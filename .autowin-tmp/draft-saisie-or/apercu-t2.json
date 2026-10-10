@@ -1,0 +1,339 @@
+{
+  "ok": true,
+  "fichier": ".autowin-tmp/draft-saisie-or/tour2.html",
+  "fenetre": 1600,
+  "largeurs": [
+    {
+      "largeur": 560,
+      "debordementPx": 0,
+      "largeurBloc": 560,
+      "largeurContenu": 560,
+      "retirees": [],
+      "onglets": 7,
+      "paires": [
+        {
+          "onglets": [
+            1,
+            2
+          ],
+          "partChangee": 0.0381
+        },
+        {
+          "onglets": [
+            1,
+            3
+          ],
+          "partChangee": 0.0763
+        },
+        {
+          "onglets": [
+            1,
+            4
+          ],
+          "partChangee": 0.0566
+        },
+        {
+          "onglets": [
+            1,
+            5
+          ],
+          "partChangee": 0.0549
+        },
+        {
+          "onglets": [
+            1,
+            6
+          ],
+          "partChangee": 0.0421
+        },
+        {
+          "onglets": [
+            1,
+            7
+          ],
+          "partChangee": 0.1589
+        },
+        {
+          "onglets": [
+            2,
+            3
+          ],
+          "partChangee": 0.0749
+        },
+        {
+          "onglets": [
+            2,
+            4
+          ],
+          "partChangee": 0.0639
+        },
+        {
+          "onglets": [
+            2,
+            5
+          ],
+          "partChangee": 0.0527
+        },
+        {
+          "onglets": [
+            2,
+            6
+          ],
+          "partChangee": 0.0405
+        },
+        {
+          "onglets": [
+            2,
+            7
+          ],
+          "partChangee": 0.1583
+        },
+        {
+          "onglets": [
+            3,
+            4
+          ],
+          "partChangee": 0.0801
+        },
+        {
+          "onglets": [
+            3,
+            5
+          ],
+          "partChangee": 0.0814
+        },
+        {
+          "onglets": [
+            3,
+            6
+          ],
+          "partChangee": 0.0664
+        },
+        {
+          "onglets": [
+            3,
+            7
+          ],
+          "partChangee": 0.1781
+        },
+        {
+          "onglets": [
+            4,
+            5
+          ],
+          "partChangee": 0.0785
+        },
+        {
+          "onglets": [
+            4,
+            6
+          ],
+          "partChangee": 0.0624
+        },
+        {
+          "onglets": [
+            4,
+            7
+          ],
+          "partChangee": 0.1631
+        },
+        {
+          "onglets": [
+            5,
+            6
+          ],
+          "partChangee": 0.0478
+        },
+        {
+          "onglets": [
+            5,
+            7
+          ],
+          "partChangee": 0.1677
+        },
+        {
+          "onglets": [
+            6,
+            7
+          ],
+          "partChangee": 0.1544
+        }
+      ]
+    },
+    {
+      "largeur": 860,
+      "debordementPx": 0,
+      "largeurBloc": 860,
+      "largeurContenu": 860,
+      "retirees": [],
+      "onglets": 7,
+      "paires": [
+        {
+          "onglets": [
+            1,
+            2
+          ],
+          "partChangee": 0.1415
+        },
+        {
+          "onglets": [
+            1,
+            3
+          ],
+          "partChangee": 0.1572
+        },
+        {
+          "onglets": [
+            1,
+            4
+          ],
+          "partChangee": 0.1453
+        },
+        {
+          "onglets": [
+            1,
+            5
+          ],
+          "partChangee": 0.1495
+        },
+        {
+          "onglets": [
+            1,
+            6
+          ],
+          "partChangee": 0.0322
+        },
+        {
+          "onglets": [
+            1,
+            7
+          ],
+          "partChangee": 0.0283
+        },
+        {
+          "onglets": [
+            2,
+            3
+          ],
+          "partChangee": 0.0534
+        },
+        {
+          "onglets": [
+            2,
+            4
+          ],
+          "partChangee": 0.0459
+        },
+        {
+          "onglets": [
+            2,
+            5
+          ],
+          "partChangee": 0.0377
+        },
+        {
+          "onglets": [
+            2,
+            6
+          ],
+          "partChangee": 0.1403
+        },
+        {
+          "onglets": [
+            2,
+            7
+          ],
+          "partChangee": 0.1403
+        },
+        {
+          "onglets": [
+            3,
+            4
+          ],
+          "partChangee": 0.057
+        },
+        {
+          "onglets": [
+            3,
+            5
+          ],
+          "partChangee": 0.0566
+        },
+        {
+          "onglets": [
+            3,
+            6
+          ],
+          "partChangee": 0.1547
+        },
+        {
+          "onglets": [
+            3,
+            7
+          ],
+          "partChangee": 0.1543
+        },
+        {
+          "onglets": [
+            4,
+            5
+          ],
+          "partChangee": 0.056
+        },
+        {
+          "onglets": [
+            4,
+            6
+          ],
+          "partChangee": 0.1437
+        },
+        {
+          "onglets": [
+            4,
+            7
+          ],
+          "partChangee": 0.1439
+        },
+        {
+          "onglets": [
+            5,
+            6
+          ],
+          "partChangee": 0.1466
+        },
+        {
+          "onglets": [
+            5,
+            7
+          ],
+          "partChangee": 0.1461
+        },
+        {
+          "onglets": [
+            6,
+            7
+          ],
+          "partChangee": 0.0206
+        }
+      ]
+    }
+  ],
+  "defauts": [],
+  "captures": [
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-1.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-2.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-3.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-4.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-5.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-6.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l560-onglet-7.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-1.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-2.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-3.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-4.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-5.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-6.png",
+    "D:\\Autowin\\.autowin-tmp\\draft-saisie-or\\apercu-t2\\l860-onglet-7.png"
+  ],
+  "preuve": "rendu du chat tenu a 560 et 860 px, rien de retire, onglets distincts"
+}

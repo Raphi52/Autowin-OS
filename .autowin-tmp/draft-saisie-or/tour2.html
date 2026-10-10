@@ -1,0 +1,161 @@
+<style>
+.dr{font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#dde3ee;background:transparent}
+.dr .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 10px}
+.dr .tabs label{font:600 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#a9b2c4;padding:7px 10px;border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer}
+.dr .r{display:none}
+.dr .p{display:none}
+.dr #w1:checked ~ .tabs label[for=w1],.dr #w2:checked ~ .tabs label[for=w2],.dr #w3:checked ~ .tabs label[for=w3],.dr #w4:checked ~ .tabs label[for=w4],.dr #w5:checked ~ .tabs label[for=w5],.dr #w6:checked ~ .tabs label[for=w6],.dr #w0:checked ~ .tabs label[for=w0]{color:#e3ba55;border-color:rgba(227,186,85,.7);background:rgba(212,169,79,.10)}
+.dr #w1:checked ~ .p1,.dr #w2:checked ~ .p2,.dr #w3:checked ~ .p3,.dr #w4:checked ~ .p4,.dr #w5:checked ~ .p5,.dr #w6:checked ~ .p6,.dr #w0:checked ~ .p0{display:block}
+.dr .kick{font:600 11px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;color:#d4a94f}
+.dr .sep{height:1px;margin:10px 0;background:linear-gradient(90deg,rgba(212,169,79,.55),rgba(212,169,79,.06))}
+.dr .why{color:#a9b2c4;margin:4px 0 0}
+.dr .why b{color:#dde3ee}
+.dr .zoom{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin:10px 0 0}
+.dr .zc{display:flex;flex-direction:column;align-items:center;gap:6px}
+.dr .zl{font:10.5px/1.2 ui-monospace,Consolas,monospace;color:#a9b2c4;letter-spacing:.04em}
+.dr .big{display:inline-flex;align-items:center;justify-content:center;width:74px;height:60px;border-radius:22px 22px 6px 22px}
+.dr .big svg{width:30px;height:30px}
+.dr .off{opacity:.45}
+.dr .fr{width:190px;height:72px;border-radius:30px;border:2px solid rgba(255,255,255,.11);background:#09090a}
+.dr .cp{margin:12px 0 0;border:1px solid rgba(255,255,255,.11);border-radius:16px;padding:14px 18px 12px;background:#09090a}
+.dr .l1{display:flex;align-items:flex-start;gap:12px}
+.dr .ph{flex:1;min-width:0;color:#8f89ad;padding-top:9px;font-size:14px}
+.dr .tx{flex:1;min-width:0;color:#eef1f7;padding-top:9px;font-size:14px}
+.dr .car{color:#e3ba55}
+.dr .send{display:inline-flex;align-items:center;justify-content:center;flex:0 0 46px;width:46px;height:38px;border-radius:14px 14px 4px 14px}
+.dr .send svg{width:19px;height:19px}
+.dr .q{display:flex;align-items:center;margin:10px 0 0}
+.dr .qf{flex:0 0 41%;height:2px;background:linear-gradient(90deg,#e8302a,#ff8a5c)}
+.dr .qk{display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;height:20px;border-radius:50%;border:1px solid #ff8a5c;background:#2a160e;color:#ff8a5c;font:700 9.5px/1 ui-monospace,Consolas,monospace}
+.dr .qt{flex:1;height:2px;background:rgba(255,255,255,.08)}
+.dr .l3{display:flex;align-items:center;gap:8px;margin:12px 0 0;flex-wrap:wrap}
+.dr .rd{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px solid #ffffff;color:#ffffff}
+.dr .rd svg{width:13px;height:13px}
+.dr .mdl{font-weight:700;font-size:12.5px;margin-left:8px;color:#ffffff}
+.dr .eff{font-size:11px;color:#a9b2c4;display:inline-flex;align-items:center;gap:3px}
+.dr .eff svg{width:10px;height:10px}
+.dr .note{color:#a9b2c4;font-size:12.5px;margin:10px 0 0}
+.dr .note b{color:#dde3ee}
+
+/* depart (4) */
+.dr .p0 .cp{border-color:rgba(212,169,79,.5)}
+.dr .p0 .fr{border-color:rgba(212,169,79,.5)}
+.dr .p0 .btn{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55}
+
+/* 4.1 cadre affirme */
+.dr .p1 .cp{border-color:rgba(227,186,85,.85)}
+.dr .p1 .fr{border-color:rgba(227,186,85,.85)}
+.dr .p1 .btn{background:transparent;border:1.5px solid #e3ba55;color:#f0cd70}
+
+/* 4.2 cadre degrade */
+.dr .p2 .cp,.dr .p2 .fr{border-color:transparent;background:linear-gradient(#09090a,#09090a) padding-box,linear-gradient(135deg,#e8c164,rgba(212,169,79,.5) 40%,rgba(212,169,79,.07) 85%) border-box}
+.dr .p2 .btn{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55}
+
+/* 4.3 bouton qui s'allume */
+.dr .p3 .cp{border-color:rgba(212,169,79,.5)}
+.dr .p3 .fr{border-color:rgba(212,169,79,.5)}
+.dr .p3 .on{background:#d9ae52;border:1.5px solid #d9ae52;color:#16110a}
+.dr .p3 .vide{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55}
+
+/* 4.4 or a l'ecriture */
+.dr .p4 .repos{border-color:rgba(255,255,255,.13)}
+.dr .p4 .ecrit{border-color:rgba(227,186,85,.8)}
+.dr .p4 .cp{border-color:rgba(227,186,85,.8)}
+.dr .p4 .btn{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55}
+
+/* 4.5 noir chaud */
+.dr .p5 .cp,.dr .p5 .fr{background:#130f08;border-color:rgba(212,169,79,.5)}
+.dr .p5 .btn{background:rgba(212,169,79,.14);border:1.5px solid #d4a94f;color:#ecc766}
+
+/* 4.6 avion seul */
+.dr .p6 .cp{border-color:rgba(212,169,79,.5)}
+.dr .p6 .fr{border-color:rgba(212,169,79,.5)}
+.dr .p6 .btn{background:transparent;border:1.5px solid transparent;color:#e3ba55}
+.dr .p6 .send svg{width:23px;height:23px}
+</style>
+<div class="dr">
+<div class="kick">Saisie du chat · direction 4 « Cadre or » · 6 affinements</div>
+<div class="sep"></div>
+<input type="radio" name="dw" id="w1" class="r" checked><input type="radio" name="dw" id="w2" class="r"><input type="radio" name="dw" id="w3" class="r"><input type="radio" name="dw" id="w4" class="r"><input type="radio" name="dw" id="w5" class="r"><input type="radio" name="dw" id="w6" class="r"><input type="radio" name="dw" id="w0" class="r">
+<div class="tabs"><label for="w1">4.1 · Affirmé</label><label for="w2">4.2 · Dégradé</label><label for="w3">4.3 · S'allume</label><label for="w4">4.4 · À l'écriture</label><label for="w5">4.5 · Noir chaud</label><label for="w6">4.6 · Avion seul</label><label for="w0">Départ 4</label></div>
+
+<div class="p p1">
+<div class="kick">4.1 · Cadre affirmé — l'or se voit d'un coup d'œil</div>
+<p class="why">Même dessin que le 4, mais le bord passe de <b>50 % à 85 %</b> d'or : un <b>trait net</b> au lieu d'un contour sourd. Bouton et avion un ton <b>plus clair</b>.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p2">
+<div class="kick">4.2 · Cadre dégradé — l'or s'éteint en diagonale</div>
+<p class="why">Le bord est <b>or vif en haut à gauche</b> et <b>s'éteint</b> vers le bas à droite : le cadre reste lisible, mais plus <b>léger</b> qu'un contour uniforme. Bouton inchangé.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p3">
+<div class="kick">4.3 · Bouton qui s'allume — l'or dit « ça peut partir »</div>
+<p class="why">Champ vide : bouton <b>en contour</b>, éteint. Dès qu'il y a du texte : bouton <b>or plein</b>, avion foncé. L'or porte une <b>information</b> au lieu d'être un décor. Cadre à 50 % comme le 4.</p>
+<div class="zoom">
+<div class="zc"><span class="big vide off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><span class="big on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="send on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p4">
+<div class="kick">4.4 · Or à l'écriture — le cadre s'allume quand tu tapes</div>
+<p class="why">Au repos, bord <b>gris discret</b> comme les autres blocs. Dès que le curseur est dans le champ, le bord passe <b>or à 80 %</b>. L'or indique <b>où tu écris</b>.</p>
+<div class="zoom">
+<div class="zc"><div class="fr repos"></div><span class="zl">au repos ×2</span></div>
+<div class="zc"><div class="fr ecrit"></div><span class="zl">en écriture ×2</span></div>
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="send btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p5">
+<div class="kick">4.5 · Noir chaud — un fond teinté brun</div>
+<p class="why">Le fond passe du <b>noir froid</b> à un <b>noir chaud</b>, à peine brun, qui s'accorde avec l'or. Le bouton reçoit un <b>voile or à 14 %</b> à l'intérieur de son contour.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p6">
+<div class="kick">4.6 · Avion seul — le cadre suffit</div>
+<p class="why">Le bouton perd son contour : il ne reste qu'un <b>avion doré</b>, un peu <b>plus grand</b> (23 px au lieu de 19). Un seul trait or à l'écran : <b>le cadre</b>.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p0">
+<div class="kick">Départ — le 4 tel que tu l'as choisi</div>
+<p class="why">Fond <b>noir profond</b>, bord <b>or à 50 %</b>, bouton <b>en contour</b> or 1,5 px.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div>
+</div>
+<div class="cp"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="sep"></div>
+<p class="note"><b>Inchangé partout</b> : la jauge rouge → orange (elle dit le <b>niveau de quota</b>), les trois <b>ronds blancs</b>, la <b>forme</b> du bouton d’envoi (sauf en 4.6, sans bord), le <b>rouge</b> d'Arrêter et le <b>vert</b> de Reprendre, et <b>aucune lueur</b>.</p>
+</div>

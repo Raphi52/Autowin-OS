@@ -1,0 +1,104 @@
+<style>
+.dr{font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#dde3ee;background:transparent}
+.dr .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px}
+.dr .tabs label{font:600 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#a9b2c4;padding:7px 10px;border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer}
+.dr .r{display:none}
+.dr .p{display:none}
+.dr #x1:checked ~ .tabs label[for=x1],.dr #x2:checked ~ .tabs label[for=x2],.dr #x3:checked ~ .tabs label[for=x3],.dr #x4:checked ~ .tabs label[for=x4],.dr #x5:checked ~ .tabs label[for=x5],.dr #x6:checked ~ .tabs label[for=x6]{color:#e3ba55;border-color:rgba(227,186,85,.7);background:rgba(212,169,79,.10)}
+.dr #x1:checked ~ .p1,.dr #x2:checked ~ .p2,.dr #x3:checked ~ .p3,.dr #x4:checked ~ .p4,.dr #x5:checked ~ .p5,.dr #x6:checked ~ .p6{display:block}
+.dr .kick{font:600 11px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;color:#d4a94f}
+.dr .sep{height:1px;margin:10px 0;background:linear-gradient(90deg,rgba(212,169,79,.55),rgba(212,169,79,.06))}
+.dr .why{color:#a9b2c4;margin:4px 0 0}
+.dr .why b{color:#dde3ee}
+.dr .zl{font:10.5px/1.2 ui-monospace,Consolas,monospace;color:#a9b2c4;letter-spacing:.04em}
+.dr .note{color:#a9b2c4;font-size:12.5px;margin:10px 0 0}
+.dr .note b{color:#dde3ee}
+
+/* avant / apres */
+.dr .ba{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.dr .bah{flex:1 1 0;font:600 10.5px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#a9b2c4}
+.dr .bah:first-child{flex:0 0 31%}
+.dr .bal{flex:0 0 31%;color:#a9b2c4;font-size:12.5px}
+.dr .bal b{color:#dde3ee}
+.dr .bac{flex:1 1 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dr .bulle{display:inline-block;padding:6px 11px;border-radius:18px 18px 4px 18px;background:linear-gradient(135deg,rgba(60,110,235,.85),rgba(230,60,160,.85));color:#fff;font-size:12.5px}
+.dr .keep{font:600 10px/1 ui-monospace,Consolas,monospace;color:#4fd1a5;letter-spacing:.06em;text-transform:uppercase}
+.dr .nav{display:inline-flex;align-items:center;gap:10px;padding:7px 12px 7px 8px;border-radius:12px;background:linear-gradient(135deg,rgba(60,110,235,.85),rgba(230,60,160,.85));color:#fff;font-size:13px;box-shadow:0 0 18px rgba(230,60,160,.45)}
+.dr .nav.pince{border-radius:12px 12px 3px 12px}
+.dr .ni{display:inline-block;width:14px;height:12px;border:1.6px solid #fff;border-radius:4px}
+.dr .tab{display:inline-flex;align-items:center;height:26px;padding:0 11px;border-radius:999px;color:#a59fc2;font-size:11.5px;font-weight:600}
+.dr .tab.act{background:linear-gradient(135deg,rgba(60,110,235,.85),rgba(230,60,160,.85));color:#fff;box-shadow:0 0 14px rgba(230,60,160,.45)}
+.dr .tab.act.pince2{border-radius:8px 8px 2px 8px}
+.dr .sendnv{display:inline-flex;align-items:center;justify-content:center;width:46px;height:38px;border-radius:14px 14px 4px 14px;background:linear-gradient(135deg,rgba(60,110,235,.85),rgba(230,60,160,.85));color:#fff}
+.dr .sendnv svg{width:19px;height:19px}
+
+/* zoom */
+.dr .zoom{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin:10px 0 0}
+.dr .zc{display:flex;flex-direction:column;align-items:center;gap:6px}
+.dr .fr{width:190px;height:72px;border-radius:30px;border:2px solid rgba(212,169,79,.5);background:#09090a}
+.dr .fr.repos{border-color:rgba(255,255,255,.13)}
+.dr .fr.ecrit{border-color:rgba(227,186,85,.8)}
+
+/* formes du bouton : taille reelle (s-) et agrandie x1.6 (big-) */
+.dr .sb,.dr .bb{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.dr .sb svg{width:19px;height:19px}
+.dr .bb svg{width:30px;height:30px}
+.dr .s-r12{width:46px;height:38px;border-radius:12px}
+.dr .big-r12{width:74px;height:60px;border-radius:19px}
+.dr .s-rond{width:38px;height:38px;border-radius:50%}
+.dr .big-rond{width:60px;height:60px;border-radius:50%}
+.dr .s-pill{width:52px;height:34px;border-radius:999px}
+.dr .big-pill{width:84px;height:54px;border-radius:999px}
+.dr .s-car{width:38px;height:38px;border-radius:10px}
+.dr .big-car{width:60px;height:60px;border-radius:16px}
+
+/* etats */
+.dr .on{background:#d9ae52;border:1.5px solid #d9ae52;color:#16110a}
+.dr .vide{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55;opacity:.45}
+.dr .con{background:transparent;border:1.5px solid #e3ba55;color:#f0cd70}
+.dr .cvide{background:transparent;border:1.5px solid #e3ba55;color:#f0cd70;opacity:.45}
+
+/* saisie */
+.dr .cp{margin:12px 0 0;border:1px solid rgba(212,169,79,.5);border-radius:16px;padding:14px 18px 12px;background:#09090a}
+.dr .p-aff .cp,.dr .p-aff .fr{border-color:rgba(227,186,85,.85)}
+.dr .p-chaud .cp,.dr .p-chaud .fr{background:#130f08}
+.dr .p-ecrit .cp{border-color:rgba(227,186,85,.8)}
+.dr .l1{display:flex;align-items:flex-start;gap:12px}
+.dr .tx{flex:1;min-width:0;color:#eef1f7;padding-top:9px;font-size:14px}
+.dr .car{color:#e3ba55}
+.dr .q{display:flex;align-items:center;margin:10px 0 0}
+.dr .qf{flex:0 0 41%;height:2px;background:linear-gradient(90deg,#e8302a,#ff8a5c)}
+.dr .qk{display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;height:20px;border-radius:50%;border:1px solid #ff8a5c;background:#2a160e;color:#ff8a5c;font:700 9.5px/1 ui-monospace,Consolas,monospace}
+.dr .qt{flex:1;height:2px;background:rgba(255,255,255,.08)}
+.dr .l3{display:flex;align-items:center;gap:8px;margin:12px 0 0;flex-wrap:wrap}
+.dr .rd{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px solid #ffffff;color:#ffffff}
+.dr .rd svg{width:13px;height:13px}
+.dr .mdl{font-weight:700;font-size:12.5px;margin-left:8px;color:#ffffff}
+.dr .eff{font-size:11px;color:#a9b2c4;display:inline-flex;align-items:center;gap:3px}
+.dr .eff svg{width:10px;height:10px}
+</style>
+
+<div class="dr">
+<div class="kick">Le coin pincé en bas à droite · où il est aujourd'hui</div>
+<div class="sep"></div>
+<div class="ba"><span class="bah"></span><span class="bah">aujourd'hui</span><span class="bah">proposé</span></div>
+<div class="ba"><span class="bal"><b>Bulle</b> de ton message</span><span class="bac"><span class="bulle">Fais voir des variantes</span></span><span class="bac"><span class="bulle">Fais voir des variantes</span><span class="keep">gardé</span></span></div>
+<div class="ba"><span class="bal"><b>Menu</b> de gauche, élément ouvert</span><span class="bac"><span class="nav pince"><span class="ni"></span>Chat</span></span><span class="bac"><span class="nav"><span class="ni"></span>Chat</span></span></div>
+<div class="ba"><span class="bal"><b>Onglet</b> actif du panneau Détails</span><span class="bac"><span class="tab">Graph</span><span class="tab act pince2">Runs</span><span class="tab">Logs</span></span><span class="bac"><span class="tab">Graph</span><span class="tab act">Runs</span><span class="tab">Logs</span></span></div>
+<div class="ba"><span class="bal"><b>Bouton</b> d'envoi</span><span class="bac"><span class="sendnv"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></span><span class="bac"><span class="zl">voir A à F ci-dessous</span></span></div>
+<div class="sep"></div><div class="kick">Saisie · 6 variantes du 4, sans coin pincé</div>
+<input type="radio" name="dx" id="x1" class="r" checked><input type="radio" name="dx" id="x2" class="r"><input type="radio" name="dx" id="x3" class="r"><input type="radio" name="dx" id="x4" class="r"><input type="radio" name="dx" id="x5" class="r"><input type="radio" name="dx" id="x6" class="r">
+<div class="tabs"><label for="x1">A · S'allume, coins réguliers</label><label for="x2">B · S'allume, rond</label><label for="x3">C · S'allume, pastille</label><label for="x4">D · Affirmé, carré</label><label for="x5">E · Noir chaud + s'allume</label><label for="x6">F · À l'écriture, rond</label></div>
+<div class="p p1 "><div class="kick">A · S'allume, coins réguliers</div><p class="why">Bouton <b>rectangle arrondi</b> (46 × 38, <b>coins de 12 px</b> partout) : contour éteint quand le champ est vide, <b>or plein</b> quand le message peut partir. Cadre or à 50 %.</p><div class="zoom"><div class="zc"><span class="bb big-r12 vide"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div><div class="zc"><span class="bb big-r12 on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div><div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-r12 on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="p p2 "><div class="kick">B · S'allume, rond</div><p class="why">Le bouton redevient <b>un rond</b> de 38 px, comme le bouton d'envoi d'origine de l'app et les <b>trois ronds</b> de gauche. Même allumage : <b>contour</b> puis <b>or plein</b>.</p><div class="zoom"><div class="zc"><span class="bb big-rond vide"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div><div class="zc"><span class="bb big-rond on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div><div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-rond on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="p p3 "><div class="kick">C · S'allume, pastille</div><p class="why">Bouton en <b>pastille</b> allongée (52 × 34, bouts <b>entièrement ronds</b>) : plus large, il se lit comme une <b>action</b> plutôt qu'une icône. Contour puis <b>or plein</b>.</p><div class="zoom"><div class="zc"><span class="bb big-pill vide"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div><div class="zc"><span class="bb big-pill on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div><div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-pill on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="p p4 p-aff"><div class="kick">D · Affirmé, carré</div><p class="why">Cadre <b>or à 85 %</b> et bouton <b>carré</b> 38 × 38 aux <b>coins de 10 px</b>, toujours <b>en contour</b> : rien ne se remplit, l'or reste un <b>trait</b>.</p><div class="zoom"><div class="zc"><span class="bb big-car cvide"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div><div class="zc"><span class="bb big-car con"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div><div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-car con"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="p p5 p-chaud"><div class="kick">E · Noir chaud + s'allume</div><p class="why">La A sur un fond <b>noir chaud</b>, à peine brun : <b>coins de 12 px</b>, contour puis <b>or plein</b>. L'or se fond mieux dans un fond <b>tiède</b>.</p><div class="zoom"><div class="zc"><span class="bb big-r12 vide"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div><div class="zc"><span class="bb big-r12 on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div><div class="zc"><div class="fr"></div><span class="zl">cadre ×2</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-r12 on"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="p p6 p-ecrit"><div class="kick">F · À l'écriture, rond</div><p class="why">Cadre <b>gris au repos</b>, <b>or quand tu tapes</b> ; bouton <b>rond</b> en <b>contour</b> or. L'or n'apparaît que quand tu <b>écris</b>.</p><div class="zoom"><div class="zc"><div class="fr repos"></div><span class="zl">au repos ×2</span></div><div class="zc"><div class="fr ecrit"></div><span class="zl">en écriture ×2</span></div><div class="zc"><span class="bb big-rond con"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div></div>
+<div class="cp"><div class="l1"><span class="tx">Ajoute un filet doré sous l’en-tête<span class="car">|</span></span><span class="sb s-rond con"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div></div>
+<div class="sep"></div><p class="note"><b>Inchangé partout</b> : la jauge rouge → orange (elle dit le <b>niveau de quota</b>), les trois <b>ronds blancs</b>, le <b>rouge</b> d'Arrêter et le <b>vert</b> de Reprendre, et <b>aucune lueur</b> sur la saisie.</p></div>
