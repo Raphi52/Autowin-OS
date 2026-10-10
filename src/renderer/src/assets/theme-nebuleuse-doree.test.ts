@@ -71,9 +71,31 @@ describe('theme Nebuleuse doree', () => {
       if (new Set(coins).size < 2) return
       const regle = decl.parent as postcss.Rule
       if (regle.selectors.every((s) => /\.msg\.user \.msg-body$/.test(s.trim()))) return
+      // Meme exception nommee que theme-nebuleuse-verre.test.ts (« reserve le coin pince aux
+      // bulles »), dont ces deux regles sont derivees : les BOUTS de la capsule du pied de liste.
+      // La doree a la meme capsule (`.conv-foot` a 999px, `overflow: hidden`) ; des bouts carres
+      // y couperaient l'anneau de la case survolee dans la courbe.
+      const boutDeCapsule =
+        (/\.conv-foot > button:first-child$/.test(regle.selector.trim()) &&
+          decl.value === '999px 0 0 999px') ||
+        (/\.conv-foot > button:last-child$/.test(regle.selector.trim()) &&
+          decl.value === '0 999px 999px 0')
+      if (boutDeCapsule) return
       coinsInegaux.push(`${regle.selector} -> ${decl.value}`)
     })
     expect(coinsInegaux).toEqual([])
+  })
+
+  /**
+   * Le BLEU des pastilles « tour fini » (conv-205) est pour Nebuleuse de verre seule : la doree
+   * garde son vert flashy (demande du 2026-10-10, conv-215). Sans substitution dans la derivation,
+   * le bleu #3c6eeb de la source tombait dans la regle des lilas et sortait en gris rgb(158, 158, 158).
+   */
+  it('garde ses pastilles « tour fini » VERTES : le bleu de Nebuleuse de verre ne passe pas', async () => {
+    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
+    const main = genererMainDoree()
+    expect(main).toContain('--chat-etat-fini: #00ff55;')
+    expect(main).not.toContain('« les pastilles vertes met les bleu a la place »')
   })
 
   it('est a jour avec sa source : regenerer ne change rien', async () => {

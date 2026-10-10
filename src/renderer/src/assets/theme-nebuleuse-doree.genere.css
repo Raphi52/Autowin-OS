@@ -1,6 +1,6 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree -- ne pas modifier.
    Theme « Nebuleuse doree » : cyan et rose -> or, noirs de fond -> noir chaud, verts -> #00ff55.
-   371 regles, 506 declarations. */
+   373 regles, 508 declarations. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-doree'] .topology-state {
@@ -151,6 +151,11 @@
     background: rgba(12, 10, 6, 0.9)
 }
 
+/* ---- src/renderer/src/components/ChatView.capsule-orchestration.css ---- */
+:root[data-theme='nebuleuse-doree'] .thinking-block--orchestration .orch-texte {
+    background: var(--bg-inset, rgba(12, 10, 6, 0.45))
+}
+
 /* ---- src/renderer/src/components/ChatView.css ---- */
 :root[data-theme='nebuleuse-doree'] .conv-menu-pop {
     background: rgb(12, 10, 6)
@@ -247,6 +252,9 @@
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .composer {
     background: linear-gradient(180deg, rgba(12, 10, 6, 0.74), var(--chat-saisie-fond) 30%)
+}
+:root[data-theme='nebuleuse-doree'] .chat-context-rule-libelle {
+    background: rgb(12, 10, 6)
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send {
     border: 1px solid rgba(227, 186, 81, 0.55);

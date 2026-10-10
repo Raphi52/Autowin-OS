@@ -332,6 +332,22 @@ const SAISIE_DOREE = [
 ]
 
 /**
+ * LE BLEU DES PASTILLES « TOUR FINI » APPARTIENT A NEBULEUSE DE VERRE (conv-205, 2026-10-10 :
+ * « les pastilles vertes met les bleu a la place »). La doree garde son vert flashy #00ff55
+ * (conv-215 : « en gardant la pastille tour fini verte »). Recolore, le bleu #3c6eeb tombait dans
+ * la regle des lilas clairs et sortait en GRIS rgb(158, 158, 158). Le commentaire suit : il nommait
+ * le bleu. Le vert, a 140 deg, traverse ensuite la recoloration intact.
+ */
+const ETAT_FINI_DOREE = [
+  `  /* Tour fini = le BLEU du theme, plein (debut de \`--nv-degrade\`) : demande conv-205
+     (2026-10-10), « les pastilles vertes met les bleu a la place » — en tete du fil et liste. */
+  --chat-etat-fini: #3c6eeb;`,
+  `  /* Tour fini = VERT flashy (conv-197) : le bleu de conv-205 est pour Nebuleuse de verre seule,
+     la doree garde son vert (conv-215, 2026-10-10) — en tete du fil et liste. */
+  --chat-etat-fini: #00ff55;`
+]
+
+/**
  * LE FOND DE NEBULEUSE DE VERRE LUI APPARTIENT (conv-159, 2026-10-10) : le « liseré · halo haut »
  * (azur en haut, rose en bas, noir neutre) a ete choisi pour CE theme seul. Recolore, il donnerait
  * a la doree un bleu en haut et un or en bas que personne n'a demande. La doree garde donc ses deux
@@ -427,6 +443,13 @@ export function genererMainDoree() {
     }
     derive = derive.replace(ligneVerre, ligneDoree)
   }
+  // Meme exigence pour la pastille « tour fini » (ETAT_FINI_DOREE).
+  if (!derive.includes(ETAT_FINI_DOREE[0])) {
+    throw new Error(
+      'genererMainDoree : pastille « tour fini » (--chat-etat-fini) introuvable dans la source'
+    )
+  }
+  derive = derive.replace(...ETAT_FINI_DOREE)
   // Meme exigence pour le fond (FOND_DOREE) : un bloc ou un en-tete introuvable arrete la generation.
   if (!BLOC_FOND_PROPRE.test(derive)) {
     throw new Error('genererMainDoree : bloc FOND-PROPRE:DEBUT/FIN introuvable dans la source')

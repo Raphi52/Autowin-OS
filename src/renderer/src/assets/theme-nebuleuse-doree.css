@@ -177,8 +177,10 @@
   --chat-wf-fermer-survol: #ff6b8a;
   --chat-wf-onglet-survol: rgb(250, 250, 250);
   --chat-etat-defaut: rgb(205, 205, 205);
+  /* Tour fini = VERT flashy (conv-197) : le bleu de conv-205 est pour Nebuleuse de verre seule,
+     la doree garde son vert (conv-215, 2026-10-10) — en tete du fil et liste. */
   --chat-etat-fini: #00ff55;
-  /* Pastilles VIVES (conv-197, 2026-10-10) : vert flashy, rouge du bouton Stop
+  /* Pastilles VIVES (conv-197, 2026-10-10) : rouge du bouton Stop
      (`.composer-send.is-stop`), non lu = couleur de la FIN des degrades (`--nv-degrade`). */
   --chat-etat-echec: #eb2828;
   --chat-etat-interrompu: #ffb547;
@@ -324,10 +326,10 @@
 }
 :root[data-theme='nebuleuse-doree'] textarea,
 :root[data-theme='nebuleuse-doree'] input {
-  caret-color: rgb(239, 211, 140);
+  caret-color: #ffffff;
 }
 :root[data-theme='nebuleuse-doree'] ::placeholder {
-  color: rgb(165, 165, 165);
+  color: #999999;
   opacity: 1;
 }
 
@@ -1809,6 +1811,13 @@
   :root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-new-row.active::after {
     animation: none;
     display: none;
+  }
+  /* La lumiere des panneaux (conv-191) s'eteint : aucune lumiere, aucun glissement. Les transitions
+     restent une LISTE de durees nulles -- `none` ne peut pas s'y glisser, il annulerait aussi le
+     repli du menu. */
+  :root[data-theme='nebuleuse-doree'] {
+    --nv-lumiere-couleur: transparent;
+    --nv-lumiere-transition: --nv-lumiere-x 0s, --nv-lumiere-y 0s;
   }
 }
 
