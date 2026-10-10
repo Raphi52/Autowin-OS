@@ -26,8 +26,8 @@ export interface RequestExecutionProjection {
   runIds?: string[]
   events: HarnessTimelineEvent[]
   /**
-   * Tours sélectionnables, du plus récent au plus ancien. Absent quand la projection ne dépend pas
-   * d'un tour (faits de run : le graphe montre alors déjà TOUS les runs de la conversation).
+   * Tours sélectionnables, du plus récent au plus ancien — TOUJOURS rendus, run ou pas : une
+   * conversation qui contient un run garde son sélecteur (voir `projectRunExecutions`).
    */
   turns?: RequestTurnOption[]
 }
@@ -185,12 +185,29 @@ function executionStatus(events: HarnessTimelineEvent[]): string {
 }
 
 /**
- * Projection conversationnelle des nouveaux faits de run. Les anciennes traces sans lifecycle
- * continuent de passer dans le projecteur historique situé sous cette fonction.
+ * Projection conversationnelle des nouveaux faits de run DU TOUR CHOISI. Un tour sans run (ou une
+ * ancienne trace sans lifecycle) passe dans le projecteur historique situé sous cette fonction.
+ *
+ * Les runs retenus sont ceux que le tour TOUCHE ; leurs faits sont ensuite lus dans TOUTE la
+ * conversation, car un run repris après redémarrage persiste sa suite sous un autre tour
+ * (`relaunch-resumable-run.ts`, `resumeTurnId`) et doit s'afficher entier. Avant, la projection
+ * prenait les runs de TOUS les tours et passait avant le choix du tour : un seul run dans la
+ * conversation masquait le sélecteur et confisquait le graphe (scout du 2026-10-10).
  */
-function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjection | undefined {
-  const allEvents = timeline.turns.flatMap((turn) => turn.events).sort(eventOrder)
-  const workspaceFacts = allEvents.filter((event) => event.run?.stage === 'workspace')
+function projectRunExecutions(
+  timeline: HarnessTimeline,
+  turn: HarnessTimelineTurn
+): RequestExecutionProjection | undefined {
+  const turnRunIds = new Set(
+    turn.events
+      .map((event) => event.run?.runId ?? event.execution?.runId)
+      .filter((runId): runId is string => Boolean(runId))
+  )
+  if (turnRunIds.size === 0) return undefined
+  const allEvents = timeline.turns.flatMap((item) => item.events).sort(eventOrder)
+  const workspaceFacts = allEvents.filter(
+    (event) => event.run?.stage === 'workspace' && turnRunIds.has(event.run.runId)
+  )
   if (workspaceFacts.length === 0) return undefined
 
   const runIds = [
@@ -490,7 +507,7 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
   }
 
   return {
-    turnId: timeline.turns[0]?.id,
+    turnId: turn.id,
     runIds,
     events
   }
@@ -526,14 +543,14 @@ export function projectLatestRequestExecution(
   timeline: HarnessTimeline,
   options: ProjectionOptions = {}
 ): RequestExecutionProjection {
-  const runProjection = projectRunExecutions(timeline)
-  if (runProjection) return runProjection
   // `timeline.turns` est déjà trié du plus récent au plus ancien par `buildHarnessTimelineFromTrace`.
   const turns = timeline.turns.map(turnOption)
   const turn =
     (options.turnId ? timeline.turns.find((item) => item.id === options.turnId) : undefined) ??
     timeline.turns[0]
   if (!turn) return { events: [], turns }
+  const runProjection = projectRunExecutions(timeline, turn)
+  if (runProjection) return { ...runProjection, turns }
 
   const root = requestRoot(turn, options.requestLabel)
   const sourceById = new Map(turn.events.map((event) => [event.id, event]))
@@ -608,6 +625,8 @@ export function projectLatestRequestExecution(
         kind: event.kind === 'gate' || rawActorKind === 'system' ? 'event' : 'agent',
         title: agentTitle(event),
         observedEventIds: [event.id, ...grouped.map((candidate) => candidate.id)],
+        // Mêmes sources, même ordre que `payloads` ci-dessus : le détail relu au clic est identique.
+        payloadEventIds: [event.id, ...absorbed.map((candidate) => candidate.id)],
         dependencyIds: [...(event.execution?.dependencyIds ?? [])],
         workflow: structural.length > 0 ? 'autowin' : 'direct',
         skillName: event.execution?.phase,

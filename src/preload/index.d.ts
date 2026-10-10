@@ -59,7 +59,7 @@ import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setti
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandResult, AppSnapshot } from '../main/commands'
-import type { TraceEventV1 } from '../main/activity/trace-event'
+import type { TraceEventV1, TracePayload } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
@@ -426,6 +426,14 @@ interface ChatApi {
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>
   causalTrace: (conversationId: string) => Promise<TraceEventV1[]>
+  /** La trace SANS contenus, pour le graphe du chat (relue chaque seconde en direct). */
+  causalTraceGraphe: (conversationId: string) => Promise<TraceEventV1[]>
+  /** Les charges entières des événements nommés, aux seuls genres demandés (détail d'une étape). */
+  causalTraceCharges: (
+    conversationId: string,
+    eventIds: string[],
+    kinds: string[]
+  ) => Promise<Record<string, TracePayload[]>>
   activitySessions: () => Promise<SessionMeta[]>
   activitySession: (meta: { id: string; project: string }) => Promise<SessionActivity>
   activityImage: (

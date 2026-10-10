@@ -82,6 +82,11 @@ export interface HarnessTimelineEvent {
       | 'event'
     title: string
     observedEventIds?: string[]
+    /**
+     * Événements dont les charges composent le détail du nœud, dans l'ordre d'affichage. Le graphe
+     * reçoit la trace SANS contenus : il relit ces charges-là, et elles seules, à l'ouverture.
+     */
+    payloadEventIds?: string[]
     dependencyIds?: string[]
     limitation?: string
     workflow?: 'autowin' | 'direct'

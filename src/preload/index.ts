@@ -87,7 +87,7 @@ import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setti
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandResult, AppSnapshot } from '../main/commands'
-import type { TraceEventV1 } from '../main/activity/trace-event'
+import type { TraceEventV1, TracePayload } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
@@ -545,6 +545,14 @@ const api = {
     ipcRenderer.invoke('os:promptTracesGlobal', capability),
   causalTrace: (conversationId: string): Promise<TraceEventV1[]> =>
     ipcRenderer.invoke('os:causalTrace', conversationId),
+  causalTraceGraphe: (conversationId: string): Promise<TraceEventV1[]> =>
+    ipcRenderer.invoke('os:causalTrace:graphe', conversationId),
+  causalTraceCharges: (
+    conversationId: string,
+    eventIds: string[],
+    kinds: string[]
+  ): Promise<Record<string, TracePayload[]>> =>
+    ipcRenderer.invoke('os:causalTrace:charges', conversationId, eventIds, kinds),
   activitySessions: (): Promise<SessionMeta[]> => ipcRenderer.invoke('os:activity:sessions'),
   activitySession: (meta: { id: string; project: string }): Promise<SessionActivity> =>
     ipcRenderer.invoke('os:activity:session', meta),

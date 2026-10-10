@@ -797,3 +797,166 @@ describe('WorkflowExecutionGraph', () => {
     expect(onSelect).toHaveBeenLastCalledWith(null)
   })
 })
+
+/**
+ * LE GRAPHE NE RAPATRIE PLUS LES CONTENUS QU'IL N'AFFICHE PAS (scout du 2026-10-10).
+ *
+ * Relu chaque seconde en direct, `causalTrace` copiait toute la conversation, prompts compris — 409 Mo
+ * sérialisés sur conv-72, et 23 gels de l'app attribués à ce canal. Le graphe lit désormais la trace
+ * SANS contenus, et ne demande les charges d'une étape qu'au moment où on l'ouvre.
+ */
+describe('WorkflowExecutionGraph — trace allégée, détail à la demande', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+
+  let root: Root | null = null
+  let container: HTMLDivElement | null = null
+
+  afterEach(async () => {
+    if (root) await act(async () => root?.unmount())
+    container?.remove()
+    root = null
+    container = null
+    vi.useRealTimers()
+  })
+
+  async function render(live = false): Promise<HTMLDivElement> {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowExecutionGraph, { conversationId: 'conv-a', active: true, live })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    return container
+  }
+
+  // Ce que rend `os:causalTrace:graphe` : la structure, contenus vidés.
+  const structure = (): HarnessTraceEvent[] => [
+    trace('agent', 1, {
+      turnId: 'turn-latest',
+      type: 'handoff',
+      execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' },
+      payloads: []
+    }),
+    trace('appel', 2, {
+      turnId: 'turn-latest',
+      parentId: 'agent',
+      type: 'message',
+      payloads: [{ kind: 'user-message', content: '' }]
+    }),
+    trace('reponse', 3, {
+      turnId: 'turn-latest',
+      parentId: 'agent',
+      type: 'model-response',
+      payloads: [{ kind: 'model-response', content: '' }]
+    })
+  ]
+
+  it('lit la structure par le canal allégé, jamais la trace complète', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([])
+    const causalTraceGraphe = vi.fn().mockResolvedValue(structure())
+    const causalTraceCharges = vi.fn().mockResolvedValue({})
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { causalTrace, causalTraceGraphe, causalTraceCharges }
+    })
+
+    const view = await render()
+
+    expect(causalTraceGraphe).toHaveBeenCalledWith('conv-a')
+    expect(causalTrace).not.toHaveBeenCalled()
+    expect(causalTraceCharges).not.toHaveBeenCalled()
+    expect(view.querySelector('[data-execution-node="agent"]')).not.toBeNull()
+  })
+
+  it('charge au clic les charges de l’étape, dans l’ordre, aux seuls genres du détail', async () => {
+    const charges = deferred<Record<string, Array<{ kind: string; content: string }>>>()
+    const causalTraceCharges = vi.fn().mockReturnValue(charges.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(structure()),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+    )
+
+    expect(causalTraceCharges).toHaveBeenCalledTimes(1)
+    const [conversationId, eventIds, kinds] = causalTraceCharges.mock.calls[0]
+    expect(conversationId).toBe('conv-a')
+    expect(eventIds).toEqual(['agent', 'appel', 'reponse'])
+    expect([...kinds].sort()).toEqual(
+      ['error', 'model-response', 'reasoning', 'system-instruction', 'user-message'].sort()
+    )
+    expect(view.querySelector('[data-execution-exchange="chargement"]')).not.toBeNull()
+
+    await act(async () => {
+      charges.resolve({
+        appel: [{ kind: 'user-message', content: 'corrige le bouton Envoyer' }],
+        reponse: [{ kind: 'model-response', content: 'bouton corrigé dans Composer.tsx' }]
+      })
+      await charges.promise
+    })
+    const detail = view.querySelector('.workflow-execution-detail')
+    expect(detail?.querySelector('[data-execution-prompt]')?.textContent).toContain(
+      'corrige le bouton Envoyer'
+    )
+    expect(detail?.querySelector('[data-execution-response]')?.textContent).toContain(
+      'bouton corrigé dans Composer.tsx'
+    )
+  })
+
+  it('ne relit pas les charges d’une étape ouverte à chaque seconde du direct', async () => {
+    vi.useFakeTimers()
+    const causalTraceGraphe = vi.fn().mockResolvedValue(structure())
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      reponse: [{ kind: 'model-response', content: 'retour' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { causalTrace: vi.fn(), causalTraceGraphe, causalTraceCharges }
+    })
+    const view = await render(true)
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+
+    expect(causalTraceGraphe.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(causalTraceCharges).toHaveBeenCalledTimes(1)
+  })
+
+  it('dit que le détail est indisponible quand la lecture des charges échoue', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(structure()),
+        causalTraceCharges: vi.fn().mockRejectedValue(new Error('trace corrompue ligne 3'))
+      }
+    })
+    const view = await render()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(view.querySelector('[data-execution-exchange="erreur"]')?.textContent).toContain(
+      'trace corrompue ligne 3'
+    )
+  })
+})

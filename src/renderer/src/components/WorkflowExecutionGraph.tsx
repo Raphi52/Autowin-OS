@@ -8,6 +8,7 @@ import {
 } from './harness-timeline-model'
 import { LatestRequestGate } from './observatory-reliability'
 import {
+  NODE_PAYLOAD_KINDS,
   projectLatestRequestExecution,
   type RequestTurnOption
 } from './request-execution-tree-model'
@@ -299,6 +300,85 @@ function ExecutionNodeExchange({
   )
 }
 
+type ChargeEtape = HarnessTimelineEvent['payloads'][number]
+
+/**
+ * Le pont expose-t-il les lectures ALLÉGÉES du graphe ?
+ *
+ * En mode dev, l'écran se recharge à chaud mais le pont (`preload`) et le cœur gardent leur version
+ * jusqu'au prochain redémarrage : pendant cet intervalle, les deux canaux n'existent pas encore. Le
+ * graphe relit alors la trace complète, comme avant — plus lent, mais jamais cassé.
+ */
+function lecturesAllegeesDisponibles(): boolean {
+  return (
+    typeof window.api?.causalTraceGraphe === 'function' &&
+    typeof window.api?.causalTraceCharges === 'function'
+  )
+}
+
+const GENRES_DU_DETAIL = [...NODE_PAYLOAD_KINDS]
+
+/**
+ * LE DÉTAIL D'UNE ÉTAPE, CHARGÉ À SON OUVERTURE.
+ *
+ * L'arbre reçoit la trace sans contenus (`os:causalTrace:graphe`) : les prompts, retours et
+ * raisonnements d'une étape sont relus ici, pour elle seule, quand on la déplie. La clé est la liste
+ * des événements sources : la trace étant en ajout seul, une même liste rend toujours les mêmes
+ * charges — le rechargement de chaque seconde ne relance donc rien tant qu'aucune source n'arrive.
+ */
+function ExecutionNodeContents({
+  conversationId,
+  event
+}: {
+  conversationId: string
+  event: HarnessTimelineEvent
+}): React.JSX.Element {
+  const sources = lecturesAllegeesDisponibles() ? (event.display?.payloadEventIds ?? []) : []
+  const cle = sources.length > 0 ? `${conversationId}\n${sources.join('\n')}` : null
+  const [lu, setLu] = useState<{ cle: string; charges?: ChargeEtape[]; erreur?: string } | null>(
+    null
+  )
+  useEffect(() => {
+    if (!cle) return
+    const [conversation, ...ids] = cle.split('\n')
+    let vivant = true
+    window.api
+      .causalTraceCharges(conversation, ids, GENRES_DU_DETAIL)
+      .then((parEvenement) => {
+        if (vivant) setLu({ cle, charges: ids.flatMap((id) => parEvenement[id] ?? []) })
+      })
+      .catch((raison: unknown) => {
+        if (vivant)
+          setLu({ cle, erreur: raison instanceof Error ? raison.message : String(raison) })
+      })
+    return () => {
+      vivant = false
+    }
+  }, [cle])
+
+  if (cle && lu?.cle !== cle) {
+    return (
+      <p className="workflow-execution-exchange-empty" data-execution-exchange="chargement">
+        Chargement du détail…
+      </p>
+    )
+  }
+  if (cle && lu?.erreur) {
+    return (
+      <p className="workflow-execution-warning" role="alert" data-execution-exchange="erreur">
+        Détail indisponible · {lu.erreur}
+      </p>
+    )
+  }
+  const affiche = cle ? { ...event, payloads: lu?.charges ?? [] } : event
+  return (
+    <>
+      <ExecutionNodeExchange event={affiche} />
+      <ExecutionNodeReasoning event={affiche} />
+    </>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
   return (
     <div>
@@ -481,7 +561,10 @@ export function WorkflowExecutionGraph({
         setError(null)
       }
       try {
-        const trace = (await window.api.causalTrace(conversationId)) as HarnessTraceEvent[]
+        // La STRUCTURE seule : relue chaque seconde en direct, elle ne doit pas copier les contenus.
+        const trace = (await (lecturesAllegeesDisponibles()
+          ? window.api.causalTraceGraphe(conversationId)
+          : window.api.causalTrace(conversationId))) as HarnessTraceEvent[]
         if (!requestGate.current.isCurrent(requestId)) return
         const timeline = buildHarnessTimelineFromTrace(Array.isArray(trace) ? trace : [])
         const projection = projectLatestRequestExecution(timeline, {
@@ -745,8 +828,7 @@ export function WorkflowExecutionGraph({
                     event={node.event}
                     offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
                   />
-                  <ExecutionNodeExchange event={node.event} />
-                  <ExecutionNodeReasoning event={node.event} />
+                  <ExecutionNodeContents conversationId={conversationId} event={node.event} />
                   {node.issues.length > 0 && (
                     <p className="workflow-execution-warning">
                       Trace partielle · {node.issues.join(', ')}

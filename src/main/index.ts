@@ -230,6 +230,7 @@ import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
 import { installTraceEventSink, TraceStore } from './activity/trace-store'
+import { allegerTracePourGraphe, chargesDesEvenements } from './activity/trace-allegee'
 import { resolveOtelGenAiConfig } from './activity/otel-genai-config'
 import { MetadataOnlyOtlpExporter } from './activity/otel-genai-exporter'
 import { DiagnosticCapabilities } from './activity/diagnostic-capability'
@@ -4500,6 +4501,21 @@ Le fil reprend ensuite normalement.`
     const conversationId = guardString(convId, 'convId')
     return causalTrace.readConversation(conversationId)
   })
+  // Le graphe du chat : la structure sans les contenus (relue chaque seconde en direct), puis les
+  // charges de la seule étape ouverte. Voir `activity/trace-allegee.ts` pour la mesure.
+  ipcMain.handle('os:causalTrace:graphe', (event, convId: string) => {
+    assertTrustedRendererSender(event, 'Causal trace graph')
+    const conversationId = guardString(convId, 'convId')
+    return allegerTracePourGraphe(causalTrace.readConversation(conversationId))
+  })
+  ipcMain.handle(
+    'os:causalTrace:charges',
+    (event, convId: string, eventIds: unknown, kinds: unknown) => {
+      assertTrustedRendererSender(event, 'Causal trace payloads')
+      const conversationId = guardString(convId, 'convId')
+      return chargesDesEvenements(causalTrace.readConversation(conversationId), eventIds, kinds)
+    }
+  )
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
   // Les canaux de la reconnaissance vocale locale vivent dans src/main/ipc/whisper.ts : ils ne

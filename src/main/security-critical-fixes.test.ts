@@ -541,7 +541,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   UN canal ajoute par ce tour : `app:color-scheme` ('Schema de couleurs') — pose
     //   `nativeTheme.themeSource` pour que `prefers-color-scheme` suive le theme Autowin. N'accepte
     //   que `dark` ou `light` ; rien d'autre n'est lu ni ecrit. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(213)
+    // MISE A JOUR 2026-10-10 (conv-163) — 213 -> 215. DEUX canaux de LECTURE pour le graphe du chat
+    //   (`src/main/index.ts`, logique dans `activity/trace-allegee.ts`), gardes des leur PREMIERE ligne
+    //   par `assertTrustedRendererSender` :
+    //   `os:causalTrace:graphe` ('Causal trace graph') — la trace de LA conversation (`guardString`)
+    //     sans ses contenus ; n'ecrit rien.
+    //   `os:causalTrace:charges` ('Causal trace payloads') — les charges des seuls evenements nommes
+    //     de cette conversation, aux seuls genres demandes ; listes bornees (500 ids, 32 genres) et
+    //     refusees si mal formees. N'ecrit rien. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(215)
     expect(unguarded).toEqual([])
   })
 
