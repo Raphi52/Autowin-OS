@@ -44,7 +44,20 @@ export interface FenetreBattante {
    */
   isDestroyed?(): boolean
   webContents?: {
-    executeJavaScript?(code: string): Promise<unknown>
+    /**
+     * Cadre principal de la page : c'est LUI qu'on sonde, jamais `webContents.executeJavaScript`.
+     *
+     * Mesure du 2026-10-10 (gels.jsonl, 06:54:39Z puis 06:55:09Z) : au demarrage, l'interface se
+     * chargeait depuis le serveur de developpement ; le battement a declare 15 s de silence, recharge
+     * la page — relancant le chargement a zero —, puis tue l'affichage. Relancee, l'interface s'est
+     * chargee en 1,2 s : la fenetre n'etait pas gelee, elle CHARGEAIT. Electron 44.5.1 fait attendre
+     * `webContents.executeJavaScript` jusqu'a `did-stop-loading` tant que la page charge
+     * (lib/browser/api/web-contents.ts, `waitTillCanExecuteJavaScript`) : cette sonde mesurait donc
+     * la duree du CHARGEMENT. `mainFrame.executeJavaScript` s'execute tout de suite dans la page
+     * (shell/browser/api/electron_api_web_frame_main.cc, `WebFrameMain::ExecuteJavaScript`) : il
+     * mesure ce qu'on veut savoir — la page repond-elle ? —, y compris pendant un chargement.
+     */
+    mainFrame?: { executeJavaScript?(code: string): Promise<unknown> } | null
     reloadIgnoringCache?(): void
     /** Dernier recours : tue le processus d'affichage, Electron en repart un neuf. */
     forcefullyCrashRenderer?(): void
@@ -109,7 +122,8 @@ export function surveillerParBattement(
       return
     }
     let repondu = false
-    void fenetre.webContents
+    // Le CADRE, pas `webContents` : voir `FenetreBattante.webContents.mainFrame`.
+    void fenetre.webContents?.mainFrame
       ?.executeJavaScript?.('1')
       .then(() => {
         repondu = true
