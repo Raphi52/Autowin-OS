@@ -679,9 +679,42 @@ export function codexApiEffort(effort: string | undefined): string | undefined {
   return CODEX_VALID_EFFORTS.has(effort) ? effort : 'high'
 }
 
+/*
+ * DEUX GROUPES, CHACUN COMPTE — meme regle que `materializeClaudeAttachments` (claude.ts).
+ *
+ * `agent-pilot.ts` remet a TOUS les modeles la meme liste : pieces du message courant, puis pieces
+ * d'un tour anterieur rejointes d'office (`provenance: 'message-precedent'`). Ici chaque image
+ * part en `input_image` NU (ni nom, ni provenance) : sans texte qui les separe, une image ancienne
+ * est indiscernable de celle du message — le double comptage de conv-150 (tour
+ * 1bf1ae63-adb7-47be-ba4e-5c65c5593851, « tes deux captures » pour une seule) en pire.
+ * Sans piece ancienne, le contenu reste strictement celui d'avant.
+ */
 function codexContent(message: Message): Array<Record<string, string>> {
   const content: Array<Record<string, string>> = [{ type: 'input_text', text: message.content }]
-  for (const attachment of message.attachments ?? []) {
+  const toutes = message.attachments ?? []
+  const anciennes = toutes.filter((a) => a.provenance === 'message-precedent')
+  if (anciennes.length === 0) return pousserPiecesCodex(content, toutes)
+  const courantes = toutes.filter((a) => a.provenance !== 'message-precedent')
+  content.push({
+    type: 'input_text',
+    text:
+      courantes.length > 0
+        ? `PIÈCES JOINTES DE TON MESSAGE CI-DESSUS (${courantes.length}) :`
+        : 'Ton message ci-dessus n’a AUCUNE pièce jointe.'
+  })
+  pousserPiecesCodex(content, courantes)
+  content.push({
+    type: 'input_text',
+    text: `RAPPEL — PIÈCES JOINTES D’UN TOUR ANTÉRIEUR de cette conversation (${anciennes.length}), déjà envoyées plus tôt : elles ne font PAS partie du message ci-dessus, ne les compte pas avec lui :`
+  })
+  return pousserPiecesCodex(content, anciennes)
+}
+
+function pousserPiecesCodex(
+  content: Array<Record<string, string>>,
+  attachments: NonNullable<Message['attachments']>
+): Array<Record<string, string>> {
+  for (const attachment of attachments) {
     if (attachment.kind === 'text') {
       content.push({
         type: 'input_text',
