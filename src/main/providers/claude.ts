@@ -1726,6 +1726,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         toolUseId: string
         /** Lancee en ARRIERE-PLAN : son resultat n'atteint pas le modele si le tour finit avant. */
         enFond: boolean
+        /** Jamais vue `task_started` ICI : lancee par un tour PRECEDENT, signalee a la reprise. */
+        precedente?: boolean
       }
     >()
     /**
@@ -1931,7 +1933,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               arretee: true,
               type: connue?.type ?? '',
               toolUseId: connue?.toolUseId ?? '',
-              enFond: connue?.enFond ?? false
+              enFond: connue?.enFond ?? false,
+              // Inconnue de ce processus : le CLI repris signale une tache du tour d'AVANT
+              // (conv-217, `bd74t04oh` lancee au tour f7d4bc2d-…, signalee au tour 1d809770-…).
+              ...(connue ? {} : { precedente: true })
             })
           }
         }
@@ -2181,18 +2186,32 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
         if (tachesDeFond.size > 0) {
           // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
-          const lister = (arretee: boolean): string =>
+          const lister = (arretee: boolean, precedente = false): string =>
             [...tachesDeFond.values()]
-              .filter((x) => x.arretee === arretee)
+              .filter((x) => x.arretee === arretee && Boolean(x.precedente) === precedente)
               .map((x) => `\`${x.commande}\``)
               .join(', ')
           const arretees = lister(true)
           const ouvertes = lister(false)
+          /*
+           * TACHE D'UN TOUR PRECEDENT — conv-217, tour 1d809770-55bc-42b8-896d-ffab2d2270b0 : la
+           * reponse au « go » s'ouvrait sur « Tâche de fond arrêtée à la fin de ce tour », alors que
+           * ce tour n'avait rien lance en fond (la commande venait du tour f7d4bc2d-…). Et « relance
+           * la demande » ne la referait pas : ce n'est pas cette demande qui l'avait lancee.
+           */
+          // fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — tache du tour precedent annoncee « arretee a la fin de ce tour »
+          const precedentes = lister(true, true)
           const parties = [
             arretees ? `Tâche de fond arrêtée à la fin de ce tour : ${arretees}.` : '',
             ouvertes ? `Tâche de fond pas terminée à la fin de ce tour : ${ouvertes}.` : ''
           ].filter(Boolean)
-          const avis = `\n\n⚠️ ${parties.join('\n⚠️ ')} Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+          const avisCeTour = parties.length
+            ? `\n\n⚠️ ${parties.join('\n⚠️ ')} Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+            : ''
+          const avisPrecedent = precedentes
+            ? `\n\n⚠️ Une commande de fond lancée à un tour précédent a été arrêtée avant d'avoir fini (${precedentes}) : son résultat est perdu.`
+            : ''
+          const avis = `${avisPrecedent}${avisCeTour}`
           tachesDeFond.clear()
           text += avis
           queue.push({ delta: avis })

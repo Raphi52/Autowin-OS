@@ -147,4 +147,13 @@ describe('claude — result de notification émis AVANT la demande (reprise de s
     const res = await lancer()
     expect(res.usage?.costUsd).toBeCloseTo(0.91, 6)
   }, 60_000)
+
+  it("ne dit pas qu'une tâche d'un tour PRÉCÉDENT a été arrêtée « à la fin de ce tour »", async () => {
+    const res = await lancer()
+    const texte = res.text ?? ''
+    expect(texte).not.toContain('à la fin de ce tour')
+    // « Relance la demande » ne referait pas une commande qu'une AUTRE demande avait lancée.
+    expect(texte).not.toContain('relance la demande')
+    expect(texte).toContain('lancée à un tour précédent')
+  }, 60_000)
 })
