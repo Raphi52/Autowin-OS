@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 /**
- * Capsule « Agent » (Fumé net · Agent assorti, conv-173, 2026-10-10 : « Agent assorti implémente
- * c magnifique »). Le thème Nébuleuse de verre allume la capsule de la ligne Agent tant que le tour
- * tourne, et la pâlit ensuite. Il le lit sur la classe `is-live` de `.msg-meta` : ce test verrouille
- * qu'elle suit `message.done`, dans les deux sens.
+ * Ligne « Agent » RETIRÉE du fil (conv-227, 2026-10-11 : « enleve carrement cette ligne de tous
+ * les themes elle pollue pour rien »). Elle vivait dans ChatMessageRow, commune à tous les thèmes :
+ * ce test verrouille qu'aucune réponse de l'agent ne la rend plus, ni pendant le tour ni après.
  *
- * Entrée qui ferait échouer une correction fausse : un tour terminé qui garderait `is-live` (la
- * capsule resterait allumée sur tout l'historique) ou un tour en cours qui ne l'aurait pas.
+ * Entrée qui ferait échouer une correction fausse : la ligne masquée par CSS dans un seul thème
+ * (elle resterait dans le DOM), ou rendue seulement pendant le tour (avec son spinner).
  */
 import { describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
@@ -14,7 +13,7 @@ import { createRoot } from 'react-dom/client'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 
-async function meta(done: boolean): Promise<Element | null> {
+async function rendre(done: boolean): Promise<Element | null> {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
@@ -29,7 +28,7 @@ async function meta(done: boolean): Promise<Element | null> {
   await act(async () => {
     root.render(createElement(ChatMessageRow, { message, conversationId: 'A' } as never))
   })
-  const trouve = host.querySelector('.msg.assistant > .msg-meta')
+  const trouve = host.querySelector('.msg.assistant')
   const copie = trouve ? (trouve.cloneNode(true) as Element) : null
   await act(async () => root.unmount())
   host.remove()
@@ -37,14 +36,14 @@ async function meta(done: boolean): Promise<Element | null> {
 }
 
 describe('ligne Agent du fil', () => {
-  it('porte is-live pendant le tour, pour que sa capsule reste allumée', async () => {
-    expect((await meta(false))?.classList.contains('is-live')).toBe(true)
-  })
-
-  it('perd is-live une fois le tour fini, pour que sa capsule pâlisse', async () => {
-    const ligne = await meta(true)
-    expect(ligne, 'la ligne Agent doit exister').not.toBeNull()
-    expect(ligne?.classList.contains('is-live')).toBe(false)
-    expect(ligne?.querySelector('.msg-role')?.textContent).toBe('Agent')
+  it.each([
+    ['pendant le tour', false],
+    ['tour fini', true]
+  ])("n'est plus rendue (%s)", async (_cas, done) => {
+    const reponse = await rendre(done)
+    expect(reponse, 'la réponse de l’agent doit exister').not.toBeNull()
+    expect(reponse?.querySelector(':scope > .msg-meta')).toBeNull()
+    expect(reponse?.textContent).not.toContain('Agent')
+    expect(reponse?.textContent).toContain('réponse')
   })
 })
