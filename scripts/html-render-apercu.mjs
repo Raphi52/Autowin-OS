@@ -17,7 +17,9 @@
  *
  * Usage : node scripts/html-render-apercu.mjs <fichier.html|fichier.md> [--bloc 1]
  *           [--largeurs 560,860] [--fenetre 1600] [--out .autowin-tmp/html-render-apercu]
- *           [--seuil-onglets 0.02]
+ *           [--seuil-onglets 0.02] [--clair]
+ *   `--clair` : rend le bloc comme en THEME CLAIR (fond du fil clair + regles forcees de
+ *   theme-modes.css). Un thème clair actif chez l'utilisateur = contrôle les DEUX.
  *   Un fichier .md (ou tout fichier contenant une cloture ```html-render) : le n-ieme bloc est pris.
  *   Sinon le fichier entier est le contenu du bloc.
  *
@@ -39,6 +41,7 @@ import { fileURLToPath } from 'node:url'
 const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const FILTRE = join(RACINE, 'src/renderer/src/components/chat-html-inline.ts')
 const CHAT_CSS = join(RACINE, 'src/renderer/src/components/ChatView.css')
+const THEME_MODES_CSS = join(RACINE, 'src/renderer/src/assets/theme-modes.css')
 
 const NAVIGATEURS = [
   process.env.AUTOWIN_NAVIGATEUR,
@@ -68,6 +71,19 @@ function extraireBloc(texte, rang = 1) {
 function reglesConteneur() {
   const css = readFileSync(CHAT_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
   return [...css.matchAll(/(^|\n)(\.md-html(?![-\w])[^{]*)\{([^}]*)\}/g)]
+    .map((m) => `${m[2].trim()}{${m[3].trim()}}`)
+    .join('\n')
+}
+
+/**
+ * `--clair` : les regles `[data-base='clair'] .md-html…` de theme-modes.css, que l'app pose sur le
+ * bloc en THEME CLAIR. Elles forcent `color`, `background-color` et `border-color` en `!important`
+ * sur TOUT le contenu du bloc : une maquette controlee seulement sur fond sombre peut s'y rendre
+ * grise et sans couleur sans que le controle le voie (constat conv-227, 2026-10-11).
+ */
+function reglesThemeClair() {
+  const css = readFileSync(THEME_MODES_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  return [...css.matchAll(/(^|\n)([^{}]*\[data-base='clair'\][^{}]*\.md-html[^{}]*)\{([^}]*)\}/g)]
     .map((m) => `${m[2].trim()}{${m[3].trim()}}`)
     .join('\n')
 }
@@ -104,7 +120,10 @@ async function main() {
     sortir(1, { ok: false, erreur: `aucun navigateur trouve (essaye : ${NAVIGATEURS.join(' ; ')}) — regle AUTOWIN_NAVIGATEUR` })
 
   const filtre = await compilerFiltre()
-  const conteneur = reglesConteneur()
+  const clair = process.argv.includes('--clair')
+  const conteneur = reglesConteneur() + (clair ? '\n' + reglesThemeClair() : '')
+  // Fond du fil en theme clair : le panneau de Holographique blanc (`rgba(253, 253, 255, 0.985)`).
+  const corps = clair ? 'background:#fdfdff;color:#1c172b' : 'background:#0b0b0e;color:#dde3ee'
   const browser = await chromium.launch({ executablePath, headless: true })
   const rapport = { ok: true, fichier, fenetre, largeurs: [], defauts: [], captures: [] }
 
@@ -112,8 +131,8 @@ async function main() {
     for (const largeur of largeurs) {
       const page = await browser.newPage({ viewport: { width: fenetre, height: 900 } })
       await page.setContent(
-        `<!doctype html><html><head><style>${conteneur}</style></head>` +
-          `<body style="margin:0;background:#0b0b0e;color:#dde3ee;font:14px 'Segoe UI',system-ui,sans-serif">` +
+        `<!doctype html><html${clair ? ` data-base="clair"` : ''}><head><style>${conteneur}</style></head>` +
+          `<body style="margin:0;${corps};font:14px 'Segoe UI',system-ui,sans-serif">` +
           `<div id="colonne" style="width:${largeur}px;margin:0 auto"><div id="bloc" class="md-html"></div></div></body></html>`
       )
       await page.addScriptTag({ content: filtre })
