@@ -959,4 +959,35 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
       'trace corrompue ligne 3'
     )
   })
+
+  // fix-ok: test ajouté (cas limite 14), pas un correctif ; mesuré : repli remplacé par `Promise.resolve([])` dans WorkflowExecutionGraph.tsx:567, ce test échoue (code 1), restauré il passe
+  /*
+   * LE REPLI DU MODE DEV. L'écran se recharge à chaud, pas le pont : tant qu'on n'a pas redémarré,
+   * `causalTraceGraphe`/`causalTraceCharges` n'existent pas. Le graphe doit alors relire la trace
+   * complète comme avant et montrer le détail depuis elle — plus lent, jamais vide.
+   */
+  it('sans les lectures allégées dans le pont, relit la trace complète et montre le détail', async () => {
+    const complete = structure().map((event) =>
+      event.id === 'appel'
+        ? { ...event, payloads: [{ kind: 'user-message', content: 'PROMPT-REPLI' }] }
+        : event
+    )
+    const causalTrace = vi.fn().mockResolvedValue(complete)
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+    const view = await render()
+
+    expect(causalTrace).toHaveBeenCalledWith('conv-a')
+    expect(view.querySelector('[data-execution-node="agent"]')).not.toBeNull()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(view.querySelector('[data-execution-exchange="chargement"]')).toBeNull()
+    expect(
+      view.querySelector('.workflow-execution-detail [data-execution-prompt]')?.textContent
+    ).toContain('PROMPT-REPLI')
+    expect(causalTrace).toHaveBeenCalledTimes(1)
+  })
 })
