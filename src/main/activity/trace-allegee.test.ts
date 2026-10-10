@@ -67,6 +67,31 @@ describe('allegerTracePourGraphe', () => {
     expect(extractHumanMessage(contenu, 80)).toBe('répare le graphe du chat')
   })
 
+  it('une étape EN ÉCHEC garde un extrait borné de sa cause ; un outil en échec, rien', () => {
+    const cause = 'checkpoint orchestration causalement invalide : liens de reservation incoherents'
+    const [relais, longue, outil] = allegerTracePourGraphe([
+      {
+        ...evenement('h-1', 'handoff', [
+          { kind: 'model-response', content: cause },
+          { kind: 'app-state', content: 'état privé' }
+        ]),
+        status: 'failed'
+      },
+      {
+        ...evenement('h-2', 'handoff', [{ kind: 'error', content: 'e'.repeat(50_000) }]),
+        status: 'failed'
+      },
+      {
+        ...evenement('t-1', 'tool-call', [{ kind: 'error', content: 'sortie d’outil privée' }]),
+        status: 'failed'
+      }
+    ])
+
+    expect(relais.payloads.map((charge) => charge.content)).toEqual([cause, ''])
+    expect(longue.payloads[0].content.length).toBe(300)
+    expect(outil.payloads[0].content).toBe('')
+  })
+
   it('ne modifie pas la trace lue (événements gelés par le TraceStore)', () => {
     const source = Object.freeze(
       evenement('m-1', 'message', [

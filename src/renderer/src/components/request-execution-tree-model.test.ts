@@ -848,3 +848,130 @@ describe('choix du tour quand la conversation contient un run', () => {
     )
   })
 })
+
+/**
+ * LE DÉTAIL D'UN SOUS-AGENT DE RUN MONTRE CE QU'IL A REÇU, RENDU, ET POURQUOI IL A ÉCHOUÉ.
+ *
+ * Constaté le 2026-10-10 (scout de conv-193) : dans un run orchestré, cliquer un sous-agent disait
+ * « Aucun prompt ni retour enregistré » — la projection des runs construisait chaque agent avec
+ * `payloads: []`. Les traces réelles portent pourtant tout : sur conv-139 le prompt du sous-agent est
+ * un `message` relié à sa TENTATIVE (`attemptId`), pas par parenté ; sur conv-163 les six échecs de
+ * `scout:dette` écrivent leur cause dans la charge du relais en échec. Formes rejouées ci-dessous.
+ */
+describe('sous-agent de run — prompt, retour et cause d’échec', () => {
+  const runId = 'run-detail'
+  const exec = (attemptId: string, agentId = 'think:subagent', phase = 'think') => ({
+    runId,
+    attemptId,
+    phase,
+    agentId,
+    taskId: `${agentId}:task`
+  })
+  const workspace = runTrace('workspace', 'turn-d', 1, runId, {
+    type: 'boundary',
+    execution: { runId },
+    run: {
+      stage: 'workspace',
+      runId,
+      timestampMs: 100,
+      workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: 'C:\\wt\\run-detail' }
+    }
+  })
+  const agentOf = (events: HarnessTraceEvent[], attemptId: string) =>
+    projectLatestRequestExecution(buildHarnessTimelineFromTrace(events)).events.find(
+      (event) => event.display?.kind === 'agent' && event.execution?.attemptId === attemptId
+    )
+
+  it('remonte le prompt relié par tentative, le retour unique et le raisonnement — jamais un contenu d’outil', () => {
+    const agent = agentOf(
+      [
+        workspace,
+        runTrace('start', 'turn-d', 2, runId, {
+          status: 'running',
+          execution: exec('att-ok'),
+          payloads: [{ kind: 'app-state', content: 'payload privé' }]
+        }),
+        runTrace('prompt', 'turn-d', 3, runId, {
+          type: 'message',
+          parentId: 'outil-du-parent',
+          execution: exec('att-ok'),
+          payloads: [{ kind: 'user-message', content: 'PROMPT DU SOUS-AGENT' }]
+        }),
+        runTrace('system', 'turn-d', 4, runId, {
+          type: 'injection',
+          parentId: 'prompt',
+          execution: exec('att-ok'),
+          payloads: [{ kind: 'system-instruction', content: 'INSTRUCTIONS DU KIT' }]
+        }),
+        runTrace('outil', 'turn-d', 5, runId, {
+          type: 'tool-call',
+          execution: exec('att-ok'),
+          payloads: [
+            { kind: 'tool-call', content: 'Bash rm -rf' },
+            { kind: 'error', content: 'ERREUR OUTIL SENSIBLE' }
+          ]
+        }),
+        runTrace('reponse', 'turn-d', 6, runId, {
+          type: 'model-response',
+          execution: exec('att-ok'),
+          payloads: [{ kind: 'model-response', content: 'RETOUR DU SOUS-AGENT' }]
+        }),
+        runTrace('end', 'turn-d', 7, runId, {
+          execution: exec('att-ok'),
+          payloads: [
+            { kind: 'model-response', content: 'RETOUR DU SOUS-AGENT' },
+            { kind: 'reasoning', content: 'PENSÉE DU SOUS-AGENT' }
+          ]
+        })
+      ],
+      'att-ok'
+    )
+
+    expect(agent?.payloads.map((payload) => [payload.kind, payload.content])).toEqual([
+      ['user-message', 'PROMPT DU SOUS-AGENT'],
+      ['system-instruction', 'INSTRUCTIONS DU KIT'],
+      ['model-response', 'RETOUR DU SOUS-AGENT'],
+      ['reasoning', 'PENSÉE DU SOUS-AGENT']
+    ])
+    expect(agent?.display?.failure).toBeUndefined()
+  })
+
+  it('écrit la cause d’un échec sur le nœud, telle que la trace l’a enregistrée', () => {
+    const cause = 'checkpoint orchestration causalement invalide : liens de reservation incoherents'
+    const agent = agentOf(
+      [
+        workspace,
+        runTrace('start', 'turn-d', 2, runId, {
+          status: 'running',
+          execution: exec('att-ko', 'scout:dette', 'scout')
+        }),
+        runTrace('fail', 'turn-d', 3, runId, {
+          status: 'failed',
+          execution: exec('att-ko', 'scout:dette', 'scout'),
+          payloads: [{ kind: 'model-response', content: cause }]
+        })
+      ],
+      'att-ko'
+    )
+
+    expect(agent?.status).toBe('failed')
+    expect(agent?.display?.failure).toBe(cause)
+    expect(agent?.payloads).toEqual([{ kind: 'model-response', content: cause }])
+  })
+
+  it('n’invente pas de cause pour un échec qui n’en a enregistré aucune', () => {
+    const agent = agentOf(
+      [
+        workspace,
+        runTrace('fail', 'turn-d', 2, runId, {
+          status: 'failed',
+          execution: exec('att-muet', 'scout:dette', 'scout')
+        })
+      ],
+      'att-muet'
+    )
+
+    expect(agent?.status).toBe('failed')
+    expect(agent?.display?.failure).toBeUndefined()
+  })
+})

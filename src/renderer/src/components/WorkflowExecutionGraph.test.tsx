@@ -960,6 +960,102 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
     )
   })
 
+  /*
+   * SOUS-AGENT D'UN RUN ORCHESTRÉ (scout du 2026-10-10, conv-193). Son prompt est relié par TENTATIVE
+   * (`attemptId`), pas par parenté, et sa cause d'échec est écrite sur le relais en échec. Avant : la
+   * carte taisait la cause et le clic disait « Aucun prompt ni retour enregistré ». Formes reprises
+   * des traces réelles conv-139 (sous-agent réussi) et conv-163 (`scout:dette` en échec).
+   */
+  it('sous-agent de run : cause d’échec sur la carte, prompt et retour unique au clic', async () => {
+    const cause = 'checkpoint orchestration causalement invalide : liens de reservation incoherents'
+    const execution = (attemptId: string, agentId: string) => ({
+      phase: 'scout',
+      agentId,
+      taskId: agentId,
+      runId: 'run-1',
+      attemptId
+    })
+    // Ce que rend `os:causalTrace:graphe` : contenus vidés, sauf l'extrait de la cause d'un échec.
+    const graphe: HarnessTraceEvent[] = [
+      trace('run-workspace', 1, {
+        type: 'boundary',
+        run: {
+          runId: 'run-1',
+          timestampMs: 1,
+          stage: 'workspace',
+          workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: 'C:\\repo-run-1' }
+        }
+      }),
+      trace('ok-start', 2, {
+        type: 'handoff',
+        status: 'running',
+        execution: execution('att-ok', 'scout:ux'),
+        payloads: [{ kind: 'app-state', content: '' }]
+      }),
+      trace('ok-prompt', 3, {
+        type: 'message',
+        parentId: 'outil-ailleurs',
+        execution: execution('att-ok', 'scout:ux'),
+        payloads: [{ kind: 'user-message', content: '' }]
+      }),
+      trace('ok-outil', 4, {
+        type: 'tool-call',
+        execution: execution('att-ok', 'scout:ux'),
+        payloads: [{ kind: 'error', content: '' }]
+      }),
+      trace('ok-reponse', 5, {
+        type: 'model-response',
+        execution: execution('att-ok', 'scout:ux'),
+        payloads: [{ kind: 'model-response', content: '' }]
+      }),
+      trace('ok-end', 6, {
+        type: 'handoff',
+        execution: execution('att-ok', 'scout:ux'),
+        payloads: [{ kind: 'model-response', content: '' }]
+      }),
+      trace('ko-fail', 7, {
+        type: 'handoff',
+        status: 'failed',
+        execution: execution('att-ko', 'scout:dette'),
+        payloads: [{ kind: 'model-response', content: cause }]
+      })
+    ]
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      'ok-prompt': [{ kind: 'user-message', content: 'PROMPT DU SOUS-AGENT' }],
+      'ok-reponse': [{ kind: 'model-response', content: 'RETOUR DU SOUS-AGENT' }],
+      'ok-end': [{ kind: 'model-response', content: 'RETOUR DU SOUS-AGENT' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(graphe),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+
+    const echec = view.querySelector('[data-execution-node="agent:run-1:att-ko"]')
+    expect(echec?.querySelector('[data-execution-failure]')?.textContent).toBe(cause)
+    expect(
+      view.querySelector('[data-execution-node="agent:run-1:att-ok"] [data-execution-failure]')
+    ).toBeNull()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent:run-1:att-ok"]')?.click()
+      await Promise.resolve()
+    })
+
+    const [, eventIds] = causalTraceCharges.mock.calls[0]
+    expect(eventIds).toEqual(['ok-start', 'ok-prompt', 'ok-reponse', 'ok-end'])
+    const detail = view.querySelector('.workflow-execution-detail')
+    expect(detail?.querySelector('[data-execution-exchange="vide"]')).toBeNull()
+    expect(detail?.querySelector('[data-execution-prompt]')?.textContent).toContain(
+      'PROMPT DU SOUS-AGENT'
+    )
+    expect(detail?.querySelectorAll('[data-execution-response] pre')).toHaveLength(1)
+  })
+
   // fix-ok: test ajouté (cas limite 14), pas un correctif ; mesuré : repli remplacé par `Promise.resolve([])` dans WorkflowExecutionGraph.tsx:567, ce test échoue (code 1), restauré il passe
   /*
    * LE REPLI DU MODE DEV. L'écran se recharge à chaud, pas le pont : tant qu'on n'a pas redémarré,

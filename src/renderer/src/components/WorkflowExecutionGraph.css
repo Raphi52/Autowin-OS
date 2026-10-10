@@ -270,6 +270,16 @@
   font-weight: 700;
 }
 
+/* Cause d'un échec : une ligne, coupée ; le texte entier est dans l'infobulle et dans le détail. */
+.workflow-execution-node-failure {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--err);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workflow-execution-skill {
   color: var(--accent);
   font-weight: 800;

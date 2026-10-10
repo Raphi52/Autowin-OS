@@ -168,6 +168,63 @@ function eventOrder(a: HarnessTimelineEvent, b: HarnessTimelineEvent): number {
   return aSequence - bSequence
 }
 
+/**
+ * Genres d'événements dont une TENTATIVE de sous-agent prête ses charges au nœud. Les appels
+ * d'outil (`tool-call`, `tool-result`) en sont exclus à dessein : ils portent eux aussi une charge
+ * `error` (conv-139), qui se serait affichée comme le retour du sous-agent.
+ */
+const ATTEMPT_PAYLOAD_EVENT_KINDS = new Set<HarnessTimelineEvent['kind']>([
+  'handoff',
+  'verdict',
+  'message',
+  'injection',
+  'boundary',
+  'model-response',
+  'error'
+])
+
+/**
+ * Charges montrées par le détail d'une étape : celles de `NODE_PAYLOAD_KINDS`, sans doublon. Le
+ * relais terminal d'un sous-agent recopie la réponse du modèle mot pour mot (conv-139) : sans
+ * dédoublonnage, le retour s'afficherait deux fois. Sert à la projection ET aux charges relues au
+ * clic (`ExecutionNodeContents`). Comparaison par genre, sans concaténer de clés : en direct, la
+ * projection se rejoue chaque seconde sur des prompts de plusieurs dizaines de Ko.
+ */
+export function distinctNodePayloads(
+  payloads: HarnessTimelineEvent['payloads']
+): HarnessTimelineEvent['payloads'] {
+  const seenByKind = new Map<string, string[]>()
+  const kept: HarnessTimelineEvent['payloads'] = []
+  for (const payload of payloads) {
+    if (!NODE_PAYLOAD_KINDS.has(payload.kind)) continue
+    const seen = seenByKind.get(payload.kind) ?? []
+    if (seen.includes(payload.content)) continue
+    seen.push(payload.content)
+    seenByKind.set(payload.kind, seen)
+    kept.push(payload)
+  }
+  return kept
+}
+
+/**
+ * Cause d'un échec : la charge `error` (sinon `model-response`) du DERNIER événement en échec de la
+ * tentative — conv-163 y écrit « checkpoint orchestration causalement invalide… ». Aucune charge
+ * écrite → `undefined` : on n'invente pas de cause. En lecture allégée, la trace ne garde de ces
+ * charges qu'un extrait borné (`EXTRAIT_CAUSE_MAX`, `trace-allegee.ts`) : assez pour la carte, le
+ * texte entier reste dans le détail relu au clic.
+ */
+function failureCause(sources: HarnessTimelineEvent[]): string | undefined {
+  for (const source of [...sources].reverse()) {
+    if (source.status !== 'failed') continue
+    const payloads = source.payloads ?? []
+    const cause =
+      payloads.find((payload) => payload.kind === 'error' && payload.content?.trim()) ??
+      payloads.find((payload) => payload.kind === 'model-response' && payload.content?.trim())
+    if (cause) return cause.content.trim()
+  }
+  return undefined
+}
+
 function workspaceId(path: string): string {
   return `workspace:base:${encodeURIComponent(path.toLowerCase())}`
 }
@@ -399,25 +456,46 @@ function projectRunExecutions(
         .reverse()
         .find((candidate) => candidate.kind === 'model-response' || candidate.kind === 'error')
       const phase = latest.execution?.phase
+      // LE DÉTAIL DU SOUS-AGENT SORT DE SA TENTATIVE, PAS SEULEMENT DE SA DESCENDANCE.
+      //
+      // `payloads: []` jetait tout : un clic sur un sous-agent de run disait « Aucun prompt ni
+      // retour enregistré » alors que la trace les portait (constaté le 2026-10-10 sur conv-139 et
+      // conv-163). Le prompt d'un sous-agent n'est PAS un descendant du relais : il est relié par
+      // `attemptId`. On réunit donc relais, descendants techniques et événements de la tentative,
+      // puis on garde le même filtre que le chat direct (`NODE_PAYLOAD_KINDS`).
+      const linked = runEvents.filter(
+        (event) =>
+          event.execution?.attemptId === attemptId && ATTEMPT_PAYLOAD_EVENT_KINDS.has(event.kind)
+      )
+      // Une source par identifiant : relais, descendant et membre de la tentative se recoupent.
+      const payloadSources = [
+        ...new Map([...ordered, ...grouped, ...linked].map((event) => [event.id, event])).values()
+      ].sort(eventOrder)
+      const status = terminal?.status ?? latest.status
+      const failure = status === 'failed' ? failureCause(payloadSources) : undefined
       const agent: HarnessTimelineEvent = {
         ...latest,
         id: `agent:${runId}:${attemptId}`,
         parentId: skillByPhase.get(phase ?? '')?.id ?? runWorkspaceId,
         provider: terminal?.provider ?? latest.provider,
         model: terminal?.model ?? latest.model,
-        status: terminal?.status ?? latest.status,
+        status,
         durationMs: terminal?.durationMs ?? latest.durationMs,
         costUsd: terminal?.costUsd ?? latest.costUsd,
-        payloads: [],
+        payloads: distinctNodePayloads(payloadSources.flatMap((source) => source.payloads ?? [])),
         execution: { ...latest.execution, runId, attemptId },
         display: {
           kind: 'agent',
           title: agentTitle(latest),
+          ...(failure ? { failure } : {}),
           runId,
           attemptId,
           observedEventIds: [
             ...new Set([...ordered.map((event) => event.id), ...grouped.map((event) => event.id)])
           ],
+          // Mêmes sources, même ordre que `payloads` : le détail relu au clic (lecture allégée,
+          // `os:causalTrace:charges`) est identique à celui de la trace complète.
+          payloadEventIds: payloadSources.map((source) => source.id),
           dependencyIds: [...(latest.execution?.dependencyIds ?? [])],
           workflow: 'autowin',
           skillName: phase
