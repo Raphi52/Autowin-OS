@@ -671,16 +671,147 @@
   text-align: center;
   color: var(--text-faint);
 }
+/*
+ * CHRONOLOGIE EN FRISE — demande utilisateur du 2026-10-11 (conv-226) : « mon observatory je le veux
+ * en mode timeline dans chronologie ». Un AXE vertical continu traverse chaque tour ; à sa gauche,
+ * l'heure de chaque événement et l'écart avec le précédent ; sur l'axe, un point coloré par type ;
+ * à droite, la carte d'événement INCHANGÉE. Le tour est un jalon (losange) posé sur le même axe.
+ * Géométrie : `--tl-gutter` = largeur de la gouttière, `--tl-axis` = centre de l'axe, tous deux
+ * mesurés depuis le bord gauche du tour. `--tl-inset` compense le retrait d'un groupe encadré
+ * (bord 3px + marge 8px) pour que ses événements retombent sur le MÊME axe.
+ */
 .observatory-turn {
+  --tl-gutter: 104px;
+  --tl-axis: 90px;
+  --tl-line: rgba(233, 189, 78, 0.38);
+  position: relative;
   margin-bottom: 18px;
+  padding-left: var(--tl-gutter);
+}
+.observatory-turn::before {
+  position: absolute;
+  top: 10px;
+  bottom: 6px;
+  left: calc(var(--tl-axis) - 1px);
+  width: 2px;
+  background: var(--tl-line);
+  content: '';
 }
 .observatory-turn > header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   margin: 2px 0 8px;
   color: var(--text-faint);
   font-size: 12px;
+}
+/* Jalon du tour : losange or sur l'axe, au niveau du titre « TOUR N ». */
+.observatory-turn > header::before {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--tl-axis) - var(--tl-gutter) - 6px);
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid #e9bd4e;
+  background: var(--surface-panel, #0d1117);
+  transform: rotate(45deg);
+  content: '';
+}
+.observatory-turn > header .observatory-turn-span {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.observatory-event-row {
+  position: relative;
+}
+/* Heure + écart, alignés à droite contre l'axe, centrés sur la carte. */
+.observatory-event-when {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--tl-gutter) - var(--tl-axis) + 12px + var(--tl-inset, 0px));
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  transform: translateY(-50%);
+  color: var(--text, #dde3ee);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.observatory-event-when b {
+  font-weight: 600;
+}
+.observatory-event-when small {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+/* Longue attente avant cet événement : l'écart passe en or pour sauter aux yeux. */
+.observatory-event-when[data-pause='true'] small {
+  color: #e9bd4e;
+  font-weight: 700;
+}
+/* Point de l'événement sur l'axe, couleur de son type (même famille que la barre de la carte). */
+.observatory-event-when::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 12px - 5px);
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 2px solid var(--surface-panel, #0d1117);
+  border-radius: 50%;
+  background: var(--tl-dot, #e9bd4e);
+  transform: translateY(-50%);
+  content: '';
+}
+.observatory-event-row[data-kind='message'] {
+  --tl-dot: #6aa8ff;
+}
+.observatory-event-row[data-kind='model-response'] {
+  --tl-dot: #8f7cff;
+}
+.observatory-event-row[data-kind='response-displayed'] {
+  --tl-dot: #68eeb7;
+}
+.observatory-event-row[data-kind='artifact'] {
+  --tl-dot: #68eeb7;
+}
+.observatory-event-row[data-kind='tool-call'] {
+  --tl-dot: #2fb0a0;
+}
+.observatory-event-row[data-kind='tool-result'] {
+  --tl-dot: #7ee08a;
+}
+.observatory-event-row[data-kind='decision'] {
+  --tl-dot: #c98bff;
+}
+.observatory-event-row[data-kind='verdict'] {
+  --tl-dot: #ff8fb0;
+}
+.observatory-event-row[data-kind='gate'] {
+  --tl-dot: #ef3f91;
+}
+.observatory-event-row[data-kind='handoff'] {
+  --tl-dot: #5c9dff;
+}
+.observatory-event-row[data-kind='injection'] {
+  --tl-dot: #ff9d5c;
+}
+.observatory-event-row[data-kind='boundary'] {
+  --tl-dot: #6f7cff;
+}
+.observatory-event-row[data-kind='retry'] {
+  --tl-dot: #ffb347;
+}
+.observatory-event-row[data-kind='cancellation'] {
+  --tl-dot: #9aa0a8;
+}
+.observatory-event-row[data-kind='error'] {
+  --tl-dot: #ff6078;
 }
 .observatory-turn > header small {
   font-size: 12px;
@@ -701,6 +832,7 @@
 /* Groupes encadrés par ZONE : Sortant (bleu), Réponse (jaune), Sous-agents (violet). */
 .observatory-group {
   --zone-accent: #4aa3c7;
+  --tl-inset: 11px;
   margin: 10px 0;
   padding: 8px 8px 4px;
   border: 1px solid color-mix(in srgb, var(--zone-accent) 55%, #25313b);
@@ -1398,6 +1530,11 @@
   .observatory-quick-filters {
     flex: 1 1 100%;
   }
+  /* Frise resserrée : la gouttière des heures rend de la place à la carte. */
+  .observatory-turn {
+    --tl-gutter: 84px;
+    --tl-axis: 72px;
+  }
   .observatory-event {
     grid-template-columns: 34px 92px minmax(0, 1fr) minmax(92px, 110px);
   }
@@ -1430,6 +1567,10 @@
     max-height: 190px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+  /* Frise : police des heures réduite pour tenir dans la gouttière resserrée (règle à 1050 px). */
+  .observatory-event-when {
+    font-size: 10px;
   }
   .observatory-event {
     grid-template-columns: 32px 90px minmax(120px, 1fr);

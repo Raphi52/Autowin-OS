@@ -36,6 +36,7 @@ import { computeObservatoryTotals, formatObservatoryDuration } from './observato
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
+import { buildTimelineMarks, turnSpan, type TimelineMark } from './observatory-timeline-axis'
 import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
@@ -664,7 +665,8 @@ export function ObservatoryView({
     event: HarnessTimelineEvent,
     index: number,
     diverges = false,
-    turnId = ''
+    turnId = '',
+    mark?: TimelineMark
   ): React.JSX.Element => (
     <div key={event.id} className="observatory-event-wrap">
       <ObservatoryRagCausalStep
@@ -674,55 +676,73 @@ export function ObservatoryView({
         currentCalls={currentCalls}
         convBrainTraces={convBrainTraces}
       />
-      <button
-        className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
-        onClick={(click) => {
-          click.stopPropagation()
-          if (click.shiftKey)
-            setCompare((items) =>
-              items.some((item) => item.id === event.id)
-                ? items.filter((item) => item.id !== event.id)
-                : [...items, event].slice(-2)
-            )
-          else {
-            setSelectedCall(null)
-            setSelected(selected?.id === event.id ? null : event)
+      {/* Ligne de FRISE : l'heure et l'écart vivent dans la gouttière de gauche, sur l'axe du tour,
+          hors du bouton — son contenu et ses sélecteurs (`span:nth-child(2)`) restent intacts. */}
+      <div className="observatory-event-row" data-kind={event.kind}>
+        <time
+          className="observatory-event-when"
+          data-testid="observatory-event-when"
+          data-pause={mark?.pause ? 'true' : undefined}
+          dateTime={mark?.clock ? event.timestamp : undefined}
+          title={
+            mark?.clock
+              ? `${new Date(event.timestamp!).toLocaleString('fr-FR')}${mark.delta ? ` · ${mark.delta} depuis l’événement précédent affiché` : ''}`
+              : 'Horodatage absent de la trace'
           }
-        }}
-      >
-        <i>{index + 1}</i>
-        <span>
-          <b>{isReasoningEvent(event) ? 'Raisonnement du modèle' : LABEL[event.kind]}</b>
-          {diverges && <em className="observatory-diverge-badge">divergeant</em>}
-          <small>{event.actor}</small>
-        </span>
-        <p>
-          <strong>
-            {event.content
-              ? humanEventPreview(event.kind, event.content, 140)
-              : 'Aucun contenu observable.'}
-          </strong>
-          <small>
-            {event.provider
-              ? `${event.provider}${event.model ? ` · ${event.model}` : ''}`
-              : event.detail}
-          </small>
-        </p>
-        <span className="observatory-load">
-          {event.inputTokens != null && <b>{event.inputTokens.toLocaleString('fr-FR')} in</b>}
-          {event.cacheReadTokens != null && (
-            <small>{event.cacheReadTokens.toLocaleString('fr-FR')} cache</small>
-          )}
-          {event.outputTokens != null && (
-            <small>{event.outputTokens.toLocaleString('fr-FR')} out</small>
-          )}
-          {event.costUsd != null && <small>${event.costUsd.toFixed(4)}</small>}
-          {event.durationMs != null && <small>{Math.round(event.durationMs)} ms</small>}
-          {event.inputTokens == null && event.outputTokens == null && (
-            <small>{event.content.length.toLocaleString('fr-FR')} caractères</small>
-          )}
-        </span>
-      </button>
+        >
+          <b>{mark?.clock ?? '—'}</b>
+          {mark?.delta && <small>{mark.delta}</small>}
+        </time>
+        <button
+          className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
+          onClick={(click) => {
+            click.stopPropagation()
+            if (click.shiftKey)
+              setCompare((items) =>
+                items.some((item) => item.id === event.id)
+                  ? items.filter((item) => item.id !== event.id)
+                  : [...items, event].slice(-2)
+              )
+            else {
+              setSelectedCall(null)
+              setSelected(selected?.id === event.id ? null : event)
+            }
+          }}
+        >
+          <i>{index + 1}</i>
+          <span>
+            <b>{isReasoningEvent(event) ? 'Raisonnement du modèle' : LABEL[event.kind]}</b>
+            {diverges && <em className="observatory-diverge-badge">divergeant</em>}
+            <small>{event.actor}</small>
+          </span>
+          <p>
+            <strong>
+              {event.content
+                ? humanEventPreview(event.kind, event.content, 140)
+                : 'Aucun contenu observable.'}
+            </strong>
+            <small>
+              {event.provider
+                ? `${event.provider}${event.model ? ` · ${event.model}` : ''}`
+                : event.detail}
+            </small>
+          </p>
+          <span className="observatory-load">
+            {event.inputTokens != null && <b>{event.inputTokens.toLocaleString('fr-FR')} in</b>}
+            {event.cacheReadTokens != null && (
+              <small>{event.cacheReadTokens.toLocaleString('fr-FR')} cache</small>
+            )}
+            {event.outputTokens != null && (
+              <small>{event.outputTokens.toLocaleString('fr-FR')} out</small>
+            )}
+            {event.costUsd != null && <small>${event.costUsd.toFixed(4)}</small>}
+            {event.durationMs != null && <small>{Math.round(event.durationMs)} ms</small>}
+            {event.inputTokens == null && event.outputTokens == null && (
+              <small>{event.content.length.toLocaleString('fr-FR')} caractères</small>
+            )}
+          </span>
+        </button>
+      </div>
       {selected?.id === event.id && (
         <article className="observatory-event-detail" onClick={(click) => click.stopPropagation()}>
           <header>
@@ -1508,6 +1528,15 @@ export function ObservatoryView({
                   <div>
                     <span>TOUR {timeline.turns.length - turnIndex}</span>
                     <time>{new Date(turn.ts).toLocaleString('fr-FR')}</time>
+                    {turnSpan(turn.events) && (
+                      <small
+                        className="observatory-turn-span"
+                        data-testid="observatory-turn-span"
+                        title="Durée couverte par les événements affichés de ce tour"
+                      >
+                        sur {turnSpan(turn.events)}
+                      </small>
+                    )}
                   </div>
                   <small>
                     {turn.tokens.toLocaleString('fr-FR')} tokens ·{' '}
@@ -1518,7 +1547,15 @@ export function ObservatoryView({
                 </header>
                 {(() => {
                   let n = 0
-                  return layoutTurnEvents(turn.events).map((item, itemIndex) =>
+                  const items = layoutTurnEvents(turn.events)
+                  // Les écarts se mesurent dans l'ORDRE AFFICHÉ (réponse dédupliquée comprise) : la
+                  // frise dit « +2,4 s depuis la ligne au-dessus », pas depuis un événement masqué.
+                  const marks = buildTimelineMarks(
+                    items.flatMap((item) =>
+                      item.type === 'group' ? item.events.map(({ event }) => event) : [item.event]
+                    )
+                  )
+                  return items.map((item, itemIndex) =>
                     item.type === 'group' ? (
                       <div
                         key={`${item.zone}:${turn.id}:${itemIndex}`}
@@ -1529,11 +1566,11 @@ export function ObservatoryView({
                           <small>{ZONE_HINT[item.zone]}</small>
                         </div>
                         {item.events.map(({ event, diverges }) =>
-                          renderEvent(event, n++, diverges, turn.id)
+                          renderEvent(event, n++, diverges, turn.id, marks.get(event.id))
                         )}
                       </div>
                     ) : (
-                      renderEvent(item.event, n++, false, turn.id)
+                      renderEvent(item.event, n++, false, turn.id, marks.get(item.event.id))
                     )
                   )
                 })()}

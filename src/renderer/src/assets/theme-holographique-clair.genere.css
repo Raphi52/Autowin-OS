@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   566 regles, 858 declarations. Voir genererCoucheClaire. */
+   570 regles, 863 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -1298,6 +1298,19 @@
 :root[data-theme='holographique-clair'] .observatory-causal-node-wrap > button.is-critical {
     border-color: rgba(14, 49, 170, 0.46);
     background: linear-gradient(90deg, rgba(60, 110, 235, 0.1), var(--surface-card))
+}
+:root[data-theme='holographique-clair'] .observatory-turn {
+    --tl-line: rgba(170, 14, 95, 0.38)
+}
+:root[data-theme='holographique-clair'] .observatory-turn > header::before {
+    border: 2px solid #aa0e5f;
+    background: var(--surface-panel, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .observatory-event-when[data-pause='true'] small {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-event-when::after {
+    border: 2px solid var(--surface-panel, rgba(20, 15, 40, 0.2))
 }
 :root[data-theme='holographique-clair'] .observatory-turn > header span {
     color: #aa0e5f
