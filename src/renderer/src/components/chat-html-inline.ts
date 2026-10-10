@@ -475,6 +475,8 @@ function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
  * Une requete qui ne porte QUE sur la largeur devient donc une requete de CONTENEUR, et le bloc
  * devient ce conteneur (voir `sanitizeChatHtml`). Tout le reste (`print`, `prefers-*`, hauteur,
  * orientation, `device-width`, listes a virgule, `not`) garde son sens de page et reste `@media`.
+ *
+ * fix-ok: cause mesuree conv-139 tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 (saisie ts=1791619766383) — un `@media` de largeur d'un bloc mesurait la fenetre (1600 px) et non la colonne (860 px) : contenu 1460 px, 600 px coupes ; apres conversion `@container` 1140 px, 280 px coupes (scripts/html-render-apercu.mjs). Test chat-html-inline.largeur-colonne : 3/5 rouges sur 9b180bfe^, 5/5 verts sur 9b180bfe.
  */
 const FEATURE_LARGEUR = String.raw`\(\s*(?:(?:min-|max-)?width\s*:[^()]*|[^():]*(?<![\w-])width(?![\w-])[^():]*)\)`
 const MEDIA_DE_LARGEUR = new RegExp(
