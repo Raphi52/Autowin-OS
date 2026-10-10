@@ -166,6 +166,29 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
+   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-157) : « ce bouton met le en dore » (pastille
+   * « ↓ Dernier message », rose dans ce theme). La regle ecrite a la main doit couvrir les DEUX
+   * pastilles (fil et mosaique, identiques par choix) et ne garder aucun rose.
+   */
+  it('peint la pastille « Dernier message » en or, dans le fil comme dans la mosaique', () => {
+    const regles: postcss.Rule[] = []
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (/chat-jump-latest|chat-mosaic-window-jump/.test(regle.selector)) regles.push(regle)
+    })
+    const selecteurs = regles.flatMap((r) => r.selectors.map((s) => s.replace(/\s+/g, ' ').trim()))
+    expect(selecteurs).toEqual(
+      expect.arrayContaining([
+        `${PREFIXE} .cosmic-outline .chat-jump-latest`,
+        `${PREFIXE} .chat-mosaic-window-jump`
+      ])
+    )
+    const texte = regles.map((r) => r.toString()).join('\n')
+    expect(texte).toContain('rgba(212, 169, 79, 0.6)')
+    expect(texte).toContain('color: #e3ba55')
+    expect(texte).not.toMatch(/255, 141, 198|255, 176, 216|230, 60, 160/)
+  })
+
+  /**
    * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-157) : « met des borders degrade [...] sur les
    * elements du chat qui ont un cadre comme ca » (capture de la carte de fichier du fil), precise :
    * « ca doit etre les memes couleurs que mes messages dans le chat ». Le bord rose plein de la
@@ -187,9 +210,22 @@ describe('theme Nebuleuse de verre', () => {
     expect(carte.border).toBe('0')
     expect(carte.position).toBe('relative')
     const bord = decls(`${PREFIXE} .artifact-preview::before`)
-    const bulle = decls(`${PREFIXE} .msg.user .msg-body`)
-    expect(bulle.background).toBe('linear-gradient(135deg, #e63ca0, #3c6eeb)')
-    expect(bord.background).toBe(bulle.background)
+    // La bulle AFFICHEE vient de cosmic-outline.css (`.msg-bulle`, selecteur plus fort que la
+    // regle `.msg.user .msg-body` du theme, qui est ecrasee) : c'est elle qu'on compare.
+    let bulle = ''
+    postcss.parse(lire('./cosmic-outline.css')).walkRules((regle) => {
+      if (
+        regle.selector.includes(":not([data-base='clair']):not([data-theme^='malvoyant-'])") &&
+        /\.msg\.user \.msg-body\.msg-bulle$/.test(regle.selector.trim())
+      ) {
+        regle.walkDecls('background', (d) => {
+          bulle = d.value
+        })
+      }
+    })
+    // Bleu en haut a gauche -> rose en bas a droite (« le bleu est a gauche et le rose a droite »).
+    expect(bulle).toBe('linear-gradient(135deg, rgba(60, 110, 235, 0.85), rgba(230, 60, 160, 0.85))')
+    expect(bord.background).toBe(bulle)
     expect(bord['border-radius']).toBe('inherit')
     expect(bord['mask-composite']).toBe('exclude')
     expect(bord['pointer-events']).toBe('none')
