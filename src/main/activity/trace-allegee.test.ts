@@ -130,4 +130,18 @@ describe('chargesDesEvenements', () => {
       )
     ).toThrow(/500/)
   })
+
+  // fix-ok: tests ajoutés (cas limites 5 et 6), pas un correctif ; mesuré : sans `element.trim() === ''` dans listeDeChaines, ce test échoue (code 1), restauré il passe
+  it('refuse un identifiant vide dans la liste, au lieu de l’ignorer en silence', () => {
+    expect(() => chargesDesEvenements(trace, ['a', ''], ['model-response'])).toThrow(
+      /eventIds contient une entrée invalide/
+    )
+    expect(() => chargesDesEvenements(trace, ['a', '   '], ['model-response'])).toThrow(
+      /eventIds contient une entrée invalide/
+    )
+  })
+
+  it('une liste vide ne demande rien et ne rend rien', () => {
+    expect(chargesDesEvenements(trace, [], ['model-response'])).toEqual({})
+  })
 })
