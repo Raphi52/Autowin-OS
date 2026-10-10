@@ -69,6 +69,34 @@ describe('theme Holographique blanc', () => {
     expect(genererMainClair()).toBe(css)
   })
 
+  /* conv-223 (2026-10-11, capture : texte de l'agent sur un fond gris a lisere rose) : « ecris juste en
+     noir sur blanc sans liserais et sans fond gris sous le texte ». La couche generee peint le meme
+     selecteur (lisere rose, voile gris) avec le MEME poids : seul l'ordre d'import la faisait perdre,
+     et une feuille ajoutee a chaud passe en dernier. La regle du blanc doit donc gagner par son POIDS. */
+  it("ecrit la reponse de l'agent en noir sur blanc, sans lisere ni fond, quel que soit l'ordre des feuilles", () => {
+    const poids = (s: string): number => (s.match(/\[[^\]]+\]|\.[\w-]+|:(?!:)[\w-]+/g) ?? []).length
+    let poidsCouche = 0
+    postcss.parse(lire('./theme-holographique-clair.genere.css')).walkRules((regle) => {
+      const peint = regle.nodes.some((d) => d.type === 'decl' && /^(border|background)/.test(d.prop))
+      if (!peint) return
+      for (const s of regle.selectors) if (/\.msg-body$/.test(s) && !/\.msg\.user/.test(s)) poidsCouche = Math.max(poidsCouche, poids(s))
+    })
+    expect(poidsCouche).toBeGreaterThan(0)
+    const decl: Record<string, string> = {}
+    let poidsBlanc = 0
+    postcss.parse(css).walkRules((regle) => {
+      for (const s of regle.selectors) {
+        if (!/\[data-base='clair'\] \.cosmic-outline \.msg\.assistant \.msg-body$/.test(s)) continue
+        poidsBlanc = Math.max(poidsBlanc, poids(s))
+        regle.walkDecls((d) => {
+          decl[d.prop] = d.value
+        })
+      }
+    })
+    expect(poidsBlanc).toBeGreaterThan(poidsCouche)
+    expect(decl).toMatchObject({ border: '0', background: 'transparent', color: '#000000' })
+  })
+
   it('ne peint rien hors du theme', () => {
     const fautifs: string[] = []
     postcss.parse(css).walkRules((regle) => {

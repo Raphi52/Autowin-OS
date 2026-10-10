@@ -625,6 +625,17 @@ const COMPLEMENT_CLAIR = `
 :root[data-theme='${CLAIR_ID}'][data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .conv-search, .artifact-preview) {
   background: #fdfdff;
 }
+/* REPONSE DE L'AGENT EN NOIR SUR BLANC (conv-223, 2026-10-11, capture : texte sur un voile gris a
+   lisere rose). Demande : « ecris juste en noir sur blanc sans liserais et sans fond gris sous le
+   texte ». La couche generee (theme-${CLAIR_ID}.genere.css) peint ce selecteur -- lisere rose,
+   voile rgba(20, 15, 40, 0.07) -- avec le MEME poids que la feuille principale : seul l'ordre d'import
+   la faisait perdre. Ajoutee a chaud pendant une session ouverte, elle est passee DERRIERE et a gagne.
+   Le double attribut donne a cette regle un poids de plus : elle gagne quel que soit l'ordre. */
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .cosmic-outline .msg.assistant .msg-body {
+  border: 0;
+  background: transparent;
+  color: #000000;
+}
 /* Fond UNI (« Le plus blanc ») : le decor de fond ressortait en formes grises sur l'Accueil. */
 :root[data-theme='${CLAIR_ID}'] .decor-de-fond {
   display: none;
