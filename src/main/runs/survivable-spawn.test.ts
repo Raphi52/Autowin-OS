@@ -397,6 +397,30 @@ child.once('close', (code) => {
     await run.tail((line) => lines.push(line))
     expect(lines.length).toBe(2) // et la sortie reste lisible tant que l'app vit
   })
+
+  it('sans journal : un caractère UTF-8 coupé entre deux morceaux du pipe reste intact', async () => {
+    // Le CLI écrit du JSON en UTF-8. « é » (C3 A9) envoyé en DEUX écritures espacées arrive en deux
+    // morceaux : décodé morceau par morceau, il devenait deux U+FFFD, et l'offset comptait 6 octets.
+    const root = tempRoot()
+    const writer = join(root, 'coupe.mjs')
+    writeFileSync(
+      writer,
+      `process.stdout.write(Buffer.from([0x7b, 0x22, 0x74, 0x22, 0x3a, 0x22, 0xc3]))
+setTimeout(() => process.stdout.write(Buffer.from([0xa9, 0x22, 0x7d, 0x0a])), 150)
+`
+    )
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [writer],
+      journalRoot: undefined,
+      detachedEnabled: false
+    })
+
+    const lines: string[] = []
+    const { offset } = await run.tail((line) => lines.push(line))
+    expect(lines).toEqual(['{"t":"é"}'])
+    expect(offset).toBe(11) // octets réellement lus, pas la longueur d'un texte réencodé
+  })
 })
 
 /**
