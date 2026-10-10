@@ -145,6 +145,22 @@ describe('minimal conversation status lights', () => {
       /\.conversation-state\.is-asking\s*{[^}]*color:\s*var\(--chat-etat-question\)/s
     )
     expect(theme).toMatch(/--chat-etat-question:\s*#facc15;/)
+    // DEMANDE DU 2026-10-10 : les trois points de la question tournent de 90 degres — une COLONNE
+    // (comme les reponses proposees, listees l'une sous l'autre), precedee d'un « ? ». Les deux
+    // animations sont COMBINEES en un seul cycle : le « ? » gigote, PUIS chaque point avance a
+    // droite a tour de role. Meme duree des deux cotes, sinon elles se decalent au fil des cycles.
+    // L'attente (is-waiting) garde sa rangee horizontale.
+    const asking = css.match(/\.conversation-state\.is-asking\s*{([^}]*)}/s)?.[1]
+    const question = css.match(/\.conversation-state\.is-asking::before\s*{([^}]*)}/s)?.[1]
+    expect(asking).toMatch(/width:\s*18px;[^]*height:\s*15px;/)
+    expect(question).toMatch(/content:\s*'\?';/)
+    const dureeColonne = asking?.match(/animation:\s*conv-asking-list\s+([\d.]+s)\b/)?.[1]
+    const dureeQuestion = question?.match(/animation:\s*conv-asking-wiggle\s+([\d.]+s)\b/)?.[1]
+    expect(dureeColonne).toBeDefined()
+    expect(dureeQuestion).toBe(dureeColonne)
+    expect(css).toMatch(
+      /\.conversation-state\.is-waiting\s*{[^}]*width:\s*15px;[^}]*height:\s*9px;[^}]*animation:\s*conv-asking-dots\b/s
+    )
     // PLUS DE reduced-motion SUR LE SPINNER — decision du 2026-08-28, verrouillee par
     // assets/spinner-motion.test.ts : le spinner est un indicateur d'ETAT, pas un effet
     // decoratif. Fige, il affirme faussement que rien ne tourne. Reintroduire l'assertion
