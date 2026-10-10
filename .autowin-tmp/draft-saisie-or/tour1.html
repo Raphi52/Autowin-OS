@@ -1,0 +1,160 @@
+<style>
+.dr{font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#dde3ee;background:transparent}
+.dr .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 10px}
+.dr .tabs label{font:600 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#a9b2c4;padding:7px 10px;border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer}
+.dr .r{display:none}
+.dr .p{display:none}
+.dr #v1:checked ~ .tabs label[for=v1],.dr #v2:checked ~ .tabs label[for=v2],.dr #v3:checked ~ .tabs label[for=v3],.dr #v4:checked ~ .tabs label[for=v4],.dr #v5:checked ~ .tabs label[for=v5],.dr #v6:checked ~ .tabs label[for=v6],.dr #v0:checked ~ .tabs label[for=v0]{color:#e3ba55;border-color:rgba(227,186,85,.7);background:rgba(212,169,79,.10)}
+.dr #v1:checked ~ .p1,.dr #v2:checked ~ .p2,.dr #v3:checked ~ .p3,.dr #v4:checked ~ .p4,.dr #v5:checked ~ .p5,.dr #v6:checked ~ .p6,.dr #v0:checked ~ .p0{display:block}
+.dr .kick{font:600 11px/1.4 ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;color:#d4a94f}
+.dr .sep{height:1px;margin:10px 0;background:linear-gradient(90deg,rgba(212,169,79,.55),rgba(212,169,79,.06))}
+.dr .why{color:#a9b2c4;margin:4px 0 0}
+.dr .why b{color:#dde3ee}
+.dr .zoom{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin:10px 0 0}
+.dr .zc{display:flex;flex-direction:column;align-items:center;gap:6px}
+.dr .zl{font:10.5px/1.2 ui-monospace,Consolas,monospace;color:#a9b2c4;letter-spacing:.04em}
+.dr .big{display:inline-flex;align-items:center;justify-content:center;width:74px;height:60px;border-radius:22px 22px 6px 22px}
+.dr .big svg{width:30px;height:30px}
+.dr .off{opacity:.45}
+.dr .coin{width:150px;height:72px;border-radius:0 0 22px 0;border-right:1px solid rgba(255,255,255,.11);border-bottom:1px solid rgba(255,255,255,.11)}
+.dr .cp{margin:12px 0 0;border:1px solid rgba(255,255,255,.11);border-radius:16px;padding:14px 18px 12px}
+.dr .l1{display:flex;align-items:flex-start;gap:12px}
+.dr .ph{flex:1;min-width:0;color:#8f89ad;padding-top:9px;font-size:14px}
+.dr .send{display:inline-flex;align-items:center;justify-content:center;flex:0 0 46px;width:46px;height:38px;border-radius:14px 14px 4px 14px}
+.dr .send svg{width:19px;height:19px}
+.dr .q{display:flex;align-items:center;margin:10px 0 0}
+.dr .qf{flex:0 0 41%;height:2px;background:linear-gradient(90deg,#e8302a,#ff8a5c)}
+.dr .qk{display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;height:20px;border-radius:50%;border:1px solid #ff8a5c;background:#2a160e;color:#ff8a5c;font:700 9.5px/1 ui-monospace,Consolas,monospace}
+.dr .qt{flex:1;height:2px;background:rgba(255,255,255,.08)}
+.dr .l3{display:flex;align-items:center;gap:8px;margin:12px 0 0;flex-wrap:wrap}
+.dr .rd{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px solid #ffffff;color:#ffffff}
+.dr .rd svg{width:13px;height:13px}
+.dr .mdl{font-weight:700;font-size:12.5px;margin-left:8px;color:#ffffff}
+.dr .eff{font-size:11px;color:#a9b2c4;display:inline-flex;align-items:center;gap:3px}
+.dr .eff svg{width:10px;height:10px}
+.dr .note{color:#a9b2c4;font-size:12.5px;margin:10px 0 0}
+.dr .note b{color:#dde3ee}
+
+/* ---- ACTUEL (rose) ---- */
+.dr .p0 .bg{background:linear-gradient(315deg,rgba(230,60,160,.42),rgba(10,10,10,.92) 62%),rgba(8,8,8,.86)}
+.dr .p0 .btn{background:linear-gradient(135deg,rgba(60,110,235,.85),rgba(230,60,160,.85));color:#fff}
+
+/* ---- 1 FILET D'OR ---- */
+.dr .p1 .bg{background:linear-gradient(90deg,#e3ba55,rgba(212,169,79,.55) 55%,rgba(212,169,79,.08)) 16px 0/calc(100% - 32px) 1.5px no-repeat,#0b0b0c}
+.dr .p1 .coin.bg{background:#0b0b0c}
+.dr .p1 .ftop{width:150px;height:72px;border-radius:22px 0 0 0;border-left:1px solid rgba(255,255,255,.11);border-top:1px solid rgba(227,186,85,.85);background:#0b0b0c}
+.dr .p1 .btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);border-top-color:rgba(255,255,255,.26);color:#e3ba55}
+
+/* ---- 2 ANGLE D'OR ---- */
+.dr .p2 .bg{background:linear-gradient(315deg,rgba(212,169,79,.26),rgba(10,10,10,.92) 55%),rgba(8,8,8,.86)}
+.dr .p2 .btn{background:linear-gradient(135deg,#ecc766,#a8802f);color:#1a1408;border:1px solid #c99a3c;border-top-color:#f6dc94}
+
+/* ---- 3 POINT D'OR ---- */
+.dr .p3 .bg{background:#17171a}
+.dr .p3 .cp{border-color:rgba(255,255,255,.14)}
+.dr .p3 .coin{border-color:rgba(255,255,255,.14)}
+.dr .p3 .btn{background:#d4a94f;color:#141008}
+
+/* ---- 4 CADRE OR ---- */
+.dr .p4 .bg{background:#09090a}
+.dr .p4 .cp{border-color:rgba(212,169,79,.5)}
+.dr .p4 .coin{border-color:rgba(212,169,79,.5)}
+.dr .p4 .btn{background:transparent;border:1.5px solid #d4a94f;color:#e3ba55}
+
+/* ---- 5 SOCLE OR ---- */
+.dr .p5 .bg{background:linear-gradient(180deg,rgba(10,10,10,.95) 40%,rgba(212,169,79,.28)),rgba(8,8,8,.86)}
+.dr .p5 .l3{padding-top:10px;border-top:1px solid rgba(212,169,79,.28)}
+.dr .p5 .btn{background:rgba(212,169,79,.20);border:1px solid rgba(227,186,85,.65);color:#f0d48a}
+
+/* ---- 6 CHAMPAGNE ET NUIT ---- */
+.dr .p6 .bg{background:linear-gradient(315deg,rgba(205,184,138,.22),rgba(10,10,10,0) 50%),linear-gradient(135deg,rgba(60,84,150,.24),rgba(10,10,10,0) 45%),rgba(9,9,11,.94)}
+.dr .p6 .btn{background:linear-gradient(135deg,#efe0b6,#b99a5a);color:#1b1710}
+.dr .p6 .cp{border-color:rgba(205,184,138,.22)}
+.dr .p6 .coin{border-color:rgba(205,184,138,.22)}
+</style>
+<div class="dr">
+<div class="kick">Saisie du chat · thème Nébuleuse de verre · 6 variantes sans rose</div>
+<div class="sep"></div>
+<input type="radio" name="dv" id="v1" class="r" checked><input type="radio" name="dv" id="v2" class="r"><input type="radio" name="dv" id="v3" class="r"><input type="radio" name="dv" id="v4" class="r"><input type="radio" name="dv" id="v5" class="r"><input type="radio" name="dv" id="v6" class="r"><input type="radio" name="dv" id="v0" class="r">
+<div class="tabs"><label for="v1">1 · Filet d'or</label><label for="v2">2 · Angle d'or</label><label for="v3">3 · Point d'or</label><label for="v4">4 · Cadre or</label><label for="v5">5 · Socle or</label><label for="v6">6 · Champagne</label><label for="v0">Actuel</label></div>
+
+<div class="p p1">
+<div class="kick">1 · Filet d'or — or en trace</div>
+<p class="why">Fond <b>noir uni</b>, plus aucun dégradé. Le seul or : un <b>filet fin en haut</b> qui s'éteint vers la droite, et l'<b>avion doré</b> sur un bouton de verre neutre.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="ftop"></div><span class="zl">coin haut-gauche</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p2">
+<div class="kick">2 · Angle d'or — même lumière, autre couleur</div>
+<p class="why">La <b>même nappe</b> qu'aujourd'hui, partie du <b>coin bas-droit</b>, mais <b>dorée</b> et plus discrète (26 % au lieu de 42 %). Bouton d'envoi en <b>or plein</b>, avion foncé.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p3">
+<div class="kick">3 · Point d'or — un seul accent</div>
+<p class="why">Bloc <b>graphite uni</b>, un cran plus clair que le fil. L'or n'existe qu'à <b>un endroit</b> : le <b>bouton d'envoi</b>, en or mat plein, sans dégradé ni reflet.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p4">
+<div class="kick">4 · Cadre or — l'or dessine le contour</div>
+<p class="why">Fond <b>noir profond</b> uni. Le <b>bord entier</b> du bloc passe en <b>or fin</b> à mi-opacité. Bouton d'envoi <b>en contour</b> : vide au centre, bord et avion dorés.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p5">
+<div class="kick">5 · Socle or — l'or monte du bas</div>
+<p class="why">Lumière <b>dorée par en dessous</b> : le haut reste noir, la <b>rangée d'outils</b> repose sur un socle chaud, séparée par un <b>filet or</b>. Envoi en <b>or translucide</b>.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p6">
+<div class="kick">6 · Champagne et nuit — deux tons doux</div>
+<p class="why">Garde l'idée des <b>deux couleurs</b> d'aujourd'hui, mais <b>bleu nuit</b> en haut à gauche et <b>champagne</b> (or désaturé) en bas à droite. Envoi en <b>champagne pâle</b>, avion foncé.</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="p p0">
+<div class="kick">Actuel — pour comparer</div>
+<p class="why">Nappe <b>rose à 42 %</b> depuis le coin bas-droit, bouton d'envoi en dégradé <b>bleu → rose</b> (lu violet quand il est éteint).</p>
+<div class="zoom">
+<div class="zc"><span class="big btn"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">envoi prêt</span></div>
+<div class="zc"><span class="big btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span><span class="zl">champ vide</span></div>
+<div class="zc"><div class="coin bg"></div><span class="zl">coin bas-droit</span></div>
+</div>
+<div class="cp bg"><div class="l1"><span class="ph">Écrire à l’agent ou déposer des fichiers…</span><span class="send btn off"><svg viewBox="0 0 24 24"><path d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z" fill="currentColor"/></svg></span></div><div class="q"><span class="qf"></span><span class="qk">41</span><span class="qt"></span></div><div class="l3"><span class="rd"><svg viewBox="0 0 24 24"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><path d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="rd"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="mdl">Opus 5.5 · CLI</span><span class="eff">Très élevé <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></div></div>
+</div>
+
+<div class="sep"></div>
+<p class="note"><b>Inchangé partout</b> : la jauge rouge → orange (sa couleur dit le <b>niveau de quota</b>), les trois ronds blancs, la forme du bouton d'envoi, et <b>aucune lueur</b> autour du bouton (celle d'aujourd'hui est retirée).</p>
+</div>
