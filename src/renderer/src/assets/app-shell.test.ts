@@ -61,15 +61,18 @@ describe('collapsed navigation rail', () => {
 
   it('keeps the collapsed controls square and reduces the gap before content', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*9px/s)
-    // Géométrie verrouillée : 33px + margin-inline 0 3px, sinon l'icône ne peut pas
-    // se décaler de 3px vers la gauche dans un rail de 54px (voir le test suivant).
+    // 54 - 2 x 8 px - 2 x 1 px de bord (cadre Nébuleuse) = 36 px : la piste tient un item rond.
+    expect(css).toMatch(/\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*8px/s)
+    // conv-198 : replié, l'item est un CARRÉ centré — un bord en capsule (999px) y dessine un
+    // rond, pas un ovale. L'ancien 33 x 36 collé à gauche donnait un ovale décentré.
     // `width` est ancré sur une frontière pour qu'un `max-width: 36px` ne le satisfasse pas.
     const collapsedNavItem =
       css.match(/\.rail\.is-collapsed \.nav-item\s*{([^}]*)}/s)?.[1] ?? ''
-    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])width:\s*33px\s*;/)
-    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-inline:\s*0 3px\s*;/)
-    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])height:\s*36px\s*;/)
+    const width = collapsedNavItem.match(/(?:^|[;{\s])width:\s*(\d+)px\s*;/)?.[1]
+    const height = collapsedNavItem.match(/(?:^|[;{\s])height:\s*(\d+)px\s*;/)?.[1]
+    expect(width).toBe('36')
+    expect(height).toBe(width)
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-inline:\s*auto\s*;/)
     expect(css).toMatch(
       /\.shell:has\(\.rail\.is-collapsed\) \.main\s*{[^}]*padding-left:\s*var\(--s2\)/s
     )
@@ -77,12 +80,11 @@ describe('collapsed navigation rail', () => {
     expect(css).not.toMatch(/(?:^|\n)\.nav\s*{[^}]*overflow-x:\s*hidden/s)
   })
 
-  it('shifts navigation icons three pixels left only when the rail is collapsed', () => {
+  // conv-198 : l'ancien translateX(-3px) mettait l'icône 3 px à gauche du centre de son rond.
+  // Centrée par la flexbox seule, elle tombe au milieu du rond et sous le bouton de repli.
+  it('never shifts the navigation icons off the centre of their round item', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
-    expect(css).toMatch(
-      /\.rail\.is-collapsed \.space-toy-icon\s*{[^}]*transform:\s*translateX\(-3px\)/s
-    )
-    expect(css).not.toMatch(/(?:^|\n)\.space-toy-icon\s*{[^}]*translateX\(-3px\)/s)
+    expect(css).not.toMatch(/\.space-toy-icon\s*{[^}]*transform:\s*translate/s)
   })
 })
 
