@@ -501,8 +501,9 @@ export function genererMainDoree() {
 :root[data-theme='nebuleuse-doree'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
   color: #141008;
 }
-/* Bloc ASK (conv-202) : badge, Envoyer et reponse cochee portent le degrade, ici or plein. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) {
+/* Bloc ASK et bloc du cadrage (conv-202) : badge, Envoyer et reponse cochee portent le degrade,
+   ici or plein. */
+:root[data-theme='nebuleuse-doree'] .askd {
   --nv-askd-encre-bulle: #141008;
 }
 `

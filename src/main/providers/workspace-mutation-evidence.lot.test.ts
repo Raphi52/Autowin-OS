@@ -22,6 +22,7 @@ vi.mock('../git-read-main', async (importOriginal) => {
   return {
     ...reel,
     readGitState: vi.fn(reel.readGitState),
+    readGitDiff: vi.fn(reel.readGitDiff),
     readGitDiffHeadBatch: vi.fn(reel.readGitDiffHeadBatch),
     readNoIndexGitDiff: vi.fn(reel.readNoIndexGitDiff)
   }
@@ -33,6 +34,7 @@ afterEach(() => {
   vi.mocked(readGitState).mockClear()
   vi.mocked(readGitDiffHeadBatch).mockClear()
   vi.mocked(readNoIndexGitDiff).mockClear()
+  vi.mocked(readGitDiff).mockClear()
   for (const root of roots.splice(0)) supprimerArbre(root)
 })
 
@@ -207,5 +209,36 @@ describe('photo git du tour : une entree non suivie inchangee ne se rediffe pas'
     expect(appelsSurDesEntreesPresentes(root)).toEqual(['nouveau.ts'])
     const seconde = await captureWorkspaceMutationSnapshot(root)
     expect(seconde.get('nouveau.ts')).not.toBe(premiere.get('nouveau.ts'))
+  })
+})
+
+/**
+ * UN NOM ACCENTUE EST VU SOUS SON VRAI NOM — heal conv-204, 2026-10-10.
+ *
+ * `git status` cite tout chemin non ASCII : `"accentu\303\251.ts"`. La photo gardait ce texte comme
+ * nom de fichier ; `git diff HEAD -- "accentu\303\251.ts"` ne designe aucun fichier et rend un diff
+ * VIDE. L'empreinte ne bougeait donc jamais : les modifications de ce fichier etaient invisibles.
+ */
+describe('photo git du tour : un nom accentue est vu sous son vrai nom', () => {
+  it('la photo nomme le fichier accentue, et une modification change son empreinte', async () => {
+    const root = depot('autowin-accent-')
+    const avant = await captureWorkspaceMutationSnapshot(root)
+    expect([...avant.keys()].filter((chemin) => chemin.includes('"'))).toEqual([])
+    expect(avant.has('accentué.ts')).toBe(true)
+    expect(avant.lineFingerprints.get('accentué.ts')).toHaveLength(1)
+
+    writeFileSync(join(root, 'accentué.ts'), 'apres\nencore une ligne\n', 'utf8')
+    const apres = await captureWorkspaceMutationSnapshot(root)
+    expect(apres.get('accentué.ts')).not.toBe(avant.get('accentué.ts'))
+    expect(apres.lineFingerprints.get('accentué.ts')).toHaveLength(2)
+  })
+
+  it('l en-tete de diff cite par git reste attribue par le lot : aucun repli fichier par fichier', async () => {
+    const root = depot('autowin-accent-lot-')
+    await attendreLaParite(root)
+    vi.mocked(readGitDiff).mockClear()
+    await captureWorkspaceMutationSnapshot(root)
+    // Seul le nom a joker part seul — c'est voulu (CHEMIN_NON_LITTERAL), il le faisait deja.
+    expect(vi.mocked(readGitDiff).mock.calls.map(([, chemin]) => chemin)).toEqual(['a[1].ts'])
   })
 })

@@ -489,6 +489,15 @@ textarea.input:focus {
 .select {
   cursor: pointer;
 }
+/* Les lignes d'une liste deroulante NATIVE sont peintes dans une fenetre a part, qui ne sait pas
+   rendre la transparence : sans fond propre, elle reprend celui du `select` (souvent un voile
+   translucide, `--bg-3`) et le pose sur du BLANC — le texte clair devient invisible (liste des
+   themes en Holographique, constat du 2026-10-10). `--bg-0` est opaque dans chaque theme
+   (verifie par theme.css.test.ts). Les regles plus precises d'un theme ou d'un widget gagnent. */
+select option {
+  background-color: var(--bg-0);
+  color: var(--text);
+}
 
 /* Badges + statut */
 .badge {

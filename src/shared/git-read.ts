@@ -50,6 +50,57 @@ function classify(code: string): GitFileStatus {
   return 'modified'
 }
 
+/** Les echappements a une lettre de `quote_c_style` (git, quote.c), en octets. */
+const ECHAPPEMENTS_C: Readonly<Record<string, number>> = {
+  a: 7,
+  b: 8,
+  t: 9,
+  n: 10,
+  v: 11,
+  f: 12,
+  r: 13,
+  '"': 34,
+  '\\': 92
+}
+
+/**
+ * LE VRAI NOM D'UN CHEMIN CITE PAR GIT — heal conv-204, 2026-10-10.
+ *
+ * Avec `core.quotePath` (defaut), git ecrit entre guillemets, a la maniere du C, tout chemin qui
+ * porte un octet non ASCII ou un caractere special : `"accentu\303\251.ts"` pour `accentué.ts`. Ce
+ * texte n'est le nom d'AUCUN fichier : garde tel quel, `git diff -- <ce texte>` ne trouve rien et
+ * les modifications du fichier deviennent invisibles. Les sequences `\ooo` sont des OCTETS, a
+ * reassembler en UTF-8. Un champ qui n'est pas entierement entre guillemets est rendu intact :
+ * git cite toujours un chemin qui commence par un guillemet, donc aucun vrai nom n'est confondu.
+ */
+export function decoderCheminGit(champ: string): string {
+  if (champ.length < 2 || !champ.startsWith('"') || !champ.endsWith('"')) return champ
+  const caracteres = Array.from(champ.slice(1, -1))
+  const encodeur = new TextEncoder()
+  const octets: number[] = []
+  for (let i = 0; i < caracteres.length; i += 1) {
+    const c = caracteres[i] as string
+    if (c !== '\\') {
+      octets.push(...encodeur.encode(c))
+      continue
+    }
+    const octal = /^[0-7]{1,3}/.exec(caracteres.slice(i + 1, i + 4).join(''))?.[0]
+    if (octal) {
+      octets.push(parseInt(octal, 8))
+      i += octal.length
+      continue
+    }
+    const code = ECHAPPEMENTS_C[caracteres[i + 1] ?? '']
+    if (code !== undefined) {
+      octets.push(code)
+      i += 1
+      continue
+    }
+    octets.push(92) // barre isolee : git n'en produit pas, on la garde telle quelle
+  }
+  return new TextDecoder().decode(new Uint8Array(octets))
+}
+
 /** Parse `git status --porcelain=v2 --branch`. */
 export function parseGitStatus(porcelain: string): GitState {
   const state: GitState = { branch: '', ahead: 0, behind: 0, changes: [] }
@@ -73,13 +124,14 @@ export function parseGitStatus(porcelain: string): GitState {
         rest.split(' ').slice(pathFieldIndex).join(' ').trim() ||
         (line.split('\t')[0]?.split(' ').slice(pathFieldIndex).join(' ') ?? '')
       const staged = xy[0] !== '.'
-      state.changes.push({ path, status: classify(xy), staged })
+      state.changes.push({ path: decoderCheminGit(path), status: classify(xy), staged })
     } else if (line.startsWith('u ')) {
       // "u XY <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>" : fichier en CONFLIT de fusion.
       const path = line.split(' ').slice(10).join(' ').trim()
-      state.changes.push({ path, status: 'conflicted', staged: false })
+      state.changes.push({ path: decoderCheminGit(path), status: 'conflicted', staged: false })
     } else if (line.startsWith('? ')) {
-      state.changes.push({ path: line.slice(2).trim(), status: 'untracked', staged: false })
+      const path = decoderCheminGit(line.slice(2).trim())
+      state.changes.push({ path, status: 'untracked', staged: false })
     }
   }
   return state

@@ -848,10 +848,12 @@
    les fonds sont des gris neutres. Une reponse cochee ou choisie prend le degrade de la bulle de
    l'utilisateur, bord blanc : elle s'allume, elle ne fonce pas (conv-201). Maquettes :
    artifacts/draft-ask-capsules/tour4.html, onglet « 6 · Cadre ».
-   Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`) reutilise ces classes : il garde l'or
-   de conv-136, plus bas. L'encre posee sur le degrade passe par --nv-askd-encre-bulle, que
-   Nebuleuse doree remet en noir chaud (son degrade est or). */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) {
+   Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`, « le bloc Frame ») reutilise ces
+   classes et prend le MEME habit (conv-202 : « le bloc Frame aussi il faut lui donner la meme
+   gueule que notre nouveau bloc ASK ») : l'or de conv-136 n'y reste plus. L'encre posee sur le
+   degrade passe par --nv-askd-encre-bulle, que Nebuleuse doree remet en noir chaud (son degrade
+   est or). */
+:root[data-theme='nebuleuse-doree'] .askd {
   --gold: rgb(241, 216, 154);
   --gold-bright: #ffffff;
   --gold-doux: #d9d9d9;
@@ -882,30 +884,38 @@
     var(--nv-askd-holo) border-box;
 }
 /* Le voile or derriere la question disparait : le fond gris du cadre le remplace. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp)::before {
+:root[data-theme='nebuleuse-doree'] .askd::before {
   content: none;
 }
 /* Le lustre qui balaie le haut glisse sur le bord du cadre, entre les deux coins arrondis. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp)::after {
+:root[data-theme='nebuleuse-doree'] .askd::after {
   left: 14px;
   right: 14px;
   top: -1.5px;
   height: 1.5px;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-tete {
+:root[data-theme='nebuleuse-doree'] .askd .askd-tete {
   padding-left: 2px;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-badge {
+:root[data-theme='nebuleuse-doree'] .askd .askd-badge {
   color: var(--nv-askd-encre-bulle);
   background: var(--nv-degrade);
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-liste {
+/* Le badge « cadrage » perd le contour or de CadrageHypotheses.css. Un contour TRANSPARENT ne
+   suffit pas : le degrade, dessine dans la boite interieure, se repete sous le bord -- un filet
+   rose a gauche et bleu a droite (conv-202 : « juste le tag a un liserai rose a gauche et bleu a
+   droite enleve les »). Aucun bord, et la marge du badge ASK : meme taille que lui. */
+:root[data-theme='nebuleuse-doree'] .cadrage-hyp .askd-badge {
+  border: 0;
+  padding: 3px 5px;
+}
+:root[data-theme='nebuleuse-doree'] .askd .askd-liste {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: 10px;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-item {
+:root[data-theme='nebuleuse-doree'] .askd .askd-item {
   padding-left: 0;
   border: 1.5px solid transparent;
   border-radius: 12px;
@@ -914,75 +924,67 @@
     var(--nv-askd-holo) border-box;
 }
 /* Le liseré or de gauche n'a plus lieu d'etre : c'est le bord de la capsule qui s'allume. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-item::before {
+:root[data-theme='nebuleuse-doree'] .askd .askd-item::before {
   content: none;
 }
 /* Survol, focus clavier et reponse recommandee : bandes plus claires, bord de 2 px. La marge
    negative rend le demi-pixel gagne par le bord : le texte ne bouge pas. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp):not(.est-repondu) .askd-item:hover,
-:root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp):not(.est-repondu)
-  .askd-item:focus-within,
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp):not(.est-repondu) .askd-item.est-reco {
+:root[data-theme='nebuleuse-doree'] .askd:not(.est-repondu) .askd-item:hover,
+:root[data-theme='nebuleuse-doree'] .askd:not(.est-repondu) .askd-item:focus-within,
+:root[data-theme='nebuleuse-doree'] .askd:not(.est-repondu) .askd-item.est-reco {
   border-width: 2px;
   margin: -0.5px;
   background:
     linear-gradient(180deg, #2c2c2c, #222222) padding-box,
     var(--nv-askd-holo-vif) border-box;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-ligne {
+:root[data-theme='nebuleuse-doree'] .askd .askd-ligne {
   padding: 11px 12px 12px;
 }
 /* Le lavis et l'anneau carres de la ligne debordaient des coins arrondis : la capsule s'en charge. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-item:hover .askd-ligne,
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-item:focus-within .askd-ligne {
+:root[data-theme='nebuleuse-doree'] .askd .askd-item:hover .askd-ligne,
+:root[data-theme='nebuleuse-doree'] .askd .askd-item:focus-within .askd-ligne {
   background: none;
   box-shadow: none;
 }
 /* Aucune reponse depliable : la colonne du triangle (16 px vides) disparait, la case colle au bord. */
-:root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp):not(:has(.askd-tri[aria-expanded]))
-  .askd-ligne {
+:root[data-theme='nebuleuse-doree'] .askd:not(:has(.askd-tri[aria-expanded])) .askd-ligne {
   grid-template-columns: 1fr auto;
 }
-:root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp):not(:has(.askd-tri[aria-expanded]))
-  .askd-tri {
+:root[data-theme='nebuleuse-doree'] .askd:not(:has(.askd-tri[aria-expanded])) .askd-tri {
   display: none;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-item .askd-touche {
+:root[data-theme='nebuleuse-doree'] .askd .askd-item .askd-touche {
   color: #8a8a8a;
 }
 :root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp):not(.est-repondu)
+  .askd:not(.est-repondu)
   .askd-item:is(:hover, :focus-within, .est-reco)
   .askd-touche {
   color: #ffffff;
 }
 /* La case : bord argent, cochee = blanche avec une coche bleue. Elle reste une vraie case a cocher
    (seule son apparence change) : son etat se lit toujours au lecteur d'ecran. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-coche input {
+:root[data-theme='nebuleuse-doree'] .askd .askd-coche input {
   appearance: none;
   border: 1.5px solid #cfcfcf;
   border-radius: 3px;
   background: transparent;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-coche input:checked {
+:root[data-theme='nebuleuse-doree'] .askd .askd-coche input:checked {
   border-color: #ffffff;
   background: #ffffff
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2 4.2 7.4 8 2.8' fill='none' stroke='rgb(158, 158, 158)' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     center / 10px no-repeat;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-coche input:focus-visible {
+:root[data-theme='nebuleuse-doree'] .askd .askd-coche input:focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 /* Reponse cochee (choix multiple) ou retenue (bloc repondu) : le degrade de la bulle, bord blanc. */
+:root[data-theme='nebuleuse-doree'] .askd .askd-item:has(.askd-coche input:checked),
 :root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp)
-  .askd-item:has(.askd-coche input:checked),
-:root[data-theme='nebuleuse-doree']
-  .askd.est-repondu:not(.cadrage-hyp)
+  .askd.est-repondu
   .askd-item:has(.askd-choix[data-choisi='oui']) {
   border-width: 1.5px;
   margin: 0;
@@ -991,51 +993,28 @@
     linear-gradient(#f2f2f2, #f2f2f2) border-box;
 }
 :root[data-theme='nebuleuse-doree']
-  .askd:not(.cadrage-hyp)
+  .askd
   .askd-item:has(.askd-coche input:checked)
   :is(.askd-libelle, .askd-consequence, .askd-touche, .askd-tri, .askd-tag),
 :root[data-theme='nebuleuse-doree']
-  .askd.est-repondu:not(.cadrage-hyp)
+  .askd.est-repondu
   .askd-item:has(.askd-choix[data-choisi='oui'])
   :is(.askd-libelle, .askd-consequence, .askd-touche, .askd-tri, .askd-tag),
 :root[data-theme='nebuleuse-doree']
-  .askd.est-repondu:not(.cadrage-hyp)
+  .askd.est-repondu
   .askd-choix[data-choisi='oui']
   .askd-libelle::after {
   color: var(--nv-askd-encre-bulle);
 }
 /* Le pied : filet argent, bouton Envoyer au degrade de la bulle (desactive, il garde son contour). */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-pied {
+:root[data-theme='nebuleuse-doree'] .askd .askd-pied {
   margin-top: 10px;
   padding: 10px 2px 0;
   border-image: linear-gradient(90deg, #9a9a9a, #3a3a3a) 1;
 }
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) .askd-envoyer:not(:disabled) {
+:root[data-theme='nebuleuse-doree'] .askd .askd-envoyer:not(:disabled) {
   color: var(--nv-askd-encre-bulle);
   background: var(--nv-degrade);
-}
-/* SUPPOSITIONS DU CADRAGE (CadrageHypotheses) : memes classes `askd-*`, l'OR de conv-136 inchange
-   (« les blocs comme ASK qui demandent des actions utilisateur, mets-les en doré »). Dans ce theme
-   --gold* vaut du rose ; on lui rend l'or d'Autowin. */
-:root[data-theme='nebuleuse-doree'] .cadrage-hyp {
-  --gold: #d4a94f;
-  --gold-bright: #e3ba55;
-  --gold-doux: #b8913f;
-  --gold-clair: #e3ba55;
-}
-:root[data-theme='nebuleuse-doree'] .cadrage-hyp .askd-item {
-  border-color: rgba(212, 169, 79, 0.4);
-  border-radius: 14px;
-  background: rgba(212, 169, 79, 0.07);
-}
-:root[data-theme='nebuleuse-doree'] .cadrage-hyp .askd-item:hover {
-  border-color: rgba(212, 169, 79, 0.75);
-  background: rgba(212, 169, 79, 0.13);
-}
-/* OR NEON (N6) : le bloc de fin de tour BRILLE -- l'or signale ce qui attend ta decision. */
-:root[data-theme='nebuleuse-doree'] .cadrage-hyp .askd-item.est-reco {
-  border-color: rgba(227, 186, 85, 0.85);
-  box-shadow: 0 0 12px rgba(227, 186, 85, 0.45);
 }
 :root[data-theme='nebuleuse-doree'] .md-final-summary {
   border-color: rgba(227, 186, 85, 0.75);
@@ -1833,7 +1812,8 @@
 :root[data-theme='nebuleuse-doree'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
   color: #141008;
 }
-/* Bloc ASK (conv-202) : badge, Envoyer et reponse cochee portent le degrade, ici or plein. */
-:root[data-theme='nebuleuse-doree'] .askd:not(.cadrage-hyp) {
+/* Bloc ASK et bloc du cadrage (conv-202) : badge, Envoyer et reponse cochee portent le degrade,
+   ici or plein. */
+:root[data-theme='nebuleuse-doree'] .askd {
   --nv-askd-encre-bulle: #141008;
 }

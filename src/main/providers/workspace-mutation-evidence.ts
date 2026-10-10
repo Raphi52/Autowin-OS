@@ -9,7 +9,7 @@ import {
   readGitState,
   readNoIndexGitDiff
 } from '../git-read-main'
-import type { GitDiffResult } from '../../shared/git-read'
+import { decoderCheminGit, type GitDiffResult } from '../../shared/git-read'
 import type { ExecutionEvidence } from './types'
 import {
   addedLineFingerprintsFromUnifiedDiff,
@@ -191,11 +191,23 @@ type DiffsDuLot = {
 /**
  * Decoupe un lot `git diff --no-renames` par son entete `diff --git a/P b/P`. Sans renommage, les
  * deux cotes sont le MEME chemin : on le retrouve sans ambiguite meme s'il contient des espaces.
- * Un entete cite (`"a/..."`, caracteres speciaux) rend `undefined` : on ne sait plus attribuer.
+ *
+ * ENTETE CITE (heal conv-204, 2026-10-10) : un nom non ASCII arrive cite des deux cotes,
+ * `"a/accentu\303\251.ts" "b/accentu\303\251.ts"`. Tant que `git status` gardait lui aussi la forme
+ * citee, aucun vrai nom accentue n'entrait dans le lot ; depuis qu'il est decode, ce bloc doit etre
+ * attribue — sinon UN SEUL fichier accentue renvoyait toute la photo au diff fichier par fichier.
+ * Seul l'entete est decode : la portion rendue reste le texte EXACT de git.
  */
 function cheminDeLEntete(bloc: string): string | undefined {
   const finDeLigne = bloc.indexOf('\n')
   const entete = finDeLigne === -1 ? bloc : bloc.slice(0, finDeLigne)
+  const cite = /^("(?:[^"\\]|\\.)*") ("(?:[^"\\]|\\.)*")$/.exec(entete)
+  if (cite) {
+    const gauche = decoderCheminGit(cite[1] as string)
+    const droite = decoderCheminGit(cite[2] as string)
+    if (!gauche.startsWith('a/') || droite !== `b/${gauche.slice(2)}`) return undefined
+    return gauche.slice(2) || undefined
+  }
   if (!entete.startsWith('a/')) return undefined
   const reste = entete.slice(2)
   const longueur = (reste.length - 3) / 2

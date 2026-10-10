@@ -43,6 +43,39 @@ describe('parseGitStatus (porcelain v2 --branch)', () => {
 
     expect(s.changes).toEqual([{ path: 'src/new name.ts', status: 'renamed', staged: true }])
   })
+
+  /*
+   * NOM CITE PAR GIT — heal conv-204, 2026-10-10. Avec `core.quotePath` (defaut), git ecrit entre
+   * guillemets, a la maniere du C, tout chemin portant un octet non ASCII ou un caractere special :
+   * `"accentu\303\251.ts"`. Garde tel quel, ce texte n'est le nom d'AUCUN fichier : la photo git
+   * le passait a `git diff`, qui ne trouvait rien, et les modifications du fichier etaient invisibles.
+   */
+  it('decode un chemin cite par git (octets UTF-8 en octal) dans chaque type de ligne', () => {
+    const s = parseGitStatus(
+      [
+        '1 .M N... 100644 100644 100644 aaa bbb "src/accentu\\303\\251.ts"',
+        '? "nouveau \\303\\251t\\303\\251.ts"',
+        '2 R. N... 100644 100644 100644 aaa bbb R100 "src/\\303\\251.ts"\t"src/old \\342\\202\\254.ts"',
+        'u UU N... 100644 100644 100644 100644 aaa bbb ccc "conflit \\303\\240.ts"'
+      ].join('\n')
+    )
+    expect(s.changes.map((c) => c.path)).toEqual([
+      'src/accentué.ts',
+      'nouveau été.ts',
+      'src/é.ts',
+      'conflit à.ts'
+    ])
+  })
+
+  it('decode les echappements C de git (guillemet, barre oblique inverse, tabulation)', () => {
+    const s = parseGitStatus('? "a\\"b\\\\c\\td.ts"')
+    expect(s.changes.map((c) => c.path)).toEqual(['a"b\\c\td.ts'])
+  })
+
+  it('laisse intact un chemin non cite, meme s il contient un guillemet au milieu', () => {
+    const s = parseGitStatus('? src/sans-guillemets.ts\n? src/mi"lieu.ts')
+    expect(s.changes.map((c) => c.path)).toEqual(['src/sans-guillemets.ts', 'src/mi"lieu.ts'])
+  })
 })
 
 describe('parseGitLog', () => {

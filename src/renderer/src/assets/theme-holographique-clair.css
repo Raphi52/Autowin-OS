@@ -1,0 +1,414 @@
+/* ===========================================================================
+   HOLOGRAPHIQUE CLAIR -- demande du 2026-10-10 (conv-212) : « Fais un mode
+   holographique clair ». Pendant clair d'« Holographique » (id `nebuleuse-verre`,
+   theme-nebuleuse-verre.css), dont il reprend la signature :
+   - UN degrade bleu -> rose (#3c6eeb -> #e63ca0), bleu toujours PLEIN, reserve a
+     ce qui est actif : bulle envoyee, element du menu ouvert, fil ouvert, bouton
+     d'accent, « Nouveau fil », envoi pret ;
+   - formes rondes (capsules, rayon 16 px des panneaux), titres sans empattement.
+
+   CE QUI CHANGE PAR RAPPORT AU SOMBRE
+   - Le noir devient une NACRE ARGENT-LILAS. Pas de blanc pur sur les panneaux :
+     « le blanc pique les yeux » (choix du 2026-09-23, d'ou le gris-bleu du clair).
+   - Fond UNI, sans halo rose ou bleu : c'est le choix tranche pour le sombre
+     (conv-184 : « met le noir, oublie le rose et bleu, c'est moche »).
+   - Relief des panneaux par le REMPLISSAGE (haut un cran plus clair), jamais par
+     les aretes (relief-blocs-par-le-fond, conv-191).
+   - Les encres sont ASSOMBRIES pour tenir 4,5:1 sur tous les fonds (contraste
+     calcule par theme-holographique-clair.test.ts) : le bleu #3c6eeb ne sert que
+     de REMPLISSAGE (3,3:1 en texte) ; le texte bleu passe par --cyan.
+
+   PORTEE : tout est prefixe par :root[data-theme='holographique-clair']. Base
+   CLAIRE (theme-mode.ts) : le theme herite des ~500 corrections ecrites pour
+   tous les themes clairs (`data-base='clair'`). Importe APRES theme-modes.css et
+   theme-clair-gris.css : a specificite egale, ces regles-ci gagnent.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. JETONS
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] {
+  color-scheme: light;
+
+  /* Les quatre fonds du theme, nommes pour que le test calcule le contraste dessus. */
+  --holo-fond-page: #e9e8f4;
+  --holo-panneau: #d9daea;
+  --holo-carte: #e6e6f2;
+  --holo-champ: #eeedf6;
+  /* Haut des panneaux, un cran plus clair : le relief vient du fond, pas du bord. */
+  --holo-panneau-haut: #e4e5f2;
+
+  --bg-0: #e9e8f4;
+  --bg-1: #e6e6f2;
+  --bg-2: #dfdfee;
+  --bg-3: rgba(40, 30, 90, 0.06);
+  --bg-inset: #eeedf6;
+
+  --line: rgba(40, 30, 90, 0.15);
+  --line-strong: rgba(40, 30, 90, 0.32);
+  --voile-rgb: 40, 30, 90;
+
+  /* Encre violet-nuit : le pendant du lilas tres clair du sombre. */
+  --text: #1b1633;
+  --text-dim: #433c60;
+  --text-faint: #555072;
+  --titlebar-symbol: #1b1633;
+
+  /* Comme dans le sombre, la famille « gold » (soulignes, onglets actifs, reperes) devient
+     l'accent rose -- ici un rose PROFOND, lisible sur la nacre (5,1:1 sur le panneau). */
+  --gold: #a8136b;
+  --gold-bright: #c2187d;
+  --gold-doux: #a8136b;
+  --gold-clair: #b0176f;
+  --rose: #b0176f;
+  --rose-bright: #c2187d;
+  --accent: #b0176f;
+  --accent-dim: #f1c6df;
+  --accent-soft: rgba(230, 60, 160, 0.12);
+  /* LE bleu, en remplissage seulement (voir l'en-tete). */
+  --violet: #3c6eeb;
+  /* Bleu de TEXTE (liens, info) : la meme teinte assombrie, 4,6:1 sur le panneau. */
+  --cyan: #2c56c9;
+  --info: #2c56c9;
+
+  --ok: #15652f;
+  --warn: #7a4f00;
+  --err: #b01d18;
+
+  --on-accent: #ffffff;
+  --ombre-rgb: 40, 30, 90;
+
+  --font: 'Segoe UI Variable Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --display: 'Segoe UI Variable Display', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Cascadia Mono', 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --r1: 10px;
+  --r2: 14px;
+  --r3: 18px;
+
+  /* Decor 3D de l'Accueil (home-decor-scene.ts) : meme famille que le sombre. */
+  --decor-nuage: #2a1d6b;
+  --decor-nuage-2: #3c6eeb;
+  --decor-accent: #e63ca0;
+  --decor-froid: #5b6dff;
+  --decor-chaud: #ff5fa8;
+
+  --holo-degrade: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  /* Survol : le MEME degrade sous un reflet bombe -- le bleu reste plein. */
+  --holo-degrade-survol:
+    radial-gradient(55% 85% at 50% 0%, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 100%),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+}
+
+/* SURFACES -- posees sur .shell (ui-system.css). Memes selecteurs que la base claire
+   (theme-modes.css), ecrits apres elle. */
+:root[data-theme='holographique-clair'] .shell,
+:root[data-theme='holographique-clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: #d9daea;
+  --surface-card: #e6e6f2;
+  --surface-inset: #e6e6f2;
+  --surface-hover: rgba(60, 110, 235, 0.08);
+  --surface-selected: rgba(230, 60, 160, 0.12);
+  --container-border: rgba(40, 30, 90, 0.14);
+  --container-border-strong: rgba(40, 30, 90, 0.28);
+  --container-radius-page: 20px;
+  --container-radius-panel: 16px;
+  --container-radius-card: 12px;
+  --container-shadow: none;
+  /* Le filet du haut des vues : le degrade signature, discret. */
+  --lisere-degrade: linear-gradient(90deg, rgba(60, 110, 235, 0.55), rgba(230, 60, 160, 0.55));
+  --module-title-font: var(--display);
+  --module-title-color: #1b1633;
+  --module-eyebrow-color: #555072;
+}
+
+/* ---------------------------------------------------------------------------
+   2. FOND : nacre UNIE. La galaxie de la base claire disparait (pas d'image
+   sous un voile) : le fond ne porte aucune couleur, comme le noir du sombre.
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] body {
+  background: #e9e8f4;
+  color: var(--text);
+}
+:root[data-theme='holographique-clair'] ::selection {
+  background: rgba(230, 60, 160, 0.24);
+  color: #1b1633;
+}
+:root[data-theme='holographique-clair'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 2px solid rgba(194, 24, 125, 0.75);
+  outline-offset: 2px;
+}
+:root[data-theme='holographique-clair'] ::placeholder {
+  color: #6a6585;
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   3. PANNEAUX : nacre, haut un cran plus clair. La base claire les peint en
+   gris-bleu #cfd6e0 avec ce meme selecteur :is(...) : il est repris tel quel.
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane,
+  .cosmic-outline .composer) {
+  background: linear-gradient(180deg, #e4e5f2, #d9daea 120px);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat::after {
+  background: linear-gradient(180deg, #e4e5f2, #d9daea 120px);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head {
+  border-color: rgba(40, 30, 90, 0.1);
+  background: transparent;
+}
+:root[data-theme='holographique-clair'] .view-page {
+  background: var(--lisere-haut), linear-gradient(180deg, #e4e5f2, #d9daea 160px);
+}
+:root[data-theme='holographique-clair'] .theme-serious .rail {
+  border-right-color: rgba(40, 30, 90, 0.1);
+}
+:root[data-theme='holographique-clair'] :is(.theme-serious .brand, .cosmic-outline .composer-field,
+  .cosmic-outline .conv-search, .cosmic-outline .chat-suggest .btn) {
+  background: #eeedf6;
+}
+:root[data-theme='holographique-clair'] .brand-name {
+  color: #1b1633;
+}
+
+/* ACCUEIL : la base claire lave le decor 3D d'un voile IVOIRE et pose des tuiles BLANCHES
+   (theme-modes.css). Ici le voile est de la nacre du fond : le decor, teinte bleu-rose par les
+   jetons --decor-*, transparait a peine, et les tuiles prennent la nacre des cartes. */
+:root[data-theme='holographique-clair'] .decor-de-fond::after {
+  background:
+    linear-gradient(170deg, rgba(236, 235, 246, 0.9), rgba(233, 232, 244, 0.86) 45%, rgba(230, 229, 242, 0.9)),
+    radial-gradient(62% 52% at 50% 44%, rgba(244, 243, 250, 0.5), transparent 80%);
+}
+:root[data-theme='holographique-clair'] .home-view::after {
+  background: radial-gradient(62% 52% at 50% 44%, rgba(244, 243, 250, 0.35), transparent 80%);
+}
+:root[data-theme='holographique-clair'] .home-tile__panel {
+  background: rgba(230, 230, 242, 0.92);
+  border-color: rgba(40, 30, 90, 0.14);
+  box-shadow: 0 18px 40px -12px rgba(40, 30, 90, 0.28);
+}
+
+/* ---------------------------------------------------------------------------
+   4. MENU : capsules ; l'element ouvert prend le degrade, texte blanc.
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+:root[data-theme='holographique-clair'] .nav-item:hover {
+  background: rgba(60, 110, 235, 0.08);
+}
+/* Le degrade part du bord EXTERIEUR (background-origin) : cale sur l'interieur, il se
+   repetait sous le bord transparent en un lisere rose a gauche (constat du sombre, conv-139). */
+:root[data-theme='holographique-clair'] .nav-item.active {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+   5. BRIQUES COMMUNES
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] .btn {
+  border-color: rgba(40, 30, 90, 0.18);
+  border-radius: 999px;
+  background: #eeedf6;
+  color: #1b1633;
+}
+:root[data-theme='holographique-clair'] .btn:hover:not(:disabled) {
+  border-color: rgba(194, 24, 125, 0.45);
+  background: rgba(230, 60, 160, 0.08);
+}
+:root[data-theme='holographique-clair'] .btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+:root[data-theme='holographique-clair'] .btn-accent,
+:root[data-theme='holographique-clair'] .cosmic-outline .btn-accent {
+  border-color: transparent;
+  background: var(--holo-degrade);
+  background-origin: border-box;
+  color: #ffffff;
+}
+:root[data-theme='holographique-clair'] .btn-accent:hover:not(:disabled),
+:root[data-theme='holographique-clair'] .cosmic-outline .btn-accent:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--holo-degrade-survol);
+}
+:root[data-theme='holographique-clair'] .input,
+:root[data-theme='holographique-clair'] .select,
+:root[data-theme='holographique-clair'] textarea.input,
+:root[data-theme='holographique-clair'] .cosmic-outline :where(.input, .select, textarea.input) {
+  border-color: rgba(40, 30, 90, 0.18);
+  border-radius: 12px;
+  background: #eeedf6;
+  color: #1b1633;
+}
+:root[data-theme='holographique-clair'] .input:focus,
+:root[data-theme='holographique-clair'] .select:focus,
+:root[data-theme='holographique-clair'] textarea.input:focus,
+:root[data-theme='holographique-clair'] .cosmic-outline :where(.input, .select, textarea.input):focus {
+  border-color: rgba(194, 24, 125, 0.6);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .badge {
+  border-color: rgba(40, 30, 90, 0.16);
+  background: #eeedf6;
+  color: #433c60;
+}
+
+/* ---------------------------------------------------------------------------
+   6. LISTE DES FILS
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] .conv-search,
+:root[data-theme='holographique-clair'] .conv-search .input {
+  border-radius: 12px;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item {
+  border-radius: 18px;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item:hover {
+  border-color: rgba(40, 30, 90, 0.1);
+  background: rgba(255, 255, 255, 0.35);
+}
+/* Fil ouvert : CADRE degrade de 1,5 px sur fond de champ (double fond padding-box /
+   border-box : une border-image perdrait les coins ronds), comme le sombre. */
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active {
+  border: 1.5px solid transparent;
+  border-radius: 18px;
+  background:
+    linear-gradient(#eeedf6, #eeedf6) padding-box,
+    linear-gradient(135deg, #3c6eeb, #e63ca0) border-box;
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active .conv-label {
+  color: #1b1633;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active .conv-meta {
+  color: #a8136b;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* « Nouveau fil » : pilule pleine au degrade, « + » dans un rond blanc a droite. */
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row {
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 7px 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  box-shadow: none;
+  color: #ffffff;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row:hover,
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row.active {
+  background:
+    radial-gradient(ellipse 75% 60% at 35% 0%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0)),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-title {
+  flex: 1;
+  min-width: 0;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-icon {
+  order: 2;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #c2348f;
+}
+
+/* ---------------------------------------------------------------------------
+   7. LE FIL
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head-kicker,
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-conv-title,
+:root[data-theme='holographique-clair'] .chat-head-kicker {
+  font-family: var(--display);
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head-signal {
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd0ec, #e63ca0 50%, #3c6eeb 100%);
+}
+/* Bulle envoyee : le degrade signature, texte blanc, coin bas-droit pince. Cette regle remplace
+   le voile rose de la base claire (theme-modes.css) et le texte estompe de theme-clair-gris.css. */
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body,
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body.msg-bulle {
+  border: 1px solid transparent;
+  border-radius: 12px 12px 3px 12px;
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: #ffffff;
+  box-shadow: 0 6px 18px -8px rgba(60, 40, 140, 0.45);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body :is(a, code, strong) {
+  color: #ffffff;
+}
+/* Reponse de l'agent : pas de plaque ni de lisere, le texte se pose sur le fil. */
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-body {
+  padding: 2px 4px 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #1b1633;
+}
+:root[data-theme='holographique-clair'] .msg.assistant .msg-role,
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-role {
+  color: #a8136b;
+}
+
+/* ---------------------------------------------------------------------------
+   8. SAISIE : un champ clair dans un cadre au degrade (le cadre or du sombre),
+   bouton d'envoi rond qui s'allume au degrade quand un message est pret.
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-field {
+  border: 1.5px solid transparent;
+  border-radius: 16px;
+  background:
+    linear-gradient(#eeedf6, #eeedf6) padding-box,
+    linear-gradient(135deg, rgba(60, 110, 235, 0.55), rgba(230, 60, 160, 0.55)) border-box;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-field:focus-within {
+  background:
+    linear-gradient(#f3f2f9, #f3f2f9) padding-box,
+    linear-gradient(135deg, #3c6eeb, #e63ca0) border-box;
+}
+/* Le texte se pose directement dans le cadre : la regle `.input` de ce theme lui donnait un
+   second cadre clair, un bloc dans le bloc (meme defaut corrige dans le sombre, conv-124). */
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-field textarea {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #1b1633;
+  caret-color: #c2187d;
+}
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  color: #ffffff;
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  background: var(--holo-degrade-survol);
+}
