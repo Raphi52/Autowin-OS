@@ -103,4 +103,65 @@ describe('theme Nebuleuse de verre', () => {
     }
     expect(fautifs).toEqual([])
   })
+
+  /**
+   * REGLE DE L'UTILISATEUR (2026-10-10, conv-155) : le coin bas-droit pince « faisait sens pour la
+   * bulle de chat mais pas pour les boutons et les highlights ». Seule la bulle de SES messages a
+   * le droit d'avoir des coins inegaux ; un bouton ou un element selectionne a des coins reguliers.
+   */
+  it('reserve le coin pince aux bulles de message de l utilisateur', () => {
+    const coinsInegaux: string[] = []
+    for (const fichier of ['./theme-nebuleuse-verre.css', './theme-nebuleuse-verre.genere.css']) {
+      postcss.parse(lire(fichier)).walkDecls(/^(border-radius|--nv-forme-toi)$/, (decl) => {
+        // Une valeur calculee (`calc(var(--nv-rond) - 1px)`) est UN rayon, pas quatre coins.
+        const coins = decl.value.includes('(') ? [decl.value] : decl.value.split('/')[0].trim().split(/\s+/)
+        if (new Set(coins).size < 2) return
+        const regle = decl.parent as postcss.Rule
+        if (regle.selectors.every((s) => /\.msg\.user \.msg-body$/.test(s.trim()))) return
+        coinsInegaux.push(`${regle.selector} -> ${decl.value}`)
+      })
+    }
+    expect(coinsInegaux).toEqual([])
+  })
+
+  /**
+   * LA SAISIE SANS ROSE (2026-10-10, conv-155, variante « B · S'allume, rond » choisie sur
+   * maquette) : bloc noir profond uni a bord or, bouton d'envoi ROND qui s'allume en or plein
+   * quand le message peut partir, contour or eteint quand le champ est vide, aucune lueur.
+   */
+  it('donne a la saisie le noir a bord or et le bouton rond qui s allume en or', () => {
+    const decls = (selecteur: string): Record<string, string> => {
+      const valeurs: Record<string, string> = {}
+      postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+        if (!regle.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === selecteur)) return
+        regle.walkDecls((d) => {
+          valeurs[d.prop] = d.value
+        })
+      })
+      return valeurs
+    }
+    const saisie = decls(`${PREFIXE} .cosmic-outline .composer`)
+    expect(saisie['--nv-saisie-degrade']).toBe('linear-gradient(#09090a, #09090a)')
+    expect(decls(`${PREFIXE} .cosmic-outline .chat > .composer`)['--nv-saisie-bord']).toBe(
+      'rgba(212, 169, 79, 0.5)'
+    )
+    const envoi = decls(`${PREFIXE} .cosmic-outline .composer-send`)
+    expect(envoi['border-radius']).toBe('50%')
+    expect([envoi.width, envoi.height]).toEqual(['38px', '38px'])
+    expect(envoi['--nv-envoi-fond']).toBe('#d9ae52')
+    expect(envoi['--nv-envoi-vide-fond']).toBe('transparent')
+    expect(envoi['--nv-envoi-lueur']).toBe('none')
+    // Plus aucun rose dans les regles de la saisie ecrites a la main.
+    const saisieEtEnvoi = JSON.stringify([saisie, envoi])
+    expect(saisieEtEnvoi).not.toMatch(/230, 60, 160|nv-degrade\b|nv-lueur-toi/)
+  })
+
+  it('allume le mode auto de la saisie en or, pas en rose', () => {
+    let actif = ''
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (regle.selector.trim() === `${PREFIXE} .composer-auto.actif`) actif = regle.toString()
+    })
+    expect(actif).toContain('rgba(212, 169, 79, 0.75)')
+    expect(actif).not.toMatch(/251, 91, 171/)
+  })
 })

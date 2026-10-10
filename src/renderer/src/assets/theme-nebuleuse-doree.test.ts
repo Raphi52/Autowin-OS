@@ -52,6 +52,27 @@ describe('theme Nebuleuse doree', () => {
     expect(main).toContain('--warn: #ffb547')
   })
 
+  /**
+   * Nebuleuse doree garde SA saisie (degrade or -> noir, bord blanc fin, pastille d'envoi en
+   * degrade or) quand Nebuleuse de verre passe a la sienne (conv-155) ; seule la forme du bouton
+   * suit, parce que la regle « coin pince = bulle de message seulement » vaut pour les deux.
+   */
+  it('garde sa propre saisie et son envoi degrade, sans coin pince hors des bulles', () => {
+    const main = lire('./theme-nebuleuse-doree.css')
+    expect(main).toContain('--nv-saisie-bord: var(--nv-bord);')
+    expect(main).toContain('--nv-envoi-fond: var(--nv-degrade);')
+    expect(main).toContain('--nv-envoi-vide-fond: var(--nv-degrade);')
+    const coinsInegaux: string[] = []
+    postcss.parse(main).walkDecls('border-radius', (decl) => {
+      const coins = decl.value.includes('(') ? [decl.value] : decl.value.split('/')[0].trim().split(/\s+/)
+      if (new Set(coins).size < 2) return
+      const regle = decl.parent as postcss.Rule
+      if (regle.selectors.every((s) => /\.msg\.user \.msg-body$/.test(s.trim()))) return
+      coinsInegaux.push(`${regle.selector} -> ${decl.value}`)
+    })
+    expect(coinsInegaux).toEqual([])
+  })
+
   it('est a jour avec sa source : regenerer ne change rien', async () => {
     const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
     expect(genererMainDoree()).toBe(lire('./theme-nebuleuse-doree.css'))
