@@ -338,10 +338,10 @@
 }
 :root[data-theme='nebuleuse-verre'] textarea,
 :root[data-theme='nebuleuse-verre'] input {
-  caret-color: #ff7cbf;
+  caret-color: #ffffff;
 }
 :root[data-theme='nebuleuse-verre'] ::placeholder {
-  color: #8f89ad;
+  color: #999999;
   opacity: 1;
 }
 
@@ -1791,45 +1791,34 @@
   --nv-satin-reflets:
     #0c0c0c 0%, #222222 18%, #080808 42%, #080808 48%, #1a1a1a 64%, #080808 80%;
   --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
-  /* BALAYAGE « CROISEMENT » A LA SOURIS (conv-191, 2026-10-10 : « une animation pour donner un cote
-     brillant a nos panels et pk pas une reponse a la souris », puis « Un balayage en fonction de la
-     position de la souris qui va d'avant en arriere », « 4 5 6 » et « go 6 »). Deux bandes de reflet
-     GRISES, a 135 deg comme le satin et les coins coupes, posees PAR-DESSUS le satin : la seconde,
-     plus faible, passe SOUS le curseur, la premiere au point OPPOSE de l'ecran ; elles se croisent au
-     centre. UN SEUL REFLET POUR LA PAGE (« un seul reflet pour toute la page, qui suit la souris
-     partout et ne se voit que dans les panneaux ») : comme le satin, chaque bande est calee sur
-     l'ECRAN (`fixed`), et le script `panneaux-balai.ts` pose la MEME position sur les cinq panneaux
-     (`--nv-balai-1` / `--nv-balai-2` : l'abscisse, en largeurs d'ecran, ou la bande coupe la
-     mi-hauteur). L'inertie est la transition ci-dessous (1,4 s et 2,2 s). Chaque bande est un calque
-     de 300 % de l'ecran : son centre tombe a l'abscisse u quand sa position vaut (1,5 - u) / 2. Au
-     repos (-0,45), elles attendent hors de l'ecran, a gauche. */
-  --nv-balai-bande-1: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0) 44%,
-    rgba(255, 255, 255, 0.09) 50%,
-    rgba(255, 255, 255, 0) 56%
-  );
-  --nv-balai-bande-2: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0) 46%,
-    rgba(255, 255, 255, 0.055) 50%,
-    rgba(255, 255, 255, 0) 54%
-  );
-  --nv-balai-transition:
-    --nv-balai-1 1.4s cubic-bezier(0.2, 0.8, 0.2, 1), --nv-balai-2 2.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* LA SOURIS EST LA SOURCE DE LUMIERE (conv-191, 2026-10-10 : « le comportement je l'aime pas trop
+     draft moi des animations », « en fait j'aimerais que ca fasse comme si ma souris etait la source
+     de lumiere », puis « go Ambiance implemente »). Une LUMIERE LOINTAINE ET LARGE, centree sur la
+     souris : tout le cote de la page proche du curseur s'eclaire doucement, en gris. Elle remplace le
+     balayage a deux bandes. Comme le satin, elle est calee sur l'ECRAN (`fixed`) : une seule lumiere
+     pour la page, qui ne se voit qu'a travers les panneaux.
+     Le script `panneaux-lumiere.ts` pose sur les panneaux (les cinq du Chat et le cadre des autres
+     vues, `.view-page`) la position de la souris
+     (`--nv-lumiere-x` / `--nv-lumiere-y`, en fractions de l'ecran) ; la lumiere y glisse en 0,6 s.
+     Rayon : 58 % de la largeur de l'ecran, la proportion de la maquette choisie (560 px sur une scene
+     de 970 px). Au repos (souris hors de la fenetre), elle attend hors de l'ecran, a gauche.
+     Ces trois reglages ne citent aucune propriete propre a un panneau : ils peuvent vivre ici. */
+  --nv-lumiere-rayon: 58vw;
+  --nv-lumiere-couleur: rgba(255, 255, 255, 0.13);
+  --nv-lumiere-transition: --nv-lumiere-x 0.6s ease-out, --nv-lumiere-y 0.6s ease-out;
 }
 /* Enregistrees en NOMBRES pour pouvoir glisser (une propriete libre saute d'une valeur a l'autre).
    Non heritees : le fil les recoit sur `.chat`, et seul son panneau peint (`::after`) les reprend --
    les messages ne recalculent rien quand la souris bouge. */
-@property --nv-balai-1 {
+@property --nv-lumiere-x {
   syntax: '<number>';
   inherits: false;
-  initial-value: -0.45;
+  initial-value: -0.6;
 }
-@property --nv-balai-2 {
+@property --nv-lumiere-y {
   syntax: '<number>';
   inherits: false;
-  initial-value: -0.45;
+  initial-value: 0.5;
 }
 /* Les panneaux : coins coupes, plus de filet or ni de reflet (le cadre les remplace).
    Liste, panneau de droite et menu gardent un bord TRANSPARENT d'1 px, sous lequel leur fond est
@@ -1843,10 +1832,14 @@
   box-shadow: none;
   clip-path: var(--nv-chanfrein-forme) padding-box;
   background:
-    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
-    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
     var(--nv-satin) fixed;
-  transition: var(--nv-balai-transition);
+  transition: var(--nv-lumiere-transition);
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::after {
   border-radius: 0;
@@ -1854,13 +1847,17 @@
   clip-path: var(--nv-chanfrein-forme);
   /* Le script pose les positions sur `.chat` (un pseudo-element n'a pas de style propre) ; le panneau
      peint les reprend et c'est LUI qui glisse. */
-  --nv-balai-1: inherit;
-  --nv-balai-2: inherit;
+  --nv-lumiere-x: inherit;
+  --nv-lumiere-y: inherit;
   background:
-    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
-    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
     var(--nv-satin) fixed;
-  transition: var(--nv-balai-transition);
+  transition: var(--nv-lumiere-transition);
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat {
   border-radius: 0;
@@ -1870,15 +1867,19 @@
   box-shadow: none;
   clip-path: var(--nv-chanfrein-forme-menu) padding-box;
   background:
-    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
-    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
     var(--nv-satin) fixed;
   /* Le menu se replie en glissant (app-shell.css, `.rail` : largeur et marges en 180 ms) : ces deux
-     transitions sont REPRISES ici, sinon le balayage les ecraserait. */
+     transitions sont REPRISES ici, sinon le glissement de la lumiere les ecraserait. */
   transition:
     width 180ms var(--ease),
     padding 180ms var(--ease),
-    var(--nv-balai-transition);
+    var(--nv-lumiere-transition);
 }
 /* Le cadre : le `::before` de chaque panneau devient l'anneau. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)::before,
@@ -1901,12 +1902,12 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer:focus-within {
   border-radius: 0;
-  /* La saisie n'est pas coupee (ses menus sortent au-dessus) : le satin de la PAGE et les deux bandes
-     du balayage, poses sur toute sa boite, peindraient ses coins coupes. Du haut vers le bas :
+  /* La saisie n'est pas coupee (ses menus sortent au-dessus) : le satin et la lumiere de la PAGE,
+     poses sur toute sa boite, peindraient ses coins coupes. Du haut vers le bas :
      1. le noir du fond (#000, le fond du theme) repeint les deux triangles coupes ;
      2-3. les deux traits de la diagonale (blanc en haut, argent en bas), redessines PAR-DESSUS le
           satin -- avant, le satin etait rogne et laissait voir les pans en dessous ;
-     4-5. les deux bandes du balayage ; 6. le satin de la page, accroche a l'ecran (`fixed`) ;
+     4. la lumiere de la souris ; 5. le satin de la page, accroche a l'ecran (`fixed`) ;
      puis, sous le bord, les pans et les cotes du cadre. */
   background:
     linear-gradient(
@@ -1933,9 +1934,12 @@
         transparent calc(100% - var(--nv-chanfrein-a) + 0.4px)
       )
       right bottom / var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat padding-box,
-    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed
-      padding-box,
-    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed
       padding-box,
     var(--nv-satin) fixed padding-box,
     linear-gradient(
@@ -1959,7 +1963,7 @@
       )
       border-box;
   background-origin: border-box;
-  transition: var(--nv-balai-transition);
+  transition: var(--nv-lumiere-transition);
 }
 /* La jauge de contexte, bande de 3 px posee sur le haut de la saisie (piste `::after`, remplissage
    `::before`) : plus d'arrondi, et elle COMMENCE APRES LE PAN BLANC -- un masque de plus, avant
@@ -2042,6 +2046,112 @@
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button:not(:first-child) {
   border-left: 0;
+}
+/* LES AUTRES VUES COMME LE CHAT (conv-211, 2026-10-10 : « parfait j'adore ce qu'on a fait dans la
+   view Chat maintenant faut aligner toutes les autres views »). Le cadre de page partage
+   (`.view-page`, ViewPage.css : Task Manager, Worktrees, Tickets, Tests, Observatory, Agent Studio,
+   Knowledge, Settings) prend le traitement des panneaux du Chat : coins haut gauche et bas droit
+   coupes a 14 px, pan blanc en haut, pan argent en bas, cotes a 7 %, satin de la page et lumiere de
+   la souris. Le filet or du haut (`--lisere-haut`) et le reflet dore (`--container-shadow`) partent,
+   comme sur les panneaux du Chat.
+   - Coupe par `clip-path` sur le cadre lui-meme, comme la liste des fils : il a deja
+     `overflow: hidden` (ViewPage.css), et aucune vue n'y loge d'element `position: fixed` -- leurs
+     fenetres flottantes passent par un portail dans `body`.
+   - Le trait est PEINT dans le fond, au lieu d'un `::before` absolu comme sur les panneaux du Chat :
+     Task Manager fait defiler son cadre en fenetre etroite (`overflow: auto` sous 820 px,
+     TaskManagerView.css) et un calque absolu defilerait avec le contenu ; un fond reste cale sur la
+     boite. Il n'a pas de bord : le trait occupe le premier pixel du fond, et le retrait du cadre
+     (16 px en haut, `--view-retrait` sur les cotes) tient le contenu hors des coins coupes.
+   - Dans un carre de 14 px a 135 deg, la coupe tombe a 50 % : le trait de la diagonale suit, sur
+     1 px a l'interieur de la coupe (en haut) ou avant elle (en bas).
+   - La lumiere : `panneaux-lumiere.ts` pose aussi la position de la souris sur `.view-page`. */
+:root[data-theme='nebuleuse-verre'] {
+  --nv-chanfrein-trait-fond:
+    linear-gradient(
+        135deg,
+        transparent calc(50% - 1px),
+        var(--nv-chanfrein-haut) calc(50% - 0.4px),
+        var(--nv-chanfrein-haut) calc(50% + 0.6px),
+        transparent calc(50% + 1.4px)
+      )
+      left top / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat,
+    linear-gradient(var(--nv-chanfrein-haut), var(--nv-chanfrein-haut)) left top /
+      var(--nv-chanfrein-pans) 1px no-repeat,
+    linear-gradient(var(--nv-chanfrein-haut), var(--nv-chanfrein-haut)) left top / 1px
+      var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(
+        135deg,
+        transparent calc(50% - 1.4px),
+        var(--nv-chanfrein-bas) calc(50% - 0.6px),
+        var(--nv-chanfrein-bas) calc(50% + 0.4px),
+        transparent calc(50% + 1px)
+      )
+      right bottom / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat,
+    linear-gradient(var(--nv-chanfrein-bas), var(--nv-chanfrein-bas)) right bottom /
+      var(--nv-chanfrein-pans) 1px no-repeat,
+    linear-gradient(var(--nv-chanfrein-bas), var(--nv-chanfrein-bas)) right bottom / 1px
+      var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes)) left top / 100% 1px
+      no-repeat,
+    linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes)) left bottom / 100% 1px
+      no-repeat,
+    linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes)) left top / 1px 100%
+      no-repeat,
+    linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes)) right top / 1px 100%
+      no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .view-page {
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme);
+  background:
+    var(--nv-chanfrein-trait-fond),
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
+    var(--nv-satin) fixed;
+  transition: var(--nv-lumiere-transition);
+}
+/* L'ACCUEIL AUSSI (meme demande, conv-211) : il n'a pas de cadre de page, ses panneaux sont les
+   tuiles (`.home-tile__panel`) et la plaque du titre (`.home-view__masthead`, HomeView.css). Meme
+   coupe, meme trait, meme satin, meme lumiere que le cadre des vues. Ce qui differe :
+   - ils ont un bord d'1 px : il devient transparent et les calques partent de la boite EXTERIEURE
+     (`background-origin: border-box`), pour que le trait tombe sur la coupe ;
+   - le satin est opaque : le flou du decor derriere ne sert plus, il part ;
+   - la coupe efface l'ombre portee et l'anneau dore d'une tuile tenue : la tuile tenue et la tuile
+     au clavier se disent par leur bord, qui reprend une couleur (la coupe le rogne aux coins).
+   Le menu des reglages est un FRERE de la plaque du titre (HomeView.tsx, `.home-view__settings`) :
+   la coupe ne le rogne pas. */
+:root[data-theme='nebuleuse-verre'] :is(.home-tile__panel, .home-view__masthead) {
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  clip-path: var(--nv-chanfrein-forme);
+  background:
+    var(--nv-chanfrein-trait-fond),
+    radial-gradient(
+      circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+      var(--nv-lumiere-couleur),
+      rgba(255, 255, 255, 0)
+    )
+    fixed,
+    var(--nv-satin) fixed;
+  background-origin: border-box;
+  transition:
+    border-color var(--dur) var(--ease),
+    var(--nv-lumiere-transition);
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-held='true'] .home-tile__panel {
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile:focus-visible .home-tile__panel {
+  border-color: var(--cyan);
+  box-shadow: none;
 }
 /* CADRE-CHANFREIN:FIN */
 /* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
@@ -2130,11 +2240,12 @@
   box-shadow: 0 0 14px rgba(230, 60, 160, 0.45);
   color: #ffffff;
 }
-:root[data-theme='nebuleuse-verre'] .workflow-panel-close {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
+/* Croix seule, blanche (conv-213, 2026-10-10 : « enlève le rond autour de cette croix, laisse
+   juste une croix blanche ») : plus de pastille ronde, ni au repos ni au survol. */
+:root[data-theme='nebuleuse-verre'] .workflow-panel-close,
+:root[data-theme='nebuleuse-verre'] .workflow-panel-close:hover {
+  background: transparent;
+  color: #ffffff;
 }
 
 /* Fenetre etroite (< 1180 px) : Details passe en TIROIR par-dessus le fil
@@ -2302,12 +2413,11 @@
     animation: none;
     display: none;
   }
-  /* Le balayage des panneaux (conv-191) s'efface : bandes vides, aucun glissement. Les transitions
+  /* La lumiere des panneaux (conv-191) s'eteint : aucune lumiere, aucun glissement. Les transitions
      restent une LISTE de durees nulles -- `none` ne peut pas s'y glisser, il annulerait aussi le
      repli du menu. */
   :root[data-theme='nebuleuse-verre'] {
-    --nv-balai-bande-1: linear-gradient(transparent, transparent);
-    --nv-balai-bande-2: linear-gradient(transparent, transparent);
-    --nv-balai-transition: --nv-balai-1 0s, --nv-balai-2 0s;
+    --nv-lumiere-couleur: transparent;
+    --nv-lumiere-transition: --nv-lumiere-x 0s, --nv-lumiere-y 0s;
   }
 }

@@ -55,9 +55,13 @@ export const THEMES: readonly Theme[] = [
   // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
   // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
   { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
-  { id: 'nebuleuse-verre', libelle: 'Nébuleuse de verre', base: 'sombre' },
+  // Affiche « Holographique » depuis le 2026-10-10 (conv-212). L id reste `nebuleuse-verre` :
+  // c est la valeur memorisee sur le poste, la renommer ferait retomber sur le sombre.
+  { id: 'nebuleuse-verre', libelle: 'Holographique', base: 'sombre' },
   // Variante or et noir de Nebuleuse (conv-139) : feuilles derivees par scripts/theme-nebuleuse-verre.mjs.
-  { id: 'nebuleuse-doree', libelle: 'Nébuleuse dorée', base: 'sombre' },
+  // Affiche « Holographique doré » depuis le 2026-10-10 (conv-212), en pendant de « Holographique ».
+  // L id reste `nebuleuse-doree` : c est la valeur memorisee sur le poste.
+  { id: 'nebuleuse-doree', libelle: 'Holographique doré', base: 'sombre' },
   // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
   // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
   // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :

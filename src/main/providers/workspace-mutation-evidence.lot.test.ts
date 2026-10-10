@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readGitDiff, readGitDiffHeadBatch, readGitState } from '../git-read-main'
+import {
+  readGitDiff,
+  readGitDiffHeadBatch,
+  readGitState,
+  readNoIndexGitDiff
+} from '../git-read-main'
 import { addedLineFingerprintsFromUnifiedDiff } from '../exact-line-fingerprint'
 import { supprimerArbre } from '../fs-supprimer'
 import {
@@ -17,7 +22,8 @@ vi.mock('../git-read-main', async (importOriginal) => {
   return {
     ...reel,
     readGitState: vi.fn(reel.readGitState),
-    readGitDiffHeadBatch: vi.fn(reel.readGitDiffHeadBatch)
+    readGitDiffHeadBatch: vi.fn(reel.readGitDiffHeadBatch),
+    readNoIndexGitDiff: vi.fn(reel.readNoIndexGitDiff)
   }
 })
 
@@ -26,6 +32,7 @@ const roots: string[] = []
 afterEach(() => {
   vi.mocked(readGitState).mockClear()
   vi.mocked(readGitDiffHeadBatch).mockClear()
+  vi.mocked(readNoIndexGitDiff).mockClear()
   for (const root of roots.splice(0)) supprimerArbre(root)
 })
 
@@ -157,5 +164,48 @@ describe('photo git du tour : partagee entre conversations simultanees', () => {
     const b = depot('autowin-lot-b-')
     await Promise.all([captureWorkspaceMutationSnapshot(a), captureWorkspaceMutationSnapshot(b)])
     expect(vi.mocked(readGitState)).toHaveBeenCalledTimes(2)
+  })
+})
+
+/**
+ * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal conv-204, mesure du 2026-10-10.
+ *
+ * Apres le lot, une photo du depot reel lancait encore 91 `git diff --no-index` : un par entree non
+ * suivie, alors que presque toutes etaient identiques d'une photo a l'autre (banc sur D:/Autowin :
+ * 95 processus par photo, dont 91 pour ces entrees). Le texte de git n'est re-servi que si
+ * l'entree n'a pas change de GENERATION — et les empreintes restent celles de l'ancien calcul.
+ */
+describe('photo git du tour : une entree non suivie inchangee ne se rediffe pas', () => {
+  /*
+   * Seules comptent les entrees PRESENTES sur le disque. `git status` rend un nom accentue entre
+   * guillemets (`"accentu\303\251.ts"`) : ce chemin n'existe pas tel quel, n'a donc pas de
+   * generation lisible, et repasse par git a chaque photo — comme avant, a l'identique.
+   */
+  const appelsSurDesEntreesPresentes = (root: string): string[] =>
+    vi
+      .mocked(readNoIndexGitDiff)
+      .mock.calls.map(([, chemin]) => chemin)
+      .filter((chemin) => existsSync(join(root, chemin)))
+
+  it('la seconde photo ne relance aucun git --no-index et garde les empreintes de l ancien calcul', async () => {
+    const root = depot('autowin-memo-stable-')
+    await captureWorkspaceMutationSnapshot(root)
+    expect(appelsSurDesEntreesPresentes(root).sort()).toEqual(['dossier-neuf/', 'nouveau.ts'])
+    vi.mocked(readNoIndexGitDiff).mockClear()
+
+    await attendreLaParite(root)
+    expect(appelsSurDesEntreesPresentes(root)).toEqual([])
+  })
+
+  it('une entree non suivie MODIFIEE entre deux photos est rediffee, a l identique de l ancien calcul', async () => {
+    const root = depot('autowin-memo-change-')
+    const premiere = await captureWorkspaceMutationSnapshot(root)
+    writeFileSync(join(root, 'nouveau.ts'), 'cree\nmodifie entre deux photos\n', 'utf8')
+    vi.mocked(readNoIndexGitDiff).mockClear()
+
+    await attendreLaParite(root)
+    expect(appelsSurDesEntreesPresentes(root)).toEqual(['nouveau.ts'])
+    const seconde = await captureWorkspaceMutationSnapshot(root)
+    expect(seconde.get('nouveau.ts')).not.toBe(premiere.get('nouveau.ts'))
   })
 })

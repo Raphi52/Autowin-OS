@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { realpathSync, watch, type FSWatcher } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   readGitDiff,
@@ -243,9 +244,78 @@ async function diffDuChemin(
 ): Promise<GitDiffResult> {
   const portion = lot?.portions.get(chemin)
   if (portion !== undefined) return { available: true, diff: portion }
-  if (lot?.vides.has(chemin))
-    return { available: true, diff: await readNoIndexGitDiff(cwd, chemin) }
+  if (lot?.vides.has(chemin)) return { available: true, diff: await diffNonSuivi(cwd, chemin) }
   return readGitDiff(cwd, chemin)
+}
+
+/**
+ * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal conv-204, mesure du 2026-10-10.
+ *
+ * Apres le lot, une photo du depot reel lancait encore 91 `git diff --no-index` (banc sur
+ * D:/Autowin : 95 processus par photo), un par entree non suivie, alors que presque toutes sont
+ * identiques d'une photo a l'autre. Le texte de git est donc RE-SERVI tel quel tant que l'entree
+ * garde la meme GENERATION : meme octet, donc meme empreinte. Une generation illisible (chemin
+ * absent) ne se memorise jamais — elle repasse par git, comme avant.
+ */
+const MEMO_NON_SUIVIS_OCTETS_MAX = 16 * 1024 * 1024
+const diffsNonSuivisMemorises = new Map<
+  string,
+  { generation: string; diff: string; octets: number }
+>()
+let octetsNonSuivisMemorises = 0
+
+/**
+ * Fichier : le marqueur de generation de la photo (identite, taille, dates a la nanoseconde,
+ * empreinte du debut). Dossier : git n'y lit AUCUN contenu (`--no-index /dev/null dossier/` echoue
+ * et rend un texte vide) — sa seule dependance est l'apparition d'une entree, qui change ses dates.
+ */
+async function generationDeLEntree(absolu: string): Promise<string | undefined> {
+  try {
+    const info = await stat(absolu, { bigint: true })
+    if (info.isDirectory()) return `dossier:${info.dev}:${info.ino}:${info.mtimeNs}:${info.ctimeNs}`
+  } catch {
+    return undefined
+  }
+  return captureFileGenerationMarker(absolu)
+}
+
+function oublierDiffNonSuivi(cle: string): void {
+  const ancien = diffsNonSuivisMemorises.get(cle)
+  if (!ancien) return
+  octetsNonSuivisMemorises -= ancien.octets
+  diffsNonSuivisMemorises.delete(cle)
+}
+
+function memoriserDiffNonSuivi(cle: string, generation: string, diff: string): void {
+  oublierDiffNonSuivi(cle)
+  const octets = Buffer.byteLength(diff, 'utf8')
+  if (octets > PORTION_LOT_OCTETS_MAX) return
+  diffsNonSuivisMemorises.set(cle, { generation, diff, octets })
+  octetsNonSuivisMemorises += octets
+  // Budget borne : on oublie les plus anciennes d'abord (ordre d'insertion de la Map).
+  for (const [plusAncienne] of diffsNonSuivisMemorises) {
+    if (octetsNonSuivisMemorises <= MEMO_NON_SUIVIS_OCTETS_MAX) break
+    oublierDiffNonSuivi(plusAncienne)
+  }
+}
+
+async function diffNonSuivi(cwd: string, chemin: string): Promise<string> {
+  const absolu = resolve(cwd, chemin)
+  const cle = `${filesystemPathKey(cwd)}\u0000${chemin}`
+  const avant = await generationDeLEntree(absolu)
+  const memo = diffsNonSuivisMemorises.get(cle)
+  if (avant && memo?.generation === avant) return memo.diff
+  const diff = await readNoIndexGitDiff(cwd, chemin)
+  const apres = avant ? await generationDeLEntree(absolu) : undefined
+  /*
+   * On ne retient que ce que git a lu d'une generation STABLE pendant toute sa lecture. Un texte
+   * vide pour un FICHIER n'est jamais retenu : git rend toujours au moins l'entete d'un fichier
+   * present, un vide signale donc un echec de git, qu'on ne doit pas figer.
+   */
+  const fiable = diff !== '' || avant?.startsWith('dossier:') === true
+  if (avant && apres === avant && fiable) memoriserDiffNonSuivi(cle, avant, diff)
+  else oublierDiffNonSuivi(cle)
+  return diff
 }
 
 async function enParalleleBorne<T, R>(

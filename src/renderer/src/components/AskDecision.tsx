@@ -316,7 +316,14 @@ export function AskDecisionBlock({
               disabled={selection.length === 0 || verrouille}
               data-testid="ask-decision-envoyer"
             >
-              Envoyer {selection.length > 0 ? `(${selection.length})` : ''}
+              {/* Le compte en pastille, plus « (1) » (conv-209, variante 6). L'espace garde un nom
+                  lisible (« Envoyer 2 ») ; dans le flex du bouton, il ne se dessine pas. */}
+              Envoyer{' '}
+              {selection.length > 0 && (
+                <span className="askd-envoyer-compte" data-testid="ask-decision-compte">
+                  {selection.length}
+                </span>
+              )}
             </button>
             <span>plusieurs réponses possibles — cochez celles qui conviennent</span>
           </>

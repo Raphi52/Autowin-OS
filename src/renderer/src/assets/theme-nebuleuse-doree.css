@@ -1637,11 +1637,12 @@
   box-shadow: 0 0 14px rgba(227, 181, 63, 0.45);
   color: #ffffff;
 }
-:root[data-theme='nebuleuse-doree'] .workflow-panel-close {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
+/* Croix seule, blanche (conv-213, 2026-10-10 : « enlève le rond autour de cette croix, laisse
+   juste une croix blanche ») : plus de pastille ronde, ni au repos ni au survol. */
+:root[data-theme='nebuleuse-doree'] .workflow-panel-close,
+:root[data-theme='nebuleuse-doree'] .workflow-panel-close:hover {
+  background: transparent;
+  color: #ffffff;
 }
 
 /* Fenetre etroite (< 1180 px) : Details passe en TIROIR par-dessus le fil

@@ -394,12 +394,14 @@
   flex: 0 0 auto;
   cursor: pointer;
 }
+/* Police du texte du fil, plus la chasse fixe de Consolas : « j'aime pas la police du bouton
+   envoyer du bloc ask » puis « go le 6 » (conv-209, maquette artifacts/draft-ask-envoyer/galerie.html).
+   Le compte coche passe de « (1) » a une pastille. */
 .askd-envoyer {
-  font:
-    600 11.5px/1 ui-monospace,
-    Consolas,
-    monospace;
-  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12.5px/1 var(--font);
   color: #0b0e14;
   background: linear-gradient(90deg, var(--gold-doux), var(--gold-clair));
   border: 0;
@@ -407,6 +409,23 @@
   padding: 7px 12px;
   cursor: pointer;
   transition: filter 0.16s ease-out;
+}
+/* Avec la pastille, la marge droite se resserre : elle tient la hauteur du bouton seul. */
+.askd-envoyer:has(.askd-envoyer-compte) {
+  padding: 5px 7px 5px 12px;
+}
+.askd-envoyer-compte {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .askd-envoyer:hover:not(:disabled) {
   filter: brightness(1.12);
@@ -419,6 +438,9 @@
   color: #a9b2c4;
   background: none;
   border: 1px solid rgba(255, 255, 255, 0.14);
+  /* La bordure prend 1 px sur la marge : grise ou actif avec sa pastille, le bouton garde ~26 px
+     de haut et le pied ne saute pas au premier coche (28,5 contre 26 mesure, conv-209). */
+  padding: 6px 11px;
   cursor: not-allowed;
 }
 

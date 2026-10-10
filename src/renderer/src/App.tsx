@@ -13,7 +13,7 @@ import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
-import { installerBalaiDesPanneaux } from './panneaux-balai'
+import { installerLumiereDesPanneaux } from './panneaux-lumiere'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
@@ -176,9 +176,9 @@ export function MainApp(): React.JSX.Element {
     document.title = testInstance ? 'Autowin OS Test' : 'Autowin OS'
   }, [testInstance])
 
-  // Reflets des panneaux qui suivent la souris (conv-191) : le script ne pose que des positions, le
-  // thème Nébuleuse de verre les peint ; les autres thèmes ne les lisent pas.
-  useEffect(() => installerBalaiDesPanneaux(window), [])
+  // La souris éclaire les panneaux (conv-191) : le script ne pose que sa position, le thème
+  // Nébuleuse de verre peint la lumière ; les autres thèmes ne la lisent pas.
+  useEffect(() => installerLumiereDesPanneaux(window), [])
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)

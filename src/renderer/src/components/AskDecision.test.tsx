@@ -237,6 +237,8 @@ describe('AskDecisionBlock — plusieurs réponses à la fois', () => {
     rendreMultiple(choisi)
     const envoyer = hote.querySelector<HTMLButtonElement>('[data-testid="ask-decision-envoyer"]')!
     expect(envoyer.disabled).toBe(true)
+    // Rien de coche : pas de pastille « 0 ».
+    expect(hote.querySelector('[data-testid="ask-decision-compte"]')).toBeNull()
     act(() => envoyer.click())
     expect(choisi).not.toHaveBeenCalled()
   })
@@ -250,7 +252,9 @@ describe('AskDecisionBlock — plusieurs réponses à la fois', () => {
     act(() => cases[0].click())
     const envoyer = hote.querySelector<HTMLButtonElement>('[data-testid="ask-decision-envoyer"]')!
     expect(envoyer.disabled).toBe(false)
-    expect(envoyer.textContent).toContain('(2)')
+    // Le compte est une pastille (conv-209), plus « (2) » ; le nom lu reste « Envoyer 2 ».
+    expect(hote.querySelector('[data-testid="ask-decision-compte"]')?.textContent).toBe('2')
+    expect(envoyer.textContent).toBe('Envoyer 2')
     act(() => envoyer.click())
     expect(choisi).toHaveBeenCalledWith('- Le serveur Brain\n- Le test de non-régression')
   })

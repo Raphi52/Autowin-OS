@@ -22,7 +22,9 @@ function selecteursHorsTheme(css: string): string[] {
 
 describe('theme Nebuleuse doree', () => {
   it('est propose dans la liste des themes, en base sombre', () => {
-    expect(THEMES.find((t) => t.id === 'nebuleuse-doree')?.libelle).toBe('Nébuleuse dorée')
+    // Renomme a l affichage le 2026-10-10 (conv-212), en pendant de « Holographique ».
+    // L identifiant reste `nebuleuse-doree` : c est la valeur memorisee sur le poste.
+    expect(THEMES.find((t) => t.id === 'nebuleuse-doree')?.libelle).toBe('Holographique doré')
     expect(baseDuTheme('nebuleuse-doree')).toBe('sombre')
   })
 

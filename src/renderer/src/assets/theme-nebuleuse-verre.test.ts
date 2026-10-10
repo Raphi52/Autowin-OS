@@ -35,7 +35,10 @@ function selecteursHorsTheme(css: string): string[] {
 describe('theme Nebuleuse de verre', () => {
   it('est propose dans la liste des themes, en base sombre', () => {
     expect(THEMES.map((t) => t.id)).toContain('nebuleuse-verre')
-    expect(THEMES.find((t) => t.id === 'nebuleuse-verre')?.libelle).toBe('Nébuleuse de verre')
+    // Renomme a l affichage le 2026-10-10 (conv-212) : « le mode nebuleux appelle-le le mode
+    // holographique ». L identifiant reste `nebuleuse-verre` : c est lui qui est memorise sur le
+    // poste, le changer ferait retomber l utilisateur sur le theme sombre.
+    expect(THEMES.find((t) => t.id === 'nebuleuse-verre')?.libelle).toBe('Holographique')
     expect(baseDuTheme('nebuleuse-verre')).toBe('sombre')
   })
 
@@ -692,6 +695,51 @@ describe('Cadre chanfrein platine, coins seuls', () => {
       )
       expect(r['mask-composite'], calque).toBe('intersect, exclude')
     }
+  })
+
+  it('donne au cadre de page des autres vues les coins coupes et le trait du Chat (conv-211)', () => {
+    // « faut aligner toutes les autres views » : `.view-page` (les huit vues hors Chat et Accueil)
+    // est coupe comme la liste des fils, sans filet or ni reflet dore.
+    const cadre = derniere(`${PREFIXE} .view-page`)
+    expect(cadre['clip-path']).toBe('var(--nv-chanfrein-forme)')
+    expect(cadre['border-radius']).toBe('0')
+    expect(cadre['box-shadow']).toBe('none')
+    // Trait PEINT en tete du fond (un `::before` absolu defilerait avec Task Manager sous 820 px),
+    // puis la lumiere et le satin de la page.
+    expect(cadre.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), radial-gradient\(/)
+    expect(cadre.background).toMatch(/var\(--nv-satin\) fixed$/)
+    expect(cadre.background).not.toMatch(/lisere-haut|surface-panel/)
+    // Le trait : la diagonale a 50 % du carre de 14 px, puis 14 px de pan le long des deux bords,
+    // en blanc en haut a gauche et en argent en bas a droite ; les cotes a 7 % sur les quatre bords.
+    const trait = derniere(PREFIXE)['--nv-chanfrein-trait-fond']
+    expect(trait.match(/linear-gradient\( 135deg,/g)).toHaveLength(2)
+    expect(trait).toContain(
+      'var(--nv-chanfrein-haut) calc(50% + 0.6px), transparent calc(50% + 1.4px) ) left top / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat'
+    )
+    expect(trait).toContain(
+      'transparent calc(50% - 1.4px), var(--nv-chanfrein-bas) calc(50% - 0.6px)'
+    )
+    expect(trait).toContain('left top / var(--nv-chanfrein-pans) 1px no-repeat')
+    expect(trait).toContain('right bottom / 1px var(--nv-chanfrein-pans) no-repeat')
+    expect(trait.match(/var\(--nv-chanfrein-cotes\), var\(--nv-chanfrein-cotes\)/g)).toHaveLength(4)
+  })
+
+  it('coupe aussi les tuiles et la plaque du titre de l Accueil, trait cale sur leur bord', () => {
+    const accueil = derniere(`${PREFIXE} :is(.home-tile__panel, .home-view__masthead)`)
+    expect(accueil['clip-path']).toBe('var(--nv-chanfrein-forme)')
+    expect(accueil['border-color']).toBe('transparent')
+    expect(accueil['border-radius']).toBe('0')
+    // Bord d'1 px : les calques partent de la boite exterieure, sinon le trait tombe 1 px dedans.
+    expect(accueil['background-origin']).toBe('border-box')
+    expect(accueil['backdrop-filter']).toBe('none')
+    expect(accueil.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), radial-gradient\(/)
+    // La tuile tenue et la tuile au clavier se disent encore : par leur bord.
+    expect(derniere(`${PREFIXE} .home-tile[data-held='true'] .home-tile__panel`)['border-color']).toBe(
+      'var(--line-strong)'
+    )
+    expect(derniere(`${PREFIXE} .home-tile:focus-visible .home-tile__panel`)['border-color']).toBe(
+      'var(--cyan)'
+    )
   })
 
   it('laisse a Nebuleuse doree son cadre or qui coule : le bloc CADRE-CHANFREIN ne passe pas', async () => {

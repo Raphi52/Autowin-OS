@@ -82,6 +82,7 @@ describe('worktree add porte core.longpaths', () => {
       source.match(
         /\[\s*'-c',\s*\n?\s*'core\.longpaths=true',\s*\n?\s*'worktree',\s*\n?\s*'add'/g
       ) ?? []
-    expect(sitesPrefixes.length).toBe(7)
+    // 8 depuis `restaurerCopieDepuisSecoursAsync` (2026-10-10) : forme asynchrone, prefixe porte.
+    expect(sitesPrefixes.length).toBe(8)
   })
 })
