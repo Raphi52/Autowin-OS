@@ -513,21 +513,41 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
       )
         .join('')
         .replace(/^\.+/, '') || 'fichier'
+    const prefixe = attachment.provenance === 'message-precedent' ? 'tour-precedent-' : ''
     const path = join(
       dir,
-      `${index + 1}-${nomDeFichierPourPieceJointe(safeName, attachment.mimeType ?? '')}`
+      `${index + 1}-${prefixe}${nomDeFichierPourPieceJointe(safeName, attachment.mimeType ?? '')}`
     )
     const data =
       attachment.kind === 'text' ? attachment.content : Buffer.from(attachment.content, 'base64')
     writeFileSync(path, data)
     return path
   })
+  /*
+   * DEUX LISTES, CHACUNE COMPTEE — jamais une liste plate.
+   *
+   * Vecu en conv-150, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 (2026-10-10) : UNE capture jointe,
+   * mais un seul titre « PIÈCES JOINTES FOURNIES PAR L'UTILISATEUR » sur deux `image.png` (la sienne
+   * et celle de son premier message, rejointe d'office). Le modele a repondu « Je regarde tes deux
+   * captures » avant de les ouvrir : la provenance ne tenait qu'a un suffixe entre parentheses.
+   */
+  const ligne = (index: number): string => `- ${paths[index]} — ${attachments[index]?.name ?? ''}`
+  const courantes = attachments.flatMap((a, i) => (a.provenance === 'message-precedent' ? [] : [i]))
+  const anciennes = attachments.flatMap((a, i) => (a.provenance === 'message-precedent' ? [i] : []))
+  const blocCourant =
+    courantes.length > 0
+      ? `\n\nPIÈCES JOINTES DE TON MESSAGE CI-DESSUS (${courantes.length}) :\n${courantes.map(ligne).join('\n')}`
+      : '\n\nTon message ci-dessus n’a AUCUNE pièce jointe.'
+  const blocAncien =
+    anciennes.length > 0
+      ? `\n\nRAPPEL — PIÈCES JOINTES D’UN TOUR ANTÉRIEUR de cette conversation (${anciennes.length}), déjà envoyées plus tôt : elles ne font PAS partie du message ci-dessus, ne les compte pas avec lui :\n${anciennes.map(ligne).join('\n')}`
+      : ''
   return {
     dir,
     paths,
     promptSuffix:
-      '\n\nPIÈCES JOINTES FOURNIES PAR L’UTILISATEUR (celles marquées « message precedent » viennent d’un tour ANTÉRIEUR de cette conversation, pas du message ci-dessus) :\n' +
-      paths.map((path, index) => `- ${path} — ${attachments[index]?.name ?? ''}`).join('\n') +
+      blocCourant +
+      blocAncien +
       '\nUtilise Read uniquement pour consulter ces fichiers si nécessaire.',
     cleanup: () =>
       rmAsync(dir, { recursive: true, force: true }).catch(() => {

@@ -20,6 +20,12 @@ export interface Attachment {
   kind: 'text' | 'image' | 'file'
   /** UTF-8 pour `text`, base64 sans préfixe data URL pour `image` et `file`. */
   content: string
+  /**
+   * Absent = jointe au message COURANT. `message-precedent` = rejointe d'office depuis un tour
+   * antérieur (`agent-pilot.ts`). Champ STRUCTURÉ : un suffixe dans `name` ne suffisait pas
+   * (conv-150, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — une capture, « tes deux captures »).
+   */
+  provenance?: 'message-precedent'
 }
 
 export interface Message {

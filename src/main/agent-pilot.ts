@@ -1604,7 +1604,12 @@ export class AgentPilot {
           const piece =
             index === history.length - 1
               ? lisible
-              : { ...lisible, name: `${lisible.name} (jointe a un message precedent)` }
+              : {
+                  ...lisible,
+                  name: `${lisible.name} (jointe a un message precedent)`,
+                  // Le provider range les pieces par CE champ, pas par le nom (conv-150, tour 1bf1ae63).
+                  provenance: 'message-precedent' as const
+                }
           // Cle calculee sur la piece AVANT renommage : sinon la meme image, jointe au message
           // courant ET a un message passe, produit deux cles et part deux fois (attrape par le test).
           const cle = `${lisible.name}|${lisible.content}`
