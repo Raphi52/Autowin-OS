@@ -169,9 +169,13 @@ describe('identite Autowin OS', () => {
     const runtimeIcon = readFileSync(join(ROOT, 'resources/icon.png'))
     const packagingIcon = readFileSync(join(ROOT, 'build/icon.png'))
 
-    // Choix utilisateur du 2026-09-03 : la marque du rail porte le spinner « atome », plus l'image.
-    expect(appShell).toContain("import { Spinner } from './components/Spinner'")
-    expect(appShell).toContain('<Spinner className="brand-logo"')
+    // Choix utilisateur du 2026-10-11 (conv-228) : la marque du rail porte le LOGO anneau, genere
+    // par scripts/logo_anneau.py — « je garde mon spinner je veux juste changer le logo ici ». Il
+    // remplace l'atome qu'y avait mis le choix du 2026-09-03 ; l'atome reste l'indicateur de
+    // chargement partout ailleurs.
+    expect(appShell).toContain("import logoAnneau from './assets/autowin-logo-anneau.png'")
+    expect(appShell).toContain('<img className="brand-logo" src={logoAnneau}')
+    expect(appShell).not.toContain('<Spinner className="brand-logo"')
     expect(appShell).not.toContain('autowin-logo-transparent.png')
     expect(appShell).not.toContain('className="brand-dot"')
     expect(packagingIcon).toEqual(runtimeIcon)

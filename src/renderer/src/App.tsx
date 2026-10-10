@@ -8,7 +8,8 @@ declare const __BUILD_NUMBER__: string
 declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
-import { Spinner } from './components/Spinner'
+// Le logo anneau de l'en-tete, genere par `scripts/logo_anneau.py` (source unique du logo).
+import logoAnneau from './assets/autowin-logo-anneau.png'
 import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
@@ -59,8 +60,6 @@ import './assets/theme-clair-gris.css'
 import './assets/ui-system.css'
 import './assets/theme-nebuleuse-verre.genere.css'
 import './assets/theme-nebuleuse-verre.css'
-import './assets/theme-nebuleuse-doree.genere.css'
-import './assets/theme-nebuleuse-doree.css'
 import './assets/theme-holographique-clair.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
@@ -481,7 +480,9 @@ export function MainApp(): React.JSX.Element {
        */}
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
-          <Spinner className="brand-logo" size={34} />
+          {/* LE LOGO, plus le spinner (2026-10-11, conv-228) : « je garde mon spinner je veux juste
+              changer le logo ici ». L'atome reste l'indicateur de chargement partout ailleurs. */}
+          <img className="brand-logo" src={logoAnneau} alt="" draggable={false} />
           <span className="brand-name">Autowin OS</span>
           <button
             type="button"
