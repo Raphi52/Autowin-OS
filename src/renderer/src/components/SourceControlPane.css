@@ -420,8 +420,12 @@
   background: color-mix(in srgb, var(--gold, #d4a94f) 8%, transparent);
   font-size: 11.5px;
 }
+/* Base de 160 px, pas 0 : avec `flex: 1` (base nulle), le compte ne faisait jamais passer les
+   boutons a la ligne. Dans le panneau Details il retrecissait a une colonne d'un mot (« · 3 /
+   comment / sur 1 / fichier ») et « commentaires » passait sous « Envoyer a l'agent » (capture du
+   2026-10-11, conv-245). Trop etroit pour 160 px a cote des boutons, il prend sa propre ligne. */
 .sc-relecture-compte {
-  flex: 1;
+  flex: 1 1 160px;
   min-width: 0;
   color: var(--text, #e6e9ee);
 }

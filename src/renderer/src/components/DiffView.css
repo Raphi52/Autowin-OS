@@ -53,17 +53,12 @@
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.diff-add {
-  color: var(--ok, #3ecb8f);
-  background: color-mix(in srgb, var(--ok, #3ecb8f) 10%, transparent);
-}
-.diff-del {
-  color: var(--danger, #e6635b);
-  background: color-mix(in srgb, var(--danger, #e6635b) 10%, transparent);
-}
-.diff-hunk {
-  color: var(--accent, #4b9fff);
-}
+/* Les couleurs des lignes ajoutees, retirees et d'en-tete de bloc vivent dans le bloc « CONTRASTE
+   FORT » plus bas, et SEULEMENT la. Une premiere version (texte vert ou rouge sur fond a 10 %) restait
+   ecrite ici, morte car remplacee plus bas ; mais le generateur des themes holographiques la
+   retraduisait avec une priorite plus forte : en Holographique, le texte d'une ligne ajoutee
+   redevenait vert sur vert, et l'en-tete de bloc rose sur rose, au lieu du texte clair choisi
+   (conv-245, 2026-10-11). */
 .diff-meta {
   color: var(--muted, #8b939f);
 }
@@ -144,6 +139,19 @@
   color: var(--text, #e6e9ee);
   font-family: inherit;
   white-space: normal;
+}
+/* DIFF ETROIT (panneau Details, environ 300 px de code) : le retrait de 100 px qui aligne le
+   commentaire sur le code laissait 150 px a l'editeur -- trois lignes visibles, « Ajouter a la
+   relecture » sur trois lignes et « Annuler » coupe (capture du 2026-10-11, conv-245). Sous 440 px,
+   le commentaire et l'editeur prennent toute la largeur. */
+.diff-view {
+  container-type: inline-size;
+}
+@container (max-width: 440px) {
+  .diff-comment,
+  .diff-editeur {
+    margin-left: 6px;
+  }
 }
 .diff-comment {
   display: flex;
