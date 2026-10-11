@@ -143,6 +143,9 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
      * INSCRITE AVANT D'ATTENDRE : le tour suivant doit savoir qu'elle tourne. Sinon le CLI repris
      * la dit « stopped » et `claude.ts` concluait « son résultat est perdu » (conv-253, tour
      * bdfe38d3-5ba5-4693-bad2-f70b39bc845e) — le modèle relançait alors un doublon.
+     * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — aucun registre ne disait qu'Autowin
+     * avait relancé la tâche, d'où l'avis « perdu » (delta at=1791731278911) ; 3 édits = construction
+     * du registre en plusieurs pas ; relance-taches-de-fond.registre.test.ts rouge 2/3 puis vert.
      */
     for (const tache of taches)
       if (!tache.erreurDemarrage && tache.journalPath)
