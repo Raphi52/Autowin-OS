@@ -603,6 +603,7 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   }
 }
 
+// fix-ok: conv-258 — mesure sur saisies-utilisateur.jsonl : la phrase citee n'existe que dans conv-253 (saisie ts 1791720124446, voie orientation) ; le dossier /kaizen partait sur conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) car le numero tape n'etait jamais confronte a la citation.
 /*
   LA PHRASE CITÉE DÉSIGNE LA SCÈNE MIEUX QUE LE NUMÉRO TAPÉ (2026-10-11).
 
