@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactKind, ChatArtifact } from '../../../shared/artifacts'
+import { chatMediaUrl, isChatMediaUrl } from '../../../shared/chat-media'
 import { BrainMarkdown } from './BrainMarkdown'
 import { ArtifactArchivePreview } from './ArtifactArchivePreview'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
@@ -88,6 +89,8 @@ function fileSize(bytes: number): string {
 
 function inlineDataUrl(artifact: ChatArtifact): string | undefined {
   if (artifact.url?.startsWith('data:')) return artifact.url
+  // Vidéo/son conservés : adresse lue par plages depuis le disque (`chat-media-protocol.ts`).
+  if (isChatMediaUrl(artifact.url)) return artifact.url
   if (artifact.content === undefined || artifact.encoding !== 'base64') return undefined
   return `data:${artifact.mimeType};base64,${artifact.content}`
 }
@@ -333,7 +336,19 @@ export function ArtifactPreview({
     artifact?: ChatArtifact
     error?: string
   }>()
+  /* VIDÉO ET SON CONSERVÉS = LUS PAR PLAGES (kaizen conv-260, 2026-10-11). La copie base64 de
+     `readChatArtifact` est plafonnée à 16 Mo : la pub de 74,6 Mo du tour
+     41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 n'aurait jamais eu de lecteur. Le lecteur reçoit une
+     adresse `autowin-media://` faite du seul triplet d'identité ; le processus principal retrouve
+     le fichier dans le stockage du fil et le sert par morceaux. */
+  const mediaParPlages =
+    (artifact.kind === 'video' || artifact.kind === 'audio') &&
+    artifact.content === undefined &&
+    Boolean(artifact.path) &&
+    Boolean(conversationId) &&
+    Boolean(turnId)
   const mustLoad =
+    !mediaParPlages &&
     artifact.content === undefined &&
     Boolean(artifact.path) &&
     artifact.kind !== 'executable' &&
@@ -392,7 +407,15 @@ export function ArtifactPreview({
   const activeLoadState = loadState?.key === loadKey ? loadState : undefined
   const loaded = activeLoadState?.artifact
   const loadError = activeLoadState?.error
-  const resolved = loaded ?? artifact
+  const mediaUrl =
+    mediaParPlages && conversationId && turnId
+      ? chatMediaUrl(conversationId, turnId, artifact.id)
+      : undefined
+  const parPlages = useMemo(
+    () => (mediaUrl ? { ...artifact, url: mediaUrl } : undefined),
+    [artifact, mediaUrl]
+  )
+  const resolved = loaded ?? parPlages ?? artifact
   const setCardRef = (element: HTMLElement | null): void => {
     cardRef.current = element
   }

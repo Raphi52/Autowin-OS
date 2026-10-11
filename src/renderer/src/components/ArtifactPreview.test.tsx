@@ -558,6 +558,53 @@ A`
     expect(read).toHaveBeenCalledTimes(1)
     expect(container.querySelector('pre.is-text')?.textContent).toBe('contenu différé')
   })
+
+  /* Kaizen conv-260, tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 : la pub livrée pesait 74,6 Mo.
+     Par la copie base64 (plafond 16 Mo), sa carte n'aurait montré que « Aperçu limité à 16 Mo ». */
+  it('vidéo conservée de plus de 16 Mo : un lecteur lu par plages, sans copie base64', async () => {
+    Object.defineProperty(globalThis, 'IntersectionObserver', {
+      configurable: true,
+      value: undefined
+    })
+    const read = vi.fn(async () => ({ ok: false, error: 'Aperçu limité à 16 Mo' }))
+    Object.defineProperty(window, 'api', { configurable: true, value: { readChatArtifact: read } })
+    render(
+      artifact({
+        id: 'pub-v2',
+        name: 'autowin-os-pub-v2.mp4',
+        mimeType: 'video/mp4',
+        kind: 'video',
+        size: 74_601_555,
+        content: undefined,
+        encoding: undefined,
+        path: 'C:\\store\\conv-260\\tour\\pub-v2.mp4'
+      }),
+      { conversationId: 'conv-260', turnId: '41ab69ad' }
+    )
+    await act(async () => {})
+    expect(read).not.toHaveBeenCalled()
+    expect(container.querySelector('.artifact-preview__blocked')).toBeNull()
+    const lecteur = container.querySelector('video')
+    expect(lecteur?.getAttribute('src')).toBe('autowin-media://artefact/conv-260/41ab69ad/pub-v2')
+  })
+
+  it('jumeau : sans identité de tour, pas d’adresse inventée (le lecteur ne se monte pas)', async () => {
+    const read = vi.fn()
+    Object.defineProperty(window, 'api', { configurable: true, value: { readChatArtifact: read } })
+    render(
+      artifact({
+        id: 'pub-v2',
+        name: 'pub.mp4',
+        mimeType: 'video/mp4',
+        kind: 'video',
+        content: undefined,
+        encoding: undefined,
+        path: 'C:\\store\\pub.mp4'
+      })
+    )
+    await act(async () => {})
+    expect(container.querySelector('video')).toBeNull()
+  })
 })
 
 describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {

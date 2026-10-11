@@ -27,6 +27,7 @@ import {
   revealableConversationArtifactPath
 } from '../store/chat-artifact-store'
 import type { AutowinOS } from '../os'
+import { brancherMediaDuFil, resoudreMediaConserve } from '../chat-media-protocol'
 
 /** Ce que les canaux des artefacts prenaient dans `index.ts` — désormais passé explicitement. */
 export type ChatArtifactsIpcDeps = {
@@ -36,6 +37,11 @@ export type ChatArtifactsIpcDeps = {
 export function registerChatArtifactsIpc({ os }: ChatArtifactsIpcDeps): void {
   const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
   const budgetedArtifactRenderers = new Set<number>()
+  // Vidéo et son du fil : lus depuis le stockage par plages, hors du budget base64 de 16 Mo
+  // (kaizen conv-260). Même résolution par identité que `os:chatArtifact:reveal` ci-dessous.
+  brancherMediaDuFil((identite) =>
+    resoudreMediaConserve(os.conversations.get(identite.conversationId), identite)
+  )
 
   ipcMain.handle(
     'os:chatArtifact:read',

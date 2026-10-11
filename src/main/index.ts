@@ -38,6 +38,7 @@ import { registerFabricIpc } from './ipc/fabric'
 import { registerCapabilitiesIpc } from './ipc/capabilities'
 import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
+import { declarerSchemaMediaDuFil } from './chat-media-protocol'
 import { registerSkillsIpc } from './ipc/skills'
 import { registerWhisperIpc } from './ipc/whisper'
 import { registerDiarisationIpc } from './ipc/diarisation'
@@ -4623,6 +4624,10 @@ installCrashHandlers({
   // orchestrations en vol pour ne pas laisser de controllers fantômes (cancel no-op sinon).
   onFatal: () => bus.abortAllOrchestrations()
 })
+
+// Vidéos du fil lues depuis le disque par plages (kaizen conv-260) : Electron n'accepte ce schéma
+// qu'AVANT l'évènement `ready`. Le service des requêtes est branché avec les canaux des artefacts.
+declarerSchemaMediaDuFil()
 
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.

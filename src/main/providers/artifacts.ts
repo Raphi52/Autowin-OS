@@ -109,7 +109,7 @@ const CODE_EXTENSIONS = new Set([
 
 const extension = (name: string): string => extname(name).slice(1).toLowerCase()
 
-function artifactMimeType(name: string, supplied = ''): string {
+export function artifactMimeType(name: string, supplied = ''): string {
   return (
     supplied.trim().toLowerCase() ||
     MIME_BY_EXTENSION[extension(name)] ||
