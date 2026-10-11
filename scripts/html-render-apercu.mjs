@@ -67,12 +67,19 @@ function extraireBloc(texte, rang = 1) {
   return blocs[Math.min(Math.max(rang, 1), blocs.length) - 1]
 }
 
-/** Les regles `.md-html` de ChatView.css (pas `.md-html-oversize`) : le conteneur reel du bloc. */
+/**
+ * Les regles `.md-html` de ChatView.css (pas `.md-html-oversize`) : le conteneur reel du bloc —
+ * plus la regle `.msg-body`, la BULLE qui l'entoure dans le fil. Ce qu'elle transmet par heritage
+ * (`white-space: pre-wrap`, corps, interligne) change le rendu : sans elle, ce controle rendait
+ * « code 0 » sur un bloc qui montrait 176 px de vide dans le fil (conv-254, 2026-10-11).
+ */
 function reglesConteneur() {
   const css = readFileSync(CHAT_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-  return [...css.matchAll(/(^|\n)(\.md-html(?![-\w])[^{]*)\{([^}]*)\}/g)]
-    .map((m) => `${m[2].trim()}{${m[3].trim()}}`)
-    .join('\n')
+  const regles = (motif) => [...css.matchAll(motif)].map((m) => `${m[2].trim()}{${m[3].trim()}}`)
+  return [
+    ...regles(/(^|\n)(\.msg-body)\s*\{([^}]*)\}/g),
+    ...regles(/(^|\n)(\.md-html(?![-\w])[^{]*)\{([^}]*)\}/g)
+  ].join('\n')
 }
 
 /**
@@ -133,7 +140,9 @@ async function main() {
       await page.setContent(
         `<!doctype html><html${clair ? ` data-base="clair"` : ''}><head><style>${conteneur}</style></head>` +
           `<body style="margin:0;${corps};font:14px 'Segoe UI',system-ui,sans-serif">` +
-          `<div id="colonne" style="width:${largeur}px;margin:0 auto"><div id="bloc" class="md-html"></div></div></body></html>`
+          // La bulle garde son heritage (white-space, corps) ; son cadre est neutralise pour que
+          // `largeur` reste la largeur du BLOC.
+          `<div id="colonne" class="msg-body" style="width:${largeur}px;margin:0 auto;padding:0;border:0;border-radius:0;background:none"><div id="bloc" class="md-html"></div></div></body></html>`
       )
       await page.addScriptTag({ content: filtre })
       const mesure = await page.evaluate((src) => {
