@@ -10,7 +10,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './ModelActivityLogPane.css'
 import type { Msg } from './chat-view-types'
 import { HumanJson } from './HumanJson'
-import { deltaMs, grouperParTour, type ModelActivityTour } from './model-activity-tours'
+import {
+  deltaMs,
+  grouperParTour,
+  grouperSemblables,
+  type ModelActivityTour
+} from './model-activity-tours'
 import { detailCourt, titreCourt } from './model-log-court'
 import {
   assemblerJournal,
@@ -34,7 +39,7 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   injection: 'Injection',
   boundary: 'Frontière',
   usage: 'Coût',
-  status: 'Signe de vie',
+  status: 'Action',
   brain: 'Brain',
   agent: 'Sous-agent',
   fichiers: 'Fichiers',
@@ -155,7 +160,9 @@ export function ModelActivityLogPane({
   // le journal d'activite facturee (provider, tokens, cout, duree).
   const [causal, setCausal] = useState<ReadonlyArray<Record<string, unknown>>>([])
   const [activity, setActivity] = useState<ReadonlyArray<Record<string, unknown>>>([])
-  const [kindMasque, setKindMasque] = useState<ModelActivityKind | ''>('')
+  // Le filtre retient un NOM affiché, pas une nature : `action` et `status` s'appellent tous deux
+  // « Action », et deux entrées identiques dans le menu filtraient chacune une moitié différente.
+  const [natureMasquee, setNatureMasquee] = useState('')
   const [sourceMasquee, setSourceMasquee] = useState<ModelActivitySource | ''>('')
   const [erreursSeules, setErreursSeules] = useState(false)
   // Vue PISTES : chaque source occupe une voie fixe à gauche de l'heure. MASQUÉE d'office
@@ -321,7 +328,7 @@ export function ModelActivityLogPane({
     // Le rouge d'abord : chercher un echec parmi des milliers de lignes vertes est la premiere
     // chose qu'on vient faire ici, et rien ne le permettait.
     if (erreursSeules && entry.ok !== false && entry.kind !== 'error') return false
-    if (kindMasque && entry.kind !== kindMasque) return false
+    if (natureMasquee && KIND_LABEL[entry.kind] !== natureMasquee) return false
     if (sourceMasquee && entry.source !== sourceMasquee) return false
     if (!motif) return true
     return `${entry.label} ${entry.detail ?? ''} ${KIND_LABEL[entry.kind]} ${SOURCE_LABEL[entry.source]}`
@@ -329,7 +336,7 @@ export function ModelActivityLogPane({
       .includes(motif)
   })
   // On ne rend que la FIN de ce que le filtre retient ; le reste est atteignable par le bouton.
-  const selection = `${conversationId ?? ''}|${motif}|${kindMasque}|${sourceMasquee}|${erreursSeules}`
+  const selection = `${conversationId ?? ''}|${motif}|${natureMasquee}|${sourceMasquee}|${erreursSeules}`
   const fenetre = fenetres[selection] ?? FENETRE
   const affichees =
     fenetre >= visibles.length ? visibles : visibles.slice(visibles.length - fenetre)
@@ -338,7 +345,7 @@ export function ModelActivityLogPane({
   // dit plus quel tour a fait quoi, ni ce qu'il a coute.
   const tours = grouperParTour(affichees)
   // Les listes de filtres viennent des lignes REELLEMENT presentes : jamais une categorie vide.
-  const kindsPresents = [...new Set(entries.map((entry) => entry.kind))]
+  const naturesPresentes = [...new Set(entries.map((entry) => KIND_LABEL[entry.kind]))]
   const sourcesPresentes = [...new Set(entries.map((entry) => entry.source))]
   // Les VOIES : sources présentes, rangées dans l'ordre stable ci-dessus.
   const voies = SOURCE_ORDRE.filter((source) => sourcesPresentes.includes(source)).concat(
@@ -366,13 +373,13 @@ export function ModelActivityLogPane({
         <select
           className="input"
           aria-label="Filtrer par nature"
-          value={kindMasque}
-          onChange={(event) => setKindMasque(event.target.value as ModelActivityKind | '')}
+          value={natureMasquee}
+          onChange={(event) => setNatureMasquee(event.target.value)}
         >
           <option value="">Tout</option>
-          {kindsPresents.map((kind) => (
-            <option key={kind} value={kind}>
-              {KIND_LABEL[kind]}
+          {naturesPresentes.map((nature) => (
+            <option key={nature} value={nature}>
+              {nature}
             </option>
           ))}
         </select>
@@ -475,23 +482,109 @@ export function ModelActivityLogPane({
                 {typeof tour.cout === 'number' && <span>{tour.cout.toFixed(4)} $</span>}
                 {tour.erreur && <span className="model-log-tour__ko">échec</span>}
               </summary>
-              {/* La FRISE : un trait continu traverse le tour, une perle par geste. */}
+              {/* La FRISE : un trait continu traverse le tour, une perle par geste — ou par rafale
+                  de gestes semblables qui se suivent, repliée en un groupe (conv-270). */}
               <div className="model-log-frise">
-                {tour.entries.map((entry) => (
-                  <LogRow
-                    key={entry.id}
-                    entry={entry}
-                    tour={tour}
-                    voie={pistes ? voieDe.get(entry.source) : undefined}
-                    conversationId={conversationId}
-                  />
-                ))}
+                {grouperSemblables(tour.entries).map((bloc) =>
+                  bloc.genre === 'ligne' ? (
+                    <LogRow
+                      key={bloc.entry.id}
+                      entry={bloc.entry}
+                      tour={tour}
+                      voie={pistes ? voieDe.get(bloc.entry.source) : undefined}
+                      conversationId={conversationId}
+                    />
+                  ) : (
+                    <LogGroupe
+                      key={`groupe:${bloc.id}`}
+                      entries={bloc.entries}
+                      tour={tour}
+                      voie={pistes ? voieDe.get(bloc.entries[0].source) : undefined}
+                      conversationId={conversationId}
+                    />
+                  )
+                )}
               </div>
             </details>
           </section>
         ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * GROUPE de lignes SEMBLABLES qui se suivent (conv-270, 2026-10-11 : « dans les logs groupe les
+ * trucs qui se ressemblent qui se suivent » ; règle dans `grouperSemblables`). Replié, il tient sur
+ * UNE ligne : nature, nombre, et le titre de la PREMIÈRE ligne — par où la rafale commence. Déplié,
+ * il rend ses lignes telles quelles, chacune avec son heure et sa carte dépliable.
+ *
+ * La tête porte la classe `model-log-row` et `data-log-kind` : elle hérite ainsi de la grille, de la
+ * perle et de la teinte de sa nature, y compris des surcharges des thèmes (Nébuleuse, Holographique
+ * clair), sans une règle de couleur de plus. Les lignes restent dans la page même repliées : le
+ * filtre, l'export et le compte « N gestes » du tour lisent toujours chaque ligne.
+ */
+function LogGroupe({
+  entries,
+  tour,
+  voie,
+  conversationId
+}: {
+  entries: readonly ModelActivityEntry[]
+  tour: ModelActivityTour
+  voie?: number
+  conversationId?: string | null
+}): React.JSX.Element {
+  const premiere = entries[0]
+  const nature = KIND_LABEL[premiere.kind]
+  const titre = titreCourt(premiere.label, nature) ?? detailCourt(premiere.detail ?? premiere.label)
+  // Même état d'échec pour toutes (clé du groupe) : rouge si elles ont échoué, vert si toutes ont
+  // réussi, rien sinon — comme la pastille d'une ligne seule.
+  const echec = premiere.ok === false || premiere.kind === 'error'
+  const dot = echec ? 'st-err' : entries.every((entry) => entry.ok === true) ? 'st-ok' : ''
+  return (
+    <details className="model-log-groupe" data-testid="model-log-groupe">
+      <summary
+        className="model-log-row model-log-groupe__tete"
+        data-log-kind={premiere.kind}
+        data-log-ok={echec ? 'false' : undefined}
+        title={`${entries.length} lignes « ${nature} » à la suite — clic pour les voir`}
+      >
+        {typeof voie === 'number' && (
+          <span
+            className="model-log-piste"
+            data-piste-source={premiere.source}
+            data-piste-index={voie}
+            style={{ ['--piste' as string]: String(voie) }}
+            aria-hidden="true"
+          />
+        )}
+        <time className="model-log-time">{heure(premiere.at) ?? ''}</time>
+        <span className="model-log-perle" aria-hidden="true" />
+        <div className="model-log-carte">
+          <div className="model-log-head">
+            {dot ? <span className={`status-dot ${dot}`} /> : null}
+            <span className="model-log-kind">{nature}</span>
+            <span className="model-log-compte">×{entries.length}</span>
+            <span className="model-log-label is-plein">{titre}</span>
+            <span className="model-log-chevron" aria-hidden="true">
+              ›
+            </span>
+          </div>
+        </div>
+      </summary>
+      <div className="model-log-groupe__membres">
+        {entries.map((entry) => (
+          <LogRow
+            key={entry.id}
+            entry={entry}
+            tour={tour}
+            voie={voie}
+            conversationId={conversationId}
+          />
+        ))}
+      </div>
+    </details>
   )
 }
 

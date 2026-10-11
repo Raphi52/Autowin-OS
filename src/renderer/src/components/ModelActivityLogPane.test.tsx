@@ -268,7 +268,11 @@ describe('ModelActivityLogPane — tenue du volume', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    const rendues = host.querySelectorAll('.model-log-row').length
+    // Les LIGNES du journal, sans les têtes de groupe (conv-270) : une rafale semblable repliée
+    // ajoute une tête, mais le plafond porte sur les gestes rendus, toujours 300 au plus.
+    const lignes = (): number =>
+      host.querySelectorAll('.model-log-row:not(.model-log-groupe__tete)').length
+    const rendues = lignes()
     expect(rendues).toBeLessThanOrEqual(300)
     // ce qui est rendu, c'est la FIN du journal (l'activité récente)
     expect(host.textContent).toContain('ligne 19999')
@@ -279,7 +283,7 @@ describe('ModelActivityLogPane — tenue du volume', () => {
     await act(async () => {
       bouton?.click()
     })
-    expect(host.querySelectorAll('.model-log-row').length).toBeGreaterThan(rendues)
+    expect(lignes()).toBeGreaterThan(rendues)
   })
 })
 
@@ -564,5 +568,65 @@ describe('ModelActivityLogPane — les appels prompt', () => {
       await Promise.resolve()
     })
     expect(host.querySelector('[data-testid="model-activity-log"]')).not.toBeNull()
+  })
+})
+
+// conv-270, 2026-10-11 : « dans les logs groupe les trucs qui se ressemblent qui se suivent ».
+describe('ModelActivityLogPane — lignes semblables qui se suivent', () => {
+  const rafale = [
+    { kind: 'provider-status', text: 'Bash · git status --short', at: 1 },
+    { kind: 'provider-status', text: 'tache de fond en cours - Lint', at: 2 },
+    { kind: 'provider-status', text: 'Bash terminé - 3 s', at: 3 }
+  ]
+
+  it('replie trois signes de vie consécutifs en UN groupe qui dit leur nombre', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue(rafale)
+    await monter()
+    const groupes = host.querySelectorAll('[data-testid="model-log-groupe"]')
+    expect(groupes).toHaveLength(1)
+    const tete = groupes[0].querySelector(':scope > summary') as HTMLElement
+    expect(tete.querySelector('.model-log-compte')?.textContent).toBe('×3')
+    // La tête dit par où la rafale commence, et porte la teinte de sa nature.
+    expect(tete.textContent).toContain('Bash · git status --short')
+    expect(tete.getAttribute('data-log-kind')).toBe('status')
+    // Replié par défaut : les trois lignes sont dans le groupe, pas à côté.
+    expect((groupes[0] as HTMLDetailsElement).open).toBe(false)
+    const membres = groupes[0].querySelectorAll('.model-log-groupe__membres .model-log-row')
+    expect([...membres].map((row) => row.querySelector('.model-log-label')?.textContent)).toEqual([
+      'Bash · git status --short',
+      'tache de fond en cours - Lint',
+      'Bash terminé - 3 s'
+    ])
+  })
+
+  it('le menu des natures montre « Action » UNE fois et retient les deux sortes de gestes', async () => {
+    // Les lignes du fournisseur (`status`) et les appels d'outil (`action`) portent le même nom
+    // affiché : deux entrées « Action » identiques filtraient chacune une moitié différente.
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([rafale[0]])
+    await monter()
+    const menu = host.querySelector('[aria-label="Filtrer par nature"]') as HTMLSelectElement
+    const libelles = [...menu.options].map((option) => option.textContent)
+    expect(libelles.filter((libelle) => libelle === 'Action')).toHaveLength(1)
+    await act(async () => {
+      menu.value = 'Action'
+      menu.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const kinds = [...host.querySelectorAll('.model-log-row')].map((row) =>
+      row.getAttribute('data-log-kind')
+    )
+    expect(new Set(kinds)).toEqual(new Set(['action', 'status']))
+  })
+
+  it('laisse en ligne seule un geste sans voisin semblable', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([rafale[0]])
+    await monter()
+    expect(host.querySelectorAll('[data-testid="model-log-groupe"]')).toHaveLength(0)
+    expect(host.textContent).toContain('Bash · git status --short')
   })
 })

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { deltaMs, grouperParTour, type ModelActivityTour } from './model-activity-tours'
+import {
+  deltaMs,
+  grouperParTour,
+  grouperSemblables,
+  type ModelActivityTour
+} from './model-activity-tours'
 import type { ModelActivityEntry } from './model-activity-log'
 
 function ligne(part: Partial<ModelActivityEntry>): ModelActivityEntry {
@@ -78,5 +83,76 @@ describe('deltaMs', () => {
   it('reste indéfini quand une des deux heures manque', () => {
     expect(deltaMs({} as ModelActivityEntry, { debut: 10 } as ModelActivityTour)).toBeUndefined()
     expect(deltaMs({ at: 10 } as ModelActivityEntry, {} as ModelActivityTour)).toBeUndefined()
+  })
+})
+
+/**
+ * LIGNES SEMBLABLES QUI SE SUIVENT (conv-270, 2026-10-11 : « dans les logs groupe les trucs qui se
+ * ressemblent qui se suivent »). Mesure sur trois conversations réelles : même nature + même source
+ * à la suite, dans un tour, ramène 503 lignes à 284 (conv-259), 272 à 172 (conv-266), 189 à 86
+ * (conv-268) — surtout les rafales de « Signe de vie » d'une commande. Exiger le même TITRE en plus
+ * ne regroupait que 2 lignes sur 503 : le critère est la nature, pas le texte.
+ */
+describe('grouperSemblables', () => {
+  it('réunit en un groupe les lignes de même nature et de même source qui se suivent', () => {
+    const blocs = grouperSemblables([
+      ligne({ id: 'a', kind: 'reasoning' }),
+      ligne({ id: 'b', kind: 'status', label: 'Bash · git status' }),
+      ligne({ id: 'c', kind: 'status', label: 'Bash terminé - 3 s' }),
+      ligne({ id: 'd', kind: 'status', label: 'Read · a.ts' }),
+      ligne({ id: 'e', kind: 'reasoning' })
+    ])
+    expect(
+      blocs.map((bloc) =>
+        bloc.genre === 'ligne' ? bloc.entry.id : bloc.entries.map((entry) => entry.id).join('+')
+      )
+    ).toEqual(['a', 'b+c+d', 'e'])
+  })
+
+  it('donne au groupe l’identifiant de sa première ligne, stable quand la rafale grandit', () => {
+    const avant = grouperSemblables([
+      ligne({ id: 'b', kind: 'status' }),
+      ligne({ id: 'c', kind: 'status' })
+    ])
+    const apres = grouperSemblables([
+      ligne({ id: 'b', kind: 'status' }),
+      ligne({ id: 'c', kind: 'status' }),
+      ligne({ id: 'd', kind: 'status' })
+    ])
+    expect(avant[0]).toMatchObject({ genre: 'groupe', id: 'b' })
+    expect(apres[0]).toMatchObject({ genre: 'groupe', id: 'b' })
+  })
+
+  it('ne réunit pas deux sources différentes, même de même nature', () => {
+    const blocs = grouperSemblables([
+      ligne({ id: 'a', kind: 'artifact', source: 'thread' }),
+      ligne({ id: 'b', kind: 'artifact', source: 'causal' })
+    ])
+    expect(blocs.map((bloc) => bloc.genre)).toEqual(['ligne', 'ligne'])
+  })
+
+  it('ne cache jamais une ligne en échec dans un groupe de lignes réussies', () => {
+    const blocs = grouperSemblables([
+      ligne({ id: 'a', kind: 'action', ok: true }),
+      ligne({ id: 'b', kind: 'action', ok: false }),
+      ligne({ id: 'c', kind: 'action', ok: true })
+    ])
+    expect(blocs.map((bloc) => bloc.genre)).toEqual(['ligne', 'ligne', 'ligne'])
+  })
+
+  it('réunit aussi les échecs semblables qui se suivent, entre eux', () => {
+    const blocs = grouperSemblables([
+      ligne({ id: 'a', kind: 'action', ok: false }),
+      ligne({ id: 'b', kind: 'action', ok: false })
+    ])
+    expect(blocs).toHaveLength(1)
+    expect(blocs[0]).toMatchObject({ genre: 'groupe', id: 'a' })
+  })
+
+  it('laisse seule une ligne sans voisine semblable, et une liste vide reste vide', () => {
+    expect(grouperSemblables([ligne({ id: 'a' })])).toEqual([
+      { genre: 'ligne', entry: ligne({ id: 'a' }) }
+    ])
+    expect(grouperSemblables([])).toEqual([])
   })
 })

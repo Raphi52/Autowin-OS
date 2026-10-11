@@ -200,7 +200,8 @@
 
 /* LA LIGNE AU REPOS = le resume cliquable de la carte. `flex-wrap: nowrap` : elle reste sur UNE
    ligne, le resume gris se coupe en points de suspension. */
-.model-log-detail > summary.model-log-head {
+.model-log-detail > summary.model-log-head,
+.model-log-groupe__tete .model-log-head {
   display: flex;
   flex-wrap: nowrap;
   align-items: baseline;
@@ -284,9 +285,46 @@
   transition: transform 120ms ease;
 }
 
-.model-log-detail[open] .model-log-chevron {
+.model-log-detail[open] .model-log-chevron,
+.model-log-groupe[open] > summary .model-log-chevron {
   transform: rotate(90deg);
   color: var(--log-tone, #a9b2c4);
+}
+
+/* GROUPE DE LIGNES SEMBLABLES QUI SE SUIVENT (conv-270, 2026-10-11). Sa tete EST une ligne
+   (`.model-log-row` : meme grille, meme perle, meme teinte de nature) ; seul s'ajoute le compte
+   « ×N » a cote de la nature. Pas de perle doublee : la couche generee des themes
+   (theme-*.genere.css) redessine `.model-log-perle` plus fort et l'effacait. */
+.model-log-groupe {
+  margin: 0;
+}
+
+.model-log-groupe > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.model-log-groupe > summary::-webkit-details-marker {
+  display: none;
+}
+
+.model-log-compte {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--log-tone, #a9b2c4) 45%, transparent);
+  border-radius: 3px;
+  font:
+    700 9px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--log-tone, #a9b2c4);
+}
+
+/* Deplie, les lignes du groupe se decalent d'un cran sous sa tete : on voit ou il finit. */
+.model-log-groupe__membres .model-log-carte {
+  margin-left: 10px;
 }
 
 /* Ouvert, le texte complet s'affiche dessous : le resume coupe ne servirait qu'a le repeter. */
