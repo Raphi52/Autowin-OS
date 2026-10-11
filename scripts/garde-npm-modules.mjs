@@ -124,7 +124,14 @@ export function refusNpmModulesPartages(commande, cwd, sonde) {
   if (!cible) return undefined
   const modules = sonde.modulesReels(cible)
   if (!modules) return undefined
-  if (!sonde.verrouille(join(modules, 'electron', 'dist', 'electron.exe'))) return undefined
+  // + l'EXE DE DEV (conv-266, scripts/electron_dev.py) : l'app lancée par le lanceur tourne sur
+  // `<dépôt>/.autowin-data/electron-dev/electron.exe`. Celui d'npm est alors LIBRE, mais l'app tient
+  // les DLL d'npm (liens durs) et ses modules natifs : npm buterait quand même en EBUSY.
+  const exes = [
+    join(modules, 'electron', 'dist', 'electron.exe'),
+    join(dirname(modules), '.autowin-data', 'electron-dev', 'electron.exe')
+  ]
+  if (!exes.some((exe) => sonde.verrouille(exe))) return undefined
   return (
     `Refusé : cette commande npm réécrirait ${modules}, dont l'Electron tourne en ce moment (Autowin OS ouvert : electron.exe verrouillé). ` +
     "Le 2026-10-05, un npm install lancé dans ces conditions a échoué en EBUSY au milieu et a laissé node_modules à moitié vide : l'app ne démarrait plus. " +

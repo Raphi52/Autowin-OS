@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
 from launch_dev_dependances import dependances_manquantes, electron_verrouille
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
-import logo_anneau  # noqa: E402 - icone d'electron.exe, voir `poser_icone_electron`
+import electron_dev  # noqa: E402 - l'exe de dev, voir `preparer_exe_dev`
 
 RACINE = Path(__file__).resolve().parent.parent
 JOURNAL = RACINE / ".autowin-data" / "launch-dev.log"
@@ -153,7 +153,7 @@ def _acquerir_verrou() -> tuple[bool, int | None]:
 
 
 def demarrer_dev(
-    commande: list[str], cwd: Path, sortie: Path
+    commande: list[str], cwd: Path, sortie: Path, env: dict[str, str] | None = None
 ) -> subprocess.Popen[bytes]:
     """Lance l'app en lui donnant un FICHIER, jamais un tube.
 
@@ -170,6 +170,10 @@ def demarrer_dev(
     Un fichier n'a pas de lecteur a satisfaire : l'app peut ecrire pendant des heures, que le lanceur
     soit vivant ou non. L'ecran d'attente, lui, SUIT le fichier (`suivre_sortie`).
     """
+    # ELECTRON_EXEC_PATH (l'exe de dev, conv-266) : celui de `env`, JAMAIS une valeur heritee. Un
+    # redemarrage lance depuis l'app en porte une, qui viserait un exe disparu (spawn ENOENT).
+    environnement = {k: v for k, v in os.environ.items() if k != "ELECTRON_EXEC_PATH"}
+    environnement.update(env or {})
     sortie.parent.mkdir(parents=True, exist_ok=True)
     fichier = sortie.open("ab")
     try:
@@ -180,6 +184,7 @@ def demarrer_dev(
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             creationflags=CREATE_NO_WINDOW,
+            env=environnement,
         )
     finally:
         # Notre copie du handle ne sert plus : l'enfant a la sienne. La garder ferait croire au
@@ -295,6 +300,7 @@ TITRE_SPLASH = "autowin-dev-amorce"
 # Executables qui portent LEGITIMEMENT une fenetre de l'application. Le titre seul ne suffit pas :
 # un mail Outlook « ... - AutoWinOS 894 » ou un editeur ouvert sur le depot contient « autowin » dans
 # son titre et faisait refuser tout lancement (constate le 2026-08-28, fenetre OUTLOOK.EXE).
+# L'exe de DEV (electron_dev.py) s'appelle aussi `electron.exe` : il est reconnu sans ajout.
 EXES_APP = {"autowin-os.exe", "electron.exe"}
 
 
@@ -587,23 +593,25 @@ def main() -> int:
             else f"[demarrage] dépendances toujours incomplètes ({reste[0]}) — voir {JOURNAL}\n"
         )
 
-    def poser_icone_electron() -> None:
-        """Le logo dans electron.exe : le Gestionnaire des taches n'affiche plus l'atome (conv-266)."""
-        etat = logo_anneau.poser_sur_electron(RACINE)
-        journaliser(f"icone electron.exe : {etat}")
-        if etat == "pose":
-            logo_anneau.prevenir_windows([logo_anneau._exe_electron(RACINE)])
-        elif etat.startswith("echec"):
-            splash.pousser(f"[demarrage] icône d'Electron non remplacée ({etat}) — voir {JOURNAL}\n")
+    def preparer_exe_dev() -> dict[str, str]:
+        """L'exe de dev (`Autowin OS Dev.exe`, logo et nom propres) pour electron-vite. Detail :
+        electron_dev.py. Au moindre echec, rien : l'app demarre sur l'Electron d'npm, comme avant."""
+        exe, etat = electron_dev.preparer(RACINE)
+        journaliser(f"exe de dev : {etat}")
+        if exe is None:
+            if etat.startswith("echec"):
+                splash.pousser(f"[demarrage] exe de dev indisponible ({etat}) : démarrage sur Electron — voir {JOURNAL}\n")
+            return {}
+        return {"ELECTRON_EXEC_PATH": str(exe)}
 
     def travailler() -> None:
         try:
             mettre_a_jour()
             # APRES la mise a jour : un pull qui ajoute une dependance est repare du meme geste.
             reparer_dependances()
-            # APRES la reparation (une reinstallation remet l'atome d'Electron dans l'exe) et AVANT
-            # `npm run dev` (apres, l'exe est verrouille). Detail : logo_anneau.poser_sur_electron.
-            poser_icone_electron()
+            # APRES la reparation (une reinstallation d'Electron change les fichiers a lier) et
+            # AVANT `npm run dev`, qui le recoit par ELECTRON_EXEC_PATH.
+            env_dev = preparer_exe_dev()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
                 # L'app ecrit dans SON fichier, pas dans un tube qui mourrait avec nous : c'est la
@@ -611,7 +619,7 @@ def main() -> int:
                 # d'attente SUIT ce fichier depuis la position d'avant le lancement.
                 depuis = SORTIE_APP.stat().st_size if SORTIE_APP.is_file() else 0
                 amorcer_catalogue_modeles()
-                processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP)
+                processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP, env=env_dev)
                 demarrer_enregistreur(processus.pid)
                 limite_totale = time.monotonic() + ATTENTE_TOTALE_S
                 # La fraicheur du bundle est TRANSMISE, elle ne ferme rien : c'est `SuiviDemarrage`

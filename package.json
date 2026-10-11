@@ -108,6 +108,7 @@
     "test:launch-dev-phases": "py -3 scripts/launch_dev_phases_test.py",
     "test:launch-dev-stdout": "py -3 scripts/launch_dev_stdout_test.py",
     "test:logo": "py -3 scripts/logo_anneau_test.py",
+    "test:electron-dev": "py -3 scripts/electron_dev_test.py",
     "test:exit-recorder": "py -3 scripts/enregistreur_sortie_test.py",
     "bootstrap:deps": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-deps.ps1",
     "clean:generated": "powershell -ExecutionPolicy Bypass -File scripts/clean-generated-artifacts.ps1",

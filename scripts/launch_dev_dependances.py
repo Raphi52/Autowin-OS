@@ -53,12 +53,14 @@ def electron_verrouille(racine: Path) -> bool:
 
     C'est la condition exacte qui a fait echouer `npm install` en EBUSY. L'ouverture ne modifie rien.
 
-    Compte AUSSI les `electron-atome-*.exe` du meme dossier (conv-266) : `logo_anneau.poser_sur_electron`
-    renomme l'exe tenu sous ce nom et pose un electron.exe neuf, donc libre, alors que les processus
-    en cours tournent toujours sur l'ancien.
+    Compte AUSSI l'EXE DE DEV et les anciens exe mis de cote (conv-266) : l'app lancee par le lanceur
+    tourne sur `Autowin OS Dev.exe`, dont les DLL sont des liens durs vers celles d'npm, et elle
+    charge ses modules natifs depuis node_modules — electron.exe d'npm peut alors etre LIBRE alors
+    qu'une reinstallation buterait en EBUSY. Liste unique : `electron_dev.executables_a_surveiller`.
     """
-    dist = racine / "node_modules" / "electron" / "dist"
-    for exe in (dist / "electron.exe", *dist.glob("electron-atome-*.exe")):
+    from electron_dev import executables_a_surveiller
+
+    for exe in executables_a_surveiller(racine):
         try:
             with exe.open("r+b"):
                 pass

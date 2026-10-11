@@ -121,6 +121,16 @@ verifie(
     "un depot sans Electron ne doit rendre aucun PID, pas lever",
 )
 
+# L'EXE DE DEV (conv-266) : le lanceur fait tourner l'app sur `.autowin-data/electron-dev/electron.exe`.
+# S'il n'etait pas reconnu, l'enregistreur ne verrait plus l'app et ne journaliserait plus sa mort.
+from enregistreur_sortie import est_l_app  # noqa: E402
+
+_depot = Path(r"D:\Autowin")
+verifie(est_l_app(r"D:\Autowin\node_modules\electron\dist\electron.exe", _depot), "l'Electron d'npm du depot")
+verifie(est_l_app(r"D:\Autowin\.autowin-data\electron-dev\electron.exe", _depot), "l'exe de DEV du depot")
+verifie(not est_l_app(r"D:\Autre\node_modules\electron\dist\electron.exe", _depot), "l'Electron d'un AUTRE depot")
+verifie(not est_l_app(r"D:\Autowin\node_modules\esbuild\esbuild.exe", _depot), "un autre exe du depot")
+
 # UNE SEULE INSTANCE : quatre enregistreurs en parallele multiplient le bruit sans rien mesurer de plus.
 _racine_verrou = Path(tempfile.gettempdir()) / "autowin-verrou-test"
 verifie(instance_unique(_racine_verrou) is True, "le premier enregistreur doit obtenir le verrou")

@@ -46,8 +46,22 @@ export interface ShellRaccourci {
   ): boolean
 }
 
-export function cheminRaccourciDemarrerDev(appData: string): string {
-  return join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', NOM_RACCOURCI_ELECTRON_DEV)
+/** Dossier et nom de produit de l'EXE DE DEV — mêmes valeurs que scripts/electron_dev.py. */
+export const DOSSIER_EXE_DEV = 'electron-dev'
+export const PRODUIT_EXE_DEV = 'Autowin OS Dev'
+
+/**
+ * Electron nomme ce raccourci d'après le NOM DE PRODUIT de l'exe (`GetApplicationName`,
+ * windows_toast_activator.cc) : « Electron » pour le binaire npm — preuve sur ce poste, l'app appelle
+ * `app.setName('Autowin OS')` et le raccourci s'appelle pourtant `Electron.lnk`. Le lanceur fait
+ * tourner l'app sur l'EXE DE DEV (scripts/electron_dev.py, conv-266), produit « Autowin OS Dev ». Il
+ * garde le nom `electron.exe` (Electron en tire `app.isPackaged`) : c'est son DOSSIER qui le
+ * reconnaît. Un autre nom que celui d'Electron créerait un doublon d'identité.
+ */
+export function cheminRaccourciDemarrerDev(appData: string, executable?: string): string {
+  const exeDeDev = executable !== undefined && basename(dirname(executable)) === DOSSIER_EXE_DEV
+  const nom = exeDeDev ? `${PRODUIT_EXE_DEV}.lnk` : NOM_RACCOURCI_ELECTRON_DEV
+  return join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', nom)
 }
 
 export function iconeRaccourciDev(racineApp: string, varianteDev: boolean): string {

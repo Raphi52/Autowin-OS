@@ -36,6 +36,13 @@ describe('raccourci menu Démarrer en dev', () => {
     expect(LNK.endsWith('Start Menu\\Programs\\Electron.lnk') || LNK.endsWith('Start Menu/Programs/Electron.lnk')).toBe(true)
   })
 
+  it("sur l'exe de DEV, porte le nom de son produit (conv-266, scripts/electron_dev.py)", () => {
+    // L'exe de dev s'appelle aussi electron.exe (app.isPackaged) : c'est son DOSSIER qui le distingue.
+    const dev = cheminRaccourciDemarrerDev('C:\\Users\\U\\AppData\\Roaming', 'D:\\Autowin\\.autowin-data\\electron-dev\\electron.exe')
+    expect(dev.replace(/\//g, '\\')).toBe('C:\\Users\\U\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Autowin OS Dev.lnk')
+    expect(cheminRaccourciDemarrerDev('C:\\Users\\U\\AppData\\Roaming', EXE)).toBe(LNK)
+  })
+
   it("réécrit le raccourci créé par Electron (sans icône, CLSID aléatoire) avec l'icône Autowin", () => {
     const f = faux({ target: EXE, cwd: 'D:\\Autowin\\node_modules\\electron\\dist', appUserModelId: EXE, toastActivatorClsid: '{3507F640-57DA-4372-978C-8622207ED2BC}', icon: '' })
     expect(f.lancer()).toEqual({ etat: 'ecrit' })

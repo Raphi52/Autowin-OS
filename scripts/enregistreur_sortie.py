@@ -37,7 +37,9 @@ from pathlib import Path
 SYNCHRONIZE = 0x0010_0000
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WAIT_OBJECT_0 = 0x0
-CIBLE = "electron.exe"
+# L'Electron d'npm ET l'exe de DEV que le lanceur lui prefere (scripts/electron_dev.py, conv-266) :
+# celui-ci porte le meme nom (app.isPackaged en depend) et vit sous le depot, donc il est reconnu.
+CIBLES = ("electron.exe",)
 # Une seule instance par depot : quatre enregistreurs qui sondent en parallele multiplient le bruit
 # sans rien mesurer de plus. Le nom porte sur le CHEMIN, pour ne pas brider une seconde copie du projet —
 # mais HACHE, car un nom de mutex ne peut pas contenir de `\`. Avec le chemin brut, `CreateMutexW`
@@ -158,16 +160,18 @@ def pids_electron(racine: Path) -> set[int]:
     En dev, l'executable vit dans `<depot>/node_modules/electron/dist/electron.exe` : le chemin porte
     donc le depot, ce qui est un critere plus sur que la ligne de commande et ne coute aucun enfant.
     """
-    empreinte = str(racine).lower()
     trouves: set[int] = set()
     for pid in _tous_les_pids():
         chemin = chemin_du_processus(pid)
-        if not chemin:
-            continue
-        minuscule = chemin.lower()
-        if minuscule.endswith(CIBLE) and empreinte in minuscule:
+        if chemin and est_l_app(chemin, racine):
             trouves.add(pid)
     return trouves
+
+
+def est_l_app(chemin: str, racine: Path) -> bool:
+    """Vrai si `chemin` est un Electron de CE depot : celui d'npm ou l'exe de dev."""
+    minuscule = chemin.lower()
+    return minuscule.endswith(CIBLES) and str(racine).lower() in minuscule
 
 
 def instance_unique(racine: Path) -> bool:

@@ -86,6 +86,18 @@ with tempfile.TemporaryDirectory() as tmp:
         verifie(electron_verrouille(r) is False, "ancien electron mis de cote mais LIBRE : la reparation peut partir")
         ancien.unlink()
 
+        # L'app tourne sur l'EXE DE DEV (electron_dev.py) : electron.exe d'npm est libre, mais les DLL
+        # d'npm sont tenues (liens durs) et l'app charge ses modules natifs depuis node_modules.
+        dev = r / ".autowin-data" / "electron-dev" / "electron.exe"
+        dev.parent.mkdir(parents=True)
+        dev.write_bytes(b"")
+        poignee = noyau.CreateFileW(str(dev), 0x80000000, 0x1, None, 3, 0x80, None)
+        try:
+            verifie(electron_verrouille(r) is True, "l'app sur l'exe de DEV bloque la reparation de node_modules")
+        finally:
+            noyau.CloseHandle(ctypes.c_void_p(poignee))
+        verifie(electron_verrouille(r) is False, "exe de dev libre : la reparation peut partir")
+
 # Le vrai depot, si l'app tourne : electron.exe DOIT etre vu verrouille (sonde reelle, pas un faux).
 depot = Path(__file__).resolve().parent.parent
 if "--app-ouverte" in sys.argv:

@@ -4649,7 +4649,7 @@ app.whenReady().then(async () => {
       const raccourci = aligneRaccourciDemarrerDev({
         shell,
         existe: existsSync,
-        chemin: cheminRaccourciDemarrerDev(app.getPath('appData')),
+        chemin: cheminRaccourciDemarrerDev(app.getPath('appData'), process.execPath),
         executable: process.execPath,
         identite: process.execPath,
         clsid: DEV_TOAST_ACTIVATOR_CLSID,

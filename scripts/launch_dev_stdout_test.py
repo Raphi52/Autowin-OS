@@ -18,6 +18,7 @@ Usage : py -3 scripts/launch_dev_stdout_test.py
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import time
@@ -67,6 +68,27 @@ with tempfile.TemporaryDirectory() as racine:
         ecrites >= LIGNES,
         f"l'app doit avoir ecrit ses {LIGNES} lignes, pas mourir sur un tube mort (vu {ecrites})",
     )
+
+# L'EXE DE DEV (conv-266) : `demarrer_dev` passe ELECTRON_EXEC_PATH a electron-vite, et RETIRE une
+# valeur heritee quand il n'y a pas d'exe de dev — un redemarrage lance depuis l'app en porte une, qui
+# viserait un exe disparu (electron-vite echouerait sur « spawn ENOENT »).
+with tempfile.TemporaryDirectory() as racine:
+    dossier = Path(racine)
+    lecteur = dossier / "lit_env.py"
+    lecteur.write_text("import os\nprint(os.environ.get('ELECTRON_EXEC_PATH', '<aucun>'))\n", encoding="utf-8")
+    ancien = os.environ.get("ELECTRON_EXEC_PATH")
+    os.environ["ELECTRON_EXEC_PATH"] = r"C:\herite\disparu.exe"
+    try:
+        for env, attendu in (({"ELECTRON_EXEC_PATH": r"D:\x\electron-dev\electron.exe"}, r"D:\x\electron-dev\electron.exe"), ({}, "<aucun>")):
+            sortie = dossier / f"env-{len(env)}.log"
+            demarrer_dev([sys.executable, str(lecteur)], dossier, sortie, env=env).wait(timeout=60)
+            lu = sortie.read_text(encoding="utf-8").strip()
+            verifie(lu == attendu, f"ELECTRON_EXEC_PATH vu par l'app : « {lu} », attendu « {attendu} »")
+    finally:
+        if ancien is None:
+            os.environ.pop("ELECTRON_EXEC_PATH", None)
+        else:
+            os.environ["ELECTRON_EXEC_PATH"] = ancien
 
 # CABLAGE : la plomberie ne sert a rien si le lanceur retombe sur un tube. C'est le seul defaut de la
 # famille « expose mais jamais appele » qu'aucun test de comportement n'attrape.

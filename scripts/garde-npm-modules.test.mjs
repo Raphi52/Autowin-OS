@@ -47,6 +47,14 @@ describe('refusNpmModulesPartages', () => {
     expect(motif).toMatch(/EBUSY/)
   })
 
+  it("refuse aussi quand l'app tourne sur l'EXE DE DEV (conv-266) : electron.exe d'npm est libre, ses DLL non", () => {
+    const seulExeDev = {
+      ...sonde(false),
+      verrouille: (p) => /^D:[\\/]Autowin[\\/]\.autowin-data[\\/]electron-dev[\\/]electron\.exe$/.test(p)
+    }
+    expect(refusNpmModulesPartages('npm install', 'D:/Autowin', seulExeDev)).toMatch(/Refusé/)
+  })
+
   it("laisse passer quand l'app ne tourne pas, ou hors du dépôt", () => {
     expect(refusNpmModulesPartages('npm install', 'D:/Autowin', sonde(false))).toBeUndefined()
     expect(refusNpmModulesPartages('cd /c/tmp/tk && npm install x', 'D:/Autowin', sonde(true))).toBeUndefined()
