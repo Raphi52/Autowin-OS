@@ -163,6 +163,7 @@ describe('persistChatUsageSettlement', () => {
     const activityRoot = join(root, 'activity')
     const input = {
       conversationId: 'conv-recovered',
+      turnId: 'turn-recovered',
       usageCallId: 'provider-paid-once',
       provider: 'claude',
       model: 'haiku',

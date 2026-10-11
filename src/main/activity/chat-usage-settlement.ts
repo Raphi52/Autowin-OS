@@ -37,6 +37,11 @@ interface PersistChatUsageSettlementInput {
 
 interface PersistRecoveredChatProviderUsageInput {
   conversationId: string
+  /**
+   * Tour qui a PAYE l'appel recupere. Obligatoire : c'etait la seule ligne de cout du journal sans
+   * tour (kaizen conv-260, tour 50a06982-1549-4759-9619-b815a8fff9b8 : 8,00 $ hors de leur tour).
+   */
+  turnId: string
   usageCallId: string
   provider: string
   model?: string
@@ -79,6 +84,7 @@ export function persistRecoveredChatProviderUsage(
       cacheReadTokens: input.usage.cacheReadTokens,
       costUsd: input.usage.costUsd,
       usageCallId: input.usageCallId,
+      turnId: input.turnId,
       durationMs: input.durationMs,
       text: 'Resultat provider certifie et reinjecte sans repeter cet appel.'
     },

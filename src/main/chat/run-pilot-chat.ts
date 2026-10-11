@@ -519,6 +519,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         recoveredProviderUsage &&
         persistRecoveredChatProviderUsage({
           conversationId,
+          turnId,
           usageCallId: recovery.call.token,
           provider: recovery.call.provider,
           model:
@@ -1479,6 +1480,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (recovery && recoveredUsage)
           persistRecoveredChatProviderUsage({
             conversationId,
+            turnId,
             usageCallId: recovery.call.token,
             provider: recovery.call.provider,
             model:
