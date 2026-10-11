@@ -35,6 +35,9 @@ import { appliquerPresenceSysteme } from './os-presence-main'
 import type { EtatRunsVivants } from '../shared/os-presence'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
+import iconIco from '../../resources/icon.ico?asset'
+import devIconIco from '../../resources/autowin-os-dev.ico?asset'
+import { iconeNotification } from '../shared/os-presence'
 
 /** Ce que le fenêtrage prenait dans `index.ts` — désormais passé explicitement. */
 export type WindowingDeps = {
@@ -118,7 +121,14 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   function setupTray(): void {
     if (tray) return
     try {
-      tray = new Tray(process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon)
+      tray = new Tray(
+        iconeNotification(process.platform, process.env['AUTOWIN_OS_DEV'] === '1', {
+          png: icon,
+          devPng: devIcon,
+          ico: iconIco,
+          devIco: devIconIco
+        })
+      )
       tray.setToolTip('Autowin OS — actif (les runs continuent fenêtre fermée)')
       const menu = Menu.buildFromTemplate([
         { label: 'Ouvrir Autowin', click: () => showMainWindow() },

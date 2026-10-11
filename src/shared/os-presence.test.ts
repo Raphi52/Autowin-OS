@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { presenceSysteme } from './os-presence'
+import { iconeNotification, presenceSysteme } from './os-presence'
 
 describe('présence système des runs', () => {
   it('efface la jauge et garde le texte de repos quand rien ne tourne', () => {
@@ -34,5 +34,19 @@ describe('présence système des runs', () => {
     expect(presenceSysteme({ runsActifs: 1, etapesFaites: -5, etapesTotales: 6 }).progression).toBe(
       0
     )
+  })
+})
+
+describe('icône de la zone de notification', () => {
+  const fichiers = { png: 'icon.png', devPng: 'dev.png', ico: 'icon.ico', devIco: 'dev.ico' }
+
+  it('prend le .ico sous Windows, pour que le cercle reste net à 16-24 px', () => {
+    expect(iconeNotification('win32', false, fichiers)).toBe('icon.ico')
+    expect(iconeNotification('win32', true, fichiers)).toBe('dev.ico')
+  })
+
+  it('garde le PNG ailleurs, où le .ico ne se charge pas', () => {
+    expect(iconeNotification('darwin', false, fichiers)).toBe('icon.png')
+    expect(iconeNotification('linux', true, fichiers)).toBe('dev.png')
   })
 })

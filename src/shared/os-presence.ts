@@ -46,3 +46,22 @@ export function presenceSysteme(etat: EtatRunsVivants): PresenceSysteme {
   const faites = Math.min(total, Math.max(0, Math.floor(etat.etapesFaites || 0)))
   return { progression: faites / total, mode: 'normal', infobulle }
 }
+
+/** Les fichiers d'icône du produit (chemins résolus par `?asset` dans `src/main/window.ts`). */
+export type FichiersIcone = { png: string; devPng: string; ico: string; devIco: string }
+
+/**
+ * L'image de l'icône de la zone de notification. Sous Windows, le `.ico` : Windows y prend le cadre
+ * DESSINÉ à la taille de la zone (16, 20 ou 24 px selon l'échelle d'écran) au lieu de réduire
+ * lui-même le PNG 512, ce qui rend le cercle flou. Les `.ico` viennent de scripts/logo_anneau.py.
+ * Source : https://www.electronjs.org/docs/latest/api/tray — « Windows: It is recommended to use
+ * ICO icons to get best visual effects. »
+ */
+export function iconeNotification(
+  plateforme: string,
+  dev: boolean,
+  fichiers: FichiersIcone
+): string {
+  if (plateforme === 'win32') return dev ? fichiers.devIco : fichiers.ico
+  return dev ? fichiers.devPng : fichiers.png
+}
