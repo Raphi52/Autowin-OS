@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { EtatPorteProd, NiveauProtectionProd } from '../../../shared/prod-protection'
+import type {
+  EtatPorteProd,
+  NiveauProtectionProd,
+  PropositionAutoriteProd
+} from '../../../shared/prod-protection'
 import './ProdProtectionSettings.css'
 
 /**
@@ -32,6 +36,34 @@ export function ProdProtectionSettings(): React.JSX.Element {
   const [confirmation, setConfirmation] = useState('')
   const [message, setMessage] = useState<{ ton: 'ok' | 'erreur'; texte: string } | null>(null)
   const [occupe, setOccupe] = useState(false)
+  const [proposition, setProposition] = useState<PropositionAutoriteProd | null>(null)
+  const [calcul, setCalcul] = useState(false)
+  const [copie, setCopie] = useState<'copie' | 'echec' | null>(null)
+
+  /**
+   * LA LISTE PROPOSÉE DEPUIS LE CATALOGUE SQL. Le catalogue n'est interrogé qu'au clic, et rien
+   * n'est écrit : l'utilisateur recopie lui-même le contenu dans son fichier de déclaration.
+   */
+  const proposer = useCallback(async () => {
+    setCalcul(true)
+    setCopie(null)
+    try {
+      setProposition(await window.api.prodAutoriteProposition())
+    } catch {
+      setProposition({ ok: false, erreur: "La proposition n'a pas pu être calculée." })
+    } finally {
+      setCalcul(false)
+    }
+  }, [])
+
+  const copier = useCallback(async (contenu: string) => {
+    try {
+      await navigator.clipboard.writeText(contenu)
+      setCopie('copie')
+    } catch {
+      setCopie('echec')
+    }
+  }, [])
 
   const relire = useCallback(async () => {
     try {
@@ -122,13 +154,14 @@ export function ProdProtectionSettings(): React.JSX.Element {
   return (
     <section
       className="settings-prod-protection surface-panel"
-      aria-label="Protection de production"
+      aria-label="Rule Production"
       data-testid="prod-protection"
     >
       <header>
         <div>
-          <span className="domain-eyebrow">Sûreté</span>
-          <h2>Protection de production</h2>
+          {/* Règle d'Autowin OS, affichée dans l'onglet Rules de Settings (voir RulesView). */}
+          <span className="domain-eyebrow">Rule · Autowin OS</span>
+          <h2>Production</h2>
         </div>
         <span
           className={`prod-etat prod-etat-${porte === null ? 'inconnu' : porte.niveau === 'aucun' ? 'inactive' : 'active'}`}
@@ -162,6 +195,75 @@ export function ProdProtectionSettings(): React.JSX.Element {
           )}
         </ul>
       )}
+
+      <div className="prod-catalogue" data-testid="prod-catalogue">
+        <button
+          type="button"
+          className="btn"
+          data-testid="prod-catalogue-proposer"
+          disabled={calcul}
+          onClick={() => void proposer()}
+        >
+          {calcul ? 'Lecture du catalogue…' : 'Proposer la liste depuis le catalogue SQL'}
+        </button>
+        {proposition && !proposition.ok && (
+          <p className="prod-message prod-message-erreur" role="alert">
+            {proposition.erreur}
+          </p>
+        )}
+        {proposition?.ok && (
+          <>
+            <p data-testid="prod-catalogue-resume">
+              Le catalogue déclare <b>{proposition.exploitees}</b> base(s) exploitée(s).{' '}
+              <b>{proposition.ajoutees.length}</b> base(s) à ajouter (
+              <b>{proposition.ajoutees.filter((a) => a.classe === 'prod').length}</b> en production,{' '}
+              <b>{proposition.ajoutees.filter((a) => a.classe === 'non-prod').length}</b> hors
+              production) · <b>{proposition.passeesEnProd.length}</b> passée(s) en production ·{' '}
+              <b>{proposition.conservees}</b> entrée(s) actuelle(s) reprise(s).
+            </p>
+            {proposition.passeesEnProd.length > 0 && (
+              <p data-testid="prod-catalogue-prod">
+                Déclarées hors production mais exploitées selon le catalogue, donc passées en
+                production : <b>{proposition.passeesEnProd.join(', ')}</b>
+              </p>
+            )}
+            {proposition.anomalies.length > 0 && (
+              <p>Non repris de ton fichier actuel : {proposition.anomalies.join(' · ')}</p>
+            )}
+            {proposition.ajoutees.length === 0 && proposition.passeesEnProd.length === 0 ? (
+              <p>
+                Ta déclaration <b>couvre déjà tout le catalogue</b> : rien à changer.
+              </p>
+            ) : (
+              <>
+                <textarea
+                  className="prod-catalogue-contenu"
+                  data-testid="prod-catalogue-contenu"
+                  readOnly
+                  rows={8}
+                  value={proposition.contenu}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void copier(proposition.contenu)}
+                >
+                  {copie === 'copie' ? 'Copié' : 'Copier'}
+                </button>
+                {copie === 'echec' && (
+                  <p className="prod-message prod-message-erreur" role="alert">
+                    La copie a échoué : sélectionne le texte ci-dessus à la main.
+                  </p>
+                )}
+              </>
+            )}
+            <p className="prod-note">
+              Autowin n’écrit jamais ce fichier : colle ce contenu dans le fichier de déclaration
+              indiqué plus haut, puis rouvre cet écran pour vérifier le nombre de cibles déclarées.
+            </p>
+          </>
+        )}
+      </div>
 
       <fieldset className="prod-niveaux" data-testid="prod-protection-niveaux">
         <legend>Ce qu’Autowin demande avant d’agir sur une base de production</legend>
@@ -226,7 +328,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
         </label>
         <button
           type="button"
-          className="prod-valider"
+          className="prod-valider btn btn-accent"
           data-testid="prod-protection-valider"
           disabled={occupe || nouvelle.length === 0 || confirmation.length === 0}
           onClick={() => void enregistrer()}

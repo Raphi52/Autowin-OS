@@ -47,6 +47,12 @@ export interface ChargementAutorite {
   /** Ce qui a été réellement retenu — à afficher pour que l'utilisateur vérifie sa déclaration. */
   retenues: number
   /**
+   * Les entrées valides TELLES QU'ÉCRITES (casse, séparateurs, motif), avant la normalisation de
+   * `construireAutoriteProd`. Sert à PROPOSER un contenu fidèle au fichier de l'utilisateur ;
+   * la décision, elle, se prend toujours sur `autorite`.
+   */
+  declarations: EntreeAutorite[]
+  /**
    * Ce qui a mal tourné, en clair. Vide = tout va bien. Non vide = des cibles sont peut-être
    * bloquantes sans que ce soit voulu.
    */
@@ -89,6 +95,7 @@ export function chargerAutoriteProd(racine: string): ChargementAutorite {
     return {
       autorite: construireAutoriteProd([]),
       retenues: 0,
+      declarations: [],
       anomalies: [
         `Aucun fichier de déclaration (${chemin}) : toute cible est traitée comme de la production.`
       ]
@@ -102,6 +109,7 @@ export function chargerAutoriteProd(racine: string): ChargementAutorite {
     return {
       autorite: construireAutoriteProd([]),
       retenues: 0,
+      declarations: [],
       anomalies: [
         `Fichier de déclaration illisible (${chemin}, JSON invalide) : toute cible est traitée comme de la production.`
       ]
@@ -117,6 +125,7 @@ export function chargerAutoriteProd(racine: string): ChargementAutorite {
     return {
       autorite: construireAutoriteProd([]),
       retenues: 0,
+      declarations: [],
       anomalies: [
         `Fichier de déclaration mal formé (${chemin}) : un tableau d'entrées est attendu. Toute cible est traitée comme de la production.`
       ]
@@ -139,5 +148,5 @@ export function chargerAutoriteProd(racine: string): ChargementAutorite {
       `${entrees.length - autorite.entrees.length} déclaration(s) en double ou en conflit : la plus prudente (prod) l'emporte.`
     )
   }
-  return { autorite, retenues: autorite.entrees.length, anomalies }
+  return { autorite, retenues: autorite.entrees.length, declarations: entrees, anomalies }
 }

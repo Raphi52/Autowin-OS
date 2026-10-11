@@ -1,7 +1,9 @@
 /* Barre du haut partagée par toutes les vues. Reproduit l'arrangement de Task Manager, choisi comme
    référence : identité du module à gauche (surtitre + titre + description), pastilles de sections en
    dessous, actions optionnelles à droite.
-   Aucune couleur en dur : les pastilles viennent de `DomainShell.css`, les titres de `ui-system.css`.
+   Aucune couleur en dur dans la mise en page commune : les pastilles viennent de `DomainShell.css`,
+   les titres de `ui-system.css`. Seul l'habit Holographique des onglets, en fin de feuille et sous
+   préfixe de thème, en porte.
    Direction Linéaire : aplats unis, aucun halo, aucun dégradé flou. */
 
 .view-topbar {
@@ -39,4 +41,96 @@
   /* Largeur INTRINSÈQUE : étirée sur toute la ligne, le cadre des pastilles devenait une bande vide
      qui traversait l'écran. Constaté sur la vue Settings, qui n'a que quatre sections. */
   justify-self: start;
+}
+
+/* PASSAGE À LA LIGNE des onglets, dans TOUTES les vues qui en ont : Settings, Agent Studio, Task
+   Manager et Tickets (conv-244, 2026-10-11 : « applique aux barres d'onglets … le même traitement que
+   Settings », puis « applique à la barre d'onglets de Tickets »). Sans lui, une colonne étroite
+   empilait un libellé mot par mot ou poussait le dernier onglet hors du cadre (mesuré dans Settings à
+   820 px : « Diagnostic » coupé). Spécificité (0,2,0) : en thème malvoyant, son `row-gap` plus large
+   (texte agrandi, theme-modes.css, (0,3,0)) continue de l'emporter. */
+.view-topbar .domain-tabs {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  max-width: 100%;
+}
+.view-topbar .domain-tabs button {
+  white-space: nowrap;
+}
+
+/* ONGLETS EN LISERÉ SEUL — toutes les barres d'onglets des vues, en Holographique (thèmes
+   `nebuleuse-verre`, affiché « Holographique », et `holographique-clair`). L'onglet choisi n'a
+   QU'UN trait de 2 px bleu → rose dessous : ni capsule, ni fond, ni bord, ni barre de fond derrière
+   la rangée (conv-244, 2026-10-11 : « je veux des liserés seuls sous les onglets que je sélectionne
+   dans chaque view »). Vocabulaire déjà validé pour les onglets du panneau de droite (conv-180 :
+   « la capsule ça va pas bien avec le border très angulaire ») ; le panneau de droite garde ses
+   propres règles, au même dessin (theme-nebuleuse-verre.css, `.run-detail-tab`).
+   Barres couvertes : la barre du haut de chaque vue (Settings, Agent Studio, Task Manager, Tickets),
+   les onglets de Tests (Suites / Latence), du registre Skills · Hooks · Gates · Mods · Tools et du
+   chemin de chat de Behaviour (Cockpit / Orchestré / Direct). Behaviour marque l'onglet choisi par
+   `.active`, les autres par `.is-active`.
+   Couleurs en dur ASSUMÉES ici, et seulement sous un préfixe de thème : le générateur des couches de
+   couleurs (scripts/theme-nebuleuse-verre.mjs) ignore ces règles. La couche générée
+   `:root[data-theme] .domain-tabs button.is-active` (0,4,1) peignait la capsule rose : la règle de
+   l'onglet actif (0,5,1) la bat, et redécrit elle-même TOUT son fond (trait, position, taille), car
+   la règle commune des boutons (0,4,1) ne fait qu'égaler la couche générée — l'ordre de chargement
+   trancherait. */
+:root:is([data-theme='nebuleuse-verre'], [data-theme='holographique-clair'])
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle) {
+  --vt-souligne: linear-gradient(90deg, #3c6eeb, #e63ca0);
+  gap: 2px 20px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+/* Retraits : la barre du haut garde son léger retrait ; les deux barres de Settings perdent celui
+   de leur ancienne bande de fond. Tests garde le sien, qui l'aligne sur le contenu de la vue. */
+:root:is([data-theme='nebuleuse-verre'], [data-theme='holographique-clair'])
+  .view-topbar
+  .domain-tabs {
+  padding: 2px 2px 0;
+}
+:root:is([data-theme='nebuleuse-verre'], [data-theme='holographique-clair'])
+  :is(.cockpit-tabs, .behaviour-path-toggle) {
+  padding: 0;
+}
+:root:is([data-theme='nebuleuse-verre'], [data-theme='holographique-clair'])
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle)
+  button {
+  padding: 7px 1px 9px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+  color: var(--text-dim);
+}
+:root[data-theme='nebuleuse-verre']
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle)
+  button:hover {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 0 0);
+  color: var(--text);
+}
+:root[data-theme='holographique-clair']
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle)
+  button:hover {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.18) 0 0);
+  color: var(--text);
+}
+:root:is([data-theme='nebuleuse-verre'], [data-theme='holographique-clair'])
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle)
+  button:is(.is-active, .active) {
+  /* Le TRAIT ENTIER, pas seulement son image : la couche générée repose un `background` raccourci sur
+     l'onglet actif, qui remet la taille à `auto` et la répétition à `repeat` — mesuré le 2026-10-11 :
+     le dégradé remplissait tout l'onglet dans les barres du haut, dès que cette couche se chargeait
+     après cette feuille. */
+  background: var(--vt-souligne) center bottom / 100% 2px no-repeat;
+  color: var(--text);
+}
+:root[data-theme='nebuleuse-verre']
+  :is(.view-topbar .domain-tabs, .tests-tabs, .cockpit-tabs, .behaviour-path-toggle)
+  button:is(.is-active, .active) {
+  color: #ffffff;
 }

@@ -104,6 +104,22 @@
   opacity: 0.5;
   cursor: default;
 }
+/* Retour au modèle du chat pour les petites tâches : même bouton que `.router-actions`. */
+.router-petites-taches-reset {
+  margin-top: 8px;
+  border: 1px solid var(--container-border);
+  background: var(--surface-card);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+}
+.router-petites-taches-reset:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .router-actions .router-standby {
   border-color: rgba(126, 177, 219, 0.32);
   color: #c8def1;

@@ -466,3 +466,90 @@ describe('RouterView — le modèle par défaut connaît l’état des providers
     expect(dernier.statuses).toEqual([{ provider: 'codex', status: 'expired', testable: true }])
   })
 })
+
+describe('RouterView — modèle des petites tâches', () => {
+  const effectif = { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'low' }
+
+  async function monter(api: Record<string, unknown>): Promise<void> {
+    propsSelecteur.length = 0
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn(),
+        ...api
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, {})))
+    await flush()
+  }
+
+  const selecteurDesPetitesTaches = (): Record<string, unknown> | undefined =>
+    [...propsSelecteur].reverse().find((props) => props.binding === effectif)
+
+  it('non réglé : affiche la section, le modèle effectif et « Suit le chat »', async () => {
+    await monter({ petitesTaches: async () => ({ reglage: null, effectif }) })
+
+    const section = container.querySelector('[data-testid="router-petites-taches"]')
+    expect(section?.querySelector('h3')?.textContent).toBe('Modèle des petites tâches')
+    const props = selecteurDesPetitesTaches()
+    expect(props?.libelle).toBe('Suit le chat')
+    expect(props?.aide).toBe(
+      'S’applique au prochain tri de conversation et au prochain choix de workflow.'
+    )
+    expect(
+      container.querySelector('[data-testid="router-petites-taches-suit-chat"]')?.textContent
+    ).toBe('Non réglé : suit le modèle du chat, en effort low.')
+    // Identifiants propres : le sélecteur du chat est sur la même page.
+    expect(props?.idBase).toBe('router-petites-taches-modele')
+    expect(container.querySelector('.router-petites-taches-reset')).toBeNull()
+  })
+
+  it('choisir un modèle l’enregistre avec son effort', async () => {
+    const setPetitesTaches = vi.fn(async () => ({
+      reglage: { provider: 'claude', model: 'claude-haiku-4-5', reasoningEffort: 'low' },
+      effectif: { provider: 'claude', model: 'claude-haiku-4-5', reasoningEffort: 'low' }
+    }))
+    await monter({ petitesTaches: async () => ({ reglage: null, effectif }), setPetitesTaches })
+
+    const onSelect = selecteurDesPetitesTaches()?.onSelect as (option: unknown) => void
+    await act(async () =>
+      onSelect({ provider: 'claude', model: 'claude-haiku-4-5', reasoningEffort: 'low' })
+    )
+    await flush()
+
+    expect(setPetitesTaches).toHaveBeenCalledWith('claude', 'claude-haiku-4-5', 'low')
+    expect(container.querySelector('.router-petites-taches-reset')).not.toBeNull()
+    expect(propsSelecteur[propsSelecteur.length - 1].libelle).toBe('Réglé')
+  })
+
+  it('« Suivre le modèle du chat » efface le réglage', async () => {
+    const setPetitesTaches = vi.fn(async () => ({ reglage: null, effectif }))
+    await monter({
+      petitesTaches: async () => ({
+        reglage: { provider: 'claude', model: 'claude-haiku-4-5' },
+        effectif: { provider: 'claude', model: 'claude-haiku-4-5' }
+      }),
+      setPetitesTaches
+    })
+
+    const bouton = container.querySelector<HTMLButtonElement>('.router-petites-taches-reset')
+    expect(bouton?.textContent).toBe('Suivre le modèle du chat')
+    await act(async () => bouton?.click())
+    await flush()
+
+    expect(setPetitesTaches).toHaveBeenCalledWith(null)
+  })
+
+  it('preload sans ce canal (app plus ancienne) : section absente, aucun rejet', async () => {
+    await monter({})
+    expect(container.querySelector('[data-testid="router-petites-taches"]')).toBeNull()
+  })
+})

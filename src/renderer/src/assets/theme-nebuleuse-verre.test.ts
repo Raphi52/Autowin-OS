@@ -114,8 +114,10 @@ describe('theme Nebuleuse de verre', () => {
    *
    * UNE EXCEPTION NOMMEE (conv-202, 2026-10-10) : le BORD des capsules du bloc ASK est un reflet
    * holographique en bandes bleu > rose > argent, choisi par l'utilisateur sur maquette apres
-   * quatre tours (« Irisé mais holographique bleu rose argent », puis « go cadre c parfait »). Seul
-   * ce calque passe : un `repeating-linear-gradient` peint en `border-box` sur `.askd-item`. Le
+   * quatre tours (« Irisé mais holographique bleu rose argent », puis « go cadre c parfait »). Depuis
+   * conv-240 (2026-10-11, « implemente le 2 c parfait »), ce bord est le cadre « Nacre » : UN seul
+   * cycle bleu > rose > argent > rose clair (`linear-gradient`), pose sur les reponses cochees ou
+   * retenues. Seul ce calque passe : un degrade peint en `border-box` sur `.askd-item`. Le
    * REMPLISSAGE de la capsule reste compte comme celui de tout bouton (deux teintes au plus).
    */
   it('ne donne a aucun bouton un degrade de plus de deux teintes', () => {
@@ -148,7 +150,7 @@ describe('theme Nebuleuse de verre', () => {
           let valeur = decl.value.replace(/var\((--nv-[\w-]+)\)/g, (m, nom) => jetons.get(nom) ?? m)
           if (/\.askd-item\b/.test(regle.selector)) {
             valeur = valeur.replace(
-              /repeating-linear-gradient\((?:[^()]|\([^()]*\))*\)\s+border-box/g,
+              /(?:repeating-)?linear-gradient\((?:[^()]|\([^()]*\))*\)\s+border-box/g,
               'bord-holo-ask'
             )
           }
@@ -1000,5 +1002,175 @@ describe('Degrades : un seul bleu, toujours plein', () => {
     expect(racine['--nv-degrade']).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
     expect(racine['--nv-degrade-survol']).toMatch(/^radial-gradient\(/)
     expect(racine['--nv-degrade-survol']).toContain('linear-gradient(135deg, #3c6eeb, #e63ca0)')
+  })
+})
+
+/**
+ * POPUPS DU MODELE ET DU CONTEXTE EN HOLO (conv-250, 2026-10-11 : « refais ces popup en mode holo
+ * comme le theme »). Le choix du modele (matrice modele x effort, comptes) et la fenetre « Contexte
+ * de cette conversation » prennent le cadre des panneaux : coins coupes, trait blanc / argent, satin.
+ * ENTREES QUI DOIVENT FAIRE ECHOUER : le filet OR des fenetres flottantes qui reviendrait (bloc
+ * deplace AVANT la section 4), un satin cale sur l'ecran (la fenetre se fondrait dans le panneau
+ * dessous), une puce de compte restylee hors des popups (elle changerait la vue Routage), le point
+ * d'effort choisi de nouveau ecrase par la regle des remplis, ou un cran memorise reste clair dans
+ * Holographique blanc.
+ */
+describe('Popups du modele et du contexte en holo (conv-250)', () => {
+  /** Les deux popups des captures : leurs puces et leur matrice. */
+  const POPUPS = `${PREFIXE} :is(.model-select-menu, .model-quota-popover)`
+  /** Toutes les fenetres flottantes qui portent le cadre (les deux popups + les quatre menus). */
+  const FENETRES = [
+    '.model-select-menu',
+    '.model-quota-popover',
+    '.conv-menu-pop',
+    '.slash-palette',
+    '.slash-detail',
+    '.graph-settings-popover',
+    '.model-question-popup'
+  ]
+  const CADRE = `${PREFIXE} :is( ${FENETRES.join(', ')} )`
+  const regles = (): { selecteur: string; decls: Record<string, string> }[] => {
+    const liste: { selecteur: string; decls: Record<string, string> }[] = []
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      const decls: Record<string, string> = {}
+      regle.walkDecls((d) => {
+        decls[d.prop] = d.value.replace(/\s+/g, ' ').trim()
+      })
+      for (const s of regle.selectors) liste.push({ selecteur: s.replace(/\s+/g, ' ').trim(), decls })
+    })
+    return liste
+  }
+  const derniere = (selecteur: string): Record<string, string> => {
+    const trouvees = regles().filter((r) => r.selecteur === selecteur)
+    return Object.assign({}, ...trouvees.map((r) => r.decls))
+  }
+  const rang = (selecteur: string): number => regles().findIndex((r) => r.selecteur === selecteur)
+
+  it('donne a toutes les fenetres flottantes le cadre des panneaux, sur un satin propre', () => {
+    const cadre = derniere(CADRE)
+    expect(cadre['clip-path']).toBe('var(--nv-chanfrein-forme)')
+    expect(cadre['border-radius']).toBe('0')
+    expect(cadre['box-shadow']).toBe('none')
+    expect(cadre['border']).toBe('1px solid transparent')
+    expect(cadre['background-origin']).toBe('border-box')
+    expect(cadre.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), /)
+    // Satin PROPRE a la fenetre : cale sur l'ecran, il serait identique au panneau dessous.
+    expect(cadre.background).toMatch(/var\(--nv-satin\)$/)
+    expect(cadre.background).not.toMatch(/fixed/)
+  })
+
+  it('ne laisse plus aucune regle poser le filet ou le reflet OR sur une de ces fenetres', () => {
+    const dores = regles()
+      .filter((r) => FENETRES.some((f) => r.selecteur.includes(f)))
+      .filter((r) => Object.values(r.decls).some((v) => /dore|--nv-flottant/.test(v)))
+      .map((r) => r.selecteur)
+    expect(dores).toEqual([])
+  })
+
+  it('rend l ascenseur fin du theme, arrete au-dessus du coin coupe', () => {
+    // `scrollbar-color` non auto ferait dessiner l ascenseur du systeme, fleches comprises : la
+    // fleche du bas tombait dans le coin coupe de la palette /.
+    expect(derniere(CADRE)['scrollbar-color']).toBe('auto')
+    expect(derniere(`${CADRE}::-webkit-scrollbar-track`)['margin-bottom']).toBe('var(--nv-chanfrein)')
+    // Curseur par le jeton du fil : assombri dans Holographique blanc (un blanc ecrit en dur y
+    // restait blanc, invisible sur la nacre).
+    expect(derniere(`${CADRE}::-webkit-scrollbar-thumb`).background).toBe('var(--chat-ascenseur) padding-box')
+  })
+
+  it('raccorde l en-tete colle des reglages du graphe au fond de la fenetre', () => {
+    const fenetre = derniere(`${PREFIXE} .graph-settings-popover`)
+    const tete = derniere(`${PREFIXE} .graph-settings-popover > .graph-settings-popover__heading`)
+    // Les DEUX cales sur l ecran : un satin cale sur sa propre boite ne se raccorderait pas.
+    // Attachement en longhand : `var(--nv-satin) fixed` en fin de raccourci ferait poser au
+    // generateur du blanc le lisere irise des panneaux, sur cette seule fenetre.
+    expect(fenetre.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), /)
+    for (const r of [fenetre, tete]) {
+      expect(r.background).toMatch(/var\(--nv-satin\)$/)
+      expect(r['background-attachment']).toBe('scroll, fixed, fixed')
+    }
+    expect(lire('./theme-holographique-clair.css')).not.toMatch(
+      /graph-settings-popover[^{]*\{[^}]*--nv-holo-lisere/
+    )
+    // La diagonale du coin repeinte sur l en-tete, decalee d 1 px (il commence dans le bord).
+    expect(tete.background).toContain('-1px -1px / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat')
+    // L en-tete du poste « Savoir » partage la classe : aucune regle ne le vise sans le `>`.
+    const tetesLarges = regles()
+      .map((r) => r.selecteur)
+      .filter((sel) => /graph-settings-popover__heading/.test(sel) && !/> \.graph-settings-popover__heading/.test(sel))
+    expect(tetesLarges).toEqual([])
+    expect(derniere(`${PREFIXE} .graph-settings-popover .settings-section`).background).toBe('transparent')
+  })
+
+  it('met l element choisi dans le cadre bleu -> rose : puce retenue et ligne du modele actif', () => {
+    expect(derniere(CADRE)['--nv-pop-cadre']).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
+    const puce = derniere(
+      `${POPUPS} :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
+    )
+    const ligne = derniere(`${PREFIXE} .model-select-menu .effort-matrix-row.is-active`)
+    for (const fond of [puce.background, ligne.background]) {
+      expect(fond).toBe(
+        'linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box, var(--nv-pop-cadre) border-box'
+      )
+    }
+  })
+
+  it('ne restyle les puces de compte QUE dans ces fenetres (la vue Routage reste intacte)', () => {
+    const horsPopup = regles()
+      .map((r) => r.selecteur)
+      .filter((s) => s.includes('router-'))
+      .filter((s) => !/model-select-menu|model-quota-popover/.test(s))
+    expect(horsPopup).toEqual([])
+  })
+
+  it('peint le point choisi au degrade, au-dessus de la regle des remplis de la ligne active', () => {
+    const rempli = `${PREFIXE} .model-select-menu .effort-matrix-row.is-active .effort-cran.is-filled i`
+    const choisi = `${PREFIXE} .model-select-menu .effort-matrix-row .effort-cran.is-live.is-selected i`
+    expect(derniere(choisi).background).toBe('var(--nv-pop-cadre)')
+    // Meme specificite (7 classes) : c est l ORDRE qui tranche, le choisi vient apres.
+    expect(rang(choisi)).toBeGreaterThan(rang(rempli))
+    // Le cran conseille garde le vert du theme, apres les remplis (ChatView.css, meme ordre).
+    const conseille = `${PREFIXE} .model-select-menu .effort-matrix-row.is-active .effort-cran.is-recommended i`
+    expect(derniere(conseille).background).toBe('#00ff55')
+    expect(rang(conseille)).toBeGreaterThan(rang(rempli))
+  })
+
+  it('passe les points argent et blanc par des jetons que le blanc assombrit', () => {
+    expect(derniere(`${PREFIXE} .model-select-menu .effort-cran.is-memorized.is-selected i`).background).toBe(
+      'var(--nv-pop-texte-argent)'
+    )
+    const blanc = lire('./theme-holographique-clair.css')
+    const argent = /--nv-pop-texte-argent:\s*#([0-9a-f]{6})/i.exec(blanc)?.[1]
+    expect(argent, 'jeton derive dans Holographique blanc').toBeDefined()
+    const luminosite = parseInt(argent!.slice(0, 2), 16) + parseInt(argent!.slice(2, 4), 16) + parseInt(argent!.slice(4, 6), 16)
+    // Sombre sur la nacre : bien sous la moitie de la luminosite maximale (3 x 255).
+    expect(luminosite).toBeLessThan(3 * 128)
+  })
+
+  it('jauge du contexte au degrade du fil, valeur en blanc et non plus en vert neon', () => {
+    expect(derniere(`${PREFIXE} .model-quota-popover .quota-context-gauge-fill`).background).toBe(
+      'var(--nv-pop-cadre)'
+    )
+    expect(derniere(`${PREFIXE} .model-quota-popover .model-quota-window > strong`).color).toBe('#ffffff')
+  })
+})
+
+/**
+ * SELECTION DANS LA BARRE DE PROMPT EN BLEU (conv-263, 2026-10-11 : « met notre bleu electrique
+ * quand je selectionne le texte de la barre de prompt au lieu du rose fonce »). Le rose a 38 %
+ * vire au rose fonce sur le champ sombre ; la selection du champ prend LE bleu du theme, PLEIN
+ * (#3c6eeb, conv-182 : aucun bleu dilue). Le reste de l'app garde la selection rose.
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer la regle, ou peindre le champ en bleu transparent.
+ */
+describe('Selection dans la barre de prompt', () => {
+  it('peint le texte selectionne du champ en bleu plein, texte blanc', () => {
+    const decls: Record<string, string> = {}
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (!regle.selectors.some((s) => /\.composer-field textarea::selection$/.test(s.trim()))) return
+      regle.walkDecls((d) => {
+        decls[d.prop] = d.value.trim()
+      })
+    })
+    expect(decls.background).toBe('#3c6eeb')
+    expect(decls.color).toBe('#ffffff')
   })
 })

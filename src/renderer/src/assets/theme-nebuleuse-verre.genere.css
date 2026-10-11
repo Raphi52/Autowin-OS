@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   578 regles, 806 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   575 regles, 797 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -494,13 +494,6 @@
 }
 
 /* ---- src/renderer/src/components/DiffView.css ---- */
-:root[data-theme='nebuleuse-verre'] .diff-add {
-    color: var(--ok, rgb(0, 255, 85));
-    background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 10%, transparent)
-}
-:root[data-theme='nebuleuse-verre'] .diff-hunk {
-    color: var(--accent, rgb(122, 95, 255))
-}
 :root[data-theme='nebuleuse-verre'] .diff-add {
     background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 30%, transparent)
 }
@@ -1041,15 +1034,6 @@
 :root[data-theme='nebuleuse-verre'] .home-threads__alerte input:checked::after {
     background: rgb(255, 108, 182)
 }
-:root[data-theme='nebuleuse-verre'] .perf-widget__barre button[aria-pressed='true'] {
-    border-color: rgba(251, 91, 171, 0.55);
-    background: rgba(251, 91, 171, 0.22);
-    color: rgb(255, 108, 182)
-}
-:root[data-theme='nebuleuse-verre'] [data-couleur='vert'] {
-    border-left-color: rgb(0, 255, 85);
-    color: rgb(0, 255, 85)
-}
 
 /* ---- src/renderer/src/components/HumanJson.css ---- */
 :root[data-theme='nebuleuse-verre'] .human-json__toggle {
@@ -1089,11 +1073,19 @@
 :root[data-theme='nebuleuse-verre'] .model-log-count {
     color: rgb(251, 91, 171)
 }
-:root[data-theme='nebuleuse-verre'] .model-log-row {
-    border-image: linear-gradient(90deg, rgba(251, 91, 171, 0.28), rgba(251, 91, 171, 0.03)) 1
+:root[data-theme='nebuleuse-verre'] .model-log-frise {
+    background-image: var(
+    --log-frise,
+    linear-gradient(180deg, rgba(251, 91, 171, 0.55), rgba(251, 91, 171, 0.12))
+  )
 }
-:root[data-theme='nebuleuse-verre'] .model-log-more {
-    color: rgba(251, 91, 171, 0.7)
+:root[data-theme='nebuleuse-verre'] .model-log-perle {
+    background: radial-gradient(
+    circle at 50% 11px,
+    var(--log-perle, var(--log-tone, #a9b2c4)) 0 3.5px,
+    rgba(10, 10, 10, 0.6) 4px 5.5px,
+    transparent 6px
+  )
 }
 :root[data-theme='nebuleuse-verre'] .model-log-row[data-log-kind='prompt'] {
     --log-tone: rgb(251, 91, 171)
@@ -1118,10 +1110,6 @@
     background: rgba(251, 91, 171, 0.12)
 }
 :root[data-theme='nebuleuse-verre'] .model-log-tour__head strong {
-    color: rgb(251, 91, 171)
-}
-:root[data-theme='nebuleuse-verre'] .model-log-voie.is-seule {
-    border-color: rgba(251, 91, 171, 0.45);
     color: rgb(251, 91, 171)
 }
 :root[data-theme='nebuleuse-verre'] [data-piste-source='prompts'], :root[data-theme='nebuleuse-verre'] [data-voie-source='prompts'] {
@@ -1446,6 +1434,28 @@
 :root[data-theme='nebuleuse-verre'] .observatory-conversation-filter:focus-visible {
     border-color: rgb(134, 109, 255)
 }
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__lane[data-phase='frame'] {
+    --gantt-color: rgb(255, 54, 155)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__lane[data-phase='terrain'] {
+    --gantt-color: rgb(87, 63, 207)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__lane[data-phase='judge'] {
+    --gantt-color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__bar.is-open, :root[data-theme='nebuleuse-verre'] .observatory-gantt__envelope.is-open {
+    background: repeating-linear-gradient(
+    135deg,
+    var(--gantt-color) 0 5px,
+    color-mix(in srgb, var(--gantt-color) 55%, rgb(10, 10, 10)) 5px 10px
+  )
+}
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__bar.is-selected, :root[data-theme='nebuleuse-verre'] .observatory-gantt__envelope.is-selected {
+    outline: 2px solid rgb(255, 107, 181)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-gantt__tip {
+    background: rgb(10, 10, 10)
+}
 
 /* ---- src/renderer/src/components/OrchestrationBudgetSettings.css ---- */
 :root[data-theme='nebuleuse-verre'] .orchestration-budget-message {
@@ -1552,15 +1562,6 @@
 }
 :root[data-theme='nebuleuse-verre'] .run-inspector__kicker {
     color: rgb(255, 108, 182)
-}
-
-/* ---- src/renderer/src/components/RunProgress.css ---- */
-:root[data-theme='nebuleuse-verre'] .run-progress__step {
-    border-left: 2px solid var(--ok, rgb(0, 255, 85));
-    background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 6%, transparent)
-}
-:root[data-theme='nebuleuse-verre'] .run-progress__dot {
-    background: var(--ok, rgb(0, 255, 85))
 }
 
 /* ---- src/renderer/src/components/SandboxedHtmlPreview.css ---- */
@@ -1828,14 +1829,6 @@
 :root[data-theme='nebuleuse-verre'] .wf-badge.is-on {
     color: var(--accent, rgb(255, 47, 151));
     border-color: var(--accent-dim, rgb(173, 0, 87))
-}
-
-/* ---- src/renderer/src/components/WorkflowVerdict.css ---- */
-:root[data-theme='nebuleuse-verre'] .workflow-verdict-table .is-recommended {
-    background: var(--accent-soft, rgba(133, 108, 255, 0.08))
-}
-:root[data-theme='nebuleuse-verre'] .workflow-verdict-badge {
-    background: var(--accent, rgb(133, 108, 255))
 }
 
 /* ---- src/renderer/src/components/WorktreeView.css ---- */

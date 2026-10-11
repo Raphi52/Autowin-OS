@@ -31,8 +31,6 @@ export interface TempIsole {
 
 /** Les temporaires d'appel du provider : un couple par appel au CLI. */
 export const PREFIXES_APPEL = ['autowin-os-system-', 'autowin-os-settings-'] as const
-/** Les rapports de verdict ecrits par la verification d'une edition. */
-export const PREFIXES_VERDICT = ['autowin-verdict-'] as const
 
 export function isolerTemp(
   prefixesObserves: readonly string[] = PREFIXES_APPEL,

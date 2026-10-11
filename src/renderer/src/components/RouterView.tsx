@@ -54,6 +54,12 @@ interface Binding {
   reasoningEffort?: string
 }
 
+/** Réglage des petites tâches tel que le processus principal le rend (null = jamais posé). */
+interface PetitesTaches {
+  reglage: Binding | null
+  effectif: Binding
+}
+
 export function RouterView({ active = true }: { active?: boolean }): React.JSX.Element {
   const [models, setModels] = useState<RuntimeModel[]>([])
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
@@ -73,6 +79,9 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [providerError, setProviderError] = useState<Record<string, string>>({})
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const [petitesTaches, setPetitesTaches] = useState<PetitesTaches | null>(null)
+  const [petitesTachesPending, setPetitesTachesPending] = useState(false)
+  const [petitesTachesError, setPetitesTachesError] = useState<string | null>(null)
   const [catalogActive, setCatalogActive] = useState(active)
   const reloadGenerationRef = useRef(0)
 
@@ -123,17 +132,34 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setBinding(roles.orchestrator ?? null)
   }, [])
 
+  // Appel OPTIONNEL, comme `claudeAccounts` : un preload plus ancien que le renderer (app packagée
+  // pas encore réinstallée) n'a pas ce canal, et la section se cache au lieu de lever un rejet.
+  // Un échec de lecture est DIT dans la section, jamais avalé.
+  const reloadPetitesTaches = useCallback(async (): Promise<void> => {
+    try {
+      const etat = await window.api.petitesTaches?.()
+      if (etat) setPetitesTaches(etat)
+    } catch (reason) {
+      setPetitesTachesError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }, [])
+
   useEffect(() => {
     if (!active) return
     void Promise.resolve().then(reloadCatalog)
+    void Promise.resolve().then(reloadPetitesTaches)
     const off = window.api.onAppEvent((event) => {
-      if (event.type === 'refresh' && event.scope === 'roles') void reloadCatalog()
+      if (event.type === 'refresh' && event.scope === 'roles') {
+        void reloadCatalog()
+        // Le modèle du chat change aussi l'EFFECTIF des petites tâches quand elles ne sont pas réglées.
+        void reloadPetitesTaches()
+      }
     })
     return () => {
       invalidatePendingReloads()
       off()
     }
-  }, [active, reloadCatalog])
+  }, [active, reloadCatalog, reloadPetitesTaches])
 
   const byProvider = useMemo(() => {
     const map = new Map<string, RuntimeModel[]>()
@@ -294,6 +320,22 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     }
   }
 
+  const changePetitesTaches = async (option: OrchestratorModelOption | null): Promise<void> => {
+    if (petitesTachesPending) return
+    setPetitesTachesPending(true)
+    setPetitesTachesError(null)
+    try {
+      const etat = option
+        ? await window.api.setPetitesTaches(option.provider, option.model, option.reasoningEffort)
+        : await window.api.setPetitesTaches(null)
+      setPetitesTaches(etat)
+    } catch (e) {
+      setPetitesTachesError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPetitesTachesPending(false)
+    }
+  }
+
   return (
     <section className="router-view">
       <ModuleHeader
@@ -320,6 +362,45 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
           onSelect={(option) => void changeDefaultModel(option)}
         />
       </section>
+
+      {(petitesTaches || petitesTachesError) && (
+        <section className="router-default" data-testid="router-petites-taches">
+          <header>
+            <h3>Modèle des petites tâches</h3>
+            <small>tri des conversations et choix automatique du workflow</small>
+          </header>
+          <OrchestratorModelSelector
+            busy={false}
+            catalogLoaded={loaded}
+            models={models}
+            statuses={statuses}
+            binding={petitesTaches?.effectif ?? null}
+            pending={petitesTachesPending}
+            error={petitesTachesError}
+            onSelect={(option) => void changePetitesTaches(option)}
+            idBase="router-petites-taches-modele"
+            // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
+            // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
+            libelle={petitesTaches?.reglage ? 'Réglé' : 'Suit le chat'}
+            aide="S’applique au prochain tri de conversation et au prochain choix de workflow."
+          />
+          {petitesTaches && !petitesTaches.reglage && (
+            <p className="router-hint" data-testid="router-petites-taches-suit-chat">
+              Non réglé : suit le modèle du chat, en effort low.
+            </p>
+          )}
+          {petitesTaches?.reglage && (
+            <button
+              type="button"
+              className="router-petites-taches-reset"
+              disabled={petitesTachesPending}
+              onClick={() => void changePetitesTaches(null)}
+            >
+              Suivre le modèle du chat
+            </button>
+          )}
+        </section>
+      )}
 
       <div className="router-providers">
         {providers.map((provider) => {

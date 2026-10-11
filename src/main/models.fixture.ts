@@ -21,7 +21,7 @@ const discoveredClaude = (model: string): ImportedModel => ({
   id: `claude/${model}`,
   provider: 'claude',
   model,
-  label: `${model} · CLI`,
+  label: `${model}`,
   reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   defaultReasoningEffort: 'high'
 })

@@ -44,6 +44,21 @@ export interface OrchestratorAccounts {
   onSelect: (accountId: string) => void
 }
 
+/**
+ * LE MODÈLE PAR DÉFAUT, quand le sélecteur pilote UNE conversation (conv-239, 2026-10-11).
+ *
+ * Une conversation qui a choisi son modèle doit pouvoir revenir au défaut de l'application (le
+ * rôle orchestrateur, réglé dans Routage) : sans ce retour, un choix fait une fois la détachait
+ * pour toujours. Absent = sélecteur de l'application (Routage) : rien ne change pour lui.
+ */
+export interface OrchestratorModelDefaut {
+  /** Libellé court du modèle par défaut de l'application (ex. « Opus 5.5 »). */
+  label: string
+  /** Vrai quand la conversation suit déjà le défaut (aucun choix propre). */
+  actif: boolean
+  onChoisir: () => void
+}
+
 const STATUT_LABEL: Record<string, string> = {
   authenticated: 'Authentifié',
   expired: 'Expiré · à reconnecter',
@@ -65,7 +80,12 @@ export function OrchestratorModelSelector({
   pending,
   error,
   onSelect,
-  comptes
+  comptes,
+  ouverture = 'haut',
+  defaut,
+  libelle,
+  aide,
+  idBase = 'chat-orchestrator-model'
 }: {
   busy: boolean
   catalogLoaded: boolean
@@ -78,6 +98,23 @@ export function OrchestratorModelSelector({
   onSelect: (option: OrchestratorModelOption) => void
   /** Absent = aucun bloc « Compte » (cas de Routage : rien ne change pour lui). */
   comptes?: OrchestratorAccounts
+  /**
+   * Sens d'ouverture du menu flottant. `haut` (défaut) : posé AU-DESSUS du bouton, comme dans la
+   * barre de saisie d'avant. `bas` : sous le bouton — obligatoire en tête de conversation, où un
+   * menu ouvert vers le haut sortirait de la fenêtre (conv-239).
+   */
+  ouverture?: 'haut' | 'bas'
+  /** Présent = le sélecteur pilote UNE conversation, qui peut revenir au défaut de l'app. */
+  defaut?: OrchestratorModelDefaut
+  /**
+   * Réglage autre que le modèle du chat (conv-264 : « modèle des petites tâches »). Sans ces trois
+   * champs, le sélecteur disait « Orchestrateur » et « La conversation Autowin et son historique
+   * sont conservés » sous un réglage qui ne touche aucune conversation, et ses `id` fixes
+   * apparaissaient en double sur la page. Absents = libellés et identifiants d'avant.
+   */
+  libelle?: string
+  aide?: string
+  idBase?: string
 }): React.JSX.Element {
   const statutDe = (provider: string): string | undefined =>
     statuses?.find((s) => s.provider === provider)?.status
@@ -93,14 +130,22 @@ export function OrchestratorModelSelector({
    * du conteneur. On le rend donc dans `document.body`, en `position: fixed`, ancre sur le
    * bouton — plus aucun parent ne peut le couper.
    */
-  const [ancre, setAncre] = useState<{ left: number; bottom: number } | null>(null)
+  const [ancre, setAncre] = useState<
+    | { left: number; bottom: number; top?: undefined }
+    | { left: number; top: number; bottom?: undefined }
+    | null
+  >(null)
   useClampDansFenetre(menuRef, ancre !== null)
   const mesurerAncre = useCallback((): void => {
     const resume = dropdownRef.current?.querySelector('summary')
     if (!resume) return
     const rect = resume.getBoundingClientRect()
-    setAncre({ left: rect.left, bottom: window.innerHeight - rect.top + 7 })
-  }, [])
+    setAncre(
+      ouverture === 'bas'
+        ? { left: rect.left, top: rect.bottom + 7 }
+        : { left: rect.left, bottom: window.innerHeight - rect.top + 7 }
+    )
+  }, [ouverture])
   useEffect(() => {
     if (!ancre) return
     window.addEventListener('resize', mesurerAncre)
@@ -204,14 +249,16 @@ export function OrchestratorModelSelector({
   }, [])
 
   return (
-    <div className="model-select-shell">
-      <span className="model-select-label">Orchestrateur</span>
+    <div className={`model-select-shell${ouverture === 'bas' ? ' is-ouverture-bas' : ''}`}>
+      <span className="model-select-label">
+        {libelle ?? (defaut ? 'Modèle de cette conversation' : 'Orchestrateur')}
+      </span>
       <details
         ref={dropdownRef}
-        id="chat-orchestrator-model"
-        data-testid="chat-orchestrator-model"
+        id={idBase}
+        data-testid={idBase}
         className="model-select"
-        aria-describedby="chat-orchestrator-model-help chat-orchestrator-model-status"
+        aria-describedby={`${idBase}-help ${idBase}-status`}
         data-disabled={disabled || undefined}
         onClick={(event) => {
           if (disabled) event.preventDefault()
@@ -232,11 +279,39 @@ export function OrchestratorModelSelector({
           createPortal(
             <div
               ref={menuRef}
-              className="model-select-menu is-flottant"
+              className={`model-select-menu is-flottant${ouverture === 'bas' ? ' is-ouverture-bas' : ''}`}
               role="listbox"
-              aria-label="Modèle orchestrateur"
-              style={{ left: ancre.left, bottom: ancre.bottom }}
+              aria-label={defaut ? 'Modèle de cette conversation' : 'Modèle orchestrateur'}
+              style={
+                ancre.top !== undefined
+                  ? // `bottom: auto` : la règle de base pose `bottom: calc(100% + 7px)`, qui, avec un
+                    // `top` en ligne, écraserait la hauteur du menu à zéro.
+                    { left: ancre.left, top: ancre.top, bottom: 'auto' }
+                  : { left: ancre.left, bottom: ancre.bottom }
+              }
             >
+            {defaut && (
+              <div className="model-select-defaut" data-testid="conv-model-defaut">
+                <button
+                  type="button"
+                  className={`router-account-chip${defaut.actif ? ' is-active' : ''}`}
+                  aria-pressed={defaut.actif}
+                  disabled={defaut.actif}
+                  onClick={() => {
+                    dropdownRef.current?.removeAttribute('open')
+                    setAncre(null)
+                    defaut.onChoisir()
+                  }}
+                >
+                  {defaut.actif ? 'Suit le modèle par défaut' : 'Revenir au modèle par défaut'} ·{' '}
+                  {defaut.label}
+                </button>
+                <p className="router-hint">
+                  Ce choix ne vaut que pour cette conversation. Le modèle par défaut se règle dans
+                  Routage.
+                </p>
+              </div>
+            )}
             {matrixRows.length > 0 && (
               <ModelEffortMatrix
                 variant="inline"
@@ -387,13 +462,16 @@ export function OrchestratorModelSelector({
             document.body
           )}
       </details>
-      <span id="chat-orchestrator-model-help" className="model-select-help">
+      <span id={`${idBase}-help`} className="model-select-help">
         {busy
           ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
-          : 'Le changement s’appliquera au prochain tour. La conversation Autowin et son historique sont conservés.'}
+          : (aide ??
+            (defaut
+              ? 'Le changement s’appliquera au prochain tour de cette conversation seulement. Son historique est conservé.'
+              : 'Le changement s’appliquera au prochain tour. La conversation Autowin et son historique sont conservés.'))}
       </span>
       <span
-        id="chat-orchestrator-model-status"
+        id={`${idBase}-status`}
         className="model-select-status"
         role="status"
         aria-live="polite"

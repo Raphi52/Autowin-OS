@@ -189,6 +189,14 @@
   --chat-frise-ko:                  var(--err);   /* frise du bloc Actions : action en échec */
   --chat-icone-tour:                #6e6e6e;   /* icones sous un message au repos : gris neutre sur fond clair (conv-203) */
   --chat-icone-tour-survol:         #111111;   /* au survol : le noir tient le role du blanc (conv-203) */
+  --chat-capsule-reflet-haut:       #ffffff66;   /* meme valeur qu en sombre : reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % (conv-173) */
+  --chat-capsule-reflet-milieu:     #ffffff1a;   /* meme valeur qu en sombre : meme reflet a 55 % du rayon : blanc a 10 % */
+  --chat-capsule-reflet-fin:        #ffffff00;   /* meme valeur qu en sombre : fin du reflet : blanc transparent */
+  --chat-capsule-reflet-eteint-haut: #ffffff26;   /* meme valeur qu en sombre : reflet d une capsule eteinte (tour fini, non survolee) : blanc a 15 % */
+  --chat-capsule-reflet-eteint-milieu: #ffffff08;   /* meme valeur qu en sombre : meme reflet eteint a 55 % du rayon : blanc a 3 % */
+  --chat-capsule-sur-degrade:       #fff;   /* meme valeur qu en sombre : icone et compteur poses sur le degrade de la capsule : restent blancs */
+  --chat-capsule-pastille-texte-fini: #ffffffb8;   /* meme valeur qu en sombre : le meme texte, tour fini : blanc a 72 % */
+  --chat-capsule-pastille-filet:    #ffffff47;   /* meme valeur qu en sombre : filet clair autour de cette pastille : blanc a 28 % */
 
 }
 

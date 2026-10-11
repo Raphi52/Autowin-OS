@@ -3,11 +3,15 @@ import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catal
 import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
 
 configurerCatalogueTest(TEST_SQL_CATALOG)
-import { contenuAutoriteProd, declarationsDepuisCatalogue } from './prod-autorite-depuis-catalogue'
+import {
+  declarationsDepuisCatalogue,
+  propositionDepuisCatalogue,
+  propositionPourEcran
+} from './prod-autorite-depuis-catalogue'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { cheminAutoriteProd, chargerAutoriteProd } from './store/prod-autorite-store'
-import { classerCible } from './prod-guard'
+import { classerCible, type EntreeAutorite } from './prod-guard'
 
 /**
  * LA GÉNÉRATION DE LA LISTE DE DÉCLARATION. Ce qui est vérifié : la classification vient du
@@ -86,7 +90,7 @@ describe('le fichier produit est réellement utilisable', () => {
     const racine = mkdtempSync(`${tmpdir()}/prod-autorite-gen-`)
     writeFileSync(
       cheminAutoriteProd(racine),
-      contenuAutoriteProd({ exploitees: EXPLOITEES, developpement: DEV }),
+      propositionDepuisCatalogue([], { exploitees: EXPLOITEES, developpement: DEV }).contenu,
       'utf8'
     )
     return racine
@@ -107,5 +111,87 @@ describe('le fichier produit est réellement utilisable', () => {
   it('laisse une base ABSENTE bloquante : l’ignorance n’est pas une permission', () => {
     const autorite = chargerAutoriteProd(racineAvecFichier()).autorite
     expect(classerCible({ nature: 'base', nom: 'APP_JAMAIS_VUE' }, autorite).estBloquant).toBe(true)
+  })
+})
+
+/**
+ * LA PROPOSITION POUR L'ÉCRAN DE RÉGLAGES. L'application n'écrit jamais le fichier de déclaration
+ * (`store/prod-autorite-store.ts`) : elle PROPOSE un contenu que l'utilisateur recopie lui-même.
+ * Ce qui est vérifié : la déclaration actuelle est reprise telle qu'écrite, seul ce qui manque est
+ * ajouté, et aucune protection n'est jamais BAISSÉE.
+ */
+const ACTUELLES: EntreeAutorite[] = [
+  { nature: 'chemin', nom: 'D:/Deploiement/Prod', classe: 'prod', motif: 'écrit à la main' },
+  { nature: 'base', nom: 'db_alpha', classe: 'prod' },
+  { nature: 'base', nom: 'DB_PAPA', classe: 'non-prod', motif: 'cru hors production' },
+  { nature: 'base', nom: 'APP_RECETTE', classe: 'prod', motif: 'protégée exprès' }
+]
+
+describe('proposition depuis le catalogue', () => {
+  const proposer = (): ReturnType<typeof propositionDepuisCatalogue> =>
+    propositionDepuisCatalogue(ACTUELLES, { exploitees: EXPLOITEES, developpement: DEV })
+
+  it('reprend chaque entrée actuelle TELLE QU’ÉCRITE, casse et motif compris', () => {
+    const p = proposer()
+    expect(p.entrees[0]).toEqual(ACTUELLES[0])
+    expect(p.entrees[1]).toEqual(ACTUELLES[1])
+    expect(p.conservees).toBe(4)
+  })
+
+  it('n’ajoute QUE les bases absentes, sans doublon dû à la casse', () => {
+    const p = proposer()
+    expect(p.ajoutees.map((e) => [e.nom, e.classe])).toEqual([['APP_DEV', 'non-prod']])
+    expect(p.entrees.filter((e) => e.nom.toLowerCase() === 'db_alpha')).toHaveLength(1)
+    expect(p.entrees).toHaveLength(5)
+  })
+
+  it('passe en PRODUCTION une base déclarée hors production que le catalogue dit exploitée', () => {
+    const p = proposer()
+    expect(p.passeesEnProd).toEqual(['DB_PAPA'])
+    expect(p.entrees.find((e) => e.nom === 'DB_PAPA')?.classe).toBe('prod')
+  })
+
+  it('ne BAISSE jamais une protection : une base protégée à la main reste en production', () => {
+    expect(proposer().entrees.find((e) => e.nom === 'APP_RECETTE')?.classe).toBe('prod')
+  })
+
+  it('part d’une déclaration vide : tout le catalogue est ajouté', () => {
+    const p = propositionDepuisCatalogue([], { exploitees: EXPLOITEES, developpement: DEV })
+    expect(p.ajoutees).toHaveLength(4)
+    expect(p.conservees).toBe(0)
+  })
+
+  it('produit un contenu que le chargeur relit SANS ligne écartée, avec la même classification', () => {
+    const racine = mkdtempSync(`${tmpdir()}/prod-autorite-prop-`)
+    writeFileSync(cheminAutoriteProd(racine), proposer().contenu, 'utf8')
+    const charge = chargerAutoriteProd(racine)
+    expect(charge.anomalies).toEqual([])
+    expect(charge.declarations).toEqual(proposer().entrees)
+    expect(classerCible({ nature: 'base', nom: 'DB_PAPA' }, charge.autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_DEV' }, charge.autorite).estBloquant).toBe(
+      false
+    )
+  })
+})
+
+describe('proposition pour l’écran de réglages', () => {
+  const DECLARATION = { declarations: ACTUELLES, anomalies: ['entrée 9 : nom manquant ou vide'] }
+
+  it('DIT l’échec du catalogue au lieu d’une liste vide qui aurait l’air complète', () => {
+    expect(
+      propositionPourEcran(DECLARATION, { ok: false, erreur: 'Requête abandonnée.' }, DEV)
+    ).toEqual({ ok: false, erreur: 'Catalogue SQL illisible : Requête abandonnée.' })
+  })
+
+  it('rend le résumé, les remarques sur le fichier actuel et le contenu prêt à coller', () => {
+    const r = propositionPourEcran(DECLARATION, { ok: true, exploitees: EXPLOITEES }, DEV)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.exploitees).toBe(2)
+    expect(r.ajoutees).toEqual([{ nom: 'APP_DEV', classe: 'non-prod' }])
+    expect(r.passeesEnProd).toEqual(['DB_PAPA'])
+    expect(r.conservees).toBe(4)
+    expect(r.anomalies).toEqual(['entrée 9 : nom manquant ou vide'])
+    expect(JSON.parse(r.contenu)).toHaveLength(5)
   })
 })

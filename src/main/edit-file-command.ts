@@ -107,8 +107,9 @@ export function decideEdit(
    *
    * Un chemin ABSOLU hors du dossier Autowin est donc accepte, et marque `externe`. Ce qui protege
    * reellement reste EN PLACE et vaut pour lui aussi : pas de `.git/`, pas de fichier de secrets,
-   * remplacement d'une chaine EXACTE et UNIQUE (donc jamais d'ecrasement ni de creation), refus des
-   * fichiers non-UTF-8. Seules les racines SYSTEME restent fermees : elles ne sont le travail de
+   * remplacement d'une chaine EXACTE et UNIQUE (donc jamais d'ecrasement ni de creation), encodage
+   * d'origine conserve et refus d'un fichier qu'on ne saurait pas reecrire a l'identique
+   * (`readFileText`, file-encoding.ts). Seules les racines SYSTEME restent fermees : elles ne sont le travail de
    * personne et une erreur y casse le poste.
    *
    * Un chemin RELATIF, lui, reste resolu DANS le dossier Autowin et sa traversee `..` reste refusee :
@@ -296,40 +297,11 @@ export function applyEdit(content: string, oldText: string, newText: string): st
 }
 
 /**
- * REFUSE une edition sur un fichier qui n'est pas de l'UTF-8 valide.
- *
- * MESURE le 2026-08-27 sur les octets reels : `readFileSync(p).toString('utf8')` ne JETTE pas sur
- * une entree invalide — Node substitue U+FFFD. Un fichier cp1252 (`e9` pour « é ») reecrit ensuite
- * en utf8 ressortait donc en `ef bf bd` : chaque octet non-UTF-8 du fichier etait DETRUIT, y compris
- * TRES LOIN de la zone editee, et le bureau isole publiait la corruption dans le depot.
- *   avant : 2f2f2063616c63756c **e9** 20766965757820666963686965720d0a
- *   apres : 2f2f2063616c63756c **efbfbd** 206e65756620666963686965720d0a
- *
- * POURQUOI REFUSER plutot que preserver l'encodage : preserver imposerait de DEVINER le jeu de
- * caracteres (aucun n'est marque dans le fichier), et l'`oldText` fourni par le modele est de
- * l'UTF-8 — le faire correspondre a un contenu transcode ajoute une seconde devinette. Une
- * substitution silencieuse sur une DEVINETTE est exactement le defaut qu'on corrige. Le refus est
- * exact, sans perte, et il ENSEIGNE (comme les autres refus de cette commande) : l'agent sait quoi
- * faire ensuite. Il ecarte au passage les fichiers BINAIRES, qu'une edition texte detruit toujours.
- *
- * Le decodeur est en mode `fatal` : il distingue un octet reellement invalide d'un U+FFFD
- * LEGITIMEMENT encode (ef bf bd) dans un fichier UTF-8 valide, que le seul test de presence du
- * caractere de remplacement confondrait — et ferait refuser a tort.
- */
-export function refusSiPasUtf8(octets: Uint8Array, relativePath: string): string | undefined {
-  if (decoderUtf8(octets).valide) return undefined
-  return (
-    `contenu non UTF-8 : ${relativePath} contient des octets qu'une écriture UTF-8 détruirait ` +
-    `(fichier en encodage hérité type cp1252/latin-1, ou binaire). Édition refusée pour ne pas ` +
-    `corrompre le reste du fichier — convertis-le en UTF-8 d'abord, ou modifie-le autrement.`
-  )
-}
-
-/**
  * DECODE en UTF-8 en DISANT si l'entree l'etait vraiment.
  *
- * Meme mesure que ci-dessus, cote LECTURE : `readFileSync(p, 'utf8')` rend un texte ou chaque octet
- * invalide est devenu `�`, sans le moindre signal. Rien n'est detruit sur le disque, mais le
+ * MESURE le 2026-08-27 sur les octets reels : `readFileSync(p, 'utf8')` ne JETTE pas sur une entree
+ * invalide — il rend un texte ou chaque octet invalide est devenu `�`, sans le moindre signal.
+ * Cote LECTURE, rien n'est detruit sur le disque, mais le
  * modele recoit une ligne FAUSSE presentee comme le contenu du fichier — et il peut ensuite batir un
  * `oldText` dessus. On rend donc le texte (les lignes ASCII restent vraies et utiles) ET le drapeau :
  * une lecture qui ment doit le DIRE, c'est moins couteux que de la refuser et plus honnete que de la

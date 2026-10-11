@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { askDejaRepondu } from './chat-message-keys'
+import { askReponseDuFil } from './chat-message-keys'
 import type { Msg } from './chat-view-types'
 
 /*
@@ -37,12 +37,12 @@ const utilisateur = (content: string): Msg => ({ role: 'user', content }) as unk
 describe('verrou du bloc ask — seule une vraie réponse ferme la question', () => {
   it('un message utilisateur SANS rapport laisse la question ouverte', () => {
     const fil = [tourAvecQuestion(), utilisateur('ca la met juste dans la barre de prompt...')]
-    expect(askDejaRepondu(fil, 0)).toBe(false)
+    expect(askReponseDuFil(fil, 0)).toBeUndefined()
   })
 
   it("le libellé d'une option ferme la question", () => {
     const fil = [tourAvecQuestion(), utilisateur('Les deux')]
-    expect(askDejaRepondu(fil, 0)).toBe(true)
+    expect(askReponseDuFil(fil, 0)).toBeDefined()
   })
 
   it('une réponse multiple (liste de puces) ferme la question', () => {
@@ -50,12 +50,12 @@ describe('verrou du bloc ask — seule une vraie réponse ferme la question', ()
       tourAvecQuestion(),
       utilisateur('- Les deux\n- Elle part tout de suite avec mon orientation')
     ]
-    expect(askDejaRepondu(fil, 0)).toBe(true)
+    expect(askReponseDuFil(fil, 0)).toBeDefined()
   })
 
   it('une réponse arrivée APRÈS un message hors sujet ferme quand même la question', () => {
     const fil = [tourAvecQuestion(), utilisateur('autre chose'), utilisateur('Les deux')]
-    expect(askDejaRepondu(fil, 0)).toBe(true)
+    expect(askReponseDuFil(fil, 0)).toBeDefined()
   })
 
   it('un tour sans question ne verrouille rien', () => {
@@ -63,6 +63,6 @@ describe('verrou du bloc ask — seule une vraie réponse ferme la question', ()
       { role: 'assistant', content: 'ok', done: true, status: 'completed', parts: [] },
       utilisateur('Les deux')
     ] as unknown as Msg[]
-    expect(askDejaRepondu(fil, 0)).toBe(false)
+    expect(askReponseDuFil(fil, 0)).toBeUndefined()
   })
 })

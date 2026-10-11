@@ -23,6 +23,31 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
     }
   })
 
+  it('réécrit roles.json SANS perdre le modèle des petites tâches', () => {
+    saveRoleBindings.mockClear()
+    const petitesTaches = { provider: 'claude', model: 'claude-haiku-4-5' }
+    const fake = { roles: new RoleModelConfig({ petitesTaches }) }
+    AutowinOS.prototype.setRoles.call(
+      fake as never,
+      [['orchestrator', { provider: 'claude', model: 'opus' }]] as never
+    )
+    expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), petitesTaches)
+  })
+
+  it('setPetitesTaches persiste puis applique, et undefined efface', () => {
+    saveRoleBindings.mockClear()
+    const fake = { roles: new RoleModelConfig(undefined) }
+    const pose = AutowinOS.prototype.setPetitesTaches.call(fake as never, {
+      provider: 'claude',
+      model: 'claude-haiku-4-5'
+    })
+    expect(pose).toEqual({ provider: 'claude', model: 'claude-haiku-4-5' })
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(expect.any(Object), pose)
+    expect(AutowinOS.prototype.setPetitesTaches.call(fake as never, undefined)).toBeUndefined()
+    expect(saveRoleBindings).toHaveBeenLastCalledWith(expect.any(Object), undefined)
+    expect(fake.roles.getPetitesTaches()).toBeUndefined()
+  })
+
   it("n'écrit rien pour un lot vide", () => {
     saveRoleBindings.mockClear()
     const fake = { roles: new RoleModelConfig(undefined) }

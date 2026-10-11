@@ -6,6 +6,7 @@ import {
   ROUTE_CONFIDENCE_THRESHOLD
 } from './conversation-router'
 import { ExecutionSupervisor } from './execution-supervisor'
+import { RoleModelConfig } from './roles'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -60,15 +61,11 @@ function harness(response: string | Error, waitUntilReady: () => Promise<void> =
       }
     })
   }
-  const roles = {
-    getBinding: () => ({
-      provider: 'codex',
-      model: 'gpt-router',
-      reasoningEffort: 'low'
-    })
-  }
+  const roles = new RoleModelConfig({
+    orchestrator: { provider: 'codex', model: 'gpt-router', reasoningEffort: 'low' }
+  })
   return {
-    router: new ConversationRouter(registry as never, roles as never, supervisor, waitUntilReady),
+    router: new ConversationRouter(registry as never, roles, supervisor, waitUntilReady),
     registry,
     supervisor
   }
@@ -100,10 +97,10 @@ describe('ConversationRouter', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new MeteredRouterProvider()
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const roles = {
-      getBinding: () => ({ provider: provider.id, model: 'router', reasoningEffort: 'low' })
-    }
-    const router = new ConversationRouter(registry, roles as never, supervisor)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'router', reasoningEffort: 'low' }
+    })
+    const router = new ConversationRouter(registry, roles, supervisor)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
     await router.decide(current, 'Suite du même sujet, avec assez de texte pour dépasser la garde')
@@ -220,9 +217,10 @@ describe('ConversationRouter', () => {
    * Classer une conversation, c'est trancher « même sujet ou nouveau » sur quelques centaines de
    * caractères. Mesuré le 2026-09-16 sur `.autowin-data/autowin-os/activity` : 1 901 classements
    * sur claude-opus-5 pour 52,44 $, parce que le routeur empruntait le binding `orchestrator`.
-   * Il doit prendre le modèle LÉGER par défaut du provider, sans toucher aux rôles du pipeline.
+   * Le correctif suivant forçait le défaut codé `claude-fable-5`, deux fois plus cher qu'Opus
+   * (conv-264). Le tri lit désormais le réglage « modèle des petites tâches » de l'utilisateur.
    */
-  it('classe sur le modèle LÉGER du provider, pas sur l’opus des rôles', async () => {
+  it('classe sur le modèle des PETITES TÂCHES réglé, jamais sur un défaut codé', async () => {
     const registry = {
       send: vi.fn(async (_p: string, _m: unknown, options: { model?: string }) => ({
         text: '{"route":"current","confidence":0.99,"reason":"related","title":""}',
@@ -231,10 +229,11 @@ describe('ConversationRouter', () => {
         systemInjected: true
       }))
     }
-    const roles = {
-      getBinding: () => ({ provider: 'claude', model: 'claude-opus-5', reasoningEffort: 'low' })
-    }
-    const router = new ConversationRouter(registry as never, roles as never, new ExecutionSupervisor())
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' },
+      petitesTaches: { provider: 'claude', model: 'claude-haiku-4-5', reasoningEffort: 'low' }
+    })
+    const router = new ConversationRouter(registry as never, roles, new ExecutionSupervisor())
     await router.decide(
       conversation([message('user', 'Sujet courant', 1)]),
       'Suite substantielle du sujet courant, assez longue pour interroger le modèle'
@@ -242,7 +241,7 @@ describe('ConversationRouter', () => {
     expect(registry.send).toHaveBeenCalledWith(
       'claude',
       expect.any(Array),
-      expect.objectContaining({ model: 'claude-fable-5' })
+      expect.objectContaining({ model: 'claude-haiku-4-5', reasoningEffort: 'low' })
     )
   })
 
@@ -261,10 +260,10 @@ describe('ConversationRouter', () => {
         systemInjected: true
       }))
     }
-    const roles = { getBinding: () => binding }
+    const roles = new RoleModelConfig({ orchestrator: binding })
     const router = new ConversationRouter(
       registry as never,
-      roles as never,
+      roles,
       new ExecutionSupervisor(),
       () => ready.promise
     )
@@ -274,6 +273,7 @@ describe('ConversationRouter', () => {
     )
     await Promise.resolve()
     binding = { provider: 'codex', model: 'gpt-5.6-terra', reasoningEffort: 'medium' }
+    roles.setBinding('orchestrator', binding)
     ready.resolve()
 
     await pending

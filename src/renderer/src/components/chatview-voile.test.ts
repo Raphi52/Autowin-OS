@@ -34,7 +34,18 @@ const THEME_MODES = 'src/renderer/src/assets/theme-modes.css'
 describe('le chat passe ses voiles par le theme', () => {
   it("n'ecrit plus aucun blanc translucide en dur", () => {
     const css = readFileSync(CHAT, 'utf8')
-    const enDur = [...css.matchAll(/rgba\(\s*255\s*,\s*255\s*,\s*255\s*,[^)]*\)/g)].map((m) => m[0])
+    /*
+     * UNE SEULE EXCEPTION, NOMMEE (conv-246, 2026-10-11) : le texte de la capsule NOIRE du mot
+     * « contexte » (conv-189). Le voile s'inverserait en theme clair -- texte sombre sur capsule
+     * noire --, `ChatContextRule.style.test.ts` exige ce blanc ecrit tel quel, et la couche generee
+     * du theme Holographique blanc le relit pour le passer a l'encre. Elle est retiree AVANT le
+     * balayage, et on verifie qu'elle est bien la, une fois : elle ne couvre rien d'autre.
+     */
+    const capsule = /\n\.chat-context-rule-libelle\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(capsule).toContain('color: rgba(255, 255, 255, 0.6);')
+    const BLANC = /rgba\(\s*255\s*,\s*255\s*,\s*255\s*,[^)]*\)/g
+    expect(capsule.match(BLANC)).toHaveLength(1)
+    const enDur = [...css.replace(capsule, '').matchAll(BLANC)].map((m) => m[0])
     expect(enDur).toEqual([])
   })
 

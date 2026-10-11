@@ -179,7 +179,3 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
 
 /** Identifiants déclarés, pour typer les traces sans dupliquer la liste. */
 export type BrainPointId = (typeof BRAIN_INJECTION_POINTS)[number]['id']
-
-export function brainInjectionPoint(id: string): BrainInjectionPoint | undefined {
-  return BRAIN_INJECTION_POINTS.find((point) => point.id === id)
-}

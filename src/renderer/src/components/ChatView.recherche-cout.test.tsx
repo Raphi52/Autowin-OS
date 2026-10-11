@@ -18,9 +18,9 @@ vi.mock('./chat-message-keys', async (importOriginal) => {
   const reel = await importOriginal<typeof import('./chat-message-keys')>()
   return {
     ...reel,
-    askDejaRepondu: (...args: Parameters<typeof reel.askDejaRepondu>) => {
+    askReponseDuFil: (...args: Parameters<typeof reel.askReponseDuFil>) => {
       compteur.scans += 1
-      return reel.askDejaRepondu(...args)
+      return reel.askReponseDuFil(...args)
     },
     lastUserPromptBefore: (...args: Parameters<typeof reel.lastUserPromptBefore>) => {
       compteur.scans += 1

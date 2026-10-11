@@ -176,6 +176,30 @@ export function promptDesOptions(options: readonly AskOption[]): string {
 }
 
 /**
+ * Les reponses (leurs rangs) que ce texte ENVOIE — l'inverse exact de `promptDeLOption` et de
+ * `promptDesOptions`. Le texte d'une option seule en retient une ; des puces en retiennent plusieurs,
+ * a condition que CHAQUE ligne soit une option. Tout autre texte (une phrase tapee dans la saisie,
+ * une puce inconnue) n'en retient aucune : seule l'egalite prouve qu'un message est la reponse.
+ */
+export function optionsRepondues(
+  options: readonly AskOption[],
+  texte: string | undefined
+): ReadonlySet<number> {
+  const propre = texte?.trim() ?? ''
+  if (!propre) return new Set()
+  const attendus = options.map((option) => promptDeLOption(option).trim())
+  const seule = attendus.indexOf(propre)
+  if (seule >= 0) return new Set([seule])
+  const lignes = propre
+    .split(String.fromCharCode(10))
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+  if (lignes.length < 2) return new Set()
+  const rangs = lignes.map((ligne) => (ligne.startsWith('- ') ? attendus.indexOf(ligne.slice(2).trim()) : -1))
+  return rangs.every((rang) => rang >= 0) ? new Set(rangs) : new Set()
+}
+
+/**
  * Ancien rendu (grille de chips) — conserve pour les appelants qui n'ont pas encore migre.
  * @deprecated Le bloc de decision est `parseAskDecision` + `AskDecisionBlock`.
  */

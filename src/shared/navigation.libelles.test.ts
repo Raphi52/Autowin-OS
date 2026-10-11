@@ -46,6 +46,15 @@ describe('resolveAppLocation — le nom AFFICHÉ est une adresse valide', () => 
     }
   })
 
+  it('atteint l’onglet Rules par son nom, et la règle Production y mène aussi', () => {
+    for (const nom of ['rules', 'Rules', 'règles', 'regles', 'production', 'Production']) {
+      expect(resolveAppLocation(nom), nom).toMatchObject({
+        destination: 'settings',
+        section: 'rules'
+      })
+    }
+  })
+
   it('DIT que la destination n’a pas été reconnue, au lieu de replier en silence', () => {
     // Le repli sur `chat` reste — refuser produirait des faux blocages. Mais l'appelant doit pouvoir
     // distinguer « je suis sur le chat parce que tu l'as demandé » de « je n'ai pas compris ».

@@ -110,13 +110,40 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
      * ici plutot que de laisser la regle s'assouplir en silence.
      */
     const SELECTEURS_NOIR_ASSUME = ['.conv-menu-pop', '.cosmic-outline .conv-pane']
+    /*
+     * QUATRE AUTRES COULEURS RESTENT EN DUR, PAR DEUX DECISIONS DE L'UTILISATEUR (conv-246, 2026-10-11).
+     *
+     * Les passer par un jeton a ete essaye : la couche du theme Holographique blanc est GENEREE en
+     * relisant ces valeurs litterales (`genererCoucheClaire`). Derriere un jeton, elle perdait la
+     * bordure encre de la vignette, la capsule claire du mot « contexte » et le texte encre de la
+     * duree -- une capsule noire et un texte blanc sur pastille claire, en theme blanc. Et deux gardes
+     * exigent ces valeurs ecrites telles quelles : `ChatView.style.test.ts` (vignette BLANCHE,
+     * conv-186) et `ChatContextRule.style.test.ts` (capsule NOIRE, conv-189). On les NOMME ici, a la
+     * declaration pres, plutot que de laisser deux gardes se contredire en silence.
+     */
+    const DECLARATIONS_ASSUMEES = [
+      ['.attachment-chip', 'border: 1px solid #ffffff;'],
+      ['.attachment-chip > button:not(.attachment-thumb-button)', 'color: #ffffff;'],
+      ['.chat-context-rule-libelle', 'background: #000000;'],
+      ['.capsule-bouton .thinking-duree', 'color: #fff;']
+    ]
     const utile = sansCommentaires(chat)
     const fautives: string[] = []
     const assumes: string[] = []
+    const declarationsAssumees: string[] = []
     let selecteur = ''
+    let propriete = ''
     utile.split('\n').forEach((ligne, index) => {
       if (/\{\s*$/.test(ligne)) selecteur = ligne.replace(/\s*\{\s*$/, '').trim()
+      const declaration = /^\s*(-?[a-z][a-z-]*)\s*:/.exec(ligne)
+      if (declaration) propriete = declaration[1]
       if (!ligne.match(HEX)) return
+      // Un MASQUE ne peint rien : seule son opacite compte, sa teinte est ignoree. Le noir plein
+      // `linear-gradient(#000 0 0)` du bord degrade des capsules (conv-176) n'est donc pas une
+      // couleur d'interface. Toleree dans une declaration `mask` / `-webkit-mask`, et sous CETTE
+      // forme seulement (conv-246).
+      if (/^(-webkit-)?mask$/.test(propriete) && /^linear-gradient\(#000 0 0\)/.test(ligne.trim()))
+        return
       // Seules trois formes sont tolerees, et aucune n'est une couleur d'interface reglable :
       // un TAUX d'eclaircissement dans un color-mix, une etincelle de 1 px d'un radial-gradient,
       // et les deux noirs assumes ci-dessus.
@@ -128,18 +155,28 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
         assumes.push(selecteur)
         return
       }
+      if (DECLARATIONS_ASSUMEES.some(([s, d]) => s === selecteur && d === ligne.trim())) {
+        declarationsAssumees.push(`${selecteur} :: ${ligne.trim()}`)
+        return
+      }
       fautives.push(`l.${index + 1} (${selecteur}) : ${ligne.trim()}`)
     })
     expect(fautives, `couleurs ecrites en dur : \n${fautives.join('\n')}`).toEqual([])
     // Les deux exceptions sont les DEUX attendues, pas une de plus qui se serait glissee dessous.
     expect(assumes.sort()).toEqual([...SELECTEURS_NOIR_ASSUME].sort())
+    // Idem pour les quatre declarations : chacune une fois, aucune de plus.
+    expect(declarationsAssumees.sort()).toEqual(
+      DECLARATIONS_ASSUMEES.map(([s, d]) => `${s} :: ${d}`).sort()
+    )
   })
 
   it('garde la dette a son plancher : pas un hex de plus qu aujourd hui', () => {
-    // Cliquet volontaire. 15 = 10 taux d'eclaircissement (boutons Envoyer / Arreter) + 3
-    // etincelles de la carte de suppression + 2 noirs assumes. Ce nombre ne doit que DESCENDRE.
+    // Cliquet volontaire. Ce nombre ne doit que DESCENDRE. Descendu de 15 a 8 le 2026-10-11
+    // (conv-246) : les taux d'eclaircissement et les etincelles etaient deja partis, les blancs des
+    // capsules sont passes par des jetons. Restent les 2 noirs assumes, les 4 declarations assumees
+    // et les 2 noirs du MASQUE du bord degrade des capsules (toleres plus haut).
     const total = (sansCommentaires(chat).match(HEX) ?? []).length
-    expect(total).toBeLessThanOrEqual(15)
+    expect(total).toBeLessThanOrEqual(8)
   })
 
   it('donne a chaque jeton une valeur SOMBRE litterale, jamais un renvoi', () => {

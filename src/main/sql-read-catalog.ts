@@ -115,11 +115,6 @@ export function getSqlCatalogConfig(): SqlCatalogConfig | undefined {
   return configuration
 }
 
-/** La base catalogue comme cible de lecture — `undefined` sans configuration. */
-export function catalogTarget(): SqlTarget | undefined {
-  return configuration ? { server: configuration.server, database: configuration.database } : undefined
-}
-
 /** La base visée est-elle la base catalogue configurée (celle qui porte les secrets) ? */
 export function estBaseCatalogue(database: string | undefined): boolean {
   return (
@@ -244,4 +239,28 @@ export async function resolveSqlTargets(deps: CatalogDeps = {}): Promise<SqlTarg
   // sinon une panne réseau passagère priverait l'agent de la production une demi-heure.
   cache = { catalogue, expire: maintenant + (catalogue.degraded ? 0 : CACHE_TTL_MS) }
   return catalogue
+}
+
+export type LectureBasesExploitees =
+  { ok: true; exploitees: SqlTarget[] } | { ok: false; erreur: string }
+
+/**
+ * Les SEULES bases exploitées, telles que l'autorité les liste — sans la base catalogue ni les
+ * cibles de développement, que `resolveSqlTargets` mélange. Sert à proposer la liste de production
+ * (`prod-autorite-depuis-catalogue.ts`). Pas de cache : la lecture suit un clic de l'utilisateur,
+ * qui attend l'état du moment. Un échec reste un ÉCHEC, jamais une liste vide qui aurait l'air
+ * complète.
+ */
+export async function lireBasesExploitees(deps: SqlcmdDeps = {}): Promise<LectureBasesExploitees> {
+  const config = configuration
+  if (!config) return { ok: false, erreur: 'aucun catalogue SQL configuré (sql-catalog.json).' }
+  const resultat = await runSqlcmdJson(
+    config.server,
+    config.database,
+    buildCatalogQuery(config),
+    deps
+  )
+  return resultat.ok
+    ? { ok: true, exploitees: parseCatalogRows(resultat.rows) }
+    : { ok: false, erreur: resultat.reason }
 }

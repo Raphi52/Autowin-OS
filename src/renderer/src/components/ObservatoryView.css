@@ -1847,3 +1847,273 @@
 .observatory-runs [data-run-blocked='true'] {
   border-left: 2px solid #e06c5a;
 }
+
+/*
+ * DÉROULÉ PAR AGENT — demande utilisateur du 2026-10-11 (conv-232), capture à l'appui : en tête de
+ * chaque tour de la Chronologie, une ligne par agent et une barre par exécution, sur un axe en
+ * minutes depuis le départ du run. Couleur = PHASE (palette catégorielle : un code de distinction,
+ * pas un état) ; rouge = refus du juge ou échec ; rayé = démarré sans fin tracée. La bulle de survol
+ * est sombre dans TOUS les thèmes : elle porte son propre texte clair, lisible sur fond clair aussi.
+ */
+.observatory-gantt {
+  --gantt-who: 132px;
+  --gantt-lane: 26px;
+  margin: 2px 0 14px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-card);
+}
+.observatory-gantt__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+.observatory-gantt__head b {
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.observatory-gantt__head small {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.observatory-gantt__head em {
+  font-style: normal;
+  font-weight: 700;
+}
+.observatory-gantt__head em.is-refused,
+.observatory-gantt__head em.is-failed {
+  color: #ff6078;
+}
+.observatory-gantt__grid {
+  display: grid;
+}
+.observatory-gantt__axis {
+  position: relative;
+  height: 16px;
+  margin-left: var(--gantt-who);
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.observatory-gantt__axis small {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.observatory-gantt__axis small[data-edge='start'] {
+  transform: none;
+}
+.observatory-gantt__axis small[data-edge='end'] {
+  transform: translateX(-100%);
+}
+.observatory-gantt__lane {
+  --gantt-color: #8c96a8;
+  display: grid;
+  grid-template-columns: var(--gantt-who) minmax(0, 1fr);
+  align-items: center;
+  min-height: var(--gantt-lane);
+  border-top: 1px solid rgba(var(--voile-rgb), 0.05);
+}
+.observatory-gantt__lane[data-phase='orchestrator'] {
+  --gantt-color: #7b74ff;
+}
+.observatory-gantt__lane[data-phase='scout'] {
+  --gantt-color: #5b8cf0;
+}
+.observatory-gantt__lane[data-phase='think'] {
+  --gantt-color: #a98bff;
+}
+.observatory-gantt__lane[data-phase='frame'] {
+  --gantt-color: #e0559b;
+}
+.observatory-gantt__lane[data-phase='terrain'] {
+  --gantt-color: #34b6c6;
+}
+.observatory-gantt__lane[data-phase='build'] {
+  --gantt-color: #d1a14a;
+}
+.observatory-gantt__lane[data-phase='clean'] {
+  --gantt-color: #8da3bd;
+}
+.observatory-gantt__lane[data-phase='judge'] {
+  --gantt-color: #2fae74;
+}
+.observatory-gantt__lane[data-phase='learn'] {
+  --gantt-color: #8b6cf2;
+}
+.observatory-gantt__who {
+  display: grid;
+  min-width: 0;
+  padding-right: 10px;
+  line-height: 1.2;
+}
+.observatory-gantt__who b,
+.observatory-gantt__who small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.observatory-gantt__who b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+.observatory-gantt__who small {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.observatory-gantt__track {
+  position: relative;
+  height: var(--gantt-lane);
+}
+/* Repères verticaux des graduations, très discrets. */
+.observatory-gantt__track > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(var(--voile-rgb), 0.06);
+}
+.observatory-gantt__bar,
+.observatory-gantt__envelope {
+  position: absolute;
+  top: 50%;
+  min-width: 3px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--gantt-color);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.observatory-gantt__bar {
+  height: 12px;
+}
+/* L'orchestrateur ATTEND ses agents : trait fin plein, sous ses réponses en trait épais. */
+.observatory-gantt__envelope {
+  height: 4px;
+  border-radius: 2px;
+}
+.observatory-gantt__bar.is-refused,
+.observatory-gantt__bar.is-failed,
+.observatory-gantt__envelope.is-failed {
+  background: #ff6078;
+}
+.observatory-gantt__bar.is-failed {
+  background: repeating-linear-gradient(135deg, #ff6078 0 5px, #c23a52 5px 10px);
+}
+.observatory-gantt__bar.is-open,
+.observatory-gantt__envelope.is-open {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--gantt-color) 0 5px,
+    color-mix(in srgb, var(--gantt-color) 55%, #10131a) 5px 10px
+  );
+}
+.observatory-gantt__envelope.is-cancelled {
+  background: #9aa0a8;
+}
+.observatory-gantt__bar:hover,
+.observatory-gantt__bar:focus-visible,
+.observatory-gantt__envelope:hover,
+.observatory-gantt__envelope:focus-visible {
+  z-index: 5;
+  outline: 1px solid rgba(var(--voile-rgb), 0.7);
+  outline-offset: 1px;
+}
+.observatory-gantt__bar.is-selected,
+.observatory-gantt__envelope.is-selected {
+  z-index: 4;
+  outline: 2px solid #e9bd4e;
+  outline-offset: 1px;
+}
+/* Bulle de survol : sous la barre, ouverte vers l'intérieur de l'axe. */
+.observatory-gantt__tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  display: none;
+  gap: 4px;
+  width: max-content;
+  max-width: min(340px, 70vw);
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #10131a;
+  color: #dde3ee;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+.observatory-gantt__tip[data-anchor='end'] {
+  right: 0;
+  left: auto;
+}
+.observatory-gantt__bar:hover > .observatory-gantt__tip,
+.observatory-gantt__bar:focus-visible > .observatory-gantt__tip,
+.observatory-gantt__envelope:hover > .observatory-gantt__tip,
+.observatory-gantt__envelope:focus-visible > .observatory-gantt__tip {
+  display: grid;
+}
+.observatory-gantt__tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+/* Les textes de la bulle HÉRITENT de sa couleur : les couches de thème générées ne recolorent que la
+   règle de la bulle (fond + couleur) ; un texte clair écrit en dur ici resterait clair sur la bulle
+   blanche du thème Holographique blanc. */
+.observatory-gantt__tip-head b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: inherit;
+  font-size: 12px;
+}
+.observatory-gantt__tip-head b::before {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gantt-color);
+  content: '';
+}
+.observatory-gantt__bar.is-refused .observatory-gantt__tip-head b::before,
+.observatory-gantt__bar.is-failed .observatory-gantt__tip-head b::before {
+  background: #ff6078;
+}
+.observatory-gantt__tip-head em {
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 96, 120, 0.55);
+  border-radius: 4px;
+  color: #ff6078;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.observatory-gantt__tip-head em[data-status='open'] {
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+  color: inherit;
+}
+.observatory-gantt__tip small {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-size: 11px;
+}
+.observatory-gantt__tip q {
+  color: inherit;
+  quotes: '« ' ' »';
+}

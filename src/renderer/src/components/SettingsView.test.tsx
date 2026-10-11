@@ -500,6 +500,34 @@ describe('SettingsView diagnostic', () => {
   })
 
   /*
+   * DEMANDE UTILISATEUR (conv-242) : « Production » n'est plus un onglet de Settings. L'onglet
+   * devient « Rules », et la protection de production y devient UNE règle d'Autowin OS parmi
+   * d'autres à venir.
+   */
+  it('remplace l onglet Production par Rules, où Production est une règle d Autowin OS', async () => {
+    Object.defineProperty(window, 'api', { configurable: true, value: {} })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, { active: true, section: 'rules', onSectionChange: vi.fn() })
+      )
+    })
+    const libelles = [...container.querySelectorAll('button')].map((b) => b.textContent)
+    expect(libelles).toContain('Rules')
+    expect(libelles).not.toContain('Production')
+
+    const regles = container.querySelector('[data-testid="settings-rules"]')
+    expect(regles).toBeTruthy()
+    const regleProd = regles?.querySelector('[data-testid="prod-protection"]')
+    expect(regleProd).toBeTruthy()
+    expect(regleProd?.querySelector('h2')?.textContent).toBe('Production')
+    expect(regleProd?.querySelector('.domain-eyebrow')?.textContent).toBe('Rule · Autowin OS')
+  })
+
+  /*
    * POURQUOI : le constat « historique mis de cote » nomme un fichier. Sans bouton, l'utilisateur
    * doit recopier un chemin a la main dans l'explorateur. Et sur un constat qui ne SE REPARE PAS,
    * un bouton « Reparer » promettrait un geste qui ne peut pas aboutir.

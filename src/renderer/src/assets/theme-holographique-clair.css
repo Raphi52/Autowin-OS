@@ -146,11 +146,9 @@
      fond translucide, a sa bordure et a son reflet ; derriere lui il n'y a que des degrades doux,
      deja flous. Garde-fou : theme-nebuleuse-verre.test.ts. */
   /* Fenetres flottantes (menus, quotas, palette /) : OPAQUES. Sans flou de fond, 8 % de
-     transparence laissaient lire le texte du fil au travers (capture du 2026-10-10).
-     Teinte : le noir neutre choisi ensuite pour ce theme (rgba(20, 20, 20, 0.92)), rendu opaque
-     a la fusion du 2026-10-10 (salvage conv-207) ; le correctif d'origine visait la version
-     opaque de l'ancien violet. */
-  --nv-flottant: #f1f0f6;
+     transparence laissaient lire le texte du fil au travers (capture du 2026-10-10). Leur fond
+     est depuis conv-250 le satin de la page, opaque lui aussi (section 6 quater) : l'ancien jeton
+     --nv-flottant (rgb(20, 20, 20)) n'avait plus d'usage et est retire. */
   --nv-lueur-rose: 0 0 18px rgba(208, 43, 140, 0.45);
   --nv-rond: 16px;
 
@@ -325,6 +323,13 @@
   background: rgba(208, 43, 140, 0.38);
   color: #ffffff;
 }
+/* Barre de prompt : selection en BLEU du theme, plein (conv-263, 2026-10-11 : « met notre bleu
+   electrique quand je selectionne le texte de la barre de prompt au lieu du rose fonce »). Le rose
+   a 38 % virait au rose fonce sur le champ sombre. #3c6eeb plein, jamais dilue (conv-182). */
+:root[data-theme='holographique-clair'] .composer-field textarea::selection {
+  background: #3c6eeb;
+  color: #ffffff;
+}
 :root[data-theme='holographique-clair'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
   outline: 2px solid rgba(170, 14, 94, 0.85);
   outline-offset: 2px;
@@ -340,7 +345,7 @@
 
 /* Ascenseurs : fins, translucides, rose au survol. */
 :root[data-theme='holographique-clair'] * {
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(20, 15, 40, 0.162) transparent;
 }
 :root[data-theme='holographique-clair'] ::-webkit-scrollbar {
   width: 8px;
@@ -352,7 +357,7 @@
 :root[data-theme='holographique-clair'] ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16) padding-box;
+  background: rgba(20, 15, 40, 0.162) padding-box;
 }
 :root[data-theme='holographique-clair'] ::-webkit-scrollbar-thumb:hover {
   background: rgba(208, 43, 140, 0.55) padding-box;
@@ -512,25 +517,9 @@
   cursor: not-allowed;
 }
 
-/* Fenetres flottantes (menus, popovers, palette /) : verre fonce, plus opaque
-   pour rester lisibles au-dessus du contenu. */
-:root[data-theme='holographique-clair']
-  :is(
-    .conv-menu-pop,
-    .model-select-menu,
-    .model-quota-popover,
-    .slash-palette,
-    .model-question-popup,
-    .graph-settings-popover
-  ) {
-  border: 1px solid rgba(20, 15, 40, 0.148);
-  border-top-color: var(--nv-bord-dore);
-  border-radius: 14px;
-  background: var(--nv-flottant);
-  box-shadow:
-    0 18px 50px rgba(40, 30, 80, 0.18),
-    var(--nv-reflet-dore);
-}
+/* Fenetres flottantes (menus, popovers, palette /) : leur cadre vit en section 6 quater (cadre holo
+   des panneaux, conv-250). La plaque noire arrondie a filet OR qui etait posee ici est retiree : la
+   section 6 quater la recouvrait pour chacune de ces fenetres. */
 
 /* ---------------------------------------------------------------------------
    5. CHAT -- les quatre colonnes de verre de la maquette 5.1.
@@ -876,19 +865,21 @@
   box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
 }
 
-/* QUESTION A L'UTILISATEUR (AskDecision) EN HOLO « REFLET FIN » DANS UN CADRE (conv-202,
-   2026-10-10, /draft des capsules ASK en 4 tours : « Irisé mais holographique bleu rose argent »,
-   puis « t'as oublié le haut tu l'as laissé doré », puis « go cadre c parfait »). Remplace, pour
-   ce bloc, l'or de conv-136. Tout le bloc tient dans un CADRE holo arrondi ; chaque reponse est une
-   capsule ENTIERE (bord sur les quatre cotes, 6 px d'air) au bord en bandes bleu > rose > argent >
-   rose clair, repetees tous les 240 px. Bleu #3c6eeb toujours PLEIN (conv-182) : aucun voile bleu,
-   les fonds sont des gris neutres. Une reponse cochee ou choisie prend le degrade de la bulle de
-   l'utilisateur, bord blanc : elle s'allume, elle ne fonce pas (conv-201). Maquettes :
-   artifacts/draft-ask-capsules/tour4.html, onglet « 6 · Cadre ».
+/* QUESTION A L'UTILISATEUR (AskDecision) : CADRE « NACRE » (conv-240, 2026-10-11, /draft en 2 tours :
+   « le bloc ASK et frame sont un peu trop exuberant », puis « le 1 [Cadre seul] mais le cadre en lui
+   meme faut le changer et dans le cas de choix multiple ca doit aussi mettre le cadre autour des
+   reponses selectionnees », puis « implemente le 2 c parfait »). Remplace le cadre de conv-202, qui
+   peignait des bandes holo repetees tous les 240 px sur le cadre ET sur chaque reponse (1,5 px).
+   Ici, le holo ne reste que sur le CADRE du bloc, 1 px, en UN SEUL cycle bleu > rose > argent > rose
+   clair etale sur toute la largeur (--nv-askd-nacre). Les reponses sont des aplats gris sans bord
+   visible ; survol, focus et reponse recommandee : un gris plus clair. Une reponse COCHEE (choix
+   multiple) ou RETENUE (bloc repondu) porte le MEME cadre nacre autour d'un gris plus clair, texte
+   blanc. Bleu #3c6eeb toujours PLEIN (conv-182) : aucun voile bleu, les fonds sont des gris neutres.
+   Maquettes : artifacts/draft-ask-sobre/tour2.html, onglet « 2 · Nacre ».
    Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`, « le bloc Frame ») reutilise ces
-   classes et prend le MEME habit (conv-202 : « le bloc Frame aussi il faut lui donner la meme
-   gueule que notre nouveau bloc ASK ») : l'or de conv-136 n'y reste plus. L'encre posee sur le
-   degrade passe par --nv-askd-encre-bulle. */
+   classes et prend le MEME habit (conv-202). --nv-askd-holo reste defini pour Holographique blanc,
+   derive de ce fichier : il en borde ses reponses survolees. L'encre posee sur une reponse cochee
+   passe par --nv-askd-encre-bulle. */
 :root[data-theme='holographique-clair'] .askd {
   --gold: #aa0e5f;
   --gold-bright: #121018;
@@ -903,21 +894,21 @@
     #ff8cc8 180px,
     #3c6eeb 240px
   );
-  --nv-askd-holo-vif: repeating-linear-gradient(
+  --nv-askd-nacre: linear-gradient(
     100deg,
-    #3c6eeb 0,
-    #ff6bb5 60px,
-    #ffffff 120px,
-    #ff8cc8 180px,
-    #3c6eeb 240px
+    #3c6eeb 0%,
+    #d02b8c 30%,
+    #d9d9d9 55%,
+    #ff8cc8 78%,
+    #3c6eeb 100%
   );
   padding: 12px 10px 10px;
-  border: 1.5px solid transparent;
+  border: 1px solid transparent;
   border-image: none;
   border-radius: 14px;
   background:
     linear-gradient(180deg, #eceaf2, #edecf3 90px) padding-box,
-    var(--nv-askd-holo) border-box;
+    var(--nv-askd-nacre) border-box;
 }
 /* Le voile or derriere la question disparait : le fond gris du cadre le remplace. */
 :root[data-theme='holographique-clair'] .askd::before {
@@ -927,8 +918,8 @@
 :root[data-theme='holographique-clair'] .askd::after {
   left: 14px;
   right: 14px;
-  top: -1.5px;
-  height: 1.5px;
+  top: -1px;
+  height: 1px;
 }
 :root[data-theme='holographique-clair'] .askd .askd-tete {
   padding-left: 2px;
@@ -951,28 +942,23 @@
   gap: 6px;
   margin-top: 10px;
 }
+/* Une reponse : un aplat gris. Le bord TRANSPARENT de 1 px est la place du cadre nacre d'une reponse
+   cochee : le fond passe dessous, et rien ne bouge quand on coche. */
 :root[data-theme='holographique-clair'] .askd .askd-item {
   padding-left: 0;
-  border: 1.5px solid transparent;
+  border: 1px solid transparent;
   border-radius: 12px;
-  background:
-    linear-gradient(#edebf3, #edebf3) padding-box,
-    var(--nv-askd-holo) border-box;
+  background: #eae8f1;
 }
-/* Le liseré or de gauche n'a plus lieu d'etre : c'est le bord de la capsule qui s'allume. */
+/* Le liseré or de gauche n'a plus lieu d'etre : la reponse s'eclaircit, ou prend le cadre. */
 :root[data-theme='holographique-clair'] .askd .askd-item::before {
   content: none;
 }
-/* Survol, focus clavier et reponse recommandee : bandes plus claires, bord de 2 px. La marge
-   negative rend le demi-pixel gagne par le bord : le texte ne bouge pas. */
+/* Survol, focus clavier et reponse recommandee : un gris plus clair, aucun bord. */
 :root[data-theme='holographique-clair'] .askd:not(.est-repondu) .askd-item:hover,
 :root[data-theme='holographique-clair'] .askd:not(.est-repondu) .askd-item:focus-within,
 :root[data-theme='holographique-clair'] .askd:not(.est-repondu) .askd-item.est-reco {
-  border-width: 2px;
-  margin: -0.5px;
-  background:
-    linear-gradient(180deg, #e8e7f0, #eceaf3) padding-box,
-    var(--nv-askd-holo-vif) border-box;
+  background: #e6e4ef;
 }
 :root[data-theme='holographique-clair'] .askd .askd-ligne {
   padding: 11px 12px 12px;
@@ -1017,16 +1003,16 @@
   outline: 2px solid #121018;
   outline-offset: 2px;
 }
-/* Reponse cochee (choix multiple) ou retenue (bloc repondu) : le degrade de la bulle, bord blanc. */
+/* Reponse cochee (choix multiple) ou retenue (bloc repondu) : le MEME cadre nacre que le bloc,
+   autour d'un gris plus clair (conv-240 : « ca doit aussi mettre le cadre autour des reponses
+   selectionnees »). */
 :root[data-theme='holographique-clair'] .askd .askd-item:has(.askd-coche input:checked),
 :root[data-theme='holographique-clair']
   .askd.est-repondu
   .askd-item:has(.askd-choix[data-choisi='oui']) {
-  border-width: 1.5px;
-  margin: 0;
   background:
-    var(--nv-degrade) padding-box,
-    linear-gradient(#f2f2f2, #f2f2f2) border-box;
+    linear-gradient(#303030, #303030) padding-box,
+    var(--nv-askd-nacre) border-box;
 }
 :root[data-theme='holographique-clair']
   .askd
@@ -2228,56 +2214,886 @@
   }
 }
 
-/* Arbre du graphe. Le TYPE d'etape garde sa couleur (agent, skill, depot, git,
-   cloture : un sens, WorkflowExecutionGraph.css) mais en liseré fin sur du verre ;
-   seule l'etape choisie s'encadre de rose, comme dans la maquette. */
+/* Arbre du graphe : l'ARBRE ETOILE (conv-234, 2026-10-11, /draft « une belle gueule qui
+   ressemble a mon theme holo », arrete sur « go fil holo »). Le dessin vit dans
+   WorkflowExecutionGraph.css ; le bleu PLEIN, le rose de la bulle et le vert unique y viennent
+   deja des jetons du theme. Ce bloc ne regle que le reste : le rose clair de ce qui tourne,
+   l'argent des chiffres, un gris NEUTRE pour ce qui attend, le blanc des flux et de l'etape
+   choisie, et le bord en bandes du bloc ASK pour la fiche. Les NOMS des jetons comptent : le
+   generateur du theme blanc recolore un jeton d'apres son nom (« texte », « actif », « filet »). */
 :root[data-theme='holographique-clair'] .workflow-execution-summary {
   border-bottom-color: rgba(20, 15, 40, 0.106);
 }
-:root[data-theme='holographique-clair'] .workflow-execution-node,
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-request,
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-phase,
-:root[data-theme='holographique-clair']
-  .workflow-execution-node:is(.is-workspace, .is-skill, .is-agent, .is-git, .is-closure) {
-  border-color: rgba(20, 15, 40, 0.106);
+:root[data-theme='holographique-clair'] .workflow-execution-graph {
+  --wx-rose-actif: #aa0e5f;
+  --wx-texte-chiffre: #2d293d;
+  --wx-attente: #8a8a8a;
+  --wx-lueur: #ffffff;
+  --wx-filet-vif: #121018;
+  --wx-fond-perle: #ebe9f2;
+  --wx-fiche-fond: #e6e4ef;
+  --wx-fiche-bord: repeating-linear-gradient(
+    100deg,
+    #113ca7 0,
+    #d02b8c 60px,
+    #2d293d 120px,
+    #aa0e5f 180px,
+    #113ca7 240px
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   6 ter. RUNS, LOGS ET FILES EN HOLO (conv-245, 2026-10-11 : « embelli les vues : chat > Runs
+   Logs et Files pour que ca colle plus au theme holo »). Les trois onglets portaient encore
+   l'habit d'avant le holo : filet OR en haut des cartes de run (`.card`, reflets dores de
+   conv-124), sous-onglets en pastilles a bord (en capitales, police Arial : un bouton n'herite pas
+   de la police), et la palette OR des Logs et de Files (#d4a94f, --gold) que la couche generee
+   retraduit en ROSE-ROUGE (« COUT », « Lancer », l'etape suggeree). Ils reprennent le vocabulaire
+   deja choisi pour le holo :
+   - sous-onglets = le LISERE des onglets du panneau (conv-180) : texte seul, trait bleu -> rose
+     de 2 px sous le mot actif, trait blanc 22 % au survol ;
+   - blocs = APLATS GRIS NEUTRES sans bord visible, comme les reponses du bloc ASK (conv-240) ;
+     aucune teinte froide dans les fonds (conv-191) ; survol = un gris plus clair ;
+   - element CHOISI (run deplie, bascule enfoncee, voie isolee, etape suggeree, champ actif) =
+     le CADRE bleu -> rose d'1 px du fil ouvert (conv-171), sur un gris fonce ;
+   - action principale (Lancer, Envoyer, Appliquer) = la pilule au degrade de la bulle ;
+   - etats : le vert du theme #00ff55 (conv-197), l'ambre --warn, un rouge clair pour le TEXTE
+     d'un echec (#ff6b7d : 5,6:1 sur le gris des puces, le rouge franc du Stop n'y fait que 3,5:1).
+   Tout est borne a `.runs-pane` : la meme vue ouverte ailleurs (Observatory) n'est pas touchee.
+   --------------------------------------------------------------------------- */
+/* Les NOMS des jetons comptent : le generateur d'Holographique blanc recolore un jeton d'apres
+   son nom (« texte » -> encre, « filet » -> trait sombre). Les aplats passent par --voile-rgb :
+   blanc translucide ici, encre translucide dans le blanc. */
+:root[data-theme='holographique-clair'] .runs-pane {
+  --nv-rp-aplat: rgba(var(--voile-rgb), 0.055);
+  --nv-rp-aplat-survol: rgba(var(--voile-rgb), 0.095);
+  --nv-rp-aplat-creux: rgba(var(--voile-rgb), 0.03);
+  --nv-rp-puce: rgba(var(--voile-rgb), 0.07);
+  --nv-rp-choisi: #efedf4;
+  --nv-rp-cadre: linear-gradient(135deg, #3c6eeb, #d02b8c);
+  --nv-rp-filet: rgba(var(--voile-rgb), 0.07);
+  --nv-rp-texte-echec: #aa0e21;
+  /* Mot des puces de nature des Logs (Demande, Reponse, Action...). */
+  --nv-rp-texte-rose: #aa0e5f;
+  --nv-rp-texte-clair: #1f1c2b;
+  --nv-rp-texte-lavande: #393158;
+  --nv-rp-texte-bleu: #0e31aa;
+  --nv-rp-texte-gris: #51496e;
+  /* Trait de chaque voie (source) des Logs. */
+  --nv-rp-filet-voie-bleu: #113ca7;
+  --nv-rp-filet-voie-rose: #d02b8c;
+  --nv-rp-filet-voie-rose-clair: #aa0e5f;
+  --nv-rp-filet-voie-bleu-clair: #0e31aa;
+  --nv-rp-filet-voie-lavande: #393158;
+  --nv-rp-filet-voie-blanc: #121018;
+  --nv-rp-filet-voie-argent: #2d293d;
+  --nv-rp-filet-voie-gris: #51496e;
+  --nv-rp-filet-voie-gris-fonce: #645b89;
+  /* Jauge DoD des runs (WorkflowsPanel.tsx) : la progression prend le degrade de la jauge de
+     contexte ; un run vert garde le vert du theme. */
+  --run-jauge: linear-gradient(90deg, #3c6eeb, #d02b8c);
+}
+
+/* -- Sous-onglets en lisere : Fil des sous-agents / RUN.md (Runs), Fichiers / Projet / Brain /
+      Git (Files). Le trait a la largeur du mot : aucun remplissage horizontal. */
+:root[data-theme='holographique-clair'] .runs-pane .run-detail-tabs {
+  gap: 16px;
+  margin-bottom: 10px;
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-repo {
+  column-gap: 16px;
+  border-bottom-color: var(--nv-rp-filet);
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-detail-tab,
+:root[data-theme='holographique-clair'] .runs-pane .sc-repo-btn {
+  padding: 3px 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+  box-shadow: none;
+  color: #474166;
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-detail-tab:hover,
+:root[data-theme='holographique-clair'] .runs-pane .sc-repo-btn:hover {
+  background-image: linear-gradient(rgba(var(--voile-rgb), 0.22) 0 0);
+  color: #3c298e;
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-detail-tab.is-active,
+:root[data-theme='holographique-clair'] .runs-pane .sc-repo-btn.is-active {
+  background-image: linear-gradient(90deg, #3c6eeb, #d02b8c);
+  color: #121018;
+}
+
+/* -- RUNS : cartes en aplat gris, run deplie dans le cadre bleu -> rose. */
+:root[data-theme='holographique-clair'] .runs-pane .run-row,
+:root[data-theme='holographique-clair'] .runs-pane .live-run {
+  border: 1px solid transparent;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.035);
-}
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-request {
-  box-shadow: inset 2px 0 0 #d02b8c;
-}
-:root[data-theme='holographique-clair']
-  .workflow-execution-node:is(.is-workspace, .is-skill, .is-agent, .is-git, .is-closure) {
-  box-shadow: inset 2px 0 0 var(--execution-kind-color);
-}
-/* L'or (depot) devenait le meme rose que l'agent : on lui rend une teinte a lui. */
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-workspace {
-  --execution-kind-color: #ffc28a;
-}
-:root[data-theme='holographique-clair'] .workflow-execution-node:hover,
-:root[data-theme='holographique-clair'] .workflow-execution-node:focus-visible {
-  border-color: rgba(20, 15, 40, 0.176);
-  background: rgba(255, 255, 255, 0.06);
-}
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-selected {
-  border-color: rgba(208, 43, 140, 0.45);
-  background: rgba(208, 43, 140, 0.1);
-}
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-running .workflow-execution-dot {
-  background: #d02b8c;
-  animation: nv-pouls 1.6s ease-in-out infinite;
-}
-:root[data-theme='holographique-clair'] .workflow-execution-node.is-pending .workflow-execution-dot {
-  background: #a78bfa;
+  background: var(--nv-rp-aplat);
   box-shadow: none;
 }
-:root[data-theme='holographique-clair'] .workflow-execution-edge {
-  --execution-edge-color: rgba(208, 43, 140, 0.45); /* pas de bleu dilue (C1) */
+:root[data-theme='holographique-clair'] .runs-pane .run-row:hover {
+  background: var(--nv-rp-aplat-survol);
 }
-:root[data-theme='holographique-clair'] .workflow-execution-detail {
-  border-color: rgba(20, 15, 40, 0.12);
+:root[data-theme='holographique-clair'] .runs-pane .run-row[aria-expanded='true'],
+:root[data-theme='holographique-clair'] .runs-pane .live-run:has(> .live-run-fold[open]) {
+  background:
+    linear-gradient(var(--nv-rp-choisi), var(--nv-rp-choisi)) padding-box,
+    var(--nv-rp-cadre) border-box;
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row[aria-expanded='true'] .run-subject {
+  color: #121018;
+}
+/* Le statut : une puce grise sans bord, son mot dans la couleur de l'etat. */
+:root[data-theme='holographique-clair'] .runs-pane .run-row .badge {
+  padding: 2px 8px;
+  border: 0;
+  background: var(--nv-rp-puce);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row[data-statut='green'] .badge {
+  color: #09712c;
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row[data-statut='red'] .badge {
+  color: var(--nv-rp-texte-echec);
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row[data-statut='open'] .badge {
+  color: var(--warn);
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row .meter {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(var(--voile-rgb), 0.08);
+}
+:root[data-theme='holographique-clair'] .runs-pane .run-row .meter > span {
+  border-radius: 999px;
+}
+/* Le detail deplie se detache de la carte : un creux gris sous le cadre, plus de bord colle. */
+:root[data-theme='holographique-clair'] .runs-pane .run-detail-box {
+  margin-top: 6px;
+  padding: 10px 10px 8px;
+  border: 0;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--nv-rp-aplat-creux);
+}
+:root[data-theme='holographique-clair'] .runs-pane .subagent-step,
+:root[data-theme='holographique-clair'] .runs-pane .subagent-live-text {
+  border-color: transparent;
+  border-radius: 10px;
+  background: var(--nv-rp-aplat);
+}
+/* En-tete d'un sous-agent (icone, role, modele, phase, cout) : il passe a la ligne ENTRE ses
+   mentions. Serre dans le panneau, chaque mention se coupait sur elle-meme : « sous- / agent »,
+   « claude- / opus-5-5 » (capture du 2026-10-11). Le retour a la ligne suffit : une mention qui
+   tient sur une ligne n'est plus ecrasee. PAS de `nowrap` sur les mentions : la raison d'une
+   etape (« tache jugee atomique… ») peut etre plus large que le panneau, elle elargissait alors
+   tout le detail et faisait paraitre une barre de defilement horizontale. */
+:root[data-theme='holographique-clair'] .runs-pane .subagent-step > .row:first-child {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+/* -- LOGS : barre de filtre en capsules grises, puces de nature en gris a mot colore. */
+:root[data-theme='holographique-clair'] .runs-pane .model-log-filter :is(input, select),
+:root[data-theme='holographique-clair'] .runs-pane .model-log-toggle,
+:root[data-theme='holographique-clair'] .runs-pane .model-log-more-btn,
+:root[data-theme='holographique-clair'] .runs-pane .model-log-copy {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-rp-aplat);
+  box-shadow: none;
+  color: var(--text-dim);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-filter :is(input, select):hover,
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .model-log-toggle:hover:not(:disabled, [aria-pressed='true']),
+:root[data-theme='holographique-clair'] .runs-pane .model-log-more-btn:hover:not(:disabled),
+:root[data-theme='holographique-clair'] .runs-pane .model-log-copy:hover {
+  border-color: transparent;
+  background: var(--nv-rp-aplat-survol);
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-filter :is(input, select):focus,
+:root[data-theme='holographique-clair'] .runs-pane .model-log-toggle[aria-pressed='true'],
+:root[data-theme='holographique-clair'] .runs-pane .model-log-voie.is-seule {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--nv-rp-choisi), var(--nv-rp-choisi)) padding-box,
+    var(--nv-rp-cadre) border-box;
+  box-shadow: none;
+  color: #121018;
+}
+/* « Erreurs » enfonce dit toujours qu'on ne regarde QUE les echecs. */
+:root[data-theme='holographique-clair'] .runs-pane .model-log-toggle.is-on[aria-pressed='true'] {
+  color: var(--nv-rp-texte-echec);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-count {
+  color: var(--text-faint);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-voie {
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-voie:hover {
+  background: var(--nv-rp-aplat-survol);
+}
+/* Les voies prennent les teintes du holo (bleu, roses, argent, lavande, gris) au lieu des
+   teintes desaturees retraduites par la couche generee. Le vert reste aux etats. */
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='thread'], [data-voie-source='thread']) {
+  --piste-tone: var(--nv-rp-filet-voie-bleu);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='prompts'], [data-voie-source='prompts']) {
+  --piste-tone: var(--nv-rp-filet-voie-rose-clair);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='journal'], [data-voie-source='journal']) {
+  --piste-tone: var(--nv-rp-filet-voie-bleu-clair);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='parts'], [data-voie-source='parts']) {
+  --piste-tone: var(--nv-rp-filet-voie-gris);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='causal'], [data-voie-source='causal']) {
+  --piste-tone: var(--nv-rp-filet-voie-lavande);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='activity'], [data-voie-source='activity']) {
+  --piste-tone: var(--nv-rp-filet-voie-rose);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='brain'], [data-voie-source='brain']) {
+  --piste-tone: var(--nv-rp-filet-voie-blanc);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='bureaux'], [data-voie-source='bureaux']) {
+  --piste-tone: var(--nv-rp-filet-voie-gris-fonce);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is([data-piste-source='fichiers'], [data-voie-source='fichiers']) {
+  --piste-tone: var(--nv-rp-filet-voie-argent);
+}
+/* Logs en LIGNE UNIQUE (conv-247, 2026-10-11, maquette « tour 4 » choisie) : chaque geste est une
+   carte a coins coupes le long d'une frise ; les filets entre lignes et la puce grise de la nature
+   disparaissent — la nature s'ecrit en couleur, la frise prend le degrade bleu -> rose. */
+:root[data-theme='holographique-clair'] .runs-pane .model-log-list {
+  --log-frise: linear-gradient(180deg, #3c6eeb, #d02b8c);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-kind {
+  color: var(--log-tone);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-row[data-log-kind='prompt'],
+:root[data-theme='holographique-clair'] .runs-pane .model-log-row[data-log-kind='artifact'] {
+  --log-tone: var(--nv-rp-texte-rose);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-row[data-log-kind='text'] {
+  --log-tone: var(--nv-rp-texte-clair);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .model-log-row:is([data-log-kind='reasoning'], [data-log-kind='injection']) {
+  --log-tone: var(--nv-rp-texte-lavande);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .model-log-row:is([data-log-kind='action'], [data-log-kind='model-call']) {
+  --log-tone: var(--nv-rp-texte-bleu);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .model-log-row:is(
+    [data-log-kind='usage'],
+    [data-log-kind='boundary'],
+    [data-log-kind='event'],
+    [data-log-kind='status']
+  ) {
+  --log-tone: var(--nv-rp-texte-gris);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-row[data-log-kind='error'] {
+  --log-tone: var(--nv-rp-texte-echec);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-row[data-log-kind='done'] {
+  --log-tone: var(--ok);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-tour {
+  border-top-color: var(--nv-rp-filet);
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-tour__head strong {
+  color: #121018;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='holographique-clair'] .runs-pane .model-log-tour__ko {
+  color: var(--nv-rp-texte-echec);
+}
+/* Detail deplie d'une ligne, et editeur de fichier de Projet : un creux gris tenu par un trait
+   vertical bleu -> rose, a la place du trait or. */
+:root[data-theme='holographique-clair'] .runs-pane :is(.model-log-expand, .pp-editeur, .sc-relecture) {
+  padding-left: 10px;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, #3c6eeb, #d02b8c) left top / 2px 100% no-repeat,
+    var(--nv-rp-aplat-creux);
+}
+
+/* -- FILES : titres de section en casse normale, boutons en capsules grises, l'etape suggeree
+      dans le cadre bleu -> rose, Lancer et Envoyer en pilule degradee. « Annuler ces changements »
+      reste une capsule grise : c'est un geste qui PERD du travail, pas l'action principale de la
+      carte (son etat arme garde le rouge). */
+:root[data-theme='holographique-clair'] .runs-pane .sc-sect {
+  border-bottom-color: var(--nv-rp-filet);
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-h {
+  color: #474166;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .sc-btn:not(.sc-repo-btn, .is-armed, .sc-lancement-bouton, .sc-relecture-envoyer),
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is(.pp-vscode, .pp-enregistrer, .sc-diff-wrap-mode) {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-rp-aplat);
+  box-shadow: none;
+  color: var(--text);
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .sc-btn:not(.sc-repo-btn, .is-armed, .sc-lancement-bouton, .sc-relecture-envoyer):hover:not(
+    :disabled
+  ),
+:root[data-theme='holographique-clair']
+  .runs-pane
+  :is(.pp-vscode, .pp-enregistrer, .sc-diff-wrap-mode):hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--nv-rp-aplat-survol);
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .runs-pane .pp-vscode {
+  padding: 4px 12px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+/* Enchainement auto allume : le vert du theme, sans bord. */
+:root[data-theme='holographique-clair'] .runs-pane .sc-toggle.is-on {
+  background: rgba(0, 255, 85, 0.12);
+  color: #09712c;
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--nv-rp-aplat);
+  color: var(--text);
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step:hover {
+  border-color: transparent;
+  background: var(--nv-rp-aplat-survol);
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step.is-suggested,
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step.is-suggested:hover {
+  background:
+    linear-gradient(var(--nv-rp-choisi), var(--nv-rp-choisi)) padding-box,
+    var(--nv-rp-cadre) border-box;
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step .sc-flux-detail,
+:root[data-theme='holographique-clair'] .runs-pane .sc-flux-step.is-suggested .sc-flux-detail {
+  color: var(--text-dim);
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-lancement-bouton:not(.is-on),
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-degrade);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: #121018;
+}
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .sc-lancement-bouton:not(.is-on):hover:not(:disabled),
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer:hover:not(:disabled) {
+  background: var(--nv-degrade-survol);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-lancement {
+  border-left-color: var(--nv-rp-filet);
+}
+:root[data-theme='holographique-clair'] .runs-pane .sc-lancement-commande {
+  border-color: transparent;
+  border-radius: 6px;
+  background: var(--nv-rp-puce);
+}
+:root[data-theme='holographique-clair'] .runs-pane :is(.pp-arbre, .sc-diff-card, .sc-autoclose-last) {
+  border-color: transparent;
+  border-radius: 12px;
+  background: var(--nv-rp-aplat-creux);
+}
+:root[data-theme='holographique-clair'] .runs-pane :is(.sc-diff-head, .sc-diff-actions) {
+  border-color: var(--nv-rp-filet);
+  background: transparent;
+}
+:root[data-theme='holographique-clair'] .runs-pane .pp-noeud.is-active {
+  background: var(--nv-rp-aplat-survol);
+  color: #121018;
+}
+/* L'EN-TETE COLLE DE FILES (onglets Fichiers / Projet / Brain / Git) peignait --surface-panel, qui
+   vaut ici un blanc a 4,5 % : en faisant defiler la liste, les noms de fichiers et la tete d'une
+   carte de differences passaient AU TRAVERS des onglets (capture du 2026-10-11, conv-245). Il
+   reprend le fond EXACT du panneau : le satin et la lumiere de la souris, cales sur l'ecran
+   (`fixed`). La position de la lumiere n'est pas heritee (proprietes enregistrees) : elle descend
+   du panneau jusqu'a l'en-tete par `inherit`, maillon par maillon. La derniere couche finit par une
+   couleur transparente : sans elle, le generateur du blanc poserait sur cet en-tete le lisere irise
+   reserve aux grands panneaux. */
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .runs-pane
+  :is(.workflow-panel-detail, .sc-pane, .sc-scroll, .sc-repo) {
+  --nv-lumiere-x: inherit;
+  --nv-lumiere-y: inherit;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .runs-pane .sc-repo {
+  background:
+    radial-gradient(
+        circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%)
+          calc(var(--nv-lumiere-y) * 100%),
+        var(--nv-lumiere-couleur),
+        rgba(255, 255, 255, 0)
+      )
+      fixed,
+    var(--nv-satin) fixed transparent;
+}
+/* CARTE DE DIFFERENCES : les couleurs des lignes restent celles du « Contraste fort » (DiffView.css,
+   choix du 2026-09-23 : fonds francs, texte clair). Seuls changent les filets, devenus gris neutres,
+   et l'habit des commentaires de relecture, qui prend celui des encarts du panneau : un creux gris
+   tenu par le trait vertical bleu -> rose, l'editeur en aplat, cadre bleu -> rose quand on y ecrit. */
+:root[data-theme='holographique-clair'] .runs-pane .diff-line {
+  border-bottom-color: rgba(var(--voile-rgb), 0.04);
+}
+:root[data-theme='holographique-clair'] .runs-pane .diff-gutter {
+  border-right-color: var(--nv-rp-filet);
+}
+:root[data-theme='holographique-clair'] .runs-pane :is(.diff-comment, .diff-editeur) {
+  padding-left: 10px;
+  border-left: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, #3c6eeb, #d02b8c) left top / 2px 100% no-repeat,
+    var(--nv-rp-aplat-creux);
+}
+:root[data-theme='holographique-clair'] .runs-pane .diff-commenter {
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--nv-rp-aplat-survol);
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .runs-pane .diff-editeur-texte {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--nv-rp-aplat);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .runs-pane .diff-editeur-texte:focus {
+  outline: none;
+  background:
+    linear-gradient(var(--nv-rp-choisi), var(--nv-rp-choisi)) padding-box,
+    var(--nv-rp-cadre) border-box;
+}
+
+/* ---------------------------------------------------------------------------
+   6 quater. FENETRES FLOTTANTES EN HOLO (conv-250, 2026-10-11). D'abord les deux popups des
+   captures (« refais ces popup en mode holo comme le theme ») : le choix du modele -- matrice
+   modele x effort, comptes -- et la fenetre « Contexte de cette conversation ». Puis le MEME cadre
+   pour les autres menus flottants (« Applique le meme cadre holo (coins coupes, trait blanc et
+   argent, satin) aux autres menus flottants [...] : menu d'un fil, palette /, reglages du graphe,
+   question de modele ») ; la palette / y compte son encart de description (`.slash-detail`) et sa
+   variante des mentions @ (`.slash-palette.mention-palette`). Pour ces quatre-la, seul le CADRE
+   change : leur contenu garde son style. Les deux premieres gardaient l'habit d'avant le holo :
+   plaque noire arrondie a filet OR en haut (regle des fenetres flottantes, section 4), puces roses
+   a bord, points roses qui luisent, titres violets en chasse fixe, valeur en vert neon.
+   Elles reprennent le vocabulaire deja choisi pour le holo :
+   - le CADRE des panneaux (conv-177/211) : coins haut gauche et bas droit coupes a 14 px, trait
+     blanc en haut, argent en bas, cotes a 7 %, peint dans le fond comme sur les tuiles de
+     l'Accueil (bord transparent d'1 px, calques depuis la boite exterieure) ;
+   - le fond : le satin gris de la page (conv-191), PROPRE a la fenetre et non cale sur l'ecran.
+     Cale sur l'ecran, il serait le MEME que celui du panneau dessous : la fenetre s'y fondrait.
+     Un voile a 3,5 % la detache d'un cran ;
+   - blocs = APLATS GRIS sans bord (conv-240/245) ; element CHOISI (compte retenu, modele par
+     defaut suivi, ligne du modele actif) = le CADRE bleu -> rose d'1 px sur un gris fonce (conv-171) ;
+   - points d'effort : gris au repos, ARGENT pour la memoire d'un autre modele, rose clair pour le
+     modele actif, et le point choisi prend le degrade de la bulle -- seule lueur, parce qu'il dit
+     l'etat actif (« lueur = information ») ; le vert du theme reste le cran conseille ;
+   - jauge de contexte au degrade de la jauge du fil (`.chat-context-gauge-fill`), ambre puis
+     rouge clair aux paliers tendu et critique.
+   La fenetre des QUOTAS partage la classe de celle du contexte (`.model-quota-popover`) : elle
+   prend le meme cadre. Le bouton qui ouvre la matrice et la vue Routage ne sont pas touches : les
+   puces de compte ne changent que DANS ces fenetres.
+   Coupe par `clip-path` sans risque : aucune de ces fenetres n'a d'enfant qui en deborde (la
+   matrice et le sous-menu d'effort sont en ligne ; l'encart de la palette est un FRERE de la liste,
+   pas un enfant) ; l'ombre portee part avec la coupe, le trait la remplace. Deux consequences de la
+   coupe sont traitees plus bas : l'ascenseur (sa fleche du bas tombait dans le coin coupe) et
+   l'en-tete COLLE des reglages du graphe (son fond noir masquait le satin et le trait du coin).
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair']
+  :is(
+    .model-select-menu,
+    .model-quota-popover,
+    .conv-menu-pop,
+    .slash-palette,
+    .slash-detail,
+    .graph-settings-popover,
+    .model-question-popup
+  ) {
+  --nv-pop-aplat: rgba(var(--voile-rgb), 0.055);
+  --nv-pop-aplat-survol: rgba(var(--voile-rgb), 0.095);
+  --nv-pop-puce: rgba(var(--voile-rgb), 0.07);
+  --nv-pop-voile: rgba(var(--voile-rgb), 0.035);
+  --nv-pop-choisi: #efedf4;
+  --nv-pop-cadre: linear-gradient(135deg, #3c6eeb, #d02b8c);
+  --nv-pop-filet: rgba(var(--voile-rgb), 0.07);
+  --nv-pop-texte: #1c172b;
+  --nv-pop-texte-doux: #393158;
+  --nv-pop-texte-pale: #585276;
+  --nv-pop-texte-rose: #aa0e5f;
+  /* Points de la matrice : NOMMES pour le generateur d'Holographique blanc, qui recolore un jeton
+     d'apres son nom (« texte », « cran-vif » -> encre). Ecrits en dur dans les regles, l'argent et
+     le blanc restaient clairs sur la nacre : le cran memorise devenait le point le MOINS visible
+     (capture du blanc, 2026-10-11). */
+  --nv-pop-texte-argent: #2d293d;
+  --nv-pop-cran-vif: #121018;
+  border: 1px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme);
+  background:
+    var(--nv-chanfrein-trait-fond),
+    linear-gradient(var(--nv-pop-voile), var(--nv-pop-voile)),
+    var(--nv-satin);
+  background-origin: border-box;
+  color: var(--nv-pop-texte);
+}
+/* L'ASCENSEUR. `scrollbar-color`, pose sur tout element par ce theme (section 2), fait dessiner a
+   Chromium l'ascenseur du systeme, avec ses fleches : celle du bas tombait dans le coin coupe et la
+   coupe la tranchait en biais (palette /, qui defile toujours). Dans ces fenetres, la propriete
+   revient a `auto` : l'ascenseur fin du theme (`::-webkit-scrollbar`, 8 px, sans fleches) reprend la
+   main, et sa piste s'arrete a 14 px du bas, au-dessus de la coupe. */
+:root[data-theme='holographique-clair']
+  :is(
+    .model-select-menu,
+    .model-quota-popover,
+    .conv-menu-pop,
+    .slash-palette,
+    .slash-detail,
+    .graph-settings-popover,
+    .model-question-popup
+  ) {
+  scrollbar-color: auto;
+}
+:root[data-theme='holographique-clair']
+  :is(
+    .model-select-menu,
+    .model-quota-popover,
+    .conv-menu-pop,
+    .slash-palette,
+    .slash-detail,
+    .graph-settings-popover,
+    .model-question-popup
+  )::-webkit-scrollbar-track {
+  margin-bottom: var(--nv-chanfrein);
+}
+/* Le curseur passe par --chat-ascenseur (celui du fil) : le blanc a 16 % de la section 2, ecrit en
+   dur, restait blanc dans Holographique blanc -- invisible sur la nacre (capture du 2026-10-11). Le
+   jeton, lui, y devient une encre a 16 %. */
+:root[data-theme='holographique-clair']
+  :is(
+    .model-select-menu,
+    .model-quota-popover,
+    .conv-menu-pop,
+    .slash-palette,
+    .slash-detail,
+    .graph-settings-popover,
+    .model-question-popup
+  )::-webkit-scrollbar-thumb {
+  background: var(--chat-ascenseur) padding-box;
+}
+:root[data-theme='holographique-clair']
+  :is(
+    .model-select-menu,
+    .model-quota-popover,
+    .conv-menu-pop,
+    .slash-palette,
+    .slash-detail,
+    .graph-settings-popover,
+    .model-question-popup
+  )::-webkit-scrollbar-thumb:hover {
+  background: rgba(208, 43, 140, 0.55) padding-box;
+}
+/* REGLAGES DU GRAPHE : son en-tete « Visibilite » reste COLLE en haut quand la fenetre defile, sur
+   un fond noir opaque (couche generee) qui couvrait le satin et le trait du coin coupe. Il prend le
+   fond de la fenetre, cale sur l'ECRAN des deux cotes (`fixed`) : un fond cale sur sa propre boite
+   ne se raccorderait pas a celui de la fenetre, dont la hauteur varie. Ici le satin cale sur l'ecran
+   ne se fond dans rien : la fenetre flotte au-dessus du graphe, pas d'un panneau satine. La
+   diagonale du coin est repeinte sur l'en-tete, decalee d'1 px : il commence a l'interieur du bord
+   de la fenetre, la ou le trait est trace. Les deux pans droits sont dans ce bord : l'en-tete ne
+   les couvre pas. Borne a l'en-tete des REGLAGES : celui du poste « Savoir »
+   (`.graph-workbench-popover`) partage la classe et n'est pas touche.
+   L'attachement est ecrit A PART (`background-attachment`) : le generateur d'Holographique blanc pose
+   son lisere irise sur tout fond qui FINIT par `var(--nv-satin) fixed`, la marque des PANNEAUX. Ecrit
+   dans le raccourci, il le posait sur cette seule fenetre (capture du blanc, 2026-10-11) ; aucune
+   autre fenetre flottante n'en porte. */
+:root[data-theme='holographique-clair'] .graph-settings-popover {
+  background:
+    var(--nv-chanfrein-trait-fond),
+    linear-gradient(var(--nv-pop-voile), var(--nv-pop-voile)),
+    var(--nv-satin);
+  background-attachment: scroll, fixed, fixed;
+  background-origin: border-box;
+}
+:root[data-theme='holographique-clair'] .graph-settings-popover > .graph-settings-popover__heading {
+  background:
+    linear-gradient(
+        135deg,
+        transparent calc(50% - 1px),
+        var(--nv-chanfrein-haut) calc(50% - 0.4px),
+        var(--nv-chanfrein-haut) calc(50% + 0.6px),
+        transparent calc(50% + 1.4px)
+      )
+      -1px -1px / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat,
+    linear-gradient(var(--nv-pop-voile), var(--nv-pop-voile)),
+    var(--nv-satin);
+  background-attachment: scroll, fixed, fixed;
+  border-bottom-color: var(--nv-pop-filet);
+}
+/* Ses sections (Contenu affiche, Lisibilite...) : des plaques NOIRES opaques (rgb(10, 10, 10), couche
+   generee) qui cachaient le satin presque partout (capture du 2026-10-11). A l'origine elles ne se
+   voyaient pas -- #020204 sur le fond #000 de la fenetre -- et seul leur filet du bas les separe :
+   elles deviennent transparentes, le filet passe au gris du theme. Borne a la fenetre : le panneau
+   lateral qui reprend ces sections (`.visibility-sidebar`) n'est pas touche. */
+:root[data-theme='holographique-clair'] .graph-settings-popover .settings-section {
+  background: transparent;
+  border-bottom-color: var(--nv-pop-filet);
+}
+
+/* Les filets internes (en-tete, lignes, separations de la matrice) tombent au gris du theme. */
+:root[data-theme='holographique-clair'] .model-quota-popover :is(header, footer, .model-quota-row),
+:root[data-theme='holographique-clair'] .model-quota-popover .router-accounts,
+:root[data-theme='holographique-clair'] .model-select-menu .model-select-defaut,
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-group + .effort-matrix-group,
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix footer {
+  border-color: var(--nv-pop-filet);
+}
+
+/* -- Puces : le modele par defaut et les comptes. Aplat gris ; choisie = cadre bleu -> rose. */
+:root[data-theme='holographique-clair'] :is(.model-select-menu, .model-quota-popover) .router-account-chip {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-pop-aplat);
+  color: var(--nv-pop-texte-doux);
+  font-family: var(--font);
+}
+:root[data-theme='holographique-clair']
+  :is(.model-select-menu, .model-quota-popover)
+  .router-account-chip:hover:not(:disabled) {
+  background: var(--nv-pop-aplat-survol);
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair']
+  :is(.model-select-menu, .model-quota-popover)
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled) {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box,
+    var(--nv-pop-cadre) border-box;
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] :is(.model-select-menu, .model-quota-popover) .router-account-tier {
+  background: var(--nv-pop-puce);
+  color: var(--nv-pop-texte-pale);
+  font-weight: 600;
+}
+:root[data-theme='holographique-clair']
+  :is(.model-select-menu, .model-quota-popover)
+  .router-account-chip.is-active
+  .router-account-tier {
+  color: var(--nv-pop-texte-rose);
+}
+:root[data-theme='holographique-clair'] :is(.model-select-menu, .model-quota-popover) .router-hint {
+  color: var(--nv-pop-texte-doux);
+}
+/* Intitule en casse normale, comme les groupes de la liste des fils (`.conv-group-head`). */
+:root[data-theme='holographique-clair'] :is(.model-select-menu, .model-quota-popover) .router-accounts-title {
+  color: var(--nv-pop-texte-pale);
+  font: 600 11px/1.3 var(--font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* -- Matrice modele x effort : textes aux gris lavande du theme (plus de violet), noms et pied en
+      casse normale, ligne du modele actif dans le cadre bleu -> rose. Les lignes gardent leur grille ; un retrait
+      de 6 px sur l'en-tete des colonnes ET sur chaque ligne garde les points sous leur colonne. */
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-group-title {
+  color: var(--nv-pop-texte-doux);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-columns {
+  padding: 0 6px;
+  color: var(--nv-pop-texte-pale);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row {
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row:hover {
+  background: var(--nv-pop-aplat);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row.is-active {
+  background:
+    linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box,
+    var(--nv-pop-cadre) border-box;
+}
+/* Le nom du modele en typo du theme et en casse normale (6 bis : fin des petites capitales) ;
+   l'identifiant technique dessous garde sa chasse fixe, comme le code et les chemins. */
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-name strong {
+  color: var(--nv-pop-texte);
+  font: 600 12px/1.2 var(--font);
+  text-transform: none;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row.is-active .effort-matrix-name strong {
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-name small {
+  color: var(--nv-pop-texte-pale);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix footer {
+  color: var(--nv-pop-texte-pale);
+  font: 500 11px/1.4 var(--font);
+  text-transform: none;
+}
+/* Les points. Memes selecteurs que ChatView.css, dans le MEME ordre (le cran conseille vient
+   apres les remplis, sinon un cran conseille ET rempli repassait dans la couleur du remplissage). */
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran i {
+  background: rgba(var(--voile-rgb), 0.2);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran.is-filled i {
+  background: rgba(var(--voile-rgb), 0.42);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran.is-memorized.is-selected i {
+  width: 9px;
+  height: 9px;
+  background: var(--nv-pop-texte-argent);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row.is-active .effort-cran.is-filled i {
+  background: var(--nv-pop-texte-rose);
+  box-shadow: none;
+}
+/* `.effort-matrix-row` en plus : sans lui, la regle des remplis de la ligne active (un cran de
+   plus) repeignait le point choisi en rose clair plat, sans son anneau (capture du 2026-10-11). */
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row .effort-cran.is-live.is-selected i {
+  width: 13px;
+  height: 13px;
+  background: var(--nv-pop-cadre);
+  box-shadow:
+    0 0 0 1.5px #ffffff,
+    0 0 12px rgba(208, 43, 140, 0.55);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row .effort-cran.is-recommended i,
+:root[data-theme='holographique-clair'] .model-select-menu .effort-matrix-row.is-active .effort-cran.is-recommended i {
+  background: #00ff55;
+  box-shadow: 0 0 6px rgba(0, 255, 85, 0.55);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran:hover i {
+  background: var(--nv-pop-cran-vif);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran:is(:hover, :focus-visible) em {
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair'] .model-select-menu .effort-cran.is-absent i {
+  background: rgba(var(--voile-rgb), 0.06);
+}
+
+/* -- Fenetre du contexte (et des quotas) : en-tete en typo du theme, jauge au degrade du fil. */
+:root[data-theme='holographique-clair'] .model-quota-popover header strong {
+  color: #121018;
+  font-family: var(--display);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+:root[data-theme='holographique-clair'] .model-quota-popover small {
+  color: var(--nv-pop-texte-pale);
+}
+:root[data-theme='holographique-clair'] .model-quota-popover header button {
+  color: var(--nv-pop-texte-doux);
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .model-quota-name strong {
+  color: var(--nv-pop-texte);
+}
+/* La valeur : blanche. Le vert neon venait de la couche generee, qui avait pris pour un vert le
+   blanc menthe d'origine (#cceee7) ; l'etat se lit sur la jauge. */
+:root[data-theme='holographique-clair'] .model-quota-popover .model-quota-window > strong {
+  color: #121018;
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .quota-context-gauge-track {
+  height: 4px;
+  background: rgba(var(--voile-rgb), 0.08);
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .quota-context-gauge-fill {
+  background: var(--nv-pop-cadre);
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .quota-context-gauge.is-tendu .quota-context-gauge-fill {
+  background: var(--warn);
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .quota-context-gauge.is-critique .quota-context-gauge-fill {
+  background: #ff6b7d;
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .quota-context-gauge .quota-context-compact {
+  padding: 3px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-pop-aplat);
+  color: var(--nv-pop-texte-doux);
+}
+:root[data-theme='holographique-clair']
+  .model-quota-popover
+  .quota-context-gauge
+  .quota-context-compact:hover:not(:disabled) {
+  background: var(--nv-pop-aplat-survol);
+  color: #121018;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2342,6 +3158,9 @@
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .chat-runtime-provider {
   font-weight: 600;
+  /* Le nom du fournisseur reste en MAJUSCULES (« CLAUDE »), comme dans le thème de base : la
+     ligne passe en casse normale juste au-dessus, pas lui (conv-239, 2026-10-11). */
+  text-transform: uppercase;
 }
 /* Corps des messages : un cran plus grand, interligne plus serre. */
 :root[data-theme='holographique-clair'] .cosmic-outline .msg-body,
@@ -2368,14 +3187,283 @@
   font-weight: 650;
 }
 
+/* SELECTION-VUES:DEBUT -- conv-261 (2026-10-11). */
+/* ---------------------------------------------------------------------------
+   6 septies. LES VUES PARLENT COMME LE CHAT : un element CHOISI = le cadre du fil ouvert.
+   Demande (conv-261) : « dans toutes mes views les elements selectionnes sont moche, met des border
+   comme ca » -- capture jointe : le fil ouvert du chat (`.conv-item.active`, section 5), cadre
+   degrade bleu -> rose de 1,5 px sur fond d'encre, sans voile ni lueur. Releve avant correction, au
+   meme theme : Agent Studio (modele choisi = aplat bordeaux sans bord), Task Manager et Tests (aplat
+   bordeaux + bord rose), Observatory (« Chronologie » bordeaux), Knowledge (bord rose sur voile),
+   Settings (cadre nacre, sources en aplat gris). Ici UN dessin pour tous.
+   HORS PERIMETRE, volontairement : les ONGLETS (lisere seul, conv-244, ViewTopBar.css), la pastille
+   du menu de gauche (conv-187), le panneau Details (section 6, deja au cadre), les barres de Gantt
+   et les etiquettes du graphe (la couleur y porte une donnee), et les puces de compte de la vue
+   Routage (`.router-account-chip`) : elles restent intactes hors des popups depuis conv-250, le
+   test « la vue Routage reste intacte » le garde.
+   POIDS : chaque liste passe par :is(), qui prend la specificite de son membre le plus fort, sous
+   `.shell.theme-serious` (toujours pose, App.tsx). Le choix bat ainsi les couches `.theme-serious`
+   des vues et la couche generee ; le survol est ecrit AVANT le choix, a poids egal, pour lui ceder.
+   --------------------------------------------------------------------------- */
+:root[data-theme='holographique-clair'] {
+  /* L'encre du fil ouvert, et son cadre : les memes valeurs que `.conv-item.active`. */
+  --nv-choisi-fond: #f1f0f6;
+  --nv-choisi-cadre: linear-gradient(135deg, #3c6eeb, #d02b8c);
+  /* Cartes de liste au repos et au survol : des voiles (blanc ici, encre dans le blanc). */
+  --nv-liste-fond: rgba(var(--voile-rgb), 0.045);
+  --nv-liste-survol: rgba(var(--voile-rgb), 0.075);
+  --nv-liste-bord-survol: rgba(var(--voile-rgb), 0.1);
+}
+/* Plus de voile bordeaux nulle part : ce qui lisait --surface-selected (depot d'un fil, avis d'une
+   copie de travail...) prend un voile neutre ; le CHOIX, lui, passe par le cadre ci-dessous. */
+:root[data-theme='holographique-clair'] .shell,
+:root[data-theme='holographique-clair'] .shell.theme-serious {
+  --surface-selected: rgba(var(--voile-rgb), 0.07);
+}
+
+/* -- Cartes de liste : plaque de verre sans bord, coins du chat (14 px), rien ne bouge au survol.
+      Le bord transparent fait deja 1,5 px : le cadre du choix ne decale pas le contenu. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(
+    .topology-model,
+    .task-manager-row,
+    .tests-project > button:first-child,
+    .observatory-view .observatory-conversations > button,
+    .observatory-view .observatory-calls button,
+    .observatory-view .observatory-event,
+    .tickets-list [data-testid='ticket-row'],
+    .workflow-profile
+  ) {
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  background: var(--nv-liste-fond);
+  box-shadow: none;
+  transform: none;
+}
+/* Rangees de barre laterale (Knowledge) : transparentes au repos, comme la liste des fils. */
+:root[data-theme='holographique-clair'] .shell.theme-serious .theme-filter {
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+/* Survol : celui du chat (`.conv-item:hover`), un voile et un filet clairs. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(
+    .topology-model,
+    .task-manager-row,
+    .tests-project > button:first-child,
+    .observatory-view .observatory-conversations > button,
+    .observatory-view .observatory-calls button,
+    .observatory-view .observatory-event,
+    .tickets-list [data-testid='ticket-row'],
+    .workflow-profile,
+    .theme-filter
+  ):hover {
+  border-color: var(--nv-liste-bord-survol);
+  background: var(--nv-liste-survol);
+  transform: none;
+}
+
+/* -- Bascules et filtres d'Observatory : des pilules, comme les suggestions du fil. */
+:root[data-theme='holographique-clair'] .shell.theme-serious .observatory-view .observatory-view-switch {
+  border-color: var(--nv-bord);
+  border-radius: 999px;
+  background: rgba(var(--voile-rgb), 0.03);
+}
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .observatory-view
+  :is(.observatory-view-switch, .observatory-quick-filters, .observatory-causal-controls)
+  button {
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+}
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .observatory-view
+  :is(.observatory-quick-filters, .observatory-causal-controls)
+  button:not(.is-active) {
+  border-color: rgba(var(--voile-rgb), 0.12);
+  background: rgba(var(--voile-rgb), 0.04);
+}
+
+/* -- LE CHOIX : le cadre du fil ouvert, partout. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(
+    .topology-model.is-selected,
+    .cockpit-sources > button.is-active,
+    .control-row.is-selected,
+    .settings-view .control-row.is-selected,
+    .task-manager-row.is-selected,
+    .task-manager-weekdays label.is-selected,
+    .tests-project.is-active > button:first-child,
+    .observatory-view .observatory-view-switch button.is-active,
+    .observatory-view .observatory-quick-filters button.is-active,
+    .observatory-view .observatory-causal-controls button.is-active,
+    .observatory-view .observatory-conversations > button.is-active,
+    .observatory-view .observatory-calls button.is-active,
+    .observatory-view .observatory-event.is-selected,
+    .observatory-view .observatory-causal-node-wrap > button.is-selected,
+    .tickets-state-chip.is-active,
+    .tickets-list [data-testid='ticket-row'].is-selected,
+    .workflow-profile.is-active,
+    .theme-filter.is-active,
+    .graph-observatory--galaxy .theme-filter.is-active,
+    .wf-return-buttons button.is-active
+  ) {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box,
+    var(--nv-choisi-cadre) border-box;
+  box-shadow: none;
+  transform: none;
+  opacity: 1;
+}
+/* Le texte du choix en blanc, comme le titre du fil ouvert -- sauf les puces d'etat des Tickets, dont
+   la teinte dit l'etat filtre. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(
+    .topology-model.is-selected,
+    .cockpit-sources > button.is-active,
+    .control-row.is-selected,
+    .settings-view .control-row.is-selected,
+    .task-manager-row.is-selected,
+    .task-manager-weekdays label.is-selected,
+    .tests-project.is-active > button:first-child,
+    .observatory-view .observatory-view-switch button.is-active,
+    .observatory-view .observatory-quick-filters button.is-active,
+    .observatory-view .observatory-causal-controls button.is-active,
+    .observatory-view .observatory-conversations > button.is-active,
+    .observatory-view .observatory-calls button.is-active,
+    .observatory-view .observatory-event.is-selected,
+    .observatory-view .observatory-causal-node-wrap > button.is-selected,
+    .tickets-list [data-testid='ticket-row'].is-selected,
+    .workflow-profile.is-active,
+    .theme-filter.is-active,
+    .graph-observatory--galaxy .theme-filter.is-active,
+    .wf-return-buttons button.is-active
+  ) {
+  color: #121018;
+}
+
+/* -- Les deux derniers aplats bordeaux des vues : le prompt envoye d'une tache planifiee et la
+      pilule « Source » des Tickets deviennent du verre neutre. */
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-prompt {
+  border-color: transparent;
+  border-radius: 14px;
+  background: var(--nv-liste-fond);
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious .tickets-source-pill {
+  border-color: var(--nv-bord);
+  background: rgba(var(--voile-rgb), 0.04);
+}
+
+/* ---------------------------------------------------------------------------
+   6 octies. LE RESTE DES VUES AU NIVEAU DU CHAT (meme demande : « rend les ultra belle, aussi belle
+   que la vue Chat »). Releve du 2026-10-11 (sonde des bords calcules, theme Holographique noir) :
+   ce qui jurait encore a cote du chat, c'etaient des CASES A ARETE (bord blanc 18-20 %, coins de
+   8-12 px) la ou le chat n'a que des plaques de verre, des champs CARRES (6 px, fond noir) la ou sa
+   recherche est arrondie, des TITRES DE SECTION roses ou bleus la ou ses titres sont gris, et le
+   dernier bouton principal bordeaux (« + Nouvelle tache ») la ou le chat a « Nouveau fil » en
+   degrade plein. Regle du theme suivie : le relief des panneaux vient du FOND, jamais des aretes.
+   --------------------------------------------------------------------------- */
+/* -- Plaques : les cases a arete deviennent du verre, coins du chat. Un emplacement d'Agent Studio
+      dont le modele est introuvable (`.is-unresolved`) garde son bord d'alerte. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(
+    .topology-slot:not(.is-unresolved),
+    .observatory-view .observatory-metrics > strong,
+    .observatory-view .observatory-transcripts button,
+    .observatory-view .observatory-diagnostics button,
+    .task-manager-facts > div
+  ) {
+  border-color: transparent;
+  border-radius: 14px;
+  background: var(--nv-liste-fond);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .observatory-view
+  :is(.observatory-transcripts button, .observatory-diagnostics button):hover {
+  border-color: var(--nv-liste-bord-survol);
+  background: var(--nv-liste-survol);
+}
+/* La bande de chiffres des Worktrees : des cellules separees par un filet blanc -> des plaques
+   separees par du vide, comme les tuiles du chat. */
+:root[data-theme='holographique-clair'] .shell.theme-serious .wt-cdp-flux {
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious .wt-cdp-nombre {
+  border-radius: 14px;
+  background: var(--nv-liste-fond);
+}
+
+/* -- Champs et boutons de la barre d'Observatory : la forme de la recherche du chat (12 px, voile
+      clair, filet discret, blanc pendant la saisie) au lieu du rectangle noir de 6 px. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .observatory-view
+  :is(
+    .observatory-toolbar input,
+    .observatory-toolbar select,
+    .observatory-toolbar button:not(.is-active),
+    .observatory-toolbar summary,
+    .observatory-conversation-filter
+  ) {
+  border-color: rgba(var(--voile-rgb), 0.13);
+  border-radius: 12px;
+  background: rgba(var(--voile-rgb), 0.045);
+}
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .observatory-view
+  :is(.observatory-toolbar input, .observatory-conversation-filter):focus {
+  border-color: #121018;
+  box-shadow: none;
+  outline: none;
+}
+
+/* -- Titres de section : gris, petites capitales, comme « MODELES IMPORTES » et « SOURCES ». Le rose
+      du Task Manager et le bleu d'Observatory (« conversations » en minuscules) rentrent dans le
+      rang ; les compteurs a cote gardent leur couleur. */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  :is(.task-manager-panel-title > span, .observatory-view .observatory-panel-title) {
+  color: rgba(var(--voile-rgb), 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* -- Le bouton principal du Task Manager : la pilule « Nouveau fil » du chat (degrade plein, texte
+      blanc, sans bord). Le `!important` repond a celui de TaskManagerView.css et de la couche
+      generee, qui l'imposaient en bordeaux ; rien d'autre ne le porte. Texte par `--on-accent` :
+      le generateur du blanc garde ce jeton blanc (un `#ffffff` ecrit en dur y deviendrait encre,
+      donc noir sur le degrade). */
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary {
+  border: 0 !important;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3c6eeb, #d02b8c) !important;
+  color: var(--on-accent) !important;
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5583f2, #ef5cb1) !important;
+}
+/* SELECTION-VUES:FIN */
+
 /* ---------------------------------------------------------------------------
    7. MOUVEMENT REDUIT : la seule lueur qui bat s'arrete.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme='holographique-clair'] .workflow-execution-node.is-running .workflow-execution-dot {
-    animation: none;
-    box-shadow: 0 0 12px rgba(208, 43, 140, 0.7);
-  }
   :root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row.active::after {
     animation: none;
     display: none;

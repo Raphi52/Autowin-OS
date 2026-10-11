@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -9,6 +9,7 @@ import {
   persistRunLifecycle
 } from './orchestration-observability'
 import { TraceStore } from './trace-store'
+import { supprimerArbre } from '../fs-supprimer'
 
 describe('observabilite orchestration', () => {
   it('persiste le workspace, le sort Git et la clôture d’un run sans perdre son identité', () => {
@@ -442,5 +443,39 @@ describe('observabilite orchestration', () => {
       type: 'error',
       status: 'failed'
     })
+  })
+})
+
+/*
+ * UN STORE CREE ICI EST REFERME ICI (conv-246, 2026-10-11). Sans store prete par l'appelant, chaque
+ * `persist*` creait un `TraceStore` neuf dont le descripteur d'ecriture restait ouvert pour toujours.
+ * L'app prete toujours le sien (`causalTrace`), mais un bus sans `setTraceStore` -- tous les tests du
+ * bus, et le banc e2e -- laissait la trace ouverte : sous Windows, son dossier ne s'effacait plus
+ * (EPERM, fichier « en attente de suppression »). Entree qui ferait echouer ce test : retirer la
+ * fermeture du store emprunte dans `persistRunLifecycle`.
+ */
+describe('trace sans store prete', () => {
+  it('ne laisse aucun fichier de trace ouvert derriere elle', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-orchestration-sans-store-'))
+    const precedent = process.env.APPDATA
+    process.env.APPDATA = appData
+    try {
+      persistRunLifecycle(
+        {
+          stage: 'closure',
+          runId: 'run-1',
+          timestampMs: 100,
+          closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
+        },
+        { conversationId: 'conv-1', turnId: 'turn-1' }
+      )
+      const trace = new TraceStore(join(appData, 'autowin-os', 'causal-trace'))
+      expect(trace.readConversation('conv-1').length).toBeGreaterThan(0)
+    } finally {
+      if (precedent === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = precedent
+    }
+    supprimerArbre(appData)
+    expect(existsSync(appData)).toBe(false)
   })
 })

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ProviderRegistry } from './providers/registry'
 import type { SendResult, Usage } from './providers/types'
-import type { RoleBinding, RoleModelConfig } from './roles'
-import { normalizeRoleBinding } from './roles'
+import type { RoleModelConfig } from './roles'
 import type { Conversation, ConversationStore, Msg } from './store/conversations'
 import { compileExecutionQuote } from './execution-quote'
 import type { ExecutionSupervisor } from './execution-supervisor'
@@ -38,18 +37,13 @@ Règles :
 - title : titre bref du nouveau sujet, sans donnée sensible, uniquement pour route=new.`
 
 /**
- * BINDING DU TRI. Le classement des conversations n'a pas de role a lui : il empruntait celui de
- * l'orchestrateur, donc le modele le plus cher du fichier de reglages. Mesure du 2026-09-16
- * (`scripts/audit-cout-tokens.mjs`) : 1 894 classements sur claude-opus-5 pour 52,17 $, alors que
- * la reponse attendue fait 31 tokens de JSON. On garde le PROVIDER choisi par l'utilisateur (c'est
- * son moteur) et on redescend au modele par DEFAUT du code pour ce provider, en effort minimal.
- * Un provider sans defaut publie ressort INCHANGE : aucun modele n'est invente.
- * fix-ok: le tri heritait du binding orchestrateur — mesure 1 894 appels opus-5 / 52,17 $.
+ * MODÈLE DU TRI. Le classement des conversations n'a pas de rôle du pipeline : il emprunta d'abord
+ * le modèle de l'orchestrateur (mesure du 2026-09-16 : 1 894 classements sur claude-opus-5 pour
+ * 52,17 $), puis le défaut CODÉ du provider, `claude-fable-5` — choisi nulle part par l'utilisateur
+ * et facturé le double d'Opus (449 classements pour 28,68 $ dans `activity/*.jsonl`, conv-264).
+ * Il lit désormais le réglage « modèle des petites tâches » (`RoleModelConfig.bindingDesPetitesTaches`,
+ * écran Routeur) ; non réglé, le modèle du chat en effort low.
  */
-export function bindingDeTri(binding: RoleBinding): RoleBinding {
-  const defaut = normalizeRoleBinding({ provider: binding.provider })
-  return { ...binding, model: defaut.model ?? binding.model, reasoningEffort: 'low' }
-}
 
 export type ConversationRouteReason =
   | 'related'
@@ -161,7 +155,7 @@ export class ConversationRouter {
       await this.waitUntilReady()
       // La découverte peut remplacer un alias pendant l'attente : relire APRÈS la barrière évite
       // d'envoyer l'ancien `codex/flagship` alors que son transport concret vient d'être résolu.
-      const binding = bindingDeTri(this.roles.getBinding('orchestrator'))
+      const binding = this.roles.bindingDesPetitesTaches()
       const send = (): Promise<SendResult> =>
         this.registry.send(binding.provider, messages, {
           system: ROUTER_SYSTEM,
@@ -214,7 +208,7 @@ export class ConversationRouter {
         usage: result.usage
       }
     } catch {
-      const binding = this.roles.getBinding('orchestrator')
+      const binding = this.roles.bindingDesPetitesTaches()
       return {
         route: 'current',
         confidence: 0,

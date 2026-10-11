@@ -304,9 +304,19 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
   let reasoningAt: { at?: number } = {}
   let text = ''
   let textAt: { at?: number } = {}
+  /** Rafale de fragments de pensée consécutifs, rendue en UNE ligne (voir `reasoning-step`). */
+  type Rafale = {
+    ligne: Brute
+    texte: string
+    premier: Record<string, unknown>
+    fragments: number
+  }
+  const rafales: Rafale[] = []
+  let rafale: Rafale | undefined
   events.forEach((event, index) => {
     const id = `${turnId}:journal:${index}`
     const kind = String(event.kind ?? '')
+    if (kind !== 'reasoning-step') rafale = undefined
     if (kind === 'reasoning' || kind === 'think') {
       if (!reasoning) reasoningAt = stamp(event)
       reasoning += String(event.text ?? '')
@@ -328,18 +338,27 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       return
     }
     if (kind === 'reasoning-step') {
-      // Pensée d'UNE itération (le journal écrit aussi un `reasoning` agrégé à la clôture) : elle
-      // se lit comme une réflexion, pas comme un geste anonyme.
-      const detail = joinDetail(short(event.text), rest(event, 'text', 'iteration'))
-      out.push({
+      // Pensée d'UNE itération : elle se lit comme une réflexion, pas comme un geste anonyme.
+      // Le main écrit un `reasoning-step` par FRAGMENT diffusé (quelques mots chacun) : une ligne
+      // par fragment noyait le journal sous des centaines de « Raisonnement » illisibles
+      // (conv-257 : 143 lignes pour un seul tour). Les fragments CONSÉCUTIFS d'une même itération
+      // forment donc UNE ligne, à l'heure du premier ; tout autre événement (outil, signe de vie,
+      // réponse) clôt la rafale, ce qui garde la pensée à sa place entre les gestes.
+      if (rafale && rafale.premier.iteration === event.iteration) {
+        rafale.texte += String(event.text ?? '')
+        rafale.fragments += 1
+        return
+      }
+      const ligne: Brute = {
         id,
         turnId,
         kind: 'reasoning',
         label: `Raisonnement (étape ${String(event.iteration ?? '?')})`,
-        ...stamp(event),
-        ...allFields(event),
-        ...(detail ? { detail } : {})
-      })
+        ...stamp(event)
+      }
+      rafale = { ligne, texte: String(event.text ?? ''), premier: event, fragments: 1 }
+      rafales.push(rafale)
+      out.push(ligne)
       return
     }
     if (kind === 'delta') {
@@ -521,8 +540,27 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       })
     }
   })
+  // Chaque rafale reçoit son texte ENTIER une fois tous ses fragments lus ; une rafale de blancs
+  // (un « \n\n » isolé) n'est pas une pensée et ne fait pas de ligne.
+  const vides = new Set<Brute>()
+  for (const r of rafales) {
+    if (!r.texte.trim()) {
+      vides.add(r.ligne)
+      continue
+    }
+    const detail = joinDetail(short(r.texte), rest(r.premier, 'text', 'iteration'))
+    Object.assign(
+      r.ligne,
+      allFields({ ...r.premier, text: r.texte, ...(r.fragments > 1 ? { fragments: r.fragments } : {}) }),
+      detail ? { detail } : {}
+    )
+  }
+  const gestes = vides.size > 0 ? out.filter((ligne) => !vides.has(ligne)) : out
+  // Le `reasoning` AGRÉGÉ de clôture est la MÊME pensée que les rafales, réécrite d'un bloc (et
+  // parfois plus courte : mesuré conv-58, 12 001 caractères agrégés contre 20 213 en fragments).
+  // Il ne fait une ligne que pour un journal sans fragments (journaux anciens).
   const head: Brute[] = []
-  if (reasoning.trim())
+  if (reasoning.trim() && rafales.length === vides.size)
     head.push({
       id: `${turnId}:reasoning`,
       turnId,
@@ -542,7 +580,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       detail: short(text)
     })
   // Le raisonnement PRÉCÈDE les gestes, la réponse produite les SUIT : c'est l'ordre réel du tour.
-  return [...head, ...out, ...tail]
+  return [...head, ...gestes, ...tail]
 }
 
 /** Horodatage ISO d'un événement causal → epoch. Jamais inventé. */
@@ -708,17 +746,20 @@ function dedupe(entries: ModelActivityEntry[]): ModelActivityEntry[] {
  * DURABLE.
  */
 function ecarterPenseeTronquee(entries: ModelActivityEntry[]): ModelActivityEntry[] {
+  // La pensée du journal est répartie en RAFALES (une par passage entre deux gestes) : la copie du
+  // tour, elle, enjambe plusieurs rafales. On la compare donc à leur CONCATÉNATION, blancs ôtés —
+  // chaque ligne est normalisée séparément (`short`), seul le texte compte.
+  const sansBlancs = (texte: string): string => texte.replace(/\s+/g, '')
   const entieres = new Map<string, string>()
   for (const entry of entries) {
     if (entry.kind !== 'reasoning' || entry.source !== 'journal' || !entry.detail) continue
-    const deja = entieres.get(entry.turnId) ?? ''
-    if (entry.detail.length > deja.length) entieres.set(entry.turnId, entry.detail)
+    entieres.set(entry.turnId, (entieres.get(entry.turnId) ?? '') + sansBlancs(entry.detail))
   }
   return entries.filter((entry) => {
     if (entry.kind !== 'reasoning' || entry.source !== 'journal') {
       if (entry.kind !== 'reasoning' || !entry.detail) return true
       const entiere = entieres.get(entry.turnId)
-      return !(entiere && entiere.includes(entry.detail))
+      return !(entiere && entiere.includes(sansBlancs(entry.detail)))
     }
     return true
   })
@@ -957,9 +998,25 @@ function turnIdDuTourSuivant(messages: readonly Msg[], depuis: number): string {
   return `message-${depuis}`
 }
 
-export function buildModelActivityLog(input: ModelActivityInput): ModelActivityEntry[] {
+/**
+ * L'ASSEMBLAGE EN TROIS MORCEAUX (conv-252, 2026-10-11 : « fais en sorte que l'onglet Logs ne
+ * recalcule plus tout le journal à chaque morceau de réponse affiché pendant un tour, en ne
+ * recalculant que les lignes du fil quand seuls les messages changent »).
+ *
+ * Pendant un tour, `messages` change à CHAQUE fragment de réponse ; les six sources de conversation
+ * (trace, activité, Brain, prompts, copies, fichiers), elles, ne bougent qu'avec leurs relectures.
+ * `buildModelActivityLog` refaisait pourtant les six à chaque fragment. L'onglet Logs garde donc
+ * `lignesDesSources` d'un fragment à l'autre et ne refait que `lignesDuFil`, puis `assemblerJournal`.
+ * `buildModelActivityLog` reste l'enchaînement exact des trois : même ordre, même résultat.
+ */
+
+/** Lignes tirées du FIL — demandes, journal du tour, parts persistées, réflexion du message. */
+export function lignesDuFil(
+  messages: ModelActivityInput['messages'],
+  journalByTurn: ModelActivityInput['journalByTurn']
+): ModelActivityEntry[] {
   const entries: ModelActivityEntry[] = []
-  input.messages.forEach((message, messageIndex) => {
+  messages.forEach((message, messageIndex) => {
     if (message.role === 'user') {
       const detail = short((message as { content?: string }).content)
       entries.push({
@@ -967,7 +1024,7 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
         // La demande APPARTIENT au tour qu'elle ouvre. Avec un `turnId` vide, toutes les demandes
         // de la conversation se retrouvaient rassemblees dans un meme pseudo-tour, detachees de
         // ce qu'elles avaient declenche.
-        turnId: turnIdDuTourSuivant(input.messages, messageIndex),
+        turnId: turnIdDuTourSuivant(messages, messageIndex),
         kind: 'prompt',
         label: 'Demande',
         source: 'thread',
@@ -976,7 +1033,7 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
       return
     }
     const turnId = (message as { turnId?: string }).turnId ?? `message-${messageIndex}`
-    const journal = input.journalByTurn[turnId]
+    const journal = journalByTurn[turnId]
     const parts = ((message as { parts?: unknown[] }).parts ?? []) as Array<Record<string, unknown>>
     // UNION, et non alternative : le journal porte le raisonnement et l'usage, les parts portent ce
     // qui a ete PERSISTE. Prendre l'un « a la place » de l'autre perdait a chaque fois quelque chose.
@@ -990,11 +1047,35 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
     // montrait MOINS que la bulle du fil. Les copies déjà portées par le journal sont écartées.
     entries.push(...tag('thread', fromMessageThinking(turnId, message)))
   })
-  entries.push(...tag('causal', fromCausal(input.causal ?? [])))
-  entries.push(...tag('activity', fromActivity(input.activity ?? [])))
-  entries.push(...tag('brain', fromBrain(input.brain ?? [])))
-  entries.push(...tag('prompts', fromPromptCalls(input.promptCalls ?? [])))
-  entries.push(...tag('bureaux', fromBureaux(input.bureaux ?? [])))
-  entries.push(...tag('fichiers', fromFichiers(input.fichiers ?? [])))
-  return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
+  return entries
+}
+
+/** Lignes des six sources de CONVERSATION : aucune ne dépend des messages. */
+export function lignesDesSources(
+  input: Omit<ModelActivityInput, 'messages' | 'journalByTurn'>
+): ModelActivityEntry[] {
+  return [
+    ...tag('causal', fromCausal(input.causal ?? [])),
+    ...tag('activity', fromActivity(input.activity ?? [])),
+    ...tag('brain', fromBrain(input.brain ?? [])),
+    ...tag('prompts', fromPromptCalls(input.promptCalls ?? [])),
+    ...tag('bureaux', fromBureaux(input.bureaux ?? [])),
+    ...tag('fichiers', fromFichiers(input.fichiers ?? []))
+  ]
+}
+
+/**
+ * Le journal final : fil d'ABORD, sources ensuite — cet ordre départage les lignes de même heure au
+ * tri et décide quelle copie d'un doublon reste. Les trois passes rendent des listes neuves et ne
+ * modifient aucune ligne : les lignes des sources peuvent être réutilisées d'un assemblage à l'autre.
+ */
+export function assemblerJournal(
+  fil: readonly ModelActivityEntry[],
+  sources: readonly ModelActivityEntry[]
+): ModelActivityEntry[] {
+  return trierChronologiquement(ecarterPenseeTronquee(dedupe([...fil, ...sources])))
+}
+
+export function buildModelActivityLog(input: ModelActivityInput): ModelActivityEntry[] {
+  return assemblerJournal(lignesDuFil(input.messages, input.journalByTurn), lignesDesSources(input))
 }

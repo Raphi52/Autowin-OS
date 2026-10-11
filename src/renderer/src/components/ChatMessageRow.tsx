@@ -347,7 +347,7 @@ export const ChatMessageRow = memo(
     onResend,
     onRefineResume,
     onLogin,
-    askRepondu,
+    askReponse,
     autoLancerCandidats,
     onAnswerAsk,
     skills,
@@ -378,8 +378,11 @@ export const ChatMessageRow = memo(
     autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
     directiveReceipts?: DirectiveReceipt[]
-    /** Une question de ce tour a deja sa reponse dans le fil (message utilisateur posterieur). */
-    askRepondu?: boolean
+    /**
+     * Le texte du message du fil qui REPOND a une question de ce tour (`askReponseDuFil`),
+     * `undefined` tant qu'elle est ouverte. Il ferme le bloc ET dit quelle reponse mettre en evidence.
+     */
+    askReponse?: string
     /**
      * Reponse a une question `ask`. Chemin DEDIE, jamais celui des suggestions : une reponse a une
      * question est un message ORDINAIRE, pas une orientation en vol (pastille « ✓ Orienté »).
@@ -559,7 +562,8 @@ export const ChatMessageRow = memo(
                         <AskDecisionBlock
                           key={`ask-${part.askId}`}
                           decision={part.decision}
-                          dejaRepondu={askRepondu}
+                          dejaRepondu={askReponse !== undefined}
+                          reponseDuFil={askReponse}
                           onPick={(prompt) => onAnswerAsk?.(prompt)}
                         />
                       )
@@ -727,7 +731,7 @@ export const ChatMessageRow = memo(
     prev.message === next.message &&
     prev.conversationId === next.conversationId &&
     prev.retryPrompt === next.retryPrompt &&
-    prev.askRepondu === next.askRepondu &&
+    prev.askReponse === next.askReponse &&
     prev.directiveReceipts === next.directiveReceipts &&
     prev.tourEnCours === next.tourEnCours
 )

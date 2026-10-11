@@ -86,7 +86,7 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
       {loadError && (
         <div className="domain-warning">
           <p role="alert">{loadError}</p>
-          <button type="button" onClick={() => void load()}>
+          <button type="button" className="btn" onClick={() => void load()}>
             Réessayer
           </button>
         </div>

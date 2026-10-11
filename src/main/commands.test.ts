@@ -376,6 +376,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       ).toBe(true)
       expect(events.some((event) => event.run?.stage === 'closure')).toBe(true)
     } finally {
+      traceStore.fermer()
       supprimerArbre(root)
     }
   })
@@ -1973,6 +1974,7 @@ describe('AppCommandBus command execution policy', () => {
         expect.objectContaining({ type: 'orchestrate-usage', convId: 'conv-1' })
       )
     } finally {
+      traceStore.fermer()
       supprimerArbre(root)
     }
   })

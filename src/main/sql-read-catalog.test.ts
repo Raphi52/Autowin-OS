@@ -14,6 +14,7 @@ import {
   devTargets,
   estBaseCatalogue,
   estServeurDev,
+  lireBasesExploitees,
   parseCatalogRows,
   parseSqlCatalogConfig,
   resolveSqlTargets
@@ -306,5 +307,54 @@ describe('resolveSqlTargets', () => {
     child2.emit('close', 1)
     await p2
     expect(spawnFn).toHaveBeenCalledTimes(2)
+  })
+})
+
+/**
+ * LES BASES EXPLOITÉES SEULES — ce que la proposition de liste de production classe en production.
+ * Distinct de `resolveSqlTargets`, qui MÉLANGE exploitées, base catalogue et cibles de dev : la
+ * proposition doit savoir lesquelles sont exploitées, et un échec doit rester un échec, jamais une
+ * liste vide qui aurait l'air complète.
+ */
+describe('lireBasesExploitees', () => {
+  beforeEach(() => configureSqlCatalog(TEST_SQL_CATALOG))
+
+  function lire(contenu: string, code = 0): ReturnType<typeof lireBasesExploitees> {
+    const child = fakeChild()
+    const promesse = lireBasesExploitees({
+      spawnFn: vi.fn(() => child) as never,
+      sqlcmdPath: 'sqlcmd.exe',
+      outputFile: fakeFile(contenu),
+      outputPath: 'T:\\cat.json'
+    })
+    child.emit('close', code)
+    return promesse
+  }
+
+  it('rend les seules bases exploitées, sans la base catalogue ni les cibles de dev', async () => {
+    const r = await lire(
+      '[{"d":"DB_ALPHA","s":"SRV-PROD\\\\PROD"},{"d":"DB_PAPA","s":"SRV-EXT-A"}]'
+    )
+    expect(r).toEqual({
+      ok: true,
+      exploitees: [
+        { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
+        { server: 'SRV-EXT-A', database: 'DB_PAPA' }
+      ]
+    })
+  })
+
+  it('rend un ÉCHEC, pas une liste vide, quand le catalogue est injoignable', async () => {
+    const r = await lire('Msg 4060, Level 11\nCannot open database CATALOGUE.', 1)
+    expect(r.ok).toBe(false)
+  })
+
+  it('refuse sans configuration, sans lancer aucune requête', async () => {
+    configureSqlCatalog()
+    const spawnFn = vi.fn()
+    const r = await lireBasesExploitees({ spawnFn: spawnFn as never })
+    expect(r.ok).toBe(false)
+    expect(spawnFn).not.toHaveBeenCalled()
+    configureSqlCatalog(TEST_SQL_CATALOG)
   })
 })

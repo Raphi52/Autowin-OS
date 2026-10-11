@@ -88,6 +88,44 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
     expect(ligne?.querySelector('time')?.textContent).toBe('07:05:09')
   })
 
+  // conv-247, 2026-10-11 : « n'affiche rien à la place du — quand un geste n'a pas d'heure ».
+  // La colonne reste (les heures restent alignées), mais vide.
+  it('laisse la colonne de l’heure VIDE quand le geste n’a pas d’heure', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([])
+    await monter()
+    const ligne = [...host.querySelectorAll('.model-log-row')].find((row) =>
+      row.textContent?.includes('run_tests')
+    ) as HTMLElement
+    const heure = ligne.querySelector('time.model-log-time')
+    expect(heure).toBeTruthy()
+    expect(heure?.textContent).toBe('')
+  })
+
+  // conv-247, 2026-10-11 : « retire aussi le — des en-têtes de tour quand le tour n'a pas d'heure
+  // de début ». L'en-tête garde son rang et ses chiffres, sans case d'heure vide.
+  it('n’écrit pas « — » dans l’en-tête d’un tour sans heure de début', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([])
+    await monter()
+    const entete = host.querySelector('.model-log-tour__head') as HTMLElement
+    expect(entete.textContent).toContain('Tour 1')
+    expect(entete.textContent).toContain('gestes')
+    expect(entete.textContent).not.toContain('—')
+  })
+
+  it('garde l’heure de début dans l’en-tête quand le tour en a une', async () => {
+    const at = new Date('2026-09-01T07:05:09').getTime()
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([{ kind: 'command', name: 'Bash', actionId: 'c1', at }])
+    await monter()
+    const entetes = [...host.querySelectorAll('.model-log-tour__head')].map((e) => e.textContent)
+    expect(entetes.some((texte) => texte?.includes('07:05:09'))).toBe(true)
+  })
+
   it('un IPC de journal en échec ne vide pas le panneau', async () => {
     ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
       .fn()
@@ -281,63 +319,82 @@ describe('ModelActivityLogPane — les quatre sources jusqu’à l’écran', ()
       expect(options).toContain(source)
   })
 
+  const afficherPistes = async (): Promise<void> => {
+    const bouton = host.querySelector('[data-testid="model-log-pistes"]') as HTMLButtonElement
+    if (bouton.getAttribute('aria-pressed') !== 'true') await act(async () => bouton.click())
+  }
+
   it('donne à chaque source une VOIE à position fixe, la même sur toutes ses lignes', async () => {
     brancher()
     await monter()
-    const voies = [...host.querySelectorAll('[data-voie-source]')].map((n) => [
-      n.getAttribute('data-voie-source'),
-      n.getAttribute('data-voie-index')
-    ])
-    // Une voie par source PRÉSENTE, pas une de plus : aucune piste vide.
-    expect(new Set(voies.map(([source]) => source))).toEqual(
-      new Set(['thread', 'journal', 'parts', 'causal', 'activity'])
-    )
-    const indexVoie = Object.fromEntries(voies)
+    await afficherPistes()
     const rails = [...host.querySelectorAll('[data-piste-source]')]
     expect(rails.length).toBeGreaterThan(0)
+    // Une voie par source PRÉSENTE, pas une de plus : aucune piste vide.
+    expect(new Set(rails.map((rail) => rail.getAttribute('data-piste-source')))).toEqual(
+      new Set(['thread', 'journal', 'parts', 'causal', 'activity'])
+    )
+    const indexVoie = new Map<string, string>()
     for (const rail of rails) {
       const source = rail.getAttribute('data-piste-source') as string
-      // La ligne est SUR la voie de sa source, et l'index est aussi porté en variable CSS.
-      expect(rail.getAttribute('data-piste-index')).toBe(indexVoie[source])
-      expect((rail as HTMLElement).style.getPropertyValue('--piste')).toBe(indexVoie[source])
+      const index = rail.getAttribute('data-piste-index') as string
+      // Toutes les lignes d'une source sont SUR la même voie, portée aussi en variable CSS.
+      expect(indexVoie.get(source) ?? index).toBe(index)
+      indexVoie.set(source, index)
+      expect((rail as HTMLElement).style.getPropertyValue('--piste')).toBe(index)
     }
+    expect(new Set(indexVoie.values()).size).toBe(indexVoie.size)
   })
 
-  it('un clic sur une voie isole sa source, un second la relâche', async () => {
+  // conv-247, 2026-10-11 : « enlève la légende en haut des logs » — la légende des voies a disparu,
+  // même pistes affichées ; isoler une source passe par le menu « Toutes sources ».
+  it('n’affiche plus la légende des voies, même pistes affichées', async () => {
     brancher()
     await monter()
-    const voie = host.querySelector('[data-voie-source="journal"]') as HTMLButtonElement
-    await act(async () => voie.click())
+    await afficherPistes()
+    expect(host.querySelectorAll('[data-piste-source]').length).toBeGreaterThan(0)
+    expect(host.querySelector('[data-testid="model-log-voies"]')).toBeNull()
+    expect(host.querySelector('[data-voie-source]')).toBeNull()
+  })
+
+  it('le menu des sources isole une source, « Toutes sources » la relâche', async () => {
+    brancher()
+    await monter()
+    const menu = host.querySelector('[aria-label="Filtrer par source"]') as HTMLSelectElement
+    const choisir = async (valeur: string): Promise<void> =>
+      act(async () => {
+        menu.value = valeur
+        menu.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    await choisir('journal')
     let sources = [...host.querySelectorAll('.model-log-row [data-log-source]')].map((n) =>
       n.getAttribute('data-log-source')
     )
     expect(new Set(sources)).toEqual(new Set(['journal']))
-    expect(
-      (host.querySelector('[data-voie-source="journal"]') as HTMLElement).getAttribute(
-        'aria-pressed'
-      )
-    ).toBe('true')
-    await act(async () =>
-      (host.querySelector('[data-voie-source="journal"]') as HTMLButtonElement).click()
-    )
+    await choisir('')
     sources = [...host.querySelectorAll('.model-log-row [data-log-source]')].map((n) =>
       n.getAttribute('data-log-source')
     )
     expect(new Set(sources).size).toBeGreaterThan(1)
   })
 
-  it('le bouton Pistes replie le rail et rend ses pixels au texte', async () => {
+  // conv-247, 2026-10-11 : « enlève la colonne tout à gauche » — la colonne des pistes n'est plus
+  // affichée d'office. Elle reste à un clic, par le bouton Pistes.
+  it('n’affiche pas la colonne des pistes au montage ; le bouton Pistes l’affiche puis la replie', async () => {
     brancher()
     await monter()
-    expect(host.querySelectorAll('[data-piste-source]').length).toBeGreaterThan(0)
-    const bouton = host.querySelector('[data-testid="model-log-pistes"]') as HTMLButtonElement
-    await act(async () => bouton.click())
     expect(host.querySelectorAll('[data-piste-source]').length).toBe(0)
     expect(host.querySelector('[data-testid="model-log-voies"]')).toBeNull()
     expect(
       host.querySelector('[data-testid="model-activity-log"]')?.getAttribute('data-pistes')
     ).toBe('false')
-    // Le flux lui-même est intact : replier la vue ne filtre rien.
+    const bouton = host.querySelector('[data-testid="model-log-pistes"]') as HTMLButtonElement
+    expect(bouton.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => bouton.click())
+    expect(host.querySelectorAll('[data-piste-source]').length).toBeGreaterThan(0)
+    await act(async () => bouton.click())
+    expect(host.querySelectorAll('[data-piste-source]').length).toBe(0)
+    // Le flux lui-même est intact : la colonne absente ne filtre rien.
     expect(host.textContent).toContain('je réfléchis')
   })
 

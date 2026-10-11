@@ -38,7 +38,10 @@ describe('navigation pendant une reponse', () => {
     expect(creation).not.toMatch(/provider:\s*['"]claude['"]/)
     expect(source).toContain("if (e.scope === 'roles') refreshRuntimeIdentity()")
     expect(source).toContain('window.api.roles()')
-    expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    // Depuis conv-239 (2026-10-11), le chat ne réécrit plus le rôle orchestrateur GLOBAL : son
+    // sélecteur pose le modèle de LA conversation. Le défaut de l'application se règle dans Routage.
+    expect(source).not.toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    expect(source).toContain('window.api.conversationSetModel(')
     expect(modelsSource).not.toContain('window.api.roles()')
     expect(modelsSource).not.toContain('window.api.setRole(')
     expect(modelsSource).toContain('window.api.setTopology(')

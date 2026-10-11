@@ -18,10 +18,33 @@ interface OrchestrationTraceContext {
   runId?: string
 }
 
+/**
+ * Un store PRETE par l'appelant (l'app prete `causalTrace`) reste ouvert. Un store cree ICI, faute
+ * de store prete, est referme ici : son descripteur d'ecriture restait sinon ouvert pour toujours,
+ * et sous Windows le dossier de trace ne s'effacait plus (EPERM, conv-246).
+ */
+function avecTraceStore(prete: TraceStore | undefined, travail: (store: TraceStore) => void): void {
+  if (prete) return travail(prete)
+  const store = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+  try {
+    travail(store)
+  } finally {
+    store.fermer()
+  }
+}
+
 export function persistRunLifecycle(
   lifecycle: RunLifecycleEvent,
   context: { conversationId: string; turnId: string },
-  traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+  traceStore?: TraceStore
+): void {
+  avecTraceStore(traceStore, (store) => persisterCycleDeRun(lifecycle, context, store))
+}
+
+function persisterCycleDeRun(
+  lifecycle: RunLifecycleEvent,
+  context: { conversationId: string; turnId: string },
+  traceStore: TraceStore
 ): void {
   const currentTurn = traceStore
     .readConversation(context.conversationId)
@@ -83,7 +106,15 @@ export function persistRunLifecycle(
 export function persistOrchestrationPhaseStart(
   phase: OrchestrationPhase,
   context: OrchestrationTraceContext,
-  traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+  traceStore?: TraceStore
+): void {
+  avecTraceStore(traceStore, (store) => persisterDebutDePhase(phase, context, store))
+}
+
+function persisterDebutDePhase(
+  phase: OrchestrationPhase,
+  context: OrchestrationTraceContext,
+  traceStore: TraceStore
 ): void {
   if (!phase.execution?.attemptId || (phase.step !== 'exec' && phase.step !== 'judge')) return
   const currentTurn = traceStore
@@ -180,7 +211,16 @@ export function persistOrchestrationStep(
   step: OrchestrationStep,
   context: OrchestrationTraceContext,
   promptRoot = promptObservabilityRoot(),
-  traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+  traceStore?: TraceStore
+): void {
+  avecTraceStore(traceStore, (store) => persisterEtape(step, context, promptRoot, store))
+}
+
+function persisterEtape(
+  step: OrchestrationStep,
+  context: OrchestrationTraceContext,
+  promptRoot: string,
+  traceStore: TraceStore
 ): void {
   const existing = traceStore.readConversation(context.conversationId)
   let parentId = resolveStepParentId(existing, context.turnId, context.runId, step.execution)

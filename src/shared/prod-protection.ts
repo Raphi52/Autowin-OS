@@ -45,3 +45,26 @@ export interface EtatPorteProd {
   /** Le fichier de déclaration, pour que l'utilisateur sache où écrire. */
   chemin: string
 }
+
+/**
+ * LA LISTE PROPOSÉE DEPUIS LE CATALOGUE SQL — un CONTENU à recopier, jamais un fichier écrit.
+ * Le fichier de déclaration n'est écrit que par un humain (`main/store/prod-autorite-store.ts`) :
+ * l'écran montre ce que le catalogue ajouterait, l'utilisateur le colle lui-même.
+ */
+export type PropositionAutoriteProd =
+  | { ok: false; erreur: string }
+  | {
+      ok: true
+      /** Combien de bases le catalogue déclare exploitées. */
+      exploitees: number
+      /** Bases absentes de la déclaration actuelle, ajoutées par la proposition. */
+      ajoutees: { nom: string; classe: 'prod' | 'non-prod' }[]
+      /** Bases déclarées hors production que le catalogue dit exploitées : passées en production. */
+      passeesEnProd: string[]
+      /** Entrées de la déclaration actuelle reprises telles qu'écrites. */
+      conservees: number
+      /** Remarques sur le fichier actuel (lignes écartées, fichier absent) : non reprises. */
+      anomalies: string[]
+      /** Le contenu complet, prêt à coller dans le fichier de déclaration. */
+      contenu: string
+    }

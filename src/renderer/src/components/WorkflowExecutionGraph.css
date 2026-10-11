@@ -1,4 +1,16 @@
 .workflow-execution-graph {
+  /* Jetons de la constellation : chaque thème les règle (Nébuleuse de verre : holo). */
+  --wx-froid: var(--violet);
+  --wx-chaud: var(--rose);
+  --wx-rose-actif: color-mix(in srgb, var(--rose) 60%, var(--wx-lueur));
+  --wx-texte-chiffre: var(--text-dim);
+  --wx-ok: var(--ok);
+  --wx-attente: var(--text-faint);
+  --wx-lueur: #ffffff;
+  --wx-filet-vif: var(--wx-lueur);
+  --wx-fond-perle: var(--bg-1, #111111);
+  --wx-fiche-fond: var(--bg-inset);
+  --wx-fiche-bord: linear-gradient(90deg, var(--wx-froid), var(--wx-chaud));
   display: flex;
   min-width: 0;
   flex: 1;
@@ -51,155 +63,162 @@
   color: var(--err);
 }
 
+/* ---------------------------------------------------------------------------
+   L'ARBRE ÉTOILÉ (conv-234, 2026-10-11) : chaque étape est une PERLE posée par le calcul de
+   placement (graph-constellation-layout.ts), reliée à son parent par un lien courbe, avec un FLUX
+   qui coule vers ce qui tourne et un FIL qui descend de l'étape choisie jusqu'à sa FICHE. Les
+   couleurs passent par les jetons --wx-* de .workflow-execution-graph : chaque thème les règle.
+   --------------------------------------------------------------------------- */
 .workflow-execution-tree {
+  position: relative;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 2px 0 var(--s2);
 }
 
-.workflow-execution-node-wrap {
+.workflow-execution-band {
   position: relative;
   min-width: 0;
-  padding-left: min(calc(var(--execution-depth) * 18px), 72px);
 }
 
-.workflow-execution-edge {
-  --execution-edge-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+.workflow-execution-links {
   position: absolute;
-  top: -8px;
-  left: min(calc(var(--execution-depth) * 18px - 11px), 61px);
-  width: 7px;
-  height: 28px;
-  border-bottom: 1px solid var(--execution-edge-color);
-  border-left: 1px solid var(--execution-edge-color);
-  border-radius: 0 0 0 7px;
+  top: 0;
+  left: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.workflow-execution-edge::after {
-  position: absolute;
-  right: -5px;
-  bottom: -4px;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--execution-edge-color);
-  content: '';
+.wx-stop-froid {
+  stop-color: var(--wx-froid);
 }
 
+.wx-stop-chaud {
+  stop-color: var(--wx-chaud);
+}
+
+/* Lien parent → enfant, au dégradé de la demande (bleu en haut, rose en bas). */
+.workflow-execution-edge {
+  fill: none;
+  stroke-width: 1.6;
+}
+
+/* Étape à venir : pointillé gris, rien n'y coule encore. */
+.workflow-execution-edge.is-attente {
+  stroke: var(--wx-attente);
+  stroke-width: 1.4;
+  stroke-dasharray: 3 4;
+}
+
+/* LE FLUX (choix « Flux ») : des points coulent sur le chemin qui mène à ce qui tourne. */
+.workflow-execution-flux,
+.workflow-execution-fil-flux {
+  fill: none;
+  stroke: var(--wx-filet-vif);
+  stroke-linecap: round;
+  stroke-dasharray: 0 10;
+}
+
+.workflow-execution-flux {
+  stroke-width: 2.8;
+  animation: wx-flux 0.9s linear infinite;
+}
+
+/* LE FIL HOLO (choix final, « go fil holo ») : de l'étape choisie à sa fiche, des points lents. */
+.workflow-execution-fil {
+  fill: none;
+  stroke-width: 2.4;
+}
+
+.workflow-execution-fil-flux {
+  stroke-width: 2.4;
+  animation: wx-flux 1.8s linear infinite;
+}
+
+/* UNE ÉTAPE : sa perle et sa légende, à la place que le calcul lui donne. */
 .workflow-execution-node {
-  position: relative;
+  position: absolute;
   display: flex;
-  width: 100%;
   min-width: 0;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 3px 0;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--r2);
-  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text);
-  text-align: left;
+  font: inherit;
+  text-align: center;
   cursor: pointer;
 }
 
-.workflow-execution-node:hover,
-.workflow-execution-node:focus-visible,
-.workflow-execution-node.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+.workflow-execution-node:focus-visible {
   outline: none;
 }
 
-.workflow-execution-node.is-request {
-  border-color: color-mix(in srgb, var(--accent) 66%, var(--line));
-  background:
-    linear-gradient(100deg, color-mix(in srgb, var(--accent) 15%, transparent), transparent 72%),
-    color-mix(in srgb, var(--bg-1) 94%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
+.wx-astre {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: var(--wx-astre);
+  flex: 0 0 auto;
 }
 
-.workflow-execution-node.is-phase {
-  min-height: 40px;
-  border-style: dashed;
-  background: color-mix(in srgb, var(--accent-soft) 42%, var(--bg-1));
-}
-
-.workflow-execution-node.is-workspace,
-.workflow-execution-node.is-skill,
-.workflow-execution-node.is-agent,
-.workflow-execution-node.is-git,
-.workflow-execution-node.is-closure {
-  border-color: color-mix(in srgb, var(--execution-kind-color) 46%, var(--line));
-  background:
-    linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--execution-kind-color) 10%, transparent),
-      transparent 70%
-    ),
-    color-mix(in srgb, var(--bg-1) 94%, transparent);
-  box-shadow: inset 3px 0 0 var(--execution-kind-color);
-}
-
-.workflow-execution-node.is-workspace {
-  --execution-kind-color: var(--gold);
-}
-
-.workflow-execution-node.is-skill {
-  --execution-kind-color: var(--violet);
-  border-style: dashed;
-}
-
-.workflow-execution-node.is-agent {
-  --execution-kind-color: var(--rose);
-}
-
-.workflow-execution-node.is-git {
-  --execution-kind-color: var(--cyan);
-}
-
-.workflow-execution-node.is-closure {
-  --execution-kind-color: var(--ok);
-}
-
-.workflow-execution-node.is-workspace .workflow-execution-dot,
-.workflow-execution-node.is-skill .workflow-execution-dot,
-.workflow-execution-node.is-agent .workflow-execution-dot,
-.workflow-execution-node.is-git .workflow-execution-dot,
-.workflow-execution-node.is-closure .workflow-execution-dot {
-  background: var(--execution-kind-color);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--execution-kind-color) 52%, transparent);
-}
-
-.workflow-execution-node.is-request .workflow-execution-dot {
-  width: 10px;
-  height: 10px;
-  flex-basis: 10px;
-  background: var(--accent);
-  box-shadow: 0 0 11px color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.workflow-execution-node.is-phase .workflow-execution-dot {
-  border: 2px solid var(--accent);
-  background: transparent;
-  box-shadow: none;
-}
-
-.workflow-execution-dot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
+.wx-perle,
+.wx-anneau,
+.wx-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 50%, transparent);
+  transform: translate(-50%, -50%);
 }
 
-.workflow-execution-node.is-running .workflow-execution-dot,
+/* PERLE DE VERRE (choix « Perles ») : le dégradé garde son bleu PLEIN, le reflet bombé est un
+   calque clair posé par-dessus, en haut à gauche. */
+.workflow-execution-node .workflow-execution-dot {
+  width: calc(var(--wx-r) * 2);
+  height: calc(var(--wx-r) * 2);
+  background:
+    radial-gradient(
+      circle at 35% 30%,
+      color-mix(in srgb, var(--wx-lueur) 90%, transparent),
+      color-mix(in srgb, var(--wx-lueur) 20%, transparent) 24%,
+      transparent 60%
+    ),
+    linear-gradient(135deg, var(--wx-froid), var(--wx-chaud));
+}
+
+/* Terminé : la pastille du vert unique, posée sur le bord de la perle à 45°. */
+.workflow-execution-node.is-completed .workflow-execution-dot::after {
+  position: absolute;
+  top: 14.6%;
+  left: 85.4%;
+  width: clamp(5px, calc(var(--wx-r) * 0.42), 8px);
+  height: clamp(5px, calc(var(--wx-r) * 0.42), 8px);
+  border-radius: 50%;
+  background: var(--wx-ok);
+  box-shadow: 0 0 0 1.5px var(--wx-fond-perle);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+/* En cours : une perle ROSE, plus brillante — jamais plus sombre. */
+.workflow-execution-node.is-running .workflow-execution-dot {
+  background:
+    radial-gradient(
+      circle at 35% 30%,
+      color-mix(in srgb, var(--wx-lueur) 90%, transparent),
+      color-mix(in srgb, var(--wx-lueur) 20%, transparent) 24%,
+      transparent 60%
+    ),
+    linear-gradient(135deg, var(--wx-chaud), var(--wx-rose-actif));
+}
+
 .workflow-execution-node.is-pending .workflow-execution-dot {
-  background: var(--warn);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--warn) 50%, transparent);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.2px var(--wx-attente);
 }
 
 /* Interrompu : ni un succès (vert) ni un échec constaté (rouge) — une issue qui ne viendra jamais.
@@ -208,32 +227,84 @@
 .workflow-execution-node.is-interrupted .workflow-execution-dot,
 .workflow-execution-node.is-cancelled .workflow-execution-dot {
   background: var(--text-faint);
-  box-shadow: none;
 }
 
 .workflow-execution-node.is-failed .workflow-execution-dot {
   background: var(--err);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--err) 50%, transparent);
 }
 
-.workflow-execution-node-copy {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  gap: 3px;
+/* Anneau : pointillé qui tourne pour ce qui tourne, blanc plein pour l'étape choisie. */
+.wx-anneau {
+  width: calc(var(--wx-r) * 2 + 8px);
+  height: calc(var(--wx-r) * 2 + 8px);
+  border: 1.5px solid transparent;
 }
 
-.workflow-execution-node-title {
+.workflow-execution-node.is-running .wx-anneau {
+  border: 1.5px dashed var(--wx-rose-actif);
+  animation: wx-tourne 6s linear infinite;
+}
+
+.workflow-execution-node:not(.is-selected, .is-running):hover .wx-anneau,
+.workflow-execution-node:not(.is-selected):focus-visible .wx-anneau {
+  border-color: color-mix(in srgb, var(--wx-filet-vif) 45%, transparent);
+}
+
+.workflow-execution-node.is-selected .wx-anneau {
+  border: 1.5px solid var(--wx-filet-vif);
+  animation: none;
+}
+
+/* Halo : rose derrière les étapes qui ont pesé (un quart de la demande ou plus) et derrière ce
+   qui tourne, où il bat ; clair derrière l'étape choisie. */
+.wx-halo {
+  width: max(calc(var(--wx-r) * 4), 30px);
+  height: max(calc(var(--wx-r) * 4), 30px);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--wx-chaud) 50%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+}
+
+.workflow-execution-node:is(.is-lourd, .is-running) .wx-halo {
+  opacity: 1;
+}
+
+.workflow-execution-node.is-running .wx-halo {
+  animation: wx-pouls 1.6s ease-in-out infinite;
+}
+
+.workflow-execution-node.is-selected .wx-halo {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--wx-lueur) 30%, transparent),
+    transparent 70%
+  );
+  opacity: 1;
+  animation: none;
+}
+
+/* LÉGENDE : le nom, le chiffre (durée ou état), puis la ligne d'identité, coupée au besoin. */
+.wx-legende {
   display: flex;
+  width: 100%;
   min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 2px;
+  line-height: 13px;
 }
 
-.workflow-execution-node-title b,
-.workflow-execution-node-title em,
-.workflow-execution-node-meta {
+.wx-legende > * {
+  max-width: 100%;
+}
+
+.workflow-execution-node-title,
+.workflow-execution-node-meta,
+.wx-chiffre {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -242,38 +313,63 @@
 
 .workflow-execution-node-title b {
   font-size: 11px;
+  font-weight: 600;
 }
 
-.workflow-execution-node-title em {
-  color: var(--text-faint);
-  font-size: 9px;
+.wx-chiffre {
+  color: var(--wx-texte-chiffre);
+  font: 10px/13px var(--mono);
+}
+
+.wx-chiffre > span + .wx-statut {
+  margin-left: 4px;
+}
+
+.wx-statut {
   font-style: normal;
 }
 
-.workflow-execution-node-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 5px;
-  color: var(--text-dim);
-  font-size: 10px;
-  white-space: normal;
-}
-
-.workflow-execution-node-meta > span {
-  min-width: 0;
+/* « terminé » se lit déjà à la pastille verte : le mot reste pour les lecteurs d'écran. */
+.workflow-execution-node.is-completed .wx-statut,
+.workflow-execution-node.is-racine .wx-statut {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
-.workflow-execution-agent {
-  color: var(--text);
-  font-weight: 700;
+.workflow-execution-node.is-running .wx-statut {
+  color: var(--wx-rose-actif);
 }
 
-/* Cause d'un échec : une ligne, coupée ; le texte entier est dans l'infobulle et dans le détail. */
+.workflow-execution-node.is-failed .wx-statut {
+  color: var(--err);
+}
+
+.workflow-execution-node:is(.is-pending, .is-interrupted, .is-cancelled) .wx-statut,
+.workflow-execution-node.is-pending .workflow-execution-node-title b {
+  color: var(--wx-attente);
+}
+
+.workflow-execution-node-meta {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.workflow-execution-node-meta > span + span {
+  margin-left: 4px;
+}
+
+.workflow-execution-agent {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+/* Cause d'un échec : une ligne, coupée ; le texte entier est dans l'infobulle et dans la fiche. */
 .workflow-execution-node-failure {
+  display: block;
   min-width: 0;
   overflow: hidden;
   color: var(--err);
@@ -282,28 +378,199 @@
   white-space: nowrap;
 }
 
+/* Le nom de la skill reste distinct de la ligne grise, sans la couleur d'accent : sur 28 étapes,
+   autant de lignes roses brouillaient la constellation (conv-108, mesuré le 2026-10-11). */
 .workflow-execution-skill {
-  color: var(--accent);
-  font-weight: 800;
+  color: var(--wx-texte-chiffre);
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
 /* « aucune skill » : un chat direct sans skill est NORMAL. L'absence se dit en discret ; dans
    l'accent gras d'un vrai nom de skill, elle se lisait comme une alerte (2026-10-10). */
 .workflow-execution-skill.is-absent {
-  color: var(--text-dim);
+  color: var(--text-faint);
   font-weight: 500;
+}
+
+/* LA RACINE : une pastille au dégradé de la bulle, la demande citée dessous. */
+.workflow-execution-node.is-racine {
+  justify-content: flex-start;
+}
+
+.wx-pastille {
+  display: inline-flex;
+  max-width: min(100%, 240px);
+  height: var(--wx-astre);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--wx-lueur) 40%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--wx-froid), var(--wx-chaud));
+  color: var(--on-accent, var(--wx-lueur));
+}
+
+.wx-pastille b {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-execution-node.is-racine.is-selected .wx-pastille {
+  box-shadow:
+    0 0 0 1.5px var(--wx-fond-perle),
+    0 0 0 3px var(--wx-filet-vif);
+}
+
+.workflow-execution-node.is-racine .workflow-execution-node-meta {
+  width: 100%;
+  margin-top: 6px;
+  white-space: normal;
 }
 
 .workflow-execution-request-label {
   display: -webkit-box;
   width: 100%;
   overflow: hidden;
-  color: var(--text);
-  line-height: 1.35;
+  padding-left: 8px;
+  border-left: 2px solid var(--wx-froid);
+  color: var(--wx-texte-chiffre);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.4;
+  text-align: left;
   white-space: normal !important;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* LA FICHE ACCROCHÉE, au bord holo (choix « Fil holo ») : le détail de l'étape choisie. */
+.workflow-execution-detail.wx-fiche {
+  margin: 0 0 var(--s2);
+  padding: 9px 10px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--wx-fiche-fond), var(--wx-fiche-fond)) padding-box,
+    var(--wx-fiche-bord) border-box;
+}
+
+.wx-fiche-tete {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.wx-fiche-tete b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx-fiche-statut {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--wx-texte-chiffre);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wx-fiche-statut::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wx-attente);
+  content: '';
+}
+
+.wx-fiche-statut.is-completed::before {
+  background: var(--wx-ok);
+}
+
+.wx-fiche-statut.is-running::before {
+  background: var(--wx-chaud);
+}
+
+.wx-fiche-statut.is-failed::before {
+  background: var(--err);
+}
+
+.wx-jauge {
+  display: grid;
+  gap: 3px;
+  margin: 7px 0 2px;
+}
+
+.wx-jauge-piste {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.wx-jauge-plein {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--wx-froid), var(--wx-chaud));
+}
+
+.wx-jauge-texte {
+  color: var(--wx-texte-chiffre);
+  font-size: 10.5px;
+}
+
+.wx-jauge-texte b {
+  color: var(--text);
+}
+
+@keyframes wx-flux {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes wx-tourne {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes wx-pouls {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Mouvement réduit : rien ne coule, rien ne tourne, rien ne bat. */
+@media (prefers-reduced-motion: reduce) {
+  .workflow-execution-flux,
+  .workflow-execution-fil-flux,
+  .workflow-execution-node .wx-anneau,
+  .workflow-execution-node .wx-halo {
+    animation: none;
+  }
 }
 
 .workflow-execution-detail {
@@ -410,12 +677,9 @@
   font-size: 10px;
   color: var(--text-faint);
 }
-
-/* Détail déplié DANS la brique : il prolonge la brique sélectionnée, sans cadre séparé. */
-.workflow-execution-detail.is-inline {
-  margin: 0 0 var(--s1, 4px);
-  border: 0;
-  border-left: 2px solid var(--accent-dim);
-  border-radius: 0 0 var(--r2) var(--r2);
-  padding: 6px var(--s2) var(--s2);
+/* Chargement du détail : l'atome à gauche du libellé, centré sur sa ligne (spinner-partout). */
+.workflow-execution-exchange-empty[data-execution-exchange='chargement'] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }

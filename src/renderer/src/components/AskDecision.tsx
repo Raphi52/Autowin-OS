@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import './AskDecision.css'
-import { promptDeLOption, promptDesOptions, type AskDecision, type AskOption } from './ask-choices'
+import {
+  optionsRepondues,
+  promptDeLOption,
+  promptDesOptions,
+  type AskDecision,
+  type AskOption
+} from './ask-choices'
 
 /*
  * SPEC GELEE — bloc de decision `ask` (20/08, apres trois tours de convergence visuelle).
@@ -55,6 +61,7 @@ function Detail({ detail }: { detail: NonNullable<AskOption['detail']> }): React
 export function AskDecisionBlock({
   decision,
   dejaRepondu,
+  reponseDuFil,
   onPick
 }: {
   decision: AskDecision
@@ -64,6 +71,12 @@ export function AskDecisionBlock({
    * conversation et a un redemarrage, contrairement a l'etat local qui, lui, repartait a zero.
    */
   dejaRepondu?: boolean
+  /**
+   * Le TEXTE du message du fil qui a repondu (`askReponseDuFil`). Il dit QUELLE reponse a ete
+   * retenue apres un remontage ou un redemarrage, quand l'etat local du clic est perdu (conv-240 :
+   * « apres avoir repondu ca doit me highlight celui qui a ete choisi par un cadre »).
+   */
+  reponseDuFil?: string
   onPick?: (prompt: string) => void
 }): React.JSX.Element {
   // La recommandee s'ouvre d'office : c'est celle dont la justification compte le plus.
@@ -99,6 +112,11 @@ export function AskDecisionBlock({
   // Lu au RENDU : l'etat et le fil seulement. Le `ref` ne sert qu'au clic (garde synchrone) —
   // le lire ici serait une lecture de ref pendant le rendu, que React interdit.
   const verrouille = repondu !== undefined || dejaRepondu === true
+  // La reponse retenue : celle du clic, sinon celle du fil. Rien n'est retenu tant que le bloc est
+  // ouvert, et un texte libre tape dans la saisie n'en retient aucune (`optionsRepondues`).
+  const retenues = verrouille
+    ? optionsRepondues(decision.options, repondu ?? reponseDuFil)
+    : new Set<number>()
   const repondre = (prompt: string): void => {
     /*
      * AUCUN DESTINATAIRE = AUCUNE REPONSE (conv-50, 2026-09-01).
@@ -253,10 +271,13 @@ export function AskDecisionBlock({
                   </span>
                 )}
                 {decision.choixMultiple ? (
-                  <label className="askd-choix askd-coche">
+                  <label
+                    className="askd-choix askd-coche"
+                    data-choisi={retenues.has(index) ? 'oui' : undefined}
+                  >
                     <input
                       type="checkbox"
-                      checked={cochees.has(index)}
+                      checked={cochees.has(index) || retenues.has(index)}
                       disabled={verrouille}
                       onChange={() => cocher(index)}
                     />
@@ -276,7 +297,7 @@ export function AskDecisionBlock({
                     className="askd-choix"
                     disabled={verrouille}
                     aria-disabled={verrouille}
-                    data-choisi={repondu === promptDeLOption(option) ? 'oui' : undefined}
+                    data-choisi={retenues.has(index) ? 'oui' : undefined}
                     onClick={() => repondre(promptDeLOption(option))}
                   >
                     <span className="askd-libelle">

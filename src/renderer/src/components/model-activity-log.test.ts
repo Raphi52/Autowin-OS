@@ -472,6 +472,103 @@ describe('le raisonnement DURABLE ne doit ni disparaître ni faire doublon', () 
   })
 })
 
+/**
+ * LES FRAGMENTS DE PENSÉE SE REGROUPENT (conv-257 : « dans les logs de conv groupe tous les
+ * raisonnements, là y a que des lignes raisonnement »). Le main écrit un `reasoning-step` par
+ * fragment diffusé — quelques mots chacun, 143 pour un seul tour —, et chacun faisait une ligne.
+ */
+describe('le raisonnement diffusé en fragments tient en UNE ligne par passage', () => {
+  const fragment = (text: string, at: number, iteration = 0) => ({
+    kind: 'reasoning-step',
+    iteration,
+    text,
+    at
+  })
+
+  it('regroupe les fragments consécutifs en une seule ligne, à l’heure du premier', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          fragment('Let me take a look at the', 10),
+          fragment(' image first.', 11),
+          fragment('\n\n', 12),
+          fragment('I see', 13)
+        ]
+      }
+    })
+    const pensees = entries.filter((entry) => entry.kind === 'reasoning')
+    expect(pensees).toHaveLength(1)
+    expect(pensees[0]).toMatchObject({ source: 'journal', at: 10 })
+    expect(pensees[0].detail).toBe('Let me take a look at the image first.\n\nI see')
+    expect(pensees[0].fields).toMatchObject({ fragments: 4, iteration: 0 })
+  })
+
+  it('garde une ligne par passage ENTRE deux gestes, dans l’ordre réel', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          fragment('je lis', 1),
+          fragment(' l’image', 2),
+          { kind: 'provider-status', iteration: 0, text: 'Read en cours', at: 3 },
+          fragment('je cherche', 4),
+          fragment(' le libellé', 5),
+          fragment('autre étape', 6, 1)
+        ]
+      }
+    })
+    const texte = (entry: (typeof entries)[number]): string | undefined =>
+      entry.kind === 'reasoning' ? entry.detail : entry.label
+    expect(entries.map((entry) => [entry.kind, texte(entry)])).toEqual([
+      ['reasoning', 'je lis l’image'],
+      ['status', 'Read en cours'],
+      ['reasoning', 'je cherche le libellé'],
+      ['reasoning', 'autre étape']
+    ])
+  })
+
+  it('n’ajoute ni la pensée agrégée de clôture ni la copie du tour en doublon des rafales', () => {
+    const message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      parts: [],
+      status: 'completed',
+      done: true,
+      reasoning: 'l’image\n\nje cherche'
+    } as unknown as Msg
+    const entries = buildModelActivityLog({
+      messages: [message],
+      journalByTurn: {
+        'turn-1': [
+          fragment('je lis', 1),
+          fragment(' l’image', 2),
+          { kind: 'provider-status', iteration: 0, text: 'Read en cours', at: 3 },
+          fragment('\n\nje cherche', 4),
+          { kind: 'reasoning', text: 'je lis l’image\n\nje cherche', at: 9 }
+        ]
+      }
+    })
+    const pensees = entries.filter((entry) => entry.kind === 'reasoning')
+    expect(pensees.map((entry) => entry.detail)).toEqual(['je lis l’image', 'je cherche'])
+    expect(pensees.every((entry) => entry.source === 'journal')).toBe(true)
+  })
+
+  it('ne fait aucune ligne pour une rafale de blancs', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          { kind: 'provider-status', iteration: 0, text: 'Bash en cours', at: 1 },
+          fragment('\n\n', 2),
+          { kind: 'provider-status', iteration: 0, text: 'Bash terminé', at: 3 }
+        ]
+      }
+    })
+    expect(entries.map((entry) => entry.kind)).toEqual(['status', 'status'])
+  })
+})
+
 describe('buildModelActivityLog — la source BRAIN', () => {
   const trace = (part: Record<string, unknown>): Record<string, unknown> => ({
     id: 'b1',

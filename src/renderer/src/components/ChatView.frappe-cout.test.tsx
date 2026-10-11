@@ -9,7 +9,7 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * COMPTEUR HORS-MODÈLE du coût d'une frappe. `askDejaRepondu` et `lastUserPromptBefore`
+ * COMPTEUR HORS-MODÈLE du coût d'une frappe. `askReponseDuFil` et `lastUserPromptBefore`
  * balaient le fil pour CHAQUE message : si le fil est re-rendu à chaque caractère, on paie
  * O(n²) par touche — c'est le freeze mesuré (conv-1464). Le test ne juge pas un ressenti, il
  * compte des appels réels.
@@ -19,9 +19,9 @@ vi.mock('./chat-message-keys', async (importOriginal) => {
   const reel = await importOriginal<typeof import('./chat-message-keys')>()
   return {
     ...reel,
-    askDejaRepondu: (...args: Parameters<typeof reel.askDejaRepondu>) => {
+    askReponseDuFil: (...args: Parameters<typeof reel.askReponseDuFil>) => {
       compteur.scans += 1
-      return reel.askDejaRepondu(...args)
+      return reel.askReponseDuFil(...args)
     },
     lastUserPromptBefore: (...args: Parameters<typeof reel.lastUserPromptBefore>) => {
       compteur.scans += 1

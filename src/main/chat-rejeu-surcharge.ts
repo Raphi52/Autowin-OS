@@ -1,5 +1,6 @@
 import { isTransientOverload } from './transient-overload'
 import { estMurDeQuota } from '../shared/reprise-quota'
+import { classifyProviderFailure, modeleDeRepliApresRefus } from './provider-failure-diagnosis'
 
 /**
  * REJOUER UN TOUR DE CHAT TUE PAR UNE PANNE SERVEUR TEMPORAIRE.
@@ -74,6 +75,45 @@ export function deciderRejeuDeChat(message: string, attempt: number): DecisionRe
     maxAttempts,
     delaiMs: rejouer && transitoire ? (attempt + 1) * DELAI_BASE_MS : 0
   }
+}
+
+/**
+ * REFUS DU FILTRE DE SECURITE DU MODELE DANS UN TOUR DE CHAT : on relance UNE fois, autrement.
+ *
+ * Mesure conv-239, tour `d9a2ca62-65b1-498d-ad32-32c45d4f3558` (2026-10-11 06:46) : « parfait met
+ * claude en full maj », sur claude-opus-5-5 en reprise de la session `78f72dd3`, meurt en « API
+ * Error: Opus 5.5's safeguards flagged this message […] Try rephrasing the request in a new session
+ * or change your model. Details: `[reasoning_extraction]` » — 536 411 jetons d'entree, 3,70 USD,
+ * 0 jeton de sortie. L'adaptateur marque cette erreur NON rejouable (elle a ete facturee), le pilote
+ * la relancait telle quelle et le fil s'arretait : l'utilisateur a du reformuler a la main deux
+ * minutes plus tard (tour `fef584d5`, meme session, meme modele, reussi).
+ *
+ * Rejouer a l'IDENTIQUE echoue pareil (le CLI le dit, l'orchestrateur l'a mesure en conv-890). On
+ * suit donc le conseil du CLI, dans cet ordre :
+ *  1. `modele` — un modele VOISIN existe (Opus -> Sonnet de la meme generation, seule
+ *     correspondance connue, voir `modeleDeRepliApresRefus`) : on garde la session, donc le fil.
+ *  2. `session` — pas de voisin, mais l'appel reprenait une session heritee AVANT tout travail du
+ *     tour : on la lache et on renvoie le fil complet dans une session neuve.
+ * Sinon rien : l'erreur remonte avec son conseil (`describeChatTurnFailure`). Jamais deux fois
+ * dans le meme tour — un second refus est un verdict, pas un hasard.
+ */
+export type RepliApresRefus = { mode: 'modele'; modele: string } | { mode: 'session' }
+
+export function deciderRepliApresRefus(contexte: {
+  message: string
+  /** Modele de l'appel refuse (celui demande, a defaut celui que le fournisseur a resolu). */
+  modele?: string
+  /** L'appel reprenait une session heritee, et AUCUN travail du tour n'y est encore ecrit. */
+  sessionHeriteeLachable: boolean
+  /** Le repli de ce tour a deja ete joue. */
+  dejaTente: boolean
+}): RepliApresRefus | undefined {
+  if (contexte.dejaTente) return undefined
+  if (classifyProviderFailure(contexte.message) !== 'refused') return undefined
+  const voisin = modeleDeRepliApresRefus(contexte.modele)
+  if (voisin && voisin !== contexte.modele) return { mode: 'modele', modele: voisin }
+  if (contexte.sessionHeriteeLachable) return { mode: 'session' }
+  return undefined
 }
 
 /**

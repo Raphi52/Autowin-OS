@@ -118,11 +118,6 @@
   color: var(--text);
 }
 
-/* components/BehaviourView.css — tailles */
-:root[data-theme^='malvoyant-'] .behaviour-view > header p {
-  font-size: 13px;
-}
-
 /* components/BrainMarkdown.css — tailles */
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
@@ -174,14 +169,12 @@
 :root[data-theme^='malvoyant-'] .cockpit-sources button b,
 :root[data-theme^='malvoyant-'] .cockpit-sources button strong,
 :root[data-theme^='malvoyant-'] .cockpit-sources button small,
-:root[data-theme^='malvoyant-'] .cockpit-tabs button,
 :root[data-theme^='malvoyant-'] .registry-heading,
 :root[data-theme^='malvoyant-'] .control-row strong,
 :root[data-theme^='malvoyant-'] .control-row p,
 :root[data-theme^='malvoyant-'] .control-source-badge,
 :root[data-theme^='malvoyant-'] .control-hook-meta em,
 :root[data-theme^='malvoyant-'] .control-hook-meta code,
-:root[data-theme^='malvoyant-'] .control-empty,
 :root[data-theme^='malvoyant-'] .inspector-hero p,
 :root[data-theme^='malvoyant-'] .cockpit-inspector dl > div,
 :root[data-theme^='malvoyant-'] .inspector-impact,
@@ -652,9 +645,7 @@
 }
 
 /* components/InterfaceView.css — tailles */
-:root[data-theme^='malvoyant-'] .interface-row-text p,
-:root[data-theme^='malvoyant-'] .interface-theme-label,
-:root[data-theme^='malvoyant-'] .interface-reserve {
+:root[data-theme^='malvoyant-'] .interface-theme-label {
   font-size: 13px;
 }
 
@@ -773,7 +764,14 @@
 :root[data-theme^='malvoyant-'] .observatory-call-preview,
 :root[data-theme^='malvoyant-'] [data-testid='observatory-conversation-count'],
 :root[data-theme^='malvoyant-'] .observatory-compare-status,
-:root[data-theme^='malvoyant-'] .observatory-run-jump {
+:root[data-theme^='malvoyant-'] .observatory-run-jump,
+:root[data-theme^='malvoyant-'] .observatory-gantt__head b,
+:root[data-theme^='malvoyant-'] .observatory-gantt__head small,
+:root[data-theme^='malvoyant-'] .observatory-gantt__axis,
+:root[data-theme^='malvoyant-'] .observatory-gantt__who small,
+:root[data-theme^='malvoyant-'] .observatory-gantt__tip,
+:root[data-theme^='malvoyant-'] .observatory-gantt__tip-head em,
+:root[data-theme^='malvoyant-'] .observatory-gantt__tip small {
   font-size: 13px;
 }
 
@@ -798,8 +796,14 @@
 :root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event p small,
 :root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-conversations > button.is-active,
 :root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-calls button.is-active,
-:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event.is-selected {
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event.is-selected,
+:root[data-theme^='malvoyant-'] .observatory-gantt__tip {
   color: var(--text);
+}
+
+/* components/OrchestrationBudgetSettings.css — tailles */
+:root[data-theme^='malvoyant-'] .orchestration-budget-input b {
+  font-size: 13px;
 }
 
 /* components/ProdPassphraseGate.css — gris en dur */
@@ -876,6 +880,12 @@
 :root[data-theme^='malvoyant-'] .html-render-preview__source,
 :root[data-theme^='malvoyant-'] .html-render-preview__too-large {
   color: var(--text);
+}
+
+/* components/SettingsView.css — tailles */
+:root[data-theme^='malvoyant-'] .settings-content .domain-eyebrow,
+:root[data-theme^='malvoyant-'] .settings-providers-list li > span:first-of-type {
+  font-size: 13px;
 }
 
 /* components/SlashPalette.css — tailles */
@@ -1071,9 +1081,12 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-empty,
 :root[data-theme^='malvoyant-'] .workflow-execution-error,
 :root[data-theme^='malvoyant-'] .workflow-execution-node-title b,
-:root[data-theme^='malvoyant-'] .workflow-execution-node-title em,
 :root[data-theme^='malvoyant-'] .workflow-execution-node-meta,
 :root[data-theme^='malvoyant-'] .workflow-execution-node-failure,
+:root[data-theme^='malvoyant-'] .wx-pastille b,
+:root[data-theme^='malvoyant-'] .workflow-execution-request-label,
+:root[data-theme^='malvoyant-'] .wx-fiche-statut,
+:root[data-theme^='malvoyant-'] .wx-jauge-texte,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail header,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dt,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dd,

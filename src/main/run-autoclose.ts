@@ -506,6 +506,13 @@ export type VerificationAvantPublication =
        * 2026-10-01) : on publie, et le panneau les NOMME — un vert obtenu ainsi ne se tait pas.
        */
       instablesSousCharge?: string[]
+      /**
+       * Suites restées rouges, mais DÉJÀ rouges au dernier commit, sans échec nouveau avec les
+       * fichiers du tour (conv-246) : on publie, et le panneau les NOMME.
+       */
+      dejaRouges?: string[]
+      /** Suites rouges dans l'arbre partagé, vertes avec ce qui part : le travail d'autres fils. */
+      rougesDAilleurs?: string[]
     }
   | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
   | { statut: 'non-verifie'; raison: string }

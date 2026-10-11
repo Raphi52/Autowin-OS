@@ -65,33 +65,28 @@
 }
 
 .model-log-list {
+  /* Largeur d'une voie de piste et de la colonne de la frise : les lignes ET le trait de la frise
+     (porte par `.model-log-frise`) les lisent, donc elles vivent sur la liste, pas sur la ligne. */
+  --piste-w: 5px;
+  --frise-w: 12px;
   min-height: 0;
   gap: 0;
 }
 
-/* UNE ENTREE = une grille [heure | corps]. La gouttiere fixe aligne toutes les heures entre
-   elles, ce qu'un flex ne garantit pas des que le label change de longueur. */
+/* LIGNE UNIQUE (conv-247, 2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 choisies par
+   l'utilisateur — « go 2 3 4 »). UNE ENTREE = une grille [heure | perle | carte]. L'heure SEULE
+   a gauche de la frise aligne toutes les heures en colonne ; la carte a coins coupes porte, au
+   repos, une seule ligne (nature, titre court, resume gris) et se deplie au clic. */
 .model-log-row {
   display: grid;
-  grid-template-columns: var(--log-gutter) 1fr;
-  column-gap: 8px;
-  align-items: baseline;
-  padding: 4px 6px 4px 0;
-  border-top: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.28), rgba(212, 169, 79, 0.03)) 1;
-  transition: background-color 120ms ease;
-}
-
-.model-log-row:first-child {
-  border-top-color: transparent;
-  border-image: none;
-}
-
-.model-log-row:hover {
-  background: rgba(255, 255, 255, 0.035);
+  grid-template-columns: var(--log-gutter) var(--frise-w) minmax(0, 1fr);
+  column-gap: 4px;
+  align-items: start;
+  padding: 2px 4px 2px 0;
 }
 
 .model-log-time {
+  padding-top: 4px;
   font:
     10px/1.5 ui-monospace,
     SFMono-Regular,
@@ -103,106 +98,212 @@
   white-space: nowrap;
 }
 
-.model-log-body {
-  min-width: 0;
+/* LA FRISE : un trait continu traverse le tour, place au centre de la colonne des perles. Le
+   degrade est un reglage (--log-frise) : or par defaut, bleu -> rose dans Nebuleuse. */
+.model-log-frise {
+  --frise-x: calc(var(--log-gutter) + 4px + var(--frise-w) / 2 - 1px);
+  background-image: var(
+    --log-frise,
+    linear-gradient(180deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.12))
+  );
+  background-position: var(--frise-x) 0;
+  background-size: 2px 100%;
+  background-repeat: no-repeat;
 }
 
-.model-log-head {
+/* UNE PERLE par geste, a la couleur de sa nature, cerclee de sombre pour se detacher du trait. */
+.model-log-perle {
+  align-self: stretch;
+  min-height: 18px;
+  background: radial-gradient(
+    circle at 50% 11px,
+    var(--log-perle, var(--log-tone, #a9b2c4)) 0 3.5px,
+    rgba(0, 0, 0, 0.6) 4px 5.5px,
+    transparent 6px
+  );
+}
+
+.model-log-row:is([data-log-ok='false'], [data-log-kind='error']) {
+  --log-perle: #eb2828;
+}
+
+/* LA CARTE A COINS COUPES — la coupe des panneaux Nebuleuse (--nv-chanfrein-forme), en petit :
+   haut-gauche et bas-droite coupes a 6 px. Le contour est un ANNEAU d'1 px decoupe en « evenodd »
+   (meme recette que --nv-chanfrein-anneau) : le fond de la carte reste translucide. Pan haut-gauche
+   a la couleur de la nature, pan bas-droite argent, cotes a 7 %. */
+.model-log-carte {
+  --c: 6px;
+  --pan: calc(var(--c) * 2.4);
+  position: relative;
+  min-width: 0;
+  clip-path: polygon(
+    var(--c) 0,
+    100% 0,
+    100% calc(100% - var(--c)),
+    calc(100% - var(--c)) 100%,
+    0 100%,
+    0 var(--c)
+  );
+  background: var(--log-carte-fond, rgba(255, 255, 255, 0.035));
+}
+
+.model-log-carte:hover {
+  --log-carte-fond: rgba(255, 255, 255, 0.055);
+}
+
+.model-log-carte::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+        var(--log-carte-pan, var(--log-tone, #a9b2c4)),
+        var(--log-carte-pan, var(--log-tone, #a9b2c4))
+      )
+      left top / var(--pan) var(--pan) no-repeat,
+    linear-gradient(
+        var(--log-carte-pan-bas, rgba(201, 212, 230, 0.5)),
+        var(--log-carte-pan-bas, rgba(201, 212, 230, 0.5))
+      )
+      right bottom / var(--pan) var(--pan) no-repeat,
+    var(--log-carte-cote, rgba(255, 255, 255, 0.07));
+  clip-path: polygon(
+    evenodd,
+    var(--c) 0,
+    100% 0,
+    100% calc(100% - var(--c)),
+    calc(100% - var(--c)) 100%,
+    0 100%,
+    0 var(--c),
+    var(--c) 0,
+    calc(var(--c) + 0.414px) 1px,
+    calc(100% - 1px) 1px,
+    calc(100% - 1px) calc(100% - var(--c) - 0.414px),
+    calc(100% - var(--c) - 0.414px) calc(100% - 1px),
+    1px calc(100% - 1px),
+    1px calc(var(--c) + 0.414px),
+    calc(var(--c) + 0.414px) 1px
+  );
+}
+
+.model-log-row:is([data-log-ok='false'], [data-log-kind='error']) .model-log-carte {
+  --log-carte-pan: #eb2828;
+  --log-carte-pan-bas: #eb2828;
+  --log-carte-cote: rgba(235, 40, 40, 0.4);
+}
+
+.model-log-detail {
+  margin: 0;
+  color: #a9b2c4;
+}
+
+/* LA LIGNE AU REPOS = le resume cliquable de la carte. `flex-wrap: nowrap` : elle reste sur UNE
+   ligne, le resume gris se coupe en points de suspension. */
+.model-log-detail > summary.model-log-head {
   display: flex;
+  flex-wrap: nowrap;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
-}
-
-/* CHIP DE TYPE : petites capitales monospace. La couleur vient de --log-tone, posee par
-   [data-log-kind] plus bas — une seule regle de forme, huit teintes. */
-.model-log-kind {
-  flex: none;
-  font:
-    9px/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0 5px;
-  border-radius: 3px;
-  color: var(--log-tone, #a9b2c4);
-  border: 1px solid color-mix(in srgb, var(--log-tone, #a9b2c4) 38%, transparent);
-  background: color-mix(in srgb, var(--log-tone, #a9b2c4) 11%, transparent);
-}
-
-.model-log-label {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: #dde3ee;
-}
-
-.model-log-row[data-log-ok='false'] .model-log-label {
-  color: #f0a9a9;
-}
-
-/* DETAIL : deux lignes maximum au repos. Le <details> natif porte le depliage, donc le clamp doit
-   sauter des que le bloc est ouvert — sinon on deplie sur un texte toujours tronque. */
-.model-log-detail {
-  margin-top: 2px;
-  font:
-    11px/1.45 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  color: #a9b2c4;
-  word-break: break-word;
-}
-
-.model-log-detail > summary {
-  display: block;
+  padding: 3px 8px 3px 9px;
   cursor: pointer;
   list-style: none;
-  white-space: pre-wrap;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .model-log-detail > summary::-webkit-details-marker {
   display: none;
 }
 
-.model-log-detail[open] > summary {
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  display: block;
-  color: #c3cbda;
-}
-
-.model-log-detail > summary:hover {
-  color: #c3cbda;
-}
-
-/* Le texte complet n'est PAS duplique : summary porte tout et se declampe a l'ouverture. Ce
-   marqueur dit seulement dans quel sens ira le clic. */
-.model-log-more {
-  display: block;
-  margin-top: 1px;
-  font-size: 9px;
+/* NATURE DU GESTE : petites capitales monospace a la couleur de sa nature (--log-tone, posee par
+   [data-log-kind] plus bas — une seule regle de forme, une teinte par nature). */
+.model-log-kind {
+  flex: none;
+  font:
+    700 9px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(212, 169, 79, 0.7);
+  color: var(--log-tone, #a9b2c4);
 }
 
-.model-log-detail[open] .model-log-more::after {
-  content: 'replier';
+/* TITRE COURT : il s'arrete a 46 % de la ligne pour laisser sa place au resume. Sans resume a cote
+   (`is-plein`, dont le TEXTE de « Demande » ou « Réflexion »), il prend toute la ligne : coupe a
+   mi-ligne, il laissait la droite vide (capture du 2026-10-11, lignes « Signe de vie »). */
+.model-log-label {
+  flex: 0 1 auto;
+  max-width: 46%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: #dde3ee;
 }
 
-.model-log-detail:not([open]) .model-log-more::after {
-  content: 'tout voir';
+.model-log-label.is-plein {
+  flex: 1 1 0;
+  max-width: none;
+}
+
+.model-log-label.is-texte {
+  font-weight: 500;
+}
+
+.model-log-row[data-log-ok='false'] .model-log-label {
+  color: #f0a9a9;
+}
+
+.model-log-resume {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font:
+    10.5px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: rgba(169, 178, 196, 0.8);
+}
+
+/* Le chevron dit dans quel sens ira le clic ; ouvert, il pointe vers le bas et prend la teinte. */
+.model-log-chevron {
+  flex: none;
+  margin-left: auto;
+  font:
+    700 12px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: rgba(169, 178, 196, 0.55);
+  transition: transform 120ms ease;
+}
+
+.model-log-detail[open] .model-log-chevron {
+  transform: rotate(90deg);
+  color: var(--log-tone, #a9b2c4);
+}
+
+/* Ouvert, le texte complet s'affiche dessous : le resume coupe ne servirait qu'a le repeter. */
+.model-log-detail[open] .model-log-resume {
+  visibility: hidden;
+}
+
+.model-log-texte {
+  margin-bottom: 4px;
+  font:
+    11px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: #c3cbda;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* HUIT TEINTES, une par nature de geste. Sobres : le journal doit rester lisible, pas clignoter. */
@@ -237,10 +338,12 @@
   color: #a9b2c4;
 }
 
-/* Panneau etroit : la gouttiere horaire mange le label. On la reduit plutot que de tronquer. */
+/* Panneau etroit : la gouttiere horaire mange le label. On la reduit plutot que de tronquer. Posee
+   sur la LISTE : la ligne et le trait de la frise doivent lire la meme largeur. 46 px : l'heure
+   seule (« 07:05:09 ») y tient sans deborder sur la perle. */
 @container (max-width: 320px) {
-  .model-log-row {
-    --log-gutter: 42px;
+  .model-log-list {
+    --log-gutter: 46px;
   }
 }
 
@@ -295,7 +398,7 @@
 /* DETAIL DEPLIE : sous le texte a plat, les CHAMPS BRUTS du geste, clef par clef. Le mur de JSON
    colle en une chaine etait exactement le defaut — l'arbre le remplace, la chaine reste au repos. */
 .model-log-expand {
-  margin: 4px 0 2px;
+  margin: 0 8px 6px 9px;
   padding: 6px 8px;
   border-left: 2px solid rgba(212, 169, 79, 0.35);
   background: rgba(255, 255, 255, 0.025);
@@ -371,10 +474,11 @@
 .model-log-tour__ko {
   color: #e2685f;
 }
+/* L'ecart depuis le debut du tour (« +230 min 42 s ») vit dans la carte DEPLIEE, a cote de la
+   source (conv-247, ligne unique). Dans la gouttiere, il debordait sur le texte (conv-245) puis
+   forcait chaque ligne sur deux hauteurs ; la gouttiere ne garde plus que l'heure. */
 .model-log-delta {
-  display: block;
-  opacity: 0.55;
-  font-size: 10px;
+  white-space: nowrap;
 }
 .model-log-toggle {
   padding: 0 8px;
@@ -394,56 +498,19 @@
    est en pseudo-éléments — la fenêtre de 300 lignes n'est pas alourdie.
    ========================================================================== */
 
-/* Rail d'en-tête : la légende des voies, et le moyen d'isoler une source d'un clic. */
-.model-log-voies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  padding: 2px 0 4px;
-}
-
-.model-log-voie {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 4px;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: transparent;
-  cursor: pointer;
-  font:
-    9px/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  letter-spacing: 0.05em;
-  color: rgba(169, 178, 196, 0.75);
-}
-
-.model-log-voie:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.model-log-voie.is-seule {
-  border-color: rgba(212, 169, 79, 0.45);
-  color: #d4a94f;
-}
-
-.model-log-voie__trait {
-  width: 3px;
-  height: 10px;
-  border-radius: 2px;
-  background: var(--piste-tone, #8b93a6);
-}
-
-.model-log-voie__compte {
-  opacity: 0.6;
-}
-
-/* La ligne gagne une colonne de rail UNIQUEMENT en vue pistes. */
+/* La ligne gagne une colonne de rail UNIQUEMENT en vue pistes ; le trait de la frise se decale
+   d'autant. */
 .model-log-list[data-pistes='true'] .model-log-row {
-  grid-template-columns: calc(var(--piste-total, 1) * 5px) var(--log-gutter) 1fr;
-  column-gap: 6px;
+  grid-template-columns:
+    calc(var(--piste-total, 1) * var(--piste-w)) var(--log-gutter) var(--frise-w)
+    minmax(0, 1fr);
+}
+
+.model-log-list[data-pistes='true'] .model-log-frise {
+  --frise-x: calc(
+    var(--piste-total, 1) * var(--piste-w) + 4px + var(--log-gutter) + 4px + var(--frise-w) / 2 -
+      1px
+  );
 }
 
 .model-log-piste {
@@ -517,8 +584,8 @@
 
 /* Panneau très étroit : le rail passe à 4 px par voie plutôt que de manger le label. */
 @container (max-width: 320px) {
-  .model-log-list[data-pistes='true'] .model-log-row {
-    grid-template-columns: calc(var(--piste-total, 1) * 4px) var(--log-gutter) 1fr;
+  .model-log-list {
+    --piste-w: 4px;
   }
   .model-log-piste::before {
     background: repeating-linear-gradient(

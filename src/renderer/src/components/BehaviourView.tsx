@@ -207,7 +207,12 @@ export function BehaviourView(): React.JSX.Element {
           <span title={composition?.inspection?.workspace}>
             Workspace : {composition?.inspection?.workspace ?? 'chargement…'}
           </span>
-          <button type="button" disabled={choosing} onClick={() => void chooseWorkspace()}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={choosing}
+            onClick={() => void chooseWorkspace()}
+          >
             {choosing ? 'Sélection…' : 'Choisir un workspace'}
           </button>
         </div>
@@ -220,6 +225,7 @@ export function BehaviourView(): React.JSX.Element {
             <label>
               Mode{' '}
               <select
+                className="select"
                 aria-label="Mode d’apprentissage Brain"
                 value={learningMode}
                 onChange={(event) => {
@@ -241,6 +247,7 @@ export function BehaviourView(): React.JSX.Element {
             {learningCurations.map((curation) => (
               <button
                 type="button"
+                className="btn btn-sm"
                 key={curation.value.eventId}
                 onClick={() => {
                   void window.api
@@ -257,6 +264,7 @@ export function BehaviourView(): React.JSX.Element {
             {learningCurations.length < learningCurationTotal && (
               <button
                 type="button"
+                className="btn btn-sm"
                 onClick={() =>
                   void loadMoreCurations().catch((reason) =>
                     setError(reason instanceof Error ? reason.message : String(reason))
@@ -322,7 +330,7 @@ export function BehaviourView(): React.JSX.Element {
       {error && (
         <div className="behaviour-error">
           <p role="alert">{error}</p>
-          <button type="button" onClick={() => void loadComposition(workspace)}>
+          <button type="button" className="btn" onClick={() => void loadComposition(workspace)}>
             Réessayer
           </button>
         </div>

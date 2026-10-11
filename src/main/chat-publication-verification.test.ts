@@ -58,7 +58,9 @@ afterEach(() => {
  * Un dépôt à trois tests : `sujet.test.ts` IMPORTE `sujet.ts`, `lecteur.test.ts` le LIT (comme
  * `chat-ipc-contract.test.ts` lit `index.ts`), `etranger.test.ts` est DÉJÀ rouge et sans rapport.
  */
-function depot(options: { avecInstable?: boolean } = {}): string {
+function depot(
+  options: { avecInstable?: boolean; avecDejaRouge?: boolean; avecCombine?: boolean } = {}
+): string {
   mkdirSync(RACINE, { recursive: true })
   const repo = mkdtempSync(join(RACINE, 'repo-'))
   temporaires.push(repo)
@@ -120,6 +122,34 @@ function depot(options: { avecInstable?: boolean } = {}): string {
         "  writeFileSync(temoin, 'x')",
         '  expect(premier).toBe(false)',
         '})',
+        ''
+      ].join(SAUT),
+      'utf8'
+    )
+  }
+  if (options.avecDejaRouge) {
+    // Rouge DÉJÀ COMMITÉ, et dans la portée de `sujet.ts` (il l'importe) : aucun tour n'en est l'auteur.
+    writeFileSync(
+      join(repo, 'ancien-rouge.test.ts'),
+      [
+        "import { expect, it } from 'vitest'",
+        "import { valeur } from './sujet'",
+        "it('attend 2 depuis toujours', () => expect(valeur()).toBe(2))",
+        ''
+      ].join(SAUT),
+      'utf8'
+    )
+  }
+  if (options.avecCombine) {
+    // Vert au commit. Un AUTRE fil cassera `autre.ts` sans le publier : le rouge ne viendra pas du tour.
+    writeFileSync(join(repo, 'autre.ts'), `export const autre = (): number => 2${SAUT}`, 'utf8')
+    writeFileSync(
+      join(repo, 'combine.test.ts'),
+      [
+        "import { expect, it } from 'vitest'",
+        "import { valeur } from './sujet'",
+        "import { autre } from './autre'",
+        "it('additionne sujet et autre', () => expect(valeur() + autre()).toBe(3))",
         ''
       ].join(SAUT),
       'utf8'
@@ -243,6 +273,64 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
       expect(verdict.testsJoues).toBe(nombre + 2)
     }
   )
+
+  /*
+   * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (conv-246, 2026-10-11). Mesuré ce jour-là : plus aucun tour
+   * ne publiait depuis 08:40, 84 fichiers en attente, pour 7 suites rouges dont AUCUNE n'était due au
+   * tour refusé — 3 déjà rouges sur main, 2 cassées par le travail non publié d'autres fils. Le tour
+   * est désormais jugé sur ce qui PART : le dernier commit + ses fichiers, comparé au dernier commit
+   * seul, dans une copie propre.
+   * Entrées qui feraient échouer ces cas : comparer à l'arbre partagé au lieu du dernier commit (le
+   * rouge d'un autre fil y reste), ou imputer au tour tout rouge de la copie (le rouge commité y est).
+   */
+  it('publie quand le seul rouge était déjà là au dernier commit, et le nomme', async () => {
+    const repo = depot({ avecDejaRouge: true })
+    writeFileSync(
+      join(repo, 'sujet.ts'),
+      `// commentaire${SAUT}export const valeur = (): number => 1${SAUT}`,
+      'utf8'
+    )
+
+    const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
+
+    expect(verdict).toMatchObject({ statut: 'vert', dejaRouges: ['ancien-rouge.test.ts'] })
+    // La copie propre ne survit pas à la mesure : ni dossier, ni copie enregistrée dans git.
+    const copies = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repo,
+      encoding: 'utf8'
+    })
+    expect(copies.match(/^worktree /gm)).toHaveLength(1)
+  })
+
+  it('publie quand le rouge vient du travail NON publié d’un autre fil, et le nomme', async () => {
+    const repo = depot({ avecCombine: true })
+    // L'autre fil : `autre.ts` modifié dans l'arbre partagé, jamais dans la liste du tour.
+    writeFileSync(join(repo, 'autre.ts'), `export const autre = (): number => 5${SAUT}`, 'utf8')
+    writeFileSync(
+      join(repo, 'sujet.ts'),
+      `// commentaire${SAUT}export const valeur = (): number => 1${SAUT}`,
+      'utf8'
+    )
+
+    const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
+
+    expect(verdict).toMatchObject({ statut: 'vert', rougesDAilleurs: ['combine.test.ts'] })
+  })
+
+  it('bloque le rouge AJOUTÉ par le tour, sans lui imputer le rouge déjà commité', async () => {
+    const repo = depot({ avecDejaRouge: true })
+    writeFileSync(
+      join(repo, 'sujet.ts'),
+      `export const valeur = (): number => 1${SAUT}export const autre = 2${SAUT}`,
+      'utf8'
+    )
+
+    const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
+
+    expect(verdict.statut).toBe('echec')
+    if (verdict.statut !== 'echec') return
+    expect(verdict.testsEnEchec).toEqual(['lecteur.test.ts'])
+  })
 
   it('un texte qu’aucun test ne cite n’est pas vérifiable : il le dit, sans lancer la suite', async () => {
     const repo = depot()

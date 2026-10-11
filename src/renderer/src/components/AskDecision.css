@@ -473,6 +473,10 @@
   margin-left: 0.5rem;
   color: #e3ba55;
 }
+/* Choix multiple : la case cochee dit deja que la ligne a ete envoyee, pas de seconde coche. */
+.askd.est-repondu .askd-coche[data-choisi='oui'] .askd-libelle::after {
+  content: none;
+}
 .askd.est-repondu .askd-entree {
   visibility: hidden;
 }

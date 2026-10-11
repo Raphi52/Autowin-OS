@@ -413,8 +413,31 @@ function recolorerClair(rgb, role, garder) {
   return null
 }
 
+/**
+ * Role d'une declaration, selon sa propriete ET sa regle. Rend un role, ou une fonction du RANG de la
+ * couleur dans la valeur quand ses couleurs ne peignent pas la meme chose.
+ *
+ * L'ASCENSEUR (2026-10-11, conv-250 : « corrige dans le generateur du theme Holographique blanc la
+ * couleur du curseur des barres de defilement, pour qu'elles soient visibles sur la nacre dans toute
+ * l'app »). `roleClair` ne voyait que la propriete : `scrollbar-color` et le fond du curseur
+ * `::-webkit-scrollbar-thumb` tombaient en « fond », et un fond blanc reste blanc. Le curseur du noir
+ * (blanc a 16 %) restait donc blanc sur la nacre, invisible -- releve dans les huit zones qui
+ * defilent de l'app (accueil, fil, Agent Studio, Observatory, Worktrees, Reglages), toutes regies par
+ * la regle `*` de la section 2. Le curseur est un TRAIT (un blanc a 16 % y devient une encre
+ * d'opacite comparable a l'oeil, la meme que --chat-ascenseur) ; la piste, seconde couleur de
+ * `scrollbar-color`, reste un fond.
+ */
+function roleDeclarationClair(propriete, selecteur) {
+  const p = propriete.toLowerCase()
+  if (p === 'scrollbar-color') return (rang) => (rang === 0 ? 'trait' : 'fond')
+  if (/::-webkit-scrollbar-thumb/.test(selecteur) && /^background/.test(p)) return 'trait'
+  return roleClair(propriete)
+}
+
 function recolorerValeurClair(valeur, role, garder) {
+  let rang = 0
   return valeur.replace(COULEUR, (brut) => {
+    const roleIci = typeof role === 'function' ? role(rang++) : role
     if (brut.startsWith('#') && ![4, 5, 7, 9].includes(brut.length)) return brut
     const rgb = brut.startsWith('#')
       ? hexVersRgb(brut)
@@ -422,7 +445,7 @@ function recolorerValeurClair(valeur, role, garder) {
           const n = brut.match(/[\d.]+/g).map(Number)
           return { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
         })()
-    const t = recolorerClair(rgb, role, garder)
+    const t = recolorerClair(rgb, roleIci, garder)
     if (!t) return brut
     // Opaque en #rrggbb : theme.css.test.ts exige un --bg-0 hexadecimal (liste native d'un select).
     const hex = (n) => n.toString(16).padStart(2, '0')
@@ -719,7 +742,7 @@ export function genererMainClair() {
     const regle = decl.parent
     const selecteur = regle && regle.type === 'rule' ? regle.selector : ''
     const garder = CLAIR_SUR_DEGRADE.test(selecteur)
-    decl.value = recolorerValeurClair(decl.value, roleClair(decl.prop), garder)
+    decl.value = recolorerValeurClair(decl.value, roleDeclarationClair(decl.prop, selecteur), garder)
     // Le lisere irise en premiere couche des panneaux qui portent le satin de la page (la saisie,
     // peinte autrement et coupee en `padding-box`, n'en recoit pas).
     if (decl.prop === 'background' && /var\(--nv-satin\) fixed\s*$/.test(decl.value)) {

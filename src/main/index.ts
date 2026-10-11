@@ -94,7 +94,8 @@ import {
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { loadSqlCatalogConfigFile } from './sql-read-catalog'
+import { devTargets, lireBasesExploitees, loadSqlCatalogConfigFile } from './sql-read-catalog'
+import { propositionPourEcran } from './prod-autorite-depuis-catalogue'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import type { ExecutionEvidence, Message, ProviderAdapter } from './providers/types'
@@ -127,7 +128,14 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
-import { CapteurHdesk, racineScriptsHorsArchive, agirHdesk, basculerHdesk, type GesteTv } from './hdesk-tv'
+import {
+  CapteurHdesk,
+  racineScriptsHorsArchive,
+  agirHdesk,
+  basculerHdesk,
+  fermerHdesk,
+  type GesteTv
+} from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
@@ -148,6 +156,7 @@ import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
+import { modeleDuTour } from './chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
@@ -1608,6 +1617,10 @@ bus.onConversationRemoved = (id: string): void => {
  * promettre une relance qui n'arriverait pas.
  */
 bus.redemarrerApp = (): void => restartApplication(app)
+// Outil `bureau_cache_fermer` (lot 1, conv-222) : meme racine de scripts que la TV et les gestes,
+// `app.asar.unpacked` une fois installee.
+bus.fermerBureauCache = (demande) =>
+  fermerHdesk(racineScriptsHorsArchive(app.getAppPath()), demande)
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
@@ -1745,7 +1758,8 @@ function registerHdeskTvIpc(): void {
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
   // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
-  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. runs/inventaire-tours.ts.
+  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. listUnfinishedTurnsPuisMenageAsync
+  // (runs/turn-journal.ts).
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
     // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;
@@ -2459,7 +2473,8 @@ Le fil reprend ensuite normalement.`
     lireModeles: () => agentModels,
     lireTopologie,
     appliquerTopologie,
-    broadcastRolesRefresh
+    broadcastRolesRefresh,
+    broadcastConversationsRefresh: () => broadcast({ type: 'refresh', scope: 'conversations' })
   })
   // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
   // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
@@ -3273,6 +3288,26 @@ Le fil reprend ensuite normalement.`
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       appliquerCompteDeConversation(conversationId)
+      /*
+       * LE MODÈLE DU FIL (conv-239, 2026-10-11) : une conversation peut porter son propre modèle.
+       * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)
+       * prime : on ne remplit que la place vide. Un choix devenu indisponible est DIT dans le fil,
+       * puis le tour part sur le modèle par défaut au lieu d'échouer au premier appel.
+       */
+      if (args[3] === undefined) {
+        await agentModelsReady.catch(() => undefined)
+        const modele = modeleDuTour(os.conversations.get(conversationId)?.modeleChoisi, agentModels)
+        if (modele.kind === 'choisi') args[3] = modele.binding
+        else if (modele.kind === 'indisponible') {
+          // Même forme que la bascule de dossier (`alignerDossierSurLaDemande`) : avis écrit
+          // dans le fil AVANT que le tour parte, puis rafraîchissement.
+          os.conversations.append(conversationId, {
+            role: 'assistant',
+            content: `⚠️ Le modèle choisi pour cette conversation (${modele.voulu.provider} · ${modele.voulu.model ?? 'modèle par défaut'}) n'est plus disponible : ${modele.motif}. Ce tour part sur le modèle par défaut de l'application.`
+          })
+          broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+        }
+      }
       let finirTour!: () => void
       const finDuTour = new Promise<void>((resolve) => {
         finirTour = resolve
@@ -4679,6 +4714,20 @@ app.whenReady().then(async () => {
       anomalies: liste.anomalies,
       chemin: cheminAutoriteProd(ensureAutowinAppData(appDataRoot))
     }
+  })
+  /**
+   * LA LISTE PROPOSÉE DEPUIS LE CATALOGUE SQL — lecture seule, au clic de l'utilisateur. Rien n'est
+   * écrit : l'écran montre le contenu, l'utilisateur le colle lui-même dans son fichier de
+   * déclaration (voir `prod-autorite-depuis-catalogue.ts`).
+   */
+  ipcMain.handle('prod:autorite:proposition', async (event) => {
+    assertTrustedRendererSender(event, 'Protection de production')
+    const lecture = await lireBasesExploitees()
+    return propositionPourEcran(
+      chargerAutoriteProd(ensureAutowinAppData(appDataRoot)),
+      lecture,
+      devTargets()
+    )
   })
   /** Changer le niveau de protection (aucun / confirmation / phrase). Prend effet immediatement. */
   ipcMain.handle('prod:porte:niveau', (event, niveau: unknown) => {

@@ -1,0 +1,472 @@
+/*
+ * SETTINGS — mise en page commune de ses sept onglets (conv-244, 2026-10-11 : « refais tous les tabs
+ * de la view settings en mode propre responsive et joli en theme holo »).
+ *
+ * Constats mesurés avant cette feuille (instance cachée, thème Holographique, 1280 / 1000 / 820 px) :
+ *   - le contenu ne DÉFILAIT pas (`.domain-content { overflow: hidden }`) : dans Budget, les panneaux
+ *     « Arrêt automatique » et « Mesure des routes » étaient inatteignables sous ~1100 px de haut ;
+ *     dans Behaviour, tout le bas de la page aussi (`.behaviour-view { height: 100% }`, sans défilement) ;
+ *   - la barre d'onglets ne passait pas à la ligne : à 820 px, « Skills · Hooks · … » s'empilait mot
+ *     par mot sur cinq lignes et « Diagnostic » sortait du cadre ;
+ *   - chaque panneau avait SON gabarit : Budget figé à 620 px, Rules et Dossier de travail sans aucun
+ *     retrait intérieur (texte collé au bord), titres en h1 de 22 px ici, h2 de 15 px là ;
+ *   - des boutons et des listes sans la brique de l'app (`.btn`, `.select`) : gris par défaut du
+ *     navigateur, quel que soit le thème.
+ *
+ * Ici : la MISE EN PAGE, avec les jetons communs (elle vaut pour tous les thèmes), puis l'HABIT
+ * Holographique en fin de fichier. Les règles préfixées par un thème sont ignorées par le générateur
+ * des couches de couleurs (scripts/theme-nebuleuse-verre.mjs, `prefixer`).
+ *
+ * Gabarit des vues (ViewPage.gabarit.test.ts) : aucun conteneur du contenu n'ajoute de retrait
+ * LATÉRAL — le cadre `.view-page` le pose. Les retraits ci-dessous sont verticaux, ou intérieurs aux
+ * panneaux.
+ */
+
+.settings-view {
+  --st-ecart: 14px;
+  --st-panneau-pad: 18px 20px 20px;
+  --st-carte: var(--surface-card);
+  --st-carte-survol: var(--surface-hover);
+  --st-trait: var(--line);
+  --st-titre: var(--text);
+}
+
+/* 1. LA BARRE D'ONGLETS (passage à la ligne, soulignement holo) vit dans ViewTopBar.css, partagée
+   avec Agent Studio, Task Manager et Tickets : une seule copie de la règle pour toutes les vues. */
+
+/* 2. LE CONTENU DÉFILE. Skills garde sa hauteur pleine (ses trois colonnes défilent chacune) tant que
+   la colonne est large ; plus étroite, sa page s'allonge et c'est ce conteneur qui défile. */
+.settings-view .settings-content {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--st-ecart);
+  padding-top: var(--st-ecart);
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  container: settings / inline-size;
+}
+.settings-view .settings-content[data-section='capabilities'] {
+  display: block;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 3. LES PANNEAUX — un seul gabarit : retrait intérieur, en-tête titre + action, texte lisible. */
+.settings-content .surface-panel {
+  min-width: 0;
+  margin: 0;
+  padding: var(--st-panneau-pad);
+  color: var(--text);
+}
+.settings-content .surface-panel > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+.settings-content .surface-panel > header > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.settings-content .surface-panel h2,
+.settings-content .surface-panel > .module-header > h1 {
+  margin: 0;
+  color: var(--st-titre);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.settings-content .surface-panel > .module-header {
+  margin-bottom: 2px;
+}
+/* Typographie GÉNÉRIQUE en spécificité nulle (`:where`) : la règle propre d'un composant gagne
+   toujours — sans cela, `.domain-warning` ou un message de réussite passaient au gris du texte. */
+:where(.settings-content .surface-panel) p {
+  margin: 0 0 10px;
+  max-width: 78ch;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.55;
+}
+:where(.settings-content .surface-panel) p:last-child {
+  margin-bottom: 0;
+}
+:where(.settings-content .surface-panel) :is(strong, b) {
+  color: var(--text);
+}
+:where(.settings-content .surface-panel) code {
+  padding: 1px 6px;
+  border: 1px solid var(--st-trait);
+  border-radius: 6px;
+  background: var(--st-carte);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.settings-content .domain-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+.settings-content .domain-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+/* Un renvoi DANS une phrase : un lien, pas un bouton gris posé au milieu du texte. */
+.settings-view .domain-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.settings-view .domain-link:hover {
+  color: var(--text);
+}
+.settings-content .domain-warning > p {
+  margin: 0 0 8px;
+  color: var(--warn);
+}
+.settings-content .surface-panel input[type='checkbox'],
+.settings-content .surface-panel input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+/* 4. BUDGET : trois panneaux en colonnes équilibrées dès que la largeur le permet. Les colonnes
+   vivent dans une enveloppe à hauteur naturelle : posées sur le conteneur qui défile (hauteur fixe),
+   elles déborderaient en largeur au lieu de descendre. */
+.settings-budget {
+  columns: 2 380px;
+  column-gap: var(--st-ecart);
+}
+/* Sélecteur plus fort que `.settings-content .surface-panel { margin: 0 }` : sans lui, les deux
+   panneaux de la colonne de droite se touchaient (mesuré à 1280 px). */
+.settings-content .settings-budget > .surface-panel {
+  break-inside: avoid;
+  margin-bottom: var(--st-ecart);
+}
+.settings-content .settings-budget > .surface-panel:last-child {
+  margin-bottom: 0;
+}
+/* Le pilote shadow suit le rythme des deux autres panneaux de Budget (grille, écart de 14 px) :
+   sans cela son titre collait à son texte. */
+.settings-content .shadow-routing-pilot {
+  display: grid;
+  gap: 14px;
+}
+.settings-content .shadow-routing-pilot > p {
+  margin: 0;
+}
+/* La case du pilote shadow : la case, puis sa phrase, alignées. */
+.settings-content .shadow-routing-pilot > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.settings-content .shadow-routing-pilot > label input {
+  flex: none;
+  margin: 2px 0 0;
+}
+
+/* 5. PROVIDERS : une carte par fournisseur, le statut en pastille. */
+.settings-providers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+  margin: 4px 0 14px;
+  padding: 0;
+  list-style: none;
+}
+.settings-providers-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--st-trait);
+  border-radius: var(--container-radius-card);
+  background: var(--st-carte);
+}
+.settings-providers-list strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.settings-providers-list li > span:first-of-type {
+  justify-self: end;
+  padding: 3px 9px;
+  border: 1px solid var(--st-trait);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.settings-providers-list li > span:nth-of-type(2) {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* 6. DIAGNOSTIC : le dossier de travail, puis une grille de contrôles. */
+.settings-execution-workspace p > button,
+.settings-preflight-list .btn {
+  margin-left: 6px;
+}
+.settings-preflight-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-preflight-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--st-trait);
+  border-radius: var(--container-radius-card);
+  background: var(--st-carte);
+}
+.settings-preflight-list li > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-preflight-list li > span {
+  flex: 1 1 100%;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.settings-check-mark {
+  display: inline-block;
+  width: 1.2em;
+  font-weight: 800;
+}
+.settings-preflight-list li.is-ok .settings-check-mark {
+  color: var(--ok);
+}
+.settings-preflight-list li.is-ko .settings-check-mark {
+  color: var(--err);
+}
+.settings-preflight-list li.is-ko {
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
+}
+
+/* 7. RULES : chaque règle est un panneau ; la pile garde l'écart commun. */
+.settings-rules {
+  display: grid;
+  gap: var(--st-ecart);
+  min-width: 0;
+}
+
+/* 8. ÉTROIT : la colonne de contenu passe sous ~560 px (fenêtre réduite, panneaux ouverts). */
+@container settings (max-width: 560px) {
+  .settings-content .surface-panel {
+    padding: 16px 14px 16px;
+  }
+}
+
+/* =================================================================================================
+ * HABIT HOLOGRAPHIQUE (thème `nebuleuse-verre`, affiché « Holographique »).
+ *
+ * Le vocabulaire est celui que l'utilisateur a déjà validé ailleurs dans ce thème, rien d'inventé :
+ *   - ONGLET ACTIF = texte blanc souligné d'un trait de 2 px bleu -> rose, sans capsule ni lueur
+ *     (onglets du panneau de droite, conv-180 : « la capsule ça va pas bien avec le border très
+ *     angulaire » — le cadre de Settings est le même cadre à coins coupés) ;
+ *   - BLOCS INTÉRIEURS ARRONDIS, gris neutres, sans bord visible (conv-211 : le chanfrein est réservé
+ *     aux grands panneaux ; conv-191 : aucune teinte froide dans les fonds) ;
+ *   - le HOLO tient dans un filet d'1 px « nacre », un seul cycle bleu > rose > argent > rose clair
+ *     (cadre du bloc ASK, conv-240) — ici en haut de chaque panneau, à la place du filet doré ;
+ *   - bleu #3c6eeb toujours PLEIN (conv-182) ; aucun halo autour d'un élément choisi (conv-198).
+ * ================================================================================================= */
+:root[data-theme='nebuleuse-verre'] .settings-view {
+  --st-panneau: rgba(255, 255, 255, 0.035);
+  --st-carte: rgba(255, 255, 255, 0.05);
+  --st-carte-survol: rgba(255, 255, 255, 0.08);
+  --st-trait: rgba(255, 255, 255, 0.1);
+  --st-titre: #ffffff;
+  --st-nacre: linear-gradient(
+    100deg,
+    #3c6eeb 0%,
+    #e63ca0 30%,
+    #d9d9d9 55%,
+    #ff8cc8 78%,
+    #3c6eeb 100%
+  );
+}
+
+/* Onglets soulignés : voir ViewTopBar.css (partagé avec Agent Studio, Task Manager et Tickets). */
+
+/* Panneaux : aplat gris, sans bord ni reflet doré, filet nacre en haut. */
+:root[data-theme='nebuleuse-verre'] .settings-content .surface-panel {
+  border: 0;
+  border-radius: 16px;
+  background:
+    var(--st-nacre) left top / 100% 1px no-repeat,
+    var(--st-panneau);
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .settings-content .domain-eyebrow {
+  color: var(--text-faint);
+}
+:where(:root[data-theme='nebuleuse-verre'] .settings-content .surface-panel) code {
+  border-color: transparent;
+}
+/* Champ + unité du Budget : le champ de verre du thème (même bord, même rayon, même focus rose). */
+:root[data-theme='nebuleuse-verre'] .settings-view .orchestration-budget-input {
+  border-color: rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .orchestration-budget-input:focus-within {
+  border-color: rgba(230, 60, 160, 0.6);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .orchestration-budget-input b {
+  border-left-color: rgba(255, 255, 255, 0.1);
+}
+/* Behaviour : ses catégories sont des panneaux (même habit), ses champs des cartes ; le choix du
+   chemin est souligné comme les onglets, au lieu du voile bleu froid de la base. */
+:root[data-theme='nebuleuse-verre'] .settings-view :is(.behaviour-category, .behaviour-inspection) {
+  border-color: transparent;
+  border-radius: 16px;
+  background:
+    var(--st-nacre) left top / 100% 1px no-repeat,
+    var(--st-panneau);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view :is(.behaviour-field, .behaviour-inspection li) {
+  border-radius: 12px;
+  background: var(--st-carte);
+}
+/* Onglets Cockpit / Orchestré / Direct : liseré seul, voir ViewTopBar.css. */
+
+/* Cartes et lignes intérieures : aplats gris sans bord visible, un gris plus clair au survol. */
+:root[data-theme='nebuleuse-verre'] .settings-providers-list li,
+:root[data-theme='nebuleuse-verre'] .settings-preflight-list li {
+  border-color: transparent;
+}
+:root[data-theme='nebuleuse-verre'] .settings-preflight-list li:hover,
+:root[data-theme='nebuleuse-verre'] .settings-providers-list li:hover {
+  background: var(--st-carte-survol);
+}
+:root[data-theme='nebuleuse-verre'] .settings-preflight-list li.is-ko {
+  border-color: rgba(235, 40, 40, 0.55);
+}
+:root[data-theme='nebuleuse-verre'] .settings-preflight-list li.is-ko .settings-check-mark {
+  color: #eb2828;
+}
+
+/* Skills · Hooks · … : la coque est un panneau (même filet nacre), ses colonnes ne repeignent pas
+   par-dessus ; les lignes sont des aplats et la ligne INSPECTÉE prend le cadre nacre de la réponse
+   retenue du bloc ASK (conv-240). Le violet froid de la sélection de base disparaît. */
+:root[data-theme='nebuleuse-verre'] .settings-view .cockpit-shell {
+  border-radius: 16px;
+  background:
+    var(--st-nacre) left top / 100% 1px no-repeat,
+    var(--st-panneau);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view :is(.cockpit-sources, .cockpit-inspector) {
+  background: transparent;
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .cockpit-sources {
+  border-right-color: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .cockpit-inspector {
+  border-left-color: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .cockpit-sources > button.is-active {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+/* Onglets Skills · Hooks · Gates · Mods · Tools : liseré seul, voir ViewTopBar.css. */
+:root[data-theme='nebuleuse-verre'] .settings-view .control-row {
+  border-color: transparent;
+  background: var(--st-carte);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .control-row:hover {
+  border-color: transparent;
+  background: var(--st-carte-survol);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .control-row.is-selected {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#303030, #303030) padding-box,
+    var(--st-nacre) border-box;
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .inspector-hero {
+  border-color: transparent;
+  background: var(--st-carte);
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .cockpit-inspector dl > div {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Boutons : la brique `.btn` du thème (pilule de verre) ; l'action principale prend le dégradé du
+   thème, SANS la lueur rose qui l'entoure ailleurs. */
+/* `.settings-content` en plus : la feuille du thème est chargée APRÈS celle-ci et pose sa lueur avec
+   un poids égal (`.cosmic-outline .btn-accent`) — mesuré, la lueur restait. */
+:root[data-theme='nebuleuse-verre'] .settings-view .settings-content .btn-accent {
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .domain-link {
+  color: #ff8cc8;
+}
+:root[data-theme='nebuleuse-verre'] .settings-view .domain-link:hover {
+  color: #ffffff;
+}
+:root[data-theme='nebuleuse-verre'] .settings-content .surface-panel input[type='checkbox'],
+:root[data-theme='nebuleuse-verre'] .settings-content .surface-panel input[type='radio'] {
+  accent-color: #e63ca0;
+}
+
+/* HOLOGRAPHIQUE BLANC reçoit le même trait d'onglet et le même filet nacre : sans eux, son onglet
+   actif restait la capsule rose de la base. Ses fonds viennent de ses jetons. */
+:root[data-theme='holographique-clair'] .settings-view {
+  --st-nacre: linear-gradient(
+    100deg,
+    #3c6eeb 0%,
+    #e63ca0 30%,
+    #c9c9c9 55%,
+    #ff8cc8 78%,
+    #3c6eeb 100%
+  );
+}
+:root[data-theme='holographique-clair'] .settings-content .surface-panel {
+  background:
+    var(--st-nacre) left top / 100% 1px no-repeat,
+    var(--surface-panel);
+  box-shadow: none;
+}
+:root[data-theme='holographique-clair'] .settings-view .settings-content .btn-accent {
+  box-shadow: none;
+}

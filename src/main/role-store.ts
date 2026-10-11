@@ -1,6 +1,12 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { ALL_ROLES, isReasoningEffort, type Role, type RoleBinding } from './roles'
+import {
+  ALL_ROLES,
+  isReasoningEffort,
+  type Role,
+  type RoleBinding,
+  type RolesPersistes
+} from './roles'
 import { ensureAutowinAppData } from './app-data'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
 import { readDurableJson, writeDurableJson } from './durable-json'
@@ -64,24 +70,36 @@ export function decodeRoleBinding(value: unknown): RoleBinding | undefined {
   }
 }
 
-function decodeRoleBindings(value: unknown): Partial<Record<Role, RoleBinding>> | undefined {
+/** Clé du réglage « modèle des petites tâches », posée à côté des quatre rôles. */
+const CLE_PETITES_TACHES = 'petitesTaches'
+
+function decodeRoleBindings(value: unknown): RolesPersistes | undefined {
   if (!isPlainObject(value)) return undefined
-  if (Object.keys(value).some((role) => !ALL_ROLES.includes(role as Role))) return undefined
-  const decoded: Partial<Record<Role, RoleBinding>> = {}
+  if (
+    Object.keys(value).some((cle) => cle !== CLE_PETITES_TACHES && !ALL_ROLES.includes(cle as Role))
+  ) {
+    return undefined
+  }
+  const decoded: RolesPersistes = {}
   for (const role of ALL_ROLES) {
     if (value[role] === undefined) continue
     const binding = decodeRoleBinding(value[role])
     if (!binding) return undefined
     decoded[role] = binding
   }
+  if (value[CLE_PETITES_TACHES] !== undefined) {
+    const petitesTaches = decodeRoleBinding(value[CLE_PETITES_TACHES])
+    if (!petitesTaches) return undefined
+    decoded.petitesTaches = petitesTaches
+  }
   return Object.keys(decoded).length > 0 ? decoded : undefined
 }
 
-function writeBindings(path: string, bindings: Partial<Record<Role, RoleBinding>>): void {
+function writeBindings(path: string, bindings: RolesPersistes): void {
   writeDurableJson(path, bindings, decodeRoleBindings)
 }
 
-export function loadRoleBindings(): Partial<Record<Role, RoleBinding>> | undefined {
+export function loadRoleBindings(): RolesPersistes | undefined {
   const p = rolesPath()
   if (!existsSync(p) && !existsSync(`${p}.bak`)) return undefined
   try {
@@ -91,6 +109,14 @@ export function loadRoleBindings(): Partial<Record<Role, RoleBinding>> | undefin
   }
 }
 
-export function saveRoleBindings(bindings: Record<Role, RoleBinding>): void {
-  writeBindings(rolesPath(), bindings)
+/**
+ * Écrit les quatre rôles ET le réglage des petites tâches : `roles.json` est réécrit en entier à
+ * chaque resynchronisation de la topologie, donc un appelant qui oublierait `petitesTaches` le
+ * ferait disparaître du disque.
+ */
+export function saveRoleBindings(
+  bindings: Record<Role, RoleBinding>,
+  petitesTaches: RoleBinding | undefined
+): void {
+  writeBindings(rolesPath(), { ...bindings, ...(petitesTaches ? { petitesTaches } : {}) })
 }

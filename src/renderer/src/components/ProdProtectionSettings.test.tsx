@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProdProtectionSettings } from './ProdProtectionSettings'
-import type { EtatPorteProd } from '../../../shared/prod-protection'
+import type { EtatPorteProd, PropositionAutoriteProd } from '../../../shared/prod-protection'
 
 /**
  * L'ÉCRAN DE RÉGLAGE DE LA PROTECTION — ce qui est vérifié ici :
@@ -22,6 +24,19 @@ const PORTE_CONFIRMATION: EtatPorteProd = {
   declarees: 0,
   anomalies: [] as string[],
   chemin: 'C:/data/prod-autorite.json'
+}
+
+const PROPOSITION: PropositionAutoriteProd = {
+  ok: true,
+  exploitees: 2,
+  ajoutees: [
+    { nom: 'DB_ALPHA', classe: 'prod' },
+    { nom: 'APP_DEV', classe: 'non-prod' }
+  ],
+  passeesEnProd: ['DB_PAPA'],
+  conservees: 3,
+  anomalies: [],
+  contenu: '[\n  { "nature": "base", "nom": "DB_ALPHA", "classe": "prod" }\n]\n'
 }
 
 const PORTE_DORT: EtatPorteProd = {
@@ -45,9 +60,11 @@ function poserApi(
     definie?: boolean
     porte?: EtatPorteProd
     definir?: () => Promise<{ ok: boolean; erreur?: string }>
+    proposition?: PropositionAutoriteProd
   } = {}
 ) {
   const api = {
+    prodAutoriteProposition: vi.fn(async () => options.proposition ?? PROPOSITION),
     prodPorteEtat: vi.fn(async () => options.porte ?? PORTE_CONFIRMATION),
     prodPorteNiveau: vi.fn(async () => ({ ok: true }) as { ok: boolean; erreur?: string }),
     prodPassphraseEtat: vi.fn(async () => ({
@@ -287,5 +304,115 @@ describe('choix du niveau', () => {
     poserApi()
     await rendre()
     expect(hote.querySelector<HTMLElement>('.prod-formulaire')?.hidden).toBe(true)
+  })
+
+  /*
+   * L'ATTRIBUT NE SUFFIT PAS (constaté le 2026-10-11, conv-242) : le test ci-dessus passait alors
+   * que le champ « Phrase de passe » restait VISIBLE au niveau « confirmation ». La feuille pose
+   * `display: grid` sur le formulaire, et une règle d'auteur passe devant le `display: none` que le
+   * navigateur donne à `[hidden]`. On mesure donc l'affichage avec la VRAIE feuille.
+   */
+  it('le formulaire masqué est réellement invisible, feuille de style comprise', async () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/renderer/src/components/ProdProtectionSettings.css'),
+      'utf8'
+    )
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.append(style)
+    try {
+      poserApi()
+      await rendre()
+      const formulaire = hote.querySelector<HTMLElement>('.prod-formulaire') as HTMLElement
+      expect(formulaire.hidden).toBe(true)
+      expect(getComputedStyle(formulaire).display).toBe('none')
+
+      // Au niveau « phrase », il réapparaît bien avec sa mise en page.
+      await act(async () => racine.unmount())
+      racine = createRoot(hote)
+      poserApi({ porte: PORTE_ACTIVE, definie: true })
+      await rendre()
+      const visible = hote.querySelector<HTMLElement>('.prod-formulaire') as HTMLElement
+      expect(visible.hidden).toBe(false)
+      expect(getComputedStyle(visible).display).toBe('grid')
+    } finally {
+      style.remove()
+    }
+  })
+})
+
+/**
+ * LA LISTE PROPOSÉE DEPUIS LE CATALOGUE SQL. Autowin n'écrit jamais le fichier de déclaration : il
+ * PROPOSE un contenu, l'utilisateur le recopie lui-même. Rien n'est demandé au catalogue tant que
+ * l'utilisateur n'a pas cliqué.
+ */
+describe('proposition depuis le catalogue', () => {
+  async function proposer(): Promise<void> {
+    await act(async () => {
+      ;(hote.querySelector('[data-testid="prod-catalogue-proposer"]') as HTMLButtonElement).click()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+
+  it('n’interroge PAS le catalogue à l’ouverture de l’écran', async () => {
+    const api = poserApi()
+    await rendre()
+    expect(api.prodAutoriteProposition).not.toHaveBeenCalled()
+    expect(hote.querySelector('[data-testid="prod-catalogue-contenu"]')).toBeNull()
+  })
+
+  it('montre au clic ce qui serait ajouté, passé en production et repris, puis le contenu', async () => {
+    const api = poserApi()
+    await rendre()
+    await proposer()
+    expect(api.prodAutoriteProposition).toHaveBeenCalledTimes(1)
+    const resume = hote.querySelector('[data-testid="prod-catalogue-resume"]')?.textContent ?? ''
+    expect(resume).toContain('2 base(s) à ajouter')
+    expect(resume).toContain('1 en production')
+    expect(resume).toContain('1 hors production')
+    expect(resume).toContain('3 entrée(s) actuelle(s) reprise(s)')
+    expect(hote.querySelector('[data-testid="prod-catalogue-prod"]')?.textContent).toContain(
+      'DB_PAPA'
+    )
+    const contenu = hote.querySelector(
+      '[data-testid="prod-catalogue-contenu"]'
+    ) as HTMLTextAreaElement
+    expect(contenu.readOnly).toBe(true)
+    expect(contenu.value).toBe(PROPOSITION.ok ? PROPOSITION.contenu : '')
+  })
+
+  it('DIT que le fichier n’est pas écrit par Autowin, et ne déclenche aucune écriture', async () => {
+    const api = poserApi()
+    await rendre()
+    await proposer()
+    expect(hote.querySelector('[data-testid="prod-catalogue"]')?.textContent).toContain(
+      'Autowin n’écrit jamais ce fichier'
+    )
+    expect(api.prodPassphraseDefinir).not.toHaveBeenCalled()
+    expect(api.prodPorteNiveau).not.toHaveBeenCalled()
+  })
+
+  it('affiche l’échec du catalogue, sans contenu à coller', async () => {
+    poserApi({ proposition: { ok: false, erreur: 'Catalogue SQL illisible : délai dépassé.' } })
+    await rendre()
+    await proposer()
+    expect(hote.querySelector('[data-testid="prod-catalogue"]')?.textContent).toContain(
+      'Catalogue SQL illisible : délai dépassé.'
+    )
+    expect(hote.querySelector('[data-testid="prod-catalogue-contenu"]')).toBeNull()
+  })
+
+  it('dit quand la déclaration couvre déjà tout le catalogue', async () => {
+    poserApi({
+      proposition: { ...PROPOSITION, ajoutees: [], passeesEnProd: [] } as PropositionAutoriteProd
+    })
+    await rendre()
+    await proposer()
+    expect(hote.querySelector('[data-testid="prod-catalogue"]')?.textContent).toContain(
+      'couvre déjà tout le catalogue'
+    )
+    expect(hote.querySelector('[data-testid="prod-catalogue-contenu"]')).toBeNull()
   })
 })

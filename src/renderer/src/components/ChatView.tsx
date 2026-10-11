@@ -93,8 +93,8 @@ import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import {
-  askDejaRepondu,
   askEnAttente,
+  askReponseDuFil,
   lastUserPromptBefore,
   messageKey,
   tourDuMessageEnCours
@@ -213,6 +213,8 @@ import { VueMesuree } from './VueMesuree'
 import { useDebutProgressif } from './fil-progressif'
 import { flattenChatParts } from '../../../shared/chat-turn'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
+/** Le modèle retenu pour un fil (voir `Conversation.modeleChoisi` côté main). */
+type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: string }
 
 /* ---------- Constantes ---------- */
 
@@ -852,6 +854,42 @@ export function ChatView({
     setDossierNouveauFil(null)
   }
   /**
+   * MODÈLE ARMÉ SUR UN FIL PAS ENCORE CRÉÉ (conv-239, 2026-10-11 : « rends le modèle propre à
+   * chaque conversation »). Même logique que le dossier armé ci-dessus : l'intention est gardée
+   * ici, posée sur la conversation dès sa création, puis vidée. Volontairement en MÉMOIRE seule —
+   * pas de localStorage : un choix qui survit des jours et retombe sur un fil sans rapport est
+   * exactement le défaut du dossier armé (kaizen conv-113).
+   */
+  const [modeleNouveauFil, setModeleNouveauFil] = useState<ModeleDuFil | null>(null)
+  const modeleNouveauFilRef = useRef<ModeleDuFil | null>(null)
+  modeleNouveauFilRef.current = modeleNouveauFil
+  /** Pose le modèle armé sur le fil qui vient de naître, puis le vide. Best-effort : jamais bloquant. */
+  async function poserModeleArme(conversationId: string): Promise<void> {
+    const arme = modeleNouveauFilRef.current
+    if (!arme) return
+    modeleNouveauFilRef.current = null
+    setModeleNouveauFil(null)
+    try {
+      const retenu = await window.api.conversationSetModel?.(
+        conversationId,
+        arme.provider,
+        arme.model,
+        arme.reasoningEffort
+      )
+      if (retenu)
+        setConvs((courant) =>
+          courant.map((conv) =>
+            conv.id === conversationId ? { ...conv, modeleChoisi: retenu } : conv
+          )
+        )
+    } catch (error) {
+      // Le fil part alors sur le modèle par défaut — et l'en-tête le MONTRE ; on dit pourquoi.
+      setModelChangeError(
+        `Modèle non enregistré sur le nouveau fil : ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+  /**
    * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (conv-826 : « faudrait que le mode auto gère ce
    * cas au lieu de s'arrêter »). Le minuteur vit ici, pas dans l'effet du fil affiché : changer de
    * fil ne le tue pas. `differees` = nombre de relances différées d'affilée (borne dans
@@ -1303,6 +1341,15 @@ export function ChatView({
     reasoningEffort?: string
   } | null>(null)
   /**
+   * LE MODÈLE DU FIL AFFICHÉ (conv-239) : son choix propre, sinon le modèle armé pour un fil neuf,
+   * sinon le défaut de l'application (rôle orchestrateur). C'est CE binding que l'en-tête, la
+   * jauge et les quotas décrivent : c'est celui que le prochain tour utilisera.
+   */
+  const modeleDuFil: ModeleDuFil | null = activeId
+    ? (convs.find((conv) => conv.id === activeId)?.modeleChoisi ?? null)
+    : modeleNouveauFil
+  const bindingEffectif = modeleDuFil ?? orchestratorBinding
+  /**
    * LA JAUGE DU FIL COURANT — mesuree si un tour l a etablie, sinon le repli a 0 %.
    *
    * UNE seule source pour les DEUX vues : la barre de l en-tete et le filet colore au-dessus du
@@ -1312,7 +1359,7 @@ export function ChatView({
    */
   const jaugeCourante =
     (activeId != null ? contextGauges[activeId] : undefined) ??
-    jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
+    jaugeVide(bindingEffectif?.model, bindingEffectif?.provider)
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelChangePending, setModelChangePending] = useState(false)
   const [modelChangeError, setModelChangeError] = useState<string | null>(null)
@@ -1772,28 +1819,55 @@ export function ChatView({
     }
   }
 
-  async function changeOrchestratorModel(option: OrchestratorModelOption): Promise<void> {
+  /**
+   * LE MODÈLE, À L'ÉCHELLE DE LA CONVERSATION (conv-239, 2026-10-11).
+   *
+   * Avant, ce choix réécrivait le rôle orchestrateur GLOBAL (`setRole`) : changer de modèle dans
+   * un fil le changeait dans tous. Il est désormais mémorisé sur la conversation ouverte, que le
+   * main relit au départ de chacun de ses tours. Sans conversation ouverte, il est ARMÉ pour le
+   * fil qui va naître. Le défaut de l'application se règle toujours dans Routage.
+   * `option === null` : revenir au modèle par défaut.
+   */
+  async function changerModeleDuFil(option: OrchestratorModelOption | null): Promise<void> {
     if (busy || modelChangePending) return
-    setModelChangePending(true)
     setModelChangeError(null)
-    try {
-      await window.api.setRole(
-        'orchestrator',
-        option.provider,
-        option.model,
-        option.reasoningEffort
+    if (!activeId) {
+      setModeleNouveauFil(
+        option
+          ? {
+              provider: option.provider,
+              model: option.model,
+              ...(option.reasoningEffort ? { reasoningEffort: option.reasoningEffort } : {})
+            }
+          : null
       )
-      await refreshRuntimeIdentity()
+      return
+    }
+    const cible = activeId
+    setModelChangePending(true)
+    try {
+      if (!window.api.conversationSetModel)
+        // Le pont (preload) n'est relu qu'au démarrage : une app lancée avant ce changement ne le
+        // connaît pas. On le DIT au lieu d'écrire le défaut global à la place.
+        throw new Error('redémarre Autowin pour activer le modèle par conversation')
+      const retenu = await window.api.conversationSetModel(
+        cible,
+        option ? option.provider : null,
+        option?.model,
+        option?.reasoningEffort
+      )
+      setConvs((courant) =>
+        courant.map((conv) => {
+          if (conv.id !== cible) return conv
+          if (retenu) return { ...conv, modeleChoisi: retenu }
+          const { modeleChoisi: _retire, ...reste } = conv
+          return reste
+        })
+      )
     } catch (error) {
       setModelChangeError(
         `Changement non enregistré : ${error instanceof Error ? error.message : String(error)}`
       )
-      try {
-        await refreshRuntimeIdentity()
-      } catch (error) {
-        // L'identité affichée reste la dernière identité confirmée.
-        traceSilentFailure('runtime-identity', error)
-      }
     } finally {
       setModelChangePending(false)
     }
@@ -3155,6 +3229,8 @@ export function ChatView({
       await window.api.conversationsSetProject?.(creee.id, dossierArme)
       consommerDossierNouveauFil()
     }
+    // Le modèle armé, lui aussi, se pose AVANT le premier tour (le main le lit à son départ).
+    await poserModeleArme(creee.id)
     setConvs((courant) =>
       courant.some((c) => c.id === creee.id)
         ? courant
@@ -4780,6 +4856,8 @@ export function ChatView({
           await window.api.conversationsSetProject?.(c.id, dossierNouveauFilRef.current)
           consommerDossierNouveauFil()
         }
+        // Le modèle armé dans « Nouveau fil » se pose de même AVANT le premier tour.
+        await poserModeleArme(c.id)
         const shouldAdoptCreatedConversation =
           activeRef.current === null &&
           composerDraftKeyRef.current === sendDraftKey &&
@@ -5879,7 +5957,7 @@ export function ChatView({
 
   /**
    * FIL RENDU, MÉMOÏSÉ. Mesuré (conv-1464) : chaque caractère tapé dans le composer re-rendait la
-   * liste ENTIÈRE, et `askDejaRepondu`/`lastUserPromptBefore` balaient le fil pour CHAQUE
+   * liste ENTIÈRE, et `askReponseDuFil`/`lastUserPromptBefore` balaient le fil pour CHAQUE
    * message → O(n²) balayages par touche (400 pour 5 caractères sur 80 messages, mesuré par
    * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
    * `input` n'est VOLONTAIREMENT pas une dépendance : le composer ne touche pas au fil.
@@ -5907,9 +5985,10 @@ export function ChatView({
               onAnswerAsk={answerAsk}
               /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
-             Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). */
-              askRepondu={
-                message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
+             Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). Le TEXTE
+             de la reponse dit aussi au bloc quelle ligne encadrer (conv-240). */
+              askReponse={
+                message.role === 'assistant' ? askReponseDuFil(messages, index) : undefined
               }
               message={message}
               skills={skillsInstallees}
@@ -6826,15 +6905,35 @@ export function ChatView({
                     asksUser={active?.lastAssistantAsksUser === true}
                   />
                   <span
-                    className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
+                    className={`chat-runtime-provider is-${bindingEffectif?.provider ?? 'loading'}`}
                   >
-                    {runtimeIdentity?.provider ?? 'connexion…'}
+                    {bindingEffectif?.provider ?? 'connexion…'}
                   </span>
-                  <span>
-                    {runtimeIdentity?.modelLabel
-                      ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
-                      : 'modèle en cours de résolution'}
-                  </span>
+                  {/*
+                    LE MODÈLE DU FIL, EN LISTE DÉROULANTE (conv-239, 2026-10-11). Il était affiché
+                    ici en simple texte ET choisi dans la barre de saisie : deux fois la même
+                    information. Le choix vit désormais ici seul, et il ne vaut QUE pour cette
+                    conversation (`changerModeleDuFil`). Menu ouvert VERS LE BAS : vers le haut,
+                    il sortirait de la fenêtre.
+                  */}
+                  <OrchestratorModelSelector
+                    busy={busy}
+                    catalogLoaded={modelCatalogLoaded}
+                    models={modelCatalog}
+                    binding={bindingEffectif}
+                    pending={modelChangePending}
+                    error={modelChangeError}
+                    onSelect={(option) => void changerModeleDuFil(option)}
+                    comptes={comptesDeConversation}
+                    ouverture="bas"
+                    defaut={{
+                      label: runtimeIdentity?.modelLabel
+                        ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
+                        : 'modèle de l’application',
+                      actif: modeleDuFil === null,
+                      onChoisir: () => void changerModeleDuFil(null)
+                    }}
+                  />
                   {/*
                   L'IDENTIFIANT de la conversation, a la place de « interface prete ».
 
@@ -7479,7 +7578,7 @@ Cliquer pour choisir une autre branche.`}
                 <>
                   {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
                   <ModelQuotaIndicator
-                    provider={runtimeIdentity?.provider}
+                    provider={bindingEffectif?.provider}
                     comptes={comptesDeConversation}
                   />
                   {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
@@ -7583,18 +7682,6 @@ Cliquer pour choisir une autre branche.`}
                   <span className="composer-hint">
                     Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
                   </span>
-                  <div className="composer-meta-actions">
-                    <OrchestratorModelSelector
-                      busy={busy}
-                      catalogLoaded={modelCatalogLoaded}
-                      models={modelCatalog}
-                      binding={orchestratorBinding}
-                      pending={modelChangePending}
-                      error={modelChangeError}
-                      onSelect={(option) => void changeOrchestratorModel(option)}
-                      comptes={comptesDeConversation}
-                    />
-                  </div>
                 </div>
               }
             />

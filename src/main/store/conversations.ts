@@ -100,6 +100,16 @@ export function forkTitle(sourceTitle: string): string {
   return `${base || 'Conversation'} (fork)`
 }
 
+/**
+ * Le modèle retenu pour UNE conversation — même forme que le rôle orchestrateur (`RoleBinding`),
+ * écrite ici en clair pour que le store ne dépende pas du module des rôles.
+ */
+export interface ModeleDeConversation {
+  provider: string
+  model?: string
+  reasoningEffort?: string
+}
+
 /** Une conversation, rattachée à un provider et rangée dans un dossier de travail. */
 export interface Conversation {
   schemaVersion?: 2 | 3
@@ -169,6 +179,19 @@ export interface Conversation {
    * vide, pour qu'un fichier relu n'en garde aucune trace.
    */
   claudeAccountId?: string
+  /**
+   * Le modèle (et son effort) que CETTE conversation doit utiliser pour ses tours de chat.
+   *
+   * Demande du 2026-10-11 (conv-239) : « rends le modèle propre à chaque conversation ». Avant,
+   * le sélecteur réécrivait le rôle orchestrateur GLOBAL : changer de modèle dans un fil le
+   * changeait dans tous les autres.
+   *
+   * OPTIONNEL, même contrat que `claudeAccountId` : absent -> le fil part sur le modèle par défaut
+   * de l'application (rôle orchestrateur, réglable dans Routage), exactement comme avant. Retirer
+   * le choix EFFACE le champ. La validation contre le catalogue est faite par le canal qui l'écrit
+   * (`os:conversations:setModel`) et rejouée au départ de chaque tour (`chat/modele-de-conversation`).
+   */
+  modeleChoisi?: ModeleDeConversation
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -1988,6 +2011,31 @@ export class ConversationStore {
     const propre = accountId?.trim()
     if (propre) conversation.claudeAccountId = propre
     else delete conversation.claudeAccountId
+    this.changed(id)
+    return conversation
+  }
+
+  /**
+   * Choisit le modèle de CETTE conversation (`null` = revenir au modèle par défaut de l'app).
+   * Même contrat que `choisirCompteClaude` : rend la conversation, `undefined` sur un id inconnu,
+   * et ne touche PAS `updatedAt` (choisir un modèle n'est pas travailler).
+   *
+   * Le store ne VALIDE pas le modèle contre le catalogue : il ne le connaît pas. C'est le canal
+   * `os:conversations:setModel` qui refuse un modèle inconnu avant d'appeler ceci.
+   */
+  choisirModele(id: string, modele: ModeleDeConversation | null): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    const provider = modele?.provider?.trim()
+    if (modele && provider) {
+      conversation.modeleChoisi = {
+        provider,
+        ...(modele.model?.trim() ? { model: modele.model.trim() } : {}),
+        ...(modele.reasoningEffort?.trim()
+          ? { reasoningEffort: modele.reasoningEffort.trim() }
+          : {})
+      }
+    } else delete conversation.modeleChoisi
     this.changed(id)
     return conversation
   }

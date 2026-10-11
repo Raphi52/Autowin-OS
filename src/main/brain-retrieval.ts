@@ -117,16 +117,6 @@ export type BrainUnavailableReason =
   | 'network'
   | 'test-mode'
 
-/** Motif humain, une phrase, pour chaque cause d'indisponibilité. */
-export const BRAIN_UNAVAILABLE_REASON_LABEL: Record<BrainUnavailableReason, string> = {
-  'no-token': 'jeton de service absent ou illisible — aucune requête n’est partie',
-  'empty-query': 'requête vide côté appelant — aucune requête n’est partie',
-  'challenge-refused': 'le serveur a REFUSÉ le préalable d’authentification (GET /challenge non-ok)',
-  'query-refused': 'le serveur a REFUSÉ la requête (POST /query-secure non-ok)',
-  network: 'aucune réponse du serveur (arrêté, délai dépassé ou réseau)',
-  'test-mode': 'appel réseau neutralisé en test'
-}
-
 export interface BrainRetrievalResult {
   context: string
   navigation?: BrainNavigation

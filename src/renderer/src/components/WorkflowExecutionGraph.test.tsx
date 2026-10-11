@@ -362,7 +362,9 @@ describe('WorkflowExecutionGraph', () => {
     expect(toolMeta?.textContent).toContain('chat direct')
     // Un chat direct sans skill est NORMAL : l'absence se lit en discret, pas dans la couleur
     // d'accent en gras d'un vrai nom de skill (lue comme une alarme, 2026-10-10).
-    expect(meta?.querySelector('.workflow-execution-skill')?.classList.contains('is-absent')).toBe(true)
+    expect(meta?.querySelector('.workflow-execution-skill')?.classList.contains('is-absent')).toBe(
+      true
+    )
   })
 
   it('ne peint pas en rouge une étape annulée : un Stop n’est pas un échec', () => {
@@ -374,13 +376,55 @@ describe('WorkflowExecutionGraph', () => {
     expect(css).toMatch(/\.is-cancelled \.workflow-execution-dot[^{]*\{[^}]*var\(--text-faint\)/)
   })
 
-  it('relie chaque card enfant avec une flèche orientée vers elle', () => {
-    const css = readFileSync(join(__dirname, 'WorkflowExecutionGraph.css'), 'utf8')
+  /**
+   * L'ARBRE ÉTOILÉ (conv-234) : la flèche en L entre deux cartes est remplacée par un lien courbe
+   * de perle à perle. Chaque étape qui a un parent DOIT avoir son lien, sinon une perle flotte
+   * sans qu'on sache d'où elle vient ; et le flux ne coule QUE vers ce qui tourne.
+   */
+  it('relie chaque étape à son parent et fait couler le flux vers ce qui tourne', async () => {
+    const causalTrace = vi.fn().mockResolvedValue(executionRunTrace({ agent: 'running' }))
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+    // En direct : hors direct, une étape restée « en cours » est requalifiée « interrompue ».
+    const view = await render({ conversationId: 'conv-a', active: true, live: true })
 
-    expect(css).toContain('.workflow-execution-edge::after')
-    expect(css).toMatch(/border-left:\s*5px solid/)
-    expect(css).toMatch(/border-top:\s*4px solid transparent/)
-    expect(css).toMatch(/border-bottom:\s*4px solid transparent/)
+    const enfants = [...view.querySelectorAll('[data-execution-node]')].filter(
+      (node) => !node.classList.contains('is-racine')
+    )
+    expect(enfants.length).toBeGreaterThan(0)
+    for (const node of enfants) {
+      const id = node.getAttribute('data-execution-node')
+      const lien = view.querySelector(`[data-execution-edge="${id}"]`)
+      expect(lien, `lien vers ${id}`).not.toBeNull()
+      expect(lien?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+C/)
+    }
+    const agent = view.querySelector('[data-execution-kind="agent"]')
+    expect(agent?.className).toContain('is-running')
+    expect(agent?.className).toContain('is-actif')
+    // Le flux suit le lien de l'agent qui tourne, et pas celui d'une étape terminée.
+    const fluxAgent = view
+      .querySelector(`[data-execution-edge="${agent?.getAttribute('data-execution-node')}"]`)
+      ?.parentElement?.querySelector('.workflow-execution-flux')
+    expect(fluxAgent).not.toBeNull()
+    const copie = view.querySelector('[data-execution-kind="workspace"]')
+    if (copie && !copie.classList.contains('is-racine'))
+      expect(
+        view
+          .querySelector(`[data-execution-edge="${copie.getAttribute('data-execution-node')}"]`)
+          ?.parentElement?.querySelector('.workflow-execution-flux')
+      ).toBeNull()
+  })
+
+  it('peint les perles par jetons de thème, le bleu plein, sans couleur écrite en dur', () => {
+    const css = readFileSync(join(__dirname, 'WorkflowExecutionGraph.css'), 'utf8')
+    // Le dégradé de la perle part du bleu du thème, sans transparence sur lui (conv-182).
+    expect(css).toMatch(/linear-gradient\(135deg, var\(--wx-froid\), var\(--wx-chaud\)\)/)
+    expect(css).not.toMatch(/--wx-froid\)?\s*\d+%/)
+    // Les seules couleurs écrites en dur sont les replis des jetons, déclarés sur le conteneur.
+    const horsJetons = css
+      .split('\n')
+      .filter((ligne) => /#[0-9a-f]{3,8}\b|rgba?\(/i.test(ligne))
+      .filter((ligne) => !/^\s*--wx-/.test(ligne))
+    expect(horsJetons.filter((ligne) => /wx|perle|flux|fil/i.test(ligne))).toEqual([])
   })
 
   it('ignore une réponse obsolète après un changement rapide de conversation', async () => {
@@ -660,11 +704,13 @@ describe('WorkflowExecutionGraph', () => {
       view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
     )
     const detail = view.querySelector('.workflow-execution-detail')
-    // La brique se déplie sur place : le détail est DANS son conteneur, pas sous l'arbre.
-    expect(detail?.closest('.workflow-execution-node-wrap')).toBe(
-      view.querySelector('[data-execution-node="agent"]')?.closest('.workflow-execution-node-wrap')
-    )
-    expect(detail?.closest('.workflow-execution-node-wrap')).not.toBeNull()
+    // La fiche est ACCROCHÉE à son étape (choix « Fil holo », conv-234) : elle porte l'étape
+    // qu'elle décrit, un fil part de cette étape, et elle se glisse juste sous sa ligne — pas en
+    // bas de tout l'arbre (le détail du 2026-09-23 voulait déjà la brique dépliée sur place).
+    expect(detail?.getAttribute('data-execution-detail-of')).toBe('agent')
+    expect(view.querySelector('[data-execution-fil="agent"]')).not.toBeNull()
+    const bandeDuNoeud = view.querySelector('[data-execution-node="agent"]')?.parentElement
+    expect(bandeDuNoeud?.nextElementSibling).toBe(detail)
     expect(detail?.querySelector('[data-execution-prompt]')?.textContent).toContain(
       'corrige le bouton Envoyer'
     )

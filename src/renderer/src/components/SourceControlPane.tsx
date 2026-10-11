@@ -82,6 +82,10 @@ type Verification =
       testsJoues: number
       /** Suites rouges dans la portée complète, vertes rejouées seules : publiées, et NOMMÉES. */
       instablesSousCharge?: string[]
+      /** Suites déjà rouges au dernier commit, sans échec nouveau dû au tour : publiées, et NOMMÉES. */
+      dejaRouges?: string[]
+      /** Suites rouges seulement à cause d'un travail qui ne part pas (autres fils) : NOMMÉES. */
+      rougesDAilleurs?: string[]
     }
   | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
   | { statut: 'non-verifie'; raison: string }
@@ -98,10 +102,17 @@ function libelleVerification(verification: Verification): string {
   if (verification.statut === 'vert') {
     const s = verification.testsJoues > 1 ? 's' : ''
     const verts = `Tests rejoués avant de pousser · ${verification.testsJoues} vert${s}`
-    const instables = verification.instablesSousCharge ?? []
-    return instables.length
-      ? `${verts} — rouge sous charge, vert seul : ${instables.join(', ')}`
-      : verts
+    const nommes: Array<[string, string[] | undefined]> = [
+      ['rouge sous charge, vert seul', verification.instablesSousCharge],
+      ['déjà rouge au dernier commit', verification.dejaRouges],
+      ['rouge venu d’un travail non publié', verification.rougesDAilleurs]
+    ]
+    return [
+      verts,
+      ...nommes
+        .filter(([, suites]) => suites?.length)
+        .map(([motif, suites]) => `${motif} : ${suites!.join(', ')}`)
+    ].join(' — ')
   }
   if (verification.statut === 'echec')
     return `Tests rejoués avant de pousser · ${verification.detail}`

@@ -14,7 +14,7 @@ import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
 import {
   openStdoutJournal,
-  survivableExitCode,
+  guetterSortieCertifiee,
   tailJsonLines,
   type StdoutJournalHandle
 } from '../runs/stdout-journal'
@@ -1767,7 +1767,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const queue: StreamChunk[] = []
     let done = false
     let childClosed = false
-    let relayCompletionPoll: ReturnType<typeof setInterval> | undefined
+    let arreterGuetSortie: (() => void) | undefined
     let errored: Error | null = null
     let resolveWait: (() => void) | null = null
 
@@ -1781,7 +1781,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // et tue le process en escalade SIGTERM→SIGKILL. L'abort utilisateur passe par le même chemin.
     const forceSettle = (err: Error): void => {
       if (!errored) errored = err
-      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
+      arreterGuetSortie?.()
       done = true
       wake()
     }
@@ -1811,7 +1811,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (childClosed || done) return
         watchdog.dispose()
         killEscalate(child)
-        if (relayCompletionPoll) clearInterval(relayCompletionPoll)
+        arreterGuetSortie?.()
         done = true
         wake()
       }, delaiFinApresResultatMs())
@@ -2381,7 +2381,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     child.on('error', async (e) => {
       if (finApresResultat) clearTimeout(finApresResultat)
-      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
+      arreterGuetSortie?.()
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
       /*
@@ -2416,7 +2416,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     child.once('close', async (code) => {
       childClosed = true
       if (finApresResultat) clearTimeout(finApresResultat)
-      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
+      arreterGuetSortie?.()
       const tailError = await tailSettled
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
@@ -2486,12 +2486,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // relais termine, run reste `active` jusqu'au watchdog). La preuve atomique du relais est plus
       // forte que cet event volatil : on la convertit en la meme cloture locale, apres installation
       // du listener et avec `once` pour ignorer un event tardif du processus.
-      relayCompletionPoll = setInterval(() => {
-        if (childClosed) return
-        const exitCode = survivableExitCode(journal.path)
-        if (exitCode !== undefined) child.emit('close', exitCode)
-      }, 80)
-      relayCompletionPoll.unref?.()
+      // Lecture ASYNCHRONE : la version synchrone gelait la fenetre a chaque lenteur du disque
+      // (voir `guetterSortieCertifiee`).
+      arreterGuetSortie = guetterSortieCertifiee(journal.path, (exitCode) => {
+        if (!childClosed) child.emit('close', exitCode)
+      })
     }
 
     // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.

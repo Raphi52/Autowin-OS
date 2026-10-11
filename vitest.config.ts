@@ -92,6 +92,12 @@ const EXCLUSIONS = [
   // etaient verts — on corrigeait un defaut qui n'existait plus que dans la copie.
   '.verif-index/**',
   '**/.verif-index/**',
+  // BROUILLONS DE SESSION `.autowin-tmp/` (ignore par git depuis le 2026-10-10) : les agents y
+  // posent des copies du depot. MESURE du 2026-10-11 (conv-259) : `scripts/run-vitest-worktree.ps1`
+  // cite 3 fichiers et en a joue 6 — les 3 copies de `.autowin-tmp/kaizen-243/idx/src/...`, posees
+  // par une autre conversation pendant la passe. Meme panne que `.verif-index/` juste au-dessus.
+  '.autowin-tmp/**',
+  '**/.autowin-tmp/**',
   // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
   'scripts/cdp-verdict.test.mjs',
   /**

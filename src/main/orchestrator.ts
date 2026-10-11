@@ -393,6 +393,7 @@ import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
+import type { DemandeFermeture } from './hdesk-tv'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import {
   ECHO_MAX_BLOCK_CHARS,
@@ -796,6 +797,14 @@ export interface OrchestratorLifecycleDeps {
    * phase suivante.
    */
   drainDirectives?: (conversationId: string) => string[]
+  /**
+   * FIN DE RUN (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : ferme le bureau caché du run
+   * (`identifiantBureauCache(runId)`), que le run soit vert, rouge ou planté. Une app laissée ouverte
+   * par une phase occupait l'identifiant : hdesk-lancer refuse une relance tant qu'elle vit (exit 5).
+   * Jamais attendu ni levé : la fermeture douce peut prendre jusqu'à 30 s et ne doit ni retarder ni
+   * casser le run. Absent (tests) → rien n'est fermé.
+   */
+  fermerBureauCache?: (demande: DemandeFermeture) => Promise<unknown>
   onPhaseCompleted?: (info: {
     runId: string
     task: string
@@ -2195,6 +2204,17 @@ export class Orchestrator {
       this.causalWatchPathsByRun.delete(runId)
       this.costContextByRun.delete(runId)
       this.learningOraclesByRun.delete(runId)
+      // Le bureau caché du run se ferme à la fin, quelle que soit l'issue (lot 1, conv-222). Sans
+      // conversation, hdesk-lancer refuse de lancer : rien à fermer. Non attendu, jamais levé.
+      if (conversationId && this.deps.fermerBureauCache) {
+        try {
+          void this.deps
+            .fermerBureauCache({ id: identifiantBureauCache(runId), conversationId })
+            .catch(() => undefined)
+        } catch {
+          /* best-effort : une fermeture ratée ne casse jamais le run */
+        }
+      }
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.

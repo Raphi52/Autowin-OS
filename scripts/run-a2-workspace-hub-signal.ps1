@@ -19,7 +19,6 @@ Invoke-Checked 'Tests lifecycle A2' {
   & npx vitest run `
     src/main/store/worktree-repository.test.ts `
     src/main/store/worktree-run-state.test.ts `
-    src/main/store/worktree-manager.test.ts `
     src/main/store/run-worktree-coordinator.test.ts `
     src/main/store/worktree-recovery.integration.test.ts `
     src/main/commands.test.ts `
@@ -31,9 +30,6 @@ Invoke-Checked 'Tests lifecycle A2' {
 
 Invoke-Checked 'Tests Hub A2' {
   & npx vitest run `
-    src/shared/worktree-activity-model.test.ts `
-    src/renderer/src/components/WorktreeActivityView.test.tsx `
-    src/renderer/src/components/WorktreeActivityView.style.test.ts `
     src/renderer/src/components/SourceControlPane.test.tsx
 }
 

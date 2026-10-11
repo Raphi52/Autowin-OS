@@ -61,26 +61,6 @@
   height: 100%;
 }
 
-.settings-preflight {
-  /* Remplit la vue en conteneur opaque (la classe .surface-panel fournit fond 95% + bord + radius),
-     comme les autres sections Settings — plus une boîte flottante insérée. */
-  height: 100%;
-  margin: 0;
-  padding: 20px;
-  overflow: auto;
-}
-
-.settings-preflight header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.settings-preflight h2 {
-  margin: 4px 0 0;
-}
-
 .domain-eyebrow {
   color: var(--text-dim);
   font-size: 0.72rem;
@@ -108,101 +88,6 @@
   font-size: 0.68rem;
   font-weight: 800;
   line-height: 1;
-}
-
-.settings-providers {
-  height: 100%;
-  margin: 0;
-  padding: 20px;
-  overflow: auto;
-}
-
-.settings-providers header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.settings-providers h2 {
-  margin: 4px 0 0;
-}
-
-.settings-providers-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-  margin: 20px 0 16px;
-  padding: 0;
-  list-style: none;
-}
-
-.settings-providers-list li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px 12px;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-card);
-}
-
-.settings-providers-list strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.9rem;
-  text-overflow: ellipsis;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-.settings-providers-list li > span:first-of-type {
-  justify-self: end;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--text-dim);
-  background: var(--surface-panel);
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.settings-providers-list li > span:nth-of-type(2) {
-  grid-column: 1 / -1;
-  color: var(--text-dim);
-  font-size: 0.76rem;
-  line-height: 1.45;
-}
-
-.settings-providers .domain-hint {
-  max-width: 72ch;
-  margin: 0;
-}
-
-.settings-preflight-list {
-  display: grid;
-  gap: 8px;
-  padding: 0;
-  list-style: none;
-}
-
-.settings-preflight-list li {
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-
-.settings-preflight-list li.is-ok strong {
-  color: var(--ok);
-}
-
-.settings-preflight-list li.is-ko strong {
-  color: var(--err);
 }
 
 /* Une anomalie de la section, visible depuis l'onglet VOISIN : sans elle, un provider expiré ou un

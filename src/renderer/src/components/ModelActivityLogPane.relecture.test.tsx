@@ -16,13 +16,26 @@ import type { Msg } from './chat-view-types'
 
 vi.mock('./model-activity-log', async (importOriginal) => {
   const origine = await importOriginal<typeof import('./model-activity-log')>()
-  return { ...origine, buildModelActivityLog: vi.fn(origine.buildModelActivityLog) }
+  return {
+    ...origine,
+    lignesDuFil: vi.fn(origine.lignesDuFil),
+    lignesDesSources: vi.fn(origine.lignesDesSources),
+    assemblerJournal: vi.fn(origine.assemblerJournal)
+  }
 })
 
-import { buildModelActivityLog } from './model-activity-log'
+import { assemblerJournal, lignesDesSources, lignesDuFil } from './model-activity-log'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
 
-const construire = vi.mocked(buildModelActivityLog)
+const fil = vi.mocked(lignesDuFil)
+const sources = vi.mocked(lignesDesSources)
+const assembler = vi.mocked(assemblerJournal)
+/** Nombre d'appels de chacun des trois calculs du journal. */
+const calculs = (): { fil: number; sources: number; assembler: number } => ({
+  fil: fil.mock.calls.length,
+  sources: sources.mock.calls.length,
+  assembler: assembler.mock.calls.length
+})
 
 // Tableau STABLE : seul l'état relu peut relancer la construction du journal.
 const messages = [
@@ -44,9 +57,9 @@ let host: HTMLDivElement
 let root: Root
 let api: Record<string, ReturnType<typeof vi.fn>>
 
-async function monter(live = true): Promise<void> {
+async function monter(live = true, fil: Msg[] = messages): Promise<void> {
   await act(async () => {
-    root.render(<ModelActivityLogPane conversationId="conv-1" messages={messages} live={live} />)
+    root.render(<ModelActivityLogPane conversationId="conv-1" messages={fil} live={live} />)
   })
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0)
@@ -61,7 +74,9 @@ async function attendre(ms: number): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  construire.mockClear()
+  fil.mockClear()
+  sources.mockClear()
+  assembler.mockClear()
   ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -91,25 +106,48 @@ afterEach(() => {
 describe('ModelActivityLogPane — relire n’est pas recalculer', () => {
   it('une relecture IDENTIQUE ne reconstruit pas le journal, alors que les sources sont bien relues', async () => {
     await monter()
-    const apresMontage = construire.mock.calls.length
+    const apresMontage = calculs()
+    expect(apresMontage.assembler).toBeGreaterThan(0)
     const lecturesTrace = api.causalTraceGraphe.mock.calls.length
     await attendre(8_100)
     // Les relectures ont eu lieu (2 passes de 4 s)…
     expect(api.causalTraceGraphe.mock.calls.length).toBeGreaterThanOrEqual(lecturesTrace + 2)
-    // … mais rien n'ayant changé, le journal n'a pas été reconstruit une seule fois.
-    expect(construire.mock.calls.length).toBe(apresMontage)
+    // … mais rien n'ayant changé, aucun des trois calculs du journal n'a été refait.
+    expect(calculs()).toEqual(apresMontage)
   })
 
   it('une relecture qui CHANGE repose la source et le journal suit', async () => {
     await monter()
-    const apresMontage = construire.mock.calls.length
+    const apresMontage = calculs()
     api.conversationActivity.mockResolvedValue([
       { ts: '2026-10-11T10:00:05.000Z', costUsd: 0.02 },
       { ts: '2026-10-11T10:00:09.000Z', costUsd: 0.5 }
     ])
     await attendre(4_100)
-    expect(construire.mock.calls.length).toBeGreaterThan(apresMontage)
+    const apres = calculs()
+    expect(apres.sources).toBeGreaterThan(apresMontage.sources)
+    expect(apres.assembler).toBeGreaterThan(apresMontage.assembler)
+    // Une source relue n'a rien changé au fil : ses lignes ne sont pas refaites.
+    expect(apres.fil).toBe(apresMontage.fil)
     expect(host.textContent).toContain('0.5 $')
+  })
+
+  it('un fragment de réponse ne refait QUE les lignes du fil, pas les six sources', async () => {
+    await monter()
+    const avant = calculs()
+    // Ce que fait le fil pendant un tour : un tableau NEUF dont seul le dernier message a grandi.
+    const fragment = [
+      ...messages.slice(0, 3),
+      { ...messages[3], parts: [{ kind: 'action', name: 'geste_du_fragment', ok: true }] }
+    ] as unknown as Msg[]
+    await monter(true, fragment)
+    const apres = calculs()
+    expect(apres.fil).toBe(avant.fil + 1)
+    expect(apres.assembler).toBe(avant.assembler + 1)
+    expect(apres.sources).toBe(avant.sources)
+    expect(host.textContent).toContain('geste_du_fragment')
+    // Les lignes des sources sont toujours là après l'assemblage.
+    expect(host.textContent).toContain('0.02 $')
   })
 
   it('en boucle, ne relit que le journal du DERNIER tour ; les tours terminés sont lus une fois', async () => {

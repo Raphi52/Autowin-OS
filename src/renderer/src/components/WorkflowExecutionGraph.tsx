@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { buildCausalPath, flattenCausalNodes, type CausalPathNode } from './causal-path-model'
 import { settleStrandedExecutionStatus, statusLabel } from './execution-interrupted-status'
 import {
   buildHarnessTimelineFromTrace,
@@ -16,6 +16,12 @@ import {
 import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
+import {
+  constellationEdgePath,
+  layoutConstellation,
+  type ConstellationLayout,
+  type ConstellationRow
+} from './graph-constellation-layout'
 
 /**
  * Ce que le graphe PUBLIE quand on descend sur un nœud. Il ne décide de rien : il dit sur quoi
@@ -76,7 +82,10 @@ function durationLabel(durationMs: number | undefined, offsetMs?: number): strin
 }
 
 /** Position de l'evenement depuis le debut de la demande, depuis son horodatage logue. */
-function offsetFromStart(timestamp: string | undefined, baseMs: number | undefined): number | undefined {
+function offsetFromStart(
+  timestamp: string | undefined,
+  baseMs: number | undefined
+): number | undefined {
   if (baseMs == null || !timestamp) return undefined
   const at = Date.parse(timestamp)
   return Number.isFinite(at) ? Math.max(0, at - baseMs) : undefined
@@ -116,16 +125,22 @@ function workspaceModeLabel(mode: string | undefined): string {
 
 function ExecutionNodeMeta({
   event,
-  offsetMs
+  offsetMs,
+  sansDuree = false
 }: {
   event: HarnessTimelineEvent
   offsetMs?: number
+  /** La constellation écrit la durée sur sa propre ligne, sous le titre : pas deux fois. */
+  sansDuree?: boolean
 }): React.JSX.Element {
   const display = event.display
   if (display?.kind === 'workspace') {
+    const mode = workspaceModeLabel(display.workspace?.mode)
+    // « Dépôt de travail » titre déjà le nœud : la ligne ne le redit pas, elle donne le chemin.
+    if (mode === display.title) return <span>{display.workspace?.path}</span>
     return (
       <>
-        <span>{workspaceModeLabel(display.workspace?.mode)}</span>
+        <span>{mode}</span>
         <span aria-hidden="true">·</span>
         <span>{display.workspace?.path}</span>
       </>
@@ -179,8 +194,12 @@ function ExecutionNodeMeta({
       <>
         <span>{closureStatusLabel(display.closure?.status)}</span>
         <span aria-hidden="true">·</span>
-        <span>{durationLabel(display.closure?.totalDurationMs, offsetMs)}</span>
-        <span aria-hidden="true">·</span>
+        {!sansDuree && (
+          <>
+            <span>{durationLabel(display.closure?.totalDurationMs, offsetMs)}</span>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
         <span>
           {costLabel(display.closure?.totalCostUsd)}
           {unknown > 0 ? ` + ${unknown} non chiffre(s)` : ''}
@@ -215,10 +234,34 @@ function ExecutionNodeMeta({
         </>
       )}
       <span className="workflow-execution-agent">{event.actor}</span>
-      <span aria-hidden="true">·</span>
-      <span>{durationLabel(event.durationMs, offsetMs)}</span>
+      {!sansDuree && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>{durationLabel(event.durationMs, offsetMs)}</span>
+        </>
+      )}
     </>
   )
+}
+
+/** Le chiffre que la constellation écrit sous le nom : la durée, ou le temps total d'une clôture. */
+function chiffreDuNoeud(node: CausalPathNode, offsetMs?: number): string {
+  return durationLabel(dureeDuNoeud(node), offsetMs)
+}
+
+/**
+ * La durée d'une étape telle que la constellation la montre. Une PHASE n'a pas de durée propre
+ * (alias de skill, « 0 ms » sur conv-108) : elle prend la durée cumulée de ses agents, que le
+ * chemin causal calcule déjà. Une clôture porte le temps total du run.
+ */
+function dureeDuNoeud(node: CausalPathNode): number | undefined {
+  const event = node.event
+  const positive = (ms: number | undefined): number | undefined =>
+    ms != null && Number.isFinite(ms) && ms > 0 ? ms : undefined
+  // Un marqueur instantané (copie, plan, Git : « 0 ms » sur conv-108) n'a pas de durée à montrer :
+  // `durationLabel` dit alors sa POSITION dans la demande, comme pour une durée absente.
+  if (event.display?.kind === 'closure') return positive(event.display.closure?.totalDurationMs)
+  return positive(event.durationMs) ?? positive(node.inclusiveDurationMs)
 }
 
 /**
@@ -374,6 +417,7 @@ function ExecutionNodeContents({
   if (cle && lu?.cle !== cle) {
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="chargement">
+        <Spinner size={12} />
         Chargement du détail…
       </p>
     )
@@ -542,6 +586,304 @@ function ExecutionNodeDetail({
   )
 }
 
+/**
+ * L'ARBRE ÉTOILÉ (conv-234, 2026-10-11) — remplace la pile de cartes égales.
+ *
+ * Choix de l'utilisateur, arrêté par /draft en cinq tours : « Constellation c'est incroyable »,
+ * puis l'Arbre étoilé, puis le mélange Perles + Flux + Fiche accrochée, enfin « go fil holo ».
+ *   - chaque étape est une PERLE de verre dont la taille suit la durée ;
+ *   - des points COULENT sur les liens qui mènent à ce qui tourne ;
+ *   - l'étape choisie descend un FIL bleu → rose jusqu'à sa FICHE au bord holo, glissée sous sa
+ *     ligne : la fiche reste près de l'étape même au milieu d'un run de 500 agents.
+ * Le placement est calculé à part (`graph-constellation-layout.ts`), sans DOM.
+ */
+const AIR_DU_FIL = 14
+
+function ExecutionConstellation({
+  conversationId,
+  nodes,
+  layout,
+  actifs,
+  selectedId,
+  idDegrade,
+  baseMs,
+  dureeDemande,
+  onToggle
+}: {
+  conversationId: string
+  nodes: CausalPathNode[]
+  layout: ConstellationLayout
+  actifs: Set<string>
+  selectedId: string | null
+  idDegrade: string
+  baseMs?: number
+  dureeDemande?: number
+  onToggle: (id: string) => void
+}): React.JSX.Element | null {
+  const parId = new Map(nodes.map((node) => [node.id, node]))
+  const choisi = selectedId ? layout.nodes.get(selectedId) : undefined
+  const noeudChoisi = selectedId ? parId.get(selectedId) : undefined
+  if (layout.rows.length === 0) return null
+  const coupure = choisi ? choisi.row + 1 : layout.rows.length
+  const avant = layout.rows.slice(0, coupure)
+  const apres = layout.rows.slice(coupure)
+
+  const bande = (rows: ConstellationRow[], avecFil: boolean): React.JSX.Element => {
+    const haut = rows[0].top
+    const hauteur = rows.reduce((total, row) => total + row.height, 0) + (avecFil ? AIR_DU_FIL : 0)
+    const ici = new Set(rows.flatMap((row) => row.ids))
+    const liens = [...layout.nodes.values()].filter(
+      (place) => place.parentId && (ici.has(place.id) || ici.has(place.parentId))
+    )
+    return (
+      <div className="workflow-execution-band" style={{ height: hauteur }}>
+        <svg
+          className="workflow-execution-links"
+          width={layout.width}
+          height={hauteur}
+          viewBox={`0 ${haut} ${layout.width} ${hauteur}`}
+          aria-hidden="true"
+          focusable="false"
+        >
+          <defs>
+            <linearGradient
+              id={`${idDegrade}-lien`}
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1="0"
+              x2="0"
+              y2={Math.max(1, layout.height)}
+            >
+              <stop offset="0" className="wx-stop-froid" />
+              <stop offset="1" className="wx-stop-chaud" />
+            </linearGradient>
+            {avecFil && choisi && (
+              <linearGradient
+                id={`${idDegrade}-fil`}
+                gradientUnits="userSpaceOnUse"
+                x1="0"
+                y1={choisi.bottom}
+                x2="0"
+                y2={haut + hauteur}
+              >
+                <stop offset="0" className="wx-stop-froid" />
+                <stop offset="1" className="wx-stop-chaud" />
+              </linearGradient>
+            )}
+          </defs>
+          {liens.map((place) => {
+            const parent = layout.nodes.get(place.parentId ?? '')
+            const enfant = parId.get(place.id)
+            if (!parent || !enfant) return null
+            const chemin = constellationEdgePath(parent, place, layout.width)
+            const attente = enfant.event.status === 'pending'
+            const actif = !attente && actifs.has(place.id)
+            return (
+              <g key={place.id}>
+                <path
+                  d={chemin}
+                  className={`workflow-execution-edge${attente ? ' is-attente' : ''}${actif ? ' is-actif' : ''}`}
+                  stroke={`url(#${idDegrade}-lien)`}
+                  {...(ici.has(place.id) ? { 'data-execution-edge': place.id } : {})}
+                />
+                {actif && <path d={chemin} className="workflow-execution-flux" />}
+              </g>
+            )
+          })}
+          {avecFil && choisi && (
+            <g data-execution-fil={choisi.id}>
+              <path
+                d={`M${choisi.x} ${choisi.bottom + 2}V${haut + hauteur}`}
+                className="workflow-execution-fil"
+                stroke={`url(#${idDegrade}-fil)`}
+              />
+              <path
+                d={`M${choisi.x} ${choisi.bottom + 4}V${haut + hauteur}`}
+                className="workflow-execution-fil-flux"
+              />
+            </g>
+          )}
+        </svg>
+        {rows.flatMap((row) =>
+          row.ids.map((id) => {
+            const place = layout.nodes.get(id)
+            const node = parId.get(id)
+            if (!place || !node) return null
+            const event = node.event
+            const status = event.status ?? 'completed'
+            const kind = event.display?.kind ?? 'event'
+            const titre = event.display?.title ?? EVENT_LABEL[event.kind]
+            const offset = offsetFromStart(event.timestamp, baseMs)
+            const duree = dureeDuNoeud(node)
+            const lourd =
+              !place.root && duree != null && dureeDemande != null && dureeDemande > 0
+                ? duree / dureeDemande >= 0.25
+                : false
+            return (
+              <button
+                key={id}
+                type="button"
+                role="treeitem"
+                aria-selected={selectedId === id}
+                title={`${titre} — ${statusLabel(status)}`}
+                className={[
+                  'workflow-execution-node',
+                  `is-${kind}`,
+                  `is-${status}`,
+                  selectedId === id ? 'is-selected' : '',
+                  place.root ? 'is-racine' : '',
+                  actifs.has(id) ? 'is-actif' : '',
+                  lourd ? 'is-lourd' : ''
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                style={
+                  {
+                    left: place.x - place.largeur / 2,
+                    top: place.top - haut,
+                    width: place.largeur,
+                    height: row.astre + row.legende,
+                    '--wx-r': `${place.r}px`,
+                    '--wx-astre': `${row.astre}px`
+                  } as React.CSSProperties
+                }
+                data-execution-node={id}
+                data-execution-kind={kind}
+                data-execution-agent={event.execution?.agentId ?? event.actor}
+                data-execution-provider={event.provider}
+                data-execution-model={event.model}
+                data-execution-skill={event.display?.skillName}
+                data-execution-run={event.display?.runId}
+                data-depth={node.depth}
+                onClick={() => onToggle(id)}
+              >
+                {place.root ? (
+                  <span className="wx-pastille workflow-execution-node-title">
+                    <b>{titre}</b>
+                    <em className="wx-statut">{statusLabel(status)}</em>
+                  </span>
+                ) : (
+                  <span className="wx-astre" aria-hidden="true">
+                    <span className="wx-halo" />
+                    <span className="workflow-execution-dot wx-perle" />
+                    <span className="wx-anneau" />
+                  </span>
+                )}
+                <span className="workflow-execution-node-copy wx-legende">
+                  {!place.root && (
+                    <>
+                      <span className="workflow-execution-node-title">
+                        <b>{titre}</b>
+                      </span>
+                      <span className="wx-chiffre">
+                        {status === 'completed' && <span>{chiffreDuNoeud(node, offset)}</span>}
+                        <em className="wx-statut">{statusLabel(status)}</em>
+                      </span>
+                    </>
+                  )}
+                  {/* Pas de ligne qui redit le titre : une phase s'appelle déjà « skill · X », et
+                      une demande sans texte propre ne se cite pas elle-même. */}
+                  {kind !== 'skill' &&
+                    !(kind === 'request' && (!event.label || event.label === titre)) && (
+                      <span className="workflow-execution-node-meta">
+                        <ExecutionNodeMeta event={event} offsetMs={offset} sansDuree />
+                      </span>
+                    )}
+                  {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10, conv-163). */}
+                  {event.display?.failure && (
+                    <span
+                      className="workflow-execution-node-failure"
+                      data-execution-failure
+                      title={event.display.failure}
+                    >
+                      {event.display.failure}
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {bande(avant, Boolean(choisi))}
+      {noeudChoisi && choisi && (
+        <ExecutionFiche
+          conversationId={conversationId}
+          node={noeudChoisi}
+          racine={choisi.root}
+          baseMs={baseMs}
+          dureeDemande={dureeDemande}
+        />
+      )}
+      {apres.length > 0 && bande(apres, false)}
+    </>
+  )
+}
+
+/**
+ * LA FICHE ACCROCHÉE — le détail de l'étape choisie, au bout du fil. Elle reprend tout ce que le
+ * détail montrait (lignes par type, prompt envoyé, instructions système, retour, raisonnement) et
+ * y ajoute la PART de la demande que l'étape a prise, en jauge.
+ */
+function ExecutionFiche({
+  conversationId,
+  node,
+  racine,
+  baseMs,
+  dureeDemande
+}: {
+  conversationId: string
+  node: CausalPathNode
+  racine: boolean
+  baseMs?: number
+  dureeDemande?: number
+}): React.JSX.Element {
+  const event = node.event
+  const status = event.status ?? 'completed'
+  const offset = offsetFromStart(event.timestamp, baseMs)
+  const duree = dureeDuNoeud(node)
+  const part =
+    !racine && duree != null && dureeDemande != null && dureeDemande > 0
+      ? Math.min(1, duree / dureeDemande)
+      : undefined
+  return (
+    <div
+      className="workflow-execution-detail wx-fiche"
+      role="region"
+      aria-label="Détail de l’étape sélectionnée"
+      data-execution-detail-of={node.id}
+    >
+      <div className="wx-fiche-tete">
+        <b>{event.display?.title ?? EVENT_LABEL[event.kind]}</b>
+        <em className={`wx-fiche-statut is-${status}`}>{statusLabel(status)}</em>
+      </div>
+      {part != null && (
+        <div className="wx-jauge" data-execution-part={Math.round(part * 100)}>
+          <span className="wx-jauge-piste">
+            <span className="wx-jauge-plein" style={{ width: `${Math.max(2, part * 100)}%` }} />
+          </span>
+          <span className="wx-jauge-texte">
+            {chiffreDuNoeud(node, offset)} · <b>{Math.round(part * 100)} %</b> de la demande
+          </span>
+        </div>
+      )}
+      <ExecutionNodeDetail event={event} offsetMs={offset} />
+      <ExecutionNodeContents conversationId={conversationId} event={event} />
+      {node.issues.length > 0 && (
+        <p className="workflow-execution-warning">Trace partielle · {node.issues.join(', ')}</p>
+      )}
+      {event.display?.limitation && (
+        <p className="workflow-execution-warning">{event.display.limitation}</p>
+      )}
+    </div>
+  )
+}
+
 export function WorkflowExecutionGraph({
   conversationId,
   active = true,
@@ -696,6 +1038,57 @@ export function WorkflowExecutionGraph({
     )
   }, [selected, turnId])
 
+  // LARGEUR RÉELLE DE L'ARBRE : la constellation se pose dans la colonne qu'on lui donne, et se
+  // replace quand on élargit ou rétrécit le panneau.
+  const [arbre, setArbre] = useState<HTMLDivElement | null>(null)
+  const [largeur, setLargeur] = useState(0)
+  useEffect(() => {
+    if (!arbre) return
+    const mesurer = (): void => setLargeur(Math.round(arbre.clientWidth))
+    mesurer()
+    if (typeof ResizeObserver !== 'function') return
+    const observateur = new ResizeObserver(mesurer)
+    observateur.observe(arbre)
+    return () => observateur.disconnect()
+  }, [arbre])
+  // Identifiant des dégradés SVG, propre à cette instance : deux graphes ouverts ne se volent pas
+  // leurs couleurs. `useId` rend des deux-points, illisibles dans une référence `url(#…)`.
+  const idDegrade = `wx${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  const constellation = useMemo(() => {
+    // Une étape est « active » si elle tourne ou si l'une de ses descendantes tourne : c'est sur
+    // ce chemin que le flux coule. L'ordre préfixe renversé visite les enfants avant leur parent.
+    const actifs = new Set<string>()
+    for (const node of [...nodes].reverse())
+      if (node.event.status === 'running' || node.children.some((child) => actifs.has(child.id)))
+        actifs.add(node.id)
+    const layout = layoutConstellation(
+      nodes.map((node) => ({
+        id: node.id,
+        ...(node.parentId && !node.issues.includes('missing-parent')
+          ? { parentId: node.parentId }
+          : {}),
+        depth: node.depth,
+        // La clôture résume le run, elle n'en est pas une étape : sa taille ne suit pas la durée.
+        durationMs: node.event.display?.kind === 'closure' ? undefined : dureeDuNoeud(node),
+        hasFailure: Boolean(node.event.display?.failure),
+        running: node.event.status === 'running'
+      })),
+      { width: largeur, rootQuote: true }
+    )
+    return { layout, actifs }
+  }, [nodes, largeur])
+  // Durée de toute la demande : la jauge de la fiche dit la part qu'une étape en a prise.
+  const dureeDemande = useMemo(() => {
+    const racine = graph.roots[0]?.inclusiveDurationMs
+    if (racine != null && racine > 0) return racine
+    let fin = Number.NEGATIVE_INFINITY
+    for (const node of nodes) {
+      const at = Date.parse(node.event.timestamp ?? '')
+      if (Number.isFinite(at)) fin = Math.max(fin, at + (node.event.durationMs ?? 0))
+    }
+    return baseMs != null && Number.isFinite(fin) && fin > baseMs ? fin - baseMs : undefined
+  }, [graph.roots, nodes, baseMs])
+
   const runCount = new Set(
     nodes
       .map((node) => node.event.display?.runId)
@@ -785,91 +1178,26 @@ export function WorkflowExecutionGraph({
       )}
 
       {nodes.length > 0 && (
-        <div className="workflow-execution-tree" role="tree" aria-label="Traitement de la demande">
-          {nodes.map((node) => (
-            <div
-              className="workflow-execution-node-wrap"
-              key={node.id}
-              style={{ '--execution-depth': node.depth } as React.CSSProperties}
-            >
-              {node.depth > 0 && !node.issues.includes('missing-parent') && (
-                <span className="workflow-execution-edge" data-execution-edge aria-hidden="true" />
-              )}
-              <button
-                type="button"
-                role="treeitem"
-                aria-selected={selectedId === node.id}
-                className={[
-                  'workflow-execution-node',
-                  `is-${node.event.display?.kind ?? 'event'}`,
-                  `is-${node.event.status ?? 'completed'}`,
-                  selectedId === node.id ? 'is-selected' : ''
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                data-execution-node={node.id}
-                data-execution-kind={node.event.display?.kind ?? 'event'}
-                data-execution-agent={node.event.execution?.agentId ?? node.event.actor}
-                data-execution-provider={node.event.provider}
-                data-execution-model={node.event.model}
-                data-execution-skill={node.event.display?.skillName}
-                data-execution-run={node.event.display?.runId}
-                data-depth={node.depth}
-                onClick={() => setSelectedId((current) => (current === node.id ? null : node.id))}
-              >
-                <span className="workflow-execution-dot" aria-hidden="true" />
-                <span className="workflow-execution-node-copy">
-                  <span className="workflow-execution-node-title">
-                    <b>{node.event.display?.title ?? EVENT_LABEL[node.event.kind]}</b>
-                    <em>{statusLabel(node.event.status)}</em>
-                  </span>
-                  <span className="workflow-execution-node-meta">
-                    <ExecutionNodeMeta
-                      event={node.event}
-                      offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
-                    />
-                  </span>
-                  {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10) : six échecs de
-                      `scout:dette` (conv-163) s'affichaient sans la cause que la trace écrivait. */}
-                  {node.event.display?.failure && (
-                    <span
-                      className="workflow-execution-node-failure"
-                      data-execution-failure
-                      title={node.event.display.failure}
-                    >
-                      {node.event.display.failure}
-                    </span>
-                  )}
-                </span>
-              </button>
-              {/* LA BRIQUE SE DÉPLIE SUR PLACE (demande du 2026-09-23) : le détail vit sous la
-                  brique cliquée, dans l'arbre, et non dans un bloc séparé sous tout le graphe. */}
-              {selectedId === node.id && (
-                <div
-                  className="workflow-execution-detail is-inline"
-                  role="region"
-                  aria-label="Détail de l’étape sélectionnée"
-                >
-                  <ExecutionNodeDetail
-                    event={node.event}
-                    offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
-                  />
-                  <ExecutionNodeContents conversationId={conversationId} event={node.event} />
-                  {node.issues.length > 0 && (
-                    <p className="workflow-execution-warning">
-                      Trace partielle · {node.issues.join(', ')}
-                    </p>
-                  )}
-                  {node.event.display?.limitation && (
-                    <p className="workflow-execution-warning">{node.event.display.limitation}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+        <div
+          className="workflow-execution-tree"
+          role="tree"
+          aria-label="Traitement de la demande"
+          ref={setArbre}
+          data-execution-constellation
+        >
+          <ExecutionConstellation
+            conversationId={conversationId}
+            nodes={nodes}
+            layout={constellation.layout}
+            actifs={constellation.actifs}
+            selectedId={selectedId}
+            idDegrade={idDegrade}
+            baseMs={baseMs}
+            dureeDemande={dureeDemande}
+            onToggle={(id) => setSelectedId((current) => (current === id ? null : id))}
+          />
         </div>
       )}
-
     </section>
   )
 }

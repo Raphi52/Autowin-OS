@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 // @vitest-environment happy-dom
 import { act, createElement, useState, type ComponentProps } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { buildOrchestratorModelGroups } from './chat-view-model'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
@@ -21,8 +21,16 @@ describe('selecteur orchestrateur Chat', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
   })
   let container: HTMLDivElement | null = null
+  let rendu: Root | null = null
 
   afterEach(() => {
+    /*
+     * DÉMONTER, pas seulement retirer le conteneur : le menu vit dans un PORTAIL de
+     * `document.body`. Sans démontage, le menu d'un test survivait dans la page et le test suivant
+     * comptait ses options en double (constaté le 2026-10-11 en ajoutant les tests conv-239).
+     */
+    act(() => rendu?.unmount())
+    rendu = null
     container?.remove()
     container = null
   })
@@ -34,6 +42,7 @@ describe('selecteur orchestrateur Chat', () => {
     container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
+    rendu = root
     await act(async () => {
       root.render(
         createElement(OrchestratorModelSelector, {
@@ -70,6 +79,61 @@ describe('selecteur orchestrateur Chat', () => {
     expect(dom.querySelectorAll('[role="option"]')).toHaveLength(0)
     expect(dom.textContent).toContain('Catalogue de modèles vide.')
     expect(dom.textContent).not.toMatch(/enregistré|réussi/i)
+  })
+
+  it('ouvert en tête de conversation, le menu se pose SOUS le bouton (conv-239)', async () => {
+    await renderSelector({
+      models: [{ id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' }],
+      ouverture: 'bas'
+    })
+    const menu = document.body.querySelector<HTMLElement>('.model-select-menu.is-flottant')
+    expect(menu).not.toBeNull()
+    expect(menu?.classList.contains('is-ouverture-bas')).toBe(true)
+    // `top` posé, `bottom` neutralisé : la règle de base `bottom: calc(100% + 7px)` écraserait
+    // sinon la hauteur du menu à zéro.
+    expect(menu?.style.top).not.toBe('')
+    expect(menu?.style.bottom).toBe('auto')
+  })
+
+  it('par défaut le menu reste posé AU-DESSUS du bouton (Routage inchangé)', async () => {
+    await renderSelector({
+      models: [{ id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' }]
+    })
+    const menu = document.body.querySelector<HTMLElement>('.model-select-menu.is-flottant')
+    expect(menu?.style.top).toBe('')
+    expect(menu?.style.bottom).not.toBe('')
+    expect(document.body.querySelector('[data-testid="conv-model-defaut"]')).toBeNull()
+  })
+
+  it('une conversation qui a choisi son modèle peut revenir au défaut de l’application', async () => {
+    const onChoisir = vi.fn()
+    await renderSelector({
+      models: [{ id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' }],
+      ouverture: 'bas',
+      defaut: { label: 'Opus 5.5', actif: false, onChoisir }
+    })
+    const bloc = document.body.querySelector('[data-testid="conv-model-defaut"]')
+    expect(bloc?.textContent).toContain('Revenir au modèle par défaut')
+    expect(bloc?.textContent).toContain('Opus 5.5')
+    expect(bloc?.textContent).toContain('Ce choix ne vaut que pour cette conversation')
+    await act(async () => {
+      bloc?.querySelector('button')?.click()
+    })
+    expect(onChoisir).toHaveBeenCalledTimes(1)
+  })
+
+  it('une conversation qui suit déjà le défaut ne propose pas d’y revenir', async () => {
+    const onChoisir = vi.fn()
+    await renderSelector({
+      models: [{ id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' }],
+      ouverture: 'bas',
+      defaut: { label: 'Opus 5.5', actif: true, onChoisir }
+    })
+    const bouton = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="conv-model-defaut"] button'
+    )
+    expect(bouton?.textContent).toContain('Suit le modèle par défaut')
+    expect(bouton?.disabled).toBe(true)
   })
 
   it('signale la disparition du binding tout en ne proposant que le catalogue dynamique', async () => {
@@ -207,6 +271,7 @@ describe('selecteur orchestrateur Chat', () => {
     container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
+    rendu = root
     await act(async () => root.render(createElement(RejectionHarness)))
     // Menu flottant : on l'ouvre, puis on cherche dans la PAGE (le portail y depose le menu).
     const detailsRejet = container.querySelector('details') as HTMLDetailsElement | null
@@ -352,16 +417,35 @@ describe('selecteur orchestrateur Chat', () => {
     expect(anthropic?.options[0].label).toBe('Opus 4.8')
   })
 
-  it('change le role orchestrateur partage sans toucher la conversation', () => {
-    expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
-    expect(source).toContain('option.provider,')
-    expect(source).toContain('option.model,')
-    expect(source).toContain('option.reasoningEffort')
+  it('change le modèle de LA conversation sans toucher le rôle partagé', () => {
+    // conv-239 (2026-10-11) : « rends le modèle propre à chaque conversation ». Le sélecteur ne
+    // réécrit plus le rôle orchestrateur global (celui de TOUS les fils) ; il pose le modèle de la
+    // conversation ouverte, que le main relit au départ de chacun de ses tours.
+    expect(source).not.toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    const choix = source.slice(source.indexOf('async function changerModeleDuFil('))
+    const corps = choix.slice(0, choix.indexOf('\n  }\n'))
+    expect(corps).toContain('window.api.conversationSetModel(')
+    expect(corps).toContain('option ? option.provider : null')
+    expect(corps).toContain('option?.model')
+    expect(corps).toContain('option?.reasoningEffort')
+    // Sans conversation ouverte, le choix est ARMÉ pour le fil qui va naître…
+    expect(corps).toContain('setModeleNouveauFil(')
+    // … et posé sur lui AVANT son premier tour, sur les deux chemins de création.
+    expect(source.match(/await poserModeleArme\(/g)).toHaveLength(2)
+    // Le sélecteur vit en TÊTE de conversation, ouvert vers le bas, et plus dans la barre de saisie.
+    const tete = source.slice(source.indexOf('data-testid="chat-runtime-identity"'))
+    expect(tete.slice(0, tete.indexOf('data-testid="chat-runtime-conv"'))).toMatch(
+      /<OrchestratorModelSelector[\s\S]*?ouverture="bas"/
+    )
+    const saisie = source.slice(source.indexOf('metaNode={'))
+    expect(saisie.slice(0, 600)).not.toContain('<OrchestratorModelSelector')
+    expect(source.match(/<OrchestratorModelSelector\b/g)).toHaveLength(1)
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
     // L'indicateur de quotas reste alimente par l'identite runtime — et RIEN d'autre : depuis le
     // 2026-09-06 la jauge de contexte a son PROPRE bouton et son propre panneau, elle ne transite
     // plus par la popup des quotas.
-    expect(source).toMatch(/<ModelQuotaIndicator\s+provider=\{runtimeIdentity\?\.provider\}/)
+    // Les quotas suivent le fournisseur du MODÈLE DU FIL (son choix propre, sinon le défaut).
+    expect(source).toMatch(/<ModelQuotaIndicator\s+provider=\{bindingEffectif\?\.provider\}/)
     expect(source).not.toContain('contextGauge={activeId != null ? contextGauges[activeId]')
     /*
      * La jauge de contexte est passee dans un PANNEAU (`contextPanelNode`) rendu par
@@ -386,7 +470,7 @@ describe('selecteur orchestrateur Chat', () => {
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
     // Menu devenu FLOTTANT : il porte `is-flottant` en plus et part dans un portail. Ce qui est
     // verifie reste qu'il existe UNE seule classe de menu, portee par le composant extrait.
-    expect(selectorSource).toContain('className="model-select-menu is-flottant"')
+    expect(selectorSource).toContain('className={`model-select-menu is-flottant')
     expect(selectorSource).toContain('createPortal(')
     expect(selectorSource).toContain('Le changement s’appliquera au prochain tour')
     expect(selectorSource).not.toMatch(

@@ -412,6 +412,38 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('les rouges laissés passer (déjà là, ou venus d’ailleurs) sont NOMMÉS, jamais tus', async () => {
+    // conv-246 (2026-10-11) : un rouge déjà présent au dernier commit, ou dû au travail non publié
+    // d'un autre fil, ne bloque plus la publication — le panneau doit dire lesquels sont passés.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-1 · tour cccccccc',
+          branch: 'auto/conv-1-cccccccc',
+          at: '2026-10-11T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
+          verification: {
+            statut: 'vert',
+            commande: 'vitest related src/main/commands.ts --run',
+            testsJoues: 300,
+            dejaRouges: ['src/renderer/src/spinner-partout.test.ts'],
+            rougesDAilleurs: ['src/renderer/src/components/ViewPage.gabarit.test.ts']
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 300 verts — déjà rouge au dernier commit : ' +
+        'src/renderer/src/spinner-partout.test.ts — rouge venu d’un travail non publié : ' +
+        'src/renderer/src/components/ViewPage.gabarit.test.ts'
+    )
+  })
+
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

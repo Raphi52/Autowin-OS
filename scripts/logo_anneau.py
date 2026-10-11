@@ -178,7 +178,9 @@ def generer(racine: Path = _RACINE) -> list[Path]:
     # Chaque taille est DESSINEE a sa taille, pas reduite depuis le 512 : a 16 px, une reduction
     # bicubique d'un grand dessin bave ; un rendu natif sur-echantillonne garde un bord net.
     ico = _ico([dessiner_anneau(cote, sur=max(8, 2048 // cote)) for cote in TAILLES_ICO])
-    for relatif in ("build/icon.ico", "resources/autowin-os-dev.ico"):
+    # `resources/icon.ico` : l'icone de la zone de notification de l'app INSTALLEE (src/main/window.ts).
+    # `build/` ne part pas dans le paquet, seul `resources/` y est extrait (electron-builder.yml).
+    for relatif in ("build/icon.ico", "resources/icon.ico", "resources/autowin-os-dev.ico"):
         chemin = racine / relatif
         chemin.write_bytes(ico)
         ecrits.append(chemin)

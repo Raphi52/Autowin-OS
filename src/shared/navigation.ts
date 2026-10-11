@@ -19,9 +19,11 @@ export type SettingsSection =
   | 'behaviour'
   | 'providers'
   | 'preflight'
-  // Protection de production : la phrase de passe qui garde les gestes sur les bases reelles.
-  // Distincte de « capabilities » : accorder un outil n'est pas autoriser un geste sur la prod.
-  | 'production'
+  // Rules : les regles d'Autowin OS. La protection de production (ce qu'Autowin demande avant un
+  // geste sur une base reelle) en est UNE — elle avait son propre onglet « Production » jusqu'a
+  // la demande conv-242. Distincte de « capabilities » : accorder un outil n'est pas autoriser un
+  // geste sur la prod.
+  | 'rules'
   // Apparence de l'application (mode sombre / clair). Séparée de « behaviour » : régler ce qu'on
   // VOIT n'est pas régler ce que les agents FONT.
   | 'interface'
@@ -126,6 +128,12 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   'theme-clair': { destination: 'settings', section: 'interface' },
   behaviour: { destination: 'settings', section: 'behaviour' },
   behavior: { destination: 'settings', section: 'behaviour' },
+  // L'onglet Rules, et la regle Production qu'il porte : « production » menait a l'ancien onglet,
+  // il doit continuer d'aboutir au meme reglage.
+  rules: { destination: 'settings', section: 'rules' },
+  règles: { destination: 'settings', section: 'rules' },
+  regles: { destination: 'settings', section: 'rules' },
+  production: { destination: 'settings', section: 'rules' },
   // Le Diagnostic de démarrage n'avait AUCUN nom : « diagnostic » retombait sur le chat, donc la
   // seule section qui porte une alerte n'était atteignable qu'à la souris (constat du 2026-09-10).
   diagnostic: { destination: 'settings', section: 'preflight' },

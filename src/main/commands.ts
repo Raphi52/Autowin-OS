@@ -108,6 +108,7 @@ import { readLastCommitFiles, readTestsCitant } from './git-read-main'
 import type { VerificationAvantPublication } from './run-autoclose'
 import { nativeSkills } from './native-registry'
 import { supprimerArbre } from './fs-supprimer'
+import { comparerALaBase } from './comparaison-a-la-base'
 
 /**
  * Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat.
@@ -270,6 +271,8 @@ import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import { addedLineFingerprints } from './exact-line-fingerprint'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
 import type { DesktopController } from './desktop-control'
+import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
+import { identifiantBureauCacheChat } from './consigne-bureau-cache'
 import {
   OutcomeLearningSupervisor,
   type OutcomeLearningResult
@@ -1484,6 +1487,29 @@ export const CATALOG: CommandSpec[] = [
       idempotentHint: true,
       openWorldHint: false
     }
+  },
+  {
+    /*
+     * LOT 1 du RUN outils-agent-1-2-4-6-7 (conv-222, 2026-10-11). hdesk-lancer refuse une relance sur
+     * le même identifiant tant que l'app vit (sortie 5), et rien ne la fermait : l'agent tuait un
+     * processus à la main, par nom au pire — la même app ouverte chez l'utilisateur partait aussi.
+     * La conversation n'est JAMAIS un argument du modèle : c'est le fil courant, et le script
+     * refuse le bureau d'un autre fil.
+     */
+    name: 'bureau_cache_fermer',
+    description:
+      'Fermer l’application que tu as lancée dans ton bureau Windows caché (scripts/hdesk-lancer.ps1) — PAR BUREAU, jamais par nom : la même application ouverte sur l’écran de l’utilisateur ou dans un autre bureau caché n’est pas touchée. Fermeture douce, puis arrêt forcé après le délai ; l’identifiant redevient libre pour une relance. Seulement les bureaux de cette conversation',
+    args: {
+      id: 'facultatif — identifiant du bureau caché (lettres, chiffres, - et _). Absent = le bureau de cette conversation, `chat-<id du fil>`',
+      delaiDouxSecondes:
+        'facultatif — attente de la fermeture douce avant l’arrêt forcé, entier de 1 à 30 (défaut 5)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   }
 ]
 
@@ -1967,6 +1993,13 @@ export class AppCommandBus {
    * promettre une relance qui n'arrivera pas.
    */
   redemarrerApp?: () => void
+
+  /**
+   * Fermeture d'un bureau caché (`bureau_cache_fermer`), câblée tardivement depuis index.ts sur
+   * `fermerHdesk` : le bus ne connaît pas le chemin des scripts de l'app installée. Absent ->
+   * l'outil annonce l'indisponibilité au lieu de prétendre avoir fermé.
+   */
+  fermerBureauCache?: (demande: DemandeFermeture) => Promise<ResultatFermeture>
 
   /**
    * Lance un VRAI tour dans une conversation NOMMEE, cable tardivement depuis index.ts sur la
@@ -3763,6 +3796,40 @@ export class AppCommandBus {
           detail: 'Redémarrage en cours — la consigne sera rejouée dans cette conversation.'
         }
       }
+      case 'bureau_cache_fermer': {
+        // Le fil est celui de l'appel, jamais un argument : un `conversationId` glissé dans `a`
+        // est ignoré, sinon le modèle pourrait se dire d'un autre fil pour fermer son bureau.
+        const fil = conversationId ?? this.activeConversationId ?? ''
+        if (!fil) {
+          return {
+            ferme: false,
+            detail:
+              'Fermeture refusée : aucune conversation courante — impossible de savoir quels bureaux sont les tiens.'
+          }
+        }
+        if (!this.fermerBureauCache) {
+          return {
+            ferme: false,
+            detail: 'Fermeture indisponible : aucun lanceur de scripts câblé dans ce processus.'
+          }
+        }
+        const id = s('id').trim() || identifiantBureauCacheChat(fil)
+        const delai =
+          a.delaiDouxSecondes === undefined || a.delaiDouxSecondes === ''
+            ? undefined
+            : Number(a.delaiDouxSecondes)
+        const r = await this.fermerBureauCache({
+          id,
+          conversationId: fil,
+          ...(delai !== undefined ? { delaiDouxSecondes: delai } : {})
+        })
+        const detail = r.ok
+          ? r.dejaFerme
+            ? `Bureau ${id} : rien ne tournait, la fiche est retirée.`
+            : `Bureau ${id} fermé (${r.fermesDoucement?.length ?? 0} en douceur, ${r.forces?.length ?? 0} forcé(s)).`
+          : `Bureau ${id} non fermé (code ${r.code ?? '?'}) : ${r.erreur ?? 'raison inconnue'}`
+        return { ...r, id, detail }
+      }
       case 'reload_env':
         // La valeur lue chez l'OS atterrit dans le `process.env` DU processus principal : le
         // reglage prend effet au prochain appel qui le lit, sans redemarrage.
@@ -4810,11 +4877,53 @@ export class AppCommandBus {
         }
         const encoreRouges = lectureBruteDuRapport(seules.rapport)?.suitesEnEchec.map(versRelatif)
         if (encoreRouges?.length) {
+          /*
+           * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (conv-246, 2026-10-11, choix de l'utilisateur) : les
+           * suites restées rouges sont rejouées sur le dernier commit, puis avec les fichiers du
+           * tour, dans une copie propre. Seul un échec NOUVEAU bloque (voir `comparaison-a-la-base.ts`).
+           */
+          const suites = [...new Set(encoreRouges)]
+          const comparaison = await comparerALaBase({
+            repo,
+            fichiers,
+            suites,
+            mesurer: async (racine, cible) => {
+              const m = await this.mesurerParLots(racine, cible, binDuDepot)
+              return {
+                lancee: m.allowed,
+                ok: m.ok,
+                exitCode: m.exitCode,
+                rapport: m.rapport,
+                ...(m.reason ? { raison: m.reason } : {})
+              }
+            }
+          })
+          if (comparaison.issue === 'aucun-rouge-du-tour') {
+            return {
+              statut: 'vert',
+              commande: mesure.command,
+              testsJoues: brut?.testsJoues ?? 0,
+              ...(comparaison.dejaRouges.length ? { dejaRouges: comparaison.dejaRouges } : {}),
+              ...(comparaison.rougesDAilleurs.length
+                ? { rougesDAilleurs: comparaison.rougesDAilleurs }
+                : {})
+            }
+          }
+          if (comparaison.issue === 'rouges-du-tour') {
+            return {
+              statut: 'echec',
+              commande: mesure.command,
+              detail: comparaison.detail,
+              testsEnEchec: comparaison.suites
+            }
+          }
           return {
             statut: 'echec',
             commande: mesure.command,
-            detail: `${encoreRouges.length} suite(s) rouge(s), même rejouée(s) seule(s)`,
-            testsEnEchec: [...new Set(encoreRouges)]
+            detail:
+              `${suites.length} suite(s) rouge(s), même rejouée(s) seule(s) — ` +
+              `impossible de dire si le tour en est la cause : ${comparaison.raison}`,
+            testsEnEchec: suites
           }
         }
       }

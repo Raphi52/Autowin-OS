@@ -140,3 +140,30 @@ describe('déclarations partiellement abîmées', () => {
     expect(classerCible({ nature: 'base', nom: 'APP_X' }, autorite).classe).toBe('prod')
   })
 })
+
+describe('déclarations telles qu’écrites', () => {
+  it('rend les entrées valides SANS les normaliser, pour qu’une proposition garde la casse', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'prod-autorite-brut-'))
+    writeFileSync(
+      cheminAutoriteProd(racine),
+      JSON.stringify([
+        { nature: 'base', nom: 'DB_Alpha', classe: 'prod', motif: 'à la main' },
+        { nature: 'chemin', nom: 'D:\\Deploiement\\Prod', classe: 'prod' },
+        { nature: 'inconnue', nom: 'X', classe: 'prod' }
+      ]),
+      'utf8'
+    )
+    const charge = chargerAutoriteProd(racine)
+    expect(charge.declarations).toEqual([
+      { nature: 'base', nom: 'DB_Alpha', classe: 'prod', motif: 'à la main' },
+      { nature: 'chemin', nom: 'D:\\Deploiement\\Prod', classe: 'prod' }
+    ])
+    expect(charge.anomalies).toHaveLength(1)
+  })
+
+  it('rend une liste VIDE quand le fichier manque', () => {
+    expect(
+      chargerAutoriteProd(mkdtempSync(join(tmpdir(), 'prod-autorite-vide-'))).declarations
+    ).toEqual([])
+  })
+})

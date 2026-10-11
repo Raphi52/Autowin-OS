@@ -5,7 +5,11 @@ import type {
   ReponseAutorisation as ReponseAutorisationProd,
   ReponseDefinition as ReponseDefinitionPhrase
 } from '../main/prod-passphrase-ipc'
-import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
+import type {
+  EtatPorteProd,
+  NiveauProtectionProd,
+  PropositionAutoriteProd
+} from '../shared/prod-protection'
 import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
@@ -79,7 +83,7 @@ import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
 import type { AutoCloseReport } from '../main/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
-import type { Role, RoleBinding } from '../main/roles'
+import type { PetitesTachesEtat, Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
@@ -129,6 +133,9 @@ const api = {
   // Etat et niveau de la protection : ce que l'ecran de reglages affiche, et le seul moyen de
   // changer le niveau. Aucun secret ne transite par ces deux canaux.
   prodPorteEtat: (): Promise<EtatPorteProd> => ipcRenderer.invoke('prod:porte:etat'),
+  // Liste de production PROPOSÉE depuis le catalogue SQL : un contenu à recopier, rien n'est écrit.
+  prodAutoriteProposition: (): Promise<PropositionAutoriteProd> =>
+    ipcRenderer.invoke('prod:autorite:proposition'),
   prodPorteNiveau: (niveau: NiveauProtectionProd): Promise<{ ok: boolean; erreur?: string }> =>
     ipcRenderer.invoke('prod:porte:niveau', niveau),
   prodPassphraseAutoriser: (
@@ -453,6 +460,15 @@ const api = {
     reasoningEffort?: string
   ): Promise<Record<Role, RoleBinding>> =>
     ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
+  /** Modèle des petites tâches (tri des conversations, choix du workflow) : réglage + effectif. */
+  petitesTaches: (): Promise<PetitesTachesEtat> => ipcRenderer.invoke('os:petitesTaches'),
+  /** `provider === null` efface le réglage : les petites tâches suivent alors le modèle du chat. */
+  setPetitesTaches: (
+    provider: string | null,
+    model?: string,
+    reasoningEffort?: string
+  ): Promise<PetitesTachesEtat> =>
+    ipcRenderer.invoke('os:setPetitesTaches', provider, model, reasoningEffort),
   models: (force = false): Promise<ImportedModel[]> => ipcRenderer.invoke('os:models:list', force),
   fabricNodes: (): Promise<FabricNodeSummary[]> => ipcRenderer.invoke('os:fabric:list'),
   installIsolatedFabricFixture: (): Promise<{
@@ -492,6 +508,14 @@ const api = {
   /** Compte Claude propre a une conversation (`null` = compte de l'application). */
   conversationSetClaudeAccount: (id: string, accountId: string | null): Promise<string | null> =>
     ipcRenderer.invoke('os:conversations:setClaudeAccount', id, accountId),
+  /** Modele propre a une conversation (`provider === null` = modele par defaut de l'application). */
+  conversationSetModel: (
+    id: string,
+    provider: string | null,
+    model?: string,
+    reasoningEffort?: string
+  ): Promise<{ provider: string; model?: string; reasoningEffort?: string } | null> =>
+    ipcRenderer.invoke('os:conversations:setModel', id, provider, model, reasoningEffort),
   /** Comptes Claude multiples — un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
   claudeAccounts: (): Promise<ClaudeAccountsPayload> =>
     ipcRenderer.invoke('os:claudeAccounts:list'),

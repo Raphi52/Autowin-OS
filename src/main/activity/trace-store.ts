@@ -622,6 +622,17 @@ export class TraceStore {
     for (const event of events) this.append(event)
     return this
   }
+  /**
+   * Relache tous les descripteurs d'ecriture gardes par `descripteurOuvert`. Une ecriture suivante
+   * rouvre simplement le sien. A appeler par qui a CREE le store pour un usage borne : sous Windows,
+   * un fichier encore ouvert ne s'efface qu'« en attente », et son dossier ne se supprime plus
+   * (EPERM a la suppression des dossiers de test, conv-246).
+   */
+  fermer(): void {
+    for (const descriptor of this.descriptors.values()) closeSync(descriptor)
+    this.descriptors.clear()
+  }
+
   deleteConversation(conversationId: string): boolean {
     const path = this.path(conversationId)
     if (!existsSync(path)) return false

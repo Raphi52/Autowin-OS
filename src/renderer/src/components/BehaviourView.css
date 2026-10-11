@@ -1,29 +1,82 @@
 .behaviour-view {
   box-sizing: border-box;
-  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
      le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
-  padding: 9px 0 20px;
+  /* PAS DE `height: 100%` (conv-244) : figee a la hauteur du cadre et sans defilement, la vue
+     coupait tout le bas de la page (composition, phases). C'est le conteneur de Settings qui defile. */
+  padding: 4px 0 20px;
   color: var(--text);
   /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
      ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
      comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
 }
+/* L'EN-TETE (conv-244) : titre a gauche, choix du chemin a droite, puis une ligne par reglage
+   (workspace, apprentissage Brain). Avant, les quatre blocs etaient serres sur UNE ligne : la
+   description du titre passait sous le texte du workspace et la liste de mode etait grise brute. */
 .behaviour-view > header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 20px;
   /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
-  padding: 4px var(--view-head-retrait) 18px;
+  padding: 4px var(--view-head-retrait) 16px;
   border-bottom: 1px solid var(--line);
+}
+.behaviour-view > header > .module-header {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.behaviour-view > header > .behaviour-path-toggle {
+  order: 1;
+  flex: none;
+}
+.behaviour-view > header > .behaviour-workspace {
+  order: 2;
+  flex: 1 1 100%;
 }
 .behaviour-view > header p {
   margin: 0;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
+}
+.behaviour-workspace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.behaviour-workspace > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.behaviour-workspace > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.behaviour-workspace .select {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.behaviour-workspace > details {
+  flex: 1 1 100%;
+}
+.behaviour-workspace summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.behaviour-workspace ol {
+  max-height: 220px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  overflow: auto;
 }
 .behaviour-error {
   margin: 0 0 10px;

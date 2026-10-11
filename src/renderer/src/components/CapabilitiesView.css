@@ -13,6 +13,8 @@
 }
 .cockpit-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
   justify-content: space-between;
   align-items: center;
   min-height: 66px;
@@ -31,7 +33,7 @@
 }
 .cockpit-toolbar label > span {
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -47,13 +49,16 @@
   min-width: 140px;
   padding: 0 32px 0 11px;
 }
+/* Largeur FIXE bornée par un max : un `width: min(270px, 100%)` se résolvait contre la barre, dont la
+   largeur dépend de son contenu — le champ retombait à ~160 px et tronquait son texte d'aide. */
 .cockpit-toolbar input {
   width: 270px;
+  max-width: 100%;
 }
 .cockpit-shell {
   min-height: 0;
   display: grid;
-  grid-template-columns: 210px minmax(390px, 1fr) 330px;
+  grid-template-columns: 210px minmax(0, 1fr) 330px;
   /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
   border: 0;
   border-radius: var(--container-radius-panel);
@@ -75,7 +80,7 @@
 .cockpit-inspector > h2 {
   margin: 0 0 13px;
   color: var(--text-faint);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -116,7 +121,7 @@
 .cockpit-sources button small {
   grid-column: 1/-1;
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: 10px;
 }
 .cockpit-sources button.is-future {
   margin-top: 11px;
@@ -135,7 +140,9 @@
   padding: 18px;
 }
 .cockpit-tabs {
-  width: max-content;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -148,7 +155,7 @@
   border-radius: 7px;
   background: transparent;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -164,7 +171,7 @@
   justify-content: space-between;
   padding: 16px 4px 9px;
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
@@ -202,7 +209,7 @@
   overflow: hidden;
   margin: 4px 0 0;
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -223,7 +230,7 @@
   border: 1px solid rgba(148, 157, 179, 0.25);
   border-radius: 6px;
   color: #aeb4c7;
-  font-size: 7px;
+  font-size: 10px;
   font-style: normal;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -258,7 +265,7 @@
   border: 1px solid rgba(151, 110, 227, 0.28);
   border-radius: 5px;
   color: #c2a0f2;
-  font-size: 7px;
+  font-size: 10px;
   font-style: normal;
 }
 .control-toggle {
@@ -294,7 +301,7 @@
 .control-empty {
   padding: 34px;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
 }
 .cockpit-inspector {
@@ -314,7 +321,7 @@
 .inspector-hero p {
   margin: 0;
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 11px;
 }
 .cockpit-inspector dl {
   margin: 12px 0;
@@ -325,7 +332,7 @@
   gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid rgba(137, 151, 178, 0.1);
-  font-size: 9px;
+  font-size: 11px;
 }
 .cockpit-inspector dt {
   color: var(--text-faint);
@@ -345,7 +352,7 @@
   border: 1px solid rgba(66, 211, 165, 0.28);
   border-radius: 11px;
   background: rgba(54, 202, 157, 0.06);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.5;
 }
 .inspector-impact b {
@@ -362,7 +369,7 @@
   border-radius: 7px;
   background: #281319;
   color: #ff8898;
-  font-size: 9px;
+  font-size: 11px;
 }
 .control-notice {
   margin: 0 0 10px;
@@ -371,7 +378,7 @@
   border-radius: 7px;
   background: rgba(54, 202, 157, 0.08);
   color: #7be7bf;
-  font-size: 9px;
+  font-size: 11px;
 }
 .related-capabilities {
   margin-top: 10px;
@@ -403,7 +410,7 @@
 }
 .related-list > button b {
   overflow: hidden;
-  font-size: 9px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -411,7 +418,7 @@
   grid-column: 2;
   color: var(--text-faint);
   overflow: hidden;
-  font-size: 7px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -419,13 +426,49 @@
   grid-column: 1/-1;
   margin: 4px;
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: 10px;
 }
-@media (max-width: 1050px) {
+/* RESPONSIVE (conv-244) — mesure : a 1000 px de fenetre l'inspecteur sortait du cadre de 112 px,
+   a 820 px la liste aussi. Les seuils lisent la LARGEUR DE LA COLONNE de Settings (conteneur
+   `settings`, SettingsView.css), pas celle de l'ecran : le menu deplie ou replie la change. */
+@container settings (max-width: 1050px) {
   .cockpit-shell {
-    grid-template-columns: 180px minmax(360px, 1fr) 280px;
+    grid-template-columns: 180px minmax(0, 1fr) 270px;
   }
+}
+/* Trop etroit pour trois colonnes : l'inspecteur passe dessous et la page defile (le conteneur de
+   Settings defile) ; la liste garde sa propre hauteur pour rester utilisable. */
+@container settings (max-width: 880px) {
+  .capability-cockpit {
+    height: auto;
+    grid-template-rows: auto auto auto;
+  }
+  .cockpit-toolbar {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .cockpit-toolbar label,
   .cockpit-toolbar input {
-    width: 210px;
+    width: 100%;
+  }
+  .cockpit-shell {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .cockpit-registry {
+    height: min(560px, 72vh);
+  }
+  .cockpit-inspector {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(137, 151, 178, 0.12);
+    border-left: 0;
+  }
+}
+@container settings (max-width: 600px) {
+  .cockpit-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit-sources {
+    border-right: 0;
+    border-bottom: 1px solid rgba(137, 151, 178, 0.12);
   }
 }

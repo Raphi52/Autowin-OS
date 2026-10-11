@@ -138,6 +138,8 @@ export type Conv = {
   inactive?: boolean
   /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
   claudeAccountId?: string
+  /** Modele retenu pour CETTE conversation (voir `Conversation.modeleChoisi`). Absent = defaut. */
+  modeleChoisi?: { provider: string; model?: string; reasoningEffort?: string }
   /**
    * Motif de l'echec du DERNIER tour, servi par la projection IPC. Il distingue, parmi toutes les
    * pastilles ROUGES, celles coupees par le mur de QUOTA — les seules qui se relancent telles

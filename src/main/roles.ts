@@ -90,12 +90,49 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
   scout: normalizeRoleBinding({ provider: 'claude' })
 }
 
+/**
+ * LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11).
+ *
+ * Deux appels courts tournent en fond, hors pipeline : le TRI des conversations (même sujet ou
+ * nouveau fil ?) et le CHOIX AUTOMATIQUE du workflow. Aucun n'avait de réglage : le tri forçait le
+ * défaut du code (`claude-fable-5`, 2× le prix d'Opus — 449 appels pour 28,68 $ relevés dans
+ * `activity/*.jsonl`), le choix du workflow forçait l'effort `low` sur le modèle du chat.
+ *
+ * Désormais l'utilisateur le règle lui-même (écran Routeur, clé `petitesTaches` de `roles.json`).
+ * Non réglé, il suit le modèle du CHAT — un choix qu'il a fait — en effort `low` : l'effort d'avant
+ * pour ces deux appels, affiché tel quel à l'écran. Aucun modèle n'est inventé par le code.
+ */
+export const EFFORT_PETITES_TACHES_NON_REGLE: ReasoningEffort = 'low'
+
+export function bindingDesPetitesTaches(
+  reglage: RoleBinding | undefined,
+  chat: RoleBinding
+): RoleBinding {
+  if (reglage) return { ...reglage }
+  return {
+    provider: chat.provider,
+    ...(chat.model ? { model: chat.model } : {}),
+    reasoningEffort: EFFORT_PETITES_TACHES_NON_REGLE
+  }
+}
+
+/** Ce que l'écran Routeur lit : le réglage posé (null = jamais posé) et le binding qui part. */
+export interface PetitesTachesEtat {
+  reglage: RoleBinding | null
+  effectif: RoleBinding
+}
+
+/** Contenu de `roles.json` : les quatre rôles, plus le réglage des petites tâches s'il existe. */
+export type RolesPersistes = Partial<Record<Role, RoleBinding>> & { petitesTaches?: RoleBinding }
+
 export class RoleModelConfig {
   private bindings: Record<Role, RoleBinding>
   /** Catalogue découvert (models.ts) — alimente la résolution d'alias des normalisations FUTURES. */
   private catalog?: ImportedModel[]
+  /** Réglage EXPLICITE des petites tâches ; absent = suit le modèle du chat. */
+  private petitesTaches?: RoleBinding
 
-  constructor(defaults?: Partial<Record<Role, RoleBinding>>, catalog?: ImportedModel[]) {
+  constructor(defaults?: RolesPersistes, catalog?: ImportedModel[]) {
     this.catalog = catalog
     // Fusion superficielle : chaque role explicitement fourni remplace entierement
     // le binding par defaut correspondant (pas de merge partiel provider/model).
@@ -107,7 +144,26 @@ export class RoleModelConfig {
           this.bindings[role] = normalizeRoleBinding(override, catalog)
         }
       }
+      // Jamais normalisé : la normalisation compléterait un binding sans modèle par le défaut du
+      // code, exactement le choix caché que ce réglage remplace.
+      if (defaults.petitesTaches) this.petitesTaches = { ...defaults.petitesTaches }
     }
+  }
+
+  /** Le réglage tel que l'utilisateur l'a posé, ou `undefined` s'il ne l'a jamais posé. */
+  getPetitesTaches(): RoleBinding | undefined {
+    return this.petitesTaches ? { ...this.petitesTaches } : undefined
+  }
+
+  /** Pose (ou efface avec `undefined`) le réglage des petites tâches. */
+  setPetitesTaches(binding: RoleBinding | undefined): this {
+    this.petitesTaches = binding ? { ...binding } : undefined
+    return this
+  }
+
+  /** Le binding qui part VRAIMENT pour le tri et le choix du workflow. */
+  bindingDesPetitesTaches(): RoleBinding {
+    return bindingDesPetitesTaches(this.petitesTaches, this.getBinding('orchestrator'))
   }
 
   /**

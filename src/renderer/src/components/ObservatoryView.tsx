@@ -37,6 +37,8 @@ import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
 import { buildTimelineMarks, turnSpan, type TimelineMark } from './observatory-timeline-axis'
+import { buildAgentGantt, type AgentGantt } from './observatory-agent-gantt'
+import { ObservatoryAgentGantt } from './ObservatoryAgentGantt'
 import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
@@ -433,6 +435,20 @@ export function ObservatoryView({
     [conversationId, focusUnavailable, timeline.turns, turnFocus]
   )
   const allEvents = useMemo(() => scopedTurns.flatMap((turn) => turn.events), [scopedTurns])
+  /**
+   * Déroulé par agent de chaque tour (conv-232). Calculé sur TOUS les événements du tour, pas sur la
+   * vue filtrée : un filtre « Outils » ne doit pas faire disparaître la barre de l'agent qui les a
+   * lancés. Seuil de deux lignes : un tour de simple conversation n'aurait qu'une barre, que la
+   * liste dit déjà.
+   */
+  const ganttByTurn = useMemo(() => {
+    const byTurn = new Map<string, AgentGantt>()
+    for (const turn of scopedTurns) {
+      const gantt = buildAgentGantt(turn.events, { minLanes: 2 })
+      if (gantt) byTurn.set(turn.id, gantt)
+    }
+    return byTurn
+  }, [scopedTurns])
   const authorityEvents = useMemo(() => allEvents.filter((event) => event.authority), [allEvents])
   const decisionLedger = useMemo(() => buildObservatoryDecisionLedger(allEvents), [allEvents])
   const causalPath = useMemo(() => buildCausalPath(allEvents), [allEvents])
@@ -595,6 +611,28 @@ export function ObservatoryView({
     setSelected(allEvents.find((event) => event.id === eventId) ?? null)
   }
 
+  /**
+   * Clic sur une barre du déroulé : ouvre l'événement dans la liste du tour et l'amène à l'écran.
+   * Les filtres ne sont remis à zéro QUE si l'événement est masqué par eux — sinon le clic
+   * effacerait sans raison un filtre que l'utilisateur vient de poser.
+   */
+  function focusGanttEvent(eventId: string): void {
+    const event = allEvents.find((item) => item.id === eventId)
+    if (!event) return
+    const shown = visibleTurns.some((turn) => turn.events.some((item) => item.id === eventId))
+    if (!shown) resetTimelineFilters()
+    setSelectedCall(null)
+    setSelected((current) => (current?.id === eventId ? null : event))
+    // Deux trames : la première monte le détail, la seconde le trouve à sa place définitive.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document
+          .querySelector(`[data-event-id="${eventId.replace(/"/g, '\\"')}"]`)
+          ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      )
+    )
+  }
+
   async function exportTrace(scope: 'view' | 'full'): Promise<void> {
     if (!conversationId) return
     const visibleCausalIds = new Set(visibleCausalNodes.map((node) => node.id))
@@ -668,7 +706,7 @@ export function ObservatoryView({
     turnId = '',
     mark?: TimelineMark
   ): React.JSX.Element => (
-    <div key={event.id} className="observatory-event-wrap">
+    <div key={event.id} className="observatory-event-wrap" data-event-id={event.id}>
       <ObservatoryRagCausalStep
         event={event}
         turnId={turnId}
@@ -1545,6 +1583,13 @@ export function ObservatoryView({
                       : `${turn.inputTokens.toLocaleString('fr-FR')} in · ${turn.outputTokens.toLocaleString('fr-FR')} out`}
                   </small>
                 </header>
+                {ganttByTurn.get(turn.id) && (
+                  <ObservatoryAgentGantt
+                    gantt={ganttByTurn.get(turn.id)!}
+                    selectedId={selected?.id}
+                    onSelect={focusGanttEvent}
+                  />
+                )}
                 {(() => {
                   let n = 0
                   const items = layoutTurnEvents(turn.events)

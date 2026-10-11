@@ -3,7 +3,7 @@ import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
-import { ProdProtectionSettings } from './ProdProtectionSettings'
+import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ModeAutoSeuilsSettings } from './ModeAutoSeuilsSettings'
@@ -11,6 +11,7 @@ import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { ViewTopBar } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
+import './SettingsView.css'
 import { Spinner } from './Spinner'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
@@ -156,11 +157,11 @@ export function SettingsView({
   const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
 
   return (
-    <section className="view-page domain-shell" data-testid="settings-view">
+    <section className="view-page domain-shell settings-view" data-testid="settings-view">
       <ViewTopBar
         eyebrow="CONFIGURATION"
         title="Settings"
-        description="Budget, capacités accordées aux agents, comportement, apparence, providers et prérequis machine."
+        description="Budget, capacités accordées aux agents, comportement, apparence, providers, règles d’Autowin OS et prérequis machine."
         ariaLabel="Sections Settings"
         active={section}
         onSelect={onSectionChange}
@@ -170,7 +171,7 @@ export function SettingsView({
           { id: 'behaviour', label: 'Behaviour' },
           { id: 'interface', label: 'Interface' },
           { id: 'providers', label: 'Providers' },
-          { id: 'production', label: 'Production' },
+          { id: 'rules', label: 'Rules' },
           {
             id: 'preflight',
             label: 'Diagnostic',
@@ -183,14 +184,14 @@ export function SettingsView({
           }
         ]}
       />
-      <div className="domain-content">
+      <div className="domain-content settings-content" data-section={section}>
         {section === 'capabilities' && <CapabilitiesView active={active} />}
         {section === 'budget' && (
-          <>
+          <div className="settings-budget">
             <OrchestrationBudgetSettings />
             <ModeAutoSeuilsSettings />
             <ShadowRoutingPilotSettings />
-          </>
+          </div>
         )}
         {section === 'behaviour' && <BehaviourView />}
         {section === 'interface' && <InterfaceView />}
@@ -205,7 +206,11 @@ export function SettingsView({
             {providersError && (
               <div className="domain-warning">
                 <p role="alert">{providersError}</p>
-                <button type="button" onClick={() => setProvidersReload((token) => token + 1)}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setProvidersReload((token) => token + 1)}
+                >
                   Réessayer
                 </button>
               </div>
@@ -244,7 +249,7 @@ export function SettingsView({
             </p>
           </section>
         )}
-        {section === 'production' && <ProdProtectionSettings />}
+        {section === 'rules' && <RulesView />}
         {section === 'preflight' && <ExecutionWorkspaceSettings />}
         {section === 'preflight' && (
           <section
@@ -256,7 +261,12 @@ export function SettingsView({
                 <span className="domain-eyebrow">Configuration locale</span>
                 <h2>Diagnostic de démarrage</h2>
               </div>
-              <button type="button" onClick={() => void recheck()} disabled={checking}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void recheck()}
+                disabled={checking}
+              >
                 {checking ? 'Vérification…' : 'Relancer le diagnostic'}
               </button>
             </header>
@@ -279,7 +289,8 @@ export function SettingsView({
                   {preflight.checks.map((check) => (
                     <li key={check.id} className={check.ok ? 'is-ok' : 'is-ko'}>
                       <strong>
-                        {check.ok ? '✓' : '✗'} {check.label}
+                        <span className="settings-check-mark">{check.ok ? '✓' : '✗'}</span>{' '}
+                        {check.label}
                       </strong>
                       {check.detail && <span>{check.detail}</span>}
                       {/*
@@ -297,7 +308,7 @@ export function SettingsView({
                       {check.revealPath && (
                         <button
                           type="button"
-                          className="settings-preflight-repair"
+                          className="settings-preflight-repair btn btn-sm"
                           data-testid={`settings-reveal-${check.id}`}
                           onClick={() => void window.api?.openFolder?.(check.revealPath as string)}
                         >
@@ -307,7 +318,7 @@ export function SettingsView({
                       {!check.ok && REPARABLES.has(check.id) && (
                         <button
                           type="button"
-                          className="settings-preflight-repair"
+                          className="settings-preflight-repair btn btn-sm"
                           data-testid={`settings-repair-${check.id}`}
                           onClick={() => void repair(check.id)}
                           disabled={repairing !== null || checking}

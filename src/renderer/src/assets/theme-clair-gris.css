@@ -313,7 +313,8 @@
 :root[data-base='clair'] .theme-serious .observatory-view .observatory-event p small,
 :root[data-base='clair'] .theme-serious .observatory-view .observatory-conversations > button.is-active,
 :root[data-base='clair'] .theme-serious .observatory-view .observatory-calls button.is-active,
-:root[data-base='clair'] .theme-serious .observatory-view .observatory-event.is-selected {
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-event.is-selected,
+:root[data-base='clair'] .observatory-gantt__tip {
   color: var(--text-dim);
 }
 

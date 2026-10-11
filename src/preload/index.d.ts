@@ -5,7 +5,11 @@ import type {
   ReponseDefinition as ReponseDefinitionPhrase
 } from '../main/prod-passphrase-ipc'
 import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
-import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
+import type {
+  EtatPorteProd,
+  NiveauProtectionProd,
+  PropositionAutoriteProd
+} from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -51,7 +55,7 @@ import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
 import type { AutoCloseReport } from '../main/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
-import type { Role, RoleBinding } from '../main/roles'
+import type { PetitesTachesEtat, Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
@@ -104,6 +108,8 @@ interface ChatApi {
     phraseActuelle?: string
   ) => Promise<ReponseDefinitionPhrase>
   prodPorteEtat: () => Promise<EtatPorteProd>
+  /** Liste de production PROPOSÉE depuis le catalogue SQL — un contenu à recopier, rien n'est écrit. */
+  prodAutoriteProposition: () => Promise<PropositionAutoriteProd>
   prodPorteNiveau: (niveau: NiveauProtectionProd) => Promise<{ ok: boolean; erreur?: string }>
   prodAutorisationConfirmer: (id: string) => Promise<{ ok: boolean }>
   prodPassphraseAutoriser: (
@@ -363,6 +369,12 @@ interface ChatApi {
     model?: string,
     reasoningEffort?: string
   ) => Promise<Record<Role, RoleBinding>>
+  petitesTaches: () => Promise<PetitesTachesEtat>
+  setPetitesTaches: (
+    provider: string | null,
+    model?: string,
+    reasoningEffort?: string
+  ) => Promise<PetitesTachesEtat>
   models: (force?: boolean) => Promise<ImportedModel[]>
   fabricNodes: () => Promise<FabricNodeSummary[]>
   installIsolatedFabricFixture: () => Promise<{ summary: FabricNodeSummary; model: ImportedModel }>
@@ -390,6 +402,16 @@ interface ChatApi {
   providerLogin: (provider: string) => Promise<{ ok: true }>
   /** Compte Claude propre a une conversation (`null` = compte de l'application). */
   conversationSetClaudeAccount: (id: string, accountId: string | null) => Promise<string | null>
+  /**
+   * Modele propre a une conversation (`provider === null` = modele par defaut de l'application).
+   * Rend le choix retenu, ou null. Refuse (rejet) un modele absent du catalogue.
+   */
+  conversationSetModel: (
+    id: string,
+    provider: string | null,
+    model?: string,
+    reasoningEffort?: string
+  ) => Promise<{ provider: string; model?: string; reasoningEffort?: string } | null>
   /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
   claudeAccounts: () => Promise<ClaudeAccountsPayload>
   claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>

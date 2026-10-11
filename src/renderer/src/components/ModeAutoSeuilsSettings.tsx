@@ -74,7 +74,12 @@ export function ModeAutoSeuilsSettings(): React.JSX.Element {
           />
         </div>
       </label>
-      <button type="button" data-testid="mode-auto-seuils-enregistrer" onClick={enregistrer}>
+      <button
+        type="button"
+        className="btn btn-accent"
+        data-testid="mode-auto-seuils-enregistrer"
+        onClick={enregistrer}
+      >
         Enregistrer
       </button>
       {message && <p role="status">{message}</p>}

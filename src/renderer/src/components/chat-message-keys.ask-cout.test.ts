@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 /*
  * GEL DE LA VUE CHAT (heal du 2026-09-18, `gels.jsonl` : `renderer:vue-chat` 1,3 a 2,8 s, conv-680).
- * Mesure au profileur CPU, 591 conversations reelles, 30 deltas de flux : `askDejaRepondu` est
+ * Mesure au profileur CPU, 591 conversations reelles, 30 deltas de flux : `askReponseDuFil` est
  * appele pour CHAQUE message assistant a CHAQUE delta (le fil est recalcule quand `messages`
  * change), et passait par `groupAssistantActivity` -> `coalesceAssistantParts` ->
  * `markdownCodeContinuationPrefixes`, c'est-a-dire une analyse Markdown COMPLETE de tout le texte
@@ -21,7 +21,7 @@ vi.mock('../../../shared/orchestration-outcome', async (io) => {
   }
 })
 
-const { askDejaRepondu } = await import('./chat-message-keys')
+const { askReponseDuFil } = await import('./chat-message-keys')
 import type { Msg } from './chat-view-types'
 
 const question = {
@@ -44,13 +44,13 @@ const tour = (avecQuestion: boolean): Msg =>
   }) as unknown as Msg
 const utilisateur = (content: string): Msg => ({ role: 'user', content }) as unknown as Msg
 
-describe('askDejaRepondu — ne ré-analyse pas le Markdown du fil', () => {
+describe('askReponseDuFil — ne ré-analyse pas le Markdown du fil', () => {
   it('rend le même verdict sans aucune analyse Markdown', () => {
     const fil = [tour(true), utilisateur('Le second'), tour(false), utilisateur('autre'), tour(true)]
     analyses.n = 0
-    expect(askDejaRepondu(fil, 0)).toBe(true)
-    expect(askDejaRepondu(fil, 2)).toBe(false)
-    expect(askDejaRepondu(fil, 4)).toBe(false)
+    expect(askReponseDuFil(fil, 0)).toBeDefined()
+    expect(askReponseDuFil(fil, 2)).toBeUndefined()
+    expect(askReponseDuFil(fil, 4)).toBeUndefined()
     expect(analyses.n).toBe(0)
   })
 })

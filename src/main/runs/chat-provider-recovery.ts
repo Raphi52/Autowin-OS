@@ -24,6 +24,15 @@ function providerJournalActivityAt(path: string, fallback: number): number {
   }
 }
 
+/** Version non bloquante de `providerJournalActivityAt`, pour la boucle d'attente. */
+async function providerJournalActivityAtAsync(path: string, fallback: number): Promise<number> {
+  try {
+    return Math.max(fallback, (await stat(path)).mtimeMs)
+  } catch {
+    return fallback
+  }
+}
+
 export type RecoverableChatProviderExit =
   { kind: 'exit'; exitCode: number } | { kind: 'stale' } | { kind: 'aborted' }
 
@@ -39,16 +48,22 @@ export async function waitForRecoverableChatProviderExit(
     maxInactivityMs?: number
     pollMs?: number
     now?: () => number
-    activityAt?: (path: string, fallback: number) => number
-    readExitCode?: (path: string) => number | undefined
+    activityAt?: (path: string, fallback: number) => number | Promise<number>
+    readExitCode?: (path: string) => number | undefined | Promise<number | undefined>
     wait?: (ms: number) => Promise<void>
   }
 ): Promise<RecoverableChatProviderExit> {
   const maxInactivityMs = options.maxInactivityMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
   const pollMs = options.pollMs ?? 250
   const now = options.now ?? Date.now
-  const activityAt = options.activityAt ?? providerJournalActivityAt
-  const readExitCode = options.readExitCode ?? survivableExitCode
+  /*
+   * LECTURES ASYNCHRONES : cette boucle tourne toutes les 250 ms tant qu'un tour de chat repris
+   * attend son CLI. En synchrone (`readFileSync` du recu + `statSync` du journal), chaque lenteur
+   * du disque gelait la fenetre — `gels.jsonl` 2026-10-11 : 3 129 ms sous `ipc:os:conversations`,
+   * `statSync` 1 019 ms, appelant `waitForRecoverableChatProviderExit`.
+   */
+  const activityAt = options.activityAt ?? providerJournalActivityAtAsync
+  const readExitCode = options.readExitCode ?? survivableExitCodeAsync
   const wait =
     options.wait ??
     ((ms: number) =>
@@ -58,9 +73,9 @@ export async function waitForRecoverableChatProviderExit(
       }))
 
   while (!options.signal.aborted) {
-    const exitCode = readExitCode(journalPath)
+    const exitCode = await readExitCode(journalPath)
     if (exitCode !== undefined) return { kind: 'exit', exitCode }
-    if (now() - activityAt(journalPath, options.fallbackActivityAt ?? now()) > maxInactivityMs)
+    if (now() - (await activityAt(journalPath, options.fallbackActivityAt ?? now())) > maxInactivityMs)
       return { kind: 'stale' }
     await wait(pollMs)
   }

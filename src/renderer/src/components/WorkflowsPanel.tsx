@@ -474,8 +474,12 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               return (
                 <div key={r.path} className="col" style={{ gap: 0 }}>
                   <div className="run-card-shell">
+                    {/* `aria-expanded` et `data-statut` : le run DEPLIE et son statut se lisent
+                        sans deviner (lecteur d'ecran), et le theme les habille (conv-245). */}
                     <button
                       className="card run-row"
+                      aria-expanded={isOpen}
+                      data-statut={r.summary.status}
                       onClick={() => {
                         if (isOpen) {
                           setOpenRun(null)
@@ -496,11 +500,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       </div>
                       <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
                         <div className="meter grow">
+                          {/* Hors vert, la couleur se regle par le theme (`--run-jauge`) ; sans
+                              reglage, l'accent comme avant. Le style en ligne battait toute feuille
+                              de theme (conv-245). Un run vert garde le vert du theme. */}
                           <span
                             style={{
                               width: `${pct}%`,
                               background:
-                                r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
+                                r.summary.status === 'green'
+                                  ? 'var(--ok)'
+                                  : 'var(--run-jauge, var(--accent))'
                             }}
                           />
                         </div>

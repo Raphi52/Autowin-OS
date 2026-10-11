@@ -1,30 +1,34 @@
 /* Écran Settings · Interface (interrupteur sombre/clair). Les couleurs viennent
    des variables du thème : cet écran doit rester lisible dans LES DEUX modes. */
+/* Le retrait interieur, le titre et l'en-tete viennent du gabarit commun des panneaux de Settings
+   (SettingsView.css, conv-244). */
 .interface-view {
-  padding: 14px 18px 18px;
   color: var(--text);
 }
-.interface-view > header {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.interface-view h2 {
-  margin: 2px 0 0;
-  font-size: 15px;
-}
 
+/* Reglage = libelle et explication a gauche, controle a droite ; passe sous le texte quand la
+   colonne est etroite (avant : texte fige a 62ch, liste collee au bord droit, grand vide entre). */
 .interface-row {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--s5);
-  padding: 16px 4px 12px;
+  gap: 12px var(--s5);
+  padding: 2px 0 14px;
+}
+.interface-row-text {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.interface-row-text > strong {
+  font-size: 14px;
 }
 .interface-row-text p {
   margin: 4px 0 0;
-  max-width: 62ch;
+  max-width: 70ch;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* LA LISTE DE THEMES — elle remplace l'ancien interrupteur a deux positions.
@@ -63,10 +67,14 @@
 }
 
 .interface-reserve {
-  margin: 0 4px;
-  padding-top: 10px;
+  margin: 0;
+  padding: 10px 0 0;
   border-top: 1px solid var(--line);
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.55;
   max-width: 78ch;
+}
+.interface-reserve + .interface-reserve {
+  margin-top: 10px;
 }

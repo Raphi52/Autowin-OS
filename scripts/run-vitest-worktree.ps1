@@ -3,8 +3,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -Path (Join-Path $PSScriptRoot '..')
 & npx vitest run `
-  src/renderer/src/components/WorktreeActivityView.test.tsx `
-  src/main/store/worktree-manager.test.ts `
   src/main/store/run-worktree-coordinator.test.ts `
   src/main/os.readiness.test.ts `
   src/main/orchestrator.worktree-flip.test.ts

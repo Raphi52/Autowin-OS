@@ -44,6 +44,12 @@
   gap: 8px;
   max-width: 460px;
 }
+/* Le `display: grid` ci-dessus passe devant le `display: none` que le navigateur donne à
+   `[hidden]` : sans cette règle, le champ « Phrase de passe » restait visible aux niveaux
+   « confirmation » et « aucun ». */
+.settings-prod-protection .prod-formulaire[hidden] {
+  display: none;
+}
 .settings-prod-protection .prod-label {
   display: grid;
   gap: 4px;
@@ -102,4 +108,24 @@
 .settings-prod-protection .prod-niveau-note {
   color: #a9b2c4;
   font-size: 12px;
+}
+.settings-prod-protection .prod-catalogue {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.settings-prod-protection .prod-catalogue p {
+  margin: 0;
+  line-height: 1.45;
+}
+.settings-prod-protection .prod-catalogue-contenu {
+  width: 100%;
+  box-sizing: border-box;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, monospace;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  color: inherit;
+  padding: 6px 8px;
+  resize: vertical;
 }

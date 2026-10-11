@@ -321,3 +321,70 @@ describe('theme Holographique blanc — couche generee des composants', () => {
     expect(fond('.theme-cluster-label')).toMatch(/rgba\(253, 253, 255, 0\.9\)/)
   })
 })
+
+/**
+ * ASCENSEURS VISIBLES SUR LA NACRE (conv-250, 2026-10-11 : « corrige dans le generateur du theme
+ * Holographique blanc la couleur du curseur des barres de defilement, pour qu'elles soient visibles
+ * sur la nacre dans toute l'app »). Le generateur classait `scrollbar-color` et le fond du curseur
+ * `::-webkit-scrollbar-thumb` en « fond » : le blanc a 16 % d'Holographique noir restait blanc, donc
+ * invisible -- releve dans les huit zones qui defilent de l'app, toutes regies par la regle `*`.
+ * ENTREE QUI DOIT FAIRE ECHOUER : un curseur qui redevient blanc (ou toute couleur claire), ou un
+ * curseur dont l'ecart a la nacre tombe sous celui du noir sur son fond.
+ */
+describe('ascenseurs du theme Holographique blanc', () => {
+  const regleDe = (selecteur: string): Record<string, string> => {
+    const valeurs: Record<string, string> = {}
+    postcss.parse(css).walkRules((regle) => {
+      if (!regle.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === selecteur)) return
+      regle.walkDecls((d) => {
+        valeurs[d.prop] = d.value.replace(/\s+/g, ' ').trim()
+      })
+    })
+    return valeurs
+  }
+  /** Premiere couleur rgba() d'une valeur. */
+  const rgba = (valeur: string): [number, number, number, number] => {
+    const m = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(valeur)
+    if (!m) throw new Error(`rgba() attendu en tete, recu : ${valeur}`)
+    return [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]
+  }
+  /** La couleur VUE : le curseur translucide pose sur le fond donne. */
+  const compose = ([r, g, b, a]: [number, number, number, number], fond: string): string => {
+    const f = [1, 3, 5].map((i) => parseInt(fond.slice(i, i + 2), 16))
+    return (
+      '#' +
+      [r, g, b]
+        .map((c, i) => Math.round(f[i] + (c - f[i]) * a).toString(16).padStart(2, '0'))
+        .join('')
+    )
+  }
+  const curseurs = (): [string, [number, number, number, number]][] => [
+    ['scrollbar-color de *', rgba(regleDe(`${PREFIXE} *`)['scrollbar-color'])],
+    ['::-webkit-scrollbar-thumb', rgba(regleDe(`${PREFIXE} ::-webkit-scrollbar-thumb`).background)]
+  ]
+
+  it('peint le curseur en encre, la meme que l ascenseur du fil (--chat-ascenseur)', () => {
+    const fil = /--chat-ascenseur:\s*([^;]+);/.exec(blocRacine())?.[1].trim()
+    expect(fil, '--chat-ascenseur derive dans le blanc').toBeDefined()
+    for (const [ou, couleur] of curseurs()) {
+      const [r, g, b] = couleur
+      // Une encre : chaque canal sous la moitie (le defaut : 255, 255, 255).
+      expect(Math.max(r, g, b), ou).toBeLessThan(128)
+      expect(`rgba(${couleur.join(', ')})`, ou).toBe(fil)
+    }
+    // La piste reste transparente : seul le curseur se voit.
+    expect(regleDe(`${PREFIXE} *`)['scrollbar-color']).toMatch(/ transparent$/)
+  })
+
+  it('detache le curseur de la nacre au moins autant que le noir detache le sien', () => {
+    // Holographique noir : blanc a 16 % sur #0a0a0a -> environ 1,5:1 (discret par choix).
+    const noir = contraste(compose([255, 255, 255, 0.16], '#0a0a0a'), '#0a0a0a')
+    for (const [ou, couleur] of curseurs()) {
+      for (const fond of [NACRE, PAGE]) {
+        expect(contraste(compose(couleur, fond), fond), `${ou} sur ${fond}`).toBeGreaterThan(
+          noir * 0.9
+        )
+      }
+    }
+  })
+})

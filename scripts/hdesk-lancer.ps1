@@ -116,7 +116,17 @@ $pi = New-Object AutowinHdeskLanceur+PROCESS_INFORMATION
 if ([string]::IsNullOrWhiteSpace($env:WEBVIEW2_USER_DATA_FOLDER)) {
   $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "autowin-hdesk\webview2\$Id"
 }
-if (-not [AutowinHdeskLanceur]::CreateProcess($Executable, $ligne, [IntPtr]::Zero, [IntPtr]::Zero, $false, 0, [IntPtr]::Zero, (Split-Path -Parent $Executable), [ref]$si, [ref]$pi)) {
+# CREATE_NO_WINDOW (0x08000000) — mesures du 2026-10-11 (conv-222, lot 1), trois options essayees :
+# - 0 (avant) : une app CONSOLE s'attachait a la console du lanceur ; tant qu'elle vivait, les canaux
+#   standard de l'appelant restaient ouverts et un appelant Node (spawnSync/execFile : tests, outils
+#   Autowin) attendait la fin de l'APP, pas du lanceur — 90 s de blocage par lancement.
+# - CREATE_NEW_CONSOLE (0x10) : NE PAS REMETTRE. Windows 11 confie la nouvelle console au Terminal
+#   Windows (« laisser Windows decider »), qui s'ouvre sur l'ECRAN DE L'UTILISATEUR — 3 fenetres
+#   powershell.exe y sont apparues.
+# - DETACHED_PROCESS (0x8) : sans console, une app PowerShell + WinForms n'ouvrait plus sa fenetre.
+# Retenu : une console PROPRE et invisible — rien d'herite du lanceur, rien a confier au Terminal.
+# Lancement mesure ~2,5 s, aucun WindowsTerminal/OpenConsole cree. Sans effet sur une app graphique.
+if (-not [AutowinHdeskLanceur]::CreateProcess($Executable, $ligne, [IntPtr]::Zero, [IntPtr]::Zero, $false, 0x08000000, [IntPtr]::Zero, (Split-Path -Parent $Executable), [ref]$si, [ref]$pi)) {
   [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
   throw "CreateProcess sur '$nomBureau' a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
 }

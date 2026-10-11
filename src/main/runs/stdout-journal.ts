@@ -39,6 +39,49 @@ export async function survivableExitCodeAsync(journalPath: string): Promise<numb
   }
 }
 
+/**
+ * GUETTE LE REÇU DE SORTIE `.exit.json` SANS JAMAIS TENIR LA BOUCLE D'ÉVÉNEMENTS.
+ *
+ * Mesure (`gels.jsonl`, 2026-10-10 et 2026-10-11) : 50 gels de la fenêtre en deux jours, jusqu'à
+ * 3,1 s chacun, tous en `readFileSync …stdout.jsonl.exit.json` appelé par `survivableExitCode`
+ * depuis le guet du relais de `claude.ts` (toutes les 80 ms, PAR appel Claude en cours). Lire un
+ * fichier de quelques octets ne coûte rien quand le disque répond ; quand il sature (D: est un
+ * disque mécanique, et un `pip install torch` y écrivait des milliers de fichiers), CHAQUE lecture
+ * synchrone gèle l'interface pendant toute l'attente du disque.
+ *
+ * La lecture part donc dans le pool de libuv, et UNE SEULE est en vol à la fois : si le disque
+ * rame, le tour suivant est sauté au lieu d'empiler des lectures qui l'engorgent davantage.
+ * `surSortie` est appelé au plus une fois. Rend la fonction d'arrêt.
+ */
+export function guetterSortieCertifiee(
+  journalPath: string,
+  surSortie: (exitCode: number) => void,
+  intervalleMs = 80,
+  lire: (journalPath: string) => Promise<number | undefined> = survivableExitCodeAsync
+): () => void {
+  let arrete = false
+  let lectureEnVol = false
+  const minuteur = setInterval(() => {
+    if (arrete || lectureEnVol) return
+    lectureEnVol = true
+    void lire(journalPath)
+      .then((exitCode) => {
+        if (arrete || exitCode === undefined) return
+        arrete = true
+        clearInterval(minuteur)
+        surSortie(exitCode)
+      })
+      .finally(() => {
+        lectureEnVol = false
+      })
+  }, intervalleMs)
+  minuteur.unref?.()
+  return () => {
+    arrete = true
+    clearInterval(minuteur)
+  }
+}
+
 /** Écriture atomique côté parent/relais non-Windows. */
 export function writeSurvivableExit(journalPath: string, exitCode: number): void {
   if (!Number.isSafeInteger(exitCode) || exitCode < 0) throw new Error('code de sortie invalide')

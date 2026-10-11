@@ -249,6 +249,14 @@
   --chat-frise-ko:                  #e07a6a;   /* frise du bloc Actions : action en échec */
   --chat-icone-tour:                #9a9a9a;   /* icones sous un message (copier, inspecter, brancher) au repos : gris NEUTRE, aucune teinte (conv-203) */
   --chat-icone-tour-survol:         #ffffff;   /* les memes au survol : blanc pur (conv-203) */
+  --chat-capsule-reflet-haut:       #ffffff66;   /* reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % (conv-173) */
+  --chat-capsule-reflet-milieu:     #ffffff1a;   /* meme reflet a 55 % du rayon : blanc a 10 % */
+  --chat-capsule-reflet-fin:        #ffffff00;   /* fin du reflet : blanc transparent */
+  --chat-capsule-reflet-eteint-haut: #ffffff26;   /* reflet d une capsule eteinte (tour fini, non survolee) : blanc a 15 % */
+  --chat-capsule-reflet-eteint-milieu: #ffffff08;   /* meme reflet eteint a 55 % du rayon : blanc a 3 % */
+  --chat-capsule-sur-degrade:       #fff;   /* icone et compteur poses sur le degrade de la capsule : restent blancs */
+  --chat-capsule-pastille-texte-fini: #ffffffb8;   /* le meme texte, tour fini : blanc a 72 % */
+  --chat-capsule-pastille-filet:    #ffffff47;   /* filet clair autour de cette pastille : blanc a 28 % */
   --chat-surlignage-texte:          #10121a;   /* texte de l occurrence trouvee, pose sur un aplat or FIXE : reste sombre dans les deux modes */
   --chat-depot-texte:               #e9f8ff;   /* texte du voile de depot de fichier, pose sur un fond sombre FIXE */
   --chat-depot-detail:              #7f9bad;   /* detail du voile de depot de fichier, pose sur un fond sombre FIXE */

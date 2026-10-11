@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +11,7 @@ import {
   TraceStore
 } from './trace-store'
 import type { TraceEventV1 } from './trace-event'
+import { supprimerArbre } from '../fs-supprimer'
 
 function event(id: string, sequence: number, content = id): TraceEventV1 {
   return {
@@ -233,18 +234,23 @@ describe('TraceStore append-only', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-process-reservation-'))
     const barrier = join(root, 'start')
     new TraceStore(root).append(event('evt-0', 0))
+    // CommonJS, comme le depot (pas de "type": "module") : avec tsx 4.23 sous Node 20.20, un
+    // `import { TraceStore }` en mode module ne voit plus que `default` (constate le 2026-10-11,
+    // conv-246, meme sur un fichier de deux lignes) et le processus enfant mourait avant de reserver.
     const script = [
-      "import { TraceStore } from './src/main/activity/trace-store.ts'",
-      "import { existsSync } from 'node:fs'",
-      "import { setTimeout as delay } from 'node:timers/promises'",
-      'while (!existsSync(process.argv[2])) await delay(2)',
-      "process.stdout.write(String(new TraceStore(process.argv[1]).nextSequence('conv-1')))"
-    ].join(';')
+      "const { TraceStore } = require('./src/main/activity/trace-store.ts')",
+      "const { existsSync } = require('node:fs')",
+      "const { setTimeout: delay } = require('node:timers/promises');",
+      '(async () => {',
+      '  while (!existsSync(process.argv[2])) await delay(2)',
+      "  process.stdout.write(String(new TraceStore(process.argv[1]).nextSequence('conv-1')))",
+      '})()'
+    ].join('\n')
     const reserve = (): Promise<number> =>
       new Promise((resolve, reject) => {
         const child = spawn(
           process.execPath,
-          ['--import', 'tsx', '--input-type=module', '--eval', script, root, barrier],
+          ['--import', 'tsx', '--input-type=commonjs', '--eval', script, root, barrier],
           { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
         )
         let stdout = ''
@@ -586,4 +592,29 @@ describe('compteur de sequence — lectures disque', () => {
    * du test ecrase le fichier en ignorant le verrou, cas que la nouvelle conception ne promet pas.
    * L'invariant inter-processus reste couvert : « conserve le verrou-fichier » ci-dessus.
    */
+})
+
+/*
+ * UN STORE SE REFERME (conv-246, 2026-10-11). `append` garde le descripteur d'ecriture ouvert, et
+ * rien ne permettait de le relacher. Sous Windows, effacer un fichier encore ouvert le laisse « en
+ * attente de suppression » : son dossier ne se vide plus, et `supprimerArbre` echoue en EPERM. C'est
+ * ce qui rendait `commands.test.ts` et `e2e-chaine.test.ts` rouges a la suppression de leur dossier.
+ * Entree qui ferait echouer ce test : un `fermer` qui oublie un descripteur du cache.
+ */
+describe('un store se referme', () => {
+  it('relache ses descripteurs : le dossier s efface, et une ecriture suivante rouvre', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-fermer-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    store.append({ ...event('evt-x', 0), conversationId: 'conv-2', parentId: undefined })
+    store.fermer()
+    expect(
+      (store as unknown as { descriptors: Map<string, number> }).descriptors.size
+    ).toBe(0)
+    store.append(event('evt-1', 1))
+    expect(store.readConversation('conv-1').map((e) => e.id)).toEqual(['evt-0', 'evt-1'])
+    store.fermer()
+    supprimerArbre(root)
+    expect(existsSync(root)).toBe(false)
+  })
 })

@@ -55,6 +55,7 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
         </div>
         <button
           type="button"
+          className="btn"
           disabled={busy}
           data-testid="execution-workspace-choose"
           onClick={() => void run(() => window.api.chooseExecutionWorkspace())}
@@ -83,6 +84,7 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
               Choisi : <code>{state.chosen}</code>{' '}
               <button
                 type="button"
+                className="btn btn-sm"
                 disabled={busy}
                 data-testid="execution-workspace-reset"
                 onClick={() => void run(() => window.api.resetExecutionWorkspace())}

@@ -202,7 +202,7 @@ describe('role-store Autowin OS', () => {
   })
 
   it('saves roles.json in the autowin-os folder', () => {
-    saveRoleBindings(bindings)
+    saveRoleBindings(bindings, undefined)
 
     expect(existsSync(join(appDataRoot, 'autowin-os', 'roles.json'))).toBe(true)
     expect(existsSync(join(legacyAppDataRoot(appDataRoot), 'roles.json'))).toBe(false)
@@ -221,7 +221,7 @@ describe('role-store Autowin OS', () => {
   })
 
   it('récupère roles.json si un crash laisse seulement sa dernière version valide', () => {
-    saveRoleBindings(bindings)
+    saveRoleBindings(bindings, undefined)
     const path = join(appDataRoot, 'autowin-os', 'roles.json')
     renameSync(path, `${path}.bak`)
 
@@ -247,12 +247,76 @@ describe('role-store Autowin OS', () => {
   })
 
   it('récupère le snapshot précédent si un binding devient structurellement invalide', () => {
-    saveRoleBindings(bindings)
-    saveRoleBindings(bindings)
+    saveRoleBindings(bindings, undefined)
+    saveRoleBindings(bindings, undefined)
     const path = join(appDataRoot, 'autowin-os', 'roles.json')
     writeFileSync(path, JSON.stringify({ judge: { provider: 42 } }), 'utf8')
 
     expect(loadRoleBindings()).toEqual(bindings)
+  })
+
+  it('garde le modèle des petites tâches à côté des quatre rôles, et le relit', () => {
+    const petitesTaches = {
+      provider: 'claude',
+      model: 'claude-haiku-4-5',
+      reasoningEffort: 'low' as const
+    }
+    saveRoleBindings(bindings, petitesTaches)
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ ...bindings, petitesTaches })
+    const relus = loadRoleBindings()
+    expect(relus).toEqual({ ...bindings, petitesTaches })
+    expect(new RoleModelConfig(relus).bindingDesPetitesTaches()).toEqual(petitesTaches)
+  })
+
+  it('sans réglage, n’écrit aucune clé petitesTaches', () => {
+    saveRoleBindings(bindings, undefined)
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+
+    expect(Object.keys(JSON.parse(readFileSync(path, 'utf8')))).not.toContain('petitesTaches')
+  })
+
+  it('écarte un réglage des petites tâches mal formé', () => {
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+    mkdirSync(join(appDataRoot, 'autowin-os'), { recursive: true })
+    writeFileSync(
+      path,
+      JSON.stringify({
+        ...bindings,
+        petitesTaches: { provider: 'claude', reasoningEffort: 'impossible' }
+      }),
+      'utf8'
+    )
+
+    expect(loadRoleBindings()).toBeUndefined()
+  })
+})
+
+describe('modèle des petites tâches', () => {
+  const chat = { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' as const }
+
+  it('non réglé : suit le modèle du chat en effort low', () => {
+    const cfg = new RoleModelConfig({ orchestrator: chat })
+    expect(cfg.getPetitesTaches()).toBeUndefined()
+    expect(cfg.bindingDesPetitesTaches()).toEqual({
+      provider: 'claude',
+      model: 'claude-opus-5-5',
+      reasoningEffort: 'low'
+    })
+  })
+
+  it('réglé : rendu tel quel, jamais complété par le défaut du code', () => {
+    const cfg = new RoleModelConfig({ orchestrator: chat }).setPetitesTaches({ provider: 'claude' })
+    expect(cfg.bindingDesPetitesTaches()).toEqual({ provider: 'claude' })
+  })
+
+  it('effacé : revient au modèle du chat, et suit un changement du chat', () => {
+    const cfg = new RoleModelConfig({ orchestrator: chat })
+      .setPetitesTaches({ provider: 'claude', model: 'claude-haiku-4-5' })
+      .setPetitesTaches(undefined)
+    cfg.setBinding('orchestrator', { provider: 'claude', model: 'claude-sonnet-4-6' })
+    expect(cfg.bindingDesPetitesTaches().model).toBe('claude-sonnet-4-6')
   })
 })
 

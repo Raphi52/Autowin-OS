@@ -73,7 +73,7 @@ else:
     verifie(rail.is_file() and Image.open(rail).width == logo.TAILLE_LOGO_RAIL,
             "le logo de l'en-tete est rendu a 4x ses 38 px CSS, pour rester net sur un ecran haute densite")
 
-    for relatif in ("build/icon.ico", "resources/autowin-os-dev.ico"):
+    for relatif in ("build/icon.ico", "resources/icon.ico", "resources/autowin-os-dev.ico"):
         donnees = (RACINE / relatif).read_bytes()
         _, _, nombre = struct.unpack("<HHH", donnees[:6])
         tailles = sorted(
@@ -91,6 +91,12 @@ else:
             ico = Image.open(RACINE / relatif)
     verifie((RACINE / "build/icon.ico").read_bytes() == (RACINE / "resources/autowin-os-dev.ico").read_bytes(),
             "l'icone Dev et l'icone du paquet sont le MEME fichier")
+    # L'icone de la zone de notification de l'app installee (src/main/window.ts) : sans elle, la
+    # notification retomberait sur le PNG 512 reduit par Windows, flou a 16-24 px.
+    icone_notification = RACINE / "resources/icon.ico"
+    verifie(icone_notification.is_file()
+            and icone_notification.read_bytes() == (RACINE / "build/icon.ico").read_bytes(),
+            "resources/icon.ico (icone de notification du paquet) est le MEME fichier que build/icon.ico")
     svg = (RACINE / "build/icon.svg").read_text(encoding="utf-8")
     verifie("logo_anneau.py" in svg and "ellipse" not in svg, "build/icon.svg est l'anneau genere, plus l'atome")
 

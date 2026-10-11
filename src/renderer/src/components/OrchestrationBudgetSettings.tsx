@@ -122,7 +122,7 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
       {loadError && (
         <div className="orchestration-budget-failure">
           <p role="alert">{loadError}</p>
-          <button type="button" onClick={() => void load()} disabled={loading}>
+          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
             Réessayer
           </button>
         </div>
@@ -192,7 +192,12 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
         dépassement n&apos;annule jamais le travail déjà payé : il est affiché, puis interdit
         l&apos;appel suivant.
       </small>
-      <button type="button" onClick={() => void save()} disabled={saveDisabled}>
+      <button
+        type="button"
+        className="btn btn-accent"
+        onClick={() => void save()}
+        disabled={saveDisabled}
+      >
         {saving ? 'Enregistrement...' : 'Enregistrer'}
       </button>
       {message && (

@@ -52,10 +52,6 @@ export function basculerAlerte(alertes: AlertesInterlocuteurs, cle: string): Ale
   return suivant
 }
 
-export function estAlerte(alertes: AlertesInterlocuteurs, cle: string): boolean {
-  return alertes.has(cle)
-}
-
 /** Ce qu'une alerte annonce : de qui, quel objet, et le message qui l'a déclenchée. */
 export interface AlerteMessage {
   id: string

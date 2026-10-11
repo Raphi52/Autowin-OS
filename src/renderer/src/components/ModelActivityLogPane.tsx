@@ -13,7 +13,10 @@ import { HumanJson } from './HumanJson'
 import { deltaMs, grouperParTour, type ModelActivityTour } from './model-activity-tours'
 import { detailCourt, titreCourt } from './model-log-court'
 import {
-  buildModelActivityLog,
+  assemblerJournal,
+  detailCausal,
+  lignesDesSources,
+  lignesDuFil,
   type ModelActivityEntry,
   type ModelActivityKind,
   type ModelActivitySource
@@ -89,6 +92,49 @@ function duree(ms: number): string {
   return `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1_000)} s`
 }
 
+/**
+ * RELIRE N'EST PAS RECALCULER (conv-252, 2026-10-11 : « corrige l'onglet Logs pour qu'il ne
+ * recalcule plus tout le journal toutes les 2 à 4 s quand rien n'a changé »).
+ *
+ * Mesure du 2026-10-11 12:00-12:02 (`gels.jsonl`) : pendant un tour vivant, le panneau droit tenait
+ * l'affichage 1,1 à 2,8 s toutes les 2 à 4 s — le rythme exact des deux relectures ci-dessous. Chaque
+ * relecture posait un tableau NEUF même identique : `buildModelActivityLog` refaisait tout le journal.
+ * Une relecture ne pose donc sa source que si son EMPREINTE a changé ; identique, l'ancienne référence
+ * reste, et React ne rend ni ne recalcule rien. L'empreinte est exacte (le JSON entier), pas un
+ * compte de lignes : une ligne modifiée sur place est vue aussi.
+ */
+let empreinteIllisible = 0
+function empreinte(valeur: unknown): string {
+  try {
+    return JSON.stringify(valeur) ?? ''
+  } catch {
+    // Jamais vu par IPC (clonage structuré) ; illisible = toujours « changé », jamais « identique ».
+    empreinteIllisible += 1
+    return `\u0000illisible-${empreinteIllisible}`
+  }
+}
+
+function memesEmpreintes(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
+  if (a.size !== b.size) return false
+  for (const [cle, valeur] of a) if (b.get(cle) !== valeur) return false
+  return true
+}
+
+type Lignes = ReadonlyArray<Record<string, unknown>>
+
+/**
+ * LA TRACE ALLÉGÉE, comme le graphe (`WorkflowExecutionGraph`, décision du 2026-10-10) : la structure
+ * sans les contenus, relue toutes les 4 s ; les contenus d'une étape sont relus quand on DÉPLIE sa
+ * ligne (`LogRow`). En dev, le pont peut garder son ancienne version jusqu'au redémarrage : sans les
+ * deux canaux, on relit la trace complète, comme avant — plus lent, jamais cassé.
+ */
+function traceAllegeeDisponible(): boolean {
+  return (
+    typeof window.api?.causalTraceGraphe === 'function' &&
+    typeof window.api?.causalTraceCharges === 'function'
+  )
+}
+
 export type ModelActivityLogPaneProps = {
   conversationId: string | null
   messages: readonly Msg[]
@@ -138,33 +184,59 @@ export function ModelActivityLogPane({
     .filter((turnId): turnId is string => Boolean(turnId))
     .join('|')
 
-  // Chargement des journaux : à l'ouverture, quand la liste des tours change, et en boucle courte
-  // tant qu'un tour est VIVANT (le journal est écrit au fil de l'eau côté main).
+  // Ce qui est POSÉ dans l'état, avec l'empreinte de chaque source : une relecture identique ne
+  // repose rien (voir `empreinte`). Écrits seulement par les relectures, jamais pendant le rendu.
+  const journalPose = useRef<Record<string, Lignes>>({})
+  const empreintesTours = useRef<ReadonlyMap<string, string>>(new Map())
+  const empreintesSources = useRef<Record<string, string>>({})
+
+  // Chargement des journaux : TOUS les tours à l'ouverture, quand la liste des tours change et à la
+  // fin d'un tour ; en boucle courte, tant qu'un tour est VIVANT, le SEUL dernier tour — un tour
+  // terminé n'écrit plus son journal, le relire toutes les 2 s tenait le processus principal
+  // (`ipc:runs:turnJournal (sync)`, 1,5 s le 2026-10-11 à 11:04).
   useEffect(() => {
     if (!conversationId) return
     const turnIds = turnKey ? turnKey.split('|') : []
     let annule = false
-    const charger = async (): Promise<void> => {
+    const charger = async (ids: readonly string[], complet: boolean): Promise<void> => {
       const lecture = await Promise.all(
-        turnIds.map(async (turnId) => {
+        ids.map(async (turnId) => {
           try {
-            const events = (await window.api?.turnJournal?.(conversationId, turnId)) ?? []
+            const events = ((await window.api?.turnJournal?.(conversationId, turnId)) ??
+              []) as Lignes
             return [turnId, events] as const
           } catch {
             // Journal absent (nettoyé) : le tour reste tracé par ses parts durables.
-            return [turnId, []] as const
+            return [turnId, [] as Lignes] as const
           }
         })
       )
       if (annule) return
-      setJournalByTurn(Object.fromEntries(lecture.filter(([, events]) => events.length > 0)))
+      // `complet` remplace tout (autre conversation, autre liste de tours) ; sinon le tour relu
+      // complète ce qui est déjà posé.
+      const empreintes = new Map(complet ? [] : empreintesTours.current)
+      const suivant: Record<string, Lignes> = complet ? {} : { ...journalPose.current }
+      for (const [turnId, events] of lecture) {
+        if (events.length > 0) {
+          empreintes.set(turnId, empreinte(events))
+          suivant[turnId] = events
+        } else {
+          empreintes.delete(turnId)
+          delete suivant[turnId]
+        }
+      }
+      if (memesEmpreintes(empreintes, empreintesTours.current)) return
+      empreintesTours.current = empreintes
+      journalPose.current = suivant
+      setJournalByTurn(suivant)
     }
-    void charger()
-    if (!live)
+    void charger(turnIds, true)
+    const vivant = turnIds.at(-1)
+    if (!live || !vivant)
       return () => {
         annule = true
       }
-    const timer = setInterval(() => void charger(), 2_000)
+    const timer = setInterval(() => void charger([vivant], false), 2_000)
     return () => {
       annule = true
       clearInterval(timer)
@@ -178,9 +250,18 @@ export function ModelActivityLogPane({
     // conversation il n'y a rien a lire, et l'affichage derive de `conversationId` plus bas.
     if (!conversationId) return
     let annule = false
+    /** Pose une source relue SEULEMENT si son contenu a changé depuis la dernière pose. */
+    const poserSiChange = (cle: string, lignes: Lignes, poser: (valeur: Lignes) => void): void => {
+      const signe = empreinte(lignes)
+      if (empreintesSources.current[cle] === signe) return
+      empreintesSources.current[cle] = signe
+      poser(lignes)
+    }
     const charger = async (): Promise<void> => {
       const [trace, activite, savoir, appels, copies, touches] = await Promise.all([
-        window.api?.causalTrace?.(conversationId).catch(() => []) ?? [],
+        (traceAllegeeDisponible()
+          ? window.api.causalTraceGraphe(conversationId).catch(() => [])
+          : window.api?.causalTrace?.(conversationId).catch(() => [])) ?? [],
         window.api?.conversationActivity?.(conversationId).catch(() => []) ?? [],
         // Le spool Brain porte TOUTES les conversations : on ne garde que la nôtre.
         window.api?.brainTraces?.(conversationId).catch(() => []) ?? [],
@@ -189,15 +270,17 @@ export function ModelActivityLogPane({
         window.api?.conversationFileTraces?.(conversationId).catch(() => []) ?? []
       ])
       if (annule) return
-      setCausal((trace ?? []) as ReadonlyArray<Record<string, unknown>>)
-      setActivity((activite ?? []) as ReadonlyArray<Record<string, unknown>>)
-      setPromptCalls((appels ?? []) as ReadonlyArray<Record<string, unknown>>)
-      setBureaux((copies ?? []) as ReadonlyArray<Record<string, unknown>>)
-      setFichiers((touches ?? []) as ReadonlyArray<Record<string, unknown>>)
-      setBrain(
-        ((savoir ?? []) as ReadonlyArray<Record<string, unknown>>).filter(
+      poserSiChange('causal', (trace ?? []) as Lignes, setCausal)
+      poserSiChange('activite', (activite ?? []) as Lignes, setActivity)
+      poserSiChange('appels', (appels ?? []) as Lignes, setPromptCalls)
+      poserSiChange('copies', (copies ?? []) as Lignes, setBureaux)
+      poserSiChange('fichiers', (touches ?? []) as Lignes, setFichiers)
+      poserSiChange(
+        'brain',
+        ((savoir ?? []) as Lignes).filter(
           (item) => !item.conversationId || item.conversationId === conversationId
-        )
+        ),
+        setBrain
       )
     }
     void charger()
@@ -212,12 +295,13 @@ export function ModelActivityLogPane({
     }
   }, [conversationId, turnKey, live])
 
-  const entries = useMemo(
+  // TROIS calculs, et non un seul (voir `assemblerJournal`) : un fragment de réponse change
+  // `messages` seul, il ne refait donc que les lignes du FIL ; les six sources ne se recalculent
+  // qu'avec leurs relectures (qui ne posent rien quand rien n'a changé).
+  const lignesSources = useMemo(
     () =>
-      buildModelActivityLog({
-        messages,
-        journalByTurn,
-        // DERIVE, pas remis a zero par un effet : sans conversation, ces deux sources n'existent pas.
+      lignesDesSources({
+        // DERIVE, pas remis a zero par un effet : sans conversation, ces sources n'existent pas.
         causal: conversationId ? causal : [],
         activity: conversationId ? activity : [],
         brain: conversationId ? brain : [],
@@ -225,17 +309,12 @@ export function ModelActivityLogPane({
         bureaux: conversationId ? bureaux : [],
         fichiers: conversationId ? fichiers : []
       }),
-    [
-      messages,
-      journalByTurn,
-      causal,
-      activity,
-      brain,
-      promptCalls,
-      bureaux,
-      fichiers,
-      conversationId
-    ]
+    [causal, activity, brain, promptCalls, bureaux, fichiers, conversationId]
+  )
+  const lignesFil = useMemo(() => lignesDuFil(messages, journalByTurn), [messages, journalByTurn])
+  const entries = useMemo(
+    () => assemblerJournal(lignesFil, lignesSources),
+    [lignesFil, lignesSources]
   )
   const motif = filtre.trim().toLowerCase()
   const visibles = entries.filter((entry) => {
@@ -404,6 +483,7 @@ export function ModelActivityLogPane({
                     entry={entry}
                     tour={tour}
                     voie={pistes ? voieDe.get(entry.source) : undefined}
+                    conversationId={conversationId}
                   />
                 ))}
               </div>
@@ -415,16 +495,59 @@ export function ModelActivityLogPane({
   )
 }
 
+/**
+ * Contenus ENTIERS d'une étape de la trace, relus quand on déplie sa ligne : la liste n'en reçoit que
+ * la structure (`traceAllegeeDisponible`). La trace est en ajout seul : une fois relus, ils ne
+ * changent plus, la ligne les garde.
+ */
+type ContenusEtape = { enCours: true } | { detail?: string; charges: Lignes } | { erreur: string }
+
 function LogRow({
   entry,
   tour,
-  voie
+  voie,
+  conversationId
 }: {
   entry: ModelActivityEntry
   tour?: ModelActivityTour
   /** Index de la voie de la source, ou `undefined` quand la vue pistes est repliée. */
   voie?: number
+  conversationId?: string | null
 }): React.JSX.Element {
+  const [contenus, setContenus] = useState<ContenusEtape | null>(null)
+  // Garde IMMÉDIATE, pas l'état : deux signaux « ouvert » peuvent arriver avant le rendu suivant, et
+  // chacun aurait relu les mêmes contenus. Relâchée sur échec : redéplier retente.
+  const lectureDemandee = useRef(false)
+  const eventId =
+    entry.source === 'causal' && typeof entry.fields?.id === 'string' ? entry.fields.id : undefined
+  const surOuverture = (ouvert: boolean): void => {
+    if (!ouvert || lectureDemandee.current || !conversationId || !eventId) return
+    if (!traceAllegeeDisponible()) return
+    const charges = Array.isArray(entry.fields?.payloads) ? (entry.fields.payloads as Lignes) : []
+    const genres = [...new Set(charges.map((charge) => String(charge.kind ?? '')))].filter(Boolean)
+    if (genres.length === 0) return
+    lectureDemandee.current = true
+    setContenus({ enCours: true })
+    window.api
+      .causalTraceCharges(conversationId, [eventId], genres)
+      .then((lues) => {
+        const entieres = (lues?.[eventId] ?? []) as unknown as Lignes
+        setContenus({
+          detail: detailCausal({ ...entry.fields, payloads: entieres }),
+          charges: entieres
+        })
+      })
+      .catch((raison: unknown) => {
+        lectureDemandee.current = false
+        setContenus({ erreur: raison instanceof Error ? raison.message : String(raison) })
+      })
+  }
+  // Ce que la carte dépliée montre : les contenus relus quand ils sont là, la structure sinon.
+  const detailDeplie = contenus && 'charges' in contenus ? contenus.detail : entry.detail
+  const champsDeplies =
+    contenus && 'charges' in contenus && entry.fields
+      ? { ...entry.fields, payloads: contenus.charges }
+      : entry.fields
   // Ecart depuis le debut du tour : l'heure absolue ne dit pas ou le temps est parti.
   const ecart = tour ? deltaMs(entry, tour) : undefined
   const dot =
@@ -467,7 +590,11 @@ function LogRow({
       <time className="model-log-time">{heure(entry.at) ?? ''}</time>
       <span className="model-log-perle" aria-hidden="true" />
       <div className="model-log-carte">
-        <details className="model-log-detail" data-testid="model-log-detail">
+        <details
+          className="model-log-detail"
+          data-testid="model-log-detail"
+          onToggle={(evenement) => surOuverture(evenement.currentTarget.open)}
+        >
           <summary className="model-log-head">
             {dot ? <span className={`status-dot ${dot}`} /> : null}
             <span className="model-log-kind">{nature}</span>
@@ -484,7 +611,17 @@ function LogRow({
             </span>
           </summary>
           <div className="model-log-expand">
-            {entry.detail ? <div className="model-log-texte">{entry.detail}</div> : null}
+            {detailDeplie ? <div className="model-log-texte">{detailDeplie}</div> : null}
+            {contenus && 'enCours' in contenus ? (
+              <div className="model-log-texte" data-testid="model-log-contenus-en-cours">
+                Lecture du contenu…
+              </div>
+            ) : null}
+            {contenus && 'erreur' in contenus ? (
+              <div className="model-log-texte" data-testid="model-log-contenus-erreur">
+                Contenu illisible : {contenus.erreur}
+              </div>
+            ) : null}
             <div className="model-log-meta">
               <span className="model-log-source" data-log-source={entry.source}>
                 {SOURCE_LABEL[entry.source]}
@@ -511,7 +648,7 @@ function LogRow({
                 Copier
               </button>
             </div>
-            {entry.fields ? <HumanJson className="model-log-json" value={entry.fields} /> : null}
+            {champsDeplies ? <HumanJson className="model-log-json" value={champsDeplies} /> : null}
           </div>
         </details>
       </div>

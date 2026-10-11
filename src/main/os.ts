@@ -4,7 +4,8 @@
  * Principe : rien d'exposé ici n'est mort — chaque méthode a un appelant réel
  * (chat, orchestration, dashboards, graphe 3D).
  */
-import { Notification } from 'electron'
+import { Notification, app } from 'electron'
+import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from './hdesk-tv'
 import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
 import {
@@ -333,12 +334,13 @@ export class AutowinOS {
     const profiles = loadWorkflowProfiles().profiles
     let reponse: string
     try {
-      const binding = this.roles.all().orchestrator
-      if (!binding?.provider) return undefined
+      // Le modèle des petites tâches (réglage du Routeur) ; non réglé, celui du chat en effort low.
+      const binding = this.roles.bindingDesPetitesTaches()
+      if (!binding.provider) return undefined
       const res = await this.registry.send(
         binding.provider,
         [{ role: 'user', content: dynamicPrompt(task, profiles) }],
-        { model: binding.model, reasoningEffort: 'low' }
+        { model: binding.model, reasoningEffort: binding.reasoningEffort }
       )
       reponse = res.text ?? ''
     } catch {
@@ -605,6 +607,10 @@ export class AutowinOS {
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
+      // Fin de run : ferme le bureau cache du run s'il a ete ouvert (lot 1, conv-222). Le chemin des
+      // scripts n'est lu qu'a ce moment-la : rien ne change au demarrage.
+      fermerBureauCache: (demande) =>
+        fermerBureauCacheSiOuvert(racineScriptsHorsArchive(app.getAppPath()), demande),
       // Lue A CHAQUE phase, pas figee ici : le bus de commandes n'existe pas encore a cet instant.
       skillCommands: () => this.skillCommandRunner,
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu
@@ -1152,9 +1158,20 @@ export class AutowinOS {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
       .setBinding(role, binding)
       .all()
-    saveRoleBindings(proposed)
+    saveRoleBindings(proposed, this.roles.getPetitesTaches())
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()
+  }
+
+  /**
+   * Pose (ou efface avec `undefined`) le MODÈLE DES PETITES TÂCHES — tri des conversations et choix
+   * automatique du workflow — et le persiste dans `roles.json` à côté des quatre rôles. Persister
+   * AVANT d'appliquer : un disque qui refuse l'écriture ne laisse pas un réglage fantôme en mémoire.
+   */
+  setPetitesTaches(binding: RoleBinding | undefined): RoleBinding | undefined {
+    saveRoleBindings(this.roles.all(), binding)
+    this.roles.setPetitesTaches(binding)
+    return this.roles.getPetitesTaches()
   }
 
   /**
@@ -1167,7 +1184,7 @@ export class AutowinOS {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
     for (const [role, binding] of bindings) proposed.setBinding(role, binding)
     const all = proposed.all()
-    saveRoleBindings(all)
+    saveRoleBindings(all, this.roles.getPetitesTaches())
     for (const [role] of bindings) this.roles.setBinding(role, all[role])
     return this.roles.all()
   }

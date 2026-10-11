@@ -18,6 +18,16 @@ import './InterfaceView.css'
  * racine du document par `theme-mode.ts`, et les feuilles de style font le reste
  * (`assets/theme-modes.css`) ; ce composant ne peint rien lui-même.
  */
+/**
+ * LES COMPTES DU TEXTE VIENNENT DU REGISTRE (conv-244). La phrase disait « dix thèmes, cinq sombres
+ * et cinq clairs » en dur : six thèmes en ont été retirés le 2026-10-11 (conv-231) et l'écran
+ * annonçait encore dix. Comme la liste, la phrase lit `THEMES`.
+ */
+const NB_THEMES = THEMES.length
+const NB_SOMBRES = THEMES.filter((t) => t.base === 'sombre').length
+const NB_CLAIRS = NB_THEMES - NB_SOMBRES
+const NB_MALVOYANT = THEMES.filter((t) => t.id.startsWith('malvoyant')).length
+
 export function InterfaceView(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
 
@@ -39,16 +49,17 @@ export function InterfaceView(): React.JSX.Element {
         <div className="interface-row-text">
           <strong>Thème</strong>
           <p>
-            L’apparence de l’application : <strong>dix thèmes</strong>, cinq sombres et cinq clairs,
-            dont deux <strong>Spécial malvoyant</strong> à très fort contraste. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
-            rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
+            L’apparence de l’application : <strong>{NB_THEMES} thèmes</strong>, {NB_SOMBRES} sombres
+            et {NB_CLAIRS} clairs, dont {NB_MALVOYANT} <strong>Spécial malvoyant</strong> à très
+            fort contraste. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas
+            ne voit rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
             redémarrage.
           </p>
         </div>
         <label className="interface-theme-choix">
           <span className="interface-theme-label">Thème</span>
           <select
-            className="interface-theme-select"
+            className="interface-theme-select select"
             value={theme}
             aria-label="Thème"
             data-testid="interface-theme"

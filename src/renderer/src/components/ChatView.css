@@ -1160,6 +1160,12 @@
   gap: var(--s4);
   row-gap: 28px;
   padding: var(--s3) var(--s2);
+  /* LE FIL NE DEFILE QU'EN HAUTEUR (conv-248, 2026-10-11 : « je veux pas de scroll horizontal dans
+     le chat »). `.scroll-y` ne pose que `overflow-y: auto`, ce qui rend `overflow-x` calcule a `auto`
+     lui aussi : le moindre contenu trop large donnait une barre au fil entier. Le fil decoupait deja
+     ce qui depasse (c'est un conteneur a defilement) ; seule la barre disparait. Ce sont les blocs
+     eux-memes qui tiennent dans la colonne — voir `.md-table-wrap`, `.md-html`, ajuster-a-la-largeur. */
+  overflow-x: hidden;
 }
 .msg {
   display: flex;
@@ -1386,11 +1392,6 @@
     min-width: 24px;
     height: 24px;
   }
-}
-.composer-meta-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 .composer textarea {
   resize: none;
@@ -1888,10 +1889,13 @@ h6.md-h {
   font-size: 12px;
   color: var(--chat-md-h6);
 }
-/* Tableaux GFM du chat : entêtes, bordures et zébrage discrets, colonnes alignées. */
+/* Tableaux GFM du chat : entêtes, bordures et zébrage discrets, colonnes alignées.
+   AUCUNE BARRE HORIZONTALE (conv-248) : les cellules ET les entetes passent a la ligne, et un
+   tableau qui deborde encore (dizaines de colonnes) est reduit a l'echelle par Markdown.tsx
+   (CadreDeTableau), jamais mis a defiler. Mesure avant : 1 366 px de contenu dans 327 px. */
 .md-table-wrap {
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   margin: var(--s2) 0;
   border: 1px solid var(--line);
   border-radius: var(--r2);
@@ -1918,7 +1922,9 @@ h6.md-h {
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  white-space: nowrap;
+  /* Plus de `nowrap` : un entete insecable fixait la largeur minimale de sa colonne, et neuf
+     colonnes poussaient le tableau a 1 366 px dans une colonne de 327 (conv-248). */
+  white-space: normal;
 }
 .md-table tbody tr:nth-child(even) td {
   background: rgba(var(--voile-rgb), 0.025);
@@ -2028,7 +2034,28 @@ ol.md-list li {
   max-width: 100%;
   margin: var(--s1) 0;
   contain: layout paint style;
-  overflow-x: auto;
+  /* AUCUNE BARRE HORIZONTALE (conv-248 : 1 709 px de contenu dans 329 px, avec sa barre). Le
+     contenu est d'abord rendu fluide par les valeurs par defaut ci-dessous ; ce qu'il impose encore
+     (pistes de grille fixes, `nowrap` voulu) est reduit a l'echelle par Markdown.tsx (BlocHtmlRendu). */
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  /* Le bloc est du HTML : ses retours a la ligne de SOURCE ne s'affichent pas, comme dans une page.
+     Sans cela il heritait le `pre-wrap` de `.msg-body` (texte de bulle) et chaque saut de ligne
+     entre deux balises devenait une ligne vide : conv-254, 176 px de vide entre des onglets et leur
+     panneau. Un `pre` du bloc garde son `pre-wrap` (regle ci-dessous) ; une regle du modele gagne. */
+  white-space: normal;
+}
+/* VALEURS PAR DEFAUT FLUIDES, pas des ordres : specificite d'une seule classe, si bien que toute
+   regle du modele (prefixee par `[data-html-scope]`, ou en ligne) l'emporte. Seul ce que le modele
+   n'a PAS precise change : un element plus large que son parent, un enfant flex qui refusait de
+   retrecir sous son contenu, une rangee flex qui refusait de passer a la ligne, un `pre` insecable. */
+.md-html * {
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.md-html pre {
+  white-space: pre-wrap;
 }
 .md-html > :first-child {
   margin-top: 0;
@@ -3644,7 +3671,10 @@ button.chat-project-dot:disabled {
   max-height: 40vh;
   overflow: auto;
   padding: 8px;
-  white-space: pre;
+  /* Les lignes longues du correctif passent a la ligne au lieu de defiler en largeur (conv-248 :
+     1 045 px dans 348). L'alignement en colonnes d'un diff y perd un peu, la lecture non. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .tnp-note {
   opacity: 0.65;
@@ -3916,6 +3946,9 @@ button.chat-project-dot:disabled {
   background: rgb(0 0 0 / 22%);
   color: var(--muted);
   white-space: pre-wrap;
+  /* Un chemin ou un JSON sans espace ne trouvait aucun point de coupure : 1 563 px dans 284, avec
+     une barre horizontale (conv-248). Il se coupe desormais n'importe ou. */
+  overflow-wrap: anywhere;
   font-size: 10.5px;
 }
 /* SKILLS ET AGENTS CHOISIS pour la tache : une ligne par phase engagee, meme gouttiere que le
@@ -4152,9 +4185,9 @@ button.chat-project-dot:disabled {
      capsule bombee comme une pilule de verre. */
   background: radial-gradient(
     55% 85% at 50% 0%,
-    rgba(255, 255, 255, 0.4),
-    rgba(255, 255, 255, 0.1) 55%,
-    rgba(255, 255, 255, 0) 100%
+    var(--chat-capsule-reflet-haut),
+    var(--chat-capsule-reflet-milieu) 55%,
+    var(--chat-capsule-reflet-fin) 100%
   );
   /* PAS de reflet `inset 0 3px` : il depassait de 1 px sous le bord degrade et tracait un trait
      gris sous lui — « ca fait pas pur » (conv-176, 2026-10-10). Le bord se suffit. */
@@ -4178,9 +4211,9 @@ button.chat-project-dot:disabled {
 .capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-capsule {
   background: radial-gradient(
     55% 85% at 50% 0%,
-    rgba(255, 255, 255, 0.15),
-    rgba(255, 255, 255, 0.03) 55%,
-    rgba(255, 255, 255, 0) 100%
+    var(--chat-capsule-reflet-eteint-haut),
+    var(--chat-capsule-reflet-eteint-milieu) 55%,
+    var(--chat-capsule-reflet-fin) 100%
   );
 }
 /* BORD DEGRADE : un calque evide par masque, comme les cartes de fichier du theme Nebuleuse de
@@ -4224,7 +4257,7 @@ button.chat-project-dot:disabled {
   height: 1.6em;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
-  color: #fff;
+  color: var(--chat-capsule-sur-degrade);
   /* PAS d'anneau blanc : il se lisait comme un cercle gris autour de l'icone, comme le trait sous
      le bord — « autour de l'icone aussi » (conv-176, 2026-10-10). */
 }
@@ -4258,7 +4291,7 @@ button.chat-project-dot:disabled {
   padding: 0 0.6em;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.5);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 0 0 1px var(--chat-capsule-pastille-filet);
   color: #fff;
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 0.92em;
@@ -4276,7 +4309,7 @@ button.chat-project-dot:disabled {
   padding: 0 0.3em;
   border-radius: 999px;
   background: var(--capsule-froid);
-  color: #fff;
+  color: var(--chat-capsule-sur-degrade);
   font-size: 0.75em;
   font-weight: 700;
   line-height: 1;
@@ -4286,7 +4319,7 @@ button.chat-project-dot:disabled {
 .thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-secondes,
 .thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-duree,
 .capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-duree {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--chat-capsule-pastille-texte-fini);
 }
 /* CHEVRON DESSINE, pas un glyphe, DANS la capsule (R5 : on voit que c'est elle qui se clique).
    Le caractere « ▾ » a 10px et 0.55 d'opacite etait illisible : « on voit pas ou elle pointe »
@@ -4994,10 +5027,6 @@ button.chat-project-dot:disabled {
   margin-right: 4px;
 }
 
-/* Le sélecteur modèle/effort a été déplacé à GAUCHE de la barre de saisie (à côté de
-   joindre/micro). Ancrée à droite (`right: 0`), la popup partait vers la gauche et sortait
-   de l'écran : on n'en voyait plus la moitié. Dans la barre de saisie, elle s'ancre donc à
-   GAUCHE du bouton et se borne à la largeur de la fenêtre. */
 /* PEINT AU-DESSUS DE TOUTE L'APP (2026-09-12) : le menu est rendu dans `document.body`, donc
    plus aucun panneau ne le rogne ni ne le recouvre. Le z-index passe devant le panneau des runs
    et les surcouches du fil ; il reste SOUS la visionneuse d'image (10000). */
@@ -5010,14 +5039,80 @@ button.chat-project-dot:disabled {
   max-width: calc(100vw - 24px);
 }
 
-.composer-meta-actions .model-select-menu {
+/* LE MODÈLE DU FIL, EN TÊTE DE CONVERSATION (conv-239, 2026-10-11). Le sélecteur a quitté la
+   barre de saisie pour remplacer le libellé du modèle dans la ligne d'infos du haut. Il en prend
+   la typographie (corps, casse, couleur) au lieu de sa taille de barre de saisie, et garde le
+   séparateur « · » des éléments voisins. Le `:root` + les deux classes renforcent le sélecteur :
+   les thèmes Nébuleuse posent `overflow: hidden` sur `.chat-runtime > *` (quatre classes), ce
+   qui rognerait la bulle d'état posée SOUS le bouton. */
+:root .cosmic-outline .chat-runtime > .model-select-shell.is-ouverture-bas,
+.chat-runtime > .model-select-shell.is-ouverture-bas {
+  /* NE RÉTRÉCIT PAS : en fenêtre étroite, la pastille se tassait sous son contenu et, débordement
+     visible oblige (pour la bulle d'état), « Élevé » venait chevaucher l'identifiant voisin
+     (capture conv-239 à 900 px). Le nom d'un modèle est court ; ce sont l'identifiant, le dossier
+     et la branche qui cèdent la place, avec leurs « … ». */
+  flex: none;
+  max-width: none;
+  overflow: visible;
+}
+.chat-runtime > span + .model-select-shell::before,
+.chat-runtime > .model-select-shell + span::before {
+  margin-right: 6px;
+  color: inherit;
+  content: '·';
+}
+.chat-runtime .model-select {
+  color: inherit;
+}
+.chat-runtime .model-select summary {
+  min-height: 0;
+  padding: 1px 4px 1px 3px;
+  gap: 4px;
+}
+.chat-runtime .model-select summary > strong,
+.chat-runtime .model-select summary > em {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+/* L'EFFORT DANS LA MÊME COULEUR QUE LE NOM DU MODÈLE (demande utilisateur, conv-249,
+   2026-10-11) : grisé (couleur « note » + opacité), « Très élevé » se lisait comme un libellé
+   éteint à côté de « Opus 5.5 ». `:root` passe devant la règle du mode clair (plus haut dans ce fichier), qui le
+   repeindrait en `--text-dim` ; `inherit` y rend `--text`, comme le nom. */
+:root .chat-runtime .model-select summary > em {
+  color: inherit;
+  opacity: 1;
+}
+/* FLÈCHE ABAISSÉE (même demande) : la règle de base la remonte de 2 px pour un chevron de 7 px ;
+   à 5 px dans la ligne d'infos, ce décalage la posait au-dessus du milieu du texte. */
+.chat-runtime .model-select-chevron {
+  width: 5px;
+  height: 5px;
+  transform: translateY(0) rotate(45deg);
+}
+.chat-runtime .model-select[open] .model-select-chevron {
+  transform: translateY(1px) rotate(225deg);
+}
+/* Retour au modèle par défaut de l'application, en tête du menu d'un fil. */
+.model-select-defaut {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid rgba(var(--voile-rgb), 0.08);
+}
+.model-select-defaut .router-hint {
+  margin: 0;
+}
+/* Ouvert VERS LE BAS, la bulle d'état (erreur, enregistrement) passe sous le bouton : au-dessus,
+   elle couvrait le titre de la conversation. */
+.model-select-shell.is-ouverture-bas .model-select-status:not(:empty) {
+  top: calc(100% + 5px);
+  bottom: auto;
   right: auto;
   left: 0;
-  /* La matrice fait 600px : dans une fenetre etroite, la colonne de droite sortait de
-     l'ecran (constate le 2026-09-12). On borne sur la largeur reellement visible, et le
-     recadrage JS (useClampDansFenetre) ramene le reste dans le cadre. */
-  max-width: calc(100vw - 24px);
-  width: min(600px, calc(100vw - 24px));
 }
 
 /* MODE AUTO DU FIL — bouton de la barre de saisie, distinct du réglage global de la liste.

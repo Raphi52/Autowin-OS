@@ -2,6 +2,7 @@ import { rappelSansDejaEnvoye } from './rappel-conversations'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
 import {
   deciderRejeuDeChat,
+  deciderRepliApresRefus,
   dormirAnnulable,
   estCrashDExecutionDuCli
 } from './chat-rejeu-surcharge'
@@ -684,7 +685,7 @@ const REPARATION_BUDGET_CARACTERES = 20_000_000
  *
  * Ce que fait Autowin : quand UNE seule `}` manque et qu'il n'existe qu'UNE facon de la placer qui
  * donne une commande executable, l'intention est univoque — on l'execute, comme
- * `commandeRecupereeApresAppelIllisible`. On essaie CHAQUE position hors chaine : deux lectures
+ * `recupererCmdFermeeEnOutilNatif` (providers/claude.ts). On essaie CHAQUE position hors chaine : deux lectures
  * differentes (une `}` oubliee au milieu d'`args` imbriques) = ambigu -> `undefined`, le bloc reste
  * `invalid` et la relance s'en charge. Rien d'autre n'est repare (guillemet, virgule, `]`).
  */
@@ -1532,6 +1533,13 @@ export class AgentPilot {
      * ouverte — sinon la 2e itération repart à blanc (voir le bloc d'options plus bas).
      */
     let sessionEnCours = resumeSessionId
+    /**
+     * REPLI APRES UN REFUS DU FILTRE DE SECURITE (`deciderRepliApresRefus`) : joue UNE fois par tour.
+     * Le modele voisin reste celui du tour une fois choisi : le message refuse est desormais dans la
+     * session, revenir au modele qui l'a refuse a l'iteration suivante rejouerait le meme refus.
+     */
+    let repliApresRefusTente = false
+    let modeleApresRefus: string | undefined
     // Combien de segments de `convo` ont DÉJÀ été expédiés dans ce tour (voir la construction du
     // message plus bas) : au-delà, la session reprise les porte déjà.
     let segmentsDejaEnvoyes = 0
@@ -1631,7 +1639,7 @@ export class AgentPilot {
      */
     const cleEtat = conversationId ?? ''
     const snapshotPrecedent = this.dernierEtatPousse.get(cleEtat)
-    const blocsDuTour = buildTurnMessageBlocks({
+    const partiesDuMessage = {
       snapshot,
       ...(snapshotPrecedent !== undefined ? { snapshotPrecedent } : {}),
       brainContext,
@@ -1643,7 +1651,8 @@ export class AgentPilot {
       lastUserMessage: lastUserMessage?.content,
       compteRenduNonVu,
       tourCoupePourCeMessage
-    })
+    }
+    const blocsDuTour = buildTurnMessageBlocks(partiesDuMessage)
     // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
     this.dernierEtatPousse.set(cleEtat, snapshot)
     const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
@@ -2042,7 +2051,7 @@ export class AgentPilot {
           ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
-      const contextBlocks = contextBlocksDuTour()
+      let contextBlocks = contextBlocksDuTour()
       let prompt = this.registry.describePrompt(
         provider,
         messages,
@@ -2067,7 +2076,7 @@ export class AgentPilot {
         system,
         systemBlocks,
         contextBlocks,
-        model: binding.model,
+        model: modeleApresRefus ?? binding.model,
         reasoningEffort: binding.reasoningEffort,
         ...providerLimits,
         /**
@@ -2276,6 +2285,72 @@ export class AgentPilot {
               name: provider,
               text: `${message} — session du fournisseur abandonnee, nouvel essai sans reprise`,
               data: { attempt, maxAttempts: 2 }
+            })
+            continue
+          }
+          /*
+           * REFUS DU FILTRE DE SECURITE (conv-239, tour d9a2ca62) : l'adaptateur le marque NON
+           * rejouable — il est facture — et la ligne suivante abandonnait le tour. Le rejouer a
+           * l'identique echouerait pareil : on suit le conseil du CLI (« in a new session or change
+           * your model »), UNE fois par tour. Politique et mesure : `deciderRepliApresRefus`.
+           */
+          const modeleRefuse =
+            options.model ?? (error instanceof ProviderCallError ? error.resolvedModel : undefined)
+          const repliRefus = deciderRepliApresRefus({
+            message,
+            ...(modeleRefuse ? { modele: modeleRefuse } : {}),
+            // Seulement au 1er appel du tour : apres, la session porte deja le travail de ce tour
+            // (lectures natives comprises), et la lacher le perdrait.
+            sessionHeriteeLachable:
+              i === 0 && Boolean(sessionEnCours) && sessionEnCours === resumeSessionId,
+            dejaTente: repliApresRefusTente
+          })
+          if (repliRefus) {
+            repliApresRefusTente = true
+            if (repliRefus.mode === 'modele') {
+              modeleApresRefus = repliRefus.modele
+              options.model = repliRefus.modele
+            } else {
+              sessionEnCours = undefined
+              delete options.resumeSessionId
+              if (conversationId) {
+                this.chatSessions.delete(conversationId)
+                this.forgetPersistedChatSession(conversationId)
+              }
+              // Le message d'une reprise est AMPUTE de l'historique (il vivait dans la session) :
+              // une session neuve doit recevoir le fil entier, et l'etat entier au lieu d'un diff.
+              const blocsSansReprise = buildTurnMessageBlocks({
+                ...partiesDuMessage,
+                resumeSessionId: undefined
+              })
+              for (const bloc of blocsSansReprise) nomsDuTour.set(bloc.text, bloc.name)
+              convo.splice(0, blocsDuTour.length, ...blocsSansReprise.map((bloc) => bloc.text))
+              segmentsDejaEnvoyes = convo.length
+              messages[0] = {
+                ...messages[0],
+                content: `${convo.map(baliserRelanceAutomatique).join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`
+              }
+              contextBlocks = contextBlocksDuTour()
+              options.contextBlocks = contextBlocks
+            }
+            if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
+            attempt += 1
+            emit({
+              kind: 'retry',
+              iteration: i,
+              name: provider,
+              text:
+                `${message.split('\n')[0]} — refus du filtre de sécurité` +
+                (modeleRefuse ? ` de ${modeleRefuse}` : '') +
+                (repliRefus.mode === 'modele'
+                  ? `, nouvel essai sur ${repliRefus.modele}`
+                  : ', nouvel essai dans une session neuve avec tout le fil'),
+              data: {
+                attempt,
+                maxAttempts: attempt + 1,
+                repliApresRefus: repliRefus.mode,
+                ...(repliRefus.mode === 'modele' ? { modele: repliRefus.modele } : {})
+              }
             })
             continue
           }

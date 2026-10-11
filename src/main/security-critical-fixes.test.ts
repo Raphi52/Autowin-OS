@@ -549,7 +549,25 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:causalTrace:charges` ('Causal trace payloads') — les charges des seuls evenements nommes
     //     de cette conversation, aux seuls genres demandes ; listes bornees (500 ids, 32 genres) et
     //     refusees si mal formees. N'ecrit rien. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(215)
+    // MISE A JOUR 2026-10-11 (conv-239) — 215 -> 216. UN canal, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'SetConversationModel')` (`src/main/ipc/roles.ts`) :
+    //   `os:conversations:setModel` — memorise le modele d'UNE conversation. Il ECRIT, mais rien ne
+    //   SORT du poste : l'id doit etre une chaine non vide, le couple fournisseur/modele/effort est
+    //   VALIDE contre le catalogue (`validerModeleDeConversation`) avant toute ecriture, `null` est
+    //   le seul autre cas accepte (effacer), et aucun chemin n'est construit depuis l'appel.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-11 (conv-259) — 216 -> 219. TROIS canaux, chacun garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender` :
+    //   `prod:autorite:proposition` ('Protection de production', `index.ts`) — PROPOSE la liste de
+    //     production depuis le catalogue SQL. LECTURE SEULE : il lit les bases exploitees et la
+    //     declaration actuelle, rend un CONTENU a recopier, et n'ecrit AUCUN fichier — la declaration
+    //     reste ecrite par un humain (`prod-autorite-depuis-catalogue.ts`). Aucun argument recu.
+    //   `os:petitesTaches` ('PetitesTaches') et `os:setPetitesTaches` ('SetPetitesTaches')
+    //     (`src/main/ipc/roles.ts`) — le modele des petites taches, ajoutes par un autre travail du
+    //     meme jour : lecture de l'etat, et ecriture d'un binding VALIDE contre le catalogue
+    //     (`assertRuntimeBindingAvailable`) avant toute ecriture ; `null` efface.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(219)
     expect(unguarded).toEqual([])
   })
 

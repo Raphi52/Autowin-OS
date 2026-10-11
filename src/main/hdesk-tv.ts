@@ -439,6 +439,120 @@ export function agirHdesk(racine: string, g: GesteTv): Promise<ResultatGeste> {
  */
 export const BASCULE_MAX_SECONDES = 120
 
+/**
+ * FERMER L'APP D'UN BUREAU CACHE (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : scripts/hdesk-fermer.ps1
+ * ferme PAR BUREAU, jamais par nom, et refuse le bureau d'une autre conversation. Codes du script :
+ * 0 ferme / deja ferme · 1 entree invalide · 2 aucun bureau a ce nom · 5 autre conversation · 6 survivants.
+ */
+export interface DemandeFermeture {
+  id: string
+  conversationId: string
+  /** Attente de la fermeture douce (WM_CLOSE) avant l'arret force, 1 a 30 s. Defaut du script : 5. */
+  delaiDouxSecondes?: number
+}
+
+export interface ResultatFermeture {
+  /** Le script a rendu 0 : plus rien ne vit dans ce bureau (ou rien n'y vivait deja). */
+  ok: boolean
+  code: number | null
+  id?: string
+  ferme?: boolean
+  dejaFerme?: boolean
+  fermesDoucement?: number[]
+  forces?: number[]
+  survivants?: number[]
+  epargnes?: Array<{ pid: number; motif: string }>
+  ficheRetiree?: boolean
+  conversationOccupante?: string
+  erreur?: string
+}
+
+/** Arguments PowerShell de la fermeture ; leve si une entree est invalide (rien n'est lance). */
+export function argumentsFermer(racine: string, d: DemandeFermeture): string[] {
+  if (typeof d?.id !== 'string' || !ID_BUREAU.test(d.id))
+    throw new Error('Identifiant de bureau invalide.')
+  if (typeof d.conversationId !== 'string' || !ID_BUREAU.test(d.conversationId))
+    throw new Error('Conversation invalide : impossible de savoir quels bureaux sont les tiens.')
+  const args = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    join(racine, 'scripts', 'hdesk-fermer.ps1'),
+    '-Id',
+    d.id,
+    '-Conversation',
+    d.conversationId
+  ]
+  if (d.delaiDouxSecondes !== undefined) {
+    if (
+      !Number.isInteger(d.delaiDouxSecondes) ||
+      d.delaiDouxSecondes < 1 ||
+      d.delaiDouxSecondes > 30
+    )
+      throw new Error('Delai doux invalide : un entier de 1 a 30 secondes.')
+    args.push('-DelaiDouxSecondes', String(d.delaiDouxSecondes))
+  }
+  return args
+}
+
+/** Lit la DERNIERE ligne JSON de la sortie du script ; le code de sortie fait foi pour `ok`. */
+export function resultatFermeture(out: string, code: number | null): ResultatFermeture {
+  for (const l of String(out || '')
+    .split(/\r?\n/)
+    .reverse()) {
+    const t = l.trim()
+    if (!t.startsWith('{')) continue
+    try {
+      return { ...(JSON.parse(t) as Omit<ResultatFermeture, 'ok' | 'code'>), ok: code === 0, code }
+    } catch {
+      /* ligne non JSON : on continue */
+    }
+  }
+  return {
+    ok: false,
+    code,
+    erreur: `hdesk-fermer.ps1 n'a rendu aucun resultat lisible (code ${code}).`
+  }
+}
+
+export function fermerHdesk(racine: string, d: DemandeFermeture): Promise<ResultatFermeture> {
+  let args: string[]
+  try {
+    args = argumentsFermer(racine, d)
+  } catch (e) {
+    return Promise.resolve({ ok: false, code: null, erreur: (e as Error).message })
+  }
+  return new Promise((resolve) => {
+    // 60 s : delai doux (30 s max) + arret force (3 s) + enumeration des processus, avec marge.
+    execFile('powershell.exe', args, { windowsHide: true, timeout: 60_000 }, (err, out) => {
+      const code = err
+        ? typeof (err as { code?: unknown }).code === 'number'
+          ? (err as { code: number }).code
+          : null
+        : 0
+      resolve(resultatFermeture(String(out), code))
+    })
+  })
+}
+
+/**
+ * Fermeture de FIN DE RUN (dependance `fermerBureauCache` de l'orchestrateur) : PowerShell n'est lance
+ * que si le bureau a une fiche au registre. La plupart des runs n'ouvrent aucune app ; lancer un
+ * PowerShell par run pour lire « aucun bureau a ce nom » (code 2) serait du bruit. `undefined` = rien
+ * a fermer.
+ */
+export function fermerBureauCacheSiOuvert(
+  racine: string,
+  d: DemandeFermeture,
+  registre = join(process.env.LOCALAPPDATA ?? tmpdir(), 'autowin-hdesk'),
+  fermer: (racine: string, d: DemandeFermeture) => Promise<ResultatFermeture> = fermerHdesk
+): Promise<ResultatFermeture | undefined> {
+  if (typeof d?.id !== 'string' || !ID_BUREAU.test(d.id)) return Promise.resolve(undefined)
+  if (!existsSync(join(registre, `${d.id}.json`))) return Promise.resolve(undefined)
+  return fermer(racine, d)
+}
+
 export function argumentsBascule(racine: string, id: string, maxSecondes = BASCULE_MAX_SECONDES): string[] {
   if (typeof id !== 'string' || !ID_BUREAU.test(id)) throw new Error('Identifiant de bureau invalide.')
   const max = Math.min(600, Math.max(5, Math.round(Number(maxSecondes) || BASCULE_MAX_SECONDES)))

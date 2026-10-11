@@ -36,6 +36,7 @@ import {
   insererDictee,
   type EtatDictee
 } from './composer-dictee'
+import { Spinner } from './Spinner'
 
 /** Où le volume de capture est mémorisé : un micro trop faible doit se régler UNE fois, pas à chaque dictée. */
 const CLE_GAIN_DICTEE = 'autowin.dictee.gain'
@@ -643,7 +644,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               }
               title={
                 dicteeInstallation
-                  ? 'Installation de la reconnaissance vocale en cours…'
+                  ? 'Installation de la reconnaissance vocale en cours'
                   : dicteeInstallee === false
                   ? DICTEE_NON_INSTALLEE
                   : (dicteeErreur ??
@@ -652,7 +653,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       : 'Dicter au micro (Whisper local)'))
               }
             >
-              {dicteeEtat === 'transcription' || dicteeInstallation ? (
+              {dicteeInstallation ? (
+                // L'installation dure : l'atome animé dit « ça bosse », comme partout ailleurs.
+                <Spinner size={15} />
+              ) : dicteeEtat === 'transcription' ? (
                 <IconeTranscription />
               ) : dicteeEtat === 'ecoute' ? (
                 <IconeArret />

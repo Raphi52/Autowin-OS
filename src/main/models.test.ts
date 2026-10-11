@@ -1,8 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  discoverImportedModels,
+  findModel,
+  loadCachedImportedModels
+} from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
 /**
@@ -65,10 +70,10 @@ describe('catalogue Agents dynamique', () => {
       'max'
     ])
     expect(models.find((model) => model.model === 'claude-fable-5')?.label).toBe(
-      'Claude Fable 5 · CLI'
+      'Claude Fable 5'
     )
     expect(models.find((model) => model.model === 'claude-opus-4-8')?.label).toBe(
-      'Claude Opus 4.8 · CLI'
+      'Claude Opus 4.8'
     )
   })
 
@@ -167,7 +172,7 @@ describe('catalogue Agents dynamique', () => {
     expect(sonnet55).toMatchObject({
       provider: 'claude',
       model: 'claude-sonnet-5-5',
-      label: 'Claude Sonnet 5.5 · CLI',
+      label: 'Claude Sonnet 5.5',
       defaultReasoningEffort: 'high'
     })
     expect(sonnet55?.reasoningEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
@@ -177,9 +182,9 @@ describe('catalogue Agents dynamique', () => {
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
     // Un id daté SANS mineure s'affiche avec sa date entre parenthèses, comme les autres snapshots.
     const libelle = (id: string): string | undefined => models.find((m) => m.model === id)?.label
-    expect(libelle('claude-opus-4-20250514')).toBe('Claude Opus 4 (20250514) · CLI')
-    expect(libelle('claude-sonnet-4-20250514')).toBe('Claude Sonnet 4 (20250514) · CLI')
-    expect(libelle('claude-haiku-4-5-20251001')).toBe('Claude Haiku 4.5 (20251001) · CLI')
+    expect(libelle('claude-opus-4-20250514')).toBe('Claude Opus 4 (20250514)')
+    expect(libelle('claude-sonnet-4-20250514')).toBe('Claude Sonnet 4 (20250514)')
+    expect(libelle('claude-haiku-4-5-20251001')).toBe('Claude Haiku 4.5 (20251001)')
   })
 })
 
@@ -227,6 +232,36 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(offline.some((m) => m.model === 'claude-opus-4-6')).toBe(false)
     // Le repli n'a pas ré-écrit le cache avec le seed.
     expect(JSON.parse(readFileSync(cachePath, 'utf8')).claude).toHaveLength(2)
+  })
+
+  it('un ancien cache qui nommait « Claude Opus 4.8 · CLI » ressort sans « CLI »', async () => {
+    // Demande utilisateur du 2026-10-11 (conv-237) : « C'est con que les noms de models contiennent
+    // CLI ». Le nom vient de l'id, il est RECALCULÉ à la relecture : un cache écrit avant le
+    // changement ne doit pas ramener l'ancien suffixe.
+    const cachePath = makeCachePath()
+    writeFileSync(
+      cachePath,
+      JSON.stringify({
+        version: 1,
+        discoveredAt: Date.now(),
+        claude: [
+          {
+            id: 'claude/claude-opus-4-8',
+            provider: 'claude',
+            model: 'claude-opus-4-8',
+            label: 'Claude Opus 4.8 · CLI',
+            reasoningEfforts: ['high'],
+            defaultReasoningEffort: 'high'
+          }
+        ]
+      }),
+      'utf8'
+    )
+
+    const offline = await discoverImportedModels(deadFetch as unknown as typeof fetch, cachePath, noCliIds)
+    expect(offline.find((m) => m.model === 'claude-opus-4-8')?.label).toBe('Claude Opus 4.8')
+    expect(loadCachedImportedModels(cachePath).map((m) => m.label)).toEqual(['Claude Opus 4.8'])
+    expect(offline.some((m) => /\bCLI\b/.test(m.label))).toBe(false)
   })
 
   it('étiquette l’alias avec la meilleure version du catalogue final, cache inclus', async () => {
@@ -281,7 +316,7 @@ describe('résolution des alias par famille via findModel', () => {
       id: `claude/${model}`,
       provider: 'claude',
       model,
-      label: `${model} · CLI`,
+      label: `${model}`,
       reasoningEfforts: ['high'],
       defaultReasoningEffort: 'high'
     })
