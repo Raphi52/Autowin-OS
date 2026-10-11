@@ -89,7 +89,7 @@ describe('guet du relais (claude.ts) — guetterSortieCertifiee', () => {
     expect(lectures).toBeGreaterThan(1)
   })
 
-  it("ne signale plus rien une fois arrêté", async () => {
+  it('ne signale plus rien une fois arrêté', async () => {
     const sorties: number[] = []
     const arreter = guetterSortieCertifiee(journal, (code) => sorties.push(code), 5)
     arreter()

@@ -12,8 +12,26 @@
  * par le run — jamais `add -A`, qui emporterait le travail non relu d'autrui.
  */
 
-/** Exécute une commande git et rend sa sortie. Injectable → testable contre un vrai dépôt. */
-export type GitRunner = (args: string[], cwd: string) => Promise<string>
+/**
+ * Exécute une commande git et rend sa sortie. Injectable → testable contre un vrai dépôt.
+ * `env` s'ajoute à l'environnement du processus, pour CETTE commande seulement.
+ */
+export type GitRunner = (
+  args: string[],
+  cwd: string,
+  options?: { env?: Record<string, string> }
+) => Promise<string>
+
+/**
+ * L'interrupteur « Enchaînement auto » sur ON VAUT ACCORD de publier sur la branche courante
+ * (conv-267, 2026-10-11, choix utilisateur : « Interrupteur ON = mon accord : publie directement sur
+ * main, sans PR »). Le garde-fou agent du dépôt (`.githooks/pre-push`) refuse tout push de l'app sur
+ * main et nomme lui-même son exception assumée : `ALLOW_MAIN_PUSH=1`. Sans elle, mesuré ce jour-là :
+ * 26 branches auto/… poussées, 0 PR ouverte (`gh` absent), main distant figé depuis 02:22.
+ * Un dépôt dont le hook ignore cette variable n'en est pas affecté ; un refus du DISTANT (branche
+ * protégée côté serveur) reste un refus, et l'enchaînement retombe sur la branche dédiée.
+ */
+const ACCORD_PUSH_DIRECT = { ALLOW_MAIN_PUSH: '1' }
 
 export interface AutoCloseInput {
   repo: string
@@ -298,7 +316,9 @@ async function publishRunCommits(input: {
       if (courante && courante !== 'HEAD') {
         base = courante
         try {
-          await runGit(['push', 'origin', `${publishedSha}:refs/heads/${courante}`], repo)
+          await runGit(['push', 'origin', `${publishedSha}:refs/heads/${courante}`], repo, {
+            env: ACCORD_PUSH_DIRECT
+          })
           return { status: 'pushed', branch: courante, files: files.length, mode: 'direct' }
         } catch (error) {
           directRefused = (error instanceof Error ? error.message : String(error)).slice(0, 300)
@@ -463,8 +483,21 @@ export async function defaultGitRunner(): Promise<GitRunner> {
   const { execFile } = await import('node:child_process')
   const { promisify } = await import('node:util')
   const exec = promisify(execFile)
-  return async (args, cwd) => (await exec('git', args, { cwd, windowsHide: true })).stdout
+  return async (args, cwd, options) =>
+    (
+      await exec('git', args, {
+        cwd,
+        windowsHide: true,
+        // Le diff entier est lu pour y chercher un secret : le plafond par défaut d'execFile (1 Mo)
+        // faisait tomber toute la publication d'un gros changement (run-2be0320894d3-1, 2026-10-11).
+        maxBuffer: PLAFOND_SORTIE_GIT,
+        ...(options?.env ? { env: { ...process.env, ...options.env } } : {})
+      })
+    ).stdout
 }
+
+/** 256 Mo : au-delà, la publication échoue en le disant plutôt que d'épuiser la mémoire. */
+const PLAFOND_SORTIE_GIT = 256 * 1024 * 1024
 
 export interface AutoCloseReport {
   runId: string

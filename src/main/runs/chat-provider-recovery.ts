@@ -59,8 +59,9 @@ export async function waitForRecoverableChatProviderExit(
   /*
    * LECTURES ASYNCHRONES : cette boucle tourne toutes les 250 ms tant qu'un tour de chat repris
    * attend son CLI. En synchrone (`readFileSync` du recu + `statSync` du journal), chaque lenteur
-   * du disque gelait la fenetre — `gels.jsonl` 2026-10-11 : 3 129 ms sous `ipc:os:conversations`,
-   * `statSync` 1 019 ms, appelant `waitForRecoverableChatProviderExit`.
+   * du disque gelait la fenetre — `gels.jsonl` 2026-10-11 : `readFileSync` du recu 3 129 ms dans
+   * cette boucle (sous `ipc:os:conversations`), et `statSync` 1 019 ms dans
+   * `providerJournalActivityAt`.
    */
   const activityAt = options.activityAt ?? providerJournalActivityAtAsync
   const readExitCode = options.readExitCode ?? survivableExitCodeAsync
@@ -75,7 +76,10 @@ export async function waitForRecoverableChatProviderExit(
   while (!options.signal.aborted) {
     const exitCode = await readExitCode(journalPath)
     if (exitCode !== undefined) return { kind: 'exit', exitCode }
-    if (now() - (await activityAt(journalPath, options.fallbackActivityAt ?? now())) > maxInactivityMs)
+    if (
+      now() - (await activityAt(journalPath, options.fallbackActivityAt ?? now())) >
+      maxInactivityMs
+    )
       return { kind: 'stale' }
     await wait(pollMs)
   }

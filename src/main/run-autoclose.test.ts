@@ -9,6 +9,7 @@ import {
   autoCloseRun,
   captureCloseBaseline,
   closeGreenRunOnDisk,
+  defaultGitRunner,
   detectSecret,
   parsePorcelainPaths,
   projectPublicationNeedsRetry,
@@ -699,5 +700,43 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
       openPr: async () => { throw new Error('gh absent') }
     })
     expect(res).toMatchObject({ status: 'pushed', branch: 'auto/r3', mode: 'pr', prError: 'gh absent' })
+  })
+
+  // conv-267 (2026-10-11), choix utilisateur : « Interrupteur ON = mon accord : publie directement
+  // sur main, sans PR ». Le garde-fou agent de .githooks/pre-push refusait CHAQUE push direct de
+  // l'app (26 branches auto/… poussées, 0 PR ouverte faute de `gh`, main distant figé à 02:22).
+  it('interrupteur ON = accord : le garde-fou agent du dépôt (pre-push) laisse passer le push direct', async () => {
+    const { repo, remote } = await repoWithRemote()
+    // Même contrat que .githooks/pre-push : seule la branche par défaut est refusée, sauf avec
+    // l'exception nommée ALLOW_MAIN_PUSH=1 ; une branche auto/… passe.
+    writeFileSync(
+      join(repo, '.git', 'hooks', 'pre-push'),
+      '#!/bin/sh\nbloque=0\nwhile read l ls r rs; do [ "$r" = refs/heads/travail ] && bloque=1; done\n' +
+        '[ "$bloque" = 1 ] && [ "$ALLOW_MAIN_PUSH" != "1" ] && { echo "Push direct refuse" >&2; exit 1; }\nexit 0\n',
+      { mode: 0o755 }
+    )
+    writeFileSync(join(repo, 'd.ts'), 'd\n')
+    const openPr = vi.fn(async () => 'PR 9')
+    const res = await autoCloseRun({
+      repo, branch: 'auto/r4', message: 'm', runGit: await defaultGitRunner(), direct: true, openPr
+    })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+    expect(openPr).not.toHaveBeenCalled()
+    const local = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim()
+    const distant = (await run('git', ['rev-parse', 'travail'], { cwd: remote })).stdout.trim()
+    expect(distant).toBe(local)
+  })
+})
+
+// 2026-10-11 16:06, run-2be0320894d3-1 : « stdout maxBuffer length exceeded » — le diff lu pour
+// chercher un secret dépassait le plafond par défaut d'execFile (1 Mo) et toute la publication tombait.
+describe('defaultGitRunner — gros changement', () => {
+  it('publie un changement de plus de 1 Mo', async () => {
+    const { repo } = await repoWithRemote()
+    writeFileSync(join(repo, 'gros.txt'), 'ligne de texte ordinaire\n'.repeat(100_000))
+    const res = await autoCloseRun({
+      repo, branch: 'auto/r5', message: 'm', runGit: await defaultGitRunner(), direct: true
+    })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
   })
 })
