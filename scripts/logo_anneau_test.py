@@ -43,15 +43,16 @@ else:
     # --- le dessin --------------------------------------------------------------------------------
     image = logo.dessiner_anneau(64)
     verifie(image.size == (64, 64) and image.mode == "RGBA", "un carre RGBA de la taille demandee")
-    verifie(image.getpixel((32, 32)) == (*logo.COEUR, 255), "le coeur est sombre et OPAQUE")
+    # « pas de rond noir au milieu, jamais — l'icone c'est un cercle colore, c'est tout »
+    # (2026-10-11, conv-228) : le centre est TRANSPARENT, partout.
+    verifie(image.getpixel((32, 32))[3] == 0, "le centre de l'anneau est TRANSPARENT, jamais un rond sombre")
     verifie(image.getpixel((0, 0))[3] == 0, "hors du cercle, le fond est TRANSPARENT")
     # Milieu de l'epaisseur, a 3 h (90 deg) : le violet.
     rayon = 64 * logo.REMPLISSAGE / 2
     x = round(32 + rayon * (1 + logo.TROU) / 2)
     verifie(proche(image.getpixel((x, 32))[:3], logo.couleur(90), 12), "a 3 h l'anneau est violet")
     verifie(image.getpixel((x, 32))[3] == 255, "l'epaisseur de l'anneau est opaque")
-    sans_coeur = logo.dessiner_anneau(64, coeur=False)
-    verifie(sans_coeur.getpixel((32, 32))[3] == 0, "coeur=False laisse le trou transparent")
+    verifie(not hasattr(logo, "COEUR"), "aucune couleur de coeur ne doit subsister : le centre est vide")
 
     # --- les icones du depot SONT ce dessin ---------------------------------------------------------
     # Sinon une icone garde l'ancien atome sans que personne ne le voie avant le menu Demarrer.
@@ -61,12 +62,16 @@ else:
         centre = im.getpixel((cote // 2, cote // 2))
         r = cote * logo.REMPLISSAGE / 2 * (1 + logo.TROU) / 2
         trois_heures = im.getpixel((round(cote / 2 + r), cote // 2))
-        return proche(centre[:3], logo.COEUR, 3) and proche(trois_heures[:3], logo.couleur(90), 16)
+        return centre[3] == 0 and proche(trois_heures[:3], logo.couleur(90), 16)
 
     pngs = [RACINE / p for p in ("resources/icon.png", "build/icon.png", "resources/autowin-os-dev.png")]
     for png in pngs:
         verifie(est_l_anneau(png), f"{png.relative_to(RACINE)} doit etre le logo anneau")
     verifie(len({p.read_bytes() for p in pngs}) == 1, "les trois PNG du produit doivent etre IDENTIQUES")
+    rail = RACINE / "src/renderer/src/assets/autowin-logo-anneau.png"
+    verifie(rail.is_file() and est_l_anneau(rail), "le logo de l'en-tete de la barre laterale doit etre l'anneau")
+    verifie(rail.is_file() and Image.open(rail).width == logo.TAILLE_LOGO_RAIL,
+            "le logo de l'en-tete est rendu a 4x ses 38 px CSS, pour rester net sur un ecran haute densite")
 
     for relatif in ("build/icon.ico", "resources/autowin-os-dev.ico"):
         donnees = (RACINE / relatif).read_bytes()
@@ -81,8 +86,8 @@ else:
             ico.size = (cote, cote)
             ico.load()
             cadre = ico.convert("RGBA")
-            verifie(proche(cadre.getpixel((cote // 2, cote // 2))[:3], logo.COEUR, 6),
-                    f"{relatif} {cote} px : le coeur sombre doit rester visible")
+            verifie(cadre.getpixel((cote // 2, cote // 2))[3] == 0,
+                    f"{relatif} {cote} px : le centre doit etre TRANSPARENT (aucun rond noir)")
             ico = Image.open(RACINE / relatif)
     verifie((RACINE / "build/icon.ico").read_bytes() == (RACINE / "resources/autowin-os-dev.ico").read_bytes(),
             "l'icone Dev et l'icone du paquet sont le MEME fichier")
