@@ -360,9 +360,11 @@ import { filterNativePreflight, readNativePreflight } from './activity/native-pr
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import {
+  releverDatesDesJournaux,
   resumeActionFor,
   runIsProducing,
   runJournalProgressMark,
+  sonderJournauxDuRun,
   waitUntilRunCanResume
 } from './runs/run-reattach'
 import {
@@ -5040,29 +5042,30 @@ app.whenReady().then(async () => {
       }
 
       void waitUntilRunCanResume(
-        () => {
+        // Sondée CHAQUE SECONDE : le disque est relevé sans bloquer (voir `sonderJournauxDuRun`).
+        async () => {
           const latest = os
             .resumableOrchestrations()
             .find((candidate) => candidate.runId === resumableRun.runId)
-          return latest
-            ? resumeActionFor(
-                latest,
-                defaultProcessIdentity,
-                Date.now(),
-                persistedJournalLastWriteMs
-              )
-            : 'ignorer'
+          if (!latest) return 'ignorer'
+          const sonde = await sonderJournauxDuRun(latest)
+          return resumeActionFor(
+            latest,
+            defaultProcessIdentity,
+            Date.now(),
+            sonde.lastWriteMs,
+            sonde.exitCodeOf
+          )
         },
         undefined,
         undefined,
         // Le plafond compte le SILENCE du journal : un doublon qui écrit encore reste observé.
-        () =>
-          runJournalProgressMark(
-            os
-              .resumableOrchestrations()
-              .find((candidate) => candidate.runId === resumableRun.runId),
-            persistedJournalLastWriteMs
-          )
+        async () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return runJournalProgressMark(latest, await releverDatesDesJournaux(latest))
+        }
       ).then((action) => {
         const latest = os
           .resumableOrchestrations()
@@ -5176,30 +5179,33 @@ app.whenReady().then(async () => {
     }
     if (reprise === 'rattacher') {
       void waitUntilRunCanResume(
-        () => {
+        // Sondée CHAQUE SECONDE : le disque est relevé sans bloquer. Les `statSync` du journal et
+        // `readFileSync` du reçu `.exit.json` faits ici ont figé la fenêtre jusqu'à 6,6 s
+        // (gels.jsonl 2026-10-11 15:23-15:24). Voir `sonderJournauxDuRun`.
+        async () => {
           const latest = os
             .resumableOrchestrations()
             .find((candidate) => candidate.runId === resumableRun.runId)
-          return latest
-            ? resumeActionFor(
-                latest,
-                defaultProcessIdentity,
-                Date.now(),
-                persistedJournalLastWriteMs
-              )
-            : 'ignorer'
+          if (!latest) return 'ignorer'
+          const sonde = await sonderJournauxDuRun(latest)
+          return resumeActionFor(
+            latest,
+            defaultProcessIdentity,
+            Date.now(),
+            sonde.lastWriteMs,
+            sonde.exitCodeOf
+          )
         },
         undefined,
         undefined,
         // Le plafond compte le SILENCE du journal, pas la durée de l'étape : une construction de
         // plus de 10 min n'est plus déclarée « interrompue » en plein travail (conv-115, 2026-10-09).
-        () =>
-          runJournalProgressMark(
-            os
-              .resumableOrchestrations()
-              .find((candidate) => candidate.runId === resumableRun.runId),
-            persistedJournalLastWriteMs
-          )
+        async () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return runJournalProgressMark(latest, await releverDatesDesJournaux(latest))
+        }
       ).then(async (action) => {
         const latest = os
           .resumableOrchestrations()

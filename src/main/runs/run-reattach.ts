@@ -4,7 +4,8 @@ import {
   type OrchestrationRunState
 } from './orchestration-state'
 import { existsSync, readFileSync } from 'node:fs'
-import { survivableExitCode } from './stdout-journal'
+import { stat as statAsync } from 'node:fs/promises'
+import { survivableExitCode, survivableExitCodeAsync } from './stdout-journal'
 import {
   claudeToolEvidenceKind,
   claudeToolResultText,
@@ -103,8 +104,15 @@ function hasOrphanedActiveReservation(state: ResumableRunView): boolean {
   )
 }
 
-function hasCertifiedRelayExit(agent: { journalPath?: string } | undefined): boolean {
-  return Boolean(agent?.journalPath && survivableExitCode(agent.journalPath) !== undefined)
+/** Lit le reçu de sortie `.exit.json` d'un journal. Par défaut sur le disque ; une décision prise
+ *  dans une boucle reçoit plutôt un relevé fait sans bloquer (`sonderJournauxDuRun`). */
+type LectureSortie = (journalPath: string) => number | undefined
+
+function hasCertifiedRelayExit(
+  agent: { journalPath?: string } | undefined,
+  exitCodeOf: LectureSortie = survivableExitCode
+): boolean {
+  return Boolean(agent?.journalPath && exitCodeOf(agent.journalPath) !== undefined)
 }
 
 function hasCertifiedFailedRelayExit(agent: { journalPath?: string } | undefined): boolean {
@@ -119,13 +127,14 @@ function hasCertifiedSuccessfulRelayExit(agent: { journalPath?: string } | undef
 
 function hasUncertainActiveAgent(
   state: Pick<OrchestrationRunState, 'agents'>,
-  liveness: RunLiveness
+  liveness: RunLiveness,
+  exitCodeOf: LectureSortie = survivableExitCode
 ): boolean {
   return (state.agents ?? []).some(
     (agent, index) =>
       agent.active !== false &&
       liveness.agents[index]?.state === 'inconnu' &&
-      !hasCertifiedRelayExit(agent)
+      !hasCertifiedRelayExit(agent, exitCodeOf)
   )
 }
 
@@ -135,14 +144,15 @@ function hasUncertainActiveAgent(
  */
 function hasUnprovenEndedActiveAgent(
   state: Pick<OrchestrationRunState, 'agents'>,
-  liveness: RunLiveness
+  liveness: RunLiveness,
+  exitCodeOf: LectureSortie = survivableExitCode
 ): boolean {
   return (state.agents ?? []).some(
     (agent, index) =>
       agent.active !== false &&
       (liveness.agents[index]?.state === 'termine' ||
         liveness.agents[index]?.state === 'pid-recycle') &&
-      !hasCertifiedRelayExit(agent)
+      !hasCertifiedRelayExit(agent, exitCodeOf)
   )
 }
 
@@ -253,6 +263,77 @@ export function runJournalProgressMark(
   return derniere
 }
 
+/** Date de dernière écriture d'un journal, lue sans bloquer. `undefined` = absent ou illisible. */
+export async function dateEcritureJournalAsync(path: string): Promise<number | undefined> {
+  try {
+    return (await statAsync(path)).mtimeMs
+  } catch {
+    return undefined
+  }
+}
+
+function cheminsDesJournaux(
+  state: Pick<OrchestrationRunState, 'agents'> | null | undefined
+): string[] {
+  const chemins = (state?.agents ?? []).map((agent) => agent.journalPath)
+  return [...new Set(chemins.filter((chemin): chemin is string => Boolean(chemin)))]
+}
+
+/** Relève une valeur par journal EN PARALLÈLE et sans bloquer ; rend une lecture synchrone du relevé. */
+async function relever(
+  chemins: string[],
+  lire: (path: string) => Promise<number | undefined>
+): Promise<(path: string) => number | undefined> {
+  const valeurs = new Map(
+    await Promise.all(
+      chemins.map(async (chemin) => [chemin, await lire(chemin).catch(() => undefined)] as const)
+    )
+  )
+  return (path) => valeurs.get(path)
+}
+
+/**
+ * Dates de dernière écriture des journaux d'un run, RELEVÉES SANS BLOQUER, à passer comme
+ * `lastWriteMs` à une décision synchrone (`runJournalProgressMark`, `resumeActionFor`). Un chemin
+ * absent du relevé rend `undefined`, c'est-à-dire « on ne sait pas » — jamais une preuve.
+ */
+export function releverDatesDesJournaux(
+  state: Pick<OrchestrationRunState, 'agents'> | null | undefined,
+  lireDate: (path: string) => Promise<number | undefined> = dateEcritureJournalAsync
+): Promise<(path: string) => number | undefined> {
+  return relever(cheminsDesJournaux(state), lireDate)
+}
+
+export interface SondeJournaux {
+  lastWriteMs: (path: string) => number | undefined
+  exitCodeOf: (path: string) => number | undefined
+}
+
+/**
+ * LES FAITS DISQUE D'UN RUN RATTACHÉ, RELEVÉS SANS TENIR LA BOUCLE D'ÉVÉNEMENTS.
+ *
+ * `waitUntilRunCanResume` redemande chaque seconde l'action de reprise d'un run rattaché.
+ * `resumeActionFor` lisait alors le disque en SYNCHRONE : la date du journal (`statSync`, via
+ * `agentSilenceMs`) et le reçu `.exit.json` (`readFileSync`, via `hasCertifiedRelayExit`). Mesure
+ * (`gels.jsonl`, 2026-10-11 15:23-15:24, disque D: à 261 % d'occupation) : 1,0 s, 3,6 s et 6,6 s de
+ * fenêtre figée sur le `statSync` du journal, 2,3 s sur la lecture du reçu.
+ *
+ * Les deux lectures partent donc dans le pool de libuv AVANT la décision, qui reste synchrone et
+ * inchangée : elle reçoit le relevé au lieu d'aller sur le disque.
+ */
+export async function sonderJournauxDuRun(
+  state: Pick<OrchestrationRunState, 'agents'> | null | undefined,
+  lireDate: (path: string) => Promise<number | undefined> = dateEcritureJournalAsync,
+  lireSortie: (path: string) => Promise<number | undefined> = survivableExitCodeAsync
+): Promise<SondeJournaux> {
+  const chemins = cheminsDesJournaux(state)
+  const [lastWriteMs, exitCodeOf] = await Promise.all([
+    relever(chemins, lireDate),
+    relever(chemins, lireSortie)
+  ])
+  return { lastWriteMs, exitCodeOf }
+}
+
 /**
  * Cet agent produit-il encore, pour de bon ?
  *
@@ -301,7 +382,8 @@ export function resumeActionFor(
   state: ResumableRunView | null | undefined,
   identityOf: ProcessIdentity,
   nowMs = Date.now(),
-  lastWriteMs?: (path: string) => number | undefined
+  lastWriteMs?: (path: string) => number | undefined,
+  exitCodeOf: LectureSortie = survivableExitCode
 ): ResumeAction {
   if (!state || state.terminal) return 'ignorer'
   if (hasOrphanedActiveReservation(state)) return 'bloquer'
@@ -310,8 +392,8 @@ export function resumeActionFor(
     if (lastWriteMs && !runIsProducing(state, nowMs, lastWriteMs)) return 'bloquer'
     return 'rattacher'
   }
-  if (hasUncertainActiveAgent(state, liveness)) return 'rattacher'
-  if (hasUnprovenEndedActiveAgent(state, liveness)) return 'bloquer'
+  if (hasUncertainActiveAgent(state, liveness, exitCodeOf)) return 'rattacher'
+  if (hasUnprovenEndedActiveAgent(state, liveness, exitCodeOf)) return 'bloquer'
   return 'relancer'
 }
 
@@ -492,7 +574,9 @@ export function terminalizeInterruptedPersistedRun(
   if (!orphanedReservation && liveness.working && !staleLive) return state
   if (staleLive) {
     const livePids = (state.agents ?? [])
-      .filter((agent, index) => agent.active !== false && liveness.agents[index]?.state === 'vivant')
+      .filter(
+        (agent, index) => agent.active !== false && liveness.agents[index]?.state === 'vivant'
+      )
       .map((agent) => agent.pid)
       .filter((pid): pid is number => typeof pid === 'number')
     if (
@@ -1103,10 +1187,12 @@ function pauseBeforeLivenessProbe(): Promise<void> {
  * absolu, comme avant.
  */
 export async function waitUntilRunCanResume(
-  readAction: () => ResumeAction,
+  // Les deux sondes peuvent être asynchrones : c'est ce qui permet de relever le disque sans figer
+  // la fenêtre à chaque seconde (voir `sonderJournauxDuRun`).
+  readAction: () => ResumeAction | Promise<ResumeAction>,
   pause: () => Promise<void> = pauseBeforeLivenessProbe,
   maxRattacherProbes = MAX_REATTACH_PROBES,
-  readProgressMark?: () => number | undefined
+  readProgressMark?: () => number | undefined | Promise<number | undefined>
 ): Promise<Exclude<ResumeAction, 'rattacher'>> {
   if (!Number.isSafeInteger(maxRattacherProbes) || maxRattacherProbes < 1) {
     throw new Error('nombre maximal de sondes invalide')
@@ -1114,9 +1200,9 @@ export async function waitUntilRunCanResume(
   let probes = 0
   let derniereEcriture: number | undefined
   for (;;) {
-    const action = readAction()
+    const action = await readAction()
     if (action !== 'rattacher') return action
-    const ecritA = readProgressMark?.()
+    const ecritA = await readProgressMark?.()
     if (ecritA !== undefined) {
       // Le journal a bougé depuis la sonde précédente : l'agent produit, le silence repart de zéro.
       // La première mesure n'est qu'un point de départ, elle ne prouve encore aucune avancée.
