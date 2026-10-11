@@ -179,6 +179,7 @@ import {
   referencesDesPiecesJointes
 } from './store/pieces-jointes-orchestration'
 import type { Message } from './providers/types'
+import { tachesDeFondEnCours } from './providers/taches-de-fond-suivies'
 import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
@@ -478,6 +479,37 @@ export interface PromptSnapshot {
     consigne: string
     /** De quoi reconnaitre les travaux sans relancer le recensement. */
     apercu: Array<{ agentId: string; date: string; fichiers: string[] }>
+  }
+  /**
+   * Commandes de fond qu'Autowin a relancées hors du tour et qui tournent encore. Le CLI repris les
+   * dit « stopped » : c'est SA copie. Sans ce champ, le modèle croyait sa surveillance morte et en
+   * relançait une seconde (conv-253, tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e). Absent quand rien
+   * ne tourne.
+   */
+  tachesDeFondSuiviesParAutowin?: {
+    consigne: string
+    taches: Array<{ conversationId: string; tache: string; commande: string; depuis: string }>
+  }
+}
+
+/** Le champ `tachesDeFondSuiviesParAutowin`, ou rien quand aucune tâche relancée ne tourne. */
+function tachesDeFondPourLePrompt(): Pick<PromptSnapshot, 'tachesDeFondSuiviesParAutowin'> {
+  const taches = tachesDeFondEnCours()
+  if (taches.length === 0) return {}
+  return {
+    tachesDeFondSuiviesParAutowin: {
+      consigne:
+        'Ces commandes de fond ont été relancées par Autowin et TOURNENT encore. Si le CLI te dit ' +
+        'qu’une tâche s’est arrêtée « before the previous session ended », c’est sa copie à lui. ' +
+        'Le résultat de celle d’Autowin reviendra dans ce fil par un tour de reprise automatique : ' +
+        'ne la relance pas, n’en lance pas une seconde pour surveiller la même chose.',
+      taches: taches.map((t) => ({
+        conversationId: t.conversationId,
+        tache: t.tache,
+        commande: t.commande.length > 300 ? `${t.commande.slice(0, 300)}…` : t.commande,
+        depuis: new Date(t.depuis).toISOString()
+      }))
+    }
   }
 }
 
@@ -2292,7 +2324,8 @@ export class AppCommandBus {
               apercu: full.travauxNonPublies
             }
           }
-        : {})
+        : {}),
+      ...tachesDeFondPourLePrompt()
     }
   }
 
