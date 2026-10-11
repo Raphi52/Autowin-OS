@@ -52,12 +52,18 @@ def electron_verrouille(racine: Path) -> bool:
     """Vrai si `electron.exe` du depot ne s'ouvre pas en ecriture : une app tourne encore dessus.
 
     C'est la condition exacte qui a fait echouer `npm install` en EBUSY. L'ouverture ne modifie rien.
+
+    Compte AUSSI les `electron-atome-*.exe` du meme dossier (conv-266) : `logo_anneau.poser_sur_electron`
+    renomme l'exe tenu sous ce nom et pose un electron.exe neuf, donc libre, alors que les processus
+    en cours tournent toujours sur l'ancien.
     """
-    exe = racine / "node_modules" / "electron" / "dist" / "electron.exe"
-    try:
-        with exe.open("r+b"):
-            return False
-    except FileNotFoundError:
-        return False
-    except OSError:
-        return True
+    dist = racine / "node_modules" / "electron" / "dist"
+    for exe in (dist / "electron.exe", *dist.glob("electron-atome-*.exe")):
+        try:
+            with exe.open("r+b"):
+                pass
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return True
+    return False

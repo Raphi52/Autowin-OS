@@ -66,6 +66,26 @@ with tempfile.TemporaryDirectory() as tmp:
     exe.write_bytes(b"")
     verifie(electron_verrouille(r) is False, "electron.exe libre : la reparation peut partir")
 
+    # Conv-266 : `logo_anneau.poser_sur_electron` RENOMME l'exe tenu en `electron-atome-<n>.exe` et
+    # pose un electron.exe neuf, donc LIBRE. Les processus en cours tournent sur l'ancien : une
+    # reinstallation d'Electron buterait dessus (EBUSY), exactement la panne qui videait node_modules.
+    if sys.platform == "win32":
+        import ctypes
+
+        noyau = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        noyau.CreateFileW.restype = ctypes.c_void_p
+        ancien = exe.parent / "electron-atome-1791730503238413200.exe"
+        ancien.write_bytes(b"")
+        # Ouverture SANS partage en ecriture : ce que fait Windows d'un exe en cours d'execution.
+        poignee = noyau.CreateFileW(str(ancien), 0x80000000, 0x1, None, 3, 0x80, None)
+        try:
+            verifie(electron_verrouille(r) is True,
+                    "un ancien electron mis de cote et encore TENU bloque la reparation")
+        finally:
+            noyau.CloseHandle(ctypes.c_void_p(poignee))
+        verifie(electron_verrouille(r) is False, "ancien electron mis de cote mais LIBRE : la reparation peut partir")
+        ancien.unlink()
+
 # Le vrai depot, si l'app tourne : electron.exe DOIT etre vu verrouille (sonde reelle, pas un faux).
 depot = Path(__file__).resolve().parent.parent
 if "--app-ouverte" in sys.argv:
