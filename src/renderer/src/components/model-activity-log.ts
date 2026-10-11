@@ -330,7 +330,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'status',
-        label: ligne ?? 'signe de vie',
+        label: ligne ?? 'action',
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {})
