@@ -13,7 +13,7 @@ import { THEMES, baseDuTheme } from '../theme-mode'
  */
 const lire = (fichier: string): string => readFileSync(new URL(fichier, import.meta.url), 'utf8')
 const PREFIXE = ":root[data-theme='nebuleuse-verre']"
-/** Le bloc propre a Nebuleuse de verre (conv-177), retire de la derivation doree. */
+/** Le bloc propre a Nebuleuse de verre (conv-177). */
 const BLOC_CHANFREIN = /\/\* CADRE-CHANFREIN:DEBUT[\s\S]*?\/\* CADRE-CHANFREIN:FIN \*\/\n/
 
 function selecteursHorsTheme(css: string): string[] {
@@ -312,7 +312,7 @@ describe('theme Nebuleuse de verre', () => {
   // popovers et colonnes du chat. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : remettre un fond
   // `linear-gradient(180deg, rgba(255, 206, 120, ...` ou le jeton lui-meme dans une regle.
   it('ne pose plus de voile or qui part du haut des panneaux', () => {
-    for (const fichier of ['./theme-nebuleuse-verre.css', './theme-nebuleuse-doree.css']) {
+    for (const fichier of ['./theme-nebuleuse-verre.css']) {
       postcss.parse(lire(fichier)).walkDecls((d) => {
         if (!/^(background|background-image|--)/.test(d.prop)) return
         expect(d.value, `${fichier} ${d.prop}`).not.toMatch(/var\(--nv-voile-dore\)/)
@@ -330,8 +330,8 @@ describe('theme Nebuleuse de verre', () => {
    * par les quatre colonnes ET la saisie.
    */
   // Depuis conv-177, Nebuleuse de verre REMPLACE ce cadre par le chanfrein platine (bloc
-  // CADRE-CHANFREIN, teste plus bas) ; l'or qui coule reste la BASE que Nebuleuse doree herite.
-  it('garde en base, pour Nebuleuse doree, le cadre or qui coule vers le blanc', () => {
+  // CADRE-CHANFREIN, teste plus bas) ; l'or qui coule reste la BASE, sous ce bloc.
+  it('garde en base, sous le chanfrein, le cadre or qui coule vers le blanc', () => {
     const regles: postcss.Rule[] = []
     postcss
       .parse(lire('./theme-nebuleuse-verre.css').replace(BLOC_CHANFREIN, ''))
@@ -425,11 +425,10 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   // conv-198 (2026-10-10) : « enlève le halo autour de ce que j'ai sélectionné ». L'onglet ouvert
-  // du menu garde son dégradé, sans lueur autour — dans le verre et dans la dorée qui en dérive.
+  // du menu garde son dégradé, sans lueur autour.
   it('ne met aucun halo autour de l onglet ouvert du menu', () => {
     for (const [fichier, theme] of [
-      ['./theme-nebuleuse-verre.css', 'nebuleuse-verre'],
-      ['./theme-nebuleuse-doree.css', 'nebuleuse-doree']
+      ['./theme-nebuleuse-verre.css', 'nebuleuse-verre']
     ] as const) {
       const actif: Record<string, string> = {}
       postcss.parse(lire(fichier)).walkRules((regle) => {
@@ -477,8 +476,7 @@ describe('theme Nebuleuse de verre', () => {
  * blanc qui s'efface SANS ligne jusqu'au milieu. L'etat se lit au reflet et a l'avion, jamais a la
  * couleur (conv-182 : le bleu reste plein) : survol = reflet plus fort, appui = reflet eteint sans
  * retrecir, rien a envoyer = reflet faible et avion a 50 %. ENTREES QUI DOIVENT FAIRE ECHOUER : la
- * perle or remise, une `opacity` ou un contour or sur le rond vide, une lueur coloree, ou le gel
- * qui fuit dans Nebuleuse doree (elle garde son or, conv-155).
+ * perle or remise, une `opacity` ou un contour or sur le rond vide, ou une lueur coloree.
  */
 describe('Envoyer en gel fondu bleu-rose', () => {
   const ENVOI = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled)`
@@ -530,12 +528,6 @@ describe('Envoyer en gel fondu bleu-rose', () => {
     expect(vide['box-shadow']).toBe('none')
   })
 
-  it('laisse a Nebuleuse doree son or : le gel n y passe pas', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    expect(genererMainDoree()).not.toMatch(
-      /rgba\(255, 255, 255, 0\.4\), rgba\(255, 255, 255, 0\) 60%/
-    )
-  })
 })
 
 /**
@@ -543,8 +535,7 @@ describe('Envoyer en gel fondu bleu-rose', () => {
  * un dome radial et un reflet ovale net en haut ; au survol le reflet s'avive, a l'appui il
  * s'eteint et l'ombre se raccourcit, sans retrecissement. Aucune lueur (ombres noires seulement),
  * deux teintes par degrade (conv-124). Envoyer avait la meme perle en or jusqu'au gel bleu-rose
- * (conv-200, ci-dessus). Nebuleuse doree, derivee de ce fichier, garde sa pastille (conv-155) : le
- * bloc RELIEF-PERLE n'y passe pas.
+ * (conv-200, ci-dessus).
  */
 describe('Stop en perle', () => {
   const STOP = `${PREFIXE} .composer-input-row > .composer-stop:not(:disabled)`
@@ -584,12 +575,6 @@ describe('Stop en perle', () => {
     expect(derniere(STOP)['box-shadow']).toBe('0 2px 3px rgba(0, 0, 0, 0.6)')
   })
 
-  it('laisse a Nebuleuse doree sa pastille : le bloc RELIEF-PERLE ne passe pas', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    const source = lire('./theme-nebuleuse-verre.css')
-    expect(source).toMatch(/RELIEF-PERLE:DEBUT[\s\S]*RELIEF-PERLE:FIN/)
-    expect(genererMainDoree()).not.toMatch(/RELIEF-PERLE:(DEBUT|FIN)|ellipse 52% 28%/)
-  })
 })
 
 /**
@@ -598,8 +583,7 @@ describe('Stop en perle', () => {
  * bas droit coupes a 14 px, seuls les pans coupes allumes (blanc / argent), cotes a 7 %, sur la
  * liste, le fil, le panneau de droite, le menu et la saisie. Entrees qui feraient echouer une copie
  * fausse : un cadre encore dore, une coupe posee sur le fil ou la saisie (elle rognerait leurs
- * menus), une jauge de contexte dont la decoupe d'occupation serait ecrasee, ou le bloc qui fuit
- * dans Nebuleuse doree.
+ * menus), ou une jauge de contexte dont la decoupe d'occupation serait ecrasee.
  */
 describe('Cadre chanfrein platine, coins seuls', () => {
   const derniere = (selecteur: string): Record<string, string> => {
@@ -742,11 +726,6 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     )
   })
 
-  it('laisse a Nebuleuse doree son cadre or qui coule : le bloc CADRE-CHANFREIN ne passe pas', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    expect(lire('./theme-nebuleuse-verre.css')).toMatch(BLOC_CHANFREIN)
-    expect(genererMainDoree()).not.toMatch(/CADRE-CHANFREIN|--nv-chanfrein/)
-  })
 })
 
 /**
@@ -873,12 +852,6 @@ describe('bandeaux du haut du chat en perle d or', () => {
     ).toBe('transparent')
   })
 
-  it('passe aussi dans Nebuleuse doree, a l identique', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    const derivee = genererMainDoree()
-    const dore = decls(derivee, BANDEAU.replace('nebuleuse-verre', 'nebuleuse-doree'))
-    expect(dore).toEqual(decls(lire('./theme-nebuleuse-verre.css'), BANDEAU))
-  })
 })
 
 /**
@@ -886,7 +859,7 @@ describe('bandeaux du haut du chat en perle d or', () => {
  * liseré et enlève le liseré rose en dessous, du coup la capsule ça va pas bien avec le border
  * très angulaire »). Sous le cadre a coins coupes, l'onglet actif est souligne d'un trait de 2 px
  * bleu -> rose, sans pastille ; le filet rose sous la barre disparait. Le reglage vit DANS le bloc
- * CADRE-CHANFREIN : la doree, a coins arrondis, garde sa pastille.
+ * CADRE-CHANFREIN.
  */
 describe('Onglets du panneau de droite : un liseré au lieu de la capsule', () => {
   const ONGLETS = `${PREFIXE} .cosmic-outline .runs-pane`
@@ -916,10 +889,6 @@ describe('Onglets du panneau de droite : un liseré au lieu de la capsule', () =
     expect(dansLeBloc(`${ONGLETS} .workflow-panel-head`)['border-image']).toBe('none')
   })
 
-  it('laisse a Nebuleuse doree sa pastille : rien de ce reglage ne passe dans la derivation', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    expect(genererMainDoree()).not.toContain('.runs-pane .workflow-section-tab')
-  })
 })
 
 /**
@@ -928,7 +897,7 @@ describe('Onglets du panneau de droite : un liseré au lieu de la capsule', () =
  * coupe, le pied n'a plus ni cotes, ni bas, ni coins coupes, ni filets entre les cases : un trait
  * d'1 px en haut, bleu -> rose au repos. Au survol, ce trait redevient gris (regle de base du pied)
  * et seule la portion au-dessus de la case survolee reprend le bleu -> rose. Le reglage vit DANS le
- * bloc du chanfrein : Nebuleuse doree garde sa capsule entiere.
+ * bloc du chanfrein.
  */
 describe('Pied de liste sous le cadre coupe : un seul trait en haut', () => {
   const PIED = `${PREFIXE} .cosmic-outline .conv-pane .conv-foot`
@@ -973,10 +942,6 @@ describe('Pied de liste sous le cadre coupe : un seul trait en haut', () => {
     expect(bloc).not.toContain('--nv-pied-coupe')
   })
 
-  it('laisse a Nebuleuse doree sa capsule entiere : le trait seul ne passe pas dans la derivation', async () => {
-    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
-    expect(genererMainDoree()).not.toContain('.cosmic-outline .conv-pane .conv-foot')
-  })
 })
 
 /**

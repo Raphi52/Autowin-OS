@@ -120,7 +120,7 @@ describe('barre de quota cliquable', () => {
     const fond = bloc.match(/background:\s*rgba\(0, 0, 0, (0?\.\d+|1)\)/)
     expect(fond, 'fond noir rgba(0, 0, 0, a) absent').not.toBeNull()
     expect(Number(fond?.[1])).toBeGreaterThanOrEqual(0.9)
-    for (const theme of ['nebuleuse-verre', 'nebuleuse-doree']) {
+    for (const theme of ['nebuleuse-verre']) {
       const genere = readFileSync(
         new URL(`../assets/theme-${theme}.genere.css`, import.meta.url),
         'utf8'

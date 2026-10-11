@@ -44,36 +44,17 @@ export type Theme = {
 export const THEMES: readonly Theme[] = [
   { id: 'sombre', libelle: 'Sombre', base: 'sombre' },
   { id: 'clair', libelle: 'Clair', base: 'clair' },
-  // Premier theme qui ne soit ni le sombre d origine ni son inverse clair : ses couleurs
-  // viennent de la maquette maison sketches/galaxy-dark-gold-pink/obisidian-nebula. Sa BASE est
-  // sombre, donc ses accents et ses filets sont ceux d un fond noir.
-  { id: 'obsidian-nebula', libelle: 'Obsidian Nebula', base: 'sombre' },
-  // Le VIF : or eclatant, rose franc, filets prune. Palette de la maquette maison
-  // sketches/galaxy-dark-gold-pink/solar-rose-command.
-  { id: 'solar-rose', libelle: 'Solar Rose', base: 'sombre' },
-  // Le TERRE : or assourdi, rose brique, filets brun dore. Palette de la maquette maison
-  // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
-  // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
-  { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
+  // RETIRES le 2026-10-11 (conv-231) : Obsidian Nebula, Solar Rose, Black Versailles, et leurs
+  // trois pendants clairs Ardoise, Parchemin, Rose poudre. Un poste qui en avait memorise un
+  // retombe sur le sombre (lireThemeMode). Leurs maquettes restent dans sketches/.
   // Affiche « Holographique » depuis le 2026-10-10 (conv-212). L id reste `nebuleuse-verre` :
   // c est la valeur memorisee sur le poste, la renommer ferait retomber sur le sombre.
   { id: 'nebuleuse-verre', libelle: 'Holographique', base: 'sombre' },
-  // Variante or et noir de Nebuleuse (conv-139) : feuilles derivees par scripts/theme-nebuleuse-verre.mjs.
-  // Affiche « Holographique doré » depuis le 2026-10-10 (conv-212), en pendant de « Holographique ».
-  // L id reste `nebuleuse-doree` : c est la valeur memorisee sur le poste.
-  { id: 'nebuleuse-doree', libelle: 'Holographique doré', base: 'sombre' },
   // Pendant BLANC d Holographique (conv-212, 2026-10-10, /draft « go le plus blanc ») : feuille
   // DERIVEE d Holographique noir par scripts/theme-nebuleuse-verre.mjs holographique-clair
   // (nacre #f8f7fb sur fond #f6f5f9, lisere irise, coins bleu et rose, lumiere de la souris).
   // L id reste `holographique-clair` : c est la valeur memorisee si la premiere version a ete choisie.
   { id: 'holographique-clair', libelle: 'Holographique blanc', base: 'clair' },
-  // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
-  // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
-  // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
-  // ces palettes sont PROPOSEES, a corriger a l oeil.
-  { id: 'ardoise', libelle: 'Ardoise', base: 'clair' },
-  { id: 'parchemin', libelle: 'Parchemin', base: 'clair' },
-  { id: 'rose-poudre', libelle: 'Rose poudre', base: 'clair' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },

@@ -99,7 +99,7 @@ describe('workflow header toggle', () => {
       m[1].trim()
     )
     expect(regles).toEqual(['.workflow-toggle:focus-visible'])
-    for (const nom of ['theme-modes.css', 'theme-nebuleuse-doree.css', 'theme-nebuleuse-verre.css']) {
+    for (const nom of ['theme-modes.css', 'theme-nebuleuse-verre.css']) {
       const theme = readFileSync(new URL(`../assets/${nom}`, import.meta.url), 'utf8')
       expect(theme, nom).not.toMatch(/\.workflow-toggle(?!:focus-visible)/)
     }
@@ -258,7 +258,7 @@ describe('vignette de pièce jointe du champ de saisie — bordure et croix blan
 
     expect(chip).toMatch(/border:\s*1px solid #ffffff/)
     expect(croix).toMatch(/color:\s*#ffffff/)
-    for (const theme of ['nebuleuse-verre', 'nebuleuse-doree']) {
+    for (const theme of ['nebuleuse-verre']) {
       const couche = readFileSync(new URL(`../assets/theme-${theme}.genere.css`, import.meta.url), 'utf8')
       const regle = couche.match(/\.attachment-chip\s*{([^}]*)}/s)?.[1] ?? ''
       expect(regle, `${theme} repeint la bordure`).not.toMatch(/border/)

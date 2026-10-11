@@ -62,8 +62,8 @@ describe('jauge de contexte sous l en-tete — degrade progressif', () => {
 
 /**
  * « BLANCHE SUR GRIS, CA SERA PLUS DISCRET » (conv-189, 2026-10-10) : l'or de conv-179 a ete juge
- * « trop orange », puis abandonne. Dans Nebuleuse de verre -- et Nebuleuse doree, qui en est
- * derivee --, le remplissage est BLANC uni sur un rail GRIS, sans aucune teinte d'or.
+ * « trop orange », puis abandonne. Dans Nebuleuse de verre, le remplissage est BLANC uni sur un
+ * rail GRIS, sans aucune teinte d'or.
  */
 describe('jauge de contexte blanche sur gris, Nebuleuse de verre', () => {
   const PREFIXE = ":root[data-theme='nebuleuse-verre']"

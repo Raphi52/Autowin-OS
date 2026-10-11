@@ -33,16 +33,14 @@ import postcss from 'postcss'
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url))
 const SOURCES = ['src/renderer/src/components', 'src/renderer/src/assets']
-// fix-ok: le nom du theme etait ecrit en dur (prefixe + fichier de sortie) ; mesure : sans argument la sortie nebuleuse-verre est identique octet par octet (cmp exit 0), avec nebuleuse-doree 0 #ff3d9a/#7b5cff (test 6/6).
-// Deux themes partagent ce generateur : « nebuleuse-verre » (rose/violet, par defaut) et
-// « nebuleuse-doree » (or et noir, conv-139). Choix : node scripts/theme-nebuleuse-verre.mjs [id]
-const THEME = process.argv[2] === 'nebuleuse-doree' ? 'nebuleuse-doree' : 'nebuleuse-verre'
-const DORE = THEME === 'nebuleuse-doree'
+// La variante or et noir « nebuleuse-doree » (conv-139) a ete supprimee le 2026-10-11 (conv-230) :
+// ce generateur ne produit plus que Nebuleuse de verre et son pendant blanc (holographique-clair).
+const THEME = 'nebuleuse-verre'
 const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
 const PREFIXE = `:root[data-theme='${THEME}']`
 // AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
-const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-nebuleuse-doree|AskDecision.css/
+const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([
@@ -178,7 +176,6 @@ function transposerVert(cle, h, s, l) {
 function transposer(rgb, enFond) {
   const cle = `${rgb.r},${rgb.g},${rgb.b}`
   const { h, s, l } = rgbVersHsl(rgb)
-  if (DORE) return transposerDore(cle, h, s, l, enFond)
   const vert = transposerVert(cle, h, s, l)
   if (vert) return vert
   if (ORS.has(cle)) {
@@ -195,22 +192,6 @@ function transposer(rgb, enFond) {
     // Encre violette du theme (#0b0a18 = 11,10,24), a l'opacite d'origine.
     return { r: 10, g: 10, b: 10 } // noir, plus de bleu marine (conv-139)
   }
-  return null
-}
-
-/** Variante or et noir : l'or reste, cyans et roses passent a l'or, fonds au noir chaud. */
-function transposerDore(cle, h, s, l, enFond) {
-  if (ORS.has(cle)) return null
-  // La doree finit son degrade de quota sur le MEME vert : meme famille, meme cible.
-  const vert = transposerVert(cle, h, s, l)
-  if (vert) return vert
-  if (h >= 185 && h <= 212 && s >= 0.45 && l >= 0.18) {
-    return hslVersRgb({ h: 43, s: borne(s, 0.6, 0.85), l: borne(l, 0.3, 0.82) })
-  }
-  if (h >= 318 && h <= 342 && s >= 0.5 && l >= 0.2) {
-    return hslVersRgb({ h: 43, s: 0.72, l: borne(l, 0.3, 0.8) })
-  }
-  if (enFond && l < 0.09) return { r: 12, g: 10, b: 6 }
   return null
 }
 
@@ -296,12 +277,6 @@ export function generer() {
       )
     }
   }
-  if (DORE) {
-    const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree -- ne pas modifier.
-   Theme « Nebuleuse doree » : cyan et rose -> or, noirs de fond -> noir chaud, verts -> #00ff55.
-   ${regles} regles, ${declarations} declarations. */\n\n`
-    return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
-  }
   const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
@@ -309,91 +284,11 @@ export function generer() {
   return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
 }
 
-/** Les jetons de saisie de Nebuleuse de verre -> ceux de Nebuleuse doree (voir genererMainDoree). */
-const SAISIE_DOREE = [
-  [
-    '--nv-saisie-degrade: linear-gradient(#09090a, #09090a);',
-    '--nv-saisie-degrade: linear-gradient(315deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%);'
-  ],
-  ['--nv-saisie-bord: transparent;', '--nv-saisie-bord: var(--nv-bord);'],
-  // Le cadre « or qui coule vers le blanc » (conv-168) reste a Nebuleuse de verre : la doree garde
-  // son degrade non rogne sous son bord blanc fin.
-  ['--nv-saisie-cadre: var(--nv-cadre-coule);', '--nv-saisie-cadre: none;'],
-  ['--nv-saisie-boite: padding-box;', '--nv-saisie-boite: border-box;'],
-  ['--nv-envoi-fond: #d9ae52;', '--nv-envoi-fond: var(--nv-degrade);'],
-  ['--nv-envoi-fond-survol: #e3ba55;', '--nv-envoi-fond-survol: var(--nv-degrade-survol);'],
-  ['--nv-envoi-bord: 1.5px solid #d9ae52;', '--nv-envoi-bord: 0;'],
-  ['--nv-envoi-texte: #16110a;', '--nv-envoi-texte: #ffffff;'],
-  ['--nv-envoi-lueur: none;', '--nv-envoi-lueur: 0 0 16px rgba(227, 181, 63, 0.45);'],
-  ['--nv-envoi-vide-fond: transparent;', '--nv-envoi-vide-fond: var(--nv-degrade);'],
-  ['--nv-envoi-vide-bord: 1.5px solid #d4a94f;', '--nv-envoi-vide-bord: 0;'],
-  ['--nv-envoi-vide-texte: #e3ba55;', '--nv-envoi-vide-texte: rgba(255, 255, 255, 0.75);'],
-  ['--nv-auto-glyphe: #e3ba55;', '--nv-auto-glyphe: var(--gold-clair);']
-]
-
 /**
- * LE BLEU DES PASTILLES « TOUR FINI » APPARTIENT A NEBULEUSE DE VERRE (conv-205, 2026-10-10 :
- * « les pastilles vertes met les bleu a la place »). La doree garde son vert flashy #00ff55
- * (conv-215 : « en gardant la pastille tour fini verte »). Recolore, le bleu #3c6eeb tombait dans
- * la regle des lilas clairs et sortait en GRIS rgb(158, 158, 158). Le commentaire suit : il nommait
- * le bleu. Le vert, a 140 deg, traverse ensuite la recoloration intact.
+ * Le FOND de Nebuleuse de verre lui appartient (conv-159) : le bloc borne par FOND-PROPRE:DEBUT/FIN
+ * dans theme-nebuleuse-verre.css est remplace par FOND_CLAIR dans Holographique blanc.
  */
-const ETAT_FINI_DOREE = [
-  `  /* Tour fini = le BLEU du theme, plein (debut de \`--nv-degrade\`) : demande conv-205
-     (2026-10-10), « les pastilles vertes met les bleu a la place » — en tete du fil et liste. */
-  --chat-etat-fini: #3c6eeb;`,
-  `  /* Tour fini = VERT flashy (conv-197) : le bleu de conv-205 est pour Nebuleuse de verre seule,
-     la doree garde son vert (conv-215, 2026-10-10) — en tete du fil et liste. */
-  --chat-etat-fini: #00ff55;`
-]
-
-/**
- * LE FOND DE NEBULEUSE DE VERRE LUI APPARTIENT (conv-159, 2026-10-10) : le « liseré · halo haut »
- * (azur en haut, rose en bas, noir neutre) a ete choisi pour CE theme seul. Recolore, il donnerait
- * a la doree un bleu en haut et un or en bas que personne n'a demande. La doree garde donc ses deux
- * nappes. Ecrit dans les couleurs de la SOURCE : la recoloration les rend a l'identique de
- * theme-nebuleuse-doree.css d'avant ce choix. Le bloc remplace est borne par FOND-PROPRE:DEBUT/FIN
- * dans theme-nebuleuse-verre.css.
- */
-const FOND_ENTETE_DOREE = [
-  `   - Fond : NOIR PUR (#000) uni, sans halo, sans filet ni grain (conv-184,
-     section 2). Le decor 3D de l'Accueil reste, teinte dans la meme famille
-     (jetons --decor-*).`,
-  `   - Fond : une encre violette (#0a0a0a) eclairee par DEUX nappes, violet en
-     haut a gauche, magenta en bas a droite. Le decor 3D reste, teinte dans la
-     meme famille (jetons --decor-*).`
-]
-const FOND_DOREE = `/* ---------------------------------------------------------------------------
-   2. FOND : encre violette + deux nappes. L'image de galaxie est retiree ;
-   le grain anime (body::before) est garde, sans sa nappe or.
-   --------------------------------------------------------------------------- */
-:root[data-theme='nebuleuse-verre'] body {
-  background:
-    radial-gradient(70vw 60vh at 96% 100%, rgba(255, 40, 140, 0.42), transparent 70%),
-    /* Plus de nappe bleu-violet en haut a gauche (C1) : une lueur rose a peine visible. */
-    radial-gradient(60vw 55vh at 0% 0%, rgba(230, 60, 160, 0.12), transparent 70%), #0a0a0a;
-  color: var(--text);
-}
-`
 const BLOC_FOND_PROPRE = /\/\* FOND-PROPRE:DEBUT[\s\S]*?\/\* FOND-PROPRE:FIN \*\/\n/
-/**
- * ENVOYER ET STOP EN PERLE (2026-10-10, « PERLE implémente ») : choisi pour Nebuleuse de verre
- * seule. La doree garde sa pastille d'envoi degradee (conv-155) et son Stop : le bloc borne par
- * RELIEF-PERLE:DEBUT/FIN dans theme-nebuleuse-verre.css est RETIRE de la derivation.
- */
-const BLOC_RELIEF_PERLE = /\/\* RELIEF-PERLE:DEBUT[\s\S]*?\/\* RELIEF-PERLE:FIN \*\/\n/
-/**
- * CADRE CHANFREIN PLATINE (conv-177, 2026-10-10, « coins seuls implemente ») : choisi pour
- * Nebuleuse de verre seule. La doree garde le cadre « or qui coule vers le blanc » (conv-168) et
- * ses coins arrondis : le bloc borne par CADRE-CHANFREIN:DEBUT/FIN est RETIRE de la derivation.
- */
-const BLOC_CADRE_CHANFREIN = /\/\* CADRE-CHANFREIN:DEBUT[\s\S]*?\/\* CADRE-CHANFREIN:FIN \*\/\n/
-/**
- * RECHERCHE EN GROS (conv-185, 2026-10-10, « ce bloc je le veux en gros avec contour gris et contour
- * blanc quand j'ecris dedans ») : demande sur Nebuleuse de verre seule. La doree garde son champ de
- * recherche d'origine : le bloc borne par RECHERCHE-GROSSE:DEBUT/FIN est RETIRE de la derivation.
- */
-const BLOC_RECHERCHE_GROSSE = /\/\* RECHERCHE-GROSSE:DEBUT[\s\S]*?\/\* RECHERCHE-GROSSE:FIN \*\/\n/
 
 /* =================================================================================================
  * HOLOGRAPHIQUE BLANC (id `holographique-clair`, conv-212, 2026-10-10). Demande : « un theme
@@ -403,7 +298,7 @@ const BLOC_RECHERCHE_GROSSE = /\/\* RECHERCHE-GROSSE:DEBUT[\s\S]*?\/\* RECHERCHE
  * lumiere de la souris, neon autour des messages), tour 2 bis « Halo nacre », tour 3 « go le plus
  * blanc » (nacre #f8f7fb sur fond #f6f5f9).
  *
- * Comme la doree, la feuille est DERIVEE de theme-nebuleuse-verre.css : chaque retouche du noir
+ * La feuille est DERIVEE de theme-nebuleuse-verre.css : chaque retouche du noir
  * passe dans le blanc a la regeneration. Mais passer au clair n'est pas un simple changement de
  * teinte : le meme #ffffff est un texte sur un panneau (il doit devenir encre) ou un texte sur le
  * degrade (il doit rester blanc). La recoloration lit donc chaque DECLARATION (postcss) et decide
@@ -427,8 +322,14 @@ const CLAIR_ROSE = { r: 208, g: 43, b: 140 }
  * Protegee, elle gardait son fond noir sous un texte devenu encre -- illisible. Seule la reponse
  * COCHEE porte le degrade, et son texte passe par --nv-askd-encre-bulle, deja garde blanc.
  */
+/*
+ * L'onglet actif du panneau Details SOUS `.runs-pane` n'y est PAS (conv-229, 2026-10-11, capture :
+ * « Graph » blanc sur blanc, « pareil pour les headers du menu Details ») : sous le cadre a coins
+ * coupes, il n'a plus de pastille degradee mais un simple trait sous le mot (conv-180), pose sur la
+ * nacre. Son blanc doit donc devenir encre ; seule la pastille de la section 6 garde le blanc.
+ */
 const CLAIR_SUR_DEGRADE =
-  /\.nav-item\.active|\.btn-accent|\.msg\.user \.msg-body|\.conv-new-(row|title|icon)|\.composer-send|\.composer-stop|\.workflow-section-tab\.is-active|\.askd-coche input:checked|::selection|\.chat-context-rule|\.conversation-state/
+  /\.nav-item\.active|\.btn-accent|\.msg\.user \.msg-body|\.conv-new-(row|title|icon)|\.composer-send|\.composer-stop|(?<!\.runs-pane )\.workflow-section-tab\.is-active|\.askd-coche input:checked|::selection|\.chat-context-rule|\.conversation-state/
 /** Jetons qui designent un texte pose sur le degrade : ils restent blancs. */
 const CLAIR_JETONS_BLANCS = new Set([
   '--on-accent',
@@ -687,15 +588,114 @@ const COMPLEMENT_CLAIR = `
   background: color-mix(in srgb, var(--theme-color) 14%, #fdfdff);
   box-shadow: 0 3px 12px rgba(40, 30, 80, 0.16);
 }
-/* Texte BLANC sur les pastilles degradees (meme liste que la doree, qui y met son noir chaud). */
+/* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : « CADRE HOLO · TITRE ET
+   FILET » (/draft conv-212, 2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
+   peint en OR (conv-124) ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
+   nacre. Ici : le CADRE du bloc ASK (memes bandes bleu, rose, argent, 1,5 px) autour d'une plaque
+   nacree, « Fait » ecrit en degrade bleu -> rose, et un filet irise sous la liste.
+   Feuille seule, sans toucher au balisage (Markdown.tsx) : le titre est la premiere ligne du bloc
+   (« ✅ Fait », un span). Un texte DECOUPE dans un degrade (background-clip: text) efface l'emoji :
+   une encre transparente le reduit a sa silhouette, un carre bleu (capture du 2026-10-11), et
+   ::first-letter le vise bien mais ne lui rend pas son encre (mesure : sa taille change, pas sa
+   couleur). Le titre garde donc l'encre du texte, et un CALQUE degrade pose en mode « eclaircir »
+   (lighten) sur le MOT seulement le colore : sur l'encre, le degrade gagne ; sur la plaque presque
+   blanche, la plaque gagne. Le calque commence a 1,5 em : l'emoji et son espace mesurent 1,66 em
+   dans la page (l'emoji seul environ 1,4 em). Le double attribut egale la regle de la base claire
+   (ChatView.css, « :root[data-base='clair'] .md-final-summary »).
+   Contrastes calcules sur la plaque #fdfdff : #2f56c9 6,3:1, #b01d7c 6,2:1, texte 17:1. */
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary {
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, #fdfdff, #f9f8fc) padding-box,
+    repeating-linear-gradient(100deg, #3c6eeb 0, #d02b8c 60px, #d9d9d9 120px, #ff8cc8 180px, #3c6eeb 240px)
+      border-box;
+  box-shadow: none;
+  color: var(--text);
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > span:first-child > span:first-child,
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > :is(h1, h2, h3, h4, h5, h6):first-child {
+  position: relative;
+  display: inline-block;
+  font-weight: 750;
+  color: #1c172b;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > span:first-child > span:first-child::after,
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > :is(h1, h2, h3, h4, h5, h6):first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 1.5em;
+  background: linear-gradient(90deg, #2f56c9, #b01d7c);
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+/* « ✅ **Fait** » : le gras prend l'or recolore du noir (span > strong) ; ramene a l'encre, sinon le
+   calque « eclaircir » le melangerait en violet. */
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > span:first-child > span:first-child strong {
+  color: #1c172b;
+}
+/* Le filet irise : sous la liste qui suit le titre (2e enfant du bloc), pas sous une liste plus bas. */
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .md-final-summary > span:first-child > .md-list:nth-child(2) {
+  padding-bottom: 9px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, rgba(207, 214, 228, 0)) 1;
+}
+/* Texte BLANC sur les pastilles degradees.
+   SANS les cases du pied de liste (conv-229, 2026-10-11 : « les textes deviennent blanc quand je
+   click dessus sur fond blanc ») : depuis le /draft du pied du 2026-10-10, une case dont le reglage
+   a change ne porte plus de degrade, son fond est transparent sur la nacre. Ce blanc, plus precis
+   que \`.conv-foot > button\`, rendait « Actives », « Compacte » et « Mosaique » invisibles. */
 :root[data-theme='${CLAIR_ID}'] .nav-item.active,
 :root[data-theme='${CLAIR_ID}'] .workflow-section-tab.is-active,
 :root[data-theme='${CLAIR_ID}'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop),
-:root[data-theme='${CLAIR_ID}'] .cosmic-outline .conv-new-row .conv-new-title,
-:root[data-theme='${CLAIR_ID}'] .conv-foot > .conv-status-filter:not([data-filter='toutes']),
-:root[data-theme='${CLAIR_ID}'] .conv-foot > .conv-density-toggle:not([data-density='detail']),
-:root[data-theme='${CLAIR_ID}'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
+:root[data-theme='${CLAIR_ID}'] .cosmic-outline .conv-new-row .conv-new-title {
   color: #ffffff;
+}
+/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft conv-225, 2026-10-11, tour 1 :
+   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise de conv-202 autour d'une plaque
+   GRISE #eceaf2, et des capsules grises #edebf3 : ce gris jurait sur la page #f6f5f9. Ici le bloc prend
+   l'habit des panneaux du theme : nacre #fdfdff, contour gris fin, lisere irise de 3 px en haut
+   (--nv-holo-lisere) sur lequel glisse le lustre. Chaque reponse est une capsule BLANCHE au contour gris ;
+   les bandes bleu, rose, argent ne reviennent QUE sur la reponse survolee, focalisee ou recommandee
+   (1,5 px, la marge negative garde le texte immobile). Cochee ou retenue : le degrade de la bulle,
+   inchange (conv-201). Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit (conv-202).
+   Maquette : artifacts/draft-ask-blanc/tour1.html, onglet 3. Double attribut : ces regles pesent plus
+   que celles derivees du noir, quel que soit l'ordre des feuilles. */
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd {
+  padding: 15px 10px 10px;
+  border: 1px solid rgba(20, 15, 40, 0.13);
+  border-image: none;
+  border-radius: 12px;
+  background: var(--nv-holo-lisere) left top / 100% 3px no-repeat, #fdfdff;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd::after {
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 3px;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd .askd-item {
+  border: 1px solid rgba(20, 15, 40, 0.12);
+  border-radius: 10px;
+  background: #ffffff;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd:not(.est-repondu) .askd-item:is(:hover, :focus-within, .est-reco) {
+  border: 1.5px solid transparent;
+  margin: -0.5px;
+  background: linear-gradient(#ffffff, #ffffff) padding-box, var(--nv-askd-holo) border-box;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd .askd-item:has(.askd-coche input:checked),
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd.est-repondu .askd-item:has(.askd-choix[data-choisi='oui']) {
+  border: 1px solid transparent;
+  margin: 0;
+  background: var(--nv-degrade) padding-box, linear-gradient(#f2f2f2, #f2f2f2) border-box;
+}
+:root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd .askd-pied {
+  border-image: none;
+  border-top: 1px solid rgba(20, 15, 40, 0.1);
 }
 `
 
@@ -904,115 +904,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const { css, regles, declarations } = generer()
     writeFileSync(join(RACINE, SORTIE), css)
     console.log(`${SORTIE} : ${regles} regles, ${declarations} declarations`)
-    if (DORE) {
-      writeFileSync(join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-doree.css'), genererMainDoree())
-      console.log(`theme-nebuleuse-doree.css : derive de theme-nebuleuse-verre.css`)
-    }
   }
-}
-
-
-
-/**
- * Nebuleuse doree = la feuille ecrite a la main de Nebuleuse de verre (une seule source, les
- * deux themes ne divergent pas), recolorée : roses -> or, violets/bleus -> bronze, textes lilas
- * -> ivoire, encres violettes -> noir chaud. Verts, rouges et ambres d'etat restent.
- * La zone de saisie reprend le degrade or clair -> noir (« B1 plus clair », conv-139).
- */
-export function genererMainDoree() {
-  const source = readFileSync(join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-verre.css'), 'utf8')
-  const recolorer = (rgb) => {
-    const { h, s, l } = rgbVersHsl(rgb)
-    // TEXTES lilas clairs -> BLANC / gris NEUTRES (conv-139, 2026-10-10 : « on dirait que tout
-    // mon ecran a un filtre jaune, les textes doivent etre blancs »). Avant ce test, les lilas
-    // pales tombaient dans les regles bronze/ivoire ci-dessous et teintaient tout le texte.
-    if (h >= 215 && h < 300 && l >= 0.55) {
-      const gris = Math.round(Math.min(1, l + 0.04) * 255)
-      return { r: gris, g: gris, b: gris }
-    }
-    if (h >= 300 && h <= 345 && s >= 0.5) return hslVersRgb({ h: 43, s: 0.75, l: borne(l, 0.3, 0.88) })
-    if (h >= 215 && h < 300 && s >= 0.35 && l >= 0.15) return hslVersRgb({ h: 36, s: 0.6, l: borne(l * 0.85, 0.25, 0.8) })
-    if (h >= 215 && h < 300 && l >= 0.6) return hslVersRgb({ h: 40, s, l })
-    if (h >= 215 && h < 300 && l < 0.2) return hslVersRgb({ h: 38, s: borne(s, 0, 0.35), l })
-    return null
-  }
-  // LA SAISIE DE NEBULEUSE DOREE LUI APPARTIENT (conv-155) : Nebuleuse de verre a pris un noir a
-  // cadre or et un bouton d'envoi rond qui s'allume ; la doree garde son degrade or -> noir
-  // (« B1 plus clair », conv-139), son bord blanc fin et sa pastille d'envoi degradee. Seule la
-  // FORME du bouton suit la source (rond : le coin pince est reserve aux bulles de message).
-  // Chaque ligne de la source DOIT exister : une ligne introuvable arrete la generation au lieu
-  // de laisser passer en silence la saisie de Nebuleuse de verre.
-  let derive = source
-  for (const [ligneVerre, ligneDoree] of SAISIE_DOREE) {
-    if (!derive.includes(ligneVerre)) {
-      throw new Error(`genererMainDoree : ligne de saisie introuvable dans la source : ${ligneVerre}`)
-    }
-    derive = derive.replace(ligneVerre, ligneDoree)
-  }
-  // Meme exigence pour la pastille « tour fini » (ETAT_FINI_DOREE).
-  if (!derive.includes(ETAT_FINI_DOREE[0])) {
-    throw new Error(
-      'genererMainDoree : pastille « tour fini » (--chat-etat-fini) introuvable dans la source'
-    )
-  }
-  derive = derive.replace(...ETAT_FINI_DOREE)
-  // Meme exigence pour le fond (FOND_DOREE) : un bloc ou un en-tete introuvable arrete la generation.
-  if (!BLOC_FOND_PROPRE.test(derive)) {
-    throw new Error('genererMainDoree : bloc FOND-PROPRE:DEBUT/FIN introuvable dans la source')
-  }
-  if (!derive.includes(FOND_ENTETE_DOREE[0])) {
-    throw new Error('genererMainDoree : ligne « Fond » de l en-tete introuvable dans la source')
-  }
-  derive = derive.replace(BLOC_FOND_PROPRE, FOND_DOREE).replace(...FOND_ENTETE_DOREE)
-  if (!BLOC_RELIEF_PERLE.test(derive)) {
-    throw new Error('genererMainDoree : bloc RELIEF-PERLE:DEBUT/FIN introuvable dans la source')
-  }
-  derive = derive.replace(BLOC_RELIEF_PERLE, '')
-  if (!BLOC_CADRE_CHANFREIN.test(derive)) {
-    throw new Error('genererMainDoree : bloc CADRE-CHANFREIN:DEBUT/FIN introuvable dans la source')
-  }
-  derive = derive.replace(BLOC_CADRE_CHANFREIN, '')
-  if (!BLOC_RECHERCHE_GROSSE.test(derive)) {
-    throw new Error('genererMainDoree : bloc RECHERCHE-GROSSE:DEBUT/FIN introuvable dans la source')
-  }
-  derive = derive.replace(BLOC_RECHERCHE_GROSSE, '')
-  const css = derive
-    .replace(COULEUR, (brut) => {
-      if (brut.startsWith('#') && ![4, 5, 7, 9].includes(brut.length)) return brut
-      const rgb = brut.startsWith('#')
-        ? hexVersRgb(brut)
-        : (() => {
-            const n = brut.match(/[\d.]+/g).map(Number)
-            return { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
-          })()
-      const t = recolorer(rgb)
-      if (!t) return brut
-      return rgb.a === 1 ? `rgb(${t.r}, ${t.g}, ${t.b})` : `rgba(${t.r}, ${t.g}, ${t.b}, ${rgb.a})`
-    })
-    .replaceAll("data-theme='nebuleuse-verre'", "data-theme='nebuleuse-doree'")
-  // LISIBILITE SUR L'OR : la pastille pleine (selection, onglet, envoi) recoloree en or clair
-  // gardait le texte BLANC de la source -- « Chat » devenait illisible (capture du 2026-10-10,
-  // conv-139, apres D6). Sur un fond or plein, le texte passe en noir chaud. « Nouveau fil » sur un
-  // fil vide n'est plus assombri mais brillant (conv-201) : son titre suit, `.active` compris.
-  const lisibilite = `
-/* Texte NOIR CHAUD sur les pastilles or pleines (genere, voir genererMainDoree). */
-:root[data-theme='nebuleuse-doree'] .nav-item.active,
-:root[data-theme='nebuleuse-doree'] .workflow-section-tab.is-active,
-:root[data-theme='nebuleuse-doree']
-  .cosmic-outline
-  .composer-send:not(.is-resume):not(.is-stop),
-:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-new-row .conv-new-title,
-:root[data-theme='nebuleuse-doree'] .conv-foot > .conv-status-filter:not([data-filter='toutes']),
-:root[data-theme='nebuleuse-doree'] .conv-foot > .conv-density-toggle:not([data-density='detail']),
-:root[data-theme='nebuleuse-doree'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
-  color: #141008;
-}
-/* Bloc ASK et bloc du cadrage (conv-202) : badge, Envoyer et reponse cochee portent le degrade,
-   ici or plein. */
-:root[data-theme='nebuleuse-doree'] .askd {
-  --nv-askd-encre-bulle: #141008;
-}
-`
-  return `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree, depuis
-   theme-nebuleuse-verre.css -- ne pas modifier a la main (modifier la source, puis regenerer). */\n\n${css}${lisibilite}`
 }

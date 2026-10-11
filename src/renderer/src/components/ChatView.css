@@ -1861,6 +1861,12 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+/* Saut de paragraphe (Markdown.tsx, ligne vide) : un demi-interligne au lieu d'une ligne blanche
+   pleine (conv-227, 2026-10-11 : « trop d'espacement vertical [...] ca fait scroller pour rien »). */
+.md-para {
+  display: block;
+  height: 0.5em;
+}
 /* Titres markdown du chat : hiérarchie lisible, sans marges excessives. */
 .md-h {
   margin: var(--s2) 0 var(--s1);

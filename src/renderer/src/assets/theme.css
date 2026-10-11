@@ -136,8 +136,8 @@
 
      CE QUE CA DEBLOQUE : `theme-modes.css` redefinit ces memes noms sous
      `:root[data-base='clair']` en les renvoyant vers --text / --text-dim / --text-faint /
-     --bg-* / --line* / --ok / --err / --warn / --info / --violet / --rose* / --gold*. Les quatre
-     themes clairs (clair, ardoise, parchemin, rose poudre) reteintent ainsi le Chat entier,
+     --bg-* / --line* / --ok / --err / --warn / --info / --violet / --rose* / --gold*. Les themes
+     de base claire (clair, holographique blanc, malvoyant clair) reteintent ainsi le Chat entier,
      sans qu'aucun d'eux soit nomme ici.
 
      OR ET ROSE : rattaches, jamais alteres (decision produit du 2026-09-06). En sombre ils

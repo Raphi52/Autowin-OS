@@ -391,6 +391,18 @@ function renderTextBlock(block: string): React.ReactNode[] {
         listKind = 'ul'
       }
       list.push(<li key={`li-${key++}`}>{inline(item[1])}</li>)
+    } else if (line.trim() === '') {
+      // LIGNE VIDE = SAUT DE PARAGRAPHE, pas une ligne blanche pleine (conv-227, 2026-10-11 : « ya
+      // trop d'espacement vertical [...] ca fait scroller pour rien »). Rendue avant comme un `<br>`
+      // de plus : chaque paragraphe coutait un interligne entier (≈ 22 px), et les lignes vides
+      // autour d'un schema ou d'un bloc 44 a 48 px. Un seul petit separateur (`.md-para`, hauteur
+      // dans ChatView.css), et seulement ENTRE deux lignes de texte : apres un titre, une liste, un
+      // tableau, ou en tete / fin de bloc, la marge du bloc voisin suffit.
+      flushList()
+      if (lastWasText && lines.slice(index + 1).some((suite) => suite.trim() !== '')) {
+        out.push(<span key={`para-${key++}`} className="md-para" aria-hidden="true" />)
+      }
+      lastWasText = false
     } else {
       flushList()
       out.push(

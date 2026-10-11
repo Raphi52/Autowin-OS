@@ -46,7 +46,6 @@ describe('theme.css — les contrôles natifs suivent le thème sombre', () => {
       './theme.css',
       './theme-modes.css',
       './theme-nebuleuse-verre.css',
-      './theme-nebuleuse-doree.css',
       './theme-holographique-clair.css'
     ]
     const translucides: string[] = []

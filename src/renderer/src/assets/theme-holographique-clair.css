@@ -648,8 +648,7 @@
 :root[data-theme='holographique-clair'] .conv-search .input {
   border-radius: 12px;
 }
-/* RECHERCHE-GROSSE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde son champ de recherche d'origine. */
+/* RECHERCHE-GROSSE:DEBUT -- champ de recherche en gros (conv-185). */
 /* CHAMP « RECHERCHER PARTOUT… » EN GROS (conv-185, 2026-10-10 : « ce bloc je le veux en gros avec
    contour gris et contour blanc quand j'ecris dedans »). Gris neutre au repos, BLANC pendant la
    saisie, sans halo. Specificite (0,4,0) / (0,5,0) chargee APRES la couche generee : prime sur son
@@ -889,8 +888,7 @@
    Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`, « le bloc Frame ») reutilise ces
    classes et prend le MEME habit (conv-202 : « le bloc Frame aussi il faut lui donner la meme
    gueule que notre nouveau bloc ASK ») : l'or de conv-136 n'y reste plus. L'encre posee sur le
-   degrade passe par --nv-askd-encre-bulle, que Nebuleuse doree remet en noir chaud (son degrade
-   est or). */
+   degrade passe par --nv-askd-encre-bulle. */
 :root[data-theme='holographique-clair'] .askd {
   --gold: #aa0e5f;
   --gold-bright: #121018;
@@ -1316,8 +1314,7 @@
   /* PLUS DE ROSE (conv-155, 2026-10-10, « enlever ce rose », variante « B · S'allume, rond »
      choisie sur maquette) : un NOIR PROFOND UNI. Ecrit comme un degrade d'une seule teinte pour
      rester une couche d'image : la saisie detachee du fil le pose sur son encre (plus bas).
-     En VARIABLE, ecrite UNE seule fois : le generateur de Nebuleuse doree remplace cette ligne
-     par SON degrade or -> noir (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
+     En VARIABLE, ecrite UNE seule fois. */
   --nv-saisie-degrade: linear-gradient(#f6f5f9, #f6f5f9);
   background: var(--nv-saisie-degrade);
   backdrop-filter: none;
@@ -1338,9 +1335,7 @@
      degrade que les panneaux (--nv-cadre-coule), a la place du cadre or uni de conv-155.
      Le bloc est OPAQUE (--nv-saisie-degrade = #09090a plein) : le cadre est donc un FOND pose sur
      la boite du bord, et le noir du bloc, rogne a l'interieur (padding-box), le recouvre ailleurs.
-     Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut.
-     Nebuleuse doree garde sa saisie (SAISIE_DOREE) : bord blanc fin, aucun cadre, degrade non
-     rogne -- trois lignes remplacees ci-dessous. */
+     Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut. */
   --nv-saisie-bord: transparent;
   --nv-saisie-cadre: var(--nv-cadre-coule);
   --nv-saisie-boite: padding-box;
@@ -1442,8 +1437,7 @@
    (« ca faisait sens pour la bulle de chat mais pas pour les boutons ») -- et le degrade
    bleu -> rose : un ROND de 38 px, comme les trois ronds de sa rangee. Champ vide : contour or
    eteint. Message pret : OR PLEIN, avion fonce -- l'or dit « ca peut partir ». Aucune lueur.
-   Les couleurs passent par les jetons --nv-envoi-* : Nebuleuse doree, generee depuis ce
-   fichier, y remet sa pastille degradee or (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
+   Les couleurs passent par les jetons --nv-envoi-*. */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send {
   --nv-envoi-fond: #d9ae52;
   --nv-envoi-fond-survol: #e3ba55;
@@ -1515,8 +1509,7 @@
   box-shadow: 0 0 0 1px rgba(0, 255, 85, 0.6);
   color: #ccffdd;
 }
-/* RELIEF-PERLE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde sa pastille degradee (conv-155). */
+/* RELIEF-PERLE:DEBUT -- Envoyer et Stop en perle (2026-10-10). */
 /* ENVOYER ET STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette parmi six
    dosages du dome : « PERLE implémente »). Les deux ronds sortaient plats ; ils deviennent un DOME
    (degrade radial clair au centre -> sombre au bord) coiffe d'un REFLET OVALE net en haut. Survol :
@@ -1533,7 +1526,7 @@
    le reste de mon theme » : « E · Gel » puis « implémente E4 »). La perle or d'Envoyer cede la
    place au degrade du theme, celui de « Nouveau fil » et de l'icone active du menu, avion BLANC, et
    un reflet blanc qui s'efface SANS ligne jusqu'au milieu. Il repeint, pour ce theme seulement, l'or
-   des jetons --nv-envoi-* poses plus haut (ces jetons restent : la doree derivee les reprend).
+   des jetons --nv-envoi-* poses plus haut.
    L'etat se lit au reflet et a l'avion, jamais a la couleur (conv-182 : le bleu reste plein) :
    survol = reflet plus fort, appui = reflet eteint sans retrecir, rien a envoyer = le meme rond,
    reflet faible et avion a 50 % -- plus de contour or ni d'`opacity`. « Orienter » est le meme
@@ -1617,7 +1610,7 @@
    vivante, rgb(255, 181, 71). Le bandeau prend donc l'or de la perle d'Envoyer (#e2b65a -> #a27326),
    en voile : deux teintes, un reflet blanc ovale en haut, l'ombre noire courte, aucune lueur.
    --warn n'est redefini que sur le bandeau : le jeton du theme reste l'ambre des ETATS (interrompu,
-   refuse). Hors du bloc de la perle : Nebuleuse doree en herite a l'identique. */
+   refuse). */
 :root[data-theme='holographique-clair'] .chat-workflow-notice {
   --warn: #684c12;
   color: #6b4e10;
@@ -1650,8 +1643,7 @@
    or depuis conv-179, puis jugee « trop orange ». ChatView.css la pose sur le filet du bas de
    l'en-tete (`.chat-context-rule`) et ecrit le mot « contexte » au bout du remplissage. Ici :
    3 px, l'epaisseur demandee pour la jauge (conv-156) ; un rail gris (voile a 16 %) ; un
-   remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css.
-   Hors des blocs propres a ce theme (perle, chanfrein) : Nebuleuse doree en herite a l'identique. */
+   remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css. */
 :root[data-theme='holographique-clair'] .chat-context-rule::after,
 :root[data-theme='holographique-clair'] .chat-context-rule::before {
   top: 4px;
@@ -1666,8 +1658,7 @@
   background-color: #ffffff;
   opacity: 0.9;
 }
-/* CADRE-CHANFREIN:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde le cadre « or qui coule vers le blanc » (conv-168) et ses coins arrondis. */
+/* CADRE-CHANFREIN:DEBUT -- cadre chanfrein platine (conv-177). */
 /* CADRE CHANFREIN PLATINE, « COINS SEULS » (conv-177, 2026-10-10 : « /draft des Border de container
    styles », puis « j'adore le 3 » -- Chanfrein --, « Platine », et « coins seuls implemente » ;
    reglage 2 du tour 3 choisi sur maquette). Les coins HAUT GAUCHE et BAS DROIT sont COUPES a 45 deg
@@ -1990,7 +1981,7 @@
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .runs-pane .workflow-section-tab.is-active {
   background-image: linear-gradient(90deg, #3c6eeb, #d02b8c);
-  color: #ffffff;
+  color: #121018;
 }
 /* PIED DE LISTE : UN SEUL TRAIT EN HAUT (conv-190, 2026-10-10 : « dans ce bloc de buttons en fait
    laisse qu'un liseré top », sur une capture de la capsule a coins coupes de conv-188). Le cadre
@@ -1999,8 +1990,7 @@
    au repos. Le comportement du survol est garde, ramene a ce seul trait : le trait redevient gris
    et SEULE la portion au-dessus de la case survolee reprend le bleu -> rose (une case allumee a la
    fois, demande du /draft du pied). Les anneaux decoupes deviennent de simples bandes d'1 px
-   collees en haut : aucun masque, aucun `clip-path`. Nebuleuse doree, a coins arrondis, garde sa
-   capsule entiere : ce reglage vit dans le bloc du chanfrein, que la derivation ne reprend pas. */
+   collees en haut : aucun masque, aucun `clip-path`. Ce reglage vit dans le bloc du chanfrein. */
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-pane .conv-foot {
   border-radius: 0;
   clip-path: none;
@@ -2134,7 +2124,7 @@
 /* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
    La couche generee transposait cet or en rose comme un or decoratif ; la saisie n'a plus de rose
    (conv-155) et l'or y signale ce qui est actif. Le jeton --gold-clair de ce theme etant rose, la
-   couleur du glyphe est ecrite ici (Nebuleuse doree remet son --gold-clair, SAISIE_DOREE). */
+   couleur du glyphe est ecrite ici. */
 :root[data-theme='holographique-clair'] .composer-auto.actif {
   --nv-auto-glyphe: #e3ba55;
   border-color: rgba(98, 74, 24, 0.75);
@@ -2509,13 +2499,112 @@
   background: color-mix(in srgb, var(--theme-color) 14%, #fdfdff);
   box-shadow: 0 3px 12px rgba(40, 30, 80, 0.16);
 }
-/* Texte BLANC sur les pastilles degradees (meme liste que la doree, qui y met son noir chaud). */
+/* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : « CADRE HOLO · TITRE ET
+   FILET » (/draft conv-212, 2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
+   peint en OR (conv-124) ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
+   nacre. Ici : le CADRE du bloc ASK (memes bandes bleu, rose, argent, 1,5 px) autour d'une plaque
+   nacree, « Fait » ecrit en degrade bleu -> rose, et un filet irise sous la liste.
+   Feuille seule, sans toucher au balisage (Markdown.tsx) : le titre est la premiere ligne du bloc
+   (« ✅ Fait », un span). Un texte DECOUPE dans un degrade (background-clip: text) efface l'emoji :
+   une encre transparente le reduit a sa silhouette, un carre bleu (capture du 2026-10-11), et
+   ::first-letter le vise bien mais ne lui rend pas son encre (mesure : sa taille change, pas sa
+   couleur). Le titre garde donc l'encre du texte, et un CALQUE degrade pose en mode « eclaircir »
+   (lighten) sur le MOT seulement le colore : sur l'encre, le degrade gagne ; sur la plaque presque
+   blanche, la plaque gagne. Le calque commence a 1,5 em : l'emoji et son espace mesurent 1,66 em
+   dans la page (l'emoji seul environ 1,4 em). Le double attribut egale la regle de la base claire
+   (ChatView.css, « :root[data-base='clair'] .md-final-summary »).
+   Contrastes calcules sur la plaque #fdfdff : #2f56c9 6,3:1, #b01d7c 6,2:1, texte 17:1. */
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary {
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, #fdfdff, #f9f8fc) padding-box,
+    repeating-linear-gradient(100deg, #3c6eeb 0, #d02b8c 60px, #d9d9d9 120px, #ff8cc8 180px, #3c6eeb 240px)
+      border-box;
+  box-shadow: none;
+  color: var(--text);
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > span:first-child > span:first-child,
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > :is(h1, h2, h3, h4, h5, h6):first-child {
+  position: relative;
+  display: inline-block;
+  font-weight: 750;
+  color: #1c172b;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > span:first-child > span:first-child::after,
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > :is(h1, h2, h3, h4, h5, h6):first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 1.5em;
+  background: linear-gradient(90deg, #2f56c9, #b01d7c);
+  mix-blend-mode: lighten;
+  pointer-events: none;
+}
+/* « ✅ **Fait** » : le gras prend l'or recolore du noir (span > strong) ; ramene a l'encre, sinon le
+   calque « eclaircir » le melangerait en violet. */
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > span:first-child > span:first-child strong {
+  color: #1c172b;
+}
+/* Le filet irise : sous la liste qui suit le titre (2e enfant du bloc), pas sous une liste plus bas. */
+:root[data-theme='holographique-clair'][data-base='clair'] .md-final-summary > span:first-child > .md-list:nth-child(2) {
+  padding-bottom: 9px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, rgba(207, 214, 228, 0)) 1;
+}
+/* Texte BLANC sur les pastilles degradees.
+   SANS les cases du pied de liste (conv-229, 2026-10-11 : « les textes deviennent blanc quand je
+   click dessus sur fond blanc ») : depuis le /draft du pied du 2026-10-10, une case dont le reglage
+   a change ne porte plus de degrade, son fond est transparent sur la nacre. Ce blanc, plus precis
+   que `.conv-foot > button`, rendait « Actives », « Compacte » et « Mosaique » invisibles. */
 :root[data-theme='holographique-clair'] .nav-item.active,
 :root[data-theme='holographique-clair'] .workflow-section-tab.is-active,
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop),
-:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row .conv-new-title,
-:root[data-theme='holographique-clair'] .conv-foot > .conv-status-filter:not([data-filter='toutes']),
-:root[data-theme='holographique-clair'] .conv-foot > .conv-density-toggle:not([data-density='detail']),
-:root[data-theme='holographique-clair'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row .conv-new-title {
   color: #ffffff;
+}
+/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft conv-225, 2026-10-11, tour 1 :
+   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise de conv-202 autour d'une plaque
+   GRISE #eceaf2, et des capsules grises #edebf3 : ce gris jurait sur la page #f6f5f9. Ici le bloc prend
+   l'habit des panneaux du theme : nacre #fdfdff, contour gris fin, lisere irise de 3 px en haut
+   (--nv-holo-lisere) sur lequel glisse le lustre. Chaque reponse est une capsule BLANCHE au contour gris ;
+   les bandes bleu, rose, argent ne reviennent QUE sur la reponse survolee, focalisee ou recommandee
+   (1,5 px, la marge negative garde le texte immobile). Cochee ou retenue : le degrade de la bulle,
+   inchange (conv-201). Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit (conv-202).
+   Maquette : artifacts/draft-ask-blanc/tour1.html, onglet 3. Double attribut : ces regles pesent plus
+   que celles derivees du noir, quel que soit l'ordre des feuilles. */
+:root[data-theme='holographique-clair'][data-base='clair'] .askd {
+  padding: 15px 10px 10px;
+  border: 1px solid rgba(20, 15, 40, 0.13);
+  border-image: none;
+  border-radius: 12px;
+  background: var(--nv-holo-lisere) left top / 100% 3px no-repeat, #fdfdff;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .askd::after {
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 3px;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .askd .askd-item {
+  border: 1px solid rgba(20, 15, 40, 0.12);
+  border-radius: 10px;
+  background: #ffffff;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .askd:not(.est-repondu) .askd-item:is(:hover, :focus-within, .est-reco) {
+  border: 1.5px solid transparent;
+  margin: -0.5px;
+  background: linear-gradient(#ffffff, #ffffff) padding-box, var(--nv-askd-holo) border-box;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .askd .askd-item:has(.askd-coche input:checked),
+:root[data-theme='holographique-clair'][data-base='clair'] .askd.est-repondu .askd-item:has(.askd-choix[data-choisi='oui']) {
+  border: 1px solid transparent;
+  margin: 0;
+  background: var(--nv-degrade) padding-box, linear-gradient(#f2f2f2, #f2f2f2) border-box;
+}
+:root[data-theme='holographique-clair'][data-base='clair'] .askd .askd-pied {
+  border-image: none;
+  border-top: 1px solid rgba(20, 15, 40, 0.1);
 }

@@ -515,15 +515,18 @@
   gap: 4px;
 }
 
+/* ESPACEMENT VERTICAL RESSERRE (conv-227, 2026-10-11 : « ya trop d'espacement vertical entre les
+   differents elements du chat ca fait scroller pour rien »). Mesure avant : 34 px entre deux
+   messages, 38 px au-dessus du premier, 9-10 px entre les elements d'un message. */
 .cosmic-outline .chat-scroll {
-  gap: 34px;
-  padding: 38px max(34px, calc((100% - 900px) / 2)) 34px;
+  gap: 18px;
+  padding: 20px max(34px, calc((100% - 900px) / 2)) 20px;
 }
 
 .cosmic-outline .msg {
   width: min(100%, 820px);
   max-width: 820px;
-  gap: 9px;
+  gap: 6px;
 }
 
 .cosmic-outline .msg.user {
@@ -537,7 +540,7 @@
 }
 
 .cosmic-outline .msg-turn {
-  gap: 10px;
+  gap: 6px;
 }
 
 .cosmic-outline .msg.assistant .msg-body {
@@ -973,7 +976,7 @@
  * lumiere AUTOUR (« nan essaye plutot avec des shadows autour »), qui suit le degrade (« Néon mais
  * faut que la couleur suive le dégradé »), sans bord lumineux (« go Brume »). Une ombre CSS n'a
  * qu'UNE couleur : la lueur est donc une COPIE FLOUTEE du fond de la bulle (`background: inherit`),
- * posee derriere elle. Elle suit le degrade de chaque theme sombre, or en Nebuleuse doree.
+ * posee derriere elle. Elle suit le degrade de chaque theme sombre.
  * `isolation` sur la ligne du message : sans elle, le calque a z-index -1 tomberait sous le fond du
  * fil, qui le cacherait.
  */
@@ -990,14 +993,6 @@
   filter: blur(22px);
   opacity: 0.45;
   pointer-events: none;
-}
-/* Theme NEBULEUSE DOREE : pas de rose ni de bleu (conv-139, 2026-10-10). Meme bulle, degrade
-   or -> noir chaud qui part d'en bas a droite comme la zone de saisie. */
-:root[data-theme='nebuleuse-doree']:not([data-base='clair']) .cosmic-outline .msg.user .msg-body.msg-bulle {
-  /* Ni liseré (le border-left-color dore du theme genere teintait le bord gauche) ni rose : le
-     MEME degrade que la zone de saisie (conv-139, 2026-10-10). */
-  border: 0;
-  background: linear-gradient(315deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%);
 }
 :root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle.avec-skill {
   padding: 0;

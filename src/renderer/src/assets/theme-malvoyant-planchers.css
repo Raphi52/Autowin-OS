@@ -102,7 +102,8 @@
 }
 
 /* components/AskDecision.css — tailles */
-:root[data-theme^='malvoyant-'] .askd-pied {
+:root[data-theme^='malvoyant-'] .askd-pied,
+:root[data-theme^='malvoyant-'] .askd-envoyer-compte {
   font-size: 13px;
 }
 
@@ -206,6 +207,13 @@
 
 /* components/ChatMosaic.css — tailles */
 :root[data-theme^='malvoyant-'] .chat-mosaic-window-composer .composer-dictee-message {
+  font-size: 13px;
+}
+
+/* components/ChatView.capsule-orchestration.css — tailles */
+:root[data-theme^='malvoyant-'] .thinking-block--orchestration > .orch-corps,
+:root[data-theme^='malvoyant-'] .thinking-block--orchestration .orch-titre,
+:root[data-theme^='malvoyant-'] .thinking-block--orchestration .orch-attente {
   font-size: 13px;
 }
 
@@ -751,6 +759,9 @@
 :root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button small,
 :root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button em,
 :root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button.is-bottleneck::after,
+:root[data-theme^='malvoyant-'] .observatory-turn > header .observatory-turn-span,
+:root[data-theme^='malvoyant-'] .observatory-event-when,
+:root[data-theme^='malvoyant-'] .observatory-event-when small,
 :root[data-theme^='malvoyant-'] .observatory-event > span:nth-child(2) b,
 :root[data-theme^='malvoyant-'] .observatory-event > span:nth-child(2) small,
 :root[data-theme^='malvoyant-'] .observatory-event p small,
@@ -1062,6 +1073,7 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-node-title b,
 :root[data-theme^='malvoyant-'] .workflow-execution-node-title em,
 :root[data-theme^='malvoyant-'] .workflow-execution-node-meta,
+:root[data-theme^='malvoyant-'] .workflow-execution-node-failure,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail header,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dt,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dd,

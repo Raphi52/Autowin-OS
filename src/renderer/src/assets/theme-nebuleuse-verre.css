@@ -296,8 +296,8 @@
   --module-eyebrow-color: #8f89ad;
 }
 
-/* FOND-PROPRE:DEBUT -- propre a Nebuleuse de verre. genererMainDoree (scripts/theme-nebuleuse-verre.mjs,
-   FOND_DOREE) remplace tout ce bloc, marqueurs compris, par le fond de Nebuleuse doree. */
+/* FOND-PROPRE:DEBUT -- propre a Nebuleuse de verre. genererMainClair (scripts/theme-nebuleuse-verre.mjs,
+   FOND_CLAIR) remplace tout ce bloc, marqueurs compris, par le fond d'Holographique blanc. */
 /* ---------------------------------------------------------------------------
    2. FOND NOIR PUR (2026-10-10, conv-184) : l'utilisateur a compare son fond
    « liseré · halo haut » (conv-159 : halo azur en haut, halo rose en bas,
@@ -655,8 +655,7 @@
 :root[data-theme='nebuleuse-verre'] .conv-search .input {
   border-radius: 12px;
 }
-/* RECHERCHE-GROSSE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde son champ de recherche d'origine. */
+/* RECHERCHE-GROSSE:DEBUT -- champ de recherche en gros (conv-185). */
 /* CHAMP « RECHERCHER PARTOUT… » EN GROS (conv-185, 2026-10-10 : « ce bloc je le veux en gros avec
    contour gris et contour blanc quand j'ecris dedans »). Gris neutre au repos, BLANC pendant la
    saisie, sans halo. Specificite (0,4,0) / (0,5,0) chargee APRES la couche generee : prime sur son
@@ -896,8 +895,7 @@
    Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`, « le bloc Frame ») reutilise ces
    classes et prend le MEME habit (conv-202 : « le bloc Frame aussi il faut lui donner la meme
    gueule que notre nouveau bloc ASK ») : l'or de conv-136 n'y reste plus. L'encre posee sur le
-   degrade passe par --nv-askd-encre-bulle, que Nebuleuse doree remet en noir chaud (son degrade
-   est or). */
+   degrade passe par --nv-askd-encre-bulle. */
 :root[data-theme='nebuleuse-verre'] .askd {
   --gold: #ff8cc8;
   --gold-bright: #ffffff;
@@ -1323,8 +1321,7 @@
   /* PLUS DE ROSE (conv-155, 2026-10-10, « enlever ce rose », variante « B · S'allume, rond »
      choisie sur maquette) : un NOIR PROFOND UNI. Ecrit comme un degrade d'une seule teinte pour
      rester une couche d'image : la saisie detachee du fil le pose sur son encre (plus bas).
-     En VARIABLE, ecrite UNE seule fois : le generateur de Nebuleuse doree remplace cette ligne
-     par SON degrade or -> noir (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
+     En VARIABLE, ecrite UNE seule fois. */
   --nv-saisie-degrade: linear-gradient(#09090a, #09090a);
   background: var(--nv-saisie-degrade);
   backdrop-filter: none;
@@ -1345,9 +1342,7 @@
      degrade que les panneaux (--nv-cadre-coule), a la place du cadre or uni de conv-155.
      Le bloc est OPAQUE (--nv-saisie-degrade = #09090a plein) : le cadre est donc un FOND pose sur
      la boite du bord, et le noir du bloc, rogne a l'interieur (padding-box), le recouvre ailleurs.
-     Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut.
-     Nebuleuse doree garde sa saisie (SAISIE_DOREE) : bord blanc fin, aucun cadre, degrade non
-     rogne -- trois lignes remplacees ci-dessous. */
+     Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut. */
   --nv-saisie-bord: transparent;
   --nv-saisie-cadre: var(--nv-cadre-coule);
   --nv-saisie-boite: padding-box;
@@ -1449,8 +1444,7 @@
    (« ca faisait sens pour la bulle de chat mais pas pour les boutons ») -- et le degrade
    bleu -> rose : un ROND de 38 px, comme les trois ronds de sa rangee. Champ vide : contour or
    eteint. Message pret : OR PLEIN, avion fonce -- l'or dit « ca peut partir ». Aucune lueur.
-   Les couleurs passent par les jetons --nv-envoi-* : Nebuleuse doree, generee depuis ce
-   fichier, y remet sa pastille degradee or (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
+   Les couleurs passent par les jetons --nv-envoi-*. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send {
   --nv-envoi-fond: #d9ae52;
   --nv-envoi-fond-survol: #e3ba55;
@@ -1522,8 +1516,7 @@
   box-shadow: 0 0 0 1px rgba(0, 255, 85, 0.6);
   color: #ccffdd;
 }
-/* RELIEF-PERLE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde sa pastille degradee (conv-155). */
+/* RELIEF-PERLE:DEBUT -- Envoyer et Stop en perle (2026-10-10). */
 /* ENVOYER ET STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette parmi six
    dosages du dome : « PERLE implémente »). Les deux ronds sortaient plats ; ils deviennent un DOME
    (degrade radial clair au centre -> sombre au bord) coiffe d'un REFLET OVALE net en haut. Survol :
@@ -1540,7 +1533,7 @@
    le reste de mon theme » : « E · Gel » puis « implémente E4 »). La perle or d'Envoyer cede la
    place au degrade du theme, celui de « Nouveau fil » et de l'icone active du menu, avion BLANC, et
    un reflet blanc qui s'efface SANS ligne jusqu'au milieu. Il repeint, pour ce theme seulement, l'or
-   des jetons --nv-envoi-* poses plus haut (ces jetons restent : la doree derivee les reprend).
+   des jetons --nv-envoi-* poses plus haut.
    L'etat se lit au reflet et a l'avion, jamais a la couleur (conv-182 : le bleu reste plein) :
    survol = reflet plus fort, appui = reflet eteint sans retrecir, rien a envoyer = le meme rond,
    reflet faible et avion a 50 % -- plus de contour or ni d'`opacity`. « Orienter » est le meme
@@ -1624,7 +1617,7 @@
    vivante, rgb(255, 181, 71). Le bandeau prend donc l'or de la perle d'Envoyer (#e2b65a -> #a27326),
    en voile : deux teintes, un reflet blanc ovale en haut, l'ombre noire courte, aucune lueur.
    --warn n'est redefini que sur le bandeau : le jeton du theme reste l'ambre des ETATS (interrompu,
-   refuse). Hors du bloc de la perle : Nebuleuse doree en herite a l'identique. */
+   refuse). */
 :root[data-theme='nebuleuse-verre'] .chat-workflow-notice {
   --warn: #e2b65a;
   color: #e9c069;
@@ -1657,8 +1650,7 @@
    or depuis conv-179, puis jugee « trop orange ». ChatView.css la pose sur le filet du bas de
    l'en-tete (`.chat-context-rule`) et ecrit le mot « contexte » au bout du remplissage. Ici :
    3 px, l'epaisseur demandee pour la jauge (conv-156) ; un rail gris (voile a 16 %) ; un
-   remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css.
-   Hors des blocs propres a ce theme (perle, chanfrein) : Nebuleuse doree en herite a l'identique. */
+   remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css. */
 :root[data-theme='nebuleuse-verre'] .chat-context-rule::after,
 :root[data-theme='nebuleuse-verre'] .chat-context-rule::before {
   top: 4px;
@@ -1673,8 +1665,7 @@
   background-color: #ffffff;
   opacity: 0.9;
 }
-/* CADRE-CHANFREIN:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
-   la doree garde le cadre « or qui coule vers le blanc » (conv-168) et ses coins arrondis. */
+/* CADRE-CHANFREIN:DEBUT -- cadre chanfrein platine (conv-177). */
 /* CADRE CHANFREIN PLATINE, « COINS SEULS » (conv-177, 2026-10-10 : « /draft des Border de container
    styles », puis « j'adore le 3 » -- Chanfrein --, « Platine », et « coins seuls implemente » ;
    reglage 2 du tour 3 choisi sur maquette). Les coins HAUT GAUCHE et BAS DROIT sont COUPES a 45 deg
@@ -2003,8 +1994,7 @@
    au repos. Le comportement du survol est garde, ramene a ce seul trait : le trait redevient gris
    et SEULE la portion au-dessus de la case survolee reprend le bleu -> rose (une case allumee a la
    fois, demande du /draft du pied). Les anneaux decoupes deviennent de simples bandes d'1 px
-   collees en haut : aucun masque, aucun `clip-path`. Nebuleuse doree, a coins arrondis, garde sa
-   capsule entiere : ce reglage vit dans le bloc du chanfrein, que la derivation ne reprend pas. */
+   collees en haut : aucun masque, aucun `clip-path`. Ce reglage vit dans le bloc du chanfrein. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot {
   border-radius: 0;
   clip-path: none;
@@ -2136,7 +2126,7 @@
 /* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
    La couche generee transposait cet or en rose comme un or decoratif ; la saisie n'a plus de rose
    (conv-155) et l'or y signale ce qui est actif. Le jeton --gold-clair de ce theme etant rose, la
-   couleur du glyphe est ecrite ici (Nebuleuse doree remet son --gold-clair, SAISIE_DOREE). */
+   couleur du glyphe est ecrite ici. */
 :root[data-theme='nebuleuse-verre'] .composer-auto.actif {
   --nv-auto-glyphe: #e3ba55;
   border-color: rgba(212, 169, 79, 0.75);

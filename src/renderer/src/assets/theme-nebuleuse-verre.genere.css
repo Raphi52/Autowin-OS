@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   567 regles, 794 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   578 regles, 806 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -224,6 +224,11 @@
     color: rgb(255, 176, 216)
 }
 
+/* ---- src/renderer/src/components/ChatView.capsule-orchestration.css ---- */
+:root[data-theme='nebuleuse-verre'] .thinking-block--orchestration .orch-texte {
+    background: var(--bg-inset, rgba(10, 10, 10, 0.45))
+}
+
 /* ---- src/renderer/src/components/ChatView.css ---- */
 :root[data-theme='nebuleuse-verre'] .conv-highlight {
     background: rgba(251, 91, 171, 0.28)
@@ -351,6 +356,9 @@
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer {
     background: linear-gradient(180deg, rgba(10, 10, 10, 0.74), var(--chat-saisie-fond) 30%)
+}
+:root[data-theme='nebuleuse-verre'] .chat-context-rule-libelle {
+    background: rgb(10, 10, 10)
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send {
     border: 1px solid rgba(255, 53, 154, 0.55);
@@ -1275,6 +1283,34 @@
 }
 :root[data-theme='nebuleuse-verre'] .observatory-causal-node-wrap > button.is-critical > i {
     box-shadow: 0 0 8px rgba(134, 109, 255, 0.65)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-turn {
+    --tl-line: rgba(255, 107, 181, 0.38)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-turn > header::before {
+    border: 2px solid rgb(255, 107, 181);
+    background: var(--surface-panel, rgb(10, 10, 10))
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-when[data-pause='true'] small {
+    color: rgb(255, 107, 181)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-when::after {
+    background: var(--tl-dot, rgb(255, 107, 181))
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-row[data-kind='response-displayed'] {
+    --tl-dot: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-row[data-kind='artifact'] {
+    --tl-dot: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-row[data-kind='tool-call'] {
+    --tl-dot: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-row[data-kind='tool-result'] {
+    --tl-dot: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .observatory-event-row[data-kind='gate'] {
+    --tl-dot: rgb(255, 47, 151)
 }
 :root[data-theme='nebuleuse-verre'] .observatory-turn > header span {
     color: rgb(255, 107, 181)

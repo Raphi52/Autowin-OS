@@ -19,7 +19,9 @@
    * qu'on le survole).
    */
   position: relative;
-  margin: 16px 0 6px;
+  /* 16 px -> 6 px au-dessus (conv-227, 2026-10-11 : « trop d'espacement vertical [...] ») : le
+     filet or du haut suffit a detacher le bloc du texte qui precede. */
+  margin: 6px 0 6px;
   padding: 14px 0 2px;
   border-top: 2px solid;
   border-bottom: 1px solid;

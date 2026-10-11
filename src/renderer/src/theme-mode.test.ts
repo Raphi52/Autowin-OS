@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  THEMES,
   THEME_MODE_STORAGE_KEY,
   appliquerThemeMode,
   ecrireThemeMode,
@@ -29,6 +30,22 @@ describe('mode d’affichage sombre / clair', () => {
     expect(lireThemeMode()).toBe('sombre')
   })
 
+  /*
+   * SIX THEMES RETIRES le 2026-10-11 (conv-231, « supprime les theme nebula les 2 themes rose
+   * versaille ardoise et parchemin »). Un poste qui en avait memorise un retombe sur le sombre.
+   * ENTREE QUI DOIT FAIRE ECHOUER CE CAS : remettre l un d eux dans le registre ou sa feuille.
+   */
+  it('n’offre plus les six themes retires, et retombe sur le sombre si l’un etait memorise', () => {
+    const retires = ['obsidian-nebula', 'solar-rose', 'rose-poudre', 'black-versailles', 'ardoise', 'parchemin']
+    const css = readFileSync('src/renderer/src/assets/theme-modes.css', 'utf8')
+    for (const id of retires) {
+      expect(THEMES.map((t) => t.id)).not.toContain(id)
+      expect(css).not.toContain(`data-theme='${id}'`)
+      localStorage.setItem(THEME_MODE_STORAGE_KEY, id)
+      expect(lireThemeMode()).toBe('sombre')
+    }
+  })
+
   it('mémorise le clair et le pose sur la racine du document', () => {
     ecrireThemeMode('clair')
     expect(localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('clair')
@@ -52,22 +69,22 @@ describe('mode d’affichage sombre / clair', () => {
    * ENTREE QUI DOIT FAIRE ECHOUER CES DEUX CAS : ne plus poser data-base, ou le poser pour tous.
    */
   it('pose la BASE du theme a cote de son nom, pour un theme clair NOMME', function () {
-    ecrireThemeMode('ardoise')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('ardoise')
+    ecrireThemeMode('holographique-clair')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('holographique-clair')
     expect(document.documentElement.getAttribute('data-base')).toBe('clair')
   })
 
   it('ne laisse AUCUNE base derriere lui quand on repasse a un theme sombre', function () {
-    ecrireThemeMode('ardoise')
-    ecrireThemeMode('obsidian-nebula')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('obsidian-nebula')
+    ecrireThemeMode('holographique-clair')
+    ecrireThemeMode('nebuleuse-verre')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('nebuleuse-verre')
     expect(document.documentElement.hasAttribute('data-base')).toBe(false)
   })
   /*
    * `prefers-color-scheme` doit suivre la BASE du theme Autowin, pas Windows. Defaut constate le
    * 2026-10-08 (conv-111) : Windows clair + Autowin sombre -> le HTML du fil ecrivait en bleu marine
    * sur noir. ENTREE QUI DOIT FAIRE ECHOUER CE CAS : ne plus appeler `setColorScheme`, ou envoyer
-   * `light` pour un theme sombre NOMME (obsidian-nebula) ou `dark` pour un clair NOMME (ardoise).
+   * `light` pour un theme sombre NOMME (nebuleuse-verre) ou `dark` pour un clair NOMME (holographique-clair).
    */
   it('annonce au processus principal le schema de couleurs de la BASE du theme', function () {
     const recus: string[] = []
@@ -76,8 +93,8 @@ describe('mode d’affichage sombre / clair', () => {
     g.api = { setColorScheme: (s: string) => (recus.push(s), Promise.resolve(true)) }
     try {
       appliquerThemeMode('sombre')
-      appliquerThemeMode('ardoise')
-      appliquerThemeMode('obsidian-nebula')
+      appliquerThemeMode('holographique-clair')
+      appliquerThemeMode('nebuleuse-verre')
       appliquerThemeMode('malvoyant-clair')
     } finally {
       g.api = avant

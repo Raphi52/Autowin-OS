@@ -146,6 +146,39 @@ describe('theme Holographique blanc', () => {
     for (const extremite of ['#3c6eeb', '#d02b8c']) expect(contraste('#ffffff', extremite)).toBeGreaterThanOrEqual(4.5)
   })
 
+  /* conv-229 (2026-10-11, capture : « Actives », « Compacte », « Mosaique » illisibles) : « dans le
+     menu en bas des conv les textes deviennent blanc quand je click dessus sur fond blanc ». Le pied
+     n'a plus de fond depuis le /draft du 2026-10-10 (« rien ne s'y allume ») : aucune de ses cases,
+     quel que soit son reglage, ne doit recevoir une couleur de texte illisible sur la nacre. */
+  it('pied de liste : le texte de chaque case reste lisible sur la nacre, reglage change ou non', () => {
+    const couleurs: string[] = []
+    postcss.parse(css).walkRules((r) => {
+      if (!r.selectors.some((s) => s.startsWith(PREFIXE) && s.includes('.conv-foot'))) return
+      r.walkDecls('color', (d) => void couleurs.push(`${r.selectors.find((s) => s.includes('.conv-foot'))} -> ${d.value}`))
+    })
+    expect(couleurs.length).toBeGreaterThan(0)
+    for (const c of couleurs) {
+      const valeur = c.split(' -> ')[1]
+      expect(contraste(enHex(valeur), NACRE), c).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  /* conv-229, suite (capture : « Graph » blanc sur blanc) : « pareil pour les headers du menu
+     Details ». Sous le cadre a coins coupes, l'onglet actif n'a plus de pastille (conv-180) : un
+     simple trait sous le mot, sur la nacre. Son texte doit donc etre lisible sur la nacre. */
+  it('panneau Details : l onglet actif en trait seul reste lisible sur la nacre', () => {
+    const couleurs: string[] = []
+    postcss.parse(css).walkRules((r) => {
+      const sel = r.selectors.find((s) => s.startsWith(PREFIXE) && s.includes('.runs-pane .workflow-section-tab'))
+      if (sel) r.walkDecls('color', (d) => void couleurs.push(`${sel} -> ${d.value}`))
+    })
+    expect(couleurs.some((c) => c.includes('.is-active'))).toBe(true)
+    for (const c of couleurs) {
+      const valeur = c.split(' -> ')[1]
+      expect(contraste(enHex(valeur), NACRE), c).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
   /* Ce que l'utilisateur a choisi sur maquette (conv-212). */
   it('« Le plus blanc » : satin nacre #f8f7fb, page #f6f5f9 unie', () => {
     expect(css).toContain('#f8f7fb 0%, #ffffff 18%')
@@ -174,6 +207,40 @@ describe('theme Holographique blanc', () => {
     expect(regles.length).toBeGreaterThan(0)
     expect(regles.join(' ')).not.toMatch(/#202020|#2c2c2c|#222222/i)
   })
+  /* conv-225 (2026-10-11, /draft du bloc ASK en blanc, tour 1 : « go : fais le 3 »). La plaque grise
+     #eceaf2 du cadre irise (conv-202) jurait sur la page #f6f5f9. Version 3 « Liseré du haut » : nacre,
+     contour gris fin, lisere irise de 3 px en haut ; reponses en capsules blanches, l'irise ne revient
+     qu'au survol, au focus et sur la recommandee. Entree qui doit faire echouer : ces regles retirees du
+     complement (le gris du cadre derive du noir revient), ou ecrites a UN seul attribut (elles ne
+     pesent alors pas plus que les regles derivees du noir). */
+  it('bloc ASK « Liseré du haut » : nacre, contour gris, lisere irise en haut, irise des reponses au survol seulement', () => {
+    const P = `${PREFIXE}[data-base='clair']`
+    const regle = (selecteur: string): Record<string, string> => {
+      const decl: Record<string, string> = {}
+      postcss.parse(css).walkRules((r) => {
+        if (!r.selectors.includes(`${P} ${selecteur}`)) return
+        r.walkDecls((d) => void (decl[d.prop] = d.value))
+      })
+      return decl
+    }
+    expect(regle('.askd')).toMatchObject({
+      border: '1px solid rgba(20, 15, 40, 0.13)',
+      background: 'var(--nv-holo-lisere) left top / 100% 3px no-repeat, #fdfdff'
+    })
+    expect(regle('.askd .askd-item')).toMatchObject({
+      border: '1px solid rgba(20, 15, 40, 0.12)',
+      background: '#ffffff'
+    })
+    expect(regle('.askd:not(.est-repondu) .askd-item:is(:hover, :focus-within, .est-reco)').background).toBe(
+      'linear-gradient(#ffffff, #ffffff) padding-box, var(--nv-askd-holo) border-box'
+    )
+    expect(regle('.askd .askd-pied')).toMatchObject({
+      'border-image': 'none',
+      'border-top': '1px solid rgba(20, 15, 40, 0.1)'
+    })
+    // La reponse cochee ou retenue garde le degrade de la bulle (conv-201) : rien ne doit la repeindre en blanc.
+    expect(regle('.askd .askd-item:has(.askd-coche input:checked)').background).toContain('var(--nv-degrade) padding-box')
+  })
   it('capsule d actions terminee : trait vert du theme et teinte verte, plus le sarcelle de la base claire', () => {
     const i = css.indexOf(`${PREFIXE} .cosmic-outline .activity-group[data-state='done'] {`)
     expect(i).toBeGreaterThan(0)
@@ -181,6 +248,32 @@ describe('theme Holographique blanc', () => {
     expect(regle).toContain('border-left-color: #09712c;')
     expect(regle).toMatch(/rgba\(0, 190, 70, 0\.14\)/)
     expect(contraste('#09712c', NACRE)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  /* /draft du bloc de fin de tour (conv-212, 2026-10-11) : « Cadre holo », puis « go met le 5 »
+     (titre et filet). Entree qui doit faire echouer : le cadre or bruni recolore du noir revenu,
+     ou l'emoji du titre laisse en encre transparente (il disparaitrait). */
+  it('bloc Fait : cadre holo du bloc ASK, « Fait » en degrade, emoji garde, filet irise sous la liste', () => {
+    const P = `${PREFIXE}[data-base='clair'] .md-final-summary`
+    const bloc = (suffixe: string): string => {
+      const i = css.indexOf(`${P}${suffixe}`)
+      expect(i, `${P}${suffixe} absent`).toBeGreaterThan(0)
+      return css.slice(i, css.indexOf('}', i))
+    }
+    expect(bloc(' {')).toMatch(
+      /repeating-linear-gradient\(100deg, #3c6eeb 0, #d02b8c 60px, #d9d9d9 120px, #ff8cc8 180px, #3c6eeb 240px\)/
+    )
+    expect(bloc(' {')).toContain('box-shadow: none;')
+    // Le titre garde l'encre (l'emoji reste en couleur) ; un calque « eclaircir » colore le mot seul.
+    // Un decoupage background-clip: text reduisait l'emoji a un carre bleu (capture du 2026-10-11).
+    const titre = bloc(' > span:first-child > span:first-child,')
+    expect(titre).toContain('color: #1c172b;')
+    expect(titre).not.toMatch(/text-fill-color: transparent|background-clip: text/)
+    const calque = bloc(' > span:first-child > span:first-child::after,')
+    expect(calque).toMatch(/mix-blend-mode: lighten;/)
+    expect(calque).toMatch(/left: 1.5em;/)
+    expect(bloc(' > span:first-child > .md-list:nth-child(2) {')).toMatch(/border-image: linear-gradient\(90deg, #3c6eeb/)
+    for (const c of ['#2f56c9', '#b01d7c']) expect(contraste(c, '#fdfdff')).toBeGreaterThanOrEqual(4.5)
   })
 })
 
