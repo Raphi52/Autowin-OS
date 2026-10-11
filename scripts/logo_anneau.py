@@ -180,8 +180,12 @@ def generer(racine: Path = _RACINE) -> list[Path]:
     ico = _ico([dessiner_anneau(cote, sur=max(8, 2048 // cote)) for cote in TAILLES_ICO])
     # `resources/icon.ico` : l'icone de la zone de notification de l'app INSTALLEE (src/main/window.ts).
     # `build/` ne part pas dans le paquet, seul `resources/` y est extrait (electron-builder.yml).
-    for relatif in ("build/icon.ico", "resources/icon.ico", "resources/autowin-os-dev.ico"):
-        chemin = racine / relatif
+    # TOUT autre .ico de ces deux dossiers recoit aussi le logo : le 2026-10-11 (conv-266), deux
+    # copies a nom unique (`*-c3735beb.ico`, ancien contournement du cache d'icones) portaient encore
+    # l'atome — « change tous les icones de autowin OS ou ya l'atome par le cercle ».
+    nommes = [racine / r for r in ("build/icon.ico", "resources/icon.ico", "resources/autowin-os-dev.ico")]
+    autres = sorted({*(racine / "build").glob("*.ico"), *(racine / "resources").glob("*.ico")} - set(nommes))
+    for chemin in (*nommes, *autres):
         chemin.write_bytes(ico)
         ecrits.append(chemin)
     chemin = racine / "build" / "icon.icns"
@@ -222,10 +226,109 @@ def prevenir_windows(fichiers: list[Path]) -> list[Path]:
     return notifies
 
 
+# Tampon pose a cote d'electron.exe apres reecriture : il decrit l'exe REECRIT et l'icone posee.
+TAMPON_ELECTRON = "autowin-icone.json"
+
+
+def _exe_electron(racine: Path) -> Path:
+    return racine / "node_modules" / "electron" / "dist" / "electron.exe"
+
+
+def _verrouille(exe: Path) -> bool:
+    """Vrai si l'exe ne s'ouvre pas en ecriture : une app tourne dessus (meme test que le lanceur)."""
+    try:
+        with exe.open("r+b"):
+            return False
+    except OSError:
+        return True
+
+
+def poser_sur_electron(racine: Path = _RACINE, executer=None, verrouille=_verrouille) -> str:
+    """Remplace l'icone INTEGREE a `node_modules/electron/dist/electron.exe` par le logo.
+
+    POURQUOI. En dev, l'app tourne sur l'electron.exe d'npm, qui porte l'ATOME d'Electron dans ses
+    ressources. Les raccourcis Bureau / menu Demarrer et la fenetre ont chacun leur icone (l'anneau),
+    mais le Gestionnaire des taches, le melangeur de volume et l'Explorateur lisent celle de l'exe.
+    Constate le 2026-10-11 (conv-266) : c'etait le dernier atome du produit sur ce poste. Le paquet
+    installe, lui, recoit `build/icon.ico` d'electron-builder (electron-builder.yml).
+
+    COMMENT, SANS RISQUE POUR L'EXE. Jamais d'ecriture en place : rcedit (livre avec
+    electron-winstaller) reecrit une COPIE, la copie est LANCEE une fois (`ELECTRON_RUN_AS_NODE`), et
+    seulement alors elle remplace l'exe. Un echec laisse electron.exe intact. Exe verrouille (une app
+    tourne dessus) : aucun geste, le prochain lancement s'en charge. Mesure (245 Mo, conv-266) :
+    ~10 s au total, une seule fois par exe ou par logo ; ensuite « deja-pose », instantane.
+
+    Un `npm install` remet l'exe d'origine : le TAMPON (taille + date de l'exe reecrit, empreinte de
+    l'icone) ne correspond plus et l'icone est reposee au lancement suivant (`launch_dev.py`).
+
+    Rend « absent », « verrouille », « deja-pose », « pose » ou « echec : <raison> ».
+    """
+    import hashlib
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    executer = executer or subprocess.run
+    exe = _exe_electron(racine)
+    icone = racine / "build" / "icon.ico"
+    outil = racine / "node_modules" / "electron-winstaller" / "vendor" / "rcedit.exe"
+    if not exe.is_file():
+        return "absent"
+    if not icone.is_file():
+        return f"echec : icone introuvable ({icone})"
+    empreinte = hashlib.sha256(icone.read_bytes()).hexdigest()
+    tampon = exe.parent / TAMPON_ELECTRON
+    try:
+        attendu = json.loads(tampon.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        attendu = {}
+    etat = exe.stat()
+    if attendu == {"ico_sha256": empreinte, "exe_taille": etat.st_size, "exe_mtime_ns": etat.st_mtime_ns}:
+        return "deja-pose"
+    if verrouille(exe):
+        return "verrouille"
+    if not outil.is_file():
+        return f"echec : rcedit introuvable ({outil})"
+
+    copie = exe.with_name("electron-autowin-tmp.exe")
+    options = {"capture_output": True, "text": True, "timeout": 120}
+    if sys.platform == "win32":
+        options["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        shutil.copy2(exe, copie)
+        fin = executer([str(outil), str(copie), "--set-icon", str(icone)], **options)
+        if fin.returncode != 0:
+            return f"echec : rcedit code {fin.returncode} {(fin.stderr or '').strip()[:200]}"
+        essai = executer(
+            [str(copie), "-e", "process.exit(0)"],
+            env={**os.environ, "ELECTRON_RUN_AS_NODE": "1"},
+            **options,
+        )
+        if essai.returncode != 0:
+            return f"echec : l'exe reecrit ne demarre pas (code {essai.returncode})"
+        os.replace(copie, exe)
+    except (OSError, subprocess.SubprocessError) as erreur:
+        return f"echec : {erreur}"
+    finally:
+        if copie.exists():
+            copie.unlink()
+    etat = exe.stat()
+    tampon.write_text(
+        json.dumps({"ico_sha256": empreinte, "exe_taille": etat.st_size, "exe_mtime_ns": etat.st_mtime_ns}),
+        encoding="utf-8",
+    )
+    return "pose"
+
+
 if __name__ == "__main__":
     cible = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else _RACINE
     ecrits = generer(cible)
     for fichier in ecrits:
         print(f"ecrit : {fichier}")
-    for chemin in prevenir_windows([f for f in ecrits if f.suffix in (".ico", ".png")]):
+    etat_electron = poser_sur_electron(cible)
+    print(f"icone d'electron.exe : {etat_electron}")
+    if etat_electron == "pose":
+        ecrits.append(_exe_electron(cible))
+    for chemin in prevenir_windows([f for f in ecrits if f.suffix in (".ico", ".png", ".exe")]):
         print(f"cache d'icones Windows prevenu : {chemin}")

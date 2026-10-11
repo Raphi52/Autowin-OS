@@ -45,6 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
 from launch_dev_dependances import dependances_manquantes, electron_verrouille
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
+import logo_anneau  # noqa: E402 - icone d'electron.exe, voir `poser_icone_electron`
 
 RACINE = Path(__file__).resolve().parent.parent
 JOURNAL = RACINE / ".autowin-data" / "launch-dev.log"
@@ -586,11 +587,23 @@ def main() -> int:
             else f"[demarrage] dépendances toujours incomplètes ({reste[0]}) — voir {JOURNAL}\n"
         )
 
+    def poser_icone_electron() -> None:
+        """Le logo dans electron.exe : le Gestionnaire des taches n'affiche plus l'atome (conv-266)."""
+        etat = logo_anneau.poser_sur_electron(RACINE)
+        journaliser(f"icone electron.exe : {etat}")
+        if etat == "pose":
+            logo_anneau.prevenir_windows([logo_anneau._exe_electron(RACINE)])
+        elif etat.startswith("echec"):
+            splash.pousser(f"[demarrage] icône d'Electron non remplacée ({etat}) — voir {JOURNAL}\n")
+
     def travailler() -> None:
         try:
             mettre_a_jour()
             # APRES la mise a jour : un pull qui ajoute une dependance est repare du meme geste.
             reparer_dependances()
+            # APRES la reparation (une reinstallation remet l'atome d'Electron dans l'exe) et AVANT
+            # `npm run dev` (apres, l'exe est verrouille). Detail : logo_anneau.poser_sur_electron.
+            poser_icone_electron()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
                 # L'app ecrit dans SON fichier, pas dans un tube qui mourrait avec nous : c'est la
