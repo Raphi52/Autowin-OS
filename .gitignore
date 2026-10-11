@@ -29,6 +29,9 @@ artifacts/preuve-*.png
 # Versionnees par accident le 2026-08-18 (commit 601d7da0, balayage automatique dune session
 # concurrente) : 1,2 Mo de PNG dans lhistorique partage. Ignorees pour que cela ne recommence pas.
 .autowin-chat-*.png
+# Meme famille, autre prefixe, ajoute le 2026-10-11 (conv-233) : `.autowin-tmp-capture-chat*.png`
+# (270 Ko) versionnees par un run le 2026-09-23 (commit 3d61a94c), le motif ci-dessus ne les couvrait pas.
+/.autowin-tmp-*.png
 
 # Preferences personnelles injectees dans chaque tour (contexte projet local, non partage)
 AGENTS.md
