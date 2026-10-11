@@ -385,7 +385,9 @@ export function ModelActivityLogPane({
             <details open>
               <summary className="model-log-tour__head">
                 <strong>Tour {tour.index}</strong>
-                <span>{heure(tour.debut) ?? '—'}</span>
+                {/* Sans heure de début, pas de case « — » : elle se lisait comme un tiret
+                    entre le rang et les chiffres (conv-247, 2026-10-11). */}
+                {heure(tour.debut) ? <span>{heure(tour.debut)}</span> : null}
                 <span>{tour.entries.length} gestes</span>
                 {typeof tour.dureeMs === 'number' && <span>{duree(tour.dureeMs)}</span>}
                 {typeof tour.tokens === 'number' && (
