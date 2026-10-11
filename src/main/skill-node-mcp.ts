@@ -264,7 +264,34 @@ export function schemaEntree(args: Record<string, unknown>): {
  */
 export const PLAFOND_RESULTAT_OUTIL_CAR = 500_000
 
-export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
+/**
+ * Le PERIMETRE d'un serveur : quels noms il publie et sert, et comment il refuse le reste.
+ *
+ * Par defaut, celui d'un noeud skill (`OUTILS_NOEUD_SKILL`). Le chat passe le sien
+ * (`chat-mcp.ts`), DERIVE du catalogue du bus — jamais une seconde liste ecrite a la main.
+ */
+export interface PerimetreOutils {
+  readonly outils: readonly string[]
+  /** Texte du refus d'un nom hors perimetre. */
+  refus(nom: string): string
+}
+
+export const PERIMETRE_NOEUD_SKILL: PerimetreOutils = {
+  // GETTER, pas une valeur : le cycle d'import skill-node-mcp -> skill-node-tools -> agent-pilot ->
+  // chat-mcp -> skill-node-mcp fait lire OUTILS_NOEUD_SKILL avant son initialisation si on le copie
+  // au chargement (mesure le 2026-10-02 sur 7cec6570 : TypeError « reading 'includes' »). Lu a
+  // l'appel, le cycle est deja resolu.
+  get outils() {
+    return OUTILS_NOEUD_SKILL
+  },
+  refus: (nom) =>
+    `REFUSÉ — \`${nom}\` est indisponible depuis un nœud de workflow. L'appel n'a pas eu lieu.`
+}
+
+export function outilsPublies(
+  lanceur: LanceurCommandeSkill,
+  perimetre: PerimetreOutils = PERIMETRE_NOEUD_SKILL
+): Array<{
   name: string
   description: string
   inputSchema: ReturnType<typeof schemaEntree>
@@ -272,7 +299,7 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
 }> {
   const specs = lanceur.catalogue?.() ?? []
   return specs
-    .filter((s) => (OUTILS_NOEUD_SKILL as readonly string[]).includes(s.name))
+    .filter((s) => perimetre.outils.includes(s.name))
     .map((s) => ({
       name: s.name,
       description: s.description,
@@ -315,6 +342,11 @@ function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille
   ].join('\n')
 }
 
+/** Ce que le modele lira d'un resultat — exporte pour que le chat le borne sur le MEME texte. */
+export function resultatEnTexte(valeur: unknown): string {
+  return enTexte(valeur)
+}
+
 function enTexte(valeur: unknown): string {
   if (typeof valeur === 'string') return valeur
   const savoir =
@@ -332,7 +364,8 @@ function enTexte(valeur: unknown): string {
 export async function traiterMessageMcp(
   message: { method?: string; id?: unknown; params?: { name?: string; arguments?: unknown } },
   lanceur: LanceurCommandeSkill,
-  observer?: (appel: AppelMcpObserve) => void
+  observer?: (appel: AppelMcpObserve) => void,
+  perimetre: PerimetreOutils = PERIMETRE_NOEUD_SKILL
 ): Promise<{ statut: number; corps?: unknown }> {
   const id = message.id
   const repondre = (result: unknown): { statut: number; corps: unknown } => ({
@@ -347,7 +380,7 @@ export async function traiterMessageMcp(
         serverInfo: { name: NOM_SERVEUR_MCP, version: '1.0.0' }
       })
     case 'tools/list':
-      return repondre({ tools: outilsPublies(lanceur) })
+      return repondre({ tools: outilsPublies(lanceur, perimetre) })
     case 'tools/call': {
       const nom = String(message.params?.name ?? '')
       const argsBruts = message.params?.arguments ?? {}
@@ -374,15 +407,10 @@ export async function traiterMessageMcp(
        * PREMIERE barriere : on ne sert que ce qu'on publie. Le refus est BAVARD — il nomme la
        * commande — parce qu'un agent qui ne comprend pas son refus le retente a l'identique.
        */
-      if (!(OUTILS_NOEUD_SKILL as readonly string[]).includes(nom)) {
+      if (!perimetre.outils.includes(nom)) {
         observer?.({ outil: nom, refuse: true, ok: false })
         return repondre({
-          content: [
-            {
-              type: 'text',
-              text: `REFUSÉ — \`${nom}\` est indisponible depuis un nœud de workflow. L'appel n'a pas eu lieu.`
-            }
-          ],
+          content: [{ type: 'text', text: perimetre.refus(nom) }],
           isError: true
         })
       }
@@ -404,6 +432,14 @@ export async function traiterMessageMcp(
           ...mesureAppel(nom, args, resultat.data),
           ...(resultat.error ? { erreur: resultat.error } : {})
         })
+        /*
+         * UNE CAPTURE ATTEINT LE MODELE. `desktop_observe` rend son image en piece jointe : sur le
+         * chemin `<cmd>`, le pilote la joint au message suivant. Par ce canal, il n'y a pas de
+         * message suivant — sans ce bloc `image`, le modele « observait » l'ecran sans le voir.
+         */
+        const images = (resultat.attachments ?? [])
+          .filter((piece) => piece.kind === 'image' && piece.content)
+          .map((piece) => ({ type: 'image', data: piece.content, mimeType: piece.mimeType }))
         return repondre({
           content: [
             {
@@ -411,7 +447,8 @@ export async function traiterMessageMcp(
               text: resultat.ok
                 ? (renvoi ?? texte)
                 : `ÉCHEC — ${resultat.error ?? 'raison inconnue'}`
-            }
+            },
+            ...images
           ],
           isError: !resultat.ok
         })
@@ -438,9 +475,14 @@ export async function traiterMessageMcp(
  */
 export async function demarrerServeurOutilsNoeudSkill(
   lanceur: LanceurCommandeSkill,
-  options: { port?: number; observer?: (appel: AppelMcpObserve) => void } = {}
+  options: {
+    port?: number
+    observer?: (appel: AppelMcpObserve) => void
+    perimetre?: PerimetreOutils
+  } = {}
 ): Promise<ServeurOutilsNoeudSkill> {
   const jeton = randomUUID()
+  const perimetre = options.perimetre ?? PERIMETRE_NOEUD_SKILL
   const serveur: Server = createServer((req, res) => {
     let brut = ''
     req.on('data', (c) => (brut += c))
@@ -458,7 +500,7 @@ export async function demarrerServeurOutilsNoeudSkill(
         res.writeHead(400).end('json illisible')
         return
       }
-      void traiterMessageMcp(message, lanceur, options.observer)
+      void traiterMessageMcp(message, lanceur, options.observer, perimetre)
         .then(({ statut, corps }) => {
           if (typeof corps === 'undefined') {
             res.writeHead(statut).end()
@@ -495,7 +537,8 @@ export async function demarrerServeurOutilsNoeudSkill(
           [NOM_SERVEUR_MCP]: { type: 'http', url, headers: { 'X-Autowin-Token': jeton } }
         }
       }),
-    nomsExposes: () => outilsPublies(lanceur).map((o) => `mcp__${NOM_SERVEUR_MCP}__${o.name}`),
+    nomsExposes: () =>
+      outilsPublies(lanceur, perimetre).map((o) => `mcp__${NOM_SERVEUR_MCP}__${o.name}`),
     arreter: () =>
       new Promise<void>((resolve) => {
         if (!serveur.listening) return resolve()

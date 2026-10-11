@@ -268,6 +268,17 @@ export function buildChatPilotagePrompt(
     `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
     `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte HORS commande est ta réponse parlée à ` +
     `l'utilisateur (il la voit dans le chat). L'UI se met à jour EN DIRECT quand tu agis.\n` +
+    // OUTILS DIRECTS (2026-10-10, `chat-mcp.ts`) : les memes commandes sont aussi servies sur le canal
+    // d'outils natif du modele. Cote noeuds de workflow (`skill-node-tools.ts`), annoncer un seul des
+    // deux chemins faisait prendre l'autre une fois sur deux : on dit donc les DEUX, et ce qui reste
+    // au texte. Texte FIXE — il fait partie du prefixe systeme mis en cache.
+    `OUTILS DIRECTS : ces mêmes commandes peuvent aussi t'être servies comme outils natifs, ` +
+    `préfixés \`mcp__autowin__\` (par exemple \`mcp__autowin__remember\`). Si tu les vois dans tes ` +
+    `outils, appelle-les directement : leur résultat te revient dans la même réponse. Les deux ` +
+    `chemins exécutent la même commande — n'émets jamais la même commande des deux façons. ` +
+    `\`ask\` et \`orchestrate\` restent TOUJOURS en texte <cmd> (ils clôturent ton tour), comme les ` +
+    `commandes de fichiers, pour lesquelles tu as déjà tes propres outils. Sans outils ` +
+    `\`mcp__autowin__\`, le texte <cmd> reste le seul chemin.\n` +
     // ORDRE DE PRIORITE (2026-09-12) : trois textes sont injectes dans le MEME prompt systeme du
     // chat - la CONSTITUTION, CE prompt de pilotage et le PROFIL de reponse. Chacun revendiquait sa
     // primaute de son cote (« PRIME sur la constitution » ici, « format strict est prioritaire »

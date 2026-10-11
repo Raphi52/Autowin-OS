@@ -338,6 +338,12 @@ export interface CommandSpec {
     idempotentHint: boolean
     openWorldHint: boolean
   }
+  /**
+   * Present = la commande n'est PAS servie au chat comme outil direct du modele (`chat-mcp.ts`) ;
+   * elle reste au texte `<cmd>`. La valeur est le MOTIF, rendu au modele dans le refus. L'exclusion
+   * vit ici, sur la commande, pour qu'aucune seconde liste ne puisse diverger du catalogue.
+   */
+  horsCanalNatif?: string
 }
 export interface CommandResult {
   ok: boolean
@@ -708,6 +714,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'orchestrate',
+    horsCanalNatif:
+      'son issue clôt le tour et un seul run est permis par message — ces règles ne vivent que sur le chemin texte',
     description:
       'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
     args: {
@@ -1167,6 +1175,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'ask',
+    horsCanalNatif:
+      'une question clôt le tour et une seule est permise par tour — ces règles ne vivent que sur le chemin texte',
     description:
       "Poser une QUESTION a l'utilisateur avec des reponses cliquables — a utiliser quand une " +
       'decision lui appartient vraiment (un choix entre approches, une autorisation) plutot que de ' +
@@ -1378,6 +1388,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'read_file',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Lire un fichier : chemin relatif au dossier de travail, ou chemin ABSOLU dans un autre dépôt (même périmètre que edit_file). Lignes numérotées, plage from/lines, max 400 lignes par appel — traces .autowin-data comprises, secrets et racines système exclus',
     args: {
@@ -1407,6 +1419,8 @@ export const CATALOG: CommandSpec[] = [
      * directe du « 1 prompt ≠ 1 réussite ».
      */
     name: 'list_files',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Lister le contenu d’un dossier du workspace — rend les fichiers et sous-dossiers avec leur nombre. Non récursif par défaut ; `recursif: true` descend dans l’arborescence. Rend AUSSI `nombreParSuffixe` (ex. {".test.ts": 220}) : utilise ce compte tout fait plutôt que de dénombrer la liste toi-même.',
     args: {
@@ -1422,6 +1436,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'find_in_files',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Chercher un motif (regex, insensible à la casse) dans les fichiers du dossier de travail, ou d’un autre dépôt en donnant son chemin ABSOLU dans `dir` — rend chemin:ligne + extrait, max 80 correspondances',
     args: {
@@ -1437,6 +1453,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'edit_file',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Remplacer un extrait UNIQUE dans un bureau isolé, vérifier ce bureau automatiquement, puis publier seulement si le test passe',
     args: {
@@ -1462,6 +1480,8 @@ export const CATALOG: CommandSpec[] = [
      * porte gardee vaut mieux que de laisser la porte derobee.
      */
     name: 'create_file',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Créer un fichier NEUF (contenu complet). N’écrase jamais un fichier existant — pour modifier, utilise edit_file. Prouve ensuite avec `verify`',
     args: {
@@ -1477,6 +1497,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'move_file',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Déplacer ou renommer un fichier. N’écrase jamais la destination. Prouve ensuite avec `verify`',
     args: {
@@ -1492,6 +1514,8 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     name: 'delete_file',
+    horsCanalNatif:
+      'le modèle a déjà ses propres outils de fichiers (Read, Grep, Glob, Edit, Write) ; la servir en double coûterait sans rien apporter',
     description:
       'Supprimer UN fichier (jamais un dossier). Geste destructif : n’y recours que si la suppression est explicitement demandée ou prouvée nécessaire. Prouve ensuite avec `verify`',
     args: { path: 'chemin du fichier à supprimer' },

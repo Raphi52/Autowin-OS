@@ -258,4 +258,15 @@ describe('STYLE_CLOTURE_CHAT — critère « a agi »', () => {
     )
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/sans commande.*aucun bloc de clôture/iu)
   })
+
+  // conv-267 (2026-10-11) : 2 tours réels sur 2 ont répondu sans clôture après un `get_state`
+  // DIRECT ; la relance de conclusion a doublé l'appel au modèle et la phrase affichée.
+  it('compte un outil direct mcp__autowin__ comme une commande, dans les DEUX sens de la règle', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /au moins une commande — un bloc <cmd> OU un outil direct `mcp__autowin__…`, les deux comptent/u
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /sans commande ni outil direct, n'ajoute aucun bloc de clôture/u
+    )
+  })
 })

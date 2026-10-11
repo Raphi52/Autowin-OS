@@ -8,6 +8,8 @@ import {
   SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { contextWindowFor } from '../../shared/context-gauge'
+import { DEFAULT_TIMEOUT_MS as GRAPHIFY_TIMEOUT_MS } from '../graphify-command'
+import { verifyTimeoutMs } from '../verify-command'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -290,6 +292,42 @@ export function envSortieMcpNoeudSkill(
 ): Record<string, string> {
   if (!noeudOutille || env.MAX_MCP_OUTPUT_TOKENS) return {}
   return { MAX_MCP_OUTPUT_TOKENS: MCP_SORTIE_NOEUD_SKILL_TOKENS }
+}
+
+/**
+ * DÉLAI D'UN APPEL D'OUTIL DIRECT, ALIGNÉ SUR LE PLUS LONG GESTE SERVI (conv-267, 2026-10-11).
+ *
+ * MESURÉ ce jour-là (claude 2.1.296, serveur HTTP comme `skill-node-mcp.ts`, `MCP_TOOL_TIMEOUT` non
+ * posé) : le CLI coupe un appel d'outil à 60,4 s (« The operation timed out ») alors que le serveur
+ * répondait à 330 s ; avec `MCP_TOOL_TIMEOUT=200000`, un appel de 90 s est rendu. Or le chat sert en
+ * direct `verify` et `run` (même exécution, plafond `verifyTimeoutMs`, 10 min par défaut) et
+ * `graphify` (10 min) : coupés à 60 s, ils continuaient dans Autowin pendant que le modèle recevait
+ * un échec — et pouvait les relancer.
+ *
+ * DEUX DÉLAIS, pas un. Avec `MCP_TOOL_TIMEOUT=900000` seul, un appel de 330 s a encore été coupé à
+ * 300 s : « sent no response or progress for 300s; aborting » — le délai d'INACTIVITÉ, réglé par
+ * `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` (notre serveur répond en un bloc, sans progression). Avec les
+ * deux variables posées, le même appel de 330 s est rendu.
+ *
+ * Le délai suit le plafond EFFECTIF de `verify`, relu à chaque lancement (un `reload_env` de
+ * `AUTOWIN_VERIFY_TIMEOUT_MS` le déplace aussi), plus une marge : la commande rend toujours SON
+ * verdict de plafond avant que le CLI ne coupe. Le détecteur de silence d'Autowin n'est pas en
+ * cause : le CLI écrit une ligne `tool_progress` toutes les 30 s pendant l'attente. Une valeur déjà
+ * posée par l'utilisateur garde le dernier mot, variable par variable.
+ */
+export const MARGE_DELAI_OUTIL_MCP_MS = 2 * 60_000
+
+export function envDelaiOutilsMcp(
+  outille: boolean,
+  env: NodeJS.ProcessEnv
+): Record<string, string> {
+  if (!outille) return {}
+  const plusLongGeste = Math.max(verifyTimeoutMs(env), GRAPHIFY_TIMEOUT_MS)
+  const delai = String(plusLongGeste + MARGE_DELAI_OUTIL_MCP_MS)
+  return {
+    ...(env.MCP_TOOL_TIMEOUT ? {} : { MCP_TOOL_TIMEOUT: delai }),
+    ...(env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ? {} : { CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: delai })
+  }
 }
 
 /**
@@ -1653,6 +1691,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           ...withClaudeAccountEnv(process.env),
           // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
           ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+          // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
+          ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
           // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
           ...envFiletElectronAgent(modAutowin, process.env),
           ...(invocation.env ?? {})

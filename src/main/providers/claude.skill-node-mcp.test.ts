@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   ClaudeCliAdapter,
+  MARGE_DELAI_OUTIL_MCP_MS,
   MCP_SORTIE_NOEUD_SKILL_TOKENS,
   argumentsMcpNoeudSkill,
+  envDelaiOutilsMcp,
   envSortieMcpNoeudSkill
 } from './claude'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { SendOptions } from './types'
 
 /**
@@ -122,5 +126,50 @@ describe('plafond de sortie MCP du CLI — levé pour un nœud skill', () => {
 
   it('dépasse la plus grosse note du Brain (809 430 octets)', () => {
     expect(Number(MCP_SORTIE_NOEUD_SKILL_TOKENS)).toBeGreaterThan(809_430)
+  })
+})
+
+/*
+ * MESURÉ le 2026-10-11 (conv-267, claude 2.1.296) : sans MCP_TOOL_TIMEOUT, un appel d'outil MCP
+ * HTTP est coupé à 60,4 s ; avec la variable posée, un appel de 90 s est rendu. Avec elle SEULE, un
+ * appel de 330 s est coupé à 300 s (délai d'inactivité) ; avec CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT en
+ * plus, il est rendu. Le chat sert en direct verify et run (plafond verifyTimeoutMs) et graphify.
+ */
+describe('délai d’un appel d’outil direct — jamais sous le plus long geste servi', () => {
+  const delais = (ms: number): Record<string, string> => ({
+    MCP_TOOL_TIMEOUT: String(ms + MARGE_DELAI_OUTIL_MCP_MS),
+    CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: String(ms + MARGE_DELAI_OUTIL_MCP_MS)
+  })
+
+  it('pose les DEUX délais au plafond de verify (défaut 10 min) plus la marge', () => {
+    expect(envDelaiOutilsMcp(true, {})).toEqual(delais(600_000))
+  })
+
+  it('suit un plafond de verify relevé par AUTOWIN_VERIFY_TIMEOUT_MS', () => {
+    expect(envDelaiOutilsMcp(true, { AUTOWIN_VERIFY_TIMEOUT_MS: '1800000' })).toEqual(
+      delais(1_800_000)
+    )
+  })
+
+  it('ne descend jamais sous graphify (10 min) quand verify est plafonné plus bas', () => {
+    expect(envDelaiOutilsMcp(true, { AUTOWIN_VERIFY_TIMEOUT_MS: '5000' })).toEqual(delais(600_000))
+  })
+
+  it('rien sans outil direct ; une valeur déjà posée garde le dernier mot, variable par variable', () => {
+    expect(envDelaiOutilsMcp(false, {})).toEqual({})
+    expect(envDelaiOutilsMcp(true, { MCP_TOOL_TIMEOUT: '30000' })).toEqual({
+      CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: delais(600_000).CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT
+    })
+    expect(
+      envDelaiOutilsMcp(true, {
+        MCP_TOOL_TIMEOUT: '30000',
+        CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: '40000'
+      })
+    ).toEqual({})
+  })
+
+  it('est câblé dans l’environnement du CLI lancé, à côté du plafond de sortie', () => {
+    const source = readFileSync(join(__dirname, 'claude.ts'), 'utf8')
+    expect(source).toMatch(/\.\.\.envDelaiOutilsMcp\(argsMcp\.mcp\.length > 0, process\.env\)/)
   })
 })

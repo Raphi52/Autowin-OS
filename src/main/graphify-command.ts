@@ -12,7 +12,8 @@ import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 import { killEscalate } from './providers/watchdog'
 
-const DEFAULT_TIMEOUT_MS = 10 * 60_000
+/** Exporté pour le délai des outils directs du CLI (`envDelaiOutilsMcp`, providers/claude.ts). */
+export const DEFAULT_TIMEOUT_MS = 10 * 60_000
 const MAX_CAPTURE_CHARS = 64 * 1024
 const MAX_GRAPH_BYTES = 128 * 1024 * 1024
 // Aucun partage d'entreprise par defaut : la source partagee vient de AUTOWIN_GRAPHIFY_SOURCE.

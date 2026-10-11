@@ -1174,7 +1174,9 @@ const pilot = new AgentPilot(
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
   // RESOLU PAR TOUR : c'est l'AGENTS.md du dossier RANGE sur la conversation qui doit être lu.
   (conversationId?: string) => projectContextBlock(dossierDuTour(conversationId)),
-  (conversationId?: string) => dossierDuTour(conversationId)
+  (conversationId?: string) => dossierDuTour(conversationId),
+  // Commandes du chat AUSSI servies comme outils directs du modèle quand il les porte (chat-mcp.ts).
+  true
 )
 const conversationRouteCoordinator = new ConversationRouteCoordinator(
   os.conversations,

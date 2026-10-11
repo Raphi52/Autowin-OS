@@ -114,6 +114,12 @@ import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 import { protegerRappel } from './observabilite-non-bloquante'
 import { bornerResultatDeCommande } from './resultat-de-commande-borne'
+import {
+  cleAppelNatif,
+  estUnOutilDirectDuChat,
+  ouvrirOutilsNatifsDuChat,
+  type OuvertureOutilsNatifs
+} from './chat-mcp'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -175,7 +181,8 @@ export function resolveLatestUserMessage(
 export type PilotEventVariant =
   | { kind: 'delta'; streamId: string; text: string; iteration: number }
   | { kind: 'stream-reset'; streamId: string; iteration: number }
-  | { kind: 'think'; text: string }
+  /** `iteration` : le fil en fait le flux `fallback:<iteration>` (effaçable par une relance, D2). */
+  | { kind: 'think'; text: string; iteration?: number }
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
   | { kind: 'reasoning'; text: string; iteration: number }
   | {
@@ -374,6 +381,8 @@ const RELANCE_CONCLUSION_ABSENTE =
   'que tu as réellement fait, une ligne par action avec son résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
   'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
   'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné. ' +
+  'Cette nouvelle réponse REMPLACE la précédente à l’écran : écris-la en entier, sans ' +
+  'renvoyer à ce que tu avais écrit. ' +
   'N’écris PAS le mot « rien » seul dans une rubrique pour la remplir : ce mot éteint le mode ' +
   'auto du chat. Réserve-le au travail réellement terminé ; sinon dis le fait en clair.'
 
@@ -914,7 +923,13 @@ export class AgentPilot {
      * Dossier de travail DU TOUR, resolu depuis la conversation courante (plus de dossier global fige
      * au demarrage). Sert au cwd du CLI, a la cle de session et au filtrage des faits provisoires.
      */
-    private readonly executionWorkspace: (conversationId?: string) => string = () => ''
+    private readonly executionWorkspace: (conversationId?: string) => string = () => '',
+    /**
+     * Servir AUSSI les commandes du chat comme outils directs du modele (MCP, `chat-mcp.ts`), en
+     * plus du texte `<cmd>`. Faux par defaut : seul `index.ts` l'active, les fixtures et les tests
+     * existants restent au texte seul. Un objet sert aux tests a injecter le demarrage du serveur.
+     */
+    private readonly outilsNatifs: boolean | Pick<OuvertureOutilsNatifs, 'demarrer'> = false
   ) {}
 
   /**
@@ -1922,6 +1937,145 @@ export class AgentPilot {
     let preuvePromiseRecoveryAvailable = true
     let gesteRenduRecoveryAvailable = true
     let bureauUtilise = false
+    /**
+     * LA COMPTABILITE D'UNE COMMANDE EXECUTEE — commune au texte `<cmd>` et aux outils directs.
+     *
+     * Extraite telle quelle du chemin `<cmd>` pour que l'appel direct (`chat-mcp.ts`) soit COMPTE
+     * exactement pareil : depot de memoire refuse (`refusRememberAuxiliaire`, dit a la cloture),
+     * echec non rattrape (bilan `echecs-abandonnes`, reprise apres echec), mur deja rencontre. Une
+     * seconde copie de ce bloc divergerait au premier correctif — d'ou une seule fonction.
+     * Rend l'issue pour que l'appel direct la reporte sur son iteration (voir plus bas).
+     */
+    const comptabiliserCommande = (
+      nom: string,
+      args: Record<string, unknown>,
+      r: CommandResult,
+      actionId: string
+    ): { reussie: boolean; rejeu: boolean } => {
+      const commandSucceeded = commandResultSucceeded(r)
+      if (nom === 'remember') {
+        // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
+        // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
+        // precedent, sinon la cloture porterait un « NON deposee » dementi par la reprise.
+        refusRememberAuxiliaire = motifDepotMemoireNonAbouti(r)
+      }
+      /*
+       * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
+       * purgeait l'echec jamais rejoue sur `a.ts` — defaut mesure le 2026-08-22 par deux juges
+       * externes independants, et mon commentaire revendiquait alors une garantie que la clef ne
+       * pouvait pas donner. `cleDEchec` ne retient que les arguments IDENTIFIANTS, pour qu'une
+       * reprise du meme fichier avec un contenu corrige rende la MEME clef.
+       */
+      const cleCible = cleDEchec(nom, args)
+      // Rejouee avec succes sur la MEME cible : l'echec est repare, il ne pese plus sur la cloture.
+      if (commandSucceeded) {
+        commandesEnEchecNonRattrape.delete(cleCible)
+        actionIdParEchec.delete(cleCible)
+        return { reussie: true, rejeu: false }
+      }
+      anyActionFailed = true
+      echecDeLaDerniereIteration = true
+      commandesEnEchecNonRattrape.add(cleCible)
+      actionIdParEchec.set(cleCible, actionId)
+      const signature = signatureDEchec(
+        nom,
+        String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))
+      )
+      // Le test d'appartenance passe AVANT l'enregistrement, sinon le mur courant serait
+      // toujours « deja vu » et la premiere rencontre declencherait l'escalade a tort.
+      // AGREGE sur l'iteration : si AU MOINS UN echec de cette iteration est un rejeu connu,
+      // l'escalade est due. Ne garder que le dernier perdait silencieusement l'escalade quand
+      // une iteration enchainait un mur deja connu PUIS un mur neuf (audit du 2026-08-21).
+      const rejeu = signaturesDEchecVues.includes(signature)
+      dernierEchecEstUnRejeu = dernierEchecEstUnRejeu || rejeu
+      derniereSignatureDEchec = signature
+      signaturesDEchecVues.push(signature)
+      if (conversationId) {
+        try {
+          enregistrerMur(conversationId, signature)
+        } catch {
+          /* best-effort : c'est un cache d'indice, il ne doit jamais casser le tour */
+        }
+      }
+      return { reussie: false, rejeu }
+    }
+    /*
+     * OUTILS DIRECTS DU MODELE (`chat-mcp.ts`) — etat de l'iteration COURANTE.
+     *
+     * Les appels directs ont lieu PENDANT l'envoi ; la boucle des `<cmd>` vient apres. On retient
+     * donc ce qu'ils ont execute (pour ne pas rejouer un `<cmd>` identique de la meme reponse, y
+     * compris d'une tentative precedente du meme envoi) et s'ils ont echoue (la boucle des `<cmd>`
+     * remet ces drapeaux a plat : elle doit reporter ceux des appels directs, pas les effacer).
+     */
+    let executesParCanalNatif = new Set<string>()
+    let echecNatifCetteIteration = false
+    let rejeuNatifCetteIteration = false
+    let iterationNatif = 0
+    let appelNatifIndex = 0
+    let outilsNatifsAnnonces = false
+    const replisNatifsDits = new Set<string>()
+    /**
+     * UN APPEL DIRECT S'AFFICHE ET COMPTE EXACTEMENT COMME UN `<cmd>` : carte, progression, resultat,
+     * capture publiee dans le fil, drapeaux du tour (action, lecture, bureau) et comptabilite commune.
+     * Sans eux, les gardes de cloture (« rien execute », « echec tu », « fais le geste ») mordaient a
+     * tort ou se taisaient. Seule difference : la capture n'est pas rejointe au message suivant, le
+     * modele l'a deja recue en bloc `image` dans le resultat de l'outil.
+     */
+    const executerAppelNatif = async (
+      nom: string,
+      args: Record<string, unknown>
+    ): Promise<CommandResult> => {
+      signal?.throwIfAborted()
+      // Marquee AVANT l'execution : un `<cmd>` identique ne doit pas la rejouer, meme en echec.
+      executesParCanalNatif.add(cleAppelNatif(nom, args))
+      const actionId = `natif:${iterationNatif}:${appelNatifIndex++}`
+      anyActionExecuted = true
+      if (nom === 'desktop_act' || nom === 'desktop_observe') bureauUtilise = true
+      if (nom === 'list_files' || nom === 'read_file' || nom === 'find_in_files') {
+        anyReadExecuted = true
+      }
+      emit({ kind: 'command', actionId, name: nom, args })
+      const r = await execCommandTolerante(nom, args, (text) =>
+        emit({ kind: 'action-progress', actionId, text })
+      )
+      let indexCapture = 0
+      for (const piece of r.attachments ?? []) {
+        if (piece.kind !== 'image' || !piece.content) continue
+        emit({
+          kind: 'artifact',
+          iteration: iterationNatif,
+          artifact: {
+            id: `tool-capture-${actionId}-${indexCapture++}-${piece.name}`,
+            name: piece.name,
+            mimeType: piece.mimeType,
+            kind: 'image',
+            size: piece.size,
+            createdAt: Date.now(),
+            encoding: 'base64',
+            content: piece.content,
+            source: { provider, tool: nom }
+          }
+        })
+      }
+      const echecRattrape = commandResultSucceeded(r)
+        ? actionIdParEchec.get(cleDEchec(nom, args))
+        : undefined
+      emit({
+        kind: 'result',
+        actionId,
+        name: nom,
+        ok: commandResultSucceeded(r),
+        data: r.ok ? r.data : r.error,
+        ...(echecRattrape ? { retryOf: echecRattrape } : {}),
+        ...(r.attachments?.length ? { attachments: r.attachments } : {})
+      })
+      const compte = comptabiliserCommande(nom, args, r, actionId)
+      if (!compte.reussie) {
+        echecNatifCetteIteration = true
+        if (compte.rejeu) rejeuNatifCetteIteration = true
+      }
+      return r
+    }
     /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
     let blocVisuelRecoveryAvailable = true
     /**
@@ -2129,6 +2283,31 @@ export class AgentPilot {
       let callStartedAt = performance.now()
       let successfulStreamedPrefix = recoveredHere?.streamedPrefix ?? ''
       let successfulAttempt = recoveredHere?.attempt ?? 0
+      /**
+       * LES FLUX DE TEXTE QUE CETTE ITERATION A AFFICHES — pour pouvoir REMPLACER sa reponse (D2).
+       *
+       * Mesure du 2026-10-11 (conv-267, tours reels) : une relance qui fait REFAIRE la reponse
+       * (« conclusion absente », « chiffre non verifie ») laissait l'ancienne affichee et la nouvelle
+       * s'y ajoutait — la premiere phrase deux fois, puis deux blocs « ✅ Fait ». Le moteur ne rendait
+       * pourtant qu'UNE reponse : le doublon naissait dans le fil, qui assemble les flux diffuses.
+       * Le fil efface un flux par son identifiant EXACT (`reduceChatTurn`, `stream-reset`), et une
+       * iteration ecrit sous plusieurs : le direct, `:remainder`, `:sans-bloc`, `:ordered:N`, le
+       * repli `fallback:<i>`. On les note donc a l'emission, au lieu d'en deviner la liste.
+       */
+      const fluxAffichesCetteIteration = new Set<string>()
+      if (successfulStreamedPrefix) fluxAffichesCetteIteration.add(`${i}:${successfulAttempt}`)
+      /** Retire du fil la reponse de CETTE iteration : la reponse relancee la remplacera. */
+      const effacerReponseRelancee = (): void => {
+        for (const streamId of fluxAffichesCetteIteration)
+          emit({ kind: 'stream-reset', streamId, iteration: i })
+        fluxAffichesCetteIteration.clear()
+        successfulStreamedPrefix = ''
+      }
+      // Etat des outils directs pour CETTE iteration (partage entre ses tentatives d'envoi).
+      executesParCanalNatif = new Set<string>()
+      echecNatifCetteIteration = false
+      rejeuNatifCetteIteration = false
+      iterationNatif = i
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
@@ -2144,6 +2323,7 @@ export class AgentPilot {
             }
             if (commandBoundarySeen || !segment.text) continue
             attemptStreamedPrefix += segment.text
+            fluxAffichesCetteIteration.add(streamId)
             emit({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
@@ -2153,11 +2333,49 @@ export class AgentPilot {
           conversationId && workspaceDuTour
             ? await captureSaufAnnulation(workspaceDuTour, signal)
             : undefined
+        /*
+         * OUTILS DIRECTS (`chat-mcp.ts`) : ouverts pour CET envoi, fermes avec lui (`finally` plus
+         * bas, y compris sur erreur et sur arret). Meme catalogue que le texte du tour ; jamais pour
+         * le tour de surveillance, qui reste sans aucune commande. Un echec n'est jamais fatal : on
+         * reste au texte `<cmd>` et on le DIT dans le fil, une fois par motif.
+         */
+        const natif = this.outilsNatifs
+          ? watchdogReadOnly
+            ? undefined
+            : await ouvrirOutilsNatifsDuChat({
+                provider,
+                catalogue: catalog,
+                exec: (nom, args) => executerAppelNatif(nom, args),
+                ...(typeof this.outilsNatifs === 'object' && this.outilsNatifs.demarrer
+                  ? { demarrer: this.outilsNatifs.demarrer }
+                  : {})
+              })
+          : undefined
+        const outilsDeCetEnvoi = natif && 'servis' in natif ? natif.servis : undefined
+        if (outilsDeCetEnvoi && !outilsNatifsAnnonces) {
+          outilsNatifsAnnonces = true
+          emit({
+            kind: 'provider-status',
+            iteration: i,
+            text: `Outils directs de l'app servis au modèle : ${outilsDeCetEnvoi.noms.length} commandes (les autres restent en <cmd>)`
+          })
+        }
+        if (natif && 'repli' in natif && !replisNatifsDits.has(natif.repli)) {
+          replisNatifsDits.add(natif.repli)
+          emit({
+            kind: 'provider-status',
+            iteration: i,
+            text: `Outils directs indisponibles — retour au texte <cmd> : ${natif.repli}`
+          })
+        }
         try {
           callStartedAt = performance.now()
           timer.mark(`send${i}:start`)
           let sawFirstChunk = false
-          res = await this.registry.send(provider, messages, options, (chunk) => {
+          const optionsDeCetEnvoi: SendOptions = outilsDeCetEnvoi
+            ? { ...options, skillNodeTools: outilsDeCetEnvoi.options }
+            : options
+          res = await this.registry.send(provider, messages, optionsDeCetEnvoi, (chunk) => {
             /**
              * ARTEFACTS EN DIRECT — a leur place dans le fil.
              *
@@ -2190,6 +2408,8 @@ export class AgentPilot {
               if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
               // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
               if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
+              // Un outil direct de l'app a DEJA sa carte d'action : son battement la doublerait.
+              if (estUnOutilDirectDuChat(chunk.status)) return
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',
@@ -2415,6 +2635,9 @@ export class AgentPilot {
           // Attente ANNULABLE : un Stop pendant le backoff rend la main tout de suite.
           await dormirAnnulable(rejeu.delaiMs, signal)
           signal?.throwIfAborted()
+        } finally {
+          // Le port ne survit jamais a son envoi : reussite, erreur, rejeu ou arret.
+          await outilsDeCetEnvoi?.arreter()
         }
       }
       emit({
@@ -2667,8 +2890,12 @@ export class AgentPilot {
       }
 
       if (!hasCommand) {
-        if (!successfulStreamedPrefix && spoken) emit({ kind: 'think', text: spoken })
-        else if (successfulStreamedPrefix) {
+        if (!successfulStreamedPrefix && spoken) {
+          // L'iteration est portee par l'evenement : le fil en fait le flux `fallback:<i>`, et
+          // la relance peut l'effacer sans toucher au texte des iterations precedentes.
+          fluxAffichesCetteIteration.add(`fallback:${i}`)
+          emit({ kind: 'think', text: spoken, iteration: i })
+        } else if (successfulStreamedPrefix) {
           const visible = ordered
             .filter(
               (token): token is Extract<OrderedPilotToken, { kind: 'text' }> =>
@@ -2677,6 +2904,7 @@ export class AgentPilot {
             .map((token) => token.text)
             .join('')
           const { visible: remainder } = consumeStreamedPrefix(visible, successfulStreamedPrefix)
+          if (remainder) fluxAffichesCetteIteration.add(`${i}:${successfulAttempt}:remainder`)
           if (remainder)
             emit({
               kind: 'delta',
@@ -2710,6 +2938,7 @@ export class AgentPilot {
               .join('')
               .trim()
             if (texteParle) {
+              fluxAffichesCetteIteration.add(`${i}:${successfulAttempt}:sans-bloc`)
               emit({
                 kind: 'delta',
                 streamId: `${i}:${successfulAttempt}:sans-bloc`,
@@ -2964,6 +3193,8 @@ export class AgentPilot {
           relanceDeFormeUtilisee = true
           conclusionFormatRecoveryAvailable = false
           grantRecoveryIteration('conclusion-absente')
+          // D2 : la reponse reformulee REMPLACE celle-ci dans le fil (voir fluxAffichesCetteIteration).
+          effacerReponseRelancee()
           convo.push(RELANCE_CONCLUSION_ABSENTE)
           continue
         }
@@ -2982,12 +3213,16 @@ export class AgentPilot {
         ) {
           chiffreNonVerifieRecoveryAvailable = false
           grantRecoveryIteration('chiffre-non-verifie')
+          // D2 : la reponse verifiee REMPLACE celle-ci dans le fil — d'ou la consigne de la redonner
+          // EN ENTIER (« corrige-toi » supposait une premiere reponse restee affichee).
+          effacerReponseRelancee()
           convo.push(
             'SYSTÈME: tu viens d’avancer un nombre SANS avoir appelé la moindre commande de ' +
               'lecture. Tu ne peux pas connaître le contenu d’un dossier sans le lister : ce ' +
               'chiffre est une supposition, pas une réponse. Appelle MAINTENANT `list_files` (ou ' +
               '`find_in_files`) sur le dossier concerné, puis donne le nombre RÉELLEMENT observé. ' +
-              'S’il diffère de ce que tu viens d’écrire, corrige-toi explicitement.'
+              'Ta nouvelle réponse REMPLACE la précédente à l’écran : redonne-la EN ENTIER avec ' +
+              'le nombre observé, et dis s’il diffère de celui que tu avais écrit.'
           )
           continue
         }
@@ -3009,10 +3244,12 @@ export class AgentPilot {
       }
 
       const results: string[] = []
-      echecDeLaDerniereIteration = false
+      // Remis a plat a chaque iteration — mais sur ce que les OUTILS DIRECTS de cette iteration ont
+      // deja constate pendant l'envoi : les effacer ici ferait taire leur echec (faux sans eux).
+      echecDeLaDerniereIteration = echecNatifCetteIteration
       // Remis a plat a chaque iteration, comme son jumeau : sinon un rejeu d'une iteration
       // precedente ferait escalader une iteration qui n'a rencontre qu'un mur neuf.
-      dernierEchecEstUnRejeu = false
+      dernierEchecEstUnRejeu = rejeuNatifCetteIteration
       let commandIndex = 0
       let tokenIndex = 0
       let streamedPrefixRemaining = successfulStreamedPrefix
@@ -3027,6 +3264,8 @@ export class AgentPilot {
           const consumed = consumeStreamedPrefix(texteVisible, streamedPrefixRemaining)
           const visible = consumed.visible
           streamedPrefixRemaining = consumed.prefixRemaining
+          if (visible)
+            fluxAffichesCetteIteration.add(`${i}:${successfulAttempt}:ordered:${tokenIndex}`)
           if (visible)
             emit({
               kind: 'delta',
@@ -3063,6 +3302,21 @@ export class AgentPilot {
           continue
         }
 
+        if (executesParCanalNatif.has(cleAppelNatif(token.name, token.args))) {
+          // DEJA EXECUTEE par l'outil direct pendant cette reponse (meme nom, memes arguments) : le
+          // modele l'a appelee ET recopiee en texte. On ne la rejoue pas, et on le dit.
+          emit({
+            kind: 'provider-status',
+            iteration: i,
+            text: `${token.name} : déjà exécutée par l'outil direct dans cette réponse, non rejouée`
+          })
+          results.push(
+            `${token.name} → déjà exécutée par l'outil direct dans cette réponse : non rejouée ` +
+              '(son résultat t’a déjà été rendu).'
+          )
+          tokenIndex += 1
+          continue
+        }
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
         if (token.name === 'desktop_act' || token.name === 'desktop_observe') bureauUtilise = true
@@ -3300,52 +3554,13 @@ export class AgentPilot {
           tokenIndex += 1
           continue
         }
-        const commandSucceeded = commandResultSucceeded(r)
-        if (token.name === 'remember') {
-          // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
-          // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
-          // precedent, sinon la cloture porterait un « NON deposee » dementi par la reprise.
-          refusRememberAuxiliaire = motifDepotMemoireNonAbouti(r)
-        }
-        /*
-         * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
-         * purgeait l'echec jamais rejoue sur `a.ts` — defaut mesure le 2026-08-22 par deux juges
-         * externes independants, et mon commentaire revendiquait alors une garantie que la clef ne
-         * pouvait pas donner. `cleDEchec` ne retient que les arguments IDENTIFIANTS, pour qu'une
-         * reprise du meme fichier avec un contenu corrige rende la MEME clef.
-         */
-        const cleCible = cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
-        // Rejouee avec succes sur la MEME cible : l'echec est repare, il ne pese plus sur la cloture.
-        if (commandSucceeded) {
-          commandesEnEchecNonRattrape.delete(cleCible)
-          actionIdParEchec.delete(cleCible)
-        }
-        if (!commandSucceeded) {
-          anyActionFailed = true
-          echecDeLaDerniereIteration = true
-          commandesEnEchecNonRattrape.add(cleCible)
-          actionIdParEchec.set(cleCible, actionId)
-          const signature = signatureDEchec(
-            token.name,
-            String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))
-          )
-          // Le test d'appartenance passe AVANT l'enregistrement, sinon le mur courant serait
-          // toujours « deja vu » et la premiere rencontre declencherait l'escalade a tort.
-          // AGREGE sur l'iteration : si AU MOINS UN echec de cette iteration est un rejeu connu,
-          // l'escalade est due. Ne garder que le dernier perdait silencieusement l'escalade quand
-          // une iteration enchainait un mur deja connu PUIS un mur neuf (audit du 2026-08-21).
-          dernierEchecEstUnRejeu =
-            dernierEchecEstUnRejeu || signaturesDEchecVues.includes(signature)
-          derniereSignatureDEchec = signature
-          signaturesDEchecVues.push(signature)
-          if (conversationId) {
-            try {
-              enregistrerMur(conversationId, signature)
-            } catch {
-              /* best-effort : c'est un cache d'indice, il ne doit jamais casser le tour */
-            }
-          }
-        }
+        // Comptabilite COMMUNE avec les outils directs : voir `comptabiliserCommande`.
+        const commandSucceeded = comptabiliserCommande(
+          token.name,
+          authoritativeArgs as Record<string, unknown>,
+          r,
+          actionId
+        ).reussie
         // BORNE OBLIGATOIRE : sans elle, une lecture volumineuse (`retrospective`, `read_file`,
         // `conversation_read`) part telle quelle dans le prompt et tue le tour — conv-312, 2 860 957
         // caracteres injectes, « Prompt is too long », fil devenu un cul-de-sac.
@@ -3474,6 +3689,8 @@ export class AgentPilot {
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\n${bloc}`)
       if (consigneClotureApresRemember) {
         consigneClotureApresRemember = false
+        // D2 : meme relance, meme remplacement — la carte `remember` reste, seul le texte part.
+        effacerReponseRelancee()
         convo.push(RELANCE_CONCLUSION_ABSENTE)
       }
       if (consigneRepriseRemember) {

@@ -43,7 +43,13 @@ export interface LanceurCommandeSkill {
   exec(
     name: string,
     args: Record<string, unknown>
-  ): Promise<{ ok: boolean; data?: unknown; error?: string }>
+  ): Promise<{
+    ok: boolean
+    data?: unknown
+    error?: string
+    /** Les images (captures) partent au modele en bloc `image` sur le canal natif. */
+    attachments?: ReadonlyArray<{ kind: string; mimeType: string; content: string }>
+  }>
   /**
    * Les specs REELLES des commandes autorisees. Absent = prompt sans liste d'arguments (degrade,
    * mais jamais faux) — voir `promptOutilsNoeudSkill`.
