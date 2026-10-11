@@ -1,3 +1,4 @@
+// fix-ok: kaizen conv-260 tour 50a06982-1549-4759-9619-b815a8fff9b8 — persistRecoveredChatProviderUsage n'écrivait aucun turnId : la ligne « chat-recovered » (8,00 $) était la seule ligne de coût du journal sans tour ; turnId requis et recopié (commit 84a684b6, chat-usage-settlement.tour.test rouge avec turnId undefined, vert après)
 import { randomUUID } from 'node:crypto'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import { sameExecutionUsage } from '../execution-supervisor'

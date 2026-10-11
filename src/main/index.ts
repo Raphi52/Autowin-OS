@@ -1,4 +1,5 @@
 // fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
+// fix-ok: kaizen conv-260 tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 — la pub livrée (74,6 Mo) n'avait aucun lecteur possible dans le fil : la seule voie était la copie base64 de os:chatArtifact:read, plafonnée à 16 Mo (MAX_ARTIFACT_PREVIEW_BYTES) ; declarerSchemaMediaDuFil() déclare autowin-media:// avant ready pour la lire par plages (commit cd9a7fe9, ArtifactPreview.test « vidéo conservée de plus de 16 Mo » rouge sans, vert avec)
 import { commandeNonInjectable } from './skill-routing'
 import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'

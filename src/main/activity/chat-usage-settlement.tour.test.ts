@@ -1,3 +1,4 @@
+// fix-ok: kaizen conv-260 tour 50a06982-1549-4759-9619-b815a8fff9b8 — le cas « appel récupéré après redémarrage » n'avait aucun test : sa ligne de coût (8,00 $) sortait sans turnId ; le test ajouté par 84a684b6 était rouge (turnId undefined) avant la correction, vert après
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
