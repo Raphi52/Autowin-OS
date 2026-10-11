@@ -153,6 +153,32 @@
     margin-left: 6px;
   }
 }
+/* GOUTTIERE COMPACTE DANS LE PANNEAU DETAILS (conv-245, 2026-10-11 : « compacte la colonne des
+   numeros de ligne des cartes de differences quand elles sont etroites, pour que le code ne se
+   coupe plus tous les 20 caracteres »). Le panneau fait 340 px par defaut : les 100 px de gouttiere
+   du « Contraste fort » y prenaient plus d'un tiers de la carte. Sous 440 px, et dans ce panneau
+   seulement, la colonne prend la place EXACTE de ses deux numeros : `--diff-chiffres` (pose par
+   DiffView.tsx) chiffres chacun, en `ch` pour suivre la taille du texte. Ailleurs, et dans une carte
+   large, les 100 px restent. Largeur = 2 numeros + ecart 4 + marges 3 + 3 + filet 1 (+ 1 de jeu). */
+@container (max-width: 440px) {
+  .runs-pane .diff-line {
+    grid-template-columns: calc(var(--diff-chiffres, 4) * 2ch + 12px) minmax(0, 1fr);
+  }
+  .runs-pane .diff-gutter {
+    gap: 4px;
+    padding: 2px 3px;
+  }
+  .runs-pane .diff-lineno {
+    min-width: calc(var(--diff-chiffres, 4) * 1ch);
+  }
+  /* Le « + » de commentaire (16 px, en absolu) n'a plus de vide ou se poser : il chevauchait le
+     numero d'origine, qu'on lisait « +3 » au lieu de « 93 » (capture du 2026-10-11). Le temps du
+     survol, il prend la place de ce numero ; son infobulle dit toujours la ligne visee. */
+  .runs-pane .diff-line:hover .diff-commenter + .diff-lineno,
+  .runs-pane .diff-commenter:focus-visible + .diff-lineno {
+    visibility: hidden;
+  }
+}
 .diff-comment {
   display: flex;
   align-items: flex-start;

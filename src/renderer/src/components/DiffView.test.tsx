@@ -33,6 +33,21 @@ describe('DiffView', () => {
     expect(container.querySelector('[data-testid="diff-view"]')).toBeNull()
     expect(container.textContent).toContain('Aucune différence')
   })
+
+  // La gouttiere compacte du panneau Details (DiffView.css) se cale sur ce nombre : sans lui, une
+  // largeur fixe soit gaspille la place du code, soit laisse un numero a 5 chiffres deborder.
+  it('annonce le nombre de chiffres du plus grand numéro de ligne, des deux côtés', () => {
+    const avant = (diff: string): string | undefined => {
+      act(() => root.render(createElement(DiffView, { diff })))
+      return container
+        .querySelector<HTMLElement>('[data-testid="diff-view"]')
+        ?.style.getPropertyValue('--diff-chiffres')
+    }
+    expect(avant('@@ -1,2 +1,2 @@\n a\n-b\n+c')).toBe('2')
+    expect(avant('@@ -998,3 +998,4 @@\n a\n b\n+c\n d')).toBe('4')
+    // Le numero d'ORIGINE peut etre le plus long : un fichier qui a fondu sous 10 000 lignes.
+    expect(avant('@@ -9999,3 +9999,1 @@\n-a\n-b\n c')).toBe('5')
+  })
 })
 
 /** Tape dans une zone de texte contrôlée par React (le setter natif déclenche son onChange). */

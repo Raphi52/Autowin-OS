@@ -46,6 +46,14 @@ export function DiffView({
     const cle = cleEmplacement('', c.cote, c.ligne)
     parEmplacement.set(cle, [...(parEmplacement.get(cle) ?? []), c])
   }
+  /**
+   * Chiffres du plus grand numéro de ligne, avant comme après (2 au moins). La gouttière compacte
+   * du panneau Détails (DiffView.css) se cale dessus : la colonne garde la place exacte de ses
+   * numéros, et rend le reste au code.
+   */
+  const chiffres = String(
+    lines.reduce((max, l) => Math.max(max, l.oldLine ?? 0, l.newLine ?? 0), 10)
+  ).length
   const fermer = (): void => {
     setEnEdition(null)
     setBrouillon('')
@@ -58,7 +66,11 @@ export function DiffView({
   }
 
   return (
-    <div className="diff-view" data-testid="diff-view">
+    <div
+      className="diff-view"
+      data-testid="diff-view"
+      style={{ '--diff-chiffres': chiffres } as React.CSSProperties}
+    >
       {lines.map((l, i) => {
         const repere = onAjouter ? repererLigne(lines, i) : null
         const emplacement = repere ? cleEmplacement('', repere.cote, repere.ligne) : null
