@@ -72,7 +72,8 @@ describe('Settings · Interface', () => {
   it('choisit le clair, le mémorise et le pose sur la racine du document', async () => {
     const container = await monter()
     const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
-    expect(liste.value).toBe('sombre')
+    // Rien de memorise = le theme par DEFAUT, Holographique depuis le 2026-10-11 (conv-269).
+    expect(liste.value).toBe('nebuleuse-verre')
 
     // Une liste native ne réagit pas à `click()` : on pose la valeur puis on émet `change`,
     // ce que React écoute réellement.

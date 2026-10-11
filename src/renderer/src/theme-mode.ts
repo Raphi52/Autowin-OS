@@ -1,17 +1,18 @@
 /**
- * MODE D'AFFICHAGE — sombre (par défaut) ou clair.
+ * MODE D'AFFICHAGE — Holographique par défaut (depuis le 2026-10-11), ou l'un des thèmes du registre.
  *
  * Un SEUL point de vérité : la valeur est écrite sur `document.documentElement` en
  * `data-theme`, et c'est ce que les feuilles de style regardent (`:root[data-theme='clair']`
  * dans `assets/theme-modes.css`). Aucun composant ne repeint quoi que ce soit lui-même.
  *
- * Par défaut SOMBRE : personne qui n'y touche pas ne doit voir son application changer.
+ * Le sombre reste l'état NU du document (aucun attribut), mais ce n'est plus le DÉFAUT : voir
+ * `THEME_MODE_PAR_DEFAUT`.
  */
 /**
  * Un thème est désigné par son IDENTIFIANT, une chaîne libre — et non plus par une union de deux
  * valeurs. C'est ce qui permet d'en ajouter sans toucher au type. Le contrôle ne vient donc plus
  * du compilateur mais du REGISTRE ci-dessous : une valeur absente du registre est refusée à la
- * lecture, exactement comme avant (cas vérifié : `galaxy` mémorisé retombe sur le sombre).
+ * lecture, exactement comme avant (cas vérifié : `galaxy` mémorisé retombe sur le défaut).
  */
 export type ThemeId = string
 
@@ -46,9 +47,9 @@ export const THEMES: readonly Theme[] = [
   { id: 'clair', libelle: 'Clair', base: 'clair' },
   // RETIRES le 2026-10-11 (conv-231) : Obsidian Nebula, Solar Rose, Black Versailles, et leurs
   // trois pendants clairs Ardoise, Parchemin, Rose poudre. Un poste qui en avait memorise un
-  // retombe sur le sombre (lireThemeMode). Leurs maquettes restent dans sketches/.
-  // Affiche « Holographique » depuis le 2026-10-10 (conv-212). L id reste `nebuleuse-verre` :
-  // c est la valeur memorisee sur le poste, la renommer ferait retomber sur le sombre.
+  // retombe sur le defaut (lireThemeMode). Leurs maquettes restent dans sketches/.
+  // Affiche « Holographique » depuis le 2026-10-10 (conv-212), theme PAR DEFAUT depuis le
+  // 2026-10-11 (conv-269). L id reste `nebuleuse-verre` : c est la valeur memorisee sur le poste.
   { id: 'nebuleuse-verre', libelle: 'Holographique', base: 'sombre' },
   // Pendant BLANC d Holographique (conv-212, 2026-10-10, /draft « go le plus blanc ») : feuille
   // DERIVEE d Holographique noir par scripts/theme-nebuleuse-verre.mjs holographique-clair
@@ -62,7 +63,20 @@ export const THEMES: readonly Theme[] = [
 ]
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
-const THEME_MODE_PAR_DEFAUT: ThemeId = 'sombre'
+
+/**
+ * DEUX ROLES, DEUX CONSTANTES — ils etaient confondus jusqu au 2026-10-11.
+ *
+ * `THEME_NU` : le theme qui n ecrit AUCUN attribut sur la racine. C est le sombre, et il le reste :
+ * les blocs de style ecrits sans prefixe en dependent.
+ *
+ * `THEME_MODE_PAR_DEFAUT` : ce qu un poste voit quand rien n est memorise, ou quand la valeur
+ * memorisee est abimee ou retiree du registre. Holographique depuis le 2026-10-11 (conv-269,
+ * « le mode holographique est le mode par defaut de autowin os desormais »). Un poste qui a CHOISI
+ * le sombre l a memorise (`sombre`) et le garde.
+ */
+const THEME_NU: ThemeId = 'sombre'
+export const THEME_MODE_PAR_DEFAUT: ThemeId = 'nebuleuse-verre'
 
 /** Un identifiant n'est valable que s'il est DANS le registre. */
 export function estThemeConnu(valeur: unknown): valeur is ThemeId {
@@ -74,13 +88,13 @@ export function baseDuTheme(id: ThemeId): ThemeBase {
   return THEMES.find((t) => t.id === id)?.base ?? 'sombre'
 }
 
-/** Lit le thème mémorisé. Toute valeur absente, abîmée ou inconnue retombe sur le sombre. */
+/** Lit le thème mémorisé. Toute valeur absente, abîmée ou inconnue retombe sur Holographique. */
 export function lireThemeMode(): ThemeId {
   try {
     const brut = globalThis.localStorage?.getItem(THEME_MODE_STORAGE_KEY)
     return estThemeConnu(brut) ? brut : THEME_MODE_PAR_DEFAUT
   } catch {
-    // localStorage indisponible (contexte de test, mode privé) : le sombre reste le repli.
+    // localStorage indisponible (contexte de test, mode privé) : le défaut reste le repli.
     return THEME_MODE_PAR_DEFAUT
   }
 }
@@ -96,7 +110,7 @@ export function lireThemeMode(): ThemeId {
 export function appliquerThemeMode(mode: ThemeId): void {
   const racine = globalThis.document?.documentElement
   if (!racine) return
-  if (mode === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-theme')
+  if (mode === THEME_NU) racine.removeAttribute('data-theme')
   else racine.setAttribute('data-theme', mode)
   /*
    * LA BASE, posee A COTE du nom du theme -- et c est ce qui manquait.
@@ -112,7 +126,7 @@ export function appliquerThemeMode(mode: ThemeId): void {
    * Le sombre reste l etat NU sur les deux attributs -- rien a retirer pour lui.
    */
   const base = baseDuTheme(mode)
-  if (base === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-base')
+  if (base === 'sombre') racine.removeAttribute('data-base')
   else racine.setAttribute('data-base', base)
   accorderBoutonsDeFenetre(racine, base)
   accorderSchemaDeCouleurs(base)
