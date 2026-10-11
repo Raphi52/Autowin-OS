@@ -485,6 +485,9 @@ export interface PromptSnapshot {
    * dit « stopped » : c'est SA copie. Sans ce champ, le modèle croyait sa surveillance morte et en
    * relançait une seconde (conv-253, tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e). Absent quand rien
    * ne tourne.
+   * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — raisonnement mesuré « The background
+   * watcher process ended with the session » : l'état poussé au modèle taisait la copie d'Autowin ;
+   * 4 édits = import + champ + fonction + branchement ; commands.taches-de-fond-suivies.test.ts rouge puis vert.
    */
   tachesDeFondSuiviesParAutowin?: {
     consigne: string
