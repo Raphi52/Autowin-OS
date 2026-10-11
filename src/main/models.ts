@@ -97,11 +97,16 @@ function labelClaudeAlias(family: string, latestModelId: string): string {
   return `Claude ${name} · dernier (${version.major}${version.minor ? `.${version.minor}` : ''})`
 }
 
+/**
+ * Nom affiché d'un modèle Claude NOMMÉ. Sans suffixe « · CLI » (retiré le 2026-10-11, conv-237 :
+ * « C'est con que les noms de models contiennent CLI ») : tous les modèles Claude passent par le
+ * CLI, le suffixe ne distinguait rien et allongeait chaque ligne des listes de choix.
+ */
 function labelClaudeModel(id: string): string {
   const version = parseClaudeVersion(id)
-  if (!version) return `${id} · CLI`
+  if (!version) return id
   const name = version.family.charAt(0).toUpperCase() + version.family.slice(1)
-  return `Claude ${name} ${version.major}${version.minor ? `.${version.minor}` : ''}${version.date ? ` (${version.date})` : ''} · CLI`
+  return `Claude ${name} ${version.major}${version.minor ? `.${version.minor}` : ''}${version.date ? ` (${version.date})` : ''}`
 }
 
 /** Conserve les seeds vérifiés tout en ajoutant les modèles découverts, sans doublon. */
@@ -292,7 +297,15 @@ function readCatalogCache(
     if (!models.every((model) => isValidCachedModel(model, provider))) return undefined
     // Tout ce qui entre dans ce cache vient d'un listing dynamique antérieur. Ce marquage migre
     // aussi les caches créés avant l'ajout explicite de cette provenance.
-    return uniqueModels(models.map((model) => ({ ...model, dynamicallyLoaded: true })))
+    // Le nom d'un modèle Claude se DÉDUIT de son id : il est recalculé ici plutôt que relu, sinon un
+    // cache écrit avant un changement de libellé (ex. l'ancien suffixe « · CLI ») le ramènerait.
+    return uniqueModels(
+      models.map((model) => ({
+        ...model,
+        ...(provider === 'claude' ? { label: labelClaudeModel(model.model) } : {}),
+        dynamicallyLoaded: true
+      }))
+    )
   } catch {
     return undefined
   }
