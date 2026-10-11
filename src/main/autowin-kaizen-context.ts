@@ -603,8 +603,103 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   }
 }
 
+/*
+  LA PHRASE CITÉE DÉSIGNE LA SCÈNE MIEUX QUE LE NUMÉRO TAPÉ (2026-10-11).
+
+  « /kaizen dans la conv 243 il a pas pris en compte le message "utiliser remotion ou hyperframes
+  c'est utile?" » a reçu le dossier de conv-243 : un seul tour (cb786c88-9d33-413c-8faf-dc3a31b785f6,
+  sur les refus « safeguards »), `saisies: []`, et aucune trace de la phrase. Elle avait été tapée
+  dans conv-253 (saisie ts 1791720124446, voie « orientation ») : un chiffre mal tapé, et tout le
+  kaizen auditait une conversation sans rapport. Le numéro reste la cible par défaut ; mais une phrase
+  citée entre guillemets qui n'y figure PAS est vérifiée contre les messages utilisateur de toutes
+  les conversations. Une seule autre la contient → le dossier y part, et c'est DIT. Plusieurs, ou
+  aucune → la cible ne bouge pas, et l'écart est dit aussi : un dossier qui ne contient pas la scène
+  citée ne doit plus se lire comme s'il la contenait.
+*/
+const CITATION_MIN = 8
+
+function normaliserCitation(texte: string): string {
+  return texte
+    .normalize('NFKC')
+    .replace(/[’‘`´]/g, "'")
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([?!:;.,])/g, '$1')
+    .trim()
+    .toLowerCase()
+}
+
+/** Fragments cités entre guillemets dans une demande (« … », "…", “…”). */
+export function fragmentsCites(task: string): string[] {
+  const fragments: string[] = []
+  for (const m of task.matchAll(/["«“]([^"»”]+)["»”]/g)) {
+    const fragment = normaliserCitation(m[1])
+    if (fragment.length >= CITATION_MIN) fragments.push(fragment)
+  }
+  return [...new Set(fragments)]
+}
+
+export interface CibleKaizen {
+  conversationId: string
+  /** Écart entre la cible demandée et la phrase citée, à placer en tête du dossier. */
+  avis?: string
+}
+
+interface ConversationCherchable {
+  id: string
+  messages: ReadonlyArray<{ role: string; content: string }>
+}
+
+export function localiserMessageCite(
+  task: string,
+  cibleId: string,
+  conversations: readonly ConversationCherchable[]
+): CibleKaizen {
+  const citations = fragmentsCites(task)
+  if (!citations.length) return { conversationId: cibleId }
+  const contient = (conversation: ConversationCherchable): boolean =>
+    conversation.messages.some(
+      (message) =>
+        message.role === 'user' &&
+        typeof message.content === 'string' &&
+        // La demande /kaizen recopie la phrase : elle ne prouve pas où la scène a eu lieu.
+        !/^\/kaizen(?=\s|$)/i.test(message.content.trim()) &&
+        citations.some((citation) => normaliserCitation(message.content).includes(citation))
+    )
+  const cible = conversations.find((conversation) => conversation.id === cibleId)
+  if (cible && contient(cible)) return { conversationId: cibleId }
+  const citee = `« ${clipped(citations[0], 120)} »`
+  const ailleurs = conversations
+    .filter((conversation) => conversation.id !== cibleId && contient(conversation))
+    .map((conversation) => conversation.id)
+  if (ailleurs.length === 1)
+    return {
+      conversationId: ailleurs[0],
+      avis:
+        `Le message cité ${citee} n'apparaît dans aucun message de ${cibleId} ; il a été écrit dans ` +
+        `${ailleurs[0]}. Ce dossier est donc construit sur ${ailleurs[0]}, pas sur ${cibleId}.`
+    }
+  if (ailleurs.length > 1)
+    return {
+      conversationId: cibleId,
+      avis:
+        `Le message cité ${citee} n'apparaît dans aucun message de ${cibleId} ; il apparaît dans ` +
+        `${ailleurs.slice(0, 6).join(', ')}. Ce dossier reste celui de ${cibleId} : établis la ` +
+        `bonne conversation avant d'auditer.`
+    }
+  return {
+    conversationId: cibleId,
+    avis:
+      `Le message cité ${citee} n'apparaît dans aucun message de ${cibleId}, ni dans aucune autre ` +
+      `conversation enregistrée. Ce dossier ne contient donc pas la scène citée.`
+  }
+}
+
 /** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
-export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenEvidence): string {
+export function buildAutowinKaizenTask(
+  request: string,
+  evidence: AutowinKaizenEvidence,
+  avisCible?: string
+): string {
   const messages = evidence.conversation.messages.slice(-MESSAGE_LIMIT).map((message) => ({
     ts: new Date(message.ts).toISOString(),
     role: message.role,
@@ -651,7 +746,7 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
   }
 
   const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
-
+${avisCible ? `\n⚠️ CIBLE DU DOSSIER : ${clipped(avisCible, 600)}\n` : ''}
 ${MARQUEUR_DEBUT}
 `
   const pied =

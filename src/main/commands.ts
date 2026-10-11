@@ -229,6 +229,7 @@ import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
   kaizenNamedConversationId,
+  localiserMessageCite,
   PLAFONDS_AMPLES
 } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
@@ -2663,11 +2664,26 @@ export class AppCommandBus {
             ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
               conversation)
             : conversation
-        const rawTask =
+        // fix-ok: conv-258 — le dossier visait conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) alors que la phrase citee avait ete tapee dans conv-253 ; le numero tape n'etait jamais confronte a la citation.
+        const kaizenDemande =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
+        const kaizenCible = kaizenDemande
+          ? localiserMessageCite(
+              authoritativeTask,
+              kaizenEvidenceConversation.id,
+              this.os.conversations.list()
+            )
+          : undefined
+        const kaizenDossier =
+          kaizenCible && kaizenEvidenceConversation
+            ? (this.os.conversations.get(kaizenCible.conversationId) ?? kaizenEvidenceConversation)
+            : kaizenEvidenceConversation
+        const rawTask =
+          kaizenDemande && kaizenDossier
             ? buildAutowinKaizenTask(
                 requestedTask,
-                collectAutowinKaizenEvidence(kaizenEvidenceConversation)
+                collectAutowinKaizenEvidence(kaizenDossier),
+                kaizenCible?.avis
               )
             : requestedTask
         /*

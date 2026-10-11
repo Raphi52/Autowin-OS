@@ -1244,6 +1244,51 @@ describe('AppCommandBus command execution policy', () => {
     }
   })
 
+  it('/kaizen vise la conversation qui contient la phrase citée, pas un numéro mal tapé (conv-258)', async () => {
+    // Réel : « dans la conv 243 … "utiliser remotion ou hyperframes c'est utile?" » recevait le
+    // dossier de conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6, sans la phrase) ; elle était
+    // dans conv-253.
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-citation-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      const autres = [
+        { id: 'conv-243', content: "Fais en sorte qu'un refus du modèle relance le tour" },
+        { id: 'conv-253', content: "utiliser remotion ou hyperframes c'est utile?" }
+      ].map(({ id, content }) => ({
+        id,
+        title: id,
+        category: 'claude',
+        provider: 'claude',
+        messages: [{ role: 'user', content, ts: 1 }],
+        runPaths: []
+      }))
+      const sourceGet = os.conversations.get
+      const sourceList = os.conversations.list
+      os.conversations.get = (id: string) => autres.find((c) => c.id === id) ?? sourceGet(id)
+      os.conversations.list = () => [...sourceList(), ...autres]
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'orchestrate',
+        {
+          task: `/kaizen dans la conv 243 il a pas pris en compte le message "utiliser remotion ou hyperframes c'est utile?\n"`
+        },
+        'conv-1'
+      )
+
+      expect(result).toMatchObject({ ok: true })
+      expect(os.calls.lastTask).toContain('"id":"conv-253"')
+      expect(os.calls.lastTask).not.toContain('"id":"conv-243"')
+      expect(os.calls.lastTask).toContain('CIBLE DU DOSSIER')
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      supprimerArbre(appData)
+    }
+  })
+
   it('alimente un Auto-Kaizen avec les preuves de sa conversation source', async () => {
     const previousAppData = process.env.APPDATA
     const appData = mkdtempSync(join(tmpdir(), 'autowin-auto-kaizen-command-'))
