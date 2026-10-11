@@ -87,7 +87,11 @@ describe('outcomeToTraceEvent', () => {
 
 describe('appendObservedOrchestrationOutcome', () => {
   const roots: string[] = []
+  const stores: TraceStore[] = []
   afterEach(() => {
+    // Refermer AVANT d'effacer : sous Windows, un journal encore ouvert par `descripteurOuvert`
+    // fait echouer la suppression du dossier (EPERM sur lstat de conv1.jsonl).
+    for (const store of stores.splice(0)) store.fermer()
     for (const root of roots.splice(0)) supprimerArbre(root)
   })
 
@@ -95,6 +99,7 @@ describe('appendObservedOrchestrationOutcome', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-outcome-'))
     roots.push(root)
     const store = new TraceStore(root)
+    stores.push(store)
     store.append({
       schema: 'autowin.trace/v1',
       id: 'judge-1',
@@ -129,6 +134,7 @@ describe('appendObservedOrchestrationOutcome', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-outcome-handoff-'))
     roots.push(root)
     const store = new TraceStore(root)
+    stores.push(store)
     store.append({
       schema: 'autowin.trace/v1',
       id: 'build-handoff-1',

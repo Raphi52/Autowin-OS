@@ -482,6 +482,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
       })
       let traceParentId: string | undefined
+      // Le journal s'ouvre EN AVANCE et sans bloquer : le premier `append` du tour n'arrive qu'apres
+      // une reponse du modele. Ouvert la, en synchrone, il a fige la fenetre 9,9 s + 4,4 s
+      // (gels.jsonl 2026-10-11 20:30). Voir `TraceStore.preparerEcriture`.
+      if (conversationId) void causalTrace.preparerEcriture(conversationId)
       let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
       let traceActionIndex = 0
       /**
