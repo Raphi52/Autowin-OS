@@ -15,6 +15,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { TacheDeFondARelancer } from '../providers/types'
+import { noterTacheRelancee, noterTacheRendue } from '../providers/taches-de-fond-suivies'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { survivableExitCode, writeSurvivableExit } from '../runs/stdout-journal'
 
@@ -138,6 +139,19 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
   }
 
   const surveiller = async (lot: string, taches: TacheRelancee[]): Promise<void> => {
+    /*
+     * INSCRITE AVANT D'ATTENDRE : le tour suivant doit savoir qu'elle tourne. Sinon le CLI repris
+     * la dit « stopped » et `claude.ts` concluait « son résultat est perdu » (conv-253, tour
+     * bdfe38d3-5ba5-4693-bad2-f70b39bc845e) — le modèle relançait alors un doublon.
+     */
+    for (const tache of taches)
+      if (!tache.erreurDemarrage && tache.journalPath)
+        noterTacheRelancee({
+          conversationId: tache.conversationId,
+          tache: tache.id,
+          commande: tache.commande,
+          depuis: tache.debut
+        })
     const issues = new Map<number, IssueTacheRelancee>()
     for (;;) {
       taches.forEach((tache, index) => {
@@ -162,6 +176,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
     } catch (erreur) {
       journaliser(`[taches de fond] tour de reprise impossible dans ${conversationId}`, erreur)
     }
+    for (const tache of taches) noterTacheRendue(tache.id)
     deps.magasin.supprimer(lot)
   }
 

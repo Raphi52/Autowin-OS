@@ -38,6 +38,7 @@ import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
+import { tacheRelanceeParAutowin } from './taches-de-fond-suivies'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
 import {
   appendWorkspaceMutationEvidence,
@@ -1937,6 +1938,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
+        /*
+         * RELANCEE PAR AUTOWIN = PAS PERDUE. fix-ok: conv-253 tours dcb537d2-ed5a-4646-806d-880ef76df295
+         * → bdfe38d3-5ba5-4693-bad2-f70b39bc845e — le CLI repris signalait `bmaye5d39` « stopped »
+         * (journal 354008f8 l.1) alors qu'Autowin la faisait tourner (lot 6cb0f6b4) : l'avis disait
+         * « son résultat est perdu » et le modele a relance un doublon. C'est la copie du CLI qui
+         * s'est arretee ; celle d'Autowin rend son resultat par un tour de reprise.
+         */
+        if (!demarre && !tachesDeFond.has(idTache) && tacheRelanceeParAutowin(idTache)) {
+          queue.push({
+            delta: '',
+            status: `tache de fond d'un tour precedent - suivie par Autowin, resultat a venir dans le fil`
+          })
+          return
+        }
         if (demarre) {
           const toolUseId = String(o['tool_use_id'] ?? '')
           tachesDeFond.set(idTache, {
