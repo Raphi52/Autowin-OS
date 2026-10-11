@@ -38,4 +38,22 @@ describe('ChatView — l’en-tête nomme la conversation qu’on regarde', () =
     expect(pastille?.getAttribute('title')).toContain('conv-42')
     expect(pastille?.getAttribute('title')).toContain('conversation')
   })
+
+  // « enleve en cours ca prend de la place pour rien » (2026-10-11) : pendant un tour, l'en-tete
+  // affichait « conv-237 · en cours ». L'etat occupe reste porte par la classe, pas par du texte.
+  it('pendant un tour, l’en-tête n’ajoute pas « en cours » après l’identifiant', async () => {
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('conv-42')]),
+        conversation: vi.fn().mockResolvedValue({ id: 'conv-42', messages: [] }),
+        pilotChat: vi.fn(() => new Promise(() => {}))
+      })
+    )
+    await harness.type('un tour qui dure')
+    await harness.click('.composer-send')
+
+    const pastille = harness.container.querySelector('[data-testid="chat-runtime-conv"]')
+    expect(pastille?.classList.contains('is-busy')).toBe(true)
+    expect(pastille?.textContent).toBe('conv-42')
+  })
 })

@@ -6844,8 +6844,9 @@ export function ChatView({
                   La place etait donc occupee par du bruit alors qu'il manquait la seule
                   information qui relie ce que l'agent dit a ce que l'utilisateur voit.
 
-                  L'etat occupe n'est PAS perdu : il reste porte par la classe `is-busy`, par la
-                  pastille, et par la mention ajoutee a la suite de l'id.
+                  L'etat occupe reste porte par la classe `is-busy`. La mention « · en cours »
+                  qui suivait l'id a ete retiree (2026-10-11, « ca prend de la place pour rien ») :
+                  le fil en cours se voit deja dans la conversation elle-meme.
                 */}
                   <span
                     className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
@@ -6856,9 +6857,7 @@ export function ChatView({
                         : 'Aucune conversation ouverte'
                     }
                   >
-                    {/* Pas de pastille ici : l'etat occupe se lit sur « en cours » et la classe is-busy. */}
                     {activeId ?? 'aucune conversation'}
-                    {busy && ' · en cours'}
                   </span>
                   {(() => {
                     /*
