@@ -121,29 +121,38 @@ export interface ScanRunsResult {
  * ne `readFile` que les `limit` plus récents.
  */
 export async function scanRunsBounded(
-  root = runsRoot(),
+  root: string | readonly string[] = runsRoot(),
   options: ScanRunsOptions = {}
 ): Promise<ScanRunsResult> {
   const sessionFilter = options.sessions ? new Set(options.sessions) : undefined
-  const sessions = sessionFilter
-    ? (await safeReaddir(root)).filter((s) => sessionFilter.has(s))
-    : await safeReaddir(root)
+  // Plusieurs racines : la borne porte sur leur UNION (un seul tri, N lectures au total), et une
+  // racine citée deux fois (AUTOWIN_RUN_ROOT = racine des conversations) n'est parcourue qu'une fois.
+  const racines = [
+    ...new Map(
+      (typeof root === 'string' ? [root] : root).map((r) => [comparablePath(r), r])
+    ).values()
+  ]
 
   const candidates: { subject: string; session: string; path: string; mtime: number }[] = []
-  for (const session of sessions) {
-    const sessionDir = join(root, session)
-    for (const ws of await safeReaddir(sessionDir)) {
-      const runPath = join(sessionDir, ws, 'RUN.md')
-      try {
-        const runStat = await stat(runPath)
-        candidates.push({
-          subject: ws.replace(/-workspace$/, ''),
-          session,
-          path: runPath,
-          mtime: runStat.mtimeMs
-        })
-      } catch {
-        /* pas de RUN.md ici — ignoré */
+  for (const racine of racines) {
+    const sessions = sessionFilter
+      ? (await safeReaddir(racine)).filter((s) => sessionFilter.has(s))
+      : await safeReaddir(racine)
+    for (const session of sessions) {
+      const sessionDir = join(racine, session)
+      for (const ws of await safeReaddir(sessionDir)) {
+        const runPath = join(sessionDir, ws, 'RUN.md')
+        try {
+          const runStat = await stat(runPath)
+          candidates.push({
+            subject: ws.replace(/-workspace$/, ''),
+            session,
+            path: runPath,
+            mtime: runStat.mtimeMs
+          })
+        } catch {
+          /* pas de RUN.md ici — ignoré */
+        }
       }
     }
   }
@@ -211,7 +220,9 @@ export type FenetreRuns<T> = T[] & { horsFenetre: number }
  * disparaissait de `runsBlocked` sans aucun signal (constat conv-861, 2026-09-25 : ranger des runs
  * récents a fait REMONTER 6 anciens runs bloqués, invisibles jusque-là). Le compte voyage désormais.
  */
-export async function scanRunsPourSnapshot(root = runsRoot()): Promise<FenetreRuns<RunEntry>> {
+export async function scanRunsPourSnapshot(
+  root: string | readonly string[] = runsRoot()
+): Promise<FenetreRuns<RunEntry>> {
   const { entries, remaining } = await scanRunsBounded(root, { limit: LIMITE_RUNS_SNAPSHOT })
   return Object.assign(entries, { horsFenetre: remaining })
 }

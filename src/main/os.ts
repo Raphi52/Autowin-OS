@@ -36,10 +36,12 @@ import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-br
 import {
   attachConversationIds,
   attachPublicationStates,
+  runsRoot,
   scanRuns,
   scanRunsPourSnapshot,
   type RunEntry
 } from './dashboards/runs-scan'
+import { convRunsRoot } from './runs/conv-runs'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
@@ -1515,7 +1517,13 @@ export class AutowinOS {
    * (Observatoire) garde `listRuns()`, lui, intact.
    */
   async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number }> {
-    const fenetre = await scanRunsPourSnapshot()
+    /*
+     * LA RACINE OÙ AUTOWIN ÉCRIT, PAS SEULEMENT CELLE DU KIT. `runsRoot()` (`~/.claude/runs`) n'existe
+     * pas sur le poste : `get_state`, l'état du prompt et le contexte des orchestrations voyaient
+     * ZÉRO run, alors que la construction de conv-253 tournait (kaizen du 2026-10-11, sonde : 0 run
+     * par défaut, 9 « open » dans `convRunsRoot()`). Les deux racines, une seule borne.
+     */
+    const fenetre = await scanRunsPourSnapshot([convRunsRoot(), runsRoot()])
     // `horsFenetre` suit la liste : sans lui, un run bloqué plus ancien que la borne disparaît en silence.
     return Object.assign(
       fenetre.map((r) => ({ ...r, blocked: isBlocked(r.summary) })),

@@ -11,7 +11,13 @@ describe('runsWithGate ne paie pas le scan complet des runs', () => {
   const corps = /async runsWithGate\(\)[^{]*\{([\s\S]*?)\n {2}\}/.exec(source)?.[1] ?? ''
 
   it('appelle la variante bornée', () => {
-    expect(corps).toContain('scanRunsPourSnapshot()')
+    expect(corps).toContain('scanRunsPourSnapshot(')
+  })
+
+  // Kaizen conv-253 : sans la racine des conversations, la liste était vide sur le poste
+  // (`~/.claude/runs` n'existe pas) — l'agent ne voyait aucun run, même en cours.
+  it('lit la racine où Autowin écrit ses runs', () => {
+    expect(corps).toContain('convRunsRoot()')
   })
 
   it('n’appelle PAS la variante sans borne', () => {
