@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   THEMES,
+  THEME_MODE_PAR_DEFAUT,
   THEME_MODE_STORAGE_KEY,
   appliquerThemeMode,
   ecrireThemeMode,
@@ -10,7 +11,8 @@ import {
 } from './theme-mode'
 
 /**
- * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : rendre le mode clair par défaut, oublier de poser
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : changer le thème par défaut (Holographique depuis le
+ * 2026-10-11, conv-269), rendre le mode clair par défaut, oublier de poser
  * `data-theme` sur la racine, ou retirer les surcharges claires de `theme-modes.css` — dans les
  * trois cas l'interrupteur de Settings · Interface ne changerait rien à l'écran.
  */
@@ -21,28 +23,48 @@ describe('mode d’affichage sombre / clair', () => {
     document.documentElement.removeAttribute('data-base')
   })
 
-  it('démarre en sombre quand rien n’est mémorisé', () => {
+  /*
+   * HOLOGRAPHIQUE PAR DEFAUT depuis le 2026-10-11 (conv-269, « le mode holographique est le mode
+   * par defaut de autowin os desormais »). ENTREE QUI DOIT FAIRE ECHOUER CES CAS : remettre le
+   * sombre en defaut, ou confondre le defaut avec l etat NU (le defaut retirerait alors
+   * l attribut et l ecran resterait sombre).
+   */
+  it('démarre en Holographique quand rien n’est mémorisé', () => {
+    expect(THEME_MODE_PAR_DEFAUT).toBe('nebuleuse-verre')
+    expect(lireThemeMode()).toBe('nebuleuse-verre')
+  })
+
+  it('pose Holographique sur la racine au démarrage d’un poste neuf', () => {
+    appliquerThemeMode(lireThemeMode())
+    expect(document.documentElement.getAttribute('data-theme')).toBe('nebuleuse-verre')
+    expect(document.documentElement.hasAttribute('data-base')).toBe(false)
+  })
+
+  it('garde le sombre pour un poste qui l’a CHOISI', () => {
+    localStorage.setItem(THEME_MODE_STORAGE_KEY, 'sombre')
     expect(lireThemeMode()).toBe('sombre')
+    appliquerThemeMode(lireThemeMode())
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
   it('ignore une valeur mémorisée invalide', () => {
     localStorage.setItem(THEME_MODE_STORAGE_KEY, 'galaxy')
-    expect(lireThemeMode()).toBe('sombre')
+    expect(lireThemeMode()).toBe('nebuleuse-verre')
   })
 
   /*
    * SIX THEMES RETIRES le 2026-10-11 (conv-231, « supprime les theme nebula les 2 themes rose
-   * versaille ardoise et parchemin »). Un poste qui en avait memorise un retombe sur le sombre.
+   * versaille ardoise et parchemin »). Un poste qui en avait memorise un retombe sur le defaut.
    * ENTREE QUI DOIT FAIRE ECHOUER CE CAS : remettre l un d eux dans le registre ou sa feuille.
    */
-  it('n’offre plus les six themes retires, et retombe sur le sombre si l’un etait memorise', () => {
+  it('n’offre plus les six themes retires, et retombe sur le defaut si l’un etait memorise', () => {
     const retires = ['obsidian-nebula', 'solar-rose', 'rose-poudre', 'black-versailles', 'ardoise', 'parchemin']
     const css = readFileSync('src/renderer/src/assets/theme-modes.css', 'utf8')
     for (const id of retires) {
       expect(THEMES.map((t) => t.id)).not.toContain(id)
       expect(css).not.toContain(`data-theme='${id}'`)
       localStorage.setItem(THEME_MODE_STORAGE_KEY, id)
-      expect(lireThemeMode()).toBe('sombre')
+      expect(lireThemeMode()).toBe('nebuleuse-verre')
     }
   })
 

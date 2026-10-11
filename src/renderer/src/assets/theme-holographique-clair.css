@@ -3198,9 +3198,9 @@
    Settings (cadre nacre, sources en aplat gris). Ici UN dessin pour tous.
    HORS PERIMETRE, volontairement : les ONGLETS (lisere seul, conv-244, ViewTopBar.css), la pastille
    du menu de gauche (conv-187), le panneau Details (section 6, deja au cadre), les barres de Gantt
-   et les etiquettes du graphe (la couleur y porte une donnee), et les puces de compte de la vue
-   Routage (`.router-account-chip`) : elles restent intactes hors des popups depuis conv-250, le
-   test « la vue Routage reste intacte » le garde.
+   et les etiquettes du graphe (la couleur y porte une donnee). Les puces de compte de la vue
+   Routage, longtemps gardees intactes (conv-250), prennent le cadre a leur tour sur demande
+   (conv-261, 2nd tour) : voir « Routage » plus bas.
    POIDS : chaque liste passe par :is(), qui prend la specificite de son membre le plus fort, sous
    `.shell.theme-serious` (toujours pose, App.tsx). Le choix bat ainsi les couches `.theme-serious`
    des vues et la couche generee ; le survol est ecrit AVANT le choix, a poids egal, pour lui ceder.
@@ -3350,6 +3350,22 @@
   ) {
   color: #121018;
 }
+/* -- Routage : le compte choisi (`.router-account-chip.is-active`, desactive puisqu'on ne rebascule
+      pas sur soi-meme) prend le meme cadre, en 1 px comme ces puces dans les popups (section 6) :
+      une pilule de 1 px au repos qui passerait a 1,5 px sauterait d'un demi-pixel. Les autres
+      puces de la vue ne bougent pas. Demande conv-261 : « mets aussi le cadre bleu -> rose sur les
+      puces de compte choisies de la vue Routage ». */
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .router-view
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled) {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box,
+    var(--nv-choisi-cadre) border-box;
+  color: #121018;
+  opacity: 1;
+}
 
 /* -- Les deux derniers aplats bordeaux des vues : le prompt envoye d'une tache planifiee et la
       pilule « Source » des Tickets deviennent du verre neutre. */
@@ -3406,6 +3422,32 @@
 :root[data-theme='holographique-clair'] .shell.theme-serious .wt-cdp-nombre {
   border-radius: 14px;
   background: var(--nv-liste-fond);
+}
+/* Le bandeau du haut (« Sante du projet », « Branche »...) : plus de trait de 3 px a gauche ni de
+   filets entre les cases (demande conv-261 : « retire la bordure du bandeau du haut des
+   Worktrees »). Ses cinq cases deviennent des plaques, comme la bande de chiffres juste dessous.
+   Le trait disait l'etat de sante par sa couleur : le mot de la premiere case (Indisponible,
+   Obsolete...) dit deja cet etat, il en reprend donc la couleur d'alerte. */
+:root[data-theme='holographique-clair'] .shell.theme-serious .project-strip {
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious .project-strip > div {
+  border: 0;
+  border-radius: 14px;
+  background: var(--nv-liste-fond);
+}
+:root[data-theme='holographique-clair']
+  .shell.theme-serious
+  .project-strip.is-unavailable
+  > div:first-child
+  strong {
+  color: var(--warn);
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious .project-strip.is-stale > div:first-child strong {
+  color: var(--gold);
 }
 
 /* -- Champs et boutons de la barre d'Observatory : la forme de la recherche du chat (12 px, voile

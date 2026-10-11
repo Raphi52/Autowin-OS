@@ -166,13 +166,22 @@ with tempfile.TemporaryDirectory() as dossier:
     etat = logo.poser_sur_electron(racine_test, executer=rcedit_simule, verrouille=lambda _p: False)
     verifie(etat == "pose" and appels, f"un logo regenere est repose sur l'exe, pas « {etat} »")
 
-    # Une app tourne sur l'exe : on n'y touche pas.
+    # Exe TENU par des processus (le cas normal, mesure conv-266) : l'ancien est mis de cote par
+    # renommage, la copie reecrite prend sa place, et l'ancien part au passage suivant.
     (racine_test / "build" / "icon.ico").write_bytes(b"ICO-ANNEAU-V3")
-    appels.clear()
+    exe.write_bytes(b"EXE-ATOME-TENU")
+    avant = exe.read_bytes()
     etat = logo.poser_sur_electron(racine_test, executer=rcedit_simule, verrouille=lambda _p: True)
-    verifie(etat == "verrouille" and not appels, f"exe verrouille : aucun geste, pas « {etat} »")
+    mis_de_cote = list(dist.glob("electron-atome-*.exe"))
+    verifie(etat == "pose", f"exe tenu : l'icone est quand meme posee, pas « {etat} »")
+    verifie(len(mis_de_cote) == 1 and mis_de_cote[0].read_bytes() == avant,
+            "exe tenu : l'ancien est RENOMME (ses processus continuent dessus), pas ecrase")
+    verifie(exe.is_file() and exe.read_bytes() != avant, "exe tenu : electron.exe est la copie reecrite")
+    logo.poser_sur_electron(racine_test, executer=rcedit_simule, verrouille=lambda _p: False)
+    verifie(not list(dist.glob("electron-atome-*.exe")), "l'ancien exe mis de cote est supprime au passage suivant")
 
     # rcedit echoue : electron.exe reste INTACT et l'echec est dit.
+    (racine_test / "build" / "icon.ico").write_bytes(b"ICO-ANNEAU-V4")
     avant = exe.read_bytes()
     etat = logo.poser_sur_electron(racine_test, executer=lambda c, **_o: Fin(1), verrouille=lambda _p: False)
     verifie(etat.startswith("echec") and exe.read_bytes() == avant,
@@ -182,6 +191,67 @@ with tempfile.TemporaryDirectory() as dossier:
     outil.unlink()
     etat = logo.poser_sur_electron(racine_test, executer=rcedit_simule, verrouille=lambda _p: False)
     verifie(etat.startswith("echec") and "rcedit" in etat, f"rcedit absent : echec nomme, pas « {etat} »")
+
+# --- raccourcis : icone a NOM VERSIONNE (conv-266) ---------------------------------------------------
+# L'Explorateur range ses images par chemin : sous le meme chemin, il gardait l'atome sur le Bureau.
+with tempfile.TemporaryDirectory() as dossier:
+    racine_test = Path(dossier) / "depot"
+    icones = Path(dossier) / "icones"
+    (racine_test / "resources").mkdir(parents=True)
+    (racine_test / "build").mkdir()
+    source = racine_test / "resources" / "autowin-os-dev.ico"
+    source.write_bytes(bytes([1, 2, 3]))
+    (racine_test / "build" / "icon.ico").write_bytes(bytes([1, 2, 3]))
+
+    v1 = logo.icone_versionnee(source, icones)
+    # MEME empreinte que le test TypeScript (raccourci-demarrer-dev.test.ts) pour les octets 1, 2, 3.
+    verifie(v1.name == "autowin-os-dev-039058c6f2c0.ico", f"nom versionne commun aux trois langages : {v1.name}")
+    verifie(v1.read_bytes() == source.read_bytes(), "la copie versionnee porte le contenu du logo")
+    verifie(logo.icone_versionnee(source, icones) == v1, "meme logo, meme chemin")
+    source.write_bytes(bytes([4, 5, 6]))
+    v2 = logo.icone_versionnee(source, icones)
+    verifie(v2 != v1 and v1.is_file(), "logo modifie : chemin NEUF (l'ancien reste pour qui le vise encore)")
+
+    verifie(logo.source_de_l_icone(f"{racine_test / 'build' / 'icon.ico'},0", racine_test, icones)
+            == racine_test / "build" / "icon.ico", "chemin STABLE du depot reconnu")
+    verifie(logo.source_de_l_icone(f"{v1},0", racine_test, icones) == source,
+            "copie versionnee reconnue : on remonte au logo du depot")
+    verifie(logo.source_de_l_icone(r"C:\Program Files\Autre\app.ico,0", racine_test, icones) is None,
+            "un raccourci qui vise une AUTRE icone n'est pas le notre")
+    # Electron.lnk reecrit par une instance lancee depuis une copie de travail (mesure conv-266).
+    copie_agent = r"D:\Autowin\worktrees\e266\agent__run-7f72-1\build\icon.ico,0"
+    verifie(logo.source_de_l_icone(copie_agent, racine_test, icones) == racine_test / "build" / "icon.ico",
+            "l'icone d'une COPIE DE TRAVAIL (chemin qui disparaitra) est reconnue par son nom")
+    verifie(logo.source_de_l_icone(r"C:\Windows\explorer.exe,0", racine_test, icones) is None,
+            "une icone tiree d'un exe n'est pas la notre")
+    verifie(logo.source_de_l_icone("", racine_test, icones) is None, "raccourci sans icone : ignore")
+
+    lnks = {Path(dossier) / n: v for n, v in (
+        ("stable.lnk", f"{racine_test / 'resources' / 'autowin-os-dev.ico'},0"),
+        ("perime.lnk", f"{v1},0"),
+        ("a-jour.lnk", f"{v2},0"),
+        ("etranger.lnk", r"C:\Windows\explorer.exe,0"),
+    )}
+    for lnk in lnks:
+        lnk.write_bytes(b"")
+    reecrits: list[Path] = []
+
+    def icone_simulee(lnk: Path, nouvelle: str | None = None) -> str:
+        if nouvelle is not None:
+            reecrits.append(lnk)
+            lnks[lnk] = nouvelle
+        return lnks[lnk]
+
+    faits = logo.realigner_raccourcis(racine_test, list(lnks), icones, icone_simulee)
+    verifie(sorted(p.name for p in reecrits) == ["perime.lnk", "stable.lnk"],
+            f"seuls les raccourcis du logo PAS a jour sont reecrits : {sorted(p.name for p in reecrits)}")
+    verifie(all(lnks[Path(dossier) / n] == f"{v2},0" for n in ("stable.lnk", "perime.lnk", "a-jour.lnk")),
+            "nos raccourcis visent tous la copie du logo ACTUEL")
+    verifie(lnks[Path(dossier) / "etranger.lnk"] == r"C:\Windows\explorer.exe,0", "le raccourci etranger est intact")
+    verifie(len(faits) == 2, f"rend les raccourcis reecrits : {faits}")
+    reecrits.clear()
+    logo.realigner_raccourcis(racine_test, list(lnks), icones, icone_simulee)
+    verifie(not reecrits, "second passage : plus rien a reecrire")
 
 if ECHECS:
     for message in ECHECS:

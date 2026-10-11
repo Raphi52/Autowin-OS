@@ -197,28 +197,151 @@ def generer(racine: Path = _RACINE) -> list[Path]:
     return ecrits
 
 
-def prevenir_windows(fichiers: list[Path]) -> list[Path]:
-    """Dit au shell Windows que ces icones ont change. Rend les chemins notifies.
-
-    MESURE du 2026-10-11 (conv-228) : apres reecriture de `build/icon.ico`, le shell servait encore
-    l'ATOME a 16, 24 et 32 px — les tailles du menu Demarrer et du Bureau — alors qu'il rendait deja
-    l'anneau a 48 px. Son cache d'icones est indexe par chemin et par taille, et `ie4uinit -show` ne
-    l'a pas vide. `SHChangeNotify(SHCNE_UPDATEITEM)` sur l'icone ET sur les raccourcis qui la
-    portent, puis `SHCNE_ASSOCCHANGED`, l'a fait : relu ensuite a 16 / 24 / 32 px, c'etait l'anneau.
-    """
-    if sys.platform != "win32":
-        return []
-    import ctypes
+def _raccourcis_connus() -> list[Path]:
+    """Les raccourcis Windows qui affichent le logo : menu Demarrer (dev), Bureau Dev, Bureau paquet."""
     import os
 
-    shell32 = ctypes.windll.shell32  # type: ignore[attr-defined]
-    shell32.SHChangeNotify.argtypes = [ctypes.c_long, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
-    raccourcis = [
+    return [
         Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs/Electron.lnk",
         Path.home() / "Desktop" / "Autowin OS Dev.lnk",
         Path.home() / "Desktop" / "Autowin OS.lnk",
     ]
-    notifies = [p for p in (*fichiers, *raccourcis) if p.is_file()]
+
+
+def dossier_icones_versionnees() -> Path:
+    """`%LOCALAPPDATA%\\autowin-os\\icones` : hors du depot, une copie de travail supprimee n'emporte
+    pas l'icone d'un raccourci. Meme dossier que src/main/raccourci-demarrer-dev.ts."""
+    import os
+
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "autowin-os" / "icones"
+
+
+def icone_versionnee(source: Path, dossier: Path | None = None) -> Path:
+    """Copie de `source` dont le NOM porte l'empreinte du contenu ; posee si elle manque.
+
+    POURQUOI (mesure du 2026-10-11, conv-266) : l'anneau avait ete ecrit sous le MEME chemin que
+    l'atome, et l'Explorateur dessinait toujours l'atome sur le Bureau ; pointe vers un chemin NEUF,
+    le meme raccourci a montre l'anneau aussitot. Un logo modifie = un nom neuf = une image relue.
+    MEME REGLE que `cheminIconeVersionnee` (TypeScript) et create-dev-shortcut.ps1 :
+    `<nom>-<12 premiers hexa du SHA-256>.ico`.
+    """
+    import hashlib
+
+    contenu = source.read_bytes()
+    dossier = dossier or dossier_icones_versionnees()
+    cible = dossier / f"{source.stem}-{hashlib.sha256(contenu).hexdigest()[:12]}{source.suffix}"
+    if not cible.is_file():
+        dossier.mkdir(parents=True, exist_ok=True)
+        cible.write_bytes(contenu)
+    return cible
+
+
+def source_de_l_icone(icone_actuelle: str, racine: Path, dossier: Path) -> Path | None:
+    """L'icone du DEPOT qu'affiche un raccourci (`chemin,index`), ou None s'il vise autre chose.
+
+    Reconnait l'icone par son NOM (`icon.ico`, `autowin-os-dev.ico`, ou leur copie versionnee), ou
+    qu'elle soit : le 2026-10-11 (conv-266), `Electron.lnk` visait `build/icon.ico` d'une COPIE DE
+    TRAVAIL d'agent (une instance lancee depuis elle l'avait reecrit), et ce chemin disparait avec
+    elle — Windows retombe alors sur l'icone d'electron.exe, l'atome. Une icone d'un autre nom n'est
+    pas la notre : le raccourci reste intact.
+    """
+    import os
+    import re
+
+    if not icone_actuelle:
+        return None
+    chemin = Path(icone_actuelle.rsplit(",", 1)[0])
+    if chemin.suffix.lower() != ".ico":
+        return None
+    parent = os.path.normcase(str(chemin.parent))
+    for depot in (racine / "build", racine / "resources"):
+        if parent == os.path.normcase(str(depot)):
+            return chemin if chemin.is_file() else None
+    nom = re.sub(r"-[0-9a-f]{12}$", "", chemin.stem)
+    for depot in (racine / "resources", racine / "build"):
+        if (depot / f"{nom}.ico").is_file():
+            return depot / f"{nom}.ico"
+    return None
+
+
+def _icone_du_raccourci_windows(raccourci: Path, nouvelle: str | None = None) -> str:
+    """Lit (et, si `nouvelle`, reecrit) l'icone d'un .lnk par WScript.Shell. Rend l'icone RELUE.
+
+    Verifie le 2026-10-11 (conv-266) sur une copie de `Electron.lnk` : la reecriture garde l'identite
+    de l'app (System.AppUserModel.ID) et le CLSID des notifications.
+    """
+    import os
+    import subprocess
+
+    script = (
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $w = New-Object -ComObject WScript.Shell; "
+        "$l = $w.CreateShortcut($env:AUTOWIN_LNK); "
+        "if ($env:AUTOWIN_ICONE) { $l.IconLocation = $env:AUTOWIN_ICONE; $l.Save(); "
+        "$l = $w.CreateShortcut($env:AUTOWIN_LNK) }; [Console]::Out.Write($l.IconLocation)"
+    )
+    fin = subprocess.run(  # noqa: S603 - arguments fixes, chemins passes par l'environnement
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        env={**os.environ, "AUTOWIN_LNK": str(raccourci), "AUTOWIN_ICONE": nouvelle or ""},
+        capture_output=True,
+        timeout=60,
+        creationflags=0x08000000 if sys.platform == "win32" else 0,  # CREATE_NO_WINDOW
+    )
+    if fin.returncode != 0:
+        raise OSError(f"raccourci {raccourci} : powershell code {fin.returncode} {fin.stderr.decode('utf-8', 'replace')[:200]}")
+    return fin.stdout.decode("utf-8", "replace").strip()
+
+
+def realigner_raccourcis(
+    racine: Path = _RACINE,
+    raccourcis: list[Path] | None = None,
+    dossier: Path | None = None,
+    icone_du_raccourci=None,
+) -> list[tuple[Path, str]]:
+    """Pointe chaque raccourci connu vers la copie VERSIONNEE du logo qu'il affiche.
+
+    A rejouer apres chaque `generer` : le contenu change, donc le nom versionne aussi, et l'Explorateur
+    comme le menu Demarrer relisent l'image. Rend les (raccourci, nouvelle icone) reecrits.
+    Le demarrage de l'app (menu Demarrer) et create-dev-shortcut.ps1 (Bureau) visent le meme chemin.
+    """
+    if sys.platform != "win32" and icone_du_raccourci is None:
+        return []
+    icone_du_raccourci = icone_du_raccourci or _icone_du_raccourci_windows
+    dossier = dossier or dossier_icones_versionnees()
+    ecrits: list[tuple[Path, str]] = []
+    for raccourci in raccourcis if raccourcis is not None else _raccourcis_connus():
+        if not raccourci.is_file():
+            continue
+        actuelle = icone_du_raccourci(raccourci)
+        source = source_de_l_icone(actuelle, racine, dossier)
+        if source is None:
+            continue
+        voulue = f"{icone_versionnee(source, dossier)},0"
+        if actuelle.lower() == voulue.lower():
+            continue
+        relue = icone_du_raccourci(raccourci, voulue)
+        if relue.lower() != voulue.lower():
+            raise OSError(f"raccourci {raccourci} : icone relue « {relue} », attendue « {voulue} »")
+        ecrits.append((raccourci, voulue))
+    return ecrits
+
+
+def prevenir_windows(fichiers: list[Path]) -> list[Path]:
+    """Dit au shell Windows que ces icones ont change. Rend les chemins notifies.
+
+    CE QUE CA NE FAIT PAS. Conv-228 avait conclu que `SHCNE_UPDATEITEM` + `SHCNE_ASSOCCHANGED`
+    faisaient passer le Bureau et le menu Demarrer a l'anneau, sur la foi d'une relecture par l'API
+    du shell DEPUIS UN AUTRE PROCESSUS. Faux : le 2026-10-11 (conv-266), le Bureau capture tel que
+    l'Explorateur le DESSINE (PrintWindow sur sa liste d'icones) montrait toujours l'atome, et
+    `SHUpdateImage` n'y a rien change non plus. L'Explorateur range ses images PAR CHEMIN : seul un
+    chemin neuf les fait relire — d'ou `icone_versionnee` et `realigner_raccourcis` ci-dessous.
+    """
+    if sys.platform != "win32":
+        return []
+    import ctypes
+
+    shell32 = ctypes.windll.shell32  # type: ignore[attr-defined]
+    shell32.SHChangeNotify.argtypes = [ctypes.c_long, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
+    notifies = [p for p in (*fichiers, *_raccourcis_connus()) if p.is_file()]
     for chemin in notifies:
         # SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH
         shell32.SHChangeNotify(0x00002000, 0x0005 | 0x1000, ctypes.c_wchar_p(str(chemin)), None)
@@ -254,14 +377,23 @@ def poser_sur_electron(racine: Path = _RACINE, executer=None, verrouille=_verrou
 
     COMMENT, SANS RISQUE POUR L'EXE. Jamais d'ecriture en place : rcedit (livre avec
     electron-winstaller) reecrit une COPIE, la copie est LANCEE une fois (`ELECTRON_RUN_AS_NODE`), et
-    seulement alors elle remplace l'exe. Un echec laisse electron.exe intact. Exe verrouille (une app
-    tourne dessus) : aucun geste, le prochain lancement s'en charge. Mesure (245 Mo, conv-266) :
+    seulement alors elle remplace l'exe. Un echec laisse electron.exe intact. Mesure (245 Mo, conv-266) :
     ~10 s au total, une seule fois par exe ou par logo ; ensuite « deja-pose », instantane.
+
+    EXE VERROUILLE = le cas NORMAL, pas l'exception. Mesure du 2026-10-11 (conv-266) : au lancement de
+    16:39, le lanceur a rendu « verrouille » — des relais de fond (`windows-survivable-relay-v3.cjs`,
+    lances PAR electron.exe et faits pour survivre aux redemarrages de l'app) et une instance de test
+    le tenaient ouvert. Attendre « que plus rien ne tourne » revenait a ne jamais poser l'icone.
+    Windows interdit d'ECRIRE un exe en cours d'usage mais permet de le RENOMMER : l'exe tenu devient
+    `electron-atome-<n>.exe` (ses processus continuent dessus), la copie reecrite prend sa place, et
+    les processus suivants demarrent sur elle. L'ancien est supprime au premier passage ou plus rien
+    ne le tient. Si la mise en place echoue apres le renommage, l'ancien est remis : dist/ n'est
+    jamais laisse sans electron.exe.
 
     Un `npm install` remet l'exe d'origine : le TAMPON (taille + date de l'exe reecrit, empreinte de
     l'icone) ne correspond plus et l'icone est reposee au lancement suivant (`launch_dev.py`).
 
-    Rend « absent », « verrouille », « deja-pose », « pose » ou « echec : <raison> ».
+    Rend « absent », « deja-pose », « pose » ou « echec : <raison> ».
     """
     import hashlib
     import json
@@ -275,6 +407,12 @@ def poser_sur_electron(racine: Path = _RACINE, executer=None, verrouille=_verrou
     outil = racine / "node_modules" / "electron-winstaller" / "vendor" / "rcedit.exe"
     if not exe.is_file():
         return "absent"
+    # Anciens exe mis de cote par un passage precedent : supprimes des que plus rien ne les tient.
+    for ancien in exe.parent.glob("electron-atome-*.exe"):
+        try:
+            ancien.unlink()
+        except OSError:
+            pass  # encore tenu par un processus lance avant le remplacement : le prochain passage
     if not icone.is_file():
         return f"echec : icone introuvable ({icone})"
     empreinte = hashlib.sha256(icone.read_bytes()).hexdigest()
@@ -286,8 +424,7 @@ def poser_sur_electron(racine: Path = _RACINE, executer=None, verrouille=_verrou
     etat = exe.stat()
     if attendu == {"ico_sha256": empreinte, "exe_taille": etat.st_size, "exe_mtime_ns": etat.st_mtime_ns}:
         return "deja-pose"
-    if verrouille(exe):
-        return "verrouille"
+    tenu = verrouille(exe)
     if not outil.is_file():
         return f"echec : rcedit introuvable ({outil})"
 
@@ -307,7 +444,18 @@ def poser_sur_electron(racine: Path = _RACINE, executer=None, verrouille=_verrou
         )
         if essai.returncode != 0:
             return f"echec : l'exe reecrit ne demarre pas (code {essai.returncode})"
-        os.replace(copie, exe)
+        if tenu:
+            import time
+
+            mis_de_cote = exe.with_name(f"electron-atome-{time.time_ns()}.exe")
+            os.rename(exe, mis_de_cote)
+            try:
+                os.replace(copie, exe)
+            except OSError:
+                os.rename(mis_de_cote, exe)
+                raise
+        else:
+            os.replace(copie, exe)
     except (OSError, subprocess.SubprocessError) as erreur:
         return f"echec : {erreur}"
     finally:
@@ -330,5 +478,7 @@ if __name__ == "__main__":
     print(f"icone d'electron.exe : {etat_electron}")
     if etat_electron == "pose":
         ecrits.append(_exe_electron(cible))
+    for raccourci, icone in realigner_raccourcis(cible):
+        print(f"raccourci realigne : {raccourci} -> {icone}")
     for chemin in prevenir_windows([f for f in ecrits if f.suffix in (".ico", ".png", ".exe")]):
         print(f"cache d'icones Windows prevenu : {chemin}")

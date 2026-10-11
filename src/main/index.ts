@@ -313,7 +313,9 @@ import {
   aligneRaccourciDemarrerDev,
   cheminRaccourciDemarrerDev,
   DEV_TOAST_ACTIVATOR_CLSID,
-  iconeRaccourciDev
+  dossierIconesVersionnees,
+  iconeRaccourciDev,
+  poserIconeVersionnee
 } from './raccourci-demarrer-dev'
 import {
   createStorageMigrationReadHandler,
@@ -4641,7 +4643,18 @@ app.whenReady().then(async () => {
         executable: process.execPath,
         identite: process.execPath,
         clsid: DEV_TOAST_ACTIVATOR_CLSID,
-        icone: iconeRaccourciDev(app.getAppPath(), process.env['AUTOWIN_OS_DEV'] === '1')
+        // Copie à nom VERSIONNÉ : sous un chemin inchangé, l'Explorateur garde l'ancienne image
+        // (l'atome, mesuré conv-266). Détail : raccourci-demarrer-dev.ts, `cheminIconeVersionnee`.
+        icone: poserIconeVersionnee({
+          source: iconeRaccourciDev(app.getAppPath(), process.env['AUTOWIN_OS_DEV'] === '1'),
+          dossier: dossierIconesVersionnees(process.env['LOCALAPPDATA'] ?? app.getPath('appData')),
+          existe: existsSync,
+          lire: (chemin) => readFileSync(chemin),
+          ecrire: (chemin, contenu) => {
+            mkdirSync(dirname(chemin), { recursive: true })
+            writeFileSync(chemin, contenu)
+          }
+        })
       })
       if (raccourci.etat === 'echec') console.warn('[icone barre des taches dev]', raccourci.raison)
     } catch (erreur) {

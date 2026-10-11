@@ -718,7 +718,12 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
     writeFileSync(join(repo, 'd.ts'), 'd\n')
     const openPr = vi.fn(async () => 'PR 9')
     const res = await autoCloseRun({
-      repo, branch: 'auto/r4', message: 'm', runGit: await defaultGitRunner(), direct: true, openPr
+      repo,
+      branch: 'auto/r4',
+      message: 'm',
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr
     })
     expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
     expect(openPr).not.toHaveBeenCalled()
@@ -735,7 +740,11 @@ describe('defaultGitRunner — gros changement', () => {
     const { repo } = await repoWithRemote()
     writeFileSync(join(repo, 'gros.txt'), 'ligne de texte ordinaire\n'.repeat(100_000))
     const res = await autoCloseRun({
-      repo, branch: 'auto/r5', message: 'm', runGit: await defaultGitRunner(), direct: true
+      repo,
+      branch: 'auto/r5',
+      message: 'm',
+      runGit: await defaultGitRunner(),
+      direct: true
     })
     expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
   })

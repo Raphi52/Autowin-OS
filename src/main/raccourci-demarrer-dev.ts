@@ -1,4 +1,5 @@
-import { dirname, join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { basename, dirname, extname, join } from 'node:path'
 
 /**
  * ICÔNE DE LA BARRE DES TÂCHES EN DEV — pourquoi ce module existe.
@@ -53,6 +54,45 @@ export function iconeRaccourciDev(racineApp: string, varianteDev: boolean): stri
   return varianteDev
     ? join(racineApp, 'resources', 'autowin-os-dev.ico')
     : join(racineApp, 'build', 'icon.ico')
+}
+
+/**
+ * ICÔNE À NOM VERSIONNÉ — pourquoi le raccourci ne vise plus `resources/autowin-os-dev.ico` lui-même.
+ *
+ * Mesuré le 2026-10-11 (conv-266) : le logo anneau avait été écrit SOUS LE MÊME CHEMIN que l'ancien
+ * atome. L'Explorateur range ses icônes par chemin : le Bureau, capturé par PrintWindow, dessinait
+ * toujours l'atome, et ni `SHChangeNotify(UPDATEITEM)` ni `SHUpdateImage` ne l'ont fait changer. Le
+ * même raccourci pointé vers un NOUVEAU chemin a montré l'anneau aussitôt. Le raccourci vise donc une
+ * copie dont le nom porte l'empreinte du contenu : un logo modifié = un chemin neuf = une image relue.
+ *
+ * Même règle dans `scripts/logo_anneau.py` (`icone_versionnee`) et `scripts/create-dev-shortcut.ps1` :
+ * `%LOCALAPPDATA%\autowin-os\icones\<nom>-<12 premiers hexa du SHA-256>.ico`. Hors du dépôt, pour
+ * qu'une copie de travail supprimée n'emporte pas l'icône du raccourci.
+ */
+export function dossierIconesVersionnees(localAppData: string): string {
+  return join(localAppData, 'autowin-os', 'icones')
+}
+
+export function cheminIconeVersionnee(source: string, contenu: Uint8Array, dossier: string): string {
+  const empreinte = createHash('sha256').update(contenu).digest('hex').slice(0, 12)
+  const extension = extname(source)
+  return join(dossier, `${basename(source, extension)}-${empreinte}${extension}`)
+}
+
+/** Pose la copie versionnée si elle manque et rend son chemin ; source absente = rendue telle quelle. */
+export function poserIconeVersionnee(entree: {
+  source: string
+  dossier: string
+  existe: (chemin: string) => boolean
+  lire: (chemin: string) => Uint8Array
+  ecrire: (chemin: string, contenu: Uint8Array) => void
+}): string {
+  const { source, dossier, existe, lire, ecrire } = entree
+  if (!existe(source)) return source
+  const contenu = lire(source)
+  const cible = cheminIconeVersionnee(source, contenu, dossier)
+  if (!existe(cible)) ecrire(cible, contenu)
+  return cible
 }
 
 const memeChemin = (a: string | undefined, b: string): boolean =>

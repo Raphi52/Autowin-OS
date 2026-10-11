@@ -88,7 +88,9 @@ describe('spawn CLI — regime de contexte', () => {
       source.indexOf('let settingsDir'),
       source.indexOf('let systemPromptDir')
     )
-    expect(block).toContain('mkdtempSync(')
+    // Dossier temporaire DEDIE, cree sans figer la boucle (gel de 99 s mesure le 2026-10-11 en
+    // synchrone, cf. `claude.reglages-non-bloquants.test.ts`).
+    expect(block).toContain('await mkdtempAsync(')
     // Le kit de l'utilisateur ne doit pas etre modifie pour economiser des tokens.
     expect(block).not.toContain('.claude')
   })

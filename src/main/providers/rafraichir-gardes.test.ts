@@ -78,7 +78,8 @@ describe('rafraichirGardesDesAgents', () => {
   it('est appelé au démarrage de l’app avec le MÊME script que celui écrit au lancement d’un agent', () => {
     const src = (p: string): string => readFileSync(join(__dirname, p), 'utf8')
     expect(src('./claude.ts')).toMatch(
-      /writeFileSync\(hookGarde, scriptDesGardesCourant\(\), 'utf8'\)/
+      // Ecriture asynchrone depuis le gel de 99 s du 2026-10-11 (claude.reglages-non-bloquants.test.ts).
+      /await writeFileAsync\(hookGarde, scriptDesGardesCourant\(\), 'utf8'\)/
     )
     expect(src('../index.ts')).toMatch(
       /rafraichirGardesDesAgents\(\{ racine: tmpdir\(\), script: scriptDesGardesCourant\(\) \}\)/

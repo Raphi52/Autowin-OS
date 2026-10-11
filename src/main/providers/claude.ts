@@ -11,7 +11,12 @@ import { contextWindowFor } from '../../shared/context-gauge'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
+import {
+  mkdtemp as mkdtempAsync,
+  rm as rmAsync,
+  stat as statAsync,
+  writeFile as writeFileAsync
+} from 'node:fs/promises'
 import {
   openStdoutJournal,
   guetterSortieCertifiee,
@@ -1477,14 +1482,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      */
     let settingsDir: string | undefined
     try {
-      settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
+      /*
+       * ECRITURES ASYNCHRONES. Ce dossier est cree a CHAQUE appel Claude. En synchrone, la moindre
+       * lenteur du disque figeait toute la fenetre : `gels.jsonl` 2026-10-11 14:12, 99 121 ms en
+       * `writeFileSync …/garde-git-destructeur.mjs` (deja 1 831 ms le 2026-10-02), pendant qu'un
+       * `pip install torch` saturait les disques. Garde : `claude.reglages-non-bloquants.test.ts`.
+       */
+      settingsDir = await mkdtempAsync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
       // GARDE EFFACEMENT DE TRAVAIL (conv-587) : un hook PreToolUse sur Bash refuse les commandes
       // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
-      writeFileSync(hookGarde, scriptDesGardesCourant(), 'utf8')
-      writeFileSync(
+      await writeFileAsync(hookGarde, scriptDesGardesCourant(), 'utf8')
+      await writeFileAsync(
         settingsFile,
         JSON.stringify(reglagesCliAutowin(hookGarde, gardeNpmDuDepot(modAutowin))),
         'utf8'

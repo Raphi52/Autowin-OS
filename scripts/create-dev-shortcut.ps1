@@ -81,6 +81,17 @@ try {
 
 }
 
+# ICONE A NOM VERSIONNE. Mesure du 2026-10-11 (conv-266) : le logo anneau ecrit SOUS LE MEME CHEMIN
+# que l'ancien atome, l'Explorateur dessinait toujours l'atome sur le Bureau (il range ses icones par
+# chemin) ; le meme raccourci pointe vers un chemin NEUF a montre l'anneau aussitot. Le raccourci vise
+# donc une copie dont le nom porte l'empreinte du contenu. MEME REGLE que src/main/raccourci-demarrer-dev.ts
+# (`cheminIconeVersionnee`) et scripts/logo_anneau.py (`icone_versionnee`) : SHA-256, 12 premiers hexa.
+$empreinte = (Get-FileHash -LiteralPath $ico -Algorithm SHA256).Hash.Substring(0, 12).ToLowerInvariant()
+$dossierIcones = Join-Path $env:LOCALAPPDATA 'autowin-os\icones'
+New-Item -ItemType Directory -Force -Path $dossierIcones | Out-Null
+$icoVersionnee = Join-Path $dossierIcones ("{0}-{1}.ico" -f [IO.Path]::GetFileNameWithoutExtension($ico), $empreinte)
+if (-not (Test-Path -LiteralPath $icoVersionnee -PathType Leaf)) { Copy-Item -LiteralPath $ico -Destination $icoVersionnee }
+
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcutPath = Join-Path $desktop 'Autowin OS Dev.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -94,12 +105,12 @@ $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $interpreteur
 $shortcut.Arguments = "`"$launcher`""
 $shortcut.WorkingDirectory = $ProjectRoot
-$shortcut.IconLocation = "$ico,0"
+$shortcut.IconLocation = "$icoVersionnee,0"
 $shortcut.Description = 'Autowin OS - version Dev'
 $shortcut.Save()
 
 $verified = $shell.CreateShortcut($shortcutPath)
-if ($verified.IconLocation -notlike "$ico,*" -or $verified.Arguments -notlike '*launch_dev.py*') {
+if ($verified.IconLocation -notlike "$icoVersionnee,*" -or $verified.Arguments -notlike '*launch_dev.py*') {
   throw "Le raccourci Dev n'a pas été mis à jour : $shortcutPath"
 }
 # `pythonw`/`pyw` : les deux sont graphiques. `python.exe` ou `py.exe` NON — les accepter

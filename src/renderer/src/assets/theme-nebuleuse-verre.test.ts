@@ -1114,12 +1114,29 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     }
   })
 
-  it('ne restyle les puces de compte QUE dans ces fenetres (la vue Routage reste intacte)', () => {
+  // Hors des popups, la vue Routage etait gardee intacte (conv-250). conv-261 (2026-10-11, demande :
+  // « mets aussi le cadre bleu -> rose sur les puces de compte choisies de la vue Routage ») y pose
+  // le meme cadre, mais sur le compte CHOISI seulement : les autres puces de la vue restent telles
+  // quelles, et aucune regle sur les puces ne sort de `.router-view` ni des popups.
+  it('hors des popups, ne restyle que le compte CHOISI de la vue Routage', () => {
     const horsPopup = regles()
       .map((r) => r.selecteur)
       .filter((s) => s.includes('router-'))
       .filter((s) => !/model-select-menu|model-quota-popover/.test(s))
-    expect(horsPopup).toEqual([])
+    expect(horsPopup).toEqual([
+      `${PREFIXE} .shell.theme-serious .router-view :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
+    ])
+  })
+
+  it('met le compte choisi de la vue Routage dans le cadre bleu -> rose, en 1 px comme dans les popups', () => {
+    const puce = derniere(
+      `${PREFIXE} .shell.theme-serious .router-view :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
+    )
+    expect(puce.border).toBe('1px solid transparent')
+    expect(puce.background).toBe(
+      'linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box, var(--nv-choisi-cadre) border-box'
+    )
+    expect(derniere(PREFIXE)['--nv-choisi-cadre']).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
   })
 
   it('peint le point choisi au degrade, au-dessus de la regle des remplis de la ligne active', () => {
