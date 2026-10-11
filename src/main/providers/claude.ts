@@ -18,12 +18,15 @@ import {
   writeFile as writeFileAsync
 } from 'node:fs/promises'
 import {
-  openStdoutJournal,
+  openStdoutJournalAsync,
   guetterSortieCertifiee,
   tailJsonLines,
   type StdoutJournalHandle
 } from '../runs/stdout-journal'
-import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
+import {
+  backgroundSurvivalInvocationAsync,
+  type InvocationSurvivable
+} from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
@@ -1549,7 +1552,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     await attendreMiseAJourClaudeCli()
     let journal: StdoutJournalHandle | undefined
     let invocation:
-      | ReturnType<typeof backgroundSurvivalInvocation>
+      | InvocationSurvivable
       | {
           bin: string
           args: string[]
@@ -1574,7 +1577,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // d'écrire dans le journal. Porte de sortie : AUTOWIN_DETACHED_RUNS=0 → pipe historique.
       if (process.env.AUTOWIN_DETACHED_RUNS !== '0' && journalRoot) {
         try {
-          journal = openStdoutJournal(journalRoot, spawnToken)
+          // Asynchrone : un `openSync` ici a figé la fenêtre 9,9 s (gels.jsonl 2026-10-11 14:15)
+          // pendant que le disque saturait. Voir `openStdoutJournalAsync`.
+          journal = await openStdoutJournalAsync(journalRoot, spawnToken)
         } catch {
           journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
         }
@@ -1599,7 +1604,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       }
       invocation = journal
-        ? backgroundSurvivalInvocation(
+        ? // Asynchrone : l'écriture synchrone du `.stdin` a figé la fenêtre 1,7 s (gels.jsonl
+          // 2026-10-11 14:13). Voir `backgroundSurvivalInvocationAsync`.
+          await backgroundSurvivalInvocationAsync(
             // Le relais Windows ne cherche pas dans le PATH : jamais de nom nu (voir binaireClaudeLancable).
             await binaireClaudeLancable(this.bin, {
               designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)

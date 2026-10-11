@@ -31,29 +31,45 @@ vi.mock('node:child_process', async (importOriginal) => ({
   }
 }))
 
-vi.mock('../runs/stdout-journal', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runs/stdout-journal')>()),
-  survivableExitCode: () => relay.certifiedExit,
-  tailJsonLines: async (
-    _path: string,
-    onLine: (line: string) => void,
-    options?: { isComplete?: () => boolean }
-  ) => {
-    await new Promise((resolve) => setTimeout(resolve, relay.tailDelayMs))
-    onLine(
-      JSON.stringify({
-        type: 'result',
-        subtype: 'success',
-        result: 'dernière ligne Claude',
-        session_id: 'tail-session',
-        is_error: false,
-        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
-      })
-    )
-    while (!options?.isComplete?.()) await new Promise((resolve) => setTimeout(resolve, 5))
-    return { offset: 1, stopped: false }
+vi.mock('../runs/stdout-journal', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('../runs/stdout-journal')>()
+  return {
+    ...reel,
+    // Le reçu `.exit.json` du relais est lu par le VRAI guet asynchrone ; seule sa lecture disque est
+    // remplacée. (Doubler `survivableExitCode` ne touchait plus rien depuis que `send` guette en
+    // asynchrone — test resté rouge du 2026-10-11 16:23 au correctif.)
+    guetterSortieCertifiee: (
+      journalPath: string,
+      surSortie: (exitCode: number) => void,
+      intervalleMs?: number
+    ) =>
+      reel.guetterSortieCertifiee(
+        journalPath,
+        surSortie,
+        intervalleMs,
+        async () => relay.certifiedExit
+      ),
+    tailJsonLines: async (
+      _path: string,
+      onLine: (line: string) => void,
+      options?: { isComplete?: () => boolean }
+    ) => {
+      await new Promise((resolve) => setTimeout(resolve, relay.tailDelayMs))
+      onLine(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          result: 'dernière ligne Claude',
+          session_id: 'tail-session',
+          is_error: false,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
+        })
+      )
+      while (!options?.isComplete?.()) await new Promise((resolve) => setTimeout(resolve, 5))
+      return { offset: 1, stopped: false }
+    }
   }
-}))
+})
 
 import { ClaudeCliAdapter } from './claude'
 

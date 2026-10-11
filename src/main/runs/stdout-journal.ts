@@ -7,10 +7,17 @@ import {
   readSync,
   renameSync,
   statSync,
-  writeFileSync
+  writeFileSync,
+  open as ouvrirDescripteur
 } from 'node:fs'
-import { open as ouvrirAsync, readFile as readFileAsync, stat as statAsync } from 'node:fs/promises'
+import {
+  mkdir as mkdirAsync,
+  open as ouvrirAsync,
+  readFile as readFileAsync,
+  stat as statAsync
+} from 'node:fs/promises'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 
 const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
 
@@ -146,6 +153,33 @@ export function openStdoutJournal(root: string, runId: string): StdoutJournalHan
   mkdirSync(root, { recursive: true })
   const path = stdoutJournalPath(root, runId)
   return { path, fd: openSync(path, 'a') }
+}
+
+/** `fs.open` en promesse : rend un descripteur NUMÉRIQUE, sans FileHandle (voir plus bas). */
+const ouvrirDescripteurAsync = promisify(ouvrirDescripteur)
+
+/**
+ * OUVRE LE JOURNAL D'UN APPEL SANS TENIR LA BOUCLE D'ÉVÉNEMENTS — même contrat que
+ * `openStdoutJournal` (dossier créé, fichier ouvert en ajout, fd à passer au `stdio` du spawn puis
+ * à fermer par l'appelant).
+ *
+ * Mesure (`gels.jsonl`, 2026-10-11 14:15) : 9 930 ms de fenêtre figée sur UN SEUL
+ * `openSync …/4cfa900f-….stdout.jsonl`, appelé par `send` de `claude.ts` au lancement d'un appel
+ * Claude, pendant que le disque D: (mécanique) saturait. Ouvrir un fichier vide ne coûte rien quand
+ * le disque répond ; quand il rame, le `openSync` attend avec lui, et la fenêtre aussi.
+ *
+ * Pourquoi `fs.open` en promesse et pas `fs/promises.open` : ce dernier rend un FileHandle. Un
+ * FileHandle que personne ne ferme est fermé au ramassage mémoire — or `claude.ts` ferme ce fd par
+ * `closeSync(journal.fd)`. Le ramasse-miettes refermerait alors un NUMÉRO déjà libéré, qui peut
+ * entre-temps désigner un autre fichier ouvert. Un descripteur numérique n'a pas ce double.
+ */
+export async function openStdoutJournalAsync(
+  root: string,
+  runId: string
+): Promise<StdoutJournalHandle> {
+  const path = stdoutJournalPath(root, runId) // identifiant refusé AVANT de créer quoi que ce soit
+  await mkdirAsync(root, { recursive: true })
+  return { path, fd: await ouvrirDescripteurAsync(path, 'a') }
 }
 
 export function openStderrJournal(root: string, runId: string): StdoutJournalHandle {

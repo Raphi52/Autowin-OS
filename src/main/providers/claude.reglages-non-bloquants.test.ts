@@ -40,3 +40,32 @@ describe('claude — les reglages de l’appel ne figent pas la boucle', () => {
     expect(bloc).toMatch(/await writeFileAsync\(\s*settingsFile/)
   })
 })
+
+/*
+ * LE JOURNAL D'UN APPEL S'OUVRE SANS FIGER LA FENETRE.
+ *
+ * `gels.jsonl` 2026-10-11 14:15 : 9 930 ms sur UN `openSync …stdout.jsonl`, l'ouverture du journal
+ * survivable dans `send`. Le comportement de `openStdoutJournalAsync` est prouve par
+ * `runs/stdout-journal.ouverture-sans-es-bloquante.test.ts` ; ici, que `send` s'en sert bien.
+ */
+describe('claude — le journal de l’appel ne fige pas la boucle', () => {
+  const code = readFileSync(join(__dirname, 'claude.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+
+  it('le journal est ouvert en ATTENDANT la version asynchrone', () => {
+    expect(code).toContain('journal = await openStdoutJournalAsync(journalRoot, spawnToken)')
+  })
+
+  it('plus aucun appel a l’ouverture synchrone', () => {
+    expect(code).not.toMatch(/\bopenStdoutJournal\(/)
+  })
+
+  // `gels.jsonl` 2026-10-11 14:13 : 1 726 ms sur UN `writeFileSync …stdin` (le message de l'appel),
+  // ecrit par `backgroundSurvivalInvocation` juste avant le lancement. Comportement prouve par
+  // `runs/survivable-spawn.entree-sans-es-bloquante.test.ts`.
+  it('le message de l’appel est ecrit en ATTENDANT la version asynchrone', () => {
+    expect(code).toMatch(/await backgroundSurvivalInvocationAsync\(/)
+    expect(code).not.toMatch(/\bbackgroundSurvivalInvocation\(/)
+  })
+})

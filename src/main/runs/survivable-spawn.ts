@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { writeFile as writeFileAsync } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
@@ -280,6 +281,15 @@ function windowsSurvivalRelayPaths(root: string): { powershell: string; node: st
   return { powershell, node }
 }
 
+export interface InvocationSurvivable {
+  bin: string
+  args: string[]
+  env?: NodeJS.ProcessEnv
+  relay: boolean
+  inputPath?: string
+  completionPath: string
+}
+
 export function backgroundSurvivalInvocation(
   bin: string,
   args: string[],
@@ -294,18 +304,59 @@ export function backgroundSurvivalInvocation(
    * (mesure 2026-09-14, survivable-spawn.test.ts « transmet l'environnement demandé »).
    */
   baseEnv: NodeJS.ProcessEnv = process.env
-): {
-  bin: string
-  args: string[]
-  env?: NodeJS.ProcessEnv
-  relay: boolean
-  inputPath?: string
-  completionPath: string
-} {
+): InvocationSurvivable {
   const completionPath = survivableExitPath(journalPath)
   if (!usesWindowsSurvivalRelay(platform)) return { bin, args, relay: false, completionPath }
-  const inputPath = `${journalPath}.${randomUUID()}.stdin`
+  const inputPath = cheminEntreeRelais(journalPath)
   writeFileSync(inputPath, stdin, { encoding: 'utf8', flag: 'wx' })
+  return invocationRelais(bin, args, journalRoot, journalPath, inputPath, diagnosticPath, baseEnv)
+}
+
+/**
+ * MÊME INVOCATION que `backgroundSurvivalInvocation`, mais le message (`stdin`) part sur le disque
+ * SANS TENIR LA BOUCLE D'ÉVÉNEMENTS.
+ *
+ * Mesure (`gels.jsonl`, 2026-10-11 14:13) : 1 726 ms de fenêtre figée sur UN
+ * `writeFileSync …stdout.jsonl.<uuid>.stdin`, appelé par `send` de `claude.ts` au lancement d'un
+ * appel Claude, pendant que le disque D: (mécanique) saturait. Écrire quelques kilo-octets ne coûte
+ * rien quand le disque répond ; quand il rame, l'écriture synchrone attend avec lui, et la fenêtre
+ * aussi. Même drapeau `wx` : un fichier d'entrée déjà présent fait échouer, jamais écraser.
+ *
+ * Reste synchrone, faute de gel mesuré : la préparation du relais (`windowsSurvivalRelayPaths`,
+ * dossier `.runtime` déjà créé et deux scripts déjà présents après le premier appel).
+ */
+export async function backgroundSurvivalInvocationAsync(
+  bin: string,
+  args: string[],
+  journalRoot: string,
+  journalPath: string,
+  stdin = '',
+  platform: NodeJS.Platform = process.platform,
+  diagnosticPath = `${journalPath}.stderr.log`,
+  baseEnv: NodeJS.ProcessEnv = process.env
+): Promise<InvocationSurvivable> {
+  const completionPath = survivableExitPath(journalPath)
+  if (!usesWindowsSurvivalRelay(platform)) return { bin, args, relay: false, completionPath }
+  const inputPath = cheminEntreeRelais(journalPath)
+  await writeFileAsync(inputPath, stdin, { encoding: 'utf8', flag: 'wx' })
+  return invocationRelais(bin, args, journalRoot, journalPath, inputPath, diagnosticPath, baseEnv)
+}
+
+function cheminEntreeRelais(journalPath: string): string {
+  return `${journalPath}.${randomUUID()}.stdin`
+}
+
+/** Arguments du relais Windows, une fois le fichier d'entrée écrit. */
+function invocationRelais(
+  bin: string,
+  args: string[],
+  journalRoot: string,
+  journalPath: string,
+  inputPath: string,
+  diagnosticPath: string,
+  baseEnv: NodeJS.ProcessEnv
+): InvocationSurvivable {
+  const completionPath = survivableExitPath(journalPath)
   const relayPaths = windowsSurvivalRelayPaths(journalRoot)
   const powershellArgs = [
     '-NoLogo',
