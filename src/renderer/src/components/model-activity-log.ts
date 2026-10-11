@@ -575,39 +575,49 @@ const CAUSAL_KIND: Record<string, ModelActivityKind> = {
  * analysait, et que ce journal ne lisait pas du tout : contexte injecté, frontières de confiance,
  * appels d'outils, verdicts, refus. Chaque charge (`payloads`) est rendue ENTIÈRE.
  */
+/**
+ * Détail d'un événement de la trace causale : ses charges (genre, nom, contenu), puis ses champs
+ * restants. EXPORTÉ pour l'onglet Logs, qui lit la trace ALLÉGÉE (contenus vidés) et recharge les
+ * contenus d'une étape quand on la déplie : le texte rendu alors est celui que la trace complète
+ * aurait donné.
+ */
+export function detailCausal(event: Record<string, unknown>): string | undefined {
+  const payloads = Array.isArray(event.payloads)
+    ? (event.payloads as Array<Record<string, unknown>>)
+    : []
+  const corps = payloads
+    .map((payload) =>
+      joinDetail(
+        payload.name
+          ? `${String(payload.kind ?? 'charge')} « ${String(payload.name)} »`
+          : String(payload.kind ?? 'charge'),
+        short(payload.content)
+      )
+    )
+    .filter((part): part is string => Boolean(part))
+  return joinDetail(
+    corps.join('\n') || undefined,
+    rest(
+      event,
+      'schema',
+      'id',
+      'conversationId',
+      'turnId',
+      'timestamp',
+      'type',
+      'actor',
+      'payloads',
+      'status'
+    )
+  )
+}
+
 function fromCausal(events: ReadonlyArray<Record<string, unknown>>): Brute[] {
   return events.map((event, index) => {
     const type = String(event.type ?? 'event')
     const actor = (event.actor ?? {}) as Record<string, unknown>
-    const payloads = Array.isArray(event.payloads)
-      ? (event.payloads as Array<Record<string, unknown>>)
-      : []
-    const corps = payloads
-      .map((payload) =>
-        joinDetail(
-          payload.name
-            ? `${String(payload.kind ?? 'charge')} « ${String(payload.name)} »`
-            : String(payload.kind ?? 'charge'),
-          short(payload.content)
-        )
-      )
-      .filter((part): part is string => Boolean(part))
     const statut = String(event.status ?? '')
-    const detail = joinDetail(
-      corps.join('\n') || undefined,
-      rest(
-        event,
-        'schema',
-        'id',
-        'conversationId',
-        'turnId',
-        'timestamp',
-        'type',
-        'actor',
-        'payloads',
-        'status'
-      )
-    )
+    const detail = detailCausal(event)
     return {
       id: `causal:${String(event.id ?? index)}`,
       turnId: String(event.turnId ?? ''),
