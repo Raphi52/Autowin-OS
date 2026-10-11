@@ -34,7 +34,9 @@ const RACINES_DE_CONTENU: Record<string, string> = {
   WorkflowProfilesView: 'workflow-profiles',
   CapabilitiesView: 'capability-cockpit',
   BehaviourView: 'behaviour-view',
-  InterfaceView: 'interface-view'
+  InterfaceView: 'interface-view',
+  // Onglet Rules de Settings (conv-242) : une pile de panneaux de règles, sa racine ne peint rien.
+  RulesView: 'settings-rules'
 }
 /** Les en-tetes poses A MEME le cadre (comme `ViewTopBar`) : une bande peinte y refait un cadre. */
 const ENTETES_SUR_LE_CADRE = ['graph-toolbar', 'topology-toolbar']
