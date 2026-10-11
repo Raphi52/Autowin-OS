@@ -11,6 +11,7 @@ import './ModelActivityLogPane.css'
 import type { Msg } from './chat-view-types'
 import { HumanJson } from './HumanJson'
 import { deltaMs, grouperParTour, type ModelActivityTour } from './model-activity-tours'
+import { detailCourt, titreCourt } from './model-log-court'
 import {
   buildModelActivityLog,
   type ModelActivityEntry,
@@ -418,14 +419,17 @@ export function ModelActivityLogPane({
                 {typeof tour.cout === 'number' && <span>{tour.cout.toFixed(4)} $</span>}
                 {tour.erreur && <span className="model-log-tour__ko">échec</span>}
               </summary>
-              {tour.entries.map((entry) => (
-                <LogRow
-                  key={entry.id}
-                  entry={entry}
-                  tour={tour}
-                  voie={pistes ? voieDe.get(entry.source) : undefined}
-                />
-              ))}
+              {/* La FRISE : un trait continu traverse le tour, une perle par geste. */}
+              <div className="model-log-frise">
+                {tour.entries.map((entry) => (
+                  <LogRow
+                    key={entry.id}
+                    entry={entry}
+                    tour={tour}
+                    voie={pistes ? voieDe.get(entry.source) : undefined}
+                  />
+                ))}
+              </div>
             </details>
           </section>
         ))}
@@ -454,10 +458,15 @@ function LogRow({
         : entry.kind === 'error'
           ? 'st-err'
           : ''
-  // Le detail A PLAT ne suffisait pas : les champs bruts du geste (sessionId, args, data, usage,
-  // erreur, charges causales) etaient colles en une chaine. Ils sont desormais DEPLIABLES cle par
-  // cle, et la ligne entiere est copiable telle qu'elle a ete lue.
-  const depliable = Boolean(entry.detail || entry.fields)
+  // LIGNE UNIQUE (conv-247, 2026-10-11, maquette « tour 4 » pistes 2 + 3 + 4) : au repos, nature +
+  // titre COURT + résumé gris tiennent sur une ligne ; le texte complet, la source, l'écart et les
+  // champs bruts clé par clé vivent dans la carte dépliée. Le filtre et l'export lisent toujours
+  // l'entrée complète : seul l'affichage est raccourci.
+  const nature = KIND_LABEL[entry.kind]
+  const titre = titreCourt(entry.label, nature)
+  // « Demande · Demande » ne disait rien : quand le titre répète la nature, le texte prend sa place.
+  const titreAffiche = titre ?? detailCourt(entry.detail ?? entry.label)
+  const resume = titre !== null && entry.detail ? detailCourt(entry.detail) : null
   return (
     <div
       className="model-log-row"
@@ -474,49 +483,58 @@ function LogRow({
           aria-hidden="true"
         />
       )}
-      <time className="model-log-time">
-        {heure(entry.at) ?? '—'}
-        {typeof ecart === 'number' && ecart > 0 && (
-          <small className="model-log-delta">+{duree(ecart)}</small>
-        )}
-      </time>
-      <div className="model-log-body">
-        <div className="model-log-head">
-          {dot ? <span className={`status-dot ${dot}`} /> : null}
-          <span className="model-log-kind">{KIND_LABEL[entry.kind]}</span>
-          <span className="model-log-source" data-log-source={entry.source}>
-            {SOURCE_LABEL[entry.source]}
-          </span>
-          <span className="model-log-label">{entry.label}</span>
-        </div>
-        {depliable ? (
-          <details className="model-log-detail" data-testid="model-log-detail">
-            {/* Le detail ENTIER vit dans le summary, clampe a deux lignes par le CSS et declampe
-                a l'ouverture : le texte n'est donc jamais duplique ni tronque pour de bon. */}
-            <summary>{entry.detail ?? entry.label}</summary>
-            <div className="model-log-expand">
-              <div className="model-log-meta">
-                {entry.turnId ? <span>tour {entry.turnId}</span> : null}
-                <span>id {entry.id}</span>
-                {typeof entry.at === 'number' ? (
-                  <span>{new Date(entry.at).toISOString()}</span>
-                ) : null}
-                <button
-                  type="button"
-                  className="model-log-copy"
-                  onClick={(clic) => {
-                    clic.preventDefault()
-                    void navigator.clipboard?.writeText(JSON.stringify(entry, null, 2))
-                  }}
-                >
-                  Copier
-                </button>
-              </div>
-              {entry.fields ? <HumanJson className="model-log-json" value={entry.fields} /> : null}
+      {/* L'heure SEULE, à gauche de la frise : les heures s'alignent en colonne et la carte garde
+          toute sa largeur pour le contenu. */}
+      <time className="model-log-time">{heure(entry.at) ?? '—'}</time>
+      <span className="model-log-perle" aria-hidden="true" />
+      <div className="model-log-carte">
+        <details className="model-log-detail" data-testid="model-log-detail">
+          <summary className="model-log-head">
+            {dot ? <span className={`status-dot ${dot}`} /> : null}
+            <span className="model-log-kind">{nature}</span>
+            {/* Sans résumé gris à côté, le titre prend toute la ligne (« is-plein ») ; quand il
+                porte le texte de la demande ou de la réflexion, il garde une graisse normale. */}
+            <span
+              className={`model-log-label${titre === null ? ' is-texte' : ''}${resume ? '' : ' is-plein'}`}
+            >
+              {titreAffiche}
+            </span>
+            {resume ? <span className="model-log-resume">{resume}</span> : null}
+            <span className="model-log-chevron" aria-hidden="true">
+              ›
+            </span>
+          </summary>
+          <div className="model-log-expand">
+            {entry.detail ? <div className="model-log-texte">{entry.detail}</div> : null}
+            <div className="model-log-meta">
+              <span className="model-log-source" data-log-source={entry.source}>
+                {SOURCE_LABEL[entry.source]}
+              </span>
+              {typeof ecart === 'number' && ecart > 0 && (
+                <span className="model-log-delta">+{duree(ecart)}</span>
+              )}
+              {titre !== null && titre !== entry.label ? (
+                <span className="model-log-titre-complet">{entry.label}</span>
+              ) : null}
+              {entry.turnId ? <span>tour {entry.turnId}</span> : null}
+              <span>id {entry.id}</span>
+              {typeof entry.at === 'number' ? (
+                <span>{new Date(entry.at).toISOString()}</span>
+              ) : null}
+              <button
+                type="button"
+                className="model-log-copy"
+                onClick={(clic) => {
+                  clic.preventDefault()
+                  void navigator.clipboard?.writeText(JSON.stringify(entry, null, 2))
+                }}
+              >
+                Copier
+              </button>
             </div>
-            <span className="model-log-more" aria-hidden="true" />
-          </details>
-        ) : null}
+            {entry.fields ? <HumanJson className="model-log-json" value={entry.fields} /> : null}
+          </div>
+        </details>
       </div>
     </div>
   )

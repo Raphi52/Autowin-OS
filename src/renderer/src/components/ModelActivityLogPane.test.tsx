@@ -127,6 +127,85 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
   })
 })
 
+/**
+ * LIGNE UNIQUE (conv-247, 2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 retenues par
+ * l'utilisateur — « go 2 3 4 »). Au repos, chaque geste tient sur UNE ligne : nature, titre court,
+ * résumé gris ; l'heure seule à gauche de la frise ; un clic sur la carte la déplie.
+ */
+describe('ModelActivityLogPane — la ligne unique', () => {
+  async function monterAppelModele(): Promise<HTMLElement> {
+    const at = new Date('2026-09-01T07:05:09').getTime()
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([{ kind: 'prompt-call', name: 'claude-opus-5-5', at }])
+    await monter()
+    return [...host.querySelectorAll('.model-log-row')].find(
+      (row) => row.getAttribute('data-log-kind') === 'model-call'
+    ) as HTMLElement
+  }
+
+  it('affiche le titre COURT sur la ligne et garde le titre complet dans la carte dépliée', async () => {
+    const ligne = await monterAppelModele()
+    const resume = ligne.querySelector('summary') as HTMLElement
+    expect(resume.querySelector('.model-log-label')?.textContent).toBe('opus-5-5')
+    expect(resume.textContent).not.toContain('Appel modèle')
+    expect(ligne.querySelector('.model-log-expand')?.textContent).toContain(
+      'Appel modèle — claude-opus-5-5'
+    )
+  })
+
+  it('met toute la ligne dans le résumé cliquable de la carte : la carte entière se déplie', async () => {
+    const ligne = await monterAppelModele()
+    const carte = ligne.querySelector('.model-log-carte details') as HTMLDetailsElement
+    expect(carte).toBeTruthy()
+    const resume = carte.querySelector(':scope > summary') as HTMLElement
+    expect(resume.querySelector('.model-log-kind')?.textContent).toBe('Modèle')
+    expect(resume.querySelector('.model-log-label')).toBeTruthy()
+    // La source passe dans la partie dépliée : la ligne au repos ne garde que l'essentiel.
+    expect(resume.querySelector('.model-log-source')).toBeNull()
+    expect(carte.querySelector('.model-log-expand .model-log-source')?.textContent).toBe('journal')
+  })
+
+  it('pose l’heure seule à gauche de la frise, avant la perle et la carte', async () => {
+    const ligne = await monterAppelModele()
+    const enfants = [...ligne.children].map((enfant) => enfant.className.split(' ')[0])
+    const iHeure = enfants.indexOf('model-log-time')
+    expect(iHeure).toBeGreaterThanOrEqual(0)
+    expect(enfants[iHeure + 1]).toBe('model-log-perle')
+    expect(enfants[iHeure + 2]).toBe('model-log-carte')
+    expect(ligne.querySelector('time')?.textContent).toBe('07:05:09')
+  })
+
+  it('quand le titre répète la nature (« Demande »), la ligne affiche le texte à sa place', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([])
+    await monter()
+    const demande = [...host.querySelectorAll('.model-log-row')].find(
+      (row) => row.getAttribute('data-log-kind') === 'prompt'
+    ) as HTMLElement
+    expect(demande.querySelector('summary .model-log-label')?.textContent).toBe('lance les tests')
+  })
+
+  it('sans résumé gris, le titre prend toute la ligne au lieu de s’arrêter à 46 %', async () => {
+    // Capture du 2026-10-11 : « Signe de vie · Bash · cd /d/A… » coupé à mi-ligne, la droite vide.
+    const ligne = await monterAppelModele()
+    const label = ligne.querySelector('summary .model-log-label') as HTMLElement
+    const resume = ligne.querySelector('summary .model-log-resume')
+    expect(label.classList.contains('is-plein')).toBe(resume === null)
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([])
+    await monter()
+    const demande = [...host.querySelectorAll('.model-log-row')].find(
+      (row) => row.getAttribute('data-log-kind') === 'prompt'
+    ) as HTMLElement
+    expect(demande.querySelector('summary .model-log-label')?.classList.contains('is-plein')).toBe(
+      true
+    )
+  })
+})
+
 describe('ModelActivityLogPane — tenue du volume', () => {
   it('borne le nombre de lignes RENDUES et laisse remonter plus ancien', async () => {
     const parts = Array.from({ length: 20_000 }, (_, index) => ({
