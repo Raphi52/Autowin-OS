@@ -6,8 +6,9 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
-import { memo } from 'react'
+import { memo, useRef } from 'react'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
+import { useAjusterALaLargeur } from './ajuster-a-la-largeur'
 import { retirerLignePromptSuivant } from '../../../shared/prompt-suivant'
 import { parseFileRef } from '../../../shared/file-ref'
 import { tokenizeMarkdownCodeBlocks } from './markdown-blocs'
@@ -99,12 +100,10 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
         // barre d'outils et une hauteur fixe qui scrollait : le contenu etait enferme dans une boite
         // au lieu d'embellir la reponse. Le prix de ce choix est que le HTML du modele vit desormais
         // dans le DOM de l'app — c'est `sanitizeChatHtml` qui porte seul cette frontiere.
-        <div
+        <BlocHtmlRendu
           key={`${keyPrefix}-html-render-${index}`}
-          className="md-html"
-          data-testid="chat-inline-html"
-          data-html-scope={prepared.scopeId}
-          dangerouslySetInnerHTML={{ __html: prepared.html }}
+          html={prepared.html}
+          scopeId={prepared.scopeId}
         />
       )
     }
@@ -258,7 +257,7 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
   const columnCount = Math.max(headers.length, ...body.map((cells) => cells.length))
   const columns = Array.from({ length: columnCount }, (_, i) => i)
   return (
-    <div className="md-table-wrap" key={keyPrefix}>
+    <CadreDeTableau key={keyPrefix} contenu={rows.join('\n')}>
       <table className="md-table">
         <thead>
           <tr>
@@ -281,6 +280,41 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
           ))}
         </tbody>
       </table>
+    </CadreDeTableau>
+  )
+}
+
+/**
+ * Bloc ```html-render``` du fil. Il ne defile jamais en largeur : ce que la feuille de style n'a pas
+ * pu rendre fluide est reduit a l'echelle de la colonne (voir `ajuster-a-la-largeur.ts`).
+ */
+function BlocHtmlRendu({ html, scopeId }: { html: string; scopeId: string }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  useAjusterALaLargeur(ref, html)
+  return (
+    <div
+      ref={ref}
+      className="md-html"
+      data-testid="chat-inline-html"
+      data-html-scope={scopeId}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+}
+
+/** Cadre d'un tableau GFM : meme regle, un tableau trop large est reduit, jamais mis a defiler. */
+function CadreDeTableau({
+  contenu,
+  children
+}: {
+  contenu: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  useAjusterALaLargeur(ref, contenu)
+  return (
+    <div ref={ref} className="md-table-wrap">
+      {children}
     </div>
   )
 }

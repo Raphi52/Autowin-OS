@@ -12,7 +12,9 @@ describe('confinement du Markdown dans les bulles', () => {
   })
 
   it('style les tableaux GFM (entête, bordures, zébrage) sans déborder de la bulle', () => {
-    expect(css).toMatch(/\.md-table-wrap\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/s)
+    // Aucune barre horizontale dans le fil (conv-248) : le cadre ne defile pas, le tableau tient.
+    expect(css).toMatch(/\.md-table-wrap\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*hidden;/s)
+    expect(css).not.toMatch(/\.md-table th\s*\{[^}]*white-space:\s*nowrap/s)
     expect(css).toMatch(/\.md-table\s*\{[^}]*border-collapse:\s*collapse;/s)
     expect(css).toMatch(/\.md-table th,\s*\.md-table td\s*\{[^}]*border-bottom:/s)
     expect(css).toMatch(/\.md-table tbody tr:nth-child\(even\) td\s*\{/)
