@@ -19,7 +19,36 @@ export function resteADire(closing: string, dejaDit: string): string {
   if (closing.startsWith(deja)) return closing.slice(deja.length).trim()
   // Rien de neuf : tout ce que porte la cloture a deja ete affiche.
   if (deja.includes(closing.trim())) return ''
+  /*
+   * LE MEME TEXTE, AUX BLANCS PRES. Les deux textes compares ne sont pas assembles par le meme code :
+   * le deja-dit recolle les deltas avec leurs separateurs (`collerTexteParle`, `\n\n` entre deux
+   * messages), le texte de cloture rebatit les morceaux par `.join('')` une fois les `<cmd>` retires.
+   * Une jointure peut donc porter un saut de ligne d'un cote et rien de l'autre. MESURE sur `conv-234`
+   * (2026-10-11) : identiques sans les blancs (34 967 caracteres), differents au caractere 972 a cause
+   * d'un seul `\n\n` — et 37 970 caracteres, galerie `html-render` comprise, publies une seconde fois.
+   * Le contenu est le critere ; les blancs n'en font pas partie.
+   */
+  const dejaSansBlancs = sansBlancs(deja)
+  const closingSansBlancs = sansBlancs(closing)
+  if (dejaSansBlancs.includes(closingSansBlancs)) return ''
+  if (closingSansBlancs.startsWith(dejaSansBlancs))
+    return closing.slice(apresNonBlancs(closing, dejaSansBlancs.length)).trim()
   return closing
+}
+
+function sansBlancs(texte: string): string {
+  return texte.replace(/\s+/gu, '')
+}
+
+/** Position dans `texte` juste apres ses `compte` premiers caracteres non blancs. */
+function apresNonBlancs(texte: string, compte: number): number {
+  let vus = 0
+  let position = 0
+  while (position < texte.length && vus < compte) {
+    if (!/\s/u.test(texte[position])) vus += 1
+    position += 1
+  }
+  return position
 }
 
 /** Flux dédié : ce texte de clôture n'appartient à aucun stream déjà ouvert. */
