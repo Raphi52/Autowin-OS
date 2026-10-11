@@ -36,6 +36,11 @@ export default defineConfig(
       '**/out',
       'Audit/**',
       '.autowin-data/**',
+      // Brouillons de session et maquettes, hors suivi git (.gitignore:10 et :71, ajoute le
+      // 2026-10-10) : 3734 erreurs de lint le 2026-10-11, dont 0 dans src/. Les 9 fichiers deja
+      // suivis sous .autowin-tmp/ sont des PNG/HTML/JSON/CSS, qu'eslint ne lit pas.
+      '.autowin-tmp/**',
+      'artifacts/**',
       'tests/fixtures/arena-conv-126/**'
     ]
   },
