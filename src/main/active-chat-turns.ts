@@ -25,6 +25,17 @@ export class ActiveChatTurns {
    * resté armé ne peut donc étouffer que ce qui survient AVANT le prochain tour de la conversation.
    */
   private readonly deliberatelyStopped = new Set<string>()
+  /**
+   * Tours REPRIS après un redémarrage du main : leur CLI a survécu et travaille encore, mais l'app ne
+   * fait qu'attendre son reçu `.exit.json` — elle n'a aucun canal pour lui parler.
+   *
+   * Mesuré le 2026-10-11 (conv-260, tour 2d8540b1) : un tel tour, lancé à 22:29 et repris à 22:43,
+   * n'était connu que de `turns`. L'envoi normal (`os:pilotChat`) ne consultait pas cette réservation,
+   * si bien qu'un message tapé ouvrait un SECOND `claude.exe --resume` sur la même session, qui écrivait
+   * dans le même historique que le premier. Les distinguer d'un tour ordinaire permet de refuser ce
+   * second départ sans gêner l'enchaînement normal (un tour fini puis sa file d'attente).
+   */
+  private readonly recovered = new Set<AbortController>()
 
   get(conversationId: string): ActiveChatTurn | undefined {
     return [...(this.turns.get(conversationId)?.values() ?? [])].at(-1)
@@ -180,6 +191,20 @@ export class ActiveChatTurns {
     if (this.deleting.has(conversationId)) controller.abort('conversation-deleted')
   }
 
+  /** Enregistre un tour REPRIS après redémarrage (voir `recovered`) : même réservation que `set`. */
+  setRecovered(conversationId: string, controller: AbortController, completion: Promise<void>): void {
+    this.recovered.add(controller)
+    this.set(conversationId, controller, completion)
+  }
+
+  /** Un tour repris après redémarrage occupe-t-il encore cette conversation ? */
+  isRecovering(conversationId: string): boolean {
+    for (const controller of this.turns.get(conversationId)?.keys() ?? []) {
+      if (this.recovered.has(controller)) return true
+    }
+    return false
+  }
+
   /**
    * Marque un arrêt VOULU. Appelé aussi par les chemins qui ne passent pas par `abort()` ci-dessous
    * (`os:orchestrate:cancel` ne coupe que l'orchestration), sinon la moitié des arrêts resterait
@@ -198,6 +223,7 @@ export class ActiveChatTurns {
   }
 
   delete(conversationId: string, controller: AbortController): void {
+    this.recovered.delete(controller)
     const conversationTurns = this.turns.get(conversationId)
     if (!conversationTurns) return
     conversationTurns.delete(controller)

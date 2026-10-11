@@ -3361,8 +3361,9 @@ Le fil reprend ensuite normalement.`
       }
     })
   /**
-   * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
-   * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
+   * Reprend les appels de chat dont le CLI a survécu au main. La réservation (`setRecovered`) fait
+   * refuser un nouveau message par `os:pilotChat` et répondre « actif » à la sonde de l'écran,
+   * qui adopte alors le tour (`reconcilierTourNonClos`) pendant qu'on attend la preuve `.exit.json`.
    * Aucun timeout ne transforme une ignorance en relance : seule une sortie certifiée est traitée.
    */
   const reprendreAppelChat = (call: RecoverableChatProviderCall): void => {
@@ -3371,7 +3372,7 @@ Le fil reprend ensuite normalement.`
     const recoveryCompletion = new Promise<void>((resolve) => {
       resolveRecovery = resolve
     })
-    activeChatTurns.set(call.conversationId, recoveryController, recoveryCompletion)
+    activeChatTurns.setRecovered(call.conversationId, recoveryController, recoveryCompletion)
     setImmediate(() => {
       void (async () => {
         try {
@@ -3469,6 +3470,21 @@ Le fil reprend ensuite normalement.`
           console.warn('[resume-chat-provider] reprise impossible :', call.turnId, error)
         } finally {
           activeChatTurns.delete(call.conversationId, recoveryController)
+          /*
+           * ORIENTATIONS TAPÉES PENDANT LA REPRISE : rendues à l'écran, jamais perdues.
+           * L'écran voit désormais un tour repris comme occupé, donc ce qu'on tape part en
+           * orientation (`os:pilotChat:inject`). Quand la reprise se termine SANS rejouer de tour
+           * (arrêt, CLI en échec, journal muet), aucun `finally` de `runPilotChat` ne les rend :
+           * on le fait ici, avec le même signal. Après un rejeu, la file est déjà vide.
+           */
+          const orphelines = drainPendingDirectives(call.conversationId)
+          if (orphelines.length) {
+            broadcast({
+              type: 'directives-orphelines',
+              convId: call.conversationId,
+              textes: orphelines
+            })
+          }
           resolveRecovery()
         }
       })()
@@ -3571,6 +3587,17 @@ Le fil reprend ensuite normalement.`
 
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
+    /*
+     * UN SEUL AGENT PAR FIL, même après un redémarrage (conv-260, 2026-10-11) : un tour repris
+     * attend encore son CLI survivant. En lancer un second ouvrirait un deuxième `claude --resume`
+     * sur la même session. L'écran route déjà la saisie en orientation pendant ce temps ; ce refus
+     * est le filet si un envoi passe quand même (écran pas encore réconcilié).
+     */
+    if (typeof conversationId === 'string' && activeChatTurns.isRecovering(conversationId)) {
+      throw new Error(
+        'Un tour repris après le redémarrage tourne encore dans cette conversation : attends sa fin ou arrête-le avant d’envoyer un nouveau message.'
+      )
+    }
     return runPilotChat(event.sender, messages, conversationId)
   })
   ipcMain.handle('os:pilotChat:resume', (event, rawConversationId: unknown) => {
