@@ -36,6 +36,11 @@ import { survivableExitCode, writeSurvivableExit } from '../runs/stdout-journal'
  * Le lot est écrit sur disque AVANT d'attendre : une app fermée entre-temps reprend la surveillance
  * au démarrage suivant (`reprendreAuDemarrage`). Une durée maximale borne l'attente : au-delà, la
  * commande est arrêtée et le tour de reprise le DIT.
+ *
+ * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — aucun registre ne disait qu'Autowin
+ * avait relancé la tâche, d'où l'avis « perdu » (delta at=1791731278911) ; 3 édits = construction
+ * du registre en plusieurs pas ; relance-taches-de-fond.registre.test.ts rouge 2/3 puis vert.
+ * Posé ICI, hors du bloc de 6ec03033, pour que ce commit s'annule seul d'un `git revert`.
  */
 
 /** Au-delà, la commande relancée est arrêtée et le tour de reprise dit « durée dépassée ». */
@@ -143,9 +148,6 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
      * INSCRITE AVANT D'ATTENDRE : le tour suivant doit savoir qu'elle tourne. Sinon le CLI repris
      * la dit « stopped » et `claude.ts` concluait « son résultat est perdu » (conv-253, tour
      * bdfe38d3-5ba5-4693-bad2-f70b39bc845e) — le modèle relançait alors un doublon.
-     * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — aucun registre ne disait qu'Autowin
-     * avait relancé la tâche, d'où l'avis « perdu » (delta at=1791731278911) ; 3 édits = construction
-     * du registre en plusieurs pas ; relance-taches-de-fond.registre.test.ts rouge 2/3 puis vert.
      */
     for (const tache of taches)
       if (!tache.erreurDemarrage && tache.journalPath)
