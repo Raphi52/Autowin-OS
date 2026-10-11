@@ -102,7 +102,9 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             receipt.reponse ? (
               '✓ Répondu'
             ) : (
-              '✓ Reçue — l’agent répondra dans sa prochaine réponse'
+              // Pas « dans sa prochaine réponse » : l'orientation n'entre qu'à la fin de l'appel
+              // en cours, et le texte suivant n'y répond pas (conv-253, tour cdbc9802, 93 s).
+              '✓ Reçue — l’agent finit ce qu’il fait, puis y répond'
             )
           ) : receipt.status === 'differee' ? (
             '⏸ Reçue — l’agent la lira à la phase suivante du run'

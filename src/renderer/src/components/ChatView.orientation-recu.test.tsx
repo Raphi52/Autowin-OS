@@ -59,7 +59,7 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await act(async () => {})
   }
 
-  it('un RUN en cours ⇒ « lira à la phase suivante », pas « prochaine réponse »', async () => {
+  it('un RUN en cours ⇒ « lira à la phase suivante », pas « puis y répond »', async () => {
     const { pilote, app, injecte } = await monter()
     await act(async () =>
       app({ type: 'orchestrate-start', convId: 'A', task: '/frame les icônes' })
@@ -67,7 +67,7 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await orienter(pilote)
     expect(injecte).toHaveBeenCalled()
     expect(recu()).toContain('à la phase suivante')
-    expect(recu()).not.toContain('prochaine réponse')
+    expect(recu()).not.toContain('puis y répond')
   })
 
   it('sans run, le reçu annonce QUAND la réponse viendra', async () => {
@@ -77,7 +77,10 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     // « Orienté » disait seulement « transmis » : l'utilisateur croyait que rien ne se passait
     // pendant les minutes du tour (conv-61, 2026-09-01). Le reçu dit maintenant QUAND il aura
     // sa réponse.
-    expect(recu()).toBe('✓ Reçue — l’agent répondra dans sa prochaine réponse')
+    // « dans sa prochaine réponse » était FAUX (conv-253, tour cdbc9802-bbd2-4144-924d-a9f4cdb90ac3,
+    // saisie ts 1791720124446) : le texte suivant de l'agent finissait son étape en cours et ne
+    // répondait pas ; la réponse est venue 93 s plus tard. L'utilisateur a conclu « pas pris en compte ».
+    expect(recu()).toBe('✓ Reçue — l’agent finit ce qu’il fait, puis y répond')
   })
 
   it('un run TERMINÉ ne rend plus le reçu trompeur', async () => {
@@ -85,6 +88,6 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await act(async () => app({ type: 'orchestrate-start', convId: 'A', task: '/frame' }))
     await act(async () => app({ type: 'orchestrate-end', convId: 'A', status: 'green' }))
     await orienter(pilote)
-    expect(recu()).toContain('prochaine réponse')
+    expect(recu()).toContain('puis y répond')
   })
 })

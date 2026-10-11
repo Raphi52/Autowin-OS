@@ -862,7 +862,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     expect(
       container!.querySelector('.directive-receipt .directive-receipt-status')?.textContent
-    ).toContain('prochaine réponse')
+    ).toContain('puis y répond')
 
     await act(async () => pilot.resolve({ ok: true }))
   })
