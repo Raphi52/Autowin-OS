@@ -3,11 +3,12 @@
    /draft « des jolis panel orchestration dans mon theme nebuleuse », puis « Capsule », puis
    « Go sur la capsule 2 · Phase dans la capsule »).
 
-   Le bloc EST une capsule « Actions » : classes `thinking-block` / `thinking-capsule` de
-   ChatView.css (bord degrade bleu -> rose de 2 px, reflet bombe, rond degrade de l'icone,
-   pastille de duree, chevron dessine, signe de vie a droite, barre de temps dessous). Ce fichier
-   n'ajoute QUE ce qu'Actions n'a pas : la phase ecrite dans la capsule, le bouton ↗ rond, l'issue
-   de fin, et le corps qui montre les prompts.
+   Le bloc EST le bloc « Actions » : depuis conv-909 (2026-10-12, « ce bloc orchestration doit
+   etre comme celui de Actions »), il prend le cadre « grand, deux lignes » d'anneau-activite.css
+   (`thinking-block--deux-lignes cadre-anneau` : bord degrade de 2 px, verre fume, grand rond de
+   verre a gauche, deux lignes, chevron dessine, boutons dans le cadre). Ce fichier n'ajoute QUE ce
+   qu'Actions n'a pas : la phase ecrite en premiere ligne, le bouton ↗ rond, l'issue de fin sans
+   resume chiffre, et le corps qui montre les prompts.
 
    Couleurs : uniquement des jetons du theme. Le rose de la phase est `--gold-clair` (dans
    Nebuleuse de verre, la famille « gold » est rose : #ff9fd0) ; un autre theme lui donne sa
@@ -24,12 +25,9 @@
   font-weight: 600;
 }
 
-/* Tour fini : la phase s'adoucit comme le libelle (texte et reflet, jamais la couleur du bord). */
-.thinking-block--orchestration.is-done
-  > summary:not(:focus-visible)
-  .thinking-capsule:not(:hover)
-  .orch-phase {
-  color: var(--capsule-texte-fini);
+/* Tour fini : la phase s'adoucit comme le libelle du cadre (jamais la couleur du bord). */
+.thinking-block--orchestration.cadre-anneau:not(.is-live) .anneau-l1 .orch-phase {
+  color: var(--anneau-texte-fini);
 }
 
 /* ↗ : un rond de verre a cote de la capsule (maquette 2), pas le petit cadre de la barre
@@ -62,6 +60,7 @@
 
 .thinking-block.thinking-block--orchestration > summary .activity-resume {
   flex: none;
+  border-radius: 999px;
 }
 
 /* Issue de fin, a la place du signe de vie : un echec se lit en rouge, une interruption en ambre.
@@ -74,10 +73,6 @@
 .thinking-block--orchestration > summary .orch-issue[data-etat='interrompu'] {
   color: var(--warn);
   opacity: 1;
-}
-
-.thinking-block--orchestration .thinking-frise-barre > span[data-etat='interrompu'] {
-  background: var(--warn);
 }
 
 /* CORPS : la phase, son prompt, son rendu — visibles des que la capsule est ouverte. */

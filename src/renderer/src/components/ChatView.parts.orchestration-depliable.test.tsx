@@ -38,7 +38,9 @@ describe('le bloc orchestration se deplie et nomme les skills/agents choisis', (
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
     // Capsule 2 (conv-194, 2026-10-10) : la phase jouee est ecrite dans la capsule, sans clic.
-    expect(container.querySelector('.thinking-capsule .orch-phase')?.textContent).toBe('scout')
+    expect(
+      container.querySelector('[data-testid="activity-capsule"] .orch-phase')?.textContent
+    ).toBe('scout')
     expect(container.querySelector('[data-testid="activity-steps"]')).toBeNull()
     act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
     const liste = container.querySelector('[data-testid="activity-steps"]')
