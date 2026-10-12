@@ -406,7 +406,13 @@ A`
     expect(mermaidMock.initialize).toHaveBeenCalledWith(
       expect.objectContaining({ securityLevel: 'strict' })
     )
-    expect(mermaidMock.render).toHaveBeenCalledWith(expect.any(String), hostile)
+    // 3e argument = la zone de dessin hors page (zone-dessin-diagramme.ts) : sans elle, mermaid
+    // dessine dans <body> et rétrécit l'app (voir ArtifactDiagramPreview.hors-page.test.tsx).
+    expect(mermaidMock.render).toHaveBeenCalledWith(
+      expect.any(String),
+      hostile,
+      expect.any(HTMLElement)
+    )
     expect(container.querySelector('.artifact-diagram')?.children).toHaveLength(1)
   })
 
