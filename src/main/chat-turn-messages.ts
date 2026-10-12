@@ -499,6 +499,16 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
 }
 
 /**
+ * « Compte rendu » et « rendre compte » contiennent le mot « compte » sans demander aucun compte.
+ * Mesure conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches mail/Teams finit par
+ * « <le compte rendu : …> », et chaque tri de notification conclu sans lecture était relancé
+ * (3 fois dans ce fil). On retire ces expressions AVANT de chercher le mot : une vraie demande
+ * qui les accompagne (« combien de comptes rendus ? ») reste vue par ses autres mots.
+ */
+const EXPRESSIONS_SANS_DEMANDE_DE_COMPTE =
+  /\bcomptes?[\s-]+rendus?\b|\b(?:rendre|rends|rend|rendez|rendons|rendent|rendu|rendue|rendus)\s+(?:des\s+)?comptes?\b/g
+
+/**
  * La question exige-t-elle un chiffre VÉRIFIÉ, et la réponse en avance-t-elle un sans avoir lu ?
  *
  * MESURÉ le 2026-08-15 sur deux séries de 10 sondes à vérité terrain : 19 réussites sur 20, et
@@ -518,7 +528,7 @@ export function exigeUnChiffreVerifie(
   lectureEffectuee: boolean
 ): boolean {
   if (lectureEffectuee) return false
-  const q = (question ?? '').toLowerCase()
+  const q = (question ?? '').toLowerCase().replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
   const demandeUnCompte =
     /\bcombien\b/.test(q) ||
     /\bnombre\b/.test(q) ||
