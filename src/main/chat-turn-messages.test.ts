@@ -373,6 +373,44 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
   it('ne mord PAS sur une réponse vide', () => {
     expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
   })
+
+  // Cas RÉEL de conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches « Assistant mails
+  // Outlook » et « Assistant Teams » finit par « <le compte rendu : …> ». La garde y lisait une
+  // demande de compte et relançait chaque tri de notification conclu sans lecture — 3 fois dans
+  // ce fil, un appel au modèle payé pour rien à chaque fois.
+  const GABARIT_MAIL =
+    'Termine OBLIGATOIREMENT par le texte exact du mail de réponse, entre ces deux lignes :\n' +
+    '--- RÉPONSE MAIL ---\n' +
+    '<le compte rendu : ce que tu as fait, ou la réponse à la question, en français, poli et court>\n' +
+    '--- FIN RÉPONSE MAIL ---'
+
+  it('ne mord PAS sur « compte rendu » — le gabarit réel des tâches mail', () => {
+    expect(
+      exigeUnChiffreVerifie(GABARIT_MAIL, 'Notification automatique, aucune réponse.', false)
+    ).toBe(false)
+  })
+
+  it('ne mord PAS sur les autres formes de « compte rendu » et « rendre compte »', () => {
+    for (const demande of [
+      'Fais-moi un compte-rendu de la réunion.',
+      'Relis les comptes rendus de la semaine.',
+      'Rends compte de ce que tu as fait.',
+      'Je dois rendre compte au client demain.',
+      'Je me suis rendu compte que le build casse.'
+    ]) {
+      expect(exigeUnChiffreVerifie(demande, 'Voici le résumé.', false), demande).toBe(false)
+    }
+  })
+
+  it('mord TOUJOURS sur le verbe compter, et sur un vrai compte de comptes rendus', () => {
+    expect(exigeUnChiffreVerifie('Compte les fichiers de src/main.', 'Il y en a 12.', false)).toBe(
+      true
+    )
+    // Retirer l'expression ne doit pas masquer la vraie demande qui l'accompagne.
+    expect(
+      exigeUnChiffreVerifie('Combien de comptes rendus dans docs/ ?', 'Il y en a 4.', false)
+    ).toBe(true)
+  })
 })
 
 describe('exigeDireLEchec — un « Fait » posé sur un échec', () => {
