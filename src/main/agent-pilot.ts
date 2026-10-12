@@ -37,6 +37,7 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  commandeAObserveLeReel,
   exigePreuveAvantDePromettre,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
   exigeFaireLeGeste,
@@ -1821,6 +1822,12 @@ export class AgentPilot {
     /** Une LECTURE a-t-elle eu lieu ? Un chiffre sans lecture est une supposition, pas une reponse. */
     let anyReadExecuted = false
     /**
+     * Un `run` ou un `verify` a-t-il VRAIMENT tourne (`commandeAObserveLeReel`) ? Compte comme une
+     * lecture pour la SEULE garde « chiffre non verifie » (conv-267) : la garde « question sans
+     * lecture » garde son critere, qui n'etait pas en cause.
+     */
+    let sortieDeCommandeObservee = false
+    /**
      * Artefacts DEJA publies dans le fil pendant ce tour, par identifiant.
      *
      * Un artefact arrive deux fois : une premiere en direct (flux du provider, a sa place
@@ -1961,6 +1968,9 @@ export class AgentPilot {
       actionId: string
     ): { reussie: boolean; rejeu: boolean } => {
       const commandSucceeded = commandResultSucceeded(r)
+      // Ici et pas dans un seul des deux chemins : `<cmd>` et outil direct passent tous deux par
+      // cette comptabilite, et une commande en echec (code de sortie non nul) a pu observer.
+      if (commandeAObserveLeReel(nom, r)) sortieDeCommandeObservee = true
       if (nom === 'remember') {
         // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
         // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
@@ -3156,11 +3166,14 @@ export class AgentPilot {
           relanceDeFormeUtilisee = true
           echecTuRecoveryAvailable = false
           grantRecoveryIteration('echec-taise')
+          // D2 : la reponse reformulee REMPLACE celle qui taisait l'echec (fluxAffichesCetteIteration).
+          effacerReponseRelancee()
           convo.push(
             'SYSTÈME: au moins une de tes actions a ÉCHOUÉ et ta réponse n’en dit rien. Reformule ' +
               'MAINTENANT, SANS aucune commande : dis EXPLICITEMENT laquelle a échoué et ce que ' +
               'cela empêche. N’écris « Fait » que pour ce qui a RÉELLEMENT abouti — un « ✅ Fait » ' +
-              'posé sur un échec est pire que pas de conclusion du tout, parce qu’il rassure à tort.'
+              'posé sur un échec est pire que pas de conclusion du tout, parce qu’il rassure à tort. ' +
+              'Ta nouvelle réponse REMPLACE la précédente à l’écran : écris-la en entier.'
           )
           continue
         }
@@ -3191,6 +3204,8 @@ export class AgentPilot {
           preuvePromiseRecoveryAvailable = false
           relanceDeFormeUtilisee = true
           grantRecoveryIteration('preuve-promise')
+          // D2 : le compte-rendu REMPLACE la promesse — sinon elle reste affichee, dementie juste dessous.
+          effacerReponseRelancee()
           convo.push(RELANCE_PREUVE_AVANT_DE_PROMETTRE)
           continue
         }
@@ -3203,6 +3218,8 @@ export class AgentPilot {
           blocVisuelRecoveryAvailable = false
           relanceDeFormeUtilisee = true
           grantRecoveryIteration('bloc-visuel-non-ferme')
+          // D2 : le bloc re-emis REMPLACE le bloc casse, affiche en code brut jusque-la.
+          effacerReponseRelancee()
           convo.push(RELANCE_BLOC_VISUEL_NON_FERME)
           continue
         }
@@ -3231,7 +3248,11 @@ export class AgentPilot {
         }
         if (
           chiffreNonVerifieRecoveryAvailable &&
-          exigeUnChiffreVerifie(latestUserMessage, visibleTextThisTurn, anyReadExecuted)
+          exigeUnChiffreVerifie(
+            latestUserMessage,
+            visibleTextThisTurn,
+            anyReadExecuted || sortieDeCommandeObservee
+          )
         ) {
           chiffreNonVerifieRecoveryAvailable = false
           grantRecoveryIteration('chiffre-non-verifie')

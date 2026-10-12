@@ -1,7 +1,26 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { configureAutowinAppDataBase } from './app-data'
 import type { PromptSnapshot } from './commands'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../shared/chat-turn'
+
+/*
+ * ISOLATION : un echec d'action est inscrit au registre des murs, qui PERSISTE sur disque. Sans
+ * racine temporaire, le test « echec tu » ecrirait dans l'APPDATA reel (meme garde que
+ * agent-pilot.correction-apres-echec.test.ts).
+ */
+let racine = ''
+beforeEach(() => {
+  racine = mkdtempSync(join(tmpdir(), 'relance-remplace-'))
+  configureAutowinAppDataBase(racine)
+})
+afterEach(() => {
+  configureAutowinAppDataBase(undefined)
+  if (racine) rmSync(racine, { recursive: true, force: true })
+})
 
 /**
  * UNE RELANCE QUI FAIT REFAIRE LA REPONSE LA REMPLACE — ELLE NE S'Y AJOUTE PAS (D2, conv-267).
@@ -46,9 +65,14 @@ function texteDuFil(events: PilotEvent[]): string {
 
 const occurrences = (texte: string, motif: string): number => texte.split(motif).length - 1
 
+type Issue = { ok: boolean; data?: unknown; error?: string }
+const REUSSITE: Issue = { ok: true, data: { tab: 'chat', stored: true } }
+
 async function jouer(
   demande: string,
-  reponses: string[]
+  reponses: string[],
+  /** Issue de chaque commande, dans l'ordre ; au-delà, réussite. */
+  issues: Issue[] = []
 ): Promise<{ fil: string; appels: number; consignes: string[] }> {
   const consignes: string[] = []
   const send = vi.fn(
@@ -81,10 +105,11 @@ async function jouer(
   const bus = {
     catalog: () => [
       { name: 'get_state', args: {}, description: 'etat' },
-      { name: 'remember', args: {}, description: 'memoire' }
+      { name: 'remember', args: {}, description: 'memoire' },
+      { name: 'run', args: {}, description: 'commande' }
     ],
     snapshotForPrompt,
-    exec: vi.fn().mockResolvedValue({ ok: true, data: { tab: 'chat', stored: true } })
+    exec: vi.fn(async () => issues.shift() ?? REUSSITE)
   }
   const events: PilotEvent[] = []
   await new AgentPilot(registry as never, roles as never, bus as never).chat(
@@ -149,5 +174,84 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
     expect(consignes.at(-1)).toContain('ta réponse ne CONCLUT pas')
     expect(occurrences(fil, 'Leçon déposée : le port est 9240.')).toBe(1)
     expect(occurrences(fil, '✅ Fait')).toBe(1)
+  })
+
+  it('échec tu : l’aveu de l’échec remplace la réponse qui le taisait', async () => {
+    const { fil, appels, consignes } = await jouer(
+      'quel onglet est actif ?',
+      [
+        'Je lis l’état.<cmd>{"name":"get_state","args":{}}</cmd>',
+        // Meme commande, meme cible : l'echec est rattrape, la reprise apres echec ne mord pas.
+        'Je relis l’état.<cmd>{"name":"get_state","args":{}}</cmd>',
+        `L’onglet actif est chat.${CLOTURE}`,
+        `L’onglet actif est chat. La première lecture de l’état a échoué, la seconde a abouti.${CLOTURE}`
+      ],
+      [{ ok: false, error: 'bus indisponible' }]
+    )
+    expect(appels).toBe(4)
+    expect(consignes.at(-1)).toContain('ta réponse n’en dit rien')
+    expect(occurrences(fil, 'L’onglet actif est chat.')).toBe(1)
+    expect(occurrences(fil, '✅ Fait')).toBe(1)
+    expect(fil).toContain('a échoué')
+    // Le texte des appels non relancés reste, avec leurs cartes d'action.
+    expect(fil).toContain('Je lis l’état.')
+    expect(fil).toContain('Je relis l’état.')
+    expect(consignes.at(-1)).toContain('REMPLACE')
+  })
+
+  it('preuve promise : le compte-rendu remplace la promesse « je te tiens au courant »', async () => {
+    const { fil, appels, consignes } = await jouer('lance le contrôle de l’app', [
+      'Je lance le contrôle.<cmd>{"name":"get_state","args":{}}</cmd>',
+      'Contrôle lancé, je te tiens au courant dès qu’il a fini.',
+      `Contrôle terminé : l’onglet actif est chat.${CLOTURE}`
+    ])
+    expect(appels).toBe(3)
+    expect(consignes.at(-1)).toContain('PROMET un compte-rendu ultérieur')
+    expect(fil).not.toContain('je te tiens au courant')
+    expect(fil).toContain('Contrôle terminé')
+    expect(fil).toContain('Je lance le contrôle.')
+    expect(occurrences(fil, '✅ Fait')).toBe(1)
+    expect(consignes.at(-1)).toContain('REMPLACE')
+  })
+
+  it('bloc visuel non fermé : le bloc ré-émis remplace le bloc cassé', async () => {
+    const { fil, appels, consignes } = await jouer('fais-moi un résumé visuel', [
+      '```html-render\n<p>Résumé du jour</p>\n</html-render>',
+      '```html-render\n<p>Résumé du jour</p>\n```'
+    ])
+    expect(appels).toBe(2)
+    expect(consignes.at(-1)).toContain('sans jamais le REFERMER')
+    expect(occurrences(fil, '<p>Résumé du jour</p>')).toBe(1)
+    expect(fil).not.toContain('</html-render>')
+    expect(consignes.at(-1)).toContain('REMPLACE')
+  })
+
+  // conv-267 (2026-10-12) : le tour réel du ping de 90 s était relancé alors que le nombre venait
+  // de la sortie de `run`. Une commande qui a VRAIMENT tourné vaut une lecture pour cette garde.
+  it('chiffre tiré de la sortie d’un run lancé : aucune relance, un seul appel au modèle', async () => {
+    const { fil, appels, consignes } = await jouer(
+      'combien de réponses le ping a-t-il reçues ?',
+      [
+        'Je lance le ping.<cmd>{"name":"run","args":{"commande":"ping -n 3 127.0.0.1"}}</cmd>',
+        `Le ping a reçu 3 réponses.${CLOTURE}`
+      ],
+      [{ ok: true, data: { lance: true, exitCode: 0, detail: 'envoyés = 3, reçus = 3' } }]
+    )
+    expect(consignes.some((c) => c.includes('SANS avoir appelé la moindre commande'))).toBe(false)
+    expect(appels).toBe(2)
+    expect(occurrences(fil, 'Le ping a reçu 3 réponses.')).toBe(1)
+  })
+
+  it('run REFUSÉ : rien n’a tourné, la garde mord toujours', async () => {
+    const { consignes } = await jouer(
+      'combien de réponses le ping a-t-il reçues ?',
+      [
+        'Je lance le ping.<cmd>{"name":"run","args":{"commande":"ping -n 3 127.0.0.1"}}</cmd>',
+        `Le ping a reçu 3 réponses.${CLOTURE}`,
+        `Je n’ai pas pu lancer le ping : la commande a été refusée.${CLOTURE}`
+      ],
+      [{ ok: true, data: { lance: false, detail: 'Commande refusée : non autorisée' } }]
+    )
+    expect(consignes.some((c) => c.includes('SANS avoir appelé la moindre commande'))).toBe(true)
   })
 })

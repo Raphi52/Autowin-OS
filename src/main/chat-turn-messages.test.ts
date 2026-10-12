@@ -12,6 +12,7 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  commandeAObserveLeReel,
   exigePreuveAvantDePromettre,
   blocVisuelNonFerme,
   nommerPiecesJointes
@@ -815,5 +816,52 @@ describe('borne en volume — les pieces jointes comptent', () => {
       content: `court ${index}`
     }))
     expect(boundedTurnHistory(fil, { maxMessages: 40, maxTokens: 60_000 })).toHaveLength(6)
+  })
+})
+
+/*
+ * conv-267 (2026-10-12) : sur un vrai tour, « combien de réponses le ping a-t-il reçues ? » a été
+ * relancé alors que le nombre venait de la sortie de `run` — la garde ne comptait comme lecture que
+ * list_files / read_file / find_in_files. La sortie d'une commande qui a VRAIMENT tourné observe le
+ * réel autant qu'une lecture de dossier.
+ */
+describe('commandeAObserveLeReel — run et verify qui ont tourné valent une lecture', () => {
+  it('run lancé : oui, quel que soit son code de sortie (un grep sans résultat a observé)', () => {
+    expect(
+      commandeAObserveLeReel('run', {
+        ok: true,
+        data: { lance: true, exitCode: 0, detail: 'reçus = 91' }
+      })
+    ).toBe(true)
+    expect(commandeAObserveLeReel('run', { ok: true, data: { lance: true, exitCode: 1 } })).toBe(
+      true
+    )
+  })
+
+  it('run refusé ou en panne : non, rien n’a tourné', () => {
+    expect(
+      commandeAObserveLeReel('run', {
+        ok: true,
+        data: { lance: false, detail: 'Commande refusée' }
+      })
+    ).toBe(false)
+    expect(commandeAObserveLeReel('run', { ok: false, error: 'bus indisponible' })).toBe(false)
+  })
+
+  it('verify qui a tourné : oui, même coupé au plafond ; verify refusé : non', () => {
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: true, exitCode: 1 } })
+    ).toBe(true)
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: true, exitCode: null } })
+    ).toBe(true)
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: false, exitCode: null } })
+    ).toBe(false)
+  })
+
+  it('aucune autre commande : get_state reste un aperçu, pas une observation', () => {
+    expect(commandeAObserveLeReel('get_state', { ok: true, data: { tab: 'chat' } })).toBe(false)
+    expect(commandeAObserveLeReel('remember', { ok: true, data: { stored: true } })).toBe(false)
   })
 })

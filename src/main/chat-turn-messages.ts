@@ -522,6 +522,30 @@ const EXPRESSIONS_SANS_DEMANDE_DE_COMPTE =
  * réclame un compte, la réponse contient un nombre, et aucune lecture n'a eu lieu. Un faux positif
  * coûterait une itération inutile ; on préfère le faux négatif.
  */
+/**
+ * La commande a-t-elle OBSERVÉ le réel, comme une lecture de dossier ? (conv-267, 2026-10-12)
+ *
+ * Mesure sur un vrai tour : « combien de réponses le ping a-t-il reçues ? » a été relancé par
+ * `exigeUnChiffreVerifie` alors que le nombre venait de la sortie de `run` (91 reçues sur 91). La
+ * garde ne comptait comme lecture que `list_files` / `read_file` / `find_in_files` ; la sortie d'une
+ * commande qui a VRAIMENT tourné est une observation au même titre.
+ *
+ * - `run` : seulement si la commande est partie (`lance: true`). Son code de sortie n'y change rien :
+ *   un `grep` sans résultat a observé quelque chose. Un refus (`lance: false`) n'a rien observé.
+ * - `verify` : seulement s'il a tourné (`allowed` n'est pas `false`), même coupé au plafond.
+ * - Rien d'autre : `get_state` reste l'APERÇU partiel dont l'agent tirait ses chiffres faux.
+ */
+export function commandeAObserveLeReel(
+  nom: string,
+  resultat: { ok: boolean; data?: unknown; error?: unknown }
+): boolean {
+  if (!resultat.ok || !resultat.data || typeof resultat.data !== 'object') return false
+  const data = resultat.data as Record<string, unknown>
+  if (nom === 'run') return data.lance === true
+  if (nom === 'verify') return data.allowed !== false
+  return false
+}
+
 export function exigeUnChiffreVerifie(
   question: string | undefined,
   reponse: string,
@@ -1164,7 +1188,8 @@ export const RELANCE_PREUVE_AVANT_DE_PROMETTRE =
   'choix : (1) va chercher le résultat dans CE tour — sonde l’état réel (`get_state`, ' +
   '`retrospective`, `run`, `verify`, lecture de fichier) et rends compte de ce que tu OBSERVES ; ' +
   'ou (2) si le résultat est réellement hors de ta portée, dis-le explicitement — ce qui est ' +
-  'lancé, où le retrouver, ce que l’utilisateur doit faire — sans promettre de revenir.'
+  'lancé, où le retrouver, ce que l’utilisateur doit faire — sans promettre de revenir. ' +
+  'Ta réponse finale REMPLACE la précédente à l’écran : écris-la en entier.'
 
 /**
  * Une fence ```` ```html-render ```` a-t-elle été ouverte sans jamais être refermée ?
@@ -1210,7 +1235,7 @@ export const RELANCE_BLOC_VISUEL_NON_FERME =
   'contenant que ```. Une pseudo-balise (`</html-render`) n’est pas un délimiteur : le fil rend ' +
   'alors ton HTML en bloc de code BRUT, et toute ta mise en forme est perdue à l’écran. ' +
   'Ré-émets MAINTENANT ta réponse complète, SANS aucune commande, avec la fence ouverte par ' +
-  '```html-render et fermée par ``` sur une ligne seule.'
+  '```html-render et fermée par ``` sur une ligne seule. Elle REMPLACE la précédente à l’écran.'
 
 /**
  * RENDRE UN GESTE FAISABLE — garde déterministe. Mesuré conv-843, tour
