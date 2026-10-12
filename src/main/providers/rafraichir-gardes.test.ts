@@ -4,6 +4,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -57,6 +58,20 @@ describe('rafraichirGardesDesAgents', () => {
     expect(res).toEqual({ rafraichis: [], aJour: [], echecs: [] })
     expect(readFileSync(join(vieux, NOM_SCRIPT_GARDE), 'utf8')).toBe('ancienne')
     expect(readFileSync(join(tiers, NOM_SCRIPT_GARDE), 'utf8')).toBe('ancienne')
+  })
+
+  /*
+   * Mesuré le 2026-10-01 : remplacer le script (fichier provisoire puis renommage) remet à l'heure la
+   * date du DOSSIER. Or `balayerTemporairesOrphelins` ne supprime qu'un dossier de plus de 24 h, sur
+   * cette même date : un dossier d'agent mort, rafraîchi à chaque redémarrage, ne vieillissait jamais.
+   */
+  it('garde la date du dossier : le nettoyage des dossiers de plus de 24 h n’est pas repoussé', () => {
+    const r = racine()
+    const d = reglages(r, 'autowin-os-settings-age', 'ancienne', 2 * 3_600_000)
+    const avant = statSync(d).mtimeMs
+    rafraichirGardesDesAgents({ racine: r, script: 'courante' })
+    expect(readFileSync(join(d, NOM_SCRIPT_GARDE), 'utf8')).toBe('courante')
+    expect(Math.abs(statSync(d).mtimeMs - avant)).toBeLessThan(2_000)
   })
 
   it('un script déjà à jour n’est pas réécrit', () => {

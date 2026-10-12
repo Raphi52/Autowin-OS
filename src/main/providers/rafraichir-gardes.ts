@@ -1,4 +1,12 @@
-import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { AGE_ORPHELIN_MS } from './temporaires-orphelins'
 
@@ -49,8 +57,9 @@ export function rafraichirGardesDesAgents(options: {
     const dossier = join(racine, nom)
     const fichier = join(dossier, NOM_SCRIPT_GARDE)
     try {
-      if (!statSync(dossier).isDirectory() || !existsSync(fichier)) continue
-      if (maintenant - statSync(dossier).mtimeMs >= ageMaxMs) continue
+      const infos = statSync(dossier)
+      if (!infos.isDirectory() || !existsSync(fichier)) continue
+      if (maintenant - infos.mtimeMs >= ageMaxMs) continue
       if (readFileSync(fichier, 'utf8') === script) {
         resultat.aJour.push(nom)
         continue
@@ -58,6 +67,9 @@ export function rafraichirGardesDesAgents(options: {
       const provisoire = `${fichier}.${process.pid}.nouveau`
       writeFileSync(provisoire, script, 'utf8')
       renameSync(provisoire, fichier)
+      // Le renommage remet à l'heure la date du DOSSIER, celle que lit le balayage des orphelins
+      // (plus de 24 h) : on la rend, sinon un dossier mort rafraîchi à chaque démarrage ne part jamais.
+      utimesSync(dossier, infos.atime, infos.mtime)
       resultat.rafraichis.push(nom)
     } catch {
       resultat.echecs.push(nom)

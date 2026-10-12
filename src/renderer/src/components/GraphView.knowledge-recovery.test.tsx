@@ -137,6 +137,32 @@ describe('GraphView — chantier 2 : la boîte de réception est visible sans ou
     expect(container.querySelector('.graph-stat-inbox')?.textContent).toContain('2')
   })
 
+  it('la pastille reprend le compte relu par le panneau quand la file a été vidée hors écran', async () => {
+    // Constaté le 2026-10-06 (conv-583) : file vidée par /curate en ligne de commande, la pastille
+    // gardait « 12 » alors que le panneau ouvert affichait « 0 candidats ».
+    const twelve = Array.from({ length: 12 }, (_, i) => inboxCandidate(`inbox/c${i}`))
+    let drained = false
+    const listInbox = vi.fn().mockImplementation(async () => (drained ? [] : twelve))
+    installApi({ listInbox })
+    await mount()
+    expect(container.querySelector('.graph-workbench-badge')?.textContent).toBe('12')
+
+    drained = true // la curation tourne hors de l'écran : rien ne prévient la vue
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+        ?.click()
+    )
+    await flush()
+
+    expect(container.querySelector('[aria-label="Boîte de réception du savoir"]')?.textContent).toContain(
+      '0 candidat'
+    )
+    expect(container.querySelector('.graph-workbench-badge')).toBeNull()
+    expect(container.querySelector('.graph-stat-inbox')).toBeNull()
+  })
+
   it('sans candidat, aucun compteur parasite sur le bouton', async () => {
     installApi()
     await mount()

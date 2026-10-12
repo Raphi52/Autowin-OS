@@ -56,6 +56,8 @@ export const THEMES: readonly Theme[] = [
   // (nacre #f8f7fb sur fond #f6f5f9, lisere irise, coins bleu et rose, lumiere de la souris).
   // L id reste `holographique-clair` : c est la valeur memorisee si la premiere version a ete choisie.
   { id: 'holographique-clair', libelle: 'Holographique blanc', base: 'clair' },
+  // Vert phosphore sur noir, chasse fixe, copie d Internet Typewriter (writer.bighugelabs.com).
+  { id: 'machine-a-ecrire', libelle: 'Machine à écrire', base: 'sombre' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },

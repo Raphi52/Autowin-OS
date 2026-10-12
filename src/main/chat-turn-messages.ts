@@ -499,6 +499,16 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
 }
 
 /**
+ * « Compte rendu » et « rendre compte » contiennent le mot « compte » sans demander aucun compte.
+ * Mesure conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches mail/Teams finit par
+ * « <le compte rendu : …> », et chaque tri de notification conclu sans lecture était relancé
+ * (3 fois dans ce fil). On retire ces expressions AVANT de chercher le mot : une vraie demande
+ * qui les accompagne (« combien de comptes rendus ? ») reste vue par ses autres mots.
+ */
+const EXPRESSIONS_SANS_DEMANDE_DE_COMPTE =
+  /\bcomptes?[\s-]+rendus?\b|\b(?:rendre|rends|rend|rendez|rendons|rendent|rendu|rendue|rendus)\s+(?:des\s+)?comptes?\b/g
+
+/**
  * La question exige-t-elle un chiffre VÉRIFIÉ, et la réponse en avance-t-elle un sans avoir lu ?
  *
  * MESURÉ le 2026-08-15 sur deux séries de 10 sondes à vérité terrain : 19 réussites sur 20, et
@@ -518,7 +528,7 @@ export function exigeUnChiffreVerifie(
   lectureEffectuee: boolean
 ): boolean {
   if (lectureEffectuee) return false
-  const q = (question ?? '').toLowerCase()
+  const q = (question ?? '').toLowerCase().replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
   const demandeUnCompte =
     /\bcombien\b/.test(q) ||
     /\bnombre\b/.test(q) ||
@@ -901,14 +911,17 @@ export function questionPoseeSansAvoirLu(
  * On ne reconnait que des lecteurs SURS. Un `Bash` quelconque (npm, git commit, rm) n'est pas une
  * lecture : la liste est fermee, pas heuristique.
  */
-const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
+// WebFetch / WebSearch OBSERVENT le monde comme Read : un chiffre lu sur le web n'est pas devine.
+const LECTEURS_NATIFS = /^(Read|Grep|Glob|WebFetch|WebSearch)\b/
 // fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
 // reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
 // MEME DEFAUT, AUTRES FORMES (conv-861, 2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
 // `git -C X log` -- trois relances a tort dans le meme fil. On ne regarde donc plus le 1er mot : la
 // commande est DECOUPEE en segments (hors guillemets) et chaque segment est classe sur une liste
 // FERMEE. Le patch par forme (un `cd` ici, un `date` la) ne finissait jamais.
-const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type)$/
+// `curl` lit une API : conv-103 (2026-09-23→25), 4 relances « chiffre non verifie » a tort sur des
+// nombres lus via curl sur l'API Azure DevOps.
+const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|curl)$/
 const SOUS_COMMANDE_GIT_LECTRICE = /^(log|show|diff|status)$/
 /** Ne lit ni n'ecrit rien : n'empeche pas une lecture d'etre « pure ». */
 const NEUTRE_BASH =

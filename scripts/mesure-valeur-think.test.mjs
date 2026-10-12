@@ -1,0 +1,366 @@
+/**
+ * La mesure de la valeur de `think` (`mesure-valeur-think.mjs`) : extraction des fichiers cites,
+ * appariement aux fichiers modifies, et regle de decision fixee AVANT la mesure.
+ */
+import { describe, expect, it } from 'vitest'
+import {
+  briefingDeSession,
+  decisionSaut,
+  estCite,
+  suiviProfondeur,
+  fichiersCites,
+  mediane,
+  mesurerRun,
+  mesurerTrous,
+  racineDeDonnees,
+  runsDuMessage,
+  runsExclus,
+  section,
+  thinkParFilEtJour,
+  trousRencontres
+} from './mesure-valeur-think.mjs'
+
+const BRIEFING = [
+  '## Localisation',
+  '| 3 | `src/main/orchestrator.ts:3643` | lecture |',
+  '- `orchestration-state.ts:1116` et `skills/think/SKILL.md` §2',
+  '## Cartographie',
+  '- `src/main/autre-fichier.ts` cité hors Localisation',
+  '## Trous',
+  '- rien'
+].join('\n')
+
+describe('fichiers cités par un texte', () => {
+  it('lit les chemins complets, les noms nus et retire le numéro de ligne', () => {
+    const cites = fichiersCites(section(BRIEFING, 'Localisation'))
+    expect([...cites.chemins].sort()).toEqual(['skills/think/SKILL.md', 'src/main/orchestrator.ts'])
+    expect([...cites.noms].sort()).toEqual([
+      'orchestration-state.ts',
+      'orchestrator.ts',
+      'skill.md'
+    ])
+  })
+
+  it('ne prend que la section demandée', () => {
+    expect(section(BRIEFING, 'localisation')).not.toContain('autre-fichier')
+    expect(section('## Localisation\na.ts', 'Trous')).toBe('')
+  })
+
+  it('accepte les barres obliques inverses de Windows', () => {
+    expect([...fichiersCites('voir src\\main\\x.ts').chemins]).toEqual(['src/main/x.ts'])
+  })
+})
+
+describe('appariement aux fichiers modifiés', () => {
+  const cites = fichiersCites(section(BRIEFING, 'Localisation'))
+
+  it('par chemin complet, par nom nu, et rien d’autre', () => {
+    expect(estCite('src/main/orchestrator.ts', cites)).toBe(true)
+    expect(estCite('src/main/runs/orchestration-state.ts', cites)).toBe(true)
+    expect(estCite('src/main/autre-fichier.ts', cites)).toBe(false)
+  })
+
+  it('sépare ce que la Localisation apporte de ce que la tâche nommait déjà', () => {
+    const mesure = mesurerRun({
+      tache: 'corrige orchestrator.ts',
+      briefing: BRIEFING,
+      modifies: [
+        'src/main/orchestrator.ts',
+        'src/main/runs/orchestration-state.ts',
+        'src/main/autre-fichier.ts'
+      ]
+    })
+    expect(mesure.tacheNommeUnFichier).toBe(true)
+    expect(mesure.modifiesCites).toBe(2)
+    expect(mesure.apportes).toEqual(['src/main/runs/orchestration-state.ts'])
+    expect(mesure.rappel).toBeCloseTo(2 / 3)
+  })
+})
+
+describe('rattachement des commits à un run', () => {
+  it('reconnaît les quatre formes de message relevées', () => {
+    expect(runsDuMessage('agent run-18847638a7f3-1')).toEqual(['run-18847638a7f3-1'])
+    expect(runsDuMessage('agent run-3180eec71b06-1: garde des notes')).toEqual([
+      'run-3180eec71b06-1'
+    ])
+    expect(runsDuMessage('salvage(run-28937ab3093b-1): HEAD lu')).toEqual(['run-28937ab3093b-1'])
+    expect(runsDuMessage('autowin: travail préservé de la copie run-121f31145ea6-1')).toEqual([
+      'run-121f31145ea6-1'
+    ])
+    expect(runsDuMessage('auto(conv-889): 2 3 4')).toEqual([])
+  })
+})
+
+describe('règle de décision « sauter think »', () => {
+  const sans = { apportes: [] }
+  const avec = { apportes: ['a.ts'] }
+
+  it('ne conclut pas sous 5 cas', () => {
+    expect(decisionSaut([sans, sans, sans, sans]).construire).toBe(false)
+  })
+
+  it('construit à 80 % de cas sans apport, pas en dessous', () => {
+    expect(decisionSaut([sans, sans, sans, sans, avec]).construire).toBe(true)
+    expect(decisionSaut([sans, sans, sans, avec, avec]).construire).toBe(false)
+  })
+
+  it('médiane paire et impaire', () => {
+    expect(mediane([3, 1, 2])).toBe(2)
+    expect(mediane([1, 2, 3, 4])).toBe(2.5)
+    expect(mediane([])).toBe(null)
+  })
+})
+
+/*
+ * Objection du juge (run-85d8e7f57af2-1, réparation 2) : la mesure ne disait rien des « Trous », et
+ * comptait le run qui l'a écrite. Deux signaux sans modèle, nommés pour ce qu'ils sont : un trou
+ * qui portait sur un fichier modifié ensuite, et un trou repris par une étape suivante du même run.
+ * fix-ok: run-85d8e7f57af2-1 réparation 2 — imports puis cas écrits AVANT le script (rouge mesuré :
+ * 4 échecs, « mesurerTrous / runsExclus is not a function »), 13/13 ensuite ; puis Prettier --write.
+ */
+describe('« Trous » du briefing, sans modèle', () => {
+  const avecTrous = [
+    '## Localisation',
+    '- `src/main/orchestrator.ts:3643`',
+    '## Trous',
+    '- je n’ai pas lu `src/main/commands.ts` ni vérifié `pickResumeForTask`',
+    '- Brain indisponible'
+  ].join('\n')
+
+  it('compte les trous portant sur un fichier modifié ensuite', () => {
+    const m = mesurerTrous({
+      briefing: avecTrous,
+      modifies: ['src/main/commands.ts', 'src/main/orchestrator.ts'],
+      suite: ''
+    })
+    expect(m.fichiersTrouModifies).toEqual(['src/main/commands.ts'])
+  })
+
+  it('compte les repères d’un trou repris par une étape suivante', () => {
+    const m = mesurerTrous({
+      briefing: avecTrous,
+      modifies: [],
+      suite: '## Confiance\n- NON VÉRIFIÉ : pourquoi `pickResumeForTask` a rendu null'
+    })
+    expect(m.reperes).toBe(2)
+    expect(m.reprisPlusTard).toEqual(['pickResumeForTask'])
+  })
+
+  it('un briefing sans section Trous ne compte rien', () => {
+    const m = mesurerTrous({
+      briefing: '## Localisation\n- a.ts',
+      modifies: ['a.ts'],
+      suite: 'a.ts'
+    })
+    expect(m).toEqual({ reperes: 0, reprisPlusTard: [], fichiersTrouModifies: [] })
+  })
+})
+
+describe('runs exclus de l’échantillon', () => {
+  it('lit chaque --exclure, et rien d’autre', () => {
+    const exclus = runsExclus(['--exclure', 'run-a', '--data', 'x', '--exclure', 'run-b', '--json'])
+    expect([...exclus].sort()).toEqual(['run-a', 'run-b'])
+    expect(runsExclus(['--data', 'x']).size).toBe(0)
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 4 de run-85d8e7f57af2-1 — lance sans `--data` depuis une
+ * copie de travail, le script rendait 2 (« Racine de donnees introuvable ») : il cherchait
+ * `.autowin-data` a cote de la copie, alors que les donnees vivent a cote du depot principal.
+ */
+describe('racine de données par défaut', () => {
+  const sep = (p) => p.replace(/\\/g, '/')
+  const existe =
+    (...presents) =>
+    (p) =>
+      presents.map(sep).includes(sep(p))
+
+  it('depuis une copie de travail, prend les données du dépôt principal', () => {
+    const racine = racineDeDonnees({
+      argv: [],
+      env: {},
+      depot: 'D:/AutoWinOS/.autowin-data/autowin-os/worktrees/x/agent__run-1',
+      depotPrincipal: 'D:/AutoWinOS',
+      existe: existe('D:/AutoWinOS/.autowin-data/autowin-os/run-state')
+    })
+    expect(sep(racine)).toBe('D:/AutoWinOS/.autowin-data/autowin-os')
+  })
+
+  it('garde l’ordre : --data, puis AUTOWIN_DATA_ROOT, puis le dépôt lui-même', () => {
+    const base = { depot: 'D:/a', depotPrincipal: 'D:/b', existe: () => true }
+    expect(sep(racineDeDonnees({ ...base, argv: ['--data', 'D:/x'], env: {} }))).toBe('D:/x')
+    expect(racineDeDonnees({ ...base, argv: [], env: { AUTOWIN_DATA_ROOT: 'D:/y' } })).toBe('D:/y')
+    expect(sep(racineDeDonnees({ ...base, argv: [], env: {} }))).toBe(
+      'D:/a/.autowin-data/autowin-os'
+    )
+  })
+
+  it('sans données nulle part, nomme le dossier du dépôt (message d’erreur)', () => {
+    const racine = racineDeDonnees({
+      argv: [],
+      env: {},
+      depot: 'D:/a',
+      depotPrincipal: undefined,
+      existe: () => false
+    })
+    expect(sep(racine)).toBe('D:/a/.autowin-data/autowin-os')
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 5 de run-85d8e7f57af2-1 — l'echantillon ne lisait que
+ * run-state/ (33 briefings), que l'app efface a la fin de chaque run (clearOrchestrationState). Les
+ * traces de session ~/.claude/projects/*agent--run-* en gardent 56, dont 11 identiques a run-state
+ * (prototype du 2026-10-01). Ces cas etaient rouges avant briefingDeSession et suiviProfondeur.
+ */
+describe('briefing think lu dans une trace de session', () => {
+  const snapshot = (texte) => ({
+    type: 'attachment',
+    timestamp: '2026-10-01T06:47:55.691Z',
+    attachment: { type: 'prompt_snapshot', systemPrompt: [texte] }
+  })
+  const user = (texte) => ({ type: 'user', message: { content: texte } })
+  const dit = (texte) => ({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: texte }] }
+  })
+  const tache =
+    'TÂCHE: corrige `src/main/x.ts`\n\n[COLLECTE DE CONTEXTE — effectuée avant RUN.md]\n`autre.ts`'
+
+  it('reconnaît la consigne think dans l’instantané du prompt et coupe la tâche avant la collecte', () => {
+    const b = briefingDeSession([
+      snapshot('…\n=== SKILL THINK (kit) ===\n# Think'),
+      user(tache),
+      dit('Je lis.'),
+      dit('Rien de structuré')
+    ])
+    expect(b).toEqual({
+      tache: 'corrige `src/main/x.ts`',
+      briefing: 'Je lis.\n\nRien de structuré'
+    })
+  })
+
+  it('reconnaît un briefing sans instantané par ses titres Localisation et Trous', () => {
+    const b = briefingDeSession([user(tache), dit(BRIEFING)])
+    expect(b?.briefing).toBe(BRIEFING)
+  })
+
+  it('ignore une autre étape, même si un résultat d’outil cite la consigne think', () => {
+    const outil = {
+      type: 'user',
+      message: { content: [{ type: 'tool_result', content: '=== SKILL THINK (kit) ===' }] }
+    }
+    expect(briefingDeSession([user(tache), outil, dit('## Besoin\n- x')])).toBeUndefined()
+  })
+})
+
+describe('suivi du coût de think depuis les niveaux de profondeur (piste 2)', () => {
+  const l = (ts, runId, cout) => ({ ts: Date.parse(ts), runId, cout })
+  const passages = [
+    l('2026-10-01T08:00:00Z', 'run-a', 2),
+    l('2026-10-02T08:00:00Z', 'run-b', 0.3),
+    l('2026-10-02T09:00:00Z', 'run-b', 0.1),
+    l('2026-10-03T08:00:00Z', 'run-c', 0.6)
+  ]
+
+  it('sans mise en service sur le dépôt, ne mesure rien et le dit', () => {
+    expect(suiviProfondeur(passages, undefined)).toEqual({
+      enService: false,
+      depuis: null,
+      runs: 0,
+      attendus: 10,
+      mediane: null,
+      complet: false
+    })
+  })
+
+  it('après la mise en service : un coût par run, les 10 premiers runs, leur médiane', () => {
+    const s = suiviProfondeur(passages, Date.parse('2026-10-02T00:00:00Z'))
+    expect(s).toMatchObject({ enService: true, runs: 2, attendus: 10, complet: false })
+    expect(s.mediane).toBeCloseTo(0.5)
+    expect(suiviProfondeur(passages, Date.parse('2026-10-02T00:00:00Z'), 1)).toMatchObject({
+      runs: 1,
+      complet: true
+    })
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 6 de run-85d8e7f57af2-1 — la sortie ne donnait pas « le nombre
+ * de think payes par fil et par jour » (mesure demandee par la piste 5), et ne classait pas chaque trou
+ * annonce : rencontre plus tard, pas rencontre, ou sans repere verifiable. Cas ecrits AVANT le script.
+ */
+describe('think payés par fil et par jour (piste 5)', () => {
+  const l = (ts, runId, conv, cout) => ({ ts: Date.parse(ts), runId, conv, cout })
+  const passages = [
+    l('2026-09-30T10:36:57Z', 'run-3180', 'conv-890', 1.98),
+    l('2026-09-30T13:42:34Z', 'run-66d6', 'conv-890', 1.9),
+    l('2026-09-30T13:50:00Z', 'run-66d6', 'conv-890', 0.1),
+    l('2026-09-30T09:00:00Z', 'run-c', 'conv-798', 0.4),
+    l('2026-10-01T09:00:00Z', 'run-d', 'conv-798', 0.3),
+    l('2026-10-01T09:30:00Z', 'run-e', undefined, 5)
+  ]
+
+  it('un couple fil/jour par fil et date, les runs distincts qui y paient think', () => {
+    const r = thinkParFilEtJour(passages)
+    expect(r.couples).toBe(3)
+    expect(r.maxRuns).toBe(2)
+    expect(r.aPlusieursRuns).toHaveLength(1)
+    expect(r.aPlusieursRuns[0]).toMatchObject({ conv: 'conv-890', jour: '2026-09-30', runs: 2 })
+    expect(r.aPlusieursRuns[0].cout).toBeCloseTo(3.98)
+    // Ce qui a ete paye apres le premier run du couple : ici tout run-66d6.
+    expect(r.coutApresLePremier).toBeCloseTo(2)
+  })
+
+  it('un passage sans fil connu n’entre dans aucun couple', () => {
+    expect(thinkParFilEtJour([passages[5]])).toMatchObject({ couples: 0, maxRuns: 0 })
+  })
+})
+
+describe('chaque trou annoncé : rencontré plus tard ou non, sans modèle', () => {
+  const briefing = [
+    '## Trous',
+    '- je n’ai pas vérifié `pickResumeForTask`',
+    '  - ni son appelant `os.ts:1385`',
+    '- `src/main/commands.ts` non lu',
+    '- le chiffre `9,6 %` non revérifié',
+    '- Brain indisponible',
+    '## Autre',
+    '- `ailleurs`'
+  ].join('\n')
+
+  it('classe chaque puce : repère repris, fichier modifié, aucun retour, rien de vérifiable', () => {
+    const r = trousRencontres({
+      briefing,
+      modifies: ['src/main/commands.ts'],
+      suite: 'NON VÉRIFIÉ : pourquoi `pickResumeForTask` a rendu null'
+    })
+    expect(r).toMatchObject({ annonces: 4, rencontres: 2, pasRencontres: 1, sansRepere: 1 })
+    expect(r.detail.map((t) => t.statut)).toEqual([
+      'rencontre',
+      'rencontre',
+      'pas-rencontre',
+      'sans-repere'
+    ])
+  })
+
+  it('sans puce, chaque paragraphe de la section est un trou (9 briefings de run-state sont ainsi)', () => {
+    const r = trousRencontres({
+      briefing:
+        '## Trous\nNon vérifié : si `ChatView.tsx` laisse passer un champ.\n\nBrain injoignable.',
+      modifies: [],
+      suite: ''
+    })
+    expect(r.detail.map((t) => t.statut)).toEqual(['pas-rencontre', 'sans-repere'])
+  })
+
+  it('« - rien » et l’absence de section ne sont pas des trous', () => {
+    expect(
+      trousRencontres({ briefing: '## Trous\n- rien', modifies: [], suite: '' }).annonces
+    ).toBe(0)
+    expect(
+      trousRencontres({ briefing: '## Localisation\n- a.ts', modifies: [], suite: '' }).annonces
+    ).toBe(0)
+  })
+})

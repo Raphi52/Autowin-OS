@@ -2987,6 +2987,14 @@ export class AppCommandBus {
           if (resumable && this.os.isOrchestrationLive?.(resumable.runId)) {
             return { runId: resumable.runId, status: 'running', reused: true }
           }
+          // LE MEME TOUR SE REJOINT AUSSI QUAND SA TACHE A ETE REECRITE (conv-890, 2026-09-30) : le
+          // tour de chat restaure apres un redemarrage relance `orchestrate` avec un autre libelle,
+          // pendant que la reprise de demarrage fait deja tourner le run de ce tour. Sans ce
+          // rattachement, un second run repart de zero et repaie `think` (run-66d6d5bdfc5a-1, 1,94 $).
+          // fix-ok: causal-trace/conv-890 sequences 802 et 805, meme tour 386f4c48 ; commands.test.ts
+          // « rejoint le run vivant du MEME tour » rouge avant, vert apres (reparation 4, run-85d8).
+          const vivantDuTour = this.os.liveOrchestrationForTurn?.(convId, orchestrationTurnId)
+          if (vivantDuTour) return { runId: vivantDuTour, status: 'running', reused: true }
           // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
           // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
           // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
@@ -3018,9 +3026,14 @@ export class AppCommandBus {
           // conversation, plutôt que de la repayer. Mesuré sur conv-1061 : « scout … vue Chat »
           // puis « Fais tout … » ne s'apparient pas, et le scout est intégralement rejoué.
           // Aucun checkpoint n'est repris ici : seuls des textes de phase sont réinjectés.
+          // Le tour et le dossier du run : `think` n'est repris que pour la même demande, et si les
+          // fichiers que son briefing cite n'ont pas changé depuis (`think-briefing.ts`).
           const resumeOutputs =
             resumable?.phaseOutputs ??
-            this.os.acquiredAnalysisForConversation?.(task, convId, Date.now()) ??
+            (await this.os.acquiredAnalysisForConversation?.(task, convId, Date.now(), {
+              turnId: orchestrationTurnId,
+              workspace: this.workspaceDuTour
+            })) ??
             []
           this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
           let currentRunId: string | undefined

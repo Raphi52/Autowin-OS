@@ -77,12 +77,18 @@ function outilsNiesParUnTableau(texte: string, catalogue: readonly string[]): st
           .trim()
       )
     if (!cellules.some((cellule) => CELLULES_NEGATIVES.has(cellule))) continue
+    // La cellule qui cite l'outil doit être une cellule de CAPACITÉ : uniquement des noms d'outils
+    // (« edit_file / create_file »). Sinon un tableau de constats où « aucune » est l'action proposée
+    // et `npm run typecheck` la preuve nie `run` à tort (bulletins maintenance 2026-10-03 et 04).
+    const outils = new Set(catalogue.map((nom) => sansAccent(nom).toLowerCase()))
+    const motsDe = (cellule: string): string[] => cellule.split(/[^\w-]+/u).filter(Boolean)
     for (const nom of catalogue) {
       const cible = sansAccent(nom).toLowerCase()
       if (!cible) continue
-      const cite = cellules.some((cellule) =>
-        cellule.split(/[^\w-]+/u).some((mot) => mot === cible)
-      )
+      const cite = cellules.some((cellule) => {
+        const mots = motsDe(cellule)
+        return mots.includes(cible) && mots.every((mot) => outils.has(mot))
+      })
       if (cite && !trouves.includes(nom)) trouves.push(nom)
     }
   }

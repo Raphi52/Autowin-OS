@@ -71,4 +71,29 @@ describe('une publication que personne n a demandee ne propose rien', () => {
   it('une suite qui n est pas une publication n est jamais touchee', () => {
     expect(publicationJamaisDemandee('Lance les tests de saisie', 'corrige le bouton')).toBe(false)
   })
+
+  /*
+   * VECU LE 2026-10-01 (conv-770), deux fois. La consigne du tour INTERDISAIT de publier
+   * (« Ne publie rien : aucun commit, aucun push ») ; ses mots comptaient pourtant comme une demande
+   * de publication, et la suite proposee etait reecrite en `/salvage`, puis envoyee par le mode auto.
+   */
+  it('une INTERDICTION de publier n est pas une demande de publication', () => {
+    expect(
+      publicationJamaisDemandee(
+        PUBLIER,
+        'Reprise après redémarrage. Ne publie rien : aucun commit, aucun push. Vérifie les trois correctifs.'
+      )
+    ).toBe(true)
+    expect(
+      publicationJamaisDemandee(PUBLIER, 'Ne publie rien : aucun commit, aucun push, aucun pull.')
+    ).toBe(true)
+    expect(publicationJamaisDemandee(PUBLIER, 'corrige le test, sans aucun commit')).toBe(true)
+  })
+
+  it('une demande qui publie VRAIMENT garde le tri, même avec une négation ailleurs', () => {
+    expect(publicationJamaisDemandee(PUBLIER, 'commit et push, mais ne touche pas aux tests')).toBe(
+      false
+    )
+    expect(publicationJamaisDemandee(PUBLIER, 'je ne sais pas, publie quand même')).toBe(false)
+  })
 })

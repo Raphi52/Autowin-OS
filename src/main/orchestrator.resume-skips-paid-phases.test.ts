@@ -224,3 +224,50 @@ describe('un acquis réinjecté ne repaie pas sa phase', () => {
     expect(execPrompts(provider)).toHaveLength(0)
   })
 })
+
+/*
+ * UN BRIEFING `think` REPRIS GARDE LE COMMIT DE SON BRIEFING.
+ *
+ * `pickAcquiredAnalysis` ne reprend un `think` que s'il porte `codeSha`. Si le run qui le reprend
+ * l'enregistrait SANS ce commit, un troisieme lancement le rejouerait (objection du juge,
+ * run-85d8e7f57af2-1 reparation 6). L'acquis persiste est celui que `onPhaseCompleted` recoit.
+ */
+describe('un briefing `think` repris garde le commit de son briefing', () => {
+  it('le run qui reprend `think` le persiste avec son `codeSha` d’origine', async () => {
+    const provider = new CountingProvider()
+    const persistes: Array<Array<{ phase: string; codeSha?: string }>> = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: makeTestWorktrees('C:\\base'),
+      currentWorkflow: () => ({ phases: ['think', 'build'], explicit: true }) as never,
+      onPhaseCompleted: ({ phaseOutputs }) => {
+        persistes.push(phaseOutputs.map((output) => ({ ...output })))
+      }
+    })
+    const sha = 'a'.repeat(40)
+    const result = await orch.run(
+      'modifie le projet',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [{ phase: 'think', text: '## Localisation\n- `src/a.ts:1`', codeSha: sha } as never]
+    )
+
+    // `think` n'est pas rejoue : seul `build` part au provider.
+    expect(execPrompts(provider)).toHaveLength(1)
+    const dernier = persistes.at(-1) ?? []
+    expect(dernier.find((output) => output.phase === 'think')?.codeSha).toBe(sha)
+    const rendu = result.phaseOutputs.find((output) => output.phase === 'think') as
+      { codeSha?: string } | undefined
+    expect(rendu?.codeSha).toBe(sha)
+  })
+})

@@ -821,3 +821,217 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
     expect(prompts[0]).toContain('Fusionne leurs sorties')
   })
 })
+
+/**
+ * `think` REDIGE UN BRIEFING, IL NE CHOISIT PAS LA SUITE DU RUN.
+ *
+ * Cas reel conv-1340 : le briefing `think` a fini par `SUITE: fin` et 2 etapes sur 3 n'ont jamais
+ * ete jouees. Encore 1 briefing sur 34 le fait (`run-state/run-3f2ee2d1f0c2-1.json`). La cause :
+ * l'invitation « LE WORKFLOW EST UN OUTIL » (`persona.ts`, `WORKFLOW_IS_A_TOOL_INSTRUCTION`) est
+ * donnee a chaque noeud, `think` compris, et `recordPhase` lisait la ligne `SUITE:` de toutes les
+ * etapes. L'interdiction n'existait qu'en prose dans `skills/think/SKILL.md`.
+ */
+class ThinkQuiArrete extends GreedyProvider {
+  /** Positionne depuis `onPhase` : la phase que le moteur execute vraiment. */
+  phaseCourante: string | undefined
+  /** Ce que chaque phase a reçu (dernier message + consigne), pour lire ce qui lui a été porté. */
+  readonly envoisParPhase: Record<string, string[]> = {}
+
+  // eslint-disable-next-line require-yield
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const content = String(messages[messages.length - 1]?.content ?? '')
+    this.contents.push(content)
+    const phase = this.phaseCourante ?? 'inconnu'
+    ;(this.envoisParPhase[phase] ??= []).push(`${options.system ?? ''}\n${content}`)
+    const usage = { inputTokens: 4, outputTokens: 2, costUsd: 0.001 }
+    const systemInjected = Boolean(options.system)
+    if (/juge|VALIDE ou/i.test(content)) {
+      return { text: 'VALIDE', provider: this.id, usage, systemInjected }
+    }
+    const text =
+      this.phaseCourante === 'think'
+        ? '## Localisation\n- src/a.ts\n\n## Trous\n- aucun\n\nSUITE: fin'
+        : `travail de ${this.phaseCourante ?? 'inconnu'}`
+    return { text, provider: this.id, usage, systemInjected }
+  }
+}
+
+describe('un briefing `think` qui ecrit SUITE: fin n’arrete pas le run', () => {
+  const lancer = async (workflow: Record<string, unknown>) => {
+    const provider = new ThinkQuiArrete()
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      vi.fn().mockResolvedValue([]),
+      () => ['frame', 'build'],
+      { currentWorkflow: () => workflow as never }
+    )
+    const result = await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step !== 'exec' || !event.phase) return
+      provider.phaseCourante = event.phase
+      phases.push(event.phase)
+    }) as never)
+    return { result, phases, provider }
+  }
+
+  it('avec un enchainement defini, l’etape apres `think` est jouee', async () => {
+    const { result, phases } = await lancer({
+      graph: {
+        entry: 'think-1',
+        nodes: [
+          { id: 'think-1', phase: 'think' },
+          { id: 'frame-1', phase: 'frame' },
+          { id: 'build-1', phase: 'build' }
+        ],
+        edges: [
+          { from: 'think-1', to: 'frame-1', when: 'always' },
+          { from: 'frame-1', to: 'build-1', when: 'always' }
+        ]
+      }
+    })
+    expect(phases).toContain('think')
+    expect(phases).toContain('frame')
+    expect(phases).toContain('build')
+    expect(result.trace.some((step) => /SUITE: fin ignorée.*think/iu.test(step.detail ?? ''))).toBe(
+      true
+    )
+  })
+
+  /*
+   * Garde de forme (`think-briefing.ts`) : le briefing ci-dessus n'a que 2 titres sur 6. L'etape
+   * suivante doit le recevoir AVERTI, et l'acquis enregistre aussi.
+   */
+  it('un briefing `think` incomplet part averti vers l’etape suivante', async () => {
+    const { result, provider } = await lancer({
+      phases: ['think', 'frame', 'build'],
+      explicit: true
+    })
+    const think = result.phaseOutputs.find((output) => output.phase === 'think')
+    expect(think?.text.startsWith('⚠️ Briefing `think` incomplet')).toBe(true)
+    expect(provider.envoisParPhase.frame?.join('\n')).toContain('Briefing `think` incomplet')
+  })
+
+  it('sans enchainement defini, l’etape apres `think` est jouee', async () => {
+    const { result, phases } = await lancer({ phases: ['think', 'frame', 'build'], explicit: true })
+    expect(phases).toContain('think')
+    expect(phases).toContain('frame')
+    expect(phases).toContain('build')
+    expect(result.trace.some((step) => /SUITE: fin ignorée.*think/iu.test(step.detail ?? ''))).toBe(
+      true
+    )
+  })
+})
+
+/**
+ * LE FILTRE `think` NE COUPE PAS LA PAROLE A L'ARBITRE DE DERIVE.
+ *
+ * Objection du juge (run-85d8e7f57af2-1, reparation 2) : l'arbitre ecrit sa decision en ajoutant
+ * `SUITE: fin` ou `SUITE: <phase>` a la sortie de la phase (`orchestrator.ts`, bloc « [dérive] »),
+ * donc par la MEME ligne que le filtre `think` ignore. Un arret arbitre juste apres `think` etait
+ * donc ignore lui aussi, et le plan continuait. Seule la ligne du MODELE doit l'etre.
+ */
+class ThinkQuiDerive extends ThinkQuiArrete {
+  constructor(private readonly route: string) {
+    super()
+  }
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const content = String(messages[messages.length - 1]?.content ?? '')
+    const usage = { inputTokens: 4, outputTokens: 2, costUsd: 0.001 }
+    if (content === 'Tranche maintenant.') {
+      this.contents.push(content)
+      return {
+        text: `ROUTE: ${this.route}`,
+        provider: this.id,
+        usage,
+        systemInjected: Boolean(options.system)
+      }
+    }
+    if (this.phaseCourante === 'think') {
+      // Trois fois la meme erreur dans le flux : le detecteur de derive se declenche.
+      for (const n of [1, 2, 3]) {
+        yield { delta: `Error: ECONNREFUSED sur /srv/${n} ligne ${n}\nje reessaie\n` }
+      }
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('l’arbitre de dérive garde la main juste apres `think`', () => {
+  const lancer = async (route: string) => {
+    const provider = new ThinkQuiDerive(route)
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      vi.fn().mockResolvedValue([]),
+      () => ['frame', 'build'],
+      { currentWorkflow: () => ({ phases: ['think', 'frame', 'build'], explicit: true }) as never }
+    )
+    const result = await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step !== 'exec' || !event.phase) return
+      provider.phaseCourante = event.phase
+      phases.push(event.phase)
+    }) as never)
+    return { result, phases, provider }
+  }
+
+  it('un arret decide par l’arbitre apres `think` arrete le run', async () => {
+    const { result, phases, provider } = await lancer('fin')
+    expect(provider.contents).toContain('Tranche maintenant.')
+    expect(phases).toContain('think')
+    expect(phases).not.toContain('frame')
+    // fix-ok: les `build` restants sont ceux de la boucle de reparation du controle final (trace :
+    // « Réparation 1/24 — nouveau passage de build »), pas du plan : un par reparation, aucun autre.
+    const reparations = result.trace.filter((step) =>
+      /^Réparation \d+\/\d+ — nouveau passage de build/u.test(step.detail ?? '')
+    ).length
+    expect(phases.filter((phase) => phase === 'build').length).toBe(reparations)
+    expect(result.trace.some((step) => /ignorée.*think/iu.test(step.detail ?? ''))).toBe(false)
+  })
+
+  it('une route decidee par l’arbitre apres `think` est suivie', async () => {
+    const { phases } = await lancer('build')
+    expect(phases.slice(0, 2)).toEqual(['think', 'build'])
+  })
+})
+
+/*
+ * Le briefing `think` enregistre le commit du code qu'il a lu : sans lui, sa reprise est refusee
+ * (`pickAcquiredAnalysis`) et la verification « fichiers cites inchanges » n'a pas de point de depart.
+ */
+describe('un briefing `think` joue enregistre le commit du code lu', () => {
+  it('pose `codeSha` sur `think`, et seulement sur lui', async () => {
+    const { shaHeadSurDisque } = await import('./depot-git')
+    const depot = process.cwd()
+    const attendu = shaHeadSurDisque(depot)
+    expect(attendu).toMatch(/^[0-9a-f]{40}$/)
+    const provider = new ThinkQuiArrete()
+    const orchestrator = makeGreedy(provider, vi.fn().mockResolvedValue([]), () => ['frame'], {
+      executionWorkspace: depot,
+      worktrees: makeTestWorktrees(depot),
+      currentWorkflow: () => ({ phases: ['think', 'frame'], explicit: true }) as never
+    })
+    const result = await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step === 'exec' && event.phase) provider.phaseCourante = event.phase
+    }) as never)
+    const think = result.phaseOutputs.find((output) => output.phase === 'think')
+    const frame = result.phaseOutputs.find((output) => output.phase === 'frame')
+    expect((think as { codeSha?: string } | undefined)?.codeSha).toBe(attendu)
+    expect(frame && 'codeSha' in frame).toBe(false)
+  })
+})

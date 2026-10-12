@@ -72,6 +72,28 @@ async function render(props: Record<string, unknown> = {}): Promise<void> {
   await flush()
 }
 
+describe('KnowledgeInboxPanel — le compte remonté à la pastille', () => {
+  it('ne remonte aucun compte avant la fin de la lecture, puis le compte lu', async () => {
+    const pending = deferred<InboxCandidateView[]>()
+    mockApi({ listInbox: vi.fn().mockReturnValue(pending.promise) })
+    const onPendingCountChange = vi.fn()
+    await render({ onPendingCountChange })
+    // La liste vide par défaut n'est PAS une lecture : remonter 0 ici ferait clignoter la pastille.
+    expect(onPendingCountChange).not.toHaveBeenCalled()
+
+    await act(async () => pending.resolve([candidate(), candidate({ id: 'inbox/b' })]))
+    await flush()
+    expect(onPendingCountChange).toHaveBeenLastCalledWith(2)
+  })
+
+  it('une lecture en échec ne remonte rien', async () => {
+    mockApi({ listInbox: vi.fn().mockRejectedValue(new Error('partage injoignable')) })
+    const onPendingCountChange = vi.fn()
+    await render({ onPendingCountChange })
+    expect(onPendingCountChange).not.toHaveBeenCalled()
+  })
+})
+
 describe('KnowledgeInboxPanel — la promotion humaine a enfin une surface', () => {
   it('liste les candidats de inbox/ pour la racine sélectionnée', async () => {
     const api = mockApi()

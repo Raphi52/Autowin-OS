@@ -25,6 +25,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
   Sans `get_state` : rejouer ce journal DANS L'ORDRE sur le fichier (`upsert` ajoute
   `conversation.id`, `delete` retire `id`) ; si ni l'un ni l'autre ne se lit → garde-fou « sonde
   qui échoue » : aucun satellite collecté ce jour-là.
+  Constaté aussi le 2026-10-05 : le fichier de base, figé au 02/10, ignorait toutes les
+  conversations créées depuis — elles n'existaient QUE dans le journal.
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
 - Hors périmètre ABSOLU : `claude-accounts/` (identités, secrets), `Cache/`, `Code Cache/`,
   `GPUCache/`, `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal` (propriété
