@@ -73,7 +73,7 @@ supprimable ; il n'est posé qu'une fois, à la création du fichier de profils.
 ### Observatory — traçabilité des conversations (sortant / réponse / thinking / échecs, coût par modèle)
 ![Vue Observatory d'Autowin OS](docs/screenshots/observatory.png)
 
-### Settings — capacités connectées (Skills · Hooks · Tools)
+### Settings — capacités connectées (Skills · Hooks · Gates · Mods · Tools)
 ![Vue Settings d'Autowin OS](docs/screenshots/settings.png)
 
 ## Fonctionnalités clés
