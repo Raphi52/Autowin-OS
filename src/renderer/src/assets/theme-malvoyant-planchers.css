@@ -600,11 +600,7 @@
 :root[data-theme^='malvoyant-'] .home-chat__envoyer,
 :root[data-theme^='malvoyant-'] .home-chat__annuler,
 :root[data-theme^='malvoyant-'] .home-chat__ouvrir,
-:root[data-theme^='malvoyant-'] .home-threads__alerte,
-:root[data-theme^='malvoyant-'] .perf-widget__barre button,
-:root[data-theme^='malvoyant-'] .perf-widget__groupe h3,
-:root[data-theme^='malvoyant-'] .perf-widget__personnes h3,
-:root[data-theme^='malvoyant-'] .perf-widget__champ {
+:root[data-theme^='malvoyant-'] .home-threads__alerte {
   font-size: 13px;
 }
 
@@ -629,9 +625,7 @@
 :root[data-theme^='malvoyant-'] .enregistrements__champ select,
 :root[data-theme^='malvoyant-'] .enregistrements__aide,
 :root[data-theme^='malvoyant-'] .enregistrements__fichier-nom,
-:root[data-theme^='malvoyant-'] .jarvis__anneau-texte > strong,
-:root[data-theme^='malvoyant-'] .perf-widget__groupe h3,
-:root[data-theme^='malvoyant-'] .perf-widget__personnes h3 {
+:root[data-theme^='malvoyant-'] .jarvis__anneau-texte > strong {
   color: var(--text);
 }
 
@@ -664,27 +658,25 @@
 }
 
 /* components/ModelActivityLogPane.css — tailles */
-:root[data-theme^='malvoyant-'] .model-log-more,
 :root[data-theme^='malvoyant-'] .model-log-filter select,
 :root[data-theme^='malvoyant-'] .model-log-json,
 :root[data-theme^='malvoyant-'] .model-log-tour__head,
 :root[data-theme^='malvoyant-'] .model-log-tour__head strong,
-:root[data-theme^='malvoyant-'] .model-log-delta,
 :root[data-theme^='malvoyant-'] .model-log-toggle {
   font-size: 13px;
 }
 
 /* components/ModelActivityLogPane.css — gris en dur */
 :root[data-theme^='malvoyant-'] .model-log-time,
+:root[data-theme^='malvoyant-'] .model-log-detail,
 :root[data-theme^='malvoyant-'] .model-log-label,
 :root[data-theme^='malvoyant-'] .model-log-row[data-log-ok='false'] .model-log-label,
-:root[data-theme^='malvoyant-'] .model-log-detail,
-:root[data-theme^='malvoyant-'] .model-log-detail[open] > summary,
-:root[data-theme^='malvoyant-'] .model-log-detail > summary:hover,
+:root[data-theme^='malvoyant-'] .model-log-resume,
+:root[data-theme^='malvoyant-'] .model-log-chevron,
+:root[data-theme^='malvoyant-'] .model-log-texte,
 :root[data-theme^='malvoyant-'] .model-log-empty,
 :root[data-theme^='malvoyant-'] .model-log-source,
-:root[data-theme^='malvoyant-'] .model-log-meta,
-:root[data-theme^='malvoyant-'] .model-log-voie {
+:root[data-theme^='malvoyant-'] .model-log-meta {
   color: var(--text);
 }
 
@@ -863,11 +855,6 @@
 :root[data-theme^='malvoyant-'] .run-inspector__ligne ul,
 :root[data-theme^='malvoyant-'] .run-inspector__fichiers code {
   color: var(--text);
-}
-
-/* components/RunProgress.css — tailles */
-:root[data-theme^='malvoyant-'] .run-progress__icon {
-  font-size: 13px;
 }
 
 /* components/SandboxedHtmlPreview.css — tailles */
@@ -1117,15 +1104,6 @@
 :root[data-theme^='malvoyant-'] .wf-tn-head,
 :root[data-theme^='malvoyant-'] .workflow-profiles-note,
 :root[data-theme^='malvoyant-'] .workflow-graph-hint {
-  font-size: 13px;
-}
-
-/* components/WorkflowVerdict.css — tailles */
-:root[data-theme^='malvoyant-'] .workflow-verdict-table,
-:root[data-theme^='malvoyant-'] .workflow-verdict-badge,
-:root[data-theme^='malvoyant-'] .workflow-verdict-caveat,
-:root[data-theme^='malvoyant-'] .workflow-verdict-rationale,
-:root[data-theme^='malvoyant-'] .workflow-verdict-skipped {
   font-size: 13px;
 }
 

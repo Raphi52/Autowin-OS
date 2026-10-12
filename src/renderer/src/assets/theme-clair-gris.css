@@ -242,9 +242,7 @@
 :root[data-base='clair'] .enregistrements__champ select,
 :root[data-base='clair'] .enregistrements__aide,
 :root[data-base='clair'] .enregistrements__fichier-nom,
-:root[data-base='clair'] .jarvis__anneau-texte > strong,
-:root[data-base='clair'] .perf-widget__groupe h3,
-:root[data-base='clair'] .perf-widget__personnes h3 {
+:root[data-base='clair'] .jarvis__anneau-texte > strong {
   color: var(--text-dim);
 }
 
@@ -267,15 +265,15 @@
 
 /* components/ModelActivityLogPane.css */
 :root[data-base='clair'] .model-log-time,
+:root[data-base='clair'] .model-log-detail,
 :root[data-base='clair'] .model-log-label,
 :root[data-base='clair'] .model-log-row[data-log-ok='false'] .model-log-label,
-:root[data-base='clair'] .model-log-detail,
-:root[data-base='clair'] .model-log-detail[open] > summary,
-:root[data-base='clair'] .model-log-detail > summary:hover,
+:root[data-base='clair'] .model-log-resume,
+:root[data-base='clair'] .model-log-chevron,
+:root[data-base='clair'] .model-log-texte,
 :root[data-base='clair'] .model-log-empty,
 :root[data-base='clair'] .model-log-source,
-:root[data-base='clair'] .model-log-meta,
-:root[data-base='clair'] .model-log-voie {
+:root[data-base='clair'] .model-log-meta {
   color: var(--text-dim);
 }
 
