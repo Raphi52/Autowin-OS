@@ -200,6 +200,37 @@ def formater_identite(
     return " · ".join(morceaux)
 
 
+def etapes_connues_total() -> int:
+    """Combien d'etapes un demarrage traverse au plus, d'apres les LISTES de ce module.
+
+    Les motifs de compilation (sauf `demarrage`, qui se repete) plus chaque jalon publie par
+    l'application. C'est le repli de l'anneau tant qu'aucun lancement n'a ete MESURE : un total
+    deduit du code, pas un chiffre invente.
+    """
+    return sum(1 for cle, _, _ in ETAPES if cle != "demarrage") + len(ACTIVITE_APRES)
+
+
+def denominateur(reference: int, franchies: int) -> int:
+    """Le total affiche par l'anneau. Jamais atteint avant la fin : si ce lancement depasse la
+    reference (une installation de dependances en plus), il reste toujours une etape a venir —
+    un anneau plein qui attend encore se lirait comme un blocage."""
+    return max(reference, franchies + 1, 1)
+
+
+def ligne_compte_etapes(franchies: int, reference: int, quand: str | None) -> str:
+    """Ligne sous l'etape : « 4 etapes sur 21 · total du lancement de 09:51 ».
+
+    `quand` = heure du lancement MESURE qui sert de reference ; `None` = aucun lancement mesure, la
+    reference est alors le total des etapes connues, et la ligne le dit.
+    """
+    total = denominateur(reference, franchies)
+    pluriel = "s" if franchies > 1 else ""
+    source = f"total du lancement de {quand}" if quand else "total des étapes connues"
+    if franchies >= reference:
+        source = f"plus long que le lancement de {quand}" if quand else "plus que les étapes connues"
+    return f"{franchies} étape{pluriel} sur {total} · {source}"
+
+
 class SuiviDemarrage:
     """Decide QUAND l'ecran d'attente doit se fermer. Pur, donc eprouvable sans fenetre.
 

@@ -106,6 +106,7 @@
     "test:worktree-fingerprint": "powershell -ExecutionPolicy Bypass -File scripts/worktree-fingerprint.test.ps1",
     "test:launch-dev": "powershell -ExecutionPolicy Bypass -File scripts/launch-dev.test.ps1",
     "test:launch-dev-phases": "py -3 scripts/launch_dev_phases_test.py",
+    "test:launch-dev-comptes": "py -3 scripts/launch_dev_comptes_test.py",
     "test:launch-dev-stdout": "py -3 scripts/launch_dev_stdout_test.py",
     "test:logo": "py -3 scripts/logo_anneau_test.py",
     "test:electron-dev": "py -3 scripts/electron_dev_test.py",
