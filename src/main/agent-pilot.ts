@@ -120,6 +120,7 @@ import {
   ouvrirOutilsNatifsDuChat,
   type OuvertureOutilsNatifs
 } from './chat-mcp'
+import { cleDeVideo, videosLivreesDuTour } from './videos-livrees'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -1828,6 +1829,13 @@ export class AgentPilot {
      */
     const artefactsDejaEmis = new Set<string>()
     /**
+     * VIDÉO LIVRÉE = VIDÉO MONTRÉE (conv-253, constat conv-260) : une vidéo citée dans la réponse et
+     * écrite depuis ce début de tour arrive dans le lecteur du fil, sans `show_video`. L'ensemble
+     * retient celles déjà montrées (par la commande ou ici) pour n'en afficher qu'un lecteur.
+     */
+    const debutDuTourMs = Date.now()
+    const videosDejaMontrees = new Set<string>()
+    /**
      * Une QUESTION a-t-elle ete posee ce tour ? Mesure (conv-1399) : une question a
      * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
      * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
@@ -2781,6 +2789,20 @@ export class AgentPilot {
         // Deja affiche en direct a sa place chronologique : ne pas le doubler en fin de tour.
         if (artefactsDejaEmis.has(artifact.id)) continue
         artefactsDejaEmis.add(artifact.id)
+        if (artifact.kind === 'video' && artifact.path)
+          videosDejaMontrees.add(cleDeVideo(artifact.path))
+        emit({ kind: 'artifact', artifact, iteration: i })
+      }
+      // La réponse NOMME une vidéo qu'elle vient d'écrire (ffmpeg dans un shell) : son lecteur suit
+      // le texte, comme une image lue. Voir `videos-livrees.ts`.
+      for (const artifact of await videosLivreesDuTour(
+        res.text ?? '',
+        workspaceDuTour,
+        debutDuTourMs,
+        videosDejaMontrees
+      )) {
+        if (artefactsDejaEmis.has(artifact.id)) continue
+        artefactsDejaEmis.add(artifact.id)
         emit({ kind: 'artifact', artifact, iteration: i })
       }
       if (conversationId && res.tachesDeFondARelancer?.length)
@@ -3430,6 +3452,18 @@ export class AgentPilot {
               source: { provider, tool: token.name }
             }
           })
+        }
+        /*
+         * CARTES DU FIL RENDUES PAR UNE COMMANDE (`show_video`, conv-253). Champ distinct
+         * d'`attachments` : elles s'affichent dans le fil et ne partent JAMAIS au modèle IA — une
+         * vidéo dans `commandAttachments` serait envoyée au prochain appel.
+         */
+        for (const artifact of r.artifacts ?? []) {
+          if (artefactsDejaEmis.has(artifact.id)) continue
+          artefactsDejaEmis.add(artifact.id)
+          if (artifact.kind === 'video' && artifact.path)
+            videosDejaMontrees.add(cleDeVideo(artifact.path))
+          emit({ kind: 'artifact', iteration: i, artifact })
         }
         // Meme clef que la comptabilite d'echec plus bas (nom + cible), calculee ici parce que le
         // resultat est emis AVANT le bloc qui la tient : c'est le seul endroit ou l'on sait encore

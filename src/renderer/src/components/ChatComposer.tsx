@@ -166,6 +166,11 @@ export interface ChatComposerHandle {
   focus: () => void
   /** Focus + caret placé (`-1` = fin du texte). */
   focusAt: (caret: number) => void
+  /**
+   * Insère au curseur, sans rien effacer, avec les espaces de la dictée (moment vidéo pointé). Un
+   * texte sélectionné reste en place ET sélectionné : la référence s'insère juste avant lui.
+   */
+  insererAuCurseur: (texte: string) => void
 }
 
 export interface ChatComposerProps {
@@ -225,17 +230,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
-    useImperativeHandle(ref, () => ({
-      setInput: (value: string) => setInput(value),
-      focus: () => inputRef.current?.focus(),
-      focusAt: (caret: number) => {
-        const el = inputRef.current
-        if (!el) return
-        el.focus()
-        const pos = caret < 0 ? el.value.length : caret
-        el.setSelectionRange(pos, pos)
-      }
-    }))
 
     // Auto-hauteur : même règle qu'avant l'extraction (180 px de plafond).
     useEffect(() => {
@@ -337,6 +331,57 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         champ.setSelectionRange(suivant.caret, suivant.caret)
       })
     }
+
+    /**
+     * INSÉRER UNE RÉFÉRENCE VIDÉO SANS RIEN EFFACER (conv-253, 2026-10-11).
+     *
+     * Même calcul que la dictée (`insererDictee`), deux différences mesurées par
+     * `ChatView.pointer-video.test.tsx` :
+     * - une SÉLECTION reste sélectionnée, décalée de la longueur insérée (la dictée la réduisait à
+     *   un curseur) ;
+     * - le champ est écrit TOUT DE SUITE : deux pointages avant le prochain rendu React lisaient
+     *   tous deux l'ancien `el.value`, et la seconde référence écrasait la première.
+     */
+    function insererSansEffacer(texte: string): void {
+      if (texte.trim() === '') return
+      const el = inputRef.current
+      const courant = el?.value ?? input
+      const debut = el?.selectionStart ?? courant.length
+      const fin = el?.selectionEnd ?? debut
+      const suivant = insererDictee(courant, texte, debut)
+      const decalage = suivant.texte.length - courant.length
+      const [selDebut, selFin] =
+        debut === fin ? [suivant.caret, suivant.caret] : [debut + decalage, fin + decalage]
+      if (el) {
+        el.value = suivant.texte
+        el.setSelectionRange(selDebut, selFin)
+      }
+      pousserTexte(suivant.texte)
+      requestAnimationFrame(() => {
+        const champ = inputRef.current
+        if (!champ) return
+        champ.focus()
+        champ.setSelectionRange(selDebut, selFin)
+      })
+    }
+
+    // Déclaré APRÈS `insererSansEffacer` : appelé avant sa déclaration, il était refusé par ESLint
+    // (react-hooks, « Cannot access variable before it is declared »).
+    // fix-ok: ChatComposer.tsx — insererAuCurseur lisait insererSansEffacer avant sa déclaration (eslint 244:44)
+    useImperativeHandle(ref, () => ({
+      setInput: (value: string) => setInput(value),
+      focus: () => inputRef.current?.focus(),
+      focusAt: (caret: number) => {
+        const el = inputRef.current
+        if (!el) return
+        el.focus()
+        const pos = caret < 0 ? el.value.length : caret
+        el.setSelectionRange(pos, pos)
+      },
+      // Le caret d'un champ quitté (clic sur le lecteur) est conservé par le navigateur : la
+      // référence atterrit là où l'utilisateur écrivait.
+      insererAuCurseur: (texte: string) => insererSansEffacer(texte)
+    }))
 
     async function installerDictee(): Promise<void> {
       const api = apiWhisper()

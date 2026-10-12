@@ -56,7 +56,10 @@
 :root[data-base='clair'] .artifact-archive__entry small,
 :root[data-base='clair'] .artifact-slide,
 :root[data-base='clair'] .artifact-slide > span,
-:root[data-base='clair'] .artifact-preview__reveal {
+:root[data-base='clair'] .artifact-preview__reveal,
+:root[data-base='clair'] .lecteur-video__barre,
+:root[data-base='clair'] .lecteur-video__barre button,
+:root[data-base='clair'] .lecteur-video__etat strong {
   color: var(--text-dim);
 }
 

@@ -7,6 +7,7 @@ import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
 import { ArtifactFontPreview } from './ArtifactFontPreview'
 import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
 import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
+import { ArtifactVideoPlayer } from './ArtifactVideoPlayer'
 import './ArtifactPreview.css'
 import { Spinner } from './Spinner'
 
@@ -270,7 +271,7 @@ function ArtifactBody({
   if (artifact.kind === 'audio' && dataUrl)
     return <audio className="artifact-preview__media" controls src={dataUrl} />
   if (artifact.kind === 'video' && dataUrl)
-    return <video className="artifact-preview__video" controls src={dataUrl} />
+    return <ArtifactVideoPlayer artifact={artifact} src={dataUrl} />
   if (
     (artifact.kind === 'code' || artifact.kind === 'diff' || artifact.kind === 'text') &&
     text !== undefined

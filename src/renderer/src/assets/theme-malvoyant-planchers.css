@@ -74,7 +74,9 @@
 :root[data-theme^='malvoyant-'] .artifact-preview__kind,
 :root[data-theme^='malvoyant-'] .artifact-table-wrap table,
 :root[data-theme^='malvoyant-'] .artifact-notebook__cell > span,
-:root[data-theme^='malvoyant-'] .artifact-archive__summary {
+:root[data-theme^='malvoyant-'] .artifact-archive__summary,
+:root[data-theme^='malvoyant-'] .lecteur-video__barre,
+:root[data-theme^='malvoyant-'] .lecteur-video__avis {
   font-size: 13px;
 }
 
@@ -97,7 +99,10 @@
 :root[data-theme^='malvoyant-'] .artifact-office-document,
 :root[data-theme^='malvoyant-'] .artifact-slide,
 :root[data-theme^='malvoyant-'] .artifact-slide > span,
-:root[data-theme^='malvoyant-'] .artifact-preview__reveal {
+:root[data-theme^='malvoyant-'] .artifact-preview__reveal,
+:root[data-theme^='malvoyant-'] .lecteur-video__barre,
+:root[data-theme^='malvoyant-'] .lecteur-video__barre button,
+:root[data-theme^='malvoyant-'] .lecteur-video__etat strong {
   color: var(--text);
 }
 

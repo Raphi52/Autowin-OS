@@ -215,6 +215,8 @@ import {
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
+import type { ChatArtifact } from '../shared/artifacts'
+import { preparerVideoAMontrer } from './show-video-command'
 import { runSqlRead } from './sql-read-command'
 import { getSqlCatalogConfig } from './sql-read-catalog'
 import type { PorteProd } from './prod-gate'
@@ -351,6 +353,11 @@ export interface CommandResult {
   error?: string
   /** Pieces jointes ephemeres pour l'iteration modele suivante ; jamais journalisees dans le texte. */
   attachments?: NonNullable<Message['attachments']>
+  /**
+   * Cartes à montrer dans le FIL de l'utilisateur, JAMAIS envoyées au modèle IA (`show_video`).
+   * Séparé d'`attachments`, qui part tel quel dans le prochain message du modèle.
+   */
+  artifacts?: ChatArtifact[]
 }
 
 /** Instantané de l'état que l'agent PEUT VOIR (ce qu'il pilote). */
@@ -1401,6 +1408,25 @@ export const CATALOG: CommandSpec[] = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * MONTRER UNE VIDÉO DANS LE FIL (conv-253, 2026-10-11) : un MP4 rendu par une commande shell
+     * n'y arrivait jamais, donc l'utilisateur ne pouvait pas en pointer une image. Voir
+     * `show-video-command.ts`. La vidéo ne part jamais au modèle IA.
+     */
+    name: 'show_video',
+    description:
+      'Montrer dans le fil de l’utilisateur une vidéo (.mp4, .webm, .mov) du dossier de travail, dans un lecteur image par image. L’utilisateur peut y pointer une image : son message contiendra alors `[vidéo <nom> · mm:ss.cc · image N/total · <chemin>]`, N compté à partir de 0 comme ffmpeg. Les images/s sont mesurées par ffprobe ; s’il échoue, le lecteur suppose 30 et l’écrit (`· 30 i/s supposé`). La vidéo n’est pas envoyée au modèle. Une vidéo que tu viens d’écrire pendant le tour (ffmpeg…) et dont tu cites le chemin dans ta réponse est montrée AUTOMATIQUEMENT : n’appelle `show_video` que pour une vidéo plus ancienne que l’utilisateur veut voir.',
+    args: {
+      path: 'chemin de la vidéo, relatif au dossier de travail (ou absolu dans ce dossier)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: false
     }
   },
@@ -2506,6 +2532,14 @@ export class AppCommandBus {
           data: avecNoteDeRejeu(observed.data, dejaVu, name),
           attachments: [observed.attachment]
         }
+      }
+      if (name === 'show_video') {
+        // La carte part par `artifacts` (le fil), jamais par `attachments` (le modèle IA).
+        const video = await preparerVideoAMontrer(args, this.workspaceDuTour)
+        if (!video.ok) throw new Error(`show_video refusé : ${video.raison}`)
+        this.trace?.(name, redactedArgs(name, args), true)
+        noterIssue(true)
+        return { ok: true, data: video.resume, artifacts: [video.artifact] }
       }
       if (name === 'desktop_act') {
         // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches

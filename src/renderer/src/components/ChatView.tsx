@@ -87,6 +87,7 @@ import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
 import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
+import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
 // de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
@@ -716,6 +717,11 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
+}
+
+/** Doublon de pièce jointe par défaut : même nom ET même taille. */
+function cleNomTaille(fichier: { name: string; size: number }): string {
+  return `${fichier.name}\u0000${fichier.size}`
 }
 
 export function ChatView({
@@ -2046,7 +2052,11 @@ export function ChatView({
     })
   }
 
-  async function addFiles(files: FileList | File[], cible?: string): Promise<void> {
+  async function addFiles(
+    files: FileList | File[],
+    cible?: string,
+    cleDeDoublon: (fichier: { name: string; size: number }) => string = cleNomTaille
+  ): Promise<void> {
     /*
      * PLUS DE REFUS SILENCIEUX PENDANT UN TOUR (conv-44, 2026-09-01).
      *
@@ -2060,9 +2070,9 @@ export function ChatView({
     const originDraftKey = cible ?? composerDraftKeyRef.current
     const originDraft = getComposerDraft(originDraftKey)
     setDraftError(originDraftKey, null)
-    const seen = new Set(originDraft.attachments.map((file) => `${file.name}\u0000${file.size}`))
+    const seen = new Set(originDraft.attachments.map(cleDeDoublon))
     const candidates = Array.from(files).filter((file) => {
-      const key = `${file.name}\u0000${file.size}`
+      const key = cleDeDoublon(file)
       if (seen.has(key)) return false
       seen.add(key)
       return true
@@ -2085,7 +2095,14 @@ export function ChatView({
     }
     try {
       const encoded = await Promise.all(candidates.map(encodeAttachment))
-      setDraftAttachments(originDraftKey, (current) => [...current, ...encoded])
+      // Dédoublonner AUSSI sur le brouillon ACTUEL (conv-253) : deux ajouts lancés avant la fin du
+      // premier encodage se comparaient tous deux au brouillon d'AVANT (`originDraft`), et le même
+      // instant vidéo pointé deux fois joignait deux PNG.
+      // fix-ok: cause mesurée — le filtre ne comparait qu'à `originDraft`, lu avant l'await de l'encodage : sans ce second filtre, deux clics sans attente joignent 2 PNG et ChatView.pointer-video.test.tsx échoue (code 1) ; avec lui, 1 PNG (code 0).
+      setDraftAttachments(originDraftKey, (current) => {
+        const presents = new Set(current.map(cleDeDoublon))
+        return [...current, ...encoded.filter((piece) => !presents.has(cleDeDoublon(piece)))]
+      })
     } catch (error) {
       setDraftError(
         originDraftKey,
@@ -2093,6 +2110,21 @@ export function ChatView({
       )
     }
   }
+
+  /*
+   * POINTER UN MOMENT D'UNE VIDÉO DU FIL (conv-253, 2026-10-11) : la référence va au curseur de la
+   * saisie, l'image passe par `addFiles` (mêmes plafonds, même dédoublonnage nom + taille). La
+   * référence est insérée même si l'image est refusée (9e pièce jointe…). Valeur STABLE : le fil
+   * mémoïsé (`filRendu`) n'a pas à se recalculer.
+   */
+  const addFilesRef = useRef(addFiles)
+  addFilesRef.current = addFiles
+  const pointerMomentVideo = useCallback((moment: MomentPointe): void => {
+    composerRef.current?.insererAuCurseur(moment.reference)
+    // Doublon par NOM seul : `<vidéo>-i<N>.png` désigne une image précise ; deux encodages PNG du
+    // même instant n'ont pas de taille garantie identique (non mesuré).
+    if (moment.image) void addFilesRef.current([moment.image], undefined, (fichier) => fichier.name)
+  }, [])
 
   /* --- données latérales --- */
 
@@ -3127,7 +3159,7 @@ export function ChatView({
    * Un message persiste en `streaming` — l'app tuee en plein tour — se relisait comme un tour vivant :
    * ses actions restaient sans issue, donc l'indicateur « N action en cours » collait alors que le
    * panneau Sous-agents etait vide. On INTERROGE donc l'autorite, au lieu de supposer dans un sens ou
-   * dans l'autre : un tour reellement en vol n'est pas touche, un tour mort est clos.
+   * dans l'autre : un tour reellement en vol est ADOPTE (fil occupe), un tour mort est clos.
    *
    * Best-effort : si la sonde echoue, on ne change rien — mieux vaut un indicateur trop prudent qu'un
    * tour vivant declare mort.
@@ -3136,13 +3168,26 @@ export function ChatView({
     const messages = liveMessagesRef.current.get(id) ?? []
     const dernier = [...messages].reverse().find((message) => message.role === 'assistant')
     if (!dernier || (dernier as AsstMsg).done) return
+    let actif: boolean | undefined
     try {
-      const sonde = await window.api.pilotChatActive?.(id)
-      if (sonde?.active !== false) return
+      actif = (await window.api.pilotChatActive?.(id))?.active
     } catch {
       return
     }
+    if (actif === undefined) return
     if (activeRef.current !== id && !liveMessagesRef.current.has(id)) return
+    if (actif) {
+      /*
+       * UN TOUR VIVANT QUE L'ÉCRAN N'A PAS LANCÉ : il l'ADOPTE (conv-260, 2026-10-11).
+       * Cas réel : le main redémarre pendant un tour, le CLI survit et le main le REPREND, mais sans
+       * émettre le moindre événement pilote pendant l'attente. L'écran ne passait un fil en
+       * « occupé » que sur un tel événement : il croyait le fil libre, et le message suivant lançait
+       * un second agent sur la même session. Adopté, le fil montre Stop, la saisie part en
+       * orientation, et la veille des tours (`TOUR_VIVANT_SONDE_MS`) le relâche à sa vraie fin.
+       */
+      if (!busyConversationsRef.current.has(id)) setConversationBusy(id, true)
+      return
+    }
     setConversationBusy(id, false)
     patchLast(id, (message) => {
       message.done = true
@@ -7483,7 +7528,9 @@ Cliquer pour choisir une autre branche.`}
               ))}
 
             <VueMesuree id="chat-fil" bloc>
-              {filRendu}
+              <PointerMomentVideo.Provider value={pointerMomentVideo}>
+                {filRendu}
+              </PointerMomentVideo.Provider>
             </VueMesuree>
 
             {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message

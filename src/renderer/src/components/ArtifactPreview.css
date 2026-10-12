@@ -354,3 +354,74 @@
   padding: 6px 2px 0;
   border-top: 0;
 }
+
+/* LECTEUR VIDÉO IMAGE PAR IMAGE (conv-253, 2026-10-11) : la vidéo, puis une barre sous elle —
+   ±1 s / ±1 image, temps au centième + « image N/total », et « Pointer ce moment ». Le corps de la
+   carte est borné à 430 px : la vidéo cède 90 px pour que la barre reste visible sans défilement.
+   Boutons au trait de `.artifact-preview__reveal`. */
+.lecteur-video {
+  outline: none;
+}
+
+.lecteur-video:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(242 201 76 / 55%);
+}
+
+.lecteur-video .artifact-preview__video {
+  max-height: 340px;
+}
+
+.lecteur-video__barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 11px;
+  color: #c6cad3;
+  font-size: 11px;
+}
+
+.lecteur-video__pas {
+  display: flex;
+  gap: 4px;
+}
+
+.lecteur-video__barre button {
+  padding: 3px 7px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 5px;
+  background: transparent;
+  color: #c6cad3;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lecteur-video__barre button:hover,
+.lecteur-video__barre button:focus-visible {
+  border-color: rgb(242 201 76 / 48%);
+  color: #f2c94c;
+}
+
+.lecteur-video__etat {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lecteur-video__etat strong {
+  color: #f2f3f6;
+  font-weight: 600;
+}
+
+.lecteur-video__barre .lecteur-video__pointer {
+  border-color: rgb(242 201 76 / 40%);
+  color: #f2c94c;
+}
+
+.lecteur-video__avis {
+  padding: 0 11px 8px;
+  color: #e0a458;
+  font-size: 11px;
+}

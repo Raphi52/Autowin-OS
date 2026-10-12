@@ -124,6 +124,12 @@
 :root[data-theme='holographique-clair'] .artifact-preview__reveal:hover {
     color: #aa0e5f
 }
+:root[data-theme='holographique-clair'] .lecteur-video__barre button:hover, :root[data-theme='holographique-clair'] .lecteur-video__barre button:focus-visible {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .lecteur-video__barre .lecteur-video__pointer {
+    color: #aa0e5f
+}
 
 /* ---- src/renderer/src/components/BehaviourView.css ---- */
 :root[data-theme='holographique-clair'] .behaviour-field-excerpt pre {

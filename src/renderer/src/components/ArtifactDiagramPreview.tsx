@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { creerZoneDeDessinHorsPage } from './zone-dessin-diagramme'
 
 function adaptDiagramSource(source: string): string {
   if (
@@ -25,6 +26,8 @@ function adaptDiagramSource(source: string): string {
 export function ArtifactDiagramPreview({ source }: { source: string }): React.JSX.Element {
   const reactId = useId()
   const id = useMemo(() => `artifact-diagram-${reactId.replaceAll(':', '')}`, [reactId])
+  /** La place réelle du diagramme dans le fil : sa largeur devient celle de la zone de dessin. */
+  const placeRef = useRef<HTMLDivElement | null>(null)
   const [rendered, setRendered] = useState<{
     source: string
     svg?: string
@@ -33,6 +36,10 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
 
   useEffect(() => {
     let active = true
+    // Créée ICI, une par dessin, et retirée quand CE dessin est fini — même s'il a été abandonné
+    // entre-temps (fil quitté, double montage du mode strict) : mermaid termine toujours ses dessins
+    // dans l'ordre, et un dessin privé de sa zone mesurerait un texte de largeur nulle.
+    const zone = creerZoneDeDessinHorsPage(placeRef.current?.clientWidth ?? 0)
     void import('mermaid')
       .then(async ({ default: mermaid }) => {
         mermaid.initialize({
@@ -42,7 +49,7 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
           suppressErrorRendering: true,
           maxTextSize: 80_000
         })
-        const result = await mermaid.render(id, adaptDiagramSource(source))
+        const result = await mermaid.render(id, adaptDiagramSource(source), zone)
         if (active) setRendered({ source, svg: result.svg })
       })
       .catch(() => {
@@ -52,9 +59,9 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
             error: 'Diagramme invalide ou syntaxe non prise en charge'
           })
       })
+      .finally(() => zone.remove())
     return () => {
       active = false
-      document.getElementById(`d${id}`)?.remove()
     }
   }, [id, source])
 
@@ -63,19 +70,20 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
   const svg = current?.svg
   if (error)
     return (
-      <div>
+      <div ref={placeRef}>
         <div className="artifact-preview__blocked">{error}</div>
         <pre className="artifact-preview__source is-diagram">{source}</pre>
       </div>
     )
   if (!svg)
     return (
-      <div className="artifact-preview__placeholder" role="status">
+      <div ref={placeRef} className="artifact-preview__placeholder" role="status">
         Rendu du diagramme…
       </div>
     )
   return (
     <div
+      ref={placeRef}
       className="artifact-diagram"
       data-diagram-security="strict"
       dangerouslySetInnerHTML={{ __html: svg }}

@@ -1,5 +1,20 @@
 @import './theme.css';
 
+/*
+ * LA PAGE NE DEFILE JAMAIS (conv-275, 2026-10-11 : « empêche aussi la page entière d'afficher sa
+ * propre barre de défilement »). Toute l'interface vit dans `#root`, qui fait exactement la hauteur
+ * de la fenêtre et coupe ce qui dépasse ; chaque vue a son propre défilement. Seul un élément ajouté
+ * directement dans `<body>` (dessin temporaire d'une bibliothèque, fenêtre volante) pouvait donc
+ * allonger le document : la page affichait alors sa barre de 10 px et toute l'app rétrécissait d'autant.
+ *
+ * Cette règle existait déjà dans `index.html`, mais DANS l'écran d'attente, que React efface à son
+ * premier rendu : elle ne protégeait que le démarrage. Elle vit désormais ici, pour toute la session.
+ */
+html,
+body {
+  overflow: hidden;
+}
+
 /* Racine plein écran (le splash Electron boilerplate a été retiré). */
 #root {
   display: flex;

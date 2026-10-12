@@ -49,6 +49,10 @@ export interface ChatArtifact {
   content?: string
   path?: string
   url?: string
+  /** Vidéo : images/s MESURÉES par ffprobe (`show_video`). Absent = le lecteur suppose 30 et l'affiche. */
+  fps?: number
+  /** Vidéo : nombre d'images mesuré par ffprobe (`nb_frames`), quand le conteneur le donne. */
+  images?: number
   source: ArtifactSource
 }
 

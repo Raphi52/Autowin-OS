@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -48,6 +48,45 @@ function conversation(value: ChatArtifact): Conversation {
 }
 
 describe('chat artifact store', () => {
+  it('vidéo montrée de plus de 16 Mo : pas d’aperçu, message nommé, fichier toujours affichable', () => {
+    // conv-253 : « plus de 16 Mo = message et bouton Afficher le fichier ». La carte garde son
+    // chemin conservé : c'est lui qu'ouvre « Afficher le fichier ».
+    const base = mkdtempSync(join(tmpdir(), 'autowin-video-17mo-'))
+    const projet = join(base, 'projet')
+    mkdirSync(projet)
+    const film = join(projet, 'film.mp4')
+    writeFileSync(film, '')
+    truncateSync(film, 17 * 1024 * 1024)
+    const carte = artifact({
+      id: 'video-17',
+      name: 'film.mp4',
+      mimeType: 'video/mp4',
+      kind: 'video',
+      size: 17 * 1024 * 1024,
+      encoding: undefined,
+      content: undefined,
+      path: film,
+      fps: 30,
+      source: { provider: 'autowin', tool: 'show_video' }
+    })
+    const stored = materializeChatArtifact(carte, 'conv-1', 'turn-1', base)
+    expect(
+      readConversationArtifact(conversation(stored), 'turn-1', 'video-17', base)
+    ).toMatchObject({ ok: false, error: 'Aperçu limité à 16 Mo', artifact: { path: stored.path } })
+    expect(
+      revealableConversationArtifactPath(conversation(stored), 'turn-1', 'video-17', base)
+    ).toBe(stored.path)
+    // Jumeau : pile 16 Mo, l'aperçu est servi.
+    truncateSync(film, 16 * 1024 * 1024)
+    const pile = materializeChatArtifact(
+      { ...carte, id: 'video-16', size: 16 * 1024 * 1024 },
+      'conv-1',
+      'turn-1',
+      base
+    )
+    expect(readConversationArtifact(conversation(pile), 'turn-1', 'video-16', base).ok).toBe(true)
+  })
+
   it('matérialise et relit l’image utilisateur originale depuis son message', () => {
     const base = mkdtempSync(join(tmpdir(), 'autowin-user-image-'))
     const stored = materializeUserImageArtifact(
