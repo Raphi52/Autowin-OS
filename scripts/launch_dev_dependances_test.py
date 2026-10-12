@@ -8,7 +8,11 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from launch_dev_dependances import dependances_manquantes, electron_verrouille  # noqa: E402
+from launch_dev_dependances import (  # noqa: E402
+    attendre_electron_libre,
+    dependances_manquantes,
+    electron_verrouille,
+)
 
 ECHECS: list[str] = []
 
@@ -97,6 +101,45 @@ with tempfile.TemporaryDirectory() as tmp:
         finally:
             noyau.CloseHandle(ctypes.c_void_p(poignee))
         verifie(electron_verrouille(r) is False, "exe de dev libre : la reparation peut partir")
+
+        # LA COURSE DU REDEMARRAGE (conv-900, 2026-10-12) : restart_app lance le lanceur PUIS quitte
+        # l'app. Le lanceur a teste le verrou a 09:19:46, les processus de l'ancienne app sont morts a
+        # 09:19:47 (app-exits.log) : reparation sautee pour une seconde, Electron 44 jamais pose.
+        # Ici l'ancienne app lache l'exe PENDANT l'attente : la reparation doit pouvoir partir.
+        poignee = noyau.CreateFileW(str(dev), 0x80000000, 0x1, None, 3, 0x80, None)
+        lache = {"fait": False}
+
+        def l_ancienne_app_se_ferme(_pause: float) -> None:
+            if not lache["fait"]:
+                noyau.CloseHandle(ctypes.c_void_p(poignee))
+                lache["fait"] = True
+
+        instant = {"t": 0.0}
+
+        def horloge() -> float:
+            instant["t"] += 0.5
+            return instant["t"]
+
+        try:
+            verifie(attendre_electron_libre(r, 20.0, dormir=l_ancienne_app_se_ferme, horloge=horloge) is True,
+                    "l'ancienne app qui finit de quitter pendant l'attente ne bloque PAS la reparation")
+        finally:
+            if not lache["fait"]:
+                noyau.CloseHandle(ctypes.c_void_p(poignee))
+
+        # Une app qui tourne VRAIMENT (elle ne lache rien) bloque toujours, au bout du delai borne.
+        poignee = noyau.CreateFileW(str(dev), 0x80000000, 0x1, None, 3, 0x80, None)
+        pauses: list[float] = []
+        instant["t"] = 0.0
+        try:
+            verifie(attendre_electron_libre(r, 20.0, dormir=pauses.append, horloge=horloge) is False,
+                    "une app qui tient encore l'exe apres le delai bloque la reparation")
+            verifie(0 < len(pauses) <= 41, f"attente bornee par le delai, pas infinie ({len(pauses)} pauses)")
+        finally:
+            noyau.CloseHandle(ctypes.c_void_p(poignee))
+
+    verifie(attendre_electron_libre(r, 20.0, dormir=lambda _p: None) is True,
+            "rien de tenu : aucune attente, la reparation part tout de suite")
 
 # Le vrai depot, si l'app tourne : electron.exe DOIT etre vu verrouille (sonde reelle, pas un faux).
 depot = Path(__file__).resolve().parent.parent

@@ -17,6 +17,8 @@ coute une reinstallation (~1 min) a CHAQUE lancement.
 from __future__ import annotations
 
 import json
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -69,3 +71,31 @@ def electron_verrouille(racine: Path) -> bool:
         except OSError:
             return True
     return False
+
+
+def attendre_electron_libre(
+    racine: Path,
+    delai_s: float = 20.0,
+    pause_s: float = 0.5,
+    *,
+    dormir: Callable[[float], None] = time.sleep,
+    horloge: Callable[[], float] = time.monotonic,
+    signe_de_vie: Callable[[], None] | None = None,
+) -> bool:
+    """Vrai des que plus aucun Electron ne tient `node_modules` ; Faux s'il est encore tenu apres `delai_s`.
+
+    LA COURSE DU REDEMARRAGE, mesuree le 2026-10-12 (conv-900) : `restart_app` (app-restart.ts) lance
+    le lanceur PUIS quitte l'app. Le lanceur a teste le verrou a 09:19:46, les trois processus de
+    l'ancienne app sont morts a 09:19:47 (app-exits.log, « arret propre ») : la reparation a ete
+    sautee pour UNE seconde, et Electron 44 n'a jamais ete pose. On attend donc que l'ancienne app
+    finisse de quitter. Une app qui tourne VRAIMENT ne lache rien : au bout du delai, Faux, et la
+    reparation reste sautee comme avant -- jamais d'`npm install` sous EBUSY.
+    """
+    limite = horloge() + delai_s
+    while electron_verrouille(racine):
+        if horloge() >= limite:
+            return False
+        if signe_de_vie is not None:
+            signe_de_vie()
+        dormir(pause_s)
+    return True

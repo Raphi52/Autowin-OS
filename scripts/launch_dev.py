@@ -43,7 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
-from launch_dev_dependances import dependances_manquantes, electron_verrouille
+from launch_dev_dependances import attendre_electron_libre, dependances_manquantes, electron_verrouille
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
 import electron_dev  # noqa: E402 - l'exe de dev, voir `preparer_exe_dev`
 
@@ -557,6 +557,11 @@ def main() -> int:
             return
         journaliser(f"dependances: incompletes ({', '.join(manquants[:3])}…)")
         if electron_verrouille(RACINE):
+            # Apres un redemarrage, l'ancienne app finit souvent de quitter : on l'attend (borne),
+            # sinon la reparation saute pour une seconde (conv-900, voir attendre_electron_libre).
+            splash.pousser("[demarrage] dépendances incomplètes : attente de la fermeture de l'ancienne app\n")
+            journaliser("dependances: electron.exe tenu — attente de la fermeture de l'ancienne app")
+        if not attendre_electron_libre(RACINE, signe_de_vie=lambda: parole.__setitem__("dernier", time.monotonic())):
             splash.pousser(
                 "[demarrage] dépendances incomplètes, mais une app Electron tourne encore dessus : "
                 "réparation impossible sans risque — ferme-la et relance\n"
