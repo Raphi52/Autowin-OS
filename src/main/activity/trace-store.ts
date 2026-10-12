@@ -1,8 +1,10 @@
 import {
   appendFileSync,
+  close as fermerDescripteurAsync,
   closeSync,
   existsSync,
   mkdirSync,
+  open as ouvrirDescripteur,
   openSync,
   readSync,
   readFileSync,
@@ -11,7 +13,9 @@ import {
   writeFileSync,
   writeSync
 } from 'node:fs'
+import { mkdir as mkdirAsync, stat as statAsync, unlink as unlinkAsync } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
 
 type TraceEventSink = (event: TraceEventV1) => void
@@ -145,6 +149,23 @@ function withSequenceLock<T>(root: string, conversationId: string, action: () =>
   }
 }
 
+/** `fs.open` en promesse : un descripteur NUMÉRIQUE, comme `openSync` (jamais un FileHandle, que le
+ *  ramasse-miettes refermerait derrière un `closeSync` déjà fait sur le même numéro). */
+const ouvrirDescripteurAsync = promisify(ouvrirDescripteur)
+
+/**
+ * Referme un descripteur SANS tenir la boucle d'evenements. Mesure (`gels.jsonl` 2026-10-11 20:30) :
+ * 4 415 ms de fenetre figee sur UN `closeSync`, celui du plus ancien descripteur evince par
+ * `descripteurOuvert` — sous Windows la fermeture d'un fichier ecrit peut attendre le disque (et
+ * l'analyse antivirus faite a la fermeture). Le numero n'est plus reference nulle part avant l'appel,
+ * et il ne peut pas etre reattribue avant que la fermeture ait eu lieu : aucun double usage possible.
+ */
+function fermerSansBloquer(descriptor: number): void {
+  fermerDescripteurAsync(descriptor, () => {
+    // Un descripteur deja ferme (ou un fichier disparu) ne doit rien faire echouer.
+  })
+}
+
 /** Installe une sortie best-effort globale pour les vues dérivées/exporteurs, jamais pour la durabilité. */
 export function installTraceEventSink(sink: TraceEventSink): () => void {
   const previous = installedTraceEventSink
@@ -157,6 +178,11 @@ export function installTraceEventSink(sink: TraceEventSink): () => void {
 export class TraceStore {
   private readonly ids = new Map<string, Set<string>>()
   private readonly descriptors = new Map<string, number>()
+  /** Ouvertures lancees par `preparerEcriture`, pas encore abouties : conversation -> jeton. */
+  private readonly ouverturesEnCours = new Map<string, number>()
+  /** Jetons d'ouvertures annulees par `deleteConversation` : le fichier qu'elles ont pu recreer part. */
+  private readonly ouverturesSupprimees = new Set<number>()
+  private dernierJetonOuverture = 0
   private readonly lastSequences = new Map<string, number>()
   private readonly sequenceCursors = new Map<
     string,
@@ -286,18 +312,85 @@ export class TraceStore {
       this.descriptors.set(conversationId, existant)
       return existant
     }
+    // Repli BLOQUANT : seulement si `preparerEcriture` n'a pas ete appelee, ou n'a pas encore abouti.
+    // Le dossier n'est cree qu'ici, pour ouvrir — plus a chaque evenement comme avant.
+    mkdirSync(this.root, { recursive: true })
     const descriptor = openSync(this.path(conversationId), 'a')
+    this.retenirDescripteur(conversationId, descriptor)
+    return descriptor
+  }
+
+  /** Garde le descripteur en cache ; le plus ancien au-dela de la borne est referme sans bloquer. */
+  private retenirDescripteur(conversationId: string, descriptor: number): void {
     this.descriptors.set(conversationId, descriptor)
     while (this.descriptors.size > DESCRIPTEURS_MAX) {
       const [plusAncien, handle] = this.descriptors.entries().next().value as [string, number]
       this.descriptors.delete(plusAncien)
-      try {
-        closeSync(handle)
-      } catch {
-        // Un descripteur deja ferme (ou un fichier disparu) ne doit pas faire echouer une ecriture.
-      }
+      fermerSansBloquer(handle)
     }
-    return descriptor
+  }
+
+  /**
+   * OUVRE EN AVANCE, SANS TENIR LA BOUCLE D'EVENEMENTS, le journal ou `append` va ecrire.
+   *
+   * Mesure (`gels.jsonl` 2026-10-11 20:30, disque D: mecanique sature) : 9 991 ms de fenetre figee
+   * sur UN `openSync …/conv-253.jsonl`, l'ouverture faite par `descripteurOuvert` au premier
+   * `append` d'un tour de chat (`run-pilot-chat.ts`), puis 4 415 ms sur la fermeture du descripteur
+   * evince. `append` reste SYNCHRONE — un evenement rendu est sur le disque, et tout le monde (autres
+   * instances, autres processus, tests) en depend — donc l'ouverture ne peut pas devenir asynchrone
+   * DANS `append`. Elle part donc plus tot : le tour de chat connait sa conversation des son debut,
+   * et n'ecrit son premier evenement qu'apres une reponse du modele, des secondes plus tard.
+   *
+   * Si `append` arrive avant la fin de l'ouverture, il retombe sur l'ouverture bloquante d'avant ; le
+   * descripteur arrive ensuite en double et il est referme sans bloquer. Echec d'ouverture = rien :
+   * `append` rouvrira lui-meme et levera, comme avant. Rend une promesse qui ne rejette jamais.
+   */
+  preparerEcriture(conversationId: string): Promise<void> {
+    let path: string
+    try {
+      path = this.path(conversationId)
+    } catch {
+      return Promise.resolve() // identifiant invalide : `append` le refusera lui-meme
+    }
+    if (this.descriptors.has(conversationId) || this.ouverturesEnCours.has(conversationId)) {
+      return Promise.resolve()
+    }
+    const jeton = ++this.dernierJetonOuverture
+    this.ouverturesEnCours.set(conversationId, jeton)
+    return (async () => {
+      let descriptor: number | undefined
+      try {
+        await mkdirAsync(this.root, { recursive: true })
+        descriptor = await ouvrirDescripteurAsync(path, 'a')
+      } catch {
+        // Ouverture impossible : `append` rouvrira lui-meme, et levera s'il le faut.
+      }
+      // Toujours la notre ? `fermer` et `deleteConversation` retirent l'entree pour l'annuler.
+      const encoreAttendue = this.ouverturesEnCours.get(conversationId) === jeton
+      if (encoreAttendue) this.ouverturesEnCours.delete(conversationId)
+      const supprimee = this.ouverturesSupprimees.delete(jeton)
+      if (descriptor === undefined) return
+      if (encoreAttendue && !this.descriptors.has(conversationId)) {
+        this.retenirDescripteur(conversationId, descriptor)
+        return
+      }
+      // Arrivee trop tard (repli deja ouvert, store referme, conversation supprimee) : on la rend.
+      fermerSansBloquer(descriptor)
+      if (supprimee) await this.retirerFichierRecreeVide(path)
+    })()
+  }
+
+  /**
+   * Une ouverture en mode ajout CREE le fichier : arrivee apres `deleteConversation`, elle a pu
+   * ressusciter un journal vide. Seul un fichier VIDE part — un fichier ecrit entre-temps n'est pas
+   * le notre a effacer.
+   */
+  private async retirerFichierRecreeVide(path: string): Promise<void> {
+    try {
+      if ((await statAsync(path)).size === 0) await unlinkAsync(path)
+    } catch {
+      // Deja absent, ou encore tenu : rien a rendre.
+    }
   }
 
   append(event: TraceEventV1): this {
@@ -314,7 +407,6 @@ export class TraceStore {
       throw new Error(`sequence non monotone: ${event.sequence} <= ${lastSequence}`)
     if (event.parentId && !seen.has(event.parentId))
       throw new Error(`parent causal introuvable: ${event.parentId}`)
-    mkdirSync(this.root, { recursive: true })
     const descriptor = this.descripteurOuvert(event.conversationId)
     writeSync(descriptor, `${JSON.stringify(event)}\n`, undefined, 'utf8')
     seen.add(event.id)
@@ -631,10 +723,18 @@ export class TraceStore {
   fermer(): void {
     for (const descriptor of this.descriptors.values()) closeSync(descriptor)
     this.descriptors.clear()
+    // Une ouverture anticipee encore en vol se refermera d'elle-meme a son arrivee.
+    this.ouverturesEnCours.clear()
   }
 
   deleteConversation(conversationId: string): boolean {
     const path = this.path(conversationId)
+    // Annuler AVANT de tester l'existence : une ouverture anticipee en vol creerait le fichier.
+    const ouvertureEnVol = this.ouverturesEnCours.get(conversationId)
+    if (ouvertureEnVol !== undefined) {
+      this.ouverturesEnCours.delete(conversationId)
+      this.ouverturesSupprimees.add(ouvertureEnVol)
+    }
     if (!existsSync(path)) return false
     const descriptor = this.descriptors.get(conversationId)
     if (descriptor !== undefined) {
