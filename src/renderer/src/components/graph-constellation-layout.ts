@@ -82,7 +82,8 @@ export const CONSTELLATION = {
   ligneLegende: 13,
   ecartLignes: 28,
   racinePastille: 28,
-  racineCitation: 36
+  /** Citation (2 lignes) + durée et coût du tour sur une ligne dessous (2026-10-12). */
+  racineCitation: 52
 } as const
 
 const LARGEUR_PAR_DEFAUT = 320

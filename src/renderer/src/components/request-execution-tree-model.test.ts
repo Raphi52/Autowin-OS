@@ -239,7 +239,7 @@ describe('projectLatestRequestExecution', () => {
     expect(new Set(agents.map((event) => event.parentId)).size).toBe(1)
     expect([
       ...new Set(projectLatestRequestExecution(timeline).events.map((event) => event.display?.kind))
-    ]).toEqual(['workspace', 'skill', 'agent', 'closure'])
+    ]).toEqual(['request', 'workspace', 'skill', 'agent', 'closure'])
   })
 
   it('projette un seul nœud Git du run, son sort et la clôture avec temps et coût', () => {
@@ -557,14 +557,13 @@ describe('projectLatestRequestExecution', () => {
 
     const projection = projectLatestRequestExecution(timeline)
 
+    // L'appel et son résultat ne font qu'UNE action : le résultat est absorbé, pas un second bloc.
     expect(projection.events.find((event) => event.id === 'tool')?.display).toMatchObject({
       workflow: 'autowin',
-      skillName: 'build'
+      skillName: 'build',
+      observedEventIds: ['tool', 'result']
     })
-    expect(projection.events.find((event) => event.id === 'result')?.display).toMatchObject({
-      workflow: 'autowin',
-      skillName: 'build'
-    })
+    expect(projection.events.find((event) => event.id === 'result')).toBeUndefined()
   })
 
   it('reste honnête avec un chat direct sans métadonnée d’exécution', () => {
@@ -724,9 +723,15 @@ describe('nœud de clôture — un run non clos est EN ATTENTE, pas en cours', (
 describe('choix du tour projeté', () => {
   const deuxTours = (): ReturnType<typeof buildHarnessTimelineFromTrace> =>
     buildHarnessTimelineFromTrace([
-      trace('m-vieux', 'turn-vieux', 1, { type: 'message', payloads: [{ kind: 'text', content: 'UTILISATEUR: repare le gate' }] }),
+      trace('m-vieux', 'turn-vieux', 1, {
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: repare le gate' }]
+      }),
       trace('a-vieux', 'turn-vieux', 2, { execution: { phase: 'build' } }),
-      trace('m-recent', 'turn-recent', 3, { type: 'message', payloads: [{ kind: 'text', content: 'UTILISATEUR: ajoute un module' }] }),
+      trace('m-recent', 'turn-recent', 3, {
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: ajoute un module' }]
+      }),
       trace('a-recent', 'turn-recent', 4, { execution: { phase: 'judge' } })
     ])
 
@@ -973,5 +978,487 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
 
     expect(agent?.status).toBe('failed')
     expect(agent?.display?.failure).toBeUndefined()
+  })
+})
+
+/**
+ * GRAPHE LISIBLE (2026-10-12) — mesuré sur les 13 traces encore sur disque : 5 titres seulement
+ * (« orchestrator », « Demande utilisateur », « Étape », « Outil », « Résultat ») et un escalier de
+ * 14 niveaux pour 6 actions successives (conv-904, /draft). Forme reprise de cette trace réelle :
+ * chaque action est reliée à la PRÉCÉDENTE, le prompt de l'agent est écrit à la FIN de l'appel.
+ */
+describe('graphe lisible — actions nommées, à plat, regroupées', () => {
+  const agentActor = { id: 'orchestrator', kind: 'agent', label: 'Orchestrateur' }
+  const call = (id: string, sequence: number, name: string, parentId?: string) =>
+    trace(id, 'turn-draft', sequence, {
+      type: 'tool-call',
+      parentId,
+      actor: agentActor,
+      provider: undefined,
+      execution: undefined,
+      metrics: undefined,
+      payloads: [{ kind: 'tool-call', name, content: 'ARGUMENTS PRIVÉS' }]
+    })
+  const result = (id: string, sequence: number, name: string, parentId: string) =>
+    trace(id, 'turn-draft', sequence, {
+      type: 'tool-result',
+      parentId,
+      actor: { id: name, kind: 'tool', label: name },
+      provider: undefined,
+      execution: undefined,
+      metrics: undefined,
+      payloads: [{ kind: 'tool-result', name, content: 'RETOUR PRIVÉ' }]
+    })
+  const draftTrace = (): HarnessTraceEvent[] => [
+    call('c1', 1, 'mcp__autowin__brain_query'),
+    result('r1', 2, 'brain_query', 'c1'),
+    call('c2', 3, 'brain_read', 'r1'),
+    result('r2', 4, 'brain_read', 'c2'),
+    call('c3', 5, 'brain_read', 'r2'),
+    result('r3', 6, 'brain_read', 'c3'),
+    trace('prompt', 'turn-draft', 7, {
+      type: 'message',
+      parentId: 'r3',
+      actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      execution: undefined,
+      metrics: undefined,
+      payloads: [
+        { kind: 'user-message', content: "ÉTAT DE L'APP:\n{}\n\nUTILISATEUR: dessine la barre" }
+      ]
+    }),
+    call('c4', 8, 'ask', 'prompt'),
+    result('r4', 9, 'ask', 'c4'),
+    trace('shown', 'turn-draft', 10, {
+      type: 'response-displayed',
+      parentId: 'r4',
+      actor: { id: 'autowin-renderer', kind: 'system', label: 'Interface Autowin' },
+      provider: undefined,
+      execution: undefined,
+      metrics: undefined
+    }),
+    trace('bilan', 'turn-draft', 11, {
+      type: 'boundary',
+      actor: { id: 'execution-supervisor', kind: 'system', label: 'Execution supervisor' },
+      execution: undefined,
+      metrics: { durationMs: 420539, costUsd: 2.6 }
+    })
+  ]
+  const depthOf = (events: { id: string; parentId?: string }[], id: string): number => {
+    const byId = new Map(events.map((event) => [event.id, event]))
+    let depth = 0
+    for (let current = byId.get(id); current?.parentId; current = byId.get(current.parentId))
+      depth++
+    return depth
+  }
+
+  it('nomme chaque bloc — aucun titre passe-partout', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    const titles = events.map((event) => event.display?.title)
+    for (const generic of ['Outil', 'Résultat', 'Étape', 'orchestrator', 'Demande utilisateur'])
+      expect(titles).not.toContain(generic)
+    expect(titles).toEqual(
+      expect.arrayContaining([
+        'Brain interrogé',
+        'Notes lues',
+        'Orchestrateur',
+        'Question posée',
+        'Réponse affichée'
+      ])
+    )
+    expect(titles[0]).toMatch(/^Demande du \d{2}\/\d{2}\/\d{4}/)
+    expect(events[0].label).toContain('dessine la barre')
+  })
+
+  it('le nombre d’un regroupement vit HORS du titre, qui passe au pluriel', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    // Panneau de 388 px : « Note du Brain lue ×3 » y perdait son nombre sous les points de
+    // suspension. Le titre court et le nombre à part ne se coupent plus l'un l'autre.
+    expect(events.find((event) => event.id === 'c2')?.display).toMatchObject({
+      title: 'Notes lues',
+      count: 2
+    })
+    expect(events.find((event) => event.id === 'c1')?.display?.count).toBeUndefined()
+    for (const event of events) expect(event.display?.title ?? '').not.toMatch(/×\d/)
+  })
+
+  it('le bilan du superviseur n’est plus un bloc : la demande porte sa durée et son coût', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    expect(events.map((event) => event.display?.title)).not.toContain('Bilan du tour')
+    expect(events.find((event) => event.id === 'bilan')).toBeUndefined()
+    expect(events[0]).toMatchObject({
+      id: 'request:turn-draft',
+      durationMs: 420539,
+      costUsd: 2.6,
+      status: 'completed',
+      display: { observedEventIds: ['bilan'] }
+    })
+  })
+
+  it('un tour arrêté est annulé, un tour dont tous les appels ont échoué est en échec', () => {
+    const arrete = draftTrace().map((event) =>
+      event.id === 'bilan' ? { ...event, status: 'cancelled' } : event
+    )
+    expect(
+      projectLatestRequestExecution(buildHarnessTimelineFromTrace(arrete)).events[0].status
+    ).toBe('cancelled')
+
+    const echec = buildHarnessTimelineFromTrace([
+      trace('appel', 'turn-ko', 1, {
+        type: 'message',
+        actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+        execution: undefined,
+        metrics: undefined
+      }),
+      trace('erreur', 'turn-ko', 2, {
+        type: 'error',
+        status: 'failed',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 2848 }
+      })
+    ])
+    expect(projectLatestRequestExecution(echec).events[0].status).toBe('failed')
+  })
+
+  it('fusionne appel et résultat en une action, avec la durée écoulée entre les deux', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    const ids = events.map((event) => event.id)
+    for (const absorbed of ['r1', 'r2', 'r3', 'r4', 'c3']) expect(ids).not.toContain(absorbed)
+    const query = events.find((event) => event.id === 'c1')
+    expect(query?.durationMs).toBe(1000)
+    expect(query?.display?.observedEventIds).toEqual(['c1', 'r1'])
+    const reads = events.find((event) => event.id === 'c2')
+    expect(reads?.durationMs).toBe(2000)
+    expect(reads?.display?.observedEventIds).toEqual(['c2', 'r2', 'c3', 'r3'])
+    // Seul le NOM de l'outil atteint ce que le graphe AFFICHE : ni ses arguments, ni son retour.
+    const affiche = events.map((event) => [event.display?.title, event.label, event.payloads])
+    expect(JSON.stringify(affiche)).not.toMatch(/ARGUMENTS PRIVÉS|RETOUR PRIVÉ/)
+  })
+
+  it('met les actions à plat sous leur agent au lieu d’un escalier', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    const agent = events.find((event) => event.display?.kind === 'agent')
+    expect(agent?.parentId).toBe('request:turn-draft')
+    for (const id of ['c1', 'c2', 'c4', 'shown'])
+      expect(events.find((event) => event.id === id)?.parentId).toBe(agent?.id)
+    expect(Math.max(...events.map((event) => depthOf(events, event.id)))).toBe(2)
+  })
+
+  it('un échec dans un groupe reste visible sur le groupe', () => {
+    const events = draftTrace().map((event) =>
+      event.id === 'r3' ? { ...event, status: 'failed' } : event
+    )
+    const projection = projectLatestRequestExecution(buildHarnessTimelineFromTrace(events))
+    expect(projection.events.find((event) => event.id === 'c2')?.status).toBe('failed')
+  })
+
+  it('cite le texte du tour CHOISI, jamais le dernier message du fil', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      trace('old-msg', 'turn-old', 1, {
+        type: 'message',
+        timestamp: '2026-07-30T11:00:00.000Z',
+        payloads: [{ kind: 'user-message', content: 'UTILISATEUR: ancienne demande' }]
+      }),
+      trace('mute', 'turn-mute', 2, {
+        type: 'message',
+        timestamp: '2026-07-30T11:30:00.000Z',
+        payloads: [{ kind: 'user-message', content: 'sans marqueur humain' }]
+      }),
+      trace('new-msg', 'turn-new', 3, {
+        type: 'message',
+        payloads: [{ kind: 'user-message', content: 'UTILISATEUR: nouvelle demande' }]
+      })
+    ])
+    const label = (turnId: string) =>
+      projectLatestRequestExecution(timeline, { turnId, requestLabel: 'dernier message' }).events[0]
+        .label
+    expect(label('turn-old')).toContain('ancienne demande')
+    expect(label('turn-mute')).toBe('')
+    expect(label('turn-new')).toContain('nouvelle demande')
+  })
+})
+
+describe('durée du bloc « Orchestrateur » en chat direct', () => {
+  const prompt = (id: string, turnId: string, sequence: number) =>
+    trace(id, turnId, sequence, {
+      type: 'message',
+      actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      execution: undefined,
+      metrics: undefined
+    })
+
+  it('prend la durée mesurée de la réponse du modèle absorbée sous le prompt', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      prompt('appel', 'turn-direct', 1),
+      trace('consignes', 'turn-direct', 2, {
+        type: 'injection',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: undefined
+      }),
+      trace('reponse', 'turn-direct', 3, {
+        type: 'model-response',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 201086.5 }
+      })
+    ])
+
+    const agent = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'agent'
+    )
+
+    expect(agent?.display?.title).toBe('Orchestrateur')
+    expect(agent?.durationMs).toBe(201086.5)
+  })
+
+  it('prend la durée de l’erreur qui clôt un appel en échec', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      prompt('appel', 'turn-echec', 1),
+      trace('erreur', 'turn-echec', 2, {
+        type: 'error',
+        status: 'failed',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 2364.7 }
+      })
+    ])
+
+    const agent = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'agent'
+    )
+
+    expect(agent?.durationMs).toBe(2364.7)
+  })
+
+  it('n’invente aucune durée quand aucune réponse chiffrée n’a été écrite', () => {
+    const timeline = buildHarnessTimelineFromTrace([prompt('appel', 'turn-coupe', 1)])
+
+    const agent = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'agent'
+    )
+
+    expect(agent).toBeDefined()
+    expect(agent?.durationMs).toBeUndefined()
+  })
+})
+
+/**
+ * STATUT DU BLOC « Orchestrateur » (2026-10-12). Un appel au modèle qui se clôt par une erreur
+ * s'affichait « terminé » : le bloc reprenait le statut du message ENVOYÉ, pas l'issue de l'appel,
+ * alors que le bloc « Erreur » juste dessous disait l'inverse (conv-770, conv-879).
+ */
+describe('statut du bloc « Orchestrateur » en chat direct', () => {
+  const prompt = (id: string, turnId: string, sequence: number) =>
+    trace(id, turnId, sequence, {
+      type: 'message',
+      actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      execution: undefined,
+      metrics: undefined
+    })
+  const agentOf = (events: HarnessTraceEvent[]) =>
+    projectLatestRequestExecution(buildHarnessTimelineFromTrace(events)).events.find(
+      (event) => event.display?.kind === 'agent'
+    )
+
+  it('un appel clos par une erreur est en échec, pas terminé', () => {
+    const agent = agentOf([
+      prompt('appel', 'turn-echec', 1),
+      trace('consignes', 'turn-echec', 2, {
+        type: 'injection',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: undefined
+      }),
+      trace('erreur', 'turn-echec', 3, {
+        type: 'error',
+        status: 'failed',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 2364.7 }
+      })
+    ])
+
+    expect(agent?.status).toBe('failed')
+  })
+
+  it('un appel qui a répondu reste terminé — discriminant', () => {
+    const agent = agentOf([
+      prompt('appel', 'turn-ok', 1),
+      trace('reponse', 'turn-ok', 2, {
+        type: 'model-response',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 27418.9 }
+      })
+    ])
+
+    expect(agent?.status).toBe('completed')
+  })
+
+  it('une erreur suivie d’une réponse ne laisse pas l’appel en échec', () => {
+    const agent = agentOf([
+      prompt('appel', 'turn-reprise', 1),
+      trace('erreur', 'turn-reprise', 2, {
+        type: 'error',
+        status: 'failed',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: undefined
+      }),
+      trace('reponse', 'turn-reprise', 3, {
+        type: 'model-response',
+        parentId: 'appel',
+        execution: undefined,
+        metrics: { durationMs: 900 }
+      })
+    ])
+
+    expect(agent?.status).toBe('completed')
+  })
+})
+
+/**
+ * CANDIDATS DU SCOUT INTERNE (2026-10-12) — l'arbre d'un tour EN COURS, les gestes propres de
+ * l'agent, et la racine d'un tour qui lance un run.
+ */
+describe('tour en cours, gestes de l’agent, racine d’un run', () => {
+  const demandeRecue = (turnId: string, sequence: number, at: string, texte: string) =>
+    trace(`${turnId}:demande-recue`, turnId, sequence, {
+      type: 'message',
+      timestamp: at,
+      actor: { id: 'user', kind: 'human', label: 'Utilisateur' },
+      channel: 'user',
+      provider: undefined,
+      execution: undefined,
+      metrics: undefined,
+      payloads: [{ kind: 'user-message', content: `UTILISATEUR: ${texte}` }],
+      observation: { boundary: 'Autowin chat turn start', fidelity: 'derived' }
+    })
+  const appel = (id: string, turnId: string, sequence: number, at: string) =>
+    trace(id, turnId, sequence, {
+      type: 'message',
+      timestamp: at,
+      actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      execution: undefined,
+      metrics: undefined
+    })
+  const geste = (id: string, turnId: string, sequence: number, at: string, nom: string) =>
+    trace(id, turnId, sequence, {
+      type: 'tool-call',
+      timestamp: at,
+      actor: { id: 'orchestrator', kind: 'agent', label: 'Orchestrateur' },
+      provider: undefined,
+      execution: undefined,
+      metrics: { durationMs: 1000 },
+      payloads: [{ kind: 'tool-call', name: nom, content: '' }],
+      observation: { boundary: 'Autowin chat native tool', fidelity: 'derived' }
+    })
+  const bilan = (id: string, turnId: string, sequence: number, at: string) =>
+    trace(id, turnId, sequence, {
+      type: 'boundary',
+      timestamp: at,
+      actor: { id: 'execution-supervisor', kind: 'system', label: 'Execution supervisor' },
+      execution: undefined,
+      metrics: { durationMs: 60000, costUsd: 0.5 }
+    })
+
+  it('un tour qui vient de partir est le tour affiché, daté de l’envoi et en cours', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      appel('ancien', 'tour-ancien', 1, '2026-10-12T09:00:00.000Z'),
+      bilan('ancien-bilan', 'tour-ancien', 2, '2026-10-12T09:01:00.000Z'),
+      demandeRecue('tour-neuf', 3, '2026-10-12T09:05:00.000Z', 'refais le graphe')
+    ])
+
+    const projection = projectLatestRequestExecution(timeline)
+
+    // Avant : le tour neuf n'existait pas dans la trace, l'arbre montrait « tour-ancien ».
+    expect(projection.turnId).toBe('tour-neuf')
+    expect(projection.events[0]).toMatchObject({
+      status: 'running',
+      timestamp: '2026-10-12T09:05:00.000Z',
+      label: 'refais le graphe'
+    })
+    expect(projection.events[0].display?.title).toMatch(/12\/10\/2026 11:05$/)
+    expect(projection.turns?.[0].label).toBe('refais le graphe')
+  })
+
+  it('le tour se clôt par le bilan du superviseur : plus « en cours »', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      demandeRecue('tour-1', 1, '2026-10-12T09:05:00.000Z', 'trie mes mails'),
+      appel('appel-1', 'tour-1', 2, '2026-10-12T09:05:40.000Z'),
+      bilan('bilan-1', 'tour-1', 3, '2026-10-12T09:06:00.000Z')
+    ])
+    expect(projectLatestRequestExecution(timeline).events[0].status).toBe('completed')
+  })
+
+  it('range les gestes de l’agent sous l’appel pendant lequel ils ont eu lieu, groupés par outil', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      demandeRecue('tour-g', 1, '2026-10-12T09:05:00.000Z', 'corrige le bug'),
+      geste('g1', 'tour-g', 2, '2026-10-12T09:05:01.000Z', 'Read'),
+      geste('g2', 'tour-g', 3, '2026-10-12T09:05:03.000Z', 'Bash'),
+      geste('g3', 'tour-g', 4, '2026-10-12T09:05:05.000Z', 'Read'),
+      geste('g4', 'tour-g', 5, '2026-10-12T09:05:07.000Z', 'Edit'),
+      appel('appel-g', 'tour-g', 6, '2026-10-12T09:05:30.000Z'),
+      bilan('bilan-g', 'tour-g', 7, '2026-10-12T09:05:31.000Z')
+    ])
+
+    const { events } = projectLatestRequestExecution(timeline)
+    const agent = events.find((event) => event.display?.kind === 'agent')
+    const outils = events.filter((event) => event.display?.kind === 'tool')
+
+    expect(agent?.display?.title).toBe('Orchestrateur')
+    // Deux lectures ENTRECOUPÉES d'une commande font UN bloc « Fichiers lus ×2 ».
+    expect(outils.map((event) => [event.display?.title, event.display?.count])).toEqual([
+      ['Fichiers lus', 2],
+      ['Commande', undefined],
+      ['Fichier modifié', undefined]
+    ])
+    for (const outil of outils) expect(outil.parentId).toBe(agent?.id)
+    expect(outils[0].durationMs).toBe(2000)
+  })
+
+  it('un tour qui lance un run a sa demande et son orchestrateur au-dessus du dépôt', () => {
+    const runId = 'run-racine'
+    const timeline = buildHarnessTimelineFromTrace([
+      demandeRecue('tour-run', 1, '2026-10-12T09:05:00.000Z', 'lance le build'),
+      appel('appel-run', 'tour-run', 2, '2026-10-12T09:05:20.000Z'),
+      trace('reponse-run', 'tour-run', 3, {
+        type: 'model-response',
+        parentId: 'appel-run',
+        execution: undefined,
+        metrics: { durationMs: 20000 }
+      }),
+      runTrace('ws', 'tour-run', 4, runId, {
+        type: 'boundary',
+        execution: { runId },
+        run: {
+          stage: 'workspace',
+          runId,
+          timestampMs: 100,
+          workspace: { mode: 'base', repositoryPath: 'C:\repo', path: 'C:\repo' }
+        }
+      }),
+      bilan('bilan-run', 'tour-run', 5, '2026-10-12T09:09:00.000Z')
+    ])
+
+    const { events } = projectLatestRequestExecution(timeline)
+    const racine = events[0]
+    const orchestrateur = events.find((event) => event.id === 'request:tour-run:orchestrateur')
+    const depot = events.find((event) => event.display?.kind === 'workspace')
+
+    expect(racine).toMatchObject({
+      id: 'request:tour-run',
+      label: 'lance le build',
+      durationMs: 60000,
+      costUsd: 0.5
+    })
+    expect(racine.parentId).toBeUndefined()
+    expect(orchestrateur).toMatchObject({
+      parentId: 'request:tour-run',
+      durationMs: 20000,
+      display: { kind: 'agent', title: 'Orchestrateur' }
+    })
+    expect(depot?.parentId).toBe(orchestrateur?.id)
   })
 })

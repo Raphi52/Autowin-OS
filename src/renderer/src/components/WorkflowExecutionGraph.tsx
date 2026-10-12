@@ -41,6 +41,11 @@ interface WorkflowExecutionGraphProps {
   active?: boolean
   live?: boolean
   requestLabel?: string
+  /**
+   * Demande IMPOSÉE par l'appelant : l'arbre la projette et masque son sélecteur. Le fil des
+   * demandes (`RequestThread`) s'en sert pour garder cet arbre comme « détail » d'un récit.
+   */
+  turnId?: string
   onSelect?: (selection: ExecutionNodeSelection | null) => void
 }
 
@@ -62,9 +67,34 @@ const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   boundary: 'Frontière'
 }
 
+/**
+ * Durée lisible : « 420 ms », « 56,39 s », puis « 18 min 22 s » et « 1 h 05 min ». Au-delà d'une
+ * minute, « 1 102,34 s » se lisait mal (demande du 2026-10-12, « lisser l'existant »).
+ */
 function elapsedLabel(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(ms / 1000)} s`
+  const seconds = ms / 1000
+  if (seconds < 60)
+    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(seconds)} s`
+  const total = Math.round(seconds)
+  const minutes = Math.floor(total / 60)
+  if (minutes < 60) return `${minutes} min ${String(total % 60).padStart(2, '0')} s`
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
+}
+
+/** Coût total d'une demande, au centime : « 10,14 $ ». */
+function totalCostLabel(costUsd: number): string {
+  if (costUsd > 0 && costUsd < 0.01) return '< 0,01 $'
+  return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(costUsd)} $`
+}
+
+/** Durée et coût du tour entier, portés par la demande depuis que le « Bilan du tour » n'est plus un bloc. */
+function requestTotals(event: HarnessTimelineEvent): string | undefined {
+  const parts = [
+    event.durationMs != null && event.durationMs > 0 ? elapsedLabel(event.durationMs) : '',
+    event.costUsd != null ? totalCostLabel(event.costUsd) : ''
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 /**
@@ -96,11 +126,28 @@ function costLabel(costUsd: number | undefined): string {
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
 }
 
+/**
+ * La skill d'une étape, seulement quand il y en a une. « aucune skill » s'écrivait sous CHAQUE bloc
+ * d'un chat direct, c'est-à-dire presque partout, sans rien apprendre (demande du 2026-10-12).
+ */
 function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.skillName) return `skill · ${event.display.skillName}`
   if (event.display?.workflow === 'autowin') return 'skill non tracée'
-  if (event.display?.workflow === 'direct') return 'aucune skill'
   return undefined
+}
+
+/**
+ * La carte d'un bloc ne dit que ce que son titre ne dit pas. L'acteur brut (« orchestrator »,
+ * « brain_read », « Interface Autowin ») répétait le titre en jargon : il reste dans la fiche.
+ */
+function hasCardMeta(event: HarnessTimelineEvent): boolean {
+  const kind = event.display?.kind
+  if (kind === 'skill') return false
+  if (kind === 'request') return Boolean(event.label) || requestTotals(event) !== undefined
+  if (kind && ['workspace', 'quote', 'git', 'closure', 'phase'].includes(kind)) return true
+  // La skill se dit UNE fois, sur l'agent qui l'exécute. Ses actions en héritent dans le modèle,
+  // mais la recopier sous chacune refaisait le « partout pour rien » (capture du 2026-10-12).
+  return kind === 'agent' && skillLabel(event) !== undefined
 }
 
 function gitOutcomeLabel(outcome: string | undefined): string {
@@ -208,35 +255,26 @@ function ExecutionNodeMeta({
     )
   }
   if (display?.kind === 'request') {
-    return <span className="workflow-execution-request-label">{event.label}</span>
+    const totals = requestTotals(event)
+    return (
+      <>
+        {event.label && <span className="workflow-execution-request-label">{event.label}</span>}
+        {totals && (
+          <span className="workflow-execution-request-totals" data-execution-totals>
+            {totals}
+          </span>
+        )}
+      </>
+    )
   }
   if (display?.kind === 'phase') return <span>Phase Autowin</span>
+  const skill = skillLabel(event)
   return (
     <>
-      {skillLabel(event) && (
-        <>
-          <span
-            className={
-              event.display?.workflow === 'direct' && !event.display?.skillName
-                ? 'workflow-execution-skill is-absent'
-                : 'workflow-execution-skill'
-            }
-          >
-            {skillLabel(event)}
-          </span>
-          {event.display?.workflow === 'direct' && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>chat direct</span>
-            </>
-          )}
-          <span aria-hidden="true">·</span>
-        </>
-      )}
-      <span className="workflow-execution-agent">{event.actor}</span>
+      {skill && <span className="workflow-execution-skill">{skill}</span>}
       {!sansDuree && (
         <>
-          <span aria-hidden="true">·</span>
+          {skill && <span aria-hidden="true">·</span>}
           <span>{durationLabel(event.durationMs, offsetMs)}</span>
         </>
       )}
@@ -713,6 +751,7 @@ function ExecutionConstellation({
             const status = event.status ?? 'completed'
             const kind = event.display?.kind ?? 'event'
             const titre = event.display?.title ?? EVENT_LABEL[event.kind]
+            const compte = event.display?.count
             const offset = offsetFromStart(event.timestamp, baseMs)
             const duree = dureeDuNoeud(node)
             const lourd =
@@ -725,7 +764,7 @@ function ExecutionConstellation({
                 type="button"
                 role="treeitem"
                 aria-selected={selectedId === id}
-                title={`${titre} — ${statusLabel(status)}`}
+                title={`${titre}${compte ? ` ×${compte}` : ''} — ${statusLabel(status)}`}
                 className={[
                   'workflow-execution-node',
                   `is-${kind}`,
@@ -772,8 +811,15 @@ function ExecutionConstellation({
                 <span className="workflow-execution-node-copy wx-legende">
                   {!place.root && (
                     <>
+                      {/* Le « ×N » est HORS du texte coupé : un titre trop long perd sa fin, jamais
+                          son nombre (panneau de 388 px, 2026-10-12). */}
                       <span className="workflow-execution-node-title">
                         <b>{titre}</b>
+                        {compte && (
+                          <span className="wx-compte" data-execution-count={compte}>
+                            ×{compte}
+                          </span>
+                        )}
                       </span>
                       <span className="wx-chiffre">
                         {status === 'completed' && <span>{chiffreDuNoeud(node, offset)}</span>}
@@ -781,14 +827,13 @@ function ExecutionConstellation({
                       </span>
                     </>
                   )}
-                  {/* Pas de ligne qui redit le titre : une phase s'appelle déjà « skill · X », et
-                      une demande sans texte propre ne se cite pas elle-même. */}
-                  {kind !== 'skill' &&
-                    !(kind === 'request' && (!event.label || event.label === titre)) && (
-                      <span className="workflow-execution-node-meta">
-                        <ExecutionNodeMeta event={event} offsetMs={offset} sansDuree />
-                      </span>
-                    )}
+                  {/* Pas de ligne qui redit le titre (`hasCardMeta`) : une phase s'appelle déjà
+                      « skill · X », un outil ou un orchestrateur sans skill n'a rien à ajouter. */}
+                  {hasCardMeta(event) && (
+                    <span className="workflow-execution-node-meta">
+                      <ExecutionNodeMeta event={event} offsetMs={offset} sansDuree />
+                    </span>
+                  )}
                   {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10, conv-163). */}
                   {event.display?.failure && (
                     <span
@@ -889,6 +934,7 @@ export function WorkflowExecutionGraph({
   active = true,
   live = false,
   requestLabel,
+  turnId: imposedTurnId,
   onSelect
 }: WorkflowExecutionGraphProps): React.JSX.Element {
   const [events, setEvents] = useState<HarnessTimelineEvent[]>([])
@@ -899,7 +945,8 @@ export function WorkflowExecutionGraph({
   // RATTACHÉ à sa conversation plutôt que remis à zéro par un effet : changer de conversation le
   // périme alors de lui-même, sans rendu supplémentaire ni cascade.
   const [picked, setPicked] = useState<{ convId?: string; turnId: string } | null>(null)
-  const pickedTurnId = picked && picked.convId === conversationId ? picked.turnId : undefined
+  const pickedTurnId =
+    imposedTurnId ?? (picked && picked.convId === conversationId ? picked.turnId : undefined)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -994,10 +1041,18 @@ export function WorkflowExecutionGraph({
   // relisait indefiniment comme une etape active (« je vois encore des choses en cours », conv-1056).
   // Le composant CONNAISSAIT deja la reponse via `live` ; elle n'etait simplement pas consultee.
   // Rien n'est reecrit sur disque : la trace reste un fait historique, on corrige ce qu'on AFFICHE.
-  const settledEvents = useMemo(
-    () => settleStrandedExecutionStatus(events, { live }),
-    [events, live]
-  )
+  const settledEvents = useMemo(() => {
+    const settled = settleStrandedExecutionStatus(events, { live })
+    // LA DEMANDE QUI TOURNE EST « EN COURS ». Le superviseur écrit un bilan après CHAQUE appel au
+    // modèle : entre deux appels, la racine aurait lu « terminé » alors que le tour continue. Le
+    // composant sait qu'une exécution est vivante (`live`) : la dernière demande est donc en cours.
+    if (!live || pickedTurnId) return settled
+    return settled.map((event) =>
+      event.display?.kind === 'request' && event.status !== 'running'
+        ? { ...event, status: 'running' }
+        : event
+    )
+  }, [events, live, pickedTurnId])
   const graph = useMemo(() => buildCausalPath(settledEvents), [settledEvents])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
   // Debut de la demande = plus petit horodatage projete. Sert de reference aux evenements sans
@@ -1133,7 +1188,7 @@ export function WorkflowExecutionGraph({
           conversation existait dans la trace et restait inatteignable. Masqué sous deux tours —
           une commande sans alternative est du bruit.
         */}
-        {turns.length > 1 && (
+        {!imposedTurnId && turns.length > 1 && (
           <select
             className="workflow-execution-turn-select"
             data-execution-turn-select

@@ -94,6 +94,8 @@ export interface HarnessTimelineEvent {
     workflow?: 'autowin' | 'direct'
     skillName?: string
     skillIdentity?: 'phase-alias'
+    /** Gestes regroupés dans ce bloc (« Notes lues » ×3). Absent = un seul. Affiché hors du titre. */
+    count?: number
     runId?: string
     attemptId?: string
     workspace?: RunWorkspaceObservation & { root?: boolean }

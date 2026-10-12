@@ -316,6 +316,25 @@
   font-weight: 600;
 }
 
+/* Titre d'une perle : le NOM se coupe s'il le faut, le « ×N » qui le suit jamais. */
+.wx-legende > .workflow-execution-node-title {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.wx-legende > .workflow-execution-node-title b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wx-compte {
+  flex: 0 0 auto;
+  color: var(--gold);
+  font: 600 10.5px/13px var(--mono);
+}
+
 .wx-chiffre {
   color: var(--wx-texte-chiffre);
   font: 10px/13px var(--mono);
@@ -386,13 +405,6 @@
   letter-spacing: 0.01em;
 }
 
-/* « aucune skill » : un chat direct sans skill est NORMAL. L'absence se dit en discret ; dans
-   l'accent gras d'un vrai nom de skill, elle se lisait comme une alerte (2026-10-10). */
-.workflow-execution-skill.is-absent {
-  color: var(--text-faint);
-  font-weight: 500;
-}
-
 /* LA RACINE : une pastille au dégradé de la bulle, la demande citée dessous. */
 .workflow-execution-node.is-racine {
   justify-content: flex-start;
@@ -447,6 +459,17 @@
   white-space: normal !important;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* Durée et coût du tour entier, sous la demande (l'ex-« Bilan du tour »), en or comme les chiffres. */
+.workflow-execution-request-totals {
+  display: block;
+  margin-top: 3px;
+  color: var(--gold);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* LA FICHE ACCROCHÉE, au bord holo (choix « Fil holo ») : le détail de l'étape choisie. */

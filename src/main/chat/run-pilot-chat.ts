@@ -67,6 +67,11 @@ import { authorityReceiptToTraceEvent } from '../activity/authority-receipt-trac
 import { chatArtifactToTraceEvent } from '../activity/chat-artifact-trace'
 import { reasoningToTraceEvent } from '../activity/reasoning-trace'
 import { appendObservedOrchestrationOutcome } from '../activity/orchestration-outcome-trace'
+import {
+  evenementDemandeRecue,
+  evenementGesteAgent,
+  gesteDeLaLigne
+} from '../activity/chat-turn-trace'
 import { rebaseTraceSequence } from '../activity/trace-store'
 import { guardAttachments, guardString } from '../ipc-guards'
 import {
@@ -504,6 +509,26 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined
       const last = safe[safe.length - 1]
+      // LA DEMANDE ENTRE DANS LA TRACE DÈS SON ENVOI (2026-10-12). Sans elle, rien n'était écrit
+      // avant la fin du premier appel au modèle : l'arbre montrait le tour précédent en « direct »
+      // et datait mal la demande (`chat-turn-trace.ts`). Pas pour une reprise : son tour l'a déjà.
+      if (conversationId && !recovery && !continuation && last?.role === 'user') {
+        try {
+          traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
+          causalTrace.append(
+            evenementDemandeRecue({
+              conversationId,
+              turnId,
+              sequence: traceSequence,
+              at: Date.now(),
+              contenu: last.content
+            })
+          )
+          traceSequence += 1
+        } catch {
+          /* trace best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+        }
+      }
       const routingUserMessageOverride = continuationWindow?.routingUserMessage
         ? guardString(continuationWindow.routingUserMessage.content, 'content')
         : undefined
@@ -930,6 +955,27 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
           if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
+          // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée : jamais un contenu),
+          // comme les preuves d'exécution d'un run. Sinon l'arbre n'en montrait aucun.
+          const geste = conversationId ? gesteDeLaLigne(pilotEvent.text) : undefined
+          if (conversationId && geste) {
+            try {
+              traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
+              causalTrace.append(
+                evenementGesteAgent({
+                  conversationId,
+                  turnId,
+                  id: `${turnId}:geste:${randomUUID()}`,
+                  sequence: traceSequence,
+                  finAt: Date.now(),
+                  geste
+                })
+              )
+              traceSequence += 1
+            } catch {
+              /* trace best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+            }
+          }
         }
         if (pilotEvent.kind === 'think' && pilotEvent.text) {
           spoken.push(pilotEvent.text)

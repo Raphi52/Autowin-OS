@@ -291,7 +291,7 @@ describe('WorkflowExecutionGraph', () => {
           node.getAttribute('data-execution-kind')
         )
       )
-    ).toEqual(new Set(['workspace', 'skill', 'agent', 'git', 'closure']))
+    ).toEqual(new Set(['request', 'workspace', 'skill', 'agent', 'git', 'closure']))
     for (const [id, labels] of cases) {
       await act(async () =>
         view.querySelector<HTMLButtonElement>(`[data-execution-node="${id}"]`)?.click()
@@ -349,24 +349,77 @@ describe('WorkflowExecutionGraph', () => {
     })
 
     const view = await render({ conversationId: 'conv-a', active: true })
-    const meta = view
-      .querySelector('[data-execution-node="direct-message"]')
-      ?.querySelector('.workflow-execution-node-meta')
+    const agent = view.querySelector('[data-execution-node="direct-message"]')
 
-    expect(meta?.textContent).toContain('aucune skill')
-    expect(meta?.textContent).toContain('chat direct')
-    expect(meta?.textContent).not.toContain('codex')
-
-    const toolMeta = view
-      .querySelector('[data-execution-node="direct-tool"]')
-      ?.querySelector('.workflow-execution-node-meta')
-    expect(toolMeta?.textContent).toContain('aucune skill')
-    expect(toolMeta?.textContent).toContain('chat direct')
-    // Un chat direct sans skill est NORMAL : l'absence se lit en discret, pas dans la couleur
-    // d'accent en gras d'un vrai nom de skill (lue comme une alarme, 2026-10-10).
-    expect(meta?.querySelector('.workflow-execution-skill')?.classList.contains('is-absent')).toBe(
-      true
+    // LISSÉ (demande du 2026-10-12) : un chat direct sans skill est le cas NORMAL. « aucune skill ·
+    // chat direct · orchestrator » s'écrivait sous chaque bloc sans rien apprendre : le bloc dit
+    // désormais seulement « Orchestrateur », et ni l'outil ni lui ne portent de ligne vide de sens.
+    expect(agent?.querySelector('.workflow-execution-node-title')?.textContent).toBe(
+      'Orchestrateur'
     )
+    expect(agent?.querySelector('.workflow-execution-node-meta')).toBeNull()
+    expect(view.textContent).not.toContain('aucune skill')
+    expect(view.textContent).not.toContain('chat direct')
+    expect(view.textContent).not.toContain('codex')
+    expect(
+      view.querySelector('[data-execution-node="direct-tool"] .workflow-execution-node-meta')
+    ).toBeNull()
+  })
+
+  it('écrit le « ×N » d’un regroupement HORS du titre coupable, au pluriel', async () => {
+    const lecture = (id: string, sequence: number, parentId?: string) =>
+      trace(id, sequence, {
+        type: 'tool-call',
+        parentId,
+        actor: { id: 'orchestrator', kind: 'agent', label: 'Orchestrateur' },
+        provider: undefined,
+        execution: undefined,
+        metrics: undefined,
+        payloads: [{ kind: 'tool-call', name: 'brain_read', content: '' }]
+      })
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('appel', 1, {
+        type: 'message',
+        actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+        provider: { id: 'claude', model: 'claude-opus-5-5' },
+        execution: undefined
+      }),
+      lecture('lu-1', 2, 'appel'),
+      lecture('lu-2', 3, 'lu-1'),
+      lecture('lu-3', 4, 'lu-2')
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    const titre = view.querySelector('[data-execution-node="lu-1"] .workflow-execution-node-title')
+
+    // Panneau de 388 px : le nom se coupe s'il le faut (le <b>), le nombre reste entier à côté.
+    expect(titre?.querySelector('b')?.textContent).toBe('Notes lues')
+    expect(titre?.querySelector('b')?.textContent).not.toContain('×')
+    expect(titre?.querySelector('[data-execution-count]')?.textContent).toBe('×3')
+    expect(view.querySelector('[data-execution-node="lu-1"]')?.getAttribute('title')).toBe(
+      'Notes lues ×3 — terminé'
+    )
+  })
+
+  it('nomme la skill invoquée par une commande au lieu de « aucune skill »', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('direct-message', 1, {
+        type: 'message',
+        actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+        provider: { id: 'claude', model: 'claude-opus-5-5' },
+        execution: undefined,
+        payloads: [{ kind: 'user-message', content: 'UTILISATEUR: /draft moi le graph parfait' }]
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+
+    expect(
+      view.querySelector('[data-execution-node="direct-message"] .workflow-execution-skill')
+        ?.textContent
+    ).toBe('skill · draft')
   })
 
   it('ne peint pas en rouge une étape annulée : un Stop n’est pas un échec', () => {
@@ -407,13 +460,16 @@ describe('WorkflowExecutionGraph', () => {
       .querySelector(`[data-execution-edge="${agent?.getAttribute('data-execution-node')}"]`)
       ?.parentElement?.querySelector('.workflow-execution-flux')
     expect(fluxAgent).not.toBeNull()
-    const copie = view.querySelector('[data-execution-kind="workspace"]')
-    if (copie && !copie.classList.contains('is-racine'))
-      expect(
-        view
-          .querySelector(`[data-execution-edge="${copie.getAttribute('data-execution-node')}"]`)
-          ?.parentElement?.querySelector('.workflow-execution-flux')
-      ).toBeNull()
+    // Une étape HORS du chemin de ce qui tourne (la clôture, sous l'agent) ne reçoit aucun flux.
+    // Le dépôt, lui, est désormais sous la demande (2026-10-12) : il est SUR ce chemin, son flux
+    // est donc attendu.
+    const cloture = view.querySelector('[data-execution-kind="closure"]')
+    expect(cloture).not.toBeNull()
+    expect(
+      view
+        .querySelector(`[data-execution-edge="${cloture?.getAttribute('data-execution-node')}"]`)
+        ?.parentElement?.querySelector('.workflow-execution-flux')
+    ).toBeNull()
   })
 
   it('peint les perles par jetons de thème, le bleu plein, sans couleur écrite en dur', () => {
@@ -587,7 +643,8 @@ describe('WorkflowExecutionGraph', () => {
         trace('chat-late-usage', 2, {
           parentId: 'root',
           type: 'boundary',
-          actor: { id: 'execution-supervisor', kind: 'system', label: 'Execution supervisor' }
+          actor: { id: 'execution-supervisor', kind: 'system', label: 'Execution supervisor' },
+          metrics: { durationMs: 4200, costUsd: 0.12 }
         })
       ])
     Object.defineProperty(window, 'api', {
@@ -609,7 +666,10 @@ describe('WorkflowExecutionGraph', () => {
     })
 
     expect(causalTrace).toHaveBeenCalledTimes(2)
-    expect(container?.querySelector('[data-execution-node="chat-late-usage"]')).not.toBeNull()
+    // Le bilan tardif n'est plus un bloc (2026-10-12) : sa durée et son coût s'affichent SOUS la
+    // demande. Les voir apparaître prouve que l'usage tardif a bien été relu.
+    expect(container?.querySelector('[data-execution-node="chat-late-usage"]')).toBeNull()
+    expect(container?.querySelector('[data-execution-totals]')?.textContent).toBe('4,2 s · 0,12 $')
   })
   /**
    * RUN ZOMBIE DANS LE GRAPHE. Une etape d'un run tue avec l'app est reconciliee en `interrupted`.
