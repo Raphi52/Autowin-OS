@@ -237,7 +237,9 @@ describe('WorkflowExecutionGraph', () => {
         (node) => node.tagName === 'BUTTON' && node.getAttribute('role') === 'treeitem'
       )
     ).toBe(true)
-    expect(view.textContent).toContain('Demande utilisateur')
+    // La racine est DATÉE, plus jamais le passe-partout « Demande utilisateur » commun à toutes.
+    expect(view.textContent).toMatch(/Demande du \d{2}\/\d{2}\/\d{4}/)
+    expect(view.textContent).not.toContain('Demande utilisateur')
     expect(view.textContent).toContain('Construis le graphe de ma demande')
     expect(view.textContent).toContain('Builder')
     expect(view.textContent).toContain('1,25 s')
@@ -458,7 +460,14 @@ describe('WorkflowExecutionGraph', () => {
     const causalTrace = vi
       .fn()
       .mockResolvedValueOnce([trace('root', 1)])
-      .mockResolvedValueOnce([trace('root', 1), trace('next', 2, { parentId: 'root' })])
+      .mockResolvedValueOnce([
+        trace('root', 1),
+        // Un AUTRE outil : deux `npm test` d'affilée se regrouperaient en un seul bloc « ×2 ».
+        trace('next', 2, {
+          parentId: 'root',
+          payloads: [{ kind: 'tool-call', content: 'contenu sensible', name: 'npm run lint' }]
+        })
+      ])
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { causalTrace }
