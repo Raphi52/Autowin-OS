@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   575 regles, 797 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   577 regles, 799 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -99,6 +99,12 @@
     background: linear-gradient(145deg, #181b24, rgb(10, 10, 10))
 }
 :root[data-theme='nebuleuse-verre'] .artifact-preview__reveal:hover {
+    color: rgb(255, 114, 185)
+}
+:root[data-theme='nebuleuse-verre'] .lecteur-video__barre button:hover, :root[data-theme='nebuleuse-verre'] .lecteur-video__barre button:focus-visible {
+    color: rgb(255, 114, 185)
+}
+:root[data-theme='nebuleuse-verre'] .lecteur-video__barre .lecteur-video__pointer {
     color: rgb(255, 114, 185)
 }
 
