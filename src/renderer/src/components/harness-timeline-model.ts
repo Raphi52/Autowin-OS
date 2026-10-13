@@ -94,6 +94,12 @@ export interface HarnessTimelineEvent {
      * (demande du 2026-10-12 : « je dois voir ce qui est fait en détail quand je déplie »).
      */
     detailOutil?: 'fait-retenu' | 'appels'
+    /**
+     * Nombre d'appels EN ÉCHEC d'un groupe d'outil (`count` > 1). Le groupe prend le statut le plus
+     * grave : sans ce nombre, « Commandes ×10 · échec » se lisait « 10 commandes en échec » pour une
+     * seule (conv-937, 2026-10-13).
+     */
+    echecs?: number
     dependencyIds?: string[]
     limitation?: string
     /** Cause d'échec d'un sous-agent de run, telle que la trace l'a écrite. Absente = aucune écrite. */

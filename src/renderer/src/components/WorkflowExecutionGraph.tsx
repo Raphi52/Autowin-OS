@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { buildCausalPath, flattenCausalNodes, type CausalPathNode } from './causal-path-model'
-import { settleStrandedExecutionStatus, statusLabel } from './execution-interrupted-status'
+import {
+  settleStrandedExecutionStatus,
+  statusLabel,
+  statusLabelDuNoeud
+} from './execution-interrupted-status'
 import {
   buildHarnessTimelineFromTrace,
   type HarnessTimelineEvent,
@@ -906,7 +910,7 @@ function ExecutionConstellation({
                 type="button"
                 role="treeitem"
                 aria-selected={selectedId === id}
-                title={`${titre}${compte ? ` ×${compte}` : ''} — ${statusLabel(status)}`}
+                title={`${titre}${compte ? ` ×${compte}` : ''} — ${statusLabelDuNoeud(status, event.display)}`}
                 className={[
                   'workflow-execution-node',
                   `is-${kind}`,
@@ -965,7 +969,7 @@ function ExecutionConstellation({
                       </span>
                       <span className="wx-chiffre">
                         {status === 'completed' && <span>{chiffreDuNoeud(node, offset)}</span>}
-                        <em className="wx-statut">{statusLabel(status)}</em>
+                        <em className="wx-statut">{statusLabelDuNoeud(status, event.display)}</em>
                       </span>
                     </>
                   )}
@@ -1048,7 +1052,9 @@ function ExecutionFiche({
     >
       <div className="wx-fiche-tete">
         <b>{event.display?.title ?? EVENT_LABEL[event.kind]}</b>
-        <em className={`wx-fiche-statut is-${status}`}>{statusLabel(status)}</em>
+        <em className={`wx-fiche-statut is-${status}`}>
+          {statusLabelDuNoeud(status, event.display)}
+        </em>
       </div>
       {part != null && (
         <div className="wx-jauge" data-execution-part={Math.round(part * 100)}>

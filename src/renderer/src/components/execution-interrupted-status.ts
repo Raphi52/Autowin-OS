@@ -34,6 +34,20 @@ export function statusLabel(status: string | undefined): string {
   return 'terminé'
 }
 
+/**
+ * Libellé du statut d'un nœud. Un GROUPE d'appels en échec dit combien ont échoué : « 1 échec »
+ * sous « Commandes ×10 », pas « échec », qui se lisait « les 10 ont échoué » (conv-937).
+ */
+export function statusLabelDuNoeud(
+  status: string | undefined,
+  display: { count?: number; echecs?: number } | undefined
+): string {
+  const echecs = display?.echecs
+  if (status !== 'failed' || !echecs || !display?.count || display.count < 2)
+    return statusLabel(status)
+  return `${echecs} échec${echecs > 1 ? 's' : ''}`
+}
+
 export function settleStrandedExecutionStatus<T extends { status?: string }>(
   events: readonly T[],
   options: { live: boolean }

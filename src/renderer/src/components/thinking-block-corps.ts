@@ -188,6 +188,8 @@ export function actionsDuTour(
     for (let i = sortie.length - 1; i >= 0; i -= 1) if (sortie[i]!.outil === outil) return i
     return -1
   }
+  const plusAncienneOuverte = (outil: string): number =>
+    sortie.findIndex((a) => a.outil === outil && a.etat === 'encours')
   const nouvelle = (texte: string, outil: string, secondes: number | null): ActionFrise => ({
     texte,
     outil,
@@ -234,9 +236,13 @@ export function actionsDuTour(
     }
     const outil = (fin ?? battement)![1]!.trim()
     const suite = ((fin ? fin[3] : battement![2]) ?? '').trim()
-    let index = derniere(outil)
-    // Une fin ne rattache qu'une action ENCORE en cours ; un battement, la derniere de son outil.
-    if (fin && index >= 0 && sortie[index]!.etat !== 'encours') index = -1
+    // Une fin rattache la PLUS ANCIENNE action de son outil encore en cours — l'ordre de lancement,
+    // comme les taches de fond ci-dessus ; un battement, la derniere de son outil.
+    // DEUX Bash LANCES ENSEMBLE (conv-937, 2026-10-13) : la fin ne porte pas d'identifiant. Ne
+    // regarder que la DERNIERE action laissait la 2e fin sans cible des que la 1re l'avait close :
+    // elle creait une action FANTOME (11 actions pour 10 commandes), la premiere commande restait
+    // ouverte et prenait le nom de la tache de fond de la seconde.
+    const index = fin ? plusAncienneOuverte(outil) : derniere(outil)
     if (index < 0) {
       sortie.push(
         nouvelle(fin ? `${outil}${suite ? ` — ${suite}` : ''}` : ligne, outil, secondesDe(suite))

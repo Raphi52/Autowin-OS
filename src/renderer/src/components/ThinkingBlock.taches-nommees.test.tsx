@@ -66,6 +66,27 @@ describe('bloc Actions — une tâche nomme la commande qu’elle enveloppe', ()
     expect(actions[0]!.sousActions).toBeUndefined()
   })
 
+  it('deux Bash lancés ensemble : deux lignes, aucune fantôme, chacun son nom', () => {
+    // Recopié du tour conv-937 42305783… (lignes de statut 2 à 7). La 2e fin ne trouvait plus de
+    // cible quand la 1re avait clos la DERNIÈRE commande : 11 actions pour 10 commandes, la légende
+    // disait « Bash ×6 » au lieu de ×5, et le fetch prenait le nom de la tâche des tests.
+    const paralleles = [
+      'Bash · cd /d/AutoWinOS; git fetch origin 2>&1 | tail -2; git fetch github 2>&1 | tail -2; echo "local/origin:"; git rev-list --',
+      'Bash · cd /d/AutoWinOS; npx vitest run src/main/separation-entreprise.test.ts src/renderer/src/components/ChatView.joindre-pend',
+      'Bash terminé - 2 s',
+      'tache de fond en cours - Run targeted tests including enterprise separation',
+      'tache de fond terminee - Run targeted tests including enterprise separation',
+      'Bash terminé - 7 s'
+    ]
+    expect(actionsDuTour(paralleles, undefined, true).map((a) => [a.texte, a.etat])).toEqual([
+      [
+        'Bash · cd /d/AutoWinOS; git fetch origin 2>&1 | tail -2; git fetch github 2>&1 | tail -2; echo "local/origin:"; git rev-list -- — 2 s',
+        'ok'
+      ],
+      ['Run targeted tests including enterprise separation — 7 s', 'ok']
+    ])
+  })
+
   it('une tâche en arrière-plan reste en cours après le « Bash terminé - 0 s » de son lancement', () => {
     const debut = [
       'Bash · npm test',

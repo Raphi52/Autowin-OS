@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import { projectLatestRequestExecution } from './request-execution-tree-model'
+import { statusLabelDuNoeud } from './execution-interrupted-status'
 
 function trace(
   id: string,
@@ -1211,7 +1212,17 @@ describe('graphe lisible — actions nommées, à plat, regroupées', () => {
       event.id === 'r3' ? { ...event, status: 'failed' } : event
     )
     const projection = projectLatestRequestExecution(buildHarnessTimelineFromTrace(events))
-    expect(projection.events.find((event) => event.id === 'c2')?.status).toBe('failed')
+    const groupe = projection.events.find((event) => event.id === 'c2')
+    expect(groupe?.status).toBe('failed')
+    // COMBIEN ont échoué (conv-937) : « Commandes ×10 · échec » pour UN échec sur dix se lisait
+    // « les dix ont échoué ». Le groupe garde son statut rouge et porte le nombre exact.
+    expect(groupe?.display).toMatchObject({ count: 2, echecs: 1 })
+    expect(statusLabelDuNoeud(groupe?.status, groupe?.display)).toBe('1 échec')
+  })
+
+  it('un groupe sans échec ne porte aucun compte d’échecs', () => {
+    const { events } = projectLatestRequestExecution(buildHarnessTimelineFromTrace(draftTrace()))
+    expect(events.find((event) => event.id === 'c2')?.display?.echecs).toBeUndefined()
   })
 
   it('cite le texte du tour CHOISI, jamais le dernier message du fil', () => {

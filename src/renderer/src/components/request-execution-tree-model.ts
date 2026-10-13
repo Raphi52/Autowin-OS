@@ -1116,6 +1116,7 @@ export function projectLatestRequestExecution(
     const pairs = group.members.map((call) => ({ call, result: resultOfCall.get(call.id) }))
     const durations = pairs.map(({ call, result }) => actionDuration(call, result))
     const count = pairs.length
+    const echecs = pairs.filter(({ call, result }) => (result ?? call).status === 'failed').length
     return {
       ...head,
       parentId,
@@ -1131,6 +1132,7 @@ export function projectLatestRequestExecution(
         // le « ×3 » qui le suit (capture du 2026-10-12, panneau de 388 px).
         title: toolTitle(group.toolName, count),
         ...(count > 1 ? { count } : {}),
+        ...(count > 1 && echecs > 0 ? { echecs } : {}),
         observedEventIds: pairs.flatMap(({ call, result }) =>
           result ? [call.id, result.id] : [call.id]
         ),
