@@ -125,6 +125,13 @@
   --nv-verre: rgba(255, 255, 255, 0.05);
   --nv-verre-fort: rgba(255, 255, 255, 0.075);
   --nv-bord: rgba(20, 15, 40, 0.127);
+  /* La marge entre le bord de la fenetre et les blocs, A GAUCHE (menu) COMME A DROITE (dernier
+     bloc de chaque vue) -- voir les sections 3 (rail) et 3 bis (`.main`). */
+  --nv-marge-fenetre: 10px;
+  /* L'ecart ENTRE deux blocs : menu -> premier bloc de la vue, et entre les colonnes du chat
+     (« on peut reduire aussi entre les panels », conv-934). Meme valeur que la marge de fenetre :
+     un seul espacement horizontal dans tout le theme. */
+  --nv-ecart-blocs: var(--nv-marge-fenetre);
   --nv-reflet: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   /* REFLETS DORES (variante 6.4 choisie le 2026-10-09, conv-124) : l'or vit DANS le
      verre -- un reflet d'un pixel en haut de chaque plaque. Le fond, les boutons et les
@@ -367,13 +374,23 @@
    3. RAIL (menu de gauche) : colonne de verre flottante.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair'] .theme-serious .rail {
-  /* Haut et bas : la marge des blocs (var(--s5), app-shell.css). Gauche : 10 px. */
-  margin: var(--s5) 0 var(--s5) 10px;
+  /* Haut et bas : la marge des blocs (var(--s5), app-shell.css). Gauche : la marge de fenetre. */
+  margin: var(--s5) 0 var(--s5) var(--nv-marge-fenetre);
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--nv-reflet-dore);
+}
+/* 3 bis. BORD DROIT = BORD GAUCHE (conv-934, 2026-10-13 : « a droite on a une marge plus grande que
+   celle de gauche », puis « l'espace de droite est trop grand »). Mesure avant : menu a 10 px du
+   bord gauche de la fenetre, dernier bloc a 24 px du bord droit (marge de `.main`, var(--s5)), dans
+   TOUTES les vues. La marge de droite prend donc la meme valeur que celle du menu.
+   A gauche, l'ecart menu -> vue passe aussi a l'ecart entre blocs (24 px avant), menu deplie comme
+   replie : cette regle vient apres celle du menu replie (app-shell.css), a specificite egale. */
+:root[data-theme='holographique-clair'] .theme-serious .main {
+  padding-right: var(--nv-marge-fenetre);
+  padding-left: var(--nv-ecart-blocs);
 }
 :root[data-theme='holographique-clair'] .theme-serious .brand {
   border-color: var(--nv-bord);
@@ -525,15 +542,30 @@
    5. CHAT -- les quatre colonnes de verre de la maquette 5.1.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat-layout {
-  gap: 10px;
-  /* Pas de marge verticale : les colonnes du chat s'alignent en haut et en bas sur les
+  /* L'ESPACEMENT DU CHAT EST CELUI DES AUTRES VUES (conv-934, 2026-10-13 : « l'espacement entre la
+     colonne de gauche et la colonne d'icones doit etre le meme que l'espacement entre la barre de
+     convs et le bloc de chat », puis « toutes les autres vues a part chat ont le bon espacement
+     deja »). Mesure avant : toutes les autres vues a 24 px du menu (la marge de `.main`,
+     var(--s5)) ; le chat a 34 px (cette marge + 10 px de retrait de ce cadre) et ses colonnes a
+     21 px les unes des autres. Desormais : AUCUN retrait, ni a gauche ni a droite (« a droite on a
+     une marge plus grande que celle de gauche ») -- le chat prend les marges de `.main` comme
+     toutes les vues -- et entre colonnes l'ecart entre blocs (--nv-ecart-blocs, le meme que menu ->
+     vue) : deux demi-ecarts, la poignee juste dessous n'ajoutant rien. */
+  gap: calc(var(--nv-ecart-blocs) / 2);
+  /* Aucune marge propre, ni verticale ni horizontale : les colonnes du chat s'alignent sur les
      blocs des autres vues et sur le menu de gauche (marge de `.main`). */
-  padding: 0 10px;
+  padding: 0;
   border: 0;
   background: transparent;
   /* Ce cadre n'est pas une plaque : sans cela il porterait le reflet dore
      (--container-shadow) en travers du haut des colonnes. */
   box-shadow: none;
+}
+/* La poignee de redimensionnement entre deux colonnes (9 px, cosmic-outline.css) ne doit RIEN
+   ajouter a l'ecart : ses marges negatives couvrent exactement sa largeur (-4 + 9 - 5 = 0). Avec
+   -4 px des deux cotes, elle ajoutait 1 px. Son trait (1 px, `inset: 0 4px`) tombe au milieu. */
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane-resizer, .runs-pane-resizer) {
+  margin: 0 -5px 0 -4px;
 }
 :root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane) {
   border: 1px solid var(--nv-bord);
