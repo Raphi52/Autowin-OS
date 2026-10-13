@@ -3375,8 +3375,10 @@ ${CONTRAT_OBJECTIONS}`
    */
   /**
    * Rejoue un appel provider quand l'échec est une SURCHARGE serveur explicitement temporaire
-   * (529/503). Incident ak-9d3fa074346ba9da : un `API Error: 529 Overloaded` sur une seule phase
-   * faisait échouer l'orchestrate entier. Toute autre erreur remonte immédiatement, inchangée.
+   * (529/503), ou un CLI ARRÊTÉ DE L'EXTÉRIEUR avant de répondre (une fois). Incidents
+   * ak-9d3fa074346ba9da (`API Error: 529 Overloaded`) et ak-8142df0fddd513bc (`claude CLI exit
+   * 1073807364`) : une seule phase faisait échouer l'orchestrate entier. Toute autre erreur remonte
+   * immédiatement, inchangée.
    */
   private async sendSurvivingOverload<T>(
     send: () => Promise<T>,
@@ -3386,10 +3388,12 @@ ${CONTRAT_OBJECTIONS}`
     return retryOnTransientOverload(send, {
       ...(this.deps.sleep ? { sleep: this.deps.sleep } : {}),
       ...(signal ? { signal } : {}),
-      onRetry: ({ attempt, attempts, delayMs, message }) =>
+      onRetry: ({ attempt, attempts, delayMs, message, cause }) =>
         onRetry?.(
-          `Surcharge API — nouvelle tentative ${attempt}/${attempts} dans ` +
-            `${(delayMs / 1000).toFixed(1)}s (${message})`
+          cause === 'cli-arrete'
+            ? `CLI arrêté de l’extérieur avant de répondre — phase rejouée (${attempt}/${attempts}) (${message})`
+            : `Surcharge API — nouvelle tentative ${attempt}/${attempts} dans ` +
+                `${(delayMs / 1000).toFixed(1)}s (${message})`
         )
     })
   }
