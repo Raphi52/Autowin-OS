@@ -135,6 +135,7 @@ const GIT_LOURDS = [
   'src/main/store/balayage-*.test.ts',
   'src/main/edit-file-portee.test.ts',
   'src/main/run-autoclose.test.ts',
+  'src/main/githooks-pre-push.test.ts',
   'src/main/e2e-chaine*.test.ts'
 ]
 

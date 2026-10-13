@@ -154,3 +154,53 @@ export function aligneRaccourciDemarrerDev(entree: {
   })
   return ok ? { etat: 'ecrit' } : { etat: 'echec', raison: `écriture refusée : ${chemin}` }
 }
+
+/**
+ * RACCOURCI DU BUREAU — pourquoi l'app le réaligne elle-même.
+ *
+ * Constaté le 2026-10-13 (conv-930) : un collègue avait fait la mise à jour et gardait l'ancien logo
+ * sur son Bureau. Ce raccourci est posé UNE fois, à la main, par `scripts/create-dev-shortcut.ps1`,
+ * et jusqu'au 2026-10-11 il visait `resources\autowin-os-dev.ico` sous un chemin FIXE : la mise à
+ * jour en remplace le contenu, l'Explorateur garde l'image du chemin (cf. `cheminIconeVersionnee`).
+ * Aucune mise à jour ne pouvait donc le corriger. Au démarrage, l'app le repointe vers la copie à
+ * nom versionné — un logo modifié arrive alors chez chacun avec la mise à jour suivante (un `.ico`
+ * changé relance l'app, `updateEffectFor`).
+ *
+ * Bornes : seulement le raccourci de CE dépôt (son dossier de travail, champ posé par toutes les
+ * versions du script depuis 2026-07-19), seulement son ICÔNE (opération `update` : Electron ne touche
+ * que les champs fournis), et JAMAIS de création — un Bureau sans raccourci reste sans raccourci.
+ */
+export const NOM_RACCOURCI_BUREAU_DEV = 'Autowin OS Dev.lnk'
+
+export function cheminRaccourciBureauDev(bureau: string): string {
+  return join(bureau, NOM_RACCOURCI_BUREAU_DEV)
+}
+
+const dossierNormalise = (chemin: string | undefined): string =>
+  (chemin ?? '').replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+
+export type ResultatRaccourciBureau =
+  | { etat: 'absent' }
+  | { etat: 'autre-depot' }
+  | { etat: 'deja-aligne' }
+  | { etat: 'ecrit' }
+  | { etat: 'echec'; raison: string }
+
+export function aligneIconeRaccourciBureauDev(entree: {
+  shell: ShellRaccourci
+  existe: (chemin: string) => boolean
+  chemin: string
+  racineDepot: string
+  icone: string
+}): ResultatRaccourciBureau {
+  const { shell, existe, chemin, racineDepot, icone } = entree
+  if (!existe(chemin)) return { etat: 'absent' }
+  if (!existe(icone)) return { etat: 'echec', raison: `icône introuvable : ${icone}` }
+  const actuel = shell.readShortcutLink(chemin)
+  if (dossierNormalise(actuel.cwd) !== dossierNormalise(racineDepot)) return { etat: 'autre-depot' }
+  if (memeChemin(actuel.icon, icone)) return { etat: 'deja-aligne' }
+  // `target` recopié TEL QUEL : le type d'Electron l'exige même pour `update`. Le reste du raccourci
+  // (arguments, dossier, description) n'est pas fourni, donc pas touché.
+  const ok = shell.writeShortcutLink(chemin, 'update', { target: actuel.target, icon: icone, iconIndex: 0 })
+  return ok ? { etat: 'ecrit' } : { etat: 'echec', raison: `écriture refusée : ${chemin}` }
+}

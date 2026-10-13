@@ -4,6 +4,7 @@ import { watch, mkdtempSync, readdirSync, readFileSync, rmSync, type FSWatcher }
 import { readdir, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 /**
  * RELANCE AUTOMATIQUE DU MOTEUR EN DÉVELOPPEMENT — compiler en coulisse, relancer au repos.
@@ -101,14 +102,35 @@ export function changementSansEffetSurLeMoteur(chemin: string): boolean {
   return FICHIER_SANS_EFFET.test(chemin)
 }
 
-/** Première ligne utile d'une erreur de compilation, pour un toast lisible. */
-function resumerErreur(erreur: string): string {
+/**
+ * Lignes d'une sortie de compilation qui ne disent PAS ce qui casse. Vite écrit « ✗ Build failed in
+ * 72ms » puis « error during build: » AVANT le motif : prises pour le résumé, elles donnaient un
+ * bandeau qui annonçait l'échec sans jamais dire lequel. Les cadres de pile non plus.
+ */
+const LIGNE_SANS_MOTIF = [
+  /^✗?\s*build failed in\b/i,
+  /^error during build:?$/i,
+  /^\[[\w:-]+\] transform failed with \d+ errors?:?$/i,
+  /^at\s/
+]
+
+/** Le motif précis d'abord (esbuild, TypeScript, résolution Rollup), le vocabulaire générique ensuite. */
+const MOTIF_PRECIS =
+  /\bERROR:|\berror TS\d*|SyntaxError|is not exported by|could not resolve|failed to resolve|cannot find module/i
+const MOTIF_GENERIQUE = /error|erreur|failed|cannot|could not|expected|unexpected/i
+
+/** Ligne qui dit ce qui casse dans une sortie de compilation, pour un bandeau lisible. */
+export function resumerErreurDeCompilation(erreur: string): string {
+  // Sous Windows, picocolors (Vite) colore même une sortie redirigée : sans ce nettoyage, le
+  // bandeau montrait « □[31m□□[39m ». `compilerLeMoteur` pose aussi NO_COLOR à la source.
+  const lignes = stripVTControlCharacters(erreur)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !LIGNE_SANS_MOTIF.some((motif) => motif.test(l)))
   const ligne =
-    erreur
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .find((l) => /error|erreur|failed|cannot|could not|expected|unexpected/i.test(l)) ??
-    erreur.trim().split(/\r?\n/)[0] ??
+    lignes.find((l) => MOTIF_PRECIS.test(l)) ??
+    lignes.find((l) => MOTIF_GENERIQUE.test(l)) ??
+    lignes[0] ??
     ''
   return ligne.length > 220 ? `${ligne.slice(0, 220)}…` : ligne || 'motif non rapporté'
 }
@@ -228,7 +250,7 @@ export function armerRelanceAutoMoteur(
     if (!resultat.ok) {
       // Relancer reconstruirait ce code cassé : l'app ne reviendrait pas. On attend la correction.
       annulerRelance()
-      const resume = resumerErreur(resultat.erreur)
+      const resume = resumerErreurDeCompilation(resultat.erreur)
       journal(`compilation en échec : ${resume}`)
       if (resume !== derniereErreurAnnoncee) {
         derniereErreurAnnoncee = resume
@@ -393,7 +415,8 @@ export function compilerLeMoteur(racine: string, executable: string): Promise<Re
       ],
       {
         cwd: racine,
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        // NO_COLOR : picocolors colore sous Windows même vers un tube ; la sortie finit dans un bandeau.
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1' },
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe']
       }

@@ -1527,3 +1527,123 @@ describe('la cause d’un blocage atteint le journal du run', () => {
     expect(diagnostic).toContain(CAUSE)
   })
 })
+
+/*
+ * UNE FUSION REFUSÉE N'EST JAMAIS UNE LIVRAISON « PAR GIT EXTERNE » (conv-914, 2026-10-13).
+ *
+ * Vécu : run-a8a70cd0ee56-1, vert, copie de 16 fichiers, fusion refusée (`base-dirty`). Ses agents
+ * avaient lancé des commandes `git -C D:/AutoWinOS …` sur le vrai dépôt (lectures classées
+ * mutation). La porte `externalGitMutationDelivered` exige une copie SANS fichier, mais elle lisait
+ * la liste `files` de l'activité, que le coordinateur ne remplit qu'à la finalisation : toujours
+ * vide à cet instant. Le run a donc été déclaré intégré, et la clôture a commité puis poussé sous
+ * son nom 36 fichiers non commités d'AUTRES conversations (be8c2f87), sans aucun des siens.
+ */
+describe('Orchestrator — une copie qui porte du travail ne passe pas pour une livraison Git externe', () => {
+  class GitExterneProvider implements ProviderAdapter {
+    readonly id = 'git-externe'
+    readonly supportsExecution = true
+    private appels = 0
+    async auth(): Promise<boolean> {
+      return true
+    }
+    async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+      this.appels += 1
+      return {
+        text: this.appels === 1 ? 'push effectue et refs alignees' : 'VALIDE',
+        provider: this.id,
+        systemInjected: false,
+        executionEvidence:
+          this.appels === 1
+            ? [
+                {
+                  type: 'command_execution',
+                  kind: 'mutation',
+                  status: 'completed',
+                  ok: true,
+                  command: 'git -C "C:\\base" push origin main',
+                  summary: 'push termine'
+                },
+                {
+                  type: 'command_execution',
+                  kind: 'verification',
+                  status: 'completed',
+                  ok: true,
+                  command:
+                    'git -C "C:\\base" rev-parse main; git -C "C:\\base" rev-parse origin/main',
+                  summary: 'main = origin/main'
+                }
+              ]
+            : undefined
+      }
+    }
+  }
+
+  function orchestrateur(
+    fichiersChangesDeLaCopie: RunWorktrees['fichiersChangesDeLaCopie'],
+    fin: ReturnType<RunWorktrees['end']>
+  ) {
+    const provider = new GitExterneProvider()
+    const close = vi.fn().mockResolvedValue(undefined)
+    let runId = ''
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: (id) => {
+          runId = id
+          return 'C:\\wt\\run-1'
+        },
+        // Comme en production : la liste reste vide tant que la finalisation n'a pas tourné.
+        activity: () => [
+          { agentId: runId, agentName: 'Agent', state: 'ready' as const, files: [], startedAtMs: 0 }
+        ],
+        fichiersChangesDeLaCopie,
+        end: () => fin
+      },
+      closeGreenRun: { begin: vi.fn(), close }
+    })
+    return { orch, close }
+  }
+
+  it('fusion refusée sur une copie qui a des fichiers → rouge, et AUCUNE clôture (donc aucun commit)', async () => {
+    const { orch, close } = orchestrateur(async () => ['src/a.ts'], {
+      outcome: 'blocked' as const,
+      agentId: 'run-1',
+      files: ['src/a.ts'],
+      reason: 'base-dirty' as const
+    })
+    const result = await orch.run('mets a jour le depot reel C:\\base puis verifie les refs')
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons).toContain('intégration locale non terminée')
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it('copie mesurée VIDE + action Git vérifiée sur le vrai dépôt → la livraison externe reste acceptée', async () => {
+    const { orch } = orchestrateur(async () => [], {
+      outcome: 'blocked' as const,
+      agentId: 'run-1',
+      reason: 'base-in-progress' as const
+    })
+    const result = await orch.run('mets a jour le depot reel C:\\base puis verifie les refs')
+    expect(result.gateBlocked).toBe(false)
+    expect(result.valid).toBe(true)
+  })
+
+  it('mesure de la copie impossible → on ne conclut pas à une copie vide : rouge, aucune clôture', async () => {
+    const { orch, close } = orchestrateur(
+      async () => {
+        throw new Error('copie illisible')
+      },
+      { outcome: 'blocked' as const, agentId: 'run-1', reason: 'base-dirty' as const }
+    )
+    const result = await orch.run('mets a jour le depot reel C:\\base puis verifie les refs')
+    expect(result.gateBlocked).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+  })
+})

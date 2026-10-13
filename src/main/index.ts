@@ -317,7 +317,9 @@ import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import { identiteEntreprise } from './identite-entreprise'
 import {
+  aligneIconeRaccourciBureauDev,
   aligneRaccourciDemarrerDev,
+  cheminRaccourciBureauDev,
   cheminRaccourciDemarrerDev,
   DEV_TOAST_ACTIVATOR_CLSID,
   dossierIconesVersionnees,
@@ -4799,6 +4801,32 @@ app.whenReady().then(async () => {
       if (raccourci.etat === 'echec') console.warn('[icone barre des taches dev]', raccourci.raison)
     } catch (erreur) {
       console.warn('[icone barre des taches dev]', erreur)
+    }
+    // Le raccourci du BUREAU, posé une fois par create-dev-shortcut.ps1, gardait l'ancien logo après
+    // une mise à jour (conv-930) : on ne repointe que son icône, et seulement s'il est celui de CE
+    // dépôt. Une instance de test isolée n'a pas à toucher au Bureau de l'utilisateur.
+    if (!isolatedTestInstance) {
+      try {
+        const bureau = aligneIconeRaccourciBureauDev({
+          shell,
+          existe: existsSync,
+          chemin: cheminRaccourciBureauDev(app.getPath('desktop')),
+          racineDepot: app.getAppPath(),
+          icone: poserIconeVersionnee({
+            source: iconeRaccourciDev(app.getAppPath(), true),
+            dossier: dossierIconesVersionnees(process.env['LOCALAPPDATA'] ?? app.getPath('appData')),
+            existe: existsSync,
+            lire: (chemin) => readFileSync(chemin),
+            ecrire: (chemin, contenu) => {
+              mkdirSync(dirname(chemin), { recursive: true })
+              writeFileSync(chemin, contenu)
+            }
+          })
+        })
+        if (bureau.etat === 'echec') console.warn('[icone raccourci bureau dev]', bureau.raison)
+      } catch (erreur) {
+        console.warn('[icone raccourci bureau dev]', erreur)
+      }
     }
   }
 

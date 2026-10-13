@@ -1043,6 +1043,13 @@ export interface RunWorktrees {
   baseDirtyFiles?(): readonly string[]
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
   activity?(): WorktreeAgentActivity[]
+  /**
+   * Fichiers RÉELLEMENT changés dans la copie du run, mesurés à l'instant de l'appel. La liste
+   * `files` d'`activity()` ne convient pas pour cette question : le coordinateur ne la remplit qu'à
+   * la finalisation, elle est donc vide pendant tout le run. Une erreur se PROPAGE : une mesure
+   * impossible ne doit jamais se lire « copie vide » (conv-914, 2026-10-13).
+   */
+  fichiersChangesDeLaCopie?(runId: string): Promise<readonly string[]>
   /** Attache/détache un processus CLI réel au lease durable du run. */
   process?(runId: string, pid: number, active: boolean): void
   /** Barrière durable couvrant l'intervalle avant que spawn fournisse un PID. */
@@ -2305,9 +2312,24 @@ export class Orchestrator {
         produced?.phaseOutputs.flatMap((output) => output.executionEvidence ?? []) ?? []
       // Une action Git explicitement ciblee et verifiee sur le depot reel n'a rien a publier depuis
       // la copie isolee. L'activite doit cependant prouver que cette copie n'a produit aucun fichier.
+      // fix-ok: conv-914 (2026-10-13) — run-a8a70cd0ee56-1, copie de 16 fichiers, fusion refusée
+      // (base-dirty), déclaré intégré par cette porte : `producedFileCount` lit `activity().files`,
+      // que le coordinateur ne remplit qu'à la finalisation (run-worktree-coordinator.ts), donc 0
+      // ici. La clôture a alors commité et poussé sous son nom 36 fichiers d'autres conversations
+      // (be8c2f87). Test « fusion refusée sur une copie qui a des fichiers » : rouge avant, vert après.
+      // La copie est donc MESURÉE avant la finalisation (qui peut la committer ou la supprimer) ; une
+      // mesure impossible ne vaut pas « copie vide ».
+      let copieMesureeVide = producedFileCount === 0
+      if (copieMesureeVide && this.deps.worktrees?.fichiersChangesDeLaCopie) {
+        try {
+          copieMesureeVide = (await this.deps.worktrees.fichiersChangesDeLaCopie(runId)).length === 0
+        } catch {
+          copieMesureeVide = false
+        }
+      }
       const externalGitMutationDelivered =
         activityBeforeFinalize !== undefined &&
-        producedFileCount === 0 &&
+        copieMesureeVide &&
         hasVerifiedExternalGitMutation(executionEvidence, this.deps.executionWorkspace)
       const finalized = this.deps.worktrees?.endAsync
         ? await this.deps.worktrees.endAsync(runId, finalizeOptions)

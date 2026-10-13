@@ -1,5 +1,8 @@
 #!/bin/sh
-# Garde-fou anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS.
+# Deux garde-fous :
+#   1. Anti-fuite (pour tous) : refuse tout push vers GitHub dont un commit contient `entreprise/`
+#      — section « DÉPÔT PUBLIC » plus bas, prouvée par src/main/githooks-pre-push.test.ts.
+#   2. Anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS.
 #
 # Contexte d'origine : plusieurs devs/agents travaillant sur `main` dans le même checkout ont produit
 # des changements entremêlés, des fichiers supprimés sous les pieds d'une autre session et un HEAD
@@ -36,15 +39,73 @@ case "$worktree" in
   */agent__* | */integration__* | */.quarantine/*) is_agent=1 ;;
 esac
 
+# ─── DÉPÔT PUBLIC : JAMAIS LE DOSSIER DE L'ENTREPRISE ───────────────────────────────────────────
+# Ajouté le 2026-10-13 (conv-932). Ce qui est propre à l'entreprise vit dans `entreprise/` et ne
+# part JAMAIS sur GitHub : la version publique se construit sans ce dossier
+# (`scripts/export-public.mjs`). Ce refus vaut pour TOUT pousseur, humain compris, et n'a pas
+# d'exception : un `git push github main` direct publierait l'arbre entier.
+#
+# QUEL DISTANT EST PUBLIC : son adresse pointe vers github.com. On lit `$1`, `$2` ET l'adresse
+# CONFIGURÉE du distant : git passe à `$2` l'adresse déjà réécrite par `url.<x>.insteadOf`
+# (mesuré), qui peut ne plus nommer github.com.
+DOSSIER_PRIVE="entreprise"
+est_public=0
+for adresse in "$1" "$2" \
+  $(git config --get-all "remote.$1.url" 2>/dev/null) \
+  $(git config --get-all "remote.$1.pushurl" 2>/dev/null); do
+  printf '%s\n' "$adresse" | grep -qiE '(^|[@/.])github\.com([:/]|$)' && est_public=1
+done
+
+# QUELS COMMITS : ceux que ce push ENVOIE (absents des refs connues de ce distant). Un commit
+# contient le dossier si son arbre a une entrée `entreprise` à la racine. Pour ne pas ouvrir chaque
+# commit, on ne regarde que la pointe et les commits qui TOUCHENT le dossier : un commit qui le
+# contient l'a forcément reçu d'un commit qui l'a ajouté (poussé aussi) ou d'un parent déjà publié.
+# `--full-history` : sans lui, une fusion identique à un parent masquerait la branche d'à côté.
+contient_prive() {
+  [ -n "$(git ls-tree --name-only "$1" -- "$DOSSIER_PRIVE" 2>/dev/null)" ]
+}
+
 blocked=""
-while read -r _local_ref local_sha remote_ref _remote_sha; do
+fuites=""
+while read -r _local_ref local_sha remote_ref remote_sha; do
   # Suppression de branche (local_sha tout à zéro) : hors périmètre de ce garde-fou.
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  if [ "$est_public" = "1" ]; then
+    deja_publie=""
+    case "$remote_sha" in
+      *[!0]*) git cat-file -e "$remote_sha^{commit}" 2>/dev/null && deja_publie="^$remote_sha" ;;
+    esac
+    for c in "$local_sha" $(git rev-list --full-history "$local_sha" $deja_publie --not --remotes="$1" -- "$DOSSIER_PRIVE" 2>/dev/null); do
+      if contient_prive "$c"; then
+        fuites="$fuites
+    $remote_ref  ←  $(git log -1 --format='%h %s' "$c" 2>/dev/null)"
+        break
+      fi
+    done
+  fi
   target=$(printf '%s' "$remote_ref" | sed 's|^refs/heads/||')
   for p in $PROTECTED; do
     [ "$target" = "$p" ] && blocked="$blocked $target"
   done
 done
+
+if [ -n "$fuites" ]; then
+  cat >&2 <<EOF
+
+  ⛔ Push refusé vers le dépôt public ($1) : des commits envoyés contiennent $DOSSIER_PRIVE/,
+  le dossier propre à l'entreprise, qui ne se publie jamais sur GitHub.
+$fuites
+
+  La version publique se construit SANS ce dossier, puis se pousse seule :
+
+    node scripts/export-public.mjs --auteur "Nom <adresse>" --ref <commit> --parent $1/main
+    git push $1 <commit exporté>:refs/heads/main
+
+  Le travail propre à l'entreprise se pousse sur le dépôt interne (origin).
+
+EOF
+  exit 1
+fi
 
 # Dédoublonne (un même ref peut matcher via la liste + le HEAD distant).
 blocked=$(printf '%s\n' $blocked | sort -u | tr '\n' ' ' | sed 's/ *$//')

@@ -1644,6 +1644,17 @@ export class RunWorktreeCoordinator {
     return this.manager.patchTravailNonPublie?.(agentId) ?? { patch: '', tronque: false }
   }
 
+  /**
+   * Fichiers changés dans la copie du run, mesurés MAINTENANT (contrat `RunWorktrees`, orchestrator.ts).
+   * Sans le `try/catch` de `changedFilesAsync` : une erreur doit remonter, car l'appelant en déduit
+   * qu'une copie n'a rien produit, et un « [] » par défaut ouvrirait cette porte à tort.
+   */
+  async fichiersChangesDeLaCopie(runId: string): Promise<readonly string[]> {
+    return this.manager.changedFilesAsync
+      ? await this.manager.changedFilesAsync(runId)
+      : this.manager.changedFiles(runId)
+  }
+
   activity(): WorktreeAgentActivity[] {
     // UNE seule interrogation git pour tout le lot, pas une par entree : la question est posee a
     // chaque affichage, elle doit rester gratuite.

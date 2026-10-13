@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
+  aligneIconeRaccourciBureauDev,
   aligneRaccourciDemarrerDev,
   cheminIconeVersionnee,
+  cheminRaccourciBureauDev,
   cheminRaccourciDemarrerDev,
   DEV_TOAST_ACTIVATOR_CLSID,
   dossierIconesVersionnees,
@@ -97,5 +101,87 @@ describe('icône à nom versionné (conv-266 : l Explorateur gardait l atome sou
 
   it('source absente : rendue telle quelle, pour que l alignement dise « icône introuvable »', () => {
     expect(poserIconeVersionnee({ source: ICO, dossier: DOSSIER, existe: () => false, lire: () => anneau, ecrire: () => {} })).toBe(ICO)
+  })
+})
+
+/**
+ * RACCOURCI DU BUREAU — demande du 2026-10-13 (conv-930) : un collègue avait fait la mise à jour et
+ * gardait l'ancien logo sur son Bureau. Ce raccourci, posé UNE fois par scripts/create-dev-shortcut.ps1,
+ * visait jusqu'au 2026-10-11 `resources\autowin-os-dev.ico` sous un chemin FIXE : la mise à jour en
+ * change le contenu, l'Explorateur garde l'image du chemin. L'app le réaligne donc au démarrage.
+ */
+describe('raccourci du Bureau en dev : l icône suit le logo du dépôt', () => {
+  const DEPOT = 'D:\\Autowin'
+  const BUREAU_LNK = cheminRaccourciBureauDev('C:\\Users\\U\\Desktop')
+  const NEUVE = 'C:\\Users\\U\\AppData\\Local\\autowin-os\\icones\\autowin-os-dev-5a8d4006defc.ico'
+  // Champs exacts d'un raccourci posé par le script AVANT le 2026-10-11.
+  const ANCIEN: DetailsRaccourci = {
+    target: 'C:\\Windows\\pyw.exe',
+    args: '"D:\\Autowin\\scripts\\launch_dev.py"',
+    cwd: DEPOT,
+    icon: ICO,
+    iconIndex: 0
+  }
+
+  function bureau(initial: DetailsRaccourci | undefined, icone = NEUVE) {
+    const ecritures: Array<{ operation: string; details: DetailsRaccourci }> = []
+    const shell: ShellRaccourci = {
+      readShortcutLink: () => initial!,
+      writeShortcutLink: (_c, operation, details) => {
+        ecritures.push({ operation, details })
+        return true
+      }
+    }
+    const existe = (p: string) => p === NEUVE || (p === BUREAU_LNK && initial !== undefined)
+    const resultat = aligneIconeRaccourciBureauDev({ shell, existe, chemin: BUREAU_LNK, racineDepot: DEPOT, icone })
+    return { resultat, ecritures }
+  }
+
+  it('porte le nom que lui donne create-dev-shortcut.ps1', () => {
+    expect(BUREAU_LNK.replace(/\//g, '\\')).toBe('C:\\Users\\U\\Desktop\\Autowin OS Dev.lnk')
+  })
+
+  it('ancien raccourci du dépôt → seule son icône est réécrite, vers la copie au nom neuf', () => {
+    const { resultat, ecritures } = bureau(ANCIEN)
+    expect(resultat).toEqual({ etat: 'ecrit' })
+    // `update` : Electron ne touche QUE les champs fournis — arguments et dossier restent ceux que le
+    // collègue a posés ; la cible est recopiée à l'identique (le type d'Electron l'exige).
+    expect(ecritures).toEqual([
+      { operation: 'update', details: { target: ANCIEN.target, icon: NEUVE, iconIndex: 0 } }
+    ])
+  })
+
+  it('reconnaît le dépôt malgré la casse et une barre finale', () => {
+    expect(bureau({ ...ANCIEN, cwd: 'd:\\autowin\\' }).resultat).toEqual({ etat: 'ecrit' })
+  })
+
+  it('déjà aligné → aucune écriture', () => {
+    const { resultat, ecritures } = bureau({ ...ANCIEN, icon: NEUVE })
+    expect(resultat).toEqual({ etat: 'deja-aligne' })
+    expect(ecritures).toEqual([])
+  })
+
+  it('raccourci d un AUTRE clone (ou d une copie de travail) → intact', () => {
+    const { resultat, ecritures } = bureau({ ...ANCIEN, cwd: 'E:\\AutreClone' })
+    expect(resultat).toEqual({ etat: 'autre-depot' })
+    expect(ecritures).toEqual([])
+  })
+
+  it('pas de raccourci sur le Bureau → l app n en crée JAMAIS un', () => {
+    const { resultat, ecritures } = bureau(undefined)
+    expect(resultat).toEqual({ etat: 'absent' })
+    expect(ecritures).toEqual([])
+  })
+
+  it('icône introuvable → échec nommé, le raccourci reste tel quel', () => {
+    const { resultat, ecritures } = bureau(ANCIEN, 'C:\\nulle-part.ico')
+    expect(resultat).toEqual({ etat: 'echec', raison: 'icône introuvable : C:\\nulle-part.ico' })
+    expect(ecritures).toEqual([])
+  })
+
+  it('le démarrage de l app le réaligne réellement (câblage de index.ts)', () => {
+    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    expect(source).toContain('aligneIconeRaccourciBureauDev({')
+    expect(source).toContain("cheminRaccourciBureauDev(app.getPath('desktop'))")
   })
 })

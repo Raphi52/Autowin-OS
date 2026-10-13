@@ -7,6 +7,7 @@ import {
   changementSansEffetSurLeMoteur,
   empreinteDuCodeCompile,
   relanceAutoMoteurPermise,
+  resumerErreurDeCompilation,
   type ReglagesRelanceMoteur,
   type ResultatCompilation
 } from './relance-auto-moteur'
@@ -271,5 +272,49 @@ describe('empreinteDuCodeCompile', () => {
     expect(empreinteDuCodeCompile(dossier)).toBe(avant)
     writeFileSync(join(dossier, 'main', 'chunks', 'x.js'), 'c()')
     expect(empreinteDuCodeCompile(dossier)).not.toBe(avant)
+  })
+})
+
+describe('resumerErreurDeCompilation', () => {
+  // Sortie RÉELLE d'un `electron-vite build` en échec, capturée le 13/10 : picocolors force les
+  // couleurs sous Windows même quand la sortie part dans un tube, et la ligne « Build failed »
+  // arrive AVANT le motif. Le bandeau affichait « □[31m□□[39m Build failed in 270ms ».
+  const ESC = '\u001b'
+  const SORTIE_VITE = [
+    `${ESC}[31m✗${ESC}[39m Build failed in 72ms`,
+    `${ESC}[31merror during build:`,
+    `${ESC}[31m[vite:esbuild] Transform failed with 1 error:`,
+    `D:/AutoWinOS/src/main/x.ts:3:0: ERROR: Unexpected "}"${ESC}[31m`,
+    `file: ${ESC}[36mD:/AutoWinOS/src/main/x.ts:3:0${ESC}[31m`,
+    `${ESC}[33m`,
+    `${ESC}[33mUnexpected "}"${ESC}[33m`,
+    '3  |  }',
+    `${ESC}[31m`,
+    '    at failureErrorWithLog (D:\AutoWinOS\node_modules\esbuild\lib\main.js:1748:15)'
+  ].join('\n')
+
+  it('rend le MOTIF réel, sans code couleur ni la ligne « Build failed in … »', () => {
+    expect(resumerErreurDeCompilation(SORTIE_VITE)).toBe(
+      'D:/AutoWinOS/src/main/x.ts:3:0: ERROR: Unexpected "}"'
+    )
+  })
+
+  it('une erreur de résolution Rollup sans le mot « error » reste le motif rendu', () => {
+    const sortie = [
+      '✗ Build failed in 40ms',
+      'error during build:',
+      'src/main/a.ts (1:9): "foo" is not exported by "src/main/b.ts", imported by "src/main/a.ts".',
+      'file: D:/AutoWinOS/src/main/a.ts:1:9',
+      '    at getRollupError (D:\AutoWinOS\node_modules\rollup\dist\shared\parseAst.js:1:1)'
+    ].join('\n')
+    expect(resumerErreurDeCompilation(sortie)).toBe(
+      'src/main/a.ts (1:9): "foo" is not exported by "src/main/b.ts", imported by "src/main/a.ts".'
+    )
+  })
+
+  it('sans aucune ligne parlante, le dit au lieu de rendre « Build failed »', () => {
+    expect(resumerErreurDeCompilation('✗ Build failed in 5ms\nerror during build:')).toBe(
+      'motif non rapporté'
+    )
   })
 })
