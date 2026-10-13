@@ -75,6 +75,17 @@
   flex: none;
   object-fit: contain;
   filter: none;
+  /* LE LOGO TOURNE (2026-10-13, conv-929 : « fais en sorte que le logo rond tourne »). Régulier :
+     un tour en 3 s (8 s jugé « trop lent » par l'utilisateur). L'anneau est centré dans son
+     image (zone visible 4→148 px sur 152), il tourne donc sur place sans tanguer. Exception VOULUE à prefers-reduced-motion : la machine
+     de l'utilisateur l'a actif (voir theme.css, spinner) — neutralisée, la rotation demandée ne
+     se verrait jamais chez lui. */
+  animation: aw-brand-logo-tourne 3s linear infinite;
+}
+@keyframes aw-brand-logo-tourne {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .brand-name {
   min-width: 0;

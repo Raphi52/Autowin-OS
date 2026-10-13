@@ -53,6 +53,25 @@ describe('collapsed navigation rail', () => {
     )
   })
 
+  // conv-929 (2026-10-13) : « fais en sorte que le logo rond tourne ». La machine de l'utilisateur
+  // a `prefers-reduced-motion: reduce` ACTIF (voir theme.css) : une rotation coupée dans ce cas ne
+  // tournerait jamais chez lui. Entrée qui doit faire échouer : aucune animation sur .brand-logo,
+  // une rotation incomplète (< 360deg) ou une neutralisation sous prefers-reduced-motion.
+  it('fait tourner le logo rond en continu, même avec les animations réduites', () => {
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    const logo = css.match(/(?:^|\n)\.brand-logo\s*{([^}]*)}/s)?.[1] ?? ''
+    const name = logo.match(
+      /animation:\s*([\w-]+)\s+\d+(?:\.\d+)?s[^;]*\blinear\b[^;]*\binfinite\b/
+    )?.[1]
+    expect(name).toBeTruthy()
+    // conv-929 : 8 s par tour jugé « trop lent » par l'utilisateur.
+    const duree = Number(logo.match(/animation:\s*[\w-]+\s+(\d+(?:\.\d+)?)s/)?.[1])
+    expect(duree).toBeLessThanOrEqual(4)
+    const frames = css.match(new RegExp(`@keyframes ${name}\\s*{([\\s\\S]*?)\\n}`))?.[1] ?? ''
+    expect(frames).toMatch(/to\s*{\s*transform:\s*rotate\(360deg\)/)
+    expect(css).not.toMatch(/prefers-reduced-motion[^@]*\.brand-logo/s)
+  })
+
   it('hides labels without hiding the navigation icons', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     expect(css).toContain('.rail.is-collapsed .nav-item > span:not(.space-toy-icon)')
