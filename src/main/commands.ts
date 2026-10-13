@@ -1703,6 +1703,28 @@ const assumeEcranReel = (args: Record<string, unknown>): boolean =>
   args.ecran_utilisateur === true || args.ecran_utilisateur === 'true'
 
 /**
+ * Une liste telle que l'envoient les DEUX voies d'appel (conv-927, 2026-10-13). La voie <cmd>
+ * passe un vrai tableau ; l'outil natif ne peut passer qu'une CHAINE, parce que `schemaEntree`
+ * (skill-node-mcp.ts) declare tout argument en `type: 'string'` — meme raison que le `'true'`
+ * accepte juste au-dessus. Seule une chaine qui se LIT comme un tableau JSON est acceptee : un
+ * identifiant nu (« agent-a ») reste refuse, avec le meme message qu'avant.
+ */
+function listeEnvoyee(brut: unknown, refus: string): unknown[] {
+  if (Array.isArray(brut)) return brut
+  const lu: unknown = typeof brut === 'string' ? jsonOuRien(brut) : undefined
+  if (Array.isArray(lu)) return lu
+  throw new Error(refus)
+}
+
+function jsonOuRien(texte: string): unknown {
+  try {
+    return JSON.parse(texte)
+  } catch {
+    return undefined // pas du JSON : l'appelant leve son refus nomme
+  }
+}
+
+/**
  * Attache au résultat la note qui dit au modèle qu'il vient de REJOUER un appel identique.
  *
  * On ne remplace ni n'enveloppe le résultat : on AJOUTE une clé. Envelopper aurait changé la forme
@@ -3776,8 +3798,7 @@ export class AppCommandBus {
         return { runId, verite, reetiquetes, connu: reetiquetes > 0 }
       }
       case 'marquer_travaux_tries': {
-        const brut = a.ids
-        if (!Array.isArray(brut)) throw new Error('marquer_travaux_tries : ids doit etre une liste')
+        const brut = listeEnvoyee(a.ids, 'marquer_travaux_tries : ids doit etre une liste')
         // Plafond aligne sur `remove_conversations` : refuse AVANT d'ecrire quoi que ce soit.
         if (brut.length > 200)
           throw new Error(`marquer_travaux_tries : ${brut.length} ids demandés, 200 au maximum.`)

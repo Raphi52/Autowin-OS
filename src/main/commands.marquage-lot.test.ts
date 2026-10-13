@@ -64,6 +64,21 @@ describe('marquer_travaux_tries', () => {
     expect(res.data.shas).toEqual({ 'agent-a': 'sha-agent-a' })
   })
 
+  /*
+   * L'OUTIL NATIF ENVOIE LA LISTE EN TEXTE (conv-927, 2026-10-13). `schemaEntree`
+   * (skill-node-mcp.ts) declare TOUS les arguments en `type: 'string'` : le modele qui suit la
+   * description (« ex. ["agent-a","agent-b"] ») envoie donc la chaine JSON, et le lot repondait
+   * « ids doit etre une liste » — le marquage n'etait possible que par la voie <cmd>.
+   */
+  it('accepte la liste envoyee en TEXTE JSON par l outil natif', async () => {
+    const { bus, marques } = busAvec(['agent-a', 'agent-b'])
+
+    const res = await bus.exec('marquer_travaux_tries', { ids: '["agent-a","agent-b"]' })
+
+    expect(res).toMatchObject({ ok: true, data: { marques: ['agent-a', 'agent-b'], count: 2 } })
+    expect(marques).toEqual(['agent-a', 'agent-b'])
+  })
+
   it('refuse un `ids` qui n est pas une liste, et un lot au-dela du plafond', async () => {
     const { bus } = busAvec(['agent-a'])
 
