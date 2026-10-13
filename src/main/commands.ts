@@ -3739,8 +3739,7 @@ export class AppCommandBus {
         return { removed }
       }
       case 'remove_conversations': {
-        const brut = a.ids
-        if (!Array.isArray(brut)) throw new Error('remove_conversations : ids doit etre une liste')
+        const brut = listeEnvoyee(a.ids, 'remove_conversations : ids doit etre une liste')
         const ids = brut.map((v) => String(v))
         // removeMany REFUSE au-dela du plafond AVANT toute suppression : rien de partiel.
         const removed = this.os.conversations.removeMany(ids)
