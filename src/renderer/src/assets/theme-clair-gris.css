@@ -111,7 +111,6 @@
 }
 
 /* components/ChatView.css */
-:root[data-base='clair'] .attachment-button,
 :root[data-base='clair'] .chat-travail-non-publie,
 :root[data-base='clair'] .chat-travail-non-publie button,
 :root[data-base='clair'] .chat-travail-non-publie__fermer,

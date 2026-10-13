@@ -7756,11 +7756,17 @@ Cliquer pour choisir une autre branche.`}
                     {/* Rond du mode auto, signe INFINI : « ça continue sans moi ». */}
                     <IconeInfini />
                   </button>
+                  {/* `btn` comme ∞ et le micro voisins : même fond, même survol, même état
+                      désactivé. Sans elle, le trombone gardait un style à part (survol vert,
+                      contour voilé) que les thèmes générés recopiaient.
+                      JAMAIS DÉSACTIVÉ PENDANT UN TOUR (conv-937, 2026-10-13 : « ça m'empêche
+                      d'upload et de préparer mon prochain prompt pendant que la conv travaille »).
+                      Le glisser-déposer et le collage joignaient déjà pendant le tour ; l'envoi en
+                      cours de tour emporte les pièces jointes (submitBtw, repli en file avec elles). */}
                   <button
                     type="button"
-                    className="attachment-button"
+                    className="btn attachment-button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={busy}
                     aria-label="Joindre des fichiers"
                     title="Joindre des fichiers"
                   >
@@ -7795,7 +7801,6 @@ Cliquer pour choisir une autre branche.`}
                       if (event.currentTarget.files) void addFiles(event.currentTarget.files)
                       event.currentTarget.value = ''
                     }}
-                    disabled={busy}
                   />
                 </>
               }

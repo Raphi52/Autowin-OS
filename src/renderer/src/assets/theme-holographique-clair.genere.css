@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   566 regles, 855 declarations. Voir genererCoucheClaire. */
+   563 regles, 849 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -309,18 +309,6 @@
 :root[data-theme='holographique-clair'] .md-final-summary {
     border: 1px solid rgba(170, 14, 95, 0.66);
     background: linear-gradient(145deg, rgba(208, 43, 140, 0.14), rgba(253, 253, 255, 0.76))
-}
-:root[data-theme='holographique-clair'] .attachment-button {
-    border: 1px solid rgba(14, 49, 170, 0.16);
-    background: rgba(20, 15, 40, 0.045);
-    color: rgba(14, 49, 170, 0.74)
-}
-:root[data-theme='holographique-clair'] .attachment-button:hover:not(:disabled) {
-    border-color: rgba(9, 113, 44, 0.48);
-    background: rgba(0, 190, 70, 0.09)
-}
-:root[data-theme='holographique-clair'] .attachment-button:focus-visible {
-    outline: 2px solid rgba(9, 113, 44, 0.72)
 }
 :root[data-theme='holographique-clair'] .attachment-chip {
     border: 1px solid rgba(20, 15, 40, 0.16);

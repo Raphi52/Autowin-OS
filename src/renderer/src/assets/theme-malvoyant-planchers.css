@@ -291,7 +291,6 @@
 }
 
 /* components/ChatView.css — gris en dur */
-:root[data-theme^='malvoyant-'] .attachment-button,
 :root[data-theme^='malvoyant-'] .chat-travail-non-publie,
 :root[data-theme^='malvoyant-'] .chat-travail-non-publie button,
 :root[data-theme^='malvoyant-'] .chat-travail-non-publie__fermer,
@@ -1089,6 +1088,7 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dt,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dd,
 :root[data-theme^='malvoyant-'] .workflow-execution-warning,
+:root[data-theme^='malvoyant-'] .workflow-execution-note,
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning > summary,
 :root[data-theme^='malvoyant-'] .workflow-execution-exchange > details > summary,
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning pre,

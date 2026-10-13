@@ -1405,37 +1405,13 @@
 .attachment-input {
   display: none;
 }
-.attachment-button {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  place-items: center;
-  border: 1px solid rgba(203, 225, 236, 0.16);
-  border-radius: 12px;
-  background: rgba(4, 10, 15, 0.3);
-  color: rgba(225, 241, 248, 0.74);
-  cursor: pointer;
-  transition:
-    color 140ms ease,
-    border-color 140ms ease,
-    background-color 140ms ease,
-    transform 140ms ease;
-}
-.attachment-button:hover:not(:disabled) {
-  border-color: rgba(127, 221, 202, 0.48);
-  background: rgba(127, 221, 202, 0.09);
-  color: var(--chat-piece-jointe-survol);
-  transform: translateY(-1px);
-}
-.attachment-button:focus-visible {
-  outline: 2px solid rgba(127, 221, 202, 0.72);
-  outline-offset: 2px;
-}
-.attachment-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.38;
-}
+/* LE TROMBONE EST UN `.btn` COMME ∞ ET LE MICRO (2026-10-13, conv-937 : « grisé et vert au
+   survol au lieu d'avoir le même comportement que les boutons d'à côté »). Il gardait ici son
+   propre aspect — contour voilé à 16 %, fond d'encre, survol vert d'eau — que
+   scripts/theme-nebuleuse-verre.mjs recopiait dans les thèmes générés à spécificité ÉGALE et
+   chargé APRÈS : le contour blanc de la rangée (« BLANC FRANC », plus bas) perdait, le survol
+   passait au #00ff55. Fond, contour, survol et désactivation viennent désormais de `.btn`
+   (theme.css) ; la taille et le rond, de la règle `.composer-input-row > .attachment-button`. */
 .attachment-icon {
   width: 21px;
   height: 21px;
@@ -5134,8 +5110,11 @@ button.chat-project-dot:disabled {
    Jeton --text plutôt qu'un blanc figé (2026-09-09) : plein et quasi blanc en sombre (écart
    imperceptible), et il suit les thèmes clairs — un blanc figé y rendait les trois
    pastilles invisibles sur fond pâle. */
+/* `.btn` dans le sélecteur du trombone : même poids (0,4,0) que ∞ et le micro, qui en gagnent un
+   par `:not(.actif)` / `:not(.is-recording)`. Sans lui, `:root[data-theme=…] .btn` (0,3,0),
+   chargé après, voilait son seul contour (constat conv-937, thème nebuleuse-verre). */
 .composer-input-row > .composer-auto:not(.actif):not(:disabled),
-.composer-input-row > .attachment-button:not(:disabled),
+.composer-input-row > .attachment-button.btn:not(:disabled),
 .composer-input-row > .composer-dictee:not(.is-recording):not(:disabled) {
   border-color: var(--text);
   color: var(--text);
