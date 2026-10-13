@@ -28,6 +28,7 @@ import type {
   ChatAttachment,
   AgentTopology,
   ExecutionWorkspaceState,
+  BrainReglageState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
@@ -479,6 +480,11 @@ interface ChatApi {
   executionWorkspace: () => Promise<ExecutionWorkspaceState>
   chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
+  /** Le Brain renseigné dans les Réglages : chemin et/ou dépôt git (`src/main/brain-reglage.ts`). */
+  brainReglage: () => Promise<BrainReglageState>
+  choisirDossierBrain: () => Promise<string | null>
+  enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }) => Promise<BrainReglageState>
+  resetBrainReglage: () => Promise<BrainReglageState>
   onModelQuestion: (cb: (question: PendingModelQuestion) => void) => () => void
   answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
   toolUsage: () => Promise<

@@ -120,7 +120,10 @@ import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
-import { ensureBrainIndexFresh, reindexerApresMutation } from './brain-index-refresh'
+import { ensureBrainIndexFresh, readBrainHealth, reindexerApresMutation } from './brain-index-refresh'
+import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from './brain-reglage'
+import { defaultBrainRoot } from './brain-paths'
+import type { BrainReglageState } from '../shared/preload-contracts'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -2805,6 +2808,32 @@ Le fil reprend ensuite normalement.`
     }
   }
 
+  // LE BRAIN renseigne dans les Reglages (conv-923, 2026-10-13) : un chemin et/ou un depot git.
+  // Le dossier du demarrage sert de reference : le serveur Brain et la vue du graphe le gardent
+  // jusqu'au redemarrage (`SHARED_BRAIN_ROOT` est lu a l'import de viz/fs-brains.ts).
+  const racineBrainAuDemarrage = sharedBrainRoot()
+  const memeDossier = (a: string, b: string): boolean => {
+    const n = (v: string): string => v.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+    return n(a) === n(b)
+  }
+  const brainReglageState = async (erreur?: string): Promise<BrainReglageState> => {
+    const reglage = lireBrainReglage()
+    const effectif = sharedBrainRoot()
+    // Borne courte : l'ecran des Reglages ne doit pas attendre un serveur qui ne repond pas.
+    const serveurRacine = (await readBrainHealth(fetch, process.env, 2000))?.root ?? null
+    return {
+      actif: racineBrainAuDemarrage,
+      effectif,
+      choisi: reglage.chemin || reglage.depot ? reglage : null,
+      estUnDepot: Boolean(reglage.depot),
+      redemarrageNecessaire: !memeDossier(effectif, racineBrainAuDemarrage),
+      serveurRacine,
+      serveurSurUnAutreDossier: serveurRacine !== null && !memeDossier(serveurRacine, effectif),
+      // Une adresse de depot peut porter un identifiant (`https://nom:jeton@…`) : jamais affiche.
+      ...(erreur ? { erreur: erreur.replace(/\/\/[^@/\s]*@/g, '//***@') } : {})
+    }
+  }
+
   /*
    * LES CONSIGNES DONNEES PENDANT UN TOUR, RENDUES AU FIL.
    *
@@ -2860,6 +2889,39 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Dossier de travail')
     clearExecutionWorkspacePreference()
     return executionWorkspaceState()
+  })
+
+  ipcMain.handle('os:brain-reglage', (event) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainReglageState()
+  })
+
+  ipcMain.handle('os:brain-reglage:choisir-dossier', (event) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return pickDirectory(event.sender)
+  })
+
+  ipcMain.handle('os:brain-reglage:enregistrer', async (event, entree: unknown) => {
+    assertTrustedRendererSender(event, 'Brain')
+    const champs = (entree && typeof entree === 'object' ? entree : {}) as {
+      chemin?: unknown
+      depot?: unknown
+    }
+    try {
+      await appliquerBrainReglage(
+        { chemin: champs.chemin, depot: champs.depot },
+        { racineParDefaut: defaultBrainRoot() }
+      )
+      return brainReglageState()
+    } catch (error) {
+      return brainReglageState(error instanceof Error ? error.message : String(error))
+    }
+  })
+
+  ipcMain.handle('os:brain-reglage:reset', (event) => {
+    assertTrustedRendererSender(event, 'Brain')
+    effacerBrainReglage()
+    return brainReglageState()
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {

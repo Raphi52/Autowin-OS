@@ -89,6 +89,8 @@ export type AutoCloseResult =
         | 'invalid-publication-range'
         /** Reprise legacy : aucune preuve durable ne permet d'attribuer le dirty Brain au run. */
         | 'recovery-baseline-missing'
+        /** Brain réglé en simple dossier (aucun dépôt renseigné) : aucune commande git n'y est lancée. */
+        | 'brain-sans-depot'
         /** L'historique à publier contient un commit qui n'appartient pas à ce run. */
         | 'concurrent-commits'
         /** Tour de chat : aucun de ses fichiers n'est prouvé à ce fil (voir chat-turn-publication). */
@@ -500,15 +502,16 @@ export interface CloseBaseline {
 /** Photographie les deux dépôts au démarrage d'un run (best-effort, jamais bloquant). */
 export async function captureCloseBaseline(
   projectRepo: string,
-  brainRepo: string,
+  /** Absent : le Brain n'est pas un dépôt (`brainEstUnDepot`), aucune commande git n'y est lancée. */
+  brainRepo: string | undefined,
   runGit?: GitRunner
 ): Promise<CloseBaseline> {
   const git = runGit ?? (await defaultGitRunner())
   const [project, brain, projectHead, brainHead] = await Promise.all([
     snapshotChangedPaths(projectRepo, git),
-    snapshotChangedPaths(brainRepo, git),
+    brainRepo ? snapshotChangedPaths(brainRepo, git) : Promise.resolve([]),
     headSha(projectRepo, git),
-    headSha(brainRepo, git)
+    brainRepo ? headSha(brainRepo, git) : Promise.resolve(undefined)
   ])
   return { project, brain, projectHead, brainHead }
 }
@@ -617,7 +620,8 @@ export async function closeGreenRunOnDisk(input: {
   runId: string
   task: string
   projectRepo: string
-  brainRepo: string
+  /** Absent : Brain réglé en simple dossier (aucun dépôt) — aucune commande git n'y est lancée. */
+  brainRepo: string | undefined
   /** Fichiers déjà modifiés AVANT le run, par dépôt : ils sont exclus de la publication. */
   baseline?: Readonly<CloseBaseline>
   /** Publication projet attestée par le moteur worktree ; elle prime sur HEAD et le dirty courant. */
@@ -694,10 +698,13 @@ export async function closeGreenRunOnDisk(input: {
         // est classé lecture seule : ce qu'il aurait écrit reste visible et non commité, jamais mêlé.
         async () => []
       )
-  const brain: AutoCloseResult = input.recoveredWithoutBrainBaseline
+  const brainRepo = input.brainRepo
+  const brain: AutoCloseResult = !brainRepo
+    ? { status: 'skipped', reason: 'brain-sans-depot' }
+    : input.recoveredWithoutBrainBaseline
     ? { status: 'skipped', reason: 'recovery-baseline-missing' }
     : await closeScoped(
-        input.brainRepo,
+        brainRepo,
         input.baseline?.brain ?? [],
         input.baseline?.brainHead,
         // Brain : seules les notes qui portent la provenance de CE run, écrite par l'app elle-même.

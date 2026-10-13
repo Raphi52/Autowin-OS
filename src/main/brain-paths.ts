@@ -1,6 +1,7 @@
 // fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { lireBrainReglage } from './brain-reglage'
 import { identiteBrain, nomHistorique } from './identite-entreprise'
 
 /**
@@ -109,7 +110,29 @@ function sameRoot(left: string, right: string): boolean {
   return normalize(left) === normalize(right)
 }
 
+/**
+ * Vrai seulement si un DÉPÔT git est renseigné dans les Réglages (`brain-reglage.ts`). Sinon le Brain
+ * est un simple dossier : Autowin n'y lance aucune commande git, même s'il contient un `.git`.
+ */
+export function brainEstUnDepot(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(lireBrainReglage(env).depot)
+}
+
+/**
+ * La racine CHOISIE dans les Réglages (`brain-reglage.ts`) : le chemin, ou, pour un dépôt sans
+ * chemin, le dossier local d'Autowin où il a été cloné. Elle prime sur les variables héritées et les
+ * installations du poste ; seule une racine posée sous le nom NEUTRE pour CE process garde la main
+ * (un test, un lancement dédié), comme partout dans ce module.
+ */
+export function racineBrainChoisie(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (env.AUTOWIN_BRAIN_ROOT?.trim()) return undefined
+  const reglage = lireBrainReglage(env)
+  return reglage.chemin ?? (reglage.depot ? defaultBrainRoot(env) : undefined)
+}
+
 export function sharedBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const choisie = racineBrainChoisie(env)
+  if (choisie) return choisie
   const own = autowinOwnBrainRoot(env)
   if (own) return own
   const configured = lireReglage(env, 'AUTOWIN_BRAIN_ROOT')

@@ -154,6 +154,7 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'no-changes': 'aucun changement',
     'no-remote': 'aucun distant',
     'recovery-baseline-missing': 'baseline de reprise absente',
+    'brain-sans-depot': 'Brain sans dépôt git',
     'protected-branch': 'branche protégée',
     'secret-detected': 'secret détecté',
     'concurrent-commits': 'commits concurrents',

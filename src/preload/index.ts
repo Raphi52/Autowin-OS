@@ -17,6 +17,7 @@ import type {
   ChatAttachment,
   AgentTopology,
   ExecutionWorkspaceState,
+  BrainReglageState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type {
@@ -607,6 +608,12 @@ const api = {
     ipcRenderer.invoke('os:execution-workspace:choose'),
   resetExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>
     ipcRenderer.invoke('os:execution-workspace:reset'),
+  brainReglage: (): Promise<BrainReglageState> => ipcRenderer.invoke('os:brain-reglage'),
+  choisirDossierBrain: (): Promise<string | null> =>
+    ipcRenderer.invoke('os:brain-reglage:choisir-dossier'),
+  enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }): Promise<BrainReglageState> =>
+    ipcRenderer.invoke('os:brain-reglage:enregistrer', entree),
+  resetBrainReglage: (): Promise<BrainReglageState> => ipcRenderer.invoke('os:brain-reglage:reset'),
   onModelQuestion: (cb: (question: PendingModelQuestion) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, question: PendingModelQuestion): void =>
       cb(question)

@@ -32,6 +32,11 @@ import { recopierNomsHistoriques } from './identite-entreprise'
 export interface BrainHealth {
   state: 'healthy' | 'degraded' | 'unavailable' | string
   reasons: string[]
+  /**
+   * Dossier que CE serveur sert : sa réponse le porte dans `context` (`health_response`,
+   * brain_server.py). Sert à voir qu'un serveur déjà lancé sert encore un ancien dossier.
+   */
+  root?: string
 }
 
 export interface BrainIndexRefresh {
@@ -70,13 +75,17 @@ export async function readBrainHealth(
       headers: token ? { authorization: `Bearer ${token}` } : {}
     })
     // 503 est la réponse NORMALE d'un Brain dégradé : son corps porte le diagnostic.
-    const body = (await res.json()) as { health?: { state?: unknown; reasons?: unknown } }
+    const body = (await res.json()) as {
+      health?: { state?: unknown; reasons?: unknown }
+      context?: unknown
+    }
     const health = body?.health
     if (!health || typeof health.state !== 'string') return null
     const reasons = Array.isArray(health.reasons)
       ? health.reasons.filter((r): r is string => typeof r === 'string')
       : []
-    return { state: health.state, reasons }
+    const root = typeof body.context === 'string' && body.context.trim() ? body.context.trim() : undefined
+    return { state: health.state, reasons, ...(root ? { root } : {}) }
   } catch {
     return null
   } finally {

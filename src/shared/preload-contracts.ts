@@ -68,6 +68,29 @@ export interface NativePreflightTrace {
 }
 
 /** Le dossier de travail : le dépôt sur lequel les runs s'exécutent (vu depuis l'interface). */
+/**
+ * Le Brain renseigné dans les Réglages : un chemin et/ou un dépôt git (`src/main/brain-reglage.ts`).
+ * Sans dépôt, c'est un simple dossier : Autowin n'y lance aucune commande git.
+ */
+export interface BrainReglageState {
+  /** Dossier du Brain au démarrage de cette session. */
+  actif: string
+  /** Dossier qu'Autowin utilise compte tenu du réglage enregistré. */
+  effectif: string
+  /** Le réglage enregistré, ou `null` : résolution automatique (variables, installation du poste). */
+  choisi: { chemin?: string; depot?: string } | null
+  /** Vrai seulement si un dépôt est renseigné : la clôture des runs y commite leurs notes. */
+  estUnDepot: boolean
+  /** Le dossier effectif diffère de celui du démarrage : redémarrer Autowin. */
+  redemarrageNecessaire: boolean
+  /** Dossier que sert le serveur Brain déjà lancé, s'il répond. */
+  serveurRacine: string | null
+  /** Le serveur lancé sert un AUTRE dossier : tant qu'il tourne, les notes déposées y partent. */
+  serveurSurUnAutreDossier: boolean
+  /** Raison d'un enregistrement refusé (chemin introuvable, clonage raté…). */
+  erreur?: string
+}
+
 export interface ExecutionWorkspaceState {
   /** Le dossier ACTIF pour cette session — figé au démarrage. */
   path: string

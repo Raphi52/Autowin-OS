@@ -3,6 +3,7 @@ import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
+import { BrainSettings } from './BrainSettings'
 import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
@@ -251,6 +252,7 @@ export function SettingsView({
         )}
         {section === 'rules' && <RulesView />}
         {section === 'preflight' && <ExecutionWorkspaceSettings />}
+        {section === 'preflight' && <BrainSettings />}
         {section === 'preflight' && (
           <section
             className="settings-preflight surface-panel"

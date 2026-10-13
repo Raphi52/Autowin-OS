@@ -67,6 +67,7 @@ import {
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { sharedBrainRoot } from './brain-context'
+import { brainEstUnDepot } from './brain-paths'
 import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
 import {
@@ -518,7 +519,7 @@ export class AutowinOS {
                 direct: true,
                 task: publication.task ?? 'Run récupéré',
                 projectRepo: executionWorkspace,
-                brainRepo: sharedBrainRoot(),
+                brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
                 projectPublication: {
                   baseSha: publication.baseSha,
                   publishedSha: publication.agentSha
@@ -735,7 +736,7 @@ export class AutowinOS {
           if (!this.autoClose) return
           this.closeBaselines.set(
             runId,
-            captureCloseBaseline(executionWorkspace, sharedBrainRoot())
+            captureCloseBaseline(executionWorkspace, brainEstUnDepot() ? sharedBrainRoot() : undefined)
           )
         },
         close: async ({ runId, task, projectPublication }) => {
@@ -747,7 +748,7 @@ export class AutowinOS {
             direct: true,
             task,
             projectRepo: executionWorkspace,
-            brainRepo: sharedBrainRoot(),
+            brainRepo: brainEstUnDepot() ? sharedBrainRoot() : undefined,
             baseline: await baselinePromise,
             projectPublication
           })

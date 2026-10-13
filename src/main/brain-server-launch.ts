@@ -18,7 +18,8 @@ import {
   sharedBrainStateRoot,
   sharedBrainTooling,
   autowinOwnBrainRoot,
-  lireReglage
+  lireReglage,
+  racineBrainChoisie
 } from './brain-paths'
 import { identiteBrain, recopierNomsHistoriques } from './identite-entreprise'
 
@@ -212,7 +213,10 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
         : '')
   // Le Brain PROPRE a Autowin prime sur l'ancien nom de `AUTOWIN_BRAIN_ROOT` herite d'un autre Brain du poste
   // (constate le 2026-09-25, conv-3) : voir `autowinOwnBrainRoot`.
-  const brainRoot = autowinOwnBrainRoot(env)
+  // Le dossier choisi dans les Réglages passe devant : c'est CE serveur qui écrit les notes déposées,
+  // il doit servir le même dossier que celui que l'app lit (`racineBrainChoisie`).
+  const brainRoot = racineBrainChoisie(env)
+    ?? autowinOwnBrainRoot(env)
     ?? lireReglage(env, 'AUTOWIN_BRAIN_ROOT')
     ?? nonEmptyString(config.brain_root)
     ?? sharedBrainRoot(env)
