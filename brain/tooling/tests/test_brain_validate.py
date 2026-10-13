@@ -8,27 +8,85 @@ from unittest.mock import patch
 
 TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
+import os
+# Identite NEUTRE forcee (brain_identite) : la suite rend le meme resultat avec ou sans dossier
+# `entreprise/` a la racine du depot. Posee AVANT tout import du tooling.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
 
-from brain_validate import REQUIRED_ARCHITECTURE_FILES, REQUIRED_SOURCE_FILES, REQUIRED_V1_NOTES, validate_brain
+import types
+
+from brain_validate import (
+    required_architecture_files,
+    required_source_files,
+    required_v1_notes,
+    validate_brain,
+)
 from obsidian_graph import refresh_indexes
-from rig_coverage import REGISTRY_PATH, write_registry
+
+# Domaine metier FICTIF (conv-916) : le tooling generique ne connait aucun metier ; un profil
+# d'entreprise declare le sien (`metier`) et son module de couverture. Ce profil et ce module
+# inventes exercent ce chemin sans nommer d'entreprise. Le metier reel est garde par la suite
+# `entreprise/<nom>/brain/tooling/tests/`, absente de la version publique.
+_METIER = {
+    "cle": "zorg",
+    "libelle": "ZORG",
+    "documentation": "zorg-documentation",
+    "fichiersDocumentation": ["_IMPORT.md", "RECONSTRUCT.md", "ZORG-Dispatcher.md", "SITEMAP.md"],
+    "couverture": "zorg_coverage_fictif",
+}
+_IDENTITE = {"AUTOWIN_IDENTITE_ENTREPRISE": json.dumps({"metier": _METIER})}
+REGISTRY_PATH = Path("knowledge/_generated/zorg-coverage.json")
+
+
+def write_registry(root: Path) -> None:
+    path = root / REGISTRY_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"entries": [{"path": "_IMPORT.md"}]}), encoding="utf-8")
+
+
+def _check_registry(root) -> list:
+    path = Path(root) / REGISTRY_PATH
+    return [] if path.is_file() else [f"missing coverage registry {REGISTRY_PATH.as_posix()}"]
+
+
+_COUVERTURE = types.ModuleType(_METIER["couverture"])
+_COUVERTURE.REGISTRY_PATH = REGISTRY_PATH
+_COUVERTURE.check_registry = _check_registry
+_ENV = patch.dict(os.environ, _IDENTITE)
+_MODULES = patch.dict(sys.modules, {_METIER["couverture"]: _COUVERTURE})
+
+
+def setUpModule():
+    _ENV.start()
+    _MODULES.start()
+
+
+def tearDownModule():
+    _MODULES.stop()
+    _ENV.stop()
+
+
+with patch.dict(os.environ, _IDENTITE):
+    REQUIRED_ARCHITECTURE_FILES = required_architecture_files()
+    REQUIRED_SOURCE_FILES = required_source_files()
+    REQUIRED_V1_NOTES = required_v1_notes()
 
 
 def write_note(
     path: Path,
     *,
-    uid: str = "rig/concept/greffe",
+    uid: str = "zorg/concept/fiche",
     status: str = "active",
     include_uid: bool = True,
-    schema: str = "amitel-brain/v1",
+    schema: str = "autowin-brain/v1",
     reviewed_by: str = '["reviewer"]',
     supersedes: str = "[]",
     created: str = "2026-07-15",
-    body: str = "[[knowledge/_maps/rig]]",
+    body: str = "[[knowledge/_maps/zorg]]",
     kind: str = "concept",
-    scope: str = "rig",
-    mocs: str = '["knowledge/_maps/rig"]',
-    tags: str = "[rig, theme/rig]",
+    scope: str = "zorg",
+    mocs: str = '["knowledge/_maps/zorg"]',
+    tags: str = "[zorg, theme/zorg]",
     extra_frontmatter: str = "",
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,14 +104,14 @@ def write_note(
         "updated: 2026-07-15\n"
         f"status: {status}\n"
         "confidence: confirmed\n"
-        'sources: ["file:C:/Code RIG/RigApplication/README.md"]\n'
+        'sources: ["file:C:/Code ZORG/ZorgApplication/README.md"]\n'
         f"supersedes: {supersedes}\n"
         f"reviewed_by: {reviewed_by}\n"
         "reviewed_at: 2026-07-15\n"
         f"mocs: {mocs}\n"
         f"tags: {tags}\n"
         f"{extra_frontmatter}"
-        f"---\n\n# Greffe\n\n{body}\n",
+        f"---\n\n# Fiche\n\n{body}\n",
         encoding="utf-8",
     )
 
@@ -62,13 +120,13 @@ def make_architecture(root: Path) -> None:
     map_bodies = {
         Path("knowledge/_maps/brain.md"): (
             "global",
-            "[[HOME]] [[knowledge/_maps/rig]] [[knowledge/_maps/contribution]] "
+            "[[HOME]] [[knowledge/_maps/zorg]] [[knowledge/_maps/contribution]] "
             "[[knowledge/runbooks/_index]] [[knowledge/standards/_index]] "
             "[[knowledge/_maps/vault-inventory]]",
         ),
-        Path("knowledge/_maps/rig.md"): (
-            "rig",
-            "[[knowledge/_maps/rig-couverture]] [[knowledge/_maps/rig-source-mirror]]",
+        Path("knowledge/_maps/zorg.md"): (
+            "zorg",
+            "[[knowledge/_maps/zorg-couverture]] [[knowledge/_maps/zorg-source-mirror]]",
         ),
         Path("knowledge/_maps/contribution.md"): ("global", "[[HOME]]"),
         Path("knowledge/runbooks/_index.md"): ("global", "[[HOME]]"),
@@ -76,7 +134,7 @@ def make_architecture(root: Path) -> None:
     }
     map_themes = {
         Path("knowledge/_maps/brain.md"): "[theme/ia, theme/autowin-os]",
-        Path("knowledge/_maps/rig.md"): "[theme/rig]",
+        Path("knowledge/_maps/zorg.md"): "[theme/zorg]",
         Path("knowledge/_maps/contribution.md"): "[theme/gouvernance]",
         Path("knowledge/runbooks/_index.md"): "[theme/operations, theme/integrations]",
         Path("knowledge/standards/_index.md"): "[theme/architecture, theme/donnees]",
@@ -98,24 +156,24 @@ def make_architecture(root: Path) -> None:
         else:
             path.write_text(f"# {path.stem}\n", encoding="utf-8")
     for relative in REQUIRED_SOURCE_FILES:
-        source = root / "knowledge/domain/rigapplication-documentation" / relative
+        source = root / "knowledge/domain/zorg-documentation" / relative
         source.parent.mkdir(parents=True, exist_ok=True)
         content = "# Source miroir sans frontmatter\n"
         if relative == Path("_IMPORT.md"):
             content = (
-                "---\ntype: domain\nscope: rig\nstatus: active\n"
+                "---\ntype: domain\nscope: zorg\nstatus: active\n"
                 "# Source miroir active\n\n[[missing-source-target]]\n"
             )
         source.write_text(content, encoding="utf-8")
-    mirror = root / "knowledge/domain/rigapplication-documentation"
+    mirror = root / "knowledge/domain/zorg-documentation"
     files = [{"path": relative.as_posix()} for relative in REQUIRED_SOURCE_FILES]
     (mirror / "_SOURCE_MANIFEST.json").write_text(
         json.dumps({"schema": 1, "source_repo_head": "fixture", "file_count": len(files), "files": files}),
         encoding="utf-8",
     )
-    coverage_map = root / "knowledge/_maps/rig-couverture.md"
-    write_note(coverage_map, uid="rig/map/coverage", body="[[HOME]]", kind="map")
-    ast_map = root / "knowledge/domain/rig-ast-graphes-vers-phases-reconstruction.md"
+    coverage_map = root / "knowledge/_maps/zorg-couverture.md"
+    write_note(coverage_map, uid="zorg/map/coverage", body="[[HOME]]", kind="map")
+    ast_map = root / "knowledge/domain/zorg-ast-graphes-vers-phases-reconstruction.md"
     ast_map.write_text("# AST\n", encoding="utf-8")
     graph_config = root / ".obsidian/graph.json"
     graph_config.parent.mkdir(parents=True, exist_ok=True)
@@ -130,7 +188,7 @@ def make_architecture(root: Path) -> None:
                     {"query": f"tag:#theme/{theme}", "color": {"a": 1, "rgb": index}}
                     for index, theme in enumerate(
                         (
-                            "rig", "architecture", "donnees", "integrations", "operations", "ia",
+                            "zorg", "architecture", "donnees", "integrations", "operations", "ia",
                             "gouvernance", "autowin-os",
                         ),
                         start=1,
@@ -145,7 +203,7 @@ def make_architecture(root: Path) -> None:
 
 
 class BrainArchitectureValidationTests(unittest.TestCase):
-    def test_rejects_missing_rig_coverage_registry(self):
+    def test_rejects_missing_zorg_coverage_registry(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
@@ -159,10 +217,10 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/greffe.md")
-            rig_map = root / "knowledge/_maps/rig.md"
-            rig_map.write_text(
-                rig_map.read_text(encoding="utf-8") + "\n[[knowledge/domain/greffe]]\n",
+            write_note(root / "knowledge/domain/fiche.md")
+            zorg_map = root / "knowledge/_maps/zorg.md"
+            zorg_map.write_text(
+                zorg_map.read_text(encoding="utf-8") + "\n[[knowledge/domain/fiche]]\n",
                 encoding="utf-8",
             )
             refresh_indexes(root, reviewer="fixture:external-reviewer")
@@ -181,8 +239,8 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             make_architecture(root)
             write_note(
                 root / "knowledge/domain/no-theme.md",
-                uid="rig/concept/no-theme",
-                tags="[rig, architecture]",
+                uid="zorg/concept/no-theme",
+                tags="[zorg, architecture]",
             )
 
             report = validate_brain(root)
@@ -195,8 +253,8 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             make_architecture(root)
             write_note(
                 root / "knowledge/domain/too-many-themes.md",
-                uid="rig/concept/too-many-themes",
-                tags="[theme/rig, theme/architecture, theme/inconnu]",
+                uid="zorg/concept/too-many-themes",
+                tags="[theme/zorg, theme/architecture, theme/inconnu]",
             )
 
             report = validate_brain(root)
@@ -212,7 +270,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             brain.write_text(
                 brain.read_text(encoding="utf-8").replace(
                     "tags: [theme/ia, theme/autowin-os]",
-                    "tags: [theme/rig, theme/autowin-os]",
+                    "tags: [theme/zorg, theme/autowin-os]",
                 ),
                 encoding="utf-8",
             )
@@ -228,7 +286,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             note = root / "knowledge/domain/self-reviewed.md"
             write_note(
                 note,
-                uid="rig/concept/self-reviewed",
+                uid="zorg/concept/self-reviewed",
                 reviewed_by='["hermes:reviewer"]',
             )
             note.write_text(
@@ -247,7 +305,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             note = root / "knowledge/domain/malformed-reviewer.md"
             write_note(
                 note,
-                uid="rig/concept/malformed-reviewer",
+                uid="zorg/concept/malformed-reviewer",
                 reviewed_by='["hermes:reviewer"]',
             )
             note.write_text(
@@ -259,18 +317,18 @@ class BrainArchitectureValidationTests(unittest.TestCase):
 
             self.assertTrue(any("invalid author_agent identifier" in error for error in report.errors))
 
-    def test_rejects_active_notes_disconnected_from_company_and_rig_roots(self):
+    def test_rejects_active_notes_disconnected_from_company_and_zorg_roots(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
             write_note(
                 root / "knowledge/domain/orphan-a.md",
-                uid="rig/concept/orphan-a",
+                uid="zorg/concept/orphan-a",
                 body="[[knowledge/domain/orphan-b]]",
             )
             write_note(
                 root / "knowledge/domain/orphan-b.md",
-                uid="rig/concept/orphan-b",
+                uid="zorg/concept/orphan-b",
                 body="[[knowledge/domain/orphan-a]]",
             )
 
@@ -279,7 +337,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             orphan_errors = [error for error in report.errors if "orphan" in error]
             self.assertEqual(len(orphan_errors), 4)
             self.assertTrue(any("company MOC" in error for error in orphan_errors))
-            self.assertTrue(any("RIG MOC" in error for error in orphan_errors))
+            self.assertTrue(any("ZORG MOC" in error for error in orphan_errors))
             self.assertEqual(report.counts["orphan_notes"], 2)
 
     def test_rejects_active_legacy_note_disconnected_from_company_root(self):
@@ -306,7 +364,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             make_architecture(root)
             broken = root / "knowledge/lessons/truncated.md"
             broken.parent.mkdir(parents=True, exist_ok=True)
-            broken.write_text("---\nstatus: active\nscope: rig\n", encoding="utf-8")
+            broken.write_text("---\nstatus: active\nscope: zorg\n", encoding="utf-8")
 
             report = validate_brain(root)
 
@@ -316,26 +374,26 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/code-only.md", uid="rig/concept/code-only")
-            rig_map = root / "knowledge/_maps/rig.md"
-            rig_map.write_text(
-                rig_map.read_text(encoding="utf-8")
+            write_note(root / "knowledge/domain/code-only.md", uid="zorg/concept/code-only")
+            zorg_map = root / "knowledge/_maps/zorg.md"
+            zorg_map.write_text(
+                zorg_map.read_text(encoding="utf-8")
                 + "\n```md\n[[knowledge/domain/code-only]]\n````\n",
                 encoding="utf-8",
             )
 
             report = validate_brain(root)
 
-            self.assertTrue(any("code-only.md" in error and "RIG MOC" in error for error in report.errors))
+            self.assertTrue(any("code-only.md" in error and "ZORG MOC" in error for error in report.errors))
 
     def test_requires_existing_anchor_for_navigation_and_accepts_alias(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/anchored.md", uid="rig/concept/anchored")
-            rig_map = root / "knowledge/_maps/rig.md"
-            original = rig_map.read_text(encoding="utf-8")
-            rig_map.write_text(
+            write_note(root / "knowledge/domain/anchored.md", uid="zorg/concept/anchored")
+            zorg_map = root / "knowledge/_maps/zorg.md"
+            original = zorg_map.read_text(encoding="utf-8")
+            zorg_map.write_text(
                 original + "\n[[knowledge/domain/anchored#Missing|Alias]]\n",
                 encoding="utf-8",
             )
@@ -343,10 +401,10 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             invalid = validate_brain(root)
 
             self.assertTrue(any("unresolved wikilink anchor" in error for error in invalid.errors))
-            self.assertTrue(any("anchored.md" in error and "RIG MOC" in error for error in invalid.errors))
+            self.assertTrue(any("anchored.md" in error and "ZORG MOC" in error for error in invalid.errors))
 
-            rig_map.write_text(
-                original + "\n[[knowledge/domain/anchored#Greffe|Alias]]\n",
+            zorg_map.write_text(
+                original + "\n[[knowledge/domain/anchored#Fiche|Alias]]\n",
                 encoding="utf-8",
             )
             refresh_indexes(root, reviewer="fixture:external-reviewer")
@@ -368,8 +426,8 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/one.md", uid="rig/concept/duplicate")
-            write_note(root / "knowledge/domain/two.md", uid="rig/concept/duplicate")
+            write_note(root / "knowledge/domain/one.md", uid="zorg/concept/duplicate")
+            write_note(root / "knowledge/domain/two.md", uid="zorg/concept/duplicate")
 
             report = validate_brain(root)
 
@@ -389,7 +447,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/candidate.md", schema="amitel-brain/candidate-v1", status="candidate")
+            write_note(root / "knowledge/domain/candidate.md", schema="autowin-brain/candidate-v1", status="candidate")
 
             report = validate_brain(root)
 
@@ -401,7 +459,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             make_architecture(root)
             (root / "index.md").unlink()
             for relative in REQUIRED_SOURCE_FILES:
-                (root / "knowledge/domain/rigapplication-documentation" / relative).unlink()
+                (root / "knowledge/domain/zorg-documentation" / relative).unlink()
 
             report = validate_brain(root)
 
@@ -412,7 +470,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/duplicate-key.md", extra_frontmatter="uid: rig/concept/second\n")
+            write_note(root / "knowledge/domain/duplicate-key.md", extra_frontmatter="uid: zorg/concept/second\n")
 
             report = validate_brain(root)
 
@@ -465,11 +523,11 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/old.md", uid="rig/concept/old", status="active")
+            write_note(root / "knowledge/domain/old.md", uid="zorg/concept/old", status="active")
             write_note(
                 root / "knowledge/domain/new.md",
-                uid="rig/concept/new",
-                supersedes='["rig/concept/old", "rig/concept/missing"]',
+                uid="zorg/concept/new",
+                supersedes='["zorg/concept/old", "zorg/concept/missing"]',
             )
 
             report = validate_brain(root)
@@ -502,7 +560,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             root = Path(td)
             make_architecture(root)
             path = root / "knowledge/domain/bom-candidate.md"
-            write_note(path, schema="amitel-brain/candidate-v1", status="candidate")
+            write_note(path, schema="autowin-brain/candidate-v1", status="candidate")
             path.write_text("\ufeff" + path.read_text(encoding="utf-8"), encoding="utf-8")
 
             report = validate_brain(root)
@@ -514,7 +572,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             root = Path(td)
             make_architecture(root)
             path = root / "knowledge/domain/truncated.md"
-            path.write_text('---\nschema: "amitel-brain/v1"\nuid: rig/concept/truncated\n', encoding="utf-8")
+            path.write_text('---\nschema: "autowin-brain/v1"\nuid: zorg/concept/truncated\n', encoding="utf-8")
 
             report = validate_brain(root)
 
@@ -526,7 +584,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             make_architecture(root)
             path = root / "knowledge/domain/distant-candidate.md"
             path.write_text(
-                "---\n" + ("# padding\n" * 150) + ' schema : "amitel-brain/candidate-v1" \n',
+                "---\n" + ("# padding\n" * 150) + ' schema : "autowin-brain/candidate-v1" \n',
                 encoding="utf-8",
             )
 
@@ -546,7 +604,7 @@ class BrainArchitectureValidationTests(unittest.TestCase):
             )
             path = root / "knowledge/domain/escape.md"
             text = path.read_text(encoding="utf-8").replace(
-                'mocs: ["knowledge/_maps/rig"]',
+                'mocs: ["knowledge/_maps/zorg"]',
                 'mocs: ["knowledge/_maps/../../../external"]',
             )
             path.write_text(text, encoding="utf-8")
@@ -560,12 +618,12 @@ class BrainArchitectureValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             make_architecture(root)
-            write_note(root / "knowledge/domain/old.md", uid="rig/concept/old", status="superseded")
+            write_note(root / "knowledge/domain/old.md", uid="zorg/concept/old", status="superseded")
             write_note(
                 root / "knowledge/domain/replacement.md",
-                uid="rig/concept/replacement",
+                uid="zorg/concept/replacement",
                 status="archived",
-                supersedes='["rig/concept/old"]',
+                supersedes='["zorg/concept/old"]',
             )
 
             report = validate_brain(root)

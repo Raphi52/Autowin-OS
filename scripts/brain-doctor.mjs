@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SONDE DE CONTRAT du canal Amitel Brain — interroge le VRAI service, jamais un mock.
+ * SONDE DE CONTRAT du canal Brain — interroge le VRAI service, jamais un mock.
  *
  * Pourquoi elle existe (defaut mesure le 2026-09-02) : le client TS d Autowin et
  * `brain_server.py` vivent dans DEUX depots. Chacun a fait evoluer la poignee de main de son
@@ -17,22 +17,26 @@
 import { createCipheriv, createHash, createHmac, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { identiteBrain, lireReglage } from './identite-entreprise.mjs'
 
-const SERVICE = 'amitel-brain'
-const REQUEST_AAD = Buffer.from('amitel-brain/request-v1', 'utf8')
+// Nom de service du profil d'entreprise s'il existe (le serveur installe ne connait que lui).
+const IDENTITE = identiteBrain()
+const SERVICE = IDENTITE.service
+const REQUEST_AAD = Buffer.from(`${SERVICE}/request-v1`, 'utf8')
 
 function token() {
-  if (process.env.AMITEL_BRAIN_TOKEN) return process.env.AMITEL_BRAIN_TOKEN
+  const configured = lireReglage('AUTOWIN_BRAIN_TOKEN')
+  if (configured) return configured
   const base = process.env.LOCALAPPDATA
-    ? join(process.env.LOCALAPPDATA, 'AmitelBrain', 'service-token')
-    : join(process.env.HOME ?? '', '.amitel-brain', 'service-token')
+    ? join(process.env.LOCALAPPDATA, IDENTITE.dossierLocal, 'service-token')
+    : join(process.env.HOME ?? '', IDENTITE.dossierMaison, 'service-token')
   return existsSync(base) ? readFileSync(base, 'ascii').trim() : ''
 }
 
 function origin() {
-  const configured = process.env.AMITEL_BRAIN_ORIGIN
+  const configured = lireReglage('AUTOWIN_BRAIN_ORIGIN')
   if (configured) return configured.replace(/\/+$/, '')
-  return `http://127.0.0.1:${process.env.AMITEL_BRAIN_PORT || '8765'}`
+  return `http://127.0.0.1:${lireReglage('AUTOWIN_BRAIN_PORT') || '8765'}`
 }
 
 /** Verifie la signature HMAC et rend le corps authentifie (protocole 1 ou 2). */
@@ -75,7 +79,7 @@ async function main() {
   console.log(`service   : ${base}`)
   console.log(`jeton     : ${tok ? `present (${tok.length} car.)` : 'ABSENT'}`)
   if (!tok) {
-    note('fail', 'jeton de service', 'ni AMITEL_BRAIN_TOKEN ni le fichier local')
+    note('fail', 'jeton de service', 'ni AUTOWIN_BRAIN_TOKEN ni le fichier local')
     return 1
   }
 

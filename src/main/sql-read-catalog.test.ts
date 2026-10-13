@@ -79,7 +79,7 @@ describe('parseSqlCatalogConfig', () => {
  */
 describe('CATALOG_QUERY — la requête qui lit l’autorité', () => {
   /**
-   * La table voisine des SECRETS : `COL_PWD_BD`, `COL_INFOGREFFE_PASSWORD`, `COL_DOCVERIF_PASSWORD`,
+   * La table voisine des SECRETS : `COL_PWD_BD`, `COL_INFOPORTAIL_PASSWORD`, `COL_DOCVERIF_PASSWORD`,
    * `COL_WS_IDNUM_CLEF_API`. On ne lit donc que deux colonnes, et jamais `SELECT *`.
    */
   it('ne lit QUE le nom de base et le serveur, jamais un secret', () => {

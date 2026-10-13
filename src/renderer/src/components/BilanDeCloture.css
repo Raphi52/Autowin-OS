@@ -1,0 +1,94 @@
+/* Bilan du nœud « Clôture du run » — typographie posée sur le fond, comme la carte de bilan. */
+.bilan-cloture {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 var(--s2, 8px) var(--s2, 8px);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bilan-cloture .run-bilan {
+  margin: 4px 0 0;
+}
+.bilan-cloture__bloc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+}
+.bilan-cloture__kicker {
+  font:
+    10px/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #d4a94f;
+}
+.bilan-cloture__note {
+  margin: 0;
+  color: var(--fg-faint, #a9b2c4);
+}
+.bilan-cloture__motifs,
+.bilan-cloture__puces {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bilan-cloture__conclusion {
+  margin: 0;
+}
+.bilan-cloture__qui,
+.bilan-cloture__score {
+  color: var(--fg-faint, #a9b2c4);
+}
+.bilan-cloture__juge[data-bilan-juge='valide'] .bilan-cloture__conclusion b {
+  color: #63c08a;
+}
+.bilan-cloture__juge[data-bilan-juge='defaut'] .bilan-cloture__conclusion b {
+  color: #e2705f;
+}
+.bilan-cloture__gravite {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  font:
+    10px/1.5 ui-monospace,
+    monospace;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 3px;
+}
+.bilan-cloture__puces li[data-gravite='OK'] .bilan-cloture__gravite {
+  color: #63c08a;
+}
+.bilan-cloture__puces li[data-gravite='MAJEUR'] .bilan-cloture__gravite,
+.bilan-cloture__puces li[data-gravite='MINEUR'] .bilan-cloture__gravite {
+  color: #e2705f;
+}
+.bilan-cloture__chemin {
+  font:
+    11px/1.4 ui-monospace,
+    monospace;
+  word-break: break-all;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 3px;
+}
+.bilan-cloture__ouvrir {
+  align-self: flex-start;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #e3ba55;
+  background: transparent;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.bilan-cloture__ouvrir:hover {
+  border-color: #e3ba55;
+}

@@ -167,7 +167,7 @@ describe('le gate ne peut pas se prouver tout seul', () => {
  */
 describe('les mutations d’état NON-git satisfont aussi le gate', () => {
   it.each([
-    ['Restart-Service RigSvc', 'Get-Service RigSvc'],
+    ['Restart-Service ContosoSvc', 'Get-Service ContosoSvc'],
     ['systemctl restart nginx', 'systemctl status nginx'],
     ['docker compose up -d', 'docker ps -a'],
     ['dotnet publish -o out', 'Test-Path out'],
@@ -186,14 +186,14 @@ describe('les mutations d’état NON-git satisfont aussi le gate', () => {
   })
 
   it('ne prend PAS une lecture de conteneur ou de service pour une mutation', () => {
-    for (const lecture of ['docker ps', 'docker inspect x', 'Get-Service', 'sc query RigSvc']) {
+    for (const lecture of ['docker ps', 'docker inspect x', 'Get-Service', 'sc query ContosoSvc']) {
       expect(claudeToolEvidenceKind('Bash', lecture)).toBe('inspection')
     }
   })
 
   it('une mutation non-git SEULE ne suffit toujours pas', () => {
     expect(
-      evidenceSatisfiesTask('redémarre le service', [ev('mutation', 'Restart-Service RigSvc')])
+      evidenceSatisfiesTask('redémarre le service', [ev('mutation', 'Restart-Service ContosoSvc')])
     ).toBe(false)
   })
 })
@@ -211,7 +211,7 @@ describe('un littéral cité n’est pas une commande exécutée', () => {
     'rg "npm install" README.md',
     'cat notes.md',
     'printf "git log"',
-    'echo "Restart-Service RigSvc"'
+    'echo "Restart-Service ContosoSvc"'
   ])('« %s » est une LECTURE, pas une mutation', (command) => {
     expect(claudeToolEvidenceKind('Bash', command)).toBe('inspection')
   })

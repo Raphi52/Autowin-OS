@@ -37,7 +37,7 @@ const CASES: Array<[string, 'mutation' | 'verification' | 'inspection']> = [
   ['echo "x" > f.txt', 'mutation'],
   ['set-content f.txt x', 'mutation'],
   ['copy-item a b', 'mutation'],
-  ['Restart-Service RigSvc', 'mutation'],
+  ['Restart-Service ContosoSvc', 'mutation'],
   ['docker compose up -d', 'mutation'],
   // INTERSECTION mutation ∩ vérification : l'ordre des branches y est observable.
   ['npm install && npm test', 'verification'],

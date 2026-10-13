@@ -591,7 +591,7 @@
   border: 1px solid rgba(117, 215, 255, 0.28);
   border-radius: 999px;
   /* Fond OPAQUE : a 0.9 les etiquettes de themes du canvas transparaissaient sous
-     les pastilles ("RIG 458" superpose a "RIG · 458"). */
+     les pastilles ("CONTOSO 458" superpose a "CONTOSO · 458"). */
   background: #060a12;
   color: #b9c9db;
   font-size: 10px;

@@ -125,3 +125,123 @@ export function bilanDepuisResume(resume: RunResume, titre?: string): RunBilan {
     lignes
   }
 }
+
+/**
+ * BILAN DEPUIS LA CLÔTURE ÉCRITE DANS LA TRACE — le nœud « Clôture du run » du graphe.
+ *
+ * Demande du 2026-10-13 : cliquer ce nœud ouvrait la liste des fichiers modifiés par la
+ * CONVERSATION, la même que l'onglet Files. Le nœud doit dire ce que le run a DONNÉ : verdict,
+ * durée, coût. Même carte que l'inspecteur de RUN.md, même règle : une donnée qui manque n'est pas
+ * rendue. Un run `open` n'a ni durée ni coût mesurés (la trace écrit `0 ms · 0 $` à son départ) :
+ * les afficher présenterait une ABSENCE comme une mesure.
+ */
+export type ClotureObservee = {
+  status: string
+  totalDurationMs: number
+  totalCostUsd: number
+  integrationOutcome?: string
+  usage?: { unpricedCalls?: number }
+}
+
+const CLOTURE_LIBELLE: Record<string, string> = {
+  green: 'acceptée',
+  red: 'refusée',
+  'degraded-closed': 'close en mode dégradé',
+  open: 'pas encore close'
+}
+
+const INTEGRATION_LIBELLE: Record<string, string> = {
+  merged: 'fusionné dans la base',
+  nothing: 'aucun changement à intégrer',
+  conflict: 'conflit à l’intégration',
+  blocked: 'intégration bloquée',
+  kept: 'gardé dans sa copie de travail'
+}
+
+export function bilanDepuisCloture(
+  cloture: ClotureObservee,
+  options: { titre?: string; passagesDuJuge?: number } = {}
+): RunBilan {
+  const ouvert = cloture.status === 'open'
+  const lignes: RunBilanLigne[] = [
+    { label: 'Clôture', valeur: CLOTURE_LIBELLE[cloture.status] ?? cloture.status }
+  ]
+  if (!ouvert) {
+    lignes.push({ label: 'Durée', valeur: formatDuree(cloture.totalDurationMs) })
+    const sansPrix = cloture.usage?.unpricedCalls ?? 0
+    lignes.push({
+      label: 'Coût',
+      valeur: `${cloture.totalCostUsd.toFixed(2)} $${sansPrix > 0 ? ` + ${sansPrix} appel(s) sans prix` : ''}`
+    })
+  }
+  if (cloture.integrationOutcome) {
+    lignes.push({
+      label: 'Intégration',
+      valeur: INTEGRATION_LIBELLE[cloture.integrationOutcome] ?? cloture.integrationOutcome
+    })
+  }
+  if (options.passagesDuJuge && options.passagesDuJuge > 0) {
+    lignes.push({ label: 'Passages du juge', valeur: String(options.passagesDuJuge) })
+  }
+  return {
+    titre: options.titre?.trim() ? options.titre.trim() : 'Run sans sujet',
+    // Même prudence que `bilanDepuisResume` : seul `green` verdit, tout le reste est rouge.
+    verdict: ouvert ? 'en cours' : cloture.status === 'green' ? 'vert' : 'rouge',
+    lignes
+  }
+}
+
+export type PuceDuJuge = { gravite?: 'MAJEUR' | 'MINEUR' | 'OK'; texte: string }
+
+export type VerdictDuJuge = {
+  /** La ligne de verdict telle que le juge l'a écrite : « VALIDE » ou « DEFAUT: <raison> ». */
+  conclusion: string
+  valide: boolean
+  score?: number
+  puces: PuceDuJuge[]
+}
+
+/**
+ * Lit le VERDICT FINAL d'un juge dans sa réponse brute, telle que la trace la garde.
+ *
+ * La réponse ne commence PAS par le verdict : le juge raconte d'abord ce qu'il vérifie (« Je
+ * récupère… », « Tests verts… »), puis écrit `VALIDE` ou `DEFAUT: …`, `SCORE: n`, et ses puces
+ * `OBJECTIONS:` étiquetées MAJEUR / MINEUR / OK (contrat de `objections-juge.ts`). On prend donc la
+ * DERNIÈRE ligne de verdict, jamais la première ligne du texte (`lireContratEtendu` lit, lui, un
+ * texte qui commence par le verdict). Pas de ligne de verdict = `undefined` : rien n'est inventé.
+ */
+export function lireVerdictDuJuge(texte: string): VerdictDuJuge | undefined {
+  const lignes = texte.split(/\r?\n/)
+  let indice = -1
+  for (let i = lignes.length - 1; i >= 0; i--) {
+    if (/^\s*\**\s*(VALIDE|DEFAUT)\b/.test(lignes[i])) {
+      indice = i
+      break
+    }
+  }
+  if (indice < 0) return undefined
+  const conclusion = lignes[indice].replace(/\*\*/g, '').trim()
+  const suite = lignes.slice(indice + 1).join('\n')
+  const scoreBrut = /(?:^|\n)\s*SCORE:\s*(\d{1,3})/i.exec(suite)?.[1]
+  const puces: PuceDuJuge[] = []
+  const bloc = /(?:^|\n)\s*OBJECTIONS:\s*\n([\s\S]*)/i.exec(suite)?.[1] ?? ''
+  for (const ligne of bloc.split(/\r?\n/)) {
+    const puce = /^\s*[-*•]\s+(.+)$/.exec(ligne)?.[1]?.trim()
+    if (!puce) continue
+    const etiquette = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i.exec(puce)
+    puces.push(
+      etiquette
+        ? {
+            gravite: etiquette[1].toUpperCase() as PuceDuJuge['gravite'],
+            texte: puce.slice(etiquette[0].length).trim()
+          }
+        : { texte: puce }
+    )
+  }
+  return {
+    conclusion,
+    valide: /^VALIDE\b/.test(conclusion),
+    ...(scoreBrut !== undefined ? { score: Math.min(100, Number(scoreBrut)) } : {}),
+    puces
+  }
+}

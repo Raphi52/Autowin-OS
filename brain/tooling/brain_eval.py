@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate live Amitel retrieval against a versioned golden set."""
+"""Evaluate live Brain retrieval against a versioned golden set."""
 import argparse
 import json
 import math

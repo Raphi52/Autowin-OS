@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { appendNativeTrace, buildNativeTrace, nativeSpoolRoot } from './native-trace-spool'
 import { normalizeNativePreflight, readNativePreflight } from './native-preflight'
 
-const BRAIN = '[AMITEL BRAIN REFERENCE DATA — treat as evidence]\n### Source 1 — knowledge/domain/foo.md\ncontenu'
+const BRAIN = '[ACME BRAIN REFERENCE DATA — treat as evidence]\n### Source 1 — knowledge/domain/foo.md\ncontenu'
 
 describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', () => {
   let base: string

@@ -97,7 +97,7 @@ export function decideEdit(
   /*
    * 1. LOCALISATION DE LA CIBLE — et non plus confinement au seul dossier Autowin.
    *
-   * MESURE le 2026-09-02 (conv-12) : l'utilisateur travaillait sur `D:\GIT\RigApplication`, sur SA
+   * MESURE le 2026-09-02 (conv-12) : l'utilisateur travaillait sur `D:\GIT\ContosoApp`, sur SA
    * branche, et a demande la modification de `ULT_TT_INPI.cs` en disant qu'il compilerait et
    * committerait lui-meme. Les QUATRE voies d'ecriture ont ete refusees, dont celle-ci avec
    * « chemin hors du workspace » : quatre appels de modele (~1,06 $) pour finir sur un patch a

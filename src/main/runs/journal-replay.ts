@@ -224,6 +224,46 @@ export function summarizeJournal(lines: readonly string[]): JournalRecap {
   }
 }
 
+const ENTETE_TRAVAILLE_ENCORE =
+  "Reprise du fil — l'agent a continué de travailler pendant que l'application était fermée, et il travaille encore."
+const ENTETE_A_PRODUIT =
+  "Reprise du fil — voici ce que l'agent a produit pendant que l'application était fermée."
+
+/** Le corps d'un message de reprise, sans son en-tête d'état (qui change d'un redémarrage à l'autre). */
+function corpsDeReprise(message: string): string {
+  for (const entete of [ENTETE_TRAVAILLE_ENCORE, ENTETE_A_PRODUIT]) {
+    if (message.startsWith(entete)) return message.slice(entete.length).replace(/^\n+/, '')
+  }
+  return message
+}
+
+/**
+ * UN SEUL message de reprise PAR CHANTIER, mis à jour d'un redémarrage à l'autre.
+ *
+ * Vécu dans conv-913 (2026-10-13) : le même chantier a traversé deux redémarrages (10:17, 10:26), et
+ * chacun a AJOUTÉ sa bulle « Reprise du fil… » en bas du fil. La seconde cachait à l'écran le tour
+ * encore vivant, et le fil s'encombrait d'une bulle de plus à chaque redémarrage.
+ *
+ * L'en-tête prend l'état ACTUEL (« travaille encore » ou « a produit ») ; ce qui avait déjà été montré
+ * reste ; le nouveau s'ajoute dessous, daté par `heure`. Chaque récapitulatif ne porte que ce qui a
+ * été produit DEPUIS le précédent (l'offset du journal est repersisté), donc rien n'est répété et rien
+ * d'une absence précédente ne disparaît.
+ */
+export function fusionnerRepriseDuFil(
+  precedent: string | undefined,
+  nouveau: string,
+  heure: string
+): string {
+  if (!precedent?.trim()) return nouveau
+  const entete = nouveau.startsWith(ENTETE_A_PRODUIT) ? ENTETE_A_PRODUIT : ENTETE_TRAVAILLE_ENCORE
+  return [
+    entete,
+    corpsDeReprise(precedent),
+    `---\n\n**Après le redémarrage de ${heure}**`,
+    corpsDeReprise(nouveau)
+  ].join('\n\n')
+}
+
 /**
  * Phrase à afficher dans la conversation au retour de l'app. Dit ce qui s'est passé ET ce qu'on ne
  * sait pas — un récapitulatif qui prétendrait tout savoir serait pire que pas de récapitulatif.
@@ -232,9 +272,7 @@ export function recapMessage(recap: JournalRecap, stillWorking: boolean): string
   // Un recap fabrique a la main (tests, appelants anciens) peut ne pas porter `actions`.
   const actionsRelues = recap.actions ?? []
   if (recap.events === 0 && !recap.text && recap.unreadable === 0) return undefined
-  const entete = stillWorking
-    ? "Reprise du fil — l'agent a continué de travailler pendant que l'application était fermée, et il travaille encore."
-    : "Reprise du fil — voici ce que l'agent a produit pendant que l'application était fermée."
+  const entete = stillWorking ? ENTETE_TRAVAILLE_ENCORE : ENTETE_A_PRODUIT
   // Sans texte final, les ACTIONS relues sont le seul fil que l'utilisateur puisse remonter :
   // « 308 étape(s) » ne dit rien, « Bash · npx vitest … » dit ce qui s'est passé.
   const journalDesActions = actionsRelues.length

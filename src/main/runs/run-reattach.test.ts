@@ -2599,8 +2599,10 @@ describe('câblage — le démarrage rejoue le journal et mémorise où il s’e
     expect(bloc).toContain('tailJournalOnce(agent.journalPath, agent.offset ?? 0')
   })
 
+  // Dans LE message de reprise du chantier, mis à jour d'un redémarrage à l'autre, et non plus une
+  // bulle ajoutée à chaque fois (conv-913, 2026-10-13 ; voir index.reprise-du-fil-unique.test.ts).
   it('il remet le récapitulatif dans la conversation', () => {
-    expect(bloc).toContain('os.conversations.append(conversationId')
+    expect(bloc).toContain('os.conversations.noterRepriseDuChantier(conversationId')
   })
 
   it('il repersiste l’offset atteint — sinon le même texte serait remontré', () => {

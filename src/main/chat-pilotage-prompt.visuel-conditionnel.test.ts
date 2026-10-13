@@ -62,7 +62,7 @@ describe('regles visuelles conditionnelles', () => {
       'le bouton de la sidebar est mal aligné',
       'fais une capture de l écran',
       'change la couleur du titre en or',
-      'ouvre RigV3 et regarde la fenêtre',
+      'ouvre ContosoV3 et regarde la fenêtre',
       'refais l icône de l app',
       'le CSS du tableau déborde',
       'montre-moi une maquette du menu',

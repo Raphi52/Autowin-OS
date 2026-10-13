@@ -11,16 +11,20 @@ const disque = (...presents: string[]) => {
 
 describe('depotCiteDansLeMessage', () => {
   it('rend la racine du depot cite quand elle differe du dossier actif', () => {
-    const existe = disque('D:\\Projets\\Rig', 'D:\\Projets\\Rig\\.git', 'D:\\Projets\\Rig\\src')
-    expect(depotCiteDansLeMessage('corrige D:\\Projets\\Rig\\src stp', ACTIF, existe)).toBe(
-      'D:\\Projets\\Rig'
+    const existe = disque(
+      'D:\\Projets\\Contoso',
+      'D:\\Projets\\Contoso\\.git',
+      'D:\\Projets\\Contoso\\src'
+    )
+    expect(depotCiteDansLeMessage('corrige D:\\Projets\\Contoso\\src stp', ACTIF, existe)).toBe(
+      'D:\\Projets\\Contoso'
     )
   })
 
   it('ignore la ponctuation collee au chemin', () => {
-    const existe = disque('D:\\Projets\\Rig', 'D:\\Projets\\Rig\\.git')
-    expect(depotCiteDansLeMessage('va dans D:\\Projets\\Rig.', ACTIF, existe)).toBe(
-      'D:\\Projets\\Rig'
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    expect(depotCiteDansLeMessage('va dans D:\\Projets\\Contoso.', ACTIF, existe)).toBe(
+      'D:\\Projets\\Contoso'
     )
   })
 
@@ -39,8 +43,8 @@ describe('depotCiteDansLeMessage', () => {
   })
 
   it('ne DEVINE pas depuis un simple nom de projet', () => {
-    const existe = disque('D:\\Projets\\Rig', 'D:\\Projets\\Rig\\.git')
-    expect(depotCiteDansLeMessage('faut regarder le projet Rig', ACTIF, existe)).toBeNull()
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    expect(depotCiteDansLeMessage('faut regarder le projet Contoso', ACTIF, existe)).toBeNull()
   })
 
   it('ne bascule pas vers un depot git IMBRIQUE dans le depot de travail actuel', () => {
@@ -77,18 +81,18 @@ describe('depotCiteDansLeMessage', () => {
       `${ACTIF}\\.git`,
       jetable,
       `${jetable}\\.git`,
-      'D:\\Projets\\Rig',
-      'D:\\Projets\\Rig\\.git'
+      'D:\\Projets\\Contoso',
+      'D:\\Projets\\Contoso\\.git'
     )
-    expect(depotCiteDansLeMessage(`compare ${jetable} et D:\\Projets\\Rig`, ACTIF, existe)).toBe(
-      'D:\\Projets\\Rig'
-    )
+    expect(
+      depotCiteDansLeMessage(`compare ${jetable} et D:\\Projets\\Contoso`, ACTIF, existe)
+    ).toBe('D:\\Projets\\Contoso')
   })
 
   it('bascule toujours d un dossier parent SANS depot vers un projet qu il contient', () => {
-    const existe = disque('D:\\GIT', 'D:\\GIT\\RigApplication', 'D:\\GIT\\RigApplication\\.git')
-    expect(depotCiteDansLeMessage('corrige D:\\GIT\\RigApplication', 'D:\\GIT', existe)).toBe(
-      'D:\\GIT\\RigApplication'
+    const existe = disque('D:\\GIT', 'D:\\GIT\\ContosoApp', 'D:\\GIT\\ContosoApp\\.git')
+    expect(depotCiteDansLeMessage('corrige D:\\GIT\\ContosoApp', 'D:\\GIT', existe)).toBe(
+      'D:\\GIT\\ContosoApp'
     )
   })
 

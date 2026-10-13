@@ -41,7 +41,7 @@ export function lastUserPromptBefore(messages: Msg[], index: number): string | u
  * La regle vit dans `optionsRepondues`, que le bloc relit pour savoir QUELLE ligne mettre en
  * evidence : la question fermee et la reponse retenue ne peuvent pas diverger.
  *
- * Greffe du travail run-f81767873c01-1 (2026-09-01), garde parce que sa regle est plus JUSTE que
+ * Intégration du travail run-f81767873c01-1 (2026-09-01), garde parce que sa regle est plus JUSTE que
  * celle du drapeau seul : un message ORDINAIRE mais hors sujet ne doit pas fermer la question non
  * plus, et aucun drapeau ne peut le savoir.
  */
@@ -104,7 +104,7 @@ function estUneReponse(message: Msg): boolean {
  * `ask-decision` n'est PAS un genre de `part` (`PersistedChatPart` = text|action|artifact|error) :
  * c'est un BLOC de rendu produit par `groupAssistantActivity`. Tester `part.kind` rendait donc
  * cette fonction TOUJOURS fausse. La detection passe par le groupement, seule autorite sur
- * « ce fil affiche-t-il une question ». Greffe du travail run-0be31590f330-1 (2026-08-28).
+ * « ce fil affiche-t-il une question ». Intégration du travail run-0be31590f330-1 (2026-08-28).
  */
 export function askEnAttente(messages: Msg[]): boolean {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

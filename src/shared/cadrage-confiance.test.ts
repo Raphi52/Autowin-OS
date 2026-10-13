@@ -201,10 +201,12 @@ describe('le module ne contient aucun caractere de controle', () => {
 describe('hypothesesDuCadrage — texte réel du cadrage SURVBOD (conv-536)', () => {
   const ligne =
     "- `SURVBOD` est déclaré comme processus exécutable dans le menu : **NON VÉRIFIÉ** (c'est en base). Risque : l'accueil afficherait « ne peut pas être directement exécuté » (`FORM_ACCUEIL.cs:1631`). Je le contrôle avec une requête en lecture seule avant la capture finale, ou tu me le confirmes."
-  it('ne laisse pas « ** ** » et garde la phrase entière', () => {
+  it('ne laisse pas « ** ** » et ne perd rien : l’affirmation, puis la raison entière', () => {
     const [h] = hypothesesDuCadrage(`## Confiance\n${ligne}`)
-    expect(h.affirmation).not.toContain('**')
-    expect(h.affirmation.endsWith('ou tu me le confirmes.')).toBe(true)
+    expect(h.affirmation).toBe('SURVBOD est déclaré comme processus exécutable dans le menu')
+    expect(h.justification?.startsWith("c'est en base. Risque :")).toBe(true)
+    expect(h.justification?.endsWith('ou tu me le confirmes.')).toBe(true)
+    expect(`${h.affirmation} ${h.justification}`).not.toContain('*')
   })
   it('un texte aberrant est coupé sur un mot, avec une ellipse', () => {
     const [h] = hypothesesDuCadrage(`## Confiance\n- ${'mot '.repeat(300)}NON VÉRIFIÉ`)
@@ -238,5 +240,203 @@ describe('citations des lignes VÉRIFIÉ', () => {
 
   it('sans contrôleur fourni, le comportement reste celui d’avant', () => {
     expect(hypothesesDuCadrage(cadrage('VÉRIFIÉ — src/fantome.ts:12'))).toEqual([])
+  })
+})
+
+/*
+ * TEXTES REELS des cadrages du 2026-10-13 (run-state live, conv-914 / conv-916). Rejoues sur
+ * l'ancien lecteur, 3 cadrages sur 3 affichaient un debris au lieu d'une phrase : « * ** » (la
+ * capture envoyee par l'utilisateur, conv-919 : « les phrases écrites ici ont jamais aucun sens »),
+ * « * , sans incidence sur la suite :** », « ** :** ». Deux causes : le `*` d'un gras en tete de
+ * ligne lu comme une puce, et un EN-TETE « **Non vérifié :** » pris pour une affirmation alors que
+ * les affirmations sont les puces qui le suivent.
+ */
+describe('hypothesesDuCadrage — l’étiquette en EN-TÊTE de liste (forme des cadrages récents)', () => {
+  const sansDebris = (h: { affirmation: string; justification?: string }): void => {
+    for (const texte of [h.affirmation, h.justification ?? '']) {
+      expect(texte).not.toMatch(/\*|`|^[\s:;,.—–-]|NON V[EÉ]RIFI/u)
+    }
+  }
+
+  it('« **Non vérifié** » seul : ce sont les puces suivantes qui s’affichent, pas « * ** »', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Confiance',
+        '**Vérifié**',
+        '- GitHub : réponse HTTP 200 et `"visibility": "public"`.',
+        '',
+        '**Non vérifié**',
+        '- Un usage de `graph_navigation.py` hors du dépôt, par une tâche planifiée.',
+        '',
+        '## Options'
+      ].join('\n')
+    )
+    expect(trouvees).toEqual([
+      {
+        affirmation: 'Un usage de graph_navigation.py hors du dépôt, par une tâche planifiée.',
+        source: 'confiance'
+      }
+    ])
+  })
+
+  it('« **NON VÉRIFIÉ, sans incidence sur la suite :** » — le qualificatif devient la raison', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Confiance',
+        '- 1 juge sur 8 lance un test.',
+        '',
+        '**NON VÉRIFIÉ, sans incidence sur la suite :**',
+        '- les 4 versions et 23 192 caractères de conv-914 ;',
+        '- les 3 min 49 de conv-911 ;',
+        "- l'ordre entre la fusion (`endAsync`, l.2308) et `learn`, lu en partie seulement ; H2 n'y touche pas.",
+        '',
+        '## Options'
+      ].join('\n')
+    )
+    expect(trouvees.map((h) => h.affirmation)).toEqual([
+      'les 4 versions et 23 192 caractères de conv-914',
+      'les 3 min 49 de conv-911',
+      "l'ordre entre la fusion (endAsync, l.2308) et learn, lu en partie seulement ; H2 n'y touche pas."
+    ])
+    for (const h of trouvees) {
+      expect(h.justification).toBe('sans incidence sur la suite')
+      sansDebris(h)
+    }
+  })
+
+  it('la liste se ferme sur la ligne suivante qui n’est pas une puce', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Confiance',
+        '**Non vérifié, à régler pendant la construction :**',
+        '- Les tests qui vérifient le texte `D:/GIT/ContosoApp` (`commands.test.ts`).',
+        "- L'usage de `graph_navigation.py` en dehors du dépôt.",
+        '**Vérifié :**',
+        '- Des tests importent déjà des fichiers de `scripts/`.'
+      ].join('\n')
+    )
+    expect(trouvees.map((h) => h.affirmation)).toEqual([
+      'Les tests qui vérifient le texte D:/GIT/ContosoApp (commands.test.ts).',
+      "L'usage de graph_navigation.py en dehors du dépôt."
+    ])
+    expect(trouvees[0].justification).toBe('à régler pendant la construction')
+  })
+
+  it('en-tête lui-même en puce : seuls ses sous-items sont lus, pas leurs détails', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Confiance',
+        '- **Non vérifié :**',
+        "  - Quels de ces fichiers tournent sur le fil principal pendant l'utilisation.",
+        '    - détail technique sous l’item',
+        '- **Vérifié :** le fichier existe.'
+      ].join('\n')
+    )
+    expect(trouvees.map((h) => h.affirmation)).toEqual([
+      "Quels de ces fichiers tournent sur le fil principal pendant l'utilisation."
+    ])
+  })
+
+  it('« **Non vérifié :** x. Suite » — la première phrase, la suite en raison', () => {
+    const [h] = hypothesesDuCadrage(
+      "## Confiance\n**Non vérifié :** que la mosaïque lise la règle par la liste. À contrôler pendant l'écriture du code ; ce n'est pas bloquant.\n"
+    )
+    expect(h).toEqual({
+      affirmation: 'que la mosaïque lise la règle par la liste.',
+      source: 'confiance',
+      justification: "À contrôler pendant l'écriture du code ; ce n'est pas bloquant."
+    })
+  })
+
+  it('étiquette en gras au milieu : l’affirmation avant, la raison après, sans « — , »', () => {
+    const [h] = hypothesesDuCadrage(
+      '## Confiance\n- Le mode auto exécute la suite sans validation humaine — **NON VÉRIFIÉ**, code inaccessible ici ; posé en hypothèse.\n'
+    )
+    expect(h).toEqual({
+      affirmation: 'Le mode auto exécute la suite sans validation humaine',
+      source: 'confiance',
+      justification: 'code inaccessible ici ; posé en hypothèse.'
+    })
+  })
+
+  it('« x : NON VÉRIFIÉ. Suite » ne laisse plus « : . »', () => {
+    const [h] = hypothesesDuCadrage(
+      "## Confiance\n- Test à deux comptes réels : **NON VÉRIFIÉ**. Il faut une place publiée, et c'est le risque principal pour la suite.\n"
+    )
+    expect(h.affirmation).toBe('Test à deux comptes réels')
+    expect(h.justification).toBe(
+      "Il faut une place publiée, et c'est le risque principal pour la suite."
+    )
+  })
+
+  it('une étiquette CITÉE ou un constat d’absence n’est pas une supposition', () => {
+    expect(
+      hypothesesDuCadrage(
+        '## Confiance\nAucune affirmation porteuse ne reste non vérifiée : les deux « non vérifié » sont hors périmètre et hors DoD.\n'
+      )
+    ).toEqual([])
+    expect(
+      hypothesesDuCadrage('## Confiance\n- Le mot « NON VÉRIFIÉ » apparaît dans la consigne.\n')
+    ).toEqual([])
+  })
+
+  it('un sous-titre « ### Non vérifié » reste dans la section Confiance', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Confiance',
+        '### Vérifié',
+        '- le hook existe',
+        '### Non vérifié',
+        '- le port 8765 est libre'
+      ].join('\n')
+    )
+    expect(trouvees).toEqual([{ affirmation: 'le port 8765 est libre', source: 'confiance' }])
+  })
+})
+
+describe('hypothesesDuCadrage — ## Besoin : l’annonce part, la liste annoncée est lue', () => {
+  it('« Hypothèse écrite : x » ne s’affiche plus « écrite : x »', () => {
+    const [h] = hypothesesDuCadrage(
+      "## Besoin\n- **Hypothèse écrite** : tu veux la voix **sortante**, pas un simple habillage visuel. Si c'est l'inverse, dis-le, ça change la cible.\n"
+    )
+    expect(h).toEqual({
+      affirmation: 'tu veux la voix sortante, pas un simple habillage visuel.',
+      source: 'besoin',
+      justification: "Si c'est l'inverse, dis-le, ça change la cible."
+    })
+  })
+
+  it('« **Hypothèses (corrige-moi) :** » — chaque puce est une hypothèse', () => {
+    const trouvees = hypothesesDuCadrage(
+      [
+        '## Besoin',
+        "**Hors périmètre :** l'historique git.",
+        '',
+        '**Hypothèses (corrige-moi) :**',
+        '- « chemin perso » couvre `prenom.nom` et « Prénom NOM ».',
+        "- `Raphi52` reste, puisque c'est le nom du dépôt public lui-même.",
+        '',
+        '**Critères de réussite à vérifier :**',
+        '- [ ] Chaque motif interdit donne **0** résultat.'
+      ].join('\n')
+    )
+    expect(trouvees).toEqual([
+      {
+        affirmation: '« chemin perso » couvre prenom.nom et « Prénom NOM ».',
+        source: 'besoin'
+      },
+      {
+        affirmation: "Raphi52 reste, puisque c'est le nom du dépôt public lui-même.",
+        source: 'besoin'
+      }
+    ])
+  })
+
+  it('« **Hypothèse** : x » en Confiance ne garde pas son mot d’annonce', () => {
+    const [h] = hypothesesDuCadrage(
+      '## Confiance\n- **Hypothèse** : les skills scout produisent bien une ligne CIBLE — NON VÉRIFIÉ sur des sorties réelles.\n'
+    )
+    expect(h.affirmation).toBe('les skills scout produisent bien une ligne CIBLE')
+    expect(h.justification).toBe('sur des sorties réelles.')
   })
 })

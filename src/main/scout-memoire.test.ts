@@ -73,7 +73,7 @@ describe('mémoire des pistes déjà proposées par un scout', () => {
       maintenant: '2026-09-01T10:00:00Z',
       chemin
     })
-    expect(pistesDejaConnues({ depot: 'D:/RigV3Desktop', chemin })).toEqual([])
+    expect(pistesDejaConnues({ depot: 'D:/ContosoV3Desktop', chemin })).toEqual([])
   })
 
   it('exclut les pistes du run en cours : une réparation ne se voit pas interdire sa propre liste', () => {

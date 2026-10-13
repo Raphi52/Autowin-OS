@@ -87,6 +87,13 @@ export interface HarnessTimelineEvent {
      * reçoit la trace SANS contenus : il relit ces charges-là, et elles seules, à l'ouverture.
      */
     payloadEventIds?: string[]
+    /**
+     * Le détail d'une brique d'OUTIL, relu au clic seulement — l'arbre n'en reçoit jamais le contenu.
+     * `fait-retenu` : le fait VALIDÉ par `remember`, lu dans sa RÉPONSE, jamais ses arguments (un
+     * fait refusé pour un secret y figure en clair). `appels` : ce que chaque appel a envoyé et reçu
+     * (demande du 2026-10-12 : « je dois voir ce qui est fait en détail quand je déplie »).
+     */
+    detailOutil?: 'fait-retenu' | 'appels'
     dependencyIds?: string[]
     limitation?: string
     /** Cause d'échec d'un sous-agent de run, telle que la trace l'a écrite. Absente = aucune écrite. */
@@ -102,6 +109,11 @@ export interface HarnessTimelineEvent {
     quote?: RunExecutionQuoteObservation
     git?: RunGitObservation
     closure?: RunClosureObservation
+    /**
+     * Nœud de CLÔTURE : les verdicts RENDUS par le juge de ce run, dans l'ordre (un par passage,
+     * réparations comprises). Le bilan relit le dernier au clic — l'arbre n'en reçoit pas le texte.
+     */
+    verdictEventIds?: string[]
   }
   run?: RunLifecycleEvent
   payloads: Array<{ kind: string; content: string; name?: string; mediaType?: string }>

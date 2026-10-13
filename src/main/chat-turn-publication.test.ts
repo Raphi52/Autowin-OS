@@ -137,6 +137,80 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(await enAttente(repo)).toContain('partage.ts')
   })
 
+  /*
+   * VÉCU LE 2026-10-01 (a7602f5c, conv-770) : le tour a publié `src/main/commands.ts`, qui importait
+   * `../shared/heredocs` ; ce fichier, créé par un tour PRÉCÉDENT du même fil, n'avait jamais été
+   * commité. Les tests passaient dans la copie de travail complète ; sur main le build échouait
+   * (« Could not resolve »), et l'app d'un collègue ne démarrait plus. Annulé par 65b6c2b3.
+   */
+  it('laisse en attente un fichier qui importe un fichier local resté hors du commit (a7602f5c)', async () => {
+    const { repo, remote } = await depot()
+    // Tour précédent : un module NON SUIVI, jamais commité.
+    writeFileSync(join(repo, 'aide.ts'), 'export const aide = 2\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    // Ce tour : un fichier qui l'importe, entièrement réclamé par le fil.
+    writeFileSync(join(repo, 'mine.ts'), "import { aide } from './aide'\nexport const a = aide\n")
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'utilise aide',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: {
+            'mine.ts': lignes("import { aide } from './aide'", 'export const a = aide')
+          }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'unattributed' },
+      exclus: [{ path: 'mine.ts', motif: 'import-hors-commit', importsHorsCommit: ['aide.ts'] }]
+    })
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+  })
+
+  it('publie ensemble un fichier et le module qu’il importe quand le tour a écrit les deux', async () => {
+    const { repo, remote } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'aide.ts'), 'export const aide = 2\n')
+    // Import d'un module SUIVI et propre (`partage.ts`) : il est dans le commit précédent.
+    writeFileSync(
+      join(repo, 'mine.ts'),
+      "import { aide } from './aide.js'\nimport { partage } from './partage'\nexport const a = aide + partage\n"
+    )
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute aide',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['aide.ts', 'mine.ts'],
+          pathLineFingerprints: {
+            'aide.ts': lignes('export const aide = 2'),
+            'mine.ts': lignes(
+              "import { aide } from './aide.js'",
+              "import { partage } from './partage'",
+              'export const a = aide + partage'
+            )
+          }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 2 } })
+    expect((await fichiersDuDernierCommitDistant(remote)).sort()).toEqual(['aide.ts', 'mine.ts'])
+  })
+
   it('laisse en attente un fichier sans preuve par lignes déjà modifié avant le tour', async () => {
     const { repo } = await depot()
     writeFileSync(join(repo, 'partage.ts'), 'export const partage = 1\n')

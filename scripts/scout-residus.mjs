@@ -43,7 +43,7 @@ const rel = (f) => relative(PROJET, f).split(String.fromCharCode(92)).join('/')
 // Un script qui n'est pas « code mort » peut avoir cessé de FONCTIONNER : une racine codée en dur
 // vers un dossier disparu le tue dès sa première ligne, sans qu'aucun détecteur de code mort ne le
 // voie. Mesuré au banc /arena du 2026-09-06 : `assert-package-content.ps1` pointait
-// `C:\Amitel\Autowin OS` et rendait exit 1, entraînant deux `verify-*.ps1` VIVANTS avec lui — le
+// `C:\<editeur>\Autowin OS` et rendait exit 1, entraînant deux `verify-*.ps1` VIVANTS avec lui — le
 // bras qui suivait la sonde les avait déclarés verts. Critère retenu : le DOSSIER PARENT du chemin
 // cité n'existe pas (un fichier de sortie encore à produire est légitime, son dossier doit exister).
 const cheminsMorts = []

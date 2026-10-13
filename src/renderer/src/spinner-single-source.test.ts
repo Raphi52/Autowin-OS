@@ -45,7 +45,7 @@ describe('spinner — source unique', () => {
   })
 
   /**
-   * GREFFE — exigence recuperee de trois bureaux non fusionnes du 2026-08-28
+   * INTÉGRATION — exigence recuperee de trois bureaux non fusionnes du 2026-08-28
    * (run-4b878d41753f-1, run-59624aa4eeee-1, run-9d66e3788edf-1).
    *
    * Ces bureaux decrivaient une AUTRE implementation de l'atome (orbites inclinees pilotees par

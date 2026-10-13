@@ -1,7 +1,7 @@
 # Registre des branches autowin/* — relevé du 2026-09-08
 
 Consigné AVANT toute suppression, conformément à travail-non-publie.ts (« ne supprime aucune branche autowin/recovery/* sans avoir consigné son SHA »).
-Dépôt : dev.azure.com/AmitelGTC/AutoWinOS. 89 branches relevées. Restauration : `git branch <nom> <sha>` puis `git push origin <nom>`.
+Dépôt : dépôt Azure DevOps de l'entreprise (adresse dans `entreprise/<nom>/README.md`). 89 branches relevées. Restauration : `git branch <nom> <sha>` puis `git push origin <nom>`.
 
 ## Supprimées le 2026-09-08 (11) — aucune perte de contenu
 

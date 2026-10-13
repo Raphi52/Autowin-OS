@@ -13,7 +13,7 @@ const WORK_ITEM_BATCH_SIZE = 200
 
 /**
  * Type de work item appliqué quand l'appelant n'en fournit aucun. `Tache` est le type custom
- * Amitel-SCRUM (« Suivi d'une tâche à accomplir ») de l'organisation ciblée par
+ * SCRUM de l'entreprise (« Suivi d'une tâche à accomplir ») de l'organisation ciblée par
  * `DEFAULT_TICKET_SOURCE`. ⚠️ Le type anglais par défaut `Task` y est DÉSACTIVÉ (l'API répond
  * `VS403074`), il ne peut donc pas servir de défaut.
  */

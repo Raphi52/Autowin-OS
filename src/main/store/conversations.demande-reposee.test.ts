@@ -45,7 +45,7 @@ function corpus(): { store: ConversationStore; ids: Record<string, string> } {
     'des mails encore'
   ])
   creer('Origine', [DEMANDE, 'fait : plafond pose'])
-  creer('Bruit', ['parle-moi des tickets RIG', 'voici les tickets'])
+  creer('Bruit', ['parle-moi des tickets ZOX', 'voici les tickets'])
   return { store, ids }
 }
 

@@ -68,7 +68,7 @@ lequel pourrait dupliquer une écriture ou une dépense déjà engagée — éca
 
 ## Contexte d'environnement à connaître
 
-- L'arbre `C:\Amitel\Autowin OS` était posé sur la branche `autowin/recovery/run-e9bba61b1111-1`, ce
+- L'arbre `C:\<editeur>\Autowin OS` était posé sur la branche `autowin/recovery/run-e9bba61b1111-1`, ce
   qui bloquait toute mise à jour (divergence). Remis sur `main` le 2026-08-14.
 - Le commit `36937cb` de cette branche de récupération porte un remaniement du composer (envoi unique,
   suppression de la file) **non terminé** : sa preuve CDP avait été faite contre un processus principal

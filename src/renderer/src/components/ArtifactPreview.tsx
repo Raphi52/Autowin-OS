@@ -8,6 +8,7 @@ import { ArtifactFontPreview } from './ArtifactFontPreview'
 import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
 import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
 import { ArtifactVideoPlayer } from './ArtifactVideoPlayer'
+import { RondDIcone } from './anneau-activite'
 import './ArtifactPreview.css'
 import { Spinner } from './Spinner'
 
@@ -63,8 +64,8 @@ function nomRepeteLeLibelle(nom: string, libelle: string): boolean {
   return aplatir(nom) === aplatir(libelle)
 }
 
-/** Cadre photo (soleil + montagnes) : l'icône de la capsule d'image, au trait des icônes
- *  Raisonnement / Actions de ThinkingBlock.tsx (16 × 16, `currentColor`). */
+/** Cadre photo (soleil + montagnes) : l'icône du rond de la capsule d'image, au trait de l'icône
+ *  Raisonnement de ThinkingBlock.tsx (16 × 16, `currentColor`). */
 const ICONE_IMAGE = (
   <svg viewBox="0 0 16 16" focusable="false">
     <rect
@@ -472,18 +473,23 @@ export function ArtifactPreview({
      la même gueule que les capsules Action et Raisonnement »). Ce n'est PAS une copie de leur
      style : on reprend leur BALISAGE et leurs classes (`thinking-block`, `thinking-capsule`…),
      donc ChatView.css et chaque thème les dessinent à l'identique, et toute retouche future des
-     capsules s'applique aussi aux images. Libellé de provenance dans la capsule, poids dans la
-     pastille sombre, nom du fichier dehors en gris, à la place du signe de vie.
+     capsules s'applique aussi aux images. Libellé de provenance et poids en première ligne, nom
+     du fichier sur la seconde, à la place du signe de vie (conv-907, voir plus bas).
      Replié = plus AUCUN pixel d'aperçu (choix utilisateur du 27/08) : le corps n'est rendu
      qu'ouvert. L'ouverture est pilotée ici (clic intercepté) : l'image ne se charge qu'à la
      demande, et l'état reste juste au clavier comme à la souris. */
+  /* DEUX LIGNES (conv-907, 2026-10-12 : « comme les capsules raisonnement actions etc je veux que
+     le titre de l'image soit dans la capsule dans une ligne en dessous »). La capsule prend le
+     cadre de BlocRepliable (ThinkingBlock.tsx) : le rond degrade et son icone a gauche, le libelle
+     et le poids en premiere ligne, le NOM du fichier dessous, DANS le cadre, puis le chevron. Un
+     nom qui redit le libelle n'ouvre pas de seconde ligne vide. */
   if (isCollapsible) {
     const libelle = provenanceLabel ?? kindLabel(resolved)
     const nomVisible = displayName ?? artifact.name
     return (
       <details
         ref={setCardRef}
-        className={`thinking-block artifact-capsule${live ? ' is-live' : ' is-done'}`}
+        className={`thinking-block thinking-block--deux-lignes cadre-anneau artifact-capsule${live ? ' is-live' : ' is-done'}`}
         data-artifact-kind={artifact.kind}
         data-collapsed={isExpanded ? undefined : 'true'}
         open={isExpanded}
@@ -495,18 +501,23 @@ export function ArtifactPreview({
             setIsExpanded((current) => !current)
           }}
         >
-          <span className="thinking-capsule">
-            <span className="thinking-capsule-icone" aria-hidden="true">
-              {ICONE_IMAGE}
+          <span className="anneau-tete">
+            <RondDIcone>{ICONE_IMAGE}</RondDIcone>
+            <span className="anneau-col">
+              <span className="anneau-l1">
+                <span className="thinking-label artifact-capsule__provenance">{libelle}</span>
+                <span className="thinking-duree">{fileSize(artifact.size)}</span>
+              </span>
+              {!nomRepeteLeLibelle(nomVisible, libelle) && (
+                <span className="anneau-l2">
+                  <span className="thinking-status artifact-capsule__nom" title={artifact.name}>
+                    {nomVisible}
+                  </span>
+                </span>
+              )}
             </span>
-            <span className="thinking-label artifact-capsule__provenance">{libelle}</span>
-            <span className="thinking-duree">{fileSize(artifact.size)}</span>
+            <span className="anneau-chevron" aria-hidden="true" />
           </span>
-          {!nomRepeteLeLibelle(nomVisible, libelle) && (
-            <span className="thinking-status artifact-capsule__nom" title={artifact.name}>
-              {nomVisible}
-            </span>
-          )}
         </summary>
         {isExpanded && (
           <div className="artifact-capsule__corps">

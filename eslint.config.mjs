@@ -41,7 +41,10 @@ export default defineConfig(
       // suivis sous .autowin-tmp/ sont des PNG/HTML/JSON/CSS, qu'eslint ne lit pas.
       '.autowin-tmp/**',
       'artifacts/**',
-      'tests/fixtures/arena-conv-126/**'
+      'tests/fixtures/arena-conv-126/**',
+      // Archives d'une entreprise (`entreprise/<nom>/archives/`) : copies FIGEES de bancs et d'audits
+      // passes, gardees telles quelles. Meme raison que la fixture ci-dessus : ne pas les reformater.
+      'entreprise/*/archives/**'
     ]
   },
   tseslint.configs.recommended,

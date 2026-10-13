@@ -26,7 +26,7 @@ describe('recherche par contenu — terme court (moins de 3 caracteres)', () => 
       content: 'variante 5A · Flashy — cyan / magenta / jaune'
     })
     const b = store.create({ title: 'Sans rapport', provider: 'claude' })
-    store.append(b.id, { role: 'user', content: 'parle-moi des tickets RIG' })
+    store.append(b.id, { role: 'user', content: 'parle-moi des tickets ZOX' })
     return store
   }
 

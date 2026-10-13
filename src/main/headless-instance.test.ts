@@ -50,10 +50,10 @@ describe('mode instance automatisée', () => {
 
   it('isole aussi l’identité Windows des instances automatisées', () => {
     expect(
-      automationAppIdentity('com.amitel.autowin-os', { isolated: false, headless: false })
-    ).toBe('com.amitel.autowin-os')
-    expect(automationAppIdentity('com.amitel.autowin-os', { isolated: true, headless: true })).toBe(
-      'com.amitel.autowin-os.test'
+      automationAppIdentity('com.autowin.autowin-os', { isolated: false, headless: false })
+    ).toBe('com.autowin.autowin-os')
+    expect(automationAppIdentity('com.autowin.autowin-os', { isolated: true, headless: true })).toBe(
+      'com.autowin.autowin-os.test'
     )
   })
 

@@ -7,7 +7,7 @@ import { AppCommandBus } from './commands'
 /**
  * ECRIRE DANS UN AUTRE DEPOT — le mur mesure en conv-12 (2026-09-02).
  *
- * L'utilisateur travaillait sur `D:\GIT\RigApplication`, sur sa branche, et demandait la
+ * L'utilisateur travaillait sur `D:\GIT\ContosoApp`, sur sa branche, et demandait la
  * modification de `ULT_TT_INPI.cs` en annoncant qu'il compilerait et committerait lui-meme. Les
  * quatre voies d'ecriture ont ete refusees — dont `edit_file` avec « chemin hors du workspace » —
  * apres 4 appels de modele (~1,06 $), pour finir sur un patch a coller a la main.

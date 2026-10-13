@@ -14,7 +14,8 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
-import { askReponseDuFil } from './chat-message-keys'
+import { askReponseDuFil, tourDuMessageEnCours } from './chat-message-keys'
+import type { SkillInstallee } from './useSkillsInventory'
 import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
@@ -54,6 +55,8 @@ export type ChatMosaicProps = {
    * c'est ce qui autorise une fenetre inchangee a ne pas se re-rendre pendant qu'une autre streame.
    */
   signatureComposer?: string
+  /** Skills installees : un message `/<skill>` porte le meme bandeau qu'en chat plein. */
+  skills?: readonly SkillInstallee[] | null
 }
 
 function FenetreChatBrut({
@@ -61,13 +64,15 @@ function FenetreChatBrut({
   onClose,
   onOuvrirSeule,
   rendreComposer,
-  onAnswerAsk
+  onAnswerAsk,
+  skills
 }: {
   fenetre: ChatMosaicWindow
   onClose: (id: string) => void
   onOuvrirSeule: (id: string) => void
   rendreComposer: (id: string) => React.ReactNode
   onAnswerAsk?: (prompt: string, cible: string) => void
+  skills?: readonly SkillInstallee[] | null
   /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
   signatureComposer?: string
 }): React.JSX.Element {
@@ -140,16 +145,28 @@ function FenetreChatBrut({
     if (el && colleEnBas) el.scrollTop = el.scrollHeight
   }, [fenetre.messages, colleEnBas])
 
+  const etat = fenetre.busy ? 'occupe' : attention ? 'attention' : undefined
+  /*
+   * UNE FENETRE DE MOSAIQUE EST UN VRAI PANNEAU DE CHAT (conv-817, 2026-10-13 : « mes chat dans le
+   * mode mosaique doivent avoir le style de chat normal avec les chanfreins et tout »). Elle porte
+   * les classes du chat plein — `lisere-dessus chat`, fil en `chat-scroll`, saisie `.composer` en
+   * ENFANT DIRECT — pour que CHAQUE theme lui applique ce qu'il pose sur le chat plein : panneau
+   * (`.chat::after`), cadre a coins coupes (`.chat::before`), saisie detachee (`.chat > .composer`),
+   * satin et lumiere de la souris. Un habillage propre a la mosaique divergeait au premier theme.
+   */
   return (
     <section
-      className="chat-mosaic-window"
+      className="lisere-dessus chat chat-mosaic-window"
       data-conv-id={fenetre.id}
-      data-etat={fenetre.busy ? 'occupe' : attention ? 'attention' : undefined}
+      data-etat={etat}
       ref={cadreRef}
       onMouseDown={repris}
       onFocusCapture={repris}
       onClick={poserLeFocus}
     >
+      {/* L'ETAT DU TOUR (occupe / termine non repris) se lit sur un ANNEAU A PART : `::after` et
+          `::before` sont desormais le panneau et le cadre du chat, que l'anneau dore ecrasait. */}
+      {etat && <span className="chat-mosaic-window-anneau" aria-hidden="true" />}
       <header className="chat-mosaic-window-head">
         <span className="chat-mosaic-window-title">{fenetre.title || 'Sans titre'}</span>
         {fenetre.busy && (
@@ -176,7 +193,11 @@ function FenetreChatBrut({
           ×
         </button>
       </header>
-      <div className="chat-mosaic-window-thread scroll-y" ref={filRef} onScroll={surDefilement}>
+      <div
+        className="chat-scroll chat-mosaic-window-thread scroll-y"
+        ref={filRef}
+        onScroll={surDefilement}
+      >
         {fenetre.messages.length === 0 ? (
           <div className="chat-mosaic-window-empty">Aucun message.</div>
         ) : (
@@ -185,6 +206,12 @@ function FenetreChatBrut({
               key={`${fenetre.id}-${index}`}
               message={message}
               conversationId={fenetre.id}
+              skills={skills}
+              tourEnCours={
+                message.role === 'user'
+                  ? tourDuMessageEnCours([...fenetre.messages], index, fenetre.busy)
+                  : undefined
+              }
               askReponse={
                 message.role === 'assistant'
                   ? askReponseDuFil([...fenetre.messages], index)
@@ -212,7 +239,8 @@ function FenetreChatBrut({
           ↓ Dernier message
         </button>
       )}
-      <div className="chat-mosaic-window-composer">{rendreComposer(fenetre.id)}</div>
+      {/* Pas d'enveloppe : la saisie doit etre ENFANT DIRECT de `.chat`, comme en chat plein. */}
+      {rendreComposer(fenetre.id)}
     </section>
   )
 }
@@ -234,7 +262,8 @@ const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
     avant.onOuvrirSeule === apres.onOuvrirSeule &&
     avant.rendreComposer === apres.rendreComposer &&
     avant.onAnswerAsk === apres.onAnswerAsk &&
-    avant.signatureComposer === apres.signatureComposer
+    avant.signatureComposer === apres.signatureComposer &&
+    avant.skills === apres.skills
   )
 })
 
@@ -245,7 +274,8 @@ export function ChatMosaic({
   rendreComposer,
   onNouvelleConversation,
   onAnswerAsk,
-  signatureComposer
+  signatureComposer,
+  skills
 }: ChatMosaicProps): React.JSX.Element {
   if (fenetres.length === 0) {
     return (
@@ -279,6 +309,7 @@ export function ChatMosaic({
           rendreComposer={rendreComposer}
           onAnswerAsk={onAnswerAsk}
           signatureComposer={signatureComposer}
+          skills={skills}
         />
       ))}
     </div>

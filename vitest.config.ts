@@ -167,6 +167,9 @@ export default defineConfig({
      */
     env: {
       AUTOWIN_RUN_JOURNAL_ROOT: '',
+      // Identite d'entreprise publiee par l'app (`identite-entreprise.ts`) : `{}` force l'identite
+      // NEUTRE, pour que la suite rende le meme resultat avec ou sans dossier `entreprise/`.
+      AUTOWIN_IDENTITE_ENTREPRISE: '{}',
       // Voir `RACINE_DONNEES_TESTS` : aucun test n'écrit plus dans le %APPDATA% réel.
       APPDATA: RACINE_DONNEES_TESTS
     },

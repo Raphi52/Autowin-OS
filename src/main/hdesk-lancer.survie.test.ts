@@ -1,5 +1,5 @@
 /**
- * Kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 (2026-09-15) : RigV3 a ouvert sa
+ * Kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 (2026-09-15) : ContosoV3 a ouvert sa
  * fenetre dans le bureau cache puis s'est ferme ~4 s plus tard ; hdesk-lancer.ps1 avait deja rendu
  * exit 0. Le lanceur doit signaler la mort de l'app DANS l'appel (exit 4), sans l'inscrire pour la TV.
  */

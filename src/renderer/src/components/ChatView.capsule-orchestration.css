@@ -119,6 +119,13 @@
   overflow-wrap: anywhere;
 }
 
+/* RAISONNEMENT EN DIRECT (conv-918) : la colonne inversee cale le defilement sur la FIN du texte,
+   la ou il s'ecrit, et l'y garde pendant qu'il grandit ; remonter reste possible a la molette. */
+.thinking-block--orchestration .orch-raisonnement.is-direct {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
 .thinking-block--orchestration .orch-texte.failed {
   border-color: color-mix(in srgb, var(--chat-frise-ko, var(--err)) 55%, transparent);
   color: var(--text);

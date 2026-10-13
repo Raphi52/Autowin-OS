@@ -3,7 +3,7 @@
 Consigné AVANT suppression, par la même règle que les registres du 2026-09-08 : on ne
 supprime aucune branche dont le SHA n'est écrit nulle part.
 
-Dépôt : dev.azure.com/AmitelGTC/AutoWinOS.
+Dépôt : dépôt Azure DevOps de l'entreprise (adresse dans `entreprise/<nom>/README.md`).
 Restauration : `git branch <nom> <sha>` puis `git push origin <nom>`.
 
 ## Supprimées le 2026-09-17 (3 distantes + 3 locales) — aucune perte

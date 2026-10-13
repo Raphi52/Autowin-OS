@@ -1459,12 +1459,11 @@
   text-align: left;
 }
 /* IMAGE ENVOYÉE EN CAPSULE (conv-178, 2026-10-10) : collée à DROITE sous ta bulle, comme tout ce
-   que tu écris — à gauche, elle se lisait comme une image de l'agent. Le nom passe à sa gauche. */
-.attachment-list.sent .artifact-capsule > summary {
-  flex-direction: row-reverse;
-}
-.attachment-list.sent .artifact-capsule > summary .thinking-status {
-  text-align: right;
+   que tu écris — à gauche, elle se lisait comme une image de l'agent. Depuis le cadre à deux
+   lignes (conv-907), le nom est DANS le cadre, sous le libellé : c'est le cadre entier qui se
+   range à droite. */
+.attachment-list.sent .artifact-capsule.cadre-anneau {
+  margin-left: auto;
 }
 .attachment-chip {
   display: inline-flex;
@@ -3217,54 +3216,10 @@ button.chat-project-dot:disabled {
 .activity-local-details details.failed pre {
   border-color: var(--err);
 }
-/* Le bloc n'ouvre rien quand il n'y a pas de run : le curseur ne doit pas promettre un clic utile. */
-/* B3-γ — la carte d'activite porte la teinte de son statut (bord gauche + fond).
-   Repris du parti pris tranche sur RunProgress, pour que le fil du chat lise comme la barre de
-   phases d'un run : le point seul ne se voyait pas dans un fil dense. */
-/* DEGRADE, pas aplat : la teinte part du liseré de statut et s'éteint vers la droite. Un aplat
-   uniforme rendait la carte plate et faisait disparaître le liseré dans la masse — grief direct de
-   l'utilisateur (« l'actuel n'a pas les dégradés que tu m'avais montré »). */
-.activity-group {
-  border-left: 2px solid color-mix(in srgb, var(--ok) 70%, transparent);
-  border-radius: 8px;
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--ok) 16%, transparent) 0%,
-    color-mix(in srgb, var(--ok) 4%, transparent) 45%,
-    transparent 85%
-  );
-}
-.activity-group[data-state='failed'] {
-  border-left-color: var(--err);
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--err) 22%, transparent) 0%,
-    color-mix(in srgb, var(--err) 6%, transparent) 45%,
-    transparent 85%
-  );
-}
-.activity-group[data-state='running'] {
-  border-left-color: var(--accent);
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--accent) 20%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 6%, transparent) 45%,
-    transparent 85%
-  );
-}
-.activity-group[data-state='interrupted'] {
-  border-left-color: var(--warn);
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--warn) 20%, transparent) 0%,
-    color-mix(in srgb, var(--warn) 6%, transparent) 45%,
-    transparent 85%
-  );
-}
-
-.activity-group[aria-disabled='true'] {
-  cursor: default;
-}
+/* LA BARRE D'ACTIVITE (conv-904, 2026-10-12) : plus de carte teintee (B3-γ, bord gauche + degrade
+   par statut). Elle prend le cadre « grand, deux lignes » des capsules, dessine par
+   anneau-activite.css : le VERDICT de chaque action se lit dans l'anneau d'arcs et la legende,
+   l'etat du groupe dans le reflet du cadre (allume tant que ca tourne). */
 
 /* L'état d'authentification du provider, à l'endroit même du choix : choisir un provider expiré
    comme modèle par défaut échouait au premier prompt, sans aucun signal au moment du clic. */
@@ -4286,7 +4241,8 @@ button.chat-project-dot:disabled {
    Fumé net : chacune dans une PASTILLE sombre cerclée d'un filet clair. */
 .thinking-block > summary .thinking-secondes,
 .thinking-block > summary .thinking-duree,
-.capsule-bouton .thinking-duree {
+.capsule-bouton .thinking-duree,
+.activity-anneau .anneau-l1 .thinking-duree {
   flex: none;
   padding: 0 0.6em;
   border-radius: 999px;
@@ -5378,39 +5334,11 @@ button.chat-project-dot:disabled {
 
 /* Bloc Actions — variante C3 « frise » (2026-09-24) : frise a pastilles dans le corps deplie.
    Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action.
-   La BARRE DE TEMPS (un segment par action) est passee SOUS la ligne d'en-tete avec R5
-   (conv-162) : visible bloc plie, et plus dessinee une seconde fois dans le corps. */
+   La BARRE DE TEMPS qui passait sous l'en-tete (R5, conv-162) a disparu : le rond de verre et la
+   legende du cadre « deux lignes » la remplacent dans Actions (conv-904) puis dans Orchestration
+   (conv-909), ses derniers utilisateurs. */
 .thinking-block .thinking-frise {
   white-space: normal;
-}
-.thinking-frise-barre {
-  display: flex;
-  gap: 2px;
-  height: 3px;
-}
-/* Dans l'en-tete : toute une ligne a elle seule (`flex-basis: 100%` force le retour a la ligne),
-   mais un trait de 26em au plus. Le padding droit en % se mesure sur la largeur de l'en-tete :
-   max(0, 100% - 26em) laisse donc au contenu min(largeur, 26em) — une `max-width` laisserait la
-   barre remonter sur la ligne de la capsule des que la colonne est assez large.
-   Elle reste HORS de la capsule et deborde sous le signe de vie : un essai « Fumé net » qui la
-   mettait dans la capsule a ete refuse (conv-173, « mets-la comme avant en dessous »). */
-.thinking-block > summary .thinking-frise-barre {
-  flex: 0 0 100%;
-  box-sizing: border-box;
-  padding: 0 max(0px, calc(100% - 26em - 0.25em)) 0 0.25em;
-  margin-bottom: 1px;
-}
-.thinking-frise-barre > span {
-  flex-basis: 0;
-  min-width: 3px;
-  border-radius: 1px;
-  background: var(--chat-frise-ok);
-}
-.thinking-frise-barre > span[data-etat='ko'] {
-  background: var(--chat-frise-ko);
-}
-.thinking-frise-barre > span[data-etat='encours'] {
-  background: var(--capsule-chaud, var(--gold-clair));
 }
 .thinking-frise-liste {
   border-left: 1px solid rgba(var(--voile-rgb), 0.13);
@@ -5469,4 +5397,54 @@ button.chat-project-dot:disabled {
 }
 .thinking-frise-icone[data-famille='autre']::before {
   content: '•';
+}
+/* COMMANDE NOMMEE, DEPLIABLE « comme une orchestration » (conv-910) : la ligne porte ce que fait la
+   commande, en texte plein ; le chevron remplace l'invite de terminal (cette ligne-la s'ouvre
+   vraiment) ; les commandes qu'elle enchaine se lisent dessous, chacune avec son invite. */
+.thinking-frise-tache > summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+}
+.thinking-frise-tache > summary::-webkit-details-marker {
+  display: none;
+}
+.thinking-frise-tache[data-etat='encours']::after {
+  content: none;
+}
+.thinking-frise-tache[data-etat='encours'] > summary::after {
+  content: '…';
+  color: var(--gold-clair);
+}
+.thinking-frise-chevron {
+  display: inline-block;
+  width: 18px;
+  color: var(--text-dim);
+}
+.thinking-frise-chevron::before {
+  content: '▸';
+}
+.thinking-frise-tache[open] > summary .thinking-frise-chevron::before {
+  content: '▾';
+}
+.thinking-frise-tache-nom {
+  color: var(--text);
+}
+.thinking-frise-tache[data-etat='ko'] .thinking-frise-tache-nom {
+  color: var(--chat-frise-ko);
+}
+.thinking-frise-tache > summary:hover .thinking-frise-tache-nom {
+  text-decoration: underline dotted;
+}
+.thinking-frise-sous-actions {
+  margin: 2px 0 4px 18px;
+  padding: 0 0 0 10px;
+  border-left: 1px dashed rgba(var(--voile-rgb), 0.13);
+  list-style: none;
+  color: var(--text-dim);
+}
+.thinking-frise-sous-action {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 1px 0;
 }

@@ -76,7 +76,7 @@ describe('ChatView — classer une conversation par categorie', () => {
       chatApi({
         conversations: vi.fn().mockResolvedValue([
           { ...conversation('A'), categorie: 'Fiches Team' },
-          { ...conversation('B'), projectPath: 'D:\\GIT\\RigApplication' }
+          { ...conversation('B'), projectPath: 'D:\\GIT\\ContosoApp' }
         ])
       })
     )
@@ -148,7 +148,7 @@ describe('ChatView — classer une conversation par categorie', () => {
       chatApi({
         conversations: vi.fn().mockResolvedValue([
           { ...conversation('A'), projectPath: 'D:/AutoWinOS' },
-          { ...conversation('B'), projectPath: 'D:/RigV3Desktop' }
+          { ...conversation('B'), projectPath: 'D:/ContosoV3Desktop' }
         ]),
         conversationsSetProject
       })
@@ -161,15 +161,15 @@ describe('ChatView — classer une conversation par categorie', () => {
     ].map((bouton) => bouton.getAttribute('data-project-path'))
     // Le menu rend les chemins sous leur forme Windows normalisee.
     expect(dossiers).toContain('D:\\AutoWinOS')
-    expect(dossiers).toContain('D:\\RigV3Desktop')
+    expect(dossiers).toContain('D:\\ContosoV3Desktop')
 
     await act(async () => {
       document
         .querySelector<HTMLElement>(
-          '[data-testid="conv-category-folder-choice"][title$="RigV3Desktop"]'
+          '[data-testid="conv-category-folder-choice"][title$="ContosoV3Desktop"]'
         )!
         .click()
     })
-    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'D:\\RigV3Desktop')
+    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'D:\\ContosoV3Desktop')
   })
 })

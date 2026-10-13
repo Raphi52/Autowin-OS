@@ -9,7 +9,7 @@ import {
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   BRAIN_THEMES,
   applyBrainRetrievalScores,
@@ -28,6 +28,37 @@ import {
   searchVaultBrainNotesAsync
 } from './fs-brains'
 import { supprimerArbre } from '../fs-supprimer'
+
+/**
+ * Domaine metier FICTIF (conv-916), de la meme forme que celui d'un profil d'entreprise : le code ne
+ * nomme aucun domaine, ses categories et projets viennent du profil, absent du depot public.
+ */
+const PROFIL_METIER_FICTIF = JSON.stringify({
+  metier: {
+    cle: 'contoso',
+    libelle: 'CONTOSO',
+    documentation: 'contosoapp-documentation',
+    graphe: {
+      categorie: 'Comprendre l’application métier',
+      projets: [
+        { dossier: 'contoso-tv', libelle: 'Projet · TV' },
+        { dossier: 'contoso-processus', libelle: 'Projet · Processus' },
+        { dossier: 'contoso-etapercs', libelle: 'Projet · Étapes RC' },
+        { dossier: 'contoso-etapejudiciaire', libelle: 'Projet · Étapes judiciaires' },
+        { dossier: 'contoso-etapefacture', libelle: 'Projet · Étapes facture' },
+        { dossier: 'contoso-operations', libelle: 'Projet · Opérations' },
+        { dossier: 'contoso-ult_metier', libelle: 'Projet · ULT Métier' },
+        { dossier: 'contoso-ope_metier', libelle: 'Projet · OPE Métier' }
+      ],
+      motsCles: {
+        'category/procedures': ['contoso-processus'],
+        'category/rcs': ['extrait'],
+        'category/moteur-ui': ['contosoclientaccueil'],
+        'category/donnees': ['contosodatabase', 'contosometier']
+      }
+    }
+  }
+})
 
 describe('Brain graph', () => {
   it('fusionne les quatre canaux signes du retriever avec les fiches locales', () => {
@@ -1665,50 +1696,73 @@ describe('Brain graph', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-brain-'))
     mkdirSync(join(root, 'projects'))
 
-    expect(scanBrainGraphs([join(root, 'projects')], root)[0]).toMatchObject({
-      id: 'amitel-brain',
+    // Sans profil (version publique) : les categories generiques seules, aucun domaine metier.
+    const neutre = scanBrainGraphs([join(root, 'projects')], root)[0]
+    expect(neutre).toMatchObject({
+      id: 'brain',
       label: 'Brain',
       path: root,
       kind: 'vault',
       themes: BRAIN_THEMES
     })
-    expect(BRAIN_THEMES).toHaveLength(22)
-    expect(BRAIN_THEMES.map((theme) => theme.id)).toEqual(
-      expect.arrayContaining([
-        'category/brain',
-        'category/procedures',
-        'category/justice',
-        'category/rcs',
-        'category/moteur-ui',
-        'project/rig-tv',
-        'project/rig-processus',
-        'project/rig-etapercs'
-      ])
-    )
+    expect(neutre.metier).toBeUndefined()
+    expect(BRAIN_THEMES).toHaveLength(13)
+    expect(BRAIN_THEMES.map((theme) => theme.id)).not.toContain('category/contoso')
+
+    // Avec le domaine metier du profil : sa categorie et ses huit projets s'ajoutent au catalogue.
+    vi.stubEnv('AUTOWIN_IDENTITE_ENTREPRISE', PROFIL_METIER_FICTIF)
+    try {
+      const avecMetier = scanBrainGraphs([join(root, 'projects')], root)[0]
+      expect(avecMetier.themes).toHaveLength(22)
+      expect(avecMetier.themes?.map((theme) => theme.id)).toEqual(
+        expect.arrayContaining([
+          'category/brain',
+          'category/contoso',
+          'category/procedures',
+          'category/justice',
+          'category/rcs',
+          'category/moteur-ui',
+          'project/contoso-tv',
+          'project/contoso-processus',
+          'project/contoso-etapercs'
+        ])
+      )
+      expect(avecMetier.metier).toMatchObject({
+        cle: 'contoso',
+        libelle: 'CONTOSO',
+        documentation: 'contosoapp-documentation'
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('assigns several derived categories to the same note and preserves wiki links', () => {
+    vi.stubEnv('AUTOWIN_IDENTITE_ENTREPRISE', PROFIL_METIER_FICTIF)
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-vault-'))
-    mkdirSync(join(root, 'projects/rig-tv/obsidian'), { recursive: true })
-    mkdirSync(join(root, 'knowledge/domain/rigapplication-documentation/reference/60-metier-rcs'), {
+    mkdirSync(join(root, 'projects/contoso-tv/obsidian'), { recursive: true })
+    mkdirSync(join(root, 'knowledge/domain/contosoapp-documentation/reference/60-metier-rcs'), {
       recursive: true
     })
     writeFileSync(
       join(root, 'HOME.md'),
-      '# Accueil\n[[projects/rig-tv/obsidian/rig-tv]]\n[[knowledge/domain/rigapplication-documentation/reference/60-metier-rcs/inscription]]\n',
+      '# Accueil\n[[projects/contoso-tv/obsidian/contoso-tv]]\n[[knowledge/domain/contosoapp-documentation/reference/60-metier-rcs/inscription]]\n',
       'utf8'
     )
     writeFileSync(
-      join(root, 'projects/rig-tv/obsidian/rig-tv.md'),
-      '# RIG-TV\nTests KBIS, build et déploiement EDI.\n',
+      join(root, 'projects/contoso-tv/obsidian/contoso-tv.md'),
+      '# CONTOSO-TV\nTests EXTRAIT, build et déploiement EDI.\n',
       'utf8'
     )
     writeFileSync(
       join(
         root,
-        'knowledge/domain/rigapplication-documentation/reference/60-metier-rcs/inscription.md'
+        'knowledge/domain/contosoapp-documentation/reference/60-metier-rcs/inscription.md'
       ),
-      '# Inscription RCS\nImmatriculation au registre du commerce avec modèle SQL.\n',
+      '# Inscription RC\nImmatriculation au registre du commerce avec modèle SQL.\n',
       'utf8'
     )
 
@@ -1717,18 +1771,18 @@ describe('Brain graph', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'HOME', themes: ['category/brain'] }),
         expect.objectContaining({
-          id: 'projects/rig-tv/obsidian/rig-tv',
+          id: 'projects/contoso-tv/obsidian/contoso-tv',
           themes: expect.arrayContaining([
-            'category/rig',
+            'category/contoso',
             'category/echanges-services',
             'category/build-diagnostic',
-            'project/rig-tv'
+            'project/contoso-tv'
           ])
         }),
         expect.objectContaining({
-          id: 'knowledge/domain/rigapplication-documentation/reference/60-metier-rcs/inscription',
+          id: 'knowledge/domain/contosoapp-documentation/reference/60-metier-rcs/inscription',
           themes: expect.arrayContaining([
-            'category/rig',
+            'category/contoso',
             'category/documentation',
             'category/rcs',
             'category/donnees'
@@ -1829,13 +1883,13 @@ describe('Brain graph', () => {
 
   it("applique le corpus avant le top 40 et avant le chargement d'un thème partagé", async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-ranking-'))
-    const rig = join(root, 'knowledge/domain/rigapplication-documentation')
+    const contoso = join(root, 'knowledge/domain/contosoapp-documentation')
     const domain = join(root, 'knowledge/domain')
-    mkdirSync(rig, { recursive: true })
+    mkdirSync(contoso, { recursive: true })
     for (let index = 0; index < 40; index += 1) {
       writeFileSync(
-        join(rig, `needle-${index}.md`),
-        `---\ntags: [theme/architecture]\n---\n# Needle RIG ${index}\n`,
+        join(contoso, `needle-${index}.md`),
+        `---\ntags: [theme/architecture]\n---\n# Needle CONTOSO ${index}\n`,
         'utf8'
       )
     }
@@ -1935,14 +1989,14 @@ tags: [${theme}]
   it('coupe les voisins hors corpus avant de rendre un voisinage', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-neighborhood-'))
     const domain = join(root, 'knowledge/domain')
-    const rig = join(domain, 'rigapplication-documentation')
-    mkdirSync(rig, { recursive: true })
+    const contoso = join(domain, 'contosoapp-documentation')
+    mkdirSync(contoso, { recursive: true })
     writeFileSync(
       join(domain, 'autowin-os-guide.md'),
-      '# Guide Autowin\n[[knowledge/domain/rigapplication-documentation/proc]]\n',
+      '# Guide Autowin\n[[knowledge/domain/contosoapp-documentation/proc]]\n',
       'utf8'
     )
-    writeFileSync(join(rig, 'proc.md'), '# Procédure RIG\n', 'utf8')
+    writeFileSync(join(contoso, 'proc.md'), '# Procédure CONTOSO\n', 'utf8')
     const corpus = ['knowledge/domain/autowin-os-']
 
     expect(
@@ -1952,7 +2006,7 @@ tags: [${theme}]
     expect(scoped.nodes.map((node) => node.id)).toEqual(['knowledge/domain/autowin-os-guide'])
     expect(scoped.links).toEqual([])
     expect(
-      loadVaultBrainNeighborhood(root, 'knowledge/domain/rigapplication-documentation/proc', corpus)
+      loadVaultBrainNeighborhood(root, 'knowledge/domain/contosoapp-documentation/proc', corpus)
         .nodes
     ).toEqual([])
     expect(loadVaultBrainGraph(root, 300, corpus).nodes.map((node) => node.id)).toEqual([
@@ -1961,10 +2015,10 @@ tags: [${theme}]
     expect(readNodeFile(join(domain, 'autowin-os-guide.md'), root, corpus, root).content).toContain(
       'Guide Autowin'
     )
-    expect(() => readNodeFile(join(rig, 'proc.md'), root, corpus, root)).toThrow(
+    expect(() => readNodeFile(join(contoso, 'proc.md'), root, corpus, root)).toThrow(
       'fichier hors corpus du workspace'
     )
-    expect(() => readNodeFile(join(rig, 'proc.md'), undefined, corpus, root)).toThrow(
+    expect(() => readNodeFile(join(contoso, 'proc.md'), undefined, corpus, root)).toThrow(
       'fichier hors corpus du workspace'
     )
   })
@@ -1972,21 +2026,21 @@ tags: [${theme}]
   it('filtre le corpus avant le LOD du preview et du graphe asynchrone', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-preview-'))
     const early = join(root, 'knowledge/_maps')
-    const rig = join(root, 'knowledge/domain/rigapplication-documentation')
+    const contoso = join(root, 'knowledge/domain/contosoapp-documentation')
     mkdirSync(early, { recursive: true })
-    mkdirSync(rig, { recursive: true })
+    mkdirSync(contoso, { recursive: true })
     writeFileSync(join(early, 'foreign.md'), '# Foreign\n', 'utf8')
-    writeFileSync(join(rig, 'proc.md'), '# Procédure RIG\n', 'utf8')
-    const corpus = ['knowledge/domain/rigapplication-documentation/']
+    writeFileSync(join(contoso, 'proc.md'), '# Procédure CONTOSO\n', 'utf8')
+    const corpus = ['knowledge/domain/contosoapp-documentation/']
 
     const preview = await loadVaultBrainGraphPreviewAsync(root, 1, corpus)
     expect(preview.nodes.map((node) => node.id)).toEqual([
-      'knowledge/domain/rigapplication-documentation/proc'
+      'knowledge/domain/contosoapp-documentation/proc'
     ])
     expect(preview.totalNodes).toBe(1)
     expect(
       (await loadVaultBrainGraphAsync(root, 300, corpus)).nodes.map((node) => node.id)
-    ).toEqual(['knowledge/domain/rigapplication-documentation/proc'])
+    ).toEqual(['knowledge/domain/contosoapp-documentation/proc'])
   })
 
   it('returns a bounded preview before the full vault graph', async () => {
@@ -2011,12 +2065,12 @@ tags: [${theme}]
     const parent = mkdtempSync(join(tmpdir(), 'autowin-os-unicode-vault-'))
     const allowed = join(parent, 'Knowledge-K')
     const foreign = join(parent, 'Knowledge-K')
-    const previousRoot = process.env.AMITEL_BRAIN_ROOT
+    const previousRoot = process.env.AUTOWIN_BRAIN_ROOT
     try {
       mkdirSync(allowed)
       mkdirSync(foreign)
       writeFileSync(join(foreign, 'foreign-secret.md'), '# FOREIGN SECRET\n', 'utf8')
-      process.env.AMITEL_BRAIN_ROOT = allowed
+      process.env.AUTOWIN_BRAIN_ROOT = allowed
       vi.resetModules()
       const isolated = await import('./fs-brains')
 
@@ -2038,8 +2092,8 @@ tags: [${theme}]
         'fichier hors périmètre autorisé'
       )
     } finally {
-      if (previousRoot === undefined) delete process.env.AMITEL_BRAIN_ROOT
-      else process.env.AMITEL_BRAIN_ROOT = previousRoot
+      if (previousRoot === undefined) delete process.env.AUTOWIN_BRAIN_ROOT
+      else process.env.AUTOWIN_BRAIN_ROOT = previousRoot
       vi.resetModules()
     }
   })
@@ -2049,7 +2103,7 @@ tags: [${theme}]
     const allowed = join(parent, 'allowed')
     const outside = join(parent, 'outside')
     const alias = join(parent, 'alias')
-    const previousRoot = process.env.AMITEL_BRAIN_ROOT
+    const previousRoot = process.env.AUTOWIN_BRAIN_ROOT
     try {
       mkdirSync(allowed)
       mkdirSync(outside)
@@ -2057,7 +2111,7 @@ tags: [${theme}]
         writeFileSync(join(allowed, `inside-${index}.md`), `# INSIDE-${index}\n`, 'utf8')
         writeFileSync(join(outside, `outside-${index}.md`), `# OUTSIDE-${index}\n`, 'utf8')
       }
-      process.env.AMITEL_BRAIN_ROOT = allowed
+      process.env.AUTOWIN_BRAIN_ROOT = allowed
       vi.resetModules()
       const isolated = await import('./fs-brains')
       const linkType = process.platform === 'win32' ? 'junction' : 'dir'
@@ -2083,8 +2137,8 @@ tags: [${theme}]
       expect(graph.nodes).toHaveLength(100)
       expect(graph.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
     } finally {
-      if (previousRoot === undefined) delete process.env.AMITEL_BRAIN_ROOT
-      else process.env.AMITEL_BRAIN_ROOT = previousRoot
+      if (previousRoot === undefined) delete process.env.AUTOWIN_BRAIN_ROOT
+      else process.env.AUTOWIN_BRAIN_ROOT = previousRoot
       vi.resetModules()
       supprimerArbre(parent)
     }

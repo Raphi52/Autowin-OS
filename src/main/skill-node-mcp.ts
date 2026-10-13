@@ -159,9 +159,10 @@ function cheminComparable(chemin: string): string {
  * Les lectures DIRECTES du Brain d'une phase — `Read` d'une note, `Grep`/`Glob` sous sa racine —
  * rendues en lignes de trace, à côté de celles des outils natifs (`libelleAppelObserve`).
  *
- * Mesure du 2026-09-27 (`scripts/probe-think-brain.mts`, 5 tâches réelles) : un nœud `think` ouvre
- * les notes par `brain_read` MAIS AUSSI en lisant le fichier sous la racine du Brain, comme
- * `consigneCandidatesBrain` l'y autorise. Sur la tâche « heure dans une OPE RIG », la note qui
+ * Mesure du 2026-09-27 (`entreprise/<nom>/scripts/probe-think-brain.mts`, 5 tâches réelles) : un
+ * nœud `think` ouvre les notes par `brain_read` MAIS AUSSI en lisant le fichier sous la racine du
+ * Brain, comme `consigneCandidatesBrain` l'y autorise. Sur la tâche « heure dans une OPE de
+ * l'application métier », la note qui
  * répondait n'a été lue QUE par `Read` : la trace « outil natif » n'en montrait rien.
  */
 export function lecturesDirectesDuBrain(
@@ -327,7 +328,7 @@ export function outilsPublies(
 function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille: number): string {
   const chemin = typeof args.path === 'string' ? args.path.trim().replace(/\\/g, '/') : ''
   const racine = sharedBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
-  // Casse ignorée, comme `lecturesDirectesDuBrain` : `//serveur/partage/…` est déjà sous `\\serveur\rig\…`.
+  // Casse ignorée, comme `lecturesDirectesDuBrain` : `//serveur/partage/…` est déjà sous `\\serveur\contoso\…`.
   const dejaSousLaRacine = cheminComparable(chemin)
     .toLowerCase()
     .startsWith(`${cheminComparable(racine).toLowerCase()}/`)

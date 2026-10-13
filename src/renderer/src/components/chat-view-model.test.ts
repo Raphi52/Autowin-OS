@@ -100,6 +100,30 @@ describe('conversation state indicator', () => {
     ).toMatchObject({ key: 'running', label: 'En cours', glyph: '' })
   })
 
+  // conv-914 (2026-10-13) : un run rattaché au redémarrage travaille encore, mais le DERNIER tour
+  // (un tour de chat « reprend ») est terminé et l'écran n'a aucun tour ouvert. Spinner attendu.
+  it('shows running when an earlier turn still streams behind a completed last turn', () => {
+    expect(
+      deriveConversationState({
+        busy: false,
+        messageCount: 4,
+        lastMessageRole: 'assistant',
+        lastAssistantStatus: 'completed',
+        streamingTurn: true
+      })
+    ).toMatchObject({ key: 'running', label: 'En cours' })
+    // Jumeau : le même fil sans tour en cours reste « À jour ».
+    expect(
+      deriveConversationState({
+        busy: false,
+        messageCount: 4,
+        lastMessageRole: 'assistant',
+        lastAssistantStatus: 'completed',
+        streamingTurn: false
+      })
+    ).toMatchObject({ key: 'completed' })
+  })
+
   it.each([
     ['streaming', 'running', 'En cours', ''],
     ['completed', 'completed', 'À jour', '✓'],

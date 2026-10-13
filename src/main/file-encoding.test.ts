@@ -11,7 +11,7 @@ import {
 /**
  * ENCODAGE — le défaut le plus dangereux trouvé sur `edit_file` : il corrompait SILENCIEUSEMENT.
  *
- * Constaté le 2026-08-07 sur `D:\GIT\RigApplication`, fichier `ULT_1RIL_SE.cls` offset 1097 : les
+ * Constaté le 2026-08-07 sur `D:\GIT\ContosoApp`, fichier `ULT_1RIL_SE.cls` offset 1097 : les
  * octets réels `6c 27 e9 71 75 69 70 65` valent « l'équipe » en mono-octet. `edit_file` lisait et
  * écrivait en `'utf8'` codé en dur, donc :
  *   - la lecture rendait « l'<?>quipe » → l'extrait du modèle ne correspondait jamais ;

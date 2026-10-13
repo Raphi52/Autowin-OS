@@ -161,8 +161,14 @@ export function deriveConversationState(input: {
    * vert dont personne n'a lu le resultat n'est pas « a jour » : il reclame un coup d'oeil.
    */
   unseen?: boolean
+  /**
+   * Un tour est encore en cours AILLEURS que dans le dernier message (résumé IPC
+   * `hasStreamingTurn`) : run rattaché au redémarrage, dernier tour de chat déjà terminé
+   * (conv-914, 2026-10-13). L'écran n'a alors aucun tour ouvert, donc `busy` est faux.
+   */
+  streamingTurn?: boolean
 }): ConversationState {
-  if (input.busy || input.lastAssistantStatus === 'streaming') {
+  if (input.busy || input.lastAssistantStatus === 'streaming' || input.streamingTurn) {
     return {
       key: 'running',
       label: 'En cours',
@@ -386,7 +392,8 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
     step.step === 'gate'
       ? step.detail || step.text
       : step.text || step.error || (step.step === 'exec' ? undefined : step.detail)
-  if (!prompt && !rendu) return parts
+  const raisonnement = step.thinking?.trim() || undefined
+  if (!prompt && !rendu && !raisonnement) return parts
   const ok = step.status !== 'failed'
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
@@ -405,15 +412,72 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
       ...avant,
       ...(prompt ? { prompt } : {}),
       ...(rendu ? { outcome: rendu } : {}),
+      /*
+       * Le raisonnement DEJA recu en direct prime sur celui de l'etape terminee : le fournisseur
+       * recolle ses fragments de flux avec un saut de ligne entre chacun (`joinThinking`), ce qui
+       * coupe les phrases tous les trois mots. Celui de l'etape ne sert que s'il n'est rien arrive.
+       */
+      ...(!avant.raisonnement && raisonnement ? { raisonnement } : {}),
       ok
     }
     // RIEN de nouveau a dire => meme reference, pour ne pas re-rendre le fil a chaque battement.
-    if (apres.prompt === avant.prompt && apres.outcome === avant.outcome && apres.ok === avant.ok) {
+    if (
+      apres.prompt === avant.prompt &&
+      apres.outcome === avant.outcome &&
+      apres.raisonnement === avant.raisonnement &&
+      apres.ok === avant.ok
+    ) {
       return parts
     }
     const suite = parts.slice()
     const lignes = deja.slice()
     lignes[index] = apres
+    suite[i] = { ...part, pipeline: lignes }
+    return suite
+  }
+  return parts
+}
+
+/**
+ * Borne du raisonnement garde par ligne. On garde la FIN — ce que l'agent pense maintenant —, a la
+ * meme borne que celle du fournisseur (`THINKING_CAP`, src/main/providers/thinking.ts).
+ */
+export const RAISONNEMENT_MAX = 20_000
+
+/**
+ * ACCUMULE un fragment de raisonnement sous la ligne de pipeline de la phase qui l'a emis.
+ *
+ * DEMANDE (conv-918, 2026-10-13) : « quand je deplie ce bloc je vois nulle part ce qui s'ecrit dans
+ * la 2e ligne du mode reduit ». Les fragments ecrasaient la ligne de vie et n'etaient gardes nulle
+ * part. Ils s'ajoutent ici, sur l'orchestration ENCORE EN COURS du tour (meme regle que
+ * `noterChoixDePipeline`).
+ *
+ * Meme refus que pour le prompt : sous une phase jouee par plusieurs membres a la fois, on ne sait
+ * pas a qui appartient le fragment — le coller sous un membre au hasard serait pire que ne rien
+ * montrer. Sans phase connue, la ligne la plus recente est celle qui tourne.
+ */
+export function ajouterRaisonnementDePipeline(
+  parts: ChatPart[],
+  fragment: string,
+  phase?: string
+): ChatPart[] {
+  if (!fragment) return parts
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    if (part.ok !== undefined || part.interrupted) return parts
+    const deja = part.pipeline ?? []
+    if (deja.length === 0) return parts
+    const index = phase ? indexDeLaLignePipeline(deja, phase, undefined) : deja.length - 1
+    if (index < 0) return parts
+    const avant = deja[index]
+    const cumul = (avant.raisonnement ?? '') + fragment
+    const lignes = deja.slice()
+    lignes[index] = {
+      ...avant,
+      raisonnement: cumul.length > RAISONNEMENT_MAX ? cumul.slice(-RAISONNEMENT_MAX) : cumul
+    }
+    const suite = parts.slice()
     suite[i] = { ...part, pipeline: lignes }
     return suite
   }

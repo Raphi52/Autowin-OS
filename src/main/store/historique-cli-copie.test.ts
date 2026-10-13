@@ -26,7 +26,7 @@ describe('planHistoriqueCliASupprimer', () => {
     const plan = planHistoriqueCliASupprimer(COPIE, [
       ENCODE,
       `${ENCODE}-agent--run-8ce6524a505f-1`,
-      'D--RigV3Desktop'
+      'D--ContosoV3Desktop'
     ])
     expect(plan).toEqual([ENCODE, `${ENCODE}-agent--run-8ce6524a505f-1`])
   })
@@ -64,7 +64,7 @@ describe('supprimerHistoriqueCli', () => {
     const racine = mkdtempSync(join(tmpdir(), 'autowin-proj-'))
     const cible = join(racine, ENCODE)
     const descendant = join(racine, `${ENCODE}-agent--run-x-1`)
-    const etranger = join(racine, 'D--RigV3Desktop')
+    const etranger = join(racine, 'D--ContosoV3Desktop')
     for (const d of [cible, descendant, etranger]) {
       mkdirSync(d, { recursive: true })
       writeFileSync(join(d, 'session.jsonl'), '{}')

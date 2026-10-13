@@ -1,12 +1,17 @@
 [CmdletBinding()]
 param(
     [string]$HermesHome = $(if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $env:LOCALAPPDATA "hermes" }),
-    [string]$StateRoot = $(Join-Path $env:LOCALAPPDATA "AmitelBrain")
+    [string]$StateRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 . (Join-Path $PSScriptRoot "integrations\windows\hook-command.ps1")
+. (Join-Path $PSScriptRoot "integrations\windows\identite.ps1")
+# Memes noms que install.ps1 : ceux du profil d'entreprise, neutres sans profil.
+$identite = Get-BrainIdentite (Split-Path -Parent $PSScriptRoot)
+if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Join-Path $env:LOCALAPPDATA $identite.dossierLocal }
+$nomGreffon = "hermes-$($identite.service)"
 
 function Remove-BrainHook([string]$Path, [string]$Wrapper) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
@@ -17,7 +22,7 @@ function Remove-BrainHook([string]$Path, [string]$Wrapper) {
     foreach ($group in @($settings.hooks.UserPromptSubmit)) {
         $kept = @()
         foreach ($hook in @($group.hooks)) {
-            if (Test-AmitelBrainHookCommand ([string]$hook.command) $Wrapper) {
+            if (Test-BrainHookCommand ([string]$hook.command) $Wrapper) {
                 $changed = $true
             } else {
                 $kept += $hook
@@ -30,23 +35,23 @@ function Remove-BrainHook([string]$Path, [string]$Wrapper) {
     }
     if ($changed) {
         $stamp = [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmssfff")
-        Copy-Item -LiteralPath $Path -Destination "$Path.amitel-brain.$stamp.bak" -Force
+        Copy-Item -LiteralPath $Path -Destination "$Path.$($identite.service).$stamp.bak" -Force
         $settings.hooks.UserPromptSubmit = $groups
         [IO.File]::WriteAllText($Path, ($settings | ConvertTo-Json -Depth 30), $utf8NoBom)
     }
 }
 
-$installedWrapper = Join-Path $StateRoot "amitel-brain-hook.ps1"
+$installedWrapper = Join-Path $StateRoot "$($identite.service)-hook.ps1"
 Remove-BrainHook (Join-Path $env:USERPROFILE ".claude\settings.json") $installedWrapper
 Remove-BrainHook (Join-Path $env:USERPROFILE ".codex\hooks.json") $installedWrapper
 
-$plugin = Join-Path $HermesHome "plugins\hermes-amitel-brain"
+$plugin = Join-Path $HermesHome "plugins\$nomGreffon"
 $hermesCommand = Get-Command hermes -ErrorAction SilentlyContinue
 if ($hermesCommand) {
     $oldHermesHome = $env:HERMES_HOME
     $env:HERMES_HOME = $HermesHome
     try {
-        & $hermesCommand.Source plugins disable hermes-amitel-brain | Out-Null
+        & $hermesCommand.Source plugins disable $nomGreffon | Out-Null
     } finally {
         if ($null -eq $oldHermesHome) {
             Remove-Item Env:HERMES_HOME -ErrorAction SilentlyContinue
@@ -63,17 +68,19 @@ if (Test-Path -LiteralPath $configPath) {
     $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 if ($config) {
-    if ([Environment]::GetEnvironmentVariable("AMITEL_BRAIN_ROOT", "User") -eq [string]$config.brain_root) {
-        [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_ROOT", $null, "User")
-    }
-    if ([Environment]::GetEnvironmentVariable("AMITEL_BRAIN_CODE_ROOT", "User") -eq [string]$config.code_root) {
-        [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_CODE_ROOT", $null, "User")
-    }
-    if ([Environment]::GetEnvironmentVariable("AMITEL_BRAIN_PYTHON", "User") -eq [string]$config.python) {
-        [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_PYTHON", $null, "User")
+    foreach ($paire in @(
+        @("AUTOWIN_BRAIN_ROOT", [string]$config.brain_root),
+        @("AUTOWIN_BRAIN_CODE_ROOT", [string]$config.code_root),
+        @("AUTOWIN_BRAIN_PYTHON", [string]$config.python)
+    )) {
+        $nom = Get-BrainNomVariable $identite $paire[0]
+        if ([Environment]::GetEnvironmentVariable($nom, "User") -eq $paire[1]) {
+            [Environment]::SetEnvironmentVariable($nom, $null, "User")
+        }
     }
 }
-Remove-Item -LiteralPath (Join-Path $StateRoot "amitel-brain-hook.ps1") -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $installedWrapper -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $StateRoot "identite.json") -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
 
 [ordered]@{

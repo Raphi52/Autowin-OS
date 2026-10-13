@@ -34,9 +34,12 @@ describe('bloc Actions — frise C3', () => {
     expect(bilanDesActions(actions)).toBe('4 · 1 échec · 41 s')
   })
 
-  // R5 (conv-162, 2026-10-10) : la capsule ECRIT le nombre et la duree ; le bilan complet (echecs
-  // compris) reste son infobulle ; la barre court SOUS la ligne d'en-tete, donc visible bloc plie.
-  it('dessine la capsule, la barre sous la ligne et une ligne de frise par action', async () => {
+  // R5 (conv-162, 2026-10-10) : l'en-tete ECRIT le nombre et la duree ; le bilan complet (echecs
+  // compris) reste son infobulle. DEUX LIGNES (conv-904, 2026-10-12, « Rond de verre ») : la barre
+  // de temps sous la ligne devient le ROND a gauche — le nombre, teinte par l'exception la
+  // plus grave — et la seconde ligne porte la legende des outils, colores seulement sur
+  // l'exception. Visible bloc plie.
+  it('dessine le rond, sa couleur, la legende et une ligne de frise par action', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -50,26 +53,42 @@ describe('bloc Actions — frise C3', () => {
         })
       )
     })
-    expect(host.querySelector('[data-testid="action-block-nombre"]')?.textContent).toBe('4')
+    const rond = host.querySelector('[data-testid="action-block-compte"]')
+    // Le nombre est DANS le rond ; sa couleur dit l'exception la plus grave — ici l'echec, qui
+    // prime sur l'action encore en cours.
+    expect(rond?.querySelector('.anneau-nombre')?.textContent).toBe('4')
+    expect(rond?.getAttribute('data-etats')).toBe('ok ko ok encours')
+    expect(rond?.getAttribute('data-verdict')).toBe('ko')
     expect(host.querySelector('[data-testid="action-block-duree"]')?.textContent).toBe('41 s')
     expect(host.querySelector('[data-testid="action-block-capsule"]')?.getAttribute('title')).toBe(
       '4 · 1 échec · 41 s'
     )
-    expect(host.querySelectorAll('.thinking-frise-barre > span')).toHaveLength(4)
+    // DANS l'en-tete (visible bloc plie), et une seule fois : la barre de temps n'existe plus.
     expect(
-      [...host.querySelectorAll('.thinking-frise-barre > span')].map((s) =>
-        s.getAttribute('data-etat')
+      host.querySelector(
+        '[data-testid="action-block"] > summary [data-testid="action-block-compte"]'
       )
-    ).toEqual(['ok', 'ko', 'ok', 'encours'])
-    // Une seule barre, DANS l'en-tete : elle se voit bloc plie et n'est pas redessinee deplie.
-    expect(host.querySelectorAll('.thinking-frise-barre')).toHaveLength(1)
-    expect(
-      host.querySelector('[data-testid="action-block"] > summary .thinking-frise-barre')
     ).not.toBeNull()
-    // SOUS la ligne, HORS de la capsule (conv-173 : « sors-la de la capsule Actions, mets-la comme
-    // avant en dessous et qui dépasse sur le texte de la ligne ») : enfant direct de l'en-tête.
-    expect(host.querySelector('[data-testid="action-block"] > summary > .thinking-frise-barre')).not.toBeNull()
-    expect(host.querySelector('[data-testid="action-block-capsule"] .thinking-frise-barre')).toBeNull()
+    expect(host.querySelector('.thinking-frise-barre')).toBeNull()
+    // Legende « couleur sur l'exception » : les reussites sans point, l'echec et l'action en cours
+    // avec le leur — dans l'ordre des arcs.
+    const legende = [
+      ...host.querySelectorAll(
+        '[data-testid="action-block"] > summary [data-testid="legende-outil"]'
+      )
+    ]
+    expect(
+      legende.map((l) => [
+        l.textContent,
+        l.getAttribute('data-etat'),
+        Boolean(l.querySelector('.legende-point'))
+      ])
+    ).toEqual([
+      ['Read', 'ok', false],
+      ['Bash', 'ko', true],
+      ['Edit', 'ok', false],
+      ['Bash', 'encours', true]
+    ])
     const lignes = [...host.querySelectorAll('[data-testid="action-frise-ligne"]')]
     expect(lignes.map((l) => l.getAttribute('data-etat'))).toEqual(['ok', 'ko', 'ok', 'encours'])
     // Le texte du corps reste les lignes d'action, une par ligne (contrat des tests existants).

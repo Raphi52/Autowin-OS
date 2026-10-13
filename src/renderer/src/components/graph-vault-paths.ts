@@ -35,7 +35,7 @@ export function pathSegments(file: string | undefined): string[] {
  * Chemin RELATIF au brain — la seule forme exploitable pour situer une fiche.
  *
  * MESURÉ dans l'app en fonctionnement : `node.file` est un chemin UNC ABSOLU
- * (`\\serveur\rig\Brain\knowledge\_maps\x.md`), dont le 1ᵉʳ segment est le nom du
+ * (`\\serveur\contoso\Brain\knowledge\_maps\x.md`), dont le 1ᵉʳ segment est le nom du
  * SERVEUR. `node.id` porte le chemin relatif propre et c'est la clé stable de l'app : on le préfère,
  * et on ne retombe sur `file` (via une ancre de famille) que si l'id n'est pas un chemin.
  */

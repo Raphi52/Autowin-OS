@@ -1088,6 +1088,316 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
   })
 
   /*
+   * « Aucun prompt ni retour enregistré » sous 377 briques sur 682 (17 conversations, 2026-10-12) :
+   * la Demande n'avait AUCUNE source — 252 sur 252 —, et la phrase s'écrivait aussi sous les gestes
+   * d'outil et la réponse affichée, qui n'ont pas d'échange par nature.
+   */
+  it('montre ma demande EN ENTIER sous la brique Demande, sans l’état de l’app', async () => {
+    const light = structure()
+    // Ce que la trace allégée garde d'un message : l'extrait borné, coupé au premier paragraphe.
+    light[1] = {
+      ...light[1],
+      payloads: [
+        { kind: 'user-message', content: 'UTILISATEUR: <message_utilisateur>premier paragraphe' }
+      ]
+    }
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      appel: [
+        {
+          kind: 'user-message',
+          content:
+            'ÉTAT DE L\'APP:\n{"secret":"x"}\n\nUTILISATEUR: <message_utilisateur>premier paragraphe\n\nsecond paragraphe</message_utilisateur>\n\n(Réponds à l’utilisateur / agis.)'
+        }
+      ]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(light),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-kind="request"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(causalTraceCharges).toHaveBeenCalledTimes(1)
+    expect(causalTraceCharges.mock.calls[0][1]).toEqual(['appel'])
+    const demande = view.querySelector('.workflow-execution-detail [data-execution-demande]')
+    expect(demande?.querySelector('summary')?.textContent).toBe('Ta demande')
+    expect(demande?.querySelector('pre')?.textContent).toBe(
+      'premier paragraphe\n\nsecond paragraphe'
+    )
+    expect(view.querySelector('.workflow-execution-detail')?.textContent).not.toContain('secret')
+    expect(view.querySelector('[data-execution-exchange="vide"]')).toBeNull()
+  })
+
+  it('ne dit « aucun prompt » que sous un agent, jamais sous un geste d’outil', async () => {
+    const light = [
+      ...structure(),
+      trace('geste', 4, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'tool-call',
+        payloads: [{ kind: 'tool-call', name: 'Read', content: '' }]
+      })
+    ]
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(light),
+        causalTraceCharges: vi.fn().mockResolvedValue({})
+      }
+    })
+    const view = await render()
+
+    const geste = view.querySelector<HTMLButtonElement>('[data-execution-kind="tool"]')
+    expect(geste).not.toBeNull()
+    await act(async () => {
+      geste?.click()
+      await Promise.resolve()
+    })
+    expect(view.querySelector('.workflow-execution-detail')).not.toBeNull()
+    expect(view.querySelector('[data-execution-exchange="vide"]')).toBeNull()
+    // Un geste propre de l'agent est écrit sans contenu : le détail le DIT, il ne reste pas muet.
+    expect(
+      view.querySelector('[data-execution-exchange="geste-sans-contenu"]')?.textContent
+    ).toContain('seuls son nom, son issue et sa durée')
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+      await Promise.resolve()
+    })
+    expect(view.querySelector('[data-execution-exchange="vide"]')?.textContent).toContain(
+      'Aucun prompt ni retour enregistré'
+    )
+  })
+
+  // « je vois fait retenu mais quand je clique dessus je voudrais voir quel fait » (2026-10-12).
+  const avecRemember = (): HarnessTraceEvent[] => [
+    ...structure(),
+    trace('retenir', 4, {
+      turnId: 'turn-latest',
+      parentId: 'agent',
+      type: 'tool-call',
+      payloads: [{ kind: 'tool-call', name: 'remember', content: '' }]
+    }),
+    trace('retenu', 5, {
+      turnId: 'turn-latest',
+      parentId: 'retenir',
+      type: 'tool-result',
+      actor: { id: 'remember', kind: 'tool', label: 'remember' },
+      payloads: [{ kind: 'tool-result', name: 'remember', content: '' }]
+    })
+  ]
+
+  async function ouvrirFaitRetenu(reponse: unknown) {
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      retenu: [{ kind: 'tool-result', name: 'remember', content: JSON.stringify(reponse) }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(avecRemember()),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-kind="tool"]')?.click()
+      await Promise.resolve()
+    })
+    return { view, causalTraceCharges }
+  }
+
+  it('montre QUEL fait a été retenu, lu dans la réponse de remember — jamais ses arguments', async () => {
+    const { view, causalTraceCharges } = await ouvrirFaitRetenu({
+      allowed: true,
+      stored: true,
+      detail: 'retenu comme CANDIDAT dans la boîte de réception du Brain',
+      fact: { title: 'Le graphe montre le fait', body: 'Premier paragraphe.\n\nSecond paragraphe.' }
+    })
+
+    expect(causalTraceCharges.mock.calls[0][1]).toEqual(['retenu'])
+    expect(causalTraceCharges.mock.calls[0][2]).toEqual(['tool-result'])
+    const fait = view.querySelector('.workflow-execution-detail [data-execution-fait]')
+    expect(fait?.querySelector('summary')?.textContent).toBe('Fait retenu')
+    expect(fait?.querySelector('.workflow-execution-fait-titre')?.textContent).toBe(
+      'Le graphe montre le fait'
+    )
+    expect(fait?.querySelector('pre')?.textContent).toBe(
+      'Premier paragraphe.\n\nSecond paragraphe.'
+    )
+    expect(fait?.querySelector('.workflow-execution-fait-issue')?.textContent).toContain('CANDIDAT')
+  })
+
+  it('un fait refusé ne montre que le motif du refus, jamais son texte', async () => {
+    const { view } = await ouvrirFaitRetenu({
+      allowed: false,
+      reason: 'refusé localement : le fait semble contenir un jeton'
+    })
+
+    const detail = view.querySelector('.workflow-execution-detail')
+    expect(detail?.querySelector('[data-execution-fait]')).toBeNull()
+    expect(detail?.querySelector('[data-execution-fait-refuse]')?.textContent).toBe(
+      'Non retenu · refusé localement : le fait semble contenir un jeton'
+    )
+  })
+
+  // « pareil pour toutes les pastilles, je dois voir ce qui est fait en détail quand je déplie »
+  // (2026-10-12). Le contenu n'arrive qu'au clic : l'arbre, lui, n'en reçoit toujours aucun.
+  it('montre ce que chaque appel d’un outil a envoyé et reçu, chargé au clic seulement', async () => {
+    const light = [
+      ...structure(),
+      trace('verifier', 4, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'tool-call',
+        payloads: [{ kind: 'tool-call', name: 'verify', content: '' }]
+      }),
+      trace('verifie', 5, {
+        turnId: 'turn-latest',
+        parentId: 'verifier',
+        type: 'tool-result',
+        actor: { id: 'verify', kind: 'tool', label: 'verify' },
+        payloads: [{ kind: 'tool-result', name: 'verify', content: '' }]
+      })
+    ]
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      verifier: [{ kind: 'tool-call', name: 'verify', content: '{\n  "type": "typecheck"\n}' }],
+      verifie: [{ kind: 'tool-result', name: 'verify', content: '{"ok":true,"exitCode":0}' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(light),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+    expect(view.textContent).not.toContain('typecheck')
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-kind="tool"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(causalTraceCharges.mock.calls[0][1]).toEqual(['verifier', 'verifie'])
+    expect(causalTraceCharges.mock.calls[0][2]).toEqual(['tool-call', 'tool-result', 'error'])
+    const appel = view.querySelector('.workflow-execution-detail [data-execution-appel]')
+    expect(appel?.querySelector('summary')?.textContent).toBe('Appel')
+    expect(appel?.querySelector('[data-execution-appel-envoye]')?.textContent).toBe(
+      '{\n  "type": "typecheck"\n}'
+    )
+    expect(appel?.querySelector('[data-execution-appel-retour]')?.textContent).toBe(
+      '{"ok":true,"exitCode":0}'
+    )
+  })
+
+  it('montre le texte d’une « Réponse affichée » sous sa brique', async () => {
+    const light = [
+      ...structure(),
+      trace('affichee', 4, {
+        turnId: 'turn-latest',
+        parentId: 'reponse',
+        type: 'response-displayed',
+        channel: 'assistant',
+        actor: { id: 'autowin-renderer', kind: 'system', label: 'Interface Autowin' },
+        recipient: { id: 'human', kind: 'human', label: 'Utilisateur' },
+        payloads: [{ kind: 'model-response', content: '' }]
+      })
+    ]
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      affichee: [{ kind: 'model-response', content: 'C’est corrigé : la brique montre le fait.' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(light),
+        causalTraceCharges
+      }
+    })
+    const view = await render()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="affichee"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(causalTraceCharges.mock.calls[0][1]).toEqual(['affichee'])
+    const texte = view.querySelector('.workflow-execution-detail [data-execution-response]')
+    expect(texte?.querySelector('summary')?.textContent).toBe('Texte affiché')
+    expect(texte?.querySelector('pre')?.textContent).toBe(
+      'C’est corrigé : la brique montre le fait.'
+    )
+  })
+
+  /*
+   * « plein de nodes qui ont une erreur et pas de contenu, surtout pendant les orchestrations »
+   * (2026-10-13). Un sous-agent EN COURS n'a pas de durée ni de retour : ni l'un ni l'autre n'est un
+   * défaut. Sa fiche montre le prompt écrit au démarrage et dit que le retour viendra ; la phase
+   * garde sa limite connue, en ton neutre. Forme du démarrage reprise de conv-913 (build:minimal).
+   */
+  it('orchestration en cours : prompt affiché, retour attendu, aucun orange sans défaut', async () => {
+    const light = executionRunTrace({ agent: 'running' }).map((event) =>
+      event.id === 'run-agent-running'
+        ? {
+            ...event,
+            metrics: undefined,
+            payloads: [
+              { kind: 'app-state', content: '' },
+              { kind: 'user-message', content: '' }
+            ]
+          }
+        : event
+    )
+    const causalTraceCharges = vi.fn().mockResolvedValue({
+      'run-agent-running': [{ kind: 'user-message', content: 'MISSION DU SOUS-AGENT' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue(light),
+        causalTraceCharges
+      }
+    })
+    const view = await render(true)
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-kind="agent"]')?.click()
+      await Promise.resolve()
+    })
+    const fiche = view.querySelector('.workflow-execution-detail')
+    expect(fiche?.querySelector('[data-execution-prompt] pre')?.textContent).toBe(
+      'MISSION DU SOUS-AGENT'
+    )
+    expect(
+      fiche?.querySelector('[data-execution-exchange="retour-attendu"]')?.textContent
+    ).toContain('son retour s’affichera à sa fin')
+    expect(fiche?.querySelector('[data-execution-exchange="vide"]')).toBeNull()
+    expect(fiche?.querySelector('.workflow-execution-warning')).toBeNull()
+
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-kind="skill"]')?.click()
+      await Promise.resolve()
+    })
+    const phase = view.querySelector('.workflow-execution-detail')
+    expect(phase?.querySelector('.workflow-execution-warning')).toBeNull()
+    expect(phase?.querySelector('[data-execution-note]')?.textContent).toContain(
+      'Le runtime transporte la phase'
+    )
+  })
+
+  /*
    * SOUS-AGENT D'UN RUN ORCHESTRÉ (scout du 2026-10-10, conv-193). Son prompt est relié par TENTATIVE
    * (`attemptId`), pas par parenté, et sa cause d'échec est écrite sur le relais en échec. Avant : la
    * carte taisait la cause et le clic disait « Aucun prompt ni retour enregistré ». Formes reprises

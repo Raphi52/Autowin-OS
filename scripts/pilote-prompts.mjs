@@ -50,7 +50,7 @@ export function nommeUneCible(texte) {
 }
 
 const VERBES =
-  /^(fais|fait|met|mets|ajoute|corrige|enleve|supprime|remplace|cree|lance|commite?|commit|pousse|push|verifie|analyse|diagnostique|trouve|rends|reduis|greffe|affiche|classe|renomme|repare|nettoie|teste|change|passe|attaque|donne|montre|explique|simplifie|debloque|fusionne|salvage|kaizen)\b/i
+  /^(fais|fait|met|mets|ajoute|corrige|enleve|supprime|remplace|cree|lance|commite?|commit|pousse|push|verifie|analyse|diagnostique|trouve|rends|reduis|integre|affiche|classe|renomme|repare|nettoie|teste|change|passe|attaque|donne|montre|explique|simplifie|debloque|fusionne|salvage|kaizen)\b/i
 
 export function estImperatif(texte) {
   const nu = texte

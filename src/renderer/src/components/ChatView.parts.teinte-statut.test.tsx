@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -35,7 +32,7 @@ function render(actions: Action[]): void {
 // Une orchestration seule est une CAPSULE depuis conv-194 (2026-10-10) : elle porte le meme
 // `data-state` que la carte, c'est lui que le theme et ces tests lisent.
 const carte = (): HTMLElement | null =>
-  container.querySelector('.activity-group, .thinking-block--orchestration')
+  container.querySelector('.activity-anneau, .thinking-block--orchestration')
 
 const action = (over: Partial<Action>): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 't' }, ...over }) as Action
@@ -71,46 +68,9 @@ describe('B3-γ dans le fil d activité : la carte porte la teinte du statut', (
     expect(carte()?.getAttribute('data-state')).toBe('failed')
   })
 
-  it('la feuille decline la teinte de la carte par statut, pas seulement le point', () => {
-    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'ChatView.css'), 'utf8')
-    // Lecture sans regex : on extrait le corps de chaque regle par decoupage, ce qui ne peut pas
-    // etre affaibli par une classe de caracteres mal echappee.
-    const corps = (selecteur: string): string | null => {
-      const i = css.indexOf(selecteur + ' {')
-      if (i < 0) return null
-      return css.slice(i + selecteur.length + 2, css.indexOf('}', i))
-    }
-    for (const etat of ['failed', 'running', 'interrupted']) {
-      const regle = corps(".activity-group[data-state='" + etat + "']")
-      expect(regle, 'regle manquante pour ' + etat).not.toBeNull()
-      expect(regle!).toMatch(/border-left-color|border-color/)
-      expect(regle!).toMatch(/background/)
-    }
-    // La carte elle-meme doit porter un bord : sans lui, decliner sa couleur ne montre rien.
-    expect(corps('.activity-group')).toMatch(/border-left:/)
-  })
-
-  /**
-   * CASCADE REELLE. Le theme `cosmic-outline` repeint `.activity-group` avec une specificite
-   * (0,2,0) SUPERIEURE a `.activity-group` (0,1,0) de ChatView.css : sans regle teintee DANS le
-   * theme, B3-γ serait ecrit mais invisible a l'ecran. C'est exactement le faux vert qu'un test qui
-   * ne lit que ChatView.css laisse passer.
+  /*
+   * La TEINTE n'est plus portee par le fond de la carte (B3-γ) : depuis conv-904 (2026-10-12) le
+   * verdict se lit dans l'ANNEAU d'arcs et la legende, l'etat du groupe dans le reflet du cadre.
+   * Le data-state ci-dessus reste le contrat ; le dessin est verrouille par anneau-activite.test.tsx.
    */
-  it('le theme cosmic-outline decline lui aussi la teinte, sinon il ecrase la carte', () => {
-    const theme = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'cosmic-outline.css'),
-      'utf8'
-    )
-    const corps = (selecteur: string): string | null => {
-      const i = theme.indexOf(selecteur + ' {')
-      if (i < 0) return null
-      return theme.slice(i + selecteur.length + 2, theme.indexOf('}', i))
-    }
-    for (const etat of ['failed', 'running', 'interrupted']) {
-      const regle = corps(".cosmic-outline .activity-group[data-state='" + etat + "']")
-      expect(regle, 'teinte de theme manquante pour ' + etat).not.toBeNull()
-      expect(regle!).toMatch(/border-left-color/)
-      expect(regle!).toMatch(/background/)
-    }
-  })
 })

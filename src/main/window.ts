@@ -22,7 +22,14 @@ import { placerFenetreDetachee } from '../shared/view-tabs'
 import type { AppDestination } from '../shared/navigation'
 import { installerCaptureSonSysteme } from './audio-loopback'
 import { join } from 'path'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import {
+  FICHIER_ETAT_FENETRE,
+  ecrireEtatFenetre,
+  lireEtatFenetre,
+  placerFenetreMemorisee,
+  type EtatFenetre
+} from './fenetre-memoire'
 import { is } from '@electron-toolkit/utils'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import { warmCapabilities } from './capability-controls'
@@ -243,10 +250,35 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     }
     // Create the browser window.
     jalonDemarrage('construction de la fenêtre')
+    /*
+     * LA PLACE DE LA DERNIÈRE FOIS (fenetre-memoire.ts). Sans elle, la fenêtre renaissait toujours en
+     * 900×670 puis plein écran, quelle que soit la taille que l'utilisateur lui avait donnée.
+     * Les instances de test (isolées ou sans écran) n'en lisent ni n'en écrivent : leur ouverture
+     * doit rester la même à chaque fois, et elles ne doivent pas déplacer la fenêtre de l'utilisateur.
+     */
+    const memoriserPlace = !isolatedTestInstance && !automationInstanceMode.headless
+    const cheminPlace = join(app.getPath('userData'), FICHIER_ETAT_FENETRE)
+    let placeInitiale: EtatFenetre | null = null
+    if (memoriserPlace) {
+      try {
+        const enregistree = lireEtatFenetre(readFileSync(cheminPlace, 'utf8'))
+        if (enregistree) {
+          const principal = screen.getPrimaryDisplay()
+          const autres = screen.getAllDisplays().filter((d) => d.id !== principal.id)
+          placeInitiale = placerFenetreMemorisee(
+            enregistree,
+            [principal, ...autres].map((d) => d.workArea)
+          )
+        }
+      } catch {
+        // Premier lancement (fichier absent) ou fichier illisible : ouverture par défaut.
+      }
+    }
     const mainWindow = new BrowserWindow({
       title: isolatedTestInstance ? 'Autowin OS Test' : 'Autowin OS',
-      width: 900,
-      height: 670,
+      width: placeInitiale?.width ?? 900,
+      height: placeInitiale?.height ?? 670,
+      ...(placeInitiale ? { x: placeInitiale.x, y: placeInitiale.y } : {}),
       show: false,
       autoHideMenuBar: true,
       titleBarStyle: 'hidden',
@@ -282,6 +314,43 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     mainWindow.on('closed', () => {
       if (mainWindowVivante === mainWindow) mainWindowVivante = null
     })
+
+    if (memoriserPlace) {
+      // Reposée APRÈS la construction : sur deux écrans d'échelles différentes (100 % / 150 %),
+      // Windows peut appliquer l'échelle deux fois aux dimensions passées au constructeur.
+      if (placeInitiale) {
+        const { x, y, width, height } = placeInitiale
+        mainWindow.setBounds({ x, y, width, height })
+      }
+      /*
+       * Écrite à CHAQUE fin de déplacement ou de redimensionnement, pas seulement à la fermeture :
+       * un arrêt brutal (plantage, redémarrage forcé) ne passe pas par `close`.
+       * `getNormalBounds` donne la taille NON agrandie même quand la fenêtre est en plein écran :
+       * c'est elle qu'on retrouve en cliquant « Niveau inférieur » après la réouverture.
+       * Réduite dans la barre des tâches, la fenêtre n'écrit rien : son état « agrandie » n'y est
+       * pas fiable, et la dernière place écrite reste la bonne.
+       */
+      const enregistrerPlace = (): void => {
+        if (mainWindow.isDestroyed() || mainWindow.isMinimized()) return
+        try {
+          writeFileSync(
+            cheminPlace,
+            ecrireEtatFenetre({
+              ...mainWindow.getNormalBounds(),
+              maximisee: mainWindow.isMaximized()
+            }),
+            'utf8'
+          )
+        } catch {
+          // Disque indisponible : la place ne sera pas retenue cette fois, rien d'autre ne casse.
+        }
+      }
+      mainWindow.on('resized', enregistrerPlace)
+      mainWindow.on('moved', enregistrerPlace)
+      mainWindow.on('maximize', enregistrerPlace)
+      mainWindow.on('unmaximize', enregistrerPlace)
+      mainWindow.on('close', enregistrerPlace)
+    }
 
     // Clic droit dans un champ de saisie : Electron SOULIGNE les fautes tout seul, mais n'affiche
     // aucune suggestion sans menu contextuel applicatif — il faut le construire à partir de
@@ -429,7 +498,10 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
        */
       console.log(`[demarrage] ${String(Date.now() - T0_DEMARRAGE).padStart(6)} ms  ready-to-show`)
       pendantOperation('fenetre:affichage-initial', () => {
-        presentAutomationWindow(mainWindow, automationInstanceMode.headless, { maximize: true })
+        // Plein écran au premier lancement ; ensuite, comme la dernière fois.
+        presentAutomationWindow(mainWindow, automationInstanceMode.headless, {
+          maximize: placeInitiale ? placeInitiale.maximisee : true
+        })
       })
       setTimeout(() => void warmCapabilities(), 250)
     })

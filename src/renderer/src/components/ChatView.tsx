@@ -79,6 +79,7 @@ import {
   settleOrchestrationOnRunEnd,
   noterChoixDePipeline,
   completerChoixDePipeline,
+  ajouterRaisonnementDePipeline,
   texteDuPrompt
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
@@ -130,6 +131,7 @@ import type {
   SendOptions,
   UserMsg
 } from './chat-view-types'
+import { declarerVueChatMontee, filDeLaVueMontee } from './vue-chat-montee'
 import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
 import { visibleScopedRuns } from './workflows-panel-sections'
 import { ForkIcon, PanelIcon } from './chat-view-icons'
@@ -230,6 +232,12 @@ type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: string 
 const CLE_JAUGES = 'autowin.context-gauges.v1'
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
+/** Libellé affiché (infobulle, lecteur d'écran) de chaque valeur du filtre de statut du pied de liste. */
+const LIBELLE_FILTRE_STATUT: Record<'toutes' | 'actives' | 'inactives', string> = {
+  toutes: 'Toutes',
+  actives: 'Actives',
+  inactives: 'Archivées'
+}
 /**
  * Dossiers RETIRES par la croix — la memoire qui empeche l'import claude.exe de les ressusciter
  * a chaque lancement. Distincte de la liste : « absent » ne dit pas si c'est « jamais vu » ou
@@ -367,13 +375,16 @@ const PastilleEnTete = memo(function PastilleEnTete({
   messageCount,
   lastMessageRole,
   lastAssistantStatus,
-  asksUser
+  asksUser,
+  tourEnCours
 }: {
   occupe: boolean
   messageCount: number
   lastMessageRole?: 'user' | 'assistant'
   lastAssistantStatus?: Conv['lastAssistantStatus']
   asksUser: boolean
+  /** Un tour tourne encore plus haut dans le fil (`Conv.hasStreamingTurn`), même règle que la liste. */
+  tourEnCours: boolean
 }): React.JSX.Element {
   // La conversation affichee est lue par definition : jamais « non lue » (meme regle que la liste).
   const conversationState = deriveConversationState({
@@ -382,7 +393,8 @@ const PastilleEnTete = memo(function PastilleEnTete({
     lastMessageRole,
     lastAssistantStatus,
     asksUser,
-    unseen: false
+    unseen: false,
+    streamingTurn: tourEnCours
   })
   const stateDescription = `${conversationState.label} — ${conversationState.detail}`
   return (
@@ -459,6 +471,7 @@ const LigneConversation = memo(function LigneConversation({
       [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
     lastAssistantStatus: c.lastAssistantStatus,
     asksUser: c.lastAssistantAsksUser === true,
+    streamingTurn: c.hasStreamingTurn === true,
     // La conversation OUVERTE est lue par definition : elle ne doit jamais
     // s'afficher « non lue » sous les yeux de celui qui la regarde.
     unseen: nonVue
@@ -1555,6 +1568,16 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
+  // La fin d'un tour lit le fil de la vue MONTÉE, jamais une copie morte (`vue-chat-montee.ts`).
+  const vueMonteeRef = useRef(false)
+  useEffect(() => {
+    vueMonteeRef.current = true
+    const retirer = declarerVueChatMontee(() => liveMessagesRef.current)
+    return () => {
+      vueMonteeRef.current = false
+      retirer()
+    }
+  }, [])
   /*
    * VIDE LE TAMPON DE STREAMING. Les deltas de texte dorment une frame dans `pilotBatcher` : une
    * action qui doit ANCRER sur le fil reellement affiche (le recu d'orientation) lisait sinon un
@@ -2391,8 +2414,47 @@ export function ChatView({
       (flush) => window.setTimeout(flush, 50),
       (handle) => window.clearTimeout(handle)
     )
+    /*
+     * LE RAISONNEMENT DES SOUS-AGENTS, range sous sa phase dans le bloc Orchestration (conv-918,
+     * 2026-10-13). Il arrive par fragments de quelques mots, plusieurs par seconde : on les regroupe
+     * le temps d'un court delai, puis UN seul patch par conversation, au lieu d'un re-rendu du fil
+     * par fragment. Les fragments consecutifs d'une meme phase sont recolles avant d'etre ranges.
+     */
+    const raisonnementBatcher = createLiveRunDeltaBatcher<{
+      convId: string
+      phase?: string
+      texte: string
+    }>(
+      (batch) => {
+        const parConversation = new Map<string, Array<{ phase?: string; texte: string }>>()
+        for (const item of batch) {
+          const liste = parConversation.get(item.convId) ?? []
+          const dernier = liste[liste.length - 1]
+          if (dernier && dernier.phase === item.phase) dernier.texte += item.texte
+          else liste.push({ phase: item.phase, texte: item.texte })
+          parConversation.set(item.convId, liste)
+        }
+        for (const [convId, fragments] of parConversation)
+          patchLast(convId, (m) => {
+            let parts = m.parts
+            for (const fragment of fragments)
+              parts = ajouterRaisonnementDePipeline(
+                parts,
+                fragment.texte,
+                fragment.phase
+              ) as typeof m.parts
+            m.parts = parts
+          })
+      },
+      (flush) => window.setTimeout(flush, 200),
+      (handle) => window.clearTimeout(handle)
+    )
     const offApp = window.api.onAppEvent((e) => {
-      if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
+      if (e.type !== 'orchestrate-delta') {
+        deltaBatcher.flush()
+        // Avant toute fin d'etape : le direct doit etre range AVANT que l'etape ne complete sa ligne.
+        raisonnementBatcher.flush()
+      }
       /*
        * LA LISTE DES RUNS SE RAFRAICHIT SEULE (demande du 2026-09-26 : « tout doit se rafraichir
        * tout seul »). Le bouton « Rafraichir » du panneau Détails a disparu ; il couvrait un trou :
@@ -2556,6 +2618,19 @@ export function ChatView({
         })
       } else if (
         e.type === 'orchestrate-delta' &&
+        typeof e.reasoning === 'string' &&
+        e.reasoning &&
+        e.convId
+      ) {
+        // Le raisonnement n'est NI le livrable (`delta`) NI une ligne d'etat (`note`) : il se range
+        // sous sa phase, lisible en depliant le bloc Orchestration.
+        raisonnementBatcher.enqueue({
+          convId: e.convId,
+          ...(e.reasoningPhase ? { phase: e.reasoningPhase } : {}),
+          texte: e.reasoning
+        })
+      } else if (
+        e.type === 'orchestrate-delta' &&
         typeof e.note === 'string' &&
         e.note &&
         e.convId
@@ -2650,6 +2725,7 @@ export function ChatView({
     return () => {
       disposed = true
       deltaBatcher.cancel()
+      raisonnementBatcher.cancel()
       offApp()
     }
   }, [])
@@ -3167,7 +3243,17 @@ export function ChatView({
   async function reconcilierTourNonClos(id: string): Promise<void> {
     const messages = liveMessagesRef.current.get(id) ?? []
     const dernier = [...messages].reverse().find((message) => message.role === 'assistant')
-    if (!dernier || (dernier as AsstMsg).done) return
+    /*
+     * N'IMPORTE QUELLE bulle non close justifie la sonde, pas seulement la DERNIÈRE (conv-913,
+     * 2026-10-13). Au redémarrage, le main rattache une orchestration encore vivante et AJOUTE en bas
+     * du fil un récapitulatif « Reprise du fil… » sans statut, donc relu comme terminé
+     * (`index.ts`, `recapMessage`). La bulle du tour vivant n'était plus la dernière : l'écran ne
+     * sondait pas, croyait le fil libre, et la saisie partait en message normal, refusé par le main.
+     */
+    const unTourNonClos = messages.some(
+      (message) => message.role === 'assistant' && !(message as AsstMsg).done
+    )
+    if (!unTourNonClos) return
     let actif: boolean | undefined
     try {
       actif = (await window.api.pilotChatActive?.(id))?.active
@@ -3188,6 +3274,9 @@ export function ChatView({
       if (!busyConversationsRef.current.has(id)) setConversationBusy(id, true)
       return
     }
+    // Tour mort : on ne clôt que la DERNIÈRE bulle, comme avant. Une bulle plus haute restée
+    // « en cours » n'est pas réécrite ici : rien ne dit qu'elle appartienne au tour sondé.
+    if (!dernier || (dernier as AsstMsg).done) return
     setConversationBusy(id, false)
     patchLast(id, (message) => {
       message.done = true
@@ -5088,7 +5177,14 @@ export function ChatView({
           await new Promise<void>((resolve) =>
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           )
-          const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
+          // La vue a pu être REMONTÉE pendant le tour : sa copie du fil est alors morte et ne garde
+          // que le début de la réponse (12 « Réponse affichée » tronquées sur 50, 2026-10-12). On
+          // lit celle de la vue montée, qui a reçu toute la suite.
+          const filAffiche =
+            (vueMonteeRef.current ? undefined : filDeLaVueMontee(convId)) ??
+            liveMessagesRef.current.get(convId) ??
+            []
+          const rendered = [...filAffiche]
             .reverse()
             .find((message) => message.role === 'assistant') as AsstMsg | undefined
           const renderedText =
@@ -5591,8 +5687,9 @@ export function ChatView({
   }, [convQuery])
 
   /**
-   * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Marquer comme
-   * inactive/active » (`Conversation.inactive`, absent = active).
+   * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Archiver /
+   * Désarchiver » (`Conversation.inactive`, absent = active). Libellés renommés le 2026-10-13
+   * (conv-926) ; la valeur interne `inactives` reste pour ne pas perdre le choix déjà mémorisé.
    * Memorise comme la densite : c'est une preference d'affichage locale.
    */
   const [convStatusFilter, setConvStatusFilter] = useState<'toutes' | 'actives' | 'inactives'>(
@@ -5657,7 +5754,7 @@ export function ChatView({
    *
    * SEULS DES CHEMINS Y ENTRENT (conv-81, 2026-09-16). La liste memorisait tout ce qui avait servi
    * a classer, et classer ecrivait dans le meme champ que le dossier de travail : des libelles
-   * (« Perso », « Clients/Amitel ») se retrouvaient donc proposes comme dossiers de travail, et les
+   * (« Perso », « Clients/Acme ») se retrouvaient donc proposes comme dossiers de travail, et les
    * choisir renvoyait le tour dans le depot d'Autowin. Le filtre est pose a la LECTURE autant qu'a
    * l'ecriture : a la lecture il vide ce qui s'est deja installe (cette liste vit dans le stockage
    * local, il n'y a pas de migration de fichier possible), a l'ecriture il empeche le retour.
@@ -5716,7 +5813,7 @@ export function ChatView({
       if (!poser) {
         setAppNotice((current) =>
           newestNotice(current, {
-            text: 'Statut indisponible : redémarre Autowin OS pour activer « Marquer comme inactive ».'
+            text: 'Statut indisponible : redémarre Autowin OS pour activer « Archiver ».'
           })
         )
         return
@@ -6272,7 +6369,7 @@ export function ChatView({
                       })()
                     }}
                   >
-                    {toutInactif ? 'Marquer comme active' : 'Marquer comme inactive'}
+                    {toutInactif ? 'Désarchiver' : 'Archiver'}
                   </button>
                 )
               })()}
@@ -6391,8 +6488,8 @@ export function ChatView({
               className="conv-status-filter"
               data-testid="conv-status-filter"
               data-filter={convStatusFilter}
-              title={`Statut affiché : ${convStatusFilter} — cliquer pour changer`}
-              aria-label={`Filtrer par statut : ${convStatusFilter}`}
+              title={`Statut affiché : ${LIBELLE_FILTRE_STATUT[convStatusFilter]} — cliquer pour changer`}
+              aria-label={`Filtrer par statut : ${LIBELLE_FILTRE_STATUT[convStatusFilter]}`}
               onClick={() =>
                 setConvStatusFilter((f) =>
                   f === 'toutes' ? 'actives' : f === 'actives' ? 'inactives' : 'toutes'
@@ -6410,7 +6507,7 @@ export function ChatView({
                 ? 'Toutes'
                 : convStatusFilter === 'actives'
                   ? '● Actives'
-                  : '○ Inactives'}
+                  : '○ Archivées'}
             </button>
             <span className="conv-foot-spacer" />
         <button
@@ -6561,7 +6658,7 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   {convMenu.conv.inactive ? '●' : '○'}
                 </span>
-                {convMenu.conv.inactive ? 'Marquer comme active' : 'Marquer comme inactive'}
+                {convMenu.conv.inactive ? 'Désarchiver' : 'Archiver'}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
@@ -6696,7 +6793,7 @@ export function ChatView({
               {/*
                 Le dossier de REPLI est ce que la pastille affiche quand aucun dossier n'est
                 assigne. Il n'entrait jamais dans la memoire des dossiers connus : l'utilisateur
-                lisait donc « RigApplication » sur l'en-tete sans le trouver dans ce menu
+                lisait donc « ContosoApp » sur l'en-tete sans le trouver dans ce menu
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
@@ -6786,7 +6883,7 @@ export function ChatView({
               */}
               {/*
                 Les DOSSIERS sont aussi des categories dans la barre laterale (AUTOWINOS,
-                RIGV3DESKTOP…). Sans eux ici, le menu ouvert depuis la selection multiple etait
+                CONTOSOV3DESKTOP…). Sans eux ici, le menu ouvert depuis la selection multiple etait
                 vide des qu'aucun libelle libre n'existait (conv-815, 2026-09-23).
               */}
               {convFolderMenu.mode === 'categorie' &&
@@ -6892,6 +6989,7 @@ export function ChatView({
           onNouvelleConversation={nouvelleFenetreStable}
           onAnswerAsk={repondreAskMosaiqueStable}
           signatureComposer={signatureComposerMosaique}
+          skills={skillsInstallees}
         />
       ) : (
         <section
@@ -6948,6 +7046,7 @@ export function ChatView({
                     }
                     lastAssistantStatus={active?.lastAssistantStatus}
                     asksUser={active?.lastAssistantAsksUser === true}
+                    tourEnCours={active?.hasStreamingTurn === true}
                   />
                   <span
                     className={`chat-runtime-provider is-${bindingEffectif?.provider ?? 'loading'}`}

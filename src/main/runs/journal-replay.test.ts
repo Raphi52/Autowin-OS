@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recapMessage, summarizeJournal } from './journal-replay'
+import { fusionnerRepriseDuFil, recapMessage, summarizeJournal } from './journal-replay'
 
 /**
  * Le journal d'un CLI détaché existait sur le disque mais n'était jamais relu : au retour de l'app,
@@ -185,5 +185,47 @@ describe('actions relues (reprise conv-152)', () => {
     expect(message).toContain('Ce qu\'il a fait (2 action(s) relues)')
     expect(message).toContain('- Edit · src/main/a.ts')
     expect(message).not.toContain('aucun message final à cet instant.\n')
+  })
+})
+
+/*
+ * UN SEUL message de reprise par chantier (conv-913, 2026-10-13) : au redémarrage suivant, le
+ * message déjà posé est MIS À JOUR. L'en-tête dit l'état ACTUEL ; ce qui avait été montré reste ;
+ * le nouveau s'ajoute dessous, daté. Rien d'une absence précédente ne disparaît du fil.
+ */
+describe('fusion de la reprise du fil d’un chantier', () => {
+  const premier = recapMessage(summarizeJournal([claude('étape 1 faite')]), true)!
+  const second = recapMessage(summarizeJournal([claude('étape 2 faite')]), false)!
+
+  it('sans message précédent, rend le nouveau tel quel', () => {
+    expect(fusionnerRepriseDuFil(undefined, second, '10:26')).toBe(second)
+  })
+
+  it('garde ce qui avait été montré, ajoute le nouveau dessous, daté', () => {
+    const fusion = fusionnerRepriseDuFil(premier, second, '10:26')
+    expect(fusion).toContain('étape 1 faite')
+    expect(fusion).toContain('étape 2 faite')
+    expect(fusion.indexOf('étape 1 faite')).toBeLessThan(fusion.indexOf('10:26'))
+    expect(fusion.indexOf('10:26')).toBeLessThan(fusion.indexOf('étape 2 faite'))
+  })
+
+  it('l’en-tête est celui de l’état ACTUEL, et il n’apparaît qu’UNE fois', () => {
+    const fusion = fusionnerRepriseDuFil(premier, second, '10:26')
+    expect(fusion.startsWith("Reprise du fil — voici ce que l'agent a produit")).toBe(true)
+    expect(fusion).not.toContain('travaille encore')
+    expect(fusion.match(/Reprise du fil —/g)).toHaveLength(1)
+  })
+
+  it('un troisième redémarrage s’ajoute encore dessous, sans rien effacer', () => {
+    const troisieme = recapMessage(summarizeJournal([claude('étape 3 faite')]), true)!
+    const fusion = fusionnerRepriseDuFil(
+      fusionnerRepriseDuFil(premier, second, '10:26'),
+      troisieme,
+      '11:02'
+    )
+    for (const texte of ['étape 1 faite', 'étape 2 faite', 'étape 3 faite', '10:26', '11:02'])
+      expect(fusion).toContain(texte)
+    expect(fusion.match(/Reprise du fil —/g)).toHaveLength(1)
+    expect(fusion).toContain('travaille encore')
   })
 })

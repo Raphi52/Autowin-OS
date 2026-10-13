@@ -18,7 +18,7 @@ trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
 Add-Type -AssemblyName System.Drawing
 # TOUTE LA CAPTURE VIT DANS UN THREAD NEUF. Mesure du 2026-09-12 : appele depuis le thread
 # principal de PowerShell, SetThreadDesktop echoue avec Win32 170 (ERROR_BUSY) — un thread qui
-# possede deja des fenetres ne peut PAS changer de bureau. Meme parade que RigDesktop.cs : un
+# possede deja des fenetres ne peut PAS changer de bureau. Meme parade que ContosoDesktop.cs : un
 # thread cree pour l'occasion, qui s'attache AVANT de toucher quoi que ce soit de graphique.
 # Code C# PARTAGE avec scripts/hdesk-tv.ps1 (processus de capture ouvert) : un seul exemplaire.
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'hdesk-shot.cs'))

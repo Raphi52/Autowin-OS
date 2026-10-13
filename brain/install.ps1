@@ -2,7 +2,7 @@
 param(
     [string]$BrainRoot = "",
     [string]$HermesHome = $(if ($env:HERMES_HOME) { $env:HERMES_HOME } else { Join-Path $env:LOCALAPPDATA "hermes" }),
-    [string]$StateRoot = $(Join-Path $env:LOCALAPPDATA "AmitelBrain"),
+    [string]$StateRoot = "",
     [string]$RuntimePython = "",
     [switch]$SkipDependencies,
     [switch]$SkipIndex,
@@ -12,6 +12,15 @@ param(
 $ErrorActionPreference = "Stop"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 . (Join-Path $PSScriptRoot "integrations\windows\hook-command.ps1")
+. (Join-Path $PSScriptRoot "integrations\windows\identite.ps1")
+# Profil d'entreprise (entreprise/<nom>/identite.json, a la racine du depot) : il garde les noms deja
+# poses sur les postes. Absent (version publique) : noms neutres.
+$identite = Get-BrainIdentite (Split-Path -Parent $PSScriptRoot)
+if ([string]::IsNullOrWhiteSpace($StateRoot)) { $StateRoot = Join-Path $env:LOCALAPPDATA $identite.dossierLocal }
+$nomRacine = Get-BrainNomVariable $identite "AUTOWIN_BRAIN_ROOT"
+$nomCode = Get-BrainNomVariable $identite "AUTOWIN_BRAIN_CODE_ROOT"
+$nomPython = Get-BrainNomVariable $identite "AUTOWIN_BRAIN_PYTHON"
+$nomGreffon = "hermes-$($identite.service)"
 if ([string]::IsNullOrWhiteSpace($BrainRoot)) { $BrainRoot = $PSScriptRoot }
 $repoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).ProviderPath -replace '\\', '/'
 $resolvedBrain = (Resolve-Path -LiteralPath $BrainRoot).ProviderPath -replace '\\', '/'
@@ -22,7 +31,7 @@ $venvRoot = Join-Path $StateRoot ".venv"
 $runtimeRoot = Join-Path $StateRoot "tooling"
 $python = if ($RuntimePython) { (Resolve-Path -LiteralPath $RuntimePython).ProviderPath } else { Join-Path $venvRoot "Scripts\python.exe" }
 $configPath = Join-Path $StateRoot "config.json"
-$installedWrapper = Join-Path $StateRoot "amitel-brain-hook.ps1"
+$installedWrapper = Join-Path $StateRoot "$($identite.service)-hook.ps1"
 New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
 
 if (-not $SkipDependencies) {
@@ -71,8 +80,24 @@ foreach ($runtimeFile in $runtimeFiles) {
     $source = "$repoRoot/tooling/$runtimeFile"
     Copy-Item -LiteralPath $source -Destination (Join-Path $runtimeRoot $runtimeFile) -Force
 }
+# Outils PROPRES a l'entreprise (conv-916) : `entreprise/<nom>/brain/tooling/*.py`, absents de la
+# version publique. Le profil les nomme (`metier.couverture`) et le tooling generique les importe a
+# cote de lui : sans cette copie, la validation du Brain de l'entreprise signalerait un module absent.
+$dossierEntreprise = Join-Path (Split-Path -Parent $repoRoot) 'entreprise'
+if (Test-Path -LiteralPath $dossierEntreprise) {
+    foreach ($outils in @(Get-ChildItem -LiteralPath $dossierEntreprise -Directory | ForEach-Object { Join-Path $_.FullName 'brain\tooling' })) {
+        if (-not (Test-Path -LiteralPath $outils)) { continue }
+        foreach ($module in @(Get-ChildItem -LiteralPath $outils -Filter "*.py" -File)) {
+            Copy-Item -LiteralPath $module.FullName -Destination (Join-Path $runtimeRoot $module.Name) -Force
+        }
+    }
+}
 $indexScript = Join-Path $runtimeRoot "brain_index.py"
-Copy-Item -LiteralPath "$repoRoot/integrations/windows/amitel-brain-hook.ps1" -Destination $installedWrapper -Force
+Copy-Item -LiteralPath "$repoRoot/integrations/windows/brain-hook.ps1" -Destination $installedWrapper -Force
+# Le code installe lit son identite a cote de lui (tooling/brain_identite.py) : il ne voit pas le depot.
+if ($identite.brut) {
+    [IO.File]::WriteAllText((Join-Path $StateRoot "identite.json"), $identite.brut, $utf8NoBom)
+}
 $config = [ordered]@{
     brain_root = $resolvedBrain
     code_root = ($runtimeRoot -replace '\\', '/')
@@ -82,13 +107,13 @@ $config = [ordered]@{
 }
 [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 10), $utf8NoBom)
 if (-not $SkipUserEnvironment) {
-    [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_ROOT", $resolvedBrain, "User")
-    [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_CODE_ROOT", ($runtimeRoot -replace '\\', '/'), "User")
-    [Environment]::SetEnvironmentVariable("AMITEL_BRAIN_PYTHON", ($python -replace '\\', '/'), "User")
+    [Environment]::SetEnvironmentVariable($nomRacine, $resolvedBrain, "User")
+    [Environment]::SetEnvironmentVariable($nomCode, ($runtimeRoot -replace '\\', '/'), "User")
+    [Environment]::SetEnvironmentVariable($nomPython, ($python -replace '\\', '/'), "User")
 }
-$env:AMITEL_BRAIN_ROOT = $resolvedBrain
-$env:AMITEL_BRAIN_CODE_ROOT = ($runtimeRoot -replace '\\', '/')
-$env:AMITEL_BRAIN_PYTHON = ($python -replace '\\', '/')
+Set-Item -Path "Env:$nomRacine" -Value $resolvedBrain
+Set-Item -Path "Env:$nomCode" -Value ($runtimeRoot -replace '\\', '/')
+Set-Item -Path "Env:$nomPython" -Value ($python -replace '\\', '/')
 
 function Read-JsonObject([string]$Path) {
     if (Test-Path -LiteralPath $Path) {
@@ -109,7 +134,7 @@ function Write-JsonWithBackup([string]$Path, $Object) {
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
     if (Test-Path -LiteralPath $Path) {
         $stamp = [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmssfff")
-        Copy-Item -LiteralPath $Path -Destination "$Path.amitel-brain.$stamp.bak" -Force
+        Copy-Item -LiteralPath $Path -Destination "$Path.$($identite.service).$stamp.bak" -Force
     }
     [IO.File]::WriteAllText($Path, ($Object | ConvertTo-Json -Depth 30), $utf8NoBom)
 }
@@ -121,7 +146,7 @@ function Add-UserPromptHook([string]$Path, [string]$Command, [string]$Wrapper) {
     $present = $false
     foreach ($group in @($settings.hooks.UserPromptSubmit)) {
         foreach ($hook in @($group.hooks)) {
-            if (Test-AmitelBrainHookCommand ([string]$hook.command) $Wrapper) { $present = $true }
+            if (Test-BrainHookCommand ([string]$hook.command) $Wrapper) { $present = $true }
         }
     }
     if (-not $present) {
@@ -134,7 +159,7 @@ function Add-UserPromptHook([string]$Path, [string]$Command, [string]$Wrapper) {
     }
 }
 
-$hookCommands = Get-AmitelBrainHookCommands $installedWrapper
+$hookCommands = Get-BrainHookCommands $installedWrapper
 $command = $hookCommands.Quoted
 Add-UserPromptHook (Join-Path $env:USERPROFILE ".claude\settings.json") $command $installedWrapper
 $codexHome = Join-Path $env:USERPROFILE ".codex"
@@ -150,10 +175,17 @@ if ($codexCommand) {
     Write-Warning "Codex CLI absent: hook copié mais non approuvé. Relancez install.ps1 après installation de Codex."
 }
 
-$pluginSource = "$repoRoot/integrations/hermes-amitel-brain"
-$pluginTarget = Join-Path $HermesHome "plugins\hermes-amitel-brain"
+$pluginSource = "$repoRoot/integrations/hermes-brain"
+$pluginTarget = Join-Path $HermesHome "plugins\$nomGreffon"
 New-Item -ItemType Directory -Force -Path $pluginTarget | Out-Null
 Copy-Item -Path "$pluginSource\*" -Destination $pluginTarget -Recurse -Force
+# Le greffon porte le nom du service : celui deja active dans Hermes sur les postes de l'entreprise.
+$pluginManifest = Join-Path $pluginTarget "plugin.yaml"
+$manifestText = [IO.File]::ReadAllText($pluginManifest) -replace '(?m)^name:.*$', "name: $nomGreffon"
+[IO.File]::WriteAllText($pluginManifest, $manifestText, $utf8NoBom)
+if ($identite.brut) {
+    [IO.File]::WriteAllText((Join-Path $pluginTarget "identite.json"), $identite.brut, $utf8NoBom)
+}
 
 $hermesEnabled = $false
 $hermesCommand = Get-Command hermes -ErrorAction SilentlyContinue
@@ -162,9 +194,9 @@ if ($hermesCommand) {
     $env:HERMES_HOME = $HermesHome
     try {
         $pluginList = (& $hermesCommand.Source plugins list --plain --no-bundled 2>&1 | Out-String)
-        $alreadyEnabled = $LASTEXITCODE -eq 0 -and $pluginList -match '(?m)^enabled\s+\S+\s+\S+\s+hermes-amitel-brain\s*$'
+        $alreadyEnabled = $LASTEXITCODE -eq 0 -and $pluginList -match ('(?m)^enabled\s+\S+\s+\S+\s+' + [regex]::Escape($nomGreffon) + '\s*$')
         if (-not $alreadyEnabled) {
-            $enableOutput = ("n" | & $hermesCommand.Source plugins enable hermes-amitel-brain 2>&1 | Out-String)
+            $enableOutput = ("n" | & $hermesCommand.Source plugins enable $nomGreffon 2>&1 | Out-String)
             if ($LASTEXITCODE -ne 0) { throw "Le plugin Hermes a été copié mais son activation a échoué: $enableOutput" }
         }
         $hermesEnabled = $true
@@ -176,7 +208,7 @@ if ($hermesCommand) {
         }
     }
 } else {
-    Write-Warning "Hermes CLI absent: plugin copié mais non activé. Lancez 'hermes plugins enable hermes-amitel-brain' après installation de Hermes."
+    Write-Warning "Hermes CLI absent: plugin copié mais non activé. Lancez 'hermes plugins enable $nomGreffon' après installation de Hermes."
 }
 
 if (-not $SkipIndex) {

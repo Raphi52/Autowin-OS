@@ -3,7 +3,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
  * Kaizen conv-151, saisie ts=1788375124082 (« kaizen t'avais tout ce qu'il fallait pour reflechir
- * dans le brain ») : conseil d'architecture detaille sur RIG rendu sans AUCUN brain_query. La regle
+ * dans le brain ») : conseil d'architecture detaille sur CONTOSO rendu sans AUCUN brain_query. La regle
  * « POUR RELIRE » ne couvrait que les questions sur un acquis, pas les demandes de conseil.
  * Entree qui doit faire rougir : la suppression du paragraphe, ou l'exigence ramenee a « apres ».
  */

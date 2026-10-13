@@ -78,7 +78,7 @@ function api() {
     conversations: vi
       .fn()
       .mockResolvedValue([
-        { id: 'conv-1', title: 'Projet RIG', category: 'codex', provider: 'codex' }
+        { id: 'conv-1', title: 'Projet CONTOSO', category: 'codex', provider: 'codex' }
       ]),
     models: vi.fn().mockResolvedValue([]),
     providerStatus: vi.fn().mockResolvedValue([]),

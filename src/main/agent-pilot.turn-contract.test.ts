@@ -770,7 +770,7 @@ describe('AgentPilot turn contract', () => {
     const retrieveContext = vi
       .fn()
       .mockResolvedValue(
-        '[AMITEL BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
+        '[ACME BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
           '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
       )
 
@@ -814,19 +814,19 @@ describe('AgentPilot turn contract', () => {
     // (mesuré le 2026-07-28 : cache_read = 0 sur 100 % des appels, ~16 k réécrits par tour).
     const system = send.mock.calls[0][2].system as string
     const userContent = (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
-    expect(userContent).toContain('[AMITEL BRAIN REFERENCE DATA]')
+    expect(userContent).toContain('[ACME BRAIN REFERENCE DATA]')
     expect(userContent).toContain('[GRAPHIFY CODE EVIDENCE]')
     // Le préfixe system ne doit PLUS porter de contenu dépendant de la question.
-    expect(system).not.toContain('[AMITEL BRAIN REFERENCE DATA]')
+    expect(system).not.toContain('[ACME BRAIN REFERENCE DATA]')
   })
 
   it('injects only current-workspace and global provisional memories into direct chat', async () => {
     forgetEcho()
     noteRemembered('conv-workspace-memory', {
-      title: 'Compilation RIG',
+      title: 'Compilation CONTOSO',
       body: 'Utiliser gacRig avant le build.',
-      scope: 'rigapplication',
-      workspace: 'D:\\DevSrc\\RigApplication'
+      scope: 'contosoapp',
+      workspace: 'D:\\DevSrc\\ContosoApp'
     })
     noteRemembered('conv-workspace-memory', {
       title: 'Préférence globale',

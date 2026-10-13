@@ -30,6 +30,12 @@ import type { ExecutionEvidence } from './providers/types'
  */
 const AGGREGATE_HEAD = 40_000
 const AGGREGATE_TAIL = 20_000
+/** Taille maximale du livrable agrégé non coupé : ce qui s'ajoute au prompt du juge s'y mesure (changements-juge.ts). */
+// fix-ok: conv-914 (13/10) — le bloc « CE QUI A CHANGÉ » ajouté au prompt du juge n'avait aucune
+// borne : sans elle il faisait dépasser les 40 000 + 20 000 ci-dessus. Mesuré : borne remplacée par
+// Infinity → test « ne fait jamais dépasser la taille maximale » de changements-juge.test.ts rouge ;
+// avec AGGREGATE_MAX_CHARS → vert.
+export const AGGREGATE_MAX_CHARS = AGGREGATE_HEAD + AGGREGATE_TAIL
 
 /** Borne le livrable agrégé soumis au juge sans lui retirer ses deux bords porteurs. */
 export const clampAggregateForJudge = (text: string | undefined): string =>

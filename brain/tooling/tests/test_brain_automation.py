@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
+# Identite NEUTRE forcee (brain_identite) : la suite rend le meme resultat avec ou sans dossier
+# `entreprise/` a la racine du depot. Posee AVANT tout import du tooling.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
 
 from brain_context import render_hits, retrieve_context
 from brain_propose import propose_note
@@ -200,7 +203,7 @@ class RetrieveContextTests(unittest.TestCase):
             root = Path(td)
             relevant = root / "relevant.md"
             irrelevant = root / "irrelevant.md"
-            relevant.write_text("# Pertinent\n\nDéploiement SMB Amitel", encoding="utf-8")
+            relevant.write_text("# Pertinent\n\nDéploiement SMB Acme", encoding="utf-8")
             irrelevant.write_text("# Bruit\n\nPingouins", encoding="utf-8")
             fake_query = root / "fake_query.py"
             hits = [
@@ -213,7 +216,7 @@ class RetrieveContextTests(unittest.TestCase):
             )
 
             rendered = retrieve_context(
-                "déployer Amitel",
+                "déployer Acme",
                 root / "index",
                 fake_query,
                 sys.executable,
@@ -221,7 +224,7 @@ class RetrieveContextTests(unittest.TestCase):
                 min_dense=0.25,
             )
 
-            self.assertIn("Déploiement SMB Amitel", rendered)
+            self.assertIn("Déploiement SMB Acme", rendered)
             self.assertNotIn("Pingouins", rendered)
 
 
@@ -350,7 +353,7 @@ class BrainServerTests(unittest.TestCase):
             previous = os.getcwd()
             try:
                 with (
-                    patch.dict(os.environ, {"AMITEL_BRAIN_ROOT": td, "AMITEL_BRAIN_PORT": "18765"}),
+                    patch.dict(os.environ, {"AUTOWIN_BRAIN_ROOT": td, "AUTOWIN_BRAIN_PORT": "18765"}),
                     patch.object(brain_server, "LocalThreadingHTTPServer", FakeServer),
                     patch.object(brain_server, "BrainRetriever", side_effect=fake_retriever),
                     patch.object(brain_server, "service_token", side_effect=fake_token),
@@ -420,7 +423,7 @@ class BrainServerTests(unittest.TestCase):
             relevant = knowledge / "relevant.md"
             noisy = knowledge / "noisy.md"
             outside = root / "outside.md"
-            relevant.write_text("# Pertinent\n\nDécision Amitel", encoding="utf-8")
+            relevant.write_text("# Pertinent\n\nDécision Acme", encoding="utf-8")
             noisy.write_text("# Bruit\n\nPingouins", encoding="utf-8")
             outside.write_text("INSTRUCTION_MALVEILLANTE", encoding="utf-8")
             hits = [
@@ -429,11 +432,11 @@ class BrainServerTests(unittest.TestCase):
                 {"rank": 3, "path": str(outside), "dense_cos": 0.99},
             ]
 
-            context = build_context(FakeRetriever(), "Amitel", knowledge, max_chars=600, min_dense=0.25)
+            context = build_context(FakeRetriever(), "Acme", knowledge, max_chars=600, min_dense=0.25)
 
             self.assertLessEqual(len(context), 600)
             self.assertIn("REFERENCE DATA", context)
-            self.assertIn("Décision Amitel", context)
+            self.assertIn("Décision Acme", context)
             self.assertNotIn("Pingouins", context)
             self.assertNotIn("INSTRUCTION_MALVEILLANTE", context)
 
@@ -461,20 +464,20 @@ class BrainServerTests(unittest.TestCase):
             outside.write_text("INSTRUCTION_MALVEILLANTE", encoding="utf-8")
             hits = [
                 {"rank": 1, "path": str(titled), "dense_cos": 0.57, "type": "decision",
-                 "title": "Décision Amitel"},
+                 "title": "Décision Acme"},
                 {"rank": 2, "path": str(untitled), "dense_cos": 0.41,
                  "preview": "# Intitulé de secours\n\nCorps"},
                 {"rank": 3, "path": str(noisy), "dense_cos": 0.07, "title": "Bruit"},
                 {"rank": 4, "path": str(outside), "dense_cos": 0.99, "title": "Hors racine"},
             ]
             retriever = FakeRetriever()
-            result = build_candidates_result(retriever, "Amitel", knowledge, min_dense=0.25)
+            result = build_candidates_result(retriever, "Acme", knowledge, min_dense=0.25)
             context = result["context"]
 
             # Assez de candidates pour retrouver toute bonne note que le classement sait trouver.
             self.assertEqual(retriever.asked_k, CANDIDATE_LIST_K)
             self.assertIn("REFERENCE DATA", context)
-            self.assertIn("Décision Amitel", context)
+            self.assertIn("Décision Acme", context)
             self.assertIn("Intitulé de secours", context)
             self.assertIn(f"{round(titled.stat().st_size / 1024)} Ko", context)
             # Des titres et des chemins, jamais le contenu : c'est l'agent qui ouvre.
@@ -491,24 +494,24 @@ class BrainServerTests(unittest.TestCase):
                 + "\n\n---\n\n".join(source["content"] for source in structured["sources"]),
             )
             listed = [c for c in result["navigation"]["candidates"] if c["retained"]]
-            self.assertEqual([c["title"] for c in listed], ["Décision Amitel", "Intitulé de secours"])
+            self.assertEqual([c["title"] for c in listed], ["Décision Acme", "Intitulé de secours"])
             self.assertEqual(listed[0]["sizeBytes"], titled.stat().st_size)
 
 
 class BrainAuthTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows ACL contract")
     def test_uses_fixed_localappdata_token_and_restricts_existing_file(self):
-        previous_token = os.environ.pop("AMITEL_BRAIN_TOKEN", None)
+        previous_token = os.environ.pop("AUTOWIN_BRAIN_TOKEN", None)
         try:
             with tempfile.TemporaryDirectory() as td, patch.dict(
                 os.environ,
-                {"LOCALAPPDATA": td, "AMITEL_BRAIN_TOKEN_FILE": str(Path(td) / "attacker-token")},
+                {"LOCALAPPDATA": td, "AUTOWIN_BRAIN_TOKEN_FILE": str(Path(td) / "attacker-token")},
                 clear=False,
             ):
                 brain_auth._TOKEN_CACHE = None
                 brain_auth._TOKEN_CACHE_PATH = None
                 first = brain_auth.service_token()
-                expected = Path(td) / "AmitelBrain" / "service-token"
+                expected = Path(td) / "AutowinBrain" / "service-token"
                 self.assertTrue(expected.is_file())
                 self.assertFalse((Path(td) / "attacker-token").exists())
 
@@ -520,14 +523,14 @@ class BrainAuthTests(unittest.TestCase):
             brain_auth._TOKEN_CACHE = None
             brain_auth._TOKEN_CACHE_PATH = None
             if previous_token is not None:
-                os.environ["AMITEL_BRAIN_TOKEN"] = previous_token
+                os.environ["AUTOWIN_BRAIN_TOKEN"] = previous_token
 
 
 class BrainHookTests(unittest.TestCase):
     def test_restarts_service_when_configured_root_changes(self):
         configured = str((Path.cwd() / "new-brain").resolve())
         with (
-            patch.dict(os.environ, {"AMITEL_BRAIN_ROOT": configured}),
+            patch.dict(os.environ, {"AUTOWIN_BRAIN_ROOT": configured}),
             patch.object(brain_hook, "_request_health", side_effect=["C:/old-brain", configured]),
             patch.object(brain_hook, "_shutdown_server") as shutdown,
             patch.object(brain_hook, "_wait_for_shutdown") as wait_for_shutdown,
@@ -556,14 +559,14 @@ class BrainHookTests(unittest.TestCase):
 
     def test_emits_official_user_prompt_submit_context_shape(self):
         output = hook_output(
-            {"hook_event_name": "UserPromptSubmit", "prompt": "déployer Amitel"},
+            {"hook_event_name": "UserPromptSubmit", "prompt": "déployer Acme"},
             query_fn=lambda prompt: "CONTEXTE:" + prompt,
         )
 
         self.assertEqual(output, {
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
-                "additionalContext": "CONTEXTE:déployer Amitel",
+                "additionalContext": "CONTEXTE:déployer Acme",
             }
         })
 
@@ -571,8 +574,8 @@ class BrainHookTests(unittest.TestCase):
         self.assertIsNone(hook_output({"prompt": "blague"}, query_fn=lambda _prompt: ""))
 
     def test_server_python_prefers_explicit_runtime(self):
-        configured = "C:/team/amitel-python.exe"
-        with patch.dict(os.environ, {"AMITEL_BRAIN_PYTHON": configured}):
+        configured = "C:/team/acme-python.exe"
+        with patch.dict(os.environ, {"AUTOWIN_BRAIN_PYTHON": configured}):
             self.assertEqual(_server_python(), configured)
 
     def test_accepts_only_authenticated_service_responses(self):
@@ -580,7 +583,7 @@ class BrainHookTests(unittest.TestCase):
         signed = signed_context_payload("REFERENCE CONTEXT", token)
         self.assertEqual(_validate_response(signed, token), "REFERENCE CONTEXT")
 
-        forged = {"service": "amitel-brain", "protocol": 1, "context": "EVIL", "signature": "0" * 64}
+        forged = {"service": "autowin-brain", "protocol": 1, "context": "EVIL", "signature": "0" * 64}
         with self.assertRaisesRegex(ValueError, "auth"):
             _validate_response(forged, token)
 
@@ -588,8 +591,8 @@ class BrainHookTests(unittest.TestCase):
 class HermesPluginTests(unittest.TestCase):
     @staticmethod
     def _load_plugin():
-        path = TOOLING.parent / "integrations" / "hermes-amitel-brain" / "__init__.py"
-        spec = importlib.util.spec_from_file_location("amitel_brain_test_plugin", path)
+        path = TOOLING.parent / "integrations" / "hermes-brain" / "__init__.py"
+        spec = importlib.util.spec_from_file_location("brain_test_plugin", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -597,7 +600,7 @@ class HermesPluginTests(unittest.TestCase):
     def test_pre_llm_call_returns_ephemeral_context_dict(self):
         plugin = self._load_plugin()
         with patch.object(plugin, "_query_context", return_value="REFERENCE CONTEXT"):
-            result = plugin._pre_llm_call(user_message="déployer Amitel")
+            result = plugin._pre_llm_call(user_message="déployer Acme")
         self.assertEqual(result, {"context": "REFERENCE CONTEXT"})
 
     def test_pre_llm_call_fails_open(self):
@@ -606,7 +609,7 @@ class HermesPluginTests(unittest.TestCase):
             self.assertIsNone(plugin._pre_llm_call(user_message="question"))
 
     def test_loads_local_hook_when_shared_brain_contains_hostile_code(self):
-        plugin_path = TOOLING.parent / "integrations" / "hermes-amitel-brain" / "__init__.py"
+        plugin_path = TOOLING.parent / "integrations" / "hermes-brain" / "__init__.py"
         with tempfile.TemporaryDirectory() as td:
             shared = Path(td) / "shared"
             (shared / "tooling").mkdir(parents=True)
@@ -616,15 +619,15 @@ class HermesPluginTests(unittest.TestCase):
             code = (
                 "import importlib.util\n"
                 f"p = {str(plugin_path)!r}\n"
-                "s = importlib.util.spec_from_file_location('isolated_amitel_plugin', p)\n"
+                "s = importlib.util.spec_from_file_location('isolated_brain_plugin', p)\n"
                 "m = importlib.util.module_from_spec(s)\n"
                 "s.loader.exec_module(m)\n"
                 "print(m._load_hook_module().__file__)\n"
             )
             env = os.environ.copy()
             env.pop("PYTHONPATH", None)
-            env["AMITEL_BRAIN_ROOT"] = str(shared)
-            env["AMITEL_BRAIN_CODE_ROOT"] = str(TOOLING)
+            env["AUTOWIN_BRAIN_ROOT"] = str(shared)
+            env["AUTOWIN_BRAIN_CODE_ROOT"] = str(TOOLING)
             result = subprocess.run(
                 [sys.executable, "-c", code], cwd=td, env=env,
                 text=True, capture_output=True, timeout=10,
@@ -643,7 +646,7 @@ class ProposeNoteTests(unittest.TestCase):
                 title="Validation du schéma import",
                 body="Toujours valider le schéma avant l'import.",
                 note_type="lesson",
-                scope="amitel-import",
+                scope="acme-import",
                 author_agent="hermes",
                 model="test-model",
                 source="session:test-session-123",
@@ -820,13 +823,13 @@ class CodexHookTrustTests(unittest.TestCase):
             codex_home = root / ".codex"
             codex_home.mkdir()
             hooks_path = (codex_home / "hooks.json").resolve()
-            wrapper = Path(r"C:\State Root\amitel-brain-hook.ps1")
+            wrapper = Path(r"C:\State Root\autowin-brain-hook.ps1")
             hook = {
                 "key": f"{hooks_path}:user_prompt_submit:0:0",
                 "sourcePath": str(hooks_path),
                 "command": (
                     'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
-                    '"C:\\State Root\\amitel-brain-hook.ps1"'
+                    '"C:\\State Root\\autowin-brain-hook.ps1"'
                 ),
                 "currentHash": "sha256:abc123",
                 "trustStatus": "untrusted",
@@ -842,7 +845,7 @@ class CodexHookTrustTests(unittest.TestCase):
                 "key": f"{hooks_path}:user_prompt_submit:2:0",
                 "command": (
                     'powershell.exe "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
-                    'C:\\State Root\\amitel-brain-hook.ps1"'
+                    'C:\\State Root\\autowin-brain-hook.ps1"'
                 ),
             }
             trusted = {**hook, "trustStatus": "trusted"}
@@ -870,7 +873,7 @@ class CodexHookTrustTests(unittest.TestCase):
             codex_home = root / ".codex"
             codex_home.mkdir()
             hooks_path = (codex_home / "hooks.json").resolve()
-            wrapper = Path("amitel-brain-hook.ps1")
+            wrapper = Path("autowin-brain-hook.ps1")
             hook = {
                 "key": "key",
                 "sourcePath": str(hooks_path),
@@ -936,10 +939,10 @@ class WindowsInstallerTests(unittest.TestCase):
                 "raise RuntimeError('SHARED_CODE_EXECUTED')\n", encoding="utf-8"
             )
             (brain / "tooling" / "brain_index.py").write_text("raise SystemExit(99)\n", encoding="utf-8")
-            foreign_command = "powershell.exe -File C:/safe/foreign-amitel-brain-hook.ps1"
+            foreign_command = "powershell.exe -File C:/safe/foreign-autowin-brain-hook.ps1"
             managed_unquoted = (
                 "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "
-                + str(state / "amitel-brain-hook.ps1")
+                + str(state / "autowin-brain-hook.ps1")
             )
             fixture = {
                 "hooks": {
@@ -983,7 +986,7 @@ class WindowsInstallerTests(unittest.TestCase):
             )
             expected_command = (
                 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'
-                + str(state / "amitel-brain-hook.ps1") + '"'
+                + str(state / "autowin-brain-hook.ps1") + '"'
             )
             for relative in (Path(".claude/settings.json"), Path(".codex/hooks.json")):
                 settings = json.loads((user / relative).read_text(encoding="utf-8"))

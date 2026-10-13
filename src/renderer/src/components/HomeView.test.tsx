@@ -49,7 +49,7 @@ function outlookSnapshot() {
         id: 'm1',
         adresse: 'julien.mercier@example.com',
         nom: 'Julien Mercier',
-        sujet: 'RE: bon de commande RIG',
+        sujet: 'RE: bon de commande CONTOSO',
         recuLe: new Date(NOW_MS - 600_000).toISOString(),
         nonLu: true,
         conversation: 'c1'

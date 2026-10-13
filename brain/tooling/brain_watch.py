@@ -105,7 +105,7 @@ class WindowsCorpusWatcher:
             target=self._watch,
             args=(path, notify_filter, ready),
             daemon=True,
-            name=f"amitel-brain-watch-{len(self._watched)}",
+            name=f"brain-watch-{len(self._watched)}",
         )
         with self._lock:
             self._threads.append(thread)

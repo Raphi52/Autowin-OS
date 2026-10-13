@@ -20,6 +20,7 @@ import {
   autowinOwnBrainRoot,
   lireReglage
 } from './brain-paths'
+import { identiteBrain, recopierNomsHistoriques } from './identite-entreprise'
 
 // Le chemin du tooling vient de la SOURCE UNIQUE `brain-paths.ts` et reste distinct du corpus partagé.
 
@@ -132,7 +133,7 @@ export function buildBrainLaunchCommand(
    */
   attendre = false
 ): BrainLaunchCommand | null {
-  // brain_server fait lui-même os.chdir(AMITEL_BRAIN_ROOT) : aucun cwd n'est nécessaire ici, on
+  // brain_server fait lui-même os.chdir(<racine du Brain>) : aucun cwd n'est nécessaire ici, on
   // n'en impose un que s'il est LOCAL (un cwd UNC ferait repartir cmd.exe de C:\Windows).
   const cwd = isUncPath(tooling) ? undefined : tooling
   if (platform !== 'win32') return { bin: python, args: [script], cwd }
@@ -199,20 +200,20 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
 
   const explicitLegacyTooling = nonEmptyString(env.AUTOWIN_BRAIN_TOOLING)
   const tooling = explicitLegacyTooling
-    ?? lireReglage(env, 'AUTOWIN_BRAIN_CODE_ROOT', 'AMITEL_BRAIN_CODE_ROOT')
+    ?? lireReglage(env, 'AUTOWIN_BRAIN_CODE_ROOT')
     ?? nonEmptyString(config.code_root)
     ?? sharedBrainTooling(env)
-  const python = lireReglage(env, 'AUTOWIN_BRAIN_PYTHON', 'AMITEL_BRAIN_PYTHON')
+  const python = lireReglage(env, 'AUTOWIN_BRAIN_PYTHON')
     ?? nonEmptyString(config.python)
     ?? (explicitLegacyTooling
       ? join(explicitLegacyTooling, '.venv', 'Scripts', 'python.exe')
       : stateRoot
         ? join(stateRoot, '.venv', 'Scripts', 'python.exe')
         : '')
-  // Le Brain PROPRE a Autowin prime sur `AMITEL_BRAIN_ROOT` herite d'un autre Brain du poste
+  // Le Brain PROPRE a Autowin prime sur l'ancien nom de `AUTOWIN_BRAIN_ROOT` herite d'un autre Brain du poste
   // (constate le 2026-09-25, conv-3) : voir `autowinOwnBrainRoot`.
   const brainRoot = autowinOwnBrainRoot(env)
-    ?? lireReglage(env, 'AUTOWIN_BRAIN_ROOT', 'AMITEL_BRAIN_ROOT')
+    ?? lireReglage(env, 'AUTOWIN_BRAIN_ROOT')
     ?? nonEmptyString(config.brain_root)
     ?? sharedBrainRoot(env)
   return { tooling, python, brainRoot }
@@ -245,7 +246,7 @@ export async function ensureBrainServerStarted(
   if (attempts >= MAX_BRAIN_LAUNCH_ATTEMPTS) {
     return {
       status: 'unavailable',
-      detail: `${attempts} démarrages tentés sans succès cette session — le service ne tient pas, voir %LOCALAPPDATA%\\AmitelBrain\\server-err.log`
+      detail: `${attempts} démarrages tentés sans succès cette session — le service ne tient pas, voir %LOCALAPPDATA%\\${identiteBrain(env).dossierLocal}\\server-err.log`
     }
   }
   const sinceLast = now() - lastAttemptAt
@@ -279,20 +280,22 @@ export async function ensureBrainServerStarted(
   // court-circuite le relais uv, l'interpréteur de base ignore le venv — sans ce chemin, aucune
   // dépendance du Brain ne serait trouvée.
   if (interpreter.venvSitePackages) childEnv.PYTHONPATH = interpreter.venvSitePackages
-  // Contrat de brain_server.py (Hermes-Brain, hors de ce depot) : il lit ces noms HISTORIQUES.
-  childEnv.AMITEL_BRAIN_ROOT = runtime.brainRoot
-  childEnv.AMITEL_BRAIN_CODE_ROOT = runtime.tooling
-  childEnv.AMITEL_BRAIN_PYTHON = runtime.python
+  // Contrat de brain_server.py : il lit ces noms NEUTRES. Un serveur deja installe sur le poste ne
+  // lit que leurs ANCIENS noms : `recopierNomsHistoriques`, plus bas, les pose aussi.
+  childEnv.AUTOWIN_BRAIN_ROOT = runtime.brainRoot
+  childEnv.AUTOWIN_BRAIN_CODE_ROOT = runtime.tooling
+  childEnv.AUTOWIN_BRAIN_PYTHON = runtime.python
   /*
    * LE PORT DU SERVEUR VIENT DE LA MEME SOURCE QUE CELUI DU CLIENT.
    *
-   * MESURE DU 2026-09-03 (conv-8) : `brain_server.py` prend son port dans `AMITEL_BRAIN_PORT`, avec
+   * MESURE DU 2026-09-03 (conv-8) : `brain_server.py` prend son port dans une variable, avec
    * 8765 par defaut. L'environnement herite ne la portait pas, donc l'app a demarre un serveur sur
    * 8765 pendant que le service a jour ecoutait 8766 — deux serveurs, et le client qui interrogeait
    * celui que personne n'avait mis a jour. Deriver le port de `sharedBrainOrigin()` rend cette
    * divergence STRUCTURELLEMENT impossible : une seule valeur decide des deux cotes.
    */
-  childEnv.AMITEL_BRAIN_PORT = sharedBrainPort(env)
+  childEnv.AUTOWIN_BRAIN_PORT = sharedBrainPort(env)
+  recopierNomsHistoriques(childEnv, env)
   // Détaché + unref : survit à l'app, stdio ignoré (pas de pipe qui bloque). windowsHide : pas de
   // console qui pop.
   // Sous Windows, `detached` + `stdio:'ignore'` + `unref()` ne suffisent PAS : libuv appelle

@@ -2,7 +2,7 @@
  * ENCODAGE DES FICHIERS ÉDITÉS — préserver ce qu'on n'a pas demandé à changer.
  *
  * POURQUOI CE MODULE EXISTE (2026-08-07). `edit_file` lisait ET écrivait en `'utf8'` codé en dur. Sur
- * un dépôt VB6 comme RigApplication, les sources sont en encodage MONO-OCTET (Windows-1252). Mesuré
+ * un dépôt VB6 comme ContosoApp, les sources sont en encodage MONO-OCTET (Windows-1252). Mesuré
  * sur `ULT_1RIL_SE.cls`, offset 1097 :
  *
  *   octets réels : … 6c 27 e9 71 75 69 70 65 …

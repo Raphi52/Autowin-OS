@@ -735,3 +735,42 @@ describe('ConversationStore — importerTranscript', () => {
     expect(conv.projectPath).toBeUndefined()
   })
 })
+
+describe('résumé IPC — un tour encore en cours AILLEURS que dans le dernier message', () => {
+  /*
+   * VÉCU (conv-914, 2026-10-13) : deux runs rattachés au redémarrage de 10:26 travaillaient encore —
+   * leurs réponses (message-conv-914-6 et -15) étaient remises `streaming` par `resumed`. Puis un
+   * tour de chat « reprend » s'est ouvert et TERMINÉ après elles. Le résumé ne regardait que la
+   * DERNIÈRE réponse (`completed`) : la liste n'affichait aucun spinner alors que le fil travaillait.
+   */
+  it('signale le tour en cours même quand un tour plus récent est terminé', () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'deux runs', provider: 'claude' }).id
+    store.beginTurn(id, { content: '1 3 4 5' }, { turnId: 'tour-run' })
+    store.applyTurnEvent(id, 'tour-run', { kind: 'resumed' })
+    store.beginTurn(id, { content: 'reprend' }, { turnId: 'tour-chat' })
+    store.applyTurnEvent(id, 'tour-chat', { kind: 'delta', streamId: 'tour-chat:1', text: 'ok' })
+    store.applyTurnEvent(id, 'tour-chat', { kind: 'done' })
+
+    const resume = store.listSummaries().find((s) => s.id === id)!
+    // Le sens de `lastAssistantStatus` ne change pas : c'est bien le DERNIER tour, terminé.
+    expect(resume.lastAssistantStatus).toBe('completed')
+    expect(resume.hasStreamingTurn).toBe(true)
+
+    // Le run se ferme : plus rien ne tourne, le signal disparaît.
+    store.applyTurnEvent(id, 'tour-run', { kind: 'done' })
+    expect(store.listSummaries().find((s) => s.id === id)!.hasStreamingTurn).toBe(undefined)
+  })
+
+  it('n’ajoute pas le champ à un fil entièrement terminé', () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'fini', provider: 'claude' }).id
+    store.beginTurn(id, { content: 'go' }, { turnId: 'tour-1' })
+    store.applyTurnEvent(id, 'tour-1', { kind: 'failed', error: 'boom' })
+    store.beginTurn(id, { content: 'encore' }, { turnId: 'tour-2' })
+    store.applyTurnEvent(id, 'tour-2', { kind: 'done' })
+
+    const resume = store.listSummaries().find((s) => s.id === id)!
+    expect('hasStreamingTurn' in resume).toBe(false)
+  })
+})

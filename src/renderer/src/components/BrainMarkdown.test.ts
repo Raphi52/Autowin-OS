@@ -5,12 +5,12 @@ import { splitFrontmatter } from './brain-markdown-model'
 describe('BrainMarkdown', () => {
   it('sépare le frontmatter du contenu Markdown', () => {
     const result = splitFrontmatter(
-      '---\ntype: decision\nproject: RigApplication\ntitle: "Source canonique"\n---\n# Décision\n\nTexte.'
+      '---\ntype: decision\nproject: ContosoApp\ntitle: "Source canonique"\n---\n# Décision\n\nTexte.'
     )
 
     expect(result.entries).toEqual([
       { key: 'type', value: 'decision' },
-      { key: 'project', value: 'RigApplication' },
+      { key: 'project', value: 'ContosoApp' },
       { key: 'title', value: 'Source canonique' }
     ])
     expect(result.body).toBe('# Décision\n\nTexte.')

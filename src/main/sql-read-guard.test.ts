@@ -7,7 +7,7 @@ import { decideSqlRead, type SqlReadArgs } from './sql-read-guard'
 import { buildSqlTargetCatalog } from './sql-read-catalog'
 
 /**
- * GARDE DE LECTURE SQL — le maillon de sécurité de la consultation des bases RIG.
+ * GARDE DE LECTURE SQL — le maillon de sécurité de la consultation des bases CONTOSO.
  *
  * Pourquoi il existe, et pourquoi il est aussi strict : la connexion se fait en authentification
  * Windows intégrée, donc avec le compte de l'utilisateur. Mesuré sur ce poste (2026-08-06) :
@@ -51,7 +51,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   it('accepte un SELECT simple', () => {
     const d = decide({
       ...base,
-      query: 'SELECT R_CODEEVENEM_VALEUR FROM CODE_EVENEMENT_RCS'
+      query: 'SELECT R_CODEEVENEM_VALEUR FROM CODE_EVENEMENT_RC'
     })
     expect(d.allowed).toBe(true)
   })
@@ -76,8 +76,8 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   /** Le cœur : tout ce qui ÉCRIT est refusé, y compris caché dans un CTE ou une sous-requête. */
   it('REFUSE toute écriture, quelle que soit sa forme', () => {
     const ecritures = [
-      "UPDATE CODE_EVENEMENT_RCS SET R_CODEEVENEM_SYNONYME = 'X'",
-      'DELETE FROM CODE_EVENEMENT_RCS',
+      "UPDATE CODE_EVENEMENT_RC SET R_CODEEVENEM_SYNONYME = 'X'",
+      'DELETE FROM CODE_EVENEMENT_RC',
       'INSERT INTO T VALUES (1)',
       'TRUNCATE TABLE T',
       'DROP TABLE T',
@@ -225,7 +225,7 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
     }
   })
 
-  it('REFUSE les bases hors RIG, dont celle qui porte les mots de passe', () => {
+  it('REFUSE les bases hors CONTOSO, dont celle qui porte les mots de passe', () => {
     for (const database of ['master', 'msdb', 'tempdb', 'AutreAppli', 'CATALOGUE']) {
       expect(
         decide({ server: 'SRV-PROD\\PROD', database, query: 'SELECT 1 AS a' }).allowed,
@@ -291,7 +291,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
   const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE le contournement exact rapporté par l’audit', () => {
-    const attaque = "SELECT 1 AS [x'a] ; COMMIT TRANSACTION ; DELETE FROM CODE_EVENEMENT_RCS ; --'"
+    const attaque = "SELECT 1 AS [x'a] ; COMMIT TRANSACTION ; DELETE FROM CODE_EVENEMENT_RC ; --'"
     const d = decide({ ...base, query: attaque })
     expect(d.allowed, 'le contournement de l’audit passe encore').toBe(false)
   })
@@ -315,7 +315,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
 
   it('mais un identifiant délimité LÉGITIME passe toujours', () => {
     for (const query of [
-      'SELECT [R_CODEEVENEM_VALEUR] FROM [dbo].[CODE_EVENEMENT_RCS]',
+      'SELECT [R_CODEEVENEM_VALEUR] FROM [dbo].[CODE_EVENEMENT_RC]',
       'SELECT [a;b] FROM T', // un ; DANS un identifiant n'est pas une seconde instruction
       'SELECT [a--b] FROM T', // ni un -- un commentaire
       'SELECT [delete] FROM T', // ni un mot-clé un ordre d'écriture
@@ -350,7 +350,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
 
   it('REFUSE GO, qui sépare les instructions sans point-virgule', () => {
     for (const query of [
-      'SELECT 1\nGO\ncommit\ndelete[CODE_EVENEMENT_RCS]\nGO',
+      'SELECT 1\nGO\ncommit\ndelete[CODE_EVENEMENT_RC]\nGO',
       'SELECT 1\nGO\ndelete[T]\ncommit\nGO',
       'SELECT 1\ngo\nDELETE FROM T',
       'SELECT 1\r\nGO\r\nDELETE FROM T',
@@ -373,7 +373,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
 
   it('REFUSE un mot-clé collé à un identifiant délimité (frontière de mot préservée)', () => {
     for (const query of [
-      'SELECT 1\ndelete[CODE_EVENEMENT_RCS]',
+      'SELECT 1\ndelete[CODE_EVENEMENT_RC]',
       'SELECT 1\ndelete"T"',
       'SELECT * FROM T\nupdate[T]'
     ]) {
@@ -399,8 +399,8 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
 
   it('mais une lecture multi-lignes normale passe toujours', () => {
     for (const query of [
-      'SELECT R_CODEEVENEM_VALEUR\nFROM CODE_EVENEMENT_RCS\nORDER BY 1',
-      'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RCS]',
+      'SELECT R_CODEEVENEM_VALEUR\nFROM CODE_EVENEMENT_RC\nORDER BY 1',
+      'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RC]',
       "SELECT * FROM T\nWHERE libelle = 'gomme'" // « go » dans un littéral, pas en début de ligne
     ]) {
       expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
@@ -429,8 +429,8 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
 
   it('REFUSE un GO dissimulé dans un identifiant ou un littéral multi-lignes', () => {
     for (const query of [
-      'SELECT 1 FROM t WHERE a=1 OR [z\nGO\ndelete CODE_EVENEMENT_RCS\nGO\n]=1',
-      "SELECT 'a\nGO\ndelete CODE_EVENEMENT_RCS\nGO\nb'",
+      'SELECT 1 FROM t WHERE a=1 OR [z\nGO\ndelete CODE_EVENEMENT_RC\nGO\n]=1',
+      "SELECT 'a\nGO\ndelete CODE_EVENEMENT_RC\nGO\nb'",
       'SELECT "z\nGO\ndelete T\nGO\n" FROM t',
       'SELECT 1 FROM t WHERE a=1 OR [z\r\nGO\r\ndelete T\r\n]=1'
     ]) {
@@ -450,8 +450,8 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
 
   it('mais une requête multi-lignes dont les délimiteurs tiennent sur UNE ligne passe', () => {
     for (const query of [
-      'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RCS]\nWHERE 1 = 1',
-      "SELECT *\nFROM CODE_EVENEMENT_RCS\nWHERE R_CODEEVENEM_VALEUR = 'MORCA'"
+      'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RC]\nWHERE 1 = 1',
+      "SELECT *\nFROM CODE_EVENEMENT_RC\nWHERE R_CODEEVENEM_VALEUR = 'MORCA'"
     ]) {
       expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
@@ -564,7 +564,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres bases
   /**
    * Le motif énumérait les familles de DMV, donc en oubliait. Il vise maintenant la FORME `dm_<mot>_`,
    * ce qui couvre les familles présentes et futures. Le juge a vérifié 0 collision avec les vrais
-   * noms de colonnes des bases RIG : la règle large ne coûte rien en usage réel.
+   * noms de colonnes des bases CONTOSO : la règle large ne coûte rien en usage réel.
    */
   it('REFUSE toute vue de gestion dynamique, famille connue ou non', () => {
     for (const query of [
@@ -605,7 +605,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres bases
 
 /**
  * 4ᵉ audit, FAUX REFUS le seul bloquant : la règle « 3 parties » comptait les segments sans regarder
- * ce qu'ils NOMMENT. `dbo.INS_INFOGREFFE.[date insc]` est du T-SQL valide et strictement local —
+ * ce qu'ils NOMMENT. `dbo.INS_INFOPORTAIL.[date insc]` est du T-SQL valide et strictement local —
  * vérifié, il retourne des lignes sur `DB_ALPHA`. C'est la forme que produisent les générateurs SQL
  * et les LLM. Le danger vient de la PREMIÈRE partie quand elle nomme une base ou un serveur, pas du
  * nombre de segments.
@@ -615,7 +615,7 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
 
   it('accepte schéma.table.colonne, qui est local', () => {
     for (const query of [
-      'SELECT dbo.INS_INFOGREFFE.[date insc] FROM dbo.INS_INFOGREFFE',
+      'SELECT dbo.INS_INFOPORTAIL.[date insc] FROM dbo.INS_INFOPORTAIL',
       'SELECT dbo.T.A, dbo.T.B FROM dbo.T',
       'SELECT [dbo].[T].[col] FROM [dbo].[T]',
       'SELECT sys.tables.name FROM sys.tables'
@@ -627,8 +627,8 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
   it('REFUSE toujours ce qui nomme une autre base ou un serveur', () => {
     for (const query of [
       'SELECT name FROM master.sys.databases',
-      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RCS',
-      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RC',
+      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RC',
       'SELECT * FROM [SOMELINK].master.sys.databases',
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]',
       'SELECT RIGBD5.APP_X.dbo.T.col FROM RIGBD5.APP_X.dbo.T'
@@ -715,8 +715,8 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
   it('REFUSE de sortir de la base ciblée par un nom qualifié', () => {
     for (const query of [
       'SELECT name FROM master.sys.databases',
-      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RCS',
-      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RC',
+      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RC',
       'SELECT * FROM [SOMELINK].master.sys.databases',
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]'
     ]) {
@@ -744,7 +744,7 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
 
   it('mais un nom en deux parties dans la base courante reste autorisé', () => {
     for (const query of [
-      'SELECT * FROM dbo.CODE_EVENEMENT_RCS',
+      'SELECT * FROM dbo.CODE_EVENEMENT_RC',
       'SELECT c.name FROM sys.columns c', // métadonnées de la base courante : utile et sans risque
       'SELECT t.name FROM sys.tables t'
     ]) {
@@ -810,7 +810,7 @@ describe('decideSqlRead — CATALOGUE lisible, secrets exclus (décision du 2026
   it('refuse chaque colonne secrète connue, même délimitée', () => {
     for (const col of [
       'COL_PWD_BD',
-      '[COL_INFOGREFFE_PASSWORD]',
+      '[COL_INFOPORTAIL_PASSWORD]',
       'COL_DOCVERIF_PASSWORD',
       '"COL_WS_IDNUM_CLEF_API"'
     ]) {

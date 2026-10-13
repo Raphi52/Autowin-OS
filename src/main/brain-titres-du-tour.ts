@@ -20,7 +20,7 @@ import { motsDe } from '../shared/mots'
  * reçoit RIEN : zéro caractère, pas même un en-tête. Le mode d'emploi du bloc vit dans le prompt de
  * pilotage (préfixe mis en cache), pas ici : le répéter à chaque tour le ferait payer à chaque tour.
  *
- * LE SEUIL EST MESURÉ, pas choisi. `brain/tooling/eval/rag-golden.json`, 27 questions, sur le Brain
+ * LE SEUIL EST MESURÉ, pas choisi. `entreprise/<nom>/brain/eval/rag-golden.json`, 27 questions, sur le Brain
  * vivant le 2026-09-30 : le score dense seul sépare mal (une question hors sujet atteint 0,38, une
  * pertinente descend à 0,33), le RANG sépare — hors sujet, la première note listée est au rang 7 ou
  * plus loin. Rang ≤ 3 et score ≥ 0,40 : bonne note dans le bloc pour 15 questions sur 24 (autant que

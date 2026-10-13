@@ -41,6 +41,7 @@ export type OpenRunState = {
 }
 
 import { SourceControlPane } from './SourceControlPane'
+import { BilanDeCloture } from './BilanDeCloture'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
 import type { Msg } from './chat-view-types'
@@ -68,17 +69,19 @@ const EFFORT_FR: Record<string, string> = {
 /**
  * Nœuds qui parlent du DÉPÔT plutôt que d'un sous-agent : y descendre ouvre Source control, qui
  * était jusqu'ici un onglet à part qu'il fallait penser à aller chercher.
+ *
+ * La CLÔTURE n'en fait plus partie (demande du 2026-10-13) : elle ouvrait la liste des fichiers de
+ * la conversation, celle de l'onglet Files, au lieu de dire ce que le run a donné. Elle ouvre
+ * désormais son bilan (`BilanDeCloture`).
  */
 function selectionParleDuDepot(selection: ExecutionNodeSelection | null): boolean {
-  return (
-    selection?.kind === 'git' || selection?.kind === 'closure' || selection?.kind === 'workspace'
-  )
+  return selection?.kind === 'git' || selection?.kind === 'workspace'
 }
 
 export type WorkflowsPanelProps = {
   /**
    * Depot de la CONVERSATION (meme valeur que le badge de branche du chat). La vue « Workspace »
-   * lisait un depot memorise dans le navigateur, sans lien avec le fil : elle annoncait RIG-V3 sur
+   * lisait un depot memorise dans le navigateur, sans lien avec le fil : elle annoncait CONTOSO-V3 sur
    * une conversation ouverte sur AutoWinOS. Un panneau qui nomme un autre depot que celui ou le
    * travail se fait ment sur ce que « Push » et « Cloture auto » vont toucher.
    */
@@ -200,6 +203,21 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const setPanelTab = (tab: PanelTab): void => setChoixOnglet({ tab, jeton })
 
   const depot = selectionParleDuDepot(selection)
+  const clotureChoisie = selection?.kind === 'closure' ? selection.closure : undefined
+  /**
+   * Le lien « Ouvrir le RUN.md » du bilan : il déplie CE run dans l'onglet Runs, sur son RUN.md.
+   * La sélection du graphe est relâchée d'abord, sinon l'onglet Runs empilerait au-dessus les fils
+   * de sous-agents de la conversation, sans rapport avec le fichier demandé.
+   */
+  const [runADefiler, setRunADefiler] = useState<string | null>(null)
+  const ouvrirRunMd = (run: RunEntry): void => {
+    setSelection(null)
+    setRunADefiler(run.path)
+    viewRun(run)
+    // `viewRun` pose l'onglet « trace » au départ, de façon synchrone : on le remplace ensuite.
+    setRunDetailTab('runmd')
+    setPanelTab('runs')
+  }
   // Appariement par TOUR : c'est le seul lien RÉEL entre le graphe et le fil relu
   // (`scopedRunsFromTimeline` pose `runPath = turn.id`). On n'invente aucune correspondance par
   // `runId` : le `run-<n>` du graphe est éphémère et ne désigne aucun RUN.md sur disque.
@@ -308,8 +326,8 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             taille naturelle (zero) quand il n'a rien a montrer, et le graphe recupere tout. */}
         <div
           className="scroll-y col grow workflow-panel-detail"
-          data-workflow-detail={depot ? 'source-control' : 'accueil'}
-          data-detail-vide={depot ? undefined : 'true'}
+          data-workflow-detail={depot ? 'source-control' : clotureChoisie ? 'bilan-run' : 'accueil'}
+          data-detail-vide={depot || clotureChoisie ? undefined : 'true'}
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (
@@ -317,6 +335,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               conversationId={activeId ?? undefined}
               depotConversation={depotConversation}
               onSendPrompt={send}
+            />
+          )}
+          {clotureChoisie && (
+            <BilanDeCloture
+              conversationId={activeId ?? undefined}
+              closure={clotureChoisie}
+              verdictEventIds={selection?.verdictEventIds}
+              runId={selection?.runId}
+              runs={runs}
+              onOuvrirRunMd={ouvrirRunMd}
             />
           )}
 
@@ -472,7 +500,22 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                   : 0
               const isOpen = openRun?.path === r.path
               return (
-                <div key={r.path} className="col" style={{ gap: 0 }}>
+                <div
+                  key={r.path}
+                  className="col"
+                  style={{ gap: 0 }}
+                  // Ouvert depuis le bilan d'une clôture : la carte peut être loin dans la liste.
+                  // Défilement UNE fois, puis la demande retombe (pas à chaque rendu).
+                  ref={
+                    r.path === runADefiler
+                      ? (element) => {
+                          if (!element) return
+                          element.scrollIntoView?.({ block: 'start' })
+                          setRunADefiler(null)
+                        }
+                      : undefined
+                  }
+                >
                   <div className="run-card-shell">
                     {/* `aria-expanded` et `data-statut` : le run DEPLIE et son statut se lisent
                         sans deviner (lecteur d'ecran), et le theme les habille (conv-245). */}

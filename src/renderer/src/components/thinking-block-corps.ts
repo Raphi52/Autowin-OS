@@ -54,7 +54,25 @@ const FIN = /^(.+?) (terminé|échoué)(?: - (.*))?$/
 
 export type EtatAction = 'ok' | 'ko' | 'encours'
 
-/** Une action du bloc, telle que la frise C3 la dessine. */
+/**
+ * TACHE NOMMEE (conv-910, 2026-10-12 : « une tache de fond est dépliable pour voir la liste
+ * d'actions liées […] n'écris pas tache de fond, écris direct ce qu'est la tache de fond »).
+ *
+ * Ce que le CLI appelle une tache (`task_started` / `task_notification`, relayes par claude.ts en
+ * « tache de fond en cours - <description> » puis « tache de fond terminee - <description> ») n'est
+ * PAS un travail a part : c'est la commande Bash en cours elle-meme, devenue longue. Mesure sur le
+ * flux brut du tour de la capture (run-stdout c10e16e5…, conv-906) : les 12 taches portent toutes
+ * `task_type: local_bash`, `is_backgrounded: false` et le `tool_use_id` de l'appel Bash qui les
+ * precede ; l'ordre recu est `Bash · <commande>` → tache en cours → tache terminee → `Bash terminé`.
+ * Elles ajoutaient donc DEUX lignes et deux pastilles de legende par commande, sous un libelle qui
+ * ne disait pas ce qu'elle faisait — la legende du bloc plie s'etalait sur dix lignes.
+ *
+ * Regle : la tache NOMME la commande qu'elle enveloppe (la plus ancienne commande encore en cours
+ * sans nom — deux commandes lancees en parallele gardent chacune la sienne), et ses actions liees
+ * sont les commandes que cette ligne Bash enchaine. Aucune ligne « tache de fond » n'est ecrite.
+ */
+const TACHE = /^tache de fond (en cours|terminee|en echec|[a-z]+)(?: - (.*))?$/
+
 export type ActionFrise = {
   /** Texte de la ligne — inchange par rapport au corps texte (`outil · cible — duree`). */
   texte: string
@@ -64,13 +82,85 @@ export type ActionFrise = {
   etat: EtatAction
   /** Duree en secondes, si connue (sert a la largeur du segment de la barre de temps). */
   secondes: number | null
+  /** Ce que fait la commande, quand le CLI l'a decrite (voir TACHE). Le texte devient ce nom. */
+  tache?: { nom: string; etat: EtatAction }
+  /** Les commandes enchainees par cette ligne — ce qu'on lit en depliant une tache nommee. */
+  sousActions?: string[]
+}
+
+/**
+ * Coupe le libelle d'une commande coupee a 120 caracteres par claude.ts (`cible.slice(0, 120)`) :
+ * au-dela, la derniere sous-commande est un moignon, et on le dit par « … ».
+ */
+const CIBLE_MAX = 120
+
+/**
+ * Les commandes d'une ligne shell, dans l'ordre : coupees sur `&&`, `||`, `;` et le retour a la
+ * ligne HORS guillemets. Un tube (`|`) reste une seule action — c'est une seule commande qui
+ * coule dans une autre. Un here-doc (`<<`) garde ses lignes : ce sont des donnees, pas des actions.
+ */
+export function sousCommandes(commande: string): string[] {
+  const sortie: string[] = []
+  const coupeLigne = !commande.includes('<<')
+  let courante = ''
+  let guillemet: string | null = null
+  const pousser = (): void => {
+    const propre = courante.trim()
+    if (propre) sortie.push(propre)
+    courante = ''
+  }
+  for (let i = 0; i < commande.length; i += 1) {
+    const c = commande[i]!
+    if (c === '\\' && guillemet !== "'" && i + 1 < commande.length) {
+      courante += c + commande[i + 1]!
+      i += 1
+      continue
+    }
+    if (guillemet) {
+      courante += c
+      if (c === guillemet) guillemet = null
+      continue
+    }
+    if (c === '"' || c === "'") {
+      guillemet = c
+      courante += c
+      continue
+    }
+    const deux = commande.slice(i, i + 2)
+    if (deux === '&&' || deux === '||') {
+      pousser()
+      i += 1
+      continue
+    }
+    if (c === ';' || (c === '\n' && coupeLigne)) {
+      pousser()
+      continue
+    }
+    courante += c
+  }
+  pousser()
+  return sortie
+}
+
+/**
+ * Le signe de vie COURANT, tel que la seconde ligne du bloc plie l'affiche : une tache s'y lit par
+ * ce qu'elle fait (« Run the new trace event tests »), jamais par « tache de fond en cours - … ».
+ */
+export function statutLisible(statut: string): string {
+  const tache = TACHE.exec(statut)
+  if (!tache) return statut.replace(/^tache de fond /, 'commande ')
+  const nom = (tache[2] ?? '').trim()
+  const issue = tache[1]!
+  if (issue === 'en cours') return nom || 'commande en cours'
+  const fin = issue === 'terminee' ? 'terminée' : issue === 'en echec' ? 'en échec' : issue
+  return nom ? `${nom} · ${fin}` : `commande ${fin}`
 }
 
 function familleDe(outil: string): ActionFrise['famille'] {
   if (/^(Read|NotebookRead)$/i.test(outil)) return 'lire'
   if (/^(Grep|Glob|WebSearch|WebFetch|LS)$/i.test(outil)) return 'chercher'
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(outil)) return 'modifier'
-  if (/^(Bash|PowerShell|tache de fond)$/i.test(outil)) return 'commande'
+  if (/^(Bash|PowerShell|Commande)$/i.test(outil)) return 'commande'
   return 'autre'
 }
 
@@ -106,6 +196,36 @@ export function actionsDuTour(
     secondes
   })
   for (const ligne of lignes) {
+    const tache = TACHE.exec(ligne)
+    if (tache) {
+      const nom = (tache[2] ?? '').trim()
+      const etat: EtatAction =
+        tache[1] === 'en cours' ? 'encours' : tache[1] === 'terminee' ? 'ok' : 'ko'
+      if (etat === 'encours') {
+        // La PLUS ANCIENNE commande en cours encore sans nom : deux Bash lances ensemble recoivent
+        // leur tache dans l'ordre de lancement, pas tous deux la derniere.
+        const cible = sortie.find(
+          (a) =>
+            a.etat === 'encours' &&
+            !a.tache &&
+            (a.famille === 'commande' || /^(Agent|Task)$/.test(a.outil))
+        )
+        if (cible) cible.tache = { nom, etat }
+        else sortie.push({ ...nouvelle(nom || 'commande', 'Commande', null), tache: { nom, etat } })
+        continue
+      }
+      // Une fin rattache la tache EN COURS du meme nom (la plus recente), sinon la derniere ouverte.
+      const ouvertes = sortie.filter((a) => a.tache?.etat === 'encours')
+      const cible = ouvertes.filter((a) => a.tache!.nom === nom).at(-1) ?? ouvertes.at(-1)
+      if (cible) cible.tache!.etat = etat
+      else {
+        // Fin sans debut vu (tour relu, journal borne) : la ligne existe quand meme, terminee.
+        const seule = { ...nouvelle(nom || 'commande', 'Commande', null), tache: { nom, etat } }
+        seule.etat = etat
+        sortie.push(seule)
+      }
+      continue
+    }
     const fin = FIN.exec(ligne)
     const battement = fin ? null : BATTEMENT.exec(ligne)
     if (!fin && !battement) {
@@ -132,6 +252,24 @@ export function actionsDuTour(
         : action.texte.split(' — ')[0]!
     action.secondes = secondesDe(suite) ?? action.secondes
     if (fin) action.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
+  }
+  for (const a of sortie) {
+    if (!a.tache) continue
+    // La ligne garde l'etat le plus grave de la commande et de sa tache : une commande lancee en
+    // arriere-plan rend la main en 0 s mais sa tache tourne encore.
+    a.etat =
+      a.etat === 'ko' || a.tache.etat === 'ko'
+        ? 'ko'
+        : a.etat === 'encours' || a.tache.etat === 'encours'
+          ? 'encours'
+          : 'ok'
+    if (!a.tache.nom || a.outil === 'Commande') continue
+    const [tete, ...suite] = a.texte.split(' — ')
+    const commande = tete!.replace(/^[^·]*·\s*/, '')
+    const actions = sousCommandes(commande)
+    if (actions.length && commande.length >= CIBLE_MAX) actions[actions.length - 1] += '…'
+    a.sousActions = actions
+    a.texte = [a.tache.nom, ...suite].join(' — ')
   }
   if (done) for (const a of sortie) if (a.etat === 'encours') a.etat = 'ok'
   return sortie

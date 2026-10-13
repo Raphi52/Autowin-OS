@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math as _math
 import sys
 from pathlib import Path
 
@@ -180,31 +181,27 @@ verifie(_second.stdout.strip() == "False",
 
 
 
-# --- PALETTE : la MEME que l'ecran de demarrage de l'app ----------------------------------------
-# Deux ecrans se suivent a l'oeil pendant un demarrage. Deux codes couleur differents feraient croire
-# a deux produits — et une palette copiee A LA MAIN derive au premier changement de theme cote app.
-# On relit donc les valeurs a la SOURCE et on refuse la derive.
-_html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.html").read_text(
-    encoding="utf-8"
-)
+# --- PALETTE : celle du THEME HOLOGRAPHIQUE, lue a la source -------------------------------------
+# Choix de l'utilisateur sur maquettes (conv-903, 2026-10-12) : « que le style ressemble plus au theme
+# holo dans son ensemble ». Le lanceur LIT ses jetons dans theme-nebuleuse-verre.css. On les relit ici
+# par un chemin INDEPENDANT et on compare aux valeurs EXECUTEES du lanceur, pas a son texte : une
+# copie a la main derivait en silence (commit 08016aac), et un hexadecimal dans un commentaire
+# faisait passer une garde de texte.
+_theme = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "src" / "assets"
+          / "theme-nebuleuse-verre.css").read_text(encoding="utf-8")
 _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
 
-# Les deux teintes ne sont PAS recopiees ici : on les EXTRAIT du degrade de l'app. Recopier des
-# hexadecimaux faisait deriver silencieusement les deux ecrans (constate le 2026-09-07 : le commit
-# 08016aac avait change index.html sans que cette garde bronche, parce qu'elle comparait ses propres
-# copies entre elles). Lues a la source, un changement de palette cote app fait ECHOUER cette garde
-# tant que le lanceur n'a pas suivi — c'est exactement ce qu'elle doit faire.
-_arcs = _re.search(
-    r"linear-gradient\(\s*(#[0-9a-fA-F]{6})\s+0\s+50%\s*,\s*(#[0-9a-fA-F]{6})", _html
-)
-verifie(
-    _arcs is not None,
-    "le degrade des deux arcs doit rester lisible dans index.html : c'est la SOURCE de la palette",
-)
-# On compare les valeurs REELLEMENT utilisees par le lanceur, pas une sous-chaine de son fichier :
-# chercher l'hexadecimal dans le TEXTE source passait sur un simple COMMENTAIRE, donc la garde
-# pouvait rester verte alors que l'ecran peignait une autre teinte (constate le 2026-09-07).
-import importlib.util as _ilu
+
+def _jeton(nom: str) -> str:
+    trouve = _re.search(rf"--{nom}:\s*(#[0-9a-fA-F]{{6}})", _theme)
+    verifie(trouve is not None, f"le theme Holo doit porter --{nom} : c'est la SOURCE de la palette")
+    return trouve.group(1).lower() if trouve else ""
+
+
+_degrade = _re.search(r"--nv-degrade:\s*linear-gradient\(\s*135deg\s*,\s*(#\w{6})\s*,\s*(#\w{6})", _theme)
+verifie(_degrade is not None, "le degrade signature du theme doit rester lisible")
+
+import importlib.util as _ilu  # noqa: E402
 
 _spec = _ilu.spec_from_file_location(
     "_splash_pour_garde", Path(__file__).resolve().parent / "launch_dev_splash.py"
@@ -212,56 +209,75 @@ _spec = _ilu.spec_from_file_location(
 _mod = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 for _nom, _attendu, _obtenu in (
-    ("arc-a", _arcs.group(1), _mod._DORE),
-    ("arc-b", _arcs.group(2), _mod._VIOLET),
+    ("text", _jeton("text"), _mod._TEXTE),
+    ("text-dim", _jeton("text-dim"), _mod._TEXTE_DIM),
+    ("text-faint", _jeton("text-faint"), _mod._TEXTE_PALE),
+    ("rose-bright", _jeton("rose-bright"), _mod._ROSE_VIF),
+    ("err", _jeton("err"), _mod._ALERTE),
+    ("bg-0", _jeton("bg-0"), _mod._FOND_BAS),
+    ("nv-chanfrein-haut", _jeton("nv-chanfrein-haut"), _mod._PAN_HAUT),
+    ("nv-chanfrein-bas", _jeton("nv-chanfrein-bas"), _mod._PAN_BAS),
+    ("degrade bleu", _degrade.group(1).lower() if _degrade else "", _mod._BLEU),
+    ("degrade rose", _degrade.group(2).lower() if _degrade else "", _mod._ROSE),
 ):
-    verifie(
-        _obtenu.lower() == _attendu.lower(),
-        f"le lanceur peint {_nom} en {_obtenu} alors que index.html dit {_attendu} : les deux ecrans divergent",
-    )
-verifie(
-    "_DORE = _ARCS.group(1)" in _splash_src and "_VIOLET = _ARCS.group(2)" in _splash_src,
-    "le lanceur doit DERIVER sa palette de index.html, pas recopier des hexadecimaux a la main",
-)
+    verifie(_obtenu.lower() == _attendu,
+            f"le lanceur peint {_nom} en {_obtenu} alors que le theme Holo dit {_attendu} : les deux divergent")
+verifie("_jetons_holo(_THEME.read_text" in _splash_src,
+        "le lanceur doit DERIVER sa palette du theme Holo, pas recopier des hexadecimaux a la main")
+# Le Holo n'a PAS d'or : les petits textes passent en lilas (consequence ecrite sur la maquette choisie).
+verifie("_DORE" not in _splash_src and "#e9bd4e" not in _splash_src.lower(),
+        "plus d'or dans le lanceur : le theme Holo n'en a pas")
+verifie(_mod._TITRE == "Autowin OS", "le gros titre dit « Autowin OS »")
+# L'ancien defaut : un tiret par etape, etires sur toute la largeur — vingt tirets a 52 s, un pointille.
+verifie("self._barres" not in _splash_src and "self.segments" not in _splash_src,
+        "la barre de tirets ne doit pas revenir : c'est l'ANNEAU qui porte la progression")
+verifie(_mod._CHANFREIN == int(_re.search(r"--nv-chanfrein:\s*(\d+)px", _theme).group(1)),
+        "la coupe des coins vient du theme (--nv-chanfrein)")
 
-verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
-        "la couleur de TEXTE doit etre celle de l'app")
-# REPARTITION demandee par l'utilisateur : le GROS titre en blanc, tous les PETITS textes en dore.
-# Un gris "atone" invente pour atténuer avait ete introduit a la place : il n'appartient a aucune des
-# deux palettes et rendait terne un ecran qui doit etre noir et dore.
-verifie("_ATONE" not in _splash_src,
-        "le gris atone invente ne doit pas revenir : les petits textes sont dores")
-verifie(_splash_src.count("fg=_DORE") >= 3,
-        "sous-titre, chrono et detail doivent etre dores")
-verifie(_mod._TITRE == "Autowin OS" and "fg=_TEXTE" in _splash_src,
-        "le gros titre dit « Autowin OS » et l'etape en cours reste BLANCHE")
-# FOND : le noir violace de la capture de reference (demande du 2026-10-11, conv-228 : « refais la
-# gueule du launcher pour qu'il fasse plus moderne comme ce screenshot »). Il remplace le noir pur
-# qu'exigeait cette garde jusque-la. Il est LU dans le module du logo, source unique, jamais recopie.
 import logo_anneau as _logo  # noqa: E402
 
-verifie(_mod._FOND.lower() == "#%02x%02x%02x" % _logo.FOND,
-        "le fond du lanceur doit etre celui du logo (logo_anneau.FOND), pas une valeur recopiee")
-verifie(sum(_logo.FOND) / 3 < 30, "le fond reste SOMBRE : c'est un noir violace, pas un violet")
 if _logo.PILLOW:
     # On verifie l'IMAGE reellement peinte, pas le texte du fichier.
     _fond = _mod._peindre_fond()
-    _blanc = tuple(int(_mod._TEXTE[i : i + 2], 16) for i in (1, 3, 5))
-    _bande = _fond.crop((0, _mod._HAUT_TITRE, _mod._LARGEUR, _mod._HAUT_TITRE + _mod._CAPITALE))
+    _texte = tuple(int(_mod._TEXTE[i : i + 2], 16) for i in (1, 3, 5))
+    _bande = _fond.crop((0, _mod._HAUT_TITRE, _mod._LARGEUR, _mod._BASE_TITRE))
     _comptes = {couleur: n for n, couleur in _bande.getcolors(_bande.width * _bande.height)}
-    verifie(_comptes.get(_blanc, 0) > 2000,
-            "le titre « Autowin OS » doit etre peint en BLANC (#f5f7fb), en gros, sous l'anneau")
-    _halo = _fond.getpixel((_mod._CENTRE[0] + _mod._DIAMETRE // 2 + 4, _mod._CENTRE[1]))
-    verifie(sum(_halo) > sum(_logo.FOND) + 60,
-            "un halo violet doit entourer l'anneau, comme sur la capture de reference")
-    # Sous le titre, les etiquettes tkinter ont un fond OPAQUE : le halo doit y valoir zero, sinon
-    # chaque etiquette dessine un rectangle visible (defaut de la premiere version, vu a la capture).
-    _y_etiquettes = _mod._HAUT_TITRE + _mod._CAPITALE + 22
-    verifie(all(_fond.getpixel((x, _y_etiquettes)) == _logo.FOND for x in (60, _mod._LARGEUR // 2, 460)),
-            "le halo doit etre ETEINT la ou se posent les etiquettes : sinon un rectangle apparait")
-# Le vert de la premiere version ne doit pas resurgir : il n'appartient a aucune des deux palettes.
-verifie("#7ee2a8" not in _splash_src,
-        "l'accent vert d'origine doit avoir disparu : il n'est pas dans la palette du produit")
+    verifie(_comptes.get(_texte, 0) > 2000,
+            "le titre « Autowin OS » doit etre peint, en gros, dans la couleur de texte du theme")
+    _haut = _fond.getpixel((_mod._LARGEUR // 2, 2))
+    _bas = _fond.getpixel((_mod._LARGEUR // 2, _mod._HAUTEUR - 3))
+    verifie(sum(_haut) > sum(_bas), "le panneau est un DEGRADE, plus clair en haut (verre fort) qu'en bas")
+    # Pas de halo : a cote de l'anneau, le fond reste NEUTRE (gris), sans violet.
+    _cote = _fond.getpixel((_mod._CENTRE[0] + _mod._DIAMETRE // 2 + 6, _mod._CENTRE[1]))
+    verifie(max(_cote) - min(_cote) <= 4, f"aucun halo colore autour de l'anneau (pixel {_cote})")
+    # Les deux PANS coupes s'allument : blanc en haut a gauche, argent en bas a droite.
+    _rvb = lambda h: tuple(int(h[i : i + 2], 16) for i in (1, 3, 5))  # noqa: E731
+    verifie(_fond.getpixel((_mod._CHANFREIN + 4, 0)) == _rvb(_mod._PAN_HAUT),
+            "le pan haut-gauche doit etre peint de la couleur du theme")
+    verifie(_fond.getpixel((_mod._LARGEUR - _mod._CHANFREIN - 4, _mod._HAUTEUR - 1)) == _rvb(_mod._PAN_BAS),
+            "le pan bas-droit doit etre peint de la couleur du theme")
+    # Le reflet : il apparait, traverse, s'efface ; le bout s'allume QUAND il y arrive (maquette 3.5).
+    _debut, _milieu, _fin = (_mod.etat_reflet(t) for t in (0.0, 0.9, 1.512))
+    verifie(_debut[1] == 0.0 and _milieu[1] == 1.0, "le reflet apparait en fondu puis brille")
+    verifie(_debut[0] < _milieu[0] < _fin[0] <= 1.0, "le reflet avance de midi vers le bout")
+    verifie(_debut[2] == 0.0 and _milieu[2] == 0.0 and _fin[2] > 0.95,
+            "le bout ne s'allume que lorsque le reflet l'atteint")
+    # L'anneau compose : la part franchie est COLOREE, le reste est la piste neutre.
+    _anneau = _mod._Anneau(_fond)
+    _img = _anneau.image(5, 5, 20, 20, 0.0, 10.0, False)
+    _c = _anneau.COTE // 2
+    _pt = lambda a: (round(_c + 35 * _math.sin(_math.radians(a))), round(_c - 35 * _math.cos(_math.radians(a))))  # noqa: E731
+    _rempli, _vide = _img.getpixel(_pt(20)), _img.getpixel(_pt(200))
+    verifie(max(_rempli) - min(_rempli) > 60, f"la part franchie doit porter le degrade du logo ({_rempli})")
+    verifie(max(_vide) - min(_vide) <= 4 and _vide[0] < 60, f"la part a venir reste la piste sombre ({_vide})")
+    _rouge = _anneau.image(5, 5, 20, 20, 0.0, 10.0, True).getpixel(_pt(85))
+    verifie(_rouge[0] > 150 and _rouge[1] < 90, f"sur erreur, le bout passe au rouge du theme ({_rouge})")
+    # Le compteur ROULE (3.6) : a mi-pas, l'ancien chiffre est deja monte hors du centre.
+    _pose = _anneau.image(4, 4, 20, 20, 0.0, 10.0, False)
+    _roule = _anneau.image(5, 4, 20, 20, 0.0, _mod._DUREE_PAS / 2, False)
+    _centre = (_c - 12, _c - 6, _c + 12, _c + 8)
+    verifie(list(_pose.crop(_centre).getdata()) != list(_roule.crop(_centre).getdata()),
+            "pendant le pas, le compteur doit bouger dans le trou")
 
 # --- COURSE : application affichee => JAMAIS d'alerte -------------------------------------------
 # Defaut mesure le 2026-08-12 a 17:46:08 : l'ecran s'est ferme parce que l'app s'affichait (le succes),
@@ -408,6 +424,7 @@ try:
 
     ecran = Splash()
     verifie(ecran.racine.winfo_exists() == 1, "la fenetre doit exister DES la construction")
+    verifie(not ecran._bascule_verrouillee, "avant Electron, la bascule de compte est permise")
     for ligne in (
         "vite v5.4.0 dev server running",
         "\x1b[32m202 modules transformed.\x1b[39m",
@@ -425,20 +442,43 @@ try:
             "chaque etape franchie doit laisser sa DUREE : c'est la reponse a « qu'est-ce qui prend du temps »")
     verifie(" s" in ecran.journal.cget("text"),
             "le journal affiche une duree lisible a cote de chaque etape")
+    verifie(len(ecran.journal.cget("text").splitlines()) <= 3,
+            "trois lignes de journal au plus : la quatrieme sortait du bas de la fenetre")
+    # Une part d'anneau par etape FRANCHIE, et la ligne sous l'etape le dit.
+    verifie(ecran._franchies == len(ecran._durees), "une part d'anneau par etape franchie")
+    verifie(ecran.ligne_compte.cget("text").startswith(f"{ecran._franchies} étape"),
+            "la ligne sous l'etape compte les etapes franchies")
+    verifie(ecran._bascule_verrouillee,
+            "« restarting electron app » : le store de l'app va lire ses comptes, la bascule se verrouille")
+    # Verrouillee, un clic sur l'autre compte n'ECRIT RIEN : l'app ignorerait puis ecraserait l'ecriture.
+    if len(ecran._zones) > 1:
+        from types import SimpleNamespace as _Ev
+
+        _debut_zone, _fin_zone, _autre = ecran._zones[1]
+        _actif_avant = ecran._actif
+        ecran._clic_pied(_Ev(x=_mod._PIED[0] + (_debut_zone + _fin_zone) // 2, y=_mod._PIED[1] + 22))
+        verifie(ecran._actif == _actif_avant, "bascule verrouillee : le compte actif ne change pas")
+        verifie(ecran.ligne_compte.cget("text").startswith("trop tard"),
+                "bascule verrouillee : l'ecran dit pourquoi le clic n'a rien fait")
+    # Les coins coupes sont une vraie REGION de fenetre Windows, pas seulement un dessin.
+    if sys.platform == "win32":
+        import ctypes as _ct
+
+        _region = _ct.windll.gdi32.CreateRectRgn(0, 0, 0, 0)
+        _type = _ct.windll.user32.GetWindowRgn(int(ecran.racine.wm_frame(), 16), _region)
+        _ct.windll.gdi32.DeleteObject(_region)
+        verifie(_type == 3, f"la fenetre doit porter sa region a coins coupes (GetWindowRgn = {_type}, 3 = complexe)")
     # Des lignes de log ne ferment PLUS l'ecran : il faut une fenetre constatee.
     verifie(not ecran.fini,
             "les lignes de log seules ne doivent PAS fermer l'ecran — c'etait la disparition prematuree")
     # Une erreur doit primer meme apres « Interface prete » — teste AVANT la fermeture, sinon les
     # widgets sont detruits et la lecture n'a plus de sens.
+    _avant = ecran._franchies
     ecran._absorber('[vite:esbuild] Transform failed with 1 error:')
     verifie(ecran.etiquette_etape.cget("text") == "Compilation en ECHEC",
             "une erreur tardive doit remplacer un faux succes affiche")
-    # Autant de segments que d'etapes FRANCHIES, jamais de case grise en attente : une case vide
-    # promet une etape, et le nombre d'etapes n'est pas connu d'avance.
-    verifie(len(ecran._barres) == len(ecran._durees) - 1 or len(ecran._barres) == len(ecran._durees),
-            "un segment par etape franchie, pas un par etape imaginaire")
-    verifie(all(b.cget("bg") != "#1c1d1f" for b in ecran._barres),
-            "aucun segment ne doit rester en couleur d'attente : ils sont crees quand l'etape arrive")
+    verifie(ecran.etiquette_etape.cget("fg").lower() == _mod._ALERTE.lower(), "l'echec s'affiche en rouge du theme")
+    verifie(ecran._erreur and ecran._franchies == _avant, "une erreur n'est pas une etape franchie")
     # Un second battement APRES fermeture ne doit pas lever : le rappel planifie peut arriver en retard.
     ecran._battement()
 except ImportError as erreur:  # tkinter absent : on le DIT, on ne fait pas passer le test en silence

@@ -22,9 +22,9 @@ function fiche(chemin: string): GraphNode {
 }
 
 const VAULT = [
-  fiche('projects/rig-tv/obsidian/areas/import.md'),
-  fiche('projects/rig-tv/obsidian/areas/export.md'),
-  fiche('projects/rig-tv/obsidian/relations/calls.md'),
+  fiche('projects/contoso-tv/obsidian/areas/import.md'),
+  fiche('projects/contoso-tv/obsidian/areas/export.md'),
+  fiche('projects/contoso-tv/obsidian/relations/calls.md'),
   fiche('projects/autowin-os/obsidian/autowin-os.md'),
   fiche('knowledge/decisions/curation.md'),
   fiche('knowledge/lessons/smb.md'),
@@ -238,9 +238,9 @@ describe('premier anneau regroupé — la lecture posée sur le disque', () => {
 describe('exploration progressive de l’arbre', () => {
   it('replie tous les descendants d’un dossier sans recalculer les positions restantes', () => {
     const complet = layoutTree(VAULT)
-    const replie = projectTreeVisibility(complet, new Set(['projects/rig-tv']))
-    expect(replie.nodes.some((node) => node.id === 'projects/rig-tv')).toBe(true)
-    expect(replie.nodes.some((node) => node.id.startsWith('projects/rig-tv/'))).toBe(false)
+    const replie = projectTreeVisibility(complet, new Set(['projects/contoso-tv']))
+    expect(replie.nodes.some((node) => node.id === 'projects/contoso-tv')).toBe(true)
+    expect(replie.nodes.some((node) => node.id.startsWith('projects/contoso-tv/'))).toBe(false)
     expect(replie.nodes.some((node) => node.id.startsWith('knowledge/'))).toBe(true)
     for (const node of replie.nodes) {
       const origine = complet.nodes.find((candidate) => candidate.id === node.id)

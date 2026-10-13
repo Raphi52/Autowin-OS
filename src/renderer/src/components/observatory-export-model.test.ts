@@ -28,7 +28,7 @@ describe('observatory export model', () => {
               messages: [
                 {
                   content:
-                    'Question\n\n[AMITEL BRAIN REFERENCE DATA]\n### Source 1 - knowledge/a.md\nProvenance: domain | global | codex | 2026-07-20'
+                    'Question\n\n[ACME BRAIN REFERENCE DATA]\n### Source 1 - knowledge/a.md\nProvenance: domain | global | codex | 2026-07-20'
                 }
               ]
             }

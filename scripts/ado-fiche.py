@@ -10,11 +10,32 @@ client public Azure CLI, en ouvrant le navigateur avec le code prerempli.
   python scripts/ado-fiche.py create T.md    -> cree la fiche (1re ligne = titre)
 """
 import json, sys, time, os, subprocess, urllib.request, urllib.parse, webbrowser
+from pathlib import Path
 
 CLIENT = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"   # Azure CLI, client public
 ADO_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
 AUTH = "https://login.microsoftonline.com/organizations/oauth2/v2.0"
-ORG, PROJECT = "AmitelGTC", "AutoWinOS"
+
+
+def _organisation():
+    """Organisation et projet Azure DevOps : variables AUTOWIN_ADO_ORG / AUTOWIN_ADO_PROJECT, sinon
+    le profil d'entreprise (entreprise/<nom>/identite.json, cle azureDevOps), absent du depot public."""
+    org, projet = os.environ.get("AUTOWIN_ADO_ORG", ""), os.environ.get("AUTOWIN_ADO_PROJECT", "")
+    dossier = Path(__file__).resolve().parents[1] / "entreprise"
+    if (not org or not projet) and dossier.is_dir():
+        for entree in sorted(d for d in dossier.iterdir() if d.is_dir()):
+            try:
+                ado = json.loads((entree / "identite.json").read_text(encoding="utf-8")).get("azureDevOps") or {}
+            except (OSError, ValueError, AttributeError):
+                continue
+            org, projet = org or ado.get("organisation", ""), projet or ado.get("projet", "")
+            break
+    if not org:
+        sys.exit("organisation Azure DevOps inconnue : regler AUTOWIN_ADO_ORG")
+    return org, projet or "AutoWinOS"
+
+
+ORG, PROJECT = _organisation()
 TOKEN_PATH = os.path.expanduser("~/.ado-token")
 
 

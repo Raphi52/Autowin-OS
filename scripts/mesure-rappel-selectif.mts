@@ -56,7 +56,7 @@ const GABARITS_APP = [
   /^Traite ENSEMBLE ces/,
   /^Corrige ce defaut d'Au/,
   /^La mise à jour d'Autow/,
-  /^Dans D:\\RigV3WPF, (port|alig)/
+  /^Dans [A-Z]:\\\w+, (port|alig)/
 ]
 const estHumain = (texte: string): boolean => !GABARITS_APP.some((g) => g.test(texte.trim()))
 

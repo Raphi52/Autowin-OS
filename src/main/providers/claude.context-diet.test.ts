@@ -77,7 +77,7 @@ describe('spawn CLI — regime de contexte', () => {
 
   it('ramene la memoire auto au PROJET COURANT (et non celle d’un autre projet)', () => {
     // Mesure du 2026-07-28 : le settings.json de l'utilisateur pointait autoMemoryDirectory sur
-    // ~/.claude/projects/C--Code-RIG/memory (552 Ko) — chargee a chaque appel alors qu'Autowin
+    // ~/.claude/projects/C--Code-Contoso/memory (552 Ko) — chargee a chaque appel alors qu'Autowin
     // travaille ailleurs. Cout mesure : 10 272 tokens contre 1 072 sans, soit ~9 200 par appel.
     expect(source).toContain("'--settings'")
     expect(source).toContain('autoMemoryDirectory')

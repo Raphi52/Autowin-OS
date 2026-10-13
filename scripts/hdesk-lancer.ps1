@@ -19,7 +19,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Executable,
   [string]$Arguments = '',
   [int]$AttenteSecondes = 30,
-  # Duree de surveillance APRES la premiere fenetre (crash RigV3 mesure a ~4 s, conv-540).
+  # Duree de surveillance APRES la premiere fenetre (crash ContosoV3 mesure a ~4 s, conv-540).
   [int]$SurvieSecondes = 6,
   # RELIE LE BUREAU A SON TRAVAIL : la petite TV de la conversation affiche ce libelle et filtre
   # sur la conversation. Ecrit dans %LOCALAPPDATA%\autowin-hdesk\<id>.json — hors du depot : un agent lance depuis
@@ -112,7 +112,7 @@ $pi = New-Object AutowinHdeskLanceur+PROCESS_INFORMATION
 # DOSSIER WEBVIEW2 PROPRE AU BUREAU, herite par l'app (env = null -> copie du notre). Sans lui, une app
 # WebView2 deja ouverte sur l'ecran reel tient le dossier par defaut et l'instance cachee plante au
 # demarrage : COMException 0x800700AA « ressource en cours d'utilisation », fenetre noire puis fermeture
-# (mesure RigV3Desktop, conv-540, 2026-09-15). Un dossier impose par l'appelant est respecte.
+# (mesure ContosoV3Desktop, conv-540, 2026-09-15). Un dossier impose par l'appelant est respecte.
 if ([string]::IsNullOrWhiteSpace($env:WEBVIEW2_USER_DATA_FOLDER)) {
   $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "autowin-hdesk\webview2\$Id"
 }
@@ -143,7 +143,7 @@ do {
 } while ((Get-Date) -lt $fin)
 [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
 # UNE FENETRE N'EST PAS UN DEMARRAGE REUSSI (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
-# 2026-09-15) : RigV3 a pose sa fenetre puis s'est ferme ~4 s plus tard ; le lanceur avait deja rendu
+# 2026-09-15) : ContosoV3 a pose sa fenetre puis s'est ferme ~4 s plus tard ; le lanceur avait deja rendu
 # pret=true / exit 0 et l'agent ne l'a appris que sur une capture ulterieure. On surveille donc le
 # processus $SurvieSecondes apres la fenetre : s'il meurt, exit 4 avec code de sortie et erreurs du
 # journal Windows — l'erreur arrive DANS le tour, a l'appel meme, et rien n'est inscrit pour la TV.

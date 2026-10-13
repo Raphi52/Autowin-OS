@@ -261,7 +261,7 @@ describe('runAppPreflight', () => {
    * AUTRE port que 8765. Une adresse en dur appelle 8765 et l'assertion tombe.
    */
   it('sonde l’origine CONFIGUREE, jamais une adresse ecrite en dur', async () => {
-    process.env.AMITEL_BRAIN_ORIGIN = 'http://127.0.0.1:8790'
+    process.env.AUTOWIN_BRAIN_ORIGIN = 'http://127.0.0.1:8790'
     // Le mock DECLARE son argument : sans lui, `mock.calls` est un tuple vide et l'URL sondee
     // — la seule chose que ce test verifie — serait inaccessible au controle de types.
     const fetchMock = vi.fn(async (_entree: unknown) => new Response('ok'))
@@ -272,7 +272,7 @@ describe('runAppPreflight', () => {
       expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://127.0.0.1:8790/')
     } finally {
       globalThis.fetch = originalFetch
-      delete process.env.AMITEL_BRAIN_ORIGIN
+      delete process.env.AUTOWIN_BRAIN_ORIGIN
     }
   })
 })

@@ -67,6 +67,11 @@ export type DependancesDeRelance = {
   /** Fenetres vivantes a notifier. Injecte pour que le module ne depende pas d'`electron`. */
   fenetresVivantes: () => { webContents: { send: (canal: string, charge: unknown) => void } }[]
   defaultProcessIdentity: typeof import('../store/worktree-manager').defaultProcessIdentity
+  /**
+   * Vrai quand une reprise d'APPEL CHAT possède ce tour. Une orchestration lancée depuis le chat
+   * partage le `turnId` de son tour de chat : la relance du run ne doit pas le fermer à sa place.
+   */
+  appelChatReprisPourTour: (conversationId: string, turnId: string) => boolean
 }
 
 export function creerRelanceDeRunReprenable(
@@ -102,7 +107,8 @@ export function creerRelanceDeRunReprenable(
     classifierRefusDeReprise,
     randomUUID,
     fenetresVivantes,
-    defaultProcessIdentity
+    defaultProcessIdentity,
+    appelChatReprisPourTour
   } = deps
 
   const relaunchResumableRun = async (
@@ -148,6 +154,12 @@ export function creerRelanceDeRunReprenable(
       recordedTurnRuntime
     )
     const { resumeExisting, turnId: resumeTurnId, turnBinding: resumeBinding } = resumedRuntime
+    // Tour d'origine à fermer si la reprise en ouvre un nouveau — sauf s'il appartient à une
+    // reprise d'appel chat, qui le fermera elle-même.
+    const tourDOrigine =
+      resumableRun.turnId && !appelChatReprisPourTour(conversationId, resumableRun.turnId)
+        ? resumableRun.turnId
+        : undefined
     const durableResumeTurn = createOrchestrateTurnPersistence({
       conversations: os.conversations,
       conversationId,
@@ -158,6 +170,12 @@ export function creerRelanceDeRunReprenable(
         reasoningEffort: resumeBinding.reasoningEffort
       },
       resumeExisting,
+      supersededTurnId: tourDOrigine,
+      journalSuperseded: (event) => {
+        if (tourDOrigine) appendTurnEvent(turnJournalRoot, conversationId, tourDOrigine, event)
+      },
+      // La liste allume un spinner tant que ce tour est `streaming` : elle doit apprendre sa fin.
+      onClosed: () => broadcast({ type: 'refresh', scope: 'conversations' }),
       journal: (event) => appendTurnEvent(turnJournalRoot, conversationId, resumeTurnId, event)
     })
     // Le run repris s'exécutait SANS son RUN.md : trace.json jamais persistée → panneau Juges
@@ -285,7 +303,11 @@ export function creerRelanceDeRunReprenable(
               }
             }
             if (lifecycle.stage === 'closure') resumedTerminalLifecycle = lifecycle
-            persistRunLifecycle(lifecycle, { conversationId, turnId: resumeTurnId }, causalTrace)
+            persistRunLifecycle(
+              lifecycle,
+              { conversationId, turnId: resumeTurnId, runPath: resumedRunFile?.path },
+              causalTrace
+            )
           },
           resumableRun,
           (usage) => {
@@ -295,7 +317,7 @@ export function creerRelanceDeRunReprenable(
             resumedTerminalLifecycle = settledLifecycle
             persistRunLifecycle(
               resumedTerminalLifecycle,
-              { conversationId, turnId: resumeTurnId },
+              { conversationId, turnId: resumeTurnId, runPath: resumedRunFile?.path },
               causalTrace
             )
             broadcast({ type: 'orchestrate-usage', convId: conversationId })

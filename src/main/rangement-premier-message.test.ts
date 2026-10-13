@@ -67,11 +67,11 @@ describe('dossierDeduitDuPremierMessage', () => {
     ).toBeNull()
   })
 
-  it('exige un fragment de nom assez long : « rig » ne suffit pas', () => {
+  it('exige un fragment de nom assez long : « zox » ne suffit pas', () => {
     expect(
       dossierDeduitDuPremierMessage(
-        'rig est lent',
-        [resolve('D:/RigApplication')],
+        'zox est lent',
+        [resolve('D:/ZoxApplication')],
         resolve('D:/Autre'),
         existe
       )

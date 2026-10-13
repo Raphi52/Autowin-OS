@@ -398,7 +398,6 @@
 :root[data-base='clair'] .cosmic-outline .msg-meta,
 :root[data-base='clair'] .cosmic-outline .msg.assistant .msg-body,
 :root[data-base='clair'] .cosmic-outline .msg.user .msg-body,
-:root[data-base='clair'] .cosmic-outline .activity-group,
 :root[data-base='clair'] .cosmic-outline .activity-step-toggle,
 :root[data-base='clair'] .cosmic-outline .activity-step-detail,
 :root[data-base='clair'] .cosmic-outline .activity-step-target,
@@ -406,8 +405,6 @@
 :root[data-base='clair'] .cosmic-outline .activity-why,
 :root[data-base='clair'] .cosmic-outline .activity-open-run,
 :root[data-base='clair'] .cosmic-outline .activity-open-run:hover,
-:root[data-base='clair'] .cosmic-outline .activity-group-title,
-:root[data-base='clair'] .cosmic-outline .activity-progress,
 :root[data-base='clair'] .cosmic-outline .activity-step,
 :root[data-base='clair'] .cosmic-outline .activity-step-link,
 :root[data-base='clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {

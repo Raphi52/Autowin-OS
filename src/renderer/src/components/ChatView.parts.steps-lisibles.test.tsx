@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -113,36 +110,8 @@ describe("chaque etage a son bouton d'extension", () => {
   })
 })
 
-describe('les degrades du design converge sont bien ecrits dans les DEUX feuilles', () => {
-  const lire = (...chemin: string[]): string =>
-    readFileSync(join(dirname(fileURLToPath(import.meta.url)), ...chemin), 'utf8')
-  const corpsDe = (css: string, selecteur: string): string | null => {
-    const i = css.indexOf(selecteur + ' {')
-    if (i < 0) return null
-    return css.slice(i + selecteur.length + 2, css.indexOf('}', i))
-  }
-
-  it('ChatView.css teinte chaque statut par un DEGRADE, pas un aplat', () => {
-    const css = lire('ChatView.css')
-    for (const etat of ['failed', 'running', 'interrupted']) {
-      const regle = corpsDe(css, ".activity-group[data-state='" + etat + "']")
-      expect(regle, 'regle manquante pour ' + etat).not.toBeNull()
-      expect(regle!, 'aplat au lieu du degrade pour ' + etat).toMatch(/linear-gradient\(/)
-    }
-  })
-
-  /**
-   * ENTREE QUI FAIT ECHOUER SI LA CORRECTION EST FAUSSE : le theme. `.cosmic-outline
-   * .activity-group[data-state]` (0,2,1) bat la regle de ChatView.css — un degrade ecrit dans la
-   * seule feuille de base serait present dans le fichier et INVISIBLE a l'ecran. C'est le defaut
-   * exact que l'utilisateur constate (« l'actuel n'a pas les degrades »).
-   */
-  it('le theme cosmic-outline porte lui aussi le degrade, sinon il ecrase la carte', () => {
-    const theme = lire('..', 'assets', 'cosmic-outline.css')
-    for (const etat of ['failed', 'running', 'interrupted', 'done']) {
-      const regle = corpsDe(theme, ".cosmic-outline .activity-group[data-state='" + etat + "']")
-      expect(regle, 'teinte de theme manquante pour ' + etat).not.toBeNull()
-      expect(regle!, 'aplat au lieu du degrade pour ' + etat).toMatch(/linear-gradient\(/)
-    }
-  })
-})
+/*
+ * Les DEGRADES de la carte teintee (« l'actuel n'a pas les degrades ») ne sont plus verifies ici :
+ * la barre a quitte la carte teintee pour le cadre « grand, deux lignes » (conv-904, 2026-10-12),
+ * dont le dessin est verrouille par anneau-activite.test.tsx.
+ */

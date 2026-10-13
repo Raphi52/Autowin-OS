@@ -27,7 +27,13 @@ const projets = [
     runner: 'vitest',
     runnable: true
   },
-  { id: 'c:/dev/rig', label: 'RIG', root: 'C:/dev/rig', runner: 'vitest', runnable: true },
+  {
+    id: 'c:/dev/contoso',
+    label: 'CONTOSO',
+    root: 'C:/dev/contoso',
+    runner: 'vitest',
+    runnable: true
+  },
   {
     id: 'c:/dev/vide',
     label: 'vide',
@@ -54,10 +60,10 @@ describe('TestsView — multi-projets', () => {
     const container = monter()
     await rendre(container)
     const noms = [...container.querySelectorAll('[data-testid="test-project"]')].map((n) =>
-      n.textContent?.includes('RIG')
+      n.textContent?.includes('CONTOSO')
     )
     expect(noms.length).toBe(3)
-    expect(container.textContent).toContain('RIG')
+    expect(container.textContent).toContain('CONTOSO')
     expect(container.textContent).toContain('Autowin OS')
     // ENTREE QUI DOIT FAIRE ECHOUER une vue codee en dur sur un seul depot :
     // le projet non executable doit apparaitre AVEC sa raison, pas etre masque.
@@ -85,7 +91,7 @@ describe('TestsView — multi-projets', () => {
     const container = monter()
     await rendre(container)
     const cible = [...container.querySelectorAll('[data-testid="test-project"]')].find((n) =>
-      n.textContent?.includes('RIG')
+      n.textContent?.includes('CONTOSO')
     ) as HTMLElement
     await act(async () => {
       cible.querySelector('button')?.click()
@@ -97,7 +103,7 @@ describe('TestsView — multi-projets', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(runProjectTests.mock.calls[0][0]).toBe('C:/dev/rig')
+    expect(runProjectTests.mock.calls[0][0]).toBe('C:/dev/contoso')
     expect(container.textContent).toContain('boom')
     expect(container.querySelector('[data-testid="tests-totals"]')?.textContent).toContain('1')
   })

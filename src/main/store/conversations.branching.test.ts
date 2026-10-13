@@ -302,8 +302,8 @@ describe('ConversationStore — fork', () => {
   })
 
   it('forker un fork n’empile pas les suffixes dans le titre', () => {
-    expect(forkTitle('Analyse RIG')).toBe('Analyse RIG (fork)')
-    expect(forkTitle('Analyse RIG (fork)')).toBe('Analyse RIG (fork)')
+    expect(forkTitle('Analyse CONTOSO')).toBe('Analyse CONTOSO (fork)')
+    expect(forkTitle('Analyse CONTOSO (fork)')).toBe('Analyse CONTOSO (fork)')
     expect(forkTitle('   ')).toBe('Conversation (fork)')
   })
 

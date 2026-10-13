@@ -4,6 +4,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import os
+# Identite NEUTRE forcee (brain_identite) : la suite rend le meme resultat avec ou sans dossier
+# `entreprise/` a la racine du depot. Posee AVANT tout import du tooling.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
 import brain_auth  # noqa: E402
 
 

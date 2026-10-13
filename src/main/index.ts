@@ -207,7 +207,8 @@ import {
   listUnfinishedTurnsPuisMenageAsync,
   pruneFinishedTurnJournals,
   removeConversationTurnJournals,
-  readTurnJournal
+  readTurnJournal,
+  resumerGestesDesTours
 } from './runs/turn-journal'
 import {
   listRecoverableChatProviderCallsAsync,
@@ -311,6 +312,7 @@ import {
 import { configureTurnTiming } from './turn-timing'
 import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
+import { identiteEntreprise } from './identite-entreprise'
 import {
   aligneRaccourciDemarrerDev,
   cheminRaccourciDemarrerDev,
@@ -344,6 +346,13 @@ import { registerTicketsIpc } from './tickets-ipc'
 import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
+import {
+  armerRelanceAutoMoteur,
+  compilerLeMoteur,
+  relanceAutoMoteurPermise,
+  sourcesDuMoteurPlusRecentesQue,
+  surveillerSourcesDuMoteur
+} from './relance-auto-moteur'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
 import {
@@ -382,7 +391,7 @@ import {
   type BrainLaunchOutcome
 } from './preflight-announce'
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
-import { recapMessage, summarizeJournal } from './runs/journal-replay'
+import { fusionnerRepriseDuFil, recapMessage, summarizeJournal } from './runs/journal-replay'
 import type { FinishedRunOutcome } from './runs/run-interruption'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
@@ -686,6 +695,16 @@ const appelChatReprenable = (conversationId: string, turnId: string): boolean =>
   if (call) appelsChatReconnusAuChargement.set(turnId, call)
   return call !== undefined
 }
+/**
+ * Une orchestration lancée depuis le chat partage le `turnId` de son tour de chat. Quand la reprise
+ * d'APPEL CHAT possède ce tour, c'est elle qui le fermera : une reprise de RUN qui ouvre un nouveau
+ * tour ne doit pas le passer en `interrupted` à sa place. On interroge le journal du tour lui-même,
+ * pas `appelsChatReconnusAuChargement` : `hydrate` ne remplit cette Map que pour les tours ABSENTS
+ * des checkpoints de run (court-circuit `resumable?.has(...) || appelChatReprenable(...)`), donc
+ * jamais pour un tour partagé chat/run — exactement ceux qu'il faut protéger (juge, 2026-10-13).
+ */
+const appelChatReprisPourTour = (conversationId: string, turnId: string): boolean =>
+  recoverableChatProviderCallForTurn(turnJournalRoot, conversationId, turnId) !== undefined
 const resumableTurnIds = new Set([
   ...os
     .resumableOrchestrations()
@@ -1143,9 +1162,9 @@ const titresBrainDuTour = createBrainTitresDuTour({
 const contexteGrapheDuTour = createBrainContextProvider({
   graphEvidence: (raw, query, limit) =>
     brainWorker.request('graphifyEvidence', raw, query, limit),
-  // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
+  // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc CONTOSO, donc une question Autowin ramenait
   // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
-  // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
+  // pas ecrit en dur : dans un workspace CONTOSO, la doc CONTOSO est exactement ce qu'il faut.
   // Cette voie ne pousse plus d'EXTRAITS Brain. MESURE 2026-07-29 : l'appel coutait ~430 ms de
   // mediane a chaque tour (jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en tiraient
   // AUCUNE source utile. Le Brain revient a chaque tour le 2026-09-30, mais en CHEMINS seuls et par
@@ -1222,6 +1241,8 @@ let preflightWatchHandle: { stop: () => void } | null = null
 // Surveillance du brain_server APRÈS le démarrage : la boucle de preflight est bornée, celle-ci dure
 // toute la session et relance le service s'il meurt (conv-270, 2026-09-04).
 let brainSupervisionHandle: { stop: () => void } | null = null
+/** Relance automatique du moteur en développement (`relance-auto-moteur.ts`), coupée à la fermeture. */
+let relanceMoteurHandle: { arreter: () => void } | null = null
 
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
@@ -1788,6 +1809,12 @@ function registerChatIpc(): void {
       guardString(turnId, 'turnId')
     )
   })
+  // Gestes propres de l'agent pour TOUTES les demandes d'une conversation : un appel, un résumé
+  // par demande, au lieu d'un journal entier copié vers l'écran par ligne du fil des demandes.
+  ipcMain.handle('runs:turnJournalGestes', (event, conversationId: string) => {
+    assertTrustedRendererSender(event, 'TurnJournalGestes')
+    return resumerGestesDesTours(turnJournalRoot, guardString(conversationId, 'conversationId'))
+  })
   // Auto-update git : check au démarrage (non-bloquant) + application 1-clic (pull + relaunch).
   //
   // `os.executionWorkspace` et NON `process.cwd()` : dans l'app PACKAGÉE, le cwd est le dossier de
@@ -2125,6 +2152,7 @@ Le fil reprend ensuite normalement.`
         model: orchestratorBinding.model,
         reasoningEffort: orchestratorBinding.reasoningEffort
       },
+      onClosed: () => broadcast({ type: 'refresh', scope: 'conversations' }),
       journal: (durableEvent) =>
         appendTurnEvent(turnJournalRoot, conversationId, turnId, {
           ...durableEvent,
@@ -3113,7 +3141,7 @@ Le fil reprend ensuite normalement.`
   /**
    * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
    *
-   * Un libelle de classement (« Clients/Amitel ») ou un dossier disparu laissait le modele
+   * Un libelle de classement (« Clients/Acme ») ou un dossier disparu laissait le modele
    * travailler dans le depot d'Autowin sans un mot — l'utilisateur croyait etre dans son projet,
    * et c'est l'AGENTS.md d'Autowin qui etait lu. On ecrit donc l'avertissement dans le fil, UNE
    * seule fois par conversation et par motif : le repeter a chaque message serait du bruit.
@@ -4675,7 +4703,12 @@ jalonDemarrage('corps du module terminé, whenReady enregistré')
 app.whenReady().then(async () => {
   jalonDemarrage('app.whenReady')
   // Set app user model id for windows
-  electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
+  electronApp.setAppUserModelId(
+    automationAppIdentity(
+      identiteEntreprise().application.appId ?? AUTOWIN_APP_ID,
+      automationInstanceMode
+    )
+  )
   // En dev, Electron pose un raccourci menu Démarrer sans icône pour cette identité, et la barre
   // des tâches lui prend son icône : on le pose nous-mêmes, icône Autowin et CLSID fixe.
   if (process.platform === 'win32' && !app.isPackaged) {
@@ -4941,6 +4974,7 @@ app.whenReady().then(async () => {
         conversationId: state.conversationId,
         turnId: state.turnId,
         resumeExisting: true,
+        onClosed: () => broadcast({ type: 'refresh', scope: 'conversations' }),
         journal: (event) =>
           appendTurnEvent(turnJournalRoot, state.conversationId!, state.turnId!, event)
       })
@@ -5008,7 +5042,8 @@ app.whenReady().then(async () => {
     classifierRefusDeReprise,
     randomUUID,
     fenetresVivantes: () => BrowserWindow.getAllWindows(),
-    defaultProcessIdentity
+    defaultProcessIdentity,
+    appelChatReprisPourTour
   })
   const startupResumeQueue = new StartupResumeQueue()
 
@@ -5139,12 +5174,22 @@ app.whenReady().then(async () => {
         : undefined
       liveReattachment = admitLiveReattachment(resumableRun, recordedTurnRuntime, randomUUID())
       const resumeTurnId = liveReattachment.turnId
+      const tourDOrigine =
+        resumableRun.turnId && !appelChatReprisPourTour(conversationId, resumableRun.turnId)
+          ? resumableRun.turnId
+          : undefined
       durableLiveReattachment = createOrchestrateTurnPersistence({
         conversations: os.conversations,
         conversationId,
         turnId: resumeTurnId,
         runtime: liveReattachment.turnBinding,
         resumeExisting: liveReattachment.resumeExisting,
+        supersededTurnId: tourDOrigine,
+        journalSuperseded: (event) => {
+          if (tourDOrigine) appendTurnEvent(turnJournalRoot, conversationId, tourDOrigine, event)
+        },
+        // fix-ok: la fin d'un run rattaché ne rechargeait pas la liste ; son spinner (hasStreamingTurn) restait allumé.
+        onClosed: () => broadcast({ type: 'refresh', scope: 'conversations' }),
         journal: (event) => appendTurnEvent(turnJournalRoot, conversationId, resumeTurnId, event)
       })
       durableLiveReattachment.begin(liveReattachment.task)
@@ -5183,7 +5228,16 @@ app.whenReady().then(async () => {
         })
         const message = recapMessage(recap, produitEncore)
         if (conversationId && message) {
-          os.conversations.append(conversationId, { role: 'assistant', content: message })
+          // UN message par chantier, MIS À JOUR d'un redémarrage à l'autre (conv-913, 2026-10-13) :
+          // l'ajouter à chaque fois empilait une bulle de plus en bas du fil, qui cachait à l'écran
+          // le tour encore vivant.
+          const heure = new Date().toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+          os.conversations.noterRepriseDuChantier(conversationId, resumableRun.runId, (precedent) =>
+            fusionnerRepriseDuFil(precedent, message, heure)
+          )
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
         }
         if (conversationId && recap.coverage.lostProof > 0) {
@@ -5371,6 +5425,39 @@ app.whenReady().then(async () => {
     onEvent: (message) => console.log(message)
   })
 
+  // MOTEUR RECHARGÉ SANS TUER PERSONNE (dev seulement) : l'interface se recharge déjà à chaud ; le
+  // moteur, lui, est recompilé en coulisse à chaque modification et l'app ne se relance que quand
+  // aucun tour de chat ni aucune orchestration ne tourne, après un préavis. `--watch` reste interdit
+  // (`dev-sans-watch.test.ts`) : il relançait en plein travail. Voir `relance-auto-moteur.ts`.
+  if (
+    relanceAutoMoteurPermise({
+      isPackaged: app.isPackaged,
+      instanceIsolee: isolatedTestInstance,
+      executionDeTache: scheduledTaskDispatch,
+      env: process.env
+    })
+  ) {
+    const racineDuDepot = app.getAppPath()
+    const demarrageDuProcessus = Date.now() - process.uptime() * 1000
+    relanceMoteurHandle = armerRelanceAutoMoteur({
+      surveiller: (surChangement) =>
+        surveillerSourcesDuMoteur(racineDuDepot, surChangement, (ligne) =>
+          console.warn(`[relance-moteur] ${ligne}`)
+        ),
+      compiler: () => compilerLeMoteur(racineDuDepot, process.execPath),
+      auRepos: () =>
+        activeChatTurns.inFlightConversations().length === 0 && bus.orchestrationsEnVol() === 0,
+      annoncer: (text) => broadcast({ type: 'toast', text }),
+      relancer: (cause) => {
+        annoncerFermeture(cause)
+        restartApplication(app)
+      },
+      sourcesModifieesDepuisLeDemarrage: () =>
+        sourcesDuMoteurPlusRecentesQue(racineDuDepot, demarrageDuProcessus),
+      journaliser: (ligne) => console.log(`[relance-moteur] ${ligne}`)
+    })
+  }
+
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -5406,6 +5493,8 @@ app.on('before-quit', (event) => {
   preflightWatchHandle = null
   brainSupervisionHandle?.stop() // couper le battement de surveillance du brain_server
   brainSupervisionHandle = null
+  relanceMoteurHandle?.arreter() // plus de surveillance des sources ni de relance programmée
+  relanceMoteurHandle = null
   if (!otelQuitDrainStarted && otelGenAiExporter.stats().queued > 0) {
     event.preventDefault()
     otelQuitDrainStarted = true

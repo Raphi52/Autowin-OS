@@ -20,7 +20,7 @@ import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test
  *
  * Etat mesure du depot ce jour-la : `command-edit-…-updatebanner-tsx` -> 2 patches « + », et
  * `run-f2f7fec8c587-1` -> 1, tous deux prouves SUPERSEDED par lecture du fichier cible et par le
- * commit de greffe `1bbedc81`. Le bandeau les aurait cries indefiniment.
+ * commit d'intégration `1bbedc81`. Le bandeau les aurait cries indefiniment.
  *
  * On ne supprime rien : on MARQUE. Et le marquage porte le SHA, donc un travail qui REPREND sur la
  * meme branche ressort — sinon on aurait remplace un bandeau qui crie par un bandeau qui se tait.

@@ -94,7 +94,8 @@ const MOTIFS_EXCLUSION: Record<string, string> = {
   'modifie-avant-le-tour': 'déjà modifié avant le tour',
   'touche-par-un-autre-fil': 'touché aussi par un autre fil',
   'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier',
-  'tests-rouges': 'tests rouges'
+  'tests-rouges': 'tests rouges',
+  'import-hors-commit': 'importe un fichier qui ne partirait pas avec lui'
 }
 
 /** Mesuré le 2026-10-01 : `b6d2a3fc` poussé sans test a laissé main rouge 20 h. */
@@ -224,7 +225,7 @@ export function SourceControlPane({
    *
    * Il suit la CONVERSATION. Auparavant il ne lisait que `autowin:sc-repo`, un chemin choisi une
    * fois dans le navigateur et jamais revu : le panneau affichait alors le nom et la branche d'un
-   * AUTRE depot que celui du fil (constate le 2026-09-23 : « RIG-V3 » sur une conversation
+   * AUTRE depot que celui du fil (constate le 2026-09-23 : « CONTOSO-V3 » sur une conversation
    * AutoWinOS). Le chemin memorise ne sert plus que de repli quand la conversation n'en porte pas.
    */
   const [repoMemorise] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')

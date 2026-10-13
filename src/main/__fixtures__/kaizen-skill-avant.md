@@ -43,8 +43,8 @@ the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavi
 5. **INTEGRATE — edit the kit to change FUTURE behavior, immediately.** The deliverable IS the edit. Before picking a file, run an explicit **placement analysis** per finding — REASON it, don’t look it up, and surface the "why here" in the STATE table. Three axes: **SCOPE** (below), **ENFORCEMENT** (wired hook+rule > recall fiche — see bullets), **FOLD vs NEW** (extend/retire before adding — see bullets).
    - **SCOPE decides the file AND whether to mirror** — the most-missed axis:
      - **global** (every machine/project) → `~/.claude/CLAUDE.md` **+ mirror `CONSTITUTION.md`**.
-     - **local** (THIS machine only — RIG hooks, paths, project gates) → the **« Local »** section of `~/.claude/CLAUDE.md`, **NOT mirrored** (a machine-specific fact in the shared `CONSTITUTION.md` pollutes the company kit).
-     - **project** (one RIG sub-project) → that project's `CLAUDE.md` (e.g. `<project-root>\CLAUDE.md`), never the global constitution.
+     - **local** (THIS machine only — <métier> hooks, paths, project gates) → the **« Local »** section of `~/.claude/CLAUDE.md`, **NOT mirrored** (a machine-specific fact in the shared `CONSTITUTION.md` pollutes the company kit).
+     - **project** (one <métier> sub-project) → that project's `CLAUDE.md` (e.g. `<project-root>\CLAUDE.md`), never the global constitution.
 
    Then map the kind of fix to the file (the **target-map**), at the scope decided above:
    - **a triggered reflex / hard rule** → `CLAUDE.md` (+ `CONSTITUTION.md` **only if global**) — the reflexes loaded every session.

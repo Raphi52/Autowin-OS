@@ -42,8 +42,17 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    | Catégorie | Preuve de mort |
    |---|---|
    | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'existe PAS dans la liste vivante (`get_state`, cf. Racines — jamais `conversations.json` seul) |
-   | Sorties de runs (`runs/`, `run-state/`) | run terminé depuis > 30 jours ET absent des runs en cours / bloqués / non publiés de `get_state` |
-   | Rétention `prompt-observability/` et `run-stdout/` (fichiers directs, pas le sous-dossier `systems/`) | fichier NON MODIFIÉ depuis > 14 jours (mtime) ET, pour `run-stdout/`, son run absent des runs en cours / bloqués de `get_state` — l'âge suffit : ces données sont des journaux, pas un état |
+   | Sorties de runs (`runs/`, `run-state/`) | dossier non modifié depuis > 30 jours ET AUCUN run bloqué dedans — selon le scan COMPLET ci-dessous, jamais `runsBlocked` de `get_state` — ET absent des travaux non publiés ; pour `run-state/`, sa `conversationId` ne porte aucun run bloqué |
+   | Rétention `prompt-observability/` et `run-stdout/` (fichiers directs, pas le sous-dossier `systems/`) | fichier NON MODIFIÉ depuis > 14 jours (mtime) ET, pour `run-stdout/`, son uuid (36 premiers caractères du nom) n'est cité par AUCUN `run-state/*.json` (champ `agentToken`) — l'âge suffit : ces données sont des journaux, pas un état |
+
+   **Runs bloqués = scan complet, pas `get_state`.** `runsBlocked` n'est qu'une FENÊTRE (les 24 RUN.md
+   les plus récents ; `runsNonExamines` compte le reste) et, avant le 2026-10-11, il ne voyait AUCUN
+   run (mauvaise racine) : les passes des 02 et 03/10 ont mis 42 runs rouges en corbeille sur la foi
+   d'une liste vide — remis en place le 13/10. Sonde : un script `.mts` lancé par `npx tsx`, qui
+   importe `scanRuns` (`file:///D:/AutoWinOS/src/main/dashboards/runs-scan.ts`) et `isBlocked`
+   (`file:///D:/AutoWinOS/src/shared/run-blocked.ts`), scanne `.autowin-data/autowin-os/runs` et rend
+   l'ensemble des `session` qui portent au moins un run bloqué (mesuré le 13/10 : 925 RUN.md bloqués
+   sur 1 094, 117 conversations). Sonde en échec → `runs/` et `run-state/` NON collectés ce jour-là.
    | Racine `.autowin-data/` : `*.log` > 5 Mo, `tmp/`, captures `tmp-*.png`, `vitest-*.txt` | non modifié depuis > 7 jours et non référencé par un process vivant (`DevToolsActivePort` exclu) |
    | Sauvegardes ponctuelles dans `autowin-os/` : `*.bak`, `*.bak.N`, `*.avant-*`, `*.pre-*`, `g.tmp.jsonl` (y compris dans `activity/` et `prompt-observability/`) | non modifié depuis > 14 jours — copies d'avant-migration, l'original vivant est à côté |
    | Bancs d'essai terminés : `autowin-os/arena-bench*/`, `banc-*/`, `critere-reprises/`, `judge-session-*/` | aucun fichier du dossier modifié depuis > 14 jours |

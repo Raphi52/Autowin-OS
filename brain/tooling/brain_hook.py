@@ -13,17 +13,18 @@ from urllib.request import Request, urlopen
 
 from brain_auth import seal_request, service_token, verified_context
 from brain_singleton import ProcessMutex
+import brain_identite
 
 DEFAULT_PORT = 8765
 
 
 def _endpoint(path="/query"):
-    port = int(os.environ.get("AMITEL_BRAIN_PORT", DEFAULT_PORT))
+    port = int(brain_identite.lire("AUTOWIN_BRAIN_PORT", DEFAULT_PORT))
     return f"http://127.0.0.1:{port}{path}"
 
 
 def _port():
-    return int(os.environ.get("AMITEL_BRAIN_PORT", DEFAULT_PORT))
+    return int(brain_identite.lire("AUTOWIN_BRAIN_PORT", DEFAULT_PORT))
 
 
 def _validate_response(payload, token):
@@ -37,15 +38,15 @@ def _authenticate_service(token, timeout):
     with urlopen(request, timeout=timeout) as response:
         declared = int(response.headers.get("Content-Length", "0") or 0)
         if declared < 0 or declared > 16_384:
-            raise ValueError("invalid Amitel Brain challenge")
+            raise ValueError("invalid Brain challenge")
         raw = response.read(16_385)
     if len(raw) > 16_384:
-        raise ValueError("invalid Amitel Brain challenge")
+        raise ValueError("invalid Brain challenge")
     payload = json.loads(raw)
     challenge = _validate_response(payload, token)
     match = re.fullmatch(r"challenge:([0-9a-f]{24})", challenge)
     if match is None:
-        raise ValueError("Amitel Brain server authentication failed")
+        raise ValueError("Brain server authentication failed")
     return match.group(1)
 
 
@@ -55,7 +56,7 @@ def _request_context(prompt, timeout=1.0, harness=None):
     request_payload = {
         "query": prompt[:8000],
         "max_chars": 2000,
-        "harness": harness or os.environ.get("AMITEL_BRAIN_HARNESS", "unknown"),
+        "harness": harness or brain_identite.lire("AUTOWIN_BRAIN_HARNESS", "unknown"),
         "trace_id": uuid.uuid4().hex,
     }
     body = json.dumps(seal_request(request_payload, token, nonce)).encode("utf-8")
@@ -71,7 +72,7 @@ def _request_context(prompt, timeout=1.0, harness=None):
 
 def _configured_root():
     default = Path(__file__).resolve().parents[1]
-    return str(Path(os.environ.get("AMITEL_BRAIN_ROOT", default)).resolve())
+    return str(Path(brain_identite.lire("AUTOWIN_BRAIN_ROOT", default)).resolve())
 
 
 def _same_root(left, right):
@@ -123,7 +124,7 @@ def _wait_for_shutdown(timeout=2.0):
 
 
 def _server_python():
-    configured = os.environ.get("AMITEL_BRAIN_PYTHON")
+    configured = brain_identite.lire("AUTOWIN_BRAIN_PYTHON")
     if configured:
         return configured
     local_venv = Path.home() / ".brain" / "tooling" / ".venv"

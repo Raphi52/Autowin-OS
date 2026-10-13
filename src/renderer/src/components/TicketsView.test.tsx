@@ -25,7 +25,7 @@ function item(id: string, sourceId = DEFAULT_TICKET_SOURCE.id): TicketItem {
     type: id === '3' ? 'Bug' : 'Fiche Team',
     title: `Ticket ${id}`,
     state: id === '3' ? 'Closed' : 'En cours',
-    assignee: 'Équipe RIG',
+    assignee: 'Équipe CONTOSO',
     description: id === '1' ? 'Description lisible' : '',
     createdAt: '2026-07-22T09:00:00.000Z',
     updatedAt: '2026-07-23T10:00:00.000Z',
@@ -274,7 +274,7 @@ describe('vue Tickets', () => {
       option.getAttribute('value')
     )
     expect(options).toContain('Alice Martin') // annuaire Azure
-    expect(options).toContain('Équipe RIG') // assignés déjà chargés
+    expect(options).toContain('Équipe CONTOSO') // assignés déjà chargés
 
     const filter = container.querySelector(
       '[data-testid="tickets-assignee-filter"]'

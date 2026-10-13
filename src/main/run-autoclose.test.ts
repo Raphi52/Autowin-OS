@@ -9,6 +9,7 @@ import {
   autoCloseRun,
   captureCloseBaseline,
   closeGreenRunOnDisk,
+  porteLaProvenanceDuRun,
   defaultGitRunner,
   detectSecret,
   parsePorcelainPaths,
@@ -246,9 +247,13 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
     expect(baseline.project).toContain('travail-concurrent.ts')
     expect(baseline.brain).toContain('note-en-attente.md')
 
-    // Puis le run produit SES fichiers.
+    // Puis le run produit SES fichiers, sous leur forme réelle (2026-10-13) : côté projet, le commit de
+    // fusion de sa copie isolée ; côté Brain, une note portant SA provenance (`commands.ts`). Un simple
+    // fichier apparu dans l'arbre partagé ne prouve plus rien : une autre conversation a pu l'écrire.
     writeFileSync(join(repo, 'du-run.ts'), 'export const y = 2\n')
-    writeFileSync(join(brain, 'du-run.md'), '# produit par le run\n')
+    await realGit(['add', '--', 'du-run.ts'], repo)
+    await realGit(['commit', '-m', 'agent run-77-1'], repo)
+    writeFileSync(join(brain, 'du-run.md'), '# produit par le run\n\nProvenance Autowin (v1):\n- run: run-77\n')
 
     const report = await closeGreenRunOnDisk({
       runId: 'run-77',
@@ -271,6 +276,74 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
       expect(committed).toContain(mine)
       expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
     }
+  })
+
+  /**
+   * LE CAS MESURÉ le 2026-10-13. Le run `run-a8a70cd0ee56-1` a fusionné SON travail
+   * (`e58cc386 agent run-a8a70cd0ee56-1`, 13:40:16). Une seconde plus tard, sa clôture a commité
+   * `be8c2f87 auto(run-a8a70cd0ee56-1)` : 36 fichiers que D'AUTRES conversations modifiaient dans
+   * l'arbre partagé pendant qu'il tournait (dont un banc de test jetable). Côté Brain, `5089af8`
+   * a emporté 10 notes d'autres conversations, sans aucune venant du run, et les a poussées. La
+   * clôture prenait pour « fichiers du run » tout ce qui était modifié MAINTENANT et pas au départ.
+   */
+  it('LE CAS MESURÉ : le travail des AUTRES conversations, fait pendant le run, n’est pas embarqué', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    mkdirSync(join(brain, 'inbox'))
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+
+    // PENDANT le run, une autre conversation travaille dans les mêmes dépôts partagés.
+    writeFileSync(join(repo, 'travail-d-une-autre-conv.ts'), 'export const autre = 1\n')
+    writeFileSync(join(brain, 'inbox', 'note-d-une-autre-conv.md'), '# fait d’un autre fil\n')
+    // Le run, lui : son travail arrive par la fusion de sa copie isolée…
+    writeFileSync(join(repo, 'du-run.ts'), 'export const y = 2\n')
+    await realGit(['add', '--', 'du-run.ts'], repo)
+    await realGit(['commit', '-m', 'agent run-77-1'], repo)
+    // …et sa leçon est déposée par l'app, avec la provenance du run (commands.ts).
+    writeFileSync(
+      join(brain, 'inbox', 'lecon-du-run.md'),
+      '# leçon\n\nProvenance Autowin (v1):\n- run: run-77\n- workspace: D:/x\n'
+    )
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-77',
+      task: 'ajoute un fichier',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    // Projet : seul le commit du run part ; le fichier de l'autre conversation n'est commité nulle part.
+    expect(report.project).toMatchObject({ status: 'pushed', files: 1 })
+    expect(await realGit(['log', '--format=%s'], repo)).not.toMatch(/^auto\(/m)
+    expect(await realGit(['status', '--porcelain', '--', 'travail-d-une-autre-conv.ts'], repo)).toMatch(/^\?\?/)
+    // Brain : la leçon du run part, la note de l'autre fil reste où elle est, non commitée.
+    expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
+    const commiteBrain = await realGit(['show', '--name-only', '--format=', 'HEAD'], brain)
+    expect(commiteBrain).toContain('inbox/lecon-du-run.md')
+    expect(commiteBrain).not.toContain('note-d-une-autre-conv.md')
+    expect(await realGit(['status', '--porcelain', '-uall', '--', 'inbox'], brain)).toContain(
+      'inbox/note-d-une-autre-conv.md'
+    )
+  })
+
+  it('une note Brain d’un AUTRE run n’est pas embarquée, même avec une provenance', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(brain, 'lecon-run-770.md'), 'Provenance Autowin (v1):\n- run: run-770\n')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-77',
+      task: 'rien',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.brain).toMatchObject({ status: 'skipped', reason: 'no-changes' })
   })
 
   it('sans delta (le run n’a rien produit), rien n’est publié', async () => {
@@ -606,7 +679,11 @@ describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () =
     writeFileSync(join(brain, 'inbox', 'autrui-en-cours.md'), '# brouillon d_une autre session\n')
 
     const baseline = await captureCloseBaseline(repo, brain, realGit)
-    writeFileSync(join(brain, 'inbox', 'note-du-run.md'), '# produit par le run\n')
+    // Forme réelle d'une note de run : le bloc de provenance que l'app y écrit (`commands.ts`).
+    writeFileSync(
+      join(brain, 'inbox', 'note-du-run.md'),
+      '# produit par le run\n\nProvenance Autowin (v1):\n- run: run-brain-1\n'
+    )
 
     const report = await closeGreenRunOnDisk({
       runId: 'run-brain-1',
@@ -627,6 +704,21 @@ describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () =
     expect((await run('git', ['status', '--porcelain', '-uall'], { cwd: brain })).stdout).toContain(
       'autrui-en-cours.md'
     )
+  })
+})
+
+describe('provenance d’une note Brain de run', () => {
+  it('ligne exacte : `run-7` ne vaut pas pour `run-77`, fins de ligne Windows acceptées', () => {
+    expect(porteLaProvenanceDuRun('x\nProvenance Autowin (v1):\n- run: run-77\n', 'run-77')).toBe(true)
+    expect(porteLaProvenanceDuRun('Provenance Autowin (v1):\r\n- run: run-77\r\n', 'run-77')).toBe(true)
+    expect(porteLaProvenanceDuRun('- run: run-77\n', 'run-7')).toBe(false)
+    expect(porteLaProvenanceDuRun('- run: run-7\n', 'run-77')).toBe(false)
+    expect(porteLaProvenanceDuRun('voir - run: run-77 ailleurs', 'run-77')).toBe(false)
+  })
+
+  it('le dépôt des leçons d’un run écrit bien cette ligne (sinon plus aucune note de run ne partirait)', () => {
+    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    expect(source).toContain('Provenance Autowin (v1):\\n- run: ${input.runId}\\n')
   })
 })
 

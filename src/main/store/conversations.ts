@@ -79,6 +79,12 @@ export interface Msg {
    * ça a effacé ton message précédent » — la réponse à la question vivait au-dessus d'elle).
    */
   coupeLaReponse?: number
+  /**
+   * Identifiant du CHANTIER (run d'orchestration) dont ce message est le récapitulatif « Reprise du
+   * fil… ». Au redémarrage suivant, c'est ce message qui est mis à jour, au lieu d'en empiler un
+   * nouveau en bas du fil (conv-913, 2026-10-13). Voir `noterRepriseDuChantier`.
+   */
+  repriseDuChantier?: string
 }
 
 /** Nombre de parts déjà produites par une réponse encore en cours, ou `undefined` s'il n'y en a pas. */
@@ -147,9 +153,9 @@ export interface Conversation {
   /**
    * La CATÉGORIE de la barre latérale, quand elle ne correspond à aucun dossier de travail.
    *
-   * Un libellé libre (« Perso », « Clients/Amitel ») : il groupe la conversation dans la liste et
+   * Un libellé libre (« Perso », « Clients/Acme ») : il groupe la conversation dans la liste et
    * ne pilote RIEN d'autre. Quand il est présent, il l'emporte sur `projectPath` pour le
-   * groupement — c'est ce qui permet à un fil de travailler dans `D:\GIT\RigApplication` tout en
+   * groupement — c'est ce qui permet à un fil de travailler dans `D:\GIT\ContosoApp` tout en
    * étant rangé sous « Factures ».
    *
    * OPTIONNEL, et il le reste. Un ancien fichier qui range un libellé dans `projectPath` le voit
@@ -215,6 +221,14 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
    * ferait grossir chaque résumé IPC sans rien dire de plus.
    */
   lastAssistantAsksUser?: true
+  /**
+   * Un tour assistant est encore `streaming` QUELQUE PART dans le fil, pas forcément le dernier.
+   * Vécu conv-914 (2026-10-13) : deux runs rattachés au redémarrage travaillaient encore, mais un
+   * tour de chat plus récent était terminé — `lastAssistantStatus` disait `completed` et la liste
+   * n'affichait aucun spinner. Fiable : `hydrate` passe en `interrupted` tout `streaming` qu'aucune
+   * reprise ne prendra en main. Absent quand rien ne tourne.
+   */
+  hasStreamingTurn?: true
   /**
    * Motif de l'échec du DERNIER tour, quand il a échoué. C'est lui qui permet de reconnaître une
    * conversation coupée par le mur de QUOTA (`estMurDeQuota`, src/shared/reprise-quota.ts) parmi
@@ -736,7 +750,7 @@ export class ConversationStore {
        * UN LIBELLÉ ÉGARÉ DANS LE DOSSIER DE TRAVAIL EST DÉPLACÉ, PAS EFFACÉ (conv-81, 2026-09-16).
        *
        * `projectPath` a longtemps servi AUSSI de catégorie : les fichiers déjà écrits portent donc
-       * des « Perso » ou « Clients/Amitel » là où un chemin est attendu. Les effacer ferait perdre
+       * des « Perso » ou « Clients/Acme » là où un chemin est attendu. Les effacer ferait perdre
        * un rangement fait à la main ; les laisser ferait repartir le défaut à chaque lecture — ces
        * libellés remplissaient la liste des dossiers connus et faisaient croire à un dossier de
        * travail qui n'a jamais existé. On les déplace UNE fois, tels quels : la casse et les
@@ -923,6 +937,8 @@ export class ConversationStore {
        * (sous un brouillon deja lu).
        */
       auDessusDeLaReponseDuTour?: boolean
+      /** Récapitulatif de reprise de ce chantier (cf. `Msg.repriseDuChantier`). */
+      repriseDuChantier?: string
     }
   ): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
@@ -978,7 +994,8 @@ export class ConversationStore {
       content: m.content,
       ts,
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),
-      ...(m.orientation ? { orientation: true as const } : {})
+      ...(m.orientation ? { orientation: true as const } : {}),
+      ...(m.repriseDuChantier ? { repriseDuChantier: m.repriseDuChantier } : {})
     }
     const coupure = m.orientation && rangReponseEnCours < 0 ? pointDeCoupure(dernier) : undefined
     if (coupure !== undefined) message.coupeLaReponse = coupure
@@ -997,6 +1014,46 @@ export class ConversationStore {
         updatedAt: ts
       })
     return conversation
+  }
+
+  /**
+   * LE message « Reprise du fil » d'UN chantier : ajouté au premier redémarrage, puis MIS À JOUR en
+   * place aux suivants, au lieu d'empiler une bulle de plus en bas du fil à chaque fois.
+   *
+   * Vécu dans conv-913 (2026-10-13) : deux redémarrages, deux bulles pour le même chantier, et la
+   * dernière cachait à l'écran le tour encore vivant. `composer` reçoit le texte déjà montré (ou
+   * `undefined` la première fois) et rend le texte complet : le fusionner sans rien perdre est son
+   * affaire (`fusionnerRepriseDuFil`). Un ancien récapitulatif SANS repère n'est pas adopté : rien ne
+   * dit à quel chantier il appartenait.
+   */
+  noterRepriseDuChantier(
+    id: string,
+    runId: string,
+    composer: (precedent: string | undefined) => string
+  ): 'ajoute' | 'mis-a-jour' {
+    const conversation = this.conversations.get(id)
+    if (!conversation) {
+      throw new Error(`Conversation inconnue: ${id}`)
+    }
+    let existant: Msg | undefined
+    for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
+      const message = conversation.messages[index]
+      if (message.role === 'assistant' && message.repriseDuChantier === runId) {
+        existant = message
+        break
+      }
+    }
+    if (!existant) {
+      this.append(id, { role: 'assistant', content: composer(undefined), repriseDuChantier: runId })
+      return 'ajoute'
+    }
+    existant.content = composer(existant.content)
+    this.indexerMessage(conversation.id, existant.content)
+    conversation.updatedAt = this.now()
+    // Une MODIFICATION en place ne se journalise pas comme un ajout : `append-messages` la
+    // rejouerait en fin de fil. On republie la conversation entière (une fois par redémarrage).
+    this.changed(id, 'immediate')
+    return 'mis-a-jour'
   }
 
   /** Persiste atomiquement le message utilisateur et le brouillon assistant avant le transport. */
@@ -1901,7 +1958,10 @@ export class ConversationStore {
         ...(lastUserMessageAt(messages) !== undefined
           ? { lastUserMessageAt: lastUserMessageAt(messages) }
           : {}),
-        ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {})
+        ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {}),
+        ...(messages.some((m) => m.role === 'assistant' && m.status === 'streaming')
+          ? { hasStreamingTurn: true as const }
+          : {})
       }
     })
   }
@@ -1927,8 +1987,8 @@ export class ConversationStore {
    * Range la conversation — dans un DOSSIER de travail, ou sous une CATÉGORIE de la liste.
    *
    * Le routage se fait sur la FORME de la valeur reçue, et c'est le point unique qui empêche le
-   * défaut de revenir (conv-81, 2026-09-16) : un chemin (`D:\GIT\RigApplication`) devient le
-   * dossier de travail, tout le reste (« Perso », « Clients/Amitel ») devient une simple catégorie.
+   * défaut de revenir (conv-81, 2026-09-16) : un chemin (`D:\GIT\ContosoApp`) devient le
+   * dossier de travail, tout le reste (« Perso », « Clients/Acme ») devient une simple catégorie.
    * Sans ce tri, classer sous un libellé écrivait ce libellé comme dossier de travail : le tour
    * partait quand même dans le dépôt d'Autowin, et le libellé se retrouvait proposé comme dossier
    * dans le menu « Ranger dans… ». Le tri est ICI et non chez les appelants — l'IPC, la commande
@@ -1936,7 +1996,7 @@ export class ConversationStore {
    * dans trois appelants finit par diverger dans l'un des trois.
    *
    * Un libellé laisse le dossier de travail INTACT : c'est exactement ce que demande « dissocier le
-   * CWD du nom de la catégorie » — un fil peut travailler dans `D:\GIT\RigApplication` et être rangé
+   * CWD du nom de la catégorie » — un fil peut travailler dans `D:\GIT\ContosoApp` et être rangé
    * sous « Factures ».
    *
    * Un vrai dossier, lui, EFFACE la catégorie : la conversation se regroupe alors sous le nom de son
@@ -1964,7 +2024,7 @@ export class ConversationStore {
       delete conversation.categorie
     } else {
       // Libellé : la casse et les séparateurs sont ceux que l'utilisateur a écrits, on ne les
-      // canonise pas — « Clients/Amitel » n'est pas un chemin et n'a pas à en prendre la forme.
+      // canonise pas — « Clients/Acme » n'est pas un chemin et n'a pas à en prendre la forme.
       conversation.categorie = brut
     }
     this.changed(id)

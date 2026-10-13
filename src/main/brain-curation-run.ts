@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { buildBrainLaunchCommand, CMD_UNSAFE, resolveBrainRuntime } from './brain-server-launch'
+import { recopierNomsHistoriques } from './identite-entreprise'
 
 /** Identité de revue : DOIT différer de la famille d'agent auteur (`autowin-os`), sinon
  *  `brain_curate._promote` refuse la promotion (« reviewer must belong to a distinct family »). */
@@ -162,8 +163,9 @@ export function startBrainCuration(
   }
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
-  // Nom HISTORIQUE lu par les scripts Python de Hermes-Brain (hors de ce depot).
-  childEnv.AMITEL_BRAIN_ROOT = brainRoot
+  // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
+  childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
+  recopierNomsHistoriques(childEnv, env)
   attempted = true
   let rendu = false
   const liberer = (): void => {
@@ -178,7 +180,7 @@ export function startBrainCuration(
       [
         ...command.args,
         // Sans `--brain`/`--index`, brain_curate.py prend le PARENT de son propre dossier. Depuis
-        // que le code est installé en local (%LOCALAPPDATA%\AmitelBrain\tooling), ce parent n'a pas
+        // que le code est installé en local (%LOCALAPPDATA%\<dossierLocal>\tooling), ce parent n'a pas
         // d'inbox/ : la curation ne voyait aucun candidat (mesuré le 2026-09-29). L'index est celui
         // que le serveur sert (`brain_server.py` lit `racine/tooling/index`).
         '--brain',

@@ -38,7 +38,7 @@ const pathWatchGenerations = new Map<string, number>()
  * Forme CANONIQUE d'un chemin — la seule que `fs.watch` accepte sans tuer le processus.
  *
  * DÉFAUT REPRODUIT (2026-08-31, exit 127) : `fs.watch` sur un dossier dont le chemin traverse un
- * nom court 8.3 de Windows (`C:\Users\RAPHAE~1.VIL\...`, la forme que rend `os.tmpdir()` sur ce
+ * nom court 8.3 de Windows (`C:\Users\PRENOM~1.NOM\...`, la forme que rend `os.tmpdir()` sur ce
  * poste) fait ABORTER le processus — `Assertion failed: !_wcsnicmp(filename, dir, dirlen), file
  * src\win\fs-event.c, line 72`. libuv compare le nom LONG que Windows lui rend dans l'événement au
  * chemin COURT qu'on lui a donné : ils diffèrent, il assert. Reproduit en isolation sur 5 fichiers

@@ -7,6 +7,7 @@ import {
   gesteDeLaLigne
 } from './chat-turn-trace'
 import { allegerTracePourGraphe } from './trace-allegee'
+import { demandeHumaineEntiere } from '../../shared/balise-message-utilisateur'
 
 const AT = Date.parse('2026-10-12T09:05:00.000Z')
 
@@ -34,34 +35,59 @@ describe('evenementDemandeRecue — la demande entre dans la trace dès son envo
     // Sans fournisseur : l'arbre ne le prend pas pour un appel au modèle.
     expect(event.provider).toBeUndefined()
     expect(event.payloads).toEqual([
-      { kind: 'user-message', content: 'UTILISATEUR: refais le graphe' }
+      {
+        kind: 'user-message',
+        content: 'UTILISATEUR: <message_utilisateur>refais le graphe</message_utilisateur>'
+      }
     ])
   })
 
-  it('ne garde que le segment UTILISATEUR d’un message composé, borné', () => {
-    const event = evenementDemandeRecue({
+  // Le détail de la brique Demande la montre EN ENTIER (2026-10-12) : la demande reçue gardait le
+  // premier paragraphe, 2000 caractères au plus — tout ce que l'arbre pouvait montrer d'un tour en cours.
+  it('garde les mots de l’utilisateur EN ENTIER, paragraphes compris, jamais l’état de l’app', () => {
+    const long = 'a'.repeat(5000)
+    const multi = evenementDemandeRecue({
       conversationId: 'conv-1',
       turnId: 'tour-2',
       sequence: 1,
       at: AT,
-      contenu: `ÉTAT DE L'APP:\n{"secret":"x"}\n\nUTILISATEUR: ${'a'.repeat(5000)}`
+      contenu: `premier paragraphe\n\n${long}\n\ndernier paragraphe`
     })
-    expect(event.payloads[0].content.startsWith('UTILISATEUR: aaa')).toBe(true)
-    expect(event.payloads[0].content).not.toContain('secret')
-    expect(event.payloads[0].content.length).toBeLessThanOrEqual(2000)
+    expect(demandeHumaineEntiere(multi.payloads[0].content)).toBe(
+      `premier paragraphe\n\n${long}\n\ndernier paragraphe`
+    )
+
+    const compose = evenementDemandeRecue({
+      conversationId: 'conv-1',
+      turnId: 'tour-2b',
+      sequence: 1,
+      at: AT,
+      contenu: `ÉTAT DE L'APP:\n{"secret":"x"}\n\nUTILISATEUR: <message_utilisateur>un\n\ndeux</message_utilisateur>`
+    })
+    expect(compose.payloads[0].content).not.toContain('secret')
+    expect(demandeHumaineEntiere(compose.payloads[0].content)).toBe('un\n\ndeux')
   })
 
-  it('reste lisible dans la trace allégée que reçoit le graphe', () => {
-    const [allegee] = allegerTracePourGraphe([
+  it('reste borné et lisible dans la trace allégée que reçoit le graphe', () => {
+    const [court, long] = allegerTracePourGraphe([
       evenementDemandeRecue({
         conversationId: 'conv-1',
         turnId: 'tour-3',
         sequence: 1,
         at: AT,
         contenu: 'trie mes mails'
+      }),
+      evenementDemandeRecue({
+        conversationId: 'conv-1',
+        turnId: 'tour-4',
+        sequence: 2,
+        at: AT,
+        contenu: 'b'.repeat(5000)
       })
     ])
-    expect(allegee.payloads[0].content).toBe('UTILISATEUR: trie mes mails')
+    expect(demandeHumaineEntiere(court.payloads[0].content)).toBe('trie mes mails')
+    expect(long.payloads[0].content.startsWith('UTILISATEUR: ')).toBe(true)
+    expect(long.payloads[0].content.length).toBeLessThanOrEqual(2000)
   })
 })
 

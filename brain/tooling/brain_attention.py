@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from brain_trace import local_log_path
+import brain_identite
 
 
 FEEDBACK_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}")
@@ -91,7 +92,7 @@ def record_feedback(
     path, *, trace_id, used_ids=(), rejected_ids=(), enabled=True,
     max_bytes=5_000_000,
 ):
-    if not enabled or os.environ.get("AMITEL_BRAIN_FEEDBACK", "1") == "0":
+    if not enabled or brain_identite.lire("AUTOWIN_BRAIN_FEEDBACK", "1") == "0":
         return False
     try:
         target = local_log_path(path)
@@ -100,7 +101,7 @@ def record_feedback(
     if max_bytes < 128:
         raise ValueError("max_bytes must be at least 128")
     event = {
-        "schema": "amitel-brain/attention-feedback-v1",
+        "schema": brain_identite.schema("attention-feedback-v1"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "trace_id": _feedback_identifier(trace_id),
         "used_ids": sorted({_feedback_identifier(item) for item in used_ids}),

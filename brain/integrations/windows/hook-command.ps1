@@ -1,4 +1,4 @@
-function Get-AmitelBrainHookCommands([string]$Wrapper) {
+function Get-BrainHookCommands([string]$Wrapper) {
     $prefix = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "
     return [pscustomobject]@{
         Quoted = $prefix + '"' + $Wrapper + '"'
@@ -6,8 +6,8 @@ function Get-AmitelBrainHookCommands([string]$Wrapper) {
     }
 }
 
-function Test-AmitelBrainHookCommand([string]$Actual, [string]$Wrapper) {
-    $commands = Get-AmitelBrainHookCommands $Wrapper
+function Test-BrainHookCommand([string]$Actual, [string]$Wrapper) {
+    $commands = Get-BrainHookCommands $Wrapper
     return [string]::Equals($Actual, $commands.Quoted, [StringComparison]::Ordinal) -or
         [string]::Equals($Actual, $commands.Unquoted, [StringComparison]::Ordinal)
 }

@@ -38,7 +38,7 @@ describe('ChatView — signe de vie d’une action en cours', () => {
   }
 
   const groupe = (): string =>
-    harness?.container.querySelector('.activity-group')?.textContent ?? ''
+    harness?.container.querySelector('.activity-anneau')?.textContent ?? ''
 
   it('affiche le battement pendant l’action, puis l’efface au verdict', async () => {
     const pilote = await monter()

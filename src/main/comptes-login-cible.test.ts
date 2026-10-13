@@ -14,10 +14,10 @@ vi.mock('./provider-login', async (importOriginal) => ({
 
 /**
  * INCIDENT REEL (2026-09-01) : l'utilisateur etait connecte en raphi5269@gmail.com sur le compte
- * par defaut, a ajoute un compte amitel.fr — et s'est retrouve avec DEUX puces identiques, le
+ * par defaut, a ajoute un compte acme.fr — et s'est retrouve avec DEUX puces identiques, le
  * compte gmail ayant disparu. Preuve hors-modele : les sauvegardes du CLI
  * (~/.claude/backups/.claude.json.backup.1788241304475) portent encore
- * `emailAddress: raphi5269@gmail.com` a 07:41, alors que ~/.claude.json porte amitel.fr ensuite.
+ * `emailAddress: raphi5269@gmail.com` a 07:41, alors que ~/.claude.json porte acme.fr ensuite.
  * Deux defauts distincts, un test chacun.
  */
 describe('le login ne doit jamais atterrir dans un dossier HERITE', () => {
@@ -61,7 +61,7 @@ describe('describeAccounts — deux comptes REELLEMENT identiques', () => {
       addedAt: 'x',
       email: 'prenom.nom@example.com',
       subscriptionType: 'team',
-      orgName: 'Amitel'
+      orgName: 'Acme'
     }
     const noms = describeAccounts(
       [

@@ -13,7 +13,7 @@ import { AppCommandBus } from './commands'
  * l'orchestrateur lisait `deps.executionWorkspace` -- la valeur figee au demarrage de l'app
  * (`os.ts`, `resolveExecutionWorkspace()`), impossible a changer sans redemarrer.
  *
- * MESURE QUI A FAIT ECRIRE CE TEST (conv-649) : une demande visant explicitement `D:/RigV3Desktop`
+ * MESURE QUI A FAIT ECRIRE CE TEST (conv-649) : une demande visant explicitement `D:/ContosoV3Desktop`
  * a produit un run qui a analyse `D:/AutoWinOS` et rendu un livrable hors sujet. 11,65 $ perdus,
  * et aucun signal a l'utilisateur.
  *

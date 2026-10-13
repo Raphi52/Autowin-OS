@@ -82,20 +82,20 @@ describe('commande de classement des conversations', () => {
 
     const result = await bus(espion).exec('classer_conversation', {
       id: 'conv-1',
-      dossier: 'C:/Clients/Amitel'
+      dossier: 'C:/Clients/Acme'
     })
 
     expect(result).toMatchObject({
       ok: true,
-      data: { id: 'conv-1', dossier: 'C:/Clients/Amitel' }
+      data: { id: 'conv-1', dossier: 'C:/Clients/Acme' }
     })
-    expect(espion.chemin('conv-1')).toBe('C:/Clients/Amitel')
+    expect(espion.chemin('conv-1')).toBe('C:/Clients/Acme')
   })
 
   it('un dossier VIDE déclasse au lieu d’écrire une chaîne vide', async () => {
     // Sans cela, « déclasser » créerait un groupe au nom vide dans la barre latérale.
     const espion = banc()
-    await bus(espion).exec('classer_conversation', { id: 'conv-1', dossier: 'C:/Clients/Amitel' })
+    await bus(espion).exec('classer_conversation', { id: 'conv-1', dossier: 'C:/Clients/Acme' })
 
     const result = await bus(espion).exec('classer_conversation', { id: 'conv-1', dossier: '   ' })
 
@@ -106,7 +106,7 @@ describe('commande de classement des conversations', () => {
   it('RAFRAÎCHIT la vue : un classement invisible ne vaut rien', async () => {
     const espion = banc()
 
-    await bus(espion).exec('classer_conversation', { id: 'conv-1', dossier: 'C:/Clients/Amitel' })
+    await bus(espion).exec('classer_conversation', { id: 'conv-1', dossier: 'C:/Clients/Acme' })
 
     expect(espion.events).toContainEqual({ type: 'refresh', scope: 'conversations' })
   })
@@ -116,7 +116,7 @@ describe('commande de classement des conversations', () => {
 
     const result = await bus(espion).exec('classer_conversation', {
       id: 'conv-absente',
-      dossier: 'C:/Clients/Amitel'
+      dossier: 'C:/Clients/Acme'
     })
 
     expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/introuvable/i) })

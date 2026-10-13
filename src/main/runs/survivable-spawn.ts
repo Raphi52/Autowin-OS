@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { writeFile as writeFileAsync } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import {
   openStdoutJournal,
@@ -269,6 +269,78 @@ export function usesWindowsSurvivalRelay(platform: NodeJS.Platform = process.pla
   return platform === 'win32'
 }
 
+/** Ce que `runtimeDuRelais` lit du processus courant (injectable pour les tests). */
+export interface ContexteRuntimeRelais {
+  execPath: string
+  /** Vrai sous Electron (`process.versions.electron`), faux sous un Node ordinaire. */
+  electron: boolean
+  env: NodeJS.ProcessEnv
+  existe: (chemin: string) => boolean
+}
+
+/**
+ * QUEL EXE FAIT TOURNER LE RELAIS (conv-902, 2026-10-12).
+ *
+ * Le relais tournait sur `process.execPath` avec `ELECTRON_RUN_AS_NODE`. En dev, c'est
+ * `.autowin-data/electron-dev/electron.exe`, dont les DLL sont des liens durs vers
+ * `node_modules/electron/dist` (scripts/electron_dev.py). Le relais est fait pour SURVIVRE à l'app, et
+ * `restart_app` part toujours d'un tour d'agent : son relais tenait encore l'exe quand le lanceur
+ * voulait réinstaller Electron. Trois redémarrages de suite ont fini sur « dependances: electron.exe
+ * verrouille — reparation sautee » (launch-dev.log, 12/10 09:19, 09:33, 09:34 ; pid 5304 = le relais
+ * de la session qui demandait le redémarrage), et Electron 44 n'a jamais été posé.
+ *
+ * En dev, le relais tourne donc sur un `node.exe` rangé hors de tout `node_modules` : celui désigné
+ * par npm, sinon le premier du PATH. Le script du relais n'utilise que `child_process` et `fs`.
+ * L'app INSTALLÉE garde son exe : il ne vit pas dans `node_modules`, et un poste client n'a pas
+ * forcément Node. Est « de dev » un exe nommé `electron.exe`, la règle même d'Electron pour
+ * `app.isPackaged` (voir EXE dans scripts/electron_dev.py). Sans Node trouvé, on retombe sur l'exe
+ * courant : le run part quand même, et le lanceur continuera de refuser d'installer sous un agent vivant.
+ */
+export function runtimeDuRelais(
+  contexte: ContexteRuntimeRelais = contexteRuntimeCourant()
+): string {
+  const { execPath, electron, env, existe } = contexte
+  if (!electron) return execPath
+  if (win32.basename(execPath).toLowerCase() !== 'electron.exe') return execPath
+  const npm = [env.npm_node_execpath, env.NODE].filter((c): c is string => Boolean(c))
+  const dossiers = (env.Path ?? env.PATH ?? '')
+    .split(';')
+    .map((dossier) => dossier.trim().replace(/^"(.*)"$/, '$1'))
+    .filter(Boolean)
+  for (const candidat of [...npm, ...dossiers.map((dossier) => win32.join(dossier, 'node.exe'))]) {
+    if (!win32.isAbsolute(candidat)) continue
+    if (win32.basename(candidat).toLowerCase() !== 'node.exe') continue
+    if (/[\\/]node_modules[\\/]/i.test(candidat)) continue
+    if (existe(candidat)) return candidat
+  }
+  return execPath
+}
+
+function contexteRuntimeCourant(): ContexteRuntimeRelais {
+  return {
+    execPath: process.execPath,
+    electron: Boolean(process.versions.electron),
+    env: process.env,
+    existe: existsSync
+  }
+}
+
+/** Choix fait une fois par processus : le PATH ne change pas en cours de route, le disque peut ramer. */
+let runtimeRelaisMemorise: string | undefined
+function runtimeRelaisCourant(): string {
+  if (runtimeRelaisMemorise === undefined) {
+    runtimeRelaisMemorise = runtimeDuRelais()
+    if (runtimeRelaisMemorise === process.execPath && process.versions.electron) {
+      console.warn(
+        `[relais survivable] le relais tourne sur ${process.execPath} : en dev, aucun node.exe hors ` +
+          'node_modules trouve (npm_node_execpath, NODE, PATH) -- le lanceur ne pourra pas reinstaller ' +
+          'Electron tant qu’un agent tourne'
+      )
+    }
+  }
+  return runtimeRelaisMemorise
+}
+
 function windowsSurvivalRelayPaths(root: string): { powershell: string; node: string } {
   const runtime = join(root, '.runtime')
   mkdirSync(runtime, { recursive: true })
@@ -380,7 +452,8 @@ function invocationRelais(
     Buffer.from(inputPath, 'utf8').toString('base64')
   ]
   return {
-    bin: process.execPath,
+    // Jamais l'exe de dev en dev : il tient node_modules/electron (voir runtimeDuRelais).
+    bin: runtimeRelaisCourant(),
     args: [
       relayPaths.node,
       Buffer.from(JSON.stringify(powershellArgs), 'utf8').toString('base64'),

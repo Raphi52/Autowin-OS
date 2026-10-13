@@ -4,9 +4,9 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 /**
  * PERIMETRE DE LECTURE — garde contre une auto-limitation MESUREE, pas supposee.
  *
- * Le 07/08, le chat a refuse d'analyser un ticket : « le depot RIG n'est pas accessible depuis cette
+ * Le 07/08, le chat a refuse d'analyser un ticket : « le depot CONTOSO n'est pas accessible depuis cette
  * session (workspace limite a E:\GIT\Autowin-OS) […] reste a confirmer sur le code ». Le 10/08, le meme
- * chat a lu D:\GIT\RigApplication\greffe_map.txt sans difficulte. L'argv journalise des DEUX tours est
+ * chat a lu D:\GIT\ContosoApp\agence_map.txt sans difficulte. L'argv journalise des DEUX tours est
  * identique (`--add-dir E:\GIT\Autowin-OS`, aucun autre dossier) : il n'y avait aucun blocage technique.
  *
  * Le reflexe 8 de la constitution (cloture NEGATIVE : balayer l'atteignable avant « impossible »)

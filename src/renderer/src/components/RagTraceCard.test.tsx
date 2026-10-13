@@ -10,7 +10,7 @@ describe('RAG observability rendering', () => {
     const malformed = renderToStaticMarkup(
       <RagTraceCard
         request={{
-          body: { messages: [{ content: 'Question\n\n[AMITEL BRAIN REFERENCE DATA — tronqué]' }] }
+          body: { messages: [{ content: 'Question\n\n[ACME BRAIN REFERENCE DATA — tronqué]' }] }
         }}
       />
     )

@@ -1,5 +1,6 @@
 import { gesteDeLaLigne, type GesteAgent } from '../../shared/gestes-agent'
-import { extraitDemandeUtilisateur } from './trace-allegee'
+import { demandeHumaineEntiere } from '../../shared/balise-message-utilisateur'
+import { motsUtilisateur } from '../chat-turn-messages'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
 
 /**
@@ -25,10 +26,16 @@ import { assertTraceEvent, type TraceEventV1 } from './trace-event'
 export { FRONTIERE_DEMANDE_RECUE, FRONTIERE_GESTE_AGENT } from '../../shared/trace-tour-chat'
 import { FRONTIERE_DEMANDE_RECUE, FRONTIERE_GESTE_AGENT } from '../../shared/trace-tour-chat'
 
-/** Texte humain d'un message, ramené au segment `UTILISATEUR:` borné que lit l'arbre. */
+/**
+ * La demande humaine ENTIÈRE, encadrée comme dans le prompt envoyé — jamais l'état de l'app.
+ *
+ * Elle était bornée au segment que lit le libellé (`extraitDemandeUtilisateur`) : le premier
+ * paragraphe, 2000 caractères au plus. Le détail de la brique Demande la montre en entier (demande
+ * du 2026-10-12) ; la trace allégée, elle, la borne toujours pour le sélecteur des tours.
+ */
 function segmentDemande(contenu: string): string {
-  const marque = /(^|\n)\s*UTILISATEUR\s*:/.test(contenu) ? contenu : `UTILISATEUR: ${contenu}`
-  return extraitDemandeUtilisateur(marque)
+  const mots = /(^|\n)\s*UTILISATEUR\s*:/.test(contenu) ? demandeHumaineEntiere(contenu) : contenu
+  return `UTILISATEUR: ${motsUtilisateur(mots)}`
 }
 
 export function evenementDemandeRecue(input: {
@@ -58,7 +65,7 @@ export function evenementDemandeRecue(input: {
       boundary: FRONTIERE_DEMANDE_RECUE,
       fidelity: 'derived',
       limitation:
-        'Segment UTILISATEUR de la demande, borné ; le message complet envoyé au modèle est porté par l’appel.'
+        'Mots de l’utilisateur seuls, en entier ; le message complet envoyé au modèle est porté par l’appel.'
     }
   })
 }

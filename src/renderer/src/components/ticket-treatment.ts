@@ -285,7 +285,7 @@ export function plainText(value: string | undefined): string {
  * ligne ci-dessous se vérifie hors du modèle (nom de branche, exit code, URL de PR, état visé).
  */
 /**
- * PRATIQUE DE L'ÉQUIPE RIG, relevée sur les fiches Azure DevOps le 2026-09-24 (demande utilisateur :
+ * PRATIQUE DE L'ÉQUIPE CONTOSO, relevée sur les fiches Azure DevOps le 2026-09-24 (demande utilisateur :
  * « base-toi sur comment mes collègues gèrent leurs work items »). Le développeur s'arrête à
  * « Développement terminé » (fiches 1765, 1665, 1664) ; recette, release et production suivent,
  * faites par d'autres. Le compte-rendu suit la fiche 1765 : Évolutions / Corrections / État / DLL.

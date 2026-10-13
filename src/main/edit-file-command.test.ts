@@ -32,20 +32,20 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
   })
 
   /*
-   * MESURE conv-12 (2026-09-02) : l'edition d'un fichier d'un AUTRE depot (D:\GIT\RigApplication) a
+   * MESURE conv-12 (2026-09-02) : l'edition d'un fichier d'un AUTRE depot (D:\GIT\ContosoApp) a
    * ete refusee « chemin hors du workspace », alors que l'agent lisait ce depot depuis 20 tours.
    * Un chemin ABSOLU externe est donc recevable, et marque `externe`.
    */
   it('ACCEPTE un chemin absolu vers un autre depot, marque externe', () => {
     const decision = decideEdit(
-      { path: 'D:/GIT/RigApplication/Source/ULT_TT_INPI.cs', oldText: 'a', newText: 'b' },
+      { path: 'D:/GIT/ContosoApp/Source/ULT_TT_INPI.cs', oldText: 'a', newText: 'b' },
       WORKSPACE,
       file('a')
     )
     expect(decision.allowed).toBe(true)
     if (decision.allowed) {
       expect(decision.externe).toBe(true)
-      expect(decision.relativePath).toBe('D:/GIT/RigApplication/Source/ULT_TT_INPI.cs')
+      expect(decision.relativePath).toBe('D:/GIT/ContosoApp/Source/ULT_TT_INPI.cs')
     }
   })
 
@@ -68,7 +68,7 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
   })
 
   it('refuse .git et les secrets AUSSI hors du workspace', () => {
-    for (const path of ['D:/GIT/RigApplication/.git/config', 'D:/GIT/RigApplication/.env']) {
+    for (const path of ['D:/GIT/ContosoApp/.git/config', 'D:/GIT/ContosoApp/.env']) {
       const decision = decideEdit({ path, oldText: 'a', newText: 'b' }, WORKSPACE, file('a'))
       expect(decision.allowed).toBe(false)
       if (!decision.allowed) expect(decision.reason).toMatch(/protégé|sensible/)

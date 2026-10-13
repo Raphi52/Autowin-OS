@@ -39,11 +39,11 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
   it('un libelle ne pilote pas le dossier de travail deja choisi', () => {
     const store = new ConversationStore(horloge())
     const id = neuve(store)
-    store.rangerDansDossier(id, 'D:/GIT/RigApplication')
+    store.rangerDansDossier(id, 'D:/GIT/ContosoApp')
 
     store.rangerDansDossier(id, 'Factures')
 
-    expect(store.get(id)?.projectPath).toBe('D:\\GIT\\RigApplication')
+    expect(store.get(id)?.projectPath).toBe('D:\\GIT\\ContosoApp')
     expect(store.get(id)?.categorie).toBe('Factures')
   })
 
@@ -54,12 +54,12 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
     const id = neuve(store)
     store.rangerDansDossier(id, 'Factures')
 
-    store.rangerDansDossier(id, 'D:/GIT/RigApplication')
+    store.rangerDansDossier(id, 'D:/GIT/ContosoApp')
 
-    expect(store.get(id)?.projectPath).toBe('D:\\GIT\\RigApplication')
+    expect(store.get(id)?.projectPath).toBe('D:\\GIT\\ContosoApp')
     expect(store.get(id)?.categorie).toBeUndefined()
     const groupe = grouperConversations(store.list())[0]
-    expect(groupe.label).toBe('RigApplication')
+    expect(groupe.label).toBe('ContosoApp')
   })
 
   it('`null` sort des DEUX : ni dossier ni categorie ne restent sur disque', () => {
@@ -79,7 +79,7 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
       title: 'Ancienne',
       provider: 'claude',
       schemaVersion: 3,
-      projectPath: 'Clients/Amitel',
+      projectPath: 'Clients/Acme',
       messages: [],
       createdAt: 1,
       updatedAt: 2
@@ -88,7 +88,7 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
 
     expect(store.hydrate([ancienne])).toBe(true)
 
-    expect(store.get('conv-7')?.categorie).toBe('Clients/Amitel')
+    expect(store.get('conv-7')?.categorie).toBe('Clients/Acme')
     expect(store.get('conv-7')?.projectPath).toBeUndefined()
   })
 
@@ -101,7 +101,7 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
         title: 'Ancienne',
         provider: 'claude',
         schemaVersion: 3,
-        projectPath: 'Clients/Amitel',
+        projectPath: 'Clients/Acme',
         messages: [],
         createdAt: 1,
         updatedAt: 2
@@ -122,14 +122,14 @@ describe('un libelle de classement ne devient jamais un dossier de travail', () 
         title: 'Projet',
         provider: 'claude',
         schemaVersion: 3,
-        projectPath: 'D:\\GIT\\RigApplication',
+        projectPath: 'D:\\GIT\\ContosoApp',
         messages: [],
         createdAt: 1,
         updatedAt: 2
       } as unknown as Conversation
     ])
 
-    expect(store.get('conv-8')?.projectPath).toBe('D:\\GIT\\RigApplication')
+    expect(store.get('conv-8')?.projectPath).toBe('D:\\GIT\\ContosoApp')
     expect(store.get('conv-8')?.categorie).toBeUndefined()
   })
 })

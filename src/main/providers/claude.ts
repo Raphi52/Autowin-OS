@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import {
+  copyFile as copyFileAsync,
   mkdtemp as mkdtempAsync,
   rm as rmAsync,
   stat as statAsync,
@@ -993,8 +994,16 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
           // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
           matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
           hooks: [
-            { type: 'command', command: `node ${q(hookGarde)}` },
-            ...(hookNpm ? [{ type: 'command', command: `node ${q(hookNpm)}` }] : [])
+            // ÉCHEC FERMÉ (CLI ≥ 2.1.295) : une garde qui plante, ne démarre pas ou dépasse son
+            // délai REFUSE la commande. Sans lui, mesuré le 2026-10-13 sur le CLI 2.1.296 : un script
+            // de garde qui lève une exception sort en code 1, « erreur non bloquante », et la
+            // commande passait. Un CLI plus ancien ignore la clé (mesuré 2.1.275/2.1.280 : la garde
+            // tourne et refuse toujours). Banc : `claude.garde-onfailure.test.ts`.
+            { type: 'command', command: `node ${q(hookGarde)}`, onFailure: 'block' },
+            // Même échec fermé pour le garde npm. Ses erreurs INTERNES (JSON illisible, sonde) restent
+            // à sa charge : il les attrape et laisse passer. `onFailure` ne joue que si le script ne
+            // peut pas tourner (absent, erreur de syntaxe, exception au chargement, délai dépassé).
+            ...(hookNpm ? [{ type: 'command', command: `node ${q(hookNpm)}`, onFailure: 'block' }] : [])
           ]
         },
         {
@@ -1016,6 +1025,36 @@ export function gardeNpmDuDepot(
   if (!modAutowin) return undefined
   const script = join(modAutowin, '..', '..', 'scripts', 'garde-npm-modules.mjs')
   return existe(script) ? script : undefined
+}
+
+/**
+ * Le garde npm que le hook d'UN lancement d'agent exécutera : une COPIE dans son dossier de réglages,
+ * comme la garde principale, nettoyée avec lui.
+ *
+ * Pourquoi pas le fichier du dépôt : le hook porte `onFailure: 'block'`, et `node` relit le script à
+ * CHAQUE appel d'outil. Pointé sur `<dépôt>/scripts`, un garde laissé en erreur de syntaxe par une
+ * édition refusait toutes les commandes et éditions de TOUS les agents en cours, y compris celle qui
+ * l'aurait réparé (mesuré le 2026-10-13, CLI 2.1.296 : `claude.garde-onfailure.test.ts`). La copie fige
+ * le garde au lancement. En contrepartie, un correctif du garde ne vaut que pour les agents lancés
+ * après (`rafraichirGardesDesAgents` ne rafraîchit que la garde principale).
+ *
+ * Le script se copie tel quel : il n'importe que des modules `node:`. Asynchrone pour ne pas figer la
+ * fenêtre (`claude.reglages-non-bloquants.test.ts`). Copie impossible → `undefined` : le lancement
+ * part sans garde npm, comme quand le dépôt n'en a pas, plutôt que sans aucun réglage.
+ */
+export async function gardeNpmDuLancement(
+  dossierReglages: string,
+  modAutowin: string | undefined
+): Promise<string | undefined> {
+  const source = gardeNpmDuDepot(modAutowin)
+  if (!source) return undefined
+  const copie = join(dossierReglages, 'garde-npm-modules.mjs')
+  try {
+    await copyFileAsync(source, copie)
+    return copie
+  } catch {
+    return undefined
+  }
 }
 
 export function argumentsMcpNoeudSkill(opts: SendOptions): {
@@ -1401,7 +1440,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        *
        * Mesure conv-650, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 : argv
        * `--tools Read,WebFetch,WebSearch`, lectures parties de `D:\AutoWinOS` alors que la
-       * conversation etait rangee sur `D:\RigV3Desktop`, et quatre demandes d'ecriture refusees
+       * conversation etait rangee sur `D:\ContosoV3Desktop`, et quatre demandes d'ecriture refusees
        * d'affilee (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782).
        *
        * Les pieces jointes n'ont plus besoin d'une branche a elles : elles vivent dans un dossier
@@ -1458,7 +1497,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           )
         } else {
           args.push(
-            // GREFFE du 2026-08-27 (copie isolée run-f2f7fec8c587-1, 0734729) : `bypassPermissions`
+            // INTÉGRATION du 2026-08-27 (copie isolée run-f2f7fec8c587-1, 0734729) : `bypassPermissions`
             // sur le TOUR DE CHAT, assumé explicitement par l'utilisateur. Sans lui, Bash/Write/Edit
             // étaient DÉCLARÉS mais retombaient sur une demande d'autorisation — donc échouaient en
             // mode non interactif. La frontière qui reste fermée est `watchdog-read-only` ci-dessus.
@@ -1509,7 +1548,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * MEMOIRE AUTO du CLI — on la ramene au PROJET COURANT.
      *
      * Mesure du 2026-07-28 : `~/.claude/settings.json` de l'utilisateur porte
-     * `autoMemoryDirectory: "~/.claude/projects/C--Code-RIG/memory"` (552 Ko de fiches), chargee a
+     * `autoMemoryDirectory: "~/.claude/projects/C--Code-Contoso/memory"` (552 Ko de fiches), chargee a
      * CHAQUE appel — la memoire d'un AUTRE projet que celui sur lequel Autowin travaille. Cout
      * mesure sur un appel minimal : 10 272 tokens contre 1 072 sans, soit ~9 200 tokens par appel.
      *
@@ -1539,7 +1578,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await writeFileAsync(hookGarde, scriptDesGardesCourant(), 'utf8')
       await writeFileAsync(
         settingsFile,
-        JSON.stringify(reglagesCliAutowin(hookGarde, gardeNpmDuDepot(modAutowin))),
+        JSON.stringify(reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin))),
         'utf8'
       )
       args.push('--settings', settingsFile)

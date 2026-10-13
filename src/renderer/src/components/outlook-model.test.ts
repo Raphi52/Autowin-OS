@@ -398,12 +398,12 @@ describe('cle de fil et nom du contact, tels que la vraie boite les rend', () =>
   it('garde le nom RECU du contact, pas celui qu Outlook met sur un envoi', () => {
     // Mesure du 2026-09-03 : cote Elements envoyes, le nom du destinataire arrive comme
     // "'prenom.nom@example.com'" -- entre apostrophes. Le laisser gagner parce qu'il est le plus
-    // recent remplacerait "Raphael VILAIN" par cette chaine dans la liste des interlocuteurs.
+    // recent remplacerait "Prenom NOM" par cette chaine dans la liste des interlocuteurs.
     const [fil] = groupByInterlocutor([
       mail({
         id: 'recu',
         adresse: 'prenom.nom@example.com',
-        nom: 'Raphael VILAIN',
+        nom: 'Prenom NOM',
         recuLe: new Date(NOW - 3600_000).toISOString()
       }),
       mail({
@@ -414,7 +414,7 @@ describe('cle de fil et nom du contact, tels que la vraie boite les rend', () =>
         recuLe: new Date(NOW).toISOString()
       })
     ])
-    expect(fil.nom).toBe('Raphael VILAIN')
+    expect(fil.nom).toBe('Prenom NOM')
   })
 
   it('retire les apostrophes d un nom quand c est tout ce qu on a', () => {

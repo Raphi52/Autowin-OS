@@ -244,7 +244,7 @@ export function groupByInterlocutor(
       //
       // Et JAMAIS un message envoyé. Mesuré le 2026-09-03 : côté Éléments envoyés, Outlook rend le
       // destinataire sous la forme « 'prenom.nom@example.com' », entre apostrophes. Laisser cette
-      // graphie gagner parce qu'elle est la plus récente remplaçait « Raphaël VILAIN » par une
+      // graphie gagner parce qu'elle est la plus récente remplaçait « Prenom NOM » par une
       // adresse entre guillemets dans la liste des interlocuteurs.
       if (!deMoi && nom !== '' && instant !== null && instant >= existant.dernierNomRecu) {
         existant.nom = nettoyerNom(nom)

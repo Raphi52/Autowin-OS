@@ -38,8 +38,24 @@ export interface OrchestrateTurnPersistenceOptions {
   runtime?: ChatTurnRuntime
   /** Réutilise le tour interrompu portant déjà `turnId`, sans ajouter une seconde paire de messages. */
   resumeExisting?: boolean
+  /**
+   * Tour d'ORIGINE du checkpoint repris. `hydrate` le garde `streaming` parce qu'une reprise va le
+   * prendre en main. Quand cette reprise ouvre un NOUVEAU tour (autre identité de modèle, snapshot
+   * absent, ancien checkpoint), plus personne ne le fermait : `hasStreamingTurn` le voyait où qu'il
+   * soit dans le fil et le spinner de la liste restait allumé jusqu'au redémarrage suivant
+   * (juge du correctif spinner, conv-914, 2026-10-13). `begin` le passe en `interrupted`.
+   */
+  supersededTurnId?: string
+  /** Journal fichier du tour d'ORIGINE : sa fermeture y est écrite, pas dans celui du nouveau tour. */
+  journalSuperseded?: (event: ChatTurnEvent) => void
   /** Survie niveau 2 (journal fichier du tour) — best-effort, ne casse jamais le run. */
   journal?: (event: ChatTurnEvent) => void
+  /**
+   * Appelé UNE fois, APRÈS l'écriture de l'état terminal (`succeed` ou `fail`). Sert à recharger la
+   * liste des conversations : tant que ce tour est `streaming`, la liste affiche un spinner
+   * (`hasStreamingTurn`), et seul `refresh/conversations` la recharge (conv-914, 2026-10-13).
+   */
+  onClosed?: () => void
 }
 
 export interface OrchestrateTurnPersistence {
@@ -72,7 +88,10 @@ export function createOrchestrateTurnPersistence(
     turnId,
     runtime,
     resumeExisting = false,
-    journal
+    supersededTurnId,
+    journalSuperseded,
+    journal,
+    onClosed
   } = options
   const targeted = conversationId !== AUTONOMOUS
   let opened = false
@@ -141,6 +160,22 @@ export function createOrchestrateTurnPersistence(
         opened = true
         emit({ kind: 'resumed' })
         return
+      }
+      if (supersededTurnId && supersededTurnId !== turnId) {
+        const origine = conversations
+          .get(conversationId)
+          ?.messages.find(
+            (candidate) => candidate.role === 'assistant' && candidate.turnId === supersededTurnId
+          )
+        if (origine?.status === 'streaming') {
+          const fermeture: ChatTurnEvent = { kind: 'interrupted' }
+          conversations.applyTurnEvent(conversationId, supersededTurnId, fermeture)
+          try {
+            journalSuperseded?.(fermeture)
+          } catch {
+            /* journal best-effort : ne jamais casser un tour pour une écriture de trace */
+          }
+        }
       }
       conversations.beginTurn(
         conversationId,
@@ -212,12 +247,14 @@ export function createOrchestrateTurnPersistence(
       } else {
         emit({ kind: 'done' })
       }
+      onClosed?.()
     },
     fail(error, aborted) {
       if (!opened || closed) return
       closed = true
       if (aborted) {
         emit({ kind: 'cancelled' })
+        onClosed?.()
         return
       }
       /*
@@ -230,6 +267,7 @@ export function createOrchestrateTurnPersistence(
        */
       const sansTravail = !refusDeRepriseRaconteDuTravail(classifierRefusDeReprise(error))
       emit({ kind: 'failed', error, ...(sansTravail && { transient: true as const }) })
+      onClosed?.()
     }
   }
 }

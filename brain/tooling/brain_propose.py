@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create immutable, provenance-carrying Amitel Brain candidates in inbox/."""
+"""Create immutable, provenance-carrying Brain candidates in inbox/."""
 import argparse
 import json
 import os
@@ -10,6 +10,7 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from brain_context import _opened_path
+import brain_identite
 from brain_candidate_policy import (
     ALLOWED_SOURCE_SCHEMES,
     contains_likely_pii as _contains_likely_pii,
@@ -78,7 +79,7 @@ def propose_note(
     now = datetime.now(timezone.utc)
     content = (
         "---\n"
-        "schema: amitel-brain/candidate-v1\n"
+        f"schema: {brain_identite.schema('candidate-v1')}\n"
         f"type: {note_type}\n"
         f"kind: {note_type if note_type != 'domain' else 'concept'}\n"
         f"scope: {_yaml_string(scope.strip())}\n"

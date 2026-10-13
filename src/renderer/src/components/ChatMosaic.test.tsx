@@ -129,6 +129,31 @@ describe('ChatMosaic', () => {
     expect(hote.querySelector('[data-conv-id="a"] .chat-mosaic-window-busy')).not.toBeNull()
     expect(hote.querySelector('[data-conv-id="b"] .chat-mosaic-window-busy')).toBeNull()
   })
+
+  // conv-817 (2026-10-13) : « mes chat dans le mode mosaique doivent avoir le style de chat normal
+  // avec les chanfreins et tout ». Les themes habillent le chat plein par `.chat::before/::after`,
+  // `.chat > .chat-scroll` et `.chat > .composer` : la fenetre doit offrir CETTE structure.
+  it('chaque fenetre a la structure du chat plein : panneau .chat, fil .chat-scroll, saisie enfant direct', () => {
+    const hote = monter(
+      <ChatMosaic
+        fenetres={[fenetre('a', 'Alpha', true), fenetre('b', 'Beta')]}
+        onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
+        rendreComposer={(id) => <div className="composer" data-testid={`composer-${id}`} />}
+        onNouvelleConversation={vi.fn()}
+      />
+    )
+    for (const id of ['a', 'b']) {
+      const cadre = hote.querySelector(`[data-conv-id="${id}"]`) as HTMLElement
+      expect(cadre.classList.contains('chat')).toBe(true)
+      expect(cadre.classList.contains('lisere-dessus')).toBe(true)
+      expect(cadre.querySelector(':scope > .chat-scroll')).not.toBeNull()
+      expect(cadre.querySelector(':scope > .composer')).not.toBeNull()
+    }
+    // L'etat du tour vit sur un anneau a part : `::after` est desormais le panneau du chat.
+    expect(hote.querySelector('[data-conv-id="a"] > .chat-mosaic-window-anneau')).not.toBeNull()
+    expect(hote.querySelector('[data-conv-id="b"] > .chat-mosaic-window-anneau')).toBeNull()
+  })
 it("colore la bordure de la fenetre dont le tour VIENT de se terminer, jusqu au retour de l utilisateur", () => {
     const hote = document.createElement("div")
     document.body.appendChild(hote)

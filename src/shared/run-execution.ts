@@ -75,6 +75,14 @@ export interface RunClosureObservation {
   totalCostUsd: number
   gateReasons?: string[]
   integrationOutcome?: string
+  /**
+   * Chemin du RUN.md de ce run. Le moteur ne le connaît pas : c'est l'appelant qui a créé le RUN.md
+   * (`commands.ts`, reprise au démarrage) qui le pose au moment d'écrire la trace. Sans lui, le bilan
+   * du nœud « Clôture du run » ne pouvait relier le run à aucun fichier : rien d'autre dans la
+   * trace ne fait le lien entre `run-<hash>` et `runs/<conv>/<sujet>-workspace/RUN.md`.
+   * ABSENT sur les runs écrits avant ce champ, ou lancés sans RUN.md.
+   */
+  runPath?: string
   usage?: {
     startedAgents?: number
     startedCalls: number

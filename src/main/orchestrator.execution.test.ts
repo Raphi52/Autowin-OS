@@ -198,10 +198,10 @@ describe('Orchestrator execution contract', () => {
   it('n injecte pas au sous-agent la memoire du meme fil creee dans un autre workspace', async () => {
     forgetEcho()
     noteRemembered('conv-cross-workspace', {
-      title: 'RIG prive',
+      title: 'CONTOSO prive',
       body: 'utiliser gacRig avant build',
-      scope: 'RIG',
-      workspace: 'D:\\DevSrc\\RigApplication'
+      scope: 'CONTOSO',
+      workspace: 'D:\\DevSrc\\ContosoApp'
     })
     noteRemembered('conv-cross-workspace', {
       title: 'Global explicite',
@@ -237,15 +237,15 @@ describe('Orchestrator execution contract', () => {
     expect(prompt).toContain('conserver les preuves')
   })
 
-  it('n impose plus aucun corpus derive du workspace (isolation RIG retiree)', async () => {
+  it('n impose plus aucun corpus derive du workspace (isolation CONTOSO retiree)', async () => {
     const provider = new CapturingProvider()
     const seenCorpus: Array<readonly string[] | undefined> = []
-    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
+    const preamble = '[ACME BRAIN REFERENCE DATA]\n\n'
     const sources = [
       {
-        path: 'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        path: 'knowledge/domain/contosoapp-documentation/reference/proc.md',
         content:
-          '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE'
+          '### Source 1 — knowledge/domain/contosoapp-documentation/reference/proc.md\nCONTOSO_SOURCE_AUTORISEE'
       },
       {
         path: 'knowledge/domain/autowin-os-realite-produit-v5.md',
@@ -262,7 +262,7 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      executionWorkspace: 'D:\\DevSrc\\RigApplication',
+      executionWorkspace: 'D:\\DevSrc\\ContosoApp',
       retrieveBrain: async (_query, options) => {
         seenCorpus.push(options?.corpus)
         return {
@@ -274,7 +274,7 @@ describe('Orchestrator execution contract', () => {
       }
     })
 
-    await orchestrator.run('analyse RigApplication en lecture seule sans le modifier')
+    await orchestrator.run('analyse ContosoApp en lecture seule sans le modifier')
 
     const prompt = provider.messages[0].map((message) => message.content).join('\n')
     // JUMEAU de `commands.test.ts` (« brain_query … source Autowin adverse ») : même contrat, deux
@@ -282,7 +282,7 @@ describe('Orchestrator execution contract', () => {
     // une contradiction vivante. État final arbitré après audit : plus AUCUN filtrage dérivé du
     // workspace, donc les DEUX sources atteignent le prompt. Conséquence assumée, pas oubliée.
     expect(seenCorpus[0]).toBeUndefined()
-    expect(prompt).toContain('RIG_SOURCE_AUTORISEE')
+    expect(prompt).toContain('CONTOSO_SOURCE_AUTORISEE')
     expect(prompt).toContain('AUTOWIN_SOURCE_INTERDITE')
   })
 
@@ -294,7 +294,7 @@ describe('Orchestrator execution contract', () => {
      * `brain_read`, ou le fichier sous la RACINE du Brain. Et il ne fait plus qu'UN appel : l'empreinte
      * à question figée a disparu.
      */
-    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
+    const preamble = '[ACME BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
     const sources = Array.from({ length: 20 }, (_, i) => ({
       path: `knowledge/domain/note-${i}.md`,
       content: `### Candidate ${i + 1} — Note ${i} ${'intitulé '.repeat(15)}\n\`knowledge/domain/note-${i}.md\` · 3 Ko`

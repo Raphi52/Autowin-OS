@@ -284,3 +284,76 @@ describe('orchestrate -- le battement nomme la phase en cours', () => {
     for (const ligne of horloges) expect(ligne).toContain('frame')
   })
 })
+
+/**
+ * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT -- conv-918, 2026-10-13.
+ *
+ * Capture de l'utilisateur : la 2e ligne du bloc Orchestration affichait « and now 1/2 could ».
+ * C'etaient des fragments du raisonnement du sous-agent, passes par le canal des NOTES : chacun
+ * ecrasait la ligne de vie, et aucun n'arrivait dans le bloc deplie. La ligne dit desormais
+ * « réfléchit… » ; le texte part au fil dans son propre champ, avec la phase qui l'emet.
+ */
+function osQuiReflechit(phase: string, fragments: string[]): OsDouble {
+  const base = osQuiEmetUneNote('') as unknown as Record<string, unknown>
+  return {
+    ...base,
+    runTask: async (...args: unknown[]) => {
+      const onPhase = args[2] as (p: { step: string; phase?: string }) => void
+      const onDelta = args[3] as (
+        step: string,
+        delta: string,
+        note?: string,
+        reasoning?: string
+      ) => void
+      onPhase({ step: 'exec', phase })
+      for (const fragment of fragments) onDelta('exec', '', undefined, fragment)
+      return {
+        task: String(args[0] ?? ''),
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+  } as unknown as OsDouble
+}
+
+describe('orchestrate -- le raisonnement ne remplace pas la ligne de vie', () => {
+  it('la ligne dit « réfléchit… », une fois par serie, jamais les mots du raisonnement', async () => {
+    const vus: string[] = []
+    const bus = new AppCommandBus(osQuiReflechit('think', ['and now ', '1/2 could']), () => {})
+
+    await bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
+    )
+
+    expect(vus.join('\n')).not.toContain('1/2 could')
+    const reflexion = vus.filter((ligne) => ligne.includes('réfléchit…'))
+    expect(reflexion).toHaveLength(1)
+    // Meme forme que le battement : la duree et la phase restent en tete.
+    expect(reflexion[0]).toMatch(/^\d+ s · think · réfléchit…$/)
+  })
+
+  it('le texte entier part au fil, dans son propre champ, avec sa phase', async () => {
+    const diffuses: Array<Record<string, unknown>> = []
+    const bus = new AppCommandBus(osQuiReflechit('think', ['and now ', '1/2 could']), (e) =>
+      diffuses.push(e as unknown as Record<string, unknown>)
+    )
+
+    await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1')
+
+    const raisonnement = diffuses.filter((e) => e.type === 'orchestrate-delta' && e.reasoning)
+    expect(raisonnement.map((e) => e.reasoning)).toEqual(['and now ', '1/2 could'])
+    for (const e of raisonnement) {
+      expect(e.reasoningPhase).toBe('think')
+      expect(e.note).toBeUndefined()
+    }
+  })
+})

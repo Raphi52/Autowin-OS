@@ -76,7 +76,7 @@ afterEach(() => {
 /** Candidat au format déposé par `remember` : la promotion le range dans `knowledge/lessons/`. */
 const CANDIDAT = [
   '---',
-  'schema: amitel-brain/candidate-v1',
+  'schema: autowin-brain/candidate-v1',
   'type: lesson',
   'scope: "autowin-os"',
   'author_agent: "autowin-os"',
@@ -111,7 +111,7 @@ describe('promotion Brain — réservation sans écrasement', () => {
     expect(moved.to).toBe('knowledge/lessons/candidat-2')
     expect(readFileSync(race.target, 'utf8')).toBe('# concurrent\n')
     const promue = readFileSync(join(root, 'knowledge', 'lessons', 'candidat-2.md'), 'utf8')
-    expect(promue).toContain('schema: amitel-brain/v1\n')
+    expect(promue).toContain('schema: autowin-brain/v1\n')
     expect(promue).toContain('\n# candidat\n')
   })
 

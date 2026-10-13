@@ -16,7 +16,7 @@ import type { SuggestionGroup } from './scout-suggestions'
 export const STATIC_SUGGESTIONS = [
   'Crée une conversation « Revue archi » en catégorie codex',
   'Mets le juge sur codex',
-  'Ouvre le graphe du brain rig-tv',
+  'Ouvre le graphe du brain',
   'Quel est l’état des workflows ?'
 ]
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Retrieve and render bounded Amitel Brain context for prompt injection."""
+"""Retrieve and render bounded Brain context for prompt injection."""
 import argparse
 import json
 import os

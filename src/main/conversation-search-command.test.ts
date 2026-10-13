@@ -19,7 +19,7 @@ function busAvecCorpus(): AppCommandBus {
   const a = conversations.create({ title: 'Pastilles', provider: 'claude' })
   conversations.append(a.id, { role: 'user', content: 'explique le code couleur de la pastille' })
   const b = conversations.create({ title: 'Ailleurs', provider: 'claude' })
-  conversations.append(b.id, { role: 'user', content: 'parle-moi des tickets RIG' })
+  conversations.append(b.id, { role: 'user', content: 'parle-moi des tickets ZOX' })
   return new AppCommandBus({ conversations } as never, () => undefined)
 }
 

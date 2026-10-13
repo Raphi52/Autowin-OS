@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDecipheriv, createHash, createHmac } from 'node:crypto'
 import { retrieveBrainContext, brainServiceToken } from './brain-retrieval'
+import { avecProfilAcme } from './identite-entreprise.test-helpers'
 
 const TEST_TOKEN = 'x'.repeat(40)
 
@@ -15,11 +16,11 @@ const signedPayload = (body: Record<string, unknown>): Record<string, unknown> =
     ...('request' in body ? { request: body.request } : {})
   })
   return {
-    service: 'amitel-brain',
+    service: 'autowin-brain',
     protocol: 2,
     authenticated,
     signature: createHmac('sha256', TEST_TOKEN)
-      .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
+      .update(`autowin-brain\n2\n${authenticated}`, 'utf8')
       .digest('hex')
   }
 }
@@ -56,7 +57,7 @@ const openRequest = (body: unknown): Record<string, unknown> => {
   const encrypted = Buffer.from(envelope.ciphertext, 'base64')
   const key = createHash('sha256').update(TEST_TOKEN, 'utf8').digest()
   const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.nonce, 'hex'))
-  decipher.setAAD(Buffer.from('amitel-brain/request-v1', 'utf8'))
+  decipher.setAAD(Buffer.from('autowin-brain/request-v1', 'utf8'))
   decipher.setAuthTag(encrypted.subarray(-16))
   return JSON.parse(
     Buffer.concat([decipher.update(encrypted.subarray(0, -16)), decipher.final()]).toString('utf8')
@@ -80,16 +81,16 @@ const okFetch = (body: Record<string, unknown>): typeof fetch =>
 describe('origine du service — configuree, jamais ecrite en dur', () => {
   /*
    * DEFAUT MESURE le 2026-09-02 : l'origine etait la constante `http://127.0.0.1:8765`, alors que la
-   * machine exposait le service sur 8766 (`AMITEL_BRAIN_ORIGIN`). Les requetes partaient donc sur un
+   * machine exposait le service sur 8766 (`AUTOWIN_BRAIN_ORIGIN`). Les requetes partaient donc sur un
    * AUTRE serveur, signant avec un AUTRE jeton : chaque `brain_query` revenait `invalid` et tout le
    * savoir rendu etait jete. Le port ne doit plus etre devine ici.
    */
-  it('appelle l origine declaree par AMITEL_BRAIN_ORIGIN', async () => {
+  it('appelle l origine declaree par AUTOWIN_BRAIN_ORIGIN', async () => {
     const urls: string[] = []
     const res = await retrieveBrainContext('q', {
       env: {
-        AMITEL_BRAIN_TOKEN: TEST_TOKEN,
-        AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
+        AUTOWIN_BRAIN_TOKEN: TEST_TOKEN,
+        AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
       } as NodeJS.ProcessEnv,
       fetchFn: (async (url: unknown, init?: RequestInit) => {
         urls.push(String(url))
@@ -108,7 +109,7 @@ describe('origine du service — configuree, jamais ecrite en dur', () => {
   it('retombe sur le port par defaut quand rien n est configure', async () => {
     const urls: string[] = []
     await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: (async (url: unknown, init?: RequestInit) => {
         urls.push(String(url))
         return (
@@ -123,8 +124,8 @@ describe('origine du service — configuree, jamais ecrite en dur', () => {
   it('rend unavailable — sans throw — si l origine configuree n est pas loopback', async () => {
     const res = await retrieveBrainContext('q', {
       env: {
-        AMITEL_BRAIN_TOKEN: TEST_TOKEN,
-        AMITEL_BRAIN_ORIGIN: 'https://brain.example.invalid'
+        AUTOWIN_BRAIN_TOKEN: TEST_TOKEN,
+        AUTOWIN_BRAIN_ORIGIN: 'https://brain.example.invalid'
       } as NodeJS.ProcessEnv,
       fetchFn: okFetch({ context: '[BRAIN] ok' })
     })
@@ -143,7 +144,7 @@ describe('parseNavigation — offsets de chunk + root', () => {
       retained: true
     }))
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '[BRAIN] borné',
         navigation: { query: 'q', minDense: 0.25, candidates }
@@ -154,7 +155,7 @@ describe('parseNavigation — offsets de chunk + root', () => {
 
   it('remonte root, chunkByteStart/End quand le serveur les expose', async () => {
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '[BRAIN] x',
         navigation: {
@@ -190,7 +191,7 @@ describe('parseNavigation — offsets de chunk + root', () => {
   })
   it("dégrade proprement si un serveur ancien n'expose ni root ni offsets", async () => {
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '[BRAIN] x',
         navigation: {
@@ -210,7 +211,7 @@ describe('retrieveBrainContext', () => {
     'classe un contexte signé sans caractère utile comme empty (%j)',
     async (context) => {
       const result = await retrieveBrainContext('question', {
-        env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+        env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
         fetchFn: okFetch({ context })
       })
       expect(result).toMatchObject({ context: '', status: 'empty' })
@@ -219,7 +220,7 @@ describe('retrieveBrainContext', () => {
 
   it('rejette une navigation retenue quand le contexte signé ne contient aucun savoir', async () => {
     const result = await retrieveBrainContext('question', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '\n\t',
         navigation: {
@@ -242,7 +243,7 @@ describe('retrieveBrainContext', () => {
 
   it('rejette une navigation signée pour une autre question Unicode', async () => {
     const result = await retrieveBrainContext('Où vit 😀 A ?', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '[BRAIN] réponse B',
         navigation: {
@@ -257,7 +258,7 @@ describe('retrieveBrainContext', () => {
 
   it('rejette un contexte sans navigation ni liaison signée à la requête', async () => {
     const result = await retrieveBrainContext('QUESTION_A', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: withChallenge(async () =>
         textResponse(signedPayload({ context: '[BRAIN] REPONSE_DE_B' }))
       )
@@ -267,7 +268,7 @@ describe('retrieveBrainContext', () => {
 
   it("rejette le rejeu signé d'une ancienne exécution de la même question", async () => {
     const result = await retrieveBrainContext('QUESTION_A', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       traceId: () => 'trace-courante',
       fetchFn: withChallenge(async () =>
         textResponse(
@@ -284,7 +285,7 @@ describe('retrieveBrainContext', () => {
   it('ne contacte pas le Brain quand le workspace est fail-closed', async () => {
     const fetchFn = vi.fn()
     const res = await retrieveBrainContext('secret', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: fetchFn as unknown as typeof fetch,
       corpus: []
     })
@@ -298,7 +299,7 @@ describe('retrieveBrainContext', () => {
       bodies.push(openRequest(init?.body))
       return textResponse(boundSignedPayload({ context: '[BRAIN] savoir' }, init?.body))
     })
-    const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
+    const env = { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
 
     await retrieveBrainContext('question', {
       env,
@@ -309,13 +310,13 @@ describe('retrieveBrainContext', () => {
     await retrieveBrainContext('question', {
       env,
       fetchFn,
-      corpus: ['rig-'],
+      corpus: ['contoso-'],
       traceId: () => 'trace-b'
     })
 
     expect(bodies).toEqual([
       { query: 'question', harness: 'autowin-os', trace_id: 'trace-a', corpus: ['autowin-os'] },
-      { query: 'question', harness: 'autowin-os', trace_id: 'trace-b', corpus: ['rig-'] }
+      { query: 'question', harness: 'autowin-os', trace_id: 'trace-b', corpus: ['contoso-'] }
     ])
   })
 
@@ -326,7 +327,7 @@ describe('retrieveBrainContext', () => {
       { length: 20 },
       (_, i) => `### Candidate ${i + 1} — Note ${i + 1} ${'titre long '.repeat(12)}\n\`knowledge/n${i}.md\` · 4 Ko`
     )
-    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
+    const preamble = '[ACME BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
     const context = preamble + cartes.join('\n\n---\n\n')
     expect(context.length).toBeGreaterThan(3_000)
     const fetchFn = withChallenge(async (_url: unknown, init?: RequestInit) => {
@@ -358,7 +359,7 @@ describe('retrieveBrainContext', () => {
     })
 
     const res = await retrieveBrainContext('question', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn,
       mode: 'candidates',
       traceId: () => 'trace-liste'
@@ -377,23 +378,23 @@ describe('retrieveBrainContext', () => {
       return textResponse(boundSignedPayload({ context: '[BRAIN] extrait' }, init?.body))
     })
     await retrieveBrainContext('question', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn
     })
     expect(bodies[0]).not.toHaveProperty('mode')
   })
 
   it('refuse un contexte non lié cryptographiquement au corpus demandé', async () => {
-    const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
+    const env = { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
     const missing = await retrieveBrainContext('sans-attestation', {
       env,
       corpus: ['knowledge/domain/autowin-os-'],
-      fetchFn: okFetch({ context: 'SECRET_RIG' })
+      fetchFn: okFetch({ context: 'SECRET_CONTOSO' })
     })
     const wrong = await retrieveBrainContext('mauvaise-attestation', {
       env,
       corpus: ['knowledge/domain/autowin-os-'],
-      fetchFn: okFetch({ context: 'SECRET_RIG', corpus: ['knowledge/domain/rig-'] })
+      fetchFn: okFetch({ context: 'SECRET_CONTOSO', corpus: ['knowledge/domain/contoso-'] })
     })
     const exact = await retrieveBrainContext('bonne-attestation', {
       env,
@@ -412,9 +413,9 @@ describe('retrieveBrainContext', () => {
 
   it('rejette une reponse forgee meme si son contexte semble exploitable', async () => {
     const res = await retrieveBrainContext('autowin', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
-        service: 'amitel-brain',
+        service: 'autowin-brain',
         protocol: 1,
         context: '[BRAIN] contenu forge',
         signature: '0'.repeat(64)
@@ -430,7 +431,7 @@ describe('retrieveBrainContext', () => {
       return challengeResponse(url) ?? { ok: false }
     }) as unknown as typeof fetch
     const result = await retrieveBrainContext('PROMPT_ULTRA_SECRET', {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn
     })
     expect(result.status).toBe('unavailable')
@@ -450,15 +451,15 @@ describe('retrieveBrainContext', () => {
       protocol === 2
         ? signedPayload({ context })
         : {
-            service: 'amitel-brain',
+            service: 'autowin-brain',
             protocol: 1,
             context,
             signature: createHmac('sha256', TEST_TOKEN)
-              .update(`amitel-brain\n1\n${context}`, 'utf8')
+              .update(`autowin-brain\n1\n${context}`, 'utf8')
               .digest('hex')
           }
     const res = await retrieveBrainContext(`oversize-${protocol}`, {
-      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
       fetchFn: okFetch(payload)
     })
 
@@ -467,7 +468,7 @@ describe('retrieveBrainContext', () => {
 
   it('renvoie le contexte du serveur quand il répond', async () => {
     const res = await retrieveBrainContext('autowin', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({ context: '[BRAIN] note pertinente' })
     })
     expect(res.context).toBe('[BRAIN] note pertinente')
@@ -475,7 +476,7 @@ describe('retrieveBrainContext', () => {
   })
   it('capture la navigation quand le serveur l’expose', async () => {
     const res = await retrieveBrainContext('autowin', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({
         context: '[BRAIN]',
         navigation: {
@@ -495,7 +496,7 @@ describe('retrieveBrainContext', () => {
   })
   it('navigation undefined si serveur ancien (dégradation gracieuse)', async () => {
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({ context: 'x' })
     })
     expect(res.navigation).toBeUndefined()
@@ -512,25 +513,33 @@ describe('retrieveBrainContext', () => {
       throw new Error('ECONNREFUSED')
     }) as unknown as typeof fetch
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: boom
     })
     expect(res).toMatchObject({ context: '', status: 'unavailable' })
   })
   it('distingue une réponse valide vide d’un service indisponible', async () => {
     const res = await retrieveBrainContext('q', {
-      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      env: { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({ context: '' })
     })
     expect(res).toMatchObject({ context: '', status: 'empty' })
   })
-  it('brainServiceToken lit AMITEL_BRAIN_TOKEN en priorité', () => {
-    expect(brainServiceToken({ AMITEL_BRAIN_TOKEN: 'tok' } as NodeJS.ProcessEnv)).toBe('tok')
+  it('brainServiceToken lit AUTOWIN_BRAIN_TOKEN en priorité', () => {
+    expect(brainServiceToken({ AUTOWIN_BRAIN_TOKEN: 'tok' } as NodeJS.ProcessEnv)).toBe('tok')
+  })
+
+  it('brainServiceToken lit l ancien nom du profil d entreprise en secours, jamais sans profil', () => {
+    expect(brainServiceToken(avecProfilAcme({ ACME_BRAIN_TOKEN: 'ancien' }))).toBe('ancien')
+    expect(
+      brainServiceToken(avecProfilAcme({ AUTOWIN_BRAIN_TOKEN: 'neuf', ACME_BRAIN_TOKEN: 'ancien' }))
+    ).toBe('neuf')
+    expect(brainServiceToken({ ACME_BRAIN_TOKEN: 'ancien', LOCALAPPDATA: '' })).not.toBe('ancien')
   })
 })
 
 describe('fraîcheur — aucune publication n’est masquée par le client', () => {
-  const env = { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv
+  const env = { AUTOWIN_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv
 
   function countingFetch(): { fetchFn: typeof fetch; appels: () => number } {
     let appels = 0
@@ -601,7 +610,7 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
  * rougir : renvoyer le meme motif (ou aucun) pour des echecs distincts.
  */
 describe('motif d’indisponibilité — la cause, pas une énumération', () => {
-  const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
+  const env = { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
   const fetchKo = (status: number, only?: 'challenge'): typeof fetch =>
     (async (url: unknown) => {
       if (only === 'challenge') return new Response('non', { status })

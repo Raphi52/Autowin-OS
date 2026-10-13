@@ -17,12 +17,12 @@ describe('avertissement quand le rangement ne pilote pas le dossier de travail',
     )
 
   it('nomme le motif de chaque cas', () => {
-    expect(diagnostiqueDossierConversation('D:\\RIGApplication', AUTOWIN, existe)).toBe(
+    expect(diagnostiqueDossierConversation('D:\\CONTOSOApplication', AUTOWIN, existe)).toBe(
       'bascule-requise'
     )
     expect(diagnostiqueDossierConversation(AUTOWIN, AUTOWIN, existe)).toBe('deja-aligne')
     expect(diagnostiqueDossierConversation(undefined, AUTOWIN, existe)).toBe('non-range')
-    expect(diagnostiqueDossierConversation('Clients/Amitel', AUTOWIN, existe)).toBe(
+    expect(diagnostiqueDossierConversation('Clients/Acme', AUTOWIN, existe)).toBe(
       'libelle-non-absolu'
     )
     expect(diagnostiqueDossierConversation('D:\\Disparu', AUTOWIN, () => false)).toBe(
@@ -32,8 +32,8 @@ describe('avertissement quand le rangement ne pilote pas le dossier de travail',
 
   /** LE defaut a rendre visible : un libelle laisse le modele dans le depot d'Autowin, en silence. */
   it('avertit sur un libelle de rangement, en citant le dossier reellement utilise', () => {
-    const texte = avertir('Clients/Amitel')
-    expect(texte).toContain('Clients/Amitel')
+    const texte = avertir('Clients/Acme')
+    expect(texte).toContain('Clients/Acme')
     expect(texte).toContain(AUTOWIN)
   })
 
@@ -42,7 +42,7 @@ describe('avertissement quand le rangement ne pilote pas le dossier de travail',
   })
 
   it('se tait quand le dossier pilote vraiment le travail', () => {
-    expect(avertir('D:\\RIGApplication')).toBeNull()
+    expect(avertir('D:\\CONTOSOApplication')).toBeNull()
     expect(avertir(AUTOWIN)).toBeNull()
     expect(avertir(undefined)).toBeNull()
   })
@@ -53,13 +53,13 @@ describe('dossierDeTravailDuTour', () => {
   const REPLI = resolve('/depot/autowin')
 
   it('rend le dossier range sur la conversation quand il existe', () => {
-    expect(dossierDeTravailDuTour(resolve('/projet/rig'), REPLI, existe)).toBe(
-      resolve('/projet/rig')
+    expect(dossierDeTravailDuTour(resolve('/projet/contoso'), REPLI, existe)).toBe(
+      resolve('/projet/contoso')
     )
   })
 
   it('retombe sur le repli pour un libelle non absolu', () => {
-    expect(dossierDeTravailDuTour('Clients/Amitel', REPLI, existe)).toBe(REPLI)
+    expect(dossierDeTravailDuTour('Clients/Acme', REPLI, existe)).toBe(REPLI)
   })
 
   it('retombe sur le repli quand le dossier range a disparu', () => {

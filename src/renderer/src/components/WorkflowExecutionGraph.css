@@ -653,6 +653,14 @@
   overflow-wrap: anywhere;
 }
 
+/* Une limite connue de la trace : une information, pas un défaut — même place, ton neutre. */
+.workflow-execution-note {
+  margin: var(--s2) 0 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
 /* Pli de la délibération : replié par défaut, il ne doit jamais pousser le détail hors écran. */
 .workflow-execution-reasoning,
 .workflow-execution-exchange > details {
@@ -697,6 +705,27 @@
 
 .workflow-execution-exchange-empty {
   margin: var(--s2) 0 0;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* « Fait retenu » : le titre du fait au-dessus de son texte, puis où il est parti. */
+.workflow-execution-fait-titre {
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Détail d'un outil : « Envoyé », puis « Retour » ou « Erreur », au-dessus de chaque contenu. */
+.workflow-execution-appel-part {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.workflow-execution-fait-issue {
+  margin: 4px 0 0;
   font-size: 10px;
   color: var(--text-faint);
 }

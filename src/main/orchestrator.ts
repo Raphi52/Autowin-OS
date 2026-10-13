@@ -5,6 +5,9 @@ import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
 import { noteVerdictPrecedentPourJuge, reservesMineuresFigees, verdictPanelPourMemoire } from './memoire-juge'
+import { noteChangementsPourJuge } from './changements-juge'
+import { noteTestsDejaJouesPourJuge } from './tests-deja-joues'
+import { etapeResultatValide } from '../shared/resultat-valide'
 import {
   CONTRAT_OBJECTIONS,
   dodDuVerdict,
@@ -1106,6 +1109,8 @@ export function consigneCandidatesBrain(racine?: string): string {
  * COMPLÈTES non tronquées → croissance linéaire du prompt juge avec le nb de phases. On borne chaque
  * bloc de phase (plus large que le portage : le juge doit voir la substance du livrable, pas juste
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
+ * Piste 5 de conv-914 : c'est la PART de chaque phase ; la place qu'une phase courte n'utilise pas
+ * revient aux longues, sous 60 000 au total (`agregerPhasesPourLeJuge`, agregat-juge.ts).
  */
 const JUDGE_PHASE_CAP = 6000
 
@@ -1699,7 +1704,7 @@ export class Orchestrator {
     task: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string, reasoning?: string) => void,
     signal?: AbortSignal,
     collectedContext = '',
     /**
@@ -2512,7 +2517,7 @@ ${annonceCommit}`
     runId: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string, reasoning?: string) => void,
     signal?: AbortSignal,
     collectedContext = '',
     bindingOverride?: RoleBinding,
@@ -2583,7 +2588,7 @@ ${annonceCommit}`
     runId: string,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string, reasoning?: string) => void,
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot,
@@ -2731,7 +2736,7 @@ ${CONTRAT_OBJECTIONS}`
     const startedAt = performance.now()
     const res = await this.sendWithRoleContext('jugement', 'judge', judgeProvider, opts.model, () =>
       registry.send(judgeProvider, messages, opts, (c) =>
-        c.reasoning ? onDelta?.('judge', '', c.reasoning) : onDelta?.('judge', c.delta)
+        c.reasoning ? onDelta?.('judge', '', undefined, c.reasoning) : onDelta?.('judge', c.delta)
       )
     )
     if (res.usage) {
@@ -2835,7 +2840,7 @@ ${CONTRAT_OBJECTIONS}`
     phase: NodePhase,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string, reasoning?: string) => void,
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
@@ -3047,7 +3052,7 @@ ${CONTRAT_OBJECTIONS}`
                   supervision.onDelta(chunk.delta)
                   // La NOTE remonte a l'interface, jamais au livrable : un battement d'outil dit
                   // que le sous-agent travaille, il ne fait pas partie de sa reponse.
-                  if (chunk.reasoning) onDelta?.('exec', '', chunk.reasoning)
+                  if (chunk.reasoning) onDelta?.('exec', '', undefined, chunk.reasoning)
                 })
                 const derive = supervision.trip()
                 if (derive) {
@@ -3402,7 +3407,7 @@ ${CONTRAT_OBJECTIONS}`
     workCwd: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string, reasoning?: string) => void,
     signal?: AbortSignal,
     greedyPlan?: GreedyTaskNode[],
     collectedContext = '',
@@ -3635,6 +3640,16 @@ ${CONTRAT_OBJECTIONS}`
     for (const output of usableResume) {
       aggregatedEvidence.push(...(output.executionEvidence ?? []))
     }
+    /**
+     * Début des preuves dont l'ORDRE est chronologique : base du bloc « TESTS DÉJÀ JOUÉS » du juge
+     * (`tests-deja-joues.ts`, piste 4 de conv-914). Avance après une reprise, et après toute étape
+     * où plusieurs agents travaillent en parallèle dans la même copie : leurs preuves arrivent dans
+     * l'ordre où ils FINISSENT, pas dans celui où ils ont agi.
+     * fix-ok: conv-914 piste 4 — mesuré sur le contrôle final de run-a8a70cd0ee56-1 : 247 s dont 30 s
+     * à relancer vitest et typecheck, faute de savoir si le code avait changé depuis ; sans cette
+     * borne, le test d'un agent parallèle passerait pour postérieur à l'édition d'un autre.
+     */
+    let debutPreuvesOrdonnees = aggregatedEvidence.length
     /**
      * Les phases déjà payées, comptées par OCCURRENCE et non par nom.
      *
@@ -4043,6 +4058,7 @@ ${CONTRAT_OBJECTIONS}`
           runtimeSnapshot
         )
         aggregatedEvidence.push(...greedy.evidence)
+        debutPreuvesOrdonnees = aggregatedEvidence.length // sous-tâches parallèles : ordre inconnu
         lastExecText = greedy.aggregate
         const agregatGreedy = garderCasLimitesFrame(
           phase,
@@ -4143,11 +4159,18 @@ ${CONTRAT_OBJECTIONS}`
             // La persona s'ajoute AU PROMPT de ce membre-là. Un prompt commun à tous rendrait le
             // fan-out inutile : N fois le même avis, pour N fois le prix.
             const personaBloc = personaInstruction(member.persona)
+            const membreSystemBlocks = personaBloc
+              ? [...fanSystemBlocks, { name: 'persona', chars: personaBloc.length }]
+              : fanSystemBlocks
+            // LE PROMPT DU MEMBRE (2026-10-13) : ce chemin n'annonçait AUCUNE enveloppe, ni au départ
+            // ni à la fin. Un membre en éventail (`frame:probleme`…) n'écrivait donc jamais son prompt
+            // dans la trace : sa fiche du graphe ne montrait que son retour (conv-913, conv-914).
+            // Même construction que les autres chemins : décrite avant l'appel, précisée par
+            // `observePrompt` quand le fournisseur la voit partir.
+            let enveloppeMembre: PromptEnvelope | undefined
             const opts: SendOptions = {
               system: fanSystem + personaBloc,
-              systemBlocks: personaBloc
-                ? [...fanSystemBlocks, { name: 'persona', chars: personaBloc.length }]
-                : fanSystemBlocks,
+              systemBlocks: membreSystemBlocks,
               contextBlocks: fanContextBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
@@ -4160,8 +4183,21 @@ ${CONTRAT_OBJECTIONS}`
                 fanMembers.length > 1,
                 member.model
               ),
-              signal
+              signal,
+              observePrompt: (observed) => {
+                observed.systemBlocks = membreSystemBlocks
+                observed.contextBlocks = fanContextBlocks
+                enveloppeMembre = observed
+              }
             }
+            enveloppeMembre = registry.describePrompt(
+              member.provider,
+              fanMessages,
+              opts,
+              member.model
+            )
+            enveloppeMembre.systemBlocks = membreSystemBlocks
+            enveloppeMembre.contextBlocks = fanContextBlocks
             const startedAt = performance.now()
             onPhase?.({
               step: 'exec',
@@ -4170,6 +4206,7 @@ ${CONTRAT_OBJECTIONS}`
               model: member.model,
               reasoningEffort: member.reasoningEffort,
               phase,
+              prompt: enveloppeMembre,
               execution
             })
             /**
@@ -4187,7 +4224,7 @@ ${CONTRAT_OBJECTIONS}`
             try {
               const res = await registry.send(member.provider, fanMessages, opts, (c) => {
                 supervision.onDelta(c.delta)
-                if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+                if (c.reasoning) onDelta?.('exec', '', undefined, c.reasoning)
               })
               const derive = supervision.trip()
               if (derive) {
@@ -4218,6 +4255,7 @@ ${CONTRAT_OBJECTIONS}`
                 tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
                 costUsd: res.usage?.costUsd,
                 usage: res.usage,
+                prompt: enveloppeMembre,
                 status: 'completed',
                 durationMs: performance.now() - startedAt,
                 evidence: res.executionEvidence,
@@ -4253,6 +4291,8 @@ ${CONTRAT_OBJECTIONS}`
             }
           }
         const memberOutputs = await Promise.all(fanMembers.map(runMember))
+        // Membres parallèles dans la même copie : l'ordre de leurs preuves n'est pas celui de leurs actes.
+        if (fanMembers.length > 1) debutPreuvesOrdonnees = aggregatedEvidence.length
         // SYNTHÈSE par l'orchestrateur (le rôle le + capable) : union dédupliquée, PAS de re-décision.
         // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
         let good = memberOutputs.filter((o) => o.ok && o.text.trim())
@@ -4739,7 +4779,7 @@ ${CONTRAT_OBJECTIONS}`
           () =>
             registry.send(providerDeLaPhase, phaseMessages, options, (c) => {
               supervision.onDelta(c.delta)
-              if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+              if (c.reasoning) onDelta?.('exec', '', undefined, c.reasoning)
               /*
                * LE BATTEMENT D'OUTIL EXISTAIT ET ETAIT JETE ICI.
                *
@@ -5127,6 +5167,8 @@ ${CONTRAT_OBJECTIONS}`
     let lastJudgeText = ''
     /** Verdict tel que les juges l'ont RENDU (panel : reconstruit depuis les membres) — memoire du juge. */
     let lastJudgeMemoire = ''
+    /** Le livrable agrégé tel que le juge précédent l'a reçu : base du bloc « CE QUI A CHANGÉ » (changements-juge.ts). */
+    let texteDejaJuge = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
@@ -5199,6 +5241,8 @@ ${CONTRAT_OBJECTIONS}`
         const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         lastJudgeText = resumedJudgeText.trim()
         lastJudgeMemoire = lastJudgeText
+        // Le juge repris a statué sur le texte repris, celui que porte `exec` ici.
+        texteDejaJuge = exec.text
         // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
         // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
         trust.record({
@@ -5323,6 +5367,10 @@ ${CONTRAT_OBJECTIONS}`
           noteHypotheses +
           // conv-35 : a partir du 2e passage, `lastJudgeMemoire` est encore le verdict PRECEDENT.
           noteVerdictPrecedentPourJuge(lastJudgeMemoire) +
+          // conv-914 : à partir du 2e passage, le juge reçoit aussi les lignes changées depuis le texte déjà jugé.
+          noteChangementsPourJuge(texteDejaJuge, exec.text) +
+          // conv-914 piste 4 : les tests joués sur le code actuel ne sont pas à relancer.
+          noteTestsDejaJouesPourJuge(aggregatedEvidence.slice(debutPreuvesOrdonnees)) +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
@@ -5330,6 +5378,7 @@ Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'u
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 ${CONTRAT_OBJECTIONS}`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
+      texteDejaJuge = exec.text
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
@@ -5837,6 +5886,10 @@ ${CONTRAT_OBJECTIONS}`
           gateBloque: false
         })
         if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
+        // Piste 3 (conv-914) : le résultat validé part AVANT learn/salvage — voir shared/resultat-valide.ts.
+        if (apresGate.length > 0) {
+          push(etapeResultatValide(phaseOutputs.length > 0 ? exec.text : lastJudgeText))
+        }
         for (const phaseApresGate of apresGate) {
           try {
             await executePipelinePhase(phaseApresGate)

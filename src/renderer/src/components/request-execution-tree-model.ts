@@ -112,10 +112,20 @@ function requestRoot(
     display: {
       kind: 'request',
       title: dated.charAt(0).toUpperCase() + dated.slice(1),
-      observedEventIds: []
+      observedEventIds: [],
+      // LA DEMANDE SE RELIT EN ENTIER AU CLIC (demande du 2026-10-12) : ses sources sont les messages
+      // du tour qui portent le marqueur `UTILISATEUR:`. Sans elles, le détail disait « Aucun prompt
+      // ni retour » sous chaque demande (252 sur 252 mesurées). Deux suffisent : la demande reçue à
+      // l'envoi, puis le premier appel au modèle — seul à porter le texte entier avant ce jour.
+      payloadEventIds: turn.events
+        .filter((event) => event.kind === 'message' && MARQUE_UTILISATEUR.test(event.content ?? ''))
+        .slice(0, 2)
+        .map((event) => event.id)
     }
   }
 }
+
+const MARQUE_UTILISATEUR = /(^|\n)\s*UTILISATEUR\s*:/
 
 function phaseRoot(
   turn: HarnessTimelineTurn,
@@ -680,7 +690,15 @@ function projectRunExecutions(
         title: 'Clôture du run',
         runId,
         closure,
-        observedEventIds: closureFacts.map((event) => event.id)
+        observedEventIds: closureFacts.map((event) => event.id),
+        // Le verdict RENDU (ni le démarrage du juge, ni un juge encore en cours) : c'est lui qui
+        // porte les raisons de l'acceptation ou du refus dans le bilan du run.
+        verdictEventIds: runEvents
+          .filter(
+            (event) =>
+              event.kind === 'verdict' && event.status !== 'running' && event.status !== 'pending'
+          )
+          .map((event) => event.id)
       }
     })
   }
@@ -1088,6 +1106,8 @@ export function projectLatestRequestExecution(
           kind: 'event',
           title: stepTitle(head),
           observedEventIds: [head.id],
+          // Relu au clic : le texte d'une « Réponse affichée », la cause d'une erreur.
+          payloadEventIds: [head.id],
           workflow,
           skillName
         }
@@ -1114,6 +1134,21 @@ export function projectLatestRequestExecution(
         observedEventIds: pairs.flatMap(({ call, result }) =>
           result ? [call.id, result.id] : [call.id]
         ),
+        // LE DÉTAIL DE CHAQUE APPEL, RELU AU CLIC (demande du 2026-10-12). « Fait retenu » montre
+        // QUEL fait : la réponse de `remember` porte le fait validé (`fact.title`, `fact.body`) ou le
+        // motif du refus — ses arguments ne sont jamais relus, un fait refusé pour un secret y figure
+        // en clair. Tout autre outil montre ce que chaque appel a envoyé et reçu.
+        ...(group.toolName === 'remember'
+          ? {
+              detailOutil: 'fait-retenu' as const,
+              payloadEventIds: pairs.flatMap(({ result }) => (result ? [result.id] : []))
+            }
+          : {
+              detailOutil: 'appels' as const,
+              payloadEventIds: pairs.flatMap(({ call, result }) =>
+                result ? [call.id, result.id] : [call.id]
+              )
+            }),
         workflow,
         skillName
       }

@@ -169,10 +169,10 @@ describe('#2 contexte d’exécution déclaré sur la source', () => {
         id: 'g',
         label: 'g',
         provider: 'github',
-        owner: 'amitel',
+        owner: 'acme',
         repository: 'os'
       })
-    ).toBe('amitel/os')
+    ).toBe('acme/os')
     expect(
       ticketTargetRepository({
         id: 'l',

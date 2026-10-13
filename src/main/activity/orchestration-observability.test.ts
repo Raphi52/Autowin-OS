@@ -94,6 +94,54 @@ describe('observabilite orchestration', () => {
     ])
   })
 
+  /**
+   * Le bilan du nœud « Clôture du run » ouvre le RUN.md du run (demande du 2026-10-13). Rien d'autre
+   * dans la trace ne relie `run-<hash>` à son fichier : l'appelant qui a créé le RUN.md le grave
+   * sur la CLÔTURE, et sur elle seule.
+   */
+  it('grave le chemin du RUN.md sur la clôture, et seulement sur elle', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-run-runmd-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    const context = {
+      conversationId: 'conv-runmd',
+      turnId: 'turn-runmd',
+      runPath: 'C:\\data\\runs\\conv-runmd\\corrige-x-workspace\\RUN.md'
+    }
+    try {
+      persistRunLifecycle(
+        {
+          stage: 'workspace',
+          runId: 'run-1',
+          timestampMs: 100,
+          workspace: { mode: 'base', repositoryPath: 'C:\\repo', path: 'C:\\repo' }
+        },
+        context,
+        trace
+      )
+      persistRunLifecycle(
+        {
+          stage: 'closure',
+          runId: 'run-1',
+          timestampMs: 240,
+          closure: { status: 'green', totalDurationMs: 140, totalCostUsd: 0.42 }
+        },
+        context,
+        trace
+      )
+      const [workspace, closure] = trace.readConversation('conv-runmd').map((event) => event.run)
+      expect(JSON.stringify(workspace)).not.toContain('RUN.md')
+      expect(closure).toEqual(
+        expect.objectContaining({
+          stage: 'closure',
+          closure: expect.objectContaining({ status: 'green', runPath: context.runPath })
+        })
+      )
+    } finally {
+      trace.fermer()
+      supprimerArbre(root)
+    }
+  })
+
   it('injecte le runId et la tentative dans chaque étape persistée', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-run-step-'))
     const trace = new TraceStore(join(root, 'trace'))
@@ -184,6 +232,65 @@ describe('observabilite orchestration', () => {
         execution: { runId: 'run-1', attemptId: 'attempt-live' }
       }
     ])
+  })
+
+  // « montre le prompt d'un sous-agent dès qu'il démarre, pas seulement à la fin » (2026-10-13).
+  it('écrit le prompt du sous-agent DÈS son démarrage, au texte près de celui de la fin', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-prompt-depart-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    const execution = {
+      phase: 'build' as const,
+      agentId: 'builder',
+      taskId: 'task-1',
+      groupId: 'build',
+      attemptId: 'attempt-prompt'
+    }
+    const context = { conversationId: 'conv-run', turnId: 'turn-run', iteration: 0, runId: 'run-1' }
+    const prompt = {
+      provider: 'codex',
+      transport: 'fetch',
+      system: 'PROMPT SYSTEME LOURD',
+      messages: [
+        { role: 'user' as const, content: 'MISSION DU SOUS-AGENT' },
+        { role: 'assistant' as const, content: 'historique' }
+      ],
+      options: {},
+      limitation: 'opaque'
+    }
+
+    persistOrchestrationPhaseStart(
+      { step: 'exec', role: 'subagent', provider: 'codex', phase: 'build', prompt, execution },
+      context,
+      trace
+    )
+    const [depart] = trace.readConversation('conv-run')
+    expect(depart.status).toBe('running')
+    // Le prompt de l'utilisateur seulement : le système, lourd, reste écrit une fois, à la fin.
+    expect(depart.payloads).toEqual([
+      { kind: 'app-state', content: 'exec démarré' },
+      { kind: 'user-message', content: 'MISSION DU SOUS-AGENT' }
+    ])
+
+    persistOrchestrationStep(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        text: 'fait',
+        status: 'completed',
+        prompt,
+        execution
+      },
+      context,
+      join(root, 'prompts'),
+      trace
+    )
+    const message = trace.readConversation('conv-run').find((event) => event.type === 'message')
+    // Même texte au départ et à la fin : le détail du graphe les fusionne en un seul prompt.
+    expect(message?.payloads.find((charge) => charge.kind === 'user-message')?.content).toBe(
+      'MISSION DU SOUS-AGENT'
+    )
+    supprimerArbre(root)
   })
 
   it('persiste les appels sous-agent et juge dans le journal causal', () => {

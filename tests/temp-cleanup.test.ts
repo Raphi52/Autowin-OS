@@ -1,12 +1,18 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync, utimesSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync, utimesSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { nettoyageDeSuite } from './global-nettoyage-temp'
 import {
   DOSSIER_A_EPARGNER,
   PREFIXES_VIVANTS_DE_LAPP,
+  REGISTRE_DES_SUITES,
+  inscrireSuite,
   nettoyerDossiersTemporairesDeTest,
-  purgerDossiersTemporairesAnciens
+  processusVivant,
+  purgerDossiersTemporairesAnciens,
+  suitesEnCours
 } from './temp-cleanup'
 
 /**
@@ -157,5 +163,78 @@ describe('purge bornee par l age', () => {
 
     expect(resultat.epargnes).toContain(DOSSIER_A_EPARGNER)
     expect(existsSync(cible)).toBe(true)
+  })
+})
+
+/**
+ * DEUX SUITES EN MÊME TEMPS SUR LE POSTE — le cas que la garde « né pendant ce run » ne voyait pas.
+ *
+ * MESURÉ le 2026-10-13 : des conversations et des agents jouent vitest en parallèle sur ce poste. La
+ * fin de l'une supprimait les dossiers nés depuis SON départ, dont ceux qu'une autre suite, encore en
+ * cours, utilisait : `claude.garde-onfailure.test.ts` échouait par intermittence sur « Cannot find
+ * module …/garde.mjs », vert seul. Ici, les deux suites tournent sur une racine JOUET, avec le vrai
+ * cycle de vie (`nettoyageDeSuite`) et le vrai test de vie des processus (celui de ce test : vivant).
+ */
+describe('deux suites vitest qui se chevauchent sur le même poste', () => {
+  const TOLERANCE_HORLOGE_MS = 1_000
+
+  it('LE CAS MESURÉ : la fin d’une suite épargne le dossier qu’une AUTRE suite, encore en cours, utilise', () => {
+    const racine = racineJouet()
+    const debut = Date.now() - TOLERANCE_HORLOGE_MS
+    const finDeA = nettoyageDeSuite(racine, process.pid, debut)
+    const finDeB = nettoyageDeSuite(racine, process.pid, debut + 1)
+    const deB = dossier(racine, 'autowin-trace-de-la-suite-b')
+
+    finDeA()
+    expect(existsSync(deB), 'la suite B tourne encore : son dossier doit survivre à la fin de A').toBe(true)
+
+    // B finit à son tour : plus personne ne peut l'utiliser, le dossier part.
+    finDeB()
+    expect(existsSync(deB), 'la dernière suite à finir range le dossier').toBe(false)
+    expect(readdirSync(join(racine, REGISTRE_DES_SUITES)), 'chaque suite se désinscrit').toEqual([])
+  })
+
+  it('une suite démarrée APRÈS la naissance du dossier ne le protège pas', () => {
+    const racine = racineJouet()
+    const debut = Date.now() - TOLERANCE_HORLOGE_MS
+    const finDeA = nettoyageDeSuite(racine, process.pid, debut)
+    const deA = dossier(racine, 'autowin-trace-de-la-suite-a')
+    const finDeB = nettoyageDeSuite(racine, process.pid, Date.now() + 60_000)
+
+    finDeA()
+    expect(existsSync(deA), 'B n’existait pas à la naissance du dossier : il n’est pas à elle').toBe(false)
+    finDeB()
+  })
+
+  it('une suite morte sans se désinscrire ne protège plus rien, et son inscription est retirée', () => {
+    const racine = racineJouet()
+    const debut = Date.now() - TOLERANCE_HORLOGE_MS
+    const morte = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid!
+    expect(processusVivant(morte)).toBe(false)
+    inscrireSuite(racine, morte, debut - 1)
+    const finDeA = nettoyageDeSuite(racine, process.pid, debut)
+    const residu = dossier(racine, 'autowin-trace-orpheline')
+
+    finDeA()
+    expect(existsSync(residu), 'une suite plantée ne doit pas retenir les dossiers pour toujours').toBe(false)
+    expect(suitesEnCours(racine)).toEqual([])
+    expect(readdirSync(join(racine, REGISTRE_DES_SUITES))).toEqual([])
+  })
+
+  it('le processus courant est vivant ; un processus terminé ne l’est plus', () => {
+    expect(processusVivant(process.pid)).toBe(true)
+    const termine = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid!
+    expect(processusVivant(termine)).toBe(false)
+  })
+
+  it('le registre lui-même n’est jamais balayé, ni en fin de suite ni par la purge', () => {
+    const racine = racineJouet()
+    const debut = Date.now() - TOLERANCE_HORLOGE_MS
+    const registre = dossier(racine, REGISTRE_DES_SUITES)
+
+    nettoyerDossiersTemporairesDeTest(racine, debut)
+    purgerDossiersTemporairesAnciens(racine, Date.now() + 30 * 24 * 60 * 60 * 1000, 24 * 60 * 60 * 1000)
+
+    expect(existsSync(registre)).toBe(true)
   })
 })

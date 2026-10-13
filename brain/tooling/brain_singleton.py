@@ -7,6 +7,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import brain_identite
+
 
 class ProcessMutex:
     """Non-blocking per-user mutex; closing it releases ownership."""
@@ -23,7 +25,7 @@ class ProcessMutex:
             kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
             kernel32.CreateMutexW.restype = ctypes.c_void_p
             kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-            handle = kernel32.CreateMutexW(None, True, f"Local\\AmitelBrain-{digest}")
+            handle = kernel32.CreateMutexW(None, True, f"Local\\{brain_identite.dossier_local()}-{digest}")
             if not handle:
                 raise OSError(ctypes.get_last_error(), "CreateMutexW failed")
             if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
@@ -32,7 +34,7 @@ class ProcessMutex:
             return cls(handle=handle)
 
         import fcntl
-        path = Path(tempfile.gettempdir()) / f"amitel-brain-{digest}.lock"
+        path = Path(tempfile.gettempdir()) / f"{brain_identite.service()}-{digest}.lock"
         file_handle = path.open("a+b")
         try:
             fcntl.flock(file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)

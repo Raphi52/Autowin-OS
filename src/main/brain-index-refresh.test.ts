@@ -28,7 +28,7 @@ function spawnPilotable(): {
 
 function fauxBrain(): { env: NodeJS.ProcessEnv; tooling: string; root: string } {
   const root = mkdtempSync(join(tmpdir(), 'index-refresh-'))
-  // Le `tooling/` INSTALLÉ est HORS de la racine du Brain (en vrai : %LOCALAPPDATA%\AmitelBrain\
+  // Le `tooling/` INSTALLÉ est HORS de la racine du Brain (en vrai : %LOCALAPPDATA%\AcmeBrain\
   // tooling, alors que la racine est le partage). Le mettre DANS la racine rendait le défaut du
   // 2026-09-04 invisible : `join(tooling,'index')` et `join(root,'tooling','index')` coïncidaient.
   const tooling = mkdtempSync(join(tmpdir(), 'index-refresh-tooling-'))
@@ -40,7 +40,7 @@ function fauxBrain(): { env: NodeJS.ProcessEnv; tooling: string; root: string } 
   return {
     root,
     tooling,
-    env: { AMITEL_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AMITEL_BRAIN_PYTHON: python }
+    env: { AUTOWIN_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_PYTHON: python }
   }
 }
 
@@ -68,8 +68,8 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
       return { json: async () => ({ health: DEGRADE }) }
     }) as unknown as typeof fetch
     const sante = await readBrainHealth(fetchFn, {
-      AMITEL_BRAIN_TOKEN: 'jeton-test',
-      AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
+      AUTOWIN_BRAIN_TOKEN: 'jeton-test',
+      AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
     })
     expect(vueUrl).toBe('http://127.0.0.1:8766/health')
     expect(vuAuth).toBe('Bearer jeton-test')

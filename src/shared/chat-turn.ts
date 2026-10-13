@@ -84,6 +84,15 @@ export interface PipelineChoice {
    * la decision et son motif, tels que l'orchestrateur les a ecrits.
    */
   outcome?: string
+  /**
+   * Le RAISONNEMENT du sous-agent pendant cette etape, accumule fragment par fragment pendant qu'il
+   * tourne, puis complete par l'etape terminee s'il n'en est rien arrive en direct.
+   *
+   * DEMANDE (conv-918, 2026-10-13) : la ligne de vie du bloc montrait des bouts de cette reflexion
+   * (« and now 1/2 could ») qu'on ne retrouvait nulle part en depliant. Transitoire comme le reste
+   * de `pipeline` : jamais ecrit par le journal du tour.
+   */
+  raisonnement?: string
   /** Faux quand l'etape a echoue (ou que le controle final a refuse) : l'affichage doit le montrer. */
   ok?: boolean
 }

@@ -69,7 +69,7 @@ describe('un dépôt Brain refusé ne se lit pas comme une action terminée', ()
 describe('un dépôt validé mais NON écrit est dit, avec son motif', () => {
   it.each([
     'Brain injoignable : fetch failed',
-    'jeton du Brain absent — rien n’a été écrit (définir AMITEL_BRAIN_TOKEN)',
+    'jeton du Brain absent — rien n’a été écrit (définir AUTOWIN_BRAIN_TOKEN)',
     'refusé par le Brain : likely personal data detected; candidate rejected'
   ])('signale l’échec « %s »', (detail) => {
     const resume = groupOutcomeSummary([

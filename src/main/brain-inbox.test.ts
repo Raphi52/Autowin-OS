@@ -39,7 +39,7 @@ function note(relative: string, content: string): void {
 /** Candidat tel que `remember` le dépose (`brain-remember.ts`, schéma candidate-v1). */
 function candidat(title: string, corps = 'corps', entete: Record<string, string> = {}): string {
   const champs: Record<string, string> = {
-    schema: 'amitel-brain/candidate-v1',
+    schema: 'autowin-brain/candidate-v1',
     type: 'lesson',
     kind: 'lesson',
     scope: '"autowin-os"',
@@ -519,7 +519,7 @@ describe('promouvoir / rejeter — primitives no-clobber et réversibles', () =>
     expect(readFileSync(join(root, 'knowledge/lessons/une-lecon-brain.md'), 'utf8')).toBe(
       [
         '---',
-        'schema: amitel-brain/v1',
+        'schema: autowin-brain/v1',
         'uid: autowin-os/lesson/une-lecon-brain',
         'type: lesson',
         'kind: lesson',

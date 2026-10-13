@@ -17,7 +17,7 @@
  *   `reindexerApresMutation` (mesuré le 2026-09-29 : sans cela, le Brain restait muet jusqu'au
  *   prochain démarrage).
  *
- * `brain_index.py` est lancé SANS shell : ses arguments contiennent des espaces (« Projets IA/Amitel
+ * `brain_index.py` est lancé SANS shell : ses arguments contiennent des espaces (« Projets IA/<nom>
  * Brain ») et passer par `cmd /c start` coupait la ligne au premier espace — l'essai à la main du
  * 2026-09-04 a échoué exactement là.
  */
@@ -27,6 +27,7 @@ import { spawn } from 'node:child_process'
 import { sharedBrainOrigin } from './brain-paths'
 import { brainServiceToken } from './brain-retrieval'
 import { resolveBrainRuntime } from './brain-server-launch'
+import { recopierNomsHistoriques } from './identite-entreprise'
 
 export interface BrainHealth {
   state: 'healthy' | 'degraded' | 'unavailable' | string
@@ -152,14 +153,15 @@ export function startBrainIndexRebuild(
     return { status: 'unavailable', detail: `brain_index.py ou venv introuvable (${script})` }
   }
   // L'index SERVI est celui de la racine du Brain : `brain_server.py:405` lit `root/tooling/index`.
-  // Écrire dans le `tooling/` LOCAL (%LOCALAPPDATA%\AmitelBrain\tooling) construirait un index que
+  // Écrire dans le `tooling/` LOCAL (%LOCALAPPDATA%\<dossierLocal>\tooling) construirait un index que
   // le serveur ne lit JAMAIS — mesuré le 2026-09-04 : ce dossier local n'existe même pas, alors que
   // la génération servie vit sur le partage. Le Brain resterait dégradé indéfiniment.
   const outDir = join(brainRoot, 'tooling', 'index')
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
-  // Nom HISTORIQUE lu par les scripts Python de Hermes-Brain (hors de ce depot).
-  childEnv.AMITEL_BRAIN_ROOT = brainRoot
+  // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
+  childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
+  recopierNomsHistoriques(childEnv, env)
   etat = 'en-cours'
   const args = [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir]
   const options = { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }

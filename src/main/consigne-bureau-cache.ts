@@ -46,7 +46,7 @@ export function consigneBureauCache(runId: string): string {
  * Le bureau caché réservé à UNE conversation du chat (conv-620).
  *
  * Défaut mesuré : le prompt du chat prescrivait `-Id <nom>` — un nom LIBRE. Deux conversations
- * menées en parallèle sur la même application choisissaient le même nom évident (« rigv3 »),
+ * menées en parallèle sur la même application choisissaient le même nom évident (« contosov3 »),
  * donc le même bureau, le même profil et le même verrou d'instance : elles se parasitaient,
  * exactement comme les runs avant conv-618. L'identifiant est ici DÉRIVÉ de l'id du fil.
  */

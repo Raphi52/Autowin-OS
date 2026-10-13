@@ -564,87 +564,10 @@
   line-height: 1.62;
 }
 
-/* Conteneur de la barre : porte le cadre et le fond ; les actions vivent DEDANS. */
-.cosmic-outline .activity-group {
-  width: min(100%, 720px);
-  display: flex;
-  /* Les ETAGES passent SOUS l'en-tete : sans `wrap`, la carte etant une ligne flex, ils se
-     posaient a DROITE du titre (constate a la capture, Chromium reel). */
-  flex-wrap: wrap;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  padding-right: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-left: 2px solid #5ecaf0;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.3);
-  color: #9caab5;
-}
-
-/* « Voir » occupe toute la place restante — la barre entière reste cliquable. */
-.cosmic-outline .activity-group-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0 8px 11px;
-  overflow: hidden;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-
-.cosmic-outline .activity-group:hover {
-  border-color: rgba(255, 255, 255, 0.32);
-  background: rgba(0, 0, 0, 0.45);
-}
-
-/* B3-γ — la CARTE porte la teinte de son statut (bord gauche + fond), pas le seul point.
-   Ces regles vivent DANS le theme : `.cosmic-outline .activity-group` (0,2,0) repeint le fond et
-   le bord, donc une teinte posee dans ChatView.css (0,1,0) serait ecrite mais invisible. */
-.cosmic-outline .activity-group.failed,
-.cosmic-outline .activity-group[data-state='failed'] {
-  border-left-color: #ff6d8f;
-  background: linear-gradient(
-    100deg,
-    rgba(255, 109, 143, 0.24) 0%,
-    rgba(255, 109, 143, 0.07) 45%,
-    rgba(0, 0, 0, 0.3) 85%
-  );
-}
-.cosmic-outline .activity-group[data-state='running'] {
-  border-left-color: #5ecaf0;
-  background: linear-gradient(
-    100deg,
-    rgba(94, 202, 240, 0.22) 0%,
-    rgba(94, 202, 240, 0.07) 45%,
-    rgba(0, 0, 0, 0.3) 85%
-  );
-}
-.cosmic-outline .activity-group[data-state='interrupted'] {
-  border-left-color: #e8a33d;
-  background: linear-gradient(
-    100deg,
-    rgba(232, 163, 61, 0.22) 0%,
-    rgba(232, 163, 61, 0.07) 45%,
-    rgba(0, 0, 0, 0.3) 85%
-  );
-}
-.cosmic-outline .activity-group[data-state='done'] {
-  border-left-color: #4ec9a5;
-  background: linear-gradient(
-    100deg,
-    rgba(78, 201, 165, 0.2) 0%,
-    rgba(78, 201, 165, 0.06) 45%,
-    rgba(0, 0, 0, 0.3) 85%
-  );
-}
+/* LA BARRE D'ACTIVITE N'EST PLUS UNE CARTE TEINTEE (conv-904, 2026-10-12) : elle prend le cadre
+   « grand, deux lignes » des capsules (verre fume, bord degrade, anneau d'arcs, legende), dessine
+   par components/anneau-activite.css avec les seuls jetons du theme. Le cadre, le fond et le
+   liseré de statut de l'ancienne carte (B3-γ) sont retires d'ici avec elle. */
 /* Etages dans le theme : le chevron et le detail doivent rester lisibles sur fond sombre. */
 .cosmic-outline .activity-step-toggle {
   border-color: rgba(255, 255, 255, 0.22);
@@ -725,41 +648,12 @@
   color: #dbe4ea;
 }
 
+/* Titre, legende et signe de vie de la barre d'activite : dessines par anneau-activite.css, avec les
+   jetons du theme (conv-904). Seule la fleche « ↗ » d'un groupe sans etage a deplier reste ici. */
 .cosmic-outline .activity-group-go {
   margin-left: auto;
-  color: #61707d;
+  color: var(--text-dim);
   font-size: 11px;
-}
-
-.cosmic-outline .activity-group-title {
-  color: #dbe4ea;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.cosmic-outline .activity-group-tools {
-  flex: 1;
-  overflow: hidden;
-  color: #657481;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/*
- * SIGNE DE VIE d'une action en cours — une ligne discrete, monospacee parce qu'elle porte des
- * compteurs qui changent toutes les 5 s : une chasse fixe evite que la ligne tressaute a chaque
- * battement. Elle ne doit jamais voler l'attention au titre du groupe, seulement prouver que ca vit.
- */
-.cosmic-outline .activity-progress {
-  overflow: hidden;
-  padding: 2px 10px 5px 24px;
-  color: #7d8b98;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* « ↓ Dernier message » SE POSE AU BAS DU FIL, DANS LE PANNEAU (conv-154 : « le badge dernier

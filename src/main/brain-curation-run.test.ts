@@ -38,7 +38,7 @@ describe('déclencheur de curation Brain', () => {
       return { unref: vi.fn() }
     }
     const resultat = startBrainCuration(
-      { AMITEL_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AMITEL_BRAIN_PYTHON: python },
+      { AUTOWIN_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_PYTHON: python },
       spawnFn
     )
     expect(resultat.status).toBe('launched')
@@ -50,7 +50,7 @@ describe('déclencheur de curation Brain', () => {
 
   it('vise la boîte et l’index de la RACINE du Brain, pas le dossier du code installé', () => {
     // Mesuré le 2026-09-29 : sans `--brain`, brain_curate.py prend le parent de son propre dossier
-    // (%LOCALAPPDATA%\AmitelBrain, sans inbox/) — la curation de démarrage ne voyait AUCUN
+    // (%LOCALAPPDATA%\AcmeBrain, sans inbox/) — la curation de démarrage ne voyait AUCUN
     // candidat alors que l'app en comptait un sur le partage. Prouvé en vrai à 08:57:24 : avec
     // `--brain`, le candidat en attente a été promu dès le démarrage.
     const { root, python } = fauxBrain(['a.md'])
@@ -61,11 +61,11 @@ describe('déclencheur de curation Brain', () => {
       appels.push([...args])
       return { unref: vi.fn() }
     }
-    // Code installé HORS de la racine, comme en vrai (%LOCALAPPDATA%\AmitelBrain\tooling).
+    // Code installé HORS de la racine, comme en vrai (%LOCALAPPDATA%\AcmeBrain\tooling).
     const env = {
-      AMITEL_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_ROOT: root,
       AUTOWIN_BRAIN_TOOLING: installe,
-      AMITEL_BRAIN_PYTHON: python
+      AUTOWIN_BRAIN_PYTHON: python
     }
     expect(startBrainCuration(env, spawnFn).status).toBe('launched')
     const args = appels[0]
@@ -84,9 +84,9 @@ describe('déclencheur de curation Brain', () => {
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))
     // Racine contenant « & » : passée à cmd.exe, elle couperait la ligne de commande.
     const env = {
-      AMITEL_BRAIN_ROOT: piegee,
+      AUTOWIN_BRAIN_ROOT: piegee,
       AUTOWIN_BRAIN_TOOLING: tooling,
-      AMITEL_BRAIN_PYTHON: python
+      AUTOWIN_BRAIN_PYTHON: python
     }
     const r = startBrainCuration(env, spawnFn)
     if (process.platform === 'win32') {
@@ -102,7 +102,7 @@ describe('déclencheur de curation Brain', () => {
     const { root, tooling, python } = fauxBrain(['a.md'])
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))
     const r = startBrainCuration(
-      { AMITEL_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AMITEL_BRAIN_PYTHON: python },
+      { AUTOWIN_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_PYTHON: python },
       spawnFn,
       undefined,
       true
@@ -115,7 +115,7 @@ describe('déclencheur de curation Brain', () => {
     const { root, tooling, python } = fauxBrain([])
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))
     const resultat = startBrainCuration(
-      { AMITEL_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AMITEL_BRAIN_PYTHON: python },
+      { AUTOWIN_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_PYTHON: python },
       spawnFn
     )
     expect(resultat.status).toBe('nothing-to-do')
@@ -130,9 +130,9 @@ describe('déclencheur de curation Brain', () => {
     // fusion (verdict `merge`, le candidat reste) relançait une reconstruction pour rien.
     const { root, tooling, python } = fauxBrain(['a.md'])
     const env = {
-      AMITEL_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_ROOT: root,
       AUTOWIN_BRAIN_TOOLING: tooling,
-      AMITEL_BRAIN_PYTHON: python
+      AUTOWIN_BRAIN_PYTHON: python
     }
     const fins: ((code: number) => void)[] = []
     const appels: string[][] = []
@@ -168,9 +168,9 @@ describe('déclencheur de curation Brain', () => {
     // même boîte se volent les candidats (mesuré le 2026-09-26 : 9 sur 10 déplacés entre le
     // rapport et l'application de la seconde).
     const env = (root: string, tooling: string, python: string): NodeJS.ProcessEnv => ({
-      AMITEL_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_ROOT: root,
       AUTOWIN_BRAIN_TOOLING: tooling,
-      AMITEL_BRAIN_PYTHON: python
+      AUTOWIN_BRAIN_PYTHON: python
     })
     const verrouDe = (root: string): string => join(root, 'inbox', '.curation.lock')
 
@@ -241,7 +241,7 @@ describe('déclencheur de curation Brain', () => {
   it('ne relance pas une deuxième fois dans la même session', () => {
     const { root, tooling, python } = fauxBrain(['a.md'])
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))
-    const env = { AMITEL_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AMITEL_BRAIN_PYTHON: python }
+    const env = { AUTOWIN_BRAIN_ROOT: root, AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_PYTHON: python }
     startBrainCuration(env, spawnFn)
     expect(startBrainCuration(env, spawnFn).status).toBe('nothing-to-do')
     expect(spawnFn).toHaveBeenCalledTimes(1)

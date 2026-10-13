@@ -167,7 +167,7 @@ export function createAutowinAppDataRoot(base = appDataBase()): string {
  * voisin — c'est la convention des applications portables.
  *
  * Ne concerne QUE ce que l'app produit. Les lectures d'autres produits (transcripts Claude Code,
- * jeton AmitelBrain, installation codex, skills) restent à leur place : les rediriger casserait
+ * jeton du Brain partagé, installation codex, skills) restent à leur place : les rediriger casserait
  * l'app sans rien nettoyer.
  */
 /**

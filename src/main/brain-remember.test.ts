@@ -39,11 +39,11 @@ const FAIT_VALIDE = {
 const signedContextPayload = (context: string, token = 'jeton'): Record<string, unknown> => {
   const authenticated = JSON.stringify({ context, navigation: null })
   return {
-    service: 'amitel-brain',
+    service: 'autowin-brain',
     protocol: 2,
     authenticated,
     signature: createHmac('sha256', token)
-      .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
+      .update(`autowin-brain\n2\n${authenticated}`, 'utf8')
       .digest('hex')
   }
 }
@@ -109,12 +109,12 @@ describe('remember — separer la panne de transport du refus de contenu', () =>
 describe('depot — l origine est CONFIGUREE, jamais ecrite en dur', () => {
   /*
    * Meme defaut que la lecture, mesure le 2026-09-02 : le depot visait `127.0.0.1:8765` en dur alors
-   * que le service tournait sur l origine declaree par `AMITEL_BRAIN_ORIGIN`. Ecrire ailleurs que la
+   * que le service tournait sur l origine declaree par `AUTOWIN_BRAIN_ORIGIN`. Ecrire ailleurs que la
    * ou l on lit est pire qu une panne : le candidat part sur un service que personne ne consulte.
    */
-  it('envoie le candidat sur l origine declaree par AMITEL_BRAIN_ORIGIN', async () => {
+  it('envoie le candidat sur l origine declaree par AUTOWIN_BRAIN_ORIGIN', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-remember-origine-'))
-    vi.stubEnv('AMITEL_BRAIN_ORIGIN', 'http://127.0.0.1:8766')
+    vi.stubEnv('AUTOWIN_BRAIN_ORIGIN', 'http://127.0.0.1:8766')
     const fetchFn = vi.fn(
       async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
     ) as unknown as typeof fetch
@@ -135,7 +135,7 @@ describe('depot — l origine est CONFIGUREE, jamais ecrite en dur', () => {
 
   it('ne throw pas quand l origine configuree n est pas loopback : depot IMPOSSIBLE', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-remember-origine-ko-'))
-    vi.stubEnv('AMITEL_BRAIN_ORIGIN', 'https://brain.example.invalid')
+    vi.stubEnv('AUTOWIN_BRAIN_ORIGIN', 'https://brain.example.invalid')
     const fetchFn = vi.fn(
       async () => new Response('{}', { status: 200 })
     ) as unknown as typeof fetch
@@ -568,7 +568,7 @@ describe('câblage — la commande existe et le prompt enseigne quand l’employ
  * ═══ CONTRAT RÉEL DU BRAIN, découvert par un essai LIVE ═══
  *
  * Ma première version avait été écrite en lisant la copie de la GED. Or le service qui TOURNE est une
- * copie locale (`%LOCALAPPDATA%\AmitelBrain\tooling`), plus avancée. Deux écarts, tous deux invisibles
+ * copie locale (`%LOCALAPPDATA%\AcmeBrain\tooling`), plus avancée. Deux écarts, tous deux invisibles
  * à la lecture et fatals à l'usage :
  *  1. le succès répond un CONTEXTE SIGNÉ (`{context: <chemin>}`), pas `{ok: true}` — ma condition aurait
  *     annoncé « refusé » sur CHAQUE succès ;
@@ -583,7 +583,7 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
     const outcome = await rememberFact(FAIT_VALIDE, {
       token: 'jeton',
       fetchFn: reponse({
-        service: 'amitel-brain',
+        service: 'autowin-brain',
         protocol: 1,
         context: 'C:/brain/inbox/forge.md',
         signature: '0'.repeat(64)
@@ -597,11 +597,11 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
     const outcome = await rememberFact(FAIT_VALIDE, {
       token: 'jeton',
       fetchFn: reponse({
-        service: 'amitel-brain',
+        service: 'autowin-brain',
         protocol: 1,
         context: 'C:/brain/inbox/20260730-le-fait.md',
         signature: createHmac('sha256', 'jeton')
-          .update('amitel-brain\n1\nC:/brain/inbox/20260730-le-fait.md', 'utf8')
+          .update('autowin-brain\n1\nC:/brain/inbox/20260730-le-fait.md', 'utf8')
           .digest('hex')
       })
     })
@@ -879,7 +879,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
       'secret: nom du champ, pas sa valeur',
       'token = null quand la session expire',
       'config: token=<TON_JETON>',
-      'AMITEL_BRAIN_TOKEN=... (valeur a definir)',
+      'AUTOWIN_BRAIN_TOKEN=... (valeur a definir)',
       'Bearer suivi du jeton, dans l’en-tête Authorization'
     ]) {
       expect(likelySecretShape(legitime)).toBeUndefined()
@@ -909,7 +909,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
     // coûteux ici puisqu'un second garde tourne derrière.
     for (const legitime of [
       'auth_token_endpoint: /api/v2/oauth/token/refresh',
-      'refresh_token_path: /var/lib/rig/session2/token.json',
+      'refresh_token_path: /var/lib/contoso/session2/token.json',
       'reference du lot SK-10023847 chez le fournisseur',
       'token_url: https://exemple.fr/oauth/token2'
     ]) {

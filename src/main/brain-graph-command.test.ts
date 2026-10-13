@@ -6,11 +6,11 @@ import { decideRemember, parseSupersedes } from './brain-remember'
 const signed = (context: string, token = 'jeton'): Record<string, unknown> => {
   const authenticated = JSON.stringify({ context })
   return {
-    service: 'amitel-brain',
+    service: 'autowin-brain',
     protocol: 2,
     authenticated,
     signature: createHmac('sha256', token)
-      .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
+      .update(`autowin-brain\n2\n${authenticated}`, 'utf8')
       .digest('hex')
   }
 }

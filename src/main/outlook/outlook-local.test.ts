@@ -160,7 +160,7 @@ describe('ou trouver le script de lecture', () => {
   })
 
   it('laisse un chemin de developpement intact', () => {
-    const resolu = resolveOutlookScriptPath(['C:', 'Amitel', 'Autowin OS'].join('\\'))
+    const resolu = resolveOutlookScriptPath(['C:', 'Acme', 'Autowin OS'].join('\\'))
     expect(resolu).not.toContain('asar')
     expect(resolu).toContain('scripts')
   })

@@ -925,8 +925,8 @@ describe('GraphView refresh', () => {
         links: []
       })
     const loadBrainNeighborhood = vi.fn().mockResolvedValue({
-      nodes: [{ id: 'rig', label: 'RIG', group: 0 }],
-      links: [{ source: 'autowin', target: 'rig', relation: 'related' }]
+      nodes: [{ id: 'contoso', label: 'CONTOSO', group: 0 }],
+      links: [{ source: 'autowin', target: 'contoso', relation: 'related' }]
     })
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       listBrains: vi
@@ -951,7 +951,7 @@ describe('GraphView refresh', () => {
       container.querySelector<HTMLButtonElement>('[data-node-id="autowin"]')?.click()
     )
     await flush()
-    expect(container.querySelector('[data-node-id="rig"]')).toBeTruthy()
+    expect(container.querySelector('[data-node-id="contoso"]')).toBeTruthy()
 
     const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('Réessayer')
@@ -960,7 +960,7 @@ describe('GraphView refresh', () => {
     await flush()
 
     expect(loadBrainGraph).toHaveBeenCalledTimes(2)
-    expect(container.querySelector('[data-node-id="rig"]')).toBeNull()
+    expect(container.querySelector('[data-node-id="contoso"]')).toBeNull()
     expect(container.querySelector('[data-node-id="autowin"]')).toBeTruthy()
   })
 

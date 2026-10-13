@@ -2030,7 +2030,6 @@ export class AgentPilot {
     let rejeuNatifCetteIteration = false
     let iterationNatif = 0
     let appelNatifIndex = 0
-    let outilsNatifsAnnonces = false
     const replisNatifsDits = new Set<string>()
     /**
      * UN APPEL DIRECT S'AFFICHE ET COMPTE EXACTEMENT COMME UN `<cmd>` : carte, progression, resultat,
@@ -2324,6 +2323,14 @@ export class AgentPilot {
       // Etat des outils directs pour CETTE iteration (partage entre ses tentatives d'envoi).
       executesParCanalNatif = new Set<string>()
       echecNatifCetteIteration = false
+      /*
+       * Remis a plat ICI, au debut de chaque iteration — pas seulement dans la boucle des `<cmd>`,
+       * qu'un tour 100 % outils directs n'atteint jamais. Sans cela, un `verify` direct rouge puis
+       * rejoue VERT laissait le drapeau leve : « ta derniere action a ECHOUE » revenait a chaque
+       * cloture (conv-908, 2026-10-12). Un echec encore NON repare reste vu par
+       * `commandesEnEchecNonRattrape`, qui couvre tout le tour.
+       */
+      echecDeLaDerniereIteration = false
       rejeuNatifCetteIteration = false
       iterationNatif = i
       while (!res) {
@@ -2370,14 +2377,9 @@ export class AgentPilot {
               })
           : undefined
         const outilsDeCetEnvoi = natif && 'servis' in natif ? natif.servis : undefined
-        if (outilsDeCetEnvoi && !outilsNatifsAnnonces) {
-          outilsNatifsAnnonces = true
-          emit({
-            kind: 'provider-status',
-            iteration: i,
-            text: `Outils directs de l'app servis au modèle : ${outilsDeCetEnvoi.noms.length} commandes (les autres restent en <cmd>)`
-          })
-        }
+        // Le service NORMAL ne s'annonce pas : la ligne « 37 commandes servies » sortait a CHAQUE
+        // tour dans le bloc d'actions sans rien apprendre a l'utilisateur (conv-908). Seule une
+        // panne se dit, ci-dessous.
         if (natif && 'repli' in natif && !replisNatifsDits.has(natif.repli)) {
           replisNatifsDits.add(natif.repli)
           emit({

@@ -8,6 +8,24 @@ from pathlib import Path
 
 TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
+import os
+from unittest.mock import patch
+
+# Identite NEUTRE forcee (brain_identite) a l'import, puis un domaine metier FICTIF (conv-916)
+# pendant l'execution : le tooling generique ne connait aucun metier, un profil d'entreprise declare
+# le sien. Le metier reel est garde par `entreprise/<nom>/brain/tooling/tests/`.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
+_METIER = {"cle": "zorg", "libelle": "ZORG", "documentation": "zorg-documentation"}
+_ENV = patch.dict(os.environ, {"AUTOWIN_IDENTITE_ENTREPRISE": json.dumps({"metier": _METIER})})
+
+
+def setUpModule():
+    _ENV.start()
+
+
+def tearDownModule():
+    _ENV.stop()
+
 
 from obsidian_graph import analyze, graph_errors, refresh_indexes
 
@@ -27,7 +45,7 @@ class ObsidianVisibleGraphTests(unittest.TestCase):
                         {"query": f"tag:#theme/{theme}", "color": {"a": 1, "rgb": index}}
                         for index, theme in enumerate(
                             (
-                                "rig", "architecture", "donnees", "integrations", "operations", "ia",
+                                "zorg", "architecture", "donnees", "integrations", "operations", "ia",
                                 "gouvernance", "autowin-os",
                             ),
                             start=1,
@@ -40,17 +58,17 @@ class ObsidianVisibleGraphTests(unittest.TestCase):
         brain = root / "knowledge/_maps/brain.md"
         brain.parent.mkdir(parents=True)
         brain.write_text(
-            "# Brain\n[[knowledge/_maps/rig]]\n[[knowledge/_maps/vault-inventory]]\n",
+            "# Brain\n[[knowledge/_maps/zorg]]\n[[knowledge/_maps/vault-inventory]]\n",
             encoding="utf-8",
         )
-        (root / "knowledge/_maps/rig.md").write_text(
-            "# RIG\n[[knowledge/_maps/rig-source-mirror]]\n",
+        (root / "knowledge/_maps/zorg.md").write_text(
+            "# ZORG\n[[knowledge/_maps/zorg-source-mirror]]\n",
             encoding="utf-8",
         )
         enterprise = root / "governance/ARCHITECTURE.md"
         enterprise.parent.mkdir(parents=True)
         enterprise.write_text("# Architecture\n", encoding="utf-8")
-        source = root / "knowledge/domain/rigapplication-documentation/source.md"
+        source = root / "knowledge/domain/zorg-documentation/source.md"
         source.parent.mkdir(parents=True)
         source_bytes = b"# Canonical source\n"
         source.write_bytes(source_bytes)
@@ -69,14 +87,14 @@ class ObsidianVisibleGraphTests(unittest.TestCase):
             self.assertEqual(len(report.components), 1)
             self.assertEqual(graph_errors(root), [])
             self.assertEqual(
-                (root / "knowledge/domain/rigapplication-documentation/source.md").read_bytes(),
+                (root / "knowledge/domain/zorg-documentation/source.md").read_bytes(),
                 expected_source,
             )
-            source_index = root / "knowledge/_maps/rig-source-mirror.md"
-            self.assertIn("Source documentaire canonique RIG", source_index.read_text(encoding="utf-8"))
+            source_index = root / "knowledge/_maps/zorg-source-mirror.md"
+            self.assertIn("Source documentaire canonique ZORG", source_index.read_text(encoding="utf-8"))
             self.assertIn("author_agent: tooling:obsidian-graph", source_index.read_text(encoding="utf-8"))
-            self.assertIn("uid: rig/map/source-mirror", source_index.read_text(encoding="utf-8"))
-            self.assertEqual(source_index.relative_to(root).as_posix(), "knowledge/_maps/rig-source-mirror.md")
+            self.assertIn("uid: zorg/map/source-mirror", source_index.read_text(encoding="utf-8"))
+            self.assertEqual(source_index.relative_to(root).as_posix(), "knowledge/_maps/zorg-source-mirror.md")
 
     def test_new_unindexed_note_makes_guard_red(self):
         with tempfile.TemporaryDirectory() as td:
@@ -99,7 +117,7 @@ class ObsidianVisibleGraphTests(unittest.TestCase):
             refresh_indexes(root, reviewer="external:judge")
             index_paths = (
                 Path("knowledge/_maps/vault-inventory.md"),
-                Path("knowledge/_maps/rig-source-mirror.md"),
+                Path("knowledge/_maps/zorg-source-mirror.md"),
             )
             before = {path: (root / path).read_bytes() for path in index_paths}
 

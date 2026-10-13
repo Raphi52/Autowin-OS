@@ -103,8 +103,8 @@ describe('Memory retrieval score channels', () => {
 })
 
 const nodes: GraphNode[] = [
-  { id: 'a', label: 'Accueil', group: 2, themes: ['theme/rig', 'theme/architecture'] },
-  { id: 'b', label: 'Borne', group: 2, themes: ['theme/rig'] },
+  { id: 'a', label: 'Accueil', group: 2, themes: ['theme/contoso', 'theme/architecture'] },
+  { id: 'b', label: 'Borne', group: 2, themes: ['theme/contoso'] },
   { id: 'c', label: 'SQL', group: 7 },
   { id: 'orphan', label: 'Isolé', group: 9 }
 ]
@@ -117,13 +117,14 @@ describe('graph view presentation model', () => {
   it('lists active-theme nodes once in French alphabetical order', () => {
     const accentedNodes: GraphNode[] = [
       ...nodes,
-      { id: 'd', label: 'Échéances', group: 3, themes: ['theme/rig', 'theme/architecture'] }
+      { id: 'd', label: 'Échéances', group: 3, themes: ['theme/contoso', 'theme/architecture'] }
     ]
 
     expect(
-      nodesForThemesAlphabetically(accentedNodes, new Set(['theme/rig', 'theme/architecture'])).map(
-        (node) => node.id
-      )
+      nodesForThemesAlphabetically(
+        accentedNodes,
+        new Set(['theme/contoso', 'theme/architecture'])
+      ).map((node) => node.id)
     ).toEqual(['a', 'b', 'd'])
     expect(nodesForThemesAlphabetically(accentedNodes, new Set())).toEqual([])
   })
@@ -132,7 +133,9 @@ describe('graph view presentation model', () => {
     expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/architecture']))).toEqual(
       new Set(['a'])
     )
-    expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/rig']))).toEqual(new Set(['a', 'b']))
+    expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/contoso']))).toEqual(
+      new Set(['a', 'b'])
+    )
   })
 
   it('shows floating names for every highlighted theme node', () => {
@@ -146,10 +149,10 @@ describe('graph view presentation model', () => {
   })
 
   it('makes a cluster tag highlight exactly its category and lets a second click clear it', () => {
-    expect([...selectExclusiveTheme(new Set(['theme/rig']), 'theme/architecture')]).toEqual([
+    expect([...selectExclusiveTheme(new Set(['theme/contoso']), 'theme/architecture')]).toEqual([
       'theme/architecture'
     ])
-    expect([...selectExclusiveTheme(new Set(['theme/rig']), 'theme/rig')]).toEqual([])
+    expect([...selectExclusiveTheme(new Set(['theme/contoso']), 'theme/contoso')]).toEqual([])
   })
 
   it('never fits the camera on a lazy preview and fits once data is complete', () => {
@@ -173,11 +176,11 @@ describe('graph view presentation model', () => {
 
   it('searches both themes and node labels or paths with a bounded result set', () => {
     const result = searchGraphCatalog('accueil', nodes, [
-      { id: 'theme/rig', label: 'Accueil RIG', count: 2 },
+      { id: 'theme/contoso', label: 'Accueil CONTOSO', count: 2 },
       { id: 'theme/sql', label: 'SQL', count: 1 }
     ])
 
-    expect(result.themes.map((theme) => theme.id)).toEqual(['theme/rig'])
+    expect(result.themes.map((theme) => theme.id)).toEqual(['theme/contoso'])
     expect(result.nodes.map((node) => node.id)).toEqual(['a'])
     expect(searchGraphCatalog('sql', nodes, []).nodes.map((node) => node.id)).toEqual(['c'])
     expect(searchGraphCatalog('', nodes, []).nodes).toEqual([])
@@ -241,17 +244,25 @@ describe('graph view presentation model', () => {
   })
 
   it('summarises communities by size then id', () => {
-    expect(buildThemeSummaries(nodes)).toEqual([
-      { id: 'theme/rig', label: 'RIG', count: 2 },
+    // Le theme du domaine metier porte le libelle du profil (conv-916) ; le code n'en nomme aucun.
+    const metier = { cle: 'contoso', libelle: 'CONTOSO' }
+    expect(buildThemeSummaries(nodes, [], metier)).toEqual([
+      { id: 'theme/contoso', label: 'CONTOSO', count: 2 },
       { id: 'community/7', label: 'Thème 7', count: 1 },
       { id: 'community/9', label: 'Thème 9', count: 1 },
       { id: 'theme/architecture', label: 'Architecture', count: 1 }
     ])
+    // Jumeau sans profil : le meme theme prend le libelle generique.
+    expect(buildThemeSummaries(nodes)[0]).toEqual({
+      id: 'theme/contoso',
+      label: 'Contoso',
+      count: 2
+    })
   })
 
-  it('exposes the seven Amitel themes in refactor order, including empty themes', () => {
+  it('exposes the seven Acme themes in refactor order, including empty themes', () => {
     const declared = [
-      { id: 'theme/rig', label: 'RIG' },
+      { id: 'theme/contoso', label: 'CONTOSO' },
       { id: 'theme/architecture', label: 'Architecture' },
       { id: 'theme/donnees', label: 'Données' },
       { id: 'theme/integrations', label: 'Intégrations' },
@@ -267,50 +278,50 @@ describe('graph view presentation model', () => {
   it('appends YAML themes discovered after the lightweight Brain catalog', () => {
     const summaries = buildThemeSummaries(
       [{ id: 'dynamic', label: 'Dynamic', group: 0, themes: ['theme/autowin-os'] }],
-      [{ id: 'theme/rig', label: 'RIG' }]
+      [{ id: 'theme/contoso', label: 'CONTOSO' }]
     )
 
     expect(summaries).toEqual([
-      { id: 'theme/rig', label: 'RIG', count: 0 },
+      { id: 'theme/contoso', label: 'CONTOSO', count: 0 },
       { id: 'theme/autowin-os', label: 'Autowin-os', count: 1 }
     ])
   })
 
   it('places each non-empty theme label above its positioned cluster', () => {
     const positioned: GraphNode[] = [
-      { id: 'a', label: 'A', group: 0, themes: ['theme/rig'], x: -10, y: 4, z: 8 },
-      { id: 'b', label: 'B', group: 0, themes: ['theme/rig'], x: 6, y: 12, z: -2 },
+      { id: 'a', label: 'A', group: 0, themes: ['theme/contoso'], x: -10, y: 4, z: 8 },
+      { id: 'b', label: 'B', group: 0, themes: ['theme/contoso'], x: 6, y: 12, z: -2 },
       { id: 'c', label: 'C', group: 1, themes: ['theme/ia'], x: 30, y: -5, z: 10 },
       { id: 'pending', label: 'Pending', group: 1, themes: ['theme/ia'] }
     ]
 
     expect(
       themeClusterAnchors(positioned, [
-        { id: 'theme/rig', label: 'RIG' },
+        { id: 'theme/contoso', label: 'CONTOSO' },
         { id: 'theme/ia', label: 'IA' },
         { id: 'theme/empty', label: 'Vide' }
       ])
     ).toEqual([
-      { id: 'theme/rig', label: 'RIG', x: -2, y: 24, z: 3, count: 2 },
+      { id: 'theme/contoso', label: 'CONTOSO', x: -2, y: 24, z: 3, count: 2 },
       { id: 'theme/ia', label: 'IA', x: 30, y: 7, z: 10, count: 1 }
     ])
   })
 
   it('keeps floating theme tags visible and toggles the same theme off on the second click', () => {
-    const firstClick = toggleThemeSelection(new Set(), 'theme/rig')
-    const secondClick = toggleThemeSelection(firstClick, 'theme/rig')
+    const firstClick = toggleThemeSelection(new Set(), 'theme/contoso')
+    const secondClick = toggleThemeSelection(firstClick, 'theme/contoso')
     const themes = [
-      { id: 'theme/rig', label: 'RIG' },
+      { id: 'theme/contoso', label: 'CONTOSO' },
       { id: 'theme/architecture', label: 'Architecture' }
     ]
 
     expect(visibleThemeClusterIds(themes, new Set(), null)).toEqual([
-      'theme/rig',
+      'theme/contoso',
       'theme/architecture'
     ])
-    expect(visibleThemeClusterIds(themes, firstClick, null)).toEqual(['theme/rig'])
+    expect(visibleThemeClusterIds(themes, firstClick, null)).toEqual(['theme/contoso'])
     expect(visibleThemeClusterIds(themes, firstClick, nodes[0])).toEqual([])
-    expect(firstClick).toEqual(new Set(['theme/rig']))
+    expect(firstClick).toEqual(new Set(['theme/contoso']))
     expect(secondClick).toEqual(new Set())
   })
 
@@ -368,7 +379,7 @@ describe('graph view presentation model', () => {
   })
 
   it('maps serious nodes to the declared theme colors, including an active secondary theme', () => {
-    const themeOrder = ['theme/architecture', 'theme/rig', 'theme/donnees']
+    const themeOrder = ['theme/architecture', 'theme/contoso', 'theme/donnees']
     const palette = ['#aa0000', '#00bb00', '#0000cc']
 
     expect(nodeColorForTheme(nodes[0], new Set(), 0.2, themeOrder, palette)).toBe('#00bb00')
@@ -380,14 +391,14 @@ describe('graph view presentation model', () => {
   it('uses the least-common node theme in serious overview while an active filter still wins', () => {
     const multiThemeNode: GraphNode = {
       id: 'inscription',
-      label: 'Inscription RCS',
+      label: 'Inscription RC',
       group: 1,
-      themes: ['category/rig', 'category/documentation', 'category/rcs']
+      themes: ['category/contoso', 'category/documentation', 'category/rcs']
     }
-    const themeOrder = ['category/rig', 'category/documentation', 'category/rcs']
+    const themeOrder = ['category/contoso', 'category/documentation', 'category/rcs']
     const palette = ['#00bb00', '#ff9900', '#3355ff']
     const counts = new Map([
-      ['category/rig', 264],
+      ['category/contoso', 264],
       ['category/documentation', 154],
       ['category/rcs', 15]
     ])
@@ -427,11 +438,13 @@ describe('graph view presentation model', () => {
   })
 
   it('dims context nodes without hiding them', () => {
-    expect(nodeColorForTheme(nodes[2], new Set(['theme/rig']), 0.22)).toBe('rgba(255,133,200,0.22)')
+    expect(nodeColorForTheme(nodes[2], new Set(['theme/contoso']), 0.22)).toBe(
+      'rgba(255,133,200,0.22)'
+    )
   })
 
   it('maps galaxy stars to the declared theme order and dims only context stars', () => {
-    const themeOrder = ['theme/architecture', 'theme/rig', 'theme/donnees']
+    const themeOrder = ['theme/architecture', 'theme/contoso', 'theme/donnees']
     const palette = ['#aa0000', '#00bb00', '#0000cc']
 
     expect(galaxyNodeAppearance(nodes[0], new Set(), 0.22, themeOrder, palette)).toEqual({
@@ -449,14 +462,14 @@ describe('graph view presentation model', () => {
   it('uses the same primary category for serious nodes and galaxy stars', () => {
     const node: GraphNode = {
       id: 'inscription',
-      label: 'Inscription RCS',
+      label: 'Inscription RC',
       group: 1,
-      themes: ['category/rig', 'category/documentation', 'category/rcs']
+      themes: ['category/contoso', 'category/documentation', 'category/rcs']
     }
-    const themeOrder = ['category/rig', 'category/documentation', 'category/rcs']
+    const themeOrder = ['category/contoso', 'category/documentation', 'category/rcs']
     const palette = ['#00bb00', '#ff9900', '#3355ff']
     const counts = new Map([
-      ['category/rig', 264],
+      ['category/contoso', 264],
       ['category/documentation', 154],
       ['category/rcs', 15]
     ])
@@ -469,8 +482,8 @@ describe('graph view presentation model', () => {
   })
 
   it('enlarges highlighted nodes only', () => {
-    expect(nodeValueForTheme(nodes[0], new Set(['theme/rig']), 1.5)).toBe(3)
-    expect(nodeValueForTheme(nodes[2], new Set(['theme/rig']), 1.5)).toBe(1.5)
+    expect(nodeValueForTheme(nodes[0], new Set(['theme/contoso']), 1.5)).toBe(3)
+    expect(nodeValueForTheme(nodes[2], new Set(['theme/contoso']), 1.5)).toBe(1.5)
   })
 
   it('builds deterministic neighbour navigation with incoming and outgoing relations', () => {

@@ -5,7 +5,7 @@ aucune branche dont le SHA n'est écrit nulle part. Ces branches-ci ne portent p
 préfixe `autowin/` — elles ont été créées à la main pendant le chantier — mais la règle
 s'applique de la même façon : c'est la dernière copie qui compte, pas son nom.
 
-Dépôt : dev.azure.com/AmitelGTC/AutoWinOS.
+Dépôt : dépôt Azure DevOps de l'entreprise (adresse dans `entreprise/<nom>/README.md`).
 Restauration : `git branch <nom> <sha>` puis `git push origin <nom>`.
 
 ## Supprimées le 2026-09-08 — contenu intégralement en base

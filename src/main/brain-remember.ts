@@ -10,7 +10,7 @@
  *
  * DESTINATION : le Brain partagé, pas un dossier local — choix de l'utilisateur. Conséquences assumées :
  *  - ce qu'on retient sert à TOUTE la boîte, et remplit un corpus Autowin qui ne pesait que 0,19 % de
- *    l'index (15 342 chunks, dont 99 % de doc RIG — mesuré le 2026-07-29) ;
+ *    l'index (15 342 chunks, dont 99 % de doc CONTOSO — mesuré le 2026-07-29) ;
  *  - un candidat va d'abord dans `inbox/`, JAMAIS directement dans `knowledge/` : une promotion séparée
  *    peut ensuite être décidée par l'humain ou par la politique causale `OutcomeLearningSupervisor`. Le serveur
  *    l'impose, ce module ne fait que l'annoncer honnêtement à l'agent ;
@@ -104,7 +104,7 @@ function valueLooksLikeSecret(value: string): boolean {
   // Trop court pour être un secret utile : « X-CSRF-Token », « 3600000000 ».
   if (value.length < 16) return false
   // Un CHEMIN ou une URL n'est pas un secret : « /api/v2/oauth/token/refresh »,
-  // « /var/lib/rig/session2/token.json », « C:\… », « https://… ».
+  // « /var/lib/contoso/session2/token.json », « C:\… », « https://… ».
   if (/^(\.{0,2}[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(value) || value.includes('://')) return false
   // Un secret réel mélange les casses ET les chiffres. Un identifiant ne le fait pas :
   // « APP_DB_PASSWORD » (pas de minuscule), « exemple0non0valide » (pas de majuscule).
@@ -357,7 +357,7 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
 
   if (
     (args.learningOutcome === 'success' || args.learningOutcome === 'failure') &&
-    /(?:ignore|oublie|contourne).{0,40}(?:instruction|prompt|règle)|(?:system|developer)\s+prompt|<\/?(?:script|tool_call)|\btu\s+es\s+(?:maintenant|désormais)\b|\[(?:BEGIN|END)\s+(?:AMITEL\s+)?BRAIN/iu.test(
+    /(?:ignore|oublie|contourne).{0,40}(?:instruction|prompt|règle)|(?:system|developer)\s+prompt|<\/?(?:script|tool_call)|\btu\s+es\s+(?:maintenant|désormais)\b|\[(?:BEGIN|END)\s+(?:\p{L}+\s+)?BRAIN/iu.test(
       rawBody
     )
   ) {

@@ -6,7 +6,7 @@
  * Aucun test rouge : le PROCESSUS mourait.
  *
  * Cause, isolee : `fs.watch` sur un dossier dont le chemin traverse un nom court 8.3 de Windows
- * (`C:\Users\RAPHAE~1.VIL\...` — la forme que rend `os.tmpdir()` sur ce poste, donc la racine de
+ * (`C:\Users\PRENOM~1.NOM\...` — la forme que rend `os.tmpdir()` sur ce poste, donc la racine de
  * TOUS les tests) fait aborter libuv. `workspace-mutation-evidence` y pose un watcher a chaque
  * fichier absent qu'il doit surveiller ; les tests git lourds en creaient en masse sous tmpdir.
  *

@@ -44,7 +44,9 @@ describe('decideRead — les refus', () => {
    * secours en PowerShell, qui echappent a toutes les bornes de ce module.
    */
   it('accepte un chemin ABSOLU externe, comme edit_file, et le cite en absolu', () => {
-    expect(decideRead({ path: 'D:/RigV3Desktop/Components/Pages/Home.razor' }, ws)).toMatchObject({
+    expect(
+      decideRead({ path: 'D:/ContosoV3Desktop/Components/Pages/Home.razor' }, ws)
+    ).toMatchObject({
       allowed: true,
       relativePath: expect.stringContaining('Home.razor')
     })

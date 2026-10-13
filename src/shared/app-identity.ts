@@ -1,6 +1,7 @@
 export const AUTOWIN_DISPLAY_NAME = 'Autowin OS'
 export const AUTOWIN_APP_DATA_DIR = 'autowin-os'
-export const AUTOWIN_APP_ID = 'com.amitel.autowin-os'
+/** Identifiant NEUTRE ; un profil d'entreprise peut le remplacer (`identite-entreprise.ts`). */
+export const AUTOWIN_APP_ID = 'com.autowin.autowin-os'
 export const AUTOWIN_WORKSPACE_ENV = 'AUTOWIN_OS_WORKSPACE'
 /**
  * Marqueur posé par Autowin quand c'est LUI qui a republié le dossier résolu dans

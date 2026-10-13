@@ -319,6 +319,29 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     )
   })
 
+  // Vu en direct le 2026-10-13 (conv-914, `frame:probleme`) : un membre en éventail démarrait SANS
+  // prompt et finissait sans lui — sa fiche du graphe n'a jamais montré ce qu'il avait reçu.
+  it('annonce le prompt de chaque membre dès son démarrage, et le même à sa fin', async () => {
+    const provider = new RecordingProvider()
+    const starts: OrchestrationPhase[] = []
+    const result = await makeOrchestrator(provider, new CostAggregator()).run(
+      'cadre les pistes du projet',
+      undefined,
+      (phase) => starts.push(phase)
+    )
+
+    const fanoutStarts = starts.filter((phase) => phase.execution?.groupId === 'frame:fanout')
+    expect(fanoutStarts).toHaveLength(2)
+    for (const start of fanoutStarts) {
+      const prompt = start.prompt?.messages.find((message) => message.role === 'user')?.content
+      expect(prompt, `membre ${start.execution?.agentId} sans prompt au démarrage`).toBeTruthy()
+      const fin = result.trace.find(
+        (step) => step.execution?.attemptId === start.execution?.attemptId
+      )
+      expect(fin?.prompt?.messages.find((message) => message.role === 'user')?.content).toBe(prompt)
+    }
+  })
+
   it('exécute la phase sur les N modèles puis synthétise via l’orchestrateur', async () => {
     const provider = new RecordingProvider()
     const cost = new CostAggregator()
@@ -613,7 +636,10 @@ describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe282
     expect(models).toContain('claude-sonnet-5')
     expect(
       result.trace.some(
-        (step) => step.role === 'subagent' && step.model === 'claude-sonnet-5' && step.status === 'completed'
+        (step) =>
+          step.role === 'subagent' &&
+          step.model === 'claude-sonnet-5' &&
+          step.status === 'completed'
       )
     ).toBe(true)
   })

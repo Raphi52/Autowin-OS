@@ -5,7 +5,7 @@
   SURFACE de la fenêtre y échoue. Ce script ne prouve QUE le lancement + l'ouverture de CDP ;
   la capture elle-même est faite par scripts/hdesk-capture-proof.mjs, qui juge l'image.
 
-  Modèle : D:\RigTestViewer\Rig.Wpf.Kbis.SmokeRunner\RigDesktop.cs (CreateDesktop /
+  Modèle : D:\ContosoTestViewer\Contoso.Wpf.Smoke.SmokeRunner\ContosoDesktop.cs (CreateDesktop /
   STARTUPINFO.lpDesktop / CloseDesktop).
 #>
 param(

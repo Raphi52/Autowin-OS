@@ -18,7 +18,7 @@
  * a quand même pris des verrous sur une base de production.
  *
  * CHOIX ASSUMÉ, décidé par l'utilisateur le 2026-08-06 : le périmètre couvre TOUTES les tables des
- * bases RIG, pas seulement le paramétrage. Conséquence explicite : des données nominatives de base
+ * bases CONTOSO, pas seulement le paramétrage. Conséquence explicite : des données nominatives de base
  * peuvent entrer dans le contexte du modèle, donc quitter le poste. Ce n'est pas un oubli.
  *
  * QUELLES BASES : ce module ne le décide plus. L’autorité est la table catalogue configurée
@@ -166,7 +166,7 @@ const SERVER_SCOPED_FUNCTIONS = [
  * l'ancienne liste (`exec|os|db|io|tran|resource|server|cluster|xe`) laissait passer `dm_hadr_*`,
  * `dm_broker_*`, `dm_fts_*`, `dm_repl_*` et `dm_database_encryption_keys` (préfixe `dm_database_`,
  * pas `dm_db_`) — tous constatés passants au 4ᵉ audit. Le juge a vérifié 0 collision entre ce motif
- * et les vrais noms de colonnes des bases RIG : la règle large ne coûte rien en usage réel.
+ * et les vrais noms de colonnes des bases CONTOSO : la règle large ne coûte rien en usage réel.
  */
 const DYNAMIC_MANAGEMENT_PREFIX = /\bdm_[a-z]+_/
 

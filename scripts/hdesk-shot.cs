@@ -81,7 +81,7 @@ public sealed class AutowinHdeskShot {
           g.Clear(Color.FromArgb(24, 24, 28));
           // ORDRE DE DESSIN : EnumDesktopWindows rend les fenetres du PREMIER PLAN vers l'ARRIERE
           // (ordre Z). Les dessiner dans cet ordre faisait recouvrir chaque fenetre du dessus par
-          // celle de dessous (mesure du 2026-09-22 : fenetre de procedure RigV3WPF cachee derriere
+          // celle de dessous (mesure du 2026-09-22 : fenetre de procedure ContosoV3WPF cachee derriere
           // l'accueil). On peint donc de l'arriere vers l'avant.
           for (int iz = fenetres.Count - 1; iz >= 0; iz--) {
             var hwnd = fenetres[iz];

@@ -223,8 +223,10 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
       'remember',
       'desktop_observe'
     ])
-    // La ligne visible du fil.
-    expect(t.statuts().some((s) => /outils directs/i.test(s) && s.includes('3'))).toBe(true)
+    // SUCCES SILENCIEUX (conv-908, 2026-10-12 : « pk ca m'ecrit tout le temps ca dans le bloc
+    // actions ») : le service normal ne s'annonce plus a chaque tour — seule une PANNE se dit
+    // (« retour au texte », tests plus bas).
+    expect(t.statuts().some((s) => /outils directs/i.test(s))).toBe(false)
   })
 
   it('pas de double execution : le <cmd> identique n est pas rejoue, un <cmd> different l est', async () => {
@@ -307,6 +309,40 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
       { data?: Array<{ actionId: string; cible: string }> } | undefined
     expect(JSON.stringify(bilan?.data ?? [])).toContain('desktop_observe')
     expect(bilan?.data?.[0]?.actionId).toMatch(/^natif:/)
+  })
+
+  it('echec direct REPARE par un appel direct : la reprise « derniere action ECHOUEE » ne revient pas', async () => {
+    /*
+     * Mesure conv-908 (2026-10-12) : `verify` direct rouge, puis rejoue VERT (exit 0) — et la reprise
+     * « ta derniere action a ECHOUE » revenait quand meme. Le drapeau d'echec de l'iteration n'etait
+     * remis a plat que par la boucle des `<cmd>`, jamais atteinte par un tour 100 % outils directs.
+     */
+    const MARQUEUR = 'ta dernière action a ÉCHOUÉ'
+    let essais = 0
+    const t = pilote(
+      'claude',
+      [
+        {
+          pendant: async (o) => {
+            await appeler(o, 'get_state', {})
+          },
+          texte: 'Le contrôle a renvoyé une erreur.'
+        },
+        {
+          pendant: async (o) => {
+            await appeler(o, 'get_state', {})
+          },
+          texte: 'Rejoué : l’état est lu, tout est en ordre.'
+        }
+      ],
+      async () =>
+        essais++ === 0 ? { ok: false, error: 'lecture refusée' } : { ok: true, data: { tab: 'chat' } }
+    )
+    await t.jouer({ soigne: true })
+    expect(t.appelsBus('get_state')).toBe(2)
+    expect(t.prompts[1]).toContain(MARQUEUR)
+    // Aucun envoi ulterieur ne repousse la reprise apres la reparation.
+    expect(t.prompts.at(-1)!.split(MARQUEUR).length - 1).toBe(1)
   })
 
   it('jumeau : un appel direct reussi ne laisse aucun bilan d echec', async () => {

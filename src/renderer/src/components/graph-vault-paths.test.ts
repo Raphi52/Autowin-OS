@@ -12,10 +12,10 @@ describe('chemins du vault — la forme RÉELLE que l’app fournit', () => {
     // les nœuds. Sans ce correctif, toutes les fiches partageaient la même « famille » et
     // s'empilaient au même endroit. `id` porte le chemin relatif propre.
     const reel = {
-      id: 'knowledge/_maps/rig-architecture-applicative',
-      file: '\\\\nas1\\partage\\Projets IA\\Team Brain\\knowledge\\_maps\\rig-architecture-applicative.md'
+      id: 'knowledge/_maps/contoso-architecture-applicative',
+      file: '\\\\nas1\\partage\\Projets IA\\Team Brain\\knowledge\\_maps\\contoso-architecture-applicative.md'
     }
-    expect(relativePathOf(reel)).toBe('knowledge/_maps/rig-architecture-applicative')
+    expect(relativePathOf(reel)).toBe('knowledge/_maps/contoso-architecture-applicative')
     expect(pathSegments(relativePathOf(reel))[0]).toBe('knowledge')
     expect(pathSegments(relativePathOf(reel))[0]).not.toBe('nas1')
   })

@@ -67,7 +67,7 @@ await ev(String.raw`(() => {
         tokens: s.tokens || null,
         repoMapInUser: /CARTE DU CODE/.test(userText),
         repoMapInSys: /CARTE DU CODE/.test(sysText),
-        brainInUser: /AMITEL BRAIN REFERENCE DATA/.test(userText),
+        brainInUser: /(?:[A-Z]+ )?BRAIN REFERENCE DATA/.test(userText),
         userChars: userText.length, sysChars: sysText.length
       })
     } catch (e) { window.__mSteps.push({ error: String(e) }) }

@@ -52,7 +52,7 @@ describe('à quel groupe appartient une conversation', () => {
 describe('le nom lisible d’un dossier', () => {
   it('garde le dernier segment, pas le chemin entier qui ferait déborder la barre', () => {
     expect(nomDeDossier('C:\\Travail\\Autowin OS')).toBe('Autowin OS')
-    expect(nomDeDossier('/home/raph/projets/rig')).toBe('rig')
+    expect(nomDeDossier('/home/raph/projets/contoso')).toBe('contoso')
   })
 
   it('tolère un séparateur final', () => {
@@ -61,11 +61,11 @@ describe('le nom lisible d’un dossier', () => {
 
   it('deux dossiers homonymes restent DEUX groupes — la clé est le chemin, pas le libellé', () => {
     const groupes = grouperConversations([
-      conv('a', { projectPath: 'C:\\un\\rig' }),
-      conv('b', { projectPath: 'D:\\autre\\rig' })
+      conv('a', { projectPath: 'C:\\un\\contoso' }),
+      conv('b', { projectPath: 'D:\\autre\\contoso' })
     ])
     expect(groupes).toHaveLength(2)
-    expect(groupes.map((g) => g.label)).toEqual(['rig', 'rig'])
+    expect(groupes.map((g) => g.label)).toEqual(['contoso', 'contoso'])
   })
 
   it('un séparateur final ne duplique pas la catégorie du même dossier', () => {
@@ -83,7 +83,7 @@ describe('l’ordre des groupes', () => {
   it('un dossier enfant devient une sous-catégorie du dossier parent présent', () => {
     const groupes = grouperConversations([
       conv('parent', { projectPath: 'C:\\Clients' }),
-      conv('enfant', { projectPath: 'C:\\Clients\\Amitel' }),
+      conv('enfant', { projectPath: 'C:\\Clients\\Acme' }),
       conv('autre', { projectPath: 'D:\\Projets' })
     ])
 
@@ -91,7 +91,7 @@ describe('l’ordre des groupes', () => {
       groupes.map((g) => ({ label: g.label, depth: g.depth, parentKey: g.parentKey }))
     ).toEqual([
       { label: 'Clients', depth: 0, parentKey: undefined },
-      { label: 'Amitel', depth: 1, parentKey: 'C:\\Clients' },
+      { label: 'Acme', depth: 1, parentKey: 'C:\\Clients' },
       { label: 'Projets', depth: 0, parentKey: undefined }
     ])
   })
@@ -99,11 +99,11 @@ describe('l’ordre des groupes', () => {
   it('masque une sous-catégorie quand sa catégorie parente est repliée', () => {
     const groupes = grouperConversations([
       conv('parent', { projectPath: 'C:\\Clients' }),
-      conv('enfant', { projectPath: 'C:\\Clients\\Amitel' }),
+      conv('enfant', { projectPath: 'C:\\Clients\\Acme' }),
       conv('autre', { projectPath: 'D:\\Projets' })
     ])
 
-    // Entrée discriminante : si `C:\Clients` n'est pas marqué replié, Amitel doit rester visible.
+    // Entrée discriminante : si `C:\Clients` n'est pas marqué replié, Acme doit rester visible.
     expect(groupesVisibles(groupes, { 'C:\\Clients': true }).map((g) => g.key)).toEqual([
       'C:\\Clients',
       'D:\\Projets'
@@ -195,7 +195,7 @@ describe('canoniserReplis — l’état plié survit à la canonisation des chem
  */
 describe('ordre des groupes quand la date entre en jeu', () => {
   const PARENT = 'C:/Clients'
-  const ENFANT = 'C:/Clients/Amitel'
+  const ENFANT = 'C:/Clients/Acme'
   const AUTRE = 'D:/Projets'
   const dates: Record<string, number> = {
     [PARENT]: 100,
@@ -318,9 +318,9 @@ describe('une categorie de la liste n’est pas un dossier de travail', () => {
   })
 
   it('la categorie l’emporte sur le dossier de travail : c’est toute la dissociation', () => {
-    // Le fil travaille dans RigApplication mais se range sous « Factures ». Sans cette priorite,
+    // Le fil travaille dans ContosoApp mais se range sous « Factures ». Sans cette priorite,
     // choisir une categorie serait impossible des qu'un dossier de travail est assigne.
-    const c = conv('a', { projectPath: 'D:\\GIT\\RigApplication', categorie: 'Factures' })
+    const c = conv('a', { projectPath: 'D:\\GIT\\ContosoApp', categorie: 'Factures' })
     expect(groupeDe(c)).toMatchObject({ key: 'Factures', kind: 'categorie' })
   })
 
@@ -335,11 +335,11 @@ describe('une categorie de la liste n’est pas un dossier de travail', () => {
   })
 
   it('une categorie ne s’indente JAMAIS sous un dossier, meme si elle en porte la forme', () => {
-    // Un libelle avec un slash (« Clients/Amitel ») ressemble a un chemin : il ne doit pas pour
+    // Un libelle avec un slash (« Clients/Acme ») ressemble a un chemin : il ne doit pas pour
     // autant se faire adopter par un groupe de dossier, ni descendre dans l'arborescence.
     const groupes = grouperConversations([
       conv('p', { projectPath: 'C:\\Clients' }),
-      conv('c', { categorie: 'Clients/Amitel' })
+      conv('c', { categorie: 'Clients/Acme' })
     ])
     const categorie = groupes.find((g) => g.kind === 'categorie')
     expect(categorie?.parentKey).toBeUndefined()
@@ -362,21 +362,21 @@ describe('une categorie de la liste n’est pas un dossier de travail', () => {
 
 describe('repli sur le depot de la barre du haut (2026-09-17)', () => {
   it('un fil SANS rangement se range sous le depot par defaut, pas dans « Divers »', () => {
-    expect(groupeDe(conv('a'), 'D:/RigV3Desktop')).toMatchObject({
-      key: 'D:/RigV3Desktop',
-      label: 'RigV3Desktop',
+    expect(groupeDe(conv('a'), 'D:/ContosoV3Desktop')).toMatchObject({
+      key: 'D:/ContosoV3Desktop',
+      label: 'ContosoV3Desktop',
       kind: 'dossier'
     })
   })
 
   it('un dossier de travail EXPLICITE gagne contre le depot par defaut', () => {
     expect(
-      groupeDe(conv('a', { projectPath: 'C:/Travail/Autre' }), 'D:/RigV3Desktop')
+      groupeDe(conv('a', { projectPath: 'C:/Travail/Autre' }), 'D:/ContosoV3Desktop')
     ).toMatchObject({ key: 'C:/Travail/Autre', kind: 'dossier' })
   })
 
   it('une CATEGORIE explicite gagne aussi : le classement reste cosmetique et libre', () => {
-    expect(groupeDe(conv('a', { categorie: 'Perso' }), 'D:/RigV3Desktop')).toMatchObject({
+    expect(groupeDe(conv('a', { categorie: 'Perso' }), 'D:/ContosoV3Desktop')).toMatchObject({
       key: 'Perso',
       kind: 'categorie'
     })
@@ -388,9 +388,9 @@ describe('repli sur le depot de la barre du haut (2026-09-17)', () => {
   })
 
   it('grouperConversations rassemble les fils non ranges sous le depot par defaut', () => {
-    const groupes = grouperConversations([conv('a'), conv('b')], 'D:/RigV3Desktop')
+    const groupes = grouperConversations([conv('a'), conv('b')], 'D:/ContosoV3Desktop')
     expect(groupes).toHaveLength(1)
-    expect(groupes[0]).toMatchObject({ label: 'RigV3Desktop', kind: 'dossier' })
+    expect(groupes[0]).toMatchObject({ label: 'ContosoV3Desktop', kind: 'dossier' })
     expect(groupes[0].items).toHaveLength(2)
   })
 })

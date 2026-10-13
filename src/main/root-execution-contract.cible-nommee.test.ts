@@ -59,7 +59,7 @@ describe('cibleNommeeTouchee — croisement (INC-2)', () => {
   it('chemin absolu Windows rapproche du chemin relatif de la demande', () => {
     expect(
       cibleNommeeTouchee(DEMANDE_CONV_1302, [
-        mutation(undefined, { path: ['C:', 'Amitel', 'Autowin OS', ...CIBLE.split('/')].join(SEP) })
+        mutation(undefined, { path: ['C:', 'Acme', 'Autowin OS', ...CIBLE.split('/')].join(SEP) })
       ])
     ).toBe('touchee')
   })

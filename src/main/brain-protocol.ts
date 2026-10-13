@@ -1,4 +1,5 @@
 import { createCipheriv, createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { identiteBrain } from './identite-entreprise'
 
 export interface SignedBrainPayload {
   service?: unknown
@@ -23,8 +24,18 @@ export interface VerifiedBrainPayload {
   }
 }
 
-const SERVICE = 'amitel-brain'
-const REQUEST_AAD = Buffer.from('amitel-brain/request-v1', 'utf8')
+/**
+ * Nom de service signe dans chaque echange : celui du profil d'entreprise s'il existe (un serveur
+ * deja installe sur le poste ne connait que celui-la), le nom neutre sinon. Lu A CHAQUE APPEL, jamais
+ * a l'import : le processus principal publie le profil apres le chargement des modules.
+ */
+function nomService(): string {
+  return identiteBrain().service
+}
+
+function donneesAssocieesRequete(): Buffer {
+  return Buffer.from(`${nomService()}/request-v1`, 'utf8')
+}
 /**
  * GARDES DE TRANSPORT, PAS BUDGETS DE CONTENU (2026-09-27).
  *
@@ -62,7 +73,7 @@ export function sealBrainRequest(
   if (!/^[0-9a-f]{24}$/.test(nonce)) throw new Error('Nonce Brain invalide')
   const key = createHash('sha256').update(token, 'utf8').digest()
   const cipher = createCipheriv('aes-256-gcm', key, Buffer.from(nonce, 'hex'))
-  cipher.setAAD(REQUEST_AAD)
+  cipher.setAAD(donneesAssocieesRequete())
   const encrypted = Buffer.concat([
     cipher.update(JSON.stringify(payload), 'utf8'),
     cipher.final(),
@@ -258,7 +269,8 @@ export function verifySignedBrainPayload(
   payload: SignedBrainPayload,
   token: string
 ): VerifiedBrainPayload {
-  if (payload.service !== SERVICE) {
+  const service = nomService()
+  if (payload.service !== service) {
     throw new Error('Identite du service Brain invalide')
   }
 
@@ -266,7 +278,7 @@ export function verifySignedBrainPayload(
   // ne l'étaient pas. Ils sont donc volontairement écartés plutôt que présentés comme fiables.
   if (payload.protocol === 1) {
     if (typeof payload.context !== 'string') throw new Error('Reponse Brain invalide')
-    verifySignature(`${SERVICE}\n1\n${payload.context}`, payload.signature, token)
+    verifySignature(`${service}\n1\n${payload.context}`, payload.signature, token)
     return { context: payload.context }
   }
 
@@ -276,7 +288,7 @@ export function verifySignedBrainPayload(
   if (Buffer.byteLength(payload.authenticated, 'utf8') > MAX_AUTHENTICATED_BYTES) {
     throw new Error('Reponse Brain trop volumineuse')
   }
-  verifySignature(`${SERVICE}\n2\n${payload.authenticated}`, payload.signature, token)
+  verifySignature(`${service}\n2\n${payload.authenticated}`, payload.signature, token)
 
   let decoded: unknown
   try {

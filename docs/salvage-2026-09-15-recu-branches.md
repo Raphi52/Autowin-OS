@@ -5,10 +5,10 @@ Chaque ligne ci-dessous ressuscite sa branche : `git branch <nom> <sha>` (tant q
 
 ## Travail UNIQUE retrouvé et greffé dans main
 
-| Travail | Origine | Commit de greffe |
+| Travail | Origine | Commit d'intégration |
 |---|---|---|
 | Normalisation de chemin du contrôle fix-gate | sauvegarde/run-a7fc446f5430-mermaid-fixgate | 99c4b632, a6ef5c49 |
-| Console Brain au démarrage (venv uv) + champs métier des fiches (6 commits, auteur emmanuel.heurtier) | origin/feat/themes-selecteur-et-voiles | jusqu'à 4bebfd40 |
+| Console Brain au démarrage (venv uv) + champs métier des fiches (6 commits, auteur prenom.collegue) | origin/feat/themes-selecteur-et-voiles | jusqu'à 4bebfd40 |
 | Libellé lisible des runs (`libelleRun`) | origin/autowin/secours/pc-20260831/orphelin-4 | 861aa94f |
 
 ## Travail UNIQUE archivé (arbitrage humain requis)

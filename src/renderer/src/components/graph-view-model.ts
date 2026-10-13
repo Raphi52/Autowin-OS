@@ -1,3 +1,5 @@
+import type { MetierGraphe } from '../../../main/viz/fs-brains'
+
 export type GraphNode = {
   id: string
   label: string
@@ -194,7 +196,8 @@ export function graphLinkArrowColor(mode: GraphVisualMode): string {
 
 export function buildThemeSummaries(
   nodes: GraphNode[],
-  declaredThemes: ThemeDefinition[] = []
+  declaredThemes: ThemeDefinition[] = [],
+  metier?: MetierGraphe
 ): ThemeSummary[] {
   const counts = new Map<string, number>()
   for (const node of nodes) {
@@ -204,7 +207,7 @@ export function buildThemeSummaries(
     const declaredIds = new Set(declaredThemes.map((theme) => theme.id))
     const dynamicThemes = [...counts.entries()]
       .filter(([id]) => id.startsWith('theme/') && !declaredIds.has(id))
-      .map(([id, count]) => ({ id, label: themeLabel(id), count }))
+      .map(([id, count]) => ({ id, label: themeLabel(id, metier), count }))
       .sort((a, b) => a.id.localeCompare(b.id))
     return [
       ...declaredThemes.map((theme) => ({ ...theme, count: counts.get(theme.id) ?? 0 })),
@@ -212,7 +215,7 @@ export function buildThemeSummaries(
     ]
   }
   return [...counts.entries()]
-    .map(([id, count]) => ({ id, label: themeLabel(id), count }))
+    .map(([id, count]) => ({ id, label: themeLabel(id, metier), count }))
     .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
 }
 
@@ -520,8 +523,9 @@ export function dynamicGraphForKey(
   return currentKey === nextKey ? dynamicGraph : { nodes: [], links: [] }
 }
 
-function themeLabel(id: string): string {
-  if (id === 'theme/rig') return 'RIG'
+/** Libelle d'un theme ; celui du domaine metier de l'entreprise (profil) porte son libelle. */
+function themeLabel(id: string, metier?: MetierGraphe): string {
+  if (metier && id === `theme/${metier.cle}`) return metier.libelle
   if (id.startsWith('theme/')) {
     const value = id.slice('theme/'.length)
     return value.charAt(0).toUpperCase() + value.slice(1)

@@ -12,7 +12,7 @@ import type { GraphNode } from './graph-view-model'
  * C'est la demande explicite de l'utilisateur, croquis à l'appui.
  *
  * L'arbre n'est PAS fabriqué : il est déjà dans les données. Chaque fiche porte un `file`, dont le
- * chemin relatif au vault (`projects/rig-tv/obsidian/areas/foo.md`) EST sa lignée. On ne regroupe
+ * chemin relatif au vault (`projects/contoso-tv/obsidian/areas/foo.md`) EST sa lignée. On ne regroupe
  * donc rien arbitrairement — même principe que les catégories du forage, dérivées et non inventées.
  *
  * Les angles suivent le dendrogramme radial classique : chaque FEUILLE reçoit une part égale du
@@ -68,7 +68,7 @@ export type TreeLayoutOptions = {
    * `governance`. Avec lui, on coiffe le disque d'une lecture sans déplacer un seul fichier : le
    * groupe devient simplement un ou plusieurs segments de chemin en plus.
    *
-   * La valeur peut contenir des `/` pour produire PLUSIEURS anneaux — par exemple `RIG/proc`. C'est
+   * La valeur peut contenir des `/` pour produire PLUSIEURS anneaux — par exemple `CONTOSO/proc`. C'est
    * ce qui permet de subdiviser un gros sujet À L'INTÉRIEUR de son propre secteur, au lieu de croiser
    * deux axes : la campagne d'architecture a mesuré que le croisement fait chuter la justesse à 50 %,
    * sous chacun des axes pris seul.

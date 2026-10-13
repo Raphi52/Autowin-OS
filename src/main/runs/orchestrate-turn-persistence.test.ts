@@ -218,6 +218,164 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     )
   })
 
+  /*
+   * LA LISTE DOIT APPRENDRE LA FERMETURE (conv-914, 2026-10-13). Un tour lancé par le main (run
+   * repris, rattaché, direct) allume le spinner de la liste tant qu'il est `streaming`
+   * (`hasStreamingTurn`). Sa fermeture ne rechargeait pas la liste : seul `refresh/conversations` le
+   * fait, et seule la fin d'un tour de CHAT l'envoyait — le spinner serait resté allumé.
+   */
+  it('signale sa fermeture une seule fois, APRÈS l’état terminal, sur succès, échec et annulation', () => {
+    type Tour = ReturnType<typeof createOrchestrateTurnPersistence>
+    const fermetures: Array<(t: Tour) => void> = [
+      (t) => t.succeed({ result: 'ok' }),
+      (t) => t.fail('boom', false),
+      (t) => t.fail('Run annulé', true)
+    ]
+    for (const fermer of fermetures) {
+      const { store, id } = storeWithConversation()
+      const statutsVus: Array<string | undefined> = []
+      const turn = createOrchestrateTurnPersistence({
+        conversations: store,
+        conversationId: id,
+        turnId: 'turn-ferme',
+        onClosed: () => statutsVus.push(store.get(id)!.messages[1].status)
+      })
+      turn.begin('tâche')
+      expect(statutsVus).toEqual([])
+      fermer(turn)
+      fermer(turn)
+      expect(statutsVus).toHaveLength(1)
+      expect(statutsVus[0]).not.toBe('streaming')
+    }
+  })
+
+  /*
+   * SPINNER FANTÔME APRÈS UNE REPRISE SOUS UN NOUVEAU TOUR (juge du correctif spinner, conv-914,
+   * 2026-10-13). `hydrate` garde `streaming` le tour d'origine d'un checkpoint qui survit. Quand la
+   * reprise ne peut pas le réutiliser (autre identité de modèle, snapshot absent, ancien checkpoint),
+   * elle ouvre un NOUVEAU tour — et personne ne fermait l'ancien. `hasStreamingTurn` le voit où qu'il
+   * soit dans le fil : le spinner restait allumé jusqu'au redémarrage suivant, run fini.
+   */
+  it('ferme le tour d’origine quand la reprise ouvre un nouveau tour, et le spinner s’éteint à la fin', () => {
+    const { store, id } = storeWithConversation()
+    store.beginTurn(id, { content: 'la tâche' }, { turnId: 'tour-origine' })
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'tour-migre',
+      resumeExisting: false,
+      supersededTurnId: 'tour-origine'
+    })
+
+    turn.begin('[Rattachement automatique] la tâche')
+    const statut = (turnId: string) =>
+      store.get(id)!.messages.find((m) => m.role === 'assistant' && m.turnId === turnId)?.status
+    expect(statut('tour-origine')).toBe('interrupted')
+    expect(statut('tour-migre')).toBe('streaming')
+
+    turn.succeed({ result: 'ok' })
+    expect(store.listSummaries().find((s) => s.id === id)!.hasStreamingTurn).toBe(undefined)
+  })
+
+  it('écrit la fermeture du tour d’origine dans le journal de CE tour-là, pas dans le nouveau', () => {
+    const { store, id } = storeWithConversation()
+    store.beginTurn(id, { content: 'la tâche' }, { turnId: 'tour-origine' })
+    const journalOrigine: unknown[] = []
+    const journalNouveau: unknown[] = []
+    createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'tour-migre',
+      supersededTurnId: 'tour-origine',
+      journalSuperseded: (event) => journalOrigine.push(event),
+      journal: (event) => journalNouveau.push(event)
+    }).begin('t')
+    expect(journalOrigine).toEqual([{ kind: 'interrupted' }])
+    expect(journalNouveau).not.toContainEqual({ kind: 'interrupted' })
+  })
+
+  it('ne touche pas un tour d’origine déjà terminé, ni le tour repris lui-même', () => {
+    const { store, id } = storeWithConversation()
+    store.beginTurn(id, { content: 'la tâche' }, { turnId: 'tour-origine' })
+    store.applyTurnEvent(id, 'tour-origine', { kind: 'failed', error: 'avant' })
+    createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'tour-migre',
+      supersededTurnId: 'tour-origine'
+    }).begin('t')
+    const origine = store.get(id)!.messages.find((m) => m.turnId === 'tour-origine')!
+    expect(origine.status).toBe('failed')
+
+    // Même identifiant = reprise du MÊME tour : il ne se ferme pas lui-même.
+    store.beginTurn(id, { content: 'x' }, { turnId: 'tour-meme' })
+    store.applyTurnEvent(id, 'tour-meme', { kind: 'resumed' })
+    createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'tour-meme',
+      resumeExisting: true,
+      supersededTurnId: 'tour-meme'
+    }).begin('x')
+    expect(store.get(id)!.messages.find((m) => m.turnId === 'tour-meme')!.status).toBe('streaming')
+  })
+
+  it('ne signale aucune fermeture pour un tour jamais ouvert', () => {
+    const { store, id } = storeWithConversation()
+    let fermetures = 0
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-jamais',
+      onClosed: () => fermetures++
+    })
+    turn.succeed({ result: 'ok' })
+    turn.fail('boom', false)
+    expect(fermetures).toBe(0)
+  })
+
+  it('chaque tour ouvert par index.ts recharge la liste à sa fermeture', () => {
+    const source = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    const appels = source.split('createOrchestrateTurnPersistence({').slice(1)
+    // Les trois endroits connus le 2026-10-13 : run direct, publication déjà acquise, rattachement.
+    expect(appels.length).toBeGreaterThanOrEqual(3)
+    for (const appel of appels) {
+      // Les options = jusqu'à l'accolade qui ferme l'objet ouvert par `({` (comptage, pas une
+      // recherche du premier `})` : l'option `journal` contient elle-même un `})`).
+      let profondeur = 1
+      let fin = 0
+      while (profondeur > 0 && fin < appel.length) {
+        if (appel[fin] === '{') profondeur++
+        if (appel[fin] === '}') profondeur--
+        fin++
+      }
+      const options = appel.slice(0, fin)
+      expect(options).toMatch(
+        /onClosed:\s*\(\)\s*=>\s*broadcast\(\{\s*type:\s*'refresh',\s*scope:\s*'conversations'\s*\}\)/
+      )
+      // Branchement seulement (le comportement est prouvé plus haut) : le rattachement, qui peut
+      // ouvrir un NOUVEAU tour, doit nommer le tour d'origine pour le fermer.
+      if (/resumeExisting:\s*liveReattachment\.resumeExisting/.test(options)) {
+        expect(options).toMatch(/supersededTurnId:\s*tourDOrigine/)
+        expect(options).toMatch(/journalSuperseded:/)
+      }
+    }
+    expect(source).toMatch(
+      /resumeExisting:\s*liveReattachment\.resumeExisting,\s*supersededTurnId:\s*tourDOrigine/
+    )
+    // Le tour d'origine possédé par une reprise d'appel chat est exclu AVANT d'être nommé.
+    expect(source).toMatch(
+      /const tourDOrigine =\s*resumableRun\.turnId && !appelChatReprisPourTour\(conversationId, resumableRun\.turnId\)/
+    )
+    // Et la question est posée au JOURNAL du tour, pas à `appelsChatReconnusAuChargement` : hydrate
+    // ne remplit jamais cette Map pour un tour qui est aussi un checkpoint de run (court-circuit).
+    const predicat = source.slice(source.indexOf('const appelChatReprisPourTour'))
+    const corps = predicat.slice(0, predicat.indexOf('const resumableTurnIds'))
+    expect(corps.length).toBeGreaterThan(0)
+    expect(corps).toMatch(/recoverableChatProviderCallForTurn\(turnJournalRoot, conversationId, turnId\)/)
+    expect(corps).not.toMatch(/appelsChatReconnusAuChargement/)
+  })
+
   it('reste totalement inerte pour un run autonome (aucune conversation ciblée)', () => {
     const { store, id } = storeWithConversation()
     const turn = createOrchestrateTurnPersistence({

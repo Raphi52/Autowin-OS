@@ -28,7 +28,7 @@ describe('boutons de la saisie en mosaique — meme rangee qu en chat plein', ()
     postcss.parse(css).walkRules((regle) => {
       if (
         !regle.selectors.some(
-          (s) => s.includes('chat-mosaic-window-composer') && /textarea/.test(s)
+          (s) => s.includes('.chat-mosaic-window > .composer') && /textarea/.test(s)
         )
       )
         return
@@ -40,13 +40,13 @@ describe('boutons de la saisie en mosaique — meme rangee qu en chat plein', ()
   })
 
   it('le champ partage sa ligne avec Envoyer : base de flex nulle, retrecissable', () => {
-    const champ = declarations('.chat-mosaic-window-composer .composer-input-row > textarea')
+    const champ = declarations('.chat-mosaic-window > .composer .composer-input-row > textarea')
     expect(champ.flex).toBe('1 1 0')
     expect(champ['min-width']).toBe('0')
   })
 
   it('∞ et micro passent SOUS la ligne d ecriture, comme sous la barre de quotas du chat plein', () => {
-    const coupure = declarations('.chat-mosaic-window-composer .composer-input-row::before')
+    const coupure = declarations('.chat-mosaic-window > .composer .composer-input-row::before')
     expect(coupure.content).toBe("''")
     // order 0 = celui des outils : premier enfant, il passe juste apres champ + Envoyer (-1).
     expect(coupure.order).toBe('0')
@@ -54,9 +54,9 @@ describe('boutons de la saisie en mosaique — meme rangee qu en chat plein', ()
   })
 
   it('∞ et micro sont deux ronds de meme taille', () => {
-    const auto = declarations('.chat-mosaic-window-composer .composer-input-row > .composer-auto')
+    const auto = declarations('.chat-mosaic-window > .composer .composer-input-row > .composer-auto')
     const micro = declarations(
-      '.chat-mosaic-window-composer .composer-input-row > .composer-dictee'
+      '.chat-mosaic-window > .composer .composer-input-row > .composer-dictee'
     )
     expect(auto.width).toBe('24px')
     expect(auto.height).toBe('24px')

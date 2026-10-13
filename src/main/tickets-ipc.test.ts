@@ -41,7 +41,7 @@ function setup() {
   // L'annuaire est un PORT distinct du service : il interroge Azure directement dans la production.
   const people = {
     estAutorisee: vi.fn((source: { id: string }) => source.id === DEFAULT_TICKET_SOURCE.id),
-    list: vi.fn(async () => [{ displayName: 'Raphael VILAIN' }])
+    list: vi.fn(async () => [{ displayName: 'Prenom NOM' }])
   }
   registerTicketsIpc({ ipc, service, people, assertTrusted })
   return { handlers, service, people, assertTrusted }
@@ -207,7 +207,7 @@ describe('IPC Tickets', () => {
 
     const membres = await handlers.get('tickets:people')!(event, DEFAULT_TICKET_SOURCE)
 
-    expect(membres).toEqual([{ displayName: 'Raphael VILAIN' }])
+    expect(membres).toEqual([{ displayName: 'Prenom NOM' }])
     expect(people.list).toHaveBeenCalledWith(
       expect.objectContaining({ id: DEFAULT_TICKET_SOURCE.id })
     )

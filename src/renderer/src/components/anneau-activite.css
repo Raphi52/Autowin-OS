@@ -1,0 +1,413 @@
+/* ============================================================================================
+   CADRE « GRAND, DEUX LIGNES » — barre d'activite, blocs Raisonnement et Actions.
+
+   Choix de l'utilisateur sur maquettes, conv-904 (2026-10-12, /draft, sept tours) : la barre
+   d'activite prend la matiere des capsules du theme (verre fume, reflet bombe, bord degrade de
+   2 px), PLEINE LARGEUR, un grand ROND DE VERRE a gauche (le nombre d'actions, une pastille pour
+   l'exception), la phrase d'etat entiere puis la legende « couleur sur l'exception » et le
+   verdict en capsule de verre dessous ; et « 2 lignes pour les boutons raisonnement et
+   actions » — les deux blocs du tour prennent le meme cadre.
+
+   UNIQUEMENT DES JETONS : aucune couleur ecrite en dur. Chaque theme fournit deja les deux couleurs
+   des capsules (`--thinking-capsule-froid/chaud`, bleu et rose en Holographique ; cyan et or par
+   defaut), les reflets (`--chat-capsule-reflet-*`) et les couleurs de la frise. Le generateur des
+   themes ne recopie donc rien d'ici, et le dessin reste juste en theme clair comme en sombre.
+   ============================================================================================ */
+.cadre-anneau {
+  --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
+  --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
+  --anneau-ok: var(--chat-frise-ok, var(--ok));
+  --anneau-ko: var(--chat-frise-ko, var(--err));
+  /* EN COURS : la couleur chaude que le THEME donne a ses capsules (le rose d'Holographique, « seule
+     lueur qui bat ») ; a defaut, l'information (cyan). Pas l'or par defaut des capsules : dans le
+     theme Sombre il se confondait avec l'ambre de l'attente (capture du 2026-10-12). */
+  --anneau-encours: var(--thinking-capsule-chaud, var(--info, var(--cyan)));
+  --anneau-attente: var(--warn);
+  --anneau-texte-fini: color-mix(in srgb, var(--text) 40%, var(--text-dim));
+
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: min(100%, 720px);
+  border-radius: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  /* Verre fume, reflet ETEINT : un bloc fini ne tire pas l'oeil (meme regle que les capsules). */
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    var(--chat-capsule-reflet-eteint-haut),
+    var(--chat-capsule-reflet-eteint-milieu) 55%,
+    var(--chat-capsule-reflet-fin) 100%
+  );
+}
+/* BORD DEGRADE de 2 px : un calque evide par masque, comme les capsules — `border-image` ignore
+   l'arrondi, et un fond `border-box` masquerait le fil sous le cadre. */
+.cadre-anneau::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* EN COURS : reflet ALLUME et la seule lueur du cadre, dans la couleur chaude (« rose = en cours,
+   seule lueur qui bat » dans Holographique). */
+.cadre-anneau.is-live {
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    var(--chat-capsule-reflet-haut),
+    var(--chat-capsule-reflet-milieu) 55%,
+    var(--chat-capsule-reflet-fin) 100%
+  );
+  box-shadow: 0 0 14px color-mix(in srgb, var(--capsule-chaud) 35%, transparent);
+}
+.thinking-block.cadre-anneau {
+  margin: 2px 0 6px;
+}
+.activity-anneau.cadre-anneau {
+  margin: 2px 0 6px;
+}
+
+/* -- EN-TETE : grand rond, deux lignes, puis boutons et chevron, tout DANS le cadre. -- */
+.cadre-anneau .anneau-tete {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 0;
+  padding: 0.45em 0.85em 0.45em 0.45em;
+}
+.thinking-block.cadre-anneau > summary {
+  display: block;
+  padding: 0;
+  min-height: 0;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.thinking-block.cadre-anneau > summary::-webkit-details-marker {
+  display: none;
+}
+.cadre-anneau .anneau-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+.cadre-anneau .anneau-l1 {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  min-width: 0;
+  white-space: nowrap;
+}
+.cadre-anneau .anneau-l1 > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cadre-anneau .anneau-l2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px 10px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* Le libelle : texte plein en cours, adouci une fois fini (comme les capsules). */
+.cadre-anneau .anneau-l1 .thinking-label,
+.cadre-anneau .anneau-l1 .activity-group-title {
+  color: var(--text);
+  font-size: 1em;
+  font-weight: 600;
+}
+.cadre-anneau:not(.is-live) .anneau-l1 .thinking-label,
+.cadre-anneau:not(.is-live) .anneau-l1 .activity-group-title {
+  color: var(--anneau-texte-fini);
+}
+
+/* -- LE ROND DE VERRE (« Rond de verre », conv-904 : l'anneau de couleur « fait tache ») : le rond
+   degrade des capsules, en grand, avec un REFLET de verre en haut a gauche. Il porte le NOMBRE
+   d'actions (barre, Actions) ou l'icone de la pensee (Raisonnement) : les trois blocs ont le meme
+   repere a gauche. -- */
+.cadre-anneau .anneau-rond {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5em;
+  height: 2.5em;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      70% 60% at 35% 25%,
+      var(--chat-capsule-reflet-haut),
+      var(--chat-capsule-reflet-fin) 60%
+    ),
+    linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
+  color: var(--chat-capsule-sur-degrade);
+}
+.cadre-anneau .anneau-rond > * {
+  grid-area: 1 / 1;
+}
+/* En cours, le rond luit dans la couleur chaude, comme le cadre. */
+.cadre-anneau.is-live .anneau-rond {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--capsule-chaud) 60%, transparent);
+}
+/* La police du TEXTE, pas celle des titres : le theme Sombre titre en police a empattements, qui
+   rendait un chiffre de presse dans un rond moderne (capture du 2026-10-12). L'ombre courte, dans la
+   couleur du fond, garde le chiffre lisible sur la partie claire d'un degrade (cyan -> or). */
+.cadre-anneau .anneau-nombre {
+  color: var(--chat-capsule-sur-degrade);
+  font-family: var(--font, inherit);
+  font-size: 1.1em;
+  font-weight: 700;
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.cadre-anneau .anneau-rond svg {
+  display: block;
+  width: 1.15em;
+  height: 1.15em;
+}
+/* LE ROND PORTE LE VERDICT DU GROUPE (conv-904 : « je preferais voir du vert et rouge la jme rend
+   pas compte si un truc a rate ») : un verre teinte, plus clair en haut a gauche, plus sombre en
+   bas a droite, sous le meme reflet. Vert = tout a reussi, rouge = une action a echoue, ambre = une
+   attend. En cours, il garde la couleur du theme et sa lueur. Le melange vers --text eclaircit, vers
+   --bg-0 assombrit : le contraste du chiffre tient en sombre comme en clair. Le rond d'ICONE de
+   l'orchestration porte le meme verdict (conv-909) : la regle vise tout rond qui en a un. */
+.cadre-anneau .anneau-rond[data-verdict='ok'] {
+  --rond-teinte: var(--anneau-ok);
+}
+.cadre-anneau .anneau-rond[data-verdict='ko'] {
+  --rond-teinte: var(--anneau-ko);
+}
+.cadre-anneau .anneau-rond[data-verdict='attente'] {
+  --rond-teinte: var(--anneau-attente);
+}
+.cadre-anneau .anneau-rond:is([data-verdict='ok'], [data-verdict='ko'], [data-verdict='attente']) {
+  background:
+    radial-gradient(
+      70% 60% at 35% 25%,
+      var(--chat-capsule-reflet-haut),
+      var(--chat-capsule-reflet-fin) 60%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--rond-teinte) 80%, var(--text)),
+      color-mix(in srgb, var(--rond-teinte) 50%, var(--bg-0))
+    );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rond-teinte) 35%, transparent);
+}
+
+/* -- LA LEGENDE, « couleur sur l'exception » : un outil reussi reste gris sans point ; celui qui
+   tourne, echoue ou attend porte un point et sa couleur (eclaircie vers le texte pour rester
+   lisible sur le verre, en sombre comme en clair). -- */
+.cadre-anneau .legende-outil {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.cadre-anneau .legende-fois {
+  color: var(--gold-clair, var(--gold));
+  font-weight: 600;
+}
+.cadre-anneau .legende-point {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.cadre-anneau .legende-outil[data-etat='ko'] {
+  color: color-mix(in srgb, var(--anneau-ko) 72%, var(--text));
+}
+.cadre-anneau .legende-outil[data-etat='ko'] .legende-point {
+  background: var(--anneau-ko);
+}
+.cadre-anneau .legende-outil[data-etat='encours'] {
+  color: color-mix(in srgb, var(--anneau-encours) 72%, var(--text));
+}
+.cadre-anneau .legende-outil[data-etat='encours'] .legende-point {
+  background: var(--anneau-encours);
+}
+.cadre-anneau .legende-outil[data-etat='attente'] {
+  color: color-mix(in srgb, var(--anneau-attente) 72%, var(--text));
+}
+.cadre-anneau .legende-outil[data-etat='attente'] .legende-point {
+  background: var(--anneau-attente);
+}
+/* BLOC ACTIONS PLIE = DEUX LIGNES, JAMAIS PLUS (conv-910, 2026-10-12 : « ce bloc fermé je veux
+   qu'il fasse que 2 lignes » — sa legende passait a la ligne et le portait a 10 lignes). La legende
+   reste sur la seconde ligne et se coupe en « … » ; le bilan complet reste dans le corps deplie. */
+.thinking-block--actions .anneau-l2 {
+  flex-wrap: nowrap;
+}
+.thinking-block--actions .anneau-legende {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thinking-block--actions .anneau-legende > .legende-outil + .legende-outil {
+  margin-left: 10px;
+}
+/* Le signe de vie et le verdict ferment la legende : ils prennent la place qui reste, sur une
+   seule ligne (le texte entier reste au survol). */
+.cadre-anneau .anneau-l2 .thinking-status,
+.cadre-anneau .anneau-l2 .activity-progress {
+  flex: 1 1 0;
+  min-width: 8em;
+  overflow: hidden;
+  padding: 0;
+  color: var(--text-faint, var(--text-dim));
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 1em;
+  opacity: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* -- LE VERDICT EN CAPSULE DE VERRE (« Rond de verre », conv-904 : « le highlight des actions verte
+   rouge aussi est tres basique ») : deux cases, la commande puis le code, sur le verre des
+   pastilles de duree. Le CODE est teinte : vert reussi, rouge echec, ambre refus (« je preferais
+   voir du vert et rouge ») — une case de verre colore, pas un rectangle plein. La fleche reste
+   dans le texte mais c'est le filet qui la dessine. -- */
+.cadre-anneau .anneau-l2 .activity-outcome {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
+  color: var(--text-dim);
+  font-size: 1em;
+  white-space: nowrap;
+}
+.cadre-anneau .activity-outcome .verdict-commande {
+  padding: 0 8px;
+}
+.cadre-anneau .activity-outcome .verdict-fleche {
+  font-size: 0;
+}
+.cadre-anneau .activity-outcome .verdict-code {
+  padding: 0 8px;
+  border-left: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+.cadre-anneau .activity-outcome .verdict-code:first-child {
+  border-left: 0;
+}
+.cadre-anneau .anneau-l2 .activity-outcome.st-ok {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--anneau-ok) 40%, transparent);
+}
+.cadre-anneau .activity-outcome.st-ok .verdict-code {
+  border-left-color: color-mix(in srgb, var(--anneau-ok) 35%, transparent);
+  background: color-mix(in srgb, var(--anneau-ok) 18%, transparent);
+  color: color-mix(in srgb, var(--anneau-ok) 55%, var(--text));
+}
+.cadre-anneau .anneau-l2 .activity-outcome.st-failed {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--anneau-ko) 45%, transparent);
+  color: color-mix(in srgb, var(--anneau-ko) 45%, var(--text));
+}
+.cadre-anneau .activity-outcome.st-failed .verdict-code {
+  border-left-color: color-mix(in srgb, var(--anneau-ko) 35%, transparent);
+  background: color-mix(in srgb, var(--anneau-ko) 18%, transparent);
+  color: color-mix(in srgb, var(--anneau-ko) 55%, var(--text));
+}
+.cadre-anneau .anneau-l2 .activity-outcome.st-refused {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--anneau-attente) 45%, transparent);
+  color: color-mix(in srgb, var(--anneau-attente) 45%, var(--text));
+}
+.cadre-anneau .activity-outcome.st-refused .verdict-code {
+  border-left-color: color-mix(in srgb, var(--anneau-attente) 35%, transparent);
+  background: color-mix(in srgb, var(--anneau-attente) 16%, transparent);
+  color: color-mix(in srgb, var(--anneau-attente) 55%, var(--text));
+}
+
+/* -- CHEVRON DESSINE (pas un glyphe) : droite replie, haut ouvert — la meme forme que celui des
+   capsules du fil. -- */
+.cadre-anneau .anneau-chevron {
+  flex: none;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px 2px 4px;
+  border-right: 1.25px solid color-mix(in srgb, var(--text) 92%, transparent);
+  border-bottom: 1.25px solid color-mix(in srgb, var(--text) 92%, transparent);
+  opacity: 0.9;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.cadre-anneau .anneau-chevron.is-open,
+.thinking-block.cadre-anneau[open] > summary .anneau-chevron {
+  margin: 4px 2px 0 4px;
+  transform: rotate(-135deg);
+}
+
+/* -- BARRE D'ACTIVITE : le bouton principal occupe la ligne, les boutons ↗ et Relancer suivent,
+   arrondis comme les capsules. -- */
+.activity-anneau .anneau-tete .activity-group-main {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.activity-anneau .anneau-tete .activity-group-main[aria-disabled='true'] {
+  cursor: default;
+}
+.activity-anneau .anneau-tete .activity-open-run,
+.activity-anneau .anneau-tete .activity-resume {
+  flex: none;
+  border-radius: 999px;
+}
+/* La legende reste dans la colonne : le style ancien de cette classe (une ligne a 9 px qui
+   s'etirait) ne vaut plus ici. */
+.activity-anneau .anneau-l2.activity-group-tools {
+  flex: none;
+  overflow: visible;
+  font-size: 0.85em;
+  white-space: normal;
+}
+/* Les etages deplies restent DANS le cadre, sous un filet. */
+.activity-anneau .activity-steps {
+  margin: 0 0.85em 0.6em 3.5em;
+  padding-top: 0.35em;
+}
+/* Le corps deplie de Raisonnement / Actions reste DANS le cadre, aligne sur les deux lignes. */
+.thinking-block.cadre-anneau > .thinking-body {
+  margin: 0 0.85em 0.6em 3.5em;
+}
+/* S'ALLUME AU SURVOL, comme les capsules (conv-192) : le reflet d'un bloc en cours. */
+.activity-anneau.cadre-anneau:not(.is-live):hover,
+.thinking-block.cadre-anneau:not(.is-live):has(> summary:hover) {
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    var(--chat-capsule-reflet-haut),
+    var(--chat-capsule-reflet-milieu) 55%,
+    var(--chat-capsule-reflet-fin) 100%
+  );
+}

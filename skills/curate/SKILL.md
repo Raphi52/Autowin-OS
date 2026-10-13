@@ -17,8 +17,9 @@ description: >-
 
 ## Pré-requis
 - Interpréteur : le venv par machine, PAS le `python` du PATH (`numpy` absent ailleurs) —
-  `%LOCALAPPDATA%\AmitelBrain\.venv\Scripts\python.exe`, ou `AMITEL_BRAIN_PYTHON`.
-- Outillage : `<brainRoot>/tooling`. Racine par défaut : `\ged2\rig\Projets IA\Amitel Brain`.
+  `%LOCALAPPDATA%\<dossier du Brain>\.venv\Scripts\python.exe`, ou `AUTOWIN_BRAIN_PYTHON` (dossier et
+  ancien nom de variable : profil d'entreprise `entreprise/<nom>/identite.json`).
+- Outillage : `<brainRoot>/tooling`. Racine par défaut : `brain.racinePartagee` du profil d'entreprise.
 - **Toujours** `PYTHONIOENCODING=utf-8` : sans lui, l'impression du rapport plante en cp1252
   (`UnicodeEncodeError` sur `≠`) APRÈS les promotions — l'exit code ment.
 - `brain_curate.py` n'a PAS d'option `--report` : sans `--apply`, il rapporte déjà.
@@ -44,12 +45,12 @@ description: >-
 1. Compter la file : `ls <brainRoot>/inbox/*.md` (README exclu).
 2. Rapport : `python tooling/brain_curate.py --brain <brainRoot>` → JSON
    `{candidates:[{verdict, reason, merge_with}]}`. `--brain` est OBLIGATOIRE : par défaut le script vise le
-   dossier parent de son propre `tooling/` (la copie locale `%LOCALAPPDATA%\AmitelBrain`), où l'`inbox/` est
+   dossier parent de son propre `tooling/` (la copie locale `%LOCALAPPDATA%\<dossier du Brain>`), où l'`inbox/` est
    vide — il rend alors `candidates: []` sans erreur, ce qui se lit à tort comme « file déjà vide »
    (mesuré : 0 rapporté alors que 18 candidats attendaient).
    Redirige vers un fichier, le modèle d'embedding pollue stderr de barres de progression.
 2 bis. **Filtre de pertinence — AVANT toute promotion.** Le Brain ne garde que ce qui sert le
-   TRAVAIL : le métier (greffes, RIG, SQL, clients), le code et l'architecture des projets, les
+   TRAVAIL : le métier (agences, CONTOSO, SQL, clients), le code et l'architecture des projets, les
    décisions techniques et leurs motifs, les contraintes d'outillage et d'environnement, les
    préférences de travail de l'utilisateur. Tout le reste est HORS SUJET, même vrai et même bien
    sourcé : anecdote de conversation, état du moment (« le run X a échoué hier »), auto-évaluation

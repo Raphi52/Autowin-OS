@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveWindowlessInterpreter } from './brain-server-launch'
 
-const VENV = 'C:\\Users\\x\\AppData\\Local\\AmitelBrain\\.venv'
+const VENV = 'C:\\Users\\x\\AppData\\Local\\AcmeBrain\\.venv'
 const PYTHON = `${VENV}\\Scripts\\python.exe`
 const BASE = 'C:\\Users\\x\\AppData\\Roaming\\uv\\python\\cpython-3.11-windows-x86_64-none'
 

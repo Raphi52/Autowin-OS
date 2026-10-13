@@ -11,6 +11,7 @@ import {
   resolveBrainRuntime,
   windowlessPython
 } from './brain-server-launch'
+import { avecProfilAcme } from './identite-entreprise.test-helpers'
 
 let tooling: string
 
@@ -80,6 +81,38 @@ describe('ensureBrainServerStarted', () => {
     expect(opts.detached).toBe(true)
     expect('PYTHONPATH' in opts.env).toBe(false)
     expect(child.unref).toHaveBeenCalled()
+  })
+
+  /*
+   * UN SERVEUR DEJA INSTALLE NE LIT QUE LES ANCIENS NOMS. Sans leur recopie, il retombe sur ses
+   * defauts (port 8765, racine heritee) — le defaut vecu le 2026-09-03 (conv-8). Avec un profil
+   * d'entreprise, l'enfant recoit les DEUX noms ; sans profil (version publique), les seuls neutres.
+   */
+  it('passe au serveur les noms neutres, et les anciens noms du profil d entreprise', async () => {
+    makeValidTooling()
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    await ensureBrainServerStarted(
+      async () => false,
+      avecProfilAcme({ AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8766' }),
+      spawnFn as never
+    )
+    const env = spawnFn.mock.calls[0][2].env as NodeJS.ProcessEnv
+    expect(env.AUTOWIN_BRAIN_PORT).toBe('8766')
+    expect(env.ACME_BRAIN_PORT).toBe('8766')
+    expect(env.ACME_BRAIN_CODE_ROOT).toBe(tooling)
+    expect(env.ACME_BRAIN_ROOT).toBe(env.AUTOWIN_BRAIN_ROOT)
+    expect(env.ACME_BRAIN_PYTHON).toBe(env.AUTOWIN_BRAIN_PYTHON)
+
+    resetBrainLaunchAttempt()
+    const neutre = vi.fn().mockReturnValue({ unref: vi.fn() })
+    await ensureBrainServerStarted(
+      async () => false,
+      { AUTOWIN_BRAIN_TOOLING: tooling, AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8766' },
+      neutre as never
+    )
+    const envNeutre = neutre.mock.calls[0][2].env as NodeJS.ProcessEnv
+    expect(envNeutre.AUTOWIN_BRAIN_PORT).toBe('8766')
+    expect(Object.keys(envNeutre).filter((nom) => nom.startsWith('ACME_'))).toEqual([])
   })
 
   // Fenetre noire au demarrage (2026-09-06) : python.exe est une app CONSOLE, et un cmd.exe
@@ -261,13 +294,13 @@ describe('ensureBrainServerStarted', () => {
   })
 
   it('le serveur lance par Autowin sert SON Brain, pas la racine heritee d un Brain personnel', () => {
-    // Constate le 2026-09-25 (conv-3) : `AMITEL_BRAIN_ROOT`, pose par l'installateur du Brain
+    // Constate le 2026-09-25 (conv-3) : `ACME_BRAIN_ROOT`, pose par l'installateur du Brain
     // personnel, primait et le serveur d'Autowin servait (et recevait les lecons de) ce Brain-la.
     const localAppData = mkdtempSync(join(tmpdir(), 'brain-autowin-launch-'))
-    // L'installation partagee du Brain personnel, dont l'installateur a pose AMITEL_BRAIN_ROOT.
-    mkdirSync(join(localAppData, 'AmitelBrain'), { recursive: true })
+    // L'installation partagee du Brain personnel, dont l'installateur a pose ACME_BRAIN_ROOT.
+    mkdirSync(join(localAppData, 'AcmeBrain'), { recursive: true })
     writeFileSync(
-      join(localAppData, 'AmitelBrain', 'config.json'),
+      join(localAppData, 'AcmeBrain', 'config.json'),
       JSON.stringify({ brain_root: 'C:\\Perso\\Hermes-Brain' })
     )
     mkdirSync(join(localAppData, 'AutowinBrain'), { recursive: true })
@@ -281,10 +314,12 @@ describe('ensureBrainServerStarted', () => {
       })
     )
     try {
-      const runtime = resolveBrainRuntime({
-        LOCALAPPDATA: localAppData,
-        AMITEL_BRAIN_ROOT: 'C:\\Perso\\Hermes-Brain'
-      })
+      const runtime = resolveBrainRuntime(
+        avecProfilAcme({
+          LOCALAPPDATA: localAppData,
+          ACME_BRAIN_ROOT: 'C:\\Perso\\Hermes-Brain'
+        })
+      )
       expect(runtime).toMatchObject({
         brainRoot: 'C:\\Perso\\Autowin-Brain',
         tooling: 'C:\\rt\\tooling',
@@ -297,7 +332,7 @@ describe('ensureBrainServerStarted', () => {
 
   it('resout le runtime INSTALLE localement sans jamais executer le tooling du partage GED', () => {
     const localAppData = mkdtempSync(join(tmpdir(), 'brain-localappdata-'))
-    const stateRoot = join(localAppData, 'AmitelBrain')
+    const stateRoot = join(localAppData, 'AcmeBrain')
     const codeRoot = join(stateRoot, 'tooling')
     const python = join(stateRoot, '.venv', 'Scripts', 'python.exe')
     mkdirSync(stateRoot, { recursive: true })
@@ -310,7 +345,7 @@ describe('ensureBrainServerStarted', () => {
       })
     )
     try {
-      const runtime = resolveBrainRuntime({ LOCALAPPDATA: localAppData })
+      const runtime = resolveBrainRuntime(avecProfilAcme({ LOCALAPPDATA: localAppData }))
       expect(runtime).toMatchObject({ tooling: codeRoot, python })
       expect(runtime.brainRoot).toContain('Team Brain')
       expect(runtime.tooling.startsWith('\\\\')).toBe(false)

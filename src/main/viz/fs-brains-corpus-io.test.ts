@@ -46,11 +46,11 @@ describe('I/O du corpus Brain', () => {
     )
     for (const root of roots) {
       const autowin = join(root, 'knowledge/domain/autowin-os-guide.md')
-      const rig = join(root, 'knowledge/domain/rigapplication-documentation/proc.md')
+      const contoso = join(root, 'knowledge/domain/contosoapp-documentation/proc.md')
       mkdirSync(dirname(autowin), { recursive: true })
-      mkdirSync(dirname(rig), { recursive: true })
+      mkdirSync(dirname(contoso), { recursive: true })
       writeFileSync(autowin, '# Guide Autowin\narchitecture autowin\n', 'utf8')
-      writeFileSync(rig, '# Procédure RIG\narchitecture rig\n', 'utf8')
+      writeFileSync(contoso, '# Procédure CONTOSO\narchitecture contoso\n', 'utf8')
     }
 
     const corpus = ['knowledge/domain/autowin-os-']
@@ -67,7 +67,7 @@ describe('I/O du corpus Brain', () => {
     const readsInsideFixtures = [...observedReads.sync, ...observedReads.async]
     expect(readsInsideFixtures).toHaveLength(4)
     expect(readsInsideFixtures.every((path) => path.includes('autowin-os-guide.md'))).toBe(true)
-    expect(readsInsideFixtures.some((path) => path.includes('rigapplication-documentation'))).toBe(
+    expect(readsInsideFixtures.some((path) => path.includes('contosoapp-documentation'))).toBe(
       false
     )
   })

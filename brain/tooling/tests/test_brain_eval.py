@@ -6,6 +6,10 @@ from pathlib import Path
 
 TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
+import os
+# Identite NEUTRE forcee (brain_identite) : la suite rend le meme resultat avec ou sans dossier
+# `entreprise/` a la racine du depot. Posee AVANT tout import du tooling.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
 
 from brain_eval import evaluate_cases, index_freshness
 from brain_index import META_FIELDS, knowledge_fingerprint, write_index_snapshot
@@ -33,7 +37,7 @@ class BrainEvaluationTests(unittest.TestCase):
     def test_measures_recall_mrr_and_negative_leakage(self):
         cases = [
             {"id": "hit", "query": "architecture", "expected_paths": ["knowledge/right.md"]},
-            {"id": "miss", "query": "greffe", "expected_paths": ["knowledge/missing.md"]},
+            {"id": "miss", "query": "agence", "expected_paths": ["knowledge/missing.md"]},
             {"id": "negative", "query": "crêpes", "max_dense": 0.30},
         ]
         retriever = FakeRetriever({
@@ -41,7 +45,7 @@ class BrainEvaluationTests(unittest.TestCase):
                 {"path": "knowledge/noise.md", "dense_cos": 0.4},
                 {"path": "knowledge/right.md", "dense_cos": 0.7},
             ],
-            "greffe": [{"path": "knowledge/noise.md", "dense_cos": 0.2}],
+            "agence": [{"path": "knowledge/noise.md", "dense_cos": 0.2}],
             "crêpes": [{"path": "knowledge/noise.md", "dense_cos": 0.12}],
         })
 

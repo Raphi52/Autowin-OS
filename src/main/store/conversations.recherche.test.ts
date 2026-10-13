@@ -27,7 +27,7 @@ function magasinPeuple(): ConversationStore {
   store.append(a.id, { role: 'user', content: 'explique le code couleur de la pastille' })
   store.append(a.id, { role: 'assistant', content: 'ambre = en cours, cyan = a jour' })
   const b = store.create({ title: 'Autre sujet', provider: 'claude' })
-  store.append(b.id, { role: 'user', content: 'parle-moi des tickets RIG' })
+  store.append(b.id, { role: 'user', content: 'parle-moi des tickets ZOX' })
   return store
 }
 
@@ -469,6 +469,6 @@ describe('rechercherParContenu (appartenance, pour la barre laterale)', () => {
 
   it('trouve un terme court, la ou la recherche tokenisee ecarte les mots de moins de 3 lettres', () => {
     const store = magasinPeuple()
-    expect(store.rechercherParContenu('RIG').map((t) => t.id).length).toBe(1)
+    expect(store.rechercherParContenu('ZOX').map((t) => t.id).length).toBe(1)
   })
 })

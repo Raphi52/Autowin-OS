@@ -117,6 +117,37 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     expect(compteur(), 'le chiffre ne doit pas sauter sous les yeux').toBe('12 s')
   })
 
+  // conv-916 (2026-10-13) : « le timer du bloc raisonnement ne bouge même plus ». Le tour avait été
+  // vu CLOS à l'écran, puis RALLUMÉ (son orchestration tournait encore) dans une nouvelle bulle : le
+  // bloc remonté reprenait la `fin` mémorisée de cette fausse clôture et restait figé à 15 min 9 s,
+  // sous le libellé « Raisonnement » d'un tour en cours.
+  it('recompte quand un tour vu clos est rallumé dans un bloc remonté', () => {
+    monter({ text: '', done: false, turnId: 'tour-rallume' })
+    avancer(9_000)
+    rendre({ text: '', done: true, turnId: 'tour-rallume' })
+    demonter()
+    avancer(6_000)
+    monter({ text: '', done: false, turnId: 'tour-rallume' })
+    expect(compteur(), 'depuis le début du tour, pas depuis la fausse clôture').toBe('15 s')
+    avancer(5_000)
+    expect(compteur(), 'un tour en cours avance').toBe('20 s')
+  })
+
+  it('recompte quand le tour est rallumé sous les yeux, bloc remonté clos', () => {
+    monter({ text: '', done: false, turnId: 'tour-rallume-sur-place' })
+    avancer(4_000)
+    rendre({ text: '', done: true, turnId: 'tour-rallume-sur-place' })
+    demonter()
+    monter({ text: '', done: true, turnId: 'tour-rallume-sur-place' })
+    expect(compteur()).toBe('4 s')
+    avancer(3_000)
+    rendre({ text: '', done: false, turnId: 'tour-rallume-sur-place' })
+    avancer(0)
+    expect(compteur(), 'dès le premier battement, sans attendre une seconde').toBe('7 s')
+    avancer(2_000)
+    expect(compteur(), 'un tour en cours avance').toBe('9 s')
+  })
+
   it('passe en minutes au-delà de 59 s', () => {
     expect(dureeLisible(59)).toBe('59 s')
     expect(dureeLisible(60)).toBe('1 min')

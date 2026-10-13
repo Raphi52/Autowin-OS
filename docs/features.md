@@ -21,13 +21,13 @@
   conversation dédiée par ticket**, avec annulation. Filtre par ton nom → tes tickets.
 - 🟢 **Parallélisation, premier agent revenu débloque la suite** (mode greedy, `Promise.race`).
   *(Le fan-out d'agrégation attend, lui, tous ses membres avant la synthèse.)*
-- 🔧 **Consulter les bases greffes RIG en lecture seule** (`sql_query`) — un seul `SELECT`, périmètre
-  défini par l'autorité métier (`COMMUN_RIG.dbo.GREFFE`, `GRF_IS_EXPLOIT = 1`), garde lexicale et
+- 🔧 **Consulter les bases métier en lecture seule** (`sql_query`) — un seul `SELECT`, périmètre
+  défini par l'autorité métier (la table de catalogue des bases exploitées, configurée), garde lexicale et
   enveloppe transactionnelle systématiquement annulée. *Deux limites à connaître AVANT de s'en servir :
   la connexion utilise le compte Windows de l'utilisateur, qui est `db_datawriter` sur la production —
   la protection est donc ENTIÈREMENT logicielle ; et les résultats entrent dans le contexte du modèle,
-  donc des données nominatives de greffe quittent le poste. Détail, historique d'audit et risque
-  résiduel : [`docs/sql-read.md`](sql-read.md).*
+  donc des données nominatives des bases métier quittent le poste. Détail, historique d'audit et
+  risque résiduel : `docs/sql-read.md` du profil d'entreprise (`entreprise/<nom>/`).*
 
 ## Transparence & mémoire (avec les limites honnêtes)
 
@@ -36,7 +36,7 @@
   instructions internes des providers ne sont pas exposables, et certaines traces sont tronquées/masquées.*
 - 🔧 **Rétrospective détaillée des actions** (appels, outils, réponses, RAG, tokens, étapes) —
   *dans les limites de ce que les providers exposent (redaction).*
-- 🔧 **Mémoire d'équipe partagée et persistante** — récupération Amitel Brain (RAG local), fichiers
+- 🔧 **Mémoire d'équipe partagée et persistante** — récupération du Brain partagé (RAG local), fichiers
   Markdown versionnés (git, portable, zéro lock-in), signature HMAC et protections de chemins.
   *Contribution en append/supersede ; audit de sécurité formel et mesure de coût : à publier.*
 
@@ -47,7 +47,7 @@
   droit d'écrire hors pipeline, et il ne l'est que parce que l'agent peut prouver son changement.
   *Limite structurelle, à connaître : la vérification est la commande de test **déclarée par le projet**
   (`package.json` → `test:unit`/`test`). **Un dépôt qui n'en déclare aucune ne peut donc pas être édité**
-  — l'édition est refusée puis jetée. C'est le cas des dépôts VB6/.NET comme RigApplication.*
+  — l'édition est refusée puis jetée. C'est le cas des dépôts VB6/.NET.*
 - 🟢 **L'encodage du fichier est préservé** — mono-octet (VB6 `.cls`/`.bas`/`.frm`), UTF-8 avec ou sans
   BOM, UTF-16LE. Auto-contrôle d'aller-retour : on refuse d'éditer un fichier qu'on ne saurait pas
   réécrire octet pour octet, et un caractère non représentable dans l'encodage cible est refusé au lieu

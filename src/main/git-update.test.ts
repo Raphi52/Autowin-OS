@@ -518,13 +518,13 @@ describe('checkForUpdate — qui a poussé quoi (commits entrants)', () => {
 
   it('découpe auteur / date / sujet / fichiers, merges sans fichiers compris, chemins accentués intacts', () => {
     const stdout =
-      `${RS}h1${US}Emmanuel Heurtier${US}2026-09-25T09:00:00+02:00${US}Merge pull request #12${US}suite${NL}` +
+      `${RS}h1${US}Prenom Collegue${US}2026-09-25T09:00:00+02:00${US}Merge pull request #12${US}suite${NL}` +
       `${RS}h2${US}raphael${US}2026-09-24T18:00:00+02:00${US}feat: rail${CR}${NL}${CR}${NL}` +
       `src/éditeur.ts${CR}${NL}README.md${CR}${NL}`
     expect(parseIncomingCommits(stdout)).toEqual([
       {
         hash: 'h1',
-        author: 'Emmanuel Heurtier',
+        author: 'Prenom Collegue',
         date: '2026-09-25T09:00:00+02:00',
         subject: `Merge pull request #12${US}suite`,
         files: [],

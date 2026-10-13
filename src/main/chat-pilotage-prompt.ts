@@ -149,7 +149,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
   `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
   // ERREUR DU BUREAU CACHE = ERREUR DU TOUR (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
-  // 2026-09-15). RigV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
+  // 2026-09-15). ContosoV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
   // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
   `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
   `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
@@ -482,9 +482,9 @@ export function buildChatPilotagePrompt(
         `« Recommande »).\n`
     ) +
     // PÉRIMÈTRE DE LECTURE (mesure 2026-08-10, conv-1). Le même réglage a produit deux comportements
-    // opposés : le 07/08, refus d'analyser un ticket au motif que « le dépôt RIG n'est pas accessible
+    // opposés : le 07/08, refus d'analyser un ticket au motif que « le dépôt CONTOSO n'est pas accessible
     // depuis cette session (workspace limité à E:\GIT\Autowin-OS) » ; le 10/08, lecture SANS difficulté
-    // de D:\GIT\RigApplication\greffe_map.txt (26 lignes + 1re ligne exacte). L'argv journalisé des deux
+    // de D:\GIT\ContosoApp\agence_map.txt (26 lignes + 1re ligne exacte). L'argv journalisé des deux
     // tours est IDENTIQUE (`--add-dir E:\GIT\Autowin-OS`, aucun autre dossier) : il n'y avait donc aucun
     // blocage, seulement une auto-limitation. Le réflexe 8 de la constitution (clôture NÉGATIVE) ne
     // suffisait pas — il est générique ; cette ligne nomme le cas.
@@ -663,7 +663,7 @@ export function buildChatPilotagePrompt(
     `CHANGER ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
     `peut ne rien rendre du tout.\n` +
     // CHANGER n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
-    // (« fait toi-meme la regeneration sur les bases restants ») : 354 s, 2,91 $, 29 Kbis
+    // (« fait toi-meme la regeneration sur les bases restants ») : 354 s, 2,91 $, 29 Extrait
     // REGENERES dans les bases de 15 bases de PRODUCTION -- mutation massive et non annulable,
     // menee entierement en chat direct. Aucun fichier du depot n'ayant change, le critere ci-dessus
     // l'exemptait mot pour mot : zero RUN.md, zero juge, aucune trace de workflow. A la saisie
@@ -748,7 +748,7 @@ export function buildChatPilotagePrompt(
     `ouvre-la avec \`brain_read\` AVANT de répondre ou de fouiller le dépôt ; ignore les autres. Pas de ` +
     `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle.\n` +
     // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
-    // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (RIG) a recu une
+    // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (CONTOSO) a recu une
     // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne
     // couvrait que les questions sur un ACQUIS (« pourquoi a-t-on choisi X »), pas les demandes de
     // CONSEIL — pourtant celles ou une reponse generique coute le plus cher.

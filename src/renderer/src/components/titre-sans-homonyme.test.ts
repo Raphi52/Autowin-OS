@@ -29,7 +29,7 @@ describe('titre de conversation sans homonyme', () => {
   })
 
   it('ne depasse jamais la longueur d affichage, et garde la date VISIBLE', () => {
-    const long = 'Réparer la mise à jour du client lourd RigV3 sur le poste de recette'
+    const long = 'Réparer la mise à jour du client lourd ContosoV3 sur le poste de recette'
     const rendu = titreSansHomonyme(long, [titreCourt(long)], LE_12_A_9H41)
     expect(rendu.length).toBeLessThanOrEqual(LONGUEUR_TITRE)
     expect(rendu.endsWith(marqueurDeMoment(LE_12_A_9H41))).toBe(true)

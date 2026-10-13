@@ -18,6 +18,8 @@ import {
 import './ChatView.css'
 import './Evidence.css'
 import './ChatView.capsule-orchestration.css'
+import { LegendeDesOutils, RondDIcone, RondDuCompte, VerdictDeVerre } from './anneau-activite'
+import type { EtatArc } from './anneau-activite-calcul'
 import {
   decouperBattement,
   failedTask,
@@ -56,7 +58,7 @@ const CMD_LABEL: Record<string, string> = {
  */
 function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element {
   const [ouvert, setOuvert] = useState(false)
-  const detaille = Boolean(choix.prompt || choix.outcome)
+  const detaille = Boolean(choix.prompt || choix.raisonnement || choix.outcome)
   const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || 'etape'
   const estControle = choix.phase === 'gate' || choix.role === 'gate'
   return (
@@ -89,6 +91,14 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
           <div className="activity-pipeline-titre">prompt envoyé</div>
           <pre className="activity-step-detail" data-testid="activity-pipeline-prompt">
             {choix.prompt}
+          </pre>
+        </>
+      )}
+      {ouvert && choix.raisonnement && (
+        <>
+          <div className="activity-pipeline-titre">raisonnement</div>
+          <pre className="activity-step-detail" data-testid="activity-pipeline-reasoning">
+            {choix.raisonnement}
           </pre>
         </>
       )}
@@ -148,6 +158,20 @@ function PhaseDeLaCapsule({
         <pre className="orch-texte" data-testid="activity-pipeline-prompt">
           {choix.prompt}
         </pre>
+      )}
+      {/* LE RAISONNEMENT, en entier (conv-918, 2026-10-13) : c'est lui dont la ligne repliee
+          montrait des bouts. Tant que la phase tourne, la zone reste calee sur la FIN — ce qui
+          s'ecrit a l'instant —, sans empecher de remonter. */}
+      {choix.raisonnement && (
+        <>
+          <div className="orch-titre">{enCours ? 'raisonnement · en direct' : 'raisonnement'}</div>
+          <pre
+            className={`orch-texte orch-raisonnement${enCours ? ' is-direct' : ''}`}
+            data-testid="activity-pipeline-reasoning"
+          >
+            <span>{choix.raisonnement}</span>
+          </pre>
+        </>
       )}
       {(choix.outcome || enCours) && (
         <div className="orch-titre">{estControle ? 'décision et motif' : 'rendu'}</div>
@@ -712,6 +736,14 @@ export function AssistantActivityGroup({
    * montre directement le prompt envoye a chaque phase. « 1 action en cours » quitte l'ecran : l'etat
    * se lit au reflet (vivant / eteint) et a la couleur du segment ; la phrase reste en infobulle.
    * Un groupe MIXTE (orchestration + verify…) garde la barre d'actions ci-dessous.
+   *
+   * CADRE « GRAND, DEUX LIGNES » (conv-909, 2026-10-12 : « ce bloc orchestration doit etre comme
+   * celui de Actions », apres que conv-904 a redessine Actions). La capsule prend le cadre de
+   * BlocRepliable (ThinkingBlock.tsx) : le rond de verre a gauche — l'icone de l'orchestration,
+   * TEINTEE par le verdict comme le rond de compte —, « Orchestration · phase » et la duree en
+   * premiere ligne, dessous la legende des phases et le signe de vie ou le verdict en capsule de
+   * verre, puis ↗, Relancer et le chevron DANS le cadre. Le rond et la legende remplacent la barre
+   * de temps, comme dans Actions.
    */
   if (actions.length > 0 && actions.every((action) => action.name === 'orchestrate')) {
     const pipeline = actions.flatMap((action) => action.pipeline ?? [])
@@ -723,7 +755,7 @@ export function AssistantActivityGroup({
     // et issue en rouge a droite de la capsule ; son pourquoi entier est a un clic.
     const capsuleOuverte = pliManuel ?? false
     const etatDeFin = failed ? 'ko' : interruptedCount > 0 ? 'interrompu' : 'ok'
-    const segments = pipeline.length
+    const segments: Array<'ok' | 'ko' | 'encours' | 'interrompu'> = pipeline.length
       ? pipeline.map((choix, index) =>
           choix.ok === false
             ? 'ko'
@@ -734,6 +766,19 @@ export function AssistantActivityGroup({
                 : etatDeFin
         )
       : [running ? 'encours' : etatDeFin]
+    // Le verdict de chaque phase, dans la langue du rond et de la legende (« interrompu » = attente).
+    const etatsDesPhases: EtatArc[] = segments.map((etat) =>
+      etat === 'interrompu' ? 'attente' : etat
+    )
+    // La legende ne nomme les phases qu'a partir de DEUX : une seule est deja ecrite en premiere
+    // ligne (« Orchestration · scout »), la redire dessous ne ferait que doubler le mot.
+    const phasesDeLegende =
+      pipeline.length > 1
+        ? pipeline.map((choix, index) => ({
+            nom: choix.phase ?? choix.role ?? 'étape',
+            etat: etatsDesPhases[index]!
+          }))
+        : []
     const taches = actions
       .map((action) => (action.args as { task?: unknown } | undefined)?.task)
       .filter((task): task is string => typeof task === 'string' && task.trim().length > 0)
@@ -751,7 +796,7 @@ export function AssistantActivityGroup({
     const vie = running ? (decoupe?.fait ?? ligneEtat) : undefined
     return (
       <details
-        className={`thinking-block thinking-block--orchestration${running ? ' is-live' : ' is-done'}`}
+        className={`thinking-block thinking-block--deux-lignes cadre-anneau thinking-block--orchestration${running ? ' is-live' : ' is-done'}`}
         data-state={
           failed ? 'failed' : running ? 'running' : interruptedCount > 0 ? 'interrupted' : 'done'
         }
@@ -765,55 +810,55 @@ export function AssistantActivityGroup({
             setPliManuel(!capsuleOuverte)
           }}
         >
-          <span className="thinking-capsule" data-testid="activity-capsule" title={status}>
-            <span className="thinking-capsule-icone" aria-hidden="true">
+          <span className="anneau-tete">
+            <RondDIcone etats={etatsDesPhases} testid="activity-rond">
               {ICONE_ORCHESTRATION}
-            </span>
-            <span className="thinking-label">Orchestration</span>
-            {(running || phaseCourante) && (
-              <>
-                <span className="orch-sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="orch-phase">{phaseCourante ?? 'en cours'}</span>
-              </>
-            )}
-            {decoupe?.duree && (
-              <span className="thinking-duree" data-testid="activity-duree">
-                {decoupe.duree}
+            </RondDIcone>
+            <span className="anneau-col">
+              <span className="anneau-l1" data-testid="activity-capsule" title={status}>
+                <span className="thinking-label">Orchestration</span>
+                {(running || phaseCourante) && (
+                  <>
+                    <span className="orch-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="orch-phase">{phaseCourante ?? 'en cours'}</span>
+                  </>
+                )}
+                {decoupe?.duree && (
+                  <span className="thinking-duree" data-testid="activity-duree">
+                    {decoupe.duree}
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-          {boutonRun}
-          {boutonReprise}
-          {vie ? (
-            <span className="thinking-status" data-testid="activity-progress" title={vie}>
-              {vie}
+              {(phasesDeLegende.length > 0 || vie || outcome || failed || interruptedCount > 0) && (
+                <span className="anneau-l2">
+                  <LegendeDesOutils outils={phasesDeLegende} />
+                  {/* Le signe de vie tant que ca tourne, sinon le verdict en capsule de verre,
+                      comme la barre d'activite. */}
+                  {vie ? (
+                    <span className="thinking-status" data-testid="activity-progress" title={vie}>
+                      {vie}
+                    </span>
+                  ) : outcome ? (
+                    <VerdictDeVerre label={outcome.label} etat={outcome.state} />
+                  ) : failed || interruptedCount > 0 ? (
+                    // Sans resume chiffre, la phrase d'etat reste le seul verdict : « 1 action avec
+                    // erreur », « 1 action interrompue ». Ne rien ecrire laisserait un echec muet.
+                    <span
+                      className="thinking-status orch-issue"
+                      data-etat={failed ? 'failed' : 'interrompu'}
+                      title={status}
+                    >
+                      {status}
+                    </span>
+                  ) : null}
+                </span>
+              )}
             </span>
-          ) : outcome ? (
-            <span
-              className="thinking-status orch-issue"
-              data-etat={outcome.state}
-              data-testid="activity-outcome"
-              title={outcome.label}
-            >
-              {outcome.label}
-            </span>
-          ) : failed || interruptedCount > 0 ? (
-            // Sans resume chiffre, la phrase d'etat reste le seul verdict : « 1 action avec erreur »,
-            // « 1 action interrompue ». Ne rien ecrire laisserait un echec muet.
-            <span
-              className="thinking-status orch-issue"
-              data-etat={failed ? 'failed' : 'interrompu'}
-              title={status}
-            >
-              {status}
-            </span>
-          ) : null}
-          <span className="thinking-frise-barre" aria-hidden="true">
-            {segments.map((etat, index) => (
-              <span key={index} data-etat={etat} style={{ flexGrow: 1 }} />
-            ))}
+            {boutonRun}
+            {boutonReprise}
+            <span className="anneau-chevron" aria-hidden="true" />
           </span>
         </summary>
         {/* Rendu SEULEMENT ouvert : un prompt fait des milliers de caracteres, et rien de cache
@@ -858,80 +903,124 @@ export function AssistantActivityGroup({
       </details>
     )
   }
+  /*
+   * LE VERDICT DE CHAQUE ACTION (conv-904, 2026-10-12 — /draft, « Pleine largeur » + « couleur sur
+   * l'exception », puis « Rond de verre ») : il colore la legende et la pastille au coin du rond. Un
+   * groupe en echec ou sans effet dont aucune action ne porte `ok === false` (depot Brain refuse,
+   * commande qui REUSSIT a rendre un echec) colore sa DERNIERE action terminee : sans cela l'en-tete
+   * dirait « avec erreur » au-dessus d'un rond sans pastille — le faux vert que ce bloc refuse
+   * depuis le 2026-08-26.
+   */
+  const etatsDesArcs: EtatArc[] = actions.map((action) =>
+    action.ok === false
+      ? 'ko'
+      : action.interrupted
+        ? 'attente'
+        : action.ok === undefined
+          ? 'encours'
+          : 'ok'
+  )
+  if (failed && !etatsDesArcs.includes('ko')) {
+    const derniere = etatsDesArcs.lastIndexOf('ok')
+    if (derniere >= 0)
+      etatsDesArcs[derniere] = resumeDesActions?.state === 'refused' ? 'attente' : 'ko'
+  }
+  const outilsDeLegende = actions.map((action, index) => ({
+    nom: CMD_LABEL[action.name] ?? action.name,
+    etat: etatsDesArcs[index]!
+  }))
+  // Le battement s'ecrit « <duree> · <fait> » : la duree va dans sa pastille, sur la ligne du titre,
+  // comme dans les capsules Actions et Orchestration ; le fait reste sur la ligne de la legende.
+  const decoupeDuBattement = battement ? decouperBattement(battement) : undefined
+  const vie = decoupeDuBattement?.duree ? decoupeDuBattement.fait : ligneEtat
+  const ouvert = why.length ? whyOpen : etapesOuvertes
+  const etat = failed
+    ? 'failed'
+    : running
+      ? 'running'
+      : interruptedCount > 0
+        ? 'interrupted'
+        : 'done'
   return (
     <>
       {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
         (un bouton dans un bouton est invalide, et rendrait un clic « voir » ambigu). */}
-      {/* B3-γ : la TEINTE de statut est portee par la CARTE (bord + fond), pas par le seul point.
-        Le point seul se lit mal dans un fil dense : l'utilisateur repere l'etat d'un coup d'oeil
-        sur le bloc, comme dans RunProgress. Un echec prime sur toute action reussie du groupe. */}
+      {/* Le cadre porte `data-state` : le verdict se lit dans la PASTILLE du rond et la legende, l'etat du
+        groupe dans le cadre (reflet allume tant que ca tourne). Un echec prime sur toute action
+        reussie du groupe. */}
       <div
-        className={`activity-group${failed ? ' failed' : ''}`}
-        data-state={
-          failed ? 'failed' : running ? 'running' : interruptedCount > 0 ? 'interrupted' : 'done'
-        }
+        className={`activity-anneau cadre-anneau${running ? ' is-live' : ''}${failed ? ' failed' : ''}`}
+        data-state={etat}
+        data-testid="activity-anneau"
       >
-        <button
-          type="button"
-          className="activity-group-main"
-          data-testid="activity-group"
-          title={
-            !runConsultable
-              ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
-              : running
-                ? 'Ouvrir cette action en cours dans Workflows'
-                : 'Voir le détail de cette action dans Workflows'
-          }
-          aria-disabled={!runConsultable && !why.length && !actions.length}
-          {...(why.length
-            ? { 'aria-expanded': whyOpen }
-            : actions.length
-              ? { 'aria-expanded': etapesOuvertes }
-              : {})}
-          // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
-          // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
-          onClick={() => {
-            if (why.length) {
-              setWhyOpen((ouvert) => !ouvert)
-              return
+        <div className="anneau-tete">
+          <button
+            type="button"
+            className="activity-group-main"
+            data-testid="activity-group"
+            title={
+              !runConsultable
+                ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
+                : running
+                  ? 'Ouvrir cette action en cours dans Workflows'
+                  : 'Voir le détail de cette action dans Workflows'
             }
-            if (actions.length) {
-              basculerEtapes()
-              return
-            }
-            if (!runConsultable) return
-            onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
-          }}
-        >
-          <span
-            className={`status-dot ${
-              running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
-            }`}
-          />
-          <span className="activity-group-title">{status}</span>
-          <span className="activity-group-tools">{tools}</span>
-          {outcome && (
+            aria-disabled={!runConsultable && !why.length && !actions.length}
+            {...(why.length
+              ? { 'aria-expanded': whyOpen }
+              : actions.length
+                ? { 'aria-expanded': etapesOuvertes }
+                : {})}
+            // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la
+            // liste des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
+            onClick={() => {
+              if (why.length) {
+                setWhyOpen((estOuvert) => !estOuvert)
+                return
+              }
+              if (actions.length) {
+                basculerEtapes()
+                return
+              }
+              if (!runConsultable) return
+              onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+            }}
+          >
+            <RondDuCompte etats={etatsDesArcs} testid="activity-compte" />
+            <span className="anneau-col">
+              <span className="anneau-l1">
+                <span className="activity-group-title">{status}</span>
+                {decoupeDuBattement?.duree && (
+                  <span className="thinking-duree" data-testid="activity-duree">
+                    {decoupeDuBattement.duree}
+                  </span>
+                )}
+              </span>
+              <span className="anneau-l2 activity-group-tools" title={tools}>
+                <LegendeDesOutils outils={outilsDeLegende} />
+                {/* Une INFORMATION qui change toute seule : le signe de vie tant que ca tourne,
+                    sinon le verdict chiffre (exit code, refus, controle final). */}
+                {vie ? (
+                  <span className="activity-progress" data-testid="activity-progress" title={vie}>
+                    {vie}
+                  </span>
+                ) : (
+                  outcome && <VerdictDeVerre label={outcome.label} etat={outcome.state} />
+                )}
+              </span>
+            </span>
+          </button>
+          {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre
+              bouton, sinon deplier couterait l'acces a la trace complete. */}
+          {boutonRun}
+          {boutonReprise}
+          {/* Le chevron DESSINE des capsules du fil (pas un glyphe) : droite replie, haut ouvert.
+              Un groupe sans rien a deplier mais avec un run garde la fleche vers Workflows. */}
+          {why.length || actions.length ? (
             <span
-              className={`activity-outcome st-${outcome.state}`}
-              data-testid="activity-outcome"
-              title={outcome.label}
-            >
-              {outcome.label}
-            </span>
-          )}
-          {/* DEMANDE (2026-09-10) : un seul tourniquet a l'ecran. Quand les etapes sont visibles,
-              celle qui tourne porte deja le sien (« Orchestration ») — deux animations cote a cote
-              pour le meme fait. Le groupe ne garde le sien que replie, sinon il redevient muet. */}
-          {/* Plus de tourniquet ici non plus : le point de statut colore dit deja « en cours », et
-              le seul spinner du tour vit sur la ligne « Agent » (demande du 2026-09-12). */}
-          {why.length ? (
-            <span className="activity-group-go" aria-hidden="true">
-              {whyOpen ? '▾' : '▸'}
-            </span>
-          ) : actions.length ? (
-            <span className="activity-group-go" aria-hidden="true">
-              {etapesOuvertes ? '▾' : '▸'}
-            </span>
+              className={`anneau-chevron activity-group-go${ouvert ? ' is-open' : ''}`}
+              aria-hidden="true"
+            />
           ) : (
             runConsultable && (
               <span className="activity-group-go" aria-hidden="true">
@@ -939,17 +1028,7 @@ export function AssistantActivityGroup({
               </span>
             )
           )}
-        </button>
-        {/* Hors du bouton : c'est une INFORMATION qui change toute seule, pas une cible de clic. */}
-        {ligneEtat && (
-          <div className="activity-progress" data-testid="activity-progress" title={ligneEtat}>
-            {ligneEtat}
-          </div>
-        )}
-        {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
-            sinon deplier couterait l'acces a la trace complete. */}
-        {boutonRun}
-        {boutonReprise}
+        </div>
         {/* ETAGES (design converge) : une sous-ligne par action, reliees par un trait POINTILLE,
             chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
             NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd

@@ -5,8 +5,8 @@
  *
  * Il restreignait les sources a une liste blanche de prefixes derivee du nom du workspace. La mesure
  * qui l'avait justifie etait reelle (index du 2026-07-29 : 15 342 chunks, dont 99 % de
- * `knowledge/domain/rigapplication-documentation` et 0,19 % sur Autowin OS) — une question Autowin
- * ramenait des sources RIG par appariement sur un mot commun.
+ * `knowledge/domain/contosoapp-documentation` et 0,19 % sur Autowin OS) — une question Autowin
+ * ramenait des sources CONTOSO par appariement sur un mot commun.
  *
  * Mais la liste n'a jamais suivi le vault. Mesure du 2026-08-12 : le corpus `autowin-os` n'admettait
  * que 11 notes sur les 461 de `knowledge/`, en ignorant `projects/autowin-os/obsidian/` et
@@ -32,7 +32,7 @@
  * 2. `AUTOWIN_BRAIN_CORPUS` permet a un operateur de re-restreindre EXPLICITEMENT ; une valeur
  *    invalide coupe le Brain (fail-closed) plutot que de devenir un acces global par accident.
  *
- * Aucune restriction n'est plus derivee du chemin du workspace. Une exception RigApplication a ete
+ * Aucune restriction n'est plus derivee du chemin du workspace. Une exception ContosoApp a ete
  * ajoutee puis RETIREE le meme jour (2026-08-13) : elle ne pouvait pas se declencher, et affichait
  * donc une protection inexistante — le detail est dans `brainCorpusForWorkspace`.
  */
@@ -108,21 +108,21 @@ export function brainCorpusForWorkspace(
     }
     return fragments
   }
-  // AUCUNE restriction derivee du workspace. Une exception « isolation RigApplication » a existe ici
+  // AUCUNE restriction derivee du workspace. Une exception « isolation ContosoApp » a existe ici
   // du 2026-08-13 au meme jour : elle n'a JAMAIS pu se declencher. Le workspace vient de
   // `resolveExecutionWorkspace` → `gitWorkspaceFrom` (`os.ts:109`), qui exige `.git` ET
-  // `package.json` dans le meme dossier ; `C:\Code Projet\RigApplication` est un depot .NET sans
-  // `package.json`, donc le slug ne valait jamais `rigapplication`. Elle affichait une protection
+  // `package.json` dans le meme dossier ; `C:\Code Projet\ContosoApp` est un depot .NET sans
+  // `package.json`, donc le slug ne valait jamais `contosoapp`. Elle affichait une protection
   // inexistante — pire qu'aucune protection.
   //
   // Et le motif ne tenait pas non plus : la mesure d'origine (2026-07-29, index a 15 342 fragments
-  // dont 99 % de doc RIG) decrit une DOMINANCE de corpus, que le classement (dense + lexical + RRF)
+  // dont 99 % de doc CONTOSO) decrit une DOMINANCE de corpus, que le classement (dense + lexical + RRF)
   // traite mieux qu'une liste blanche. Un filtre par prefixe pose AU-DESSUS d'un classeur supprime
   // des candidats avant qu'ils soient notes, y compris le meilleur — c'est ce qui masquait 450 des
   // 461 notes. Le Brain est le vault de l'equipe, pas une entree hostile : le modele de menace
   // « source adverse » supposait une note piegee dans sa propre memoire.
   //
-  // Si des sources RIG polluent un jour les reponses Autowin, le correctif est dans le CLASSEMENT.
+  // Si des sources CONTOSO polluent un jour les reponses Autowin, le correctif est dans le CLASSEMENT.
   void workspacePath
   return undefined
 }

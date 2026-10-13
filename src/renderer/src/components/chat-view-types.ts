@@ -132,6 +132,12 @@ export type Conv = {
    * pastille `asking` ne pouvait jamais s'allumer dans la liste.
    */
   lastAssistantAsksUser?: boolean
+  /**
+   * Un tour est encore en cours quelque part dans le fil, pas forcément le dernier. Servi par la
+   * projection IPC (`ConversationSummary.hasStreamingTurn`) : c'est lui qui garde le spinner d'un
+   * run rattaché au redémarrage quand un tour de chat plus récent est déjà terminé (conv-914).
+   */
+  hasStreamingTurn?: boolean
   /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
   surlignee?: boolean
   /** Statut manuel : `true` = marquée inactive (voir `Conversation.inactive`). */

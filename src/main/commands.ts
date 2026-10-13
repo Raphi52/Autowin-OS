@@ -91,6 +91,7 @@ import {
 import {
   battementDeVerification,
   battementDOrchestration,
+  EN_REFLEXION,
   VERIFY_BATTEMENT_MS
 } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
@@ -553,6 +554,17 @@ export type AppEvent =
        * d'outil dans le livrable.
        */
       note?: string
+      /**
+       * Fragment du RAISONNEMENT du sous-agent, tel que le fournisseur le diffuse (quelques mots).
+       *
+       * Il voyageait dans `note` et devenait la ligne de vie du bloc Orchestration : des bouts de
+       * phrase (« and now 1/2 could ») qui s'ecrasaient toutes les secondes et qu'on ne retrouvait
+       * nulle part en depliant le bloc (conv-918, 2026-10-13). Champ a part : le fil l'ACCUMULE
+       * sous la phase qui le produit, la ligne de vie ne garde que ce que l'agent FAIT.
+       */
+      reasoning?: string
+      /** Phase en cours quand ce raisonnement a ete emis, pour le ranger sous la bonne ligne. */
+      reasoningPhase?: string
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
   | {
@@ -883,11 +895,11 @@ export const CATALOG: CommandSpec[] = [
      */
     name: 'classer_conversation',
     description:
-      "Classer une conversation dans la barre laterale. Un CHEMIN de dossier (ex. D:/GIT/RigApplication) devient AUSSI le dossier de travail de la conversation, et le fil se range sous le nom de ce dossier ; les dossiers enfants s'indentent en sous-categories. Un LIBELLE libre (ex. « Perso ») ne cree qu'une categorie d'affichage et ne change PAS le dossier de travail. Vide = retirer du classement.",
+      "Classer une conversation dans la barre laterale. Un CHEMIN de dossier (ex. D:/GIT/ContosoApp) devient AUSSI le dossier de travail de la conversation, et le fil se range sous le nom de ce dossier ; les dossiers enfants s'indentent en sous-categories. Un LIBELLE libre (ex. « Perso ») ne cree qu'une categorie d'affichage et ne change PAS le dossier de travail. Vide = retirer du classement.",
     args: {
       id: 'identifiant de la conversation',
       dossier:
-        'chemin du dossier de travail (ex. D:/GIT/RigApplication), OU libelle de categorie (ex. « Perso ») ; vide pour declasser'
+        'chemin du dossier de travail (ex. D:/GIT/ContosoApp), OU libelle de categorie (ex. « Perso ») ; vide pour declasser'
     },
     annotations: {
       readOnlyHint: false,
@@ -1847,6 +1859,11 @@ export class AppCommandBus {
     if (!controller) return false
     controller.abort(reason)
     return true
+  }
+
+  /** Nombre d'orchestrations en vol : la relance automatique du moteur attend qu'il tombe à zéro. */
+  orchestrationsEnVol(): number {
+    return this.activeOrchestrations.size
   }
 
   /**
@@ -3185,7 +3202,7 @@ export class AppCommandBus {
               }
               this.broadcast({ type: 'orchestrate-phase', convId, runPath, phase })
             },
-            (step, delta, note) => {
+            (step, delta, note, raisonnement) => {
               // Une NOTE (« Bash en cours — 2 min 30 s ») voyage sur le meme evenement mais dans
               // son propre champ : le renderer la range hors du texte, qui est le livrable.
               //
@@ -3199,13 +3216,34 @@ export class AppCommandBus {
                 dernierSigneDeVie = bornerLigneDeVie(note)
                 onProgress?.(dernierSigneDeVie)
               }
+              /*
+               * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT (conv-918, 2026-10-13).
+               *
+               * Ses fragments arrivaient comme des notes : chacun ECRASAIT la ligne de vie, qui
+               * affichait trois mots de reflexion en anglais (« and now 1/2 could ») au lieu de ce
+               * que l'agent fait — et ces mots n'etaient gardes nulle part. La ligne dit donc
+               * seulement « réfléchit… » tant qu'il reflechit (une fois par serie, pas a chaque
+               * fragment), et le texte entier part au fil, qui l'accumule sous la phase.
+               */
+              if (raisonnement && dernierSigneDeVie !== EN_REFLEXION) {
+                dernierSigneDeVie = EN_REFLEXION
+                onProgress?.(
+                  battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun, phaseCourante)
+                )
+              }
               this.broadcast({
                 type: 'orchestrate-delta',
                 convId,
                 runPath,
                 deltaStep: step,
                 delta,
-                ...(note ? { note } : {})
+                ...(note ? { note } : {}),
+                ...(raisonnement
+                  ? {
+                      reasoning: raisonnement,
+                      ...(phaseCourante ? { reasoningPhase: phaseCourante } : {})
+                    }
+                  : {})
               })
             },
             abortController.signal,
@@ -3271,7 +3309,8 @@ export class AppCommandBus {
                 lifecycle,
                 {
                   conversationId: convId,
-                  turnId: orchestrationTurnId
+                  turnId: orchestrationTurnId,
+                  runPath
                 },
                 this.traceStore
               )
@@ -3284,7 +3323,7 @@ export class AppCommandBus {
               terminalLifecycle = settledLifecycle
               persistRunLifecycle(
                 terminalLifecycle,
-                { conversationId: convId, turnId: orchestrationTurnId },
+                { conversationId: convId, turnId: orchestrationTurnId, runPath },
                 this.traceStore
               )
               const costCoverage = formatExecutionCostCoverage({
@@ -3311,7 +3350,7 @@ export class AppCommandBus {
             // `verify` : `orchestrate` laissait l'orchestrateur lire `deps.executionWorkspace`,
             // fige au demarrage de l'app. Une conversation rangee sur un AUTRE depot lancait donc
             // son run dans le depot d'Autowin. Mesure conv-649 : une demande visant
-            // D:/RigV3Desktop a produit un run analysant D:/AutoWinOS, 11,65 $ perdus.
+            // D:/ContosoV3Desktop a produit un run analysant D:/AutoWinOS, 11,65 $ perdus.
             { workspace: this.workspaceDuTour }
           )
           if (!r.gateBlocked) {
@@ -5407,7 +5446,7 @@ export class AppCommandBus {
        *
        * Toute la machinerie qui suit (bureau isole, `vitest related`, publication) est faite POUR CE
        * DEPOT : elle cree un bureau depuis le git d'Autowin, resynchronise un chemin RELATIF a lui, et
-       * juge l'edition avec la suite de tests d'Autowin. Sur `D:\GIT\RigApplication` (mesure conv-12),
+       * juge l'edition avec la suite de tests d'Autowin. Sur `D:\GIT\ContosoApp` (mesure conv-12),
        * rien de tout cela n'a de sens : ce depot a son propre git, sa branche, sa compilation .NET.
        * L'appliquer la-bas ne protegerait rien — il refuserait tout, ou publierait ailleurs.
        * L'utilisateur garde la main sur la verification chez lui : c'est exactement ce qu'il a annonce

@@ -652,9 +652,9 @@ describe('SourceControlPane (prompt-first)', () => {
   })
 
   it('vue Workspace : lit le dépôt de la CONVERSATION, pas le dépôt mémorisé', async () => {
-    // 2026-09-23 : le panneau annonçait « RIG-V3 » et sa branche sur une conversation ouverte sur
+    // 2026-09-23 : le panneau annonçait « CONTOSO-V3 » et sa branche sur une conversation ouverte sur
     // AutoWinOS — le chemin mémorisé une fois dans le navigateur primait sur le fil.
-    localStorage.setItem('autowin:sc-repo', 'C:/rig-v3')
+    localStorage.setItem('autowin:sc-repo', 'C:/contoso-v3')
     mockApi(GIT)
     await act(async () => {
       root.render(
@@ -668,18 +668,18 @@ describe('SourceControlPane (prompt-first)', () => {
     })
     await openWorkspaceView()
     expect(calls.repoArgs).toContain('C:/Sources/AutoWinOS')
-    expect(calls.repoArgs).not.toContain('C:/rig-v3')
+    expect(calls.repoArgs).not.toContain('C:/contoso-v3')
     expect(container.textContent).toContain('AutoWinOS')
   })
 
   it('le dépôt Worktree persisté ne change jamais le dépôt du Projet', async () => {
-    localStorage.setItem('autowin:sc-repo', 'C:/rig')
+    localStorage.setItem('autowin:sc-repo', 'C:/contoso')
     mockApi(GIT)
     await render()
     expect(calls.conversationArgs).toEqual(['conv-a'])
     expect(calls.repoArgs).toHaveLength(0)
     await openWorkspaceView()
-    expect(calls.repoArgs).toContain('C:/rig')
+    expect(calls.repoArgs).toContain('C:/contoso')
   })
 
   it('Brain affiche uniquement les appels de la conversation, pas le dépôt Brain', async () => {

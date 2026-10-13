@@ -417,7 +417,7 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
       )
       return (rep.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!.text
     }
-    vi.stubEnv('AMITEL_BRAIN_ROOT', '\\\\nas1\\partage\\Projets IA\\Team Brain')
+    vi.stubEnv('AUTOWIN_BRAIN_ROOT', '\\\\nas1\\partage\\Projets IA\\Team Brain')
     try {
       for (const chemin of [
         '//NAS1/PARTAGE/Projets IA/Team Brain/knowledge/domain/modele-ult.md',

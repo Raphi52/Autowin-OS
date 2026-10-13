@@ -14,6 +14,14 @@ describe('memoire du juge entre deux passages', () => {
     expect(note).toMatch(/TOUS les autres écarts/)
     expect(note).not.toContain('tests verts')
   })
+  it('conv-914 : le rappel cible ce qui a changé, sans retirer au juge le droit de tout relever', () => {
+    const note = noteVerdictPrecedentPourJuge(valideMineur('ligne 57 au lieu de 56'))
+    expect(note).toContain(
+      'Revérifie ce qui a changé et les objections précédentes ; les points OK sur des lignes inchangées ne sont pas à refaire.'
+    )
+    // Le juge garde le droit de relever un écart sur une ligne inchangée (gravité : CONTRAT_OBJECTIONS).
+    expect(note).toMatch(/liste en UNE FOIS TOUS les autres écarts que tu constates/)
+  })
   it('premier passage : aucun rappel', () => {
     expect(noteVerdictPrecedentPourJuge('')).toBe('')
   })

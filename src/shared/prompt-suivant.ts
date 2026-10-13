@@ -271,7 +271,7 @@ function sansInterdictions(texte: string): string {
 /**
  * LE DOSSIER SANS DEPOT GIT NE PEUT RIEN AVOIR A TRIER.
  *
- * Mesure des saisies des 09 et 10/09/2026 sur `D:\RigV3Desktop` : « comment ca commiter? ya pas de
+ * Mesure des saisies des 09 et 10/09/2026 sur `D:\ContosoV3Desktop` : « comment ca commiter? ya pas de
  * repo », puis « j1i jamais fait de repo tas mis ca sur quel git? », puis « j'ai pas de git arrete
  * de me casser les couilles pour publier ». Trois fois la meme reponse, parce que cette fonction ne
  * connaissait que le TEXTE du prompt : ses trois exceptions (ordre de tri deja joue, charniere de

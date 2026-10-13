@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local authentication shared by the Amitel Brain service and its clients."""
+"""Local authentication shared by the Brain service and its clients."""
 import hashlib
 import hmac
 import base64
@@ -11,7 +11,11 @@ import subprocess
 import time
 from pathlib import Path
 
-SERVICE_NAME = "amitel-brain"
+import brain_identite
+
+# Nom de service signe dans chaque echange : celui du profil d'entreprise s'il existe (un serveur
+# deja installe sur le poste ne connait que celui-la), le nom neutre sinon (`brain_identite`).
+SERVICE_NAME = brain_identite.service()
 PROTOCOL_VERSION = 2
 _TOKEN_CACHE = None
 _TOKEN_CACHE_PATH = None
@@ -22,8 +26,8 @@ def _token_path() -> Path:
         local = os.environ.get("LOCALAPPDATA")
         if not local:
             raise RuntimeError("LOCALAPPDATA is unavailable")
-        return Path(local) / "AmitelBrain" / "service-token"
-    return Path.home() / ".amitel-brain" / "service-token"
+        return Path(local) / brain_identite.dossier_local() / "service-token"
+    return Path.home() / brain_identite.dossier_maison() / "service-token"
 
 
 def _restrict_token_acl(path: Path, *, directory=False) -> None:
@@ -40,7 +44,7 @@ def _restrict_token_acl(path: Path, *, directory=False) -> None:
     subprocess.run(["icacls", str(path), "/reset"], **quiet)
     # Retrait de l'heritage ET octroi dans UN SEUL appel : icacls les ecrit en une fois.
     # En deux appels, un echec ou un arret entre les deux laissait une ACL protegee VIDE
-    # (D:PAI) — constate le 2026-09-24 sur %LOCALAPPDATA%\AmitelBrain : venv et tooling
+    # (D:PAI) — constate le 2026-09-24 sur %LOCALAPPDATA%\<dossier du Brain> : venv et tooling
     # devenus illisibles, Brain hors service.
     permission = f"{principal}:{'(OI)(CI)F' if directory else 'F'}"
     subprocess.run(
@@ -51,16 +55,16 @@ def _restrict_token_acl(path: Path, *, directory=False) -> None:
 def _read_token(path: Path) -> str:
     token = path.read_text(encoding="ascii").strip()
     if len(token) < 32:
-        raise ValueError("Amitel Brain service token is invalid")
+        raise ValueError("Brain service token is invalid")
     return token
 
 
 def service_token() -> str:
     global _TOKEN_CACHE, _TOKEN_CACHE_PATH
-    configured = os.environ.get("AMITEL_BRAIN_TOKEN")
+    configured = brain_identite.lire("AUTOWIN_BRAIN_TOKEN")
     if configured:
         if len(configured) < 32:
-            raise ValueError("AMITEL_BRAIN_TOKEN must contain at least 32 characters")
+            raise ValueError("AUTOWIN_BRAIN_TOKEN must contain at least 32 characters")
         return configured
 
     path = _token_path().resolve()
@@ -85,7 +89,7 @@ def service_token() -> str:
             except (OSError, ValueError):
                 time.sleep(0.02)
         if not token:
-            raise RuntimeError("Amitel Brain service token is unavailable")
+            raise RuntimeError("Brain service token is unavailable")
     _TOKEN_CACHE = token
     _TOKEN_CACHE_PATH = path
     return token
@@ -126,11 +130,11 @@ def signed_context_payload(
 
 def verified_context(payload: dict, token: str) -> str:
     if payload.get("service") != SERVICE_NAME:
-        raise ValueError("unexpected Amitel Brain service identity")
+        raise ValueError("unexpected Brain service identity")
     protocol = payload.get("protocol")
     signature = payload.get("signature")
     if not isinstance(signature, str):
-        raise ValueError("invalid authenticated Amitel Brain response")
+        raise ValueError("invalid authenticated Brain response")
     if protocol == 1:
         context = payload.get("context")
         signed = context
@@ -140,23 +144,23 @@ def verified_context(payload: dict, token: str) -> str:
             body = json.loads(signed)
             context = body.get("context")
         except (TypeError, json.JSONDecodeError, AttributeError) as exc:
-            raise ValueError("invalid authenticated Amitel Brain response") from exc
+            raise ValueError("invalid authenticated Brain response") from exc
     else:
-        raise ValueError("unexpected Amitel Brain service identity")
+        raise ValueError("unexpected Brain service identity")
     if not isinstance(context, str) or not isinstance(signed, str):
-        raise ValueError("invalid authenticated Amitel Brain response")
+        raise ValueError("invalid authenticated Brain response")
     if not hmac.compare_digest(signature, _signature(signed, token, protocol=protocol)):
-        raise ValueError("Amitel Brain response authentication failed")
+        raise ValueError("Brain response authentication failed")
     return context
 
 
-REQUEST_AAD = b"amitel-brain/request-v1"
+REQUEST_AAD = f"{SERVICE_NAME}/request-v1".encode("utf-8")
 
 
 def seal_request(payload: dict, token: str, nonce: str) -> dict:
     """Encrypt a request so a listener that wins a loopback TOCTOU learns no prompt/token."""
     if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{24}", nonce):
-        raise ValueError("invalid Amitel Brain request nonce")
+        raise ValueError("invalid Brain request nonce")
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     plaintext = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     key = hashlib.sha256(token.encode("utf-8")).digest()
@@ -166,14 +170,14 @@ def seal_request(payload: dict, token: str, nonce: str) -> dict:
 
 def open_request(envelope: dict, token: str) -> dict:
     if not isinstance(envelope, dict):
-        raise ValueError("invalid encrypted Amitel Brain request")
+        raise ValueError("invalid encrypted Brain request")
     nonce = envelope.get("nonce")
     ciphertext = envelope.get("ciphertext")
     if (
         not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{24}", nonce)
         or not isinstance(ciphertext, str) or len(ciphertext) > 32_768
     ):
-        raise ValueError("invalid encrypted Amitel Brain request")
+        raise ValueError("invalid encrypted Brain request")
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     try:
         encrypted = base64.b64decode(ciphertext, validate=True)
@@ -181,7 +185,7 @@ def open_request(envelope: dict, token: str) -> dict:
         plaintext = AESGCM(key).decrypt(bytes.fromhex(nonce), encrypted, REQUEST_AAD)
         payload = json.loads(plaintext)
     except Exception as exc:
-        raise ValueError("invalid encrypted Amitel Brain request") from exc
+        raise ValueError("invalid encrypted Brain request") from exc
     if not isinstance(payload, dict):
-        raise ValueError("invalid encrypted Amitel Brain request")
+        raise ValueError("invalid encrypted Brain request")
     return payload

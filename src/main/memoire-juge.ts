@@ -74,6 +74,8 @@ export function noteVerdictPrecedentPourJuge(verdictPrecedent: string): string {
   return (
     `VERDICT PRÉCÉDENT — ce livrable sort d'une réparation. Objections du juge précédent :\n${liste}\n` +
     `Pour CHAQUE objection ci-dessus, dis dans OBJECTIONS si elle est corrigée (OK: …) ou non (même gravité, même formulation). ` +
+    // conv-914 : le juge d'une réparation revérifiait TOUT le livrable à chaque passage.
+    `Revérifie ce qui a changé et les objections précédentes ; les points OK sur des lignes inchangées ne sont pas à refaire. ` +
     `Puis liste en UNE FOIS TOUS les autres écarts que tu constates : un écart passé sous silence ce tour-ci et relevé au suivant coûte une réparation entière.\n`
   )
 }

@@ -54,8 +54,8 @@ const message = (texte: string): Message[] => [{ role: 'user', content: texte } 
 
 describe('chat() — le dossier de travail est resolu par tour', () => {
   const envInitial = process.env[AUTOWIN_WORKSPACE_ENV]
-  const PROJET_A = resolve('/projets/rig')
-  const PROJET_B = resolve('/projets/amitel')
+  const PROJET_A = resolve('/projets/contoso')
+  const PROJET_B = resolve('/projets/acme')
 
   beforeEach(() => {
     configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-dossier-tour-')))

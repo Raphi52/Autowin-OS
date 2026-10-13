@@ -34,7 +34,7 @@ describe('environnement minimal des CLI externes', () => {
         ANTHROPIC_API_KEY: 'anthropic-secret',
         Gh_ToKeN: 'github-secret',
         gItLaB_tOkEn: 'gitlab-secret',
-        AMITEL_BRAIN_TOKEN: 'brain-secret',
+        AUTOWIN_BRAIN_TOKEN: 'brain-secret',
         AWS_SECRET_ACCESS_KEY: 'aws-secret'
       })
     ).toEqual({ PATH: 'bin' })

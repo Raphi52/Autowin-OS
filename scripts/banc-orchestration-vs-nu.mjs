@@ -76,7 +76,7 @@ export const BASE = COMMIT_CORRECTIF
 /** Le depot qui porte ce script : le banc ne le prepare JAMAIS, il ne travaille que sur une copie. */
 const DEPOT_DU_BANC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-// Chemins REELS : sous Windows, le dossier temporaire arrive sous son nom court (RAPHAE~1.VIL)
+// Chemins REELS : sous Windows, le dossier temporaire arrive sous son nom court (PRENOM~1.NOM)
 // alors que git rend le nom long — compares tels quels, deux ecritures du meme dossier different.
 const reel = (p) => realpathSync.native(path.resolve(p)).toLowerCase()
 const memeChemin = (a, b) => reel(a) === reel(b)

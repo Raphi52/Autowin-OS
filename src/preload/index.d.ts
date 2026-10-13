@@ -11,6 +11,7 @@ import type {
   PropositionAutoriteProd
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
+import type { GestesDesTours } from '../shared/gestes-agent'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
   WorktreeAgentActivity,
@@ -261,6 +262,8 @@ interface ChatApi {
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >
   turnJournal: (conversationId: string, turnId: string) => Promise<Array<Record<string, unknown>>>
+  /** Gestes propres de l'agent (lectures, commandes, éditions) de chaque demande, par demande. */
+  turnJournalGestes: (conversationId: string) => Promise<GestesDesTours>
   /** Consigne à rejouer après un redémarrage demandé par l'agent, rendue une seule fois. */
   repriseEnAttente: () => Promise<{
     conversationId: string
@@ -701,6 +704,13 @@ interface ChatApi {
        * finit persiste, la note dit seulement que le sous-agent travaille encore.
        */
       note?: string
+      /**
+       * Fragment du raisonnement du sous-agent (`orchestrate-delta`), a ACCUMULER sous sa phase —
+       * jamais a afficher seul comme ligne d'etat (conv-918, 2026-10-13).
+       */
+      reasoning?: string
+      /** Phase en cours quand ce fragment de raisonnement a ete emis. */
+      reasoningPhase?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */

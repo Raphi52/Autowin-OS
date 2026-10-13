@@ -1,0 +1,264 @@
+/*
+ * FIL DES DEMANDES (refonte du graphe, 2026-10-12). Lignes sobres, sans halo ni perle : l'état se lit
+ * à la pastille et au mot, la durée et le coût en chiffres. Couleurs = jetons de thème uniquement.
+ */
+.request-thread {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--s2);
+  overflow-y: auto;
+  padding: var(--s2) var(--s3);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  /* Le récit se replie sur une colonne quand le PANNEAU (pas la fenêtre) est étroit. */
+  container-type: inline-size;
+}
+
+.request-thread-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.request-thread-head span {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.request-thread-empty,
+.request-thread-error {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-dim);
+  padding: var(--s2) 0;
+}
+
+.request-thread-error {
+  color: var(--err);
+}
+
+.request-thread-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.request-row-item {
+  border-bottom: 1px solid var(--line);
+}
+
+.request-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 7px 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.request-row:hover,
+.request-row[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.request-row:focus-visible {
+  outline: 1px solid var(--violet);
+  outline-offset: -1px;
+}
+
+.request-row-dot {
+  width: 8px;
+  height: 8px;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.request-row-item.is-failed .request-row-dot {
+  background: var(--err);
+}
+
+.request-row-item.is-running .request-row-dot {
+  background: var(--violet);
+  animation: request-row-pulse 1.4s ease-in-out infinite;
+}
+
+.request-row-item.is-cancelled .request-row-dot,
+.request-row-item.is-interrupted .request-row-dot {
+  background: var(--text-faint);
+}
+
+@keyframes request-row-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .request-row-item.is-running .request-row-dot {
+    animation: none;
+  }
+}
+
+.request-row-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-row-figures {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.request-row-figures b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.request-row-item.is-failed .request-row-figures b {
+  color: var(--err);
+}
+
+/*
+ * Résumé : une ligne quand il tient, DEUX quand le panneau est étroit (388 px chez l'utilisateur, où
+ * « Lancé ×N » finissait sous les points de suspension). La ligne ne se brise qu'entre deux
+ * morceaux : un morceau (« Lancé ×26 », une date) n'est jamais coupé en deux.
+ */
+.request-row-mini {
+  display: -webkit-box;
+  overflow: hidden;
+  grid-column: 2 / -1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--text-faint);
+  font-size: 12px;
+  white-space: normal;
+}
+
+.request-row-piece {
+  white-space: nowrap;
+}
+
+.request-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 4px 2px var(--s3) 18px;
+}
+
+.request-story dl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.request-story-chapter {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.request-story-chapter dt {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.9;
+  text-transform: uppercase;
+}
+
+.request-story-chapter dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.request-story-figure {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.request-story-failure {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--err);
+  background: color-mix(in srgb, var(--err) 10%, transparent);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.request-story .is-failed,
+.request-story-action.is-failed {
+  color: var(--err);
+}
+
+.request-story-empty {
+  margin: 0;
+  color: var(--text-faint);
+}
+
+.request-story-families {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.request-story-family-name {
+  display: inline-block;
+  min-width: 92px;
+  color: var(--text-dim);
+}
+
+.request-live-heartbeat {
+  color: var(--violet);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.request-story-tree summary {
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.request-story-tree[open] summary {
+  margin-bottom: var(--s2);
+}
+
+@container (max-width: 420px) {
+  .request-story-chapter {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* Panneau étroit : la famille passe au-dessus de ses gestes, au lieu d'écraser leur durée. */
+  .request-story-family-name {
+    display: block;
+    min-width: 0;
+  }
+}
+
+.request-story-figure {
+  white-space: nowrap;
+}

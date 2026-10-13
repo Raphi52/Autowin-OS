@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { supprimerArbre } from '../src/main/fs-supprimer'
@@ -37,6 +37,107 @@ export const PREFIXES_TEMPORAIRES_DE_TEST = ['autowin', 'aos-'] as const
 
 /** Racine de données isolée des tests — voir `vitest.config.ts`. Jamais supprimée. */
 export const DOSSIER_A_EPARGNER = 'autowin-tests-appdata'
+
+/**
+ * REGISTRE DES SUITES EN COURS SUR LE POSTE — un fichier par suite vitest vivante. Jamais supprimé.
+ *
+ * MESURÉ le 2026-10-13 : la garde n°1 (« né pendant CE run ») ne distingue pas les suites entre
+ * elles. Plusieurs conversations et agents jouent vitest en même temps sur ce poste ; la fin de l'une
+ * supprimait les dossiers nés depuis SON départ, y compris ceux qu'une AUTRE suite, encore en cours,
+ * utilisait. `src/main/providers/claude.garde-onfailure.test.ts` échouait alors par intermittence
+ * (« Cannot find module …/garde.mjs »), vert seul, en même temps que des passes de conv-914 et conv-924.
+ * Une date de naissance ne dit pas QUI a créé le dossier : chaque suite déclare donc ici qu'elle tourne.
+ */
+export const REGISTRE_DES_SUITES = 'autowin-suites-vitest-en-cours'
+
+/** Une suite vitest inscrite au registre : son processus principal et l'instant de son départ. */
+export interface SuiteInscrite {
+  /** Nom du fichier d'inscription, unique par suite (deux suites d'un même processus restent distinctes). */
+  id: string
+  pid: number
+  debut: number
+}
+
+/** Au-delà, une inscription est périmée (numéro de processus réattribué) : même borne que la purge. */
+const AGE_MAX_INSCRIPTION_MS = 24 * 60 * 60 * 1000
+
+/** Marge entre le départ d'une autre suite et la naissance d'un dossier, dans le sens qui épargne. */
+const MARGE_HORLOGE_MS = 5_000
+
+/** Vrai si un processus de ce numéro existe. `EPERM` : il existe, mais appartient à un autre compte. */
+export function processusVivant(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/** Inscrit une suite qui démarre. Échec d'écriture → `undefined` : le nettoyage n'a pas le droit de casser la suite. */
+export function inscrireSuite(racine: string, pid: number, debut: number): SuiteInscrite | undefined {
+  const id = `${pid}-${debut}-${Math.random().toString(36).slice(2, 10)}.json`
+  try {
+    const dossier = join(racine, REGISTRE_DES_SUITES)
+    mkdirSync(dossier, { recursive: true })
+    writeFileSync(join(dossier, id), JSON.stringify({ pid, debut }), 'utf8')
+    return { id, pid, debut }
+  } catch {
+    return undefined
+  }
+}
+
+export function desinscrireSuite(racine: string, suite: SuiteInscrite | undefined): void {
+  if (!suite) return
+  try {
+    rmSync(join(racine, REGISTRE_DES_SUITES, suite.id), { force: true })
+  } catch {
+    // Inscription restée : son processus mourra, et elle sera retirée par `suitesEnCours`.
+  }
+}
+
+/**
+ * Les suites inscrites dont le processus vit encore. Une inscription laissée par une suite morte sans
+ * se désinscrire (plantage, Ctrl+C) est retirée au passage : elle ne protège plus rien.
+ */
+export function suitesEnCours(
+  racine: string,
+  maintenant: number = Date.now(),
+  vivant: (pid: number) => boolean = processusVivant
+): SuiteInscrite[] {
+  const dossier = join(racine, REGISTRE_DES_SUITES)
+  let noms: string[]
+  try {
+    noms = readdirSync(dossier)
+  } catch {
+    return []
+  }
+  const suites: SuiteInscrite[] = []
+  for (const id of noms) {
+    if (!id.endsWith('.json')) continue
+    const chemin = join(dossier, id)
+    let suite: SuiteInscrite | undefined
+    try {
+      const brut = JSON.parse(readFileSync(chemin, 'utf8')) as { pid?: unknown; debut?: unknown }
+      if (typeof brut.pid === 'number' && typeof brut.debut === 'number') {
+        suite = { id, pid: brut.pid, debut: brut.debut }
+      }
+    } catch {
+      // Illisible (en cours d'écriture) : une suite qui s'inscrit n'a encore créé aucun dossier.
+    }
+    if (!suite) continue
+    if (maintenant - suite.debut < AGE_MAX_INSCRIPTION_MS && vivant(suite.pid)) {
+      suites.push(suite)
+      continue
+    }
+    try {
+      rmSync(chemin, { force: true })
+    } catch {
+      // Retirée au prochain passage.
+    }
+  }
+  return suites
+}
 
 /**
  * DOSSIERS DE L'APPLICATION QUI TOURNE — jamais supprimés, même nés pendant le run.
@@ -164,7 +265,9 @@ export function prefixesTemporairesDeLaSuite(racineDepot?: string): string[] {
  */
 export function nettoyerDossiersTemporairesDeTest(
   racine: string,
-  debutDuRun: number
+  debutDuRun: number,
+  /** L'inscription de la suite qui se termine (`SuiteInscrite.id`), pour ne pas se compter parmi les autres. */
+  moi?: string
 ): ResultatNettoyage {
   const resultat: ResultatNettoyage = { supprimes: [], epargnes: [], echecs: [] }
 
@@ -178,10 +281,12 @@ export function nettoyerDossiersTemporairesDeTest(
   }
 
   const prefixes = prefixesTemporairesDeLaSuite()
+  // Les AUTRES suites qui tournent encore sur le poste (voir `REGISTRE_DES_SUITES`).
+  const autres = suitesEnCours(racine).filter((suite) => suite.id !== moi)
 
   for (const nom of entrees) {
     if (!prefixes.some((prefixe) => nom.startsWith(prefixe))) continue
-    if (nom === DOSSIER_A_EPARGNER) {
+    if (nom === DOSSIER_A_EPARGNER || nom === REGISTRE_DES_SUITES) {
       resultat.epargnes.push(nom)
       continue
     }
@@ -201,6 +306,15 @@ export function nettoyerDossiersTemporairesDeTest(
     }
     // Antérieur au run : il appartient à quelqu'un d'autre.
     if (ne < debutDuRun) {
+      resultat.epargnes.push(nom)
+      continue
+    }
+    // Né pendant ce run, mais pas forcément PAR lui : une autre suite qui tournait déjà à sa naissance
+    // peut l'utiliser encore. C'est la dernière suite à finir qui le range. Marge d'horloge dans le
+    // sens prudent : la date de naissance peut être arrondie sous `Date.now()` (temp-cleanup.test.ts).
+    // Coût assumé : deux suites qui finissent en même temps se l'épargnent mutuellement, et il reste
+    // à la purge des plus de 24 h.
+    if (autres.some((suite) => suite.debut <= ne + MARGE_HORLOGE_MS)) {
       resultat.epargnes.push(nom)
       continue
     }
@@ -241,7 +355,7 @@ export function purgerDossiersTemporairesAnciens(
 
   for (const nom of entrees) {
     if (!prefixesAnciens.some((prefixe) => nom.startsWith(prefixe))) continue
-    if (nom === DOSSIER_A_EPARGNER) {
+    if (nom === DOSSIER_A_EPARGNER || nom === REGISTRE_DES_SUITES) {
       resultat.epargnes.push(nom)
       continue
     }

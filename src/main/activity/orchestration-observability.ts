@@ -1,10 +1,14 @@
 import type { OrchestrationPhase, OrchestrationStep } from '../orchestrator'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
-import { appendPromptCall, promptObservabilityRoot } from './prompt-observability'
+import {
+  appendPromptCall,
+  promptObservabilityRoot,
+  restoreMisdecodedUtf8
+} from './prompt-observability'
 import { promptCallToTraceEvents } from './prompt-call-trace'
 import { TraceStore } from './trace-store'
-import { assertTraceEvent, type TraceEventV1 } from './trace-event'
+import { assertTraceEvent, type TraceEventV1, type TracePayload } from './trace-event'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { evidencePayloads } from './evidence-payloads'
 import { stepPayloads } from './step-reasoning-payloads'
@@ -33,12 +37,27 @@ function avecTraceStore(prete: TraceStore | undefined, travail: (store: TraceSto
   }
 }
 
+/**
+ * `runPath` : le RUN.md que l'APPELANT a ouvert pour ce run. Le moteur l'ignore ; on le grave sur
+ * la clôture pour que le bilan du nœud « Clôture du run » puisse ouvrir CE fichier — aucun autre
+ * champ de la trace ne relie `run-<hash>` à son RUN.md.
+ */
 export function persistRunLifecycle(
   lifecycle: RunLifecycleEvent,
-  context: { conversationId: string; turnId: string },
+  context: { conversationId: string; turnId: string; runPath?: string },
   traceStore?: TraceStore
 ): void {
-  avecTraceStore(traceStore, (store) => persisterCycleDeRun(lifecycle, context, store))
+  const avecRunMd: RunLifecycleEvent =
+    lifecycle.stage === 'closure' && context.runPath && !lifecycle.closure.runPath
+      ? { ...lifecycle, closure: { ...lifecycle.closure, runPath: context.runPath } }
+      : lifecycle
+  avecTraceStore(traceStore, (store) =>
+    persisterCycleDeRun(
+      avecRunMd,
+      { conversationId: context.conversationId, turnId: context.turnId },
+      store
+    )
+  )
 }
 
 function persisterCycleDeRun(
@@ -111,6 +130,21 @@ export function persistOrchestrationPhaseStart(
   avecTraceStore(traceStore, (store) => persisterDebutDePhase(phase, context, store))
 }
 
+/**
+ * LE PROMPT DU SOUS-AGENT, ÉCRIT DÈS SON DÉMARRAGE (demande du 2026-10-13).
+ *
+ * Il n'entrait dans la trace qu'à la FIN de l'étape (`persistOrchestrationStep`, avec la réponse) :
+ * pendant toute l'étape, sa fiche du graphe restait vide. L'enveloppe est pourtant construite
+ * avant l'appel et passe déjà dans `phase.prompt` (`orchestrator.ts`, onPhase). Seuls les messages
+ * de l'UTILISATEUR partent ici, au texte près de ceux de la fin (`promptCallToTraceEvents`), pour
+ * que le détail les fusionne : le prompt système, lourd, reste écrit une seule fois, à la fin.
+ */
+function promptDuDepart(phase: OrchestrationPhase): TracePayload[] {
+  return (phase.prompt?.messages ?? [])
+    .filter((message) => message.role === 'user' && message.content.trim())
+    .map((message) => ({ kind: 'user-message', content: restoreMisdecodedUtf8(message.content) }))
+}
+
 function persisterDebutDePhase(
   phase: OrchestrationPhase,
   context: OrchestrationTraceContext,
@@ -148,7 +182,7 @@ function persisterDebutDePhase(
       },
       recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
       channel: 'internal',
-      payloads: [{ kind: 'app-state', content: `${phase.step} démarré` }],
+      payloads: [{ kind: 'app-state', content: `${phase.step} démarré` }, ...promptDuDepart(phase)],
       observation: { boundary: `Autowin orchestration ${phase.step} start`, fidelity: 'exact' },
       execution: { ...phase.execution, runId: context.runId ?? phase.execution.runId },
       provider: phase.provider ? { id: phase.provider, model: phase.model } : undefined

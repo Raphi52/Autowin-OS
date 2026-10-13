@@ -52,9 +52,9 @@ const CRLF = String.fromCharCode(13, 10)
 /*
  * LE CHEMIN EST RESOLU EN FORME LONGUE — sinon `vitest related` ne trouve JAMAIS rien ici.
  *
- * MESURE du 2026-09-03, dans ce depot : `os.tmpdir()` rend `C:\Users\EMMANU~1.HEU\...` (forme 8.3
+ * MESURE du 2026-09-03, dans ce depot : `os.tmpdir()` rend `C:\Users\COLLEG~1.NOM\...` (forme 8.3
  * heritee de MS-DOS). Le bureau isole herite de ce chemin court, vitest resout la cible dessus,
- * mais son graphe de modules est indexe sur le chemin REEL (`C:\Users\Emmanuel.heurtier\...`) : les
+ * mais son graphe de modules est indexe sur le chemin REEL (`C:\Users\Prenom.collegue\...`) : les
  * deux ne se ressemblent pas, donc `vitest related <fichier> --run` rend « No test files found,
  * exiting with code 0 ». Le produit bascule alors sur la suite complete — comportement voulu, mais
  * qui rend AVEUGLE tout test cense prouver le ciblage : il passe quoi qu'on sabote.

@@ -75,7 +75,7 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
     })
   })
 
-  // run-36461be778d0-1, reparations 1-4 : « 4 edits de D:/GIT/RigApplication/.../PROC_SURVBOD.csproj »
+  // run-36461be778d0-1, reparations 1-4 : « 4 edits de D:/GIT/ContosoApp/.../PROC_SURVBOD.csproj »
   // — l'extension etait bornee a 5 caracteres, un `.csproj` (6) ne pouvait jamais etre nomme.
   it('lit un jeton qui nomme un fichier a extension LONGUE (.csproj)', async () => {
     const f = 'Z:/absent/BODACC/PROC_SURVBOD/PROC_SURVBOD.csproj' // hors disque : isole la source 2
@@ -271,7 +271,7 @@ describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detach
 
 /**
  * SOURCE 3 SUR UN FICHIER NON SUIVI — run-36461be778d0-1, reparations 1 a 3 : le refus fix-gate
- * visait D:/GIT/RigApplication/.../BODACC/PROC_SURVBOD/PROC_SURVBOD.csproj, fichier DEPLACE donc
+ * visait D:/GIT/ContosoApp/.../BODACC/PROC_SURVBOD/PROC_SURVBOD.csproj, fichier DEPLACE donc
  * non suivi (`??`), qui portait deja son `fix-ok:` ligne 3. `git diff HEAD` ne montre rien d'un
  * fichier non suivi et `git log` n'a aucun commit : le jeton restait invisible, meme refus rejoue.
  */

@@ -45,7 +45,7 @@ describe('racine-depot — ancrage LOCAL des sondes', () => {
   })
 
   /*
-   * LE point de ce fichier. Mesure du 2026-09-06 : 28 chemins `C:/Amitel/Autowin OS/...` codes en
+   * LE point de ce fichier. Mesure du 2026-09-06 : 28 chemins `C:/<editeur>/Autowin OS/...` codes en
    * dur dans 20 sondes de `scripts/`. Cette installation n'existe plus — les 7 lanceurs qui s'y
    * rendaient sont morts et ont ete supprimes. Toute reintroduction doit RATER ici.
    *
@@ -62,7 +62,10 @@ describe('racine-depot — ancrage LOCAL des sondes', () => {
         // La PROSE garde le droit de raconter le defaut : seul le CODE est vise, donc le chemin
         // entre guillemets (chaine JS ou PowerShell), hors ligne de commentaire.
         const commentaire = nu.startsWith('//') || nu.startsWith('*') || nu.startsWith('#')
-        if (!commentaire && /['"`]C:[\\/]{1,2}Amitel/i.test(ligne)) fautifs.push(`${nom}:${i + 1}`)
+        // Dossier d'editeur quelconque : le defaut vecu visait UNE installation `C:/<editeur>/Autowin OS`.
+        if (!commentaire && /['"`]C:[\\/]{1,2}[^'"`\\/]+[\\/]{1,2}Autowin OS/i.test(ligne)) {
+          fautifs.push(`${nom}:${i + 1}`)
+        }
       })
     }
     expect(fautifs).toEqual([])

@@ -8,6 +8,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import brain_identite
+
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 DRIVE_REMOTE = 4
@@ -62,7 +64,7 @@ class RetrievalTrace:
                 "score": round(float(hit.get("dense_cos", 0.0)), 6),
             })
         event = {
-            "schema": "amitel-brain/retrieval-trace-v1",
+            "schema": brain_identite.schema("retrieval-trace-v1"),
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "trace_id": self._identifier(trace_id),
             "harness": self._identifier(harness),
@@ -86,7 +88,7 @@ class RetrievalTrace:
 
 
 def configured_trace():
-    path = os.environ.get("AMITEL_BRAIN_TRACE_PATH", "").strip()
+    path = (brain_identite.lire("AUTOWIN_BRAIN_TRACE_PATH") or "").strip()
     if not path:
         return None
     try:

@@ -118,12 +118,12 @@ describe('normalizeProjects', () => {
     const p = normalizeProjects([
       { root: 'C:/dev/Autowin OS' },
       { root: 'C:/dev/Autowin OS' },
-      { root: 'C:/dev/rig', label: 'RIG' },
+      { root: 'C:/dev/contoso', label: 'CONTOSO' },
       { root: '' },
       'nope'
     ])
-    expect(p.map((x) => x.label)).toEqual(['Autowin OS', 'RIG'])
+    expect(p.map((x) => x.label)).toEqual(['Autowin OS', 'CONTOSO'])
     expect(p[0].id).toBeTruthy()
-    expect(p[1].root).toBe('C:/dev/rig')
+    expect(p[1].root).toBe('C:/dev/contoso')
   })
 })

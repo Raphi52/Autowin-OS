@@ -56,35 +56,159 @@ const PLAFOND_JUSTIFICATION = 400
  * courante ne matchait JAMAIS. Mesure du 20/08 : cinq tests rouges sur ce seul caractere.
  */
 const ETIQUETTE_NON_VERIFIE = /\bNON\s*[- ]?\s*V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
+const ETIQUETTE_NON_VERIFIE_G = new RegExp(ETIQUETTE_NON_VERIFIE.source, 'giu')
+/*
+ * Etiquette VERIFIE positive : toute forme NON VERIFIE est retiree AVANT, donc « NON VÉRIFIÉ » ne
+ * peut jamais etre lu comme une preuve.
+ */
+const ETIQUETTE_VERIFIE = /(?<!\p{L})V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
+const ETIQUETTE_UTILISATEUR = /\bDE\s+L['’]UTILISATEUR\b/iu
 
-const PREFIXE_PUCE = /^\s*(?:[-*•]|\d+[.)])\s*/u
-const PONCTUATION_ORPHELINE = /^[\s:—–-]+|[\s:—–-]+$/gu
+/*
+ * Une puce Markdown est un marqueur SUIVI D'UN BLANC. L'ancien motif acceptait `*` sans blanc et
+ * mangeait donc la premiere etoile d'un gras en tete de ligne : « **Non vérifié** » devenait
+ * « *Non vérifié** », puis « * ** » une fois l'etiquette retiree — exactement ce que l'utilisateur
+ * lisait a l'ecran (conv-919, 2026-10-13).
+ */
+const PREFIXE_PUCE = /^(\s*)(?:[-*•+]|\d+[.)])\s+/u
+const CASE_A_COCHER = /^\[[ xX]\]/u
+const BORD_DEBUT = /^[\s:;,.—–→-]+/u
+/** « Hypothèse : x » en tete d'affirmation : le mot d'annonce n'apprend rien a celui qui lit la liste. */
+const ANNONCE_HYPOTHESE = /^hypoth[eè]ses?\b[^:]{0,40}:\s*/iu
+/** « Aucune affirmation ne reste non vérifiée » dit qu'il n'y a RIEN a supposer : ce n'est pas une supposition. */
+const CONSTAT_D_ABSENCE = /^(?:aucune?|rien|nulle?)\b/iu
+const BORD_FIN = /[\s:;,(—–-]+$/u
+/** Une fin de phrase suivie d'une nouvelle phrase (majuscule ou guillemet). */
+const FIN_DE_PHRASE = /[.!?…](?=\s+[«"\p{Lu}])/u
 
-function titreDeSection(ligne: string): string | null {
-  const titre = /^\s{0,3}#{1,6}\s+(.+?)\s*$/u.exec(ligne)
-  return titre ? titre[1].toLowerCase() : null
-}
-
-function nettoyer(ligne: string): string {
-  return ligne
-    .replace(PREFIXE_PUCE, '')
-    .replace(ETIQUETTE_NON_VERIFIE, ' ')
-    .replace(/`/gu, '')
-    // L'etiquette etait souvent en gras (`**NON VERIFIE**`) : une fois retiree, il restait « ** ** »
-    // a l'ecran (conv-536). Un gras VIDE part avec elle.
-    .replace(/\*\*\s*\*\*/gu, ' ')
-    .replace(/\((?:\s*)\)/gu, ' ')
-    .replace(/\s{2,}/gu, ' ')
-    .replace(PONCTUATION_ORPHELINE, '')
-    .trim()
-}
-
-function nettoyerAffirmation(ligne: string): string {
-  return couper(nettoyer(ligne), PLAFOND_AFFIRMATION)
+function titreDeSection(ligne: string): { niveau: number; titre: string } | null {
+  const titre = /^\s{0,3}(#{1,6})\s+(.+?)\s*$/u.exec(ligne)
+  return titre ? { niveau: titre[1].length, titre: titre[2] } : null
 }
 
 /**
- * Une ligne de TABLEAU markdown, decoupee en cellules — ou `null` si ce n'en est pas une.
+ * Le texte tel que l'utilisateur le LIRA : le bloc affiche du texte brut, pas du Markdown.
+ *
+ * Le cadrage met ses etiquettes en gras (`**NON VÉRIFIÉ**`, `**Non vérifié :**`). Retirer
+ * l'etiquette en laissant les etoiles affichait « ** ** », « **** — dépend… », « ** :** ». On
+ * retire donc l'emphase AVANT de lire quoi que ce soit ; le code entre accents graves garde son
+ * contenu tel quel (un `__init__` n'est pas un gras).
+ */
+function texteBrut(ligne: string): string {
+  return ligne
+    .split(/(`[^`]*`)/u)
+    .map((morceau, index) =>
+      index % 2 === 1
+        ? morceau.slice(1, -1)
+        : morceau
+            .replace(/\*\*|__/gu, '')
+            .replace(/(?<![\p{L}\p{N}*])\*(?=\S)([^*\n]*?\S)\*(?![\p{L}\p{N}*])/gu, '$1')
+            .replace(/`/gu, '')
+    )
+    .join('')
+}
+
+/** Retire la ponctuation laissee orpheline aux deux bouts par l'etiquette retiree. */
+function bords(texte: string): string {
+  return texte
+    .replace(/\((?:\s*)\)/gu, ' ')
+    .replace(/\s{2,}/gu, ' ')
+    .replace(BORD_DEBUT, '')
+    .replace(BORD_FIN, '')
+    .trim()
+}
+
+/**
+ * L'etiquette NON VERIFIE APPOSEE sur la ligne — jamais celle qui y est seulement CITEE.
+ * « les deux « non vérifié » sont hors périmètre » parle de l'etiquette, il ne la porte pas.
+ */
+function etiquetteNonVerifie(texte: string): { debut: number; fin: number } | null {
+  for (const m of texte.matchAll(ETIQUETTE_NON_VERIFIE_G)) {
+    const debut = m.index ?? 0
+    const fin = debut + m[0].length
+    const avant = texte.slice(0, debut).trimEnd().slice(-1)
+    const apres = texte.slice(fin).trimStart().charAt(0)
+    if (/[«"“]/u.test(avant) && /[»"”]/u.test(apres)) continue
+    return { debut, fin }
+  }
+  return null
+}
+
+function portUneAutorite(texte: string): boolean {
+  return (
+    ETIQUETTE_VERIFIE.test(texte.replace(ETIQUETTE_NON_VERIFIE_G, ' ')) ||
+    ETIQUETTE_UTILISATEUR.test(texte)
+  )
+}
+
+/** La raison ecrite apres l'etiquette, sans la parenthese qui l'enveloppait. */
+function raison(texte: string): string | undefined {
+  const propre = bords(bords(texte).replace(/^\(([^()]*)\)/u, '$1'))
+  return propre ? couper(propre, PLAFOND_JUSTIFICATION) : undefined
+}
+
+type Lecture =
+  | { genre: 'hypothese'; affirmation: string; justification?: string }
+  | { genre: 'entete'; justification?: string }
+
+/**
+ * Une affirmation lisible d'un coup : sa PREMIERE phrase. Ce qui suit (« À contrôler pendant
+ * l'écriture du code », « Si c'est l'inverse, dis-le ») est la raison, et va dans le depliable.
+ */
+function hypothese(texte: string, justification?: string): Lecture | null {
+  let affirmation = bords(bords(texte).replace(ANNONCE_HYPOTHESE, ''))
+  let suite = justification
+  if (!suite) {
+    const fin = FIN_DE_PHRASE.exec(affirmation)
+    if (fin && fin.index >= 12) {
+      suite = raison(affirmation.slice(fin.index + 1))
+      affirmation = affirmation.slice(0, fin.index + 1).trim()
+    }
+  }
+  if (!affirmation) return null
+  return {
+    genre: 'hypothese',
+    affirmation: couper(affirmation, PLAFOND_AFFIRMATION),
+    ...(suite && { justification: suite })
+  }
+}
+
+/**
+ * Une ligne qui porte l'etiquette NON VERIFIE, sous ses trois formes reelles :
+ *   « x — NON VÉRIFIÉ, raison »                       → l'affirmation est AVANT l'etiquette ;
+ *   « NON VÉRIFIÉ : x » / « NON VÉRIFIÉ, raison : x » → elle est APRES ;
+ *   « **NON VÉRIFIÉ, sans incidence :** » seul        → c'est un EN-TETE : les puces qui suivent
+ *     sont les affirmations. Forme la plus frequente des cadrages recents ; l'ancien lecteur
+ *     affichait l'en-tete lui-meme (« * , sans incidence sur la suite :** ») et ignorait la liste.
+ */
+function lireLigneEtiquetee(brut: string): Lecture | null {
+  const etiquette = etiquetteNonVerifie(brut)
+  if (!etiquette) return null
+  const avant = bords(brut.slice(0, etiquette.debut))
+  const apres = brut.slice(etiquette.fin)
+  if (avant) return hypothese(avant, raison(apres))
+  const qualifiee = /^\s*[,(]\s*([^:]{0,100}?)\)?\s*:(.*)$/su.exec(apres)
+  if (qualifiee) {
+    const qualificatif = raison(qualifiee[1])
+    return bords(qualifiee[2])
+      ? hypothese(qualifiee[2], qualificatif)
+      : { genre: 'entete', ...(qualificatif && { justification: qualificatif }) }
+  }
+  return bords(apres) ? hypothese(apres) : { genre: 'entete' }
+}
+
+/** La raison d'une cellule etiquetee : ce qui suit l'etiquette, ou la cellule entiere si elle la porte au milieu. */
+function raisonDeCellule(cellule: string): string | undefined {
+  const etiquette = etiquetteNonVerifie(cellule)
+  if (!etiquette) return raison(cellule)
+  return bords(cellule.slice(0, etiquette.debut))
+    ? raison(cellule)
+    : raison(cellule.slice(etiquette.fin))
+}
+
+/**
+ * Une ligne de TABLEAU markdown, decoupee en cellules (en texte brut) — ou `null` si ce n'en est
+ * pas une.
  *
  * C'est la forme reellement emise, mesuree le 20/08 sur le run `run-f7293debbd3b-1` :
  *
@@ -106,36 +230,15 @@ function cellulesDeTableau(ligne: string): string[] | null {
   if (cellules.length < 2) return null
   // `|---|---|` : une ligne faite de tirets et de deux-points n'affirme rien.
   if (cellules.every((cellule) => /^:?-{2,}:?$/u.test(cellule))) return null
-  return cellules
+  return cellules.map((cellule) => texteBrut(cellule).trim())
 }
 
-/** Ce que le cadrage a ecrit apres l'etiquette, dans ses mots. */
-function justificationApresEtiquette(cellule: string): string | undefined {
-  const reste = cellule.replace(ETIQUETTE_NON_VERIFIE, '').replace(/`/gu, '')
-  const propre = reste.replace(PONCTUATION_ORPHELINE, '').trim()
-  return propre ? propre.slice(0, PLAFOND_JUSTIFICATION) : undefined
-}
-
-/**
- * Les hypotheses porteuses d'un cadrage, dans l'ordre du texte.
- *
- * Deux sources, par conception distinctes : la section `## Confiance` (les affirmations que le
- * modele a lui-meme marquees NON VERIFIE) et les lignes de `## Besoin` qui s'annoncent comme des
- * hypotheses. Une ligne ETIQUETEE verifiee ou attribuee a l'utilisateur n'est jamais reprise : elle
- * a une autorite, contrairement a une deduction.
- */
 /**
  * Dit si une citation `chemin:ligne` d'une ligne VERIFIE est INTROUVABLE (fichier absent ou ligne
  * au-dela de sa fin). Injecte par l'appelant : ce module partage n'a pas acces au disque.
  */
 export type CitationIntrouvable = (chemin: string, ligne?: number) => boolean
 
-/*
- * Etiquette VERIFIE positive : toute forme NON VERIFIE est retiree AVANT, donc « NON VÉRIFIÉ » ne
- * peut jamais etre lu comme une preuve.
- */
-const ETIQUETTE_VERIFIE = /(?<!\p{L})V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
-const ETIQUETTE_NON_VERIFIE_G = new RegExp(ETIQUETTE_NON_VERIFIE.source, 'giu')
 /** `src/a.ts:12`, `SKILL.md:64-68` : un chemin a extension, suivi ou non d'un numero de ligne. */
 const CITATION = /([\w./-]+\.(?:md|tsx?|m?js|json|ps1|ya?ml))(?::(\d+))?/giu
 
@@ -156,6 +259,24 @@ function citationsIntrouvables(ligne: string, introuvable: CitationIntrouvable):
   return manquantes
 }
 
+/** Une liste ouverte par un en-tete (« **Non vérifié :** », « **Hypothèses (corrige-moi) :** »). */
+interface ListeOuverte {
+  justification?: string
+  /** Retrait de l'en-tete s'il est lui-meme une puce, -1 sinon : ses items sont plus a droite. */
+  retraitEntete: number
+  /** Retrait du premier item : une puce plus a droite est un DETAIL de l'item, pas une affirmation. */
+  retraitItems?: number
+  items: number
+}
+
+/**
+ * Les hypotheses porteuses d'un cadrage, dans l'ordre du texte.
+ *
+ * Deux sources, par conception distinctes : la section `## Confiance` (les affirmations que le
+ * modele a lui-meme marquees NON VERIFIE) et les lignes de `## Besoin` qui s'annoncent comme des
+ * hypotheses. Une ligne ETIQUETEE verifiee ou attribuee a l'utilisateur n'est jamais reprise : elle
+ * a une autorite, contrairement a une deduction.
+ */
 export function hypothesesDuCadrage(
   texte: unknown,
   options: { citationIntrouvable?: CitationIntrouvable } = {}
@@ -164,42 +285,107 @@ export function hypothesesDuCadrage(
   const trouvees: HypotheseDeCadrage[] = []
   const vues = new Set<string>()
   let sectionCourante: SourceHypothese | null = null
+  let niveauSection = 0
+  let liste: ListeOuverte | null = null
+
+  const retenir = (lecture: Lecture | null, source: SourceHypothese): void => {
+    if (!lecture || lecture.genre !== 'hypothese') return
+    const cle = lecture.affirmation.toLowerCase()
+    if (vues.has(cle)) return
+    vues.add(cle)
+    trouvees.push({
+      affirmation: lecture.affirmation,
+      source,
+      ...(lecture.justification && { justification: lecture.justification })
+    })
+  }
 
   for (const ligneBrute of texte.split(/\r?\n/u)) {
+    if (trouvees.length >= PLAFOND_HYPOTHESES) break
     const titre = titreDeSection(ligneBrute)
     if (titre !== null) {
-      sectionCourante = titre.includes('confiance')
+      // Un sous-titre (« ### Non vérifié ») RESTE dans sa section ; il ouvre ou ferme une liste.
+      if (sectionCourante && titre.niveau > niveauSection) {
+        const lecture = lireLigneEtiquetee(texteBrut(titre.titre))
+        liste =
+          lecture?.genre === 'entete'
+            ? { justification: lecture.justification, retraitEntete: -1, items: 0 }
+            : null
+        continue
+      }
+      const nom = titre.titre.toLowerCase()
+      sectionCourante = nom.includes('confiance')
         ? 'confiance'
-        : titre.includes('besoin')
+        : nom.includes('besoin')
           ? 'besoin'
           : null
+      niveauSection = titre.niveau
+      liste = null
       continue
     }
     if (!sectionCourante) continue
-    const ligne = ligneBrute.trim()
-    if (!ligne) continue
+    if (!ligneBrute.trim()) {
+      // Une ligne vide ferme une liste deja remplie ; entre l'en-tete et son premier item, non.
+      if (liste?.items) liste = null
+      continue
+    }
 
-    let affirmation: string | undefined
-    let justification: string | undefined
+    const puce = PREFIXE_PUCE.exec(ligneBrute)
+    const retrait = puce ? puce[1].replace(/\t/gu, '    ').length : -1
+    const brut = texteBrut(puce ? ligneBrute.slice(puce[0].length) : ligneBrute).trim()
 
+    if (liste) {
+      const estItem =
+        puce !== null &&
+        retrait > liste.retraitEntete &&
+        (liste.retraitItems === undefined || retrait >= liste.retraitItems)
+      if (estItem) {
+        liste.retraitItems ??= retrait
+        if (retrait > liste.retraitItems || CASE_A_COCHER.test(brut)) continue
+        liste.items++
+        const lecture = etiquetteNonVerifie(brut)
+          ? lireLigneEtiquetee(brut)
+          : portUneAutorite(brut)
+            ? null
+            : hypothese(brut)
+        if (lecture?.genre === 'hypothese') {
+          retenir(
+            { ...lecture, justification: lecture.justification ?? liste.justification },
+            sectionCourante
+          )
+        }
+        continue
+      }
+      liste = null
+    }
+
+    const cellules = cellulesDeTableau(ligneBrute.trim())
     const manquantes =
       sectionCourante === 'confiance' && options.citationIntrouvable
-        ? citationsIntrouvables(ligne, options.citationIntrouvable)
+        ? citationsIntrouvables(cellules ? cellules.join(' | ') : brut, options.citationIntrouvable)
         : []
-    const cellules = cellulesDeTableau(ligne)
+
     if (manquantes.length) {
-      affirmation = nettoyerAffirmation(
-        cellules ? cellules[0] : ligne.replace(new RegExp(ETIQUETTE_VERIFIE.source, 'giu'), ' ')
+      const sansEtiquette = cellules
+        ? cellules[0]
+        : brut.replace(new RegExp(ETIQUETTE_VERIFIE.source, 'giu'), ' ')
+      retenir(
+        hypothese(
+          sansEtiquette,
+          `marquée VÉRIFIÉ mais citation introuvable : ${manquantes.join(', ')}`
+        ),
+        sectionCourante
       )
-      justification = `marquée VÉRIFIÉ mais citation introuvable : ${manquantes.join(', ')}`
     } else if (cellules) {
       // Forme TABLEAU : l'affirmation est la premiere cellule, l'etiquette et sa raison vivent dans
       // une autre. Une ligne d'en-tete (« Affirmation | Statut ») ne porte aucune etiquette.
-      const cellulEtiquetee = cellules.find((cellule) => ETIQUETTE_NON_VERIFIE.test(cellule))
-      if (!cellulEtiquetee) continue
-      const premiere = cellules[0] === cellulEtiquetee ? '' : cellules[0]
-      affirmation = nettoyerAffirmation(premiere || cellulEtiquetee)
-      justification = premiere ? justificationApresEtiquette(cellulEtiquetee) : undefined
+      const etiquetee = cellules.find((cellule) => etiquetteNonVerifie(cellule))
+      if (!etiquetee) continue
+      const premiere = cellules[0] === etiquetee ? '' : bords(cellules[0])
+      retenir(
+        premiere ? hypothese(premiere, raisonDeCellule(etiquetee)) : lireLigneEtiquetee(etiquetee),
+        sectionCourante
+      )
     } else if (sectionCourante === 'confiance') {
       /*
        * SEULE l'etiquette NON VERIFIE explicite compte. Une ligne SANS etiquette n'est pas reprise :
@@ -207,25 +393,30 @@ export function hypothesesDuCadrage(
        * hypothese, et le bloc redeviendrait le mur de texte qu'on cherche a supprimer. Une
        * affirmation deja VERIFIE ou tenue DE L'UTILISATEUR porte son autorite, on la laisse.
        */
-      if (!ETIQUETTE_NON_VERIFIE.test(ligne)) continue
-      affirmation = nettoyerAffirmation(ligne)
+      if (CONSTAT_D_ABSENCE.test(brut)) continue
+      const lecture = lireLigneEtiquetee(brut)
+      if (lecture?.genre === 'entete') {
+        liste = { justification: lecture.justification, retraitEntete: retrait, items: 0 }
+        continue
+      }
+      retenir(lecture, sectionCourante)
     } else {
-      if (!/^\s*(?:[-*•]|\d+[.)])?\s*hypoth[eè]se\b/iu.test(ligne)) continue
-      affirmation = nettoyerAffirmation(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
+      /*
+       * `## Besoin` : « Hypothèse : x », « Hypothèse écrite : x », « Hypothèse annoncée (à corriger
+       * si faux) : x » — le mot d'annonce ET son qualificatif partent, jusqu'aux deux-points.
+       * L'ancien lecteur ne retirait que le mot et affichait « écrite : … ». Un en-tete seul,
+       * « **Hypothèses (corrige-moi) :** », ouvre une liste dont chaque puce est une hypothese.
+       */
+      const annonce = /^hypoth[eè]ses?\b([^:]{0,140}):(.*)$/isu.exec(brut)
+      if (annonce) {
+        if (bords(annonce[2])) retenir(hypothese(annonce[2]), sectionCourante)
+        else liste = { retraitEntete: retrait, items: 0 }
+      } else if (/^hypoth[eè]se\b/iu.test(brut)) {
+        retenir(hypothese(brut.replace(/^hypoth[eè]se\b/iu, '')), sectionCourante)
+      }
     }
-
-    if (!affirmation) continue
-    const cle = affirmation.toLowerCase()
-    if (vues.has(cle)) continue
-    vues.add(cle)
-    trouvees.push({
-      affirmation,
-      source: sectionCourante,
-      ...(justification && { justification })
-    })
-    if (trouvees.length >= PLAFOND_HYPOTHESES) break
   }
-  return trouvees
+  return trouvees.slice(0, PLAFOND_HYPOTHESES)
 }
 
 /**

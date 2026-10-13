@@ -89,7 +89,8 @@ class EntityGraph:
 
 
 def _load_code_graph(graph: EntityGraph, graph_path: Path) -> None:
-    """Meme format que `rig_graph_navigation._project_map` : nodes[id,label], links[source,target,relation]."""
+    """Meme format que la carte de projet de l'outil de navigation d'entreprise : nodes[id,label],
+    links[source,target,relation]."""
     data = json.loads(graph_path.read_text(encoding="utf-8"))
     # Graphify nomme le FICHIER `tooling_brain_server` (libelle `brain_server.py`) mais fait pointer
     # chaque import vers l'identifiant nu `brain_server`, qui n'est meme pas un noeud : sans ce

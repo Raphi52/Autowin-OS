@@ -30,6 +30,7 @@ from datetime import date
 from pathlib import Path
 
 from brain_candidate_policy import scan_candidate, valid_source
+import brain_identite
 
 TYPE_DIRS = {
     "lesson": "lessons",
@@ -148,12 +149,24 @@ def _list_field(raw: str | None) -> list[str]:
     return value
 
 
+def _cle_metier_du_scope(folded: str):
+    """Cle du domaine metier (profil `metier`) si le scope en releve : `<cle>`, `<cle>-...` ou
+    `<cle>/...`. Sans profil (version publique), aucun scope n'est metier. Meme regle que
+    `defaultTheme` de `src/main/brain-inbox.ts`."""
+    metier = brain_identite.metier()
+    cle = metier["cle"] if metier else None
+    if cle and (folded == cle or folded.startswith(cle + "-") or folded.startswith(cle + "/")):
+        return cle
+    return None
+
+
 def _default_theme(scope: str) -> str:
     folded = scope.casefold()
     if "autowin" in folded:
         return "theme/autowin-os"
-    if folded == "rig" or folded.startswith("rig-") or folded.startswith("rig/"):
-        return "theme/rig"
+    cle = _cle_metier_du_scope(folded)
+    if cle:
+        return f"theme/{cle}"
     return "theme/gouvernance"
 
 
@@ -161,8 +174,9 @@ def _default_mocs(scope: str) -> list[str]:
     folded = scope.casefold()
     if "autowin" in folded:
         return ["knowledge/_maps/autowin-os"]
-    if folded == "rig" or folded.startswith("rig-") or folded.startswith("rig/"):
-        return ["knowledge/_maps/rig"]
+    cle = _cle_metier_du_scope(folded)
+    if cle:
+        return [f"knowledge/_maps/{cle}"]
     return ["knowledge/_maps/brain"]
 
 
@@ -234,7 +248,7 @@ def _promote(
     uid = f"{_slug(scope)}/{_slug(kind)}/{_slug(title)}"
     lines = [
         "---",
-        "schema: amitel-brain/v1",
+        f"schema: {brain_identite.schema('v1')}",
         f"uid: {uid}",
         f"type: {meta['type']}",
         f"kind: {kind}",

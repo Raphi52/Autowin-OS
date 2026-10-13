@@ -12,6 +12,7 @@ import type {
 } from '../shared/prod-protection'
 import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
+import type { GestesDesTours } from '../shared/gestes-agent'
 import type {
   ChatAttachment,
   AgentTopology,
@@ -287,6 +288,8 @@ const api = {
   > => ipcRenderer.invoke('runs:unfinishedTurns'),
   turnJournal: (conversationId: string, turnId: string): Promise<Array<Record<string, unknown>>> =>
     ipcRenderer.invoke('runs:turnJournal', conversationId, turnId),
+  turnJournalGestes: (conversationId: string): Promise<GestesDesTours> =>
+    ipcRenderer.invoke('runs:turnJournalGestes', conversationId),
   /**
    * La consigne laissée avant un redémarrage demandé par l'agent (`restart_app`).
    * Rendue UNE SEULE FOIS : le main l'efface en la lisant.
@@ -924,6 +927,10 @@ const api = {
       phase?: { step: string; provider?: string; role?: string }
       deltaStep?: 'exec' | 'judge'
       delta?: string
+      /** Fragment du raisonnement du sous-agent, a accumuler sous sa phase (conv-918). */
+      reasoning?: string
+      /** Phase en cours quand ce fragment de raisonnement a ete emis. */
+      reasoningPhase?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */

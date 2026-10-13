@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { nomHistorique } from './identite-entreprise'
 
 /**
  * RECHARGER UNE VARIABLE D'ENVIRONNEMENT A CHAUD — sans redemarrer le processus principal.
@@ -15,7 +16,7 @@ import { execFileSync } from 'node:child_process'
  * d'execution du processus, ce n'est pas un reglage produit.
  */
 /**
- * `AMITEL_BRAIN_ORIGIN` ajoutee le 2026-09-03 apres le meme defaut, vecu sur le canal Brain.
+ * L'origine du Brain ajoutee le 2026-09-03 apres le meme defaut, vecu sur le canal Brain.
  * L'installation persiste le jeton et les chemins du Brain, mais PAS le port : l'origine ne vivait
  * que dans le shell ou elle avait ete tapee. Le service ecoutait 8766, le processus principal
  * retombait sur le defaut 8765, et chaque `brain_query` rendait « indisponible » en 15 ms
@@ -36,12 +37,19 @@ export const VARIABLES_RECHARGEABLES = [
   'AUTOWIN_VERIFY_TIMEOUT_MS',
   'AUTOWIN_BRAIN_TIMEOUT_MS',
   'AUTOWIN_BRAIN_ORIGIN',
-  // Nom historique, toujours lu en secours par `sharedBrainOrigin`.
-  'AMITEL_BRAIN_ORIGIN',
   'AUTOWIN_SQLCMD_BIN'
 ] as const
 
 export type NomRechargeable = (typeof VARIABLES_RECHARGEABLES)[number]
+
+/**
+ * La liste blanche, plus l'ANCIEN nom de l'origine du Brain quand un profil d'entreprise en fournit
+ * un : `sharedBrainOrigin` le lit toujours en secours, il doit donc se recharger au meme titre.
+ */
+export function variablesRechargeables(env: NodeJS.ProcessEnv = process.env): string[] {
+  const ancien = nomHistorique('AUTOWIN_BRAIN_ORIGIN', env)
+  return ancien ? [...VARIABLES_RECHARGEABLES, ancien] : [...VARIABLES_RECHARGEABLES]
+}
 
 export type LecteurEnvSysteme = (nom: string) => string | undefined
 
@@ -77,13 +85,14 @@ export function rechargerEnv(
   options: { lecteur?: LecteurEnvSysteme; env?: NodeJS.ProcessEnv } = {}
 ): RechargeEnv {
   const demande = typeof nom === 'string' ? nom.trim() : ''
-  if (!(VARIABLES_RECHARGEABLES as readonly string[]).includes(demande)) {
+  const env = options.env ?? process.env
+  const rechargeables = variablesRechargeables(env)
+  if (!rechargeables.includes(demande)) {
     throw new Error(
       `Variable non rechargeable : « ${demande || '(vide)'} ». ` +
-        `Rechargeables : ${VARIABLES_RECHARGEABLES.join(', ')}.`
+        `Rechargeables : ${rechargeables.join(', ')}.`
     )
   }
-  const env = options.env ?? process.env
   const lecteur = options.lecteur ?? lecteurWindows
   const avant = env[demande]
   const apres = lecteur(demande)

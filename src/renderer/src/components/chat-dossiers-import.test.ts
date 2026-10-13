@@ -38,7 +38,7 @@ describe('fusionnerDossiersImportes', () => {
   })
 
   it('revalide ce qui traverse le pont : non-chaînes et libellés de classement ignorés', () => {
-    expect(fusionnerDossiersImportes([], [42, null, 'Clients/Amitel', {}], [])).toBeNull()
+    expect(fusionnerDossiersImportes([], [42, null, 'Clients/Acme', {}], [])).toBeNull()
   })
 })
 

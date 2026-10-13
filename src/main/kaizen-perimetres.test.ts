@@ -49,6 +49,17 @@ function normalise(t: string): string {
   return t.replace(/\r\n/g, '\n').trimEnd()
 }
 
+/**
+ * La fixture est l'ancien fichier AU DOMAINE METIER PRES : un mot y est ecrit `<métier>` (conv-916,
+ * aucun terme d'entreprise hors de `entreprise/`). Chaque `<métier>` vaut UN mot de l'ancien fichier,
+ * tout le reste doit etre identique — avec ou sans profil d'entreprise.
+ */
+// fix-ok: un masque tire des termes du profil ne masquait rien sans profil ; mesure dans la copie publique exportee (wt-public, 2026-10-13), test rouge.
+function fixtureCommeMotif(fixture: string): RegExp {
+  const morceaux = fixture.split('<métier>').map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(`^${morceaux.join('[^\\s]+')}$`)
+}
+
 function fixtureAvant(): string {
   return readFileSync(join(__dirname, '__fixtures__', 'kaizen-skill-avant.md'), 'utf8')
 }
@@ -117,7 +128,7 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
     } catch {
       return // clone superficiel : la fixture reste l’entrée nommée, le contrôle négatif tient sans git
     }
-    expect(normalise(reel)).toBe(normalise(fixtureAvant()))
+    expect(normalise(reel)).toMatch(fixtureCommeMotif(normalise(fixtureAvant())))
   })
 
   const live = join(homedir(), '.claude', 'skills', 'kaizen', 'SKILL.md')

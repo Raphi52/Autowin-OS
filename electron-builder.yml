@@ -1,4 +1,4 @@
-appId: com.amitel.autowin-os
+appId: com.autowin.autowin-os
 productName: Autowin OS
 directories:
   buildResources: build
@@ -64,7 +64,7 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: Amitel
+  maintainer: Autowin OS
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}

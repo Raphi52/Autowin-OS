@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   577 regles, 799 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   570 regles, 789 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -205,13 +205,10 @@
 }
 
 /* ---- src/renderer/src/components/ChatMosaic.css ---- */
-:root[data-theme='nebuleuse-verre'] .chat-mosaic-window[data-etat='occupe'] {
-    border-color: rgba(251, 91, 171, 0.28)
+:root[data-theme='nebuleuse-verre'] .chat-mosaic-window-anneau {
+    background: rgba(251, 91, 171, 0.28)
 }
-:root[data-theme='nebuleuse-verre'] .chat-mosaic-window[data-etat='attention'] {
-    border-color: rgba(255, 108, 182, 0.5)
-}
-:root[data-theme='nebuleuse-verre'] .chat-mosaic-window[data-etat='attention']::after {
+:root[data-theme='nebuleuse-verre'] .chat-mosaic-window[data-etat='attention'] > .chat-mosaic-window-anneau {
     background: conic-gradient(
     from var(--mosaic-shiny-angle),
     rgba(251, 91, 171, 0.55) 0%,
@@ -440,7 +437,7 @@
     ),
     rgba(10, 10, 10, 0.985)
 }
-:root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-secondes, :root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-duree, :root[data-theme='nebuleuse-verre'] .capsule-bouton .thinking-duree {
+:root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-secondes, :root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-duree, :root[data-theme='nebuleuse-verre'] .capsule-bouton .thinking-duree, :root[data-theme='nebuleuse-verre'] .activity-anneau .anneau-l1 .thinking-duree {
     background: rgba(10, 10, 10, 0.5)
 }
 :root[data-theme='nebuleuse-verre'] .conv-mosaic-close-all {
@@ -1965,47 +1962,6 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.user .msg-body {
     border: 1px solid rgba(255, 78, 167, 0.45);
     color: rgb(255, 244, 250)
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group {
-    border-left: 2px solid rgb(134, 113, 242);
-    background: rgba(10, 10, 10, 0.3)
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group:hover {
-    background: rgba(10, 10, 10, 0.45)
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group.failed, :root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group[data-state='failed'] {
-    background: linear-gradient(
-    100deg,
-    rgba(255, 109, 143, 0.24) 0%,
-    rgba(255, 109, 143, 0.07) 45%,
-    rgba(10, 10, 10, 0.3) 85%
-  )
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group[data-state='running'] {
-    border-left-color: rgb(134, 113, 242);
-    background: linear-gradient(
-    100deg,
-    rgba(134, 113, 242, 0.22) 0%,
-    rgba(134, 113, 242, 0.07) 45%,
-    rgba(10, 10, 10, 0.3) 85%
-  )
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group[data-state='interrupted'] {
-    background: linear-gradient(
-    100deg,
-    rgba(232, 163, 61, 0.22) 0%,
-    rgba(232, 163, 61, 0.07) 45%,
-    rgba(10, 10, 10, 0.3) 85%
-  )
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-group[data-state='done'] {
-    border-left-color: rgb(0, 255, 85);
-    background: linear-gradient(
-    100deg,
-    rgba(0, 255, 85, 0.2) 0%,
-    rgba(0, 255, 85, 0.06) 45%,
-    rgba(10, 10, 10, 0.3) 85%
-  )
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .activity-step-toggle:hover {
     border-color: rgba(134, 113, 242, 0.6);

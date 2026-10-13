@@ -16,6 +16,9 @@ agent-studio-*.png
 /sketches/*-converge/
 **/__pycache__/
 /graphify-out/
+# Sortie GENEREE de graphify sur brain/ (commitee par une commande d'agent le 2026-09-22, 9223b69b) :
+# elle recopiait les noms du code au moment de la generation. Se regenere a la demande.
+/brain/graphify-out/
 
 # Reglages LOCAUX de Claude Code (par machine) : jamais partages.
 .claude/settings.local.json

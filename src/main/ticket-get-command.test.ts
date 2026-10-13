@@ -15,7 +15,7 @@ const fiche: TicketItem = {
   state: 'Ouvert',
   url: 'https://dev.azure.com/org/projet/_workitems/edit/1227',
   updatedAt: '2026-08-06T10:00:00.000Z',
-  assignee: 'Emmanuel HEURTIER',
+  assignee: 'Prenom COLLEGUE',
   description: 'Contexte de la demande.',
   relations: [{ kind: 'Duplicate Of', target: '900' }],
   fields: {}
@@ -75,7 +75,7 @@ describe('getTicketFromCommand — la fiche rendue', () => {
       expect(out.ticket).toMatchObject({
         id: '1227',
         state: 'Ouvert',
-        assignee: 'Emmanuel HEURTIER'
+        assignee: 'Prenom COLLEGUE'
       })
       // Les liens comptent : c'est par eux qu'un doublon se DÉCLARE côté Azure DevOps.
       expect(out.ticket.relations).toEqual([{ kind: 'Duplicate Of', target: '900' }])

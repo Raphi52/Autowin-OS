@@ -3230,7 +3230,7 @@ export class RunWorktreeCoordinator {
   /**
    * DIRE qu'un run affiche « en cours » alors que plus rien ne le porte.
    *
-   * Greffe sur le balayage existant plutot que sur une minuterie de plus : le probleme n'est pas la
+   * Branché sur le balayage existant plutot que sur une minuterie de plus : le probleme n'est pas la
    * cadence, c'est que personne ne posait la question.
    *
    * On n'annule RIEN et on ne conclut pas a la mort -- un run peut attendre le modele sans processus.

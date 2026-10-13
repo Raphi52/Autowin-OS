@@ -1475,14 +1475,11 @@
   color: var(--nv-envoi-vide-texte);
   opacity: 0.45;
 }
-/* ARRETER et REPRENDRE gardent leur couleur au survol. Sans ces deux regles, le survol de la
-   couche generee (`.composer-send:hover:not(:disabled)`, un rose translucide, plus precise que
-   `.is-stop`) repeignait le bouton rouge en rose. */
+/* ARRETER garde sa couleur au survol. Sans cette regle, le survol de la couche generee
+   (`.composer-send:hover:not(:disabled)`, un rose translucide, plus precise que `.is-stop`)
+   repeignait le bouton rouge en rose. REPRENDRE a son propre survol, dans le gel vert ci-dessous. */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-stop:hover:not(:disabled) {
   background: rgba(235, 40, 40, 0.95);
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-resume:hover:not(:disabled) {
-  background: rgba(0, 255, 85, 0.3);
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-stop {
   /* ROUGE franc, pas rose (conv-139, 2026-10-10 : « paraissent rose au lieu de rouge »). */
@@ -1490,10 +1487,43 @@
   box-shadow: 0 0 0 1px rgba(255, 70, 60, 0.9);
   color: #ffffff;
 }
+/* REPRENDRE EN GEL VERT (conv-902, 2026-10-12, capture : le rond vert d'Holographique blanc, fleche
+   presque invisible -- « refais ce bouton pour qu'il soit mieux visible dans mes themes
+   holographique »). Il etait un voile vert a 20 % cercle de neon, fleche #ccffdd : sur la nacre du
+   blanc (qui recopie `.composer-send` tel quel, voir CLAIR_SUR_DEGRADE du generateur) la fleche
+   claire se perdait dans le voile clair ; sur le noir, un rond eteint a cote d'Envoyer. Il prend la
+   recette d'Envoyer (gel fondu, reflet blanc sans ligne, fleche BLANCHE, ombre noire courte, aucune
+   lueur) dans DEUX teintes du vert du theme (#00ff55, 140 deg) assombri pour porter le blanc.
+   Contrastes calcules (WCAG) : fleche blanche 4,57:1 au centre du degrade ; bord clair #119c40
+   3,31:1 sur la nacre #f6f5f9 ; bord sombre #06742b 3,34:1 sur le noir #0a0a0a -- le rond se
+   detache des deux fonds. Survol = reflet plus fort, appui = reflet eteint sans retrecir. */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-resume {
-  background: rgba(0, 255, 85, 0.2);
-  box-shadow: 0 0 0 1px rgba(0, 255, 85, 0.6);
-  color: #ccffdd;
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, #119c40, #06742b);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: #ffffff;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-resume:hover:not(:disabled) {
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
+    linear-gradient(135deg, #119c40, #06742b);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-resume:active:not(:disabled) {
+  transform: none;
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, #119c40, #06742b);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
 /* RELIEF-PERLE:DEBUT -- Envoyer et Stop en perle (2026-10-10). */
 /* ENVOYER ET STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette parmi six
@@ -2765,6 +2795,9 @@
    pas un enfant) ; l'ombre portee part avec la coupe, le trait la remplace. Deux consequences de la
    coupe sont traitees plus bas : l'ascenseur (sa fleche du bas tombait dans le coin coupe) et
    l'en-tete COLLE des reglages du graphe (son fond noir masquait le satin et le trait du coin).
+   La CARTE DE CONFIRMATION du fil (`.delete-confirm-card` : supprimer une conversation, un lot,
+   un RUN, et renommer un fil, qui partage la classe) prend le meme cadre (2026-10-13, conv-924 :
+   « met le theme holo dans cette popup ») ; son contenu est accorde plus bas, fin de section.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair']
   :is(
@@ -2774,7 +2807,8 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup
+    .model-question-popup,
+    .delete-confirm-card
   ) {
   --nv-pop-aplat: rgba(var(--voile-rgb), 0.055);
   --nv-pop-aplat-survol: rgba(var(--voile-rgb), 0.095);
@@ -2817,7 +2851,8 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup
+    .model-question-popup,
+    .delete-confirm-card
   ) {
   scrollbar-color: auto;
 }
@@ -2829,7 +2864,8 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup
+    .model-question-popup,
+    .delete-confirm-card
   )::-webkit-scrollbar-track {
   margin-bottom: var(--nv-chanfrein);
 }
@@ -2844,7 +2880,8 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup
+    .model-question-popup,
+    .delete-confirm-card
   )::-webkit-scrollbar-thumb {
   background: var(--chat-ascenseur) padding-box;
 }
@@ -2856,7 +2893,8 @@
     .slash-palette,
     .slash-detail,
     .graph-settings-popover,
-    .model-question-popup
+    .model-question-popup,
+    .delete-confirm-card
   )::-webkit-scrollbar-thumb:hover {
   background: rgba(208, 43, 140, 0.55) padding-box;
 }
@@ -3094,6 +3132,46 @@
   .quota-context-compact:hover:not(:disabled) {
   background: var(--nv-pop-aplat-survol);
   color: #121018;
+}
+/* CARTE DE CONFIRMATION (conv-924) : le cadre vient du bloc commun ci-dessus ; ici, son contenu.
+   - l'orbite : un APLAT gris sans bord, comme les blocs des autres fenetres ; l'etoile garde son
+     rose (--chat-suppr-orbite) ;
+   - le texte prend les trois encres des fenetres flottantes ;
+   - « Garder » : aplat gris sans bord, eclairci au survol ;
+   - « Supprimer definitivement » : le verre ROUGE du theme (`.btn-danger`, section 4). Sans cette
+     regle, `.btn` du theme (meme specificite que `.delete-confirm-danger` + prefixe) lui retirait
+     son rouge : le geste irreversible avait le meme habit gris que « Garder » (capture conv-924). */
+:root[data-theme='holographique-clair'] .delete-confirm-orbit {
+  border-color: transparent;
+  background: var(--nv-pop-aplat);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-card h2 {
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-card p {
+  color: var(--nv-pop-texte-doux);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-card p strong {
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-cancel {
+  border-color: transparent;
+  background: var(--nv-pop-aplat);
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-cancel:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--nv-pop-aplat-survol);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-danger {
+  border-color: rgba(170, 14, 33, 0.55);
+  background: rgba(255, 90, 110, 0.16);
+  color: #aa0e25;
+}
+:root[data-theme='holographique-clair'] .delete-confirm-danger:hover:not(:disabled) {
+  border-color: rgba(170, 14, 33, 0.85);
+  background: rgba(255, 90, 110, 0.28);
+  color: #2a171a;
 }
 
 /* ---------------------------------------------------------------------------

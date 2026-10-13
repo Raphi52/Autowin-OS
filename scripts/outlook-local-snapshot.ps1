@@ -156,7 +156,7 @@ try {
   #
   # `GetDefaultFolder` sur la SESSION ne rend que le magasin par DEFAUT du profil. Mesure de ce poste
   # le 2026-09-07 : le profil porte deux comptes -- Exchange (onmicrosoft) et Kerio Connect
-  # (amitel.fr, magasin "Rapha..l VILAIN", 552 messages) -- et seul le premier etait lu, donc la
+  # (domaine de l'entreprise, magasin au nom de l'utilisateur, 552 messages) -- et seul le premier etait lu, donc la
   # moitie de la vie de l'utilisateur n'atteignait jamais le widget. Le compte Kerio n'expose AUCUNE
   # adresse SMTP cote `Session.Accounts` : il ne peut se designer que par son MAGASIN, pas par une
   # adresse. D'ou ce balayage des magasins plutot qu'un filtre par compte.

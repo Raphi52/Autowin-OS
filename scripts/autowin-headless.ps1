@@ -31,7 +31,7 @@ trap {
   l'utilisateur, seulement CACHEE : un show(), une boite de dialogue systeme ou un vol de focus
   restaient visibles, et il n'y avait aucun bureau a nettoyer. Elle nait desormais dans un objet
   bureau nomme d'apres l'InstanceId, invisible et non interactif. Modele :
-  D:\RigTestViewer\Rig.Wpf.Kbis.SmokeRunner\RigDesktop.cs.
+  D:\ContosoTestViewer\Contoso.Wpf.Smoke.SmokeRunner\ContosoDesktop.cs.
 
   Mesure du 2026-09-12 (scripts/hdesk-capture-proof.ps1 + .mjs, preuves dans Audit/hdesk-proof) :
   - la capture CDP RESTE VALIDE dans ce bureau non affiche, y compris `fromSurface: true`
@@ -212,7 +212,7 @@ if (-not $lance) {
 # apres CreateProcess, le process mourait en une fraction de seconde, sans code de sortie lisible
 # et sans rien ecrire dans son profil. Entre la naissance du process et sa premiere fenetre,
 # NOTRE handle est le seul titulaire du bureau : le lacher a cet instant detruit le bureau sous
-# les pieds du process. C'est aussi ce que fait RigDesktop, qui ne ferme qu'au Dispose.
+# les pieds du process. C'est aussi ce que fait ContosoDesktop, qui ne ferme qu'au Dispose.
 $process = Get-Process -Id $infoProcessus.dwProcessId
 try {
   $launchedIdentity = Read-ExecutableIdentity

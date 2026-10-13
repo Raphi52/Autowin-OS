@@ -566,7 +566,7 @@ export function GraphView({
     () =>
       selectedBrain?.kind === 'vault' && selectedBrain.themes
         ? selectedBrain.themes.map((theme) => ({ ...theme, count: theme.count ?? 0 }))
-        : buildThemeSummaries(graph.nodes, selectedBrain?.themes),
+        : buildThemeSummaries(graph.nodes, selectedBrain?.themes, selectedBrain?.metier),
     [graph.nodes, selectedBrain]
   )
   const themeOrder = useMemo(() => themeSummaries.map((theme) => theme.id), [themeSummaries])
@@ -577,9 +577,9 @@ export function GraphView({
   const searchCatalogThemes = useMemo(
     () =>
       selectedBrain?.kind === 'vault' && themeQuery.trim()
-        ? buildThemeSummaries(vaultSearch)
+        ? buildThemeSummaries(vaultSearch, [], selectedBrain.metier)
         : themeSummaries,
-    [selectedBrain?.kind, themeQuery, themeSummaries, vaultSearch]
+    [selectedBrain?.kind, selectedBrain?.metier, themeQuery, themeSummaries, vaultSearch]
   )
   const catalogSearch = useMemo(
     () =>
@@ -615,10 +615,12 @@ export function GraphView({
           // tirage. Une lecture dont le résultat dépend du tirage ne peut pas servir de socle.
           // Toujours une couche de lecture dérivée : aucun fichier n'est déplacé dans le Brain.
           mesurerBlocGraphe('graph:layoutTree', () =>
-            layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+            layoutTree(displayGraph.nodes, {
+              groupOf: (node) => brainSubjectOf(node, selectedBrain?.metier)
+            })
           )
         : null,
-    [layoutMode, displayGraph.nodes]
+    [layoutMode, displayGraph.nodes, selectedBrain?.metier]
   )
   const visibleTree = useMemo(
     () =>

@@ -22,7 +22,7 @@ que tant qu'aucune ligne n'a montre Electron en train de partir (`ligne_verrouil
 
 NOMS AFFICHES : ceux de la maquette validee
 -------------------------------------------
-Actif : « Amitel · team » en gras, l'adresse dessous. Autre : « gmail.com » en gras, « max » dessous.
+Actif : « Acme · team » en gras, l'adresse dessous. Autre : « gmail.com » en gras, « max » dessous.
 L'organisation n'est reprise que si elle NOMME quelque chose : « x@y's Organization » est le nom
 generique que Claude donne aux comptes personnels, il est remplace par le domaine de l'adresse.
 """
@@ -85,7 +85,7 @@ def lire_comptes(chemin: Path = FICHIER_COMPTES) -> tuple[list[Compte], str | No
 
 
 def nom_court(compte: Compte) -> str:
-    """« Amitel », « gmail.com » : ce qui distingue un compte en un mot."""
+    """« Acme », « gmail.com » : ce qui distingue un compte en un mot."""
     if compte.etiquette:
         return compte.etiquette
     if compte.organisation and not compte.organisation.endswith("'s Organization"):
@@ -96,12 +96,12 @@ def nom_court(compte: Compte) -> str:
 
 
 def titre_actif(compte: Compte) -> str:
-    """Ligne en gras du compte actif : « Amitel · team »."""
+    """Ligne en gras du compte actif : « Acme · team »."""
     return f"{nom_court(compte)} · {compte.niveau}" if compte.niveau else nom_court(compte)
 
 
 def initiales(compte: Compte) -> str:
-    """« RV » pour raphael.vilain@… ; deux lettres au plus, jamais vide."""
+    """« PN » pour prenom.nom@… ; deux lettres au plus, jamais vide."""
     source = compte.email.split("@", 1)[0] if compte.email else nom_court(compte)
     morceaux = [m for m in re.split(r"[.\-_\s]+", source) if m]
     if len(morceaux) >= 2:

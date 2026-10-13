@@ -33,6 +33,7 @@ import {
 } from 'node:fs'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { sourceLocatorProblem } from './brain-remember'
+import { identiteBrain, identiteMetier } from './identite-entreprise'
 import { foldWindowsOrdinalCase } from './viz/windows-ordinal-case'
 
 /**
@@ -903,19 +904,32 @@ function isoDay(now: Date): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+/**
+ * Cle du domaine metier de l'entreprise (profil `metier`) si le scope en releve : `<cle>`,
+ * `<cle>-…` ou `<cle>/…`. Sans profil (version publique), aucun scope n'est metier. Meme regle que
+ * `_default_theme` de `brain/tooling/brain_curate.py`.
+ */
+function cleMetierDuScope(folded: string): string | undefined {
+  const cle = identiteMetier()?.cle
+  if (!cle) return undefined
+  return folded === cle || folded.startsWith(`${cle}-`) || folded.startsWith(`${cle}/`)
+    ? cle
+    : undefined
+}
+
 function defaultTheme(scope: string): string {
   const folded = scope.toLowerCase()
   if (folded.includes('autowin')) return 'theme/autowin-os'
-  if (folded === 'rig' || folded.startsWith('rig-') || folded.startsWith('rig/')) return 'theme/rig'
+  const cle = cleMetierDuScope(folded)
+  if (cle) return `theme/${cle}`
   return 'theme/gouvernance'
 }
 
 function defaultMocs(scope: string): string[] {
   const folded = scope.toLowerCase()
   if (folded.includes('autowin')) return ['knowledge/_maps/autowin-os']
-  if (folded === 'rig' || folded.startsWith('rig-') || folded.startsWith('rig/')) {
-    return ['knowledge/_maps/rig']
-  }
+  const cle = cleMetierDuScope(folded)
+  if (cle) return [`knowledge/_maps/${cle}`]
   return ['knowledge/_maps/brain']
 }
 
@@ -926,7 +940,7 @@ const CONFIDENCE_V1: Readonly<Record<string, string>> = {
 }
 
 /**
- * Convertit un candidat `amitel-brain/candidate-v1` en fiche `amitel-brain/v1`, champ pour champ
+ * Convertit un candidat `<service>/candidate-v1` en fiche `<service>/v1`, champ pour champ
  * comme `brain_curate._promote` : même dossier par type, même nom tiré du titre, même en-tête.
  * Refuse plutôt que d'écrire une fiche que `brain_validate.py` rejetterait.
  */
@@ -971,7 +985,9 @@ function renderPromotedNote(source: Buffer, reviewer: string, today: string): Re
     : 'hypothesis'
   const lines = [
     '---',
-    'schema: amitel-brain/v1',
+    // Prefixe du profil d'entreprise : les fiches deja au Brain partage portent celui-la, et
+    // `brain_validate.py` refuse tout autre schema.
+    `schema: ${identiteBrain().service}/v1`,
     `uid: ${knowledgeSlug(scope)}/${knowledgeSlug(kind)}/${knowledgeSlug(heading)}`,
     `type: ${type}`,
     `kind: ${kind}`,

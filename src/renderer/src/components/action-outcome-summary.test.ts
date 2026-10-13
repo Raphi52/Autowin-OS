@@ -71,7 +71,11 @@ describe('groupOutcomeSummary — l’ÉCHEC passe devant', () => {
       { name: 'edit_file', data: {} },
       { name: 'verify', data: { command: 'npm test', exitCode: 2, ok: false } }
     ])
-    expect(summary).toEqual({ label: 'npm test → exit 2', why: ['npm test → exit 2'], state: 'failed' })
+    expect(summary).toEqual({
+      label: 'npm test → exit 2',
+      why: ['npm test → exit 2'],
+      state: 'failed'
+    })
   })
 
   it('privilégie un refus sur une réussie (rien n’a tourné, il faut le savoir)', () => {
@@ -276,19 +280,33 @@ describe('cablage — le verdict est rendu dans le bloc d’activite', () => {
     return fs.readFileSync(path.join(__dirname, 'ChatView.parts.tsx'), 'utf8')
   }
 
+  // Depuis conv-904 (2026-10-12, « Rond de verre »), la barre rend le verdict par `VerdictDeVerre`
+  // (anneau-activite.tsx), qui pose la classe d'etat ; la capsule d'orchestration garde le sien.
+  const verre = (): string => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path') as typeof import('node:path')
+    return fs.readFileSync(path.join(__dirname, 'anneau-activite.tsx'), 'utf8')
+  }
+
   it('appelle le resume et rend son libelle', () => {
     const source = parts()
     expect(source).toContain('groupOutcomeSummary(actions)')
-    expect(source).toContain('data-testid="activity-outcome"')
-    expect(source).toContain('{outcome.label}')
+    // Le libelle part dans `VerdictDeVerre`, qui le rend en deux cases (commande, code) sous le
+    // repere `activity-outcome` : meme verdict a l'ecran, seul l'endroit du rendu a change.
+    expect(source).toContain('<VerdictDeVerre label={outcome.label}')
+    expect(verre()).toContain('data-testid="activity-outcome"')
+    expect(verre()).toContain('casesDuVerdict(label)')
   })
 
   it('colore selon le verdict (un echec doit se voir)', () => {
-    expect(parts()).toContain('st-${outcome.state}')
+    expect(parts()).toContain('etat={outcome.state}')
+    expect(verre()).toContain('st-${etat}')
   })
 
   it('n’affiche RIEN sans resume (aucune regression visuelle)', () => {
-    expect(parts()).toContain('{outcome && (')
+    expect(parts()).toContain('outcome && <VerdictDeVerre')
   })
 })
 

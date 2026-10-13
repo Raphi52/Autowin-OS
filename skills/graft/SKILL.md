@@ -1,6 +1,6 @@
 ---
 name: graft
-description: GREFFE une nouvelle skill quand une PROCÉDURE manque au kit. Déclenche-toi AU MOMENT où le même enchaînement est improvisé pour la deuxième fois — "on refait le même enchaînement à la main", "il faudrait une skill pour ça", une classe de travail récurrente que personne ne possède dans le kit, un échec répété qu'aucun déclencheur de skill existante n'attrape. `graft` transforme cette répétition en un SKILL.md nommé, borné et découvrable, puis le JOUE sur le cas présent. NE PAS utiliser pour : construire un OUTIL ou une commande qui manque (→ `forge`), corriger ou affûter les règles d'une skill EXISTANTE (→ `kaizen`), choisir sur quoi travailler (→ `scout`). graft ajoute UNE skill, celle que le travail courant n'arrête pas d'improviser.
+description: AJOUTE une nouvelle skill quand une PROCÉDURE manque au kit. Déclenche-toi AU MOMENT où le même enchaînement est improvisé pour la deuxième fois — "on refait le même enchaînement à la main", "il faudrait une skill pour ça", une classe de travail récurrente que personne ne possède dans le kit, un échec répété qu'aucun déclencheur de skill existante n'attrape. `graft` transforme cette répétition en un SKILL.md nommé, borné et découvrable, puis le JOUE sur le cas présent. NE PAS utiliser pour : construire un OUTIL ou une commande qui manque (→ `forge`), corriger ou affûter les règles d'une skill EXISTANTE (→ `kaizen`), choisir sur quoi travailler (→ `scout`). graft ajoute UNE skill, celle que le travail courant n'arrête pas d'improviser.
 ---
 
 # graft — le superviseur étend son propre kit
@@ -15,17 +15,17 @@ de le faire grossir. Chaque skill ajoutée est une ligne que le modèle doit lir
 ## Contrôle d'entrée — quatre questions, dans l'ordre
 
 1. **Quelle forme de travail répétée ?** Nomme au moins DEUX occurrences réelles (identifiants de conversation, runs,
-   commits). Une seule occurrence est une tâche, pas une skill. Pas de seconde occurrence → pas de greffe.
+   commits). Une seule occurrence est une tâche, pas une skill. Pas de seconde occurrence → pas d'ajout.
 2. **Une skill existante la possède-t-elle déjà ?** Lis le front-matter `description` de chaque skill
    du kit — cette ligne EST le déclencheur. Si l'une couvre le cas, la réponse est `kaizen` (affûter son
    déclencheur), pas une nouvelle skill. La skill en doublon est le mode d'échec numéro un : deux déclencheurs qui
    se chevauchent font choisir le routeur au hasard.
 3. **Une skill est-elle la bonne forme ?** Une capacité manquante, c'est `forge`. Une règle manquante, c'est `kaizen`. Un
-   coup unique n'est que du travail. Ne greffe qu'une PROCÉDURE reproductible avec un MOMENT reconnaissable.
+   coup unique n'est que du travail. N'ajoute qu'une PROCÉDURE reproductible avec un MOMENT reconnaissable.
 4. **Combien ça coûte ?** Dis-le : une ligne de plus dans l'instantané de chaque tour. Si la skill se déclenchait
    moins d'environ une fois par mois, dis-le et arrête.
 
-Si la question 2 répond « oui », arrête-toi et dis quelle skill possède le cas. Rapporte la recherche, ne greffe pas.
+Si la question 2 répond « oui », arrête-toi et dis quelle skill possède le cas. Rapporte la recherche, n'ajoute pas.
 
 ## Procédure
 
@@ -46,7 +46,7 @@ philosophie. Reprends la forme des skills existantes : À quoi ça sert · Contr
 
 La racine du kit est balayée, donc aucune liste n'est à éditer — ce qui est exactement pourquoi cette étape est sautée et
 exactement pourquoi elle ne doit pas l'être. Relis l'état de l'app et confirme que le nouveau nom apparaît dans
-la liste de skills de l'instantané, avec sa phrase de déclenchement attachée. Pas d'apparition = pas de greffe, quoi que
+la liste de skills de l'instantané, avec sa phrase de déclenchement attachée. Pas d'apparition = pas d'ajout, quoi que
 dise le fichier sur le disque.
 
 ### 4. PROUVER SUR UN CAS RÉEL
@@ -73,8 +73,8 @@ sur lequel elle a été jouée et son résultat · le verdict du juge.
 
 ## À ne pas faire
 
-- Ne greffe pas depuis une seule occurrence, une intuition, ou un « ça pourrait servir un jour ».
+- N'ajoute pas depuis une seule occurrence, une intuition, ou un « ça pourrait servir un jour ».
 - N'écris pas une skill dont le déclencheur chevauche celui d'une voisine — affûte plutôt la voisine.
 - Ne la déclare pas disponible parce que le fichier existe : lis le catalogue de l'app elle-même.
-- Ne greffe pas une skill en laissant inachevé le travail qui l'a motivée.
-- Ne laisse pas le kit grossir en silence : chaque greffe nomme son coût dans le rapport.
+- N'ajoute pas une skill en laissant inachevé le travail qui l'a motivée.
+- Ne laisse pas le kit grossir en silence : chaque ajout nomme son coût dans le rapport.

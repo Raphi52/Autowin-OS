@@ -701,7 +701,7 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
   const incoming = [
     {
       hash: '3646cf37aaaa',
-      author: 'emmanuel.heurtier',
+      author: 'prenom.collegue',
       date: '2026-09-25T08:00:00Z',
       subject: 'autowin: travail préservé de la copie run-36461be778d0-1',
       files: ['src/main/a.ts', 'src/renderer/src/components/B.tsx', 'docs/c.md', 'd.json'],
@@ -735,7 +735,7 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
 
     const list = container.querySelector('[data-testid="update-incoming"]')!
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(list.textContent).toContain('emmanuel.heurtier')
+    expect(list.textContent).toContain('prenom.collegue')
     expect(list.textContent).toContain('travail préservé de la copie run-36461be778d0-1')
     // Les NOMS des fichiers (le chemin entier reste dans l'infobulle), puis le reste compté.
     expect(list.textContent).toContain('a.ts, B.tsx, c.md')

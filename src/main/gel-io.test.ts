@@ -25,7 +25,7 @@ describe('nommerAccesBloquant — nommer le coupable, pas seulement le constater
     expect(nommerAccesBloquant('readFileSync', `${b}${b}nas1${b}partage${b}x.md`)).toContain(
       'io:reseau:'
     )
-    expect(nommerAccesBloquant('readFileSync', `C:${b}Amitel${b}Autowin OS${b}package.json`)).toBe(
+    expect(nommerAccesBloquant('readFileSync', `C:${b}Acme${b}Autowin OS${b}package.json`)).toBe(
       'io:disque:readFileSync C:/…/package.json'
     )
   })

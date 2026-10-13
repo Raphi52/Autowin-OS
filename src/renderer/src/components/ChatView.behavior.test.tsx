@@ -228,7 +228,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
     const conversations = vi
       .fn()
-      .mockResolvedValueOnce([{ ...conversation('A'), projectPath: 'C:\\RIGApplication' }])
+      .mockResolvedValueOnce([{ ...conversation('A'), projectPath: 'C:\\CONTOSOApplication' }])
       .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\AutowinOS' }])
     // La memoire des dossiers survit entre les tests (meme jsdom) : on repart a blanc.
     window.localStorage.removeItem('autowin.conv-folders.connus')
@@ -243,12 +243,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
       )
 
     await ouvrirMenuDossiers()
-    expect(dossiersAffiches()).toContain('C:\\RIGApplication')
+    expect(dossiersAffiches()).toContain('C:\\CONTOSOApplication')
 
-    // On range la conversation AILLEURS : plus aucune conversation ne porte RIGApplication.
+    // On range la conversation AILLEURS : plus aucune conversation ne porte CONTOSOApplication.
     const cible = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
-    ].find((b) => b.dataset.projectPath === 'C:\\RIGApplication')
+    ].find((b) => b.dataset.projectPath === 'C:\\CONTOSOApplication')
     await act(async () => {
       cible!.click()
       await Promise.resolve()
@@ -258,7 +258,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(
       dossiersAffiches(),
       'le dossier a disparu du menu des qu aucune conversation ne le portait plus'
-    ).toContain('C:\\RIGApplication')
+    ).toContain('C:\\CONTOSOApplication')
   })
 
   it('retire un dossier de la liste par sa croix, sans ranger la conversation dedans', async () => {
@@ -290,7 +290,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * DES LIBELLES S'ETAIENT INSTALLES DANS LA LISTE DES DOSSIERS (conv-81, 2026-09-16).
    *
    * La liste memorise tout ce qui a servi a classer, et classer ecrivait dans le meme champ que le
-   * dossier de travail : « Perso » ou « Clients/Amitel » se retrouvaient donc proposes comme
+   * dossier de travail : « Perso » ou « Clients/Acme » se retrouvaient donc proposes comme
    * dossiers de travail. Les choisir renvoyait le tour dans le depot d'Autowin. Le nettoyage se
    * fait a la LECTURE, pas par une migration : la liste vit dans le stockage local du navigateur, et
    * un filtre au chargement vide l'existant ET refuse le suivant.
@@ -299,7 +299,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   it('retire de la liste des dossiers les libelles de categorie, et n’en reprend aucun', async () => {
     window.localStorage.setItem(
       'autowin.conv-folders.connus',
-      JSON.stringify(['C:\\Travail\\Projet Alpha', 'Perso', 'Clients/Amitel', '\\\\srv\\part\\P'])
+      JSON.stringify(['C:\\Travail\\Projet Alpha', 'Perso', 'Clients/Acme', '\\\\srv\\part\\P'])
     )
     await mount(
       api({
@@ -338,7 +338,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
           {
             ...conversation('A'),
             categorie: 'Factures',
-            projectPath: 'D:\\GIT\\RigApplication'
+            projectPath: 'D:\\GIT\\ContosoApp'
           }
         ]),
         defaultWorkspace: vi.fn().mockResolvedValue('C:\\Travail\\Autowin OS')
@@ -351,7 +351,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => convA!.click())
 
     const pastille = container!.querySelector<HTMLButtonElement>('[data-testid="chat-project-dot"]')
-    expect(pastille?.textContent).toContain('RigApplication')
+    expect(pastille?.textContent).toContain('ContosoApp')
     expect(pastille?.textContent).not.toContain('Factures')
   })
 

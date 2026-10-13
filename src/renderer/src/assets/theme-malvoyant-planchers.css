@@ -204,7 +204,7 @@
 }
 
 /* components/ChatMosaic.css — tailles */
-:root[data-theme^='malvoyant-'] .chat-mosaic-window-composer .composer-dictee-message {
+:root[data-theme^='malvoyant-'] .chat-mosaic-window > .composer .composer-dictee-message {
   font-size: 13px;
 }
 
@@ -832,6 +832,11 @@
   font-size: 13px;
 }
 
+/* components/RequestThread.css — tailles */
+:root[data-theme^='malvoyant-'] .request-story-chapter dt {
+  font-size: 13px;
+}
+
 /* components/RouterView.css — gris en dur */
 :root[data-theme^='malvoyant-'] .router-view,
 :root[data-theme^='malvoyant-'] .router-actions .router-standby {
@@ -1077,6 +1082,7 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-node-failure,
 :root[data-theme^='malvoyant-'] .wx-pastille b,
 :root[data-theme^='malvoyant-'] .workflow-execution-request-label,
+:root[data-theme^='malvoyant-'] .workflow-execution-request-totals,
 :root[data-theme^='malvoyant-'] .wx-fiche-statut,
 :root[data-theme^='malvoyant-'] .wx-jauge-texte,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail header,
@@ -1088,7 +1094,10 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning pre,
 :root[data-theme^='malvoyant-'] .workflow-execution-exchange pre,
 :root[data-theme^='malvoyant-'] .workflow-execution-turn-select,
-:root[data-theme^='malvoyant-'] .workflow-execution-exchange-empty {
+:root[data-theme^='malvoyant-'] .workflow-execution-exchange-empty,
+:root[data-theme^='malvoyant-'] .workflow-execution-fait-titre,
+:root[data-theme^='malvoyant-'] .workflow-execution-appel-part,
+:root[data-theme^='malvoyant-'] .workflow-execution-fait-issue {
   font-size: 13px;
 }
 
@@ -1161,9 +1170,6 @@
 /* assets/cosmic-outline.css — tailles */
 :root[data-theme^='malvoyant-'] .cosmic-outline .chat-runtime,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-title,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-tools,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress,
 :root[data-theme^='malvoyant-'] .msg.user .msg-body.avec-skill .msg-skill-entete {
   font-size: 13px;
 }
@@ -1172,7 +1178,6 @@
 :root[data-theme^='malvoyant-'] .cosmic-outline .msg-meta,
 :root[data-theme^='malvoyant-'] .cosmic-outline .msg.assistant .msg-body,
 :root[data-theme^='malvoyant-'] .cosmic-outline .msg.user .msg-body,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-toggle,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-detail,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-target,
@@ -1180,10 +1185,6 @@
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-why,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-open-run,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-open-run:hover,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-title,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-tools,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-step,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-link,
 :root[data-theme^='malvoyant-'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {

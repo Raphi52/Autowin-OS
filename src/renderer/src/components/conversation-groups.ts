@@ -109,7 +109,7 @@ export function groupeDe(
     return { key: GROUPE_KAIZEN, label: 'Auto-kaizen', kind: 'kaizen' }
   }
   // La CATEGORIE avant le dossier : c'est la dissociation demandée le 2026-09-16 (conv-81). Un fil
-  // peut travailler dans `D:\GIT\RigApplication` et se ranger sous « Factures » — sans cette
+  // peut travailler dans `D:\GIT\ContosoApp` et se ranger sous « Factures » — sans cette
   // priorité, choisir une catégorie serait impossible dès qu'un dossier de travail est assigné. Le
   // libellé EST la clé : il ne se canonise pas, ce n'est pas un chemin.
   // fix-ok: conv-81 — cause mesurée dans groupeDe : le groupement lisait projectPath, donc classer = écrire un dossier de travail. La catégorie passe devant, et elle seule groupe quand elle est là.

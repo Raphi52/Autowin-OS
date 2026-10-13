@@ -2,7 +2,7 @@
  * CLASSIFIEUR DE PRODUCTION — décide, et RIEN d'autre.
  *
  * POURQUOI. Mesuré le 2026-09-16 dans ce dépôt : aucun garde ne retient un geste sur la production.
- * `sql-read-guard.ts` protège la LECTURE des bases RIG, et `autorisation-commande.ts` dit lui-même
+ * `sql-read-guard.ts` protège la LECTURE des bases CONTOSO, et `autorisation-commande.ts` dit lui-même
  * en en-tête que `decisionDeCommande('rm -rf /', [])` rend `autorise: true` — ce n'est pas un garde
  * de sécurité. Ce qui retient aujourd'hui un geste irréversible est de la PROSE de constitution,
  * donc le bon vouloir du modèle. Ce module est la première pièce qui remplace cette prose par du

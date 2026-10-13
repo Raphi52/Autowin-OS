@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * Une demande de correction a visé `src/main/facturation/remise-fidelite-inexistante.ts`
  * (fonction `calculerRemiseFidelite`, arrondi au centime supérieur au lieu de l'inférieur).
  * Cette cible n'existe pas dans ce dépôt : ni fichier, ni symbole, ni trace dans l'historique
- * git complet (`git log --all -S`). Le domaine « facturation » appartient à RIG, autre dépôt.
+ * git complet (`git log --all -S`). Le domaine « facturation » appartient à CONTOSO, autre dépôt.
  *
  * Écrire un test d'arrondi ici aurait exigé de CRÉER la fonction, donc de fabriquer le bug
  * avant de le « corriger ». Ce fichier fige à la place le fait vérifiable, de façon FALSIFIABLE :

@@ -1,4 +1,5 @@
 import { OUTCOME_LESSON_MARKER } from './outcome-learning-proposal'
+import { AGGREGATE_MAX_CHARS } from './evidence-digest'
 
 /**
  * Le texte AGRÉGÉ d'un run à plusieurs phases : celui que lit le juge, que `attestJudgeApprovedLearning`
@@ -30,32 +31,123 @@ export const MARQUE_TRONQUE = '\n…[tronqué — voir le fil des sous-agents]'
 export const MENTION_LECON_REMPLACEE =
   '(proposition de leçon remplacée par celle d’une réponse plus récente)'
 
+/**
+ * LA VERSION LA PLUS RÉCENTE D'UNE ÉTAPE REJOUÉE EN ENTIER REMPLACE LES PRÉCÉDENTES.
+ *
+ * fix-ok: conv-914 (2026-10-13) — cause lue dans le code : une réparation d'étape nommée rejoue
+ * l'étape EN ENTIER et `phaseOutputs.push` (orchestrator.ts) n'efface rien ; l'agrégat portait donc
+ * toutes les versions du tableau du `/scout` réparé (4 d'après l'analyse de conv-914, non re-mesuré),
+ * relues en entier par le juge à chaque passage. Une étape nommée (scout, frame, terrain) rend un
+ * résultat COMPLET à chaque passage (« porte le résultat, ne le remplace jamais ») : seule la
+ * dernière fait foi. Un build ou un clean de réparation, lui, AJOUTE un changement : tous restent.
+ */
+export const PHASES_REJOUEES_EN_ENTIER: ReadonlySet<string> = new Set(['scout', 'frame', 'terrain'])
+export const MENTION_VERSION_REMPLACEE =
+  '(version remplacée par la version plus récente de cette étape, plus bas)'
+
+/**
+ * Coupe un bloc trop long en gardant son DÉBUT (2/3 du plafond) et sa FIN (le reste), comme
+ * `clampAggregateForJudge` (evidence-digest.ts). Le texte gardé, ligne de raccord comprise, ne
+ * dépasse jamais `plafond` : seule la marque de coupe s'y ajoute.
+ *
+ * fix-ok: `slice(0, plafond)` gardait le seul début ; un cadrage long perdait sa fin — conclusion et
+ * ligne `CausalHypothesis`, posées en dernier (précédent rapporté : run-85d8e7f57af2-1, caractère
+ * 7 507). La fin est recalée au début d'une ligne quand elle en contient une, pour ne pas la couper.
+ */
+export function couperDebutEtFin(texte: string, plafond: number): string {
+  if (texte.length <= plafond) return texte
+  const tete = Math.ceil((plafond * 2) / 3)
+  // -1 : le saut de ligne qui sépare la marque de coupe de la fin gardée.
+  const queue = plafond - tete - 1
+  let debutQueue = texte.length - queue
+  const finDeLigne = texte.indexOf('\n', debutQueue)
+  if (finDeLigne >= 0 && finDeLigne < texte.length - 1) debutQueue = finDeLigne + 1
+  const fin = queue > 0 ? texte.slice(debutQueue) : ''
+  return `${texte.slice(0, tete)}${MARQUE_TRONQUE}${fin ? `\n${fin}` : ''}`
+}
+
 function estLigneDeLecon(ligne: string): boolean {
   return ligne.trimStart().startsWith(OUTCOME_LESSON_MARKER)
 }
 
-export function agregerPhasesPourLeJuge(sorties: SortieDePhase[], plafond: number): string {
+/**
+ * LA PLACE QU'UNE ÉTAPE COURTE N'UTILISE PAS REVIENT AUX ÉTAPES LONGUES (piste 5 de conv-914).
+ *
+ * Répartition « par remplissage » de `budget` : un bloc plus court que sa part garde tout, les autres
+ * se partagent le reste à parts égales. Chaque bloc reçoit au moins min(sa longueur, budget / nombre
+ * de blocs) : avec `budget` = plafond × nombre de blocs, aucun n'est coupé plus court qu'avant.
+ */
+export function repartirLaPlace(longueurs: readonly number[], budget: number): number[] {
+  const parts = longueurs.map(() => 0)
+  const ordre = longueurs.map((_, i) => i).sort((a, b) => longueurs[a]! - longueurs[b]!)
+  let reste = Math.max(0, Math.floor(budget))
+  ordre.forEach((i, rang) => {
+    parts[i] = Math.min(longueurs[i]!, Math.floor(reste / (ordre.length - rang)))
+    reste -= parts[i]!
+  })
+  return parts
+}
+
+/**
+ * `plafond` est la part de CHAQUE bloc ; leur somme (plafond × nombre de blocs, le maximum que
+ * l'agrégat pouvait déjà atteindre) est mise en commun, et l'agrégat entier, en-têtes et leçons
+ * comprises, ne dépasse jamais `totalMax`.
+ * fix-ok: réparation 5 de run-a8a70cd0ee56-1 — `couperDebutEtFin(texte, plafond)` coupait chaque bloc à
+ * 6 000 même quand les autres laissaient leur place vide (cadrage de 9 000 + build court : coupé), et
+ * 12 blocs longs donnaient 71 664 caractères, au-delà des 60 000 de `AGGREGATE_MAX_CHARS`.
+ */
+export function agregerPhasesPourLeJuge(
+  sorties: SortieDePhase[],
+  plafond: number,
+  totalMax: number = AGGREGATE_MAX_CHARS
+): string {
   let derniere = -1
   sorties.forEach((p, i) => {
     if (p.text.split(/\r?\n/u).some(estLigneDeLecon)) derniere = i
   })
-  return sorties
-    .map((p, i) => {
-      const lignes = p.text.split(/\r?\n/u)
-      const lecons = lignes.filter(estLigneDeLecon)
-      let texte = p.text
-      let aRecoller: string[] = []
-      if (lecons.length > 0) {
-        if (i === derniere) {
-          texte = lignes.filter((l) => !estLigneDeLecon(l)).join('\n')
-          aRecoller = lecons
-        } else {
-          texte = lignes.map((l) => (estLigneDeLecon(l) ? MENTION_LECON_REMPLACEE : l)).join('\n')
-        }
+  const blocs = sorties.map((p, i) => {
+    const entete = `[phase ${p.phase}]\n`
+    const lignes = p.text.split(/\r?\n/u)
+    const lecons = lignes.filter(estLigneDeLecon)
+    const remplacee =
+      PHASES_REJOUEES_EN_ENTIER.has(p.phase) && sorties.some((q, j) => j > i && q.phase === p.phase)
+    if (remplacee) {
+      // La leçon reste celle de la réponse la plus récente qui en porte une, même remplacée.
+      const recollees = i === derniere && lecons.length > 0 ? `\n${lecons.join('\n')}` : ''
+      return { entete, fixe: `${MENTION_VERSION_REMPLACEE}${recollees}` }
+    }
+    let texte = p.text
+    let aRecoller: string[] = []
+    if (lecons.length > 0) {
+      if (i === derniere) {
+        texte = lignes.filter((l) => !estLigneDeLecon(l)).join('\n')
+        aRecoller = lecons
+      } else {
+        texte = lignes.map((l) => (estLigneDeLecon(l) ? MENTION_LECON_REMPLACEE : l)).join('\n')
       }
-      let body = texte.length > plafond ? `${texte.slice(0, plafond)}${MARQUE_TRONQUE}` : texte
-      if (aRecoller.length > 0) body = `${body.replace(/\s+$/u, '')}\n${aRecoller.join('\n')}`
-      return `[phase ${p.phase}]\n${body}`
+    }
+    return { entete, texte, recolle: aRecoller.length > 0 ? `\n${aRecoller.join('\n')}` : '' }
+  })
+  const aCouper = blocs.filter((b) => b.texte !== undefined)
+  // Ce qui ne se coupe pas : en-têtes, séparateurs, versions remplacées, leçons recollées, marques.
+  const horsCoupe =
+    blocs.reduce(
+      (n, b) => n + b.entete.length + (b.fixe?.length ?? 0) + (b.recolle?.length ?? 0),
+      0
+    ) +
+    2 * Math.max(0, blocs.length - 1) +
+    aCouper.length * MARQUE_TRONQUE.length
+  const parts = repartirLaPlace(
+    aCouper.map((b) => b.texte!.length),
+    Math.min(plafond * sorties.length, totalMax - horsCoupe)
+  )
+  let rang = 0
+  return blocs
+    .map((b) => {
+      if (b.texte === undefined) return `${b.entete}${b.fixe}`
+      let body = couperDebutEtFin(b.texte, parts[rang++]!)
+      if (b.recolle) body = `${body.replace(/\s+$/u, '')}${b.recolle}`
+      return `${b.entete}${body}`
     })
     .join('\n\n')
 }

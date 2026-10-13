@@ -1,21 +1,32 @@
 /**
  * SONDE du bloc « titres Brain du tour » (src/main/brain-titres-du-tour.ts) sur le Brain VIVANT.
  *
- * Rejoue les 27 questions de brain/tooling/eval/rag-golden.json par le chemin réel du chat
+ * Rejoue les 27 questions du jeu d'évaluation de l'entreprise (`entreprise/<nom>/brain/eval/rag-golden.json`,
+ * il dépend du contenu de SON Brain) par le chemin réel du chat
  * (candidates -> scopeBrainRetrieval -> selectionnerTitres) et rend : combien de fois la note
  * attendue est dans le bloc, combien de lignes il porte en moyenne, et si les questions hors sujet
  * (`max_dense`, sans note attendue) reçoivent bien un bloc vide. Lecture seule, gratuite (aucun
  * modèle). Usage : npx tsx scripts/sonde-titres-brain.mts
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { retrieveBrainContext } from '../src/main/brain-retrieval'
 import { scopeBrainRetrieval, brainCorpusForWorkspace } from '../src/main/brain-corpus-scope'
 import { rendreTitres, selectionnerTitres } from '../src/main/brain-titres-du-tour'
 
 type Cas = { id: string; query: string; expected_paths?: string[] }
+/** Premier `entreprise/<nom>/brain/eval/rag-golden.json` (ordre alphabetique), absent du depot public. */
+function jeuEvaluation(): string {
+  const dossiers = existsSync('entreprise') ? readdirSync('entreprise').sort() : []
+  const trouve = dossiers
+    .map((nom) => join('entreprise', nom, 'brain', 'eval', 'rag-golden.json'))
+    .find((chemin) => existsSync(chemin))
+  if (!trouve) throw new Error('aucun jeu d evaluation : entreprise/<nom>/brain/eval/rag-golden.json absent')
+  return trouve
+}
 const norm = (p: string): string => p.split(String.fromCharCode(92)).join('/').toLowerCase()
 const cas = (
-  JSON.parse(readFileSync('brain/tooling/eval/rag-golden.json', 'utf8')) as { cases: Cas[] }
+  JSON.parse(readFileSync(jeuEvaluation(), 'utf8')) as { cases: Cas[] }
 ).cases
 const corpus = brainCorpusForWorkspace(process.cwd())
 let trouves = 0

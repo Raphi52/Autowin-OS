@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
  * Racine REELLE du depot, quelle que soit la machine.
  *
  * Les sondes `scripts/cdp-*.mjs` ecrivaient leurs captures et leurs rapports dans
- * `C:/Amitel/Autowin OS/...` : le chemin d'UNE installation, disparue depuis. Sur toute autre
+ * `C:/<editeur>/Autowin OS/...` : le chemin d'UNE installation, disparue depuis. Sur toute autre
  * machine, et depuis toute copie de travail d'agent, l'ecriture echouait ou deposait la preuve
  * hors du depot — un instrument de preuve qui ment sur l'endroit ou vit sa preuve.
  *

@@ -52,7 +52,7 @@ def bm25_candidate_count(k, total):
 # instability below 4, NOT because 0.7845 is meaningfully above 0.7787.
 # COVERAGE, stated exactly: recall@5 stays 0.8276 by 1-for-1 COMPENSATION, not by invariance —
 # at k=5, graph-tv-calls ENTERS the top 5 (was out) and graph-etapercs-endettement LEAVES it
-# (was rank 1). Full per-case delta at k=5: 4 better (rig-navigation 2->1, rig-data-map 3->1,
+# (was rank 1). Full per-case delta at k=5: 4 better (app-navigation 2->1, app-data-map 3->1,
 # graph-ult-inherits 2->1, graph-tv-calls out->4), 1 worse, 24 unchanged. Losing a rank-1 answer
 # entirely is the accepted cost. Note the ranks depend on k, since bm25_candidate_count(k, total)
 # sizes the lexical pool — always state the k with the rank.
@@ -352,7 +352,7 @@ class BrainRetriever:
         self._index_monitor_thread = threading.Thread(
             target=self._index_monitor_loop,
             daemon=True,
-            name="amitel-brain-index-monitor",
+            name="brain-index-monitor",
         )
         self._index_monitor_thread.start()
 
@@ -378,7 +378,7 @@ class BrainRetriever:
                         target=self._reload_worker,
                         args=(current,),
                         daemon=True,
-                        name="amitel-brain-index-reload",
+                        name="brain-index-reload",
                     )
                     self._reload_thread.start()
 
@@ -474,7 +474,7 @@ class BrainRetriever:
             target=self._freshness_worker,
             args=(self.manifest, self.generation, self._corpus_epoch),
             daemon=True,
-            name="amitel-brain-freshness",
+            name="brain-freshness",
         )
         self._freshness_thread.start()
 

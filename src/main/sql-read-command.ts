@@ -1,7 +1,7 @@
 /**
  * Commande agent « sql_query » — consulter les bases SQL en LECTURE SEULE.
  *
- * Constaté le 2026-08-06 : à qui lui demandait de consulter `CODE_EVENEMENT_RCS`, l'agent répondait
+ * Constaté le 2026-08-06 : à qui lui demandait de consulter `CODE_EVENEMENT_RC`, l'agent répondait
  * « je n'ai aucun accès SQL » — exact, et la capacité n'existait pas. Elle existe maintenant, sous
  * garde stricte, parce que la connexion utilise le compte Windows de l'utilisateur, qui est
  * `db_datawriter` sur les bases de PRODUCTION (mesuré : UPDATE et DELETE autorisés).

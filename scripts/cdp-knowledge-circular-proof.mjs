@@ -60,7 +60,7 @@ const control = (action) =>
       cwd: root,
       encoding: 'utf8',
       windowsHide: true,
-      env: { ...process.env, AMITEL_BRAIN_ROOT: fixtureRoot }
+      env: { ...process.env, AUTOWIN_BRAIN_ROOT: fixtureRoot }
     }
   )
 

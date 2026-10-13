@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the governed Amitel Brain architecture without mutating the vault."""
+"""Validate the governed Brain architecture without mutating the vault."""
 from __future__ import annotations
 
 import argparse
@@ -10,23 +10,18 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from rig_coverage import REGISTRY_PATH, check_registry
 from obsidian_graph import graph_errors
 from brain_verify import validate_contract_uri
+import brain_identite
 
-SCHEMA = "amitel-brain/v1"
-CANDIDATE_SCHEMA = "amitel-brain/candidate-v1"
-CANONICAL_SOURCE = Path("knowledge/domain/rigapplication-documentation")
-REQUIRED_SOURCE_FILES = tuple(Path(path) for path in (
-    "_IMPORT.md",
-    "RECONSTRUCT.md",
-    "RIG-Dispatcher.md",
-    "SITEMAP.md",
-))
+# Prefixe du profil d'entreprise (`brain_identite`) : les notes deja au Brain partage portent celui-la.
+SCHEMA = brain_identite.schema("v1")
+CANDIDATE_SCHEMA = brain_identite.schema("candidate-v1")
 KNOWLEDGE_TEMPLATE = Path("knowledge/_TEMPLATE.md")
+# Notes d'architecture de TOUT Brain. Le domaine metier d'une entreprise (profil `metier`, conv-916)
+# y ajoute sa carte `knowledge/_maps/<cle>.md` : voir `required_v1_notes()`.
 REQUIRED_V1_NOTES = tuple(Path(path) for path in (
     "knowledge/_maps/brain.md",
-    "knowledge/_maps/rig.md",
     "knowledge/_maps/contribution.md",
     "knowledge/runbooks/_index.md",
     "knowledge/standards/_index.md",
@@ -59,7 +54,7 @@ ALLOWED_KINDS = {
 ALLOWED_ACTIVE_STATUSES = {"active", "superseded", "archived"}
 ALLOWED_CONFIDENCE = {"confirmed", "derived", "hypothesis"}
 ALLOWED_THEMES = {
-    "theme/rig", "theme/architecture", "theme/donnees", "theme/integrations",
+    "theme/architecture", "theme/donnees", "theme/integrations",
     "theme/operations", "theme/ia", "theme/gouvernance", "theme/autowin-os",
 }
 UID_RE = re.compile(r"^[a-z0-9][a-z0-9:/._-]{2,127}$")
@@ -67,7 +62,65 @@ AGENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[A-Za-z0-9][A-Za-z0-9.
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 WIKILINK_RE = re.compile(r"\[\[([^\[\]\n]+)\]\]")
 COMPANY_MOC = Path("knowledge/_maps/brain.md")
-RIG_MOC = Path("knowledge/_maps/rig.md")
+
+
+def canonical_source():
+    """Documentation source du domaine metier (profil), rangee a part ; None sans domaine."""
+    metier = brain_identite.metier()
+    if not metier or not metier["documentation"]:
+        return None
+    return Path("knowledge/domain") / metier["documentation"]
+
+
+def required_source_files() -> tuple:
+    """Fichiers que la documentation source du domaine metier doit porter (profil)."""
+    metier = brain_identite.metier()
+    return tuple(Path(nom) for nom in metier["fichiersDocumentation"]) if metier else ()
+
+
+def metier_moc():
+    """Carte du domaine metier, `knowledge/_maps/<cle>.md` ; None sans domaine."""
+    metier = brain_identite.metier()
+    return Path(f"knowledge/_maps/{metier['cle']}.md") if metier else None
+
+
+def required_v1_notes() -> tuple:
+    moc = metier_moc()
+    return REQUIRED_V1_NOTES + ((moc,) if moc else ())
+
+
+def required_architecture_files() -> tuple:
+    moc = metier_moc()
+    return REQUIRED_ARCHITECTURE_FILES + ((moc,) if moc else ())
+
+
+def allowed_themes() -> set:
+    metier = brain_identite.metier()
+    return ALLOWED_THEMES | ({f"theme/{metier['cle']}"} if metier else set())
+
+
+def _coverage_check(root_path: Path, report: "ValidationReport") -> None:
+    """Registre de couverture du domaine metier : un module PROPRE a l'entreprise (profil
+    `metier.couverture`), installe a cote du tooling. Declare mais introuvable = erreur : une
+    installation amputee ne doit pas valider le Brain en silence."""
+    metier = brain_identite.metier()
+    nom = metier["couverture"] if metier else None
+    if not nom:
+        return
+    module = brain_identite.module_metier(nom)
+    if module is None:
+        report.errors.append(f"coverage module {nom!r} declared by the enterprise profile is missing")
+        return
+    coverage_errors = module.check_registry(root_path)
+    report.errors.extend(coverage_errors)
+    registry_path = root_path / module.REGISTRY_PATH
+    if not coverage_errors and registry_path.is_file():
+        try:
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            entries = registry.get("entries", []) if isinstance(registry, dict) else []
+            report.counts["coverage_entries"] = len(entries) if isinstance(entries, list) else 0
+        except (OSError, json.JSONDecodeError):
+            pass
 
 
 @dataclass
@@ -244,7 +297,9 @@ def _validate_navigation_graph(
     report: ValidationReport,
 ) -> None:
     company_reachable = _reachable_active_notes(COMPANY_MOC, root, active_notes)
-    rig_reachable = _reachable_active_notes(RIG_MOC, root, active_notes)
+    metier = brain_identite.metier()
+    moc = metier_moc()
+    metier_reachable = _reachable_active_notes(moc, root, active_notes) if moc else set()
     orphans: set[Path] = set()
     for path, (relative, metadata, _) in sorted(active_notes.items(), key=lambda item: item[1][0]):
         if path not in company_reachable:
@@ -253,9 +308,10 @@ def _validate_navigation_graph(
             )
             orphans.add(path)
         scope = metadata.get("scope", "").strip().strip('"\'')
-        if scope == "rig" and path not in rig_reachable:
+        if metier and scope == metier["cle"] and path not in metier_reachable:
             report.errors.append(
-                f"{relative}: active RIG note is orphaned from RIG MOC {RIG_MOC.as_posix()}"
+                f"{relative}: active {metier['libelle']} note is orphaned from "
+                f"{metier['libelle']} MOC {moc.as_posix()}"
             )
             orphans.add(path)
     report.counts["active_notes"] = len(active_notes)
@@ -323,7 +379,7 @@ def _validate_v1_note(
 
     tags = _list_value(metadata["tags"])
     themes = [] if tags is None else [tag for tag in tags if tag.startswith("theme/")]
-    unsupported_themes = sorted(set(themes) - ALLOWED_THEMES)
+    unsupported_themes = sorted(set(themes) - allowed_themes())
     if unsupported_themes:
         report.errors.append(f"{relative}: unsupported themes: {', '.join(unsupported_themes)}")
     if status == "active" and not 1 <= len(themes) <= 2:
@@ -393,32 +449,27 @@ def _validate_brain_checked(root_path: Path, report: ValidationReport) -> Valida
         report.errors.append(f"brain root is not a directory: {root_path}")
         return report.finish()
 
-    for relative in REQUIRED_ARCHITECTURE_FILES:
+    for relative in required_architecture_files():
         if (root_path / relative).is_file():
             report.counts["architecture_files"] += 1
         else:
             report.errors.append(f"missing architecture file: {relative.as_posix()}")
 
-    source_root = root_path / CANONICAL_SOURCE
-    if source_root.is_dir():
+    source = canonical_source()
+    source_root = root_path / source if source else None
+    if source_root is not None and source_root.is_dir():
         report.counts["canonical_source_files"] = sum(1 for path in source_root.rglob("*") if path.is_file())
-    missing_source_files = [relative.as_posix() for relative in REQUIRED_SOURCE_FILES if not (source_root / relative).is_file()]
+    missing_source_files = [
+        relative.as_posix() for relative in required_source_files()
+        if source_root is None or not (source_root / relative).is_file()
+    ]
     if missing_source_files:
         report.errors.append(
             f"canonical source is missing required files: {', '.join(missing_source_files)}"
         )
 
-    coverage_errors = check_registry(root_path)
-    report.errors.extend(coverage_errors)
+    _coverage_check(root_path, report)
     report.errors.extend(graph_errors(root_path))
-    registry_path = root_path / REGISTRY_PATH
-    if not coverage_errors and registry_path.is_file():
-        try:
-            registry = json.loads(registry_path.read_text(encoding="utf-8"))
-            entries = registry.get("entries", []) if isinstance(registry, dict) else []
-            report.counts["coverage_entries"] = len(entries) if isinstance(entries, list) else 0
-        except (OSError, json.JSONDecodeError):
-            pass
 
     seen_uids: dict[str, tuple[str, dict[str, str]]] = {}
     active_notes: dict[Path, tuple[str, dict[str, str], list[str]]] = {}
@@ -429,11 +480,12 @@ def _validate_brain_checked(root_path: Path, report: ValidationReport) -> Valida
         for path in sorted(knowledge.rglob("*.md")):
             if path.relative_to(root_path) == KNOWLEDGE_TEMPLATE:
                 continue
-            try:
-                path.relative_to(source_root)
-                continue
-            except ValueError:
-                pass
+            if source_root is not None:
+                try:
+                    path.relative_to(source_root)
+                    continue
+                except ValueError:
+                    pass
             text = path.read_text(encoding="utf-8")
             try:
                 metadata = _frontmatter(text)
@@ -447,7 +499,8 @@ def _validate_brain_checked(root_path: Path, report: ValidationReport) -> Valida
                 continue
             managed_prefix = text.removeprefix("\ufeff")
             managed_schema = re.search(
-                r'(?m)^\s*schema\s*:\s*["\']?amitel-brain/(?:v1|candidate-v1)["\']?\s*$',
+                r'(?m)^\s*schema\s*:\s*["\']?' + re.escape(brain_identite.service())
+                + r'/(?:v1|candidate-v1)["\']?\s*$',
                 managed_prefix,
             )
             if metadata is None and managed_schema:
@@ -458,7 +511,7 @@ def _validate_brain_checked(root_path: Path, report: ValidationReport) -> Valida
                 continue
             if metadata is None or schema != SCHEMA:
                 report.counts["legacy_notes"] += 1
-                if path.relative_to(root_path) in REQUIRED_V1_NOTES:
+                if path.relative_to(root_path) in required_v1_notes():
                     report.errors.append(f"{_relative(path, root_path)}: architecture notes must use schema {SCHEMA}")
                 if metadata is not None and status == "active":
                     active_notes[path.resolve()] = (
@@ -477,14 +530,15 @@ def _validate_brain_checked(root_path: Path, report: ValidationReport) -> Valida
 
     _validate_navigation_graph(root_path, active_notes, report)
 
+    controlled = allowed_themes()
     covered_themes = {
         theme
         for _relative_path, metadata in seen_uids.values()
         if metadata.get("status", "").strip().strip('"\'') == "active"
         for theme in (_list_value(metadata.get("tags", "")) or [])
-        if theme in ALLOWED_THEMES
+        if theme in controlled
     }
-    missing_themes = sorted(ALLOWED_THEMES - covered_themes)
+    missing_themes = sorted(controlled - covered_themes)
     if missing_themes:
         report.errors.append(f"controlled themes without active v1 notes: {', '.join(missing_themes)}")
 

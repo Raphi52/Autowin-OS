@@ -533,6 +533,70 @@ describe('Envoyer en gel fondu bleu-rose', () => {
 })
 
 /**
+ * REPRENDRE EN GEL VERT (2026-10-12, conv-902, capture du rond vert d'Holographique blanc :
+ * « refais ce bouton pour qu'il soit mieux visible dans mes themes holographique »). Le bouton
+ * etait un voile vert a 20 % cercle de neon, fleche #ccffdd : invisible sur la nacre du blanc, qui
+ * recopie `.composer-send` tel quel. Il prend la recette d'Envoyer -- gel fondu, reflet sans ligne,
+ * fleche blanche, ombre noire courte -- en deux teintes du vert du theme assombri. ENTREES QUI
+ * DOIVENT FAIRE ECHOUER : le voile translucide remis, une fleche claire non blanche, une lueur
+ * verte, ou un vert trop clair pour porter le blanc (moins de 4,5:1 au centre du degrade).
+ */
+describe('Reprendre en gel vert', () => {
+  const REPRENDRE = `${PREFIXE} .cosmic-outline .composer-send.is-resume`
+  const GEL_VERT =
+    /^linear-gradient\(180deg, rgba\(255, 255, 255, (0?\.\d+)\), rgba\(255, 255, 255, 0\) \d+%\),\s*linear-gradient\(135deg, (#[0-9a-f]{6}), (#[0-9a-f]{6})\)$/
+  const derniere = (selecteur: string): Record<string, string> => {
+    const valeurs: Record<string, string> = {}
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (!regle.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === selecteur)) return
+      regle.walkDecls((d) => {
+        valeurs[d.prop] = d.value
+      })
+    })
+    return valeurs
+  }
+  const rgb = (hex: string): number[] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const lum = (c: number[]): number => {
+    const [r, g, b] = c
+      .map((x) => x / 255)
+      .map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const contraste = (a: number[], b: number[]): number => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
+    return (x + 0.05) / (y + 0.05)
+  }
+  const reflet = (fond: string | undefined): number => Number((fond ?? '').match(GEL_VERT)?.[1] ?? NaN)
+
+  it('peint un gel vert opaque, fleche blanche lisible, ombre noire sans lueur', () => {
+    const repos = derniere(REPRENDRE)
+    const m = (repos.background ?? '').match(GEL_VERT)
+    expect(m, repos.background).not.toBeNull()
+    const [clair, sombre] = [rgb(m![2]), rgb(m![3])]
+    const milieu = clair.map((v, i) => Math.round((v + sombre[i]) / 2))
+    // Fleche blanche lisible au centre du degrade, et le rond se detache de la nacre du blanc
+    // comme du noir de la saisie.
+    expect(contraste([255, 255, 255], milieu)).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(clair, [246, 245, 249])).toBeGreaterThanOrEqual(3)
+    expect(contraste(sombre, [10, 10, 10])).toBeGreaterThanOrEqual(3)
+    expect(repos.color).toBe('#ffffff')
+    expect(repos['border-color']).toBe('transparent')
+    expect(repos['background-origin']).toBe('border-box')
+    expect(repos['box-shadow']).toBe('0 2px 3px rgba(0, 0, 0, 0.6)')
+  })
+
+  it('marque le survol et l appui par le reflet seul, sans retrecir', () => {
+    const pret = reflet(derniere(REPRENDRE).background)
+    const survol = derniere(`${REPRENDRE}:hover:not(:disabled)`)
+    const appui = derniere(`${REPRENDRE}:active:not(:disabled)`)
+    expect(reflet(survol.background)).toBeGreaterThan(pret)
+    expect(reflet(appui.background)).toBeLessThan(pret)
+    expect(appui.transform).toBe('none')
+    expect(appui['box-shadow']).toBe('0 1px 1px rgba(0, 0, 0, 0.6)')
+  })
+})
+
+/**
  * STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette : « PERLE implémente ») :
  * un dome radial et un reflet ovale net en haut ; au survol le reflet s'avive, a l'appui il
  * s'eteint et l'ombre se raccourcit, sans retrecissement. Aucune lueur (ombres noires seulement),
@@ -1026,7 +1090,9 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     '.slash-palette',
     '.slash-detail',
     '.graph-settings-popover',
-    '.model-question-popup'
+    '.model-question-popup',
+    // conv-924 : la carte de confirmation du fil (supprimer / renommer) prend le meme cadre.
+    '.delete-confirm-card'
   ]
   const CADRE = `${PREFIXE} :is( ${FENETRES.join(', ')} )`
   const regles = (): { selecteur: string; decls: Record<string, string> }[] => {
@@ -1168,6 +1234,22 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       'var(--nv-pop-cadre)'
     )
     expect(derniere(`${PREFIXE} .model-quota-popover .model-quota-window > strong`).color).toBe('#ffffff')
+  })
+
+  // conv-924 (« met le theme holo dans cette popup ») : la carte « Supprimer la conversation ? »
+  // etait une plaque noire arrondie, et `.btn` du theme effacait le rouge de son bouton destructif.
+  it('carte de confirmation : cadre holo, et le bouton irreversible garde un habit ROUGE distinct de « Garder »', () => {
+    const danger = derniere(`${PREFIXE} .delete-confirm-danger`)
+    expect(danger.background).toBe('rgba(255, 90, 110, 0.16)')
+    expect(danger['border-color']).toBe('rgba(255, 90, 110, 0.55)')
+    // Ecrite APRES `.btn` du theme, a specificite egale : c'est l'ordre qui lui rend son rouge.
+    expect(rang(`${PREFIXE} .delete-confirm-danger`)).toBeGreaterThan(rang(`${PREFIXE} .btn`))
+    expect(rang(`${PREFIXE} .delete-confirm-danger:hover:not(:disabled)`)).toBeGreaterThan(
+      rang(`${PREFIXE} .btn:hover:not(:disabled)`)
+    )
+    const garder = derniere(`${PREFIXE} .delete-confirm-cancel`)
+    expect(garder.background).toBe('var(--nv-pop-aplat)')
+    expect(garder.background).not.toBe(danger.background)
   })
 })
 

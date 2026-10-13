@@ -12,14 +12,14 @@ Autowin OS = cockpit **Electron + React + TypeScript** d'orchestration d'agents.
 1. **Node.js** (LTS récent) — vérifier : `node --version`.
 2. **Git**.
 3. **uv** (gestionnaire de venv Python, pour le brain_server) — https://docs.astral.sh/uv/.
-4. Un **accès en écriture** au repo Azure DevOps `AmitelGTC/AutoWinOS` (demander à être ajouté à
-   l'équipe). L'accès passe par `az login` — voir la procédure Azure DevOps interne si ton poste
+4. Un **accès en écriture** au dépôt de l'équipe (adresse dans `entreprise/<nom>/README.md` ;
+   demander à être ajouté à l'équipe). L'accès passe par `az login` — voir la procédure Azure DevOps interne si ton poste
    n'est pas encore configuré.
 
 ## 2. Récupérer et installer
 
 ```bash
-git clone https://dev.azure.com/AmitelGTC/AutoWinOS/_git/AutoWinOS
+git clone <adresse du dépôt de l'équipe> AutoWinOS
 cd "AutoWinOS"
 npm install
 ```
@@ -35,7 +35,7 @@ npm run bootstrap:deps
 
 Il installe les CLI `@openai/codex` et `@anthropic-ai/claude-code` si absentes, crée le venv du
 brain_server, et **guide** ce qui ne s'automatise pas (voir §6). Chemin du brain configurable via
-`AUTOWIN_BRAIN_TOOLING` (défaut : partage GED Amitel ; pointer un dossier local pour un venv par machine).
+`AUTOWIN_BRAIN_TOOLING` (défaut : partage réseau de l'équipe, `brain.racinePartagee` du profil d'entreprise ; pointer un dossier local pour un venv par machine).
 
 ## 4. Lancer en développement
 
@@ -76,7 +76,8 @@ alors qu'il occupait déjà `.autowin-data/whisper`.
 
 ## 6. Config manuelle (secrets / login interactif — non automatisables)
 
-- **Token Brain** : définir la variable d'environnement `AMITEL_BRAIN_TOKEN` (active le RAG).
+- **Token Brain** : définir la variable d'environnement `AUTOWIN_BRAIN_TOKEN` (active le RAG ; l'ancien nom
+  fourni par le profil d'entreprise reste lu).
 - **OAuth Codex** : `npm run codex:login`.
 - **Kimi Code** (optionnel, en standby par défaut) : installer puis `kimi login` si utilisé.
 

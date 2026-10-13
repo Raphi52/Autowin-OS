@@ -630,21 +630,28 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     const root = createRoot(container)
     act(() => root.render(<ArtifactPreview artifact={artifact} />))
 
-    // MÊME GUEULE que Raisonnement / Actions (conv-178) : un <details> `thinking-block` dont
-    // l'en-tête est la capsule, poids dans la pastille, nom du fichier dehors.
+    // MÊME GUEULE que Raisonnement / Actions (conv-178), sur leur cadre à DEUX LIGNES (conv-907 :
+    // « le titre de l'image dans la capsule dans une ligne en dessous ») : le rond et son icône,
+    // libellé + poids en ligne 1, nom du fichier en ligne 2 — DANS le cadre, plus à côté.
     const card = container.querySelector<HTMLDetailsElement>(
-      'details.thinking-block.artifact-capsule'
+      'details.thinking-block.cadre-anneau.artifact-capsule'
     )!
     expect(card.getAttribute('data-collapsed')).toBe('true')
     expect(card.open).toBe(false)
     expect(card.classList.contains('is-done')).toBe(true)
     const toggle = container.querySelector<HTMLElement>('summary.artifact-capsule__entete')!
-    expect(toggle.querySelector('.thinking-capsule .thinking-capsule-icone svg')).not.toBe(null)
-    expect(toggle.querySelector('.thinking-capsule .thinking-label')?.textContent).toBe(
+    const tete = toggle.querySelector('.anneau-tete')!
+    expect(tete.querySelector(':scope > .anneau-rond svg')).not.toBe(null)
+    expect(tete.querySelector('.anneau-col > .anneau-l1 .thinking-label')?.textContent).toBe(
       'Image générée'
     )
-    expect(toggle.querySelector('.thinking-capsule .thinking-duree')?.textContent).toBe('12 o')
-    expect(toggle.querySelector('.thinking-status')?.textContent).toBe('capture-écran')
+    expect(tete.querySelector('.anneau-col > .anneau-l1 .thinking-duree')?.textContent).toBe('12 o')
+    expect(tete.querySelector('.anneau-col > .anneau-l2 .thinking-status')?.textContent).toBe(
+      'capture-écran'
+    )
+    expect(tete.querySelector(':scope > .anneau-chevron')).not.toBe(null)
+    // Plus rien hors du cadre : le nom n'est plus un voisin de la capsule.
+    expect(toggle.children.length).toBe(1)
     // Replié : aucune image dans le DOM, ni corps ni pied — seule la capsule reste.
     expect(container.querySelector('.artifact-preview__body')).toBe(null)
     expect(container.querySelector('img')).toBe(null)
@@ -684,6 +691,8 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     act(() => root.render(<ArtifactPreview artifact={imageLue('image-Read')} />))
     expect(container.querySelector('.thinking-label')?.textContent).toBe('Image · Read')
     expect(container.querySelector('.artifact-capsule__nom')).toBe(null)
+    // … et aucune seconde ligne vide n'est ouverte pour lui.
+    expect(container.querySelector('.anneau-l2')).toBe(null)
 
     // Un vrai nom de fichier, lui, reste affiché.
     act(() => root.render(<ArtifactPreview artifact={imageLue('1-image.png')} />))

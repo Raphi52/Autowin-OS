@@ -11,7 +11,7 @@ let cached: { token: string; expiresAt: number } | null = null
 /**
  * Obtient un token AAD Azure DevOps via la session `az login` de l'utilisateur (aucun secret à saisir).
  * Renvoie null si `az` absent ou pas de session. Mis en cache ~45 min (les tokens AAD durent ~1 h).
- * C'est le fallback d'auth « standard RIG » quand aucun PAT (AUTOWIN_AZDO_PAT) n'est fourni.
+ * C'est le fallback d'auth « standard CONTOSO » quand aucun PAT (AUTOWIN_AZDO_PAT) n'est fourni.
  */
 export async function getAzureDevOpsAadToken(now: number = Date.now()): Promise<string | null> {
   if (cached && now < cached.expiresAt) return cached.token

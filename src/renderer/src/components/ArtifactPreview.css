@@ -346,6 +346,13 @@
   border-left: 1px solid color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
 
+/* Dans le cadre à deux lignes (conv-907), le corps déplié reste DANS le cadre, aligné sur les deux
+   lignes — la même marge que `.thinking-block.cadre-anneau > .thinking-body` (anneau-activite.css). */
+.cadre-anneau > .artifact-capsule__corps {
+  width: auto;
+  margin: 0 0.85em 0.6em 3.5em;
+}
+
 .artifact-capsule__corps > .artifact-preview__body {
   border-radius: 10px;
 }

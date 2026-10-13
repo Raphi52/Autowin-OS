@@ -19,18 +19,21 @@ import {
   verifySignedBrainPayload
 } from './brain-protocol'
 import { lireReglage, sharedBrainOrigin } from './brain-paths'
+import { identiteBrain } from './identite-entreprise'
 
 type FetchLike = typeof fetch
 
 /**
- * Token de service : env AUTOWIN_BRAIN_TOKEN (secours historique : AMITEL_BRAIN_TOKEN), sinon le fichier
- * de l'installation partagee, dont le dossier garde son nom HISTORIQUE sur disque : %LOCALAPPDATA%\AmitelBrain\service-token. */
+ * Token de service : env AUTOWIN_BRAIN_TOKEN (secours : son ancien nom), sinon le fichier de
+ * l'installation partagee, dont le dossier est nomme par le profil d'entreprise :
+ * %LOCALAPPDATA%\<dossierLocal>\service-token. */
 export function brainServiceToken(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = lireReglage(env, 'AUTOWIN_BRAIN_TOKEN', 'AMITEL_BRAIN_TOKEN')
+  const configured = lireReglage(env, 'AUTOWIN_BRAIN_TOKEN')
   if (configured) return configured
+  const identite = identiteBrain(env)
   const base = env.LOCALAPPDATA
-    ? join(env.LOCALAPPDATA, 'AmitelBrain', 'service-token')
-    : join(env.HOME ?? '', '.amitel-brain', 'service-token')
+    ? join(env.LOCALAPPDATA, identite.dossierLocal, 'service-token')
+    : join(env.HOME ?? '', identite.dossierMaison, 'service-token')
   try {
     return existsSync(base) ? readFileSync(base, 'ascii').trim() : ''
   } catch {

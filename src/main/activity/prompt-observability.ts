@@ -199,7 +199,11 @@ function mojibakeScore(value: string): number {
   return (value.match(/(?:Ã.|Â.|â..|ð...)/g) ?? []).length
 }
 
-function restoreMisdecodedUtf8(value: string): string {
+/**
+ * Exportée pour le démarrage d'une étape (`orchestration-observability.ts`), qui écrit le prompt DÈS
+ * le départ : le même texte que l'appel écrit à la fin, sinon le détail l'afficherait deux fois.
+ */
+export function restoreMisdecodedUtf8(value: string): string {
   const initialScore = mojibakeScore(value)
   if (initialScore === 0) return value
 

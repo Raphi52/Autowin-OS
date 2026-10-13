@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   567 regles, 858 declarations. Voir genererCoucheClaire. */
+   566 regles, 855 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -136,6 +136,27 @@
     background: rgba(20, 15, 40, 0.038)
 }
 
+/* ---- src/renderer/src/components/BilanDeCloture.css ---- */
+:root[data-theme='holographique-clair'] .bilan-cloture__bloc {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .bilan-cloture__kicker {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .bilan-cloture__juge[data-bilan-juge='valide'] .bilan-cloture__conclusion b {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .bilan-cloture__puces li[data-gravite='OK'] .bilan-cloture__gravite {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .bilan-cloture__ouvrir {
+    color: #aa0e5f;
+    border: 1px solid rgba(170, 14, 95, 0.45)
+}
+:root[data-theme='holographique-clair'] .bilan-cloture__ouvrir:hover {
+    border-color: #aa0e5f
+}
+
 /* ---- src/renderer/src/components/BrainMarkdown.css ---- */
 :root[data-theme='holographique-clair'] .brain-markdown__meta {
     border-bottom: 1px solid rgba(20, 15, 40, 0.2)
@@ -239,13 +260,10 @@
 }
 
 /* ---- src/renderer/src/components/ChatMosaic.css ---- */
-:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='occupe'] {
-    border-color: rgba(170, 14, 95, 0.28)
+:root[data-theme='holographique-clair'] .chat-mosaic-window-anneau {
+    background: rgba(208, 43, 140, 0.28)
 }
-:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='attention'] {
-    border-color: rgba(170, 14, 95, 0.5)
-}
-:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='attention']::after {
+:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='attention'] > .chat-mosaic-window-anneau {
     background: conic-gradient(
     from var(--mosaic-shiny-angle),
     rgba(208, 43, 140, 0.55) 0%,
@@ -451,7 +469,7 @@
     ),
     rgba(253, 253, 255, 0.985)
 }
-:root[data-theme='holographique-clair'] .thinking-block > summary .thinking-secondes, :root[data-theme='holographique-clair'] .thinking-block > summary .thinking-duree, :root[data-theme='holographique-clair'] .capsule-bouton .thinking-duree {
+:root[data-theme='holographique-clair'] .thinking-block > summary .thinking-secondes, :root[data-theme='holographique-clair'] .thinking-block > summary .thinking-duree, :root[data-theme='holographique-clair'] .capsule-bouton .thinking-duree, :root[data-theme='holographique-clair'] .activity-anneau .anneau-l1 .thinking-duree {
     background: rgba(253, 253, 255, 0.5);
     color: #1c172b
 }
@@ -2001,47 +2019,6 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
     border: 1px solid rgba(170, 14, 95, 0.45);
     color: #aa0e5f
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group {
-    border-left: 2px solid #0e31aa;
-    background: rgba(20, 15, 40, 0.045)
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group:hover {
-    background: rgba(20, 15, 40, 0.068)
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group.failed, :root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='failed'] {
-    background: linear-gradient(
-    100deg,
-    rgba(255, 109, 143, 0.24) 0%,
-    rgba(255, 109, 143, 0.07) 45%,
-    rgba(20, 15, 40, 0.045) 85%
-  )
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='running'] {
-    border-left-color: #0e31aa;
-    background: linear-gradient(
-    100deg,
-    rgba(60, 110, 235, 0.22) 0%,
-    rgba(60, 110, 235, 0.07) 45%,
-    rgba(20, 15, 40, 0.045) 85%
-  )
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
-    background: linear-gradient(
-    100deg,
-    rgba(232, 163, 61, 0.22) 0%,
-    rgba(232, 163, 61, 0.07) 45%,
-    rgba(20, 15, 40, 0.045) 85%
-  )
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='done'] {
-    border-left-color: #09712c;
-    background: linear-gradient(
-    100deg,
-    rgba(0, 190, 70, 0.2) 0%,
-    rgba(0, 190, 70, 0.06) 45%,
-    rgba(20, 15, 40, 0.045) 85%
-  )
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .activity-step-toggle:hover {
     border-color: rgba(14, 49, 170, 0.6);

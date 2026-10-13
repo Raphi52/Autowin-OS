@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze and maintain the literal visible Obsidian graph for Amitel Brain."""
+"""Analyze and maintain the literal visible Obsidian graph for the Brain."""
 from __future__ import annotations
 
 import argparse
@@ -11,17 +11,36 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import unquote
 
-CANONICAL_SOURCE = Path("knowledge/domain/rigapplication-documentation")
+import brain_identite
+
 ENTERPRISE_INDEX = Path("knowledge/_maps/vault-inventory.md")
-RIG_SOURCE_INDEX = Path("knowledge/_maps/rig-source-mirror.md")
 WIKILINK_RE = re.compile(r"(?<!!)\[\[([^\[\]\n]+)\]\]")
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]\n]*\]\(([^)\n]+)\)")
 FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 CONTROLLED_THEME_QUERIES = {
-    "tag:#theme/rig", "tag:#theme/architecture", "tag:#theme/donnees",
+    "tag:#theme/architecture", "tag:#theme/donnees",
     "tag:#theme/integrations", "tag:#theme/operations", "tag:#theme/ia",
     "tag:#theme/gouvernance", "tag:#theme/autowin-os",
 }
+
+
+def _metier_source():
+    """Documentation source du domaine metier (profil `metier`, conv-916) et son index genere :
+    (dossier, index, metier) ou None. Sans domaine (version publique), tout le vault va dans
+    l'inventaire de l'entreprise."""
+    metier = brain_identite.metier()
+    if not metier or not metier["documentation"]:
+        return None
+    return (
+        Path("knowledge/domain") / metier["documentation"],
+        Path(f"knowledge/_maps/{metier['cle']}-source-mirror.md"),
+        metier,
+    )
+
+
+def controlled_theme_queries() -> set:
+    metier = brain_identite.metier()
+    return CONTROLLED_THEME_QUERIES | ({f"tag:#theme/{metier['cle']}"} if metier else set())
 
 
 @dataclass(frozen=True)
@@ -188,26 +207,25 @@ def graph_errors(root: Path) -> list[str]:
         for group in config.get("colorGroups", [])
         if isinstance(group, dict) and isinstance(group.get("query"), str)
     }
-    missing_theme_queries = sorted(CONTROLLED_THEME_QUERIES - configured_theme_queries)
+    missing_theme_queries = sorted(controlled_theme_queries() - configured_theme_queries)
     if missing_theme_queries:
         errors.append(
             "missing controlled theme color groups: " + ", ".join(missing_theme_queries)
         )
     report = analyze(root)
     files = _visible_markdown(root.resolve())
-    index_paths = {ENTERPRISE_INDEX.as_posix(), RIG_SOURCE_INDEX.as_posix()}
+    source = _metier_source()
+    prefix = source[0].as_posix() + "/" if source else None
+    index_paths = {ENTERPRISE_INDEX.as_posix()} | ({source[1].as_posix()} if source else set())
     expected_enterprise = {
         path
         for path in files
-        if not path.startswith(CANONICAL_SOURCE.as_posix() + "/") and path not in index_paths
+        if not (prefix and path.startswith(prefix)) and path not in index_paths
     }
-    expected_source = {
-        path for path in files if path.startswith(CANONICAL_SOURCE.as_posix() + "/")
-    }
-    for index_path, expected in (
-        (ENTERPRISE_INDEX, expected_enterprise),
-        (RIG_SOURCE_INDEX, expected_source),
-    ):
+    expected_indexes = [(ENTERPRISE_INDEX, expected_enterprise)]
+    if source:
+        expected_indexes.append((source[1], {path for path in files if path.startswith(prefix)}))
+    for index_path, expected in expected_indexes:
         absolute = root / index_path
         if not absolute.is_file():
             errors.append(f"missing generated Obsidian index {index_path.as_posix()}")
@@ -235,10 +253,12 @@ def graph_errors(root: Path) -> list[str]:
 
 def _frontmatter(uid: str, scope: str, reviewer: str) -> str:
     today = date.today().isoformat()
+    metier = brain_identite.metier()
+    theme = f"theme/{scope}" if metier and scope == metier["cle"] else "theme/gouvernance"
     reviewed = f'["{reviewer}"]' if reviewer else "[]"
     return (
         "---\n"
-        "schema: amitel-brain/v1\n"
+        f"schema: {brain_identite.schema('v1')}\n"
         f"uid: {uid}\n"
         "type: domain\n"
         "kind: map\n"
@@ -252,7 +272,7 @@ def _frontmatter(uid: str, scope: str, reviewer: str) -> str:
         f"reviewed_by: {reviewed}\n"
         f"reviewed_at: {today}\n"
         "mocs: []\n"
-        f"tags: [obsidian, graph, generated-map, {'theme/rig' if scope == 'rig' else 'theme/gouvernance'}]\n"
+        f"tags: [obsidian, graph, generated-map, {theme}]\n"
         "---\n"
     )
 
@@ -273,14 +293,14 @@ def _render_index(title: str, intro: str, paths: list[str], uid: str, scope: str
 def refresh_indexes(root: Path, reviewer: str = "") -> None:
     root = root.resolve()
     files = _visible_markdown(root)
-    index_paths = {ENTERPRISE_INDEX.as_posix(), RIG_SOURCE_INDEX.as_posix()}
+    metier_source = _metier_source()
+    prefix = metier_source[0].as_posix() + "/" if metier_source else None
+    index_paths = {ENTERPRISE_INDEX.as_posix()} | ({metier_source[1].as_posix()} if metier_source else set())
     enterprise = sorted(
         path for path in files
-        if not path.startswith(CANONICAL_SOURCE.as_posix() + "/") and path not in index_paths
+        if not (prefix and path.startswith(prefix)) and path not in index_paths
     )
-    source = sorted(path for path in files if path.startswith(CANONICAL_SOURCE.as_posix() + "/"))
     enterprise_path = root / ENTERPRISE_INDEX
-    source_path = root / RIG_SOURCE_INDEX
     enterprise_path.parent.mkdir(parents=True, exist_ok=True)
     enterprise_path.write_text(
         _render_index(
@@ -293,13 +313,18 @@ def refresh_indexes(root: Path, reviewer: str = "") -> None:
         ),
         encoding="utf-8",
     )
-    source_path.write_text(
+    if not metier_source:
+        return
+    _dossier, source_index, metier = metier_source
+    source = sorted(path for path in files if path.startswith(prefix))
+    (root / source_index).write_text(
         _render_index(
-            "Source documentaire canonique RIG",
-            "Carte générée : rattache les fichiers de la source documentaire canonique au cluster RIG.",
+            f"Source documentaire canonique {metier['libelle']}",
+            "Carte générée : rattache les fichiers de la source documentaire canonique au cluster "
+            f"{metier['libelle']}.",
             source,
-            "rig/map/source-mirror",
-            "rig",
+            f"{metier['cle']}/map/source-mirror",
+            metier["cle"],
             reviewer,
         ),
         encoding="utf-8",

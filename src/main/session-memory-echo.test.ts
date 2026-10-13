@@ -57,10 +57,10 @@ describe('persistance locale de la memoire provisoire', () => {
     try {
       configureSessionMemoryEcho(store)
       noteRemembered('conv-shared', {
-        title: 'RIG seulement',
+        title: 'CONTOSO seulement',
         body: 'utiliser gacRig avant build',
-        scope: 'RIG',
-        workspace: 'D:\\DevSrc\\RigApplication'
+        scope: 'CONTOSO',
+        workspace: 'D:\\DevSrc\\ContosoApp'
       })
       noteRemembered('conv-shared', {
         title: 'Partage explicite',
@@ -75,8 +75,8 @@ describe('persistance locale de la memoire provisoire', () => {
         rememberedFacts('conv-shared', 'C:\\Travail\\Autowin OS').map((fact) => fact.title)
       ).toEqual(['Partage explicite'])
       expect(
-        rememberedFacts('conv-shared', 'D:\\DevSrc\\RigApplication').map((fact) => fact.title)
-      ).toEqual(['RIG seulement', 'Partage explicite'])
+        rememberedFacts('conv-shared', 'D:\\DevSrc\\ContosoApp').map((fact) => fact.title)
+      ).toEqual(['CONTOSO seulement', 'Partage explicite'])
     } finally {
       configureSessionMemoryEcho()
       rmSync(root, { recursive: true, force: true })
@@ -131,10 +131,10 @@ describe('l’écho rend ce qui a été retenu — dans CE fil seulement', () =>
 
   it('un meme fil ne laisse pas fuiter les faits d un autre workspace', () => {
     noteRemembered('conv-1', {
-      title: 'RIG',
-      body: 'fait du depot RIG',
-      scope: 'RIG',
-      workspace: 'D:\\DevSrc\\RigApplication'
+      title: 'CONTOSO',
+      body: 'fait du depot CONTOSO',
+      scope: 'CONTOSO',
+      workspace: 'D:\\DevSrc\\ContosoApp'
     })
     noteRemembered('conv-1', {
       title: 'Global',

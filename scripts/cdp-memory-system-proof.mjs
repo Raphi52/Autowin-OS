@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import { profilEnVigueur } from './identite-entreprise.mjs'
 
 const root = racineDepot()
 const helper = join(root, 'scripts', 'autowin-headless.ps1')
@@ -33,16 +34,20 @@ const fixtureRoot = join(root, 'Audit', 'headless-instances', instanceId, 'brain
 const fixtureKnowledge = join(fixtureRoot, 'knowledge', 'domain')
 const baselineNotePath = join(fixtureKnowledge, 'memory-proof-baseline.md')
 const dynamicNotePath = join(fixtureKnowledge, 'memory-refresh-dynamic-7f3a2c.md')
-const indexedMirrorPath = join(
-  fixtureRoot,
-  'knowledge',
-  'decisions',
-  'amitel-brain-architecture.md'
-)
+// Note TEMOIN deja indexee par le Brain vivant : elle depend de son contenu, donc du profil
+// d'entreprise (`entreprise/<nom>/identite.json`, cle `preuves.memoire`). Sans profil : valeurs neutres.
+const temoin = {
+  note: 'brain-architecture.md',
+  requete: 'architecture du Brain partage',
+  titre: 'Décision — Brain partagé : cerveau collaboratif',
+  texte: 'Architecture du Brain partagé, miroir local de lecture pour la preuve des scores signés.',
+  ...(profilEnVigueur()?.preuves?.memoire ?? {})
+}
+const indexedMirrorPath = join(fixtureRoot, 'knowledge', 'decisions', temoin.note)
 const markerQuery = 'preuve memoire dynamique 7f3a2c'
 const dynamicTitle = 'Preuve mémoire dynamique 7f3a2c'
-const indexedQuery = 'architecture Amitel Brain'
-const indexedTitle = 'Décision — Amitel Brain : cerveau collaboratif partagé'
+const indexedQuery = temoin.requete
+const indexedTitle = temoin.titre
 
 const baselineNote = `---
 type: domain
@@ -77,7 +82,7 @@ tags: [brain, rag, architecture]
 
 # ${indexedTitle}
 
-Architecture du cerveau Amitel Brain, miroir local de lecture pour la preuve des scores signés.
+${temoin.texte}
 `
 
 const control = (action) =>
@@ -103,7 +108,7 @@ const control = (action) =>
       cwd: root,
       encoding: 'utf8',
       windowsHide: true,
-      env: { ...process.env, AMITEL_BRAIN_ROOT: fixtureRoot }
+      env: { ...process.env, AUTOWIN_BRAIN_ROOT: fixtureRoot }
     }
   )
 

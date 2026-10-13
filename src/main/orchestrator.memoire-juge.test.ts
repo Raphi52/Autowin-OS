@@ -113,6 +113,14 @@ describe('memoire du juge branchee dans la boucle de reparation', () => {
     expect(prompts[0]).not.toMatch(/VERDICT PRÉCÉDENT/)
     expect(prompts[1]).toMatch(/VERDICT PRÉCÉDENT/)
     expect(prompts[1]).toContain(RESERVE)
+    // conv-914 (piste 1) : le 2e juge reçoit aussi ce qui a changé depuis le texte déjà jugé —
+    // ici le 2e build de réparation, ajouté à l'agrégat.
+    // fix-ok: conv-914 (13/10) — au commit b2b9e25a, orchestrator.ts:5326 renvoyait au juge
+    // l'agrégat ENTIER sans dire ce qui avait changé. Mesuré : avec orchestrator.ts et memoire-juge.ts
+    // de b2b9e25a, l'assertion `CE QUI A CHANGÉ` ci-dessous est rouge ; avec le correctif, verte.
+    expect(prompts[0]).not.toMatch(/CE QUI A CHANGÉ/)
+    expect(prompts[1]).toMatch(/CE QUI A CHANGÉ[^\n]*\n\+ \[phase build\]\n/u)
+    expect(prompts[1]).toContain('les points OK sur des lignes inchangées ne sont pas à refaire')
     expect(prompts.length).toBe(2)
     expect(resultat.gateReasons.join(' | ')).toMatch(/mêmes réserves mineures deux passages de suite/)
   })

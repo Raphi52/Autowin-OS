@@ -14,6 +14,11 @@ import {
   type RequestTurnOption
 } from './request-execution-tree-model'
 import { workflowQuoteLabel } from './workflow-quote-label'
+import { demandeHumaineEntiere } from '../../../shared/balise-message-utilisateur'
+import type { RunClosureObservation } from '../../../shared/run-execution'
+import { lireFaitRetenu, type LectureFaitRetenu } from './fait-retenu-detail'
+import { appelsDeLOutil } from './appels-outil-detail'
+import { defautsDeTrace } from './defauts-de-trace'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
 import {
@@ -34,6 +39,10 @@ export interface ExecutionNodeSelection {
   runId?: string
   skillName?: string
   turnId?: string
+  /** Nœud « Clôture du run » : ce que la trace a écrit de la clôture, pour son bilan. */
+  closure?: RunClosureObservation
+  /** Nœud « Clôture du run » : les verdicts rendus par le juge, dans l'ordre. */
+  verdictEventIds?: string[]
 }
 
 interface WorkflowExecutionGraphProps {
@@ -350,13 +359,46 @@ function ExecutionNodeExchange({
       .filter((payload) => kinds.includes(payload.kind))
       .map((payload) => payload.content)
       .filter((content) => Boolean(content?.trim()))
+  if (event.display?.kind === 'request') {
+    // LA DEMANDE ENTIÈRE, pas le prompt composé : l'état de l'app et les consignes injectées sont
+    // déjà sous « Prompt envoyé » de l'Orchestrateur. Le texte le plus long gagne : la demande reçue
+    // à l'envoi n'en gardait que le premier paragraphe jusqu'au 2026-10-12.
+    const demande = pick('user-message')
+      .map(demandeHumaineEntiere)
+      .reduce((plusLong, texte) => (texte.length > plusLong.length ? texte : plusLong), '')
+    if (!demande) return null
+    return (
+      <div className="workflow-execution-exchange" data-execution-exchange>
+        <details open data-execution-demande>
+          <summary>Ta demande</summary>
+          <pre>{demande}</pre>
+        </details>
+      </div>
+    )
+  }
   const prompt = pick('user-message')
   const system = pick('system-instruction')
   const response = pick('model-response', 'error')
+  // UNE ÉTAPE QUI TOURNE N'A PAS ENCORE DE RETOUR (2026-10-13) : le retour n'est écrit qu'à sa fin.
+  // Le dire, au lieu de « aucun retour enregistré » qui se lisait comme une erreur.
+  const enCours = event.status === 'running' || event.status === 'pending'
   if (prompt.length === 0 && system.length === 0 && response.length === 0) {
+    // Seul un AGENT doit avoir un échange : chez lui, l'absence est un vrai manque, et on le dit. Un
+    // geste d'outil (son contenu ne s'affiche jamais), une étape de structure ou la réponse affichée
+    // n'en ont pas par nature — la phrase couvrait 55 % des briques (682 mesurées le 2026-10-12).
+    if (event.display?.kind !== 'agent') return null
+    if (enCours) {
+      return (
+        <p className="workflow-execution-exchange-empty" data-execution-exchange="en-cours">
+          Étape en cours : son prompt et son retour s’afficheront ici.
+        </p>
+      )
+    }
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="vide">
-        Aucun prompt ni retour enregistré pour cette étape.
+        {event.status === 'interrupted'
+          ? 'Étape interrompue avant d’avoir écrit son prompt et son retour.'
+          : 'Aucun prompt ni retour enregistré pour cette étape.'}
       </p>
     )
   }
@@ -380,11 +422,18 @@ function ExecutionNodeExchange({
       )}
       {response.length > 0 && (
         <details open data-execution-response>
-          <summary>Retour de l’étape</summary>
+          <summary>
+            {event.kind === 'response-displayed' ? 'Texte affiché' : 'Retour de l’étape'}
+          </summary>
           {response.map((content, index) => (
             <pre key={index}>{content}</pre>
           ))}
         </details>
+      )}
+      {response.length === 0 && enCours && (
+        <p className="workflow-execution-exchange-empty" data-execution-exchange="retour-attendu">
+          Étape en cours : son retour s’affichera à sa fin.
+        </p>
       )}
     </div>
   )
@@ -407,6 +456,88 @@ function lecturesAllegeesDisponibles(): boolean {
 }
 
 const GENRES_DU_DETAIL = [...NODE_PAYLOAD_KINDS]
+/**
+ * Les genres relus selon la brique. « Fait retenu » ne relit que les RÉPONSES de `remember`, jamais
+ * un argument ; un autre outil relit ses arguments, ses retours et ses erreurs.
+ */
+const GENRES_PAR_DETAIL: Record<'echange' | 'fait-retenu' | 'appels', string[]> = {
+  echange: GENRES_DU_DETAIL,
+  'fait-retenu': ['tool-result'],
+  appels: ['tool-call', 'tool-result', 'error']
+}
+
+/**
+ * CE QUE L'OUTIL A REÇU ET RENDU, appel par appel (demande du 2026-10-12 : « pareil pour toutes les
+ * pastilles, je dois voir ce qui est fait en détail quand je déplie »). Chargé au clic seulement :
+ * l'arbre ne reçoit toujours aucun contenu d'outil.
+ */
+function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const appels = appelsDeLOutil(event.payloads ?? [])
+  if (appels.length === 0) {
+    return (
+      <p className="workflow-execution-exchange-empty" data-execution-exchange="geste-sans-contenu">
+        Le détail de ce geste n’est pas enregistré : seuls son nom, son issue et sa durée le sont.
+      </p>
+    )
+  }
+  return (
+    <div className="workflow-execution-exchange" data-execution-appels>
+      {appels.map((appel, index) => (
+        <details key={index} open={index === 0} data-execution-appel>
+          <summary>{appels.length > 1 ? `Appel ${index + 1}` : 'Appel'}</summary>
+          {appel.envoye !== undefined && (
+            <>
+              <p className="workflow-execution-appel-part">Envoyé</p>
+              <pre data-execution-appel-envoye>{appel.envoye}</pre>
+            </>
+          )}
+          {appel.retour !== undefined && (
+            <>
+              <p className="workflow-execution-appel-part">{appel.erreur ? 'Erreur' : 'Retour'}</p>
+              <pre data-execution-appel-retour>{appel.retour}</pre>
+            </>
+          )}
+        </details>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * QUEL FAIT A ÉTÉ RETENU — le titre et le texte validés, et où il est parti (candidat Brain, gardé
+ * dans le fil…). Un refus ne montre que son motif. Voir `fait-retenu-detail.ts` pour la garde.
+ */
+function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const lectures = (event.payloads ?? [])
+    .filter((payload) => payload.kind === 'tool-result')
+    .map((payload) => lireFaitRetenu(payload.content))
+    .filter((lecture): lecture is LectureFaitRetenu => lecture !== undefined)
+  if (lectures.length === 0) {
+    return (
+      <p className="workflow-execution-exchange-empty" data-execution-exchange="fait-illisible">
+        Le texte du fait n’est pas lisible dans la trace.
+      </p>
+    )
+  }
+  return (
+    <div className="workflow-execution-exchange" data-execution-faits>
+      {lectures.map((lecture, index) =>
+        lecture.retenu ? (
+          <details open key={index} data-execution-fait>
+            <summary>{lectures.length > 1 ? `Fait ${index + 1}` : 'Fait retenu'}</summary>
+            {lecture.titre && <p className="workflow-execution-fait-titre">{lecture.titre}</p>}
+            <pre>{lecture.texte}</pre>
+            {lecture.issue && <p className="workflow-execution-fait-issue">{lecture.issue}</p>}
+          </details>
+        ) : (
+          <p key={index} className="workflow-execution-warning" data-execution-fait-refuse>
+            Non retenu · {lecture.motif}
+          </p>
+        )
+      )}
+    </div>
+  )
+}
 
 /**
  * LE DÉTAIL D'UNE ÉTAPE, CHARGÉ À SON OUVERTURE.
@@ -422,25 +553,34 @@ function ExecutionNodeContents({
 }: {
   conversationId: string
   event: HarnessTimelineEvent
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const sources = lecturesAllegeesDisponibles() ? (event.display?.payloadEventIds ?? []) : []
-  const cle = sources.length > 0 ? `${conversationId}\n${sources.join('\n')}` : null
+  const mode = event.display?.detailOutil ?? 'echange'
+  // Le genre lu fait partie de la clé : mêmes sources, mêmes genres, mêmes charges.
+  const cle = sources.length > 0 ? [conversationId, mode, ...sources].join('\n') : null
   const [lu, setLu] = useState<{ cle: string; charges?: ChargeEtape[]; erreur?: string } | null>(
     null
   )
   useEffect(() => {
     if (!cle) return
-    const [conversation, ...ids] = cle.split('\n')
+    const [conversation, modeLu, ...ids] = cle.split('\n')
+    const genre = modeLu as keyof typeof GENRES_PAR_DETAIL
+    const genres = GENRES_PAR_DETAIL[genre]
     let vivant = true
     window.api
-      .causalTraceCharges(conversation, ids, GENRES_DU_DETAIL)
+      .causalTraceCharges(conversation, ids, genres)
       .then((parEvenement) => {
         // Dédoublonnées comme dans la projection : le relais d'un sous-agent recopie la réponse
-        // du modèle, qui s'afficherait sinon deux fois.
+        // du modèle, qui s'afficherait sinon deux fois. Ce filtre ne garde que les genres d'un
+        // échange : les charges d'un outil passent à côté, dans l'ordre, une par appel.
+        const lues = ids.flatMap((id) => parEvenement[id] ?? [])
         if (vivant)
           setLu({
             cle,
-            charges: distinctNodePayloads(ids.flatMap((id) => parEvenement[id] ?? []))
+            charges:
+              genre === 'echange'
+                ? distinctNodePayloads(lues)
+                : lues.filter((charge) => genres.includes(charge.kind))
           })
       })
       .catch((raison: unknown) => {
@@ -468,6 +608,8 @@ function ExecutionNodeContents({
     )
   }
   const affiche = cle ? { ...event, payloads: lu?.charges ?? [] } : event
+  if (mode === 'fait-retenu') return <ExecutionNodeFaitsRetenus event={affiche} />
+  if (mode === 'appels') return cle ? <ExecutionNodeAppels event={affiche} /> : null
   return (
     <>
       <ExecutionNodeExchange event={affiche} />
@@ -892,6 +1034,7 @@ function ExecutionFiche({
   const status = event.status ?? 'completed'
   const offset = offsetFromStart(event.timestamp, baseMs)
   const duree = dureeDuNoeud(node)
+  const defauts = defautsDeTrace(node)
   const part =
     !racine && duree != null && dureeDemande != null && dureeDemande > 0
       ? Math.min(1, duree / dureeDemande)
@@ -919,11 +1062,18 @@ function ExecutionFiche({
       )}
       <ExecutionNodeDetail event={event} offsetMs={offset} />
       <ExecutionNodeContents conversationId={conversationId} event={event} />
-      {node.issues.length > 0 && (
-        <p className="workflow-execution-warning">Trace partielle · {node.issues.join(', ')}</p>
+      {/* L'ORANGE EST RÉSERVÉ AUX DÉFAUTS (2026-10-13) : une étape en cours ou instantanée n'a pas
+          de durée sans que la trace soit abîmée (`defauts-de-trace.ts`). Une limite connue de la
+          trace (« Chat direct… », phase sans nom de skill) est une information : ton neutre. */}
+      {defauts.length > 0 && (
+        <p className="workflow-execution-warning" data-execution-defaut>
+          Trace partielle · {defauts.join(', ')}
+        </p>
       )}
       {event.display?.limitation && (
-        <p className="workflow-execution-warning">{event.display.limitation}</p>
+        <p className="workflow-execution-note" data-execution-note>
+          {event.display.limitation}
+        </p>
       )}
     </div>
   )
@@ -1077,7 +1227,23 @@ export function WorkflowExecutionGraph({
   })
   useEffect(() => {
     const event = selected?.event
-    const key = event ? event.id : null
+    const closure = event?.display?.kind === 'closure' ? event.display.closure : undefined
+    const verdictEventIds =
+      event?.display?.kind === 'closure' ? event.display.verdictEventIds : undefined
+    // La clôture d'un run CHANGE sous un nœud resté sélectionné (open → green, coût réglé après
+    // coup, nouveau passage du juge) : sans ces champs dans la clé, son bilan resterait figé sur
+    // l'état du premier clic.
+    const key = event
+      ? closure
+        ? [
+            event.id,
+            closure.status,
+            closure.totalCostUsd,
+            closure.runPath ?? '',
+            verdictEventIds?.length ?? 0
+          ].join('|')
+        : event.id
+      : null
     if (selectionRef.current === key) return
     selectionRef.current = key
     onSelectRef.current?.(
@@ -1087,7 +1253,9 @@ export function WorkflowExecutionGraph({
             kind: event.display?.kind ?? 'event',
             ...(event.display?.runId ? { runId: event.display.runId } : {}),
             ...(event.display?.skillName ? { skillName: event.display.skillName } : {}),
-            ...(turnId ? { turnId } : {})
+            ...(turnId ? { turnId } : {}),
+            ...(closure ? { closure } : {}),
+            ...(verdictEventIds ? { verdictEventIds } : {})
           }
         : null
     )

@@ -196,10 +196,10 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       loadBrainGraphPreview: vi.fn().mockResolvedValue({
         nodes: [
           {
-            id: 'knowledge/domain/rigapplication-documentation/proc',
-            label: 'Procédure RIG',
-            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
-            themes: ['rig']
+            id: 'knowledge/domain/contosoapp-documentation/proc',
+            label: 'Procédure CONTOSO',
+            file: 'C:/brain/knowledge/domain/contosoapp-documentation/proc.md',
+            themes: ['contoso']
           },
           {
             id: 'knowledge/projects/autowin-os/guide',
@@ -212,7 +212,7 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       }),
       searchBrain: vi.fn().mockResolvedValue(
         envelope({
-          query: 'rig',
+          query: 'contoso',
           results: [
             {
               id: 'knowledge/projects/autowin-os/guide',
@@ -227,12 +227,12 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       )
     })
     await mount()
-    await search('rig')
+    await search('contoso')
 
     const searchResults = container.querySelector('[aria-label="Fiches trouvées"]')
     expect(searchResults?.textContent).toContain('Guide Autowin')
-    expect(searchResults?.textContent).not.toContain('Procédure RIG')
-    expect(container.querySelector('[data-theme-id="rig"]')).toBeNull()
+    expect(searchResults?.textContent).not.toContain('Procédure CONTOSO')
+    expect(container.querySelector('[data-theme-id="contoso"]')).toBeNull()
   })
 
   it('un clic sur un thème scopé ne réintroduit pas les fiches du preview global', async () => {
@@ -249,9 +249,9 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       loadBrainGraphPreview: vi.fn().mockResolvedValue({
         nodes: [
           {
-            id: 'knowledge/domain/rigapplication-documentation/proc',
-            label: 'Procédure RIG',
-            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
+            id: 'knowledge/domain/contosoapp-documentation/proc',
+            label: 'Procédure CONTOSO',
+            file: 'C:/brain/knowledge/domain/contosoapp-documentation/proc.md',
             themes: ['theme/architecture']
           }
         ],
@@ -286,7 +286,7 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       '[aria-label="Nœuds des thèmes actifs par ordre alphabétique"]'
     )
     expect(panel?.textContent).toContain('Guide Autowin')
-    expect(panel?.textContent).not.toContain('Procédure RIG')
+    expect(panel?.textContent).not.toContain('Procédure CONTOSO')
   })
 
   it('assainit une erreur IPC de thème et Réessayer relance réellement ce chargement', async () => {
@@ -333,7 +333,7 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
     ).toContain('Guide Autowin')
   })
 
-  it("l'ouverture d'un résultat scopé conserve un voisinage sans fiche RIG", async () => {
+  it("l'ouverture d'un résultat scopé conserve un voisinage sans fiche CONTOSO", async () => {
     const loadBrainNeighborhood = vi.fn().mockResolvedValue({
       nodes: [
         {
@@ -379,7 +379,7 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       'knowledge/domain/autowin-os-guide'
     )
     expect(container.textContent).toContain('Guide Autowin')
-    expect(container.textContent).not.toContain('Procédure RIG')
+    expect(container.textContent).not.toContain('Procédure CONTOSO')
   })
 
   it('assainit une erreur IPC de voisinage', async () => {
@@ -425,10 +425,10 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
       loadBrainGraphPreview: vi.fn().mockResolvedValue({
         nodes: [
           {
-            id: 'knowledge/domain/rigapplication-documentation/proc',
-            label: 'Procédure RIG',
-            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
-            themes: ['theme/rig']
+            id: 'knowledge/domain/contosoapp-documentation/proc',
+            label: 'Procédure CONTOSO',
+            file: 'C:/brain/knowledge/domain/contosoapp-documentation/proc.md',
+            themes: ['theme/contoso']
           }
         ],
         links: []
@@ -456,11 +456,11 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
     await mount()
 
     expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
-    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/contoso"]')).toBeNull()
     await search('architecture')
     await search('')
     expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
-    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/contoso"]')).toBeNull()
   })
 
   it('ne flashe aucun thème global pendant le chargement du catalogue scopé', async () => {
@@ -473,18 +473,18 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
           path: 'C:\\brain',
           sizeMb: 1,
           kind: 'vault',
-          themes: [{ id: 'theme/rig', label: 'RIG' }]
+          themes: [{ id: 'theme/contoso', label: 'CONTOSO' }]
         }
       ]),
       loadBrainThemes: vi.fn().mockReturnValue(themes.promise)
     })
     await mount()
 
-    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/contoso"]')).toBeNull()
     themes.resolve([{ id: 'theme/autowin-os', label: 'Autowin OS', count: 2 }])
     await flush()
     expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
-    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/contoso"]')).toBeNull()
   })
 
   it('garde le catalogue vide et affiche une erreur métier si son chargement échoue', async () => {
@@ -496,14 +496,14 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
           path: 'C:\\brain',
           sizeMb: 1,
           kind: 'vault',
-          themes: [{ id: 'theme/rig', label: 'RIG' }]
+          themes: [{ id: 'theme/contoso', label: 'CONTOSO' }]
         }
       ]),
       loadBrainThemes: vi.fn().mockRejectedValue(new Error('catalogue hors ligne'))
     })
     await mount()
 
-    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/contoso"]')).toBeNull()
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'Impossible de charger les thèmes du workspace.'
     )

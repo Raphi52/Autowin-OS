@@ -13,7 +13,7 @@ import { ConversationStore } from './store/conversations'
  * Mais les COMMANDES que le modele declenche pendant ce meme tour (`create_file`, `move_file`,
  * `delete_file`, `edit_file`, `run`, `find_in_files`...) lisaient encore `os.executionWorkspace` —
  * la valeur GLOBALE figee au demarrage. Divergence silencieuse et grave : le modele parlait de
- * `D:\GIT\RigApplication` et ecrivait dans `E:\GIT\Autowin-OS`.
+ * `D:\GIT\ContosoApp` et ecrivait dans `E:\GIT\Autowin-OS`.
  *
  * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : une conversation rangee sur
  * le dossier B pendant que le dossier global vaut A, avec un chemin RELATIF (`neuf.ts`) — c'est

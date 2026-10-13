@@ -45,12 +45,12 @@ export function canonicalProjectPath(raw: string | null | undefined): string | u
  * La valeur DESIGNE-T-ELLE un dossier, ou n'est-ce qu'un libellé de classement ?
  *
  * C'est la frontière entre les deux rôles que `projectPath` portait seul (conv-81, 2026-09-16) :
- * un dossier de travail (`D:\GIT\RigApplication`, `\\serveur\partage\Projet`) et une catégorie de
- * la barre latérale (« Perso », « Clients/Amitel »). Écrire un libellé dans le dossier de travail
+ * un dossier de travail (`D:\GIT\ContosoApp`, `\\serveur\partage\Projet`) et une catégorie de
+ * la barre latérale (« Perso », « Clients/Acme »). Écrire un libellé dans le dossier de travail
  * faisait partir le tour dans le dépôt d'Autowin, et polluait la liste des dossiers connus.
  *
  * Reconnaît ce qu'un poste Windows sait ouvrir : une lettre de lecteur suivie d'un séparateur, ou
- * un partage réseau. Rien d'autre — `Clients/Amitel` ressemble à un chemin sans en être un, et
+ * un partage réseau. Rien d'autre — `Clients/Acme` ressemble à un chemin sans en être un, et
  * c'est précisément le cas qui a créé le défaut. Ne touche PAS le disque : on juge la FORME, pas
  * l'existence — un dossier absent reste un dossier (il est signalé ailleurs,
  * `bascule-dossier-conversation.ts`), alors qu'un libellé n'en sera jamais un.

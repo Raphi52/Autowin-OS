@@ -11,19 +11,21 @@
     - prépare Graphify depuis la source partagée GED avec un cache uv local par machine ;
     - crée/complète le venv Python du brain_server (uv venv + requirements) dans le tooling résolu ;
   Ce qu'il GUIDE (manuel, non automatisable) :
-    - login Claude (claude auth login) et token Brain (AMITEL_BRAIN_TOKEN).
+    - login Claude (claude auth login) et token Brain (AUTOWIN_BRAIN_TOKEN, ou son ancien nom
+      fourni par le profil d'entreprise entreprise/<nom>/identite.json).
 
 .PARAMETER HermesBrainRepo
   Source de confiance du code Python du Brain. Son install.ps1 pose le runtime exactement la ou
-  l app le cherche (%LOCALAPPDATA%\AmitelBrain).
+  l app le cherche (%LOCALAPPDATA%\<dossier du Brain>, fixe par le profil d'entreprise).
   Defaut = env AUTOWIN_HERMES_BRAIN_REPO, sinon le dossier brain\ EMBARQUE dans ce depot, sinon
   %USERPROFILE%\Hermes-Brain (ancien clone externe, conserve comme repli).
   Le dossier brain\ est prioritaire : il est versionne avec l app, donc toujours coherent avec
   elle, et une machine neuve n a plus a cloner un second depot avant de bootstrapper.
 
 .PARAMETER BrainRoot
-  Racine du CORPUS (les notes knowledge/), transmise a install.ps1. Defaut = env AMITEL_BRAIN_ROOT,
-  sinon le partage GED Amitel. Le partage porte les DONNEES ; jamais le code que la machine execute.
+  Racine du CORPUS (les notes knowledge/), transmise a install.ps1. Defaut = env AUTOWIN_BRAIN_ROOT
+  (ou son ancien nom), sinon la racine partagee du profil d'entreprise. Le partage porte les DONNEES ;
+  jamais le code que la machine execute.
 
 .PARAMETER SkipCli   Ne pas toucher aux CLI npm.
 .PARAMETER SkipGraphify Ne pas préparer Graphify depuis la GED.
@@ -34,15 +36,28 @@ param(
   # Défaut résolu APRÈS le bloc param : sous Windows PowerShell 5.1, $PSScriptRoot y est vide
   # (Split-Path échouait sur une chaîne vide avant même le premier Write-Host).
   [string]$HermesBrainRepo = '',
-  [string]$BrainRoot = $(if ($env:AMITEL_BRAIN_ROOT) { $env:AMITEL_BRAIN_ROOT } else { '\\ged2\rig\Projets IA\Amitel Brain' }),
-  [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '\\ged2\rig\Projets IA\Graphify' }),
+  [string]$BrainRoot = '',
+  # Vide = celle du profil d'entreprise (`graphify.source`), resolue apres le bloc param.
+  [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '' }),
   [switch]$SkipCli,
   [switch]$SkipGraphify,
   [switch]$SkipBrain
 )
 $ErrorActionPreference = 'Stop'
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+# Profil d'entreprise (entreprise/<nom>/identite.json) : racine partagee, dossiers et anciens noms
+# deja poses sur ses postes. Absent (version publique) : valeurs neutres.
+. (Join-Path (Split-Path -Parent $scriptDir) 'brain\integrations\windows\identite.ps1')
+$identite = Get-BrainIdentite (Split-Path -Parent $scriptDir)
+$nomRacine = Get-BrainNomVariable $identite 'AUTOWIN_BRAIN_ROOT'
+$nomJeton = Get-BrainNomVariable $identite 'AUTOWIN_BRAIN_TOKEN'
+if (-not $GraphifySource) { $GraphifySource = $identite.sourceGraphify }
+if (-not $BrainRoot) {
+  $BrainRoot = if ($env:AUTOWIN_BRAIN_ROOT) { $env:AUTOWIN_BRAIN_ROOT }
+    elseif ([Environment]::GetEnvironmentVariable($nomRacine)) { [Environment]::GetEnvironmentVariable($nomRacine) }
+    else { $identite.racinePartagee }
+}
 if (-not $HermesBrainRepo) {
-  $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
   $embeddedBrain = Join-Path (Split-Path -Parent $scriptDir) 'brain'
   $HermesBrainRepo = if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO }
     elseif (Test-Path (Join-Path $embeddedBrain 'install.ps1')) { $embeddedBrain }
@@ -98,11 +113,17 @@ if (-not $SkipGraphify) {
   $wheelName = 'graphifyy-0.9.11-py3-none-any.whl'
   $expectedHash = '750B77232F460275ABA596B09A1B8F289A1238A41EF5AD0EDC29464E523B28CA'
   $expectedRequirementsHash = 'F1240F8372936D5EE15DD2CDF6BACE762C998D57845EC64373723D6517084436'
-  $sharedDistribution = Join-Path $GraphifySource 'dist\amitel-v0.9.11'
+  if (-not $GraphifySource) {
+    throw "source Graphify inconnue : definir AUTOWIN_GRAPHIFY_SOURCE ou graphify.source du profil d'entreprise (sinon -SkipGraphify)"
+  }
+  $distribution = if ($identite.distributionGraphify) { $identite.distributionGraphify } else { 'v0.9.11' }
+  $sharedDistribution = Join-Path $GraphifySource "dist\$distribution"
   $sharedWheel = Join-Path $sharedDistribution $wheelName
   $sharedRequirements = Join-Path $sharedDistribution 'requirements.lock'
   $sharedWheelhouse = Join-Path $sharedDistribution 'wheelhouse'
-  $cacheRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Amitel\Autowin OS\graphify'
+  # Meme dossier que celui que l'app lit (graphify-command.ts) : <editeur du profil>\Autowin OS\graphify.
+  $sousDossierCache = if ($identite.dossierEditeur) { Join-Path $identite.dossierEditeur 'Autowin OS\graphify' } else { 'Autowin OS\graphify' }
+  $cacheRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) $sousDossierCache
   $localDistribution = Join-Path $cacheRoot 'distribution'
   $localWheel = Join-Path $localDistribution $wheelName
   $localRequirements = Join-Path $localDistribution 'requirements.lock'
@@ -148,7 +169,7 @@ if (-not $SkipGraphify) {
 # --- Runtime Brain (venv + tooling), DELEGUE a Hermes-Brain ---
 #
 # On ne recree PAS ici ce que install.ps1 sait deja faire. Deux raisons, pas une preference de style :
-#  1. la cible. L app interroge %LOCALAPPDATA%\AmitelBrain\.venv\Scripts\python.exe
+#  1. la cible. L app interroge %LOCALAPPDATA%\<dossier du Brain>\.venv\Scripts\python.exe
 #     (resolveBrainRuntime, brain-server-launch.ts). La version precedente de ce bloc creait le venv
 #     dans le dossier tooling passe en parametre -- dont le defaut etait le partage GED. Lance tel
 #     quel sur une machine neuve, il posait donc un venv que l app ne regarde jamais, et l ecran
@@ -159,7 +180,7 @@ if (-not $SkipGraphify) {
 if (-not $SkipBrain) {
   Step "runtime Brain (venv + tooling, via Hermes-Brain)"
   $brainInstaller = Join-Path $HermesBrainRepo "install.ps1"
-  $brainPython = Join-Path $env:LOCALAPPDATA "AmitelBrain\.venv\Scripts\python.exe"
+  $brainPython = Join-Path $env:LOCALAPPDATA "$($identite.dossierLocal)\.venv\Scripts\python.exe"
   if (Test-Path $brainPython) { Ok "runtime deja installe ($brainPython)" }
   elseif (-not (Test-Path $brainInstaller)) {
     Warn "install.ps1 introuvable : $HermesBrainRepo"
@@ -182,7 +203,7 @@ if (-not $SkipBrain) {
 
 # --- À faire manuellement (secrets / interactif) ---
 Step "Manuel (non automatisable)"
-if ($env:AMITEL_BRAIN_TOKEN) { Ok "AMITEL_BRAIN_TOKEN défini" }
-else { Warn "AMITEL_BRAIN_TOKEN absent → le définir (secret Brain) pour activer le RAG." }
+if ($env:AUTOWIN_BRAIN_TOKEN -or [Environment]::GetEnvironmentVariable($nomJeton)) { Ok "jeton Brain défini" }
+else { Warn "$nomJeton absent → le définir (secret Brain) pour activer le RAG." }
 Warn "Login Claude : 'claude auth login' (ou le bouton « Se connecter » du wizard)."
 Write-Host "`nEnsuite : lancer Autowin OS. Le wizard n'apparaît QUE s'il reste un rouge, tente de démarrer le brain, et guide le reste." -ForegroundColor White

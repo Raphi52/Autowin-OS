@@ -31,7 +31,7 @@ const PROJETS_REALISTES: Record<string, unknown> = {
   'E:\\SOURCES\\AzureDevOps\\AutoWinOS': {},
   'E:\\SOURCES\\AzureDevOps\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\x\\agent__y': {},
   // Un libellé de classement n'est pas un chemin : même frontière que la liste du Chat (conv-81).
-  'Clients/Amitel': {}
+  'Clients/Acme': {}
 }
 
 describe('extraireDossiersProjetsClaude', () => {

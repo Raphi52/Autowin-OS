@@ -8,6 +8,10 @@ from pathlib import Path
 
 TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
+import os
+# Identite NEUTRE forcee (brain_identite) : la suite rend le meme resultat avec ou sans dossier
+# `entreprise/` a la racine du depot. Posee AVANT tout import du tooling.
+os.environ["AUTOWIN_IDENTITE_ENTREPRISE"] = "{}"
 
 from brain_graph import build_graph
 from brain_propose import propose_note
@@ -21,7 +25,7 @@ def make_brain(root: Path) -> None:
     (notes / "a.md").write_text("# A\nVoir [[b]].\n", encoding="utf-8")
     (notes / "b.md").write_text("# B\nVoir [C](c.md).\n", encoding="utf-8")
     (notes / "c.md").write_text("# C\n", encoding="utf-8")
-    code = root / "projects" / "rig-demo" / "graphify-out"
+    code = root / "projects" / "contoso-demo" / "graphify-out"
     code.mkdir(parents=True)
     (code / "graph.json").write_text(json.dumps({
         "nodes": [{"id": "svc", "label": "OrderService"}, {"id": "repo", "label": "OrderRepository"},
@@ -68,7 +72,7 @@ class EntityGraphTests(unittest.TestCase):
                          ["OrderService"])
 
     def test_code_graph_in_current_graphify_edges_format(self):
-        code = self.root / "projects" / "rig-neuf" / "graphify-out"
+        code = self.root / "projects" / "contoso-neuf" / "graphify-out"
         code.mkdir(parents=True)
         (code / "graph.json").write_text(json.dumps({
             "nodes": [{"id": "hook", "label": "brain_hook.py"}, {"id": "srv", "label": "brain_server.py"}],
@@ -114,21 +118,21 @@ class EntityGraphTests(unittest.TestCase):
 
     def test_read_opens_every_note_the_candidate_list_can_name(self):
         """Mesuré le 2026-09-27 (sonde think, tâche 4) : la liste de candidates proposait
-        `projects/rig-tv/obsidian/decisions/testviewer-responsive.md` — une racine INDEXÉE — et
+        `projects/contoso-tv/obsidian/decisions/testviewer-responsive.md` — une racine INDEXÉE — et
         `/read` la refusait (« path must name a note under knowledge/ »). Ce que la liste nomme doit
         pouvoir s'ouvrir ; ce qu'elle ne peut pas nommer (inbox/, hors racine) reste fermé."""
-        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian = self.root / "projects" / "contoso-demo" / "obsidian" / "decisions"
         obsidian.mkdir(parents=True)
         (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
         (self.root / "inbox" / "draft.md").write_text("brouillon", encoding="utf-8")
         handler = FakeHandler(self.root)
         handler.allowed_roots = [
             (self.root / "knowledge").resolve(),
-            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+            (self.root / "projects" / "contoso-demo" / "obsidian").resolve(),
         ]
         Handler._handle_read(
             handler,
-            json.dumps({"path": "projects/rig-demo/obsidian/decisions/Responsive.md", "entier": True}).encode(),
+            json.dumps({"path": "projects/contoso-demo/obsidian/decisions/Responsive.md", "entier": True}).encode(),
         )
         self.assertEqual(handler.sent[0], 200)
         self.assertIn("NOTE-PROJET", verified_context(handler.sent[1], "t"))
@@ -136,8 +140,8 @@ class EntityGraphTests(unittest.TestCase):
         self.assertEqual(handler.sent[0], 200)
         for ferme in (
             "inbox/draft.md",
-            "projects/rig-demo/graphify-out/graph.json",
-            "projects/rig-demo/obsidian/../../../secret.md",
+            "projects/contoso-demo/graphify-out/graph.json",
+            "projects/contoso-demo/obsidian/../../../secret.md",
             "projects/autre/obsidian/x.md",
         ):
             Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
@@ -147,21 +151,21 @@ class EntityGraphTests(unittest.TestCase):
         """La consigne des candidates donne la RACINE du Brain au modèle : il peut rappeler une note
         par son chemin absolu, avec des antislashs ou une autre casse. Ce qui désigne une note
         servie doit s'ouvrir ; ce qui sort des racines reste fermé, même en absolu."""
-        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian = self.root / "projects" / "contoso-demo" / "obsidian" / "decisions"
         obsidian.mkdir(parents=True)
         (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
         handler = FakeHandler(self.root)
         handler.allowed_roots = [
             (self.root / "knowledge").resolve(),
-            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+            (self.root / "projects" / "contoso-demo" / "obsidian").resolve(),
         ]
         racine = str(self.root)
         for forme in (
-            "projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
-            "PROJECTS/rig-demo/obsidian/decisions/responsive.md",
-            "  projects/rig-demo/obsidian/decisions/Responsive.md  ",
-            racine + "\\projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
-            racine.replace("\\", "/") + "/projects/rig-demo/obsidian/decisions/Responsive.md",
+            "projects\\contoso-demo\\obsidian\\decisions\\Responsive.md",
+            "PROJECTS/contoso-demo/obsidian/decisions/responsive.md",
+            "  projects/contoso-demo/obsidian/decisions/Responsive.md  ",
+            racine + "\\projects\\contoso-demo\\obsidian\\decisions\\Responsive.md",
+            racine.replace("\\", "/") + "/projects/contoso-demo/obsidian/decisions/Responsive.md",
             racine + "\\knowledge\\domain\\a.md",
         ):
             Handler._handle_read(handler, json.dumps({"path": forme, "entier": True}).encode())

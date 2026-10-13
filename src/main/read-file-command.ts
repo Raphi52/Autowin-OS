@@ -48,7 +48,7 @@ export function decideRead(
    * l'agent (« tu peux LIRE un chemin ABSOLU hors du workspace »).
    *
    * Mesure du 2026-09-16 (causal-trace) : quatre refus « chemin hors du workspace », les 10, 11 et
-   * encore le 16 a 13h48 sur `D:\RigV3Desktop\Components\Pages\Home.razor` — un fichier que la meme
+   * encore le 16 a 13h48 sur `D:\ContosoV3Desktop\Components\Pages\Home.razor` — un fichier que la meme
    * session EDITAIT. Le contournement est pire que l'ouverture : dix lectures de secours en
    * PowerShell (`Get-Content`, `Select-String`), qui echappent a TOUTES les bornes de ce module.
    *

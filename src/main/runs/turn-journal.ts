@@ -12,6 +12,12 @@ import {
 } from 'node:fs'
 import { appendFile, open, readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import {
+  fusionnerGestes,
+  gestesDuTexte,
+  type GestesDesTours,
+  type GestesDuTour
+} from '../../shared/gestes-agent'
 import { supprimerArbre } from '../fs-supprimer'
 
 /**
@@ -489,6 +495,72 @@ async function readTurnJournalAsync(path: string): Promise<TurnJournalEvent[]> {
     }
   }
   return out
+}
+
+/**
+ * GESTES PROPRES DE L'AGENT, POUR TOUTES LES DEMANDES D'UNE CONVERSATION, EN UN APPEL.
+ *
+ * Le fil des demandes (onglet Graph) affiche ces gestes sur CHAQUE ligne. Les lire depuis l'écran
+ * coûterait un journal entier copié par demande, à chaque rafraîchissement (chaque seconde en
+ * direct). On résume ici : un `stat` par journal, et seul un fichier dont la date ou la taille a
+ * bougé est relu et décodé. Les lignes encore en tampon mémoire (la demande en cours) s'ajoutent
+ * sans passer par le cache, puisqu'elles ne sont pas encore sur disque.
+ */
+const CACHE_GESTES_MAX = 4_000
+const cacheGestes = new Map<string, { mtimeMs: number; taille: number; gestes: GestesDuTour }>()
+
+export async function resumerGestesDesTours(
+  root: string,
+  conversationId: string
+): Promise<GestesDesTours> {
+  const dossier = join(root, safeSegment(conversationId))
+  let fichiers: string[]
+  try {
+    fichiers = (await readdir(dossier)).filter((nom) => nom.endsWith('.jsonl'))
+  } catch {
+    // Dossier absent : aucun journal SUR DISQUE. Le dossier n'est créé qu'à la première écriture,
+    // donc une demande qui démarre n'a encore que des lignes en mémoire, comptées plus bas.
+    fichiers = []
+  }
+  const resultat: GestesDesTours = {}
+  for (const fichier of fichiers) {
+    const chemin = join(dossier, fichier)
+    let gestes: GestesDuTour | undefined
+    try {
+      const info = await stat(chemin)
+      const enCache = cacheGestes.get(chemin)
+      if (enCache && enCache.mtimeMs === info.mtimeMs && enCache.taille === info.size) {
+        gestes = enCache.gestes
+      } else {
+        gestes = gestesDuTexte(await readFile(chemin, 'utf8'))
+        cacheGestes.delete(chemin)
+        cacheGestes.set(chemin, { mtimeMs: info.mtimeMs, taille: info.size, gestes })
+        if (cacheGestes.size > CACHE_GESTES_MAX) {
+          const plusAncien = cacheGestes.keys().next().value
+          if (plusAncien !== undefined) cacheGestes.delete(plusAncien)
+        }
+      }
+    } catch {
+      continue
+    }
+    const memoire = [...(enVol.get(chemin) ?? []), ...(pending.get(chemin) ?? [])]
+    if (memoire.length > 0) gestes = fusionnerGestes(gestes, gestesDuTexte(memoire.join('\n')))
+    if (Object.keys(gestes).length > 0) resultat[fichier.slice(0, -'.jsonl'.length)] = gestes
+  }
+  // Une demande qui vient de démarrer peut n'avoir encore QUE des lignes en mémoire, aucun fichier.
+  // `join(dossier, '')` ne finit PAS par un séparateur : le nom gardait un « \ » de tête et la
+  // demande en cours était écartée. Le préfixe se prend sur un vrai chemin de fichier du dossier.
+  const prefixe = join(dossier, 'x').slice(0, -1)
+  for (const chemin of new Set([...enVol.keys(), ...pending.keys()])) {
+    if (!chemin.startsWith(prefixe) || !chemin.endsWith('.jsonl')) continue
+    const fichier = chemin.slice(prefixe.length)
+    if (fichiers.includes(fichier) || fichier.includes('/') || fichier.includes('\\')) continue
+    const gestes = gestesDuTexte(
+      [...(enVol.get(chemin) ?? []), ...(pending.get(chemin) ?? [])].join('\n')
+    )
+    if (Object.keys(gestes).length > 0) resultat[fichier.slice(0, -'.jsonl'.length)] = gestes
+  }
+  return resultat
 }
 
 /** Version non bloquante de `readTurnJournal` : mêmes tampons mémoire recollés au disque. */

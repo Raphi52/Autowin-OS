@@ -85,6 +85,15 @@ export function bornerLigneDeVie(texte: string): string {
 export const VERIFY_BATTEMENT_MS = 5_000
 
 /**
+ * Ce que la ligne de vie d'une orchestration dit pendant que le sous-agent REFLECHIT.
+ *
+ * Son raisonnement arrive par fragments de quelques mots ; les afficher tels quels donnait une ligne
+ * illisible qui changeait chaque seconde (conv-918, 2026-10-13). Le texte complet se lit en depliant
+ * le bloc ; la ligne, elle, ne dit que l'activite.
+ */
+export const EN_REFLEXION = 'réfléchit…'
+
+/**
  * LE SIGNE DE VIE D'UNE ORCHESTRATION EN COURS.
  *
  * DEFAUT MESURE le 2026-09-07 (conv-42). Un run d'orchestration a travaille de 09:45 a 10:08 sans

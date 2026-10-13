@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { lecteurWindows, rechargerEnv, VARIABLES_RECHARGEABLES } from './env-reload'
+import { avecProfilAcme } from './identite-entreprise.test-helpers'
 import { verifyTimeoutMs, VERIFY_TIMEOUT_MS } from './verify-command'
 import { sharedBrainOrigin } from './brain-paths'
 
@@ -63,7 +64,7 @@ describe('reload_env — recharger une variable a chaud', () => {
 
   /**
    * DEFAUT VECU (conv-8, 2026-09-03) : le service Brain ecoutait 8766, le processus principal
-   * retombait sur le defaut 8765 parce que `AMITEL_BRAIN_ORIGIN` n'etait persistee NULLE PART —
+   * retombait sur le defaut 8765 parce que `ACME_BRAIN_ORIGIN` n'etait persistee NULLE PART —
    * elle ne vivait que dans le shell ou elle avait ete tapee. Chaque `brain_query` rendait
    * « indisponible » en 15 ms (connexion refusee), et l'origine n'etait pas rechargeable : la
    * seule issue etait un redemarrage complet de l'app.
@@ -73,16 +74,22 @@ describe('reload_env — recharger une variable a chaud', () => {
    * « Variable non rechargeable » et `sharedBrainOrigin` reste sur 8765.
    */
   it('rebranche le canal Brain a chaud quand le port persiste diverge du processus', () => {
-    const env = { AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8765' } as NodeJS.ProcessEnv
+    const env = avecProfilAcme({ ACME_BRAIN_ORIGIN: 'http://127.0.0.1:8765' })
     expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8765')
 
-    const issue = rechargerEnv('AMITEL_BRAIN_ORIGIN', {
+    const issue = rechargerEnv('ACME_BRAIN_ORIGIN', {
       env,
-      lecteur: (nom) => (nom === 'AMITEL_BRAIN_ORIGIN' ? 'http://127.0.0.1:8766' : undefined)
+      lecteur: (nom) => (nom === 'ACME_BRAIN_ORIGIN' ? 'http://127.0.0.1:8766' : undefined)
     })
 
     expect(issue.change).toBe(true)
     expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+  })
+
+  it('sans profil d entreprise, un ancien nom reste hors de la liste blanche', () => {
+    expect(() =>
+      rechargerEnv('ACME_BRAIN_ORIGIN', { env: {}, lecteur: () => 'http://127.0.0.1:8766' })
+    ).toThrow(/non rechargeable/)
   })
 
 

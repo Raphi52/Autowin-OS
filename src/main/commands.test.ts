@@ -233,7 +233,7 @@ describe('classement d’une conversation', () => {
     // Entrée discriminante : sans le correctif, `conv-absente` ressort encore en ok:true.
     const result = await bus.exec('classer_conversation', {
       id: 'conv-absente',
-      dossier: 'Clients/Amitel'
+      dossier: 'Clients/Acme'
     })
 
     expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/introuvable/i) })
@@ -277,15 +277,15 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
   })
 
-  it('brain_query n impose plus aucun corpus derive du workspace (isolation RIG retiree)', async () => {
+  it('brain_query n impose plus aucun corpus derive du workspace (isolation CONTOSO retiree)', async () => {
     const os = fakeOs()
-    os.executionWorkspace = 'D:\\DevSrc\\RigApplication'
-    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
+    os.executionWorkspace = 'D:\\DevSrc\\ContosoApp'
+    const preamble = '[ACME BRAIN REFERENCE DATA]\n\n'
     const sources = [
       {
-        path: 'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        path: 'knowledge/domain/contosoapp-documentation/reference/proc.md',
         content:
-          '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_COMMANDE_AUTORISEE'
+          '### Source 1 — knowledge/domain/contosoapp-documentation/reference/proc.md\nCONTOSO_COMMANDE_AUTORISEE'
       },
       {
         path: 'knowledge/domain/autowin-os-realite-produit-v5.md',
@@ -306,7 +306,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     })
     const bus = new AppCommandBus(os, () => {}, undefined, undefined, undefined, retrieve)
 
-    const result = await bus.exec('brain_query', { question: 'architecture RIG' })
+    const result = await bus.exec('brain_query', { question: 'architecture CONTOSO' })
 
     // Ce test et son JUMEAU (`orchestrator.execution.test.ts`) portent le MÊME contrat par deux
     // chemins — la commande et l'orchestrateur — et doivent bouger ENSEMBLE. Ils ont affirmé
@@ -317,10 +317,10 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     // pertinence ni « contamination croisée » ne le justifiaient — la dominance de corpus se traite
     // dans le CLASSEMENT (dense + lexical + RRF), pas par une liste blanche qui se périme en silence
     // et masquait 450 des 461 notes. La conséquence est ASSUMÉE et vérifiée ici : une source Autowin
-    // PEUT désormais entrer dans un prompt agissant sur RigApplication.
+    // PEUT désormais entrer dans un prompt agissant sur ContosoApp.
     expect(seenCorpus[0]).toBeUndefined()
     expect(result).toMatchObject({ ok: true, data: { found: true } })
-    expect(JSON.stringify(result)).toContain('RIG_COMMANDE_AUTORISEE')
+    expect(JSON.stringify(result)).toContain('CONTOSO_COMMANDE_AUTORISEE')
     expect(JSON.stringify(result)).toContain('AUTOWIN_COMMANDE_INTERDITE')
   })
 

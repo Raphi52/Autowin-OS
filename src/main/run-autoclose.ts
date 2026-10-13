@@ -8,8 +8,9 @@
  *  2. **On ne déplace jamais le HEAD local** — pas de `checkout -b` : l'utilisateur travaille peut-être
  *     dans ce dépôt. Le commit va sur la branche courante, la publication sur une branche distante.
  *
- * Le périmètre est explicite : sur un dépôt PARTAGÉ (le Brain), on ne commite QUE les chemins produits
- * par le run — jamais `add -A`, qui emporterait le travail non relu d'autrui.
+ * Le périmètre est explicite : les dépôts sont PARTAGÉS entre conversations, donc on ne commite QUE ce
+ * qu'une preuve rattache au run — jamais `add -A`, ni « tout ce qui a changé pendant le run », qui
+ * emporteraient le travail non relu d'autrui (voir `closeScoped`).
  */
 
 /**
@@ -439,10 +440,43 @@ async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<st
   }
 }
 
-/** Chemins réellement imputables au run = modifiés maintenant, mais pas déjà modifiés avant. */
+/**
+ * Candidats au run = modifiés maintenant, mais pas déjà modifiés avant. NÉCESSAIRE, PAS SUFFISANT :
+ * une autre conversation a pu les modifier pendant le run (voir `closeScoped`).
+ */
 function pathsFromRun(before: readonly string[], after: readonly string[]): string[] {
   const preexisting = new Set(before)
   return after.filter((path) => !preexisting.has(path))
+}
+
+/**
+ * Vrai si le texte porte la ligne de provenance qu'Autowin écrit dans une note Brain déposée POUR un
+ * run : bloc « Provenance Autowin (v1) », ligne `- run: <runId>` (`commands.ts`, dépôt des leçons d'un
+ * run). Ligne exacte : `run-7` ne vaut pas pour `run-77`.
+ */
+export function porteLaProvenanceDuRun(contenu: string, runId: string): boolean {
+  const id = runId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^- run: ${id}[ \\t]*\\r?$`, 'm').test(contenu)
+}
+
+/** Parmi les candidats, les fichiers lisibles qui portent la provenance du run. Illisible → pas à lui. */
+async function fichiersPortantLaProvenance(
+  repo: string,
+  candidats: readonly string[],
+  runId: string
+): Promise<string[]> {
+  if (candidats.length === 0) return []
+  const { readFile } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const gardes: string[] = []
+  for (const chemin of candidats) {
+    try {
+      if (porteLaProvenanceDuRun(await readFile(join(repo, chemin), 'utf8'), runId)) gardes.push(chemin)
+    } catch {
+      // Supprimé, dossier ou verrouillé : rien ne le rattache au run.
+    }
+  }
+  return gardes
 }
 
 /** SHA de HEAD, ou undefined si le dépôt n'a pas d'historique lisible. */
@@ -512,11 +546,17 @@ export interface AutoCloseReport {
   exclus?: Array<{
     path: string
     motif:
-      'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours' | 'tests-rouges'
+      | 'modifie-avant-le-tour'
+      | 'touche-par-un-autre-fil'
+      | 'autre-fil-en-cours'
+      | 'tests-rouges'
+      | 'import-hors-commit'
     /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
     lignesNonReclamees?: number
     /** Motif `tests-rouges` : les fichiers de test en échec. */
     testsEnEchec?: string[]
+    /** Motif `import-hors-commit` : les fichiers locaux importés qui ne partiraient pas avec lui. */
+    importsHorsCommit?: string[]
   }>
   /** Tour de chat : les tests rejoués AVANT de pousser (absent = aucune vérification branchée). */
   verification?: VerificationAvantPublication
@@ -569,9 +609,9 @@ function autoCloseMessage(task: string, runId: string): string {
 }
 
 /**
- * Clôture réelle d'un run vert : publie le PROJET (tout l'arbre) puis le BRAIN (uniquement les
- * fichiers modifiés du Brain — dépôt partagé, jamais `add -A`). Chaque dépôt est indépendant : un
- * échec côté Brain (réseau GED, conflit) n'empêche pas la publication du projet.
+ * Clôture réelle d'un run vert : publie le PROJET (les commits du run) puis le BRAIN (les seules notes
+ * portant la provenance du run). Chaque dépôt est indépendant : un échec côté Brain (réseau GED,
+ * conflit) n'empêche pas la publication du projet.
  */
 export async function closeGreenRunOnDisk(input: {
   runId: string
@@ -595,17 +635,25 @@ export async function closeGreenRunOnDisk(input: {
   const branch = autoCloseBranch(input.runId)
   const message = autoCloseMessage(input.task, input.runId)
 
-  /** Publie un dépôt en n'y prenant QUE ce que le run a produit (delta vs baseline). */
+  /**
+   * Publie un dépôt en n'y prenant QUE ce que le run a produit.
+   *
+   * « Modifié maintenant, et pas au départ du run » ne suffit PAS à dire « modifié par le run » : les
+   * dépôts sont partagés entre conversations. Mesuré le 2026-10-13 : `be8c2f87 auto(run-a8a70cd0ee56-1)`
+   * a commité 36 fichiers d'autres conversations, et `5089af8` côté Brain 10 notes d'autres fils (aucune
+   * du run), poussées. `attribuer` garde donc, parmi ces fichiers, ceux qu'une preuve rattache au run.
+   */
   const closeScoped = async (
     repo: string,
     before: readonly string[],
-    baseHead: string | undefined
+    baseHead: string | undefined,
+    attribuer: (repo: string, candidats: readonly string[]) => Promise<string[]>
   ): Promise<AutoCloseResult> => {
     try {
       const after = parsePorcelainPaths(
         await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo)
       )
-      const mine = pathsFromRun(before, after)
+      const mine = await attribuer(repo, pathsFromRun(before, after))
       // Arbre propre : le travail du run a pu être DÉJÀ commité par la fusion du worktree.
       if (mine.length === 0) {
         if (!baseHead) return { status: 'skipped', reason: 'no-changes' }
@@ -639,11 +687,22 @@ export async function closeGreenRunOnDisk(input: {
     : await closeScoped(
         input.projectRepo,
         input.baseline?.project ?? [],
-        input.baseline?.projectHead
+        input.baseline?.projectHead,
+        // Projet : AUCUN fichier modifié de l'arbre partagé n'est à un run. Un run qui modifie du code
+        // travaille dans sa copie isolée, et son travail arrive dans la base par SES commits
+        // (`agent <runId>-N`), publiés plus bas par `publishLegacyRunCommits`. Un run sans copie isolée
+        // est classé lecture seule : ce qu'il aurait écrit reste visible et non commité, jamais mêlé.
+        async () => []
       )
   const brain: AutoCloseResult = input.recoveredWithoutBrainBaseline
     ? { status: 'skipped', reason: 'recovery-baseline-missing' }
-    : await closeScoped(input.brainRepo, input.baseline?.brain ?? [], input.baseline?.brainHead)
+    : await closeScoped(
+        input.brainRepo,
+        input.baseline?.brain ?? [],
+        input.baseline?.brainHead,
+        // Brain : seules les notes qui portent la provenance de CE run, écrite par l'app elle-même.
+        (repo, candidats) => fichiersPortantLaProvenance(repo, candidats, input.runId)
+      )
 
   return { runId: input.runId, branch, project, brain, at: new Date().toISOString() }
 }

@@ -11,7 +11,7 @@ Le moteur :
 - échoue silencieusement si le brain est indisponible ;
 - propose les nouvelles connaissances dans `inbox/` avant revue humaine.
 
-> Ce dépôt public contient le moteur et des templates, **aucune connaissance Amitel interne**.
+> Ce dépôt public contient le moteur et des templates, **aucune connaissance interne d’entreprise**.
 
 ## Installation Windows — une commande
 
@@ -30,14 +30,18 @@ Par défaut, le clone lui-même devient le brain. Pour connecter un brain partag
 
 L’installateur :
 
-1. crée `%LOCALAPPDATA%\AmitelBrain\.venv` ;
+1. crée `%LOCALAPPDATA%\AutowinBrain\.venv` ;
 2. installe les dépendances locales ;
-3. copie une liste fermée de modules runtime dans `%LOCALAPPDATA%\AmitelBrain\tooling` ;
+3. copie une liste fermée de modules runtime dans `%LOCALAPPDATA%\AutowinBrain\tooling` ;
 4. construit un index transactionnel ;
 5. ajoute sans écraser un hook `UserPromptSubmit` à Claude Code et Codex ;
 6. demande au `codex app-server` local le hash du handler de commande exacte, l’approuve et vérifie son état `trusted` ;
 7. installe et active le plugin Hermes ;
 8. sauvegarde chaque configuration modifiée.
+
+Un profil d’entreprise (`entreprise/<nom>/identite.json`, à la racine du dépôt, absent de la
+version publique) peut remplacer le dossier `AutowinBrain`, le nom du service et les noms des
+variables par ceux déjà posés sur les postes de l’entreprise.
 
 Le support Codex nécessite une version récente où la feature `hooks` est stable. L’installation s’arrête avec une erreur explicite si le Codex local ne sait pas découvrir ou approuver ce handler.
 
@@ -64,7 +68,7 @@ Le désinstalleur retire seulement les hooks et le plugin Hermes Brain. Il ne su
 ## Utilisation manuelle
 
 ```powershell
-$python = "$env:LOCALAPPDATA\AmitelBrain\.venv\Scripts\python.exe"
+$python = "$env:LOCALAPPDATA\AutowinBrain\.venv\Scripts\python.exe"
 $oldPythonPath = $env:PYTHONPATH
 Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 & $python tooling/brain_index.py --knowledge knowledge --out tooling/index
@@ -77,7 +81,7 @@ if ($null -ne $oldPythonPath) { $env:PYTHONPATH = $oldPythonPath }
 Une IA ne modifie pas directement `knowledge/`. Elle dépose une candidate :
 
 ```powershell
-& "$env:LOCALAPPDATA\AmitelBrain\.venv\Scripts\python.exe" tooling/brain_propose.py `
+& "$env:LOCALAPPDATA\AutowinBrain\.venv\Scripts\python.exe" tooling/brain_propose.py `
   --inbox inbox --title "Décision" --body "..." --type decision `
   --scope global --author-agent hermes --model "modele-utilise" `
   --source "ticket:PROJET-123"
@@ -108,7 +112,7 @@ python -m unittest discover -s tooling/tests -v
 ```text
 knowledge/                         corpus Markdown versionné
 inbox/                             candidates non actives
-integrations/hermes-amitel-brain/  plugin Hermes
+integrations/hermes-brain/         plugin Hermes
 integrations/windows/              adaptateur Claude/Codex
 tooling/                           index, retrieval, service et tests
 ```

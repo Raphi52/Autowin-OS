@@ -11,6 +11,7 @@ import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawn } from 'node:child_process'
 import { killEscalate } from './providers/watchdog'
+import { identiteEntreprise } from './identite-entreprise'
 
 /** Exporté pour le délai des outils directs du CLI (`envDelaiOutilsMcp`, providers/claude.ts). */
 export const DEFAULT_TIMEOUT_MS = 10 * 60_000
@@ -211,7 +212,10 @@ export function resolveGraphifyLaunch(
     DEFAULT_SHARED_GRAPHIFY_SOURCE,
   installRoot = join(
     process.env.LOCALAPPDATA?.trim() || homedir(),
-    'Amitel',
+    // Dossier d'editeur du profil d'entreprise : le cache deja pose sur ses postes y vit.
+    ...(identiteEntreprise().application.dossierEditeur
+      ? [identiteEntreprise().application.dossierEditeur as string]
+      : []),
     'Autowin OS',
     'graphify'
   )

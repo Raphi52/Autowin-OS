@@ -74,7 +74,7 @@ describe('popup orchestrateur — dernière version seulement', () => {
   })
 
   it('ne garde que la version la plus haute même si l’ancienne arrive EN PREMIER', () => {
-    // GREFFE du bureau `refs/autowin/rescue/run-ea8bccd9824f-1`, seule part de ce fichier que main
+    // INTÉGRATION du bureau `refs/autowin/rescue/run-ea8bccd9824f-1`, seule part de ce fichier que main
     // ne couvrait pas. Les autres cas du bureau renommaient des propriétés déjà testées ici, et sa
     // version PERDAIT cinq cas que main possède (date de snapshot, routes auto/*) : seul celui-ci
     // est repris.

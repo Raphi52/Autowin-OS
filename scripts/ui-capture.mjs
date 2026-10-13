@@ -377,7 +377,7 @@ const argument = (nom, defaut) => {
 /**
  * Où vit le `DevToolsActivePort` de l'instance ouverte.
  *
- * Ce chemin était CODÉ EN DUR sur une seule installation (`C:/Amitel/Autowin OS/...`). Le harnais
+ * Ce chemin était CODÉ EN DUR sur une seule installation (`C:/<editeur>/Autowin OS/...`). Le harnais
  * rendait donc `cdp-injoignable` sur toute autre machine ET depuis tout worktree d'agent, alors que
  * l'application tournait : un instrument de preuve qui impute au produit un défaut qui est le sien.
  * On REMONTE désormais les parents du script jusqu'à trouver le fichier — depuis un worktree

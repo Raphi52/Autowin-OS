@@ -703,6 +703,33 @@ describe('nœud de clôture — un run non clos est EN ATTENTE, pas en cours', (
   })
 
   /**
+   * Le BILAN du run (demande du 2026-10-13) relit le verdict du juge au clic. Le nœud doit donc
+   * nommer les verdicts RENDUS de CE run, dans l'ordre — pas le démarrage du juge (`running`), et pas
+   * le verdict d'un autre run du même tour.
+   */
+  it('nomme les verdicts rendus par le juge de CE run, sans le démarrage du juge', () => {
+    const juge = (id: string, sequence: number, runId: string, status: 'running' | 'completed') =>
+      runTrace(id, 'turn-c', sequence, runId, {
+        type: 'verdict',
+        status,
+        actor: { id: 'judge:single', kind: 'agent', label: 'judge' },
+        execution: { runId, phase: 'judge', agentId: 'judge:single', attemptId: `${id}-a` }
+      })
+    const timeline = buildHarnessTimelineFromTrace([
+      workspace('run-c'),
+      juge('juge-demarre', 2, 'run-c', 'running'),
+      juge('juge-passage-1', 3, 'run-c', 'completed'),
+      juge('juge-autre-run', 4, 'run-z', 'completed'),
+      juge('juge-passage-2', 5, 'run-c', 'completed'),
+      closure('run-c', 'green', 6)
+    ])
+    const noeud = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'closure' && event.display.runId === 'run-c'
+    )
+    expect(noeud?.display?.verdictEventIds).toEqual(['juge-passage-1', 'juge-passage-2'])
+  })
+
+  /**
    * SECOND ORDRE, ÉCARTÉ PAR LECTURE plutôt que par un test qui n'aurait rien gardé.
    *
    * Le statut d'un nœud « demande » agrège ses enfants sur `running` seul, ce qui aurait pu faire
@@ -962,6 +989,41 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
     expect(agent?.status).toBe('failed')
     expect(agent?.display?.failure).toBe(cause)
     expect(agent?.payloads).toEqual([{ kind: 'model-response', content: cause }])
+  })
+
+  // Le prompt est écrit DÈS le démarrage (2026-10-13), puis de nouveau avec la réponse : un seul
+  // prompt à l'écran, pendant l'étape comme après.
+  it('montre le prompt d’un sous-agent dès son démarrage, sans le doubler à sa fin', () => {
+    const depart = runTrace('start', 'turn-d', 2, runId, {
+      status: 'running',
+      execution: exec('att-live'),
+      payloads: [
+        { kind: 'app-state', content: 'exec démarré' },
+        { kind: 'user-message', content: 'MISSION DU SOUS-AGENT' }
+      ]
+    })
+    const enCours = agentOf([workspace, depart], 'att-live')
+    expect(enCours?.status).toBe('running')
+    expect(enCours?.payloads).toEqual([{ kind: 'user-message', content: 'MISSION DU SOUS-AGENT' }])
+
+    const fini = agentOf(
+      [
+        workspace,
+        depart,
+        runTrace('prompt', 'turn-d', 3, runId, {
+          type: 'message',
+          execution: exec('att-live'),
+          payloads: [{ kind: 'user-message', content: 'MISSION DU SOUS-AGENT' }]
+        }),
+        runTrace('end', 'turn-d', 4, runId, {
+          status: 'completed',
+          execution: exec('att-live'),
+          payloads: [{ kind: 'model-response', content: 'FAIT' }]
+        })
+      ],
+      'att-live'
+    )
+    expect(fini?.payloads.filter((charge) => charge.kind === 'user-message')).toHaveLength(1)
   })
 
   it('n’invente pas de cause pour un échec qui n’en a enregistré aucune', () => {

@@ -133,8 +133,22 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     const declarationsAssumees: string[] = []
     let selecteur = ''
     let propriete = ''
+    // UNE REGLE PEUT LISTER PLUSIEURS SELECTEURS, un par ligne. Seule la DERNIERE ligne etait lue :
+    // en ajoutant `.activity-anneau .anneau-l1 .thinking-duree` sous `.capsule-bouton
+    // .thinking-duree` (conv-904), la declaration assumee ci-dessus devenait « fautive » sans avoir
+    // change. Le groupe entier est donc gardé, et une exception vaut si SON selecteur en fait partie.
+    let enCours: string[] = []
+    let groupe: string[] = []
+    const selecteurDuGroupe = (attendus: readonly string[]): string | undefined =>
+      groupe.find((s) => attendus.includes(s))
     utile.split('\n').forEach((ligne, index) => {
-      if (/\{\s*$/.test(ligne)) selecteur = ligne.replace(/\s*\{\s*$/, '').trim()
+      // Aucune ligne n'echappe au controle des couleurs ci-dessous : on ne fait que NOTER le groupe.
+      if (/\{\s*$/.test(ligne)) {
+        selecteur = ligne.replace(/\s*\{\s*$/, '').trim()
+        groupe = [...enCours, selecteur]
+        enCours = []
+      } else if (/[;{}]/.test(ligne)) enCours = []
+      else if (/,\s*$/.test(ligne)) enCours.push(ligne.trim().replace(/,\s*$/, ''))
       const declaration = /^\s*(-?[a-z][a-z-]*)\s*:/.exec(ligne)
       if (declaration) propriete = declaration[1]
       if (!ligne.match(HEX)) return
@@ -148,15 +162,16 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
       // un TAUX d'eclaircissement dans un color-mix, une etincelle de 1 px d'un radial-gradient,
       // et les deux noirs assumes ci-dessus.
       if (/color-mix\(/.test(ligne) || /radial-gradient\(/.test(ligne)) return
-      if (
-        SELECTEURS_NOIR_ASSUME.includes(selecteur) &&
-        /^background:\s*#000;$/.test(ligne.trim())
-      ) {
-        assumes.push(selecteur)
+      const noirAssume = selecteurDuGroupe(SELECTEURS_NOIR_ASSUME)
+      if (noirAssume && /^background:\s*#000;$/.test(ligne.trim())) {
+        assumes.push(noirAssume)
         return
       }
-      if (DECLARATIONS_ASSUMEES.some(([s, d]) => s === selecteur && d === ligne.trim())) {
-        declarationsAssumees.push(`${selecteur} :: ${ligne.trim()}`)
+      const assumee = DECLARATIONS_ASSUMEES.find(
+        ([s, d]) => groupe.includes(s) && d === ligne.trim()
+      )
+      if (assumee) {
+        declarationsAssumees.push(`${assumee[0]} :: ${ligne.trim()}`)
         return
       }
       fautives.push(`l.${index + 1} (${selecteur}) : ${ligne.trim()}`)

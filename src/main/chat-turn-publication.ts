@@ -1,5 +1,5 @@
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import {
@@ -76,7 +76,7 @@ function absoluDeTrace(racine: string, path: string): string {
 
 /**
  * Chemin RÉEL d'un dossier : git rend la forme longue (`prenom.nom`), un dossier temporaire
- * Windows peut arriver en nom court (`RAPHAE~1.VIL`). Sans cette résolution, le même fichier aurait
+ * Windows peut arriver en nom court (`PRENOM~1.NOM`). Sans cette résolution, le même fichier aurait
  * deux clés et le tour ne reconnaîtrait pas le sien.
  */
 async function cheminsReels(dossiers: Iterable<string>): Promise<Map<string, string>> {
@@ -184,6 +184,34 @@ async function lignesNonReclamees(
   }
 }
 
+const FICHIER_DE_CODE = /\.[cm]?[jt]sx?$/i
+const IMPORT_RELATIF =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s*)(['"])(\.{1,2}\/[^'"\n]+)\1/gm
+
+/** Fichiers du dépôt qu'un fichier de code importe par un chemin relatif, résolus comme Node/Vite. */
+async function importsLocaux(repo: string, gitPath: string): Promise<string[]> {
+  if (!FICHIER_DE_CODE.test(gitPath)) return []
+  const absolu = resolve(repo, gitPath)
+  const source = await readFile(absolu, 'utf8').catch(() => '')
+  const cibles = new Set<string>()
+  for (const [, , specificateur] of source.matchAll(IMPORT_RELATIF)) {
+    const base = resolve(dirname(absolu), specificateur)
+    const sansJs = base.replace(/\.[cm]?js$/i, '')
+    const candidats = [
+      base,
+      ...['.ts', '.tsx'].map((ext) => sansJs + ext),
+      ...['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'].map((ext) => base + ext),
+      ...['index.ts', 'index.tsx', 'index.js'].map((nom) => join(base, nom))
+    ]
+    for (const candidat of candidats) {
+      if (!(await stat(candidat).catch(() => undefined))?.isFile()) continue
+      cibles.add(relative(repo, candidat).split(sep).join('/'))
+      break
+    }
+  }
+  return [...cibles]
+}
+
 function messageDeCommit(conversationId: string, request: string): string {
   const head = request.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail du chat'
   return `auto(${conversationId}): ${head}`
@@ -267,10 +295,12 @@ export async function publierTourDeChat(input: {
   if (duTour.size === 0) return undefined
 
   let enAttente: string[]
+  let changesDuDepot: string[] = []
   try {
-    enAttente = parsePorcelainPaths(
+    changesDuDepot = parsePorcelainPaths(
       await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo)
-    ).filter((gitPath) => duTour.has(cle(resolve(repo, gitPath))))
+    )
+    enAttente = changesDuDepot.filter((gitPath) => duTour.has(cle(resolve(repo, gitPath))))
   } catch (error) {
     return rapport(input, {
       status: 'failed',
@@ -294,6 +324,26 @@ export async function publierTourDeChat(input: {
       exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
     else if (autreFilEnCours) exclus.push({ path: gitPath, motif: 'autre-fil-en-cours', ...detail })
     else publier.push(gitPath)
+  }
+  /*
+   * UN FICHIER PUBLIÉ N'IMPORTE AUCUN FICHIER LOCAL RESTÉ HORS DU COMMIT. Vécu le 2026-10-01
+   * (a7602f5c) : `commands.ts` partait, `src/shared/heredocs.ts` qu'il importe restait non suivi —
+   * main ne compilait plus. Point fixe : écarter un fichier peut laisser dehors ce qu'un autre importe.
+   */
+  const dehors = new Set(changesDuDepot.map((gitPath) => cle(resolve(repo, gitPath))))
+  for (let ecarte = true; ecarte;) {
+    ecarte = false
+    const partants = new Set(publier.map((gitPath) => cle(resolve(repo, gitPath))))
+    for (const gitPath of [...publier]) {
+      const manquants = (await importsLocaux(repo, gitPath)).filter((cible) => {
+        const key = cle(resolve(repo, cible))
+        return dehors.has(key) && !partants.has(key)
+      })
+      if (!manquants.length) continue
+      publier.splice(publier.indexOf(gitPath), 1)
+      exclus.push({ path: gitPath, motif: 'import-hors-commit', importsHorsCommit: manquants })
+      ecarte = true
+    }
   }
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).
   if (publier.length === 0)

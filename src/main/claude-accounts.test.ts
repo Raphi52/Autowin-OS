@@ -177,13 +177,13 @@ describe('describeAccounts — deux comptes, MÊME email, niveaux différents', 
   it('va plus loin quand email ET niveau sont identiques : l’organisation tranche', () => {
     const described = describeAccounts(
       [
-        { ...base, id: 'default', email: 'a@b.fr', subscriptionType: 'team', orgName: 'Amitel' },
+        { ...base, id: 'default', email: 'a@b.fr', subscriptionType: 'team', orgName: 'Acme' },
         { ...base, id: 'compte-2', email: 'a@b.fr', subscriptionType: 'team', orgName: 'Perso' }
       ],
       'default'
     )
     expect(described.map((account) => account.displayName)).toEqual([
-      'a@b.fr (Amitel)',
+      'a@b.fr (Acme)',
       'a@b.fr (Perso)'
     ])
   })
@@ -223,13 +223,13 @@ describe('parseIdentity', () => {
           authMethod: 'claude.ai',
           email: 'prenom.nom@example.com',
           orgId: '1b869168',
-          orgName: 'Amitel',
+          orgName: 'Acme',
           subscriptionType: 'team'
         })
       )
     ).toEqual({
       email: 'prenom.nom@example.com',
-      orgName: 'Amitel',
+      orgName: 'Acme',
       subscriptionType: 'team'
     })
   })

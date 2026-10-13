@@ -241,7 +241,7 @@ describe('section « Recentes » en tete de la barre laterale', () => {
 
   it('rend les plus recentes en premier, toutes provenances confondues', () => {
     const recentes = conversationsRecentes(
-      [conv('rangee', 300, 'Clients/Amitel'), conv('sans-dossier', 900), conv('vieille', 100)],
+      [conv('rangee', 300, 'Clients/Acme'), conv('sans-dossier', 900), conv('vieille', 100)],
       5
     )
     expect(recentes.map((c) => c.id)).toEqual(['sans-dossier', 'rangee', 'vieille'])

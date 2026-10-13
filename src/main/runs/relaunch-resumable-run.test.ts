@@ -70,6 +70,7 @@ type Banc = {
   clotures: { chemin: string; statut: string; note: string }[]
   oublis: string[]
   diffusions: Record<string, unknown>[]
+  evenementsJournal: { turnId: string; event: unknown }[]
 }
 
 type Reglages = {
@@ -85,6 +86,8 @@ type Reglages = {
   /** Identite du tour deja enregistree cote conversation. */
   tourEnregistre?: { provider: string; model: string }
   reconcileLateRunLifecycle?: DependancesDeRelance['reconcileLateRunLifecycle']
+  /** Tours possédés par une reprise d'appel chat ; par défaut aucun. */
+  appelChatReprisPourTour?: (conversationId: string, turnId: string) => boolean
 }
 
 function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<void> } {
@@ -97,7 +100,8 @@ function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<
     sections: [],
     clotures: [],
     oublis: [],
-    diffusions: []
+    diffusions: [],
+    evenementsJournal: []
   }
   const etatRepris = etat(reglages.etat)
   const conversations = new Map<string, { messages: unknown[] }>([
@@ -157,7 +161,9 @@ function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<
     appendConvActivity: () => {},
     admitAutomaticResumeRuntime,
     createOrchestrateTurnPersistence: carte,
-    appendTurnEvent: () => {},
+    appendTurnEvent: (_racine: string, _conv: string, turnId: string, event: unknown) =>
+      observe.evenementsJournal.push({ turnId, event }),
+    appelChatReprisPourTour: reglages.appelChatReprisPourTour ?? (() => false),
     reuseOrCreateConvRun: async (_conv: string, tache: string) => {
       observe.ordre.push('reuseOrCreateConvRun')
       observe.runFiles.push({ chemin: 'C:/runs/RUN.md', tache })
@@ -238,9 +244,47 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     await divergent.relance()
     expect(divergent.observe.cartes[0].options).toMatchObject({
       turnId: 'uuid-migration',
-      resumeExisting: false
+      resumeExisting: false,
+      // Le tour d'origine, gardé `streaming` par hydrate, doit être fermé par le nouveau tour,
+      // sinon il garde le spinner de la liste allumé (conv-914, 2026-10-13).
+      supersededTurnId: 'turn-origine'
     })
     expect(divergent.observe.cartes[0].begin).toEqual(['[Reprise automatique] ajoute un bouton'])
+  })
+
+  // Une orchestration lancée depuis le chat partage le `turnId` du tour de chat. Si ce tour est
+  // repris au démarrage par la reprise d'APPEL CHAT, c'est elle qui le possède : la relance du run
+  // ne doit pas le fermer, sinon le spinner s'éteint pendant que le chat travaille encore.
+  it('ne ferme pas un tour d origine possede par une reprise d appel chat', async () => {
+    const divergent = banc({
+      tourEnregistre: liaison('claude', 'claude-opus-5'),
+      appelChatReprisPourTour: (_conversationId, turnId) => turnId === 'turn-origine'
+    })
+    await divergent.relance()
+    expect(divergent.observe.cartes[0].options.supersededTurnId).toBeUndefined()
+  })
+
+  it('journalise la fermeture du tour d origine sous SON identifiant', async () => {
+    const divergent = banc({ tourEnregistre: liaison('claude', 'claude-opus-5') })
+    await divergent.relance()
+    const journal = divergent.observe.cartes[0].options.journalSuperseded as (e: unknown) => void
+    journal({ kind: 'interrupted' })
+    expect(divergent.observe.evenementsJournal).toContainEqual({
+      turnId: 'turn-origine',
+      event: { kind: 'interrupted' }
+    })
+  })
+
+  // conv-914 (2026-10-13) : le tour repris allume le spinner de la liste tant qu'il tourne. Sa
+  // fermeture doit recharger la liste, sinon le spinner reste allumé après la fin du run.
+  it('recharge la liste des conversations quand le tour repris se ferme', async () => {
+    const b = banc()
+    await b.relance()
+    const onClosed = b.observe.cartes[0].options.onClosed as (() => void) | undefined
+    expect(typeof onClosed).toBe('function')
+    const avant = b.observe.diffusions.length
+    onClosed!()
+    expect(b.observe.diffusions.slice(avant)).toEqual([{ type: 'refresh', scope: 'conversations' }])
   })
 
   /** REMPLACE : `expect(indexSource).toContain('resumableRun.bindingOverride')`. */

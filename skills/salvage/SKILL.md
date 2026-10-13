@@ -107,7 +107,7 @@ Classe chacun : **DOUBLON** (contenu présent, éventuellement réécrit) · **U
 | Verdict | Action |
 |---|---|
 | DOUBLON | Jette le porteur. Rien à fusionner — et nomme le code existant qui le couvre. |
-| DÉPASSÉ | En général, on jette. Si l'ancienne version porte quelque chose que la nouvelle n'a pas (un test, un cas limite, une constante nommée), greffe **cette partie seulement**. |
+| DÉPASSÉ | En général, on jette. Si l'ancienne version porte quelque chose que la nouvelle n'a pas (un test, un cas limite, une constante nommée), intègre **cette partie seulement**. |
 | UNIQUE | Fusionne — étape 4. |
 | INCONNU | Laisse intact. Un élément non tranché n'est jamais un candidat à la suppression. |
 | Intentions en conflit | **Remonte à l'humain.** |

@@ -1,4 +1,4 @@
-// fix-ok: les libelles de categories du graphe (lignes ~431-445) citaient en dur le nom de l application metier et son vocabulaire ; constate par grep "label: .*(RIG|greffe)" hors tests, desormais vide.
+// fix-ok: le vocabulaire du domaine metier de l entreprise (categorie, projets, mots-cles) etait ecrit en dur dans le catalogue et les regles du graphe ; il vient desormais du profil (identiteMetier), constate par la garde separation-entreprise.test.ts (conv-916).
 import {
   closeSync,
   existsSync,
@@ -11,6 +11,7 @@ import {
 import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
 import { dirname, extname, join, posix, relative, resolve, win32 } from 'node:path'
 import { sharedBrainRoot, teamWorkspaces } from '../brain-paths'
+import { identiteMetier, type IdentiteMetier } from '../identite-entreprise'
 import { brainSourcePathAllowed } from '../brain-corpus-scope'
 import type { BrainNavigation } from '../brain-retrieval'
 import { openVaultNoteDescriptor, readVaultNote, readVaultNoteSync } from './brain-file-reader'
@@ -38,7 +39,12 @@ export interface BrainGraphRef {
   sizeMb: number
   kind: 'vault' | 'graphify'
   themes?: BrainTheme[]
+  /** Domaine metier de l'entreprise (profil), pour classer ses fiches dans la vue ; absent = neutre. */
+  metier?: MetierGraphe
 }
+
+/** Ce que la vue du graphe sait du domaine metier : de quoi le reconnaitre et le nommer. */
+export type MetierGraphe = Pick<IdentiteMetier, 'cle' | 'libelle' | 'documentation' | 'sousProjet'>
 
 export interface BrainTheme {
   id: string
@@ -425,11 +431,30 @@ export async function applyBrainRetrievalScoresAsync(
   )
 }
 
-/** Racine du Brain — SOURCE UNIQUE dans `brain-paths.ts`, surchargeable par `AUTOWIN_BRAIN_ROOT` (secours : `AMITEL_BRAIN_ROOT`). */
+/** Racine du Brain — SOURCE UNIQUE dans `brain-paths.ts`, surchargeable par `AUTOWIN_BRAIN_ROOT` (secours : son ancien nom). */
 export const SHARED_BRAIN_ROOT = sharedBrainRoot()
-export const BRAIN_THEMES: BrainTheme[] = [
+/**
+ * Catalogue des categories du graphe : les categories generiques, plus celles du DOMAINE METIER de
+ * l'entreprise (profil `metier`, conv-916) — sa categorie juste apres `Brain`, ses projets de code a
+ * la fin. Sans profil (version publique), aucune categorie metier. L'ordre sert aussi au tri des
+ * themes d'une note (`noteThemes`).
+ */
+export function brainThemes(metier: IdentiteMetier | undefined = identiteMetier()): BrainTheme[] {
+  if (!metier) return THEMES_GENERIQUES
+  const deja = cataloguesMetier.get(metier)
+  if (deja) return deja
+  const catalogue = [
+    THEMES_GENERIQUES[0],
+    { id: `category/${metier.cle}`, label: metier.categorie ?? metier.libelle },
+    ...THEMES_GENERIQUES.slice(1),
+    ...metier.projets.map((projet) => ({ id: `project/${projet.dossier}`, label: projet.libelle }))
+  ]
+  cataloguesMetier.set(metier, catalogue)
+  return catalogue
+}
+
+const THEMES_GENERIQUES: BrainTheme[] = [
   { id: 'category/brain', label: 'Brain' },
-  { id: 'category/rig', label: 'Comprendre l’application métier' },
   { id: 'category/documentation', label: 'Documentation source' },
   { id: 'category/procedures', label: 'Parcours et procédures métier' },
   { id: 'category/justice', label: 'Justice et dossiers judiciaires' },
@@ -441,16 +466,11 @@ export const BRAIN_THEMES: BrainTheme[] = [
   { id: 'category/build-diagnostic', label: 'Développer, livrer et diagnostiquer' },
   { id: 'category/decisions', label: 'Décisions' },
   { id: 'category/runbooks', label: 'Runbooks' },
-  { id: 'category/standards', label: 'Standards et contribution' },
-  { id: 'project/rig-tv', label: 'Projet · TV' },
-  { id: 'project/rig-processus', label: 'Projet · Processus' },
-  { id: 'project/rig-etapercs', label: 'Projet · Étapes RCS' },
-  { id: 'project/rig-etapejudiciaire', label: 'Projet · Étapes judiciaires' },
-  { id: 'project/rig-etapefacture', label: 'Projet · Étapes facture' },
-  { id: 'project/rig-operations', label: 'Projet · Opérations' },
-  { id: 'project/rig-rig_ult_metier', label: 'Projet · ULT Métier' },
-  { id: 'project/rig-rig_ope_metier', label: 'Projet · OPE Métier' }
+  { id: 'category/standards', label: 'Standards et contribution' }
 ]
+const cataloguesMetier = new WeakMap<IdentiteMetier, BrainTheme[]>()
+
+export const BRAIN_THEMES: BrainTheme[] = brainThemes()
 
 /** Racines par défaut où chercher des graphes graphify. */
 function defaultBrainRoots(): string[] {
@@ -461,12 +481,13 @@ function defaultBrainRoots(): string[] {
 export function scanBrainGraphs(
   roots: string[] = defaultBrainRoots(),
   vaultRoot = SHARED_BRAIN_ROOT,
-  includeVaultThemes = true
+  includeVaultThemes = true,
+  metier: IdentiteMetier | undefined = identiteMetier()
 ): BrainGraphRef[] {
   const found: BrainGraphRef[] = []
   if (existsSync(vaultRoot)) {
     found.push({
-      id: 'amitel-brain',
+      id: 'brain',
       label: 'Brain',
       path: vaultRoot,
       sizeMb: 0,
@@ -474,7 +495,17 @@ export function scanBrainGraphs(
       // Le catalogue fixe garde les catégories historiques ; les tags YAML
       // permettent aux nouveaux domaines (ex. theme/autowin-os) d'apparaître
       // sans nouvelle livraison de l'application.
-      themes: includeVaultThemes ? vaultThemeCatalog(vaultRoot) : BRAIN_THEMES
+      themes: includeVaultThemes ? vaultThemeCatalog(vaultRoot) : brainThemes(metier),
+      ...(metier
+        ? {
+            metier: {
+              cle: metier.cle,
+              libelle: metier.libelle,
+              documentation: metier.documentation,
+              sousProjet: metier.sousProjet
+            }
+          }
+        : {})
     })
   }
   for (const root of roots) {
@@ -494,7 +525,9 @@ export function scanBrainGraphs(
         } catch {
           /* stat impossible — laisse 0 */
         }
-        const id = name.replace(/^rig-/, '')
+        // Un projet du domaine metier (`projects/<cle>-tv`) s'affiche sans le prefixe du domaine.
+        const prefixe = metier ? `${metier.cle}-` : undefined
+        const id = prefixe && name.startsWith(prefixe) ? name.slice(prefixe.length) : name
         found.push({ id, label: id, path: gpath, sizeMb, kind: 'graphify' })
       }
     }
@@ -998,13 +1031,14 @@ export function loadBrainThemes(
 }
 
 function themeCatalog(records: readonly Pick<VaultNoteRecord, 'themes'>[]): BrainTheme[] {
-  const known = new Set(BRAIN_THEMES.map((theme) => theme.id))
+  const catalogue = brainThemes()
+  const known = new Set(catalogue.map((theme) => theme.id))
   const dynamic = new Set<string>()
   for (const record of records) {
     for (const theme of record.themes) if (!known.has(theme)) dynamic.add(theme)
   }
   return [
-    ...BRAIN_THEMES,
+    ...catalogue,
     ...[...dynamic]
       .sort((left, right) => left.localeCompare(right))
       .map((id) => ({ id, label: themeLabel(id) }))
@@ -1036,7 +1070,11 @@ function markdownFiles(root: string): string[] {
   return files.sort()
 }
 
-function noteThemes(id: string, content: string): string[] {
+function noteThemes(
+  id: string,
+  content: string,
+  metier: IdentiteMetier | undefined = identiteMetier()
+): string[] {
   const normalizedId = id.replace(/\\/g, '/').toLowerCase()
   // Les wikilinks servent à relier les catégories, pas à les hériter implicitement.
   const semanticContent = content.replace(WIKI_LINK_RE, '')
@@ -1050,6 +1088,9 @@ function noteThemes(id: string, content: string): string[] {
   const add = (category: string, condition: boolean): void => {
     if (condition) categories.add(category)
   }
+  // Mots propres au domaine metier de l'entreprise (profil), ajoutes aux regles generiques.
+  const motMetier = (category: string, texte: string): boolean =>
+    (metier?.motsCles[category] ?? []).some((mot) => texte.includes(mot))
 
   add(
     'category/brain',
@@ -1057,39 +1098,44 @@ function noteThemes(id: string, content: string): string[] {
       normalizedId
     )
   )
-  add(
-    'category/rig',
-    normalizedId.startsWith('knowledge/domain/rig') ||
-      normalizedId.startsWith('knowledge/_maps/rig') ||
-      normalizedId.startsWith('projects/rig-')
-  )
+  if (metier) {
+    add(
+      `category/${metier.cle}`,
+      normalizedId.startsWith(`knowledge/domain/${metier.cle}`) ||
+        normalizedId.startsWith(`knowledge/_maps/${metier.cle}`) ||
+        normalizedId.startsWith(`projects/${metier.cle}-`)
+    )
+  }
   add(
     'category/documentation',
-    normalizedId.startsWith('knowledge/domain/rigapplication-documentation/')
+    metier?.documentation !== undefined &&
+      normalizedId.startsWith(`knowledge/domain/${metier.documentation}/`)
   )
   add(
     'category/procedures',
     normalizedId.includes('/proc/') ||
-      normalizedId.includes('rig-processus') ||
+      motMetier('category/procedures', normalizedId) ||
       /proc_|processus|workflow|parcours/.test(identity)
   )
   add(
     'category/justice',
     /judiciaire|mandataire|juridiction|proc[ée]dure collective|proc_mjud/.test(identity)
   )
-  add('category/rcs', /\brcs\b|kbis|registre du commerce|immatriculation/.test(identity))
+  add(
+    'category/rcs',
+    /\brcs\b|registre du commerce|immatriculation/.test(identity) ||
+      motMetier('category/rcs', identity)
+  )
   add('category/facturation', /factur|encaissement|paiement|crystal reports|bodacc/.test(identity))
   add(
     'category/moteur-ui',
-    /host|plugin|moteur graphique|rigclientaccueil|\betp_|\bope_|\bult_|[ée]cran|contr[oô]le/.test(
-      haystack
-    )
+    /host|plugin|moteur graphique|\betp_|\bope_|\bult_|[ée]cran|contr[oô]le/.test(haystack) ||
+      motMetier('category/moteur-ui', haystack)
   )
   add(
     'category/donnees',
-    /\bsql\b|base de donn[ée]es|rigdatabase|rigbasegreffe|rigmetier|\bdao\b|\borm\b|modele_/.test(
-      haystack
-    )
+    /\bsql\b|base de donn[ée]es|\bdao\b|\borm\b|modele_/.test(haystack) ||
+      motMetier('category/donnees', haystack)
   )
   add(
     'category/echanges-services',
@@ -1110,20 +1156,11 @@ function noteThemes(id: string, content: string): string[] {
       normalizedId === 'knowledge/_maps/contribution'
   )
 
-  for (const project of [
-    'rig-tv',
-    'rig-processus',
-    'rig-etapercs',
-    'rig-etapejudiciaire',
-    'rig-etapefacture',
-    'rig-operations',
-    'rig-rig_ult_metier',
-    'rig-rig_ope_metier'
-  ]) {
-    add(`project/${project}`, normalizedId.startsWith(`projects/${project}/`))
+  for (const projet of metier?.projets ?? []) {
+    add(`project/${projet.dossier}`, normalizedId.startsWith(`projects/${projet.dossier}/`))
   }
 
-  const order = new Map(BRAIN_THEMES.map((theme, index) => [theme.id, index]))
+  const order = new Map(brainThemes(metier).map((theme, index) => [theme.id, index]))
   return [...categories].sort(
     (left, right) =>
       (order.get(left) ?? 999) - (order.get(right) ?? 999) || left.localeCompare(right)
