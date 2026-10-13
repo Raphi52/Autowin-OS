@@ -1,12 +1,29 @@
 import { execFile } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
+import {
+  COMMANDE_CONV_932,
+  COMMANDE_CONV_933
+} from './activity/commandes-ecriture-2026-10-13.fixture'
+import {
+  readRecentConversationFileTraces,
+  type ConversationFileTrace
+} from './activity/conversation-file-trace-spool'
+import { appendShellWriteTraces } from './activity/trace-workspace-mutation'
 import { photographierDebutDeTour, publierTourDeChat } from './chat-turn-publication'
 import { exactLineFingerprint } from './exact-line-fingerprint'
+import { claudeToolEvidenceKind } from './providers/claude'
+import type { ExecutionEvidence } from './providers/types'
 import type { GitRunner } from './run-autoclose'
 import { supprimerArbre } from './fs-supprimer'
 
@@ -590,5 +607,298 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
 
     expect(report).toBeUndefined()
     expect(verifier).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * FICHIER NOMMÉ PAR UNE COMMANDE SHELL DU TOUR — rejeu des deux cas du 2026-10-13.
+ *
+ * d7af3730 (conv-932) et dd0c3d6a (conv-933) ont publié le code sans le test que le même tour venait
+ * d'écrire. Le test avait été retouché en ligne de commande (`prettier --write`, puis `cat >> …
+ * <<'EOF'` et `sed -i`), donc sans preuve par lignes, et un AUTRE fil l'avait seulement VU changer
+ * pendant son propre tour (sa comparaison avant/après, sans lignes) : « touche-par-un-autre-fil ».
+ * Les commandes rejouées sont les vraies, recopiées des sessions du CLI ; les traces passent par le
+ * même chemin qu'en fin d'appel (`appendShellWriteTraces`, puis relecture du journal).
+ */
+describe('enchaînement auto du chat — fichier nommé par une commande shell du tour', () => {
+  const TOUR_932 = '861aad09-5446-4a34-9e32-94eb3da2fbae'
+  const TOUR_933 = 'f24b1b7e-5ef7-4cce-9186-9f10bc8a10d9'
+
+  /** Le dépôt du test tel que Git Bash l'écrit (`/c/Users/…`), comme `/d/AutoWinOS` le 13/10. */
+  const formeGitBash = (dossier: string): string =>
+    process.platform === 'win32'
+      ? `/${dossier[0].toLowerCase()}${dossier.slice(2).replaceAll('\\', '/')}`
+      : dossier
+
+  /** Ce que `agent-pilot.ts` reçoit du fournisseur Claude pour un appel Bash réussi. */
+  const appelBash = (command: string): ExecutionEvidence => ({
+    type: 'Bash',
+    kind: claudeToolEvidenceKind('Bash', command),
+    status: 'completed',
+    ok: true,
+    summary: `Bash ${command}`,
+    command
+  })
+
+  /** Trace les commandes comme `agent-pilot.ts` en fin d'appel, puis relit le journal comme `os.ts`. */
+  async function tracesDesCommandes(
+    conversationId: string,
+    turnId: string,
+    repo: string,
+    commandes: string[]
+  ): Promise<ConversationFileTrace[]> {
+    const journal = mkdtempSync(join(tmpdir(), 'autowin-chat-pub-journal-'))
+    dirs.push(journal)
+    await appendShellWriteTraces(
+      { conversationId, turnId, workspaceRoot: repo, evidence: commandes.map(appelBash) },
+      journal
+    )
+    return readRecentConversationFileTraces(journal)
+  }
+
+  async function commit(repo: string, message: string): Promise<void> {
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', message], { cwd: repo })
+  }
+
+  it('d7af3730 (conv-932) : le test créé par Write puis reformaté par `prettier --write` part avec le code', async () => {
+    const { repo, remote } = await depot()
+    mkdirSync(join(repo, 'src', 'main'), { recursive: true })
+    const CONFIG = 'vitest.config.ts'
+    const TEST = 'src/main/githooks-pre-push.test.ts'
+    writeFileSync(
+      join(repo, CONFIG),
+      "const GIT_LOURDS = [\n  'src/main/run-autoclose.test.ts',\n  'src/main/e2e-chaine*.test.ts'\n]\n"
+    )
+    await commit(repo, 'config')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+
+    // Edit : l'inscription du test dans la configuration, lignes réclamées.
+    const inscription = [
+      "  'src/main/run-autoclose.test.ts',",
+      "  'src/main/githooks-pre-push.test.ts',",
+      "  'src/main/e2e-chaine*.test.ts'"
+    ]
+    writeFileSync(join(repo, CONFIG), ['const GIT_LOURDS = [', ...inscription, ']', ''].join('\n'))
+    // Write : le test tel que le modèle l'a écrit (vraies lignes de 13:08:14Z)…
+    const corps = [
+      "  const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: envPropre(), windowsHide: true })",
+      "  return { status: r.status, stdout: (r.stdout ?? '').trim(), stderr: r.stderr ?? '' }",
+      '}'
+    ]
+    const ecrit = [
+      "import { spawnSync } from 'node:child_process'",
+      'function git(cwd: string, args: string[]): { status: number | null; stdout: string; stderr: string } {',
+      ...corps
+    ]
+    // …puis tel que `prettier --write` l'a laissé à 13:10:16Z : 4 lignes que le fil ne réclame plus.
+    const reformate = [
+      "import { spawnSync } from 'node:child_process'",
+      'function git(',
+      '  cwd: string,',
+      '  args: string[]',
+      '): { status: number | null; stdout: string; stderr: string } {',
+      ...corps
+    ]
+    writeFileSync(join(repo, TEST), `${reformate.join('\n')}\n`)
+
+    const nommees = await tracesDesCommandes('conv-932', TOUR_932, repo, [
+      COMMANDE_CONV_932.replace('/d/AutoWinOS', formeGitBash(repo))
+    ])
+    expect(nommees).toMatchObject([{ paths: [TEST], nommeParCommande: true }])
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-932',
+      turnId: TOUR_932,
+      request: 'refuse tout push vers GitHub qui contient entreprise/',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-932',
+          turnId: TOUR_932,
+          paths: [TEST],
+          pathLineFingerprints: { [TEST]: lignes(...ecrit) }
+        }),
+        trace(repo, {
+          conversationId: 'conv-932',
+          turnId: TOUR_932,
+          paths: [CONFIG],
+          pathLineFingerprints: { [CONFIG]: lignes(...inscription) }
+        }),
+        // 13:10:39Z : conv-931 finit son tour, sa comparaison avant/après VOIT les fichiers de conv-932.
+        trace(repo, { conversationId: 'conv-931', turnId: '8cfd4d8c', paths: [CONFIG, TEST] }),
+        ...nommees
+      ]
+    })
+
+    expect(report?.exclus).toBeUndefined()
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 2 } })
+    expect((await fichiersDuDernierCommitDistant(remote)).sort()).toEqual([TEST, CONFIG])
+  })
+
+  it('dd0c3d6a (conv-933) : le test complété par `cat >> … <<EOF` et `sed -i` part avec le code, malgré un autre tour en cours', async () => {
+    const { repo, remote } = await depot()
+    mkdirSync(join(repo, 'src', 'main'), { recursive: true })
+    const CODE = 'src/main/relance-auto-moteur.ts'
+    const TEST = 'src/main/relance-auto-moteur.test.ts'
+    writeFileSync(
+      join(repo, CODE),
+      'function resumerErreur(erreur: string): string {\n  return erreur\n}\n'
+    )
+    writeFileSync(
+      join(repo, TEST),
+      "import {\n  armerRelanceAutoMoteur,\n  relanceAutoMoteurPermise,\n  type ReglagesRelanceMoteur\n} from './relance-auto-moteur'\n"
+    )
+    await commit(repo, 'relance')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+
+    // Edit : la fonction exportée sous son nouveau nom, ligne réclamée.
+    const exporte = 'export function resumerErreurDeCompilation(erreur: string): string {'
+    writeFileSync(join(repo, CODE), `${exporte}\n  return erreur\n}\n`)
+    // Effet de la commande réelle : le corps du here-document ajouté, puis l'import complété.
+    const commande = COMMANDE_CONV_933.split('\n')
+    appendFileSync(join(repo, TEST), `${commande.slice(1, commande.indexOf('EOF')).join('\n')}\n`)
+    writeFileSync(
+      join(repo, TEST),
+      readFileSync(join(repo, TEST), 'utf8').replace(
+        '  relanceAutoMoteurPermise,\n',
+        '  relanceAutoMoteurPermise,\n  resumerErreurDeCompilation,\n'
+      )
+    )
+
+    const nommees = await tracesDesCommandes('conv-933', TOUR_933, repo, [COMMANDE_CONV_933])
+    expect(nommees).toMatchObject([{ paths: [TEST], nommeParCommande: true }])
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-933',
+      turnId: TOUR_933,
+      request: "ca me met un bandeau que je comprend pas avec un pbm d'encodage du texte",
+      debut,
+      runGit: realGit,
+      // 13:21:14Z : le tour e4a3c760 de conv-930, parti à 13:20:45Z, tourne encore dans le dépôt.
+      autresToursEnCours: [repo],
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-933',
+          turnId: TOUR_933,
+          paths: [CODE],
+          pathLineFingerprints: { [CODE]: lignes(exporte) }
+        }),
+        // 13:20:04Z et 13:20:51Z : conv-930 et conv-932 finissent un tour et VOIENT le test changer.
+        trace(repo, { conversationId: 'conv-930', turnId: 'c3ede00e', paths: [CODE, TEST] }),
+        trace(repo, { conversationId: 'conv-932', turnId: 'e0322299', paths: [CODE, TEST] }),
+        ...nommees
+      ]
+    })
+
+    expect(report?.exclus).toBeUndefined()
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 2 } })
+    expect((await fichiersDuDernierCommitDistant(remote)).sort()).toEqual([TEST, CODE])
+  })
+
+  it('reste écarté quand un AUTRE fil a aussi nommé le fichier dans une commande d’écriture', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 5\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, { paths: ['partage.ts'], nommeParCommande: true }),
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          nommeParCommande: true
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'unattributed' },
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
+    })
+  })
+
+  it('reste écarté quand un autre fil a réclamé des lignes du fichier pendant le tour', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 6\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      autresToursEnCours: [repo],
+      traces: [
+        trace(repo, { paths: ['partage.ts'], nommeParCommande: true }),
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const partage = 6') }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'unattributed' },
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
+    })
+  })
+
+  it('une commande d’un tour PRÉCÉDENT du fil ne prouve rien pour ce tour', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 7\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          turnId: 'tour-A-0000',
+          timestamp: AVANT,
+          paths: ['partage.ts'],
+          nommeParCommande: true
+        }),
+        trace(repo, { paths: ['partage.ts'] }),
+        trace(repo, { conversationId: 'conv-B', turnId: 'tour-B', paths: ['partage.ts'] })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
+    })
+  })
+
+  it('une commande d’écriture ne rattrape pas un fichier déjà modifié avant le tour', async () => {
+    const { repo } = await depot()
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 8\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 9\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [trace(repo, { paths: ['partage.ts'], nommeParCommande: true })]
+    })
+
+    expect(report).toMatchObject({
+      exclus: [{ path: 'partage.ts', motif: 'modifie-avant-le-tour' }]
+    })
   })
 })

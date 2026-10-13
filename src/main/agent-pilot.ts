@@ -24,6 +24,7 @@ import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { coupesParPoids } from './chat-session-poids'
 import { loadConvActivity } from './activity/conv-activity'
 import {
+  appendShellWriteTraces,
   appendWorkspaceMutationTrace,
   captureMutationTraceBase
 } from './activity/trace-workspace-mutation'
@@ -2699,6 +2700,14 @@ export class AgentPilot {
        * (`ok: false`) n'est pas tracée ; l'écriture du journal ne fait jamais échouer le tour.
        */
       if (conversationId && workspaceDuTour) {
+        // Commandes shell qui NOMMENT un fichier écrit : seule preuve d'auteur d'une écriture hors
+        // outil d'édition (le commit automatique du chat en dépend, voir chat-turn-publication.ts).
+        await appendShellWriteTraces({
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          workspaceRoot: workspaceDuTour,
+          evidence: res.executionEvidence ?? []
+        })
         const dejaTraces = new Set<string>()
         for (const item of res.executionEvidence ?? []) {
           if (!item.ok || item.kind !== 'mutation') continue

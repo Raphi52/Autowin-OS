@@ -3,7 +3,9 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from '../providers/workspace-mutation-evidence'
+import type { ExecutionEvidence } from '../providers/types'
 import { ensureAutowinAppData } from '../app-data'
+import { cheminsEcritsParCommande } from './chemins-ecrits-par-commande'
 import {
   appendConversationFileTrace,
   normalizeWorkspaceTracePath,
@@ -39,6 +41,8 @@ export async function appendWorkspaceMutationTrace(
     paths: readonly string[]
     before?: WorkspaceSnapshot
     pathLineFingerprints?: Record<string, string[]>
+    /** Chemins nommés par une commande shell d'écriture du fil (voir `ConversationFileTrace`). */
+    nommeParCommande?: boolean
     eventId?: string
   },
   base = ensureAutowinAppData()
@@ -99,12 +103,48 @@ export async function appendWorkspaceMutationTrace(
         pathBaseGenerationMarkers,
         ...(pathLineFingerprints && Object.keys(pathLineFingerprints).length
           ? { pathLineFingerprints }
-          : {})
+          : {}),
+        ...(input.nommeParCommande ? { nommeParCommande: true } : {})
       },
       base
     )
   } catch {
     // L'observabilité ne doit jamais interrompre la mutation qu'elle décrit.
     return 'failed'
+  }
+}
+
+/**
+ * ÉCRITURES EN LIGNE DE COMMANDE DU FIL. Une commande shell réussie qui NOMME un fichier en écriture
+ * (`prettier --write x`, `cat >> x <<EOF`, `sed -i … x`) est tracée au nom du fil avec
+ * `nommeParCommande` : sans cela, le journal ne connaissait ce fichier que par la comparaison
+ * avant/après, que TOUS les fils en cours écrivent aussi, et le commit automatique ne savait plus
+ * qui l'avait écrit (d7af3730 et dd0c3d6a, 2026-10-13). Une commande en échec n'est pas tracée.
+ */
+export async function appendShellWriteTraces(
+  input: {
+    conversationId?: string
+    turnId?: string
+    workspaceRoot: string
+    evidence: readonly ExecutionEvidence[]
+  },
+  base = ensureAutowinAppData()
+): Promise<void> {
+  for (const item of input.evidence) {
+    if (!item.ok || !item.command?.trim()) continue
+    const workspaceRoot = item.workspaceRoot ?? input.workspaceRoot
+    const paths = cheminsEcritsParCommande(item.command, workspaceRoot)
+    if (paths.length === 0) continue
+    await appendWorkspaceMutationTrace(
+      {
+        ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+        ...(input.turnId ? { turnId: input.turnId } : {}),
+        workspaceRoot,
+        source: 'chat_tool',
+        paths,
+        nommeParCommande: true
+      },
+      base
+    )
   }
 }

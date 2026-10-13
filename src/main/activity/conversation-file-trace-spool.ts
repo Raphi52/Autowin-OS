@@ -30,6 +30,13 @@ export interface ConversationFileTrace {
   pathBaseGenerationMarkers?: Record<string, string | null>
   /** Empreintes non réversibles des lignes revendiquées par un outil d'édition, par chemin. */
   pathLineFingerprints?: Record<string, string[]>
+  /**
+   * Le fil a NOMMÉ ces chemins dans une commande shell d'écriture (`>`, `>>`, `tee`, `sed -i`,
+   * `prettier --write`, `eslint --fix` — voir `chemins-ecrits-par-commande.ts`). Distingue un
+   * fichier ÉCRIT en ligne de commande d'un fichier seulement VU changer par la comparaison
+   * avant/après d'un appel au modèle.
+   */
+  nommeParCommande?: boolean
 }
 
 type ConversationFileTraceAppendResult = 'appended' | 'duplicate' | 'ignored' | 'failed'

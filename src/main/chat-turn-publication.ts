@@ -26,12 +26,20 @@ import {
  * conv-870, attribué aussi à conv-871 et conv-869 par la comparaison avant/après). Un fichier n'est
  * donc publié que s'il est PROUVÉ au fil :
  *  1. par ses LIGNES : chaque ligne ajoutée de son diff a été écrite par un outil d'édition du fil ;
- *  2. à défaut (édition en ligne de commande, suppression, renommage) : il était propre au début du
- *     tour ET aucun autre fil ne l'a touché depuis ET aucun autre fil n'a de tour EN COURS dans le
- *     dépôt. Un tour en cours n'a encore rien écrit au journal : `agent-pilot.ts` n'y trace les
- *     éditions du modèle qu'à la FIN de son appel. Mesuré le 2026-09-30 (5fb0730d, bb8e6c0c) : conv-889
- *     écrit ses fichiers pendant les tours de conv-891, ses traces arrivent à 10:51:52, après les deux
- *     publications de conv-891 (10:32:31, 10:49:54) — qui ont donc commité son travail.
+ *  2. à défaut, il était propre au début du tour ET le TOUR l'a nommé dans une commande shell
+ *     d'écriture (`prettier --write`, `cat >>`, `sed -i`… — trace `nommeParCommande`) ET aucun
+ *     autre fil ne l'a nommé ni réclamé par lignes pendant le tour. Qu'un autre fil l'ait seulement
+ *     VU changer (sa comparaison avant/après, sans lignes), ou ait un tour en cours, n'y change rien.
+ *     Mesuré le 2026-10-13 : d7af3730 (conv-932, test reformaté par `prettier --write`) et dd0c3d6a
+ *     (conv-933, test complété par `cat >> … <<'EOF'`) ont publié le code sans son test, écarté
+ *     parce que conv-931, puis conv-930 et conv-932, l'avaient vu changer pendant leur propre tour.
+ *  3. à défaut (édition en ligne de commande non nommée, suppression, renommage) : il était propre
+ *     au début du tour ET aucun autre fil ne l'a touché depuis ET aucun autre fil n'a de tour EN
+ *     COURS dans le dépôt. Un tour en cours n'a encore rien écrit au journal : `agent-pilot.ts` n'y
+ *     trace les éditions du modèle qu'à la FIN de son appel. Mesuré le 2026-09-30 (5fb0730d,
+ *     bb8e6c0c) : conv-889 écrit ses fichiers pendant les tours de conv-891, ses traces arrivent à
+ *     10:51:52, après les deux publications de conv-891 (10:32:31, 10:49:54) — qui ont donc commité
+ *     son travail.
  * Le reste est LAISSÉ en attente et nommé dans le rapport, avec le nombre de lignes que le fil ne
  * réclame pas (les réécrire avec l'outil d'édition suffit à le publier). Un faux négatif laisse un
  * fichier non publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil
@@ -267,6 +275,14 @@ export async function publierTourDeChat(input: {
   const duTour = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
   const concurrents = new Set<string>()
+  /** Nommés par une commande shell d'écriture de CE tour. */
+  const nommesParLeTour = new Set<string>()
+  /**
+   * Écrits par un autre fil pendant le tour : nommés par sa commande, réclamés par ses lignes, ou
+   * tracés par une autre source que le chat. Le reste de ses traces (sa comparaison avant/après,
+   * sans lignes) dit seulement qu'il a VU le fichier changer.
+   */
+  const ecritsParUnAutreFil = new Set<string>()
   for (const trace of input.traces) {
     if (typeof trace.workspaceRoot !== 'string' || !trace.workspaceRoot.trim()) continue
     const racine = racines.get(trace.workspaceRoot) ?? trace.workspaceRoot
@@ -276,15 +292,21 @@ export async function publierTourDeChat(input: {
       const absolu = absoluDeTrace(racine, path)
       if (!dansLeDepot(repo, absolu)) continue
       const key = cle(absolu)
-      if (autreFil) {
-        if (pendantLeTour) concurrents.add(key)
-        continue
-      }
-      if (!SOURCES_DU_CHAT.has(trace.source)) continue
-      if (trace.turnId === turnId) duTour.add(key)
       const lignes = Object.entries(trace.pathLineFingerprints ?? {}).find(
         ([candidate]) => cle(absoluDeTrace(racine, candidate)) === key
       )?.[1]
+      if (autreFil) {
+        if (!pendantLeTour) continue
+        concurrents.add(key)
+        if (trace.nommeParCommande || lignes?.length || trace.source !== 'chat_tool')
+          ecritsParUnAutreFil.add(key)
+        continue
+      }
+      if (!SOURCES_DU_CHAT.has(trace.source)) continue
+      if (trace.turnId === turnId) {
+        duTour.add(key)
+        if (trace.nommeParCommande) nommesParLeTour.add(key)
+      }
       if (lignes?.length) {
         const set = revendiquees.get(key) ?? new Set<string>()
         for (const line of lignes) set.add(line)
@@ -320,6 +342,7 @@ export async function publierTourDeChat(input: {
     if (nonReclamees === 0) publier.push(gitPath)
     else if (salesAuDepart.has(key))
       exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour', ...detail })
+    else if (nommesParLeTour.has(key) && !ecritsParUnAutreFil.has(key)) publier.push(gitPath)
     else if (concurrents.has(key))
       exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
     else if (autreFilEnCours) exclus.push({ path: gitPath, motif: 'autre-fil-en-cours', ...detail })
