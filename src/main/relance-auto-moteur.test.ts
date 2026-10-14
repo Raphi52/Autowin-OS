@@ -290,7 +290,7 @@ describe('resumerErreurDeCompilation', () => {
     `${ESC}[33mUnexpected "}"${ESC}[33m`,
     '3  |  }',
     `${ESC}[31m`,
-    '    at failureErrorWithLog (D:\AutoWinOS\node_modules\esbuild\lib\main.js:1748:15)'
+    '    at failureErrorWithLog (D:\\AutoWinOS\\node_modules\\esbuild\\lib\\main.js:1748:15)'
   ].join('\n')
 
   it('rend le MOTIF réel, sans code couleur ni la ligne « Build failed in … »', () => {
@@ -305,7 +305,7 @@ describe('resumerErreurDeCompilation', () => {
       'error during build:',
       'src/main/a.ts (1:9): "foo" is not exported by "src/main/b.ts", imported by "src/main/a.ts".',
       'file: D:/AutoWinOS/src/main/a.ts:1:9',
-      '    at getRollupError (D:\AutoWinOS\node_modules\rollup\dist\shared\parseAst.js:1:1)'
+      '    at getRollupError (D:\\AutoWinOS\\node_modules\\rollup\\dist\\shared\\parseAst.js:1:1)'
     ].join('\n')
     expect(resumerErreurDeCompilation(sortie)).toBe(
       'src/main/a.ts (1:9): "foo" is not exported by "src/main/b.ts", imported by "src/main/a.ts".'
