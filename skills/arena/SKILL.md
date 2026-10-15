@@ -52,7 +52,12 @@ remplie d'une estimation.
 - **A est le témoin obligatoire** : le workflow ACTUEL, inchangé. Sans témoin, on attribue au nouveau
   workflow ce qui n'est que la facilité de la tâche.
 - **Isolement** : chaque bras travaille dans SA copie de travail (worktree / dossier séparé). Deux
-  bras qui écrivent le même fichier = résultat non attribuable.
+  bras qui écrivent le même fichier = résultat non attribuable. **Le navigateur de test aussi** :
+  deux bras qui pilotent un navigateur par le MÊME port de débogage voient les pages l'un de l'autre.
+  Mesuré (banc « Snake à écrans », 2026-10-15) : c-2 a piloté la page de c-1 par le port partagé
+  (« page non chargée »), 35 tours contre 18 et 28 pour ses deux répliques. → La consigne commune,
+  identique pour les quatre bras, dit : « si tu ouvres un navigateur, donne-lui un profil dans ton
+  dossier et laisse le système choisir son port de débogage (`--remote-debugging-port=0`) ».
 - **Les chiffres se LISENT** (`activity/conv-N.jsonl` : `costUsd`, `durationMs`, tours ;
   `npm run scout:rendement --json` pour la base de comparaison). Un chiffre estimé se marque
   « non mesuré » — il ne se met pas dans le tableau comme s'il était mesuré.
@@ -88,6 +93,21 @@ remplie d'une estimation.
   lance aucun bras. Cas particuliers : critère déjà vert = la tâche est faite → arrêt et signalement
   (pas de banc) ; critère qu'on ne peut pas exécuter avant (capture d'écran, jugement à l'œil) = pas
   un critère → en fabriquer un exécutable, ou déclarer le banc impossible.
+- **CALIBRER L'APPEL NU AVANT DE PAYER LES BRAS — sinon le banc est REFUSÉ.** AU MOMENT où le
+  critère est vu rouge et la grille validée → lancer **3 appels nus** de calibrage (le prompt de X,
+  isolés comme les bras, copies jetées ensuite), les noter, et écrire dans le RUN.md une section
+  `## Calibrage` portant la ligne `Calibrage : <n>/3 appels nus au critère complet`. À **3/3**, la
+  tâche ne peut pas départager sur la qualité : la durcir puis recalibrer, ou lancer quand même en
+  écrivant dans la section `NON DISCRIMINANT` (banc de coût seulement, décidé AVANT de payer).
+  Motif MESURÉ : trois bancs du 2026-10-15 (Snake, Snake à écrans, demande ambiguë sur un dépôt
+  existant) — **36 bras sur 36** au critère, environ 30 $ pour aucun départage. Au troisième, le
+  calibrage (environ 1,5 $ et 2 minutes par version de la tâche) l'a dit avant le lancement. Ce qui
+  n'a PAS fait échouer l'appel nu sur un dépôt de 25 fichiers : un mot à deux sens tranché par le
+  glossaire, une date d'effet exigée par une règle documentée, six saisies invalides à refuser — il
+  lit tout le dépôt et voit chaque piège (9 calibrages sur 9). Hypothèse NON vérifiée pour départager
+  une skill de cadrage : un dépôt trop gros pour être lu en entier, ou une ambiguïté qu'aucun
+  document ne tranche. Contrôlé avant le départ (point P23) ; la section se lit comme une étape
+  d'avant-lancement, ses mentions du lanceur ne comptent pas comme le lancement des bras.
 - **LE CRITÈRE DOIT COUVRIR LES CAS LIMITES — sinon le banc est REFUSÉ.** Au moins **3 assertions**,
   dont au moins **1 cas nominal** et au moins **2 cas limites** pris hors du chemin heureux : entrée
   invalide ou absurde · limite vide / zéro résultat · borne (premier, dernier, égalité) · erreur
@@ -277,9 +297,9 @@ et pas seulement quand la cible est une skill :
 npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc> --avant-lancement
 ```
 
-Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les sept points qui coûtent le
+Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les huit points qui coûtent le
 plus cher à découvrir trop tard (candidats triés, rouge collé, cas limites, énoncé identique, B de
-texte, X réellement nu, **critère binaire + preuve rejouable**). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
+texte, X réellement nu, **critère binaire + preuve rejouable**, **appel nu calibré**). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
 pré-vol. Motif mesuré, bancs `residus` et `dogfood` : X citait `/scout` et `/arena`
 dans son prompt — donc X n'était pas le plancher de mesure —, et le contrôle ne l'a dit qu'APRÈS que
 les quatre bras aient été payés (≈ 11 $ et 15 $ de tournoi rendus ininterprétables sur leur bras X).
@@ -335,7 +355,12 @@ tir unique, l'écart s'écrit `non mesuré`. **Un workflow n'est
 pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi bon, sinon il perd.**
 
 ### 5. Installer et retenir
-- Livrer le meilleur livrable pour de vrai ; jeter les copies de travail perdantes.
+- Livrer le meilleur livrable pour de vrai ; jeter les copies de travail perdantes. Quand le banc
+  doit être « supprimé à la fin », cela couvre aussi `<dossier du compte Claude>/projects/<dossier
+  encodé>` : même avec `--no-session-persistence`, un appel qui reçoit une sortie d'outil trop longue
+  l'y écrit (`tool-results/`). Mesuré sur les trois bancs du 2026-10-15 (dossier du juge à chaque
+  fois) : chercher le nom du banc dans `projects/` de CHAQUE compte utilisé avant d'annoncer « rien
+  ne reste ».
 - Écrire le workflow gagnant à son point de déclenchement, en une règle-réflexe.
 - **SI B GAGNE — le texte de la skill est RÉÉCRIT pour de vrai, dans le fichier réel du dépôt, avec
   la formulation exacte du bras gagnant, en commit dédié.** C'est le but même de la règle « B est
@@ -393,7 +418,7 @@ noms-là, dès la préparation du banc (étape 1) et au retour de chaque bras (�
 Le `RUN.md` passé en `--run` reste à part : c'est le compte rendu (candidats scoutés, rouge collé,
 tableau, Discrimination), pas un des artefacts ci-dessus.
 
-Il lit les fichiers du banc et rend 22 points OK/RATE (candidats écrits, rouge collé, cas limites du
+Il lit les fichiers du banc et rend 23 points OK/RATE (candidats écrits, rouge collé, cas limites du
 critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
 `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
 copies perdantes retirées, et — si le banc teste des variations de TEXTE — section `## Variantes de
@@ -401,7 +426,7 @@ texte` avec son levier plus un `variantes/<bras>.diff` non vide par bras, et enf
 du banc dans `arena-duels.jsonl` — un tournoi non journalisé est RATE, gagnant seul journalisé
 compris), et enfin — si le banc est sorti 4/4 — la section `## Critère durci` nommant l'assertion à
 ajouter pour la reprise (P18). Code de sortie 0 =
-protocole tenu. Les six points lisibles avant le départ des bras se contrôlent avec
+protocole tenu. Les huit points lisibles avant le départ des bras se contrôlent avec
 `--avant-lancement` (étape 3) : le faire à la fin seulement, c'est payer le tournoi pour apprendre
 qu'il était invalide. Un RATE se corrige, ou s'écrit dans la
 sortie tel quel — il ne se tait pas : au banc, quatre de ces points étaient RATE sans

@@ -746,7 +746,7 @@ export const CATALOG: CommandSpec[] = [
       // l'heuristique de régime devine. Ce paramètre lui donne la capacité — même mouvement que
       // `verify` et `brain_query`, et sa décision devient TRAÇABLE au lieu d'être implicite.
       phase:
-        'facultatif — la seule phase à jouer : « scout » (chercher quoi faire), « frame » (cadrer un besoin), « terrain », « build » (exécuter), « clean », « judge » (auditer un livrable existant). Omettre pour laisser le pipeline choisir.'
+        'facultatif — la seule phase à jouer : « scout » (chercher quoi faire), « frame » (cadrer un besoin), « terrain » (seulement si l’utilisateur le demande), « build » (exécuter), « clean », « judge » (auditer un livrable existant). Omettre pour laisser le pipeline choisir.'
     },
     annotations: {
       readOnlyHint: false,

@@ -31,8 +31,9 @@ describe('clôture d’un run d’ANALYSE seule', () => {
 
   it('il nomme la phase jouée et ce qui reste de la chaîne', () => {
     const texte = formatOrchestrationOutcome(true, livre(['frame']))
-    expect(texte).toContain('Reste à faire : terrain → build → clean → judge.')
-    expect(texte).toContain('Recommandé : lancer terrain.')
+    expect(texte).toContain('Reste à faire : build → clean → judge.')
+    expect(texte).toContain('Recommandé : lancer build.')
+    expect(texte).not.toContain('terrain')
     expect(texte).toContain('phase frame')
   })
 
@@ -162,15 +163,16 @@ describe('une phase refusée qui demande à être refaite ne compte pas comme ac
   it('recommande de relancer frame, jamais terrain', () => {
     const texte = formatOrchestrationOutcome(true, refuse)
     expect(texte).toContain('Recommandé : lancer frame.')
-    expect(texte).toContain('Reste à faire : frame → terrain → build → clean → judge.')
+    expect(texte).toContain('Reste à faire : frame → build → clean → judge.')
     expect(texte).not.toContain('lancer terrain')
   })
 
-  it('un frame abouti garde « lancer terrain »', () => {
+  it('un frame abouti recommande « lancer build », plus jamais terrain', () => {
     const texte = formatOrchestrationOutcome(true, {
       ...refuse,
       phaseOutputs: [refuse.phaseOutputs[0], { phase: 'frame', text: '## Besoin\nok' }]
     })
-    expect(texte).toContain('Recommandé : lancer terrain.')
+    expect(texte).toContain('Recommandé : lancer build.')
+    expect(texte).not.toContain('lancer terrain')
   })
 })

@@ -85,7 +85,7 @@ describe('cliquet remake — les regles de surete sont DANS le corps de la skill
     ['copie hors git avec exclusions', "énumérant ce qu'elle EXCLUT"],
     ['copies par partition apres etape 2', "par partition, après l'étape 2"],
     ['rejeus du controle dans le tally', 'un rejeu du contrôle par RUN'],
-    ['terrain compte dans le tally', 'N `terrain` if armed'],
+    ['build enchaine par frame hors decompte', 'jamais par `frame`'],
     ['bracket d agents du regime', "fourchette d'agents"],
     ['fourchette pour l indecidable', 'FOURCHETTE avec sa borne haute'],
     ['timeout distingue d une regression', 'Est-ce seulement un rouge ?'],
@@ -126,9 +126,12 @@ describe('cliquet remake — les regles de surete sont DANS le corps de la skill
 })
 
 describe('cliquet remake — les renvois vers les skills voisines resolvent', () => {
-  it('frame enchaine bien sur terrain, et remake desarme cet enchainement', () => {
-    expect(corps(lire('frame'))).toContain('Passe la main à `terrain`')
-    expect(corps(lire('remake'))).toContain("N'enchaîne PAS sur `terrain`")
+  // 2026-10-15 : terrain a quitté le pipeline par défaut, frame passe désormais la main à build ;
+  // la garde de remake désarme donc CET enchaînement-là, et plus aucune ne vise terrain.
+  it('frame enchaine bien sur build, et remake desarme cet enchainement', () => {
+    expect(corps(lire('frame'))).toContain('Passe la main à `build`')
+    expect(corps(lire('remake'))).toContain("N'enchaîne PAS sur `build`")
+    expect(corps(lire('remake'))).not.toContain('`terrain`')
   })
 
   it('frame exige toujours les trois sections que remake cite', () => {

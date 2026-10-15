@@ -67,6 +67,49 @@ function dernierCompose(selecteur: string): string {
   return selecteur.slice(debut).trim()
 }
 
+/** Les arguments d'une liste de selecteurs, coupes aux virgules de PREMIER niveau. */
+function argumentsDeListe(liste: string): string[] {
+  const out: string[] = []
+  let profondeur = 0
+  let debut = 0
+  for (let i = 0; i < liste.length; i++) {
+    const c = liste[i]
+    if (c === '(' || c === '[') profondeur++
+    else if (c === ')' || c === ']') profondeur--
+    else if (c === ',' && profondeur === 0) {
+      out.push(liste.slice(debut, i).trim())
+      debut = i + 1
+    }
+  }
+  out.push(liste.slice(debut).trim())
+  return out.filter(Boolean)
+}
+
+/**
+ * Le ou les composes qui designent l'element PEINT. Sans `:is()` / `:where()` : le dernier compose.
+ * Avec : le reste du compose joint au sujet de CHAQUE argument — dans `:is(.a .b, .c)`, l'element
+ * peint est `.b` ou `.c`, jamais `.a`.
+ */
+function sujetsDuSelecteur(selecteur: string): string[] {
+  const compose = dernierCompose(selecteur)
+  const ouverture = /:(?:is|where|matches)\(/i.exec(compose)
+  if (!ouverture) return [compose]
+  const debut = ouverture.index + ouverture[0].length
+  let profondeur = 1
+  let fin = debut
+  while (fin < compose.length && profondeur > 0) {
+    const c = compose[fin]
+    if (c === '(' || c === '[') profondeur++
+    else if (c === ')' || c === ']') profondeur--
+    fin++
+  }
+  const avant = compose.slice(0, ouverture.index)
+  const apres = compose.slice(fin)
+  return argumentsDeListe(compose.slice(debut, fin - 1)).flatMap((argument) =>
+    sujetsDuSelecteur(argument).map((sujet) => `${avant}${sujet}${apres}`)
+  )
+}
+
 const NEUTRE = /^(transparent|none|0|0px|unset|initial|inherit)$/i
 
 /** Une declaration qui PEINT une surface (fond, ombre, flou, bord visible). */
@@ -87,10 +130,10 @@ function violations(classes: string[]): Violation[] {
     const racine = postcss.parse(readFileSync(fichier, 'utf8'))
     racine.walkRules((regle) => {
       for (const selecteur of regle.selectors) {
-        const compose = dernierCompose(selecteur)
-        // Un pseudo-element (::before/::after) est un autre objet que la racine elle-meme.
-        if (compose.includes('::')) continue
-        if (!motifs.some((m) => m.test(compose))) continue
+        const sujets = sujetsDuSelecteur(selecteur)
+          // Un pseudo-element (::before/::after) est un autre objet que la racine elle-meme.
+          .filter((compose) => !compose.includes('::'))
+        if (!sujets.some((compose) => motifs.some((m) => m.test(compose)))) continue
         regle.walkDecls((d) => {
           if (d.parent !== regle) return
           if (peint(d.prop, d.value)) {
@@ -113,6 +156,26 @@ describe('Gabarit des vues : un seul cadre de page', () => {
         expect(Object.keys(RACINES_DE_CONTENU), `${vue} rend ${composant}`).toContain(composant)
       }
     }
+  })
+
+  /*
+   * L'ELEMENT PEINT D'UN `:is(...)` EST LE SUJET DE CHAQUE ARGUMENT, pas tout le bloc.
+   * Faux positif mesure le 2026-10-15 (conv-961) : la regle « elements choisis » des themes
+   * holographique-clair et nebuleuse-verre se termine par `:is(…, .graph-observatory--galaxy
+   * .theme-filter.is-active, …)`. Lire le bloc entier comme dernier compose y trouvait
+   * `.graph-observatory--galaxy`, un ANCETRE, et accusait le bouton de filtre choisi de repeindre
+   * la racine de la vue.
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : revenir a `dernierCompose` seul dans `violations`.
+   */
+  it('lit le sujet de chaque argument d un :is(), et attrape toujours une racine peinte dedans', () => {
+    const sujets = sujetsDuSelecteur(
+      ":root[data-theme='x'] .shell :is(.task-manager-row.is-selected, .graph-observatory--galaxy .theme-filter.is-active)"
+    )
+    expect(sujets).toEqual(['.task-manager-row.is-selected', '.theme-filter.is-active'])
+    expect(sujetsDuSelecteur('.shell :where(.panneau .graph-observatory, .autre)')).toContain(
+      '.graph-observatory'
+    )
+    expect(sujetsDuSelecteur('.a > .router-view.is-open')).toEqual(['.router-view.is-open'])
   })
 
   it('la racine du contenu d une vue ne repeint pas le cadre de page, dans aucune feuille', () => {

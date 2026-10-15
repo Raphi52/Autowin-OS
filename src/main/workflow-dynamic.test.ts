@@ -170,6 +170,43 @@ Voilà.`
   })
 })
 
+describe('terrain ne se joue que si l’utilisateur le demande (2026-10-15)', () => {
+  // Le mode dynamique tourne SANS que l'utilisateur ait choisi de workflow (os.ts). Un graphe qu'il
+  // invente n'est donc jamais une demande de l'utilisateur : terrain n'y a pas sa place. Une demande
+  // explicite (« prépare le terrain », `/terrain`) garde son chemin : le refus retombe sur
+  // « aucun », et c'est le routage d'intention qui la sert.
+  it('la question posée au modèle ne lui propose plus terrain', () => {
+    const phrase = dynamicPrompt('refonds la page des réglages de bout en bout', catalogue)
+    const phases = /Phases possibles :([^.]*)\./u.exec(phrase.replace(/\n/g, ' '))?.[1]
+    expect(phases, 'liste des phases introuvable').toBeDefined()
+    expect(phases).toContain('build')
+    expect(phases).not.toMatch(/terrain/iu)
+  })
+
+  it('REFUSE un graphe inventé qui contient terrain', () => {
+    const verdict = acceptProposedGraph({
+      entry: 'f',
+      nodes: [
+        { id: 'f', phase: 'frame' },
+        { id: 't', phase: 'terrain' },
+        { id: 'b', phase: 'build' }
+      ],
+      edges: [
+        { from: 'f', to: 't', when: 'always' },
+        { from: 't', to: 'b', when: 'always' }
+      ]
+    })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.ok === false && verdict.reason).toContain('terrain')
+  })
+
+  it('un graphe inventé avec terrain retombe sur « aucun »', () => {
+    const reponse = `WORKFLOW: nouveau
+{"name":"Avec terrain","graph":{"entry":"f","nodes":[{"id":"f","phase":"frame"},{"id":"t","phase":"terrain"},{"id":"b","phase":"build"}],"edges":[{"from":"f","to":"t","when":"always"},{"from":"t","to":"b","when":"always"}]}}`
+    expect(readWorkflowDecision(reponse, catalogue).kind).toBe('none')
+  })
+})
+
 describe('les garde-fous du graphe inventé', () => {
   it('REFUSE un graphe invalide — un retour sans borne ne peut pas tourner', () => {
     const verdict = acceptProposedGraph({

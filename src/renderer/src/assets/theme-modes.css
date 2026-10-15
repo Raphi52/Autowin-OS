@@ -113,7 +113,6 @@
   --chat-etat-question:             var(--gold);   /* pastille d etat : question posee */
   --chat-etat-non-lu:               var(--gold-bright);   /* pastille d etat : non lu */
   --chat-etat-annule:               var(--text-faint);   /* pastille d etat : annule */
-  --chat-piece-jointe-survol:       var(--info);   /* bouton de piece jointe au survol */
   --chat-suppr-orbite:              var(--rose);   /* orbite decorative de la carte de suppression */
   --chat-suppr-kicker:              var(--rose);   /* surtitre de la carte de suppression */
   --chat-suppr-titre:               var(--text);   /* titre de la carte de suppression */

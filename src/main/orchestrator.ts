@@ -16,7 +16,9 @@ import {
   consigneTestsDuJuge,
   empreintesTestsDuJuge,
   empreintesDesFichiers,
-  motifsTestModifie
+  motifsTestModifie,
+  reservesMineuresDuScout,
+  resultatAvecReservesDuJuge
 } from './objections-juge'
 
 /**
@@ -5411,11 +5413,26 @@ ${CONTRAT_OBJECTIONS}`
     let lastJudgeMemoire = ''
     /** Le livrable agrégé tel que le juge précédent l'a reçu : base du bloc « CE QUI A CHANGÉ » (changements-juge.ts). */
     let texteDejaJuge = ''
+    /**
+     * Les MINEUR du DERNIER verdict qui a clos un `/scout` nommé sans nouveau passage (conv-976,
+     * `reservesMineuresDuScout`) : ajoutés au résultat rendu, jamais perdus. Vidé à chaque jugement.
+     */
+    let reservesDuJuge: string[] = []
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
       bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
+
+    /** La trace DIT pourquoi un `/scout` nommé s'arrête malgré des MINEUR (conv-976). */
+    const pousserReservesDuJuge = (): void => {
+      if (reservesDuJuge.length === 0) return
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: `Réserves mineures du juge gardées dans le résultat (${reservesDuJuge.length}) : un /scout nommé ne relance pas l'analyse pour des objections MINEUR seules.`
+      })
+    }
 
     // Une passe JUGE (autre rôle → décorrélation) + GATE déterministe sur l'état COURANT de `exec`.
     // Rejouable : après une phase de réparation, l'agrégat `exec` change et on re-juge.
@@ -5427,6 +5444,7 @@ ${CONTRAT_OBJECTIONS}`
       // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
       // bloqué par pre-green clôture rouge, ou rejoint une reprise explicitement dessinée : le juge
       // ne peut rien apprendre qu'un oracle local vient déjà de réfuter.
+      reservesDuJuge = []
       const evidenceOk = evidenceSatisfiesTask(task, exec.executionEvidence)
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
@@ -5480,16 +5498,21 @@ ${CONTRAT_OBJECTIONS}`
       // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
       const resumedJudgeText = takePaidPhase('judge')
       if (resumedJudgeText !== undefined) {
-        const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
+        const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
+        // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves, pas un refus.
+        const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, resumedJudgeText) : []
+        const ok = evidenceOk && (verdictDuJuge || reserves.length > 0)
+        reservesDuJuge = verdictDuJuge ? [] : reserves
         lastJudgeText = resumedJudgeText.trim()
         lastJudgeMemoire = lastJudgeText
         // Le juge repris a statué sur le texte repris, celui que porte `exec` ici.
         texteDejaJuge = exec.text
         // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
         // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+        // La calibration garde le vote RÉEL du juge : des réserves gardées ne le changent pas en vert.
         trust.record({
           judgeModel: judgeProvider,
-          verdict: ok ? 'green' : 'red',
+          verdict: evidenceOk && verdictDuJuge ? 'green' : 'red',
           runId,
           conversationId: conversationId
         })
@@ -5499,7 +5522,11 @@ ${CONTRAT_OBJECTIONS}`
           role: 'judge',
           model: judgeBinding.model,
           text: lastJudgeText,
-          detail: ok ? 'verdict repris · validé' : 'verdict repris · défaut',
+          detail: ok
+            ? reservesDuJuge.length > 0
+              ? 'verdict repris · validé avec réserves mineures'
+              : 'verdict repris · validé'
+            : 'verdict repris · défaut',
           status: 'completed',
           execution: {
             phase: 'judge',
@@ -5524,6 +5551,7 @@ ${CONTRAT_OBJECTIONS}`
             ? `BLOQUÉ: ${recoveredGate.reasons.join('; ')}`
             : 'clôture autorisée'
         })
+        pousserReservesDuJuge()
         return {
           valid: ok,
           gate: recoveredGate,
@@ -5866,14 +5894,20 @@ ${CONTRAT_OBJECTIONS}`
        * (ligne 2522) l'utilisait deja ; les trois chemins du pipeline principal, non — le doublon
        * annonce comme resorbe ne l'etait que sur une lignee.
        */
-      const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
+      const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
+      // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves ajoutées au résultat,
+      // pas un refus qui relance scout + juge. Un MAJEUR, et tout autre run, gardent le blocage.
+      const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, verdict.text) : []
+      const ok = evidenceOk && (verdictDuJuge || reserves.length > 0)
+      reservesDuJuge = verdictDuJuge ? [] : reserves
       lastJudgeText = verdict.text.trim()
       lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
       // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+      // La calibration garde le vote RÉEL du juge : des réserves gardées ne le changent pas en vert.
       trust.record({
         judgeModel: judgeProvider,
-        verdict: ok ? 'green' : 'red',
+        verdict: evidenceOk && verdictDuJuge ? 'green' : 'red',
         runId,
         conversationId: conversationId
       })
@@ -5886,7 +5920,7 @@ ${CONTRAT_OBJECTIONS}`
         tokens: verdict.usage ? verdict.usage.inputTokens + verdict.usage.outputTokens : undefined,
         costUsd: verdict.usage?.costUsd,
         usage: verdict.usage,
-        detail: ok ? 'validé' : 'défaut',
+        detail: ok ? (reservesDuJuge.length > 0 ? 'validé avec réserves mineures' : 'validé') : 'défaut',
         prompt: judgeMembers.length >= 2 ? undefined : judgeEnvelope,
         status: 'completed',
         durationMs: performance.now() - judgeStartedAt,
@@ -5923,6 +5957,7 @@ ${CONTRAT_OBJECTIONS}`
         role: 'gate',
         detail: g.blocked ? `BLOQUÉ: ${g.reasons.join('; ')}` : 'clôture autorisée'
       })
+      pousserReservesDuJuge()
       return {
         valid: ok,
         gate: g,
@@ -6130,7 +6165,11 @@ ${CONTRAT_OBJECTIONS}`
         if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
         // Piste 3 (conv-914) : le résultat validé part AVANT learn/salvage — voir shared/resultat-valide.ts.
         if (apresGate.length > 0) {
-          push(etapeResultatValide(phaseOutputs.length > 0 ? exec.text : lastJudgeText))
+          push(
+            etapeResultatValide(
+              resultatAvecReservesDuJuge(phaseOutputs.length > 0 ? exec.text : lastJudgeText, reservesDuJuge)
+            )
+          )
         }
         for (const phaseApresGate of apresGate) {
           try {
@@ -6207,7 +6246,11 @@ ${CONTRAT_OBJECTIONS}`
 
     return {
       task,
-      result: phaseOutputs.length > 0 ? exec.text : lastJudgeText,
+      // conv-976 : les MINEUR gardés sur un `/scout` nommé suivent le résultat rendu (vide sinon).
+      result: resultatAvecReservesDuJuge(
+        phaseOutputs.length > 0 ? exec.text : lastJudgeText,
+        valid && !gate.blocked ? reservesDuJuge : []
+      ),
       valid,
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,

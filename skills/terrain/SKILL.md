@@ -1,19 +1,18 @@
 ---
 name: terrain
 description: >-
-  Étape 2 du pipeline (frame → terrain → build → clean → judge) : depuis un besoin cadré dont
-  l'approche est tranchée, PRÉPARER LE TERRAIN D'AUTO-CORRECTION avant le travail autonome — (1)
+  Skill À LA DEMANDE, hors de la chaîne par défaut (frame → build → clean → judge) : ne se joue que
+  si on la NOMME (`/terrain`, « prépare le terrain / le harnais »). Depuis un besoin cadré dont
+  l'approche est tranchée, PRÉPARE LE TERRAIN D'AUTO-CORRECTION avant un travail autonome — (1)
   OBSERVABILITÉ (captures + logs pour boucler sur la sortie réelle), (2) l'ENVIRONNEMENT / la
-  technique, (3) l'ÉTAT de reprise — et CONSTRUIRE le harnais s'il manque ; PLUS la spécification de
-  boucle dont l'exécutant a besoin (signal par incrément, carte de découpage, plafonds de coût,
-  point de reprise vert, câblage besoin→boucle→judge, pilote /goal armé à la passation). À utiliser
-  quand un travail autonome va démarrer et que le COMMENT de la boucle doit être préparé d'abord (§
-  Quand la déclencher). PAS pour cadrer le besoin ou choisir l'approche (→ `frame`), PAS pour jouer
-  les mécaniques de boucle — découpage, TDD, incréments APPARTIENNENT AU MOTEUR (ch.4 BUILD) — ni
-  pour juger le résultat (→ `judge`).
+  technique, (3) l'ÉTAT de reprise — et CONSTRUIT le harnais s'il manque ; PLUS la spécification de
+  boucle (signal par incrément, découpage, plafonds de coût, point de reprise vert, pilote /goal).
+  Sans elle, le harnais qui manque se construit pendant `build`. PAS pour cadrer le besoin ou choisir
+  l'approche (→ `frame`), PAS pour jouer les mécaniques de boucle — découpage, TDD, incréments
+  APPARTIENNENT AU MOTEUR (ch.4 BUILD) — ni pour juger le résultat (→ `judge`).
 ---
 
-# terrain — préparer le terrain d'auto-correction (étape 2)
+# terrain — préparer le terrain d'auto-correction
 
 ## À quoi ça sert
 **Rendre le terrain prêt pour que Claude travaille de façon AUTONOME et se corrige lui-même — AVANT que la boucle démarre.** Un besoin
@@ -24,8 +23,9 @@ au lieu de tourner en aveugle.
 
 ## Quand la déclencher — et quand NON
 **Déclencheurs** : « prépare le workflow / le terrain » · « comment Claude va boucler / récupérer ses captures et ses logs » · « mets en place l'auto-correction / l'environnement de travail autonome » · « fais tourner Claude seul jusqu'au bout ». Surtout sur un projet ou un PC où ce harnais n'existe pas encore.
-**Chaîne** : APRÈS `frame` (besoin cadré, approche tranchée) et AVANT la construction, puis `clean`, puis `judge`.
+**Chaîne** : AUCUNE par défaut — la chaîne livrée est `frame → build → clean → judge`, sans terrain. Elle ne se joue que si on la NOMME (`/terrain`, « prépare le terrain / le harnais ») ; elle se place alors APRÈS `frame` (besoin cadré, approche tranchée) et AVANT la construction, puis `clean`, puis `judge`.
 **PAS pour** : cadrer le besoin ou choisir l'approche → `frame` · exécuter les mécaniques de boucle elles-mêmes (découper et exécuter un plan, TDD, incréments guidés par les tests) → ENGINE Ch.4 BUILD, le manuel de l'exécutant : AUCUNE skill ne se déclenche pendant la construction · juger le livrable fini → `judge`.
+**PAS non plus** quand le critère de succès est DÉJÀ exécutable (un script de contrôle fourni avec la tâche) et que le livrable tient en un ou deux fichiers neufs : le harnais n'a plus rien à rendre observable. Mesuré au banc `/arena /frame` « Snake à écrans » (2026-10-15, 4 workflows × 3 répliques) : frame → terrain → build a coûté **1,21 $** contre 0,94 $ pour frame + build et 0,53 $ pour l'appel nu, et 2,6 fois sa durée, pour la même note 26/26. Son harnais de jeu (317 à 356 lignes de tests par réplique) n'a pas attrapé le seul vrai défaut du banc (Espace maintenue fait clignoter la pause). Un seul banc : c'est une limite de déclenchement mesurée, pas une loi — mais c'est elle qui a sorti terrain de la chaîne par défaut le 2026-10-15 : aucun workflow livré ne la joue plus (`src/main/workflow-defaults.ts` : « Feature » la sautait déjà, « Chantier Autowin » l'a perdue ce jour-là).
 
 ## Procédure
 
@@ -59,7 +59,7 @@ au lieu de tourner en aveugle.
     Compile la condition DEPUIS le `signal:`/`signal-cmd:` du RUN ; l'utilisateur l'arme (ligne prête à coller) et lance `/goal clear` à la clôture. Run non interactif (dont l'app Autowin) → `non armé : non interactif`.
     Procédure complète, gabarit et garde de pilote : [`references/goal.md`](references/goal.md).
 
-12. **Câble `clean` puis `judge` (étapes 4-5)** : après la preuve du build et la garde voisine, `clean` inspecte les résidus attribuables, rejoue le signal et prend l'empreinte du diff nettoyé ; passe ensuite le livrable + le chemin du RUN à `judge`. Un défaut de juge rentre à nouveau comme incrément, suivi encore de `clean`. Tout signal ajouté périme aussi la condition `/goal` armée — recompile-la et redonne-la (ou trace que la couverture est inchangée). Le plafond de cycles reste celui de `judge`. **N'empaquette en skill réutilisable QU'à partir de 2 récurrences** ; nomme-la `loop-<tâche>`, couvre le terrain + la spécification de boucle + les passations, puis teste son déclenchement.
+12. **Câble `clean` puis `judge`** : après la preuve du build et la garde voisine, `clean` inspecte les résidus attribuables, rejoue le signal et prend l'empreinte du diff nettoyé ; passe ensuite le livrable + le chemin du RUN à `judge`. Un défaut de juge rentre à nouveau comme incrément, suivi encore de `clean`. Tout signal ajouté périme aussi la condition `/goal` armée — recompile-la et redonne-la (ou trace que la couverture est inchangée). Le plafond de cycles reste celui de `judge`. **N'empaquette en skill réutilisable QU'à partir de 2 récurrences** ; nomme-la `loop-<tâche>`, couvre le terrain + la spécification de boucle + les passations, puis teste son déclenchement.
 
 ## Ce que ça produit
 
@@ -82,7 +82,7 @@ au lieu de tourner en aveugle.
 - **Cadrer le besoin ou choisir l'approche** — c'est le travail de `frame` ; terrain part d'une `Décision:` déjà tranchée.
 - **Jouer les mécaniques de boucle** (découper/exécuter un plan, TDD, incréments guidés par les tests) — elles sont au moteur ch.4 BUILD, le manuel de l'exécutant ; aucune skill ne se déclenche pendant la construction.
 - **Respécifier des mécaniques génériques de boucle** — seul le pont signal↔harnais propre à la tâche a sa place ici.
-- **Nettoyer ou juger le livrable fini** — ce sont `clean` (étape 4) puis `judge` (étape 5).
+- **Nettoyer ou juger le livrable fini** — ce sont `clean` puis `judge`.
 - **Poser `status: green` pour satisfaire le hook d'arrêt** — le contrôle rejoue `signal-cmd` ; un faux vert bloque.
 - **Monter deux constructeurs en parallèle** — des étapes sérialisées, idempotentes et réversibles seulement ; confirme avant toute action irréversible.
 - **Inventer un plafond de cycles de juge** — le plafond de `judge` fait foi ; terrain ne le duplique pas.

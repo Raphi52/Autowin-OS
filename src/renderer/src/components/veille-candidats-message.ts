@@ -159,7 +159,7 @@ export function candidatsDepuisScoutTable(
  * pas seulement le cadrage. Le préfixe `/frame` réduisait le run à la seule phase frame
  * (`skill-routing.ts` → `explicitPhase`), donc l'ancienne version ne pouvait rien livrer. Ici :
  * AUCUN préfixe de phase, et le mot « pipeline » dans la consigne classe la tâche en régime
- * `critical` (`task-regime.ts` : CRITICAL_SIGNALS), qui joue scout → frame → terrain → build → clean
+ * `critical` (`task-regime.ts` : CRITICAL_SIGNALS), qui joue scout → frame → build → clean
  * puis le juge, sans qu'une intention en langage naturel puisse l'amputer.
  */
 export function redigerPromptWorkflowSelection(selection: readonly CandidatAffiche[]): string {
@@ -189,7 +189,7 @@ export function redigerPromptWorkflowSelection(selection: readonly CandidatAffic
     ...lignes,
     '',
     'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis joue le',
-    'PIPELINE complet — cadrage, terrain, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
+    'PIPELINE complet — cadrage, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
     'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
   ].join('\n')
 }

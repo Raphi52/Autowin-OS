@@ -1,7 +1,7 @@
 ---
 name: heal
 description: >-
-  Pilote le pipeline COMPLET (scout → frame → terrain → build → clean → judge) contre la MALADIE
+  Pilote le pipeline COMPLET (scout → frame → build → clean → judge) contre la MALADIE
   d'une codebase — lenteur, bugs, code sous-optimisé et non structuré — jusqu'à ce qu'un projet
   bricolé devienne structuré, mesuré et fonctionnel. Contrairement à `remake`, qui dépense le recul
   de conception sur un livrable FINI, `heal` part de SYMPTÔMES : une latence mesurée, un bug
@@ -38,7 +38,7 @@ cause non localisée est un peut-être-correctif sur un peut-être-bug.
 Aucune optimisation ne démarre sans un chiffre qui existe AVANT le changement.
 
 - Perf : les mesures propres à l'app (vue / traces / temps) si elles existent ; sinon un harnais de
-  chronométrage reproductible ajouté sous `terrain`.
+  chronométrage reproductible, ajouté ici avant tout changement.
 - Bugs : un test ROUGE qui reproduit, ou une trace d'exécution. Un rapport de bug n'est pas un symptôme.
 - Structure : un signal dénombrable (implémentations dupliquées, taille de fichier, points chauds de complexité).
 
@@ -93,11 +93,11 @@ Présente UN tableau classé : Type (🐌 perf · 🐛 bug · 🧱 structure) ·
 Pour chaque candidat que l'humain retient, dans l'ordre, un à la fois :
 
 1. `frame` — le QUOI et l'approche, avec le signal de fin comme critère d'acceptation.
-2. `terrain` — le harnais qui rend le symptôme OBSERVABLE et rejouable (sonde de profilage,
-   test de reproduction). Sauté seulement si l'étape 0 l'a déjà produit.
-3. `build` — le correctif, sur la cause NOMMÉE. Le rouge → vert est obligatoire pour un bug.
-4. `clean` — retirer les sondes et les échafaudages qui ne servent plus.
-5. `judge` — verdict sur le livrable, plus **la mesure d'après contre la référence**.
+2. `build` — le correctif, sur la cause NOMMÉE, observé par le harnais de l'étape 0 (sonde de
+   profilage, test de reproduction) ; s'il manque pour ce candidat, le build le construit d'abord.
+   Le rouge → vert est obligatoire pour un bug.
+3. `clean` — retirer les sondes et les échafaudages qui ne servent plus.
+4. `judge` — verdict sur le livrable, plus **la mesure d'après contre la référence**.
 
 Ne groupe jamais plusieurs candidats dans une seule construction : un changement mélangé rend la mesure inattribuable.
 

@@ -567,7 +567,22 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     meme jour : lecture de l'etat, et ecriture d'un binding VALIDE contre le catalogue
     //     (`assertRuntimeBindingAvailable`) avant toute ecriture ; `null` efface.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(219)
+    // MISE A JOUR 2026-10-15 (conv-961) — 219 -> 224. ATTRIBUTION MESUREE : ce test etait DEJA rouge
+    //   (224) ; la difference des noms de canaux entre 81e6c36d et l'arbre courant donne exactement ces
+    //   cinq, tous gardes des leur PREMIERE ligne par `assertTrustedRendererSender` (`src/main/index.ts`) :
+    //   `runs:turnJournalGestes` ('TurnJournalGestes', 3480a25e) — LECTURE des gestes des tours d'UNE
+    //     conversation ; l'id passe par `guardString` puis `safeSegment` avant de former un chemin
+    //     (`resumerGestesDesTours`, `runs/turn-journal.ts`). N'ecrit rien.
+    //   `os:brain-reglage` ('Brain', 4fd18e51) — LECTURE du reglage du Brain.
+    //   `os:brain-reglage:choisir-dossier` ('Brain') — ouvre le selecteur de dossier natif ; le
+    //     chemin vient de l'utilisateur, pas du renderer.
+    //   `os:brain-reglage:enregistrer` ('Brain') — ECRIT le reglage : chemin ABSOLU exige et dossier
+    //     existant, sinon refus ; un depot n'est clone que dans un dossier absent ou vide, par
+    //     `execFile('git', ['clone', '--', depot, dossier])` — pas de shell, `--` contre une option
+    //     deguisee en URL (`brain-reglage.ts`).
+    //   `os:brain-reglage:reset` ('Brain') — efface ce reglage seul ; aucun argument.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(224)
     expect(unguarded).toEqual([])
   })
 

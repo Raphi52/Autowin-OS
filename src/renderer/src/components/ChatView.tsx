@@ -4833,6 +4833,21 @@ export function ChatView({
     // L'utilisateur répond lui-même dans ce fil : la pause du mode auto qui l'y invitait est levée.
     if (sourceConversationId && !options?.automatique) effacerArretAuto(sourceConversationId)
     if (sourceConversationId && !options?.automatique) stopDemandeRef.current.delete(sourceConversationId)
+    /*
+     * UN ENVOI A LA MAIN CONSOMME LE TOUR QUE LE MODE AUTO AURAIT ENCHAINE.
+     *
+     * Le mode auto ne retenait comme « traite » que ce qu'il envoyait lui-meme. Tant que le message
+     * reste dans ce fil, le tour suivant change la signature et rien ne se voit. Mais quand le routeur
+     * l'EMPORTE dans un fil neuf, ce fil-ci retrouve exactement son dernier tour : le mode auto le
+     * croyait encore a traiter et renvoyait la meme suite. Vecu le 2026-10-15 (conv-961 -> conv-968,
+     * 09:58:13) : la suite acceptee par Tab est partie dans conv-968, puis le mode auto l'a renvoyee
+     * dans conv-961 32 ms plus tard — deux bancs identiques sur le meme Bureau.
+     * Temoin : `ChatView.mode-auto-reste-dans-le-fil.test.tsx`.
+     */
+    if (sourceConversationId && !options?.automatique) {
+      const signature = signatureTour(liveMessagesRef.current.get(sourceConversationId) ?? [])
+      if (signature !== null) autoEtat(sourceConversationId).tour = signature
+    }
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
     // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
     // conv-113 (saisies ts 1791317725882 vs 1791317691042) : un envoi de ∞ se distingue d'un texte tapé.

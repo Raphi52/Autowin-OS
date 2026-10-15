@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   563 regles, 778 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   563 regles, 777 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -2017,7 +2017,6 @@
     --chat-signal-cyan: rgb(122, 98, 244);
     --chat-etat-defaut: rgb(105, 76, 249);
     --chat-etat-fini: rgb(0, 255, 85);
-    --chat-piece-jointe-survol: rgb(0, 255, 85);
     --chat-md-bon: rgb(0, 255, 85);
     --chat-md-alerte: rgb(255, 152, 204);
     --chat-md-ref-survol: rgb(204, 196, 243);

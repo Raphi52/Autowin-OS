@@ -49,7 +49,7 @@ describe('le pied de clôture nomme le SUJET du travail', () => {
     const texte = bloc(formatOrchestrationOutcome(true, livre(['frame'], chemin)))
     expect(texte).toContain('rendre-la-cloture-parlante')
     expect(texte).toContain('phase frame')
-    expect(texte).toContain('Recommandé : lancer terrain.')
+    expect(texte).toContain('Recommandé : lancer build.')
   })
 
   it('run qui a muté : le sujet est dit, « reste à faire : rien » intact', () => {

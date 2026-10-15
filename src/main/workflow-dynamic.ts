@@ -95,7 +95,7 @@ plus cher à relire qu'un graphe connu.
 
 Format d'un graphe : {"entry":"<id du 1er nœud>","nodes":[{"id":"frame-1","phase":"frame"}],
 "edges":[{"from":"frame-1","to":"build-1","when":"always"}]}. Phases possibles : scout, frame,
-terrain, build, clean, judge, remake. Toute arête de RETOUR (vers un nœud déjà passé) DOIT porter
+build, clean, judge, remake. Toute arête de RETOUR (vers un nœud déjà passé) DOIT porter
 "maxTraversals": <1-10>.`
 }
 
@@ -111,6 +111,12 @@ export function acceptProposedGraph(
 ): { ok: true } | { ok: false; reason: string } {
   const defauts = graphDefects(graph)
   if (defauts.length) return { ok: false, reason: `graphe invalide : ${defauts[0].message}` }
+  // Un graphe INVENTÉ n'est jamais une demande de l'utilisateur, et `terrain` ne se joue que sur sa
+  // demande depuis le 2026-10-15 (constitution, « Le pipeline »). Refus déterministe : la consigne
+  // seule laisserait le modèle le remettre. Une demande explicite reste servie par le routage.
+  if (graph.nodes.some((node) => node.phase === 'terrain')) {
+    return { ok: false, reason: 'terrain ne se joue que si l’utilisateur le demande' }
+  }
   const pire = worstCaseNodeExecutions(graph)
   if (pire > PLAFOND_GRAPHE_INVENTE) {
     return { ok: false, reason: `pire cas ${pire} > plafond ${PLAFOND_GRAPHE_INVENTE}` }

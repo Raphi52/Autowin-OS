@@ -31,7 +31,7 @@ describe('ExecutionQuote', () => {
     )
 
     expect(quote.regime).toBe('critical')
-    expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
+    expect(quote.phases).toEqual(['scout', 'frame', 'build', 'clean'])
     expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 20 })
     expect(quote.limits).toMatchObject({
       maxProviderCalls: 20_000,
@@ -104,13 +104,16 @@ describe('ExecutionQuote', () => {
       judgeFanOut: 4
     })
 
+    // Le panel terrain reste CONFIGURÉ (phaseFanOut) mais n'est plus réservé : depuis le 2026-10-15,
+    // le régime critique ne joue plus terrain. Mesuré : 46 → 45 agents obligatoires, 141 → 136 prévus.
     expect(allocation).toMatchObject({
-      phaseMembers: { scout: 4, frame: 4, terrain: 4 },
+      phaseMembers: { scout: 4, frame: 4 },
       judgeMembers: 4,
       maxGreedyNodes: 20,
-      reservedMandatoryAgents: 46,
-      plannedMaxAgents: 141
+      reservedMandatoryAgents: 45,
+      plannedMaxAgents: 136
     })
+    expect(allocation.phaseMembers).not.toHaveProperty('terrain')
   })
 
   it("refuse un plan d'exécution impossible avant toute admission provider — en mode bloquant", () => {

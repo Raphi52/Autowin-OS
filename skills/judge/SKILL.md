@@ -1,7 +1,7 @@
 ---
 name: judge
 description: >-
-  Étape 5 — DERNIÈRE étape du pipeline (frame → terrain → build → clean → judge). Revue ADVERSARIALE
+  Étape 4 — DERNIÈRE étape du pipeline (frame → build → clean → judge). Revue ADVERSARIALE
   et EXTERNE d'un livrable produit par Claude, notée par dimension et BOUCLÉE jusqu'au seuil du
   régime. Un panel de juges spécialistes indépendants — chacun EXTERNE au producteur mais INFORMÉ du
   besoin, des décisions et des défauts déjà remontés — note le travail, liste les défauts AVEC
@@ -13,7 +13,7 @@ description: >-
   `terrain`), ni pour CORRIGER — les réparations retournent au producteur (→ `build`).
 ---
 
-# judge — ORCHESTRATEUR, revue adversariale externe, bouclée jusqu'au seuil (étape 5)
+# judge — ORCHESTRATEUR, revue adversariale externe, bouclée jusqu'au seuil (étape 4)
 
 Tu es l'**ORCHESTRATEUR** (session principale). Amène le livrable au seuil de son régime sous des angles adversariaux, puis **renvoie les défauts au producteur — ne les corrige jamais toi-même**. Seule barrière d'excellence du pipeline. Changer de casquette dans la même session est permis : corriger en tant que producteur (ENGINE ch.4 — BUILD) entre deux audits, puis relancer des juges externes — mais un juge n'audite JAMAIS un travail qu'il vient de produire. Judge audite la QUALITÉ d'un livrable ; une cible comportementale ou d'habitude va à `kaizen`.
 

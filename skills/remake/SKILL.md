@@ -231,8 +231,9 @@ autrement ».
 Impact ⊥ effort, deux axes, jamais une note unique effondrée (moteur ch.1). Tout ce qui est retenu passe par
 `frame`, donc **la longueur de la liste EST le prix**. Expose une ligne couvrant les deux coûts avant de t'engager :
 
-- **Les agents, depuis un décompte NOMMÉ** — N lentilles + N cadrages + N chaînes + **N `terrain` if armed** (voir
-  le contrat de dispatch : il est désarmé par défaut, et compté dès qu'il ne l'est plus). Compare le
+- **Les agents, depuis un décompte NOMMÉ** — N lentilles + N cadrages + N chaînes, **chaque chaîne lancée par toi à
+  l'étape 4, jamais par `frame`** (contrat de dispatch, point 5 : un `build` enchaîné par un sous-cadrage n'entre
+  dans aucun de ces termes). Compare le
   total à la fourchette d'agents du régime (`skills/_engine/ENGINE.md`) et au cumul de la session ; tout
   dépassement porte sa ligne de justification.
 - **Les rejeux du signal × sa durée mesurée** — un par incrément de construction, un par `clean`, un à
@@ -240,8 +241,8 @@ Impact ⊥ effort, deux axes, jamais une note unique effondrée (moteur ch.1). T
   chaque ligne `check:`**. Sur 6 partitions, cela fait 7 rejeux non comptés ; sur une suite de 20 minutes, c'est
   tout le budget.
 
-Trois multiplicandes ne sont pas encore décidées à ce stade — le nombre d'incréments de construction, les
-itérations judge→build, et le fait que `terrain` soit armé ou non. Donne-les en FOURCHETTE avec sa borne haute
+Deux multiplicandes ne sont pas encore décidées à ce stade — le nombre d'incréments de construction et les
+itérations judge→build. Donne-les en FOURCHETTE avec sa borne haute
 montrée, et réserve « compté » aux termes réellement connus (lentilles, cadrages, partitions, la durée
 mesurée du signal). Une fausse précision sur un terme indécidable n'est pas de l'honnêteté, c'est de la décoration.
 
@@ -328,10 +329,11 @@ d'arbitrage, et obéit à son propre contrat sur ce qu'elle doit écrire avant d
    produits pour CETTE partition, plus ses fichiers. Jamais une plage : sur un arbre partagé, les commits d'une autre session
    sont entrelacés avec les tiens. Mesuré dans les deux sens — un juge a attribué le commit d'un inconnu
    au remake, et un constructeur a accusé « une session concurrente » d'un rouge qui venait de son propre travail non commité.
-5. **N'enchaîne PAS sur `terrain`, et le RUN parent est interdit.** Le contrat propre à `frame` se termine par
-   une passation inconditionnelle à `terrain` : laissé seul, N sous-cadrages lancent N `terrain` non budgétés. Ajoute-le
-   délibérément avant `build` quand le travail exige un harnais qui n'existe pas — et compte-le alors
-   à l'étape 2. Et une phase qui touche le statut du parent le passe au vert au candidat 2 sur 6, ce que le
+5. **N'enchaîne PAS sur `build`, et le RUN parent est interdit.** Le contrat propre à `frame` se termine par
+   une passation inconditionnelle à `build` : laissé seul, N sous-cadrages lancés en parallèle lancent N `build` non
+   budgétés — en parallèle sur le même arbre, avant que l'étape 3 ait tué les candidats morts au cadrage, hors du
+   périmètre gradué du point 4, et en double de la chaîne que l'étape 4 lance ensuite. Dis à chaque `frame` que sa
+   passation s'arrête au cadrage : `build` part de l'étape 4, et de là seulement. Et une phase qui touche le statut du parent le passe au vert au candidat 2 sur 6, ce que le
    contrôle valide ensuite comme une affirmation sur tout le remake.
 
 En revanche, ne dis pas à `frame` de « rendre sans écrire » : il refuse de rapporter « fini » avant que
@@ -422,7 +424,7 @@ avant et après, et la poignée de retour arrière unique. Écrit dans le RUN.md
   signal attesté sous `critical` n'est vérifié par personne. Les trois sont « pas de signal ».
 - **Réécrire le périmètre gelé** — kit, garde-fous de code, `src/main/constitution.ts`, mémoire : proposer seulement.
 - **Présenter un regret comme un défaut** — c'est la barre de `judge`, et l'emprunter fait mentir la skill.
-- **Laisser `disposable` sur un RUN de remake, laisser une phase enchaîner sur `terrain`, ou en laisser une toucher le parent** —
+- **Laisser `disposable` sur un RUN de remake, laisser `frame` enchaîner sur `build`, ou en laisser une toucher le parent** —
   trois façons silencieuses de perdre les garanties que ce fichier revendique.
 - **Bissecter avant de savoir que le rouge est un rouge** — un dépassement du plafond de vérification n'est pas une régression.
 - **Réimplémenter une phase, ou donner à `build` un candidat non cadré** — `remake` enchaîne et ajoute la

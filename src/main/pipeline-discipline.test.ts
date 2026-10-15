@@ -11,8 +11,18 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--fenetre-reelle')
   })
 
-  it('nomme les six phases dans l ordre et reste autonome', () => {
-    const phases = ['SCOUT', 'FRAME', 'TERRAIN', 'BUILD', 'CLEAN', 'JUDGE']
+  // 2026-10-15 : terrain a quitté la chaîne par défaut (constitution, « Le pipeline »). Le texte
+  // injecté à chaque agent l'annonçait encore comme l'étape 3 — il contredisait la constitution.
+  it('ne présente plus TERRAIN comme une étape de la chaîne par défaut', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/^\d\. TERRAIN/mu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/^3\. BUILD/mu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/^5\. JUDGE/mu)
+    // Il reste lançable à la demande : son résultat attendu est toujours décrit.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('terrain, seulement si on le nomme = ## SOP')
+  })
+
+  it('nomme les cinq phases dans l ordre et reste autonome', () => {
+    const phases = ['SCOUT', 'FRAME', 'BUILD', 'CLEAN', 'JUDGE']
     const positions = phases.map((phase) => PIPELINE_DISCIPLINE_INSTRUCTION.indexOf(phase))
 
     expect(positions.every((position) => position >= 0)).toBe(true)
@@ -232,8 +242,8 @@ describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
   })
 
   it('la preuve hors-modèle de BUILD renvoie au réflexe 2 sans le recopier', () => {
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/4\. BUILD — .*réflexe 2/)
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/4\. BUILD — .*test rouge→vert, exit-code, capture lue/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/3\. BUILD — .*réflexe 2/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/3\. BUILD — .*test rouge→vert, exit-code, capture lue/)
   })
 
   it('n impose plus le mot « livrable » que le profil de réponse interdit', () => {

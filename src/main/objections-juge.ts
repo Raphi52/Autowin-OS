@@ -30,7 +30,7 @@ import { isAbsolute, resolve } from 'node:path'
  * Les puces OK restent affichées : panneau des juges (`lireContratEtendu`) et RUN.md (`judgeText`).
  */
 export const CONTRAT_OBJECTIONS = `OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <défaut que le producteur peut encore corriger dans CE run — il BLOQUE la clôture et relance une réparation> | OK: <constat vérifié> | OK: hors run — <réserve qu'aucune réparation ne peut lever (publication faite par l'app après ton VALIDE, mesure qui attend des runs futurs, geste ou accord de l'utilisateur) et qui la lèvera>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <défaut que le producteur peut encore corriger dans CE run — il BLOQUE la clôture et relance une réparation ; sur un /scout nommé, il est seulement ajouté au résultat comme réserve, sans nouveau passage : une erreur qui fausse une piste y est MAJEUR> | OK: <constat vérifié> | OK: hors run — <réserve qu'aucune réparation ne peut lever (publication faite par l'app après ton VALIDE, mesure qui attend des runs futurs, geste ou accord de l'utilisateur) et qui la lèvera>
 Facultatif, en fin d'une puce MAJEUR ou MINEUR : « | TEST: <fichier de test> | <commande> » — le test qui échoue aujourd'hui et que la réparation doit faire passer sans le modifier.
 Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et reste affichée à l'utilisateur.
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
@@ -61,6 +61,14 @@ function normaliser(ligne: string): string {
  * Rend `[]` quand il n'y a pas de section, qu'elle est vide, ou qu'elle dit « aucune ».
  */
 export function objectionsDuJuge(text: string, toutesGravites = false): string[] {
+  return objectionsClassees(text, toutesGravites).map((o) => o.texte)
+}
+
+/** Les objections de `objectionsDuJuge`, avec la gravité retenue (MAJEUR/MINEUR/OK, ou `null` = puce nue). */
+function objectionsClassees(
+  text: string,
+  toutesGravites: boolean
+): Array<{ gravite: string | null; texte: string }> {
   /*
    * DANS UN VERDICT QUI PORTE DEJA UNE PUCE `MAJEUR:`, UNE PUCE NUE N'EST PAS UN DEFAUT MAJEUR.
    *
@@ -74,7 +82,7 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
    */
   const aUnMajeur = PUCE_MAJEUR.test(text ?? '')
   const lignes = (text ?? '').split(/\r?\n/)
-  const objections: string[] = []
+  const objections: Array<{ gravite: string | null; texte: string }> = []
   let dansLaSection = false
   /*
    * fix-ok: run-0940cc5e0fcd-1 (conv-857, 2026-09-26) reparation 13 — le juge rend VALIDE 86 ; sa puce
@@ -90,7 +98,7 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
       parente = null
       // Forme en ligne : « OBJECTIONS: aucune » ou « OBJECTIONS: X ».
       const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
-      if (reste && !VIDE.test(normaliser(reste))) objections.push(reste)
+      if (reste && !VIDE.test(normaliser(reste))) objections.push({ gravite: null, texte: reste })
       continue
     }
     if (!dansLaSection) continue
@@ -117,9 +125,50 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
     if (gravite && !toutesGravites && /^ok$/i.test(gravite)) continue
     if (!gravite && !toutesGravites && aUnMajeur) continue
-    objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
+    objections.push({
+      gravite: gravite ? gravite.toUpperCase() : null,
+      texte: etiquette ? contenu.slice(etiquette[0].length).trim() : contenu
+    })
   }
   return objections
+}
+
+/**
+ * UN /scout NOMMÉ NE PAIE PAS UN NOUVEAU PASSAGE POUR DES OBJECTIONS MINEUR SEULES.
+ *
+ * fix-ok: conv-976 tour a0d81c84 (2026-10-15, run scout-nouvelles-ameliorations-induites-mv9ia9nw) —
+ * 7 juges et 6 passages de scout, 23 min, ~8,8 $. Seul le 1er verdict portait un MAJEUR ; les
+ * verdicts 2 à 6 ne portaient QUE des MINEUR (« 10 fichiers » au lieu de 22, « cinq vérifications »
+ * au lieu de six) et relançaient chacun scout + juge (~5,6 $). Une liste de pistes est un livrable
+ * OUVERT : chaque correction ajoute des ancres `fichier:ligne`, donc de nouvelles prises pour un
+ * MINEUR, et le frein « même refus » ne mord jamais puisque l'objection change à chaque passage.
+ *
+ * Décision utilisateur (conv-977) : sur un `/scout` nommé, des MINEUR seuls deviennent des RÉSERVES
+ * ajoutées au résultat (`resultatAvecReservesDuJuge`). La règle conv-844 (« tout MINEUR bloque »)
+ * reste entière partout ailleurs, et d'abord sur build.
+ *
+ * Rend les textes des MINEUR quand TOUTES les objections bloquantes sont étiquetées MINEUR, `[]`
+ * sinon : un MAJEUR, une puce nue (comptée MAJEUR) ou un refus sans objection gardent le blocage.
+ */
+export function reservesMineuresDuScout(phaseNommee: string | undefined, text: string): string[] {
+  if (phaseNommee !== 'scout') return []
+  const objections = objectionsClassees(text, false)
+  if (objections.length === 0) return []
+  if (!objections.every((o) => o.gravite === 'MINEUR')) return []
+  return objections.map((o) => o.texte)
+}
+
+/** Nombre maximal de réserves recopiées dans le résultat, et longueur de chacune (même borne que la DoD). */
+const RESERVES_MAX = 8
+const RESERVE_LONGUEUR_MAX = 500
+
+/** Le résultat rendu à l'utilisateur, suivi des réserves du juge en section dédiée ; intact sans réserve. */
+export function resultatAvecReservesDuJuge(resultat: string, reserves: readonly string[]): string {
+  if (reserves.length === 0) return resultat
+  const puces = reserves
+    .slice(0, RESERVES_MAX)
+    .map((r) => `- ${r.length > RESERVE_LONGUEUR_MAX ? `${r.slice(0, RESERVE_LONGUEUR_MAX)}…` : r}`)
+  return `${resultat}\n\n## Réserves du juge (non corrigées)\nLe juge les a classées MINEUR. Sur un \`/scout\`, elles ne relancent pas l'analyse : vérifie-les avant d'agir sur la piste concernée.\n${puces.join('\n')}`
 }
 
 const SUFFIXE_TEST = /\|?\s*\bTEST:\s*([^|]+?)\s*\|\s*(.+?)\s*$/

@@ -16,7 +16,9 @@ import { DEFAULT_WORKFLOWS } from './workflow-defaults'
  */
 export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowProfilesFile {
   const charge = loadWorkflowProfiles(path)
-  const actuel = migrerExplorationSansVeilleExterne(migrateLegacyProviderLockedDefaults(charge))
+  const actuel = migrerChantierSansTerrain(
+    migrerExplorationSansVeilleExterne(migrateLegacyProviderLockedDefaults(charge))
+  )
   // Semé une fois, tracé par MARQUEUR et non par l'existence du fichier : une installation qui
   // possédait déjà un profil n'aurait JAMAIS reçu le catalogue (constaté en réel — un seul profil
   // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
@@ -74,6 +76,56 @@ function migrerExplorationSansVeilleExterne(file: WorkflowProfilesFile): Workflo
       if (!angles.some((agent) => agent.persona === 'externe'))
         console.log(
           "[workflows] Exploration modifié par l'utilisateur : la veille externe (angle web) n'y est pas ajoutée"
+        )
+      return profile
+    }
+    changed = true
+    return { ...courant }
+  })
+  return changed ? { ...file, profiles } : file
+}
+
+/** Description du Chantier Autowin semé quand il jouait encore `terrain` (avant le 2026-10-15). */
+const DESCRIPTION_CHANTIER_AVEC_TERRAIN =
+  'Une mission menée de bout en bout : charger le contexte, découvrir, cadrer, préparer le terrain, construire, nettoyer, faire juger et capitaliser. Un refus repart au build, toujours via clean.'
+
+/**
+ * `terrain` a quitté le Chantier Autowin le 2026-10-15 : sa seule règle propre (une preuve qui
+ * reproduit ce que voit l'utilisateur, sur un artefact plus récent que la source) a rejoint le
+ * réflexe 2 de la constitution. Mesuré au banc « Snake à écrans » : frame → terrain → build coûtait
+ * 1,21 $ contre 0,94 $ sans terrain, pour la même note 26/26 (skills/terrain/SKILL.md).
+ * Le catalogue n'est semé qu'une fois : sans cette migration, une installation existante garderait
+ * terrain. Seule l'empreinte EXACTE de l'ancien défaut est remplacée ; un Chantier modifié reste tel quel.
+ */
+function migrerChantierSansTerrain(file: WorkflowProfilesFile): WorkflowProfilesFile {
+  const courant = DEFAULT_WORKFLOWS.find((candidate) => candidate.id === 'chantier-autowin')
+  if (!courant?.graph) return file
+  const ancien: WorkflowProfile = {
+    ...courant,
+    description: DESCRIPTION_CHANTIER_AVEC_TERRAIN,
+    graph: {
+      ...courant.graph,
+      nodes: courant.graph.nodes.flatMap((node) =>
+        node.id === 'frame-1' ? [node, { id: 'terrain-1', phase: 'terrain' as const }] : [node]
+      ),
+      edges: courant.graph.edges.flatMap((edge) =>
+        edge.from === 'frame-1' && edge.to === 'build-1'
+          ? [
+              { from: 'frame-1', to: 'terrain-1', when: 'always' as const },
+              { from: 'terrain-1', to: 'build-1', when: 'always' as const }
+            ]
+          : [edge]
+      )
+    }
+  }
+  const empreinte = empreinteCanonique(ancien)
+  let changed = false
+  const profiles = file.profiles.map((profile) => {
+    if (profile.id !== 'chantier-autowin') return profile
+    if (empreinteCanonique(profile) !== empreinte) {
+      if (profile.graph?.nodes.some((node) => node.phase === 'terrain'))
+        console.log(
+          "[workflows] Chantier Autowin modifié par l'utilisateur : son étape terrain n'est pas retirée"
         )
       return profile
     }

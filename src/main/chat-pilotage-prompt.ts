@@ -779,7 +779,9 @@ export function buildChatPilotagePrompt(
         `(« cherche ce qui cloche », « par où commencer », « what could we improve »).\n` +
         `- \`frame\` : le besoin est flou, ou formulé comme une solution — il faut le CADRER avant d'écrire ` +
         `(« je veux un bouton », « il faudrait que… », « I need a way to… »).\n` +
-        `- \`terrain\` : préparer l'observabilité ou le harnais avant une boucle autonome.\n` +
+        `- \`terrain\` : SEULEMENT si l'utilisateur le demande (« prépare le terrain / le harnais ») — ` +
+        `préparer l'observabilité ou le harnais avant une boucle autonome ; hors de la chaîne par ` +
+        `défaut, ne le choisis jamais de toi-même.\n` +
         `- \`build\` : la tâche est claire et il faut l'EXÉCUTER.\n` +
         `- \`clean\` : hygiène finale d'un travail déjà vérifié.\n` +
         `- \`judge\` : auditer un livrable qui EXISTE déjà — ne joue aucune phase d'exécution, ` +

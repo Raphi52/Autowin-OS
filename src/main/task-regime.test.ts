@@ -92,11 +92,10 @@ describe('regimePhases', () => {
     expect(regimePhases('ajoute un bouton export')).toEqual(['frame', 'build'])
   })
 
-  it('critical → les 5 phases scout→clean', () => {
+  it('critical → les 4 phases scout→clean, sans terrain', () => {
     expect(regimePhases('refactor architecture du pipeline')).toEqual([
       'scout',
       'frame',
-      'terrain',
       'build',
       'clean'
     ])
@@ -149,7 +148,8 @@ describe('phasesForRegime', () => {
   it('retourne une copie (pas de mutation partagée)', () => {
     const a = phasesForRegime('critical')
     a.push('judge')
-    expect(phasesForRegime('critical')).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
+    // 2026-10-15 : terrain hors de la chaîne par défaut — même note au banc, 1,21 $ contre 0,94 $.
+    expect(phasesForRegime('critical')).toEqual(['scout', 'frame', 'build', 'clean'])
   })
 })
 

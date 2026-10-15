@@ -159,12 +159,12 @@ describe('effet sur les phases jouées — le gain concret', () => {
     expect(regimePhases('scout je veux des idées')).toEqual(['scout'])
   })
 
-  it('une tâche de complexité CRITIQUE sans intention garde ses cinq phases', () => {
+  it('une tâche de complexité CRITIQUE sans intention garde ses quatre phases', () => {
     // Garde anti-regression : le routage d'intention ne doit pas amputer une tache critique.
+    // Quatre et non plus cinq : terrain a quitté la chaîne par défaut le 2026-10-15.
     expect(regimePhases('refactor la sécurité de l’authentification')).toEqual([
       'scout',
       'frame',
-      'terrain',
       'build',
       'clean'
     ])
@@ -409,19 +409,18 @@ describe('MAJEUR 4 — deux intentions : on refuse de router plutôt que d’amp
 })
 
 describe('MAJEUR 5 — une tâche CRITIQUE n’est plus amputée par une intention', () => {
-  it('LE CAS RÉEL : « il faut refactorer toute l’architecture » garde ses cinq phases', () => {
+  it('LE CAS RÉEL : « il faut refactorer toute l’architecture » garde ses quatre phases', () => {
     // AVANT : ['frame'] — « il faut » amputait un refactor d'architecture.
     expect(regimePhases("il faut refactorer toute l'architecture")).toEqual([
       'scout',
       'frame',
-      'terrain',
       'build',
       'clean'
     ])
   })
 
   it('même chose sur un signal de sécurité', () => {
-    expect(regimePhases("je veux revoir la sécurité de l'authentification")).toHaveLength(5)
+    expect(regimePhases("je veux revoir la sécurité de l'authentification")).toHaveLength(4)
   })
 
   it('une phase NOMMÉE garde le droit de réduire une tâche critique (décision explicite)', () => {
@@ -641,6 +640,6 @@ describe('câblage — le modèle ne peut pas réduire une tâche critique', () 
   it('une phase NOMMÉE par l’utilisateur garde son pouvoir de réduire', () => {
     // La distinction est le coeur de la garde : l'humain decide, le modele propose.
     expect(regimePhases("/frame refactorer toute l'architecture de securite")).toEqual(['frame'])
-    expect(regimePhases("refactorer toute l'architecture de securite")).toHaveLength(5)
+    expect(regimePhases("refactorer toute l'architecture de securite")).toHaveLength(4)
   })
 })

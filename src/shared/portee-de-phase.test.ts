@@ -22,17 +22,18 @@ describe('runDAnalyseSeule', () => {
 })
 
 describe('phasesRestantes', () => {
-  it('après un frame, il reste terrain, build, clean et judge', () => {
-    expect(phasesRestantes(['frame'])).toEqual(['terrain', 'build', 'clean', 'judge'])
+  // 2026-10-15 : terrain a quitté la chaîne par défaut (constitution « Le pipeline »). Le mode auto
+  // lance la ligne « Recommandé » tirée d'ici : terrain revenait donc sans un clic après chaque /frame.
+  it('après un frame, il reste build, clean et judge — terrain n’est jamais proposé', () => {
+    expect(phasesRestantes(['frame'])).toEqual(['build', 'clean', 'judge'])
   })
 
   it('part de la position la plus AVANCÉE, pas du nombre de phases', () => {
-    expect(phasesRestantes(['frame', 'scout', 'frame'])).toEqual([
-      'terrain',
-      'build',
-      'clean',
-      'judge'
-    ])
+    expect(phasesRestantes(['frame', 'scout', 'frame'])).toEqual(['build', 'clean', 'judge'])
+  })
+
+  it('un terrain joué À LA DEMANDE reste reconnu : la suite est build', () => {
+    expect(phasesRestantes(['frame', 'terrain'])).toEqual(['build', 'clean', 'judge'])
   })
 
   it('après le juge, il ne reste rien de la chaîne', () => {

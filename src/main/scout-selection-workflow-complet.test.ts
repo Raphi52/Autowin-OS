@@ -15,7 +15,11 @@ describe('bouton de la shortlist scout', () => {
   ])
 
   it('lance le pipeline COMPLET, pas la seule phase frame', () => {
-    expect(regimePhases(prompt)).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
+    expect(regimePhases(prompt)).toEqual(['scout', 'frame', 'build', 'clean'])
+  })
+
+  it('ne demande plus terrain : la consigne suit la chaîne par défaut (2026-10-15)', () => {
+    expect(prompt).not.toMatch(/terrain/iu)
   })
 
   it('ne porte plus aucun prefixe de phase', () => {

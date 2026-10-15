@@ -105,7 +105,12 @@ function bancConforme() {
   const run = join(racine, 'RUN.md')
   writeFileSync(
     run,
-    `## Candidats scoutés
+    `## Calibrage
+
+Trois appels nus lancés avant les bras par \`sh lance.sh pilote\` (prompt de X, copies jetées).
+Calibrage : 1/3 appels nus au critère complet
+
+## Candidats scoutés
 
 | candidat | famille | hypothèse mesurable | coût prévu | risque | score | retenu ? |
 |---|---|---|---|---|---|---|
@@ -701,6 +706,77 @@ Assertion A7 a ajouter : refuser un rapport qui cite un fichier inexistant du de
     writeFileSync(f.run, md)
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P18').ok).toBe(true)
+  })
+})
+
+/*
+ * P23 — L'APPEL NU EST CALIBRE AVANT DE PAYER LES BRAS.
+ *
+ * Mesure du 2026-10-15 (conv-961) : trois bancs de suite (Snake, Snake a ecrans, demande ambigue)
+ * ont fini a 36 bras sur 36 au critere, environ 30 $ pour aucun departage. Au troisieme, trois appels
+ * nus de calibrage (environ 1,5 $, 2 minutes) l'avaient dit AVANT le lancement : 3/3. Le calibrage se
+ * fait avant les bras, donc ses mentions du lanceur (`lance.sh pilote`) ne datent pas le lancement :
+ * ce matin-la, P1 et P20 les prenaient pour le depart des bras et refusaient le banc.
+ *
+ * ENTREES QUI DOIVENT FAIRE ECHOUER CES TESTS : retirer P23 du pre-vol ; accepter 3/3 sans
+ * NON DISCRIMINANT ; compter une mention du lanceur DANS `## Calibrage` comme le lancement.
+ */
+describe('P23 — appel nu calibre avant le lancement', () => {
+  const avecCalibrage = (f, bloc) => {
+    const md = readFileSync(f.run, 'utf8').replace(
+      /## Calibrage[\s\S]*?\n\n(?=## Candidats)/,
+      bloc === null ? '' : `## Calibrage\n\n${bloc}\n\n`
+    )
+    writeFileSync(f.run, md)
+  }
+  const pre = (f) =>
+    verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine, avantLancement: true })
+
+  it('fait partie du pre-vol', () => {
+    expect(POINTS_AVANT_LANCEMENT).toContain('P23')
+  })
+
+  it('un calibrage cite AVANT les candidats, avec le lanceur, ne compte pas comme le lancement', () => {
+    const f = bancConforme()
+    const res = pre(f)
+    expect('P23 ' + point(res, 'P23').detail).toBe('P23 ok')
+    expect('P1 ' + point(res, 'P1').detail).toBe('P1 ok')
+    expect('P20 ' + point(res, 'P20').detail).toBe('P20 ok')
+  })
+
+  it('RATE sans section Calibrage', () => {
+    const f = bancConforme()
+    avecCalibrage(f, null)
+    expect(point(pre(f), 'P23').ok).toBe(false)
+  })
+
+  it('RATE quand la section ne chiffre pas le calibrage, ou sur moins de 3 appels', () => {
+    const f = bancConforme()
+    avecCalibrage(f, "L'appel nu a l'air de bien marcher.")
+    expect(point(pre(f), 'P23').ok).toBe(false)
+    avecCalibrage(f, 'Calibrage : 1/2 appels nus au critère complet')
+    expect(point(pre(f), 'P23').detail).toMatch(/3/)
+  })
+
+  it('3/3 au critere : RATE sans NON DISCRIMINANT, ok quand le banc de cout est assume', () => {
+    const f = bancConforme()
+    avecCalibrage(f, 'Calibrage : 3/3 appels nus au critère complet')
+    expect(point(pre(f), 'P23').ok).toBe(false)
+    avecCalibrage(
+      f,
+      'Calibrage : 3/3 appels nus au critère complet\nBanc lancé quand même : NON DISCRIMINANT prévu, il ne mesure que le coût.'
+    )
+    expect('P23 ' + point(pre(f), 'P23').detail).toBe('P23 ok')
+  })
+
+  it('une mention du lanceur HORS de la section Calibrage, avant les candidats, reste refusee', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8')
+    writeFileSync(
+      f.run,
+      md.replace('## Candidats scoutés', '## Lancement\nsh lance.sh\n\n## Candidats scoutés')
+    )
+    expect(point(pre(f), 'P1').ok).toBe(false)
   })
 })
 

@@ -187,7 +187,7 @@ export function CandidatsPickPanel({
         data-testid="cpick-lancer"
         disabled={selection.length === 0}
         onClick={() => onPick?.(redigerPromptWorkflowSelection(selection))}
-        title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → terrain → build → nettoyage → jugement) jusqu'au commit publié"
+        title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → build → nettoyage → jugement) jusqu'au commit publié"
       >
         Lancer le workflow complet sur la sélection
       </button>

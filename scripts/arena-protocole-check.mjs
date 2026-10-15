@@ -173,12 +173,31 @@ function cdSuitLaBoucleDesBras(texte, cds) {
 }
 
 /**
+ * Position de la premiere mention du lanceur des bras dans le RUN.md, HORS de la section
+ * `## Calibrage`. Le calibrage (skills/arena/SKILL.md, etape 1) fait tourner trois appels nus
+ * AVANT les bras, souvent par le meme lanceur en mode pilote : le citer ne date pas le lancement.
+ * Mesure du 2026-10-15 (banc « arena-ambigu », conv-961) : la section de calibrage, ecrite avant les
+ * candidats, citait `lance.sh pilote` ; P1 et P20 la prenaient pour le depart des bras et refusaient
+ * un banc ou candidats et critere binaire etaient bien ecrits avant.
+ */
+function mentionDuLancement(md, ancre) {
+  const debut = md.indexOf('## Calibrage')
+  const corps = debut < 0 ? null : md.slice(debut + '## Calibrage'.length)
+  const finRel = corps === null ? -1 : corps.search(/\n##\s/)
+  const fin = debut < 0 ? -1 : finRel < 0 ? md.length : debut + '## Calibrage'.length + finRel
+  for (let i = md.indexOf(ancre); i >= 0; i = md.indexOf(ancre, i + 1)) {
+    if (debut < 0 || i < debut || i >= fin) return i
+  }
+  return -1
+}
+
+/**
  * Points verifiables AVANT de lancer les bras : ils ne lisent que le RUN.md et les prompts, donc ils
  * peuvent tous etre controles pendant que le banc ne coute encore rien. Motif (bancs `residus` et
  * `dogfood` du 2026-09-05) : X n_etait pas l_appel nu et B n_etait pas un bras de texte — defauts
  * constates APRES coup, quand les quatre bras avaient deja ete payes.
  */
-export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20']
+export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20', 'P23']
 
 export function verifierProtocole({
   run,
@@ -278,7 +297,7 @@ export function verifierProtocole({
       .map((t) => md.indexOf(t))
       .find((i) => i >= 0)
     const ancres = [lancement ? path.basename(lancement.chemin) : null, 'claude -p'].filter(Boolean)
-    const lancementPos = ancres.map((a) => md.indexOf(a)).filter((i) => i >= 0)
+    const lancementPos = ancres.map((a) => mentionDuLancement(md, a)).filter((i) => i >= 0)
     if (lancementPos.length && Math.min(...lancementPos) < titre) {
       return 'candidats ecrits APRES le lancement : le scoutage ne choisit plus, il justifie'
     }
@@ -689,7 +708,7 @@ export function verifierProtocole({
       return 'preuve en prose : aucune commande rejouable (`...` ou node/npx/pwsh/git) — c_est un avis, pas une mesure'
     // MEME REGLE QUE P1 : pose apres le lancement, le critere ne choisit plus, il justifie.
     const ancres = [lancement ? path.basename(lancement.chemin) : null, 'claude -p'].filter(Boolean)
-    const lancementPos = ancres.map((a) => md.indexOf(a)).filter((i) => i >= 0)
+    const lancementPos = ancres.map((a) => mentionDuLancement(md, a)).filter((i) => i >= 0)
     if (lancementPos.length && Math.min(...lancementPos) < md.indexOf(critere[0]))
       return 'critere binaire ecrit APRES le lancement : il ne mesure plus, il justifie le gagnant deja connu'
     return true
@@ -745,6 +764,26 @@ export function verifierProtocole({
     const repliquees = BRAS.filter((b) => repliquesDuBras(b).length >= 2)
     if (!repliquees.length)
       return 'dispersion annoncee mais aucun bras n_a 2 sorties (out-<bras>-<replique>.json) : rien ne la mesure'
+    return true
+  })
+
+  /*
+   * P23 — l'appel nu est CALIBRE avant de payer les bras (skills/arena/SKILL.md, etape 1).
+   * Mesure du 2026-10-15 (conv-961) : trois bancs, 36 bras sur 36 au critere, environ 30 $ sans
+   * aucun departage ; trois appels nus de calibrage (environ 1,5 $) l'avaient dit avant le depart.
+   * A 3/3, le banc ne peut mesurer que le cout : il ne part que si le RUN.md l'assume en le disant.
+   */
+  ajoute('P23', 'Appel nu CALIBRE avant le lancement (`## Calibrage`, n/3 au critere)', () => {
+    const bloc = section(md, '## Calibrage')
+    if (bloc === null)
+      return 'aucune section `## Calibrage` : rien ne dit, avant de payer les bras, si la tache peut les departager'
+    const m = /calibrage\s*:\s*(\d+)\s*\/\s*(\d+)/i.exec(bloc)
+    if (!m)
+      return 'section Calibrage sans la ligne `Calibrage : <n>/<N> appels nus au critere complet`'
+    const [reussis, appels] = [Number(m[1]), Number(m[2])]
+    if (appels < 3) return `calibrage sur ${appels} appel(s) nu(s), 3 minimum`
+    if (reussis >= appels && !/NON DISCRIMINANT/i.test(bloc))
+      return `${reussis}/${appels} appels nus au critere : la tache ne departage pas sur la qualite — la durcir, ou ecrire NON DISCRIMINANT dans la section pour lancer un banc de cout assume`
     return true
   })
 

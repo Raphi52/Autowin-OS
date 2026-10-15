@@ -133,7 +133,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   if (phase !== 'judge') {
     blocks.push({
       label: 'discipline',
-      value: 'Discipline de pipeline (frame→terrain→build→judge) ajoutée au system.',
+      value: 'Discipline de pipeline (scout→frame→build→clean→judge) ajoutée au system.',
       source: 'src/main/pipeline-discipline.ts:6',
       excerpt: injectedText(PIPELINE_DISCIPLINE_INSTRUCTION)
     })

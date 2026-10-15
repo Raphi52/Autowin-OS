@@ -43,10 +43,19 @@ export function runDAnalyseSeule(phases: readonly string[]): boolean {
 }
 
 /**
- * Ce qui reste de la chaine canonique apres la derniere phase jouee.
+ * Phases qui EXISTENT mais ne font pas partie de la chaine par defaut : elles ne se jouent que si on
+ * les nomme, donc on ne les propose jamais comme suite. `terrain` en est sorti le 2026-10-15
+ * (constitution, « Le pipeline ») : le mode auto lance la ligne « Recommande » tiree d'ici, et
+ * terrain revenait sans un clic apres chaque `/frame`.
+ */
+const PHASES_A_LA_DEMANDE: ReadonlySet<string> = new Set(['terrain', 'kaizen', 'remake'])
+
+/**
+ * Ce qui reste de la chaine par defaut apres la derniere phase jouee.
  *
  * On part de la POSITION la plus avancee atteinte, pas du nombre de phases : un run `/frame` seul a
- * encore terrain, build, clean et judge devant lui, meme s'il a joue plusieurs fois la meme phase.
+ * encore build, clean et judge devant lui, meme s'il a joue plusieurs fois la meme phase. Une phase
+ * a la demande deja jouee (`terrain`) compte comme position, mais n'est jamais proposee.
  */
 export function phasesRestantes(phases: readonly string[]): string[] {
   let plusAvancee = -1
@@ -55,7 +64,5 @@ export function phasesRestantes(phases: readonly string[]): string[] {
     if (index > plusAvancee) plusAvancee = index
   }
   if (plusAvancee < 0) return []
-  return PIPELINE_PHASES.slice(plusAvancee + 1).filter(
-    (phase) => phase !== 'kaizen' && phase !== 'remake'
-  )
+  return PIPELINE_PHASES.slice(plusAvancee + 1).filter((phase) => !PHASES_A_LA_DEMANDE.has(phase))
 }

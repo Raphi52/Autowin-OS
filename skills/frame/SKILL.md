@@ -1,7 +1,7 @@
 ---
 name: frame
 description: >-
-  Étape 1 du pipeline (frame → terrain → build → clean → judge). CADRE un besoin en profondeur ET,
+  Étape 1 du pipeline (frame → build → clean → judge). CADRE un besoin en profondeur ET,
   si le besoin cadré laisse un choix d'approche ouvert, EXPLORE les options. Point d'entrée par
   défaut du travail substantiel : déclenche-toi SANS attendre le mot « frame », (a) dès qu'une
   demande est formulée en SOLUTION (« crée X », « ajoute Y », « mets en place Z ») ou qu'un besoin est vague sur une tâche
@@ -52,7 +52,7 @@ Ouvre ou complète l'**unique** `RUN.md` vivant : `~\.claude\runs\<session_id>\<
 - **Aucune solution pendant le cadrage** — proposer un COMMENT est interdit. À l'instant où une solution est sur la table, tu es passé de la PRODUCTION (tu mènes) à la RÉACTION (tu défends un artefact) — reviens au problème.
 - Anti-dérive à l'ouverture : décompose chaque terme et ses présupposés plutôt que d'élargir le périmètre.
 
-**4. Balayage d'angles morts** (inspiré de Fusion — *ce qu'aucune question n'a touché*) — avant d'écrire le besoin : quelle facette n'a été sondée par AUCUN archétype ni AUCUNE question **et n'est déjà couverte par aucune hypothèse énoncée du filtre** ? Ce sont les **NON-DEMANDÉS** (inconnues inconnues), DISTINCTS des questions ouvertes (inconnues connues reportées à `terrain`). **Boucle, ne fais pas un seul passage** — rebalaye, chaque tour utilisant un archétype DIFFÉRENT comme lentille de couverture (Casseur = mode de panne non sondé ; Naïf = présupposé non examiné — son usage d'analyse, pas de génération de questions). Arrête quand un tour ne trouve rien de neuf (aucune facette d'impact ≥ 30 non déjà listée). **Plafond par régime** : disposable = 1 passe · standard = 2 tours max · critical = jusqu'à 2 tours à vide, 3 max. Nomme les angles morts pour qu'ils remontent ; un angle mort à fort impact → pose-le maintenant plutôt que de le reporter.
+**4. Balayage d'angles morts** (inspiré de Fusion — *ce qu'aucune question n'a touché*) — avant d'écrire le besoin : quelle facette n'a été sondée par AUCUN archétype ni AUCUNE question **et n'est déjà couverte par aucune hypothèse énoncée du filtre** ? Ce sont les **NON-DEMANDÉS** (inconnues inconnues), DISTINCTS des questions ouvertes (inconnues connues reportées à `build`). **Boucle, ne fais pas un seul passage** — rebalaye, chaque tour utilisant un archétype DIFFÉRENT comme lentille de couverture (Casseur = mode de panne non sondé ; Naïf = présupposé non examiné — son usage d'analyse, pas de génération de questions). Arrête quand un tour ne trouve rien de neuf (aucune facette d'impact ≥ 30 non déjà listée). **Plafond par régime** : disposable = 1 passe · standard = 2 tours max · critical = jusqu'à 2 tours à vide, 3 max. Nomme les angles morts pour qu'ils remontent ; un angle mort à fort impact → pose-le maintenant plutôt que de le reporter.
 
 **4 bis. Cas limites d'entree — ENUMERE-LES DANS L'ENONCE, ne les laisse pas a l'executant.**
 Des que le besoin touche une entree (drapeau CLI, argument, option, champ de formulaire, requete,
@@ -67,12 +67,12 @@ assertions comportementales) : enonce SANS cas limites = **0 vert sur 3** — le
 un drapeau repete en silence, 2 sur 3 jettent une pile Node sur une valeur hors plage ; enonce AVEC
 la liste = **3 verts sur 3**. Separation parfaite (p = 0,10, plancher a n=3).
 **Garde-fou deterministe** : `node scripts/frame-cas-limites-check.mjs <RUN.md>` — exit 1 tant que le
-besoin decrit une entree sans enumerer ses cas limites. Passe-le AVANT de rendre la main a `terrain`.
+besoin decrit une entree sans enumerer ses cas limites. Passe-le AVANT de rendre la main a `build`.
 
 **5. Passe risques** — avant d'écrire le besoin, liste les **menaces sur le critère de succès** : ce qui pourrait le faire ÉCHOUER (dépendance pas prête, plafond de perf/échelle, perte de données / irréversibilité, une hypothèse énoncée qui se révèle fausse, blocage externe, dérive de périmètre). Chacune = **gravité** (probabilité × impact) + une ligne de **mitigation/surveillance**. DISTINCT des angles morts (facettes non sondées) et de la surface d'impact (existant affecté) : un risque est une menace CONNUE que tu peux déjà nommer. Risque à forte gravité sans mitigation → remonte-le (un besoin n'est pas cadré tant qu'un risque fatal n'a pas de propriétaire).
 **Mesure (banc `bench/risques/`, 3 repliques par bras, critere fige `gel/check.mjs`)** : AVEC cette passe = **1 vert sur 3**, SANS = **0 sur 3** → gardee par la regle fixee d avance (« pire » = au moins 1 vert de moins). Ecart NON significatif (n=3) : a la lecture, les 6 cadrages nomment tous la perte de donnees irreversible ; le critere mord sur la formulation (gravite dans le meme paragraphe). A re-mesurer avec un critere moins lexical avant toute suppression.
 
-**6. Écris `## Besoin` + `## Contraintes`** (en mots simples que l'utilisateur lit — aucun label interne) : `## Besoin` porte le vrai problème (pas la solution demandée) · périmètre dedans/dehors · un **critère de succès vérifiable sous forme de liste cochable** (conditions de sortie `- [ ]`, chacune nommant une PREUVE — **format + règles : voir `RUN-template.md`, la source unique** ; `disposable` peut garder un critère d'une ligne — proportionnalité) · décisions délibérées · hypothèses énoncées · **surface d'impact** (existant affecté, cité) · **risques** (menaces sur le succès : gravité + mitigation) · **angles morts** (les inconnues inconnues du balayage de passe A) · questions ouvertes laissées à `terrain`. `## Contraintes` ne porte que les bornes de solution, chacune classée `HARD` ou `SOFT` avec sa source et la conséquence d'une violation ; ne duplique pas le `Scope OUT` du gabarit. **Petite rétro** : quels signaux sont apparus ce run → ajuste les seuils pour que la prochaine fois morde plus tôt.
+**6. Écris `## Besoin` + `## Contraintes`** (en mots simples que l'utilisateur lit — aucun label interne) : `## Besoin` porte le vrai problème (pas la solution demandée) · périmètre dedans/dehors · un **critère de succès vérifiable sous forme de liste cochable** (conditions de sortie `- [ ]`, chacune nommant une PREUVE — **format + règles : voir `RUN-template.md`, la source unique** ; `disposable` peut garder un critère d'une ligne — proportionnalité) · décisions délibérées · hypothèses énoncées · **surface d'impact** (existant affecté, cité) · **risques** (menaces sur le succès : gravité + mitigation) · **angles morts** (les inconnues inconnues du balayage de passe A) · questions ouvertes laissées à `build`. `## Contraintes` ne porte que les bornes de solution, chacune classée `HARD` ou `SOFT` avec sa source et la conséquence d'une violation ; ne duplique pas le `Scope OUT` du gabarit. **Petite rétro** : quels signaux sont apparus ce run → ajuste les seuils pour que la prochaine fois morde plus tôt.
 
 **7. Registre de confiance — rien de porteur ne sort de cette skill sans vérification** (garde anti-hallucination ; DERNIER geste de la passe A, après que `## Besoin` est écrit). Liste chaque affirmation sur laquelle le besoin cadré **REPOSE** : ce qui existe, le nom d'un fichier / d'une API / d'un drapeau / d'une table, le comportement actuel de quelque chose, ce qu'une contrainte dit vraiment. Marque chacune avec exactement une valeur :
 - **VÉRIFIÉE** — NOMME l'artefact hors-modèle qui l'établit, ouvert ou exécuté **cette session** : un `file:line` que tu as réellement lu, une commande + son code de sortie, un résultat de requête. Un chemin cité sans l'avoir ouvert n'est pas vérifié.
@@ -95,7 +95,7 @@ Ensuite **résous, n'annote pas** : chaque affirmation NON VÉRIFIÉE dont le tr
 
 Une fois `## Besoin` écrit, tranche : le besoin cadré laisse-t-il un vrai choix de COMMENT encore ouvert (quelle architecture / bibliothèque / motif), ou un seul chemin évident tombe-t-il des contraintes ?
 
-- **Chemin forcé**, OU famille de déclencheurs (a) seule, sans question de conception → **saute la passe B**, passe directement à `terrain`.
+- **Chemin forcé**, OU famille de déclencheurs (a) seule, sans question de conception → **saute la passe B**, passe directement à `build`.
 - **Vraie bifurcation** (un choix ouvert demeure), OU famille de déclencheurs (b) (« quelle approche », « compare », « explore les options ») → **joue la passe B**.
 
 ---
@@ -121,7 +121,7 @@ Une fois `## Besoin` écrit, tranche : le besoin cadré laisse-t-il un vrai choi
 ---
 
 ### Fini
-Passe la main à `terrain` (le régime se propage par l'en-tête du RUN). **Ne rapporte JAMAIS « fini »** tant que `## Besoin` + `## Contraintes` + `## Confiance` (et, si la passe B a tourné, `## Options` + `Décision:`) ne sont pas réellement écrits dans RUN.md. **Un cadrage portant une affirmation porteuse NON VÉRIFIÉE et non résolue n'est pas fini** — le passer lance tout le pipeline sur un peut-être.
+Passe la main à `build` (le régime se propage par l'en-tête du RUN). **Ne rapporte JAMAIS « fini »** tant que `## Besoin` + `## Contraintes` + `## Confiance` (et, si la passe B a tourné, `## Options` + `Décision:`) ne sont pas réellement écrits dans RUN.md. **Un cadrage portant une affirmation porteuse NON VÉRIFIÉE et non résolue n'est pas fini** — le passer lance tout le pipeline sur un peut-être.
 
 ## Ce que ça produit
 

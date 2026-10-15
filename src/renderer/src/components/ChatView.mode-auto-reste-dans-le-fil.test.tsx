@@ -80,6 +80,49 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
     expect(routeConversationMessage).not.toHaveBeenCalled()
   })
 
+  /*
+   * DEFAUT MESURE — conv-961 -> conv-968, 2026-10-15 09:58:10-13 (trace du routeur, session
+   * 913f0706 ; messages des deux fils). La suite proposee (« Lance /arena /frame sur une
+   * modification de code existant… ») est acceptee par Tab : elle reste en BROUILLON, et le mode
+   * auto, arme, patiente (porte « brouillon »). Entree l'envoie A LA MAIN : le routeur la juge
+   * « new-topic » a 0,9 et l'emporte dans un fil neuf, conv-968 (texte nu, sans l'en-tete du mode
+   * auto). conv-961 redevient libre, brouillon vide, dernier tour INCHANGE — et le mode auto, qui
+   * ne retient comme « traite » que ce qu'il a envoye lui-meme, renvoie la MEME suite dans conv-961
+   * 32 ms plus tard. Deux bancs identiques sont partis sur le meme Bureau.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer de `send` la ligne qui marque le tour du fil
+   * source comme traite quand l'envoi vient de l'utilisateur.
+   */
+  it('une suite envoyee A LA MAIN puis detournee par le routeur n est pas renvoyee par le mode auto', async () => {
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    const routeConversationMessage = routeurQuiScinde()
+    h = await mountChat(
+      chatApi({
+        pilotChat,
+        routeConversationMessage,
+        conversations: vi.fn().mockResolvedValue([conversation('A', filConv19), conversation('N')]),
+        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filConv19 : []))
+      })
+    )
+    await h.click('.conv-item .conv-pick')
+    // La suggestion acceptee par Tab : un brouillon present, que le mode auto respecte.
+    await h.type(SUITE)
+    await h.click('[data-testid="composer-auto-toggle"]')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(pilotChat, 'le brouillon fait patienter le mode auto').not.toHaveBeenCalled()
+    await h.click('[data-testid="composer-send"]')
+    for (let i = 0; i < 6; i++)
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((r) => setTimeout(r, 0))
+      })
+    const destinations = pilotChat.mock.calls.map((c) => c[1])
+    expect(destinations, 'un seul envoi, dans le fil choisi par le routeur').toEqual(['N'])
+  })
+
   it('un message TAPE par l utilisateur passe toujours par le routeur', async () => {
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
     const routeConversationMessage = routeurQuiScinde()

@@ -191,6 +191,41 @@ describe('semis du catalogue', () => {
       journal.mockRestore()
     }
   })
+
+  it('retire terrain d’un Chantier Autowin livré INTACT, sans toucher une variante (2026-10-15)', () => {
+    // Le catalogue n'est semé qu'une fois : sans migration, le Chantier déjà sur le disque garderait
+    // terrain alors que le défaut l'a retiré (banc « Snake à écrans » : même note, 1,21 $ contre 0,94 $).
+    const p = chemin()
+    const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'chantier-autowin')!
+    const nodes = courant.graph!.nodes.flatMap((node) =>
+      node.id === 'frame-1' ? [node, { id: 'terrain-1', phase: 'terrain' as const }] : [node]
+    )
+    const edges = courant.graph!.edges.flatMap((edge) =>
+      edge.from === 'frame-1' && edge.to === 'build-1'
+        ? [
+            { from: 'frame-1', to: 'terrain-1', when: 'always' as const },
+            { from: 'terrain-1', to: 'build-1', when: 'always' as const }
+          ]
+        : [edge]
+    )
+    const avant: WorkflowProfile = {
+      ...courant,
+      description:
+        'Une mission menée de bout en bout : charger le contexte, découvrir, cadrer, préparer le terrain, construire, nettoyer, faire juger et capitaliser. Un refus repart au build, toujours via clean.',
+      graph: { ...courant.graph!, nodes, edges }
+    }
+    const variante: WorkflowProfile = { ...avant, id: 'mon-chantier', name: 'Le mien' }
+    saveWorkflowProfiles({ seeded: true, activeId: 'chantier-autowin', profiles: [avant, variante] }, p)
+
+    const apres = seedDefaultWorkflows(p)
+    const phasesDe = (id: string): string[] =>
+      apres.profiles.find((profile) => profile.id === id)!.graph!.nodes.map((node) => node.phase)
+
+    expect(phasesDe('chantier-autowin')).not.toContain('terrain')
+    expect(apres.profiles.find((profile) => profile.id === 'chantier-autowin')).toEqual(courant)
+    expect(phasesDe('mon-chantier')).toContain('terrain')
+    expect(apres.activeId).toBe('chantier-autowin')
+  })
 })
 
 describe('workflows livrés d’origine', () => {
@@ -225,7 +260,6 @@ describe('workflows livrés d’origine', () => {
       'think',
       'scout',
       'frame',
-      'terrain',
       'build',
       'clean',
       'judge',
@@ -250,8 +284,8 @@ describe('workflows livrés d’origine', () => {
     /*
      * CE HELPER MESURE LES ARETES, PAS LA MARCHE REELLE — il n'applique pas `estJugeTerminal`.
      *
-     * La marche reelle s'arrete AVANT le juge (mesure : `think-1 > scout-1 > frame-1 > terrain-1 >
-     * build-1 > clean-1`, puis arret sur `judge-1`), et l'orchestrateur joue le juge via le gate
+     * La marche reelle s'arrete AVANT le juge (mesure : `think-1 > scout-1 > frame-1 > build-1 >
+     * clean-1`, puis arret sur `judge-1`), et l'orchestrateur joue le juge via le gate
      * puis `learn-1` apres lui. Ici on suit `nextNode` seul, donc la sequence inclut le juge et
      * l'arete verte qui mene a `learn-1`. Les deux lectures sont justes ; elles ne mesurent pas la
      * meme chose, et le distinguer evite de conclure a une double execution.
@@ -260,7 +294,6 @@ describe('workflows livrés d’origine', () => {
       'think-1',
       'scout-1',
       'frame-1',
-      'terrain-1',
       'build-1',
       'clean-1',
       'judge-1',
@@ -274,7 +307,6 @@ describe('workflows livrés d’origine', () => {
       'think-1',
       'scout-1',
       'frame-1',
-      'terrain-1',
       'build-1',
       'clean-1',
       'judge-1',

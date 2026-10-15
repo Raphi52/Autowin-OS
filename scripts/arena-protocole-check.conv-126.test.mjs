@@ -42,7 +42,10 @@ const RATES_ATTENDUS = {
   P17: /ne declarent X comme appel nu/,
   // Banc d'avant la regle du critere binaire (2026-09-06) : il ne declare aucune ligne
   // `**Critere binaire** :`, donc son gagnant ne repose que sur l'avis du juge.
-  P20: /aucune ligne .\*\*Crit[eè]re binaire\*\*/
+  P20: /aucune ligne .\*\*Crit[eè]re binaire\*\*/,
+  // Banc d'avant la regle du calibrage (2026-10-15, conv-961) : aucun appel nu lance avant les
+  // bras, donc rien ne disait avant de payer si la tache pouvait les departager.
+  P23: /aucune section `## Calibrage`/
 }
 
 describe('arena-protocole-check face au banc réel de conv-126', () => {
@@ -61,7 +64,7 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
     expect(attendus.filter((f) => !existsSync(f))).toEqual([])
   })
 
-  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P9, P11, P15, P16, P17, P20', () => {
+  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P9, P11, P15, P16, P17, P20, P23', () => {
     const res = verifierProtocole({ run: RUN, bench: BENCH, racineDuels: FIXTURE })
     expect(res.erreur).toBeUndefined()
     const rates = res.points.filter((p) => !p.ok)
@@ -93,7 +96,7 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
       // Banc a TIR UNIQUE : moins de deux bras au critere, P22 n'a pas de dispersion a exiger.
       'P22'
     ])
-    expect(res.points).toHaveLength(22)
+    expect(res.points).toHaveLength(23)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {

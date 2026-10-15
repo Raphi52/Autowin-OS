@@ -53,10 +53,10 @@ Profil livré d'origine (`chantier-autowin`, dans `src/main/workflow-defaults.ts
 workflows par défaut.
 
 **Quand l'utiliser** — une mission menée de bout en bout, quand la tâche n'est pas encore choisie ou
-pas cadrée, et qu'elle demande de préparer le terrain avant d'écrire. Pour un simple défaut, préférer
+pas cadrée. Pour un simple défaut, préférer
 *Correctif* ; pour un besoin déjà identifié, *Feature* ; pour une question, *Éclair*.
 
-**Chemin** — `think → scout → frame → terrain → build → clean → judge`, chaque transition inconditionnelle ; un `judge` **vert** enchaîne ensuite `learn → salvage`.
+**Chemin** — `think → scout → frame → build → clean → judge`, chaque transition inconditionnelle ; un `judge` **vert** enchaîne ensuite `learn → salvage`.
 
 **Retour** — un `judge` **rouge** renvoie au `build`, **2 reprises au maximum** ; la reprise repasse
 ensuite par `clean` avant d'être rejugée. Aucun autre retour arrière n'existe dans ce profil.

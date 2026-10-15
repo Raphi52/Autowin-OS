@@ -1,7 +1,7 @@
 /**
  * Classification de RÉGIME d'une tâche → sous-ensemble de phases du pipeline (proportionnalité).
  *
- * Aujourd'hui l'orchestrateur joue les 5 phases (scout→frame→terrain→build→clean) + juge pour TOUTE
+ * Aujourd'hui l'orchestrateur joue les 4 phases (scout→frame→build→clean) + juge pour TOUTE
  * tâche, même triviale — coût et latence inutiles. Ce module applique la proportionnalité du kit :
  * une tâche triviale ne mérite pas un pipeline complet.
  *
@@ -20,13 +20,15 @@ export type TaskRegime = 'trivial' | 'standard' | 'critical'
  * Définit les phases que l'orchestrateur exécute avant le juge pour chaque régime de tâche :
  * trivial : exécute uniquement build pour une modification directe ;
  * standard : cadre le besoin avec frame, puis exécute build ;
- * critical : exécute le pipeline complet, de scout à clean.
+ * critical : exécute le pipeline complet, de scout à clean. Sans `terrain` depuis le 2026-10-15 :
+ *   même note 26/26 au banc « Snake à écrans », 1,21 $ avec contre 0,94 $ sans (skills/terrain/SKILL.md) ;
+ *   terrain ne se joue plus que si on le nomme.
  * Le juge reste TOUJOURS actif : il est ajouté séparément par l'orchestrateur.
  */
 const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
   trivial: ['build'],
   standard: ['frame', 'build'],
-  critical: ['scout', 'frame', 'terrain', 'build', 'clean']
+  critical: ['scout', 'frame', 'build', 'clean']
 }
 
 /** Signaux de COMPLEXITÉ (→ critical) : architecture, transverse, risque, irréversible. */
