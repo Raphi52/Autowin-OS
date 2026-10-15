@@ -25,6 +25,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { sharedBrainOrigin } from './brain-paths'
+import { verifySignedBrainPayload, type SignedBrainPayload } from './brain-protocol'
 import { brainServiceToken } from './brain-retrieval'
 import { resolveBrainRuntime } from './brain-server-launch'
 import { recopierNomsHistoriques } from './identite-entreprise'
@@ -33,8 +34,9 @@ export interface BrainHealth {
   state: 'healthy' | 'degraded' | 'unavailable' | string
   reasons: string[]
   /**
-   * Dossier que CE serveur sert : sa réponse le porte dans `context` (`health_response`,
-   * brain_server.py). Sert à voir qu'un serveur déjà lancé sert encore un ancien dossier.
+   * Dossier que CE serveur sert : sa réponse le porte dans son enveloppe signée — `authenticated`
+   * en protocole v2 (`health_response`, brain_server.py → `signed_context_payload`, brain_auth.py).
+   * Sert à voir qu'un serveur déjà lancé sert encore un ancien dossier.
    */
   root?: string
 }
@@ -75,21 +77,39 @@ export async function readBrainHealth(
       headers: token ? { authorization: `Bearer ${token}` } : {}
     })
     // 503 est la réponse NORMALE d'un Brain dégradé : son corps porte le diagnostic.
-    const body = (await res.json()) as {
+    const body = (await res.json()) as SignedBrainPayload & {
       health?: { state?: unknown; reasons?: unknown }
-      context?: unknown
     }
     const health = body?.health
     if (!health || typeof health.state !== 'string') return null
     const reasons = Array.isArray(health.reasons)
       ? health.reasons.filter((r): r is string => typeof r === 'string')
       : []
-    const root = typeof body.context === 'string' && body.context.trim() ? body.context.trim() : undefined
+    const root = dossierServiSigne(body, token)
     return { state: health.state, reasons, ...(root ? { root } : {}) }
   } catch {
     return null
   } finally {
     clearTimeout(t)
+  }
+}
+
+/**
+ * Dossier servi, lu dans l'enveloppe SIGNÉE de `/health` (v2 : `authenticated`, v1 : `context`) par
+ * le vérificateur commun du protocole. Défaut corrigé le 2026-10-15 : la lecture de `body.context`
+ * à la racine ne trouvait jamais rien en v2, donc les Réglages affichaient « dossier inconnu » et
+ * l'alerte « le serveur sert un autre dossier » ne pouvait pas se lever. Signature absente ou
+ * fausse : aucun dossier — un chemin non authentifié ne doit pas trancher ce diagnostic.
+ */
+function dossierServiSigne(
+  body: SignedBrainPayload,
+  token: string | undefined
+): string | undefined {
+  if (!token) return undefined
+  try {
+    return verifySignedBrainPayload(body, token).context.trim() || undefined
+  } catch {
+    return undefined
   }
 }
 

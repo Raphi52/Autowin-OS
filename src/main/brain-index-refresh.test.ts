@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createHmac } from 'node:crypto'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,6 +75,44 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     expect(vueUrl).toBe('http://127.0.0.1:8766/health')
     expect(vuAuth).toBe('Bearer jeton-test')
     expect(sante).toEqual(DEGRADE)
+  })
+
+  /*
+   * FORME RÉELLE de `/health` (protocole v2), relevée sur le serveur du poste le 2026-10-15 :
+   * `{ service, protocol: 2, authenticated: "{\"context\":\"C:\\\\Brains\\\\…\"}", signature, health }`.
+   * Le dossier servi est DANS `authenticated` (`signed_context_payload`, brain/tooling/brain_auth.py),
+   * jamais à la racine : lire `body.context` rendait toujours « dossier inconnu » dans les Réglages.
+   */
+  const JETON = 'jeton-test'
+  function reponseSante(dossier: string, signature?: string): Record<string, unknown> {
+    // `json.dumps(body, ensure_ascii=False, separators=(",", ":"))` = JSON.stringify compact.
+    const authenticated = JSON.stringify({ context: dossier })
+    return {
+      service: 'autowin-brain',
+      protocol: 2,
+      authenticated,
+      signature:
+        signature ??
+        createHmac('sha256', JETON)
+          .update(`autowin-brain\n2\n${authenticated}`, 'utf8')
+          .digest('hex'),
+      health: { state: 'healthy', reasons: [] }
+    }
+  }
+  const lireSante = (corps: Record<string, unknown>): ReturnType<typeof readBrainHealth> =>
+    readBrainHealth((async () => ({ json: async () => corps })) as unknown as typeof fetch, {
+      AUTOWIN_BRAIN_TOKEN: JETON,
+      AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
+    })
+
+  it('lit le dossier servi dans `authenticated` de la réponse /health v2 signée', async () => {
+    const sante = await lireSante(reponseSante('C:\\Brains\\Equipe'))
+    expect(sante).toEqual({ state: 'healthy', reasons: [], root: 'C:\\Brains\\Equipe' })
+  })
+
+  it("n'expose AUCUN dossier quand la signature est fausse, mais garde l'état", async () => {
+    const sante = await lireSante(reponseSante('C:\\Brains\\Equipe', 'f'.repeat(64)))
+    expect(sante).toEqual({ state: 'healthy', reasons: [] })
   })
 
   it('un Brain sain ne déclenche AUCUNE réindexation', async () => {
