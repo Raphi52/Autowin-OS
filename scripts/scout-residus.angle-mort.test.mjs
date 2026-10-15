@@ -121,6 +121,14 @@ describe('scout-residus — chemins morts : ce qui n est PAS mort', () => {
     expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
   })
 
+  it('ne lit pas un fichier BINAIRE (image) comme du texte', () => {
+    const nul = String.fromCharCode(0)
+    const rapport = sonde(
+      dossier({ 'fond.png': 'PNG' + nul + nul + 'S:/nulle-part-xyz/octets-d-image' + nul + chr10 })
+    )
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
   it('signale ENCORE une racine codee en dur sans repli ni recreation', () => {
     const rapport = sonde(
       dossier({ 'b.mjs': "const racine = 'C:/nulle-part-xyz/socle'" + chr10 + 'readFileSync(racine)' + chr10 })

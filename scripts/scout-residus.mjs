@@ -59,6 +59,10 @@ for (const f of tousFichiers) {
   } catch {
     continue
   }
+  // Un fichier BINAIRE (image, police) n'a pas de lignes : ses octets forment au hasard des
+  // « X:/… ». Mesuré le 2026-10-12 : 4 des 43 signalements sur `src/` étaient des octets de
+  // `autowin-galaxy-bg-hq.png`. Même critère que git : un octet NUL signe un binaire.
+  if (contenu.includes(String.fromCharCode(0))) continue
   // Un fichier qui recree son dossier de sortie ne peut pas mourir d'un dossier absent :
   // `mkdirSync(…, { recursive: true })` le refabrique a chaque execution. Mesure du banc /arena
   // v3 (2026-09-06) : ~10 signalements etaient refutes par la ligne meme qui les portait.

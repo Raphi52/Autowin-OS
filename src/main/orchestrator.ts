@@ -1335,6 +1335,14 @@ function jetonDeReservation(reservationId: string): string {
 export class Orchestrator {
   private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
   /**
+   * Pré-lecture `git ls-files` du plafond scout (`lecteurAncrageDepuisDisque`), par `runId`.
+   * Le processus git tourne DANS l'espace de travail : `run()` l'attend dans son `finally`, sinon il
+   * survit au run avec ce dossier pour répertoire courant et Windows refuse de le supprimer
+   * (EBUSY, mesuré 2026-10-12 sur orchestrator.execution.test.ts : `git ls-files` sans code de
+   * sortie au moment du nettoyage). Bornée par son timeout (5 s), jamais rejetée.
+   */
+  private readonly lecturesDeFondByRun = new Map<string, Promise<void>>()
+  /**
    * Conversation et tour d'origine du run EN COURS, par `runId`. Sert a estampiller chaque ligne
    * de cout : sans ce rattachement, `cost.jsonl` ne pouvait pas dire QUEL echange a coute combien.
    * Rempli seulement quand l'appelant fournit reellement l'information — jamais devine.
@@ -2292,6 +2300,11 @@ export class Orchestrator {
       erreurDuRun = erreur
       throw erreur
     } finally {
+      // EN PREMIER : plus aucun processus de ce run ne doit tourner dans l'espace de travail quand
+      // la fin du run (fusion, retrait de la copie) commence. Voir `lecturesDeFondByRun`.
+      const lectureDeFond = this.lecturesDeFondByRun.get(runId)
+      this.lecturesDeFondByRun.delete(runId)
+      if (lectureDeFond) await lectureDeFond
       this.processObservers.delete(runId)
       this.causalWatchPathsByRun.delete(runId)
       this.costContextByRun.delete(runId)
@@ -3833,6 +3846,7 @@ ${CONTRAT_OBJECTIONS}`
     // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
     // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
     const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
+    this.lecturesDeFondByRun.set(runId, lireAncrages.pret)
     // La note ajustee sur les choix reels passe AVANT le plafond : un aveu reste a 50.
     // fix-ok: le facteur des choix (piste 7, conv-890) n'atteignait pas la note sans ce branchement :
     // orchestrator.scout-cible.test.ts rend 72 au lieu de 36 quand il manque.

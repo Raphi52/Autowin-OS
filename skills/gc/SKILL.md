@@ -36,8 +36,11 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 ## Procédure
 0. **Relire la veille.** `conversation_read` sur CETTE conversation : ne re-rapporte pas une
    proposition de purge déjà faite et restée sans réponse, rappelle-la en une ligne.
-1. **Mesurer** (lecture seule) : `du -sh` par dossier de `.autowin-data/autowin-os` et de
-   `.autowin-data`. Noter le total.
+1. **Mesurer** (lecture seule) : taille par dossier de `.autowin-data/autowin-os` et de
+   `.autowin-data`. Noter le total. PAS `du` : celui de Git Bash suit la jonction
+   `worktrees/<hash>/agent__run-*/node_modules` → le `node_modules` du dépôt et ne finit pas
+   (mesuré le 2026-10-11 : > 5 min). Mesurer avec un parcours `lstat` qui saute les liens et
+   les jonctions (`readlinkSync` qui rend une cible = lien à ne pas suivre).
 2. **Marquer** — chaque candidat doit porter une PREUVE de mort, sinon il reste :
    | Catégorie | Preuve de mort |
    |---|---|
