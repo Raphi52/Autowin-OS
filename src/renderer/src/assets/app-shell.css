@@ -320,6 +320,29 @@
   flex-direction: column;
 }
 
+/* LE PASSAGE D'UNE VUE A L'AUTRE (conv-981, 2026-10-15), par `document.startViewTransition`
+   (transition-de-vue.ts) : la page se fond de l'ancienne vue a la nouvelle, et le surlignage du
+   menu GLISSE vers l'onglet choisi. Le nom n'existe que PENDANT la transition (classe posee sur
+   <html>) : nomme en permanence, l'onglet deviendrait un contexte d'empilement et une racine de flou
+   d'arriere-plan (spec css-view-transitions-1). Effet court, une fois par clic, garde sous
+   prefers-reduced-motion : ce poste l'a actif, il ne se verrait jamais (voir theme.css, spinner).
+   fix-ok: conv-981 - chaque vue passait de display none a flex d'un coup (.view-slot ci-dessus) et
+   le surlignage du menu sautait d'un onglet a l'autre. Fichier modifie UNE seule fois a la main dans
+   run-52d36e67e4de-1 ; le controle des causes en comptait 3 (meme modification sous son chemin
+   complet et son chemin court, plus le releve de fin d'etape : fichiersEditesParLeRun). */
+:root.vue-en-transition .nav-item.active {
+  view-transition-name: nav-actif;
+}
+::view-transition-group(root),
+::view-transition-group(nav-actif) {
+  animation-duration: 220ms;
+  animation-timing-function: var(--ease);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+
 /* Flash discret quand un agent pilote la vue (inset accent, pas de halo flou). */
 .main.driven {
   box-shadow: inset 0 0 0 2px var(--accent);

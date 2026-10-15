@@ -167,7 +167,7 @@ export function ConversationCostIndicator({
         {summary.rewritingContext ? <span className="conv-cost-flag"> ⚠</span> : null}
       </button>
       {open && (
-        <div className="conv-cost-panel" data-testid="conversation-cost-panel">
+        <div className="conv-cost-panel fade-in" data-testid="conversation-cost-panel">
           <div className="conv-cost-head">
             <span>
               {callsLabel(summary.calls)} · cache {Math.round(summary.cacheHitRatio * 100)} %

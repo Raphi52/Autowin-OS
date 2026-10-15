@@ -1,4 +1,7 @@
+import { useState, type ReactNode } from 'react'
+import type React from 'react'
 import {
+  rejeuDeLaBarre,
   spanGeometry,
   type AgentEnvelope,
   type AgentGantt,
@@ -42,19 +45,89 @@ function laneName(lane: AgentLane): string {
   return lane.variant ? `${lane.label} · ${lane.variant}` : lane.label
 }
 
+/**
+ * Position d'une barre, et son minutage quand le diagramme se REJOUE depuis le bilan du run
+ * (conv-981) : la feuille l'allume a `--rejeu-delai`, pendant `--rejeu-duree`.
+ */
+function styleDeBarre(
+  geometrie: { left: number; width: number },
+  rejeu: number
+): React.CSSProperties {
+  const position = { left: `${geometrie.left}%`, width: `${geometrie.width}%` }
+  if (rejeu <= 0) return position
+  const { delaiMs, dureeMs } = rejeuDeLaBarre(geometrie)
+  return {
+    ...position,
+    '--rejeu-delai': `${delaiMs}ms`,
+    '--rejeu-duree': `${dureeMs}ms`
+  } as React.CSSProperties
+}
+
 /** La bulle s'ouvre vers l'intérieur de l'axe : à droite d'une barre de gauche, et inversement. */
 function anchor(left: number): 'start' | 'end' {
   return left > 55 ? 'end' : 'start'
 }
 
+/**
+ * LE DÉROULÉ REJOUABLE (conv-981, 2026-10-15) : le diagramme et son bouton « Rejouer », partagés par
+ * le bilan du run (panneau de droite) et la Chronologie de l'Observatory — demande « je veux un truc
+ * pareil dans l'Observatory ». Le numéro du rejeu sert de clé : un second clic remonte le diagramme
+ * et repart du début, sans doublon. `actions` ajoute un geste à côté du bouton (le bilan y met son
+ * lien vers la version complète, dans l'Observatory).
+ */
+export function DerouleRejouable({
+  gantt,
+  libelle,
+  selectedId,
+  onSelect,
+  actions
+}: {
+  gantt: AgentGantt
+  /** « Rejouer ce run » dans le bilan, « Rejouer ce tour » dans l'Observatory. */
+  libelle: string
+  selectedId?: string
+  onSelect: (eventId: string) => void
+  actions?: ReactNode
+}): React.JSX.Element {
+  const [rejeu, setRejeu] = useState(0)
+  return (
+    <div className="deroule-rejouable">
+      <div className="deroule-rejouable__actions">
+        <button
+          type="button"
+          className="deroule-rejouable__bouton"
+          data-testid="run-rejeu-bouton"
+          onClick={() => setRejeu((n) => n + 1)}
+        >
+          {rejeu > 0 ? 'Rejouer encore' : libelle}
+        </button>
+        {actions}
+      </div>
+      <ObservatoryAgentGantt
+        key={rejeu}
+        gantt={gantt}
+        rejeu={rejeu}
+        onSelect={onSelect}
+        {...(selectedId ? { selectedId } : {})}
+      />
+    </div>
+  )
+}
+
 export function ObservatoryAgentGantt({
   gantt,
   selectedId,
-  onSelect
+  onSelect,
+  rejeu = 0
 }: {
   gantt: AgentGantt
   selectedId?: string
   onSelect: (eventId: string) => void
+  /**
+   * « Rejouer ce run » (conv-981) : numero du rejeu en cours, 0 = diagramme fixe. Les barres
+   * s'allument alors l'une apres l'autre, a l'echelle du run ramene a 10 s.
+   */
+  rejeu?: number
 }): React.JSX.Element {
   const spans = gantt.lanes.flatMap((lane) => lane.spans)
   const refused = spans.filter((span) => span.status === 'refused').length
@@ -65,6 +138,7 @@ export function ObservatoryAgentGantt({
     <section
       className="observatory-gantt"
       data-testid="observatory-agent-gantt"
+      data-rejeu={rejeu > 0 ? rejeu : undefined}
       aria-label="Déroulé par agent"
       onClick={(event) => event.stopPropagation()}
     >
@@ -118,7 +192,7 @@ export function ObservatoryAgentGantt({
                     <button
                       type="button"
                       className={`observatory-gantt__envelope is-${envelope.status}${selectedId === envelope.eventId ? ' is-selected' : ''}`}
-                      style={{ left: `${left}%`, width: `${width}%` }}
+                      style={styleDeBarre({ left, width }, rejeu)}
                       aria-label={`${laneName(lane)} : tour complet, ${formatDuration(envelope.durationMs)}`}
                       onClick={() => onSelect(envelope.eventId)}
                     >
@@ -152,7 +226,7 @@ export function ObservatoryAgentGantt({
                     type="button"
                     key={span.id}
                     className={`observatory-gantt__bar is-${span.status}${selectedId === span.eventId ? ' is-selected' : ''}`}
-                    style={{ left: `${left}%`, width: `${width}%` }}
+                    style={styleDeBarre({ left, width }, rejeu)}
                     data-testid="observatory-gantt-bar"
                     data-status={span.status}
                     aria-label={`${laneName(lane)} : ${formatDuration(span.durationMs)}${badge ? `, ${badge}` : ''}`}

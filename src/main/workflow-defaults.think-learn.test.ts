@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 import { graphDefects, nodeRanks } from './workflow-graph'
@@ -149,9 +150,36 @@ describe('ce qui ne doit PAS changer', () => {
     // la chaine vient de `phasesApresJugeHorsGraphe`, qui ne peut pas rendre d'identifiant de noeud.
     expect(orchestrateur).toContain('phasesApresJugeHorsGraphe(task)')
     // Joué SEULEMENT sur gate non bloqué, et une panne n'y rougit pas le run.
-    expect(orchestrateur).toMatch(
-      /if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(phaseApresGate\)/
+    /*
+     * fix-ok: rouge depuis e58cc386 (2026-10-13) — ce contrat se lisait par une DISTANCE : l'appel
+     * devait tomber à moins de 2200 caractères de `if (!gate.blocked) {`. La branche a grossi pour de
+     * bonnes raisons (résultat remis avant learn, conv-914 : 2122 -> 2367 ; réserves du juge sur un
+     * /scout, conv-977 : -> 2463) et le test rougissait sans qu'aucun défaut n'existe ; à l'inverse,
+     * un second appel sorti de la branche passait inaperçu. On lit donc la STRUCTURE : chaque appel
+     * `executePipelinePhase(phaseApresGate)` doit vivre dans la branche ALORS d'un `if (!gate.blocked)`.
+     */
+    const source = ts.createSourceFile('orchestrator.ts', orchestrateur, ts.ScriptTarget.Latest, true)
+    const branchesNonBloquees: ts.Statement[] = []
+    const appelsApresGate: ts.CallExpression[] = []
+    const visiter = (noeud: ts.Node): void => {
+      if (ts.isIfStatement(noeud) && noeud.expression.getText(source) === '!gate.blocked') {
+        branchesNonBloquees.push(noeud.thenStatement)
+      }
+      if (
+        ts.isCallExpression(noeud) &&
+        noeud.expression.getText(source) === 'executePipelinePhase' &&
+        noeud.arguments[0]?.getText(source) === 'phaseApresGate'
+      ) {
+        appelsApresGate.push(noeud)
+      }
+      ts.forEachChild(noeud, visiter)
+    }
+    visiter(source)
+    expect(appelsApresGate.length).toBeGreaterThan(0)
+    const horsBranche = appelsApresGate.filter(
+      (appel) => !branchesNonBloquees.some((b) => appel.pos >= b.pos && appel.end <= b.end)
     )
+    expect(horsBranche.map((appel) => appel.getText(source))).toEqual([])
     expect(orchestrateur).toContain("le verdict du run n'en est pas affecte")
   })
 

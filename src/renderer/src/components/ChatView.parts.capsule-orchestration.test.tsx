@@ -345,3 +345,88 @@ describe('AssistantActivityGroup — capsule d une orchestration', () => {
     expect(container.querySelector('.activity-anneau')).not.toBeNull()
   })
 })
+
+/**
+ * LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15). Le rond de verre ne passe plus d'un coup au
+ * vert ou au rouge : un reflet le balaie quand le run REUSSIT, une breve secousse le marque quand il
+ * ECHOUE. L'effet ne joue qu'au PASSAGE de « en cours » a la fin, vu pendant qu'il est affiche — le
+ * rond du compte, lui, vaut « ok » apres chaque outil et n'est pas un signal de fin.
+ *
+ * fix-ok: conv-981 - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
+ * des causes en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le
+ * releve de fin d'etape).
+ */
+describe('le verdict atterrit sur le rond du run', () => {
+  const atterrissage = (): string | null =>
+    container.querySelector('[data-testid="activity-rond"]')?.getAttribute('data-atterrissage') ??
+    null
+
+  it('un reflet quand le run passe de « en cours » a reussi', () => {
+    rendre({ actions: [orchestration()] })
+    expect(bloc()?.getAttribute('data-state')).toBe('running')
+    expect(atterrissage()).toBeNull()
+    rendre({ actions: [orchestration({ ok: true })] })
+    expect(bloc()?.getAttribute('data-state')).toBe('done')
+    expect(atterrissage()).toBe('reussi')
+  })
+
+  it('une secousse quand il passe de « en cours » a l echec', () => {
+    rendre({ actions: [orchestration()] })
+    rendre({ actions: [orchestration({ ok: false })] })
+    expect(atterrissage()).toBe('echec')
+  })
+
+  it('rien a l ouverture d un fil dont le run est deja fini (jumeau)', () => {
+    rendre({ actions: [orchestration({ ok: true })] })
+    expect(atterrissage()).toBeNull()
+    rendre({ actions: [orchestration({ ok: true })] })
+    expect(atterrissage()).toBeNull()
+  })
+
+  it('rien quand le run est interrompu', () => {
+    rendre({ actions: [orchestration()] })
+    rendre({ actions: [orchestration({ interrupted: true })] })
+    expect(bloc()?.getAttribute('data-state')).toBe('interrupted')
+    expect(atterrissage()).toBeNull()
+  })
+
+  it('un nouvel affichage sans changement d etat ne rejoue rien : la marque reste posee', () => {
+    rendre({ actions: [orchestration()] })
+    rendre({ actions: [orchestration({ ok: true })] })
+    const rond = container.querySelector('[data-testid="activity-rond"]')
+    rendre({ actions: [orchestration({ ok: true })] })
+    expect(container.querySelector('[data-testid="activity-rond"]')).toBe(rond)
+    expect(atterrissage()).toBe('reussi')
+  })
+
+  it('la marque s efface a la fin de l effet : revenir sur l onglet Chat ne le rejoue pas', () => {
+    // Une animation CSS REPART quand son element redevient affiche apres un `display: none` — ce que
+    // fait chaque vue de l'app quand on change d'onglet (app-shell.css, .view-slot). Une marque restee
+    // posee rejouerait donc le reflet a chaque retour sur le Chat.
+    rendre({ actions: [orchestration()] })
+    rendre({ actions: [orchestration({ ok: true })] })
+    const rond = container.querySelector('[data-testid="activity-rond"]') as HTMLElement
+    // La fin d'une AUTRE animation dans le rond n'efface rien.
+    act(() => {
+      rond.dispatchEvent(new AnimationEvent('animationend', { bubbles: true, animationName: 'x' }))
+    })
+    expect(atterrissage()).toBe('reussi')
+    act(() => {
+      rond.dispatchEvent(
+        new AnimationEvent('animationend', { bubbles: true, animationName: 'anneau-reflet' })
+      )
+    })
+    expect(atterrissage()).toBeNull()
+    rendre({ actions: [orchestration({ ok: true })] })
+    expect(atterrissage()).toBeNull()
+  })
+
+  it('une reprise efface la marque, la fin suivante atterrit de nouveau', () => {
+    rendre({ actions: [orchestration()] })
+    rendre({ actions: [orchestration({ ok: true })] })
+    rendre({ actions: [orchestration({ ok: true }), orchestration()] })
+    expect(atterrissage()).toBeNull()
+    rendre({ actions: [orchestration({ ok: true }), orchestration({ ok: true })] })
+    expect(atterrissage()).toBe('reussi')
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ETATS_CONNUS, resoudreEtat, verdictEtat } from './ui-capture.mjs'
+import { ETATS_CONNUS, attributDEtat, resoudreEtat, verdictEtat } from './ui-capture.mjs'
 
 /**
  * Pourquoi ce test existe : `--state` sert a AMENER l'UI dans un etat qu'aucune navigation ne
@@ -29,6 +29,26 @@ describe('ui-capture --state', () => {
     expect(resoudreEtat(' Occupe ')).toBe('occupe')
     expect(resoudreEtat('shiny')).toBeUndefined()
     expect(ETATS_CONNUS).toContain('attention')
+  })
+
+  /*
+   * LE VERDICT QUI « ATTERRIT » (conv-981) : le reflet et la secousse du rond ne jouent qu'a la FIN
+   * d'un run vu en cours — aucune navigation ne la produit. Le composant ecrit `data-atterrissage`
+   * (anneau-activite.tsx) ; l'etat force ecrit LE MEME attribut, avec la meme valeur.
+   */
+  it('ecrit l attribut que le composant pose reellement, selon l etat', () => {
+    expect(attributDEtat('attention')).toEqual({ nom: 'data-etat', valeur: 'attention' })
+    expect(attributDEtat('occupe')).toEqual({ nom: 'data-etat', valeur: 'occupe' })
+    expect(attributDEtat('atterrissage-reussi')).toEqual({
+      nom: 'data-atterrissage',
+      valeur: 'reussi'
+    })
+    expect(attributDEtat('atterrissage-echec')).toEqual({
+      nom: 'data-atterrissage',
+      valeur: 'echec'
+    })
+    expect(resoudreEtat('Atterrissage-Reussi')).toBe('atterrissage-reussi')
+    expect(resoudreEtat('atterrissage-rate')).toBeUndefined()
   })
 })
 

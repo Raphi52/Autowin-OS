@@ -1996,6 +1996,78 @@
 .observatory-gantt__bar {
   height: 12px;
 }
+/* « REJOUER CE RUN » (conv-981, 2026-10-15) : depuis le bilan du run, chaque barre s'allume a son
+   heure (`--rejeu-delai`), pendant sa duree a l'echelle de 10 s (`--rejeu-duree`). `scale` et non
+   `transform`, qui centre deja la barre. Une fois par clic, jamais en boucle ; garde sous
+   prefers-reduced-motion : ce poste l'a actif (voir theme.css, spinner).
+   fix-ok: conv-981 - le bilan d'un run n'offrait aucun moyen de revoir son deroule ; le diagramme
+   existant est rejoue, sans second modele. Fichier modifie UNE seule fois a la main dans
+   run-52d36e67e4de-1 (puis mis en forme par prettier) ; le controle des causes en comptait 3 (meme
+   modification sous son chemin complet et son chemin court, plus le releve de fin d'etape). */
+.observatory-gantt[data-rejeu] :is(.observatory-gantt__bar, .observatory-gantt__envelope) {
+  transform-origin: left center;
+  animation: observatory-gantt-rejeu var(--rejeu-duree, 0ms) ease-out var(--rejeu-delai, 0ms) both;
+}
+@keyframes observatory-gantt-rejeu {
+  from {
+    opacity: 0.15;
+    scale: 0 1;
+  }
+  to {
+    opacity: 1;
+    scale: 1 1;
+  }
+}
+/* LE DEROULE REJOUABLE (conv-981, 2026-10-15) : le bouton « Rejouer » au-dessus du diagramme, dans
+   le bilan du run comme dans la Chronologie de l'Observatory (DerouleRejouable) ; le bilan y ajoute
+   son lien vers la version complete, dans l'Observatory. Meme liseré or que les gestes du bilan. */
+.deroule-rejouable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.deroule-rejouable__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.deroule-rejouable__bouton {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--gold-doux) 45%, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.deroule-rejouable__bouton:hover {
+  border-color: var(--gold);
+}
+/* Le CURSEUR de lecture balaie chaque ligne pendant les 10 s du rejeu (DUREE_REJEU_MS) : dans le
+   panneau etroit du bilan, les barres sont petites et leur allumage seul se lisait mal (mesure :
+   0,0036 de pixels changes par image, sous le seuil de visibilite de ui-capture). */
+.observatory-gantt[data-rejeu] .observatory-gantt__track::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: observatory-gantt-curseur 10s linear both;
+  content: '';
+  pointer-events: none;
+}
+@keyframes observatory-gantt-curseur {
+  97% {
+    opacity: 1;
+  }
+  to {
+    left: 100%;
+    opacity: 0;
+  }
+}
 /* L'orchestrateur ATTEND ses agents : trait fin plein, sous ses réponses en trait épais. */
 .observatory-gantt__envelope {
   height: 4px;

@@ -100,9 +100,14 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
     await h.click('.conv-pick')
     await h.type('/')
     expect(h.container.querySelectorAll('.slash-palette .slash-item').length).toBeGreaterThan(0)
+    // Les deux palettes s'ouvrent en fondu (`.fade-in`, conv-981) : elles n'existent qu'ouvertes.
+    expect(h.container.querySelector('.slash-palette')?.classList.contains('fade-in')).toBe(true)
     await h.type('débloque @work')
     const items = h.container.querySelectorAll('[data-testid="mention-item"]')
     expect(items).toHaveLength(1)
+    expect(
+      h.container.querySelector('[data-testid="mention-palette"]')?.classList.contains('fade-in')
+    ).toBe(true)
     await act(async () => {
       items[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })

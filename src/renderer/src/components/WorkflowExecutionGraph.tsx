@@ -20,6 +20,7 @@ import {
 import { workflowQuoteLabel } from './workflow-quote-label'
 import { demandeHumaineEntiere } from '../../../shared/balise-message-utilisateur'
 import type { RunClosureObservation } from '../../../shared/run-execution'
+import type { AgentGantt } from './observatory-agent-gantt'
 import { sensDuCodeDeBlocage } from '../../../shared/raison-de-blocage'
 import { lireReponseRemember, type LectureFaitRetenu } from './fait-retenu-detail'
 import { appelsDeLOutil } from './appels-outil-detail'
@@ -48,6 +49,8 @@ export interface ExecutionNodeSelection {
   closure?: RunClosureObservation
   /** Nœud « Clôture du run » : les verdicts rendus par le juge, dans l'ordre. */
   verdictEventIds?: string[]
+  /** Nœud « Clôture du run » : le déroulé par agent du run, pour le rejouer (conv-981). */
+  gantt?: AgentGantt
 }
 
 interface WorkflowExecutionGraphProps {
@@ -1265,6 +1268,7 @@ export function WorkflowExecutionGraph({
     const closure = event?.display?.kind === 'closure' ? event.display.closure : undefined
     const verdictEventIds =
       event?.display?.kind === 'closure' ? event.display.verdictEventIds : undefined
+    const gantt = event?.display?.kind === 'closure' ? event.display.gantt : undefined
     // La clôture d'un run CHANGE sous un nœud resté sélectionné (open → green, coût réglé après
     // coup, nouveau passage du juge) : sans ces champs dans la clé, son bilan resterait figé sur
     // l'état du premier clic.
@@ -1275,7 +1279,8 @@ export function WorkflowExecutionGraph({
             closure.status,
             closure.totalCostUsd,
             closure.runPath ?? '',
-            verdictEventIds?.length ?? 0
+            verdictEventIds?.length ?? 0,
+            gantt ? `${gantt.lanes.length}:${gantt.end}` : ''
           ].join('|')
         : event.id
       : null
@@ -1290,7 +1295,8 @@ export function WorkflowExecutionGraph({
             ...(event.display?.skillName ? { skillName: event.display.skillName } : {}),
             ...(turnId ? { turnId } : {}),
             ...(closure ? { closure } : {}),
-            ...(verdictEventIds ? { verdictEventIds } : {})
+            ...(verdictEventIds ? { verdictEventIds } : {}),
+            ...(gantt ? { gantt } : {})
           }
         : null
     )

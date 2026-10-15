@@ -7921,6 +7921,7 @@ Cliquer pour choisir une autre branche.`}
             setRunDetailTab={setRunDetailTab}
             liveRunCardRef={liveRunCardRef}
             {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
+            {...(onInspectTurn ? { onInspectTurn } : {})}
           />
         </VueMesuree>
       )}

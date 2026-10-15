@@ -22,9 +22,11 @@
 import React from 'react'
 import './anneau-activite.css'
 import {
+  ANIMATIONS_D_ATTERRISSAGE,
   casesDuVerdict,
   groupesDeLegende,
   verdictDuRond,
+  type Atterrissage,
   type EtatArc,
   type OutilDeLegende
 } from './anneau-activite-calcul'
@@ -62,10 +64,16 @@ export function RondDuCompte({
 export function RondDIcone({
   children,
   etats,
+  atterrissage,
+  onAtterri,
   testid
 }: {
   children: React.ReactNode
   etats?: readonly EtatArc[]
+  /** Le verdict qui « atterrit » : reflet ou secousse, au passage de fin du run (conv-981). */
+  atterrissage?: Atterrissage | null
+  /** Appele a la fin de l'effet, pour retirer la marque (sinon un retour d'onglet le rejouerait). */
+  onAtterri?: () => void
   testid?: string
 }): React.JSX.Element {
   return (
@@ -73,6 +81,14 @@ export function RondDIcone({
       className="anneau-rond"
       aria-hidden="true"
       {...(etats ? { 'data-etats': etats.join(' '), 'data-verdict': verdictDuRond(etats) } : {})}
+      {...(atterrissage
+        ? {
+            'data-atterrissage': atterrissage,
+            onAnimationEnd: (event: React.AnimationEvent) => {
+              if (ANIMATIONS_D_ATTERRISSAGE.includes(event.animationName)) onAtterri?.()
+            }
+          }
+        : {})}
       {...(testid ? { 'data-testid': testid } : {})}
     >
       {children}

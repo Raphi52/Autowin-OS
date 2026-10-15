@@ -184,6 +184,23 @@ describe('Observatory · déroulé par agent', () => {
     expect(wrap.querySelector('.observatory-event-detail')).not.toBeNull()
   })
 
+  it('rejoue le déroulé du tour, comme depuis le bilan du run (conv-981)', async () => {
+    const view = await mount(runTrace)
+    const tour = view
+      .querySelector('[data-testid="observatory-agent-gantt"]')!
+      .closest('.observatory-turn')!
+    const rejouer = tour.querySelector<HTMLButtonElement>('[data-testid="run-rejeu-bouton"]')
+    expect(rejouer?.textContent).toBe('Rejouer ce tour')
+    expect(
+      tour.querySelector('[data-testid="observatory-agent-gantt"]')?.hasAttribute('data-rejeu')
+    ).toBe(false)
+    await act(async () => rejouer!.click())
+    expect(
+      tour.querySelector('[data-testid="observatory-agent-gantt"]')?.getAttribute('data-rejeu')
+    ).toBe('1')
+    expect(rejouer!.textContent).toBe('Rejouer encore')
+  })
+
   it('ne montre aucun déroulé pour un tour de simple conversation', async () => {
     const view = await mount([
       traceEvent({

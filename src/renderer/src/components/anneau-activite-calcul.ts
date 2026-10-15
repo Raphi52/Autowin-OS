@@ -2,6 +2,7 @@
  * Calculs du rond de compte et de sa legende (conv-904, 2026-10-12) — separes des composants
  * (anneau-activite.tsx) pour que le rechargement a chaud des composants reste possible.
  */
+import { useState } from 'react'
 /** Verdict d'une action, tel que le rond et la legende le signalent. */
 export type EtatArc = 'ok' | 'ko' | 'encours' | 'attente'
 
@@ -26,6 +27,52 @@ export function exceptionDuGroupe(etats: readonly EtatArc[]): Exclude<EtatArc, '
  */
 export function verdictDuRond(etats: readonly EtatArc[]): EtatArc {
   return exceptionDuGroupe(etats) ?? 'ok'
+}
+
+/** L'effet joue sur le rond au moment ou le run se termine (conv-981). */
+export type Atterrissage = 'reussi' | 'echec'
+
+/**
+ * LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15) : l'effet d'un PASSAGE d'etat du bloc
+ * d'orchestration (`data-state`). Seule la fin d'un run en cours atterrit : reflet s'il reussit,
+ * secousse s'il echoue. Une interruption, un etat deja fini a l'ouverture du fil, ou un retour en
+ * cours ne jouent rien. Le rond du COMPTE n'est pas un signal de fin : il vaut « ok » apres chaque
+ * outil (`verdictDuRond`).
+ */
+export function atterrissageDuPassage(avant: string, apres: string): Atterrissage | null {
+  if (avant !== 'running') return null
+  if (apres === 'done') return 'reussi'
+  if (apres === 'failed') return 'echec'
+  return null
+}
+
+/** Les animations de l'atterrissage (anneau-activite.css) : seule leur fin efface la marque. */
+export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
+
+/**
+ * L'effet a poser sur le rond quand l'etat du bloc PASSE de « en cours » a la fin (conv-981). Le
+ * premier etat vu est la reference : un fil ouvert sur un run deja fini ne joue rien. L'animation
+ * CSS ne part qu'a l'APPARITION de l'attribut ; `effacer` le retire a la fin de l'effet. Sans cela,
+ * l'effet REPARTIRAIT a chaque retour sur l'onglet Chat : une animation recommence quand son element
+ * redevient affiche apres un `display: none`, ce que fait chaque vue au changement d'onglet. Etat
+ * precedent tenu par le motif React « informations des rendus precedents » (setState pendant le
+ * rendu), sur en double rendu.
+ */
+export function useAtterrissage(etat: string): [Atterrissage | null, () => void] {
+  // fix-ok: src/renderer/src/components/anneau-activite-calcul.ts — marque laissee posee = reflet
+  // rejoue a chaque retour sur le Chat (display:none -> flex relance les animations CSS).
+  const [suivi, setSuivi] = useState<{ etat: string; atterrissage: Atterrissage | null }>({
+    etat,
+    atterrissage: null
+  })
+  const effacer = (): void =>
+    setSuivi((courant) => (courant.atterrissage ? { ...courant, atterrissage: null } : courant))
+  if (suivi.etat !== etat) {
+    const suivant = { etat, atterrissage: atterrissageDuPassage(suivi.etat, etat) }
+    setSuivi(suivant)
+    return [suivant.atterrissage, effacer]
+  }
+  return [suivi.atterrissage, effacer]
 }
 
 /**

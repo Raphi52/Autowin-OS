@@ -4,6 +4,7 @@ import type {
   HarnessTimelineTurn
 } from './harness-timeline-model'
 import { FRONTIERE_DEMANDE_RECUE } from '../../../shared/trace-tour-chat'
+import { buildAgentGantt } from './observatory-agent-gantt'
 import { roleLabel, stepTitle, toolNameOf, toolTitle } from './execution-step-titles'
 import { extractHumanMessage } from './human-message'
 import { causeNommee, raisonDeLaCloture, raisonDuGit } from './raison-d-echec'
@@ -755,7 +756,14 @@ function projectRunExecutions(
             (event) =>
               event.kind === 'verdict' && event.status !== 'running' && event.status !== 'pending'
           )
-          .map((event) => event.id)
+          .map((event) => event.id),
+        // « Rejouer ce run » (conv-981) : le déroulé par agent de CE run, par le calcul de la
+        // Chronologie. Les événements d'agent portent `execution.runId` (mesuré sur conv-981 :
+        // 211 sur 211), donc `runEvents` les contient.
+        ...(() => {
+          const gantt = buildAgentGantt(runEvents)
+          return gantt ? { gantt } : {}
+        })()
       }
     })
   }

@@ -388,3 +388,23 @@ describe('ascenseurs du theme Holographique blanc', () => {
     }
   })
 })
+
+/*
+ * LE DETAIL DU COUT N'EST PAS COUPE (conv-981, 2026-10-15). La ligne d'en-tete coupe ses elements
+ * trop longs (`.chat-runtime > * { overflow: hidden }`). Le cout du fil y vit depuis qu'il a quitte
+ * la zone de saisie, et son detail s'ouvre en position absolue SOUS lui : coupe, il etait invisible
+ * (mesure : clic sur « 8,55 $ », aucun panneau a l'ecran, a 900 comme a 1600 px de large).
+ */
+describe('Holographique blanc : le detail du cout de la ligne d en-tete', () => {
+  it('laisse deborder le bloc du cout, et lui seul', () => {
+    let debordement: string | undefined
+    postcss.parse(css).walkRules((regle) => {
+      if (regle.selectors.some((s) => /\.chat-runtime\s*>\s*\.conv-cost$/.test(s))) {
+        regle.walkDecls('overflow', (d) => {
+          debordement = d.value
+        })
+      }
+    })
+    expect(debordement).toBe('visible')
+  })
+})

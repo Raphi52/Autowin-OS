@@ -3268,6 +3268,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Le cout du fil vit sur cette ligne et ouvre son detail SOUS lui, en position absolue : coupe par
+   la regle ci-dessus, ce detail etait invisible (conv-981 : clic sur « 8,55 $ », aucun panneau). */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-runtime > .conv-cost {
+  overflow: visible;
+}
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-runtime > span {
   font-family: var(--font);
 }

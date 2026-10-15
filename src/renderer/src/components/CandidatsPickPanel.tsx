@@ -14,6 +14,12 @@ const LIBELLE_BANDE: Record<'g' | 'y' | 'r', string> = {
   r: 'faible'
 }
 
+/** Au-dela du 10e candidat, la cascade ne decale plus : 30 lignes n'attendent pas 1,2 s. */
+const RANG_MAX_CASCADE = 10
+
+/** La barre illustre la note sur 100 ; une note hors bornes ne deborde pas du rail. */
+const largeurNote = (note: number): string => `${Math.min(100, Math.max(0, note))}%`
+
 /**
  * Le panneau de SÉLECTION sous un message de scout : une case par candidat, une ligne DÉPLIABLE
  * (tous les détails : preuve, ancrage, date, type…), et un bouton qui envoie le prompt /frame
@@ -112,6 +118,7 @@ export function CandidatsPickPanel({
           key={`${candidat.url ?? candidat.titre}-${index}`}
           className="cpick-item"
           data-testid="cpick-ligne"
+          style={{ '--i': Math.min(index, RANG_MAX_CASCADE) } as React.CSSProperties}
         >
           <div className="cpick-ligne">
             <input type="checkbox" checked={coches.has(index)} onChange={() => basculer(index)} />
@@ -134,7 +141,15 @@ export function CandidatsPickPanel({
             {/* La valeur de la ligne : une note quand le scout en donne une, sinon les deux
                 pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre. */}
             {candidat.pertinence !== undefined && (
-              <span className="cpick-score">{candidat.pertinence}</span>
+              <>
+                <span className="cpick-barre" aria-hidden="true">
+                  <span
+                    className="cpick-barre-remplie"
+                    style={{ width: largeurNote(candidat.pertinence) }}
+                  />
+                </span>
+                <span className="cpick-score">{candidat.pertinence}</span>
+              </>
             )}
             {candidat.pertinence === undefined && (candidat.impact || candidat.effort) && (
               <span className="cpick-pastilles" data-testid="cpick-pastilles">
@@ -156,7 +171,7 @@ export function CandidatsPickPanel({
             )}
           </div>
           {deplies.has(index) && (
-            <div className="cpick-details" data-testid="cpick-details">
+            <div className="cpick-details fade-in" data-testid="cpick-details">
               {/* Trois blocs, un par QUESTION — c'est tout (demande du 14/08). Les anciens
                   candidats sans what/why/how retombent sur ce que leur charge portait. */}
               <div className="cpick-q">

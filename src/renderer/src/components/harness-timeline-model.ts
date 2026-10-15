@@ -5,6 +5,7 @@ import type {
   RunLifecycleEvent,
   RunWorkspaceObservation
 } from '../../../shared/run-execution'
+import type { AgentGantt } from './observatory-agent-gantt'
 
 export type HarnessTimelineEventKind =
   | 'message'
@@ -120,6 +121,11 @@ export interface HarnessTimelineEvent {
      * réparations comprises). Le bilan relit le dernier au clic — l'arbre n'en reçoit pas le texte.
      */
     verdictEventIds?: string[]
+    /**
+     * Nœud de CLÔTURE : le déroulé par agent de CE run (`buildAgentGantt`, le calcul de la
+     * Chronologie), pour « Rejouer ce run » depuis son bilan (conv-981). Absent sans agent tracé.
+     */
+    gantt?: AgentGantt
   }
   run?: RunLifecycleEvent
   payloads: Array<{ kind: string; content: string; name?: string; mediaType?: string }>

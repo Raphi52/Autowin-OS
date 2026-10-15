@@ -145,4 +145,74 @@ describe('CandidatsPickPanel', () => {
     )
     expect(onPick).not.toHaveBeenCalled()
   })
+
+  /*
+   * L'ARRIVEE DES CANDIDATS (conv-981) : cascade, barre de note, details en fondu. Les bornes sont
+   * celles du cadrage : note absente = pas de barre, note hors 0-100 = barre bornee, decalage de la
+   * cascade plafonne a l'index 10 (30 candidats ne doivent pas attendre 1,2 s).
+   */
+  const candidat = (
+    titre: string,
+    pertinence?: number
+  ): { titre: string; url: string; pertinence?: number } => ({
+    titre,
+    url: `src/${titre}.ts:1`,
+    ...(pertinence === undefined ? {} : { pertinence })
+  })
+  const largeurBarre = (ligne: Element): string | null =>
+    ligne.querySelector<HTMLElement>('.cpick-barre-remplie')?.style.width ?? null
+
+  it('une barre montre la note, bornee entre 0 et 100 %', () => {
+    act(() =>
+      root.render(
+        <CandidatsPickPanel
+          candidats={[candidat('a', 72), candidat('b', 140), candidat('c', -5), candidat('d', 0)]}
+        />
+      )
+    )
+    const lignes = [...container.querySelectorAll('[data-testid="cpick-ligne"]')]
+    expect(lignes.map(largeurBarre)).toEqual(['72%', '100%', '0%', '0%'])
+    // Le chiffre reste affiche tel que le scout l'a donne : la barre illustre, elle ne corrige pas.
+    expect(lignes.map((l) => l.querySelector('.cpick-score')?.textContent)).toEqual([
+      '72',
+      '140',
+      '-5',
+      '0'
+    ])
+  })
+
+  it('sans note, pas de barre : les pastilles Impact/Effort restent (jumeau)', () => {
+    act(() =>
+      root.render(
+        <CandidatsPickPanel candidats={[{ ...candidat('a'), impact: 'g', effort: 'y' }]} />
+      )
+    )
+    expect(container.querySelector('.cpick-barre')).toBeNull()
+    expect(container.querySelector('[data-testid="cpick-pastilles"]')).not.toBeNull()
+  })
+
+  it('les lignes arrivent en cascade, decalage plafonne a l index 10', () => {
+    const trente = Array.from({ length: 30 }, (_, i) => candidat(`c${i}`, 50))
+    act(() => root.render(<CandidatsPickPanel candidats={trente} />))
+    const rangs = [...container.querySelectorAll<HTMLElement>('[data-testid="cpick-ligne"]')].map(
+      (l) => l.style.getPropertyValue('--i')
+    )
+    expect(rangs.slice(0, 3)).toEqual(['0', '1', '2'])
+    expect(rangs[10]).toBe('10')
+    expect(rangs[29]).toBe('10')
+  })
+
+  it('un seul candidat : aucun decalage', () => {
+    act(() => root.render(<CandidatsPickPanel candidats={[candidat('seul', 90)]} />))
+    const ligne = container.querySelector<HTMLElement>('[data-testid="cpick-ligne"]')
+    expect(ligne?.style.getPropertyValue('--i')).toBe('0')
+  })
+
+  it('les details deplies apparaissent en fondu', () => {
+    act(() => root.render(<CandidatsPickPanel candidats={[candidat('a', 90)]} />))
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="cpick-deplier"]')?.click())
+    expect(
+      container.querySelector('[data-testid="cpick-details"]')?.classList.contains('fade-in')
+    ).toBe(true)
+  })
 })

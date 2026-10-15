@@ -209,6 +209,61 @@
   box-shadow: 0 0 10px color-mix(in srgb, var(--rond-teinte) 35%, transparent);
 }
 
+/* LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15) : a la FIN d'un run vu en cours, un reflet
+   balaie le verre s'il reussit, une breve secousse le marque s'il echoue (`data-atterrissage`, pose
+   par useAtterrissage). Une seule fois : l'animation part a l'apparition de l'attribut, jamais en
+   boucle, jamais a l'ouverture d'un fil deja fini. Pas de neutralisation sous prefers-reduced-motion :
+   c'est un indicateur d'ETAT, et ce poste a le mouvement reduit actif (voir theme.css, spinner).
+   fix-ok: conv-981 - le rond changeait de teinte d'un coup a la fin d'un run, sans aucun mouvement
+   (seul effet du fichier avant ce bloc : le chevron, l.354). Fichier modifie UNE seule fois a la
+   main dans run-52d36e67e4de-1 ; le controle des causes en comptait 3 (meme modification sous son
+   chemin complet et son chemin court, plus le releve de fin d'etape : fichiersEditesParLeRun). */
+.cadre-anneau .anneau-rond[data-atterrissage] {
+  position: relative;
+  overflow: hidden;
+}
+.cadre-anneau .anneau-rond[data-atterrissage='reussi']::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 28%,
+    color-mix(in srgb, var(--text) 80%, transparent) 50%,
+    transparent 72%
+  );
+  transform: translateX(-120%);
+  animation: anneau-reflet 900ms ease-out 120ms both;
+  content: '';
+  pointer-events: none;
+}
+@keyframes anneau-reflet {
+  to {
+    transform: translateX(120%);
+  }
+}
+.cadre-anneau .anneau-rond[data-atterrissage='echec'] {
+  animation: anneau-secousse 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes anneau-secousse {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
 /* -- LA LEGENDE, « couleur sur l'exception » : un outil reussi reste gris sans point ; celui qui
    tourne, echoue ou attend porte un point et sa couleur (eclaircie vers le texte pour rester
    lisible sur le verre, en sombre comme en clair). -- */

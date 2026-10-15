@@ -81,6 +81,14 @@
  *                                    vrai (scale 1) — un agrandi ressusciterait un detail
  *                                    sous-pixel et rendrait « ca bouge » sur un ecran ou l'humain
  *                                    ne voit rien.
+ *         [--taper <texte>] [--champ <selecteur>] SAISIT ce texte (apres les --click) dans le champ
+ *                                    (defaut : premier `textarea`) : ce qui ne s'ouvre qu'a la
+ *                                    frappe (palette `/`). Champ absent = code 9. Valeur rendue
+ *                                    a la fin.
+ *         [--ralenti <1..20>]        avec --motion : ralentit l'horloge des animations AVANT le
+ *                                    declencheur (defaut x10 avec --click, --taper ou --state,
+ *                                    x1 sinon ; 1 = coupe).
+ *                                    Une ouverture de 130 ms finit sinon avant la premiere image.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -189,6 +197,59 @@ export const verdictMouvement = ({ selecteur, occurrences }) => {
     if (max < SEUILS.mouvement) echecs.push(`mouvement-absent(${nom}, ${taille}, max=${max})`)
   })
   return { ok: echecs.length === 0, echecs }
+}
+
+/**
+ * L'accuse de reception d'une image du flux (`Page.startScreencast`), ou null. Pure.
+ *
+ * Mesure du 2026-10-15 (conv-981) : la fenetre de l'instance cachee n'est jamais affichee
+ * (`presentAutomationWindow` rend false en mode test cache) ; elle dessine ~2 images/s, les
+ * animations avancent par a-coups et une capture sur deux attend une image qui ne vient pas
+ * (`Page.captureScreenshot expire`). Un flux d'images ouvert la fait dessiner a ~33 images/s.
+ * Chromium n'envoie l'image suivante qu'apres l'accuse de la precedente.
+ */
+export const accuseDImage = (message) =>
+  message?.method === 'Page.screencastFrame'
+    ? { method: 'Page.screencastFrameAck', params: { sessionId: message.params?.sessionId } }
+    : null
+
+/**
+ * Ce que `--taper <texte> [--champ <selecteur>]` demande de saisir, ou null. Pure.
+ *
+ * Certains affichages ne s'ouvrent qu'a la FRAPPE (la palette `/` du composer, conv-981) : aucun
+ * `--click` ne les montre. Le champ par defaut est le premier `textarea` de la page.
+ */
+export const saisieDemandee = (argv) => {
+  const i = argv.indexOf('--taper')
+  const texte = i >= 0 ? argv[i + 1] : undefined
+  if (typeof texte !== 'string' || texte.startsWith('--')) return null
+  const j = argv.indexOf('--champ')
+  const champ = j >= 0 && argv[j + 1] && !argv[j + 1].startsWith('--') ? argv[j + 1] : 'textarea'
+  return { champ, texte }
+}
+
+/**
+ * Vitesse de l'horloge des animations pendant une mesure de mouvement. Pure.
+ *
+ * Une animation d'OUVERTURE (menu de 130 ms) est finie avant la premiere image : le clic est suivi
+ * de 600 ms d'attente, et chaque capture prend ~1 s dans l'instance cachee. Apres un `--click`, on
+ * ralentit donc 10 fois (`Animation.setPlaybackRate`) AVANT le clic. Ralentir ne fabrique aucun
+ * mouvement : un element immobile reste a 0, et un mouvement lent donne des ecarts PLUS petits entre
+ * images — l'outil devient plus severe, pas plus laxiste. `--ralenti <n>` (1 a 20) regle le facteur,
+ * `--ralenti 1` le coupe. Une saisie (`--taper`) ou un etat force (`--state`) declenchent comme un
+ * clic : la palette `/` s'ouvre a la frappe, le reflet du verdict a l'apparition de son attribut.
+ * Sans declencheur, une boucle se mesure a sa vitesse reelle.
+ */
+export const tauxDeLectureDuMouvement = (argv) => {
+  if (!argv.includes('--motion')) return 1
+  const i = argv.indexOf('--ralenti')
+  const demande = i >= 0 ? Number(argv[i + 1]) : NaN
+  const facteur = Number.isFinite(demande)
+    ? Math.min(20, Math.max(1, demande))
+    : argv.includes('--click') || argv.includes('--taper') || argv.includes('--state')
+      ? 10
+      : 1
+  return 1 / facteur
 }
 
 /**
@@ -388,7 +449,17 @@ export const ENV_CONVERSATION_SEMEE = 'AUTOWIN_CAPTURE_CONVERSATION_SEMEE'
 /** Clé de la conversation rouverte au démarrage (`derniere-conversation.ts`, renderer). */
 export const CLE_DERNIERE_CONVERSATION = 'autowin.chat.derniereConversation'
 
-export const ETATS_CONNUS = ['attention', 'occupe']
+export const ETATS_CONNUS = ['attention', 'occupe', 'atterrissage-reussi', 'atterrissage-echec']
+
+/**
+ * L'attribut qu'un etat force ECRIT, tel que le composant le pose. Pure. La mosaique ecrit
+ * `data-etat` ; le rond de verre ecrit `data-atterrissage` a la fin d'un run vu en cours
+ * (anneau-activite.tsx, conv-981) : reflet si reussi, secousse si echec.
+ */
+export const attributDEtat = (etat) =>
+  etat.startsWith('atterrissage-')
+    ? { nom: 'data-atterrissage', valeur: etat.slice('atterrissage-'.length) }
+    : { nom: 'data-etat', valeur: etat }
 
 export const resoudreEtat = (valeur) => {
   const brut = String(valeur ?? '')
@@ -620,6 +691,11 @@ const main = async () => {
   const erreursConsole = []
   socket.onmessage = ({ data }) => {
     const m = JSON.parse(data)
+    const accuse = accuseDImage(m)
+    if (accuse) {
+      socket.send(JSON.stringify({ id: ++id, ...accuse }))
+      return
+    }
     const cb = attente.get(m.id)
     if (cb) {
       attente.delete(m.id)
@@ -783,12 +859,25 @@ const main = async () => {
   const aRestaurer = vueARestaurer({ vueAvant, vueDemandee: vue })
   // Appelee sur CHAQUE sortie posterieure a la navigation, y compris les echecs : une capture qui
   // echoue n'a pas moins deplace l'utilisateur qu'une capture qui reussit.
+  // Ce que --taper a ecrase : rendu a la fin, sinon le brouillon de l'utilisateur serait perdu
+  // sur une fenetre reelle.
+  let saisieARestaurer
   const restaurerVue = async () => {
     // La taille emulee par --largeur ne survit JAMAIS a la capture : sur une fenetre reelle
     // (--port, --fenetre-reelle), elle laisserait l'app de l'utilisateur mise en page a une
     // largeur qui n'est pas celle de son ecran. Toutes les sorties passent par ici.
     if (largeurDemandee > 0) {
       await envoyer('Emulation.clearDeviceMetricsOverride').catch(() => {})
+    }
+    if (saisieARestaurer) {
+      await evaluer(`(() => {
+        const el = document.querySelector(${JSON.stringify(saisieARestaurer.champ)})
+        if (!el) return false
+        const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(saisieARestaurer.valeur)})
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+        return true
+      })()`).catch(() => {})
     }
     if (!aRestaurer) return
     try {
@@ -898,6 +987,22 @@ const main = async () => {
   // popover, un menu, un onglet n'existent dans le DOM qu'APRES un clic. On mesure donc le DOM
   // avant, on declenche, on laisse le rendu se poser, et le verdict exige un DELTA -- un clic sans
   // effet ne doit pas produire une capture de la vue fermee portant un verdict vert.
+  // MESURE DE MOUVEMENT : la fenetre doit DESSINER pendant la mesure (voir `accuseDImage`), et
+  // l'animation que le declencheur lance (--state, --click, --taper) doit encore tourner a la
+  // premiere image (voir `tauxDeLectureDuMouvement`). Les deux se posent AVANT tout declencheur.
+  // fix-ok: scripts/ui-capture.mjs — mesure du 2026-10-15 (conv-981) : la fenetre cachee jamais
+  // affichee dessine ~2 images/s (une capture sur deux expire, 33 images/s avec le flux) ; une
+  // ouverture de 130 ms finit avant la 1re image (600 ms d'attente apres le declencheur).
+  const mesureMouvement = drapeau('--motion')
+  if (mesureMouvement) {
+    await envoyer('Page.startScreencast', { format: 'jpeg', quality: 10, maxWidth: 64, maxHeight: 64 })
+  }
+  const tauxDeLecture = tauxDeLectureDuMouvement(process.argv)
+  if (tauxDeLecture !== 1) {
+    await envoyer('Animation.enable')
+    await envoyer('Animation.setPlaybackRate', { playbackRate: tauxDeLecture })
+  }
+
   // --state : amene l'UI dans un etat qu'aucune navigation ne produit a la demande (une fenetre
   // mosaique passe en data-etat='attention' seulement a la FIN d'un tour). On l'ECRIT sur le DOM,
   // et le verdict exige que l'ecriture ait touche au moins un element.
@@ -909,7 +1014,7 @@ const main = async () => {
     const appliques = etat
       ? await evaluer(`(() => {
       const noeuds = [...document.querySelectorAll(${JSON.stringify(selecteurEtat)})]
-      noeuds.forEach((n) => n.setAttribute('data-etat', ${JSON.stringify(etat)}))
+      noeuds.forEach((n) => n.setAttribute(${JSON.stringify(attributDEtat(etat ?? '').nom)}, ${JSON.stringify(attributDEtat(etat ?? '').valeur)}))
       return noeuds.length
     })()`)
       : 0
@@ -979,6 +1084,33 @@ const main = async () => {
     if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
     }
+  }
+
+  // --taper <texte> : SAISIE dans un champ (voir `saisieDemandee`). La valeur est posee comme React
+  // l'attend (setter natif + evenement `input`), APRES les --click, donc apres le ralenti : ce que la
+  // frappe ouvre s'anime pendant la mesure. Champ introuvable = echec nomme, jamais une capture
+  // sans la saisie presentee comme avec.
+  const saisie = saisieDemandee(process.argv)
+  if (saisie) {
+    const avant = await evaluer(`(() => {
+      const el = document.querySelector(${JSON.stringify(saisie.champ)})
+      if (!el || !(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)) return { echec: true }
+      const valeur = el.value
+      el.focus()
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(saisie.texte)})
+      el.setSelectionRange?.(el.value.length, el.value.length)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      return { valeur }
+    })()`)
+    if (avant?.echec) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`champ-absent(${saisie.champ})`], vue }, 9)
+    }
+    saisieARestaurer = { champ: saisie.champ, valeur: avant.valeur }
+    await new Promise((r) => setTimeout(r, 600))
+    mesuresDom = await mesurerDom()
   }
 
   // --tour <id> : LA DEMANDE AFFICHEE PAR LE GRAPHE (conv-966). Le graphe projette le DERNIER tour ;
@@ -1239,6 +1371,8 @@ const main = async () => {
     }
 
     const verdictM = verdictMouvement({ selecteur: selecteurMouvement, occurrences })
+    if (tauxDeLecture !== 1) await envoyer('Animation.setPlaybackRate', { playbackRate: 1 })
+    await envoyer('Page.stopScreencast')
     await restaurerVue()
     socket.close()
     rendre(
@@ -1253,6 +1387,7 @@ const main = async () => {
         selecteur: selecteurMouvement,
         frames,
         intervalle,
+        ...(tauxDeLecture !== 1 ? { ralenti: Math.round(1 / tauxDeLecture) } : {}),
         occurrencesTotal: boites.total,
         occurrencesMesurees: occurrences.length,
         ...(boites.total > occurrences.length

@@ -38,7 +38,7 @@ import type { ObservatoryFocus } from '../observatory-focus'
 import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
 import { buildTimelineMarks, turnSpan, type TimelineMark } from './observatory-timeline-axis'
 import { buildAgentGantt, type AgentGantt } from './observatory-agent-gantt'
-import { ObservatoryAgentGantt } from './ObservatoryAgentGantt'
+import { DerouleRejouable } from './ObservatoryAgentGantt'
 import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
@@ -1584,7 +1584,8 @@ export function ObservatoryView({
                   </small>
                 </header>
                 {ganttByTurn.get(turn.id) && (
-                  <ObservatoryAgentGantt
+                  <DerouleRejouable
+                    libelle="Rejouer ce tour"
                     gantt={ganttByTurn.get(turn.id)!}
                     selectedId={selected?.id}
                     onSelect={focusGanttEvent}

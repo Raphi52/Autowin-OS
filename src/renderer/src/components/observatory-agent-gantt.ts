@@ -406,3 +406,25 @@ export function spanGeometry(
   const width = (Math.max(0, span.end - span.start) / range) * 100
   return { left: Math.max(0, left), width: Math.min(100 - Math.max(0, left), width) }
 }
+
+/** Duree du rejeu d'un run depuis son bilan (conv-981) : 10 s, quel que soit le nombre d'etapes. */
+export const DUREE_REJEU_MS = 10_000
+/** Une barre tres courte reste visible pendant le rejeu. */
+const DUREE_MIN_REJEU_MS = 160
+
+/**
+ * Minutage d'une barre pendant « Rejouer ce run » (conv-981) : elle s'allume a son heure, a
+ * l'echelle du run ramene a 10 s. Deduit de `spanGeometry` (gauche et largeur en %) — aucun second
+ * modele. Une barre tres courte dure au moins 160 ms, sans jamais depasser la fin du rejeu.
+ */
+export function rejeuDeLaBarre(
+  geometrie: { left: number; width: number },
+  dureeTotaleMs = DUREE_REJEU_MS
+): { delaiMs: number; dureeMs: number } {
+  const delaiMs = Math.round((geometrie.left / 100) * dureeTotaleMs)
+  const largeurMs = Math.round((geometrie.width / 100) * dureeTotaleMs)
+  return {
+    delaiMs,
+    dureeMs: Math.max(0, Math.min(Math.max(DUREE_MIN_REJEU_MS, largeurMs), dureeTotaleMs - delaiMs))
+  }
+}

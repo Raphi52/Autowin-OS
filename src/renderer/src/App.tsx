@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
 import { messageMoteurPerime } from '../../shared/moteur-perime'
+import { basculerVue } from './transition-de-vue'
 
 // Gravés au build par `electron.vite.config.ts` (remplacement littéral Vite). Hors build (tests
 // unitaires happy-dom, où `define` ne s'applique pas), ils sont indéfinis → repli lisible.
@@ -264,14 +265,22 @@ export function MainApp(): React.JSX.Element {
     localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
   }, [railCollapsed])
 
+  // L'onglet AFFICHE, lu par la bascule animee : vers l'onglet deja actif, aucune transition.
+  const tabAffiche = useRef(tab)
+  useEffect(() => {
+    tabAffiche.current = tab
+  }, [tab])
   const activateTab = useCallback((nextTab: Tab): void => {
-    setVisitedTabs((visited) => {
-      if (visited.has(nextTab)) return visited
-      const next = new Set(visited)
-      next.add(nextTab)
-      return next
+    // Fondu de la page et surlignage du menu qui glisse (conv-981) ; bascule directe sans l'API.
+    basculerVue(document, nextTab === tabAffiche.current, () => {
+      setVisitedTabs((visited) => {
+        if (visited.has(nextTab)) return visited
+        const next = new Set(visited)
+        next.add(nextTab)
+        return next
+      })
+      setTab(nextTab)
     })
-    setTab(nextTab)
   }, [])
 
   const applyLocation = useCallback(

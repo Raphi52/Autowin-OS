@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   SEUILS,
   VUES_CONNUES,
+  accuseDImage,
   doitPasserParInstanceCachee,
+  tauxDeLectureDuMouvement,
   resoudreVue,
+  saisieDemandee,
   verdictCapture,
   verdictMouvement
 } from '../../scripts/ui-capture.mjs'
@@ -265,5 +268,80 @@ describe('verdict de mouvement', () => {
     // une rotation lente et legitime. Le cas mesure separe largement : 0 contre ~0,2.
     expect(SEUILS.mouvement).toBeGreaterThan(0.0005)
     expect(SEUILS.mouvement).toBeLessThan(0.05)
+  })
+})
+
+/**
+ * MESURER UNE ANIMATION D'OUVERTURE (conv-981, 2026-10-15). Deux defauts mesures sur
+ * `--click ".model-select > summary" --motion ".model-select-menu"` (code 1, capture expiree) :
+ * 1. la fenetre de l'instance cachee n'est jamais affichee (`presentAutomationWindow` rend false en
+ *    mode test cache) : elle dessine ~2 images/s, et une capture sur deux attend une image qui ne
+ *    vient pas. Un flux d'images ouvert (`Page.startScreencast`) la fait dessiner a ~33 images/s :
+ *    6 captures sur 6 en ~0,1 s. Chaque image du flux doit etre ACQUITTEE, sinon il s'arrete ;
+ * 2. le clic est suivi de 600 ms d'attente : une ouverture de 130 ms est finie avant la premiere
+ *    image. On ralentit l'horloge des animations AVANT le clic.
+ */
+describe('mesure de mouvement d une animation d ouverture', () => {
+  it('ralentit 10 fois les animations quand le mouvement est mesure apres un clic', () => {
+    expect(tauxDeLectureDuMouvement(['--click', 'summary', '--motion', '.menu'])).toBe(0.1)
+  })
+
+  it('ralentit aussi apres une saisie : la palette `/` s ouvre a la frappe, pas au clic', () => {
+    expect(tauxDeLectureDuMouvement(['--taper', '/', '--motion', '.slash-palette'])).toBe(0.1)
+  })
+
+  it('ralentit aussi apres un etat force : le reflet du verdict part quand l attribut apparait', () => {
+    expect(
+      tauxDeLectureDuMouvement(['--state', 'atterrissage-reussi', '--motion', '.anneau-rond'])
+    ).toBe(0.1)
+  })
+
+  it('ne ralentit rien sans clic : une boucle se mesure a sa vitesse reelle (jumeau)', () => {
+    expect(tauxDeLectureDuMouvement(['--motion', '.spinner'])).toBe(1)
+  })
+
+  it('obeit a --ralenti, borne entre 1 et 20, et 1 coupe le ralenti', () => {
+    expect(tauxDeLectureDuMouvement(['--click', 'a', '--motion', 'b', '--ralenti', '4'])).toBe(0.25)
+    expect(tauxDeLectureDuMouvement(['--click', 'a', '--motion', 'b', '--ralenti', '1'])).toBe(1)
+    expect(tauxDeLectureDuMouvement(['--click', 'a', '--motion', 'b', '--ralenti', '500'])).toBe(
+      0.05
+    )
+    expect(tauxDeLectureDuMouvement(['--click', 'a', '--motion', 'b', '--ralenti', 'x'])).toBe(0.1)
+    expect(tauxDeLectureDuMouvement(['--motion', 'b', '--ralenti', '5'])).toBe(0.2)
+  })
+
+  it('ne ralentit rien quand aucun mouvement n est mesure', () => {
+    expect(tauxDeLectureDuMouvement(['--click', 'summary'])).toBe(1)
+  })
+
+  it('acquitte chaque image du flux, sinon le flux s arrete et la fenetre se rendort', () => {
+    expect(
+      accuseDImage({ method: 'Page.screencastFrame', params: { sessionId: 7, data: 'x' } })
+    ).toEqual({
+      method: 'Page.screencastFrameAck',
+      params: { sessionId: 7 }
+    })
+  })
+
+  it('ignore tout autre message du debogueur (jumeau)', () => {
+    expect(accuseDImage({ id: 3, result: {} })).toBeNull()
+    expect(accuseDImage({ method: 'Log.entryAdded', params: { entry: {} } })).toBeNull()
+  })
+
+  it('--taper saisit dans le premier champ de texte, ou dans --champ', () => {
+    // La palette `/` ne s'ouvre qu'a la frappe : aucun clic ne la montre.
+    expect(saisieDemandee(['--view', 'chat', '--taper', '/'])).toEqual({
+      champ: 'textarea',
+      texte: '/'
+    })
+    expect(saisieDemandee(['--taper', '@w', '--champ', '.composer textarea'])).toEqual({
+      champ: '.composer textarea',
+      texte: '@w'
+    })
+  })
+
+  it('sans --taper, aucune saisie (jumeau)', () => {
+    expect(saisieDemandee(['--view', 'chat', '--champ', 'textarea'])).toBeNull()
+    expect(saisieDemandee(['--view', 'chat', '--taper'])).toBeNull()
   })
 })

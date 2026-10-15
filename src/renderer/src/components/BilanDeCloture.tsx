@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { RunClosureObservation } from '../../../shared/run-execution'
 import type { RunEntry } from './chat-view-types'
+import { DerouleRejouable } from './ObservatoryAgentGantt'
+import type { AgentGantt } from './observatory-agent-gantt'
 import { RunBilanCard } from './RunBilanCard'
 import { bilanDepuisCloture, lireVerdictDuJuge, type VerdictDuJuge } from './run-bilan'
 import { libelleRun } from './run-label'
@@ -26,16 +28,25 @@ export function BilanDeCloture({
   conversationId,
   closure,
   verdictEventIds,
+  gantt,
   runId,
   runs,
-  onOuvrirRunMd
+  onOuvrirRunMd,
+  onVoirDansObservatory
 }: {
   conversationId?: string
   closure: RunClosureObservation
   verdictEventIds?: string[]
+  /** Le déroulé par agent du run (le diagramme de la Chronologie), pour le rejouer (conv-981). */
+  gantt?: AgentGantt
   runId?: string
   runs: readonly RunEntry[]
   onOuvrirRunMd: (run: RunEntry) => void
+  /**
+   * Ouvre CE tour dans l'Observatory, la version complète du déroulé (conv-981) : barres
+   * cliquables et liste des événements. Absent sans tour connu : aucun lien mort.
+   */
+  onVoirDansObservatory?: () => void
 }): React.JSX.Element {
   const dernierVerdictId = verdictEventIds?.at(-1)
   const verdict = useDernierVerdict(conversationId, dernierVerdictId)
@@ -60,6 +71,10 @@ export function BilanDeCloture({
           passagesDuJuge: verdictEventIds?.length
         })}
       />
+
+      {gantt && !ouvert && (
+        <RejeuDuRun gantt={gantt} onVoirDansObservatory={onVoirDansObservatory} />
+      )}
 
       <div className="bilan-cloture__bloc" data-bilan-raisons>
         <span className="bilan-cloture__kicker">
@@ -227,4 +242,42 @@ function cheminComparable(chemin: string): string {
 function sujetDuChemin(chemin: string): string {
   const morceaux = chemin.replace(/\\/g, '/').split('/')
   return (morceaux.at(-2) ?? chemin).replace(/-workspace$/, '')
+}
+
+/**
+ * « REJOUER CE RUN » (conv-981, 2026-10-15) : le déroulé par agent du run — le MÊME diagramme que la
+ * Chronologie de l'Observatory, rien de redessiné — se rejoue en 10 s, chaque étape s'allumant à son
+ * heure (`DerouleRejouable`). Un run encore ouvert n'a pas de déroulé fini : l'appelant ne monte
+ * rien. Le lien « Version complète » ouvre ce tour dans l'Observatory, où chaque barre ouvre son
+ * événement dans la liste du tour.
+ */
+function RejeuDuRun({
+  gantt,
+  onVoirDansObservatory
+}: {
+  gantt: AgentGantt
+  onVoirDansObservatory?: () => void
+}): React.JSX.Element {
+  return (
+    <div className="bilan-cloture__bloc bilan-cloture__rejeu" data-bilan-rejeu>
+      <DerouleRejouable
+        gantt={gantt}
+        libelle="Rejouer ce run"
+        onSelect={() => undefined}
+        actions={
+          onVoirDansObservatory && (
+            <button
+              type="button"
+              className="deroule-rejouable__bouton"
+              data-testid="run-voir-observatory"
+              title="Ouvrir ce tour dans l'Observatory : barres cliquables et liste des événements"
+              onClick={onVoirDansObservatory}
+            >
+              Version complète dans l&apos;Observatory ↗
+            </button>
+          )
+        }
+      />
+    </div>
+  )
 }

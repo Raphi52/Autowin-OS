@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkflowsPanel, type WorkflowsPanelProps } from './WorkflowsPanel'
 import type { RunEntry } from './ChatView'
 import type { RunClosureObservation } from '../../../shared/run-execution'
+import type { AgentGantt } from './observatory-agent-gantt'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -25,6 +26,9 @@ vi.mock('./SourceControlPane', () => ({
 
 let closureChoisie: RunClosureObservation = { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
 let verdictsChoisis: string[] | undefined
+/** Tour et déroulé du nœud choisi : le lien « version complète dans l'Observatory » (conv-981). */
+let tourChoisi: string | undefined
+let deroulChoisi: AgentGantt | undefined
 
 vi.mock('./WorkflowExecutionGraph', () => ({
   WorkflowExecutionGraph: ({
@@ -41,7 +45,9 @@ vi.mock('./WorkflowExecutionGraph', () => ({
             kind: 'closure',
             runId: 'run-1',
             closure: closureChoisie,
-            ...(verdictsChoisis ? { verdictEventIds: verdictsChoisis } : {})
+            ...(verdictsChoisis ? { verdictEventIds: verdictsChoisis } : {}),
+            ...(tourChoisi ? { turnId: tourChoisi } : {}),
+            ...(deroulChoisi ? { gantt: deroulChoisi } : {})
           })
         }
       />
@@ -49,6 +55,31 @@ vi.mock('./WorkflowExecutionGraph', () => ({
     </div>
   )
 }))
+
+const DEROULE: AgentGantt = {
+  start: 0,
+  end: 1_000,
+  ticks: [],
+  lanes: [
+    {
+      key: 'build:subagent',
+      phase: 'build',
+      label: 'Build',
+      spans: [
+        {
+          id: 'b1',
+          eventId: 'b1',
+          start: 0,
+          end: 1_000,
+          durationMs: 1_000,
+          status: 'ok',
+          actions: 1,
+          summary: 'vert'
+        }
+      ]
+    }
+  ]
+}
 
 const REPONSE_DU_JUGE = [
   'Je relance les tests cités pour avoir un code de sortie.',
@@ -108,6 +139,8 @@ describe('WorkflowsPanel — bilan du nœud « Clôture du run »', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     verdictsChoisis = undefined
+    tourChoisi = undefined
+    deroulChoisi = undefined
     charges = vi.fn(async (_conversation: string, ids: string[]) =>
       Object.fromEntries(
         ids.map((id) => [id, [{ kind: 'model-response', content: REPONSE_DU_JUGE }]])
@@ -246,5 +279,26 @@ describe('WorkflowsPanel — bilan du nœud « Clôture du run »', () => {
     expect(container.querySelector('[data-bilan-runmd]')?.textContent).toContain(
       'avant que la trace garde le chemin'
     )
+  })
+
+  it('le déroulé du bilan ouvre CE tour dans l’Observatory, version complète (conv-981)', async () => {
+    closureChoisie = { status: 'green', totalDurationMs: 1_000, totalCostUsd: 0.1 }
+    tourChoisi = 'turn-42'
+    deroulChoisi = DEROULE
+    const onInspectTurn = vi.fn()
+    render(baseProps({ onInspectTurn }))
+    await choisirCloture()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="run-voir-observatory"]')!.click()
+    })
+    expect(onInspectTurn).toHaveBeenCalledWith({ conversationId: 'conv-1', turnId: 'turn-42' })
+  })
+
+  it('sans tour connu, pas de lien vers l’Observatory (jumeau)', async () => {
+    closureChoisie = { status: 'green', totalDurationMs: 1_000, totalCostUsd: 0.1 }
+    deroulChoisi = DEROULE
+    render(baseProps({ onInspectTurn: vi.fn() }))
+    await choisirCloture()
+    expect(container.querySelector('[data-testid="run-voir-observatory"]')).toBeNull()
   })
 })

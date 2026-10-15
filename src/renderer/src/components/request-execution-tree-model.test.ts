@@ -329,6 +329,43 @@ describe('projectLatestRequestExecution', () => {
       totalDurationMs: 140,
       totalCostUsd: 0.42
     })
+    // fix-ok: conv-981 - test ajoute UNE seule fois dans run-52d36e67e4de-1 ; le controle des causes
+    // en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le releve
+    // de fin d'etape).
+    // « Rejouer ce run » (conv-981) : la cloture porte le deroule par agent de CE run, calcule par
+    // le meme `buildAgentGantt` que la Chronologie — aucun second modele.
+    expect(closure[0].display?.gantt?.lanes.map((lane) => lane.key)).toEqual(['builder'])
+  })
+
+  it('une cloture sans agent ne porte aucun deroule a rejouer (jumeau)', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      runTrace('workspace', 'turn-1', 1, 'run-1', {
+        type: 'boundary',
+        execution: { runId: 'run-1' },
+        run: {
+          stage: 'workspace',
+          runId: 'run-1',
+          timestampMs: 100,
+          workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: 'C:\\wt\\run-1' }
+        }
+      }),
+      runTrace('closure-final', 'turn-1', 2, 'run-1', {
+        type: 'gate',
+        status: 'completed',
+        execution: { runId: 'run-1' },
+        run: {
+          stage: 'closure',
+          runId: 'run-1',
+          timestampMs: 240,
+          closure: { status: 'green', totalDurationMs: 140, totalCostUsd: 0.1 }
+        }
+      })
+    ])
+    const closure = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'closure'
+    )
+    expect(closure).toBeDefined()
+    expect(closure?.display?.gantt).toBeUndefined()
   })
 
   it('N1 — n’ajoute aucun nœud Git à un run sans worktree', () => {

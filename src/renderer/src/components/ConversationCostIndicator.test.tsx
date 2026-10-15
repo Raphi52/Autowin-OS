@@ -153,6 +153,20 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     expect(keys).toEqual(['subagent', 'orchestrator'])
   })
 
+  it('le détail s’ouvre en fondu, comme le sélecteur de modèle (conv-981)', async () => {
+    // Le panneau n'existe qu'ouvert : l'apparition `.fade-in` (theme.css) joue donc a CHAQUE
+    // ouverture, et jamais pendant qu'il reste ouvert.
+    setApi({ costBreakdown: async () => rows })
+    await render({ conversationId: 'conv-76' })
+    expect(container.querySelector('[data-testid="conversation-cost-panel"]')).toBeNull()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
+    )
+    await flush()
+    const panneau = container.querySelector('[data-testid="conversation-cost-panel"]')
+    expect(panneau?.classList.contains('fade-in')).toBe(true)
+  })
+
   it('un contexte RÉÉCRIT est signalé — c’est ce qui fait grimper la facture', async () => {
     setApi({ costBreakdown: async () => rows })
     await render({ conversationId: 'conv-76' })

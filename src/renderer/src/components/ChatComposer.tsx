@@ -486,7 +486,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           {props.frictionNode}
           {mentionsVisibles.length > 0 ? (
             <ul
-              className="slash-palette mention-palette"
+              className="slash-palette mention-palette fade-in"
               role="listbox"
               aria-label="Cibles"
               data-testid="mention-palette"
@@ -533,7 +533,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                   </div>
                 </div>
               ) : null}
-              <ul className="slash-palette" role="listbox" aria-label="Commandes">
+              <ul className="slash-palette fade-in" role="listbox" aria-label="Commandes">
                 {slashVisibles.map((c, i) => (
                   <li
                     key={c.name}

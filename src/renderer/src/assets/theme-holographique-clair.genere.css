@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   553 regles, 836 declarations. Voir genererCoucheClaire. */
+   554 regles, 837 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -224,6 +224,9 @@
 /* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */
 :root[data-theme='holographique-clair'] .cpick-tete {
     border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .cpick-barre {
+    background: rgba(208, 43, 140, 0.14)
 }
 
 /* ---- src/renderer/src/components/CapabilitiesView.css ---- */

@@ -4,6 +4,7 @@ import {
   blockedReason,
   buildAgentGantt,
   buildGanttTicks,
+  rejeuDeLaBarre,
   shortModelName,
   spanGeometry
 } from './observatory-agent-gantt'
@@ -341,5 +342,33 @@ describe('axe et géométrie du déroulé', () => {
     expect(shortModelName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5')
     expect(shortModelName('gpt-5.1-codex')).toBe('gpt-5.1-codex')
     expect(shortModelName(undefined)).toBeUndefined()
+  })
+})
+
+/**
+ * « REJOUER CE RUN » (conv-981) : le diagramme se rejoue en 10 s au plus depuis le bilan du run.
+ * Chaque barre s'allume a son heure, a l'echelle du run : son depart sur l'axe donne son delai,
+ * sa largeur sa duree. Aucun second modele : le minutage se deduit de `spanGeometry`.
+ * fix-ok: conv-981 - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
+ * des causes en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le
+ * releve de fin d'etape).
+ */
+describe('rejeuDeLaBarre', () => {
+  it('place la barre a l echelle du run, ramene a 10 s', () => {
+    expect(rejeuDeLaBarre({ left: 0, width: 100 })).toEqual({ delaiMs: 0, dureeMs: 10_000 })
+    expect(rejeuDeLaBarre({ left: 50, width: 10 })).toEqual({ delaiMs: 5_000, dureeMs: 1_000 })
+  })
+
+  it('donne une duree visible a une barre tres courte, sans depasser la fin du rejeu', () => {
+    expect(rejeuDeLaBarre({ left: 20, width: 0.1 })).toEqual({ delaiMs: 2_000, dureeMs: 160 })
+    const derniere = rejeuDeLaBarre({ left: 99.9, width: 0.05 })
+    expect(derniere.delaiMs + derniere.dureeMs).toBeLessThanOrEqual(10_000)
+  })
+
+  it('50 etapes tiennent en 10 s', () => {
+    const fins = Array.from({ length: 50 }, (_, i) =>
+      rejeuDeLaBarre({ left: i * 2, width: 2 })
+    ).map((r) => r.delaiMs + r.dureeMs)
+    expect(Math.max(...fins)).toBeLessThanOrEqual(10_000)
   })
 })

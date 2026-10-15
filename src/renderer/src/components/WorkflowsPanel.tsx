@@ -45,6 +45,7 @@ import { BilanDeCloture } from './BilanDeCloture'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
 import type { Msg } from './chat-view-types'
+import type { InspectTurnTarget } from '../observatory-focus'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
 // implicite d'une autre vue.
 import './ViewPage.css'
@@ -119,6 +120,8 @@ export type WorkflowsPanelProps = {
    * demande, pour que deux demandes identiques d'affilee rouvrent bien l'onglet.
    */
   ongletDemande?: { tab: PanelTab; jeton: number }
+  /** Ouvre un tour dans l'Observatory : lien « version complète » du déroulé du bilan (conv-981). */
+  onInspectTurn?: (target: InspectTurnTarget) => void
 }
 
 /**
@@ -158,7 +161,8 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     setRunDetailTab,
     liveRunCardRef,
     messages,
-    ongletDemande
+    ongletDemande,
+    onInspectTurn
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
@@ -342,9 +346,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               conversationId={activeId ?? undefined}
               closure={clotureChoisie}
               verdictEventIds={selection?.verdictEventIds}
+              gantt={selection?.gantt}
               runId={selection?.runId}
               runs={runs}
               onOuvrirRunMd={ouvrirRunMd}
+              {...(onInspectTurn && activeId && selection?.turnId
+                ? {
+                    onVoirDansObservatory: () =>
+                      onInspectTurn({ conversationId: activeId, turnId: selection.turnId! })
+                  }
+                : {})}
             />
           )}
 

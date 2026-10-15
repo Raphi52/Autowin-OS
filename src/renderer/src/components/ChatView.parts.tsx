@@ -20,7 +20,7 @@ import './ChatView.css'
 import './Evidence.css'
 import './ChatView.capsule-orchestration.css'
 import { LegendeDesOutils, RondDIcone, RondDuCompte, VerdictDeVerre } from './anneau-activite'
-import type { EtatArc } from './anneau-activite-calcul'
+import { useAtterrissage, type EtatArc } from './anneau-activite-calcul'
 import {
   decouperBattement,
   failedTask,
@@ -30,6 +30,7 @@ import {
   ligneEtatLancement,
   resumeCible
 } from './chat-parts-helpers'
+import { useDureeVivante } from './duree-vivante'
 
 const CMD_LABEL: Record<string, string> = {
   navigate: 'Navigation',
@@ -609,6 +610,15 @@ export function AssistantActivityGroup({
   const interruptedCount = actions.filter((action) => action.interrupted).length
   const completedCount = actions.filter((action) => action.ok === true).length
   const running = runningCount > 0
+  const etatOrchestration = failed
+    ? 'failed'
+    : running
+      ? 'running'
+      : interruptedCount > 0
+        ? 'interrupted'
+        : 'done'
+  // Le verdict qui « atterrit » sur le rond du run (conv-981) : appele avant toute sortie anticipee.
+  const [atterrissage, effacerAtterrissage] = useAtterrissage(etatOrchestration)
   /*
    * SIGNE DE VIE de l'action encore en vol. Sans lui, le groupe se resume a « 1 action en cours »
    * et rien d'autre — c'est litteralement ce que l'utilisateur a rapporte le 2026-08-25 : « ca me
@@ -621,6 +631,13 @@ export function AssistantActivityGroup({
     .find((action) => action.ok === undefined && !action.interrupted && action.progress)?.progress
   // Avant le premier battement, la ligne d'etat du lancement dit QUOI tourne et OU.
   const ligneEtat = battement ?? ligneEtatLancement(actions)
+  // La duree du battement n'arrive que toutes les 5 s : l'ecran l'avance seul chaque seconde, comme
+  // le bloc Raisonnement (conv-982, duree-vivante.ts). Pose AVANT le retour de la capsule
+  // d'orchestration : un hook ne vit pas sous un `if`.
+  const dureeVivante = useDureeVivante(
+    battement ? decouperBattement(battement).duree : undefined,
+    running
+  )
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
   const status = running
     ? completedCount > 0
@@ -809,9 +826,7 @@ export function AssistantActivityGroup({
     return (
       <details
         className={`thinking-block thinking-block--deux-lignes cadre-anneau thinking-block--orchestration${running ? ' is-live' : ' is-done'}`}
-        data-state={
-          failed ? 'failed' : running ? 'running' : interruptedCount > 0 ? 'interrupted' : 'done'
-        }
+        data-state={etatOrchestration}
         open={capsuleOuverte}
       >
         <summary
@@ -823,7 +838,12 @@ export function AssistantActivityGroup({
           }}
         >
           <span className="anneau-tete">
-            <RondDIcone etats={etatsDesPhases} testid="activity-rond">
+            <RondDIcone
+              etats={etatsDesPhases}
+              atterrissage={atterrissage}
+              onAtterri={effacerAtterrissage}
+              testid="activity-rond"
+            >
               {ICONE_ORCHESTRATION}
             </RondDIcone>
             <span className="anneau-col">
@@ -837,9 +857,9 @@ export function AssistantActivityGroup({
                     <span className="orch-phase">{phaseCourante ?? 'en cours'}</span>
                   </>
                 )}
-                {decoupe?.duree && (
+                {dureeVivante && (
                   <span className="thinking-duree" data-testid="activity-duree">
-                    {decoupe.duree}
+                    {dureeVivante}
                   </span>
                 )}
               </span>
@@ -1002,9 +1022,9 @@ export function AssistantActivityGroup({
             <span className="anneau-col">
               <span className="anneau-l1">
                 <span className="activity-group-title">{status}</span>
-                {decoupeDuBattement?.duree && (
+                {dureeVivante && (
                   <span className="thinking-duree" data-testid="activity-duree">
-                    {decoupeDuBattement.duree}
+                    {dureeVivante}
                   </span>
                 )}
               </span>
