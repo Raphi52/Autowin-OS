@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CandidatVeille } from '../../../main/veille/candidats'
+import type { CandidatVeille, StatutMarquable } from '../../../main/veille/candidats'
 import type { StockVeille } from '../../../main/veille/candidats-store'
 import { trierParPertinence, type TriVeille } from './veille-tri'
 import './VeilleCandidatsSection.css'
@@ -23,7 +23,7 @@ import { Spinner } from './Spinner'
 export interface VeilleCandidatsSectionProps {
   /** Injectable pour les tests : sinon la vue parlerait au vrai IPC. */
   charger?: () => Promise<StockVeille>
-  marquer?: (id: string, statut: CandidatVeille['statut']) => Promise<StockVeille>
+  marquer?: (id: string, statut: StatutMarquable) => Promise<StockVeille>
   /** Injectable pour les tests : l'envoi réel passe par l'événement de pré-remplissage. */
   prompter?: (candidat: CandidatVeille) => Promise<void> | void
   /**
@@ -38,8 +38,15 @@ export interface VeilleCandidatsSectionProps {
 const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
   nouveau: 'nouveau',
   prompte: 'prompté',
-  ecarte: 'écarté'
+  ecarte: 'écarté',
+  perime: 'périmé'
 }
+
+/** Dit pourquoi un candidat périmé ne se prompte plus — même texte sur le bouton et après un clic. */
+const RAISON_PERIME =
+  'La ligne citée n’est plus dans le fichier : ce défaut a sans doute déjà été corrigé.'
+
+const pluriel = (n: number, mot: string): string => `${n} ${mot}${n > 1 ? 's' : ''}`
 
 /**
  * Prépare la conversation VISIBLE du scout interne : créée par la vue puis OUVERTE immédiatement
@@ -176,13 +183,19 @@ function LigneCandidat({
         <a href={candidat.url} target="_blank" rel="noreferrer" className="veille-source">
           ouvrir la source
         </a>
-        <button type="button" className="veille-prompter" onClick={() => onPrompter(candidat)}>
+        <button
+          type="button"
+          className="veille-prompter"
+          onClick={() => onPrompter(candidat)}
+          disabled={candidat.statut === 'perime'}
+          title={candidat.statut === 'perime' ? RAISON_PERIME : undefined}
+        >
           Prompter dans Autowin
         </button>
         <button
           type="button"
           onClick={() => onEcarter(candidat)}
-          disabled={candidat.statut === 'ecarte'}
+          disabled={candidat.statut === 'ecarte' || candidat.statut === 'perime'}
         >
           Écarter
         </button>
@@ -201,6 +214,8 @@ export function VeilleCandidatsSection({
   const [stock, setStock] = useState<StockVeille>()
   const [erreur, setErreur] = useState<string>()
   const [voirEcartes, setVoirEcartes] = useState(false)
+  /** Ce qu'un clic n'a PAS fait, dit en clair : un bouton muet se lirait comme une panne. */
+  const [avis, setAvis] = useState<string>()
   // Par défaut on trie par pertinence : la vue existe pour décider quoi reprendre en premier.
   const [tri, setTri] = useState<TriVeille>('pertinence')
 
@@ -242,10 +257,10 @@ export function VeilleCandidatsSection({
 
   const changerStatut = async (
     candidat: CandidatVeille,
-    statut: CandidatVeille['statut']
+    statut: StatutMarquable
   ): Promise<void> => {
     const ecrivain =
-      marquer ?? ((id: string, s: CandidatVeille['statut']) => window.api.veilleMarquer(id, s))
+      marquer ?? ((id: string, s: StatutMarquable) => window.api.veilleMarquer(id, s))
     setStock(await ecrivain(candidat.id, statut))
   }
 
@@ -269,20 +284,50 @@ export function VeilleCandidatsSection({
     )
   }
 
+  // Écartés et périmés sont masqués ensemble par défaut : ni l'un ni l'autre n'est à reprendre.
+  const masque = (c: CandidatVeille): boolean => c.statut === 'ecarte' || c.statut === 'perime'
   const visibles = trierParPertinence(
-    stock.candidats.filter((c) => voirEcartes || c.statut !== 'ecarte'),
+    stock.candidats.filter((c) => voirEcartes || !masque(c)),
     tri
   )
   const ajouts = visibles.filter((c) => c.type === 'ajout')
   // `autre` va avec les corrections : ce n'est pas un ajout prouvé, donc il n'a rien à faire dans la
   // colonne où l'on va piocher ce qu'on implémente.
   const corrections = visibles.filter((c) => c.type !== 'ajout')
-  const lancerPrompt = (candidat: CandidatVeille): void => {
-    void (prompter ?? prompterParDefaut)(candidat)
-    void changerStatut(candidat, 'prompte')
+  /**
+   * Prompter RE-LIT le stock d'abord : c'est cette lecture qui re-vérifie, côté main, que la ligne
+   * citée est encore dans son fichier. La vue peut être ouverte depuis des heures — le défaut a pu
+   * être corrigé entre l'affichage et le clic (cas réel : conv-947, servi trois semaines après).
+   */
+  const lancerPrompt = async (candidat: CandidatVeille): Promise<void> => {
+    const lecteur = charger ?? ((): Promise<StockVeille> => window.api.veilleSnapshot())
+    let frais: StockVeille
+    try {
+      frais = await lecteur()
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : String(cause))
+      return
+    }
+    setStock(frais)
+    const actuel = frais.candidats.find((c) => c.id === candidat.id)
+    if (!actuel || actuel.statut === 'perime') {
+      setAvis(
+        actuel
+          ? `« ${candidat.titre} » n’a pas été envoyé. ${RAISON_PERIME}`
+          : `« ${candidat.titre} » n’est plus dans le stock : rien n’a été envoyé.`
+      )
+      return
+    }
+    setAvis(undefined)
+    void (prompter ?? prompterParDefaut)(actuel)
+    void changerStatut(actuel, 'prompte')
   }
-  const ecartes =
-    stock.candidats.length - stock.candidats.filter((c) => c.statut !== 'ecarte').length
+  const ecartes = stock.candidats.filter((c) => c.statut === 'ecarte').length
+  const perimes = stock.candidats.filter((c) => c.statut === 'perime').length
+  const masques = [
+    ...(ecartes > 0 ? [pluriel(ecartes, 'écarté')] : []),
+    ...(perimes > 0 ? [pluriel(perimes, 'périmé')] : [])
+  ].join(' · ')
 
   return (
     <section className="veille" data-testid="veille-section">
@@ -311,9 +356,9 @@ export function VeilleCandidatsSection({
               <option value="date">ordre de lecture</option>
             </select>
           </label>
-          {ecartes > 0 && (
+          {masques && (
             <button type="button" onClick={() => setVoirEcartes((v) => !v)}>
-              {voirEcartes ? 'masquer' : 'voir'} {ecartes} écarté{ecartes > 1 ? 's' : ''}
+              {voirEcartes ? 'masquer' : 'voir'} {masques}
             </button>
           )}
           <button type="button" onClick={() => void lire()} data-testid="veille-actualiser">
@@ -337,6 +382,12 @@ export function VeilleCandidatsSection({
           </button>
         </div>
       </header>
+
+      {avis && (
+        <p className="veille-message" role="status" data-testid="veille-avis">
+          {avis}
+        </p>
+      )}
 
       {stock.echecs.length > 0 && (
         <div className="veille-echecs" role="alert" data-testid="veille-echecs">
@@ -379,7 +430,7 @@ export function VeilleCandidatsSection({
                   <LigneCandidat
                     key={candidat.id}
                     candidat={candidat}
-                    onPrompter={lancerPrompt}
+                    onPrompter={(c) => void lancerPrompt(c)}
                     onEcarter={(c) => void changerStatut(c, 'ecarte')}
                   />
                 ))}
@@ -398,7 +449,7 @@ export function VeilleCandidatsSection({
                   <LigneCandidat
                     key={candidat.id}
                     candidat={candidat}
-                    onPrompter={lancerPrompt}
+                    onPrompter={(c) => void lancerPrompt(c)}
                     onEcarter={(c) => void changerStatut(c, 'ecarte')}
                   />
                 ))}

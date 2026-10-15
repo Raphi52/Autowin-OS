@@ -52,8 +52,15 @@ export interface CandidatVeille {
   prompt: string
   /** Quand la passe a vu cette entrée pour la première fois. */
   vuLe: string
-  statut: 'nouveau' | 'ecarte' | 'prompte'
+  /**
+   * `perime` n'est JAMAIS écrit sur disque ni posé par un humain : il est CALCULÉ au moment de servir
+   * le stock (`classerPerimes`), quand la ligne citée d'une correction n'est plus dans son fichier.
+   */
+  statut: StatutMarquable | 'perime'
 }
+
+/** Les statuts qu'un humain pose depuis la vue (et que `veille:marquer` accepte). */
+export type StatutMarquable = 'nouveau' | 'ecarte' | 'prompte'
 
 /**
  * La nature d'une entrée de notes de version.
@@ -305,4 +312,69 @@ export function trierCandidats(
   }
 
   return { retenus, refuses }
+}
+
+/**
+ * Lit un fichier du dépôt analysé par son chemin RELATIF (`src/main/x.ts`).
+ * `undefined` = le fichier n'existe pas ; une EXCEPTION = illisible, donc état inconnu.
+ */
+export type LireSource = (cheminRelatif: string) => string | undefined
+
+/** Ce que `audit-interne` écrit à la place d'un octet de contrôle pour garder la citation lisible. */
+const MARQUE_OCTET_CONTROLE = '<octet de contrôle>'
+
+/** Espaces, tabulations et fins de ligne ramenés à un seul blanc : une ré-indentation ne périme rien. */
+function compacter(texte: string): string {
+  return texte.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * La ligne citée par un candidat ancré dans le code est-elle ENCORE dans son fichier ?
+ *
+ * Fichier absent → non : la ligne n'y est plus. La citation « lisible » d'un octet de contrôle est
+ * coupée sur sa marque, et chaque morceau doit se retrouver dans le fichier.
+ */
+export function citationEncorePresente(
+  candidat: Pick<CandidatVeille, 'url' | 'citation'>,
+  lire: LireSource
+): boolean {
+  const contenu = lire(ancrageSansLigne(candidat.url.trim()))
+  if (contenu === undefined) return false
+  const texte = compacter(contenu)
+  const morceaux = candidat.citation.split(MARQUE_OCTET_CONTROLE).map(compacter).filter(Boolean)
+  return morceaux.length > 0 && morceaux.every((morceau) => texte.includes(morceau))
+}
+
+/**
+ * Classe « périmé » chaque CORRECTION ancrée dans le code dont la ligne citée a disparu du fichier.
+ *
+ * fix-ok: un candidat garde la citation figée au jour de sa détection. « La mise à jour propose
+ * d'abord rebaser » (update-contract.ts, vu le 2026-09-22 à 11:40 UTC) a été corrigé trois heures
+ * plus tard (191ab51d), et servi quand même le 2026-10-14 comme défaut à corriger (conv-947) — rien
+ * ne relisait le fichier avant de le proposer.
+ *
+ * Appelé au moment de SERVIR le stock, jamais pour l'écrire : le statut humain reste sur disque, et
+ * si la ligne revient (correctif annulé) le candidat redevient actif sans rien réparer. Un fichier
+ * ILLISIBLE laisse le candidat tel quel — ne pas savoir n'est pas une preuve de correction. Les
+ * ajouts et les candidats web ne sont pas touchés : seule une correction cite le code qui la fonde.
+ */
+export function classerPerimes(
+  candidats: readonly CandidatVeille[],
+  lire: LireSource
+): CandidatVeille[] {
+  const lus = new Map<string, string | undefined>()
+  const lireUneFois: LireSource = (chemin) => {
+    if (!lus.has(chemin)) lus.set(chemin, lire(chemin))
+    return lus.get(chemin)
+  }
+  return candidats.map((candidat) => {
+    if (candidat.type !== 'correction' || !ancrageInterne(candidat.url.trim())) return candidat
+    try {
+      return citationEncorePresente(candidat, lireUneFois)
+        ? candidat
+        : { ...candidat, statut: 'perime' as const }
+    } catch {
+      return candidat
+    }
+  })
 }

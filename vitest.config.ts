@@ -136,7 +136,9 @@ const GIT_LOURDS = [
   'src/main/edit-file-portee.test.ts',
   'src/main/run-autoclose.test.ts',
   'src/main/githooks-pre-push.test.ts',
-  'src/main/e2e-chaine*.test.ts'
+  'src/main/e2e-chaine*.test.ts',
+  // Vrai dépôt, vraie copie propre (`git worktree add`), vrai `tsc` (conv-954).
+  'src/main/typage-avant-publication-reel.test.ts'
 ]
 
 export default defineConfig({

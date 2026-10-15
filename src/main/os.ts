@@ -66,12 +66,14 @@ import {
   type VerificationAvantPublication
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
+import type { TypageAvantPublication } from './typage-avant-publication'
 import { sharedBrainRoot } from './brain-context'
 import { brainEstUnDepot } from './brain-paths'
 import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
+  marquerCheckpointCoupeParQuota,
   loadOrchestrationStates,
   pickOrchestrationsToResume,
   pickOrchestrationToResume,
@@ -698,6 +700,18 @@ export class AutowinOS {
         this.orchestrationStartedAt.delete(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
       },
+      // Mur de quota : l'état reprenable est GARDÉ et marqué, jamais effacé (`orchestrator.ts`).
+      onRunQuotaWalled: (runId, mur, regle) => {
+        const racine = this.orchestrationStateRoot
+        void marquerCheckpointCoupeParQuota(racine, runId, mur, regle)
+          // Agents et consommation incohérents entre eux : on pose au moins le refus et l'heure. Le
+          // verrou éventuellement resté sur le disque sera réconcilié à la relance, comme après un
+          // crash (`reconcileResumableOrchestrationForRelaunch`).
+          .catch(() => marquerCheckpointCoupeParQuota(racine, runId, mur))
+          .catch((erreur: unknown) =>
+            console.warn('[orchestration] mur de quota non noté sur le checkpoint', runId, erreur)
+          )
+      },
       // Fan-out multi-modèles : les blocs topology scout/frame/terrain → phases composées ; judge → juges.
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
       phaseFanOut: (phase) => selectPhaseFanOut(this.fanOut, phase),
@@ -823,6 +837,8 @@ export class AutowinOS {
       repo: string,
       fichiers: readonly string[]
     ) => Promise<VerificationAvantPublication>
+    /** Typage de ce qui part, joué AVANT les tests (voir `typage-avant-publication.ts`). */
+    typerAvantPublication?: (repo: string, fichiers: readonly string[]) => Promise<TypageAvantPublication>
   }): Promise<AutoCloseReport | undefined> {
     const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {

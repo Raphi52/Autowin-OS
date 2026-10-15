@@ -3,17 +3,23 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { ChatTurnEvent } from '../../shared/chat-turn'
-import { applyTurnEventToMessages, deterministicMessageId, pointDeCoupure } from './conversations'
-import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
+import { flattenChatParts, type ChatTurnEvent } from '../../shared/chat-turn'
+import {
+  applyTurnEventToMessages,
+  ConversationStore,
+  deterministicMessageId,
+  pointDeCoupure
+} from './conversations'
+import type { Conversation, ConversationChange, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
 import type { FinishedRunOutcome } from '../runs/run-interruption'
 
@@ -36,6 +42,55 @@ export class ConversationPersistenceError extends Error {
     super(message, options)
     this.name = 'ConversationPersistenceError'
   }
+}
+
+/**
+ * LE TEXTE D'UN MESSAGE À PARTIES N'EST ÉCRIT QU'UNE FOIS.
+ *
+ * `content` d'un message qui porte des `parts` en est DÉRIVÉ à chaque événement de tour
+ * (`message.content = flattenChatParts(next.parts)`, `conversations.ts`). Mesuré le 2026-10-14 sur
+ * `conversations.json` (75,7 Mo, 828 conversations) : 4 852 messages à parties, et pour TOUS
+ * `content === flattenChatParts(parts)` — 18,9 Mo de texte recopié, relu, revalidé et réécrit à
+ * chaque démarrage et à chaque rotation du journal.
+ *
+ * Sur le disque, un tel `content` est donc écrit VIDE, puis recalculé à la lecture. Seul un
+ * `content` strictement égal à sa dérivation est vidé : un texte qui en diffère (aucun aujourd'hui)
+ * reste écrit tel quel, donc rien ne se perd.
+ *
+ * Pourquoi `''` et pas l'absence du champ : la version précédente du binaire EXIGE un `content`
+ * texte (`isConversationMessage`) et déclarerait le fichier entier illisible sans lui — le piège
+ * décrit plus bas, à `backupBeforeFirstMigratedWrite`. Avec `''`, un retour arrière relit encore ses
+ * conversations ; seul le texte à plat de ces messages lui manquerait, leurs `parts` restant entières.
+ *
+ * Conséquence assumée : le texte à plat suit la version COURANTE de `flattenChatParts`, comme il le
+ * fait déjà pour tout message que le tour suivant touche.
+ */
+function messagePourLeDisque(message: Msg): Msg {
+  if (!Array.isArray(message.parts) || !message.content) return message
+  return message.content === flattenChatParts(message.parts) ? { ...message, content: '' } : message
+}
+
+function conversationPourLeDisque(conversation: Conversation): Conversation {
+  let change = false
+  const messages = conversation.messages.map((message) => {
+    const disque = messagePourLeDisque(message)
+    if (disque !== message) change = true
+    return disque
+  })
+  return change ? { ...conversation, messages } : conversation
+}
+
+/** Inverse de `messagePourLeDisque`, appliqué EN PLACE sur ce qui vient d'être relu du disque. */
+function restaurerContenuDuMessage(message: Msg): Msg {
+  if (message.content === '' && Array.isArray(message.parts) && message.parts.length > 0) {
+    message.content = flattenChatParts(message.parts)
+  }
+  return message
+}
+
+function restaurerContenus(conversation: Conversation): Conversation {
+  for (const message of conversation.messages) restaurerContenuDuMessage(message)
+  return conversation
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -400,6 +455,123 @@ export function conversationJournalPath(path = conversationsPath()): string {
   return `${path}.journal.jsonl`
 }
 
+/**
+ * ARCHIVE DES CONVERSATIONS INACTIVES — un fichier par conversation, hors du snapshot.
+ *
+ * Mesuré le 2026-10-14 : 779 conversations sur 828 n'avaient pas bougé depuis plus de 14 jours et
+ * pesaient 65,4 Mo des 76,8 Mo que le démarrage relit, revalide message par message et RÉÉCRIT
+ * (le snapshot est recompacté à chaque démarrage qui trouve un journal, et à chaque rotation).
+ * Le jalon « stores conversations et taches charges » prenait 1,3 à 1,8 s du corps du module.
+ *
+ * La règle qui rend l'archive sûre tient en une phrase : la copie ACTIVE (snapshot ou journal)
+ * GAGNE TOUJOURS. Une archive n'est lue que pour un fil absent des deux. Donc :
+ * - le démarrage ne lit que le snapshot et le journal ; les archives sont relues JUSTE APRÈS, hors
+ *   du chemin critique (`archivesChargees`), puis ajoutées au store sans être réécrites ;
+ * - un fil archivé qu'on touche est réécrit EN ENTIER dans le journal (et redevient actif) ;
+ * - un fil archivé supprimé perd aussi son fichier, sinon il ressusciterait au démarrage suivant ;
+ * - la bascule (`archiver`) écrit d'abord les archives, puis seulement retire ces fils du
+ *   snapshot ; un arrêt entre les deux laisse un fil en double, et la copie active gagne.
+ *
+ * Un fichier par fil, et pas une archive unique : supprimer ou raviver un fil ne réécrit alors
+ * qu'un seul petit fichier, jamais 65 Mo.
+ */
+export function conversationArchiveDir(path = conversationsPath()): string {
+  return `${path}.archive`
+}
+
+/** Au-delà de ce délai sans activité, un fil quitte le snapshot pour l'archive. */
+export const SEUIL_ARCHIVE_MS = 14 * 24 * 60 * 60 * 1000
+
+/** Un id de conversation est un NOM DE FICHIER d'archive : rien qui puisse sortir du dossier. */
+const ID_ARCHIVABLE = /^[A-Za-z0-9._-]{1,120}$/
+
+function cheminArchive(path: string, id: string): string {
+  return join(conversationArchiveDir(path), `${id}.json`)
+}
+
+/**
+ * PIERRE TOMBALE d'une archive qu'on n'a pas pu retirer (fichier tenu par un antivirus, un
+ * indexeur) : `<id>.supprime`. Sans elle, l'enregistrement `delete` du journal disparaît à la
+ * prochaine compaction et le fil supprimé revient au démarrage suivant.
+ */
+const SUFFIXE_SUPPRIME = '.supprime'
+
+/** Les ids archivés, lus dans le NOM des fichiers : aucun fichier n'est ouvert. */
+function idsArchives(path: string): string[] {
+  const dossier = conversationArchiveDir(path)
+  if (!existsSync(dossier)) return []
+  try {
+    const noms = readdirSync(dossier)
+    const supprimes = new Set(
+      noms
+        .filter((nom) => nom.endsWith(SUFFIXE_SUPPRIME))
+        .map((nom) => nom.slice(0, -SUFFIXE_SUPPRIME.length))
+    )
+    return noms
+      .filter((nom) => nom.endsWith('.json'))
+      .map((nom) => nom.slice(0, -'.json'.length))
+      .filter((id) => ID_ARCHIVABLE.test(id) && !supprimes.has(id))
+  } catch {
+    return []
+  }
+}
+
+/** Ids marqués supprimés dont l'archive n'a pas encore pu être retirée. */
+function idsSupprimesEnAttente(path: string): string[] {
+  const dossier = conversationArchiveDir(path)
+  if (!existsSync(dossier)) return []
+  try {
+    return readdirSync(dossier)
+      .filter((nom) => nom.endsWith(SUFFIXE_SUPPRIME))
+      .map((nom) => nom.slice(0, -SUFFIXE_SUPPRIME.length))
+  } catch {
+    return []
+  }
+}
+
+/** Une archive illisible ou d'un autre fil rend `undefined` : on ne devine jamais son contenu. */
+function conversationDArchive(texte: string, id: string): Conversation | undefined {
+  try {
+    const data: unknown = JSON.parse(texte)
+    return isConversation(data) && data.id === id ? restaurerContenus(data) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function lireArchive(path: string, id: string): Conversation | undefined {
+  if (!ID_ARCHIVABLE.test(id)) return undefined
+  try {
+    return conversationDArchive(readFileSync(cheminArchive(path, id), 'utf8'), id)
+  } catch {
+    return undefined
+  }
+}
+
+async function lireArchiveAsync(path: string, id: string): Promise<Conversation | undefined> {
+  try {
+    return conversationDArchive(await readFile(cheminArchive(path, id), 'utf8'), id)
+  } catch {
+    return undefined
+  }
+}
+
+function supprimerArchive(path: string, id: string): void {
+  if (!ID_ARCHIVABLE.test(id)) return
+  try {
+    rmSync(cheminArchive(path, id), { force: true })
+  } catch (erreur) {
+    // Une archive qui reste ferait revenir un fil que l'utilisateur a supprimé : une pierre
+    // tombale durable la fait ignorer, et son retrait est retenté au démarrage suivant.
+    try {
+      writeFileSync(join(conversationArchiveDir(path), `${id}${SUFFIXE_SUPPRIME}`), '', 'utf8')
+    } catch {
+      /* rien de plus à tenter ici : le message ci-dessous nomme le fichier à retirer */
+    }
+    console.warn(`[conversations] archive de ${id} non supprimée`, erreur)
+  }
+}
+
 type ConversationJournalRecord =
   | { schema: 'autowin.conversation-change/v1'; op: 'upsert'; conversation: Conversation }
   | { schema: 'autowin.conversation-change/v1'; op: 'delete'; id: string }
@@ -421,10 +593,22 @@ type ConversationJournalRecord =
 
 const JOURNAL_MAX_BYTES = 16 * 1024 * 1024
 
-function applyConversationJournal(base: Conversation[], path: string): Conversation[] {
+function applyConversationJournal(
+  base: Conversation[],
+  path: string,
+  /** Rempli des fils que le journal SUPPRIME : leur archive éventuelle doit partir avec eux. */
+  supprimees?: Set<string>
+): Conversation[] {
   const journal = conversationJournalPath(path)
   if (!existsSync(journal)) return base
   const byId = new Map(base.map((conversation) => [conversation.id, conversation]))
+  // Un delta qui vise un fil absent du snapshot peut viser un fil ARCHIVÉ (ravivé par un upsert
+  // perdu) : son archive est relue, plutôt que d'écarter le delta.
+  const depuisArchive = (id: string): Conversation | undefined => {
+    const archivee = lireArchive(path, id)
+    if (archivee) byId.set(id, archivee)
+    return archivee
+  }
   const lines = readFileSync(journal, 'utf8').split(/\r?\n/)
   const lastContentIndex = lines.reduce((last, line, index) => (line ? index : last), -1)
   const ecartees: string[] = []
@@ -434,9 +618,11 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
       const record = JSON.parse(line) as Partial<ConversationJournalRecord>
       if (record.schema !== 'autowin.conversation-change/v1') throw new Error('schema invalide')
       if (record.op === 'upsert' && isConversation(record.conversation)) {
-        byId.set(record.conversation.id, record.conversation)
+        byId.set(record.conversation.id, restaurerContenus(record.conversation))
+        supprimees?.delete(record.conversation.id)
       } else if (record.op === 'delete' && typeof record.id === 'string') {
         byId.delete(record.id)
+        supprimees?.add(record.id)
       } else if (
         record.op === 'append-messages' &&
         typeof record.id === 'string' &&
@@ -444,7 +630,7 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
         record.messages.every(isConversationMessage) &&
         typeof record.updatedAt === 'number'
       ) {
-        const conversation = byId.get(record.id)
+        const conversation = byId.get(record.id) ?? depuisArchive(record.id)
         if (!conversation) throw new Error('conversation du delta introuvable')
         // Historique antérieur au marqueur : l'ordre du journal dit encore où la consigne est
         // arrivée dans la réponse en cours. On le retrouve ici, en mémoire, sans réécrire le disque.
@@ -453,7 +639,7 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
             const coupure = pointDeCoupure(conversation.messages.at(-1))
             if (coupure !== undefined) message.coupeLaReponse = coupure
           }
-          conversation.messages.push(message)
+          conversation.messages.push(restaurerContenuDuMessage(message))
         }
         conversation.updatedAt = record.updatedAt
       } else if (
@@ -464,7 +650,7 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
         typeof record.event.kind === 'string' &&
         typeof record.updatedAt === 'number'
       ) {
-        const conversation = byId.get(record.id)
+        const conversation = byId.get(record.id) ?? depuisArchive(record.id)
         const message = conversation
           ? applyTurnEventToMessages(
               conversation.messages,
@@ -517,8 +703,22 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
   return [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
+/** Les fils ACTIFS (snapshot + journal) — les archives ne sont pas lues ici. */
 export function loadConversations(path = conversationsPath()): Conversation[] {
-  return applyConversationJournal(loadConversationSnapshot(path), path)
+  return chargerConversationsEtJournal(path).conversations
+}
+
+function chargerConversationsEtJournal(path: string): {
+  conversations: Conversation[]
+  supprimees: Set<string>
+} {
+  const supprimees = new Set<string>()
+  const conversations = applyConversationJournal(
+    loadConversationSnapshot(path).map(restaurerContenus),
+    path,
+    supprimees
+  )
+  return { conversations, supprimees }
 }
 
 /**
@@ -552,7 +752,7 @@ function writeConversationSnapshot(all: Conversation[], path: string): void {
     mkdirSync(dirname(path), { recursive: true })
     backupBeforeFirstMigratedWrite(path)
     const tmp = `${path}.tmp`
-    writeFileSync(tmp, JSON.stringify(all, null, 1), 'utf8')
+    writeFileSync(tmp, JSON.stringify(all.map(conversationPourLeDisque), null, 1), 'utf8')
     renameSync(tmp, path)
   } catch (error) {
     /*
@@ -586,7 +786,7 @@ async function writeConversationSnapshotAsync(all: Conversation[], path: string)
     await mkdir(dirname(path), { recursive: true })
     backupBeforeFirstMigratedWrite(path)
     const tmp = `${path}.tmp`
-    await writeFile(tmp, JSON.stringify(all, null, 1), 'utf8')
+    await writeFile(tmp, JSON.stringify(all.map(conversationPourLeDisque), null, 1), 'utf8')
     await rename(tmp, path)
   } catch (error) {
     const cause = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
@@ -614,13 +814,22 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
 function journalRecords(changes: readonly ConversationChange[]): ConversationJournalRecord[] {
   return changes.map(({ id, conversation, journal }) => {
     if (journal?.op === 'append-messages') {
-      return { schema: 'autowin.conversation-change/v1', id, ...journal }
+      return {
+        schema: 'autowin.conversation-change/v1',
+        id,
+        ...journal,
+        messages: journal.messages.map(messagePourLeDisque)
+      }
     }
     if (journal?.op === 'turn-event') {
       return { schema: 'autowin.conversation-change/v1', id, ...journal }
     }
     return conversation
-      ? { schema: 'autowin.conversation-change/v1', op: 'upsert', conversation }
+      ? {
+          schema: 'autowin.conversation-change/v1',
+          op: 'upsert',
+          conversation: conversationPourLeDisque(conversation)
+        }
       : { schema: 'autowin.conversation-change/v1', op: 'delete', id }
   })
 }
@@ -739,16 +948,56 @@ export function persistConversations(
     appelChatReprenable?: (conversationId: string, turnId: string) => boolean
     /** Issue d'un run déjà terminé — voir `ConversationStore.hydrate`. */
     finishedRunOutcome?: (turnId: string) => FinishedRunOutcome | undefined
+    /** Appelé quand les fils archivés ont été relus et ajoutés au store (nombre ajouté). */
+    onArchivesChargees?: (ajoutees: number) => void
+    /**
+     * Passe d'archivage AUTOMATIQUE : `apresMs` après le démarrage, puis toutes les `intervalleMs`.
+     * Absente (tests) : aucune minuterie, la passe ne part que sur appel explicite d'`archiver`.
+     */
+    archivage?: { apresMs: number; intervalleMs: number; seuilMs?: number }
   }
-): () => void {
+): PersistanceConversations {
   const journalPresentAtStartup = existsSync(conversationJournalPath(path))
-  const migrated = store.hydrate(loadConversations(path), options)
+  const { conversations: chargees, supprimees } = chargerConversationsEtJournal(path)
+  // Un fil SUPPRIMÉ alors qu'il était archivé : son fichier part aussi, sinon il ressusciterait.
+  for (const id of supprimees) supprimerArchive(path, id)
+  const actifsAuDemarrage = new Set(chargees.map((conversation) => conversation.id))
+  /** Fils dont la SEULE copie est l'archive. Jamais écrits dans le snapshot. */
+  const archivees = new Set(
+    idsArchives(path).filter((id) => !actifsAuDemarrage.has(id) && !supprimees.has(id))
+  )
+  const migrated = store.hydrate(chargees, options)
   // Le plancher persiste est releve APRES l'hydratation : hydrate calcule le sien depuis les
-  // conversations vivantes, et c'est le PLUS HAUT des deux qui doit gagner.
+  // conversations vivantes, et c'est le PLUS HAUT des deux qui doit gagner. Les fils archivés, pas
+  // encore relus, comptent aussi : leur id ne doit jamais être réattribué.
   store.raiseIdFloor(readConversationIdFloor(path))
+  for (const id of archivees) {
+    const numero = Number(id.replace(/^conv-/, ''))
+    if (Number.isSafeInteger(numero)) store.raiseIdFloor(numero + 1)
+  }
   writeConversationIdFloor(store.idFloor(), path)
+  /** Ce que le snapshot contient : tout le store, MOINS les fils dont l'archive est la copie. */
+  const actives = (): Conversation[] =>
+    archivees.size > 0
+      ? store.list().filter((conversation) => !archivees.has(conversation.id))
+      : store.list()
+  /** Compteur de changements par fil : la bascule n'archive qu'un fil que rien n'a touché depuis. */
+  const versions = new Map<string, number>()
   const pending: ConversationChange[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
+  /** Snapshots posés par la fermeture ; ils gagnent sur une réécriture d'archivage encore en vol. */
+  let snapshotsDeFermeture = 0
+  /**
+   * Réécritures d'archivage DÉPOSÉES et pas encore jouées. Leur corps contient l'effet de tout lot
+   * déposé avant elles : un tel lot qui échoue leur est donc CONFIÉ (voir `enfiler`), au lieu de
+   * revenir dans le journal derrière elles, où il serait compté deux fois.
+   */
+  let depotsDeReecriture = 0
+  const reecrituresEnAttente: Array<{
+    numero: number
+    lot: ConversationChange[]
+    confies: number
+  }> = []
 
   const armerDelai = (): void => {
     if (timer) return
@@ -758,9 +1007,10 @@ export function persistConversations(
 
   /** Met le lot en QUEUE derrière ce qui est déjà en vol — l'ordre du journal est intouchable. */
   const enfiler = (changes: ConversationChange[]): void => {
+    const reecrituresAuDepot = depotsDeReecriture
     volsJournal.set(path, (volsJournal.get(path) ?? 0) + 1)
     const suite: Promise<void> = (chainesJournal.get(path) ?? Promise.resolve())
-      .then(() => appendConversationChangesAsync(changes, store.list(), path))
+      .then(() => appendConversationChangesAsync(changes, actives(), path))
       .then(
         async () => {
           // Une creation a pu faire monter le plancher : on le fige tout de suite, sinon un arret
@@ -768,6 +1018,15 @@ export function persistConversations(
           await writeConversationIdFloorAsync(store.idFloor(), path)
         },
         () => {
+          // Une réécriture déposée APRÈS ce lot le contient déjà : elle décide de son sort — absorbé
+          // si son snapshot est posé, rendu au journal À SA PLACE sinon. Le confier dans l'ordre
+          // d'échec garde l'ordre chronologique des lots.
+          const reecriture = reecrituresEnAttente.find((r) => r.numero > reecrituresAuDepot)
+          if (reecriture) {
+            reecriture.lot.splice(reecriture.confies, 0, ...changes)
+            reecriture.confies += changes.length
+            return
+          }
           // Erreur disque transitoire : le lot RETOURNE en tête de file et sera rejoué au prochain
           // vidage — comme avant, on n'efface qu'après succès. Il repasse devant les changements
           // arrivés depuis, puisqu'il les précédait.
@@ -810,7 +1069,10 @@ export function persistConversations(
     if (!differable && (journalEnVol(path) || pending.length > 0)) {
       const lot = pending.splice(0, pending.length)
       try {
-        saveConversations(store.list(), path)
+        saveConversations(actives(), path)
+        // Posé APRÈS tout ce qui est en vol : une réécriture d'archivage encore en file ne doit plus
+        // le recouvrir avec un état plus ancien (`reecrireSnapshot`).
+        snapshotsDeFermeture += 1
         writeConversationIdFloor(store.idFloor(), path)
       } catch (erreurSnapshot) {
         /*
@@ -823,7 +1085,7 @@ export function persistConversations(
         const cause = erreurSnapshot instanceof Error ? erreurSnapshot.message : String(erreurSnapshot)
         if (lot.length && !journalEnVol(path)) {
           try {
-            appendConversationChanges(lot, store.list(), path)
+            appendConversationChanges(lot, actives(), path)
             console.error(`[conversations] fermeture : snapshot refusé (${cause}), lot sauvé dans le journal.`)
             return
           } catch (erreurJournal) {
@@ -855,7 +1117,7 @@ export function persistConversations(
       return
     }
     try {
-      appendConversationChanges(changes, store.list(), path)
+      appendConversationChanges(changes, actives(), path)
       writeConversationIdFloor(store.idFloor(), path)
     } catch (error) {
       // Effacement APRES succes uniquement : une erreur disque transitoire reste rejouable.
@@ -864,7 +1126,22 @@ export function persistConversations(
     }
   }
 
-  store.onChange = (change) => {
+  store.onChange = (recu) => {
+    let change = recu
+    versions.set(change.id, (versions.get(change.id) ?? 0) + 1)
+    if (!change.conversation) {
+      // SUPPRIMÉ : son archive part avec lui, qu'il soit archivé ou non — une archive périmée
+      // restée sur le disque (son retrait a échoué) le ferait ressusciter une fois le journal
+      // compacté. Retirer un fichier absent ne coûte rien.
+      archivees.delete(change.id)
+      supprimerArchive(path, change.id)
+    } else if (archivees.has(change.id)) {
+      // RAVIVÉ : le snapshot ne contient pas ce fil, donc un delta seul (`append-messages`,
+      // `turn-event`) n'aurait rien sur quoi se rejouer. Le journal porte le fil ENTIER, et il
+      // redevient actif. Son archive, désormais périmée, part au prochain démarrage.
+      archivees.delete(change.id)
+      change = { id: change.id, conversation: change.conversation, urgency: 'immediate' }
+    }
     pending.push(change)
     if (change.urgency === 'immediate') {
       flush()
@@ -873,16 +1150,266 @@ export function persistConversations(
     armerDelai()
   }
 
+  /**
+   * RELECTURE DES ARCHIVES, juste après le démarrage et hors de son chemin critique. Une archive
+   * illisible est GARDÉE et nommée : son fil manque à la liste, il n'est pas perdu.
+   */
+  const chargerArchives = async (): Promise<number> => {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    const lues: Conversation[] = []
+    const illisibles: string[] = []
+    for (const id of [...archivees]) {
+      const conversation = await lireArchiveAsync(path, id)
+      if (conversation) lues.push(conversation)
+      else illisibles.push(id)
+    }
+    if (illisibles.length) {
+      console.warn(
+        `[conversations] ${illisibles.length} archive(s) illisible(s), gardée(s) sur le disque : ` +
+          illisibles.slice(0, 5).join(', ')
+      )
+    }
+    // MÊME normalisation que le démarrage (`hydrate`) : une migration ajoutée là s'applique aussi
+    // aux fils archivés, au lieu de les laisser dans le format de l'année de leur archivage.
+    const normalisees = new ConversationStore()
+    normalisees.hydrate(lues.filter((c) => archivees.has(c.id)))
+    const ajoutees = store.integrerArchives(normalisees.list())
+    // Tout est dans le store : plus aucune lecture à la demande.
+    store.chargeurDArchive = undefined
+    try {
+      options?.onArchivesChargees?.(ajoutees)
+    } catch {
+      /* un observateur ne casse jamais la relecture */
+    }
+    return ajoutees
+  }
+  /** Résolue quand les archives sont dans le store ; posée en fin de démarrage, jamais avant. */
+  let archivesChargees: Promise<number> = Promise.resolve(0)
+
+  /**
+   * Archives PÉRIMÉES : un fil actif au démarrage a sa copie durable dans le snapshot ou le journal,
+   * et elle gagne toujours. Son ancienne archive ne ferait que tromper un lecteur externe.
+   */
+  const retirerArchivesPerimees = async (): Promise<void> => {
+    const perimees = idsArchives(path).filter((id) => actifsAuDemarrage.has(id))
+    const tombes = idsSupprimesEnAttente(path)
+    if (perimees.length === 0 && tombes.length === 0) return
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    for (const id of perimees) {
+      await rm(cheminArchive(path, id), { force: true }).catch(() => undefined)
+    }
+    // Pierre tombale : l'archive d'abord, la tombe seulement une fois l'archive vraiment partie.
+    for (const id of tombes) {
+      if (!ID_ARCHIVABLE.test(id)) continue
+      const parti = await rm(cheminArchive(path, id), { force: true }).then(
+        () => true,
+        () => false
+      )
+      if (parti) {
+        await rm(join(conversationArchiveDir(path), `${id}${SUFFIXE_SUPPRIME}`), {
+          force: true
+        }).catch(() => undefined)
+      }
+    }
+  }
+
+  /**
+   * Réécrit le snapshot SANS les fils archivés, dans la file du journal (l'ordre est intouchable).
+   *
+   * SÉRIALISÉ AU DÉPÔT, pas quand son tour arrive dans la file. Tout lot déjà en file porte des
+   * changements ANTÉRIEURS : il s'écrit avant, puis ce snapshot l'absorbe en effaçant le journal.
+   * Tout lot déposé APRÈS porte des changements POSTÉRIEURS : il s'écrit après, dans le journal neuf.
+   * Les changements encore en attente partent avec ce snapshot, et nulle part ailleurs. Sérialiser
+   * au passage dans la file aurait compté deux fois un lot déposé entre-temps : déjà dans le
+   * snapshot, puis rejoué depuis le journal (texte et messages doublés au démarrage suivant).
+   */
+  const reecrireSnapshot = (): Promise<void> => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+    const depot = {
+      numero: ++depotsDeReecriture,
+      lot: pending.splice(0, pending.length),
+      confies: 0
+    }
+    reecrituresEnAttente.push(depot)
+    const corps = JSON.stringify(actives().map(conversationPourLeDisque), null, 1)
+    const fermeturesAuDepot = snapshotsDeFermeture
+    volsJournal.set(path, (volsJournal.get(path) ?? 0) + 1)
+    const suite: Promise<void> = (chainesJournal.get(path) ?? Promise.resolve())
+      .then(async () => {
+        const tmp = `${path}.archivage.tmp`
+        try {
+          await mkdir(dirname(path), { recursive: true })
+          backupBeforeFirstMigratedWrite(path)
+          await writeFile(tmp, corps, 'utf8')
+          // Une fermeture a posé entre-temps un snapshot COMPLET et plus récent : il gagne.
+          if (snapshotsDeFermeture !== fermeturesAuDepot) {
+            await rm(tmp, { force: true }).catch(() => undefined)
+            return
+          }
+          // Renommage SYNCHRONE : entre ce contrôle et lui, aucun autre code ne peut écrire.
+          renameSync(tmp, path)
+        } catch (erreur) {
+          await rm(tmp, { force: true }).catch(() => undefined)
+          // Rien n'est posé : le lot retiré (et ceux qui lui ont été confiés) rejoint le journal À SA
+          // PLACE, avant les lots suivants.
+          const lot = depot.lot
+          if (lot.length) {
+            try {
+              await appendFile(
+                conversationJournalPath(path),
+                `${journalRecords(lot)
+                  .map((record) => JSON.stringify(record))
+                  .join('\n')}\n`,
+                'utf8'
+              )
+            } catch {
+              pending.unshift(...lot)
+              armerDelai()
+            }
+          }
+          throw erreur
+        }
+        // Le snapshot est posé et contient le lot : quoi qu'il arrive ensuite, il ne repart jamais
+        // dans le journal. Un journal impossible à effacer est au moins vidé.
+        try {
+          await rm(conversationJournalPath(path), { force: true })
+        } catch {
+          await writeFile(conversationJournalPath(path), '', 'utf8').catch((erreur: unknown) =>
+            console.warn('[conversations] journal compacté impossible à vider', erreur)
+          )
+        }
+        await writeConversationIdFloorAsync(store.idFloor(), path)
+      })
+      .finally(() => {
+        const rang = reecrituresEnAttente.indexOf(depot)
+        if (rang >= 0) reecrituresEnAttente.splice(rang, 1)
+        volsJournal.set(path, (volsJournal.get(path) ?? 1) - 1)
+        if ((volsJournal.get(path) ?? 0) <= 0) volsJournal.delete(path)
+        if (chainesJournal.get(path) === suite) chainesJournal.delete(path)
+      })
+    chainesJournal.set(path, suite)
+    return suite
+  }
+
+  let archivageEnCours: Promise<number> | undefined
+  /**
+   * BASCULE vers l'archive des fils inactifs depuis `seuilMs`. Ordre, et c'est lui qui la rend sûre :
+   * 1. chaque archive est écrite (fichier temporaire puis renommage) ;
+   * 2. seuls les fils que RIEN n'a touchés depuis leur sérialisation basculent ;
+   * 3. le snapshot est réécrit sans eux, dans la file du journal.
+   * Un arrêt entre 1 et 3 laisse un fil en double : la copie active gagne, rien n'est perdu.
+   */
+  const archiver = (maintenant = Date.now(), seuilMs = SEUIL_ARCHIVE_MS): Promise<number> => {
+    archivageEnCours ??= (async () => {
+      await archivesChargees
+      const candidats = store
+        .list()
+        .filter(
+          (conversation) =>
+            !archivees.has(conversation.id) &&
+            ID_ARCHIVABLE.test(conversation.id) &&
+            maintenant - conversation.updatedAt > seuilMs &&
+            !conversation.messages.some((message) => message.status === 'streaming')
+        )
+      if (candidats.length === 0) return 0
+      await mkdir(conversationArchiveDir(path), { recursive: true })
+      const ecrites: Array<{ conversation: Conversation; version: number }> = []
+      for (const conversation of candidats) {
+        const version = versions.get(conversation.id) ?? 0
+        if (store.get(conversation.id) !== conversation) continue
+        const cible = cheminArchive(path, conversation.id)
+        const corps = JSON.stringify(conversationPourLeDisque(conversation))
+        try {
+          await writeFile(`${cible}.tmp`, corps, 'utf8')
+          await rename(`${cible}.tmp`, cible)
+          ecrites.push({ conversation, version })
+        } catch (erreur) {
+          console.warn(`[conversations] archivage de ${conversation.id} impossible`, erreur)
+        }
+      }
+      const basculees: string[] = []
+      for (const { conversation, version } of ecrites) {
+        if (
+          (versions.get(conversation.id) ?? 0) === version &&
+          store.get(conversation.id) === conversation
+        ) {
+          basculees.push(conversation.id)
+        } else {
+          // Touché pendant la passe : son archive est déjà périmée, la copie active fait foi.
+          await rm(cheminArchive(path, conversation.id), { force: true }).catch(() => undefined)
+        }
+      }
+      if (basculees.length === 0) return 0
+      for (const id of basculees) archivees.add(id)
+      await reecrireSnapshot()
+      return basculees.length
+    })().finally(() => {
+      archivageEnCours = undefined
+    })
+    return archivageEnCours
+  }
+
+  const programmerArchivage = (): void => {
+    if (!options?.archivage) return
+    const { apresMs, intervalleMs, seuilMs } = options.archivage
+    const lancer = (): void => {
+      void archiver(Date.now(), seuilMs).then(
+        (n) => {
+          if (n) console.log(`[conversations] ${n} conversation(s) inactive(s) archivée(s)`)
+        },
+        (erreur: unknown) => console.warn('[conversations] passe d’archivage en échec', erreur)
+      )
+    }
+    const premier = setTimeout(() => {
+      lancer()
+      const suivant = setInterval(lancer, intervalleMs)
+      ;(suivant as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.()
+    }, apresMs)
+    ;(premier as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
+  }
+
   // Le replay est amorti sur le démarrage : une fois hydraté, le journal devient un snapshot
   // canonique puis repart vide. Il ne grossit donc pas à travers les sessions et chaque delta de la
   // session courante reste limité à la seule conversation touchée.
-  if (migrated || journalPresentAtStartup) saveConversations(store.list(), path)
+  if (migrated || journalPresentAtStartup) saveConversations(actives(), path)
   else if (!existsSync(path)) writeConversationSnapshot([], path)
+
+  // RIEN ne part en arrière-plan avant que l'écriture de démarrage ait RÉUSSI. Si elle lève,
+  // l'appelant met ce store de côté et rebranche une persistance neuve (`index.ts`) : des tâches
+  // laissées par celle-ci écriraient alors le même fichier en parallèle de la nouvelle, ou
+  // retireraient des archives dont la seule autre copie vient d'être mise de côté.
+  if (archivees.size > 0) {
+    // FENÊTRE DE RELECTURE : jusqu'à ce que les archives soient dans le store, un fil archivé
+    // demandé par son id (tâche planifiée liée à un vieux fil, `chat_send` d'un agent) est lu À LA
+    // DEMANDE — son seul petit fichier — au lieu d'être déclaré inexistant. Sinon le répartiteur de
+    // tâches créerait un fil neuf et y rebrancherait la tâche (`task-manager/chat-dispatch.ts`).
+    store.chargeurDArchive = (id) => {
+      if (!archivees.has(id)) return undefined
+      const lue = lireArchive(path, id)
+      if (!lue) return undefined
+      const normalisee = new ConversationStore()
+      normalisee.hydrate([lue])
+      return normalisee.get(id)
+    }
+    archivesChargees = chargerArchives()
+  }
+  void retirerArchivesPerimees()
+  programmerArchivage()
 
   // Exposé pour un flush forcé (ex. before-quit) : évite de perdre le dernier
   // fragment de streaming resté dans la fenêtre de debounce de 120 ms. `differable: false` :
   // à la fermeture, une rotation doit s'écrire ICI, tout de suite — aucune file ne sera drainée.
-  return () => flush({ differable: false })
+  return Object.assign(() => flush({ differable: false }), { archiver, archivesChargees })
+}
+
+/**
+ * Ce que rend `persistConversations` : le vidage forcé (appelable tel quel, comme avant), plus la
+ * passe d'archivage et la promesse de relecture des archives.
+ */
+export type PersistanceConversations = (() => void) & {
+  archiver: (maintenant?: number, seuilMs?: number) => Promise<number>
+  archivesChargees: Promise<number>
 }
 
 /**

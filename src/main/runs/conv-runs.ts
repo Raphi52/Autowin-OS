@@ -1,21 +1,12 @@
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  readSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { readFile, readdir, rm, stat } from 'node:fs/promises'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRunsBounded, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
 import type { RunClosureStatus } from '../../shared/run-execution'
+import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 import { rootDodLabels, rootRequirementChecks } from '../root-execution-contract'
 import type { ExecutionEvidence } from '../providers/types'
 
@@ -126,7 +117,13 @@ const SLUG_MOTS_MAX = 6
 const SLUG_LONGUEUR_MAX = 40
 
 function slugify(task: string): string {
+  // Le marqueur d'une relance (`reprend\n\nCIBLE CONTEXTUALISEE : <sujet>`, commands.ts) ne nomme
+  // rien : il prenait deux des six mots du libellé (`go-cible-contextualisee-traite-trois`,
+  // conv-517). Seul le marqueur EXACT est retiré, en majuscules : un sujet qui parle de la cible
+  // contextualisée garde ses mots.
   const tokens = task
+    .split(MARQUEUR_CIBLE_CONTEXTUALISEE)
+    .join(' ')
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
@@ -430,20 +427,21 @@ export function ligneJournalDErreur(e: unknown): string {
     .slice(0, 600)
 }
 
+/** Texte d'un RUN.md une fois clos : partagé par la clôture synchrone et la réconciliation. */
+function texteClos(md: string, status: RunClosureStatus, journalLine: string): string {
+  // Le cochage auto de « le juge valide … » est retiré avec la case elle-même : il cochait un
+  // pseudo-critère au moment où le statut le disait déjà. Une DoD RÉELLE, elle, n'est jamais cochée
+  // par la clôture — c'est à celui qui produit la preuve de la cocher, sinon la case ne prouve rien.
+  return md
+    .replace(/^status: open/m, `status: ${status}`)
+    .replace(/^## Journal$/m, `## Journal`)
+    .replace(/(## Journal\n)/, `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`)
+}
+
 export function closeConvRun(path: string, status: RunClosureStatus, journalLine: string): void {
   if (status === 'open') return
   try {
-    let md = readFileSync(path, 'utf8')
-    md = md.replace(/^status: open/m, `status: ${status}`)
-    // Le cochage auto de « le juge valide … » est retiré avec la case elle-même : il cochait un
-    // pseudo-critère au moment où le statut le disait déjà. Une DoD RÉELLE, elle, n'est jamais cochée
-    // par la clôture — c'est à celui qui produit la preuve de la cocher, sinon la case ne prouve rien.
-    md = md.replace(/^## Journal$/m, `## Journal`)
-    md = md.replace(
-      /(## Journal\n)/,
-      `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`
-    )
-    writeFileSync(path, md, 'utf8')
+    writeFileSync(path, texteClos(readFileSync(path, 'utf8'), status, journalLine), 'utf8')
   } catch {
     /* clôture best-effort : un RUN resté open est visible, pas fatal */
   }
@@ -452,19 +450,82 @@ export function closeConvRun(path: string, status: RunClosureStatus, journalLine
 /**
  * Vrai si le fichier COMMENCE par ce texte, en ne lisant que les premiers octets.
  *
- * La réconciliation examine des milliers de RUN.md dont l'immense majorité est déjà close : les
- * charger entiers pour ne regarder que leur première ligne coûterait des dizaines de mégaoctets à
- * chaque démarrage.
+ * La réconciliation examine des centaines de RUN.md dont l'immense majorité est déjà close : les
+ * charger entiers pour ne regarder que leur première ligne coûterait des dizaines de mégaoctets.
+ * ASYNCHRONE : la forme `openSync`/`readSync` gelait la fenêtre au démarrage (voir
+ * `reconcileAbandonedConvRuns`).
  */
-function commencePar(path: string, prefixe: string): boolean {
+async function commencePar(path: string, prefixe: string): Promise<boolean> {
   const tampon = Buffer.alloc(Buffer.byteLength(prefixe, 'utf8'))
-  let fd: number | undefined
+  const fichier = await open(path, 'r')
   try {
-    fd = openSync(path, 'r')
-    const lus = readSync(fd, tampon, 0, tampon.length, 0)
-    return lus === tampon.length && tampon.toString('utf8') === prefixe
+    const { bytesRead } = await fichier.read(tampon, 0, tampon.length, 0)
+    return bytesRead === tampon.length && tampon.toString('utf8') === prefixe
   } finally {
-    if (fd !== undefined) closeSync(fd)
+    await fichier.close()
+  }
+}
+
+/** Taille des lots d'entrées-sorties : la file de libuv n'a que quatre fils, la fenêtre aussi en lit. */
+const RECONCILIATION_LOT = 8
+
+/**
+ * Fichier mémo de la réconciliation, À CÔTÉ de la racine des runs (jamais dedans : tout ce qui
+ * parcourt la racine y lit des dossiers de conversation). Production :
+ * `%APPDATA%\autowin-os\runs-reconciliation.json`.
+ */
+export function cheminMemoReconciliation(root: string): string {
+  return join(dirname(root), `${basename(root)}-reconciliation.json`)
+}
+
+/** Borne lue dans le mémo ; 0 (tout réexaminer) si le mémo est absent, illisible ou incohérent. */
+async function lireBorneVerifiee(memoPath: string): Promise<number> {
+  try {
+    const memo = JSON.parse(await readFile(memoPath, 'utf8')) as {
+      verifieAvant?: unknown
+      ecritLe?: unknown
+    }
+    // Un mémo écrit « dans le futur » trahit une horloge revenue en arrière : les `mtime` posés
+    // depuis peuvent être antérieurs à sa borne sans avoir été examinés.
+    if (typeof memo.ecritLe !== 'number' || memo.ecritLe > Date.now()) return 0
+    return typeof memo.verifieAvant === 'number' && Number.isFinite(memo.verifieAvant)
+      ? memo.verifieAvant
+      : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Découpe une liste en lots consécutifs. */
+function enLots<T>(elements: T[], taille: number): T[][] {
+  const lots: T[][] = []
+  for (let i = 0; i < elements.length; i += taille) lots.push(elements.slice(i, i + taille))
+  return lots
+}
+
+function estAbsent(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+type ExamenRun = 'absent' | 'recent' | 'deja-verifie' | 'clos' | 'ouvert' | 'illisible'
+
+/** Clôture ASYNCHRONE d'un run abandonné ; faux si l'écriture n'a pas abouti. */
+async function clorePourAbandon(path: string): Promise<boolean> {
+  try {
+    const md = await readFile(path, 'utf8')
+    await writeFile(
+      path,
+      texteClos(
+        md,
+        'red',
+        "Abandonné : l'app s'est arrêtée avant la clôture, aucun verdict n'a été rendu."
+      ),
+      'utf8'
+    )
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -483,56 +544,115 @@ function commencePar(path: string, prefixe: string): boolean {
  * reste est RENVOYÉ pour être journalisé — une troncature muette se lirait « tout est traité ».
  *
  * Ne lit que le début de chaque fichier : le statut est en première ligne, inutile de charger 8888
- * documents entiers. Coût mesuré de la seule traversée : ~360 ms pour 8888 workspaces.
+ * documents entiers.
+ *
+ * ASYNCHRONE DE BOUT EN BOUT. Mesure (`gels.jsonl`) : « démarrage : construction de la fenêtre »
+ * bloquée 1 034 ms le 2026-09-22 07:03, dont 779 ms d'`openSync` en 705 appels, et encore 1 216 ms
+ * dont 900 ms d'`openSync` en 826 appels le 2026-10-13 14:10 — tous venus d'ici. L'appel partait
+ * déjà par `setImmediate` « sans rien attendre », mais un corps synchrone reste sur le fil de la
+ * fenêtre : différer ne rend pas non bloquant. Les lectures passent donc par `fs/promises`, en
+ * lots de `RECONCILIATION_LOT`.
+ *
+ * MÉMO DE LA DERNIÈRE VÉRIFICATION (`memoPath`, `null` pour s'en passer). Il retient la borne
+ * `verifieAvant` : tout RUN.md dont le `mtime` lui est antérieur a déjà été examiné, et toute
+ * écriture postérieure (une clôture, une reprise) aurait avancé ce `mtime`. Ces fichiers ne sont
+ * donc plus rouverts : au démarrage suivant, seul un `stat` les touche. La borne est celle de la
+ * passe (`now - olderThanMs`), jamais `now` : un run trop jeune pour être examiné doit l'être une
+ * fois vieilli. Elle n'avance QUE si la passe a tout examiné — plafond atteint, fichier illisible
+ * ou clôture ratée laissent l'ancienne borne, et le reste est repris au démarrage suivant. Angle
+ * mort assumé : un RUN.md recopié en conservant un `mtime` ancien ne serait pas relu.
  */
-export function reconcileAbandonedConvRuns(options: {
+export async function reconcileAbandonedConvRuns(options: {
   root?: string
   now?: number
   olderThanMs?: number
   max?: number
-}): { closed: number; remaining: number } {
+  memoPath?: string | null
+}): Promise<{ closed: number; remaining: number; dejaVerifies: number }> {
   const root = options.root ?? convRunsRoot()
-  const now = options.now ?? Date.now()
+  const debutReel = Date.now()
+  const now = options.now ?? debutReel
   const olderThanMs = options.olderThanMs ?? 24 * 3_600_000
   const max = options.max ?? 500
+  const memoPath =
+    options.memoPath === undefined ? cheminMemoReconciliation(root) : options.memoPath
+  // Examiné ssi `mtime < borne` : même règle que le seuil historique (`now - mtime > olderThanMs`).
+  const borne = now - olderThanMs
+  const dejaVerifieAvant = memoPath ? await lireBorneVerifiee(memoPath) : 0
   let closed = 0
   let remaining = 0
+  let dejaVerifies = 0
+  let complet = true
+
   let convs: string[]
   try {
-    convs = readdirSync(root)
+    convs = await readdir(root)
   } catch {
-    return { closed: 0, remaining: 0 } // racine absente : rien à réconcilier, et surtout rien à casser
+    // racine absente : rien à réconcilier, et surtout rien à casser
+    return { closed: 0, remaining: 0, dejaVerifies: 0 }
   }
-  for (const conv of convs) {
-    let workspaces: string[]
+
+  const chemins: string[] = []
+  for (const lot of enLots(convs, RECONCILIATION_LOT)) {
+    const listes = await Promise.all(
+      lot.map(async (conv) => {
+        try {
+          // Seuls les workspaces portent un RUN.md à clore ; un worktree d'agent n'en est pas un.
+          return (await readdir(join(root, conv)))
+            .filter((ws) => ws.endsWith('-workspace'))
+            .map((ws) => join(root, conv, ws, 'RUN.md'))
+        } catch {
+          return [] // un fichier à la racine, ou un dossier disparu entre-temps
+        }
+      })
+    )
+    for (const liste of listes) chemins.push(...liste)
+  }
+
+  const examiner = async (path: string): Promise<ExamenRun> => {
+    let mtime: number
     try {
-      workspaces = readdirSync(join(root, conv))
-    } catch {
-      continue
+      mtime = (await stat(path)).mtimeMs
+    } catch (error) {
+      return estAbsent(error) ? 'absent' : 'illisible'
     }
-    for (const ws of workspaces) {
-      // Seuls les workspaces portent un RUN.md à clore ; un worktree d'agent n'en est pas un.
-      if (!ws.endsWith('-workspace')) continue
-      const path = join(root, conv, ws, 'RUN.md')
-      try {
-        if (now - statSync(path).mtimeMs <= olderThanMs) continue
-        if (!commencePar(path, 'status: open')) continue
-      } catch {
-        continue // RUN.md absent ou illisible : ce n'est pas à la réconciliation de le signaler
-      }
-      if (closed >= max) {
+    if (mtime >= borne) return 'recent'
+    if (mtime < dejaVerifieAvant) return 'deja-verifie'
+    try {
+      return (await commencePar(path, 'status: open')) ? 'ouvert' : 'clos'
+    } catch (error) {
+      // Un dossier supprimé pendant la passe (ramasse-miettes) n'a plus rien à vérifier.
+      return estAbsent(error) ? 'absent' : 'illisible'
+    }
+  }
+
+  for (const lot of enLots(chemins, RECONCILIATION_LOT)) {
+    const examens = await Promise.all(lot.map(examiner))
+    for (let i = 0; i < lot.length; i++) {
+      const examen = examens[i]
+      if (examen === 'deja-verifie') dejaVerifies += 1
+      if (examen === 'illisible') complet = false
+      if (examen !== 'ouvert') continue
+      if (closed >= max || !(await clorePourAbandon(lot[i]))) {
         remaining += 1
+        complet = false
         continue
       }
-      closeConvRun(
-        path,
-        'red',
-        "Abandonné : l'app s'est arrêtée avant la clôture, aucun verdict n'a été rendu."
-      )
       closed += 1
     }
   }
-  return { closed, remaining }
+
+  if (memoPath && complet) {
+    try {
+      // `min` avec l'heure réelle : une passe jouée avec un `now` dans le futur ne doit pas
+      // déclarer vérifiés des fichiers qui seront encore écrits avant cette date.
+      const memo = { verifieAvant: Math.min(borne, debutReel), ecritLe: Date.now() }
+      await writeFile(memoPath, JSON.stringify(memo), 'utf8')
+    } catch {
+      /* mémo best-effort : sans lui, la passe suivante réexamine tout, rien de plus */
+    }
+  }
+  return { closed, remaining, dejaVerifies }
 }
 
 /** Chemin du sidecar de trace (fil des sous-agents) d'un RUN.md. */

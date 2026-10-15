@@ -260,7 +260,9 @@ import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
 import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
+import { classeTerminaleDEchec } from './classe-terminale-echec'
 import { PIPELINE_PHASES } from '../shared/pipeline-phases'
+import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../shared/relance-sans-objet'
 import {
   runGraphify,
   type GraphifyCommandInput,
@@ -2796,14 +2798,12 @@ export class AppCommandBus {
           typeof a.rootTask === 'string' && a.rootTask.trim() ? a.rootTask.trim() : undefined
         // Le prompt utilisateur est l'autorite du run. `phase` et `task` sont produits par le modele
         // conversationnel : ils peuvent aider a deleguer, jamais reduire le contrat racine. Une
-        // reprise sans objet nomme transporte aussi la cible contextualisee par le pilote.
+        // reprise sans objet nomme (« reprend », « go », « lancer terrain. ») transporte aussi la
+        // cible contextualisee par le pilote — voir shared/relance-sans-objet.ts pour la mesure.
         const rootNeedsContext =
-          suppliedRootTask !== undefined &&
-          /^(?:(?:fais|fait)\s+)?(?:ça|ca|ceci|cela|un truc|le truc)(?:\s+(?:bien|parfait|parfaitement))?[.!?]*$|^(?:vas-y|go)[.!?]*$|^fais ce qu['’]il faut pour que (?:ça|ca|ceci|cela)(?: se)? fasse (?:ça|ca|ceci|cela) la prochaine fois[.!?]*$|^finis? (?:ça|ca|ceci|cela)(?: une bonne fois pour toutes)?[.!?]*$/i.test(
-            suppliedRootTask
-          )
+          suppliedRootTask !== undefined && estRelanceSansObjet(suppliedRootTask)
         const authoritativeTask = rootNeedsContext
-          ? `${suppliedRootTask}\n\nCIBLE CONTEXTUALISEE : ${delegatedTask}`
+          ? `${suppliedRootTask}\n\n${MARQUEUR_CIBLE_CONTEXTUALISEE} ${delegatedTask}`
           : (suppliedRootTask ?? delegatedTask)
         /**
          * UNE PHASE CHOISIE PAR LE MODÈLE N'AMPUTE PAS UNE TÂCHE À RISQUE.
@@ -3517,7 +3517,9 @@ export class AppCommandBus {
             model:
               bindingOverride?.model ?? this.os.roles.getBinding('orchestrator').model ?? 'autowin',
             role: 'orchestrator',
-            terminalClass: abortController.signal.aborted ? 'external' : 'defect'
+            // Quota, surcharge ou session expirée : la cause est hors du travail jugé, donc jamais
+            // une leçon publiable sur le code (`classe-terminale-echec.ts`).
+            terminalClass: classeTerminaleDEchec(e, abortController.signal.aborted)
           })
           if (runPath) {
             saveConvRunTrace(runPath, steps)

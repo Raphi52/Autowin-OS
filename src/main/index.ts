@@ -172,6 +172,7 @@ import { type ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
+import { classeTerminaleDEchec } from './classe-terminale-echec'
 import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
 import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
@@ -201,6 +202,7 @@ import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
   electStartupOrchestrationResumes,
+  repriseAutoRetenueParQuota,
   type OrchestrationRunState
 } from './runs/orchestration-state'
 import {
@@ -316,15 +318,20 @@ import { configureTurnTiming } from './turn-timing'
 import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import { identiteEntreprise } from './identite-entreprise'
+import { typerCeQuiPart, typeurTsc } from './typage-avant-publication'
 import {
   aligneIconeRaccourciBureauDev,
+  aligneArgumentsRaccourciDemarrerDev,
   aligneRaccourciDemarrerDev,
+  argumentsRaccourciDemarrerDev,
   cheminRaccourciBureauDev,
   cheminRaccourciDemarrerDev,
+  cheminsRaccourcisDemarrerDev,
   DEV_TOAST_ACTIVATOR_CLSID,
   dossierIconesVersionnees,
   iconeRaccourciDev,
-  poserIconeVersionnee
+  poserIconeVersionnee,
+  racineDepotDeLExeDev
 } from './raccourci-demarrer-dev'
 import {
   createStorageMigrationReadHandler,
@@ -782,13 +789,24 @@ const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome 
  */
 const conversationsEcartees: string[] = []
 
+/**
+ * Les fils ARCHIVÉS (inactifs depuis 14 jours) ne sont pas relus par le démarrage : ils arrivent
+ * juste après, et la liste est alors rafraîchie. La bascule vers l'archive tourne 2 minutes après
+ * le démarrage, puis une fois par jour — jamais sur le chemin critique. Voir `conversations-disk.ts`.
+ */
+const persistanceConversations = {
+  resumableTurnIds,
+  appelChatReprenable,
+  finishedRunOutcome: finishedRunOutcomeByTurnId,
+  onArchivesChargees: (ajoutees: number) => {
+    if (ajoutees > 0) broadcast({ type: 'refresh', scope: 'conversations' })
+  },
+  archivage: { apresMs: 2 * 60_000, intervalleMs: 24 * 60 * 60_000 }
+}
+
 let flushConversations: () => void
 try {
-  flushConversations = persistConversations(os.conversations, undefined, {
-    resumableTurnIds,
-    appelChatReprenable,
-    finishedRunOutcome: finishedRunOutcomeByTurnId
-  })
+  flushConversations = persistConversations(os.conversations, undefined, persistanceConversations)
 } catch (erreur) {
   const cause = erreur instanceof Error ? erreur.message : String(erreur)
   const ecartes = ecarterStoreIllisible()
@@ -800,11 +818,7 @@ try {
         : `Aucun fichier n'a pu etre ecarte.`)
   )
   try {
-    flushConversations = persistConversations(os.conversations, undefined, {
-      resumableTurnIds,
-      appelChatReprenable,
-      finishedRunOutcome: finishedRunOutcomeByTurnId
-    })
+    flushConversations = persistConversations(os.conversations, undefined, persistanceConversations)
   } catch (secondeErreur) {
     console.error(
       `[conversations] demarrage impossible meme apres mise de cote. ` +
@@ -2375,7 +2389,8 @@ Le fil reprend ensuite normalement.`
         reused: false,
         evidence: pendingExecutionEvidence,
         model: orchestratorBinding.model,
-        terminalClass: aborted ? 'external' : 'defect'
+        // Même classement que le chemin du chat (`commands.ts`) : `classe-terminale-echec.ts`.
+        terminalClass: classeTerminaleDEchec(e, aborted)
       })
       // Un échec doit se CONCLURE dans le fil : le renderer jette la promesse (`void`), donc sans ce
       // tour terminal l'erreur disparaissait entièrement.
@@ -3444,7 +3459,11 @@ Le fil reprend ensuite normalement.`
               // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
               // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
               verifierAvantPublication: (repo, fichiers) =>
-                bus.verifierAvantPublication(repo, fichiers)
+                bus.verifierAvantPublication(repo, fichiers),
+              // Le TYPAGE de ce qui part, avant les tests : `9d6bb850` (conv-954) a publié un fichier
+              // sans son appelant, et main ne compilait plus alors que les tests de l'arbre étaient verts.
+              typerAvantPublication: (repo, fichiers) =>
+                typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) })
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
         }
@@ -3972,7 +3991,10 @@ Le fil reprend ensuite normalement.`
     ipc: ipcMain,
     assertTrusted: assertTrustedRendererSender,
     // « En générer plus » : le scout interne seul (pas les scouts web), dans une conversation VISIBLE.
-    genererInterne: genererCandidatsInternesVisibles
+    genererInterne: genererCandidatsInternesVisibles,
+    // Le dépôt que ce même scout lit : ses ancrages `src/…:N` y sont relatifs. Chaque service du
+    // stock re-vérifie que la ligne citée d'une correction y est encore, sinon elle sort « périmée ».
+    racineDepot: os.executionWorkspace
   })
   /**
    * CAPITALISATION : plus AUCUN declenchement automatique.
@@ -4778,11 +4800,16 @@ app.whenReady().then(async () => {
   if (process.platform === 'win32' && !app.isPackaged) {
     try {
       app.setToastActivatorCLSID(DEV_TOAST_ACTIVATOR_CLSID)
+      // Sans argument, un clic dans le menu Démarrer ouvrait la page d'accueil d'Electron (conv-954).
+      // Le script vient du dépôt de l'EXE, pas de `app.getAppPath()` : une instance de test lancée
+      // sur une copie temporaire ne doit pas faire viser au raccourci un script qui disparaîtra.
+      const racineExe = racineDepotDeLExeDev(process.execPath)
       const raccourci = aligneRaccourciDemarrerDev({
         shell,
         existe: existsSync,
         chemin: cheminRaccourciDemarrerDev(app.getPath('appData'), process.execPath),
         executable: process.execPath,
+        args: racineExe ? argumentsRaccourciDemarrerDev(racineExe) : '',
         identite: process.execPath,
         clsid: DEV_TOAST_ACTIVATOR_CLSID,
         // Copie à nom VERSIONNÉ : sous un chemin inchangé, l'Explorateur garde l'ancienne image
@@ -4799,6 +4826,16 @@ app.whenReady().then(async () => {
         })
       })
       if (raccourci.etat === 'echec') console.warn('[icone barre des taches dev]', raccourci.raison)
+      // L'AUTRE raccourci de dev (l'ancien `Electron.lnk` d'un poste passé sur l'exe de dev) gardait
+      // une cible sans argument : on lui donne les mêmes arguments, s'il vise un exe de CE dépôt.
+      if (racineExe && !isolatedTestInstance) {
+        const courant = cheminRaccourciDemarrerDev(app.getPath('appData'), process.execPath)
+        for (const chemin of cheminsRaccourcisDemarrerDev(app.getPath('appData'))) {
+          if (chemin === courant) continue
+          const autre = aligneArgumentsRaccourciDemarrerDev({ shell, existe: existsSync, chemin, racineDepot: racineExe })
+          if (autre.etat === 'echec') console.warn('[raccourci menu demarrer dev]', autre.raison)
+        }
+      }
     } catch (erreur) {
       console.warn('[icone barre des taches dev]', erreur)
     }
@@ -4978,18 +5015,22 @@ app.whenReady().then(async () => {
   // que ce sont des échecs — ils faussaient donc en silence toute lecture du taux de réussite.
   // APRÈS `createWindow` et sans `await` : le démarrage ne doit rien attendre de cette hygiène. Le
   // seuil de 24 h laisse intacts les runs en vol et ceux que la reprise va récupérer.
-  setImmediate(() => {
-    try {
-      const bilan = reconcileAbandonedConvRuns({})
+  // ASYNCHRONE, et non plus `setImmediate` : différer un corps synchrone le laissait sur le fil de
+  // la fenêtre qui se charge (`gels.jsonl` 2026-09-22 07:03 puis 2026-10-13 14:10 : ~1,1 s de
+  // « construction de la fenêtre », 705 à 826 `openSync`). Voir `reconcileAbandonedConvRuns`.
+  void reconcileAbandonedConvRuns({})
+    .then((bilan) => {
       if (bilan.closed || bilan.remaining) {
         // Le reste est dit à voix haute : une borne muette se lirait « tout est traité ».
         console.log(
           `[runs] ${bilan.closed} run(s) abandonné(s) clos en red, ${bilan.remaining} en attente du prochain démarrage`
         )
       }
-    } catch (error) {
+    })
+    .catch((error: unknown) => {
       console.warn('[runs] réconciliation des runs abandonnés impossible', error)
-    }
+    })
+  setImmediate(() => {
     // RAMASSE-MIETTES DES WORKSPACES DE RUNS. La réconciliation ci-dessus ne SUPPRIME rien : elle
     // repeint `open` en `red`, donc elle fait grossir la population de bloqués. Mesuré le
     // 2026-08-18 sur la racine dev : 11 784 RUN.md dont 9 341 verts — c'est là qu'est la masse.
@@ -5051,6 +5092,19 @@ app.whenReady().then(async () => {
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
   const worktreeActivityAtStartup = os.getWorktreeActivity()
   const resumableRuns = os.resumableOrchestrations().filter((state) => {
+    // Run SUSPENDU par le mur de quota avant l'heure que le refus annonçait : le relancer ne ferait
+    // que se cogner au même refus. Il reste reprenable (et protégé du ménage des copies) ; seule la
+    // relance AUTOMATIQUE attend. Après l'heure, ou sans heure annoncée, il repart comme les autres.
+    if (repriseAutoRetenueParQuota(state, Date.now())) {
+      console.warn(
+        '[resume-orchestration]',
+        state.runId,
+        `-> reprise automatique différée : mur de quota jusqu'à ${new Date(
+          state.quotaWall?.resumeAfter ?? Date.now()
+        ).toLocaleString('fr-FR')}`
+      )
+      return false
+    }
     const publication = publishedWorktreeProofForResume(state.runId, worktreeActivityAtStartup)
     if (!publication) return true
 

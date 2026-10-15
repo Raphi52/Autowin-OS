@@ -435,6 +435,7 @@ import {
   modeleDeRepliApresRefus
 } from './provider-failure-diagnosis'
 import { retryOnTransientOverload } from './transient-overload'
+import { estMurDeQuota, instantDeRetourAnnonce } from '../shared/reprise-quota'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
 import { annonceCommitLocal } from './annonce-commit-local'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
@@ -842,6 +843,16 @@ export interface OrchestratorLifecycleDeps {
   onAgentsChanged?: (runId: string, agents: RunAgentRef[]) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
   onRunSettled?: (runId: string) => void
+  /**
+   * Run arrêté par le MUR DE QUOTA : il n'est pas fini, il est SUSPENDU. L'appelant garde son état
+   * reprenable en y notant le refus et l'heure de retour annoncée, avec les agents et la
+   * consommation réglés (`marquerCheckpointCoupeParQuota`). `onRunSettled` n'est PAS appelé.
+   */
+  onRunQuotaWalled?: (
+    runId: string,
+    mur: { reason: string; resumeAfter?: number },
+    regle: { agents: RunAgentRef[]; usage?: ExecutionUsageSnapshot }
+  ) => void
   /** Empreinte d'un processus vivant — sert à savoir, au redémarrage, si un agent travaille encore. */
   processIdentity?: (pid: number) => string | null | undefined
   /**
@@ -961,6 +972,20 @@ export interface GreedyTaskNode {
   deps: string[]
 }
 
+/**
+ * Le refus de quota qui a arrêté un run, ou rien.
+ *
+ * Seule l'EXCEPTION compte : c'est par elle que le mur arrive (« Phase clean — … : You've hit your
+ * session limit · resets 1pm », RUN.md de conv-914). Un verdict rouge rendu normalement reste un
+ * verdict, jamais une suspension. Le vocabulaire est celui du disjoncteur (`estMurDeQuota`), qui
+ * écarte déjà le rate-limit passager.
+ */
+export function murDeQuotaDuRun(erreur: unknown): string | undefined {
+  if (erreur === undefined || erreur === null) return undefined
+  const message = erreur instanceof Error ? erreur.message : String(erreur)
+  return estMurDeQuota(message) ? message : undefined
+}
+
 function costOfTrace(trace: OrchestrationStep[]): number {
   return trace.reduce(
     (total, step) =>
@@ -1022,6 +1047,8 @@ export interface RunWorktrees {
     options?: {
       merge?: boolean
       retainGreen?: boolean
+      /** Run suspendu par le mur de quota : copie gardée pour la reprise, jamais classée triée. */
+      suspendu?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
       onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
@@ -1031,6 +1058,8 @@ export interface RunWorktrees {
     options?: {
       merge?: boolean
       retainGreen?: boolean
+      /** Run suspendu par le mur de quota : copie gardée pour la reprise, jamais classée triée. */
+      suspendu?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
       onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
@@ -1519,6 +1548,31 @@ export class Orchestrator {
   private readonly runAgents = new Map<string, Map<string, RunAgentRef>>()
   /** Runs deja terminaux dont le checkpoint ne peut etre libere qu'apres le dernier provider. */
   private readonly terminalRunsAwaitingProviderSettlement = new Set<string>()
+  /**
+   * Runs SUSPENDUS par le mur de quota alors qu'un appel (membre de fan-out) était encore en vol :
+   * leur marque attend le règlement de ce dernier appel, pour écrire des agents et une consommation
+   * enfin réglés. Leur état reprenable n'est jamais effacé, et leur copie reste gardée.
+   */
+  private readonly suspendusEnAttenteDeReglement = new Map<
+    string,
+    { reason: string; resumeAfter?: number }
+  >()
+
+  /** Note la suspension sur l'état reprenable (best-effort) et libère la mémoire du run. */
+  private noterSuspensionParQuota(
+    runId: string,
+    mur: { reason: string; resumeAfter?: number }
+  ): void {
+    try {
+      this.deps.onRunQuotaWalled?.(runId, mur, {
+        agents: this.agentsOf(runId),
+        usage: this.deps.currentExecutionUsage?.()
+      })
+    } catch {
+      /* best-effort : sans la marque, l'état reprenable reste tel quel — jamais effacé */
+    }
+    this.runAgents.delete(runId)
+  }
 
   private rememberAgent(
     runId: string,
@@ -1573,6 +1627,16 @@ export class Orchestrator {
       const historical = { ...agent }
       delete historical.reservationId
       byToken.set(token, { ...historical, active: false })
+    }
+    const murEnAttente = this.suspendusEnAttenteDeReglement.get(runId)
+    if (murEnAttente) {
+      const encoreActif = [...byToken.values()].some(
+        (candidate) => candidate.active === true || Boolean(candidate.reservationId)
+      )
+      if (encoreActif) return
+      this.suspendusEnAttenteDeReglement.delete(runId)
+      this.noterSuspensionParQuota(runId, murEnAttente)
+      return
     }
     if (!this.terminalRunsAwaitingProviderSettlement.has(runId)) {
       if (byToken.size === 0) this.runAgents.delete(runId)
@@ -1979,6 +2043,9 @@ export class Orchestrator {
     // `checkout` : le travail de l'utilisateur n'est jamais déplacé.
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
+    // L'exception qui a arrêté le run, lue dans le `finally` : un mur de quota y SUSPEND le run au
+    // lieu de le clore (voir `murDeQuotaDuRun`).
+    let erreurDuRun: unknown
     // Reference du rapport rendu : le `finally` doit pouvoir aligner ses chemins APRES avoir su ce que
     // la fusion a fait de la copie isolee. Muter l'objet rendu fonctionne (la valeur de retour est
     // cette reference), reassigner la variable ne fonctionnerait PAS.
@@ -2221,6 +2288,9 @@ export class Orchestrator {
       green = !result.gateBlocked
       produced = result
       return result
+    } catch (erreur) {
+      erreurDuRun = erreur
+      throw erreur
     } finally {
       this.processObservers.delete(runId)
       this.causalWatchPathsByRun.delete(runId)
@@ -2299,9 +2369,13 @@ export class Orchestrator {
         await closePublishedRun(projectPublication)
       }
       const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
+      // MUR DE QUOTA : le run n'a pas échoué sur son travail, l'abonnement a dit non. Sa copie reste
+      // en place pour la reprise (`suspendu`), et son état reprenable n'est pas effacé plus bas.
+      const murDeQuota = green ? undefined : murDeQuotaDuRun(erreurDuRun)
       const finalizeOptions = {
         merge: retained ? false : green,
         ...(retained ? { retainGreen: true } : {}),
+        ...(murDeQuota ? { suspendu: true } : {}),
         onPublished
       }
       // L'activite est lue AVANT `end` : la finalisation supprime la copie, donc apres l'appel on ne
@@ -2318,15 +2392,17 @@ export class Orchestrator {
       // ici. La clôture a alors commité et poussé sous son nom 36 fichiers d'autres conversations
       // (be8c2f87). Test « fusion refusée sur une copie qui a des fichiers » : rouge avant, vert après.
       // La copie est donc MESURÉE avant la finalisation (qui peut la committer ou la supprimer) ; une
-      // mesure impossible ne vaut pas « copie vide ».
-      let copieMesureeVide = producedFileCount === 0
-      if (copieMesureeVide && this.deps.worktrees?.fichiersChangesDeLaCopie) {
+      // mesure impossible ne vaut pas « copie vide ». Cette mesure UNIQUE sert aussi la garde
+      // « intégration vide » plus bas : `undefined` = copie non mesurable.
+      let fichiersDeLaCopie: number | undefined = producedFileCount
+      if (producedFileCount === 0 && this.deps.worktrees?.fichiersChangesDeLaCopie) {
         try {
-          copieMesureeVide = (await this.deps.worktrees.fichiersChangesDeLaCopie(runId)).length === 0
+          fichiersDeLaCopie = (await this.deps.worktrees.fichiersChangesDeLaCopie(runId)).length
         } catch {
-          copieMesureeVide = false
+          fichiersDeLaCopie = undefined
         }
       }
+      const copieMesureeVide = fichiersDeLaCopie === 0
       const externalGitMutationDelivered =
         activityBeforeFinalize !== undefined &&
         copieMesureeVide &&
@@ -2343,7 +2419,12 @@ export class Orchestrator {
       // renvoye `nothing`, compte comme integre, et l'utilisateur a lu « fusion verifiee » alors que
       // le correctif n'avait jamais quitte la copie isolee. « Rien a fusionner » n'est credible que
       // si le run n'a RIEN produit : sinon c'est une integration vide, donc un faux vert.
-      const emptyIntegrationClaim = finalizeOutcome === 'nothing' && producedFileCount > 0
+      // fix-ok: conv-914 (2026-10-14) — cette garde lisait `producedFileCount`, donc
+      // `activity().files`, vide jusqu'à la finalisation : elle ne mordait jamais en production (son
+      // test historique fournissait une activité déjà remplie). Elle lit maintenant la mesure réelle
+      // `fichiersDeLaCopie` ; une copie non mesurable ne prouve pas « rien produit ». Test « copie
+      // mesurée avec 2 fichiers + finalisation « rien » » : rouge avant, vert après.
+      const emptyIntegrationClaim = finalizeOutcome === 'nothing' && fichiersDeLaCopie !== 0
       const integrated =
         !requiresIsolatedWorkspace ||
         externalGitMutationDelivered ||
@@ -2411,7 +2492,10 @@ export class Orchestrator {
           produced.gateReasons.push('intégration locale non terminée')
         }
         if (emptyIntegrationClaim) {
-          const vide = `intégration vide : ${producedFileCount} fichier(s) modifié(s) dans la copie isolée, rien publié`
+          const vide =
+            fichiersDeLaCopie === undefined
+              ? 'intégration vide non vérifiable : la copie isolée n’a pas pu être mesurée avant la finalisation, rien publié'
+              : `intégration vide : ${fichiersDeLaCopie} fichier(s) modifié(s) dans la copie isolée, rien publié`
           if (!produced.gateReasons.includes(vide)) produced.gateReasons.push(vide)
         }
         // La cause exacte (base-dirty / base-in-progress / merge-failed + fichiers) doit atterrir
@@ -2496,7 +2580,22 @@ ${annonceCommit}`
       // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait
       // la seule garde durable contre une relance/double facturation après crash.
       const hasUnsettledProviderCall = (this.deps.currentExecutionUsage?.()?.activeCalls ?? 0) > 0
-      const terminalRun = !green || integrated || retained
+      // fix-ok: conv-914/conv-916 (2026-10-13) — deux runs arrêtés sur « session limit · resets 1pm »,
+      // l'un en phase clean après un build payé : `!green` les rendait terminaux, `onRunSettled`
+      // effaçait leur état reprenable, et `run-state/` ne les contenait plus. Un mur de quota SUSPEND
+      // le run : son acquis reste reprenable (relance de la tâche, « Reprendre tout », démarrage
+      // après l'heure annoncée). La décision ne dépend QUE du mur — la copie vient d'être gardée sur
+      // ce seul critère (`suspendu`) : un run dont la copie est gardée mais l'état effacé ne serait
+      // plus ni reprenable ni présenté au tri. Un appel encore en vol (membre de fan-out) retarde
+      // seulement la marque jusqu'à son règlement : une date ne lève jamais un verrou.
+      const suspenduParQuota = murDeQuota !== undefined
+      const terminalRun = (!green && !suspenduParQuota) || integrated || retained
+      if (murDeQuota) {
+        const resumeAfter = instantDeRetourAnnonce(murDeQuota)
+        const mur = { reason: murDeQuota, ...(resumeAfter !== undefined ? { resumeAfter } : {}) }
+        if (hasUnsettledProviderCall) this.suspendusEnAttenteDeReglement.set(runId, mur)
+        else this.noterSuspensionParQuota(runId, mur)
+      }
       if (terminalRun) {
         if (hasUnsettledProviderCall) {
           this.terminalRunsAwaitingProviderSettlement.add(runId)

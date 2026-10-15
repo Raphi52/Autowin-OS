@@ -83,7 +83,8 @@
   padding: 12px 14px;
   background: var(--surface-inset, rgba(255, 255, 255, 0.02));
 }
-.veille-ligne.is-ecarte {
+.veille-ligne.is-ecarte,
+.veille-ligne.is-perime {
   opacity: 0.55;
 }
 .veille-ligne-tete {
@@ -103,6 +104,10 @@
 }
 .veille-statut.is-prompte {
   color: var(--cyan);
+}
+.veille-statut.is-perime {
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  text-decoration: line-through;
 }
 .veille-titre {
   font-size: 14px;

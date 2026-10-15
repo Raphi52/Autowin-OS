@@ -18,6 +18,7 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { ajouterArchives, texteDuMessage } from './conversations-sur-disque.mjs'
 
 /** Relances nues : elles ne portent aucune cible, donc elles ne fondent pas le style. */
 const RELANCES = new Set([
@@ -99,7 +100,8 @@ export function ditRien(lignes) {
 export function chantiersOuverts(conv) {
   let dernier = null
   for (const m of conv.messages ?? [])
-    if (m.role === 'assistant' && typeof m.content === 'string') dernier = m.content
+    // `content` d'un message à parties est écrit vide sur le disque : il se reconstruit.
+    if (m.role === 'assistant') dernier = texteDuMessage(m)
   if (!dernier) return []
   const reste = lignesDeRubrique(dernier, 'Reste à faire')
   const reco = lignesDeRubrique(dernier, 'Recommandé')
@@ -315,8 +317,14 @@ export function lireCorpus(dir) {
   // applyConversationJournal (src/main/store/conversations-disk.ts). `turn-event` n'est pas rejoue :
   // il ne porte que le texte en flux des reponses, jamais une demande de l'utilisateur.
   const journal = `${fichier}.journal.jsonl`
-  if (!existsSync(journal)) return { conversations: base, fichier }
-  const parId = new Map(base.map((c) => [c.id, c]))
+  // Les fils archivés (inactifs depuis 14 jours) ne sont plus dans le snapshot.
+  if (!existsSync(journal))
+    return {
+      conversations: [...ajouterArchives(new Map(base.map((c) => [c.id, c])), fichier).values()],
+      fichier
+    }
+  // Archives d'abord : le snapshot puis le journal, copies actives, les remplacent (conversations-disk.ts).
+  const parId = ajouterArchives(new Map(base.map((c) => [c.id, c])), fichier)
   for (const ligne of readFileSync(journal, 'utf8').split(/\r?\n/)) {
     if (!ligne) continue
     let r

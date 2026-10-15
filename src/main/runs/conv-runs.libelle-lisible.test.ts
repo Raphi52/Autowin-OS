@@ -43,6 +43,27 @@ describe('libellé de run lisible', () => {
     for (const t of s.split('-')) expect(t.length).toBeGreaterThan(1)
   })
 
+  /*
+   * ROUGE AVANT FIX (2026-10-14) — une relance « reprend » / « go » part avec l'objectif
+   * `<relance>\n\nCIBLE CONTEXTUALISEE : <sujet>` (commands.ts). Le marqueur prenait deux des six
+   * mots du libellé : `go-cible-contextualisee-traite-trois-<ts>` (conv-517), et le sujet perdait
+   * ses derniers mots porteurs.
+   */
+  it('une relance ne fait pas entrer le marqueur « CIBLE CONTEXTUALISEE » dans le libellé', () => {
+    // Avant le correctif : `reprend-cible-contextualisee-corrige`.
+    expect(sujet('reprend\n\nCIBLE CONTEXTUALISEE : Corrige la fuite memoire du journal')).toBe(
+      'reprend-corrige-fuite-memoire-journal'
+    )
+  })
+
+  // ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LE RETRAIT EST TROP LARGE : un sujet qui PARLE de la
+  // cible contextualisée garde ses mots — seul le marqueur posé par commands.ts est retiré.
+  it('garde « cible contextualisee » quand c’est le sujet lui-même', () => {
+    expect(sujet('Preserve la cible contextualisee des relances')).toBe(
+      'preserve-cible-contextualisee-relances'
+    )
+  })
+
   it('retombe sur la phrase brute quand tout est du remplissage', () => {
     expect(sujet('vazy stp')).not.toBe('')
   })

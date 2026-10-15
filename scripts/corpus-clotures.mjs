@@ -20,6 +20,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { ajouterArchives, texteDuMessage } from './conversations-sur-disque.mjs'
 
 const SOURCE = process.argv[2] ?? path.join('.autowin-data', 'autowin-os', 'conversations.json')
 const DESTINATION = path.join(
@@ -48,7 +49,8 @@ function messagesDeCloture(donnees) {
   for (const conversation of conversations) {
     for (const message of conversation?.messages ?? []) {
       if (message?.role !== 'assistant') continue
-      const texte = typeof message.content === 'string' ? message.content : ''
+      // `content` d'un message à parties est écrit vide sur le disque : il se reconstruit.
+      const texte = texteDuMessage(message)
       if (texte.includes('👉') && /(Recommand|Reste à faire)/u.test(texte)) sortie.push(texte)
     }
   }
@@ -90,7 +92,12 @@ function main() {
     process.exitCode = 1
     return
   }
-  const messages = messagesDeCloture(JSON.parse(fs.readFileSync(SOURCE, 'utf8')))
+  const donnees = JSON.parse(fs.readFileSync(SOURCE, 'utf8'))
+  // Les fils archivés (inactifs depuis 14 jours) ne sont plus dans le snapshot.
+  const toutes = Array.isArray(donnees)
+    ? [...ajouterArchives(new Map(donnees.map((c) => [c.id, c])), SOURCE).values()]
+    : donnees
+  const messages = messagesDeCloture(toutes)
   const vus = new Set()
   const corpus = []
   for (const message of messages) {

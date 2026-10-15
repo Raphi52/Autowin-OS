@@ -88,6 +88,19 @@ export interface OrchestrationRunState {
     reason: string
     decidedAt: number
   }
+  /**
+   * Run SUSPENDU par le mur de quota (`orchestrator.ts`). Son acquis reste reprenable : l'effacer
+   * perdait des phases déjà payées (conv-914 et conv-916, 2026-10-13). `resumeAfter` est l'heure
+   * de retour que le refus annonçait lui-même (`instantDeRetourAnnonce`) ; avant elle, la reprise
+   * automatique du démarrage s'abstient (`repriseAutoRetenueParQuota`). Une reprise demandée
+   * (relance de la tâche dans le fil, « Reprendre tout ») n'attend pas : c'est un geste voulu.
+   * Le prochain checkpoint du run repris ne porte plus ce champ.
+   */
+  quotaWall?: {
+    reason: string
+    resumeAfter?: number
+    decidedAt: number
+  }
   startedAt: number
   updatedAt: number
   /**
@@ -472,6 +485,18 @@ function isResumeDisposition(
   )
 }
 
+function isQuotaWall(value: unknown): value is NonNullable<OrchestrationRunState['quotaWall']> {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.reason) &&
+    (value.resumeAfter === undefined ||
+      (typeof value.resumeAfter === 'number' && Number.isFinite(value.resumeAfter))) &&
+    typeof value.decidedAt === 'number' &&
+    Number.isFinite(value.decidedAt) &&
+    value.decidedAt >= 0
+  )
+}
+
 function isTerminalDisposition(
   value: unknown
 ): value is NonNullable<OrchestrationRunState['terminal']> {
@@ -521,6 +546,7 @@ function raisonsCheckpointInvalide(value: unknown): string[] {
   if (!(value.resumeDisposition === undefined || (isRunId(value.runId) && isResumeDisposition(value.resumeDisposition, value.runId))))
     r.push('resumeDisposition invalide')
   if (!(value.terminal === undefined || isTerminalDisposition(value.terminal))) r.push('terminal invalide')
+  if (!(value.quotaWall === undefined || isQuotaWall(value.quotaWall))) r.push('quotaWall invalide')
   if (value.agents !== undefined) {
     if (!Array.isArray(value.agents)) r.push('agents n est pas un tableau')
     else
@@ -554,6 +580,7 @@ function isOrchestrationRunState(value: unknown): value is OrchestrationRunState
     (value.resumeDisposition === undefined ||
       isResumeDisposition(value.resumeDisposition, value.runId)) &&
     (value.terminal === undefined || isTerminalDisposition(value.terminal)) &&
+    (value.quotaWall === undefined || isQuotaWall(value.quotaWall)) &&
     (value.agents === undefined ||
       (Array.isArray(value.agents) && value.agents.every(isRunAgentRef))) &&
     hasConsistentActiveReservationLinks(value) &&
@@ -676,6 +703,57 @@ export function saveOrchestrationAgentCheckpoint(
   }
   saveOrchestrationState(root, updated)
   return updated
+}
+
+/**
+ * SUSPEND un run arrêté par le mur de quota au lieu de l'effacer.
+ *
+ * Écrit dans la MÊME écriture le refus, son heure de retour, et l'état réglé des agents et de la
+ * consommation : l'appel refusé est déjà réglé en mémoire (`settleAgentReservationInMemory`), mais
+ * le disque garde le dernier checkpoint d'agents, pris quand l'appel était encore en vol. Sans ce
+ * réalignement, la reprise lirait un verrou fantôme (`activeCalls` > 0) sur un appel terminé.
+ *
+ * ÉCRITURE CHAÎNÉE (`saveOrchestrationStateAsync`) et pas synchrone : un checkpoint d'agents encore
+ * en vol, plus ancien, renommerait sinon son fichier PAR-DESSUS cette marque. Rejetée — sans rien
+ * écrire — si l'état marqué serait illisible à la relecture.
+ */
+export async function marquerCheckpointCoupeParQuota(
+  root: string,
+  runId: string,
+  mur: { reason: string; resumeAfter?: number },
+  regle: {
+    agents?: NonNullable<OrchestrationRunState['agents']>
+    usage?: ExecutionUsageSnapshot
+  } = {},
+  nowMs = Date.now()
+): Promise<OrchestrationRunState> {
+  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  if (!current) throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
+  const updated: OrchestrationRunState = {
+    ...current,
+    ...(regle.agents ? { agents: regle.agents } : {}),
+    ...(regle.usage ? { usage: regle.usage } : {}),
+    quotaWall: {
+      reason: mur.reason.slice(0, 500),
+      ...(mur.resumeAfter !== undefined ? { resumeAfter: mur.resumeAfter } : {}),
+      decidedAt: nowMs
+    },
+    updatedAt: nowMs
+  }
+  await saveOrchestrationStateAsync(root, updated)
+  return updated
+}
+
+/**
+ * La reprise AUTOMATIQUE du démarrage doit-elle encore attendre ce run ?
+ *
+ * Même règle que le disjoncteur du registre (`providers/registry.ts`) : un mur qui annonce son
+ * heure de retour tient jusqu'à elle ; un mur sans heure tombe au redémarrage, geste délibéré de
+ * l'utilisateur. Relancer avant l'heure ne ferait que se cogner au même refus.
+ */
+export function repriseAutoRetenueParQuota(state: OrchestrationRunState, nowMs: number): boolean {
+  const resumeAfter = state.quotaWall?.resumeAfter
+  return resumeAfter !== undefined && nowMs < resumeAfter
 }
 
 export function clearOrchestrationState(root: string, runId: string): void {

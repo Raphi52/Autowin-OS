@@ -290,6 +290,8 @@ describe('resumerErreurDeCompilation', () => {
     `${ESC}[33mUnexpected "}"${ESC}[33m`,
     '3  |  }',
     `${ESC}[31m`,
+    // Barres obliques DOUBLÉES : `'D:\A…\node_modules'` donnait un vrai saut de ligne (`\n`) et
+    // ôtait les autres barres — la pile n'était pas celle de la vraie sortie (lint rouge le 14/10).
     '    at failureErrorWithLog (D:\\AutoWinOS\\node_modules\\esbuild\\lib\\main.js:1748:15)'
   ].join('\n')
 

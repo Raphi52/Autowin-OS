@@ -173,6 +173,59 @@ describe('prompter un candidat', () => {
   })
 })
 
+describe('candidat PÉRIMÉ — sa ligne citée a disparu du fichier', () => {
+  const perime = (partiel: Partial<CandidatVeille> = {}): CandidatVeille =>
+    candidat({
+      id: 'corr',
+      concurrent: 'Autowin OS',
+      titre: 'La mise à jour propose d’abord rebaser',
+      url: 'src/shared/update-contract.ts:52',
+      type: 'correction',
+      statut: 'perime',
+      ...partiel
+    })
+
+  it('est masqué par défaut, compté, et ne peut pas être prompté une fois affiché', async () => {
+    await rendre({ charger: async () => stock({ candidats: [candidat(), perime()] }) })
+    expect(texte()).toContain('1 périmé')
+    expect(texte()).not.toContain('La mise à jour propose')
+
+    const voir = [...(conteneur?.querySelectorAll('button') ?? [])].find((b) =>
+      b.textContent?.includes('périmé')
+    ) as HTMLButtonElement
+    await act(async () => {
+      voir.click()
+    })
+    const ligne = conteneur?.querySelector('li.is-perime') as HTMLElement
+    expect(ligne?.textContent).toContain('périmé')
+    const bouton = ligne.querySelector('button.veille-prompter') as HTMLButtonElement
+    expect(bouton.disabled).toBe(true)
+  })
+
+  it('RE-VÉRIFIE au clic : devenu périmé depuis l’affichage → rien n’est envoyé, et on le dit', async () => {
+    let lectures = 0
+    const charger = vi.fn(async () => {
+      lectures++
+      // 1re lecture : à l'ouverture de la vue, la ligne existait encore. 2e : au clic, elle a disparu.
+      return stock({ candidats: [perime({ statut: lectures === 1 ? 'nouveau' : 'perime' })] })
+    })
+    const prompter = vi.fn()
+    const marquer = vi.fn(async () => stock())
+    await rendre({ charger, prompter, marquer })
+
+    const bouton = conteneur?.querySelector('button.veille-prompter') as HTMLButtonElement
+    expect(bouton.disabled).toBe(false)
+    await act(async () => {
+      bouton.click()
+    })
+
+    expect(charger).toHaveBeenCalledTimes(2)
+    expect(prompter).not.toHaveBeenCalled()
+    expect(marquer).not.toHaveBeenCalled()
+    expect(trouver('veille-avis')?.textContent).toMatch(/plus dans le fichier/)
+  })
+})
+
 describe('pertinence — la note du scout, affichee et triable', () => {
   const av = (id: string, titre: string, pertinence: number | undefined): CandidatVeille =>
     candidat({ id, titre, ...(pertinence !== undefined ? { pertinence } : {}) })

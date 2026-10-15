@@ -64,6 +64,79 @@ export function cheminRaccourciDemarrerDev(appData: string, executable?: string)
   return join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', nom)
 }
 
+/**
+ * ARGUMENTS DU RACCOURCI — ce qu'ouvre un clic dessus dans le menu Démarrer.
+ *
+ * Constaté le 2026-10-15 (conv-954) : le raccourci visait l'exe SANS argument, et un clic ouvrait la
+ * page d'accueil d'Electron (`default_app.asar`) au lieu d'Autowin OS. La cible ne peut pas changer
+ * (Electron la contrôle), mais pas les arguments : ils désignent `scripts/menu-demarrer-dev.cjs`, que
+ * l'application par défaut d'Electron exécute, et qui démarre le lanceur officiel du dépôt.
+ */
+export const SCRIPT_MENU_DEMARRER_DEV = join('scripts', 'menu-demarrer-dev.cjs')
+
+export function argumentsRaccourciDemarrerDev(racineApp: string): string {
+  return `"${join(racineApp, SCRIPT_MENU_DEMARRER_DEV)}"`
+}
+
+/**
+ * Le DÉPÔT d'un exe de dev, déduit de son emplacement : `<dépôt>\.autowin-data\electron-dev\electron.exe`
+ * ou `<dépôt>\node_modules\electron\dist\electron.exe`. Autre emplacement = `undefined`.
+ *
+ * Les arguments se calculent depuis CE dépôt, jamais depuis `app.getAppPath()` : une instance de test
+ * lancée sur une copie de travail temporaire (scripts/autowin-headless.ps1 -AppPath) aurait sinon fait
+ * viser au raccourci le script de cette copie, mort avec elle. Cible et script restent dans le même dépôt.
+ */
+export function racineDepotDeLExeDev(executable: string | undefined): string | undefined {
+  if (!executable) return undefined
+  const dossier = dirname(executable)
+  const nom = (chemin: string): string => basename(chemin).toLowerCase()
+  if (nom(dossier) === DOSSIER_EXE_DEV && nom(dirname(dossier)) === '.autowin-data')
+    return dirname(dirname(dossier))
+  const electron = dirname(dossier)
+  if (nom(dossier) === 'dist' && nom(electron) === 'electron' && nom(dirname(electron)) === 'node_modules')
+    return dirname(dirname(electron))
+  return undefined
+}
+
+/** Les deux noms qu'un raccourci de dev peut porter (exe de dev, Electron d'npm). */
+export function cheminsRaccourcisDemarrerDev(appData: string): string[] {
+  const dossier = join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+  return [join(dossier, `${PRODUIT_EXE_DEV}.lnk`), join(dossier, NOM_RACCOURCI_ELECTRON_DEV)]
+}
+
+export type ResultatArgumentsRaccourci =
+  | { etat: 'absent' }
+  | { etat: 'autre-depot' }
+  | { etat: 'deja-aligne' }
+  | { etat: 'ecrit' }
+  | { etat: 'echec'; raison: string }
+
+/**
+ * L'AUTRE raccourci de dev — celui de l'exe qui ne tourne PAS. Constaté le 2026-10-15 (conv-954) :
+ * un poste passé sur l'exe de dev (conv-266) garde l'ancien `Electron.lnk`, avec l'icône Autowin et
+ * sans argument ; l'app ne réaligne que le raccourci de l'exe qui tourne, et celui-là continuait
+ * d'ouvrir la page d'accueil d'Electron. On n'y écrit que les ARGUMENTS (opération `update`), et
+ * seulement s'il vise un exe de CE dépôt : le raccourci d'un autre clone n'est pas le nôtre.
+ */
+export function aligneArgumentsRaccourciDemarrerDev(entree: {
+  shell: ShellRaccourci
+  existe: (chemin: string) => boolean
+  chemin: string
+  racineDepot: string
+}): ResultatArgumentsRaccourci {
+  const { shell, existe, chemin, racineDepot } = entree
+  if (!existe(chemin)) return { etat: 'absent' }
+  const actuel = shell.readShortcutLink(chemin)
+  const racine = racineDepotDeLExeDev(actuel.target)
+  if (racine === undefined || dossierNormalise(racine) !== dossierNormalise(racineDepot))
+    return { etat: 'autre-depot' }
+  const args = argumentsRaccourciDemarrerDev(racine)
+  if (memeChemin(actuel.args, args)) return { etat: 'deja-aligne' }
+  // `target` recopié TEL QUEL : le type d'Electron l'exige même pour `update`.
+  const ok = shell.writeShortcutLink(chemin, 'update', { target: actuel.target, args })
+  return ok ? { etat: 'ecrit' } : { etat: 'echec', raison: `écriture refusée : ${chemin}` }
+}
+
 export function iconeRaccourciDev(racineApp: string, varianteDev: boolean): string {
   return varianteDev
     ? join(racineApp, 'resources', 'autowin-os-dev.ico')
@@ -124,17 +197,20 @@ export function aligneRaccourciDemarrerDev(entree: {
   existe: (chemin: string) => boolean
   chemin: string
   executable: string
+  /** Ce que l'exe reçoit au clic : `argumentsRaccourciDemarrerDev`. Vide = page d'accueil d'Electron. */
+  args: string
   identite: string
   clsid: string
   icone: string
 }): ResultatRaccourciDev {
-  const { shell, existe, chemin, executable, identite, clsid, icone } = entree
+  const { shell, existe, chemin, executable, args, identite, clsid, icone } = entree
   if (!existe(icone)) return { etat: 'echec', raison: `icône introuvable : ${icone}` }
   const cwd = dirname(executable)
   if (existe(chemin)) {
     const actuel = shell.readShortcutLink(chemin)
     if (
       memeChemin(actuel.target, executable) &&
+      memeChemin(actuel.args, args) &&
       memeChemin(actuel.cwd, cwd) &&
       actuel.appUserModelId === identite &&
       memeClsid(actuel.toastActivatorClsid, clsid) &&
@@ -144,7 +220,7 @@ export function aligneRaccourciDemarrerDev(entree: {
   }
   const ok = shell.writeShortcutLink(chemin, 'create', {
     target: executable,
-    args: '',
+    args,
     cwd,
     description: 'Autowin OS (dev)',
     icon: icone,

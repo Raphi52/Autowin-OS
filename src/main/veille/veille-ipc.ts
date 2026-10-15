@@ -1,6 +1,11 @@
 import type { IpcMainInvokeEvent } from 'electron'
-import type { TypeEntree } from './candidats'
-import { ecrireStockVeille, lireStockVeille, type StockVeille } from './candidats-store'
+import { classerPerimes, type StatutMarquable, type TypeEntree } from './candidats'
+import {
+  ecrireStockVeille,
+  lecteurDuDepot,
+  lireStockVeille,
+  type StockVeille
+} from './candidats-store'
 
 /**
  * L'IPC de la veille : lire le stock, et marquer un candidat.
@@ -15,7 +20,8 @@ import { ecrireStockVeille, lireStockVeille, type StockVeille } from './candidat
 
 export type StatutCandidat = StockVeille['candidats'][number]['statut']
 
-const STATUTS: readonly StatutCandidat[] = ['nouveau', 'ecarte', 'prompte']
+/** `perime` n'y figure PAS : il se constate sur le fichier, il ne se pose pas à la main. */
+const STATUTS: readonly StatutMarquable[] = ['nouveau', 'ecarte', 'prompte']
 
 export interface RegisterVeilleIpcOptions {
   ipc: {
@@ -34,10 +40,25 @@ export interface RegisterVeilleIpcOptions {
    * nommée plutôt que d'exister en silence.
    */
   genererInterne?: (conversationId?: string) => Promise<unknown>
+  /**
+   * Racine du dépôt que le scout interne analyse (`os.executionWorkspace`) : les ancrages
+   * `src/…:N` des candidats y sont relatifs. Présente → chaque correction ancrée dans le code est
+   * re-vérifiée À CHAQUE service du stock, et sort « perime » si sa ligne citée a disparu.
+   */
+  racineDepot?: string
 }
 
 export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
   const { ipc, assertTrusted, chemin } = options
+
+  /**
+   * Servir = re-vérifier. La vue n'affiche et ne prompte que ce qui passe ici, donc un candidat dont
+   * la ligne a disparu ne peut plus partir comme « défaut à corriger ». Rien n'est réécrit sur disque.
+   */
+  const servir = (stock: StockVeille): StockVeille => {
+    const lire = options.racineDepot ? lecteurDuDepot(options.racineDepot) : undefined
+    return lire ? { ...stock, candidats: classerPerimes(stock.candidats, lire) } : stock
+  }
 
   /** Une seule génération à la fois : un double-clic ne paie pas deux scouts. */
   let generationEnCours: Promise<unknown> | undefined
@@ -58,7 +79,7 @@ export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
 
   ipc.handle('veille:snapshot', (event) => {
     assertTrusted(event, 'Veille concurrents')
-    return lireStockVeille(chemin)
+    return servir(lireStockVeille(chemin))
   })
 
   ipc.handle('veille:marquer', (event, ...args: unknown[]) => {
@@ -81,7 +102,7 @@ export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
       candidats: stock.candidats.map((c) => (c.id === id ? { ...c, statut } : c))
     }
     ecrireStockVeille(suivant, chemin)
-    return suivant
+    return servir(suivant)
   })
 }
 

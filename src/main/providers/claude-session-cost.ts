@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
+import { loadChatSessions } from '../runs/chat-session-store'
 
 /**
  * LE COÛT D'UN TOUR, PAS CELUI DE LA SESSION ENTIÈRE.
@@ -31,7 +32,12 @@ export interface SessionCostState {
   readonly updatedAt: number
 }
 
-/** Au-delà, une session n'est plus reprise : son état ne sert qu'à faire grossir le fichier. */
+/**
+ * Au-delà, l'état d'une session qu'AUCUNE conversation ne peut reprendre (agents, fils supprimés) ne
+ * sert qu'à faire grossir le fichier. Une session encore rattachée à une conversation, elle, est
+ * gardée quel que soit son âge : mesuré le 2026-10-14, la tâche quotidienne /maintenance, restée
+ * 10 jours sans tour, a vu son cumul purgé — et son tour du 13/10 compté 125,16 $ au lieu de ~9 $.
+ */
 export const SESSION_COST_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
@@ -54,19 +60,29 @@ export function perTurnCostUsd(
   return reportedTotalUsd - previous.lastTotalUsd
 }
 
-/** Purge les sessions plus vieilles que le TTL — le fichier ne grossit pas indéfiniment. */
+/**
+ * Purge les sessions plus vieilles que le TTL — le fichier ne grossit pas indéfiniment — SAUF celles
+ * qu'une conversation peut encore reprendre (`reprenables`, lu seulement si une session a vieilli).
+ */
 export function purgeSessionCostStates(
   states: Readonly<Record<string, SessionCostState>>,
   now: number,
-  ttlMs: number = SESSION_COST_TTL_MS
+  ttlMs: number = SESSION_COST_TTL_MS,
+  reprenables: () => ReadonlySet<string> = () => new Set()
 ): Record<string, SessionCostState> {
   const kept: Record<string, SessionCostState> = {}
+  let vivantes: ReadonlySet<string> | undefined
   for (const [id, state] of Object.entries(states)) {
     if (!state || typeof state.updatedAt !== 'number') continue
-    if (now - state.updatedAt > ttlMs) continue
+    if (now - state.updatedAt > ttlMs && !(vivantes ??= reprenables()).has(id)) continue
     kept[id] = state
   }
   return kept
+}
+
+/** Sessions CLI que le chat peut reprendre : celles que l'index des conversations retient encore. */
+function sessionsDuChat(): ReadonlySet<string> {
+  return new Set(Object.values(loadChatSessions()).map((record) => record.sessionId))
 }
 
 /*
@@ -154,14 +170,15 @@ export function reinitialiserMagasinCoutsDeSession(): void {
 export function coutDuTourDepuisCumul(
   sessionId: string | undefined,
   reportedTotalUsd: number,
-  now: number = Date.now()
+  now: number = Date.now(),
+  reprenables: () => ReadonlySet<string> = sessionsDuChat
 ): number {
   if (!sessionId) return reportedTotalUsd
   if (!Number.isFinite(reportedTotalUsd) || reportedTotalUsd < 0) return reportedTotalUsd
   const chemin = cheminMagasin()
   const états = lireMagasin(chemin)
   const tour = perTurnCostUsd(reportedTotalUsd, états[sessionId])
-  const suivants = purgeSessionCostStates(états, now)
+  const suivants = purgeSessionCostStates(états, now, SESSION_COST_TTL_MS, reprenables)
   suivants[sessionId] = { lastTotalUsd: reportedTotalUsd, updatedAt: now }
   écrireMagasin(chemin, suivants)
   return tour

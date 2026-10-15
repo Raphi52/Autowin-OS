@@ -241,6 +241,18 @@ const MAX_AUTOMATIC_RETRIES = ESSAIS_MAX
  * attendent la fin d'un processus, pas un reessai -- les laisser sans reveil les figerait.
  */
 const DELAIS_REPRISE_PLANCHER = 5_000
+
+/**
+ * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA N'EST PAS UN RUN REFUSÉ.
+ *
+ * Mesuré le 2026-10-13 : deux runs (conv-914, conv-916) arrêtés sur « session limit · resets 1pm »,
+ * l'un en phase clean après un build déjà payé. La finalisation rouge les traitait comme un travail
+ * jugé raté : copie vide libérée, copie pleine classée « triée ». Or leur reprise rouvre CETTE copie
+ * (`resumeExisting`) : libérée, elle rend « copie durable absente » et la reprise échoue. Le run
+ * suspendu garde donc sa copie telle quelle, et ce libellé dit pourquoi elle attend.
+ */
+export const DETAIL_RUN_SUSPENDU =
+  'Run suspendu par le mur de quota : copie conservée pour la reprise.'
 /**
  * Les publications qu'une reprise peut encore reveiller — donc dont le manifeste porte encore une
  * information vivante, meme si la copie a disparu du disque.
@@ -845,6 +857,11 @@ export class RunWorktreeCoordinator {
     options: {
       merge?: boolean
       retainGreen?: boolean
+      /**
+       * Run SUSPENDU (mur de quota, `orchestrator.ts`) : rouge, mais pas refusé. Sa copie reste
+       * en place, même vide, et n'est pas classée « triée » : la reprise la rouvre.
+       */
+      suspendu?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
       onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     } = {}
@@ -868,7 +885,9 @@ export class RunWorktreeCoordinator {
           options.retainGreen ? 'held' : 'not-requested',
           options.retainGreen
             ? 'Solution conservée par un tournoi ; aucune publication automatique.'
-            : undefined
+            : options.suspendu
+              ? DETAIL_RUN_SUSPENDU
+              : undefined
         )
         /*
          * UN RUN QUI N'A RIEN ECRIT NE LAISSE PAS DE BUREAU DERRIERE LUI.
@@ -889,7 +908,7 @@ export class RunWorktreeCoordinator {
          * l'asynchrone, mais ce fichier a deja paye le prix d'un correctif pose sur une seule des
          * deux copies.
          */
-        if (!options.retainGreen && tracked.files.length === 0) {
+        if (!options.retainGreen && !options.suspendu && tracked.files.length === 0) {
           this.libererLaCopieEnConflit(tracked.runId)
         }
         /*
@@ -917,7 +936,7 @@ export class RunWorktreeCoordinator {
          * attend une vraie decision. Pose sur les DEUX jumeaux (`end` et `endAsync`), comme le
          * commentaire ci-dessus l'exige.
          */
-        if (!options.retainGreen && tracked.files.length > 0) {
+        if (!options.retainGreen && !options.suspendu && tracked.files.length > 0) {
           this.manager.marquerTravailTrie?.(tracked.runId)
         }
       }
@@ -1005,6 +1024,11 @@ export class RunWorktreeCoordinator {
     options: {
       merge?: boolean
       retainGreen?: boolean
+      /**
+       * Run SUSPENDU (mur de quota, `orchestrator.ts`) : rouge, mais pas refusé. Sa copie reste
+       * en place, même vide, et n'est pas classée « triée » : la reprise la rouvre.
+       */
+      suspendu?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
       onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     } = {}
@@ -1035,7 +1059,9 @@ export class RunWorktreeCoordinator {
           options.retainGreen ? 'held' : 'not-requested',
           options.retainGreen
             ? 'Solution conservée par un tournoi ; aucune publication automatique.'
-            : undefined
+            : options.suspendu
+              ? DETAIL_RUN_SUSPENDU
+              : undefined
         )
         /*
          * UN RUN QUI N'A RIEN ECRIT NE LAISSE PAS DE BUREAU DERRIERE LUI.
@@ -1056,7 +1082,7 @@ export class RunWorktreeCoordinator {
          * l'asynchrone, mais ce fichier a deja paye le prix d'un correctif pose sur une seule des
          * deux copies.
          */
-        if (!options.retainGreen && tracked.files.length === 0) {
+        if (!options.retainGreen && !options.suspendu && tracked.files.length === 0) {
           this.libererLaCopieEnConflit(tracked.runId)
         }
         /*
@@ -1084,7 +1110,7 @@ export class RunWorktreeCoordinator {
          * attend une vraie decision. Pose sur les DEUX jumeaux (`end` et `endAsync`), comme le
          * commentaire ci-dessus l'exige.
          */
-        if (!options.retainGreen && tracked.files.length > 0) {
+        if (!options.retainGreen && !options.suspendu && tracked.files.length > 0) {
           this.manager.marquerTravailTrie?.(tracked.runId)
         }
       }

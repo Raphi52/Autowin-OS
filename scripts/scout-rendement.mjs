@@ -11,6 +11,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { ajouterArchives } from './conversations-sur-disque.mjs'
 
 const args = process.argv.slice(2)
 const argOf = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -42,7 +43,11 @@ const readJsonl = (p) => {
 const lireCorpus = () => {
   const base = readJson(path.join(DATA, 'conversations.json'), [])
   if (!Array.isArray(base)) return base
-  const parId = new Map(base.map((c) => [c.id, c]))
+  // Archives d'abord : le snapshot puis le journal, copies actives, les remplacent (conversations-disk.ts).
+  const parId = ajouterArchives(
+    new Map(base.map((c) => [c.id, c])),
+    path.join(DATA, 'conversations.json')
+  )
   for (const r of readJsonl(path.join(DATA, 'conversations.json.journal.jsonl'))) {
     if (r.op === 'upsert' && r.conversation?.id) parId.set(r.conversation.id, r.conversation)
     else if (r.op === 'delete') parId.delete(r.id)

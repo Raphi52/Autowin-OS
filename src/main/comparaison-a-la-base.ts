@@ -103,7 +103,7 @@ export async function ouvrirCopieDeBase(repo: string): Promise<CopieDeBase> {
 }
 
 /** Pose sur la copie l'état des fichiers du tour tel qu'il sera commité (absent = supprimé). */
-function appliquerLeTour(repo: string, copie: string, fichiers: readonly string[]): void {
+export function appliquerLeTour(repo: string, copie: string, fichiers: readonly string[]): void {
   for (const fichier of fichiers) {
     const source = join(repo, fichier)
     const cible = join(copie, fichier)

@@ -1,5 +1,8 @@
+import { readdirSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
+import { convRunsRoot } from './runs/conv-runs'
 
 /**
  * UNE REPRISE ELLIPTIQUE NE DOIT PAS FAIRE PERDRE LA CIBLE.
@@ -44,12 +47,12 @@ function osDouble(): {
 
 const CIBLE = 'Preserver la cible contextualisee quand une reprise utilisateur est elliptique.'
 
-async function lancer(rootTask: string): Promise<string | undefined> {
+async function lancer(rootTask: string, convId = 'conv-reprise'): Promise<string | undefined> {
   const { os, calls } = osDouble()
   await new AppCommandBus(os, () => {}).exec(
     'orchestrate',
     { task: CIBLE, phase: 'build', rootTask },
-    'conv-reprise'
+    convId
   )
   return calls.lastTask
 }
@@ -67,6 +70,69 @@ describe('reprise elliptique — la cible contextualisée survit', () => {
       expect(envoye).toContain(vague)
       expect(envoye).toContain(CIBLE)
       expect(envoye).not.toBe(vague)
+    })
+  }
+
+  /*
+   * LES RELANCES REELLEMENT TAPEES (saisies-utilisateur.jsonl, releve du 2026-10-14) : « reprend »
+   * 90 fois, « go » 28, « reprendre » 9, « vazy » 9, « finis » 5, « lance le » / « relance le » /
+   * « lancer terrain. » 3 chacun. Seuls « go » et « vas-y » etaient reconnus : 30 RUN.md portaient
+   * l'objectif « reprend » et 23 « lancer terrain. », sans la cible du pilote — et le dossier
+   * « reprend-… » faisait rouvrir un run ouvert d'un autre sujet (`reuseOrCreateConvRun` apparie
+   * sur le texte de la tache).
+   */
+  for (const relance of [
+    'reprend',
+    'reprendre',
+    'Reprends.',
+    'reprend pardon',
+    'vazy',
+    'continue',
+    'ok',
+    'oui',
+    'finis',
+    'lance le',
+    'relance le',
+    'lancer terrain.',
+    'lancer frame.',
+    'lancer la phase suivante.',
+    'Reprendre le travail arrêté — corriger la cause nommée ci-dessus, puis relancer la même demande.'
+  ]) {
+    it(`la relance « ${relance} » garde la cible du pilote`, async () => {
+      const envoye = await lancer(relance)
+
+      expect(envoye).toContain(CIBLE)
+      expect(envoye).not.toBe(relance)
+    })
+  }
+
+  it('« reprend » : RUN.md porte la cible, le dossier ne s’appelle plus « reprend-<horodatage> »', async () => {
+    // Conversation propre a ce test : son dossier ne contient que le run qu'il vient de creer.
+    const convId = `conv-reprise-runmd-${process.pid}-${Date.now().toString(36)}`
+    const dossierConv = join(convRunsRoot(), convId)
+    try {
+      await lancer('reprend', convId)
+
+      const workspaces = readdirSync(dossierConv)
+      expect(workspaces).toHaveLength(1)
+      expect(workspaces[0]).not.toMatch(/^reprend-[a-z0-9]+-workspace$/)
+      const md = readFileSync(join(dossierConv, workspaces[0], 'RUN.md'), 'utf8')
+      const besoin = md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1] ?? ''
+      expect(besoin).toContain(CIBLE)
+    } finally {
+      rmSync(dossierConv, { recursive: true, force: true })
+    }
+  })
+
+  for (const nomme of [
+    'reprends le découpage de src/main/index.ts : extrais runPilotChat vers src/main/chat/run-pilot-chat.ts',
+    'lance le terrain sur le contrôleur arena-audit et prépare le test qui doit sortir rouge',
+    'relance le service du brain, puis vérifie que /query et /ingest répondent à nouveau.',
+    'ok pardon reprend : ajouter /ingest à la source hermes-brain puis réinstaller',
+    'continue d’attendre et donne-moi les résultats des 4 répliques'
+  ]) {
+    it(`une relance qui NOMME son objet reste intacte : « ${nomme.slice(0, 40)}… »`, async () => {
+      expect(await lancer(nomme)).toBe(nomme)
     })
   }
 

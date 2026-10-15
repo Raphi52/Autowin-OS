@@ -543,6 +543,71 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
     expect(await enAttente(repo)).toContain('mine.ts')
   })
 
+  // Vécu le 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant a cassé la
+  // compilation de main, alors que les tests rejoués dans l'arbre partagé étaient verts.
+  it('typage ROUGE de ce qui part : rien n’est commité, les tests ne sont pas joués, chaque fichier nomme l’erreur', async () => {
+    const { repo, remote, debut, traces } = await tourQuiModifieMine()
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    const erreur = "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
+    const typer = vi.fn(async () => ({
+      statut: 'echec' as const,
+      projets: ['node' as const],
+      commande: 'tsc --noEmit -p tsconfig.node.json --composite false',
+      erreurs: [erreur]
+    }))
+    const verifier = vi.fn()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      typerAvantPublication: typer,
+      verifierAvantPublication: verifier
+    })
+
+    const [depotType, fichiersTypes] = typer.mock.calls[0] as unknown as [string, string[]]
+    expect(realpathSync.native(depotType)).toBe(realpathSync.native(repo))
+    expect(fichiersTypes).toEqual(['mine.ts'])
+    expect(verifier).not.toHaveBeenCalled()
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'typage-rouge', detail: expect.stringContaining('1 erreur de typage nouvelle') },
+      exclus: [{ path: 'mine.ts', motif: 'typage-rouge', erreursDeTypage: [erreur] }],
+      typage: { statut: 'echec' }
+    })
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await enAttente(repo)).toContain('mine.ts')
+  })
+
+  it('typage VERT : les tests suivent, la publication part, et le rapport dit que ce qui part a été typé', async () => {
+    const { remote, debut, traces } = await tourQuiModifieMine()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      typerAvantPublication: async () => ({ statut: 'vert' as const, projets: ['node' as const] }),
+      verifierAvantPublication: async () => ({
+        statut: 'vert' as const,
+        commande: 'vitest related mine.ts --run',
+        testsJoues: 3
+      })
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      typage: { statut: 'vert', projets: ['node'] },
+      verification: { statut: 'vert' }
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+  })
+
   it('tests VERTS : publication comme avant, et le rapport dit ce qui a été rejoué', async () => {
     const { remote, debut, traces } = await tourQuiModifieMine()
 

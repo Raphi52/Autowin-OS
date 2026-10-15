@@ -1,3 +1,5 @@
+import type { TypageAvantPublication } from './typage-avant-publication'
+
 /**
  * Clôture automatique d'un run VERT : commit du travail puis publication sur une branche DÉDIÉE.
  *
@@ -97,6 +99,8 @@ export type AutoCloseResult =
         | 'unattributed'
         /** Tour de chat : les tests de ses fichiers, rejoués avant de pousser, ne sont pas verts. */
         | 'tests-rouges'
+        /** Tour de chat : ce qui part ne se type pas (erreur nouvelle, voir typage-avant-publication). */
+        | 'typage-rouge'
       detail?: string
     }
   | { status: 'failed'; error: string }
@@ -554,15 +558,20 @@ export interface AutoCloseReport {
       | 'autre-fil-en-cours'
       | 'tests-rouges'
       | 'import-hors-commit'
+      | 'typage-rouge'
     /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
     lignesNonReclamees?: number
     /** Motif `tests-rouges` : les fichiers de test en échec. */
     testsEnEchec?: string[]
     /** Motif `import-hors-commit` : les fichiers locaux importés qui ne partiraient pas avec lui. */
     importsHorsCommit?: string[]
+    /** Motif `typage-rouge` : les premières erreurs nouvelles, `fichier: TSxxxx: message`. */
+    erreursDeTypage?: string[]
   }>
   /** Tour de chat : les tests rejoués AVANT de pousser (absent = aucune vérification branchée). */
   verification?: VerificationAvantPublication
+  /** Tour de chat : le typage de ce qui part (absent = aucun typage branché, ou aucun fichier TypeScript). */
+  typage?: TypageAvantPublication
 }
 
 /**

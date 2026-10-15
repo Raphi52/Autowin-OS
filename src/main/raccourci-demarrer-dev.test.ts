@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import {
+  aligneArgumentsRaccourciDemarrerDev,
   aligneIconeRaccourciBureauDev,
   aligneRaccourciDemarrerDev,
+  argumentsRaccourciDemarrerDev,
+  cheminsRaccourcisDemarrerDev,
+  racineDepotDeLExeDev,
   cheminIconeVersionnee,
   cheminRaccourciBureauDev,
   cheminRaccourciDemarrerDev,
@@ -17,6 +22,7 @@ import {
 const EXE = 'D:\\Autowin\\node_modules\\electron\\dist\\electron.exe'
 const ICO = 'D:\\Autowin\\resources\\autowin-os-dev.ico'
 const LNK = cheminRaccourciDemarrerDev('C:\\Users\\U\\AppData\\Roaming')
+const ARGS = argumentsRaccourciDemarrerDev('D:\\Autowin')
 
 function faux(initial?: DetailsRaccourci) {
   let lnk = initial
@@ -31,7 +37,7 @@ function faux(initial?: DetailsRaccourci) {
   }
   const existe = (p: string) => p === ICO || (p === LNK && lnk !== undefined)
   const lancer = () =>
-    aligneRaccourciDemarrerDev({ shell, existe, chemin: LNK, executable: EXE, identite: EXE, clsid: DEV_TOAST_ACTIVATOR_CLSID, icone: ICO })
+    aligneRaccourciDemarrerDev({ shell, existe, chemin: LNK, executable: EXE, args: ARGS, identite: EXE, clsid: DEV_TOAST_ACTIVATOR_CLSID, icone: ICO })
   return { lancer, ecritures }
 }
 
@@ -50,7 +56,7 @@ describe('raccourci menu Démarrer en dev', () => {
   it("réécrit le raccourci créé par Electron (sans icône, CLSID aléatoire) avec l'icône Autowin", () => {
     const f = faux({ target: EXE, cwd: 'D:\\Autowin\\node_modules\\electron\\dist', appUserModelId: EXE, toastActivatorClsid: '{3507F640-57DA-4372-978C-8622207ED2BC}', icon: '' })
     expect(f.lancer()).toEqual({ etat: 'ecrit' })
-    expect(f.ecritures[0]).toMatchObject({ target: EXE, args: '', icon: ICO, iconIndex: 0, appUserModelId: EXE, toastActivatorClsid: DEV_TOAST_ACTIVATOR_CLSID })
+    expect(f.ecritures[0]).toMatchObject({ target: EXE, args: ARGS, icon: ICO, iconIndex: 0, appUserModelId: EXE, toastActivatorClsid: DEV_TOAST_ACTIVATOR_CLSID })
   })
 
   it("n'écrit plus rien une fois conforme", () => {
@@ -58,6 +64,116 @@ describe('raccourci menu Démarrer en dev', () => {
     expect(f.lancer()).toEqual({ etat: 'ecrit' })
     expect(f.lancer()).toEqual({ etat: 'deja-aligne' })
     expect(f.ecritures).toHaveLength(1)
+  })
+
+  // Constaté le 2026-10-15 (conv-954) : l'icône du menu Démarrer ouvrait la page d'accueil
+  // d'Electron. Le raccourci était conforme sur tout ce qu'Electron contrôle, mais SANS argument.
+  it('réécrit un raccourci conforme pour Electron mais sans argument : il ouvrait Electron nu', () => {
+    const f = faux({ target: EXE, args: '', cwd: 'D:\\Autowin\\node_modules\\electron\\dist', appUserModelId: EXE, toastActivatorClsid: DEV_TOAST_ACTIVATOR_CLSID, icon: ICO })
+    expect(f.lancer()).toEqual({ etat: 'ecrit' })
+    expect(f.ecritures[0]).toMatchObject({ target: EXE, args: ARGS })
+  })
+
+  it('les arguments désignent, entre guillemets, le script qui démarre le lanceur officiel', () => {
+    expect(ARGS.replace(/\//g, '\\')).toBe('"D:\\Autowin\\scripts\\menu-demarrer-dev.cjs"')
+    // Le script existe bien dans CE dépôt : un nom faux redonnerait un clic sans effet.
+    expect(existsSync(argumentsRaccourciDemarrerDev(join(__dirname, '..', '..')).slice(1, -1))).toBe(true)
+  })
+})
+
+describe('menu Démarrer sur les postes des collègues (conv-954)', () => {
+  const DEPOT = 'D:\\Autowin'
+  const EXE_DEV = 'D:\\Autowin\\.autowin-data\\electron-dev\\electron.exe'
+  const [LNK_DEV, LNK_ELECTRON] = cheminsRaccourcisDemarrerDev('C:\\Users\\U\\AppData\\Roaming')
+
+  it("le dépôt se déduit de l'exe, exe de dev comme Electron d'npm ; ailleurs, aucun", () => {
+    expect(racineDepotDeLExeDev(EXE_DEV)).toBe(DEPOT)
+    expect(racineDepotDeLExeDev(EXE)).toBe(DEPOT)
+    expect(racineDepotDeLExeDev('D:\\Autowin\\NODE_MODULES\\Electron\\Dist\\electron.exe')).toBe(DEPOT)
+    expect(racineDepotDeLExeDev('C:\\Program Files\\Electron\\electron.exe')).toBeUndefined()
+    expect(racineDepotDeLExeDev(undefined)).toBeUndefined()
+  })
+
+  it('les deux noms possibles du raccourci, dans le dossier Programmes', () => {
+    expect(LNK_DEV.replace(/\//g, '\\')).toBe('C:\\Users\\U\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Autowin OS Dev.lnk')
+    expect(LNK_ELECTRON).toBe(LNK)
+  })
+
+  function autre(initial: DetailsRaccourci | undefined) {
+    let lnk = initial
+    const ecritures: { operation: string; details: DetailsRaccourci }[] = []
+    const shell: ShellRaccourci = {
+      readShortcutLink: () => lnk!,
+      writeShortcutLink: (_c, operation, details) => {
+        ecritures.push({ operation, details })
+        lnk = { ...lnk!, ...details }
+        return true
+      }
+    }
+    const lancer = () =>
+      aligneArgumentsRaccourciDemarrerDev({ shell, existe: (c) => c === LNK_ELECTRON && lnk !== undefined, chemin: LNK_ELECTRON, racineDepot: DEPOT })
+    return { lancer, ecritures }
+  }
+
+  it("l'ancien Electron.lnk d'un poste passé sur l'exe de dev reçoit les arguments, rien d'autre", () => {
+    const f = autre({ target: EXE, args: '', cwd: 'D:\\Autowin\\node_modules\\electron\\dist', appUserModelId: EXE, icon: ICO })
+    expect(f.lancer()).toEqual({ etat: 'ecrit' })
+    // `update` avec la cible recopiée : identité, CLSID, icône et dossier ne sont pas fournis, donc intacts.
+    expect(f.ecritures).toEqual([{ operation: 'update', details: { target: EXE, args: argumentsRaccourciDemarrerDev(DEPOT) } }])
+    expect(f.lancer()).toEqual({ etat: 'deja-aligne' })
+    expect(f.ecritures).toHaveLength(1)
+  })
+
+  it("le raccourci d'un AUTRE clone, ou d'un exe inconnu, n'est pas touché ; absent reste absent", () => {
+    const clone = autre({ target: 'E:\\Clone\\node_modules\\electron\\dist\\electron.exe', args: '' })
+    expect(clone.lancer()).toEqual({ etat: 'autre-depot' })
+    const inconnu = autre({ target: 'C:\\Program Files\\Electron\\electron.exe', args: '' })
+    expect(inconnu.lancer()).toEqual({ etat: 'autre-depot' })
+    const absent = autre(undefined)
+    expect(absent.lancer()).toEqual({ etat: 'absent' })
+    expect([...clone.ecritures, ...inconnu.ecritures, ...absent.ecritures]).toEqual([])
+  })
+
+  it("le démarrage tire le script du dépôt de l'EXE, pas de la copie qui tourne, et réaligne l'autre raccourci", () => {
+    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    expect(source).toContain('const racineExe = racineDepotDeLExeDev(process.execPath)')
+    expect(source).toContain('args: racineExe ? argumentsRaccourciDemarrerDev(racineExe)')
+    expect(source).not.toContain('argumentsRaccourciDemarrerDev(app.getAppPath())')
+    expect(source).toContain('aligneArgumentsRaccourciDemarrerDev({')
+  })
+})
+
+describe('scripts/menu-demarrer-dev.cjs : le lanceur choisi au clic', () => {
+  type Commande = { erreur?: string; interpreteur?: string; arguments?: string[]; dossier?: string }
+  const script = createRequire(import.meta.url)('../../scripts/menu-demarrer-dev.cjs') as {
+    choisirInterpreteur: (e: { racine: string; chemins: string[]; existe: (c: string) => boolean }) => string | undefined
+    commandeLanceur: (e: { racine: string; chemins: string[]; existe: (c: string) => boolean }) => Commande
+  }
+  const R = 'D:\\Autowin'
+  const LANCEUR = join(R, 'scripts', 'launch_dev.py')
+  const PYW = join('C:\\Windows', 'pyw.exe')
+  const PYTHONW = join('C:\\venv', 'pythonw.exe')
+
+  it('même ordre que create-dev-shortcut.ps1 : Python embarqué, puis pyw.exe, puis pythonw.exe', () => {
+    const embarque = join(R, 'resources', 'python', 'pythonw.exe')
+    const chemins = ['C:\\venv', 'C:\\Windows']
+    expect(script.choisirInterpreteur({ racine: R, chemins, existe: (c) => [embarque, PYW, PYTHONW].includes(c) })).toBe(embarque)
+    // pyw.exe gagne même s'il vient APRÈS pythonw.exe dans le PATH (le venv d'un autre produit).
+    expect(script.choisirInterpreteur({ racine: R, chemins, existe: (c) => [PYW, PYTHONW].includes(c) })).toBe(PYW)
+    expect(script.choisirInterpreteur({ racine: R, chemins, existe: (c) => c === PYTHONW })).toBe(PYTHONW)
+  })
+
+  it('lance launch_dev.py depuis la racine du dépôt', () => {
+    expect(script.commandeLanceur({ racine: R, chemins: ['C:\\Windows'], existe: (c) => [LANCEUR, PYW].includes(c) })).toEqual({
+      interpreteur: PYW,
+      arguments: [LANCEUR],
+      dossier: R
+    })
+  })
+
+  it('dit pourquoi il ne peut pas lancer, au lieu de rester muet', () => {
+    expect(script.commandeLanceur({ racine: R, chemins: [], existe: (c) => c === LANCEUR }).erreur).toMatch(/pyw\.exe/)
+    expect(script.commandeLanceur({ racine: R, chemins: ['C:\\Windows'], existe: (c) => c === PYW }).erreur).toMatch(/launch_dev\.py/)
   })
 })
 

@@ -868,6 +868,28 @@ export class ConversationStore {
     return this.nextId
   }
 
+  /**
+   * Ajoute les conversations ARCHIVÉES relues APRÈS le démarrage (`conversations-disk.ts`).
+   *
+   * Aucun événement de changement : elles viennent du disque, les y réécrire n'aurait aucun sens.
+   * Une conversation déjà présente GAGNE toujours — elle a été relue de l'instantané ou du journal,
+   * donc elle est au moins aussi récente que son archive. Rend le nombre réellement ajouté.
+   */
+  integrerArchives(archivees: readonly Conversation[]): number {
+    let ajoutees = 0
+    for (const conversation of archivees) {
+      if (this.conversations.has(conversation.id)) continue
+      this.conversations.set(conversation.id, conversation)
+      // Les index de recherche déjà construits absorbent ces messages, comme ceux d'un tour.
+      for (const message of conversation.messages)
+        this.indexerMessage(conversation.id, message.content)
+      const numero = Number(conversation.id.replace(/^conv-/, ''))
+      if (Number.isSafeInteger(numero)) this.raiseIdFloor(numero + 1)
+      ajoutees += 1
+    }
+    return ajoutees
+  }
+
   /** Releve le plancher (jamais le baisse) depuis une valeur persistee. */
   raiseIdFloor(valeur: number): void {
     if (Number.isSafeInteger(valeur) && valeur > this.nextId) this.nextId = valeur
@@ -1382,7 +1404,18 @@ export class ConversationStore {
   }
 
   /** Récupère une conversation par id, ou undefined si absente. */
+  /**
+   * Lecture À LA DEMANDE d'un fil archivé pas encore relu (`conversations-disk.ts`) : posée
+   * pendant la courte relecture des archives qui suit le démarrage, retirée ensuite.
+   */
+  chargeurDArchive?: (id: string) => Conversation | undefined
+
   get(id: string): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (conversation || !this.chargeurDArchive) return conversation
+    const archivee = this.chargeurDArchive(id)
+    if (!archivee || archivee.id !== id) return undefined
+    this.integrerArchives([archivee])
     return this.conversations.get(id)
   }
 

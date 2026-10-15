@@ -41,12 +41,24 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
     // Ne garder que la neuve rouvrirait exactement la boucle que ce garde existe pour couper.
     /\bplan d['’]ex[ée]cution impossible\b/.test(text) ||
     /\bhttp 429\b/.test(text) ||
-    // TOKEN D'AUTH EXPIRE — mur non actionnable : l'agent ne peut PAS passer, seul l'utilisateur peut
-    // se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu sur
-    // conv-1086 (2026-08-13) : « 401 OAuth access token has expired. Re-authenticate to continue »
-    // passait a travers la suppression et declenchait un incident kaizen inutile — un des
-    // amplificateurs des 2248 alertes de l'historique. Ancre sur le VOCABULAIRE d'authentification
-    // pour ne pas avaler un vrai defaut qui mentionnerait « 401 » par hasard.
+    isExpiredAuth(text)
+  )
+}
+
+/**
+ * TOKEN D'AUTH EXPIRE — mur non actionnable : l'agent ne peut PAS passer, seul l'utilisateur peut
+ * se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu sur
+ * conv-1086 (2026-08-13) : « 401 OAuth access token has expired. Re-authenticate to continue »
+ * passait a travers la suppression et declenchait un incident kaizen inutile — un des
+ * amplificateurs des 2248 alertes de l'historique. Ancre sur le VOCABULAIRE d'authentification
+ * pour ne pas avaler un vrai defaut qui mentionnerait « 401 » par hasard.
+ *
+ * Sorti de `isNonActionableWall` le 2026-10-14, mot pour mot, pour servir aussi au classement des
+ * echecs d'orchestration (`classe-terminale-echec.ts`) : une seule definition d'une session expiree.
+ */
+export function isExpiredAuth(texte: string): boolean {
+  const text = texte.toLowerCase()
+  return (
     /\boauth\b[^\n]{0,40}\b(?:expired|expire|invalid)\b/.test(text) ||
     /\baccess token has expired\b/.test(text) ||
     /\bre-?authenticate\b/.test(text) ||

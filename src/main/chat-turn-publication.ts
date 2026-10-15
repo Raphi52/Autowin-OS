@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
 import { exactLineFingerprint } from './exact-line-fingerprint'
+import type { TypageAvantPublication } from './typage-avant-publication'
 import {
   autoCloseBranch,
   autoCloseRun,
@@ -66,6 +67,9 @@ export interface ChatTurnStart {
 }
 
 type Exclusion = NonNullable<AutoCloseReport['exclus']>[number]
+
+/** Au-delà, le panneau n'en nommerait pas plus utilement : le rapport donne le total. */
+const ERREURS_DE_TYPAGE_NOMMEES = 10
 
 function cle(path: string): string {
   const normalized = resolve(path).replaceAll('\\', '/').replace(/\/+$/, '')
@@ -253,6 +257,13 @@ export async function publierTourDeChat(input: {
     repo: string,
     fichiers: readonly string[]
   ) => Promise<VerificationAvantPublication>
+  /**
+   * Type ce qui PART (copie propre du dernier commit + fichiers du tour), AVANT les tests. Vécu le
+   * 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant, écarté, a cassé la
+   * compilation de main ; les tests, rejoués dans l'arbre partagé où l'appelant était encore là,
+   * étaient verts. Absent = aucun typage (voir `typage-avant-publication.ts`).
+   */
+  typerAvantPublication?: (repo: string, fichiers: readonly string[]) => Promise<TypageAvantPublication>
   runGit?: GitRunner
   openPr?: PrOpener
 }): Promise<AutoCloseReport | undefined> {
@@ -371,6 +382,28 @@ export async function publierTourDeChat(input: {
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).
   if (publier.length === 0)
     return rapport(input, { status: 'skipped', reason: 'unattributed' }, exclus)
+  // Une erreur de typage NOUVELLE dans ce qui part ne se pousse pas : les fichiers restent en
+  // attente, nommés avec les erreurs. Un typage qui n'a pas pu se jouer laisse partir, et le DIT.
+  const typage = await input.typerAvantPublication?.(repo, publier)
+  if (typage?.statut === 'echec') {
+    const rouges = publier.map<Exclusion>((path) => ({
+      path,
+      motif: 'typage-rouge',
+      erreursDeTypage: typage.erreurs.slice(0, ERREURS_DE_TYPAGE_NOMMEES)
+    }))
+    const n = typage.erreurs.length
+    return rapport(
+      input,
+      {
+        status: 'skipped',
+        reason: 'typage-rouge',
+        detail: `${n} erreur${n > 1 ? 's' : ''} de typage nouvelle${n > 1 ? 's' : ''} dans ce qui part (${typage.commande})`
+      },
+      [...exclus, ...rouges],
+      undefined,
+      typage
+    )
+  }
   // Un rouge (ou un plafond de temps) ne se pousse pas : les fichiers restent en attente, nommés
   // avec les tests en échec. Un fichier qu'aucun test ne juge part comme avant, mais le rapport le dit.
   const verification = await input.verifierAvantPublication?.(repo, publier)
@@ -384,7 +417,8 @@ export async function publierTourDeChat(input: {
       input,
       { status: 'skipped', reason: 'tests-rouges', detail: verification.detail },
       [...exclus, ...rouges],
-      verification
+      verification,
+      typage
     )
   }
   const project = await autoCloseRun({
@@ -396,7 +430,7 @@ export async function publierTourDeChat(input: {
     direct: true,
     ...(input.openPr ? { openPr: input.openPr } : {})
   })
-  return rapport(input, project, exclus, verification)
+  return rapport(input, project, exclus, verification, typage)
 }
 
 function brancheDuTour(conversationId: string, turnId: string): string {
@@ -407,7 +441,8 @@ function rapport(
   input: { conversationId: string; turnId: string },
   project: AutoCloseReport['project'],
   exclus: Exclusion[] = [],
-  verification?: VerificationAvantPublication
+  verification?: VerificationAvantPublication,
+  typage?: TypageAvantPublication
 ): AutoCloseReport {
   return {
     runId: `${input.conversationId} · tour ${input.turnId.slice(0, 8)}`,
@@ -416,6 +451,8 @@ function rapport(
     at: new Date().toISOString(),
     source: 'chat',
     ...(exclus.length ? { exclus } : {}),
-    ...(verification ? { verification } : {})
+    ...(verification ? { verification } : {}),
+    // `sans-objet` (aucun fichier TypeScript) ne dit rien d'utile : il n'encombre pas le rapport.
+    ...(typage && typage.statut !== 'sans-objet' ? { typage } : {})
   }
 }

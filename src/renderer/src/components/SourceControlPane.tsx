@@ -63,16 +63,45 @@ interface AutoCloseViewState {
     exclus?: Exclusion[]
     /** Tour de chat : les tests rejoués avant de pousser (absent = aucune vérification). */
     verification?: Verification
+    /** Tour de chat : le typage de ce qui part (absent = aucun typage, ou aucun fichier TypeScript). */
+    typage?: Typage
   }
 }
 
 interface Exclusion {
   path: string
-  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours' | 'tests-rouges'
+  motif:
+    | 'modifie-avant-le-tour'
+    | 'touche-par-un-autre-fil'
+    | 'autre-fil-en-cours'
+    | 'tests-rouges'
+    | 'import-hors-commit'
+    | 'typage-rouge'
   /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
   lignesNonReclamees?: number
   /** Motif `tests-rouges` : les fichiers de test en échec. */
   testsEnEchec?: string[]
+  /** Motif `typage-rouge` : les premières erreurs nouvelles, `fichier: TSxxxx: message`. */
+  erreursDeTypage?: string[]
+}
+
+/** Miroir de `TypageAvantPublication` (src/main/typage-avant-publication.ts), `sans-objet` exclu. */
+type Typage =
+  | { statut: 'vert'; projets: string[]; dejaRouges?: number }
+  | { statut: 'echec'; projets: string[]; commande: string; erreurs: string[] }
+  | { statut: 'non-verifie'; raison: string }
+
+/** Vécu le 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant a cassé la compilation de main. */
+function libelleTypage(typage: Typage): string {
+  if (typage.statut === 'vert') {
+    const deja = typage.dejaRouges ? ` — ${typage.dejaRouges} erreur(s) déjà présente(s) au dernier commit` : ''
+    return `Typage de ce qui part · vert (${typage.projets.join(', ')})${deja}`
+  }
+  if (typage.statut === 'echec') {
+    const n = typage.erreurs.length
+    return `Typage de ce qui part · ${n} erreur${n > 1 ? 's' : ''} nouvelle${n > 1 ? 's' : ''} (${typage.commande})`
+  }
+  return `Typage non vérifié · ${typage.raison}`
 }
 
 type Verification =
@@ -95,7 +124,8 @@ const MOTIFS_EXCLUSION: Record<string, string> = {
   'touche-par-un-autre-fil': 'touché aussi par un autre fil',
   'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier',
   'tests-rouges': 'tests rouges',
-  'import-hors-commit': 'importe un fichier qui ne partirait pas avec lui'
+  'import-hors-commit': 'importe un fichier qui ne partirait pas avec lui',
+  'typage-rouge': 'ne compile pas sans ce qui reste en attente'
 }
 
 /** Mesuré le 2026-10-01 : `b6d2a3fc` poussé sans test a laissé main rouge 20 h. */
@@ -124,6 +154,7 @@ function libelleVerification(verification: Verification): string {
 function libelleExclusion(item: Exclusion): string {
   const motif = MOTIFS_EXCLUSION[item.motif] ?? item.motif
   if (item.testsEnEchec?.length) return `${item.path} (${motif} : ${item.testsEnEchec.join(', ')})`
+  if (item.erreursDeTypage?.length) return `${item.path} (${motif} : ${item.erreursDeTypage[0]})`
   const n = item.lignesNonReclamees
   if (!n) return `${item.path} (${motif})`
   const s = n > 1 ? 's' : ''
@@ -160,7 +191,8 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'concurrent-commits': 'commits concurrents',
     'invalid-publication-range': 'plage Git non vérifiable',
     unattributed: 'aucun fichier du tour prouvé à ce fil',
-    'tests-rouges': 'tests rouges'
+    'tests-rouges': 'tests rouges',
+    'typage-rouge': 'typage rouge'
   }
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
@@ -884,6 +916,9 @@ export function SourceControlPane({
                 {autoClose.last.brain && (
                   <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
                 )}
+                {autoClose.last.typage ? (
+                  <span data-testid="sc-autoclose-typage">{libelleTypage(autoClose.last.typage)}</span>
+                ) : null}
                 {autoClose.last.verification ? (
                   <span data-testid="sc-autoclose-verification">
                     {libelleVerification(autoClose.last.verification)}

@@ -1647,3 +1647,79 @@ describe('Orchestrator — une copie qui porte du travail ne passe pas pour une 
     expect(close).not.toHaveBeenCalled()
   })
 })
+
+/*
+ * LA GARDE « INTÉGRATION VIDE » MESURE LA COPIE (conv-914, 2026-10-14).
+ *
+ * La garde de conv-1286 refuse un « rien à fusionner » quand la copie portait des fichiers. Elle
+ * lisait `activity().files`, que le coordinateur ne remplit qu'à la finalisation : toujours vide
+ * avant `end`, donc la garde ne mordait jamais en production. Son test historique passait parce
+ * qu'il fournissait une activité DÉJÀ remplie, ce que la production ne fait pas. Ici l'activité
+ * est vide comme en production, et seule la mesure réelle de la copie porte l'information.
+ */
+describe('Orchestrator — la garde « intégration vide » lit la mesure réelle de la copie', () => {
+  function orchestrateurRienAFusionner(
+    fichiersChangesDeLaCopie: RunWorktrees['fichiersChangesDeLaCopie']
+  ) {
+    const provider = new CapturingProvider()
+    const close = vi.fn().mockResolvedValue(undefined)
+    let runId = ''
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: (id) => {
+          runId = id
+          return 'C:\\wt\\run-1'
+        },
+        // Comme en production : la liste reste vide tant que la finalisation n'a pas tourné.
+        activity: () => [
+          { agentId: runId, agentName: 'Agent', state: 'ready' as const, files: [], startedAtMs: 0 }
+        ],
+        fichiersChangesDeLaCopie,
+        end: () => ({ outcome: 'nothing' as const, agentId: 'run-1' })
+      },
+      closeGreenRun: { begin: vi.fn(), close }
+    })
+    return { orch, close }
+  }
+
+  it('copie mesurée avec 2 fichiers + finalisation « rien » → rouge, intégration vide nommée, aucune clôture', async () => {
+    const { orch, close } = orchestrateurRienAFusionner(async () => [
+      'src/renderer/src/assets/theme-modes.css',
+      'src/renderer/src/components/ChatView.css'
+    ])
+    const result = await orch.run('modifie le projet')
+    expect(result.gateBlocked).toBe(true)
+    expect(result.valid).toBe(false)
+    expect(result.gateReasons).toContain(
+      'intégration vide : 2 fichier(s) modifié(s) dans la copie isolée, rien publié'
+    )
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it('copie mesurée VIDE + finalisation « rien » → le run reste vert (rien à fusionner, légitime)', async () => {
+    const { orch } = orchestrateurRienAFusionner(async () => [])
+    const result = await orch.run('modifie le projet')
+    expect(result.gateBlocked).toBe(false)
+    expect(result.valid).toBe(true)
+  })
+
+  it('mesure de la copie impossible + finalisation « rien » → on ne conclut pas à « rien produit » : rouge, cause nommée', async () => {
+    const { orch, close } = orchestrateurRienAFusionner(async () => {
+      throw new Error('copie illisible')
+    })
+    const result = await orch.run('modifie le projet')
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons).toContain(
+      'intégration vide non vérifiable : la copie isolée n’a pas pu être mesurée avant la finalisation, rien publié'
+    )
+    expect(close).not.toHaveBeenCalled()
+  })
+})

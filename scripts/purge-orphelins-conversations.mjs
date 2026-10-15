@@ -10,6 +10,7 @@
  */
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { idsArchives } from './conversations-sur-disque.mjs'
 
 const args = process.argv.slice(2)
 const apply = args.includes('--apply')
@@ -44,6 +45,9 @@ if (existsSync(journal)) {
     else if (rec?.op === 'delete' && typeof rec.id === 'string') vivants.delete(rec.id)
   }
 }
+// Les fils ARCHIVÉS sont vivants : absents du snapshot, ils ne doivent surtout pas perdre leurs
+// satellites. Une archive dont le fil a été supprimé disparaît avec lui (conversations-disk.ts).
+for (const id of idsArchives(conversationsPath)) vivants.add(id)
 
 /**
  * Les dossiers de `chat-artifacts` ne portent PAS l'id nu : `safeSegment()` (voir

@@ -342,6 +342,82 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('un tour bloqué par le TYPAGE de ce qui part nomme l’erreur, et rien n’est annoncé comme poussé', async () => {
+    // Vécu le 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant a cassé la
+    // compilation de main. Le typage de ce qui part est joué avant les tests ; le panneau dit pourquoi.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    const erreur = "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-954 · tour 9d6bb850',
+          branch: 'auto/conv-954-9d6bb850',
+          at: '2026-10-15T09:42:44.000Z',
+          source: 'chat',
+          project: { status: 'skipped', reason: 'typage-rouge', detail: '1 erreur de typage nouvelle' },
+          exclus: [
+            { path: 'src/main/raccourci-demarrer-dev.ts', motif: 'typage-rouge', erreursDeTypage: [erreur] }
+          ],
+          typage: {
+            statut: 'echec',
+            projets: ['node'],
+            commande: 'tsc --noEmit -p tsconfig.node.json --composite false',
+            erreurs: [erreur]
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).toContain('Projet · non publié · typage rouge')
+    expect(last).not.toContain('poussé')
+    expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
+      `Laissé en attente · src/main/raccourci-demarrer-dev.ts (ne compile pas sans ce qui reste en attente : ${erreur})`
+    )
+    expect(container.querySelector('[data-testid="sc-autoclose-typage"]')?.textContent).toBe(
+      'Typage de ce qui part · 1 erreur nouvelle (tsc --noEmit -p tsconfig.node.json --composite false)'
+    )
+  })
+
+  it('un typage vert ou non joué se DIT aussi, à côté des tests', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    let typage: Record<string, unknown> = { statut: 'vert', projets: ['node', 'web'], dejaRouges: 2 }
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-954 · tour 2f3e2880',
+          branch: 'main',
+          at: '2026-10-15T09:51:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', mode: 'direct', branch: 'main', files: 2 },
+          typage
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-typage"]')?.textContent).toBe(
+      'Typage de ce qui part · vert (node, web) — 2 erreur(s) déjà présente(s) au dernier commit'
+    )
+
+    // Second rendu, sur une racine neuve (même préparation que le `beforeEach`).
+    act(() => root.unmount())
+    container.remove()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    typage = { statut: 'non-verifie', raison: 'copie propre du dernier commit impossible : disque plein' }
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-typage"]')?.textContent).toBe(
+      'Typage non vérifié · copie propre du dernier commit impossible : disque plein'
+    )
+  })
+
   it('un tour publié dit combien de tests ont été rejoués, ou pourquoi aucun ne l’a été', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

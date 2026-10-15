@@ -522,18 +522,33 @@ function estEnvoiDuModeAuto(texte: string): boolean {
   return ANCRE_DEJA_ECRITE.test(nu) || nu.startsWith(PROMPT_NOUVELLE_CIBLE)
 }
 
-/** Tours automatiques envoyés depuis le dernier message ÉCRIT par l'utilisateur (orientations ignorées). */
-export function toursAutoDAffilee(fil: readonly Msg[]): number {
-  let n = 0
+/** Les envois du mode auto depuis le dernier message ÉCRIT par l'utilisateur (orientations ignorées). */
+function envoisAutoDepuisHumain(fil: readonly Msg[]): string[] {
+  const envois: string[] = []
   for (let rang = fil.length - 1; rang >= 0; rang--) {
     const m = fil[rang]
     if (m.role !== 'user') continue
     const user = m as Extract<Msg, { role: 'user' }>
     if (user.orientation) continue
-    if (!estEnvoiDuModeAuto(user.content ?? '')) break
-    n++
+    const nu = (user.content ?? '').trim()
+    if (!estEnvoiDuModeAuto(nu)) break
+    envois.push(nu)
   }
-  return n
+  return envois
+}
+
+/** Tours automatiques envoyés depuis le dernier message ÉCRIT par l'utilisateur (orientations ignorées). */
+export function toursAutoDAffilee(fil: readonly Msg[]): number {
+  return envoisAutoDepuisHumain(fil).length
+}
+
+/**
+ * Relèves (`PROMPT_NOUVELLE_CIBLE`) envoyées depuis le dernier message ÉCRIT par l'utilisateur.
+ * Lu dans le FIL, pas en mémoire : le compte survit à un redémarrage, et repart de zéro de lui-même
+ * dès que l'utilisateur écrit (ou clique une option), puisque la remontée s'arrête sur son message.
+ */
+export function relevesDepuisHumain(fil: readonly Msg[]): number {
+  return envoisAutoDepuisHumain(fil).filter((t) => t.startsWith(PROMPT_NOUVELLE_CIBLE)).length
 }
 
 /** Le % utilisé de la fenêtre 7 j de Claude (le plus haut si plusieurs modèles), null si inconnu. */
@@ -749,11 +764,13 @@ export function suiteEstDifferee(suite: string, recommandation: string | null): 
 }
 
 /**
- * LE TOUR DE RELEVE, envoye UNE SEULE FOIS quand la chaine est finie.
+ * LE TOUR DE RELEVE, envoye UNE SEULE FOIS par serie automatique quand la chaine est finie.
  *
  * Il ne fabrique aucune tache : il demande a l'agent de PROPOSER des cibles et d'attendre le choix
- * de l'utilisateur. La borne de cout est le garde-fou anti-boucle deja present : ce texte etant
- * fixe, un second passage tombe sur `prompt-identique` et la boucle patiente au lieu de repartir.
+ * de l'utilisateur. La borne de cout est `relevesDepuisHumain` : une releve deja presente dans le
+ * fil depuis le dernier message de l'utilisateur rend `chaine-finie`, et la boucle patiente au lieu
+ * de repartir. (`prompt-identique` ne la protege PAS : ce chemin rend la main avant lui, et la
+ * reponse automatique a l'`ask` s'intercale entre deux releves.)
  */
 export const PROMPT_NOUVELLE_CIBLE =
   'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 10 ' +
@@ -925,8 +942,17 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
     // Fil d'arriere-plan : on cesse de le suivre, sans depenser un tour sur ce qu'on ne regarde pas.
     if (!entree.proposerNouvelleCible)
       return { action: 'arreter', raison: finDeChaine, message: MESSAGES_ARRET[finDeChaine] }
-    // Deja demande : la releve n'a rien donne. On PATIENTE, l'interrupteur reste allume.
-    if (entree.dernierPromptEnvoye?.trim().startsWith(PROMPT_NOUVELLE_CIBLE))
+    /*
+     * Deja demandee DANS CETTE SERIE : on PATIENTE, l'interrupteur reste allume. Le compte vient du
+     * FIL, depuis le dernier message de l'utilisateur — pas du seul dernier envoi. Depuis 4399faa7
+     * (21/09), la reponse automatique a la question `ask` s'intercale entre deux releves : comparer
+     * au dernier envoi laissait repartir releve → ask → reponse auto → « rien » → releve, jusqu'au
+     * plafond de tours d'affilee. `dernierPromptEnvoye` reste un secours si le fil ne la montre pas.
+     */
+    if (
+      relevesDepuisHumain(entree.fil) >= 1 ||
+      entree.dernierPromptEnvoye?.trim().startsWith(PROMPT_NOUVELLE_CIBLE)
+    )
       return { action: 'attendre', raison: 'chaine-finie' }
     return { action: 'envoyer', texte: PROMPT_NOUVELLE_CIBLE, signature }
   }

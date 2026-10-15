@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
-import { clesCandidat, type CandidatVeille } from './candidats'
+import { clesCandidat, type CandidatVeille, type LireSource } from './candidats'
 
 /**
  * Le stock des candidats de veille, sur le disque LOCAL.
@@ -97,5 +97,38 @@ export function fusionnerPasse(
     candidats: [...stock.candidats, ...ajouts],
     echecs: [...passe.echecs],
     dernierePasse: passe.maintenant
+  }
+}
+
+/**
+ * Le lecteur des fichiers du dépôt analysé, pour re-vérifier les citations au moment de servir.
+ *
+ * `undefined` quand la racine n'existe pas : sans dépôt lisible, aucun candidat n'est déclassé —
+ * sinon une racine mal réglée ferait passer TOUTES les corrections pour périmées. Un ancrage qui
+ * sort de la racine (`src/../../x`, que la forme `src/…:N` laisse passer) n'est jamais lu : il lève,
+ * donc l'état reste inconnu. Fichier absent → `undefined` ; toute autre erreur lève.
+ */
+export function lecteurDuDepot(racine: string): LireSource | undefined {
+  let estDossier = false
+  try {
+    estDossier = statSync(racine).isDirectory()
+  } catch {
+    return undefined
+  }
+  if (!estDossier) return undefined
+  const base = resolve(racine)
+  return (cheminRelatif) => {
+    const cible = resolve(base, cheminRelatif)
+    const depuisBase = relative(base, cible)
+    if (!depuisBase || depuisBase.startsWith('..') || isAbsolute(depuisBase)) {
+      throw new Error(`ancrage hors du dépôt : ${cheminRelatif}`)
+    }
+    try {
+      return readFileSync(cible, 'utf8')
+    } catch (erreur) {
+      const code = (erreur as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
+      throw erreur
+    }
   }
 }
