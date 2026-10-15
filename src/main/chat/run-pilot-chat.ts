@@ -171,6 +171,11 @@ export type DirectChatRecovery = {
   turnId: string
   call: RecoverableChatProviderCall
   providerCall: RecoveredPilotProviderCall
+  /**
+   * Modèle et effort du CHAT d'origine, rejoués pour le chat seulement — jamais imposés aux
+   * commandes du tour (voir `reglagesDeReprise`, conv-955).
+   */
+  runtimeBinding?: RoleBinding
 }
 
 /**
@@ -221,7 +226,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     continuation = false
   ) => {
     await os.waitUntilReady()
-    const turnRuntimeBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
+    const turnRuntimeBinding =
+      bindingOverride ?? recovery?.runtimeBinding ?? os.roles.getBinding('orchestrator')
     // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()
@@ -1503,6 +1509,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                       kind: 'provider-journal',
                       ...link,
                       ...(policy ? { policy } : {}),
+                      // Le réglage IMPOSÉ au tour, pour qu'une reprise le rejoue — et lui seul.
+                      ...(bindingOverride ? { bindingFige: bindingOverride } : {}),
                       at: Date.now()
                     })
                 : undefined,

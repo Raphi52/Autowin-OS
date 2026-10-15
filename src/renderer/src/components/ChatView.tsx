@@ -80,6 +80,9 @@ import {
   noterChoixDePipeline,
   completerChoixDePipeline,
   ajouterRaisonnementDePipeline,
+  indexDeLaBulleQuiPorte,
+  porteLActionOuverte,
+  porteUneOrchestrationOuverte,
   texteDuPrompt
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
@@ -726,7 +729,11 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
           content: m.content,
           attachments: m.attachments,
           messageId: m.messageId,
-          ts: m.ts
+          ts: m.ts,
+          // Le drapeau QUE LE MAIN ECRIT (directive-dans-le-fil.ts) : sans lui, une orientation
+          // relue passait pour une demande ordinaire — etiquette absente, question `ask` crue
+          // repondue, mode auto qui la comptait (conv-955, saisies ts 1792054396405, 1792054407546).
+          ...(m.orientation ? { orientation: true } : {})
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
@@ -2435,16 +2442,20 @@ export function ChatView({
           parConversation.set(item.convId, liste)
         }
         for (const [convId, fragments] of parConversation)
-          patchLast(convId, (m) => {
-            let parts = m.parts
-            for (const fragment of fragments)
-              parts = ajouterRaisonnementDePipeline(
-                parts,
-                fragment.texte,
-                fragment.phase
-              ) as typeof m.parts
-            m.parts = parts
-          })
+          patchLast(
+            convId,
+            (m) => {
+              let parts = m.parts
+              for (const fragment of fragments)
+                parts = ajouterRaisonnementDePipeline(
+                  parts,
+                  fragment.texte,
+                  fragment.phase
+                ) as typeof m.parts
+              m.parts = parts
+            },
+            porteUneOrchestrationOuverte
+          )
       },
       (flush) => window.setTimeout(flush, 200),
       (handle) => window.clearTimeout(handle)
@@ -2606,16 +2617,20 @@ export function ChatView({
           step?: string
           prompt?: OrchStep['prompt']
         }
-        patchLast(e.convId, (m) => {
-          m.parts = noterChoixDePipeline(m.parts, {
-            phase: choix.phase ?? choix.step,
-            role: choix.role,
-            provider: choix.provider,
-            model: choix.model,
-            // Le prompt voyage AVEC le démarrage de phase : la ligne ne l'attend plus jusqu'à la fin.
-            prompt: texteDuPrompt(choix.prompt)
-          }) as typeof m.parts
-        })
+        patchLast(
+          e.convId,
+          (m) => {
+            m.parts = noterChoixDePipeline(m.parts, {
+              phase: choix.phase ?? choix.step,
+              role: choix.role,
+              provider: choix.provider,
+              model: choix.model,
+              // Le prompt voyage AVEC le démarrage de phase : la ligne ne l'attend plus jusqu'à la fin.
+              prompt: texteDuPrompt(choix.prompt)
+            }) as typeof m.parts
+          },
+          porteUneOrchestrationOuverte
+        )
       } else if (
         e.type === 'orchestrate-delta' &&
         typeof e.reasoning === 'string' &&
@@ -2662,9 +2677,13 @@ export function ChatView({
          * le prompt envoye et, pour le controle final, la decision et son motif. On les rattache a
          * cette ligne au lieu d'ouvrir un second affichage : une seule verite, deux niveaux de zoom.
          */
-        patchLast(e.convId, (m) => {
-          m.parts = completerChoixDePipeline(m.parts, step) as typeof m.parts
-        })
+        patchLast(
+          e.convId,
+          (m) => {
+            m.parts = completerChoixDePipeline(m.parts, step) as typeof m.parts
+          },
+          porteUneOrchestrationOuverte
+        )
       } else if (
         e.type === 'orchestrate-hypotheses' &&
         e.convId &&
@@ -2748,16 +2767,26 @@ export function ChatView({
     }
   }
 
-  function patchLast(conversationId: string, fn: (m: AsstMsg) => void): void {
+  function patchLast(
+    conversationId: string,
+    fn: (m: AsstMsg) => void,
+    /**
+     * L'evenement vise une part DEJA posee (battement, verdict, ligne de pipeline) : il rejoint la
+     * bulle qui la porte, meme si une orientation a ete ecrite dessous (conv-955, 2026-10-15 — sans
+     * cela, une bulle vide s'ouvrait sous l'orientation et le run semblait plante pendant 29 min).
+     */
+    porte?: (m: AsstMsg) => boolean
+  ): void {
     // RIEN A PATCHER N'EST PAS « FIL VIDE ». Le cache peut avoir ete retire le temps d'une relecture
     // (handler `refresh`) : publier le tableau vide qui en resulte EFFACAIT la fenetre de mosaique
     // a l'ecran, avant qu'elle ne se repeigne — le clignotement signale par l'utilisateur.
     const courant = liveMessagesRef.current.get(conversationId)
     if (!courant || courant.length === 0) return
     const next = courant.slice()
-    // OU ECRIRE : dans la bulle ouverte EN FIN DE FIL, jamais au-dessus d'une demande.
-    let cible = -1
-    for (let i = next.length - 1; i >= 0; i--) {
+    // OU ECRIRE : la bulle qui porte la part visee, sinon la bulle ouverte EN FIN DE FIL, jamais
+    // au-dessus d'une demande.
+    let cible = porte ? indexDeLaBulleQuiPorte(next, porte) : -1
+    for (let i = next.length - 1; cible === -1 && i >= 0; i--) {
       if (next[i].role === 'user') break
       if (next[i].role === 'assistant') {
         cible = i
@@ -2947,8 +2976,14 @@ export function ChatView({
         return
       }
       pilotBatcher.flush()
-      patchLast(conversationId, (message) =>
-        Object.assign(message, reduceAssistantPilotEvent(message, e))
+      // Battement et verdict VISENT une action deja posee : ils rejoignent la bulle qui la porte,
+      // meme au-dessus d'une orientation (conv-955). Le reste s'ecrit en fin de fil, comme avant.
+      patchLast(
+        conversationId,
+        (message) => Object.assign(message, reduceAssistantPilotEvent(message, e)),
+        (e.kind === 'action-progress' || e.kind === 'result') && e.actionId
+          ? porteLActionOuverte(e.actionId, e.turnId)
+          : undefined
       )
     })
     return () => {

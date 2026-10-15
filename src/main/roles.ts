@@ -5,6 +5,7 @@
 
 import type { PipelinePhase, NodePhase } from './skill-pipeline'
 import type { ImportedModel } from './models'
+import type { TaskRegime } from './task-regime'
 import { resolveAlias } from './model-aliases'
 
 export type Role = 'orchestrator' | 'subagent' | 'judge' | 'scout'
@@ -46,6 +47,65 @@ export function resolvePhaseBinding(
     model: override?.model ?? binding.model,
     reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort
   }
+}
+
+/**
+ * L'EFFORT PAR DÉFAUT D'UNE ÉTAPE (conv-955, 2026-10-15).
+ *
+ * Mesuré dans `prompt-observability` : les 100 appels d'étapes et les 63 juges partaient TOUS à
+ * l'effort du rôle (`xhigh`), qu'il s'agisse d'écrire le code (build) ou de noter une leçon (learn).
+ * Rien ne faisait ce choix : `phaseModel` le permet, mais seulement à la main, sans écran, et pas pour
+ * think/learn/salvage (hors `PipelinePhase`).
+ *
+ * La règle ne s'applique QUE quand l'effort de l'étape HÉRITE du réglage du rôle : un `phaseModel`,
+ * l'effort propre d'un agent du canevas ou un binding figé passent devant (décidé à l'appelant).
+ * - Crans retirés selon l'étape : build et salvage jamais ; scout/frame/terrain un ; clean/think/learn deux.
+ * - La difficulté de la demande (`classifyRegime`) n'agit que sur les étapes baissées : difficile en
+ *   rend un, triviale en retire un de plus. Une erreur de classement coûte du temps, jamais build.
+ * - PLAFOND = le réglage (jamais au-dessus, ni `max` ni `ultra`). PLANCHER = le plus bas effort de la
+ *   liste DU MODÈLE : `minimal` ou `none` hors liste seraient retirés sans bruit par l'adaptateur
+ *   (`claude.ts`, EFFORTS_CLI_CLAUDE) et le CLI retomberait sur son propre défaut.
+ * - Liste du modèle inconnue, ou réglage absent de cette liste : le réglage repart tel quel.
+ * Fonction pure : mêmes entrées → même effort, donc une reprise de run retombe sur la même valeur.
+ */
+const CRANS_RETIRES_PAR_ETAPE: Readonly<Record<string, number>> = {
+  build: 0,
+  salvage: 0,
+  scout: 1,
+  frame: 1,
+  terrain: 1,
+  clean: 2,
+  think: 2,
+  learn: 2
+}
+
+const CRANS_RENDUS_PAR_DIFFICULTE: Readonly<Record<TaskRegime, number>> = {
+  critical: 1,
+  standard: 0,
+  trivial: -1
+}
+
+// fix-ok: conv-955 — cause mesuree : aucune regle ne choisissait l'effort par etape (prompt-observability :
+// 100 appels d'etapes et 63 juges, tous a l'effort du role `xhigh`) ; effort-par-etape.test.ts rouge
+// (fonction absente) puis vert 10/10.
+export function effortParDefautDeLEtape(
+  phase: NodePhase,
+  difficulte: TaskRegime,
+  reglage: ReasoningEffort | undefined,
+  effortsDuModele: readonly ReasoningEffort[] | undefined
+): ReasoningEffort | undefined {
+  if (!reglage) return reglage
+  const retires = Object.hasOwn(CRANS_RETIRES_PAR_ETAPE, phase) ? CRANS_RETIRES_PAR_ETAPE[phase] : 0
+  if (retires <= 0) return reglage
+  // Rangée dans l'ordre canonique : l'ordre de la liste déclarée par le modèle ne compte pas.
+  const echelle = REASONING_EFFORTS.filter((effort) => effortsDuModele?.includes(effort))
+  const rang = echelle.indexOf(reglage)
+  if (rang < 0) return reglage
+  const rendus = Object.hasOwn(CRANS_RENDUS_PAR_DIFFICULTE, difficulte)
+    ? CRANS_RENDUS_PAR_DIFFICULTE[difficulte]
+    : 0
+  const descente = Math.max(0, retires - rendus)
+  return echelle[Math.max(0, rang - descente)]
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lireFaitRetenu } from './fait-retenu-detail'
+import { lireFaitRetenu, lireReponseRemember } from './fait-retenu-detail'
 
 describe('lireFaitRetenu — la réponse de remember, jamais ses arguments', () => {
   it('rend le fait validé, son titre et où il est parti', () => {
@@ -15,9 +15,32 @@ describe('lireFaitRetenu — la réponse de remember, jamais ses arguments', () 
       )
     ).toEqual({
       retenu: true,
+      depose: false,
       titre: 'Titre',
       texte: 'Corps',
       issue: 'Brain injoignable : gardé dans ce fil'
+    })
+  })
+
+  it('distingue un fait déposé au Brain d’un fait seulement gardé dans le fil', () => {
+    const fait = { title: 'Titre', body: 'Corps' }
+    expect(
+      lireFaitRetenu(JSON.stringify({ allowed: true, stored: true, fact: fait }))
+    ).toMatchObject({ retenu: true, depose: true })
+    // Réponse réelle de conv-927 (2026-10-13) : validé localement, refusé par le Brain.
+    expect(
+      lireFaitRetenu(
+        JSON.stringify({
+          allowed: true,
+          stored: false,
+          detail: 'refusé par le Brain : likely personal data detected; candidate rejected',
+          fact: fait
+        })
+      )
+    ).toMatchObject({
+      retenu: true,
+      depose: false,
+      issue: 'refusé par le Brain : likely personal data detected; candidate rejected'
     })
   })
 
@@ -39,5 +62,27 @@ describe('lireFaitRetenu — la réponse de remember, jamais ses arguments', () 
     expect(
       lireFaitRetenu(JSON.stringify({ allowed: true, fact: { title: 'sans corps' } }))
     ).toBeUndefined()
+  })
+})
+
+describe('lireReponseRemember — réponse réussie OU en échec', () => {
+  it('lit une réponse en échec : la trace range un dépôt refusé en `error`', () => {
+    expect(
+      lireReponseRemember({
+        kind: 'error',
+        content: JSON.stringify({ allowed: false, stored: false, reason: 'source invalide' })
+      })
+    ).toEqual({ retenu: false, motif: 'source invalide' })
+  })
+
+  it('une exception levée par la commande est son propre motif', () => {
+    expect(lireReponseRemember({ kind: 'error', content: 'Brain : délai dépassé' })).toEqual({
+      retenu: false,
+      motif: 'Brain : délai dépassé'
+    })
+  })
+
+  it('un résultat réussi illisible reste illisible : aucun motif inventé', () => {
+    expect(lireReponseRemember({ kind: 'tool-result', content: 'pas du JSON' })).toBeUndefined()
   })
 })

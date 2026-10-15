@@ -445,6 +445,26 @@ export function findModel(models: ImportedModel[], id: string): ImportedModel | 
   return undefined
 }
 
+// fix-ok: conv-955 — cause mesuree : l'orchestrateur ne voyait pas le catalogue des modeles (0 occurrence
+// de `reasoningEfforts` ou `getCatalog` dans HEAD:src/main/orchestrator.ts), donc la regle d'effort par
+// etape ne pouvait pas connaitre le plancher du modele.
+/**
+ * Les efforts que le modèle d'un binding déclare au catalogue — même résolution que
+ * runtime-topology.ts (id canonique ou alias, puis couple fournisseur/modèle de transport).
+ * `undefined` si le catalogue, le modèle ou l'entrée manquent : l'appelant ne doit rien en déduire.
+ */
+export function effortsDeclaresDuModele(
+  catalogue: ImportedModel[] | undefined,
+  provider: string,
+  model: string | undefined
+): readonly ReasoningEffort[] | undefined {
+  if (!catalogue || !model) return undefined
+  const entree =
+    findModel(catalogue, model.includes('/') ? model : `${provider}/${model}`) ??
+    catalogue.find((candidat) => candidat.provider === provider && candidat.model === model)
+  return entree?.provider === provider ? entree.reasoningEfforts : undefined
+}
+
 /** Premier modèle importé d'un provider donné (pour une migration/défaut sûr). */
 export function defaultModelForProvider(
   models: ImportedModel[],

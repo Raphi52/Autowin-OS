@@ -72,9 +72,10 @@ describe('ChatView — portée du panneau Workflows', () => {
   it('les compteurs comptent la conversation, pas le dépôt entier', async () => {
     await monter()
     const texte = bouton().textContent ?? ''
-    // 1 open / 1 green viennent de RUNS_DE_A ; 46/225 seraient la fuite globale.
+    // 1 open vient de RUNS_DE_A ; 46/225 seraient la fuite globale. Le run vert de RUNS_DE_A
+    // n'a plus de badge sur le bouton (conv-969).
     expect(texte).toContain('1 open')
-    expect(texte).toContain('1 green')
+    expect(texte).not.toContain('green')
     expect(texte).not.toContain('46')
     expect(texte).not.toContain('225')
   })

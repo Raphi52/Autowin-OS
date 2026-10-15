@@ -73,7 +73,8 @@ const JUDGE_FORMAT_CONTRACT =
   `Ne sanctionne jamais l'absence d'une colonne « # », l'absence de bandes 🟢/🟡/🔴, ni la présence ` +
   `d'un /100 : ce ne sont pas des défauts ici. Juge le FOND.\n`
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
-import { resolvePhaseBinding } from './roles'
+import { effortParDefautDeLEtape, resolvePhaseBinding } from './roles'
+import { effortsDeclaresDuModele } from './models'
 import { raisonDeBlocageIntegration } from '../shared/raison-de-blocage'
 import { defaultQuorumThreshold } from './quorum'
 import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
@@ -127,6 +128,7 @@ import {
   resolveWorkflowAgents,
   worstCaseNodeExecutions,
   worstCaseVisits,
+  type WorkflowAgentBinding,
   type WorkflowGraph
 } from './workflow-graph'
 import { sortieScoutAvecCible } from './scout-cible'
@@ -156,7 +158,7 @@ import {
   type ModelChoice,
   type NodeVerdict
 } from './workflow-walk'
-import { phasesApresJugeHorsGraphe } from './task-regime'
+import { classifyRegime, phasesApresJugeHorsGraphe } from './task-regime'
 
 /**
  * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
@@ -1365,6 +1367,7 @@ export class Orchestrator {
    */
   private resolvePhaseFanOut(
     phase: NodePhase,
+    task: string,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): RoleBinding[] {
     // Les agents COMPOSÉS sur le nœud priment sur la topologie globale : c'est le sens même du
@@ -1373,10 +1376,31 @@ export class Orchestrator {
     const composes = graph ? agentsForPhase(graph, phase) : undefined
     const fallback = bindingDeRepliPourPhase(phase, this.deps.roles, runtimeSnapshot)
     const topologie = runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? []
+    // L'effort par défaut de l'étape ne vaut que pour un agent du canevas qui HÉRITE de l'effort du
+    // rôle (ni fournisseur ni effort propres). La fusion `{...fallback, ...agent}` efface cette
+    // origine : on la lit donc sur l'agent tel qu'il est posé, avant fusion. Un `phaseModel` du rôle
+    // pour cette étape garde la main, comme sur le chemin principal.
+    const heriteDuRole = (agent: WorkflowAgentBinding): boolean =>
+      !agent.provider &&
+      !agent.reasoningEffort &&
+      !fallback.phaseModel?.[phase as PipelinePhase]?.reasoningEffort
     // Un panel scout de la topologie n'a pas d'angle (`FanMember`, os.ts) : sans cette répartition,
     // ses N membres recevaient la MÊME consigne (piste 6 de conv-890). Le canevas, lui, pose les siens.
     const resolved = composes
-      ? resolveWorkflowAgents(composes, fallback)
+      ? resolveWorkflowAgents(composes, fallback).map((member, rang) =>
+          heriteDuRole(composes[rang])
+            ? {
+                ...member,
+                reasoningEffort: this.effortHeriteDeLEtape(
+                  phase,
+                  task,
+                  member.provider,
+                  member.model,
+                  member.reasoningEffort
+                )
+              }
+            : member
+        )
       : phase === 'scout'
         ? anglesDuPanelScout(topologie)
         : topologie
@@ -1388,6 +1412,49 @@ export class Orchestrator {
           this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
           Number.POSITIVE_INFINITY
       )
+  }
+
+  /**
+   * L'effort qui part pour une étape dont l'effort HÉRITE du réglage du rôle (`effortParDefautDeLEtape`,
+   * roles.ts). La difficulté vient du devis du run — enregistré, donc relu tel quel à la reprise — et,
+   * sans devis, du texte de la tâche (même calcul déterministe). Sans liste d'efforts connue pour le
+   * modèle, le réglage repart tel quel : rien n'est inventé.
+   */
+  private effortHeriteDeLEtape(
+    phase: NodePhase,
+    task: string,
+    provider: string,
+    model: string | undefined,
+    reglage: ReasoningEffort | undefined
+  ): ReasoningEffort | undefined {
+    const difficulte = this.deps.currentExecutionQuote?.()?.regime ?? classifyRegime(task)
+    const efforts = effortsDeclaresDuModele(this.deps.roles.getCatalog?.(), provider, model)
+    return effortParDefautDeLEtape(phase, difficulte, reglage, efforts)
+  }
+
+  /**
+   * Le (modèle, effort) d'une étape jouée par le binding du rôle. `fige` = binding imposé pour ce run
+   * (`bindingOverride`) ou juge dédié : il part tel quel. Un `phaseModel[étape].reasoningEffort` passe
+   * aussi devant la règle — c'est un réglage explicite de l'utilisateur.
+   */
+  private resolveEtape(
+    binding: RoleBinding,
+    phase: NodePhase,
+    task: string,
+    fige: boolean
+  ): { model?: string; reasoningEffort?: ReasoningEffort } {
+    const resolu = resolvePhaseBinding(binding, phase)
+    if (fige || binding.phaseModel?.[phase as PipelinePhase]?.reasoningEffort) return resolu
+    return {
+      ...resolu,
+      reasoningEffort: this.effortHeriteDeLEtape(
+        phase,
+        task,
+        binding.provider,
+        resolu.model,
+        resolu.reasoningEffort
+      )
+    }
   }
 
   /** #8 — même facteur commun que {@link resolvePhaseFanOut}, pour le panel de JUGES. */
@@ -3046,7 +3113,7 @@ ${CONTRAT_OBJECTIONS}`
     // tâche reste autoritaire et désactive le fan-out, comme dans le chemin non décomposé.
     const configuredBindings: RoleBinding[] = bindingOverride
       ? [bindingOverride]
-      : this.resolvePhaseFanOut(phase, runtimeSnapshot)
+      : this.resolvePhaseFanOut(phase, task, runtimeSnapshot)
     const subBindings =
       configuredBindings.length > 0
         ? configuredBindings
@@ -3100,7 +3167,12 @@ ${CONTRAT_OBJECTIONS}`
           const members = await Promise.all(
             subBindings.map(async (subBinding) => {
               const subProvider = subBinding.provider
-              const phaseBinding = resolvePhaseBinding(subBinding, phase)
+              // Sans panel ni binding figé, la sous-tâche joue le binding du rôle : son effort suit
+              // alors l'effort par défaut de l'étape. Les membres d'un panel ont déjà le leur.
+              const phaseBinding =
+                configuredBindings.length > 0
+                  ? resolvePhaseBinding(subBinding, phase)
+                  : this.resolveEtape(subBinding, phase, task, false)
               const memberKey = phaseBinding.model ?? subProvider
               let envelope: PromptEnvelope | undefined
               const options: SendOptions = {
@@ -4225,7 +4297,9 @@ ${CONTRAT_OBJECTIONS}`
       // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
-      const fanMembers = bindingOverride ? [] : this.resolvePhaseFanOut(phase, runtimeSnapshot)
+      const fanMembers = bindingOverride
+        ? []
+        : this.resolvePhaseFanOut(phase, task, runtimeSnapshot)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanContextBlocks = contextBlocksForPhase(phase)
@@ -4683,7 +4757,14 @@ ${CONTRAT_OBJECTIONS}`
       const bindingDeLaPhase = choix.binding
       const providerDeLaPhase = bindingDeLaPhase.provider
       if (choix.note) onDelta?.('exec', `[binding] Phase ${phase} — ${choix.note}\n`)
-      const phaseBinding = resolvePhaseBinding(bindingDeLaPhase, phase)
+      // L'effort suit l'effort par défaut de l'étape quand il hérite du rôle (roles.ts,
+      // effortParDefautDeLEtape) ; un binding figé pour le run ou un juge dédié part tel quel.
+      const phaseBinding = this.resolveEtape(
+        bindingDeLaPhase,
+        phase,
+        task,
+        jugeDedie || Boolean(bindingOverride)
+      )
       // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
       // à chaque phase gonfle le contexte pour rien ("ENGINE injectée N fois", "1M3 tokens"). On ne

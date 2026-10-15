@@ -181,3 +181,46 @@ describe('buildBehaviourComposition — le libellé constitution cite le VRAI no
     for (const v of libelles) expect(v).toContain(`${attendu} réflexes`)
   })
 })
+
+describe("buildBehaviourComposition — l'effort par étape affiché suit la règle (conv-955)", () => {
+  const catalogue = [
+    {
+      id: 'claude/claude-opus-5-5',
+      provider: 'claude',
+      model: 'claude-opus-5-5',
+      label: 'Opus 5.5',
+      reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'] as const,
+      defaultReasoningEffort: 'medium' as const
+    }
+  ].map((m) => ({ ...m, reasoningEfforts: [...m.reasoningEfforts] }))
+  const roleXhigh = {
+    provider: 'claude',
+    model: 'claude-opus-5-5',
+    reasoningEffort: 'xhigh' as const
+  }
+  const champ = (c: ReturnType<typeof buildBehaviourComposition>, role: string): string =>
+    c.orchestrated.modelSelection.find((f) => f.label === `rôle ${role}`)?.value ?? ''
+
+  it('sous-agents : clean annonce high|medium|low selon la difficulté, build reste xhigh', () => {
+    const roles = new RoleModelConfig({ subagent: roleXhigh, judge: roleXhigh }, catalogue)
+    const valeur = champ(buildBehaviourComposition(roles, {}, undefined, null), 'subagent')
+    expect(valeur).toContain('clean:claude-opus-5-5/high|medium|low')
+    expect(valeur).toContain('frame:claude-opus-5-5/xhigh|high|medium')
+    expect(valeur).toContain('build:claude-opus-5-5/xhigh,')
+    expect(valeur).toContain('(difficile|standard|triviale)')
+  })
+
+  it('le juge garde son réglage partout', () => {
+    const roles = new RoleModelConfig({ subagent: roleXhigh, judge: roleXhigh }, catalogue)
+    const valeur = champ(buildBehaviourComposition(roles, {}, undefined, null), 'judge')
+    expect(valeur).toContain('clean:claude-opus-5-5/xhigh,')
+    expect(valeur).not.toContain('|')
+  })
+
+  it('sans catalogue, rien de calculé : le réglage du rôle est affiché tel quel', () => {
+    const roles = new RoleModelConfig({ subagent: roleXhigh })
+    const valeur = champ(buildBehaviourComposition(roles, {}, undefined, null), 'subagent')
+    expect(valeur).toContain('clean:claude-opus-5-5/xhigh,')
+    expect(valeur).not.toContain('triviale')
+  })
+})

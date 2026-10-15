@@ -24,12 +24,14 @@ import { CONSTITUTION } from './constitution'
 import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 import { phasesForRegime, type TaskRegime } from './task-regime'
 import {
+  effortParDefautDeLEtape,
   resolvePhaseBinding,
   ALL_ROLES,
   type Role,
   type RoleBinding,
   type RoleModelConfig
 } from './roles'
+import { effortsDeclaresDuModele, type ImportedModel } from './models'
 import type { PipelinePhase } from './skill-pipeline'
 import type { AgentTopology } from './topology'
 
@@ -152,8 +154,37 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   return { phase, blocks }
 }
 
+/** Ordre d'affichage de l'effort d'une étape qui dépend de la difficulté de la demande. */
+const DIFFICULTES_AFFICHEES: TaskRegime[] = ['critical', 'standard', 'trivial']
+
+/**
+ * L'effort qui part pour une étape. Pour le rôle subagent, quand il hérite du réglage du rôle, il suit
+ * `effortParDefautDeLEtape` (roles.ts) : il dépend alors de la difficulté de la demande, affichée
+ * difficile|standard|triviale. Un `phaseModel` de l'étape, ou un autre rôle, part tel quel.
+ */
+function effortAffiche(
+  role: Role,
+  binding: RoleBinding,
+  phase: PipelinePhase,
+  resolu: { model?: string; reasoningEffort?: RoleBinding['reasoningEffort'] },
+  catalogue: ImportedModel[] | undefined
+): string {
+  const reglage = resolu.reasoningEffort ?? binding.reasoningEffort
+  if (role !== 'subagent' || binding.phaseModel?.[phase]?.reasoningEffort)
+    return reglage ?? 'défaut'
+  const efforts = effortsDeclaresDuModele(
+    catalogue,
+    binding.provider,
+    resolu.model ?? binding.model
+  )
+  const parDifficulte = DIFFICULTES_AFFICHEES.map(
+    (difficulte) => effortParDefautDeLEtape(phase, difficulte, reglage, efforts) ?? 'défaut'
+  )
+  return new Set(parDifficulte).size === 1 ? parDifficulte[0] : parDifficulte.join('|')
+}
+
 /** Décrit le binding effectif d'un rôle (modèle/effort par défaut + overrides de phase). */
-function roleField(role: Role, binding: RoleBinding): InfluencerField {
+function roleField(role: Role, binding: RoleBinding, catalogue?: ImportedModel[]): InfluencerField {
   const phaseOverrides = binding.phaseModel
     ? Object.entries(binding.phaseModel)
         .map(([ph, o]) => `${ph}:${o?.model ?? '—'}/${o?.reasoningEffort ?? '—'}`)
@@ -162,12 +193,13 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
   const perPhase = ALL_ROLES.includes(role)
     ? ORCHESTRATED_PHASES.map((ph) => {
         const r = resolvePhaseBinding(binding, ph)
-        return `${ph}:${r.model ?? binding.model ?? 'défaut'}/${r.reasoningEffort ?? binding.reasoningEffort ?? 'défaut'}`
+        return `${ph}:${r.model ?? binding.model ?? 'défaut'}/${effortAffiche(role, binding, ph, r, catalogue)}`
       }).join(', ')
     : ''
+  const selonDifficulte = perPhase.includes('|') ? ' (difficile|standard|triviale)' : ''
   return {
     label: `rôle ${role}`,
-    value: `${binding.provider} · ${binding.model ?? 'défaut provider'} · ${binding.reasoningEffort ?? 'défaut'}${phaseOverrides ? ` — overrides phase: ${phaseOverrides}` : ''}${perPhase ? ` — effectif/phase: ${perPhase}` : ''}`,
+    value: `${binding.provider} · ${binding.model ?? 'défaut provider'} · ${binding.reasoningEffort ?? 'défaut'}${phaseOverrides ? ` — overrides phase: ${phaseOverrides}` : ''}${perPhase ? ` — effectif/phase${selonDifficulte}: ${perPhase}` : ''}`,
     source: 'src/main/roles.ts:65'
   }
 }
@@ -177,7 +209,7 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
  * réellement actifs) ; `env` = pour les caps du circuit-breaker (règle si non défini).
  */
 export function buildBehaviourComposition(
-  roles: Pick<RoleModelConfig, 'all'>,
+  roles: Pick<RoleModelConfig, 'all'> & Partial<Pick<RoleModelConfig, 'getCatalog'>>,
   env: NodeJS.ProcessEnv = process.env,
   topology?: Pick<AgentTopology, 'panels'>,
   budgetUsd: number | null = null
@@ -185,7 +217,9 @@ export function buildBehaviourComposition(
   const bindings = roles.all()
 
   const modelSelection: InfluencerField[] = [
-    ...ALL_ROLES.filter((r) => r !== 'scout').map((r) => roleField(r, bindings[r])),
+    ...ALL_ROLES.filter((r) => r !== 'scout').map((r) =>
+      roleField(r, bindings[r], roles.getCatalog?.())
+    ),
     {
       label: 'redirection exécution',
       value:

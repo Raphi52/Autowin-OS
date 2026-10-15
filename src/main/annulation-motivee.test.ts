@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { abortFailure, abortReasonText } from './providers/abort-diagnostic'
+import { MOTIF_STOP_DU_CHAT } from '../shared/arret-par-stop'
 
 /**
  * UNE ANNULATION DIT POURQUOI — jusqu'au message que l'utilisateur lit.
@@ -62,9 +63,13 @@ describe('une annulation d orchestration dit pourquoi', () => {
       const debut = source.indexOf(`ipcMain.handle('${canal}'`)
       expect(debut, `le canal ${canal} doit etre enregistre`).toBeGreaterThan(0)
       const bloc = source.slice(debut, debut + 900)
+      // Le motif du Stop est la constante PARTAGÉE avec le graphe, qui y reconnaît un arrêt voulu
+      // (conv-966) : elle compte comme un motif nommé, et sa valeur est vérifiée juste dessous.
       expect(bloc, `${canal} doit passer un motif d'annulation`).toMatch(
-        /abortOrchestration\([\s\S]{0,120}(Stop|utilisateur)/
+        /abortOrchestration\([\s\S]{0,120}(Stop|utilisateur|MOTIF_STOP_DU_CHAT)/
       )
     }
+    expect(MOTIF_STOP_DU_CHAT).toMatch(/utilisateur/)
+    expect(MOTIF_STOP_DU_CHAT).toMatch(/Stop du chat/)
   })
 })

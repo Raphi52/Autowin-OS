@@ -219,6 +219,7 @@ import {
   listRecoverableChatProviderCallsAsync,
   recoverableChatProviderCallForTurn,
   recoverCompletedChatProviderCall,
+  reglagesDeReprise,
   type RecoverableChatProviderCall,
   streamedPrefixForProviderCall,
   waitForRecoverableChatProviderExit
@@ -3551,22 +3552,19 @@ Le fil reprend ensuite normalement.`
                 message.role === 'user' || message.role === 'assistant'
             )
             .map((message) => ({ role: message.role, content: message.content }))
-          const runtime = assistant.runtime
-          const binding = runtime
-            ? {
-                provider: runtime.provider,
-                model: runtime.model,
-                reasoningEffort: runtime.reasoningEffort as ReasoningEffort | undefined
-              }
-            : undefined
+          // Le modèle du chat repart avec le chat ; seul un réglage réellement imposé au tour
+          // d'origine est rejoué sur ses commandes. L'imposer à tort figeait l'effort des runs
+          // lancés par ce tour (conv-955, `reglagesDeReprise`).
+          const reglages = reglagesDeReprise(call, assistant.runtime)
           await runPilotChat(
             undefined,
             messages,
             call.conversationId,
-            binding,
+            reglages.bindingOverride,
             {
               turnId: call.turnId,
               call,
+              runtimeBinding: reglages.runtimeBinding,
               providerCall: {
                 iteration: call.iteration,
                 attempt: call.attempt,

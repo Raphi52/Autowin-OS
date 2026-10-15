@@ -485,6 +485,65 @@ export function ajouterRaisonnementDePipeline(
 }
 
 /**
+ * LA BULLE QUI PORTE CE QU'UN EVENEMENT VISE (conv-955, 2026-10-15, tour
+ * `33bc18ab-a9f3-4bac-8058-ec4838c647b8`).
+ *
+ * Une orientation ecrite pendant un tour est relue du disque APRES la bulle du tour. `patchLast`
+ * ecrit « en fin de fil, jamais au-dessus d'une demande » : il ouvrait donc une bulle VIDE sous
+ * l'orientation, et les battements de l'orchestration — qui visent l'action `0:0`, restee dans la
+ * bulle du dessus — y etaient jetes. 29 minutes de « Raisonnement » vide a l'ecran, run arrete a la
+ * main en plein nettoyage (saisie ts 1792056140576 : « cette conv a planté »).
+ *
+ * Un evenement qui vise une part DEJA posee (battement, verdict, ligne de pipeline) rejoint donc la
+ * bulle qui la porte. On remonte le fil depuis la fin en sautant les messages de l'utilisateur et
+ * les bulles du meme tour qui ne la portent pas ; une bulle CLOSE arrete la recherche : au-dela,
+ * c'est un tour fini, jamais la cible d'un battement. -1 = personne ne la porte, l'appelant garde sa
+ * regle d'avant.
+ */
+export function indexDeLaBulleQuiPorte(
+  messages: readonly { role: string }[],
+  porte: (message: HydratedAssistantMessage) => boolean
+): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== 'assistant') continue
+    const message = messages[i] as HydratedAssistantMessage
+    if (message.done) return -1
+    if (porte(message)) return i
+  }
+  return -1
+}
+
+/** La bulle porte-t-elle l'action `actionId` ENCORE OUVERTE, du meme tour quand on le connait ? */
+export function porteLActionOuverte(
+  actionId: string,
+  turnId?: string
+): (message: HydratedAssistantMessage) => boolean {
+  return (message) =>
+    (!turnId || !message.turnId || message.turnId === turnId) &&
+    message.parts.some(
+      (part) =>
+        part.kind === 'action' &&
+        part.actionId === actionId &&
+        part.ok === undefined &&
+        !part.interrupted
+    )
+}
+
+/**
+ * La bulle porte-t-elle une orchestration ENCORE OUVERTE ? Meme regle que `noterChoixDePipeline`,
+ * `completerChoixDePipeline` et `ajouterRaisonnementDePipeline` : seule la DERNIERE orchestration
+ * de la bulle compte, et elle doit etre sans verdict ni interruption.
+ */
+export function porteUneOrchestrationOuverte(message: HydratedAssistantMessage): boolean {
+  for (let i = message.parts.length - 1; i >= 0; i--) {
+    const part = message.parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    return part.ok === undefined && !part.interrupted
+  }
+  return false
+}
+
+/**
  * PHASE d'un step, telle qu'elle a ete annoncee au fil.
  *
  * Deux sources, dans cet ordre : la provenance causale (`execution.phase`, la seule fiable), puis le

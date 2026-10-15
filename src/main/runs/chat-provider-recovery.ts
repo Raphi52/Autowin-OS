@@ -2,6 +2,8 @@ import { statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { Attachment, SendResult } from '../providers/types'
 import { guardAttachments } from '../ipc-guards'
+import { decodeRoleBinding } from '../role-store'
+import { isReasoningEffort, type RoleBinding } from '../roles'
 import { recoverDetachedProviderResult } from './run-reattach'
 import { survivableExitCode, survivableExitCodeAsync } from './stdout-journal'
 import {
@@ -101,6 +103,12 @@ export interface RecoverableChatProviderCall {
   settledActions?: RecoveredChatActionResult[]
   /** Bornes du tour d'origine, a rejouer a l'identique apres un crash. */
   policy?: ChatExecutionPolicy
+  /**
+   * Réglage IMPOSÉ aux commandes du tour d'origine (tâche planifiée au modèle choisi, modèle du
+   * fil), rejoué tel quel. ABSENT quand le tour suivait les rôles : la reprise n'en invente alors
+   * aucun — voir {@link reglagesDeReprise}.
+   */
+  bindingFige?: RoleBinding
   updatedAt: number
 }
 
@@ -161,6 +169,10 @@ function providerLink(
   // Une policy absente appartient aux anciens chats directs. Une policy PRESENTE mais illisible
   // ne doit jamais tomber sur le pilote normal : on refuse cette reprise (fail-closed).
   if (hasPersistedPolicy && !policy) return undefined
+  // Même règle pour le réglage imposé : illisible, il ne doit pas se transformer en « aucun gel ».
+  const hasBindingFige = Object.prototype.hasOwnProperty.call(event, 'bindingFige')
+  const bindingFige = hasBindingFige ? decodeRoleBinding(event.bindingFige) : undefined
+  if (hasBindingFige && !bindingFige) return undefined
   return {
     ...turn,
     provider: event.provider,
@@ -170,7 +182,40 @@ function providerLink(
     attempt: event.attempt,
     streamId: event.streamId,
     requestId: event.requestId,
-    ...(policy ? { policy } : {})
+    ...(policy ? { policy } : {}),
+    ...(bindingFige ? { bindingFige } : {})
+  }
+}
+
+/**
+ * CE QUE REJOUE LA REPRISE D'UN TOUR DE CHAT (conv-955, 2026-10-15) — deux réglages, chacun à sa place.
+ *
+ *  - `runtimeBinding` : le modèle et l'effort avec lesquels le tour d'origine répondait. Le CHAT
+ *    repris continue avec eux (même modèle avant et après la coupure).
+ *  - `bindingOverride` : le réglage IMPOSÉ aux commandes du tour (dont `orchestrate`), seulement
+ *    s'il existait et qu'il a été journalisé.
+ *
+ * Défaut corrigé : la reprise passait le modèle du chat comme réglage imposé. L'orchestrateur le
+ * prenait pour un run figé (`fige = Boolean(bindingOverride)`), donc toutes les étapes d'un run
+ * lancé par un tour repris partaient à l'effort du chat et la règle « un effort par étape »
+ * (`effortParDefautDeLEtape`) était sautée. Garde : `chat-provider-recovery.reglage-fige.test.ts`.
+ */
+export function reglagesDeReprise(
+  call: Pick<RecoverableChatProviderCall, 'bindingFige'>,
+  runtime: { provider: string; model?: string; reasoningEffort?: string } | undefined
+): { bindingOverride?: RoleBinding; runtimeBinding?: RoleBinding } {
+  const runtimeBinding: RoleBinding | undefined = runtime
+    ? {
+        provider: runtime.provider,
+        ...(runtime.model ? { model: runtime.model } : {}),
+        ...(isReasoningEffort(runtime.reasoningEffort)
+          ? { reasoningEffort: runtime.reasoningEffort }
+          : {})
+      }
+    : undefined
+  return {
+    ...(call.bindingFige ? { bindingOverride: call.bindingFige } : {}),
+    ...(runtimeBinding ? { runtimeBinding } : {})
   }
 }
 

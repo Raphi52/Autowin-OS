@@ -95,6 +95,11 @@ export interface PipelineChoice {
   raisonnement?: string
   /** Faux quand l'etape a echoue (ou que le controle final a refuse) : l'affichage doit le montrer. */
   ok?: boolean
+  /**
+   * Vrai quand l'etape a ete coupee par le bouton Stop du chat : ni reussie ni en echec, et `ok`
+   * reste alors absent. Un Stop compte comme un arret voulu, pas comme une panne (conv-966).
+   */
+  annule?: boolean
 }
 
 export interface PersistedChatArtifactPart {
