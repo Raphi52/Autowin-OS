@@ -1833,33 +1833,31 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
-  // fix-ok: targeted regression reproduction for the green workflow counter.
-  it('counts a green slash-palette run in the Workflows button', async () => {
+  // conv-969 (2026-10-15) : « enlève le badge 2 green du bouton détail ». Un run vert ne porte
+  // plus de compteur sur le bouton Détails ; le run ouvert, chargé dans le même lot, prouve que
+  // les runs de la conversation sont bien lus (sinon l'absence de « green » ne prouverait rien).
+  it('shows no green counter on the Details button, only the open one', async () => {
+    const runDe = (subject: string, status: string): Record<string, unknown> => ({
+      subject,
+      session: 'A',
+      path: `A/${subject}/RUN.md`,
+      mtime: 1,
+      summary: { status, dodTotal: 1, dodChecked: 1, journalEvents: 1, defauts: 0 }
+    })
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      conversationRuns: vi.fn().mockResolvedValue([
-        {
-          subject: 'slash-palette',
-          session: 'A',
-          path: 'A/slash-palette/RUN.md',
-          mtime: 1,
-          summary: {
-            status: 'green',
-            dodTotal: 1,
-            dodChecked: 1,
-            journalEvents: 1,
-            defauts: 0
-          }
-        }
-      ])
+      conversationRuns: vi
+        .fn()
+        .mockResolvedValue([runDe('slash-palette', 'green'), runDe('en-cours', 'open')])
     })
 
     await mount(mockApi)
     await click('.conv-pick')
 
-    expect(
-      container!.querySelector('summary[title="Détails de l’exécution"]')?.textContent
-    ).toContain('1 green')
+    const texte =
+      container!.querySelector('summary[title="Détails de l’exécution"]')?.textContent ?? ''
+    expect(texte).toContain('1 open')
+    expect(texte).not.toContain('green')
   })
 
   it('does not steal conversation B when creation from New resolves late', async () => {

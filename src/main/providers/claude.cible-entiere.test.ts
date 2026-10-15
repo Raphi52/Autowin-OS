@@ -107,4 +107,20 @@ describe('journal de tour — la cible entiere y arrive', () => {
       'grep -rn "motif" src/main/tres/long/chemin/fichier.ts'
     )
   })
+
+  // Le détail d'un geste (commande + sortie entière) va dans la trace causale, jamais dans le journal.
+  it('ne recopie pas le `detail` d un geste fini', async () => {
+    const { pilotJournalEvents } = await import('../runs/turn-journal-enrich')
+    const [event] = pilotJournalEvents(
+      {
+        kind: 'provider-status',
+        iteration: 0,
+        text: 'Bash terminé - 13 s',
+        detail: { envoye: 'npm test', retour: 'x'.repeat(50_000) }
+      } as Parameters<typeof pilotJournalEvents>[0],
+      7
+    )
+    expect(event.text).toBe('Bash terminé - 13 s')
+    expect(event).not.toHaveProperty('detail')
+  })
 })

@@ -9,6 +9,10 @@ vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 // portent bien sur le panneau Diagnostic et non sur le voisin.
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
+// L'alerte de l'onglet Routage a sa sonde a elle (`useProvidersAReconnecter`, couverte par
+// `SettingsView.routage.test.tsx`) : neutralisee ici, sinon elle consommerait les reponses de
+// `providerStatus` que cette suite reserve a la section Providers.
+vi.mock('./useProvidersAReconnecter', () => ({ useProvidersAReconnecter: () => [] }))
 vi.mock('./OrchestrationBudgetSettings', async () => {
   const { createElement } = await import('react')
   return {
@@ -327,8 +331,8 @@ describe('SettingsView diagnostic', () => {
     expect(providerStatus).toHaveBeenCalledTimes(2)
   })
 
-  it('rend le renvoi vers le Routeur cliquable', async () => {
-    const onOpenRouter = vi.fn()
+  it('rend le renvoi vers Routage cliquable : il ouvre l’onglet Routage de Settings', async () => {
+    const onSectionChange = vi.fn()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -347,8 +351,7 @@ describe('SettingsView diagnostic', () => {
         createElement(SettingsView, {
           active: true,
           section: 'providers',
-          onSectionChange: vi.fn(),
-          onOpenRouter
+          onSectionChange
         })
       )
     })
@@ -357,7 +360,7 @@ describe('SettingsView diagnostic', () => {
     ) as HTMLButtonElement
     expect(link).toBeTruthy()
     await act(async () => link.click())
-    expect(onOpenRouter).toHaveBeenCalled()
+    expect(onSectionChange).toHaveBeenCalledWith('routing')
   })
 
   it('annonce le succès de la réparation et ne laisse pas l erreur orpheline au changement de section', async () => {

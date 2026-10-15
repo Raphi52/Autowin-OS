@@ -126,7 +126,10 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('opens Agent Studio when an agent navigates to the legacy Router target', async () => {
+  // Routage a quitté Agent Studio pour Settings (conv-963, 2026-10-15 : « la view Routage il faut
+  // la mettre dans Settings ») : l'ancien nom « router » doit donc ouvrir Settings sur la vue
+  // Routage, et non plus Agent Studio (cf. LEGACY_LOCATIONS de src/shared/navigation.ts).
+  it('opens Settings on the Routage view when an agent navigates to the legacy Router target', async () => {
     let emitAppEvent: ((event: { type: string; tab?: string }) => void) | undefined
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -149,8 +152,8 @@ describe('App inspect-turn navigation', () => {
 
     await act(async () => emitAppEvent?.({ type: 'navigate', tab: 'router' }))
 
-    expect(container.querySelector('.nav-item.active')?.textContent).toContain('Agent Studio')
-    expect(container.textContent).toContain('Agent Studio routing')
+    expect(container.querySelector('.nav-item.active')?.textContent).toContain('Settings')
+    expect(container.querySelector('.router-view')).not.toBeNull()
     await act(async () => root.unmount())
   })
 })

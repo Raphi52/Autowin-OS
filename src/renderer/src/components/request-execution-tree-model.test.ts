@@ -1042,6 +1042,154 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
     expect(agent?.status).toBe('failed')
     expect(agent?.display?.failure).toBeUndefined()
   })
+
+  // conv-914 (run-68594dd94c08-1) : le sous-agent clean bute sur le quota, la phase et la clôture
+  // passent au rouge — « Alias de phase » et « Raisons » vides, rien ne disait pourquoi (conv-966).
+  const quota = 'Claude a interrompu l’appel : You’ve hit your session limit · resets 1pm'
+  const cloture = (sequence: number, gateReasons?: string[]) =>
+    runTrace('closure-red', 'turn-d', sequence, runId, {
+      type: 'gate',
+      status: 'failed',
+      execution: { runId },
+      run: {
+        stage: 'closure',
+        runId,
+        timestampMs: 900,
+        closure: {
+          status: 'red',
+          totalDurationMs: 800,
+          totalCostUsd: 6.3,
+          ...(gateReasons ? { gateReasons } : {})
+        }
+      }
+    })
+  const cleanEnEchec = runTrace('clean-ko', 'turn-d', 2, runId, {
+    status: 'failed',
+    execution: exec('att-clean', 'clean:subagent', 'clean'),
+    payloads: [{ kind: 'model-response', content: quota }]
+  })
+  const projeter = (events: HarnessTraceEvent[]) =>
+    projectLatestRequestExecution(buildHarnessTimelineFromTrace(events)).events
+
+  it('une phase et une clôture rouges, arrêtées avant le contrôle final, disent quelle étape a échoué et pourquoi', () => {
+    const events = projeter([workspace, cleanEnEchec, cloture(3)])
+    const phase = events.find((event) => event.display?.kind === 'skill')
+    const clotureRouge = events.find((event) => event.display?.kind === 'closure')
+
+    expect(phase?.status).toBe('failed')
+    expect(phase?.display?.failure).toMatch(/clean.* : Claude a interrompu l’appel : You’ve hit/)
+    expect(clotureRouge?.status).toBe('failed')
+    expect(clotureRouge?.display?.failure).toMatch(
+      /^Run arrêté avant le contrôle final — .*clean.* : Claude a interrompu l’appel/
+    )
+  })
+
+  it('une clôture rouge qui a ses raisons les reprend, sans aller chercher ailleurs', () => {
+    const events = projeter([workspace, cleanEnEchec, cloture(3, ['verdict REFUSE : tests rouges'])])
+    expect(events.find((event) => event.display?.kind === 'closure')?.display?.failure).toBe(
+      'verdict REFUSE : tests rouges'
+    )
+  })
+
+  it('Git du run bloqué dit base-dirty en clair, et la clôture reprend ce refus', () => {
+    const git = runTrace('git', 'turn-d', 3, runId, {
+      type: 'boundary',
+      execution: { runId },
+      run: {
+        stage: 'git',
+        runId,
+        timestampMs: 850,
+        git: {
+          outcome: 'blocked',
+          rawOutcome: 'blocked',
+          reason: 'base-dirty',
+          files: ['src/main/orchestrator.ts']
+        }
+      }
+    })
+    const events = projeter([workspace, cleanEnEchec, git, cloture(4)])
+    const noeudGit = events.find((event) => event.display?.kind === 'git')
+    const attendu =
+      'Travail non publié : des fichiers non committés de la base bloquent la publication — fichiers en cause : src/main/orchestrator.ts'
+
+    expect(noeudGit?.status).toBe('failed')
+    expect(noeudGit?.display?.failure).toBe(attendu)
+    expect(events.find((event) => event.display?.kind === 'closure')?.display?.failure).toBe(
+      attendu
+    )
+  })
+
+  it('une étape qui réussit ne porte aucune raison d’échec — discriminant', () => {
+    const events = projeter([
+      workspace,
+      runTrace('clean-ok', 'turn-d', 2, runId, { execution: exec('att-ok', 'clean:subagent', 'clean') })
+    ])
+    for (const event of events) expect(event.display?.failure).toBeUndefined()
+  })
+
+  // conv-955 (run-e6ef728f77ed-1, 2026-10-15) : le sous-agent clean coupé par le bouton Stop
+  // s'affichait « échec » en rouge, « INTERROMPU » en ligne d'échec — une panne qui n'a jamais eu
+  // lieu (conv-966). Texte repris de la trace réelle.
+  const arretParStop =
+    "Phase clean — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : arret demande par l'utilisateur (Stop du chat)\nlast-event=none\nstderr=none. Ce n'est pas une panne : ni claude ni le binding du rôle ne sont en cause."
+  const cleanArrete = runTrace('clean-stop', 'turn-d', 2, runId, {
+    status: 'failed',
+    execution: exec('att-clean', 'clean:subagent', 'clean'),
+    payloads: [{ kind: 'model-response', content: arretParStop }]
+  })
+
+  it('un sous-agent arrêté par le bouton Stop est annulé, pas en échec, et sa phase aussi', () => {
+    const events = projeter([workspace, cleanArrete])
+    const agent = events.find((event) => event.display?.kind === 'agent')
+    const phase = events.find((event) => event.display?.kind === 'skill')
+
+    expect(agent?.status).toBe('cancelled')
+    expect(agent?.display?.failure).toBeUndefined()
+    // Le texte de l'arrêt reste lisible au clic, dans le retour de l'étape.
+    expect(agent?.payloads).toEqual([{ kind: 'model-response', content: arretParStop }])
+    expect(phase?.status).toBe('cancelled')
+    expect(phase?.display?.failure).toBeUndefined()
+  })
+
+  it('la clôture rouge d’un run arrêté par Stop dit que c’est le Stop, et pendant quelle étape', () => {
+    const clotureRouge = projeter([workspace, cleanArrete, cloture(3)]).find(
+      (event) => event.display?.kind === 'closure'
+    )
+    expect(clotureRouge?.status).toBe('failed')
+    expect(clotureRouge?.display?.failure).toMatch(
+      /^Run arrêté par le bouton Stop du chat — pendant .* · clean:subagent$/
+    )
+  })
+
+  it('une phase où une étape a vraiment échoué reste rouge, même si une autre a été arrêtée par Stop', () => {
+    const events = projeter([
+      workspace,
+      cleanArrete,
+      runTrace('clean-ko', 'turn-d', 3, runId, {
+        status: 'failed',
+        execution: exec('att-clean-2', 'clean:subagent', 'clean'),
+        payloads: [{ kind: 'model-response', content: quota }]
+      })
+    ])
+    const phase = events.find((event) => event.display?.kind === 'skill')
+    expect(phase?.status).toBe('failed')
+    expect(phase?.display?.failure).toMatch(/You’ve hit your session limit/)
+  })
+
+  it('une vraie panne qui CITE le motif du Stop reste un échec — discriminant', () => {
+    const cite =
+      "Le grep trouve « arret demande par l'utilisateur (Stop du chat) » dans index.ts ; puis : You’ve hit your session limit"
+    const agent = projeter([
+      workspace,
+      runTrace('clean-cite', 'turn-d', 2, runId, {
+        status: 'failed',
+        execution: exec('att-clean', 'clean:subagent', 'clean'),
+        payloads: [{ kind: 'model-response', content: cite }]
+      })
+    ]).find((event) => event.display?.kind === 'agent')
+    expect(agent?.status).toBe('failed')
+    expect(agent?.display?.failure).toBe(cite)
+  })
 })
 
 /**
@@ -1353,6 +1501,29 @@ describe('statut du bloc « Orchestrateur » en chat direct', () => {
     ])
 
     expect(agent?.status).toBe('failed')
+  })
+
+  // conv-907, conv-919 : « Orchestrateur » et la demande rouges, la cause seulement sur le bloc
+  // « Erreur » voisin (conv-966).
+  it('l’orchestrateur et la demande en échec disent la cause écrite par l’Erreur', () => {
+    const cause = 'Claude a interrompu l’appel : Failed to authenticate: OAuth session expired'
+    const { events } = projectLatestRequestExecution(
+      buildHarnessTimelineFromTrace([
+        prompt('appel', 'turn-auth', 1),
+        trace('erreur', 'turn-auth', 2, {
+          type: 'error',
+          status: 'failed',
+          parentId: 'appel',
+          execution: undefined,
+          payloads: [{ kind: 'error', content: cause }],
+          metrics: { durationMs: 1761 }
+        })
+      ])
+    )
+
+    expect(events.find((event) => event.display?.kind === 'agent')?.display?.failure).toBe(cause)
+    expect(events[0].status).toBe('failed')
+    expect(events[0].display?.failure).toBe(`Orchestrateur : ${cause}`)
   })
 
   it('un appel qui a répondu reste terminé — discriminant', () => {

@@ -646,6 +646,15 @@
   overflow-wrap: anywhere;
 }
 
+/* Pourquoi l'étape rouge a échoué : la couleur de l'échec, le texte entier (la carte le coupe). */
+.workflow-execution-pourquoi {
+  margin: var(--s2) 0 0;
+  color: var(--err);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .workflow-execution-warning {
   margin: var(--s2) 0 0;
   color: var(--warn);

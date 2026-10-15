@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   573 regles, 790 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   563 regles, 778 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -548,41 +548,6 @@
 }
 :root[data-theme='nebuleuse-verre'] .subagent-thinking pre {
     background: rgba(10, 10, 10, 0.22)
-}
-
-/* ---- src/renderer/src/components/FirstRunWizard.css ---- */
-:root[data-theme='nebuleuse-verre'] .frw-overlay {
-    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
-    rgba(10, 10, 10, 0.72)
-}
-:root[data-theme='nebuleuse-verre'] .frw-card {
-    background: var(--surface-panel, rgba(10, 10, 10, 0.96))
-}
-:root[data-theme='nebuleuse-verre'] .frw-checks li.ok .frw-icon {
-    color: var(--success, rgb(0, 255, 85))
-}
-:root[data-theme='nebuleuse-verre'] .frw-checks li.ko .frw-icon {
-    color: var(--warning, rgb(255, 144, 200))
-}
-:root[data-theme='nebuleuse-verre'] .frw-detail {
-    color: var(--warning, rgb(255, 131, 193))
-}
-:root[data-theme='nebuleuse-verre'] .frw-actions button:hover:not(:disabled) {
-    border-color: var(--rose, rgb(255, 47, 151))
-}
-:root[data-theme='nebuleuse-verre'] .frw-actions .frw-primary {
-    background: var(--rose, rgb(255, 47, 151));
-    border-color: var(--rose, rgb(255, 47, 151))
-}
-:root[data-theme='nebuleuse-verre'] .frw-repair {
-    color: var(--text, rgb(204, 197, 242));
-    border: 1px solid var(--warning, rgb(255, 144, 200))
-}
-:root[data-theme='nebuleuse-verre'] .frw-repair:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--warning, rgb(255, 144, 200)) 16%, transparent)
-}
-:root[data-theme='nebuleuse-verre'] .frw-optional:hover:not(:disabled) {
-    color: var(--text, rgb(204, 197, 242))
 }
 
 /* ---- src/renderer/src/components/GraphView.css ---- */

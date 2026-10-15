@@ -117,6 +117,62 @@ describe('evenementGesteAgent — un geste fini de l’agent, sans contenu', () 
     expect(event.parentId).toBeUndefined()
   })
 
+  // « je veux voir le détail de ce geste » (2026-10-15) : la commande et sa sortie entrent dans la trace.
+  it('garde la commande envoyée et le retour quand le modèle IA les fournit', () => {
+    const event = evenementGesteAgent({
+      conversationId: 'conv-1',
+      turnId: 'tour-1',
+      id: 'tour-1:geste:b',
+      sequence: 10,
+      finAt: AT,
+      geste: { nom: 'Bash', ok: false, dureeMs: 13000 },
+      detail: { envoye: 'npm test -- x.test.ts', retour: 'Exit code 1\n2 rouges' }
+    })
+
+    expect(event.payloads).toEqual([
+      { kind: 'tool-call', name: 'Bash', content: 'npm test -- x.test.ts' },
+      { kind: 'error', name: 'Bash', content: 'Exit code 1\n2 rouges' }
+    ])
+    expect(event.observation).toEqual({ boundary: FRONTIERE_GESTE_AGENT, fidelity: 'exact' })
+    expect(event.status).toBe('failed')
+  })
+
+  it('masque un secret et borne une sortie trop longue, en le disant', () => {
+    const event = evenementGesteAgent({
+      conversationId: 'conv-1',
+      turnId: 'tour-1',
+      id: 'tour-1:geste:c',
+      sequence: 11,
+      finAt: AT,
+      geste: { nom: 'Read', ok: true, dureeMs: 1000 },
+      detail: {
+        envoye: '{\n  "file_path": ".env"\n}',
+        retour: `API_KEY=sk-abcdefghijklmnop\n${'x'.repeat(30_000)}`
+      }
+    })
+
+    const retour = event.payloads.find((charge) => charge.kind === 'tool-result')?.content ?? ''
+    expect(retour).not.toContain('sk-abcdefghijklmnop')
+    expect(retour).toContain('[REDACTED]')
+    expect(retour).toContain('tronqué')
+    expect(event.observation.fidelity).toBe('derived')
+    expect(event.observation.limitation).toContain('bornée')
+  })
+
+  it('reste un geste nu, comme avant, quand le détail est vide', () => {
+    const event = evenementGesteAgent({
+      conversationId: 'conv-1',
+      turnId: 'tour-1',
+      id: 'tour-1:geste:d',
+      sequence: 12,
+      finAt: AT,
+      geste: { nom: 'Glob', ok: true, dureeMs: 200 },
+      detail: { envoye: '', retour: '  ' }
+    })
+    expect(event.payloads).toEqual([{ kind: 'tool-call', name: 'Glob', content: '' }])
+    expect(event.observation.limitation).toContain('aucun argument ni retour')
+  })
+
   it('ignore un début de geste et les commandes d’Autowin déjà tracées', () => {
     expect(gesteDeLaLigne('Read · D:\\depot\\x.ts')).toBeUndefined()
     expect(gesteDeLaLigne('mcp__autowin__verify terminé - 5 s')).toBeUndefined()

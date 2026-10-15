@@ -43,5 +43,17 @@ describe('run-pilot-chat écrit la demande reçue et les gestes de l’agent', (
     expect(geste).toContain('evenementGesteAgent({')
     expect(geste).toContain('id: `${turnId}:geste:${randomUUID()}`')
     expect(geste).toContain('try {')
+    // Le détail (commande + retour) suit le geste dans la trace (2026-10-15).
+    expect(geste).toContain('detail: pilotEvent.detail')
+  })
+
+  it('le pilote relaie le détail que l’adaptateur joint à la ligne de fin', () => {
+    const pilote = readFileSync(join(__dirname, '..', 'agent-pilot.ts'), 'utf8')
+    expect(pilote).toContain('...(chunk.statusDetail ? { detail: chunk.statusDetail } : {})')
+  })
+
+  it('ne pousse pas la sortie entière des outils dans le flux en direct', () => {
+    const flux = bloc('const livePilotEvent = { ...pilotEvent }', "'pilot:event'")
+    expect(flux).toContain('delete livePilotEvent.detail')
   })
 })

@@ -30,7 +30,6 @@ import {
   libelleReprise
 } from '../../../shared/reprise-surcharge'
 import { SuggestionGrid } from './SuggestionGrid'
-import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { refreshesActiveConversation } from './chat-event-routing'
@@ -6067,7 +6066,6 @@ export function ChatView({
   }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
-  const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
   /**
    * Fils de sous-agents RELUS depuis la trace persistée — la même source que le graphe. Sans eux, le
    * panneau affichait « Aucune orchestration » dès que la vue se remontait, alors que son propre
@@ -6329,6 +6327,8 @@ export function ChatView({
       <VueMesuree id="chat-liste">
         <aside
           className="lisere-dessus conv-pane"
+          // Le titre visible est parti (2026-10-15) : le panneau garde son NOM pour les lecteurs d'ecran.
+          aria-label="Conversations"
           data-view-mode={convViewMode}
           data-density={convDensity}
           // Une RECHERCHE en cours re-montre la ligne d'identifiant meme en cran serre : taper « 171 »
@@ -6336,28 +6336,28 @@ export function ChatView({
           data-recherche={convQuery.trim() ? 'oui' : undefined}
           style={{ width: `${conversationsPaneWidth}px` }}
         >
-          <div className="conv-head">
-            <ModuleHeader
-              eyebrow="Espace de travail"
-              title="Conversations"
-              actions={
-                <>
-                  {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
-                    <button
-                      type="button"
-                      className="conv-mosaic-close-all"
-                      data-testid="conv-mosaic-close-all"
-                      title="Fermer toutes les fenêtres ouvertes"
-                      aria-label="Fermer toutes les fenêtres ouvertes"
-                      onClick={fermerToutesFenetresMosaique}
-                    >
-                      Tout fermer
-                    </button>
-                  )}
-                </>
-              }
-            />
-          </div>
+          {/* SANS TITRE (demande du 2026-10-15) : « Conversations » prenait une ligne pour ne rien
+            dire. La ligne d'en-tete n'existe plus que pour « Tout fermer », en mosaique. */}
+          {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+            <div className="conv-head">
+              <button
+                type="button"
+                className="conv-mosaic-close-all"
+                data-testid="conv-mosaic-close-all"
+                title="Fermer toutes les fenêtres ouvertes"
+                aria-label="Fermer toutes les fenêtres ouvertes"
+                onClick={fermerToutesFenetresMosaique}
+              >
+                Tout fermer
+              </button>
+            </div>
+          )}
+          {/* RECHERCHE EN TETE, « Nouveau fil » juste dessous (2026-10-15 : « inverse la position de
+            recherche et nouveau fil »). Les deux restent HORS de la liste qui defile : le bouton
+            etait sinon emporte par le defilement.
+            fix-ok: cause mesuree — le bouton etait le 1er enfant de `.conv-list` (le conteneur
+            scroll-y) ; ChatView.tete-panneau.test.tsx rouge sur l'ancien code
+            (« expected true to be false »), vert ici. */}
           <div className="conv-search">
             <span aria-hidden="true">⌕</span>
             <input
@@ -6372,6 +6372,24 @@ export function ChatView({
               </button>
             )}
           </div>
+          <button
+            className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
+            onClick={() => {
+              // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
+              // masque derriere la grille, ne produisait aucun effet visible.
+              if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
+              else newConv()
+            }}
+            title="Démarrer une nouvelle conversation"
+            aria-current={activeId === null ? 'page' : undefined}
+          >
+            <span className="conv-new-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+            <span className="conv-new-title">Nouveau fil</span>
+          </button>
           {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
           qu'un bouton « Sélectionner » vu toute la journée pour un geste rare. L'entrée est
@@ -6487,24 +6505,6 @@ export function ChatView({
               </div>
             )}
           <div className="conv-list scroll-y">
-            <button
-              className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
-              onClick={() => {
-                // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
-                // masque derriere la grille, ne produisait aucun effet visible.
-                if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
-                else newConv()
-              }}
-              title="Démarrer une nouvelle conversation"
-              aria-current={activeId === null ? 'page' : undefined}
-            >
-              <span className="conv-new-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </span>
-              <span className="conv-new-title">Nouveau fil</span>
-            </button>
             {convs.length === 0 && (
               <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                 Aucune conversation — écris un message pour en démarrer une.
@@ -7233,9 +7233,8 @@ Cliquer pour choisir une autre branche.`}
                     {openRunsCount > 0 ? (
                       <span className="thinking-duree">{openRunsCount} open</span>
                     ) : null}
-                    {greenRunsCount > 0 ? (
-                      <span className="thinking-duree">{greenRunsCount} green</span>
-                    ) : null}
+                    {/* Plus de badge « N green » (conv-969, 2026-10-15 : « enlève le badge 2 green du
+                        bouton détail ») : seuls les runs encore ouverts méritent un compteur ici. */}
                   </span>
                 </summary>
               </details>

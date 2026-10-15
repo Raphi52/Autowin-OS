@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   563 regles, 849 declarations. Voir genererCoucheClaire. */
+   553 regles, 836 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -567,42 +567,6 @@
 }
 :root[data-theme='holographique-clair'] .subagent-thinking pre {
     background: rgba(20, 15, 40, 0.033)
-}
-
-/* ---- src/renderer/src/components/FirstRunWizard.css ---- */
-:root[data-theme='holographique-clair'] .frw-overlay {
-    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
-    rgba(253, 253, 255, 0.72)
-}
-:root[data-theme='holographique-clair'] .frw-card {
-    background: var(--surface-panel, rgba(253, 253, 255, 0.96));
-    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.16));
-    color: var(--text, #254b7e)
-}
-:root[data-theme='holographique-clair'] .frw-checks li.ok .frw-icon {
-    color: var(--success, #09712c)
-}
-:root[data-theme='holographique-clair'] .frw-checks li.ko .frw-icon {
-    color: var(--warning, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .frw-detail {
-    color: var(--warning, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .frw-actions button:hover:not(:disabled) {
-    border-color: var(--rose, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .frw-actions .frw-primary {
-    border-color: var(--rose, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .frw-repair {
-    color: var(--text, #0e31aa);
-    border: 1px solid var(--warning, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .frw-optional {
-    border: 1px solid var(--line-strong, rgba(20, 15, 40, 0.2))
-}
-:root[data-theme='holographique-clair'] .frw-optional:hover:not(:disabled) {
-    color: var(--text, #0e31aa)
 }
 
 /* ---- src/renderer/src/components/GraphView.css ---- */

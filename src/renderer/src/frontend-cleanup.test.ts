@@ -52,10 +52,15 @@ describe('frontend cleanup guard', () => {
     expect(existsSync(join(rendererRoot, 'components', 'WorktreeMapView.tsx'))).toBe(false)
   })
 
-  it('mounts a single preflight surface', () => {
+  it('mounts NO startup preflight popup — the Settings « ! » carries the alert', () => {
+    // La popup de demarrage (FirstRunWizard) est retiree a la demande de l'utilisateur (conv-963,
+    // 2026-10-15) : un prerequis en echec s'annonce par le « ! » de Settings, 30 s apres le lancement.
+    // Ce garde-fou refuse qu'une fenetre de demarrage revienne sans qu'on le voie ici.
     const app = source('App.tsx')
-    expect(app).toContain('<FirstRunWizard />')
+    expect(app).not.toContain('<FirstRunWizard />')
     expect(app).not.toContain('<PreflightBanner />')
+    expect(existsSync(join(rendererRoot, 'components', 'FirstRunWizard.tsx'))).toBe(false)
+    expect(app).toContain('data-testid="nav-settings-alert"')
   })
 
   it('does not remount Worktree when its tab visibility changes', () => {

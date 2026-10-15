@@ -240,6 +240,16 @@ export interface StreamChunk {
    * Absent quand la cible tient déjà en entier dans `status`.
    */
   statusTarget?: string
+  /**
+   * CE QUE L'OUTIL A REÇU ET RENDU, joint à la ligne de FIN d'un outil natif (« Bash terminé - 13 s »).
+   *
+   * Le panneau Détails ne montrait d'un geste du chat direct que son nom, son issue et sa durée
+   * (« Le détail de ce geste n'est pas enregistré », signalé le 2026-10-15) : la trace était écrite
+   * depuis le seul libellé, alors que l'adaptateur tenait la commande et sa sortie au même instant.
+   * `envoye` = les arguments de l'appel, `retour` = le texte rendu par l'outil. Jamais persisté par
+   * le journal de tour : seule la trace causale le garde, bornée et rédigée.
+   */
+  statusDetail?: { envoye: string; retour: string }
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }

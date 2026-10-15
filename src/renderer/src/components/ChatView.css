@@ -30,17 +30,10 @@
    chevaucher — extrait de message, compteurs et eyebrow du titre disparaissent, les paddings
    tombent, et le menu ⋮ passe en surimpression au lieu de voler de la largeur au titre. */
 @container convpane (max-width: 170px) {
-  .conv-head {
-    padding: 0 0 var(--s1);
-  }
-  .conv-head > .module-header > span,
   .conv-snippet,
   .conv-count,
   .conv-group-count {
     display: none;
-  }
-  .conv-head > .module-header > h1 {
-    font-size: 13px;
   }
   .conv-pick {
     gap: var(--s1);
@@ -114,20 +107,14 @@
 .runs-pane-resizer:focus-visible::after {
   background: var(--accent);
 }
+/* Plus de titre (2026-10-15) : la ligne ne porte que « Tout fermer » en mosaique, cale a droite. */
 .conv-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--s1) 0 var(--s2);
+  justify-content: flex-end;
 }
 .conv-head .btn {
   margin-left: auto;
-}
-/* L'entete est un item flex : sans flex:1 sa largeur colle au titre et le switch
-   de vue reste plaque contre « Conversations » au lieu du bord droit du panneau. */
-.conv-head > .module-header {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 /* Inbox d'agents : conversations dont un agent travaille, en tête du pane. */
 /* À la taille de fenêtre de démarrage (900 px), trois colonnes fixes plaçaient Workflows hors écran.
@@ -2187,13 +2174,12 @@ ol.md-list li {
 }
 
 .cosmic-outline .conv-head {
-  min-height: 46px;
   padding: 0;
 }
 
 .cosmic-outline .chat-head-kicker {
   color: var(--chat-tete-kicker);
-  /* Meme police que le titre « Conversations » du panneau lateral (.module-header > h1). */
+  /* Meme police que les titres de module (.module-header > h1). */
   font-family: var(--module-title-font);
   font-size: 16px;
   font-weight: 700;
@@ -2285,9 +2271,6 @@ ol.md-list li {
 /* Colonne tiree au minimum, theme cosmic : ce theme repeint conv-pick/meta avec une specificite
    superieure, donc le mode compact generique ne l'atteint pas — il lui faut son propre bloc. */
 @container convpane (max-width: 170px) {
-  .cosmic-outline .conv-head {
-    min-height: 0;
-  }
   .cosmic-outline .conv-meta,
   .cosmic-outline .conv-snippet {
     display: none;
@@ -3067,8 +3050,10 @@ button.chat-project-dot:disabled {
   padding-right: var(--s3) !important;
 }
 
-/* Action principale de la bibliothèque : distincte des conversations existantes. */
+/* Action principale de la bibliothèque : distincte des conversations existantes. Elle vit HORS de
+   la liste qui defile (2026-10-15) : `flex: none` l'empeche d'etre ecrasee dans la colonne. */
 .conv-new-row {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 9px;

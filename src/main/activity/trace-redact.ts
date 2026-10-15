@@ -22,8 +22,14 @@ const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[ba
  * ts 1790334398650 : l'utilisateur a tapé son mail puis son mot de passe dans le chat, et le texte a été
  * recopié tel quel dans le dossier kaizen suivant. La valeur doit mêler lettre ET chiffre/symbole pour
  * épargner « mail@x.com merci » ; sur-rédiger reste sans danger ici (redaction seulement, jamais un garde).
+ *
+ * `(?<![\w.+-])` : l'adresse ne commence qu'au DÉBUT d'une suite de caractères d'adresse. Sans lui, le
+ * moteur relançait `[\w.+-]+@` à chaque caractère d'une longue suite sans « @ » — coût quadratique,
+ * mesuré le 2026-10-15 : 568 ms pour 30 000 « x », contre 0,5 ms pour 20 000 caractères de code. Le
+ * détail des gestes de l'agent (sorties d'outil entières, base64, fichiers minifiés) passe par ici.
+ * Mêmes correspondances : un départ au milieu de la suite bute sur le même « @ » que son début.
  */
-const EMAIL_CREDENTIAL = String.raw`([\w.+-]+@[\w-]+(?:\.[\w-]+)+\s+)(?=\S*[A-Za-z])(?=\S*[\d!#$%^&*?])[^\s@]{6,}`
+const EMAIL_CREDENTIAL = String.raw`(?<![\w.+-])([\w.+-]+@[\w-]+(?:\.[\w-]+)+\s+)(?=\S*[A-Za-z])(?=\S*[\d!#$%^&*?])[^\s@]{6,}`
 
 const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}|${EMAIL_CREDENTIAL}`, 'gi')
 

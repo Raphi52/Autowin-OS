@@ -4,8 +4,8 @@
  *
  * Les charges arrivent dans l'ordre de leurs événements (appel, résultat, appel, résultat…) : une
  * charge `tool-call` ouvre un appel, les `tool-result` et `error` qui suivent s'y rattachent. Un
- * appel sans aucun contenu — les gestes propres de l'agent, écrits sans argument ni retour par
- * `chat-turn-trace.ts` — n'est pas rendu : il n'y a rien à montrer.
+ * appel sans aucun contenu — un geste propre de l'agent écrit avant le 2026-10-15, ou par un modèle
+ * IA qui ne rend pas ses arguments (`chat-turn-trace.ts`) — n'est pas rendu : rien à montrer.
  */
 export interface AppelOutil {
   envoye?: string

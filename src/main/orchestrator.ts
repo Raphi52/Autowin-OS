@@ -988,6 +988,25 @@ export function murDeQuotaDuRun(erreur: unknown): string | undefined {
   return estMurDeQuota(message) ? message : undefined
 }
 
+/** Au-delà, une pile d'appels entière rendrait la clôture illisible ; le détail reste dans la trace. */
+const MOTIF_D_ARRET_MAX = 300
+
+/**
+ * LA RAISON D'UNE CLÔTURE QUAND LE RUN S'EST ARRÊTÉ AVANT LE CONTRÔLE FINAL.
+ *
+ * `gateReasons` n'existe que dans le rapport du run (`produced`), écrit au bout du pipeline. Un run
+ * arrêté par une exception — quota atteint, connexion expirée, phase en échec — n'en a pas : sa
+ * clôture rouge ne disait donc RIEN (mesuré le 2026-10-15 sur conv-914 et conv-916, deux clôtures
+ * rouges à « Raisons » vide). L'erreur qui a arrêté le run est cette raison.
+ */
+export function raisonsDArretDuRun(erreur: unknown): string[] | undefined {
+  if (erreur === undefined || erreur === null) return undefined
+  const message = (erreur instanceof Error ? erreur.message : String(erreur)).trim()
+  const motif =
+    message.length > MOTIF_D_ARRET_MAX ? `${message.slice(0, MOTIF_D_ARRET_MAX - 1)}…` : message
+  return [`run arrêté avant le contrôle final : ${motif || 'erreur sans message'}`]
+}
+
 function costOfTrace(trace: OrchestrationStep[]): number {
   return trace.reduce(
     (total, step) =>
@@ -2697,7 +2716,10 @@ ${annonceCommit}`
           status: green && (integrated || retained) ? 'green' : 'red',
           totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
           totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
-          gateReasons: produced?.gateReasons,
+          // Un run qui PLANTE (quota, connexion, phase en échec) n'a pas de rapport : la clôture
+          // rouge partait sans aucune raison (conv-914, run-68594dd94c08-1, quota du sous-agent
+          // clean). L'erreur qui l'a arrêté devient sa raison.
+          gateReasons: produced?.gateReasons ?? raisonsDArretDuRun(erreurDuRun),
           integrationOutcome: finalizeOutcome,
           usage: this.deps.currentExecutionUsage?.()
         }

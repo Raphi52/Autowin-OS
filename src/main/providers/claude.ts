@@ -427,6 +427,21 @@ export function claudeToolResultText(content: unknown): string {
   return ''
 }
 
+/**
+ * Ce qu'un outil natif a REÇU, sous la forme que le détail d'un geste affiche : la commande nue
+ * pour un shell (lisible telle qu'elle a été tapée), sinon tous les arguments en JSON indenté
+ * (chemin, plage de lignes, motif, texte remplacé…). Pur → testable.
+ */
+export function argumentsLisiblesDeLOutil(input: Record<string, unknown> | undefined): string {
+  if (!input) return ''
+  if (typeof input.command === 'string') return input.command
+  try {
+    return Object.keys(input).length > 0 ? JSON.stringify(input, null, 2) : ''
+  } catch {
+    return ''
+  }
+}
+
 /** Lignes dont l'outil d'édition revendique directement l'écriture ; jamais le stdout d'un shell. */
 export function claudeWrittenLineFingerprints(
   input: Record<string, unknown> | undefined
@@ -1860,6 +1875,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         writtenLineFingerprints: string[]
         /** Heure de depart : la ligne de FIN d'action porte sa duree (frise C3 du bloc Actions). */
         startedAt: number
+        /** Arguments ENTIERS de l'appel, tels que le detail du geste les montre (`statusDetail`). */
+        envoye: string
       }
     >()
     const queue: StreamChunk[] = []
@@ -2189,7 +2206,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               searchPath: recherche ? String(part.input?.path ?? '') : '',
               pattern: recherche ? String(part.input?.pattern ?? '') : '',
               writtenLineFingerprints: claudeWrittenLineFingerprints(part.input),
-              startedAt: Date.now()
+              startedAt: Date.now(),
+              envoye: argumentsLisiblesDeLOutil(part.input)
             })
             /*
              * SIGNE DE VIE PAR APPEL D'OUTIL — relaye en DIRECT, jamais persiste (meme regle que le
@@ -2245,12 +2263,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // lui dit si l'action a REUSSI ou ECHOUE, et combien de temps elle a pris. Elle ne cree pas
           // de ligne : `thinking-block-corps.ts` la replie sur la ligne de son outil.
           const dureeOutil = dureeLisible((Date.now() - call.startedAt) / 1000)
-          queue.push({
-            delta: '',
-            status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`
-          })
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const outputEntier = claudeToolResultText(part.content)
+          queue.push({
+            delta: '',
+            status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`,
+            // Le détail du geste voyage avec sa ligne de fin : c'est elle qui l'écrit dans la trace.
+            statusDetail: { envoye: call.envoye, retour: outputEntier }
+          })
           const output = outputEntier.slice(-20_000)
           collectArtifacts(part.content, call.name, call.filePath)
           const isFile = Boolean(call.filePath)

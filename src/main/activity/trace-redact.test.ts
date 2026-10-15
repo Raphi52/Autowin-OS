@@ -70,4 +70,18 @@ describe('identifiant collé en clair (conv-854, saisie ts 1790334398650)', () =
   it('ne touche pas un mot ordinaire après un mail', () => {
     expect(redactTrace('écris à user@corp.com merci')).toBe('écris à user@corp.com merci')
   })
+  it('masque encore un mail collé derrière un séparateur (début de suite, pas milieu)', () => {
+    expect(redactTrace('id=user@corp.fr Secr3t2026!')).toBe('id=user@corp.fr [REDACTED]')
+  })
+  /*
+   * COÛT LINÉAIRE (2026-10-15) — le détail des gestes de l'agent passe ici avec des sorties d'outil
+   * entières. Sans la garde de début de suite, 30 000 caractères sans « @ » coûtaient 568 ms au
+   * processus principal (coût quadratique) ; avec elle, 0,1 ms. La borne laisse 100× de marge.
+   */
+  it('reste linéaire sur une longue suite sans espace ni « @ »', () => {
+    const blob = 'x'.repeat(30_000)
+    const debut = performance.now()
+    expect(redactTrace(blob)).toBe(blob)
+    expect(performance.now() - debut).toBeLessThan(50)
+  })
 })

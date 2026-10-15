@@ -684,6 +684,56 @@ describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', ()
     expect(statuts.find((s) => s.startsWith('Bash échoué'))).toMatch(/^Bash échoué - \d+ s$/)
     expect(statuts.find((s) => s.startsWith('Read terminé'))).toMatch(/^Read terminé - \d+ s$/)
   })
+
+  // « je veux voir le détail de ce geste » (2026-10-15) : la ligne de fin emporte l'appel et son retour.
+  it('joint à la ligne de fin ce que l’outil a reçu et rendu', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } },
+            {
+              type: 'tool_use',
+              id: 't2',
+              name: 'Read',
+              input: { file_path: 'src/a.ts', offset: 10, limit: 5 }
+            }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', is_error: true, content: '2 rouges' },
+            { type: 'tool_result', tool_use_id: 't2', content: [{ type: 'text', text: 'ok' }] }
+          ]
+        }
+      },
+      succes
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    const details: Array<{ status?: string; statusDetail?: unknown }> = []
+    let step = await gen.next()
+    while (!step.done) {
+      if (step.value.status) details.push(step.value)
+      step = await gen.next()
+    }
+
+    const fin = (nom: string): unknown =>
+      details.find((chunk) => chunk.status?.startsWith(nom))?.statusDetail
+    expect(fin('Bash échoué')).toEqual({ envoye: 'npm test', retour: '2 rouges' })
+    expect(fin('Read terminé')).toEqual({
+      envoye: JSON.stringify({ file_path: 'src/a.ts', offset: 10, limit: 5 }, null, 2),
+      retour: 'ok'
+    })
+    // Un DÉBUT de geste n'a pas encore de retour : rien n'y est joint.
+    expect(
+      details.find((chunk) => chunk.status === 'Bash · npm test')?.statusDetail
+    ).toBeUndefined()
+  })
 })
 
 /**

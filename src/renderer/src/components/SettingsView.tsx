@@ -8,7 +8,9 @@ import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ModeAutoSeuilsSettings } from './ModeAutoSeuilsSettings'
+import { RouterView } from './RouterView'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
+import { useProvidersAReconnecter } from './useProvidersAReconnecter'
 import { ViewTopBar } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
@@ -29,14 +31,11 @@ const REPARABLES = new Set(['claude-session', 'brain', 'brain-venv'])
 export function SettingsView({
   active,
   section,
-  onSectionChange,
-  onOpenRouter
+  onSectionChange
 }: {
   active: boolean
   section: SettingsSection
   onSectionChange: (section: SettingsSection) => void
-  /** Navigation RÉELLE vers la page Routeur (Agent Studio · routing) — pas un simple texte. */
-  onOpenRouter?: () => void
 }): React.JSX.Element {
   const [preflight, setPreflight] = useState<PreflightResult>()
   const [checking, setChecking] = useState(false)
@@ -156,13 +155,15 @@ export function SettingsView({
   }, [section])
 
   const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
+  /** Alerte de l'onglet Routage, venue d'Agent Studio avec lui (conv-963). */
+  const providersExpires = useProvidersAReconnecter(active)
 
   return (
     <section className="view-page domain-shell settings-view" data-testid="settings-view">
       <ViewTopBar
         eyebrow="CONFIGURATION"
         title="Settings"
-        description="Budget, capacités accordées aux agents, comportement, apparence, providers, règles d’Autowin OS et prérequis machine."
+        description="Budget, capacités accordées aux agents, comportement, apparence, providers et routage, règles d’Autowin OS et prérequis machine."
         ariaLabel="Sections Settings"
         active={section}
         onSelect={onSectionChange}
@@ -172,6 +173,15 @@ export function SettingsView({
           { id: 'behaviour', label: 'Behaviour' },
           { id: 'interface', label: 'Interface' },
           { id: 'providers', label: 'Providers' },
+          {
+            id: 'routing',
+            label: 'Routage',
+            anomaly: {
+              count: providersExpires.length,
+              title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
+              testId: 'settings-anomaly-routing'
+            }
+          },
           { id: 'rules', label: 'Rules' },
           {
             id: 'preflight',
@@ -237,19 +247,21 @@ export function SettingsView({
                 <p>Aucun provider n&apos;est exposé par l&apos;application.</p>
               ))}
             <p className="domain-hint">
-              Lecture seule : la configuration (connexion, test, mode) se pilote depuis la page{' '}
+              Lecture seule : la configuration (connexion, test, mode) se pilote depuis l’onglet{' '}
               <button
                 type="button"
                 className="domain-link"
                 data-testid="settings-open-router"
-                onClick={() => onOpenRouter?.()}
+                onClick={() => onSectionChange('routing')}
               >
-                Routeur
+                Routage
               </button>
               .
             </p>
           </section>
         )}
+        {/* Routage vit ici depuis conv-963 (2026-10-15) : il était une section d'Agent Studio. */}
+        {section === 'routing' && <RouterView active={active} />}
         {section === 'rules' && <RulesView />}
         {section === 'preflight' && <ExecutionWorkspaceSettings />}
         {section === 'preflight' && <BrainSettings />}

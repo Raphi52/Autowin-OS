@@ -27,7 +27,8 @@ describe('registre canonique des destinations Autowin', () => {
     ['agents', 'agent-studio'],
     ['roles', 'agent-studio'],
     ['models', 'agent-studio'],
-    ['router', 'agent-studio'],
+    ['router', 'settings'],
+    ['routage', 'settings'],
     ['capabilities', 'settings'],
     ['skills', 'settings'],
     ['hooks', 'settings'],
@@ -47,7 +48,10 @@ describe('registre canonique des destinations Autowin', () => {
   })
 
   it.each([
-    ['router', { destination: 'agent-studio', section: 'routing' }],
+    // Routage vit dans Settings depuis conv-963 : l'ancien nom y aboutit, plus dans Agent Studio.
+    ['router', { destination: 'settings', section: 'routing' }],
+    ['routeur', { destination: 'settings', section: 'routing' }],
+    ['routage', { destination: 'settings', section: 'routing' }],
     ['models', { destination: 'agent-studio', section: 'topology' }],
     ['capabilities', { destination: 'settings', section: 'capabilities' }],
     ['behaviour', { destination: 'settings', section: 'behaviour' }],

@@ -1,7 +1,9 @@
 import { gesteDeLaLigne, type GesteAgent } from '../../shared/gestes-agent'
 import { demandeHumaineEntiere } from '../../shared/balise-message-utilisateur'
 import { motsUtilisateur } from '../chat-turn-messages'
-import { assertTraceEvent, type TraceEventV1 } from './trace-event'
+import { evidencePayloads } from './evidence-payloads'
+import { assertTraceEvent, type TraceEventV1, type TracePayload } from './trace-event'
+import { redactTrace } from './trace-redact'
 
 /**
  * DEUX FAITS D'UN TOUR DE CHAT QUE LA TRACE NE GARDAIT PAS — pour l'arbre du panneau Détails.
@@ -16,8 +18,10 @@ import { assertTraceEvent, type TraceEventV1 } from './trace-event'
  * 2. LES GESTES PROPRES DE L'AGENT (Read, Bash, Edit…). Un run les écrit déjà en `tool-call`
  *    (`orchestration-observability.ts`, preuves d'exécution) ; le chat direct, non : un tour de
  *    18 min et 94 gestes tenait dans une seule perle « Orchestrateur ». La ligne d'état du modèle
- *    (« Read terminé - 3 s ») en donne le nom, l'issue et la durée : c'est TOUT ce qui est écrit,
- *    jamais un argument ni un retour.
+ *    (« Read terminé - 3 s ») en donne le nom, l'issue et la durée. Depuis le 2026-10-15, l'adaptateur
+ *    y joint aussi ce que l'outil a reçu et rendu (`statusDetail`) : le panneau Détails disait
+ *    « Le détail de ce geste n'est pas enregistré » alors que la commande et sa sortie étaient
+ *    connues au même instant. Un modèle IA qui ne les fournit pas laisse le geste nu, comme avant.
  *
  * Fonctions pures : l'appelant fournit identifiant, séquence et horloge, et décide de l'écriture.
  */
@@ -73,6 +77,26 @@ export function evenementDemandeRecue(input: {
 /** Le geste fini qu'annonce une ligne d'état du modèle (« Read terminé - 3 s »), sinon rien. */
 export { gesteDeLaLigne }
 
+/**
+ * Les charges d'un geste dont le modèle IA a rendu les arguments et le retour (`statusDetail` de
+ * l'adaptateur). Bornées comme les preuves d'un run (`evidencePayloads`) et RÉDIGÉES : la trace
+ * causale n'en masque aucun secret à l'écriture, or un `cat .env` y recopierait sa sortie.
+ */
+function chargesDuDetail(
+  geste: GesteAgent,
+  detail: { envoye: string; retour: string } | undefined
+): { payloads: TracePayload[]; fidelity: 'exact' | 'derived'; limitation?: string } | undefined {
+  const envoye = String(redactTrace(detail?.envoye ?? ''))
+  const retour = String(redactTrace(detail?.retour ?? ''))
+  if (!envoye.trim() && !retour.trim()) return undefined
+  return evidencePayloads({
+    type: geste.nom,
+    ...(envoye.trim() ? { command: envoye } : {}),
+    ...(retour.trim() ? { stdout: retour } : {}),
+    ok: geste.ok
+  })
+}
+
 export function evenementGesteAgent(input: {
   conversationId: string
   turnId: string
@@ -81,8 +105,11 @@ export function evenementGesteAgent(input: {
   /** Instant où la ligne de fin est arrivée ; le début est reconstitué avec la durée. */
   finAt: number
   geste: GesteAgent
+  /** Ce que l'outil a reçu et rendu, quand le modèle IA le fournit ; sinon le geste reste nu. */
+  detail?: { envoye: string; retour: string }
 }): TraceEventV1 {
   const { geste } = input
+  const charges = chargesDuDetail(geste, input.detail)
   return assertTraceEvent({
     schema: 'autowin.trace/v1',
     id: input.id,
@@ -97,13 +124,19 @@ export function evenementGesteAgent(input: {
     actor: { id: 'orchestrator', kind: 'agent', label: 'Orchestrateur' },
     recipient: { id: geste.nom, kind: 'tool', label: geste.nom },
     channel: 'tool',
-    payloads: [{ kind: 'tool-call', name: geste.nom, content: '' }],
-    observation: {
-      boundary: FRONTIERE_GESTE_AGENT,
-      fidelity: 'derived',
-      limitation:
-        'Nom, issue et durée du geste, relevés sur la ligne d’état du modèle : aucun argument ni retour.'
-    },
+    payloads: charges?.payloads ?? [{ kind: 'tool-call', name: geste.nom, content: '' }],
+    observation: charges
+      ? {
+          boundary: FRONTIERE_GESTE_AGENT,
+          fidelity: charges.fidelity,
+          ...(charges.limitation ? { limitation: charges.limitation } : {})
+        }
+      : {
+          boundary: FRONTIERE_GESTE_AGENT,
+          fidelity: 'derived',
+          limitation:
+            'Nom, issue et durée du geste, relevés sur la ligne d’état du modèle : aucun argument ni retour.'
+        },
     metrics: { durationMs: geste.dureeMs }
   })
 }

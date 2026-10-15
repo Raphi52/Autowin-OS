@@ -195,7 +195,20 @@ describe('discipline de pipeline canonique', () => {
     // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
     // `--scroll` (arrive par la mise a jour amont du 2026-09-21) : il AMENE la cible dans le
     //   cadre avant la capture — il affine une preuve deja accessible, il n'en ouvre aucune.
-    const REGLAGES = ['--frames', '--interval', '--port', '--scroll', '--state-selector']
+    // `--donnees` et `--tour` (2026-10-15, conv-966, avec `--conversation`) : ils ne servent
+    //   qu'avec `--conversation`, qui ouvre la preuve (une conversation reelle dans l'instance
+    //   cachee). `--donnees` dit OU la lire, et son defaut (.autowin-data/autowin-os) est le bon ;
+    //   `--tour` choisit QUELLE demande le graphe affiche, et son defaut (la derniere) suffit a
+    //   prouver un changement frais. Ils affinent cette preuve, ils n'en ouvrent aucune.
+    const REGLAGES = [
+      '--donnees',
+      '--frames',
+      '--interval',
+      '--port',
+      '--scroll',
+      '--state-selector',
+      '--tour'
+    ]
 
     // Sans cette borne, la disparition du motif de lecture ferait passer le test a vide.
     expect(optionsLues.length).toBeGreaterThanOrEqual(6)

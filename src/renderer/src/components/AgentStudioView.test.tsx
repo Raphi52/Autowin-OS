@@ -31,7 +31,7 @@ afterEach(() => {
   container.remove()
 })
 
-async function render(section: 'topology' | 'routing' | 'workflows'): Promise<void> {
+async function render(section: 'topology' | 'workflows'): Promise<void> {
   await act(async () => {
     root.render(
       createElement(AgentStudioView, { active: true, section, onSectionChange: () => undefined })
@@ -61,16 +61,12 @@ describe('Agent Studio — la section Workflows est ATTEIGNABLE', () => {
     expect(container.querySelector('[data-testid="workflow-profiles-view"]')).not.toBeNull()
   })
 
-  it('les autres sections ne la rendent pas', async () => {
-    await render('routing')
-    expect(container.querySelector('[data-testid="workflow-profiles-view"]')).toBeNull()
-  })
-
   it('cliquer l’onglet demande le changement de section', async () => {
     const onSectionChange = vi.fn()
+    stub()
     await act(async () => {
       root.render(
-        createElement(AgentStudioView, { active: true, section: 'routing', onSectionChange })
+        createElement(AgentStudioView, { active: true, section: 'topology', onSectionChange })
       )
       await Promise.resolve()
     })
@@ -141,18 +137,18 @@ describe('Agent Studio — la section par défaut est CÂBLÉE', () => {
  * l'onglet concerné. Un prompt partait donc sur une configuration cassée que rien n'annonçait.
  */
 describe('Agent Studio — les onglets annoncent les anomalies', () => {
-  it('signale les providers expirés sur l’onglet Routage', async () => {
-    stub({
-      providerStatus: vi.fn().mockResolvedValue([
-        { provider: 'codex', status: 'expired', testable: true },
-        { provider: 'claude', status: 'authenticated', testable: true }
-      ])
-    })
+  /**
+   * Routage a quitté Agent Studio pour Settings (conv-963, 2026-10-15) : son onglet, et l'alerte des
+   * providers à reconnecter qu'il portait, n'existent plus ici — ils sont couverts par
+   * `SettingsView.routage.test.tsx`.
+   */
+  it('n’affiche plus d’onglet Routage', async () => {
+    stub()
     await render('topology')
-    const badge = container.querySelector('[data-testid="studio-anomaly-routing"]')
-    expect(badge).not.toBeNull()
-    expect(badge?.textContent).toContain('1')
-    expect(badge?.getAttribute('title')).toContain('codex')
+    const onglets = [...container.querySelectorAll('.domain-tabs button')].map((b) =>
+      b.textContent?.trim()
+    )
+    expect(onglets.some((libelle) => libelle?.startsWith('Routage'))).toBe(false)
   })
 
   it('signale les workflows non exécutables sur l’onglet Workflows', async () => {
@@ -170,22 +166,18 @@ describe('Agent Studio — les onglets annoncent les anomalies', () => {
 
   it('rien à signaler quand tout est sain', async () => {
     stub({
-      providerStatus: vi
-        .fn()
-        .mockResolvedValue([{ provider: 'codex', status: 'authenticated', testable: true }]),
       workflowProfiles: vi.fn().mockResolvedValue({
         profiles: [{ id: 'ok', name: 'OK', phases: ['build'] }],
         activeId: null
       })
     })
     await render('topology')
-    expect(container.querySelector('[data-testid="studio-anomaly-routing"]')).toBeNull()
     expect(container.querySelector('[data-testid="studio-anomaly-workflows"]')).toBeNull()
   })
 
   it('ne sonde rien tant qu’Agent Studio n’est pas ouvert', async () => {
-    const providerStatus = vi.fn().mockResolvedValue([])
-    stub({ providerStatus })
+    const workflowProfiles = vi.fn().mockResolvedValue({ profiles: [], activeId: null })
+    stub({ workflowProfiles })
     await act(async () => {
       root.render(
         createElement(AgentStudioView, {
@@ -196,15 +188,11 @@ describe('Agent Studio — les onglets annoncent les anomalies', () => {
       )
       await Promise.resolve()
     })
-    expect(providerStatus).not.toHaveBeenCalled()
+    expect(workflowProfiles).not.toHaveBeenCalled()
   })
 
-  it('rafraîchit les badges après les mutations de rôles et de workflows', async () => {
+  it('rafraîchit le badge Workflows après une mutation de workflows', async () => {
     const listeners: Array<(event: { type: string; scope?: string }) => void> = []
-    const providerStatus = vi
-      .fn()
-      .mockResolvedValueOnce([{ provider: 'codex', status: 'expired', testable: true }])
-      .mockResolvedValueOnce([{ provider: 'codex', status: 'authenticated', testable: true }])
     const workflowProfiles = vi
       .fn()
       .mockResolvedValueOnce({ profiles: [], activeId: null })
@@ -213,7 +201,6 @@ describe('Agent Studio — les onglets annoncent les anomalies', () => {
         activeId: null
       })
     stub({
-      providerStatus,
       workflowProfiles,
       onAppEvent: vi.fn((listener) => {
         listeners.push(listener)
@@ -221,17 +208,14 @@ describe('Agent Studio — les onglets annoncent les anomalies', () => {
       })
     })
     await render('topology')
-    expect(container.querySelector('[data-testid="studio-anomaly-routing"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="studio-anomaly-workflows"]')).toBeNull()
 
     await act(async () => {
-      for (const listener of listeners) listener({ type: 'refresh', scope: 'roles' })
       for (const listener of listeners) listener({ type: 'refresh', scope: 'workflows' })
       await Promise.resolve()
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-testid="studio-anomaly-routing"]')).toBeNull()
     expect(container.querySelector('[data-testid="studio-anomaly-workflows"]')).not.toBeNull()
   })
 })

@@ -7,7 +7,6 @@ import { ViewTopBar } from './ViewTopBar'
 // `AgentsTopologyView`, avec ce fichier pour unique appelant. Deux noms pour un seul composant, c'est
 // un renommage laisse a moitie fait — et un lecteur qui cherche `RolesView` ne trouve pas le code.
 import { AgentsTopologyView } from './AgentsTopologyView'
-import { RouterView } from './RouterView'
 import { WorkflowProfilesView } from './WorkflowProfilesView'
 import './ViewPage.css'
 import './DomainShell.css'
@@ -22,11 +21,11 @@ export function AgentStudioView({
   onSectionChange: (section: AgentStudioSection) => void
 }): React.JSX.Element {
   /**
-   * Une anomalie n'était visible qu'en OUVRANT l'onglet concerné : un provider expiré ou un workflow
-   * injouable partait donc au prompt suivant sans que rien ne l'annonce depuis l'onglet voisin. Les
-   * deux sondes sont en LECTURE seule et ne tournent que si Agent Studio est ouvert.
+   * Une anomalie n'était visible qu'en OUVRANT l'onglet concerné : un workflow injouable partait donc
+   * au prompt suivant sans que rien ne l'annonce depuis l'onglet voisin. La sonde est en LECTURE
+   * seule et ne tourne que si Agent Studio est ouvert. (Celle des providers expirés a suivi l'onglet
+   * Routage dans Settings — conv-963.)
    */
-  const [providersExpires, setProvidersExpires] = useState<string[]>([])
   const [workflowProfils, setWorkflowProfils] = useState<ExecutabilityInput[]>([])
   /**
    * MEME inventaire que la vue Workflows : sans lui, la sonde accusait un workflow a brique skill
@@ -45,19 +44,7 @@ export function AgentStudioView({
   useEffect(() => {
     if (!active) return
     let annule = false
-    let providerGeneration = 0
     let workflowGeneration = 0
-    const refreshProviders = (): void => {
-      const generation = ++providerGeneration
-      void Promise.resolve(window.api.providerStatus?.())
-        .then((statuts) => {
-          if (annule || generation !== providerGeneration) return
-          const liste = (statuts ?? []) as { provider: string; status: string }[]
-          setProvidersExpires(liste.filter((s) => s.status === 'expired').map((s) => s.provider))
-        })
-        // Un onglet ne doit pas casser parce que sa SONDE a échoué : l'indicateur reste simplement muet.
-        .catch(() => undefined)
-    }
     const refreshWorkflows = (): void => {
       const generation = ++workflowGeneration
       void Promise.resolve(window.api.workflowProfiles?.())
@@ -67,14 +54,12 @@ export function AgentStudioView({
             []) as ExecutabilityInput[]
           setWorkflowProfils(profils)
         })
+        // Un onglet ne doit pas casser parce que sa SONDE a échoué : l'indicateur reste simplement muet.
         .catch(() => undefined)
     }
-    refreshProviders()
     refreshWorkflows()
     const off = window.api.onAppEvent((event) => {
-      if (event.type !== 'refresh') return
-      if (event.scope === 'roles') refreshProviders()
-      if (event.scope === 'workflows') refreshWorkflows()
+      if (event.type === 'refresh' && event.scope === 'workflows') refreshWorkflows()
     })
     return () => {
       annule = true
@@ -87,21 +72,12 @@ export function AgentStudioView({
       <ViewTopBar
         eyebrow="ORCHESTRATION"
         title="Agent Studio"
-        description="Quels modèles jouent quels rôles, comment ils sont routés, et quels workflows les enchaînent."
+        description="Quels modèles jouent quels rôles, et quels workflows les enchaînent."
         ariaLabel="Sections Agent Studio"
         active={section}
         onSelect={onSectionChange}
         tabs={[
           { id: 'topology', label: 'Modèles & topologie' },
-          {
-            id: 'routing',
-            label: 'Routage',
-            anomaly: {
-              count: providersExpires.length,
-              title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
-              testId: 'studio-anomaly-routing'
-            }
-          },
           {
             id: 'workflows',
             label: 'Workflows',
@@ -114,9 +90,7 @@ export function AgentStudioView({
         ]}
       />
       <div className="domain-content">
-        {section === 'routing' ? (
-          <RouterView active={active} />
-        ) : section === 'workflows' ? (
+        {section === 'workflows' ? (
           <WorkflowProfilesView active={active} />
         ) : (
           <AgentsTopologyView active={active} />

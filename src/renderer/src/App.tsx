@@ -15,7 +15,6 @@ import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
 import { installerLumiereDesPanneaux } from './panneaux-lumiere'
-import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
 // l'utilisateur. Elle avait été supprimée en deux commits — la vue elle-même, puis son socle
@@ -65,6 +64,12 @@ import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
 const NAV = APP_DESTINATIONS
+
+/**
+ * Délai, depuis le lancement, avant que le « ! » de Settings n'annonce un prérequis en échec — la
+ * valeur demandée par l'utilisateur (conv-963 : « juste 30 secondes après »). Exporté pour les tests.
+ */
+export const DELAI_ALERTE_DEMARRAGE_MS = 30_000
 
 function WorktreeIcon(): React.JSX.Element {
   return (
@@ -167,6 +172,13 @@ export function MainApp(): React.JSX.Element {
   // L'alerte preflight vit dans la NAV principale : un prérequis KO ne doit pas rester caché
   // derrière deux clics dans l'onglet Diagnostic.
   const [preflightAlert, setPreflightAlert] = useState(false)
+  /**
+   * Le « ! » de Settings ne parle qu'APRÈS le délai de démarrage (conv-963, 2026-10-15 : « je veux
+   * plus l'avoir cette popup, juste 30 secondes après si y a une étape qui a foiré tu mets un point
+   * d'exclamation à côté de l'icône Settings »). La popup de démarrage est retirée ; pendant les
+   * premières secondes, un service qui chauffe encore (brain_server, ~30-40 s) n'est pas une panne.
+   */
+  const [alerteDemarrageArmee, setAlerteDemarrageArmee] = useState(false)
   // Une section choisie par l'humain (ou par une navigation ciblée) fait autorité : le défaut
   // « Diagnostic » ne s'applique que tant que personne n'a tranché.
   const settingsSectionPinned = useRef(false)
@@ -289,7 +301,7 @@ export function MainApp(): React.JSX.Element {
       // Point d'entrée honnête : Settings s'ouvre sur le Diagnostic tant que quelque chose cloche.
       if (!settingsSectionPinned.current) setSettingsSection(ko ? 'preflight' : 'capabilities')
     }
-    void (async () => {
+    const lire = async (): Promise<void> => {
       try {
         apply((await window.api?.getPreflight?.()) as never)
       } catch {
@@ -306,10 +318,19 @@ export function MainApp(): React.JSX.Element {
           if (!settingsSectionPinned.current) setSettingsSection('preflight')
         }
       }
-    })()
+    }
+    void lire()
+    // Au terme du délai, on RELIT l'état : le « ! » porte sur ce qui a échoué à ce moment-là, pas
+    // sur le premier diagnostic du lancement (un brain encore en préchauffage y était rouge).
+    const delai = window.setTimeout(() => {
+      if (!alive) return
+      setAlerteDemarrageArmee(true)
+      void lire()
+    }, DELAI_ALERTE_DEMARRAGE_MS)
     const off = window.api?.onPreflight?.((result) => apply(result as never))
     return () => {
       alive = false
+      window.clearTimeout(delai)
       off?.()
     }
   }, [])
@@ -469,7 +490,12 @@ export function MainApp(): React.JSX.Element {
        * et une boucle rAF permanente pour un decor que les panneaux recouvrent.
        */}
       {tab === 'accueil' && <DecorDeFond />}
-      <FirstRunWizard />
+      {/*
+       * La POPUP de démarrage (« Bienvenue dans Autowin OS », connexion au Brain et aux modèles)
+       * n'existe plus : retirée à la demande de l'utilisateur le 2026-10-15 (conv-963). Un prérequis
+       * en échec s'annonce désormais par le « ! » de Settings, 30 s après le lancement, et se répare
+       * depuis Settings > Diagnostic.
+       */}
       {/*
        * L'écran d'autorisation de production n'est PLUS monté ici. Il vivait à la racine de
        * l'application, en fenêtre flottante par-dessus tout le reste ; il vit désormais DANS LE FIL
@@ -520,7 +546,7 @@ export function MainApp(): React.JSX.Element {
                   )}
                 </span>
                 <span>{it.label}</span>
-                {it.id === 'settings' && preflightAlert && (
+                {it.id === 'settings' && preflightAlert && alerteDemarrageArmee && (
                   <span
                     className="domain-badge-alert nav-alert-badge"
                     data-testid="nav-settings-alert"
@@ -645,10 +671,6 @@ export function MainApp(): React.JSX.Element {
                 onSectionChange={(next) => {
                   settingsSectionPinned.current = true
                   setSettingsSection(next)
-                }}
-                onOpenRouter={() => {
-                  setAgentStudioSection('routing')
-                  navigate('agent-studio')
                 }}
               />
             </VueMesuree>

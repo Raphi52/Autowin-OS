@@ -961,8 +961,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
           if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
-          // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée : jamais un contenu),
-          // comme les preuves d'exécution d'un run. Sinon l'arbre n'en montrait aucun.
+          // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée, et ce qu'il a reçu et
+          // rendu quand le modèle IA le fournit), comme les preuves d'exécution d'un run.
           const geste = conversationId ? gesteDeLaLigne(pilotEvent.text) : undefined
           if (conversationId && geste) {
             try {
@@ -974,7 +974,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                   id: `${turnId}:geste:${randomUUID()}`,
                   sequence: traceSequence,
                   finAt: Date.now(),
-                  geste
+                  geste,
+                  detail: pilotEvent.detail
                 })
               )
               traceSequence += 1
@@ -1215,6 +1216,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // tour en cours (qui est deja paye et persiste).
         const livePilotEvent = { ...pilotEvent }
         delete livePilotEvent.attachments
+        // La sortie entière d'un outil n'a rien à faire dans le flux en direct : la trace la garde,
+        // le panneau Détails la relit au clic.
+        delete livePilotEvent.detail
         emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
           ...livePilotEvent,
           conversationId,

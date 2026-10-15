@@ -20,7 +20,8 @@ import {
 import { workflowQuoteLabel } from './workflow-quote-label'
 import { demandeHumaineEntiere } from '../../../shared/balise-message-utilisateur'
 import type { RunClosureObservation } from '../../../shared/run-execution'
-import { lireFaitRetenu, type LectureFaitRetenu } from './fait-retenu-detail'
+import { sensDuCodeDeBlocage } from '../../../shared/raison-de-blocage'
+import { lireReponseRemember, type LectureFaitRetenu } from './fait-retenu-detail'
 import { appelsDeLOutil } from './appels-outil-detail'
 import { defautsDeTrace } from './defauts-de-trace'
 import './WorkflowExecutionGraph.css'
@@ -462,11 +463,13 @@ function lecturesAllegeesDisponibles(): boolean {
 const GENRES_DU_DETAIL = [...NODE_PAYLOAD_KINDS]
 /**
  * Les genres relus selon la brique. « Fait retenu » ne relit que les RÉPONSES de `remember`, jamais
- * un argument ; un autre outil relit ses arguments, ses retours et ses erreurs.
+ * un argument — réussies (`tool-result`) ET en échec (`error`) : un dépôt refusé est écrit en
+ * `error`, et sans lui le panneau ne savait dire que « texte illisible » (conv-966). Un autre outil
+ * relit ses arguments, ses retours et ses erreurs.
  */
 const GENRES_PAR_DETAIL: Record<'echange' | 'fait-retenu' | 'appels', string[]> = {
   echange: GENRES_DU_DETAIL,
-  'fait-retenu': ['tool-result'],
+  'fait-retenu': ['tool-result', 'error'],
   appels: ['tool-call', 'tool-result', 'error']
 }
 
@@ -480,7 +483,8 @@ function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.
   if (appels.length === 0) {
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="geste-sans-contenu">
-        Le détail de ce geste n’est pas enregistré : seuls son nom, son issue et sa durée le sont.
+        Le détail de ce geste n’a pas été enregistré : seuls son nom, son issue et sa durée le sont.
+        Les gestes faits avec Claude depuis le 15 octobre gardent leur commande et leur retour.
       </p>
     )
   }
@@ -513,13 +517,17 @@ function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.
  */
 function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
   const lectures = (event.payloads ?? [])
-    .filter((payload) => payload.kind === 'tool-result')
-    .map((payload) => lireFaitRetenu(payload.content))
+    .filter((payload) => payload.kind === 'tool-result' || payload.kind === 'error')
+    .map(lireReponseRemember)
     .filter((lecture): lecture is LectureFaitRetenu => lecture !== undefined)
   if (lectures.length === 0) {
+    // Ce qui manque ici, c'est la RÉPONSE de remember (déposé ? refusé ? pourquoi ?), pas le fait.
+    const enCours = event.status === 'running' || event.status === 'pending'
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="fait-illisible">
-        Le texte du fait n’est pas lisible dans la trace.
+        {enCours
+          ? 'Dépôt en cours : la réponse du Brain s’affichera ici.'
+          : 'La réponse de cet appel n’a pas été enregistrée : on ne sait pas s’il a été déposé ni pourquoi.'}
       </p>
     )
   }
@@ -528,7 +536,10 @@ function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): 
       {lectures.map((lecture, index) =>
         lecture.retenu ? (
           <details open key={index} data-execution-fait>
-            <summary>{lectures.length > 1 ? `Fait ${index + 1}` : 'Fait retenu'}</summary>
+            <summary>
+              {lectures.length > 1 ? `Fait ${index + 1}` : 'Fait retenu'}
+              {!lecture.depose && ' · gardé dans ce fil, pas au Brain'}
+            </summary>
             {lecture.titre && <p className="workflow-execution-fait-titre">{lecture.titre}</p>}
             <pre>{lecture.texte}</pre>
             {lecture.issue && <p className="workflow-execution-fait-issue">{lecture.issue}</p>}
@@ -719,7 +730,16 @@ function ExecutionNodeDetail({
         {(git?.files?.length ?? 0) > 0 && (
           <DetailRow label="Fichiers" value={git?.files?.join(', ')} />
         )}
-        {git?.reason && <DetailRow label="Cause" value={git.reason} />}
+        {git?.reason && (
+          <DetailRow
+            label="Cause"
+            value={
+              sensDuCodeDeBlocage(git.reason)
+                ? `${sensDuCodeDeBlocage(git.reason)} (${git.reason})`
+                : git.reason
+            }
+          />
+        )}
       </dl>
     )
   }
@@ -1066,6 +1086,15 @@ function ExecutionFiche({
           </span>
         </div>
       )}
+      {/* POURQUOI L'ÉTAPE ROUGE A ÉCHOUÉ, EN TÊTE DE SA FICHE (conv-966). La carte la coupe sur une
+          ligne ; ici elle est entière. Une clôture qui liste déjà ses « Raisons » ne la double pas. */}
+      {status === 'failed' &&
+        event.display?.failure &&
+        !(event.display.kind === 'closure' && event.display.closure?.gateReasons?.length) && (
+          <p className="workflow-execution-pourquoi" data-execution-pourquoi>
+            <b>Pourquoi</b> · {event.display.failure}
+          </p>
+        )}
       <ExecutionNodeDetail event={event} offsetMs={offset} />
       <ExecutionNodeContents conversationId={conversationId} event={event} />
       {/* L'ORANGE EST RÉSERVÉ AUX DÉFAUTS (2026-10-13) : une étape en cours ou instantanée n'a pas

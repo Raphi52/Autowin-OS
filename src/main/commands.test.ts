@@ -1358,10 +1358,10 @@ describe('AppCommandBus command execution policy', () => {
     const result = await bus.exec('navigate', { tab: 'router' })
     expect(result).toMatchObject({
       ok: true,
-      data: { tab: 'agent-studio', section: 'routing' }
+      data: { tab: 'settings', section: 'routing' }
     })
     expect(events).toContainEqual({ type: 'navigate', tab: 'router' })
-    await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
+    await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'settings' })
   })
 
   it("le snapshot dit si le coût affiché est PARTIEL (tours non tarifés), au lieu d'un total nu", async () => {

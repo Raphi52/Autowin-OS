@@ -689,9 +689,13 @@
   border-color: #ffffff;
   box-shadow: none;
 }
+/* HAUTEUR = CELLE DE « NOUVEAU FIL » (2026-10-15 : « reduit la hauteur du champs recherche pour
+   matcher la hauteur du bouton nouveau fil ») : les deux blocs sont empiles en tete de colonne
+   depuis conv-967, 48 px sous un bouton de 38 px faisaient deux marches. Meme valeur que le
+   `min-height` de `.conv-new-row` plus bas : changer l'un, c'est changer l'autre. */
 @container convpane (min-width: 171px) {
   :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search {
-    min-height: 48px;
+    min-height: 38px;
     gap: 10px;
     padding: 0 15px;
   }

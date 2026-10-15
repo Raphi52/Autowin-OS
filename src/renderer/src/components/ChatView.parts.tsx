@@ -5,6 +5,7 @@ import { failedActionRunId } from './run-trace-target'
 import { hasConsultableRun, localActionDetail } from './action-detail-target'
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
+import { estArretParStop } from '../../../shared/arret-par-stop'
 import {
   STEP_META,
   groupSubagentSteps,
@@ -393,8 +394,13 @@ function EnveloppeDePrompt({
 /** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
 export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
   const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
+  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC » (conv-966). Le run
+  // l'écrit `failed` — l'étape ne s'est pas terminée — mais son erreur porte le motif du Stop. Sa
+  // pastille rouge « échec » se lisait comme une panne ; le texte de l'arrêt reste affiché dessous.
+  const annule = s.status === 'failed' && estArretParStop(s.error)
+  const echec = s.status === 'failed' && !annule
   return (
-    <div className={`subagent-step${s.status === 'failed' ? ' failed' : ''}`}>
+    <div className={`subagent-step${echec ? ' failed' : annule ? ' cancelled' : ''}`}>
       <div className="row gap2" style={{ fontSize: 11 }}>
         <span>{meta.icon}</span>
         <span className="c-dim" style={{ fontWeight: 600 }}>
@@ -405,7 +411,8 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
         ) : (
           s.provider && <span className="mono c-accent">{s.provider}</span>
         )}
-        {s.status === 'failed' && <span className="subagent-failed-pill">échec</span>}
+        {echec && <span className="subagent-failed-pill">échec</span>}
+        {annule && <span className="subagent-failed-pill is-cancelled">annulé</span>}
         {s.detail && <span className="c-faint">{s.detail}</span>}
         {typeof s.costUsd === 'number' ? (
           <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
@@ -426,7 +433,9 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
           )
         )}
       </div>
-      {s.status === 'failed' && s.error && <div className="subagent-error">{s.error}</div>}
+      {s.status === 'failed' && s.error && (
+        <div className={`subagent-error${annule ? ' is-cancelled' : ''}`}>{s.error}</div>
+      )}
       {s.thinking && (
         <details className="subagent-thinking">
           <summary>Raisonnement</summary>
@@ -757,13 +766,16 @@ export function AssistantActivityGroup({
     const etatDeFin = failed ? 'ko' : interruptedCount > 0 ? 'interrompu' : 'ok'
     const segments: Array<'ok' | 'ko' | 'encours' | 'interrompu'> = pipeline.length
       ? pipeline.map((choix, index) =>
-          choix.ok === false
-            ? 'ko'
-            : index < pipeline.length - 1
-              ? 'ok'
-              : running
-                ? 'encours'
-                : etatDeFin
+          // Une phase coupée par le bouton Stop n'a pas échoué : l'attente grise, pas le rouge.
+          choix.annule
+            ? 'interrompu'
+            : choix.ok === false
+              ? 'ko'
+              : index < pipeline.length - 1
+                ? 'ok'
+                : running
+                  ? 'encours'
+                  : etatDeFin
         )
       : [running ? 'encours' : etatDeFin]
     // Le verdict de chaque phase, dans la langue du rond et de la legende (« interrompu » = attente).

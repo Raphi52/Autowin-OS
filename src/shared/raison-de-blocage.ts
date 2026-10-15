@@ -45,6 +45,11 @@ const SENS_DU_CODE: Record<string, string> = {
   'ignored-deliverables': 'la copie porte un fichier nommé un par un dans .gitignore'
 }
 
+/** Le sens en clair d'un code de blocage (`base-dirty`…), ou `undefined` pour un code inconnu. */
+export function sensDuCodeDeBlocage(code: string | undefined): string | undefined {
+  return code ? SENS_DU_CODE[code.trim()] : undefined
+}
+
 export function raisonDeBlocageIntegration(finalized: unknown): string {
   if (typeof finalized !== 'object' || finalized === null) {
     return 'blocage d’intégration: aucune issue rendue par la finalisation'

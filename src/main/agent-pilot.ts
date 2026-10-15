@@ -213,6 +213,11 @@ export type PilotEventVariant =
       iteration: number
       /** Cible ENTIERE quand `text` l'a coupee pour tenir sur une ligne (cf. `StreamChunk.statusTarget`). */
       data?: { target: string }
+      /**
+       * Arguments et retour d'un outil natif FINI (cf. `StreamChunk.statusDetail`). Hors de `data`
+       * exprès : le journal de tour recopie `data` (`CHAMPS_PILOTE`), seule la trace garde ce détail.
+       */
+      detail?: { envoye: string; retour: string }
     }
   | {
       kind: 'result'
@@ -312,6 +317,8 @@ export interface PilotEvent {
   attachments?: NonNullable<Message['attachments']>
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
   usage?: TurnUsage
+  /** Arguments et retour d'un outil natif fini (variante `provider-status`) : trace seule. */
+  detail?: { envoye: string; retour: string }
 }
 
 /**
@@ -2437,7 +2444,8 @@ export class AgentPilot {
                 text: chunk.status,
                 iteration: i,
                 // Le journal recopie `text` : sans cette cible entiere, il n'y garde qu'un moignon.
-                ...(chunk.statusTarget ? { data: { target: chunk.statusTarget } } : {})
+                ...(chunk.statusTarget ? { data: { target: chunk.statusTarget } } : {}),
+                ...(chunk.statusDetail ? { detail: chunk.statusDetail } : {})
               })
               return
             }

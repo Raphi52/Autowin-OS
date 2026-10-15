@@ -338,14 +338,6 @@
   font-size: 13px;
 }
 
-/* components/FirstRunWizard.css — tailles */
-:root[data-theme^='malvoyant-'] .frw-detail,
-:root[data-theme^='malvoyant-'] .frw-repair,
-:root[data-theme^='malvoyant-'] .frw-optional,
-:root[data-theme^='malvoyant-'] .frw-repair-note {
-  font-size: 13px;
-}
-
 /* components/GraphView.css — tailles */
 :root[data-theme^='malvoyant-'] .graph-stage__heading span,
 :root[data-theme^='malvoyant-'] .graph-mode-switch__icon,
@@ -1087,6 +1079,7 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-detail header,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dt,
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dd,
+:root[data-theme^='malvoyant-'] .workflow-execution-pourquoi,
 :root[data-theme^='malvoyant-'] .workflow-execution-warning,
 :root[data-theme^='malvoyant-'] .workflow-execution-note,
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning > summary,

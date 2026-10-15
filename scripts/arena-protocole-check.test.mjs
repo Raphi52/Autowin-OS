@@ -209,6 +209,76 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     expect('P7 ' + p7.detail).toBe('P7 ok')
   })
 
+  /*
+   * P6 — UN LANCEUR QUI BOUCLE SUR LES REPLIQUES A BIEN UNE COPIE PAR BRAS.
+   *
+   * Mesure du 2026-10-15 (banc « arena-ambigu », conv-961) : `lance.sh` bouclait sur les 12
+   * identifiants de repliques (`for id in $IDS` avec IDS="a-1 ... x-3"), chaque bras dans
+   * `w="$BRAS_DIR/$id"` puis `cd "$w"`. Les 12 traces montraient 12 dossiers de travail differents,
+   * et P6 sortait pourtant RATE « 3 dossier(s) distinct(s) pour 4 bras » : il ne reconnaissait que
+   * la boucle litterale `for <v> in a b c x`. Un faux RATE pousse a reecrire un lanceur qui marchait.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : revenir a la seule regex `for (\w+) in a b c x`.
+   */
+  const lanceurRepliques = (cible) =>
+    [
+      '#!/usr/bin/env bash',
+      'BRAS_DIR="$RACINE/bras"; IDS="a-1 a-2 a-3 b-1 b-2 b-3 c-1 c-2 c-3 x-1 x-2 x-3"',
+      'PARTAGE="$RACINE/commun"',
+      'for id in $IDS; do',
+      '  (',
+      '    b=${id%%-*}',
+      '    w="$BRAS_DIR/$id"',
+      '    mkdir -p "$w"',
+      `    cd "${cible}" || exit 1`,
+      '    claude -p "$(cat "$B/prompt-$b.txt")" > "$B/out-$id.json"',
+      '  ) &',
+      'done',
+      'wait',
+      ''
+    ].join('\n')
+
+  it('P6 : une boucle sur les identifiants de repliques, chaque bras dans son dossier, passe', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'lance.sh'), lanceurRepliques('$w'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect('P6 ' + point(res, 'P6').detail).toBe('P6 ok')
+  })
+
+  it('P6 : la meme boucle sur les repliques, tous les bras dans UN dossier partage, est refusee', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'lance.sh'), lanceurRepliques('$PARTAGE'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P6').ok).toBe(false)
+    expect(point(res, 'P6').detail).toMatch(/1 dossier\(s\) distinct\(s\)/)
+  })
+
+  /*
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : tester le `cd` par `includes(<nom de la variable>)`.
+   * Avec la variable `a`, le dossier commun `$W/partage` contient la lettre « a » : l'ancien
+   * controle concluait « une copie par bras » pour quatre bras qui ecrivaient au meme endroit.
+   */
+  it('P6 : une boucle a b c x dont le cd ne depend PAS de la variable de boucle est refusee', () => {
+    const f = bancConforme()
+    writeFileSync(
+      join(f.bench, 'lance.sh'),
+      [
+        '#!/bin/sh',
+        'W="/tmp/bras"',
+        'for a in a b c x; do',
+        '  (',
+        '    cd "$W/partage" || exit 1',
+        '    claude -p "$(cat prompt-$a.txt)" > out-$a.json',
+        '  ) &',
+        'done',
+        'wait',
+        ''
+      ].join('\n')
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P6').ok).toBe(false)
+  })
+
   it('un banc conforme passe tous les points lisibles', () => {
     const f = bancConforme()
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })

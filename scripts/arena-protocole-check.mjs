@@ -115,6 +115,63 @@ function scriptLancement(bench) {
   return candidats.find((c) => parleDesQuatre(c.texte)) ?? candidats[0]
 }
 
+/** `$nom`, `${nom}` ou `${nom%...}` dans un texte de shell. */
+const refereA = (texte, nom) => new RegExp(String.raw`\$\{?${nom}\b`).test(texte)
+
+/**
+ * P6 — une boucle shell qui couvre les QUATRE bras et dont un `cd` depend de la variable de boucle
+ * donne a chaque bras sa propre copie.
+ *
+ * La liste de la boucle est litterale (`for b in a b c x`, `for id in a-1 ... x-3`) ou portee par une
+ * variable (`for id in $IDS`, avec IDS="a-1 ... x-3" affectee plus haut). Le dossier du `cd` en
+ * depend directement (`cd "$W/$b"`) ou par une variable intermediaire (`w="$BRAS_DIR/$id"` puis
+ * `cd "$w"`). Mesure du 2026-10-15 (banc « arena-ambigu », conv-961) : un lanceur a 12 repliques
+ * (`for id in $IDS` ... `cd "$w"`) avait 12 dossiers de travail distincts, prouves par les traces, et
+ * P6 sortait RATE « 3 dossier(s) distinct(s) pour 4 bras ».
+ * La dependance se lit sur une REFERENCE de variable (`$b`, `${b}`), plus sur `includes(<nom>)` :
+ * avec la variable `a`, un `cd "$W/partage"` commun aux quatre bras contenait la lettre « a » et
+ * passait pour une copie par bras.
+ */
+function cdSuitLaBoucleDesBras(texte, cds) {
+  const affectations = new Map()
+  for (const m of texte.matchAll(
+    /(?:^|[\s;(&])([A-Za-z_]\w*)=(?:"([^"\n]*)"|'([^'\n]*)'|([^\s;&|)]*))/g
+  )) {
+    const valeurs = affectations.get(m[1]) ?? []
+    valeurs.push(m[2] ?? m[3] ?? m[4] ?? '')
+    affectations.set(m[1], valeurs)
+  }
+  const couvreLesBras = (mots) =>
+    BRAS.every((b) => mots.some((mot) => new RegExp(`^${b}(?:[-_]\\w+)?$`, 'i').test(mot)))
+  for (const boucle of texte.matchAll(/\bfor\s+(\w+)\s+in\s+([^;\n]+?)\s*(?:;|\n)\s*do\b/g)) {
+    const [, variable, liste] = boucle
+    // Chaque lecture possible de la liste : les mots litteraux, ou chaque valeur affectee a une
+    // variable citee dans la liste.
+    const mots = liste.split(/\s+/).map((m) => m.replace(/^["']|["']$/g, ''))
+    const lectures = [mots]
+    for (const mot of mots) {
+      const nom = /^\$\{?(\w+)\}?$/.exec(mot)?.[1]
+      for (const valeur of (nom && affectations.get(nom)) || []) lectures.push(valeur.split(/\s+/))
+    }
+    if (!lectures.some(couvreLesBras)) continue
+    // Variables qui DEPENDENT de la variable de boucle, de proche en proche.
+    const dependantes = new Set([variable])
+    let nouvelle = true
+    while (nouvelle) {
+      nouvelle = false
+      for (const [nom, valeurs] of affectations) {
+        if (dependantes.has(nom)) continue
+        if (valeurs.some((v) => [...dependantes].some((d) => refereA(v, d)))) {
+          dependantes.add(nom)
+          nouvelle = true
+        }
+      }
+    }
+    if (cds.some((cible) => [...dependantes].some((d) => refereA(cible, d)))) return true
+  }
+  return false
+}
+
 /**
  * Points verifiables AVANT de lancer les bras : ils ne lisent que le RUN.md et les prompts, donc ils
  * peuvent tous etre controles pendant que le banc ne coute encore rien. Motif (bancs `residus` et
@@ -280,8 +337,7 @@ export function verifierProtocole({
     if (!lancement) return 'aucun script de lancement trouve dans le banc'
     const cds = [...lancement.texte.matchAll(/cd\s+"?([^"\n|&;]+)"?/g)].map((m) => m[1].trim())
     if (!cds.length) return 'aucun changement de dossier : les bras ont pu ecrire au meme endroit'
-    const boucle = /for\s+(\w+)\s+in\s+a\s+b\s+c\s+x/i.exec(lancement.texte)
-    if (boucle && cds.some((c) => c.includes(boucle[1]))) return true
+    if (cdSuitLaBoucleDesBras(lancement.texte, cds)) return true
     const distincts = new Set(cds)
     return distincts.size >= 4 ? true : `${distincts.size} dossier(s) distinct(s) pour 4 bras`
   })

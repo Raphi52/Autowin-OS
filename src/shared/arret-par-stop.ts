@@ -20,8 +20,24 @@ export const MOTIF_STOP_DU_CHAT = "arret demande par l'utilisateur (Stop du chat
  */
 const SIGNATURE_D_ABORT = /\[abort\] [^\n]*? interrompu : ([^\n]*)/
 
-/** Vrai si ce texte d'erreur est celui d'un appel coupé par le bouton Stop du chat. */
+/**
+ * Une ligne par modèle dans l'échec d'un lancement en parallèle (`describeFanoutFailure`,
+ * `main/provider-failure-diagnosis.ts`) : « • claude (claude-opus-5) : <son erreur> ».
+ */
+const PUCE_D_UN_MODELE = /\n• /
+
+function porteLeMotifDuStop(texte: string): boolean {
+  return SIGNATURE_D_ABORT.exec(texte)?.[1]?.trim() === MOTIF_STOP_DU_CHAT
+}
+
+/**
+ * Vrai si ce texte d'erreur est celui d'un appel coupé par le bouton Stop du chat.
+ *
+ * En parallèle, CHAQUE modèle doit avoir été coupé par le Stop : un modèle tombé sur son quota avant
+ * le Stop d'un autre est une vraie panne, que « annulé » cacherait (forme réelle : conv-636).
+ */
 export function estArretParStop(texte: string | undefined): boolean {
-  const motif = SIGNATURE_D_ABORT.exec(texte ?? '')?.[1]
-  return motif?.trim() === MOTIF_STOP_DU_CHAT
+  if (!texte) return false
+  const [, ...modeles] = texte.split(PUCE_D_UN_MODELE)
+  return modeles.length > 0 ? modeles.every(porteLeMotifDuStop) : porteLeMotifDuStop(texte)
 }

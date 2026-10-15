@@ -11,6 +11,7 @@ import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
 import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-store'
 import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
 import { estNiveauProtection } from '../shared/prod-protection'
+import { MOTIF_STOP_DU_CHAT } from '../shared/arret-par-stop'
 import { nomUtilisateurCourant } from './identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
@@ -4361,10 +4362,8 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Pilot chat cancel')
     const conversationId = guardString(rawConversationId, 'conversationId')
     // Stoppe le tour pilote ET le sous-agent en vol rattaché à cette conversation.
-    const orchestrationAborted = bus.abortOrchestration(
-      conversationId,
-      "arret demande par l'utilisateur (Stop du chat)"
-    )
+    // Motif partagé avec le graphe, qui y reconnaît un arrêt voulu et non une panne (conv-966).
+    const orchestrationAborted = bus.abortOrchestration(conversationId, MOTIF_STOP_DU_CHAT)
     const pilotAborted = activeChatTurns.abort(conversationId, 'user')
     return { ok: pilotAborted || orchestrationAborted }
   })

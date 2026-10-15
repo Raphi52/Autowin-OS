@@ -12,9 +12,16 @@ export const APP_DESTINATIONS = [
 ] as const
 
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
-export type AgentStudioSection = 'topology' | 'routing' | 'workflows'
+/**
+ * Routage n'est plus une section d'Agent Studio : il vit dans Settings depuis la demande de conv-963
+ * (2026-10-15, « la view Routage il faut la mettre dans Settings »). Connexion des providers, compte
+ * actif, modèle par défaut : ce sont des REGLAGES de l'application, pas l'atelier des rôles.
+ */
+export type AgentStudioSection = 'topology' | 'workflows'
 export type SettingsSection =
   | 'capabilities'
+  // Routage : connexion des providers, comptes, modèle par défaut (venu d'Agent Studio, conv-963).
+  | 'routing'
   | 'budget'
   | 'behaviour'
   | 'providers'
@@ -78,8 +85,10 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   agents: 'agent-studio',
   roles: 'agent-studio',
   models: 'agent-studio',
-  router: 'agent-studio',
-  routeur: 'agent-studio',
+  router: 'settings',
+  routeur: 'settings',
+  routage: 'settings',
+  routing: 'settings',
   capabilities: 'settings',
   skills: 'settings',
   hooks: 'settings',
@@ -108,7 +117,12 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   agents: { destination: 'agent-studio', section: 'topology' },
   roles: { destination: 'agent-studio', section: 'topology' },
   models: { destination: 'agent-studio', section: 'topology' },
-  router: { destination: 'agent-studio', section: 'routing' },
+  // Routage vit dans Settings (conv-963) : les anciens noms y aboutissent, sans quoi « va sur le
+  // routeur » ouvrirait Agent Studio sur une section qui n'existe plus.
+  router: { destination: 'settings', section: 'routing' },
+  routeur: { destination: 'settings', section: 'routing' },
+  routage: { destination: 'settings', section: 'routing' },
+  routing: { destination: 'settings', section: 'routing' },
   // La vue Workflows est une SECTION d'Agent Studio, pas une destination : sans ces entrées,
   // « va sur Workflows » retombait en silence sur le chat (constaté le 2026-09-17, un agent a cru
   // avoir navigué). Les RUN.md s'y lisent, un agent les adresse aussi par « runs ».
@@ -116,7 +130,6 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   workflow: { destination: 'agent-studio', section: 'workflows' },
   runs: { destination: 'agent-studio', section: 'workflows' },
   run: { destination: 'agent-studio', section: 'workflows' },
-  routeur: { destination: 'agent-studio', section: 'routing' },
   capabilities: { destination: 'settings', section: 'capabilities' },
   skills: { destination: 'settings', section: 'capabilities' },
   hooks: { destination: 'settings', section: 'capabilities' },

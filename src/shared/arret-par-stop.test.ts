@@ -27,11 +27,22 @@ describe('estArretParStop — un appel coupé par le bouton Stop du chat', () =>
     ).toBe(false)
   })
 
+  it('en parallèle, ne dit Stop que si CHAQUE modèle a été coupé par le Stop', () => {
+    const tete = "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie"
+    const coupe = (modele: string) =>
+      `• ${modele} : [abort] ${modele} interrompu : ${MOTIF_STOP_DU_CHAT}\nlast-event=none\nstderr=none`
+    expect(estArretParStop([tete, coupe('claude'), coupe('codex')].join('\n'))).toBe(true)
+    expect(
+      estArretParStop([tete, coupe('claude'), '• codex (gpt-5.6) : usage limit reached'].join('\n'))
+    ).toBe(false)
+  })
+
   it('ne prend pas une citation du motif pour un Stop — il faut la signature de l’émetteur', () => {
     expect(estArretParStop(`Le grep trouve « ${MOTIF_STOP_DU_CHAT} » dans index.ts`)).toBe(false)
     expect(
       estArretParStop(`[abort] claude CLI interrompu : ${MOTIF_STOP_DU_CHAT} puis autre chose`)
     ).toBe(false)
+    expect(estArretParStop(`• codex : quota\n• claude : ${MOTIF_STOP_DU_CHAT}`)).toBe(false)
     expect(estArretParStop(undefined)).toBe(false)
     expect(estArretParStop('')).toBe(false)
   })

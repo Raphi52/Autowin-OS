@@ -1179,7 +1179,7 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
   })
 
   // « je vois fait retenu mais quand je clique dessus je voudrais voir quel fait » (2026-10-12).
-  const avecRemember = (): HarnessTraceEvent[] => [
+  const avecRemember = (genre = 'tool-result', status = 'completed'): HarnessTraceEvent[] => [
     ...structure(),
     trace('retenir', 4, {
       turnId: 'turn-latest',
@@ -1191,20 +1191,29 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
       turnId: 'turn-latest',
       parentId: 'retenir',
       type: 'tool-result',
+      status,
       actor: { id: 'remember', kind: 'tool', label: 'remember' },
-      payloads: [{ kind: 'tool-result', name: 'remember', content: '' }]
+      payloads: [{ kind: genre, name: 'remember', content: '' }]
     })
   ]
 
-  async function ouvrirFaitRetenu(reponse: unknown) {
+  // Un dépôt REFUSÉ est un échec de la commande : la trace range sa réponse en `error`, sur un
+  // résultat `failed` (conv-927). C'est ce cas qui affichait « texte du fait illisible » (conv-966).
+  async function ouvrirFaitRetenu(reponse: unknown, genre = 'tool-result', status = 'completed') {
     const causalTraceCharges = vi.fn().mockResolvedValue({
-      retenu: [{ kind: 'tool-result', name: 'remember', content: JSON.stringify(reponse) }]
+      retenu: [
+        {
+          kind: genre,
+          name: 'remember',
+          content: typeof reponse === 'string' ? reponse : JSON.stringify(reponse)
+        }
+      ]
     })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
         causalTrace: vi.fn(),
-        causalTraceGraphe: vi.fn().mockResolvedValue(avecRemember()),
+        causalTraceGraphe: vi.fn().mockResolvedValue(avecRemember(genre, status)),
         causalTraceCharges
       }
     })
@@ -1225,7 +1234,8 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
     })
 
     expect(causalTraceCharges.mock.calls[0][1]).toEqual(['retenu'])
-    expect(causalTraceCharges.mock.calls[0][2]).toEqual(['tool-result'])
+    // Les réponses en échec aussi, jamais les arguments (`tool-call`).
+    expect(causalTraceCharges.mock.calls[0][2]).toEqual(['tool-result', 'error'])
     const fait = view.querySelector('.workflow-execution-detail [data-execution-fait]')
     expect(fait?.querySelector('summary')?.textContent).toBe('Fait retenu')
     expect(fait?.querySelector('.workflow-execution-fait-titre')?.textContent).toBe(
@@ -1247,6 +1257,82 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
     expect(detail?.querySelector('[data-execution-fait]')).toBeNull()
     expect(detail?.querySelector('[data-execution-fait-refuse]')?.textContent).toBe(
       'Non retenu · refusé localement : le fait semble contenir un jeton'
+    )
+  })
+
+  it('un dépôt en échec montre POURQUOI, au lieu de réclamer le texte du fait', async () => {
+    const { view } = await ouvrirFaitRetenu(
+      { allowed: false, stored: false, reason: 'source invalide : chemin relatif refusé' },
+      'error',
+      'failed'
+    )
+
+    const detail = view.querySelector('.workflow-execution-detail')
+    expect(detail?.querySelector('[data-execution-exchange="fait-illisible"]')).toBeNull()
+    expect(detail?.querySelector('[data-execution-fait-refuse]')?.textContent).toBe(
+      'Non retenu · source invalide : chemin relatif refusé'
+    )
+  })
+
+  // « fais que chaque étape rouge du graphe dise pourquoi elle a échoué » (conv-966) : la cause est
+  // en tête de la fiche, entière, sans avoir à ouvrir le bloc « Erreur » voisin.
+  it('une étape rouge dit pourquoi en tête de sa fiche', async () => {
+    const cause = 'Claude a interrompu l’appel : You’ve hit your session limit · resets 1pm'
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace: vi.fn(),
+        causalTraceGraphe: vi.fn().mockResolvedValue([
+          trace('appel', 1, {
+            turnId: 'turn-latest',
+            type: 'message',
+            channel: 'user',
+            actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+            provider: { id: 'claude', model: 'claude-opus-5-5' },
+            payloads: [{ kind: 'user-message', content: '' }]
+          }),
+          trace('erreur', 2, {
+            turnId: 'turn-latest',
+            parentId: 'appel',
+            type: 'error',
+            status: 'failed',
+            channel: 'internal',
+            // La trace allégée garde l'extrait de la cause d'une étape en échec (`trace-allegee.ts`).
+            payloads: [{ kind: 'error', content: cause }]
+          })
+        ]),
+        causalTraceCharges: vi.fn().mockResolvedValue({})
+      }
+    })
+    const view = await render()
+    await act(async () => {
+      view.querySelector<HTMLButtonElement>('[data-execution-node="appel"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(
+      view.querySelector('.workflow-execution-detail [data-execution-pourquoi]')?.textContent
+    ).toBe(`Pourquoi · ${cause}`)
+  })
+
+  it('un fait refusé par le Brain se dit gardé dans le fil seulement, avec la raison', async () => {
+    const { view } = await ouvrirFaitRetenu(
+      {
+        allowed: true,
+        stored: false,
+        detail: 'refusé par le Brain : likely personal data detected; candidate rejected',
+        fact: { title: 'Dépôt GitHub', body: 'Seule la version courante compte.' }
+      },
+      'error',
+      'failed'
+    )
+
+    const fait = view.querySelector('.workflow-execution-detail [data-execution-fait]')
+    expect(fait?.querySelector('summary')?.textContent).toBe(
+      'Fait retenu · gardé dans ce fil, pas au Brain'
+    )
+    expect(fait?.querySelector('.workflow-execution-fait-issue')?.textContent).toBe(
+      'refusé par le Brain : likely personal data detected; candidate rejected'
     )
   })
 

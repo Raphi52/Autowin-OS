@@ -747,6 +747,49 @@ describe('Orchestrator — flip live worktree', () => {
     })
   })
 
+  // conv-914 (run-68594dd94c08-1) : le sous-agent clean a buté sur le quota, la clôture rouge est
+  // partie avec « Raisons » vide — le graphe ne pouvait rien dire de l'échec.
+  it('une clôture rouge par arrêt du run porte l’erreur qui l’a arrêté', async () => {
+    class PlanteProvider extends CapturingProvider {
+      // eslint-disable-next-line require-yield
+      override async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+        throw new Error('Claude a interrompu l’appel : connexion expirée')
+      }
+    }
+    const provider = new PlanteProvider()
+    const lifecycle: RunLifecycleEvent[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: () => 'C:\\wt\\run-plante',
+        end: () => ({ outcome: 'kept' as const, agentId: 'run-plante' })
+      }
+    })
+
+    await expect(
+      runWithLifecycle(orch, 'modifie le projet', (event) => lifecycle.push(event))
+    ).rejects.toThrow(/connexion expirée/)
+
+    expect(lifecycle.at(-1)).toMatchObject({
+      stage: 'closure',
+      closure: {
+        status: 'red',
+        gateReasons: [
+          expect.stringMatching(
+            /^run arrêté avant le contrôle final : Phase build .*connexion expirée$/
+          )
+        ]
+      }
+    })
+  })
+
   it('N1 — observe le dépôt de base et la clôture, sans événement Git', async () => {
     const lifecycle: RunLifecycleEvent[] = []
     const { orch } = makeOrchestrator({ begin: () => undefined, end: () => undefined })

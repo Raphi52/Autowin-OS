@@ -44,6 +44,16 @@
  *         [--scroll <selecteur CSS>] AMENE la cible dans le cadre avant de declencher (une vue
  *                                    longue cache sa moitie basse : la capture serait verte et
  *                                    montrerait autre chose). Cible absente = echec nomme, code 9.
+ *         [--conversation <id>] [--donnees <racine>] OUVRE CETTE CONVERSATION dans l'instance
+ *                                    cachee (avec --view chat) : elle y est COPIEE avant le demarrage
+ *                                    depuis <racine> (defaut .autowin-data/autowin-os) — stockage,
+ *                                    trace, activite, runs ; jamais turn-journals ni run-state, qui
+ *                                    feraient reprendre un tour ou relancer un run —, ouverte, VERIFIEE
+ *                                    ouverte (code 10 sinon), puis la copie est retiree apres capture.
+ *                                    Refusee dans la fenetre reelle. Voir semer-conversation.mjs.
+ *         [--tour <turnId>]          choisit la demande affichee par le graphe (liste deroulante
+ *                                    `[data-execution-turn-select]`), APRES les --click ; un tour
+ *                                    absent de la liste est un echec nomme (code 9).
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -77,6 +87,12 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
+import {
+  estIdDeConversation,
+  racineDonneesInstance,
+  retirerSemence,
+  semerConversation
+} from './semer-conversation.mjs'
 
 /** Vrai quand ce fichier est LANCE en CLI, faux quand un test l'importe pour ses fonctions pures. */
 const lanceEnCli = Boolean(process.argv[1] && process.argv[1].endsWith('ui-capture.mjs'))
@@ -342,6 +358,36 @@ export const instanceIdUiCapture = (argv, pid) => {
   return explicite && !explicite.startsWith('--') ? explicite : `ui-capture-${pid}`
 }
 
+/**
+ * --conversation <id> : UNE CONVERSATION PRÉCISE, OUVERTE DANS L'INSTANCE CACHÉE (conv-966).
+ *
+ * L'instance cachée démarre vide : la preuve d'un affichage propre à une conversation (le graphe
+ * d'un tour, le fil d'un run) n'y était pas prenable. La conversation est COPIÉE dans l'instance
+ * avant son démarrage (`semer-conversation.mjs`), puis ouverte et VÉRIFIÉE ouverte.
+ *
+ * Refusée dans la fenêtre réelle : là, elle changerait la conversation de l'utilisateur. Rend
+ * `undefined` sans l'option, `{ id }` ou `{ echec }`. Pure.
+ */
+export const demandeDeConversation = (argv) => {
+  const i = argv.indexOf('--conversation')
+  if (i < 0) return undefined
+  const id = argv[i + 1]
+  if (!estIdDeConversation(id) || id.startsWith('--'))
+    return { echec: `conversation-id-invalide(${id ?? ''})` }
+  if (argv.includes('--fenetre-reelle')) return { echec: 'conversation-hors-instance-cachee' }
+  return { id }
+}
+
+/**
+ * Variable posée par le lanceur pour le script qui tourne DANS l'instance : elle atteste que la
+ * conversation y a été copiée. Sans elle (un `--port` pointé à la main sur la fenêtre réelle), la
+ * capture refuse d'ouvrir une conversation.
+ */
+export const ENV_CONVERSATION_SEMEE = 'AUTOWIN_CAPTURE_CONVERSATION_SEMEE'
+
+/** Clé de la conversation rouverte au démarrage (`derniere-conversation.ts`, renderer). */
+export const CLE_DERNIERE_CONVERSATION = 'autowin.chat.derniereConversation'
+
 export const ETATS_CONNUS = ['attention', 'occupe']
 
 export const resoudreEtat = (valeur) => {
@@ -438,19 +484,83 @@ const decouvrirCible = async (port, portImpose) => {
 }
 
 const main = async () => {
+  // --conversation est refusee AVANT toute connexion : dans la fenetre reelle (--fenetre-reelle, ou
+  // un --port donne a la main sans copie attestee), la capture aurait deja navigue chez
+  // l'utilisateur avant que le refus ne tombe.
+  const conversationAuDepart = demandeDeConversation(process.argv.slice(2))
+  if (
+    conversationAuDepart?.echec ||
+    (conversationAuDepart?.id &&
+      !doitPasserParInstanceCachee(process.argv.slice(2)) &&
+      process.env[ENV_CONVERSATION_SEMEE] !== conversationAuDepart.id)
+  ) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: false,
+          echecs: [
+            conversationAuDepart.echec ?? `conversation-non-semee(${conversationAuDepart.id})`
+          ],
+          detail:
+            'une conversation ne s’ouvre que dans une instance cachee ou ui-capture l’a copiee (sans --port ni --fenetre-reelle)'
+        },
+        null,
+        2
+      )
+    )
+    process.exit(10)
+  }
   // `--instance-dediee` : on se relance a l'identique DERRIERE l'enrobage, qui ouvre une instance
   // cachee, nous passe son port, puis l'arrete quoi qu'il arrive. Le code de sortie est le notre.
   if (doitPasserParInstanceCachee(process.argv.slice(2))) {
     const dossierScripts = dirname(fileURLToPath(import.meta.url))
+    const instanceId = instanceIdUiCapture(process.argv.slice(2), process.pid)
+    // --conversation : la conversation est COPIEE dans l'instance AVANT son demarrage, puis la
+    // copie est RETIREE apres la capture (voir `semer-conversation.mjs`).
+    const demande = demandeDeConversation(process.argv.slice(2))
+    const refuser = (echec, detail) => {
+      console.log(
+        JSON.stringify({ ok: false, echecs: [echec], ...(detail ? { detail } : {}) }, null, 2)
+      )
+      process.exit(10)
+    }
+    if (demande?.echec) refuser(demande.echec)
+    let semence
+    let destination
+    if (demande?.id) {
+      const racine = racineDepot()
+      destination = racineDonneesInstance(racine, instanceId)
+      // Une instance deja peuplee (identifiant explicite reutilise) n'est jamais ecrasee.
+      if (existsSync(resolve(destination, 'conversations.json')))
+        refuser(`instance-deja-peuplee(${instanceId})`, destination)
+      const source = resolve(argument('--donnees', resolve(racine, '.autowin-data', 'autowin-os')))
+      semence = semerConversation({ source, destination, id: demande.id })
+      if (!semence.ok) refuser(semence.echec, source)
+      console.error(
+        `[ui-capture] conversation ${demande.id} copiee dans l'instance ${instanceId} : ` +
+          `${semence.ecrits.length} element(s), ${semence.runs} run(s) — turn-journals et run-state exclus`
+      )
+    }
     const { status, error } = spawnSync(
       process.execPath,
       argumentsInstanceDediee(process.argv.slice(2), {
         enrobage: resolve(dossierScripts, 'avec-instance-headless.mjs'),
         script: resolve(dossierScripts, 'ui-capture.mjs'),
-        instanceId: instanceIdUiCapture(process.argv.slice(2), process.pid)
+        instanceId
       }),
-      { stdio: 'inherit', windowsHide: true }
+      {
+        stdio: 'inherit',
+        windowsHide: true,
+        env: demande?.id ? { ...process.env, [ENV_CONVERSATION_SEMEE]: demande.id } : process.env
+      }
     )
+    if (semence?.ok) {
+      const { retires, restants } = retirerSemence(destination, semence)
+      console.error(
+        `[ui-capture] copie de ${demande.id} retiree de l'instance : ${retires.length} element(s)` +
+          (restants.length ? ` — NON retires : ${restants.join(', ')}` : '')
+      )
+    }
     if (error) {
       console.error(`[ui-capture] instance dediee illancable : ${error.message}`)
       process.exit(9)
@@ -723,6 +833,65 @@ const main = async () => {
       adressePage: location.href
     }
   })()`)
+  // --conversation : OUVRIR la conversation copiee, et le VERIFIER sur la page. L'instance la rouvre
+  // seule (c'est la seule, ou la derniere memorisee) ; sinon on memorise son identifiant et on
+  // recharge. Le verdict exige `data-active-conversation-id` egal a l'identifiant demande : une
+  // capture d'une autre conversation ne peut pas passer pour la bonne.
+  const conversationDemandee = demandeDeConversation(process.argv.slice(2))
+  let conversationOuverte
+  if (conversationDemandee) {
+    const refuser = async (echecs, extra = {}) => {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs, vue, ...extra }, 10)
+    }
+    if (conversationDemandee.echec) await refuser([conversationDemandee.echec])
+    const id = conversationDemandee.id
+    if (process.env[ENV_CONVERSATION_SEMEE] !== id)
+      await refuser([`conversation-non-semee(${id})`], {
+        detail:
+          'une conversation ne s’ouvre que dans une instance cachee ou ui-capture l’a copiee (sans --port ni --fenetre-reelle)'
+      })
+    if (vue !== 'chat') await refuser([`conversation-exige-vue-chat(${vue})`])
+    const affichee = () =>
+      evaluer(
+        `document.querySelector('[data-active-conversation-id]')?.getAttribute('data-active-conversation-id') || null`
+      ).catch(() => null)
+    const attendreConversation = async (delaiMs) => {
+      const debut = Date.now()
+      let lue = await affichee()
+      while (lue !== id && Date.now() - debut < delaiMs) {
+        await new Promise((r) => setTimeout(r, 300))
+        lue = await affichee()
+      }
+      return lue
+    }
+    let lue = await attendreConversation(15_000)
+    if (lue !== id) {
+      await evaluer(`(() => {
+        localStorage.setItem(${JSON.stringify(CLE_DERNIERE_CONVERSATION)}, ${JSON.stringify(id)})
+        setTimeout(() => location.reload(), 50)
+        return true
+      })()`).catch(() => false)
+      await new Promise((r) => setTimeout(r, 1_500))
+      for (let essai = 0; essai < 60; essai++) {
+        const pret = await evaluer(
+          `Boolean(document.querySelector('[data-testid="nav-${vue}"]'))`
+        ).catch(() => false)
+        if (pret) break
+        await new Promise((r) => setTimeout(r, 500))
+      }
+      await evaluer(
+        `(() => { document.querySelector('[data-testid="nav-${vue}"]')?.click(); return true })()`
+      ).catch(() => false)
+      lue = await attendreConversation(30_000)
+    }
+    if (lue !== id)
+      await refuser([`conversation-non-ouverte(${id})`], { conversationAffichee: lue })
+    conversationOuverte = { id, ouverte: true }
+    await new Promise((r) => setTimeout(r, 800))
+  }
+
   let mesuresDom = await mesurerDom()
 
   // Ce que le harnais ne savait pas faire, et qui a coute deux runs le 2026-08-26 (conv-1420) : un
@@ -810,6 +979,51 @@ const main = async () => {
     if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
     }
+  }
+
+  // --tour <id> : LA DEMANDE AFFICHEE PAR LE GRAPHE (conv-966). Le graphe projette le DERNIER tour ;
+  // un tour plus ancien se choisit dans une liste deroulante, qu'un clic ne regle pas. La valeur est
+  // posee comme React l'attend (setter natif + evenement `change`), puis RELUE : un tour absent de
+  // la liste est un echec nomme, jamais une capture du dernier tour presentee comme celle demandee.
+  const tourDemande = argument('--tour')
+  let tourChoisi
+  if (tourDemande) {
+    const choix = await evaluer(`(() => {
+      const liste = document.querySelector('[data-execution-turn-select]')
+      if (!liste) return { echec: 'selecteur-de-tour-absent' }
+      const valeurs = [...liste.options].map((option) => option.value)
+      if (!valeurs.includes(${JSON.stringify(tourDemande)})) return { echec: 'tour-inconnu', tours: valeurs.slice(0, 20) }
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(liste, ${JSON.stringify(tourDemande)})
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+      return { ok: true }
+    })()`)
+    if (!choix?.ok) {
+      await restaurerVue()
+      socket.close()
+      rendre(
+        {
+          ok: false,
+          echecs: [`tour-non-choisi(${choix?.echec ?? 'inconnu'})`],
+          vue,
+          ...(choix?.tours ? { toursDisponibles: choix.tours } : {})
+        },
+        9
+      )
+    }
+    let relu
+    for (let essai = 0; essai < 25; essai++) {
+      await new Promise((r) => setTimeout(r, 200))
+      relu = await evaluer(`document.querySelector('[data-execution-turn-select]')?.value ?? null`)
+      if (relu === tourDemande) break
+    }
+    if (relu !== tourDemande) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`tour-non-applique(${tourDemande})`], vue, tourLu: relu }, 9)
+    }
+    tourChoisi = tourDemande
+    await new Promise((r) => setTimeout(r, 1_000))
+    mesuresDom = await mesurerDom()
   }
 
   // --scroll : AMENER LA PREUVE DANS LE CADRE.
@@ -1072,7 +1286,9 @@ const main = async () => {
     ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
     ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
-    ...(retraits !== undefined ? { retraits } : {})
+    ...(retraits !== undefined ? { retraits } : {}),
+    ...(conversationOuverte ? { conversation: conversationOuverte } : {}),
+    ...(tourChoisi ? { tour: tourChoisi } : {})
   }
   const verdict = verdictCapture(mesures)
   rendre(

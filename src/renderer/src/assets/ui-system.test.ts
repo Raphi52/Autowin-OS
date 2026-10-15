@@ -249,8 +249,11 @@ describe('Autowin UI contract', () => {
   })
 
   it('uses ModuleHeader in every active product view', () => {
+    // ChatView n'a PLUS de titre (decision utilisateur du 2026-10-15 : « Conversations » prenait une
+    // ligne pour rien). Garder ModuleHeader la-bas exigerait un titre cache juste pour ce test ; le
+    // contrat devient : aucun titre fait main dans ChatView — s'il revient, il passe par ModuleHeader.
+    expect(component('ChatView.tsx')).not.toMatch(/<h1[\s>]/)
     for (const file of [
-      'ChatView.tsx',
       'GraphView.tsx',
       'ObservatoryView.tsx',
       'AgentsTopologyView.tsx',

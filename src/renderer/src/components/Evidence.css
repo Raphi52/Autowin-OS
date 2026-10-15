@@ -118,6 +118,20 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* Sous-agent coupé par le bouton Stop : un arrêt VOULU, pas une panne. Gris comme dans le graphe
+   (conv-191, conv-966) ; même forme que la pastille d'échec, le texte de l'arrêt reste lisible. */
+.subagent-step.cancelled {
+  border-left: 2px solid var(--text-faint);
+  padding-left: 8px;
+}
+.subagent-failed-pill.is-cancelled {
+  background: var(--line);
+  color: var(--text-dim);
+}
+.subagent-error.is-cancelled {
+  background: var(--bg-inset);
+  color: var(--text-dim);
+}
 .subagent-thinking {
   margin-top: 4px;
 }

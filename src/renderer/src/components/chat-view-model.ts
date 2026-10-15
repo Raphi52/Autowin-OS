@@ -21,6 +21,7 @@ import {
 } from './veille-candidats-message'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import { SKILL_ALIASES } from '../../../shared/skill-aliases'
+import { estArretParStop } from '../../../shared/arret-par-stop'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
   authoritativeOrchestrationClosureSpan,
@@ -394,7 +395,11 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
       : step.text || step.error || (step.step === 'exec' ? undefined : step.detail)
   const raisonnement = step.thinking?.trim() || undefined
   if (!prompt && !rendu && !raisonnement) return parts
-  const ok = step.status !== 'failed'
+  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP N'A PAS ÉCHOUÉ (conv-966) : le run l'écrit `failed`, mais
+  // son erreur porte le motif du Stop. `ok: false` peignait sa phase en rouge, comme une panne ; il
+  // est « annulé », et son texte d'arrêt reste son rendu.
+  const annule = step.status === 'failed' && estArretParStop(step.error)
+  const ok = annule ? undefined : step.status !== 'failed'
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
@@ -418,14 +423,17 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
        * coupe les phrases tous les trois mots. Celui de l'etape ne sert que s'il n'est rien arrive.
        */
       ...(!avant.raisonnement && raisonnement ? { raisonnement } : {}),
-      ok
+      ok,
+      // Absent hors d'un Stop : une ligne ordinaire garde exactement sa forme d'avant.
+      annule: annule || undefined
     }
     // RIEN de nouveau a dire => meme reference, pour ne pas re-rendre le fil a chaque battement.
     if (
       apres.prompt === avant.prompt &&
       apres.outcome === avant.outcome &&
       apres.raisonnement === avant.raisonnement &&
-      apres.ok === avant.ok
+      apres.ok === avant.ok &&
+      Boolean(apres.annule) === Boolean(avant.annule)
     ) {
       return parts
     }

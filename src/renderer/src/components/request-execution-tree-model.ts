@@ -6,6 +6,8 @@ import type {
 import { FRONTIERE_DEMANDE_RECUE } from '../../../shared/trace-tour-chat'
 import { roleLabel, stepTitle, toolNameOf, toolTitle } from './execution-step-titles'
 import { extractHumanMessage } from './human-message'
+import { causeNommee, raisonDeLaCloture, raisonDuGit } from './raison-d-echec'
+import { estArretParStop } from '../../../shared/arret-par-stop'
 
 /** Charges qu'un nœud d'étape garde pour son détail : pensée, prompt envoyé, retour. */
 export const NODE_PAYLOAD_KINDS = new Set([
@@ -326,6 +328,24 @@ function failureCause(sources: HarnessTimelineEvent[]): string | undefined {
   return undefined
 }
 
+/**
+ * L'ISSUE AFFICHÉE D'UNE ÉTAPE : son statut et, si elle a échoué, pourquoi.
+ *
+ * UN SOUS-AGENT ARRÊTÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC » (conv-966). La trace
+ * l'écrit `failed` — l'étape ne s'est pas terminée — mais sa cause porte le motif du Stop
+ * (`estArretParStop`). Rouge, avec « INTERROMPU » en ligne d'échec, il se lisait comme une panne
+ * (conv-955, sous-agent clean). Annulé, il reprend le gris déjà prévu pour un arrêt voulu
+ * (conv-191) ; le texte de l'arrêt reste lisible au clic, dans son retour.
+ */
+function issueDeLEtape(
+  statut: HarnessTimelineEvent['status'],
+  sources: HarnessTimelineEvent[]
+): { status: HarnessTimelineEvent['status']; failure?: string } {
+  if (statut !== 'failed') return { status: statut }
+  const failure = failureCause(sources)
+  return estArretParStop(failure) ? { status: 'cancelled' } : { status: statut, failure }
+}
+
 function workspaceId(path: string): string {
   return `workspace:base:${encodeURIComponent(path.toLowerCase())}`
 }
@@ -582,8 +602,7 @@ function projectRunExecutions(
       const payloadSources = [
         ...new Map([...ordered, ...grouped, ...linked].map((event) => [event.id, event])).values()
       ].sort(eventOrder)
-      const status = terminal?.status ?? latest.status
-      const failure = status === 'failed' ? failureCause(payloadSources) : undefined
+      const { status, failure } = issueDeLEtape(terminal?.status ?? latest.status, payloadSources)
       const agent: HarnessTimelineEvent = {
         ...latest,
         id: `agent:${runId}:${attemptId}`,
@@ -616,6 +635,23 @@ function projectRunExecutions(
       events.push(agent)
     }
 
+    // UNE PHASE ROUGE L'EST PARCE QU'UN DE SES SOUS-AGENTS A ÉCHOUÉ (conv-966) : « skill · clean »
+    // ne disait que « alias de phase ». Le dernier sous-agent en échec de la phase dit pourquoi.
+    for (const [phase, skill] of skillByPhase) {
+      if (skill.status !== 'failed' || !skill.display) continue
+      const agentsDeLaPhase = projectedAgents.filter((agent) => agent.execution?.phase === phase)
+      const echec = [...agentsDeLaPhase].reverse().find((agent) => agent.status === 'failed')
+      // Une phase dont le seul arrêt est un Stop n'a pas échoué : elle est annulée, comme lui.
+      if (!echec && agentsDeLaPhase.some((agent) => agent.status === 'cancelled')) {
+        skill.status = 'cancelled'
+        continue
+      }
+      skill.display = {
+        ...skill.display,
+        failure: causeNommee(echec?.display?.title, echec?.display?.failure)
+      }
+    }
+
     const gitFact = [...runEvents].reverse().find((event) => event.run?.stage === 'git')
     let gitNode: HarnessTimelineEvent | undefined
     if (gitFact?.run?.stage === 'git' && workspace.mode === 'worktree') {
@@ -624,6 +660,8 @@ function projectRunExecutions(
       const parentId =
         completedAgents.length === 1 ? completedAgents[0].id : (fallbackSkill?.id ?? runWorkspaceId)
       const git = gitFact.run.git
+      // « Cause : base-dirty » ne disait rien : le code est traduit, les fichiers nommés (conv-966).
+      const failure = raisonDuGit(git)
       gitNode = {
         id: `git:${runId}`,
         parentId,
@@ -640,6 +678,7 @@ function projectRunExecutions(
         display: {
           kind: 'git',
           title: 'Git du run',
+          ...(failure ? { failure } : {}),
           runId,
           git,
           observedEventIds: [gitFact.id],
@@ -659,6 +698,23 @@ function projectRunExecutions(
       closureFact?.run?.stage === 'closure'
         ? closureFact.run.closure
         : { status: 'open' as const, totalDurationMs: 0, totalCostUsd: 0 }
+    // UNE CLÔTURE ROUGE DIT POURQUOI, même quand le run s'est arrêté AVANT le contrôle final : ses
+    // « Raisons » restaient vides (conv-914, conv-916 : quota du sous-agent). Les traces écrites
+    // depuis le 2026-10-15 portent l'erreur d'arrêt (`raisonsDArretDuRun`, orchestrator.ts) ; les
+    // plus anciennes la retrouvent ici, sur la publication refusée ou l'étape en échec.
+    const etapeEnEchec = [...projectedAgents].reverse().find((agent) => agent.status === 'failed')
+    const etapeAnnulee = [...projectedAgents]
+      .reverse()
+      .find((agent) => agent.status === 'cancelled')
+    const closureFailure = raisonDeLaCloture(closure, {
+      ...(gitNode?.display?.failure ? { git: gitNode.display.failure } : {}),
+      ...(etapeEnEchec
+        ? {
+            etapeEnEchec: causeNommee(etapeEnEchec.display?.title, etapeEnEchec.display?.failure)
+          }
+        : {}),
+      ...(etapeAnnulee?.display?.title ? { etapeArreteeParStop: etapeAnnulee.display.title } : {})
+    })
     const fallbackSkill = [...skillByPhase.values()].at(-1)
     const closureParent =
       gitNode?.id ??
@@ -688,6 +744,7 @@ function projectRunExecutions(
       display: {
         kind: 'closure',
         title: 'Clôture du run',
+        ...(closureFailure ? { failure: closureFailure } : {}),
         runId,
         closure,
         observedEventIds: closureFacts.map((event) => event.id),
@@ -745,6 +802,9 @@ function runLauncherNode(
     .filter((ms): ms is number => ms != null && Number.isFinite(ms))
   const first = calls[0]
   const allFailed = closings.every((event) => event?.kind === 'error' && event.status === 'failed')
+  const failure = allFailed
+    ? failureCause(closings.filter((event): event is HarnessTimelineEvent => Boolean(event)))
+    : undefined
   return {
     ...first,
     id: `request:${turn.id}:orchestrateur`,
@@ -755,6 +815,7 @@ function runLauncherNode(
     display: {
       kind: 'agent',
       title: agentTitle(first),
+      ...(failure ? { failure } : {}),
       observedEventIds: calls.map((event) => event.id),
       payloadEventIds: calls.map((event) => event.id),
       workflow: 'autowin'
@@ -782,6 +843,12 @@ function withRequestTotals(
         : agentBlocks.length > 0 && agentBlocks.every((event) => event.status === 'failed')
           ? 'failed'
           : root.status
+  // La demande échoue parce que ses appels au modèle ont échoué : le DERNIER dit pourquoi.
+  const dernierEchec = [...agentBlocks].reverse().find((event) => event.status === 'failed')
+  const failure =
+    status === 'failed'
+      ? causeNommee(dernierEchec?.display?.title, dernierEchec?.display?.failure)
+      : undefined
   return {
     ...root,
     status,
@@ -791,6 +858,7 @@ function withRequestTotals(
     ...(supervisor?.costUsd != null ? { costUsd: supervisor.costUsd } : {}),
     display: {
       ...(root.display as NonNullable<HarnessTimelineEvent['display']>),
+      ...(failure ? { failure } : {}),
       observedEventIds: supervisor ? [supervisor.id] : []
     }
   }
@@ -915,11 +983,18 @@ export function projectLatestRequestExecution(
     // d'une réponse n'est pas un échec.
     const lastClosing = closings[0]
     const callFailed = lastClosing?.kind === 'error' && lastClosing.status === 'failed'
+    // POURQUOI L'APPEL A ÉCHOUÉ (conv-966) : la cause vit dans l'« Erreur » qui le clôt, un bloc à
+    // part ; le bloc rouge « Orchestrateur » ne la disait pas. `closings` va du plus récent au plus
+    // ancien, `failureCause` attend l'ordre du temps. Un arrêt par Stop y devient « annulé ».
+    const { status, failure } = issueDeLEtape(
+      terminal?.status ?? (callFailed ? 'failed' : event.status),
+      [event, ...[...closings].reverse()]
+    )
     return {
       ...event,
       provider: terminal?.provider ?? event.provider,
       model: terminal?.model ?? event.model,
-      status: terminal?.status ?? (callFailed ? 'failed' : event.status),
+      status,
       durationMs: terminal?.durationMs ?? event.durationMs ?? measuredResponse?.durationMs,
       // LA DÉLIBÉRATION DU SOUS-AGENT SURVIT À L'ABSORPTION.
       //
@@ -937,6 +1012,7 @@ export function projectLatestRequestExecution(
       display: {
         kind: event.kind === 'gate' || rawActorKind === 'system' ? 'event' : 'agent',
         title: agentTitle(event),
+        ...(failure ? { failure } : {}),
         observedEventIds: [event.id, ...grouped.map((candidate) => candidate.id)],
         // Mêmes sources, même ordre que `payloads` ci-dessus : le détail relu au clic est identique.
         payloadEventIds: [event.id, ...absorbed.map((candidate) => candidate.id)],
