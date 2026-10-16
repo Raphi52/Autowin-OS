@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
 import { messageMoteurPerime } from '../../shared/moteur-perime'
 import { basculerVue } from './transition-de-vue'
+import { jouerEntreeCascade } from './entree-cascade'
 
 // Gravés au build par `electron.vite.config.ts` (remplacement littéral Vite). Hors build (tests
 // unitaires happy-dom, où `define` ne s'applique pas), ils sont indéfinis → repli lisible.
@@ -270,8 +271,22 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     tabAffiche.current = tab
   }, [tab])
+  // LA CASCADE D'ENTREE (conv-987, 2026-10-16) : a chaque changement de vue, ses blocs entrent l'un
+  // apres l'autre (entree-cascade.ts). Effet de MISE EN PAGE : il s'execute dans le `flushSync` de la
+  // bascule, donc avant que la transition prenne l'image de la nouvelle vue — aucun bloc ne s'y montre
+  // a sa place finale. Rien a l'ouverture de l'app : l'entree est demandee « quand je change de vue ».
+  // Comparer a l'onglet precedent (et non un drapeau « premier rendu ») tient aussi sous le double
+  // appel des effets du mode strict.
+  const tabEntre = useRef(tab)
+  useLayoutEffect(() => {
+    if (tabEntre.current === tab) return
+    tabEntre.current = tab
+    const vue = document.querySelector('.main > .view-slot.is-active > *')
+    if (vue) jouerEntreeCascade(vue)
+  }, [tab])
   const activateTab = useCallback((nextTab: Tab): void => {
-    // Fondu de la page et surlignage du menu qui glisse (conv-981) ; bascule directe sans l'API.
+    // Surlignage du menu qui glisse (conv-981) ; bascule directe sans l'API. L'entree des blocs de
+    // la vue est jouee par l'effet de mise en page ci-dessus (conv-987).
     basculerVue(document, nextTab === tabAffiche.current, () => {
       setVisitedTabs((visited) => {
         if (visited.has(nextTab)) return visited

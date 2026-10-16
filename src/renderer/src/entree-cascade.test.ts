@@ -4,13 +4,17 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  ATTRIBUT_CHANFREIN,
   ATTRIBUT_ENTREE,
+  DUREE_CHANFREIN_MS,
+  NOM_ANIMATION_CHANFREIN,
   DUREE_MS,
   NOM_ANIMATION,
   PAS_MS,
   RANG_MAX,
   SECOURS_MS,
   blocsDeCascade,
+  marquerSurfacesChanfrein,
   jouerEntreeCascade
 } from './entree-cascade'
 
@@ -229,5 +233,120 @@ describe('jouerEntreeCascade', () => {
     jouerEntreeCascade(b)
     expect(blocA.hasAttribute(ATTRIBUT_ENTREE)).toBe(false)
     expect(blocB.hasAttribute(ATTRIBUT_ENTREE)).toBe(true)
+  })
+})
+
+/**
+ * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, variante « 2 · Elan », 1 s). Le module
+ * marque les cadres coupes de la vue ; le THEME decide (son animation est l'inscription). Seul le
+ * CADRE entre : le texte est la tout de suite (retour utilisateur du 16/10 apres la livraison :
+ * « le texte doit etre la instantanement, l'animation concerne les box »).
+ */
+describe('cadres a chanfrein', () => {
+  /** L'Accueil tel que mesure : plaque du titre dans l'en-tete, puis une tuile (titre + panneau). */
+  function accueil(): { racine: Element; trouver: (classe: string) => Element } {
+    const racine = poser(document.createElement('div'), {
+      top: 0,
+      left: 0,
+      width: 600,
+      height: 622
+    })
+    racine.className = 'home-view'
+    document.body.appendChild(racine)
+    const entete = el(racine, 'home-view__header', { top: 16, left: 0, width: 600, height: 109 })
+    const plaque = el(entete, 'home-view__masthead', { top: 16, left: 0, width: 364, height: 109 })
+    el(plaque, 'ligne', { top: 26, left: 14, width: 334, height: 26 })
+    el(plaque, 'texte', { top: 57, left: 14, width: 334, height: 56 })
+    const tuile = el(racine, 'home-tile', { top: 141, left: 0, width: 280, height: 116 }, 'section')
+    el(tuile, 'home-tile__label', { top: 141, left: 0, width: 280, height: 24 })
+    const panneau = el(tuile, 'home-tile__panel', { top: 165, left: 0, width: 280, height: 92 })
+    el(panneau, 'home-tile__scroll', { top: 174, left: 7, width: 266, height: 74 })
+    return { racine, trouver: (classe) => racine.querySelector(`.${classe}`) as Element }
+  }
+  const nomme =
+    (n: string): ((e: Element) => boolean) =>
+    (e) =>
+      e.className === n
+
+  it('ne garde que les cadres que le theme anime, et ne laisse aucune trace sur les autres', () => {
+    const { racine, trouver } = accueil()
+    const gardes = marquerSurfacesChanfrein(racine, nomme('home-tile__panel'))
+    expect(gardes).toEqual([trouver('home-tile__panel')])
+    expect(trouver('home-tile__panel').hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    expect(trouver('home-view__masthead').hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+    expect(
+      (trouver('home-view__masthead') as HTMLElement).style.getPropertyValue('--entree-rang')
+    ).toBe('')
+  })
+
+  it('sans theme a chanfrein (happy-dom : aucune animation), la cascade reste celle de toujours', () => {
+    const { racine, trouver } = accueil()
+    jouerEntreeCascade(racine)
+    expect(trouver('home-tile').hasAttribute(ATTRIBUT_ENTREE)).toBe(true)
+    expect(racine.querySelectorAll(`[${ATTRIBUT_CHANFREIN}]`)).toHaveLength(0)
+  })
+
+  it("seuls les cadres entrent : aucun bloc de texte n'est marque, il est la tout de suite", () => {
+    const { racine, trouver } = accueil()
+    jouerEntreeCascade(racine, () => true)
+    const plaque = trouver('home-view__masthead') as HTMLElement
+    const panneau = trouver('home-tile__panel') as HTMLElement
+    expect(plaque.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    expect([plaque, panneau].map((s) => s.style.getPropertyValue('--entree-rang'))).toEqual([
+      '0',
+      '1'
+    ])
+    // Ni la tuile, ni son titre, ni la plaque, ni le contenu des cadres ne montent.
+    expect(racine.querySelectorAll(`[${ATTRIBUT_ENTREE}]`)).toHaveLength(0)
+    for (const c of ['ligne', 'texte', 'home-tile__label', 'home-tile__scroll']) {
+      expect((trouver(c) as HTMLElement).style.getPropertyValue('--entree-rang'), c).toBe('')
+    }
+  })
+
+  it('libere un cadre a la fin de SON dessin, jamais sur la fin de la montee d un bloc', () => {
+    vi.useFakeTimers()
+    const { racine, trouver } = accueil()
+    jouerEntreeCascade(racine, () => true)
+    const panneau = trouver('home-tile__panel')
+    const finir = (cible: Element, nom: string): void => {
+      const evenement = new Event('animationend', { bubbles: true })
+      Object.defineProperty(evenement, 'animationName', { value: nom })
+      cible.dispatchEvent(evenement)
+    }
+    finir(panneau, NOM_ANIMATION)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    finir(panneau, NOM_ANIMATION_CHANFREIN)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+    expect((panneau as HTMLElement).style.getPropertyValue('--entree-rang')).toBe('')
+    // La plaque, elle, attend la fin de SON dessin (ou le secours).
+    expect(trouver('home-view__masthead').hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    vi.advanceTimersByTime(SECOURS_MS)
+    expect(racine.querySelectorAll(`[${ATTRIBUT_ENTREE}], [${ATTRIBUT_CHANFREIN}]`)).toHaveLength(0)
+  })
+
+  it('app-shell.css porte le minutage de l Elan : 1 s cote theme, coins a 10 %, traits a 65 %', () => {
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'assets/app-shell.css'),
+      'utf8'
+    )
+    const theme = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'assets/theme-nebuleuse-verre.css'),
+      'utf8'
+    )
+    expect(theme).toContain(
+      `animation: ${NOM_ANIMATION_CHANFREIN} ${DUREE_CHANFREIN_MS}ms linear both;`
+    )
+    const cles = css.match(/@keyframes entree-chanfrein \{([\s\S]*?)\n\}/)?.[1] ?? ''
+    expect(cles).toMatch(
+      /10% \{\s*--ch-coin: 1;\s*--ch-trait: 0;\s*animation-timing-function: cubic-bezier\(0\.12, 0\.75, 0\.2, 1\);/
+    )
+    expect(cles).toMatch(/65% \{\s*--ch-trait: 1;/)
+    for (const p of ['coin', 'trait', 'trait-a', 'contour', 'fond', 'lum']) {
+      expect(css, p).toMatch(new RegExp(`@property --ch-${p} \\{[^}]*inherits: false;`))
+    }
+    // Le texte n'attend plus l'elan des traits : plus aucun decalage du contenu.
+    expect(css).toContain('animation-delay: calc(var(--entree-rang, 0) * 40ms);')
+    expect(css).not.toContain('--entree-decalage')
   })
 })

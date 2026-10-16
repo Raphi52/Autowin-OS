@@ -459,10 +459,14 @@ function recolorerValeurClair(valeur, role, garder) {
  */
 const CLAIR_REMPLACEMENTS = [
   // Satin de la page : nacre #f8f7fb, reflets a +7 / -4 niveaux (le noir : #080808 et #222222).
+  // Ses quatre teintes sont NOMMEES depuis conv-987 (l'entree des cadres les reprend une a une) :
+  // a 0 %, 18 %, 42/48/80 % et 64 %.
   [
-    '#0c0c0c 0%, #222222 18%, #080808 42%, #080808 48%, #1a1a1a 64%, #080808 80%;',
-    '#f8f7fb 0%, #ffffff 18%, #f5f4f9 42%, #f5f4f9 48%, #fcfbfe 64%, #f5f4f9 80%;'
+    '--nv-satin-a: #0c0c0c;\n  --nv-satin-b: #222222;\n  --nv-satin-c: #080808;\n  --nv-satin-d: #1a1a1a;',
+    '--nv-satin-a: #f8f7fb;\n  --nv-satin-b: #ffffff;\n  --nv-satin-c: #f5f4f9;\n  --nv-satin-d: #fcfbfe;'
   ],
+  // Lumiere de l'entree des cadres (conv-987) : la meme nacre que le halo de la souris, ci-dessous.
+  ['--nv-entree-lumiere: rgba(255, 255, 255, 0.17);', '--nv-entree-lumiere: rgba(255, 255, 255, 0.97);'],
   // Lumiere de la souris : un blanc a 13 % ne se voit pas sur la nacre ; le halo du /draft
   // (« Halo nacre ») part de 97 %.
   ['--nv-lumiere-couleur: rgba(255, 255, 255, 0.13);', '--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);'],
@@ -508,6 +512,20 @@ const COMPLEMENT_CLAIR = `
    Pose en premiere couche du fond des panneaux (voir genererMainClair). */
 :root[data-theme='${CLAIR_ID}'] {
   --nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);
+}
+/* L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16) : pendant l'entree, le lisere se pose AVEC
+   le satin (\`--ch-fond\`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
+   flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
+   teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
+:root[data-theme='${CLAIR_ID}'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
+:root[data-theme='${CLAIR_ID}'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+  --nv-holo-lisere: linear-gradient(
+    90deg,
+    color-mix(in srgb, #3c6eeb calc(var(--ch-fond) * 100%), transparent),
+    color-mix(in srgb, #9b8cff calc(var(--ch-fond) * 100%), transparent) 35%,
+    color-mix(in srgb, #e63ca0 calc(var(--ch-fond) * 100%), transparent) 70%,
+    color-mix(in srgb, #cfd6e4 calc(var(--ch-fond) * 100%), transparent)
+  );
 }
 /* La bulle de l'utilisateur : le degrade du noir, rose assombri (#d02b8c) pour que le blanc dessus
    passe 4,5:1 sur toute la bulle (4,54:1 sur le bleu, 4,77:1 sur le rose). La regle de

@@ -181,7 +181,13 @@ describe('theme Holographique blanc', () => {
 
   /* Ce que l'utilisateur a choisi sur maquette (conv-212). */
   it('« Le plus blanc » : satin nacre #f8f7fb, page #f6f5f9 unie', () => {
-    expect(css).toContain('#f8f7fb 0%, #ffffff 18%')
+    // Teintes NOMMEES depuis conv-987 (l'entree des cadres les reprend une a une) : 0 %, 18 %,
+    // 42/48/80 % et 64 % du satin.
+    expect(css).toContain('--nv-satin-a: #f8f7fb;')
+    expect(css).toContain('--nv-satin-b: #ffffff;')
+    expect(css).toContain('--nv-satin-c: #f5f4f9;')
+    expect(css).toContain('--nv-satin-d: #fcfbfe;')
+    expect(css).toContain('--nv-entree-lumiere: rgba(255, 255, 255, 0.97);')
     expect(css).toMatch(new RegExp(`${PREFIXE.replace(/[[\]]/g, '\\$&')} body \\{\\s*background: #f6f5f9;`))
   })
   it('« Feuille holo » : coins bleu et rose, lisere irise en haut des panneaux', () => {
@@ -189,6 +195,18 @@ describe('theme Holographique blanc', () => {
     expect(css).toContain('--nv-chanfrein-bas: #e63ca0;')
     expect(css).toContain('--nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);')
     expect(css.match(/var\(--nv-holo-lisere\) left top \/ 100% 3px no-repeat/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+  })
+  /* conv-987 (2026-10-16, capture) : pendant l'entree des cadres a chanfrein, le lisere flottait seul
+     en haut de cadres encore vides. Il se pose desormais avec le satin, dans les MEMES teintes que le
+     lisere de repos (sinon il sauterait a la fin de l'entree). */
+  it('pose le lisere avec le satin pendant l entree des cadres, dans ses teintes de repos', () => {
+    const debut = css.indexOf(`${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],\n${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {\n  --nv-holo-lisere:`)
+    expect(debut).toBeGreaterThan(-1)
+    const entree = css.slice(debut, css.indexOf('}', debut))
+    const teintes = [...entree.matchAll(/color-mix\(in srgb, (#[0-9a-f]{6}) calc\(var\(--ch-fond\) \* 100%\), transparent\)( \d+%)?/g)].map(
+      (m) => `${m[1]}${m[2] ?? ''}`
+    )
+    expect(teintes.join(', ')).toBe('#3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4')
   })
   it('« Halo nacre » : la lumiere de la souris est un blanc a 97 %, le neon Brume entoure la bulle', () => {
     expect(css).toContain('--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);')

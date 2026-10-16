@@ -321,8 +321,8 @@
 }
 
 /* LE PASSAGE D'UNE VUE A L'AUTRE (conv-981, 2026-10-15), par `document.startViewTransition`
-   (transition-de-vue.ts) : la page se fond de l'ancienne vue a la nouvelle, et le surlignage du
-   menu GLISSE vers l'onglet choisi. Le nom n'existe que PENDANT la transition (classe posee sur
+   (transition-de-vue.ts) : le surlignage du menu GLISSE vers l'onglet choisi (la page, elle, ne se
+   fond plus depuis le 16/10 : ses blocs entrent en cascade, voir plus bas). Le nom n'existe que PENDANT la transition (classe posee sur
    <html>) : nomme en permanence, l'onglet deviendrait un contexte d'empilement et une racine de flou
    d'arriere-plan (spec css-view-transitions-1). Effet court, une fois par clic, garde sous
    prefers-reduced-motion : ce poste l'a actif, il ne se verrait jamais (voir theme.css, spinner).
@@ -338,9 +338,117 @@
   animation-duration: 220ms;
   animation-timing-function: var(--ease);
 }
-::view-transition-old(root),
+/* LA PAGE NE SE FOND PLUS (conv-987, 2026-10-16) : ce sont ses BLOCS qui entrent, en cascade
+   (ci-dessous). L'ancienne vue disparait d'un coup, comme dans la maquette choisie : fondue par-dessus
+   la nouvelle pendant 180 ms, elle restait visible derriere les blocs encore transparents. Seul le
+   surlignage du menu glisse encore (groupe `nav-actif`). */
+::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}
 ::view-transition-new(root) {
-  animation-duration: 180ms;
+  animation: none;
+}
+
+/* LA CASCADE D'ENTREE D'UNE VUE (conv-987, 2026-10-16) — direction « 1 · Cascade » du draft, choisie
+   par l'utilisateur : chaque bloc monte de 8 px en apparaissant, de haut en bas, un tous les 40 ms.
+   Les blocs et leur rang (`--entree-rang`) sont choisis par `entree-cascade.ts` a l'affichage de la
+   vue, et l'attribut est retire a la fin : rien ne rejoue quand du contenu arrive plus tard.
+   `translate` et non `transform` : il se compose avec le `transform` propre d'un element au lieu de
+   l'ecraser pendant l'entree. Pas de garde prefers-reduced-motion : ce poste l'a actif, l'entree ne
+   se verrait jamais (meme choix que le surlignage du menu, ci-dessus). 260 ms = DUREE_MS.
+   Dans les themes a chanfrein, AUCUN bloc n'est marque : seuls les cadres entrent (ci-dessous), le
+   texte est la tout de suite (retour utilisateur du 16/10 apres l'Elan). */
+@keyframes entree-cascade {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+.view-slot [data-entree-cascade] {
+  animation: entree-cascade 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--entree-rang, 0) * 40ms);
+}
+
+/* L'ENTREE DES CADRES A CHANFREIN — LE MINUTAGE (conv-987, 2026-10-16, draft « conteneurs a
+   chanfrein », tour 3, variante « 2 · Elan », 1 s, choisie sur maquette). Theme-neutre : ces
+   proprietes ne dessinent rien ici. Les deux themes qui coupent les coins (theme-nebuleuse-verre.css,
+   et Holographique blanc qui en est genere) posent l'animation sur leurs cadres marques par
+   `entree-cascade.ts` et en tirent leur dessin. Le deroule :
+   - 0 a 100 ms : les deux coins coupes s'allument (`--ch-coin`) ;
+   - 100 a 650 ms : un trait part de chaque coin et court le long des deux bords (`--ch-trait`), avec
+     ELAN : la moitie du chemin en 100 ms, puis il freine ; le satin se pose en meme temps (`--ch-fond`) ;
+   - 650 a 780 ms : les traits s'eteignent (`--ch-trait-a`), le contour revient a son trait de repos
+     (`--ch-contour`) ;
+   - 500 a 1000 ms : une lumiere traverse le cadre en diagonale (`--ch-lum`).
+   ENREGISTREES (`@property`) pour etre interpolees : une variable libre saute d'une valeur a l'autre.
+   Non heritees : chaque cadre a SON avancement (ils entrent decales de 40 ms). Leur valeur initiale
+   est l'etat FINAL : un cadre hors entree se dessine exactement comme avant. */
+@property --ch-coin {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --ch-trait {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --ch-trait-a {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+@property --ch-contour {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --ch-fond {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --ch-lum {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 150%;
+}
+@keyframes entree-chanfrein {
+  0% {
+    --ch-coin: 0;
+    --ch-trait: 0;
+    --ch-trait-a: 0.85;
+    --ch-contour: 0;
+    --ch-fond: 0;
+    --ch-lum: -40%;
+  }
+  10% {
+    --ch-coin: 1;
+    --ch-trait: 0;
+    animation-timing-function: cubic-bezier(0.12, 0.75, 0.2, 1);
+  }
+  50% {
+    --ch-lum: -40%;
+  }
+  65% {
+    --ch-trait: 1;
+    --ch-trait-a: 0.85;
+    --ch-contour: 0;
+    --ch-fond: 1;
+  }
+  78% {
+    --ch-trait-a: 0;
+    --ch-contour: 1;
+  }
+  100% {
+    --ch-coin: 1;
+    --ch-trait: 1;
+    --ch-trait-a: 0;
+    --ch-contour: 1;
+    --ch-fond: 1;
+    --ch-lum: 150%;
+  }
 }
 
 /* LE CHANGEMENT DE THEME EN CERCLE (conv-981, 2026-10-16) : le nouveau theme s'ouvre en cercle

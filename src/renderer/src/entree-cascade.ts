@@ -127,6 +127,31 @@ export const NOM_ANIMATION = 'entree-cascade'
  */
 export const SECOURS_MS = 5000
 
+/**
+ * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, draft « conteneurs a chanfrein », tour 3,
+ * variante « 2 · Elan », 1 s) : les deux coins coupes s'allument, puis un trait part de chacun et
+ * court le long des bords, en freinant ; le satin se pose, le contour revient a son 7 %, une lumiere
+ * traverse en diagonale. Le minutage vit dans app-shell.css (`@keyframes entree-chanfrein`), le
+ * dessin dans les deux themes qui coupent les coins (Nebuleuse de verre, Holographique blanc).
+ *
+ * Les surfaces CANDIDATES sont celles que ces themes coupent (conv-177 : liste, fil, panneau de
+ * droite ; conv-211 : tuiles et plaque de l'Accueil ; cadre de page des autres vues). Le THEME
+ * decide : une candidate marquee qui ne recoit pas l'animation (tout autre theme) est demarquee
+ * aussitot, et la cascade du contenu reste celle de toujours.
+ *
+ * LE TEXTE NE S'ANIME PAS (conv-987, 2026-10-16, retour apres la livraison de l'Elan : « le texte
+ * doit pas mettre du temps a s'afficher, il doit etre la instantanement, et l'animation concerne
+ * les box ») : quand le theme dessine ses cadres, AUCUN bloc de contenu n'est marque. Avant, le
+ * contenu attendait 300 ms l'elan des traits puis montait en cascade : le texte n'etait complet
+ * qu'a ~1 s. Seul le cadre (coins, traits, satin, lumiere) entre ; ce qu'il contient est la d'emblee.
+ */
+export const SURFACES_CHANFREIN =
+  '.view-page, .home-view__masthead, .home-tile__panel, .conv-pane, .chat, .runs-pane'
+export const ATTRIBUT_CHANFREIN = 'data-entree-chanfrein'
+export const NOM_ANIMATION_CHANFREIN = 'entree-chanfrein'
+/** Duree de l'entree d'un cadre (variante choisie : 1 s) — app-shell.css la porte, le test les lie. */
+export const DUREE_CHANFREIN_MS = 1000
+
 type Entree = {
   racine: Element
   restants: Set<Element>
@@ -135,9 +160,11 @@ type Entree = {
 }
 let enCours: Entree | null = null
 
-function liberer(bloc: Element): void {
-  bloc.removeAttribute(ATTRIBUT_ENTREE)
-  ;(bloc as HTMLElement).style?.removeProperty('--entree-rang')
+function liberer(element: Element): void {
+  element.removeAttribute(ATTRIBUT_ENTREE)
+  element.removeAttribute(ATTRIBUT_CHANFREIN)
+  const style = (element as HTMLElement).style
+  style?.removeProperty('--entree-rang')
 }
 
 function effacer(): void {
@@ -150,27 +177,82 @@ function effacer(): void {
   restants.forEach(liberer)
 }
 
+function enOrdreDeLecture(elements: Element[]): Element[] {
+  return elements
+    .map((e) => ({ e, b: boite(e) }))
+    .sort((a, b) =>
+      Math.abs(a.b.top - b.b.top) <= MEME_LIGNE_PX ? a.b.left - b.b.left : a.b.top - b.b.top
+    )
+    .map(({ e }) => e)
+}
+
+function visibleDans(vue: Boite, e: Element): boolean {
+  const b = boite(e)
+  return (
+    b.width >= TAILLE_MIN &&
+    b.height >= TAILLE_MIN &&
+    b.bottom > vue.top &&
+    b.top < vue.top + vue.height
+  )
+}
+
+/** Le theme anime-t-il ce cadre marque ? (opt-in : seule sa regle pose l'animation). */
+function animeParLeTheme(surface: Element): boolean {
+  const s = surface.ownerDocument.defaultView?.getComputedStyle(surface)
+  return !!s && s.animationName.split(',').some((nom) => nom.trim() === NOM_ANIMATION_CHANFREIN)
+}
+
+/**
+ * Les cadres a chanfrein visibles de la vue, en ordre de lecture, MARQUES. Ceux que le theme
+ * n'anime pas sont demarques avant de rendre la main : il n'en reste aucune trace.
+ */
+export function marquerSurfacesChanfrein(
+  racine: Element,
+  anime: (surface: Element) => boolean = animeParLeTheme
+): Element[] {
+  const vue = boite(racine)
+  if (vue.width < 2 || vue.height < 2) return []
+  const candidates = [
+    ...(racine.matches(SURFACES_CHANFREIN) ? [racine] : []),
+    ...Array.from(racine.querySelectorAll(SURFACES_CHANFREIN))
+  ].filter((e) => visibleDans(vue, e))
+  const surfaces = enOrdreDeLecture(candidates)
+  surfaces.forEach((surface, rang) => {
+    ;(surface as HTMLElement).style?.setProperty('--entree-rang', String(Math.min(rang, RANG_MAX)))
+    surface.setAttribute(ATTRIBUT_CHANFREIN, '')
+  })
+  const animees = surfaces.filter((surface) => anime(surface))
+  surfaces.filter((s) => !animees.includes(s)).forEach(liberer)
+  return animees
+}
+
 /**
  * Joue la cascade sur la vue qui vient d'apparaitre. Appelee APRES que la vue est dans le DOM et
  * affichee (les rectangles en dependent), avant la peinture : aucun bloc ne se montre une image
  * a sa place finale puis disparait. Une nouvelle entree efface la precedente (clics rapides).
+ * `anime` n'existe que pour les tests (happy-dom ne joue aucune animation).
  */
-export function jouerEntreeCascade(racine: Element): void {
+export function jouerEntreeCascade(racine: Element, anime?: (surface: Element) => boolean): void {
   effacer()
-  const blocs = blocsDeCascade(racine)
-  if (!blocs.length) return
+  const surfaces = marquerSurfacesChanfrein(racine, anime)
+  // Theme a chanfrein : seuls les cadres entrent, le texte est la tout de suite (voir plus haut).
+  const blocs = surfaces.length ? [] : blocsDeCascade(racine)
+  if (!blocs.length && !surfaces.length) return
   blocs.forEach((bloc, rang) => {
     ;(bloc as HTMLElement).style?.setProperty('--entree-rang', String(Math.min(rang, RANG_MAX)))
     bloc.setAttribute(ATTRIBUT_ENTREE, '')
   })
-  const restants = new Set(blocs)
+  const restants = new Set([...blocs, ...surfaces])
   // Les fins d'animation REMONTENT jusqu'a la racine ; celles des animations propres d'un
-  // descendant (spinner, pulsation) portent un autre nom et sont ignorees.
+  // descendant (spinner, pulsation) portent un autre nom et sont ignorees. Un bloc se libere a la
+  // fin de SA montee, un cadre a la fin de SON dessin : jamais l'un sur la fin de l'autre.
   const surFin = (evenement: Event): void => {
-    const bloc = evenement.target as Element
-    if ((evenement as AnimationEvent).animationName !== NOM_ANIMATION || !restants.has(bloc)) return
-    restants.delete(bloc)
-    liberer(bloc)
+    const element = evenement.target as Element
+    const nom = (evenement as AnimationEvent).animationName
+    const attendu = surfaces.includes(element) ? NOM_ANIMATION_CHANFREIN : NOM_ANIMATION
+    if (nom !== attendu || !restants.has(element)) return
+    restants.delete(element)
+    liberer(element)
     if (!restants.size) effacer()
   }
   racine.addEventListener('animationend', surFin)

@@ -1802,8 +1802,16 @@
      panneau le pose en `fixed`, cale sur l'ECRAN et non sur sa propre boite. Les reperes en % se
      lisent donc sur la diagonale de la fenetre : le reflet net traverse le haut gauche (menu, liste),
      le second le bas droit (fil, saisie, panneau de droite), et chaque panneau en montre sa part. */
+  /* Les quatre teintes du satin, NOMMEES (conv-987, 2026-10-16) : l'entree des cadres (bloc
+     ENTREE-CHANFREIN, plus bas) les reprend une a une pour poser le satin en fondu -- une liste de
+     reflets ne se rend pas transparente d'un seul geste. */
+  --nv-satin-a: #f8f7fb;
+  --nv-satin-b: #ffffff;
+  --nv-satin-c: #f5f4f9;
+  --nv-satin-d: #fcfbfe;
   --nv-satin-reflets:
-    #f8f7fb 0%, #ffffff 18%, #f5f4f9 42%, #f5f4f9 48%, #fcfbfe 64%, #f5f4f9 80%;
+    var(--nv-satin-a) 0%, var(--nv-satin-b) 18%, var(--nv-satin-c) 42%, var(--nv-satin-c) 48%,
+    var(--nv-satin-d) 64%, var(--nv-satin-c) 80%;
   --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
   /* LA SOURIS EST LA SOURCE DE LUMIERE (conv-191, 2026-10-10 : « le comportement je l'aime pas trop
      draft moi des animations », « en fait j'aimerais que ca fasse comme si ma souris etait la source
@@ -2172,6 +2180,100 @@
   box-shadow: none;
 }
 /* CADRE-CHANFREIN:FIN */
+/* ENTREE-CHANFREIN:DEBUT -- l'entree des cadres a chanfrein (conv-987). */
+/* L'ENTREE DES CADRES A CHANFREIN, LE DESSIN (conv-987, 2026-10-16 : « /draft des animations
+   d'entree pour les containers a chanfrin », puis « 3 et 6 », « le 4 duree 1 second » et « Implemente
+   la 2 (Elan, 1 s) » ; maquette du tour 3, rendue par le filtre reel du fil). A chaque changement de
+   vue, `entree-cascade.ts` marque les cadres visibles (`data-entree-chanfrein`, rang en
+   `--entree-rang`) et garde ceux que CETTE regle anime. Le minutage (`@keyframes entree-chanfrein`,
+   `--ch-*`) est dans app-shell.css ; ici, le cadre en tire son dessin :
+   - les deux coins coupes s'allument (`--ch-coin`), puis un trait part de chacun, blanc vers la
+     droite et le bas, argent vers la gauche et le haut, et court jusqu'aux angles opposes ;
+   - le satin se pose en fondu (`--ch-fond`), le contour revient a son 7 % (`--ch-contour`) ;
+   - une lumiere traverse en diagonale (`--ch-lum`). Sa couleur est la sienne, `--nv-entree-lumiere`,
+     et non celle de la souris : « reduire les animations » eteint la lumiere de la souris (section 7)
+     et ce poste l'a actif -- l'entree n'aurait jamais eu de lumiere.
+   POURQUOI LES RECETTES SONT REDECLAREES SUR LE CADRE : une variable posee sur :root y est calculee
+   une fois, et les panneaux heritent du resultat. Les `--ch-*` animes sur un panneau n'atteindraient
+   jamais la recette de la racine. Redeclarees ICI, sur le cadre marque, elles sont recalculees a
+   chaque image avec SON avancement ; ses pseudo-elements (anneau `::before`, panneau `::after` du
+   fil) en heritent. Ce sont les recettes de repos (plus haut), couleurs passees par `--ch-*` et
+   traits ajoutes : a l'etat final, le dessin est le meme au pixel, et le cadre se libere sans saut.
+   Le test « recette d'entree = recette de repos » les tient alignees.
+   Les enfants DIRECTS reprennent le satin de repos : sans cela, la saisie (`var(--nv-satin)`) aurait
+   recu sa propre lumiere et son propre fondu, en plus de ceux du fil. */
+:root[data-theme='holographique-clair'] {
+  --nv-entree-lumiere: rgba(255, 255, 255, 0.97);
+}
+:root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+  animation: entree-chanfrein 1000ms linear both;
+  animation-delay: calc(var(--entree-rang, 0) * 40ms);
+  --ch-haut: color-mix(in srgb, var(--nv-chanfrein-haut) calc(var(--ch-coin) * 100%), transparent);
+  --ch-bas: color-mix(in srgb, var(--nv-chanfrein-bas) calc(var(--ch-coin) * 100%), transparent);
+  --ch-cotes: color-mix(in srgb, var(--nv-chanfrein-cotes) calc(var(--ch-contour) * 100%), transparent);
+  --ch-trait-haut: color-mix(in srgb, var(--nv-chanfrein-haut) calc(var(--ch-trait-a) * 100%), transparent);
+  --ch-trait-bas: color-mix(in srgb, var(--nv-chanfrein-bas) calc(var(--ch-trait-a) * 100%), transparent);
+  --ch-trait-long: calc(var(--ch-trait) * 100%);
+  --nv-chanfrein-trait-fond:
+    linear-gradient(
+        135deg,
+        transparent calc(50% - 1px),
+        var(--ch-haut) calc(50% - 0.4px),
+        var(--ch-haut) calc(50% + 0.6px),
+        transparent calc(50% + 1.4px)
+      )
+      left top / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat,
+    linear-gradient(var(--ch-haut), var(--ch-haut)) left top / var(--nv-chanfrein-pans) 1px no-repeat,
+    linear-gradient(var(--ch-haut), var(--ch-haut)) left top / 1px var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(
+        135deg,
+        transparent calc(50% - 1.4px),
+        var(--ch-bas) calc(50% - 0.6px),
+        var(--ch-bas) calc(50% + 0.4px),
+        transparent calc(50% + 1px)
+      )
+      right bottom / var(--nv-chanfrein) var(--nv-chanfrein) no-repeat,
+    linear-gradient(var(--ch-bas), var(--ch-bas)) right bottom / var(--nv-chanfrein-pans) 1px no-repeat,
+    linear-gradient(var(--ch-bas), var(--ch-bas)) right bottom / 1px var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / var(--ch-trait-long) 1px no-repeat,
+    linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / 1px var(--ch-trait-long) no-repeat,
+    linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / var(--ch-trait-long) 1px no-repeat,
+    linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / 1px var(--ch-trait-long) no-repeat,
+    linear-gradient(var(--ch-cotes), var(--ch-cotes)) left top / 100% 1px no-repeat,
+    linear-gradient(var(--ch-cotes), var(--ch-cotes)) left bottom / 100% 1px no-repeat,
+    linear-gradient(var(--ch-cotes), var(--ch-cotes)) left top / 1px 100% no-repeat,
+    linear-gradient(var(--ch-cotes), var(--ch-cotes)) right top / 1px 100% no-repeat;
+  --nv-chanfrein-trait:
+    linear-gradient(var(--ch-haut), var(--ch-haut)) left top / var(--nv-chanfrein-pans)
+      var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--ch-bas), var(--ch-bas)) right bottom / var(--nv-chanfrein-pans)
+      var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / var(--ch-trait-long) 1px no-repeat,
+    linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / 1px var(--ch-trait-long) no-repeat,
+    linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / var(--ch-trait-long) 1px no-repeat,
+    linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / 1px var(--ch-trait-long) no-repeat,
+    linear-gradient(var(--ch-cotes), var(--ch-cotes));
+  /* La lumiere est une couche A PART devant le satin, sans `fixed` : elle traverse le CADRE, pas
+     l'ecran. Le satin, lui, garde son `fixed` (pose par la regle du cadre apres `var(--nv-satin)`). */
+  --nv-satin:
+    radial-gradient(ellipse 50% 75% at var(--ch-lum) var(--ch-lum), var(--nv-entree-lumiere), transparent)
+      no-repeat,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--nv-satin-a) calc(var(--ch-fond) * 100%), transparent) 0%,
+      color-mix(in srgb, var(--nv-satin-b) calc(var(--ch-fond) * 100%), transparent) 18%,
+      color-mix(in srgb, var(--nv-satin-c) calc(var(--ch-fond) * 100%), transparent) 42%,
+      color-mix(in srgb, var(--nv-satin-c) calc(var(--ch-fond) * 100%), transparent) 48%,
+      color-mix(in srgb, var(--nv-satin-d) calc(var(--ch-fond) * 100%), transparent) 64%,
+      color-mix(in srgb, var(--nv-satin-c) calc(var(--ch-fond) * 100%), transparent) 80%
+    );
+}
+:root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein] > *,
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] > * {
+  --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
+}
+/* ENTREE-CHANFREIN:FIN */
 /* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
    La couche generee transposait cet or en rose comme un or decoratif ; la saisie n'a plus de rose
    (conv-155) et l'or y signale ce qui est actif. Le jeton --gold-clair de ce theme etant rose, la
@@ -3644,6 +3746,20 @@
    Pose en premiere couche du fond des panneaux (voir genererMainClair). */
 :root[data-theme='holographique-clair'] {
   --nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);
+}
+/* L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16) : pendant l'entree, le lisere se pose AVEC
+   le satin (`--ch-fond`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
+   flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
+   teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
+:root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+  --nv-holo-lisere: linear-gradient(
+    90deg,
+    color-mix(in srgb, #3c6eeb calc(var(--ch-fond) * 100%), transparent),
+    color-mix(in srgb, #9b8cff calc(var(--ch-fond) * 100%), transparent) 35%,
+    color-mix(in srgb, #e63ca0 calc(var(--ch-fond) * 100%), transparent) 70%,
+    color-mix(in srgb, #cfd6e4 calc(var(--ch-fond) * 100%), transparent)
+  );
 }
 /* La bulle de l'utilisateur : le degrade du noir, rose assombri (#d02b8c) pour que le blanc dessus
    passe 4,5:1 sur toute la bulle (4,54:1 sur le bleu, 4,77:1 sur le rose). La regle de

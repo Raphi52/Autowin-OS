@@ -1293,3 +1293,123 @@ describe('Nebuleuse de verre : le detail du cout de la ligne d en-tete', () => {
     expect(debordement).toBe('visible')
   })
 })
+
+/**
+ * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, variante « 2 · Elan », 1 s, choisie sur
+ * maquette). Pendant l'entree, chaque cadre marque (`data-entree-chanfrein`, entree-cascade.ts)
+ * redeclare chez lui les recettes de repos, couleurs passees par les `--ch-*` animes : une recette
+ * calculee sur :root ne verrait jamais l'avancement d'un panneau. Le risque qui compte : une recette
+ * d'entree qui DERIVE de la recette de repos. A la fin de l'entree, l'attribut tombe et la recette
+ * de repos reprend : toute difference se verrait comme un saut. Entrees qui doivent faire echouer :
+ * un pan, une diagonale ou un cote modifie d'un seul cote, une teinte de satin dans un autre ordre,
+ * une lumiere d'entree qui reprendrait celle de la souris (eteinte par « reduire les animations »).
+ */
+describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
+  const css = lire('./theme-nebuleuse-verre.css')
+  const derniere = (selecteur: string): Record<string, string> => {
+    const valeurs: Record<string, string> = {}
+    postcss.parse(css).walkRules((regle) => {
+      if (regle.parent?.type === 'atrule') return
+      if (!regle.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === selecteur)) return
+      regle.walkDecls((d) => {
+        valeurs[d.prop] = d.value.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+      })
+    })
+    return valeurs
+  }
+  /** Les couches d'un fond, coupees aux virgules de premier niveau. */
+  const couches = (valeur: string): string[] => {
+    const sortie: string[] = []
+    let profondeur = 0
+    let courant = ''
+    for (const c of valeur) {
+      if (c === '(') profondeur += 1
+      if (c === ')') profondeur -= 1
+      if (c === ',' && profondeur === 0) {
+        sortie.push(courant.trim())
+        courant = ''
+      } else courant += c
+    }
+    if (courant.trim()) sortie.push(courant.trim())
+    return sortie
+  }
+  const versEntree = (v: string): string =>
+    v
+      .replaceAll('var(--nv-chanfrein-haut)', 'var(--ch-haut)')
+      .replaceAll('var(--nv-chanfrein-bas)', 'var(--ch-bas)')
+      .replaceAll('var(--nv-chanfrein-cotes)', 'var(--ch-cotes)')
+  const CADRES = `${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein]`
+  const VOLETS = `${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein]`
+  const repos = derniere(PREFIXE)
+  const entree = derniere(CADRES)
+
+  it('anime les cadres coupes, et eux seuls, pendant 1 s, decales de 40 ms par rang', () => {
+    for (const sel of [CADRES, VOLETS]) {
+      expect(derniere(sel).animation, sel).toBe('entree-chanfrein 1000ms linear both')
+      expect(derniere(sel)['animation-delay'], sel).toBe('calc(var(--entree-rang, 0) * 40ms)')
+    }
+  })
+
+  it('la recette du trait d entree est la recette de repos, couleurs animees, plus quatre traits', () => {
+    const traits = (v: string): string[] => couches(v).filter((c) => c.includes('--ch-trait-'))
+    for (const recette of ['--nv-chanfrein-trait-fond', '--nv-chanfrein-trait']) {
+      const enEntree = couches(entree[recette])
+      expect(
+        enEntree.filter((c) => !c.includes('--ch-trait-')),
+        recette
+      ).toEqual(couches(versEntree(repos[recette])))
+      // Deux traits par coin : blanc le long du haut et de la gauche, argent le long du bas et de la droite.
+      expect(traits(entree[recette]), recette).toEqual([
+        'linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / var(--ch-trait-long) 1px no-repeat',
+        'linear-gradient(var(--ch-trait-haut), var(--ch-trait-haut)) left top / 1px var(--ch-trait-long) no-repeat',
+        'linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / var(--ch-trait-long) 1px no-repeat',
+        'linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / 1px var(--ch-trait-long) no-repeat'
+      ])
+    }
+    // Les volets du Chat recoivent les memes recettes que les cadres de page.
+    const volets = derniere(VOLETS)
+    for (const recette of ['--nv-chanfrein-trait-fond', '--nv-chanfrein-trait', '--nv-satin']) {
+      expect(volets[recette], recette).toBe(entree[recette])
+    }
+  })
+
+  it('les couleurs d entree valent celles du repos a 100 % : coins, traits, cotes', () => {
+    expect(entree['--ch-haut']).toBe(
+      'color-mix(in srgb, var(--nv-chanfrein-haut) calc(var(--ch-coin) * 100%), transparent)'
+    )
+    expect(entree['--ch-bas']).toBe(
+      'color-mix(in srgb, var(--nv-chanfrein-bas) calc(var(--ch-coin) * 100%), transparent)'
+    )
+    expect(entree['--ch-cotes']).toBe(
+      'color-mix(in srgb, var(--nv-chanfrein-cotes) calc(var(--ch-contour) * 100%), transparent)'
+    )
+    expect(entree['--ch-trait-haut']).toContain('var(--nv-chanfrein-haut) calc(var(--ch-trait-a) * 100%)')
+    expect(entree['--ch-trait-bas']).toContain('var(--nv-chanfrein-bas) calc(var(--ch-trait-a) * 100%)')
+  })
+
+  it('pose le satin en fondu avec ses teintes de repos, dans le meme ordre', () => {
+    const teintes = (v: string): string[] =>
+      [...v.matchAll(/var\(--nv-satin-([a-d])\)(?: calc\(var\(--ch-fond\) \* 100%\), transparent\))? (\d+%)/g)].map(
+        (m) => `${m[1]} ${m[2]}`
+      )
+    expect(teintes(repos['--nv-satin-reflets'])).toEqual(['a 0%', 'b 18%', 'c 42%', 'c 48%', 'd 64%', 'c 80%'])
+    expect(teintes(entree['--nv-satin'])).toEqual(teintes(repos['--nv-satin-reflets']))
+    // Les enfants DIRECTS reprennent le satin de repos (la saisie n'a pas sa propre lumiere).
+    expect(derniere(`${CADRES} > *`)['--nv-satin']).toBe(repos['--nv-satin'])
+    expect(derniere(`${VOLETS} > *`)['--nv-satin']).toBe(repos['--nv-satin'])
+  })
+
+  it('a sa propre lumiere, que « reduire les animations » n eteint pas', () => {
+    expect(repos['--nv-entree-lumiere']).toBe('rgba(255, 255, 255, 0.17)')
+    expect(entree['--nv-satin']).toMatch(
+      /^radial-gradient\(ellipse 50% 75% at var\(--ch-lum\) var\(--ch-lum\), var\(--nv-entree-lumiere\), transparent\) no-repeat, linear-gradient\(/
+    )
+    expect(entree['--nv-satin']).not.toContain('--nv-lumiere-couleur')
+    const reduit: string[] = []
+    postcss.parse(css).walkAtRules('media', (regle) => {
+      if (/prefers-reduced-motion/.test(regle.params)) reduit.push(regle.toString())
+    })
+    expect(reduit.length).toBeGreaterThan(0)
+    for (const bloc of reduit) expect(bloc).not.toMatch(/--nv-entree-lumiere|entree-chanfrein/)
+  })
+})
