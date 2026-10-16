@@ -205,13 +205,16 @@
 .control-row strong {
   font-size: 11px;
 }
+/* La description se lit EN ENTIER dans la liste : elle passe à la ligne au lieu d'être coupée
+   par une ellipse sur une seule ligne (demande utilisateur, 2026-10-16, conv-1011). La donnée
+   arrivait déjà complète du registre ; seul ce style la tronquait. */
 .control-row p {
-  overflow: hidden;
   margin: 4px 0 0;
   color: var(--text-dim);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .control-status {
   width: 6px;
