@@ -51,6 +51,7 @@ import {
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
+  bilanDesOutilsNatifsRecuperes,
   statusEstUneAction,
   statusEstUneLecture,
   statutComplet,
@@ -2400,6 +2401,14 @@ export class AgentPilot {
       echecDeLaDerniereIteration = false
       rejeuNatifCetteIteration = false
       iterationNatif = i
+      // Appel récupéré après redémarrage : ses outils natifs n'ont battu que dans le process mort.
+      // Sans ce bilan, « question sans lecture » relançait un tour qui avait lu (conv-1002, tour
+      // 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc, 1,70 $) — voir `bilanDesOutilsNatifsRecuperes`.
+      if (recoveredHere) {
+        const bilan = bilanDesOutilsNatifsRecuperes(recoveredHere.result.executionEvidence)
+        if (bilan.lecture) anyReadExecuted = true
+        if (bilan.action) actionNativeCeTour = true
+      }
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
