@@ -53,6 +53,33 @@ describe('parseScoutSuggestions', () => {
     expect(parseScoutSuggestions('Voici mon analyse du problème.\nIl y a deux causes.')).toBeNull()
   })
 
+  it('une réponse ordinaire (prose, diagramme, puces) → null, même avec amorce et ligne « G -- »', () => {
+    // conv-1014 : cette réponse a été REMPLACÉE par un groupe « G » de 8 pastilles. « proposer »
+    // passait pour l'amorce, la ligne mermaid « G -- oui --> » pour un titre de groupe, et chaque
+    // nom de fichier entre accents graves des puces suivantes pour une pastille.
+    const reponse = [
+      'Je vérifie trois briques avant de proposer les étapes : copies, fusion, fichiers écrits.',
+      '',
+      '```mermaid',
+      'flowchart TD',
+      '  E3 --> G{"Gain au-delà du bruit ?"}',
+      '  G -- oui --> E4["4. Une copie par sous-tâche + fusion contrôlée"]',
+      '```',
+      '',
+      '**1. Reproduire le trou en rouge.**',
+      '- Écrire un test dans `orchestrator.greedy.test.ts`.',
+      '- Le plan JSON gagne un champ `fichiers` par sous-tâche.',
+      '- On réutilise `worktree-manager.ts` (`merge --abort`).'
+    ].join('\n')
+    expect(parseScoutSuggestions(reponse)).toBeNull()
+  })
+
+  it('un message au format mais suivi de prose → null : rien du texte ne doit disparaître', () => {
+    expect(
+      parseScoutSuggestions(`${SCOUT_OUTPUT}\n\nJe recommande le jeu B, il couvre le plus de cas.`)
+    ).toBeNull()
+  })
+
   it('prose avec une seule inline-code fortuite → null (pas de faux array)', () => {
     expect(
       parseScoutSuggestions('Le fichier `os.ts` contient la logique.\nRegarde la ligne 42.')
