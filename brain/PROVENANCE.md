@@ -48,4 +48,5 @@ traiter, mais ce n'est pas une regression de l'integration.
 ## Ce qui ne tourne pas ici
 
 `.github/workflows/tests.yml` vient de GitHub et est conserve pour la trace. Le depot de reference
-est Azure DevOps, qui ne lit pas ce fichier : **la CI du Brain n'est pas rejouee automatiquement**.
+est GitHub depuis le 2026-10-16, mais ce fichier est sous `brain/.github/` : GitHub ne lit que
+`.github/workflows/` a la RACINE du depot, donc **la CI du Brain n'est pas rejouee automatiquement**.

@@ -41,9 +41,10 @@ esac
 
 # ─── DÉPÔT PUBLIC : JAMAIS LE DOSSIER DE L'ENTREPRISE ───────────────────────────────────────────
 # Ajouté le 2026-10-13 (conv-932). Ce qui est propre à l'entreprise vit dans `entreprise/` et ne
-# part JAMAIS sur GitHub : la version publique se construit sans ce dossier
-# (`scripts/export-public.mjs`). Ce refus vaut pour TOUT pousseur, humain compris, et n'a pas
-# d'exception : un `git push github main` direct publierait l'arbre entier.
+# part JAMAIS sur GitHub. Depuis le 2026-10-16 (conv-994), GitHub est le SEUL distant (`origin`) et
+# `entreprise/` est ignoré par git (`.gitignore`) : il reste sur le disque. Un commit qui le contient
+# vient donc de l'historique d'avant la bascule (avant 9f95ebe8) ou d'un ajout forcé. Ce refus vaut
+# pour TOUT pousseur, humain compris, et n'a pas d'exception.
 #
 # QUEL DISTANT EST PUBLIC : son adresse pointe vers github.com. On lit `$1`, `$2` ET l'adresse
 # CONFIGURÉE du distant : git passe à `$2` l'adresse déjà réécrite par `url.<x>.insteadOf`
@@ -96,12 +97,11 @@ if [ -n "$fuites" ]; then
   le dossier propre à l'entreprise, qui ne se publie jamais sur GitHub.
 $fuites
 
-  La version publique se construit SANS ce dossier, puis se pousse seule :
-
-    node scripts/export-public.mjs --auteur "Nom <adresse>" --ref <commit> --parent $1/main
-    git push $1 <commit exporté>:refs/heads/main
-
-  Le travail propre à l'entreprise se pousse sur le dépôt interne (origin).
+  Ce dossier reste sur le disque, hors suivi git (.gitignore) : aucun commit ne doit le porter.
+    - Travail parti de l'historique d'avant le 2026-10-16 : reprendre ses commits sur main un
+      par un (git cherry-pick), jamais fusionner sa branche.
+    - Commit qui l'a ajouté par erreur : le refaire sans lui
+      (git rm -r --cached $DOSSIER_PRIVE, puis git commit --amend s'il est le dernier).
 
 EOF
   exit 1
