@@ -199,8 +199,10 @@ describe('theme Holographique blanc', () => {
   /* conv-987 (2026-10-16, capture) : pendant l'entree des cadres a chanfrein, le lisere flottait seul
      en haut de cadres encore vides. Il se pose desormais avec le satin, dans les MEMES teintes que le
      lisere de repos (sinon il sauterait a la fin de l'entree). */
+  // Le menu de gauche aussi (conv-987 : « et quand je reduis deploi la left bar aussi ») : il porte
+  // le meme lisere au repos.
   it('pose le lisere avec le satin pendant l entree des cadres, dans ses teintes de repos', () => {
-    const debut = css.indexOf(`${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],\n${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {\n  --nv-holo-lisere:`)
+    const debut = css.indexOf(`${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],\n${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],\n${PREFIXE} .theme-serious .rail[data-entree-chanfrein] {\n  --nv-holo-lisere:`)
     expect(debut).toBeGreaterThan(-1)
     const entree = css.slice(debut, css.indexOf('}', debut))
     const teintes = [...entree.matchAll(/color-mix\(in srgb, (#[0-9a-f]{6}) calc\(var\(--ch-fond\) \* 100%\), transparent\)( \d+%)?/g)].map(

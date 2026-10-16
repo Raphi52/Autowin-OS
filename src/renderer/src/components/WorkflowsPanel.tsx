@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RunEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
@@ -10,6 +10,8 @@ import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
 import { Markdown } from './Markdown'
 import { runOuvertARelire } from './run-ouvert-a-jour'
+import { jouerEntreeCadre } from '../entree-cascade'
+import { arreterGlissement, glisserPanneau } from '../glissement-panneau'
 
 /**
  * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, les journaux des modeles,
@@ -96,6 +98,12 @@ export type WorkflowsPanelProps = {
   runsPaneWidth: number
   beginRunsResize: (event: React.PointerEvent<HTMLDivElement>) => void
   setShowRuns: (value: boolean) => void
+  /**
+   * Le panneau se FERME : il glisse vers la droite, puis `onFermee` permet a ChatView de le demonter
+   * (conv-987, « je veux une animation d'ouverture fermeture pour le paneau de droite »).
+   */
+  fermeture?: boolean
+  onFermee?: () => void
   activeId: string | null
   send: (prompt: string) => void
   isActive: boolean
@@ -168,7 +176,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     liveRunCardRef,
     messages,
     ongletDemande,
-    onInspectTurn
+    onInspectTurn,
+    fermeture = false,
+    onFermee
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
@@ -181,6 +191,46 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
    * `relireRunOuvert`. Sans cette clé, chacun de ces rendus relancerait la même lecture.
    */
   const derniereRelecture = useRef<string | null>(null)
+  /**
+   * L'OUVERTURE DU PANNEAU DESSINE SES BORDS (conv-987, 2026-10-16 : « quand j'ouvre le panneau
+   * detail je veux l'animation des border ») : le panneau n'est monte qu'a l'ouverture (`showRuns`,
+   * ChatView), donc son montage EST l'ouverture. Effet de mise en page : le cadre est marque avant la
+   * premiere peinture, il n'apparait pas une image tout dessine. Le theme decide s'il l'anime.
+   */
+  const panneau = useRef<HTMLElement>(null)
+  useLayoutEffect(() => (panneau.current ? jouerEntreeCadre(panneau.current) : undefined), [])
+  /**
+   * ET IL GLISSE (conv-987, 2026-10-16 : « je veux une animation d'ouverture fermeture pour le
+   * paneau de droite ») : depuis le bord droit au montage, vers lui a la fermeture, puis ChatView le
+   * demonte (`onFermee`). Une reouverture pendant la fermeture repart de la ou il en est
+   * (glissement-panneau.ts). `onFermee` est lu au moment de conclure, pas fige au clic.
+   */
+  const surFermee = useRef(onFermee)
+  useLayoutEffect(() => {
+    surFermee.current = onFermee
+  })
+  const glissementMonte = useRef(false)
+  useLayoutEffect(() => {
+    const p = panneau.current
+    if (!p) return
+    const conclure = (): void => surFermee.current?.()
+    const depuisDehors = !glissementMonte.current
+    glissementMonte.current = true
+    const glisse = glisserPanneau(p, fermeture ? 'fermeture' : 'ouverture', {
+      depuisDehors,
+      ...(fermeture ? { surFin: conclure } : {})
+    })
+    if (fermeture && !glisse) conclure()
+  }, [fermeture])
+  // Demontage, ou double effet du mode strict : le glissement s'arrete, et le prochain montage
+  // repart de hors champ.
+  useLayoutEffect(() => {
+    const p = panneau.current
+    return () => {
+      glissementMonte.current = false
+      if (p) arreterGlissement(p)
+    }
+  }, [])
   const aRelire = runOuvertARelire(openRun, runs)
   const cleRelecture = aRelire ? `${aRelire.path}@${aRelire.mtime}` : null
   useEffect(() => {
@@ -285,7 +335,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
         aria-orientation="vertical"
         onPointerDown={beginRunsResize}
       />
-      <aside className="lisere-dessus runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
+      <aside
+        ref={panneau}
+        className="lisere-dessus runs-pane fade-in"
+        style={{ width: `${runsPaneWidth}px` }}
+      >
         {/* UNE SEULE BARRE. Le titre « Runs » doublonnait le bouton qui ouvre ce panneau et la
             barre d'onglets juste dessous : trois rangees pour nommer la meme chose. Les onglets
             SONT desormais le titre, les actions restent a droite. */}

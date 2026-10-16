@@ -518,7 +518,8 @@ const COMPLEMENT_CLAIR = `
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
 :root[data-theme='${CLAIR_ID}'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
-:root[data-theme='${CLAIR_ID}'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+:root[data-theme='${CLAIR_ID}'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
+:root[data-theme='${CLAIR_ID}'] .theme-serious .rail[data-entree-chanfrein] {
   --nv-holo-lisere: linear-gradient(
     90deg,
     color-mix(in srgb, #3c6eeb calc(var(--ch-fond) * 100%), transparent),

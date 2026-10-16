@@ -1340,11 +1340,14 @@ describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
       .replaceAll('var(--nv-chanfrein-cotes)', 'var(--ch-cotes)')
   const CADRES = `${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein]`
   const VOLETS = `${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein]`
+  // Le menu de gauche, quand on le reduit ou le deplie (conv-987 : « et quand je reduis deploi la
+  // left bar aussi ») : meme anneau et meme satin que les volets du Chat.
+  const MENU = `${PREFIXE} .theme-serious .rail[data-entree-chanfrein]`
   const repos = derniere(PREFIXE)
   const entree = derniere(CADRES)
 
   it('anime les cadres coupes, et eux seuls, pendant 1 s, decales de 40 ms par rang', () => {
-    for (const sel of [CADRES, VOLETS]) {
+    for (const sel of [CADRES, VOLETS, MENU]) {
       expect(derniere(sel).animation, sel).toBe('entree-chanfrein 1000ms linear both')
       expect(derniere(sel)['animation-delay'], sel).toBe('calc(var(--entree-rang, 0) * 40ms)')
     }
@@ -1366,10 +1369,11 @@ describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
         'linear-gradient(var(--ch-trait-bas), var(--ch-trait-bas)) right bottom / 1px var(--ch-trait-long) no-repeat'
       ])
     }
-    // Les volets du Chat recoivent les memes recettes que les cadres de page.
-    const volets = derniere(VOLETS)
-    for (const recette of ['--nv-chanfrein-trait-fond', '--nv-chanfrein-trait', '--nv-satin']) {
-      expect(volets[recette], recette).toBe(entree[recette])
+    // Les volets du Chat et le menu recoivent les memes recettes que les cadres de page.
+    for (const sel of [VOLETS, MENU]) {
+      for (const recette of ['--nv-chanfrein-trait-fond', '--nv-chanfrein-trait', '--nv-satin']) {
+        expect(derniere(sel)[recette], `${sel} ${recette}`).toBe(entree[recette])
+      }
     }
   })
 
@@ -1397,6 +1401,7 @@ describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
     // Les enfants DIRECTS reprennent le satin de repos (la saisie n'a pas sa propre lumiere).
     expect(derniere(`${CADRES} > *`)['--nv-satin']).toBe(repos['--nv-satin'])
     expect(derniere(`${VOLETS} > *`)['--nv-satin']).toBe(repos['--nv-satin'])
+    expect(derniere(`${MENU} > *`)['--nv-satin']).toBe(repos['--nv-satin'])
   })
 
   it('a sa propre lumiere, que « reduire les animations » n eteint pas', () => {
