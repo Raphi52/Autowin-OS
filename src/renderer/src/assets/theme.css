@@ -740,6 +740,37 @@ button.card:hover {
   animation: fadeIn var(--dur) var(--ease);
 }
 
+/* LES BLOCS DEPLIABLES GLISSENT (conv-981, 2026-10-16) : la cinquantaine de <details> de l'app
+   (pensee, frise, details d'execution...) s'ouvrait et se refermait d'un coup. Le contenu
+   (`::details-content`, Chromium 131+ ; Electron 44 = Chromium 152) passe de 0 a sa hauteur
+   naturelle — `interpolate-size` permet d'animer vers `auto`, pose ICI seulement pour ne changer
+   aucune autre transition de l'app. `content-visibility` en `allow-discrete` garde le contenu
+   visible pendant la fermeture. Le debordement vertical est coupe (`clip`, sans contexte de mise en
+   forme ni defilement) : sans cela le contenu entier apparaitrait d'un coup par-dessus la suite.
+   Un contenu qui grandit bloc OUVERT (une pensee en direct) ne s'anime pas : sa hauteur reste
+   `auto`, aucune transition ne part. Les trois MENUS flottants sont exclus : leur contenu est
+   positionne hors du flux, rien n'y glisse, et la fermeture le laisserait affiche 200 ms de trop.
+   Meme exception a prefers-reduced-motion que le spinner et le passage de vue : ce poste l'a actif. */
+details:not(
+    .model-select,
+    .observatory-filter-menu,
+    .observatory-toolbar__actions details
+  )::details-content {
+  interpolate-size: allow-keywords;
+  block-size: 0;
+  overflow-y: clip;
+  transition:
+    block-size 200ms var(--ease),
+    content-visibility 200ms var(--ease) allow-discrete;
+}
+details:not(
+    .model-select,
+    .observatory-filter-menu,
+    .observatory-toolbar__actions details
+  )[open]::details-content {
+  block-size: auto;
+}
+
 /* ============================================================
    ATOME 5A « tempo Rapide » — rendu React (composant <Spinner/>).
    Fidele a l'apercu valide : 3 plans elliptiques croises, chacun

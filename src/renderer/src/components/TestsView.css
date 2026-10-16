@@ -103,6 +103,70 @@
 .tests-summary .meta {
   opacity: 0.65;
 }
+
+/* LE RESULTAT QUI ARRIVE (conv-981, 2026-10-16) : les totaux n'etaient que du texte, sans aucune
+   transition ni animation. Un rail a deux segments (reussis, echecs ; le reste = ignores) dont la
+   largeur suit les totaux (`largeursDeLaBarre`, tests-barre.ts) et GLISSE d'un projet a l'autre.
+   Quand un run VIENT de finir (`.is-frais`, posee par TestsView.tsx, retiree a la fin du
+   remplissage) : la barre se remplit depuis zero, les compteurs montent, les echecs arrivent en
+   cascade. Le compteur est une image posee sur le vrai nombre, qui reste le texte de la page.
+   Meme exception a prefers-reduced-motion que le spinner : ce poste l'a actif. */
+@property --tests-n {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+.tests-nombre {
+  font-variant-numeric: tabular-nums;
+}
+.tests-barre {
+  display: flex;
+  height: 6px;
+  margin: -4px 0 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.tests-barre-ok,
+.tests-barre-ko {
+  transition: width 600ms var(--ease);
+}
+.tests-barre-ok {
+  background: #6ee7a8;
+}
+.tests-barre-ko {
+  background: #ff8080;
+}
+.tests-results.is-frais .tests-barre-ok,
+.tests-results.is-frais .tests-barre-ko {
+  animation: tests-remplir 800ms var(--ease);
+}
+.tests-results.is-frais .tests-nombre {
+  position: relative;
+  counter-reset: tests-n var(--tests-n);
+  animation: tests-compter 800ms var(--ease);
+  -webkit-text-fill-color: transparent;
+}
+.tests-results.is-frais .tests-nombre::before {
+  content: counter(tests-n) / '';
+  position: absolute;
+  right: 0;
+  -webkit-text-fill-color: currentColor;
+}
+.tests-results.is-frais .tests-case.is-failed {
+  animation: fadeIn 260ms var(--ease) both;
+  animation-delay: calc(min(var(--rang, 0), 12) * 40ms);
+}
+@keyframes tests-remplir {
+  from {
+    width: 0;
+  }
+}
+@keyframes tests-compter {
+  from {
+    --tests-n: 0;
+  }
+}
 .tests-invalid {
   color: #f0b27a;
   font-size: 13px;

@@ -225,7 +225,8 @@ const SENSITIVE_KEY = /(?:password|passwd|secret|token|api[-_]?key|authorization
 const MAX_DEPTH = 6
 const MAX_KEYS = 80
 const MAX_ARRAY = 80
-const MAX_STRING = 12_000
+/** Exporte pour qu'un lecteur du fil sache DIRE qu'une valeur y a ete coupee (conv-989). */
+export const MAX_STRING = 12_000
 
 export function sanitizePersistedValue(value: unknown): unknown {
   const seen = new WeakSet<object>()

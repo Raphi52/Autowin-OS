@@ -7285,7 +7285,7 @@ Cliquer pour choisir une autre branche.`}
 
           {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
             <div
-              className="chat-workflow-notice chat-travail-non-publie"
+              className="chat-workflow-notice chat-travail-non-publie fade-in"
               data-testid="chat-travail-non-publie"
               role="status"
             >
@@ -7321,7 +7321,11 @@ Cliquer pour choisir une autre branche.`}
           {listeNonPubliee && <TravauxNonPublies onFermer={() => setListeNonPubliee(false)} />}
 
           {appNotice && (
-            <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">
+            <div
+              className="chat-workflow-notice fade-in"
+              data-testid="chat-workflow-notice"
+              role="alert"
+            >
               <span>{appNotice.text}</span>
               <button
                 type="button"
@@ -7333,7 +7337,11 @@ Cliquer pour choisir une autre branche.`}
             </div>
           )}
           {activeId && arretsAuto[activeId] && (
-            <div className="chat-workflow-notice" data-testid="chat-auto-arret" role="alert">
+            <div
+              className="chat-workflow-notice fade-in"
+              data-testid="chat-auto-arret"
+              role="alert"
+            >
               <span>
                 {`« ${convs.find((c) => c.id === activeId)?.title || activeId} » — ${arretsAuto[activeId]}`}
               </span>
@@ -7348,7 +7356,11 @@ Cliquer pour choisir une autre branche.`}
           )}
 
           {activeId && autoActif && !quotaHebdoConnu && (
-            <div className="chat-workflow-notice" data-testid="chat-auto-quota-inconnu" role="status">
+            <div
+              className="chat-workflow-notice fade-in"
+              data-testid="chat-auto-quota-inconnu"
+              role="status"
+            >
               <span>
                 {`Mode auto : le quota hebdomadaire Claude n'a pas pu être lu. Seul le seuil de ${lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO)).toursAutoMax} tours automatiques d'affilée peut arrêter la chaîne.`}
               </span>

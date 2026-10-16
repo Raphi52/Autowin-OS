@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { act } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
@@ -31,6 +32,8 @@ describe('ChatView — refus visible du workflow actif', () => {
     const notice = harness.container.querySelector('[data-testid="chat-workflow-notice"]')
     expect(notice?.getAttribute('role')).toBe('alert')
     expect(notice?.textContent).toContain('Cassé')
+    // Le bandeau ARRIVE en glissant (conv-981, 2026-10-16) : la classe d'apparition du theme.
+    expect(notice?.classList.contains('fade-in')).toBe(true)
   })
 
   it('récupère au montage le refus émis avant la création de la fenêtre', async () => {
@@ -111,5 +114,24 @@ describe('ChatView — refus visible du workflow actif', () => {
     expect(text).not.toContain('startup ancien')
     expect(acknowledge).toHaveBeenCalledWith(2)
     expect(acknowledge).not.toHaveBeenCalledWith(1)
+  })
+})
+
+/**
+ * LES BANDEAUX GLISSENT A L'ENTREE (conv-981, 2026-10-16) : les 4 bandeaux du haut du chat (deux
+ * alertes, deux statuts) apparaissaient d'un coup. Chacun porte `.fade-in` (fondu + glissement,
+ * theme.css). Lu dans le source : trois d'entre eux ne s'affichent qu'apres un etat que ce banc ne
+ * produit pas (travail non publie, arret du mode auto, quota illisible). ENTREE QUI DOIT FAIRE
+ * ECHOUER : un bandeau `chat-workflow-notice` ajoute ou reecrit sans `fade-in`.
+ */
+describe('ChatView — les bandeaux glissent à l’entrée', () => {
+  it('chacun des bandeaux du chat porte la classe d’apparition', () => {
+    // Chemin depuis la racine du depot, comme les autres tests de source de ce dossier.
+    const source = readFileSync('src/renderer/src/components/ChatView.tsx', 'utf8')
+    const classes = [...source.matchAll(/className="(chat-workflow-notice[^"]*)"/g)].map(
+      (m) => m[1]
+    )
+    expect(classes).toHaveLength(4)
+    for (const c of classes) expect(c.split(' ')).toContain('fade-in')
   })
 })

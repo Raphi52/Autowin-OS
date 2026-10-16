@@ -63,6 +63,24 @@ interface LearningCurationEvent {
   }
 }
 
+/**
+ * Titre de l'inventaire : ne compte que les FICHIERS réellement chargés, une fois chacun.
+ *
+ * conv-984 (2026-10-16) : il comptait les LIGNES, chargées ou non. Or un même fichier y figure sous
+ * plusieurs moteurs (AGENTS.md vu par Codex, inactif car `project_doc_max_bytes=0`, ET replié par
+ * Autowin ; un CLAUDE.md seul, vu par Claude et par Autowin) : « réellement lues · 3 » pour un seul
+ * fichier chargé. On compte donc les CHEMINS distincts dont au moins une ligne est active, et on dit
+ * à part combien de fichiers listés ne sont chargés par personne.
+ */
+function titreInspection(files: ReadonlyArray<{ path: string; active: boolean }>): string {
+  const charges = new Set(files.filter((file) => file.active).map((file) => file.path))
+  const nonCharges = new Set(
+    files.filter((file) => !charges.has(file.path)).map((file) => file.path)
+  ).size
+  const suite = nonCharges > 0 ? ` · ${nonCharges} non chargée${nonCharges > 1 ? 's' : ''}` : ''
+  return `Instructions réellement lues · ${charges.size}${suite}`
+}
+
 function Field({ field }: { field: InfluencerField }): React.JSX.Element {
   return (
     <li className="behaviour-field">
@@ -342,7 +360,7 @@ export function BehaviourView(): React.JSX.Element {
       )}
       {composition?.inspection && (
         <section className="behaviour-inspection" aria-label="Instructions du workspace inspecté">
-          <strong>Instructions réellement lues · {composition.inspection.files.length}</strong>
+          <strong>{titreInspection(composition.inspection.files)}</strong>
           {composition.inspection.files.length === 0 ? (
             <small>Aucun fichier d’instructions découvert dans ce workspace.</small>
           ) : (

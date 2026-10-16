@@ -90,3 +90,40 @@ describe('ui-capture — restitution de la vue de l utilisateur', () => {
     expect(vueARestaurer()).toBeUndefined()
   })
 })
+
+import { choixDeListe, tauxDeLectureDuMouvement } from './ui-capture.mjs'
+
+/**
+ * `--choisir <selecteur> --valeur <v>` (conv-981, 2026-10-16) : le cercle du changement de theme part
+ * du `change` de la liste de Settings · Interface, qu'aucun clic ne declenche (le menu natif d'un
+ * <select> s'ouvre hors de la page). ENTREES FALSIFIANTES : `--tour` doit garder SA liste et son
+ * prefixe d'echec ; un `--choisir` sans valeur ne doit rien choisir ; le choix doit ralentir
+ * l'horloge comme un clic, sinon un cercle de 520 ms finit avant la premiere image.
+ */
+describe('ui-capture --choisir', () => {
+  it('vise la liste nommee et la valeur demandee', () => {
+    expect(
+      choixDeListe(['--choisir', '[data-testid="interface-theme"]', '--valeur', 'clair'])
+    ).toEqual({ selecteur: '[data-testid="interface-theme"]', valeur: 'clair', prefixe: 'liste' })
+  })
+
+  it('--tour garde la liste des tours et son prefixe', () => {
+    expect(choixDeListe(['--tour', 'turn-7'])).toEqual({
+      selecteur: '[data-execution-turn-select]',
+      valeur: 'turn-7',
+      prefixe: 'tour'
+    })
+  })
+
+  it('sans valeur, ou sans liste : rien a choisir (jumeau)', () => {
+    expect(choixDeListe(['--choisir', 'select'])).toBeNull()
+    expect(choixDeListe(['--choisir', 'select', '--valeur', '--motion'])).toBeNull()
+    expect(choixDeListe(['--valeur', 'clair'])).toBeNull()
+    expect(choixDeListe([])).toBeNull()
+  })
+
+  it('avec --motion, le choix ralentit l horloge comme un clic', () => {
+    expect(tauxDeLectureDuMouvement(['--motion', 'body', '--choisir', 'select'])).toBe(0.1)
+    expect(tauxDeLectureDuMouvement(['--motion', 'body'])).toBe(1)
+  })
+})

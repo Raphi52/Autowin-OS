@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
+import { basculerTheme } from '../transition-de-vue'
 import './InterfaceView.css'
 
 /**
@@ -63,7 +64,24 @@ export function InterfaceView(): React.JSX.Element {
             value={theme}
             aria-label="Thème"
             data-testid="interface-theme"
-            onChange={(e) => setTheme(e.target.value)}
+            onChange={(e) => {
+              // LE CERCLE PART D'ICI, et seulement d'ici (conv-981, 2026-10-16) : l'effet plus haut
+              // rejoue le theme a CHAQUE ouverture de l'ecran. Un `change` de liste n'a pas de
+              // position de souris : le cercle part du centre de la liste. Le theme est ecrit DANS
+              // la transition, avant l'image du nouvel etat ; l'effet le reecrit a l'identique.
+              const choisi = e.target.value
+              const boite = e.currentTarget.getBoundingClientRect()
+              basculerTheme(
+                document,
+                choisi === theme,
+                { x: boite.left + boite.width / 2, y: boite.top + boite.height / 2 },
+                { largeur: window.innerWidth, hauteur: window.innerHeight },
+                () => {
+                  ecrireThemeMode(choisi)
+                  setTheme(choisi)
+                }
+              )
+            }}
           >
             {THEMES.map((t) => (
               <option key={t.id} value={t.id}>

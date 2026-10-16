@@ -42,6 +42,7 @@ import { deposerOuvertureConversation } from './pending-conversation-open'
 import './ViewPage.css'
 import './TicketsView.css'
 import { Spinner } from './Spinner'
+import { BulleDuTicket } from './BulleDuTicket'
 
 interface TicketSourceSummary {
   profile: TicketSourceProfile
@@ -1550,10 +1551,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                         conversation déjà ouverte pour ce ticket s'il en existe une, sinon elle en
                         crée une. L'ancien badge texte (« prêt », « en cours »…) est supprimé : son
                         état survit dans la couleur de la bulle et dans l'infobulle. */}
-                        <button
-                          type="button"
+                        <BulleDuTicket
+                          statut={treatment?.status}
                           data-testid="ticket-open-conversation"
-                          className={`ticket-open-conversation${treatment ? ` is-${treatment.status}` : ''}`}
                           aria-label={
                             treatment
                               ? `Rejoindre la conversation du ticket ${item.id}`
@@ -1569,7 +1569,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                           onClick={() => void openTicketConversation(item, treatment)}
                         >
                           💬
-                        </button>
+                        </BulleDuTicket>
                       </div>
                     )
                   })}

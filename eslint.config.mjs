@@ -116,6 +116,23 @@ export default defineConfig(
     }
   },
   {
+    /*
+     * Même règle pour les scripts COMMONJS (`.cjs`), chargés par Node ou Electron avant tout
+     * TypeScript : `require` y EST la syntaxe d'import, et TypeScript ne peut pas y garantir les
+     * annotations de retour. Sans ce bloc, `scripts/menu-demarrer-dev.cjs` (9d6bb850, conv-954)
+     * rendait le lint rouge le 2026-10-16 : 7 erreurs, toutes de ces deux règles.
+     */
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs'
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off'
+    }
+  },
+  {
     // Tests et probes non expédiés : privilégier l'inférence des doubles et callbacks locaux.
     files: ['**/*.test.{ts,tsx}', 'scripts/**/*.{mts,ts}'],
     rules: {

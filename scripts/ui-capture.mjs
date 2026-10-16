@@ -54,6 +54,10 @@
  *         [--tour <turnId>]          choisit la demande affichee par le graphe (liste deroulante
  *                                    `[data-execution-turn-select]`), APRES les --click ; un tour
  *                                    absent de la liste est un echec nomme (code 9).
+ *         [--choisir <selecteur> --valeur <v>] la meme chose pour N'IMPORTE QUELLE liste <select>
+ *                                    (conv-981 : le cercle du changement de theme part du `change`
+ *                                    de la liste de Settings · Interface, qu'aucun clic ne declenche).
+ *                                    Liste ou valeur absente = echec nomme (code 9).
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -246,7 +250,10 @@ export const tauxDeLectureDuMouvement = (argv) => {
   const demande = i >= 0 ? Number(argv[i + 1]) : NaN
   const facteur = Number.isFinite(demande)
     ? Math.min(20, Math.max(1, demande))
-    : argv.includes('--click') || argv.includes('--taper') || argv.includes('--state')
+    : argv.includes('--click') ||
+        argv.includes('--taper') ||
+        argv.includes('--state') ||
+        argv.includes('--choisir')
       ? 10
       : 1
   return 1 / facteur
@@ -294,6 +301,28 @@ export const verdictCapture = (mesures) => {
   }
   if ((mesures.octetsPng ?? 0) < SEUILS.octetsPng) echecs.push('png-trop-petit')
   return { ok: echecs.length === 0, echecs }
+}
+
+/**
+ * La liste a regler et la valeur a y choisir, ou null. Pure. `--tour <id>` vise la liste des tours
+ * du graphe ; `--choisir <selecteur> --valeur <v>` (conv-981) vise n'importe quelle liste : un
+ * `change` de <select> ne se declenche par aucun clic (le menu natif s'ouvre hors de la page). Les
+ * echecs gardent le prefixe `tour-` pour `--tour`, `liste-` sinon.
+ */
+export const choixDeListe = (argv) => {
+  const valeurApres = (nom) => {
+    const i = argv.indexOf(nom)
+    const v = i >= 0 ? argv[i + 1] : undefined
+    return typeof v === 'string' && !v.startsWith('--') ? v : undefined
+  }
+  const tour = valeurApres('--tour')
+  if (tour !== undefined) {
+    return { selecteur: '[data-execution-turn-select]', valeur: tour, prefixe: 'tour' }
+  }
+  const selecteur = valeurApres('--choisir')
+  const valeur = valeurApres('--valeur')
+  if (selecteur === undefined || valeur === undefined) return null
+  return { selecteur, valeur, prefixe: 'liste' }
 }
 
 /**
@@ -1117,27 +1146,34 @@ const main = async () => {
   // un tour plus ancien se choisit dans une liste deroulante, qu'un clic ne regle pas. La valeur est
   // posee comme React l'attend (setter natif + evenement `change`), puis RELUE : un tour absent de
   // la liste est un echec nomme, jamais une capture du dernier tour presentee comme celle demandee.
-  const tourDemande = argument('--tour')
+  // --choisir <selecteur> --valeur <v> (conv-981) : le meme geste sur n'importe quelle liste.
+  const choix = choixDeListe(process.argv)
   let tourChoisi
-  if (tourDemande) {
-    const choix = await evaluer(`(() => {
-      const liste = document.querySelector('[data-execution-turn-select]')
-      if (!liste) return { echec: 'selecteur-de-tour-absent' }
+  let listeChoisie
+  if (choix) {
+    const { selecteur, valeur, prefixe } = choix
+    const pose = await evaluer(`(() => {
+      const liste = document.querySelector(${JSON.stringify(selecteur)})
+      if (!(liste instanceof HTMLSelectElement)) return { echec: ${JSON.stringify(prefixe === 'tour' ? 'selecteur-de-tour-absent' : 'liste-absente')} }
       const valeurs = [...liste.options].map((option) => option.value)
-      if (!valeurs.includes(${JSON.stringify(tourDemande)})) return { echec: 'tour-inconnu', tours: valeurs.slice(0, 20) }
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(liste, ${JSON.stringify(tourDemande)})
+      if (!valeurs.includes(${JSON.stringify(valeur)})) return { echec: ${JSON.stringify(prefixe === 'tour' ? 'tour-inconnu' : 'valeur-inconnue')}, valeurs: valeurs.slice(0, 20) }
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(liste, ${JSON.stringify(valeur)})
       liste.dispatchEvent(new Event('change', { bubbles: true }))
       return { ok: true }
     })()`)
-    if (!choix?.ok) {
+    if (!pose?.ok) {
       await restaurerVue()
       socket.close()
       rendre(
         {
           ok: false,
-          echecs: [`tour-non-choisi(${choix?.echec ?? 'inconnu'})`],
+          echecs: [`${prefixe}-non-choisi(${pose?.echec ?? 'inconnu'})`],
           vue,
-          ...(choix?.tours ? { toursDisponibles: choix.tours } : {})
+          ...(pose?.valeurs
+            ? prefixe === 'tour'
+              ? { toursDisponibles: pose.valeurs }
+              : { valeursDisponibles: pose.valeurs }
+            : {})
         },
         9
       )
@@ -1145,16 +1181,29 @@ const main = async () => {
     let relu
     for (let essai = 0; essai < 25; essai++) {
       await new Promise((r) => setTimeout(r, 200))
-      relu = await evaluer(`document.querySelector('[data-execution-turn-select]')?.value ?? null`)
-      if (relu === tourDemande) break
+      relu = await evaluer(`document.querySelector(${JSON.stringify(selecteur)})?.value ?? null`)
+      if (relu === valeur) break
     }
-    if (relu !== tourDemande) {
+    if (relu !== valeur) {
       await restaurerVue()
       socket.close()
-      rendre({ ok: false, echecs: [`tour-non-applique(${tourDemande})`], vue, tourLu: relu }, 9)
+      rendre(
+        {
+          ok: false,
+          echecs: [`${prefixe}-non-applique(${valeur})`],
+          vue,
+          ...(prefixe === 'tour' ? { tourLu: relu } : { valeurLue: relu })
+        },
+        9
+      )
     }
-    tourChoisi = tourDemande
-    await new Promise((r) => setTimeout(r, 1_000))
+    if (prefixe === 'tour') tourChoisi = valeur
+    else listeChoisie = { selecteur, valeur }
+    // Une mesure de mouvement part vite : ce que le choix lance (le cercle du theme) doit encore
+    // tourner a la premiere image. Sans mesure, on laisse le rendu se poser comme avant.
+    await new Promise((r) =>
+      setTimeout(r, prefixe === 'liste' && drapeau('--motion') ? 200 : 1_000)
+    )
     mesuresDom = await mesurerDom()
   }
 
@@ -1382,6 +1431,7 @@ const main = async () => {
         ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
         ...(cssInjecte ? { cssInjecte } : {}),
         ...(themeForce ? { themeForce } : {}),
+        ...(listeChoisie ? { listeChoisie } : {}),
         planche: boites.boites.length > 0 ? sortie : null,
         portUtilise,
         selecteur: selecteurMouvement,
@@ -1423,7 +1473,8 @@ const main = async () => {
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
     ...(retraits !== undefined ? { retraits } : {}),
     ...(conversationOuverte ? { conversation: conversationOuverte } : {}),
-    ...(tourChoisi ? { tour: tourChoisi } : {})
+    ...(tourChoisi ? { tour: tourChoisi } : {}),
+    ...(listeChoisie ? { listeChoisie } : {})
   }
   const verdict = verdictCapture(mesures)
   rendre(

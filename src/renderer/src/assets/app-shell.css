@@ -343,6 +343,38 @@
   animation-duration: 180ms;
 }
 
+/* LE CHANGEMENT DE THEME EN CERCLE (conv-981, 2026-10-16) : le nouveau theme s'ouvre en cercle
+   depuis la liste de Settings · Interface (`basculerTheme`, transition-de-vue.ts, qui pose l'origine
+   et le rayon en variables). L'ancien theme reste FIXE dessous : pas de fondu croise, et pas de
+   melange additif des deux images (`plus-lighter` du navigateur) qui surexposerait le cercle.
+   Qualifie par `theme-en-transition` SEULEMENT : non qualifie, le cercle jouerait aussi a chaque
+   changement d'onglet (les deux passent par `::view-transition-new(root)`). Meme exception a
+   prefers-reduced-motion que le passage de vue ci-dessus : ce poste l'a actif. */
+:root.theme-en-transition::view-transition-old(root),
+:root.theme-en-transition::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Opacite FIXEE : une regle non qualifiee qui masque l'ancienne vue au changement d'onglet
+   (`::view-transition-old(root) { opacity: 0 }`) s'appliquerait aussi ici, et le cercle s'ouvrirait
+   sur du vide. Cette regle qualifiee l'emporte par sa specificite. */
+:root.theme-en-transition::view-transition-old(root) {
+  opacity: 1;
+}
+:root.theme-en-transition::view-transition-new(root) {
+  animation: theme-cercle 520ms var(--ease);
+}
+@keyframes theme-cercle {
+  from {
+    clip-path: circle(0 at var(--theme-cercle-x, 50%) var(--theme-cercle-y, 50%));
+  }
+  to {
+    clip-path: circle(
+      var(--theme-cercle-r, 150vmax) at var(--theme-cercle-x, 50%) var(--theme-cercle-y, 50%)
+    );
+  }
+}
+
 /* Flash discret quand un agent pilote la vue (inset accent, pas de halo flou). */
 .main.driven {
   box-shadow: inset 0 0 0 2px var(--accent);

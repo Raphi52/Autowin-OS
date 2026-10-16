@@ -58,7 +58,12 @@ export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'a
  * precedent tenu par le motif React « informations des rendus precedents » (setState pendant le
  * rendu), sur en double rendu.
  */
-export function useAtterrissage(etat: string): [Atterrissage | null, () => void] {
+export function useAtterrissage(
+  etat: string,
+  // Le PASSAGE qui joue l'effet : par defaut la fin d'un run du chat. La bulle d'un ticket passe le
+  // sien (`eclatDuTicket`, ticket-treatment.ts, conv-981) : meme mecanique, autre etat.
+  passage: (avant: string, apres: string) => Atterrissage | null = atterrissageDuPassage
+): [Atterrissage | null, () => void] {
   // fix-ok: src/renderer/src/components/anneau-activite-calcul.ts — marque laissee posee = reflet
   // rejoue a chaque retour sur le Chat (display:none -> flex relance les animations CSS).
   const [suivi, setSuivi] = useState<{ etat: string; atterrissage: Atterrissage | null }>({
@@ -68,7 +73,7 @@ export function useAtterrissage(etat: string): [Atterrissage | null, () => void]
   const effacer = (): void =>
     setSuivi((courant) => (courant.atterrissage ? { ...courant, atterrissage: null } : courant))
   if (suivi.etat !== etat) {
-    const suivant = { etat, atterrissage: atterrissageDuPassage(suivi.etat, etat) }
+    const suivant = { etat, atterrissage: passage(suivi.etat, etat) }
     setSuivi(suivant)
     return [suivant.atterrissage, effacer]
   }

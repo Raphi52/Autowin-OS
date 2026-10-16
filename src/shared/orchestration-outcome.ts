@@ -1357,15 +1357,52 @@ function lireLeBlocage(
 }
 
 /**
- * Texte de clôture d'une orchestration. Ne prétend JAMAIS un succès : `gateBlocked` ou `valid: false`
- * sont dits explicitement, même quand l'appel a « réussi » techniquement. Un gate qui bloque est un
- * échec de livraison, pas un détail.
+ * Coupe du résultat dans la BULLE affichée, et nulle part ailleurs (voir la fonction suivante).
+ */
+export const CARACTERES_MAX_RESULTAT_AFFICHE = 4_000
+
+/**
+ * Texte de clôture d'une orchestration POUR L'AFFICHAGE. Ne prétend JAMAIS un succès : `gateBlocked`
+ * ou `valid: false` sont dits explicitement, même quand l'appel a « réussi » techniquement. Un gate
+ * qui bloque est un échec de livraison, pas un détail. Le résultat y est borné à
+ * `CARACTERES_MAX_RESULTAT_AFFICHE`, avec l'avis de ce qui manque.
  */
 export function formatOrchestrationOutcome(
   ok: boolean,
   data: OrchestrationOutcome | undefined,
   errorMessage?: string,
   closingNotice?: string
+): string {
+  return composerLIssue(ok, data, errorMessage, closingNotice, CARACTERES_MAX_RESULTAT_AFFICHE)
+}
+
+/**
+ * LE MEME COMPTE-RENDU, MAIS POUR L'AGENT DU CHAT : le résultat du run y est ENTIER.
+ *
+ * Vécu dans conv-914 (2026-10-16) : le scout avait rendu 6 pistes, et l'agent du chat n'en voyait
+ * qu'une. La coupe à 4 000 caractères, faite pour la bulle, servait AUSSI de résultat officiel du run
+ * remis au modèle (`agent-pilot.ts`) : il ne pouvait ni citer ni enchaîner sur ce qui suivait.
+ * L'utilisateur avait déjà posé la règle le 2026-09-27 pour le passage d'une étape à l'autre
+ * (`porterVersPhaseSuivante`, orchestrator.ts) : on ne coupe pas ce que le lecteur suivant doit
+ * savoir. La protection de la fenêtre de contexte reste celle de TOUT résultat de commande
+ * (`bornerResultatDeCommande`, appliquée par l'appelant), pas une coupe d'affichage réemployée.
+ */
+export function formatOrchestrationOutcomePourLeModele(
+  ok: boolean,
+  data: OrchestrationOutcome | undefined,
+  errorMessage?: string,
+  closingNotice?: string
+): string {
+  return composerLIssue(ok, data, errorMessage, closingNotice, undefined)
+}
+
+/** Corps commun : `plafondDuResultat` absent = résultat entier. */
+function composerLIssue(
+  ok: boolean,
+  data: OrchestrationOutcome | undefined,
+  errorMessage: string | undefined,
+  closingNotice: string | undefined,
+  plafondDuResultat: number | undefined
 ): string {
   if (!ok) {
     return `Échec du workflow : ${asString(errorMessage) ?? asString(data?.error) ?? 'raison non rapportée'}`
@@ -1467,7 +1504,13 @@ export function formatOrchestrationOutcome(
   if (visibleResult)
     lines.push(
       '',
-      boundedMarkdownResult(visibleResult, 4_000, asString(outcome.runPath) ?? undefined)
+      plafondDuResultat === undefined
+        ? visibleResult
+        : boundedMarkdownResult(
+            visibleResult,
+            plafondDuResultat,
+            asString(outcome.runPath) ?? undefined
+          )
     )
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
   if (delivered) lines.push('', ...deliveredClosingBlock(data, faitsDuRapport(result)))

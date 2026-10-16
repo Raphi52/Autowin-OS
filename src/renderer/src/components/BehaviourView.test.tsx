@@ -132,6 +132,66 @@ describe('vue Behaviour', () => {
     await act(async () => root.unmount())
   })
 
+  // conv-984 (2026-10-16) : le titre comptait les LIGNES de l'inventaire, chargées ou non. Avec
+  // AGENTS.md vu par Codex (inactif : `project_doc_max_bytes=0`) et par Autowin (replié), plus un
+  // CLAUDE.md masqué, il annonçait « réellement lues · 3 » pour UN seul fichier réellement chargé.
+  it('le titre ne compte que les FICHIERS réellement chargés, une fois chacun', async () => {
+    const { root, container } = await render()
+    const composition = window.api.behaviourComposition as ReturnType<typeof vi.fn>
+    const base = await composition('C:\\workspace-b')
+    const agents = 'C:\\workspace-b\\AGENTS.md'
+    composition.mockImplementation(async () => ({
+      ...base,
+      inspection: {
+        workspace: 'C:\\workspace-b',
+        files: [
+          {
+            id: 'codex:workspace:a',
+            label: 'AGENTS.md',
+            path: agents,
+            engine: 'codex',
+            state: 'shadowed',
+            reason: 'Chargement automatique de Codex coupé',
+            active: false
+          },
+          {
+            id: 'autowin:workspace:a',
+            label: 'AGENTS.md',
+            path: agents,
+            engine: 'autowin',
+            state: 'injected',
+            reason: 'Replié dans le prompt',
+            active: true,
+            excerpt: '# Consignes'
+          },
+          {
+            id: 'autowin:workspace:c',
+            label: 'CLAUDE.md',
+            path: 'C:\\workspace-b\\CLAUDE.md',
+            engine: 'autowin',
+            state: 'shadowed',
+            reason: 'Masqué par AGENTS.md',
+            active: false
+          }
+        ]
+      }
+    }))
+    const button = [...container.querySelectorAll('button')].find((item) =>
+      item.textContent?.includes('Choisir un workspace')
+    ) as HTMLButtonElement
+    await act(async () => {
+      button.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const titre = container.querySelector('.behaviour-inspection > strong')?.textContent
+    expect(titre).toBe('Instructions réellement lues · 1 · 1 non chargée')
+    // La liste, elle, garde toutes les lignes : chacune dit son état.
+    expect(container.querySelectorAll('.behaviour-inspection li')).toHaveLength(3)
+    await act(async () => root.unmount())
+  })
+
   it('expose le kill switch et le journal outcome-learning', async () => {
     const { root, container } = await render()
     const select = container.querySelector(

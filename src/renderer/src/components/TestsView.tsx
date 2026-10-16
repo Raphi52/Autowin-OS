@@ -4,6 +4,7 @@ import { PerfLagPanel } from './PerfLagPanel'
 import './ViewPage.css'
 import './TestsView.css'
 import { Spinner } from './Spinner'
+import { largeursDeLaBarre } from './tests-barre'
 
 /**
  * Vue Tests — MULTI-PROJETS par construction.
@@ -54,6 +55,11 @@ function api(): Api {
   return ((window as unknown as { api?: Api }).api ?? {}) as Api
 }
 
+/** La valeur que le compteur qui monte atteint (TestsView.css, `--tests-n`). */
+function compteur(valeur: number): React.CSSProperties {
+  return { '--tests-n': valeur } as React.CSSProperties
+}
+
 /** Cle de la MEMOIRE du dernier run : rouvrir la vue ne doit pas repartir d'un ecran vide. */
 const CLE_MEMOIRE = 'autowin.tests.lastRun'
 
@@ -101,6 +107,11 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   const [replies, setReplies] = useState<Record<string, boolean>>({})
   const [memorises, setMemorises] = useState<Record<string, boolean>>({})
   const [chrono, setChrono] = useState(0)
+  // LE RESULTAT QUI ARRIVE (conv-981, 2026-10-16) : le projet dont le run VIENT de finir. Sa barre se
+  // remplit, ses compteurs montent, ses echecs arrivent en cascade — une fois. La marque tombe a la
+  // fin du remplissage : une animation CSS repart a chaque retour sur l'onglet (display:none -> flex),
+  // et un run memorise rouvert n'a rien a annoncer.
+  const [frais, setFrais] = useState('')
   // Onglets : les suites d'un cote, l'outillage de MESURE DES LENTEURS de l'autre. Le panneau de
   // latence ne monte qu'au clic — sa sonde ne doit rien couter tant qu'on ne la demande pas.
   const [onglet, setOnglet] = useState<'suites' | 'latence'>('suites')
@@ -172,6 +183,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             return suite
           })
           setMemorises((prev) => ({ ...prev, [projetActif.id]: false }))
+          setFrais(projetActif.id)
         }
       } catch (e) {
         setErreur(e instanceof Error ? e.message : String(e))
@@ -224,6 +236,9 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
     },
     [projetActif]
   )
+
+  // Rang de chaque echec AFFICHE, d'un groupe a l'autre : le delai de la cascade (TestsView.css).
+  let rangDEchec = 0
 
   return (
     <section className="view-page tests-view" data-testid="tests-view">
@@ -342,7 +357,12 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             })}
           </aside>
 
-          <div className="tests-results">
+          <div
+            className={`tests-results${frais && frais === projetActif?.id ? ' is-frais' : ''}`}
+            onAnimationEnd={(e) => {
+              if (e.animationName === 'tests-remplir') setFrais('')
+            }}
+          >
             {!resultat && projetActif && (
               <p className="tests-empty">
                 {projetActif.runnable
@@ -353,12 +373,34 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             {resultat && (
               <>
                 <div className="tests-summary" data-testid="tests-totals">
-                  <span className="ok">{resultat.totals.passed} passés</span>
-                  <span className="ko">{resultat.totals.failed} échecs</span>
+                  {/* Le VRAI nombre reste le texte (lu par les tests et les lecteurs d'ecran) ; le
+                    compteur qui monte n'est qu'une image posee dessus le temps de l'arrivee. */}
+                  <span className="ok">
+                    <span className="tests-nombre" style={compteur(resultat.totals.passed)}>
+                      {resultat.totals.passed}
+                    </span>{' '}
+                    passés
+                  </span>
+                  <span className="ko">
+                    <span className="tests-nombre" style={compteur(resultat.totals.failed)}>
+                      {resultat.totals.failed}
+                    </span>{' '}
+                    échecs
+                  </span>
                   <span className="sk">{resultat.totals.skipped} ignorés</span>
                   <span className="meta">
                     {resultat.runner} · {resultat.durationMs} ms · exit {String(resultat.exitCode)}
                   </span>
+                </div>
+                <div className="tests-barre" data-testid="tests-barre" aria-hidden="true">
+                  <span
+                    className="tests-barre-ok"
+                    style={{ width: `${largeursDeLaBarre(resultat.totals).reussis}%` }}
+                  />
+                  <span
+                    className="tests-barre-ko"
+                    style={{ width: `${largeursDeLaBarre(resultat.totals).echecs}%` }}
+                  />
                 </div>
                 {projetActif && memorises[projetActif.id] && (
                   <p className="tests-memo" data-testid="tests-memo">
@@ -400,7 +442,15 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                         {!replie && (
                           <ul className="tests-file-cases">
                             {items.map((c, i) => (
-                              <li key={`${c.name}-${i}`} className={`tests-case is-${c.status}`}>
+                              <li
+                                key={`${c.name}-${i}`}
+                                className={`tests-case is-${c.status}`}
+                                style={
+                                  c.status === 'failed'
+                                    ? ({ '--rang': rangDEchec++ } as React.CSSProperties)
+                                    : undefined
+                                }
+                              >
                                 <span className="tests-case-status">
                                   {LIBELLE_STATUT[c.status]}
                                 </span>

@@ -147,3 +147,23 @@ describe('nappe de bruit organique (or/anthracite)', () => {
     )
   })
 })
+
+// conv-981 : le nouveau theme s'ouvre en cercle PAR-DESSUS l'ancien. Une regle non qualifiee qui masque
+// l'ancienne vue (`::view-transition-old(root) { opacity: 0 }`, travail de conv-987 sur le passage de
+// vue) s'appliquerait aussi au theme : le cercle s'ouvrirait sur du vide. La regle qualifiee du cercle
+// fixe donc l'opacite de l'ancien theme, et sa specificite l'emporte sur la regle non qualifiee.
+describe('changement de theme en cercle', () => {
+  it("garde l'ancien theme visible sous le cercle, meme si l'ancienne vue est masquee ailleurs", () => {
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
+    )
+    const regles = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, selecteurs]) =>
+      selecteurs
+        .split(',')
+        .some((s) => s.trim() === ':root.theme-en-transition::view-transition-old(root)')
+    )
+    expect(regles.length).toBeGreaterThan(0)
+    expect(regles.some(([, , corps]) => /(^|;|\s)opacity:\s*1\s*;/.test(corps))).toBe(true)
+  })
+})

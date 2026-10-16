@@ -339,3 +339,68 @@ describe('TestsView — 5 manques', () => {
     expect(revealFile.mock.calls[0]).toEqual(['C:/dev/autowin/b.test.ts', 42])
   })
 })
+
+/**
+ * LE RESULTAT QUI ARRIVE (conv-981, 2026-10-16) : un rail reussis / echecs dont la largeur suit les
+ * totaux, et une marque `is-frais` (barre qui se remplit, compteurs qui montent, echecs en cascade)
+ * posee QUAND un run finit, retiree a la fin du remplissage. ENTREES QUI DOIVENT FAIRE ECHOUER : une
+ * marque posee sur un run MEMORISE rouvert (l'effet rejouerait a chaque ouverture), une marque jamais
+ * retiree (il rejouerait a chaque retour sur l'onglet), ou un vrai nombre retire du texte.
+ */
+describe('TestsView — le résultat qui arrive', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+  beforeEach(() => {
+    window.localStorage.clear()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        testProjects: vi.fn(async () => projets),
+        runProjectTests: vi.fn(async () => resultatDeux)
+      }
+    })
+  })
+
+  it('un run qui finit : rail au prorata, marque d arrivee, vrais nombres dans le texte', async () => {
+    const container = monter()
+    await rendre(container)
+    await lancerSuite(container)
+    const segments = container.querySelectorAll<HTMLElement>('[data-testid="tests-barre"] > span')
+    expect([...segments].map((s) => s.style.width)).toEqual(['50%', '50%'])
+    const resultats = container.querySelector('.tests-results')!
+    expect(resultats.classList.contains('is-frais')).toBe(true)
+    const totaux = container.querySelector('[data-testid="tests-totals"]')!.textContent
+    expect(totaux).toContain('1 passés')
+    expect(totaux).toContain('1 échecs')
+    const echec = container.querySelector<HTMLElement>('.tests-case.is-failed')!
+    expect(echec.style.getPropertyValue('--rang')).toBe('0')
+
+    // La fin du remplissage retire la marque ; une autre animation (cascade) ne la retire pas.
+    await act(async () => {
+      resultats.dispatchEvent(
+        Object.assign(new Event('animationend', { bubbles: true }), { animationName: 'fadeIn' })
+      )
+    })
+    expect(resultats.classList.contains('is-frais')).toBe(true)
+    await act(async () => {
+      segments[0].dispatchEvent(
+        Object.assign(new Event('animationend', { bubbles: true }), {
+          animationName: 'tests-remplir'
+        })
+      )
+    })
+    expect(resultats.classList.contains('is-frais')).toBe(false)
+  })
+
+  it('un run MEMORISE rouvert : le rail, mais aucune marque d arrivee (jumeau)', async () => {
+    const premier = monter()
+    await rendre(premier)
+    await lancerSuite(premier)
+    const second = monter()
+    await rendre(second)
+    expect(second.querySelector('[data-testid="tests-memo"]')).not.toBeNull()
+    expect(second.querySelector('[data-testid="tests-barre"]')).not.toBeNull()
+    expect(second.querySelector('.tests-results')!.classList.contains('is-frais')).toBe(false)
+  })
+})

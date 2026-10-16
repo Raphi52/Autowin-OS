@@ -1,3 +1,4 @@
+import { skillNommeeEnTete } from '../../../shared/skill-nommee'
 import type { SkillInstallee } from './useSkillsInventory'
 
 /**
@@ -5,6 +6,10 @@ import type { SkillInstallee } from './useSkillsInventory'
  * `/<skill>` affiche le nom de la skill dans un bandeau en haut de la bulle, et le prefixe est
  * RETIRE du texte. Seule une skill INSTALLEE est reconnue : un `/truc` inconnu reste du texte
  * normal, pour ne pas faire croire qu'une skill a ete lancee.
+ *
+ * Depuis conv-988 (2026-10-16), le nom NU en tete (« draft des animations… ») porte le meme
+ * bandeau : la regle vit dans `shared/skill-nommee.ts`, la meme que celle qui CHARGE la skill cote
+ * main — le bandeau ne s'allume donc que sur un message dont la procedure est reellement chargee.
  */
 export interface EnteteSkill {
   skill: string
@@ -17,14 +22,15 @@ export function decouperSkill(
   skills: readonly SkillInstallee[] | null | undefined
 ): EnteteSkill | null {
   if (!skills || skills.length === 0) return null
-  const m = /^\s*\/([A-Za-z0-9][\w-]*)(?=\s|$)/.exec(contenu)
-  if (!m) return null
-  const nom = m[1].toLowerCase()
-  const trouvee = skills.find((s) => s.id.toLowerCase() === nom)
-  if (!trouvee) return null
+  const nommee = skillNommeeEnTete(
+    contenu,
+    skills.map((s) => s.id)
+  )
+  if (!nommee) return null
+  const trouvee = skills.find((s) => s.id === nommee.skill)
   return {
-    skill: trouvee.id,
-    description: trouvee.description?.trim() || undefined,
-    reste: contenu.slice(m[0].length).replace(/^\s+/, '')
+    skill: nommee.skill,
+    description: trouvee?.description?.trim() || undefined,
+    reste: nommee.reste
   }
 }

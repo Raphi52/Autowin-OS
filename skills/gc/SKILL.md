@@ -27,6 +27,12 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
   qui échoue » : aucun satellite collecté ce jour-là.
   Constaté aussi le 2026-10-05 : le fichier de base, figé au 02/10, ignorait toutes les
   conversations créées depuis — elles n'existaient QUE dans le journal.
+  **Puis AJOUTER les archives** : depuis le 2026-10-14 (cb33e5ac), un fil inactif depuis 14 jours
+  quitte `conversations.json` pour `conversations.json.archive/<id>.json` — il reste VIVANT.
+  Lire leurs ids avec `idsArchives` (`file:///D:/AutoWinOS/scripts/conversations-sur-disque.mjs`,
+  qui écarte les pierres tombales `<id>.supprime`), moins ceux que le journal supprime. Mesuré le
+  2026-10-16 : 73 fils dans le fichier, 785 en archive, 861 vivants — sans les archives, les
+  satellites de 785 conversations vivantes passaient pour orphelins.
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
 - Hors périmètre ABSOLU : `claude-accounts/` (identités, secrets), `Cache/`, `Code Cache/`,
   `GPUCache/`, `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal` (propriété

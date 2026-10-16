@@ -105,3 +105,59 @@ describe('Settings · Interface', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 })
+
+/**
+ * LE CERCLE DU CHANGEMENT DE THEME (conv-981, 2026-10-16) part du `onChange` de la liste, JAMAIS de
+ * l'effet qui rejoue le theme a chaque ouverture de l'ecran. Entree qui doit faire echouer ce bloc :
+ * deplacer `basculerTheme` dans le `useEffect` (le cercle partirait a l'ouverture de Settings), ou
+ * reprendre la classe des vues (le cercle jouerait a chaque changement d'onglet).
+ */
+describe('Settings · Interface — cercle du changement de thème', () => {
+  const rappels: Array<() => void> = []
+  const fins: Array<() => void> = []
+  const demarrer = vi.fn((rappel: () => void) => {
+    rappels.push(rappel)
+    return { finished: new Promise<void>((ok) => fins.push(ok)) }
+  })
+
+  beforeEach(() => {
+    rappels.length = 0
+    fins.length = 0
+    demarrer.mockClear()
+    Object.defineProperty(document, 'startViewTransition', { configurable: true, value: demarrer })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'startViewTransition')
+    document.documentElement.classList.remove('theme-en-transition', 'vue-en-transition')
+  })
+
+  it('l ouverture de l ecran applique le thème SANS cercle', async () => {
+    localStorage.setItem(THEME_MODE_STORAGE_KEY, 'clair')
+    await monter()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('clair')
+    expect(demarrer).not.toHaveBeenCalled()
+    expect(document.documentElement.classList.contains('theme-en-transition')).toBe(false)
+  })
+
+  it('choisir un thème lance le cercle sous SA classe, applique le thème dans la transition', async () => {
+    const container = await monter()
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
+    await act(async () => {
+      liste.value = 'clair'
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(demarrer).toHaveBeenCalledOnce()
+    const racine = document.documentElement
+    expect(racine.classList.contains('theme-en-transition')).toBe(true)
+    expect(racine.classList.contains('vue-en-transition')).toBe(false)
+    expect(racine.style.getPropertyValue('--theme-cercle-r')).toMatch(/^\d+px$/)
+
+    await act(async () => rappels[0]())
+    expect(racine.getAttribute('data-theme')).toBe('clair')
+    expect(localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('clair')
+    expect(liste.value).toBe('clair')
+
+    await act(async () => fins[0]())
+    expect(racine.classList.contains('theme-en-transition')).toBe(false)
+  })
+})

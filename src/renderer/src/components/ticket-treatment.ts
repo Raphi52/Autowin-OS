@@ -32,6 +32,16 @@ export type TicketTreatmentStatus =
   /** Run jamais résolu (fermeture/crash) : indéterminé, surtout PAS « en cours » à vie. */
   | 'interrupted'
 
+/**
+ * L'ECLAT DE LA BULLE D'UN TICKET (conv-981, 2026-10-16) : le PASSAGE d'un traitement en cours a
+ * traite, vu pendant que la vue est ouverte. Un ticket deja traite a l'ouverture, un echec, une
+ * interruption ou un traite reenregistre ne jouent rien : l'eclat dit « ca vient de reussir ». Pure ;
+ * branchee sur `useAtterrissage` (anneau-activite-calcul.ts) par `BulleDuTicket`.
+ */
+export function eclatDuTicket(avant: string, apres: string): 'reussi' | null {
+  return avant === 'running' && apres === 'succeeded' ? 'reussi' : null
+}
+
 export interface TicketTreatmentRecord {
   conversationId: string
   status: TicketTreatmentStatus

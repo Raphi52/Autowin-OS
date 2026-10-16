@@ -373,6 +373,34 @@
   border-color: var(--danger, #ff7185);
   background: color-mix(in srgb, var(--danger, #ff7185) 18%, transparent);
 }
+
+/* LA TEINTE GLISSE, ET LE TRAITE ECLATE (conv-981, 2026-10-16) : la bulle changeait de couleur d'un
+   coup (aucune transition dans cette feuille). Elle glisse d'une teinte a l'autre ; et quand un
+   traitement EN COURS devient traite, un anneau vert s'en echappe une fois (`.is-eclat`, posee par
+   BulleDuTicket.tsx au seul PASSAGE, retiree a la fin de l'animation). Jamais sur `.is-succeeded`
+   directement : chaque ticket deja traite eclaterait a l'ouverture de la vue. Meme exception a
+   prefers-reduced-motion que le spinner : ce poste l'a actif. */
+.ticket-open-conversation {
+  transition:
+    background-color 450ms var(--ease),
+    border-color 450ms var(--ease);
+}
+.ticket-open-conversation.is-eclat {
+  animation: ticket-eclat 900ms var(--ease);
+}
+@keyframes ticket-eclat {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success, #73d9a2) 75%, transparent);
+  }
+  30% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--success, #73d9a2) 0%, transparent);
+  }
+}
 .ticket-select-row > input {
   width: 16px;
   height: 16px;

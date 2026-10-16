@@ -25,6 +25,7 @@ import { listNativeRegistry, skillRoots } from './native-registry'
 // dans ses propres signatures, d'où l'import en plus du re-export.
 import { type PipelinePhase } from '../shared/pipeline-phases'
 import { corrigeSkillMalTapee, resolveSkillAlias } from '../shared/skill-aliases'
+import { skillNommeeEnTete } from '../shared/skill-nommee'
 
 export {
   PIPELINE_PHASES,
@@ -64,6 +65,19 @@ export function loadEngineText(root = skillsRoot()): string {
  */
 export function invokedSkillId(message: string): string | undefined {
   return /^\s*\/([a-z][a-z0-9-]*)\b/i.exec(message ?? '')?.[1]?.toLowerCase()
+}
+
+/**
+ * Skill nommée SANS barre en tête du message (« draft des animations… »), sinon undefined.
+ *
+ * Même règle que la bulle du fil (`shared/skill-nommee.ts`), appliquée aux seules skills présentes
+ * sur disque : la bulle « DRAFT » ne s'allume donc que sur un message dont le corps est réellement
+ * chargé. Avant (conv-988, 2026-10-16), la consigne du chat disait « SKILL NOMMÉE = SKILL
+ * INVOQUÉE » mais rien ne chargeait la procédure : l'agent ne l'a lue que 5 fois sur 169.
+ */
+export function skillNommeeSansBarre(message: string, roots = skillRoots()): string | undefined {
+  const nommee = skillNommeeEnTete(message, dossiersDeSkills(roots))
+  return nommee && !nommee.barre ? nommee.skill.toLowerCase() : undefined
 }
 
 /**
