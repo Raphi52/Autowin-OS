@@ -744,9 +744,7 @@ function detachedClaudeSuccess(
     /*
      * MÊME SÉPARATEUR QUE LE DIRECT (`providers/claude.ts`, `separationEntreBlocsTexte`). Un simple
      * `join('')` recollait « …le pilotage.Contrôle à 0. » là où le direct avait affiché
-     * « …le pilotage.
-
-Contrôle à 0. » : le préfixe déjà diffusé ne préfixait plus le texte
+     * « …le pilotage.\n\nContrôle à 0. » : le préfixe déjà diffusé ne préfixait plus le texte
      * récupéré, et `consumeStreamedPrefix` jetait TOUT le bloc. Mesuré le 2026-10-16 (conv-1002,
      * tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc) : la galerie html-render du tour 3, payée, n'a
      * jamais atteint le fil après le redémarrage.
