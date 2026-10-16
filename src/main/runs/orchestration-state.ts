@@ -660,7 +660,7 @@ export function suppressOrchestrationPipeline(
   electedRunId: string,
   nowMs = Date.now()
 ): OrchestrationRunState {
-  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const current = loadOrchestrationState(root, runId)
   if (!current) throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
   if (current.resumeDisposition) {
     if (current.resumeDisposition.electedRunId !== electedRunId) {
@@ -691,7 +691,7 @@ export function saveOrchestrationAgentCheckpoint(
   usage: ExecutionUsageSnapshot | undefined,
   nowMs = Date.now()
 ): OrchestrationRunState {
-  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const current = loadOrchestrationState(root, runId)
   if (!current) {
     throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
   }
@@ -727,7 +727,7 @@ export async function marquerCheckpointCoupeParQuota(
   } = {},
   nowMs = Date.now()
 ): Promise<OrchestrationRunState> {
-  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const current = loadOrchestrationState(root, runId)
   if (!current) throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
   const updated: OrchestrationRunState = {
     ...current,
@@ -830,7 +830,7 @@ export function saveOrchestrationAgentCheckpointAsync(
   usage: ExecutionUsageSnapshot | undefined,
   nowMs = Date.now()
 ): OrchestrationRunState {
-  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const current = loadOrchestrationState(root, runId)
   if (!current) {
     throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
   }
@@ -859,6 +859,33 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
     }
   }
   return fusionnerEtatsEnVol(root, states)
+}
+
+/**
+ * UN checkpoint, lu dans SON fichier — meme resultat que
+ * `loadOrchestrationStates(root).find((c) => c.runId === runId)`, sans relire les autres.
+ *
+ * Pourquoi (heal conv-1013, 2026-10-16) : `gels.jsonl` porte a chaque demarrage ~1,15 s de
+ * `readFileSync` (≈ 540 appels) partis de `terminalizeInterruptedPersistedRun`, qui rechargeait
+ * TOUS les checkpoints pour en retrouver un, et ce pour CHAQUE run du balayage de demarrage :
+ * N + N² lectures (1 332 sur les 36 checkpoints du poste, ~1,0 s). L'equivalence tient parce que
+ * `loadOrchestrationStates` n'accepte un etat que dans `<runId>.json` : aucun autre fichier ne peut
+ * porter ce run. Un `runId` mal forme garde le chemin complet, pour rendre exactement la meme chose.
+ */
+export function loadOrchestrationState(
+  root: string,
+  runId: string
+): OrchestrationRunState | undefined {
+  if (!isRunId(runId)) return loadOrchestrationStates(root).find((c) => c.runId === runId)
+  const states: OrchestrationRunState[] = []
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(statePath(root, runId), 'utf8'))
+    normalizeLegacyAllocationNames(parsed)
+    if (isOrchestrationRunState(parsed) && parsed.runId === runId) states.push(parsed)
+  } catch {
+    // Absent, ou JSON tronque par un crash : ignore, comme le chargement complet.
+  }
+  return fusionnerEtatsEnVol(root, states).find((c) => c.runId === runId)
 }
 
 /** L'etat dont l'ecriture est encore en vol PRIME sur ce que le disque montre encore. */

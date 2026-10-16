@@ -75,6 +75,7 @@ import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
   marquerCheckpointCoupeParQuota,
+  loadOrchestrationState,
   loadOrchestrationStates,
   pickOrchestrationsToResume,
   pickOrchestrationToResume,
@@ -1337,9 +1338,7 @@ export class AutowinOS {
            */
           relire: () =>
             resumeControl?.runId
-              ? loadOrchestrationStates(this.orchestrationStateRoot).find(
-                  (etat) => etat.runId === resumeControl.runId
-                )?.usage
+              ? loadOrchestrationState(this.orchestrationStateRoot, resumeControl.runId)?.usage
               : undefined
         }
       )
@@ -1514,9 +1513,7 @@ export class AutowinOS {
       offset?: number
     }>
   ): void {
-    const state = loadOrchestrationStates(this.orchestrationStateRoot).find(
-      (candidate) => candidate.runId === runId
-    )
+    const state = loadOrchestrationState(this.orchestrationStateRoot, runId)
     if (!state) return
     saveOrchestrationState(this.orchestrationStateRoot, { ...state, agents, updatedAt: Date.now() })
   }

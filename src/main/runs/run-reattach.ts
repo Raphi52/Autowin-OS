@@ -1,5 +1,5 @@
 import {
-  loadOrchestrationStates,
+  loadOrchestrationState,
   saveOrchestrationState,
   type OrchestrationRunState
 } from './orchestration-state'
@@ -411,7 +411,7 @@ export function preparePersistedRunForRelaunch(
   nowMs = Date.now(),
   onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state?.usage || state.usage.activeCalls <= 0 || state.terminal) return state ?? null
 
   const liveness = runLiveness(state, identityOf)
@@ -563,7 +563,7 @@ export function terminalizeInterruptedPersistedRun(
   allowUnknown = false,
   probes: InterruptedTerminalizationProbes = {}
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state || state.terminal || !state.usage || state.usage.activeCalls <= 0) return state ?? null
 
   const liveness = runLiveness(state, identityOf)
@@ -1046,7 +1046,7 @@ export function settleCompletedDetachedPhase(
   runId: string,
   onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state?.usage || state.usage.activeCalls !== 1) return null
   const attribution = detachedSingleAgent(state)
   if (!attribution?.agent.journalPath || !attribution.agent.provider) return null
