@@ -81,8 +81,8 @@ export class TrustLedger {
   }
 
   /**
-   * L'humain tranche APRES COUP : « c'etait bon » / « c'etait faux ».
-   * Rend le nombre de verdicts re-etiquetes (0 si le run est inconnu).
+   * L'humain tranche APRES COUP : « c'etait bon » / « c'etait faux » sur le resultat final du run.
+   * Rend le nombre de verdicts re-etiquetes : 1 (le dernier du run), ou 0 si le run est inconnu.
    */
   confirmer(runId: string, humanTruth: Verdict): number {
     const touches = this.appliquer(runId, humanTruth)
@@ -92,20 +92,26 @@ export class TrustLedger {
     return touches
   }
 
-  /** Les verdicts rattaches a un run — sert a montrer ce qu'une confirmation va toucher. */
+  /** Les verdicts rattaches a un run, dans l'ordre : une confirmation ne touche que le dernier. */
   verdictsPour(runId: string): JudgeVerdict[] {
     return this.verdicts.filter((v) => v.runId === runId)
   }
 
+  /**
+   * La vérité humaine porte sur le résultat que l'humain VOIT : le DERNIER verdict du run au moment
+   * de la confirmation (ordre d'enregistrement, rejoué tel quel au rechargement). conv-996
+   * (2026-10-16) : 94 des 171 runs de trust.jsonl ont été validés après réparation ; ré-étiqueter
+   * tous leurs passages comptait chaque rouge intermédiaire, qui jugeait une version antérieure,
+   * comme un faux rouge. Un verdict arrivé après la confirmation reste donc non confirmé.
+   */
   private appliquer(runId: string, humanTruth: Verdict): number {
     if (!runId) return 0
-    let n = 0
-    for (const v of this.verdicts) {
-      if (v.runId !== runId) continue
-      v.humanTruth = humanTruth
-      n += 1
+    for (let i = this.verdicts.length - 1; i >= 0; i -= 1) {
+      if (this.verdicts[i].runId !== runId) continue
+      this.verdicts[i].humanTruth = humanTruth
+      return 1
     }
-    return n
+    return 0
   }
 
   private ecrire(ligne: JudgeVerdict | ConfirmationLine): void {

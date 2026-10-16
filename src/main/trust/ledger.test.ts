@@ -148,6 +148,43 @@ describe('TrustLedger — confirmation humaine apres coup', () => {
     expect(ledger.calibration('claude').confirmed).toBe(0)
   })
 
+  /*
+   * conv-996 (2026-10-16) : 94 des 171 runs de trust.jsonl ont été validés APRÈS réparation (rouge,
+   * réparation, vert). L'humain juge le résultat final ; appliquer sa vérité à tous les passages
+   * comptait les rouges intermédiaires, qui jugeaient une version antérieure, comme des faux rouges.
+   */
+  it('confirmer() ne ré-étiquette que le DERNIER verdict d’un run réparé', () => {
+    const ledger = new TrustLedger()
+    ledger.record({ judgeModel: 'claude', verdict: 'red', runId: 'r1' })
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1' })
+
+    expect(ledger.confirmer('r1', 'green')).toBe(1)
+
+    const [premier, dernier] = ledger.verdictsPour('r1')
+    expect(premier.humanTruth).toBeUndefined()
+    expect(dernier.humanTruth).toBe('green')
+    expect(ledger.calibration('claude')).toMatchObject({
+      total: 2,
+      confirmed: 1,
+      falseRed: 0,
+      accuracy: 1
+    })
+  })
+
+  it('un verdict arrivé APRÈS la confirmation reste non confirmé, aussi au rechargement', () => {
+    const fichier = join(mkdtempSync(join(tmpdir(), 'trust-')), 'trust.jsonl')
+    const ledger = new TrustLedger(fichier)
+    ledger.record({ judgeModel: 'claude', verdict: 'red', runId: 'r1' })
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1' })
+    ledger.confirmer('r1', 'red')
+    ledger.record({ judgeModel: 'claude', verdict: 'red', runId: 'r1' })
+
+    for (const l of [ledger, new TrustLedger(fichier)]) {
+      expect(l.verdictsPour('r1').map((v) => v.humanTruth)).toEqual([undefined, 'red', undefined])
+      expect(l.calibration('claude')).toMatchObject({ confirmed: 1, falseGreen: 1 })
+    }
+  })
+
   it('la confirmation survit au rechargement du journal', () => {
     const fichier = join(mkdtempSync(join(tmpdir(), 'trust-')), 'trust.jsonl')
     const ledger = new TrustLedger(fichier)
