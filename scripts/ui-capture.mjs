@@ -125,6 +125,8 @@ export const VUES_CONNUES = [
   'observatory',
   'task-manager',
   'worktree',
+  // Vue Bureaux cachés (conv-951).
+  'hdesk',
   'tickets',
   'settings'
 ]

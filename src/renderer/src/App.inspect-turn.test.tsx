@@ -76,7 +76,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders exactly the ten canonical product destinations', async () => {
+  it('renders exactly the eleven canonical product destinations', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
