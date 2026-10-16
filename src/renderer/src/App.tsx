@@ -33,6 +33,7 @@ import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
+import { HdeskGestionView } from './components/HdeskGestionView'
 import { TestsView } from './components/TestsView'
 import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
@@ -681,6 +682,13 @@ export function MainApp(): React.JSX.Element {
                 section={taskManagerSection}
                 onSectionChange={setTaskManagerSection}
               />
+            </VueMesuree>
+          </div>
+        )}
+        {visitedTabs.has('hdesk') && (
+          <div className={`view-slot${tab === 'hdesk' ? ' is-active' : ''}`}>
+            <VueMesuree id="hdesk">
+              <HdeskGestionView active={tab === 'hdesk'} />
             </VueMesuree>
           </div>
         )}

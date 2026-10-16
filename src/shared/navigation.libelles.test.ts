@@ -37,6 +37,14 @@ describe('resolveAppLocation — le nom AFFICHÉ est une adresse valide', () => 
     })
   })
 
+  // Vue Bureaux cachés (conv-951) : l'utilisateur dit « Hdesk », la barre affiche « Bureaux cachés ».
+  it('atteint les Bureaux cachés par leur libellé, par « hdesk » et sans accent', () => {
+    for (const nom of ['Bureaux cachés', 'bureaux caches', 'bureau caché', 'hdesk', 'Hdesk']) {
+      expect(resolveAppLocation(nom), nom).toMatchObject({ destination: 'hdesk' })
+      expect(resolveAppLocation(nom).reconnu, nom).not.toBe(false)
+    }
+  })
+
   it('atteint le Diagnostic de démarrage par son nom', () => {
     for (const nom of ['diagnostic', 'Diagnostic', 'preflight', 'prerequis']) {
       expect(resolveAppLocation(nom), nom).toMatchObject({

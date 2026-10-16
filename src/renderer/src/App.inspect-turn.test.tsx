@@ -103,6 +103,7 @@ describe('App inspect-turn navigation', () => {
       'Observatory',
       'Task Manager',
       'Worktrees',
+      'Bureaux cachés',
       'Tickets',
       'Tests',
       'Settings'
@@ -117,6 +118,7 @@ describe('App inspect-turn navigation', () => {
       'observatory',
       'task-manager',
       'worktree',
+      'hdesk',
       'tickets',
       'tests',
       'settings'
