@@ -32,7 +32,7 @@ describe('vue Bureaux cachés — TOUS les bureaux, quel que soit le fil (conv-9
     const liste = listerTousLesBureaux(
       ['a', 'b', 'mort', 'orphelin'],
       [
-        { id: 'a', travail: 'RIG', conversationId: 'conv-1', pid: 10, lanceLe: '2026-10-16T10:00' },
+        { id: 'a', travail: 'ZOX', conversationId: 'conv-1', pid: 10, lanceLe: '2026-10-16T10:00' },
         {
           id: 'b',
           travail: 'Teams',
@@ -83,23 +83,23 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
   })
 
   it('le fil donné au script est celui de la fiche, jamais une valeur de l’écran', async () => {
-    const d = registre([{ id: 'rig', conversationId: 'conv-autre', pid: 1 }])
+    const d = registre([{ id: 'zox', conversationId: 'conv-autre', pid: 1 }])
     const fermer = vi.fn(async (_r: string, _d: DemandeFermeture) => resultat({ ferme: true }))
-    const r = await fermerBureauGere(RACINE, 'rig', d, fermer)
-    expect(fermer).toHaveBeenCalledWith(RACINE, { id: 'rig', conversationId: 'conv-autre' })
+    const r = await fermerBureauGere(RACINE, 'zox', d, fermer)
+    expect(fermer).toHaveBeenCalledWith(RACINE, { id: 'zox', conversationId: 'conv-autre' })
     expect(r).toMatchObject({ ok: true, code: 0 })
   })
 
   it('bureau déjà vide : succès sans erreur', async () => {
-    const d = registre([{ id: 'rig', conversationId: 'conv-1' }])
-    const r = await fermerBureauGere(RACINE, 'rig', d, async () => resultat({ dejaFerme: true }))
+    const d = registre([{ id: 'zox', conversationId: 'conv-1' }])
+    const r = await fermerBureauGere(RACINE, 'zox', d, async () => resultat({ dejaFerme: true }))
     expect(r).toMatchObject({ ok: true, dejaFerme: true })
   })
 
   it('fiche SANS fil : erreur, rien n’est lancé', async () => {
-    const d = registre([{ id: 'rig', pid: 1 }])
+    const d = registre([{ id: 'zox', pid: 1 }])
     const fermer = vi.fn()
-    const r = await fermerBureauGere(RACINE, 'rig', d, fermer)
+    const r = await fermerBureauGere(RACINE, 'zox', d, fermer)
     expect(fermer).not.toHaveBeenCalled()
     expect(r.ok).toBe(false)
     expect(r.message).toMatch(/fil/)
@@ -120,8 +120,8 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
   })
 
   it('refus du script : son message remonte tel quel', async () => {
-    const d = registre([{ id: 'rig', conversationId: 'conv-1' }])
-    const r = await fermerBureauGere(RACINE, 'rig', d, async () => ({
+    const d = registre([{ id: 'zox', conversationId: 'conv-1' }])
+    const r = await fermerBureauGere(RACINE, 'zox', d, async () => ({
       ok: false,
       code: 6,
       survivants: [42]
@@ -157,21 +157,21 @@ const enveloppeDecodee = (args: string[]): string => {
 }
 
 describe('vue Bureaux cachés — Créer', () => {
-  const demande = { id: 'rig2', executable: 'C:\\rig\\exe\\Rig.exe', travail: 'Essai RIG' }
+  const demande = { id: 'zox2', executable: 'C:\\zox\\exe\\Zox.exe', travail: 'Essai ZOX' }
 
   it('passe par lancer-detache.ps1, lance hdesk-lancer.ps1 avec -Travail et -Conversation', async () => {
     const { deps, executer } = depsCreation({
       code: 0,
-      sortie: '{"id":"rig2","pid":77,"pret":true}',
+      sortie: '{"id":"zox2","pid":77,"pret":true}',
       erreur: ''
     })
     const r = await creerBureau(RACINE, demande, deps)
-    expect(r).toEqual({ ok: true, id: 'rig2', pid: 77, message: 'Bureau « rig2 » prêt.' })
+    expect(r).toEqual({ ok: true, id: 'zox2', pid: 77, message: 'Bureau « zox2 » prêt.' })
     const args = executer.mock.calls[0][0]
     expect(args).toContain(join(RACINE, 'scripts', 'lancer-detache.ps1'))
     const script = enveloppeDecodee(args)
     expect(script).toContain(join(RACINE, 'scripts', 'hdesk-lancer.ps1'))
-    expect(script).toContain("-Travail 'Essai RIG'")
+    expect(script).toContain("-Travail 'Essai ZOX'")
     // Fil laissé vide → « manuel » : le lanceur refuse un bureau sans fil.
     expect(script).toContain("-Conversation 'manuel'")
   })
@@ -191,15 +191,15 @@ describe('vue Bureaux cachés — Créer', () => {
     const { deps, executer } = depsCreation({
       code: 5,
       sortie:
-        '{"id":"rig2","pret":false,"pidOccupant":9,"conversationOccupante":"conv-1","travailOccupant":"RIG","idLibre":"rig2-manuel-55","erreur":"Identifiant deja utilise"}',
+        '{"id":"zox2","pret":false,"pidOccupant":9,"conversationOccupante":"conv-1","travailOccupant":"ZOX","idLibre":"zox2-manuel-55","erreur":"Identifiant deja utilise"}',
       erreur: 'occupe'
     })
     const r = await creerBureau(RACINE, demande, deps)
     expect(r).toMatchObject({
       ok: false,
       code: 5,
-      idLibre: 'rig2-manuel-55',
-      travailOccupant: 'RIG',
+      idLibre: 'zox2-manuel-55',
+      travailOccupant: 'ZOX',
       conversationOccupante: 'conv-1'
     })
     expect(executer).toHaveBeenCalledTimes(1)
@@ -235,7 +235,7 @@ describe('vue Bureaux cachés — Créer', () => {
   })
 
   it('jumeau accepté : identifiant à tirets et soulignés, fil vide → manuel', () => {
-    expect(refusCreation({ ...demande, id: 'Rig_2-b', conversationId: '' })).toBeNull()
+    expect(refusCreation({ ...demande, id: 'Zox_2-b', conversationId: '' })).toBeNull()
   })
 
   it('le lanceur ne démarre pas : erreur, pas d’attente', async () => {

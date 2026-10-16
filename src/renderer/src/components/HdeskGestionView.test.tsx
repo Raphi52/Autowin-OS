@@ -15,14 +15,14 @@ import type {
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const RIG: BureauGere = {
-  id: 'rig',
-  travail: 'RIG Rapture',
+const ZOX: BureauGere = {
+  id: 'zox',
+  travail: 'ZOX Rapture',
   relie: true,
   conversationId: 'conv-951',
   lanceLe: '2026-10-16T14:06:37+02:00',
   pid: 15432,
-  executable: 'C:\\rig\\exe\\RigClientAccueil.exe'
+  executable: 'C:\\zox\\exe\\ZoxClientAccueil.exe'
 }
 const ORPHELIN: BureauGere = { id: 'orphelin', travail: 'travail non relié', relie: false }
 
@@ -94,14 +94,14 @@ async function saisir(h: HTMLElement, cle: string, valeur: string): Promise<void
 
 describe('HdeskGestionView — liste de tous les bureaux', () => {
   it('montre chaque bureau avec son travail, son fil, son aperçu et ses gestes', async () => {
-    const h = await monter(faux([RIG, ORPHELIN]))
-    const carte = $(h, 'hdesk-bureau-rig')!
-    expect(carte.textContent).toContain('RIG Rapture')
+    const h = await monter(faux([ZOX, ORPHELIN]))
+    const carte = $(h, 'hdesk-bureau-zox')!
+    expect(carte.textContent).toContain('ZOX Rapture')
     expect(carte.textContent).toContain('Fil : conv-951')
-    expect(carte.textContent).toContain('RigClientAccueil.exe')
+    expect(carte.textContent).toContain('ZoxClientAccueil.exe')
     expect(carte.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AA')
-    expect($(h, 'hdesk-fermer-rig')).not.toBeNull()
-    expect($(h, 'hdesk-basculer-rig')).not.toBeNull()
+    expect($(h, 'hdesk-fermer-zox')).not.toBeNull()
+    expect($(h, 'hdesk-basculer-zox')).not.toBeNull()
     expect($(h, 'hdesk-bureau-orphelin')?.textContent).toContain('Fil : aucun')
   })
 
@@ -127,17 +127,17 @@ describe('HdeskGestionView — Fermer', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     let finir: (r: ResultatFermetureGeree) => void = () => undefined
     const fermer = vi.fn(() => new Promise<ResultatFermetureGeree>((r) => (finir = r)))
-    const h = await monter(faux([RIG], { hdeskGestionFermer: fermer }))
-    await cliquer($(h, 'hdesk-fermer-rig'))
-    expect(($(h, 'hdesk-fermer-rig') as HTMLButtonElement).disabled).toBe(true)
-    expect($(h, 'hdesk-fermer-rig')?.textContent).toBe('Fermeture…')
-    await cliquer($(h, 'hdesk-fermer-rig'))
+    const h = await monter(faux([ZOX], { hdeskGestionFermer: fermer }))
+    await cliquer($(h, 'hdesk-fermer-zox'))
+    expect(($(h, 'hdesk-fermer-zox') as HTMLButtonElement).disabled).toBe(true)
+    expect($(h, 'hdesk-fermer-zox')?.textContent).toBe('Fermeture…')
+    await cliquer($(h, 'hdesk-fermer-zox'))
     expect(fermer).toHaveBeenCalledTimes(1)
-    expect(fermer).toHaveBeenCalledWith('rig')
+    expect(fermer).toHaveBeenCalledWith('zox')
     await act(async () =>
       finir({ ok: true, code: 0, message: 'Application fermée, bureau libéré.' })
     )
-    expect(($(h, 'hdesk-fermer-rig') as HTMLButtonElement).disabled).toBe(false)
+    expect(($(h, 'hdesk-fermer-zox') as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('refus (bureau sans fiche) : le message est affiché comme un refus, pas comme un succès', async () => {
@@ -159,9 +159,9 @@ describe('HdeskGestionView — Fermer', () => {
 
   it('confirmation refusée : rien n’est envoyé', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
-    const api = faux([RIG])
+    const api = faux([ZOX])
     const h = await monter(api)
-    await cliquer($(h, 'hdesk-fermer-rig'))
+    await cliquer($(h, 'hdesk-fermer-zox'))
     expect(api.hdeskGestionFermer).not.toHaveBeenCalled()
   })
 })
@@ -189,11 +189,11 @@ describe('HdeskGestionView — Créer', () => {
     const api = faux([])
     const h = await monter(api)
     await cliquer($(h, 'hdesk-nouveau'))
-    await remplir(h, { id: 'rig-essai', executable: 'C:\\rig\\Rig.exe', travail: 'Essai' })
+    await remplir(h, { id: 'zox-essai', executable: 'C:\\zox\\Zox.exe', travail: 'Essai' })
     await cliquer($(h, 'hdesk-creer'))
     expect(api.hdeskGestionCreer).toHaveBeenCalledWith({
-      id: 'rig-essai',
-      executable: 'C:\\rig\\Rig.exe',
+      id: 'zox-essai',
+      executable: 'C:\\zox\\Zox.exe',
       arguments: '',
       travail: 'Essai',
       conversationId: ''
@@ -208,15 +208,15 @@ describe('HdeskGestionView — Créer', () => {
         ok: false as const,
         code: 5,
         message: 'Identifiant deja utilise',
-        idLibre: 'rig-manuel-55'
+        idLibre: 'zox-manuel-55'
       }))
     })
     const h = await monter(api)
     await cliquer($(h, 'hdesk-nouveau'))
-    await remplir(h, { id: 'rig', executable: 'C:\\rig\\Rig.exe', travail: 'Essai' })
+    await remplir(h, { id: 'zox', executable: 'C:\\zox\\Zox.exe', travail: 'Essai' })
     await cliquer($(h, 'hdesk-creer'))
     await cliquer($(h, 'hdesk-id-libre'))
-    expect(($(h, 'hdesk-champ-id') as HTMLInputElement).value).toBe('rig-manuel-55')
+    expect(($(h, 'hdesk-champ-id') as HTMLInputElement).value).toBe('zox-manuel-55')
     expect(api.hdeskGestionCreer).toHaveBeenCalledTimes(1)
   })
 })

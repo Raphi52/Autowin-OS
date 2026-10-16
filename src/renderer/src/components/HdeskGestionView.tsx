@@ -253,10 +253,10 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
 
       {formOuvert && (
         <form className="hdesk-formulaire" data-testid="hdesk-formulaire" onSubmit={creer}>
-          {champ('id', 'Identifiant', 'ex. rig-essai')}
+          {champ('id', 'Identifiant', 'ex. appli-essai')}
           {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
           {champ('arguments', 'Arguments (facultatif)', 'ex. /mode test')}
-          {champ('travail', 'Ce que tu y fais', 'ex. Essai de RIG sur la branche Rapture')}
+          {champ('travail', 'Ce que tu y fais', 'ex. Essai de mon appli sur une branche de test')}
           {champ('conversationId', 'Fil (facultatif)', FIL_MANUEL)}
           <button type="submit" data-testid="hdesk-creer" disabled={creationEnCours}>
             {creationEnCours ? 'Création… (jusqu’à 40 s)' : 'Créer le bureau'}
