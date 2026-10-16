@@ -613,6 +613,11 @@ export interface OrchestrationResult {
   }[]
   /** Verdict terminal du juge, tel qu'écrit — annexé au RUN.md pour la mémoire inter-runs. */
   judgeText?: string
+  /**
+   * Fichier de la copie ENTIÈRE des sorties d'étapes (`runs/livrable-entier.ts`), quand quelqu'un
+   * l'écrit : la bulle coupée le nomme au lieu de promettre un « livrable entier » introuvable (conv-989).
+   */
+  livrableEntier?: string
   /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
   learningAttestations?: IndependentLearningAttestation[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
@@ -911,6 +916,13 @@ export interface OrchestratorDecompositionDeps {
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */
   currentExecutionUsage?: () => ExecutionUsageSnapshot | undefined
+  /**
+   * Le fichier ou la copie ENTIERE des sorties d'etapes de ce run est ecrite (`runs/livrable-entier.ts`,
+   * a chaque `onPhaseCompleted`). La marque de coupe de l'agregat du juge le nomme ; absent, elle garde
+   * son libelle d'avant. Fourni par celui qui ECRIT le fichier : jamais nommer une copie que personne
+   * n'ecrit (conv-989).
+   */
+  cheminDuLivrableEntier?: (runId: string) => string | undefined
   /**
    * Workflow nommé actif pour le run en cours — même idiome ambiant que le devis ci-dessus, et même
    * garantie : les runs d'une confrontation s'enchaînent en série, donc un seul workflow à la fois.
@@ -5393,6 +5405,15 @@ ${CONTRAT_OBJECTIONS}`
     // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule
     // dernière : sinon un livrable produit en frame/terrain devient invisible si clean dérive.
     // Recalculable : une phase de réparation (B5) ajoute à phaseOutputs, l'agrégat suit.
+    // conv-989 : la marque de coupe nomme la copie entiere. Un chemin illisible (identifiant de run
+    // refuse) retombe sur la marque d'avant plutot que de casser le jugement.
+    const cheminDuLivrableEntierDuRun = (): string | undefined => {
+      try {
+        return this.deps.cheminDuLivrableEntier?.(runId)
+      } catch {
+        return undefined
+      }
+    }
     const buildExec = (): {
       text: string
       usage: Usage | undefined
@@ -5402,7 +5423,12 @@ ${CONTRAT_OBJECTIONS}`
       // concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
       text:
         phaseOutputs.length > 1
-          ? agregerPhasesPourLeJuge(phaseOutputs, JUDGE_PHASE_CAP)
+          ? agregerPhasesPourLeJuge(
+              phaseOutputs,
+              JUDGE_PHASE_CAP,
+              undefined,
+              cheminDuLivrableEntierDuRun()
+            )
           : lastExecText,
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
@@ -6258,6 +6284,10 @@ ${CONTRAT_OBJECTIONS}`
       // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
       // jamais le RUN.md, donc jamais la mémoire inter-runs (conv-1405).
       ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
+      // conv-989 : seulement si une étape a écrit quelque chose — un fichier vide n'est pas écrit.
+      ...(phaseOutputs.some((sortie) => sortie.text.trim()) && cheminDuLivrableEntierDuRun()
+        ? { livrableEntier: cheminDuLivrableEntierDuRun() }
+        : {}),
       ...(learningAttestations.length ? { learningAttestations } : {}),
       brainQuery,
       brainRetrievedAt,

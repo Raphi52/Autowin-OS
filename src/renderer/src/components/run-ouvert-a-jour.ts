@@ -8,6 +8,8 @@ export type RunDeplie = {
   pending?: boolean
   error?: string
   mtime?: number
+  /** Sortie ENTIÈRE des étapes (`livrable.md` voisin du RUN.md), quand elle existe (conv-989). */
+  livrable?: string
 }
 
 /**
@@ -96,9 +98,41 @@ export async function relireRun(
 export function fusionnerRelecture(
   courant: RunDeplie | null,
   run: RunEntry,
-  contenu: string | undefined
+  contenu: string | undefined,
+  livrable?: string
 ): RunDeplie | null {
   if (courant?.path !== run.path) return courant
-  if (contenu === undefined) return { ...courant, mtime: run.mtime }
-  return { path: courant.path, content: contenu, mtime: run.mtime }
+  // La sortie entière ne disparaît pas sur une lecture manquée : elle n'est écrite qu'une fois, à la
+  // fin du run (conv-989).
+  const sortie = livrable ?? courant.livrable
+  const avecSortie = sortie ? { livrable: sortie } : {}
+  if (contenu === undefined) return { ...courant, mtime: run.mtime, ...avecSortie }
+  return { path: courant.path, content: contenu, mtime: run.mtime, ...avecSortie }
+}
+
+/**
+ * LA SORTIE ENTIÈRE DES ÉTAPES, VOISINE DU RUN.md (conv-989, 2026-10-16).
+ *
+ * Le « Fil des sous-agents » vient de `trace.json`, plafonné à 4 000 caractères par étape. La fin
+ * du run écrit la sortie entière à côté du RUN.md, sous ce nom (`NOM_LIVRABLE_DU_RUN`,
+ * src/main/runs/livrable-entier.ts) : le panneau la retrouve sans identifiant à deviner.
+ */
+export function cheminDuLivrableDuRun(runMdPath: string): string {
+  return runMdPath.replace(/[^\\/]+$/u, 'livrable.md')
+}
+
+/**
+ * Lit la sortie entière, ou rend `undefined` : son ABSENCE est normale (run d'avant conv-989, run
+ * encore en cours, run sans étape écrite) — ce n'est pas une panne à signaler.
+ */
+export async function lireLivrableDuRun(
+  lecteur: Pick<LecteurRun, 'readNodeFile'>,
+  runMdPath: string
+): Promise<string | undefined> {
+  try {
+    const contenu = (await lecteur.readNodeFile(cheminDuLivrableDuRun(runMdPath))).content
+    return contenu.trim() ? contenu : undefined
+  } catch {
+    return undefined
+  }
 }

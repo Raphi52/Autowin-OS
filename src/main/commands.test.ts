@@ -2411,3 +2411,38 @@ describe('issue d’orchestration', () => {
     expect(formatOrchestrationOutcome(true, res.data as never)).toContain('lancer judge')
   })
 })
+
+/**
+ * conv-989 : cette lignée recompose l'issue champ par champ. Un champ ajouté au résultat de
+ * l'orchestrateur n'atteint donc la bulle que s'il est recopié ICI.
+ */
+describe('orchestrate transmet le fichier de la sortie entière', () => {
+  const lancer = async (phaseOutputs: { phase: string; text: string }[]) => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'pistes',
+      phaseOutputs,
+      livrableEntier: 'D:/donnees/run-livrables/run-abc-1.md'
+    })
+    const bus = new AppCommandBus(os, () => {})
+    const res = (await bus.exec('orchestrate', { task: `cherche ${Date.now()}` }, 'conv-1')) as {
+      data?: { livrableEntier?: string }
+    }
+    return res.data?.livrableEntier ?? ''
+  }
+
+  it('écrit la sortie entière à côté du RUN.md, et c’est elle que nomme la bulle', async () => {
+    const chemin = await lancer([{ phase: 'scout', text: `${'piste '.repeat(2_000)}FIN-DU-SCOUT` }])
+    expect(chemin.replace(/\\/g, '/')).toMatch(/\/livrable\.md$/)
+    await vi.waitFor(() => expect(existsSync(chemin)).toBe(true))
+    expect(readFileSync(chemin, 'utf8')).toContain('FIN-DU-SCOUT')
+  })
+
+  it('sans sortie d’étape à écrire : la copie de run-livrables, telle que le run la rend', async () => {
+    expect(await lancer([{ phase: 'scout', text: '  ' }])).toBe('D:/donnees/run-livrables/run-abc-1.md')
+  })
+})

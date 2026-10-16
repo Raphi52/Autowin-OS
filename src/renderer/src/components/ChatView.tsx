@@ -182,7 +182,7 @@ import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { ChatContextRule } from './ChatContextRule'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
-import { fusionnerRelecture, relireRun } from './run-ouvert-a-jour'
+import { fusionnerRelecture, lireLivrableDuRun, relireRun } from './run-ouvert-a-jour'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -5420,11 +5420,14 @@ export function ChatView({
       traceSilentFailure('run-trace', error)
       setOpenTrace(null)
     }
+    // conv-989 : la sortie ENTIÈRE des étapes, voisine du RUN.md — le fil la coupe à 4 000.
+    const livrable = await lireLivrableDuRun(window.api, r.path)
+    const avecLivrable = livrable ? { livrable } : {}
     try {
       const fichier = await window.api.readNodeFile(r.path)
-      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime })
+      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime, ...avecLivrable })
     } catch (e) {
-      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime })
+      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime, ...avecLivrable })
     }
   }
 
@@ -5439,10 +5442,13 @@ export function ChatView({
    */
   async function relireRunOuvert(r: RunEntry): Promise<void> {
     const relu = await relireRun(window.api, r, openTrace, traceSilentFailure)
+    // La fin du run réécrit le RUN.md APRÈS la sortie entière : c'est souvent cette relecture-ci
+    // qui la trouve, un run ouvert pendant qu'il tournait n'en avait pas encore (conv-989).
+    const livrable = await lireLivrableDuRun(window.api, r.path)
     if (openRunPathRef.current !== r.path) return
     setOpenTrace(relu.trace)
     if (relu.montrerRunMd) setRunDetailTab('runmd')
-    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu))
+    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu, livrable))
   }
 
   /* --- rendu --- */

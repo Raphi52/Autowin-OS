@@ -8,6 +8,7 @@ import { StepThread } from './ChatView.parts'
 // que `libelleRun`, qui rend le sujet d'un run lisible a l'affichage.
 import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
+import { Markdown } from './Markdown'
 import { runOuvertARelire } from './run-ouvert-a-jour'
 
 /**
@@ -24,7 +25,7 @@ const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
 ]
 
 /** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
-export type RunDetailTab = 'trace' | 'runmd'
+export type RunDetailTab = 'trace' | 'runmd' | 'livrable'
 
 /**
  * Ce que le clic sur une carte de run produit : d'abord une attente (`pending`), puis SOIT le
@@ -38,6 +39,11 @@ export type OpenRunState = {
   error?: string
   /** Date de modification du RUN.md lue au dernier chargement : la relecture se déclenche dessus. */
   mtime?: number
+  /**
+   * Sortie ENTIÈRE des étapes (`livrable.md` voisin du RUN.md), quand elle existe : le fil des
+   * sous-agents coupe chaque étape à 4 000 caractères (conv-989).
+   */
+  livrable?: string
 }
 
 import { SourceControlPane } from './SourceControlPane'
@@ -589,15 +595,17 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                   </div>
                   {isOpen && (
                     <div className="run-detail-box fade-in">
-                      {openTrace && (
+                      {(openTrace || openRun?.livrable) && (
                         <div className="run-detail-tabs">
-                          <button
-                            type="button"
-                            className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
-                            onClick={() => setRunDetailTab('trace')}
-                          >
-                            Fil des sous-agents
-                          </button>
+                          {openTrace && (
+                            <button
+                              type="button"
+                              className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
+                              onClick={() => setRunDetailTab('trace')}
+                            >
+                              Fil des sous-agents
+                            </button>
+                          )}
                           {openRun && (
                             <button
                               type="button"
@@ -607,10 +615,25 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               RUN.md
                             </button>
                           )}
+                          {/* conv-989 : le fil coupe chaque étape à 4 000 caractères ; la sortie
+                              entière, écrite à côté du RUN.md, se lit ici. */}
+                          {openRun?.livrable && (
+                            <button
+                              type="button"
+                              className={`run-detail-tab${runDetailTab === 'livrable' ? ' is-active' : ''}`}
+                              onClick={() => setRunDetailTab('livrable')}
+                            >
+                              Sorties entières
+                            </button>
+                          )}
                         </div>
                       )}
                       {openTrace && (runDetailTab === 'trace' || !openRun) ? (
                         <StepThread steps={openTrace} />
+                      ) : runDetailTab === 'livrable' && openRun?.livrable ? (
+                        <div className="run-detail-livrable" data-testid="run-detail-livrable">
+                          <Markdown text={openRun.livrable} />
+                        </div>
                       ) : openRun?.error ? (
                         <div className="run-detail-error" data-testid="run-detail-error">
                           Lecture impossible de ce RUN.md — {openRun.error}
