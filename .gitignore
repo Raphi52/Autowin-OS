@@ -93,3 +93,8 @@ skills/arenagame/
 
 # Généré par Claude Code à chaque chargement d un mod (--plugin-dir), pointe vers .claude-plugin/types/ (ignoré)
 mods/*/tsconfig.json
+
+# Dossier propre à l'entreprise : reste sur le disque local, hors suivi git, depuis que main suit
+# le seul dépôt GitHub (2026-10-16, conv-994). Son historique d'avant vit dans la branche locale
+# sauvegarde/main-azure-2026-10-16.
+/entreprise/
