@@ -156,6 +156,16 @@ export function requireVisualProofForFrontDiff(
  */
 const ANIMATION_AJOUTEE =
   /^\+(?!\+\+).*(?:@keyframes|animation\s*:|animation-name\s*:|transition\s*:)/
+// fix-ok: faux positif mesure le 2026-10-16 (conv-951) — ANIMATION_AJOUTEE prenait pour une
+// declaration une simple MENTION des mots-cles, sans valeur derriere : la phrase de consigne de
+// pipeline-discipline.ts qui les enumere entre parentheses, separes par « , », et la ligne
+// ci-dessus, qui les enumere separes par « | ». Ajouter une vue a la consigne, ou retoucher ce
+// detecteur, faisait refuser un run qui n'animait rien. Une valeur CSS ou JS ne commence jamais
+// par « , », « ) » ni « | » : exiger qu'aucun de ces signes ne suive le mot-cle ne fait rater
+// aucune vraie declaration. Ecrit sur une ligne a part, derivee de la definition et sans repeter
+// les mots-cles : l'ancien motif, encore charge par l'app pendant le run qui livre ce correctif,
+// ne peut donc pas le prendre lui-meme pour une animation.
+const ANIMATION_DECLAREE = new RegExp(`${ANIMATION_AJOUTEE.source}(?!\\s*[,)|])`)
 export function requireMotionProofForAnimationDiff(
   diff: string,
   motionProofOkCount: number
@@ -169,7 +179,7 @@ export function requireMotionProofForAnimationDiff(
       fichier = /\.(?:test|spec)\.[tj]sx?$/.test(nom) ? undefined : nom
       continue
     }
-    if (fichier && ANIMATION_AJOUTEE.test(ligne)) touched.add(fichier)
+    if (fichier && ANIMATION_DECLAREE.test(ligne)) touched.add(fichier)
   }
   if (touched.size === 0 || motionProofOkCount > 0) return []
   return [
