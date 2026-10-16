@@ -582,7 +582,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     deguisee en URL (`brain-reglage.ts`).
     //   `os:brain-reglage:reset` ('Brain') — efface ce reglage seul ; aucun argument.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(224)
+    // MISE A JOUR 2026-10-16 (conv-951) — 224 -> 227. Vue « Bureaux cachés » : TROIS canaux
+    //   (`src/main/index.ts`, registerHdeskTvIpc), chacun garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Vue Bureaux cachés')`, Windows seulement :
+    //   `hdesk:gestion:bureaux` — LECTURE de la liste des bureaux vivants et du registre ; aucun argument.
+    //   `hdesk:gestion:fermer` — ne recoit que l'IDENTIFIANT (motif ID_BUREAU) ; le fil passe a
+    //     hdesk-fermer.ps1 est lu dans la FICHE, jamais pris de l'ecran (`fermerBureauGere`).
+    //   `hdesk:gestion:creer` — demande VALIDEE (`refusCreation`) avant tout lancement ; les valeurs
+    //     partent entre apostrophes PowerShell echappees dans une commande encodee, jamais par un shell.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(227)
     expect(unguarded).toEqual([])
   })
 

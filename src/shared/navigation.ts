@@ -6,6 +6,8 @@ export const APP_DESTINATIONS = [
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
   { id: 'task-manager', label: 'Task Manager', icon: '◷' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
+  // Bureaux cachés (conv-951, 2026-10-16) : « une view dédiée pour gérer tous mes Hdesk ».
+  { id: 'hdesk', label: 'Bureaux cachés', icon: '🖥️' },
   { id: 'tickets', label: 'Tickets', icon: '🎫' },
   { id: 'tests', label: 'Tests', icon: '🧪' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
@@ -105,6 +107,14 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   planning: 'task-manager',
   planification: 'task-manager',
   watchdog: 'task-manager',
+  // Bureaux cachés : l'utilisateur dit « Hdesk », le libellé dit « Bureaux cachés », un agent dit
+  // aussi le singulier ou sans accent (conv-951).
+  hdesks: 'hdesk',
+  'bureau caché': 'hdesk',
+  'bureau cache': 'hdesk',
+  'bureaux caches': 'hdesk',
+  'bureau-cache': 'hdesk',
+  'bureaux-caches': 'hdesk',
   // La vue Tests est multi-projets : un agent l'adresse aussi par « suite » ou « vitest ».
   test: 'tests',
   suite: 'tests',

@@ -142,6 +142,8 @@ import {
   fermerHdesk,
   type GesteTv
 } from './hdesk-tv'
+import { bureauxGeres, creerBureau, fermerBureauGere } from './hdesk-gestion'
+import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
@@ -1802,6 +1804,26 @@ function registerHdeskTvIpc(): void {
   ipcMain.handle('hdesk:tv:arreter', (event) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
     return capteurHdesk?.arreter()
+  })
+  // VUE « BUREAUX CACHÉS » (conv-951) : tous les bureaux, quel que soit le fil. Aperçu et bascule
+  // reprennent les canaux de la TV ci-dessus. Fermer ne reçoit QUE l'identifiant : le fil vient de la
+  // fiche du bureau (hdesk-gestion.ts), jamais de l'écran.
+  ipcMain.handle('hdesk:gestion:bureaux', (event) => {
+    assertTrustedRendererSender(event, 'Vue Bureaux cachés')
+    if (process.platform !== 'win32') return { ok: true, bureaux: [] }
+    return bureauxGeres(racineScriptsHorsArchive(app.getAppPath()))
+  })
+  ipcMain.handle('hdesk:gestion:fermer', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Vue Bureaux cachés')
+    if (process.platform !== 'win32')
+      return { ok: false, code: null, message: 'Windows uniquement.' }
+    return fermerBureauGere(racineScriptsHorsArchive(app.getAppPath()), String(id))
+  })
+  ipcMain.handle('hdesk:gestion:creer', (event, demande: DemandeCreationBureau) => {
+    assertTrustedRendererSender(event, 'Vue Bureaux cachés')
+    if (process.platform !== 'win32')
+      return { ok: false, code: null, message: 'Windows uniquement.' }
+    return creerBureau(racineScriptsHorsArchive(app.getAppPath()), demande)
   })
 }
 

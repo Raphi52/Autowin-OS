@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { APP_DESTINATIONS, normalizeDestination, resolveAppLocation } from './navigation'
 
 describe('registre canonique des destinations Autowin', () => {
-  it('expose les dix domaines produit, Accueil en tete', () => {
+  it('expose les onze domaines produit, Accueil en tete', () => {
     expect(APP_DESTINATIONS.map(({ id }) => id)).toEqual([
       'accueil',
       'chat',
@@ -11,6 +11,7 @@ describe('registre canonique des destinations Autowin', () => {
       'observatory',
       'task-manager',
       'worktree',
+      'hdesk',
       'tickets',
       'tests',
       'settings'
@@ -38,7 +39,10 @@ describe('registre canonique des destinations Autowin', () => {
     ['observatoire', 'observatory'],
     ['prompt-load', 'observatory'],
     ['tasks', 'task-manager'],
-    ['scheduler', 'task-manager']
+    ['scheduler', 'task-manager'],
+    ['hdesk', 'hdesk'],
+    ['bureau caché', 'hdesk'],
+    ['bureaux caches', 'hdesk']
   ] as const)('normalise %s vers %s', (input, expected) => {
     expect(normalizeDestination(input)).toBe(expected)
   })
