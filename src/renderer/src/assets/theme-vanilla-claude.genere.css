@@ -1,0 +1,195 @@
+/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs vanilla-claude -- ne pas modifier a la main.
+   Theme « Vanilla Claude » : les regles de la base claire qui ecrivent une couleur en dur, transposees
+   vers Claude clair (or et rose -> terracotta, bleus, cyans, violets et gris bleutes -> gris chauds).
+   47 regles, 87 declarations. Voir genererVanillaClaude. */
+
+/* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
+:root[data-theme='vanilla-claude'][data-base='clair'] .topology-runtime-limit {
+    border-color: rgb(79, 77, 67);
+    background: rgba(22, 21, 18, 0.82);
+    color: rgb(185, 182, 172)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .topology-runtime-limit b {
+    color: rgb(184, 182, 172)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .topology-panel > header > b {
+    background: rgba(27, 26, 23, 0.05)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+    border-color: rgba(139, 58, 31, 0.6)
+}
+
+/* ---- src/renderer/src/components/ChatView.css ---- */
+:root[data-theme='vanilla-claude'][data-base='clair'] .md-final-summary {
+    background: linear-gradient(145deg, rgba(139, 58, 31, 0.1), rgba(255, 253, 247, 0.96));
+    border-color: rgba(139, 58, 31, 0.42)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .activity-step-pipeline {
+    background: rgba(27, 26, 23, 0.04)
+}
+
+/* ---- src/renderer/src/components/GraphView.css ---- */
+:root[data-theme='vanilla-claude'][data-base='clair'] .graph-mode-switch__track {
+    border-color: rgba(31, 30, 27, 0.28);
+    background: linear-gradient(180deg, rgb(244, 243, 239), rgb(237, 235, 227));
+    box-shadow: inset 0 2px 5px rgba(31, 30, 27, 0.12)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .graph-mode-switch__thumb {
+    background: radial-gradient(circle at 32% 30%, #ffffff, rgb(229, 226, 216) 68%);
+    box-shadow: 0 2px 5px rgba(31, 30, 27, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .graph-mode-switch__track {
+    background: linear-gradient(180deg, rgb(235, 233, 224), rgb(222, 218, 205));
+    border-color: rgba(31, 30, 27, 0.34)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .graph-mode-switch__thumb {
+    border: 1px solid rgba(31, 30, 27, 0.45);
+    box-shadow: 0 1px 3px rgba(31, 30, 27, 0.35)
+}
+
+/* ---- src/renderer/src/assets/theme-modes.css ---- */
+:root[data-theme='vanilla-claude'][data-base='clair'] {
+    --bg-0: rgb(237, 236, 229);
+    --bg-1: rgb(237, 236, 229);
+    --bg-2: rgb(233, 230, 221);
+    --bg-3: rgba(27, 26, 23, 0.06);
+    --bg-inset: rgb(244, 243, 239);
+    --line: rgba(31, 30, 27, 0.16);
+    --line-strong: rgba(31, 30, 27, 0.34);
+    --text: rgb(33, 32, 29);
+    --text-dim: rgb(97, 94, 83);
+    --titlebar-symbol: rgb(33, 32, 29);
+    --text-faint: rgb(117, 113, 99);
+    --rose: rgb(184, 77, 42);
+    --rose-bright: rgb(152, 63, 34);
+    --cyan: rgb(92, 90, 79);
+    --accent-dim: rgb(234, 181, 163);
+    --accent-soft: rgba(184, 77, 42, 0.1);
+    --warn: rgb(139, 58, 31);
+    --info: rgb(92, 90, 79);
+    --violet: rgb(146, 142, 126)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .shell, :root[data-theme='vanilla-claude'][data-base='clair'] .shell.theme-serious {
+    --surface-inset: rgba(27, 26, 23, 0.05);
+    --surface-hover: rgba(27, 26, 23, 0.05);
+    --surface-selected: rgba(184, 77, 42, 0.09);
+    --container-border: rgba(31, 30, 27, 0.16);
+    --container-border-strong: rgba(31, 30, 27, 0.32)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .brand-name {
+    color: rgb(24, 23, 20)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .sg-chip:hover {
+    background: rgba(27, 26, 23, 0.05)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .observatory-panel-title {
+    color: rgb(92, 90, 79)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .observatory-view {
+    --surface-selected: rgba(139, 58, 31, 0.14);
+    --text-muted: rgb(97, 94, 83)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .observatory-group-head b {
+    color: color-mix(in srgb, var(--zone-accent) 55%, rgb(29, 28, 24))
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .observatory-conversations > button.is-active, :root[data-theme='vanilla-claude'][data-base='clair'] .observatory-calls button.is-active, :root[data-theme='vanilla-claude'][data-base='clair'] .observatory-event.is-selected, :root[data-theme='vanilla-claude'][data-base='clair'] .observatory-view-switch button.is-active, :root[data-theme='vanilla-claude'][data-base='clair'] .observatory-quick-filters button.is-active, :root[data-theme='vanilla-claude'][data-base='clair'] .observatory-causal-controls button.is-active {
+    border-color: rgba(139, 58, 31, 0.5)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .md-html {
+    border: 1px solid rgba(31, 30, 27, 0.14)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .md-html, :root[data-theme='vanilla-claude'][data-base='clair'] .md-html * {
+    color: rgb(41, 39, 35) !important;
+    border-color: rgba(31, 30, 27, 0.16) !important
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .md-html code, :root[data-theme='vanilla-claude'][data-base='clair'] .md-html kbd, :root[data-theme='vanilla-claude'][data-base='clair'] .md-html pre {
+    background-color: rgba(31, 30, 27, 0.05) !important
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .msg.user .msg-body {
+    background: rgba(184, 77, 42, 0.08);
+    border-color: rgba(184, 77, 42, 0.35);
+    color: rgb(125, 52, 28)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .chat-workflow-notice, :root[data-theme='vanilla-claude'][data-base='clair'] .chat-travail-non-publie {
+    background: rgba(139, 58, 31, 0.08);
+    border-color: rgba(139, 58, 31, 0.35)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .chat-workflow-notice button, :root[data-theme='vanilla-claude'][data-base='clair'] .chat-travail-non-publie button {
+    border-color: rgba(139, 58, 31, 0.45)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .conv-menu-pop {
+    box-shadow: 0 10px 28px rgba(31, 30, 27, 0.18)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .conv-menu-pop button:hover {
+    background: rgba(27, 26, 23, 0.06)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .activity-step-detail {
+    background: rgba(27, 26, 23, 0.04)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .home-tile__panel {
+    border-color: rgba(31, 30, 27, 0.22);
+    box-shadow: 0 20px 46px rgba(31, 30, 27, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .jarvis__anneau-etat {
+    stroke: rgba(31, 30, 27, 0.14)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .activity-step {
+    color: rgb(33, 32, 29)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .activity-step-icon {
+    background: rgba(27, 26, 23, 0.1)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .activity-step-link {
+    border-color: rgba(31, 30, 27, 0.3)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .attachment-thumb {
+    background: rgba(27, 26, 23, 0.06)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-popover {
+    box-shadow: 0 18px 48px rgba(27, 26, 23, 0.18)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-popover small, :root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-popover footer, :root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-values small, :root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-unavailable {
+    color: rgb(99, 96, 85)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-window > strong {
+    color: rgb(33, 32, 29)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-meter {
+    background: rgba(27, 26, 23, 0.12)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-quota-error {
+    color: rgb(153, 64, 34)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .model-select-menu {
+    box-shadow: 0 24px 64px rgba(27, 26, 23, 0.22)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .shell, :root[data-theme='vanilla-claude'][data-base='clair'] .shell.theme-serious {
+    --surface-panel: rgb(237, 236, 229);
+    --surface-card: rgb(244, 243, 239);
+    --surface-inset: rgb(244, 243, 239)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .rail, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .conv-pane {
+    background: rgb(237, 236, 229)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .brand {
+    background: rgb(244, 243, 239)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .shell, :root[data-theme='vanilla-claude'][data-base='clair'] .shell.theme-serious {
+    --surface-panel: rgb(223, 220, 208);
+    --surface-card: rgb(233, 230, 221);
+    --surface-inset: rgb(233, 230, 221)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .rail, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .conv-pane, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .chat-head, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .composer {
+    background: rgb(223, 220, 208)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .chat::after {
+    background: rgb(223, 220, 208)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .theme-serious .brand, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .composer-field, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .conv-search, :root[data-theme='vanilla-claude'][data-base='clair'] .cosmic-outline .chat-suggest .btn {
+    background: rgb(233, 230, 221)
+}
+:root[data-theme='vanilla-claude'][data-base='clair'] .artifact-preview {
+    background: rgb(233, 230, 221)
+}

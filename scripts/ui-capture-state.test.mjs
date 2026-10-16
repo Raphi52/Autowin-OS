@@ -1,5 +1,14 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { ETATS_CONNUS, attributDEtat, resoudreEtat, verdictEtat } from './ui-capture.mjs'
+import {
+  ETATS_CONNUS,
+  attendreFinDeTransition,
+  attributDEtat,
+  baseDuThemeDemande,
+  resoudreEtat,
+  verdictCapture,
+  verdictEtat
+} from './ui-capture.mjs'
 
 /**
  * Pourquoi ce test existe : `--state` sert a AMENER l'UI dans un etat qu'aucune navigation ne
@@ -125,5 +134,95 @@ describe('ui-capture --choisir', () => {
   it('avec --motion, le choix ralentit l horloge comme un clic', () => {
     expect(tauxDeLectureDuMouvement(['--motion', 'body', '--choisir', 'select'])).toBe(0.1)
     expect(tauxDeLectureDuMouvement(['--motion', 'body'])).toBe(1)
+  })
+})
+
+/*
+ * `--theme <id>` (conv-269, 2026-10-16) : la base claire ou sombre d'un theme vient du REGISTRE de
+ * l'application (theme-mode.ts), comme dans `appliquerThemeMode`. Le harnais la devinait au suffixe
+ * `-clair` : « Vanilla Claude » (base claire) etait capture SANS `data-base='clair'`, donc ni la base
+ * claire ni la feuille du theme ne s'appliquaient, et la capture rendait quand meme exit 0.
+ * ENTREE QUI DOIT FAIRE ECHOUER UNE CORRECTION FAUSSE : `vanilla-claude` (clair sans suffixe).
+ */
+describe('ui-capture --theme', () => {
+  const REGISTRE = `export const THEMES: readonly Theme[] = [
+  { id: 'sombre', libelle: 'Sombre', base: 'sombre' },
+  { id: 'holographique-clair', libelle: 'Holographique blanc', base: 'clair' },
+  { id: 'ninja-claude', libelle: 'Ninja Claude', base: 'sombre' },
+  { id: 'vanilla-claude', libelle: 'Vanilla Claude', base: 'clair' },
+]`
+
+  it('lit la base dans le registre, pas dans le nom', () => {
+    expect(baseDuThemeDemande('vanilla-claude', REGISTRE)).toBe('clair')
+    expect(baseDuThemeDemande('holographique-clair', REGISTRE)).toBe('clair')
+    expect(baseDuThemeDemande('ninja-claude', REGISTRE)).toBe('sombre')
+    expect(baseDuThemeDemande('sombre', REGISTRE)).toBe('sombre')
+  })
+
+  it('ne connait pas un theme absent du registre, meme approchant', () => {
+    for (const id of ['vanilla', 'Vanilla-Claude', 'ninja', 'inconnu-clair', '']) {
+      expect(baseDuThemeDemande(id, REGISTRE)).toBeUndefined()
+    }
+  })
+
+  it('lit le vrai registre de l application', () => {
+    const vrai = readFileSync(new URL('../src/renderer/src/theme-mode.ts', import.meta.url), 'utf8')
+    expect(baseDuThemeDemande('vanilla-claude', vrai)).toBe('clair')
+    expect(baseDuThemeDemande('malvoyant-clair', vrai)).toBe('clair')
+    expect(baseDuThemeDemande('nebuleuse-verre', vrai)).toBe('sombre')
+  })
+})
+
+/*
+ * LA PHOTO PRISE PENDANT LE FONDU D'UNE VUE A L'AUTRE (2026-10-16, ninja-chat.png). Le JSON disait
+ * `ok:true`, `destinationActive:"chat"`, 411 elements ; l'image montrait « Accueil » encore
+ * selectionne et un chat vide a moitie transparent. `basculerVue` (src/renderer/src/transition-de-vue.ts)
+ * pose `vue-en-transition` sur <html> jusqu'a la fin du fondu : la photo l'attend, et une photo prise
+ * classe encore posee est refusee. ENTREE QUI DOIT FAIRE ECHOUER : `enTransition: true` rendu vert.
+ */
+describe('ui-capture — fondu entre deux vues', () => {
+  const mesures = {
+    vue: 'chat',
+    destinationActive: 'chat',
+    longueurTexte: 5000,
+    elements: 500,
+    octetsPng: 200_000,
+    interfaceCapturee: { source: 'code-construit' }
+  }
+
+  it('refuse une capture prise pendant le fondu', () => {
+    const v = verdictCapture({ ...mesures, enTransition: true })
+    expect(v.ok).toBe(false)
+    expect(v.echecs).toContain('capture-pendant-le-fondu')
+  })
+
+  it('accepte la meme capture une fois le fondu fini (jumeau)', () => {
+    expect(verdictCapture({ ...mesures, enTransition: false }).ok).toBe(true)
+  })
+
+  it('attend la fin du fondu et dit qu il a attendu', async () => {
+    const lectures = [true, true, false]
+    const r = await attendreFinDeTransition(async () => lectures.shift() ?? false, {
+      delaiMs: 1000,
+      pasMs: 1
+    })
+    expect(r.enTransition).toBe(false)
+    expect(r.attendu).toBe(true)
+    expect(lectures).toEqual([])
+  })
+
+  it('n attend pas quand aucun fondu ne joue', async () => {
+    let appels = 0
+    const r = await attendreFinDeTransition(async () => (appels++, false), {
+      delaiMs: 1000,
+      pasMs: 1
+    })
+    expect(r).toEqual({ enTransition: false, attendu: false })
+    expect(appels).toBe(1)
+  })
+
+  it('rend la main au bout du delai si le fondu ne finit jamais, sans pretendre qu il a fini', async () => {
+    const r = await attendreFinDeTransition(async () => true, { delaiMs: 30, pasMs: 5 })
+    expect(r.enTransition).toBe(true)
   })
 })

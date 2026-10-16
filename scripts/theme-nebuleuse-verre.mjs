@@ -40,7 +40,7 @@ const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
 const PREFIXE = `:root[data-theme='${THEME}']`
 // AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
-const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|AskDecision.css/
+const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([
@@ -217,17 +217,26 @@ function transposerValeur(valeur, enFond) {
 }
 
 function prefixer(selecteur) {
+  return prefixerPour(selecteur, PREFIXE)
+}
+
+// fix-ok: deux causes MESUREES (2026-10-16). (1) `selectors.map(prefixer)` passe l'INDEX en 2e argument :
+// un parametre optionnel sur `prefixer` remplacait le prefixe (git diff sur theme-nebuleuse-verre.genere.css
+// non vide) -> fonction separee, diff revenu a 0. (2) un argument inconnu tombait dans le `else` et
+// reecrivait la couche d'Holographique avec exit 0 -> refus exit 2 (ARGUMENTS_CONNUS, plus bas).
+/** Meme regle pour un autre theme. Separee de `prefixer` : `selectors.map(prefixer)` lui passe l'INDEX. */
+function prefixerPour(selecteur, prefixe) {
   const s = selecteur.trim()
   // Les regles d'un AUTRE theme ou du mode clair ne nous regardent pas.
   if (/:root\[|data-base|data-theme/.test(s)) return null
-  if (/^(html|:root)\b/.test(s)) return s.replace(/^(html|:root)/, PREFIXE)
-  return `${PREFIXE} ${s}`
+  if (/^(html|:root)\b/.test(s)) return s.replace(/^(html|:root)/, prefixe)
+  return `${prefixe} ${s}`
 }
 
-function fichiers() {
+function fichiers(exclus = EXCLUS) {
   return SOURCES.flatMap((dossier) =>
     readdirSync(join(RACINE, dossier))
-      .filter((f) => f.endsWith('.css') && !EXCLUS.test(f))
+      .filter((f) => f.endsWith('.css') && !exclus.test(f))
       .sort()
       .map((f) => join(RACINE, dossier, f))
   )
@@ -935,8 +944,252 @@ export function genererCoucheClaire() {
   return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
 }
 
+/* =================================================================================================
+ * NINJA CLAUDE (id `ninja-claude`, conv-269, 2026-10-16). Demande : « un theme "Ninja Claude", pour
+ * que l'interface d'autowin ressemble en tous points a celle de claude ». Base SOMBRE (« ninja »).
+ *
+ * Palette de Claude en sombre (relevee sur une page tierce, design.hagicode.com, PAS sur une source
+ * d'Anthropic) : page #262624, panneau #1f1e1d, encre #141413, surface #30302e, texte #faf9f5 /
+ * #c2c0b6 / #9c9a92, accent terracotta #d97757. Claude est PLAT et NEUTRE CHAUD : aucun cyan, aucun
+ * or, aucun gris bleute. La couche ci-dessous transpose donc, alpha toujours conserve :
+ *   - OR de la marque (liste ORS, jaunes d'ETAT exclus) et ROSE d'Autowin -> terracotta ;
+ *   - CYAN / bleu HUD et VIOLETS -> gris chaud de meme luminosite ;
+ *   - GRIS BLEUTES (teinte 180-260 deg, peu satures) -> meme gris, teinte chaude ;
+ *   - NOIRS en FOND -> l'echelle de fonds de Claude (#1f1e1d, #262624).
+ * Verts, rouges, jaunes d'etat et blancs restent : ils portent un sens. La feuille ecrite a la main
+ * (theme-ninja-claude.css, importee APRES) pose les jetons, les polices, le chat et retire le decor.
+ *
+ * Regenerer : node scripts/theme-nebuleuse-verre.mjs ninja-claude
+ * ================================================================================================= */
+const NINJA_ID = 'ninja-claude'
+const NINJA_PREFIXE = `:root[data-theme='${NINJA_ID}']`
+/** AskDecision.css N'EST PAS exclu ici : son or (choix fait pour Holographique) devient terracotta. */
+const NINJA_EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude/
+/** Terracotta de Claude (#d97757) : teinte et saturation, la luminosite suit la couleur d'origine. */
+const NINJA_TERRACOTTA = rgbVersHsl({ r: 217, g: 119, b: 87 })
+/** Teinte des neutres chauds de Claude (#c2c0b6, #9c9a92, #30302e : 48-60 deg, saturation 3-9 %). */
+const NINJA_NEUTRE = { h: 48, s: 0.06 }
+const NINJA_PANNEAU = { r: 31, g: 30, b: 29 } // #1f1e1d
+const NINJA_PAGE = { r: 38, g: 38, b: 36 } // #262624
+
+/** Un jeton dont le NOM dit qu'il peint un fond : ses noirs suivent l'echelle de fonds. */
+const NINJA_JETON_FOND = /fond|bg|surface|background|panel|card|inset/
+
+function transposerNinja(rgb, enFond) {
+  const cle = `${rgb.r},${rgb.g},${rgb.b}`
+  const { h, s, l } = rgbVersHsl(rgb)
+  const terracotta = () =>
+    hslVersRgb({ h: NINJA_TERRACOTTA.h, s: NINJA_TERRACOTTA.s, l: borne(l, 0.3, 0.78) })
+  const neutre = () => hslVersRgb({ h: NINJA_NEUTRE.h, s: Math.min(s, NINJA_NEUTRE.s), l })
+  if (ORS.has(cle)) return terracotta()
+  if (h >= 318 && h <= 342 && s >= 0.5 && l >= 0.2) return terracotta()
+  if (enFond && l < 0.12) return l < 0.05 ? NINJA_PANNEAU : NINJA_PAGE
+  if (h >= 185 && h <= 212 && s >= 0.45 && l >= 0.18) return neutre()
+  if (h >= 240 && h <= 300 && s >= 0.4 && l >= 0.2) return neutre()
+  if (h >= 180 && h <= 260 && s > 0.02 && s < 0.45) return neutre()
+  return null
+}
+
+/**
+ * La boucle commune aux couches de Claude (Ninja en sombre, Vanilla en clair) : chaque regle de
+ * `sources` dont un selecteur passe `prefixe` est recopiee avec ses SEULES declarations de couleur
+ * que `transposer` change (alpha conserve). Un jeton dont le nom passe `jetonFond` compte comme fond.
+ */
+function genererCoucheClaude({ sources, prefixe, transposer, jetonFond }) {
+  const blocs = []
+  let regles = 0
+  let declarations = 0
+  for (const fichier of sources) {
+    const racine = postcss.parse(readFileSync(fichier, 'utf8'), { from: fichier })
+    const sortie = postcss.root()
+    racine.walkRules((regle) => {
+      if (regle.parent?.type === 'atrule' && /keyframes/i.test(regle.parent.name)) return
+      // `prefixe` rend un selecteur, une LISTE de selecteurs (Vanilla deplie ses `:is()`), ou null.
+      const selecteurs = regle.selectors.flatMap((s) => prefixe(s) ?? [])
+      if (selecteurs.length === 0) return
+      const nouvelles = []
+      regle.walkDecls((decl) => {
+        if (decl.parent !== regle) return
+        const prop = decl.prop.toLowerCase()
+        if (!PROPRIETES_COULEUR.test(prop)) return
+        // Une valeur qui porte une IMAGE (fond galaxie du body) n'est jamais recopiee : Claude
+        // n'a pas de decor, la recopier ramenerait l'image.
+        if (/url\(/i.test(decl.value)) return
+        const enFond = /^background/.test(prop) || (prop.startsWith('--') && jetonFond.test(prop))
+        let change = false
+        const valeur = decl.value.replace(COULEUR, (brut) => {
+          let rgb
+          if (brut.startsWith('#')) {
+            if (![4, 5, 7, 9].includes(brut.length)) return brut
+            rgb = hexVersRgb(brut)
+          } else {
+            const n = brut.match(/[\d.]+/g).map(Number)
+            rgb = { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
+          }
+          const t = transposer(rgb, enFond)
+          if (!t) return brut
+          change = true
+          return rgb.a === 1 ? `rgb(${t.r}, ${t.g}, ${t.b})` : `rgba(${t.r}, ${t.g}, ${t.b}, ${rgb.a})`
+        })
+        if (change) nouvelles.push(postcss.decl({ prop: decl.prop, value: valeur, important: decl.important }))
+      })
+      if (nouvelles.length === 0) return
+      const copie = postcss.rule({ selectors: selecteurs })
+      copie.append(nouvelles)
+      let cible = copie
+      for (let p = regle.parent; p && p.type === 'atrule'; p = p.parent) {
+        const enveloppe = postcss.atRule({ name: p.name, params: p.params })
+        enveloppe.append(cible)
+        cible = enveloppe
+      }
+      sortie.append(cible)
+      regles += 1
+      declarations += nouvelles.length
+    })
+    if (sortie.nodes.length > 0) {
+      blocs.push(`/* ---- ${relative(RACINE, fichier).replace(/\\/g, '/')} ---- */\n${sortie.toString()}`)
+    }
+  }
+  return { blocs, regles, declarations }
+}
+
+export function genererNinjaClaude() {
+  const { blocs, regles, declarations } = genererCoucheClaude({
+    sources: fichiers(NINJA_EXCLUS),
+    prefixe: (s) => prefixerPour(s, NINJA_PREFIXE),
+    transposer: transposerNinja,
+    jetonFond: NINJA_JETON_FOND
+  })
+  const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${NINJA_ID} -- ne pas modifier a la main.
+   Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
+   (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
+   ${regles} regles, ${declarations} declarations. Voir genererNinjaClaude.
+   fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
+   de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
+   sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */\n\n`
+  return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
+}
+
+/* =================================================================================================
+ * VANILLA CLAUDE (id `vanilla-claude`, conv-269, 2026-10-16). Demande : « une version claire
+ * "Vanilla Claude" » de Ninja Claude. Base CLAIRE.
+ *
+ * La source n'est PAS la meme que pour Ninja : en base claire, theme-modes.css et theme-clair-gris.css
+ * repeignent deja en clair les couleurs de nuit (438 regles `:root[data-base='clair'] ...`), mais en
+ * GRIS BLEUTE (#e4e8ee, #cfd6e0, choix du 2026-09-23 pour « Clair ») avec un rose d'accent. Claude
+ * clair est creme et NEUTRE CHAUD. Cette couche reprend donc chacune de ces regles, re-prefixee
+ * `:root[data-theme='vanilla-claude'][data-base='clair']` (un attribut de plus : elle gagne sur sa
+ * source quel que soit l'ordre d'import), avec la couleur transposee :
+ *   - OR de la marque et ROSE d'Autowin -> terracotta (#d97757, luminosite de la couleur d'origine) ;
+ *   - BLEUS, CYANS, VIOLETS et GRIS BLEUTES (teinte 180-300 deg) -> gris chaud de meme luminosite.
+ * Verts, rouges, jaunes d'etat et neutres restent. Palette de reference : charte d'Anthropic
+ * (github.com/anthropics/skills, brand-guidelines : #141413, #faf9f5, #e8e6dc, #b0aea5, #d97757).
+ *
+ * Regenerer : node scripts/theme-nebuleuse-verre.mjs vanilla-claude
+ * ================================================================================================= */
+const VANILLA_ID = 'vanilla-claude'
+const VANILLA_PREFIXE = `:root[data-theme='${VANILLA_ID}'][data-base='clair']`
+/** Les feuilles d'un AUTRE theme ne sont pas la base claire commune. */
+const VANILLA_EXCLUS =
+  /theme-holographique-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|theme-vanilla-claude/
+const BASE_CLAIRE = /^:root\[data-base='clair'\]/
+
+/** Coupe une liste de selecteurs aux virgules de PREMIER niveau (pas celles d'un `:is(...)` imbrique). */
+function couperListe(liste) {
+  const morceaux = []
+  let profondeur = 0
+  let courant = ''
+  for (const c of liste) {
+    if (c === '(') profondeur += 1
+    if (c === ')') profondeur -= 1
+    if (c === ',' && profondeur === 0) {
+      morceaux.push(courant.trim())
+      courant = ''
+    } else courant += c
+  }
+  if (courant.trim()) morceaux.push(courant.trim())
+  return morceaux
+}
+
+/** ` :is(A, B)` -> ['A', 'B'] si le reste du selecteur N'EST QUE ce `:is()` ; sinon null. */
+function branchesDuIsFinal(reste) {
+  if (!/^\s:is\(/.test(reste)) return null
+  let profondeur = 0
+  for (let i = reste.indexOf('('); i < reste.length; i += 1) {
+    if (reste[i] === '(') profondeur += 1
+    if (reste[i] === ')') profondeur -= 1
+    // La parenthese qui ferme le `:is(` doit etre la DERNIERE : ` :is(a) .b` n'est pas un groupe.
+    if (profondeur === 0) {
+      return i === reste.length - 1 ? couperListe(reste.slice(reste.indexOf('(') + 1, i)) : null
+    }
+  }
+  return null
+}
+
+/**
+ * Une regle de la BASE CLAIRE, et elle seule, est reprise pour Vanilla (rien de propre a un theme).
+ * Un `:is(A, B)` final est DEPLIE en `P A, P B` (2026-10-16, capture vanilla-chat2.png : saisie grise,
+ * pastille beige sous le logo). Un `:is()` pese le poids de sa branche la PLUS lourde :
+ * `:is(..., .cosmic-outline .chat-suggest .btn)` donnait 0,6,0 a `.composer-field` et a `.brand`, et
+ * la feuille ecrite a la main (0,5,0) perdait, importee apres ou non. Deplie, chaque branche garde son
+ * propre poids : elle egale sa regle de base (le prefixe du theme compense l'ecart d'une classe au plus,
+ * l'ordre d'import tranche) et la feuille du theme, importee apres, gagne.
+ */
+function prefixerVanilla(selecteur) {
+  const s = selecteur.trim()
+  if (!BASE_CLAIRE.test(s)) return null
+  const reste = s.replace(BASE_CLAIRE, '')
+  if (/data-theme/.test(reste)) return null
+  const branches = branchesDuIsFinal(reste)
+  if (branches) {
+    return branches.map((branche) => `${VANILLA_PREFIXE} ${branche.replace(/\s+/g, ' ')}`)
+  }
+  return VANILLA_PREFIXE + reste
+}
+
+function transposerVanilla(rgb) {
+  const { h, s, l } = rgbVersHsl(rgb)
+  if (ORS.has(`${rgb.r},${rgb.g},${rgb.b}`) || (h >= 318 && h <= 342 && s >= 0.5))
+    return hslVersRgb({ h: NINJA_TERRACOTTA.h, s: NINJA_TERRACOTTA.s, l: borne(l, 0.3, 0.78) })
+  // Les neutres de Claude clair : creme saturee a 20-33 % dans les tres clairs, quasi grise au-dela.
+  if (h >= 180 && h <= 300 && s > 0.02)
+    return hslVersRgb({ h: NINJA_NEUTRE.h, s: Math.min(s, l > 0.75 ? 0.2 : 0.08), l })
+  return null
+}
+
+export function genererVanillaClaude() {
+  const { blocs, regles, declarations } = genererCoucheClaude({
+    sources: fichiers(VANILLA_EXCLUS),
+    prefixe: prefixerVanilla,
+    transposer: transposerVanilla,
+    jetonFond: NINJA_JETON_FOND
+  })
+  const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${VANILLA_ID} -- ne pas modifier a la main.
+   Theme « Vanilla Claude » : les regles de la base claire qui ecrivent une couleur en dur, transposees
+   vers Claude clair (or et rose -> terracotta, bleus, cyans, violets et gris bleutes -> gris chauds).
+   ${regles} regles, ${declarations} declarations. Voir genererVanillaClaude. */\n\n`
+  return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
+}
+
+/** Arguments acceptes. Tout autre argument est REFUSE : il reecrivait la couche d'Holographique. */
+const ARGUMENTS_CONNUS = new Set([undefined, THEME, CLAIR_ID, NINJA_ID, VANILLA_ID])
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv[2] === CLAIR_ID) {
+  if (!ARGUMENTS_CONNUS.has(process.argv[2])) {
+    console.error(
+      `theme inconnu : « ${process.argv[2]} ». Attendu : rien (${THEME}), ${CLAIR_ID}, ${NINJA_ID} ou ${VANILLA_ID}. Aucun fichier ecrit.`
+    )
+    process.exit(2)
+  }
+  if (process.argv[2] === VANILLA_ID) {
+    const couche = genererVanillaClaude()
+    writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${VANILLA_ID}.genere.css`), couche.css)
+    console.log(`theme-${VANILLA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+  } else if (process.argv[2] === NINJA_ID) {
+    const couche = genererNinjaClaude()
+    writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${NINJA_ID}.genere.css`), couche.css)
+    console.log(`theme-${NINJA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+  } else if (process.argv[2] === CLAIR_ID) {
     const couche = genererCoucheClaire()
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${CLAIR_ID}.genere.css`), couche.css)
     console.log(`theme-${CLAIR_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)

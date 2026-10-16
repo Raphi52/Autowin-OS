@@ -71,6 +71,10 @@
  *         [--attendre <selecteur CSS>] ATTEND (20 s max) qu'un element de la vue CHARGEE existe
  *                                    avant de declencher, mesurer et capturer. Delai depasse =
  *                                    echec nomme, code 9.
+ *                                    SANS option, la photo attend aussi (10 s max) la fin du fondu
+ *                                    entre deux vues (`vue-en-transition` sur <html>) ; fondu encore
+ *                                    en cours = `capture-pendant-le-fondu`, code 5. Le JSON porte
+ *                                    `enTransition` et `fonduAttendu`.
  *         [--retraits]               MESURE le retrait horizontal du contenu dans le cadre de page
  *                                    (`.view-page` de la vue active) : distance entre le bord du
  *                                    cadre et le bloc peint (fond ou bord visible) le plus a gauche,
@@ -259,6 +263,29 @@ export const tauxDeLectureDuMouvement = (argv) => {
   return 1 / facteur
 }
 
+/** Classes que src/renderer/src/transition-de-vue.ts pose sur <html> le temps d'un fondu anime. */
+export const CLASSES_DE_FONDU = ['vue-en-transition', 'theme-en-transition']
+
+/**
+ * Attend que `lireEnTransition()` (une lecture de la page) rende faux, `delaiMs` au plus. Rend
+ * `{ enTransition, attendu }` : `enTransition` vrai = le fondu jouait encore au bout du delai (la photo
+ * sera refusee par `verdictCapture`), `attendu` vrai = au moins une lecture l'a trouve en cours.
+ */
+export async function attendreFinDeTransition(
+  lireEnTransition,
+  { delaiMs = 10_000, pasMs = 100 } = {}
+) {
+  const debut = Date.now()
+  let attendu = false
+  for (;;) {
+    const enTransition = Boolean(await lireEnTransition())
+    if (!enTransition) return { enTransition, attendu }
+    attendu = true
+    if (Date.now() - debut >= delaiMs) return { enTransition, attendu }
+    await new Promise((r) => setTimeout(r, pasMs))
+  }
+}
+
 /**
  * Verdict PUR à partir des mesures — testable sans app. Rend `ok:false` ET l'étape fautive, jamais
  * un booléen nu : un échec doit dire OÙ il a eu lieu.
@@ -274,6 +301,10 @@ export const verdictCapture = (mesures) => {
   if (mesures.destinationActive && mesures.vue && mesures.destinationActive !== mesures.vue) {
     echecs.push(`navigation-non-appliquee(${mesures.destinationActive})`)
   }
+  // Photo prise pendant le fondu d'une vue a l'autre (2026-10-16, ninja-chat.png : « Accueil » encore
+  // selectionne, chat a moitie transparent, verdict vert). `main` attend la fin du fondu avant la photo ;
+  // s'il dure au-dela du delai, la photo ne montre pas la vue demandee : echec nomme.
+  if (mesures.enTransition) echecs.push('capture-pendant-le-fondu')
   if ((mesures.longueurTexte ?? 0) < SEUILS.texte) echecs.push('vue-vide-texte')
   if ((mesures.elements ?? 0) < SEUILS.elements) echecs.push('vue-vide-elements')
   if (mesures.declencheur) {
@@ -506,6 +537,21 @@ export const verdictEtat = ({ etat, selecteur, appliques }) => {
   if (!resoudreEtat(etat)) echecs.push(`etat-inconnu(${etat})`)
   if (!(Number(appliques) > 0)) echecs.push(`etat-sans-cible(${selecteur})`)
   return { ok: echecs.length === 0, echecs }
+}
+
+/**
+ * `--theme <id>` : la base (`clair` | `sombre`) du theme, lue dans le REGISTRE de l'application
+ * (texte de theme-mode.ts, entrees `{ id, libelle, base }`), comme `appliquerThemeMode` la lit. Le
+ * suffixe `-clair` ne suffit pas : « Vanilla Claude » est clair sans le porter (conv-269). Rend
+ * `undefined` pour un identifiant absent du registre : l'application le refuserait aussi.
+ */
+export const baseDuThemeDemande = (id, registre) => {
+  for (const m of String(registre).matchAll(
+    /\{\s*id:\s*'([^']+)'[^{}]*?base:\s*'(clair|sombre)'\s*\}/g
+  )) {
+    if (m[1] === id) return m[2]
+  }
+  return undefined
 }
 
 // ————————————————————————————————————————————————————————————————————————
@@ -855,9 +901,17 @@ const main = async () => {
   const themeDemande = argument('--theme')
   let themeForce
   if (themeDemande !== undefined) {
+    const base = baseDuThemeDemande(
+      themeDemande,
+      readFileSync(new URL('../src/renderer/src/theme-mode.ts', import.meta.url), 'utf8')
+    )
+    if (!base) {
+      socket.close()
+      rendre({ ok: false, echecs: [`theme-inconnu(${themeDemande})`], vue }, 9)
+    }
     const applique = await evaluer(`(() => {
       const id = ${JSON.stringify(themeDemande)}
-      const clair = id.endsWith('-clair') || id === 'clair'
+      const clair = ${JSON.stringify(base === 'clair')}
       try {
         localStorage.setItem('autowin-theme-mode.v1', id)
       } catch {
@@ -948,7 +1002,8 @@ const main = async () => {
       // L'ADRESSE DU DOCUMENT MESURE, pas celle de la liste CDP lue a la decouverte : l'instance est
       // declaree prete des qu'une page autre que l'attente existe, 'about:blank' compris. Mesure du
       // 2026-09-26 : une capture --code-dev verte par ailleurs a ete classee « inconnue » une fois.
-      adressePage: location.href
+      adressePage: location.href,
+      enTransition: ${JSON.stringify(CLASSES_DE_FONDU)}.some((c) => document.documentElement.classList.contains(c))
     }
   })()`)
   // --conversation : OUVRIR la conversation copiee, et le VERIFIER sur la page. L'instance la rouvre
@@ -1456,6 +1511,20 @@ const main = async () => {
     )
   }
 
+  // LE FONDU D'UNE VUE A L'AUTRE (2026-10-16) : la photo prise 1,2 s apres le clic de navigation
+  // tombait en plein fondu dans l'instance cachee (ninja-chat.png). On attend que <html> perde la
+  // classe du fondu ; s'il a fallu attendre, la page est remesuree, car l'etat lu plus tot etait
+  // celui du fondu. Fondu encore en cours au bout de 10 s = `capture-pendant-le-fondu` (code 5).
+  const fondu = await attendreFinDeTransition(() =>
+    evaluer(
+      `${JSON.stringify(CLASSES_DE_FONDU)}.some((c) => document.documentElement.classList.contains(c))`
+    )
+  )
+  if (fondu.attendu && !fondu.enTransition) {
+    await new Promise((r) => setTimeout(r, 300))
+    mesuresDom = await mesurerDom()
+  }
+  mesuresDom = { ...mesuresDom, enTransition: fondu.enTransition, fonduAttendu: fondu.attendu }
   const capture = await envoyer('Page.captureScreenshot', { format: 'png', fromSurface: true })
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(sortie, Buffer.from(capture.data, 'base64'))

@@ -62,6 +62,15 @@ import './assets/ui-system.css'
 import './assets/theme-nebuleuse-verre.genere.css'
 import './assets/theme-nebuleuse-verre.css'
 import './assets/theme-holographique-clair.css'
+// fix-ok: imports ajoutes apres le rouge de theme-ninja-claude.test.ts (« import absent ») ; ordre genere puis main.
+// Ninja Claude (conv-269) : la couche generee AVANT la feuille ecrite a la main, comme Holographique.
+import './assets/theme-ninja-claude.genere.css'
+import './assets/theme-ninja-claude.css'
+// Vanilla Claude (conv-269) : la version claire de Ninja Claude. APRES la base claire, a l'inverse
+// d'Holographique blanc : sa couche generee ne traduit pas les feuilles de nuit, elle RECOLORE les
+// regles de la base claire elles-memes (un attribut de plus, elle gagne sur elles).
+import './assets/theme-vanilla-claude.genere.css'
+import './assets/theme-vanilla-claude.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 

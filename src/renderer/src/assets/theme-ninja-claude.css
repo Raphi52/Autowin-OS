@@ -1,0 +1,380 @@
+/* fix-ok: retouches = recalage de la palette apres lecture des captures --code-dev ; la superposition
+   Accueil/Chat venait du fondu de vue (meme image sous Holographique), pas de cette feuille. */
+/* =================================================================================================
+ * THEME « NINJA CLAUDE » (id `ninja-claude`, conv-269, 2026-10-16).
+ * Demande : « un theme "Ninja Claude", pour que l'interface d'autowin ressemble en tous points a
+ * celle de claude ». Base SOMBRE : Claude en mode sombre.
+ *
+ * Ce que Claude montre, et que cette feuille reproduit :
+ *   - un fond PLAT anthracite chaud (#262624), une colonne de gauche un cran plus sombre (#1f1e1d),
+ *     des surfaces un cran plus claires (#30302e) ; aucun decor, aucun reflet, aucun degrade ;
+ *   - du texte creme (#faf9f5), gris chaud (#c2c0b6, #9c9a92) ;
+ *   - UN accent, le terracotta (#d97757, bouton d'envoi #c96442) ;
+ *   - les reponses en SERIF, l'interface en sans-serif ; coins arrondis sobres (8 / 12 / 16 px) ;
+ *   - la question de l'utilisateur dans une bulle sombre sans bord, la reponse sans cadre.
+ * Palette relevee sur une page tierce (design.hagicode.com/designs/claude), pas chez Anthropic.
+ * Les polices d'Anthropic ne sont pas embarquees : elles sont nommees en tete, et Georgia / la
+ * police systeme prennent le relais quand elles ne sont pas installees.
+ *
+ * Les couleurs ecrites EN DUR dans les composants sont transposees par la couche generee
+ * (theme-ninja-claude.genere.css), importee AVANT cette feuille : a specificite egale, ici gagne.
+ * ================================================================================================= */
+
+/* ---- 1. JETONS ---------------------------------------------------------------------------------- */
+:root[data-theme='ninja-claude'] {
+  color-scheme: dark;
+  --bg-0: #262624;
+  --bg-1: #262624;
+  --bg-2: #30302e;
+  --bg-3: rgba(250, 249, 245, 0.06);
+  --bg-inset: #1f1e1d;
+
+  --line: rgba(222, 220, 209, 0.15);
+  --line-strong: rgba(222, 220, 209, 0.28);
+
+  --text: #faf9f5;
+  --text-dim: #c2c0b6;
+  --text-faint: #9c9a92;
+
+  /* Pas d'or chez Claude : tout ce qui designait l'or designe le terracotta. */
+  --gold: #d97757;
+  --gold-bright: #e08a6d;
+  --gold-doux: #c96442;
+  --gold-clair: #e08a6d;
+  --rose: #d97757;
+  --rose-bright: #e08a6d;
+  --accent: #d97757;
+  --accent-dim: #8f4a33;
+  --accent-soft: rgba(217, 119, 87, 0.14);
+  /* Ni cyan ni violet : gris chauds. */
+  --cyan: #c2c0b6;
+  --violet: #a8a59b;
+  --info: #c2c0b6;
+
+  /* Etats : ils gardent leur sens (le jaune d'alerte reste jaune, pas terracotta). */
+  --ok: #7fa66a;
+  --warn: #d6a63a;
+  --err: #dd5e55;
+
+  --on-accent: #ffffff;
+  --voile-rgb: 250, 249, 245;
+  --ombre-rgb: 0, 0, 0;
+
+  --font: 'Anthropic Sans', 'Styrene B', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --display: 'Anthropic Serif', 'Copernicus', 'Tiempos Headline', Georgia, 'Times New Roman', serif;
+  --mono: 'Anthropic Mono', 'Cascadia Mono', 'Cascadia Code', ui-monospace, Consolas, monospace;
+
+  --r1: 8px;
+  --r2: 12px;
+  --r3: 16px;
+
+  --titlebar-symbol: #c2c0b6;
+}
+
+:root[data-theme='ninja-claude'] .shell,
+:root[data-theme='ninja-claude'] .shell.theme-serious {
+  --surface-page: #262624;
+  --surface-panel: #262624;
+  --surface-card: #30302e;
+  --surface-inset: #1f1e1d;
+  --surface-hover: rgba(250, 249, 245, 0.05);
+  --surface-selected: rgba(250, 249, 245, 0.08);
+  --container-border: rgba(222, 220, 209, 0.15);
+  --container-border-strong: rgba(222, 220, 209, 0.28);
+  --container-radius-page: 16px;
+  --container-radius-panel: 12px;
+  --container-radius-card: 12px;
+  --container-shadow: none;
+  --container-blur: 0px;
+  --lisere-degrade: none;
+  --module-title-font: var(--display);
+  --module-title-color: #faf9f5;
+  --module-eyebrow-color: #9c9a92;
+}
+
+/* ---- 2. FOND PLAT : ni image galaxie, ni grain, ni decor 3D, ni reflet -------------------------- */
+:root[data-theme='ninja-claude'] body {
+  background: #262624;
+  color: var(--text);
+}
+:root[data-theme='ninja-claude'] body::before,
+:root[data-theme='ninja-claude'] .decor-de-fond {
+  display: none;
+}
+:root[data-theme='ninja-claude'] body::after {
+  background: none;
+  box-shadow: none;
+}
+/* Casse normale partout : Autowin met ses titres en CAPITALES ESPACEES dans 127 regles de 34
+   feuilles (« INTERLOCUTEURS », « NOUVELLE CONVERSATION »). Claude ecrit « Interlocuteurs ». Une
+   neutralisation globale les couvre toutes, y compris les vues qu'on n'a pas encore ouvertes. */
+:root[data-theme='ninja-claude'] * {
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  scrollbar-color: rgba(222, 220, 209, 0.2) transparent;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+/* Le filet dore qui suit chaque titre de tuile : Claude n'en a pas. On garde l'element (il pousse le
+   compteur a droite), on retire seulement le trait. */
+:root[data-theme='ninja-claude'] .home-tile__rule {
+  background: none;
+}
+:root[data-theme='ninja-claude'] ::selection {
+  background: rgba(217, 119, 87, 0.35);
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 2px solid rgba(217, 119, 87, 0.8);
+  outline-offset: 2px;
+}
+:root[data-theme='ninja-claude'] textarea,
+:root[data-theme='ninja-claude'] input {
+  caret-color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] ::placeholder {
+  color: #9c9a92;
+  opacity: 1;
+}
+
+/* ---- 3. COLONNE DE GAUCHE : un cran plus sombre, element ouvert en gris clair -------------------- */
+:root[data-theme='ninja-claude'] .rail,
+:root[data-theme='ninja-claude'] .theme-serious .rail {
+  border: 0;
+  border-right: 1px solid rgba(222, 220, 209, 0.1);
+  border-radius: 0;
+  background: #1f1e1d;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .theme-serious .brand {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .brand::after {
+  background: #d97757;
+}
+:root[data-theme='ninja-claude'] .brand-name {
+  font-family: var(--display);
+  color: #faf9f5;
+}
+/* Le logo arc-en-ciel devient l'eclat terracotta de Claude (dessin vectoriel inline, aucun fichier
+   ajoute). `content: url()` sur un <img> remplace son image dans Chromium. */
+:root[data-theme='ninja-claude'] .brand-logo {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5v6.5M12 15v6.5M2.5 12H9M15 12h6.5M5.3 5.3l4.6 4.6M14.1 14.1l4.6 4.6M5.3 18.7l4.6-4.6M14.1 9.9l4.6-4.6' stroke='%23d97757' stroke-width='2.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+}
+/* Menu monochrome : les icones colorees (emoji, dessins) passent en gris chaud, comme chez Claude. */
+:root[data-theme='ninja-claude'] .space-toy-icon {
+  filter: grayscale(1) brightness(1.15);
+  opacity: 0.8;
+}
+:root[data-theme='ninja-claude'] .nav-item.active .space-toy-icon {
+  opacity: 1;
+}
+:root[data-theme='ninja-claude'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #c2c0b6;
+}
+:root[data-theme='ninja-claude'] .nav-item:hover {
+  background: rgba(250, 249, 245, 0.05);
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .nav-item.active {
+  border: 1px solid transparent;
+  background: rgba(250, 249, 245, 0.08);
+  box-shadow: none;
+  color: #faf9f5;
+}
+
+/* ---- 4. BRIQUES COMMUNES : cartes, boutons, champs, badges ------------------------------------- */
+:root[data-theme='ninja-claude'] .card,
+:root[data-theme='ninja-claude'] .panel,
+:root[data-theme='ninja-claude'] .surface-panel {
+  border-color: rgba(222, 220, 209, 0.15);
+  background: #30302e;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .view-page {
+  border-color: rgba(222, 220, 209, 0.12);
+  background: #262624;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .btn {
+  border-color: rgba(222, 220, 209, 0.18);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .btn:hover:not(:disabled) {
+  border-color: rgba(222, 220, 209, 0.3);
+  background: rgba(250, 249, 245, 0.06);
+}
+:root[data-theme='ninja-claude'] .btn-accent,
+:root[data-theme='ninja-claude'] .cosmic-outline .btn-accent {
+  border-color: #c96442;
+  background: #c96442;
+  box-shadow: none;
+  color: #ffffff;
+}
+:root[data-theme='ninja-claude'] .btn-accent:hover:not(:disabled),
+:root[data-theme='ninja-claude'] .cosmic-outline .btn-accent:hover:not(:disabled) {
+  border-color: #d97757;
+  background: #d97757;
+}
+:root[data-theme='ninja-claude'] .btn-danger {
+  border-color: rgba(221, 94, 85, 0.5);
+  background: transparent;
+  color: #e88a82;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline :where(.input, .select, textarea.input),
+:root[data-theme='ninja-claude'] :where(.input, .select) {
+  border-color: rgba(222, 220, 209, 0.15);
+  border-radius: 8px;
+  background: #1f1e1d;
+  box-shadow: none;
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline :where(.input, .select, textarea.input):focus,
+:root[data-theme='ninja-claude'] :where(.input, .select):focus {
+  border-color: rgba(222, 220, 209, 0.35);
+}
+:root[data-theme='ninja-claude'] .select option {
+  background: #30302e;
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .badge {
+  border-color: rgba(222, 220, 209, 0.18);
+  background: rgba(250, 249, 245, 0.05);
+  color: #c2c0b6;
+}
+
+/* ---- 5. CHAT ------------------------------------------------------------------------------------ */
+:root[data-theme='ninja-claude'] .cosmic-outline .chat-layout,
+:root[data-theme='ninja-claude'] .cosmic-outline .chat,
+:root[data-theme='ninja-claude'] .cosmic-outline .runs-pane {
+  border-color: rgba(222, 220, 209, 0.1);
+  background: #262624;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-pane {
+  border-color: rgba(222, 220, 209, 0.1);
+  background: #1f1e1d;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .chat::before,
+:root[data-theme='ninja-claude'] .cosmic-outline .chat::after {
+  display: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .chat-head {
+  border-color: rgba(222, 220, 209, 0.1);
+  background: #262624;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .chat-head-title,
+:root[data-theme='ninja-claude'] .cosmic-outline .chat-head h2 {
+  font-family: var(--font);
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-item {
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-item:hover {
+  background: rgba(250, 249, 245, 0.05);
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-item.active {
+  border-color: transparent;
+  background: rgba(250, 249, 245, 0.08);
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-label {
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .conv-meta {
+  color: #9c9a92;
+}
+
+/* La question : une bulle sombre, sans bord ni degrade ni lueur. Le selecteur de cosmic-outline.css
+   (`:root:not([data-base='clair']):not(...)`, 8 classes) est egale ici puis gagne par l'ordre. */
+:root[data-theme='ninja-claude']:not([data-base='clair']) .cosmic-outline .msg.user .msg-body,
+:root[data-theme='ninja-claude']:not([data-base='clair'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle {
+  border: 0;
+  border-radius: 12px;
+  background: #141413;
+  box-shadow: none;
+  color: #faf9f5;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+}
+:root[data-theme='ninja-claude']:not([data-base='clair'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle::before {
+  display: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .msg.user .msg-role {
+  color: #9c9a92;
+}
+/* La reponse : du texte en serif, sans cadre ni filet. */
+:root[data-theme='ninja-claude'] .cosmic-outline .msg.assistant .msg-body {
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #faf9f5;
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1.7;
+}
+:root[data-theme='ninja-claude']
+  .cosmic-outline
+  .msg.assistant
+  .msg-body
+  :is(code, pre, kbd, samp) {
+  font-family: var(--mono);
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .msg.assistant .msg-role {
+  color: #d97757;
+}
+
+/* La zone de saisie : un cadre #30302e arrondi, le bouton d'envoi terracotta. */
+:root[data-theme='ninja-claude'] .cosmic-outline .composer {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-field {
+  border: 1px solid rgba(222, 220, 209, 0.15);
+  border-radius: 16px;
+  background: #30302e;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-field:focus-within {
+  border-color: rgba(222, 220, 209, 0.3);
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea {
+  background: transparent;
+  color: #faf9f5;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-send {
+  border: 0;
+  border-radius: 8px;
+  background: #c96442;
+  box-shadow: none;
+  color: #ffffff;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-send:hover:not(:disabled) {
+  background: #d97757;
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-send:disabled {
+  background: rgba(201, 100, 66, 0.45);
+  color: rgba(255, 255, 255, 0.7);
+}
