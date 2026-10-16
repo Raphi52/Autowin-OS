@@ -17,6 +17,7 @@ import { TraceStore } from './activity/trace-store'
 import type { BrainRetrievalOptions } from './brain-retrieval'
 import type { OrchestrationStep } from './orchestrator'
 import { supprimerArbre } from './fs-supprimer'
+import { formatOrchestrationOutcome } from '../shared/orchestration-outcome'
 
 /*
  * RACINE APP-DATA PROPRE A CE FICHIER.
@@ -2340,5 +2341,73 @@ describe('issue d’orchestration', () => {
     )) as { data?: { phaseOutputs?: { phase: string }[] } }
 
     expect(res.data?.phaseOutputs?.map((sortie) => sortie.phase)).toEqual(['frame'])
+  })
+
+  /*
+   * LE JUGE JOUE COMPTE PARMI LES PHASES (conv-981, 2026-10-15). L'orchestrateur garde le verdict
+   * du juge a part (`judgeText`), jamais dans `phaseOutputs`. Le run
+   * traite-ensemble-5-candidats-issus-scout-mv9lnufa, valide a 85 par le juge, a donc recu la
+   * cloture « Reste a faire : judge » et « Recommande : lancer judge » : en mode auto, un second
+   * juge PAYANT pour un travail deja juge.
+   */
+  it('compte le juge déjà joué : la clôture ne recommande pas de le relancer', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'lot livre',
+      phaseOutputs: [
+        { phase: 'frame', text: 'cadrage' },
+        { phase: 'build', text: 'ecriture' },
+        { phase: 'clean', text: 'nettoyage' },
+        { phase: 'learn', text: 'lecons' }
+      ],
+      judgeText: ['VALIDE', 'SCORE: 85', 'OBJECTIONS:', '- OK: preuves relues'].join('\n')
+    })
+    const bus = new AppCommandBus(os, () => {})
+
+    const res = (await bus.exec(
+      'orchestrate',
+      { task: `traite le lot ${Date.now()}` },
+      'conv-1'
+    )) as { data?: { phaseOutputs?: { phase: string }[] } }
+
+    expect(res.data?.phaseOutputs?.map((sortie) => sortie.phase)).toEqual([
+      'frame',
+      'build',
+      'clean',
+      'learn',
+      'judge'
+    ])
+    const cloture = formatOrchestrationOutcome(true, res.data as never)
+    expect(cloture).not.toContain('lancer judge')
+    expect(cloture).toContain('Reste à faire : rien.')
+  })
+
+  it('sans verdict du juge, la clôture envoie toujours vers le juge (jumeau)', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'lot livre',
+      phaseOutputs: [
+        { phase: 'build', text: 'ecriture' },
+        { phase: 'clean', text: 'nettoyage' }
+      ]
+    })
+    const bus = new AppCommandBus(os, () => {})
+
+    const res = (await bus.exec(
+      'orchestrate',
+      { task: `traite le lot sans juge ${Date.now()}` },
+      'conv-1'
+    )) as { data?: { phaseOutputs?: { phase: string }[] } }
+
+    expect(res.data?.phaseOutputs?.map((sortie) => sortie.phase)).toEqual(['build', 'clean'])
+    expect(formatOrchestrationOutcome(true, res.data as never)).toContain('lancer judge')
   })
 })

@@ -55,7 +55,12 @@ import {
   motsUtilisateur,
   baliserRelanceAutomatique
 } from './chat-turn-messages'
-import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
+import {
+  invokedSkillId,
+  noteSkillInconnue,
+  skillInstruction,
+  skillNommeeSansBarre
+} from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { suivreBlocsDeCode } from '../shared/bloc-de-code'
 import { randomUUID } from 'node:crypto'
@@ -1598,7 +1603,11 @@ export class AgentPilot {
      * part dans le main, donc le modèle recevait une commande dont il n'avait jamais lu le contrat.
      * Générique par construction : toute skill du kit devient atteignable, sans nouvelle phase.
      */
-    const invoked = invokedSkillId(lastUserMessage?.content ?? '')
+    // Le nom NU en tete (« draft … », conv-988) charge le meme corps que `/draft` : c'est ce qui
+    // rend vraie la bulle de skill que le fil affiche desormais pour cette forme.
+    const invoked =
+      invokedSkillId(lastUserMessage?.content ?? '') ??
+      skillNommeeSansBarre(lastUserMessage?.content ?? '')
     /*
      * UN `/nom` INCONNU NE DOIT PLUS DISPARAITRE EN SILENCE.
      *

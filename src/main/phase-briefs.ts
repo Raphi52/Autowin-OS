@@ -147,9 +147,30 @@ Livrable :
  */
 export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE — réflexe (5) de la constitution : PRÉCISER oui, SUBSTITUER jamais ; DÉJÀ FAITE, infaisable ou prémisse fausse → arrête-toi et dis-le, preuve du constat à l'appui.`
 
+/**
+ * LE BLOC FIXE DE FIN D'ETAPE (conv-989, 2026-10-16) — sa forme est celle que lit `extraireBilan`
+ * (src/shared/bilan-d-etape.ts) ; `phase-briefs.bilan.test.ts` lie les deux.
+ *
+ * Une sortie d'etape est de la prose de longueur libre : ceux qui la COUPENT (bulle a 4 000
+ * caracteres, agregat du juge) gardaient le debut, ou le debut et la fin, sans savoir ou etait
+ * l'essentiel. Ce bloc se reconnait, donc il passe toujours en entier. Pose ICI, une fois, plutot
+ * que recopie dans cinq consignes : leurs formats propres (tableau du scout, sections du cadrage)
+ * restent intacts. Pas pour le juge (format strict), ni kaizen et remake (livrable propre).
+ */
+export const CONSIGNE_BILAN = `BILAN — termine ta réponse par ce bloc, AVANT les lignes techniques qui restent les dernières (\`SUITE:\`, \`AUTOWIN_…\`), même si tout est déjà dit plus haut : quand ta réponse est trop longue, c'est la partie qu'Autowin remonte TOUJOURS en entier. Quatre lignes courtes, une phrase chacune.
+### Bilan de l’étape
+- Verdict : <fait | partiel | bloqué | déjà fait> — <une phrase>
+- Fichiers touchés : <chemins, ou « aucun »>
+- Preuves : <commande + code de sortie, fichier:ligne lu — ou « aucune »>
+- Reste à faire : <la suite, ou « aucun reste »>`
+
+const PHASES_AVEC_BILAN: ReadonlySet<string> = new Set(['scout', 'frame', 'terrain', 'build', 'clean'])
+
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
 export function phaseBrief(phase: NodePhase): string {
   // Un noeud SKILL n'a pas de consigne native : son corps vient du kit, pas d'ici.
   const brief = PHASE_BRIEFS[phase as PipelinePhase]
-  return brief ? `\n=== CONSIGNE ${phase.toUpperCase()} ===\n${GARDE_TACHE}\n\n${brief}\n` : ''
+  if (!brief) return ''
+  const bilan = PHASES_AVEC_BILAN.has(phase) ? `\n\n${CONSIGNE_BILAN}` : ''
+  return `\n=== CONSIGNE ${phase.toUpperCase()} ===\n${GARDE_TACHE}\n\n${brief}${bilan}\n`
 }

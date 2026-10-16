@@ -172,6 +172,197 @@ function cdSuitLaBoucleDesBras(texte, cds) {
   return false
 }
 
+/*
+ * DOSSIERS CALCULES PAR UN LANCEUR SHELL (P13). Mesure du 2026-10-15 (banc « arena-snake3 »,
+ * conv-980) : le lanceur placait les copies a cote du banc par CALCUL —
+ * `B="$(cygpath -m "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"` puis
+ * `BRAS_DIR="$(cygpath -m "$(cd "$B/.." && pwd)")/bras"`. P13 ne lisait que les chemins `"X:/..."`
+ * ecrits en toutes lettres : il n'en trouvait aucun et sortait OK avec `bras/` (137 Mo, 12 copies)
+ * encore sur le disque. Ce qui suit evalue les affectations et les `cd`/`mkdir` du lanceur, en ne
+ * connaissant QUE ce qui se deduit du fichier lui-meme (son propre chemin, les variables qu'il
+ * affecte) ; tout le reste (`$(pwd)`, `$HOME`, la variable de boucle) reste INCONNU, et seul le
+ * prefixe connu d'un chemin est retenu (`$BRAS_DIR/$id` -> le dossier `bras`).
+ */
+const INCONNU = '\u0000'
+
+/** Fin (exclue) d'une substitution `$( ... )` ou d'un groupe `( ... )` qui commence en `j`. */
+function finParentheses(s, j) {
+  let k = s.startsWith('$(', j) ? j + 2 : j + 1
+  while (k < s.length) {
+    if (s[k] === ')') return k + 1
+    k = finElement(s, k)
+  }
+  return s.length
+}
+
+/** Fin (exclue) d'une chaine `"..."` qui commence en `j` : `\x`, `$( )` et `${ }` y restent actifs. */
+function finGuillemets(s, j) {
+  let k = j + 1
+  while (k < s.length && s[k] !== '"') {
+    if (s[k] === '\\') k += 2
+    else if (s.startsWith('$(', k)) k = finParentheses(s, k)
+    else if (s.startsWith('${', k)) k = finAccolades(s, k)
+    else k++
+  }
+  return Math.min(k + 1, s.length)
+}
+
+function finAccolades(s, j) {
+  const k = s.indexOf('}', j)
+  return k < 0 ? s.length : k + 1
+}
+
+/** Fin (exclue) de l'element shell qui commence en `j` : chaine, substitution, groupe ou caractere. */
+function finElement(s, j) {
+  const c = s[j]
+  if (c === '\\') return Math.min(j + 2, s.length)
+  if (c === "'") {
+    const k = s.indexOf("'", j + 1)
+    return k < 0 ? s.length : k + 1
+  }
+  if (c === '"') return finGuillemets(s, j)
+  if (c === '(' || s.startsWith('$(', j)) return finParentheses(s, j)
+  if (s.startsWith('${', j)) return finAccolades(s, j)
+  return j + 1
+}
+
+/** Commandes d'un texte shell : listes de mots bruts, coupees aux sauts de ligne, ; & | ( ). */
+function commandesShell(texte) {
+  const commandes = []
+  let mots = []
+  let mot = ''
+  const couperMot = () => {
+    if (mot) mots.push(mot)
+    mot = ''
+  }
+  const couperCommande = () => {
+    couperMot()
+    if (mots.length) commandes.push(mots)
+    mots = []
+  }
+  for (let j = 0; j < texte.length;) {
+    const c = texte[j]
+    if (c === '#' && !mot) {
+      const k = texte.indexOf('\n', j)
+      j = k < 0 ? texte.length : k
+    } else if (c === ' ' || c === '\t') {
+      couperMot()
+      j++
+    } else if ('\n;&|()'.includes(c) && !texte.startsWith('$(', j)) {
+      couperCommande()
+      j++
+    } else {
+      const k = finElement(texte, j)
+      mot += texte.slice(j, k)
+      j = k
+    }
+  }
+  couperCommande()
+  return commandes
+}
+
+/** Valeur d'un mot shell ; ce qui ne se deduit pas du fichier devient INCONNU. */
+function evaluerMot(brut, env, lanceur, dansGuillemets = false) {
+  let out = ''
+  for (let j = 0; j < brut.length;) {
+    const c = brut[j]
+    if (!dansGuillemets && c === "'") {
+      const k = finElement(brut, j)
+      out += brut.slice(j + 1, k - 1)
+      j = k
+    } else if (!dansGuillemets && c === '"') {
+      const k = finGuillemets(brut, j)
+      out += evaluerMot(brut.slice(j + 1, k - 1), env, lanceur, true)
+      j = k
+    } else if (c === '\\') {
+      out += brut[j + 1] ?? ''
+      j += 2
+    } else if (brut.startsWith('$(', j)) {
+      const k = finParentheses(brut, j)
+      out += evaluerCommande(brut.slice(j + 2, k - 1), env, lanceur)
+      j = k
+    } else if (brut.startsWith('${', j)) {
+      const k = finAccolades(brut, j)
+      out += valeurDeVariable(brut.slice(j + 2, k - 1), env, lanceur)
+      j = k
+    } else if (c === '$' && /^(?:[A-Za-z_]\w*|[0-9?#@*$!-])/.test(brut.slice(j + 1))) {
+      const nom = /^(?:[A-Za-z_]\w*|[0-9?#@*$!-])/.exec(brut.slice(j + 1))[0]
+      out += valeurDeVariable(nom, env, lanceur)
+      j += 1 + nom.length
+    } else {
+      out += c
+      j++
+    }
+  }
+  return out
+}
+
+function valeurDeVariable(expression, env, lanceur) {
+  if (/^(?:BASH_SOURCE(?:\[0\])?|0)$/.test(expression)) return lanceur
+  // `${id%%-*}`, `${x:-defaut}`... : une transformation de valeur n'est pas evaluee.
+  return /^[A-Za-z_]\w*$/.test(expression) && env.has(expression) ? env.get(expression) : INCONNU
+}
+
+/** Valeur d'une substitution `$( ... )`, pour les seules formes qui calculent un chemin. */
+function evaluerCommande(texte, env, lanceur) {
+  const commandes = commandesShell(texte)
+  const chemin = (mot) => {
+    const v = evaluerMot(mot, env, lanceur)
+    return !v.includes(INCONNU) && path.isAbsolute(v) ? path.resolve(v) : INCONNU
+  }
+  const derniere = commandes[commandes.length - 1] ?? []
+  // `cd X && pwd` : le dossier X lui-meme.
+  if (derniere.length === 1 && derniere[0] === 'pwd') {
+    const cd = commandes
+      .slice(0, -1)
+      .reverse()
+      .find((c) => c[0] === 'cd' && c.length === 2)
+    return cd ? chemin(cd[1]) : INCONNU
+  }
+  if (commandes.length !== 1) return INCONNU
+  const [nom, ...args] = derniere
+  const cible = args.filter((a) => !a.startsWith('-')).pop()
+  if (cible === undefined) return INCONNU
+  if (nom === 'cygpath' || nom === 'realpath' || (nom === 'readlink' && args.includes('-f')))
+    return chemin(cible)
+  if (nom === 'dirname') {
+    const v = chemin(cible)
+    return v === INCONNU ? v : path.dirname(v)
+  }
+  return INCONNU
+}
+
+/**
+ * Dossiers absolus qu'un lanceur shell nomme par CALCUL : valeurs de ses affectations et cibles de
+ * ses `cd` / `mkdir`, reduites a leur prefixe connu.
+ */
+function dossiersCalculesDuLanceur(texte, lanceur) {
+  const env = new Map()
+  const dossiers = new Set()
+  const retenir = (valeur) => {
+    const i = valeur.indexOf(INCONNU)
+    let p = i < 0 ? valeur : valeur.slice(0, i).replace(/[^/\\]*$/, '')
+    p = p.replace(/[/\\]+$/, '')
+    if (p && path.isAbsolute(p) && path.parse(path.resolve(p)).root !== path.resolve(p))
+      dossiers.add(path.resolve(p))
+  }
+  for (const mots of commandesShell(texte)) {
+    let i = 0
+    if (['export', 'local', 'declare', 'readonly'].includes(mots[0])) i = 1
+    for (; i < mots.length; i++) {
+      const m = /^([A-Za-z_]\w*)=/.exec(mots[i])
+      if (!m) break
+      const valeur = evaluerMot(mots[i].slice(m[0].length), env, lanceur)
+      env.set(m[1], valeur)
+      retenir(valeur)
+    }
+    const [nom, ...args] = mots.slice(i)
+    if (nom === 'cd' || nom === 'mkdir')
+      for (const a of args.filter((x) => !x.startsWith('-'))) retenir(evaluerMot(a, env, lanceur))
+  }
+  return [...dossiers]
+}
+
 /**
  * Position de la premiere mention du lanceur des bras dans le RUN.md, HORS de la section
  * `## Calibrage`. Le calibrage (skills/arena/SKILL.md, etape 1) fait tourner trois appels nus
@@ -498,9 +689,18 @@ export function verifierProtocole({
 
   ajoute('P13', 'Copies de travail perdantes retirees du disque', () => {
     if (!lancement) return 'aucun script de lancement trouve dans le banc'
-    const racines = [...lancement.texte.matchAll(/["']([A-Za-z]:[\\/][^"'\n]*?)["']/g)]
-      .map((m) => m[1])
-      .filter((p) => !path.resolve(p).startsWith(path.resolve(bench)))
+    const litteraux = [...lancement.texte.matchAll(/["']([A-Za-z]:[\\/][^"'\n]*?)["']/g)].map(
+      (m) => m[1]
+    )
+    const calcules = /\.(sh|bash)$/i.test(lancement.chemin)
+      ? dossiersCalculesDuLanceur(lancement.texte, lancement.chemin)
+      : []
+    const racines = [...new Set([...litteraux, ...calcules])].filter(
+      (p) => !path.resolve(p).startsWith(path.resolve(bench))
+    )
+    // Sans dossier localise, rien ne prouve que les copies sont retirees : ce n'est pas un OK.
+    if (!racines.length)
+      return `aucun dossier de copies localise dans ${path.basename(lancement.chemin)} (ni chemin absolu ecrit, ni chemin calculable depuis le lanceur) : rien ne prouve que les copies sont retirees`
     const restantes = racines.filter((p) => existsSync(p) && statSync(p).isDirectory())
     return restantes.length ? `encore sur disque : ${restantes.join(', ')}` : true
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AppCommandBus } from './commands'
 import { TaskStore } from './task-manager/task-store'
+import { MODELE_PROMPT_TACHE_COURT, TETES_DU_MODELE_PROMPT_TACHE } from '../shared/modele-prompt-tache'
 
 /**
  * Demande conv-114 (2026-10-09) : l'agent peut créer des tâches, mais rien que l'utilisateur ne
@@ -38,6 +39,16 @@ describe('task_create — câblage du bus', () => {
       destructiveHint: false,
       idempotentHint: false
     })
+  })
+
+  // conv-983 (2026-10-16) : l'agent rédige le prompt d'une tâche sur le modèle partagé, qu'il lit
+  // au moment même de créer — la description de la commande, servie à chaque tour.
+  it('donne à l’agent le modèle de prompt, sans redevenir un paragraphe', () => {
+    const bus = new AppCommandBus(os as never, () => undefined)
+    const description = bus.catalog().find((c) => c.name === 'task_create')?.description ?? ''
+    expect(description).toContain(MODELE_PROMPT_TACHE_COURT)
+    for (const tete of TETES_DU_MODELE_PROMPT_TACHE) expect(description).toContain(tete)
+    expect(description.length).toBeLessThan(1000)
   })
 
   it('crée dans le stockage de l’écran ; la tâche se supprime ensuite', async () => {

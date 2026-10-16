@@ -73,6 +73,24 @@ function sectionBesoin(texte: string): string {
   return lignes.slice(debut, fin).join('\n')
 }
 
+/*
+ * UNE LIGNE DE TABLEAU EST UN CAS (conv-981, 2026-10-15) : 18 cas ecrits en tableau etaient comptes
+ * 0 et le cadrage repartait a `frame` -- deux passes payees pour les reecrire en puces. La ligne de
+ * separation `|---|` n'est pas un cas, ni la ligne d'en-tete qui la precede. Meme regle dans
+ * `scripts/frame-cas-limites-check.mjs`, tenue par le test de contrat.
+ */
+const SEPARATION_DE_TABLEAU = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
+const LIGNE_DE_TABLEAU = /^\s*\|.*\S.*\|\s*$/
+
+/** Une ligne de CONTENU de tableau : ni la separation, ni l'en-tete (la ligne qui la precede). */
+function estUnCasDeTableau(ligne: string, suivante: string | undefined): boolean {
+  return (
+    LIGNE_DE_TABLEAU.test(ligne) &&
+    !SEPARATION_DE_TABLEAU.test(ligne) &&
+    !SEPARATION_DE_TABLEAU.test(suivante ?? '')
+  )
+}
+
 /** Les cas limites reellement enumeres sous la rubrique, dans l'ordre du texte. */
 export function casLimitesEnumeres(texte: string): string[] {
   const lignes = sectionBesoin(texte).split('\n')
@@ -82,7 +100,7 @@ export function casLimitesEnumeres(texte: string): string[] {
   for (let i = debut + 1; i < lignes.length; i++) {
     const l = lignes[i]!
     if (/^\s{0,3}#{2,6}\s/.test(l)) break
-    if (/^\s*([-*]|\d+[.)])\s+\S/.test(l)) cas.push(l.trim())
+    if (/^\s*([-*]|\d+[.)])\s+\S/.test(l) || estUnCasDeTableau(l, lignes[i + 1])) cas.push(l.trim())
   }
   return cas
 }

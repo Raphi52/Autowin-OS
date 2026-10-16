@@ -391,6 +391,75 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
   })
 
   /*
+   * P13 — LE DOSSIER DES COPIES CALCULE PAR LE LANCEUR.
+   *
+   * Mesure du 2026-10-15 (banc « arena-snake3 », conv-980) : `lance.sh` calculait le dossier des copies
+   * a partir de son propre emplacement (`B="$(cygpath -m "$(cd "$(dirname "${BASH_SOURCE[0]}")" &&
+   * pwd)")"`, puis `BRAS_DIR="$(cygpath -m "$(cd "$B/.." && pwd)")/bras"`). P13 ne lisait que les
+   * chemins absolus ecrits en toutes lettres : il n'en trouvait aucun et sortait OK alors que
+   * `bras/` (137 Mo, 12 copies) etait encore sur le disque.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : ne chercher que les chemins `"X:/..."` litteraux du lanceur.
+   */
+  const lanceurCalcule = (dossierDeTravail) =>
+    [
+      '#!/usr/bin/env bash',
+      "# Banc : les copies vont a cote du banc (compte actif d'Autowin, aucune session gardee).",
+      'set -u',
+      'B="$(cygpath -m "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"',
+      'BRAS_DIR="$(cygpath -m "$(cd "$B/.." && pwd)")/bras"',
+      'IDS="a-1 a-2 a-3 b-1 b-2 b-3 c-1 c-2 c-3 x-1 x-2 x-3"',
+      'echo "compte=$ARENA_COMPTE_ID depart=$(date +%T)" > "$B/statut.txt"',
+      'for id in $IDS; do',
+      '  b=${id%%-*}',
+      `  w="${dossierDeTravail}"`,
+      '  (',
+      '    d=$(date +%s)',
+      '    mkdir -p "$w" && cp "$B/check.mjs" "$w/"',
+      '    cd "$w" || exit 1',
+      '    SYS=""',
+      '    [ -f "$B/sys-$b.txt" ] && SYS="--append-system-prompt-file $B/sys-$b.txt"',
+      '    claude -p "$(cat "$B/prompt-$b.txt")" $SYS < /dev/null > "$B/trace-$id.jsonl"',
+      '    grep \'"type":"result"\' "$B/trace-$id.jsonl" | tail -1 > "$B/out-$id.json"',
+      '    echo "$id exit=$? wall=$(( $(date +%s) - d ))s" >> "$B/statut.txt"',
+      '  ) &',
+      'done',
+      'wait',
+      ''
+    ].join('\n')
+
+  it('P13 RATE quand le lanceur CALCULE le dossier des copies et qu_elles sont encore sur disque', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'lance.sh'), lanceurCalcule('$BRAS_DIR/$id'))
+    mkdirSync(join(f.racine, 'bras', 'a-1'), { recursive: true })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P13').ok).toBe(false)
+    expect(point(res, 'P13').detail).toMatch(/encore sur disque : .*bras/)
+  })
+
+  it('P13 passe quand le dossier CALCULE des copies a bien ete retire', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'lance.sh'), lanceurCalcule('$BRAS_DIR/$id'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect('P13 ' + point(res, 'P13').detail).toBe('P13 ok')
+  })
+
+  /*
+   * Meme defaut, forme generale : un dossier que le controle ne sait pas localiser (ici `$(pwd)`, qui
+   * depend du dossier d'ou le lanceur a ete appele) ne prouve PAS que les copies sont retirees.
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : rendre OK quand aucun dossier hors du banc n'est trouve.
+   */
+  it('P13 RATE quand aucun dossier de copies du lanceur ne peut etre localise', () => {
+    const f = bancConforme()
+    const lanceur = lanceurCalcule('$(pwd)/bras/$id').replace(/^BRAS_DIR=.*\n/m, '')
+    expect(lanceur).not.toMatch(/BRAS_DIR/)
+    writeFileSync(join(f.bench, 'lance.sh'), lanceur)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P13').ok).toBe(false)
+    expect(point(res, 'P13').detail).toMatch(/aucun dossier de copies localis/i)
+  })
+
+  /*
    * Depuis la demande du 2026-09-05 (conv-305), B est TOUJOURS un bras de TEXTE : chaque banc doit
    * laisser le contenu des skills meilleur qu'avant. P16 le verifie, et la SEULE dispense est la
    * mention ecrite `B non-texte, motif : ...` — qui oblige a justifier au lieu de supposer.

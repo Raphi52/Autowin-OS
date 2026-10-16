@@ -2367,6 +2367,8 @@ Le fil reprend ensuite normalement.`
       // aucun appel n'est chiffré s'affichait « 0.00 $ ».
       const delivered = {
         ...result,
+        // Le JUGE joue compte parmi les phases, comme sur la lignee `commands.ts` (conv-981).
+        phaseOutputs: phasesAvecJuge(result.phaseOutputs, result.judgeText),
         ...executionCostCoverageFields(
           result.usage,
           learningAuthor.model ?? orchestratorBinding.model

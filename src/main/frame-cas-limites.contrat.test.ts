@@ -32,7 +32,17 @@ const CAS_DE_FIGURE: Array<[string, string, boolean]> = [
     `${BESOIN}\nCas limites : sans objet — drapeau produit par le script appelant.\n`,
     true
   ],
-  ['cas ecrits hors du besoin', `${BESOIN}\n## Contraintes\n${CAS}`, false]
+  ['cas ecrits hors du besoin', `${BESOIN}\n## Contraintes\n${CAS}`, false],
+  [
+    'tableau de 3 cas (conv-981)',
+    `${BESOIN}\n### Cas limites\n| Cas | Attendu |\n|---|---|\n| absent | defaut 7 |\n| vide | refus |\n| abc | refus |\n`,
+    true
+  ],
+  [
+    'tableau de 2 cas : l en-tete ne compte pas',
+    `${BESOIN}\n### Cas limites\n| Cas | Attendu |\n|---|---|\n| vide | refus |\n| abc | refus |\n`,
+    false
+  ]
 ]
 
 describe('contrat garde pipeline <-> controle CLI', () => {

@@ -75,22 +75,40 @@ export function fichiersEditesParLeRun(
   const compte: Record<string, number> = {}
   // fix-ok: conv-539 tour 24e29815 — le meme fichier compte sous son chemin relatif ET absolu.
   const racine = cwd ? cwd.replace(/\\/g, '/').replace(/\/+$/, '') + '/' : ''
+  const normalise = (brut: string): string => {
+    const chemin = brut.replace(/\\/g, '/').trim()
+    return racine && chemin.toLowerCase().startsWith(racine.toLowerCase())
+      ? chemin.slice(racine.length)
+      : chemin
+  }
+  /*
+   * fix-ok: conv-981 — UNE EDITION = UN COMPTE (run-52d36e67e4de-1 : 9 fichiers modifies une fois,
+   * refuses comme 3 fois). Deux causes mesurees dans sa trace :
+   *  - la preuve d'un `Edit` nomme le fichier en relatif (`paths`) ET en absolu (`path`) : on
+   *    dedoublonne APRES normalisation, sinon une edition compte deux fois ;
+   *  - le releve de fin d'etape (`workspace_delta`) dit QU'un fichier a change, pas combien de
+   *    fois : il ne compte, une seule fois, que les fichiers qu'aucune edition ne signale (un
+   *    fichier regenere par une commande).
+   */
+  const releves = new Set<string>()
   for (const item of evidence ?? []) {
     if (item.kind !== 'mutation') continue
-    const chemins = [
-      ...(item.paths ?? []),
-      ...(item.path ? [item.path] : []),
-      ...Object.keys(item.pathFingerprints ?? {})
-    ]
-    for (const brut of new Set(chemins)) {
-      let chemin = brut.replace(/\\/g, "/").trim()
-      if (racine && chemin.toLowerCase().startsWith(racine.toLowerCase())) {
-        chemin = chemin.slice(racine.length)
-      }
-      if (!chemin) continue
-      compte[chemin] = (compte[chemin] ?? 0) + 1
+    const chemins = new Set(
+      [
+        ...(item.paths ?? []),
+        ...(item.path ? [item.path] : []),
+        ...Object.keys(item.pathFingerprints ?? {})
+      ]
+        .map(normalise)
+        .filter(Boolean)
+    )
+    if (item.type === 'workspace_delta') {
+      for (const chemin of chemins) releves.add(chemin)
+      continue
     }
+    for (const chemin of chemins) compte[chemin] = (compte[chemin] ?? 0) + 1
   }
+  for (const chemin of releves) if (!compte[chemin]) compte[chemin] = 1
   return compte
 }
 

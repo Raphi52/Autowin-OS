@@ -100,3 +100,49 @@ describe('le pilote injecte la skill invoquée', () => {
     expect(captured[0]).not.toContain('PÉRIMÈTRE GELÉ')
   })
 })
+
+/**
+ * NOM NU EN TÊTE (conv-988, 2026-10-16) : la bulle du fil s'allume désormais sur « remake … » tapé
+ * sans `/`. Elle ne doit pas mentir : le corps de la skill part donc AUSSI au modèle dans ce cas.
+ */
+describe('le pilote injecte la skill nommée SANS barre', () => {
+  async function premierMessage(contenu: string, conv: string): Promise<string> {
+    const captured: string[] = []
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], _o: SendOptions) => {
+        captured.push(messages.at(-1)?.content ?? '')
+        return { text: 'ok' } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' })),
+      honoursSessionResume: vi.fn(() => false)
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
+    const bus = {
+      catalog: vi.fn(() => []),
+      snapshotForPrompt: vi.fn(async () => ({})),
+      exec: vi.fn()
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pilot = new AgentPilot(registry as any, roles as any, bus as any)
+    await pilot.chat(
+      [{ role: 'user', content: contenu }] as Message[],
+      () => {},
+      undefined,
+      1,
+      conv
+    )
+    return captured[0] ?? ''
+  }
+
+  it('« remake le module de scroll » charge le contrat comme `/remake`', async () => {
+    expect(await premierMessage('remake le module de scroll', 'conv-remake-nu')).toContain(
+      'PÉRIMÈTRE GELÉ'
+    )
+  })
+
+  it('une MENTION au fil du texte ne charge toujours rien', async () => {
+    expect(
+      await premierMessage('regarde le remake quand tu peux', 'conv-remake-mention')
+    ).not.toContain('PÉRIMÈTRE GELÉ')
+  })
+})

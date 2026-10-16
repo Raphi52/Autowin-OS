@@ -24,6 +24,7 @@ import {
   AGENT_STUDIO_DEFAULT_PROVIDER,
   usesAgentStudioDefault
 } from '../../../shared/task-provider'
+import { MODELE_PROMPT_TACHE } from '../../../shared/modele-prompt-tache'
 import './ViewPage.css'
 import './TaskManagerView.css'
 import { Spinner } from './Spinner'
@@ -829,20 +830,44 @@ export function TaskManagerView({
                 }
               />
             </label>
-            <label className="task-manager-field is-wide">
-              <span>Prompt envoyé</span>
+            {/* Un bouton DANS un <label> en deviendrait la cible (premier élément étiquetable) :
+                l'en-tête porte donc un label `htmlFor` et le bouton à côté (conv-983, 2026-10-16). */}
+            <div className="task-manager-field is-wide">
+              <span className="task-manager-field-head">
+                <label htmlFor="task-manager-prompt">Prompt envoyé</label>
+                <button
+                  type="button"
+                  className="task-manager-template"
+                  disabled={draft.prompt.trim() !== ''}
+                  title={
+                    draft.prompt.trim() === ''
+                      ? 'Remplit le champ avec le modèle de prompt, à compléter'
+                      : 'Le champ contient déjà un prompt : il n’est jamais écrasé'
+                  }
+                  onClick={() =>
+                    setDraft((current) =>
+                      current && current.prompt.trim() === ''
+                        ? { ...current, prompt: MODELE_PROMPT_TACHE }
+                        : current
+                    )
+                  }
+                >
+                  Partir du modèle
+                </button>
+              </span>
               <textarea
+                id="task-manager-prompt"
                 name="prompt"
                 value={draft.prompt}
-                rows={5}
-                placeholder="Décris exactement ce que le modèle doit faire…"
+                rows={8}
+                placeholder={MODELE_PROMPT_TACHE}
                 onChange={(event) =>
                   setDraft((current) =>
                     current ? { ...current, prompt: event.target.value } : current
                   )
                 }
               />
-            </label>
+            </div>
             <label className="task-manager-field">
               <span>Mode d’exécution</span>
               <select

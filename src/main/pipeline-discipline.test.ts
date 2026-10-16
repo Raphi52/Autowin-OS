@@ -191,12 +191,23 @@ describe('discipline de pipeline canonique', () => {
     //   EMPAQUETEE, qui ne contient pas la modification a prouver ; depuis une copie de travail il la
     //   reconstruit et lance ses fichiers. C'est la seule preuve d'un changement d'interface non publie.
     //   Lu par `drapeau(...)` (option sans valeur) : le motif ci-dessus le repere aussi.
+    // fix-ok: rouge depuis 712c6107 (2026-10-10) — quatre options lues par le harnais sans classement :
+    //   `--largeur`/`--hauteur` (128ffd16, conv-124), `--attendre`/`--retraits` (712c6107, conv-160).
+    // `--largeur` : l'instance cachee s'ouvre en 900 x 670, ou le chat replie panneau et colonnes ; la
+    //   mise en page d'un ecran large n'etait capturable par AUCUNE autre option. Il appartient au contrat.
+    // `--attendre` : une vue qui charge ses donnees (Worktrees, « Lecture… ») etait capturee sur son
+    //   indicateur de chargement ; sans lui, la vue chargee n'est jamais prouvee. Contrat.
+    // `--retraits` : MESURE au rendu le retrait du contenu dans le cadre de page — un ecart de 18 a
+    //   38 px ne se lit pas sur une image. Aucune capture ne donne ce chiffre. Contrat.
     const CONTRAT_DE_PREUVE = [
+      '--attendre',
       '--click',
       '--code-dev',
       '--css',
+      '--largeur',
       '--motion',
       '--out',
+      '--retraits',
       '--state',
       '--theme',
       '--view'
@@ -210,9 +221,12 @@ describe('discipline de pipeline canonique', () => {
     //   cachee). `--donnees` dit OU la lire, et son defaut (.autowin-data/autowin-os) est le bon ;
     //   `--tour` choisit QUELLE demande le graphe affiche, et son defaut (la derniere) suffit a
     //   prouver un changement frais. Ils affinent cette preuve, ils n'en ouvrent aucune.
+    // `--hauteur` (128ffd16) : ne sert qu'avec `--largeur`, qui ouvre la preuve ; son defaut (largeur
+    //   x 9/16, un ecran courant) suffit. Il affine cette preuve, il n'en ouvre aucune.
     const REGLAGES = [
       '--donnees',
       '--frames',
+      '--hauteur',
       '--interval',
       '--port',
       '--scroll',

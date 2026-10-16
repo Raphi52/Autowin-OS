@@ -1,5 +1,6 @@
 import { OUTCOME_LESSON_MARKER } from './outcome-learning-proposal'
 import { AGGREGATE_MAX_CHARS } from './evidence-digest'
+import { couperEnGardantLeBilan } from '../shared/bilan-d-etape'
 
 /**
  * Le texte AGRÉGÉ d'un run à plusieurs phases : celui que lit le juge, que `attestJudgeApprovedLearning`
@@ -28,6 +29,15 @@ export interface SortieDePhase {
 }
 
 export const MARQUE_TRONQUE = '\n…[tronqué — voir le fil des sous-agents]'
+
+/**
+ * La marque de coupe NOMME la copie entiere quand elle existe (conv-989, 2026-10-16). « Le fil des
+ * sous-agents » (`trace.json`) est plafonne a 4 000 caracteres par etape : plus court que ce que le
+ * juge lit deja. `ouLire` est le fichier ecrit par `runs/livrable-entier.ts`.
+ */
+export function marqueDeCoupe(ouLire?: string): string {
+  return ouLire ? `\n…[tronqué — sortie entière de cette étape : \`${ouLire}\`]` : MARQUE_TRONQUE
+}
 export const MENTION_LECON_REMPLACEE =
   '(proposition de leçon remplacée par celle d’une réponse plus récente)'
 
@@ -54,7 +64,11 @@ export const MENTION_VERSION_REMPLACEE =
  * ligne `CausalHypothesis`, posées en dernier (précédent rapporté : run-85d8e7f57af2-1, caractère
  * 7 507). La fin est recalée au début d'une ligne quand elle en contient une, pour ne pas la couper.
  */
-export function couperDebutEtFin(texte: string, plafond: number): string {
+export function couperDebutEtFin(
+  texte: string,
+  plafond: number,
+  marque: string = MARQUE_TRONQUE
+): string {
   if (texte.length <= plafond) return texte
   const tete = Math.ceil((plafond * 2) / 3)
   // -1 : le saut de ligne qui sépare la marque de coupe de la fin gardée.
@@ -63,7 +77,7 @@ export function couperDebutEtFin(texte: string, plafond: number): string {
   const finDeLigne = texte.indexOf('\n', debutQueue)
   if (finDeLigne >= 0 && finDeLigne < texte.length - 1) debutQueue = finDeLigne + 1
   const fin = queue > 0 ? texte.slice(debutQueue) : ''
-  return `${texte.slice(0, tete)}${MARQUE_TRONQUE}${fin ? `\n${fin}` : ''}`
+  return `${texte.slice(0, tete)}${marque}${fin ? `\n${fin}` : ''}`
 }
 
 function estLigneDeLecon(ligne: string): boolean {
@@ -99,8 +113,10 @@ export function repartirLaPlace(longueurs: readonly number[], budget: number): n
 export function agregerPhasesPourLeJuge(
   sorties: SortieDePhase[],
   plafond: number,
-  totalMax: number = AGGREGATE_MAX_CHARS
+  totalMax: number = AGGREGATE_MAX_CHARS,
+  ouLire?: string
 ): string {
+  const marque = marqueDeCoupe(ouLire)
   let derniere = -1
   sorties.forEach((p, i) => {
     if (p.text.split(/\r?\n/u).some(estLigneDeLecon)) derniere = i
@@ -136,7 +152,7 @@ export function agregerPhasesPourLeJuge(
       0
     ) +
     2 * Math.max(0, blocs.length - 1) +
-    aCouper.length * MARQUE_TRONQUE.length
+    aCouper.length * marque.length
   const parts = repartirLaPlace(
     aCouper.map((b) => b.texte!.length),
     Math.min(plafond * sorties.length, totalMax - horsCoupe)
@@ -145,7 +161,10 @@ export function agregerPhasesPourLeJuge(
   return blocs
     .map((b) => {
       if (b.texte === undefined) return `${b.entete}${b.fixe}`
-      let body = couperDebutEtFin(b.texte, parts[rang++]!)
+      // conv-989 : le bilan de fin d'etape passe EN ENTIER, meme quand la part est petite.
+      let body = couperEnGardantLeBilan(b.texte, parts[rang++]!, (corps, longueur) =>
+        couperDebutEtFin(corps, longueur, marque)
+      )
       if (b.recolle) body = `${body.replace(/\s+$/u, '')}${b.recolle}`
       return `${b.entete}${body}`
     })

@@ -55,6 +55,22 @@ function sectionBesoin(texte) {
  * @param {string} texte  Le RUN.md complet, ou la seule section `## Besoin`.
  * @returns {{tenu: boolean, motif: string, cas: string[]}}
  */
+/*
+ * UNE LIGNE DE TABLEAU EST UN CAS (conv-981, 2026-10-15) : meme regle que
+ * `src/main/frame-cas-limites.ts` (test de contrat). La separation `|---|` et la ligne d'en-tete
+ * qui la precede ne sont pas des cas.
+ */
+const SEPARATION_DE_TABLEAU = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
+const LIGNE_DE_TABLEAU = /^\s*\|.*\S.*\|\s*$/
+
+function estUnCasDeTableau(ligne, suivante) {
+  return (
+    LIGNE_DE_TABLEAU.test(ligne) &&
+    !SEPARATION_DE_TABLEAU.test(ligne) &&
+    !SEPARATION_DE_TABLEAU.test(suivante ?? '')
+  )
+}
+
 export function verifierCasLimites(texte) {
   const besoin = sectionBesoin(texte)
   const lignes = besoin.split(/\r?\n/)
@@ -70,7 +86,9 @@ export function verifierCasLimites(texte) {
     for (let i = debutRubrique + 1; i < lignes.length; i++) {
       const l = lignes[i]
       if (/^\s*#{2,6}\s/.test(l)) break // rubrique suivante
-      if (/^\s*([-*]|\d+[.)])\s+\S/.test(l)) cas.push(l.trim())
+      if (/^\s*([-*]|\d+[.)])\s+\S/.test(l) || estUnCasDeTableau(l, lignes[i + 1])) {
+        cas.push(l.trim())
+      }
     }
   }
   if (cas.length >= CAS_MINIMUM) {

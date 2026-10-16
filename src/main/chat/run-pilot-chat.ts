@@ -391,6 +391,19 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // A QUI IMPUTER UN GEL. Le detecteur prouve la fenetre figee sans savoir ce qui tournait : le
     // seul endroit qui le sait est ICI. Referme dans le `finally` — jamais imputer a un tour clos.
     const fermerTourPourGels = ouvrirTourDeChat({ conversationId, turnId })
+    /*
+     * TOUR CLOS ⇒ PLUS RIEN EN DIRECT VERS L'ÉCRAN.
+     *
+     * DEFAUT VECU (conv-978, 2026-10-15) : « mon bouton stop relance 3x le tour ». Apres Stop, le
+     * tour etait clos (`cancelled` ecrit), mais une action encore vivante (`verify`) a emis trois
+     * battements puis son resultat. L'ecran recevait ces evenements pour un fil qu'il venait de
+     * liberer, et son adoption des tours lances cote moteur (ChatView, fil non occupe ⇒ « un tour
+     * tourne ») rallumait « en cours » avec une bulle vide, a chaque battement.
+     *
+     * Le moteur est la seule autorite sur la fin du tour : c'est donc ICI qu'un evenement posterieur
+     * cesse d'etre diffuse. Le journal du tour le garde (il est la trace de ce qui a tourne).
+     */
+    let tourClos = false
     try {
       const rawMessages = Array.isArray(messages) ? messages : []
       const continuationWindow = continuation
@@ -1219,6 +1232,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // La sortie entière d'un outil n'a rien à faire dans le flux en direct : la trace la garde,
         // le panneau Détails la relit au clic.
         delete livePilotEvent.detail
+        if (tourClos) return
         emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
           ...livePilotEvent,
           conversationId,
@@ -1688,6 +1702,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
     } finally {
+      tourClos = true
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
       if (veilleur) clearInterval(veilleur)
       fermerTourPourGels()

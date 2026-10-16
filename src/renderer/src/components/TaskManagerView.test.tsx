@@ -3,6 +3,7 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TaskManagerView } from './TaskManagerView'
+import { MODELE_PROMPT_TACHE } from '../../../shared/modele-prompt-tache'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -370,6 +371,62 @@ describe('TaskManagerView', () => {
     expect(history.some((occurrence) => occurrence.textContent?.includes('Mode non archivé'))).toBe(
       true
     )
+  })
+
+  // conv-983 (2026-10-16) : le champ vide montre le modèle de prompt, bloc par bloc, lisible en entier.
+  it('montre le modèle de prompt en exemple grisé du champ prompt', async () => {
+    const { container } = await mount()
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+    expect(prompt.value).toBe('')
+    expect(prompt.placeholder).toBe(MODELE_PROMPT_TACHE)
+    expect(prompt.placeholder).toContain('Fait =')
+    // happy-dom rend `rows` en texte : on lit l'attribut posé par le composant.
+    expect(Number(prompt.getAttribute('rows'))).toBeGreaterThanOrEqual(
+      MODELE_PROMPT_TACHE.split('\n').length
+    )
+  })
+
+  // conv-983 (2026-10-16) : partir du modèle pour l'éditer, sans jamais écraser un prompt déjà tapé.
+  it('« Partir du modèle » remplit le champ vide, puis se grise tant qu’il contient un prompt', async () => {
+    const { container } = await mount()
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const prompt = () => container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+    const modele = () =>
+      [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Partir du modèle'
+      )!
+    // Le libellé vise toujours le champ, pas le bouton posé à côté.
+    expect(container.querySelector('label[for="task-manager-prompt"]')?.textContent).toBe(
+      'Prompt envoyé'
+    )
+    expect(prompt().id).toBe('task-manager-prompt')
+    expect(modele().disabled).toBe(false)
+
+    await act(async () => modele().click())
+    expect(prompt().value).toBe(MODELE_PROMPT_TACHE)
+    expect(modele().disabled).toBe(true)
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+        prompt(),
+        'Mon prompt à moi'
+      )
+      prompt().dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(prompt().value).toBe('Mon prompt à moi')
+    expect(modele().disabled).toBe(true)
+    // Un clic sur le bouton grisé ne remplace pas le prompt existant.
+    await act(async () => modele().click())
+    expect(prompt().value).toBe('Mon prompt à moi')
   })
 
   it('permet de choisir le modèle pour une conversation existante', async () => {

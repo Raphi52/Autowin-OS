@@ -57,6 +57,37 @@ describe('frame-cas-limites — la garde de handoff', () => {
     expect(enteteCasLimitesManquants(maigre)).toMatch(/3/)
   })
 
+  /*
+   * UN TABLEAU EST UNE ENUMERATION (conv-981, 2026-10-15) : le cadrage du run
+   * traite-ensemble-5-candidats-issus-scout-mv9lnufa listait 18 cas limites en tableau ; la garde ne
+   * comptait que les puces, a vu 0 cas et a renvoye le cadrage a `frame` -- deux passes payees pour
+   * reecrire les memes cas en puces. L'en-tete et la ligne de separation ne sont PAS des cas.
+   */
+  it('compte les lignes d un tableau comme des cas (en-tete et separation exclus)', () => {
+    const enTableau = `${BESOIN_ENTREE}
+### Cas limites d'entree
+| Cas | Attendu |
+|---|---|
+| --jours absent | defaut 7 |
+| --jours abc | refus, code 2 |
+| --jours 0 | refus |
+`
+    expect(casLimitesEnumeres(enTableau)).toHaveLength(3)
+    expect(enteteCasLimitesManquants(enTableau)).toBeUndefined()
+  })
+
+  it('un tableau de 2 cas reste maigre : son en-tete ne compte pas (jumeau)', () => {
+    const maigre = `${BESOIN_ENTREE}
+### Cas limites d'entree
+| Cas | Attendu |
+|---|---|
+| --jours abc | refus |
+| --jours 0 | refus |
+`
+    expect(casLimitesEnumeres(maigre)).toHaveLength(2)
+    expect(enteteCasLimitesManquants(maigre)).toMatch(/3/)
+  })
+
   it('LAISSE PASSER un besoin sans aucune entree utilisateur', () => {
     const sansEntree = `## Besoin\nRenommer le dossier de sortie du graphe.\n- [ ] le dossier porte le nouveau nom\n`
     expect(enteteCasLimitesManquants(sansEntree)).toBeUndefined()

@@ -583,6 +583,20 @@
   line-height: 1.45;
 }
 
+/* En-tête du champ prompt : son libellé, et « Partir du modèle » à droite (conv-983). */
+.task-manager-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-manager-view .task-manager-template {
+  min-height: 24px;
+  padding: 3px 8px;
+  color: var(--gold);
+}
+
 .task-manager-weekdays {
   min-width: 0;
   display: flex;

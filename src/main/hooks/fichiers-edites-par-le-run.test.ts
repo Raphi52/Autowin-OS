@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { fichiersEditesParLeRun, creerPreuveVisuelleHandler } from './default-gate-hooks'
 import type { HookContext } from './hook-bus'
 import type { ExecutionEvidence } from '../providers/types'
+import { detectBlindFixLoop } from '../gates/hooks'
 
 /**
  * LE DIFF DU RUN, ENFIN TRANSPORTE.
@@ -122,5 +123,60 @@ describe('fichiersEditesParLeRun — chemin absolu et relatif du meme fichier', 
     expect(fichiersEditesParLeRun([mutation(['E:/autre/b.ts'])], 'D:/AutoWinOS')).toEqual({
       'E:/autre/b.ts': 1
     })
+  })
+})
+
+/**
+ * UNE EDITION = UN COMPTE (conv-981, 2026-10-15). Run run-52d36e67e4de-1 : le controle des causes a
+ * refuse 9 fichiers modifies UNE seule fois, chacun compte 3 fois. Formes relevees dans sa trace :
+ *  - la preuve d'un `Edit` porte le fichier en `paths` (relatif) ET en `path` (absolu) : le
+ *    dedoublonnage se faisait AVANT la normalisation, donc 2 comptes pour une edition ;
+ *  - le releve de fin d'etape (`workspace_delta`) liste tous les fichiers changes du dossier
+ *    isole : +1 pour chacun, deja compte par son edition.
+ * Le releve ne dit pas COMBIEN de fois un fichier a change, seulement QU'il a change : il ne compte
+ * que les fichiers qu'aucune edition ne signale (un fichier regenere par une commande), une fois.
+ */
+describe('fichiersEditesParLeRun — une edition ne compte qu une fois', () => {
+  const RACINE = 'D:/AutoWinOS/.autowin-data/autowin-os/worktrees/x/agent__run-1'
+  const edit = (fichier: string): ExecutionEvidence =>
+    mutation([fichier], {
+      type: 'Edit',
+      path: `${RACINE}/${fichier}`
+    } as Partial<ExecutionEvidence>)
+  const releve = (fichiers: string[]): ExecutionEvidence =>
+    mutation(fichiers, {
+      type: 'workspace_delta',
+      workspaceRoot: RACINE,
+      pathFingerprints: Object.fromEntries(fichiers.map((f) => [f, 'h']))
+    } as Partial<ExecutionEvidence>)
+
+  it('une edition citee en relatif ET en absolu compte une fois', () => {
+    expect(fichiersEditesParLeRun([edit('src/a.css')], RACINE)).toEqual({ 'src/a.css': 1 })
+  })
+
+  it('le releve de fin d etape ne recompte pas un fichier deja edite', () => {
+    expect(
+      fichiersEditesParLeRun([edit('src/a.css'), releve(['src/a.css', 'src/a.genere.css'])], RACINE)
+    ).toEqual({ 'src/a.css': 1, 'src/a.genere.css': 1 })
+  })
+
+  it('deux releves successifs comptent un fichier regenere une seule fois', () => {
+    expect(
+      fichiersEditesParLeRun([releve(['src/a.genere.css']), releve(['src/a.genere.css'])], RACINE)
+    ).toEqual({ 'src/a.genere.css': 1 })
+  })
+
+  it('le cas reel : une seule edition + le releve ne declenche plus le refus', () => {
+    const edits = fichiersEditesParLeRun([edit('src/theme.css'), releve(['src/theme.css'])], RACINE)
+    expect(detectBlindFixLoop(edits)).toEqual([])
+  })
+
+  it('trois VRAIES editions sans cause restent refusees (jumeau : la garde ne mollit pas)', () => {
+    const edits = fichiersEditesParLeRun(
+      [edit('src/a.css'), edit('src/a.css'), edit('src/a.css'), releve(['src/a.css'])],
+      RACINE
+    )
+    expect(edits).toEqual({ 'src/a.css': 3 })
+    expect(detectBlindFixLoop(edits)).toHaveLength(1)
   })
 })

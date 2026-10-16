@@ -29,6 +29,7 @@ import {
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import { refusTacheWindows } from '../shared/garde-tache-windows'
+import { MODELE_PROMPT_TACHE_COURT } from '../shared/modele-prompt-tache'
 import { refusEcriturePythonCrlf } from '../shared/garde-python-crlf'
 import { sansHeredocsDeDonnees } from '../shared/heredocs'
 import {
@@ -173,6 +174,15 @@ const SAUT_NATURE = String.fromCharCode(10, 10)
 const PUBLICATION_DIFFEREE =
   'différée — le changement est vérifié ; son intégration attend la fin des processus du bureau, ' +
   'Autowin la reprend seul. Ne pas rejouer cette édition.'
+
+/**
+ * Ce que l'agent lit quand le Stop coupe la vérification d'une édition : ni un rouge (aucun test n'a
+ * conclu) ni un vert (rien n'est prouvé). L'édition n'est pas publiée, et l'arrêt est celui de
+ * l'utilisateur — donc pas à rejouer de lui-même.
+ */
+const EDITION_ARRETEE_PAR_STOP =
+  'Édition non publiée : vérification arrêtée par l’utilisateur (Stop) — rien n’est prouvé et le ' +
+  'fichier du dépôt est inchangé. Ne pas rejouer cette édition sans nouvelle demande.'
 import { lastUserMessageAt } from './store/conversations'
 import {
   piecesJointesDuDernierTour,
@@ -1291,7 +1301,8 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'task_create',
     description:
-      'Créer une tâche programmée (horaire) ou une règle de surveillance (réveil sur événement) dans le Task Manager d’Autowin — elle y est visible et l’utilisateur peut la désactiver ou la supprimer. C’est la SEULE voie : une tâche du Planificateur Windows (schtasks, Register-ScheduledTask) est refusée.',
+      'Créer une tâche programmée (horaire) ou une règle de surveillance (réveil sur événement) dans le Task Manager d’Autowin — elle y est visible et l’utilisateur peut la désactiver ou la supprimer. C’est la SEULE voie : une tâche du Planificateur Windows (schtasks, Register-ScheduledTask) est refusée. ' +
+      `Le "prompt" part SEUL dans la conversation, sans le fil : rédige-le sur ce modèle, un bloc par ligne — ${MODELE_PROMPT_TACHE_COURT}. Ni limite de temps, ni « boucle jusqu’au vert » ; pour une surveillance, l’app ajoute elle-même l’événement et la ligne ISSUE.`,
     args: {
       task:
         'objet JSON de la tâche, même forme que l’écran Task Manager : { "title", "prompt", "enabled": true|false, "mode": "active-only"|"windows", "destination": { "kind": "existing", "conversationId" } ou { "kind": "new", "title", "category", "provider" }, "action"?: "chat"|"veille", et SOIT "schedule": { "startDate": "AAAA-MM-JJ", "time": "HH:MM", "timeZone": "Europe/Paris", "recurrence": { "unit": "none"|"minute"|"hour"|"day"|"week"|"month", "interval": 1 } } (recurrence obligatoire ; "none" = une seule fois) SOIT "watchdog": { "source", "guards", "action" } }'
@@ -3494,7 +3505,12 @@ export class AppCommandBus {
              * phase voyagent : le texte vit deja dans `result` et dans RUN.md, l'y remettre
              * doublerait le poids de l'issue sur l'IPC.
              */
-            phaseOutputs: r.phaseOutputs.map((output) => ({ phase: output.phase, text: '' })),
+            // Le JUGE joue compte aussi (conv-981) : son verdict vit a part (`judgeText`), et sans
+            // lui la cloture d'un run deja juge recommandait « lancer judge » -- un juge paye de trop.
+            phaseOutputs: phasesAvecJuge(r.phaseOutputs, r.judgeText).map((output) => ({
+              phase: output.phase,
+              text: ''
+            })),
             status: r.gateBlocked ? 'failed' : 'succeeded',
             reused: run?.reused ?? false,
             // Le travail est-il reste dans la copie isolee ? C'est ce signal — jamais le vocabulaire
@@ -4636,9 +4652,23 @@ export class AppCommandBus {
          * verifiait cet invariant APRES coup, il est desormais tenu AVANT.
          */
         let cibleEffective: readonly string[] = cible
+        /*
+         * LE STOP ATTEINT AUSSI CETTE VERIFICATION, comme `run` et `verify` (suite de conv-978).
+         *
+         * Sans le signal du tour, une suite lancee ici continuait jusqu'a sa fin apres un Stop :
+         * processus vivant derriere un tour clos. Une mesure coupee ne prouve rien, donc l'edition
+         * n'est PAS publiee — et le refus le dit, au lieu de se faire passer pour un echec de tests.
+         * Le test est fait APRES chaque mesure, jamais dedans : `baselineAvantEdition` avale les
+         * erreurs de sa mesure pour toujours restaurer le fichier.
+         */
+        const signalDuTour = conversationId ? this.signalDuTour?.(conversationId) : undefined
+        const refuserSiArrete = (): void => {
+          if (signalDuTour?.aborted) throw new Error(EDITION_ARRETEE_PAR_STOP)
+        }
         const mesurer = (): Promise<MesureVerifiee> =>
-          this.mesurerAvecRapport(workspaceRoot, cibleEffective)
+          this.mesurerAvecRapport(workspaceRoot, cibleEffective, undefined, signalDuTour)
         let verification = await mesurer()
+        refuserSiArrete()
         /*
          * UNE PORTEE QUI N'A JOUE AUCUN TEST CEDE LA PLACE A LA SUITE COMPLETE — elle ne refuse pas.
          *
@@ -4656,7 +4686,13 @@ export class AppCommandBus {
         if (verification.allowed && verification.ok && verification.parPortee) {
           const compte = echecsDuRapport(verification.rapport)
           if (compte.concluant && compte.testsJoues === 0) {
-            const globale = await this.mesurerAvecRapport(workspaceRoot, [])
+            const globale = await this.mesurerAvecRapport(
+              workspaceRoot,
+              [],
+              undefined,
+              signalDuTour
+            )
+            refuserSiArrete()
             if (globale.allowed) {
               verification = globale
               // La voie a BASCULE : la baseline suivra la meme, sinon elle mesure autre chose.
@@ -4727,6 +4763,7 @@ export class AppCommandBus {
             mesurer,
             verification.command
           )
+          refuserSiArrete()
           let rapportAvant = avant ? echecsDuRapport(avant.rapport, fichierExiste) : undefined
           let verdict = verdictDifferentiel(false, rapportApres, rapportAvant)
           /*
@@ -4746,6 +4783,7 @@ export class AppCommandBus {
           ) {
             cibleEffective = []
             const globale = await mesurer()
+            refuserSiArrete()
             if (globale.allowed) {
               verification = globale
               rapportApres = echecsDuRapport(globale.rapport, fichierExiste)
@@ -4755,6 +4793,7 @@ export class AppCommandBus {
                 mesurer,
                 globale.command
               )
+              refuserSiArrete()
               rapportAvant = avantGlobal
                 ? echecsDuRapport(avantGlobal.rapport, fichierExiste)
                 : undefined
@@ -5150,7 +5189,9 @@ export class AppCommandBus {
     workspaceRoot: string,
     cible: readonly string[],
     /** Binaires du dépôt mesuré (voir `spawnVerify`) ; défaut : ceux du dossier du tour. */
-    binDir?: string
+    binDir?: string,
+    /** Signal d'arrêt du tour : le Stop de l'utilisateur tue la mesure en cours. */
+    signal?: AbortSignal
   ): Promise<MesureVerifiee> {
     /*
      * UN DOSSIER A NOM ALEATOIRE, PAS UN NOM DERIVE DU PID.
@@ -5207,7 +5248,7 @@ export class AppCommandBus {
         workspaceRoot,
         etiquette,
         undefined,
-        undefined,
+        signal,
         binDir
       )
       /*
@@ -5628,6 +5669,15 @@ export class AppCommandBus {
     type?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     /*
+     * LE STOP DOIT ATTEINDRE `verify`, comme il atteint deja `run` (conv-384).
+     *
+     * DEFAUT VECU (conv-978, 2026-10-15) : Stop clique pendant un `verify type:typecheck`. Le tour
+     * etait clos, mais `tsc` a tourne encore 15 s et ses battements (15 s, 20 s, 25 s) sont arrives
+     * a l'ecran APRES la fin du tour — l'utilisateur a vu son tour « relance 3x ». `spawnVerify`
+     * savait deja tuer l'arbre sur signal ; seul `run` le lui passait.
+     */
+    const signal = conversationId ? this.signalDuTour?.(conversationId) : undefined
+    /*
      * TROIS PREUVES, UN SEUL POINT D'ENTREE. `lint` et `typecheck` ne passent PAS par la machinerie
      * de portee : `vitest related` n'a aucun sens pour eux, et un lint restreint ne prouve rien de
      * plus vite. On rejoue le script DECLARE par le projet, dans la meme copie isolee, et on rend
@@ -5664,7 +5714,8 @@ export class AppCommandBus {
         decision.command.split(' '),
         decision.cwd,
         decision.command,
-        onProgress
+        onProgress,
+        signal
       )
       return bureauScript
         ? resultatScript
@@ -5674,8 +5725,8 @@ export class AppCommandBus {
           }
     }
     const bureau = await this.bureauDeVerification(conversationId, onProgress)
-    if (bureau) return this.runVerifyAt(bureau, onProgress, cible)
-    const resultat = await this.runVerifyAt(this.workspaceDuTour, onProgress, cible)
+    if (bureau) return this.runVerifyAt(bureau, onProgress, cible, signal)
+    const resultat = await this.runVerifyAt(this.workspaceDuTour, onProgress, cible, signal)
     return { ...resultat, output: `${VERIFY_SANS_ISOLATION}${SAUT_PORTEE}${resultat.output}` }
   }
 
@@ -5722,7 +5773,9 @@ export class AppCommandBus {
   private async runVerifyAt(
     workspaceRoot: string | undefined,
     onProgress?: (text: string) => void,
-    cible?: string
+    cible?: string,
+    /** Signal d'arret du tour : le Stop de l'utilisateur tue la verification en cours. */
+    signal?: AbortSignal
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideVerifyCommand(workspaceRoot)
     if (!decision.allowed) {
@@ -5766,7 +5819,7 @@ export class AppCommandBus {
        * On ROUTE donc, au lieu de refuser.
        */
       if (verdict.parPortee) {
-        const parPortee = await this.runRelatedVerifyAt(decision.cwd, [verdict.chemin])
+        const parPortee = await this.runRelatedVerifyAt(decision.cwd, [verdict.chemin], signal)
         // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la
         // suite complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
         if (parPortee.allowed) return parPortee
@@ -5816,7 +5869,7 @@ export class AppCommandBus {
       porteeDerivableDesChangements(await this.fichiersNonCommites(decision.cwd)) ??
       porteeDerivableDesChangements(await readLastCommitFiles(decision.cwd))
     if (etiquette === decision.command && derivee) {
-      const parPortee = await this.runRelatedVerifyAt(decision.cwd, derivee)
+      const parPortee = await this.runRelatedVerifyAt(decision.cwd, derivee, signal)
       // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la suite
       // complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
       if (parPortee.allowed) {
@@ -5826,7 +5879,7 @@ export class AppCommandBus {
         }
       }
     }
-    const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress)
+    const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress, signal)
     // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
     // vert du depot : mesure du 2026-08-22 (conv-1371), « exit 0, 713 fichiers » a ete conclu
     // « pret pour la fusion » alors qu'`origin/main` portait 3 rouges au meme instant.
@@ -5854,7 +5907,8 @@ export class AppCommandBus {
    */
   private async runRelatedVerifyAt(
     workspaceRoot: string | undefined,
-    paths: readonly string[]
+    paths: readonly string[],
+    signal?: AbortSignal
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideRelatedVerify(workspaceRoot, paths)
     if (!decision.allowed) {
@@ -5867,7 +5921,7 @@ export class AppCommandBus {
         output: ''
       }
     }
-    return await this.spawnVerify(decision.argv, decision.cwd, decision.command)
+    return await this.spawnVerify(decision.argv, decision.cwd, decision.command, undefined, signal)
   }
 
   /**
