@@ -582,7 +582,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     deguisee en URL (`brain-reglage.ts`).
     //   `os:brain-reglage:reset` ('Brain') — efface ce reglage seul ; aucun argument.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(224)
+    // MISE A JOUR 2026-10-16 (conv-298) — 224 -> 225. UN canal, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossier personnel')` (`src/main/index.ts`) :
+    //   `os:dossierPersonnel` — rend le dossier personnel (`homedir()` canonise), cible de l'entree
+    //   « This computer » du choix du dossier de travail. LECTURE SEULE, aucun argument recu, rien
+    //   n'est ecrit ni execute. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(225)
     expect(unguarded).toEqual([])
   })
 
