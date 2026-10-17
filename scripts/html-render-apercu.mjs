@@ -179,10 +179,26 @@ async function main() {
         rapport.captures.push(chemin)
       }
       if (mesure.onglets > 1) {
+        // Un CARROUSEL (conv-302, 2026-10-17) a des libelles qu'aucun utilisateur ne peut cliquer a
+        // un instant donne — les fleches « precedent / suivant » des AUTRES diapositives, les
+        // commandes d'un panneau ferme — et plusieurs libelles qui menent au MEME etat (la fleche
+        // « suivant » de la 2 et le point de la 3). Avant, le premier faisait echouer le controle
+        // (clic sur un element cache : attente de 30 s puis code 1) et le second aurait compte deux
+        // captures d'un meme etat comme « onglets quasi identiques » (code 5). On clique donc ce qui
+        // est VISIBLE au moment du clic, et on ne capture qu'une fois chaque etat des cases cochees.
         const libelles = await page.$$('#bloc label[for]')
+        const etatsVus = new Set()
         for (let i = 0; i < libelles.length; i++) {
+          if (!(await libelles[i].isVisible())) continue
           await libelles[i].click()
           await page.waitForTimeout(120)
+          // Une transition CSS (diapositive qui glisse) se capture FINIE, pas a mi-course.
+          await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))))
+          const etat = await page.evaluate(() =>
+            [...document.querySelectorAll('#bloc input')].map((champ) => (champ.checked ? 1 : 0)).join('')
+          )
+          if (etatsVus.has(etat)) continue
+          etatsVus.add(etat)
           await capturer(`l${largeur}-onglet-${i + 1}`)
         }
         // Part des pixels qui changent entre deux onglets, sur la zone commune des deux captures.
