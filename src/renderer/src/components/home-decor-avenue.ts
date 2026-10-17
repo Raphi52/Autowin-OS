@@ -839,7 +839,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
           f.position.set(cx, y, z)
           decor.add(f)
         }
-        if (rep < 2) {
+        if (rep < 1) {
           const l = new THREE.PointLight(0xffc89a, 16, 14, 2)
           l.position.set(GARDE + 2.6, TROTTOIR + 5.6, z)
           decor.add(l)
@@ -917,7 +917,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
       decor.add(bras)
       const halo = glow(col, 4.8, FACADE - 0.7, m.y, z, 0.7, decor)
       let lum: THREE.PointLight | null = null
-      if (rep < 2 || (rep === 2 && i < 2)) {
+      if (rep === 0 && i < 2) {
         lum = new THREE.PointLight(col, 30, 15, 2)
         lum.position.set(FACADE - 1.3, m.y, z)
         decor.add(lum)
@@ -1672,14 +1672,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
         ';'
     )
   }
-  const MAT_HUMAIN = new THREE.MeshPhysicalMaterial({
+  const MAT_HUMAIN = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.8,
-    sheen: 0.3,
-    sheenRoughness: 0.75,
-    sheenColor: new THREE.Color(0x8c8c8c),
-    clearcoat: 0.06,
-    clearcoatRoughness: 0.6
   })
   MAT_HUMAIN.onBeforeCompile = (sh) => {
     appoint(sh, APPOINT)
@@ -1716,18 +1711,13 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
     sh.fragmentShader = f
   }
   const PEAU_FILL = (sh: { fragmentShader: string }): void => appoint(sh, APPOINT * 1.1)
-  const MAT_PEAU = new THREE.MeshPhysicalMaterial({
+  const MAT_PEAU = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.55,
-    sheen: 0.35,
-    sheenRoughness: 0.5,
-    sheenColor: new THREE.Color(0xffa088),
-    clearcoat: 0.12,
-    clearcoatRoughness: 0.35
   })
   MAT_PEAU.onBeforeCompile = PEAU_FILL
   // le globe de l'œil : blanc, iris brun, pupille ; vernis pour accrocher le reflet des néons
-  const OEIL = ((): { geo: THREE.SphereGeometry; m: THREE.MeshPhysicalMaterial } => {
+  const OEIL = ((): { geo: THREE.SphereGeometry; m: THREE.MeshStandardMaterial } => {
     const [c, g] = toile(128, 64)
     g.fillStyle = '#d9d2cc'
     g.fillRect(0, 0, 128, 64)
@@ -1742,11 +1732,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
       g.fill()
     }
     const t = tex(c)
-    const m = new THREE.MeshPhysicalMaterial({
+    const m = new THREE.MeshStandardMaterial({
       map: t,
       roughness: 0.3,
-      clearcoat: 1,
-      clearcoatRoughness: 0.04
     })
     m.onBeforeCompile = PEAU_FILL
     return { geo: new THREE.SphereGeometry(0.0118, 18, 12), m }
@@ -1754,12 +1742,10 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   // le matériel (masques, visières, cartouches) : polymère noir mat, liseré de néon par la tranche
   // sous une capuche noire, le visage n'existe plus : un creux d'ombre
   const MAT_OMBRE = new THREE.MeshBasicMaterial({ color: 0x020203 })
-  const MAT_EQUIP = new THREE.MeshPhysicalMaterial({
+  const MAT_EQUIP = new THREE.MeshStandardMaterial({
     color: 0x0c0c10,
     roughness: 0.35,
     metalness: 0.4,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.2,
     side: THREE.DoubleSide
   })
   const HUMAINS: Personne[] = []
@@ -2282,8 +2268,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   scene.add(rame)
   const strobes = (
     [
-      [-1.2, 0xffd9a8],
-      [1.2, 0xff8fd0]
+      [0, 0xffd9a8]
     ] as const
   ).map(([x, c]) => {
     const l = new THREE.PointLight(c, 0, 24, 2)
@@ -2403,7 +2388,8 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
     const phare = new THREE.SpotLight(0xdfeaff, 300, 50, 0.42, 0.5, 2)
     phare.position.set(0, 0.7, -2.3)
     phare.target.position.set(0, 0.2, -22)
-    g.add(phare, phare.target)
+    // le phare reste hors de la scène : sa lumière est peinte (halo + traînée), pas calculée
+    g.add(phare.target)
     g.position.z = 600
     g.rotation.y = sens > 0 ? 0 : Math.PI
     scene.add(g)
@@ -2483,7 +2469,8 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   gyroB.position.set(0.3, -0.1, 0)
   const haloR = glow(0xff2040, 1.6, -0.3, -0.05, 0, 1, drone)
   const haloB = glow(0x2f6bff, 1.6, 0.3, -0.05, 0, 1, drone)
-  drone.add(gyroR, gyroB)
+  // un seul feu calculé : le bleu ne vit que dans son halo
+  drone.add(gyroR)
   drone.scale.setScalar(1.7)
   scene.add(drone)
   const coneGeo = new THREE.ConeGeometry(2.4, 14, 36, 1, true)
@@ -2565,7 +2552,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   const ORANGE = new THREE.Color(0xffb062)
   const BLANC = new THREE.Color(0xfff2dc)
   const arc = new THREE.PointLight(0xffa860, 0, 12, 2)
-  scene.add(arc)
+  // l'arc reste hors de la scène : la gerbe d'étincelles porte l'éclair
   let gerbe = false
   let cc: Enseigne | null = null
   function courtCircuit(t: number, periode: number, v: number): void {
@@ -2626,12 +2613,19 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
    * three/src/renderers/webgl/WebGLPrograms.js:473). Mesuré le 2026-10-17 dans l'instance cachée :
    * une tâche de 12,5 s à 3,45 s du chargement, moment où la foule se prépare (rapprochement par
    * l'horodatage seulement). Corrigé en même temps que la compilation en tâche de fond plus bas : la
-   * part de chacune n'est pas mesurée. Le nombre de lumières reste donc le même du début à la fin
-   * (22, relevé dans les nuanceurs compilés de la rue ET de la foule) ; `majDeal` la pose à la main
-   * à chaque image.
+   * part de chacune n'est pas mesurée. Le nombre de lumières reste donc le même du début à la fin ;
+   * `majDeal` la pose à la main à chaque image.
+   *
+   * HUIT LUMIÈRES CALCULÉES, PAS VINGT-DEUX (2026-10-17, conv-301). Avec 22 lumières dans chaque
+   * programme et des matières « physiques » pour la foule, la finalisation des programmes
+   * (`onFirstUse` de three) prenait encore 4,7 s de fil principal : un gel de 6 à 7 s à l'ouverture
+   * de l'Accueil, mesuré deux fois dans l'instance cachée. Restent dans la scène : 2 réverbères,
+   * 2 enseignes, 1 strobe du métro, le feu du drone, son projecteur et le néon du deal. L'écran du
+   * téléphone, la bombe du taggeur, l'arc électrique, le feu bleu et les phares gardent leur animation
+   * mais ne sont plus ajoutés à la scène : leur lumière est peinte par les halos. La foule est en
+   * matière « standard » (ni sheen ni vernis), un programme bien plus court.
    */
   const lueurEcran = new THREE.PointLight(0x7fdcff, 0, 1.8, 2)
-  scene.add(lueurEcran)
   {
     const porte = new THREE.Mesh(
       new THREE.PlaneGeometry(1.1, 2.3),
@@ -2694,7 +2688,6 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
     coulures: [] as { x: number; y: number; l: number; e: number }[],
     remplissage: '#ffffff'
   }
-  scene.add(tg.lum)
   function preparerTag(): void {
     const [txt, font, out, fill] = tg.mots[tg.n % tg.mots.length]
     tg.fg2.clearRect(0, 0, 1024, 341)
@@ -2729,7 +2722,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
     pp.add(manche)
     const toileP = new THREE.Mesh(
       new THREE.SphereGeometry(0.62, 28, 8, 0, Math.PI * 2, 0, Math.PI * 0.42),
-      new THREE.MeshPhysicalMaterial({
+      new THREE.MeshStandardMaterial({
         color: neon.clone().lerp(new THREE.Color(0xffffff), 0.6),
         emissive: neon,
         emissiveIntensity: 0.12,
@@ -3354,6 +3347,29 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   let enAttente: THREE.Group | null = null
   let vivante = true
   /**
+   * COMPILER EN TÂCHE DE FOND, SANS LE PIÈGE DE `compileAsync`. three r185 relit
+   * `properties.get(m).currentProgram.isReady()` toutes les 10 ms ; si la scène est libérée entre-temps
+   * (le décor est reconstruit quand le thème change au démarrage), `currentProgram` n'existe plus,
+   * la vérification lève une TypeError non rattrapée et la promesse ne se résout JAMAIS — mesuré le
+   * 2026-10-17 (conv-301, sonde de l'Accueil). Ici la vérification s'arrête avec la scène, et une
+   * matière sans programme compte comme prête au lieu de faire tomber la boucle.
+   */
+  const compilerEnFond = (objet: THREE.Object3D, cible?: THREE.Scene): Promise<void> => {
+    const materiaux = renderer.compile(objet, camera, cible ?? null) as Set<THREE.Material>
+    return new Promise((ok) => {
+      const verifier = (): void => {
+        if (!vivante) return ok()
+        for (const m of materiaux) {
+          const prog = (renderer.properties.get(m) as { currentProgram?: { isReady(): boolean } }).currentProgram
+          if (!prog || prog.isReady()) materiaux.delete(m)
+        }
+        if (materiaux.size === 0) ok()
+        else setTimeout(verifier, 10)
+      }
+      verifier()
+    })
+  }
+  /**
    * LA FOULE N'ENTRE QU'UNE FOIS SES NUANCEURS COMPILÉS.
    *
    * Ses matières « physiques » (tissu satiné, peau vernie, yeux, visières, parapluies) donnent cinq
@@ -3370,12 +3386,30 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
       enAttente = null
       acteurs = prets
     }
-    renderer.compileAsync(prets.groupe, camera, scene).then(montrer, (erreur: unknown) => {
+    compilerEnFond(prets.groupe, scene).then(montrer, (erreur: unknown) => {
       // Rien n'est masqué : l'échec est écrit, et la foule entre quand même (compilée à l'affichage).
       console.error('[decor] compilation de la foule en tâche de fond impossible :', erreur)
       montrer()
     })
   }
+  /**
+   * LA RUE AUSSI SE COMPILE EN TÂCHE DE FOND (2026-10-17, conv-301). Seule la foule passait par
+   * `compileAsync` : la première image de la rue compilait tous ses programmes d'un bloc sur le fil
+   * principal (`onFirstUse` de three, 2,3 s mesurées par profil dans l'instance cachée, carte
+   * RTX 3060 sous Direct3D 11, `KHR_parallel_shader_compile` présent) — un gel de 3 s à
+   * l'ouverture de l'Accueil. Le pilote compile désormais pendant que la page reste vivante ; tant
+   * que ce n'est pas fini, `render` ne dessine rien et le fond de la page reste visible.
+   */
+  let rueCompilee = false
+  compilerEnFond(scene).then(
+    () => {
+      rueCompilee = true
+    },
+    (erreur: unknown) => {
+      console.error('[decor] compilation de la rue en tâche de fond impossible :', erreur)
+      rueCompilee = true
+    }
+  )
   const preparation = preparationHumains()
   const deja = preparation.avancer(0)
   let canal: MessageChannel | null = null
@@ -3419,6 +3453,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
     },
 
     render(elapsed, look) {
+      // La rue n'est dessinée qu'une fois ses programmes compilés en tâche de fond (plus bas) :
+      // la dessiner avant forçait la compilation sur le fil principal, à la première image.
+      if (!rueCompilee) return
       const t = elapsed + T0
       // Le pas de temps vient de l'horloge de l'appelant : ralentie sous « mouvement réduit », elle
       // ralentit toute la scène. Plafonné à 50 ms : au retour d'une fenêtre cachée, la foule ne
