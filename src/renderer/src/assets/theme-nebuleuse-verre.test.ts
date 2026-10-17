@@ -774,7 +774,11 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     expect(trait.match(/var\(--nv-chanfrein-cotes\), var\(--nv-chanfrein-cotes\)/g)).toHaveLength(4)
   })
 
-  it('coupe aussi les tuiles et la plaque du titre de l Accueil, trait cale sur leur bord', () => {
+  // Les TUILES ont quitte le chanfrein le 2026-10-17 (conv-317, « implemente 3 + degrade different
+  // pour chaque widget ») : le bloc NEON-TUILES les recouvre en tubes neon, et leur tenue / leur focus
+  // clavier se disent par la lueur du tube (theme-nebuleuse-verre.neon-tuiles.test.ts). La regle
+  // partagee ci-dessous reste celle de la plaque du titre, et la base des tuiles sous le neon.
+  it('coupe la plaque du titre de l Accueil, trait cale sur son bord', () => {
     const accueil = derniere(`${PREFIXE} :is(.home-tile__panel, .home-view__masthead)`)
     expect(accueil['clip-path']).toBe('var(--nv-chanfrein-forme)')
     expect(accueil['border-color']).toBe('transparent')
@@ -783,13 +787,6 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     expect(accueil['background-origin']).toBe('border-box')
     expect(accueil['backdrop-filter']).toBe('none')
     expect(accueil.background).toMatch(/^var\(--nv-chanfrein-trait-fond\), radial-gradient\(/)
-    // La tuile tenue et la tuile au clavier se disent encore : par leur bord.
-    expect(derniere(`${PREFIXE} .home-tile[data-held='true'] .home-tile__panel`)['border-color']).toBe(
-      'var(--line-strong)'
-    )
-    expect(derniere(`${PREFIXE} .home-tile:focus-visible .home-tile__panel`)['border-color']).toBe(
-      'var(--cyan)'
-    )
   })
 
 })

@@ -2182,6 +2182,187 @@
   box-shadow: none;
 }
 /* CADRE-CHANFREIN:FIN */
+/* NEON-TUILES:DEBUT -- les tuiles de l'Accueil en tubes neon (conv-317). */
+/* LES TUILES DE L'ACCUEIL EN TUBES NEON (conv-317, 2026-10-17 : « /draft le style des widgets pour
+   qu'il colle plus au fond d'ecran », puis « Affiner la 2 · Tube neon », puis « implemente 3 +
+   degrade different pour chaque widget » ; maquettes : artifacts/draft-widgets-neon/tour2.md, 3 et 2,
+   avant/apres : accueil-large.png -> final-nebuleuse-verre.png).
+   Le fond de l'Accueil est l'avenue cyberpunk sous la pluie (home-decor-avenue.ts) : des tuiles en
+   satin gris neutre s'y lisaient comme des dalles collees par-dessus la rue. Chaque tuile devient un
+   TUBE NEON, SA paire de couleurs en degrade (--nv-neon-a en haut a gauche -> --nv-neon-b en bas a
+   droite), toutes relevees sur les enseignes et les lumieres de l'avenue. Chaque bout du tube eclaire
+   de sa couleur, dedans comme dehors ; le titre est une ENSEIGNE de la couleur de depart, qui gresille
+   de temps en temps (decalage propre a chaque tuile : jamais deux enseignes ensemble).
+   Ce bloc RECOUVRE, pour les tuiles seulement, le cadre a chanfrein pose plus haut (CADRE-CHANFREIN,
+   conv-211) : coins ronds et lueur debordante, que la coupe (`clip-path`) rognait. La plaque du titre
+   (`.home-view__masthead`) garde son chanfrein. Le panneau garde ce qui portait la lisibilite : une
+   encre opaque a 88 % sous le texte, et la lumiere de la souris (conv-191) en premiere couche.
+   L'entree des cadres (ENTREE-CHANFREIN, plus bas) anime `--ch-contour` sur le panneau : le tube s'y
+   ALLUME, apres le fond, au lieu du trait argent. Au repos `--ch-contour` vaut 1 (app-shell.css).
+   Pas de garde prefers-reduced-motion sur le gresillement : ce poste l'a actif, et le gresillement fait
+   partie de la maquette choisie (meme choix que l'entree des cadres, app-shell.css). */
+:root[data-theme='nebuleuse-verre'] .home-tile {
+  --nv-neon-a: #2ee8ff;
+  --nv-neon-b: #ff2fa0;
+  --nv-neon-decalage: 0s;
+  --nv-neon-encre: rgba(9, 5, 14, 0.88);
+}
+/* Une paire par widget, relevee dans home-decor-avenue.ts (enseignes, holo-panneaux, eclairs). Les
+   departs gardent les couleurs de la maquette 3 : routines CYAN, remontees ORANGE, conversations ROSE. */
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='mails'] {
+  --nv-neon-a: #8fa8ff;
+  --nv-neon-b: #8a3cff;
+  --nv-neon-decalage: -3.9s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='agenda'] {
+  --nv-neon-a: #ff6bb5;
+  --nv-neon-b: #ffd9a8;
+  --nv-neon-decalage: -4.6s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='routines'] {
+  --nv-neon-a: #2ee8ff;
+  --nv-neon-b: #2f6bff;
+  --nv-neon-decalage: -1.4s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='notifications'] {
+  --nv-neon-a: #ffb062;
+  --nv-neon-b: #ff2a4a;
+  --nv-neon-decalage: -2.7s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='conversations'] {
+  --nv-neon-a: #ff2fa0;
+  --nv-neon-b: #ffb062;
+  --nv-neon-decalage: -0.6s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='jarvis'] {
+  --nv-neon-a: #e63ca0;
+  --nv-neon-b: #8a3cff;
+  --nv-neon-decalage: -2s;
+}
+:root[data-theme='nebuleuse-verre'] .home-tile[data-widget='enregistrements'] {
+  --nv-neon-a: #ff2fa0;
+  --nv-neon-b: #2ee8ff;
+  --nv-neon-decalage: -3.3s;
+}
+/* Le tube : bord transparent de 1,5 px, rempli par le degrade en `border-box` ; l'encre en
+   `padding-box` par-dessus. Ses couleurs passent par `--ch-contour` (0 -> 1 pendant l'entree). */
+:root[data-theme='nebuleuse-verre'] .home-tile .home-tile__panel {
+  --nv-neon-tube-a: color-mix(in srgb, var(--nv-neon-a) calc(var(--ch-contour) * 100%), transparent);
+  --nv-neon-tube-b: color-mix(in srgb, var(--nv-neon-b) calc(var(--ch-contour) * 100%), transparent);
+  --nv-neon-halo-a: color-mix(in srgb, var(--nv-neon-a) calc(var(--ch-contour) * 55%), transparent);
+  --nv-neon-halo-b: color-mix(in srgb, var(--nv-neon-b) calc(var(--ch-contour) * 60%), transparent);
+  clip-path: none;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  /* Toujours AUCUN flou de fond (conv-124, test « ne pose aucun flou de fond ») : l'encre a 88 %
+     porte seule la lisibilite. */
+  backdrop-filter: none;
+  background:
+    radial-gradient(
+        circle var(--nv-lumiere-rayon) at calc(var(--nv-lumiere-x) * 100%) calc(var(--nv-lumiere-y) * 100%),
+        var(--nv-lumiere-couleur),
+        rgba(255, 255, 255, 0)
+      )
+      padding-box fixed,
+    linear-gradient(var(--nv-neon-encre), var(--nv-neon-encre)) padding-box,
+    linear-gradient(135deg, var(--nv-neon-tube-a), var(--nv-neon-tube-b)) border-box;
+  box-shadow:
+    inset 10px 10px 24px -14px var(--nv-neon-halo-a),
+    inset -10px -10px 24px -14px var(--nv-neon-halo-b),
+    -5px -5px 18px -5px var(--nv-neon-halo-a),
+    5px 5px 18px -5px var(--nv-neon-halo-b);
+  scrollbar-color: color-mix(in srgb, var(--nv-neon-a) 45%, transparent) transparent;
+}
+/* Tenue a la main : le tube eclaire plus loin. Au clavier : un liseré blanc dans le tube. Le bord
+   reste TRANSPARENT (le cadre a chanfrein le recolorait : il couvrirait le degrade). */
+:root[data-theme='nebuleuse-verre'] .home-tile[data-held='true'] .home-tile__panel {
+  border-color: transparent;
+  box-shadow:
+    inset 10px 10px 24px -14px var(--nv-neon-halo-a),
+    inset -10px -10px 24px -14px var(--nv-neon-halo-b),
+    -8px -8px 30px -6px var(--nv-neon-halo-a),
+    8px 8px 30px -6px var(--nv-neon-halo-b);
+}
+:root[data-theme='nebuleuse-verre'] .home-tile:focus-visible .home-tile__panel {
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.75),
+    inset 10px 10px 24px -14px var(--nv-neon-halo-a),
+    inset -10px -10px 24px -14px var(--nv-neon-halo-b),
+    -5px -5px 18px -5px var(--nv-neon-halo-a),
+    5px 5px 18px -5px var(--nv-neon-halo-b);
+}
+/* L'enseigne : meme gabarit d'etiquette (24 px, home-layout.ts), lettres de neon. */
+:root[data-theme='nebuleuse-verre'] .home-tile .home-tile__label h2 {
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--nv-neon-a) 30%, #ffffff);
+  text-shadow:
+    0 0 3px var(--nv-neon-a),
+    0 0 9px var(--nv-neon-a),
+    0 0 18px color-mix(in srgb, var(--nv-neon-a) 70%, transparent);
+  animation: nv-neon-gresille 5.5s linear infinite;
+  animation-delay: var(--nv-neon-decalage);
+}
+@keyframes nv-neon-gresille {
+  0%,
+  86%,
+  88%,
+  92%,
+  100% {
+    opacity: 1;
+  }
+  87% {
+    opacity: 0.3;
+  }
+  91% {
+    opacity: 0.45;
+  }
+}
+:root[data-theme='nebuleuse-verre'] .home-tile .home-tile__rule {
+  background: linear-gradient(
+    90deg,
+    var(--nv-neon-a),
+    color-mix(in srgb, var(--nv-neon-b) 60%, transparent) 55%,
+    transparent
+  );
+  opacity: 0.8;
+}
+/* Les chiffres et les heures melangent le tube au texte du theme : clairs sur l'encre, fonces sur la
+   nacre d'Holographique blanc (un cyan pur y tombait a un contraste illisible, capture du 2026-10-17). */
+:root[data-theme='nebuleuse-verre'] .home-tile .home-tile__count {
+  color: color-mix(in srgb, var(--nv-neon-a) 75%, var(--text));
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 1px var(--nv-neon-a),
+    0 0 8px color-mix(in srgb, var(--nv-neon-a) 55%, transparent);
+  text-shadow: 0 0 6px var(--nv-neon-a);
+}
+/* Le contenu reprend la couleur de son tube : heures, pastilles et filet des conversations, liens. */
+:root[data-theme='nebuleuse-verre'] .home-tile .home-list time {
+  color: color-mix(in srgb, var(--nv-neon-a) 75%, var(--text));
+  text-shadow: 0 0 6px color-mix(in srgb, var(--nv-neon-a) 60%, transparent);
+}
+:root[data-theme='nebuleuse-verre'] .home-tile .home-convs button {
+  border-left-color: var(--nv-neon-a);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nv-neon-a) 14%, transparent), transparent 75%);
+}
+:root[data-theme='nebuleuse-verre'] .home-tile .home-convs button:hover,
+:root[data-theme='nebuleuse-verre'] .home-tile .home-convs button:focus-visible {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nv-neon-a) 26%, transparent), transparent 85%);
+}
+:root[data-theme='nebuleuse-verre'] .home-tile .home-convs__dot {
+  background: radial-gradient(circle, #ffffff, var(--nv-neon-a) 60%);
+  box-shadow: 0 0 7px var(--nv-neon-a);
+}
+/* Au survol et au clavier, le lien garde son passage au blanc (HomeView.css, `.home-lien:hover`). */
+:root[data-theme='nebuleuse-verre'] .home-tile .home-lien:not(:hover):not(:focus-visible) {
+  color: color-mix(in srgb, var(--nv-neon-a) 70%, #ffffff);
+  border-bottom-color: color-mix(in srgb, var(--nv-neon-a) 45%, transparent);
+}
+/* NEON-TUILES:FIN */
 /* ENTREE-CHANFREIN:DEBUT -- l'entree des cadres a chanfrein (conv-987). */
 /* L'ENTREE DES CADRES A CHANFREIN, LE DESSIN (conv-987, 2026-10-16 : « /draft des animations
    d'entree pour les containers a chanfrin », puis « 3 et 6 », « le 4 duree 1 second » et « Implemente
