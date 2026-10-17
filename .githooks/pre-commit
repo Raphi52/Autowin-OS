@@ -1,0 +1,15 @@
+#!/bin/sh
+# Garde-fou : un commit ne supprime pas un module que le reste du commit importe encore.
+# Mesuré le 2026-10-17 (conv-318, commit 06c5ede1) : `git add <3 fichiers> && git commit` dans
+# l'arbre partagé a emporté les suppressions stagées d'une autre session sans leurs importeurs ;
+# HEAD ne compilait plus. Détail et règle : scripts/garde-commit-module-supprime.mjs.
+# Testé par src/main/githooks-pre-commit.test.ts. Échappatoire native et visible : --no-verify.
+# Le défaut naît de l'index PARTAGÉ du checkout principal : une copie de travail d'agent a son propre
+# index, et ses commits automatiques (worktree-manager, commitCopyIfDirty) ne doivent pas changer.
+case "$(git rev-parse --show-toplevel 2>/dev/null)" in
+  */agent__* | */integration__* | */.quarantine/*) exit 0 ;;
+esac
+garde="$(dirname "$0")/../scripts/garde-commit-module-supprime.mjs"
+[ -f "$garde" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+exec node "$garde"
