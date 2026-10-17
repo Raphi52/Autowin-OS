@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   COMPOSITIONS,
-  DECOR_DEFAUT,
   LUNES,
   NUAGE_COSMIQUE,
   NUAGE_FRAGMENT_SHADER,
@@ -52,8 +51,10 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
   describe('LE NUAGE : cosmique, bleu-violet, AU MILIEU, et il se déplace', () => {
-    it('la direction par défaut porte un nuage central déclaré', () => {
-      const nuage = COMPOSITIONS[DECOR_DEFAUT].nuage
+    it('la composition à planètes porte un nuage central déclaré', () => {
+      // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
+      // (l'avenue, conv-301), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
+      const nuage = COMPOSITIONS.actuel.nuage
       expect(nuage).toBeTruthy()
       // « au milieu » : le nuage est posé au centre du cadre, pas dans un angle comme les nébuleuses.
       expect(Math.abs(nuage!.fx)).toBeLessThanOrEqual(0.15)
@@ -105,8 +106,10 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   })
 
   describe('LES LUNES : autour des planètes, et elles tournent', () => {
-    it('chaque planète de la direction par défaut porte au moins une lune', () => {
-      const planetes = COMPOSITIONS[DECOR_DEFAUT].planetes
+    it('chaque planète de la composition à planètes porte au moins une lune', () => {
+      // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
+      // (l'avenue, conv-301), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
+      const planetes = COMPOSITIONS.actuel.planetes
       expect(planetes.length).toBeGreaterThanOrEqual(3)
       for (const planete of planetes) {
         expect(planete.lunes).toBeGreaterThanOrEqual(1)

@@ -5,9 +5,21 @@ import {
   createDecorScene,
   DECOR_DEFAUT,
   DECOR_VARIANTS,
+  estDirectionDecor,
   FOND_DECOR,
-  NAPPE_FRAGMENT_SHADER
+  NAPPE_FRAGMENT_SHADER,
+  type DirectionSpatiale
 } from './home-decor-scene'
+
+/**
+ * Les directions COMPOSEES par `home-decor-scene.ts`. L'avenue (conv-301) est une scene a part, aux
+ * reglages d'une autre nature (metres et secondes, pas des facteurs de composition) : la comparer a
+ * elles sur `parallaxe` ou `tempo` n'aurait pas de sens. Ses promesses sont tenues par
+ * `home-decor-avenue.contract.test.ts`.
+ */
+const SPATIALES = DECOR_VARIANTS.map((v) => v.id).filter(
+  (id): id is DirectionSpatiale => id !== 'avenue'
+)
 
 /**
  * Le decor 3D est le FOND de l'accueil, pas une surcouche posee sur l'image plate.
@@ -43,8 +55,10 @@ describe('le decor efface son canevas de maniere OPAQUE', () => {
  * le fait qu'une valeur inconnue ne fasse pas tomber la vue.
  */
 describe('directions du decor', () => {
-  it('expose les cinq directions, chacune avec un nom et un resume', () => {
+  it('expose les six directions, chacune avec un nom et un resume', () => {
+    // `avenue` EN TETE : la direction par defaut depuis le 2026-10-17 (conv-301).
     expect(DECOR_VARIANTS.map((v) => v.id)).toEqual([
+      'avenue',
       'actuel',
       'limbe',
       'poussiere',
@@ -58,17 +72,33 @@ describe('directions du decor', () => {
     }
   })
 
-  it('a « actuel » pour defaut — la composition a PLANETES, demandee le 2026-08-24', () => {
-    // CHANGEMENT DE DECISION, assume. `poussiere` etait le defaut, choisi sur rendus compares ; la
-    // demande « bascule le decor sur la composition a planetes » l'a remplace. Ce test encode la
-    // nouvelle decision au lieu d'etre desserre -- c'est lui qui avait refuse l'edition d'un agent
-    // qui n'avait pas lu l'ancienne, et il doit continuer de refuser une bascule non decidee.
-    expect(DECOR_DEFAUT).toBe('actuel')
+  it('a « avenue » pour defaut — l avenue cyberpunk, demandee le 2026-10-17 (conv-301)', () => {
+    // CHANGEMENT DE DECISION, assume, le deuxieme. `poussiere` etait le defaut, puis `actuel` (les
+    // planetes, 2026-08-24). Apres les brouillons regardes dans le fil, la demande « Passe au vrai
+    // fond de l'Accueil avec ce look » fait de l'avenue le defaut. Ce test encode la nouvelle decision
+    // au lieu d'etre desserre : il doit continuer de refuser une bascule non decidee.
+    expect(DECOR_DEFAUT).toBe('avenue')
     expect(DECOR_VARIANTS.some((v) => v.id === DECOR_DEFAUT)).toBe(true)
+    expect(DECOR_VARIANTS.find((v) => v.id === 'avenue')?.resume).toMatch(/cyberpunk/)
+  })
+
+  /**
+   * La direction vient du STOCKAGE local : une entree, pas une constante. Chaque cas limite doit
+   * retomber sur le defaut, jamais sur une scene vide ni une erreur.
+   */
+  it('ne reconnait comme direction que les identifiants du catalogue', () => {
+    // Les six directions connues sont reconnues.
+    for (const variante of DECOR_VARIANTS) expect(estDirectionDecor(variante.id)).toBe(true)
+    // Absente (`getItem` rend null), vide, mal typee, retiree ou inventee : refusee, donc defaut.
+    for (const valeur of [null, undefined, '', ' avenue', 'AVENUE', 'planetes', 3, {}]) {
+      expect(estDirectionDecor(valeur)).toBe(false)
+    }
   })
 
   it('tient la promesse de « actuel » : des PLANETES annelees, ce que « poussiere » n avait pas', () => {
-    const actuel = COMPOSITIONS[DECOR_DEFAUT]
+    // Vise `actuel` par son NOM : ce n'est plus le defaut depuis le 2026-10-17, mais elle reste
+    // choisissable, et une direction qu'on peut choisir doit tenir sa promesse.
+    const actuel = COMPOSITIONS.actuel
     // Ce que la demande visait : des silhouettes de planetes, pas seulement de la matiere.
     expect(actuel.planetes.length).toBeGreaterThanOrEqual(3)
     // Annelees : une planete sans anneau ne tiendrait pas le resume affiche.
@@ -76,7 +106,7 @@ describe('directions du decor', () => {
     // Etagees en profondeur, sinon la parallaxe curseur n'a rien a separer.
     expect(new Set(actuel.planetes.map((p) => p.z)).size).toBeGreaterThan(1)
     // Le resume affiche a l'utilisateur doit decrire CETTE image.
-    expect(DECOR_VARIANTS.find((v) => v.id === DECOR_DEFAUT)?.resume).toMatch(/plan[eè]tes/)
+    expect(DECOR_VARIANTS.find((v) => v.id === 'actuel')?.resume).toMatch(/plan[eè]tes/)
   })
 
   /**
@@ -95,9 +125,10 @@ describe('directions du decor', () => {
     // Six plans de profondeur DISTINCTS : c'est la profondeur etagee qui fait le relief.
     expect(poussiere.nebuleuses).toHaveLength(6)
     expect(new Set(poussiere.nebuleuses.map((n) => n.z)).size).toBe(6)
-    // Forte parallaxe : strictement au-dessus des autres directions, sinon « forte » ne veut rien dire.
-    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== 'poussiere')) {
-      expect(poussiere.parallaxe).toBeGreaterThan(COMPOSITIONS[autre.id].parallaxe)
+    // Forte parallaxe : strictement au-dessus des autres directions composees, sinon « forte » ne
+    // veut rien dire.
+    for (const autre of SPATIALES.filter((id) => id !== 'poussiere')) {
+      expect(poussiere.parallaxe).toBeGreaterThan(COMPOSITIONS[autre].parallaxe)
     }
     // Le resume affiche a l'utilisateur doit decrire CETTE image.
     const entree = DECOR_VARIANTS.find((v) => v.id === 'poussiere')
@@ -124,9 +155,9 @@ describe('directions du decor', () => {
     expect(nappe.nappe).toBeDefined()
     expect(nappe.nappe?.or).toBe(0xe9bd4e)
     expect(nappe.nappe?.anthracite).toBe(0x1b222c)
-    // « Tres lente » : STRICTEMENT plus lente que toutes les autres directions.
-    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== 'nappe')) {
-      expect(nappe.tempo).toBeLessThan(COMPOSITIONS[autre.id].tempo)
+    // « Tres lente » : STRICTEMENT plus lente que toutes les autres directions composees.
+    for (const autre of SPATIALES.filter((id) => id !== 'nappe')) {
+      expect(nappe.tempo).toBeLessThan(COMPOSITIONS[autre].tempo)
     }
     // Bruit ORGANIQUE : somme d'octaves, pas un degrade lineaire.
     expect(NAPPE_FRAGMENT_SHADER).toMatch(/fbm/)

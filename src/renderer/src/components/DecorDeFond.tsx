@@ -20,8 +20,12 @@ import {
  * `v2` ET NON `v1` : la cle a ete versionnee le 2026-08-25, APRES l'ecriture de ce fichier, pour que
  * le nouveau defaut `actuel` atteigne les machines ayant deja choisi `poussiere` (plainte « je vois
  * des poussieres »). Reprendre `v1` ici aurait ressuscite l'ancien choix.
+ *
+ * `v3` ET NON `v2`, meme raison le 2026-10-17 (conv-301) : le defaut devient l'avenue cyberpunk
+ * (« Passe au vrai fond de l'Accueil avec ce look »). Une machine qui gardait `actuel` sous `v2`
+ * aurait continue d'afficher les planetes, et la demande n'aurait jamais atteint l'ecran.
  */
-const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
+const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v3')
 
 /**
  * LE DECOR 3D, FOND DE TOUTE L'APPLICATION.

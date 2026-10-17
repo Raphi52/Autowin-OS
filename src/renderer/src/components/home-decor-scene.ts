@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { createAvenueScene } from './home-decor-avenue'
 
 /**
  * Le décor 3D de la page d'accueil : la scène, sans React.
@@ -279,10 +280,22 @@ function buildFilantes(random: () => number): THREE.Points {
  * le sujet dominant, la densité de matière, le langage formel (matière diffuse contre ligne), l'usage
  * de l'accent, et le régime de mouvement. Toutes restent dans le monde déjà validé par l'utilisateur :
  * centre noir, nébuleuses roses et cyan, or pour la structure.
+ *
+ * `avenue` est d'une autre famille : ce n'est pas une composition de ce fichier mais une scène à part
+ * (`home-decor-avenue.ts`), l'avenue cyberpunk sous l'orage demandée le 2026-10-17 (conv-301).
  */
-export type DecorVariant = 'actuel' | 'limbe' | 'poussiere' | 'orbites' | 'nappe'
+export type DecorVariant = 'avenue' | 'actuel' | 'limbe' | 'poussiere' | 'orbites' | 'nappe'
+
+/** Les directions « spatiales », celles que ce fichier compose (toutes sauf l'avenue). */
+export type DirectionSpatiale = Exclude<DecorVariant, 'avenue'>
 
 export const DECOR_VARIANTS: readonly { id: DecorVariant; nom: string; resume: string }[] = [
+  {
+    id: 'avenue',
+    nom: 'Avenue',
+    resume:
+      'une avenue cyberpunk sous l orage : foule à capuches et manteaux longs, néons, tags, la ville en contrebas'
+  },
   {
     id: 'actuel',
     nom: 'Actuel',
@@ -1639,7 +1652,7 @@ interface Composition {
   parallaxe: number
 }
 
-export const COMPOSITIONS: Record<DecorVariant, Composition> = {
+export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
   actuel: {
     nebuleuses: [
       { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
@@ -1811,7 +1824,25 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
  * La promesse de `poussiere` reste testee, sous son nom propre : changer de defaut ne doit pas
  * effacer la garantie d'une direction qu'on peut encore choisir.
  */
-export const DECOR_DEFAUT: DecorVariant = 'actuel'
+/*
+ * L'AVENUE CYBERPUNK, demandee le 2026-10-17 (conv-301), nouveau CHANGEMENT de decision assume.
+ *
+ * Apres une serie de brouillons regardes dans le fil, l'utilisateur a ecrit « Passe au vrai fond de
+ * l'Accueil avec ce look » : l'avenue sous l'orage, sa foule dark cyberpunk, ses tags et la ville en
+ * contrebas remplacent les planetes. Comme pour `poussiere` avant elles, les planetes ne sont pas
+ * effacees : `actuel` reste choisissable et sa promesse reste testee sous son NOM.
+ */
+export const DECOR_DEFAUT: DecorVariant = 'avenue'
+
+/**
+ * Une valeur lue du stockage est-elle une direction connue ?
+ *
+ * Le stockage est une ENTREE : il peut contenir une direction retiree depuis, ou n'importe quoi
+ * d'autre. Une valeur inconnue monte la direction par defaut, jamais une scene vide.
+ */
+export function estDirectionDecor(valeur: unknown): valeur is DecorVariant {
+  return DECOR_VARIANTS.some((direction) => direction.id === valeur)
+}
 
 /**
  * Monte la scène complète dans un canevas.
@@ -1821,6 +1852,10 @@ export const DECOR_DEFAUT: DecorVariant = 'actuel'
  * ni un test de rendu de passer.
  */
 export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorScene | null {
+  const direction: DecorVariant = estDirectionDecor(variante) ? variante : DECOR_DEFAUT
+  // L'avenue est une scene a part, avec sa propre chaine de rendu : elle ne partage rien des
+  // compositions spatiales ci-dessous.
+  if (direction === 'avenue') return createAvenueScene()
   let renderer: THREE.WebGLRenderer
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'default' })
@@ -1849,7 +1884,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
   const stars = buildStars(random)
   scene.add(stars)
 
-  const composition = COMPOSITIONS[variante] ?? COMPOSITIONS[DECOR_DEFAUT]
+  const composition = COMPOSITIONS[direction]
   const nebulaSpecs = composition.nebuleuses
 
   const nappeSpec = composition.nappe

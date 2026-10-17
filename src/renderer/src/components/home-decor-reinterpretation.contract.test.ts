@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { COMPOSITIONS, DECOR_DEFAUT, DECOR_VARIANTS } from './home-decor-scene'
+import { AVENUE } from './home-decor-avenue'
+import { COMPOSITIONS, DECOR_VARIANTS } from './home-decor-scene'
 
 /**
  * CE QUE L'UTILISATEUR A CHOISI, conv-1399, mot pour mot :
@@ -53,8 +54,14 @@ describe('décor 3D — réinterprétation synthétique, pas copie pixel (choix 
     expect(code).toMatch(/fragmentShader/)
   })
 
-  it('COUCHES : la direction par défaut étage ses éléments en profondeur', () => {
-    const defaut = COMPOSITIONS[DECOR_DEFAUT]
+  /*
+   * COUCHES et PARTICULES visent la composition à planètes par son NOM. Elles visaient « la direction
+   * par défaut » tant que c'était elle ; depuis le 2026-10-17 le défaut est l'avenue (conv-301), et ses
+   * couches, ses particules, sa lumière et son refus de toute image sont tenus par
+   * `home-decor-avenue.contract.test.ts`. Aucune garantie n'est perdue : chacune a changé d'adresse.
+   */
+  it('COUCHES : la composition à planètes étage ses éléments en profondeur', () => {
+    const defaut = COMPOSITIONS.actuel
     const profondeurs = new Set(
       [...defaut.nebuleuses.map((n) => n.z), ...defaut.planetes.map((p) => p.z)].map(Number)
     )
@@ -66,8 +73,8 @@ describe('décor 3D — réinterprétation synthétique, pas copie pixel (choix 
     expect(defaut.parallaxe).toBeGreaterThan(0)
   })
 
-  it('PARTICULES : la direction par défaut porte de la matière en points', () => {
-    expect(COMPOSITIONS[DECOR_DEFAUT].nebuleuses.length).toBeGreaterThan(0)
+  it('PARTICULES : la composition à planètes porte de la matière en points', () => {
+    expect(COMPOSITIONS.actuel.nebuleuses.length).toBeGreaterThan(0)
     // Les nébuleuses sont rendues en `Points` — c'est ce mot-là qui fait la particule, et non un
     // plan texturé qui en aurait l'apparence.
     expect(code).toMatch(/new THREE\.Points\(/)
@@ -84,7 +91,11 @@ describe('décor 3D — réinterprétation synthétique, pas copie pixel (choix 
     // « temps réel » dans la demande : la scène vit. Une direction à tempo 0 serait une image fixe
     // rendue en 3D — le pire des deux mondes.
     for (const variante of DECOR_VARIANTS) {
-      expect(COMPOSITIONS[variante.id].tempo).toBeGreaterThan(0)
+      // L'avenue n'a pas de tempo de composition : elle vit par sa marche et par sa pluie.
+      if (variante.id === 'avenue') {
+        expect(AVENUE.vitesse).toBeGreaterThan(0)
+        expect(AVENUE.pluie).toBeGreaterThan(0)
+      } else expect(COMPOSITIONS[variante.id].tempo).toBeGreaterThan(0)
     }
   })
 })
