@@ -1117,8 +1117,10 @@ export const CATALOG: CommandSpec[] = [
       'ensuite. La `consigne` est réécrite sur le disque avant la fermeture puis renvoyée toute ' +
       'seule dans cette conversation au redémarrage — rédige-la comme un ordre autonome, elle sera ' +
       'lue sans le fil courant. À n’utiliser QUE lorsqu’un redémarrage est réellement nécessaire ' +
-      '(code du process principal modifié, variable non rechargeable par `reload_env`) : l’app se ' +
-      'ferme et les runs en cours sont perdus.',
+      '(code du process principal modifié, variable non rechargeable par `reload_env`). Si d’autres ' +
+      'conversations ou des runs tournent, le redémarrage est MIS EN FILE (`enFile: true`) : il part ' +
+      'tout seul quand plus aucun agent ne tourne, après un préavis — personne n’est coupé, ne ' +
+      'demande donc pas à l’utilisateur s’il faut attendre. Sinon l’app redémarre tout de suite.',
     args: {
       consigne: 'la consigne autonome à rejouer après le redémarrage (obligatoire)',
       raison: 'facultatif — pourquoi le redémarrage est nécessaire (trace lisible)'
@@ -2133,6 +2135,20 @@ export class AppCommandBus {
    * promettre une relance qui n'arrivera pas.
    */
   redemarrerApp?: () => void
+
+  /**
+   * Conversations dont un tour de chat est EN VOL, câblé depuis index.ts. Absent -> `restart_app`
+   * ne voit que les orchestrations et garde son redémarrage immédiat.
+   */
+  conversationsEnVol?: () => string[]
+
+  /**
+   * FILE DE REDÉMARRAGE (`relance-auto-moteur.ts`, `mettreEnFile`) : relance au prochain repos, après
+   * préavis. Rend `false` si la file n'existe pas (version installée, relance auto désactivée).
+   * Conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : sans elle, `restart_app` coupait conv-303
+   * et l'agent a renvoyé le choix à l'utilisateur au lieu de redémarrer.
+   */
+  redemarrerAuRepos?: (demande: { cause: string; avantRelance?: () => void }) => boolean
 
   /**
    * Fermeture d'un bureau caché (`bureau_cache_fermer`), câblée tardivement depuis index.ts sur
@@ -3962,19 +3978,60 @@ export class AppCommandBus {
               'Redémarrage refusé : `consigne` est obligatoire — sans elle la tâche mourrait avec le process.'
           }
         }
-        const reprise = poserReprise(ensureAutowinAppData(), {
+        const contenuReprise = {
           conversationId: cible,
           consigne,
           ...(typeof a.raison === 'string' && a.raison.trim() ? { raison: a.raison.trim() } : {})
-        })
+        }
+        const cause = `restart_app (${cible})${a.raison ? ` — ${String(a.raison).trim()}` : ''}`
+        // D'AUTRES agents tournent : les couper n'est pas un geste de CE tour. Le redemarrage entre
+        // dans la file au repos (conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : faute de
+        // file, l'agent a pose un `ask` au lieu de redemarrer). Le tour courant, lui, se termine.
+        const autresConversations = (this.conversationsEnVol?.() ?? []).filter((c) => c !== cible)
+        const orchestrations = this.orchestrationsEnVol()
+        if (autresConversations.length > 0 || orchestrations > 0) {
+          const attend = [
+            ...autresConversations,
+            ...(orchestrations > 0 ? [`${orchestrations} orchestration(s)`] : [])
+          ]
+          // Horodatage frais a la relance : l'attente peut depasser la peremption de la reprise.
+          const enFile =
+            this.redemarrerAuRepos?.({
+              cause,
+              avantRelance: () => poserReprise(ensureAutowinAppData(), contenuReprise)
+            }) ?? false
+          if (enFile) {
+            // Posee TOUT DE SUITE aussi : une relance par un autre chemin (relance du moteur, ou
+            // l'utilisateur dans les 15 min) rejoue quand meme la consigne.
+            const reprise = poserReprise(ensureAutowinAppData(), contenuReprise)
+            return {
+              enFile: true,
+              attend,
+              conversationId: cible,
+              consigne: reprise.consigne,
+              detail:
+                `Redémarrage mis en file : ${attend.join(', ')} tourne encore. Autowin redémarrera ` +
+                'tout seul quand plus aucun agent ne tournera, après un préavis de 30 s, puis ' +
+                'rejouera la consigne dans cette conversation. Termine ton tour normalement : ' +
+                'ne demande rien à l’utilisateur.'
+            }
+          }
+          return {
+            redemarre: false,
+            attend,
+            detail:
+              `Redémarrage non lancé : ${attend.join(', ')} tourne encore et cette instance n’a ` +
+              'pas de file de redémarrage (version installée ou relance automatique désactivée). ' +
+              'Redémarrer maintenant couperait ce travail : c’est à l’utilisateur de choisir.'
+          }
+        }
+        const reprise = poserReprise(ensureAutowinAppData(), contenuReprise)
         // Le quit part APRES la reponse : sans ce delai, le tour se termine dans un process deja
         // mort et l'utilisateur ne voit jamais l'accuse de redemarrage.
         const relancer = this.redemarrerApp
         // La cause de l'arret, ecrite dans le journal des arrets : sans elle, ce redemarrage
         // ressemble a n'importe quelle autre fermeture propre.
-        annoncerFermeture(
-          `restart_app (${cible})${a.raison ? ` — ${String(a.raison).trim()}` : ''}`
-        )
+        annoncerFermeture(cause)
         setTimeout(() => relancer(), 1200)
         return {
           redemarre: true,

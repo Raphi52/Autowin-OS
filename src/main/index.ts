@@ -365,7 +365,8 @@ import {
   compilerLeMoteur,
   relanceAutoMoteurPermise,
   sourcesDuMoteurPlusRecentesQue,
-  surveillerSourcesDuMoteur
+  surveillerSourcesDuMoteur,
+  type RelanceMoteurArmee
 } from './relance-auto-moteur'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
@@ -1263,7 +1264,7 @@ let preflightWatchHandle: { stop: () => void } | null = null
 // toute la session et relance le service s'il meurt (conv-270, 2026-09-04).
 let brainSupervisionHandle: { stop: () => void } | null = null
 /** Relance automatique du moteur en développement (`relance-auto-moteur.ts`), coupée à la fermeture. */
-let relanceMoteurHandle: { arreter: () => void } | null = null
+let relanceMoteurHandle: Pick<RelanceMoteurArmee, 'arreter' | 'mettreEnFile'> | null = null
 
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
@@ -1668,6 +1669,10 @@ bus.onConversationRemoved = (id: string): void => {
  * promettre une relance qui n'arriverait pas.
  */
 bus.redemarrerApp = (): void => restartApplication(app)
+// FILE DE REDÉMARRAGE (conv-304) : quand d'autres agents tournent, `restart_app` dépose sa demande
+// dans la relance au repos au lieu de les couper. Pas de file (version installée) -> `false`.
+bus.conversationsEnVol = (): string[] => activeChatTurns.inFlightConversations()
+bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) ?? false
 // Outil `bureau_cache_fermer` (lot 1, conv-222) : meme racine de scripts que la TV et les gestes,
 // `app.asar.unpacked` une fois installee.
 bus.fermerBureauCache = (demande) =>

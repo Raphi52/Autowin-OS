@@ -102,6 +102,83 @@ describe('restart_app', () => {
     expect(consommerReprise(ensureAutowinAppData())).toBeNull()
   })
 
+  /*
+   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : conv-303 tournait ; le seul
+   * redemarrage offert la coupait, l'agent a pose un `ask` au lieu d'agir. « J'ai un systeme pour
+   * mettre le redemarrage en queue, tu aurais du l'utiliser. »
+   */
+  it('d autres agents tournent : met le redemarrage EN FILE au lieu de les couper', async () => {
+    vi.useFakeTimers()
+    const bus = new AppCommandBus(os, () => undefined)
+    const relance = vi.fn()
+    const demandes: Array<{ cause: string; avantRelance?: () => void }> = []
+    bus.redemarrerApp = relance
+    bus.conversationsEnVol = () => ['conv-304', 'conv-303']
+    bus.redemarrerAuRepos = (demande) => {
+      demandes.push(demande)
+      return true
+    }
+
+    const result = await bus.exec(
+      'restart_app',
+      { consigne: 'vérifie le bloc Étapes sur un vrai tour', raison: 'claude.ts modifié' },
+      'conv-304'
+    )
+
+    const data = result.data as { enFile?: boolean; attend?: string[]; detail: string }
+    expect(result.ok).toBe(true)
+    expect(data.enFile).toBe(true)
+    expect(data.attend).toEqual(['conv-303'])
+    expect(data.detail).toMatch(/ne demande rien à l’utilisateur/)
+    vi.runAllTimers()
+    expect(relance).not.toHaveBeenCalled()
+    expect(demandes).toHaveLength(1)
+    expect(demandes[0]!.cause).toBe('restart_app (conv-304) — claude.ts modifié')
+    // La consigne est sur le disque, et la file la repose (horodatage frais) juste avant de relancer.
+    expect(consommerReprise(ensureAutowinAppData())).toMatchObject({ conversationId: 'conv-304' })
+    demandes[0]!.avantRelance?.()
+    expect(consommerReprise(ensureAutowinAppData())).toMatchObject({
+      consigne: 'vérifie le bloc Étapes sur un vrai tour'
+    })
+    vi.useRealTimers()
+  })
+
+  it('d autres agents tournent et AUCUNE file : ne coupe personne et le dit', async () => {
+    vi.useFakeTimers()
+    const bus = new AppCommandBus(os, () => undefined)
+    const relance = vi.fn()
+    bus.redemarrerApp = relance
+    bus.conversationsEnVol = () => ['conv-303']
+    bus.redemarrerAuRepos = () => false
+
+    const result = await bus.exec('restart_app', { consigne: 'reprends' }, 'conv-304')
+
+    const data = result.data as { redemarre: boolean; detail: string }
+    expect(data.redemarre).toBe(false)
+    expect(data.detail).toMatch(/conv-303 tourne encore/)
+    vi.runAllTimers()
+    expect(relance).not.toHaveBeenCalled()
+    expect(consommerReprise(ensureAutowinAppData())).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('seule la conversation courante tourne : redemarrage immediat, comme avant', async () => {
+    vi.useFakeTimers()
+    const bus = new AppCommandBus(os, () => undefined)
+    const relance = vi.fn()
+    const file = vi.fn(() => true)
+    bus.redemarrerApp = relance
+    bus.conversationsEnVol = () => ['conv-304']
+    bus.redemarrerAuRepos = file
+
+    await bus.exec('restart_app', { consigne: 'reprends' }, 'conv-304')
+    vi.runAllTimers()
+
+    expect(file).not.toHaveBeenCalled()
+    expect(relance).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
   it('est publiee dans le catalogue offert au modele', () => {
     const bus = new AppCommandBus(os, () => undefined)
     expect(bus.catalog().map((c) => c.name)).toContain('restart_app')
