@@ -1215,7 +1215,9 @@ export const CATALOG: CommandSpec[] = [
       'decision lui appartient vraiment (un choix entre approches, une autorisation) plutot que de ' +
       'terminer par une question en prose, qui l’oblige a retaper sa reponse. ATTENTION : `ask` ' +
       'CLOT TON TOUR, tu ne reprends pas la main apres — ce que l’utilisateur doit voir pour ' +
-      'choisir (maquettes, comparaison) va EN ENTIER dans le MEME message, jamais « a suivre »',
+      'choisir (maquettes, comparaison) va EN ENTIER dans le MEME message, jamais « a suivre ». ' +
+      'Jamais pour choisir entre les propositions d’un /draft : ce choix passe par les boutons de ' +
+      'son bloc (scripts/draft-carrousel.mjs)',
     args: {
       question: 'la question, en une phrase',
       options:

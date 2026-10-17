@@ -310,6 +310,11 @@ export function buildChatPilotagePrompt(
     `termine pas par une question en prose quand tu peux offrir le choix : cela oblige ` +
     `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
     `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon. ` +
+    // MESURE 2026-10-17 : tours /draft c7d72274 (conv-310), 4c898868 (conv-311), 938a67c1
+    // (conv-312) finis par `ask` sans bloc de choix ; ce paragraphe ne nommait pas l'exception.
+    `EXCEPTION /draft : le choix entre les propositions d'un /draft se fait par les boutons de ` +
+    `son bloc de choix (le carrousel de \`scripts/draft-carrousel.mjs\`, sujet 3D compris), ` +
+    `JAMAIS par \`ask\` — le pilote refuse ce \`ask\`. ` +
     // MESURE 2026-10-10 (conv-171, /draft) : `ask` emis avec « la galerie suit » ; le pilote clot le
     // tour des qu'une question est posee (agent-pilot.ts, « UNE QUESTION CLOT LE TOUR »), donc
     // l'utilisateur a recu les boutons SANS les maquettes a choisir.
