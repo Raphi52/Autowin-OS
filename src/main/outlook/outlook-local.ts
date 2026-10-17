@@ -133,7 +133,19 @@ export interface OutlookGatewayOptions {
     piecesPath?: string
   ) => Promise<number>
   now?: () => number
+  /**
+   * Passerelle HORS SERVICE : aucun script lancé, aucun Outlook touché, chaque geste rend cette
+   * raison. Pour l'instance de test CACHÉE (conv-1016, 2026-10-17) : son Accueil lisait le vrai
+   * profil par COM, et Windows démarre Outlook dans le bureau de l'APPELANT. Mesure : trois
+   * OUTLOOK.EXE vivaient dans les bureaux ui-capture-*, aucun sur l'écran de l'utilisateur, et ces
+   * bureaux survivaient à leur capture.
+   */
+  horsService?: string
 }
+
+/** La raison rendue par la passerelle de l'instance de test cachée (index.ts). */
+export const OUTLOOK_HORS_INSTANCE_CACHEE =
+  "Outlook n'est pas lu dans une instance de test cachée : elle démarrerait ton Outlook dans un bureau invisible."
 
 const DEFAULT_TTL_MS = 60_000
 /** Au-delà, on considère qu'Outlook ne répondra pas : il vaut mieux une erreur nommée qu'une attente. */
@@ -432,6 +444,7 @@ export class OutlookLocalGateway {
     piecesPath?: string
   ) => Promise<number>
   private readonly now: () => number
+  private readonly horsService: string | undefined
   private cache: { at: number; result: OutlookGatewayResult } | null = null
   /** Lecture en cours : deux widgets qui interrogent en même temps ne doivent lancer QU'UN script. */
   private pending: Promise<OutlookGatewayResult> | null = null
@@ -446,10 +459,18 @@ export class OutlookLocalGateway {
     this.lecteurCorps = options.lecteurCorps ?? defaultLecteurCorps
     this.redacteur = options.redacteur ?? defaultRedacteur
     this.now = options.now ?? (() => Date.now())
+    this.horsService = options.horsService?.trim() || undefined
+  }
+
+  /** Le refus d'une passerelle hors service, ou null : tous les gestes passent par lui AVANT tout script. */
+  private refusHorsService(): { ok: false; erreur: string } | null {
+    return this.horsService ? { ok: false, erreur: this.horsService } : null
   }
 
   /** L'instantané, depuis le cache s'il est encore frais. */
   async snapshot(force = false): Promise<OutlookGatewayResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     if (!force && this.cache && this.now() - this.cache.at < this.ttlMs) {
       return this.cache.result
     }
@@ -501,6 +522,8 @@ export class OutlookLocalGateway {
     id: unknown,
     max = 8_000
   ): Promise<{ ok: true; corps: string } | { ok: false; erreur: string }> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
       return { ok: false, erreur: OPEN_FAILURES[2] }
     }
@@ -537,6 +560,8 @@ export class OutlookLocalGateway {
    * qui rend l'intégration acceptable. Ouvrir une fenêtre ne modifie rien dans la boîte.
    */
   async openItem(id: unknown): Promise<OutlookOpenResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     // La validation est ici AUSSI, et pas seulement dans le script : cet identifiant vient du
     // renderer par IPC, et une frontière de confiance ne se garde pas d'un seul côté.
     if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
@@ -572,6 +597,8 @@ export class OutlookLocalGateway {
    * destinataire, et la LISTE des chemins voyage par un fichier UTF-8 comme le corps.
    */
   async replyToItem(id: unknown, corps: unknown, pieces?: unknown): Promise<OutlookReplyResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
       return { ok: false, erreur: REPLY_FAILURES[2] }
     }
@@ -621,6 +648,8 @@ export class OutlookLocalGateway {
    *    marquage pendant toute sa durée de vie, et le correctif ne se verrait pas.
    */
   async markRead(ids: unknown): Promise<OutlookMarkReadResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     // Filtré et non refusé en bloc : un seul identifiant abîmé ne doit pas empêcher de marquer les
     // autres messages du fil. La validation est ici AUSSI, pas seulement dans le script — ces
     // identifiants viennent du renderer par IPC.
@@ -675,6 +704,8 @@ export class OutlookLocalGateway {
     corps: unknown,
     pieces?: unknown
   ): Promise<OutlookNewMessageResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
     if (typeof adresse !== 'string' || !ADRESSE_SMTP.test(adresse.trim())) {
       return { ok: false, erreur: NEW_FAILURES[2] }
     }

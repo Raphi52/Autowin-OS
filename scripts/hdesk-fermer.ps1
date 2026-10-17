@@ -18,8 +18,18 @@
   Geste : WM_CLOSE aux fenetres (fermeture douce), attente -DelaiDouxSecondes, puis arret force PAR
   PID de ce qui reste. La fiche est retiree quand plus rien ne vit : l'identifiant est libre.
 
+  BUREAU SANS FICHE (-SansFiche, conv-1016, 2026-10-17) : les bureaux des captures d'interface
+  (ui-capture-<pid>, preuve-<pid>) naissent par scripts/autowin-headless.ps1, qui n'ecrit pas ce
+  registre. Mesure du 2026-10-17 : trois bureaux ui-capture-* d'hier survivaient a leur capture,
+  tenus par OUTLOOK.EXE et KoffBackend.exe que l'instance de test y avait fait demarrer, et la vue
+  « Bureaux caches » refusait de les fermer (« Ce bureau n'a pas de fiche »). -SansFiche n'est passe
+  QUE par cette vue, sur le geste de l'utilisateur : il ne vise que les processus qui ont une fenetre
+  sur AutowinTest_<id> et leurs descendants, avec les MEMES epargnes. Un bureau qui a une fiche est
+  refuse dans ce mode : son fil fait foi, le refus « autre conversation » des agents reste entier.
+
   Usage : powershell -NoProfile -File scripts/hdesk-fermer.ps1 -Id <id> [-Conversation <fil>] [-DelaiDouxSecondes 5]
-  Sortie : JSON {id, desktop, ferme, dejaFerme, fermesDoucement, forces, survivants, epargnes, ficheRetiree, erreur?}
+          powershell -NoProfile -File scripts/hdesk-fermer.ps1 -Id <id> -SansFiche [-DelaiDouxSecondes 5]
+  Sortie : JSON {id, desktop, ferme, dejaFerme, fermesDoucement, forces, survivants, epargnes, ficheRetiree, sansFiche?, erreur?}
   Codes : 0 ferme (ou deja ferme) · 1 entree invalide / echec · 2 aucun bureau a ce nom
           5 bureau d'une AUTRE conversation (rien n'est touche) · 6 des processus survivent
 #>
@@ -29,7 +39,9 @@ param(
   [string]$Conversation = '',
   [int]$DelaiDouxSecondes = 5,
   # Registre des bureaux. Defaut : %LOCALAPPDATA%\autowin-hdesk. Les TESTS passent un dossier temporaire.
-  [string]$Registre = ''
+  [string]$Registre = '',
+  # Bureau SANS fiche au registre (voir l'en-tete) : aucun fil n'est exige, ni accepte a la place d'une fiche.
+  [switch]$SansFiche
 )
 $ErrorActionPreference = 'Stop'
 
@@ -45,17 +57,25 @@ trap { Rendre @{ id = $Id; ferme = $false; erreur = $_.Exception.Message } 1 }
 if ([string]::IsNullOrWhiteSpace($Id)) { Rendre @{ id = $Id; ferme = $false; erreur = 'Identifiant absent : passe -Id <id du bureau cache>.' } 1 }
 if ($Id -notmatch '^[a-zA-Z0-9_-]+$') { Rendre @{ id = $Id; ferme = $false; erreur = "Identifiant invalide : '$Id' (lettres, chiffres, - et _ seulement)." } 1 }
 if ($DelaiDouxSecondes -lt 1 -or $DelaiDouxSecondes -gt 30) { Rendre @{ id = $Id; ferme = $false; erreur = "Delai doux hors bornes : $DelaiDouxSecondes (1 a 30 secondes)." } 1 }
-if ([string]::IsNullOrWhiteSpace($Conversation)) { $Conversation = [string]$env:AUTOWIN_CONVERSATION_ID }
-if ([string]::IsNullOrWhiteSpace($Conversation)) { Rendre @{ id = $Id; ferme = $false; erreur = 'Fil absent : passe -Conversation <id> (ou lance depuis un agent Autowin, qui pose AUTOWIN_CONVERSATION_ID).' } 1 }
+if (-not $SansFiche) {
+  if ([string]::IsNullOrWhiteSpace($Conversation)) { $Conversation = [string]$env:AUTOWIN_CONVERSATION_ID }
+  if ([string]::IsNullOrWhiteSpace($Conversation)) { Rendre @{ id = $Id; ferme = $false; erreur = 'Fil absent : passe -Conversation <id> (ou lance depuis un agent Autowin, qui pose AUTOWIN_CONVERSATION_ID).' } 1 }
+}
 
 $dossier = if ([string]::IsNullOrWhiteSpace($Registre)) { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk' } else { $Registre }
 $fichePath = Join-Path $dossier "$Id.json"
 $bureau = "AutowinTest_$Id"
-if (-not (Test-Path -LiteralPath $fichePath)) {
+$fiche = $null
+if (Test-Path -LiteralPath $fichePath) {
+  $fiche = Get-Content -LiteralPath $fichePath -Raw | ConvertFrom-Json
+  if ($SansFiche) {
+    Rendre @{ id = $Id; desktop = $bureau; ferme = $false; conversationOccupante = [string]$fiche.conversationId
+      erreur = "Bureau '$Id' inscrit au registre (fil $($fiche.conversationId)) : il se ferme par son fil, pas sans fiche. Rien n'a ete touche." } 1
+  }
+} elseif (-not $SansFiche) {
   Rendre @{ id = $Id; desktop = $bureau; ferme = $false; erreur = "Aucun bureau cache a ce nom ('$Id') dans le registre : rien n'a ete ferme." } 2
 }
-$fiche = Get-Content -LiteralPath $fichePath -Raw | ConvertFrom-Json
-if ([string]$fiche.conversationId -ne $Conversation) {
+if ($fiche -and [string]$fiche.conversationId -ne $Conversation) {
   Rendre @{ id = $Id; desktop = $bureau; ferme = $false; conversationOccupante = [string]$fiche.conversationId
     erreur = "Bureau '$Id' d'une autre conversation ($($fiche.conversationId)) : on ne ferme que ses propres bureaux. Rien n'a ete touche." } 5
 }
@@ -111,6 +131,11 @@ function PidsAvecFenetre([string]$nom) {
 }
 function Vivant([int]$p) { return [bool](Get-Process -Id $p -ErrorAction SilentlyContinue) }
 
+# Sans fiche, seul le bureau Windows atteste que l'identifiant designe quelque chose.
+if (-not $fiche -and $null -eq [AutowinHdeskFermeur]::Fenetres($bureau)) {
+  Rendre @{ id = $Id; desktop = $bureau; ferme = $false; sansFiche = $true; erreur = "Aucun bureau cache '$bureau' vivant : rien n'a ete ferme." } 2
+}
+
 $procs = @{}
 foreach ($p in @(Get-CimInstance Win32_Process)) { $procs[[int]$p.ProcessId] = $p }
 
@@ -134,7 +159,7 @@ while ($chaine -and $procs.ContainsKey([int]$chaine) -and -not $intouchables.Con
 
 # --- Ce qui est vise ---
 $graines = @{}
-$pidFiche = [int]$fiche.pid
+$pidFiche = if ($fiche) { [int]$fiche.pid } else { 0 }
 if ($pidFiche -gt 0 -and $procs.ContainsKey($pidFiche)) {
   $p = $procs[$pidFiche]
   $memeExe = (-not $fiche.executable) -or ([string]$p.ExecutablePath -ieq [string]$fiche.executable)
@@ -165,9 +190,9 @@ while ($file.Count -gt 0) {
 
 $vivants = @($cibles.Keys | Where-Object { Vivant $_ })
 if ($vivants.Count -eq 0) {
-  Remove-Item -LiteralPath $fichePath -Force -ErrorAction SilentlyContinue
+  if ($fiche) { Remove-Item -LiteralPath $fichePath -Force -ErrorAction SilentlyContinue }
   Rendre @{ id = $Id; desktop = $bureau; ferme = $true; dejaFerme = $true; fermesDoucement = @(); forces = @(); survivants = @()
-    epargnes = @($epargnes); ficheRetiree = -not (Test-Path -LiteralPath $fichePath) } 0
+    epargnes = @($epargnes); ficheRetiree = [bool]$fiche -and -not (Test-Path -LiteralPath $fichePath); sansFiche = -not $fiche } 0
 }
 
 # --- 1. Fermeture douce : WM_CLOSE aux fenetres visibles des cibles, sur CE bureau seulement ---
@@ -192,12 +217,12 @@ while ((Get-Date) -lt $limite -and @($forces | Where-Object { Vivant $_ }).Count
 $survivants = @($cibles.Keys | Where-Object { Vivant $_ } | ForEach-Object { [int]$_ })
 
 $ficheRetiree = $false
-if ($survivants.Count -eq 0) {
+if ($fiche -and $survivants.Count -eq 0) {
   Remove-Item -LiteralPath $fichePath -Force -ErrorAction SilentlyContinue
   $ficheRetiree = -not (Test-Path -LiteralPath $fichePath)
 }
 $champs = @{ id = $Id; desktop = $bureau; ferme = ($survivants.Count -eq 0); dejaFerme = $false
   fermesDoucement = @($fermesDoucement | ForEach-Object { [int]$_ }); forces = @($forces); survivants = @($survivants)
-  epargnes = @($epargnes); ficheRetiree = $ficheRetiree }
+  epargnes = @($epargnes); ficheRetiree = $ficheRetiree; sansFiche = -not $fiche }
 if ($survivants.Count -gt 0) { $champs.erreur = "Processus encore vivants apres l'arret force : $($survivants -join ', ')." }
 Rendre $champs $(if ($survivants.Count -eq 0) { 0 } else { 6 })
