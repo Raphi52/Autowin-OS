@@ -223,6 +223,81 @@ describe('relance automatique du moteur', () => {
   })
 })
 
+/**
+ * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : l'agent devait redémarrer
+ * pendant que conv-303 tournait. Son seul outil coupait conv-303 : il a posé un `ask` (« attends, je
+ * relancerai moi-même » / « redémarre et coupe conv-303 »). L'utilisateur : « j'ai un système pour
+ * mettre le redémarrage en queue, tu aurais dû l'utiliser ». La demande entre dans CETTE file.
+ */
+describe('redémarrage demandé, mis en file', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('attend que plus aucun agent ne tourne, prévient, repose la consigne PUIS relance', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    const ordre: string[] = []
+    h.etat.repos = false
+    expect(
+      h.armee.mettreEnFile({
+        cause: 'restart_app (conv-304)',
+        avantRelance: () => ordre.push(`consigne (relances=${h.etat.relances.length})`)
+      })
+    ).toBe(true)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(h.etat.relances).toEqual([])
+    expect(h.armee.etat().demandeEnFile).toBe('restart_app (conv-304)')
+
+    h.etat.repos = true
+    await vi.advanceTimersByTimeAsync(250)
+    expect(h.etat.annonces.at(-1)).toMatch(/^Redémarrage demandé \(restart_app \(conv-304\)\)/)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(ordre).toEqual(['consigne (relances=0)'])
+    expect(h.etat.relances).toHaveLength(1)
+    expect(h.etat.relances[0]).toMatch(/^restart_app \(conv-304\) — redémarrage en file/)
+  })
+
+  it('une modification sans effet sur le code compilé ne retire PAS la demande', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    h.etat.repos = false
+    h.armee.mettreEnFile({ cause: 'restart_app (conv-304)' })
+    h.modifier()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(h.armee.etat().relanceEnAttente).toBe(true)
+    h.etat.repos = true
+    await vi.advanceTimersByTimeAsync(700)
+    expect(h.etat.relances).toHaveLength(1)
+  })
+
+  it('moteur cassé : la demande attend la correction, jamais une relance vers du code cassé', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    h.etat.prochaine = { ok: false, erreur: 'error TS2304: cannot find name' }
+    h.modifier()
+    await vi.advanceTimersByTimeAsync(200)
+    h.armee.mettreEnFile({ cause: 'restart_app (conv-304)' })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(h.etat.relances).toEqual([])
+
+    h.etat.prochaine = { ok: true, empreinte: 'A' }
+    h.modifier()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(h.etat.relances).toHaveLength(1)
+  })
+
+  it('file déjà partie : la demande est refusée au lieu d’être promise', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    h.armee.arreter()
+    expect(h.armee.mettreEnFile({ cause: 'restart_app (conv-304)' })).toBe(false)
+  })
+})
+
 describe('relanceAutoMoteurPermise', () => {
   const base = {
     isPackaged: false,

@@ -135,13 +135,32 @@ export function resumerErreurDeCompilation(erreur: string): string {
   return ligne.length > 220 ? `${ligne.slice(0, 220)}…` : ligne || 'motif non rapporté'
 }
 
+/**
+ * Redémarrage DEMANDÉ (par `restart_app`) alors que d'autres agents tournent : il entre dans la MÊME
+ * file que la relance du moteur — même repos exigé, même préavis, même report si un agent démarre.
+ * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : faute de cette entrée, le seul
+ * redémarrage offert à l'agent coupait conv-303 ; il a renvoyé le choix à l'utilisateur par un `ask`.
+ */
+export interface DemandeDeRedemarrage {
+  /** Écrite dans le journal des arrêts à la relance. */
+  cause: string
+  /** Appelé juste avant la relance : repose la consigne de reprise avec un horodatage frais. */
+  avantRelance?: () => void
+}
+
 export interface RelanceMoteurArmee {
   arreter(): void
+  /**
+   * Met un redémarrage en file : il partira au prochain repos, après le préavis. Rend `false` si la
+   * file est déjà arrêtée (relance partie, surveillance coupée) — rien n'est alors promis.
+   */
+  mettreEnFile(demande: DemandeDeRedemarrage): boolean
   /** Pour le diagnostic et les tests. */
   etat(): {
     empreinteChargee: string | null | undefined
     relanceEnAttente: boolean
     preavisEnCours: boolean
+    demandeEnFile: string | null
   }
 }
 
@@ -165,6 +184,8 @@ export function armerRelanceAutoMoteur(
   let derniereErreurAnnoncee = ''
   let arrete = false
   let relancee = false
+  /** Redémarrage demandé explicitement : il survit à une compilation « sans effet ». */
+  let demande: DemandeDeRedemarrage | null = null
   let attente: ReturnType<typeof setTimeout> | null = null
   let verification: ReturnType<typeof setInterval> | null = null
 
@@ -205,7 +226,9 @@ export function armerRelanceAutoMoteur(
       finPreavis = maintenant + reglages.preavisMs
       const secondes = Math.round(reglages.preavisMs / 1000)
       deps.annoncer(
-        `Moteur modifié : Autowin redémarre dans ${secondes} s pour le charger (aucun agent ne tourne). Un message envoyé d'ici là reporte le redémarrage.`
+        demande
+          ? `Redémarrage demandé (${demande.cause}) : Autowin redémarre dans ${secondes} s (aucun agent ne tourne). Un message envoyé d'ici là reporte le redémarrage.`
+          : `Moteur modifié : Autowin redémarre dans ${secondes} s pour le charger (aucun agent ne tourne). Un message envoyé d'ici là reporte le redémarrage.`
       )
       journal(`préavis de ${secondes} s`)
       return
@@ -213,6 +236,18 @@ export function armerRelanceAutoMoteur(
     if (maintenant < finPreavis) return
     relancee = true
     arreterTout()
+    if (demande) {
+      journal(`relance demandée : ${demande.cause}`)
+      try {
+        demande.avantRelance?.()
+      } catch (e) {
+        // La consigne n'a pas pu être reposée : on relance quand même (l'utilisateur a été prévenu
+        // par le préavis), mais la perte se lit dans le journal au lieu de disparaître.
+        journal(`consigne de reprise non reposée : ${e instanceof Error ? e.message : String(e)}`)
+      }
+      deps.relancer(`${demande.cause} — redémarrage en file, parti au repos (aucun agent en cours)`)
+      return
+    }
     journal('relance : moteur modifié, aucun agent en cours')
     deps.relancer('moteur modifie — relance automatique au repos (aucun agent en cours)')
   }
@@ -261,6 +296,11 @@ export function armerRelanceAutoMoteur(
     derniereErreurAnnoncee = ''
     if (empreinteChargee && resultat.empreinte === empreinteChargee) {
       // Commentaire, test, retour arrière : le code compilé est celui qui tourne déjà.
+      if (demande) {
+        // Le moteur n'a pas changé, mais un redémarrage a été DEMANDÉ : il reste en file.
+        journal('modification sans effet, redémarrage demandé maintenu')
+        return attendreLeRepos()
+      }
       annulerRelance()
       journal('modification sans effet sur le code compilé : pas de relance')
       return
@@ -321,10 +361,22 @@ export function armerRelanceAutoMoteur(
 
   return {
     arreter: arreterTout,
+    mettreEnFile: (nouvelle) => {
+      if (arrete || relancee) return false
+      // Une seconde demande remplace la première : une seule relance, avec la consigne la plus récente.
+      demande = nouvelle
+      journal(`redémarrage mis en file : ${nouvelle.cause}`)
+      // Un moteur qui ne compile pas garde la relance bloquée (`annulerRelance`) : la demande reste
+      // mémorisée et repart à la prochaine compilation réussie, jamais vers un code cassé.
+      if (derniereErreurAnnoncee) return true
+      attendreLeRepos()
+      return true
+    },
     etat: () => ({
       empreinteChargee,
       relanceEnAttente,
-      preavisEnCours: finPreavis !== null
+      preavisEnCours: finPreavis !== null,
+      demandeEnFile: demande?.cause ?? null
     })
   }
 }
