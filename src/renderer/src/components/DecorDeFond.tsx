@@ -78,82 +78,111 @@ export function DecorDeFond(): React.JSX.Element {
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
-    const choisie = (window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant
-    const scene: DecorScene | null = createDecorScene(choisie)
-    // Pas de WebGL (happy-dom en test, pilote absent) : l'app s'affiche sans decor, ce qui est le
-    // comportement voulu — un decor n'est pas une dependance de la fonction.
-    if (!scene) return
-    host.appendChild(scene.canvas)
-
-    const reduceMotion =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    /**
-     * Redimensionne le decor, PUIS le redessine.
+    /*
+     * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17, conv-301).
      *
-     * Le redessin n'est pas une precaution : sans lui, le decor disparait. Cause localisee le
-     * 2026-08-21 sur une machine ou « reduire les animations » est ACTIF — celle de l'utilisateur.
-     * `renderer.setSize` realloue le tampon de dessin : redimensionner repositionnait donc
-     * correctement tous les elements sur un tampon que plus personne ne remplissait.
+     * En developpement, `<StrictMode>` (main.tsx) monte cet effet, le demonte et le remonte
+     * AUSSITOT, d'un seul tenant (`commitDoubleInvokeEffectsInDEV`, pile relevee par sonde CDP).
+     * Construire ici sur-le-champ batissait donc DEUX scenes a chaque ouverture de l'Accueil : un
+     * contexte WebGL, ~0,5 s de construction sur le fil principal et une compilation jetes a la
+     * poubelle 0,2 a 0,8 s plus tard -- sur la machine de l'utilisateur, qui fait tourner Autowin en
+     * developpement. La construction part donc en MICROTACHE, et le nettoyage l'annule : seule la
+     * derniere programmation survit au double montage. En production, rien ne change de visible --
+     * une microtache s'execute avant la prochaine image.
      */
-    let derniereTaille: { w: number; h: number } | null = null
-    const fit = (): void => {
-      const w = host.clientWidth
-      const h = host.clientHeight
-      // L'observateur notifie a la moindre secousse de mise en page, taille identique comprise. Or
-      // `resize` realloue toute la chaine de post-traitement : le payer pour rien figeait la
-      // fenetre (5,6 s et 6,3 s mesurees le 2026-09-08, sans tache longue JavaScript associee).
-      if (!doitRedimensionner(derniereTaille, w, h)) return
-      derniereTaille = { w, h }
-      scene.resize(w, h)
-      scene.render(tempsDecor(performance.now() / 1000, reduceMotion), { x: 0, y: 0 })
-    }
-    fit()
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
-    observer?.observe(host)
-    window.addEventListener('resize', fit)
-
-    const aim = { x: 0, y: 0 }
-    const look = { x: 0, y: 0 }
-    const onPointerMove = (event: PointerEvent): void => {
-      aim.x = (event.clientX / window.innerWidth - 0.5) * 2
-      aim.y = (event.clientY / window.innerHeight - 0.5) * 2
-    }
-    window.addEventListener('pointermove', onPointerMove)
-
-    let frame = 0
-    let last = 0
-    const draw = (time: number): void => {
-      frame = requestAnimationFrame(draw)
-      // Suspendu quand le document est CACHE : faire tourner un rendu 3D pour une fenetre que
-      // personne ne regarde coute un GPU entier pour rien. Mais une autre VUE affichee ne suspend
-      // plus rien — c'est desormais le fond de l'application, pas celui d'un ecran.
-      if (typeof document !== 'undefined' && document.hidden) return
-      // ~40 images/s : la scene derive lentement, doubler la cadence ne se voit pas et double la
-      // facture d'une fenetre qui reste ouverte toute la journee.
-      if (time - last < 25) return
-      last = time
-      look.x += (aim.x - look.x) * 0.05
-      look.y += (aim.y - look.y) * 0.05
-      /*
-       * « MOUVEMENT REDUIT » REDUIT LE MOUVEMENT, il n'efface pas le decor. Le temps est RALENTI et
-       * non FIGE : le figer rendait le nuage immobile (plainte « le nuage est statique », conv-1476),
-       * le decor n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor`. La parallaxe
-       * curseur reste : elle ne bouge QUE quand l'utilisateur bouge, c'est de la manipulation directe.
-       */
-      scene.render(tempsDecor(time / 1000, reduceMotion), look)
-    }
-    frame = requestAnimationFrame(draw)
-
+    let annule = false
+    let arreter: (() => void) | null = null
+    queueMicrotask(() => {
+      if (annule) return
+      arreter = monterDecor(host)
+    })
     return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('resize', fit)
-      observer?.disconnect()
-      scene.dispose()
+      annule = true
+      arreter?.()
     }
   }, [themeApplique])
 
   return <div className="decor-de-fond" ref={hostRef} aria-hidden="true" />
+}
+
+/**
+ * Construit la scene dans `host`, lance sa boucle, et rend de quoi tout arreter et liberer.
+ * Rend `null` sans WebGL (happy-dom en test, pilote absent).
+ */
+function monterDecor(host: HTMLDivElement): (() => void) | null {
+  const choisie = (window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant
+  const scene: DecorScene | null = createDecorScene(choisie)
+  // Pas de WebGL (happy-dom en test, pilote absent) : l'app s'affiche sans decor, ce qui est le
+  // comportement voulu — un decor n'est pas une dependance de la fonction.
+  if (!scene) return null
+  host.appendChild(scene.canvas)
+
+  const reduceMotion =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  /**
+   * Redimensionne le decor, PUIS le redessine.
+   *
+   * Le redessin n'est pas une precaution : sans lui, le decor disparait. Cause localisee le
+   * 2026-08-21 sur une machine ou « reduire les animations » est ACTIF — celle de l'utilisateur.
+   * `renderer.setSize` realloue le tampon de dessin : redimensionner repositionnait donc
+   * correctement tous les elements sur un tampon que plus personne ne remplissait.
+   */
+  let derniereTaille: { w: number; h: number } | null = null
+  const fit = (): void => {
+    const w = host.clientWidth
+    const h = host.clientHeight
+    // L'observateur notifie a la moindre secousse de mise en page, taille identique comprise. Or
+    // `resize` realloue toute la chaine de post-traitement : le payer pour rien figeait la
+    // fenetre (5,6 s et 6,3 s mesurees le 2026-09-08, sans tache longue JavaScript associee).
+    if (!doitRedimensionner(derniereTaille, w, h)) return
+    derniereTaille = { w, h }
+    scene.resize(w, h)
+    scene.render(tempsDecor(performance.now() / 1000, reduceMotion), { x: 0, y: 0 })
+  }
+  fit()
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
+  observer?.observe(host)
+  window.addEventListener('resize', fit)
+
+  const aim = { x: 0, y: 0 }
+  const look = { x: 0, y: 0 }
+  const onPointerMove = (event: PointerEvent): void => {
+    aim.x = (event.clientX / window.innerWidth - 0.5) * 2
+    aim.y = (event.clientY / window.innerHeight - 0.5) * 2
+  }
+  window.addEventListener('pointermove', onPointerMove)
+
+  let frame = 0
+  let last = 0
+  const draw = (time: number): void => {
+    frame = requestAnimationFrame(draw)
+    // Suspendu quand le document est CACHE : faire tourner un rendu 3D pour une fenetre que
+    // personne ne regarde coute un GPU entier pour rien. Mais une autre VUE affichee ne suspend
+    // plus rien — c'est desormais le fond de l'application, pas celui d'un ecran.
+    if (typeof document !== 'undefined' && document.hidden) return
+    // ~40 images/s : la scene derive lentement, doubler la cadence ne se voit pas et double la
+    // facture d'une fenetre qui reste ouverte toute la journee.
+    if (time - last < 25) return
+    last = time
+    look.x += (aim.x - look.x) * 0.05
+    look.y += (aim.y - look.y) * 0.05
+    /*
+     * « MOUVEMENT REDUIT » REDUIT LE MOUVEMENT, il n'efface pas le decor. Le temps est RALENTI et
+     * non FIGE : le figer rendait le nuage immobile (plainte « le nuage est statique », conv-1476),
+     * le decor n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor`. La parallaxe
+     * curseur reste : elle ne bouge QUE quand l'utilisateur bouge, c'est de la manipulation directe.
+     */
+    scene.render(tempsDecor(time / 1000, reduceMotion), look)
+  }
+  frame = requestAnimationFrame(draw)
+
+  return () => {
+    cancelAnimationFrame(frame)
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('resize', fit)
+    observer?.disconnect()
+    scene.dispose()
+  }
 }
