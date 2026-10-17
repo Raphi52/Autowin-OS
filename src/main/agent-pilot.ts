@@ -2044,6 +2044,14 @@ export class AgentPilot {
      */
     let executesParCanalNatif = new Set<string>()
     let echecNatifCetteIteration = false
+    /*
+     * Les echecs directs de CETTE iteration encore NON rattrapes, par nom + cible (`cleDEchec`).
+     * Un tour d'outils directs tient en UN envoi : le modele y voit chaque resultat et rejoue sur
+     * place. Lever le drapeau au premier rouge sans jamais le baisser au vert relancait « ta
+     * derniere action a ECHOUE » apres une reparation deja faite (conv-302, 2026-10-17, tour
+     * 1201313c : typecheck rouge puis vert dans la meme reponse). Le drapeau suit donc ce registre.
+     */
+    const echecsNatifsNonRattrapes = new Set<string>()
     let rejeuNatifCetteIteration = false
     let iterationNatif = 0
     let appelNatifIndex = 0
@@ -2104,10 +2112,16 @@ export class AgentPilot {
         ...(r.attachments?.length ? { attachments: r.attachments } : {})
       })
       const compte = comptabiliserCommande(nom, args, r, actionId)
-      if (!compte.reussie) {
-        echecNatifCetteIteration = true
+      if (compte.reussie) echecsNatifsNonRattrapes.delete(cleDEchec(nom, args))
+      else {
+        echecsNatifsNonRattrapes.add(cleDEchec(nom, args))
         if (compte.rejeu) rejeuNatifCetteIteration = true
       }
+      echecNatifCetteIteration = echecsNatifsNonRattrapes.size > 0
+      // `comptabiliserCommande` leve aussi le drapeau de l'iteration au premier rouge. Pendant
+      // l'envoi, il ne porte que les appels directs (remis a plat au debut de l'iteration) : il suit
+      // donc le meme registre, sinon le vert d'une reprise sur place ne le baisserait jamais.
+      echecDeLaDerniereIteration = echecNatifCetteIteration
       return r
     }
     /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
@@ -2340,6 +2354,7 @@ export class AgentPilot {
       // Etat des outils directs pour CETTE iteration (partage entre ses tentatives d'envoi).
       executesParCanalNatif = new Set<string>()
       echecNatifCetteIteration = false
+      echecsNatifsNonRattrapes.clear()
       /*
        * Remis a plat ICI, au debut de chaque iteration — pas seulement dans la boucle des `<cmd>`,
        * qu'un tour 100 % outils directs n'atteint jamais. Sans cela, un `verify` direct rouge puis
