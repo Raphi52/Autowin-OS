@@ -344,7 +344,8 @@ import {
 } from './renderer-storage-migration'
 import { definirDossierModsAutowin, materializeClaudeAttachments, scriptDesGardesCourant } from './providers/claude'
 import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
+import { canonicalProjectPath } from '../shared/project-path'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
@@ -3016,6 +3017,13 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:dossiersClaudeCli', (event) => {
     assertTrustedRendererSender(event, 'Dossiers Claude CLI')
     return lireDossiersProjetsClaude()
+  })
+  // « This computer » dans le choix du dossier de travail (conv-298) : travailler sur la machine
+  // sans projet, comme claude.exe lancé depuis le dossier personnel. Le renderer n'a pas le
+  // disque : seul le main connaît ce dossier.
+  ipcMain.handle('os:dossierPersonnel', (event) => {
+    assertTrustedRendererSender(event, 'Dossier personnel')
+    return canonicalProjectPath(homedir()) ?? homedir()
   })
 
   // Les canaux du Brain (graphe 3D, recherche, boite de reception) vivent dans

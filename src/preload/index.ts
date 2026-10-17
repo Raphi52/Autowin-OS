@@ -703,6 +703,8 @@ const api = {
    * dossiers de travail, jamais le contenu du profil. Sert à pré-remplir la liste du Chat.
    */
   dossiersClaudeCli: (): Promise<string[]> => ipcRenderer.invoke('os:dossiersClaudeCli'),
+  /** Le dossier personnel de l'utilisateur : la cible de « This computer » dans le choix du dossier de travail. */
+  dossierPersonnel: (): Promise<string> => ipcRenderer.invoke('os:dossierPersonnel'),
   /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
   conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setInactive', id, on),

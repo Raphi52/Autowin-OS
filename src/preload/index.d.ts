@@ -542,6 +542,8 @@ interface ChatApi {
    * déclaration, ChatView ne pouvait pas typer l'appel (tsc rouge avant ajout, vert après).
    */
   dossiersClaudeCli: () => Promise<string[]>
+  /** Le dossier personnel (cible de « This computer ») ; absent d'un preload d'avant redémarrage. */
+  dossierPersonnel?: () => Promise<string>
   conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   /**
