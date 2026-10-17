@@ -7,8 +7,12 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
+import { execFile } from 'node:child_process'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { isForbidden } from './edit-file-command'
+
+const executer = promisify(execFile)
 
 /**
  * LA VERIFICATION NE DOIT PAS SE JOUER DANS UN DOSSIER QUE QUELQU'UN D'AUTRE ECRIT.
@@ -198,6 +202,54 @@ export function synchroniserBureauDeVerification(
     }
   }
   return { copies, supprimes, ignores }
+}
+
+/**
+ * CE QUI EST COMMITE LOCALEMENT APRES LE COMMIT DE LA COPIE (conv-313, 2026-10-17).
+ *
+ * La copie nait sur `origin/main`, pas sur le commit LOCAL. Reporter seulement les fichiers non
+ * commites laissait donc dans la copie la VIEILLE version de tout fichier commite localement mais
+ * pas encore pousse. Mesure : branche locale en avance de 13 commits, la copie recevait le
+ * `src/main/index.ts` modifie mais gardait les anciens `commands.ts` et `relance-auto-moteur.ts`.
+ * `verify type:typecheck` rendait le code 2, `npm run typecheck` 0 dans le vrai depot : faux rouge.
+ *
+ * Rend les chemins (relatifs a l'espace de travail) qui different entre le commit de la copie et
+ * le commit local, dans les DEUX sens : un fichier pousse sur `origin` mais absent en local est
+ * aussi a remettre a l'etat local. `--no-renames` nomme l'ancien ET le nouveau chemin d'un
+ * renommage, sinon l'ancien survivrait dans la copie. `null` quand git ne repond pas : l'appelant
+ * le dit, au lieu de passer pour une copie complete.
+ */
+export async function fichiersCommitesHorsDeLaCopie(
+  workspace: string,
+  bureau: string
+): Promise<string[] | null> {
+  const git = async (cwd: string, args: string[]): Promise<string> =>
+    (
+      await executer('git', args, {
+        cwd,
+        windowsHide: true,
+        maxBuffer: 16 * 1024 * 1024,
+        encoding: 'utf8'
+      })
+    ).stdout
+  try {
+    const base = (await git(bureau, ['rev-parse', 'HEAD'])).trim()
+    const local = (await git(workspace, ['rev-parse', 'HEAD'])).trim()
+    if (!base || !local) return null
+    if (base === local) return []
+    const sortie = await git(workspace, [
+      'diff',
+      '--relative',
+      '--name-only',
+      '--no-renames',
+      '-z',
+      base,
+      local
+    ])
+    return sortie.split('\0').filter(Boolean)
+  } catch {
+    return null
+  }
 }
 
 /** Le dossier existe-t-il vraiment ? Une copie annoncee mais absente ne doit pas etre utilisee. */
