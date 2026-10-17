@@ -10,6 +10,7 @@ import type { TraceEventV1 } from './activity/trace-event'
 import type { Conversation } from './store/conversations'
 import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
 import { redactTrace } from './activity/trace-redact'
+import { dossiersDeSkills } from './skill-pipeline'
 
 const MESSAGE_LIMIT = 24
 const MESSAGE_CAP = 700
@@ -803,7 +804,85 @@ export function kaizenNamedConversationId(task: string): string | undefined {
 
 interface ConversationDatee {
   id: string
+  title?: unknown
   messages: ReadonlyArray<{ role: string; content: unknown; ts?: number | string }>
+}
+
+const instantDe = (valeur: number | string | undefined): number =>
+  typeof valeur === 'number' ? valeur : Date.parse(valeur ?? '') || 0
+
+/** Les conversations ou `/<commande>` a ete TAPE, la plus recente d'abord. */
+function conversationsOuTapee(
+  commande: string,
+  conversations: readonly ConversationDatee[]
+): Array<{ id: string; derniere: number }> {
+  // `commande` ne contient que [a-z0-9-] (motifs des appelants) : rien a echapper.
+  const invocation = new RegExp(String.raw`^\s*\/${commande}(?=\s|$)`, 'i')
+  return conversations
+    .map((conversation) => {
+      const dates = conversation.messages
+        .filter(
+          (message) =>
+            message.role === 'user' &&
+            typeof message.content === 'string' &&
+            invocation.test(message.content)
+        )
+        .map((message) => instantDe(message.ts))
+      return { id: conversation.id, derniere: dates.length ? Math.max(...dates) : undefined }
+    })
+    .filter(
+      (candidate): candidate is { id: string; derniere: number } => candidate.derniere !== undefined
+    )
+    .sort((a, b) => b.derniere - a.derniere)
+}
+
+/**
+ * Conversation NEUVE : cote utilisateur, elle ne contient que la demande /kaizen elle-meme, et son
+ * dossier serait vide par construction. Absente de la liste = pas neuve (on ne sait pas).
+ */
+function estConversationNeuve(
+  courante: string | undefined,
+  conversations: readonly ConversationDatee[]
+): boolean {
+  const conversation = conversations.find((candidate) => candidate.id === courante)
+  return (
+    conversation !== undefined &&
+    conversation.messages.every(
+      (message) =>
+        message.role !== 'user' ||
+        (typeof message.content === 'string' && /^\s*\/kaizen(?=\s|$)/i.test(message.content))
+    )
+  )
+}
+
+/** Les conversations les plus recemment actives cote utilisateur, hors la courante, avec leur titre. */
+function conversationsRecentes(
+  courante: string | undefined,
+  conversations: readonly ConversationDatee[],
+  nombre: number
+): string {
+  return conversations
+    .filter((conversation) => conversation.id !== courante)
+    .map((conversation) => ({
+      conversation,
+      derniere: Math.max(
+        0,
+        ...conversation.messages
+          .filter((message) => message.role === 'user')
+          .map((message) => instantDe(message.ts))
+      )
+    }))
+    .filter((candidate) => candidate.derniere > 0)
+    .sort((a, b) => b.derniere - a.derniere)
+    .slice(0, nombre)
+    .map(({ conversation, derniere }) => {
+      const titre =
+        typeof conversation.title === 'string' && conversation.title.trim()
+          ? ` « ${clipped(conversation.title.trim(), 70)} »`
+          : ''
+      return `${conversation.id}${titre} (${new Date(derniere).toISOString()})`
+    })
+    .join(', ')
 }
 
 /**
@@ -818,37 +897,63 @@ interface ConversationDatee {
  * quand la commande a ete tapee dans la conversation courante, ou quand personne ne l'a tapee.
  * L'avis nomme les AUTRES conversations ou la commande a ete tapee : leurs traces ne sont pas dans
  * le dossier, l'agent sait ou les chercher.
+ *
+ * CONVERSATION NEUVE (conv-318, tour 5b0c4fcb-e354-410e-99b6-567740e86db1, saisie ts
+ * 2026-10-17T15:40:06.421Z) : « /kaizen le bloc 3d doit etre dans le bloc draft », premier message
+ * d'une conversation neuve, nomme la commande SANS sa barre. Le dossier etait celui de conv-318,
+ * vide par construction ; le /draft vise etait dans conv-315 (tour
+ * a6fcfb6e-c5ce-41c9-86c8-dcde195c67f2). Dans une conversation neuve seulement — ailleurs un mot
+ * nu reste un mot —, le premier mot de la demande qui est le NOM d'une procedure (`commandes`, par
+ * defaut les dossiers `skills/<nom>/SKILL.md`) et qui a ete tape comme `/nom` ailleurs designe le
+ * dossier. Rejoue sur les vraies conversations, n'importe quel `/mot` deja tape ne suffisait pas :
+ * « dans » partait sur conv-254, ou « /dans … » avait ete tape une fois. Sans un tel mot, le dossier
+ * reste la conversation courante, mais l'avis DIT qu'elle est vide et nomme les plus recentes.
  */
 export function kaizenConversationParCommande(
   task: string,
   courante: string | undefined,
-  conversations: readonly ConversationDatee[]
+  conversations: readonly ConversationDatee[],
+  commandes?: readonly string[]
 ): CibleKaizen | undefined {
   const tache = task.trim()
   if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
-  const commande = [...tache.slice('/kaizen'.length).matchAll(/(?:^|\s)\/([a-z][a-z0-9-]*)\b/gi)]
+  const suite = tache.slice('/kaizen'.length)
+  const avecBarre = [...suite.matchAll(/(?:^|\s)\/([a-z][a-z0-9-]*)\b/gi)]
     .map((m) => m[1].toLowerCase())
     .find((nom) => nom !== 'kaizen')
-  if (!commande) return undefined
-  // `commande` ne contient que [a-z0-9-] (motif ci-dessus) : rien a echapper.
-  const invocation = new RegExp(String.raw`^\s*\/${commande}(?=\s|$)`, 'i')
-  const instant = (valeur: number | string | undefined): number =>
-    typeof valeur === 'number' ? valeur : Date.parse(valeur ?? '') || 0
-  const tapees = conversations
-    .map((conversation) => {
-      const dates = conversation.messages
-        .filter(
-          (message) =>
-            message.role === 'user' &&
-            typeof message.content === 'string' &&
-            invocation.test(message.content)
+  const neuve = !avecBarre && estConversationNeuve(courante, conversations)
+  // Un mot nu n'est lu comme une commande que dans une conversation neuve, s'il NOMME une procedure,
+  // et s'il a ete tape comme `/nom` dans une AUTRE conversation.
+  const connues = neuve
+    ? new Set((commandes ?? dossiersDeSkills()).map((nom) => nom.toLowerCase()))
+    : new Set<string>()
+  const motNu = neuve
+    ? [
+        ...new Set(
+          [...suite.matchAll(/(?<![\w/-])([a-z][a-z0-9-]{2,})(?![\w-])/gi)].map((m) =>
+            m[1].toLowerCase()
+          )
         )
-        .map((message) => instant(message.ts))
-      return { id: conversation.id, derniere: dates.length ? Math.max(...dates) : undefined }
-    })
-    .filter((candidate): candidate is { id: string; derniere: number } => candidate.derniere !== undefined)
+      ]
+        .filter((mot) => mot !== 'kaizen' && connues.has(mot))
+        .find((mot) => conversationsOuTapee(mot, conversations).some((c) => c.id !== courante))
+    : undefined
+  const commande = avecBarre ?? motNu
+  if (!commande) {
+    if (!neuve) return undefined
+    const recentes = conversationsRecentes(courante, conversations, 6)
+    return {
+      conversationId: courante as string,
+      avis:
+        `Ce dossier est celui de ${courante}, la conversation où /kaizen a été tapé : elle ne ` +
+        `contient que cette demande, ses appels modèle, son journal des tours et ses saisies sont ` +
+        `donc vides par construction. Aucune conversation n'est nommée et aucune commande citée ` +
+        `n'a été reconnue.` +
+        (recentes ? ` Conversations les plus récentes : ${recentes}.` : '')
+    }
+  }
+  const tapees = conversationsOuTapee(commande, conversations)
   if (!tapees.length || tapees.some((candidate) => candidate.id === courante)) return undefined
-  tapees.sort((a, b) => b.derniere - a.derniere)
   const [cible, ...autres] = tapees
   const date = cible.derniere ? ` (${new Date(cible.derniere).toISOString()})` : ''
   return {
@@ -856,6 +961,10 @@ export function kaizenConversationParCommande(
     avis:
       `Aucune conversation n'est nommée dans la demande : ce dossier est celui de ${cible.id}, la ` +
       `dernière où « /${commande} » a été tapé${date}.` +
+      (motNu
+        ? ` La demande a été tapée dans une conversation neuve, et son mot « ${motNu} » a été lu ` +
+          `comme la commande /${motNu}.`
+        : '') +
       (autres.length
         ? ` « /${commande} » a aussi été tapé dans ${autres
             .slice(0, 6)

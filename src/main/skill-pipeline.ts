@@ -105,7 +105,7 @@ export function skillNommeeSansBarre(message: string, roots = skillRoots()): str
 const ID_SKILL_VALIDE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 /** Noms de dossiers portant un SKILL.md dans les racines du kit (silencieux si illisible). */
-function dossiersDeSkills(roots: string[]): string[] {
+export function dossiersDeSkills(roots: string[] = skillRoots()): string[] {
   const noms: string[] = []
   for (const root of roots) {
     try {
