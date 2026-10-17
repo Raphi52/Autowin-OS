@@ -244,6 +244,7 @@ import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
   kaizenNamedConversationId,
+  kaizenConversationParCommande,
   localiserMessageCite,
   PLAFONDS_AMPLES
 } from './autowin-kaizen-context'
@@ -2856,12 +2857,21 @@ export class AppCommandBus {
         // `/kaizen conv-61 …` vise conv-61, pas la conversation ou la commande est tapee.
         const kaizenNamedId = kaizenNamedConversationId(authoritativeTask)
         const kaizenNamed = kaizenNamedId ? this.os.conversations.get(kaizenNamedId) : undefined
+        // Ni conversation nommee ni analyse Auto-Kaizen : une COMMANDE citee (« /draft ne me render
+        // pas… ») designe la derniere conversation ou elle a ete tapee. Conv-314, tour
+        // f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : dossier construit sur la conversation du /kaizen
+        // elle-meme, vide, alors que les traces etaient dans conv-310/311/312.
+        const kaizenParCommande =
+          !kaizenNamed && conversation?.autoKaizen?.role !== 'analysis'
+            ? kaizenConversationParCommande(authoritativeTask, convId, this.os.conversations.list())
+            : undefined
         const kaizenEvidenceConversation = kaizenNamed
           ? kaizenNamed
           : conversation?.autoKaizen?.role === 'analysis'
             ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
               conversation)
-            : conversation
+            : ((kaizenParCommande && this.os.conversations.get(kaizenParCommande.conversationId)) ??
+              conversation)
         // fix-ok: conv-258 — le dossier visait conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) alors que la phrase citee avait ete tapee dans conv-253 ; le numero tape n'etait jamais confronte a la citation.
         const kaizenDemande =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
@@ -2881,7 +2891,8 @@ export class AppCommandBus {
             ? buildAutowinKaizenTask(
                 requestedTask,
                 collectAutowinKaizenEvidence(kaizenDossier),
-                kaizenCible?.avis
+                // L'avis de la citation prime : il dit si le dossier a ete deplace ailleurs.
+                kaizenCible?.avis ?? kaizenParCommande?.avis
               )
             : requestedTask
         /*

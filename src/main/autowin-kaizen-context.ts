@@ -800,3 +800,67 @@ export function kaizenNamedConversationId(task: string): string | undefined {
   const numero = /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1]
   return numero ? `conv-${numero}` : undefined
 }
+
+interface ConversationDatee {
+  id: string
+  messages: ReadonlyArray<{ role: string; content: unknown; ts?: number | string }>
+}
+
+/**
+ * /kaizen SANS CONVERSATION NOMMEE, mais avec une COMMANDE citee (« … c'est que /draft ne me
+ * render pas le bloc… ») : le dossier vise la DERNIERE conversation ou cette commande a ete tapee.
+ *
+ * Mesure le 2026-10-17, conv-314, tour f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : sans `conv N` ni
+ * citation, le dossier a ete construit sur conv-314 elle-meme, qui ne contenait que la demande —
+ * promptCalls, turnEvents et saisies vides. Les traces etaient dans conv-310, conv-311 et conv-312.
+ *
+ * Rend undefined (l'appelant garde la conversation courante) hors /kaizen, sans commande citee,
+ * quand la commande a ete tapee dans la conversation courante, ou quand personne ne l'a tapee.
+ * L'avis nomme les AUTRES conversations ou la commande a ete tapee : leurs traces ne sont pas dans
+ * le dossier, l'agent sait ou les chercher.
+ */
+export function kaizenConversationParCommande(
+  task: string,
+  courante: string | undefined,
+  conversations: readonly ConversationDatee[]
+): CibleKaizen | undefined {
+  const tache = task.trim()
+  if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
+  const commande = [...tache.slice('/kaizen'.length).matchAll(/(?:^|\s)\/([a-z][a-z0-9-]*)\b/gi)]
+    .map((m) => m[1].toLowerCase())
+    .find((nom) => nom !== 'kaizen')
+  if (!commande) return undefined
+  // `commande` ne contient que [a-z0-9-] (motif ci-dessus) : rien a echapper.
+  const invocation = new RegExp(String.raw`^\s*\/${commande}(?=\s|$)`, 'i')
+  const instant = (valeur: number | string | undefined): number =>
+    typeof valeur === 'number' ? valeur : Date.parse(valeur ?? '') || 0
+  const tapees = conversations
+    .map((conversation) => {
+      const dates = conversation.messages
+        .filter(
+          (message) =>
+            message.role === 'user' &&
+            typeof message.content === 'string' &&
+            invocation.test(message.content)
+        )
+        .map((message) => instant(message.ts))
+      return { id: conversation.id, derniere: dates.length ? Math.max(...dates) : undefined }
+    })
+    .filter((candidate): candidate is { id: string; derniere: number } => candidate.derniere !== undefined)
+  if (!tapees.length || tapees.some((candidate) => candidate.id === courante)) return undefined
+  tapees.sort((a, b) => b.derniere - a.derniere)
+  const [cible, ...autres] = tapees
+  const date = cible.derniere ? ` (${new Date(cible.derniere).toISOString()})` : ''
+  return {
+    conversationId: cible.id,
+    avis:
+      `Aucune conversation n'est nommée dans la demande : ce dossier est celui de ${cible.id}, la ` +
+      `dernière où « /${commande} » a été tapé${date}.` +
+      (autres.length
+        ? ` « /${commande} » a aussi été tapé dans ${autres
+            .slice(0, 6)
+            .map((autre) => autre.id)
+            .join(', ')} : leurs traces ne sont PAS dans ce dossier.`
+        : '')
+  }
+}
