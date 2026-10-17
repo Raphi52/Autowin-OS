@@ -1,0 +1,292 @@
+import { randomUUID } from 'node:crypto'
+import type { ProviderRegistry } from './providers/registry'
+import type { SendResult, Usage } from './providers/types'
+import type { RoleModelConfig } from './roles'
+import type { Conversation, ConversationStore, Msg } from './store/conversations'
+import { compileExecutionQuote } from './execution-quote'
+import type { ExecutionSupervisor } from './execution-supervisor'
+import { routeSkillRequest } from './skill-routing'
+import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversation-window'
+
+/**
+ * Seuil de confiance exigé du modèle pour OUVRIR une nouvelle conversation.
+ * Ramené de 0.97 à 0.90 : à 0.97 aucune rupture de sujet réelle n'ouvrait de fil, le modèle
+ * ne produisant pratiquement jamais cette quasi-certitude. Le coût d'une ouverture à tort
+ * (un fil scindé, rattrapable par un déplacement) est assumé face à celui d'un fil unique
+ * qui accumule tous les sujets.
+ * fix-ok: seuil 0.97 hors de l'échelle rendue par le modèle — décision utilisateur 2026-09-13.
+ */
+export const ROUTE_CONFIDENCE_THRESHOLD = 0.9
+/**
+ * En dessous de cette longueur, un message est traité comme un suivi local : trop court pour
+ * porter à lui seul la preuve d'une rupture de sujet nette. Garde déterministe, évaluée avant
+ * tout appel au modèle.
+ */
+const MIN_NEW_TOPIC_CHARS = 40
+const TITLE_CHARS = 60
+
+export const ROUTER_SYSTEM = `Tu es le routeur de conversations d’Autowin OS.
+Décide si le NOUVEAU message poursuit le même objectif que le CONTEXTE ACTUEL.
+Réponds uniquement avec un objet JSON :
+{"route":"current|new","confidence":0.0,"reason":"related|follow-up|new-topic|uncertain","title":""}
+
+Règles :
+- current par défaut, notamment pour une correction, un détail, un pronom, un suivi court ou une ambiguïté ;
+- new uniquement si le message ouvre clairement un autre sujet ou livrable sans dépendre du contexte actuel ;
+- confidence >= ${ROUTE_CONFIDENCE_THRESHOLD} quand la rupture de sujet est nette et que rien dans le message ne dépend du contexte actuel ; réserve les valeurs en dessous de ${ROUTE_CONFIDENCE_THRESHOLD} aux ruptures douteuses, qui doivent rester dans le fil courant ;
+- title : titre bref du nouveau sujet, sans donnée sensible, uniquement pour route=new.`
+
+/**
+ * MODÈLE DU TRI. Le classement des conversations n'a pas de rôle du pipeline : il emprunta d'abord
+ * le modèle de l'orchestrateur (mesure du 2026-09-16 : 1 894 classements sur claude-opus-5 pour
+ * 52,17 $), puis le défaut CODÉ du provider, `claude-fable-5` — choisi nulle part par l'utilisateur
+ * et facturé le double d'Opus (449 classements pour 28,68 $ dans `activity/*.jsonl`, conv-264).
+ * Il lit désormais le réglage « modèle des petites tâches » (`RoleModelConfig.bindingDesPetitesTaches`,
+ * écran Routeur) ; non réglé, le modèle du chat en effort low.
+ */
+
+export type ConversationRouteReason =
+  | 'related'
+  | 'follow-up'
+  | 'new-topic'
+  | 'uncertain'
+  | 'empty-context'
+  | 'explicit-command'
+  | 'local-follow-up'
+  | 'meta-instruction'
+  | 'fallback'
+
+export interface ConversationRouteDecision {
+  route: 'current' | 'new'
+  confidence: number
+  reason: ConversationRouteReason
+  title?: string
+  provider?: string
+  model?: string
+  reasoningEffort?: string
+  usage?: Usage
+}
+
+function parseDecision(text: string): Omit<ConversationRouteDecision, 'provider' | 'model'> | null {
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0]) as Record<string, unknown>
+    const confidence =
+      typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
+        ? Math.min(1, Math.max(0, parsed.confidence))
+        : 0
+    const reason = ['related', 'follow-up', 'new-topic', 'uncertain'].includes(
+      String(parsed.reason)
+    )
+      ? (String(parsed.reason) as ConversationRouteReason)
+      : 'uncertain'
+    const title = typeof parsed.title === 'string' ? clip(parsed.title, TITLE_CHARS) : ''
+    const wantsNew =
+      parsed.route === 'new' && reason === 'new-topic' && confidence >= ROUTE_CONFIDENCE_THRESHOLD
+    return {
+      route: wantsNew ? 'new' : 'current',
+      confidence,
+      reason: wantsNew ? 'new-topic' : reason,
+      ...(wantsNew && title ? { title } : {})
+    }
+  } catch {
+    return null
+  }
+}
+
+function contextMessages(messages: Msg[]): Array<{ role: Msg['role']; content: string }> {
+  return messages.slice(-CONTEXT_MESSAGE_LIMIT).map((message) => ({
+    role: message.role,
+    content: clip(message.content, CONTEXT_MESSAGE_CHARS)
+  }))
+}
+
+function isDeterministicFollowUp(value: string, hasAttachments: boolean): boolean {
+  if (hasAttachments) return false
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized || normalized.length > 160) return false
+  return /^(?:continue|poursuis|relance|recommence|go\b|vas[- ]?y\b|vazy\b|fais[- ]le\b|corrige (?:ça|cela)\b)/i.test(
+    normalized
+  )
+}
+
+export class ConversationRouter {
+  constructor(
+    private readonly registry: ProviderRegistry,
+    private readonly roles: RoleModelConfig,
+    private readonly executionSupervisor: ExecutionSupervisor,
+    private readonly waitUntilReady: () => Promise<void> = async () => {}
+  ) {}
+
+  async decide(
+    conversation: Conversation,
+    incomingMessage: string,
+    attachmentNames: string[] = [],
+    signal?: AbortSignal
+  ): Promise<ConversationRouteDecision> {
+    if (!conversation.messages.some((message) => message.content.trim())) {
+      return { route: 'current', confidence: 1, reason: 'empty-context' }
+    }
+    if (routeSkillRequest(incomingMessage)?.reason === 'explicit-skill') {
+      return { route: 'current', confidence: 1, reason: 'explicit-command' }
+    }
+    if (isDeterministicFollowUp(incomingMessage, attachmentNames.length > 0)) {
+      return { route: 'current', confidence: 1, reason: 'local-follow-up' }
+    }
+    // Une pièce jointe porte le sujet à elle seule : la garde de longueur ne s'applique
+    // qu'au texte nu (voir « can route an attachment-only message without inventing text »).
+    if (attachmentNames.length === 0 && incomingMessage.trim().length < MIN_NEW_TOPIC_CHARS) {
+      return { route: 'current', confidence: 1, reason: 'local-follow-up' }
+    }
+
+    const messages = [
+      {
+        role: 'user' as const,
+        content: JSON.stringify({
+          currentTitle: clip(conversation.title, TITLE_CHARS),
+          currentContext: contextMessages(conversation.messages),
+          incoming: clip(incomingMessage, 2_000),
+          attachments: attachmentNames.slice(0, 8).map((name) => clip(name, 120))
+        })
+      }
+    ]
+    try {
+      await this.waitUntilReady()
+      // La découverte peut remplacer un alias pendant l'attente : relire APRÈS la barrière évite
+      // d'envoyer l'ancien `codex/flagship` alors que son transport concret vient d'être résolu.
+      const binding = this.roles.bindingDesPetitesTaches()
+      const send = (): Promise<SendResult> =>
+        this.registry.send(binding.provider, messages, {
+          system: ROUTER_SYSTEM,
+          // Le routeur envoie un system, donc il INJECTE : sans bloc declare il etait le seul
+          // appel provider absent de l'inventaire des injections.
+          systemBlocks: [{ name: 'routerSystem', chars: ROUTER_SYSTEM.length }],
+          model: binding.model,
+          reasoningEffort: binding.reasoningEffort,
+          signal,
+          requestId: randomUUID()
+        })
+      const result = this.executionSupervisor.currentQuote()
+        ? await send()
+        : await this.executionSupervisor.run(
+            (() => {
+              const quote = compileExecutionQuote(`conversation-route:${incomingMessage}`, {
+                maxProviderCalls: 1,
+                maxTotalTokens: 200_000,
+                maxUsd: 0.1
+              })
+              quote.phases = []
+              quote.decomposition = { mode: 'disabled', maxNodes: 1 }
+              quote.limits.maxAgents = 0
+              quote.limits.maxConcurrency = 1
+              quote.limits.maxDurationMs = 30_000
+              quote.limits.maxRecoveries = 0
+              quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, 50_000)
+              return quote
+            })(),
+            signal,
+            send
+          )
+      const parsed = parseDecision(result.text)
+      if (!parsed) {
+        return {
+          route: 'current',
+          confidence: 0,
+          reason: 'fallback',
+          provider: result.provider,
+          model: result.model ?? binding.model,
+          reasoningEffort: binding.reasoningEffort,
+          usage: result.usage
+        }
+      }
+      return {
+        ...parsed,
+        provider: result.provider,
+        model: result.model ?? binding.model,
+        reasoningEffort: binding.reasoningEffort,
+        usage: result.usage
+      }
+    } catch {
+      const binding = this.roles.bindingDesPetitesTaches()
+      return {
+        route: 'current',
+        confidence: 0,
+        reason: 'fallback',
+        provider: binding.provider,
+        model: binding.model,
+        reasoningEffort: binding.reasoningEffort
+      }
+    }
+  }
+}
+
+export interface ConversationRouteResult {
+  sourceConversationId: string
+  conversationId: string
+  routed: boolean
+  decision: ConversationRouteDecision
+  title?: string
+}
+
+export class ConversationRouteCoordinator {
+  constructor(
+    private readonly conversations: ConversationStore,
+    private readonly router: Pick<ConversationRouter, 'decide'>
+  ) {}
+
+  async route(
+    sourceConversationId: string,
+    incomingMessage: string,
+    attachmentNames: string[] = [],
+    signal?: AbortSignal
+  ): Promise<ConversationRouteResult> {
+    const source = this.conversations.get(sourceConversationId)
+    if (!source) throw new Error(`Conversation inconnue: ${sourceConversationId}`)
+    const visibleSource = {
+      ...source,
+      messages: this.conversations.messagesOf(sourceConversationId)
+    }
+    const decision = await this.router.decide(
+      visibleSource,
+      incomingMessage,
+      attachmentNames,
+      signal
+    )
+    if (decision.route !== 'new') {
+      return {
+        sourceConversationId,
+        conversationId: sourceConversationId,
+        routed: false,
+        decision
+      }
+    }
+
+    // Revalide après l'appel modèle : une suppression concurrente ne doit pas
+    // créer un fil orphelin à partir d'un contexte qui n'existe plus.
+    if (!this.conversations.get(sourceConversationId)) {
+      throw new Error(`Conversation supprimée pendant le routage: ${sourceConversationId}`)
+    }
+    const fallbackTitle =
+      clip(incomingMessage, TITLE_CHARS) ||
+      clip(attachmentNames[0] ?? '', TITLE_CHARS) ||
+      'Nouvelle conversation'
+    const target = this.conversations.create({
+      title: decision.title || fallbackTitle,
+      provider: source.provider
+    })
+    // LE DOSSIER DE TRAVAIL SUIT LE NOUVEAU SUJET (conv-19 -> conv-23, 2026-09-27 13:10:21.853) :
+    // cree avec un titre seul, le fil neuf a fait son premier tour (819 s, 3,26 $) dans le dossier
+    // par defaut, D:\Autowin, au lieu du projet d'ou venait le message. Un chemin cite dans le
+    // message garde sa bascule (`alignerDossierSurLaDemande`, index.ts), qui passe avant le tour.
+    const dossierSource = source.projectPath?.trim()
+    if (dossierSource) this.conversations.rangerDansDossier(target.id, dossierSource)
+    return {
+      sourceConversationId,
+      conversationId: target.id,
+      routed: true,
+      decision,
+      title: target.title
+    }
+  }
+}
