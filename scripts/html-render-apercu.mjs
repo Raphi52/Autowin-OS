@@ -173,9 +173,27 @@ async function main() {
       const ligne = { largeur, debordementPx: Math.max(0, mesure.largeurContenu - mesure.largeurBloc), ...mesure, paires: [] }
       const bloc = await page.$('#bloc')
       const images = []
+      // Une animation EN BOUCLE est capturee a sa PREMIERE image (currentTime 0) : ce que l'utilisateur
+      // voit a l'instant ou il ouvre l'onglet. Sans cela, l'image dependait de l'horloge du controle
+      // et le verdict « onglets distincts » devenait aleatoire (conv-302, apercus en boucle).
       const capturer = async (nom) => {
         const chemin = join(out, `${nom}.png`)
+        await page.evaluate(() =>
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming?.().endTime === Infinity)
+            .forEach((a) => {
+              a.pause()
+              a.currentTime = 0
+            })
+        )
         images.push((await bloc.screenshot({ path: chemin })).toString('base64'))
+        await page.evaluate(() =>
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getComputedTiming?.().endTime === Infinity)
+            .forEach((a) => a.play())
+        )
         rapport.captures.push(chemin)
       }
       if (mesure.onglets > 1) {
@@ -192,8 +210,16 @@ async function main() {
           if (!(await libelles[i].isVisible())) continue
           await libelles[i].click()
           await page.waitForTimeout(120)
-          // Une transition CSS (diapositive qui glisse) se capture FINIE, pas a mi-course.
-          await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))))
+          // Une transition CSS (diapositive qui glisse) se capture FINIE, pas a mi-course. Une animation
+          // EN BOUCLE (aperçu qui tourne seul) ne finit jamais : l'attendre bloquerait le controle.
+          await page.evaluate(() =>
+            Promise.all(
+              document
+                .getAnimations()
+                .filter((a) => a.effect?.getComputedTiming?.().endTime !== Infinity)
+                .map((a) => a.finished.catch(() => {}))
+            )
+          )
           const etat = await page.evaluate(() =>
             [...document.querySelectorAll('#bloc input')].map((champ) => (champ.checked ? 1 : 0)).join('')
           )
