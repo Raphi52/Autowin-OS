@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { DecorScene } from './home-decor-scene'
+import { GAREE, monterVoitures } from './home-decor-avenue-voitures'
 import {
   capucheDe,
   champTete,
@@ -2366,105 +2367,24 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   }
 
   // ---------- LA CIRCULATION : on s'éloigne à droite, on vient vers nous à gauche ----------
-  const profil = new THREE.Shape()
-  ;[
-    [-2.3, 0.25],
-    [-2.36, 0.74],
-    [-1.25, 0.84],
-    [-0.62, 1.27],
-    [0.48, 1.3],
-    [1.12, 0.86],
-    [2.26, 0.74],
-    [2.34, 0.38],
-    [2.22, 0.24]
-  ].forEach(([x, y], i) => (i ? profil.lineTo(x, y) : profil.moveTo(x, y)))
-  profil.closePath()
-  const caisseGeo = new THREE.ExtrudeGeometry(profil, {
-    depth: 1.7,
-    bevelEnabled: true,
-    bevelThickness: 0.08,
-    bevelSize: 0.07,
-    bevelSegments: 3
+  // Cinq véhicules tous différents, dont une GT garée le long du trottoir de droite (conv-320) :
+  // voir `home-decor-avenue-voitures.ts`. Aucune lumière ajoutée, phares et feux restent peints.
+  const flotte = monterVoitures({
+    scene,
+    renderer,
+    glow,
+    trainee,
+    emettre,
+    toile,
+    tex,
+    GLOW,
+    TROTTOIR
   })
-  caisseGeo.translate(0, 0, -0.85)
-  caisseGeo.rotateY(Math.PI / 2)
-  const carMat = new THREE.MeshStandardMaterial({
-    color: 0x0b0b12,
-    metalness: 0.75,
-    roughness: 0.25
-  })
-  const ROUGE = new THREE.Color(0xff2046)
-  const EAU = new THREE.Color(0x9fc4ff)
-  function vehicule(
-    moto: boolean,
-    x: number,
-    sens: number
-  ): { g: THREE.Group; x: number; sens: number; z: number | null } {
-    const g = new THREE.Group()
-    if (moto) {
-      const corps = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.55, 1.9), carMat)
-      corps.position.y = 0.6
-      g.add(corps)
-      const pilote = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.45, 4, 10), carMat)
-      pilote.position.set(0, 1.25, 0.2)
-      pilote.rotation.x = -0.5
-      g.add(pilote)
-    } else g.add(new THREE.Mesh(caisseGeo, carMat))
-    const larg = moto ? 0 : 0.68
-    const feux = new THREE.Mesh(
-      new THREE.BoxGeometry(moto ? 0.18 : 1.45, 0.07, 0.04),
-      new THREE.MeshBasicMaterial({ color: ROUGE })
-    )
-    feux.position.set(0, moto ? 0.85 : 0.66, moto ? 0.97 : 2.42)
-    g.add(feux)
-    for (const s of moto ? [0] : [-1, 1]) {
-      glow(ROUGE, 1.3, s * larg, feux.position.y, feux.position.z + 0.05, 1, g)
-      trainee(ROUGE, 0.09, 8, 0.9, g).position.set(s * larg, feux.position.y, feux.position.z + 4)
-      glow(0xeef4ff, 1.5, s * larg * 0.95, 0.62, -2.42, 1, g)
-    }
-    trainee(ROUGE, moto ? 0.4 : 1.4, 6, 0.55, g).position.set(0, 0.02, 4.5)
-    const devant = trainee(0xdfe8ff, moto ? 0.6 : 1.6, 10, 0.4, g)
-    devant.rotation.z = Math.PI
-    devant.position.set(0, 0.02, -7.5)
-    const phare = new THREE.SpotLight(0xdfeaff, 300, 50, 0.42, 0.5, 2)
-    phare.position.set(0, 0.7, -2.3)
-    phare.target.position.set(0, 0.2, -22)
-    // le phare reste hors de la scène : sa lumière est peinte (halo + traînée), pas calculée
-    g.add(phare.target)
-    g.position.z = 600
-    g.rotation.y = sens > 0 ? 0 : Math.PI
-    scene.add(g)
-    return { g, x, sens, z: null }
-  }
-  const vehicules = [vehicule(false, 2.0, 1), vehicule(true, 2.9, 1), vehicule(false, -2.0, -1)]
   function circulation(t: number, v: number): void {
-    const per = p.voitures
-    vehicules.forEach((ve, i) => {
-      const age = (((t - (i * per) / 3) % per) + per) % per
-      const z = ve.sens > 0 ? 16 - age * 22 : -170 + age * 22
-      if (z < -170 || z > 18) {
-        ve.g.position.z = 600
-        ve.z = null
-        return
-      }
-      ve.g.position.set(ve.x, 0, z)
-      ve.z = z
-      if (z < 14 && z > -60)
-        for (let n = 0; n < 6; n++)
-          emettre(
-            ve.x + (rnd() - 0.5) * 1.3,
-            0.05,
-            z + ve.sens * 1.4,
-            (rnd() - 0.5) * 1.6,
-            1 + rnd() * 2.4,
-            ve.sens * (4 + rnd() * 6) + v,
-            0.55,
-            EAU,
-            9.8,
-            0
-          )
-      secousse = Math.max(secousse, Math.max(0, 1 - Math.abs(z - camera.position.z) / 9) * 0.06)
-    })
+    secousse = Math.max(
+      secousse,
+      flotte.animer(t, v, p.voitures, zVisible(GAREE.zp), camera.position.z)
+    )
   }
 
   // ---------- LE DRONE : il fouille l'avenue au projecteur, gyrophare rouge et bleu ----------
@@ -3612,6 +3532,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
           else matiere?.dispose?.()
         })
       for (const texture of textures) texture.dispose()
+      flotte.liberer()
       renderer.dispose()
       canvas.remove()
     }
