@@ -3390,7 +3390,8 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   /**
    * COMPILER EN TÂCHE DE FOND, SANS LE PIÈGE DE `compileAsync`. three r185 relit
    * `properties.get(m).currentProgram.isReady()` toutes les 10 ms ; si la scène est libérée entre-temps
-   * (le décor est reconstruit quand le thème change au démarrage), `currentProgram` n'existe plus,
+   * (le décor est reconstruit quand le thème change, ou quand on quitte l'Accueil aussitôt
+   * ouvert), `currentProgram` n'existe plus,
    * la vérification lève une TypeError non rattrapée et la promesse ne se résout JAMAIS — mesuré le
    * 2026-10-17 (conv-301, sonde de l'Accueil). Ici la vérification s'arrête avec la scène, et une
    * matière sans programme compte comme prête au lieu de faire tomber la boucle.
@@ -3446,7 +3447,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   let rueCompilee = false
   const rueEstCompilee = (): void => {
     rueCompilee = true
-    // Une scène libérée avant la fin (thème changé au démarrage) ne marque rien : sa promesse se
+    // Une scène libérée avant la fin (thème changé, Accueil quitté) ne marque rien : sa promesse se
     // résout à l'arrêt, pas à la compilation, et fausserait la mesure.
     if (vivante) marquer(MARQUES_AVENUE.rueCompilee)
   }
