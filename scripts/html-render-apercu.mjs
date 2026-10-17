@@ -17,7 +17,7 @@
  *
  * Usage : node scripts/html-render-apercu.mjs <fichier.html|fichier.md> [--bloc 1]
  *           [--largeurs 560,860] [--fenetre 1600] [--out .autowin-tmp/html-render-apercu]
- *           [--seuil-onglets 0.02] [--clair]
+ *           [--seuil-onglets 0.02] [--clair] [--theme <id>]
  *   `--clair` : rend le bloc comme en THEME CLAIR (fond du fil clair + regles forcees de
  *   theme-modes.css). Un thème clair actif chez l'utilisateur = contrôle les DEUX.
  *   Un fichier .md (ou tout fichier contenant une cloture ```html-render) : le n-ieme bloc est pris.
@@ -95,6 +95,20 @@ function reglesThemeClair() {
     .join('\n')
 }
 
+/**
+ * `--theme <id>` : les JETONS du thème (`:root[data-theme='<id>'] { --text, --bg-0, --nv-degrade… }`
+ * de src/renderer/src/assets/theme-<id>.css), posés comme l'app les pose. Un bloc qui lit ces jetons
+ * (le carrousel /draft habillé « holographique », conv-302) ne montrait sinon que ses replis : le
+ * contrôle validait un rendu qu'aucun thème réel ne produit. Thème de base claire : ajouter `--clair`.
+ */
+function jetonsDuTheme(id) {
+  const fichier = join(RACINE, `src/renderer/src/assets/theme-${id}.css`)
+  if (!existsSync(fichier)) return null
+  const css = readFileSync(fichier, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  const bloc = new RegExp(String.raw`:root\[data-theme='${id}'\]\s*\{([^}]*)\}`).exec(css)
+  return bloc ? `:root[data-theme='${id}']{${bloc[1].trim()}}` : null
+}
+
 async function compilerFiltre() {
   const sortie = await build({
     stdin: {
@@ -128,7 +142,15 @@ async function main() {
 
   const filtre = await compilerFiltre()
   const clair = process.argv.includes('--clair')
-  const conteneur = reglesConteneur() + (clair ? '\n' + reglesThemeClair() : '')
+  const theme = argument('--theme', undefined)
+  const jetons = theme ? jetonsDuTheme(theme) : ''
+  if (jetons === null)
+    sortir(2, {
+      ok: false,
+      erreur: `--theme ${theme} : aucun bloc :root[data-theme='${theme}'] dans src/renderer/src/assets/theme-${theme}.css`
+    })
+  const conteneur =
+    reglesConteneur() + (clair ? '\n' + reglesThemeClair() : '') + (jetons ? '\n' + jetons : '')
   // Fond du fil en theme clair : le panneau de Holographique blanc (`rgba(253, 253, 255, 0.985)`).
   const corps = clair ? 'background:#fdfdff;color:#1c172b' : 'background:#0b0b0e;color:#dde3ee'
   const browser = await chromium.launch({ executablePath, headless: true })
@@ -138,7 +160,7 @@ async function main() {
     for (const largeur of largeurs) {
       const page = await browser.newPage({ viewport: { width: fenetre, height: 900 } })
       await page.setContent(
-        `<!doctype html><html${clair ? ` data-base="clair"` : ''}><head><style>${conteneur}</style></head>` +
+        `<!doctype html><html${clair ? ` data-base="clair"` : ''}${theme ? ` data-theme="${theme}"` : ''}><head><style>${conteneur}</style></head>` +
           `<body style="margin:0;${corps};font:14px 'Segoe UI',system-ui,sans-serif">` +
           // La bulle garde son heritage (white-space, corps) ; son cadre est neutralise pour que
           // `largeur` reste la largeur du BLOC.
