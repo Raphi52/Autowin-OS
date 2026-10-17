@@ -42,6 +42,18 @@ describe('prompt de pilotage — processus hote', () => {
     expect(prompt).toMatch(/si `restart_app` te repond lui-meme qu'il est indisponible/)
   })
 
+  /*
+   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : conv-303 tournait ; le
+   * paragraphe ne disait rien de ce cas, l'agent s'est invente une exception (« an ask is justified
+   * despite the usual rule ») et a demande « je redemarre ? ». Saisie ts 1792232135771 : « j'ai un
+   * systeme pour mettre le redemarrage en queue tu aurais du l'utiliser ».
+   */
+  it('d autres agents tournent : restart_app QUAND MEME (mise en file), jamais la question', () => {
+    expect(prompt).toMatch(/D'AUTRES conversations ou des runs tournent \? Appelle QUAND MEME `restart_app`/)
+    expect(prompt).toMatch(/EN FILE \(`enFile: true`\)/)
+    expect(prompt).toMatch(/Ne pose donc JAMAIS la question « je redemarre maintenant ou j'attends \? »/)
+  })
+
   it('interdit l arret large d un nom de processus entier', () => {
     expect(prompt).toMatch(/arreter TOUS les processus/)
   })
