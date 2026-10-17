@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { AVENUE, BUDGET_MAILLAGE_MS, CAMERA_AVENUE } from './home-decor-avenue'
+import {
+  AVENUE,
+  BUDGET_MAILLAGE_MS,
+  CAMERA_AVENUE,
+  FONDU_ENTREE_MS,
+  MARQUES_AVENUE
+} from './home-decor-avenue'
 import {
   creerPreparation,
   maillerCorps,
@@ -104,6 +110,54 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
     const decor = readFileSync(new URL('./DecorDeFond.tsx', import.meta.url), 'utf8')
     expect(decor).toMatch(/autowinStorageKey\('home\.decor\.v3'\)/)
     expect(sans(decor)).not.toMatch(/home\.decor\.v[12]\b/)
+  })
+})
+
+/**
+ * LA RUE ENTRE EN FONDU, ET SON DÉLAI SE MESURE (conv-301, « Mesurer le délai d'apparition de la rue
+ * et ajouter un fondu d'entrée »).
+ *
+ * Mesuré le 2026-10-17 (instance cachée, code en cours) : la rue est compilée 0,6 à 0,8 s après la
+ * création de la scène, puis dessinée ; sans fondu, elle surgissait d'un coup derrière les tuiles.
+ * Filmée image par image, la luminance monte maintenant sur ~1 s au lieu de sauter.
+ *
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE BLOC :
+ *   1. le canevas créé opaque → la rue surgit sans fondu ;
+ *   2. le fondu lancé AVANT `renderer.render` → il dévoile un tampon vide ;
+ *   3. un fondu animé par la boucle d'images en JavaScript → du travail sur le fil principal, au
+ *      moment précis où la page est la plus chargée ;
+ *   4. une marque retirée → la sonde ne peut plus mesurer le délai.
+ */
+describe('fond de l Accueil — l apparition de la rue', () => {
+  it('le canevas naît invisible et passe à 1 en fondu, animé par le navigateur', () => {
+    expect(scene).toMatch(/marquer\(MARQUES_AVENUE\.cree\)\s*canvas\.style\.opacity = '0'/)
+    expect(scene).toMatch(/canvas\.style\.opacity = '1'/)
+    expect(scene).toMatch(/canvas\.animate\(\[\{ opacity: 0 \}, \{ opacity: 1 \}\]/)
+    expect(scene).toMatch(/duration: FONDU_ENTREE_MS/)
+  })
+
+  it('le fondu ne part qu APRÈS la première image dessinée, une seule fois', () => {
+    expect(scene).toMatch(/renderer\.render\(scene, camera\)\s*if \(!apparue\) apparaitre\(\)/)
+    expect(scene).toMatch(/if \(!rueCompilee\) return/)
+  })
+
+  it('assez long pour se voir, assez court pour ne pas faire attendre', () => {
+    expect(FONDU_ENTREE_MS).toBeGreaterThanOrEqual(400)
+    expect(FONDU_ENTREE_MS).toBeLessThanOrEqual(2000)
+  })
+
+  it('les marques du délai d apparition sont posées, dans l ordre de la vie de la scène', () => {
+    expect(Object.values(MARQUES_AVENUE)).toEqual([
+      'decor-avenue:cree',
+      'decor-avenue:rue-compilee',
+      'decor-avenue:rue-visible',
+      'decor-avenue:foule-maillee',
+      'decor-avenue:foule-visible'
+    ])
+    for (const cle of Object.keys(MARQUES_AVENUE))
+      expect(scene).toMatch(new RegExp(`marquer\\(MARQUES_AVENUE\\.${cle}\\)`))
+    // Une scène libérée avant la fin de sa compilation ne marque pas la rue « compilée ».
+    expect(scene).toMatch(/if \(vivante\) marquer\(MARQUES_AVENUE\.rueCompilee\)/)
   })
 })
 

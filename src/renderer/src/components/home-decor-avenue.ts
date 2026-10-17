@@ -33,8 +33,9 @@ import {
  *     auraient volé la souris aux widgets ;
  *   - le temps vient de l'appelant (`render(elapsed)`) : la limite d'images, la pause quand la
  *     fenêtre est cachée et le ralenti « mouvement réduit » de `DecorDeFond` s'appliquent ;
- *   - les corps sont maillés PAR TRANCHES entre deux images (`home-decor-avenue-maillage.ts`) : la
- *     rue s'affiche tout de suite, la foule la rejoint quand ses corps sont prêts ;
+ *   - les corps sont maillés PAR TRANCHES entre deux images (`home-decor-avenue-maillage.ts`) ; la
+ *     rue entre EN FONDU dès que ses nuanceurs sont compilés (0,6 à 0,8 s mesurés, `MARQUES_AVENUE`),
+ *     la foule la rejoint quand ses corps sont prêts ;
  *   - tout ce qui est créé est libéré par `dispose`.
  *
  * LES TEXTURES SONT DESSINÉES PAR CODE (tags, enseignes, façades) : aucune image n'est chargée, et
@@ -335,8 +336,48 @@ export function createAvenueScene(): DecorScene | null {
   }
 }
 
+/**
+ * REPÈRES DE TEMPS DE L'APPARITION, lisibles par `performance.getEntriesByName('decor-avenue:…')`.
+ *
+ * Depuis que la rue attend la fin de sa compilation pour se dessiner (conv-301, gel corrigé), il
+ * existe un délai entre l'ouverture de l'Accueil et la première image de la rue. Sans repère, ce
+ * délai ne se mesurait pas : la sonde de l'Accueil lit ces trois marques —
+ * `cree` (scène montée), `rue-visible` (première image dessinée), `foule-visible` (la foule entre).
+ */
+export const MARQUES_AVENUE = {
+  cree: 'decor-avenue:cree',
+  /**
+   * La rue est compilée : elle sera dessinée à l'image suivante. Posée hors de la boucle d'images,
+   * cette marque ne dépend pas de leur cadence — dans l'instance cachée, Windows ne compose pas le
+   * bureau et le navigateur n'y produit qu'UNE image par seconde (mesuré le 2026-10-17), ce qui
+   * retarde `rue-visible` jusqu'à 1 s sans que l'utilisateur ne le voie jamais.
+   */
+  rueCompilee: 'decor-avenue:rue-compilee',
+  rueVisible: 'decor-avenue:rue-visible',
+  /** Les corps sont maillés ; la compilation de leurs nuanceurs commence. */
+  fouleMaillee: 'decor-avenue:foule-maillee',
+  fouleVisible: 'decor-avenue:foule-visible'
+} as const
+
+const marquer = (nom: string): void => {
+  globalThis.performance?.mark?.(nom)
+}
+
+/**
+ * LE FONDU D'ENTRÉE, en millisecondes.
+ *
+ * La rue n'est dessinée qu'une fois compilée : sans fondu, elle surgissait d'un coup sur le fond de
+ * la page, au milieu de la lecture des tuiles. L'opacité du canevas monte de 0 à 1 sur cette durée,
+ * animée par le compositeur du navigateur (`canvas.animate`) : aucun travail sur le fil principal.
+ * Un fondu n'est pas un mouvement : il reste actif sous « réduire les animations ».
+ */
+export const FONDU_ENTREE_MS = 1200
+
 function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
   const canvas = renderer.domElement
+  marquer(MARQUES_AVENUE.cree)
+  // Invisible jusqu'à sa première image : le fondu d'entrée part de là (voir `apparaitre`).
+  canvas.style.opacity = '0'
   const FOND = new THREE.Color(0x170b24)
   const FLASH = new THREE.Color(0x8a78c8)
   const scene = new THREE.Scene()
@@ -3378,6 +3419,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
    * entre dans la scène quand ils sont prêts.
    */
   const entrer = (m: MaillagesHumains): void => {
+    marquer(MARQUES_AVENUE.fouleMaillee)
     const prets = monterActeurs(m)
     enAttente = prets.groupe
     const montrer = (): void => {
@@ -3385,6 +3427,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
       scene.add(prets.groupe)
       enAttente = null
       acteurs = prets
+      marquer(MARQUES_AVENUE.fouleVisible)
     }
     compilerEnFond(prets.groupe, scene).then(montrer, (erreur: unknown) => {
       // Rien n'est masqué : l'échec est écrit, et la foule entre quand même (compilée à l'affichage).
@@ -3401,15 +3444,16 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
    * que ce n'est pas fini, `render` ne dessine rien et le fond de la page reste visible.
    */
   let rueCompilee = false
-  compilerEnFond(scene).then(
-    () => {
-      rueCompilee = true
-    },
-    (erreur: unknown) => {
-      console.error('[decor] compilation de la rue en tâche de fond impossible :', erreur)
-      rueCompilee = true
-    }
-  )
+  const rueEstCompilee = (): void => {
+    rueCompilee = true
+    // Une scène libérée avant la fin (thème changé au démarrage) ne marque rien : sa promesse se
+    // résout à l'arrêt, pas à la compilation, et fausserait la mesure.
+    if (vivante) marquer(MARQUES_AVENUE.rueCompilee)
+  }
+  compilerEnFond(scene).then(rueEstCompilee, (erreur: unknown) => {
+    console.error('[decor] compilation de la rue en tâche de fond impossible :', erreur)
+    rueEstCompilee()
+  })
   const preparation = preparationHumains()
   const deja = preparation.avancer(0)
   let canal: MessageChannel | null = null
@@ -3432,6 +3476,23 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
       c.port2.postMessage(0)
     }
     c.port2.postMessage(0)
+  }
+
+  /**
+   * La première image de la rue est dessinée : le canevas passe de 0 à 1 en fondu. Appelé APRÈS
+   * `renderer.render`, pour que le fondu ne dévoile jamais un tampon vide.
+   */
+  let apparue = false
+  const apparaitre = (): void => {
+    apparue = true
+    marquer(MARQUES_AVENUE.rueVisible)
+    canvas.style.opacity = '1'
+    // Sans l'API d'animation (happy-dom en test), la rue apparaît d'un coup : rien n'est caché.
+    if (typeof canvas.animate === 'function')
+      canvas.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: FONDU_ENTREE_MS,
+        easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)'
+      })
   }
 
   let prevPont: number | null = null
@@ -3532,6 +3593,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer): DecorScene {
         camera.position.y += (Math.random() - 0.5) * secousse
       }
       renderer.render(scene, camera)
+      if (!apparue) apparaitre()
     },
 
     dispose() {
