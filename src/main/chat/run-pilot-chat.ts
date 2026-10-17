@@ -35,11 +35,12 @@ import {
   boundedTurnHistory,
   depuisDerniereCompaction
 } from '../chat-turn-messages'
+import { type ChatTurnEvent, type PersistedChatPart } from '../../shared/chat-turn'
 import {
-  flattenChatPartsForModel,
-  type ChatTurnEvent,
-  type PersistedChatPart
-} from '../../shared/chat-turn'
+  contenuAssistantPourLeModele,
+  rangDuDernierRun,
+  type SourceDuRun
+} from './dernier-run-entier'
 import type { AttachmentMeta } from '../store/conversations'
 import { closingTurnDelivery } from '../runs/turn-closing'
 import { appendTurnEvent } from '../runs/turn-journal'
@@ -433,6 +434,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const metasParContenu = new Map<string, AttachmentMeta[]>()
       /** Textes des consignes envoyees PENDANT un tour : le renderer n'envoie pas ce drapeau, le store l'a. */
       const orientations = new Set<string>()
+      /** Ou relire le run d'un message de l'agent : le journal de son tour. */
+      const tourParContenu = new Map<string, SourceDuRun>()
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
           if (stocke.role === 'user' && stocke.orientation && typeof stocke.content === 'string') {
@@ -441,6 +444,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           const parts = (stocke as { parts?: PersistedChatPart[] }).parts
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
+            // Le journal du tour garde l'issue ENTIERE d'un run, que le fil coupe (conv-989).
+            if (stocke.turnId)
+              tourParContenu.set(stocke.content, {
+                journalRoot: turnJournalRoot,
+                conversationId: stocke.turnConversationId ?? conversationId,
+                turnId: stocke.turnId
+              })
           }
           if (
             stocke.role === 'user' &&
@@ -469,13 +479,22 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           metas.find((candidate) => candidate.name === piece.name)
         return meta ? rechargerContenuPieceJointe(meta) : undefined
       }
-      const safe = (
+      const fenetre =
         continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)
-      ).map((m) => {
-        const parts = m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
+      const partsDuMessage = (m: (typeof fenetre)[number]): PersistedChatPart[] | undefined =>
+        m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
+      // Le DERNIER run seulement : relire chaque run en entier ferait grossir tout le fil (conv-989).
+      const rangDernierRun = rangDuDernierRun(fenetre, partsDuMessage)
+      const safe = fenetre.map((m, rang) => {
+        const parts = partsDuMessage(m)
         // Repli sur le contenu d'origine : un message sans `parts` retrouvables (fil hydrate,
         // message d'un ancien format) doit passer tel quel, jamais disparaitre.
-        const pourLeModele = parts ? flattenChatPartsForModel(parts) || m.content : m.content
+        const pourLeModele = parts
+          ? contenuAssistantPourLeModele(
+              parts,
+              rang === rangDernierRun ? tourParContenu.get(m.content) : undefined
+            ) || m.content
+          : m.content
         return {
           role: m.role,
           content: guardString(pourLeModele, 'content'),

@@ -23,6 +23,48 @@ async function racineFactice(): Promise<string> {
   return racine
 }
 
+// conv-1016 (2026-10-17) : trois OUTLOOK.EXE tournaient dans les bureaux caches ui-capture-*, aucun
+// sur l'ecran de l'utilisateur. L'instance de test y ouvrait l'Accueil, dont la tuile mails lisait le
+// VRAI profil par COM : Windows demarre alors Outlook dans le bureau de l'appelant.
+describe('passerelle Outlook HORS SERVICE (instance de test cachee)', () => {
+  it('aucun script, aucun Outlook : chaque geste rend la raison', async () => {
+    const id = 'ABCDEF0123456789ABCDEF0123456789'
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const opener = vi.fn(async () => 0)
+    const replier = vi.fn(async () => 0)
+    const marqueur = vi.fn(async () => 0)
+    const lecteurCorps = vi.fn(async () => {})
+    const redacteur = vi.fn(async () => 0)
+    const raison = 'Outlook hors service ici.'
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      horsService: raison,
+      runner,
+      opener,
+      replier,
+      marqueur,
+      lecteurCorps,
+      redacteur
+    })
+    const attendu = { ok: false, erreur: raison }
+    expect(await passerelle.snapshot(true)).toEqual(attendu)
+    expect(await passerelle.readBody(id)).toEqual(attendu)
+    expect(await passerelle.openItem(id)).toEqual(attendu)
+    expect(await passerelle.replyToItem(id, 'merci')).toEqual(attendu)
+    expect(await passerelle.markRead([id])).toEqual(attendu)
+    expect(await passerelle.sendNew('a@exemple.fr', 'objet', 'corps')).toEqual(attendu)
+    for (const f of [runner, opener, replier, marqueur, lecteurCorps, redacteur])
+      expect(f).not.toHaveBeenCalled()
+  })
+
+  it('jumeau : sans raison, la meme passerelle lit bien le script', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    expect((await passerelle.snapshot(true)).ok).toBe(true)
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('passerelle Outlook locale', () => {
   it('rend l instantane ecrit par le script', async () => {
     const runner = ecrivain(JSON.stringify({ ok: true, mails: [{ id: 'm1' }], evenements: [] }))

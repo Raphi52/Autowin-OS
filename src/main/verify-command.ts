@@ -1038,6 +1038,14 @@ export function echecsDuRapport(
     }
     const assertions = Array.isArray(s.assertionResults) ? s.assertionResults : []
     let echecsDeCetteSuite = 0
+    /*
+     * Les chemins de `describe` qui contiennent un test rouge. VITEST LES COMPTE COMME DES SUITES
+     * (conv-1001, 2026-10-16) : `numFailedTestSuites` = `getSuites(files)` en etat `fail`, soit le
+     * fichier PLUS chaque bloc dont un descendant echoue (sonde vitest 3.2.7 : un rouge dans un bloc
+     * = 2 suites ; rouges dans `a`, `a > b` et hors bloc = 3). Ne compter que le fichier rendait tout
+     * rapport « incoherent » des qu'un rouge vivait dans un `describe`.
+     */
+    const blocsRouges = new Set<string>()
     for (const assertion of assertions) {
       if (typeof assertion !== 'object' || assertion === null) {
         return RAPPORT_VIDE('rapport de tests de forme inattendue')
@@ -1047,9 +1055,13 @@ export function echecsDuRapport(
       echecsDeCetteSuite += 1
       const nom = typeof a.fullName === 'string' && a.fullName.trim() ? a.fullName : String(a.title)
       lignes.push(`${fichier} > ${nom} :: ${empreinteDeRaison(a.failureMessages)}`)
+      const blocs = Array.isArray(a.ancestorTitles) ? a.ancestorTitles.map(String) : []
+      for (let i = 1; i <= blocs.length; i += 1) blocsRouges.add(JSON.stringify(blocs.slice(0, i)))
     }
     if (s.status === 'failed') {
-      suitesEnEchec += 1
+      // Un bloc rouge par son SEUL hook (tests `skipped`) n'apparait dans aucun chemin ci-dessus :
+      // il reste un ecart avec le compte annonce, donc un refus — c'est voulu.
+      suitesEnEchec += 1 + blocsRouges.size
       /*
        * UNE SUITE EN ECHEC SANS ASSERTION EN ECHEC = un echec que le JSON NE COMPTE PAS.
        *

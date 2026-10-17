@@ -104,7 +104,19 @@ function rapport(
       ]
     })
   }
-  const suitesEnEchec = testResults.filter((t) => t.status === 'failed').length
+  /*
+   * COMME VITEST : le fichier rouge PLUS chaque bloc `describe` qui contient un test rouge
+   * (conv-1001). Ce fixture annoncait un seul compte par fichier alors que ses tests « suite A > … »
+   * vivent dans un bloc : il validait un controle croise que le vrai vitest faisait toujours echouer.
+   */
+  const suitesEnEchec = testResults
+    .filter((t) => t.status === 'failed')
+    .reduce((n, t) => {
+      const blocs = new Set(
+        t.assertionResults.filter((a) => a.status === 'failed').flatMap((a) => a.ancestorTitles)
+      )
+      return n + 1 + blocs.size
+    }, 0)
   /*
    * LE COMPTE VIENT DES TESTS REELLEMENT PRESENTS, jamais d'une arithmetique parallele.
    * Troisieme infidelite de fixture trouvee dans ce RUN : la version precedente additionnait
@@ -535,6 +547,105 @@ describe('les quatre défauts prouvés par le panel sur la v2', () => {
   it('REFUSE un rapport dont le compte de SUITES en échec ne correspond pas', () => {
     const menteur = rapport([A], { suitesAnnoncees: 4 })
     const relu = lu(menteur)
+    expect(relu.concluant).toBe(false)
+    expect(relu.raison ?? '').toContain('suite(s) en échec')
+  })
+
+  /*
+   * VITEST COMPTE LE FICHIER *ET* CHAQUE `describe` (conv-1001, 2026-10-16). `numFailedTestSuites`
+   * vient de `getSuites(files)` (vitest 3.2.7, chunks/index.*.js : `suites.filter(s => s.result?.state
+   * === "fail")`), et un bloc passe rouge des qu'un test qu'il contient echoue. Le controle croise
+   * comptait des FICHIERS : tout rouge range dans un `describe` rendait le rapport « incoherent », donc
+   * l'enchainement auto du chat ne publiait plus rien des que la base portait un seul test rouge
+   * (mesure : autoclose-last.json, « 2 suite(s) en échec annoncée(s), 1 identifiée(s) »).
+   * Les rapports ci-dessous sont RECOPIES de sorties reelles (`--reporter=json`), raisons abregees.
+   */
+  const BLOC_SPINNER = 'spinner — le nouveau PARTOUT (balayage exhaustif)'
+  const rapportReel = (
+    assertions: readonly { blocs: string[]; titre: string; statut: string }[],
+    suitesAnnoncees: number
+  ): string =>
+    JSON.stringify({
+      numTotalTestSuites: suitesAnnoncees,
+      numFailedTestSuites: suitesAnnoncees,
+      numTotalTests: assertions.length,
+      numFailedTests: assertions.filter((a) => a.statut === 'failed').length,
+      success: false,
+      testResults: [
+        {
+          name: 'D:/AutoWinOS/src/renderer/src/spinner-partout.test.ts',
+          status: 'failed',
+          message: '',
+          assertionResults: assertions.map((a) => ({
+            ancestorTitles: a.blocs,
+            fullName: [...a.blocs, a.titre].join(' '),
+            status: a.statut,
+            title: a.titre,
+            failureMessages:
+              a.statut === 'failed' ? ['AssertionError: expected [ …(5) ] to deeply equal []'] : []
+          }))
+        }
+      ]
+    })
+
+  it('LIT un rouge rangé dans un describe : 1 fichier + 1 bloc = 2 suites annoncées', () => {
+    // Sortie reelle de `vitest run src/renderer/src/spinner-partout.test.ts --reporter=json`.
+    const relu = lu(
+      rapportReel(
+        [
+          { blocs: [BLOC_SPINNER], titre: 'balaie réellement tout le renderer', statut: 'passed' },
+          {
+            blocs: [BLOC_SPINNER],
+            titre: 'tout libellé d’attente est accompagné du spinner',
+            statut: 'failed'
+          },
+          {
+            blocs: [BLOC_SPINNER],
+            titre: 'aucun ⏳ ne sert d’indicateur d’attente dans le JSX',
+            statut: 'passed'
+          }
+        ],
+        2
+      )
+    )
+    expect(relu.concluant).toBe(true)
+    expect(relu.echecs.size).toBe(1)
+  })
+
+  it('LIT des rouges dans des blocs IMBRIQUÉS et hors bloc : fichier + chaque chemin de blocs distinct', () => {
+    // Sonde reelle : rouges dans `bloc sain`, `bloc sain > sous-bloc` et hors bloc = 3 suites.
+    const relu = lu(
+      rapportReel(
+        [
+          { blocs: ['bloc sain'], titre: 'rouge', statut: 'failed' },
+          { blocs: ['bloc sain', 'sous-bloc'], titre: 'rouge aussi', statut: 'failed' },
+          { blocs: [], titre: 'rouge hors bloc', statut: 'failed' }
+        ],
+        3
+      )
+    )
+    expect(relu.concluant).toBe(true)
+    expect(relu.echecs.size).toBe(3)
+  })
+
+  it('REFUSE encore un bloc rouge par son SEUL hook, caché derrière un autre test rouge', () => {
+    /*
+     * ENTREE QUI DOIT FAIRE ECHOUER CE CAS : un recomptage qui accepterait n'importe quel ecart.
+     * Sonde reelle : le `beforeAll` casse de `bloc a hook casse` rend le bloc rouge (4 suites
+     * annoncees) alors que son test est `skipped` — aucun test rouge ne le trahit. Seul l'ecart de
+     * compte le voit : 3 reconstruites contre 4 annoncees.
+     */
+    const relu = lu(
+      rapportReel(
+        [
+          { blocs: ['bloc sain'], titre: 'rouge', statut: 'failed' },
+          { blocs: ['bloc sain', 'sous-bloc'], titre: 'rouge aussi', statut: 'failed' },
+          { blocs: ['bloc a hook casse'], titre: 'ne tourne pas', statut: 'skipped' },
+          { blocs: [], titre: 'rouge hors bloc', statut: 'failed' }
+        ],
+        4
+      )
+    )
     expect(relu.concluant).toBe(false)
     expect(relu.raison ?? '').toContain('suite(s) en échec')
   })

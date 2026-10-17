@@ -740,6 +740,32 @@
 :root[data-theme='machine-a-ecrire'] .cosmic-outline .msg.user .msg-role {
   color: #22c922;
 }
+/* Message ENVOYE en vert, comme dans la zone de saisie (demande conv-270, 2026-10-16). La bulle
+   degradee bleu/rose de cosmic-outline.css (~l.853, selecteur fort) passait devant la regle
+   ci-dessus : selecteur plus fort encore ici, fond noir, texte et filet verts, sans lueur. */
+:root[data-theme='machine-a-ecrire']:not([data-base='clair']):not([data-theme^='malvoyant-'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle {
+  background: #020802;
+  border-color: rgba(51, 255, 51, 0.45);
+  color: #33ff33;
+}
+:root[data-theme='machine-a-ecrire']:not([data-base='clair']):not([data-theme^='malvoyant-'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle::before {
+  display: none;
+}
+:root[data-theme='machine-a-ecrire']:not([data-base='clair']):not([data-theme^='malvoyant-'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle.avec-skill {
+  border-top-color: #33ff33;
+}
+:root[data-theme='machine-a-ecrire'] .msg.user .msg-body.avec-skill .msg-skill-desc {
+  color: #22c922;
+}
 
 /* ÉTAGES D'ACTION — le nom de l'outil (« edit_file ») restait en #b9cbdd
    (`cosmic-outline.css` l.834), un bleu-gris pensé pour le fond noir : sur la

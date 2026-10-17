@@ -124,6 +124,61 @@ describe('mode d’affichage sombre / clair', () => {
     expect(recus).toEqual(['dark', 'light', 'dark', 'light'])
   })
 
+  // fix-ok: ecrit AVANT l entree du registre (vu rouge), puis mis en forme par prettier ; aucune assertion desserree.
+  /*
+   * NINJA CLAUDE (conv-269, 2026-10-16) : l apparence de Claude, en base SOMBRE.
+   * ENTREE QUI DOIT FAIRE ECHOUER CES CAS : retirer l entree du registre (le choix memorise
+   * retomberait sur Holographique), la declarer claire (data-base poserait les corrections du
+   * clair sur un fond anthracite), ou accepter un identifiant approchant comme `ninja`.
+   */
+  it('propose Ninja Claude en base sombre, et le relit apres relance', () => {
+    expect(THEMES.find((t) => t.id === 'ninja-claude')).toEqual({
+      id: 'ninja-claude',
+      libelle: 'Ninja Claude',
+      base: 'sombre'
+    })
+    ecrireThemeMode('ninja-claude')
+    // « Relance » : seule la valeur memorisee survit, on la relit et on la reapplique.
+    document.documentElement.removeAttribute('data-theme')
+    appliquerThemeMode(lireThemeMode())
+    expect(document.documentElement.getAttribute('data-theme')).toBe('ninja-claude')
+    expect(document.documentElement.hasAttribute('data-base')).toBe(false)
+  })
+
+  it('retombe sur Holographique pour un identifiant approchant de Ninja Claude', () => {
+    for (const abime of ['ninja', 'Ninja Claude', 'ninja-claude ', '']) {
+      localStorage.setItem(THEME_MODE_STORAGE_KEY, abime)
+      expect(lireThemeMode()).toBe('nebuleuse-verre')
+    }
+  })
+
+  /*
+   * VANILLA CLAUDE (conv-269, 2026-10-16) : la version CLAIRE de Ninja Claude.
+   * ENTREE QUI DOIT FAIRE ECHOUER CES CAS : retirer l entree du registre, la declarer sombre (la
+   * creme perdrait les corrections de lisibilite de la base claire), ou accepter un identifiant
+   * approchant comme `vanilla`.
+   */
+  it('propose Vanilla Claude en base claire, et le relit apres relance', () => {
+    expect(THEMES.find((t) => t.id === 'vanilla-claude')).toEqual({
+      id: 'vanilla-claude',
+      libelle: 'Vanilla Claude',
+      base: 'clair'
+    })
+    ecrireThemeMode('vanilla-claude')
+    document.documentElement.removeAttribute('data-theme')
+    document.documentElement.removeAttribute('data-base')
+    appliquerThemeMode(lireThemeMode())
+    expect(document.documentElement.getAttribute('data-theme')).toBe('vanilla-claude')
+    expect(document.documentElement.getAttribute('data-base')).toBe('clair')
+  })
+
+  it('retombe sur Holographique pour un identifiant approchant de Vanilla Claude', () => {
+    for (const abime of ['vanilla', 'Vanilla Claude', 'vanilla-claude ', 'VANILLA-CLAUDE']) {
+      localStorage.setItem(THEME_MODE_STORAGE_KEY, abime)
+      expect(lireThemeMode()).toBe('nebuleuse-verre')
+    }
+  })
+
   it('ne casse pas si le document est absent', () => {
     expect(() => appliquerThemeMode('clair')).not.toThrow()
   })

@@ -259,3 +259,53 @@ export function jouerEntreeCascade(racine: Element, anime?: (surface: Element) =
   racine.addEventListener('animationcancel', surFin)
   enCours = { racine, restants, surFin, minuterie: setTimeout(effacer, SECOURS_MS) }
 }
+
+/**
+ * L'ENTREE D'UN CADRE QUI S'OUVRE (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je veux
+ * l'animation des border ») : le meme dessin que celui d'un changement de vue — coins, deux traits
+ * avec elan, satin, lumiere —, joue sur UN cadre qui apparait seul (panneau Details du Chat). Avant,
+ * seul le changement de vue jouait l'entree : le panneau s'ouvrait en simple fondu.
+ *
+ * Meme entree pour le MENU DE GAUCHE quand on le reduit ou le deplie (conv-987 : « et quand je
+ * reduis deploi la left bar aussi », App.tsx).
+ *
+ * INDEPENDANTE de l'entree de la vue (`enCours`) : ouvrir le panneau pendant qu'une vue entre ne doit
+ * pas couper l'entree de ses autres cadres, ni l'inverse. Le texte n'est pas anime, comme pour la vue.
+ * Rend le nettoyage (fermeture du panneau en cours de route, double effet du mode strict de React).
+ *
+ * REJOUER EN PLEIN VOL : le menu se replie puis se redeplie en moins d'une seconde. Le nettoyage du
+ * premier clic retire la marque et le second la repose dans la meme tache : sans calcul de style
+ * entre les deux, le navigateur ne voit jamais le cadre demarque et l'animation, inchangee, ne
+ * repart pas. Lire le style du cadre AVANT de le marquer rend ce retrait visible.
+ */
+export function jouerEntreeCadre(
+  cadre: Element,
+  anime: (surface: Element) => boolean = animeParLeTheme
+): () => void {
+  void cadre.ownerDocument.defaultView?.getComputedStyle(cadre).animationName
+  ;(cadre as HTMLElement).style?.setProperty('--entree-rang', '0')
+  cadre.setAttribute(ATTRIBUT_CHANFREIN, '')
+  if (!anime(cadre)) {
+    liberer(cadre)
+    return () => {}
+  }
+  let fini = false
+  const terminer = (): void => {
+    if (fini) return
+    fini = true
+    clearTimeout(minuterie)
+    cadre.removeEventListener('animationend', surFin)
+    cadre.removeEventListener('animationcancel', surFin)
+    liberer(cadre)
+  }
+  // Les fins des animations des descendants remontent ici : seule celle du cadre libere.
+  const surFin = (evenement: Event): void => {
+    if (evenement.target !== cadre) return
+    if ((evenement as AnimationEvent).animationName !== NOM_ANIMATION_CHANFREIN) return
+    terminer()
+  }
+  cadre.addEventListener('animationend', surFin)
+  cadre.addEventListener('animationcancel', surFin)
+  const minuterie = setTimeout(terminer, SECOURS_MS)
+  return terminer
+}

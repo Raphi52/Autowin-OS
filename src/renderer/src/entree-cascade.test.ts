@@ -15,6 +15,7 @@ import {
   SECOURS_MS,
   blocsDeCascade,
   marquerSurfacesChanfrein,
+  jouerEntreeCadre,
   jouerEntreeCascade
 } from './entree-cascade'
 
@@ -348,5 +349,112 @@ describe('cadres a chanfrein', () => {
     // Le texte n'attend plus l'elan des traits : plus aucun decalage du contenu.
     expect(css).toContain('animation-delay: calc(var(--entree-rang, 0) * 40ms);')
     expect(css).not.toContain('--entree-decalage')
+  })
+})
+
+/**
+ * L'ENTREE D'UN CADRE QUI S'OUVRE (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je veux
+ * l'animation des border ») : le panneau Details du Chat joue le dessin des bords a son ouverture,
+ * independamment de l'entree de la vue.
+ */
+describe('jouerEntreeCadre', () => {
+  const finir = (cible: Element, nom: string): void => {
+    const evenement = new Event('animationend', { bubbles: true })
+    Object.defineProperty(evenement, 'animationName', { value: nom })
+    cible.dispatchEvent(evenement)
+  }
+  function panneauDetails(): { panneau: HTMLElement; onglet: HTMLElement } {
+    const panneau = document.createElement('aside')
+    panneau.className = 'lisere-dessus runs-pane fade-in'
+    const onglet = document.createElement('button')
+    panneau.appendChild(onglet)
+    document.body.appendChild(panneau)
+    return { panneau, onglet }
+  }
+
+  it("marque le cadre sans delai et le libere a la fin de SON dessin, pas d'un descendant", () => {
+    const { panneau, onglet } = panneauDetails()
+    jouerEntreeCadre(panneau, () => true)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    expect(panneau.style.getPropertyValue('--entree-rang')).toBe('0')
+    finir(onglet, NOM_ANIMATION_CHANFREIN)
+    finir(panneau, 'fadeIn')
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+    finir(panneau, NOM_ANIMATION_CHANFREIN)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+    expect(panneau.style.getPropertyValue('--entree-rang')).toBe('')
+  })
+
+  it("ne touche pas l'entree de la vue en cours, et la vue ne coupe pas la sienne", () => {
+    const { racine } = vueTaskManager()
+    document.body.appendChild(racine)
+    jouerEntreeCascade(racine)
+    const blocs = racine.querySelectorAll(`[${ATTRIBUT_ENTREE}]`).length
+    expect(blocs).toBeGreaterThan(0)
+    const { panneau } = panneauDetails()
+    jouerEntreeCadre(panneau, () => true)
+    expect(racine.querySelectorAll(`[${ATTRIBUT_ENTREE}]`)).toHaveLength(blocs)
+    jouerEntreeCascade(racine)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+  })
+
+  it('rejouer en plein vol (menu replie puis redeplie) : le style est lu demarque avant de remarquer', () => {
+    // Sans ce calcul entre le retrait et la nouvelle marque, le navigateur ne voit aucun changement
+    // et l'animation ne repart pas (conv-987 : « et quand je reduis deploi la left bar aussi »).
+    const { panneau } = panneauDetails()
+    const arreter = jouerEntreeCadre(panneau, () => true)
+    const vus: boolean[] = []
+    const lire = window.getComputedStyle.bind(window)
+    const espion = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((e: Element, pseudo?: string | null) => {
+        if (e === panneau) vus.push(panneau.hasAttribute(ATTRIBUT_CHANFREIN))
+        return lire(e, pseudo)
+      })
+    arreter()
+    jouerEntreeCadre(panneau, () => true)
+    espion.mockRestore()
+    expect(vus[0]).toBe(false)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(true)
+  })
+
+  it('fermeture en cours de route ou secours : le cadre est libere, sans trace', () => {
+    vi.useFakeTimers()
+    const { panneau } = panneauDetails()
+    const arreter = jouerEntreeCadre(panneau, () => true)
+    arreter()
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+    jouerEntreeCadre(panneau, () => true)
+    vi.advanceTimersByTime(SECOURS_MS)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+  })
+
+  it("theme sans chanfrein (happy-dom : aucune animation) : aucune trace, le fondu d'avant reste", () => {
+    const { panneau } = panneauDetails()
+    jouerEntreeCadre(panneau)
+    expect(panneau.hasAttribute(ATTRIBUT_CHANFREIN)).toBe(false)
+    expect(panneau.style.getPropertyValue('--entree-rang')).toBe('')
+    expect(panneau.classList.contains('fade-in')).toBe(true)
+  })
+
+  it("les deux themes otent le fondu du panneau, plus faiblement que la regle d'entree", () => {
+    // Garde, `fadeIn` se rejouait a la liberation du cadre (le nom d'animation y revient) : le
+    // panneau clignotait a la fin de l'entree. La regle d'entree doit l'emporter PENDANT l'entree :
+    // `:root[data-theme] .runs-pane.fade-in` (4 classes) < la regle d'entree (5).
+    for (const [fichier, theme] of [
+      ['theme-nebuleuse-verre.css', 'nebuleuse-verre'],
+      ['theme-holographique-clair.css', 'holographique-clair']
+    ]) {
+      const css = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), 'assets', fichier),
+        'utf8'
+      )
+      expect(css, fichier).toContain(
+        `:root[data-theme='${theme}'] .runs-pane.fade-in {\n  animation: none;\n}`
+      )
+      expect(css, fichier).toContain(
+        `:root[data-theme='${theme}'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],\n:root[data-theme='${theme}'] .theme-serious .rail[data-entree-chanfrein] {\n  animation: ${NOM_ANIMATION_CHANFREIN}`
+      )
+    }
   })
 })

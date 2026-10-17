@@ -2200,13 +2200,16 @@
    fil) en heritent. Ce sont les recettes de repos (plus haut), couleurs passees par `--ch-*` et
    traits ajoutes : a l'etat final, le dessin est le meme au pixel, et le cadre se libere sans saut.
    Le test « recette d'entree = recette de repos » les tient alignees.
+   Le MENU DE GAUCHE (`.rail`) entre de meme quand on le reduit ou le deplie (conv-987 : « et quand
+   je reduis deploi la left bar aussi ») : meme anneau, meme satin que les volets du Chat.
    Les enfants DIRECTS reprennent le satin de repos : sans cela, la saisie (`var(--nv-satin)`) aurait
    recu sa propre lumiere et son propre fondu, en plus de ceux du fil. */
 :root[data-theme='holographique-clair'] {
   --nv-entree-lumiere: rgba(255, 255, 255, 0.97);
 }
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
-:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
+:root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] {
   animation: entree-chanfrein 1000ms linear both;
   animation-delay: calc(var(--entree-rang, 0) * 40ms);
   --ch-haut: color-mix(in srgb, var(--nv-chanfrein-haut) calc(var(--ch-coin) * 100%), transparent);
@@ -2270,8 +2273,18 @@
     );
 }
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein] > *,
-:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] > * {
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] > *,
+:root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] > * {
   --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
+}
+/* LE PANNEAU DETAILS N'A PLUS SON FONDU (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je
+   veux l'animation des border ») : a l'ouverture, ce sont ses bords qui se dessinent
+   (`jouerEntreeCadre`, WorkflowsPanel.tsx), et son texte est la tout de suite. Garde, `fade-in`
+   faisait deux degats : le texte arrivait en fondu, et a la liberation du cadre, le nom d'animation
+   redevenu `fadeIn` REJOUAIT ce fondu — le panneau clignotait a la fin de l'entree. Specificite
+   plus faible que la regle d'entree ci-dessus : pendant l'entree, c'est elle qui l'emporte. */
+:root[data-theme='holographique-clair'] .runs-pane.fade-in {
+  animation: none;
 }
 /* ENTREE-CHANFREIN:FIN */
 /* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
@@ -3752,7 +3765,8 @@
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
 :root[data-theme='holographique-clair'] :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],
-:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein] {
+:root[data-theme='holographique-clair'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],
+:root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] {
   --nv-holo-lisere: linear-gradient(
     90deg,
     color-mix(in srgb, #3c6eeb calc(var(--ch-fond) * 100%), transparent),

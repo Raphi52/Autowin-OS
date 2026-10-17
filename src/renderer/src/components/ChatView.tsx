@@ -182,7 +182,7 @@ import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { ChatContextRule } from './ChatContextRule'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
-import { fusionnerRelecture, relireRun } from './run-ouvert-a-jour'
+import { fusionnerRelecture, lireLivrableDuRun, relireRun } from './run-ouvert-a-jour'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -1460,6 +1460,13 @@ export function ChatView({
   /* Fil remonté : le saut vers le dernier message ne dépend pas d'une nouvelle activité. */
   const [scrolledAwayFromTail, setScrolledAwayFromTail] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
+  // LE PANNEAU RESTE AFFICHE LE TEMPS DE SORTIR (conv-987, 2026-10-16 : « je veux une animation
+  // d'ouverture fermeture pour le paneau de droite ») : fermer (`showRuns` a faux) le fait glisser
+  // vers la droite, et il n'est demonte qu'a la fin de son glissement (`onFermee`, WorkflowsPanel).
+  // Ouvrir le monte tout de suite : l'etat suit pendant le rendu, sans image de retard.
+  const [runsAffiche, setRunsAffiche] = useState(showRuns)
+  if (showRuns && !runsAffiche) setRunsAffiche(true)
+  const runsSorti = useCallback(() => setRunsAffiche(false), [])
   // Panneau « Réflexion » : le raisonnement du modèle, hors du fil (colonne droite).
   const [runsPaneWidth, setRunsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.runsPaneWidth'))
@@ -5420,11 +5427,14 @@ export function ChatView({
       traceSilentFailure('run-trace', error)
       setOpenTrace(null)
     }
+    // conv-989 : la sortie ENTIÈRE des étapes, voisine du RUN.md — le fil la coupe à 4 000.
+    const livrable = await lireLivrableDuRun(window.api, r.path)
+    const avecLivrable = livrable ? { livrable } : {}
     try {
       const fichier = await window.api.readNodeFile(r.path)
-      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime })
+      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime, ...avecLivrable })
     } catch (e) {
-      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime })
+      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime, ...avecLivrable })
     }
   }
 
@@ -5439,10 +5449,13 @@ export function ChatView({
    */
   async function relireRunOuvert(r: RunEntry): Promise<void> {
     const relu = await relireRun(window.api, r, openTrace, traceSilentFailure)
+    // La fin du run réécrit le RUN.md APRÈS la sortie entière : c'est souvent cette relecture-ci
+    // qui la trouve, un run ouvert pendant qu'il tournait n'en avait pas encore (conv-989).
+    const livrable = await lireLivrableDuRun(window.api, r.path)
     if (openRunPathRef.current !== r.path) return
     setOpenTrace(relu.trace)
     if (relu.montrerRunMd) setRunDetailTab('runmd')
-    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu))
+    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu, livrable))
   }
 
   /* --- rendu --- */
@@ -7902,9 +7915,11 @@ Cliquer pour choisir une autre branche.`}
       )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
-      {showRuns && (
+      {runsAffiche && (
         <VueMesuree id="chat-workflows" bloc>
           <WorkflowsPanel
+            fermeture={!showRuns}
+            onFermee={runsSorti}
             depotConversation={gitCwd}
             runsPaneWidth={runsPaneWidth}
             beginRunsResize={beginRunsResize}

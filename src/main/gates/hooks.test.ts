@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   detectRawSleep,
@@ -189,6 +190,43 @@ describe('motion-proof : un diff d ANIMATION exige une preuve de MOUVEMENT', () 
       '+  animation: spin 1s linear infinite'
     ].join('\n')
     expect(requireMotionProofForAnimationDiff(test, 0)).toEqual([])
+  })
+
+  // fix-ok: conv-951 — ANIMATION_AJOUTEE (hooks.ts) prenait une mention enumeree des mots-cles (suivie de « , » « ) » ou « | ») pour une declaration ; mesure : l'ancien motif refuse ces deux entrees, le nouveau non, et refuse toujours @keyframes et transition reels
+  // Faux positif mesure le 2026-10-16 (conv-951) : ajouter une vue a la liste de la consigne
+  // de pipeline-discipline.ts a fait refuser le run, parce que la MEME ligne source cite les
+  // mots-cles entre parentheses. Une mention enumeree n'a pas de valeur : elle ne declare rien.
+  it('ignore une MENTION enumeree des mots-cles (texte de consigne), sans valeur declaree', () => {
+    const mention = [
+      '+++ b/src/main/pipeline-discipline.ts',
+      '+PREUVE DE MOUVEMENT : si ce que tu changes est ANIME (@keyframes, animation:, transition:), cette capture ne suffit PAS'
+    ].join('\n')
+    expect(requireMotionProofForAnimationDiff(mention, 0)).toEqual([])
+  })
+
+  // Meme faux positif, deuxieme forme (2026-10-16, conv-951) : la ligne qui DEFINIT le motif
+  // enumere les mots-cles separes par « | ». Toute retouche du detecteur le faisait se refuser
+  // lui-meme. On lit la VRAIE ligne du source pour que le test suive le motif s'il change.
+  it('ignore la ligne qui DEFINIT le motif (alternative « | »), et bloque toujours @keyframes reel', () => {
+    const source = readFileSync(new URL('./hooks.ts', import.meta.url), 'utf8').split(/\r?\n/)
+    const ligneDuMotif =
+      source[source.findIndex((l) => l.startsWith('const ANIMATION_AJOUTEE')) + 1]
+    expect(ligneDuMotif).toContain('@keyframes|')
+    const definition = ['+++ b/src/main/gates/hooks.ts', `+${ligneDuMotif}`].join('\n')
+    expect(requireMotionProofForAnimationDiff(definition, 0)).toEqual([])
+    const vraieRegle = [
+      '+++ b/src/main/gates/hooks.ts',
+      '+const css = `@keyframes tourne { to {} }`'
+    ].join('\n')
+    expect(requireMotionProofForAnimationDiff(vraieRegle, 0)).toHaveLength(1)
+  })
+
+  it('bloque toujours une VRAIE declaration dans un fichier .ts (style en objet, sans capture)', () => {
+    const styleObjet = [
+      '+++ b/src/renderer/src/styles/carte.ts',
+      "+  transition: 'opacity 0.2s ease',"
+    ].join('\n')
+    expect(requireMotionProofForAnimationDiff(styleObjet, 0)).toHaveLength(1)
   })
 
   it('ignore une ligne SUPPRIMEE — retirer une animation ne demande pas de prouver qu elle bouge', () => {

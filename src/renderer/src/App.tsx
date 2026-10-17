@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import packageManifest from '../../../package.json'
 import { messageMoteurPerime } from '../../shared/moteur-perime'
 import { basculerVue } from './transition-de-vue'
-import { jouerEntreeCascade } from './entree-cascade'
+import { jouerEntreeCadre, jouerEntreeCascade } from './entree-cascade'
 
 // Gravés au build par `electron.vite.config.ts` (remplacement littéral Vite). Hors build (tests
 // unitaires happy-dom, où `define` ne s'applique pas), ils sont indéfinis → repli lisible.
@@ -33,6 +33,7 @@ import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
+import { HdeskGestionView } from './components/HdeskGestionView'
 import { TestsView } from './components/TestsView'
 import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
@@ -62,6 +63,15 @@ import './assets/ui-system.css'
 import './assets/theme-nebuleuse-verre.genere.css'
 import './assets/theme-nebuleuse-verre.css'
 import './assets/theme-holographique-clair.css'
+// fix-ok: imports ajoutes apres le rouge de theme-ninja-claude.test.ts (« import absent ») ; ordre genere puis main.
+// Ninja Claude (conv-269) : la couche generee AVANT la feuille ecrite a la main, comme Holographique.
+import './assets/theme-ninja-claude.genere.css'
+import './assets/theme-ninja-claude.css'
+// Vanilla Claude (conv-269) : la version claire de Ninja Claude. APRES la base claire, a l'inverse
+// d'Holographique blanc : sa couche generee ne traduit pas les feuilles de nuit, elle RECOLORE les
+// regles de la base claire elles-memes (un attribut de plus, elle gagne sur elles).
+import './assets/theme-vanilla-claude.genere.css'
+import './assets/theme-vanilla-claude.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
@@ -264,6 +274,18 @@ export function MainApp(): React.JSX.Element {
   // #11 — persiste l'état de la rail.
   useEffect(() => {
     localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
+  }, [railCollapsed])
+  // LE MENU QUI SE REDUIT OU SE DEPLIE DESSINE SES BORDS (conv-987, 2026-10-16 : « et quand je
+  // reduis deploi la left bar aussi ») : la meme entree que le panneau Details (entree-cascade.ts).
+  // Rien a l'ouverture de l'app, seulement au clic : on compare a l'etat precedent, ce qui tient
+  // aussi sous le double appel des effets du mode strict. Le nettoyage coupe l'entree d'un clic
+  // precedent encore en vol, avant que la suivante reparte.
+  const rail = useRef<HTMLElement>(null)
+  const railAvant = useRef(railCollapsed)
+  useLayoutEffect(() => {
+    if (railAvant.current === railCollapsed || !rail.current) return
+    railAvant.current = railCollapsed
+    return jouerEntreeCadre(rail.current)
   }, [railCollapsed])
 
   // L'onglet AFFICHE, lu par la bascule animee : vers l'onglet deja actif, aucune transition.
@@ -528,7 +550,7 @@ export function MainApp(): React.JSX.Element {
        * fil de la conv ». Le voile plein écran qu'il posait rendait le fil et la question illisibles
        * l'un à travers l'autre.
        */}
-      <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
+      <aside ref={rail} className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           {/* LE LOGO, plus le spinner (2026-10-11, conv-228) : « je garde mon spinner je veux juste
               changer le logo ici ». L'atome reste l'indicateur de chargement partout ailleurs. */}
@@ -669,6 +691,13 @@ export function MainApp(): React.JSX.Element {
                 section={taskManagerSection}
                 onSectionChange={setTaskManagerSection}
               />
+            </VueMesuree>
+          </div>
+        )}
+        {visitedTabs.has('hdesk') && (
+          <div className={`view-slot${tab === 'hdesk' ? ' is-active' : ''}`}>
+            <VueMesuree id="hdesk">
+              <HdeskGestionView active={tab === 'hdesk'} />
             </VueMesuree>
           </div>
         )}

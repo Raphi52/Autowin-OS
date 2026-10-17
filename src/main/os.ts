@@ -7,6 +7,7 @@
 import { Notification, app } from 'electron'
 import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from './hdesk-tv'
 import { interfaceVisible } from './startup-gate'
+import { cheminDuLivrableEntier, ecrireLivrableEntier } from './runs/livrable-entier'
 import { ProviderRegistry } from './providers/registry'
 import {
   assertDepotJetable,
@@ -74,6 +75,7 @@ import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
   marquerCheckpointCoupeParQuota,
+  loadOrchestrationState,
   loadOrchestrationStates,
   pickOrchestrationsToResume,
   pickOrchestrationToResume,
@@ -656,6 +658,9 @@ export class AutowinOS {
       // reste du temps. Même portée ambiante que le devis ci-dessus.
       // Remplacé PAR RUN dans `runTask` : ici c'est le défaut inerte, pas la vraie source.
       currentWorkflow: () => undefined,
+      // conv-989 : la copie ENTIERE des sorties d'etapes, que nomme la marque de coupe du juge. Le
+      // checkpoint ci-dessous est efface a la cloture ; celle-ci reste (`runs/livrable-entier.ts`).
+      cheminDuLivrableEntier: (runId) => cheminDuLivrableEntier(runId),
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
       onPhaseCompleted: ({
@@ -669,7 +674,10 @@ export class AutowinOS {
         executionQuote,
         usage,
         agents
-      }) =>
+      }) => {
+        // Differee comme le checkpoint : une copie non ecrite ne coute qu'une marque qui pointe dans
+        // le vide, jamais un run casse.
+        void ecrireLivrableEntier(runId, phaseOutputs).catch(() => undefined)
         // ECRITURE DIFFEREE, mesuree : ce checkpoint bloquait 21,6 s de fil principal le 2026-09-04
         // (`gels.jsonl`, pointes a 10 s pour un rename de 173 Ko). Atomicite et ordre preserves.
         void saveOrchestrationStateAsync(this.orchestrationStateRoot, {
@@ -687,7 +695,8 @@ export class AutowinOS {
           ...(agents && agents.length ? { agents } : {}),
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
           updatedAt: Date.now()
-        }),
+        })
+      },
       onAgentsChanged: (runId, agents) => {
         saveOrchestrationAgentCheckpointAsync(
           this.orchestrationStateRoot,
@@ -1329,9 +1338,7 @@ export class AutowinOS {
            */
           relire: () =>
             resumeControl?.runId
-              ? loadOrchestrationStates(this.orchestrationStateRoot).find(
-                  (etat) => etat.runId === resumeControl.runId
-                )?.usage
+              ? loadOrchestrationState(this.orchestrationStateRoot, resumeControl.runId)?.usage
               : undefined
         }
       )
@@ -1506,9 +1513,7 @@ export class AutowinOS {
       offset?: number
     }>
   ): void {
-    const state = loadOrchestrationStates(this.orchestrationStateRoot).find(
-      (candidate) => candidate.runId === runId
-    )
+    const state = loadOrchestrationState(this.orchestrationStateRoot, runId)
     if (!state) return
     saveOrchestrationState(this.orchestrationStateRoot, { ...state, agents, updatedAt: Date.now() })
   }

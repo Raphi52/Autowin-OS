@@ -43,3 +43,17 @@ describe('formatOrchestrationOutcomePourLeModele — le résultat n’est pas co
     )
   })
 })
+
+describe('la bulle coupée nomme le fichier de la sortie entière (conv-989)', () => {
+  it('avec une copie entière connue : son chemin, plutôt qu’un « livrable entier » introuvable', () => {
+    const chemin = 'D:/donnees/run-livrables/run-abc-1.md'
+    const texte = formatOrchestrationOutcome(true, { ...issue, livrableEntier: chemin })
+    expect(texte).toContain('[tronqué')
+    expect(texte).toContain(chemin)
+  })
+
+  it('sans copie connue : la mention d’avant, inchangée', () => {
+    const texte = formatOrchestrationOutcome(true, issue)
+    expect(texte).toContain('livrable entier dans le run « pistes »')
+  })
+})

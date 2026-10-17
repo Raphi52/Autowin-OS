@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 
 /**
@@ -85,4 +85,31 @@ async function purgerLesAnciens(dossier: string, maintenant: number): Promise<vo
       /* best-effort : un fichier verrouille sera purge a la prochaine ecriture */
     }
   }
+}
+
+/**
+ * LA MEME COPIE, A COTE DU RUN.md (conv-989) — permanente, et lisible par le panneau du run.
+ *
+ * Le panneau « Fil des sous-agents » ouvre un run par le chemin de son RUN.md ; ni ce fichier ni
+ * `trace.json` ne portent l'identifiant du run de l'orchestrateur, sous lequel `run-livrables` range
+ * sa copie. Ecrite par la fin du run (`commands.ts`, qui connait les deux), la copie voisine se
+ * retrouve par convention de nom, sans identifiant. Elle ne suit pas la purge a 30 jours : elle vit
+ * et meurt avec son RUN.md.
+ */
+export const NOM_LIVRABLE_DU_RUN = 'livrable.md'
+
+export function cheminDuLivrableDuRun(runPath: string): string {
+  return join(dirname(runPath), NOM_LIVRABLE_DU_RUN)
+}
+
+export async function ecrireLivrableDuRun(
+  runPath: string,
+  libelle: string,
+  sorties: readonly SortieDEtape[]
+): Promise<void> {
+  if (!sorties.some((sortie) => sortie.text.trim())) return
+  const fichier = cheminDuLivrableDuRun(runPath)
+  const temporaire = `${fichier}.tmp`
+  await writeFile(temporaire, texteDuLivrableEntier(libelle, sorties), 'utf8')
+  await rename(temporaire, fichier)
 }

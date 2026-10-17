@@ -2,6 +2,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { formatCostCoverage, formatUsd, resolveCostCoverage } from './cost-estimate'
 import type { TokenUsage } from './token-usage'
 import { phasesRestantes, runDAnalyseSeule } from './portee-de-phase'
+import { extraireBilan } from './bilan-d-etape'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -17,6 +18,8 @@ import { phasesRestantes, runDAnalyseSeule } from './portee-de-phase'
 
 export interface OrchestrationOutcome {
   status?: unknown
+  /** Fichier de la copie ENTIÈRE des sorties d'étapes du run (conv-989) : la bulle coupée le nomme. */
+  livrableEntier?: unknown
   valid?: unknown
   gateBlocked?: unknown
   costUsd?: unknown
@@ -732,15 +735,33 @@ function openMarkdownFence(text: string): OpenFence | undefined {
  * On n'ALLONGE PAS le plafond : ce serait une rustine, et le probleme n'est pas la taille mais le
  * silence. Le run garde son livrable entier ; il suffit de dire combien il en reste et ou.
  */
-function boundedMarkdownResult(result: string, maxLength = 4_000, runPath?: string): string {
+function boundedMarkdownResult(
+  result: string,
+  maxLength = 4_000,
+  runPath?: string,
+  livrableEntier?: string
+): string {
   if (result.length <= maxLength) return result
-  const truncated = result.slice(0, maxLength)
+  const label = runLabelFromPath(runPath)
+  // conv-989 : un CHEMIN quand la copie entiere existe — « dans le run » ne disait pas ou la lire.
+  const ou = livrableEntier
+    ? ` — sortie entière : \`${livrableEntier}\``
+    : label
+      ? ` — livrable entier dans le run « ${label} »`
+      : ''
+  /*
+   * LE BILAN DE FIN D'ETAPE RESTE LISIBLE (conv-989) : il est en FIN de sortie, donc exactement ce
+   * qu'une coupe par le debut perdait. On coupe le corps un peu plus tot pour lui laisser sa place ;
+   * les lignes techniques qui le suivent (`SUITE:`, `AUTOWIN_…`) ne s'affichent pas.
+   */
+  const trouve = extraireBilan(result)
+  const bilan = trouve && trouve.bilan.length + 400 < maxLength ? trouve.bilan : undefined
+  const corps = bilan && trouve ? trouve.avant : result
+  const truncated = corps.slice(0, bilan ? maxLength - bilan.length - 2 : maxLength)
   const open = openMarkdownFence(truncated)
   const closure = open ? `\n${open.prefix}${open.marker.repeat(open.length)}` : ''
-  const reste = result.length - maxLength
-  const label = runLabelFromPath(runPath)
-  const ou = label ? ` — livrable entier dans le run « ${label} »` : ''
-  return `${truncated}${closure}\n…[tronqué : ${reste} caractères de plus${ou}]`
+  const reste = corps.length - truncated.length
+  return `${truncated}${closure}\n…[tronqué : ${reste} caractères de plus${ou}]${bilan ? `\n\n${bilan}` : ''}`
 }
 
 /**
@@ -1509,7 +1530,8 @@ function composerLIssue(
         : boundedMarkdownResult(
             visibleResult,
             plafondDuResultat,
-            asString(outcome.runPath) ?? undefined
+            asString(outcome.runPath) ?? undefined,
+            asString(outcome.livrableEntier) ?? undefined
           )
     )
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())

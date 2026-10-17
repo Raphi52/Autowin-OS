@@ -70,6 +70,12 @@ import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
+import type {
+  DemandeCreationBureau,
+  ResultatCreationBureau,
+  ResultatFermetureGeree,
+  ResultatListeBureaux
+} from '../shared/hdesk-gestion'
 export interface ClaudeAccountEntry {
   id: string
   displayName: string
@@ -104,6 +110,9 @@ interface ChatApi {
   hdeskTvArreter: () => Promise<void>
   hdeskTvAct: (geste: GesteTv) => Promise<ResultatGeste>
   hdeskTvBasculer: (id: string) => Promise<{ ok: boolean; message?: string }>
+  hdeskGestionBureaux: () => Promise<ResultatListeBureaux>
+  hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
+  hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
     phrase: string,

@@ -200,6 +200,7 @@ import {
   ligneJournalDErreur,
   saveConvRunTrace
 } from './runs/conv-runs'
+import { cheminDuLivrableDuRun, ecrireLivrableDuRun } from './runs/livrable-entier'
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import {
@@ -3458,6 +3459,16 @@ export class AppCommandBus {
             : !r.valid
               ? 'Livrable refusé par le juge.'
               : undefined
+          // conv-989 : la sortie ENTIÈRE des étapes, à côté du RUN.md. Le panneau du run la lit par
+          // ce nom, et la bulle coupée la nomme (copie permanente, contrairement à `run-livrables`).
+          const livrableDuRun =
+            runPath && r.phaseOutputs.some((sortie) => sortie.text.trim())
+              ? cheminDuLivrableDuRun(runPath)
+              : undefined
+          if (runPath && livrableDuRun)
+            void ecrireLivrableDuRun(runPath, currentRunId ?? runPath, r.phaseOutputs).catch(
+              () => undefined
+            )
           if (runPath) {
             const costCoverage = formatExecutionCostCoverage({
               costUsd: r.costUsd,
@@ -3525,6 +3536,11 @@ export class AppCommandBus {
             turnId: orchestrationTurnId,
             runId: runPath ?? orchestrationTurnId,
             runPath,
+            // conv-989 : la bulle coupée nomme la copie entière des sorties d'étapes — la voisine du
+            // RUN.md quand elle existe (permanente), sinon celle de `run-livrables`.
+            ...((livrableDuRun ?? r.livrableEntier)
+              ? { livrableEntier: livrableDuRun ?? r.livrableEntier }
+              : {}),
             /*
              * PORTEE REELLEMENT JOUEE. Cette lignee recompose l'issue champ par champ (les deux
              * autres font `...result`) et OUBLIAIT `phaseOutputs`. Le pied de cloture derive la

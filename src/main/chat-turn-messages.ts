@@ -1118,6 +1118,30 @@ export function statusEstUneAction(status: string | undefined): boolean {
   return commande !== null && !lecturePure(commande)
 }
 
+/**
+ * LES OUTILS NATIFS D'UN APPEL RÉCUPÉRÉ APRÈS REDÉMARRAGE — même verdict que leurs battements.
+ *
+ * En direct, `anyReadExecuted` et `actionNativeCeTour` sont levés par les battements `chunk.status`
+ * (« Read · x », « Bash · sed -n … »). Quand l'app redémarre pendant l'appel, ces battements ont
+ * été vus par le process MORT : le process repris ne relit que le journal du relais, dont les
+ * outils arrivent en `executionEvidence`. Mesuré le 2026-10-16 (conv-1002, tour
+ * 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc) : 12 lectures dans l'appel récupéré, drapeau resté faux,
+ * relance « question sans lecture » payée 1,70 $. On reconstitue donc le battement (`outil · cible`,
+ * format de `statutComplet`) et on le passe aux DEUX mêmes classeurs : aucune règle dupliquée.
+ */
+export function bilanDesOutilsNatifsRecuperes(
+  preuves: readonly { type: string; command?: string; path?: string }[] | undefined
+): { lecture: boolean; action: boolean } {
+  let lecture = false
+  let action = false
+  for (const preuve of preuves ?? []) {
+    const battement = `${preuve.type} · ${preuve.command ?? preuve.path ?? ''}`
+    if (statusEstUneLecture(battement)) lecture = true
+    if (statusEstUneAction(battement)) action = true
+  }
+  return { lecture, action }
+}
+
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
 export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +

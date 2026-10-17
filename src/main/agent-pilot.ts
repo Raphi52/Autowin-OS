@@ -1,6 +1,11 @@
 import { rappelSansDejaEnvoye } from './rappel-conversations'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
 import {
+  deposerCompteRenduNonVu,
+  lireCompteRenduNonVu,
+  oublierCompteRenduNonVu
+} from './runs/compte-rendu-non-vu-store'
+import {
   deciderRejeuDeChat,
   deciderRepliApresRefus,
   dormirAnnulable,
@@ -52,6 +57,7 @@ import {
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
+  bilanDesOutilsNatifsRecuperes,
   statusEstUneAction,
   statusEstUneLecture,
   statutComplet,
@@ -86,6 +92,7 @@ import { claudeActiveAccountId } from './claude-accounts'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import {
   formatOrchestrationOutcome,
+  formatOrchestrationOutcomePourLeModele,
   isDeliveredOrchestrationOutcome,
   orchestrationEnEchec,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
@@ -975,12 +982,48 @@ export class AgentPilot {
    * repond « la trace ne contient ni son runId, ni ses phases, ni son resultat ». Reponse honnete face
    * a un trou ; le defaut etait le trou.
    *
-   * LIMITE ASSUMEE, dite plutot que cachee : cette carte vit en MEMOIRE. Un redemarrage de l'app entre
-   * les deux tours perd la note, alors que la session, elle, est rehydratee depuis le disque. Le cas
-   * reste donc possible — beaucoup plus rare qu'aujourd'hui, mais pas impossible. Le rendre durable
-   * demanderait de changer la forme du cache de sessions sur disque, hors du perimetre demande.
+   * DURABLE depuis conv-989 (2026-10-16) : la carte memoire est doublee d'un fichier a part
+   * (`runs/compte-rendu-non-vu-store.ts`). Avant, un redemarrage entre les deux tours perdait la
+   * note alors que la session, elle, etait rehydratee depuis le disque — le trou revenait. Les
+   * methodes ci-dessous sont le SEUL acces : memoire d'abord, disque ensuite, oubli des deux.
    */
   private readonly comptesRendusNonVus = new Map<string, string>()
+
+  /**
+   * AJOUTE la note a celle qui attend encore, au lieu de la remplacer (conv-989) : un `/scout` suivi
+   * d'un `/frame` sans message entre les deux ne laissait au modele que le `/frame`. Le cumul reste
+   * sous la borne de tout resultat injecte (conv-312).
+   */
+  private deposerCompteRendu(conversationId: string, texte: string): void {
+    let enAttente = this.comptesRendusNonVus.get(conversationId)
+    try {
+      enAttente ??= lireCompteRenduNonVu(conversationId)
+    } catch {
+      /* cache illisible : la note du jour reste, seule l'ancienne serait perdue */
+    }
+    const cumul = enAttente
+      ? bornerResultatDeCommande('orchestrate', `${enAttente}\n\n---\n\n${texte}`)
+      : texte
+    this.comptesRendusNonVus.set(conversationId, cumul)
+    try {
+      deposerCompteRenduNonVu(conversationId, cumul)
+    } catch {
+      /* cache non ecrit : seul un redemarrage avant le prochain tour perdrait la note */
+    }
+  }
+
+  /** Rend la note en attente PUIS l'oublie : elle n'est remise qu'une fois. */
+  private consommerCompteRendu(conversationId: string): string | undefined {
+    let texte = this.comptesRendusNonVus.get(conversationId)
+    this.comptesRendusNonVus.delete(conversationId)
+    try {
+      texte ??= lireCompteRenduNonVu(conversationId)
+      oublierCompteRenduNonVu(conversationId)
+    } catch {
+      /* cache illisible = aucune note : le tour part sans, comme avant ce correctif */
+    }
+    return texte
+  }
 
   /**
    * DERNIER etat de l'app deja pousse dans chaque conversation.
@@ -1345,20 +1388,31 @@ export class AgentPilot {
       // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
       // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
       // n'affichait que « Workflow Autowin execute. »).
+      const issueDuRun = result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined
+      const erreurDuRun = result.ok ? undefined : String(result.error ?? '')
       const compteRendu = avecAvisEnTete(
-        formatOrchestrationOutcome(
-          result.ok,
-          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-          result.ok ? undefined : String(result.error ?? '')
-        ),
+        formatOrchestrationOutcome(result.ok, issueDuRun, erreurDuRun),
         directiveNotice
       )
       /**
        * Ce tour n'a JAMAIS atteint le modele : on garde son compte-rendu pour le lui donner au tour
        * suivant. Sans ce depot, il se voit demander « on a bien fait tout le processus ? » a propos
        * d'un tour dont rien, dans sa session, ne porte la trace.
+       *
+       * Le depot porte le resultat ENTIER, pas la bulle coupee a 4 000 caracteres (conv-914 : 6 pistes
+       * trouvees, une seule visible pour l'agent). Seule la borne de tout resultat injecte s'applique.
        */
-      if (conversationId) this.comptesRendusNonVus.set(conversationId, compteRendu)
+      if (conversationId)
+        this.deposerCompteRendu(
+          conversationId,
+          bornerResultatDeCommande(
+            'orchestrate',
+            avecAvisEnTete(
+              formatOrchestrationOutcomePourLeModele(result.ok, issueDuRun, erreurDuRun),
+              directiveNotice
+            )
+          )
+        )
       emit({
         kind: 'done',
         text: compteRendu,
@@ -1634,10 +1688,7 @@ export class AgentPilot {
      * Retire meme sans reprise de session : dans ce cas l'historique complet part de toute facon, donc
      * la note est redondante — la garder ne ferait que la faire ressortir plus tard, a contretemps.
      */
-    const compteRenduNonVu = conversationId
-      ? this.comptesRendusNonVus.get(conversationId)
-      : undefined
-    if (conversationId) this.comptesRendusNonVus.delete(conversationId)
+    const compteRenduNonVu = conversationId ? this.consommerCompteRendu(conversationId) : undefined
     /*
      * LE RAPPEL EST INJECTE, PAS ATTENDU.
      *
@@ -2374,6 +2425,14 @@ export class AgentPilot {
       echecDeLaDerniereIteration = false
       rejeuNatifCetteIteration = false
       iterationNatif = i
+      // Appel récupéré après redémarrage : ses outils natifs n'ont battu que dans le process mort.
+      // Sans ce bilan, « question sans lecture » relançait un tour qui avait lu (conv-1002, tour
+      // 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc, 1,70 $) — voir `bilanDesOutilsNatifsRecuperes`.
+      if (recoveredHere) {
+        const bilan = bilanDesOutilsNatifsRecuperes(recoveredHere.result.executionEvidence)
+        if (bilan.lecture) anyReadExecuted = true
+        if (bilan.action) actionNativeCeTour = true
+      }
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
@@ -3662,11 +3721,23 @@ export class AgentPilot {
             closureNotice
           )
           compteRenduOrchestration = compteRenduAutoritatif
+          // Le MODELE lit le resultat ENTIER (conv-914) ; `compteRenduAutoritatif`, coupe a 4 000
+          // caracteres, ne sert plus que de repli AFFICHE. La borne de tout resultat injecte
+          // (conv-312) protege seule la fenetre de contexte.
+          const compteRenduPourLeModele = bornerResultatDeCommande(
+            token.name,
+            formatOrchestrationOutcomePourLeModele(
+              r.ok,
+              outcome,
+              r.ok ? undefined : String(r.error ?? ''),
+              closureNotice
+            )
+          )
           results.push(
             `${token.name} → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
               `provisoire d'un worker ; aucune autre orchestration ne sera acceptée dans ce tour) :
 ` +
-              compteRenduAutoritatif +
+              compteRenduPourLeModele +
               `
 
 Écris maintenant ta clôture pour l'utilisateur à partir de CES faits, sans en ` +

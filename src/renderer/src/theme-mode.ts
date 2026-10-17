@@ -58,6 +58,15 @@ export const THEMES: readonly Theme[] = [
   { id: 'holographique-clair', libelle: 'Holographique blanc', base: 'clair' },
   // Vert phosphore sur noir, chasse fixe, copie d Internet Typewriter (writer.bighugelabs.com).
   { id: 'machine-a-ecrire', libelle: 'Machine à écrire', base: 'sombre' },
+  // fix-ok: entree retiree puis remise expres pour prouver le test (sans elle : vitest exit 1, avec : 0).
+  // L apparence de Claude en sombre (conv-269, 2026-10-16) : anthracite chaud #262624, terracotta
+  // #d97757, titres en serif, aucun decor. Couche generee par scripts/theme-nebuleuse-verre.mjs
+  // ninja-claude, plus la feuille ecrite a la main assets/theme-ninja-claude.css.
+  { id: 'ninja-claude', libelle: 'Ninja Claude', base: 'sombre' },
+  // La version CLAIRE de Ninja Claude (conv-269, 2026-10-16) : creme #faf9f5, encre #141413,
+  // terracotta, titres en serif. Couche generee par scripts/theme-nebuleuse-verre.mjs vanilla-claude,
+  // plus la feuille ecrite a la main assets/theme-vanilla-claude.css.
+  { id: 'vanilla-claude', libelle: 'Vanilla Claude', base: 'clair' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },

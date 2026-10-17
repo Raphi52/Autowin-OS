@@ -99,6 +99,12 @@ import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
+import type {
+  DemandeCreationBureau,
+  ResultatCreationBureau,
+  ResultatFermetureGeree,
+  ResultatListeBureaux
+} from '../shared/hdesk-gestion'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -121,6 +127,13 @@ const api = {
   hdeskTvAct: (geste: GesteTv): Promise<ResultatGeste> => ipcRenderer.invoke('hdesk:tv:act', geste),
   hdeskTvBasculer: (id: string): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke('hdesk:tv:basculer', id),
+  // Vue « Bureaux cachés » (conv-951) : tous les bureaux, fermer (fil lu dans la fiche), créer.
+  hdeskGestionBureaux: (): Promise<ResultatListeBureaux> =>
+    ipcRenderer.invoke('hdesk:gestion:bureaux'),
+  hdeskGestionFermer: (id: string): Promise<ResultatFermetureGeree> =>
+    ipcRenderer.invoke('hdesk:gestion:fermer', id),
+  hdeskGestionCreer: (demande: DemandeCreationBureau): Promise<ResultatCreationBureau> =>
+    ipcRenderer.invoke('hdesk:gestion:creer', demande),
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
   // jeton opaque borne a une cible, une operation et cinq minutes.

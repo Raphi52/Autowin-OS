@@ -582,12 +582,22 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     deguisee en URL (`brain-reglage.ts`).
     //   `os:brain-reglage:reset` ('Brain') — efface ce reglage seul ; aucun argument.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-16 (conv-298) — 224 -> 225. UN canal, garde des sa PREMIERE ligne par
+    // MISE A JOUR 2026-10-16 (conv-298) — +1. UN canal, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Dossier personnel')` (`src/main/index.ts`) :
     //   `os:dossierPersonnel` — rend le dossier personnel (`homedir()` canonise), cible de l'entree
     //   « This computer » du choix du dossier de travail. LECTURE SEULE, aucun argument recu, rien
     //   n'est ecrit ni execute. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(225)
+    // MISE A JOUR 2026-10-16 (conv-951) — +3. Vue « Bureaux cachés » : TROIS canaux
+    //   (`src/main/index.ts`, registerHdeskTvIpc), chacun garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Vue Bureaux cachés')`, Windows seulement :
+    //   `hdesk:gestion:bureaux` — LECTURE de la liste des bureaux vivants et du registre ; aucun argument.
+    //   `hdesk:gestion:fermer` — ne recoit que l'IDENTIFIANT (motif ID_BUREAU) ; le fil passe a
+    //     hdesk-fermer.ps1 est lu dans la FICHE, jamais pris de l'ecran (`fermerBureauGere`).
+    //   `hdesk:gestion:creer` — demande VALIDEE (`refusCreation`) avant tout lancement ; les valeurs
+    //     partent entre apostrophes PowerShell echappees dans une commande encodee, jamais par un shell.
+    //   `unguarded` reste VIDE.
+    // Fusion des deux (mise a jour du 2026-10-18, conv-322) : 224 + 1 + 3 = 228.
+    expect(handlers).toHaveLength(228)
     expect(unguarded).toEqual([])
   })
 

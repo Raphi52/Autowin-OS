@@ -1,5 +1,5 @@
 import {
-  loadOrchestrationStates,
+  loadOrchestrationState,
   saveOrchestrationState,
   type OrchestrationRunState
 } from './orchestration-state'
@@ -16,6 +16,7 @@ import { normalizeClaudeUsage } from '../providers/claude'
 import { coutDuTourDepuisCumul } from '../providers/claude-session-cost'
 import { codexExecutionEvidenceFromItem, type CodexExecItem } from '../providers/codex'
 import { isSameProcessIdentity } from '../process-identity'
+import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 
 /**
  * Un run est-il encore EN TRAIN de travailler ailleurs ?
@@ -410,7 +411,7 @@ export function preparePersistedRunForRelaunch(
   nowMs = Date.now(),
   onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state?.usage || state.usage.activeCalls <= 0 || state.terminal) return state ?? null
 
   const liveness = runLiveness(state, identityOf)
@@ -562,7 +563,7 @@ export function terminalizeInterruptedPersistedRun(
   allowUnknown = false,
   probes: InterruptedTerminalizationProbes = {}
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state || state.terminal || !state.usage || state.usage.activeCalls <= 0) return state ?? null
 
   const liveness = runLiveness(state, identityOf)
@@ -740,7 +741,18 @@ function detachedClaudeSuccess(
       const part = rawPart as Record<string, unknown>
       return part.type === 'text' && typeof part.text === 'string' ? [part.text] : []
     })
-    .join('')
+    /*
+     * MÊME SÉPARATEUR QUE LE DIRECT (`providers/claude.ts`, `separationEntreBlocsTexte`). Un simple
+     * `join('')` recollait « …le pilotage.Contrôle à 0. » là où le direct avait affiché
+     * « …le pilotage.\n\nContrôle à 0. » : le préfixe déjà diffusé ne préfixait plus le texte
+     * récupéré, et `consumeStreamedPrefix` jetait TOUT le bloc. Mesuré le 2026-10-16 (conv-1002,
+     * tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc) : la galerie html-render du tour 3, payée, n'a
+     * jamais atteint le fil après le redémarrage.
+     */
+    .reduce(
+      (accumule, morceau) => accumule + separationEntreBlocsTexte(accumule, morceau) + morceau,
+      ''
+    )
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const event = jsonRecord(lines[index])
     if (!event) continue
@@ -1034,7 +1046,7 @@ export function settleCompletedDetachedPhase(
   runId: string,
   onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
-  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  const state = loadOrchestrationState(root, runId)
   if (!state?.usage || state.usage.activeCalls !== 1) return null
   const attribution = detachedSingleAgent(state)
   if (!attribution?.agent.journalPath || !attribution.agent.provider) return null
