@@ -21,6 +21,12 @@ import {
   type Usage
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
+import {
+  askFaitChoisirUneProposition,
+  boucleDraftEnCours,
+  REFUS_ASK_DRAFT,
+  STATUT_REFUS_ASK_DRAFT
+} from './draft-choix-par-boutons'
 import { coupesParPoids } from './chat-session-poids'
 import { loadConvActivity } from './activity/conv-activity'
 import {
@@ -1608,6 +1614,9 @@ export class AgentPilot {
     const invoked =
       invokedSkillId(lastUserMessage?.content ?? '') ??
       skillNommeeSansBarre(lastUserMessage?.content ?? '')
+    // /draft : le choix entre propositions passe par les boutons du bloc, jamais par `ask`
+    // (draft-choix-par-boutons.ts — conv-310/311/312, 2026-10-17).
+    const draftChoixParBoutons = boucleDraftEnCours(history, invoked)
     /*
      * UN `/nom` INCONNU NE DOIT PLUS DISPARAITRE EN SILENCE.
      *
@@ -3437,6 +3446,20 @@ export class AgentPilot {
           // relance « question sans lecture » a fait reposer la meme question -> 2 cartes a l'ecran.
           // La premiere est deja affichee : la seconde n'est pas emise.
           results.push('ask → une question est DÉJÀ affichée dans ce tour : ne la repose pas.')
+          tokenIndex += 1
+          continue
+        }
+        if (
+          token.name === 'ask' &&
+          draftChoixParBoutons &&
+          askFaitChoisirUneProposition(token.args)
+        ) {
+          // /draft : LE CHOIX SE FAIT PAR LES BOUTONS DU BLOC. Tours 938a67c1-78bc-4bc5-addf-865167663f44
+          // (conv-312) et c7d72274-db73-49bd-93fe-435f6647863a (conv-310) : `ask` sans aucun bloc de
+          // choix, malgre la procedure. La question n'est pas affichee et le tour continue : le
+          // modele recoit l'ordre de poser le carrousel (draft-choix-par-boutons.ts).
+          emit({ kind: 'provider-status', iteration: i, text: STATUT_REFUS_ASK_DRAFT })
+          results.push(REFUS_ASK_DRAFT)
           tokenIndex += 1
           continue
         }
