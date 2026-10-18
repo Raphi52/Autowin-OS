@@ -20,25 +20,41 @@ import * as THREE from 'three'
  *     22 lumières → 8) ; son éclat est dans ses nuanceurs, ses feux et ses halos ;
  *   - cacher la lune : il reste hors de son disque et de son halo proche (le test voisin tire des
  *     rayons vers elle, tours et mâts compris) ;
- *   - se perdre dans le brouillard de la rue : à 2,5 km, `FogExp2` l'effacerait, il a sa propre brume.
+ *   - se perdre dans le brouillard de la rue : à 1,3 km, `FogExp2` l'effacerait, il a sa propre brume.
  */
 
 /**
  * Où il est, vu de la rue. Azimut compté depuis −z vers +x, hauteur en radians, distance en mètres.
  *
- * Demande de l'utilisateur (conv-319, 2026-10-18) : « Agrandis le vaisseau mère du fond de l'Accueil
- * d'environ 40 % en gardant la lune dégagée […] met le a gauche au dessus de la ville ». Il était à
- * l'azimut 0, à 2 900 m, dans la fenêtre de ciel à gauche de la lune (195 px de large en 1600 × 900).
- * Il est maintenant au-dessus de la ville, que l'on ne voit qu'à gauche du point de fuite de l'avenue.
- * Mesuré sur la vraie caméra en 1600 × 900 (`.autowin-tmp/draft-vaisseau-v2/grand/placer.ts`) : centre
- * en (420, 150), enveloppe x 278 à 545 et y 59 à 219, soit 267 px de large (+37 %). Vu sur ce côté de
- * l'image, l'anneau s'élargit déjà de lui-même : à 2 071 m (2 900 / 1,4), il aurait mesuré 326 px.
+ * Demandes de l'utilisateur (conv-319, 2026-10-18) : « agrandis le vaisseau mère […] d'environ 40 % »,
+ * puis « plus grandes plus belle et au centre en fait pas a gauche », et enfin, devant les captures :
+ * « Au centre en haut, en grand : je déplace la lune à gauche au-dessus de la ville et j'éclaircis les
+ * câbles devant le vaisseau ». Il était à 2 900 m (195 px de large en 1600 × 900), puis à gauche à
+ * 2 450 m (267 px). Il est maintenant EN HAUT AU CENTRE, à 1 300 m, à la place de l'ancienne lune
+ * (déplacée à gauche, voir `CIEL_LUNAIRE.lune`) ; les câbles devant lui sont éclaircis par la toile
+ * (`eclaircieVaisseau`).
+ * Mesuré sur la vraie caméra (`.autowin-tmp/draft-vaisseau-v2/centre/placer.ts`) : sur l'écran de
+ * l'utilisateur (1745 × 938), centre en (788, 182), enveloppe x 561 à 1002 et y 1 à 294 ; en
+ * 1600 × 900, ses coques mesurent 423 px de large, 2,17 fois l'original. Centré en x 850, la façade
+ * de droite cachait le tiers droit de la roue ; plus haut, les mâts de la ville sortaient de l'écran ;
+ * plus bas, l'immeuble du bout de l'avenue en cachait davantage.
  * Le cap suit l'azimut (0,15 − azimut) pour qu'on voie la roue sous le même angle qu'avant.
- * Pas plus haut : sur l'écran de l'utilisateur (1745 × 938, toutes les tuiles masquées), le titre
- * « Autowin Accueil » couvre y 40 à 87 de ce côté ; centré en y 115, il cachait l'arc arrière de la
- * jante et les feux des toits. La lune, en (842, 40), est à 0,35 rad de sa pièce la plus proche.
+ * La lune, en (470, 130) chez lui, est à 0,087 rad de sa pièce la plus proche (le test exige 0,07).
  */
-export const VAISSEAU = { azimut: -0.297, hauteur: 0.312, distance: 2450, cap: 0.447 }
+export const VAISSEAU = { azimut: 0.04, hauteur: 0.313, distance: 1300, cap: 0.11 }
+
+/** La direction du vaisseau vue de la rue, et son rayon apparent en radians (jante et feux). */
+export function eclaircieVaisseau(): { direction: THREE.Vector3; rayon: number } {
+  const { azimut, hauteur, distance } = VAISSEAU
+  return {
+    direction: new THREE.Vector3(
+      Math.sin(azimut) * Math.cos(hauteur),
+      Math.sin(hauteur),
+      -Math.cos(azimut) * Math.cos(hauteur)
+    ),
+    rayon: (MOYEU_CITE.jante + 18) / distance
+  }
+}
 
 /** La roue et la cité de son moyeu. */
 export const MOYEU_CITE = {
@@ -70,6 +86,31 @@ export const GROSSISSEMENT_FEUX = 1.7
  * (mesuré sur la ville en contrebas, note Brain « moyenne des fenêtres lointaines »).
  */
 export const MOYENNE_FENETRES_LOIN = 0.04
+
+/**
+ * L'éclat du vaisseau. Demande de l'utilisateur (conv-319) : « plus grandes plus belle ». La forme
+ * reste celle qu'il a choisie (la 6 · Anneaux d'approche) ; sont plus vifs : les feux de la jante,
+ * du bord du disque, des tramways et des toits (tailles), la vague des cercles d'atterrissage (au repos,
+ * puis au passage de la vague), et la lueur bleue sous le disque. Avant, dans l'ordre ci-dessous :
+ * 7, −14, 7, 10, 10, −16, 6, 0,18 et 1,4, lueur de 160 m à 0,3.
+ */
+export const ECLAT = {
+  /** Taille des feux de la jante ; ses balises rouges clignotent, en taille négative. */
+  jante: 9,
+  baliseJante: -16,
+  /** Feux cyan du bord du disque, tramways, feux de toits et balises des plus hautes tours. */
+  disque: 8,
+  tramways: 12,
+  toits: 12,
+  balises: -18,
+  /** Feux des cercles d'atterrissage, leur éclat au repos, et le surcroît au passage de la vague. */
+  anneaux: 7,
+  vagueRepos: 0.3,
+  vaguePic: 2.0,
+  /** La lueur bleue sous le disque : sa taille en mètres et son opacité. */
+  lueur: 240,
+  lueurOpacite: 0.45
+} as const
 
 /** La brume du brouillon, réglée pour un vaisseau à 2,3 km. */
 const BRUME_BROUILLON = 0.00035
@@ -381,12 +422,12 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
       Math.sin(a) * (R + 18),
       0,
       i % 12 ? 0xdfeaff : 0xff2040,
-      i % 12 ? 7 : -14
+      i % 12 ? ECLAT.jante : ECLAT.baliseJante
     ])
   }
   for (let i = 0; i < 48; i++) {
     const a = (i / 48) * TAU
-    feuxFixes.push([Math.cos(a) * 152, Math.sin(a) * 152, 0, 0x2ee8ff, 7])
+    feuxFixes.push([Math.cos(a) * 152, Math.sin(a) * 152, 0, 0x2ee8ff, ECLAT.disque])
   }
 
   // ---------- les tramways : huit feux par pont, qui vont et viennent du disque à la jante ----------
@@ -400,7 +441,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
         const sens = k % 2 ? 1 : -1
         aM.push(phi, rnd(), sens * (0.07 + rnd() * 0.04), sens * 6)
         aC.push(...(sens > 0 ? [1, 0.85, 0.55] : [0.5, 0.85, 1]))
-        aS.push(10)
+        aS.push(ECLAT.tramways)
       }
     }
     feuxMobiles(
@@ -429,7 +470,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
         const a = (i / nb) * TAU
         position.push(Math.cos(a) * r, Math.sin(a) * r, 22)
         aC.push(0.75, 0.88, 1)
-        aS.push(6)
+        aS.push(ECLAT.anneaux)
       }
     }
     return feuxMobiles(
@@ -439,12 +480,12 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
         aC: { valeurs: aC, taille: 3 },
         aS: { valeurs: aS, taille: 1 }
       },
-      `attribute vec3 aC;attribute float aS;uniform float uT;uniform float uE;varying vec3 vC;void main(){float r=length(position.xy)/140.0;float k=exp(-pow((fract(uT*${MOYEU_CITE.vague.toFixed(2)})-r)*7.0,2.0));vC=aC*(0.18+1.4*k);vec4 mv=modelViewMatrix*vec4(position,1.0);` +
+      `attribute vec3 aC;attribute float aS;uniform float uT;uniform float uE;varying vec3 vC;void main(){float r=length(position.xy)/140.0;float k=exp(-pow((fract(uT*${MOYEU_CITE.vague.toFixed(2)})-r)*7.0,2.0));vC=aC*(${ECLAT.vagueRepos.toFixed(2)}+${ECLAT.vaguePic.toFixed(2)}*k);vec4 mv=modelViewMatrix*vec4(position,1.0);` +
         TAILLE_FEU
     )
   })()
   anneaux.name = 'anneaux-approche'
-  halo(roue, 0x5fa0ff, 160, 0, 0, 40, 0.3)
+  halo(roue, 0x5fa0ff, ECLAT.lueur, 0, 0, 40, ECLAT.lueurOpacite)
 
   // ---------- DESSUS : quelques lumières sur la ville, chacune au bout d'un mât ----------
   // Vu d'en dessous, un feu posé à ras du toit serait caché par le toit lui-même : le mât dépasse
@@ -458,10 +499,10 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     .slice()
     .sort((a, b) => b.h - a.h)
     .slice(0, MOYEU_CITE.balises))
-    toitFeu(t, 0xff2040, -16, 10)
+    toitFeu(t, 0xff2040, ECLAT.balises, 10)
   const couleurs = [0xfff1d6, 0xffb062, 0x2ee8ff, 0xff2fa0]
   for (const t of toits)
-    if (rnd() < MOYEU_CITE.toitsAllumes) toitFeu(t, couleurs[(rnd() * 4) | 0], 10, 4)
+    if (rnd() < MOYEU_CITE.toitsAllumes) toitFeu(t, couleurs[(rnd() * 4) | 0], ECLAT.toits, 4)
   const avecMat = toits.filter((t) => t.mat > 0)
   const mats = new THREE.InstancedMesh(
     new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),

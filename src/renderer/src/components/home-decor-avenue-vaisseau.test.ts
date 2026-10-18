@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { AVENUE, CAMERA_AVENUE, CIEL_LUNAIRE, directionLune } from './home-decor-avenue'
 import {
   brumePour,
+  ECLAT,
+  eclaircieVaisseau,
   monterVaisseau,
   MOYEU_CITE,
   VAISSEAU,
@@ -24,11 +26,12 @@ import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
  *   1. une couleur du ciel, de la brume ou de l'horizon qui redevient violette (rouge au-dessus du
  *      vert), ou l'ancien violet encore écrit dans `home-decor-avenue.ts` ;
  *   2. la lune ou le vaisseau hors du cadre de la rue, ou sous l'horizon ; le vaisseau qui quitte le
- *      ciel au-dessus de la ville, à gauche (« met le a gauche au dessus de la ville »), ou qui n'est
- *      plus grossi d'environ 40 % (« agrandis le vaisseau mère […] d'environ 40 % ») ;
+ *      haut du centre de l'écran, ou la lune qui revient à sa droite (« Au centre en haut, en grand : je
+ *      déplace la lune à gauche au-dessus de la ville ») ; un vaisseau qui n'est plus deux fois plus
+ *      large qu'à l'origine (« plus grandes plus belle ») ;
  *   3. le vaisseau, sa couronne ou une de ses tours posés sur la lune (sa trouée est la raison d'être de la 5) ;
  *   4. une lumière ajoutée par le vaisseau → toutes les matières de la rue s'alourdissent (conv-301) ;
- *   5. une matière du vaisseau soumise au brouillard de la rue → à 2,5 km il disparaît ;
+ *   5. une matière du vaisseau soumise au brouillard de la rue → à 1,3 km il disparaît ;
  *   6. DEUX vaisseaux au lieu d'un ; une tour qui PEND de nouveau sous la ville, ou qui quitte le disque ;
  *      un dessus sans lumières, ou des feux de toit cachés par leur propre toit (pas de mât) ; plus de
  *      cercles de feux d'atterrissage sous la plaque, ou une vague qui ne court plus du centre au bord ;
@@ -150,7 +153,7 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     expect(lumieres).toBe(0)
   })
 
-  it('ÉCHAPPE AU BROUILLARD DE LA RUE : à 2,5 km, FogExp2 l effacerait', () => {
+  it('ÉCHAPPE AU BROUILLARD DE LA RUE : à 1,3 km, FogExp2 l effacerait', () => {
     const { vaisseau } = monter()
     let matieres = 0
     vaisseau.groupe.traverse((o) => {
@@ -273,9 +276,11 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     expect(centre.y).toBeLessThan(0.95)
   })
 
-  it('PLANE AU-DESSUS DE LA VILLE, sa roue mesure ses 600 m, et il reste sous la sphère du ciel', () => {
+  it('PLANE HAUT AU-DESSUS DU DÉCOR, sa roue mesure ses 600 m, et il reste sous la sphère du ciel', () => {
     const { vaisseau } = monter()
-    expect(coque(vaisseau.groupe).min.y).toBeGreaterThan(300)
+    // ce qu'il y a de plus haut sous lui : les tours lointaines, ≤ 50 m à cet endroit, et la tour de la
+    // Spirale (x −95, z −230), antenne comprise vers 90 m
+    expect(coque(vaisseau.groupe).min.y).toBeGreaterThan(200)
     vaisseau.roue.updateWorldMatrix(true, true)
     const taille = new THREE.Box3().setFromObject(vaisseau.roue).getSize(new THREE.Vector3())
     expect(Math.max(taille.x, taille.y, taille.z)).toBeGreaterThan(600)
@@ -330,22 +335,57 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     }
   })
 
-  it('« met le a gauche au dessus de la ville » : à gauche de la lune et du point de fuite, côté ville', () => {
+  it('« Au centre en haut » : au milieu de l écran, dans sa moitié haute, la lune à sa gauche', () => {
     const { vaisseau } = monter()
     const centre = coque(vaisseau.groupe).getCenter(new THREE.Vector3())
-    // la ville est à gauche de l'avenue : ses premiers îlots commencent à x = −41
-    expect(centre.x).toBeLessThan(-41)
-    for (const aspect of [16 / 9, 16 / 10, 4 / 3]) {
+    // l'écran de l'utilisateur (1745 × 938) et les formats courants
+    for (const aspect of [1745 / 938, 16 / 9, 16 / 10]) {
       const c = camera(aspect)
       const ecran = centre.clone().project(c)
       const lune = OEIL.clone().addScaledVector(directionLune(), 3000).project(c)
-      const fuite = new THREE.Vector3(...CAMERA_AVENUE.cible).project(c)
-      expect(ecran.x).toBeLessThan(fuite.x - 0.2)
-      expect(ecran.x).toBeLessThan(lune.x - 0.4)
+      expect(Math.abs(ecran.x)).toBeLessThan(0.15)
+      expect(ecran.y).toBeGreaterThan(0.3)
+      expect(lune.x).toBeLessThan(ecran.x - 0.35)
     }
   })
 
-  it('« agrandis le vaisseau d environ 40 % » : 267 px de large en 1600 × 900, contre 195 px avant', () => {
+  it('« plus belle » : feux plus vifs, vague plus lumineuse et lueur plus large qu avant', () => {
+    const { vaisseau } = monter()
+    // avant : jante 7, disque 7, tramways 10, toits 10, cercles 6, vague 0,18 + 1,4, lueur 160 m à 0,3
+    expect(ECLAT.jante).toBeGreaterThan(7)
+    expect(ECLAT.disque).toBeGreaterThan(7)
+    expect(ECLAT.tramways).toBeGreaterThan(10)
+    expect(ECLAT.toits).toBeGreaterThan(10)
+    expect(ECLAT.anneaux).toBeGreaterThan(6)
+    expect(ECLAT.vaguePic).toBeGreaterThan(1.4)
+    expect(ECLAT.lueur).toBeGreaterThan(160)
+    // et le vaisseau s'en sert : les feux blancs de la jante, la vague des cercles, la lueur
+    const tailles = vaisseau.feux.geometry.getAttribute('aS')
+    let jante = 0
+    for (let i = 0; i < tailles.count; i++) if (tailles.getX(i) === ECLAT.jante) jante++
+    expect(jante).toBe(132)
+    expect((vaisseau.anneaux.material as THREE.ShaderMaterial).vertexShader).toMatch(
+      /vC=aC\*\(0\.30\+2\.00\*k\)/
+    )
+    let lueur = 0
+    vaisseau.roue.traverse((o) => {
+      if ((o as THREE.Sprite).isSprite && o.scale.x === ECLAT.lueur) lueur++
+    })
+    expect(lueur).toBe(1)
+  })
+
+  it('l éclaircie des câbles vise le vaisseau et couvre sa jante', () => {
+    const { vaisseau } = monter()
+    const { direction, rayon } = eclaircieVaisseau()
+    const centre = coque(vaisseau.groupe).getCenter(new THREE.Vector3()).sub(OEIL)
+    expect(centre.angleTo(direction)).toBeLessThan(0.03)
+    vaisseau.roue.updateWorldMatrix(true, true)
+    const taille = new THREE.Box3().setFromObject(vaisseau.roue).getSize(new THREE.Vector3())
+    // le rayon apparent de la jante, feux compris (606 m de diamètre)
+    expect(rayon).toBeCloseTo(Math.max(taille.x, taille.z) / 2 / VAISSEAU.distance, 1)
+  })
+
+  it('« plus grandes » : 423 px de large en 1600 × 900, plus de deux fois les 195 px d origine', () => {
     const { vaisseau } = monter()
     vaisseau.groupe.updateMatrixWorld(true)
     const c = camera(1600 / 900)
@@ -360,8 +400,8 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
         xs.push((p.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).project(c).x + 1) * 800)
     })
     const largeur = Math.max(...xs) - Math.min(...xs)
-    expect(largeur / 195).toBeGreaterThan(1.3)
-    expect(largeur / 195).toBeLessThan(1.5)
+    expect(largeur / 195).toBeGreaterThan(1.9)
+    expect(largeur / 195).toBeLessThan(2.4)
   })
 
   it('flotte sans s en aller, et la roue tourne en emportant sa ville', () => {
@@ -387,5 +427,12 @@ describe('branchement dans le fond de l Accueil (home-decor-avenue.ts)', () => {
     expect(sans).toMatch(/const vaisseau = monterVaisseau\(\{/)
     expect(sans.indexOf('monterVaisseau({')).toBeLessThan(sans.indexOf('compilerEnFond(scene)'))
     expect(sans).toMatch(/vaisseau\.animer\(t\)/)
+  })
+
+  it('donne à la toile la direction du vaisseau : les câbles s éclaircissent devant lui', () => {
+    expect(sans).toMatch(
+      /import \{ eclaircieVaisseau, monterVaisseau \} from '\.\/home-decor-avenue-vaisseau'/
+    )
+    expect(sans).toMatch(/monterToile\(\{[\s\S]*?eclaircie: eclaircieVaisseau\(\)[\s\S]*?\}\)/)
   })
 })

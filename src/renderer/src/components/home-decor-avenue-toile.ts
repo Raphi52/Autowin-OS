@@ -115,6 +115,67 @@ export interface ContexteToile {
     sol?: number
   ) => void
   enseignes: EnseigneDeToile[]
+  /**
+   * L'éclaircie : une direction du ciel devant laquelle le filet s'éclaircit — le vaisseau mère
+   * (conv-319 : « j'éclaircis les câbles devant le vaisseau »). Absente, la toile reste entière.
+   */
+  eclaircie?: { direction: THREE.Vector3; rayon: number }
+}
+
+/**
+ * Comment le filet s'éclaircit devant le vaisseau. La rue défile : chaque travée finit par passer
+ * devant lui, si bien qu'aucun câble précis ne peut être retiré une fois pour toutes. C'est donc la
+ * DIRECTION qui s'éclaircit : vu de la caméra, dans un cône du rayon apparent de la jante (`interieur`
+ * = 1 : toute la largeur de la roue), un câble sur quatre reste (`garde`) ; ils reviennent tous, en
+ * fondu, jusqu'à `exterieur` × ce rayon. À 0,8, les bords de la roue gardaient tous leurs câbles. Chaque câble tire une fois son numéro (`aTirage`) : il est gardé ou effacé en entier,
+ * jamais en pointillé.
+ */
+export const ECLAIRCIE = { garde: 0.25, interieur: 1.0, exterieur: 1.45 } as const
+
+/** Le numéro d'un câble, entre 0 et 1, tiré de son rang : la toile garde sa propre graine intacte. */
+const tirage = (rang: number): number => {
+  const x = Math.sin(rang * 12.9898 + 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
+
+/** Éclaircit les câbles d'une matière dans la direction donnée (voir `ECLAIRCIE`). */
+export function eclaircirFils(
+  mat: THREE.MeshStandardMaterial,
+  eclaircie: { direction: THREE.Vector3; rayon: number }
+): void {
+  const uniformes = {
+    uEclDir: { value: eclaircie.direction.clone().normalize() },
+    uEclCos: {
+      value: new THREE.Vector2(
+        Math.cos(eclaircie.rayon * ECLAIRCIE.exterieur),
+        Math.cos(eclaircie.rayon * ECLAIRCIE.interieur)
+      )
+    }
+  }
+  mat.onBeforeCompile = (sh): void => {
+    Object.assign(sh.uniforms, uniformes)
+    sh.vertexShader = sh.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute float aTirage;\nvarying float vTirage;\nvarying vec3 vMondeFil;'
+      )
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvTirage = aTirage;\nvMondeFil = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+      )
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform vec3 uEclDir;\nuniform vec2 uEclCos;\nvarying float vTirage;\nvarying vec3 vMondeFil;'
+      )
+      .replace(
+        'void main() {',
+        'void main() {\n' +
+          '  float eclC = dot(normalize(vMondeFil - cameraPosition), uEclDir);\n' +
+          `  if (vTirage > mix(${ECLAIRCIE.garde.toFixed(2)}, 1.0, 1.0 - smoothstep(uEclCos.x, uEclCos.y, eclC))) discard;`
+      )
+  }
+  mat.customProgramCacheKey = (): string => 'toile-eclaircie'
 }
 
 export interface ToileElectrique {
@@ -168,11 +229,14 @@ export function fusionner(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const pos = new Float32Array(nv * 3)
   const nor = new Float32Array(nv * 3)
   const idx = new Uint32Array(ni)
+  // le numéro de chaque câble (voir `ECLAIRCIE`), seulement s'ils en portent tous un
+  const tirages = geos.every((g) => g.attributes.aTirage) ? new Float32Array(nv) : null
   let ov = 0
   let oi = 0
   for (const g of geos) {
     pos.set(g.attributes.position.array as Float32Array, ov * 3)
     nor.set(g.attributes.normal.array as Float32Array, ov * 3)
+    if (tirages) tirages.set(g.attributes.aTirage.array as Float32Array, ov)
     const src = g.index ? g.index.array : []
     for (let k = 0; k < src.length; k++) idx[oi + k] = src[k] + ov
     ov += g.attributes.position.count
@@ -182,6 +246,7 @@ export function fusionner(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const out = new THREE.BufferGeometry()
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3))
   out.setAttribute('normal', new THREE.BufferAttribute(nor, 3))
+  if (tirages) out.setAttribute('aTirage', new THREE.BufferAttribute(tirages, 1))
   out.setIndex(new THREE.BufferAttribute(idx, 1))
   return out
 }
@@ -304,7 +369,13 @@ export function monterToile(c: ContexteToile): ToileElectrique {
       pts.push(new THREE.Vector3().lerpVectors(a, b, s).add(V(0, -f * 4 * s * (1 - s), 0)))
     }
     const courbe = new THREE.CatmullRomCurve3(pts)
-    tubes.push(new THREE.TubeGeometry(courbe, 22, r, 4))
+    const tube = new THREE.TubeGeometry(courbe, 22, r, 4)
+    const n = tube.attributes.position.count
+    tube.setAttribute(
+      'aTirage',
+      new THREE.BufferAttribute(new Float32Array(n).fill(tirage(tubes.length)), 1)
+    )
+    tubes.push(tube)
     return courbe
   }
   // les poteaux électriques côté ville, entre les réverbères (eux sont à 8 et 25,5 m)
@@ -644,8 +715,15 @@ export function monterToile(c: ContexteToile): ToileElectrique {
   ]
   const ROSE_NEON = new THREE.Color(0xff5fc0)
 
-  // tous les câbles de la travée en un seul maillage
-  travee.add(new THREE.Mesh(fusionner(tubes), noir))
+  // tous les câbles de la travée en un seul maillage, éclaircis devant le vaisseau mère
+  let fils = noir
+  if (c.eclaircie) {
+    fils = noir.clone()
+    eclaircirFils(fils, c.eclaircie)
+  }
+  const cables = new THREE.Mesh(fusionner(tubes), fils)
+  cables.name = 'cables'
+  travee.add(cables)
 
   // ---------- LES COPIES : une travée dans chaque copie du décor ----------
   const pendus: Pendu[] = []

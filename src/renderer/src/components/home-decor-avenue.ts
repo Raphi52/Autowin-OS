@@ -12,7 +12,7 @@ import { monterSpirale } from './home-decor-avenue-spirale'
 import { monterToile } from './home-decor-avenue-toile'
 import { GAREE, monterVoitures } from './home-decor-avenue-voitures'
 import { AMBIANCE_KOWLOON, monterVille } from './home-decor-avenue-ville'
-import { monterVaisseau } from './home-decor-avenue-vaisseau'
+import { eclaircieVaisseau, monterVaisseau } from './home-decor-avenue-vaisseau'
 import { regrouperHalos } from './home-decor-lots-halos'
 
 /**
@@ -124,12 +124,14 @@ export const CIEL_LUNAIRE = {
   /** La lumière d'un éclair dans le ciel et les nuages. */
   eclair: 0xcfe3ff,
   /**
-   * La lune, au milieu de sa trouée, dans le SEUL morceau de ciel que la rue laisse voir : en haut
-   * au centre, entre la façade à droite et l'en-tête de l'Accueil à gauche (azimut −0,08 à +0,27,
-   * hauteur 0,32 à 0,49, mesurés sur la vraie caméra en 1600 × 900). Plus à droite, la façade la
-   * cache et l'on ne voit que son halo (capture du 2026-10-17, azimut 0,4).
+   * La lune, au milieu de sa trouée, à GAUCHE, au-dessus de la ville. Elle était en haut au centre
+   * (azimut 0,19, hauteur 0,455) ; l'utilisateur a choisi de mettre le vaisseau mère à cette place
+   * (conv-319, 2026-10-18 : « Au centre en haut, en grand : je déplace la lune à gauche au-dessus de
+   * la ville et j'éclaircis les câbles devant le vaisseau »). Sur son écran (1745 × 938, tuiles
+   * masquées), elle est en (470, 130) : sous le titre « Autowin Accueil » (y 40 à 87), au-dessus des
+   * hologrammes de la ville. Plus à droite, la façade la cache (capture du 2026-10-17, azimut 0,4).
    */
-  lune: { azimut: 0.19, hauteur: 0.455 }
+  lune: { azimut: -0.303, hauteur: 0.336 }
 } as const
 
 /** La direction de la lune vue de la rue (azimut compté depuis −z vers +x, hauteur en radians). */
@@ -2030,7 +2032,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     glow,
     trainee,
     emettre,
-    enseignes
+    enseignes,
+    // conv-319 : « j'éclaircis les câbles devant le vaisseau » (le vaisseau mère, en haut au centre)
+    eclaircie: eclaircieVaisseau()
   })
   /**
    * LA SPIRALE (conv-310, « implémente spirale ») : la rue inondée, la tour de contrôle et la rame

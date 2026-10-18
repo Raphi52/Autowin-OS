@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  ECLAIRCIE,
   monterToile,
   TOILE,
   type ContexteToile,
@@ -22,6 +23,8 @@ import {
  *   3. un maillage par câble → plus de 150 appels de dessin par travée ;
  *   4. les réglages de la variante 3 changés → ce n'est plus ce que l'utilisateur a choisi ;
  *   5. la toile montée APRÈS la compilation de la rue en tâche de fond, ou non animée dans `render`.
+ *   6. (conv-319, « j'éclaircis les câbles devant le vaisseau ») des câbles effacés en pointillé au lieu
+ *      d'entiers, un filet qui ne s'éclaircit plus devant le vaisseau, ou qui s'éclaircit ailleurs.
  */
 
 const faux2d = (): CanvasRenderingContext2D => {
@@ -40,7 +43,7 @@ const faux2d = (): CanvasRenderingContext2D => {
   ) as unknown as CanvasRenderingContext2D
 }
 
-function monter(): {
+function monter(eclaircie?: ContexteToile['eclaircie']): {
   ctx: ContexteToile
   emissions: () => number
   enseignes: EnseigneDeToile[]
@@ -89,7 +92,8 @@ function monter(): {
     emettre: () => {
       emissions++
     },
-    enseignes
+    enseignes,
+    eclaircie
   }
   const toile = monterToile(ctx)
   return { ctx, emissions: () => emissions, enseignes, toile }
@@ -211,5 +215,73 @@ describe('la Toile électrique est branchée dans l avenue', () => {
     expect(toile).not.toMatch(
       /new THREE\.(Point|Spot|Directional|Hemisphere|Ambient|RectArea)Light\(/
     )
+  })
+})
+
+describe('l éclaircie devant le vaisseau mère (conv-319 : « j éclaircis les câbles devant le vaisseau »)', () => {
+  const DIRECTION = new THREE.Vector3(0.1, 0.3, -0.95).normalize()
+  const cables = (ctx: ContexteToile): THREE.Mesh => {
+    const m = ctx.decor.children[0].getObjectByName('cables') as THREE.Mesh | undefined
+    expect(m).toBeDefined()
+    return m!
+  }
+
+  it('sans éclaircie, la toile reste entière', () => {
+    const { ctx } = monter()
+    const mat = cables(ctx).material as THREE.Material
+    expect(mat.customProgramCacheKey()).not.toBe('toile-eclaircie')
+  })
+
+  it('chaque câble porte UN numéro (gardé ou effacé en entier), et un sur quatre environ reste devant le vaisseau', () => {
+    const { ctx } = monter({ direction: DIRECTION, rayon: 0.23 })
+    const tirages = cables(ctx).geometry.getAttribute('aTirage')
+    expect(tirages.count).toBe(cables(ctx).geometry.getAttribute('position').count)
+    // un tube de câble : 23 anneaux de 5 sommets, tous au même numéro
+    const parCable = 23 * 5
+    expect(tirages.count % parCable).toBe(0)
+    let gardes = 0
+    const n = tirages.count / parCable
+    for (let k = 0; k < n; k++) {
+      const t = tirages.getX(k * parCable)
+      for (let i = 1; i < parCable; i++) expect(tirages.getX(k * parCable + i)).toBe(t)
+      expect(t).toBeGreaterThanOrEqual(0)
+      expect(t).toBeLessThan(1)
+      if (t <= ECLAIRCIE.garde) gardes++
+    }
+    expect(gardes / n).toBeGreaterThan(0.15)
+    expect(gardes / n).toBeLessThan(0.35)
+  })
+
+  it('le nuanceur efface les câbles dans le cône du vaisseau, et seulement là', () => {
+    const { ctx } = monter({ direction: DIRECTION, rayon: 0.23 })
+    const mat = cables(ctx).material as THREE.MeshStandardMaterial
+    expect(mat.customProgramCacheKey()).toBe('toile-eclaircie')
+    const sh = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: THREE.ShaderLib.standard.vertexShader,
+      fragmentShader: THREE.ShaderLib.standard.fragmentShader
+    }
+    mat.onBeforeCompile(
+      sh as unknown as THREE.WebGLProgramParametersWithUniforms,
+      {} as THREE.WebGLRenderer
+    )
+    expect(sh.vertexShader).toMatch(/attribute float aTirage;/)
+    expect(sh.vertexShader).toMatch(
+      /vMondeFil = \(modelMatrix \* vec4\(transformed, 1\.0\)\)\.xyz;/
+    )
+    expect(sh.fragmentShader).toMatch(/discard;/)
+    expect((sh.uniforms.uEclDir.value as THREE.Vector3).distanceTo(DIRECTION)).toBeLessThan(1e-6)
+    // la même règle qu'en GLSL : au centre on garde un câble sur quatre, hors du cône tous
+    const [cosExt, cosInt] = (sh.uniforms.uEclCos.value as THREE.Vector2).toArray()
+    expect(cosExt).toBeLessThan(cosInt)
+    const lisse = (a: number, b: number, x: number): number => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+      return t * t * (3 - 2 * t)
+    }
+    const seuil = (angle: number): number =>
+      ECLAIRCIE.garde + (1 - ECLAIRCIE.garde) * (1 - lisse(cosExt, cosInt, Math.cos(angle)))
+    expect(seuil(0)).toBeCloseTo(ECLAIRCIE.garde)
+    expect(seuil(0.23 * 0.95)).toBeCloseTo(ECLAIRCIE.garde)
+    expect(seuil(0.23 * 1.5)).toBeCloseTo(1)
   })
 })
