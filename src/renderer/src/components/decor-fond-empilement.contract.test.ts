@@ -50,8 +50,12 @@ describe('empilement du decor de fond', () => {
     expect(corps).toMatch(/#05060c/)
   })
 
-  it('le decor 3D n’est monte QUE sur l’Accueil', () => {
+  it('le decor 3D n’est DESSINE que sur l’Accueil, et n’est monte qu’apres l’avoir ouvert', () => {
+    // conv-337 : hors de l'Accueil, le decor reste en VEILLE quelques minutes (cache, boucle
+    // arretee) au lieu d'etre detruit. Il n'est jamais actif ailleurs que sur l'Accueil, et
+    // `useDecorEnVeille` ne le monte pas avant la premiere visite (decor-veille.test.tsx).
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
-    expect(app).toMatch(/tab === 'accueil' && <DecorDeFond \/>/)
+    expect(app).toMatch(/const decorMonte = useDecorEnVeille\(tab === 'accueil'\)/)
+    expect(app).toMatch(/\{decorMonte && <DecorDeFond actif=\{tab === 'accueil'\} \/>\}/)
   })
 })

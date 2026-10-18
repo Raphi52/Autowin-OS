@@ -29,9 +29,10 @@ import { creerJumellesDuReflet } from './home-decor-reflet-jumelles'
  *   - LE REFLET A SES PROPRES PROGRAMMES : dessiner la scène dans une image à part fait préparer par
  *     three une seconde version de chaque nuanceur (sortie linéaire au lieu de sRGB). Préparées à la
  *     première image, elles figeraient l'Accueil comme en conv-301 ; `precompilerReflet` les fait
- *     compiler en tâche de fond, AVANT que la rue n'apparaisse, et le décor les FINALISE ensuite un
- *     programme par tâche (`finaliserProgrammes`) : compilées seulement, elles se finalisaient d'un
- *     bloc au premier reflet (310 ms mesurées dans l'Accueil, 2026-10-17). Ces versions « reflet »
+ *     compiler en tâche de fond — depuis conv-337 APRÈS la première image de la rue, qui ne les
+ *     attend plus — et le décor les FINALISE ensuite un programme par tâche (`finaliserProgrammes`) :
+ *     compilées seulement, elles se finalisaient d'un bloc au premier reflet (310 ms mesurées dans
+ *     l'Accueil, 2026-10-17). Jusque-là l'eau ne reflète rien (`activerReflet`). Ces versions « reflet »
  *     appartiennent à des JUMELLES des matières (`home-decor-reflet-jumelles.ts`) : portées par les
  *     mêmes matières que l'écran, elles faisaient rebasculer chaque matière de programme deux fois
  *     par image (~34 ms par image, 2026-10-18) ;
@@ -83,6 +84,24 @@ export const SPIRALE = {
   miroir: { resolution: 0.5, force: 1.1, gouttes: 0.7 }
 } as const
 
+/**
+ * LE REFLET N'EST REDESSINÉ QU'UNE IMAGE SUR `REFLET_UNE_IMAGE_SUR` (conv-337, 2026-10-19).
+ *
+ * Mesure (scripts/banc-decor-budget.mjs, copie d'origin/main, instance cachée) : 1 684 dessins par
+ * image, dont 702 pour le reflet, et 249 changements de programme sur 570. L'eau est ridée en
+ * permanence par les gouttes (nuanceur du miroir, `onde`), qui, elles, bougent à CHAQUE image : un
+ * reflet vieux d'une image (33 ms à 30 images/s) ne s'y distingue pas. Entre deux reflets, la matrice
+ * `texMiroir` reste celle de l'image qui a été dessinée : l'eau lit l'image du reflet là où elle a
+ * été prise, sans décalage.
+ */
+export const REFLET_UNE_IMAGE_SUR = 2
+
+/**
+ * LE FONDU DU REFLET, en ms : la rue apparaît sans reflet (ses programmes « reflet » se compilent
+ * après sa première image), puis le reflet monte de 0 à sa force sur cette durée.
+ */
+export const FONDU_REFLET_MS = 1200
+
 /** Ce que la spirale reprend d'une enseigne du décor. */
 export interface EnseigneDeSpirale {
   box: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
@@ -121,6 +140,14 @@ export interface Spirale {
   groupe: THREE.Group
   /** Les plans du miroir d'eau. */
   miroirs: THREE.Mesh[]
+  /**
+   * CE QUI NE SE VOIT PAS DANS L'EAU, donc n'y est pas dessiné : la rame, les portiques et les
+   * anneaux de la tour. Mesuré au banc de rendu (conv-337, 5 instants, chaque groupe retiré du SEUL
+   * reflet, même instant et même hasard) : l'écart à l'image complète reste au niveau du bruit du
+   * banc (l'essaim, qui avance d'un rendu à l'autre), alors que les façades (≈ 210 000 pixels), les
+   * prismes, les roues et les koïs changent nettement l'image. 66 dessins de moins par reflet.
+   */
+  sansReflet: THREE.Object3D[]
   /** Les prismes qui remplacent les enseignes, dans l'ordre des enseignes. */
   prismes: THREE.Mesh[]
   /** La marquise, une par travée. */
@@ -139,11 +166,18 @@ export interface Spirale {
    * finaliser en tâche de fond, comme ceux de la scène, après `precompilerReflet`.
    */
   matieresDuReflet(): Iterable<THREE.Material>
+  /**
+   * La version « reflet » des programmes est compilée ET finalisée : le reflet peut être dessiné.
+   * Avant cet appel, `avantRendu` ne dessine aucun reflet et l'eau n'en montre aucun ; après, le
+   * reflet monte en fondu (`FONDU_REFLET_MS`).
+   */
+  activerReflet(): void
   /** Une image : `t` en secondes, `parcours` la distance marchée (fait défiler les gouttes). */
   animer(t: number, parcours: number): void
   /**
-   * À appeler juste avant `renderer.render(scene, camera)`, caméra posée : dessine le reflet.
-   * `exclus` est masqué le temps du reflet (la foule).
+   * À appeler juste avant `renderer.render(scene, camera)`, caméra posée : dessine le reflet, une
+   * image sur `REFLET_UNE_IMAGE_SUR`. `exclus` est masqué le temps du reflet (la foule), comme
+   * `sansReflet`.
    */
   avantRendu(exclus?: (THREE.Object3D | null | undefined)[]): void
   /** Libère ce que le parcours de la scène ne libère pas (l'image du reflet). */
@@ -821,7 +855,7 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
       t2.position.z = z
       g.add(t2)
     }
-    return { b, bm, tm, halo: sprite(0x2ee8ff, R * 3.5, 0, 0, 0, 0.12, g), s: u * LONG }
+    return { g, b, bm, tm, halo: sprite(0x2ee8ff, R * 3.5, 0, 0, 0, 0.12, g), s: u * LONG }
   })
 
   // ---------- L'ESSAIM DE DRONES : AUTOWIN, puis ✓ ----------
@@ -935,12 +969,30 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
   })
   const _p = new THREE.Vector3()
 
+  const sansReflet: THREE.Object3D[] = [
+    ...wagons,
+    ...portiques.map((p) => p.g),
+    ...anneaux.map((a) => a.g)
+  ]
+  /** Le reflet n'est dessiné qu'une fois ses programmes prêts ; `null` = pas encore. */
+  let debutFondu: number | null = null
+  let imagesDepuisReflet = 0
+  /** L'image du reflet contient-elle un reflet à jour de sa taille ? */
+  let refletValide = false
+  // l'eau ne montre rien tant que le reflet n'est pas prêt (mélange additif : force 0 = invisible)
+  miroirMat.uniforms.uForce.value = 0
+
   return {
     groupe,
     miroirs,
     prismes,
     marquises,
     cibleReflet,
+    sansReflet,
+
+    activerReflet() {
+      if (debutFondu === null) debutFondu = performance.now()
+    },
 
     precompilerReflet(compiler) {
       const precedente = renderer.getRenderTarget()
@@ -1054,11 +1106,26 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
       echelles.forEach((e) => (e.value = echelle))
       const rw = Math.ceil(w * SPIRALE.miroir.resolution)
       const rh = Math.ceil(h * SPIRALE.miroir.resolution)
-      if (cibleReflet.width !== rw || cibleReflet.height !== rh) cibleReflet.setSize(rw, rh)
+      if (cibleReflet.width !== rw || cibleReflet.height !== rh) {
+        cibleReflet.setSize(rw, rh)
+        // réallouée, l'image du reflet est vide : elle se redessine à cette image-ci
+        refletValide = false
+      }
+      // Pas de reflet tant que sa version des programmes n'est pas prête : la dessiner ici la
+      // compilerait sur le fil, à cette image (le gel de conv-301). L'eau reste sans reflet.
+      if (debutFondu === null) return
+      miroirMat.uniforms.uForce.value =
+        SPIRALE.miroir.force * Math.min(1, (performance.now() - debutFondu) / FONDU_REFLET_MS)
+      // Une image sur REFLET_UNE_IMAGE_SUR : entre deux, l'eau relit le reflet précédent, avec la
+      // matrice `texMiroir` de l'image où il a été pris.
+      imagesDepuisReflet++
+      if (refletValide && imagesDepuisReflet < REFLET_UNE_IMAGE_SUR) return
       // la caméra miroir : symétrique de la caméra par rapport à l'eau, coupée au ras de l'eau
       camera.updateMatrixWorld()
       _cw.setFromMatrixPosition(camera.matrixWorld)
       if (_cw.y <= 0.05) return
+      imagesDepuisReflet = 0
+      refletValide = true
       _rot.extractRotation(camera.matrixWorld)
       _vise.set(0, 0, -1).applyMatrix4(_rot).add(_cw)
       camMiroir.position.set(_cw.x, -_cw.y, _cw.z)
@@ -1089,7 +1156,7 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
       e[14] = _clip.w
       camMiroir.projectionMatrixInverse.copy(camMiroir.projectionMatrix).invert()
       echelles.forEach((v) => (v.value = echelle * SPIRALE.miroir.resolution))
-      const caches = exclus.filter((o): o is THREE.Object3D => !!o && o.visible)
+      const caches = [...exclus, ...sansReflet].filter((o): o is THREE.Object3D => !!o && o.visible)
       caches.forEach((o) => (o.visible = false))
       miroirs.forEach((m) => (m.visible = false))
       const precedente = renderer.getRenderTarget()

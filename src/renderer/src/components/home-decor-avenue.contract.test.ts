@@ -182,6 +182,8 @@ describe('fond de l Accueil — l apparition de la rue', () => {
       'decor-avenue:cree',
       'decor-avenue:rue-compilee',
       'decor-avenue:rue-visible',
+      // conv-337 : la rue n'attend plus son reflet ; ce repère mesure quand l'eau se met à refléter
+      'decor-avenue:reflet-pret',
       'decor-avenue:foule-chargee',
       'decor-avenue:foule-visible'
     ])

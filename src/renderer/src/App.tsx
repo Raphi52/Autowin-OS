@@ -16,6 +16,7 @@ import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
+import { useDecorEnVeille } from './components/decor-veille'
 import { installerLumiereDesPanneaux } from './panneaux-lumiere'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
@@ -155,6 +156,9 @@ export function MainApp(): React.JSX.Element {
   // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
   // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
   const [tab, setTab] = useState<Tab>('accueil')
+  // Le fond 3D reste en veille (caché, sans dessiner) quelques minutes hors de l'Accueil : un retour
+  // ne le reconstruit plus (decor-veille.ts, conv-337).
+  const decorMonte = useDecorEnVeille(tab === 'accueil')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
   // chaque lancement.
@@ -530,12 +534,17 @@ export function MainApp(): React.JSX.Element {
         </div>
       )}
       {/*
-       * Le fond 3D n'est monte QUE sur l'Accueil (demande utilisateur du 2026-08-31 :
+       * Le fond 3D n'est DESSINE que sur l'Accueil (demande utilisateur du 2026-08-31 :
        * « enleve le fond 3d partout laisse le que sur accueil comme avant »). Ailleurs, le fond
        * est celui du `body` (theme.css) : une scene WebGL derriere le Chat coutait deux contextes
        * et une boucle rAF permanente pour un decor que les panneaux recouvrent.
        */}
-      {tab === 'accueil' && <DecorDeFond />}
+      {/*
+       * Depuis conv-337, il reste MONTE en veille quelques minutes apres qu'on a quitte l'Accueil :
+       * cache, boucle arretee, il ne dessine rien ailleurs, mais un retour ne paie plus sa
+       * reconstruction (2,2 a 3,7 s sans rue, mesure du banc). Voir `decor-veille.ts`.
+       */}
+      {decorMonte && <DecorDeFond actif={tab === 'accueil'} />}
       {/*
        * La POPUP de démarrage (« Bienvenue dans Autowin OS », connexion au Brain et aux modèles)
        * n'existe plus : retirée à la demande de l'utilisateur le 2026-10-15 (conv-963). Un prérequis
