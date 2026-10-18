@@ -1006,10 +1006,23 @@ export function dossierModAutowin(
  * EBUSY au milieu et laissé l'app sans dépendances. Les agents tournent avec `--setting-sources ''` :
  * le `.claude/settings.json` du dépôt, qui porte le même garde, ne les atteint pas.
  */
+/**
+ * FENÊTRE DE COMPACTION des agents (conv-335, 2026-10-19 : « réduit le coût d'un long fil »).
+ * Au-delà, le CLI résume le fil et repart de ce résumé. Sans elle, le CLI 2.1.302 prend « 1m tokens
+ * (default for this model) » pour Opus 5.5 : un fil grossit jusqu'au million, et CHAQUE appel le
+ * relit en entier depuis le cache. Mesure sur une semaine (172 sessions Opus 5.5) : 1,44 milliard de
+ * jetons relus, dont 78 % par des appels déjà au-delà de 200k. Simulation sur ces sessions, prix
+ * déduits de cost.jsonl et coût des résumés compris : 150k fait PERDRE (1 134 résumés par semaine),
+ * 200k +59 $, 300k +85 $ (39 résumés), 400k +59 $. Clé lue par le CLI : `autoCompactWindow`,
+ * vérifiée « from settings » par `/autocompact` (claude.compaction-fenetre.test.ts).
+ */
+export const FENETRE_COMPACTION_CLI = 300_000
+
 export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
     autoMemoryDirectory: '',
+    autoCompactWindow: FENETRE_COMPACTION_CLI,
     hooks: {
       PreToolUse: [
         {
