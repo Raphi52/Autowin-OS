@@ -1,0 +1,49 @@
+{
+  "commentaire": "Budget 3D du fond d'Accueil, tenu par scripts/banc-decor-budget.mjs (instance cachée, utilisateur actif simulé). Fixé le 2026-10-19 (conv-337) sur la mesure APRÈS le travail ; AVANT entre parenthèses. Les DESSINS sont stables d'un lancement à l'autre : c'est le vrai budget. Les TEMPS varient de ±30 % dans l'instance cachée (disque D: mécanique, autres sessions) : leurs seuils ne rattrapent qu'une régression grossière.",
+  "seuils": [
+    {
+      "chemin": "regime.dessins.moyenne",
+      "max": 1300,
+      "requis": true,
+      "pourquoi": "1 178 dessins par image (1 624 à 1 684 avant) : reflet une image sur deux, rame/portiques/anneaux/viaduc hors du reflet, objets fixes de la toile en instances"
+    },
+    {
+      "chemin": "regime.dessinsReflet.moyenne",
+      "max": 350,
+      "requis": true,
+      "pourquoi": "276 dessins de reflet par image en moyenne (675 à 702 avant)"
+    },
+    {
+      "chemin": "regime.programmes.moyenne",
+      "max": 480,
+      "pourquoi": "423 changements de programme par image (570 à 579 avant)"
+    },
+    {
+      "chemin": "regime.msFilDuDecor.mediane",
+      "max": 45,
+      "pourquoi": "27,9 ms par image dans le fil du décor (32,6 à 46,5 avant) ; seuil large, temps bruité dans l'instance cachée"
+    },
+    {
+      "chemin": "regime.msCarteGraphique.mediane",
+      "max": 16,
+      "pourquoi": "8,9 à 11,3 ms de carte graphique par image (12,6 à 14,1 avant) : la carte n'est pas le goulet"
+    },
+    {
+      "chemin": "demarrage.creeVersRueVisibleMs",
+      "max": 5000,
+      "pourquoi": "2,5 à 3,3 s de la création de la scène à la rue (2,8 à 6,1 s avant) : la rue n'attend plus les programmes du reflet"
+    },
+    {
+      "chemin": "retour.premiereImageMs",
+      "max": 500,
+      "requis": true,
+      "pourquoi": "106 à 117 ms entre le clic sur Accueil et la première image (2,8 à 3,7 s avant) : le décor reste en veille hors de l'Accueil au lieu d'être reconstruit"
+    },
+    {
+      "chemin": "retour.imagesPendantAbsence",
+      "max": 0,
+      "requis": true,
+      "pourquoi": "le fond ne dessine RIEN hors de l'Accueil (choix de l'utilisateur, 2026-08-31) : en veille, sa boucle est arrêtée"
+    }
+  ]
+}
