@@ -249,6 +249,11 @@ export const MARQUES_AVENUE = {
    */
   rueCompilee: 'decor-avenue:rue-compilee',
   rueVisible: 'decor-avenue:rue-visible',
+  /**
+   * La version « reflet » des programmes est compilée et finalisée : l'eau commence à refléter. Depuis
+   * conv-337, la rue n'attend plus son reflet pour apparaître ; ce repère mesure l'écart.
+   */
+  refletPret: 'decor-avenue:reflet-pret',
   /** Les personnes et leurs textures sont chargées ; la compilation de leurs nuanceurs commence. */
   fouleChargee: 'decor-avenue:foule-chargee',
   fouleVisible: 'decor-avenue:foule-visible'
@@ -1379,6 +1384,11 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
 
   // ---------- LE MÉTRO AÉRIEN : son viaduc traverse l'avenue et file au-dessus du vide ----------
   const PONT = VIADUC.z
+  /**
+   * Les arêtes holo du viaduc ne se voient pas dans l'eau : mesuré au banc de rendu (conv-337), les
+   * retirer du seul reflet laisse l'image au niveau du bruit du banc. Elles n'y sont plus dessinées.
+   */
+  const aretesViaduc: THREE.Object3D[] = []
   {
     const beton = new THREE.MeshStandardMaterial({ color: 0x0d0b12, roughness: 0.8 })
     // la voie au-dessus du vide : les quatre arêtes du tablier en lumière, rien qui cache la ville
@@ -1409,6 +1419,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
             (dz * VIADUC.profondeur) / 2
           )
           arete.name = 'viaduc-holo'
+          aretesViaduc.push(arete)
           g.add(arete)
         }
       const trou = new THREE.Mesh(
@@ -2088,16 +2099,32 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     // résout à l'arrêt, pas à la compilation, et fausserait la mesure.
     if (vivante) marquer(MARQUES_AVENUE.rueCompilee)
   }
-  // La version « reflet » de la Spirale est finalisée un programme par tâche, comme la foule : sans
-  // cela, le premier reflet la finalisait d'un bloc (`onFirstUse` 310 ms dans la première image,
-  // profil de l'Accueil du 2026-10-17, conv-310). Juste après `precompilerReflet`, c'est elle le
-  // programme courant de chaque matière.
+  /**
+   * LA RUE N'ATTEND PLUS SON REFLET (conv-337, 2026-10-19). Avant, la rue n'apparaissait qu'une fois
+   * compilées ET finalisées les deux versions de chaque programme : celle de l'écran, puis celle du
+   * reflet (74 programmes, dont 37 pour le seul reflet — espion de linkProgram, conv-310). Désormais
+   * la rue apparaît dès que SES programmes sont prêts ; l'eau reste sans reflet jusqu'à ce que la
+   * version « reflet » soit à son tour compilée en tâche de fond PUIS finalisée un programme par tâche
+   * (sans cela, le premier reflet la finalisait d'un bloc : `onFirstUse` 310 ms dans la première
+   * image, conv-310). Alors seulement le reflet est activé, et monte en fondu.
+   */
+  const refletEstPret = (): void => {
+    if (!vivante) return
+    spirale.activerReflet()
+    marquer(MARQUES_AVENUE.refletPret)
+  }
   compilerEnFond(scene)
-    .then(() => spirale.precompilerReflet(compilerEnFond))
-    .then(() => finaliserProgrammes(scene, spirale.matieresDuReflet()))
+    .then(() => finaliserProgrammes(scene))
     .then(rueEstCompilee, (erreur: unknown) => {
       console.error('[decor] compilation de la rue en tâche de fond impossible :', erreur)
       rueEstCompilee()
+    })
+    .then(() => (vivante ? spirale.precompilerReflet(compilerEnFond) : undefined))
+    .then(() => finaliserProgrammes(scene, spirale.matieresDuReflet()))
+    .then(refletEstPret, (erreur: unknown) => {
+      // Rien n'est masqué : l'échec est écrit, et le reflet s'active quand même (compilé à l'image).
+      console.error('[decor] compilation du reflet en tâche de fond impossible :', erreur)
+      refletEstPret()
     })
   /** Une foule arrivée après la fin de la scène n'y entre jamais : elle est libérée tout de suite. */
   const libererFoule = (f: Foule): void => {
@@ -2258,7 +2285,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       // ce qui ne dépend pas de la caméra, lu une fois pour les deux passes (reflet, écran)
       lots.nouvelleImage()
       // le reflet de l'eau, caméra posée ; la foule n'y est pas (voir home-decor-avenue-spirale.ts)
-      spirale.avantRendu([foule?.groupe])
+      spirale.avantRendu([foule?.groupe, ...aretesViaduc])
       renderer.render(scene, camera)
       if (!apparue) apparaitre()
     },

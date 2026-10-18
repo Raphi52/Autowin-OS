@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { VIADUC } from './home-decor-avenue'
 import {
   abscisseRame,
   FACES_PRISMES,
+  FONDU_REFLET_MS,
   monterSpirale,
+  REFLET_UNE_IMAGE_SUR,
   SPIRALE,
   voieHelice,
   type ContexteSpirale,
@@ -88,7 +90,8 @@ function monter(): {
     getDrawingBufferSize: (v: THREE.Vector2) => v.set(800, 400),
     render: (_s: THREE.Scene, camera: THREE.Camera) => {
       const visibles = new Map<THREE.Object3D, boolean>()
-      for (const o of [foule, ...(spirale?.miroirs ?? [])]) visibles.set(o, o.visible)
+      for (const o of [foule, ...(spirale?.miroirs ?? []), ...(spirale?.sansReflet ?? [])])
+        visibles.set(o, o.visible)
       const matieres = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>()
       for (const o of [...enseignes.map((e) => e.box), ...(spirale?.prismes ?? [])])
         matieres.set(o, o.material as THREE.Material | THREE.Material[])
@@ -368,6 +371,7 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
   it('LE REFLET : dessiné dans son image, plans d eau et foule masqués le temps du reflet, rendus après', () => {
     const { spirale, rendu, foule } = monter()
     spirale.animer(1, 0)
+    spirale.activerReflet()
     spirale.avantRendu([foule, null])
     expect(rendu.rendus).toHaveLength(1)
     const r = rendu.rendus[0]
@@ -388,6 +392,7 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
     const prisme = spirale.prismes[0]
     const originales = prisme.material as THREE.MeshBasicMaterial[]
     spirale.animer(1, 0)
+    spirale.activerReflet()
     spirale.avantRendu([])
     const pendant = rendu.rendus[0].matieres.get(prisme) as THREE.MeshBasicMaterial[]
     expect(pendant).toHaveLength(originales.length)
@@ -397,10 +402,94 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
       expect(j.color).toBe(originales[i].color)
     })
     expect(prisme.material).toBe(originales)
-    // la même jumelle d'une image à l'autre : son programme reste compilé
+    // la même jumelle d'un reflet à l'autre (une image sur deux) : son programme reste compilé
+    spirale.avantRendu([])
     spirale.avantRendu([])
     expect((rendu.rendus[1].matieres.get(prisme) as THREE.Material[])[0]).toBe(pendant[0])
     expect([...spirale.matieresDuReflet()]).toContain(pendant[0])
+  })
+
+  it('PAS DE REFLET AVANT SES PROGRAMMES : rien n est dessiné et l eau ne reflète rien', () => {
+    // conv-337 : la rue apparaît avant que la version « reflet » ne soit prête. Dessiner le reflet à
+    // ce moment la compilerait sur le fil, à l'image (le gel de conv-301).
+    const { spirale, rendu } = monter()
+    spirale.animer(1, 0)
+    const force = (spirale.miroirs[0].material as THREE.ShaderMaterial).uniforms.uForce
+    for (let i = 0; i < 4; i++) spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(0)
+    expect(force.value).toBe(0)
+  })
+
+  it('LE REFLET MONTE EN FONDU à son activation, jusqu à sa force', () => {
+    const { spirale } = monter()
+    const horloge = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    try {
+      spirale.activerReflet()
+      const force = (spirale.miroirs[0].material as THREE.ShaderMaterial).uniforms.uForce
+      spirale.avantRendu([])
+      expect(force.value).toBe(0)
+      horloge.mockReturnValue(1000 + FONDU_REFLET_MS / 2)
+      spirale.avantRendu([])
+      expect(force.value).toBeCloseTo(SPIRALE.miroir.force / 2, 5)
+      horloge.mockReturnValue(1000 + FONDU_REFLET_MS * 3)
+      spirale.avantRendu([])
+      expect(force.value).toBeCloseTo(SPIRALE.miroir.force, 5)
+    } finally {
+      horloge.mockRestore()
+    }
+  })
+
+  it('UN REFLET SUR DEUX IMAGES : entre deux, l eau relit le précédent avec SA matrice', () => {
+    // conv-337 : 702 dessins sur 1 684 par image allaient au reflet ; l'eau ridée en permanence ne
+    // laisse pas voir un reflet vieux d'une image.
+    expect(REFLET_UNE_IMAGE_SUR).toBe(2)
+    const { spirale, rendu, ctx } = monter()
+    spirale.activerReflet()
+    const uTex = (spirale.miroirs[0].material as THREE.ShaderMaterial).uniforms.uTex
+    // reflets aux images 1, 3 et 5
+    for (let i = 0; i < 5; i++) spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(3)
+    // l'image sautée garde la matrice du reflet pris, même si la caméra a bougé entre-temps
+    const prise = (uTex.value as THREE.Matrix4).clone()
+    ctx.camera.position.x += 0.3
+    ctx.camera.updateMatrixWorld()
+    spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(3)
+    expect((uTex.value as THREE.Matrix4).equals(prise)).toBe(true)
+    spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(4)
+    expect((uTex.value as THREE.Matrix4).equals(prise)).toBe(false)
+  })
+
+  it('UNE IMAGE DU REFLET RÉALLOUÉE est redessinée tout de suite, sans attendre son tour', () => {
+    const { spirale, rendu, ctx } = monter()
+    spirale.activerReflet()
+    spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(1)
+    ;(
+      ctx.renderer as unknown as { getDrawingBufferSize: (v: THREE.Vector2) => THREE.Vector2 }
+    ).getDrawingBufferSize = (v) => v.set(1000, 500)
+    spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(2)
+    expect([spirale.cibleReflet.width, spirale.cibleReflet.height]).toEqual([500, 250])
+  })
+
+  it('CE QUI NE SE VOIT PAS DANS L EAU n y est pas dessiné : rame, portiques, anneaux — puis rendus', () => {
+    const { spirale, rendu } = monter()
+    const noms = new Set(spirale.sansReflet.map((o) => o.name))
+    expect(noms).toEqual(new Set(['wagon', 'portique', 'anneau']))
+    expect(spirale.sansReflet.filter((o) => o.name === 'wagon')).toHaveLength(SPIRALE.rame.voitures)
+    expect(spirale.sansReflet.filter((o) => o.name === 'portique')).toHaveLength(
+      SPIRALE.portiques.length
+    )
+    expect(spirale.sansReflet.filter((o) => o.name === 'anneau')).toHaveLength(SPIRALE.anneaux)
+    // masqués pendant le reflet (relevé par le faux moteur), rendus à l'écran ensuite
+    spirale.activerReflet()
+    spirale.sansReflet.forEach((o) => (o.visible = true))
+    spirale.avantRendu([])
+    expect(rendu.rendus).toHaveLength(1)
+    spirale.sansReflet.forEach((o) => expect(rendu.rendus[0].visibles.get(o)).toBe(false))
+    spirale.sansReflet.forEach((o) => expect(o.visible).toBe(true))
   })
 
   it('LA VERSION « REFLET » DES NUANCEURS SE COMPILE EN TÂCHE DE FOND, dans l image du reflet', async () => {
@@ -439,12 +528,16 @@ describe('la Spirale est branchée dans l avenue', () => {
     expect(compilation).toBeGreaterThan(montage)
   })
 
-  it('précompile ET finalise la version « reflet » avant que la rue ne soit déclarée compilée', () => {
-    // Compilée mais pas finalisée, la version « reflet » se finalisait d'un bloc au premier reflet :
-    // `onFirstUse` 310 ms dans la première image (profil de l'Accueil, 2026-10-17, conv-310).
+  it('la rue apparaît sans attendre son reflet, qui ne s active qu une fois précompilé ET finalisé', () => {
+    // conv-337 : la rue attendait aussi les 37 programmes du seul reflet. Elle est désormais déclarée
+    // compilée dès SES programmes prêts. Le reflet, lui, reste éteint jusqu'à ce que sa version des
+    // programmes soit compilée en tâche de fond PUIS finalisée : compilée mais pas finalisée, elle se
+    // finalisait d'un bloc au premier reflet (`onFirstUse` 310 ms dans la première image, conv-310).
     expect(source).toMatch(
-      /compilerEnFond\(scene\)\s*\.then\(\(\) => spirale\.precompilerReflet\(compilerEnFond\)\)\s*\.then\(\(\) => finaliserProgrammes\(scene, spirale\.matieresDuReflet\(\)\)\)\s*\.then\(rueEstCompilee/
+      /compilerEnFond\(scene\)\s*\.then\(\(\) => finaliserProgrammes\(scene\)\)\s*\.then\(rueEstCompilee,[\s\S]*?\)\s*\.then\(\(\) => \(vivante \? spirale\.precompilerReflet\(compilerEnFond\) : undefined\)\)\s*\.then\(\(\) => finaliserProgrammes\(scene, spirale\.matieresDuReflet\(\)\)\)\s*\.then\(refletEstPret/
     )
+    const pret = source.slice(source.indexOf('const refletEstPret'))
+    expect(pret.slice(0, pret.indexOf('\n  }\n'))).toMatch(/spirale\.activerReflet\(\)/)
   })
 
   it('finalise TOUS les programmes d une matière, pas seulement le courant', () => {
@@ -457,11 +550,12 @@ describe('la Spirale est branchée dans l avenue', () => {
     expect(corps).toMatch(/\.programs\b/)
   })
 
-  it('anime la spirale et dessine son reflet, foule exclue, juste avant le rendu', () => {
+  it('anime la spirale et dessine son reflet, foule et arêtes du viaduc exclues, juste avant le rendu', () => {
     expect(source).toMatch(/spirale\.animer\(t, parcours\)/)
     expect(source).toMatch(
-      /spirale\.avantRendu\(\[foule\?\.groupe\]\)\s*\n\s*renderer\.render\(scene, camera\)/
+      /spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc\]\)\s*\n\s*renderer\.render\(scene, camera\)/
     )
+    expect(source).toMatch(/aretesViaduc\.push\(arete\)/)
   })
 
   it('libère l image du reflet avec la scène', () => {
