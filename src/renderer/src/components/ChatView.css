@@ -4328,8 +4328,13 @@ button.chat-project-dot:disabled {
   border-left: 0;
   padding-left: 0;
 }
+/* Le POULS de la pastille en cours (`etape-pouls`, jusqu'à 5 px autour d'elle) déborde de sa
+   colonne de 18 px. Le corps défile (`overflow-y: auto`, donc rogne aussi en largeur) : le halo du
+   « 1 » était coupé à gauche, et en haut pour la première étape (conv-336). Le corps lui réserve
+   5 px, rendus par une marge négative : la liste reste exactement où elle était. */
 .thinking-block.cadre-anneau.thinking-block--etapes > .thinking-body {
-  margin-bottom: 0;
+  margin: -5px 0.85em 0 calc(3.5em - 5px);
+  padding: 5px 0 0 5px;
 }
 /* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : le rail et les valeurs
    s'alignent en colonnes d'une étape à l'autre, quelle que soit la longueur du sujet. Le <li> garde
