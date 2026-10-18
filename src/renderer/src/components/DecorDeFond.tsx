@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { autowinStorageKey } from '../storage-keys'
-import { creerCadence } from './decor-cadence'
+import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
 import {
   createDecorScene,
@@ -44,8 +44,18 @@ const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v3')
  * quand une autre vue est affichee. C'est la difference avec la version d'avant, ou le decor
  * n'appartenait qu'a l'Accueil : un fond d'application doit vivre partout, sinon ce n'est pas un fond.
  */
-export function DecorDeFond(): React.JSX.Element {
+export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null)
+  /** La scène montée, pour la réveiller quand l'Accueil revient (voir `decor-veille.ts`). */
+  const decorRef = useRef<DecorMonte | null>(null)
+  /** Lu par la boucle d'images à chaque battement : hors de l'Accueil, elle s'arrête. */
+  const actifRef = useRef(actif)
+  /** La direction choisie, lue une fois : rien dans l'app ne la change pendant la session. */
+  const [variante] = useState<DecorVariant>(() =>
+    typeof window === 'undefined'
+      ? DECOR_DEFAUT
+      : ((window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant)
+  )
 
   /**
    * LE THEME APPLIQUE, mis en DEPENDANCE de la scene ci-dessous.
@@ -76,6 +86,19 @@ export function DecorDeFond(): React.JSX.Element {
     return () => observateur.disconnect()
   }, [])
 
+  /**
+   * L'AVENUE NE LIT PAS LE THÈME (conv-337) : sa palette est la sienne, écrite dans
+   * home-decor-avenue.ts, qui ne consulte aucune teinte du thème. La reconstruire à chaque
+   * changement de thème recompilait la scène pour rien (2 à 3,7 s sans rue). Seules les directions
+   * « spatiales », qui relisent les teintes à leur création, suivent encore le thème.
+   */
+  const cleTheme = variante === 'avenue' ? 'palette-propre' : themeApplique
+
+  useEffect(() => {
+    actifRef.current = actif
+    if (actif) decorRef.current?.reprendre()
+  }, [actif])
+
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -92,26 +115,45 @@ export function DecorDeFond(): React.JSX.Element {
      * une microtache s'execute avant la prochaine image.
      */
     let annule = false
-    let arreter: (() => void) | null = null
     queueMicrotask(() => {
       if (annule) return
-      arreter = monterDecor(host)
+      decorRef.current = monterDecor(host, variante, () => actifRef.current)
     })
     return () => {
       annule = true
-      arreter?.()
+      decorRef.current?.arreter()
+      decorRef.current = null
     }
-  }, [themeApplique])
+  }, [cleTheme, variante])
 
-  return <div className="decor-de-fond" ref={hostRef} aria-hidden="true" />
+  // En veille, le décor est CACHÉ (style en ligne : il l'emporte sur les `display` des thèmes) et
+  // sa boucle est arrêtée — rien n'est dessiné hors de l'Accueil.
+  return (
+    <div
+      className="decor-de-fond"
+      ref={hostRef}
+      aria-hidden="true"
+      style={actif ? undefined : { display: 'none' }}
+    />
+  )
+}
+
+/** Une scène montée : `arreter` la libère, `reprendre` relance sa boucle après une veille. */
+interface DecorMonte {
+  arreter(): void
+  reprendre(): void
 }
 
 /**
- * Construit la scene dans `host`, lance sa boucle, et rend de quoi tout arreter et liberer.
- * Rend `null` sans WebGL (happy-dom en test, pilote absent).
+ * Construit la scene dans `host`, lance sa boucle, et rend de quoi l'arreter, la liberer et la
+ * reveiller. La boucle s'arrete d'elle-meme quand `estActif()` devient faux (veille hors de
+ * l'Accueil). Rend `null` sans WebGL (happy-dom en test, pilote absent).
  */
-function monterDecor(host: HTMLDivElement): (() => void) | null {
-  const choisie = (window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant
+function monterDecor(
+  host: HTMLDivElement,
+  choisie: DecorVariant,
+  estActif: () => boolean
+): DecorMonte | null {
   const scene: DecorScene | null = createDecorScene(choisie)
   // Pas de WebGL (happy-dom en test, pilote absent) : l'app s'affiche sans decor, ce qui est le
   // comportement voulu — un decor n'est pas une dependance de la fonction.
@@ -155,16 +197,43 @@ function monterDecor(host: HTMLDivElement): (() => void) | null {
   }
   window.addEventListener('pointermove', onPointerMove)
 
+  /**
+   * LE REPOS (conv-337) : fenetre sans le focus, ou aucun geste depuis `REPOS_APRES_MS` → la cadence
+   * passe a `IMAGES_PAR_SECONDE_REPOS`. Le premier geste (ou le retour du focus) la remonte.
+   * Mesure qui le motive : 34 ms de calcul par image dans le fil du decor, soit les trois quarts d'un
+   * coeur a 30 images/s, pour un Accueil qui reste ouvert des heures sans qu'on y touche.
+   */
+  let dernierGeste = performance.now()
+  const geste = (): void => {
+    dernierGeste = performance.now()
+  }
+  const GESTES = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const
+  GESTES.forEach((nom) => window.addEventListener(nom, geste, { passive: true }))
+  window.addEventListener('focus', geste)
+
   let frame = 0
+  let enBoucle = false
   // 30 images/s sur tous les ecrans, et jamais plus de la moitie du fil de l'interface : voir
   // decor-cadence.ts (l'ancien seuil de 25 ms donnait 30, 30 ou 36 images/s selon l'ecran).
   const cadence = creerCadence()
   const draw = (time: number): void => {
+    // EN VEILLE hors de l'Accueil (decor-veille.ts) : la boucle s'arrete, rien n'est dessine.
+    if (!estActif()) {
+      enBoucle = false
+      return
+    }
     frame = requestAnimationFrame(draw)
     // Suspendu quand le document est CACHE : faire tourner un rendu 3D pour une fenetre que
     // personne ne regarde coute un GPU entier pour rien. Mais une autre VUE affichee ne suspend
     // plus rien — c'est desormais le fond de l'application, pas celui d'un ecran.
     if (typeof document !== 'undefined' && document.hidden) return
+    cadence.repos(
+      estAuRepos(
+        time,
+        dernierGeste,
+        typeof document.hasFocus === 'function' ? document.hasFocus() : true
+      )
+    )
     // La scene derive lentement : au-dela de 30 images/s la difference ne se voit pas, la facture
     // d'une fenetre qui reste ouverte toute la journee, si.
     if (!cadence.doitDessiner(time)) return
@@ -182,13 +251,26 @@ function monterDecor(host: HTMLDivElement): (() => void) | null {
     scene.render(tempsDecor(time / 1000, reduceMotion), look)
     cadence.noterCout(performance.now() - debut)
   }
-  frame = requestAnimationFrame(draw)
+  const reprendre = (): void => {
+    if (enBoucle) return
+    enBoucle = true
+    // la fenetre a pu changer de taille pendant la veille (l'hote cache mesure 0 : ignore)
+    fit()
+    frame = requestAnimationFrame(draw)
+  }
+  reprendre()
 
-  return () => {
-    cancelAnimationFrame(frame)
-    window.removeEventListener('pointermove', onPointerMove)
-    window.removeEventListener('resize', fit)
-    observer?.disconnect()
-    scene.dispose()
+  return {
+    reprendre,
+    arreter() {
+      cancelAnimationFrame(frame)
+      enBoucle = false
+      window.removeEventListener('pointermove', onPointerMove)
+      GESTES.forEach((nom) => window.removeEventListener(nom, geste))
+      window.removeEventListener('focus', geste)
+      window.removeEventListener('resize', fit)
+      observer?.disconnect()
+      scene.dispose()
+    }
   }
 }

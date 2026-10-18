@@ -47,7 +47,26 @@ vi.mock('./home-decor-scene', () => ({
   })
 }))
 
+/** Ce que la boucle dit à la cadence à chaque battement : au repos (true) ou non (false). */
+const appelsRepos: boolean[] = []
+vi.mock('./decor-cadence', async (original) => {
+  const vrai = await original<typeof import('./decor-cadence')>()
+  return {
+    ...vrai,
+    creerCadence: (...args: Parameters<typeof vrai.creerCadence>) => {
+      const c = vrai.creerCadence(...args)
+      const repos = c.repos
+      c.repos = (r: boolean) => {
+        appelsRepos.push(r)
+        repos(r)
+      }
+      return c
+    }
+  }
+})
+
 const { DecorDeFond } = await import('./DecorDeFond')
+const { autowinStorageKey } = await import('../storage-keys')
 
 let monte: { root: Root; hote: HTMLElement } | null = null
 const monter = async (): Promise<HTMLElement> => {
@@ -67,6 +86,7 @@ afterEach(() => {
   }
   creees.length = 0
   document.documentElement.removeAttribute('data-theme')
+  window.localStorage.removeItem(autowinStorageKey('home.decor.v3'))
 })
 
 describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => {
@@ -86,7 +106,8 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('un VRAI changement de thème reconstruit toujours la scène (teintes relues)', async () => {
+  it('un VRAI changement de thème reconstruit une direction spatiale (teintes relues)', async () => {
+    window.localStorage.setItem(autowinStorageKey('home.decor.v3'), 'actuel')
     await monter()
     await act(async () => {
       document.documentElement.setAttribute('data-theme', 'holographique-clair')
@@ -96,6 +117,78 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
     expect(creees).toHaveLength(2)
     expect(creees[0].dispose).toHaveBeenCalledTimes(1)
     expect(creees[1].dispose).not.toHaveBeenCalled()
+  })
+
+  it('un changement de thème NE reconstruit PAS l avenue : sa palette ne dépend pas du thème', async () => {
+    // conv-337 : home-decor-avenue.ts ne lit aucune teinte du thème ; la reconstruire recompilait
+    // toute la scène (2 à 3,7 s sans rue) pour une image identique.
+    await monter()
+    await act(async () => {
+      document.documentElement.setAttribute('data-theme', 'holographique-clair')
+      await Promise.resolve()
+    })
+    expect(creees).toHaveLength(1)
+    expect(creees[0].dispose).not.toHaveBeenCalled()
+  })
+
+  it('EN VEILLE (hors de l Accueil) : la scène reste, cachée, ne dessine plus ; au retour, redessine sans être reconstruite', async () => {
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    const root = createRoot(hote)
+    monte = { root, hote }
+    await act(async () => root.render(createElement(DecorDeFond, { actif: true })))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(creees).toHaveLength(1)
+    const scene = creees[0]
+    expect(scene.render.mock.calls.length).toBeGreaterThan(0)
+
+    await act(async () => root.render(createElement(DecorDeFond, { actif: false })))
+    const fond = hote.querySelector('.decor-de-fond') as HTMLElement
+    expect(fond.style.display).toBe('none')
+    // la dernière image en cours peut passer ; ensuite plus rien
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const enVeille = scene.render.mock.calls.length
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(scene.render.mock.calls.length).toBe(enVeille)
+    expect(scene.dispose).not.toHaveBeenCalled()
+
+    await act(async () => root.render(createElement(DecorDeFond, { actif: true })))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(fond.style.display).toBe('')
+    expect(scene.render.mock.calls.length).toBeGreaterThan(enVeille)
+    expect(creees).toHaveLength(1)
+  })
+
+  it('AU REPOS quand la fenêtre perd le focus, de retour à la cadence visée quand elle le retrouve', async () => {
+    // conv-337 : 34 ms de calcul par image, des heures durant, pour un Accueil qu'on ne regarde pas.
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    try {
+      await monter()
+      appelsRepos.length = 0
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 120))
+      })
+      expect(appelsRepos.length).toBeGreaterThan(0)
+      expect(appelsRepos.every((r) => r === true)).toBe(true)
+      focus.mockReturnValue(true)
+      window.dispatchEvent(new Event('focus'))
+      appelsRepos.length = 0
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 120))
+      })
+      expect(appelsRepos.length).toBeGreaterThan(0)
+      expect(appelsRepos.every((r) => r === false)).toBe(true)
+    } finally {
+      focus.mockRestore()
+    }
   })
 
   it('démonté avant d avoir construit, il ne construit rien du tout', async () => {

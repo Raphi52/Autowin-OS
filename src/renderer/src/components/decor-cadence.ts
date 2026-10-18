@@ -20,6 +20,22 @@
 /** La cadence visée, en images par seconde. */
 export const IMAGES_PAR_SECONDE_DECOR = 30
 
+/**
+ * LA CADENCE AU REPOS (conv-337, 2026-10-19) : fenêtre sans le focus, ou aucun geste depuis
+ * `REPOS_APRES_MS`. Mesuré au banc (scripts/banc-decor-budget.mjs) : 34 ms de calcul par image dans
+ * le fil du décor — à 30 images/s, les trois quarts d'un cœur, pour un Accueil qui reste ouvert des
+ * heures sans qu'on y touche. Au repos, la moitié. Le premier geste ramène la cadence visée.
+ */
+export const IMAGES_PAR_SECONDE_REPOS = 15
+
+/** Sans geste (souris, clavier, molette) depuis ce délai, en ms, le décor passe au repos. */
+export const REPOS_APRES_MS = 90_000
+
+/** Le décor est-il au repos ? `maintenant` et `dernierGeste` sur la même horloge, en ms. */
+export function estAuRepos(maintenant: number, dernierGeste: number, aLeFocus: boolean): boolean {
+  return !aLeFocus || maintenant - dernierGeste >= REPOS_APRES_MS
+}
+
 /** Part maximale du fil principal que le décor peut occuper en moyenne. */
 export const PART_MAX_DU_FIL = 0.5
 
@@ -36,6 +52,8 @@ export interface Cadence {
   noterCout(ms: number): void
   /** L'intervalle courant entre deux images, en ms. */
   intervalle(): number
+  /** Au repos, la cadence descend à `IMAGES_PAR_SECONDE_REPOS` ; hors repos, elle revient. */
+  repos(auRepos: boolean): void
 }
 
 export function creerCadence(
@@ -46,7 +64,9 @@ export function creerCadence(
   let prochaine: number | null = null
   let coutMoyen = 0
 
-  const intervalle = (): number => Math.max(base, coutMoyen / partMax)
+  const baseRepos = 1000 / Math.min(imagesParSeconde, IMAGES_PAR_SECONDE_REPOS)
+  let auRepos = false
+  const intervalle = (): number => Math.max(auRepos ? baseRepos : base, coutMoyen / partMax)
 
   return {
     doitDessiner(maintenant) {
@@ -65,6 +85,12 @@ export function creerCadence(
       if (!(ms >= 0)) return
       coutMoyen = coutMoyen === 0 ? ms : coutMoyen + (ms - coutMoyen) * LISSAGE
     },
-    intervalle
+    intervalle,
+    repos(r) {
+      if (r === auRepos) return
+      auRepos = r
+      // Au réveil, l'image suivante ne doit pas attendre la fin d'un intervalle de repos.
+      if (!r && prochaine !== null) prochaine = Math.min(prochaine, prochaine - baseRepos + base)
+    }
   }
 }
