@@ -23,10 +23,12 @@ import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :
  *   1. une couleur du ciel, de la brume ou de l'horizon qui redevient violette (rouge au-dessus du
  *      vert), ou l'ancien violet encore écrit dans `home-decor-avenue.ts` ;
- *   2. la lune ou le vaisseau hors du cadre de la rue, ou sous l'horizon ;
+ *   2. la lune ou le vaisseau hors du cadre de la rue, ou sous l'horizon ; le vaisseau qui quitte le
+ *      ciel au-dessus de la ville, à gauche (« met le a gauche au dessus de la ville »), ou qui n'est
+ *      plus grossi d'environ 40 % (« agrandis le vaisseau mère […] d'environ 40 % ») ;
  *   3. le vaisseau, sa couronne ou une de ses tours posés sur la lune (sa trouée est la raison d'être de la 5) ;
  *   4. une lumière ajoutée par le vaisseau → toutes les matières de la rue s'alourdissent (conv-301) ;
- *   5. une matière du vaisseau soumise au brouillard de la rue → à 2,9 km il disparaît ;
+ *   5. une matière du vaisseau soumise au brouillard de la rue → à 2,5 km il disparaît ;
  *   6. DEUX vaisseaux au lieu d'un ; une tour qui PEND de nouveau sous la ville, ou qui quitte le disque ;
  *      un dessus sans lumières, ou des feux de toit cachés par leur propre toit (pas de mât) ; plus de
  *      cercles de feux d'atterrissage sous la plaque, ou une vague qui ne court plus du centre au bord ;
@@ -148,7 +150,7 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     expect(lumieres).toBe(0)
   })
 
-  it('ÉCHAPPE AU BROUILLARD DE LA RUE : à 2,9 km, FogExp2 l effacerait', () => {
+  it('ÉCHAPPE AU BROUILLARD DE LA RUE : à 2,5 km, FogExp2 l effacerait', () => {
     const { vaisseau } = monter()
     let matieres = 0
     vaisseau.groupe.traverse((o) => {
@@ -328,10 +330,38 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     }
   })
 
-  it('reste PRÈS de la trouée : la lune argente sa silhouette au lieu de briller ailleurs', () => {
+  it('« met le a gauche au dessus de la ville » : à gauche de la lune et du point de fuite, côté ville', () => {
     const { vaisseau } = monter()
-    const centre = coque(vaisseau.groupe).getCenter(new THREE.Vector3()).sub(OEIL)
-    expect(centre.angleTo(directionLune())).toBeLessThan(0.3)
+    const centre = coque(vaisseau.groupe).getCenter(new THREE.Vector3())
+    // la ville est à gauche de l'avenue : ses premiers îlots commencent à x = −41
+    expect(centre.x).toBeLessThan(-41)
+    for (const aspect of [16 / 9, 16 / 10, 4 / 3]) {
+      const c = camera(aspect)
+      const ecran = centre.clone().project(c)
+      const lune = OEIL.clone().addScaledVector(directionLune(), 3000).project(c)
+      const fuite = new THREE.Vector3(...CAMERA_AVENUE.cible).project(c)
+      expect(ecran.x).toBeLessThan(fuite.x - 0.2)
+      expect(ecran.x).toBeLessThan(lune.x - 0.4)
+    }
+  })
+
+  it('« agrandis le vaisseau d environ 40 % » : 267 px de large en 1600 × 900, contre 195 px avant', () => {
+    const { vaisseau } = monter()
+    vaisseau.groupe.updateMatrixWorld(true)
+    const c = camera(1600 / 900)
+    const xs: number[] = []
+    const p = new THREE.Vector3()
+    vaisseau.groupe.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh) return
+      if ((m.material as THREE.Material).transparent) return
+      const pos = m.geometry.getAttribute('position')
+      for (let i = 0; i < pos.count; i += 3)
+        xs.push((p.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).project(c).x + 1) * 800)
+    })
+    const largeur = Math.max(...xs) - Math.min(...xs)
+    expect(largeur / 195).toBeGreaterThan(1.3)
+    expect(largeur / 195).toBeLessThan(1.5)
   })
 
   it('flotte sans s en aller, et la roue tourne en emportant sa ville', () => {

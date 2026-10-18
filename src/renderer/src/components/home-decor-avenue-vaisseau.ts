@@ -20,17 +20,25 @@ import * as THREE from 'three'
  *     22 lumières → 8) ; son éclat est dans ses nuanceurs, ses feux et ses halos ;
  *   - cacher la lune : il reste hors de son disque et de son halo proche (le test voisin tire des
  *     rayons vers elle, tours et mâts compris) ;
- *   - se perdre dans le brouillard de la rue : à 2,9 km, `FogExp2` l'effacerait, il a sa propre brume.
+ *   - se perdre dans le brouillard de la rue : à 2,5 km, `FogExp2` l'effacerait, il a sa propre brume.
  */
 
 /**
  * Où il est, vu de la rue. Azimut compté depuis −z vers +x, hauteur en radians, distance en mètres.
- * Mesuré sur la vraie caméra en 1600 × 900 : la fenêtre de ciel va de x 620 à x 990 environ, du haut
- * de l'écran aux tuiles de l'Accueil (y 175) ; la lune y est en (842, 40). Le vaisseau est à gauche de
- * la lune. Plus près (2,6 km) ou plus à droite, sa jante entrait dans le halo de la lune (rayons tirés
- * depuis l'œil, 2026-10-18) ; au brouillon, rien ne s'en approche à moins de 0,075 rad.
+ *
+ * Demande de l'utilisateur (conv-319, 2026-10-18) : « Agrandis le vaisseau mère du fond de l'Accueil
+ * d'environ 40 % en gardant la lune dégagée […] met le a gauche au dessus de la ville ». Il était à
+ * l'azimut 0, à 2 900 m, dans la fenêtre de ciel à gauche de la lune (195 px de large en 1600 × 900).
+ * Il est maintenant au-dessus de la ville, que l'on ne voit qu'à gauche du point de fuite de l'avenue.
+ * Mesuré sur la vraie caméra en 1600 × 900 (`.autowin-tmp/draft-vaisseau-v2/grand/placer.ts`) : centre
+ * en (420, 150), enveloppe x 278 à 545 et y 59 à 219, soit 267 px de large (+37 %). Vu sur ce côté de
+ * l'image, l'anneau s'élargit déjà de lui-même : à 2 071 m (2 900 / 1,4), il aurait mesuré 326 px.
+ * Le cap suit l'azimut (0,15 − azimut) pour qu'on voie la roue sous le même angle qu'avant.
+ * Pas plus haut : sur l'écran de l'utilisateur (1745 × 938, toutes les tuiles masquées), le titre
+ * « Autowin Accueil » couvre y 40 à 87 de ce côté ; centré en y 115, il cachait l'arc arrière de la
+ * jante et les feux des toits. La lune, en (842, 40), est à 0,35 rad de sa pièce la plus proche.
  */
-export const VAISSEAU = { azimut: 0, hauteur: 0.4, distance: 2900, cap: 0.15 }
+export const VAISSEAU = { azimut: -0.297, hauteur: 0.312, distance: 2450, cap: 0.447 }
 
 /** La roue et la cité de son moyeu. */
 export const MOYEU_CITE = {

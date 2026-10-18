@@ -1183,7 +1183,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   })
 
   // LE VAISSEAU MÈRE (conv-319, « Implémenter la 6 · Anneaux d'approche ») : une cité sur le moyeu d'une
-  // roue, à gauche de la trouée de la lune. Monté ICI, avant la compilation de la rue, comme la ville.
+  // roue, au-dessus de la ville, à gauche. Monté ICI, avant la compilation de la rue, comme la ville.
   const vaisseau = monterVaisseau({
     scene,
     uT: uVille.uT,
