@@ -89,7 +89,9 @@ MUTEX = "Local\\autowin-os-dev-" + _EMPREINTE
 SILENCE_MAX_S = 75
 # Filet de dernier ressort, tres large : un processus qui ecrirait sans fin ne doit pas laisser cette
 # fenetre ouverte indefiniment.
-ATTENTE_TOTALE_S = 600
+# 25 min et non plus 10 : le 2026-10-18, un premier lancement du matin sur le disque mecanique a mis
+# ~10 min a afficher sa fenetre (bundle frais, mode dev vivant) — 600 s etait pile a la limite.
+ATTENTE_TOTALE_S = 1500
 CREATE_NO_WINDOW = 0x08000000
 # L'enregistreur de sortie doit SURVIVRE a ce lanceur : detache, il n'herite pas de sa fin.
 DETACHED_PROCESS = 0x00000008
@@ -465,6 +467,9 @@ def main() -> int:
     # Partage entre les deux threads : la LECTURE bloque sur `stdout`, elle ne peut donc pas constater
     # un silence. C'est un veilleur separe qui le fait.
     parole = {"dernier": time.monotonic()}
+    # Le processus du mode dev, pose par `travailler` : le veilleur doit savoir s'il VIT encore pour
+    # distinguer un demarrage lent d'un demarrage mort (voir `silence_tolere`).
+    etat_dev: dict[str, object] = {}
 
     def git(args: list[str], delai: int = 25) -> tuple[int, str]:
         """Appel git borne. Une panne git ne doit JAMAIS empecher un demarrage.
@@ -625,6 +630,7 @@ def main() -> int:
                 depuis = SORTIE_APP.stat().st_size if SORTIE_APP.is_file() else 0
                 amorcer_catalogue_modeles()
                 processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP, env=env_dev)
+                etat_dev["processus"] = processus
                 demarrer_enregistreur(processus.pid)
                 limite_totale = time.monotonic() + ATTENTE_TOTALE_S
                 # La fraicheur du bundle est TRANSMISE, elle ne ferme rien : c'est `SuiviDemarrage`
@@ -667,6 +673,30 @@ def main() -> int:
             # apres une erreur ferait croire que le demarrage continue.
             splash.terminer()
 
+    def silence_tolere() -> bool:
+        """Vrai si le silence vient d'un demarrage LENT, pas d'un demarrage MORT.
+
+        Vecu les 2026-10-17 et 2026-10-18, au premier lancement du matin : plus aucune ligne pendant
+        plus de 75 s apres « chargement de l'interface demande » — le renderer charge alors ses
+        modules un par un depuis D:, un disque MECANIQUE (Get-PhysicalDisk : TOSHIBA HDWD220, HDD),
+        sans rien ecrire. Le veilleur concluait « bundle perime » alors que le bundle etait frais et
+        que la fenetre est arrivee ~10 min apres le double-clic (verdict=0 a 07:57:16). Tant que le
+        mode dev VIT, on attend ; seul un mode dev mort rend le silence fatal.
+        """
+        p = etat_dev.get("processus")
+        if p is None or p.poll() is not None:
+            return False
+        if not etat_dev.get("lent_signale"):
+            etat_dev["lent_signale"] = True
+            journaliser(
+                f"silence de plus de {SILENCE_MAX_S} s mais le mode dev vit "
+                f"(etape={splash.suivi.etape}) — demarrage lent, on attend"
+            )
+            splash.pousser(
+                "[demarrage] démarrage lent (disque D: sollicité) — l'application continue de se charger\n"
+            )
+        return True
+
     def veiller() -> None:
         """Constate le SILENCE. Un demarrage lent est normal ; un demarrage muet ne l'est pas."""
         while not splash.fini:
@@ -676,7 +706,7 @@ def main() -> int:
                 journaliser(f"fenetre application detectee — ecran d'attente retire (etape={splash.suivi.etape})")
                 splash.terminer()
                 return
-            if time.monotonic() - parole["dernier"] > SILENCE_MAX_S:
+            if time.monotonic() - parole["dernier"] > SILENCE_MAX_S and not silence_tolere():
                 journaliser(
                     f"silence de plus de {SILENCE_MAX_S} s "
                     f"(etape={splash.suivi.etape}, lignes={splash.suivi.lignes_vues})"
@@ -704,7 +734,7 @@ def main() -> int:
                 splash.suivi.voir_fenetre(True)
                 journaliser("fenetre application detectee (sans ecran d'attente)")
                 break
-            if time.monotonic() - parole["dernier"] > SILENCE_MAX_S:
+            if time.monotonic() - parole["dernier"] > SILENCE_MAX_S and not silence_tolere():
                 journaliser(f"silence de plus de {SILENCE_MAX_S} s (sans ecran d'attente)")
                 resultat.setdefault("code", 6)
                 break
@@ -751,6 +781,19 @@ def main() -> int:
             "Autowin OS Dev — démarrage refusé par l'application",
         )
         return 8
+    if code == 6 and splash.suivi.bundle_frais:
+        # Bundle FRAIS : dire « perime » serait faux (alerte trompeuse des 2026-10-17 et 2026-10-18).
+        alerter(
+            "".join(
+                [
+                    "Le code a bien été recompilé, mais la fenêtre ne s'est pas affichée à temps.\n\n",
+                    "Regarde si elle apparaît dans quelques instants ; sinon la fin du journal :\n",
+                    f"{JOURNAL}",
+                ]
+            ),
+            "Autowin OS Dev — démarrage très lent",
+        )
+        return 6
     if code == 6:
         alerter(
             "".join(
