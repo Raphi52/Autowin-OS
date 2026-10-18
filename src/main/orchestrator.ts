@@ -99,7 +99,7 @@ import {
   parseAttestedLearningProposal,
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
-import { agregerPhasesPourLeJuge } from './agregat-juge'
+import { agregerPhasesPourLeJuge, agregerPhasesPourLUtilisateur } from './agregat-juge'
 import {
   PIPELINE_PHASES,
   type PipelinePhase,
@@ -5422,6 +5422,8 @@ ${CONTRAT_OBJECTIONS}`
     }
     const buildExec = (): {
       text: string
+      /** Le même agrégat, SANS les versions remplacées : ce que lit l'utilisateur (conv-339). */
+      rendu: string
       usage: Usage | undefined
       executionEvidence: ExecutionEvidence[]
     } => ({
@@ -5430,6 +5432,15 @@ ${CONTRAT_OBJECTIONS}`
       text:
         phaseOutputs.length > 1
           ? agregerPhasesPourLeJuge(
+              phaseOutputs,
+              JUDGE_PHASE_CAP,
+              undefined,
+              cheminDuLivrableEntierDuRun()
+            )
+          : lastExecText,
+      rendu:
+        phaseOutputs.length > 1
+          ? agregerPhasesPourLUtilisateur(
               phaseOutputs,
               JUDGE_PHASE_CAP,
               undefined,
@@ -5450,6 +5461,14 @@ ${CONTRAT_OBJECTIONS}`
      * `reservesMineuresDuScout`) : ajoutés au résultat rendu, jamais perdus. Vidé à chaque jugement.
      */
     let reservesDuJuge: string[] = []
+    /**
+     * Le texte RENDU à l'utilisateur : l'agrégat du DERNIER jugement SANS les versions remplacées
+     * d'une étape rejouée (conv-339, `exec.rendu`). Figé avec `exec` : learn, joué après, n'y entre
+     * pas. Le juge garde `exec.text`.
+     * fix-ok: conv-339 tour b6150a1a — `result` reprenait `exec.text`, l'agrégat écrit pour le juge :
+     * la réponse affichée commençait par deux « [phase scout] (version remplacée…, plus bas) ».
+     */
+    const texteRendu = (): string => (phaseOutputs.length > 0 ? exec.rendu : lastJudgeText)
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
@@ -6199,7 +6218,7 @@ ${CONTRAT_OBJECTIONS}`
         if (apresGate.length > 0) {
           push(
             etapeResultatValide(
-              resultatAvecReservesDuJuge(phaseOutputs.length > 0 ? exec.text : lastJudgeText, reservesDuJuge)
+              resultatAvecReservesDuJuge(texteRendu(), reservesDuJuge)
             )
           )
         }
@@ -6280,7 +6299,7 @@ ${CONTRAT_OBJECTIONS}`
       task,
       // conv-976 : les MINEUR gardés sur un `/scout` nommé suivent le résultat rendu (vide sinon).
       result: resultatAvecReservesDuJuge(
-        phaseOutputs.length > 0 ? exec.text : lastJudgeText,
+        texteRendu(),
         valid && !gate.blocked ? reservesDuJuge : []
       ),
       valid,

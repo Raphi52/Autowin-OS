@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
+import { MENTION_VERSION_REMPLACEE } from './agregat-juge'
 import { reservesMineuresDuScout, resultatAvecReservesDuJuge } from './objections-juge'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -168,6 +169,12 @@ describe('conv-976 : un /scout nommé garde les MINEUR seuls comme réserves au 
     expect(resultat.result).not.toContain('piste 1 tenue')
     // La trace dit pourquoi la boucle s'est arrêtée là.
     expect(resultat.trace.some((s) => /réserves? mineures? du juge gardées? dans le résultat/iu.test(s.detail ?? ''))).toBe(true)
+    // conv-339 (tour b6150a1a-6518-4d4b-99b4-3218b5efb501) : la version remplacée n'est PAS rendue
+    // à l'utilisateur : seule la version finale, sans en-tête ni la mention « …plus bas » écrite
+    // pour le juge.
+    expect(resultat.result.startsWith('## Cible')).toBe(true)
+    expect(resultat.result).not.toContain('[phase scout]')
+    expect(resultat.result).not.toContain(MENTION_VERSION_REMPLACEE)
   })
 
   it('le build garde le blocage : un MINEUR seul relance une réparation', async () => {

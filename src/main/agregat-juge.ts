@@ -170,3 +170,37 @@ export function agregerPhasesPourLeJuge(
     })
     .join('\n\n')
 }
+
+/**
+ * LE RÉSULTAT RENDU À L'UTILISATEUR NE PORTE PAS LES VERSIONS REMPLACÉES.
+ *
+ * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le `result` du run reprenait
+ * l'agrégat du JUGE : la réponse affichée commençait par deux fois « [phase scout] » +
+ * `MENTION_VERSION_REMPLACEE` (« …plus bas »), une indication écrite pour le juge, avant la seule
+ * version qui compte. Ici, une version remplacée disparaît, SAUF si elle porte la leçon la plus
+ * récente (`observeOutcomeLearning` la relit dans `result`). Le budget reste celui de l'agrégat du
+ * juge (plafond × nombre de sorties) : la version gardée n'est pas coupée plus court. Une seule sortie
+ * visible → pas d'en-tête, comme un run d'une seule étape. Le juge, lui, reçoit toujours l'agrégat
+ * entier (`agregerPhasesPourLeJuge`).
+ */
+export function agregerPhasesPourLUtilisateur(
+  sorties: SortieDePhase[],
+  plafond: number,
+  totalMax: number = AGGREGATE_MAX_CHARS,
+  ouLire?: string
+): string {
+  let derniere = -1
+  sorties.forEach((p, i) => {
+    if (p.text.split(/\r?\n/u).some(estLigneDeLecon)) derniere = i
+  })
+  const visibles = sorties.filter(
+    (p, i) =>
+      i === derniere ||
+      !(PHASES_REJOUEES_EN_ENTIER.has(p.phase) && sorties.some((q, j) => j > i && q.phase === p.phase))
+  )
+  if (visibles.length === 0) return ''
+  const plafondVisible = (plafond * sorties.length) / visibles.length
+  const agregat = agregerPhasesPourLeJuge(visibles, plafondVisible, totalMax, ouLire)
+  const entete = `[phase ${visibles[0]!.phase}]\n`
+  return visibles.length === 1 && agregat.startsWith(entete) ? agregat.slice(entete.length) : agregat
+}

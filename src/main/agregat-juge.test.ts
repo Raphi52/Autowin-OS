@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { agregerPhasesPourLeJuge, MARQUE_TRONQUE, MENTION_VERSION_REMPLACEE } from './agregat-juge'
+import {
+  agregerPhasesPourLeJuge,
+  agregerPhasesPourLUtilisateur,
+  MARQUE_TRONQUE,
+  MENTION_VERSION_REMPLACEE
+} from './agregat-juge'
 import { OUTCOME_LESSON_MARKER, parseAttestedLearningProposal } from './outcome-learning-proposal'
 import { AGGREGATE_MAX_CHARS } from './evidence-digest'
 
@@ -219,5 +224,55 @@ describe('agrégat remis au juge — piste 1 de conv-914 : seule la dernière ve
     )
     expect(parseAttestedLearningProposal(agregat)?.title).toBe('lecon du scout 1')
     expect(lignesDeLecon(agregat)).toHaveLength(1)
+  })
+})
+
+/**
+ * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la réponse affichée d'un /scout rejoué trois
+ * fois commençait par « [phase scout] » + la mention « …plus bas », deux fois, avant le tableau. Ce
+ * texte est écrit pour le juge ; l'utilisateur ne doit lire que la version qui compte.
+ */
+describe('résultat rendu à l’utilisateur — conv-339 : sans les versions remplacées', () => {
+  const troisScouts = [
+    { phase: 'scout', text: 'tableau version 1' },
+    { phase: 'scout', text: 'tableau version 2' },
+    { phase: 'scout', text: '## Cible\ntableau version 3' }
+  ]
+
+  it('scout rejoué 3 fois : seule la dernière version, sans en-tête ni mention', () => {
+    expect(agregerPhasesPourLUtilisateur(troisScouts, CAP)).toBe('## Cible\ntableau version 3')
+    // Le juge, lui, garde les mentions qui lui disent où lire.
+    expect(agregerPhasesPourLeJuge(troisScouts, CAP)).toContain(MENTION_VERSION_REMPLACEE)
+  })
+
+  it('la version gardée n’est pas coupée plus court que dans l’agrégat du juge', () => {
+    const longue = 'z'.repeat(CAP * 2)
+    const sorties = [
+      { phase: 'scout', text: 'v1' },
+      { phase: 'scout', text: 'v2' },
+      { phase: 'scout', text: longue }
+    ]
+    expect(agregerPhasesPourLUtilisateur(sorties, CAP)).toBe(longue)
+  })
+
+  it('jumeau : un build de réparation AJOUTE un changement — tout reste, avec les en-têtes', () => {
+    const sorties = [
+      { phase: 'frame', text: 'cadre' },
+      { phase: 'build', text: 'correctif 1' },
+      { phase: 'build', text: 'correctif 2' }
+    ]
+    expect(agregerPhasesPourLUtilisateur(sorties, CAP)).toBe(agregerPhasesPourLeJuge(sorties, CAP))
+  })
+
+  it('la leçon la plus récente portée par une version remplacée reste dans le résultat', () => {
+    const rendu = agregerPhasesPourLUtilisateur(
+      [
+        { phase: 'scout', text: reponse(100, lecon('lecon du scout 1')) },
+        { phase: 'scout', text: 'tableau version 2' }
+      ],
+      CAP
+    )
+    expect(parseAttestedLearningProposal(rendu)?.title).toBe('lecon du scout 1')
+    expect(rendu).toContain('tableau version 2')
   })
 })
