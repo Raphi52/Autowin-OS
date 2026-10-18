@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { regrouperEnInstances } from './decor-instances'
 
 /**
  * LA TOILE ÉLECTRIQUE : le ciel de l'avenue devient un filet de câbles.
@@ -381,12 +382,14 @@ export function monterToile(c: ContexteToile): ToileElectrique {
   // les poteaux électriques côté ville, entre les réverbères (eux sont à 8 et 25,5 m)
   const POTEAUX = [1, 17, 29]
   const hauts: THREE.Vector3[][] = []
+  // une seule matière pour les trois transformateurs (mêmes réglages) : ils se dessinent ensemble
+  const transfo = STD(0x2b2b33, 0.5, 0.7)
   POTEAUX.forEach((z) => {
     const x = -6.75
     tige(0.13, 10, bois, x, TROTTOIR + 5, z, travee)
     bloc(0.12, 0.12, 2.4, bois, x + 0.1, TROTTOIR + 9.3, z, travee)
     bloc(0.12, 0.12, 1.6, bois, x + 0.1, TROTTOIR + 8.3, z, travee)
-    bloc(0.45, 0.65, 0.45, STD(0x2b2b33, 0.5, 0.7), x + 0.35, TROTTOIR + 7.1, z, travee)
+    bloc(0.45, 0.65, 0.45, transfo, x + 0.35, TROTTOIR + 7.1, z, travee)
     const pts: THREE.Vector3[] = []
     for (const dz of [-1.1, -0.4, 0.4, 1.1]) pts.push(V(x + 0.1, TROTTOIR + 9.36, z + dz))
     for (const dz of [-0.7, 0.7]) pts.push(V(x + 0.1, TROTTOIR + 8.36, z + dz))
@@ -724,6 +727,14 @@ export function monterToile(c: ContexteToile): ToileElectrique {
   const cables = new THREE.Mesh(fusionner(tubes), fils)
   cables.name = 'cables'
   travee.add(cables)
+
+  /**
+   * LES OBJETS FIXES DE LA TRAVÉE EN QUELQUES DESSINS (conv-337) : sacs, cartons, poteaux et leurs
+   * traverses partagent géométrie et matière ; chacun coûtait un dessin, à l'écran et dans le reflet
+   * (107 dessins à l'écran pour trois travées visibles). Un `InstancedMesh` par géométrie et matière,
+   * même rendu (voir decor-instances.ts). Avant les copies : chaque copie hérite des lots.
+   */
+  regrouperEnInstances(travee, [GEO_SAC, BOITE, CYL])
 
   // ---------- LES COPIES : une travée dans chaque copie du décor ----------
   const pendus: Pendu[] = []
