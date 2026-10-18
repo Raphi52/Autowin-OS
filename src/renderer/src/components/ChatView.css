@@ -4314,6 +4314,121 @@ button.chat-project-dot:disabled {
 .thinking-block--actions > .thinking-body {
   border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
+/* CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (conv-335, 2026-10-18, /draft « un
+   meilleur bloc raisonnement pour mieux voir le texte quand il est déplié », « Implémenter 1 + 3 »).
+   Avant : <pre> gris lavande de 13 px, fenêtre de 240 px à ascenseur, première ligne coupée.
+   - Liseuse : texte CLAIR en 14 px, aucun ascenseur ; coupé à une demi-fenêtre avec un fondu en
+     HAUT (le corps montre la fin de la pensée) et « Tout lire » (ThinkingBlock.tsx, FilDePensee) ;
+   - Fil de pensée : un point numéroté par paragraphe (`data-n`) sur un rail placé SOUS le rond de
+     l'en-tête — même retrait (0,45 em) et même colonne (2,5 em) que `.anneau-tete` ; le dernier
+     point est allumé (dégradé des capsules, bleu plein) et bat pendant le tour.
+   Pas de garde prefers-reduced-motion : ce poste l'a actif (même choix que le bloc Étapes). */
+.thinking-block > .thinking-body--fil {
+  max-height: none;
+  overflow: hidden;
+  border-left: 0;
+  padding: 0;
+  white-space: normal;
+  font-size: inherit;
+  line-height: 1.5;
+  color: var(--text);
+}
+.thinking-block.cadre-anneau > .thinking-body.thinking-body--fil {
+  margin: 0 0.85em 0.6em 0.45em;
+}
+.thinking-block > .thinking-body--fil.is-coupe {
+  max-height: 50vh;
+}
+.thinking-block > .thinking-body--fil.is-coupe.is-deborde {
+  -webkit-mask-image: linear-gradient(transparent, black 64px);
+  mask-image: linear-gradient(transparent, black 64px);
+}
+/* Une grille par paragraphe : le point dans la colonne du rond, le texte sous le libellé. Le rail
+   est un filet de 1 px qui part SOUS le point et rejoint le suivant ; aucun après le dernier. */
+.thinking-body--fil .thinking-fil-para {
+  display: grid;
+  grid-template-columns: 2.5em minmax(0, 1fr);
+  column-gap: 0.6em;
+  margin: 0;
+  padding-bottom: 0.7em;
+  background: linear-gradient(rgba(var(--voile-rgb), 0.18), rgba(var(--voile-rgb), 0.18)) no-repeat
+    calc(1.25em - 0.5px) 24px / 1px calc(100% - 24px);
+}
+.thinking-body--fil .thinking-fil-para.is-derniere {
+  padding-bottom: 0;
+  background: none;
+}
+.thinking-body--fil .thinking-fil-para::before {
+  content: attr(data-n);
+  justify-self: center;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(var(--voile-rgb), 0.35);
+  color: var(--text-dim);
+  font: 700 10px/1 var(--mono, ui-monospace, monospace);
+}
+.thinking-body--fil .thinking-fil-para.is-derniere::before {
+  background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--capsule-chaud) 22%, transparent);
+  color: var(--on-accent);
+}
+.thinking-block.is-live .thinking-fil-para.is-derniere::before {
+  animation: thinking-fil-bat 1.6s ease-in-out infinite;
+}
+@keyframes thinking-fil-bat {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--capsule-chaud) 6%, transparent);
+  }
+}
+.thinking-body--fil .thinking-fil-texte {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.thinking-body--fil .thinking-fil-code {
+  padding: 0 5px;
+  border-radius: 5px;
+  background: rgba(var(--voile-rgb), 0.07);
+  box-shadow: inset 0 0 0 1px rgba(var(--voile-rgb), 0.14);
+  color: var(--text);
+  font: 12px/1.4 var(--mono, ui-monospace, monospace);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.thinking-block > .thinking-fil-tout {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 4px;
+  padding: 2px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(var(--voile-rgb), 0.06);
+  box-shadow: inset 0 0 0 1px rgba(var(--voile-rgb), 0.22);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.thinking-block > .thinking-fil-tout:hover {
+  background: rgba(var(--voile-rgb), 0.12);
+  color: var(--text);
+}
+/* Bloc OUVERT, l'en-tête ne répète plus la dernière ligne : elle est lisible juste dessous. */
+.thinking-block--raisonnement[open] > summary .anneau-l2 {
+  display: none;
+}
 /* BLOC ÉTAPES (conv-304, 2026-10-17) : la liste de tâches de claude.exe.
    RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
    de progression pour ce bloc », trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles

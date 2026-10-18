@@ -16,6 +16,34 @@ export function corpsDuBloc(text: string): string {
   return text
 }
 
+/** Un morceau d'un paragraphe de pensée : du texte, ou un `code` à dessiner en puce. */
+export type MorceauDePensee = { code: boolean; texte: string }
+
+/**
+ * Le corps DÉPLIÉ du Raisonnement en PARAGRAPHES (conv-335, 2026-10-18, « Implémenter 1 + 3 » :
+ * Liseuse + Fil de pensée). Chaque paragraphe prend un point numéroté sur le rail : on coupe aux
+ * lignes vides — plusieurs à la suite n'en font qu'une, et aucun paragraphe vide ne naît. Un retour
+ * à la ligne simple reste DANS son paragraphe. Les `code` sortent en morceaux à part, pour être
+ * dessinés en puce ; un accent grave seul (pensée en cours d'écriture) reste du texte.
+ */
+export function paragraphesDeLaPensee(text: string): MorceauDePensee[][] {
+  return text
+    .split(/\n[ \t]*\n\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => {
+      const morceaux: MorceauDePensee[] = []
+      let depuis = 0
+      for (const m of p.matchAll(/`([^`\n]+)`/g)) {
+        if (m.index > depuis) morceaux.push({ code: false, texte: p.slice(depuis, m.index) })
+        morceaux.push({ code: true, texte: m[1]! })
+        depuis = m.index + m[0].length
+      }
+      if (depuis < p.length) morceaux.push({ code: false, texte: p.slice(depuis) })
+      return morceaux
+    })
+}
+
 /**
  * En-tete du bloc RAISONNEMENT quand il est PLIE : la DERNIERE ligne ecrite, comme le bloc
  * Actions affiche son action courante (demande de l'utilisateur, 2026-09-12). On saute les lignes

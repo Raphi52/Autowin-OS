@@ -26,7 +26,14 @@
  * (« sors-la de la capsule Actions, mets-la comme avant en dessous »). Visible bloc plié.
  */
 // fix-ok: le bloc Actions ne recevait que statusLog (texte) sans statut ; mesure claude.ts:1687 (is_error) jamais transmis -> lignes de fin parsees dans thinking-block-corps.ts, frise C3 ; edits 3-4 = echappement de retour a la ligne casse par le shell, corrige.
-import React, { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
+import React, {
+  Fragment,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState
+} from 'react'
 import { LegendeDesOutils, RondDIcone, RondDuCompte } from './anneau-activite'
 import {
   actionsDuTour,
@@ -41,6 +48,7 @@ import {
   dureeLisible,
   memoriserChrono,
   memoriserChronosDesEtapes,
+  paragraphesDeLaPensee,
   piedDesEtapes,
   resumeDesEtapes,
   secondesDesActions,
@@ -176,6 +184,86 @@ function BlocRepliable({
         </pre>
       )}
     </details>
+  )
+}
+
+/**
+ * CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (conv-335, 2026-10-18, /draft « un
+ * meilleur bloc raisonnement pour mieux voir le texte quand il est déplié », puis « Implémenter
+ * 1 + 3 »). Remplace un <pre> gris de 13 px dans une fenêtre de 240 px à ascenseur, dont la
+ * première ligne était coupée en haut.
+ *   - de la 1 (Liseuse) : texte clair en 14 px, plus d'ascenseur ; au-delà d'une demi-fenêtre, un
+ *     fondu et « Tout lire · N paragraphes », qui déplie TOUT le texte (puis « Réduire ») ;
+ *   - de la 3 (Fil de pensée) : un point numéroté par paragraphe sur un rail placé sous le rond de
+ *     l'en-tête ; le dernier est allumé, et il bat pendant le tour (CSS). L'effacement des anciens
+ *     paragraphes de la 3 n'est PAS repris : il allait contre « mieux voir le texte ».
+ * Coupé, le corps montre la FIN de la pensée (le point allumé), comme le <pre> qu'il remplace :
+ * le fondu et le bouton sont donc en HAUT. Pas d'ascenseur interne : la molette fait défiler le
+ * fil, jamais un petit cadre. Le numéro est un attribut (`data-n`) : le texte du corps reste la
+ * pensée seule.
+ */
+function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
+  const paragraphes = paragraphesDeLaPensee(texte)
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [entier, setEntier] = useState(false)
+  const [deborde, setDeborde] = useState(false)
+  // Coupé : calé sur la FIN et mesuré. Déplié en entier, rien à caler ni à mesurer.
+  const mesurer = useEffectEvent(() => {
+    const el = ref.current
+    if (!el || entier) return
+    el.scrollTop = el.scrollHeight
+    setDeborde(el.scrollHeight > el.clientHeight + 1)
+  })
+  useLayoutEffect(() => mesurer(), [texte, entier])
+  // Bloc plié, le corps n'a pas de taille : on remesure quand il en prend une (ouverture, largeur).
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observateur = new ResizeObserver(() => mesurer())
+    observateur.observe(el)
+    return () => observateur.disconnect()
+  }, [])
+  const n = paragraphes.length
+  return (
+    <>
+      {(deborde || entier) && (
+        <button
+          type="button"
+          className="thinking-fil-tout"
+          data-testid="thinking-block-tout-lire"
+          onClick={() => setEntier((e) => !e)}
+        >
+          {entier ? 'Réduire' : `Tout lire · ${n} paragraphe${n > 1 ? 's' : ''}`}
+        </button>
+      )}
+      <div
+        ref={ref}
+        className={`thinking-body thinking-body--fil${entier ? ' is-entier' : ' is-coupe'}${
+          deborde && !entier ? ' is-deborde' : ''
+        }`}
+        data-testid="thinking-block-body"
+      >
+        {paragraphes.map((morceaux, i) => (
+          <p
+            key={i}
+            className={`thinking-fil-para${i === n - 1 ? ' is-derniere' : ''}`}
+            data-n={i + 1}
+          >
+            <span className="thinking-fil-texte">
+              {morceaux.map((m, j) =>
+                m.code ? (
+                  <code key={j} className="thinking-fil-code">
+                    {m.texte}
+                  </code>
+                ) : (
+                  <Fragment key={j}>{m.texte}</Fragment>
+                )
+              )}
+            </span>
+          </p>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -517,6 +605,7 @@ export function ThinkingBlock({
           }
           {...(dernierePensee ? { entete: dernierePensee } : {})}
           corps={pensee}
+          contenu={<FilDePensee texte={pensee} />}
           dependances={[text]}
         />
         {actions && (

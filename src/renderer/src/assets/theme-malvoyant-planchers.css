@@ -278,6 +278,7 @@
 :root[data-theme^='malvoyant-'] .activity-step-link,
 :root[data-theme^='malvoyant-'] .thinking-block > summary .thinking-status,
 :root[data-theme^='malvoyant-'] .thinking-block--actions .thinking-body,
+:root[data-theme^='malvoyant-'] .thinking-block > .thinking-fil-tout,
 :root[data-theme^='malvoyant-'] .conv-mosaic-close-all,
 :root[data-theme^='malvoyant-'] .msg-provider-status,
 :root[data-theme^='malvoyant-'] .composer-dictee-message,
