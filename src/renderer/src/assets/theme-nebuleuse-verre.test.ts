@@ -218,8 +218,10 @@ describe('theme Nebuleuse de verre', () => {
     expect(saisieDetachee['--nv-saisie-bord']).toBe('transparent')
     expect(saisieDetachee['--nv-saisie-cadre']).toBe('var(--nv-cadre-coule)')
     const envoi = decls(`${PREFIXE} .cosmic-outline .composer-send`)
-    expect(envoi['border-radius']).toBe('50%')
-    expect([envoi.width, envoi.height]).toEqual(['38px', '38px'])
+    // Le rond de 38 px (conv-155) est devenu le carre de « Lineaire B » (conv-302) : voir
+    // « Envoyer en gel fondu bleu-rose » plus bas.
+    expect(envoi['border-radius']).toBe('0')
+    expect([envoi.width, envoi.height]).toEqual(['32px', '32px'])
     expect(envoi['--nv-envoi-fond']).toBe('#d9ae52')
     expect(envoi['--nv-envoi-vide-fond']).toBe('transparent')
     expect(envoi['--nv-envoi-lueur']).toBe('none')
@@ -228,13 +230,33 @@ describe('theme Nebuleuse de verre', () => {
     expect(saisieEtEnvoi).not.toMatch(/230, 60, 160|nv-degrade\b|nv-lueur-toi/)
   })
 
-  it('allume le mode auto de la saisie en or, pas en rose', () => {
-    let actif = ''
+  /**
+   * DEMANDE DE L'UTILISATEUR (2026-10-18, conv-324) : « met ces boutons au style holographique pour
+   * les hover et selected ». Le ∞ allume quitte l'or du 2026-09-07 pour le cadre nacre autour d'un
+   * gris plus clair (langage du carrousel /draft). ECHOUE si l'or ou le rose generique reviennent, si
+   * le cadre n'est plus peint en `border-box` sous un bord transparent, ou si le survol du ∞ allume
+   * retombe sur le rose de `.btn:hover`.
+   */
+  it('allume le mode auto de la saisie en cadre nacre, ni or ni rose', () => {
+    const regles: string[] = []
+    const selecteurs: string[] = []
     postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
-      if (regle.selector.trim() === `${PREFIXE} .composer-auto.actif`) actif = regle.toString()
+      if (!regle.selectors.some((s) => s.includes('.composer-auto.actif'))) return
+      regles.push(regle.toString())
+      selecteurs.push(...regle.selectors.map((s) => s.replace(/\s+/g, ' ').trim()))
     })
-    expect(actif).toContain('rgba(212, 169, 79, 0.75)')
-    expect(actif).not.toMatch(/251, 91, 171/)
+    expect(selecteurs).toEqual(
+      expect.arrayContaining([
+        `${PREFIXE} .composer-input-row > .composer-auto.actif`,
+        `${PREFIXE} .composer-input-row > .composer-auto.actif:hover:not(:disabled)`
+      ])
+    )
+    const actif = regles.join('\n')
+    expect(actif).toMatch(/border-color:\s*transparent/)
+    expect(actif).toMatch(/var\(--nv-pastille-gris-clair\)\)\s*padding-box/)
+    expect(actif).toMatch(/var\(--nv-pastille-nacre\)\s*border-box/)
+    expect(actif).toMatch(/color:\s*var\(--text\)/)
+    expect(actif).not.toMatch(/212, 169, 79|#e3ba55|251, 91, 171|230, 60, 160/)
   })
 
   /**
@@ -521,15 +543,174 @@ describe('Envoyer en gel fondu bleu-rose', () => {
     expect(appui['box-shadow']).toBe('0 1px 1px rgba(0, 0, 0, 0.6)')
   })
 
-  it('garde le meme degrade plein quand il n y a rien a envoyer', () => {
-    const vide = derniere(VIDE)
-    expect(reflet(vide.background)).toBeLessThan(reflet(derniere(ENVOI).background))
-    expect(vide.opacity).toBe('1')
-    expect(vide.color).toBe('rgba(255, 255, 255, 0.5)')
-    expect(vide['border-color']).toBe('transparent')
-    expect(vide['box-shadow']).toBe('none')
+  /**
+   * ENVOYER « LINEAIRE B » (conv-302, 2026-10-17 : « juste le bouton envoyer et les icones de B
+   * lineaire et il s'allume quand ya du texte dans le prompt »). Le rond devient un CARRE de 32 px
+   * a coins de 3 px. Champ vide : carre CREUX -- le fond de la saisie dedans, un bord d'1 px au
+   * degrade plein (le bleu n'est jamais dilue, conv-182), avion couleur du texte. Du texte : il
+   * S'ALLUME dans le gel fondu ci-dessus. ENTREES QUI DOIVENT FAIRE ECHOUER : le rond remis, un
+   * vide rempli de degrade (plus rien ne s'allumerait), un bord eteint par opacity.
+   */
+  it('passe Envoyer en carre de 32 px dans tous ses etats, coins coupes par le chanfrein', () => {
+    const forme = derniere(`${PREFIXE} .cosmic-outline .composer-send`)
+    // Coins droits : seuls les deux coins coupes du chanfrein « Platine » changent la forme.
+    expect(forme['border-radius']).toBe('0')
+    expect([forme.width, forme.height, forme['min-width'], forme['min-height']]).toEqual([
+      '32px',
+      '32px',
+      '32px',
+      '32px'
+    ])
+    expect(derniere(`${PREFIXE} .cosmic-outline .composer-send svg`)).toMatchObject({
+      width: '16px',
+      height: '16px'
+    })
   })
 
+  it('laisse Envoyer creux quand il n y a rien a envoyer, et l allume des qu il y a du texte', () => {
+    const vide = derniere(VIDE)
+    // Creux = le fond de la saisie ; son contour est le cadre platine (« Boutons a chanfrein »).
+    expect(vide.border).toBe('0')
+    expect(vide.background).toBe('var(--nv-saisie-degrade)')
+    expect(vide.color).toBe('var(--text)')
+    expect(vide.opacity).toBe('1')
+    expect(vide['box-shadow']).toBe('none')
+    // Pret : le gel plein, que le vide n'a pas -- c'est lui qui « s'allume ».
+    expect(reflet(derniere(ENVOI).background)).toBe(0.4)
+    expect(reflet(vide.background)).toBeNaN()
+  })
+})
+
+/**
+ * ICONES NUES « LINEAIRE B » (conv-302, 2026-10-17). Le mode auto, le trombone et le micro
+ * perdent leur rond blanc : le trace seul, en couleur du texte. Le survol pose un aplat gris
+ * (langage des boutons holographiques), plus le rose de `.btn`. Les etats qui PORTENT une
+ * information gardent leur habit : mode auto allume (or), micro en ecoute ou en transcription.
+ */
+describe('Icones de la saisie nues (Lineaire B)', () => {
+  const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-dictee:not(.is-recording):not(.is-transcribing))`
+  /** Le formateur peut couper `:is(...)` sur plusieurs lignes : on compare sans ces blancs. */
+  const aplati = (s: string): string =>
+    s.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim()
+  const derniere = (selecteur: string): Record<string, string> => {
+    const valeurs: Record<string, string> = {}
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (!regle.selectors.some((s) => aplati(s) === selecteur)) return
+      regle.walkDecls((d) => {
+        valeurs[d.prop] = d.value
+      })
+    })
+    return valeurs
+  }
+
+  it('retire le rond des trois icones au repos, trace en couleur du texte', () => {
+    expect(derniere(NUES)).toMatchObject({
+      'border-color': 'transparent',
+      background: 'transparent',
+      color: 'var(--text)'
+    })
+  })
+
+  // conv-324 (2026-10-18) : le survol devient le rond holographique -- aplat gris cercle de nacre.
+  it('marque le survol par un aplat gris cercle de nacre, sans bord rose', () => {
+    const survol = derniere(`${NUES}:hover:not(:disabled)`)
+    expect(survol['border-color']).toBe('transparent')
+    expect(aplati(survol.background ?? '')).toBe(
+      'linear-gradient(var(--nv-pastille-gris), var(--nv-pastille-gris)) padding-box, var(--nv-pastille-nacre) border-box'
+    )
+  })
+
+  it('tire ses gris du texte et du fond, et son cadre du nacre du bloc de question', () => {
+    const jetons = derniere(
+      `${PREFIXE} .composer-input-row > :is(.composer-auto, .attachment-button, .composer-dictee)`
+    )
+    expect(jetons['--nv-pastille-gris']).toBe('color-mix(in srgb, var(--text) 14%, var(--bg-0))')
+    expect(jetons['--nv-pastille-gris-clair']).toBe('color-mix(in srgb, var(--text) 21%, var(--bg-0))')
+    expect(aplati(jetons['--nv-pastille-nacre'] ?? '')).toBe(
+      'linear-gradient(100deg, #3c6eeb 0%, #e63ca0 30%, #d9d9d9 55%, #ff8cc8 78%, #3c6eeb 100%)'
+    )
+  })
+})
+
+/**
+ * BOUTONS A CHANFREIN « PLATINE » (conv-302, 2026-10-17 : « /draft des boutons a chanfrin », puis
+ * « Implementer la 1 · Platine »). Envoyer, Nouveau fil et Detail prennent le cadre des grands
+ * panneaux, a leur echelle : coins haut gauche et bas droit coupes, pans blanc et argent qui
+ * mesurent deux fois la coupe, cotes a 7 %. Le remplissage reste celui de chaque bouton.
+ * ENTREES QUI DOIVENT FAIRE ECHOUER : une coupe sans cadre (ou l'inverse), des couleurs de pans
+ * ecrites en dur (Holographique blanc ne les recolorerait pas), un bord encore epais sous Envoyer
+ * (le cadre, cale sur la boite interieure, decollerait de la coupe), un cadre qui capte les clics.
+ */
+describe('Boutons a chanfrein Platine', () => {
+  const BOUTONS = {
+    envoyer: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-send`,
+    'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`,
+    details: `${PREFIXE} .workflow-capsule > summary .thinking-capsule`
+  }
+  const MESURES: Record<string, [string, string]> = {
+    envoyer: ['6px', '12px'],
+    'nouveau fil': ['9px', '18px'],
+    details: ['6px', '12px']
+  }
+  const aplati = (s: string): string =>
+    s
+      .replace(/\s+/g, ' ')
+      .replace(/\(\s+/g, '(')
+      .replace(/\s+\)/g, ')')
+      .trim()
+  const derniere = (selecteur: string): Record<string, string> => {
+    const valeurs: Record<string, string> = {}
+    postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+      if (!regle.selectors.some((s) => aplati(s) === selecteur)) return
+      regle.walkDecls((d) => {
+        valeurs[d.prop] = aplati(d.value)
+      })
+    })
+    return valeurs
+  }
+  const COUPE =
+    'polygon(var(--nv-bouton-coupe) 0, 100% 0, 100% calc(100% - var(--nv-bouton-coupe)), calc(100% - var(--nv-bouton-coupe)) 100%, 0 100%, 0 var(--nv-bouton-coupe))'
+
+  it('coupe les coins haut gauche et bas droit des trois boutons, pans deux fois la coupe', () => {
+    for (const [nom, selecteur] of Object.entries(BOUTONS)) {
+      const r = derniere(selecteur)
+      expect(r['clip-path'], nom).toBe(COUPE)
+      expect(r['border-radius'], nom).toBe('0')
+      expect(r.position, nom).toBe('relative')
+      expect([r['--nv-bouton-coupe'], r['--nv-bouton-pans']], nom).toEqual(MESURES[nom])
+    }
+  })
+
+  it('trace le cadre en anneau d 1 px aux couleurs des panneaux, sans capter les clics', () => {
+    for (const [nom, selecteur] of Object.entries(BOUTONS)) {
+      const cadre = derniere(`${selecteur}::before`)
+      expect(cadre.content, nom).toBe("''")
+      expect([cadre.position, cadre.inset, cadre.padding], nom).toEqual(['absolute', '0', '0'])
+      expect(cadre['pointer-events'], nom).toBe('none')
+      expect(cadre.mask, nom).toBe('none')
+      expect(cadre['clip-path'], nom).toMatch(/^polygon\(evenodd,/)
+      expect(cadre['clip-path'], nom).toContain('calc(var(--nv-bouton-coupe) + 0.414px) 1px')
+      expect(cadre.background, nom).toContain('var(--nv-chanfrein-haut)')
+      expect(cadre.background, nom).toContain('var(--nv-chanfrein-bas)')
+      expect(cadre.background, nom).toContain('var(--nv-bouton-pans) var(--nv-bouton-pans)')
+      expect(cadre.background, nom).not.toMatch(/#[0-9a-f]{3,6}\b/i)
+    }
+  })
+
+  it('ne laisse aucun bord sous Envoyer, dans aucun etat : le cadre epouse la coupe', () => {
+    const ENVOI = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled)`
+    expect(derniere(BOUTONS.envoyer)['border-width']).toBe('0')
+    expect(derniere(ENVOI)['border-width']).toBe('0')
+    expect(derniere(`${ENVOI}:hover`)['border-width']).toBe('0')
+  })
+
+  it('allume tout le cadre au focus clavier, que la coupe empeche de detourer', () => {
+    for (const nom of ['envoyer', 'nouveau fil'] as const) {
+      expect(derniere(`${BOUTONS[nom]}:focus-visible`)['--nv-bouton-cotes'], nom).toBe(
+        'var(--nv-chanfrein-haut)'
+      )
+    }
+  })
 })
 
 /**

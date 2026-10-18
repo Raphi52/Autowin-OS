@@ -1198,8 +1198,8 @@ export class AutowinOS {
   }
 
   /**
-   * Pose (ou efface avec `undefined`) le MODÈLE DES PETITES TÂCHES — tri des conversations et choix
-   * automatique du workflow — et le persiste dans `roles.json` à côté des quatre rôles. Persister
+   * Pose (ou efface avec `undefined`) le MODÈLE DES PETITES TÂCHES — choix automatique du workflow —
+   * et le persiste dans `roles.json` à côté des quatre rôles. Persister
    * AVANT d'appliquer : un disque qui refuse l'écriture ne laisse pas un réglage fantôme en mémoire.
    */
   setPetitesTaches(binding: RoleBinding | undefined): RoleBinding | undefined {

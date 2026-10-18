@@ -103,6 +103,7 @@ import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import {
   bureauUtilisable,
   cleDuBureauDeVerification,
+  fichiersCommitesHorsDeLaCopie,
   synchroniserBureauDeVerification,
   VERIFY_SANS_ISOLATION
 } from './verification-isolee'
@@ -5839,16 +5840,21 @@ export class AppCommandBus {
         ? await worktrees.beginAsync(runId, 'Commande verify', true, beginOptions)
         : worktrees.begin(runId, 'Commande verify', true, beginOptions)
       if (!bureauUtilisable(bureau)) return undefined
-      const rapport = synchroniserBureauDeVerification(
-        workspace,
-        bureau,
-        await this.fichiersNonCommites(workspace)
-      )
+      // L'etat courant = le commit LOCAL + le travail non commite. La copie nait sur `origin` :
+      // sans les fichiers commites localement depuis, elle melangeait vieux et neuf (conv-313).
+      const commites = await fichiersCommitesHorsDeLaCopie(workspace, bureau)
+      const rapport = synchroniserBureauDeVerification(workspace, bureau, [
+        ...(commites ?? []),
+        ...(await this.fichiersNonCommites(workspace))
+      ])
       // Le premier `verify` d'une conversation paie la creation de la copie : le dire evite de
       // lire cette attente comme un blocage.
       onProgress?.(
         `copie isolée prête — ${rapport.copies.length} fichier(s) à jour reporté(s)` +
-          (rapport.supprimes.length ? `, ${rapport.supprimes.length} retiré(s)` : '')
+          (rapport.supprimes.length ? `, ${rapport.supprimes.length} retiré(s)` : '') +
+          (commites === null
+            ? ' — ⚠ commits locaux non lus : la copie peut garder des fichiers anciens'
+            : '')
       )
       return bureau
     } catch {

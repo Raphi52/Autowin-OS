@@ -62,7 +62,7 @@ function codeSeulementDuProcessPrincipal(): string {
  * Fichiers qui DÉCIDENT d'un envoi provider (par opposition à ceux qui ne font que retransporter un
  * `system` déjà composé : adaptateurs, registre, copies d'observabilité).
  */
-const FICHIERS_DE_DECISION = ['orchestrator.ts', 'agent-pilot.ts', 'conversation-router.ts']
+const FICHIERS_DE_DECISION = ['orchestrator.ts', 'agent-pilot.ts']
 
 /** Valeurs qui ne COMPOSENT pas une injection : elles recopient un `system` construit ailleurs. */
 const RETRANSPORTS =

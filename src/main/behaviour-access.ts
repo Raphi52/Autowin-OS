@@ -1,6 +1,7 @@
 import { realpathSync, statSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { NOM_PAGE_SCENE_3D } from '../shared/scene-3d'
 
 export class ApprovedBehaviourWorkspaces {
   private readonly roots = new Set<string>()
@@ -67,6 +68,39 @@ export function isTrustedRendererUrl(
       sender.host.toLowerCase() === expected.host.toLowerCase() &&
       decodeURIComponent(sender.pathname).toLowerCase() ===
         decodeURIComponent(expected.pathname).toLowerCase()
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * L'UNIQUE page qu'un cadre du fil peut charger en plus d'une URL locale (`data:`/`blob:`) : la
+ * page des scenes 3D (`scene-3d.html`, a cote de `index.html`), servie par l'app elle-meme.
+ *
+ * Elle existe parce qu'un cadre local herite de la politique de l'app, qui interdit tout script
+ * (mesure le 2026-10-16) : une scene three.js du fil (Bloc3D.tsx) a besoin d'une page qui porte SA
+ * politique. Comparaison stricte sur l'origine et le chemin : une autre page de l'app, ou la meme
+ * page servie ailleurs, reste refusee.
+ */
+export function isSceneFrameUrl(
+  url: string,
+  options: { devRendererUrl?: string; rendererHtmlPath?: string }
+): boolean {
+  try {
+    const cible = new URL(url)
+    if (options.devRendererUrl) {
+      const attendu = new URL(NOM_PAGE_SCENE_3D, options.devRendererUrl)
+      return cible.origin === attendu.origin && cible.pathname === attendu.pathname
+    }
+    if (!options.rendererHtmlPath || cible.protocol !== 'file:') return false
+    const attendu = pathToFileURL(
+      join(dirname(resolve(options.rendererHtmlPath)), NOM_PAGE_SCENE_3D)
+    )
+    return (
+      cible.host.toLowerCase() === attendu.host.toLowerCase() &&
+      decodeURIComponent(cible.pathname).toLowerCase() ===
+        decodeURIComponent(attendu.pathname).toLowerCase()
     )
   } catch {
     return false

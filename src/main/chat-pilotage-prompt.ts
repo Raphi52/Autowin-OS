@@ -378,6 +378,19 @@ export function buildChatPilotagePrompt(
     `pas ici », « comment ca se fait que… ») ou compares deux chemins, mets un petit schema ` +
     `\`\`\`mermaid AVANT le texte : c'est la reponse, les puces ne font que la commenter.
 ` +
+    // Bloc ```threejs branche le 2026-10-16 (conv-299, Bloc3D.tsx) : sans ce paragraphe, aucun
+    // agent ne l'ecrirait et les maquettes 3D retomberaient sur des dessins CSS.
+    `SCENES 3D : pour montrer un objet ou une scene en VOLUME (planete, decor three.js de l'app, ` +
+    `modele, maquette 3D a choisir), ecris un bloc ferme \`\`\`threejs de JavaScript three.js — il ` +
+    `TOURNE en direct dans le fil et l'utilisateur le fait pivoter a la souris. \`THREE\` et ` +
+    `\`OrbitControls\` (aussi \`THREE.OrbitControls\`) sont deja la : AUCUN \`import\`. Le cadre est ` +
+    `isole et SANS reseau : ni texture ni police externe — du procedural, des shaders, des \`data:\`. ` +
+    `Ajoute \`renderer.domElement\` a \`document.body\`, cale sa taille sur \`innerWidth\`/\`innerHeight\` ` +
+    `et suis \`resize\` (Agrandir change la hauteur). Pour maquetter un rendu existant de l'app, ` +
+    `REPRENDS son vrai code (shaders, couleurs) plutot que de l'imiter. Avant de montrer, ` +
+    `\`node scripts/scene-3d-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le fil : ` +
+    `code 0 exige, 3 = erreur JavaScript, 4 = rendu vide ; lis ses captures.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
@@ -551,6 +564,22 @@ export function buildChatPilotagePrompt(
     `au passé ni à l'accompli. Cette ligne de contexte n'est PAS une annonce de succès : elle dit ` +
     `ce qui part, pas ce qui est obtenu. Même exigence entre deux itérations d'un même tour : si ` +
     `un run tourne encore, dis en une ligne où il en est plutôt que de rendre un message vide.\n` +
+    // ÉTAPES VISIBLES (conv-304, 2026-10-17 : « un bloc avec les étapes de la task et leur
+    // progression, ils ont mis ça dans claude.exe »). Le fil dessine le bloc Étapes à partir des
+    // appels TaskCreate/TaskUpdate (providers/claude-etapes.ts). CAUSE de cette phrase, mesurée en A/B
+    // sur le CLI 2.1.302 (Opus, même demande en 3 gestes, `.autowin-tmp/taches-cli/essai-opus*.jsonl`) :
+    // la consigne « utilise TaskCreate très souvent » vit dans le prompt PAR DÉFAUT de Claude Code,
+    // que le chat REMPLACE (`--system-prompt-file`) — sans elle, 0 étape créée ; avec elle, 3
+    // étapes passées une à une en cours puis terminées. Conditionnelle : Codex n'a pas ces outils.
+    horsLecture(
+      `ÉTAPES VISIBLES — si tu disposes de TaskCreate et TaskUpdate : au moment où une demande ` +
+        `d'ACTION demande au moins trois gestes distincts (lire, modifier, vérifier…), commence ` +
+        `par TaskCreate, une étape par geste, AVANT le premier geste — l'utilisateur voit cette ` +
+        `liste et sa progression dans le fil, comme dans claude.exe. Passe chaque étape à ` +
+        `in_progress avec TaskUpdate quand tu l'attaques, et à completed dès qu'elle est finie, ` +
+        `une à une, jamais en lot à la fin. Une réponse conversationnelle ou un geste unique n'en ` +
+        `crée aucune.\n`
+    ) +
     `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
     `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
     `running signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +

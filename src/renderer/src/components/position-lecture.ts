@@ -38,7 +38,17 @@ export type PositionLecture = {
 /** Métriques minimales d'un message rendu : son haut, relatif au conteneur de défilement. */
 export type AncrageMessage = { offsetTop: number }
 
-type Carte = Record<string, PositionLecture>
+/**
+ * Version de l'ANCRE retenue. Les ancres écrites avant conv-307 (2026-10-17) étaient mesurées par
+ * rapport au haut VISIBLE du fil, pas au début du contenu (voir `chat-mesure-messages.ts`) : leur
+ * décalage est faux. Une entrée sans cette version garde son px (`top`, lui, était juste) et perd
+ * son ancre — sinon la reprise poserait le fil au double de la bonne profondeur.
+ */
+const VERSION_ANCRE = 2
+
+type Entree = PositionLecture & { v?: number }
+
+type Carte = Record<string, Entree>
 
 function lireCarte(): Carte {
   try {
@@ -77,7 +87,7 @@ export function memoriserPositionLecture(
   carte[conversationId] = {
     top: Math.round(metrics.scrollTop),
     hauteur: Math.round(metrics.scrollHeight),
-    ...(ancre ? { ancre } : {})
+    ...(ancre ? { ancre, v: VERSION_ANCRE } : {})
   }
   ecrireCarte(carte)
 }
@@ -107,6 +117,7 @@ export function positionLectureMemorisee(conversationId: string): PositionLectur
   if (entree.top <= 0) return undefined
   const ancre = entree.ancre
   const ancreValide =
+    entree.v === VERSION_ANCRE &&
     !!ancre &&
     Number.isFinite(ancre.index) &&
     ancre.index >= 0 &&

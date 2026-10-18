@@ -336,13 +336,70 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
         }
       ],
       async () =>
-        essais++ === 0 ? { ok: false, error: 'lecture refusée' } : { ok: true, data: { tab: 'chat' } }
+        essais++ === 0
+          ? { ok: false, error: 'lecture refusée' }
+          : { ok: true, data: { tab: 'chat' } }
     )
     await t.jouer({ soigne: true })
     expect(t.appelsBus('get_state')).toBe(2)
     expect(t.prompts[1]).toContain(MARQUEUR)
     // Aucun envoi ulterieur ne repousse la reprise apres la reparation.
     expect(t.prompts.at(-1)!.split(MARQUEUR).length - 1).toBe(1)
+  })
+
+  it('echec direct REPARE DANS LE MEME ENVOI : aucune reprise « derniere action ECHOUEE »', async () => {
+    /*
+     * Mesure conv-302 (2026-10-17, tour 1201313c) : `verify` typecheck rouge (exit 2), corrigé puis
+     * rejoué VERT dans la MEME réponse — un tour d'outils directs tient en un seul envoi. Le drapeau
+     * d'echec de l'iteration restait leve par le rouge et la reprise « ta derniere action a ECHOUE »
+     * partait quand meme, payee pour un tour deja repare. Tout cycle rouge -> vert d'un tour la
+     * declenchait.
+     */
+    const MARQUEUR = 'ta dernière action a ÉCHOUÉ'
+    let essais = 0
+    const t = pilote(
+      'claude',
+      [
+        {
+          pendant: async (o) => {
+            await appeler(o, 'get_state', {})
+            await appeler(o, 'get_state', {})
+          },
+          texte: 'Le premier contrôle était rouge ; corrigé, il est vert. ✅ Fait.'
+        }
+      ],
+      async () =>
+        essais++ === 0
+          ? { ok: false, error: 'lecture refusée' }
+          : { ok: true, data: { tab: 'chat' } }
+    )
+    await t.jouer({ soigne: true })
+    expect(t.appelsBus('get_state')).toBe(2)
+    expect(t.prompts.some((p) => p.includes(MARQUEUR))).toBe(false)
+  })
+
+  it('jumeau : un echec direct NON repare dans l envoi declenche toujours la reprise', async () => {
+    const MARQUEUR = 'ta dernière action a ÉCHOUÉ'
+    let essais = 0
+    const t = pilote(
+      'claude',
+      [
+        {
+          pendant: async (o) => {
+            await appeler(o, 'get_state', {})
+            await appeler(o, 'get_state', {})
+          },
+          texte: 'Le contrôle a renvoyé une erreur.'
+        },
+        { texte: 'Repris et terminé.' }
+      ],
+      async () =>
+        essais++ === 0
+          ? { ok: true, data: { tab: 'chat' } }
+          : { ok: false, error: 'lecture refusée' }
+    )
+    await t.jouer({ soigne: true })
+    expect(t.prompts[1]).toContain(MARQUEUR)
   })
 
   it('jumeau : un appel direct reussi ne laisse aucun bilan d echec', async () => {

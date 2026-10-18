@@ -83,14 +83,30 @@ describe('écran d’attente', () => {
   it('est PEINT AVANT que le vrai document soit demandé', () => {
     // Enchaîner deux chargements sans attendre ANNULE le premier : l'écran ne s'affichait jamais.
     // Cette erreur a été commise puis corrigée ; ce test est là pour qu'elle ne revienne pas.
-    expect(source).toMatch(/loadFile\(cheminAttente\)\.then\(chargerInterface, chargerInterface\)/)
+    expect(source).toMatch(
+      /loadFile\(cheminAttente\)\.then\(chargerInterfaceUneFois, chargerInterfaceUneFois\)/
+    )
   })
 
   it('charge l’interface même si l’écran d’attente échoue', () => {
     // Les deux arguments de `then` sont le même appel, ET l'écriture du fichier est enveloppée : ni un
     // chargement raté ni un disque en lecture seule ne doivent empêcher l'application de démarrer.
-    expect(source).toContain('.then(chargerInterface, chargerInterface)')
+    expect(source).toContain('.then(chargerInterfaceUneFois, chargerInterfaceUneFois)')
     expect(source).toMatch(/else chargerInterface\(\)/)
+  })
+
+  it('charge l’interface même si le chargement de l’attente ne se termine JAMAIS', () => {
+    // CONSTATÉ le 2026-10-17 : service réseau planté pendant ce chargement, page restée sur
+    // `about:blank`, promesse jamais réglée → aucune interface, aucune fenêtre visible.
+    expect(source).toMatch(
+      /const filetAttente = setTimeout\(chargerInterfaceUneFois, DELAI_MAX_ECRAN_ATTENTE_MS\)/
+    )
+    // Une seule demande, quel que soit l'ordre d'arrivée : un second `loadURL` annulerait le premier.
+    const garde = source.indexOf('const chargerInterfaceUneFois = (): void => {')
+    expect(garde).toBeGreaterThan(-1)
+    expect(source.slice(garde, garde + 200)).toMatch(
+      /if \(interfaceDemandee\) return\s+interfaceDemandee = true\s+clearTimeout\(filetAttente\)/
+    )
   })
 
   it('vient du module PARTAGÉ, pas d’une chaîne recopiée ici', () => {

@@ -68,12 +68,6 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     onPilotEvent: vi.fn(() => vi.fn()),
     setActiveConversation: vi.fn(),
     conversationsCreate: vi.fn(),
-    routeConversationMessage: vi.fn(async (conversationId: string) => ({
-      sourceConversationId: conversationId,
-      conversationId,
-      routed: false,
-      decision: { route: 'current', confidence: 1, reason: 'related' }
-    })),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     resumePilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
@@ -712,17 +706,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     )
   })
 
-  it('affiche et vide le prompt immédiatement avant la fin du routage', async () => {
-    const routing = deferred<{
-      sourceConversationId: string
-      conversationId: string
-      routed: boolean
-      decision: { route: 'current'; confidence: number; reason: string }
-    }>()
+  it('affiche et vide le prompt immédiatement avant la fin du tour', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      routeConversationMessage: vi.fn(() => routing.promise),
       pilotChat: vi.fn(() => pilot.promise)
     })
     await mount(mockApi)
@@ -737,58 +724,43 @@ describe('ChatView behavior under concurrent UI actions', () => {
 
     expect(textarea.value).toBe('')
     expect(container!.querySelector('.chat-scroll')?.textContent).toContain('prompt instantané')
-    expect(mockApi.pilotChat).not.toHaveBeenCalled()
 
-    await act(async () =>
-      routing.resolve({
-        sourceConversationId: 'A',
-        conversationId: 'A',
-        routed: false,
-        decision: { route: 'current', confidence: 1, reason: 'related' }
-      })
-    )
     await act(async () => pilot.resolve({ ok: true }))
   })
 
-  it('restaure le brouillon si le routage échoue après le commit optimiste', async () => {
-    const routing = deferred<never>()
+  it('restaure le brouillon si la création du fil échoue après le commit optimiste', async () => {
+    const creation = deferred<never>()
     const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      routeConversationMessage: vi.fn(() => routing.promise)
+      conversations: vi.fn().mockResolvedValue([]),
+      conversationsCreate: vi.fn(() => creation.promise)
     })
     await mount(mockApi)
-    await click('.conv-pick')
     await type('prompt à restaurer')
     await click('.composer-send')
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('')
 
-    await act(async () => routing.reject(new Error('routeur indisponible')))
+    await act(async () => creation.reject(new Error('création indisponible')))
 
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
       'prompt à restaurer'
     )
-    expect(container!.querySelector('.chat-scroll')?.textContent).not.toContain(
+    expect(container!.querySelector('.chat-scroll')?.textContent ?? '').not.toContain(
       'prompt à restaurer'
     )
-    expect(container!.textContent).toContain('routeur indisponible')
+    expect(container!.textContent).toContain('création indisponible')
   })
 
-  it('moves an unrelated message to a new active conversation before pilotChat', async () => {
+  /*
+   * Le tri de sujet qui emportait ce message dans un fil neuf a ete RETIRE (2026-10-17, conv-305 :
+   * « enleve le mecanisme qui redirige vers une autre conv quand on change de sujet c invasif je
+   * sais gerer »). Un message sans rapport avec le fil reste la ou l'utilisateur l'a ecrit.
+   */
+  it('keeps an unrelated message in the conversation where it was written', async () => {
     const source = conversation('A', [{ role: 'user', content: 'Refais le graphe Git', ts: 1 }])
-    const target = conversation('B')
-    const conversations = vi
-      .fn()
-      .mockResolvedValueOnce([source])
-      .mockResolvedValue([source, target])
-    const routeConversationMessage = vi.fn().mockResolvedValue({
-      sourceConversationId: 'A',
-      conversationId: 'B',
-      routed: true,
-      title: 'Programme Mouse Move',
-      decision: { route: 'new', confidence: 0.97, reason: 'new-topic' }
-    })
+    const conversations = vi.fn().mockResolvedValue([source])
+    const conversationsCreate = vi.fn()
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
-    const mockApi = api({ conversations, routeConversationMessage, pilotChat })
+    const mockApi = api({ conversations, conversationsCreate, pilotChat })
 
     await mount(mockApi)
     await click('.conv-pick')
@@ -811,14 +783,11 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await new Promise((resolve) => setTimeout(resolve, 5))
     })
 
-    expect(routeConversationMessage).toHaveBeenCalledWith(
-      'A',
-      'Crée un exécutable qui bouge la souris',
-      ['preuve.txt']
-    )
+    expect(conversationsCreate).not.toHaveBeenCalled()
     expect(pilotChat).toHaveBeenCalledTimes(1)
-    expect(pilotChat.mock.calls[0][1]).toBe('B')
+    expect(pilotChat.mock.calls[0][1]).toBe('A')
     expect(pilotChat.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ role: 'user', content: 'Refais le graphe Git' }),
       expect.objectContaining({
         role: 'user',
         content: 'Crée un exécutable qui bouge la souris',
@@ -832,7 +801,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ])
     expect(
       container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
-    ).toBe('B')
+    ).toBe('A')
   })
 
   it('affiche dans le fil le message orienté avec son état sending puis sent', async () => {
@@ -1879,17 +1848,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   it('sends a targeted prefill through that conversation without creating another one', async () => {
-    const routeConversationMessage = vi.fn(async (conversationId: string) => ({
-      sourceConversationId: conversationId,
-      conversationId,
-      routed: false,
-      decision: { route: 'current' as const, confidence: 1, reason: 'related' }
-    }))
     const conversationsCreate = vi.fn().mockResolvedValue(conversation('C'))
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
-      routeConversationMessage,
       conversationsCreate,
       pilotChat
     })
@@ -1906,7 +1868,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await Promise.resolve()
     })
 
-    expect(routeConversationMessage).toHaveBeenCalledWith('B', 'Traite B', [])
     expect(pilotChat).toHaveBeenCalledWith(expect.any(Array), 'B')
     expect(conversationsCreate).not.toHaveBeenCalled()
   })
@@ -1949,65 +1910,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     } finally {
       window.localStorage.clear()
     }
-  })
-
-  /**
-   * REGLE POSEE LE 2026-09-03 (conv-171), sur demande explicite de l'utilisateur : « un message
-   * reste toujours dans le fil ou je l'ecris quand la bascule d'ecran ne peut pas s'appliquer ».
-   *
-   * Ce test exigeait AUPARAVANT l'inverse : le message partait dans le fil neuf `C` pendant que
-   * l'utilisateur regardait `B`. C'est le defaut vecu — « je crois que la conv s'est pas cree et
-   * que ca a laisse le message ici ». Le fil `C` ne recevait parfois jamais son contenu et
-   * disparaissait, le texte ne survivant que dans le journal de secours des saisies.
-   *
-   * L'exigence est donc INVERSEE, pas desserree : le message doit partir dans `A`, le fil neuf
-   * cree pour rien doit etre retire, et l'ecran ne doit pas bouger de `B`.
-   */
-  it('garde le message dans A quand le routage arrive trop tard pour basculer', async () => {
-    const routing = deferred<{
-      sourceConversationId: string
-      conversationId: string
-      routed: boolean
-      decision: { route: 'current' | 'new'; confidence: number; reason: string }
-    }>()
-    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
-    const mockApi = api({
-      conversations: vi
-        .fn()
-        .mockResolvedValueOnce([conversation('A'), conversation('B')])
-        .mockResolvedValue([conversation('A'), conversation('B'), conversation('C')]),
-      routeConversationMessage: vi.fn(() => routing.promise),
-      conversationsRemove: vi.fn().mockResolvedValue(true),
-      pilotChat
-    })
-    await mount(mockApi)
-    const picks = container!.querySelectorAll('.conv-pick')
-    await act(async () => (picks[0] as HTMLElement).click())
-    await type('nouveau sujet depuis A')
-    await click('.composer-send')
-    await act(async () => (picks[1] as HTMLElement).click())
-    await type('draft B')
-    await act(async () =>
-      routing.resolve({
-        sourceConversationId: 'A',
-        conversationId: 'C',
-        routed: true,
-        decision: { route: 'new', confidence: 0.97, reason: 'new-topic' }
-      })
-    )
-
-    expect(pilotChat).toHaveBeenCalledTimes(1)
-    expect(pilotChat.mock.calls[0][0]).toEqual([
-      expect.objectContaining({ role: 'user', content: 'nouveau sujet depuis A' })
-    ])
-    // Le message reste dans le fil OU IL A ETE ECRIT, pas dans le fil neuf que personne ne regarde.
-    expect(pilotChat.mock.calls[0][1]).toBe('A')
-    // Et le fil neuf cree pour rien est retire, sinon la liste se tapisse de fils vides.
-    expect(mockApi.conversationsRemove).toHaveBeenCalledWith('C')
-    expect(
-      container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
-    ).toBe('B')
-    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
   })
 
   it.each(['click', 'enter'] as const)(

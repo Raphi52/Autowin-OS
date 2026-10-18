@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { autowinStorageKey } from '../storage-keys'
+import { creerCadence } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
 import {
   createDecorScene,
@@ -155,17 +156,18 @@ function monterDecor(host: HTMLDivElement): (() => void) | null {
   window.addEventListener('pointermove', onPointerMove)
 
   let frame = 0
-  let last = 0
+  // 30 images/s sur tous les ecrans, et jamais plus de la moitie du fil de l'interface : voir
+  // decor-cadence.ts (l'ancien seuil de 25 ms donnait 30, 30 ou 36 images/s selon l'ecran).
+  const cadence = creerCadence()
   const draw = (time: number): void => {
     frame = requestAnimationFrame(draw)
     // Suspendu quand le document est CACHE : faire tourner un rendu 3D pour une fenetre que
     // personne ne regarde coute un GPU entier pour rien. Mais une autre VUE affichee ne suspend
     // plus rien — c'est desormais le fond de l'application, pas celui d'un ecran.
     if (typeof document !== 'undefined' && document.hidden) return
-    // ~40 images/s : la scene derive lentement, doubler la cadence ne se voit pas et double la
-    // facture d'une fenetre qui reste ouverte toute la journee.
-    if (time - last < 25) return
-    last = time
+    // La scene derive lentement : au-dela de 30 images/s la difference ne se voit pas, la facture
+    // d'une fenetre qui reste ouverte toute la journee, si.
+    if (!cadence.doitDessiner(time)) return
     look.x += (aim.x - look.x) * 0.05
     look.y += (aim.y - look.y) * 0.05
     /*
@@ -174,7 +176,11 @@ function monterDecor(host: HTMLDivElement): (() => void) | null {
      * le decor n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor`. La parallaxe
      * curseur reste : elle ne bouge QUE quand l'utilisateur bouge, c'est de la manipulation directe.
      */
+    // Ce que l'image coute au fil de l'interface : presque rien quand la scene se dessine dans un
+    // Worker (l'avenue), tout son rendu sinon — la cadence s'espace alors d'elle-meme.
+    const debut = performance.now()
     scene.render(tempsDecor(time / 1000, reduceMotion), look)
+    cadence.noterCout(performance.now() - debut)
   }
   frame = requestAnimationFrame(draw)
 

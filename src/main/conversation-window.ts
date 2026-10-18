@@ -1,9 +1,9 @@
 /**
  * FENÊTRE DE REPRISE D'UN FIL — la seule définition de « combien de conversation on remonte ».
  *
- * Ces bornes vivaient dans `conversation-router.ts`, qui les utilisait pour décider si un message
- * poursuit le même objectif. Elles sont extraites ici parce qu'un SECOND appelant en a besoin :
- * `orchestration-context.ts`, qui doit joindre le fil récent au contexte transmis aux phases d'un run.
+ * Ces bornes vivaient dans `conversation-router.ts` (tri de sujet avant l'envoi, retiré le 2026-10-17,
+ * conv-305), qui les utilisait pour décider si un message poursuit le même objectif. Elles ont été
+ * extraites ici pour `orchestration-context.ts`, qui joint le fil récent au contexte d'un run.
  *
  * Pourquoi une extraction plutôt qu'une seconde paire de constantes — défaut mesuré le 2026-08-23 sur
  * conv-1376 : le sous-agent d'un run recevait la phrase-tâche NUE, sans une ligne du fil qui l'avait

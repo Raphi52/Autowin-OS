@@ -72,12 +72,6 @@ function api(): Record<string, unknown> {
     onPilotEvent: vi.fn(() => vi.fn()),
     setActiveConversation: vi.fn(),
     conversationsCreate: vi.fn(),
-    routeConversationMessage: vi.fn(async (conversationId: string) => ({
-      sourceConversationId: conversationId,
-      conversationId,
-      routed: false,
-      decision: { route: 'current', confidence: 1, reason: 'related' }
-    })),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),

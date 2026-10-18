@@ -24,6 +24,10 @@ type Harness = Awaited<ReturnType<typeof mountChat>>
  *  - sans mode auto (l'interrupteur est arme PAR fil ; conv-23 n'etait pas dans la liste) : la
  *    chaine s'est arretee la, et conv-19 n'a plus rien recu.
  * Une suite du mode auto est, par construction, l'etape suivante de CE fil : elle ne se re-route pas.
+ *
+ * Le tri de sujet a depuis ete RETIRE pour tous les messages (2026-10-17, conv-305 : « enleve le
+ * mecanisme qui redirige vers une autre conv quand on change de sujet c invasif je sais gerer »).
+ * Ces temoins verifient donc qu'aucun envoi, auto ou tape, ne quitte le fil ou il est ecrit.
  */
 const SUITE =
   "Crée une démo pour les agences immobilières (qualification automatique des demandes reçues sur les annonces) sur le modèle de demo-relance-devis.html, ajoute-la à la fiche d'appel et vérifie-la avec verifier-kit.js dans le bureau caché, sans rien envoyer."
@@ -36,15 +40,6 @@ const filConv19 = [
   }
 ]
 
-/** Le routeur tel qu'il a repondu a 13:10:21.853 : nouveau sujet, nouveau fil. */
-const routeurQuiScinde = (): ReturnType<typeof vi.fn> =>
-  vi.fn(async (conversationId: string) => ({
-    sourceConversationId: conversationId,
-    conversationId: conversationId === 'A' ? 'N' : conversationId,
-    routed: conversationId === 'A',
-    decision: { route: 'new', confidence: 0.92, reason: 'new-topic' }
-  }))
-
 describe('ChatView — la suite du mode auto reste dans son fil', () => {
   beforeAll(installRafShim)
   let h: Harness | null = null
@@ -55,13 +50,11 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
     vi.restoreAllMocks()
   })
 
-  it('le routeur ne detourne pas la suite vers un fil neuf', async () => {
+  it('la suite du mode auto part dans son fil, pas dans un fil neuf', async () => {
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
-    const routeConversationMessage = routeurQuiScinde()
     h = await mountChat(
       chatApi({
         pilotChat,
-        routeConversationMessage,
         conversations: vi.fn().mockResolvedValue([conversation('A', filConv19), conversation('N')]),
         conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filConv19 : []))
       })
@@ -77,7 +70,6 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
     )
     expect(envoi, 'la suite proposee est bien partie').toBeDefined()
     expect(envoi?.[1]).toBe('A')
-    expect(routeConversationMessage).not.toHaveBeenCalled()
   })
 
   /*
@@ -93,13 +85,11 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
    * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer de `send` la ligne qui marque le tour du fil
    * source comme traite quand l'envoi vient de l'utilisateur.
    */
-  it('une suite envoyee A LA MAIN puis detournee par le routeur n est pas renvoyee par le mode auto', async () => {
+  it('une suite envoyee A LA MAIN n est pas renvoyee une seconde fois par le mode auto', async () => {
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
-    const routeConversationMessage = routeurQuiScinde()
     h = await mountChat(
       chatApi({
         pilotChat,
-        routeConversationMessage,
         conversations: vi.fn().mockResolvedValue([conversation('A', filConv19), conversation('N')]),
         conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filConv19 : []))
       })
@@ -120,16 +110,16 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
         await new Promise((r) => setTimeout(r, 0))
       })
     const destinations = pilotChat.mock.calls.map((c) => c[1])
-    expect(destinations, 'un seul envoi, dans le fil choisi par le routeur').toEqual(['N'])
+    expect(destinations, 'un seul envoi, dans le fil ou il a ete ecrit').toEqual(['A'])
   })
 
-  it('un message TAPE par l utilisateur passe toujours par le routeur', async () => {
+  it('un message TAPE sur un tout autre sujet reste dans le fil ou il est ecrit', async () => {
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })
-    const routeConversationMessage = routeurQuiScinde()
+    const conversationsCreate = vi.fn()
     h = await mountChat(
       chatApi({
         pilotChat,
-        routeConversationMessage,
+        conversationsCreate,
         conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('N')])
       })
     )
@@ -140,7 +130,10 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(routeConversationMessage).toHaveBeenCalled()
-    expect(pilotChat.mock.calls[0]?.[1]).toBe('N')
+    expect(pilotChat.mock.calls[0]?.[1]).toBe('A')
+    expect(conversationsCreate).not.toHaveBeenCalled()
+    expect(
+      h.container.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
+    ).toBe('A')
   })
 })

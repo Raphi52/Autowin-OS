@@ -3,6 +3,8 @@
  * exporte a la fois un composant et une fonction casse le rechargement a chaud de React
  * (regle react-refresh/only-export-components). Le calcul est pur, il n'a pas besoin du composant.
  */
+import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/etapes-du-tour'
+
 /**
  * Corps du bloc RAISONNEMENT : la pensee du modele, et rien d'autre.
  *
@@ -171,6 +173,9 @@ export function secondesDe(texte: string): number | null {
   return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0)
 }
 
+/** Ligne du journal qui a créé chaque action (voir `actionsDuTour`) — lue par `avancementDesEtapes`. */
+const ORIGINE = new WeakMap<ActionFrise, number>()
+
 /**
  * Actions du tour, UNE PAR LIGNE, avec leur etat et leur duree — la matiere de la frise C3.
  * Memes regles de repli que le corps texte : battements et fins METTENT A JOUR la ligne de leur
@@ -182,8 +187,21 @@ export function actionsDuTour(
   status: string | undefined,
   done = false
 ): ActionFrise[] {
-  const lignes = (statusLog?.length ? statusLog : status ? [status] : []).filter(Boolean)
+  // Les lignes d'ÉTAPES (TaskCreate / TaskUpdate du CLI) ne sont pas des actions : elles nourrissent
+  // le bloc Étapes (shared/etapes-du-tour.ts).
+  const lignes = (statusLog?.length ? statusLog : status ? [status] : []).flatMap((ligne, i) =>
+    ligne && !estLigneDEtape(ligne) ? [{ ligne, i }] : []
+  )
   const sortie: ActionFrise[] = []
+  // ORIGINE de chaque action : l'index, dans le journal ENTIER (étapes comprises), de la ligne qui
+  // l'a créée — l'avancement des étapes la rattache à l'étape en cours à cet endroit. Les actions
+  // ne sont jamais retirées de `sortie` : celles ajoutées depuis la dernière marque viennent de la
+  // ligne précédente, quel que soit le `continue` qui l'a close.
+  let marque = 0
+  let origine = -1
+  const dater = (): void => {
+    for (; marque < sortie.length; marque += 1) ORIGINE.set(sortie[marque]!, origine)
+  }
   const derniere = (outil: string): number => {
     for (let i = sortie.length - 1; i >= 0; i -= 1) if (sortie[i]!.outil === outil) return i
     return -1
@@ -197,7 +215,9 @@ export function actionsDuTour(
     etat: 'encours',
     secondes
   })
-  for (const ligne of lignes) {
+  for (const { ligne, i } of lignes) {
+    dater()
+    origine = i
     const tache = TACHE.exec(ligne)
     if (tache) {
       const nom = (tache[2] ?? '').trim()
@@ -259,6 +279,7 @@ export function actionsDuTour(
     action.secondes = secondesDe(suite) ?? action.secondes
     if (fin) action.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
   }
+  dater()
   for (const a of sortie) {
     if (!a.tache) continue
     // La ligne garde l'etat le plus grave de la commande et de sa tache : une commande lancee en
@@ -278,6 +299,158 @@ export function actionsDuTour(
     a.texte = [a.tache.nom, ...suite].join(' — ')
   }
   if (done) for (const a of sortie) if (a.etat === 'encours') a.etat = 'ok'
+  return sortie
+}
+
+/**
+ * Le signe de vie a afficher sous la capsule ACTIONS : la derniere ligne qui n'est pas une etape.
+ * Sans ce tri, un TaskUpdate venu en dernier ferait lire « Étape #2 en cours » sous « Actions ».
+ */
+export function dernierStatutDAction(
+  statusLog: readonly string[] | undefined,
+  status: string | undefined
+): string | undefined {
+  if (status && !estLigneDEtape(status)) return status
+  for (let i = (statusLog?.length ?? 0) - 1; i >= 0; i -= 1) {
+    const ligne = statusLog![i]!
+    if (ligne && !estLigneDEtape(ligne)) return ligne
+  }
+  return undefined
+}
+
+/**
+ * Ce que dit la seconde ligne du bloc ÉTAPES plie, comme la ligne a spinner de claude.exe :
+ * l'etape EN COURS ; sinon la prochaine a faire ; sinon la fin.
+ */
+export function resumeDesEtapes(etapes: readonly Etape[]): string {
+  const enCours = etapes.find((e) => e.statut === 'in_progress')
+  if (enCours) return enCours.sujet || `Étape #${enCours.id}`
+  const suivante = etapes.find((e) => e.statut === 'pending')
+  if (suivante) return `Ensuite : ${suivante.sujet || `étape #${suivante.id}`}`
+  return etapes.length > 0 ? 'Toutes les étapes sont terminées' : ''
+}
+
+/**
+ * AVANCEMENT DE CHAQUE ÉTAPE (conv-303, 2026-10-17 : « un bloc qui montre comment la tâche est
+ * décomposée et la progression de chaque tâche »). claude.exe ne donne que TROIS états par étape,
+ * jamais un pourcentage : ce qui se mesure, ce sont les actions lancées pendant qu'elle était en
+ * cours, et leur durée connue. Une action appartient à l'étape EN COURS à la ligne qui l'a créée (le
+ * journal mêle étapes et actions dans l'ordre) ; avant toute étape en cours, à aucune.
+ */
+export type AvancementEtape = { actions: number; secondes: number }
+
+export function avancementDesEtapes(
+  statusLog: readonly string[] | undefined,
+  status: string | undefined,
+  frise: readonly ActionFrise[]
+): Map<string, AvancementEtape> {
+  // La MÊME source que `actionsDuTour` : les index d'origine s'y rapportent.
+  const source = statusLog?.length ? statusLog : status ? [status] : []
+  const enCoursA: Array<string | null> = []
+  let enCours: string | null = null
+  for (const ligne of source) {
+    const etape = ligne ? lireLigneDEtape(ligne) : null
+    if (etape?.statut === 'in_progress') enCours = etape.id
+    else if (etape && etape.id === enCours) enCours = null
+    enCoursA.push(enCours)
+  }
+  const parEtape = new Map<string, AvancementEtape>()
+  for (const action of frise) {
+    const i = ORIGINE.get(action)
+    const id = i === undefined ? null : (enCoursA[i] ?? null)
+    if (!id) continue
+    const avancement = parEtape.get(id) ?? { actions: 0, secondes: 0 }
+    avancement.actions += 1
+    avancement.secondes += action.secondes ?? 0
+    parEtape.set(id, avancement)
+  }
+  return parEtape
+}
+
+/**
+ * Ce qu'une étape affiche à droite de sa barre : ses actions et sa durée, sinon son état.
+ * La durée est celle MESURÉE à l'écran (`mesure`, voir `avancerChronosDesEtapes`) quand elle existe,
+ * sinon la somme des durées de ses actions — seule mesure d'un tour relu.
+ */
+export function valeurDeLEtape(
+  etape: Etape,
+  avancement: AvancementEtape | undefined,
+  mesure: number | null = null
+): string {
+  const n = avancement?.actions ?? 0
+  const secondes = mesure ?? avancement?.secondes ?? 0
+  const duree = secondes > 0 ? ` · ${dureeLisible(secondes)}` : ''
+  if (n === 0)
+    return etape.statut === 'completed'
+      ? `terminée${duree}`
+      : etape.statut === 'in_progress'
+        ? `en cours${duree}`
+        : 'à faire'
+  return `${n} action${n > 1 ? 's' : ''}${duree}`
+}
+
+/**
+ * CHRONO DE CHAQUE ÉTAPE (conv-313, 2026-10-17 : « le timer est fix dans ce bloc »). La somme des
+ * durées d'outils ne bouge qu'à la fin d'un outil — ou au battement de 30 s d'un outil long — et
+ * jamais pendant que le modèle réfléchit entre deux outils : sous une étape EN COURS, « 59 s »
+ * restait figé. Comme le chrono du Raisonnement, le temps d'une étape se MESURE donc à l'écran : il
+ * part quand l'étape passe en cours, s'arrête quand elle est terminée ou que le tour finit.
+ *
+ * Une étape déjà en cours quand le bloc apparaît (conversation ouverte en plein tour) part de la
+ * durée de ses actions déjà connue, pas de zéro. Une étape vue seulement terminée n'a pas de chrono :
+ * elle garde la somme de ses actions. Une étape rouverte reprend son début, comme un tour rallumé.
+ */
+export type ChronosDesEtapes = ReadonlyMap<string, Chrono>
+
+const CHRONOS_DES_ETAPES = new Map<string, ChronosDesEtapes>()
+
+export function chronosDesEtapesMemorises(cle: string | undefined): ChronosDesEtapes {
+  return (cle && CHRONOS_DES_ETAPES.get(cle)) || new Map()
+}
+
+export function memoriserChronosDesEtapes(cle: string, chronos: ChronosDesEtapes): void {
+  CHRONOS_DES_ETAPES.delete(cle)
+  CHRONOS_DES_ETAPES.set(cle, chronos)
+  if (CHRONOS_DES_ETAPES.size > CHRONOS_MAX)
+    CHRONOS_DES_ETAPES.delete(CHRONOS_DES_ETAPES.keys().next().value!)
+}
+
+/** Les chronos à l'instant `maintenant` ; rend l'objet REÇU tel quel si rien n'a changé. */
+export function avancerChronosDesEtapes(
+  chronos: ChronosDesEtapes,
+  etapes: readonly Etape[],
+  avancement: ReadonlyMap<string, AvancementEtape>,
+  maintenant: number,
+  done: boolean
+): ChronosDesEtapes {
+  let suite: Map<string, Chrono> | null = null
+  const poser = (id: string, chrono: Chrono): void => {
+    suite ??= new Map(chronos)
+    suite.set(id, chrono)
+  }
+  for (const e of etapes) {
+    const c = chronos.get(e.id)
+    if (e.statut === 'in_progress' && !done) {
+      if (!c) poser(e.id, { debut: maintenant - (avancement.get(e.id)?.secondes ?? 0) * 1000 })
+      else if (c.fin !== undefined) poser(e.id, { debut: c.debut })
+    } else if (c && c.fin === undefined && e.statut !== 'pending') {
+      poser(e.id, { debut: c.debut, fin: maintenant })
+    }
+  }
+  return suite ?? chronos
+}
+
+/** Secondes mesurées de chaque étape en cours ou terminée qui a un chrono. */
+export function secondesDesEtapes(
+  etapes: readonly Etape[],
+  chronos: ChronosDesEtapes,
+  maintenant: number
+): Map<string, number> {
+  const sortie = new Map<string, number>()
+  for (const e of etapes) {
+    const c = chronos.get(e.id)
+    if (c && e.statut !== 'pending') sortie.set(e.id, secondesDuChrono(c, maintenant)!)
+  }
   return sortie
 }
 

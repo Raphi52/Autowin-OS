@@ -25,7 +25,6 @@ import { readSessionForImport, resolveListedSessionAsync } from '../activity/tra
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
 import { removeConvActivity } from '../activity/conv-activity'
-import { appendConvActivity } from '../activity/conv-activity'
 import { deletePromptCalls } from '../activity/prompt-observability'
 import { assertTrustedRendererSender } from '../ipc-senders'
 import { guardString } from '../ipc-guards'
@@ -33,8 +32,6 @@ import { removeConversationArtifacts } from '../store/chat-artifact-store'
 import type { AutowinOS } from '../os'
 import type { ActiveChatTurns } from '../active-chat-turns'
 import type { TraceStore } from '../activity/trace-store'
-import type { TraceLedger } from '../activity/ledger'
-import type { ConversationRouteCoordinator } from '../conversation-router'
 import type { AppEvent } from '../commands'
 
 /** Ce que les canaux de conversations prenaient dans `index.ts` — désormais passé explicitement. */
@@ -42,8 +39,6 @@ export type ConversationsIpcDeps = {
   os: AutowinOS
   activeChatTurns: ActiveChatTurns
   causalTrace: TraceStore
-  ledger: TraceLedger
-  conversationRouteCoordinator: ConversationRouteCoordinator
   turnJournalRoot: string
   isolatedTestInstance: boolean
   broadcast: (e: AppEvent) => void
@@ -57,8 +52,6 @@ export function registerConversationsIpc({
   os,
   activeChatTurns,
   causalTrace,
-  ledger,
-  conversationRouteCoordinator,
   turnJournalRoot,
   isolatedTestInstance,
   broadcast,
@@ -111,61 +104,6 @@ export function registerConversationsIpc({
       const conversation = os.conversations.create({ title, provider })
       broadcast({ type: 'refresh', scope: 'conversations' })
       return conversation
-    }
-  )
-  ipcMain.handle(
-    'os:conversations:routeMessage',
-    async (event, rawConversationId: unknown, rawMessage: unknown, rawAttachmentNames: unknown) => {
-      assertTrustedRendererSender(event, 'Conversation route')
-      const conversationId = guardString(rawConversationId, 'conversationId')
-      const message = guardString(rawMessage, 'message')
-      if (!Array.isArray(rawAttachmentNames) || rawAttachmentNames.length > 8) {
-        throw new Error('attachmentNames: tableau borné attendu')
-      }
-      const attachmentNames = rawAttachmentNames.map((name, index) =>
-        guardString(name, `attachmentNames[${index}]`)
-      )
-      /*
-       * LE TRI COMPTE COMME « REPONSE EN COURS » (2026-10-05, conv-98 : « reponse interrompue »
-       * affiche pendant que le modele prepare sa reponse, alors que tout va bien).
-       * L'ecran passe la conversation en cours AVANT d'appeler ce tri (ChatView `send`), puis sonde
-       * `os:pilotChat:active` toutes les 4 s : deux « non » et il declare la reponse interrompue.
-       * Or ce tri interroge un modele — mesure sur 234 tris : mediane 6,0 s, p90 9,0 s, 32 au-dela
-       * de 8 s — et `pilotChat` n'est appele qu'apres. Pendant ce trou, rien n'etait « en cours ».
-       */
-      const result = await activeChatTurns.trackPreparation(conversationId, () =>
-        conversationRouteCoordinator.route(conversationId, message, attachmentNames)
-      )
-      const decision = result.decision
-      appendConvActivity(conversationId, {
-        kind: 'conversation-route',
-        label: result.routed ? 'Nouveau contexte détecté' : 'Contexte courant conservé',
-        provider: decision.provider,
-        model: decision.model,
-        reasoningEffort: decision.reasoningEffort,
-        inputTokens: decision.usage?.inputTokens,
-        outputTokens: decision.usage?.outputTokens,
-        // Sans ces deux champs, la part de cache du tri etait un ZERO PAR ABSENCE : le journal ne
-        // la portait pas, donc l'audit ne pouvait ni la confirmer ni l'infirmer.
-        cacheReadTokens: decision.usage?.cacheReadTokens,
-        cacheCreationTokens: decision.usage?.cacheCreationTokens,
-        costUsd: decision.usage?.costUsd,
-        text: JSON.stringify({
-          route: decision.route,
-          confidence: decision.confidence,
-          reason: decision.reason,
-          sourceConversationId: result.sourceConversationId,
-          conversationId: result.conversationId
-        })
-      })
-      ledger.append({
-        source: 'pilot',
-        name: 'conversation_route',
-        detail: `${decision.route}:${decision.confidence.toFixed(2)}:${decision.reason}`,
-        ok: true
-      })
-      if (result.routed) broadcast({ type: 'refresh', scope: 'conversations' })
-      return result
     }
   )
   ipcMain.handle('os:conversations:rename', (event, id: string, title: string) => {

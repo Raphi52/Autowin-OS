@@ -1,20 +1,18 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
+import { AVENUE, CAMERA_AVENUE, FONDU_ENTREE_MS, MARQUES_AVENUE } from './home-decor-avenue'
 import {
-  AVENUE,
-  BUDGET_MAILLAGE_MS,
-  CAMERA_AVENUE,
-  FONDU_ENTREE_MS,
-  MARQUES_AVENUE
-} from './home-decor-avenue'
-import {
-  creerPreparation,
-  maillerCorps,
-  maillerTete,
-  ORDRE_FORMES,
-  preparationHumains,
-  type NomForme
-} from './home-decor-avenue-maillage'
+  AVATARS,
+  ECART_CAMERA,
+  ecarterDeLaCamera,
+  enrouler,
+  FOULE,
+  HEURE_DE_POINTE,
+  MARCHES,
+  positionZ,
+  redresserMarche
+} from './home-decor-foule'
 import { DECOR_DEFAUT } from './home-decor-scene'
 
 /**
@@ -30,7 +28,7 @@ import { DECOR_DEFAUT } from './home-decor-scene'
  * ENTRÉES QUI DOIVENT LE FAIRE ÉCHOUER si la mise en œuvre est fausse :
  *   1. `new THREE.TextureLoader().load(photo)` posé sur un plan → la photo d'inspiration plaquée ;
  *   2. `new OrbitControls(camera, canvas)` ou un écouteur clavier → le fond vole la souris aux widgets ;
- *   3. les `yield` retirés du maillage → 4,5 s de calcul d'un seul tenant, l'Accueil figé ;
+ *   3. une lumière ajoutée par la foule → tous les programmes de la rue recompilés à son arrivée ;
  *   4. la clé de stockage laissée en `v2` → les machines qui avaient gardé les planètes ne voient
  *      jamais l'avenue.
  */
@@ -40,33 +38,50 @@ const sans = (source: string): string =>
     .replace(/^\s*\/\/.*$/gm, '')
     .replace(/\s\/\/.*$/gm, '')
 const scene = sans(readFileSync(new URL('./home-decor-avenue.ts', import.meta.url), 'utf8'))
-const maillage = sans(
-  readFileSync(new URL('./home-decor-avenue-maillage.ts', import.meta.url), 'utf8')
-)
-const code = scene + '\n' + maillage
+// Lu BRUT : le motif `foule-rocketbox/*.{glb,webp}` contient `/*`, que `sans` prendrait pour un commentaire.
+const foule = readFileSync(new URL('./home-decor-foule.ts', import.meta.url), 'utf8')
+const DOSSIER_FOULE = new URL('../assets/foule-rocketbox/', import.meta.url)
 
 describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
   it('est la direction par défaut', () => {
     expect(DECOR_DEFAUT).toBe('avenue')
   })
 
-  it('AUCUNE IMAGE CHARGÉE : la photo d inspiration n est pas plaquée, tout est dessiné par code', () => {
+  it('AUCUNE IMAGE DANS LA RUE : la photo d inspiration n est pas plaquée, la rue est dessinée par code', () => {
     // Aucun fichier image, quel que soit le format.
-    expect(code).not.toMatch(/\.(png|jpe?g|webp|avif|gif|bmp|ktx2?|hdr|exr)\b/i)
-    // Aucun chemin d'entrée d'une image dans la page : chargeurs three.js, élément image, bitmap
+    expect(scene).not.toMatch(/\.(png|jpe?g|webp|avif|gif|bmp|ktx2?|hdr|exr)\b/i)
+    // Aucun chemin d'entrée d'une image dans la rue : chargeurs three.js, élément image, bitmap
     // décodé, requête réseau, attribut `src`. Une toile 2D ne peut recevoir des pixels venus
-    // d'ailleurs que par l'un d'eux : sans eux, chaque texture est CALCULÉE.
-    expect(code).not.toMatch(
+    // d'ailleurs que par l'un d'eux : sans eux, chaque texture de la rue est CALCULÉE.
+    expect(scene).not.toMatch(
       /\b\w*Loader\b|useTexture|new Image\b|HTMLImageElement|createImageBitmap/
     )
-    expect(code).not.toMatch(/\bfetch\s*\(|\.src\s*=|VideoTexture|<video|url\(/)
-    // Les textures dessinées existent bien, et elles viennent d'une toile créée ici.
-    expect(code).toMatch(/document\.createElement\('canvas'\)/)
+    expect(scene).not.toMatch(/\bfetch\s*\(|\.src\s*=|VideoTexture|<video|url\(/)
+    // Les textures dessinées existent bien, et elles viennent d'une toile créée ici — dans la page
+    // ou, depuis que l'avenue tourne dans un Worker (conv-323), hors d'elle : decor-toile.ts.
+    expect(scene).toMatch(/nouvelleToile\(w, h\)/)
+    const toile = readFileSync(new URL('./decor-toile.ts', import.meta.url), 'utf8')
+    expect(toile).toMatch(/document\.createElement\('canvas'\)/)
+    expect(toile).toMatch(/new OffscreenCanvas\(largeur, hauteur\)/)
+    expect(toile).not.toMatch(/\b\w*Loader\b|new Image\b|createImageBitmap|\bfetch\s*\(|\.src\s*=/)
+  })
+
+  it('SEULE LA FOULE CHARGE DES FICHIERS, et seulement les siens : des personnes, pas la photo', () => {
+    // Un seul dossier, lu par Vite au build : aucun chemin construit à l'exécution ne peut en sortir.
+    expect(foule).toMatch(/import\.meta\.glob\('\.\.\/assets\/foule-rocketbox\/\*\.\{glb,webp\}'/)
+    expect(foule.match(/import\.meta\.glob\(/g)).toHaveLength(1)
+    expect(foule).not.toMatch(/new Image\b|HTMLImageElement|\.src\s*=|url\(/)
+    // Dans le dossier : des modèles, leurs textures, et la licence qui permet de les livrer.
+    const fichiers = readdirSync(DOSSIER_FOULE)
+    expect(fichiers.filter((f) => !/\.(glb|webp)$/.test(f))).toEqual(['LICENCE-ROCKETBOX.md'])
+    expect(readFileSync(new URL('LICENCE-ROCKETBOX.md', DOSSIER_FOULE), 'utf8')).toMatch(
+      /MIT License[\s\S]*Copyright \(c\) 2020 Microsoft/
+    )
   })
 
   it('LE MONDE EST CALCULÉ : nuanceurs écrits ici, pas un fichier décodé', () => {
-    expect(code).toMatch(/new THREE\.ShaderMaterial\(/)
-    expect(code).toMatch(/fragmentShader/)
+    expect(scene).toMatch(/new THREE\.ShaderMaterial\(/)
+    expect(scene).toMatch(/fragmentShader/)
   })
 
   it('COUCHES : la rue, la ville en contrebas et le ciel, et une parallaxe pour les séparer', () => {
@@ -130,10 +145,26 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
  */
 describe('fond de l Accueil — l apparition de la rue', () => {
   it('le canevas naît invisible et passe à 1 en fondu, animé par le navigateur', () => {
-    expect(scene).toMatch(/marquer\(MARQUES_AVENUE\.cree\)\s*canvas\.style\.opacity = '0'/)
+    expect(scene).toMatch(
+      /marquer\(MARQUES_AVENUE\.cree\)[^\n]*\n(\s*\/\/[^\n]*\n)*\s*if \(dansLaPage\) canvas\.style\.opacity = '0'/
+    )
     expect(scene).toMatch(/canvas\.style\.opacity = '1'/)
     expect(scene).toMatch(/canvas\.animate\(\[\{ opacity: 0 \}, \{ opacity: 1 \}\]/)
     expect(scene).toMatch(/duration: FONDU_ENTREE_MS/)
+  })
+
+  it('DANS LE WORKER, la page fait le même fondu : canevas invisible avant transfert, fondu à « apparue »', () => {
+    // conv-323 : un canevas transféré au Worker n'a plus de style côté Worker ; c'est la page qui
+    // garde l'élément et doit faire, à la première image, exactement le fondu de la page.
+    const hote = readFileSync(new URL('./decor-avenue-hote.ts', import.meta.url), 'utf8')
+    expect(hote).toMatch(
+      /canevas\.style\.opacity = '0'\s*\n\s*const horsPage = canevas\.transferControlToOffscreen\(\)/
+    )
+    expect(hote).toMatch(/case 'apparue':[\s\S]{0,200}canevas\.style\.opacity = '1'/)
+    expect(hote).toMatch(/canevas\.animate\(\[\{ opacity: 0 \}, \{ opacity: 1 \}\]/)
+    expect(hote).toMatch(/duration: FONDU_ENTREE_MS/)
+    // et le Worker la prévient APRÈS la première image, par le même `apparaitre`
+    expect(scene).toMatch(/if \(!dansLaPage\) return options\.surApparition\?\.\(\)/)
   })
 
   it('le fondu ne part qu APRÈS la première image dessinée, une seule fois', () => {
@@ -151,7 +182,7 @@ describe('fond de l Accueil — l apparition de la rue', () => {
       'decor-avenue:cree',
       'decor-avenue:rue-compilee',
       'decor-avenue:rue-visible',
-      'decor-avenue:foule-maillee',
+      'decor-avenue:foule-chargee',
       'decor-avenue:foule-visible'
     ])
     for (const cle of Object.keys(MARQUES_AVENUE))
@@ -161,95 +192,143 @@ describe('fond de l Accueil — l apparition de la rue', () => {
   })
 })
 
+/** Lit le JSON d'un fichier glTF binaire : en-tête de 12 octets, puis le premier bloc, toujours le JSON. */
+function jsonGlb(nom: string): {
+  images?: unknown[]
+  animations?: { name: string }[]
+  materials?: { name: string; extras?: { couleur?: string | null; normale?: string | null } }[]
+  skins?: { joints: number[] }[]
+} {
+  const octets = readFileSync(new URL(nom, DOSSIER_FOULE))
+  expect(octets.readUInt32LE(0), nom).toBe(0x46546c67) // « glTF »
+  const longueur = octets.readUInt32LE(12)
+  expect(octets.readUInt32LE(16), nom).toBe(0x4e4f534a) // « JSON »
+  return JSON.parse(octets.subarray(20, 20 + longueur).toString('utf8'))
+}
+
 /**
- * LA FOULE NE FIGE PAS L'ACCUEIL.
+ * LA FOULE : DES HUMAINS RÉELS, DIRECTION « HEURE DE POINTE » (conv-312).
  *
- * Mesuré le 2026-10-17 : mailler les cinq corps et les deux têtes d'un seul tenant prend 4,5 s.
- * Le maillage est donc découpé en tranches. Le nombre de tranches est la mesure DÉTERMINISTE de ce
- * découpage (une durée dépend de la machine) : à plus de 60 tranches, chacune porte moins de 2 % du
- * travail d'un corps, soit quelques millisecondes.
+ * Demande : « /draft les humains les plus realiste possible pour le fond decran d'accueil », puis
+ * « Implémenter la 6 · Heure de pointe ». Le casting recopie le brouillon validé ; les fichiers sont
+ * ceux de Microsoft Rocketbox, convertis (voir LICENCE-ROCKETBOX.md).
  *
- * Les décomptes de sommets sont ceux des corps du brouillon validé (comparaison sommet par sommet
- * faite au portage) : ils verrouillent le « look » que l'utilisateur a regardé.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE BLOC :
+ *   1. une image intégrée dans un `.glb` → le chargeur glTF la lit par une adresse `blob:`, que la
+ *      politique de sécurité de la page refuse (mesuré le 2026-10-17) : les passants arrivent sans peau ;
+ *   2. un passant dont le modèle, la marche ou une texture manque → la foule ne se charge pas ;
+ *   3. la marche capturée gardée telle quelle → les passants glissent en avançant deux fois ;
+ *   4. une lumière ajoutée par la foule → la rue recompile tous ses programmes à l'arrivée des gens.
  */
-describe('fond de l Accueil — les corps de la foule, maillés par tranches', () => {
-  const SOMMETS: Record<NomForme, [number, number]> = {
-    M: [9234, 18468],
-    C: [7186, 14368],
-    E: [9119, 18240],
-    N: [7609, 15216],
-    O: [7754, 15504]
-  }
-  const finir = <R>(g: Generator<void, R, void>): { valeur: R; tranches: number } => {
-    let tranches = 0
-    for (;;) {
-      const pas = g.next()
-      tranches++
-      if (pas.done) return { valeur: pas.value, tranches }
-    }
-  }
-
-  it(
-    'chaque corps rend la main plus de 60 fois et garde la géométrie du brouillon',
-    { timeout: 60_000 },
-    () => {
-      for (const nom of ORDRE_FORMES) {
-        const { valeur, tranches } = finir(maillerCorps(nom))
-        expect(tranches, nom).toBeGreaterThan(60)
-        expect([valeur.zones.length, valeur.index.length / 3], nom).toEqual(SOMMETS[nom])
-        // Un poids d'os par sommet et par influence, normalisé : sinon le corps se déchire en marchant.
-        for (let q = 0; q < valeur.zones.length; q += 997) {
-          const somme = [0, 1, 2, 3].reduce((s, i) => s + valeur.skinWeight[q * 4 + i], 0)
-          expect(somme).toBeCloseTo(1, 4)
-        }
-      }
-    }
-  )
-
-  it(
-    'chaque tête fine rend la main plus de 60 fois et garde la géométrie du brouillon',
-    { timeout: 60_000 },
-    () => {
-      const homme = finir(maillerTete(false))
-      const femme = finir(maillerTete(true))
-      expect(homme.tranches).toBeGreaterThan(60)
-      expect(femme.tranches).toBeGreaterThan(60)
-      expect([homme.valeur.ao.length, homme.valeur.index.length / 3]).toEqual([8196, 16308])
-      expect([femme.valeur.ao.length, femme.valeur.index.length / 3]).toEqual([8038, 15992])
-    }
-  )
-
-  it(
-    'le travail avance par budget, rend null tant qu il n est pas fini, puis rend le même résultat',
-    { timeout: 60_000 },
-    () => {
-      // Une horloge qui avance d'une unité à chaque lecture : un budget nul n'autorise qu'UNE tranche.
-      let instant = 0
-      const preparation = creerPreparation(() => instant++)
-      let appels = 0
-      let resultat = preparation.avancer(0)
-      while (!resultat) {
-        appels++
-        // Budget négatif : traité comme nul, jamais comme « tout de suite tout ».
-        resultat = preparation.avancer(appels % 2 ? -5 : 0)
-      }
-      // Des centaines d'appels : le travail a été rendu par petits morceaux, pas d'un bloc.
-      expect(appels).toBeGreaterThan(500)
-      expect(Object.keys(resultat.corps).sort()).toEqual([...ORDRE_FORMES].sort())
-      expect(resultat.tetes).toHaveLength(2)
-      // Fini, il ne recalcule rien : même objet, sans lire l'horloge.
-      const avant = instant
-      expect(preparation.avancer(BUDGET_MAILLAGE_MS)).toBe(resultat)
-      expect(instant).toBe(avant)
-    }
-  )
-
-  it('le budget par tâche reste loin du seuil d une tâche longue du navigateur (50 ms)', () => {
-    expect(BUDGET_MAILLAGE_MS).toBeGreaterThan(0)
-    expect(BUDGET_MAILLAGE_MS).toBeLessThanOrEqual(16)
+describe('fond de l Accueil — la foule réaliste « Heure de pointe »', () => {
+  it('18 passants, dans les deux sens, sur les deux trottoirs, comme le brouillon choisi', () => {
+    expect(HEURE_DE_POINTE).toHaveLength(18)
+    expect(AVENUE.passants).toBe(18)
+    expect(new Set(HEURE_DE_POINTE.map((p) => p.sens))).toEqual(new Set([1, -1]))
+    // Trottoir de la rambarde à gauche (x < -4), trottoir des façades à droite (x > 4) : jamais sur la chaussée.
+    for (const p of HEURE_DE_POINTE) expect(Math.abs(p.x), p.av).toBeGreaterThan(4)
+    expect(HEURE_DE_POINTE.filter((p) => p.x < 0).length).toBeGreaterThanOrEqual(6)
+    expect(HEURE_DE_POINTE.filter((p) => p.x > 0).length).toBeGreaterThanOrEqual(6)
+    // Des corps variés : seize personnes différentes pour dix-huit passants.
+    expect(new Set(HEURE_DE_POINTE.map((p) => p.av)).size).toBe(16)
   })
 
-  it('le travail est partagé par la session : une scène reconstruite reprend où la précédente s est arrêtée', () => {
-    expect(preparationHumains()).toBe(preparationHumains())
+  it('chaque passant a son modèle, sa marche et toutes ses textures, et aucun modèle n intègre d image', () => {
+    const marches = jsonGlb('marches.glb')
+    expect(marches.animations?.map((a) => a.name).sort()).toEqual([...MARCHES].sort())
+    for (const p of HEURE_DE_POINTE) expect(MARCHES, p.av).toContain(p.marche)
+    for (const nom of new Set(HEURE_DE_POINTE.map((p) => AVATARS[p.av]))) {
+      const glb = jsonGlb(`${nom}.glb`)
+      expect(glb.images ?? [], nom).toEqual([])
+      // Le squelette de Rocketbox lié à la peau, visage et doigts compris : 80 ou 81 os selon la personne.
+      expect(glb.skins?.[0]?.joints.length, nom).toBeGreaterThanOrEqual(80)
+      expect(glb.materials?.length, nom).toBeGreaterThanOrEqual(2)
+      for (const m of glb.materials ?? []) {
+        expect(m.extras?.couleur, `${nom} ${m.name}`).toMatch(/\.webp$/)
+        for (const texture of [m.extras?.couleur, m.extras?.normale])
+          if (texture)
+            expect(() => readFileSync(new URL(texture, DOSSIER_FOULE)), texture).not.toThrow()
+      }
+    }
+  })
+
+  it('la marche capturée est redressée : l avance retirée du clip, la vitesse rendue en m/s', () => {
+    // 120 cm en 1,2 s le long de z, avec un balancement latéral de 3 cm dans le cycle.
+    const temps = [0, 0.3, 0.6, 0.9, 1.2]
+    const valeurs = temps.flatMap((t, i) => [3 * Math.sin((i * Math.PI) / 2), 88, 100 * t])
+    const clip = new THREE.AnimationClip('m_walk_test', 1.2, [
+      new THREE.VectorKeyframeTrack('Bip01.position', temps, valeurs)
+    ])
+    expect(redresserMarche(clip)).toBeCloseTo(1, 6)
+    const v = clip.tracks[0].values
+    // Le départ et l'arrivée coïncident : le clip boucle sur place, les pieds ne glissent plus.
+    expect(v[0]).toBeCloseTo(0, 6)
+    expect(v[2]).toBeCloseTo(0, 6)
+    expect(v[12]).toBeCloseTo(0, 6)
+    expect(v[14]).toBeCloseTo(0, 6)
+    // La hauteur du bassin et le balancement dans le cycle sont gardés.
+    expect(v[1]).toBe(88)
+    expect(v[3]).toBeCloseTo(3, 5)
+  })
+
+  it('chaque passant est à sa place à l instant de référence, et la foule reste dans sa fenêtre', () => {
+    for (const p of HEURE_DE_POINTE)
+      expect(positionZ(p, 1.2, FOULE.tRef, 0)).toBeCloseTo(enrouler(p.zf), 9)
+    for (const z of [-200, -56.0001, -56, 0, 13.999, 14, 250]) {
+      const r = enrouler(z)
+      expect(r).toBeGreaterThanOrEqual(FOULE.debut)
+      expect(r).toBeLessThan(FOULE.debut + FOULE.fenetre)
+    }
+    // Il marche dans son sens : 10 s plus tard, celui qui s'éloigne est 10 × sa vitesse plus loin.
+    const p = HEURE_DE_POINTE[0]
+    expect(p.sens).toBe(1)
+    expect(positionZ(p, 1, FOULE.tRef + 10, 0)).toBeCloseTo(enrouler(p.zf - 10), 9)
+  })
+
+  it('personne ne traverse la caméra : on s écarte en approchant, on reprend sa file une fois passé', () => {
+    const [camX, , camZ] = CAMERA_AVENUE.position
+    // La caméra est posée dans la file de gauche : c'est ce qui rend l'écart nécessaire.
+    expect(HEURE_DE_POINTE.some((p) => Math.abs(p.x - camX) < ECART_CAMERA.distance)).toBe(true)
+    for (const p of HEURE_DE_POINTE) {
+      for (let z = camZ - 8; z <= camZ + 8; z += 0.05) {
+        const x = ecarterDeLaCamera(p.x, z, camX, camZ)
+        // Jamais plus près que l'écart quand on est à hauteur de la caméra.
+        if (Math.abs(z - camZ) < ECART_CAMERA.plein)
+          expect(Math.abs(x - camX), `${p.av} z=${z.toFixed(2)}`).toBeGreaterThanOrEqual(
+            ECART_CAMERA.distance - 1e-9
+          )
+        // Toujours sur le trottoir (de -7,2 à -4 à gauche).
+        if (p.x < 0) expect(x).toBeGreaterThan(-7.2)
+        if (p.x < 0) expect(x).toBeLessThan(-4)
+      }
+      // Loin de la caméra, chacun est dans sa file.
+      expect(ecarterDeLaCamera(p.x, camZ - 20, camX, camZ)).toBe(p.x)
+    }
+    // Un écart continu : pas de saut d'un pas à l'autre.
+    let avant = ecarterDeLaCamera(-5.5, camZ - 6, camX, camZ)
+    for (let z = camZ - 6; z <= camZ + 6; z += 0.01) {
+      const x = ecarterDeLaCamera(-5.5, z, camX, camZ)
+      expect(Math.abs(x - avant)).toBeLessThan(0.01)
+      avant = x
+    }
+  })
+
+  it('la foule n ajoute aucune lumière, et décode ses images hors du fil principal', () => {
+    // Rien de lourd dans la première image de la foule : sa sphère englobante est posée d'avance
+    // (sinon 261 ms de déformation sommet par sommet), ses programmes sont finalisés avant.
+    expect(foule).toMatch(/mesh\.boundingSphere = mesh\.geometry\.boundingSphere\.clone\(\)/)
+    expect(scene).toMatch(
+      /\.then\(\(\) => finaliserProgrammes\(prete\.groupe\)\)\s*\.then\(montrer/
+    )
+    expect(foule).not.toMatch(/Light\s*\(/)
+    expect(foule).toMatch(/createImageBitmap\(/)
+    // Elle n'entre dans la scène qu'une fois ses programmes compilés en tâche de fond.
+    expect(scene).toMatch(
+      /\.then\(\(\) => compilerEnFond\(prete\.groupe, scene\)\)\s*\.then\(\(\) => finaliserProgrammes/
+    )
+    // Ses textures partent vers la carte graphique une par tâche, avant : d'un bloc, 917 ms de gel.
+    expect(scene).toMatch(
+      /renderer\.initTexture\(texture\)\s*await new Promise<void>\(\(ok\) => setTimeout\(ok, 0\)\)/
+    )
   })
 })

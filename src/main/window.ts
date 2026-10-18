@@ -33,7 +33,7 @@ import {
 import { is } from '@electron-toolkit/utils'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import { warmCapabilities } from './capability-controls'
-import { isTrustedRendererUrl } from './behaviour-access'
+import { isSceneFrameUrl, isTrustedRendererUrl } from './behaviour-access'
 import { behaviourRendererOptions } from './ipc-senders'
 import { type ModelQuestionHub, type PendingModelQuestion } from './model-questions'
 import { annoncerFermeture } from './journal-arrets'
@@ -45,6 +45,12 @@ import devIcon from '../../resources/autowin-os-dev.png?asset'
 import iconIco from '../../resources/icon.ico?asset'
 import devIconIco from '../../resources/autowin-os-dev.ico?asset'
 import { iconeNotification } from '../shared/os-presence'
+
+/**
+ * Au-delà, l'écran d'attente est réputé perdu et l'interface est demandée sans lui. Le document
+ * d'attente est autonome et local : il se charge normalement en quelques millisecondes.
+ */
+const DELAI_MAX_ECRAN_ATTENTE_MS = 10_000
 
 /** Ce que le fenêtrage prenait dans `index.ts` — désormais passé explicitement. */
 export type WindowingDeps = {
@@ -423,10 +429,14 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     mainWindow.webContents.on('will-frame-navigate', (details) => {
       if (details.isMainFrame) return
       const currentUrl = details.frame?.url ?? ''
-      const isInitialLocalFrameLoad =
-        (currentUrl === '' || currentUrl === 'about:blank') &&
-        (details.url.startsWith('data:') || details.url.startsWith('blob:'))
-      if (!isInitialLocalFrameLoad) details.preventDefault()
+      const isInitialFrameLoad = currentUrl === '' || currentUrl === 'about:blank'
+      // Premier chargement seulement : un cadre de scene 3D (Bloc3D.tsx) charge la page
+      // `scene-3d.html` de l'app ; toute navigation qu'il tenterait ENSUITE reste refusee.
+      const isAllowedFirstLoad =
+        details.url.startsWith('data:') ||
+        details.url.startsWith('blob:') ||
+        isSceneFrameUrl(details.url, behaviourRendererOptions())
+      if (!(isInitialFrameLoad && isAllowedFirstLoad)) details.preventDefault()
     })
 
     // Desync fenêtre↔viewport (vécu) : le contenu reste parfois rendu à ses ANCIENNES métriques —
@@ -578,8 +588,23 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     // attendre ANNULE le premier : l'écran n'aurait jamais été affiché, et on retombait exactement sur
     // la fenêtre vide que ceci corrige. On attend donc la fin du chargement — quelques millisecondes
     // pour un document autonome — puis on lance l'interface.
-    if (attentePrete) mainWindow.loadFile(cheminAttente).then(chargerInterface, chargerInterface)
-    else chargerInterface()
+    //
+    // FILET : la promesse de `loadFile` peut ne JAMAIS se régler. CONSTATÉ le 2026-10-17 : le service
+    // réseau de Chromium a planté pendant ce chargement (« Network service crashed », 07:26:30), la
+    // page est restée sur `about:blank`, ni `then` ni `catch` n'est parti — l'interface n'a jamais été
+    // demandée, et la fenêtre, cachée jusqu'à `ready-to-show`, n'est jamais apparue. Passé le délai, on
+    // demande l'interface quand même ; la garde empêche un second `loadURL` qui annulerait le premier.
+    if (attentePrete) {
+      let interfaceDemandee = false
+      const chargerInterfaceUneFois = (): void => {
+        if (interfaceDemandee) return
+        interfaceDemandee = true
+        clearTimeout(filetAttente)
+        chargerInterface()
+      }
+      const filetAttente = setTimeout(chargerInterfaceUneFois, DELAI_MAX_ECRAN_ATTENTE_MS)
+      mainWindow.loadFile(cheminAttente).then(chargerInterfaceUneFois, chargerInterfaceUneFois)
+    } else chargerInterface()
   }
   return {
     createWindow,

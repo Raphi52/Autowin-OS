@@ -477,7 +477,7 @@ const api = {
     reasoningEffort?: string
   ): Promise<Record<Role, RoleBinding>> =>
     ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
-  /** Modèle des petites tâches (tri des conversations, choix du workflow) : réglage + effectif. */
+  /** Modèle des petites tâches (choix automatique du workflow) : réglage + effectif. */
   petitesTaches: (): Promise<PetitesTachesEtat> => ipcRenderer.invoke('os:petitesTaches'),
   /** `provider === null` efface le réglage : les petites tâches suivent alors le modèle du chat. */
   setPetitesTaches: (
@@ -684,18 +684,6 @@ const api = {
     provider: string
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
-  routeConversationMessage: (
-    conversationId: string,
-    message: string,
-    attachmentNames: string[]
-  ): Promise<{
-    sourceConversationId: string
-    conversationId: string
-    routed: boolean
-    title?: string
-    decision: { route: 'current' | 'new'; confidence: number; reason: string }
-  }> =>
-    ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
   conversationsRename: (
     id: string,
     title: string

@@ -167,7 +167,6 @@ import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { modeleDuTour } from './chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
-import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { parseFileRef, resolveFileRef } from '../shared/file-ref'
 import { commandeEditeur, ligneDemandee, racinesRevelation } from './reveal-file'
@@ -1224,10 +1223,6 @@ const pilot = new AgentPilot(
   (conversationId?: string) => dossierDuTour(conversationId),
   // Commandes du chat AUSSI servies comme outils directs du modèle quand il les porte (chat-mcp.ts).
   true
-)
-const conversationRouteCoordinator = new ConversationRouteCoordinator(
-  os.conversations,
-  new ConversationRouter(os.registry, os.roles, os.executionSupervisor, () => os.waitUntilReady())
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
@@ -3015,8 +3010,6 @@ Le fil reprend ensuite normalement.`
     os,
     activeChatTurns,
     causalTrace,
-    ledger,
-    conversationRouteCoordinator,
     turnJournalRoot,
     isolatedTestInstance,
     broadcast,

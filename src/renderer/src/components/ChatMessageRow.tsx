@@ -7,7 +7,8 @@
  * (comparateur data-only en bas de fichier).
  */
 import { tourRefusePourAutoLancer } from './veille-candidats-message'
-import React, { Fragment, memo } from 'react'
+import React, { Fragment, memo, useRef, useState } from 'react'
+import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
@@ -389,6 +390,30 @@ export const ChatMessageRow = memo(
      */
     onAnswerAsk?: (prompt: string) => void
   }): React.JSX.Element {
+    /*
+     * BOUTONS « PROMPTER » DES BLOCS html-render (conv-302, voir bouton-prompt-html.ts) : un lien
+     * `#autowin-prompt` envoie son libellé visible par le chemin d'une réponse `ask`. Mêmes règles que
+     * le bloc `ask` : rien avant la fin du tour, un seul envoi (verrou synchrone au clic, puis verrou
+     * DURABLE par le fil : `askReponse` reconnaît aussi le libellé d'un bouton déjà envoyé).
+     */
+    const promptEnvoye = useRef(false)
+    const [promptParti, setPromptParti] = useState(false)
+    const promptsOuverts =
+      message.role === 'assistant' &&
+      message.done === true &&
+      askReponse === undefined &&
+      onAnswerAsk !== undefined &&
+      !promptParti
+    const surClicPrompt = (event: React.MouseEvent<HTMLDivElement>): void => {
+      const prompt = promptDuClic(event.target)
+      if (prompt === null) return
+      // Une ancre interne ne doit jamais changer l'adresse de l'app, bouton ouvert ou fermé.
+      event.preventDefault()
+      if (!promptsOuverts || promptEnvoye.current) return
+      promptEnvoye.current = true
+      setPromptParti(true)
+      onAnswerAsk?.(prompt)
+    }
     if (message.role === 'user') {
       return (
         <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
@@ -533,7 +558,15 @@ export const ChatMessageRow = memo(
                 <Fragment key={`parts-${timelineIndex}`}>
                   {groupAssistantActivity(timelineItem.parts).map((part, index) =>
                     part.kind === 'text' ? (
-                      <div key={index} className="msg-body" dir="auto">
+                      // Le clic ne fait qu'ÉCOUTER les liens `#autowin-prompt` du bloc html-render :
+                      // le clavier passe par le lien lui-même (Entrée y déclenche ce même clic).
+                      <div
+                        key={index}
+                        className="msg-body"
+                        dir="auto"
+                        data-prompts={promptsOuverts ? 'ouverts' : 'fermes'}
+                        onClick={surClicPrompt}
+                      >
                         <Markdown
                           text={part.text}
                           continuationPrefix={part.markdownContinuationPrefix}

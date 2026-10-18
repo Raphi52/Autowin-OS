@@ -117,4 +117,50 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     expect(conversationsCreate).toHaveBeenCalledTimes(2)
     expect(conversationsSetProject).not.toHaveBeenCalledWith('second', expect.anything())
   })
+
+  /**
+   * LA DEMANDE (conv-298, 2026-10-16) : « en CWD ajoute This computer dans les choix ». Travailler
+   * sur la machine, sans projet : c'est claude.exe lancé depuis le dossier personnel. Le menu ne
+   * proposait que des dépôts. L'entrée vise le dossier personnel lu côté main, la pastille l'annonce
+   * « This computer » (pas « User »), et le même dossier n'apparaît pas une seconde fois en chemin brut.
+   */
+  it('propose « This computer » : le fil neuf travaille dans le dossier personnel', async () => {
+    const conversationsSetProject = vi.fn().mockResolvedValue('C:\\Users\\Moi')
+    const conversationsCreate = vi.fn().mockResolvedValue(conversation('neuf'))
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['C:\\Users\\Moi', 'D:\\Projets\\Cible'])
+    )
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([]),
+        conversation: vi.fn().mockResolvedValue({ id: 'neuf', messages: [] }),
+        dossierPersonnel: vi.fn().mockResolvedValue('C:\\Users\\Moi'),
+        conversationsSetProject,
+        conversationsCreate
+      })
+    )
+
+    await harness.click('[data-testid="chat-project-dot"]')
+    const ceci = document.querySelector<HTMLElement>('[data-testid="conv-project-this-computer"]')
+    expect(ceci).not.toBeNull()
+    expect(ceci!.textContent).toContain('This computer')
+    // Le dossier personnel n'est listé qu'une fois : sous son nom « This computer ».
+    const chemins = [
+      ...document.querySelectorAll<HTMLElement>('[data-testid="conv-project-choice"]')
+    ].map((bouton) => bouton.dataset.projectPath)
+    expect(chemins).not.toContain('C:\\Users\\Moi')
+    expect(chemins).toContain('D:\\Projets\\Cible')
+
+    await act(async () => {
+      ceci!.click()
+    })
+    expect(
+      harness.container.querySelector('[data-testid="chat-project-dot"]')?.textContent
+    ).toContain('This computer')
+
+    await harness.type('premier tour')
+    await harness.click('.composer-send')
+    expect(conversationsSetProject).toHaveBeenCalledWith('neuf', 'C:\\Users\\Moi')
+  })
 })

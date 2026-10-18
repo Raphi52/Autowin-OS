@@ -525,17 +525,6 @@ interface ChatApi {
     category: string
     provider: string
   }>
-  routeConversationMessage: (
-    conversationId: string,
-    message: string,
-    attachmentNames: string[]
-  ) => Promise<{
-    sourceConversationId: string
-    conversationId: string
-    routed: boolean
-    title?: string
-    decision: { route: 'current' | 'new'; confidence: number; reason: string }
-  }>
   /** Renomme et rend le titre RELU (`undefined` = id inconnu, rien renomme). */
   conversationsRename: (
     id: string,

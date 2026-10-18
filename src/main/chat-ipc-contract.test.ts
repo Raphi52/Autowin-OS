@@ -172,21 +172,18 @@ describe('renderer chat IPC contract', () => {
     expect(preloadTypes).toContain('workflowProfileAcknowledgeNotice')
   })
 
-  it('exposes a guarded conversation-routing preflight before pilotChat', () => {
+  /*
+   * PLUS AUCUN TRI DE SUJET AVANT L'ENVOI (retire le 2026-10-17, conv-305 : « enleve le mecanisme
+   * qui redirige vers une autre conv quand on change de sujet c invasif je sais gerer »).
+   * Un modele decidait a chaque envoi si le message ouvrait un autre sujet, creait un fil neuf et y
+   * emmenait l'utilisateur. Ce temoin garde le canal ferme : le message reste dans le fil ecrit.
+   */
+  it('n expose plus de tri de sujet qui deplacerait un message vers un fil neuf', () => {
     const sources = readChatContractSources()
 
-    expect(sources.preload).toContain('routeConversationMessage: (')
-    expect(sources.preload).toMatch(/ipcRenderer\.invoke\(\s*'os:conversations:routeMessage'/)
-    expect(sources.preloadTypes).toContain('routeConversationMessage: (')
-    const handler = sources.main.slice(
-      sources.main.indexOf("'os:conversations:routeMessage'"),
-      sources.main.indexOf("'os:conversations:rename'")
-    )
-    expect(handler).toContain("assertTrustedRendererSender(event, 'Conversation route')")
-    expect(handler).toContain('conversationRouteCoordinator.route(')
-    expect(handler).toContain("kind: 'conversation-route'")
-    expect(handler).toContain('inputTokens: decision.usage?.inputTokens')
-    expect(handler).toContain("name: 'conversation_route'")
+    expect(sources.preload).not.toContain('routeConversationMessage')
+    expect(sources.preloadTypes).not.toContain('routeConversationMessage')
+    expect(sources.main).not.toContain("'os:conversations:routeMessage'")
   })
 
   it('does not let a live directive outlive the chat turn that accepted it', () => {

@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { createAvenueScene } from './home-decor-avenue'
+import { createAvenueEnArrierePlan } from './decor-avenue-hote'
 
 /**
  * Le décor 3D de la page d'accueil : la scène, sans React.
@@ -1854,8 +1854,9 @@ export function estDirectionDecor(valeur: unknown): valeur is DecorVariant {
 export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorScene | null {
   const direction: DecorVariant = estDirectionDecor(variante) ? variante : DECOR_DEFAUT
   // L'avenue est une scene a part, avec sa propre chaine de rendu : elle ne partage rien des
-  // compositions spatiales ci-dessous.
-  if (direction === 'avenue') return createAvenueScene()
+  // compositions spatiales ci-dessous. Elle se dessine dans un Worker, hors du fil de l'interface
+  // (decor-avenue-hote.ts, conv-323) ; sans Worker, dans la page comme avant.
+  if (direction === 'avenue') return createAvenueEnArrierePlan()
   let renderer: THREE.WebGLRenderer
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'default' })

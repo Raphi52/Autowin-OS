@@ -153,8 +153,8 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
 /**
  * LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11).
  *
- * Deux appels courts tournent en fond, hors pipeline : le TRI des conversations (même sujet ou
- * nouveau fil ?) et le CHOIX AUTOMATIQUE du workflow. Aucun n'avait de réglage : le tri forçait le
+ * Deux appels courts tournaient en fond, hors pipeline : le TRI des conversations (même sujet ou
+ * nouveau fil ? — retiré le 2026-10-17, conv-305) et le CHOIX AUTOMATIQUE du workflow, qui reste. Aucun n'avait de réglage : le tri forçait le
  * défaut du code (`claude-fable-5`, 2× le prix d'Opus — 449 appels pour 28,68 $ relevés dans
  * `activity/*.jsonl`), le choix du workflow forçait l'effort `low` sur le modèle du chat.
  *

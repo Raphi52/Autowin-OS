@@ -76,8 +76,8 @@ export function registerRolesIpc({
     }
   )
   /**
-   * LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11) — tri des conversations et choix automatique
-   * du workflow. Ne passe PAS par la topologie : ce n'est pas un rôle du pipeline, sa seule source
+   * LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11) — choix automatique du workflow (le tri des
+   * conversations qu'il servait aussi a été retiré le 2026-10-17, conv-305). Ne passe PAS par la topologie : ce n'est pas un rôle du pipeline, sa seule source
    * est la clé `petitesTaches` de `roles.json`. Validé contre le catalogue AVANT d'écrire, comme le
    * modèle d'une conversation. `provider === null` efface le réglage (retour au modèle du chat).
    */

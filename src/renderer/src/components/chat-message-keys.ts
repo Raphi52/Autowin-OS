@@ -5,6 +5,7 @@
 import type { Msg } from './chat-view-types'
 import { groupAssistantActivity, type ChatPart } from './chat-view-model'
 import { optionsRepondues, parseAskDecision, type AskDecision } from './ask-choices'
+import { normaliserPrompt, promptsDesBoutons } from './bouton-prompt-html'
 
 export function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
@@ -75,12 +76,18 @@ export function askReponseDuFil(messages: Msg[], index: number): string | undefi
     const decision = parseAskDecision(part)
     return decision ? [decision] : []
   })
-  if (!decisions.length) return undefined
+  // Les boutons « prompter » d'un bloc html-render (conv-302, bouton-prompt-html.ts) sont une autre
+  // forme de la même question : leur libellé envoyé ferme le tour, comme une option `ask`.
+  const boutons = parts.flatMap((part) =>
+    part.kind === 'text' ? promptsDesBoutons(part.text) : []
+  )
+  if (!decisions.length && !boutons.length) return undefined
   for (let i = index + 1; i < messages.length; i += 1) {
     const message = messages[i]
     if (message.role !== 'user') continue
     const texte = message.content ?? ''
     if (decisions.some((decision) => estUneReponseAuBloc(texte, decision))) return texte.trim()
+    if (boutons.includes(normaliserPrompt(texte))) return texte.trim()
   }
   return undefined
 }

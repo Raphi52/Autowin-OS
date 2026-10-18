@@ -1,5 +1,9 @@
 /**
- * Blocs « Raisonnement » et « Actions » du fil — DEUX blocs repliables EMPILÉS, écrits en direct.
+ * Blocs « Raisonnement » et « Actions » du fil — DEUX blocs repliables, écrits en direct.
+ *
+ * DISPOSITION (conv-303, 2026-10-17, « A · Côte à côte ») : les deux blocs se partagent une ligne,
+ * dans un cadre centré ; le bloc « Étapes » (conv-304) prend toute la largeur de ce cadre DESSOUS.
+ * Avant : trois blocs empilés pleine largeur, Étapes entre Raisonnement et Actions.
  *
  * Avant le 2026-09-12 un seul bloc « Réflexion » portait les deux : la pensée du modèle ET les
  * lignes de signe de vie (outil en cours, tâche de fond, nouvelle tentative API). Sur les modèles
@@ -22,22 +26,32 @@
  * (« sors-la de la capsule Actions, mets-la comme avant en dessous »). Visible bloc plié.
  */
 // fix-ok: le bloc Actions ne recevait que statusLog (texte) sans statut ; mesure claude.ts:1687 (is_error) jamais transmis -> lignes de fin parsees dans thinking-block-corps.ts, frise C3 ; edits 3-4 = echappement de retour a la ligne casse par le shell, corrige.
-import React, { Fragment, useEffect, useRef, useState } from 'react'
+import React, { Fragment, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { LegendeDesOutils, RondDIcone, RondDuCompte } from './anneau-activite'
 import {
   actionsDuTour,
+  avancementDesEtapes,
+  avancerChronosDesEtapes,
   bilanDesActions,
   chronoMemorise,
+  chronosDesEtapesMemorises,
   corpsDuBloc,
+  dernierStatutDAction,
   derniereLigneDuRaisonnement,
   dureeLisible,
   memoriserChrono,
+  memoriserChronosDesEtapes,
+  resumeDesEtapes,
   secondesDesActions,
+  secondesDesEtapes,
   secondesDuChrono,
   statutLisible,
+  valeurDeLEtape,
   type ActionFrise,
+  type AvancementEtape,
   type Chrono
 } from './thinking-block-corps'
+import { etapesDuJournal, type Etape } from '../../../shared/etapes-du-tour'
 
 /** Étincelle : la pensée. Dessinée en SVG — l'ancien glyphe « ✻ » dépendait de la police. */
 const ICONE_RAISONNEMENT = (
@@ -66,6 +80,8 @@ function BlocRepliable({
   entete,
   corps,
   frise,
+  contenu,
+  ouvertParDefaut = false,
   dependances
 }: {
   testid: string
@@ -84,10 +100,14 @@ function BlocRepliable({
   corps: string
   /** Actions structurees : si present, le corps est dessine en FRISE (variante C3). */
   frise?: ActionFrise[]
+  /** Corps deja dessine (liste des etapes) : prend la place du texte et de la frise. */
+  contenu?: React.ReactNode
+  /** Ouverture tant que l'utilisateur n'a pas clique (les autres blocs restent plies). */
+  ouvertParDefaut?: boolean
   dependances: unknown[]
 }): React.JSX.Element {
   const [manuel, setManuel] = useState<boolean | null>(null)
-  const ouvert = manuel ?? false
+  const ouvert = manuel ?? ouvertParDefaut
   const ref = useRef<HTMLElement | null>(null)
   // Le flux s'écrit vers le BAS : sans cela, le contenu défile hors du cadre et on regarde le début.
   useEffect(() => {
@@ -133,7 +153,9 @@ function BlocRepliable({
           <span className="anneau-chevron" aria-hidden="true" />
         </span>
       </summary>
-      {frise ? (
+      {contenu ? (
+        contenu
+      ) : frise ? (
         <FriseDesActions
           actions={frise}
           testid={`${testid}-body`}
@@ -155,6 +177,73 @@ function BlocRepliable({
     </details>
   )
 }
+
+/**
+ * LISTE DES ÉTAPES (conv-304, 2026-10-17 : « un bloc avec les étapes de la task et leur
+ * progression, ils ont mis ça dans claude.exe »). Une case par étape, comme claude.exe : vide à
+ * faire, pleine en cours, cochée terminée (barrée). Cases en CSS, pas en glyphes : ◻ ◼ ✔ sortent en
+ * émoji sous Windows et débordent de la ligne.
+ */
+const MOT_DU_STATUT: Record<Etape['statut'], string> = {
+  pending: 'À faire',
+  in_progress: 'En cours',
+  completed: 'Terminée'
+}
+
+/**
+ * AVANCEMENT PAR ÉTAPE (conv-303, 2026-10-17, maquette « A · Côte à côte ») : à droite du sujet, une
+ * BARRE en blocs — la barre « Pipeline » retenue le même jour pour les effets de texte — puis ce
+ * qu'on a mesuré. claude.exe ne donne que trois états, jamais un pourcentage : la barre ne prétend
+ * rien de plus. Pleine et verte = terminée ; blocs qui DÉFILENT = en cours (aucun remplissage
+ * inventé) ; vide = à faire. La valeur compte les actions lancées pendant l'étape et leur durée.
+ */
+function ListeDesEtapes({
+  etapes,
+  avancement,
+  secondes
+}: {
+  etapes: readonly Etape[]
+  avancement: ReadonlyMap<string, AvancementEtape>
+  /** Durée MESURÉE à l'écran de chaque étape qui en a une (voir `useSecondesDesEtapes`). */
+  secondes: ReadonlyMap<string, number>
+}): React.JSX.Element {
+  return (
+    <ol className="thinking-body etapes-liste" data-testid="etapes-block-body">
+      {etapes.map((e) => (
+        <li
+          key={e.id}
+          className="etape"
+          data-statut={e.statut}
+          data-testid="etape"
+          title={MOT_DU_STATUT[e.statut]}
+        >
+          <span className="etape-case" aria-hidden="true" />
+          <span className="etape-sujet">{e.sujet || `Étape #${e.id}`}</span>
+          <span className="etape-barre" aria-hidden="true">
+            <span className="etape-barre-blocs" />
+          </span>
+          <span className="etape-valeur" data-testid="etape-valeur">
+            {valeurDeLEtape(e, avancement.get(e.id), secondes.get(e.id) ?? null)}
+          </span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/** Liste cochée : l'icone du rond du bloc Étapes. */
+const ICONE_ETAPES = (
+  <svg viewBox="0 0 16 16" focusable="false">
+    <path
+      d="M2 4.2 L3.4 5.6 L5.8 3 M2 10.2 L3.4 11.6 L5.8 9 M8 4.5 H14 M8 10.5 H14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
 
 /**
  * Variante C3 (choix de l'utilisateur, 2026-09-24) : une FRISE verticale, une pastille par
@@ -297,6 +386,46 @@ function useChronoDuRaisonnement(
   )
 }
 
+/**
+ * Durée de chaque étape, MESURÉE à l'écran et rafraîchie chaque seconde tant qu'une étape est en
+ * cours — voir `avancerChronosDesEtapes` (conv-313 : « le timer est fix dans ce bloc »). Mémorisée par
+ * tour, comme le chrono du raisonnement : un bloc démonté puis remonté ne repart pas de zéro.
+ */
+function useSecondesDesEtapes(
+  turnId: string | undefined,
+  etapes: readonly Etape[],
+  avancement: ReadonlyMap<string, AvancementEtape>,
+  done: boolean
+): ReadonlyMap<string, number> {
+  const [vue, setVue] = useState(() => ({
+    chronos: chronosDesEtapesMemorises(turnId),
+    maintenant: Date.now()
+  }))
+  const enCours = !done && etapes.some((e) => e.statut === 'in_progress')
+  // La signature relance le battement à CHAQUE changement d'état d'une étape : son passage en
+  // cours ou sa fin est daté tout de suite, pas au battement suivant.
+  const signature = `${done}|${etapes.map((e) => `${e.id}:${e.statut}`).join()}`
+  const battre = useEffectEvent(() => {
+    const t = Date.now()
+    setVue((v) => ({
+      chronos: avancerChronosDesEtapes(v.chronos, etapes, avancement, t, done),
+      maintenant: t
+    }))
+  })
+  useEffect(() => {
+    const premier = window.setTimeout(battre, 0)
+    const id = enCours ? window.setInterval(battre, 1000) : undefined
+    return () => {
+      window.clearTimeout(premier)
+      if (id !== undefined) window.clearInterval(id)
+    }
+  }, [signature, enCours])
+  useEffect(() => {
+    if (turnId && vue.chronos.size > 0) memoriserChronosDesEtapes(turnId, vue.chronos)
+  }, [turnId, vue.chronos])
+  return secondesDesEtapes(etapes, vue.chronos, vue.maintenant)
+}
+
 export function ThinkingBlock({
   text,
   done,
@@ -326,49 +455,92 @@ export function ThinkingBlock({
   const dernierePensee = derniereLigneDuRaisonnement(pensee)
   const secondesPensee = useChronoDuRaisonnement(turnId, done, reasoningMs)
   const secondesActions = secondesDesActions(frise)
+  const etapes = etapesDuJournal(statusLog?.length ? statusLog : status ? [status] : [])
+  const etapesFaites = etapes.filter((e) => e.statut === 'completed').length
+  const statutAction = dernierStatutDAction(statusLog, status)
+  const avancement = avancementDesEtapes(statusLog, status, frise)
+  const secondesEtapes = useSecondesDesEtapes(turnId, etapes, avancement, done)
+  // DISPOSITION « A · Côte à côte » (conv-303, 2026-10-17 : « centrer actions et raisonnement et en
+  // dessous un bloc qui montre comment la tâche est décomposée », puis « les 2 du haut font la même
+  // largeur que le bloc étapes ») : un CADRE centré ; Raisonnement et Actions se partagent sa ligne
+  // du haut, Étapes prend toute sa largeur dessous. Le CSS fait le reste (ChatView.css, .tour-blocs).
   return (
-    <>
-      <BlocRepliable
-        testid="thinking-block"
-        classe="thinking-block--raisonnement"
-        rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
-        libelle={done ? 'Raisonnement terminé' : 'Raisonnement'}
-        live={!done}
-        compteurs={
-          secondesPensee !== null && (
-            <span className="thinking-secondes" data-testid="thinking-block-secondes">
-              {dureeLisible(secondesPensee)}
-            </span>
-          )
-        }
-        {...(dernierePensee ? { entete: dernierePensee } : {})}
-        corps={pensee}
-        dependances={[text]}
-      />
-      {actions && (
+    <div className="tour-blocs" data-testid="tour-blocs">
+      <div className="tour-blocs-rang">
         <BlocRepliable
-          testid="action-block"
-          classe="thinking-block--actions"
-          // Le nombre d'actions est dans le rond : la pastille bleue qui le portait dans la
-          // capsule le dirait une seconde fois.
-          rond={<RondDuCompte etats={frise.map((a) => a.etat)} testid="action-block-compte" />}
-          libelle="Actions"
+          testid="thinking-block"
+          classe="thinking-block--raisonnement"
+          rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
+          libelle={done ? 'Raisonnement terminé' : 'Raisonnement'}
           live={!done}
-          titre={bilanDesActions(frise)}
           compteurs={
-            secondesActions > 0 && (
-              <span className="thinking-duree" data-testid="action-block-duree">
-                {dureeLisible(secondesActions)}
+            secondesPensee !== null && (
+              <span className="thinking-secondes" data-testid="thinking-block-secondes">
+                {dureeLisible(secondesPensee)}
               </span>
             )
           }
-          legende={<LegendeDesOutils outils={frise.map((a) => ({ nom: a.outil, etat: a.etat }))} />}
-          {...(!done && status ? { entete: statutLisible(status) } : {})}
-          corps={actions}
-          frise={frise}
-          dependances={[actions]}
+          {...(dernierePensee ? { entete: dernierePensee } : {})}
+          corps={pensee}
+          dependances={[text]}
+        />
+        {actions && (
+          <BlocRepliable
+            testid="action-block"
+            classe="thinking-block--actions"
+            // Le nombre d'actions est dans le rond : la pastille bleue qui le portait dans la
+            // capsule le dirait une seconde fois.
+            rond={<RondDuCompte etats={frise.map((a) => a.etat)} testid="action-block-compte" />}
+            libelle="Actions"
+            live={!done}
+            titre={bilanDesActions(frise)}
+            compteurs={
+              secondesActions > 0 && (
+                <span className="thinking-duree" data-testid="action-block-duree">
+                  {dureeLisible(secondesActions)}
+                </span>
+              )
+            }
+            legende={
+              <LegendeDesOutils outils={frise.map((a) => ({ nom: a.outil, etat: a.etat }))} />
+            }
+            {...(!done && statutAction ? { entete: statutLisible(statutAction) } : {})}
+            corps={actions}
+            frise={frise}
+            dependances={[actions]}
+          />
+        )}
+      </div>
+      {etapes.length > 0 && (
+        <BlocRepliable
+          testid="etapes-block"
+          classe="thinking-block--etapes"
+          // Le rond prend la teinte de l'avancement : vert quand tout est fait, ambre sinon.
+          rond={
+            <RondDIcone
+              etats={etapes.map((e) => (e.statut === 'completed' ? 'ok' : 'encours'))}
+              testid="etapes-block-rond"
+            >
+              {ICONE_ETAPES}
+            </RondDIcone>
+          }
+          libelle="Étapes"
+          live={!done}
+          compteurs={
+            <span className="thinking-duree" data-testid="etapes-block-compte">
+              {etapesFaites}/{etapes.length}
+            </span>
+          }
+          entete={resumeDesEtapes(etapes)}
+          corps=""
+          contenu={
+            <ListeDesEtapes etapes={etapes} avancement={avancement} secondes={secondesEtapes} />
+          }
+          // Ouvert pendant le tour, comme la liste de claude.exe ; replié en résumé une fois fini.
+          ouvertParDefaut={!done}
+          dependances={[etapes.map((e) => e.statut).join()]}
         />
       )}
-    </>
+    </div>
   )
 }

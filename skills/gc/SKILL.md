@@ -29,8 +29,10 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
   conversations créées depuis — elles n'existaient QUE dans le journal.
   **Puis AJOUTER les archives** : depuis le 2026-10-14 (cb33e5ac), un fil inactif depuis 14 jours
   quitte `conversations.json` pour `conversations.json.archive/<id>.json` — il reste VIVANT.
-  Lire leurs ids avec `idsArchives` (`file:///D:/AutoWinOS/scripts/conversations-sur-disque.mjs`,
-  qui écarte les pierres tombales `<id>.supprime`), moins ceux que le journal supprime. Mesuré le
+  Lire leurs ids avec `idsArchives` (`scripts/conversations-sur-disque.mjs` du dépôt Autowin,
+  qui écarte les pierres tombales `<id>.supprime`), moins ceux que le journal supprime. Le
+  script qui l'importe se lance par `npx tsx` depuis le dépôt : ce module importe du TypeScript,
+  et `node` seul s'arrête sur `ERR_UNKNOWN_FILE_EXTENSION` (constaté le 2026-10-17). Mesuré le
   2026-10-16 : 73 fils dans le fichier, 785 en archive, 861 vivants — sans les archives, les
   satellites de 785 conversations vivantes passaient pour orphelins.
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
@@ -58,8 +60,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    les plus récents ; `runsNonExamines` compte le reste) et, avant le 2026-10-11, il ne voyait AUCUN
    run (mauvaise racine) : les passes des 02 et 03/10 ont mis 42 runs rouges en corbeille sur la foi
    d'une liste vide — remis en place le 13/10. Sonde : un script `.mts` lancé par `npx tsx`, qui
-   importe `scanRuns` (`file:///D:/AutoWinOS/src/main/dashboards/runs-scan.ts`) et `isBlocked`
-   (`file:///D:/AutoWinOS/src/shared/run-blocked.ts`), scanne `.autowin-data/autowin-os/runs` et rend
+   importe `scanRuns` (`src/main/dashboards/runs-scan.ts`) et `isBlocked`
+   (`src/shared/run-blocked.ts`), scanne `.autowin-data/autowin-os/runs` et rend
    l'ensemble des `session` qui portent au moins un run bloqué (mesuré le 13/10 : 925 RUN.md bloqués
    sur 1 094, 117 conversations). Sonde en échec → `runs/` et `run-state/` NON collectés ce jour-là.
    | Racine `.autowin-data/` : `*.log` > 5 Mo, `tmp/`, captures `tmp-*.png`, `vitest-*.txt` | non modifié depuis > 7 jours et non référencé par un process vivant (`DevToolsActivePort` exclu) |
@@ -74,7 +76,17 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      `autowin-os/worktrees/panel*`, `autowin-os/worktrees/<hash>/agent__run-*`.
      Candidate si : HEAD détachée, aucune modification (`git -C <copie> status --short` vide),
      aucun fichier modifié depuis > 7 jours, et absente des runs en cours et de `travauxNonPublies`.
-     Proposer `git worktree remove <copie>`. Une copie avec des modifications → `/salvage`, pas `/gc`.
+     Proposer la commande en DEUX temps, jamais enchaînés : (1) retirer la jonction
+     `<copie>\node_modules` (`cmd /c rmdir "<copie>\node_modules"` : `rmdir` sans `/s` ne retire
+     que le lien) et VÉRIFIER qu'elle a disparu ; (2) seulement alors `git worktree remove <copie>`.
+     Lancé avec la jonction en place, `git worktree remove` la traverse et efface le `node_modules`
+     du dépôt (constaté le 2026-10-10, conv-207). Une copie avec des modifications → `/salvage`, pas `/gc`.
+     Exception : `command-verify-<conversation>` (`src/main/verification-isolee.ts`) est UNE copie
+     par conversation, réutilisée, qui reçoit l'état courant de l'arbre partagé avant chaque
+     vérification — ses « modifications » sont ce miroir, pas du travail (le recensement des travaux
+     non publiés l'écarte déjà, motif `EDITION_OUTIL` de `src/main/store/worktree-manager.ts`).
+     Rien ne la retire : la COMPTER et la PESER dans le bilan ; candidate si sa conversation n'a
+     plus de tour depuis > 7 jours (`lastUserMessageAt` de `get_state`, ou archivée).
    - **Branches `autowin/recovery/*` et remises de côté (`git stash list`)** : les COMPTER et les
      dater dans le bilan, rien de plus. Leur tri relève de `/salvage`.
    - **Chemins périmés** : `git worktree prune --dry-run` ; s'il liste quelque chose, le rapporter.

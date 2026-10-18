@@ -113,6 +113,43 @@ describe('ChatView — prévisu cliquable dans la prompt box', () => {
 })
 
 /**
+ * IMAGE COLLÉE VIDE (conv-321, 2026-10-17). Le presse-papiers de Windows a livré une `image.png` de
+ * 0 octet (conv-182 le 2026-10-10, conv-321 le 2026-10-17 : `size: 0`, aucune miniature, fichier de
+ * 0 octet dans chat-artifacts). Elle s'attachait comme une vraie capture et partait à l'agent :
+ * l'utilisateur croyait avoir montré son écran, l'agent ne recevait rien. Elle est maintenant
+ * refusée au collage, avec un message qui dit quoi faire.
+ */
+describe('ChatView — image collée vide', () => {
+  beforeAll(installRafShim)
+  let h: ChatHarness | null = null
+  afterEach(async () => {
+    await h?.unmount()
+    h = null
+    vi.restoreAllMocks()
+  })
+
+  it('refuse une image de 0 octet et le dit, au lieu de l’attacher en silence', async () => {
+    h = await mountChat(chatApi())
+    await h.click('.conv-pick')
+    const vide = new File([], 'image.png', { type: 'image/png' })
+    expect(vide.size).toBe(0)
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { configurable: true, value: { files: [vide] } })
+    await act(async () => {
+      h!.textarea().dispatchEvent(paste)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(h.container.querySelector('.attachment-chip')).toBeNull()
+    expect(h.container.querySelector('.attachment-error')?.textContent).toMatch(
+      /image\.png.*vide.*0 octet/
+    )
+  })
+})
+
+/**
  * COLLER PENDANT UN TOUR (conv-44, 2026-09-01). `addFiles` commençait par `if (!cible && busy)
  * return` : un collage pendant qu'un tour tournait était ignoré EN SILENCE — rien d'attaché, aucun
  * message. Demande de l'utilisateur : la pièce jointe s'attache dans la barre comme hors tour ; elle

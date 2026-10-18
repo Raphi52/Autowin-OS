@@ -55,7 +55,6 @@ import {
   isRunRequestCurrent,
   doitSuivreLeBas,
   suiviDuBasApresEnvoi,
-  doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
   doitRattraperApresReapparition,
@@ -168,7 +167,7 @@ import {
   ordonnerGroupes,
   type ConversationGroupKind
 } from './conversation-groups'
-import { estCheminDeDossier } from '../../../shared/project-path'
+import { canonicalProjectPath, estCheminDeDossier } from '../../../shared/project-path'
 import {
   avecDossierRetire,
   fusionnerDossiersImportes,
@@ -2120,6 +2119,21 @@ export function ChatView({
     const oversized = candidates.find((file) => file.size > MAX_ATTACHMENT_BYTES)
     if (oversized) {
       setDraftError(originDraftKey, `${oversized.name} dépasse la limite de 10 Mo.`)
+      return
+    }
+    /*
+     * IMAGE VIDE (conv-321, 2026-10-17). Le presse-papiers peut annoncer une image sans en livrer les
+     * octets : Chromium rend alors une `image.png` de 0 octet (conv-182 et conv-321 : `size: 0`, pas
+     * de miniature, fichier vide dans chat-artifacts). Attachée, elle partait à l'agent comme une
+     * vraie capture — l'utilisateur croyait l'avoir montrée, l'agent ne recevait rien. Ici, au seul
+     * moment où l'utilisateur peut encore la recopier, on le lui dit.
+     */
+    const imageVide = candidates.find((file) => file.size === 0 && file.type.startsWith('image/'))
+    if (imageVide) {
+      setDraftError(
+        originDraftKey,
+        `${imageVide.name} est arrivée vide (0 octet) : le presse-papiers n’a livré aucune image. Recopie-la, puis colle-la à nouveau.`
+      )
       return
     }
     const totalBytes =
@@ -4968,67 +4982,8 @@ export function ChatView({
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
     try {
-      // Une suite du mode auto est l'etape suivante de CE fil : pas de routage (conv-19 -> conv-23).
-      if (convId && options?.suiteDuModeAuto !== true) {
-        const sourceId = convId
-        const route = await window.api.routeConversationMessage(
-          sourceId,
-          value,
-          outgoingAttachments.map((attachment) => attachment.name)
-        )
-        /*
-         * ON NE SUIT LE ROUTAGE QUE SI ON PEUT Y EMMENER L'UTILISATEUR.
-         *
-         * Defaut vecu le 2026-09-03 (conv-171) : « je crois que la conv s'est pas cree et que ca a
-         * laisse le message ici ». La bascule d'ecran etait CONDITIONNELLE, mais l'envoi vers le fil
-         * neuf ne l'etait pas : des que le brouillon ou la selection avaient bouge pendant l'appel au
-         * routeur, le message partait dans un fil que l'utilisateur ne voyait jamais. Constat mesure :
-         * conv-170 a recu un numero (compteur passe a 179), aucun message, et n'existait plus ensuite.
-         *
-         * La decision est donc prise AVANT tout deplacement. Si on ne peut pas basculer, on ne suit
-         * pas : le message reste dans le fil ou il a ete ecrit, et le fil neuf cree pour rien est
-         * retire — sinon il tapisserait la liste de fils vides.
-         */
-        const suivreLeRoutage = doitSuivreLeRoutage({
-          routed: route.routed,
-          cibleId: route.conversationId,
-          sourceId,
-          filAffiche: activeRef.current,
-          cleBrouillonEnvoi: sendDraftKey,
-          cleBrouillonActuelle: composerDraftKeyRef.current,
-          generationSelectionEnvoi: sendSelectionGeneration,
-          generationSelectionActuelle: composerSelectionGenerationRef.current
-        })
-        if (route.routed && route.conversationId !== sourceId && !suivreLeRoutage) {
-          // Optionnel a l'appel : le retrait du fil inutile ne doit JAMAIS empecher le message de
-          // partir. Une API amputee ferait perdre le nettoyage, pas le texte de l'utilisateur.
-          void window.api
-            .conversationsRemove?.(route.conversationId)
-            ?.catch((error: unknown) => traceSilentFailure('routage-fil-abandonne', error))
-        }
-        if (suivreLeRoutage) {
-          convId = route.conversationId
-          sendLocksRef.current.add(convId)
-          liveMessagesRef.current.set(sourceId, sourcePreviousMessages)
-          setConversationBusy(sourceId, false)
-          /*
-           * Le VERROU D'ENVOI de la source part avec son drapeau `busy` : ce tour ne lui appartient
-           * plus. Sans cela il restait pris jusqu'au `finally`, donc jusqu'a la FIN du tour sur la
-           * cible — des minutes. La source affichait « Envoyer », bouton actif, et le clic ne faisait
-           * RIEN : `send()` sortait en tete sur le verrou. Symptome vecu le 20/08 : « quand une
-           * conversation travaille, je peux pas cliquer sur Envoyer dans la conversation B ».
-           *
-           * Sur : le verrou existe contre un DOUBLE envoi du meme message ; celui-ci est parti
-           * ailleurs et la source ne porte plus rien, donc un nouvel envoi est legitime.
-           */
-          sendLocksRef.current.delete(sendLockKey)
-          previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
-          activeRef.current = convId
-          setActiveId(convId)
-          switchComposerDraft(convId)
-        }
-      }
-
+      // Le message part dans le fil OU IL A ETE ECRIT : plus aucun tri ne le deplace vers un fil
+      // neuf quand le sujet change (retire le 2026-10-17, conv-305 : « c invasif je sais gerer »).
       // Pas de conversation active → on en crée une (titre = début du message).
       if (!convId) {
         const identity = await refreshRuntimeIdentity()
@@ -6023,6 +5978,38 @@ export function ChatView({
     }
   }, [])
 
+  /*
+    « THIS COMPUTER » (conv-298, 2026-10-16 : « en CWD ajoute This computer dans les choix ») :
+    travailler sur la machine, sans projet — claude.exe lancé depuis le dossier personnel. Seul le
+    main connaît ce dossier ; pont absent (preload d'avant redémarrage) = pas d'entrée, jamais une
+    panne.
+  */
+  const [dossierPersonnel, setDossierPersonnel] = useState<string | null>(null)
+  useEffect(() => {
+    const lire = window.api.dossierPersonnel
+    if (!lire) return
+    let demonte = false
+    void lire()
+      .then((chemin) => {
+        if (!demonte && estCheminDeDossier(chemin)) setDossierPersonnel(chemin.trim())
+      })
+      .catch((error) => traceSilentFailure('dossier-personnel', error))
+    return () => {
+      demonte = true
+    }
+  }, [])
+  /** Ce chemin est-il le dossier personnel ? Comparaison canonique, sans casse (Windows). */
+  const estDossierPersonnel = useCallback(
+    (chemin: string | null | undefined): boolean => {
+      if (!dossierPersonnel || !chemin) return false
+      return (
+        canonicalProjectPath(chemin)?.toLowerCase() ===
+        canonicalProjectPath(dossierPersonnel)?.toLowerCase()
+      )
+    },
+    [dossierPersonnel]
+  )
+
   const dossiersConversations = useMemo(
     () =>
       [...new Set(dossiersMemorises.map((chemin) => chemin.trim()).filter(Boolean))].sort((a, b) =>
@@ -6860,8 +6847,27 @@ export function ChatView({
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
+              {convFolderMenu.mode === 'dossier' && dossierPersonnel && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-this-computer"
+                  data-project-path={dossierPersonnel}
+                  title={`Travailler sur cet ordinateur, sans projet : ${dossierPersonnel}`}
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    appliquerRangement(menu, dossierPersonnel)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    💻
+                  </span>
+                  This computer
+                </button>
+              )}
               {convFolderMenu.mode === 'dossier' &&
                 defaultWorkspace?.trim() &&
+                !estDossierPersonnel(defaultWorkspace) &&
                 !dossiersConversations.includes(defaultWorkspace.trim()) && (
                   <button
                     role="menuitem"
@@ -6882,42 +6888,46 @@ export function ChatView({
                   </button>
                 )}
               {convFolderMenu.mode !== 'dossier' ? null : dossiersConversations.length === 0 &&
-                !defaultWorkspace?.trim() ? (
+                !defaultWorkspace?.trim() &&
+                !dossierPersonnel ? (
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
-                dossiersConversations.map((chemin) => (
-                  <div className="conv-menu-ligne" key={chemin}>
-                    <button
-                      role="menuitem"
-                      data-testid="conv-project-choice"
-                      data-project-path={chemin}
-                      onClick={() => {
-                        const menu = convFolderMenu
-                        setConvFolderMenu(null)
-                        appliquerRangement(menu, chemin)
-                      }}
-                    >
-                      <span className="conv-menu-ic" aria-hidden="true">
-                        🗂
-                      </span>
-                      {chemin}
-                    </button>
-                    <button
-                      className="conv-menu-oubli"
-                      data-testid="conv-project-forget"
-                      data-project-path={chemin}
-                      aria-label={`Retirer ${chemin} de la liste`}
-                      title="Retirer de la liste"
-                      onClick={(event) => {
-                        // Le clic ne doit PAS ranger la conversation dans le dossier qu'on retire.
-                        event.stopPropagation()
-                        oublierDossier(chemin)
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))
+                // Le dossier personnel est déjà proposé sous son nom, « This computer ».
+                dossiersConversations
+                  .filter((chemin) => !estDossierPersonnel(chemin))
+                  .map((chemin) => (
+                    <div className="conv-menu-ligne" key={chemin}>
+                      <button
+                        role="menuitem"
+                        data-testid="conv-project-choice"
+                        data-project-path={chemin}
+                        onClick={() => {
+                          const menu = convFolderMenu
+                          setConvFolderMenu(null)
+                          appliquerRangement(menu, chemin)
+                        }}
+                      >
+                        <span className="conv-menu-ic" aria-hidden="true">
+                          🗂
+                        </span>
+                        {chemin}
+                      </button>
+                      <button
+                        className="conv-menu-oubli"
+                        data-testid="conv-project-forget"
+                        data-project-path={chemin}
+                        aria-label={`Retirer ${chemin} de la liste`}
+                        title="Retirer de la liste"
+                        onClick={(event) => {
+                          // Le clic ne doit PAS ranger la conversation dans le dossier qu'on retire.
+                          event.stopPropagation()
+                          oublierDossier(chemin)
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
               )}
               {convFolderMenu.mode === 'dossier' && (
                 <button
@@ -7176,9 +7186,11 @@ export function ChatView({
                       ? active.projectPath?.trim()
                       : (dossierNouveauFil ?? undefined)
                     const cheminEffectif = dossierProjet || defaultWorkspace
-                    const labelDossier = cheminEffectif
-                      ? nomDeDossier(cheminEffectif)
-                      : 'Autowin OS'
+                    const labelDossier = estDossierPersonnel(cheminEffectif)
+                      ? 'This computer'
+                      : cheminEffectif
+                        ? nomDeDossier(cheminEffectif)
+                        : 'Autowin OS'
                     const titreDossier = dossierProjet
                       ? active
                         ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`

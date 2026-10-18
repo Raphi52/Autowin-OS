@@ -113,6 +113,47 @@ describe('verify — la suite tourne dans une copie isolée, à l’état couran
     )
   })
 
+  /*
+   * FAUX ROUGE MESURÉ le 2026-10-17 (conv-313). La copie de vérification naît sur `origin/main`, alors
+   * que la branche locale avait 13 commits pas encore poussés. Seuls les fichiers NON COMMITÉS y
+   * étaient reportés : la copie recevait le `src/main/index.ts` modifié, mais gardait les VIEUX
+   * `commands.ts` et `relance-auto-moteur.ts`, commités localement. `verify type:typecheck` rendait
+   * le code 2 (`mettreEnFile` absent), alors que `npm run typecheck` rendait 0 dans le vrai dépôt.
+   * L'état courant, c'est le commit LOCAL plus le travail en cours : pas le commit de la copie.
+   */
+  it('la copie porte aussi ce qui est COMMITÉ localement après son propre commit', async () => {
+    const workspace = espaceDeTravail()
+    const parent = mkdtempSync(join(tmpdir(), 'aos-verify-wt-'))
+    aNettoyer.push(parent)
+    const copie = join(parent, 'copie')
+    // Une VRAIE copie git, née sur le commit d'avant, comme celle de `verify`.
+    git(workspace, 'worktree', 'add', '--detach', copie, 'HEAD')
+    writeFileSync(join(workspace, 'src', 'a.ts'), 'export const a = 2 // commité localement\n')
+    writeFileSync(join(workspace, 'src', 'engage.ts'), 'export const engage = 1\n')
+    rmSync(join(workspace, 'src', 'parti.ts'))
+    git(workspace, 'add', '-A')
+    git(
+      workspace,
+      '-c',
+      'user.email=t@t.t',
+      '-c',
+      'user.name=t',
+      'commit',
+      '-m',
+      'local',
+      '--no-verify'
+    )
+    const { bus } = busSur(workspace, copie)
+
+    await bus.exec('verify', {}, 'conv-1')
+
+    expect(readFileSync(join(copie, 'src', 'a.ts'), 'utf8')).toBe(
+      'export const a = 2 // commité localement\n'
+    )
+    expect(readFileSync(join(copie, 'src', 'engage.ts'), 'utf8')).toBe('export const engage = 1\n')
+    expect(existsSync(join(copie, 'src', 'parti.ts'))).toBe(false)
+  })
+
   it('sans isolation possible, le verdict le DIT au lieu de passer pour un verdict propre', async () => {
     const workspace = espaceDeTravail()
     const { bus, dossiers } = busSur(workspace, undefined)

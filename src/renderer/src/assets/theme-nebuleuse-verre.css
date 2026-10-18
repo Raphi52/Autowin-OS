@@ -1465,7 +1465,14 @@
    (« ca faisait sens pour la bulle de chat mais pas pour les boutons ») -- et le degrade
    bleu -> rose : un ROND de 38 px, comme les trois ronds de sa rangee. Champ vide : contour or
    eteint. Message pret : OR PLEIN, avion fonce -- l'or dit « ca peut partir ». Aucune lueur.
-   Les couleurs passent par les jetons --nv-envoi-*. */
+   Les couleurs passent par les jetons --nv-envoi-*.
+   CARRE « LINEAIRE B » (conv-302, 2026-10-17, /draft de la barre de saisie : « juste le bouton
+   envoyer et les icones de B lineaire et il s'allume quand ya du texte dans le prompt »). Le rond
+   de 38 px devient un CARRE de 32 px a coins de 3 px, dans TOUS ses etats (pret, vide, Orienter,
+   Reprendre) : un bouton qui changerait de forme selon l'etat se lirait comme deux boutons.
+   L'avion passe a 16 px, la moitie du carre comme il etait la moitie du rond. Stop (bouton
+   `.composer-stop` a part) n'est pas touche. Ses coins de 3 px sont redevenus droits : la forme
+   vient du chanfrein « Platine » (bloc BOUTONS-CHANFREIN, conv-302). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send {
   --nv-envoi-fond: #d9ae52;
   --nv-envoi-fond-survol: #e3ba55;
@@ -1475,16 +1482,20 @@
   --nv-envoi-vide-fond: transparent;
   --nv-envoi-vide-bord: 1.5px solid #d4a94f;
   --nv-envoi-vide-texte: #e3ba55;
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 0;
   background-origin: border-box;
   background-repeat: no-repeat;
   color: #ffffff;
   box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send svg {
+  width: 16px;
+  height: 16px;
 }
 /* LE BOUTON D'ENVOI PRET. ChatView.css le peint avec un selecteur plus precis
    (`:not(.is-resume):not(.is-stop):not(:disabled)`) : un degrade rose a TROIS nuances
@@ -1592,6 +1603,9 @@
 :root[data-theme='nebuleuse-verre']
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  /* Aucun bord sous le gel : l'ancien `--nv-envoi-bord` (1,5 px) decalerait le cadre a chanfrein,
+     cale sur la boite interieure, de la coupe posee sur la boite exterieure (conv-302). */
+  border-width: 0;
   border-color: transparent;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
@@ -1604,6 +1618,7 @@
 :root[data-theme='nebuleuse-verre']
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  border-width: 0;
   border-color: transparent;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
@@ -1623,16 +1638,20 @@
   background-repeat: no-repeat;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
+/* RIEN A ENVOYER = CARRE CREUX, il s'allume au premier caractere (conv-302, « Lineaire B »). Le
+   bouton est desactive tant que le champ est vide (ChatComposer.tsx, `disabled`) : c'est cet etat
+   qui l'eteint, et le gel plein ci-dessus qui l'allume. Dedans, le FOND DE LA SAISIE
+   (--nv-saisie-degrade : noir ici, nacre dans Holographique blanc) ; avion en couleur du texte.
+   Remplace le gel au reflet faible et avion a 50 % (conv-200), qui se lisait presque comme le
+   bouton pret. Le contour est le cadre a chanfrein « Platine » (bloc BOUTONS-CHANFREIN), dans
+   tous les etats ; il remplace le bord d'1 px au degrade bleu -> rose de « Lineaire B ». */
 :root[data-theme='nebuleuse-verre']
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):disabled {
-  border-color: transparent;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(135deg, #3c6eeb, #e63ca0);
-  background-origin: border-box;
+  border: 0;
+  background: var(--nv-saisie-degrade);
   background-repeat: no-repeat;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text);
   box-shadow: none;
   opacity: 1;
 }
@@ -2363,6 +2382,95 @@
   border-bottom-color: color-mix(in srgb, var(--nv-neon-a) 45%, transparent);
 }
 /* NEON-TUILES:FIN */
+/* BOUTONS-CHANFREIN:DEBUT -- le chanfrein « Platine » des boutons (conv-302). */
+/* BOUTONS A CHANFREIN « PLATINE » (conv-302, 2026-10-17 : « /draft des boutons a chanfrin », puis
+   « Implementer la 1 · Platine » ; maquette : artifacts/draft-chanfrein/tour1.md, proposition 1).
+   Envoyer, Nouveau fil et Details prennent le cadre des grands panneaux (bloc CADRE-CHANFREIN
+   ci-dessus) a leur echelle : coins HAUT GAUCHE et BAS DROIT coupes a 45 deg, les deux autres
+   droits ; seuls les pans coupes s'allument, prolonges le long des bords sur une longueur egale a
+   la coupe (comme les 14 + 14 px des panneaux) ; le reste du contour tombe aux cotes a 7 %. Memes
+   jetons de couleur que les panneaux (--nv-chanfrein-haut, -bas, -cotes) : Holographique blanc,
+   qui les repeint en bleu et rose, recolore aussi les boutons. Le REMPLISSAGE de chaque bouton ne
+   change pas (gel bleu -> rose, fond de la saisie, verre fume de la capsule).
+   Les blocs interieurs des vues (cartes, colonnes) gardent leur rayon (conv-211) : seuls ces trois
+   boutons sont coupes. Les capsules Raisonnement et Actions du fil, qui partagent les classes de
+   Details, restent arrondies : le selecteur passe par `.workflow-capsule`.
+   COMMENT : la COUPE est un `clip-path` sur le bouton ; le CADRE est son `::before`, un anneau
+   decoupe en regle « evenodd » (le contour, moins le meme contour rentre d'1 px, la diagonale
+   rentree de 0,414 px pour garder 1 px perpendiculaire), cale sur la boite du bouton. Il exige un
+   bouton SANS bord : `inset: 0` part de la boite interieure, la coupe de la boite exterieure
+   (Envoyer pret, Reprendre et vide posent donc `border-width: 0`). Details reprend son `::before`
+   de bord degrade (ChatView.css, masque evide) ; Nouveau fil garde son `::after` pour l'eclat. La
+   coupe rogne aussi le contour de focus : au clavier, tout le cadre s'allume a la place. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send {
+  --nv-bouton-coupe: 6px;
+  --nv-bouton-pans: 12px;
+  border-width: 0;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
+  --nv-bouton-coupe: 9px;
+  --nv-bouton-pans: 18px;
+}
+:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
+  --nv-bouton-coupe: 6px;
+  --nv-bouton-pans: 12px;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
+:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
+  --nv-bouton-cotes: var(--nv-chanfrein-cotes);
+  position: relative;
+  border-radius: 0;
+  clip-path: polygon(
+    var(--nv-bouton-coupe) 0,
+    100% 0,
+    100% calc(100% - var(--nv-bouton-coupe)),
+    calc(100% - var(--nv-bouton-coupe)) 100%,
+    0 100%,
+    0 var(--nv-bouton-coupe)
+  );
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send::before,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row::before,
+:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(var(--nv-chanfrein-haut), var(--nv-chanfrein-haut)) left top /
+      var(--nv-bouton-pans) var(--nv-bouton-pans) no-repeat,
+    linear-gradient(var(--nv-chanfrein-bas), var(--nv-chanfrein-bas)) right bottom /
+      var(--nv-bouton-pans) var(--nv-bouton-pans) no-repeat,
+    linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes));
+  -webkit-mask: none;
+  mask: none;
+  clip-path: polygon(
+    evenodd,
+    var(--nv-bouton-coupe) 0,
+    100% 0,
+    100% calc(100% - var(--nv-bouton-coupe)),
+    calc(100% - var(--nv-bouton-coupe)) 100%,
+    0 100%,
+    0 var(--nv-bouton-coupe),
+    var(--nv-bouton-coupe) 0,
+    calc(var(--nv-bouton-coupe) + 0.414px) 1px,
+    calc(100% - 1px) 1px,
+    calc(100% - 1px) calc(100% - var(--nv-bouton-coupe) - 0.414px),
+    calc(100% - var(--nv-bouton-coupe) - 0.414px) calc(100% - 1px),
+    1px calc(100% - 1px),
+    1px calc(var(--nv-bouton-coupe) + 0.414px),
+    calc(var(--nv-bouton-coupe) + 0.414px) 1px
+  );
+  pointer-events: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send:focus-visible,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row:focus-visible {
+  --nv-bouton-cotes: var(--nv-chanfrein-haut);
+}
+/* BOUTONS-CHANFREIN:FIN */
 /* ENTREE-CHANFREIN:DEBUT -- l'entree des cadres a chanfrein (conv-987). */
 /* L'ENTREE DES CADRES A CHANFREIN, LE DESSIN (conv-987, 2026-10-16 : « /draft des animations
    d'entree pour les containers a chanfrin », puis « 3 et 6 », « le 4 duree 1 second » et « Implemente
@@ -2470,15 +2578,64 @@
   animation: none;
 }
 /* ENTREE-CHANFREIN:FIN */
-/* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
-   La couche generee transposait cet or en rose comme un or decoratif ; la saisie n'a plus de rose
-   (conv-155) et l'or y signale ce qui est actif. Le jeton --gold-clair de ce theme etant rose, la
-   couleur du glyphe est ecrite ici. */
-:root[data-theme='nebuleuse-verre'] .composer-auto.actif {
-  --nv-auto-glyphe: #e3ba55;
-  border-color: rgba(212, 169, 79, 0.75);
-  background: rgba(212, 169, 79, 0.16);
-  color: var(--nv-auto-glyphe);
+/* PASTILLES DE LA SAISIE EN HABIT HOLOGRAPHIQUE (conv-324, 2026-10-18 : « met ces boutons au style
+   holographique pour les hover et selected », capture du ∞ allume en or, du trombone et du micro).
+   Le langage est celui des fleches rondes du carrousel /draft (scripts/draft-carrousel.mjs, conv-302) :
+   un aplat GRIS neutre (texte 14 % sur le fond) cercle du cadre NACRE de 1 px (bleu > rose > argent >
+   rose clair > bleu, le cadre du bloc de question). Survol = ce rond nacre ; ∞ ALLUME = le meme cadre
+   autour d'un gris plus clair (21 %), glyphe en couleur du texte -- il remplace l'or du 2026-09-07 dans
+   ce theme. Le bord transparent de 1 px de `.btn` est la place du cadre : rien ne bouge au survol.
+   Gris tires de --text et --bg-0 : Holographique blanc, derive de ce fichier, les eclaircit seul.
+   Le micro EN ECOUTE (rouge qui bat) et EN TRANSCRIPTION n'est pas une selection : il garde son habit. */
+:root[data-theme='nebuleuse-verre'] .composer-input-row > :is(.composer-auto, .attachment-button, .composer-dictee) {
+  --nv-pastille-gris: color-mix(in srgb, var(--text) 14%, var(--bg-0));
+  --nv-pastille-gris-clair: color-mix(in srgb, var(--text) 21%, var(--bg-0));
+  --nv-pastille-nacre: linear-gradient(
+    100deg,
+    #3c6eeb 0%,
+    #e63ca0 30%,
+    #d9d9d9 55%,
+    #ff8cc8 78%,
+    #3c6eeb 100%
+  );
+}
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-auto.actif,
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-auto.actif:hover:not(:disabled) {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--nv-pastille-gris-clair), var(--nv-pastille-gris-clair)) padding-box,
+    var(--nv-pastille-nacre) border-box;
+  color: var(--text);
+}
+/* ICONES NUES « LINEAIRE B » (conv-302, 2026-10-17 : « juste le bouton envoyer et les icones de B
+   lineaire »). Mode auto, trombone et micro perdent leur rond blanc (ChatView.css, « BLANC FRANC
+   POUR LES TROIS PASTILLES ») : il ne reste que le trace, en couleur du texte. Le bouton garde sa
+   boite de 24 px, la cible du clic ne retrecit pas. Survol = rond nacre holographique (conv-324,
+   juste au-dessus), au lieu du bord rose de `.btn`. Les etats qui PORTENT une information sont
+   exclus et gardent leur habit : mode auto allume (cadre nacre), micro en ecoute ou en
+   transcription. */
+:root[data-theme='nebuleuse-verre']
+  .composer-input-row
+  > :is(
+    .composer-auto:not(.actif),
+    .attachment-button,
+    .composer-dictee:not(.is-recording):not(.is-transcribing)
+  ) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+:root[data-theme='nebuleuse-verre']
+  .composer-input-row
+  > :is(
+    .composer-auto:not(.actif),
+    .attachment-button,
+    .composer-dictee:not(.is-recording):not(.is-transcribing)
+  ):hover:not(:disabled) {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--nv-pastille-gris), var(--nv-pastille-gris)) padding-box,
+    var(--nv-pastille-nacre) border-box;
 }
 /* « ↓ DERNIER MESSAGE » EN OR (conv-157, 2026-10-10 : « ce bouton met le en dore », capture de la
    pastille rose). Elle est doree a l'origine (cosmic-outline.css `.chat-jump-latest`) ; la couche

@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { execSync } from 'node:child_process'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import { pluginScene3d } from './src/renderer/scene-3d/page-scene-3d.mjs'
 
 /**
  * IDENTITE DE BUILD, injectee au build et affichee en bas a gauche de l'app.
@@ -64,6 +65,7 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [react()]
+    // `scene-3d.html` : la page isolee ou tournent les blocs ```threejs du fil (Bloc3D.tsx).
+    plugins: [react(), pluginScene3d({ dossier: resolve('src/renderer/scene-3d') })]
   }
 })

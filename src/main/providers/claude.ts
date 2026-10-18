@@ -66,6 +66,13 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
+import {
+  OUTILS_ETAPES,
+  SuiviDesEtapes,
+  dossierDesEtapes,
+  estOutilDEtapes,
+  etapesSurDisque
+} from './claude-etapes'
 import { abortFailure } from './abort-diagnostic'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
@@ -1521,8 +1528,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             '--add-dir',
             readOnlyWorkspace,
             ...(materialized ? ['--add-dir', materialized.dir] : []),
+            // ÉTAPES DU TOUR (conv-304, 2026-10-17) : la liste de tâches de claude.exe, relayée
+            // dans le fil par `claude-etapes.ts`. Coût mesuré : +2 850 jetons de prompt par appel.
             '--tools',
-            'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB,
+            'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB + ',' + OUTILS_ETAPES,
             '--allowedTools',
             'Read',
             'Grep',
@@ -1536,6 +1545,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'Write',
             'Edit',
             'MultiEdit',
+            ...autorises(OUTILS_ETAPES),
             ...outilsMcpAutorises
           )
         }
@@ -1946,8 +1956,21 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       return sansCd
     }
 
+    /*
+     * ÉTAPES DU TOUR (claude-etapes.ts) : la liste vit par session dans le dossier du COMPTE du
+     * tour. La session est celle qu'annonce l'événement `init` (une branche peut en ouvrir une
+     * neuve), sinon celle qu'on reprend.
+     */
+    let sessionDesEtapes = opts.resumeSessionId
+    const configDesEtapes = withClaudeAccountEnv(process.env)
+    const suiviEtapes = new SuiviDesEtapes(() =>
+      sessionDesEtapes ? etapesSurDisque(dossierDesEtapes(sessionDesEtapes, configDesEtapes)) : []
+    )
+
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
+      if (t === 'system' && o['subtype'] === 'init' && typeof o['session_id'] === 'string')
+        sessionDesEtapes = o['session_id'] as string
       if (t === 'system' && o['subtype'] === 'api_retry') {
         // Surcharge API (529) : le CLI retente en backoff exponentiel jusqu'a 10 fois, soit 2-3 min
         // pendant lesquelles il n'emet RIEN d'autre. Sans ce relais, l'UI reste sur un spinner muet
@@ -2129,7 +2152,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
          * et son cumul (0,3023 USD, celui du 1er tour) facture au tour. On l'ignore en entier :
          * ni fin, ni texte, ni cout, ni avis. Les `result` de notification APRES la reponse (5 sur
          * 302 journaux mesures le 2026-10-10) arrivent quand `resultSeen` est deja vrai : inchanges.
+         *
+         * SAUF son cumul, qui n'est pas le cout de ce tour mais son POINT DE DEPART : le CLI repart
+         * du cumul qu'il avait enregistre, parfois PLUS BAS que celui deja compte (CLI coupe avant
+         * d'avoir enregistre son dernier tour). Sans ce point de depart, le `result` du vrai tour
+         * etait compare au cumul deja compte : conv-311 le 17/10, 19,22 USD factures pour un tour
+         * a 0,96 (journal run-stdout/52247101-… l.3 et l.743). On le pose comme reference, sans
+         * rien facturer.
          */
+        if (typeof o['total_cost_usd'] === 'number') {
+          coutDuTourDepuisCumul(
+            typeof o['session_id'] === 'string' ? (o['session_id'] as string) : sessionId,
+            o['total_cost_usd'] as number
+          )
+        }
         return
       }
       if (t === 'result') {
@@ -2190,6 +2226,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             reasoningFragments.push(part.thinking)
             queue.push({ delta: '', reasoning: part.thinking })
           } else if (part.type === 'tool_use' && part.id && part.name) {
+            // Un outil d'ÉTAPES n'est pas une action du bloc Actions : il nourrit le bloc Étapes,
+            // par ses propres lignes (claude-etapes.ts), et ne prouve rien du travail livré.
+            if (estOutilDEtapes(part.name)) {
+              for (const ligne of suiviEtapes.appel(part.id, part.name, part.input))
+                queue.push({ delta: '', status: ligne })
+              continue
+            }
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
@@ -2250,12 +2293,26 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               }>
             }
           | undefined
+        // Le résultat STRUCTURÉ (`tool_use_result`) est porté par l'événement, pas par la part : il
+        // n'est attribuable sans ambiguïté que si l'événement ne porte qu'un seul résultat.
+        const resultatsDuMessage = (msg?.content ?? []).filter((p) => p.type === 'tool_result')
+        const resultatStructure = resultatsDuMessage.length === 1 ? o['tool_use_result'] : undefined
         for (const part of msg?.content ?? []) {
           if (part.type !== 'tool_result' || !part.tool_use_id) continue
           // Une commande de PREMIER plan recoit ici son vrai resultat, meme coupee (« Exit code 137 »,
           // `bcdda33b-….stdout.jsonl` l.1753) : le modele l'a lu, rien a signaler ni a relancer.
           for (const [id, tache] of tachesDeFond)
             if (!tache.enFond && tache.toolUseId === part.tool_use_id) tachesDeFond.delete(id)
+          const lignesEtapes = suiviEtapes.resultat(
+            part.tool_use_id,
+            part.is_error === true,
+            resultatStructure,
+            claudeToolResultText(part.content)
+          )
+          if (lignesEtapes) {
+            for (const ligne of lignesEtapes) queue.push({ delta: '', status: ligne })
+            continue
+          }
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)

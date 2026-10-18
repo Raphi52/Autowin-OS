@@ -2019,6 +2019,13 @@ ol.md-list li {
 .md-html pre {
   white-space: pre-wrap;
 }
+/* BOUTON « PROMPTER » FERMÉ (conv-302, bouton-prompt-html.ts) : tour en cours, ou bouton déjà envoyé.
+   Grisé et inerte, comme le bloc `ask` une fois répondu — un clic ne doit pas sembler marcher. */
+.msg-body[data-prompts='fermes'] .md-html a[href='#autowin-prompt'] {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.45;
+}
 .md-html > :first-child {
   margin-top: 0;
 }
@@ -4306,6 +4313,166 @@ button.chat-project-dot:disabled {
 }
 .thinking-block--actions > .thinking-body {
   border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
+}
+/* BLOC ÉTAPES (conv-304, 2026-10-17) : la liste de tâches de claude.exe — une case par étape,
+   dessinée en CSS (les glyphes ◻ ◼ ✔ sortent en émoji sous Windows) : vide à faire, pleine en
+   cours, cochée terminée. La case suit la PREMIÈRE ligne d'un sujet long, sans décalage magique. */
+.thinking-block--etapes > .thinking-body {
+  border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
+}
+/* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : les barres et les valeurs
+   s'alignent en colonnes d'une étape à l'autre, quelle que soit la longueur du sujet. Le <li> garde
+   son infobulle et ce qu'il transmet par héritage (gras de l'étape en cours). */
+.thinking-block .etapes-liste {
+  list-style: none;
+  white-space: normal;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 2px 8px;
+}
+.etape {
+  display: contents;
+}
+.etape-case {
+  flex: 0 0 auto;
+  position: relative;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin-top: calc((1.5em - 10px) / 2);
+  border: 1.5px solid rgba(var(--voile-rgb), 0.45);
+  border-radius: 3px;
+}
+.etape[data-statut='in_progress'] {
+  color: var(--text);
+  font-weight: 600;
+}
+.etape[data-statut='in_progress'] .etape-case {
+  border-color: var(--gold-clair);
+  background: var(--gold-clair);
+}
+.etape[data-statut='completed'] .etape-case {
+  border-color: var(--chat-frise-ok);
+}
+.etape[data-statut='completed'] .etape-case::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: -1px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--chat-frise-ok);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.etape[data-statut='completed'] .etape-sujet {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+/* BARRE PAR ÉTAPE (conv-303, 2026-10-17, maquette « A · Côte à côte ») : dix blocs, la barre
+   « Pipeline » retenue le même jour. claude.exe ne donne que trois états, jamais un pourcentage :
+   pleine et verte = terminée ; trois blocs qui DÉFILENT = en cours (aucun remplissage inventé) ;
+   piste vide = à faire. Les `ch` se rapportent à la police mono de la barre : 10 blocs exactement. */
+.etape-barre {
+  display: block;
+  width: 10ch;
+  height: 0.8em;
+  margin-top: calc((1.5em - 0.8em) / 2);
+  overflow: hidden;
+  font-family: var(--mono, ui-monospace, monospace);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(var(--voile-rgb), 0.14) 0 0.8ch,
+    transparent 0.8ch 1ch
+  );
+}
+.etape-barre-blocs {
+  display: block;
+  width: 0;
+  height: 100%;
+}
+.etape[data-statut='completed'] .etape-barre-blocs {
+  width: 100%;
+  background: repeating-linear-gradient(90deg, var(--chat-frise-ok) 0 0.8ch, transparent 0.8ch 1ch);
+}
+.etape[data-statut='in_progress'] .etape-barre-blocs {
+  width: 3ch;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--anneau-encours) 0 0.8ch,
+    transparent 0.8ch 1ch
+  );
+  animation: etape-defile 1.6s steps(8) infinite;
+}
+/* Tour fini : une étape restée « en cours » ne bat plus dans l'historique du fil. */
+.thinking-block.is-done .etape[data-statut='in_progress'] .etape-barre-blocs {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .etape[data-statut='in_progress'] .etape-barre-blocs {
+    animation: none;
+  }
+}
+@keyframes etape-defile {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(8ch);
+  }
+}
+.etape-valeur {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.etape[data-statut='in_progress'] .etape-valeur {
+  color: var(--anneau-encours);
+}
+.etape[data-statut='completed'] .etape-valeur {
+  opacity: 0.6;
+}
+
+/* DISPOSITION DES BLOCS DU TOUR (conv-303, 2026-10-17, « A · Côte à côte » : « centrer actions et
+   raisonnement et en dessous un bloc qui montre comment la tâche est décomposée », puis « les 2 du
+   haut font la même largeur que le bloc étapes »). Un cadre de la largeur des capsules (720 px au
+   plus) : Raisonnement et Actions se partagent sa ligne du haut, Étapes le remplit dessous. Un bloc
+   OUVERT prend toute la ligne : une pensée ou une frise ne se lit pas dans une demi-colonne. Colonne
+   trop étroite pour deux fois 240 px : les capsules passent l'une sous l'autre.
+   CALÉ À GAUCHE, comme le texte du message (conv-309, 2026-10-17 : « remet-le à gauche en fait ») :
+   le centrage sur le fil, essayé le même jour, est retiré avec le conteneur `cqw` qui le servait. */
+.tour-blocs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 720px);
+  margin: 2px 0 6px;
+}
+/* LUEUR « EN COURS » BLANCHE dans ce cadre (conv-309 : « une shadow blanche au lieu de rose »). Le
+   cadre commun (anneau-activite.css) garde sa lueur chaude pour la barre d'activité et les autres
+   capsules ; ici le voile du thème (blanc en nuit, sombre en clair), au même rayon et même dosage. */
+.tour-blocs .thinking-block.cadre-anneau.is-live {
+  box-shadow: 0 0 14px rgba(var(--voile-rgb), 0.35);
+}
+.tour-blocs-rang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.tour-blocs .thinking-block.cadre-anneau {
+  width: 100%;
+  margin: 0;
+}
+.tour-blocs-rang > .thinking-block.cadre-anneau {
+  flex: 1 1 240px;
+  width: auto;
+  min-width: 0;
+}
+.tour-blocs-rang > .thinking-block.cadre-anneau[open] {
+  flex-basis: 100%;
 }
 
 /* Interrupteur de vue liste <-> mosaique — deplace depuis ui-system.css, qui ne porte que

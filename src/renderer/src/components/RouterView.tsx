@@ -367,7 +367,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
         <section className="router-default" data-testid="router-petites-taches">
           <header>
             <h3>Modèle des petites tâches</h3>
-            <small>tri des conversations et choix automatique du workflow</small>
+            <small>choix automatique du workflow</small>
           </header>
           <OrchestratorModelSelector
             busy={false}

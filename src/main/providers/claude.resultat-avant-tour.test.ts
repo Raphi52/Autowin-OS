@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -82,9 +82,11 @@ const lancer = async (): Promise<{ text?: string; usage?: { costUsd?: number } }
 }
 
 let session = ''
+let cheminMagasinDuTest = ''
 beforeEach(() => {
   session = randomUUID()
-  imposerMagasin(join(mkdtempSync(join(tmpdir(), 'cout-session-')), 'couts.json'))
+  cheminMagasinDuTest = join(mkdtempSync(join(tmpdir(), 'cout-session-')), 'couts.json')
+  imposerMagasin(cheminMagasinDuTest)
   etat.kills = []
   process.env.AUTOWIN_OS_WORKSPACE = process.cwd()
   process.env.AUTOWIN_CLAUDE_FIN_APRES_RESULTAT_MS = '60'
@@ -149,7 +151,32 @@ describe('claude — result de notification émis AVANT la demande (reprise de s
 
   it('ne facture pas au tour le cumul recopié par le result de notification', async () => {
     const res = await lancer()
-    expect(res.usage?.costUsd).toBeCloseTo(0.91, 6)
+    // `total_cost_usd` est un CUMUL de session : le 0,91 du vrai tour CONTIENT les 0,3023 déjà
+    // annoncés par la notification (et facturés au tour qui les a dépensés). Avant le 18/10, ce
+    // test attendait 0,91 — il facturait donc ce cumul recopié, ce que son titre interdit.
+    expect(res.usage?.costUsd).toBeCloseTo(0.91 - 0.30234839999999996, 6)
+  }, 60_000)
+
+  /*
+   * LE CUMUL DE LA NOTIFICATION EST LE POINT DE DÉPART DU TOUR, PAS UNE DONNÉE À JETER.
+   * Mesure conv-311, session 4873db1f-…, 17/10 : le tour de 17:07 a fini à un cumul de 26,7322 USD
+   * (journal run-stdout/9e89a30e-…), puis son CLI a été coupé pendant une commande de fond. À la
+   * reprise de 17:30 (journal 52247101-… l.3), le CLI repart du cumul qu'il avait ENREGISTRÉ —
+   * 18,2558, celui de 16:54 — et le dit dans le `result` de notification, puis finit à 19,2159.
+   * Coût réel du tour : 19,2159 − 18,2558 = 0,9601. Comme la notification était jetée, Autowin a
+   * comparé 19,2159 au 26,7322 déjà compté, a cru à une remise à zéro et a facturé 19,22 USD
+   * (idem au tour de 17:42 : 19,12 au lieu de 0,87 ; à l'inverse, conv-310 à 17:59 : 2,94 au lieu
+   * de 8,02). 5 reprises de ce genre en 24 h, +31 USD d'écart net.
+   */
+  it('facture le tour à partir du cumul annoncé par la notification, pas du cumul déjà compté', async () => {
+    writeFileSync(
+      cheminMagasinDuTest,
+      JSON.stringify({ [session]: { lastTotalUsd: 26.732150999999998, updatedAt: Date.now() } })
+    )
+    etat.avant[2]!.total_cost_usd = 18.2557912
+    etat.tour[2]!.total_cost_usd = 19.2158848
+    const res = await lancer()
+    expect(res.usage?.costUsd).toBeCloseTo(19.2158848 - 18.2557912, 6)
   }, 60_000)
 
   it("ne dit pas qu'une tâche d'un tour PRÉCÉDENT a été arrêtée « à la fin de ce tour »", async () => {

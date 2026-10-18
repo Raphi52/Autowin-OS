@@ -8,8 +8,12 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { authoritativeOrchestrationClosureSpan } from '../../../shared/orchestration-outcome'
 import { createBoundedCache } from './bounded-cache'
+import { MAX_SCENE_3D_CHARS } from '../../../shared/scene-3d'
 
-export type MarkdownBlock = { kind: 'text' | 'code' | 'html-render' | 'mermaid'; content: string }
+export type MarkdownBlock = {
+  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d'
+  content: string
+}
 
 /**
  * Borne du diagramme rendu : au-dela, `mermaid` refuse lui-meme la source (`maxTextSize: 80_000`).
@@ -173,14 +177,23 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       ferme &&
       span.content.trim().length > 0 &&
       span.content.length <= MAX_MERMAID_CHARS
+    // Meme regle pour une scene three.js (Bloc3D.tsx) : elle ne s'execute qu'une fois sa fence
+    // close — une scene a moitie ecrite planterait a chaque lot de texte recu.
+    const scene3dRendue =
+      span.language === 'threejs' &&
+      ferme &&
+      span.content.trim().length > 0 &&
+      span.content.length <= MAX_SCENE_3D_CHARS
     blocks.push({
       kind: mermaidRendu
         ? 'mermaid'
-        : span.language === 'html-render' &&
-            ferme &&
-            !authoritativeOrchestrationClosureSpan(span.content)
-          ? 'html-render'
-          : 'code',
+        : scene3dRendue
+          ? 'scene-3d'
+          : span.language === 'html-render' &&
+              ferme &&
+              !authoritativeOrchestrationClosureSpan(span.content)
+            ? 'html-render'
+            : 'code',
       content: span.content
     })
     cursor = span.end
