@@ -56,6 +56,16 @@ export interface LotsDeHalos {
   readonly sortes: number
   /** Relit les objets transparents qui imposent l'ordre : à appeler quand la scène en gagne (la foule). */
   relireBarrieres(): void
+  /**
+   * UNE FOIS PAR IMAGE, matrices à jour (`scene.updateMatrixWorld()`) et avant la première passe : lit
+   * ce qui ne dépend pas de la caméra — visibilité, couleur, opacité, rotation, échelle et position
+   * des halos ; visibilité, ordre et sphère des autres transparents. Les passes (reflet, écran) ne
+   * refont plus que ce qui dépend de la caméra. CONTRAT : un objet masqué le temps d'UNE passe (la
+   * foule pendant le reflet) ne doit pas contenir de halo regroupé ; s'il contient d'autres
+   * transparents, ils restent comptés dans l'ordre — une coupe de lot en trop, jamais un pixel.
+   * Sans cet appel, chaque passe relit tout elle-même.
+   */
+  nouvelleImage(): void
   /** Ce que la dernière passe a dessiné : lots émis et halos dedans. */
   dernierePasse(): { lots: number; halos: number }
   /** Rend la scène dans son état d'origine (sprites redessinés par three, lots retirés et libérés). */
@@ -245,10 +255,16 @@ interface Porteur {
 
 interface Entree extends Place {
   porteur: Porteur
+  /** Cases 3 à 15 fixées une fois par image ; cases 0 à 2 (centre vu) à chaque passe. */
   donnees: Float32Array
+  /** Une fois par image : dessiné ou non, position monde (w compris), rayon d'emprise, échelle fixe. */
+  visible: boolean
   wx: number
   wy: number
   wz: number
+  ww: number
+  rayon: number
+  attenue: boolean
 }
 
 interface Lot {
@@ -271,6 +287,20 @@ interface Barriere extends Place {
   matiereVue: THREE.Material | THREE.Material[] | undefined
   materiaux: THREE.Material[]
   fiable: boolean
+  /**
+   * Une fois par image : dessinée ou non, sa couche, sa forme (sprite, sphère, ou tout l'écran), sa
+   * position monde (w compris) et son rayon monde.
+   */
+  visible: boolean
+  couche: number
+  sprite: boolean
+  sphere: boolean
+  wx: number
+  wy: number
+  wz: number
+  ww: number
+  rayon: number
+  attenue: boolean
 }
 
 /** Le carré d'un sprite, recopié de celui de three (`Sprite.js`) : mêmes sommets, mêmes UV, même diagonale. */
@@ -348,9 +378,13 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
         y0: 0,
         x1: 0,
         y1: 0,
+        visible: false,
         wx: 0,
         wy: 0,
-        wz: 0
+        wz: 0,
+        ww: 1,
+        rayon: 0,
+        attenue: true
       })
     }
     for (let i = 0; i < LOTS_D_AVANCE; i++) nouveauLot(sorte)
@@ -378,7 +412,17 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
         x0: 0,
         y0: 0,
         x1: 0,
-        y1: 0
+        y1: 0,
+        visible: false,
+        couche: 0,
+        sprite: false,
+        sphere: false,
+        wx: 0,
+        wy: 0,
+        wz: 0,
+        ww: 1,
+        rayon: 0,
+        attenue: true
       })
     })
     barrieres = liste
@@ -387,13 +431,12 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
 
   const _ps = new THREE.Matrix4()
   const _v4 = new THREE.Vector4()
-  const _c = new THREE.Vector3()
   const _taille = new THREE.Vector2()
   let mx = 0
   let my = 0
   let derniere = { lots: 0, halos: 0 }
 
-  /** Visible à cette passe : lui et tous ses parents visibles, et toujours accroché à la scène. */
+  /** Dessiné à cette image : lui et tous ses parents visibles, et toujours accroché à la scène. */
   const accrocheEtVisible = (o: THREE.Object3D): boolean => {
     for (let p: THREE.Object3D | null = o; p; p = p.parent) {
       if (!p.visible) return false
@@ -403,6 +446,134 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
   }
 
   /**
+   * L'ordre de groupe de three si l'objet est dessiné (lui et tous ses parents visibles, accroché à la
+   * scène), sinon NaN — en une seule remontée des parents.
+   */
+  const ordreSiDessine = (o: THREE.Object3D): number => {
+    let go = NaN
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+      if (!p.visible) return NaN
+      if (p !== o && Number.isNaN(go) && (p as THREE.Group).isGroup) go = p.renderOrder
+      if (p === scene) return Number.isNaN(go) ? 0 : go
+    }
+    return NaN
+  }
+
+  /**
+   * Le rayon, en unités du monde, du cercle qui contient le carré d'un sprite tourné autour de son
+   * pivot — avant le facteur de profondeur des sprites non atténués, qui dépend de la caméra.
+   */
+  const rayonDeSprite = (e: number[], centre: THREE.Vector2): number => {
+    const sx = Math.sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2])
+    const sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6])
+    const ax = (0.5 + Math.abs(centre.x - 0.5)) * sx
+    const ay = (0.5 + Math.abs(centre.y - 0.5)) * sy
+    return Math.sqrt(ax * ax + ay * ay)
+  }
+
+  // ---------- UNE FOIS PAR IMAGE : tout ce qui ne dépend pas de la caméra ----------
+
+  const preparerBarriere = (b: Barriere): void => {
+    const o = b.objet
+    b.visible = false
+    if (o.material !== b.matiereVue) {
+      b.matiereVue = o.material
+      b.materiaux = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
+      b.fiable = sphereFiable(o)
+    }
+    let uneVisible = false
+    for (const m of b.materiaux) if (m.visible) uneVisible = true
+    if (!uneVisible) return
+    const go = ordreSiDessine(o)
+    if (Number.isNaN(go)) return
+    b.visible = true
+    b.couche = o.layers.mask
+    b.go = go
+    b.ro = o.renderOrder
+    if (o.isSprite) {
+      const e = o.matrixWorld.elements
+      b.sprite = true
+      b.sphere = false
+      b.wx = e[12]
+      b.wy = e[13]
+      b.wz = e[14]
+      b.ww = e[15]
+      b.rayon = rayonDeSprite(e, (o as THREE.Sprite).center)
+      b.attenue = (o.material as THREE.SpriteMaterial).sizeAttenuation
+      return
+    }
+    b.sprite = false
+    const geo = o.geometry
+    let sphere: THREE.Sphere | null | undefined = o.boundingSphere
+    if (sphere === null) {
+      ;(o as THREE.InstancedMesh).computeBoundingSphere()
+      sphere = o.boundingSphere
+    }
+    if (sphere === undefined && geo) {
+      if (geo.boundingSphere === null) geo.computeBoundingSphere()
+      sphere = geo.boundingSphere
+    }
+    b.sphere = !!sphere && b.fiable
+    if (!sphere) {
+      // sans sphère, three la trie à z = 0 : on fait pareil, et elle couvre tout l'écran
+      b.wx = b.wy = b.wz = 0
+      b.ww = 0
+      return
+    }
+    // comme three (projectObject) : centre de la sphère → monde (Vector4, w = 1)
+    _v4.copy(sphere.center).applyMatrix4(o.matrixWorld)
+    b.wx = _v4.x
+    b.wy = _v4.y
+    b.wz = _v4.z
+    b.ww = _v4.w
+    b.rayon = sphere.radius * o.matrixWorld.getMaxScaleOnAxis()
+  }
+
+  const preparerHalo = (en: Entree): void => {
+    const { sprite, matiere } = en.porteur
+    en.visible = false
+    // Une matière changée après le regroupement : ce halo redevient un sprite que three dessine.
+    // Sa JUMELLE du reflet (home-decor-reflet-jumelles.ts, `Object.create(original)`) n'en est pas
+    // une : posée le temps du reflet, elle lit tout de l'original. La prendre pour un changement
+    // remettait les 424 sprites en dessin, EN PLUS des lots (mesuré au banc, 2026-10-18).
+    const actuelle = sprite.material
+    if (actuelle !== matiere && Object.getPrototypeOf(actuelle) !== matiere) {
+      sprite.layers.mask = 1
+      return
+    }
+    if (!matiere.visible || !accrocheEtVisible(sprite)) return
+    en.visible = true
+    const e = sprite.matrixWorld.elements
+    en.wx = e[12]
+    en.wy = e[13]
+    en.wz = e[14]
+    en.ww = e[15]
+    en.rayon = rayonDeSprite(e, sprite.center)
+    en.attenue = matiere.sizeAttenuation
+    const d = en.donnees
+    d[3] = e[0]
+    d[4] = e[1]
+    d[5] = e[2]
+    d[6] = e[4]
+    d[7] = e[5]
+    d[8] = e[6]
+    d[9] = sprite.center.x
+    d[10] = sprite.center.y
+    d[11] = matiere.rotation
+    d[12] = matiere.color.r
+    d[13] = matiere.color.g
+    d[14] = matiere.color.b
+    d[15] = matiere.opacity
+  }
+
+  const preparerImage = (): void => {
+    for (const b of barrieres) preparerBarriere(b)
+    for (const sorte of sortes.values()) for (const en of sorte.entrees) preparerHalo(en)
+  }
+
+  // ---------- À CHAQUE PASSE : ce qui dépend de la caméra ----------
+
+  /**
    * La position d'un objet vue de la caméra : les cases 12 à 14 de
    * `camera.matrixWorldInverse × matrixWorld`, calculées avec les MÊMES opérations, dans le même ordre,
    * que `Matrix4.multiplyMatrices` de three — donc les mêmes nombres, sans la multiplication entière.
@@ -410,11 +581,7 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
   let vx = 0
   let vy = 0
   let vz = 0
-  const centreVu = (e: number[], a: number[]): void => {
-    const x = e[12]
-    const y = e[13]
-    const z = e[14]
-    const w = e[15]
+  const centreVu = (x: number, y: number, z: number, w: number, a: number[]): void => {
     vx = a[0] * x + a[4] * y + a[8] * z + a[12] * w
     vy = a[1] * x + a[5] * y + a[9] * z + a[13] * w
     vz = a[2] * x + a[6] * y + a[10] * z + a[14] * w
@@ -426,13 +593,7 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
   }
 
   /** L'emprise à l'écran (coordonnées normalisées) d'un sprite dont le centre vu est (vx, vy, vz). */
-  const empriseSprite = (
-    place: Place,
-    centre: THREE.Vector2,
-    attenue: boolean,
-    P: number[],
-    e: number[]
-  ): void => {
+  const empriseSprite = (place: Place, rayon: number, attenue: boolean, P: number[]): void => {
     const cx = P[0] * vx + P[4] * vy + P[8] * vz + P[12]
     const cy = P[1] * vx + P[5] * vy + P[9] * vz + P[13]
     const cw = P[3] * vx + P[7] * vy + P[11] * vz + P[15]
@@ -440,15 +601,7 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
       place.plein = true
       return
     }
-    let sx = Math.sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2])
-    let sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6])
-    if (!attenue && P[11] === -1) {
-      sx *= -vz
-      sy *= -vz
-    }
-    const ax = (0.5 + Math.abs(centre.x - 0.5)) * sx
-    const ay = (0.5 + Math.abs(centre.y - 0.5)) * sy
-    const r = Math.sqrt(ax * ax + ay * ay)
+    const r = !attenue && P[11] === -1 ? rayon * -vz : rayon
     const hx = (Math.abs(P[0]) * r) / cw + mx
     const hy = (Math.abs(P[5]) * r) / cw + my
     place.plein = false
@@ -459,22 +612,15 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
   }
 
   /** L'emprise d'un objet par sa sphère englobante : les huit coins de son cube vu de la caméra. */
-  const empriseSphere = (
-    place: Place,
-    centre: THREE.Vector3,
-    rayon: number,
-    camera: THREE.Camera
-  ): void => {
-    _c.copy(centre).applyMatrix4(camera.matrixWorldInverse)
-    const P = camera.projectionMatrix.elements
+  const empriseSphere = (place: Place, rayon: number, P: number[]): void => {
     let x0 = Infinity
     let y0 = Infinity
     let x1 = -Infinity
     let y1 = -Infinity
     for (let i = 0; i < 8; i++) {
-      const x = _c.x + (i & 1 ? rayon : -rayon)
-      const y = _c.y + (i & 2 ? rayon : -rayon)
-      const z = _c.z + (i & 4 ? rayon : -rayon)
+      const x = vx + (i & 1 ? rayon : -rayon)
+      const y = vy + (i & 2 ? rayon : -rayon)
+      const z = vz + (i & 4 ? rayon : -rayon)
       const w = P[3] * x + P[7] * y + P[11] * z + P[15]
       if (!(w > 1e-6)) {
         place.plein = true
@@ -494,103 +640,33 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
     place.y1 = y1 + my
   }
 
-  /**
-   * L'ordre de groupe de three si l'objet est dessiné à cette passe (lui et tous ses parents
-   * visibles, accroché à la scène), sinon NaN — en une seule remontée des parents.
-   */
-  const ordreSiDessine = (o: THREE.Object3D): number => {
-    let go = NaN
-    for (let p: THREE.Object3D | null = o; p; p = p.parent) {
-      if (!p.visible) return NaN
-      if (p !== o && Number.isNaN(go) && (p as THREE.Group).isGroup) go = p.renderOrder
-      if (p === scene) return Number.isNaN(go) ? 0 : go
-    }
-    return NaN
-  }
-
   const placerBarriere = (b: Barriere, camera: THREE.Camera): boolean => {
-    const o = b.objet
-    if (!o.layers.test(camera.layers)) return false
-    if (o.material !== b.matiereVue) {
-      b.matiereVue = o.material
-      b.materiaux = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
-      b.fiable = sphereFiable(o)
-    }
-    let uneVisible = false
-    for (const m of b.materiaux) if (m.visible) uneVisible = true
-    if (!uneVisible) return false
-    const go = ordreSiDessine(o)
-    if (Number.isNaN(go)) return false
-    b.go = go
-    b.ro = o.renderOrder
-    if (o.isSprite) {
-      // comme three : la position de l'objet, dans l'espace de découpe
-      const e = o.matrixWorld.elements
-      b.z = zDeTri(e[12], e[13], e[14], e[15])
-      centreVu(e, camera.matrixWorldInverse.elements)
-      const m = o.material as THREE.SpriteMaterial
-      const P = camera.projectionMatrix.elements
-      empriseSprite(b, (o as THREE.Sprite).center, m.sizeAttenuation, P, e)
-      return dansLImage(b)
-    }
-    const geo = o.geometry
-    let sphere: THREE.Sphere | null | undefined = o.boundingSphere
-    if (sphere === null) {
-      ;(o as THREE.InstancedMesh).computeBoundingSphere()
-      sphere = o.boundingSphere
-    }
-    if (sphere === undefined && geo) {
-      if (geo.boundingSphere === null) geo.computeBoundingSphere()
-      sphere = geo.boundingSphere
-    }
-    if (!sphere) {
-      b.z = 0
+    if (!b.visible || (b.couche & camera.layers.mask) === 0) return false
+    b.z = zDeTri(b.wx, b.wy, b.wz, b.ww)
+    if (!b.sprite && !b.sphere) {
       b.plein = true
       return true
     }
-    // comme three (projectObject) : centre de la sphère → monde → découpe
-    _v4.copy(sphere.center).applyMatrix4(o.matrixWorld)
-    _c.set(_v4.x, _v4.y, _v4.z)
-    b.z = _v4.applyMatrix4(_ps).z
-    if (!b.fiable) {
-      b.plein = true
-      return true
-    }
-    empriseSphere(b, _c, sphere.radius * o.matrixWorld.getMaxScaleOnAxis(), camera)
+    centreVu(b.wx, b.wy, b.wz, b.ww, camera.matrixWorldInverse.elements)
+    const P = camera.projectionMatrix.elements
+    if (b.sprite) empriseSprite(b, b.rayon, b.attenue, P)
+    else empriseSphere(b, b.rayon, P)
     return dansLImage(b)
   }
 
-  /** Un halo à cette passe : sa place, son emprise, et les valeurs que le nuanceur recevra. */
+  /** Un halo à cette passe : sa place, son emprise, et son centre vu de la caméra. */
   const placerHalo = (en: Entree, camera: THREE.Camera): boolean => {
-    const { sprite, matiere } = en.porteur
-    if (!accrocheEtVisible(sprite) || !matiere.visible) return false
-    const e = sprite.matrixWorld.elements
-    en.z = zDeTri(e[12], e[13], e[14], e[15])
-    en.wx = e[12]
-    en.wy = e[13]
-    en.wz = e[14]
+    if (!en.visible) return false
+    en.z = zDeTri(en.wx, en.wy, en.wz, en.ww)
     // exactement ce que three calcule avant de l'envoyer en float32 (WebGLRenderer, renderObject)
-    centreVu(e, camera.matrixWorldInverse.elements)
-    empriseSprite(en, sprite.center, matiere.sizeAttenuation, camera.projectionMatrix.elements, e)
+    centreVu(en.wx, en.wy, en.wz, en.ww, camera.matrixWorldInverse.elements)
+    empriseSprite(en, en.rayon, en.attenue, camera.projectionMatrix.elements)
     // hors de l'image : ce halo ne colorerait aucun pixel
     if (!dansLImage(en)) return false
     const d = en.donnees
     d[0] = vx
     d[1] = vy
     d[2] = vz
-    d[3] = e[0]
-    d[4] = e[1]
-    d[5] = e[2]
-    d[6] = e[4]
-    d[7] = e[5]
-    d[8] = e[6]
-    d[9] = sprite.center.x
-    d[10] = sprite.center.y
-    d[11] = matiere.rotation
-    d[12] = matiere.color.r
-    d[13] = matiere.color.g
-    d[14] = matiere.color.b
-    d[15] = matiere.opacity
     return true
   }
 
@@ -599,8 +675,15 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
   const fermes: Entree[] = []
   const tries: Entree[] = []
 
+  /**
+   * `true` dès que l'appelant annonce chaque image (`nouvelleImage`) : les passes réutilisent alors ce
+   * qui a été lu une fois. Sans cette annonce, chaque passe relit tout (mode sûr, plus lent).
+   */
+  let parImage = false
+
   const maj = (renderer: THREE.WebGLRenderer | null, camera: THREE.Camera): void => {
     if (!(camera as THREE.PerspectiveCamera).isCamera) return
+    if (!parImage) preparerImage()
     _ps.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     if (renderer && typeof renderer.getDrawingBufferSize === 'function') {
       renderer.getDrawingBufferSize(_taille)
@@ -617,21 +700,7 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
     let nHalos = 0
     for (const sorte of sortes.values()) {
       tries.length = 0
-      for (const en of sorte.entrees) {
-        // Une matière changée après le regroupement : ce halo redevient un sprite que three dessine.
-        // Sa JUMELLE du reflet (home-decor-reflet-jumelles.ts, `Object.create(original)`) n'en est pas
-        // une : posée le temps du reflet, elle lit tout de l'original. La prendre pour un changement
-        // remettait les 424 sprites en dessin, EN PLUS des lots (mesuré au banc, 2026-10-18).
-        const actuelle = en.porteur.sprite.material
-        if (
-          actuelle !== en.porteur.matiere &&
-          Object.getPrototypeOf(actuelle) !== en.porteur.matiere
-        ) {
-          en.porteur.sprite.layers.mask = 1
-          continue
-        }
-        if (placerHalo(en, camera)) tries.push(en)
-      }
+      for (const en of sorte.entrees) if (placerHalo(en, camera)) tries.push(en)
       tries.sort((a, b) => (avant(a, b) ? -1 : avant(b, a) ? 1 : 0))
       let utilises = 0
       const emettre = (membres: Entree[]): void => {
@@ -714,6 +783,10 @@ export function regrouperHalos(scene: THREE.Scene): LotsDeHalos {
     halos: nHalos,
     sortes: sortes.size,
     relireBarrieres,
+    nouvelleImage() {
+      parImage = true
+      preparerImage()
+    },
     dernierePasse: () => derniere,
     liberer() {
       scene.onBeforeRender = avantRenduPrecedent

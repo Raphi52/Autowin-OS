@@ -252,6 +252,71 @@ describe('les halos du fond avenue dessinés par lots', () => {
     expect(lots.dernierePasse().halos).toBe(2)
   })
 
+  it('UNE FOIS PAR IMAGE : les passes (reflet, écran) rendent exactement ce que rendait chaque passe seule', () => {
+    const construire = (): { scene: THREE.Scene; a: THREE.Sprite } => {
+      const scene = new THREE.Scene()
+      const parent = new THREE.Group()
+      parent.position.set(0.4, 0.1, -2)
+      parent.rotation.y = 0.3
+      const a = halo(0.2, -6, 1.5, 0x33aaff)
+      a.material.rotation = 0.7
+      a.center.set(0.5, 0)
+      parent.add(a)
+      scene.add(parent, halo(-1, -12, 3), halo(1.5, -3, 0.4), fumee(0, -8, 2))
+      return { scene, a }
+    }
+    const miroir = camera()
+    miroir.position.set(0, -1, 10)
+    miroir.updateMatrixWorld()
+    // mode sûr : chaque passe relit tout
+    const r1 = construire()
+    regrouperHalos(r1.scene)
+    const sansAnnonce: number[][] = []
+    for (const cam of [miroir, camera()]) {
+      passe(r1.scene, cam)
+      sansAnnonce.push(...lotsActifs(r1.scene).map((l) => [...donnees(l)]))
+    }
+    // mode par image : une lecture, deux passes
+    const r2 = construire()
+    const lots = regrouperHalos(r2.scene)
+    r2.scene.updateMatrixWorld()
+    lots.nouvelleImage()
+    const avecAnnonce: number[][] = []
+    for (const cam of [miroir, camera()]) {
+      passe(r2.scene, cam)
+      avecAnnonce.push(...lotsActifs(r2.scene).map((l) => [...donnees(l)]))
+    }
+    expect(avecAnnonce).toEqual(sansAnnonce)
+  })
+
+  it('les valeurs sont celles LUES À L ANNONCE de l image : la suivante prend les nouvelles', () => {
+    const scene = new THREE.Scene()
+    const a = halo(0, -5)
+    scene.add(a)
+    const lots = regrouperHalos(scene)
+    scene.updateMatrixWorld()
+    lots.nouvelleImage()
+    a.material.opacity = 0.2
+    passe(scene, camera())
+    expect(donnees(lotsActifs(scene)[0])[15]).toBe(Math.fround(0.7))
+    lots.nouvelleImage()
+    passe(scene, camera())
+    expect(donnees(lotsActifs(scene)[0])[15]).toBe(Math.fround(0.2))
+  })
+
+  it('une barrière masquée LE TEMPS D UNE PASSE reste comptée : une coupe en trop, jamais un pixel', () => {
+    const scene = new THREE.Scene()
+    const voile = fumee(0, -8, 4)
+    scene.add(halo(0, -20, 2), halo(0.1, -2, 0.3), voile)
+    const lots = regrouperHalos(scene)
+    scene.updateMatrixWorld()
+    lots.nouvelleImage()
+    voile.visible = false
+    passe(scene, camera())
+    // prudence assumée : le lot est coupé comme si le voile était là
+    expect(lots.dernierePasse().lots).toBe(2)
+  })
+
   it('LIBÉRER rend la scène d origine : sprites redessinés, lots retirés', () => {
     const scene = new THREE.Scene()
     const a = halo(0, -5)
