@@ -23,27 +23,6 @@
 import type { PipelinePhase, NodePhase } from './skill-pipeline'
 import { CONTRAT_OBJECTIONS } from './objections-juge'
 
-/**
- * LA FUSION D'UN PANEL SCOUT RESPECTE LE CONTRAT DU SCOUT.
- *
- * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — la fusion générique dit « NE
- * hiérarchise pas, NE tranche pas » et ne reçoit pas la consigne du scout (constitution, style et
- * contexte du dépôt seulement, orchestrator.ts). Elle a rendu une colonne « Score (P1 · P2) » aux
- * notes doubles (« 68 · 72 »), une phrase « La proposition 2 classe autrement… » et « Les deux
- * propositions retiennent… ». Les 9 notes du tableau final sont illisibles pour `scoreSur100`
- * (plusieurs nombres = ambigu) : le plafond de preuve et l'ajustement sur les choix réels, appliqués
- * APRÈS la fusion, ne mordaient plus sur le tableau que l'utilisateur lit. Trier par une note entière
- * est mécanique, pas une re-décision : la règle « ne pas trancher » reste vraie pour frame et terrain.
- */
-export function consigneFusionScout(membres: number, propositions: string): string {
-  return `Phase « scout » exécutée par ${membres} modèle(s) indépendant(s). Fusionne leurs sorties en UNE seule réponse, écrite comme si un seul éclaireur l'avait rédigée : le lecteur ne voit jamais les propositions séparées. N'écris donc ni « proposition 1/2 », ni « les deux propositions », ni « P1 · P2 ».
-UNION DÉDUPLIQUÉE : garde chaque piste distincte, fusionne les redites. N'invente aucune piste, aucun ancrage, aucune preuve : chaque Why vient d'une proposition.
-UN SEUL tableau aux colonnes EXACTES \`# | Score | Type | What | Why | How\`, UNE note ENTIÈRE par ligne (ex. \`| 1 | 68 | 🔧 fix | … | … | … |\`), trié par note DÉCROISSANTE. Une piste notée différemment par deux propositions garde la plus BASSE : la note mesure la preuve, pas la certitude.
-\`## Cible\` EN TÊTE, 1 à 3 lignes : la piste de la ligne 1 et pourquoi elle passe devant. Garde le bilan d'étape et, en dernier, les lignes techniques (\`SUITE:\`, \`AUTOWIN_…\`).
-
-${propositions}`
-}
-
 export const PHASE_BRIEFS: Record<PipelinePhase, string> = {
   scout: `Tu es en phase SCOUT. Objectif : sur la CIBLE, une SHORTLIST de candidats concrets et priorisés — pas les réaliser.
 LIS LA DEMANDE D'ABORD, dis ta lecture en une ligne : « quoi améliorer » → la shortlist ; « trouve une tâche » → la même, une seule piste engagée ; « comment faire X / contourner Y » → des APPROCHES (Why = la prémisse cassée, How = le plus petit pas + une source citée), jamais « impossible » sans source.

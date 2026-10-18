@@ -392,7 +392,7 @@ function appelsRequisParWorkflow(
   }
   return total
 }
-import { consigneFusionScout, GARDE_TACHE, phaseBrief } from './phase-briefs'
+import { GARDE_TACHE, phaseBrief } from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
 import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
@@ -4648,13 +4648,10 @@ ${CONTRAT_OBJECTIONS}`
         const synthMessages = [
           {
             role: 'user' as const,
-            // conv-339 : un panel scout se fusionne selon le contrat du scout (`consigneFusionScout`).
             content:
-              phase === 'scout'
-                ? consigneFusionScout(good.length, labelled)
-                : `Phase « ${phase} » exécutée par ${good.length} modèle(s) indépendant(s). Fusionne leurs sorties en UNE seule : ` +
-                  `UNION DÉDUPLIQUÉE — conserve tous les angles/idées/questions distincts, supprime uniquement les redites. ` +
-                  `NE hiérarchise pas, NE tranche pas au-delà du regroupement (agréger ≠ re-décider).\n\n${labelled}`
+              `Phase « ${phase} » exécutée par ${good.length} modèle(s) indépendant(s). Fusionne leurs sorties en UNE seule : ` +
+              `UNION DÉDUPLIQUÉE — conserve tous les angles/idées/questions distincts, supprime uniquement les redites. ` +
+              `NE hiérarchise pas, NE tranche pas au-delà du regroupement (agréger ≠ re-décider).\n\n${labelled}`
           }
         ]
         const synthStartedAt = performance.now()

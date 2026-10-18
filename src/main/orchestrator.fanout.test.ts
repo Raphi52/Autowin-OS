@@ -19,8 +19,6 @@ import { ExecutionSupervisor } from './execution-supervisor'
 class RecordingProvider implements ProviderAdapter {
   readonly supportsExecution = true
   readonly calls: SendOptions[] = []
-  /** Les messages de chaque appel, au même rang que `calls`. */
-  readonly messages: Message[][] = []
 
   constructor(readonly id = 'capture') {}
 
@@ -29,12 +27,11 @@ class RecordingProvider implements ProviderAdapter {
   }
 
   async *send(
-    messages: Message[],
+    _messages: Message[],
     options: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     yield* [] as StreamChunk[]
     this.calls.push(options)
-    this.messages.push(messages)
     const model = options.model ?? ''
     // Un modèle dont le nom contient "crash" LÈVE (simule une erreur réseau/provider) → ne répond pas.
     if (/crash/i.test(model)) throw new Error(`modèle ${model} en échec (simulé)`)
@@ -275,38 +272,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(angles[0]).toMatch(/CE QUI SE FAIT AILLEURS/u)
     expect(angles[1]).toMatch(/PRÉMISSE/u)
     expect(angles.join('\n')).not.toMatch(/DETTE|ce qui CASSE/u)
-  })
-
-  /*
-   * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la fusion générique (« NE hiérarchise
-   * pas ») a rendu « Score (P1 · P2) » = « 68 · 72 », que `scoreSur100` ne lit pas. La fusion d'un
-   * panel scout reçoit désormais le contrat du scout ; celle des autres phases ne change pas.
-   */
-  it('la fusion d’un panel scout reçoit le contrat du tableau : une note entière, triée, sans « proposition »', async () => {
-    const provider = new RecordingProvider()
-    await makeOrchestrator(provider, new CostAggregator(), 'scout').run(
-      'scout améliorations du module de cache'
-    )
-    const rang = provider.calls.findIndex((call) => call.model === 'orch')
-    expect(rang).toBeGreaterThan(-1)
-    const consigne = String(provider.messages[rang]?.[0]?.content ?? '')
-    expect(consigne).toContain('`# | Score | Type | What | Why | How`')
-    expect(consigne).toMatch(/UNE note ENTIÈRE par ligne/u)
-    expect(consigne).toMatch(/trié par note DÉCROISSANTE/u)
-    expect(consigne).toMatch(/ni « P1 · P2 »/u)
-    expect(consigne).not.toMatch(/NE hiérarchise pas/u)
-    // Les propositions des deux membres restent jointes à la consigne.
-    expect(consigne).toMatch(/### Proposition 1[\s\S]*### Proposition 2/u)
-  })
-
-  it('jumeau : la fusion d’un panel frame garde sa consigne d’union sans hiérarchie', async () => {
-    const provider = new RecordingProvider()
-    await makeOrchestrator(provider, new CostAggregator(), 'frame').run('cadre la page de réglages')
-    const rang = provider.calls.findIndex((call) => call.model === 'orch')
-    expect(rang).toBeGreaterThan(-1)
-    const consigne = String(provider.messages[rang]?.[0]?.content ?? '')
-    expect(consigne).toMatch(/NE hiérarchise pas/u)
-    expect(consigne).not.toContain('`# | Score | Type | What | Why | How`')
   })
 
   it('un panel frame de la topologie reste sans angle imposé (hors du périmètre scout)', async () => {
