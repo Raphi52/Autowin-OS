@@ -8,6 +8,7 @@
  *
  * Module PUR : il classe des steps déjà chargés, testable sans IPC.
  */
+import { lireVerdictDuJuge } from './run-bilan'
 
 export interface StepDeRun {
   step?: string
@@ -64,6 +65,20 @@ export function lireContratEtendu(texte: string): {
   }
 }
 
+/**
+ * Le vote porté par le `detail` du step. L'orchestrateur l'écrit `'validé'` / `'défaut'`
+ * (orchestrator.ts : `detail: ok ? 'validé' : 'défaut'`, parfois « validé avec réserves mineures »
+ * ou « verdict repris · défaut ») ; l'ancienne forme était `vote: VALIDE|DEFAUT`. Seule la vieille
+ * forme était lue : mesuré le 2026-10-18 sur toutes les traces du poste (194 « défaut », 66
+ * « validé », aucune « vote: »), chaque juge qui validait s'affichait DÉFAUT.
+ */
+function voteDuDetail(detail: string): 'valide' | 'defaut' | undefined {
+  const mot =
+    /\bvote:\s*(valide|defaut)\b/i.exec(detail)?.[1] ?? /(valid|d[ée]faut)/i.exec(detail)?.[1]
+  if (!mot) return undefined
+  return /^valid/i.test(mot) ? 'valide' : 'defaut'
+}
+
 export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
   const votes: VoteJuge[] = []
   for (const step of steps) {
@@ -75,18 +90,29 @@ export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
       votes.push({
         libelle,
         vote: 'echec',
-        texte: step.error ? `Juge en échec : ${step.error}` : 'Juge en échec (aucun verdict rendu).',
+        texte: step.error
+          ? `Juge en échec : ${step.error}`
+          : 'Juge en échec (aucun verdict rendu).',
         ...(step.durationMs !== undefined ? { durationMs: step.durationMs } : {})
       })
       continue
     }
     const detail = step.detail ?? ''
-    const voteDetail = /vote:\s*(valide|defaut)/i.exec(detail)?.[1]?.toLowerCase()
+    const voteDetail = voteDuDetail(detail)
     const texte = (step.text ?? '').trim()
     if (!voteDetail && !texte) continue
+    // Sans détail : la DERNIÈRE ligne de verdict du texte (il commence par un préambule), puis,
+    // pour un ancien verdict sans ligne de verdict, sa première ligne.
+    const verdictDuTexte = lireVerdictDuJuge(texte)
     const vote =
-      (voteDetail as 'valide' | 'defaut' | undefined) ??
-      (/^\s*valide/i.test(texte) ? 'valide' : 'defaut')
+      voteDetail ??
+      (verdictDuTexte
+        ? verdictDuTexte.valide
+          ? 'valide'
+          : 'defaut'
+        : /^\s*valide/i.test(texte)
+          ? 'valide'
+          : 'defaut')
     votes.push({
       libelle,
       vote,

@@ -45,6 +45,31 @@ describe('extraireVotesJuges', () => {
     ).toHaveLength(0)
   })
 
+  /*
+   * Forme RÉELLE du détail, écrite par orchestrator.ts (`detail: ok ? 'validé' : 'défaut'`) :
+   * mesurée sur toutes les traces du poste le 2026-10-18 — 194 « défaut », 66 « validé », jamais
+   * « vote: VALIDE ». Le texte, lui, commence par un préambule. Résultat : les 66 juges qui
+   * validaient s'affichaient DÉFAUT (conv-253, run kaizen : VALIDE 88 montré « Refusé »).
+   */
+  it('lit le vote « validé » / « défaut » écrit par l’orchestrateur', () => {
+    const preambule =
+      'Je vérifie l’heure du redémarrage.\n\nVALIDE\n\nSCORE: 88\n\nOBJECTIONS:\n- OK: vérifié'
+    const votes = extraireVotesJuges([
+      { step: 'judge', model: 'a', detail: 'validé', text: preambule },
+      { step: 'judge', model: 'b', detail: 'validé avec réserves mineures', text: 'x' },
+      { step: 'judge', model: 'c', detail: 'verdict repris · défaut', text: 'VALIDE' },
+      { step: 'judge', model: 'd', detail: 'défaut', text: 'Je relis.\nDEFAUT: manque' }
+    ])
+    expect(votes.map((v) => v.vote)).toEqual(['valide', 'valide', 'defaut', 'defaut'])
+  })
+
+  it('sans détail, la DERNIÈRE ligne de verdict tranche, pas le préambule', () => {
+    const votes = extraireVotesJuges([
+      { step: 'judge', model: 'm', text: 'Je relis les tests.\nTout passe.\n\nVALIDE\nSCORE: 90' }
+    ])
+    expect(votes[0].vote).toBe('valide')
+  })
+
   it('sans detail vote:, le texte tranche (VALIDE en tête = valide)', () => {
     const votes = extraireVotesJuges([{ step: 'judge', model: 'm', text: 'VALIDE — ok.' }])
     expect(votes[0].vote).toBe('valide')
