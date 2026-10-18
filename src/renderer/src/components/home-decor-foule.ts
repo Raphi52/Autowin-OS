@@ -15,6 +15,7 @@ import {
   type Obstacle,
   TAGGEUR
 } from './home-decor-figurants'
+import { creerMarche, MARCHE, type Marche } from './home-decor-foule-marche'
 import {
   creerTailleur,
   numeroAvatar,
@@ -208,8 +209,10 @@ export function enrouler(z: number): number {
 }
 
 /**
- * Où est un passant : sa position de référence, plus le défilement de la rue (la caméra « marche »),
- * moins son propre pas. `defile` = mètres parcourus par la rue depuis l'instant de référence.
+ * Où serait un passant dans sa file fixe : sa position de référence, plus le défilement de la rue
+ * (la caméra « marche »), moins son propre pas. `defile` = mètres parcourus par la rue depuis
+ * l'instant de référence. C'est sa place de DÉPART : ensuite, la marche (home-decor-foule-marche.ts)
+ * le fait avancer en voyant les autres — en file fixe, les corps se traversaient (conv-331).
  */
 export function positionZ(p: Passant, vitesse: number, t: number, defile: number): number {
   return enrouler(p.zf + defile - p.sens * vitesse * (t - FOULE.tRef))
@@ -372,8 +375,29 @@ interface Personne {
   racine: THREE.Object3D
   bassin: THREE.Object3D
   mixer: THREE.AnimationMixer
+  /** Sa marche : le pas suit sa vitesse réelle, les pieds ne glissent pas quand il ralentit. */
+  marche: THREE.AnimationAction
   vitesse: number
   ombre: THREE.Mesh
+  /** Les os qui pivotent au croisement : le buste s'efface, la tête jette un coup d'œil. */
+  buste: THREE.Object3D | null
+  cou: THREE.Object3D | null
+  tete: THREE.Object3D | null
+}
+
+/**
+ * TOURNE UN OS AUTOUR DE LA VERTICALE DU MONDE, par-dessus la pose du clip (le mélangeur la
+ * réécrit à chaque image : rien ne s'accumule). Indépendant des axes propres à chaque os.
+ */
+const HAUT = new THREE.Vector3(0, 1, 0)
+const qParent = new THREE.Quaternion()
+const qTour = new THREE.Quaternion()
+function tourner(os: THREE.Object3D | null, angle: number): void {
+  if (!os?.parent || Math.abs(angle) < 1e-4) return
+  os.parent.getWorldQuaternion(qParent)
+  qTour.setFromAxisAngle(HAUT, angle)
+  os.quaternion.premultiply(qParent.clone().invert().multiply(qTour).multiply(qParent))
+  os.updateMatrixWorld(true)
 }
 
 /** Un figurant : ses gestes, celui qu'il joue, et ses os nommés. */
@@ -594,8 +618,12 @@ export async function chargerFoule(
       racine,
       bassin,
       mixer,
+      marche: action,
       vitesse: marche.vitesse * p.vit,
-      ombre: nouvelleOmbre()
+      ombre: nouvelleOmbre(),
+      buste: racine.getObjectByName('Bip01_Spine2') ?? null,
+      cou: racine.getObjectByName('Bip01_Neck') ?? null,
+      tete: racine.getObjectByName('Bip01_Head') ?? null
     })
   }
 
@@ -830,24 +858,50 @@ export async function chargerFoule(
   }
 
   const v = new THREE.Vector3()
+  // La marche naît à la première image, là où les files de `positionZ` mettent chacun à cet instant.
+  let marche: Marche | null = null
   return {
     groupe,
     textures: [...textures.values(), ...extras, ...tailleur.textures()],
     animer(t, dt, defile, camera, lieux) {
       const obstacles = animerScenes && lieux ? animerScenes(dt, lieux) : []
-      for (const g of gens) {
+      marche ??= creerMarche({
+        passants: gens.map((g) => ({
+          x: g.p.x,
+          z: positionZ(g.p, g.vitesse, t, defile),
+          sens: g.p.sens,
+          vitesse: g.vitesse
+        })),
+        defile,
+        camera
+      })
+      // Les figurants : un corps à contourner, à l'écart qu'ils demandent (`ECART_FIGURANT.distance`).
+      marche.avancer(
+        dt,
+        defile,
+        obstacles.map((o) => ({ x: o.x, z: o.z, r: o.distance - MARCHE.rayon - MARCHE.marge }))
+      )
+      gens.forEach((g, i) => {
+        const m = marche!.marcheurs[i]
+        g.marche.timeScale = g.p.vit * Math.min(1.4, m.vitesse / g.vitesse)
         g.mixer.update(dt)
-        const z = positionZ(g.p, g.vitesse, t, defile)
-        let x = g.p.x
+        const z = marche!.z(m)
+        // Garde-fous de toujours, par-dessus la marche : on passe côté chaussée d'un figurant, et
+        // personne ne traverse la caméra. La marche les a déjà contournés : ils ne jouent qu'en dernier recours.
+        let x = m.x
         for (const o of obstacles) x = ecarter(x, z, o)
-        // La caméra en dernier : personne ne la traverse, même en contournant un figurant.
         x = ecarterDeLaCamera(x, z, camera.x, camera.z)
         g.racine.position.set(x, sol, z)
-        g.racine.rotation.y = g.p.sens === 1 ? Math.PI : 0
+        g.racine.rotation.y = m.yaw
         g.racine.updateMatrixWorld(true)
+        // L'épaule s'efface du côté de celui qu'on croise ; la tête finit le coup d'œil.
+        const buste = -m.buste
+        tourner(g.buste, buste)
+        tourner(g.cou, (m.regard - buste) * 0.4)
+        tourner(g.tete, (m.regard - buste) * 0.6)
         g.bassin.getWorldPosition(v)
         g.ombre.position.set(v.x, sol + 0.012, v.z)
-      }
+      })
     }
   }
 }
