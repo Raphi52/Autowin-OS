@@ -83,6 +83,11 @@ src/**/*.js
 src/**/*.d.ts
 !src/preload/index.d.ts
 !src/renderer/src/env.d.ts
+# La page isolee des blocs ```threejs (src/renderer/scene-3d/) a deux scripts ECRITS A LA MAIN,
+# lus par page-scene-3d.mjs au build. Ignores par la regle ci-dessus, ils manquaient a toute copie
+# propre du depot : `electron-vite build` y echouait (« Could not resolve .../runtime.js »,
+# constate le 2026-10-19, conv-337, sur une copie d'origin/main).
+!src/renderer/scene-3d/*.js
 
 # Factures personnelles : hors depot
 factures/
