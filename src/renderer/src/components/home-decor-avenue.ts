@@ -44,9 +44,9 @@ import { regrouperHalos } from './home-decor-lots-halos'
  * LE CIEL EST UNE ÉCLAIRCIE LUNAIRE DEPUIS conv-319 : « /draft le fond le ciel violet de
  * l'acceuil », « Affiner la 4 · Azur d'orage », puis « implémente la 5 et met un vaisseau mere ».
  * Plus de violet : nuit bleue, plafond de nuages, trouée et lune, orage lointain (`CIEL_LUNAIRE`),
- * et, au-dessus de la ville, UN vaisseau mère choisi par /draft (« implémente 2 et 6 », puis « j'en
- * veux qu'un ») : une ville en anneau — la cité suspendue bâtie sur la roue de la station en anneau,
- * voir `home-decor-avenue-vaisseau.ts`.
+ * et, au-dessus de la ville, UN vaisseau mère choisi par /draft (« Implémenter la 6 · Anneaux
+ * d'approche ») : une roue dont le moyeu porte une ville éclairée, des cercles de feux d'atterrissage
+ * dessous, voir `home-decor-avenue-vaisseau.ts`.
  *
  * LA VILLE DE GAUCHE EST UN KOWLOON NÉON DEPUIS conv-315 : « /draft refais la ville de gauche du
  * fond d'écran de l'accueil », « Affiner la 2 · Kowloon néon », puis « implémente 6 » (Néons
@@ -1182,8 +1182,8 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     textures
   })
 
-  // LE VAISSEAU MÈRE (conv-319, « une ville de la forme de celui du haut ») : une ville en anneau, à gauche
-  // de la trouée de la lune. Monté ICI, avant la compilation de la rue, comme la ville.
+  // LE VAISSEAU MÈRE (conv-319, « Implémenter la 6 · Anneaux d'approche ») : une cité sur le moyeu d'une
+  // roue, à gauche de la trouée de la lune. Monté ICI, avant la compilation de la rue, comme la ville.
   const vaisseau = monterVaisseau({
     scene,
     uT: uVille.uT,

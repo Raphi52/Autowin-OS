@@ -1,58 +1,67 @@
 import * as THREE from 'three'
 
 /**
- * LE VAISSEAU MÈRE : UNE VILLE EN ANNEAU, AU-DESSUS DE LA VILLE.
+ * LE VAISSEAU MÈRE : UNE CITÉ SUR LE MOYEU D'UNE ROUE, ET SES ANNEAUX D'APPROCHE.
  *
- * Demandes de l'utilisateur (conv-319) : « implémente la 5 et met un vaisseau mere », puis « /draft le
- * vaisseau mère du fond de l'Accueil : propose 6 formes de coque… », « implémente 2 et 6 », et enfin,
- * devant deux vaisseaux séparés : « tas mis les 2 vaisseaux mais j'en veux qu'un je voulais une ville
- * de la forme de celui du haut ». C'est donc UN seul vaisseau : la 6 · Cité suspendue bâtie sur la
- * forme de la 2 · Anneau (celui qui était en haut), d'après le brouillon
- * `.autowin-tmp/draft-vaisseau/scene.js` (fonctions `anneau` et `cite`). Ce qu'il montre :
- *   - la roue de l'anneau : 600 m de jante, un moyeu, six rayons, 24 pylônes d'amarrage, 144 feux, et
- *     elle tourne lentement sur son axe ;
- *   - sur sa couronne, un Kowloon : des tours debout sur le dessus, des tours qui PENDENT dessous avec
- *     un néon rose ou cyan au bout d'une sur trois, comme sous la cité suspendue ;
- *   - des enseignes holo qui grésillent sous la couronne, des balises rouges qui clignotent.
- * La ville tourne avec la roue : ses tours sont posées dans le repère de la roue, et leurs fenêtres
- * dans le repère de chaque tour, pour ne pas glisser sur les façades pendant la rotation.
+ * Demandes de l'utilisateur (conv-319) : « implémente la 5 et met un vaisseau mere », deux /draft de la
+ * coque, puis « /draft des variantes du vaisseau spatial » ; il y garde la 5 · Moyeu-cité « mais j'aime
+ * pas le dessous de la ville et j'aimerais que le dessus de la ville ait quelques lumieres », et choisit
+ * enfin « Implémenter la 6 · Anneaux d'approche ». Brouillon : `.autowin-tmp/draft-vaisseau-v2/t2/`
+ * (`variantes.js`, fonctions `moyeuBase` et `v6`). Ce qu'il montre :
+ *   - une roue : jante fine, 24 pylônes, six ponts où roulent des tramways de feux ;
+ *   - au centre, un disque de 280 m. DESSUS, une ville de 170 tours : un feu de couleur au bout d'un mât
+ *     sur six toits sur dix, une balise rouge sur les dix plus hautes. DESSOUS, une plaque et des cercles
+ *     de feux d'atterrissage, où une vague de lumière court du centre vers le bord ;
+ *   - la roue tourne lentement et emporte sa ville.
+ * Plus aucune tour ne pend sous la ville : c'est le « dessous » que l'utilisateur n'aimait pas.
  *
  * CE QU'IL N'A PAS LE DROIT DE FAIRE, parce qu'un fond passe derrière les widgets :
  *   - ajouter une lumière : chaque lumière de plus alourdit toutes les matières de la rue (conv-301,
  *     22 lumières → 8) ; son éclat est dans ses nuanceurs, ses feux et ses halos ;
  *   - cacher la lune : il reste hors de son disque et de son halo proche (le test voisin tire des
- *     rayons vers elle, tours comprises) ;
- *   - se perdre dans le brouillard de la rue : à 2,5 km, `FogExp2` l'effacerait, il a sa propre brume.
+ *     rayons vers elle, tours et mâts compris) ;
+ *   - se perdre dans le brouillard de la rue : à 2,9 km, `FogExp2` l'effacerait, il a sa propre brume.
  */
 
 /**
  * Où il est, vu de la rue. Azimut compté depuis −z vers +x, hauteur en radians, distance en mètres.
  * Mesuré sur la vraie caméra en 1600 × 900 : la fenêtre de ciel va de x 620 à x 990 environ, du haut
- * de l'écran aux tuiles de l'Accueil (y 175) ; la lune y est en (842, 40). La ville en anneau y occupe
- * x 586 à 782, y 0 à 192, centre en (686, 91), à gauche de la lune. Plus près (2,6 km) ou plus à droite,
- * sa couronne et ses tours entraient dans le halo de la lune (rayons tirés depuis l'œil, 2026-10-18).
+ * de l'écran aux tuiles de l'Accueil (y 175) ; la lune y est en (842, 40). Le vaisseau est à gauche de
+ * la lune. Plus près (2,6 km) ou plus à droite, sa jante entrait dans le halo de la lune (rayons tirés
+ * depuis l'œil, 2026-10-18) ; au brouillon, rien ne s'en approche à moins de 0,075 rad.
  */
 export const VAISSEAU = { azimut: 0, hauteur: 0.4, distance: 2900, cap: 0.15 }
 
-/** La ville posée sur la roue : rayon de la couronne, épaisseur du boudin, nombre de tours. */
-export const VILLE_ANNEAU = {
-  rayon: 270,
-  /** Rayon du boudin de la couronne : la largeur de la « rue » circulaire où la ville est bâtie. */
-  boudin: 30,
-  /** Tours qui pendent sous la couronne (un néon au bout d'une sur trois). */
-  pendues: 520,
-  /** Tours debout sur le dessus. */
-  debout: 240,
-  /** Enseignes holo sous la couronne. */
-  enseignes: 14
+/** La roue et la cité de son moyeu. */
+export const MOYEU_CITE = {
+  /** Rayon de la jante : 570 m de diamètre, 606 m avec ses feux. */
+  jante: 285,
+  /** Tours debout sur le disque central (dessus). */
+  tours: 170,
+  /** Part des toits qui portent un feu de couleur au bout d'un mât : six sur dix. */
+  toitsAllumes: 0.6,
+  /** Balises rouges au bout d'un mât, sur les plus hautes tours. */
+  balises: 10,
+  /** Cercles de feux d'atterrissage sous la plaque, du rayon 30 m au rayon 138 m. */
+  anneaux: 10,
+  /** La vague qui court sur les cercles, du centre vers le bord : une toutes les 1 / 0,22 ≈ 4,5 s. */
+  vague: 0.22,
+  /** Vitesse de la roue, en rad/s : un tour en trois minutes. */
+  rotation: 0.035
 } as const
 
 /**
- * Le grossissement des feux. Le brouillon cadrait la fenêtre de ciel 2,5 fois plus serré que l'Accueil
- * (25° au lieu de 58°) ; à la vraie taille, ses feux ne faisaient plus que 1 à 2 pixels et la jante de
- * l'anneau disparaissait derrière les câbles.
+ * Le grossissement des feux. Les brouillons cadraient la fenêtre de ciel 2,5 à 3 fois plus serré que
+ * l'Accueil ; à la vraie taille, leurs feux ne faisaient plus que 1 à 2 pixels.
  */
 export const GROSSISSEMENT_FEUX = 1.7
+
+/**
+ * La luminance des fenêtres des tours, vues de trop loin pour être dessinées une à une. Vers 0,1 elle
+ * ressort beige-gris et délave la ville ; à 0,04 les tours restent sombres et leurs feux ressortent
+ * (mesuré sur la ville en contrebas, note Brain « moyenne des fenêtres lointaines »).
+ */
+export const MOYENNE_FENETRES_LOIN = 0.04
 
 /** La brume du brouillon, réglée pour un vaisseau à 2,3 km. */
 const BRUME_BROUILLON = 0.00035
@@ -79,11 +88,16 @@ export interface ContexteVaisseau {
 export interface VaisseauMere {
   /** Le vaisseau entier, posé dans le ciel. */
   groupe: THREE.Group
-  /** La roue : la couronne et toute sa ville tournent avec elle. */
+  /** La roue : la jante, les ponts, le disque et toute sa ville tournent avec elle. */
   roue: THREE.Group
-  /** Les tours qui pendent sous la couronne, et celles debout dessus. */
-  pendues: THREE.InstancedMesh
-  debout: THREE.InstancedMesh
+  /** Les tours debout sur le disque central. */
+  tours: THREE.InstancedMesh
+  /** Les mâts des feux de toit : vu d'en dessous, un feu posé à ras du toit serait caché par le toit. */
+  mats: THREE.InstancedMesh
+  /** Les cercles de feux d'atterrissage sous la plaque. */
+  anneaux: THREE.Points
+  /** Les feux fixes : jante, bord du disque, et ceux des toits au bout de leur mât. */
+  feux: THREE.Points
   animer(t: number): void
 }
 
@@ -95,15 +109,32 @@ const ADD = {
 } as const
 const H = 'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n'
 const FIN = 'gl_FragColor=vec4(c,1.0);\n#include <colorspace_fragment>\n}'
+/** Le dessin d'un feu : un cœur net dans un halo doux. */
+const FEU_FS =
+  'varying vec3 vC;void main(){vec2 c=gl_PointCoord-0.5;float r=dot(c,c);gl_FragColor=vec4(vC*(exp(-r*22.0)*0.6+exp(-r*90.0)),1.0);}'
+/** La taille d'un feu suit la distance ; `uE` porte la hauteur du canevas en pixels. */
+const TAILLE_FEU = 'gl_PointSize=clamp(aS*uE/-mv.z,1.2,40.0);gl_Position=projectionMatrix*mv;}'
 
 /** Un feu : position, couleur, taille (négative = balise qui clignote). */
 type Feu = [number, number, number, number, number]
+
+/** Un toit de la ville : son sommet (repère de la roue), sa hauteur, son emprise, son mât. */
+interface Toit {
+  x: number
+  y: number
+  z: number
+  h: number
+  w: number
+  d: number
+  mat: number
+}
 
 export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
   const oeil = new THREE.Vector3(...ctx.camera)
   const uE = { value: ctx.canevas.height * 0.9 * GROSSISSEMENT_FEUX }
   const brume = brumePour(VAISSEAU.distance)
-  let s = 61
+  // la graine du brouillon : même ville, mêmes toits allumés
+  let s = 65
   const rnd = (): number => (s = (s * 16807) % 2147483647) / 2147483647
 
   // ---------- la coque : le clair de lune argente les arêtes, des hublots sur les flancs ----------
@@ -158,33 +189,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     return p
   }
 
-  const halo = (
-    g: THREE.Object3D,
-    couleur: number,
-    taille: number,
-    x: number,
-    y: number,
-    z: number,
-    opacite = 0.5,
-    etire = 1
-  ): THREE.Sprite => {
-    const sp = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: ctx.GLOW,
-        color: couleur,
-        opacity: opacite,
-        fog: false,
-        ...ADD
-      })
-    )
-    sp.scale.set(taille, taille * etire, 1)
-    sp.position.set(x, y, z)
-    sp.userData.o = opacite
-    g.add(sp)
-    return sp
-  }
-
-  // ---------- les feux : des points dont la taille suit la distance ; taille négative = balise ----------
+  // ---------- des feux fixes : des points dont la taille suit la distance ; taille négative = balise ----------
   const feux = (g: THREE.Object3D, liste: Feu[]): THREE.Points => {
     const pos: number[] = []
     const col: number[] = []
@@ -207,8 +212,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
         ...ADD,
         vertexShader:
           'attribute vec3 aC;attribute float aS;uniform float uT;uniform float uE;varying vec3 vC;void main(){float ph=fract(sin(dot(position.xz+position.y,vec2(12.9898,78.233)))*43758.5453);float k=aS<0.0?step(0.72,fract(uT*0.55+ph)):1.0;vC=aC*k;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_PointSize=clamp(abs(aS)*uE/-mv.z,1.2,40.0);gl_Position=projectionMatrix*mv;}',
-        fragmentShader:
-          'varying vec3 vC;void main(){vec2 c=gl_PointCoord-0.5;float r=dot(c,c);gl_FragColor=vec4(vC*(exp(-r*22.0)*0.6+exp(-r*90.0)),1.0);}'
+        fragmentShader: FEU_FS
       })
     )
     p.frustumCulled = false
@@ -216,50 +220,57 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     return p
   }
 
-  // ---------- les tours du Kowloon : fenêtres multicolores, néon au bout (`uPointe`) ----------
-  // Chaque tour monte le long de son axe y local, de sa base (0) à sa pointe (1). Les fenêtres sont
-  // posées dans le repère de la tour (`vL` × son échelle `vZ`) : elles restent sur la façade quand la
-  // roue tourne et quand le vaisseau monte et descend.
-  const tours = (max: number, pointe: number): THREE.InstancedMesh => {
-    const im = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+  // ---------- des feux qui bougent : leur position est calculée par le nuanceur, à chaque image ----------
+  const feuxMobiles = (
+    g: THREE.Object3D,
+    attributs: Record<string, { valeurs: number[]; taille: number }>,
+    vertexShader: string,
+    uniforms: Record<string, THREE.IUniform> = {}
+  ): THREE.Points => {
+    const geo = new THREE.BufferGeometry()
+    for (const [nom, { valeurs, taille }] of Object.entries(attributs))
+      geo.setAttribute(nom, new THREE.Float32BufferAttribute(valeurs, taille))
+    const p = new THREE.Points(
+      geo,
       new THREE.ShaderMaterial({
-        uniforms: {
-          uBrume: ctx.uBrume,
-          uFlash: ctx.uFlash,
-          uLune: { value: ctx.lune },
-          uHz: { value: brume },
-          uPointe: { value: pointe }
-        },
-        vertexShader:
-          'varying vec3 vW;varying vec3 vN;varying vec3 vNl;varying vec3 vL;varying vec3 vZ;varying float vS;void main(){vec4 w=modelMatrix*instanceMatrix*vec4(position,1.0);vW=w.xyz;vN=normalize(mat3(modelMatrix*instanceMatrix)*normal);vNl=normal;vL=position;vZ=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));vS=fract(sin(dot(instanceMatrix[3].xyz,vec3(12.9898,78.233,37.719)))*43758.5453);gl_Position=projectionMatrix*viewMatrix*w;}',
-        fragmentShader: [
-          'uniform vec3 uBrume;uniform float uHz;uniform float uPointe;uniform float uFlash;uniform vec3 uLune;',
-          'varying vec3 vW;varying vec3 vN;varying vec3 vNl;varying vec3 vL;varying vec3 vZ;varying float vS;',
-          H,
-          'void main(){vec3 N=normalize(vN);float d=length(vW-cameraPosition);vec3 c=vec3(0.03,0.028,0.036);',
-          '  c+=vec3(0.3,0.4,0.6)*max(dot(N,uLune),0.0)*0.08;',
-          '  if(abs(vNl.y)<0.5){float u=(abs(vNl.x)>0.5?vL.z*vZ.z:vL.x*vZ.x)+vS*40.0;',
-          '    vec2 q=vec2(u/2.6,vL.y*vZ.y/3.0);vec2 id=floor(q),f=fract(q);',
-          '    float win=step(0.25,f.x)*step(f.x,0.7)*step(0.35,f.y)*step(f.y,0.8);float r=h(id+vS*17.0);',
-          '    vec3 wc=r>0.9?vec3(0.55,1.0,0.7):(r>0.8?vec3(0.5,0.7,1.0):(r>0.6?vec3(1.0,0.85,0.6):vec3(1.0,0.6,0.35)));',
-          '    float on=step(0.38,h(id.yx+vS*3.0));float aa=smoothstep(0.3,0.9,max(fwidth(q.x),fwidth(q.y)));',
-          '    vec3 neon=mix(vec3(1.0,0.18,0.63),vec3(0.18,0.91,1.0),step(0.5,fract(vS*7.0)));',
-          '    c+=mix(wc*win*on,wc*0.07,aa)*0.75;c+=neon*exp(-(1.0-vL.y)*9.0)*0.8*uPointe;}',
-          '  c+=vec3(0.55,0.6,0.9)*uFlash*0.05;c=mix(c,uBrume,1.0-exp(-pow(d*uHz,1.6)));',
-          FIN
-        ].join('\n')
-      }),
-      max
+        uniforms: { uT: ctx.uT, uE, ...uniforms },
+        ...ADD,
+        vertexShader,
+        fragmentShader: FEU_FS
+      })
     )
-    im.count = 0
-    im.frustumCulled = false
-    return im
+    p.frustumCulled = false
+    g.add(p)
+    return p
   }
 
-  // ========== le vaisseau : la roue de l'anneau, vue un peu par en dessous ==========
+  const halo = (
+    g: THREE.Object3D,
+    couleur: number,
+    taille: number,
+    x: number,
+    y: number,
+    z: number,
+    opacite: number
+  ): THREE.Sprite => {
+    const sp = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: ctx.GLOW,
+        color: couleur,
+        opacity: opacite,
+        fog: false,
+        ...ADD
+      })
+    )
+    sp.scale.set(taille, taille, 1)
+    sp.position.set(x, y, z)
+    g.add(sp)
+    return sp
+  }
+
+  // ========== le vaisseau : la roue, vue un peu par en dessous ==========
   const groupe = new THREE.Group()
-  groupe.name = 'ville-anneau'
+  groupe.name = 'moyeu-cite'
   {
     const { azimut, hauteur, distance, cap } = VAISSEAU
     groupe.position.set(
@@ -270,7 +281,8 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     groupe.rotation.y = cap
   }
   const y0 = groupe.position.y
-  // l'axe de la roue penche de 0,32 rad : on voit l'anneau en ellipse, et son +z local pointe vers le bas
+  // l'axe de la roue penche de 0,32 rad : on la voit en ellipse. Dans le repère de la roue, +z pointe
+  // vers le BAS (le dessous de la cité), −z vers le HAUT (sa ville).
   const axe = new THREE.Group()
   axe.rotation.x = Math.PI / 2 - 0.32
   groupe.add(axe)
@@ -278,125 +290,199 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
   roue.name = 'roue'
   axe.add(roue)
 
-  const { rayon: R, boudin: B } = VILLE_ANNEAU
-  piece(roue, new THREE.TorusGeometry(R, B, 24, 180))
-  piece(roue, new THREE.TorusGeometry(R + 36, 7, 8, 180))
-  const pylone = new THREE.BoxGeometry(44, 10, 12)
+  // ---------- la roue : jante fine, pylônes, six ponts, le disque central et la plaque du dessous ----------
+  const R = MOYEU_CITE.jante
+  piece(roue, new THREE.TorusGeometry(R, 13, 16, 180))
+  const pylone = new THREE.BoxGeometry(30, 8, 10)
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * TAU
-    piece(roue, pylone, Math.cos(a) * (R + 18), Math.sin(a) * (R + 18), 0, 0, 0, a)
+    piece(roue, pylone, Math.cos(a) * (R + 10), Math.sin(a) * (R + 10), 0, 0, 0, a)
   }
-  const rayonRoue = new THREE.CylinderGeometry(7, 7, R - 55, 8)
+  const pont = new THREE.BoxGeometry(18, R - 140, 7)
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU
-    const m = (R - 55) / 2 + 30
-    piece(roue, rayonRoue, -Math.sin(a) * m, Math.cos(a) * m, 0, 0, 0, a)
+    const m = (R - 140) / 2 + 130
+    piece(roue, pont, -Math.sin(a) * m, Math.cos(a) * m, 0, 0, 0, a)
   }
-  piece(axe, new THREE.SphereGeometry(52, 32, 16))
-  piece(axe, new THREE.CylinderGeometry(16, 16, 260, 12), 0, 0, 0, Math.PI / 2)
-  const moyeu = new THREE.CylinderGeometry(30, 30, 18, 24)
-  for (const z of [-110, 110]) piece(axe, moyeu, 0, 0, z, Math.PI / 2)
+  piece(roue, new THREE.CylinderGeometry(140, 150, 26, 24), 0, 0, 0, Math.PI / 2)
+  piece(roue, new THREE.CylinderGeometry(60, 90, 40, 24), 0, 0, -30, Math.PI / 2)
+  piece(roue, new THREE.CylinderGeometry(132, 142, 8, 48), 0, 0, 17, Math.PI / 2)
 
-  // ---------- la ville bâtie sur la couronne ----------
-  const pendues = tours(VILLE_ANNEAU.pendues, 1)
-  const debout = tours(VILLE_ANNEAU.debout, 0)
-  pendues.name = 'tours-pendues'
-  debout.name = 'tours-debout'
-  roue.add(pendues, debout)
-  const feuxVille: Feu[] = []
+  // ---------- la ville du dessus : 170 tours debout sur le disque ----------
+  // Chaque tour monte le long de son axe y local, de sa base (0) à son toit (1). Les fenêtres sont posées
+  // dans le repère de la tour (`vL` × son échelle `vZ`) : elles restent sur la façade quand la roue tourne.
+  const tours = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uBrume: ctx.uBrume,
+        uFlash: ctx.uFlash,
+        uLune: { value: ctx.lune },
+        uHz: { value: brume },
+        uLoin: { value: MOYENNE_FENETRES_LOIN }
+      },
+      vertexShader:
+        'varying vec3 vW;varying vec3 vN;varying vec3 vNl;varying vec3 vL;varying vec3 vZ;varying float vS;void main(){vec4 w=modelMatrix*instanceMatrix*vec4(position,1.0);vW=w.xyz;vN=normalize(mat3(modelMatrix*instanceMatrix)*normal);vNl=normal;vL=position;vZ=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));vS=fract(sin(dot(instanceMatrix[3].xyz,vec3(12.9898,78.233,37.719)))*43758.5453);gl_Position=projectionMatrix*viewMatrix*w;}',
+      fragmentShader: [
+        'uniform vec3 uBrume;uniform float uHz;uniform float uFlash;uniform vec3 uLune;uniform float uLoin;',
+        'varying vec3 vW;varying vec3 vN;varying vec3 vNl;varying vec3 vL;varying vec3 vZ;varying float vS;',
+        H,
+        'void main(){vec3 N=normalize(vN);float d=length(vW-cameraPosition);vec3 c=vec3(0.03,0.028,0.036);',
+        '  c+=vec3(0.3,0.4,0.6)*max(dot(N,uLune),0.0)*0.08;',
+        '  if(abs(vNl.y)<0.5){float u=(abs(vNl.x)>0.5?vL.z*vZ.z:vL.x*vZ.x)+vS*40.0;',
+        '    vec2 q=vec2(u/2.6,vL.y*vZ.y/3.0);vec2 id=floor(q),f=fract(q);',
+        '    float win=step(0.25,f.x)*step(f.x,0.7)*step(0.35,f.y)*step(f.y,0.8);float r=h(id+vS*17.0);',
+        '    vec3 wc=r>0.9?vec3(0.55,1.0,0.7):(r>0.8?vec3(0.5,0.7,1.0):(r>0.6?vec3(1.0,0.85,0.6):vec3(1.0,0.6,0.35)));',
+        '    float on=step(0.38,h(id.yx+vS*3.0));float aa=smoothstep(0.3,0.9,max(fwidth(q.x),fwidth(q.y)));',
+        '    c+=mix(wc*win*on,wc*uLoin,aa)*0.75;}',
+        '  c+=vec3(0.55,0.6,0.9)*uFlash*0.05;c=mix(c,uBrume,1.0-exp(-pow(d*uHz,1.6)));',
+        FIN
+      ].join('\n')
+    }),
+    MOYEU_CITE.tours
+  )
+  tours.name = 'tours'
+  tours.frustumCulled = false
+  roue.add(tours)
   const m4 = new THREE.Matrix4()
-  const q = new THREE.Quaternion()
-  const Y = new THREE.Vector3(0, 1, 0)
-  const BAS = new THREE.Vector3(0, 0, 1)
-  const HAUT = new THREE.Vector3(0, 0, -1)
-  const base = new THREE.Vector3()
+  const HAUT = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, 0, -1)
+  )
+  const v = new THREE.Vector3()
   const echelle = new THREE.Vector3()
-  // une tour posée sur le boudin : angle `a` autour de la roue, angle `b` autour du boudin
-  const poser = (
-    im: THREE.InstancedMesh,
-    a: number,
-    b: number,
-    dir: THREE.Vector3,
-    w: number,
-    hh: number,
-    d: number
-  ): THREE.Vector3 => {
-    const rr = R + B * Math.cos(b)
-    base.set(Math.cos(a) * rr, Math.sin(a) * rr, B * Math.sin(b)).addScaledVector(dir, -4)
-    q.setFromUnitVectors(Y, dir)
-    m4.compose(base, q, echelle.set(w, hh, d))
-    im.setMatrixAt(im.count++, m4)
-    return base.clone().addScaledVector(dir, hh)
-  }
-  // dessous (+z local) : les tours qui pendent, plus longues sous le milieu du boudin
-  for (let k = 0; k < VILLE_ANNEAU.pendues; k++) {
+  const toits: Toit[] = []
+  for (let k = 0; k < MOYEU_CITE.tours; k++) {
     const a = rnd() * TAU
-    const ecart = (rnd() * 2 - 1) * 1.0
-    const hh = (22 + Math.pow(1 - Math.abs(ecart), 1.5) * 150) * (0.4 + rnd() * 0.8)
-    const bout = poser(pendues, a, Math.PI / 2 + ecart, BAS, 8 + rnd() * 12, hh, 8 + rnd() * 12)
-    if (rnd() < 0.33) feuxVille.push([bout.x, bout.y, bout.z, rnd() < 0.5 ? 0xff2fa0 : 0x2ee8ff, 7])
+    const r = 40 + Math.sqrt(rnd()) * 95
+    const w = 9 + rnd() * 12
+    const d = 9 + rnd() * 12
+    const h = 20 + rnd() * 90
+    m4.compose(v.set(Math.cos(a) * r, Math.sin(a) * r, -9), HAUT, echelle.set(w, h, d))
+    tours.setMatrixAt(k, m4)
+    toits.push({ x: v.x, y: v.y, z: -9 - h, h, w, d, mat: 0 })
   }
-  // dessus (−z local) : les tours debout, plus basses
-  for (let k = 0; k < VILLE_ANNEAU.debout; k++) {
-    const a = rnd() * TAU
-    const ecart = (rnd() * 2 - 1) * 0.9
-    poser(debout, a, -Math.PI / 2 + ecart, HAUT, 9 + rnd() * 12, 14 + rnd() * 60, 9 + rnd() * 12)
-  }
-  pendues.instanceMatrix.needsUpdate = true
-  debout.instanceMatrix.needsUpdate = true
+  tours.instanceMatrix.needsUpdate = true
 
-  // les feux : la jante (blancs, balises rouges), le bout des tours pendues
+  // ---------- les feux fixes : la jante (blancs, balises rouges) et le bord du disque (cyan) ----------
+  const feuxFixes: Feu[] = []
   for (let i = 0; i < 144; i++) {
     const a = (i / 144) * TAU
-    feuxVille.push([
-      Math.cos(a) * (R + 43),
-      Math.sin(a) * (R + 43),
+    feuxFixes.push([
+      Math.cos(a) * (R + 18),
+      Math.sin(a) * (R + 18),
       0,
       i % 12 ? 0xdfeaff : 0xff2040,
       i % 12 ? 7 : -14
     ])
   }
-  feux(roue, feuxVille)
-  // les enseignes holo, sous la couronne, au milieu des tours qui pendent
-  const enseignes: THREE.Sprite[] = []
-  for (let k = 0; k < VILLE_ANNEAU.enseignes; k++) {
-    const a = rnd() * TAU
-    const rr = R + (rnd() - 0.5) * B * 1.4
-    enseignes.push(
-      halo(
-        roue,
-        k % 2 ? 0xff2fa0 : 0x2ee8ff,
-        24 + rnd() * 18,
-        Math.cos(a) * rr,
-        Math.sin(a) * rr,
-        B + 40 + rnd() * 70,
-        0.55,
-        2.4
-      )
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * TAU
+    feuxFixes.push([Math.cos(a) * 152, Math.sin(a) * 152, 0, 0x2ee8ff, 7])
+  }
+
+  // ---------- les tramways : huit feux par pont, qui vont et viennent du disque à la jante ----------
+  {
+    const aM: number[] = []
+    const aC: number[] = []
+    const aS: number[] = []
+    for (let i = 0; i < 6; i++) {
+      const phi = (i / 6) * TAU + Math.PI / 2
+      for (let k = 0; k < 8; k++) {
+        const sens = k % 2 ? 1 : -1
+        aM.push(phi, rnd(), sens * (0.07 + rnd() * 0.04), sens * 6)
+        aC.push(...(sens > 0 ? [1, 0.85, 0.55] : [0.5, 0.85, 1]))
+        aS.push(10)
+      }
+    }
+    feuxMobiles(
+      roue,
+      {
+        position: { valeurs: new Array<number>(aS.length * 3).fill(0), taille: 3 },
+        aM: { valeurs: aM, taille: 4 },
+        aC: { valeurs: aC, taille: 3 },
+        aS: { valeurs: aS, taille: 1 }
+      },
+      'attribute vec4 aM;attribute vec3 aC;attribute float aS;uniform float uT;uniform float uE;uniform vec2 uR;varying vec3 vC;void main(){float k=fract(aM.y+uT*aM.z);float r=mix(uR.x,uR.y,k);vec3 p=vec3(cos(aM.x)*r,sin(aM.x)*r,aM.w);vC=aC*smoothstep(0.0,0.06,k)*smoothstep(1.0,0.94,k);vec4 mv=modelViewMatrix*vec4(p,1.0);' +
+        TAILLE_FEU,
+      { uR: { value: new THREE.Vector2(150, R - 14) } }
     )
   }
-  // le cœur bleu du moyeu, et ses deux bouts
-  halo(axe, 0x5fa0ff, 240, 0, 0, 0, 0.5)
-  for (const z of [-130, 130]) halo(axe, 0x2ee8ff, 80, 0, 0, z, 0.4)
+
+  // ---------- DESSOUS : les cercles de feux d'atterrissage, et la vague qui les parcourt ----------
+  const anneaux = (() => {
+    const position: number[] = []
+    const aC: number[] = []
+    const aS: number[] = []
+    for (let n = 0; n < MOYEU_CITE.anneaux; n++) {
+      const r = 30 + n * 12
+      const nb = Math.round((TAU * r) / 14)
+      for (let i = 0; i < nb; i++) {
+        const a = (i / nb) * TAU
+        position.push(Math.cos(a) * r, Math.sin(a) * r, 22)
+        aC.push(0.75, 0.88, 1)
+        aS.push(6)
+      }
+    }
+    return feuxMobiles(
+      roue,
+      {
+        position: { valeurs: position, taille: 3 },
+        aC: { valeurs: aC, taille: 3 },
+        aS: { valeurs: aS, taille: 1 }
+      },
+      `attribute vec3 aC;attribute float aS;uniform float uT;uniform float uE;varying vec3 vC;void main(){float r=length(position.xy)/140.0;float k=exp(-pow((fract(uT*${MOYEU_CITE.vague.toFixed(2)})-r)*7.0,2.0));vC=aC*(0.18+1.4*k);vec4 mv=modelViewMatrix*vec4(position,1.0);` +
+        TAILLE_FEU
+    )
+  })()
+  anneaux.name = 'anneaux-approche'
+  halo(roue, 0x5fa0ff, 160, 0, 0, 40, 0.3)
+
+  // ---------- DESSUS : quelques lumières sur la ville, chacune au bout d'un mât ----------
+  // Vu d'en dessous, un feu posé à ras du toit serait caché par le toit lui-même : le mât dépasse
+  // d'environ la demi-largeur du toit, plus quelques mètres.
+  const toitFeu = (t: Toit, c: number, taille: number, plus: number): void => {
+    const hauteurMat = Math.max(t.w, t.d) * 0.5 + plus
+    t.mat = Math.max(t.mat, hauteurMat)
+    feuxFixes.push([t.x, t.y, t.z - hauteurMat, c, taille])
+  }
+  for (const t of toits
+    .slice()
+    .sort((a, b) => b.h - a.h)
+    .slice(0, MOYEU_CITE.balises))
+    toitFeu(t, 0xff2040, -16, 10)
+  const couleurs = [0xfff1d6, 0xffb062, 0x2ee8ff, 0xff2fa0]
+  for (const t of toits)
+    if (rnd() < MOYEU_CITE.toitsAllumes) toitFeu(t, couleurs[(rnd() * 4) | 0], 10, 4)
+  const avecMat = toits.filter((t) => t.mat > 0)
+  const mats = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+    coque,
+    avecMat.length
+  )
+  mats.name = 'mats'
+  avecMat.forEach((t, k) => {
+    m4.compose(v.set(t.x, t.y, t.z), HAUT, echelle.set(1.4, t.mat, 1.4))
+    mats.setMatrixAt(k, m4)
+  })
+  mats.instanceMatrix.needsUpdate = true
+  roue.add(mats)
+  const feuxPoses = feux(roue, feuxFixes)
+  feuxPoses.name = 'feux'
 
   ctx.scene.add(groupe)
 
   return {
     groupe,
     roue,
-    pendues,
-    debout,
+    tours,
+    mats,
+    anneaux,
+    feux: feuxPoses,
     animer(t) {
       // il flotte : quelques mètres de houle, jamais de traversée ; la roue emporte sa ville
       groupe.position.y = y0 + Math.sin(t * 0.1) * 5
-      roue.rotation.z = t * 0.035
-      // les enseignes holo grésillent, et lâchent par moments
-      enseignes.forEach((e, i) => {
-        e.material.opacity =
-          (e.userData.o as number) *
-          (0.6 + 0.4 * Math.sin(t * 3 + i * 2.1)) *
-          (Math.sin(t * 0.7 + i) > 0.95 ? 0.2 : 1)
-      })
+      roue.rotation.z = t * MOYEU_CITE.rotation
       // la taille des feux suit la hauteur du canevas, en pixels
       uE.value = ctx.canevas.height * 0.9 * GROSSISSEMENT_FEUX
     }

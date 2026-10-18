@@ -5,8 +5,8 @@ import { AVENUE, CAMERA_AVENUE, CIEL_LUNAIRE, directionLune } from './home-decor
 import {
   brumePour,
   monterVaisseau,
+  MOYEU_CITE,
   VAISSEAU,
-  VILLE_ANNEAU,
   type ContexteVaisseau
 } from './home-decor-avenue-vaisseau'
 import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
@@ -15,9 +15,10 @@ import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
  * LE CIEL « ÉCLAIRCIE LUNAIRE » ET LE VAISSEAU MÈRE DU FOND DE L'ACCUEIL (conv-319).
  *
  * Demande de l'utilisateur : « /draft le fond le ciel violet de l'acceuil », « Affiner la 4 · Azur
- * d'orage », puis « implémente la 5 et met un vaisseau mere » ; et pour les vaisseaux, « /draft le
- * vaisseau mère du fond de l'Accueil : propose 6 formes de coque… », « implémente 2 et 6 », et enfin
- * « tas mis les 2 vaisseaux mais j'en veux qu'un je voulais une ville de la forme de celui du haut ».
+ * d'orage », puis « implémente la 5 et met un vaisseau mere » ; et pour le vaisseau, après deux /draft
+ * de la coque, « /draft des variantes du vaisseau spatial » : « le 5 mais j'aime pas le dessous de la
+ * ville et j'aimerais que le dessus de la ville ait quelques lumieres », puis « Implémenter la 6 ·
+ * Anneaux d'approche ».
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :
  *   1. une couleur du ciel, de la brume ou de l'horizon qui redevient violette (rouge au-dessus du
@@ -26,8 +27,10 @@ import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
  *   3. le vaisseau, sa couronne ou une de ses tours posés sur la lune (sa trouée est la raison d'être de la 5) ;
  *   4. une lumière ajoutée par le vaisseau → toutes les matières de la rue s'alourdissent (conv-301) ;
  *   5. une matière du vaisseau soumise au brouillard de la rue → à 2,9 km il disparaît ;
- *   6. DEUX vaisseaux au lieu d'un, ou une ville qui n'épouse plus la roue (tours hors de la couronne,
- *      tours qui ne pendent plus vers le bas) ; une roue immobile ; des fenêtres qui glissent sur les tours ;
+ *   6. DEUX vaisseaux au lieu d'un ; une tour qui PEND de nouveau sous la ville, ou qui quitte le disque ;
+ *      un dessus sans lumières, ou des feux de toit cachés par leur propre toit (pas de mât) ; plus de
+ *      cercles de feux d'atterrissage sous la plaque, ou une vague qui ne court plus du centre au bord ;
+ *      une roue immobile ; des fenêtres qui glissent sur les tours ;
  *   7. le vaisseau non monté, non animé, ou monté après la compilation de la rue en tâche de fond.
  */
 
@@ -114,8 +117,18 @@ describe('le ciel « Éclaircie lunaire » (la 5 du tour 2)', () => {
   )
 })
 
-describe('le vaisseau mère : UNE ville en anneau (la 6 · Cité suspendue sur la forme de la 2 · Anneau)', () => {
-  it('UN SEUL VAISSEAU : « j en veux qu un » — une seule roue, aucune cité à part', () => {
+/** L'axe y de l'instance k, dans le monde : le sens dans lequel la tour (ou le mât) monte. */
+const sens = (im: THREE.InstancedMesh, k: number): THREE.Vector3 => {
+  const m4 = new THREE.Matrix4()
+  im.getMatrixAt(k, m4)
+  return new THREE.Vector3()
+    .setFromMatrixColumn(m4, 1)
+    .normalize()
+    .transformDirection(im.matrixWorld)
+}
+
+describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu d une roue)', () => {
+  it('UN SEUL VAISSEAU : une seule roue, aucune cité à part', () => {
     const { ctx, vaisseau } = monter()
     expect(ctx.scene.children).toEqual([vaisseau.groupe])
     let roues = 0
@@ -147,48 +160,105 @@ describe('le vaisseau mère : UNE ville en anneau (la 6 · Cité suspendue sur l
     expect(matieres).toBeGreaterThan(10)
   })
 
-  it('LA VILLE A LA FORME DE L ANNEAU : chaque tour part de la couronne, tout autour de la roue', () => {
+  it('PLUS AUCUNE TOUR NE PEND sous la ville (« j aime pas le dessous ») : toutes montent, posées sur le disque', () => {
     const { vaisseau } = monter()
-    const { rayon: R, boudin: B } = VILLE_ANNEAU
+    vaisseau.groupe.updateMatrixWorld(true)
+    expect(vaisseau.tours.count).toBe(MOYEU_CITE.tours)
+    expect(vaisseau.tours.parent).toBe(vaisseau.roue)
     const m4 = new THREE.Matrix4()
     const p = new THREE.Vector3()
-    for (const [im, n] of [
-      [vaisseau.pendues, VILLE_ANNEAU.pendues],
-      [vaisseau.debout, VILLE_ANNEAU.debout]
-    ] as const) {
-      expect(im.count).toBe(n)
-      expect(im.parent).toBe(vaisseau.roue)
-      const quarts = new Set<number>()
-      for (let k = 0; k < im.count; k++) {
-        im.getMatrixAt(k, m4)
-        p.setFromMatrixPosition(m4)
-        // la base de la tour est sur le boudin de la couronne (à 4 m près, elle y est enfoncée)
-        const radial = Math.hypot(p.x, p.y)
-        expect(Math.hypot(radial - R, p.z)).toBeLessThan(B + 5)
-        quarts.add(Math.floor(((Math.atan2(p.y, p.x) + Math.PI) / (2 * Math.PI)) * 4) % 4)
-      }
-      expect(quarts.size).toBe(4)
+    const quarts = new Set<number>()
+    for (let k = 0; k < vaisseau.tours.count; k++) {
+      expect(sens(vaisseau.tours, k).y).toBeGreaterThan(0.8)
+      vaisseau.tours.getMatrixAt(k, m4)
+      p.setFromMatrixPosition(m4)
+      // la base est sur le DESSUS du disque (z −9 dans le repère de la roue, où −z monte), dans ses 140 m
+      expect(p.z).toBeCloseTo(-9)
+      expect(Math.hypot(p.x, p.y)).toBeLessThan(140)
+      quarts.add(Math.floor(((Math.atan2(p.y, p.x) + Math.PI) / (2 * Math.PI)) * 4) % 4)
     }
+    expect(quarts.size).toBe(4)
+    // aucun autre bloc d'instances ne pend vers le bas
+    vaisseau.groupe.traverse((o) => {
+      const im = o as THREE.InstancedMesh
+      if (!im.isInstancedMesh) return
+      for (let k = 0; k < im.count; k++) expect(sens(im, k).y).toBeGreaterThan(0.8)
+    })
   })
 
-  it('les tours pendues pendent VERS LE BAS du monde, les tours debout montent', () => {
+  it('le DESSUS a quelques lumières : six toits sur dix allumés, balises rouges sur les plus hautes tours', () => {
+    const { vaisseau } = monter()
+    const pos = vaisseau.feux.geometry.getAttribute('position')
+    const taille = vaisseau.feux.geometry.getAttribute('aS')
+    let dessus = 0
+    let balises = 0
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getZ(i) > -20) continue
+      dessus++
+      if (taille.getX(i) < 0) balises++
+    }
+    expect(balises).toBe(MOYEU_CITE.balises)
+    expect(dessus).toBeGreaterThan(MOYEU_CITE.tours * 0.45)
+    expect(dessus).toBeLessThan(MOYEU_CITE.tours * 0.85)
+  })
+
+  it('chaque feu de toit est au bout d un MÂT qui dépasse le bord du toit (vu d en dessous, sinon le toit le cache)', () => {
     const { vaisseau } = monter()
     vaisseau.groupe.updateMatrixWorld(true)
     const m4 = new THREE.Matrix4()
-    const sens = (im: THREE.InstancedMesh, k: number): number => {
-      im.getMatrixAt(k, m4)
-      const y = new THREE.Vector3().setFromMatrixColumn(m4, 1).normalize()
-      return y.transformDirection(im.matrixWorld).y
+    const p = new THREE.Vector3()
+    const e = new THREE.Vector3()
+    const q = new THREE.Quaternion()
+    const cle = (x: number, y: number): string => `${x.toFixed(2)},${y.toFixed(2)}`
+    const toits = new Map<string, { z: number; demi: number }>()
+    for (let k = 0; k < vaisseau.tours.count; k++) {
+      vaisseau.tours.getMatrixAt(k, m4)
+      m4.decompose(p, q, e)
+      toits.set(cle(p.x, p.y), { z: p.z - e.y, demi: Math.max(e.x, e.z) / 2 })
     }
-    for (let k = 0; k < 50; k++) {
-      expect(sens(vaisseau.pendues, k)).toBeLessThan(-0.8)
-      expect(sens(vaisseau.debout, k)).toBeGreaterThan(0.8)
+    expect(vaisseau.mats.count).toBeGreaterThan(MOYEU_CITE.tours * 0.45)
+    for (let k = 0; k < vaisseau.mats.count; k++) {
+      vaisseau.mats.getMatrixAt(k, m4)
+      m4.decompose(p, q, e)
+      const toit = toits.get(cle(p.x, p.y))
+      expect(toit, 'le mât est planté sur une tour').toBeDefined()
+      expect(p.z).toBeCloseTo(toit!.z)
+      expect(e.y).toBeGreaterThan(toit!.demi + 3)
     }
+    // et les feux du dessus sont au bout des mâts, pas à ras des toits
+    const pos = vaisseau.feux.geometry.getAttribute('position')
+    for (let i = 0; i < pos.count; i++) {
+      if (pos.getZ(i) > -20) continue
+      const toit = toits.get(cle(pos.getX(i), pos.getY(i)))
+      expect(toit).toBeDefined()
+      expect(toit!.z - pos.getZ(i)).toBeGreaterThan(toit!.demi + 3)
+    }
+  })
+
+  it('le DESSOUS porte les cercles de feux d atterrissage, et une vague y court du centre vers le bord', () => {
+    const { vaisseau } = monter()
+    vaisseau.groupe.updateMatrixWorld(true)
+    const { anneaux } = vaisseau
+    expect(anneaux.parent).toBe(vaisseau.roue)
+    const pos = anneaux.geometry.getAttribute('position')
+    const rayons = new Set<number>()
+    for (let i = 0; i < pos.count; i++) {
+      // sous la plaque, dont la face du dessous est à z = 21 dans le repère de la roue
+      expect(pos.getZ(i)).toBeGreaterThan(21)
+      rayons.add(Math.round(Math.hypot(pos.getX(i), pos.getY(i))))
+    }
+    expect(rayons.size).toBe(MOYEU_CITE.anneaux)
+    // +z de la roue pointe bien vers le bas du monde : les cercles sont SOUS la cité
+    const bas = new THREE.Vector3(0, 0, 1).transformDirection(vaisseau.roue.matrixWorld)
+    expect(bas.y).toBeLessThan(-0.9)
+    // la vague : un pic de lumière au rayon fract(uT × 0,22), qui grandit avec le temps
+    const vs = (anneaux.material as THREE.ShaderMaterial).vertexShader
+    expect(vs).toMatch(/fract\(uT\*0\.22\)-r/)
   })
 
   it('les fenêtres des tours sont posées dans le repère de chaque tour : elles ne glissent pas quand la roue tourne', () => {
     const { vaisseau } = monter()
-    const fs = (vaisseau.pendues.material as THREE.ShaderMaterial).fragmentShader
+    const fs = (vaisseau.tours.material as THREE.ShaderMaterial).fragmentShader
     expect(fs).toMatch(/vL\.z\*vZ\.z/)
     expect(fs).not.toMatch(/vW\.xz|vG\.xz/)
   })
@@ -225,7 +295,7 @@ describe('le vaisseau mère : UNE ville en anneau (la 6 · Cité suspendue sur l
     expect(brumePour(VAISSEAU.distance) * VAISSEAU.distance).toBeCloseTo(0.00035 * 2300)
   })
 
-  it('LAISSE LA LUNE DANS SA TROUÉE : aucun rayon vers son disque ni son halo proche ne touche la coque ni une tour', () => {
+  it('LAISSE LA LUNE DANS SA TROUÉE : aucun rayon vers son disque ni son halo proche ne touche la coque, une tour ni un mât', () => {
     const { vaisseau } = monter()
     const pieces: THREE.Object3D[] = []
     vaisseau.groupe.updateMatrixWorld(true)
@@ -233,7 +303,8 @@ describe('le vaisseau mère : UNE ville en anneau (la 6 · Cité suspendue sur l
       const m = o as THREE.Mesh
       if (m.isMesh && !(m.material as THREE.ShaderMaterial).transparent) pieces.push(m)
     })
-    expect(pieces).toContain(vaisseau.pendues)
+    expect(pieces).toContain(vaisseau.tours)
+    expect(pieces).toContain(vaisseau.mats)
     // le disque fait 0,02 rad de rayon : on vise son centre, puis trois couronnes autour (0,03 à 0,07)
     const lune = directionLune()
     const a = new THREE.Vector3(0, 1, 0).cross(lune).normalize()
