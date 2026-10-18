@@ -398,6 +398,7 @@ import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-c
 import { convRunsRoot } from './runs/conv-runs'
 import {
   anglesDuPanelScout,
+  prioriserAnglesScout,
   personaInstruction,
   WORKFLOW_IS_A_TOOL_INSTRUCTION
 } from '../shared/persona'
@@ -1437,14 +1438,16 @@ export class Orchestrator {
       : phase === 'scout'
         ? anglesDuPanelScout(topologie)
         : topologie
-    return resolved
-      .filter((member) => member && member.provider)
-      .slice(
-        0,
-        this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
-          this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
-          Number.POSITIVE_INFINITY
-      )
+    const admis =
+      this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
+      this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+      Number.POSITIVE_INFINITY
+    const membres = resolved.filter((member) => member && member.provider)
+    // conv-339 : un panel scout COUPÉ par le devis garde ses angles les plus utiles, pas les premiers
+    // du canevas (`prioriserAnglesScout`, persona.ts). Sans coupe, l'ordre composé reste tel quel.
+    return (
+      phase === 'scout' && membres.length > admis ? prioriserAnglesScout(membres) : membres
+    ).slice(0, admis)
   }
 
   /**

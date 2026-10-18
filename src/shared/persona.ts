@@ -176,6 +176,31 @@ export function anglesDuPanelScout<T extends { persona?: string }>(membres: read
   })
 }
 
+/**
+ * L'ordre dans lequel GARDER les membres d'un panel scout quand le devis en admet moins que le
+ * canevas n'en compose : d'abord un angle libre (écrit à la main, donc voulu), puis les angles du
+ * catalogue dans l'ordre `ORDRE_ANGLES_PANEL_SCOUT`, puis un membre sans angle. Tri stable.
+ *
+ * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le régime « trivial » plafonne la
+ * concurrence à 2 (`execution-quote.ts`), et `.slice(0, 2)` gardait les DEUX PREMIERS du canevas
+ * Exploration : « dette » puis « fragilité » (appels du 22:21:58 et du 22:22:37). Ce sont les deux
+ * angles que la consigne de base couvre déjà, et « fragilité » dit « tu ignores l'esthétique » à une
+ * question purement visuelle (« des humains ultra qualis comme dans Cyberpunk »). La veille externe,
+ * le seul angle qui regarde « ce qui se fait ailleurs », n'est jamais partie.
+ */
+export function prioriserAnglesScout<T extends { persona?: string }>(membres: readonly T[]): T[] {
+  const rangDe = (membre: T): number => {
+    const persona = membre.persona?.trim()
+    if (!persona) return ORDRE_ANGLES_PANEL_SCOUT.length
+    const rang = (ORDRE_ANGLES_PANEL_SCOUT as readonly string[]).indexOf(persona)
+    return rang < 0 ? -1 : rang
+  }
+  return membres
+    .map((membre, position) => ({ membre, position, rang: rangDe(membre) }))
+    .sort((a, b) => a.rang - b.rang || a.position - b.position)
+    .map(({ membre }) => membre)
+}
+
 /** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
 export function personasFor(phase: NodePhase): Persona[] {
   // Un noeud SKILL n'a pas d'angles pre-ecrits : le selecteur reste vide plutot que d'en inventer.

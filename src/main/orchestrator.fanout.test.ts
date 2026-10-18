@@ -218,6 +218,62 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(new Set(ids).size).toBe(2)
   })
 
+  /*
+   * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : « /scout comment améliorer les humains
+   * pour qu'ils soient ultra quali comme dans le jeu cyberpunk? » est classé « trivial » (2 places),
+   * et le canevas Exploration compose 5 angles. La coupe gardait les deux premiers, « dette » et
+   * « fragilité » (« tu ignores l'esthétique »). Elle garde désormais la veille externe et la rupture.
+   */
+  it('un panel scout coupé par le devis garde ses angles les plus utiles, pas les premiers du canevas', async () => {
+    const provider = new RecordingProvider()
+    const supervisor = new ExecutionSupervisor()
+    const tache =
+      "/scout comment améliorer les humains pour qu'ils soient ultra quali comme dans le jeu cyberpunk?"
+    const quote = compileExecutionQuote(tache)
+    expect(quote.limits.maxConcurrency).toBe(2)
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'orch' },
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' }
+    })
+    const orch = new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      currentExecutionQuote: () => supervisor.currentQuote(),
+      currentExecutionUsage: () => supervisor.currentSnapshot(),
+      currentWorkflow: () => ({
+        graph: {
+          entry: 'scout-1',
+          nodes: [
+            {
+              id: 'scout-1',
+              phase: 'scout',
+              agents: ['dette', 'fragilite', 'usage', 'rupture', 'externe'].map((persona) => ({
+                persona
+              }))
+            }
+          ],
+          edges: []
+        }
+      })
+    })
+
+    await supervisor.run(quote, undefined, () => orch.run(tache))
+
+    const angles = provider.calls
+      .map((call) => /=== ANGLE IMPOSÉ À CE MEMBRE ===\n([^\n]+)/u.exec(call.system ?? '')?.[1])
+      .filter((angle): angle is string => Boolean(angle))
+    expect(angles).toHaveLength(2)
+    expect(angles[0]).toMatch(/CE QUI SE FAIT AILLEURS/u)
+    expect(angles[1]).toMatch(/PRÉMISSE/u)
+    expect(angles.join('\n')).not.toMatch(/DETTE|ce qui CASSE/u)
+  })
+
   it('un panel frame de la topologie reste sans angle imposé (hors du périmètre scout)', async () => {
     const provider = new RecordingProvider()
     await makeOrchestrator(provider, new CostAggregator(), 'frame').run('cadre la page de réglages')
