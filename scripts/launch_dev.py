@@ -395,6 +395,35 @@ def npm() -> str | None:
     return None
 
 
+SONDE_ARMEE = RACINE / ".autowin-data" / "sonde-demarrage.armee"
+
+
+def lancer_sonde_si_armee() -> None:
+    """Lance UNE fois scripts/sonde-demarrage.ps1 (disques + lecteurs), si on l'a armee.
+
+    Demande du 2026-10-18 : mesurer ce qui rend lent le premier lancement du matin. Le marqueur est
+    supprime AVANT le lancement : une sonde qui tournerait a chaque demarrage chargerait elle-meme
+    le disque qu'elle mesure. Jamais bloquant : une sonde en panne n'empeche pas l'app de demarrer.
+    """
+    if not SONDE_ARMEE.is_file():
+        return
+    try:
+        SONDE_ARMEE.unlink()
+        subprocess.Popen(  # noqa: S603 - arguments fixes, cwd resolu
+            [
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(RACINE / "scripts" / "sonde-demarrage.ps1"),
+            ],
+            cwd=str(RACINE),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        journaliser("sonde de demarrage lancee (.autowin-data/sonde-demarrage/)")
+    except OSError as erreur:
+        journaliser(f"sonde de demarrage impossible ({erreur})")
+
+
 def main() -> int:
     if not (RACINE / "package.json").is_file():
         alerter(f"Projet Autowin OS introuvable :\n{RACINE}")
@@ -458,6 +487,7 @@ def main() -> int:
 
     avant = sources_les_plus_recentes()
     journaliser(f"lancement (sources={avant:.0f})")
+    lancer_sonde_si_armee()
 
     # L'ECRAN D'ABORD. Il s'ouvre avant que `npm` soit lance : c'est tout l'objet — une fenetre a la
     # seconde du double-clic, pas apres la compilation. Le reste du travail se fait dans un thread,
