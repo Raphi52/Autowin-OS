@@ -390,6 +390,42 @@ export function valeurDeLEtape(
 }
 
 /**
+ * PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres de progression pour ce bloc »
+ * en trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles numérotées », puis « Implémenter la 5 ·
+ * Pied au temps »). Sous la liste, une jauge dont chaque segment a la largeur du temps de son étape :
+ * la MÊME durée que sa valeur (`valeurDeLEtape` — chrono mesuré à l'écran, sinon somme des actions).
+ * Une étape à faire n'a encore aucune durée : son segment est court et de largeur fixe (`part: null`),
+ * rien n'est inventé. Rien de mesuré encore : les étapes commencées se partagent la jauge à parts
+ * égales, et le total est 0 (le pied ne l'affiche pas).
+ */
+export type SegmentDuPied = {
+  id: string
+  /** Rang dans la liste, à partir de 1 : le numéro de la pastille de la même étape. */
+  numero: number
+  statut: Etape['statut']
+  /** Part de la jauge (flex-grow) ; `null` = étape à faire, segment de largeur fixe. */
+  part: number | null
+}
+
+export function piedDesEtapes(
+  etapes: readonly Etape[],
+  avancement: ReadonlyMap<string, AvancementEtape>,
+  mesures: ReadonlyMap<string, number>
+): { segments: SegmentDuPied[]; total: number } {
+  const duree = (e: Etape): number => mesures.get(e.id) ?? avancement.get(e.id)?.secondes ?? 0
+  const total = etapes.reduce((s, e) => (e.statut === 'pending' ? s : s + duree(e)), 0)
+  return {
+    total,
+    segments: etapes.map((e, i) => ({
+      id: e.id,
+      numero: i + 1,
+      statut: e.statut,
+      part: e.statut === 'pending' ? null : total > 0 ? duree(e) : 1
+    }))
+  }
+}
+
+/**
  * CHRONO DE CHAQUE ÉTAPE (conv-313, 2026-10-17 : « le timer est fix dans ce bloc »). La somme des
  * durées d'outils ne bouge qu'à la fin d'un outil — ou au battement de 30 s d'un outil long — et
  * jamais pendant que le modèle réfléchit entre deux outils : sous une étape EN COURS, « 59 s »

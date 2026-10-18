@@ -41,6 +41,7 @@ import {
   dureeLisible,
   memoriserChrono,
   memoriserChronosDesEtapes,
+  piedDesEtapes,
   resumeDesEtapes,
   secondesDesActions,
   secondesDesEtapes,
@@ -191,11 +192,16 @@ const MOT_DU_STATUT: Record<Etape['statut'], string> = {
 }
 
 /**
- * AVANCEMENT PAR ÉTAPE (conv-303, 2026-10-17, maquette « A · Côte à côte ») : à droite du sujet, une
- * BARRE en blocs — la barre « Pipeline » retenue le même jour pour les effets de texte — puis ce
- * qu'on a mesuré. claude.exe ne donne que trois états, jamais un pourcentage : la barre ne prétend
- * rien de plus. Pleine et verte = terminée ; blocs qui DÉFILENT = en cours (aucun remplissage
- * inventé) ; vide = à faire. La valeur compte les actions lancées pendant l'étape et leur durée.
+ * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
+ * de progression pour ce bloc », trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles
+ * numérotées », « Implémenter la 5 · Pied au temps »). Remplace la case et la barre de dix blocs par
+ * étape (conv-303) : claude.exe ne donne que trois états, jamais un pourcentage, et la barre d'une
+ * étape en cours ne disait rien de plus que sa couleur.
+ *   - à gauche, un RAIL : vert jusqu'aux étapes finies, flux rose sur l'étape en cours, gris ensuite ;
+ *     chaque étape y pose sa PASTILLE — la coche une fois finie, son numéro sinon ;
+ *   - à droite, la valeur mesurée (actions et durée), inchangée ;
+ *   - en PIED, une jauge dont chaque segment a la largeur du temps de son étape (`piedDesEtapes`),
+ *     son numéro dessous, et le total. Une étape à faire : un segment court, en pointillés.
  */
 function ListeDesEtapes({
   etapes,
@@ -207,27 +213,56 @@ function ListeDesEtapes({
   /** Durée MESURÉE à l'écran de chaque étape qui en a une (voir `useSecondesDesEtapes`). */
   secondes: ReadonlyMap<string, number>
 }): React.JSX.Element {
+  const pied = piedDesEtapes(etapes, avancement, secondes)
   return (
-    <ol className="thinking-body etapes-liste" data-testid="etapes-block-body">
-      {etapes.map((e) => (
-        <li
-          key={e.id}
-          className="etape"
-          data-statut={e.statut}
-          data-testid="etape"
-          title={MOT_DU_STATUT[e.statut]}
-        >
-          <span className="etape-case" aria-hidden="true" />
-          <span className="etape-sujet">{e.sujet || `Étape #${e.id}`}</span>
-          <span className="etape-barre" aria-hidden="true">
-            <span className="etape-barre-blocs" />
+    <>
+      <ol className="thinking-body etapes-liste" data-testid="etapes-block-body">
+        {etapes.map((e, i) => (
+          <li
+            key={e.id}
+            className="etape"
+            data-statut={e.statut}
+            data-testid="etape"
+            title={MOT_DU_STATUT[e.statut]}
+          >
+            <span className="etape-rail" aria-hidden="true">
+              <span className="etape-pastille" data-testid="etape-pastille">
+                {e.statut === 'completed' ? <span className="etape-coche" /> : i + 1}
+              </span>
+            </span>
+            <span className="etape-sujet">{e.sujet || `Étape #${e.id}`}</span>
+            <span className="etape-valeur" data-testid="etape-valeur">
+              {valeurDeLEtape(e, avancement.get(e.id), secondes.get(e.id) ?? null)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="etapes-pied" data-testid="etapes-pied">
+        <span className="etapes-pied-jauge" aria-hidden="true">
+          {pied.segments.map((s) => (
+            <span
+              key={s.id}
+              className="etapes-pied-segment"
+              data-statut={s.statut}
+              data-testid="etapes-pied-segment"
+              {...(s.part === null ? {} : { style: { flexGrow: s.part } })}
+            >
+              <span className="etapes-pied-barre" />
+              <span className="etapes-pied-numero">{s.numero}</span>
+            </span>
+          ))}
+        </span>
+        {pied.total > 0 && (
+          <span
+            className="etapes-pied-total"
+            data-testid="etapes-pied-total"
+            title="Temps mesuré des étapes"
+          >
+            {dureeLisible(pied.total)}
           </span>
-          <span className="etape-valeur" data-testid="etape-valeur">
-            {valeurDeLEtape(e, avancement.get(e.id), secondes.get(e.id) ?? null)}
-          </span>
-        </li>
-      ))}
-    </ol>
+        )}
+      </div>
+    </>
   )
 }
 

@@ -4314,115 +4314,116 @@ button.chat-project-dot:disabled {
 .thinking-block--actions > .thinking-body {
   border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
-/* BLOC ÉTAPES (conv-304, 2026-10-17) : la liste de tâches de claude.exe — une case par étape,
-   dessinée en CSS (les glyphes ◻ ◼ ✔ sortent en émoji sous Windows) : vide à faire, pleine en
-   cours, cochée terminée. La case suit la PREMIÈRE ligne d'un sujet long, sans décalage magique. */
+/* BLOC ÉTAPES (conv-304, 2026-10-17) : la liste de tâches de claude.exe.
+   RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
+   de progression pour ce bloc », trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles
+   numérotées », « Implémenter la 5 · Pied au temps »). Remplace la case et la barre de dix blocs par
+   étape (conv-303) : à gauche un RAIL où chaque étape pose sa PASTILLE (coche une fois finie, son
+   numéro sinon), à droite la valeur mesurée, en PIED une jauge dont chaque segment a la largeur du
+   temps de son étape (`piedDesEtapes`). Dessiné en CSS : les glyphes ◻ ◼ ✔ sortent en émoji sous
+   Windows. Le rail remplace le filet de gauche du corps.
+   Pas de garde prefers-reduced-motion : ce poste l'a actif, le flux et le pouls ne se verraient
+   jamais (même choix que la marque et les vues, app-shell.css). Tour fini : plus rien ne bat. */
 .thinking-block--etapes > .thinking-body {
-  border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
+  border-left: 0;
+  padding-left: 0;
 }
-/* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : les barres et les valeurs
+.thinking-block.cadre-anneau.thinking-block--etapes > .thinking-body {
+  margin-bottom: 0;
+}
+/* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : le rail et les valeurs
    s'alignent en colonnes d'une étape à l'autre, quelle que soit la longueur du sujet. Le <li> garde
    son infobulle et ce qu'il transmet par héritage (gras de l'étape en cours). */
 .thinking-block .etapes-liste {
   list-style: none;
   white-space: normal;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 2px 8px;
+  gap: 0 8px;
 }
 .etape {
   display: contents;
-}
-.etape-case {
-  flex: 0 0 auto;
-  position: relative;
-  box-sizing: border-box;
-  width: 10px;
-  height: 10px;
-  margin-top: calc((1.5em - 10px) / 2);
-  border: 1.5px solid rgba(var(--voile-rgb), 0.45);
-  border-radius: 3px;
 }
 .etape[data-statut='in_progress'] {
   color: var(--text);
   font-weight: 600;
 }
-.etape[data-statut='in_progress'] .etape-case {
-  border-color: var(--gold-clair);
-  background: var(--gold-clair);
-}
-.etape[data-statut='completed'] .etape-case {
-  border-color: var(--chat-frise-ok);
-}
-.etape[data-statut='completed'] .etape-case::after {
-  content: '';
-  position: absolute;
-  left: 2px;
-  top: -1px;
-  width: 3px;
-  height: 6px;
-  border: solid var(--chat-frise-ok);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
+.etape-sujet {
+  min-width: 0;
+  padding: 1px 0 3px;
 }
 .etape[data-statut='completed'] .etape-sujet {
   text-decoration: line-through;
   opacity: 0.6;
 }
-/* BARRE PAR ÉTAPE (conv-303, 2026-10-17, maquette « A · Côte à côte ») : dix blocs, la barre
-   « Pipeline » retenue le même jour. claude.exe ne donne que trois états, jamais un pourcentage :
-   pleine et verte = terminée ; trois blocs qui DÉFILENT = en cours (aucun remplissage inventé) ;
-   piste vide = à faire. Les `ch` se rapportent à la police mono de la barre : 10 blocs exactement. */
-.etape-barre {
-  display: block;
-  width: 10ch;
-  height: 0.8em;
-  margin-top: calc((1.5em - 0.8em) / 2);
-  overflow: hidden;
-  font-family: var(--mono, ui-monospace, monospace);
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(var(--voile-rgb), 0.14) 0 0.8ch,
-    transparent 0.8ch 1ch
+/* Le RAIL : un trait de 2 px qui court d'une pastille à l'autre — vert sous une étape finie, flux
+   rose sous l'étape en cours, gris ensuite. Il s'arrête à mi-hauteur de la dernière étape. */
+.etape-rail {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  min-height: 1.9em;
+  padding-top: calc((1.5em - 16px) / 2 + 1px);
+  box-sizing: border-box;
+  background-image: linear-gradient(rgba(var(--voile-rgb), 0.16), rgba(var(--voile-rgb), 0.16));
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: 2px 100%;
+}
+.etape:last-child .etape-rail {
+  background-size: 2px 50%;
+}
+.etape[data-statut='completed'] .etape-rail {
+  background-image: linear-gradient(var(--anneau-ok), var(--anneau-ok));
+}
+.etape[data-statut='in_progress'] .etape-rail {
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--anneau-encours) 0 5px,
+    color-mix(in srgb, var(--anneau-encours) 25%, transparent) 5px 9px
   );
+  background-repeat: repeat-y;
+  background-size: 2px 18px;
+  animation: etape-flux 1.2s linear infinite;
 }
-.etape-barre-blocs {
+/* La PASTILLE : opaque, elle cache le rail qui passe dessous. */
+.etape-pastille {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font: 600 9.5px/1 var(--mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text) 12%, var(--bg-0));
+  box-shadow: inset 0 0 0 1.4px rgba(var(--voile-rgb), 0.4);
+}
+.etape[data-statut='completed'] .etape-pastille {
+  background: var(--anneau-ok);
+  box-shadow: none;
+}
+.etape-coche {
   display: block;
-  width: 0;
-  height: 100%;
+  width: 3px;
+  height: 6px;
+  margin-top: -1.5px;
+  border: solid color-mix(in srgb, var(--anneau-ok) 20%, black);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
-.etape[data-statut='completed'] .etape-barre-blocs {
-  width: 100%;
-  background: repeating-linear-gradient(90deg, var(--chat-frise-ok) 0 0.8ch, transparent 0.8ch 1ch);
-}
-.etape[data-statut='in_progress'] .etape-barre-blocs {
-  width: 3ch;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--anneau-encours) 0 0.8ch,
-    transparent 0.8ch 1ch
-  );
-  animation: etape-defile 1.6s steps(8) infinite;
-}
-/* Tour fini : une étape restée « en cours » ne bat plus dans l'historique du fil. */
-.thinking-block.is-done .etape[data-statut='in_progress'] .etape-barre-blocs {
-  animation: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .etape[data-statut='in_progress'] .etape-barre-blocs {
-    animation: none;
-  }
-}
-@keyframes etape-defile {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(8ch);
-  }
+.etape[data-statut='in_progress'] .etape-pastille {
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
+  box-shadow: none;
+  animation: etape-pouls 1.4s ease-in-out infinite;
 }
 .etape-valeur {
+  padding: 1px 0 3px 8px;
   font-family: var(--mono, ui-monospace, monospace);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
@@ -4434,6 +4435,123 @@ button.chat-project-dot:disabled {
 }
 .etape[data-statut='completed'] .etape-valeur {
   opacity: 0.6;
+}
+/* Le PIED : sous un filet, la jauge du temps (un segment par étape, son numéro dessous) et le
+   total. Le segment de l'étape en cours s'élargit à mesure que son chrono avance. */
+.thinking-block.cadre-anneau > .etapes-pied {
+  margin: 6px 0.85em 0.6em 3.5em;
+}
+.etapes-pied {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  background-image: linear-gradient(90deg, rgba(var(--voile-rgb), 0.12), rgba(var(--voile-rgb), 0));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+}
+.etapes-pied-jauge {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.etapes-pied-segment {
+  flex: 1 1 0;
+  min-width: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: flex-grow 0.6s ease-out;
+}
+.etapes-pied-segment[data-statut='pending'] {
+  flex: 0 0 14px;
+  min-width: 0;
+}
+.etapes-pied-barre {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(var(--voile-rgb), 0.14);
+}
+.etapes-pied-segment[data-statut='completed'] .etapes-pied-barre {
+  background: var(--anneau-ok);
+}
+.etapes-pied-segment[data-statut='in_progress'] .etapes-pied-barre {
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--on-accent) 85%, transparent),
+      transparent
+    ),
+    linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  background-repeat: no-repeat;
+  background-size:
+    40% 100%,
+    100% 100%;
+  animation: etape-reflet 1.8s linear infinite;
+}
+.etapes-pied-segment[data-statut='pending'] .etapes-pied-barre {
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(var(--voile-rgb), 0.24) 0 3px,
+    transparent 3px 5px
+  );
+}
+.etapes-pied-numero {
+  font: 600 9px/1 var(--mono, ui-monospace, monospace);
+  text-align: center;
+  color: var(--text-dim);
+}
+.etapes-pied-segment[data-statut='completed'] .etapes-pied-numero {
+  color: var(--anneau-ok);
+}
+.etapes-pied-segment[data-statut='in_progress'] .etapes-pied-numero {
+  color: var(--anneau-encours);
+}
+.etapes-pied-total {
+  flex: 0 0 auto;
+  font: 11px/1.4 var(--mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--anneau-encours);
+}
+.thinking-block.is-done .etapes-pied-total {
+  color: var(--text-dim);
+}
+/* Tour fini : une étape restée « en cours » ne bat plus dans l'historique du fil. */
+.thinking-block.is-done .etape[data-statut='in_progress'] .etape-rail,
+.thinking-block.is-done .etape[data-statut='in_progress'] .etape-pastille,
+.thinking-block.is-done .etapes-pied-segment[data-statut='in_progress'] .etapes-pied-barre {
+  animation: none;
+}
+@keyframes etape-flux {
+  to {
+    background-position: center 18px;
+  }
+}
+@keyframes etape-pouls {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--anneau-encours) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--anneau-encours) 0%, transparent);
+  }
+}
+@keyframes etape-reflet {
+  from {
+    background-position:
+      -60% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      160% 0,
+      0 0;
+  }
 }
 
 /* DISPOSITION DES BLOCS DU TOUR (conv-303, 2026-10-17, « A · Côte à côte » : « centrer actions et

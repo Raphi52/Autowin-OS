@@ -105,10 +105,99 @@ describe('bloc Étapes', () => {
       (e) => e.querySelector('[data-testid="etape-valeur"]')?.textContent
     )
     expect(valeurs).toEqual(['1 action', '2 actions · 12 s', 'à faire'])
-    // Une barre par étape, décorative : la valeur dit déjà l'état aux lecteurs d'écran.
-    const barres = host.querySelectorAll('[data-testid="etape"] .etape-barre[aria-hidden="true"]')
-    expect(barres).toHaveLength(3)
     await demonter()
+  })
+
+  /*
+   * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft en trois tours, choix
+   * « Implémenter la 5 · Pied au temps ») : la case et la barre de dix blocs par étape laissent la
+   * place à une pastille numérotée posée sur un rail, et à un pied dont chaque segment a la largeur
+   * du temps MESURÉ de son étape.
+   */
+  describe('rail à pastilles numérotées et pied au temps', () => {
+    const JOURNAL_MESURE = [
+      'Étape #1 à faire · Lire',
+      'Étape #2 à faire · Écrire',
+      'Étape #3 à faire · Vérifier',
+      'Étape #1 en cours · Lire',
+      'Read · a.ts',
+      'Read terminé - 30 s',
+      'Étape #1 terminée · Lire',
+      'Étape #2 en cours · Écrire',
+      'Bash · npx vitest',
+      'Bash terminé - 10 s'
+    ]
+    const parts = (host: HTMLElement) =>
+      [...host.querySelectorAll<HTMLElement>('[data-testid="etapes-pied-segment"]')].map((s) => [
+        s.dataset['statut'],
+        s.style.flexGrow
+      ])
+    const total = (host: HTMLElement) =>
+      host.querySelector('[data-testid="etapes-pied-total"]')?.textContent ?? null
+
+    it('une pastille par étape : la coche une fois finie, son numéro sinon, sur un rail décoratif', async () => {
+      const { host, demonter } = await monter(false)
+      const pastilles = [...host.querySelectorAll('[data-testid="etape-pastille"]')]
+      expect(pastilles.map((p) => p.textContent)).toEqual(['', '2', '3'])
+      expect(pastilles[0]!.querySelector('.etape-coche')).not.toBeNull()
+      // La valeur dit déjà l'état aux lecteurs d'écran : le rail et sa pastille sont décoratifs.
+      expect(
+        host.querySelectorAll('[data-testid="etape"] .etape-rail[aria-hidden="true"]')
+      ).toHaveLength(3)
+      expect(host.querySelector('.etape-barre')).toBeNull()
+      await demonter()
+    })
+
+    it('chaque segment du pied prend le temps mesuré de son étape, et suit l’étape en cours', async () => {
+      vi.useFakeTimers()
+      try {
+        const { host, demonter } = await monter(false, JOURNAL_MESURE)
+        await act(async () => {
+          vi.advanceTimersByTime(0)
+        })
+        // Étape 1 vue finie : la somme de ses actions (30 s). Étape 2 en cours : son chrono (10 s).
+        // Étape 3 à faire : aucune durée, un segment court de largeur fixe.
+        expect(parts(host)).toEqual([
+          ['completed', '30'],
+          ['in_progress', '10'],
+          ['pending', '']
+        ])
+        expect(total(host)).toBe('40 s')
+        expect([...host.querySelectorAll('.etapes-pied-numero')].map((n) => n.textContent)).toEqual(
+          ['1', '2', '3']
+        )
+        await act(async () => {
+          vi.advanceTimersByTime(5_000)
+        })
+        expect(parts(host)[1]).toEqual(['in_progress', '15'])
+        expect(total(host)).toBe('45 s')
+        await demonter()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('rien de mesuré encore : parts égales, aucun total inventé', async () => {
+      vi.useFakeTimers()
+      try {
+        const { host, demonter } = await monter(false, [
+          'Étape #1 à faire · Penser',
+          'Étape #2 à faire · Agir',
+          'Étape #1 en cours · Penser'
+        ])
+        await act(async () => {
+          vi.advanceTimersByTime(0)
+        })
+        expect(parts(host)).toEqual([
+          ['in_progress', '1'],
+          ['pending', '']
+        ])
+        expect(total(host)).toBeNull()
+        await demonter()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('une étape en cours sans action encore dit « en cours », une étape finie sans action « terminée »', async () => {
