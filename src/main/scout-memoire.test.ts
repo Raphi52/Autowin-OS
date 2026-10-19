@@ -378,3 +378,138 @@ describe('pistes déjà proposées : seulement celles qui touchent la demande, s
     ])
   })
 })
+
+/*
+ * Objection du juge sur la correction précédente (conv-339) : filtrées sur les seuls mots de la
+ * demande, les pistes du scout PRÉCÉDENT sur les humains disparaissaient — 1 titre gardé sur 9
+ * (« Humains filmés en volume ») ; « Peau moins plastique », « Visages vivants », les passants, les
+ * ombres, la foule ne disent pas « humains ». Le prochain scout sur le sujet les aurait reproposés.
+ * La fixture est le run RÉEL de ce scout (`scout-pistes.json`, run-f085fcccbb82-1, ses 27 titres).
+ * fix-ok: rejeu sur la mémoire réelle du 19/10, demande de conv-339 : 1 titre sur les humains rendu
+ * au lieu des 9 pistes de run-f085fcccbb82-1, faute de lire le sujet au niveau du run.
+ */
+describe('pistes déjà proposées : le scout précédent sur le même sujet reste interdit en entier', () => {
+  const lire = (nom: string): string[] =>
+    readFileSync(join(__dirname, '__fixtures__', nom), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+  const DEMANDE_CONV_339 =
+    "comment améliorer les humains pour qu'ils soient ultra quali comme dans le jeu cyberpunk?"
+  const noterRun = (chemin: string, run: string, quand: string, titres: readonly string[]): void =>
+    noterPistesScout({
+      depot: 'D:/Autowin',
+      texte: scout(...titres.map((t) => t.replace(/\|/gu, '/'))),
+      run,
+      maintenant: quand,
+      chemin
+    })
+
+  it('la demande de conv-339 reçoit les pistes du scout précédent sur les humains, pas celles des outils', () => {
+    const chemin = fichier()
+    noterRun(
+      chemin,
+      'run-b83811373741-1',
+      '2026-10-10T21:38:01Z',
+      lire('scout-conv-339-deja-propose.txt')
+    )
+    noterRun(
+      chemin,
+      'run-f085fcccbb82-1',
+      '2026-10-18T22:31:53Z',
+      lire('scout-conv-339-pistes-du-run.txt')
+    )
+    const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin, demande: DEMANDE_CONV_339 })
+    for (const piste of [
+      /peau moins/iu,
+      /visages vivants/iu,
+      /reflets? des néons/iu,
+      /reflet du sol mouillé/iu,
+      /ombres sont des taches/iu,
+      /disparaître toute la foule/iu,
+      /humains filmés en volume/iu
+    ])
+      expect(connues.filter((t) => piste.test(t))).toHaveLength(1)
+    expect(
+      connues.filter((t) => /mcp|outil|navigateur|mot de passe|bureau caché/iu.test(t))
+    ).toEqual([])
+  })
+
+  /*
+   * Même borne, des deux côtés : 10 runs, donc un mot de la demande désigne des runs entiers s'il
+   * apparaît dans 2 runs au plus (un sur cinq). « foule » est dans 2 runs : tous leurs titres
+   * reviennent. « chat » est dans 3 runs : seuls les titres qui disent « chat » reviennent.
+   */
+  const dixRuns = (): string => {
+    const chemin = fichier()
+    const runs: string[][] = [
+      ['La foule disparaît sans message', 'Peau moins plastique'],
+      ['Une foule plus dense le soir', 'Visages vivants'],
+      ['Le chat perd le brouillon', 'Brouillon effacé au rechargement'],
+      ['Le chat recolle en bas', 'Barre de défilement qui saute'],
+      ['Le chat oublie le modèle choisi', 'Sélecteur de modèle remis à zéro'],
+      ['Cache des conversations'],
+      ['Tri des conversations'],
+      ['Préfixe du juge'],
+      ['Écriture du journal'],
+      ['Thème blanc trop pâle']
+    ]
+    runs.forEach((titres, i) => noterRun(chemin, `r${i}`, `2026-10-1${i}T10:00:00Z`, titres))
+    return chemin
+  }
+
+  it('un mot rare (« foule », 2 runs sur 10) fait revenir tous les titres de ces runs', () => {
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin: dixRuns(),
+      demande: '/scout rends la foule plus réaliste'
+    })
+    expect([...connues].sort()).toEqual(
+      [
+        'La foule disparaît sans message',
+        'Peau moins plastique',
+        'Une foule plus dense le soir',
+        'Visages vivants'
+      ].sort()
+    )
+  })
+
+  it('jumeau : un mot courant (« chat », 3 runs sur 10) ne fait revenir que les titres qui le disent', () => {
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin: dixRuns(),
+      demande: '/scout rends le chat plus fiable'
+    })
+    expect([...connues].sort()).toEqual(
+      [
+        'Le chat oublie le modèle choisi',
+        'Le chat perd le brouillon',
+        'Le chat recolle en bas'
+      ].sort()
+    )
+  })
+
+  /*
+   * Sur la mémoire réelle, « `load_graph` est héritée » faisait revenir les 57 titres du scout sur les
+   * outils pour une demande sur le graphe du chat. Un nom de code ne désigne pas son run ; le même mot
+   * en clair, si.
+   */
+  it('un mot cité seulement dans un nom de code (`load_graph`) ne fait pas revenir son run ; en clair, si', () => {
+    const chemin = dixRuns()
+    noterRun(chemin, 'r-outils', '2026-10-20T10:00:00Z', [
+      '`load_graph` est héritée et ne sert plus',
+      'Coffre de connexions'
+    ])
+    noterRun(chemin, 'r-graphe', '2026-10-21T10:00:00Z', [
+      'Le graphe recharge toute la trace',
+      'Une ligne abîmée rend la vue indisponible'
+    ])
+    const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin, demande: '/scout le graphe' })
+    expect([...connues].sort()).toEqual(
+      [
+        '`load_graph` est héritée et ne sert plus',
+        'Le graphe recharge toute la trace',
+        'Une ligne abîmée rend la vue indisponible'
+      ].sort()
+    )
+  })
+})

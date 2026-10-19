@@ -270,17 +270,22 @@ export function pistesDejaConnues(entree: {
   const historique = lireMemoireScout(entree.chemin ?? cheminMemoireScout())
     .entrees.filter((e) => e.depot === depot && (!entree.sauf || e.run !== entree.sauf))
     .sort((a, b) => b.vuLe.localeCompare(a.vuLe))
-    .map((e) => e.titre)
   const sujet = racinesDuSujet(entree.demande ?? '')
+  const runsDuSujet = runsQueLaDemandeDesigne(historique, sujet)
+  const candidats: { titre: string; run?: string }[] = [
+    ...historique,
+    ...(entree.stockVeille ?? []).map((titre) => ({ titre }))
+  ]
   const vus = new Set<string>()
   const tetes: string[][] = []
   const titres: string[] = []
-  for (const titre of [...historique, ...(entree.stockVeille ?? [])]) {
+  for (const { titre, run } of candidats) {
     const cle = cleTitre(titre)
     if (!cle || vus.has(cle)) continue
     vus.add(cle)
     // Filtrer AVANT la borne : les 60 titres les plus récents peuvent tous être hors sujet.
-    if (sujet.length > 0 && !toucheLeSujet(titre, sujet)) continue
+    const duSujet = (run !== undefined && runsDuSujet.has(run)) || toucheLeSujet(titre, sujet)
+    if (sujet.length > 0 && !duSujet) continue
     const tete = racinesDuSujet(teteDuTitre(titre))
     if (tetes.some((connue) => reditLaMemePiste(tete, connue))) continue
     tetes.push(tete)
@@ -300,11 +305,47 @@ export function pistesDejaConnues(entree: {
  *
  * Règle lexicale, donc testable : un titre est gardé s'il partage une racine de mot avec la demande.
  * Une demande SANS sujet (« /scout améliore Autowin ») garde l'ancien comportement : tous les titres
- * récents, car c'est là que le scout risque le plus de refaire le précédent. Limite connue : un
- * synonyme ne se reconnaît pas (« humains » ne retrouve pas « passants »).
+ * récents, car c'est là que le scout risque le plus de refaire le précédent.
  * fix-ok: bloc réel de la consigne du scout de conv-339 (fixture scout-conv-339-deja-propose.txt) :
  * 36 titres d'outillage sur 60 passaient, « mot de passe tapé dans le chat » 3 fois (scout-memoire.test.ts).
  */
+
+/*
+ * LE SUJET D'UNE PISTE SE LIT AUSSI SUR SON RUN. Un scout répond à UNE demande : ses pistes en
+ * partagent le sujet, même quand leurs mots diffèrent. Filtrées titre par titre, les 9 pistes du
+ * scout de conv-339 sur les humains n'en gardaient qu'une (« Humains filmés en volume ») : « peau »,
+ * « visages », « passants », « ombres », « foule » ne disent pas « humains », et le scout suivant sur
+ * le sujet les aurait reproposées. Un mot de la demande désigne donc les runs ENTIERS dont un titre
+ * le porte — s'il est rare : présent dans un run sur cinq au plus. Un mot courant ne désigne rien,
+ * sinon tout revient : sur la mémoire réelle du 19/10 (18 runs), « humain » est dans 1 run, « chat »
+ * dans 4, « outil » dans 6. Un nom de code entre accents graves ne compte pas : « `load_graph` est
+ * héritée » cite un objet en passant, et faisait revenir les 57 titres du scout sur les outils pour
+ * une demande sur le graphe du chat. Limite : un run qui n'a jamais employé un mot de la demande
+ * n'est reconnu que titre par titre.
+ * fix-ok: rejeu de `pistesDejaConnues` sur `scout-pistes.json` réel, demande de conv-339 : 1 titre
+ * sur les humains rendu, contre les 9 pistes de run-f085fcccbb82-1 (objection du juge).
+ */
+function runsQueLaDemandeDesigne(
+  historique: readonly EntreeMemoireScout[],
+  sujet: readonly string[]
+): Set<string> {
+  const designes = new Set<string>()
+  if (sujet.length === 0) return designes
+  const racinesParRun = new Map<string, string[]>()
+  for (const e of historique) {
+    if (typeof e.run !== 'string' || !e.run) continue
+    const horsCode = e.titre.replace(/`[^`]*`/gu, ' ')
+    racinesParRun.set(e.run, [...(racinesParRun.get(e.run) ?? []), ...racinesDuSujet(horsCode)])
+  }
+  const plafond = Math.max(1, Math.floor(racinesParRun.size / 5))
+  for (const mot of sujet) {
+    const runs = [...racinesParRun]
+      .filter(([, racines]) => racines.some((racine) => memeRacine(racine, mot)))
+      .map(([run]) => run)
+    if (runs.length <= plafond) for (const run of runs) designes.add(run)
+  }
+  return designes
+}
 
 /** Mots qui ne disent rien du SUJET d'une demande ou d'une piste (sans accents, au singulier). */
 const MOTS_CREUX = new Set(
