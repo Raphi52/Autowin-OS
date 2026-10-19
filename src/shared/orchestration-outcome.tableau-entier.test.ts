@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   CARACTERES_MAX_RESULTAT_AFFICHE,
-  formatOrchestrationOutcome
+  formatOrchestrationOutcome,
+  reconcileClosedOrchestrationText
 } from './orchestration-outcome'
 
 /**
@@ -54,20 +55,52 @@ describe('bulle bornée : jamais une ligne de tableau coupée, le tableau du sco
     expect(texte).toContain('[tronqué')
   })
 
-  it('même un tableau de scout est coupé entre deux lignes au-delà de 3 fois la borne', () => {
+  /*
+   * LE TABLEAU DU SCOUT N'A PAS DE PLAFOND (conv-348, choix de l'utilisateur : « Toujours afficher le
+   * tableau du scout en entier, quelle que soit sa longueur »). Le plafond à 3 × la borne coupait le
+   * scout de conv-344 après 14 pistes sur 21 ; or la liste de choix sous la bulle se construit sur ce
+   * texte (`chat-view-model.ts`, `candidatsDepuisScoutTable`) : les pistes 15 à 21 n'étaient ni lues
+   * ni sélectionnables — dont la n°15, l'une des deux réponses à la question de départ du fil.
+   */
+  it('la sortie réelle du scout de conv-344 montre ses 21 lignes, au-delà de 3 fois la borne', () => {
+    const sortie = readFileSync(join(__dirname, '__fixtures__', 'scout-conv-344-sortie.md'), 'utf8')
+    expect(sortie.length).toBeGreaterThan(CARACTERES_MAX_RESULTAT_AFFICHE * 3)
+    expect(lignesDuTableau(sortie)).toHaveLength(21)
+    // Référence = le résultat APRÈS le filtre des affirmations de cycle de vie, qui passe AVANT la
+    // borne : il réécrit la ligne 8 de cette sortie (« modification non commitée »). Ce test ne
+    // mesure que la coupe ; il n'entérine pas cette réécriture.
+    const issueReelle = issue(sortie) as Parameters<typeof reconcileClosedOrchestrationText>[1]
+    const attendues = lignesDuTableau(reconcileClosedOrchestrationText(sortie, issueReelle))
+    expect(attendues).toHaveLength(21)
+    const texte = formatOrchestrationOutcome(true, issue(sortie))
+    expect(lignesDuTableau(texte)).toEqual(attendues)
+    expect(texte).toContain('### Bilan de l')
+  })
+
+  it('un tableau de scout plus long que 3 fois la borne reste entier, la suite seule est coupée', () => {
     const entete = '| # | Score | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|'
     const lignes = Array.from(
       { length: 10 },
       (_, i) => `| ${i + 1} | 60 | 🔧 fix | piste ${i + 1} | ${'raison '.repeat(300)}| \`a.ts:1\` |`
     )
-    const result = `## Cible\nPiste 1.\n\n${entete}\n${lignes.join('\n')}\n\nFIN`
+    const result = `## Cible\nPiste 1.\n\n${entete}\n${lignes.join('\n')}\n\n${'suite '.repeat(800)}FIN`
     expect(result.length).toBeGreaterThan(CARACTERES_MAX_RESULTAT_AFFICHE * 3)
     const texte = formatOrchestrationOutcome(true, issue(result))
-    const affichees = lignesDuTableau(texte)
-    expect(affichees.length).toBeGreaterThan(1)
-    expect(affichees.length).toBeLessThan(lignes.length)
-    expect(affichees).toEqual(lignes.slice(0, affichees.length))
-    expect(texte.length).toBeLessThan(CARACTERES_MAX_RESULTAT_AFFICHE * 3 + 500)
+    expect(lignesDuTableau(texte)).toEqual(lignes)
+    expect(texte).not.toContain('FIN')
+    expect(texte).toContain('[tronqué')
+  })
+
+  it('jumeau : un tableau de scout APRÈS la coupe et plus long que 3 fois la borne reste entier', () => {
+    const entete = '| # | Score | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|'
+    const lignes = Array.from(
+      { length: 10 },
+      (_, i) => `| ${i + 1} | 60 | 🔧 fix | piste ${i + 1} | ${'raison '.repeat(300)}| \`a.ts:1\` |`
+    )
+    const result = `## Cible\n${'contexte '.repeat(600)}DEBUT-COUPE\n\n${entete}\n${lignes.join('\n')}\n\nFIN`
+    const texte = formatOrchestrationOutcome(true, issue(result))
+    expect(lignesDuTableau(texte)).toEqual(lignes)
+    expect(texte).not.toContain('DEBUT-COUPE')
   })
 
   it('un tableau scout situé APRÈS la coupe reste affiché entier, le texte d’avant est coupé', () => {

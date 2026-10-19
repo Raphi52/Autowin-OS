@@ -960,3 +960,10 @@ details:not(
   width: 100%;
   height: 100%;
 }
+
+/* FOND NOIR choisi dans les réglages de l'Accueil (conv-346, « un fond noir ou l'image cyberpunk ou
+   les planetes ») : aucune scène 3D n'est montée, l'hôte peint l'aplat. Sans lui, le fond 2D du
+   `body` (la galaxie PNG du thème d'origine) reparaissait à la place du noir demandé. */
+.decor-de-fond[data-fond='noir'] {
+  background: #000;
+}

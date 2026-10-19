@@ -36,11 +36,13 @@ vi.mock('./home-decor-scene', () => ({
   DECOR_DEFAUT: 'avenue',
   tempsDecor: (t: number) => t,
   createDecorScene: vi.fn(() => {
+    const canvas = document.createElement('canvas')
     const scene: FausseScene = {
-      canvas: document.createElement('canvas'),
+      canvas,
       render: vi.fn(),
       resize: vi.fn(),
-      dispose: vi.fn()
+      // Comme les vraies scènes (home-decor-scene.ts, decor-avenue-hote.ts) : libérer retire l'image.
+      dispose: vi.fn(() => canvas.remove())
     }
     creees.push(scene)
     return scene
@@ -202,5 +204,46 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
     })
     hote.remove()
     expect(creees).toHaveLength(0)
+  })
+})
+
+describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)', () => {
+  /** Ce que fait le menu « Fond » des réglages : enregistrer, puis prévenir la fenêtre. */
+  const choisir = async (fond: string): Promise<void> => {
+    await act(async () => {
+      window.localStorage.setItem(autowinStorageKey('home.decor.v3'), fond)
+      window.dispatchEvent(new Event('autowin:fond-accueil'))
+      await Promise.resolve()
+    })
+  }
+
+  it('passer à Planètes reconstruit le décor sur les planètes, sans redémarrer', async () => {
+    await monter()
+    expect(creees).toHaveLength(1)
+    const { createDecorScene } = await import('./home-decor-scene')
+    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('avenue')
+    await choisir('actuel')
+    expect(creees).toHaveLength(2)
+    expect(creees[0].dispose).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(createDecorScene).mock.calls.at(-1)?.[0]).toBe('actuel')
+  })
+
+  it('Noir : aucune scène construite, l hôte peint le noir', async () => {
+    window.localStorage.setItem(autowinStorageKey('home.decor.v3'), 'noir')
+    const hote = await monter()
+    expect(creees).toHaveLength(0)
+    const fond = hote.querySelector('.decor-de-fond') as HTMLElement
+    expect(fond.dataset.fond).toBe('noir')
+    expect(fond.querySelector('canvas')).toBeNull()
+  })
+
+  it('passer de Cyberpunk à Noir libère la scène ; revenir la reconstruit', async () => {
+    const hote = await monter()
+    await choisir('noir')
+    expect(creees[0].dispose).toHaveBeenCalledTimes(1)
+    expect(hote.querySelector('.decor-de-fond canvas')).toBeNull()
+    await choisir('avenue')
+    expect(creees).toHaveLength(2)
+    expect((hote.querySelector('.decor-de-fond') as HTMLElement).dataset.fond).toBeUndefined()
   })
 })

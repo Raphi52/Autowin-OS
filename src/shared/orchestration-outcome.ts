@@ -764,23 +764,21 @@ function boundedMarkdownResult(
   /*
    * LA COUPE NE TOMBE JAMAIS AU MILIEU D'UNE LIGNE DE TABLEAU (conv-339) : le /scout y rendait 9
    * pistes, la bulle en montrait une ligne et demie — or pour un scout, le tableau EST le résultat.
-   *  - le tableau du SCOUT traversé par la borne est gardé entier, jusqu'à `plafond` ;
+   *  - le tableau du SCOUT traversé par la borne est gardé ENTIER, quelle que soit sa longueur ;
    *  - tout autre tableau perd des lignes ENTIÈRES : la bulle reste bornée (conv-914, voir
    *    `agent-pilot.resultat-entier-au-modele.test.ts`), le modèle reçoit tout par ailleurs.
-   * Au-delà du plafond, même un tableau de scout est coupé entre deux lignes, jamais dans une ligne.
    * fix-ok: sortie réelle de conv-339 (fixture scout-conv-339-sortie.md) : 2 lignes sur 9 affichées
    * avant, 9 après (orchestration-outcome.tableau-entier.test.ts).
+   * PAS DE PLAFOND POUR LE SCOUT (conv-348, choix de l'utilisateur) : l'ancien plafond à 3 × la borne
+   * coupait le scout de conv-344 après 13 pistes sur 21, et la liste de choix sous la bulle, construite
+   * sur ce texte, perdait les pistes suivantes. Seul ce qui ENTOURE le tableau reste borné.
+   * fix-ok: sortie réelle de conv-344 (fixture scout-conv-344-sortie.md) : 13 lignes sur 21 avant,
+   * 21 après (orchestration-outcome.tableau-entier.test.ts).
    */
   const tableaux = tableauxMarkdown(corps)
-  const plafond = maxLength * 3
   let coupe = bilan ? maxLength - bilan.length - 2 : maxLength
   const traverse = tableaux.find((t) => t.debut < coupe && coupe < t.fin)
-  if (traverse) {
-    coupe =
-      traverse.scout && traverse.fin <= plafond
-        ? traverse.fin
-        : finDeLigneAvant(traverse, traverse.scout ? plafond : coupe)
-  }
+  if (traverse) coupe = traverse.scout ? traverse.fin : finDeLigneAvant(traverse, coupe)
   if (corps.slice(coupe).trim() === '') return `${corps.trimEnd()}${piedBilan}`
   const fermer = (texte: string): string => {
     const open = openMarkdownFence(texte)
@@ -788,16 +786,12 @@ function boundedMarkdownResult(
   }
   /*
    * Le tableau du SCOUT tombe tout entier après la borne (longue `## Cible`) : il serait perdu. On
-   * coupe alors le texte d'AVANT, on dit combien, et le tableau suit — entier sous le plafond.
+   * coupe alors le texte d'AVANT, on dit combien, et le tableau suit — entier.
    */
   const scout = tableaux.some((t) => t.scout && t.debut < coupe)
     ? undefined
     : tableaux.find((t) => t.scout && t.debut >= coupe)
-  const finScout = !scout
-    ? 0
-    : coupe + scout.fin - scout.debut <= plafond
-      ? scout.fin
-      : finDeLigneAvant(scout, scout.debut + plafond - coupe)
+  const finScout = scout ? scout.fin : 0
   if (scout && finScout > scout.debut) {
     const omisAvant = scout.debut - coupe
     const omisApres = corps.slice(finScout).trim() === '' ? 0 : corps.length - finScout

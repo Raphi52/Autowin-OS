@@ -1223,9 +1223,18 @@ export function ChatView({
     bascule les branches du depot de la CONVERSATION. Cliquer une branche basculait donc un depot
     dont le badge ne parlait pas : l'ecran ne « se positionnait » jamais dessus. Meme cwd des deux
     cotes, sinon le badge ment.
+
+    Meme regle pour un fil NEUF (conv-354, 2026-10-19 : « je suis oblige d'ecrire un premier
+    message avant que ca affiche la branche ») : sans conversation ouverte, le dossier est celui
+    ARME sur la pastille. Le badge l'ignorait et lisait le depot par defaut — il annoncait, listait
+    et basculait les branches d'un autre depot jusqu'a la creation du fil. Une seule source pour la
+    pastille et le badge : `dossierProjetAffiche`.
   */
-  const gitCwd =
-    convs.find((c) => c.id === activeId)?.projectPath?.trim() || defaultWorkspace || undefined
+  const convAffichee = convs.find((c) => c.id === activeId)
+  const dossierProjetAffiche = convAffichee
+    ? convAffichee.projectPath?.trim()
+    : (dossierNouveauFil ?? undefined)
+  const gitCwd = dossierProjetAffiche || defaultWorkspace || undefined
   const lireEtatGit = useCallback(() => Promise.resolve(window.api.getGitState?.(gitCwd)), [gitCwd])
   const gitBranch = useBrancheCourante(lireEtatGit)
   /*
@@ -7182,9 +7191,8 @@ export function ChatView({
                       le premier tour, donc ce premier tour partait toujours dans le depot de repli
                       (« je dois pouvoir choisir mon CWD dans un nouveau fil », 2026-09-09).
                     */
-                    const dossierProjet = active
-                      ? active.projectPath?.trim()
-                      : (dossierNouveauFil ?? undefined)
+                    // Meme source que le badge de branche (`gitCwd`), sinon les deux divergent.
+                    const dossierProjet = dossierProjetAffiche
                     const cheminEffectif = dossierProjet || defaultWorkspace
                     const labelDossier = estDossierPersonnel(cheminEffectif)
                       ? 'This computer'

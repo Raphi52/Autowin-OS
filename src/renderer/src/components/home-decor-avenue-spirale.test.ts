@@ -553,8 +553,14 @@ describe('la Spirale est branchée dans l avenue', () => {
   it('anime la spirale et dessine son reflet, foule et arêtes du viaduc exclues, juste avant le rendu', () => {
     expect(source).toMatch(/spirale\.animer\(t, parcours\)/)
     expect(source).toMatch(
-      /spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc\]\)\s*\n\s*renderer\.render\(scene, camera\)/
+      /const dessinerReflet = \(\): void => spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc\]\)/
     )
+    // dans la page : juste avant le rendu, comme avant
+    expect(source).toMatch(
+      /if \(!options\.refletApresImage\) dessinerReflet\(\)\s*\n\s*renderer\.render\(scene, camera\)/
+    )
+    // dans le Worker (conv-347) : après l'image, dans sa propre tâche (decor-avenue.worker.ts)
+    expect(source).toMatch(/apresImage: options\.refletApresImage[\s\S]{0,120}dessinerReflet\(\)/)
     expect(source).toMatch(/aretesViaduc\.push\(arete\)/)
   })
 

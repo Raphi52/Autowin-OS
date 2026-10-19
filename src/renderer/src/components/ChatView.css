@@ -1155,9 +1155,12 @@
   overflow-x: hidden;
 }
 .msg {
+  /* L'écart entre les éléments d'un message, en VARIABLE : le rail du tour (plus bas) le relit
+     pour faire descendre chaque tronçon jusqu'au point suivant. cosmic-outline.css le resserre. */
+  --msg-ecart: var(--s2);
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--msg-ecart);
   min-width: 0;
   max-width: 760px;
 }
@@ -1301,7 +1304,7 @@
 .msg-turn {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--msg-ecart, var(--s2));
   min-width: 0;
   max-width: 100%;
 }
@@ -4722,8 +4725,14 @@ button.chat-project-dot:disabled {
    rail » : le verdict des juges est l'avant-dernier point, la réponse le dernier, en OR, et le trait
    qui y mène passe du violet au bleu (bleu demandé à la place de l'or, conv-338).
    Le trait est dessiné PAR SEGMENTS : chaque point trace le sien jusqu'au point suivant (le bas de
-   son élément + l'écart entre éléments + la hauteur du point suivant) ; l'intérieur plein du point
-   suivant cache le dépassement. */
+   son élément + l'écart réel entre éléments, `--msg-ecart` + la hauteur du point suivant) ;
+   l'intérieur plein du point suivant cache le raccord.
+   CENTRAGE (conv-345, 2026-10-19 : « le rond bleu est pas centré ») : à un zoom non entier (1,1),
+   un trait de 2 px et un rond de 14 px posés chacun sur l'axe sont arrondis aux pixels de l'écran
+   SÉPARÉMENT — mesuré jusqu'à 0,51 px d'écart. Trait et points partagent donc la MÊME boîte de
+   14 px centrée sur l'axe : le trait est une bande de 2 px au milieu de cette boîte, les petits
+   points y sont peints en dégradé radial centré. Banc Edge aux zooms 1 / 1,1 / 1,25 / 1,5 / 1,75 :
+   écart ≤ 0,03 px. */
 .msg.msg--rail {
   --rail-axe: 5px;
   --rail-retrait: 22px;
@@ -4735,6 +4744,7 @@ button.chat-project-dot:disabled {
 .msg--rail .rail-noeud {
   /* Hauteur du point dans son élément : le milieu d'une capsule (deux lignes, ~44 px). */
   --rail-point-y: 24px;
+  --rail-anneau: var(--chat-rail-trait);
   position: relative;
   min-width: 0;
   padding-left: var(--rail-retrait);
@@ -4754,63 +4764,102 @@ button.chat-project-dot:disabled {
    2026-10-19 : 21 px posait le point 18 px au-dessus, sur le bord du panneau. */
 .msg--rail .rail-noeud[data-nature='juge'] {
   --rail-point-y: 39px;
+  --rail-anneau: var(--chat-rail-juge);
 }
+/* Le tronçon : une bande de 2 px au milieu de la boîte de 14 px des points (voir CENTRAGE). */
 .msg--rail .rail-noeud::before {
   content: '';
   position: absolute;
-  left: calc(var(--rail-axe) - 1px);
+  left: calc(var(--rail-axe) - 7px);
   top: var(--rail-point-y);
-  bottom: calc(-1 * var(--s2) - 24px);
-  width: 2px;
-  background: var(--chat-rail-trait);
+  bottom: calc(-1 * var(--msg-ecart, var(--s2)) - 24px);
+  width: 14px;
+  background: linear-gradient(
+    90deg,
+    transparent calc(50% - 1px),
+    var(--chat-rail-trait) calc(50% - 1px) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
   pointer-events: none;
 }
+/* Le point d'un bloc : anneau de 10 px (2 px d'épaisseur), intérieur plein qui cache le trait. */
 .msg--rail .rail-noeud::after {
   content: '';
   position: absolute;
-  left: calc(var(--rail-axe) - 5px);
-  top: calc(var(--rail-point-y) - 5px);
-  width: 10px;
-  height: 10px;
-  box-sizing: border-box;
-  border-radius: 50%;
-  border: 2px solid var(--chat-rail-trait);
-  background: var(--chat-rail-fond);
-  pointer-events: none;
-}
-.msg--rail .rail-noeud[data-nature='texte']::after {
-  left: calc(var(--rail-axe) - 3px);
-  top: calc(var(--rail-point-y) - 3px);
-  width: 6px;
-  height: 6px;
-  border-width: 1.5px;
-  border-color: var(--chat-rail-point-texte);
-}
-.msg--rail .rail-noeud[data-nature='juge']::after {
-  border-color: var(--chat-rail-juge);
-}
-.msg--rail .rail-noeud[data-nature='reponse']::after {
   left: calc(var(--rail-axe) - 7px);
   top: calc(var(--rail-point-y) - 7px);
   width: 14px;
   height: 14px;
-  border-color: var(--chat-rail-reponse);
+  background: radial-gradient(
+    circle,
+    var(--chat-rail-fond) 2.75px,
+    var(--rail-anneau) 3.25px 4.75px,
+    transparent 5.25px
+  );
+  pointer-events: none;
+}
+/* Le point d'une phrase : anneau de 6 px (1,5 px d'épaisseur). */
+.msg--rail .rail-noeud[data-nature='texte']::after {
+  background: radial-gradient(
+    circle,
+    var(--chat-rail-fond) 1.25px,
+    var(--chat-rail-point-texte) 1.75px 2.75px,
+    transparent 3.25px
+  );
+}
+/* Le point de la réponse occupe toute la boîte : un rond tracé, sans dégradé sur son bord. */
+.msg--rail .rail-noeud[data-nature='reponse']::after {
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--chat-rail-reponse);
   background: radial-gradient(circle, var(--chat-rail-reponse) 0 3px, var(--chat-rail-fond) 3.5px);
 }
-/* Vers un texte, le tronçon s'arrête plus haut : son point est sur la première ligne. */
+/* Vers un texte, le tronçon s'arrête plus haut : son point est sur la première ligne.
+   Le cadre du tour (Raisonnement / Actions) est posé HORS de `.msg-turn` : son point suivant est
+   le premier point VISIBLE de cette liste, pas un frère direct. Oublié, son tronçon gardait la
+   longueur d'une capsule et passait sous le rond bleu de la réponse, en violet uni (conv-345). */
 .msg--rail
   .rail-noeud:has(+ .rail-noeud:is([data-nature='texte'], [data-nature='reponse']))::before,
-.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before {
-  bottom: calc(-1 * var(--s2) - 14px);
+.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before,
+.msg.msg--rail
+  > .rail-noeud:has(
+    + .msg-turn
+      > .rail-noeud:not(:empty):not(.rail-noeud:not(:empty) ~ *):is(
+        [data-nature='texte'],
+        [data-nature='reponse']
+      )
+  )::before {
+  bottom: calc(-1 * var(--msg-ecart, var(--s2)) - 14px);
 }
 /* Vers le verdict des juges, le tronçon descend jusqu'à sa ligne « VALIDE ». */
-.msg--rail .rail-noeud:has(+ .rail-noeud[data-nature='juge'])::before {
-  bottom: calc(-1 * var(--s2) - 39px);
+.msg--rail .rail-noeud:has(+ .rail-noeud[data-nature='juge'])::before,
+.msg.msg--rail
+  > .rail-noeud:has(
+    + .msg-turn > .rail-noeud:not(:empty):not(.rail-noeud:not(:empty) ~ *)[data-nature='juge']
+  )::before {
+  bottom: calc(-1 * var(--msg-ecart, var(--s2)) - 39px);
 }
-/* Le dernier tronçon, celui qui mène à la réponse, passe du violet au bleu. */
+/* Le dernier tronçon, celui qui mène à la réponse, passe du violet au bleu. Un dégradé VERTICAL
+   ne peut pas être aussi la bande horizontale : la bande devient un masque, à la même place. */
 .msg--rail .rail-noeud:has(+ .rail-noeud[data-nature='reponse'])::before,
-.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before {
+.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before,
+.msg.msg--rail
+  > .rail-noeud:has(
+    + .msg-turn > .rail-noeud:not(:empty):not(.rail-noeud:not(:empty) ~ *)[data-nature='reponse']
+  )::before {
   background: linear-gradient(var(--chat-rail-trait), var(--chat-rail-reponse));
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent calc(50% - 1px),
+    black calc(50% - 1px) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent calc(50% - 1px),
+    black calc(50% - 1px) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
 }
 /* Aucun tronçon après le dernier point visible du tour, ni sous le cadre du tour s'il est seul. */
 .msg--rail .msg-turn > .rail-noeud:not(:has(~ .rail-noeud:not(:empty)))::before,
@@ -5855,6 +5904,19 @@ button.chat-project-dot:disabled {
 }
 .thinking-frise-ligne[data-etat='encours']::before {
   background: var(--gold-clair);
+}
+/* MESSAGE D'ERREUR d'une action rouge (conv-341) : le texte rendu par l'outil, sous sa ligne, aligné
+   sur le libellé (après l'icône de 18 px), plus petit et en rouge adouci pour rester secondaire. */
+.thinking-frise-erreur {
+  display: block;
+  margin: 1px 0 3px 18px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--chat-frise-ko);
+  opacity: 0.78;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .thinking-frise-ligne[data-etat='encours']::after {
   content: '…';

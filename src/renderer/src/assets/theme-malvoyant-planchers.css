@@ -293,6 +293,7 @@
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
 :root[data-theme^='malvoyant-'] .conv-status-filter,
 :root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort,
+:root[data-theme^='malvoyant-'] .thinking-frise-erreur,
 :root[data-theme^='malvoyant-'] .thinking-frise-icone[data-famille='commande']::before {
   font-size: 13px;
 }

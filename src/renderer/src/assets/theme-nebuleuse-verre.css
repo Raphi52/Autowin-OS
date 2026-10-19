@@ -2401,8 +2401,19 @@
    bouton SANS bord : `inset: 0` part de la boite interieure, la coupe de la boite exterieure
    (Envoyer pret, Reprendre et vide posent donc `border-width: 0`). Details reprend son `::before`
    de bord degrade (ChatView.css, masque evide) ; Nouveau fil garde son `::after` pour l'eclat. La
-   coupe rogne aussi le contour de focus : au clavier, tout le cadre s'allume a la place. */
+   coupe rogne aussi le contour de focus : au clavier, tout le cadre s'allume a la place.
+   STOP rejoint les trois (conv-349, 2026-10-19 : « fais un bouton stop a chanfrin pour la barre
+   de prompt ») : son carre de 28 px (« COMPOSER PLUS BAS » de ChatView.css, qui ecrase les 38 px
+   de conv-254), pose sous Envoyer, prend la MEME coupe que lui (6 px, pans 12 px) : deux boutons
+   voisins aux coupes differentes se liraient comme deux familles. Il garde son dome rouge (bloc
+   RELIEF-PERLE) ; ChatView.css lui pose un bord d'1 px au repos comme eteint, d'ou son
+   `border-width: 0`. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send {
+  --nv-bouton-coupe: 6px;
+  --nv-bouton-pans: 12px;
+  border-width: 0;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop {
   --nv-bouton-coupe: 6px;
   --nv-bouton-pans: 12px;
   border-width: 0;
@@ -2416,6 +2427,7 @@
   --nv-bouton-pans: 12px;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
 :root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
   --nv-bouton-cotes: var(--nv-chanfrein-cotes);
@@ -2431,6 +2443,7 @@
   );
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send::before,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop::before,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row::before,
 :root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule::before {
   content: '';
@@ -2467,6 +2480,7 @@
   pointer-events: none;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send:focus-visible,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop:focus-visible,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row:focus-visible {
   --nv-bouton-cotes: var(--nv-chanfrein-haut);
 }

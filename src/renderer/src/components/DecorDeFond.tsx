@@ -1,32 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { autowinStorageKey } from '../storage-keys'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
-import {
-  createDecorScene,
-  DECOR_DEFAUT,
-  tempsDecor,
-  type DecorScene,
-  type DecorVariant
-} from './home-decor-scene'
-
-/**
- * LA MEME CLE QUE LA VUE ACCUEIL, obtenue par le meme helper -- et pas une chaine recopiee.
- *
- * Premiere version de ce fichier : j'avais ecrit `'autowin:decor-variant'` a la main, alors que
- * `HomeView` lisait `autowinStorageKey('home.decor.v2')`. Les deux ne coincident pas : la direction
- * choisie par l'utilisateur aurait ete ignoree en silence, et le decor serait toujours reparti sur le
- * defaut. Une cle de stockage se derive, elle ne se recopie pas.
- *
- * `v2` ET NON `v1` : la cle a ete versionnee le 2026-08-25, APRES l'ecriture de ce fichier, pour que
- * le nouveau defaut `actuel` atteigne les machines ayant deja choisi `poussiere` (plainte « je vois
- * des poussieres »). Reprendre `v1` ici aurait ressuscite l'ancien choix.
- *
- * `v3` ET NON `v2`, meme raison le 2026-10-17 (conv-301) : le defaut devient l'avenue cyberpunk
- * (« Passe au vrai fond de l'Accueil avec ce look »). Une machine qui gardait `actuel` sous `v2`
- * aurait continue d'afficher les planetes, et la demande n'aurait jamais atteint l'ecran.
- */
-const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v3')
+import { abonnerFondAccueil, DECOR_DEFAUT, FOND_NOIR, lireFondAccueil } from './fond-accueil'
+import { createDecorScene, tempsDecor, type DecorScene, type DecorVariant } from './home-decor-scene'
 
 /**
  * LE DECOR 3D, FOND DE TOUTE L'APPLICATION.
@@ -50,12 +26,12 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   const decorRef = useRef<DecorMonte | null>(null)
   /** Lu par la boucle d'images à chaque battement : hors de l'Accueil, elle s'arrête. */
   const actifRef = useRef(actif)
-  /** La direction choisie, lue une fois : rien dans l'app ne la change pendant la session. */
-  const [variante] = useState<DecorVariant>(() =>
-    typeof window === 'undefined'
-      ? DECOR_DEFAUT
-      : ((window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant)
-  )
+  /**
+   * LE FOND CHOISI dans les réglages de l'Accueil (menu « Fond », conv-346), SUIVI en direct : le
+   * changer libère la scène et monte la nouvelle, sans redémarrer. La clé, son historique et
+   * l'événement vivent dans `fond-accueil.ts`, la même source que le menu.
+   */
+  const variante = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => DECOR_DEFAUT)
 
   /**
    * LE THEME APPLIQUE, mis en DEPENDANCE de la scene ci-dessous.
@@ -92,7 +68,9 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
    * changement de thème recompilait la scène pour rien (2 à 3,7 s sans rue). Seules les directions
    * « spatiales », qui relisent les teintes à leur création, suivent encore le thème.
    */
-  const cleTheme = variante === 'avenue' ? 'palette-propre' : themeApplique
+  // Le noir non plus : il ne monte aucune scène.
+  const cleTheme =
+    variante === 'avenue' || variante === FOND_NOIR ? 'palette-propre' : themeApplique
 
   useEffect(() => {
     actifRef.current = actif
@@ -101,7 +79,8 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
 
   useEffect(() => {
     const host = hostRef.current
-    if (!host) return
+    // FOND NOIR : aucune scène, aucun contexte WebGL, aucune boucle — l'hôte peint l'aplat noir.
+    if (!host || variante === FOND_NOIR) return
     /*
      * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17, conv-301).
      *
@@ -133,6 +112,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
       className="decor-de-fond"
       ref={hostRef}
       aria-hidden="true"
+      data-fond={variante === FOND_NOIR ? FOND_NOIR : undefined}
       style={actif ? undefined : { display: 'none' }}
     />
   )
@@ -234,6 +214,10 @@ function monterDecor(
         typeof document.hasFocus === 'function' ? document.hasFocus() : true
       )
     )
+    // Dessinee dans un Worker et l'image precedente pas encore finie : on attend le battement
+    // suivant SANS consommer le tour de la cadence. Avant (conv-347), la demande etait perdue en
+    // silence par l'hote et la suivante attendait un intervalle entier : 33 / 67 ms en alternance.
+    if (scene.pret && !scene.pret()) return
     // La scene derive lentement : au-dela de 30 images/s la difference ne se voit pas, la facture
     // d'une fenetre qui reste ouverte toute la journee, si.
     if (!cadence.doitDessiner(time)) return
@@ -245,11 +229,15 @@ function monterDecor(
      * le decor n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor`. La parallaxe
      * curseur reste : elle ne bouge QUE quand l'utilisateur bouge, c'est de la manipulation directe.
      */
-    // Ce que l'image coute au fil de l'interface : presque rien quand la scene se dessine dans un
-    // Worker (l'avenue), tout son rendu sinon — la cadence s'espace alors d'elle-meme.
+    // Le cout qui regle le rythme : celui du fil ou l'image se dessine. Dans un Worker (l'avenue),
+    // l'interface ne paie qu'un message : c'est le cout de la derniere image FINIE dans le Worker qui
+    // compte (decor-cadence.ts, fil dedie). Dessinee dans la page, tout son rendu est pris sur
+    // l'interface — la cadence s'espace alors pour lui en laisser la moitie.
     const debut = performance.now()
     scene.render(tempsDecor(time / 1000, reduceMotion), look)
-    cadence.noterCout(performance.now() - debut)
+    const coutDansSonFil = scene.coutDerniereImage?.() ?? null
+    if (coutDansSonFil !== null) cadence.noterCout(coutDansSonFil, 'dedie')
+    else cadence.noterCout(performance.now() - debut)
   }
   const reprendre = (): void => {
     if (enBoucle) return

@@ -54,6 +54,8 @@ export function createAvenueEnArrierePlan(): DecorScene | null {
   let canvasCourant: HTMLCanvasElement = canevas
   let taille: { largeur: number; hauteur: number } | null = null
   let enVol = false
+  /** Ce qu'a coûté au Worker la dernière image finie : la cadence de la page s'y règle (conv-347). */
+  let coutDerniere: number | null = null
   let libere = false
   const stats: StatsDecor | null = import.meta.env?.DEV ? { images: 0, couts: [] } : null
   if (stats) (globalThis as { __autowinDecor?: StatsDecor }).__autowinDecor = stats
@@ -76,6 +78,7 @@ export function createAvenueEnArrierePlan(): DecorScene | null {
     switch (m.type) {
       case 'rendue':
         enVol = false
+        coutDerniere = m.ms
         if (stats) {
           stats.images++
           stats.couts.push(m.ms)
@@ -118,6 +121,11 @@ export function createAvenueEnArrierePlan(): DecorScene | null {
       enVol = true
       envoyer({ type: 'image', temps, regard: { x: regard.x, y: regard.y } })
     },
+    // La boucle de la page (DecorDeFond) attend une image en vol au lieu de perdre son tour, et règle
+    // son rythme sur ce que coûtent les images DANS le Worker — pas sur le prix du message.
+    // Repliée sur la page, la scène se dessine sur l'interface : ni attente, ni coût de Worker.
+    pret: () => repli !== null || (!enVol && !libere),
+    coutDerniereImage: () => (repli ? null : coutDerniere),
     dispose() {
       libere = true
       if (repli) repli.dispose()
