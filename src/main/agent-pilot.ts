@@ -1,4 +1,5 @@
 import { rappelSansDejaEnvoye } from './rappel-conversations'
+import type { ContexteStatique } from '../shared/contexte-detaille'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
 import {
   deposerCompteRenduNonVu,
@@ -176,6 +177,12 @@ type TurnUsage = {
    */
   model?: string
   provider?: string
+  /**
+   * PARTIE FIXE DU CONTEXTE, mesuree par le CLI pendant le DERNIER appel (prompt systeme, outils,
+   * outils MCP, fichiers memoire, skills). Ecrasee comme `derniereEntree` : le panneau « Contexte »
+   * en deduit les messages (conv-1000). Absente pour un provider qui ne sait pas mesurer.
+   */
+  contexte?: ContexteStatique
 }
 
 export function resolveLatestUserMessage(
@@ -2367,6 +2374,8 @@ export class AgentPilot {
         // Un tour de CHAT sait rouvrir un tour de reprise dans sa conversation : le provider peut
         // donc confier ses commandes de fond coupees au lieu de dire « relance la demande ».
         ...(conversationId ? { relancerTachesDeFond: true } : {}),
+        // Le panneau « Contexte » du chat, detaille par categorie : seul un tour de chat a un ecran.
+        ...(conversationId && !watchdogReadOnly ? { mesurerContexte: true } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
           observed.contextBlocks = contextBlocks
@@ -2867,6 +2876,9 @@ export class AgentPilot {
         if (res.model) usage.model = res.model
         usage.provider = provider
       }
+      // Ecrase, comme `derniereEntree` : le detail decrit le DERNIER appel. Un appel sans mesure
+      // garde celle du precedent du meme tour, dont la partie fixe est la meme.
+      if (res.contexte) usage.contexte = res.contexte
       // Dernière barrière avant d'interpréter/clore la réponse : une directive arrivée pendant
       // l'appel provider invalide cette réponse devenue obsolète. On la réinjecte dans un nouvel
       // appel du MÊME tour. Entre ce drain vide et les branches synchrones ci-dessous, aucun IPC ne

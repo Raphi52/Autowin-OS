@@ -17,6 +17,7 @@ import {
   fermerHdesk,
   lireRegistre,
   processusVivant,
+  resultatFermeture,
   type DemandeFermeture,
   type EntreeRegistre,
   type ResultatFermeture
@@ -163,27 +164,74 @@ export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree 
 }
 
 /**
+ * Attente de la fermeture douce d'un bureau SANS fiche. Mesure du 2026-10-17 (conv-1016) : ces
+ * bureaux étaient tenus par OUTLOOK.EXE, qui enregistre son état avant de partir ; les 5 s par défaut
+ * du script le faisaient arrêter de force.
+ */
+const DELAI_DOUX_SANS_FICHE_S = 15
+
+/** Arguments de hdesk-fermer.ps1 en mode -SansFiche ; lève sur un identifiant invalide (rien n'est lancé). */
+export function argumentsFermerSansFiche(racine: string, id: string): string[] {
+  if (typeof id !== 'string' || !ID_BUREAU.test(id))
+    throw new Error('Identifiant de bureau invalide.')
+  return [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    join(racine, 'scripts', 'hdesk-fermer.ps1'),
+    '-Id',
+    id,
+    '-SansFiche',
+    '-DelaiDouxSecondes',
+    String(DELAI_DOUX_SANS_FICHE_S)
+  ]
+}
+
+/** Lance hdesk-fermer.ps1 -SansFiche ; même lecture du résultat que la fermeture par fiche. */
+export function fermerSansFiche(racine: string, id: string): Promise<ResultatFermeture> {
+  let args: string[]
+  try {
+    args = argumentsFermerSansFiche(racine, id)
+  } catch (e) {
+    return Promise.resolve({ ok: false, code: null, erreur: (e as Error).message })
+  }
+  return new Promise((resolve) => {
+    // 60 s : délai doux (15 s) + arrêt forcé (3 s) + énumération des processus, avec marge.
+    execFile('powershell.exe', args, { windowsHide: true, timeout: 60_000 }, (err, out) => {
+      const code = err
+        ? typeof (err as { code?: unknown }).code === 'number'
+          ? (err as { code: number }).code
+          : null
+        : 0
+      resolve(resultatFermeture(String(out ?? ''), code))
+    })
+  })
+}
+
+/**
  * Ferme le bureau `id`, quel que soit son fil. Le fil passé au script est TOUJOURS celui de la FICHE,
  * jamais une valeur venue de l'écran : le refus « bureau d'une autre conversation » (code 5) protège
  * les agents entre eux et reste intact pour eux (outil bureau_cache_fermer, commands.ts). Un bureau
- * sans fiche ou sans fil n'est pas fermé : aucun script n'est lancé, la raison est rendue.
+ * avec une fiche sans fil n'est pas fermé : aucun script n'est lancé, la raison est rendue.
+ *
+ * BUREAU SANS FICHE (conv-1016, 2026-10-17) : « ui-capture-7208 : Fermeture refusée : Ce bureau n'a
+ * pas de fiche ». Les captures d'interface (autowin-headless.ps1) n'écrivent pas le registre, et leurs
+ * bureaux survivaient, tenus par un Outlook démarré dedans. Le refus laissait l'utilisateur sans aucun
+ * moyen de les fermer. Ce chemin n'existe QUE dans cette vue, sur son geste : le script ne vise que ce
+ * qui a une fenêtre sur ce bureau, et refuse lui-même un bureau qui aurait une fiche.
  */
 export async function fermerBureauGere(
   racine: string,
   id: string,
   registre = registreParDefaut(),
-  fermer: (racine: string, d: DemandeFermeture) => Promise<ResultatFermeture> = fermerHdesk
+  fermer: (racine: string, d: DemandeFermeture) => Promise<ResultatFermeture> = fermerHdesk,
+  fermerOrphelin: (racine: string, id: string) => Promise<ResultatFermeture> = fermerSansFiche
 ): Promise<ResultatFermetureGeree> {
   if (typeof id !== 'string' || !ID_BUREAU.test(id))
     return { ok: false, code: null, message: 'Identifiant de bureau invalide.' }
   const fiche = lireRegistre(registre).find((e) => e.id === id)
-  if (!fiche)
-    return {
-      ok: false,
-      code: null,
-      message:
-        "Ce bureau n'a pas de fiche : Autowin ne sait pas quelle application y tourne. Rien n'a été fermé."
-    }
+  if (!fiche) return traduireFermeture(await fermerOrphelin(racine, id))
   const fil = typeof fiche.conversationId === 'string' ? fiche.conversationId : ''
   if (!ID_BUREAU.test(fil))
     return {

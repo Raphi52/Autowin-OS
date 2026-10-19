@@ -16,9 +16,15 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ChatMessageRow } from './ChatMessageRow'
 import { heureSurLeRail, placeDeLaReponse } from './rail-du-tour'
-import { reduceAssistantPilotEvent, type HydratedAssistantMessage } from './chat-view-model'
+import {
+  reduceAssistantPilotEvent,
+  type HydratedAssistantMessage,
+  type ScopedLiveRun
+} from './chat-view-model'
 import { reduceChatTurn, sansHeureInutile, type ChatTurnState } from '../../../shared/chat-turn'
 import type { Msg } from './chat-view-types'
+import type { StepDeRun } from './juges-votes'
+import { RunsEnDirect } from './runs-en-direct'
 import type { ChatArtifact } from '../../../shared/artifacts'
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -34,16 +40,23 @@ const capture: ChatArtifact = {
   source: { provider: 'claude', model: 'opus-test', tool: 'Read' }
 }
 
-async function rendre(message: Record<string, unknown>): Promise<Element> {
+async function rendre(
+  message: Record<string, unknown>,
+  runsEnDirect: Record<string, ScopedLiveRun<StepDeRun>> = {}
+): Promise<Element> {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
   await act(async () => {
     root.render(
-      createElement(ChatMessageRow, {
-        message: message as unknown as Msg,
-        conversationId: 'conv-test'
-      } as never)
+      createElement(
+        RunsEnDirect.Provider,
+        { value: runsEnDirect },
+        createElement(ChatMessageRow, {
+          message: message as unknown as Msg,
+          conversationId: 'conv-test'
+        } as never)
+      )
     )
   })
   const copie = host.querySelector('.msg.assistant')!.cloneNode(true) as Element
@@ -52,8 +65,11 @@ async function rendre(message: Record<string, unknown>): Promise<Element> {
   return copie
 }
 
-const natures = (el: Element): string[] =>
-  [...el.querySelectorAll('.rail-noeud')].map((n) => n.getAttribute('data-nature') ?? '')
+/** `visibles` : sans les points VIDES, que `.rail-noeud:empty` masque (ChatView.css). */
+const natures = (el: Element, options: { visibles?: boolean } = {}): string[] =>
+  [...el.querySelectorAll('.rail-noeud')]
+    .filter((n) => !options.visibles || n.innerHTML !== '')
+    .map((n) => n.getAttribute('data-nature') ?? '')
 const heures = (el: Element): (string | null)[] =>
   [...el.querySelectorAll('.rail-noeud')].map(
     (n) => n.querySelector(':scope > .rail-heure')?.textContent ?? null
@@ -109,8 +125,29 @@ describe('rail du tour : rendu', () => {
   it('pendant le tour, la dernière phrase n’est pas encore la réponse', async () => {
     const tour = await rendre({ ...tourFini, done: false, status: 'streaming' })
     expect(natures(tour)).not.toContain('reponse')
-    expect(natures(tour)).not.toContain('juge')
-    expect(natures(tour).at(-1)).toBe('texte')
+    // Le point des juges est posé dès le tour en cours (conv-1021). Sans run reçu, il reste VIDE,
+    // donc masqué (`.rail-noeud:empty`, ChatView.css) : la dernière phrase reste le dernier point vu.
+    expect(tour.querySelector('[data-nature="juge"]')?.innerHTML).toBe('')
+    expect(natures(tour, { visibles: true }).at(-1)).toBe('texte')
+  })
+
+  it('pendant le tour, le bloc des juges se remplit avec le run reçu en direct (conv-1021)', async () => {
+    const run: ScopedLiveRun<StepDeRun> = {
+      convId: 'conv-test',
+      task: 't',
+      status: 'running',
+      steps: [],
+      phase: { step: 'judge', model: 'juge-test' },
+      liveText: 'DEFAUT: x\nOBJECTIONS:\n- MAJEUR: le test `a.test.ts` est rouge'
+    }
+    const tour = await rendre(
+      { ...tourFini, done: false, status: 'streaming' },
+      { 'conv-test': run }
+    )
+    expect(natures(tour, { visibles: true }).at(-1)).toBe('juge')
+    const bloc = tour.querySelector('[data-nature="juge"] [data-testid="juges-panel"]')
+    expect(bloc?.getAttribute('data-verdict')).toBe('encours')
+    expect(bloc?.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(1)
   })
 })
 

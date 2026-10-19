@@ -53,20 +53,45 @@ export function signalFinExplicite(texte: string): boolean {
 }
 
 /**
- * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
- * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
+ * TROIS SUITES NOTÉES, PAS UNE (demande utilisateur du 2026-10-16, conv-1005 : « choisir entre 3
+ * préprompts scorés et cliquer au lieu de faire Tab, et le mode auto choisit le meilleur score »).
  *
- * `depotPresent` : sans dépôt git, il n'existe ni branche, ni remise de côté, ni copie isolée à
- * trier — les deux gardes de publication n'ont donc plus d'objet et la suite passe INTACTE. Par
- * défaut `true` : un appelant qui ne sait pas garde l'ancien comportement, jamais un relâchement.
+ * Le modèle peut émettre jusqu'à trois lignes `AUTOWIN_PROMPT_V1: [85] <message>` : une action
+ * distincte par ligne, notée de 0 à 100. Le champ de saisie les montre en boutons, la mieux notée
+ * reste le texte grisé accepté par Tab, et le mode auto envoie cette même mieux notée.
+ *
+ * Une ligne SANS note (l'ancien format, et tout l'historique des fils) reste lue : elle a
+ * `score: null`, passe après les suites notées, et entre deux lignes sans note c'est la DERNIÈRE
+ * qui gagne — exactement l'ancien comportement.
  */
-export function extrairePromptSuivant(
-  texte: string | undefined | null,
-  demandeDuTour?: string,
-  depotPresent = true
-): string | null {
-  if (!texte) return null
-  let trouve: string | null = null
+export interface PropositionSuite {
+  /** Le message prêt à envoyer, nettoyé de son markdown et borné. */
+  texte: string
+  /** Note 0-100 donnée par le modèle ; `null` pour une ligne à l'ancien format, sans note. */
+  score: number | null
+}
+
+/** Au-delà de trois, le choix redevient une liste à lire : on garde les trois mieux notées. */
+export const MAX_PROPOSITIONS = 3
+
+/**
+ * La note se pose en TÊTE du message, entre crochets (`[85]`, `[85/100]`) ou en `85/100`. Pas de
+ * forme nue « 85 » ni « 85 % » : un prompt qui commence par un nombre (« 3 fichiers à relire »,
+ * « 100 % des tests… ») perdrait son début et gagnerait une note qu'il n'a jamais eue.
+ */
+const NOTE_EN_TETE =
+  /^(?:\[\s*(\d{1,3})\s*(?:\/\s*100\s*)?\]|(\d{1,3})\s*\/\s*100)\s*(?:[|:·—–-]\s*)?/u
+
+function lireNote(brut: string): PropositionSuite {
+  const m = NOTE_EN_TETE.exec(brut)
+  if (!m) return { texte: brut, score: null }
+  const note = Number(m[1] ?? m[2])
+  return { texte: brut.slice(m[0].length).trim(), score: Math.min(100, note) }
+}
+
+/** Toutes les lignes de suite, dans l'ordre du texte, avant les gardes de publication. */
+function lirePropositionsBrutes(texte: string): PropositionSuite[] {
+  const lues: PropositionSuite[] = []
   const bloc = suivreBlocsDeCode()
   for (const ligne of texte.split(SAUT)) {
     if (bloc.delimiteur(ligne)) continue
@@ -74,19 +99,76 @@ export function extrairePromptSuivant(
     if (bloc.dansUnBloc) continue
     const debut = ligne.lastIndexOf(MARQUEUR_PROMPT_SUIVANT)
     if (debut < 0) continue
-    const brut = ligne
-      .slice(debut + MARQUEUR_PROMPT_SUIVANT.length)
-      .replace(/\*\*/g, '')
-      .replace(/`/g, '')
-      .trim()
+    const lue = lireNote(
+      ligne
+        .slice(debut + MARQUEUR_PROMPT_SUIVANT.length)
+        .replace(/\*\*/g, '')
+        .replace(/`/g, '')
+        .trim()
+    )
     // Une ligne réduite à de la ponctuation est un raté du modèle, pas un prompt.
-    if (!/[\p{L}\p{N}]/u.test(brut)) continue
-    trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
+    if (!/[\p{L}\p{N}]/u.test(lue.texte)) continue
+    lues.push({
+      texte:
+        lue.texte.length > LONGUEUR_MAX ? lue.texte.slice(0, LONGUEUR_MAX).trimEnd() : lue.texte,
+      score: lue.score
+    })
   }
-  // Publication que PERSONNE n'a demandée : pas de suite du tout (voir plus bas).
-  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour, depotPresent)) return null
-  if (trouve && estPromptDePublication(trouve, demandeDuTour, depotPresent)) return PROMPT_SALVAGE
-  return trouve
+  return lues
+}
+
+/**
+ * Les suites proposées, de la MIEUX notée à la moins bien notée, trois au plus, sans doublon.
+ * Chacune passe les gardes de publication : une publication que personne n'a demandée disparaît
+ * de la liste, une publication demandée devient l'ordre de tri `/salvage` (voir plus bas).
+ *
+ * `depotPresent` : sans dépôt git, il n'existe ni branche, ni remise de côté, ni copie isolée à
+ * trier — les deux gardes de publication n'ont donc plus d'objet et la suite passe INTACTE. Par
+ * défaut `true` : un appelant qui ne sait pas garde l'ancien comportement, jamais un relâchement.
+ */
+export function extrairePropositionsSuite(
+  texte: string | undefined | null,
+  demandeDuTour?: string,
+  depotPresent = true
+): PropositionSuite[] {
+  if (!texte) return []
+  const gardees: Array<PropositionSuite & { rang: number }> = []
+  for (const [rang, lue] of lirePropositionsBrutes(texte).entries()) {
+    // Publication que PERSONNE n'a demandée : cette suite-là ne se propose pas (voir plus bas).
+    if (publicationJamaisDemandee(lue.texte, demandeDuTour, depotPresent)) continue
+    const suite = estPromptDePublication(lue.texte, demandeDuTour, depotPresent)
+      ? PROMPT_SALVAGE
+      : lue.texte
+    gardees.push({ texte: suite, score: lue.score, rang })
+  }
+  gardees.sort((a, b) => {
+    const ecart = (b.score ?? -1) - (a.score ?? -1)
+    if (ecart !== 0) return ecart
+    // Deux lignes sans note : la DERNIÈRE gagne (ancien format). Deux notes égales : l'ordre du
+    // modèle, qui écrit la meilleure en premier.
+    return a.score === null && b.score === null ? b.rang - a.rang : a.rang - b.rang
+  })
+  const vues = new Set<string>()
+  const propositions: PropositionSuite[] = []
+  for (const { texte: suite, score } of gardees) {
+    if (vues.has(suite)) continue
+    vues.add(suite)
+    propositions.push({ texte: suite, score })
+    if (propositions.length === MAX_PROPOSITIONS) break
+  }
+  return propositions
+}
+
+/**
+ * Rend la suite la MIEUX notée — celle du texte grisé (Tab) et celle que le mode auto envoie.
+ * `null` s'il n'y en a pas : l'appelant retombe alors sur la recommandation, donc rien ne régresse.
+ */
+export function extrairePromptSuivant(
+  texte: string | undefined | null,
+  demandeDuTour?: string,
+  depotPresent = true
+): string | null {
+  return extrairePropositionsSuite(texte, demandeDuTour, depotPresent)[0]?.texte ?? null
 }
 
 /**

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ContextGauge } from '../../../shared/context-gauge'
+import { tokensCourts, type ContexteDetaille } from '../../../shared/contexte-detaille'
 import './ModelQuotaIndicator.css'
+import './ContexteDetaille.css'
 
 /**
  * LA JAUGE DE CONTEXTE, CLIQUABLE — demande utilisateur du 2026-09-06.
@@ -36,7 +38,9 @@ export function ContextGaugeIndicator({
       const trigger = triggerRef.current?.getBoundingClientRect()
       if (!trigger) return
       // Meme correction que ModelQuotaIndicator : le zoom du mode malvoyant multiplie left/top.
-      const z = (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)?.currentCSSZoom || 1
+      const z =
+        (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)
+          ?.currentCSSZoom || 1
       const vw = window.innerWidth / z
       const width = Math.min(380, vw - 16)
       const left = Math.max(8, Math.min(trigger.left / z, vw - width - 8))
@@ -132,82 +136,266 @@ export function ContextGaugeIndicator({
  */
 export function ContextGaugeDetail({
   gauge,
+  contexte,
   onCompact,
   busy,
   style,
   fermer
 }: {
   gauge: ContextGauge
+  /** Detail par categorie mesure par le CLI : present, le panneau prend la forme de claude.exe. */
+  contexte?: ContexteDetaille
   onCompact?: () => void
   busy?: boolean
   style?: React.CSSProperties
   /** Appele quand une action du panneau doit le refermer. */
   fermer?: () => void
 }): React.JSX.Element {
+  if (contexte)
+    return (
+      <ContexteParCategorie
+        contexte={contexte}
+        level={gauge.level}
+        onCompact={onCompact}
+        busy={busy}
+        style={style}
+        fermer={fermer}
+      />
+    )
   const pourcent = Math.round(gauge.ratio * 100)
   const titre =
     `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
     `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
     `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
   return (
-      <section
-        className="model-quota-popover"
-        data-testid="chat-context-popover"
-        aria-label="Contexte de cette conversation"
-        style={style}
-      >
-        <header>
-          <div>
-            <strong>Contexte de cette conversation</strong>
-            <small>fenêtre du modèle servi</small>
-          </div>
-        </header>
-        <div className="model-quota-list">
-          <article
-            className={`model-quota-row quota-context-gauge is-${gauge.level}`}
-            data-testid="quota-context-gauge"
-            aria-label={titre}
-            title={titre}
-          >
-            <div className="model-quota-name">
-              <span>
-                <strong>Occupation du fil</strong>
-                <small>
-                  {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')}{' '}
-                  tokens · {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
-                </small>
-              </span>
-            </div>
-            <div className="model-quota-window">
-              <div className="quota-context-gauge-track" aria-hidden="true">
-                <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
-              </div>
-              <strong className="model-quota-values">
-                <span>{pourcent} % occupé</span>
-                <small>{gauge.fresh.toLocaleString('fr-FR')} tokens frais</small>
-              </strong>
-              {onCompact && (
-                <button
-                  type="button"
-                  className="quota-context-compact"
-                  data-testid="quota-context-compact"
-                  disabled={busy === true}
-                  title={
-                    busy === true
-                      ? 'Compaction indisponible : un tour est déjà en cours'
-                      : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
-                  }
-                  onClick={() => {
-                    fermer?.()
-                    onCompact()
-                  }}
-                >
-                  Compacter
-                </button>
-              )}
-            </div>
-          </article>
+    <section
+      className="model-quota-popover"
+      data-testid="chat-context-popover"
+      aria-label="Contexte de cette conversation"
+      style={style}
+    >
+      <header>
+        <div>
+          <strong>Contexte de cette conversation</strong>
+          <small>fenêtre du modèle servi</small>
         </div>
-      </section>
+      </header>
+      <div className="model-quota-list">
+        <article
+          className={`model-quota-row quota-context-gauge is-${gauge.level}`}
+          data-testid="quota-context-gauge"
+          aria-label={titre}
+          title={titre}
+        >
+          <div className="model-quota-name">
+            <span>
+              <strong>Occupation du fil</strong>
+              <small>
+                {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')} tokens
+                · {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
+              </small>
+            </span>
+          </div>
+          <div className="model-quota-window">
+            <div className="quota-context-gauge-track" aria-hidden="true">
+              <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
+            </div>
+            <strong className="model-quota-values">
+              <span>{pourcent} % occupé</span>
+              <small>{gauge.fresh.toLocaleString('fr-FR')} tokens frais</small>
+            </strong>
+            {onCompact && (
+              <button
+                type="button"
+                className="quota-context-compact"
+                data-testid="quota-context-compact"
+                disabled={busy === true}
+                title={
+                  busy === true
+                    ? 'Compaction indisponible : un tour est déjà en cours'
+                    : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
+                }
+                onClick={() => {
+                  fermer?.()
+                  onCompact()
+                }}
+              >
+                Compacter
+              </button>
+            )}
+          </div>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+/** « 2,5 % » — une decimale, virgule francaise, comme les lignes du panneau de claude.exe. */
+function partDeFenetre(tokens: number, limite: number): string {
+  return `${((tokens / limite) * 100).toLocaleString('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  })} %`
+}
+
+/** Une liste repliable du panneau (outils MCP, fichiers memoire, skills). */
+function ListeContexte({
+  titre,
+  elements,
+  ouverte,
+  testid,
+  nomCourt
+}: {
+  titre: string
+  elements: ContexteDetaille['outilsMcp']
+  ouverte: boolean
+  testid: string
+  /** Un chemin de fichier se lit par sa FIN : le nom du fichier compte plus que le disque. */
+  nomCourt?: (nom: string) => string
+}): React.JSX.Element | null {
+  if (elements.length === 0) return null
+  return (
+    <details className="ctx-liste" open={ouverte} data-testid={testid}>
+      <summary>
+        <span>{titre}</span>
+        <span className="ctx-nombre">{elements.length}</span>
+      </summary>
+      <ul>
+        {elements.map((e, i) => (
+          <li key={`${e.nom}-${i}`} title={`${e.nom} — ${e.tokens.toLocaleString('fr-FR')} tokens`}>
+            <span className="ctx-nom">{nomCourt ? nomCourt(e.nom) : e.nom}</span>
+            <span className="ctx-tokens">{tokensCourts(e.tokens)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+/**
+ * LE PANNEAU « CONTEXTE » A LA MANIERE DE CLAUDE.EXE (conv-1000, 2026-10-16, capture fournie) :
+ * « N % utilise » et « utilise / fenetre », une barre segmentee par categorie, la liste des
+ * categories (pastille, tokens, part de la fenetre), les categories DIFFEREES en fin de liste avec
+ * « — » (chargees a la demande, elles n'occupent rien tant que le modele ne les appelle pas), puis
+ * les listes repliables : outils MCP, fichiers memoire, skills.
+ *
+ * Les nombres viennent du CLI (`get_context_usage`) ; les Messages sont DEDUITS de l'occupation
+ * reelle du dernier appel (`composerContexte`). L'heure de mesure est ecrite : un detail d'un tour
+ * precedent ne se fait pas passer pour celui du dernier.
+ */
+function ContexteParCategorie({
+  contexte,
+  level,
+  onCompact,
+  busy,
+  style,
+  fermer
+}: {
+  contexte: ContexteDetaille
+  level: ContextGauge['level']
+  onCompact?: () => void
+  busy?: boolean
+  style?: React.CSSProperties
+  fermer?: () => void
+}): React.JSX.Element {
+  const { utilise, limite, categories } = contexte
+  const pourcent = Math.round((utilise / limite) * 100)
+  const segments = categories.filter((c) => c.genre === 'utilise' || c.genre === 'reserve')
+  const heure = new Date(contexte.mesureLe).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  return (
+    <section
+      className="model-quota-popover ctx-panneau"
+      data-testid="chat-context-popover"
+      data-context-level={level}
+      aria-label="Contexte de cette conversation"
+      style={style}
+    >
+      <header className="ctx-entete">
+        <strong>Contexte</strong>
+        <small title="Heure de la mesure des catégories par le CLI">mesuré à {heure}</small>
+      </header>
+      <div className="ctx-resume" data-testid="ctx-resume">
+        <span>
+          <b>{pourcent} %</b> utilisé
+        </span>
+        <span className="ctx-total">
+          {tokensCourts(utilise)} / {tokensCourts(limite)}
+        </span>
+      </div>
+      <div className="ctx-barre" aria-hidden="true">
+        {segments.map((c) => (
+          <i
+            key={c.cle}
+            className={`ctx-c-${c.cle}`}
+            style={{ width: `${(c.tokens / limite) * 100}%` }}
+          />
+        ))}
+      </div>
+      <ul className="ctx-categories" data-testid="ctx-categories">
+        {categories.map((c) => (
+          <li
+            key={`${c.genre}-${c.cle}`}
+            className={`ctx-cat is-${c.genre}`}
+            data-categorie={c.cle}
+            title={`${c.libelle} — ${c.tokens.toLocaleString('fr-FR')} tokens`}
+          >
+            <i className={`ctx-pastille ctx-c-${c.cle}`} aria-hidden="true" />
+            <span className="ctx-nom">{c.libelle}</span>
+            <span className="ctx-tokens">{tokensCourts(c.tokens)}</span>
+            <span className="ctx-part">
+              {c.genre === 'differe' ? '—' : partDeFenetre(c.tokens, limite)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="ctx-listes">
+        <ListeContexte
+          titre="Outils MCP"
+          elements={contexte.outilsMcp}
+          ouverte
+          testid="ctx-outils-mcp"
+        />
+        <ListeContexte
+          titre="Fichiers mémoire"
+          elements={contexte.fichiersMemoire}
+          ouverte
+          testid="ctx-fichiers-memoire"
+          nomCourt={(chemin) => {
+            const parties = chemin.split(/[\\/]/)
+            return parties.length > 2 ? `…/${parties.slice(-2).join('/')}` : chemin
+          }}
+        />
+        <ListeContexte
+          titre="Skills"
+          elements={contexte.skills}
+          ouverte={false}
+          testid="ctx-skills"
+        />
+      </div>
+      {onCompact && (
+        <footer className="ctx-pied">
+          <button
+            type="button"
+            className="quota-context-compact"
+            data-testid="quota-context-compact"
+            disabled={busy === true}
+            title={
+              busy === true
+                ? 'Compaction indisponible : un tour est déjà en cours'
+                : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
+            }
+            onClick={() => {
+              fermer?.()
+              onCompact()
+            }}
+          >
+            Compacter
+          </button>
+        </footer>
+      )}
+    </section>
   )
 }

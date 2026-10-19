@@ -17,7 +17,7 @@
  */
 import { ipcMain } from 'electron'
 import { readGitGraph } from '../git-graph-main'
-import { readGitState, readGitDiff, readGitBranches } from '../git-read-main'
+import { readGitState, readGitDiff, readGitBranches, readGitBranch } from '../git-read-main'
 import { checkoutBranch } from '../git-checkout-main'
 import { executerActionGit, type DemandeActionGit } from '../git-action-main'
 import {
@@ -41,6 +41,15 @@ export function registerGitIpc({ os, pickDirectory }: GitIpcDeps): void {
   ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
+  })
+  /*
+    La SEULE branche courante, pour le badge du chat qui la relit toutes les 5 s. Sans processus :
+    `git:read` en créait deux par lecture sur le fil principal (9 gels de 3,3 à 9,8 s, heal
+    conv-1013). Lecture seule.
+  */
+  ipcMain.handle('git:branch', (event, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitBranch')
+    return readGitBranch(cwd && typeof cwd === 'string' ? cwd : process.cwd())
   })
   // Branches LOCALES d'un dépôt, pour le sélecteur de la barre du chat. Lecture seule.
   ipcMain.handle('git:branches', (event, cwd?: string) => {

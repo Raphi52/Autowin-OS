@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
+  argumentsFermerSansFiche,
   bureauxGeres,
   creerBureau,
   fermerBureauGere,
@@ -105,12 +106,40 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/fil/)
   })
 
-  it('bureau sans fiche : refus nommé, rien n’est lancé — jumeau du cas avec fiche', async () => {
+  // conv-1016 (2026-10-17) : « ui-capture-7208 : Fermeture refusée : Ce bureau n'a pas de fiche ».
+  // Les bureaux des captures naissent sans fiche ; le geste de l'utilisateur doit les fermer.
+  it('bureau sans fiche : fermé PAR BUREAU, sans fil — jamais par le chemin des fiches', async () => {
     const fermer = vi.fn()
-    const r = await fermerBureauGere(RACINE, 'orphelin', registre([]), fermer)
+    const sansFiche = vi.fn(async (_r: string, _id: string) => resultat({ ferme: true }))
+    const r = await fermerBureauGere(RACINE, 'ui-capture-7208', registre([]), fermer, sansFiche)
     expect(fermer).not.toHaveBeenCalled()
-    expect(r).toMatchObject({ ok: false, code: null })
-    expect(r.message).toMatch(/pas de fiche/)
+    expect(sansFiche).toHaveBeenCalledWith(RACINE, 'ui-capture-7208')
+    expect(r).toMatchObject({ ok: true, code: 0, message: 'Application fermée, bureau libéré.' })
+  })
+
+  it('bureau AVEC fiche : jamais le chemin sans fiche', async () => {
+    const sansFiche = vi.fn()
+    const d = registre([{ id: 'zox', conversationId: 'conv-1' }])
+    await fermerBureauGere(RACINE, 'zox', d, async () => resultat({}), sansFiche)
+    expect(sansFiche).not.toHaveBeenCalled()
+  })
+
+  it('arguments du mode sans fiche : -SansFiche, aucun fil, délai laissé à Outlook', () => {
+    const args = argumentsFermerSansFiche(RACINE, 'ui-capture-7208')
+    expect(args).toEqual([
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      join(RACINE, 'scripts', 'hdesk-fermer.ps1'),
+      '-Id',
+      'ui-capture-7208',
+      '-SansFiche',
+      '-DelaiDouxSecondes',
+      '15'
+    ])
+    expect(args).not.toContain('-Conversation')
+    expect(() => argumentsFermerSansFiche(RACINE, 'a b;c')).toThrow(/invalide/)
   })
 
   it('identifiant invalide : refus avant toute lecture', async () => {

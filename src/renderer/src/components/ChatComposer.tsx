@@ -37,6 +37,7 @@ import {
   type EtatDictee
 } from './composer-dictee'
 import { Spinner } from './Spinner'
+import type { PropositionSuite } from '../../../shared/prompt-suivant'
 
 /** Où le volume de capture est mémorisé : un micro trop faible doit se régler UNE fois, pas à chaque dictée. */
 const CLE_GAIN_DICTEE = 'autowin.dictee.gain'
@@ -182,6 +183,12 @@ export interface ChatComposerProps {
   mentionSources: MentionSources
   skillCommands: SlashCommand[]
   ghostRecommendation: string | null
+  /**
+   * Les suites proposées par le modèle, de la mieux notée à la moins bien notée (trois au plus) :
+   * montrées en boutons quand le champ est vide, un clic remplit le champ comme Tab (conv-1005).
+   * Absent ou vide : seul le texte grisé reste, comme avant.
+   */
+  propositionsSuite?: readonly PropositionSuite[]
   placeholderPendantTour: boolean
   /** Chaque frappe : le parent écrit son brouillon. Ne doit PAS re-rendre le parent. */
   onDraftInput: (value: string) => void
@@ -476,6 +483,27 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const slashDetail = slashVisibles.find(
       (c) => c.name === slashSurvol && c.description && c.description !== c.hint
     )
+    /*
+     * LES SUITES EN BOUTONS (conv-1005) : seulement champ VIDE, hors tour en cours et sans palette
+     * ouverte — dès qu'on tape, on écrit autre chose, et pendant un tour le champ sert à orienter.
+     */
+    const suitesVisibles =
+      input.trim() === '' &&
+      !props.placeholderPendantTour &&
+      mentionsVisibles.length === 0 &&
+      slashVisibles.length === 0
+        ? (props.propositionsSuite ?? [])
+        : []
+
+    function choisirSuite(texte: string): void {
+      pousserTexte(texte)
+      requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (!el) return
+        el.focus()
+        el.setSelectionRange(el.value.length, el.value.length)
+      })
+    }
 
     return (
       <div className="composer">
@@ -555,6 +583,41 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+          {suitesVisibles.length > 0 ? (
+            <div
+              className="composer-suites fade-in"
+              role="group"
+              aria-label="Suites proposées"
+              data-testid="composer-suites"
+            >
+              {suitesVisibles.map((suite, i) => (
+                <button
+                  key={suite.texte}
+                  type="button"
+                  className={`composer-suite${i === 0 ? ' is-best' : ''}`}
+                  data-testid="composer-suite"
+                  title={
+                    i === 0
+                      ? `${suite.texte}\n\nMieux notée : Tab la prend aussi, et le mode auto l’envoie.`
+                      : suite.texte
+                  }
+                  // Garde le focus du champ : le clic remplit, l'Entrée envoie juste après.
+                  onMouseDown={(ev) => ev.preventDefault()}
+                  onClick={() => choisirSuite(suite.texte)}
+                >
+                  {suite.score !== null ? (
+                    <span
+                      className="composer-suite-score mono"
+                      aria-label={`note ${suite.score} sur 100`}
+                    >
+                      {suite.score}
+                    </span>
+                  ) : null}
+                  <span className="composer-suite-texte">{suite.texte}</span>
+                </button>
+              ))}
             </div>
           ) : null}
           <div className="composer-input-row">

@@ -581,6 +581,9 @@ type ConversationJournalRecord =
       id: string
       messages: Msg[]
       updatedAt: number
+      /** Titre repris du message (conv-999). Absent des journaux antérieurs : titre inchangé. */
+      title?: string
+      origineTitre?: 'auto' | 'utilisateur'
     }
   | {
       schema: 'autowin.conversation-change/v1'
@@ -642,6 +645,11 @@ function applyConversationJournal(
           conversation.messages.push(restaurerContenuDuMessage(message))
         }
         conversation.updatedAt = record.updatedAt
+        // Le titre retenu au moment du message, tel quel : le recalculer ici dépendrait des titres
+        // des AUTRES fils au moment du rejeu (marqueur d'homonyme), donc pourrait différer.
+        if (typeof record.title === 'string' && record.title) conversation.title = record.title
+        if (record.origineTitre === 'auto' || record.origineTitre === 'utilisateur')
+          conversation.origineTitre = record.origineTitre
       } else if (
         record.op === 'turn-event' &&
         typeof record.id === 'string' &&

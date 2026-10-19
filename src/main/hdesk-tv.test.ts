@@ -254,8 +254,41 @@ describe('TV interactive — retour de hdesk-act', () => {
   })
 })
 
-import { argumentsBascule, basculerHdesk } from './hdesk-tv'
+import {
+  argumentsBascule,
+  argumentsLancementBascule,
+  basculerHdesk,
+  dependancesBascule,
+  type DependancesBascule
+} from './hdesk-tv'
 describe('bascule de l’écran réel vers un bureau caché', () => {
+  /** Faux système : la sortie de lancer-detache.ps1, puis la suite des lectures du fichier d'état. */
+  const fauxSysteme = (
+    sortie: string,
+    lectures: Array<string | null>,
+    code: number | null = 0
+  ): DependancesBascule & { lances: string[][]; horloge: number } => {
+    const f = {
+      lances: [] as string[][],
+      horloge: 0,
+      executer: async (args: string[]) => {
+        f.lances.push(args)
+        return { code, sortie }
+      },
+      lire: () => (lectures.length > 1 ? lectures.shift()! : (lectures[0] ?? null)),
+      supprimer: () => undefined,
+      attendre: async (ms: number) => {
+        f.horloge += ms
+      },
+      maintenant: () => f.horloge,
+      fichierStatut: (id: string) => join('T', `statut-${id}.json`)
+    }
+    return f
+  }
+  const lance = '{"pid":4242,"horsJob":true,"commande":"x"}'
+  const decoder = (args: string[]): string =>
+    Buffer.from(args.at(-1)!, 'base64').toString('utf16le')
+
   it('appelle hdesk-basculer.ps1 avec l’id et une minuterie de retour bornée', () => {
     const a = argumentsBascule('R', 'run-1')
     expect(a[4]).toBe(join('R', 'scripts', 'hdesk-basculer.ps1'))
@@ -263,9 +296,79 @@ describe('bascule de l’écran réel vers un bureau caché', () => {
     expect(argumentsBascule('R', 'a', 99999).at(-1)).toBe('600')
     expect(argumentsBascule('R', 'a', 1).at(-1)).toBe('5')
   })
-  it('refuse un identifiant invalide sans rien lancer', () => {
-    expect(basculerHdesk('R', 'x;calc')).toEqual({ ok: false, message: 'Identifiant de bureau invalide.' })
+  it('refuse un identifiant invalide sans rien lancer', async () => {
+    const f = fauxSysteme(lance, [])
+    expect(await basculerHdesk('R', 'x;calc', f)).toEqual({
+      ok: false,
+      message: 'Identifiant de bureau invalide.'
+    })
+    expect(f.lances).toEqual([])
   })
+  it('passe par lancer-detache.ps1 (WMI), jamais par un PowerShell détaché qui ne s’exécute pas', () => {
+    const a = argumentsLancementBascule('D:\\Racine', 'run-1', "C:\\Temp dir\\o'k.json")
+    expect(a.slice(0, 4)).toEqual(['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand'])
+    const ps = decoder(a)
+    expect(ps).toContain(`& '${join('D:\\Racine', 'scripts', 'lancer-detache.ps1')}'`)
+    expect(ps).toContain(
+      `-File ${join('D:\\Racine', 'scripts', 'hdesk-basculer.ps1')} -InstanceId run-1`
+    )
+    // Le chemin d'état à espace est entre guillemets, l'apostrophe doublée pour la chaîne PowerShell.
+    expect(ps).toContain(`-Statut "C:\\Temp dir\\o''k.json"`)
+    expect(ps).toContain(`-Dossier 'D:\\Racine'`)
+  })
+  it('rend ok seulement quand le script annonce que l’écran a basculé', async () => {
+    const f = fauxSysteme(lance, [null, null, '{"etat":"bascule"}'])
+    expect(await basculerHdesk('R', 'run-1', f)).toEqual({ ok: true })
+    expect(f.lances).toHaveLength(1)
+  })
+  it('remonte le message d’erreur écrit par le script', async () => {
+    const f = fauxSysteme(lance, [
+      null,
+      '\uFEFF{"etat":"erreur","message":"Bureau cache introuvable : AutowinTest_run-1 (Win32 2)."}'
+    ])
+    expect(await basculerHdesk('R', 'run-1', f)).toEqual({
+      ok: false,
+      message: 'Bureau cache introuvable : AutowinTest_run-1 (Win32 2).'
+    })
+  })
+  it('dit que le lancement a échoué quand lancer-detache.ps1 ne rend aucun processus', async () => {
+    const f = fauxSysteme('{"erreur":"Win32_Process.Create a rendu 9","commande":"x"}', [], 1)
+    const r = await basculerHdesk('R', 'run-1', f)
+    expect(r).toEqual({
+      ok: false,
+      message: expect.stringContaining('Win32_Process.Create a rendu 9')
+    })
+  })
+  it('ne prétend pas avoir basculé quand le script ne donne aucune nouvelle', async () => {
+    const f = fauxSysteme(lance, [null])
+    const r = await basculerHdesk('R', 'run-1', f, 1000)
+    expect(r).toEqual({ ok: false, message: expect.stringContaining('aucune nouvelle') })
+  })
+  // VRAI lancement, sans toucher à l'écran : le bureau visé n'existe pas, donc le script échoue AVANT
+  // de basculer. Avant la correction, le PowerShell détaché ne s'exécutait jamais et l'app rendait
+  // { ok: true } : ce test prouve que le script tourne vraiment et que son erreur remonte.
+  it.runIf(process.platform === 'win32')(
+    'lance réellement le script et remonte son erreur (bureau inexistant, écran intact)',
+    async () => {
+      const racine = process.cwd()
+      expect(existsSync(join(racine, 'scripts', 'hdesk-basculer.ps1'))).toBe(true)
+      const dossier = mkdtempSync(join(tmpdir(), 'bascule avec espace-'))
+      try {
+        const id = `inexistant-${process.pid}-${Date.now()}`
+        const r = await basculerHdesk(racine, id, {
+          ...dependancesBascule(),
+          fichierStatut: (i) => join(dossier, `statut-${i}.json`)
+        })
+        expect(r).toEqual({
+          ok: false,
+          message: expect.stringContaining(`Bureau cache introuvable : AutowinTest_${id}`)
+        })
+      } finally {
+        rmSync(dossier, { recursive: true, force: true })
+      }
+    },
+    60_000
+  )
 })
 
 describe('TV interactive — touches et molette (conv-35)', () => {
@@ -286,3 +389,142 @@ describe('TV interactive — touches et molette (conv-35)', () => {
     expect(dansCs).toEqual([...TOUCHES_TV].sort())
   })
 })
+
+/**
+ * CLIC DÉCALÉ DANS UNE IMAGE RECADRÉE (conv-1009, 2026-10-16) : « Action refusée : Aucune fenetre en
+ * (362,144) dans ce bureau. dans la view bureaux virtuels les clicks marchent mal ». La TV et la vue
+ * « Bureaux cachés » montrent une capture RECADRÉE autour des fenêtres (hdesk-shot.cs, recadrer=true),
+ * mais le clic partait comme si l'image commençait au coin de l'écran. Mesure : boîte de dialogue en
+ * (755,465) sur AutowinTest_ui-capture-38332, image recadrée depuis (747,457) ; le point (362,144) de
+ * l'image est l'écran (1109,601), hdesk-act le cherchait en (362,144) où il n'y a rien.
+ */
+import { pointEcran } from './hdesk-tv'
+describe('TV interactive — clic dans une image recadrée', () => {
+  it('ramène le point de l’image au point de l’écran du bureau caché', () => {
+    expect(pointEcran({ id: 'a', x: 362, y: 144 }, { x: 747, y: 457 })).toEqual({
+      id: 'a',
+      x: 1109,
+      y: 601
+    })
+  })
+  it('sans recadrage connu, le point reste celui de l’image (capture plein écran)', () => {
+    expect(pointEcran({ id: 'a', x: 5, y: 6, texte: 't' }, undefined)).toEqual({
+      id: 'a',
+      x: 5,
+      y: 6,
+      texte: 't'
+    })
+  })
+  it('laisse les coordonnées invalides au refus de argumentsAct, sans les maquiller', () => {
+    const g = pointEcran({ id: 'a', x: NaN, y: 1 }, { x: 10, y: 10 })
+    expect(() => argumentsAct('R', g)).toThrow(/Coordonnées/)
+  })
+})
+
+describe.skipIf(process.platform !== 'win32')('TV interactive — origine de la capture', () => {
+  it('garde l’origine du recadrage de CHAQUE bureau et l’applique à ses gestes', async () => {
+    const racine = mkdtempSync(join(tmpdir(), 'tv-origine-'))
+    mkdirSync(join(racine, 'scripts'))
+    // Faux processus de capture : même protocole que scripts/hdesk-tv.ps1 (pret, puis une ligne par demande).
+    writeFileSync(
+      join(racine, 'scripts', 'hdesk-tv.ps1'),
+      [
+        '[Console]::Out.WriteLine(\'{"pret":true}\'); [Console]::Out.Flush()',
+        'while ($true) {',
+        '  $l = [Console]::In.ReadLine(); if ($null -eq $l) { break }',
+        "  $p = $l.Trim() -split '\\s+', 3",
+        '  if ($p[1] -eq \'parti\') { $s = \'{"id":"parti","erreur":"Bureau introuvable (Win32 2)."}\' }',
+        '  else { [IO.File]::WriteAllText($p[2], \'png\'); $s = \'{"id":"\' + $p[1] + \'","width":443,"height":182,"uni":false,"origineX":747,"origineY":457}\' }',
+        '  [Console]::Out.WriteLine($s); [Console]::Out.Flush()',
+        '}'
+      ].join('\n')
+    )
+    const capteur = new CapteurHdesk(racine, mkdtempSync(join(tmpdir(), 'tv-origine-reg-')))
+    try {
+      expect((await capteur.image('dialogue')).statut).toBe('ok')
+      expect(capteur.versEcran({ id: 'dialogue', x: 362, y: 144 })).toMatchObject({
+        x: 1109,
+        y: 601
+      })
+      // Un autre bureau jamais capturé : aucun décalage inventé.
+      expect(capteur.versEcran({ id: 'autre', x: 362, y: 144 })).toMatchObject({ x: 362, y: 144 })
+      // Bureau fermé : son origine est oubliée.
+      expect((await capteur.image('parti')).statut).toBe('ferme')
+      expect(capteur.versEcran({ id: 'parti', x: 1, y: 2 })).toMatchObject({ x: 1, y: 2 })
+    } finally {
+      capteur.detruire()
+      rmSync(racine, { recursive: true, force: true })
+    }
+  }, 30000)
+})
+
+// Preuve réelle du scénario utilisateur : fenêtre loin du coin de l'écran, clic au CENTRE de l'image
+// recadrée. Sans conversion, hdesk-act ne trouve aucune fenêtre (le message vu par l'utilisateur).
+describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)(
+  'TV interactive — clic réel dans une image recadrée',
+  () => {
+    it('le centre de l’image atteint la fenêtre posée en (600,400)', async () => {
+      const racine = process.cwd()
+      const dossier = mkdtempSync(join(tmpdir(), 'tv-clic-reel-'))
+      const formulaire = join(dossier, 'formulaire.ps1')
+      writeFileSync(
+        formulaire,
+        'Add-Type -AssemblyName System.Windows.Forms\n' +
+          '$f = New-Object System.Windows.Forms.Form\n' +
+          "$f.StartPosition = 'Manual'; $f.Location = New-Object System.Drawing.Point(600, 400)\n" +
+          '$f.Size = New-Object System.Drawing.Size(320, 220); $f.Text = "cible"\n' +
+          '[System.Windows.Forms.Application]::Run($f)\n'
+      )
+      const id = `tvclic${Date.now()}`
+      const reg = mkdtempSync(join(tmpdir(), 'reg-'))
+      const sortie = execFileSync(
+        'powershell',
+        [
+          '-NoProfile',
+          '-File',
+          'scripts/hdesk-lancer.ps1',
+          '-Id',
+          id,
+          '-Executable',
+          'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+          '-Arguments',
+          `-NoProfile -ExecutionPolicy Bypass -File ${formulaire}`,
+          '-AttenteSecondes',
+          '30',
+          '-Travail',
+          'preuve clic recadre',
+          '-Conversation',
+          'conv-t',
+          '-Registre',
+          reg
+        ],
+        { encoding: 'utf8' }
+      )
+      const pid = JSON.parse(sortie.trim().split(/\r?\n/).pop() as string).pid as number
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        const img = await c.image(id)
+        expect(img.statut).toBe('ok')
+        if (img.statut !== 'ok') return
+        expect(img.width).toBeLessThan(1000)
+        const centre = {
+          id,
+          x: Math.round(img.width / 2),
+          y: Math.round(img.height / 2),
+          sansClic: true
+        }
+        const vise = await agirHdesk(racine, c.versEcran(centre))
+        expect(vise).toMatchObject({
+          ok: true,
+          action: { cible: expect.stringMatching(/WindowsForms/) }
+        })
+        const brut = await agirHdesk(racine, centre)
+        expect(brut).toMatchObject({ ok: false, message: expect.stringMatching(/Aucune fenetre/) })
+      } finally {
+        c.detruire()
+        process.kill(pid)
+        rmSync(dossier, { recursive: true, force: true })
+      }
+    }, 90000)
+  }
+)

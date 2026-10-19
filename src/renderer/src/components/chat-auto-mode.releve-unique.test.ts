@@ -4,6 +4,7 @@ import {
   PROMPT_NOUVELLE_CIBLE,
   ancrerSurLaDemande,
   deciderRelanceAuto,
+  derniereDemandeHumaine,
   relevesDepuisHumain,
   type EntreeDecisionAuto
 } from './chat-auto-mode'
@@ -111,5 +112,52 @@ describe('relève du mode auto — une seule par série automatique', () => {
       agent(RIEN)
     ]
     expect(relevesDepuisHumain(fil)).toBe(1)
+  })
+})
+
+/*
+ * LA RELÈVE NE PROMET PLUS D'ATTENDRE. conv-996 (2026-10-16) : elle disait « et attends mon
+ * choix », alors que `reponseAutoAuDernierAsk` répond SEUL à la question qu'elle demande. L'agent a
+ * pris l'option envoyée pour une dérive et a refusé de l'exécuter ; l'utilisateur a tranché :
+ * « trust le pouvoir du mode auto ». Le texte change, donc les relèves DÉJÀ écrites dans les fils
+ * (et dans `dernierPromptEnvoye`) doivent rester reconnues, sinon la relève repartirait en double.
+ */
+const RELEVE_AVANT_CONV_996 =
+  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 10 ' +
+  'nouvelles cibles concrètes issues de ce qui vient d’être fait, et attends mon choix.'
+
+describe('texte de la relève — l’option recommandée part seule', () => {
+  it('annonce que l’option recommandée partira seule, sans promettre d’attendre un choix', () => {
+    expect(PROMPT_NOUVELLE_CIBLE).not.toMatch(/attends mon choix/i)
+    expect(PROMPT_NOUVELLE_CIBLE).toMatch(/option recommandée/)
+    expect(PROMPT_NOUVELLE_CIBLE).toMatch(/partira seule/)
+  })
+
+  it('une relève à l’ANCIEN texte, déjà dans le fil, compte encore : pas de deuxième relève', () => {
+    const fil = [
+      humain(DEMANDE),
+      agent(RIEN),
+      humain(RELEVE_AVANT_CONV_996),
+      askMsg(['Ajoute les tests']),
+      humain(ancrerSurLaDemande('Ajoute les tests', DEMANDE)),
+      agent(RIEN)
+    ]
+    expect(relevesDepuisHumain(fil)).toBe(1)
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
+      action: 'attendre',
+      raison: 'chaine-finie'
+    })
+  })
+
+  it('une relève à l’ANCIEN texte gardée en mémoire (dernierPromptEnvoye) compte encore', () => {
+    const fil = [humain(DEMANDE), agent(RIEN)]
+    expect(
+      deciderRelanceAuto({ ...base, fil, dernierPromptEnvoye: RELEVE_AVANT_CONV_996 })
+    ).toMatchObject({ action: 'attendre', raison: 'chaine-finie' })
+  })
+
+  it('une relève à l’ANCIEN texte n’est jamais prise pour la demande de l’utilisateur', () => {
+    const fil = [humain(DEMANDE), agent(RIEN), humain(RELEVE_AVANT_CONV_996)]
+    expect(derniereDemandeHumaine(fil)).toBe(DEMANDE)
   })
 })

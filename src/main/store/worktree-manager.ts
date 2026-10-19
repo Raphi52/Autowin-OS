@@ -31,7 +31,10 @@ import { Worker } from 'node:worker_threads'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
 import { isSameProcessIdentity } from '../process-identity'
 import { parsePorcelainPaths } from '../run-autoclose'
-import { WorktreeOperationClient } from './worktree-operation-client'
+import {
+  WorktreeOperationClient,
+  type WorktreeOperationWorkerLike
+} from './worktree-operation-client'
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 import {
   delierLesDependances,
@@ -71,6 +74,14 @@ const GIT_COMMAND_TIMEOUT_MS = Number(process.env.AUTOWIN_GIT_TIMEOUT_MS ?? 180_
  * donc large sans être infini — un worker vraiment pendu reste tué.
  */
 const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
+
+/**
+ * Budget de la passe de retention confiee au worker : une commande `git cherry` PAR ref, en serie.
+ * Mesure du 2026-10-16 sur ce depot : 77 refs, 12 s a vide (148 ms par `git cherry` en mediane).
+ * Rien n'attend ce rapport (il alimente une vue, une fois par heure) : le budget de l'inventaire
+ * de recuperation convient, et un worker vraiment pendu reste tue.
+ */
+const PASSE_RETENTION_TIMEOUT_MS = INVENTAIRE_RECUPERATION_TIMEOUT_MS
 /**
  * `finalize` n'est pas UNE commande git, c'est une SEQUENCE : commit dans la copie, fusion dans la
  * base, crochets du depot, puis suppression du dossier de travail. Lui donner le budget d'une seule
@@ -228,6 +239,9 @@ export const ARGS_REFS_RETENTION = [
 ]
 
 type CandidatRetention = { nom: string; sha: string; famille: string; ageMs?: number }
+
+/** Ce que git sait d'une ref de retention — la forme qui traverse le worker (aucune fonction). */
+export type VerdictRetention = { candidat: CandidatRetention; apporteQuelqueChose: boolean }
 
 /** Lit la sortie de `for-each-ref` et rend les refs retenues, avec leur famille et leur age. */
 function refsDeRetention(stdout: string, maintenant: number): CandidatRetention[] {
@@ -445,6 +459,12 @@ export interface WorktreeManagerOptions {
   nowFn?: () => number
   /** Désactive le client worker à l'intérieur du worker lui-même. */
   disableAsyncOperations?: boolean
+  /**
+   * Fabrique du worker d'opérations, injectable (tests) : fournie, elle crée le client même sans
+   * fichier worker compilé et même avec un git simulé — c'est le test qui décide ce que répond le
+   * worker.
+   */
+  operationWorkerFactory?: () => WorktreeOperationWorkerLike
   operationTimeoutMs?: number
 }
 
@@ -989,7 +1009,12 @@ export class WorktreeManager {
     this.processIdentity = opts.processIdentityFn ?? defaultProcessIdentity
     this.now = opts.nowFn ?? Date.now
     const operationWorkerPath = resoudreCheminWorker(__dirname, existsSync)
-    if (
+    if (!opts.disableAsyncOperations && opts.operationWorkerFactory) {
+      this.operationClient = new WorktreeOperationClient(operationWorkerPath, {
+        timeoutMs: opts.operationTimeoutMs ?? GIT_COMMAND_TIMEOUT_MS + 2_000,
+        workerFactory: opts.operationWorkerFactory
+      })
+    } else if (
       !opts.disableAsyncOperations &&
       !opts.git &&
       !opts.tryGitFn &&
@@ -1792,17 +1817,25 @@ export class WorktreeManager {
    * 2026-09-08 -- pour une reponse que la regle ignore de toute facon.
    */
   recenserRetention(consigne: (sha: string) => boolean): EntreeBalayage[] {
+    return this.verdictsRetention().map((v) =>
+      entreeDeRetention(v.candidat, v.apporteQuelqueChose, consigne)
+    )
+  }
+
+  /**
+   * La part GIT du recensement, sans la consigne : c'est elle que le worker execute, parce qu'une
+   * fonction (`consigne`) ne traverse pas `postMessage`. La regle reste appliquee cote appelant.
+   */
+  verdictsRetention(): VerdictRetention[] {
     const lignes = this.tryGitFn(this.baseRepo, ARGS_REFS_RETENTION)
     if (lignes.code !== 0) return []
-    const entrees: EntreeBalayage[] = []
-    for (const candidate of refsDeRetention(lignes.stdout, Date.now())) {
-      const apporteQuelqueChose =
-        candidate.famille === 'trie'
+    return refsDeRetention(lignes.stdout, Date.now()).map((candidat) => ({
+      candidat,
+      apporteQuelqueChose:
+        candidat.famille === 'trie'
           ? false
-          : this.tryGitFn(this.baseRepo, ['cherry', 'HEAD', candidate.nom]).stdout.includes('+')
-      entrees.push(entreeDeRetention(candidate, apporteQuelqueChose, consigne))
-    }
-    return entrees
+          : this.tryGitFn(this.baseRepo, ['cherry', 'HEAD', candidat.nom]).stdout.includes('+')
+    }))
   }
 
   /**
@@ -1815,11 +1848,24 @@ export class WorktreeManager {
    */
   async recenserRetentionAsync(
     consigne: (sha: string) => boolean,
-    executer: (
-      repo: string,
-      args: string[]
-    ) => Promise<{ code: number; stdout: string }> = tryGitAsync
+    executerInjecte?: (repo: string, args: string[]) => Promise<{ code: number; stdout: string }>
   ): Promise<EntreeBalayage[]> {
+    /*
+     * DANS LE WORKER des qu'il existe (heal conv-1013, 2026-10-16). `execFile` n'attend pas git sur
+     * le fil principal, mais il y CREE chaque processus — synchrone sous Windows. Une passe = 78
+     * processus sur ce depot (631 ms cumulees a vide), et `gels.jsonl` porte 3 gels
+     * `spawn git cherry` de 3,7 a 8,8 s, tous dans la passe du demarrage. Dans le worker, les memes
+     * commandes calent le worker, jamais la fenetre.
+     */
+    if (!executerInjecte && this.operationClient) {
+      const verdicts = await this.operationClient.run<VerdictRetention[]>(
+        { operation: 'verdictsRetention' },
+        {},
+        { timeoutMs: PASSE_RETENTION_TIMEOUT_MS }
+      )
+      return verdicts.map((v) => entreeDeRetention(v.candidat, v.apporteQuelqueChose, consigne))
+    }
+    const executer = executerInjecte ?? tryGitAsync
     const lignes = await executer(this.baseRepo, ARGS_REFS_RETENTION)
     if (lignes.code !== 0) return []
     const entrees: EntreeBalayage[] = []

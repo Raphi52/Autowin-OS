@@ -1,4 +1,9 @@
-/* Vue « Bureaux cachés » (conv-951). Le cadre, le fond et le liseré viennent de .view-page. */
+/*
+ * Vue « Bureaux cachés » (conv-951, refonte conv-1002) : antenne + moniteurs, bandeau « Tu pilotes ».
+ * AUCUNE couleur en dur (« en fonction du thème », conv-1002) : tout passe par les variables du thème
+ * actif (--accent, --err, --warn, --ok, --line, --text*, --surface-*), mélangées par color-mix.
+ * Le cadre, le fond et le liseré de la page viennent de .view-page.
+ */
 .hdesk-gestion-view {
   display: flex;
   flex-direction: column;
@@ -6,6 +11,8 @@
   min-height: 0;
   overflow: auto;
 }
+
+/* ---------- Création ---------- */
 .hdesk-formulaire {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -23,12 +30,14 @@
   font-size: 12px;
   color: var(--text-dim);
 }
-.hdesk-champ input {
+.hdesk-champ input,
+.hdesk-dock input {
   padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--surface-inset);
   color: inherit;
+  font: inherit;
 }
 .hdesk-etat {
   color: var(--text-dim);
@@ -47,66 +56,441 @@
 .hdesk-retour.is-erreur {
   color: var(--err);
 }
-.hdesk-liste {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+.hdesk-non-relie {
+  font-style: italic;
 }
-.hdesk-carte {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--container-radius-card);
-  background: var(--surface-card);
+.hdesk-btn-danger {
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
 }
-.hdesk-apercu {
-  position: relative;
+
+/* ---------- Bandeau EN DIRECT ---------- */
+.hdesk-direct {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 10;
-  overflow: hidden;
-  border-radius: 6px;
-  background: var(--surface-inset);
-  color: var(--text-faint);
-  font-size: 12px;
-}
-.hdesk-apercu img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.hdesk-apercu-note {
-  position: absolute;
-  bottom: 4px;
-  right: 6px;
-}
-.hdesk-infos {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: 6px 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-card);
   font-size: 12px;
   color: var(--text-dim);
+}
+.hdesk-direct b {
+  color: var(--text);
+}
+.hdesk-direct-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--err);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hdesk-direct-rec::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--err);
+}
+.hdesk-direct-alerte {
+  color: var(--warn);
+}
+.hdesk-direct-alerte b {
+  color: var(--warn);
+}
+.hdesk-direct-cadence {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+/* ---------- Antenne ---------- */
+.hdesk-antenne {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
 }
-.hdesk-infos > * {
+.hdesk-antenne-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.hdesk-antenne-tete strong {
+  font-size: 15px;
+  color: var(--text);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hdesk-infos strong {
-  font-size: 13px;
-  color: var(--text);
-}
-.hdesk-non-relie {
-  font-style: italic;
-}
 .hdesk-gestes {
   display: flex;
   gap: 6px;
+  margin-left: auto;
+}
+.hdesk-tag-antenne {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: var(--err);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hdesk-tag-antenne.is-petit {
+  font-size: 8.5px;
+  padding: 0 4px;
+}
+.hdesk-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hdesk-fiche > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Bandeau d'état collé au-dessus de l'image : Regarder (neutre) ou Tu pilotes (hachures d'accent). */
+.hdesk-bandeau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--surface-card);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hdesk-bandeau > strong {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.hdesk-bandeau > .btn {
+  margin-left: auto;
+}
+.hdesk-bandeau.is-pilote {
+  border: 2px solid var(--accent);
+  border-bottom: 0;
+  color: var(--text);
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--accent) 24%, transparent) 0 8px,
+    color-mix(in srgb, var(--accent) 8%, transparent) 8px 16px
+  );
+}
+.hdesk-bandeau.is-pilote > strong {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.hdesk-bandeau.is-pilote b {
+  font-family: ui-monospace, Consolas, monospace;
+}
+.hdesk-bandeau-jauge {
+  flex: 1 0 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  overflow: hidden;
+}
+.hdesk-bandeau-jauge i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.9s linear;
+}
+
+.hdesk-ecran {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 62vh;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  background: var(--surface-inset);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.hdesk-ecran img {
+  display: block;
+  max-width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+}
+.hdesk-tv.is-pilote .hdesk-ecran img {
+  cursor: crosshair;
+}
+.hdesk-ecran img.is-uni,
+.hdesk-moniteur-ecran img.is-uni {
+  opacity: 0.5;
+}
+.hdesk-ecran-note {
+  position: absolute;
+  z-index: 2;
+  bottom: 4px;
+  right: 6px;
+}
+
+/* ---------- La TV holographique ----------
+   conv-1002 : « fais un style holo sur la tv et orange pour claude ninja ». La TV = bandeau + écran
+   à l'antenne, dans UN cadre : liseré irisé qui tourne (dégradé conique sur un anneau masqué, même
+   technique que le cadre des panneaux du thème holographique), lueur assortie, fines lignes de
+   balayage et un reflet qui passe sur l'image. Les teintes sont une LISTE en variable : un thème
+   n'a qu'à la remplacer (Ninja Claude, plus bas, en orange).
+   Pas de neutralisation sous prefers-reduced-motion : ce poste l'a actif et l'effet ne se verrait
+   jamais (même choix que CandidatsPickPanel.css). La rotation est lente et ne bouge rien d'autre. */
+@property --hdesk-holo-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.hdesk-tv {
+  --hdesk-tv-teintes: #5ee7ff, #8b6cff, #ff5fd2, #ffd27a, #6dffc7, #5ee7ff;
+  --hdesk-tv-lueur: rgba(139, 108, 255, 0.3);
+  position: relative;
+  padding: 2px;
+  border-radius: 10px;
+  box-shadow: 0 0 16px var(--hdesk-tv-lueur);
+}
+.hdesk-tv::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--hdesk-holo-angle), var(--hdesk-tv-teintes));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: hdesk-holo-tourne 12s linear infinite;
+}
+/* En Piloter, la TV s'anime plus vite et luit davantage : on sent qu'elle est « en main ». */
+.hdesk-tv.is-pilote {
+  box-shadow: 0 0 24px var(--hdesk-tv-lueur);
+}
+.hdesk-tv.is-pilote::before {
+  animation-duration: 4s;
+}
+@keyframes hdesk-holo-tourne {
+  to {
+    --hdesk-holo-angle: 360deg;
+  }
+}
+/* Le cadre est porté par la TV : le bandeau et l'écran n'ont plus le leur. */
+.hdesk-tv .hdesk-bandeau,
+.hdesk-tv .hdesk-bandeau.is-pilote {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.hdesk-tv .hdesk-ecran {
+  border: 0;
+}
+/* « REGARDER » écrit dans les teintes du liseré. */
+.hdesk-tv .hdesk-bandeau.is-regarde > strong {
+  background: linear-gradient(90deg, var(--hdesk-tv-teintes));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Lignes de balayage + reflet qui traverse l'image toutes les 7 s ; jamais devant un clic. */
+.hdesk-tv .hdesk-ecran::before,
+.hdesk-tv .hdesk-ecran::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.hdesk-tv .hdesk-ecran::before {
+  background: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, #fff 5%, transparent) 0 1px,
+    transparent 1px 3px
+  );
+}
+.hdesk-tv .hdesk-ecran::after {
+  background: linear-gradient(
+    105deg,
+    transparent 42%,
+    color-mix(in srgb, #fff 12%, transparent) 50%,
+    transparent 58%
+  );
+  background-size: 250% 100%;
+  animation: hdesk-holo-reflet 7s ease-in-out infinite;
+}
+@keyframes hdesk-holo-reflet {
+  0% {
+    background-position: 0% 0;
+  }
+  45%,
+  100% {
+    background-position: 100% 0;
+  }
+}
+/* Ninja Claude : la même TV, en orange (les teintes de son accent #d97757). */
+:root[data-theme='ninja-claude'] .hdesk-tv {
+  --hdesk-tv-teintes: #d97757, #f2a65a, #ffd8a8, #c4512a, #f0b27a, #d97757;
+  --hdesk-tv-lueur: rgba(217, 119, 87, 0.32);
+}
+
+.hdesk-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.hdesk-dock input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.hdesk-vise {
+  font:
+    11px ui-monospace,
+    Consolas,
+    monospace;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ---------- Moniteurs ---------- */
+.hdesk-moniteurs {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.hdesk-moniteur {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.hdesk-moniteur-ecran {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-inset);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.hdesk-moniteur:hover .hdesk-moniteur-ecran {
+  border-color: var(--accent);
+}
+.hdesk-moniteur.is-antenne .hdesk-moniteur-ecran {
+  border: 2px solid var(--err);
+}
+.hdesk-moniteur-ecran img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hdesk-moniteur-legende {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text);
+}
+.hdesk-moniteur-legende > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hdesk-moniteur-etat {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.hdesk-moniteur-etat.is-alerte {
+  color: var(--warn);
+}
+/* La croix : posée sur le coin haut-droit de la vignette, toujours visible, rouge au survol. */
+.hdesk-moniteur-case {
+  position: relative;
+}
+.hdesk-moniteur-case.is-fermeture .hdesk-moniteur {
+  opacity: 0.45;
+}
+.hdesk-moniteur-fermer {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  /* Pastille sombre et croix blanche FIXES, hors thème : elle se pose sur une capture d'écran,
+     dont le fond est quelconque ; aux couleurs du thème clair, elle sortait gris sur gris. */
+  border: 1px solid color-mix(in srgb, #fff 35%, transparent);
+  background: color-mix(in srgb, #000 62%, transparent);
+  color: #fff;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.hdesk-moniteur-fermer svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.hdesk-moniteur-fermer:hover:not(:disabled),
+.hdesk-moniteur-fermer:focus-visible {
+  background: var(--err);
+  border-color: var(--err);
+  color: #fff;
+}
+.hdesk-moniteur-fermer:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }

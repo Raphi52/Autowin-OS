@@ -296,7 +296,7 @@ const APPROBATION_CONTRAT = /\bVALIDE\b/i
  * contrat : hors contrat, on ne présume pas l'approbation. Les autres phases restent vertes — elles
  * racontent leur travail, elles ne se prononcent pas.
  */
-function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
+export function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
   if (phase !== 'judge') return 'green'
   const propre = (text ?? '').trim()
   if (!propre) return 'red'
@@ -330,7 +330,7 @@ export function lireVerdictJuge(text: string): boolean {
  * verte) — les retirer toutes faisait franchir l'arête verte à un juge muet ou en panne (mesuré :
  * 3 tests fail-closed rouges sur main au commit 2329a77).
  */
-function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
+export function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
   return {
     ...graph,
     edges: graph.edges.filter((edge) => {
@@ -347,7 +347,7 @@ function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
  * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
  * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
  */
-function phasesApresBuildDeReparation(graph: WorkflowGraph): NodePhase[] {
+export function phasesApresBuildDeReparation(graph: WorkflowGraph): NodePhase[] {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]))
   const retour = graph.edges.find((edge) => {
     if (edge.when !== 'red') return false
@@ -1022,7 +1022,7 @@ export function raisonsDArretDuRun(erreur: unknown): string[] | undefined {
   return [`run arrêté avant le contrôle final : ${motif || 'erreur sans message'}`]
 }
 
-function costOfTrace(trace: OrchestrationStep[]): number {
+export function costOfTrace(trace: OrchestrationStep[]): number {
   return trace.reduce(
     (total, step) =>
       total + (Number.isFinite(step.costUsd) ? Math.max(0, step.costUsd as number) : 0),
@@ -1030,7 +1030,7 @@ function costOfTrace(trace: OrchestrationStep[]): number {
   )
 }
 
-function limitGreedyPlan(plan: GreedyTaskNode[], maxNodes: number): GreedyTaskNode[] {
+export function limitGreedyPlan(plan: GreedyTaskNode[], maxNodes: number): GreedyTaskNode[] {
   const kept = plan.slice(0, Math.max(0, maxNodes))
   const ids = new Set(kept.map((node) => node.id))
   return kept.filter((node) => node.deps.every((dependency) => ids.has(dependency)))
@@ -1216,7 +1216,7 @@ export function sandboxForPhase(
  * propre mission et tentent d'écrire malgré leur contrat read-only. Le routage a déjà été calculé
  * avant la construction du contexte ; on peut donc retirer uniquement une phase native reconnue.
  */
-function taskForPipelineContext(task: string): string {
+export function taskForPipelineContext(task: string): string {
   const match = /^\s*\/([a-z][a-z0-9-]*)\b\s*/i.exec(task)
   if (!match) return task
   const phase = match[1].toLowerCase() as PipelinePhase

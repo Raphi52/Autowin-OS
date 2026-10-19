@@ -44,6 +44,13 @@ export type WorktreeOperationRequest =
    * 14 403 ms au demarrage (mesure du 2026-08-29, detecteur de gel, conv-1511).
    */
   | { operation: 'recensementNonPublies'; baseRef?: string; limite?: number }
+  /**
+   * La passe de retention (un `git cherry` par ref de secours), ENTIEREMENT dans le worker : sur le
+   * thread main, la seule creation des 78 processus a gele la fenetre jusqu'a 8,8 s au demarrage
+   * (gels.jsonl, 14-16/10, heal conv-1013). Rend des `VerdictRetention` ; la consigne s'applique
+   * cote appelant.
+   */
+  | { operation: 'verdictsRetention' }
   | { operation: 'describe'; agentId: string }
   | { operation: 'hasActiveProcesses'; agentId: string }
   | { operation: 'discard'; agentId: string }

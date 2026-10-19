@@ -177,13 +177,21 @@ export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE — réflexe (5) de
  * l'essentiel. Ce bloc se reconnait, donc il passe toujours en entier. Pose ICI, une fois, plutot
  * que recopie dans cinq consignes : leurs formats propres (tableau du scout, sections du cadrage)
  * restent intacts. Pas pour le juge (format strict), ni kaizen et remake (livrable propre).
+ *
+ * LA LIGNE `Question` (conv-1008, 2026-10-16) : c'est la seule voie par laquelle un run demande
+ * quelque chose a l'utilisateur. Celle de la DERNIERE etape devient une carte « Message du run »
+ * avec ses reponses cliquables (`messageDuRun`, src/shared/message-du-run.ts). Par defaut
+ * « aucune » : le mandat d'autonomie ne change pas, seule une decision qui n'appartient pas au run
+ * y monte.
  */
-export const CONSIGNE_BILAN = `BILAN — termine ta réponse par ce bloc, AVANT les lignes techniques qui restent les dernières (\`SUITE:\`, \`AUTOWIN_…\`), même si tout est déjà dit plus haut : quand ta réponse est trop longue, c'est la partie qu'Autowin remonte TOUJOURS en entier. Quatre lignes courtes, une phrase chacune.
+export const CONSIGNE_BILAN = `BILAN — termine ta réponse par ce bloc, AVANT les lignes techniques qui restent les dernières (\`SUITE:\`, \`AUTOWIN_…\`), même si tout est déjà dit plus haut : quand ta réponse est trop longue, c'est la partie qu'Autowin remonte TOUJOURS en entier. Cinq lignes courtes, une phrase chacune.
 ### Bilan de l’étape
 - Verdict : <fait | partiel | bloqué | déjà fait> — <une phrase>
 - Fichiers touchés : <chemins, ou « aucun »>
 - Preuves : <commande + code de sortie, fichier:ligne lu — ou « aucune »>
-- Reste à faire : <la suite, ou « aucun reste »>`
+- Reste à faire : <la suite, ou « aucun reste »>
+- Question : aucune
+QUESTION — c'est la SEULE question du run que l'utilisateur verra, avec ses réponses en boutons. Laisse « aucune » par défaut. Remplace-la seulement pour une décision que tu n'as PAS le droit de prendre seul : un geste irréversible, un choix produit, une publication (commit, push, PR) que la demande a évoquée — jamais pour faire valider une suite sûre que tu peux faire toi-même. Forme exacte, sur une ligne : la question, puis \`→\`, puis 2 à 4 réponses courtes séparées par \` | \`, la recommandée en premier. Exemple : \`- Question : Je garde l’ancien format en lecture ? → Oui, en lecture seule | Non, je le retire\``
 
 const PHASES_AVEC_BILAN: ReadonlySet<string> = new Set(['scout', 'frame', 'terrain', 'build', 'clean'])
 

@@ -480,3 +480,70 @@
 .askd.est-repondu .askd-entree {
   visibility: hidden;
 }
+
+/*
+ * MESSAGE DU RUN (conv-1008) — la question que le run pose LUI-MEME a la fin de son travail.
+ *
+ * Parite avec la carte « Message from subagent » de claude.exe : qui parle, son resume, puis la
+ * question et une croix pour fermer. La GRAMMAIRE reste celle du bloc `ask` (reponses empilees,
+ * filets or, aucun panneau) : seule la tete change. Les reponses cote a cote de claude.exe ne sont
+ * PAS reprises, le garde-fou en tete de fichier tient.
+ */
+.askd-provenance {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 0 4px 10px;
+  font-size: 12.5px;
+  color: #a9b2c4;
+}
+.askd-provenance-de {
+  font:
+    600 10px/1 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e3ba55;
+  /* Colonne etroite (capture a 820 px, conv-1008) : c'est le NOM du run qui se coupe, pas qui parle. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.askd-provenance-run {
+  font:
+    11.5px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  color: #dde3ee;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  padding: 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.askd-fermer {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: #a9b2c4;
+  font:
+    16px/1 ui-monospace,
+    Consolas,
+    monospace;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.askd-fermer:hover,
+.askd-fermer:focus-visible {
+  color: #dde3ee;
+}
+.askd-resume {
+  margin: 0 0 6px;
+  padding: 0 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #dde3ee;
+}

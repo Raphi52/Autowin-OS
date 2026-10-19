@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extrairePromptSuivant,
+  extrairePropositionsSuite,
   retirerLignePromptSuivant,
   estPromptDePublication,
   PROMPT_SALVAGE
@@ -51,6 +52,84 @@ describe('extraction du prompt suivant', () => {
   it('ne jette pas sur une entrée absente', () => {
     expect(extrairePromptSuivant(undefined)).toBeNull()
     expect(extrairePromptSuivant('')).toBeNull()
+  })
+})
+
+/*
+ * TROIS SUITES NOTÉES (conv-1005, 2026-10-16) : l'utilisateur choisit d'un clic, le mode auto
+ * envoie la mieux notée — c'est `extrairePromptSuivant` qu'il lit.
+ */
+describe('trois suites notées', () => {
+  const TROIS = [
+    'bilan',
+    'AUTOWIN_PROMPT_V1: [62] Relance la suite de tests complète.',
+    'AUTOWIN_PROMPT_V1: [91] Corrige le libellé du bouton Envoyer dans ChatComposer.tsx.',
+    'AUTOWIN_PROMPT_V1: [40] Ajoute une capture de la vue chat.'
+  ].join('\n')
+
+  it('les rend de la mieux notée à la moins bien notée, note détachée du texte', () => {
+    expect(extrairePropositionsSuite(TROIS)).toEqual([
+      { texte: 'Corrige le libellé du bouton Envoyer dans ChatComposer.tsx.', score: 91 },
+      { texte: 'Relance la suite de tests complète.', score: 62 },
+      { texte: 'Ajoute une capture de la vue chat.', score: 40 }
+    ])
+  })
+
+  it('la suite unique (Tab, mode auto) est la MIEUX notée, pas la dernière écrite', () => {
+    expect(extrairePromptSuivant(TROIS)).toBe(
+      'Corrige le libellé du bouton Envoyer dans ChatComposer.tsx.'
+    )
+  })
+
+  it('lit aussi la note en 85/100, en gras, et avec un séparateur', () => {
+    expect(
+      extrairePropositionsSuite('AUTOWIN_PROMPT_V1: **[85/100]** — Relis le journal.')
+    ).toEqual([{ texte: 'Relis le journal.', score: 85 }])
+    expect(extrairePropositionsSuite('AUTOWIN_PROMPT_V1: 70/100 | Relis le journal.')).toEqual([
+      { texte: 'Relis le journal.', score: 70 }
+    ])
+  })
+
+  it('un message qui COMMENCE par un nombre ne perd pas son début', () => {
+    expect(
+      extrairePropositionsSuite('AUTOWIN_PROMPT_V1: 3 fichiers à relire, commence par a.ts')
+    ).toEqual([{ texte: '3 fichiers à relire, commence par a.ts', score: null }])
+  })
+
+  it('en garde trois au plus, et jamais deux fois la même', () => {
+    const cinq = [95, 80, 80, 60, 10]
+      .map((n, i) => `AUTOWIN_PROMPT_V1: [${n}] ${i === 2 ? 'suite 1' : `suite ${i}`}`)
+      .join('\n')
+    expect(extrairePropositionsSuite(cinq).map((p) => p.texte)).toEqual([
+      'suite 0',
+      'suite 1',
+      'suite 3'
+    ])
+  })
+
+  it('une suite notée passe devant une ligne à l’ancien format, sans note', () => {
+    const melange = 'AUTOWIN_PROMPT_V1: sans note\nAUTOWIN_PROMPT_V1: [20] notée'
+    expect(extrairePromptSuivant(melange)).toBe('notée')
+  })
+
+  it('une publication jamais demandée sort de la liste, les autres suites restent', () => {
+    const texte =
+      'AUTOWIN_PROMPT_V1: [90] Commit et push la correction.\nAUTOWIN_PROMPT_V1: [60] Relance les tests du composer.'
+    expect(extrairePropositionsSuite(texte, 'corrige le bouton Envoyer')).toEqual([
+      { texte: 'Relance les tests du composer.', score: 60 }
+    ])
+  })
+
+  it('une publication demandée devient /salvage, une seule fois', () => {
+    const texte =
+      'AUTOWIN_PROMPT_V1: [90] Commit la correction.\nAUTOWIN_PROMPT_V1: [70] Push sur main.'
+    expect(extrairePropositionsSuite(texte, 'corrige et publie')).toEqual([
+      { texte: PROMPT_SALVAGE, score: 90 }
+    ])
+  })
+
+  it('les lignes notées disparaissent toutes de l’affichage', () => {
+    expect(retirerLignePromptSuivant(`avant\n${TROIS}`)).toBe('avant\nbilan')
   })
 })
 

@@ -151,6 +151,7 @@ describe.skipIf(process.platform !== 'win32')(
     const X = `${base}x`
     const Y = `${base}y`
     const T = `${base}t`
+    const S = `${base}s`
 
     const lancer = (id: string, conversation: string, fixture: string): Sortie =>
       lancerPs('hdesk-lancer.ps1', [
@@ -213,6 +214,23 @@ describe.skipIf(process.platform !== 'win32')(
           ],
           { timeout: 60_000 }
         )
+      // Le bureau du test « sans fiche » a perdu sa fiche : son filet passe par le meme mode.
+      spawnSync(
+        'powershell',
+        [
+          '-NoProfile',
+          '-File',
+          join(SCRIPTS, 'hdesk-fermer.ps1'),
+          '-Id',
+          S,
+          '-SansFiche',
+          '-Registre',
+          registre,
+          '-DelaiDouxSecondes',
+          '1'
+        ],
+        { timeout: 60_000 }
+      )
       rmSync(registre, { recursive: true, force: true })
       rmSync(fixtures, { recursive: true, force: true })
     })
@@ -285,6 +303,46 @@ describe.skipIf(process.platform !== 'win32')(
       expect(r.code).toBe(2)
       expect(r.ferme).toBe(false)
       expect(String(r.erreur)).toMatch(/aucun bureau/i)
+    }, 60_000)
+
+    // conv-1016 (2026-10-17) : les bureaux ui-capture-* naissent sans fiche (autowin-headless.ps1) et
+    // survivaient a leur capture, tenus par un Outlook ; la vue « Bureaux caches » ne pouvait pas les fermer.
+    it('sans fiche (-SansFiche) : ferme ce qui a une fenetre sur CE bureau, sans exiger de fil', () => {
+      const s = lancer(S, 'conv-a', docile)
+      expect(s.code, String(s.stderr)).toBe(0)
+      rmSync(join(registre, `${S}.json`), { force: true })
+      // Sans le mode, le refus historique tient : aucun bureau a ce nom dans le registre.
+      expect(fermer(S, 'conv-a').code).toBe(2)
+      expect(vivant(s.pid)).toBe(true)
+
+      const r = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
+      expect(r.code, JSON.stringify(r)).toBe(0)
+      expect(r).toMatchObject({ ferme: true, sansFiche: true, ficheRetiree: false })
+      expect(r.survivants).toEqual([])
+      expect(vivant(s.pid)).toBe(false)
+    }, 120_000)
+
+    it('sans fiche : un bureau INSCRIT est refuse (exit 1) et reste intact — son fil fait foi', () => {
+      const s = lancer(S, 'conv-b', docile)
+      const pidS = s.code === 0 ? s.pid : s.pidOccupant
+      const r = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
+      expect(r.code, JSON.stringify(r)).toBe(1)
+      expect(r.conversationOccupante).toBe('conv-b')
+      expect(vivant(pidS)).toBe(true)
+      expect(fermer(S, 'conv-b').code).toBe(0)
+      expect(vivant(pidS)).toBe(false)
+    }, 120_000)
+
+    it('sans fiche : un bureau Windows inexistant rend 2, rien n est ferme', () => {
+      const r = lancerPs('hdesk-fermer.ps1', [
+        '-Id',
+        `${base}fantome`,
+        '-SansFiche',
+        '-Registre',
+        registre
+      ])
+      expect(r.code, JSON.stringify(r)).toBe(2)
+      expect(r).toMatchObject({ ferme: false, sansFiche: true })
     }, 60_000)
 
     it('la chaine de l outil (fermerHdesk) lance le vrai script et lit son refus', async () => {

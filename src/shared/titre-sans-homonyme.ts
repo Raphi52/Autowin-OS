@@ -16,7 +16,7 @@
  * couterait un appel a chaque nouveau fil pour un probleme que la date tranche exactement.
  */
 
-import { replierComplet } from '../../../shared/mots'
+import { replierComplet } from './mots'
 
 /** Longueur max d'un titre, comme `conversation-demandee.ts` et la barre laterale. */
 export const LONGUEUR_TITRE = 42
@@ -24,7 +24,7 @@ export const LONGUEUR_TITRE = 42
 const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
 /** Meme comparaison que le store : insensible a la casse, aux accents et a la ponctuation finale. */
-const empreinte = (titre: string): string =>
+export const empreinte = (titre: string): string =>
   replierComplet(compacter(titre)).replace(/[.!?…\s]+$/, '')
 
 /** Le titre coupe a la longueur d'affichage — exactement comme avant. */
@@ -55,6 +55,11 @@ export function titreSansHomonyme(
   if (!propose) return propose
   const pris = new Set(titresExistants.map(empreinte))
   if (!pris.has(empreinte(propose))) return propose
+  return avecMarqueurDeMoment(source, quand)
+}
+
+/** Le titre DATE, tenu dans la longueur d'affichage : c'est le texte qu'on coupe, jamais la date. */
+export function avecMarqueurDeMoment(source: string, quand: Date): string {
   const marqueur = ` · ${marqueurDeMoment(quand)}`
   // Le marqueur doit RESTER VISIBLE : c'est le titre qu'on raccourcit, jamais la date.
   const place = Math.max(0, LONGUEUR_TITRE - marqueur.length)

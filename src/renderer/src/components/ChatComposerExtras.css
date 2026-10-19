@@ -19,3 +19,59 @@
   white-space: nowrap;
 }
 
+
+/* Les suites proposées en boutons (conv-1005) : trois au plus, la mieux notée en premier et
+   soulignée d'or. Une ligne qui passe à la ligne au lieu de déborder : la colonne peut être
+   étroite (mosaïque), et un texte coupé se lit en entier au survol (title). */
+.composer-suites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 2px 6px;
+}
+
+.composer-suite {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 9px 3px 4px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.13));
+  border-radius: 999px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.045));
+  color: var(--text, #dde3ee);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-suite:hover,
+.composer-suite:focus-visible {
+  border-color: var(--gold-bright, #e3ba55);
+  background: var(--surface-hover, rgba(255, 255, 255, 0.07));
+}
+
+.composer-suite.is-best {
+  border-color: rgba(212, 169, 79, 0.55);
+}
+
+.composer-suite-score {
+  flex: none;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(212, 169, 79, 0.16);
+  color: var(--gold-bright, #e3ba55);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.composer-suite-texte {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

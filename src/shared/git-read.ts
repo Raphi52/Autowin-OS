@@ -35,6 +35,12 @@ export interface GitReadResult {
   history?: GitCommit[]
   error?: string
 }
+/**
+ * La seule branche courante, pour le badge du chat : lue dans `.git/HEAD`, sans processus git
+ * (heal conv-1013 — voir `readGitBranch`). Même nom que `# branch.head` de `git status`.
+ */
+export type GitBranchResult =
+  { available: true; state: { branch: string } } | { available: false; error: string }
 export interface GitDiffResult {
   available: boolean
   diff?: string

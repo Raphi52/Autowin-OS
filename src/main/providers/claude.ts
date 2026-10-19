@@ -66,6 +66,7 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
+import { sonderContexte, type IssueSonde } from './claude-sonde-contexte'
 import {
   OUTILS_ETAPES,
   SuiviDesEtapes,
@@ -1753,6 +1754,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (intentPose) execution?.onSpawnIntent?.(spawnToken, false)
       throw error
     }
+    const envDuTour = environnementAgent(
+      {
+        ...withClaudeAccountEnv(process.env),
+        // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
+        ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+        // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
+        ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
+        // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
+        ...envFiletElectronAgent(modAutowin, process.env),
+        ...(invocation.env ?? {})
+      },
+      execution?.agentEnv
+    )
     const child = spawn(invocation.bin, invocation.args, {
       shell: false,
       windowsHide: true,
@@ -1763,19 +1777,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
-      env: environnementAgent(
-        {
-          ...withClaudeAccountEnv(process.env),
-          // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
-          ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
-          // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
-          ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
-          // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
-          ...envFiletElectronAgent(modAutowin, process.env),
-          ...(invocation.env ?? {})
-        },
-        execution?.agentEnv
-      ),
+      env: envDuTour,
       ...(journal
         ? {
             detached: true,
@@ -1787,6 +1789,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
     // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
     if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
+    /*
+     * LE DETAIL DU CONTEXTE, MESURE EN PARALLELE DU TOUR (conv-1000, panneau « Contexte »).
+     *
+     * Memes arguments, meme dossier, meme environnement que le tour : la sonde voit le meme prompt
+     * systeme, les memes outils et le meme serveur MCP. Lancee MAINTENANT et pas apres : le serveur
+     * d'outils du chat ferme a la fin de l'appel, et la sonde (~1,1 s) a fini bien avant le tour.
+     * Les temporaires qu'elle lit (prompt systeme, config MCP) ne partent qu'apres elle.
+     */
+    const sondeContexte: Promise<IssueSonde> | undefined = opts.mesurerContexte
+      ? binaireClaudeLancable(this.bin, {
+          designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)
+        }).then(
+          (bin) =>
+            sonderContexte({
+              bin,
+              argsDuTour: args,
+              cwd: execution?.cwd ?? readOnlyCwd,
+              env: envDuTour,
+              signal: opts.signal,
+              delaiMs: 15_000
+            }),
+          (error: unknown): IssueSonde => ({ echec: (error as Error).message })
+        )
+      : undefined
     const childPid = child.pid
     if (childPid) {
       if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)
@@ -2571,15 +2597,24 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const nettoyerFinDAppel = async (): Promise<void> => {
       if (nettoyageFait) return
       nettoyageFait = true
-      await nettoyerTemporairesDeLAppel({
-        systemPromptDir,
-        settingsDir,
-        inputPath: invocation.inputPath,
-        journalPath: journal?.path
-      })
-      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
-      await mcpConfigDir?.nettoyer()
-      await materialized?.cleanup()
+      const nettoyer = async (): Promise<void> => {
+        await nettoyerTemporairesDeLAppel({
+          systemPromptDir,
+          settingsDir,
+          inputPath: invocation.inputPath,
+          journalPath: journal?.path
+        })
+        // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
+        await mcpConfigDir?.nettoyer()
+        await materialized?.cleanup()
+      }
+      // La sonde de contexte lit encore le prompt systeme et la config MCP : on les retire APRES
+      // elle, sans faire attendre la fin du tour (elle est bornee a 15 s et tuee a l'arret).
+      if (sondeContexte) {
+        void sondeContexte.then(nettoyer, nettoyer).catch(() => undefined)
+        return
+      }
+      await nettoyer()
     }
     child.on('error', async (e) => {
       if (finApresResultat) clearTimeout(finApresResultat)
@@ -2740,12 +2775,31 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const artifacts = [...inlineArtifacts, ...fileArtifacts].filter(
       (artifact, index, all) => all.findIndex((candidate) => candidate.id === artifact.id) === index
     )
+    /*
+     * Le detail est presque toujours deja la (sonde ~1,1 s, tour bien plus long). Un tour plus court
+     * que la sonde l'attend au plus 2 s : au-dela, le panneau garde la mesure precedente plutot que
+     * de retarder la fin du tour.
+     */
+    let contexte: SendResult['contexte']
+    if (sondeContexte) {
+      let attente: ReturnType<typeof setTimeout> | undefined
+      const issue = await Promise.race([
+        sondeContexte,
+        new Promise<IssueSonde>((r) => {
+          attente = setTimeout(() => r({ echec: 'sonde plus lente que le tour' }), 2_000)
+        })
+      ])
+      clearTimeout(attente)
+      if ('contexte' in issue) contexte = issue.contexte
+      else console.warn('[contexte] detail par categorie indisponible :', issue.echec)
+    }
     return {
       text,
       provider: this.id,
       sessionId,
       systemInjected,
       usage,
+      ...(contexte ? { contexte } : {}),
       executionEvidence: executionEvidence.length ? executionEvidence : undefined,
       thinking: joinThinking(reasoningFragments),
       model: resolvedModel,

@@ -48,6 +48,7 @@ export type DependancesDeRelance = {
   reuseOrCreateConvRun: typeof import('./conv-runs').reuseOrCreateConvRun
   regimePhases: typeof import('../task-regime').regimePhases
   saveConvRunTrace: typeof import('./conv-runs').saveConvRunTrace
+  loadConvRunTrace: typeof import('./conv-runs').loadConvRunTrace
   populateConvRunSections: typeof import('./conv-runs').populateConvRunSections
   closeConvRun: typeof import('./conv-runs').closeConvRun
   phasesAvecJuge: typeof import('../orchestration-memoire').phasesAvecJuge
@@ -90,6 +91,7 @@ export function creerRelanceDeRunReprenable(
     reuseOrCreateConvRun,
     regimePhases,
     saveConvRunTrace,
+    loadConvRunTrace,
     populateConvRunSections,
     closeConvRun,
     phasesAvecJuge,
@@ -194,7 +196,18 @@ export function creerRelanceDeRunReprenable(
           regimePhases(resumableRun.task)
         ).catch(() => undefined)
       : undefined
-    const resumedSteps: Parameters<typeof saveConvRunTrace>[1] = []
+    /*
+     * LE FIL REPART DE CE QUE LE DISQUE PORTE DÉJÀ (conv-1021, 2026-10-19).
+     *
+     * Le run d'origine réécrit `trace.json` à chaque étape (`commands.ts`), et la reprise rattache
+     * son MÊME RUN.md. Partir d'une liste vide écrasait donc, dès la première étape reprise, tout ce
+     * qui avait été joué avant le redémarrage — les verdicts des juges compris. L'orchestrateur ne
+     * rejoue pas les étapes des phases déjà payées (`dejaPayee`, orchestrator.ts) : il n'y a rien à
+     * dédoublonner, seuls les repères de passage de réparation se répètent.
+     */
+    const resumedSteps: Parameters<typeof saveConvRunTrace>[1] = resumedRunFile
+      ? [...(loadConvRunTrace(resumedRunFile.path) ?? [])]
+      : []
     const resumedArtifactIds = new Set<string>()
     const pendingResumedExecutionEvidence: ExecutionEvidence[] = []
     let resumedCurrentRunId: string | undefined
@@ -222,6 +235,9 @@ export function creerRelanceDeRunReprenable(
             pendingResumedExecutionEvidence.push(...(step.evidence ?? []))
             resumedSteps.push(step)
             durableResumeTurn.step(step)
+            // Même règle que le run direct (`commands.ts`) : écrite AVANT la diffusion, pour que
+            // l'interface qui relit le fichier en recevant l'étape la trouve déjà.
+            if (resumedRunFile) saveConvRunTrace(resumedRunFile.path, resumedSteps)
             broadcast({ type: 'orchestrate-step', convId: conversationId, step })
             persistOrchestrationStep(
               step,

@@ -31,7 +31,7 @@ import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
-import type { GitReadResult, GitDiffResult } from '../shared/git-read'
+import type { GitBranchResult, GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
   ProjectListResult,
   ProjectReadResult,
@@ -200,6 +200,9 @@ const api = {
   // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
   getGitState: (repoPath?: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:read', repoPath),
+  // La seule branche courante (badge du chat), lue sans processus git.
+  getGitBranch: (repoPath?: string): Promise<GitBranchResult> =>
+    ipcRenderer.invoke('git:branch', repoPath),
   getGitBranches: (repoPath?: string): Promise<string[]> =>
     ipcRenderer.invoke('git:branches', repoPath),
   checkoutGitBranch: (

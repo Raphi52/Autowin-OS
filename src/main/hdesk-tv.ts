@@ -116,6 +116,34 @@ export function fusionnerBureaux(
   return conversationId ? tous.filter((b) => b.conversationId === conversationId) : []
 }
 
+/** Coin haut-gauche de la capture dans l'ecran du bureau cache (pixels physiques). */
+export interface OrigineCapture {
+  x: number
+  y: number
+}
+
+/**
+ * Origine lue dans une reponse `shot` de scripts/hdesk-tv.ps1. Absente (repli hdesk-observe.ps1,
+ * capture plein ecran) ou illisible : (0,0), l'image commence au coin de l'ecran.
+ */
+export function origineCapture(reponse: Record<string, unknown>): OrigineCapture {
+  const lire = (v: unknown): number =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0
+  return { x: lire(reponse.origineX), y: lire(reponse.origineY) }
+}
+
+/**
+ * CLIC DANS UNE IMAGE RECADREE (conv-1009, 2026-10-16) : « Action refusée : Aucune fenetre en
+ * (362,144) dans ce bureau ». La TV et la vue « Bureaux cachés » montrent une capture recadree autour
+ * des fenetres, et le renderer rend le point en pixels de CETTE image ; hdesk-act.ps1 attend des
+ * pixels de l'ECRAN du bureau. On ajoute donc l'origine du recadrage. Des coordonnees invalides
+ * passent telles quelles : c'est argumentsAct qui les refuse, avec son message.
+ */
+export function pointEcran(g: GesteTv, origine: OrigineCapture | undefined): GesteTv {
+  if (!origine || !Number.isFinite(g?.x) || !Number.isFinite(g?.y)) return g
+  return { ...g, x: g.x + origine.x, y: g.y + origine.y }
+}
+
 /** Traduit une reponse `shot` en etat de TV. Bureau introuvable = ferme pendant qu'on regarde. */
 export function interpreterCapture(
   id: string,
@@ -182,6 +210,8 @@ export class CapteurHdesk {
   private file: Promise<unknown> = Promise.resolve()
   private minuterie: NodeJS.Timeout | null = null
   private readonly dossierImages: string
+  /** Origine du recadrage de la derniere image rendue, par bureau (conv-1009). */
+  private readonly origines = new Map<string, OrigineCapture>()
 
   constructor(
     private readonly racine: string,
@@ -211,7 +241,11 @@ export class CapteurHdesk {
       r = await this.observerParScript(id, png)
     }
     try {
-      return interpreterCapture(id, r, () => readFileSync(png))
+      const img = interpreterCapture(id, r, () => readFileSync(png))
+      // L'origine suit la DERNIERE image rendue de ce bureau : c'est elle que l'utilisateur voit et clique.
+      if (img.statut === 'ok' || img.statut === 'uni') this.origines.set(id, origineCapture(r))
+      else if (img.statut === 'ferme') this.origines.delete(id)
+      return img
     } catch (e) {
       return { statut: 'erreur', id, message: e instanceof Error ? e.message : String(e) }
     } finally {
@@ -219,6 +253,15 @@ export class CapteurHdesk {
       // (2026-09-15) : « les screenshots pris faut qu'ils soient nettoyes direct ».
       rmSync(png, { force: true })
     }
+  }
+
+  /**
+   * Geste pose sur l'image de ce bureau -> geste en pixels de son ecran. Limite assumee : si une
+   * capture plus recente a deplace l'origine dans l'instant entre l'affichage et le clic (fenetre
+   * ouverte au-dessus ou a gauche des autres), le clic suit la plus recente.
+   */
+  versEcran(g: GesteTv): GesteTv {
+    return pointEcran(g, typeof g?.id === 'string' ? this.origines.get(g.id) : undefined)
   }
 
   arreter(): void {
@@ -436,8 +479,18 @@ export function agirHdesk(racine: string, g: GesteTv): Promise<ResultatGeste> {
  * BASCULE DE L'ECRAN REEL (conv-35, option) : scripts/hdesk-basculer.ps1 porte lui-meme les trois
  * sorties (fenetre « Revenir », Échap, minuterie). Lance DETACHE : un arret ou un
  * plantage d'Autowin ne doit jamais laisser l'utilisateur sur le bureau cache.
+ *
+ * PAS DE `spawn(..., { detached: true })` (conv-951, 2026-10-16) : Windows PowerShell 5.1 lance en
+ * DETACHED_PROCESS sort en ~0,1 s avec le code 0 SANS executer sa commande (mesure : `-Command "exit 7"`
+ * rend 0 detache, 7 attache ; le journal « Windows PowerShell » n'avait jamais vu demarrer
+ * hdesk-basculer.ps1). Le bouton rendait pourtant ok d'avance : echec muet. Le script part donc par
+ * scripts/lancer-detache.ps1 (Win32_Process.Create via WMI : console cachee, hors du Job d'Autowin,
+ * il survit a un plantage de l'app), et l'app ATTEND son verdict dans un fichier d'etat (-Statut).
  */
 export const BASCULE_MAX_SECONDES = 120
+/** Lancement WMI + compilation du C# du script + attente de sa fenetre « Revenir » (15 s max cote script). */
+export const BASCULE_ATTENTE_MS = 30_000
+const BASCULE_SONDE_MS = 200
 
 /**
  * FERMER L'APP D'UN BUREAU CACHE (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : scripts/hdesk-fermer.ps1
@@ -569,14 +622,153 @@ export function argumentsBascule(racine: string, id: string, maxSecondes = BASCU
   ]
 }
 
-export function basculerHdesk(racine: string, id: string): { ok: true } | { ok: false; message: string } {
+export type ResultatBascule = { ok: true } | { ok: false; message: string }
+
+/** Ce que la bascule demande au systeme ; injectable pour les tests. */
+export interface DependancesBascule {
+  /** Lance powershell.exe (attache, fenetre cachee) et rend son code et sa sortie standard. */
+  executer: (args: string[]) => Promise<{ code: number | null; sortie: string }>
+  /** Contenu du fichier d'etat, ou null tant qu'il n'existe pas. */
+  lire: (chemin: string) => string | null
+  supprimer: (chemin: string) => void
+  attendre: (ms: number) => Promise<void>
+  maintenant: () => number
+  fichierStatut: (id: string) => string
+}
+
+export function dependancesBascule(): DependancesBascule {
+  return {
+    executer: (args) =>
+      new Promise((resolve) => {
+        execFile('powershell.exe', args, { windowsHide: true, timeout: 30_000 }, (err, out) => {
+          const code = err
+            ? typeof (err as { code?: unknown }).code === 'number'
+              ? (err as { code: number }).code
+              : null
+            : 0
+          resolve({ code, sortie: String(out ?? '') })
+        })
+      }),
+    lire: (chemin) => {
+      if (!existsSync(chemin)) return null
+      try {
+        return readFileSync(chemin, 'utf8')
+      } catch {
+        // Fichier tenu a l'instant par le script qui l'ecrit : la sonde suivante (200 ms) le relira,
+        // et l'attente reste bornee par BASCULE_ATTENTE_MS.
+        return null
+      }
+    },
+    supprimer: (chemin) => rmSync(chemin, { force: true }),
+    attendre: (ms) => new Promise((r) => setTimeout(r, ms)),
+    maintenant: () => Date.now(),
+    fichierStatut: (id) => join(tmpdir(), `autowin-bascule-${id}-${process.pid}-${Date.now()}.json`)
+  }
+}
+
+/** Ligne de commande Windows : un argument vide ou a espace est entoure de guillemets (un chemin Windows n'en contient jamais). */
+function ligneDeCommande(exe: string, args: readonly string[]): string {
+  return [exe, ...args].map((a) => (a === '' || /\s/.test(a) ? `"${a}"` : a)).join(' ')
+}
+
+const chainePowerShell = (s: string): string => `'${s.replace(/'/g, "''")}'`
+
+/**
+ * Arguments PowerShell qui font lancer hdesk-basculer.ps1 par lancer-detache.ps1. -EncodedCommand :
+ * aucun guillemet imbrique n'a a survivre a deux lignes de commande successives. Leve si l'id est invalide.
+ */
+export function argumentsLancementBascule(
+  racine: string,
+  id: string,
+  statut: string,
+  maxSecondes = BASCULE_MAX_SECONDES
+): string[] {
+  const commande = ligneDeCommande('powershell.exe', [
+    ...argumentsBascule(racine, id, maxSecondes),
+    '-Statut',
+    statut
+  ])
+  const ps =
+    `& ${chainePowerShell(join(racine, 'scripts', 'lancer-detache.ps1'))}` +
+    ` -Commande ${chainePowerShell(commande)} -Dossier ${chainePowerShell(racine)}`
+  return [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-EncodedCommand',
+    Buffer.from(ps, 'utf16le').toString('base64')
+  ]
+}
+
+/** Derniere ligne JSON d'une sortie PowerShell, ou null. */
+function derniereLigneJson(sortie: string): Record<string, unknown> | null {
+  for (const l of sortie.split(/\r?\n/).reverse()) {
+    const t = l.trim()
+    if (!t.startsWith('{')) continue
+    try {
+      return JSON.parse(t) as Record<string, unknown>
+    } catch {
+      /* ligne non JSON : on continue */
+    }
+  }
+  return null
+}
+
+/** Verdict du fichier d'etat ; null tant qu'il est absent ou en cours d'ecriture (JSON incomplet). */
+function verdictBascule(texte: string | null): ResultatBascule | null {
+  // Un BOM eventuel tombe avec le trim() de chaque ligne (U+FEFF est un blanc pour JavaScript).
+  const j = texte ? derniereLigneJson(texte) : null
+  if (j?.etat === 'bascule') return { ok: true }
+  if (j?.etat === 'erreur') {
+    const message =
+      typeof j.message === 'string' && j.message.trim() ? j.message.trim() : 'erreur sans message.'
+    return { ok: false, message }
+  }
+  return null
+}
+
+/**
+ * Bascule l'ecran reel sur le bureau cache `id` et ne rend { ok: true } qu'une fois l'ecran REELLEMENT
+ * bascule ; sinon le message d'erreur du script (affiche par la TV : « Bascule refusée : … »).
+ */
+export async function basculerHdesk(
+  racine: string,
+  id: string,
+  deps: DependancesBascule = dependancesBascule(),
+  attenteMs = BASCULE_ATTENTE_MS
+): Promise<ResultatBascule> {
+  let statut: string
   let args: string[]
   try {
-    args = argumentsBascule(racine, id)
+    argumentsBascule(racine, id)
+    statut = deps.fichierStatut(id)
+    args = argumentsLancementBascule(racine, id, statut)
   } catch (e) {
     return { ok: false, message: (e as Error).message }
   }
-  const p = spawn('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
-  p.unref()
-  return { ok: true }
+  deps.supprimer(statut)
+  const lancement = await deps.executer(args)
+  const lance = derniereLigneJson(lancement.sortie)
+  if (typeof lance?.pid !== 'number') {
+    const cause =
+      typeof lance?.erreur === 'string'
+        ? lance.erreur
+        : `lancer-detache.ps1 a rendu le code ${lancement.code}`
+    return { ok: false, message: `le script de bascule n'a pas pu être lancé (${cause}).` }
+  }
+  const fin = deps.maintenant() + attenteMs
+  for (;;) {
+    const verdict = verdictBascule(deps.lire(statut))
+    if (verdict) {
+      deps.supprimer(statut)
+      return verdict
+    }
+    if (deps.maintenant() >= fin) break
+    await deps.attendre(BASCULE_SONDE_MS)
+  }
+  deps.supprimer(statut)
+  return {
+    ok: false,
+    message: `le script de bascule (processus ${lance.pid}) n'a donné aucune nouvelle en ${Math.round(attenteMs / 1000)} s.`
+  }
 }

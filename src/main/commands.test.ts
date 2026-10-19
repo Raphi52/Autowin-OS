@@ -480,6 +480,49 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     ])
   })
 
+  it('écrit trace.json à CHAQUE étape, avant de la diffuser — pas seulement à la fin du run', async () => {
+    // conv-1021 : une interface rechargée en plein run doit pouvoir relire le fil déjà joué.
+    const os = fakeOs()
+    let runPath: string | undefined
+    const lireTrace = (chemin: string): Array<{ step: string }> | null => {
+      const fichier = join(dirname(chemin), 'trace.json')
+      return existsSync(fichier) ? JSON.parse(readFileSync(fichier, 'utf8')) : null
+    }
+    const etapesSurDisqueALaDiffusion: number[] = []
+    const vu: { pendantLeRun: Array<{ step: string }> | null } = { pendantLeRun: null }
+    os.runTask = async (...args: unknown[]) => {
+      const onStep = args[1] as (step: OrchestrationStep) => void
+      onStep({ step: 'exec', status: 'completed', detail: 'phase build', text: 'le livrable' })
+      onStep({ step: 'judge', status: 'completed', role: 'judge', text: 'VERDICT: REJECT' })
+      vu.pendantLeRun = runPath ? lireTrace(runPath) : null
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, (event) => {
+      const e = event as Record<string, unknown>
+      if (e.type === 'orchestrate-start') runPath = e.runPath as string | undefined
+      if (e.type === 'orchestrate-step' && runPath) {
+        etapesSurDisqueALaDiffusion.push(lireTrace(runPath)?.length ?? 0)
+      }
+    })
+    try {
+      await bus.exec('orchestrate', { task: `/build trace par étape ${Date.now()}` }, 'conv-1')
+      expect(runPath).toBeTypeOf('string')
+      // Chaque diffusion trouve DÉJÀ son étape sur disque : l'interface qui relit ne la rate pas.
+      expect(etapesSurDisqueALaDiffusion).toEqual([1, 2])
+      // Le run n'a pas encore rendu la main, et le fil est déjà là.
+      expect(vu.pendantLeRun?.map((s) => s.step)).toEqual(['exec', 'judge'])
+    } finally {
+      if (runPath) supprimerArbre(dirname(runPath))
+    }
+  })
+
   it("n'emet RIEN quand la phase n'est pas frame, ni quand le cadrage n'a aucune supposition", async () => {
     const cas = [
       { detail: 'phase build', text: '## Confiance\n- x — NON VÉRIFIÉ' },

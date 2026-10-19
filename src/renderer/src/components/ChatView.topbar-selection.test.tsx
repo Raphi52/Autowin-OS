@@ -63,10 +63,7 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
       chatApi({
         conversations: vi.fn().mockResolvedValue([conversation('conv-1')]),
         conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
-        getGitState: vi.fn().mockResolvedValue({
-          available: true,
-          state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
-        }),
+        getGitBranch: vi.fn().mockResolvedValue({ available: true, state: { branch: 'main' } }),
         getGitBranches,
         checkoutGitBranch
       })
@@ -101,10 +98,7 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
     l'ecran dessus. Le badge et la bascule doivent viser le MEME depot.
   */
   it('lit et bascule le MEME depot que celui de la conversation', async () => {
-    const getGitState = vi.fn().mockResolvedValue({
-      available: true,
-      state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
-    })
+    const getGitBranch = vi.fn().mockResolvedValue({ available: true, state: { branch: 'main' } })
     const getGitBranches = vi.fn().mockResolvedValue(['main', 'feat/topbar'])
     const checkoutGitBranch = vi.fn().mockResolvedValue({ ok: true, branch: 'feat/topbar' })
     harness = await mountChat(
@@ -113,7 +107,7 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
           .fn()
           .mockResolvedValue([{ ...conversation('conv-1'), projectPath: 'D:/Projets/Autre' }]),
         conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
-        getGitState,
+        getGitBranch,
         getGitBranches,
         checkoutGitBranch
       })
@@ -130,9 +124,38 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
       items[1]!.click()
     })
 
-    expect(getGitState.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Autre')
+    expect(getGitBranch.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Autre')
     expect(getGitBranches.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Autre')
     expect(checkoutGitBranch.mock.calls.at(-1)?.[1]).toBe('D:/Projets/Autre')
+  })
+
+  /*
+    GELS MESURES (heal conv-1013, gels.jsonl du 14 au 16/10) : 9 gels de 3,3 a 9,8 s du fil
+    principal, chacun dans la CREATION d'un seul processus `git status` (`ipc:git:read`). Le badge
+    relisait la branche toutes les 5 s par `getGitState`, soit `git status` + `git log` : 24
+    processus par minute crees sur le fil principal pour un nom qui tient dans `.git/HEAD`, et
+    chacun expose aux blocages du systeme. Le badge lit desormais par `getGitBranch`, qui ne cree
+    aucun processus (`readGitBranch`, git-read-main.ts).
+  */
+  it('le badge lit la branche SANS passer par getGitState (aucun processus git)', async () => {
+    const getGitState = vi.fn().mockResolvedValue({
+      available: true,
+      state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
+    })
+    const getGitBranch = vi.fn().mockResolvedValue({ available: true, state: { branch: 'main' } })
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('conv-1')]),
+        conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
+        getGitState,
+        getGitBranch
+      })
+    )
+
+    const branche = harness.container.querySelector<HTMLElement>('[data-testid="chat-git-branch"]')
+    expect(branche?.textContent ?? '').toContain('main')
+    expect(getGitBranch).toHaveBeenCalled()
+    expect(getGitState).not.toHaveBeenCalled()
   })
 
   it('affiche le refus et ne ferme pas le menu quand le depot est sale', async () => {
@@ -143,10 +166,7 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
       chatApi({
         conversations: vi.fn().mockResolvedValue([conversation('conv-1')]),
         conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
-        getGitState: vi.fn().mockResolvedValue({
-          available: true,
-          state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
-        }),
+        getGitBranch: vi.fn().mockResolvedValue({ available: true, state: { branch: 'main' } }),
         getGitBranches: vi.fn().mockResolvedValue(['main', 'feat/topbar']),
         checkoutGitBranch
       })

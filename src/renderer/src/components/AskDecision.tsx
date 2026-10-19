@@ -33,6 +33,33 @@ import {
 /** Fenetre d'attente d'un second chiffre, quand le prefixe tape peut encore grandir. */
 const ATTENTE_SECOND_CHIFFRE = 600
 
+/*
+ * LA CROIX DU MESSAGE DU RUN (conv-1008) : parite avec la carte « Message from subagent » de
+ * claude.exe, qu'on ferme sans repondre. Fermer n'est PAS repondre — rien ne part, la question
+ * reste close a la saisie comme avant. La fermeture est retenue sur le poste (par tour et par
+ * question) : sans cela, la carte revenait au moindre remontage du fil.
+ */
+const CLE_FERMES = 'autowin:messages-du-run-fermes'
+const FERMES_MAX = 200
+
+function lireFermes(): string[] {
+  try {
+    const brut = JSON.parse(window.localStorage.getItem(CLE_FERMES) ?? '[]') as unknown
+    return Array.isArray(brut) ? brut.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function retenirFerme(id: string): void {
+  try {
+    const suivants = [...lireFermes().filter((autre) => autre !== id), id].slice(-FERMES_MAX)
+    window.localStorage.setItem(CLE_FERMES, JSON.stringify(suivants))
+  } catch {
+    // Stockage indisponible : la carte reste fermee jusqu'au prochain remontage, rien de plus.
+  }
+}
+
 function Detail({ detail }: { detail: NonNullable<AskOption['detail']> }): React.JSX.Element {
   return (
     <div className="askd-detail">
@@ -62,7 +89,8 @@ export function AskDecisionBlock({
   decision,
   dejaRepondu,
   reponseDuFil,
-  onPick
+  onPick,
+  idDurable
 }: {
   decision: AskDecision
   /**
@@ -78,7 +106,20 @@ export function AskDecisionBlock({
    */
   reponseDuFil?: string
   onPick?: (prompt: string) => void
-}): React.JSX.Element {
+  /**
+   * Identite DURABLE du bloc (tour + question), pour retenir qu'un message du run a ete ferme.
+   * Absente : la croix ferme la carte jusqu'au prochain remontage seulement.
+   */
+  idDurable?: string
+}): React.JSX.Element | null {
+  const run = decision.provenance?.source === 'run' ? decision.provenance : undefined
+  const [ferme, setFerme] = useState(() =>
+    run && idDurable ? lireFermes().includes(idDurable) : false
+  )
+  const fermer = (): void => {
+    setFerme(true)
+    if (idDurable) retenirFerme(idDurable)
+  }
   // La recommandee s'ouvre d'office : c'est celle dont la justification compte le plus.
   const [ouvertes, setOuvertes] = useState<ReadonlySet<number>>(() => {
     const index = decision.options.findIndex((option) => option.recommande && option.detail)
@@ -232,17 +273,44 @@ export function AskDecisionBlock({
     return () => document.removeEventListener('keydown', auClavier)
   })
 
+  // Apres TOUS les hooks : un retour anticipe plus haut changerait leur ordre d'un rendu a l'autre.
+  if (run && ferme) return null
 
   return (
     <div
       ref={hote}
-      className={`askd${verrouille ? ' est-repondu' : ''}`}
+      className={`askd${verrouille ? ' est-repondu' : ''}${run ? ' est-du-run' : ''}`}
       data-testid="ask-decision"
       data-repondu={verrouille ? 'oui' : undefined}
+      data-provenance={run ? 'run' : undefined}
       aria-disabled={verrouille}
     >
+      {run && (
+        /* Qui parle, avant ce qu'il dit : la carte de claude.exe s'ouvre sur « Message from
+           subagent ». Le nom du run n'est pas un lien — rien ne sait encore ouvrir un run depuis
+           le fil, et un chevron qui ne mene nulle part mentirait. */
+        <div className="askd-provenance" data-testid="ask-decision-provenance">
+          <span className="askd-provenance-de">Message du run</span>
+          {run.run && <code className="askd-provenance-run">{run.run}</code>}
+          <button
+            type="button"
+            className="askd-fermer"
+            onClick={fermer}
+            aria-label="Fermer le message du run"
+            title="Fermer sans répondre"
+            data-testid="ask-decision-fermer"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {run?.resume && (
+        <p className="askd-resume" data-testid="ask-decision-resume">
+          {run.resume}
+        </p>
+      )}
       <div className="askd-tete">
-        <span className="askd-badge">ask</span>
+        <span className="askd-badge">{run ? 'run' : 'ask'}</span>
         <span className="askd-question">{decision.question}</span>
       </div>
       <div className="askd-liste">

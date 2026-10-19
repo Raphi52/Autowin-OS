@@ -1,3 +1,4 @@
+import type { ContexteStatique } from '../../shared/contexte-detaille'
 import type { ChatArtifact } from '../../shared/artifacts'
 
 /**
@@ -121,6 +122,12 @@ export interface SendOptions {
    * « relance la demande » : il ne promet jamais une reprise que personne ne fera.
    */
   relancerTachesDeFond?: boolean
+  /**
+   * Mesurer le contexte PAR CATEGORIE pendant l'appel (panneau « Contexte » du chat, conv-1000).
+   * Seul le tour de chat le demande : une phase de pipeline n'a pas d'ecran a renseigner. Un provider
+   * qui ne sait pas mesurer ignore le drapeau — le panneau garde alors la jauge simple.
+   */
+  mesurerContexte?: boolean
   /** Mode agentique local, réservé à l'étape d'exécution d'une orchestration. */
   execution?: {
     cwd: string
@@ -418,6 +425,8 @@ export interface SendResult {
    * figurent : un agent ou une surveillance n'a qu'une DESCRIPTION, jamais exécutable.
    */
   tachesDeFondARelancer?: TacheDeFondARelancer[]
+  /** Partie FIXE du contexte mesuree par le CLI (`SendOptions.mesurerContexte`), sans les messages. */
+  contexte?: ContexteStatique
 }
 
 /** Une commande shell que le CLI a arrêtée à la fin du tour, telle qu'il l'avait lancée. */

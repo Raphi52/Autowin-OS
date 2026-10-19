@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { admitAutomaticResumeRuntime, type OrchestrationRunState } from './orchestration-state'
 import { creerRelanceDeRunReprenable, type DependancesDeRelance } from './relaunch-resumable-run'
+import { loadConvRunTrace, saveConvRunTrace } from './conv-runs'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * CE QUE CES TESTS REMPLACENT.
@@ -174,6 +179,8 @@ function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<
       observe.ordre.push('saveConvRunTrace')
       observe.traces.push({ chemin, steps: [...steps] })
     },
+    // Aucune trace sur disque par défaut : le run d'origine n'avait encore rien écrit.
+    loadConvRunTrace: () => null,
     populateConvRunSections: (chemin: string, phases: unknown, options: unknown) => {
       observe.ordre.push('populateConvRunSections')
       observe.sections.push({ chemin, phases, options })
@@ -317,9 +324,9 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     const b = banc()
     await b.relance()
 
-    expect(b.observe.traces).toEqual([
-      { chemin: 'C:/runs/RUN.md', steps: [expect.objectContaining({ step: 'exec' })] }
-    ])
+    // Deux écritures : à l'étape (conv-1021, trace suivie en direct), puis à la clôture.
+    expect(b.observe.traces.map((t) => t.chemin)).toEqual(['C:/runs/RUN.md', 'C:/runs/RUN.md'])
+    expect(b.observe.traces.at(-1)?.steps).toEqual([expect.objectContaining({ step: 'exec' })])
     expect(b.observe.sections).toHaveLength(1)
     expect(b.observe.sections[0].chemin).toBe('C:/runs/RUN.md')
     expect(b.observe.sections[0].phases).toMatchObject({ juge: 'verdict du juge' })
@@ -327,7 +334,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
       { chemin: 'C:/runs/RUN.md', statut: 'green', note: expect.stringContaining('Reprise') }
     ])
     // La trace precede la cloture : un RUN.md clos sans sa trace laisse le panneau Juges vide.
-    expect(b.observe.ordre.indexOf('saveConvRunTrace')).toBeLessThan(
+    expect(b.observe.ordre.lastIndexOf('saveConvRunTrace')).toBeLessThan(
       b.observe.ordre.indexOf('closeConvRun')
     )
   })
@@ -341,9 +348,8 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     })
     await b.relance()
 
-    expect(b.observe.traces).toEqual([
-      { chemin: 'C:/runs/RUN.md', steps: [expect.objectContaining({ step: 'exec' })] }
-    ])
+    expect(b.observe.traces.map((t) => t.chemin)).toEqual(['C:/runs/RUN.md', 'C:/runs/RUN.md'])
+    expect(b.observe.traces.at(-1)?.steps).toEqual([expect.objectContaining({ step: 'exec' })])
     expect(b.observe.clotures).toEqual([
       {
         chemin: 'C:/runs/RUN.md',
@@ -352,6 +358,46 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
       }
     ])
     expect(String(b.observe.cartes[0].fail[0])).toContain('provider indisponible')
+  })
+
+  /**
+   * conv-1021 : le run d'origine réécrit `trace.json` à chaque étape, et la reprise rattache son
+   * MÊME RUN.md. Repartir d'une liste vide effaçait les verdicts joués avant le redémarrage. Vrai
+   * fichier sur disque, vraies fonctions de lecture et d'écriture.
+   */
+  it('repart de la trace deja sur disque et la reecrit a CHAQUE etape, avant de la diffuser', async () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'aos-reprise-trace-'))
+    const runMd = join(dossier, 'RUN.md')
+    writeFileSync(runMd, 'status: open\n')
+    const verdictAvant = 'DEFAUT\nOBJECTIONS:\n- MAJEUR: test absent'
+    saveConvRunTrace(runMd, [
+      { step: 'exec', text: 'build avant le redemarrage' },
+      { step: 'judge', role: 'judge', text: verdictAvant }
+    ])
+    const lire = (): string[] => (loadConvRunTrace(runMd) ?? []).map((s) => s.text ?? '')
+    const surDisqueALaDiffusion: string[][] = []
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        reuseOrCreateConvRun: (async () => ({ path: runMd })) as never,
+        loadConvRunTrace,
+        saveConvRunTrace,
+        broadcast: (evenement) => {
+          if (evenement.type === 'orchestrate-step') surDisqueALaDiffusion.push(lire())
+          d.broadcast(evenement)
+        }
+      })
+    })
+    try {
+      await b.relance()
+      const attendu = ['build avant le redemarrage', verdictAvant, 'un pas']
+      // L'étape reprise est sur disque, À LA SUITE des anciennes, quand elle est diffusée…
+      expect(surDisqueALaDiffusion).toEqual([attendu])
+      // … et la clôture ne les efface pas.
+      expect(lire()).toEqual(attendu)
+    } finally {
+      supprimerArbre(dossier)
+    }
   })
 
   /**

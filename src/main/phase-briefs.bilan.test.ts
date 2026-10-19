@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CONSIGNE_BILAN, PHASE_BRIEFS, phaseBrief } from './phase-briefs'
 import { extraireBilan } from '../shared/bilan-d-etape'
+import { messageDuRun } from '../shared/message-du-run'
 
 /**
  * LES ETAPES DE TRAVAIL TERMINENT PAR LE BLOC FIXE (conv-989, 2026-10-16).
@@ -24,9 +25,25 @@ describe('consigne du bilan de fin d’étape', () => {
   it('le modèle demandé est exactement ce que le code sait extraire', () => {
     const trouve = extraireBilan(`corps de l’étape\n${CONSIGNE_BILAN}\nSUITE: fin`)
     expect(trouve?.bilan).toMatch(/^### Bilan de l’étape/u)
-    for (const champ of ['Verdict', 'Fichiers touchés', 'Preuves', 'Reste à faire'])
+    for (const champ of ['Verdict', 'Fichiers touchés', 'Preuves', 'Reste à faire', 'Question'])
       expect(trouve?.bilan, champ).toContain(`- ${champ} :`)
     expect(trouve?.apres).toBe('SUITE: fin')
+  })
+
+  it('la ligne Question : le défaut ne pose rien, l’exemple donné se lit comme une vraie question (conv-1008)', () => {
+    // Recopié tel quel, le bloc ne fait surgir aucune carte : « aucune » est le défaut.
+    expect(messageDuRun([{ phase: 'build', text: `corps\n${CONSIGNE_BILAN}` }])).toBeUndefined()
+    // L'exemple de la consigne est EXACTEMENT ce que le lecteur sait lire.
+    const exemple = /Exemple : `(- Question : [^`]+)`/u.exec(CONSIGNE_BILAN)?.[1]
+    expect(exemple).toBeDefined()
+    const message = messageDuRun([
+      { phase: 'build', text: `### Bilan de l’étape\n- Verdict : fait — ok\n${exemple}` }
+    ])
+    expect(message?.question).toBe('Je garde l’ancien format en lecture ?')
+    expect(message?.reponses.map((reponse) => reponse.libelle)).toEqual([
+      'Oui, en lecture seule',
+      'Non, je le retire'
+    ])
   })
 
   it('il passe AVANT les lignes techniques qui doivent rester les dernières', () => {

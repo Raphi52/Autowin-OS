@@ -13,7 +13,7 @@ import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
 import { AskDecisionBlock } from './AskDecision'
-import { JugesPanel } from './JugesPanel'
+import { JugesPanel, JugesPanelEnDirect } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { ArtifactPile } from './ArtifactPile'
 import { AssistantActivityGroup } from './ChatView.parts'
@@ -574,13 +574,23 @@ export const ChatMessageRow = memo(
        candidats du scout (14/08). Rendu sous les tours qui ont orchestré, alimenté par le fil de
        sous-agents persisté du dernier run. Sur le rail, c'est l'AVANT-DERNIER point : juste avant
        la réponse (la 5 du /draft conv-338), au lieu d'un bandeau sous elle. */
+    const aOrchestre = message.parts.some(
+      (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
+    )
+    // PENDANT le tour, le bloc se remplit en direct (conv-1021, « pendant que ça judge ça remplisse
+    // le bloc en live ») : il suivait jusqu'ici la seule trace sur disque, écrite à la fin du run.
     const juges =
-      conversationId &&
-      message.status === 'completed' &&
-      message.parts.some(
-        (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
-      )
-        ? noeud('juges', 'juge', undefined, <JugesPanel conversationId={conversationId} />)
+      conversationId && aOrchestre
+        ? message.status === 'completed'
+          ? noeud('juges', 'juge', undefined, <JugesPanel conversationId={conversationId} />)
+          : !message.done
+            ? noeud(
+                'juges',
+                'juge',
+                undefined,
+                <JugesPanelEnDirect conversationId={conversationId} />
+              )
+            : null
         : null
     const rendreBloc = (part: ChatRenderBlock, index: number): React.ReactNode =>
       part.kind === 'text' ? (
@@ -624,6 +634,7 @@ export const ChatMessageRow = memo(
             dejaRepondu={askReponse !== undefined}
             reponseDuFil={askReponse}
             onPick={(prompt) => onAnswerAsk?.(prompt)}
+            idDurable={message.turnId ? `${message.turnId}:${part.askId}` : undefined}
           />
         )
       ) : part.kind === 'candidats-pick' ? (

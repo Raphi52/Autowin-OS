@@ -19,9 +19,11 @@ import { mesurerMessagesRendus } from './chat-mesure-messages'
 import { completerAvecHistorique, filAffichable } from './fil-affichable'
 import {
   extrairePromptSuivant,
+  extrairePropositionsSuite,
   estPromptDePublication,
   publicationJamaisDemandee,
-  PROMPT_SALVAGE
+  PROMPT_SALVAGE,
+  type PropositionSuite
 } from '../../../shared/prompt-suivant'
 import {
   attendreAvantReprise,
@@ -117,7 +119,6 @@ import {
   DELAI_SONDAGE_FICHIER,
   DUREE_MAX_SONDAGE_FICHIER,
 } from './chat-auto-mode'
-import { titreSansHomonyme } from './titre-sans-homonyme'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
@@ -193,6 +194,7 @@ import {
 import './ViewPage.css'
 import { contextGauge, jaugeVide, type ContextGauge } from '../../../shared/context-gauge'
 import { doitCompacterAutomatiquement } from '../../../shared/context-gauge'
+import { composerContexte, type ContexteStatique } from '../../../shared/contexte-detaille'
 import { occupationDeFenetre } from '../../../shared/occupation-fenetre'
 import './ChatView.css'
 import './SlashPalette.css'
@@ -231,6 +233,13 @@ type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: string 
  * connue par conversation, cote interface — une mesure datee, pas un recalcul invente.
  */
 const CLE_JAUGES = 'autowin.context-gauges.v1'
+/**
+ * Detail du contexte PAR CATEGORIE, par conversation (conv-1000) : memorise comme la jauge, pour
+ * que le panneau survive au rechargement. Borne aux plus recents : la liste des outils MCP pese
+ * ~2 ko par fil, et le stockage du navigateur est partage par toute l'app.
+ */
+const CLE_CONTEXTES = 'autowin.contextes-detailles.v1'
+const CONTEXTES_MEMORISES_MAX = 40
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
 /** Libellé affiché (infobulle, lecteur d'écran) de chaque valeur du filtre de statut du pied de liste. */
@@ -266,6 +275,7 @@ function ecrireDossiersRetires(retires: string[]): void {
 import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets-chaine-persistes'
 import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
+import { RunsEnDirect } from './runs-en-direct'
 /**
  * Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions JUSQU'A ce que ce
  * fil naisse : il est alors vide (`consommerDossierNouveauFil`), il ne sert qu'une fois.
@@ -293,6 +303,28 @@ function lireJaugesMemorisees(): Record<string, ContextGauge> {
     return lu && typeof lu === 'object' ? (lu as Record<string, ContextGauge>) : {}
   } catch {
     return {}
+  }
+}
+
+function lireContextesMemorises(): Record<string, ContexteStatique> {
+  try {
+    const brut = globalThis.localStorage?.getItem(CLE_CONTEXTES)
+    if (!brut) return {}
+    const lu: unknown = JSON.parse(brut)
+    return lu && typeof lu === 'object' ? (lu as Record<string, ContexteStatique>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function memoriserContextes(contextes: Record<string, ContexteStatique>): void {
+  const recents = Object.entries(contextes)
+    .sort(([, a], [, b]) => (b.mesureLe ?? 0) - (a.mesureLe ?? 0))
+    .slice(0, CONTEXTES_MEMORISES_MAX)
+  try {
+    globalThis.localStorage?.setItem(CLE_CONTEXTES, JSON.stringify(Object.fromEntries(recents)))
+  } catch {
+    /* stockage indisponible : le detail reste seulement en memoire. */
   }
 }
 
@@ -596,7 +628,8 @@ const LigneConversation = memo(function LigneConversation({
  * branche ni remise de cote a trier -- la reecriture de la suite en ordre de tri est donc
  * desactivee (trois relances utilisateur des 09 et 10/09/2026 sur un dossier sans `.git`).
  */
-function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
+/** Le texte de la dernière réponse de l'agent et la demande de CE tour, lus ensemble. */
+function dernierTourDuFil(fil: Msg[]): { text: string; demandeDuTour?: string } | null {
   const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
     AsstMsg | undefined
   if (!lastAssistant) return null
@@ -609,6 +642,24 @@ function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
   const demandeDuTour = [...fil]
     .reverse()
     .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
+  return { text, demandeDuTour }
+}
+
+/**
+ * Les suites notées du dernier tour, en boutons au-dessus du champ (conv-1005). Mêmes gardes de
+ * publication que le texte grisé : la première de la liste EST ce texte grisé dès que le modèle a
+ * émis ses suites. Sans ligne de suite, la liste est vide et seul le repli « Recommandé » reste.
+ */
+function propositionsDuFil(fil: Msg[], depotPresent: boolean): PropositionSuite[] {
+  const tour = dernierTourDuFil(fil)
+  if (!tour) return []
+  return extrairePropositionsSuite(tour.text, tour.demandeDuTour, depotPresent)
+}
+
+function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
+  const tour = dernierTourDuFil(fil)
+  if (!tour) return null
+  const { text, demandeDuTour } = tour
   const suite =
     extrairePromptSuivant(text, demandeDuTour, depotPresent) ?? extractRecommendation(text)
   // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage —
@@ -1064,6 +1115,10 @@ export function ChatView({
     () => ghostDuFil(messages, depotPresent),
     [messages, depotPresent]
   )
+  const propositionsSuite = useMemo(
+    () => propositionsDuFil(messages, depotPresent),
+    [messages, depotPresent]
+  )
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
@@ -1226,7 +1281,12 @@ export function ChatView({
   */
   const gitCwd =
     convs.find((c) => c.id === activeId)?.projectPath?.trim() || defaultWorkspace || undefined
-  const lireEtatGit = useCallback(() => Promise.resolve(window.api.getGitState?.(gitCwd)), [gitCwd])
+  // `getGitBranch`, pas `getGitState` : ce dernier creait 2 processus git sur le fil principal a
+  // chaque relecture (toutes les 5 s) — 9 gels de 3,3 a 9,8 s (heal conv-1013).
+  const lireEtatGit = useCallback(
+    () => Promise.resolve(window.api.getGitBranch?.(gitCwd)),
+    [gitCwd]
+  )
   const gitBranch = useBrancheCourante(lireEtatGit)
   /*
    * Occupation de la fenetre de contexte, par conversation.
@@ -1244,6 +1304,9 @@ export function ChatView({
       .find((message) => message.role === 'user')?.content
   const [contextGauges, setContextGauges] = useState<Record<string, ContextGauge>>(() =>
     lireJaugesMemorisees()
+  )
+  const [contextesStatiques, setContextesStatiques] = useState<Record<string, ContexteStatique>>(
+    () => lireContextesMemorises()
   )
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
@@ -2618,6 +2681,7 @@ export function ChatView({
               model?: string
               reasoningEffort?: string
               phase?: string
+              execution?: { groupId?: string }
             }
           })
         )
@@ -2947,7 +3011,16 @@ export function ChatView({
           derniereEntreeCache?: number
           model?: string
           provider?: string
+          /** Partie fixe du contexte mesuree par le CLI pendant le tour (agent-pilot, conv-1000). */
+          contexte?: ContexteStatique
         }
+        const contexteMesure = usage.contexte
+        if (contexteMesure)
+          setContextesStatiques((current) => {
+            const suivant = { ...current, [conversationId]: contexteMesure }
+            memoriserContextes(suivant)
+            return suivant
+          })
         const occupation = occupationDeFenetre({
           inputTokens: usage.inputTokens ?? 0,
           derniereEntree: usage.derniereEntree,
@@ -5026,39 +5099,12 @@ export function ChatView({
       }
 
       /*
-       * Conversation CREEE D'AVANCE (fenetre mosaique, ouverture directe) : elle porte encore le
-       * titre placeholder « Nouvelle conversation », et rien ne la renommait ensuite. C'est le
-       * PREMIER message utilisateur qui la nomme — sinon la barre laterale se remplit d'homonymes.
+       * Conversation CREEE D'AVANCE (fenetre mosaique, ouverture directe) : elle porte le titre
+       * provisoire « Nouvelle conversation ». Elle n'est plus renommee ICI : le stockage retitre
+       * le fil a CHAQUE message de l'utilisateur (`ConversationStore.beginTurn`, conv-999), et
+       * `conversationsRename` est desormais le renommage MANUEL — l'appeler d'ici figerait le
+       * titre comme s'il avait ete choisi.
        */
-      if (convId && previousMessagesForTarget.length === 0) {
-        const cibleRenommage = convId
-        const existant = convsRef.current.find((c) => c.id === cibleRenommage)
-        if (existant && existant.title === 'Nouvelle conversation') {
-          const sourceTitre = value || outgoingAttachments[0]?.name || ''
-          /*
-           * ET SANS HOMONYME. Mesure du 2026-09-12 : 62 des 442 conversations partagent leur titre
-           * avec une autre (« Réparer la mise à jour » ×11, « /salvage… » ×14, « Jarvis » ×8) — la
-           * plainte « il faut que les conversations s'appellent autrement », ecrite six fois. Un
-           * lanceur repete produit mecaniquement le meme titre puisqu'on recopie les 42 premiers
-           * caracteres du message. On y ajoute le seul element qui distingue deux lancements du
-           * meme geste : le moment. Un titre libre, lui, ne bouge pas d'un caractere.
-           */
-          const titre = titreSansHomonyme(
-            sourceTitre,
-            convsRef.current.filter((c) => c.id !== cibleRenommage).map((c) => c.title)
-          )
-          if (titre.trim()) {
-            try {
-              await window.api.conversationsRename(cibleRenommage, titre)
-              setConvs((courant) =>
-                courant.map((c) => (c.id === cibleRenommage ? { ...c, title: titre } : c))
-              )
-            } catch {
-              /* le titre reste le placeholder : jamais bloquant pour l'envoi */
-            }
-          }
-        }
-      }
 
       const history: Msg[] = [
         ...previousMessagesForTarget,
@@ -5531,6 +5577,7 @@ export function ChatView({
         mentionSources={mentionSources}
         skillCommands={skillCommands}
         ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [], depotPresent)}
+        propositionsSuite={propositionsDuFil(mosaicFils[id] ?? [], depotPresent)}
         placeholderPendantTour={occupe}
         onDraftInput={(value) => setDraftInput(id, value)}
         onDraftPresence={() => {}}
@@ -7297,9 +7344,11 @@ Cliquer pour choisir une autre branche.`}
               panelNode={(() => {
                 const j = jaugeCourante
                 if (!j) return undefined
+                const statique = activeId != null ? contextesStatiques[activeId] : undefined
                 return (
                   <ContextGaugeDetail
                     gauge={j}
+                    contexte={statique ? composerContexte(statique, j.used, j.limit) : undefined}
                     busy={busy}
                     onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
                   />
@@ -7714,7 +7763,8 @@ Cliquer pour choisir une autre branche.`}
 
             <VueMesuree id="chat-fil" bloc>
               <PointerMomentVideo.Provider value={pointerMomentVideo}>
-                {filRendu}
+                {/* Les runs en cours, pour le bloc des juges qui se remplit en direct (conv-1021). */}
+                <RunsEnDirect.Provider value={liveRuns}>{filRendu}</RunsEnDirect.Provider>
               </PointerMomentVideo.Provider>
             </VueMesuree>
 
@@ -7758,6 +7808,7 @@ Cliquer pour choisir une autre branche.`}
               mentionSources={mentionSources}
               skillCommands={skillCommands}
               ghostRecommendation={ghostRecommendation}
+              propositionsSuite={propositionsSuite}
               placeholderPendantTour={busy && activeId !== null}
               onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
               onDraftPresence={setBrouillonPresent}

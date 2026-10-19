@@ -3,6 +3,7 @@ import { formatCostCoverage, formatUsd, resolveCostCoverage } from './cost-estim
 import type { TokenUsage } from './token-usage'
 import { phasesRestantes, runDAnalyseSeule } from './portee-de-phase'
 import { extraireBilan } from './bilan-d-etape'
+import { avisMessageDuRun, lireMessageDuRun } from './message-du-run'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -60,6 +61,11 @@ export interface OrchestrationOutcome {
    */
   retainedWorkspace?: unknown
   result?: unknown
+  /**
+   * La question que le run adresse LUI-MEME a l'utilisateur (conv-1008), lue dans le bilan de sa
+   * derniere etape (`messageDuRun`, message-du-run.ts). Le fil en fait une carte cliquable.
+   */
+  messageDuRun?: unknown
   reused?: unknown
   learning?: {
     state?: unknown
@@ -147,6 +153,73 @@ function splitTextLines(text: string, protectedLines: ReadonlySet<number>): Pres
   return lines
 }
 
+/** Un bloc `code` de l'arbre CommonMark — tout ce que les deux lecteurs ci-dessous en tirent. */
+interface BlocDeCodeMarkdown {
+  start: number
+  end: number
+  offset?: number
+  lang?: string | null
+}
+
+/**
+ * LES BLOCS DE CODE D'UN TEXTE, CALCULES UNE FOIS (heal conv-1013, 2026-10-16).
+ *
+ * Mesure : 15 rendus de la vue chat au-dela de 1 s (jusqu'a 5,5 s) dans `gels.jsonl` du 14 au
+ * 16/10. Profil de l'ouverture d'un fil (vrai ChatView, 882 conversations) : ~20 % du rendu dans
+ * `fromMarkdown`, appele ici par `markdownCodeLineProtection` et `markdownCodeContinuationPrefixes`
+ * — eux-memes appeles a chaque rendu de message par `splitFinalSummary` (deux fois : rendu
+ * Markdown et `clotureEnDernier`) et `groupAssistantActivity`. Le meme texte etait donc analyse en
+ * entier trois fois par rendu, pour en lire seulement les blocs de code : 348 analyses pour rouvrir
+ * quatre fils deja vus.
+ *
+ * Le resultat ne depend que du texte : on garde les blocs (pas l'arbre, trop lourd) par texte
+ * analyse, dans une memoire bornee en nombre d'entrees ET en caracteres retenus. Une analyse qui
+ * echoue est memorisee aussi (`null`) : les appelants restent fermes, sans la rejouer.
+ */
+const BLOCS_DE_CODE_ENTREES_MAX = 256
+const BLOCS_DE_CODE_CARACTERES_MAX = 2_000_000
+const blocsDeCodeMemoire = new Map<string, readonly BlocDeCodeMarkdown[] | null>()
+let blocsDeCodeCaracteres = 0
+
+function blocsDeCodeMarkdown(source: string): readonly BlocDeCodeMarkdown[] | null {
+  const connu = blocsDeCodeMemoire.get(source)
+  if (connu !== undefined) {
+    // Plus recemment lu = dernier evince.
+    blocsDeCodeMemoire.delete(source)
+    blocsDeCodeMemoire.set(source, connu)
+    return connu
+  }
+  let blocs: BlocDeCodeMarkdown[] | null = []
+  try {
+    const trouves: BlocDeCodeMarkdown[] = []
+    const visit = (node: MarkdownAstNode): void => {
+      const start = node.position?.start?.line
+      const end = node.position?.end?.line
+      if (node.type === 'code' && start !== undefined && end !== undefined) {
+        trouves.push({ start, end, offset: node.position?.start?.offset, lang: node.lang })
+      }
+      node.children?.forEach(visit)
+    }
+    visit(fromMarkdown(source) as MarkdownAstNode)
+    blocs = trouves
+  } catch {
+    blocs = null
+  }
+  if (source.length <= BLOCS_DE_CODE_CARACTERES_MAX) {
+    blocsDeCodeMemoire.set(source, blocs)
+    blocsDeCodeCaracteres += source.length
+    while (
+      blocsDeCodeMemoire.size > BLOCS_DE_CODE_ENTREES_MAX ||
+      blocsDeCodeCaracteres > BLOCS_DE_CODE_CARACTERES_MAX
+    ) {
+      const plusAncien = blocsDeCodeMemoire.keys().next().value as string
+      blocsDeCodeMemoire.delete(plusAncien)
+      blocsDeCodeCaracteres -= plusAncien.length
+    }
+  }
+  return blocs
+}
+
 /** Les lignes `code` du même parseur CommonMark que la pile ReactMarkdown. */
 export function markdownCodeLineProtection(reports: readonly string[]): Array<Set<number>> {
   const lineCounts = reports.map((report) => report.split(/\r?\n/u).length)
@@ -157,30 +230,23 @@ export function markdownCodeLineProtection(reports: readonly string[]): Array<Se
     nextStart += count
   }
   const protectedLines = reports.map(() => new Set<number>())
-  try {
-    const tree = fromMarkdown(reports.join('\n')) as MarkdownAstNode
-    const visit = (node: MarkdownAstNode): void => {
-      const start = node.position?.start?.line
-      const end = node.position?.end?.line
-      if (node.type === 'code' && start !== undefined && end !== undefined) {
-        for (let reportIndex = 0; reportIndex < reports.length; reportIndex += 1) {
-          const reportStart = starts[reportIndex]
-          const reportEnd = reportStart + lineCounts[reportIndex] - 1
-          const overlapStart = Math.max(start, reportStart)
-          const overlapEnd = Math.min(end, reportEnd)
-          for (let line = overlapStart; line <= overlapEnd; line += 1) {
-            protectedLines[reportIndex].add(line - reportStart + 1)
-          }
-        }
-      }
-      for (const child of node.children ?? []) visit(child)
-    }
-    visit(tree)
-  } catch {
+  const blocs = blocsDeCodeMarkdown(reports.join('\n'))
+  if (!blocs) {
     // En cas d'entrée illisible, ne jamais détruire une preuve potentielle.
     return lineCounts.map(
       (count) => new Set(Array.from({ length: count }, (_, index) => index + 1))
     )
+  }
+  for (const { start, end } of blocs) {
+    for (let reportIndex = 0; reportIndex < reports.length; reportIndex += 1) {
+      const reportStart = starts[reportIndex]
+      const reportEnd = reportStart + lineCounts[reportIndex] - 1
+      const overlapStart = Math.max(start, reportStart)
+      const overlapEnd = Math.min(end, reportEnd)
+      for (let line = overlapStart; line <= overlapEnd; line += 1) {
+        protectedLines[reportIndex].add(line - reportStart + 1)
+      }
+    }
   }
   return protectedLines
 }
@@ -203,36 +269,24 @@ export function markdownCodeContinuationPrefixes(
   const prefixes = reports.map(() => undefined as string | undefined)
   const source = reports.join('\n')
   const lines = source.split(/\r?\n/u)
-  try {
-    const tree = fromMarkdown(source) as MarkdownAstNode
-    const visit = (node: MarkdownAstNode): void => {
-      if (node.type === 'code') {
-        const start = node.position?.start?.line
-        const end = node.position?.end?.line
-        const offset = node.position?.start?.offset
-        const fenced = offset !== undefined && /^(?:`{3,}|~{3,})/u.test(source.slice(offset))
-        // Une fence `html-render` n'est exécutable que si son document complet reste dans un seul
-        // bloc visuel. La recréer artificiellement après une carte action/artefact pourrait exécuter
-        // un suffixe HTML privé de son contexte et produire un DOM différent de la source jointe.
-        if (fenced && start !== undefined && end !== undefined) {
-          const openingLine = lines[start - 1]
-          const continuationPrefix =
-            node.lang?.toLowerCase() === 'html-render'
-              ? openingLine.replace(/html-render/iu, 'html')
-              : openingLine
-          for (let index = 1; index < starts.length; index += 1) {
-            if (starts[index] > start && starts[index] <= end && prefixes[index] === undefined) {
-              prefixes[index] = continuationPrefix
-            }
-          }
-        }
+  // La protection principale échoue déjà fermée ; sans projection fiable (`null`), ne pas inventer
+  // de fence de continuation qui pourrait activer `html-render`.
+  for (const { start, end, offset, lang } of blocsDeCodeMarkdown(source) ?? []) {
+    const fenced = offset !== undefined && /^(?:`{3,}|~{3,})/u.test(source.slice(offset))
+    // Une fence `html-render` n'est exécutable que si son document complet reste dans un seul
+    // bloc visuel. La recréer artificiellement après une carte action/artefact pourrait exécuter
+    // un suffixe HTML privé de son contexte et produire un DOM différent de la source jointe.
+    if (!fenced) continue
+    const openingLine = lines[start - 1]
+    const continuationPrefix =
+      lang?.toLowerCase() === 'html-render'
+        ? openingLine.replace(/html-render/iu, 'html')
+        : openingLine
+    for (let index = 1; index < starts.length; index += 1) {
+      if (starts[index] > start && starts[index] <= end && prefixes[index] === undefined) {
+        prefixes[index] = continuationPrefix
       }
-      node.children?.forEach(visit)
     }
-    visit(tree)
-  } catch {
-    // La protection principale échoue déjà fermée ; sans projection fiable, ne pas inventer de
-    // fence de continuation qui pourrait activer `html-render`.
   }
   return prefixes
 }
@@ -1414,7 +1468,12 @@ export function formatOrchestrationOutcomePourLeModele(
   errorMessage?: string,
   closingNotice?: string
 ): string {
-  return composerLIssue(ok, data, errorMessage, closingNotice, undefined)
+  const issue = composerLIssue(ok, data, errorMessage, closingNotice, undefined)
+  // La question du run est DEJA a l'ecran (conv-1008) : sans cet avis, l'agent du chat la
+  // reposait avec `ask` et la meme decision s'affichait deux fois. Pour le modele seulement : la
+  // bulle, elle, a la carte.
+  const avis = ok ? avisMessageDuRun(lireMessageDuRun(data?.messageDuRun)) : undefined
+  return avis ? `${issue}\n\n${avis}` : issue
 }
 
 /** Corps commun : `plafondDuResultat` absent = résultat entier. */

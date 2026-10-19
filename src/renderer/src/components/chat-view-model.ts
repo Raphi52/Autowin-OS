@@ -1564,6 +1564,11 @@ export interface LiveRunPhase {
   reasoningEffort?: string
   /** A4 — phase pipeline (scout/frame/…) pour un libellé live précis. */
   phase?: string
+  /**
+   * Provenance de la phase, telle que l'orchestrateur l'envoie. `groupId: 'judge:fanout'` dit que
+   * plusieurs juges écrivent en même temps : le bloc des juges ne lit pas leur texte mêlé (conv-1021).
+   */
+  execution?: { groupId?: string }
 }
 
 /** Libellé lisible d'une phase de pipeline (A4) — sinon retombe sur le libellé d'étape. */
@@ -1749,6 +1754,25 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       const suggestions = parseScoutSuggestions(part.text)
       if (suggestions) blocks.push({ kind: 'suggestions', groups: suggestions })
       else blocks.push(part)
+      continue
+    }
+    /*
+     * LE RUN PARLE LUI-MEME (conv-1008) : une orchestration livree qui porte une question garde sa
+     * ligne dans le bloc d'activite (son deplie, ses phases) ET ajoute sa carte de decision. Laisser
+     * la branche `ask` ci-dessous la prendre aurait fait disparaitre le run du fil au profit de sa
+     * seule question.
+     */
+    if (part.kind === 'action' && part.name === 'orchestrate') {
+      const previous = blocks.at(-1)
+      if (previous?.kind === 'activity') previous.actions.push(part)
+      else blocks.push({ kind: 'activity', actions: [part] })
+      const decisionDuRun = parseAskDecision(part)
+      if (decisionDuRun)
+        blocks.push({
+          kind: 'ask-decision',
+          decision: decisionDuRun,
+          askId: `run:${part.actionId ?? blocks.length}`
+        })
       continue
     }
     // Question posee par le modele avec des reponses DECLAREES : elle devient un bloc de DECISION

@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process'
+import { readFile, stat } from 'node:fs/promises'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import {
   parseGitStatus,
   parseGitLog,
+  type GitBranchResult,
   type GitReadResult,
   type GitDiffResult
 } from '../shared/git-read'
@@ -211,6 +214,65 @@ export async function readGitState(cwd: string, historyLimit = 20): Promise<GitR
   } catch (error) {
     return { available: false, error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+/**
+ * La branche courante, SANS créer de processus : lue dans `HEAD`, en asynchrone.
+ *
+ * Pourquoi (heal conv-1013, 2026-10-16) : `gels.jsonl` porte, du 14 au 16/10, 9 gels de 3,3 à
+ * 9,8 s du fil principal, chacun dans la création d'UN processus `git status` lancé par
+ * `readGitState` (`ipc:git:read`). `execFile` est asynchrone, mais la création du processus ne
+ * l'est pas : elle tient le fil appelant (4,8 ms en médiane à vide, 19,7 ms au p95) et elle attend
+ * dès que le système cale — au même moment, des `readFileSync` de quelques octets y restent 10 s.
+ * Le badge de branche du chat relisait `readGitState` toutes les 5 s (`branche-courante.ts`) :
+ * `git status` + `git log`, 24 processus par minute, pour un nom qui tient dans `.git/HEAD`. Ici,
+ * une lecture qui attend le disque attend dans le pool de libuv, jamais sur le fil principal.
+ *
+ * Même découverte que git, pour rendre le même nom que `# branch.head` : remontée depuis `cwd`
+ * jusqu'au premier `.git` (dossier contenant `HEAD`, ou fichier `gitdir:` d'une copie
+ * `git worktree`), `refs/heads/<nom>` → `<nom>`, HEAD sur un commit → `(detached)`. Un dossier
+ * absent, un fichier `.git` illisible ou aucun dépôt → `available: false`, comme `git status`.
+ */
+export async function readGitBranch(cwd: string): Promise<GitBranchResult> {
+  try {
+    if (!(await stat(cwd)).isDirectory())
+      return { available: false, error: `${cwd} n'est pas un dossier` }
+    let dossier = resolve(cwd)
+    for (;;) {
+      const gitDir = await dossierGitDe(join(dossier, '.git'))
+      if (gitDir === 'invalide') return { available: false, error: `.git invalide dans ${dossier}` }
+      if (gitDir) {
+        const head = (await readFile(join(gitDir, 'HEAD'), 'utf8')).trim()
+        return { available: true, state: { branch: brancheDeHead(head) } }
+      }
+      const parent = dirname(dossier)
+      if (parent === dossier)
+        return { available: false, error: `aucun dépôt git au-dessus de ${cwd}` }
+      dossier = parent
+    }
+  } catch (error) {
+    return { available: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** Le dossier git désigné par `<dossier>/.git` : lui-même, la cible d'un `gitdir:`, ou rien. */
+async function dossierGitDe(chemin: string): Promise<string | 'invalide' | null> {
+  const info = await stat(chemin).catch(() => null)
+  if (!info) return null
+  if (info.isDirectory()) {
+    // Comme git : un `.git` sans `HEAD` n'est pas un dépôt, la recherche continue plus haut.
+    return (await stat(join(chemin, 'HEAD')).catch(() => null)) ? chemin : null
+  }
+  if (!info.isFile()) return null
+  const cible = /^gitdir:\s*(.+)$/m.exec(await readFile(chemin, 'utf8'))?.[1]?.trim()
+  if (!cible) return 'invalide'
+  return isAbsolute(cible) ? cible : resolve(dirname(chemin), cible)
+}
+
+function brancheDeHead(head: string): string {
+  const ref = /^ref:\s*(.+)$/.exec(head)?.[1]?.trim()
+  if (!ref) return '(detached)'
+  return ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : ref
 }
 
 /**

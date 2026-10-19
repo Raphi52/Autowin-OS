@@ -360,8 +360,13 @@
 :root[data-theme='ninja-claude'] .cosmic-outline .composer-field:focus-within {
   border-color: rgba(222, 220, 209, 0.3);
 }
-:root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea {
+/* Le champ se pose directement dans le cadre arrondi : plus de bord a lui, ni au focus
+   (demande du 2026-10-16, conv-1001 — le `textarea.input` heritait du cadre des champs). */
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea,
+:root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea:focus {
+  border: 0;
   background: transparent;
+  box-shadow: none;
   color: #faf9f5;
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .composer-send {

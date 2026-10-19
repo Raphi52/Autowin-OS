@@ -161,3 +161,28 @@ export function removeConvActivity(convId: string, root = convActivityRoot()): b
     return false
   }
 }
+
+/**
+ * L'effort REELLEMENT envoye par une etape d'orchestration, lu dans son enveloppe de prompt.
+ *
+ * Pourquoi (2026-10-16) : les lignes `exec`/`judge` du journal n'avaient jamais d'effort, alors que
+ * celles du chat l'ont — `OrchestrationStep` ne le porte pas. L'enveloppe observee porte l'argv exact
+ * remis au CLI : on y lit la valeur de `--effort`, donc ce qui est PARTI (une valeur refusee par le
+ * CLI n'y figure pas), et non le reglage demande. Repli sur `options.reasoningEffort` si un
+ * fournisseur l'expose ainsi ; sinon absent, jamais devine.
+ */
+export function effortEnvoyeDeLEnveloppe(
+  prompt: { options?: Record<string, unknown> } | undefined
+): string | undefined {
+  const options = prompt?.options
+  if (!options) return undefined
+  const argv = options.argv
+  if (Array.isArray(argv)) {
+    const i = argv.indexOf('--effort')
+    const valeur = i >= 0 ? argv[i + 1] : undefined
+    if (typeof valeur === 'string' && valeur) return valeur
+  }
+  return typeof options.reasoningEffort === 'string' && options.reasoningEffort
+    ? options.reasoningEffort
+    : undefined
+}

@@ -348,7 +348,7 @@ export function derniereDemandeHumaine(fil: readonly Msg[]): string | null {
     if (!nu) continue
     const relue = ANCRE_DEJA_ECRITE.exec(nu)?.[1]?.trim()
     if (relue) return relue
-    if (nu.startsWith(PROMPT_NOUVELLE_CIBLE)) continue
+    if (estUneReleve(nu)) continue
     if (ACCORD_NU.test(replierAccord(nu))) continue
     if (CHOIX_PAR_NUMEROS.test(nu)) {
       const resolu = optionsChoisies(fil, rang, nu)
@@ -519,7 +519,7 @@ export function lireSeuilsChaine(brut: string | null): SeuilsChaineAuto {
 /** Un message utilisateur envoyé PAR le mode auto (ancre posée par `ancrerSurLaDemande`, ou relève). */
 function estEnvoiDuModeAuto(texte: string): boolean {
   const nu = texte.trim()
-  return ANCRE_DEJA_ECRITE.test(nu) || nu.startsWith(PROMPT_NOUVELLE_CIBLE)
+  return ANCRE_DEJA_ECRITE.test(nu) || estUneReleve(nu)
 }
 
 /** Les envois du mode auto depuis le dernier message ÉCRIT par l'utilisateur (orientations ignorées). */
@@ -548,7 +548,7 @@ export function toursAutoDAffilee(fil: readonly Msg[]): number {
  * dès que l'utilisateur écrit (ou clique une option), puisque la remontée s'arrête sur son message.
  */
 export function relevesDepuisHumain(fil: readonly Msg[]): number {
-  return envoisAutoDepuisHumain(fil).filter((t) => t.startsWith(PROMPT_NOUVELLE_CIBLE)).length
+  return envoisAutoDepuisHumain(fil).filter(estUneReleve).length
 }
 
 /** Le % utilisé de la fenêtre 7 j de Claude (le plus haut si plusieurs modèles), null si inconnu. */
@@ -764,17 +764,37 @@ export function suiteEstDifferee(suite: string, recommandation: string | null): 
 }
 
 /**
+ * Debut COMMUN a toutes les versions de la releve. Les fils et `dernierPromptEnvoye` gardent les
+ * releves deja envoyees, dont celles au texte d'avant conv-996 (« …, et attends mon choix. ») :
+ * les reconnaitre au texte complet les ferait oublier, et la releve repartirait en double.
+ */
+const DEBUT_RELEVE =
+  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 10 ' +
+  'nouvelles cibles concrètes issues de ce qui vient d’être fait'
+
+/** Ce message est-il une releve du mode auto, quelle que soit la version de son texte ? */
+export function estUneReleve(texte: string): boolean {
+  return texte.trim().startsWith(DEBUT_RELEVE)
+}
+
+/**
  * LE TOUR DE RELEVE, envoye UNE SEULE FOIS par serie automatique quand la chaine est finie.
  *
- * Il ne fabrique aucune tache : il demande a l'agent de PROPOSER des cibles et d'attendre le choix
- * de l'utilisateur. La borne de cout est `relevesDepuisHumain` : une releve deja presente dans le
- * fil depuis le dernier message de l'utilisateur rend `chaine-finie`, et la boucle patiente au lieu
- * de repartir. (`prompt-identique` ne la protege PAS : ce chemin rend la main avant lui, et la
- * reponse automatique a l'`ask` s'intercale entre deux releves.)
+ * Il ne fabrique aucune tache : il demande a l'agent de PROPOSER des cibles. La borne de cout est
+ * `relevesDepuisHumain` : une releve deja presente dans le fil depuis le dernier message de
+ * l'utilisateur rend `chaine-finie`, et la boucle patiente au lieu de repartir.
+ * (`prompt-identique` ne la protege PAS : ce chemin rend la main avant lui, et la reponse
+ * automatique a l'`ask` s'intercale entre deux releves.)
+ *
+ * ELLE NE PROMET PLUS D'ATTENDRE (conv-996, 2026-10-16). Elle finissait par « et attends mon
+ * choix », alors que `reponseAutoAuDernierAsk` envoie SEULE l'option recommandee de l'`ask` qu'elle
+ * demande. L'agent a pris cet envoi pour une derive et a refuse de l'executer ; l'utilisateur a
+ * tranche : « trust le pouvoir du mode auto ». Le texte dit donc ce qui va se passer.
  */
 export const PROMPT_NOUVELLE_CIBLE =
-  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 10 ' +
-  'nouvelles cibles concrètes issues de ce qui vient d’être fait, et attends mon choix.'
+  `${DEBUT_RELEVE}. En mode auto, l’option recommandée (la première) partira seule comme ma ` +
+  'réponse : rédige-la pour qu’elle s’exécute telle quelle. Seule une option destructrice ' +
+  'attendra mon accord.'
 
 /**
  * PREMIER PASSAGE DANS UN FIL : faut-il figer le tour deja affiche, ou le laisser partir ?
@@ -949,10 +969,7 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
      * au dernier envoi laissait repartir releve → ask → reponse auto → « rien » → releve, jusqu'au
      * plafond de tours d'affilee. `dernierPromptEnvoye` reste un secours si le fil ne la montre pas.
      */
-    if (
-      relevesDepuisHumain(entree.fil) >= 1 ||
-      entree.dernierPromptEnvoye?.trim().startsWith(PROMPT_NOUVELLE_CIBLE)
-    )
+    if (relevesDepuisHumain(entree.fil) >= 1 || estUneReleve(entree.dernierPromptEnvoye ?? ''))
       return { action: 'attendre', raison: 'chaine-finie' }
     return { action: 'envoyer', texte: PROMPT_NOUVELLE_CIBLE, signature }
   }

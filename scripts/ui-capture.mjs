@@ -44,12 +44,20 @@
  *         [--scroll <selecteur CSS>] AMENE la cible dans le cadre avant de declencher (une vue
  *                                    longue cache sa moitie basse : la capture serait verte et
  *                                    montrerait autre chose). Cible absente = echec nomme, code 9.
+ *                                    Dans le chat, un vrai coup de molette precede le cadrage (le
+ *                                    fil se recolle en bas sans geste du lecteur). La cible est
+ *                                    REMESUREE au moment de la photo (`cadrage`) : hors du cadre =
+ *                                    `scroll-cible-hors-cadre`, code 5 (conv-1014).
  *         [--conversation <id>] [--donnees <racine>] OUVRE CETTE CONVERSATION dans l'instance
  *                                    cachee (avec --view chat) : elle y est COPIEE avant le demarrage
  *                                    depuis <racine> (defaut .autowin-data/autowin-os) — stockage,
  *                                    trace, activite, runs ; jamais turn-journals ni run-state, qui
  *                                    feraient reprendre un tour ou relancer un run —, ouverte, VERIFIEE
  *                                    ouverte (code 10 sinon), puis la copie est retiree apres capture.
+ *         [--stockage-local <fichier.json>] avec --conversation : SEME ces cles localStorage
+ *                                    ({ cle: valeur }) dans l'instance cachee puis recharge — pour un
+ *                                    affichage memorise cote interface (detail du contexte, jauge).
+ *                                    Jamais dans la fenetre reelle (code 10).
  *                                    Refusee dans la fenetre reelle. Voir semer-conversation.mjs.
  *         [--tour <turnId>]          choisit la demande affichee par le graphe (liste deroulante
  *                                    `[data-execution-turn-select]`), APRES les --click ; un tour
@@ -289,6 +297,57 @@ export async function attendreFinDeTransition(
 }
 
 /**
+ * La cible de `--scroll` est-elle VRAIMENT dans le cadre ? Pure. `cadrage` est mesure dans la page
+ * (voir `MESURE_CADRAGE`) : hauteur de la cible, sa partie visible (fenetre ET conteneurs qui la
+ * rognent), et la hauteur de la zone visible ou elle vit (le fil du chat, pas toute la fenetre).
+ *
+ * Une cible qui tient dans la zone doit y etre ENTIERE ; une cible plus haute qu'elle doit la
+ * REMPLIR. Pourquoi si strict (conv-1014, 2026-10-16) : la capture verte du chat montrait le bas du
+ * fil ; une regle laxiste (« quelques pixels visibles ») aurait accepte la meme photo.
+ */
+export const cibleDansLeCadre = (cadrage) => {
+  if (!cadrage) return false
+  const { hauteur, hauteurVisible, largeurVisible, hauteurCadre } = cadrage
+  if (!(hauteurVisible > 0) || !(largeurVisible > 0)) return false
+  // 1 px de tolerance : les bords fractionnaires arrondis par le navigateur.
+  return hauteurVisible + 1 >= Math.min(hauteur, hauteurCadre)
+}
+
+/**
+ * Faut-il un VRAI coup de molette avant `scrollIntoView` ? Pure. Seulement dans le chat : son fil se
+ * recolle en bas tant que le lecteur n'a fait aucun geste (ChatView, `gesteLecteurRef`), et un
+ * defilement programmatique n'en est pas un. Ailleurs la molette n'est pas neutre (elle zoome les
+ * graphes) : on ne l'envoie pas.
+ */
+export const moletteAvantDefilement = (vue) => vue === 'chat'
+
+/**
+ * Mesure du cadrage de la cible, evaluee DANS la page. `__SELECTEUR__` est remplace par le selecteur
+ * en JSON. Chaque ancetre qui rogne (overflow non visible) reduit la zone visible : la cible peut
+ * etre dans la fenetre et pourtant cachee sous le bord du fil.
+ */
+const MESURE_CADRAGE = `(() => {
+  const cible = document.querySelector(__SELECTEUR__)
+  if (!cible) return null
+  const r = cible.getBoundingClientRect()
+  let haut = 0, bas = innerHeight, gauche = 0, droite = innerWidth
+  for (let a = cible.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+    const st = getComputedStyle(a)
+    if (st.overflowY === 'visible' && st.overflowX === 'visible') continue
+    const ra = a.getBoundingClientRect()
+    haut = Math.max(haut, ra.top); bas = Math.min(bas, ra.bottom)
+    gauche = Math.max(gauche, ra.left); droite = Math.min(droite, ra.right)
+  }
+  const arrondi = (v) => Math.round(Math.max(0, v))
+  return {
+    hauteur: arrondi(r.height),
+    hauteurVisible: arrondi(Math.min(r.bottom, bas) - Math.max(r.top, haut)),
+    largeurVisible: arrondi(Math.min(r.right, droite) - Math.max(r.left, gauche)),
+    hauteurCadre: arrondi(bas - haut)
+  }
+})()`
+
+/**
  * Verdict PUR à partir des mesures — testable sans app. Rend `ok:false` ET l'étape fautive, jamais
  * un booléen nu : un échec doit dire OÙ il a eu lieu.
  */
@@ -331,6 +390,10 @@ export const verdictCapture = (mesures) => {
       // (absente => exit 9 avant ce verdict). Objection du juge du 2026-10-02.
       echecs.push(`clic-reduit-vue-sans-cible(${mesures.declencheur})`)
     }
+  }
+  // --scroll promet la cible SUR LA PHOTO : mesuree au moment de la prise, pas supposee (conv-1014).
+  if (mesures.defilementVers && !cibleDansLeCadre(mesures.cadrage)) {
+    echecs.push(`scroll-cible-hors-cadre(${mesures.defilementVers})`)
   }
   if ((mesures.octetsPng ?? 0) < SEUILS.octetsPng) echecs.push('png-trop-petit')
   return { ok: echecs.length === 0, echecs }
@@ -1008,6 +1071,41 @@ const main = async () => {
       enTransition: ${JSON.stringify(CLASSES_DE_FONDU)}.some((c) => document.documentElement.classList.contains(c))
     }
   })()`)
+  // --stockage-local <fichier.json> : SEME des cles localStorage dans l'instance cachee, puis
+  // recharge (conv-1000, 2026-10-16). Un affichage memorise cote interface (detail du contexte par
+  // conversation, jauge) n'existe pas dans un profil neuf : sans semis, sa preuve exigeait un tour
+  // paye DANS l'instance. Reserve a l'instance ou la conversation a ete copiee : jamais la fenetre
+  // reelle, dont le stockage est celui de l'utilisateur.
+  const semis = argument('--stockage-local')
+  if (semis) {
+    if (!process.env[ENV_CONVERSATION_SEMEE]) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: ['stockage-local-hors-instance-cachee'], vue }, 10)
+    }
+    let paires
+    try {
+      paires = JSON.parse(readFileSync(semis, 'utf8'))
+    } catch (error) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`stockage-local-illisible(${error.message})`], vue }, 10)
+    }
+    await evaluer(`(() => {
+      for (const [cle, valeur] of Object.entries(${JSON.stringify(paires)}))
+        localStorage.setItem(cle, typeof valeur === 'string' ? valeur : JSON.stringify(valeur))
+      setTimeout(() => location.reload(), 50)
+      return true
+    })()`).catch(() => false)
+    await new Promise((r) => setTimeout(r, 1_500))
+    for (let essai = 0; essai < 60; essai++) {
+      const pret = await evaluer(`Boolean(document.querySelector('[data-testid="nav-${vue}"]'))`).catch(
+        () => false
+      )
+      if (pret) break
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  }
   // --conversation : OUVRIR la conversation copiee, et le VERIFIER sur la page. L'instance la rouvre
   // seule (c'est la seule, ou la derniere memorisee) ; sinon on memorise son identifiant et on
   // recharge. Le verdict exige `data-active-conversation-id` egal a l'identifiant demande : une
@@ -1271,19 +1369,84 @@ const main = async () => {
   // PAS l'element change — une preuve vraie de la mauvaise chose. Un selecteur, un
   // `scrollIntoView`, et le verdict refuse une cible absente au lieu de capturer le haut de page
   // en silence.
+  //
+  // conv-1014 (2026-10-16) : dans le chat, un `scrollIntoView` seul ne TENAIT pas — le fil se
+  // recollait en bas (pas de geste du lecteur), et la photo verte montrait le bas du fil. On envoie
+  // donc d'abord un VRAI coup de molette (CDP `Input.dispatchMouseEvent`) au-dessus du fil, puis on
+  // cadre, et on recommence tant que la cible n'a pas TENU deux mesures de suite (le rendu tardif du
+  // fil deplace encore la page apres un premier cadrage). Le verdict remesure au moment de la photo.
   const cibleDefilement = argument('--scroll')
+  const mesurerCadrage = () =>
+    // Remplacement par FONCTION : un `$` du selecteur ne doit pas etre lu comme motif de remplacement.
+    evaluer(MESURE_CADRAGE.replace('__SELECTEUR__', () => JSON.stringify(cibleDefilement))).catch(
+      () => null
+    )
   if (cibleDefilement) {
-    const trouve = await evaluer(`(() => {
-      const cible = document.querySelector(${JSON.stringify(cibleDefilement)})
-      cible?.scrollIntoView({ block: 'center', behavior: 'instant' })
-      return Boolean(cible)
-    })()`)
+    const trouve = await evaluer(
+      `Boolean(document.querySelector(${JSON.stringify(cibleDefilement)}))`
+    )
     if (!trouve) {
       await restaurerVue()
       socket.close()
       rendre({ ok: false, echecs: [`scroll-cible-absente(${cibleDefilement})`], vue }, 9)
     }
-    await new Promise((r) => setTimeout(r, 400))
+    // LA PHOTO DOIT SUIVRE LE DEFILEMENT. La fenetre cachee ne dessine que ~2 images/s sans flux
+    // ouvert (voir `accuseDImage`), et `Page.captureScreenshot` rend la DERNIERE image dessinee.
+    // Mesure du 2026-10-16 (conv-1014) : sans flux, 2 photos sur 2 montraient le fil AVANT le
+    // cadrage alors que la page mesurait la cible en place (761 px sur 761) ; avec le flux, 3 sur 3
+    // conformes a la mesure. Le flux reste ouvert jusqu'a la photo.
+    if (!mesureMouvement)
+      await envoyer('Page.startScreencast', {
+        format: 'jpeg',
+        quality: 10,
+        maxWidth: 64,
+        maxHeight: 64
+      })
+    let tenue = 0
+    for (let essai = 0; essai < 8 && tenue < 2; essai++) {
+      if (tenue === 0) {
+        if (moletteAvantDefilement(vue)) {
+          // Le centre de la zone qui DEFILE autour de la cible : c'est elle qui doit recevoir le geste.
+          const point = await evaluer(`(() => {
+            const cible = document.querySelector(${JSON.stringify(cibleDefilement)})
+            let zone = cible?.parentElement
+            while (zone && !(zone.scrollHeight > zone.clientHeight + 1 &&
+              /auto|scroll|overlay/.test(getComputedStyle(zone).overflowY))) zone = zone.parentElement
+            const r = (zone ?? document.documentElement).getBoundingClientRect()
+            const haut = Math.max(r.top, 0), bas = Math.min(r.bottom, innerHeight)
+            const gauche = Math.max(r.left, 0), droite = Math.min(r.right, innerWidth)
+            return { x: (gauche + droite) / 2, y: (haut + bas) / 2 }
+          })()`)
+          if (point) {
+            await envoyer('Input.dispatchMouseEvent', {
+              type: 'mouseWheel',
+              x: point.x,
+              y: point.y,
+              deltaX: 0,
+              deltaY: -400
+            })
+            // La molette defile en douceur : la laisser finir avant de cadrer, sinon elle deplace
+            // la cible APRES le cadrage.
+            await new Promise((r) => setTimeout(r, 250))
+          }
+        }
+        // Une cible plus haute que la zone qui defile se cadre par son HAUT : centree, la photo n'en
+        // montrait que le milieu (conv-1014 : un message de 1597 px sans sa phrase d'ouverture).
+        await evaluer(`(() => {
+          const cible = document.querySelector(${JSON.stringify(cibleDefilement)})
+          if (!cible) return false
+          let zone = cible.parentElement
+          while (zone && !(zone.scrollHeight > zone.clientHeight + 1 &&
+            /auto|scroll|overlay/.test(getComputedStyle(zone).overflowY))) zone = zone.parentElement
+          const hauteurZone = zone ? zone.clientHeight : innerHeight
+          const haute = cible.getBoundingClientRect().height > hauteurZone
+          cible.scrollIntoView({ block: haute ? 'start' : 'center', behavior: 'instant' })
+          return true
+        })()`)
+      }
+      await new Promise((r) => setTimeout(r, 350))
+      tenue = cibleDansLeCadre(await mesurerCadrage()) ? tenue + 1 : 0
+    }
     mesuresDom = await mesurerDom()
   }
 
@@ -1527,7 +1690,12 @@ const main = async () => {
     mesuresDom = await mesurerDom()
   }
   mesuresDom = { ...mesuresDom, enTransition: fondu.enTransition, fonduAttendu: fondu.attendu }
+  // Le cadrage de la cible --scroll, lu JUSTE AVANT la photo : c'est lui que le verdict juge.
+  const cadrage = cibleDefilement ? await mesurerCadrage() : undefined
   const capture = await envoyer('Page.captureScreenshot', { format: 'png', fromSurface: true })
+  // Le flux ouvert pour le cadrage --scroll n'a plus de raison d'etre. Un echec de cet arret ne
+  // touche pas la photo deja prise, et la connexion se ferme juste apres : on l'ignore.
+  if (cibleDefilement && !mesureMouvement) await envoyer('Page.stopScreencast').catch(() => {})
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(sortie, Buffer.from(capture.data, 'base64'))
   const octetsPng = statSync(sortie).size
@@ -1540,7 +1708,7 @@ const main = async () => {
     octetsPng,
     interfaceCapturee: interfaceCapturee(mesuresDom.adressePage ?? page.url, racineDepot()),
     ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
-    ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
+    ...(cibleDefilement ? { defilementVers: cibleDefilement, cadrage } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
     ...(retraits !== undefined ? { retraits } : {}),
     ...(conversationOuverte ? { conversation: conversationOuverte } : {}),

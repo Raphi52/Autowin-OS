@@ -22,7 +22,7 @@ while ($true) {
     } elseif ($parts[0] -eq 'shot' -and $parts.Count -eq 3 -and $parts[1] -match '^[a-zA-Z0-9_-]+$') {
       $r = [AutowinHdeskShot]::Capture("AutowinTest_$($parts[1])", $parts[2], $true)
       if ($r.Error) { $sortie = @{ id = $parts[1]; erreur = $r.Error } | ConvertTo-Json -Compress }
-      else { $sortie = @{ id = $parts[1]; width = $r.Width; height = $r.Height; couleursDistinctes = $r.Distinct; uni = ($r.Distinct -le 1); output = $parts[2] } | ConvertTo-Json -Compress }
+      else { $sortie = @{ id = $parts[1]; width = $r.Width; height = $r.Height; couleursDistinctes = $r.Distinct; uni = ($r.Distinct -le 1); origineX = $r.OrigineX; origineY = $r.OrigineY; output = $parts[2] } | ConvertTo-Json -Compress }
     } else { $sortie = @{ erreur = "Commande inconnue : $ligne" } | ConvertTo-Json -Compress }
   } catch { $sortie = @{ erreur = $_.Exception.Message } | ConvertTo-Json -Compress }
   [Console]::Out.WriteLine($sortie); [Console]::Out.Flush()

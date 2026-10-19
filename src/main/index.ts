@@ -488,7 +488,7 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
-import { OutlookLocalGateway } from './outlook/outlook-local'
+import { OUTLOOK_HORS_INSTANCE_CACHEE, OutlookLocalGateway } from './outlook/outlook-local'
 import { registerVeilleIpc } from './veille/veille-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
@@ -1795,7 +1795,8 @@ function registerHdeskTvIpc(): void {
   ipcMain.handle('hdesk:tv:act', (event, geste: GesteTv) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
     if (process.platform !== 'win32') return { ok: false, message: 'Windows uniquement.' }
-    return agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
+    // Le point arrive en pixels de l'image RECADREE affichee : on le ramene a l'ecran du bureau (conv-1009).
+    return agirHdesk(racineScriptsHorsArchive(app.getAppPath()), capteur().versEcran(geste))
   })
   ipcMain.handle('hdesk:tv:basculer', (event, id: string) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
@@ -4054,7 +4055,12 @@ Le fil reprend ensuite normalement.`
    * qu'elle porte un cache — en fabriquer une par appel relancerait un dialogue COM a chaque
    * rafraichissement de la page d'accueil.
    */
-  const outlookGateway = new OutlookLocalGateway({ appRoot: app.getAppPath() })
+  // Instance de test CACHÉE : aucun Outlook. Lu par COM depuis un bureau caché, Outlook démarre DANS
+  // ce bureau, invisible, et le garde vivant après la capture (conv-1016, 2026-10-17).
+  const outlookGateway = new OutlookLocalGateway({
+    appRoot: app.getAppPath(),
+    ...(headlessTestInstance ? { horsService: OUTLOOK_HORS_INSTANCE_CACHEE } : {})
+  })
   // fix-ok: 3 edits mesures - (1) remplacement Python a casse les antislashs, (2) bloc finally repris, (3) format de mes seules lignes (index.ts deja rouge au format avant moi).
   // Teams (Microsoft Graph) : configuration PERSONNELLE, lue dans l'environnement ou HKCU comme
   // AUTOWIN_WATCHDOG_MAILS. Sans AUTOWIN_TEAMS_CLIENT_ID, aucun appel reseau n'est fait.
@@ -5196,6 +5202,7 @@ app.whenReady().then(async () => {
     reuseOrCreateConvRun,
     regimePhases,
     saveConvRunTrace,
+    loadConvRunTrace,
     populateConvRunSections,
     closeConvRun,
     phasesAvecJuge,

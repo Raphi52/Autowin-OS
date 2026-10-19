@@ -6,6 +6,10 @@ using System.Runtime.InteropServices;
 using System.Threading;
 public sealed class AutowinHdeskShot {
   public string Error; public int Width, Height, Distinct, Windows, Painted; public long Bytes;
+  // ORIGINE DU RECADRAGE (conv-1009, 2026-10-16) : coin haut-gauche de l'image dans l'ecran du bureau.
+  // Un clic pose sur l'image recadree vise l'ecran en (x + OrigineX, y + OrigineY) ; sans elle, la TV
+  // envoyait le point de l'image tel quel et ratait la fenetre (« Aucune fenetre en (362,144) »).
+  public int OrigineX, OrigineY;
   [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
   static extern IntPtr OpenDesktopW(string name, uint flags, bool inherit, uint access);
   [DllImport("user32.dll", SetLastError = true)] static extern bool CloseDesktop(IntPtr h);
@@ -144,7 +148,7 @@ public sealed class AutowinHdeskShot {
           using (var zone = image.Clone(new Rectangle(x0, y0, x1 - x0, y1 - y0), image.PixelFormat)) {
             zone.Save(outputPath, ImageFormat.Png);
           }
-          Width = x1 - x0; Height = y1 - y0;
+          Width = x1 - x0; Height = y1 - y0; OrigineX = x0; OrigineY = y0;
         } else {
           image.Save(outputPath, ImageFormat.Png);
         }

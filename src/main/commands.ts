@@ -218,7 +218,7 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
-import { appendConvActivity } from './activity/conv-activity'
+import { appendConvActivity, effortEnvoyeDeLEnveloppe } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
 import {
   createTaskFromCommand,
@@ -262,6 +262,7 @@ import {
   executionCostCoverageFields,
   formatExecutionCostCoverage
 } from '../shared/orchestration-outcome'
+import { messageDuRun } from '../shared/message-du-run'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
 import { memoireDesRunsPrecedents, phasesAvecJuge, resumeDesTours } from './orchestration-memoire'
@@ -3190,6 +3191,17 @@ export class AppCommandBus {
                   }))
                 populateConvRunSections(runPath, livePhases)
               }
+              /*
+               * LA TRACE SUR DISQUE SUIT LE RUN ÉTAPE PAR ÉTAPE (conv-1021, 2026-10-19).
+               *
+               * Elle n'était écrite qu'à la fin du run : une interface rechargée en plein run (conv-1019,
+               * 2 h de boucle juge → réparation) avait perdu tout ce qui précédait, et rien sur disque ne
+               * pouvait le lui rendre. Écrite AVANT la diffusion de l'étape et en synchrone : quand
+               * l'interface reçoit `orchestrate-step` et relit le fichier, il porte déjà cette étape.
+               * Coût mesuré sur la plus grosse trace du poste (2,9 Mo, 54 étapes, conv-1019) : 14 ms
+               * par réécriture, 0,45 s cumulées sur tout le run.
+               */
+              if (runPath) saveConvRunTrace(runPath, steps)
               this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
               /*
                * Le cadrage devient CONTESTABLE ici, et nulle part ailleurs.
@@ -3223,6 +3235,8 @@ export class AppCommandBus {
                   label: step.role ?? step.step,
                   provider: step.provider,
                   model: step.model,
+                  // Meme champ que les lignes du chat (2026-10-16) : l'effort lu dans l'argv envoye.
+                  reasoningEffort: effortEnvoyeDeLEnveloppe(step.prompt),
                   inputTokens: step.usage?.inputTokens,
                   outputTokens: step.usage?.outputTokens,
                   cacheReadTokens: step.usage?.cacheReadTokens,
@@ -3574,7 +3588,17 @@ export class AppCommandBus {
             // du conseil — qui decide si le `👉 Recommandé` du worker s'adresse encore a un arbre
             // qui a recu son code (cf. `demoteUnvalidatedSuccessClaims`).
             workRetained: r.retainedWorkspace !== undefined,
-            ...(learning ? { learning } : {})
+            ...(learning ? { learning } : {}),
+            /*
+             * LE RUN PARLE LUI-MEME A LA FIN (conv-1008) : la question du bilan de sa derniere
+             * etape devient une carte « Message du run » dans le fil (ask-choices.ts). Seulement
+             * sur un run LIVRE : apres un refus du juge ou du controle final, une question comme
+             * « je publie ? » porterait sur un travail que personne n'a accepte.
+             */
+            ...(() => {
+              const message = r.valid && !r.gateBlocked ? messageDuRun(r.phaseOutputs) : undefined
+              return message ? { messageDuRun: message } : {}
+            })()
           }
         } catch (e) {
           await this.observeOutcomeLearning({

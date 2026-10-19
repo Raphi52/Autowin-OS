@@ -11,15 +11,36 @@
   Limite : un arret BRUTAL de ce processus (kill) saute le finally — d'ou un processus detache qui ne
   depend pas d'Autowin.
 
-  Usage : powershell -NoProfile -File scripts/hdesk-basculer.ps1 -InstanceId <id> [-MaxSecondes 120]
+  Usage : powershell -NoProfile -File scripts/hdesk-basculer.ps1 -InstanceId <id> [-MaxSecondes 120] [-Statut <fichier.json>]
   Sortie : JSON {instanceId, bascule, retour, motif} ; exit 0 = revenu, 1 = echec avant bascule.
+
+  -Statut (conv-951, 2026-10-16) : l'app lance ce script DETACHE par WMI (scripts/lancer-detache.ps1) et
+  ne voit donc ni sa sortie ni son code. Le script lui ecrit son verdict dans ce fichier, des qu'il le
+  connait : {"etat":"bascule"} juste apres SwitchDesktop, ou {"etat":"erreur","message":...} si la
+  bascule echoue. Sans ce fichier, un echec redevient muet pour l'utilisateur.
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
-  [ValidateRange(5, 600)][int]$MaxSecondes = 120
+  [ValidateRange(5, 600)][int]$MaxSecondes = 120,
+  [string]$Statut = ''
 )
 $ErrorActionPreference = 'Stop'
-trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+function Ecrire-Statut([hashtable]$Etat) {
+  if (-not $Statut) { return }
+  try {
+    [System.IO.File]::WriteAllText($Statut, ($Etat | ConvertTo-Json -Compress), (New-Object System.Text.UTF8Encoding $false))
+  } catch {
+    [Console]::Error.WriteLine("Fichier d'etat illisible ou inaccessible : $Statut")
+  }
+}
+trap {
+  # Message de la cause, pas l'enveloppe « Exception lors de l'appel de Basculer avec 3 argument(s) ».
+  $cause = $_.Exception
+  while ($cause.InnerException) { $cause = $cause.InnerException }
+  [Console]::Error.WriteLine($cause.Message)
+  Ecrire-Statut @{ etat = 'erreur'; message = $cause.Message }
+  exit 1
+}
 Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
 using System;
 using System.Drawing;
@@ -57,7 +78,7 @@ public static class AutowinHdeskBascule {
     }
   }
 
-  public static string Basculer(string nom, int max) {
+  public static string Basculer(string nom, int max, string statut) {
     IntPtr cache = OpenDesktopW(nom, 0, false, GENERIC_ALL);
     if (cache == IntPtr.Zero) throw new Exception("Bureau cache introuvable : " + nom + " (Win32 " + Marshal.GetLastWin32Error() + ").");
     IntPtr defaut = OpenDesktopW("Default", 0, false, GENERIC_ALL);
@@ -84,6 +105,11 @@ public static class AutowinHdeskBascule {
     }
     try {
       if (!SwitchDesktop(cache)) throw new Exception("SwitchDesktop a echoue (Win32 " + Marshal.GetLastWin32Error() + ").");
+      // L'ecran a bascule : l'app qui attend ce verdict peut repondre « ok » a l'utilisateur.
+      if (!string.IsNullOrEmpty(statut)) {
+        try { System.IO.File.WriteAllText(statut, "{\"etat\":\"bascule\"}"); }
+        catch (Exception e) { Console.Error.WriteLine("Fichier d'etat non ecrit : " + e.Message); }
+      }
       th.Join((max + 5) * 1000);
       if (th.IsAlive) motif = "minuterie";
     } finally {
@@ -94,5 +120,5 @@ public static class AutowinHdeskBascule {
   }
 }
 '@
-$motif = [AutowinHdeskBascule]::Basculer("AutowinTest_$InstanceId", $MaxSecondes)
+$motif = [AutowinHdeskBascule]::Basculer("AutowinTest_$InstanceId", $MaxSecondes, $Statut)
 [pscustomobject]@{ instanceId = $InstanceId; bascule = $true; retour = $true; motif = $motif } | ConvertTo-Json -Compress

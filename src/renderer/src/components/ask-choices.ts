@@ -1,4 +1,6 @@
 import type { SuggestionGroup } from './scout-suggestions'
+import { lireMessageDuRun } from '../../../shared/message-du-run'
+import { runLabelFromPath } from '../../../shared/orchestration-outcome'
 
 /**
  * Rend cliquables les reponses d'une question posee par le modele.
@@ -57,6 +59,12 @@ export interface AskDecision {
    * « Les deux » et « Seulement A » se ressemblent trop pour qu'une heuristique tranche.
    */
   choixMultiple?: boolean
+  /**
+   * QUI POSE LA QUESTION, quand ce n'est pas l'agent du chat (conv-1008). Absent = l'agent du chat
+   * via `ask`. `run` = le run orchestre lui-meme, a la fin de son travail : le bloc porte alors
+   * l'en-tete « Message du run », son resume et une croix pour le fermer.
+   */
+  provenance?: { source: 'run'; run?: string; resume?: string }
 }
 
 const PLAFOND_LIBELLE = 200
@@ -112,6 +120,37 @@ function optionNormalisee(valeur: unknown): AskOption | null {
 }
 
 /**
+ * LA QUESTION DU RUN (conv-1008) : une action `orchestrate` livree qui porte `messageDuRun`.
+ *
+ * Elle passe par `parseAskDecision` plutot que par un chemin a part : le verrou « deja repondu »
+ * (`askReponseDuFil`), le mode auto (`reponseAutoAuDernierAsk`, qui refuse seul une reponse
+ * destructrice) et l'attente du composer lisent tous cette fonction. Une seconde voie aurait laisse
+ * la question du run cliquable deux fois et ignoree du mode auto.
+ */
+function decisionDuRun(data: unknown): AskDecision | null {
+  if (!data || typeof data !== 'object') return null
+  const issue = data as { messageDuRun?: unknown; valid?: unknown; gateBlocked?: unknown }
+  // Refus du juge ou du controle final : la question porterait sur un travail non accepte.
+  if (issue.valid === false || issue.gateBlocked === true) return null
+  const message = lireMessageDuRun(issue.messageDuRun)
+  if (!message) return null
+  const chemin = (data as { runPath?: unknown }).runPath
+  const run = runLabelFromPath(typeof chemin === 'string' ? chemin : undefined)
+  return {
+    question: message.question.slice(0, PLAFOND_LIGNE),
+    options: message.reponses.map((reponse) => ({
+      libelle: reponse.libelle.slice(0, PLAFOND_LIBELLE),
+      ...(reponse.recommande && { recommande: true as const })
+    })),
+    provenance: {
+      source: 'run',
+      ...(run && { run }),
+      ...(message.resume && { resume: message.resume.slice(0, PLAFOND_LIGNE) })
+    }
+  }
+}
+
+/**
  * La decision a rendre, ou `null` si la charge utile n'en est pas une.
  *
  * Une seule reponse n'est pas un choix : mieux vaut laisser la question en texte que d'afficher un
@@ -124,6 +163,8 @@ export function parseAskDecision(part: {
   ok?: boolean
   data?: unknown
 }): AskDecision | null {
+  if (part.kind === 'action' && part.name === 'orchestrate' && part.ok === true)
+    return decisionDuRun(part.data)
   if (part.kind !== 'action' || part.name !== 'ask' || part.ok !== true) return null
   const data = part.data as Partial<AskChoicesData> | undefined
   if (!data || typeof data.question !== 'string' || !data.question.trim()) return null

@@ -20,6 +20,7 @@ import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-path'
 import { motsDe, replier } from '../../shared/mots'
+import { texteQuiNomme, titreApresMessage, type OrigineTitre } from '../../shared/titre-automatique'
 import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
@@ -122,6 +123,15 @@ export interface Conversation {
   schemaVersion?: 2 | 3
   id: string
   title: string
+  /**
+   * D'où vient `title` : `'auto'` = repris par l'app du dernier message de l'utilisateur, et il
+   * le suivra encore ; `'utilisateur'` = donné à la main, plus jamais réécrit.
+   *
+   * Demande du 2026-10-16 (conv-999) : le titre suit le DERNIER message, pas le premier, tant que
+   * l'utilisateur ne l'a pas nommé lui-même. OPTIONNEL : absent sur un fil antérieur, dont le
+   * titre seul dit alors s'il est automatique (`titreEstAutomatique`, shared/titre-automatique).
+   */
+  origineTitre?: OrigineTitre
   /**
    * Le moteur qui répond (`'claude' | 'codex' | ...`).
    *
@@ -508,7 +518,14 @@ export interface ConversationChange {
   conversation?: Conversation
   urgency: 'immediate' | 'checkpoint'
   journal?:
-    | { op: 'append-messages'; messages: Msg[]; updatedAt: number }
+    | {
+        op: 'append-messages'
+        messages: Msg[]
+        updatedAt: number
+        /** Titre repris du message ajouté (conv-999) : le rejeu du journal doit le retrouver. */
+        title?: string
+        origineTitre?: OrigineTitre
+      }
     | { op: 'turn-event'; turnId: string; event: ChatTurnEvent; updatedAt: number }
 }
 
@@ -1114,6 +1131,7 @@ export class ConversationStore {
     }
     conversation.messages.push(userMessage)
     this.indexerMessage(conversation.id, userMessage.content)
+    const retitre = this.titreApresLeMessage(conversation, userMessage, ts)
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
     const assistantMessage: Msg = {
       messageId: this.nextUniqueMessageId(conversation),
@@ -1133,9 +1151,42 @@ export class ConversationStore {
     this.changed(id, 'immediate', {
       op: 'append-messages',
       messages: [structuredClone(userMessage), structuredClone(assistantMessage)],
-      updatedAt: ts
+      updatedAt: ts,
+      // Le titre voyage AVEC le message dans le journal : un upsert complet réécrirait tout le fil
+      // à chaque tour, et sans lui le rejeu au démarrage rendrait l'ancien titre.
+      ...(retitre ? { title: retitre, origineTitre: 'auto' as const } : {})
     })
     return conversation
+  }
+
+  /**
+   * LE TITRE SUIT LE DERNIER MESSAGE QUI LANCE UN TOUR (conv-999, 2026-10-16), sauf nom donné à
+   * la main ou relance sans objet — la règle complète vit dans `titreApresMessage`.
+   *
+   * Ici et non dans `append` : le seul message utilisateur qu'`append` reçoit est une consigne
+   * tapée PENDANT un tour (« attends », « plutôt X ») ; elle oriente le sujet du tour en cours,
+   * elle ne le renomme pas. Rend le nouveau titre, déjà posé, ou `undefined` s'il n'a pas changé.
+   */
+  private titreApresLeMessage(
+    conversation: Conversation,
+    message: Msg,
+    ts: number
+  ): string | undefined {
+    const premier = conversation.messages.find((m) => m.role === 'user')
+    const titre = titreApresMessage({
+      titre: conversation.title,
+      origine: conversation.origineTitre,
+      ...(premier ? { premierMessage: texteQuiNomme(premier) } : {}),
+      message: texteQuiNomme(message),
+      autresTitres: [...this.conversations.values()]
+        .filter((autre) => autre.id !== conversation.id)
+        .map((autre) => autre.title),
+      quand: new Date(ts)
+    })
+    if (titre === undefined) return undefined
+    conversation.title = titre
+    conversation.origineTitre = 'auto'
+    return titre
   }
 
   /** Démarre une continuation explicite sans fabriquer de nouveau message utilisateur. */
@@ -2024,6 +2075,10 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) return undefined
     conversation.title = title
+    // Seuls la barre latérale et l'outil `rename_conversation` passent ici : c'est un nom donné
+    // par l'utilisateur, que ses messages suivants ne réécriront plus (conv-999). Le titre
+    // automatique, lui, est posé par `beginTurn` sans passer par ce chemin.
+    conversation.origineTitre = 'utilisateur'
     this.changed(id)
     const relue = this.conversations.get(id)
     return relue ? { id, title: relue.title } : undefined

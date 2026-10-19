@@ -1,6 +1,24 @@
-import React, { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, {
+  Fragment,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { extraireVotesJuges, type StepDeRun, type VoteJuge } from './juges-votes'
-import { blocDesJuges, type BlocDesJuges, type ObjectionDuJuge, type Suivi } from './juges-bloc'
+import {
+  blocDesJuges,
+  blocDesJugesEnDirect,
+  type BlocDesJuges,
+  type BlocEnDirect,
+  type JugeEnCours,
+  type ObjectionDuJuge,
+  type Suivi
+} from './juges-bloc'
+import { RunsEnDirect } from './runs-en-direct'
+import { useRunReluDuDisque, type LecteurDuRunPerdu } from './run-relu-du-disque'
 import './JugesPanel.css'
 
 /**
@@ -14,7 +32,14 @@ import './JugesPanel.css'
  * par passage, que l'ancien panneau listait comme autant de juges. Le verdict complet de chaque
  * juge reste à un clic, sur son nom en pied (demande du 14/08 : « rentrer dans le détail »).
  */
-const LIBELLE_VERDICT = { defaut: 'DÉFAUT', valide: 'VALIDE', echec: 'ÉCHEC' } as const
+const LIBELLE_VERDICT = {
+  defaut: 'DÉFAUT',
+  valide: 'VALIDE',
+  echec: 'ÉCHEC',
+  // Un juge écrit en ce moment (conv-1021) : aucun verdict n'est encore rendu.
+  encours: 'EN COURS'
+} as const
+type Verdict = keyof typeof LIBELLE_VERDICT
 const LIBELLE_SUIVI: Record<Suivi, string> = {
   partie: 'REPRISE · EN PARTIE',
   reprise: 'REPRISE',
@@ -43,10 +68,12 @@ function avecCode(texte: string): React.ReactNode {
   )
 }
 
-function IconeVerdict({ verdict }: { verdict: keyof typeof LIBELLE_VERDICT }): React.JSX.Element {
+function IconeVerdict({ verdict }: { verdict: Verdict }): React.JSX.Element {
   return (
     <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-      {verdict === 'valide' ? (
+      {verdict === 'encours' ? (
+        <circle className="jpan-pouls" cx="6" cy="6" r="3" fill="currentColor" />
+      ) : verdict === 'valide' ? (
         <path
           d="M2.2 6.3 4.8 8.8 9.8 3.4"
           fill="none"
@@ -205,7 +232,7 @@ function Objection({
   )
 }
 
-function sousTitre(bloc: BlocDesJuges, verdict: keyof typeof LIBELLE_VERDICT): string {
+function sousTitre(bloc: BlocDesJuges, verdict: Verdict): string {
   const { objections } = bloc
   if (objections.length === 0) {
     if (verdict === 'valide' && bloc.constats > 0)
@@ -235,6 +262,164 @@ function dureeLisible(ms: number): string {
   return s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s` : `${s} s`
 }
 
+/** Le sous-titre pendant que le juge écrit : ce qu'on sait déjà, sans rien annoncer de plus. */
+function sousTitreEnCours(enCours: JugeEnCours): string {
+  if (!enCours.lisible)
+    return 'plusieurs juges écrivent : leurs objections arrivent avec leurs verdicts'
+  return enCours.objections.length > 0
+    ? 'le juge écrit encore'
+    : 'aucune objection écrite pour l’instant'
+}
+
+/**
+ * Le dessin du bloc, pour un verdict rendu (`bloc`) ou un juge qui écrit (`enCours`). Le second
+ * prime : pendant qu'un passage est jugé, le verdict d'avant ne sert plus qu'au suivi de ses objections.
+ */
+function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JSX.Element | null {
+  const [ouvert, setOuvert] = useState<number | 'direct' | null>(null)
+  if (!enCours && (!bloc || bloc.votes.length === 0)) return null
+
+  const votes = enCours ? [] : (bloc?.votes ?? [])
+  const objections = enCours ? enCours.objections : (bloc?.objections ?? [])
+  const valides = votes.filter((vote) => vote.vote === 'valide').length
+  // Une objection MINEUR bloque la clôture même sous un VALIDE (décision conv-844) : le bandeau le dit.
+  const verdict: Verdict = enCours
+    ? 'encours'
+    : votes.some((vote) => vote.vote === 'defaut') || objections.length > 0
+      ? 'defaut'
+      : valides > 0
+        ? 'valide'
+        : 'echec'
+  const n = objections.length
+  const titre =
+    n > 0
+      ? `${pluriel(n, 'objection')} à corriger`
+      : verdict === 'encours'
+        ? 'Le juge relit le travail'
+        : verdict === 'valide'
+          ? 'Aucune objection à corriger'
+          : verdict === 'defaut'
+            ? 'Refusé sans objection détaillée'
+            : 'Aucun juge n’a rendu de verdict'
+  const sous = enCours
+    ? sousTitreEnCours(enCours)
+    : [
+        bloc ? sousTitre(bloc, verdict) : '',
+        reparationEnCours ? `réparation ${reparationEnCours} en cours` : ''
+      ]
+        .filter(Boolean)
+        .join(' · ')
+  // Pendant le jugement, le passage d'avant est celui du DERNIER verdict rendu.
+  const reparationPrecedente = enCours
+    ? bloc
+      ? bloc.reparation
+      : undefined
+    : bloc?.reparationPrecedente
+  const juge: VoteJuge | undefined = typeof ouvert === 'number' ? votes[ouvert] : undefined
+
+  return (
+    <section className="jpan" data-testid="juges-panel" data-verdict={verdict}>
+      <div className="jpan-bandeau">
+        <span className={`jpan-verdict is-${verdict}`}>
+          <IconeVerdict verdict={verdict} />
+          {LIBELLE_VERDICT[verdict]}
+        </span>
+        <span className="jpan-titre">
+          <b>{titre}</b>
+          {sous && <span className="jpan-sous">{sous}</span>}
+        </span>
+        {enCours ? (
+          <span className="jpan-quorum" title="Passage en train d’être jugé">
+            {enCours.reparation > 0 ? `réparation ${enCours.reparation}` : '1er passage'}
+          </span>
+        ) : (
+          bloc && (
+            <span
+              className="jpan-quorum"
+              title={
+                bloc.reparation > 0
+                  ? `Verdict du passage de la réparation ${bloc.reparation}`
+                  : 'Verdict du premier passage'
+              }
+            >
+              {valides}/{votes.length} {valides > 1 ? 'valident' : 'valide'}
+            </span>
+          )
+        )}
+      </div>
+      {n > 0 && (
+        <>
+          <div className="jpan-section">
+            <span className="jpan-kicker">À corriger</span>
+            <span className="jpan-filet" />
+          </div>
+          {objections.map((objection, i) => (
+            <Objection
+              key={i}
+              objection={objection}
+              reparationPrecedente={reparationPrecedente}
+              plusieursJuges={votes.length > 1}
+            />
+          ))}
+        </>
+      )}
+      <div className="jpan-pied">
+        {enCours ? (
+          <button
+            type="button"
+            className={`jpan-juge is-encours${ouvert === 'direct' ? ' is-ouvert' : ''}`}
+            data-testid="jpan-ligne"
+            aria-expanded={ouvert === 'direct'}
+            title={ouvert === 'direct' ? 'Replier le texte' : 'Lire ce que le juge a déjà écrit'}
+            onClick={() => setOuvert((courant) => (courant === 'direct' ? null : 'direct'))}
+          >
+            <span className="jpan-juge-nom">{enCours.libelle}</span>
+            <span className="jpan-juge-absent">écrit…</span>
+          </button>
+        ) : (
+          votes.map((vote, index) => (
+            <button
+              key={`${vote.libelle}-${index}`}
+              type="button"
+              className={`jpan-juge is-${vote.vote}${ouvert === index ? ' is-ouvert' : ''}`}
+              data-testid="jpan-ligne"
+              aria-expanded={ouvert === index}
+              title={ouvert === index ? 'Replier le verdict' : 'Lire le verdict complet'}
+              onClick={() => setOuvert((courant) => (courant === index ? null : index))}
+            >
+              <span className="jpan-juge-nom">{vote.libelle}</span>
+              {vote.vote === 'echec' ? (
+                <span className="jpan-juge-absent">n’a pas voté</span>
+              ) : vote.score !== undefined ? (
+                <b className="jpan-score">{vote.score}</b>
+              ) : (
+                <b className="jpan-score">{vote.vote === 'valide' ? 'VALIDE' : 'DÉFAUT'}</b>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+      {enCours && ouvert === 'direct' && (
+        <div className="jpan-complet" data-testid="jpan-verdict">
+          <span className="jpan-complet-tete">Texte en cours · {enCours.libelle}</span>
+          <p>{enCours.texte.trim() || 'Le juge n’a encore rien écrit.'}</p>
+        </div>
+      )}
+      {juge && (
+        <div className="jpan-complet" data-testid="jpan-verdict">
+          <span className="jpan-complet-tete">
+            Verdict complet · {juge.libelle}
+            {juge.costUsd !== undefined && ` · ${juge.costUsd.toFixed(2)} $`}
+            {juge.durationMs !== undefined && ` · ${dureeLisible(juge.durationMs)}`}
+          </span>
+          <p>{juge.texte}</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Le bloc d'un tour TERMINÉ : le verdict du run, relu dans sa trace sur disque. */
 export function JugesPanel({
   conversationId,
   charger
@@ -244,7 +429,6 @@ export function JugesPanel({
   charger?: (conversationId: string) => Promise<readonly StepDeRun[]>
 }): React.JSX.Element | null {
   const [bloc, setBloc] = useState<BlocDesJuges | null | undefined>()
-  const [ouvert, setOuvert] = useState<number | null>(null)
   useEffect(() => {
     let vivant = true
     const chargeur = charger ?? chargerTraceParDefaut
@@ -259,100 +443,36 @@ export function JugesPanel({
       vivant = false
     }
   }, [conversationId, charger])
-  if (!bloc || bloc.votes.length === 0) return null
+  return bloc ? <BlocJuges bloc={bloc} /> : null
+}
 
-  const valides = bloc.votes.filter((vote) => vote.vote === 'valide').length
-  // Une objection MINEUR bloque la clôture même sous un VALIDE (décision conv-844) : le bandeau le dit.
-  const verdict: keyof typeof LIBELLE_VERDICT =
-    bloc.votes.some((vote) => vote.vote === 'defaut') || bloc.objections.length > 0
-      ? 'defaut'
-      : valides > 0
-        ? 'valide'
-        : 'echec'
-  const n = bloc.objections.length
-  const titre =
-    n > 0
-      ? `${pluriel(n, 'objection')} à corriger`
-      : verdict === 'valide'
-        ? 'Aucune objection à corriger'
-        : verdict === 'defaut'
-          ? 'Refusé sans objection détaillée'
-          : 'Aucun juge n’a rendu de verdict'
-  const sous = sousTitre(bloc, verdict)
-  const juge: VoteJuge | undefined = ouvert !== null ? bloc.votes[ouvert] : undefined
-
-  return (
-    <section className="jpan" data-testid="juges-panel" data-verdict={verdict}>
-      <div className="jpan-bandeau">
-        <span className={`jpan-verdict is-${verdict}`}>
-          <IconeVerdict verdict={verdict} />
-          {LIBELLE_VERDICT[verdict]}
-        </span>
-        <span className="jpan-titre">
-          <b>{titre}</b>
-          {sous && <span className="jpan-sous">{sous}</span>}
-        </span>
-        <span
-          className="jpan-quorum"
-          title={
-            bloc.reparation > 0
-              ? `Verdict du passage de la réparation ${bloc.reparation}`
-              : 'Verdict du premier passage'
-          }
-        >
-          {valides}/{bloc.votes.length} {valides > 1 ? 'valident' : 'valide'}
-        </span>
-      </div>
-      {n > 0 && (
-        <>
-          <div className="jpan-section">
-            <span className="jpan-kicker">À corriger</span>
-            <span className="jpan-filet" />
-          </div>
-          {bloc.objections.map((objection, i) => (
-            <Objection
-              key={i}
-              objection={objection}
-              reparationPrecedente={bloc.reparationPrecedente}
-              plusieursJuges={bloc.votes.length > 1}
-            />
-          ))}
-        </>
-      )}
-      <div className="jpan-pied">
-        {bloc.votes.map((vote, index) => (
-          <button
-            key={`${vote.libelle}-${index}`}
-            type="button"
-            className={`jpan-juge is-${vote.vote}${ouvert === index ? ' is-ouvert' : ''}`}
-            data-testid="jpan-ligne"
-            aria-expanded={ouvert === index}
-            title={ouvert === index ? 'Replier le verdict' : 'Lire le verdict complet'}
-            onClick={() => setOuvert((courant) => (courant === index ? null : index))}
-          >
-            <span className="jpan-juge-nom">{vote.libelle}</span>
-            {vote.vote === 'echec' ? (
-              <span className="jpan-juge-absent">n’a pas voté</span>
-            ) : vote.score !== undefined ? (
-              <b className="jpan-score">{vote.score}</b>
-            ) : (
-              <b className="jpan-score">{vote.vote === 'valide' ? 'VALIDE' : 'DÉFAUT'}</b>
-            )}
-          </button>
-        ))}
-      </div>
-      {juge && (
-        <div className="jpan-complet" data-testid="jpan-verdict">
-          <span className="jpan-complet-tete">
-            Verdict complet · {juge.libelle}
-            {juge.costUsd !== undefined && ` · ${juge.costUsd.toFixed(2)} $`}
-            {juge.durationMs !== undefined && ` · ${dureeLisible(juge.durationMs)}`}
-          </span>
-          <p>{juge.texte}</p>
-        </div>
-      )}
-    </section>
+/**
+ * Le bloc d'un tour EN COURS, rempli en direct (conv-1021) : le dernier verdict rendu dès qu'il
+ * tombe, puis, pendant qu'un juge écrit, ses objections au fur et à mesure qu'elles arrivent.
+ * La source est ce que le fil reçoit en direct ; quand l'interface a perdu le run (rechargée en
+ * plein run), c'est `trace.json`, que le main réécrit à chaque étape (`run-relu-du-disque.ts`).
+ */
+export function JugesPanelEnDirect({
+  conversationId,
+  lecteur
+}: {
+  conversationId: string
+  /** Injectable pour les tests : le vrai lit les runs, `trace.json` et le bus de l'app. */
+  lecteur?: LecteurDuRunPerdu
+}): React.JSX.Element | null {
+  const direct = useContext(RunsEnDirect)[conversationId]
+  const relu = useRunReluDuDisque(conversationId, !direct, lecteur)
+  const run = direct ?? relu
+  const steps = run?.steps
+  const tourne = run?.status === 'running'
+  const phase = tourne ? run?.phase : undefined
+  // Le texte streamé n'est celui du juge que pendant SA phase : avant, c'est celui du build.
+  const texte = phase?.step === 'judge' ? run?.liveText : undefined
+  const etat = useMemo(
+    () => blocDesJugesEnDirect({ steps: steps ?? [], enCours: tourne, phase, texte }),
+    [steps, tourne, phase, texte]
   )
+  return run ? <BlocJuges {...etat} /> : null
 }
 
 /**
