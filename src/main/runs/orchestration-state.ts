@@ -758,12 +758,31 @@ export function repriseAutoRetenueParQuota(state: OrchestrationRunState, nowMs: 
 
 export function clearOrchestrationState(root: string, runId: string): void {
   etatsEnVol.delete(runId)
+  const cible = statePath(root, runId)
   try {
-    // Pierre tombale AVANT la suppression : toute ecriture encore en vol sera refusee au rename.
-    oublies.set(statePath(root, runId), Date.now())
-    rmSync(statePath(root, runId), { force: true })
+    // Pierre tombale AVANT la suppression : toute ecriture qui n'a pas encore commence est refusee.
+    oublies.set(cible, Date.now())
+    rmSync(cible, { force: true })
   } catch {
     /* déjà supprimé / dossier absent : rien à faire */
+  }
+  /*
+   * L'ECRITURE QUI A DEJA COMMENCE n'est pas arretee par la pierre tombale : elle ne la verifie
+   * qu'avant d'ecrire son `.tmp`, et son rename arrive APRES le rmSync ci-dessus. Mesure 19/10 :
+   * `run-77881113c261-1` ressuscite ainsi a chaque demarrage depuis le 17/10 (disque sature, l'oubli
+   * tombe pendant l'ecriture de debut de run) et recree un dossier de run a chaque fois. On efface
+   * donc encore une fois quand cette ecriture a fini — sauf si un run NEUF a leve l'oubli entre-temps.
+   */
+  const enVol = ecrituresEnCours.get(runId)
+  if (enVol) {
+    void enVol.then(() => {
+      if (!oublies.has(cible)) return
+      try {
+        rmSync(cible, { force: true })
+      } catch {
+        /* dossier absent : rien à faire */
+      }
+    })
   }
 }
 

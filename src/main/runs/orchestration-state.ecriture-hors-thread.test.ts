@@ -87,6 +87,28 @@ describe('checkpoint oublie — la promesse « ne sera plus rejoue » tient', ()
     expect(loadOrchestrationStates(root)).toEqual([])
   })
 
+  /*
+   * DEFAUT MESURE LE 2026-10-19 : `run-77881113c261-1` (conv-301) est repris a CHAQUE demarrage
+   * depuis le 17/10 et laisse un nouveau dossier de run a chaque fois (mvcpc24z le 17/10 a 20:00,
+   * mveuoe1x le 19/10 a 08:05). Le journal de l'app dit « copie durable absente : echec conclu une
+   * fois, checkpoint retire », mais `run-state/run-77881113c261-1.json` est reecrit a 08:05:21
+   * (startedAt = updatedAt, sans agents : l'ecriture de debut de run, os.ts:683). Le test du dessus
+   * oublie AVANT que l'ecriture ait commence ; en vrai, au demarrage (disque sature), l'ecriture a
+   * deja passe sa verification et ecrit son `.tmp` quand l'oubli tombe : son rename arrive APRES
+   * le rmSync et ressuscite le fichier.
+   */
+  it('un oubli qui tombe PENDANT l’ecriture ne laisse pas le checkpoint renaitre', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'runstate-oubli-pendant-'))
+    dossiers.push(root)
+    const enVol = saveOrchestrationStateAsync(root, etat('run-dddddddddddd-1', 1_000))
+    // Une micro-tache : l'ecriture a passe sa verification et attend le disque.
+    await Promise.resolve()
+    clearOrchestrationState(root, 'run-dddddddddddd-1')
+    await enVol
+    expect(existsSync(join(root, 'run-dddddddddddd-1.json'))).toBe(false)
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
   it('une sauvegarde tardive du meme run est refusee apres l’oubli', async () => {
     const root = mkdtempSync(join(tmpdir(), 'runstate-oubli2-'))
     dossiers.push(root)
