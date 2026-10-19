@@ -4,14 +4,16 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   bureauxGeres,
+  choisirExecutable,
   creerBureau,
   fermerBureauGere,
+  lireRecents,
   listerTousLesBureaux,
   scriptEnveloppeCreation,
   type DependancesCreation
 } from './hdesk-gestion'
 import { CapteurHdesk, type DemandeFermeture, type ResultatFermeture } from './hdesk-tv'
-import { refusCreation } from '../shared/hdesk-gestion'
+import { proposerIdentifiant, refusCreation } from '../shared/hdesk-gestion'
 
 const RACINE = join('C:', 'autowin')
 const vivantSauf =
@@ -316,4 +318,106 @@ describe.skipIf(process.platform !== 'win32')('vue Bureaux cachés — chaîne r
     expect(r).toMatchObject({ ok: false, code: 1 })
     expect(r.message).toBe(`Executable introuvable : ${exe}`)
   }, 60_000)
+})
+
+/**
+ * conv-344 — la question de départ : « pk je suis obligé de choisir un path de programme ? ». Le
+ * chemin reste obligatoire (un bureau vide est détruit par Windows), mais il se CHOISIT (scout n°10)
+ * et l'identifiant se PROPOSE (n°11).
+ */
+describe('vue Bureaux cachés — choisir l’application (conv-344)', () => {
+  it('« Parcourir… » annulé : aucun chemin, aucun message', async () => {
+    expect(await choisirExecutable(async () => null)).toEqual({ ok: false })
+  })
+
+  it('un fichier qui n’est pas un .exe est refusé, nommé', async () => {
+    const r = await choisirExecutable(async () => 'C:\\docs\\notes.txt')
+    expect(r).toEqual({ ok: false, message: 'Choisis un fichier .exe.' })
+  })
+
+  it('jumeau accepté : un .exe, majuscules comprises', async () => {
+    expect(await choisirExecutable(async () => 'C:\\Apps\\Zox.EXE')).toEqual({
+      ok: true,
+      chemin: 'C:\\Apps\\Zox.EXE'
+    })
+  })
+
+  it.each([
+    ['nominal, accent et espaces', 'C:\\x\\Mon Appli é 2.exe', [], 'mon-appli-e-2'],
+    ['vide après nettoyage', 'C:\\x\\日本.exe', [], 'appli'],
+    ['seulement « .exe »', 'C:\\x\\.exe', [], 'appli'],
+    ['énorme : coupé à 40', `C:\\x\\${'a'.repeat(200)}.exe`, [], 'a'.repeat(40)],
+    ['déjà pris deux fois', 'C:\\Windows\\notepad.exe', ['notepad', 'Notepad-2'], 'notepad-3'],
+    ['chemin à barres obliques', 'D:/outils/Roblox Studio.exe', [], 'roblox-studio']
+  ])('identifiant proposé — %s', (_cas, exe, pris, attendu) => {
+    const id = proposerIdentifiant(exe, pris)
+    expect(id).toBe(attendu)
+    expect(refusCreation({ id, executable: exe, travail: 'x' })).toBeNull()
+  })
+})
+
+/** conv-344 (scout n°6) : « Relancer » un bureau fermé sans tout retaper. */
+describe('vue Bureaux cachés — Récents (historique des lancements)', () => {
+  const histo = (lignes: string[]): string => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-recents-'))
+    writeFileSync(join(d, 'historique.jsonl'), lignes.join('\n') + '\n')
+    return d
+  }
+  const ligne = (id: string, quand: string, extra: Record<string, unknown> = {}): string =>
+    JSON.stringify({
+      id,
+      executable: `C:\\apps\\${id}.exe`,
+      arguments: '',
+      travail: `travail ${id}`,
+      conversationId: 'manuel',
+      lanceLe: quand,
+      ...extra
+    })
+
+  it('historique absent : aucun récent', () => {
+    expect(lireRecents(mkdtempSync(join(tmpdir(), 'hdesk-recents-vide-')), [])).toEqual([])
+  })
+
+  it('plus récent d’abord, une ligne abîmée ignorée, le même lancement répété compte une fois', () => {
+    const d = histo([
+      ligne('zox', '2026-10-19T08:00:00+02:00'),
+      '{pas du json',
+      ligne('zox', '2026-10-19T09:00:00+02:00'),
+      ligne('zox', '2026-10-19T10:00:00+02:00'),
+      ligne('roblox', '2026-10-19T11:00:00+02:00', { arguments: '-mode test' }),
+      JSON.stringify({ id: 'sans-executable', travail: 'x' })
+    ])
+    const r = lireRecents(d, [])
+    expect(r.map((e) => e.id)).toEqual(['roblox', 'zox'])
+    expect(r[0]).toEqual({
+      id: 'roblox',
+      executable: 'C:\\apps\\roblox.exe',
+      arguments: '-mode test',
+      travail: 'travail roblox',
+      conversationId: 'manuel',
+      lanceLe: '2026-10-19T11:00:00+02:00'
+    })
+    expect(r[1].lanceLe).toBe('2026-10-19T10:00:00+02:00')
+  })
+
+  it('un bureau encore vivant n’est pas « récent » : il est dans la liste', () => {
+    const d = histo([
+      ligne('zox', '2026-10-19T08:00:00+02:00'),
+      ligne('a', '2026-10-19T09:00:00+02:00')
+    ])
+    expect(lireRecents(d, ['zox']).map((e) => e.id)).toEqual(['a'])
+  })
+
+  it('au plus 5', () => {
+    const d = histo(
+      Array.from({ length: 9 }, (_, i) => ligne(`b${i}`, `2026-10-19T0${i}:00:00+02:00`))
+    )
+    expect(lireRecents(d, []).map((e) => e.id)).toEqual(['b8', 'b7', 'b6', 'b5', 'b4'])
+  })
+
+  it('la liste de la vue porte les récents', async () => {
+    const d = histo([ligne('zox', '2026-10-19T08:00:00+02:00')])
+    const r = await bureauxGeres(async () => ({ ok: true as const, vivants: [] }), d)
+    expect(r).toMatchObject({ ok: true, bureaux: [], recents: [{ id: 'zox' }] })
+  })
 })

@@ -37,8 +37,55 @@ export interface BureauGere {
   executable?: string
 }
 
+/**
+ * Un lancement réussi, gardé par hdesk-lancer.ps1 dans `historique.jsonl` (conv-344, scout n°6) : de
+ * quoi relancer un bureau fermé sans rien retaper — la fiche, elle, est effacée à la fermeture.
+ */
+export interface LancementRecent {
+  id: string
+  executable: string
+  arguments: string
+  travail: string
+  conversationId: string
+  lanceLe?: string
+}
+
 export type ResultatListeBureaux =
-  { ok: true; bureaux: BureauGere[] } | { ok: false; message: string }
+  { ok: true; bureaux: BureauGere[]; recents?: LancementRecent[] } | { ok: false; message: string }
+
+/** « Parcourir… » : un chemin d'.exe ; sans message = annulé. */
+export type ResultatChoixExe = { ok: true; chemin: string } | { ok: false; message?: string }
+
+/** Longueur maximale d'un identifiant PROPOSÉ (même borne que identifiantBureauCacheChat). */
+const ID_PROPOSE_MAX = 40
+
+/**
+ * Identifiant proposé à partir du nom de l'application (conv-344, scout n°11) : sans accent, en
+ * minuscules, « - » pour tout le reste, 40 caractères au plus, « appli » si rien ne reste ; suffixe
+ * -2, -3… s'il est déjà pris (comparaison sans casse : le registre vit sur un disque Windows). Le
+ * lanceur garde le dernier mot (refus « occupé », exit 5).
+ */
+export function proposerIdentifiant(executable: string, pris: readonly string[]): string {
+  const nom = String(executable ?? '')
+    .trim()
+    .split(/[\\/]/)
+    .pop()!
+    .replace(/\.exe$/i, '')
+  const base =
+    nom
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, ID_PROPOSE_MAX)
+      .replace(/-+$/g, '') || 'appli'
+  const occupes = new Set(pris.map((p) => p.toLowerCase()))
+  if (!occupes.has(base)) return base
+  let n = 2
+  while (occupes.has(`${base}-${n}`)) n++
+  return `${base}-${n}`
+}
 
 export interface ResultatFermetureGeree {
   ok: boolean
