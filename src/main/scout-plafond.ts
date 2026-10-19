@@ -7,11 +7,13 @@
  * dit « la cause exacte n'est pas vérifiée », et conv-602 note 88 une piste dont l'ancrage
  * (`Program.cs:300-304`) dit lui-même que la classe citée a disparu — relevé par le run suivant.
  *
- * Deux contrôles de FORME, les seuls falsifiables quand producteur et juge sont le même modèle :
+ * Trois contrôles de FORME, les seuls falsifiables quand producteur et juge sont le même modèle :
  *  1. le Pourquoi AVOUE ne pas avoir vérifié → la note tombe à 50 ;
  *  2. un CORRECTIF dont aucun ancrage contrôlable ne tombe sur du code vivant (commentaire, ligne
  *     vide, après la fin, fichier introuvable) → la note tombe à 50. « Aucun », pas « un » : un
- *     commentaire cité peut documenter une décision vraie (conv-890 : `orchestrator.ts:1371`).
+ *     commentaire cité peut documenter une décision vraie (conv-890 : `orchestrator.ts:1371`) ;
+ *  3. le Quoi ou le Pourquoi AFFIRME une absence sans fichier ni commande qui la montre → 50
+ *     (conv-339, voir `ABSENCE`).
  *
  * On PLAFONNE, on ne refuse pas : un refus paierait une réparation entière pour une note. La raison
  * est écrite sous le tableau, et le tableau est retrié ; les numéros de ligne ne bougent pas, car la
@@ -63,6 +65,59 @@ const ANCRAGE = new RegExp(
   String.raw`(?<![\w/.\\-])((?:[\w.-]+[\\/])*[\w-][\w.-]*\.(?:${EXTENSIONS})):(\d+)`,
   'giu'
 )
+
+/**
+ * UNE ABSENCE AFFIRMÉE DOIT ÊTRE MONTRÉE (conv-339). Le juge a refusé deux fois le tableau du scout
+ * « humains comme dans Cyberpunk » (notes 66 et 70) pour des absences fausses — « three.js n'a rien
+ * de tout fait » (une URL pour seule preuve), « aucun test n'impose ce choix » : deux tours payés.
+ * La règle n'existait qu'en prose dans la consigne. Une absence dans le Quoi ou le Pourquoi doit y
+ * être MONTRÉE : un fichier (chemin, `fichier.ext` entre accents graves, glob compris) ou la commande
+ * qui a cherché. Une URL ne montre rien du dépôt ; « three.js » nu n'est pas un fichier.
+ * Limite : on contrôle la PRÉSENCE d'une preuve, pas qu'elle dise vrai (une absence fausse posée à
+ * côté d'un ancrage sans rapport passe).
+ * fix-ok: lignes réelles de run-f085fcccbb82-1.md (68 et 100 « three.js n'a rien de tout fait »)
+ * gardaient leur note ; scout-plafond.test.ts les rejoue, avec la ligne 73 qui montre son fichier.
+ */
+const ABSENCE =
+  /(?<![\p{L}])(?:aucun(?:e|s|es)?|rien|nulle part|n['’]existe(?:nt)? (?:pas|plus)|n['’]y a (?:pas|plus)|nothing|none|nowhere|does(?: not|n['’]t) exist)(?![\p{L}])/iu
+const PREUVES_D_ABSENCE = [
+  // `chemin/vers/x`, `dossier/`, `fichier.ext`, `fichier.ext:12-30`, `home-decor-*.ts`
+  new RegExp(
+    String.raw`\x60[\w.*~-]*(?:[\\/][\w.*~-]+)+[\\/]?(?::\d+(?:-\d+)?)?\x60|\x60[\w*~-][\w.*~-]*\.(?:${EXTENSIONS})(?::\d+(?:-\d+)?)?\x60`,
+    'iu'
+  ),
+  // chemin nu avec au moins un dossier, ou `fichier.ext:ligne` nu
+  new RegExp(
+    String.raw`(?<![\w/.\\-])(?:[\w.-]+[\\/])+[\w*-][\w.*-]*\.(?:${EXTENSIONS})(?![\w])`,
+    'iu'
+  ),
+  new RegExp(String.raw`(?<![\w/.\\-])[\w-][\w.-]*\.(?:${EXTENSIONS}):\d+`, 'iu'),
+  // la commande qui a cherché
+  /(?<![\w-])(?:grep|rg|ripgrep|findstr|Select-String|git grep|git log -S)(?![\w-])|\x60(?:ls|find|dir|npx|npm|node|wc|cat|tsx|vitest|python)\s[^\x60]+\x60/iu
+]
+
+/** Le texte d'une cellule sans ses URL : un lien Markdown garde son libellé, l'adresse disparaît. */
+const sansUrl = (cellule: string): string =>
+  cellule.replace(/\[([^\]]*)\]\(\s*https?:\/\/[^)]*\)/giu, '$1').replace(/https?:\/\/\S+/giu, ' ')
+
+/** La raison du plafond quand le Quoi ou le Pourquoi affirme une absence sans la montrer. */
+function absenceNonMontree(quoi: string, pourquoi: string): string | undefined {
+  const cellules = [
+    { nom: 'Quoi', texte: sansUrl(quoi) },
+    { nom: 'Pourquoi', texte: sansUrl(pourquoi) }
+  ]
+  if (cellules.some(({ texte }) => PREUVES_D_ABSENCE.some((preuve) => preuve.test(texte)))) {
+    return undefined
+  }
+  for (const { nom, texte } of cellules) {
+    const phrase = texte.split(/(?<=[.!?;])\s+/u).find((morceau) => ABSENCE.test(morceau))
+    if (!phrase) continue
+    const extrait = phrase.trim().replace(/\s+/gu, ' ')
+    const court = extrait.length > 90 ? `${extrait.slice(0, 89)}…` : extrait
+    return `le ${nom} affirme une absence sans fichier ni commande qui la montre (« ${court} »)`
+  }
+  return undefined
+}
 
 const RAISON: Record<Exclude<EtatAncrage, 'code' | 'incontrolable'>, string> = {
   commentaire: 'tombe sur un commentaire',
@@ -118,6 +173,7 @@ export function plafonnerNotesScout(
           .join(', ')
       }
     }
+    if (!raison) raison = absenceNonMontree(cellules[tableau.colonnes.what] ?? '', pourquoi)
     if (!raison) continue
     const nouvelles = [...cellules]
     nouvelles[iScore] = String(PLAFOND_PREUVE)
