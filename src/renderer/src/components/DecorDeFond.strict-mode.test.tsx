@@ -34,7 +34,6 @@ const creees: FausseScene[] = []
 
 vi.mock('./home-decor-scene', () => ({
   DECOR_DEFAUT: 'avenue',
-  tempsDecor: (t: number) => t,
   createDecorScene: vi.fn(() => {
     const scene: FausseScene = {
       canvas: document.createElement('canvas'),

@@ -5,7 +5,6 @@ import { doitRedimensionner } from './decor-redimension'
 import {
   createDecorScene,
   DECOR_DEFAUT,
-  tempsDecor,
   type DecorScene,
   type DecorVariant
 } from './home-decor-scene'
@@ -160,10 +159,6 @@ function monterDecor(
   if (!scene) return null
   host.appendChild(scene.canvas)
 
-  const reduceMotion =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
   /**
    * Redimensionne le decor, PUIS le redessine.
    *
@@ -182,7 +177,7 @@ function monterDecor(
     if (!doitRedimensionner(derniereTaille, w, h)) return
     derniereTaille = { w, h }
     scene.resize(w, h)
-    scene.render(tempsDecor(performance.now() / 1000, reduceMotion), { x: 0, y: 0 })
+    scene.render(performance.now() / 1000, { x: 0, y: 0 })
   }
   fit()
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
@@ -240,15 +235,18 @@ function monterDecor(
     look.x += (aim.x - look.x) * 0.05
     look.y += (aim.y - look.y) * 0.05
     /*
-     * « MOUVEMENT REDUIT » REDUIT LE MOUVEMENT, il n'efface pas le decor. Le temps est RALENTI et
-     * non FIGE : le figer rendait le nuage immobile (plainte « le nuage est statique », conv-1476),
-     * le decor n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor`. La parallaxe
-     * curseur reste : elle ne bouge QUE quand l'utilisateur bouge, c'est de la manipulation directe.
+     * LE TEMPS DU DECOR EST L'HORLOGE REELLE, « mouvement reduit » ou non (2026-10-19, conv-1018).
+     * Sur un PC ou les « Effets d'animation » de Windows sont coupes, Chromium annonce
+     * `prefers-reduced-motion: reduce`. Le decor ralentissait alors son temps d'un facteur 0,25 :
+     * plainte « le fond d'ecran 3d de l'accueil defile super lentement ». Decision de l'utilisateur :
+     * le fond garde sa vitesse normale quel que soit ce reglage. Avant encore, un temps FIGE sous
+     * cette preference rendait le nuage immobile (conv-1476) : ni fige, ni ralenti, donc.
+     * Garde : DecorDeFond.vitesse.test.tsx.
      */
     // Ce que l'image coute au fil de l'interface : presque rien quand la scene se dessine dans un
     // Worker (l'avenue), tout son rendu sinon — la cadence s'espace alors d'elle-meme.
     const debut = performance.now()
-    scene.render(tempsDecor(time / 1000, reduceMotion), look)
+    scene.render(time / 1000, look)
     cadence.noterCout(performance.now() - debut)
   }
   const reprendre = (): void => {

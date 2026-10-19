@@ -109,8 +109,8 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
     expect(scene).not.toMatch(/OrbitControls/)
     // Ni écouteur, ni barre de boutons, ni légende posée dans la page.
     expect(scene).not.toMatch(/addEventListener|document\.body|keydown/)
-    // Le temps vient de `DecorDeFond` : c'est ce qui applique la limite d'images, la pause quand la
-    // fenêtre est cachée et le ralenti « mouvement réduit ». Une boucle propre les contournerait.
+    // Le temps vient de `DecorDeFond` : c'est ce qui applique la limite d'images et la pause quand
+    // la fenêtre est cachée. Une boucle propre les contournerait.
     expect(scene).not.toMatch(/setAnimationLoop|requestAnimationFrame|setInterval/)
     expect(scene).toMatch(/render\(elapsed, look\)/)
   })

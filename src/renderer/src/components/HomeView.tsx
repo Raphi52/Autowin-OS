@@ -420,8 +420,8 @@ export function HomeView({
    * les autres vues sur un PNG plat, et faire cohabiter les deux revenait a payer DEUX contextes
    * WebGL et DEUX boucles d'animation pour une seule image visible.
    *
-   * La cle de reglage (`home.decor.v2`) et le ralentissement `tempsDecor` sont partis avec lui : ils
-   * vivent maintenant dans `DecorDeFond`, seul proprietaire de la scene.
+   * La cle de reglage du decor est partie avec lui : elle vit maintenant dans `DecorDeFond`, seul
+   * proprietaire de la scene.
    * ---------------------------------------------------------------- */
 
   /* ---------------------------------------------------------------- *

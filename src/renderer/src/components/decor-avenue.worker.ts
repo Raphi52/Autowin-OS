@@ -7,8 +7,8 @@
  * que le fil entier : l'interface de l'Accueil (tuiles, glisser-déposer, Jarvis) partageait le peu
  * qui restait. Ici le décor a son propre fil ; la page ne fait plus que poster une demande d'image.
  *
- * Le Worker ne décide PAS du rythme : la page garde son horloge (`tempsDecor`, « mouvement réduit »,
- * fenêtre cachée) et demande chaque image ; elle n'en demande pas de nouvelle tant que la précédente
+ * Le Worker ne décide PAS du rythme : la page garde son horloge (cadence, fenêtre cachée) et
+ * demande chaque image ; elle n'en demande pas de nouvelle tant que la précédente
  * n'est pas `rendue`, donc un Worker lent ralentit le décor sans jamais accumuler de retard.
  */
 import { brancherMarquesAvenue, createAvenueScene } from './home-decor-avenue'

@@ -68,8 +68,8 @@ import { regrouperHalos } from './home-decor-lots-halos'
  *     les widgets) ; plus de boutons, de touches 1 à 6 ni de légende ;
  *   - la caméra est POSÉE et ne suit que le pointeur (`look`) : plus de contrôles orbitaux, qui
  *     auraient volé la souris aux widgets ;
- *   - le temps vient de l'appelant (`render(elapsed)`) : la limite d'images, la pause quand la
- *     fenêtre est cachée et le ralenti « mouvement réduit » de `DecorDeFond` s'appliquent ;
+ *   - le temps vient de l'appelant (`render(elapsed)`) : la limite d'images et la pause quand la
+ *     fenêtre est cachée de `DecorDeFond` s'appliquent ;
  *   - la rue entre EN FONDU dès que ses nuanceurs sont compilés (0,6 à 0,8 s mesurés,
  *     `MARQUES_AVENUE`), la foule la rejoint quand ses fichiers sont chargés et compilés ;
  *   - tout ce qui est créé est libéré par `dispose`.
@@ -2197,9 +2197,8 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       // la dessiner avant forçait la compilation sur le fil principal, à la première image.
       if (!rueCompilee) return
       const t = elapsed + T0
-      // Le pas de temps vient de l'horloge de l'appelant : ralentie sous « mouvement réduit », elle
-      // ralentit toute la scène. Plafonné à 50 ms : au retour d'une fenêtre cachée, la foule ne
-      // doit pas sauter de plusieurs mètres d'un coup.
+      // Le pas de temps vient de l'horloge de l'appelant. Plafonné à 50 ms : au retour d'une fenêtre
+      // cachée, la foule ne doit pas sauter de plusieurs mètres d'un coup.
       const dt = tPrecedent === null ? 0 : Math.min(0.05, Math.max(0, t - tPrecedent))
       tPrecedent = t
       const v = p.vitesse
