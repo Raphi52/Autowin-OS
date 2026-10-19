@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { SEUIL_COUPE_SESSION_TOKENS, coupesParPoids, seuilCoupeSession } from './chat-session-poids'
+import { loadConvActivity } from './activity/conv-activity'
+import { persistChatUsageSettlement } from './activity/chat-usage-settlement'
+import { TraceStore } from './activity/trace-store'
 
 const tour = (derniereEntree: number, kind = 'chat'): { kind: string; derniereEntree: number } => ({
   kind,
@@ -38,5 +44,58 @@ describe('coupe de session par poids', () => {
       SEUIL_COUPE_SESSION_TOKENS
     )
     expect(seuilCoupeSession({} as NodeJS.ProcessEnv)).toBe(SEUIL_COUPE_SESSION_TOKENS)
+  })
+})
+
+/*
+ * LA COUPE NE S'EST JAMAIS DECLENCHEE. Mesure conv-338 (kaizen du 2026-10-19) : six tours sur la
+ * MEME session CLI (b0b8264c), occupation 260 866 puis jusqu'a 582 617 tokens au dernier appel du
+ * tour 8ce6230c-374c-4de3-9429-583a648e286c — 46 $ pour six tours, 10,18 $ pour passer un point en
+ * bleu. Cause : la coupe ne lisait que `kind: 'chat'`, alors que le reglement d'usage ecrit
+ * `kind: 'chat-usage'` depuis le 2026-08-04 ; sur le poste, 1 782 entrees `chat-usage` contre 7
+ * `chat`, aucune avec une occupation. Les tests ci-dessus fabriquaient des `chat` a la main, donc
+ * passaient. Celui-ci passe par le VRAI ecrivain : un renommage futur le fera rougir.
+ */
+describe('coupe de session par poids — lue sur le journal ecrit par le reglement d usage', () => {
+  it('compte le franchissement d’une entrée écrite par persistChatUsageSettlement', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-coupe-poids-'))
+    const activityRoot = join(root, 'activity')
+    const traceStore = new TraceStore(join(root, 'trace'))
+    // Pas de rmSync : la trace s'ecrit encore a la fermeture (ENOTEMPTY) ; comme les tests voisins
+    // du meme ecrivain, le dossier `autowin-*` est laisse au nettoyage global de la suite.
+    {
+      for (const [turnId, derniereEntree] of [
+        ['tour-a', 120_000],
+        ['8ce6230c-374c-4de3-9429-583a648e286c', 582_617]
+      ] as const) {
+        persistChatUsageSettlement({
+          conversationId: 'conv-poids',
+          turnId,
+          usage: {
+            quoteId: `quote-${turnId}`,
+            startedCalls: 1,
+            completedCalls: 1,
+            failedCalls: 0,
+            activeCalls: 0,
+            inputTokens: derniereEntree,
+            outputTokens: 10,
+            cacheReadTokens: 0,
+            totalTokens: derniereEntree + 10,
+            freshTokens: derniereEntree + 10,
+            knownCostUsd: 1,
+            unpricedCalls: 0,
+            unmeteredCalls: 0,
+            tokenCoverage: 'complete'
+          },
+          provider: 'claude',
+          model: 'claude-opus-5-5',
+          label: 'met le bleu au lieu de jaune le dernier node du rail',
+          derniereEntree,
+          activityRoot,
+          traceStore
+        })
+      }
+      expect(coupesParPoids(loadConvActivity('conv-poids', activityRoot), 200_000)).toBe(1)
+    }
   })
 })

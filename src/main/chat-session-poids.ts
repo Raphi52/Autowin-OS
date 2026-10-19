@@ -25,6 +25,17 @@ export interface OccupationTour {
 }
 
 /**
+ * LES TYPES QUI SONT DES TOURS DE CHAT. La version d'origine ne lisait que `chat` ; or le reglement
+ * d'usage (`activity/chat-usage-settlement.ts`) ecrit `chat-usage` depuis le 2026-08-04, et c'est
+ * la SEULE ligne qui porte `derniereEntree`. La coupe n'a donc jamais joue. Mesure du kaizen
+ * conv-338 (2026-10-19) : six tours sur la meme session CLI, jusqu'a 582 617 tokens au dernier appel
+ * du tour 8ce6230c-374c-4de3-9429-583a648e286c ; sur le poste, 589 entrees au-dela de 200 k dans
+ * 91 fils. `chat` reste lu pour les anciens journaux ; `chat-recovered` (appel repris apres
+ * redemarrage) est un tour de chat aussi, ignore tant qu'il ne porte pas d'occupation.
+ */
+const TOURS_DE_CHAT = new Set(['chat', 'chat-usage', 'chat-recovered'])
+
+/**
  * SEUIL PAR DEFAUT — 200 000 tokens d'occupation.
  *
  * Choix de politique, pas une constante physique : c'est la fenetre entiere des modeles 200 k
@@ -54,7 +65,7 @@ export function coupesParPoids(
   let coupes = 0
   let auDessus = false
   for (const entree of entrees) {
-    if (entree.kind !== 'chat') continue
+    if (!entree.kind || !TOURS_DE_CHAT.has(entree.kind)) continue
     const occupation = entree.derniereEntree
     if (typeof occupation !== 'number' || !Number.isFinite(occupation) || occupation <= 0) continue
     if (occupation > seuil) {
