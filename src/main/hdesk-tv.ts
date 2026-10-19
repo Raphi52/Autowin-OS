@@ -175,6 +175,9 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
   return effaces
 }
 
+/** Liste brute des bureaux vivants : une ERREUR n'est jamais une liste vide (elle purgerait tout). */
+export type ListeVivants = { ok: true; vivants: string[] } | { ok: false; message: string }
+
 export class CapteurHdesk {
   private proc: ChildProcessWithoutNullStreams | null = null
   private tampon = ''
@@ -196,6 +199,26 @@ export class CapteurHdesk {
     const vivants = Array.isArray(r.bureaux) ? (r.bureaux as string[]) : []
     if (!r.erreur && Array.isArray(r.bureaux)) purgerBureauxFermes(this.registre, vivants)
     return fusionnerBureaux(vivants, lireRegistre(this.registre), conversationId)
+  }
+
+  /**
+   * TOUS les bureaux vivants, sans filtre par fil — pour la vue « Bureaux cachés » (conv-344, scout
+   * n°7). Passe par CE processus déjà ouvert : la vue lançait un PowerShell neuf à chaque tour de
+   * liste (0,92 s mesurées, toutes les 4 s). Purge au passage les fiches des bureaux fermés (n°13),
+   * comme `bureaux()`, mais seulement sur une liste réellement obtenue.
+   */
+  async listeVivants(): Promise<ListeVivants> {
+    let r: Reponse
+    try {
+      r = await this.demander('list')
+    } catch (e) {
+      return { ok: false, message: `Processus de capture sans réponse (${(e as Error).message})` }
+    }
+    if (typeof r.erreur === 'string') return { ok: false, message: r.erreur }
+    if (!Array.isArray(r.bureaux)) return { ok: false, message: 'Liste des bureaux illisible.' }
+    const vivants = r.bureaux.map(String)
+    purgerBureauxFermes(this.registre, vivants)
+    return { ok: true, vivants }
   }
 
   async image(id: string): Promise<ImageTv> {
@@ -362,13 +385,30 @@ export interface GesteTv {
 
 /** Touches reconnues par scripts/hdesk-act.cs (dictionnaire Touches) — garder les deux listes alignées. */
 export const TOUCHES_TV = [
-  'Tab', 'Echap', 'Retour', 'Entree', 'Suppr', 'Haut', 'Bas', 'Gauche', 'Droite', 'Debut', 'Fin',
-  'PageHaut', 'PageBas', 'CtrlA', 'CtrlC', 'CtrlV', 'CtrlX', 'CtrlZ'
+  'Tab',
+  'Echap',
+  'Retour',
+  'Entree',
+  'Suppr',
+  'Haut',
+  'Bas',
+  'Gauche',
+  'Droite',
+  'Debut',
+  'Fin',
+  'PageHaut',
+  'PageBas',
+  'CtrlA',
+  'CtrlC',
+  'CtrlV',
+  'CtrlX',
+  'CtrlZ'
 ] as const
 
 /** Arguments PowerShell d'un geste ; lève si l'identifiant ou les coordonnées sont invalides. */
 export function argumentsAct(racine: string, g: GesteTv): string[] {
-  if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id)) throw new Error('Identifiant de bureau invalide.')
+  if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id))
+    throw new Error('Identifiant de bureau invalide.')
   if (!Number.isFinite(g.x) || !Number.isFinite(g.y) || g.x < 0 || g.y < 0)
     throw new Error('Coordonnées invalides.')
   const args = [
@@ -399,12 +439,20 @@ export function argumentsAct(racine: string, g: GesteTv): string[] {
   return args
 }
 
-export type ActionHdesk = { instanceId?: string; x?: number; y?: number; cible?: string; messages?: unknown }
+export type ActionHdesk = {
+  instanceId?: string
+  x?: number
+  y?: number
+  cible?: string
+  messages?: unknown
+}
 export type ResultatGeste = { ok: true; action?: ActionHdesk } | { ok: false; message: string }
 
 // hdesk-act.ps1 ecrit son JSON {instanceId,x,y,cible,messages} sur la derniere ligne JSON de stdout.
 export function resultatAct(out: string): ResultatGeste {
-  const lignes = String(out || '').split(/\r?\n/).reverse()
+  const lignes = String(out || '')
+    .split(/\r?\n/)
+    .reverse()
   for (const l of lignes) {
     const t = l.trim()
     if (!t.startsWith('{')) continue
@@ -482,7 +530,9 @@ export function argumentsFermer(racine: string, d: DemandeFermeture): string[] {
     throw new Error('Identifiant de bureau invalide.')
   const sansFiche = d.sansFiche === true
   if (sansFiche && d.conversationId !== undefined)
-    throw new Error('Fermeture sans fiche : aucun fil ne doit etre passe (le script le refuserait).')
+    throw new Error(
+      'Fermeture sans fiche : aucun fil ne doit etre passe (le script le refuserait).'
+    )
   if (!sansFiche && (typeof d.conversationId !== 'string' || !ID_BUREAU.test(d.conversationId)))
     throw new Error('Conversation invalide : impossible de savoir quels bureaux sont les tiens.')
   const args = [
@@ -564,8 +614,13 @@ export function fermerBureauCacheSiOuvert(
   return fermer(racine, d)
 }
 
-export function argumentsBascule(racine: string, id: string, maxSecondes = BASCULE_MAX_SECONDES): string[] {
-  if (typeof id !== 'string' || !ID_BUREAU.test(id)) throw new Error('Identifiant de bureau invalide.')
+export function argumentsBascule(
+  racine: string,
+  id: string,
+  maxSecondes = BASCULE_MAX_SECONDES
+): string[] {
+  if (typeof id !== 'string' || !ID_BUREAU.test(id))
+    throw new Error('Identifiant de bureau invalide.')
   const max = Math.min(600, Math.max(5, Math.round(Number(maxSecondes) || BASCULE_MAX_SECONDES)))
   return [
     '-NoProfile',
@@ -580,7 +635,10 @@ export function argumentsBascule(racine: string, id: string, maxSecondes = BASCU
   ]
 }
 
-export function basculerHdesk(racine: string, id: string): { ok: true } | { ok: false; message: string } {
+export function basculerHdesk(
+  racine: string,
+  id: string
+): { ok: true } | { ok: false; message: string } {
   let args: string[]
   try {
     args = argumentsBascule(racine, id)

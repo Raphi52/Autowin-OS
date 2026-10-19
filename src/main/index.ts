@@ -1812,7 +1812,8 @@ function registerHdeskTvIpc(): void {
   ipcMain.handle('hdesk:gestion:bureaux', (event) => {
     assertTrustedRendererSender(event, 'Vue Bureaux cachés')
     if (process.platform !== 'win32') return { ok: true, bureaux: [] }
-    return bureauxGeres(racineScriptsHorsArchive(app.getAppPath()))
+    // Le processus de capture DÉJÀ ouvert pour les aperçus répond aussi à la liste (conv-344).
+    return bureauxGeres(() => capteur().listeVivants())
   })
   ipcMain.handle('hdesk:gestion:fermer', (event, id: string) => {
     assertTrustedRendererSender(event, 'Vue Bureaux cachés')

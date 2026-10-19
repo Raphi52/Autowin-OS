@@ -53,7 +53,22 @@ $ficheId = Join-Path $registreId "$Id.json"
 if (Test-Path -LiteralPath $ficheId) {
   try { $fiche = Get-Content -LiteralPath $ficheId -Raw | ConvertFrom-Json } catch { $fiche = $null }
   $vivant = $false
-  if ($fiche -and $fiche.pid) { $vivant = [bool](Get-Process -Id ([int]$fiche.pid) -ErrorAction SilentlyContinue) }
+  # MEME PROGRAMME, NE AVANT SON INSCRIPTION (conv-344, scout n°13) : Windows reutilise les numeros de
+  # processus, un numero vivant ne prouve pas que l'occupant vit encore. Meme regle que
+  # hdesk-fermer.ps1 : meme executable ET ne avant lanceLe + 5 s. Ce qui ne se lit pas (processus
+  # protege, fiche ancienne sans executable ni date) reste « occupe » : jamais de relance par-dessus.
+  if ($fiche -and $fiche.pid) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$([int]$fiche.pid)" -ErrorAction SilentlyContinue
+    if ($proc) {
+      $memeExe = $true
+      if ($fiche.executable -and $proc.ExecutablePath) {
+        try { $memeExe = ([IO.Path]::GetFullPath([string]$proc.ExecutablePath) -ieq [IO.Path]::GetFullPath([string]$fiche.executable)) } catch { $memeExe = $true }
+      }
+      $avant = $true
+      if ($fiche.lanceLe -and $proc.CreationDate) { try { $avant = ($proc.CreationDate -le ([DateTime]::Parse([string]$fiche.lanceLe)).AddSeconds(5)) } catch { $avant = $true } }
+      $vivant = $memeExe -and $avant
+    }
+  }
   if ($vivant) {
     $libre = "$Id-$Conversation-$PID"
     [pscustomobject]@{
@@ -199,6 +214,18 @@ if ($fenetres -gt 0) {
   New-Item -ItemType Directory -Path $registre -Force | Out-Null
   $entree = [pscustomobject]@{ id = $Id; pid = $pi.dwProcessId; executable = $Executable; travail = $Travail; conversationId = $Conversation; lanceLe = (Get-Date).ToString('o') }
   [IO.File]::WriteAllText((Join-Path $registre "$Id.json"), ($entree | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+  # HISTORIQUE DES LANCEMENTS REUSSIS (conv-344, scout n°6) : la fiche est effacee des que le bureau se
+  # ferme (purgerBureauxFermes) et ne garde pas les arguments ; « Relancer » dans la vue lit ce fichier.
+  # .jsonl, pas .json : le registre (lireRegistre) ne le prend pas pour une fiche, et un bureau nomme
+  # « historique » garde sa fiche historique.json. Borne aux 50 derniers. Un echec ici ne casse rien.
+  $histo = Join-Path $registre 'historique.jsonl'
+  $ligneHisto = [pscustomobject]@{ id = $Id; executable = $Executable; arguments = $Arguments; travail = $Travail; conversationId = $Conversation; lanceLe = $entree.lanceLe } | ConvertTo-Json -Compress
+  try {
+    $anciennes = @()
+    if (Test-Path -LiteralPath $histo) { $anciennes = @(Get-Content -LiteralPath $histo -Encoding UTF8 | Where-Object { $_.Trim() }) }
+    $gardees = @(@($anciennes) + @($ligneHisto) | Select-Object -Last 50)
+    [IO.File]::WriteAllText($histo, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+  } catch { [Console]::Error.WriteLine("hdesk-lancer : historique non ecrit ($($_.Exception.Message))") }
 }
 [pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0) } | ConvertTo-Json -Compress
 if ($fenetres -le 0) { exit 3 }

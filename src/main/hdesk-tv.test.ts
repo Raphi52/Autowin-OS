@@ -45,7 +45,14 @@ describe('petite TV — application installée', () => {
 
   it('les trois fichiers de capture sont extraits de l’archive au packaging', () => {
     const config = readFileSync(join(process.cwd(), 'electron-builder.yml'), 'utf8')
-    for (const f of ['scripts/hdesk-tv.ps1', 'scripts/hdesk-observe.ps1', 'scripts/hdesk-shot.cs', 'scripts/hdesk-act.ps1', 'scripts/hdesk-act.cs', 'scripts/hdesk-basculer.ps1'])
+    for (const f of [
+      'scripts/hdesk-tv.ps1',
+      'scripts/hdesk-observe.ps1',
+      'scripts/hdesk-shot.cs',
+      'scripts/hdesk-act.ps1',
+      'scripts/hdesk-act.cs',
+      'scripts/hdesk-basculer.ps1'
+    ])
       expect(config).toContain(`- ${f}`)
   })
 })
@@ -161,6 +168,94 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
   }
 )
 
+/**
+ * conv-344 (scout n°7) : la vue « Bureaux cachés » lançait un PowerShell NEUF à chaque tour de liste
+ * (toutes les 4 s, 0,92 s mesurées par appel) alors que le processus de capture déjà ouvert sait
+ * répondre `list`. Et seule la TV purgeait les fiches des bureaux fermés (scout n°13).
+ * Faux hdesk-tv.ps1 : même protocole que le vrai, il compte ses démarrages dans un fichier.
+ */
+describe.skipIf(process.platform !== 'win32')(
+  'processus de capture — liste brute pour la vue Bureaux cachés',
+  () => {
+    const fauxCapteur = (reponse: string): { racine: string; compteur: string } => {
+      const racine = mkdtempSync(join(tmpdir(), 'tv-liste-'))
+      mkdirSync(join(racine, 'scripts'))
+      const compteur = join(racine, 'demarrages.txt')
+      writeFileSync(
+        join(racine, 'scripts', 'hdesk-tv.ps1'),
+        [
+          `Add-Content -LiteralPath '${compteur}' -Value 'demarrage'`,
+          '[Console]::Out.WriteLine(\'{"pret":true}\'); [Console]::Out.Flush()',
+          'while ($null -ne ($l = [Console]::In.ReadLine())) {',
+          `  if ($l.Trim() -eq 'list') { [Console]::Out.WriteLine('${reponse}'); [Console]::Out.Flush() }`,
+          '}'
+        ].join('\n'),
+        'utf8'
+      )
+      return { racine, compteur }
+    }
+    const fiches = (reg: string): void => {
+      for (const id of ['vivant', 'mort'])
+        writeFileSync(join(reg, `${id}.json`), JSON.stringify({ id, conversationId: 'conv-1' }))
+      writeFileSync(join(reg, 'historique.jsonl'), '{"id":"mort"}\n')
+    }
+
+    it('trois tours de liste = UN seul PowerShell, et la fiche du bureau fermé est purgée', async () => {
+      const { racine, compteur } = fauxCapteur('{"bureaux":["vivant","sans-fiche"]}')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        for (let i = 0; i < 3; i++)
+          expect(await c.listeVivants()).toEqual({ ok: true, vivants: ['vivant', 'sans-fiche'] })
+        expect(readFileSync(compteur, 'utf8').trim().split(/\r?\n/)).toEqual(['demarrage'])
+        expect(existsSync(join(reg, 'mort.json'))).toBe(false)
+        expect(existsSync(join(reg, 'vivant.json'))).toBe(true)
+        // L'historique des lancements n'est pas une fiche : la purge n'y touche pas.
+        expect(existsSync(join(reg, 'historique.jsonl'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+
+    it('liste en erreur : une ERREUR, jamais une liste vide, et rien n’est purgé', async () => {
+      const { racine } = fauxCapteur('{"erreur":"EnumDesktops a echoue"}')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        expect(await c.listeVivants()).toEqual({ ok: false, message: 'EnumDesktops a echoue' })
+        expect(existsSync(join(reg, 'mort.json'))).toBe(true)
+        expect(existsSync(join(reg, 'vivant.json'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+
+    it('processus de capture mort : une erreur nommée, rien n’est purgé', async () => {
+      const racine = mkdtempSync(join(tmpdir(), 'tv-liste-mort-'))
+      mkdirSync(join(racine, 'scripts'))
+      writeFileSync(join(racine, 'scripts', 'hdesk-tv.ps1'), 'exit 1\n')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        const r = await c.listeVivants()
+        expect(r.ok).toBe(false)
+        expect(existsSync(join(reg, 'mort.json'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+  }
+)
+
 describe.skipIf(process.platform !== 'win32')(
   'petite TV — repli quand le processus de capture meurt',
   () => {
@@ -208,9 +303,12 @@ describe('fusionnerBureaux — application morte', () => {
       { id: 'vif', travail: 'B', conversationId: 'c', pid: 22 },
       { id: 'sanspid', travail: 'C', conversationId: 'c' }
     ]
-    const ids = fusionnerBureaux(['mort', 'vif', 'sanspid'], registre, 'c', (pid) => pid === 22).map(
-      (b) => b.id
-    )
+    const ids = fusionnerBureaux(
+      ['mort', 'vif', 'sanspid'],
+      registre,
+      'c',
+      (pid) => pid === 22
+    ).map((b) => b.id)
     expect(ids.sort()).toEqual(['sanspid', 'vif'])
   })
 
@@ -224,7 +322,17 @@ import { argumentsAct, agirHdesk, TOUCHES_TV } from './hdesk-tv'
 describe('TV interactive — geste vers hdesk-act', () => {
   it('construit l’appel de hdesk-act.ps1 avec clic arrondi, texte et Entrée', () => {
     const a = argumentsAct('R', { id: 'run-1', x: 10.6, y: 4.2, texte: 'abc', entree: true })
-    expect(a.slice(5)).toEqual(['-InstanceId', 'run-1', '-X', '11', '-Y', '4', '-Texte', 'abc', '-Entree'])
+    expect(a.slice(5)).toEqual([
+      '-InstanceId',
+      'run-1',
+      '-X',
+      '11',
+      '-Y',
+      '4',
+      '-Texte',
+      'abc',
+      '-Entree'
+    ])
     expect(a[4]).toBe(join('R', 'scripts', 'hdesk-act.ps1'))
   })
   it('refuse un identifiant hors ^[a-zA-Z0-9_-]+$ sans rien lancer', async () => {
@@ -264,16 +372,22 @@ describe('bascule de l’écran réel vers un bureau caché', () => {
     expect(argumentsBascule('R', 'a', 1).at(-1)).toBe('5')
   })
   it('refuse un identifiant invalide sans rien lancer', () => {
-    expect(basculerHdesk('R', 'x;calc')).toEqual({ ok: false, message: 'Identifiant de bureau invalide.' })
+    expect(basculerHdesk('R', 'x;calc')).toEqual({
+      ok: false,
+      message: 'Identifiant de bureau invalide.'
+    })
   })
 })
 
 describe('TV interactive — touches et molette (conv-35)', () => {
   it('transmet une touche nommée, la molette et -SansClic', () => {
-    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, touche: 'CtrlV', sansClic: true }).slice(9)).toEqual([
-      '-Y', '2', '-Touche', 'CtrlV', '-SansClic'
+    expect(
+      argumentsAct('R', { id: 'a', x: 1, y: 2, touche: 'CtrlV', sansClic: true }).slice(9)
+    ).toEqual(['-Y', '2', '-Touche', 'CtrlV', '-SansClic'])
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, molette: -3 }).slice(-2)).toEqual([
+      '-Molette',
+      '-3'
     ])
-    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, molette: -3 }).slice(-2)).toEqual(['-Molette', '-3'])
   })
   it('refuse une touche hors liste et une molette hors bornes', () => {
     expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, touche: 'F13; calc' })).toThrow(/Touche/)

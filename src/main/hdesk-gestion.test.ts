@@ -6,13 +6,11 @@ import {
   bureauxGeres,
   creerBureau,
   fermerBureauGere,
-  interpreterListeVivants,
-  lireBureauxVivants,
   listerTousLesBureaux,
   scriptEnveloppeCreation,
   type DependancesCreation
 } from './hdesk-gestion'
-import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
+import { CapteurHdesk, type DemandeFermeture, type ResultatFermeture } from './hdesk-tv'
 import { refusCreation } from '../shared/hdesk-gestion'
 
 const RACINE = join('C:', 'autowin')
@@ -59,19 +57,23 @@ describe('vue Bureaux cachés — TOUS les bureaux, quel que soit le fil (conv-9
   })
 
   it('une liste illisible est une ERREUR, jamais une liste vide', async () => {
-    expect(interpreterListeVivants('{"pret":true}\n{"bureaux":["x","y"]}')).toEqual({
-      ok: true,
-      vivants: ['x', 'y']
-    })
-    expect(interpreterListeVivants('', 'powershell absent')).toEqual({
-      ok: false,
-      message: 'Liste des bureaux illisible : powershell absent'
-    })
-    const r = await bureauxGeres(RACINE, registre([]), async () => ({
-      ok: false as const,
-      message: 'capture morte'
-    }))
+    const r = await bureauxGeres(
+      async () => ({ ok: false as const, message: 'capture morte' }),
+      registre([])
+    )
     expect(r).toEqual({ ok: false, message: 'capture morte' })
+  })
+
+  // conv-344 (scout n°7) : la liste passe par le processus de capture DÉJÀ ouvert (CapteurHdesk),
+  // plus par un PowerShell neuf à chaque tour. bureauxGeres ne lance plus rien lui-même.
+  it('chaque tour interroge la source donnée, une fois, et relie les fiches', async () => {
+    const lire = vi.fn(async () => ({ ok: true as const, vivants: ['zox'] }))
+    const d = registre([{ id: 'zox', conversationId: 'conv-1', travail: 'Essai' }])
+    for (let i = 0; i < 3; i++) {
+      const r = await bureauxGeres(lire, d)
+      expect(r).toMatchObject({ ok: true, bureaux: [{ id: 'zox', travail: 'Essai', relie: true }] })
+    }
+    expect(lire).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -290,9 +292,15 @@ describe('vue Bureaux cachés — Créer', () => {
 describe.skipIf(process.platform !== 'win32')('vue Bureaux cachés — chaîne réelle', () => {
   const racine = process.cwd()
 
-  it('liste les bureaux vivants par un appel ponctuel', async () => {
-    const r = await lireBureauxVivants(racine)
-    expect(r.ok).toBe(true)
+  it('liste les bureaux vivants par le vrai processus de capture', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestion-reel-'))
+    const capteur = new CapteurHdesk(racine, reg)
+    try {
+      const r = await bureauxGeres(() => capteur.listeVivants(), reg)
+      expect(r.ok).toBe(true)
+    } finally {
+      capteur.detruire()
+    }
   }, 30_000)
 
   // Apostrophes TYPOGRAPHIQUES (’ ‘) : PowerShell les prend aussi pour des fins de chaîne. Courantes
