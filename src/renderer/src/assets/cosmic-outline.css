@@ -526,7 +526,9 @@
 .cosmic-outline .msg {
   width: min(100%, 820px);
   max-width: 820px;
-  gap: 6px;
+  /* En variable : le rail du tour (ChatView.css) en tire la longueur de ses tronçons. */
+  --msg-ecart: 6px;
+  gap: var(--msg-ecart);
 }
 
 .cosmic-outline .msg.user {
@@ -540,7 +542,7 @@
 }
 
 .cosmic-outline .msg-turn {
-  gap: 6px;
+  gap: var(--msg-ecart, 6px);
 }
 
 .cosmic-outline .msg.assistant .msg-body {
