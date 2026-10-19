@@ -171,6 +171,27 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).not.toMatch(/brain_query|remember\(/u)
   })
 
+  /**
+   * UNE PROMESSE N'EST PAS UNE LECON — conv-335 (2026-10-18). Tour ff240730-2bbf-49e3-9923-5db1839772ba :
+   * l'iteration 0 ecrit « Leçon : quand le travail d'une étape est confié à une tâche programmée, je
+   * retire l'étape… » AVANT d'avoir compris le reproche ; la saisie ts=1792363511920 (« l'étape c'était
+   * créer une tache planifié pas ca ») la rend fausse et l'iteration 1 doit ecrire une « Leçon corrigée ».
+   * Tour d5bf24a1-958a-4c94-ad13-80b67a3a1fe0 : aucune des deux n'est deposee (remember-deposits.json) —
+   * ce sont des promesses de comportement, que l'outil de memoire refuse ; le repli « ÉCRIS-la dans ton
+   * livrable » les envoyait donc dans un texte que rien ne relit. Mesure sur 227 fils : 31 reponses
+   * portent une ligne « Leçon : », 5 seulement dans un tour qui a appele `remember`.
+   */
+  it("ne fait plus écrire une leçon à chaud, et ne prend plus une promesse de comportement pour une leçon", () => {
+    expect(CONSTITUTION).not.toContain('écrire la leçon AVANT de continuer')
+    expect(CONSTITUTION).toContain('une leçon écrite à chaud')
+    expect(CONSTITUTION).toContain('Une PROMESSE sur ton propre comportement')
+    expect(CONSTITUTION).toContain("n'est PAS une leçon")
+    expect(CONSTITUTION).toContain('jamais une ligne « Leçon : je ferai X »')
+    // Le renvoi vise une section qui EXISTE dans le même texte injecté.
+    expect(CONSTITUTION).toContain('« Pas de pansement »')
+    expect(CONSTITUTION).toContain('**Pas de pansement (transverse à tous)**')
+  })
+
   it('se termine par un saut de ligne pour une concaténation sûre dans les prompts système', () => {
     expect(CONSTITUTION.endsWith('\n')).toBe(true)
   })
