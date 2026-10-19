@@ -602,10 +602,11 @@ export class AutowinOS {
       // fix-ok: sans ce branchement, `memoireScout` restait vide en production : le test au site d'appel
       // (orchestrator.scout-cible.test.ts) tombe quand la memoire n'est plus lue.
       memoireScout: {
-        connues: (depot, sauf) =>
+        connues: (depot, sauf, demande) =>
           pistesDejaConnues({
             depot,
             sauf,
+            demande,
             stockVeille:
               cleDepot(depot) === cleDepot(executionWorkspace) ? titresStockVeilleAutowin() : []
           }),

@@ -161,3 +161,66 @@ describe('serveur d’outils d’un nœud skill — cycle de vie', () => {
     expect(provider.calls[0]?.skillNodeTools).toBeUndefined()
   })
 })
+
+/**
+ * conv-339, CHEMIN NATIF : l'étape learn de Claude appelle `remember` par le serveur d'outils
+ * (`mcp__autowin__remember`), pas par un `<cmd>` dans son texte. Ce faux provider fait ce que fait
+ * le CLI : il lit `mcpConfig` et appelle l'outil en HTTP, avec le jeton.
+ */
+class ProviderQuiEcritAuBrain implements ProviderAdapter {
+  readonly id = 'claude'
+  readonly supportsExecution = true
+  // eslint-disable-next-line require-yield
+  async *send(
+    _m: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const outils = options.skillNodeTools
+    if (outils) {
+      const serveur = JSON.parse(outils.mcpConfig).mcpServers.autowin
+      await fetch(serveur.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...serveur.headers },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'remember', arguments: { title: 'Reflet', fact: '34 ms corrigés' } }
+        })
+      })
+    }
+    return { text: 'note déposée', provider: this.id, systemInjected: Boolean(options.system) }
+  }
+  async auth(): Promise<boolean> {
+    return true
+  }
+}
+
+describe('notes écrites au Brain par un nœud : le run les compte (outils natifs)', () => {
+  it('un `remember` natif confirmé de l’étape learn → `notesBrainDeposees` = 1', async () => {
+    const lanceurBrain = {
+      exec: async (name: string) => ({
+        ok: true,
+        data: name === 'remember' ? { stored: true } : 'ok'
+      }),
+      catalogue: () => [
+        { name: 'remember', description: 'Déposer une note', args: { title: 't', fact: 'f' } }
+      ]
+    }
+    const provider = new ProviderQuiEcritAuBrain()
+    const resultat = await new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\workspace',
+      worktrees: makeTestWorktrees('C:\workspace'),
+      execPhases: ['learn'] as never,
+      skillCommands: () => lanceurBrain
+    }).run('retiens ce que ce run a appris')
+    expect(resultat.notesBrainDeposees).toBe(1)
+  })
+})

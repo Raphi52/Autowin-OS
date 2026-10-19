@@ -159,7 +159,7 @@ describe('cablage : le plafond de preuve mord sur la sortie reelle du scout', ()
 describe('cablage : le scout recoit les pistes deja proposees et note les siennes', () => {
   it('consigne enrichie, pistes notees, run en cours exclu', async () => {
     const provider = new ScoutQuiAvoue()
-    const lectures: Array<{ depot: string; sauf: string }> = []
+    const lectures: Array<{ depot: string; sauf: string; demande?: string }> = []
     const notes: Array<{ depot: string; texte: string; run: string }> = []
     const orch = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
@@ -174,8 +174,8 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
       worktrees: makeTestWorktrees('C:\base'),
       execPhases: [],
       memoireScout: {
-        connues: (depot, sauf) => {
-          lectures.push({ depot, sauf })
+        connues: (depot, sauf, demande) => {
+          lectures.push({ depot, sauf, demande })
           return ['Écriture du cache', 'Tri des conversations']
         },
         noter: (depot, texte, run) => notes.push({ depot, texte, run })
@@ -195,6 +195,8 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     expect(consigneScout).toMatch(/DÉJÀ PROPOSÉ/u)
     expect(consigneScout).toContain('- Écriture du cache')
     expect(lectures).toHaveLength(1)
+    // conv-339 : la mémoire filtre ses titres sur la demande — encore faut-il qu'elle la reçoive.
+    expect(lectures[0]!.demande).toBe('améliore la vue Knowledge')
     expect(notes).toHaveLength(1)
     expect(notes[0]!.texte).toMatch(/cache périmé/u)
     expect(notes[0]!.run).toBe(lectures[0]!.sauf)

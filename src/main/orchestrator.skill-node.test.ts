@@ -282,3 +282,46 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
     expect(texte).toContain('empreinte trouvee')
   })
 })
+
+/*
+ * conv-339 : l'étape learn a écrit 2 notes au Brain (inbox/, 18/10 22:34) et la bulle a affiché
+ * « Brain : aucune leçon proposée ». Ses `remember` passent par le lanceur des nœuds, sans tour :
+ * c'est donc le RUN qui doit les compter, et le dire dans son résultat.
+ */
+describe('notes écrites au Brain par un nœud : le run les compte (repli texte)', () => {
+  const lanceurBrain = (stored: boolean) => ({
+    exec: async (name: string) => ({
+      ok: true,
+      data: name === 'remember' ? { stored, unknown: false, truncated: false } : 'ok'
+    })
+  })
+  const learn = (provider: ProviderOutilleur, stored: boolean): Orchestrator =>
+    new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\workspace',
+      worktrees: makeTestWorktrees('C:\workspace'),
+      execPhases: ['learn'] as never,
+      skillCommands: () => lanceurBrain(stored)
+    })
+  const deuxNotes =
+    '<cmd>{"name":"remember","args":{"title":"Reflet de la Spirale","fact":"34 ms corrigés"}}</cmd>\n' +
+    '<cmd>{"name":"remember","args":{"title":"Humains de l Accueil","fact":"refontes"}}</cmd>'
+
+  it('deux `remember` confirmés par le Brain → `notesBrainDeposees` = 2', async () => {
+    const provider = new ProviderOutilleur([deuxNotes, 'Deux notes déposées.'])
+    const resultat = await learn(provider, true).run('retiens ce que ce run a appris')
+    expect(resultat.notesBrainDeposees).toBe(2)
+  })
+
+  it('jumeau : une écriture refusée par le Brain (`stored: false`) ne compte pas', async () => {
+    const provider = new ProviderOutilleur([deuxNotes, 'Rien n a été écrit.'])
+    const resultat = await learn(provider, false).run('retiens ce que ce run a appris')
+    expect(resultat.notesBrainDeposees).toBeUndefined()
+  })
+})

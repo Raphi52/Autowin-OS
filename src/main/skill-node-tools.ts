@@ -67,6 +67,31 @@ export interface AppelOutil {
   erreur?: string
 }
 
+/**
+ * LE LANCEUR QUI COMPTE LES NOTES DÉPOSÉES AU BRAIN (conv-339).
+ *
+ * L'étape `learn` écrit ses notes par `remember`, à travers ce lanceur (outils natifs ou repli
+ * texte), SANS conversation ni tour : le suivi des leçons (`outcome-learning-supervisor.ts`) n'en
+ * voit donc rien, et la bulle disait « Brain : aucune leçon proposée » sous un run qui venait d'en
+ * déposer deux en revue. Seule une écriture CONFIRMÉE (`stored: true`) compte.
+ * fix-ok: conv-339, notes du 18/10 22:34 dans inbox/ (source « session:current », jamais rattachée
+ * au tour) et trace « remember (learn) : ok — ecrit » ×3 du kaizen suivant, sous « aucune leçon ».
+ */
+export function lanceurQuiCompteLesNotes(
+  lanceur: LanceurCommandeSkill,
+  noteDeposee: () => void
+): LanceurCommandeSkill {
+  return {
+    exec: async (name, args) => {
+      const resultat = await lanceur.exec(name, args)
+      const donnees = resultat.data as { stored?: unknown } | undefined
+      if (name === 'remember' && resultat.ok && donnees?.stored === true) noteDeposee()
+      return resultat
+    },
+    ...(lanceur.catalogue ? { catalogue: () => lanceur.catalogue?.() ?? [] } : {})
+  }
+}
+
 /** Vrai si ce texte demande au moins un outil AUTORISÉ — sinon la boucle est un no-op sans coût. */
 export function demandeUnOutil(texte: string): boolean {
   return parseOrderedPilotTokens(texte).some(
