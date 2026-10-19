@@ -7,10 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { HdeskGestionView, type HdeskGestionApi } from './HdeskGestionView'
-import type {
-  BureauGere,
-  ResultatCreationBureau,
-  ResultatFermetureGeree
+import {
+  CREATION_ATTENTE_MS,
+  type BureauGere,
+  type ResultatCreationBureau,
+  type ResultatFermetureGeree
 } from '../../../shared/hdesk-gestion'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -61,7 +62,10 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function monter(api: HdeskGestionApi): Promise<HTMLElement> {
+async function monter(
+  api: HdeskGestionApi,
+  props: { onOpenConversation?: (t: { conversationId: string }) => void } = {}
+): Promise<HTMLElement> {
   hote = document.createElement('div')
   document.body.appendChild(hote)
   racine = createRoot(hote)
@@ -71,7 +75,8 @@ async function monter(api: HdeskGestionApi): Promise<HTMLElement> {
         active: true,
         api,
         intervalleMs: 60_000,
-        intervallePiloteMs: 60_000
+        intervallePiloteMs: 60_000,
+        ...props
       })
     )
   })
@@ -404,5 +409,193 @@ describe('HdeskGestionView — Créer', () => {
     await cliquer($(h, 'hdesk-id-libre'))
     expect(($(h, 'hdesk-champ-id') as HTMLInputElement).value).toBe('zox-manuel-55')
     expect(api.hdeskGestionCreer).toHaveBeenCalledTimes(1)
+  })
+
+  // conv-344 : le bouton disait « jusqu’à 40 s » alors que l’application attend jusqu’à 90 s.
+  it('pendant la création, le bouton annonce l’attente réelle', async () => {
+    let finir: (r: ResultatCreationBureau) => void = () => undefined
+    const api = faux([], {
+      hdeskGestionCreer: vi.fn(() => new Promise<ResultatCreationBureau>((r) => (finir = r)))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await remplir(h, { id: 'zox', executable: 'C:\\zox\\Zox.exe', travail: 'Essai' })
+    await cliquer($(h, 'hdesk-creer'))
+    expect($(h, 'hdesk-creer')?.textContent).toBe(
+      `Création… (jusqu’à ${CREATION_ATTENTE_MS / 1000} s)`
+    )
+    expect(CREATION_ATTENTE_MS).toBe(90_000)
+    await act(async () => finir({ ok: true, id: 'zox', message: 'Bureau « zox » prêt.' }))
+  })
+})
+
+/**
+ * Repris de conv-344 dans l'Antenne (conv-1023) — « pk je suis obligé de choisir un path de
+ * programme ? ». Le chemin reste obligatoire (un bureau vide est détruit par Windows) : il se
+ * CHOISIT (« Parcourir… »), l'identifiant se PROPOSE, et un bureau fermé se RELANCE sans rien retaper.
+ */
+describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
+  const champ = (h: HTMLElement, cle: string): HTMLInputElement =>
+    $(h, `hdesk-champ-${cle}`) as HTMLInputElement
+
+  it('« Parcourir… » remplit le chemin et propose un identifiant libre', async () => {
+    const api = faux([ZOX], {
+      hdeskGestionChoisirExe: vi.fn(async () => ({
+        ok: true as const,
+        chemin: 'C:\\zox\\exe\\ZOX.exe'
+      }))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('C:\\zox\\exe\\ZOX.exe')
+    // « zox » est déjà un bureau vivant : la proposition le contourne.
+    expect(champ(h, 'id').value).toBe('zox-2')
+  })
+
+  it('« Parcourir… » annulé : le champ reste tel quel, sans message', async () => {
+    const api = faux([], { hdeskGestionChoisirExe: vi.fn(async () => ({ ok: false as const })) })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await saisir(h, 'executable', 'C:\\deja\\la.exe')
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('C:\\deja\\la.exe')
+    expect($(h, 'hdesk-retour-creation')).toBeNull()
+  })
+
+  it('un fichier refusé (pas un .exe) : le refus est dit, le champ reste tel quel', async () => {
+    const api = faux([], {
+      hdeskGestionChoisirExe: vi.fn(async () => ({
+        ok: false as const,
+        message: 'Choisis un fichier .exe.'
+      }))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('')
+    expect($(h, 'hdesk-retour-creation')?.textContent).toBe(
+      'Création refusée : Choisis un fichier .exe.'
+    )
+  })
+
+  it('le chemin tapé propose l’identifiant ; un identifiant tapé à la main n’est jamais écrasé', async () => {
+    const h = await monter(faux([]))
+    await cliquer($(h, 'hdesk-nouveau'))
+    await saisir(h, 'executable', 'C:\\Program Files\\Mon Appli\\Mon Appli.exe')
+    expect(champ(h, 'id').value).toBe('mon-appli')
+    await saisir(h, 'id', 'le-mien')
+    await saisir(h, 'executable', 'C:\\Windows\\notepad.exe')
+    expect(champ(h, 'id').value).toBe('le-mien')
+    // Identifiant vidé à la main : la proposition reprend.
+    await saisir(h, 'id', '')
+    await saisir(h, 'executable', 'C:\\Windows\\notepad.exe ')
+    expect(champ(h, 'id').value).toBe('notepad')
+  })
+
+  it('sans pont « Parcourir » (ancienne version) : pas de bouton', async () => {
+    const h = await monter(faux([]))
+    await cliquer($(h, 'hdesk-nouveau'))
+    expect($(h, 'hdesk-parcourir')).toBeNull()
+  })
+
+  const RECENT = {
+    id: 'roblox',
+    executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
+    arguments: '-mode test',
+    travail: 'Essai du jeu',
+    conversationId: 'conv-526',
+    lanceLe: '2026-10-19T08:00:00+02:00'
+  }
+
+  it('« Récents » sans aucun bureau ouvert : un bureau fermé se relance avec exactement ses champs', async () => {
+    const api = faux([], {
+      hdeskGestionBureaux: vi.fn(async () => ({
+        ok: true as const,
+        bureaux: [],
+        recents: [RECENT]
+      }))
+    })
+    const h = await monter(api)
+    expect($(h, 'hdesk-vide')).not.toBeNull()
+    const ligne = $(h, 'hdesk-recent-roblox')!
+    expect(ligne.textContent).toContain('Essai du jeu')
+    expect(ligne.textContent).toContain('RobloxStudioBeta.exe')
+    await cliquer($(h, 'hdesk-relancer-roblox'))
+    expect(api.hdeskGestionCreer).toHaveBeenCalledWith({
+      id: 'roblox',
+      executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
+      arguments: '-mode test',
+      travail: 'Essai du jeu',
+      conversationId: 'conv-526'
+    })
+    expect($(h, 'hdesk-retour-creation')?.textContent).toBe('Bureau « x » prêt.')
+  })
+
+  it('« Récents » à côté de l’antenne : la liste reste visible sous les moniteurs', async () => {
+    const api = faux([ZOX], {
+      hdeskGestionBureaux: vi.fn(async () => ({
+        ok: true as const,
+        bureaux: [ZOX],
+        recents: [RECENT]
+      }))
+    })
+    const h = await monter(api)
+    expect($(h, 'hdesk-antenne')).not.toBeNull()
+    expect($(h, 'hdesk-relancer-roblox')).not.toBeNull()
+  })
+
+  it('aucun récent : pas de section', async () => {
+    const h = await monter(faux([ZOX]))
+    expect($(h, 'hdesk-recents')).toBeNull()
+  })
+})
+
+/** Repris de conv-344 (scout n°8) : le fil s'affichait comme un identifiant brut, sans lien. */
+describe('HdeskGestionView — le fil par son titre, cliquable (conv-344)', () => {
+  const titres = (liste: Array<{ id: string; title: string }>) =>
+    vi.fn(async () => liste as unknown as Array<{ id: string; title: string }>)
+
+  it('titre du fil à l’antenne ; un clic ouvre la conversation', async () => {
+    const ouvrir = vi.fn()
+    const h = await monter(
+      faux([ZOX], { conversations: titres([{ id: 'conv-951', title: 'Refonte du bureau' }]) }),
+      { onOpenConversation: ouvrir }
+    )
+    const lien = $(h, 'hdesk-fil-zox')!
+    expect(lien.textContent).toBe('Refonte du bureau')
+    expect(lien.getAttribute('title')).toBe('conv-951')
+    await cliquer(lien)
+    expect(ouvrir).toHaveBeenCalledWith({ conversationId: 'conv-951' })
+  })
+
+  it('fil inconnu de la liste, ou liste en échec : l’identifiant, toujours cliquable', async () => {
+    const ouvrir = vi.fn()
+    const h = await monter(
+      faux([ZOX], { conversations: vi.fn(async () => Promise.reject(new Error('x'))) }),
+      { onOpenConversation: ouvrir }
+    )
+    expect($(h, 'hdesk-fil-zox')!.textContent).toBe('conv-951')
+    await cliquer($(h, 'hdesk-fil-zox'))
+    expect(ouvrir).toHaveBeenCalledWith({ conversationId: 'conv-951' })
+  })
+
+  it('fil « manuel » ou absent : texte simple, sans lien', async () => {
+    const h = await monter(faux([{ ...ZOX, conversationId: 'manuel' }, ORPHELIN]), {
+      onOpenConversation: vi.fn()
+    })
+    expect($(h, 'hdesk-fil-zox')).toBeNull()
+    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : manuel')
+    // L'orphelin passe à l'antenne : sa fiche dit « aucun », sans lien.
+    await cliquer($(h, 'hdesk-moniteur-orphelin'))
+    expect($(h, 'hdesk-antenne')!.getAttribute('data-bureau')).toBe('orphelin')
+    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : aucun')
+    expect($(h, 'hdesk-fil-orphelin')).toBeNull()
+  })
+
+  it('sans moyen d’ouvrir une conversation : l’identifiant en texte, sans lien', async () => {
+    const h = await monter(faux([ZOX]))
+    expect($(h, 'hdesk-fil-zox')).toBeNull()
+    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : conv-951')
   })
 })

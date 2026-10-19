@@ -119,7 +119,13 @@
 :root[data-theme^='malvoyant-'] .askd-q b,
 :root[data-theme^='malvoyant-'] .askd-q.est-residuel p,
 :root[data-theme^='malvoyant-'] .askd-pied,
-:root[data-theme^='malvoyant-'] .askd-envoyer:disabled {
+:root[data-theme^='malvoyant-'] .askd-envoyer:disabled,
+:root[data-theme^='malvoyant-'] .askd-provenance,
+:root[data-theme^='malvoyant-'] .askd-provenance-run,
+:root[data-theme^='malvoyant-'] .askd-fermer,
+:root[data-theme^='malvoyant-'] .askd-fermer:hover,
+:root[data-theme^='malvoyant-'] .askd-fermer:focus-visible,
+:root[data-theme^='malvoyant-'] .askd-resume {
   color: var(--text);
 }
 
@@ -206,7 +212,8 @@
 }
 
 /* components/ChatComposerExtras.css — tailles */
-:root[data-theme^='malvoyant-'] .composer-friction {
+:root[data-theme^='malvoyant-'] .composer-friction,
+:root[data-theme^='malvoyant-'] .composer-suite-score {
   font-size: 13px;
 }
 
@@ -308,6 +315,23 @@
 :root[data-theme^='malvoyant-'] .composer-input-row > .composer-send.btn-accent:disabled,
 :root[data-theme^='malvoyant-'] .composer-input-row > .composer-stop:disabled,
 :root[data-theme^='malvoyant-'] .composer-dictee-apercu-texte {
+  color: var(--text);
+}
+
+/* components/ContexteDetaille.css — tailles */
+:root[data-theme^='malvoyant-'] .ctx-pied .quota-context-compact {
+  font-size: 13px;
+}
+
+/* components/ContexteDetaille.css — gris en dur */
+:root[data-theme^='malvoyant-'] .ctx-total,
+:root[data-theme^='malvoyant-'] .ctx-cat .ctx-tokens,
+:root[data-theme^='malvoyant-'] .ctx-cat .ctx-part,
+:root[data-theme^='malvoyant-'] .ctx-liste .ctx-tokens,
+:root[data-theme^='malvoyant-'] .ctx-nombre,
+:root[data-theme^='malvoyant-'] .ctx-cat.is-differe,
+:root[data-theme^='malvoyant-'] .ctx-liste summary > span:first-child::before,
+:root[data-theme^='malvoyant-'] .ctx-liste li {
   color: var(--text);
 }
 
@@ -537,7 +561,13 @@
 }
 
 /* components/HdeskGestionView.css — tailles */
-:root[data-theme^='malvoyant-'] .hdesk-journal {
+:root[data-theme^='malvoyant-'] .hdesk-direct-rec,
+:root[data-theme^='malvoyant-'] .hdesk-tag-antenne,
+:root[data-theme^='malvoyant-'] .hdesk-tag-antenne.is-petit,
+:root[data-theme^='malvoyant-'] .hdesk-bandeau > strong,
+:root[data-theme^='malvoyant-'] .hdesk-moniteur,
+:root[data-theme^='malvoyant-'] .hdesk-moniteur-ecran,
+:root[data-theme^='malvoyant-'] .hdesk-moniteur-etat {
   font-size: 13px;
 }
 

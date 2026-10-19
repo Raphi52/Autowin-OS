@@ -16,14 +16,21 @@
  * -> « travail non relié », Fermer rend le refus ; antenne fermée -> l'antenne passe au premier bureau
  * et le pilotage s'arrête ; changer d'antenne -> retour en Regarder ; saisie de création invalide ->
  * refusée AVANT tout lancement ; identifiant occupé -> l'identifiant libre est proposé, jamais relancé.
+ * REPRIS DE conv-344 (aperçu agrandi, écarté au profit de l'Antenne le 2026-10-19, conv-1023) : ce qui
+ * ne dépend pas de la façon de montrer les bureaux — « Parcourir… » + identifiant proposé, « Récents /
+ * Relancer », et le fil affiché par son titre, cliquable. Le journal des gestes de conv-344 reste dehors.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
 import {
+  CREATION_ATTENTE_MS,
   FIL_MANUEL,
+  proposerIdentifiant,
   refusCreation,
   type BureauGere,
   type DemandeCreationBureau,
+  type LancementRecent,
+  type ResultatChoixExe,
   type ResultatCreationBureau,
   type ResultatFermetureGeree,
   type ResultatListeBureaux
@@ -37,15 +44,21 @@ export interface HdeskGestionApi {
   hdeskGestionBureaux: () => Promise<ResultatListeBureaux>
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
+  /** « Parcourir… » : sélecteur natif filtré sur les .exe (conv-344). Absent = pas de bouton. */
+  hdeskGestionChoisirExe?: () => Promise<ResultatChoixExe>
   /** Aperçu, bascule et gestes : mêmes canaux que la petite TV du chat. */
   hdeskTvImage?: (id: string) => Promise<ImageTv>
   hdeskTvBasculer?: (id: string) => Promise<{ ok: boolean; message?: string }>
   hdeskTvAct?: (geste: GesteTv) => Promise<ResultatGeste>
+  /** Titres des fils (conv-344) : le fil s'affichait comme un identifiant brut. */
+  conversations?: () => Promise<Array<{ id: string; title?: string }>>
 }
 
 interface Props {
   active: boolean
   api?: HdeskGestionApi
+  /** Ouvre la conversation d'un fil (App.tsx : openTaskConversation). Absent = fil non cliquable. */
+  onOpenConversation?: (target: { conversationId: string }) => void
   /** Cadence de la liste et de TOUS les aperçus, en Regarder. */
   intervalleMs?: number
   /** Cadence de l'antenne seule, en Piloter (les moniteurs ne sont plus capturés). */
@@ -109,10 +122,12 @@ export function HdeskGestionView({
   api,
   intervalleMs = 4000,
   intervallePiloteMs = 1500,
-  delaiPilotageMs = 60_000
+  delaiPilotageMs = 60_000,
+  onOpenConversation
 }: Props): React.JSX.Element {
   const cible = (): Partial<HdeskGestionApi> | undefined => cibleDe(api)
   const [liste, setListe] = useState<ResultatListeBureaux | null>(null)
+  const [titres, setTitres] = useState<Record<string, string>>({})
   const [images, setImages] = useState<Record<string, ImageTv>>({})
   const [enFermeture, setEnFermeture] = useState<ReadonlySet<string>>(new Set())
   const [retours, setRetours] = useState<Record<string, { ok: boolean; message: string }>>({})
@@ -120,6 +135,8 @@ export function HdeskGestionView({
   const [form, setForm] = useState<Formulaire>(FORMULAIRE_VIDE)
   const [creationEnCours, setCreationEnCours] = useState(false)
   const [retourCreation, setRetourCreation] = useState<ResultatCreationBureau | null>(null)
+  // Identifiant tapé à la main : la proposition tirée du nom de l'appli ne l'écrase jamais (conv-344).
+  const [idTouche, setIdTouche] = useState(false)
   // Antenne et pilotage : l'état pour le rendu, la référence pour la boucle de capture.
   const [antenneId, setAntenneId] = useState<string | null>(null)
   const [pilote, setPilote] = useState(false)
@@ -221,6 +238,47 @@ export function HdeskGestionView({
       if (minuterie) clearTimeout(minuterie)
     }
   }, [active, api, intervalleMs, intervallePiloteMs])
+
+  // Titres des fils, relus à chaque ouverture de la vue (conv-344). Échec = l'identifiant reste affiché.
+  useEffect(() => {
+    if (!active) return
+    const lire = cibleDe(api)?.conversations
+    if (!lire) return
+    let actif = true
+    lire()
+      .then((convs) => {
+        if (!actif || !Array.isArray(convs)) return
+        setTitres(
+          Object.fromEntries(
+            convs
+              .filter((c) => typeof c?.id === 'string' && typeof c.title === 'string' && c.title)
+              .map((c) => [c.id, c.title as string])
+          )
+        )
+      })
+      .catch(() => undefined)
+    return () => {
+      actif = false
+    }
+  }, [active, api])
+
+  /** Le fil par son titre ; un clic ouvre la conversation (conv-344). « manuel » ou absent : texte. */
+  const fil = (b: BureauGere): React.JSX.Element | string => {
+    const id = b.conversationId
+    if (!id) return 'aucun'
+    if (id === FIL_MANUEL || !onOpenConversation) return id
+    return (
+      <button
+        type="button"
+        className="hdesk-lien"
+        data-testid={`hdesk-fil-${b.id}`}
+        title={id}
+        onClick={() => onOpenConversation({ conversationId: id })}
+      >
+        {titres[id] ?? id}
+      </button>
+    )
+  }
 
   // Compte à rebours du pilotage : l'horloge n'avance que dans le rappel, jamais au rendu.
   useEffect(() => {
@@ -358,10 +416,11 @@ export function HdeskGestionView({
     }))
   }
 
-  const creer = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
+  // Création par le formulaire OU par « Relancer » (Récents, conv-344) : même chemin, même refus
+  // avant tout lancement.
+  const lancer = async (demande: DemandeCreationBureau): Promise<void> => {
     if (creationEnCours) return
-    const refus = refusCreation(form)
+    const refus = refusCreation(demande)
     if (refus) {
       setRetourCreation({ ok: false, code: null, message: refus })
       return
@@ -370,7 +429,7 @@ export function HdeskGestionView({
     if (!f) return
     setCreationEnCours(true)
     setRetourCreation(null)
-    const r = await f({ ...form }).catch((err: unknown): ResultatCreationBureau => ({
+    const r = await f({ ...demande }).catch((err: unknown): ResultatCreationBureau => ({
       ok: false,
       code: null,
       message: String(err)
@@ -379,9 +438,41 @@ export function HdeskGestionView({
     setRetourCreation(r)
     if (r.ok) {
       setForm(FORMULAIRE_VIDE)
+      setIdTouche(false)
       setFormOuvert(false)
       rafraichirRef.current?.()
     }
+  }
+
+  const creer = (e: React.FormEvent): void => {
+    e.preventDefault()
+    void lancer(form)
+  }
+
+  const relancer = (r: LancementRecent): void =>
+    void lancer({
+      id: r.id,
+      executable: r.executable,
+      arguments: r.arguments,
+      travail: r.travail,
+      conversationId: r.conversationId
+    })
+
+  // Identifiants déjà vivants : la proposition les contourne (le lanceur reste juge, exit 5).
+  const idsVivants = etatListe?.ok ? etatListe.bureaux.map((b) => b.id) : []
+  const changerExecutable = (chemin: string): void =>
+    setForm((prec) => ({
+      ...prec,
+      executable: chemin,
+      ...(!idTouche && chemin.trim() ? { id: proposerIdentifiant(chemin, idsVivants) } : {})
+    }))
+
+  const parcourir = async (): Promise<void> => {
+    const f = cible()?.hdeskGestionChoisirExe
+    if (!f) return
+    const r = await f().catch((e: unknown): ResultatChoixExe => ({ ok: false, message: String(e) }))
+    if (r.ok) changerExecutable(r.chemin)
+    else if (r.message) setRetourCreation({ ok: false, code: null, message: r.message })
   }
 
   const champ = (cle: keyof Formulaire, libelle: string, aide: string): React.JSX.Element => (
@@ -391,7 +482,12 @@ export function HdeskGestionView({
         data-testid={`hdesk-champ-${cle}`}
         value={form[cle]}
         placeholder={aide}
-        onChange={(e) => setForm((prec) => ({ ...prec, [cle]: e.target.value }))}
+        onChange={(e) => {
+          const v = e.target.value
+          if (cle === 'executable') return changerExecutable(v)
+          if (cle === 'id') setIdTouche(v.trim() !== '')
+          setForm((prec) => ({ ...prec, [cle]: v }))
+        }}
       />
     </label>
   )
@@ -450,8 +546,21 @@ export function HdeskGestionView({
 
       {formOuvert && (
         <form className="hdesk-formulaire" data-testid="hdesk-formulaire" onSubmit={creer}>
-          {champ('id', 'Identifiant', 'ex. appli-essai')}
-          {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
+          {/* L'application d'abord : l'identifiant se propose à partir d'elle (conv-344). */}
+          <div className="hdesk-champ-exe">
+            {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
+            {cible()?.hdeskGestionChoisirExe && (
+              <button
+                type="button"
+                className="btn btn-sm"
+                data-testid="hdesk-parcourir"
+                onClick={() => void parcourir()}
+              >
+                Parcourir…
+              </button>
+            )}
+          </div>
+          {champ('id', 'Identifiant', 'proposé à partir de l’application')}
           {champ('arguments', 'Arguments (facultatif)', 'ex. /mode test')}
           {champ('travail', 'Ce que tu y fais', 'ex. Essai de mon appli sur une branche de test')}
           {champ('conversationId', 'Fil (facultatif)', FIL_MANUEL)}
@@ -461,7 +570,10 @@ export function HdeskGestionView({
             data-testid="hdesk-creer"
             disabled={creationEnCours}
           >
-            {creationEnCours ? 'Création… (jusqu’à 40 s)' : 'Créer le bureau'}
+            {/* conv-344 : l'écran disait « 40 s » alors que l'application attend CREATION_ATTENTE_MS. */}
+            {creationEnCours
+              ? `Création… (jusqu’à ${Math.round(CREATION_ATTENTE_MS / 1000)} s)`
+              : 'Créer le bureau'}
           </button>
         </form>
       )}
@@ -563,7 +675,7 @@ export function HdeskGestionView({
             </header>
             <p className="hdesk-fiche">
               <span>Bureau : {antenne.id}</span>
-              <span>Fil : {antenne.conversationId ?? 'aucun'}</span>
+              <span>Fil : {fil(antenne)}</span>
               <span>Lancé : {quand(antenne.lanceLe)}</span>
               {antenne.executable && (
                 <span title={antenne.executable}>{nomDeFichier(antenne.executable)}</span>
@@ -724,6 +836,36 @@ export function HdeskGestionView({
             })}
           </ul>
         </>
+      )}
+
+      {/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper — aussi quand plus aucun
+          bureau n'est ouvert, c'est même là qu'il sert le plus. */}
+      {etatListe?.ok && (etatListe.recents?.length ?? 0) > 0 && (
+        <section className="hdesk-recents" data-testid="hdesk-recents" aria-label="Récents">
+          <h3>Récents</h3>
+          <ul>
+            {etatListe.recents!.map((r) => (
+              <li
+                key={`${r.id}|${r.executable}|${r.arguments}`}
+                data-testid={`hdesk-recent-${r.id}`}
+              >
+                <strong>{r.travail}</strong>
+                <span title={r.executable}>{nomDeFichier(r.executable)}</span>
+                <span>{r.id}</span>
+                <span>{quand(r.lanceLe)}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  data-testid={`hdesk-relancer-${r.id}`}
+                  disabled={creationEnCours}
+                  onClick={() => relancer(r)}
+                >
+                  Relancer
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   )

@@ -70,7 +70,13 @@
 :root[data-base='clair'] .askd-q b,
 :root[data-base='clair'] .askd-q.est-residuel p,
 :root[data-base='clair'] .askd-pied,
-:root[data-base='clair'] .askd-envoyer:disabled {
+:root[data-base='clair'] .askd-envoyer:disabled,
+:root[data-base='clair'] .askd-provenance,
+:root[data-base='clair'] .askd-provenance-run,
+:root[data-base='clair'] .askd-fermer,
+:root[data-base='clair'] .askd-fermer:hover,
+:root[data-base='clair'] .askd-fermer:focus-visible,
+:root[data-base='clair'] .askd-resume {
   color: var(--text-dim);
 }
 
@@ -120,6 +126,18 @@
 :root[data-base='clair'] .composer-input-row > .composer-send.btn-accent:disabled,
 :root[data-base='clair'] .composer-input-row > .composer-stop:disabled,
 :root[data-base='clair'] .composer-dictee-apercu-texte {
+  color: var(--text-dim);
+}
+
+/* components/ContexteDetaille.css */
+:root[data-base='clair'] .ctx-total,
+:root[data-base='clair'] .ctx-cat .ctx-tokens,
+:root[data-base='clair'] .ctx-cat .ctx-part,
+:root[data-base='clair'] .ctx-liste .ctx-tokens,
+:root[data-base='clair'] .ctx-nombre,
+:root[data-base='clair'] .ctx-cat.is-differe,
+:root[data-base='clair'] .ctx-liste summary > span:first-child::before,
+:root[data-base='clair'] .ctx-liste li {
   color: var(--text-dim);
 }
 

@@ -39,6 +39,17 @@
   color: inherit;
   font: inherit;
 }
+/* conv-344 : « Parcourir… » collé au champ de l'application. */
+.hdesk-champ-exe {
+  display: flex;
+  gap: 6px;
+  align-items: end;
+  min-width: 0;
+}
+.hdesk-champ-exe .hdesk-champ {
+  flex: 1;
+  min-width: 0;
+}
 .hdesk-etat {
   color: var(--text-dim);
 }
@@ -493,4 +504,52 @@
 .hdesk-moniteur-fermer:disabled {
   cursor: progress;
   opacity: 0.6;
+}
+
+/* ---------- Repris de conv-344 ---------- */
+/* Le fil, par son titre, ouvre la conversation. */
+.hdesk-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* « Récents » : relancer un bureau fermé sans rien retaper. */
+.hdesk-recents h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.hdesk-recents ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hdesk-recents li {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface-inset);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hdesk-recents li > :not(button) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hdesk-recents li strong {
+  color: var(--text);
+  font-weight: 500;
 }
