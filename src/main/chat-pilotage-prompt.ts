@@ -152,7 +152,8 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // 2026-09-15). ContosoV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
   // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
   `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
-  `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
+  `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 2 = l'app s'est arretee avant sa fenetre — ` +
+  `instance unique qui a passe la main a sa copie ouverte, ou plantage au demarrage —, 3 = aucune fenetre, 1 = echec) n'est ` +
   `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
   `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
   `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +

@@ -4,13 +4,14 @@
  * bien la gérer ». La petite TV du chat (HdeskTv) ne montre que les bureaux du fil ouvert ; ici, TOUS
  * les bureaux vivants, avec aperçu, Fermer, Afficher sur mon écran (⇄) et Créer.
  * Cas limites : aucun bureau -> état vide + bouton Créer ; liste illisible -> erreur dite, jamais une
- * liste vide ; bureau sans fiche -> listé « travail non relié », Fermer rend le refus ; fermeture en
+ * liste vide ; bureau sans fiche -> listé « travail non relié », Fermer le ferme sans fiche (conv-344) ; fermeture en
  * cours -> bouton désactivé (double clic sans effet) ; saisie invalide -> refusée AVANT tout lancement ;
  * identifiant occupé -> l'identifiant libre est proposé, jamais relancé tout seul.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ImageTv } from '../../../main/hdesk-tv'
 import {
+  CREATION_ATTENTE_MS,
   FIL_MANUEL,
   refusCreation,
   type BureauGere,
@@ -259,7 +260,9 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
           {champ('travail', 'Ce que tu y fais', 'ex. Essai de mon appli sur une branche de test')}
           {champ('conversationId', 'Fil (facultatif)', FIL_MANUEL)}
           <button type="submit" data-testid="hdesk-creer" disabled={creationEnCours}>
-            {creationEnCours ? 'Création… (jusqu’à 40 s)' : 'Créer le bureau'}
+            {creationEnCours
+              ? `Création… (jusqu’à ${Math.round(CREATION_ATTENTE_MS / 1000)} s)`
+              : 'Créer le bureau'}
           </button>
         </form>
       )}

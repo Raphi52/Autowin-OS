@@ -105,12 +105,28 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/fil/)
   })
 
-  it('bureau sans fiche : refus nommé, rien n’est lancé — jumeau du cas avec fiche', async () => {
-    const fermer = vi.fn()
-    const r = await fermerBureauGere(RACINE, 'orphelin', registre([]), fermer)
-    expect(fermer).not.toHaveBeenCalled()
-    expect(r).toMatchObject({ ok: false, code: null })
-    expect(r.message).toMatch(/pas de fiche/)
+  // conv-344 (scout n°1) : ce cas rendait « Ce bureau n'a pas de fiche » alors que le script sait
+  // fermer ces bureaux depuis le 17/10 (-SansFiche, commit 41359673) — la vue ne le lui demandait pas.
+  it('bureau sans fiche : fermé en mode « sans fiche », SANS fil — jumeau du cas avec fiche', async () => {
+    const fermer = vi.fn(async (_r: string, _d: DemandeFermeture) =>
+      resultat({ ferme: true, sansFiche: true })
+    )
+    const r = await fermerBureauGere(RACINE, 'ui-capture-7208', registre([]), fermer)
+    expect(fermer).toHaveBeenCalledTimes(1)
+    expect(fermer).toHaveBeenCalledWith(RACINE, { id: 'ui-capture-7208', sansFiche: true })
+    expect(r).toMatchObject({ ok: true, code: 0 })
+  })
+
+  it('bureau sans fiche disparu entre la liste et le clic (code 2) : dit « n’existe plus », pas un échec', async () => {
+    const r = await fermerBureauGere(RACINE, 'ui-capture-1', registre([]), async () => ({
+      ok: false,
+      code: 2,
+      ferme: false,
+      sansFiche: true,
+      erreur: "Aucun bureau cache 'AutowinTest_ui-capture-1' vivant : rien n'a ete ferme."
+    }))
+    expect(r).toMatchObject({ ok: true, code: 2, dejaFerme: true })
+    expect(r.message).toMatch(/n’existe plus/)
   })
 
   it('identifiant invalide : refus avant toute lecture', async () => {
@@ -203,6 +219,22 @@ describe('vue Bureaux cachés — Créer', () => {
       conversationOccupante: 'conv-1'
     })
     expect(executer).toHaveBeenCalledTimes(1)
+  })
+
+  // conv-344 (scout n°3) : le lanceur rend 2 quand l'app meurt AVANT sa fenêtre (instance unique qui
+  // passe la main, plantage au démarrage) — avant, 30 s d'attente puis « aucune fenêtre » (code 3).
+  it('app arrêtée avant sa fenêtre (code 2) : le dit en clair, avec son code de sortie', async () => {
+    const { deps } = depsCreation({
+      code: 2,
+      sortie:
+        '{"id":"zox2","pret":false,"fenetresVisibles":0,"codeSortie":7,"journalWindows":[],"erreur":"arretee AVANT"}',
+      erreur: 'arrete avant toute fenetre'
+    })
+    const r = await creerBureau(RACINE, demande, deps)
+    expect(r).toMatchObject({ ok: false, code: 2 })
+    expect(r.message).toMatch(/avant d’ouvrir sa fenêtre \(code de sortie 7\)/)
+    expect(r.message).toMatch(/passé la main à une copie déjà ouverte/)
+    expect(r.message).toMatch(/planté au démarrage/)
   })
 
   it('exécutable introuvable (code 1) : le message du lanceur est rendu tel quel', async () => {

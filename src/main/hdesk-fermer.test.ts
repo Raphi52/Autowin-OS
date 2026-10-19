@@ -53,6 +53,26 @@ describe('argumentsFermer / resultatFermeture : ce que l app envoie au script, e
   ])('refuse avant de lancer quoi que ce soit : %s', (_cas, demande) => {
     expect(() => argumentsFermer('C:\\app', demande)).toThrow()
   })
+  // conv-344 (scout n°1) : mode « sans fiche » de la vue Bureaux caches. Aucun fil : le script n'en
+  // exige pas, et en accepter un ferait croire qu'il sert de garde.
+  it('sans fiche : -SansFiche, aucun -Conversation', () => {
+    const args = argumentsFermer('C:\\app', { id: 'ui-capture-7208', sansFiche: true })
+    expect(args).toContain('-SansFiche')
+    expect(args).not.toContain('-Conversation')
+    expect(args.slice(args.indexOf('-Id'), args.indexOf('-Id') + 2)).toEqual([
+      '-Id',
+      'ui-capture-7208'
+    ])
+    expect(argumentsFermer('C:\\app', { id: 'x', conversationId: 'conv-1' })).not.toContain(
+      '-SansFiche'
+    )
+  })
+  it.each([
+    ['sans fiche ET un fil', { id: 'x', sansFiche: true, conversationId: 'conv-1' }],
+    ['sans fiche, identifiant qui injecte', { id: 'a;b', sansFiche: true }]
+  ])('refuse avant de lancer quoi que ce soit : %s', (_cas, demande) => {
+    expect(() => argumentsFermer('C:\\app', demande as DemandeFermeture)).toThrow()
+  })
   it('lit la derniere ligne JSON et fait foi du code de sortie', () => {
     const r = resultatFermeture(
       'bruit\r\n{"id":"x","ferme":true,"forces":[12],"survivants":[]}\r\n',
@@ -151,6 +171,7 @@ describe.skipIf(process.platform !== 'win32')(
     const X = `${base}x`
     const Y = `${base}y`
     const T = `${base}t`
+    const S = `${base}s`
 
     const lancer = (id: string, conversation: string, fixture: string): Sortie =>
       lancerPs('hdesk-lancer.ps1', [
@@ -195,7 +216,7 @@ describe.skipIf(process.platform !== 'win32')(
 
     afterAll(() => {
       // Filet : rien ne doit survivre au test, meme en echec.
-      for (const id of [X, Y, T])
+      for (const id of [X, Y, T, S])
         spawnSync(
           'powershell',
           [
@@ -292,6 +313,41 @@ describe.skipIf(process.platform !== 'win32')(
       expect(r).toMatchObject({ ok: false, code: 2, ferme: false })
       expect(String(r.erreur)).toMatch(/aucun bureau/i)
     }, 60_000)
+
+    // conv-344 (scout n°1) : -SansFiche n'avait AUCUN test depuis son ajout (41359673). Un bureau
+    // dont la fiche n'est pas dans le registre lu (ici : fiche dans un AUTRE dossier, vide est lu),
+    // comme les ui-capture-* d'autowin-headless.ps1 qui n'en ecrivent pas.
+    it('sans fiche : ferme l app du bureau (exit 0, sansFiche) — et refuse ce mode si une fiche existe', () => {
+      const s = lancer(S, 'conv-a', docile)
+      expect(s.code, String(s.stderr)).toBe(0)
+      // Jumeau refuse : la fiche existe dans CE registre, son fil fait foi.
+      const refus = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
+      expect(refus.code, JSON.stringify(refus)).toBe(1)
+      expect(String(refus.erreur)).toMatch(/inscrit au registre/)
+      expect(vivant(s.pid)).toBe(true)
+
+      const vide = mkdtempSync(join(tmpdir(), 'hdesk-fermer-vide-'))
+      try {
+        const r = lancerPs('hdesk-fermer.ps1', [
+          '-Id',
+          S,
+          '-SansFiche',
+          '-Registre',
+          vide,
+          '-DelaiDouxSecondes',
+          '2'
+        ])
+        expect(r.code, JSON.stringify(r)).toBe(0)
+        expect(r.sansFiche).toBe(true)
+        expect(r.survivants).toEqual([])
+        expect(vivant(s.pid)).toBe(false)
+        // Plus rien a fermer : le bureau n'est plus la (code 2), sans erreur cachee.
+        const encore = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', vide])
+        expect([0, 2]).toContain(encore.code)
+      } finally {
+        rmSync(vide, { recursive: true, force: true })
+      }
+    }, 120_000)
 
     it('refuse un identifiant absent ou invalide (exit non nul)', () => {
       const absent = lancerPs('hdesk-fermer.ps1', [
