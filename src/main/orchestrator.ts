@@ -721,7 +721,8 @@ export interface OrchestratorCollaboratorDeps {
    * `connues` est lu UNE fois au début du run, `sauf` = ce run ; `noter` à la fin de chaque scout.
    */
   memoireScout?: {
-    connues: (depot: string, sauf: string) => string[]
+    /** `demande` = la tâche du run : seuls les titres qui en touchent le sujet reviennent (conv-339). */
+    connues: (depot: string, sauf: string, demande?: string) => string[]
     noter: (depot: string, texteScout: string, run: string) => void
     /** Les pistes prises/laissées, lues dans la demande du run (message de sélection). */
     choisir?: (depot: string, demande: string) => void
@@ -3700,7 +3701,7 @@ ${CONTRAT_OBJECTIONS}`
       // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
       this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task)
       blocPistesConnues = blocPistesDejaConnues(
-        this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId) ?? [],
+        this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId, task) ?? [],
         this.deps.memoireScout?.bilan?.(this.deps.executionWorkspace) ?? ''
       )
       facteursChoix = this.deps.memoireScout?.facteurs?.(this.deps.executionWorkspace) ?? {}

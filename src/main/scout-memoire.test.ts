@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -292,5 +292,89 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       chemin
     })
     expect(facteursDesChoix({ depot: 'D:/w', chemin })).toEqual({})
+  })
+})
+
+/*
+ * conv-339 : un /scout sur les humains de l'Accueil (« ultra quali comme dans Cyberpunk ») a reçu
+ * 60 titres « DÉJÀ PROPOSÉ » — outils, serveurs MCP, navigateur, coffre de mots de passe —, dont 25
+ * en « (ex-#N) » redisant un titre déjà listé. La fixture est le bloc RÉEL de sa consigne
+ * (prompt-observability, tour b6150a1a), un titre par ligne, le plus récent d'abord.
+ */
+describe('pistes déjà proposées : seulement celles qui touchent la demande, sans doublons', () => {
+  const titresReels = readFileSync(
+    join(__dirname, '__fixtures__', 'scout-conv-339-deja-propose.txt'),
+    'utf8'
+  )
+    .split('\n')
+    .filter(Boolean)
+  const memoire = (titres: readonly string[]): string => {
+    const chemin = fichier()
+    titres.forEach((titre, i) =>
+      noterPistesScout({
+        depot: 'D:/Autowin',
+        texte: scout(titre.replace(/\|/gu, '/')),
+        run: `r${i}`,
+        maintenant: `2026-10-${String(18 - Math.floor(i / 10)).padStart(2, '0')}T10:${String(59 - (i % 10)).padStart(2, '0')}:00Z`,
+        chemin
+      })
+    )
+    return chemin
+  }
+  const DEMANDE_CONV_339 =
+    "comment améliorer les humains pour qu'ils soient ultra quali comme dans le jeu cyberpunk?"
+  const outillage = /mcp|outil|navigateur|mot de passe|bureau caché|garde-fou/iu
+
+  it('la demande de conv-339 ne reçoit plus les titres sur les outils, MCP et le navigateur', () => {
+    const chemin = memoire(titresReels)
+    expect(titresReels.filter((t) => outillage.test(t)).length).toBeGreaterThan(15)
+    const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin, demande: DEMANDE_CONV_339 })
+    expect(connues.filter((t) => outillage.test(t))).toEqual([])
+  })
+
+  it('jumeau : une demande sur les serveurs d’outils MCP les reçoit toujours', () => {
+    const chemin = memoire(titresReels)
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin,
+      demande: '/scout quels serveurs d’outils MCP brancher au chat ?'
+    })
+    expect(connues).toContain("**Brancher tes propres serveurs d'outils (MCP) au chat.**")
+    expect(connues.filter((t) => /mcp/iu.test(t)).length).toBeGreaterThan(0)
+  })
+
+  it('une demande sans sujet (« /scout améliore Autowin ») garde tous les titres récents, comme avant', () => {
+    const chemin = memoire(titresReels)
+    const sansDemande = pistesDejaConnues({ depot: 'D:/Autowin', chemin })
+    const generique = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin,
+      demande: '/scout améliore Autowin'
+    })
+    expect(generique).toEqual(sansDemande)
+  })
+
+  it('un titre redit avec « (ex-#N) » ne revient pas une deuxième fois', () => {
+    const chemin = memoire(titresReels)
+    const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin })
+    expect(connues.filter((t) => /mot de passe tapé dans le chat/iu.test(t))).toHaveLength(1)
+    expect(connues.filter((t) => /Envoyer ou chercher un message Teams/iu.test(t))).toHaveLength(1)
+  })
+
+  it('une reformulation (« Une peau moins plastique ») est un doublon ; deux pistes voisines restent deux', () => {
+    const chemin = memoire([
+      'Peau moins « plastique »',
+      'Reflets des néons sur les passants',
+      'Une peau moins « plastique »',
+      'Passants absents du reflet du sol mouillé',
+      'Des visages vivants : clignement des yeux, regard'
+    ])
+    const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin })
+    expect(connues).toEqual([
+      'Peau moins « plastique »',
+      'Reflets des néons sur les passants',
+      'Passants absents du reflet du sol mouillé',
+      'Des visages vivants : clignement des yeux, regard'
+    ])
   })
 })
