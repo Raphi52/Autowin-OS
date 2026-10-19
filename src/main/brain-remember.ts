@@ -899,6 +899,25 @@ async function performDepositCandidate(
           `dépôt IMPOSSIBLE : la route de dépôt du Brain est absente de ce serveur (HTTP ${response.status}) — ` +
           'le fait n’a pas été examiné, rien n’a été refusé ; c’est le serveur qu’il faut corriger, pas le fait'
       }
+    /*
+     * UN JETON REFUSE N'EST PAS UN FAIT REFUSE — meme famille que le 404 ci-dessus. Mesure conv-338
+     * (2026-10-19, tour 8ce6230c-374c-4de3-9429-583a648e286c) : « refusé par le Brain : forbidden »
+     * a ete lu « il interdit de remplacer la note existante » ; le fait a ete reecrit pour rien, deux
+     * fois, et seule une relance payante a trouve la cause — un ancien serveur Brain, avec un AUTRE
+     * jeton, tenait le port. `brain_server.py` ne rend 403 qu'a un endroit (`_authorized()`) : le
+     * jeton recu differe du sien, et la requete s'arrete avant toute lecture du fait.
+     */
+    if (response.status === 401 || response.status === 403)
+      return {
+        allowed: true,
+        stored: false,
+        detail:
+          `dépôt IMPOSSIBLE : le serveur Brain qui répond sur ${origin} a refusé le jeton d’Autowin ` +
+          `(HTTP ${response.status}) — le fait n’a pas été lu, le réécrire ne changera rien. Cause ` +
+          'habituelle : un AUTRE serveur Brain (une autre installation, avec son propre jeton) tient ce ' +
+          'port. Vérifie quel processus y écoute et quel fichier de jeton il lit ; ne recopie jamais la ' +
+          'valeur du jeton'
+      }
     // Le motif du refus vient du serveur : on le rend TEL QUEL, sans le reformuler en succès.
     return {
       allowed: true,

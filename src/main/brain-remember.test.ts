@@ -104,6 +104,42 @@ describe('remember — separer la panne de transport du refus de contenu', () =>
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  /*
+   * UN JETON REFUSE N'EST PAS UN FAIT REFUSE. Mesure conv-338 (2026-10-19), tour
+   * 8ce6230c-374c-4de3-9429-583a648e286c, actions natif:0:0 et natif:0:1 : deux `remember` ont rendu
+   * « refusé par le Brain : forbidden ». L'agent a lu « il interdit de remplacer la note existante »,
+   * a reecrit le fait, a recu le meme refus, puis a ecrit en memoire locale ; il a fallu une relance
+   * automatique payante (5,02 $, 6 min) pour trouver la vraie cause : un ancien serveur Brain, avec
+   * un autre jeton, tenait le port. `brain_server.py` ne rend 403 qu'a un endroit, `_authorized()`,
+   * quand le jeton recu differe du sien : le fait n'a jamais ete lu.
+   */
+  it('nomme le jeton refusé par le serveur au lieu d’accuser le fait (403)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-403-'))
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(join(root, 'remember-deposits.json'))
+      const res = await rememberFact(
+        { ...faitPourCeTest, title: 'Jeton refuse — cas 403' },
+        { token: 'secret-de-test-403', fetchFn, origin: 'http://127.0.0.1:8765' }
+      )
+      expect(res.stored).toBe(false)
+      expect(res.detail).not.toMatch(/refusé par le Brain/u)
+      expect(res.detail).toMatch(/jeton/u)
+      expect(res.detail).toContain('403')
+      expect(res.detail).toMatch(/n’a pas été lu/u)
+      // L'adresse interrogee est nommee : c'est elle qu'il faut sonder (quel processus y ecoute).
+      expect(res.detail).toContain('127.0.0.1:8765')
+      // La VALEUR du jeton ne sort jamais dans le compte-rendu.
+      expect(res.detail).not.toContain('secret-de-test-403')
+    } finally {
+      forgetSessionDeposits()
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('depot — l origine est CONFIGUREE, jamais ecrite en dur', () => {
