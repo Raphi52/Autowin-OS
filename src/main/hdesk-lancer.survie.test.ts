@@ -106,6 +106,8 @@ describe.skipIf(process.platform !== 'win32')(
         // Attente de fenetre par defaut : 30 s. Le verdict arrive bien avant.
         expect(duree).toBeLessThan(10_000)
         expect(existsSync(join(registre, `${id}.json`))).toBe(false)
+        // Un échec n'entre pas dans l'historique des lancements (conv-344, « Récents »).
+        expect(existsSync(join(registre, 'historique.jsonl'))).toBe(false)
       } finally {
         rmSync(registre, { recursive: true, force: true })
       }

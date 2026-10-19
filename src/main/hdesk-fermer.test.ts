@@ -10,7 +10,7 @@
  * ouvrir l'app sur l'ecran reel de l'utilisateur pour la prouver violerait la regle qu'on teste.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -239,10 +239,31 @@ describe.skipIf(process.platform !== 'win32')(
     })
 
     it('ferme l app du bureau X, epargne la MEME app du bureau Y, et libere X pour une relance', () => {
+      // conv-344 (scout n°6) : l'historique des lancements réussis survit à la purge des fiches et
+      // garde les ARGUMENTS (la fiche ne les a pas) ; il est borné aux 50 derniers.
+      const historique = join(registre, 'historique.jsonl')
+      writeFileSync(
+        historique,
+        Array.from({ length: 60 }, (_, i) => JSON.stringify({ id: `ancien-${i}` })).join('\n') +
+          '\n',
+        'utf8'
+      )
       const x = lancer(X, 'conv-a', docile)
       const y = lancer(Y, 'conv-b', docile)
       expect(x.code, String(x.stderr)).toBe(0)
       expect(y.code, String(y.stderr)).toBe(0)
+      const lignes = readFileSync(historique, 'utf8').trim().split(/\r?\n/)
+      expect(lignes).toHaveLength(50)
+      const [avantDerniere, derniere] = lignes.slice(-2).map((l) => JSON.parse(l))
+      expect(avantDerniere).toMatchObject({
+        id: X,
+        executable: POWERSHELL,
+        travail: 'test hdesk-fermer',
+        conversationId: 'conv-a'
+      })
+      expect(String(avantDerniere.arguments)).toContain(docile)
+      expect(typeof avantDerniere.lanceLe).toBe('string')
+      expect(derniere).toMatchObject({ id: Y, conversationId: 'conv-b' })
       expect(vivant(x.pid)).toBe(true)
 
       const r = fermer(X, 'conv-a')

@@ -3,10 +3,9 @@
  * tous mes Hdesk, pouvoir les fermer, les créer et tout ». La petite TV du chat (hdesk-tv.ts) ne montre
  * que les bureaux du fil ouvert et ne sait ni fermer ni créer ; ce module voit TOUS les bureaux vivants.
  *
- * Il s'appuie sur l'existant sans le modifier : registre (`lireRegistre`), fermeture par bureau
- * (`fermerHdesk` -> scripts/hdesk-fermer.ps1), lanceur scripts/hdesk-lancer.ps1. hdesk-tv.ts porte au
- * même moment une correction non commitée du bouton ⇄ dans le dépôt de l'utilisateur : la toucher
- * aurait bloqué la reprise de ce travail.
+ * Il s'appuie sur l'existant : registre (`lireRegistre`), liste du processus de capture ouvert
+ * (`CapteurHdesk.listeVivants`), fermeture par bureau (`fermerHdesk` -> scripts/hdesk-fermer.ps1),
+ * lanceur scripts/hdesk-lancer.ps1.
  */
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
@@ -18,6 +17,7 @@ import {
   lireRegistre,
   processusVivant,
   type DemandeFermeture,
+  type ListeVivants,
   type EntreeRegistre,
   type ResultatFermeture
 } from './hdesk-tv'
@@ -88,59 +88,18 @@ function derniereLigneJson(sortie: string): Record<string, unknown> | null {
   return null
 }
 
-export type ListeVivants = { ok: true; vivants: string[] } | { ok: false; message: string }
-
-/** Réponse de `list` (scripts/hdesk-tv.ps1) ; la ligne {"pret":true} du démarrage est ignorée. */
-export function interpreterListeVivants(sortie: string, erreur = ''): ListeVivants {
-  for (const l of String(sortie ?? '').split(/\r?\n/)) {
-    const t = l.trim()
-    if (!t.startsWith('{')) continue
-    try {
-      const r = JSON.parse(t) as { bureaux?: unknown; erreur?: unknown }
-      if (Array.isArray(r.bureaux)) return { ok: true, vivants: r.bureaux.map(String) }
-      if (typeof r.erreur === 'string') return { ok: false, message: r.erreur }
-    } catch {
-      /* ligne non JSON : on continue */
-    }
-  }
-  return {
-    ok: false,
-    message: `Liste des bureaux illisible${erreur.trim() ? ` : ${erreur.trim()}` : '.'}`
-  }
-}
+export type { ListeVivants }
 
 /**
- * Liste des bureaux Windows VIVANTS par un appel PONCTUEL de scripts/hdesk-tv.ps1 (`list`, puis entrée
- * fermée : le script s'arrête). Mesuré le 2026-10-16 : 0,42 s. Le processus de capture ouvert de la TV
- * n'expose pas sa liste brute (`demander` est privé dans hdesk-tv.ts, intouchable ici).
+ * TOUS les bureaux, reliés à leur fiche. `lire` est la liste du processus de capture DÉJÀ ouvert
+ * (`CapteurHdesk.listeVivants`, câblé dans index.ts) : plus de PowerShell neuf à chaque tour
+ * (conv-344, scout n°7 — la raison « méthode privée intouchable » du 2026-10-16 ne tenait plus).
  */
-export function lireBureauxVivants(racine: string): Promise<ListeVivants> {
-  return new Promise((resolve) => {
-    const p = execFile(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        join(racine, 'scripts', 'hdesk-tv.ps1')
-      ],
-      { windowsHide: true, timeout: 15_000 },
-      (err, out, errOut) => {
-        const r = interpreterListeVivants(String(out), String(errOut ?? ''))
-        resolve(!r.ok && err ? { ok: false, message: `${r.message} (${err.message})` } : r)
-      }
-    )
-    p.stdin?.end('list\n')
-  })
-}
-
 export async function bureauxGeres(
-  racine: string,
-  registre = registreParDefaut(),
-  lire: (racine: string) => Promise<ListeVivants> = lireBureauxVivants
+  lire: () => Promise<ListeVivants>,
+  registre = registreParDefaut()
 ): Promise<ResultatListeBureaux> {
-  const r = await lire(racine)
+  const r = await lire()
   if (!r.ok) return r
   return { ok: true, bureaux: listerTousLesBureaux(r.vivants, lireRegistre(registre)) }
 }
@@ -149,7 +108,12 @@ export async function bureauxGeres(
 export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree {
   // Code 2 = plus aucun bureau a ce nom (disparu entre la liste et le clic) : rien a fermer, pas un échec.
   if (r.code === 2)
-    return { ok: true, code: 2, dejaFerme: true, message: 'Ce bureau n’existe plus : rien à fermer.' }
+    return {
+      ok: true,
+      code: 2,
+      dejaFerme: true,
+      message: 'Ce bureau n’existe plus : rien à fermer.'
+    }
   if (r.ok && r.dejaFerme)
     return { ok: true, code: r.code, dejaFerme: true, message: 'Ce bureau était déjà vide.' }
   if (r.ok) return { ok: true, code: r.code, message: 'Application fermée, bureau libéré.' }
