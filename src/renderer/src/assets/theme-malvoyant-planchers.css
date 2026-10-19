@@ -536,6 +536,11 @@
   color: var(--text);
 }
 
+/* components/HdeskGestionView.css — tailles */
+:root[data-theme^='malvoyant-'] .hdesk-journal {
+  font-size: 13px;
+}
+
 /* components/HomeView.css — tailles */
 :root[data-theme^='malvoyant-'] .home-tile__label h2,
 :root[data-theme^='malvoyant-'] .home-tile__count,
