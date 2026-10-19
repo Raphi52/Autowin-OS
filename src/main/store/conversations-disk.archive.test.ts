@@ -163,6 +163,8 @@ describe('archive des conversations inactives', () => {
 
     const suivant = redemarrer(p)
     expect(suivant.store.get(vieux)?.messages.at(-1)?.content).toBe('Je reprends ce vieux fil')
+    // La compaction de démarrage est posée hors du fil principal (conv-359).
+    await attendreEcrituresConversations()
     expect(idsDuSnapshot(p)).toContain(vieux)
     await suivant.persistance.archivesChargees
     // L'archive périmée part en arrière-plan : la copie active fait foi.
@@ -293,7 +295,14 @@ describe('archive des conversations inactives', () => {
     expect(relus.find((c) => c.id === vieux)?.messages.at(-1)?.content).toBe('delta orphelin')
     expect(readdirSync(conversationArchiveDir(p))).toContain(`${vieux}.json`)
   })
-  it('si l’écriture de démarrage échoue, rien ne part en arrière-plan (aucune archive retirée)', async () => {
+  /*
+   * CONTRAT CHANGÉ le 2026-10-19 (conv-359). La compaction de démarrage était synchrone : son échec
+   * levait, et `index.ts` mettait le store de côté — l'app s'ouvrait sur un historique VIDE pour un
+   * simple `.tmp` resté en dossier (conv-914). Elle passe désormais par la file du journal : en
+   * échec, le journal n'est pas effacé et reste la référence. Le démarrage ne lève plus, et le fil
+   * revenu actif reste relisible même quand son archive périmée a été retirée.
+   */
+  it('si la compaction de démarrage échoue, le démarrage tient et le journal garde tout', async () => {
     const p = nouveauChemin()
     const { persistance, vieux } = monterCorpus(p)
     await persistance.archiver(MAINTENANT)
@@ -314,14 +323,31 @@ describe('archive des conversations inactives', () => {
       'utf8'
     )
     rmSync(sauvegarde)
-    // L'écriture de démarrage échoue : `.tmp` est un dossier (cas vécu, trace de conv-914).
-    mkdirSync(`${p}.tmp`, { recursive: true })
+    // La compaction échoue : son fichier temporaire est un dossier (même forme que conv-914).
+    const obstacle = `${p}.archivage.tmp`
+    mkdirSync(obstacle, { recursive: true })
+    const avertissement = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      expect(() => persistConversations(new ConversationStore(() => MAINTENANT), p)).not.toThrow()
+      // L'attente des tests relaie l'échec provoqué ; l'app, elle, le rattrape et l'écrit au journal.
+      await expect(attendreEcrituresConversations()).rejects.toThrow(/EISDIR/)
+      await attendreEcrituresConversations()
+      expect(avertissement.mock.calls.map((appel) => String(appel[0]))).toContainEqual(
+        expect.stringContaining('compaction de démarrage en échec')
+      )
+    } finally {
+      avertissement.mockRestore()
+    }
+    // Rien n'est perdu : le journal est resté, et il porte le fil revenu actif.
+    expect(existsSync(conversationJournalPath(p))).toBe(true)
+    expect(loadConversations(p).map((c) => c.id)).toContain(vieux)
 
-    expect(() => persistConversations(new ConversationStore(() => MAINTENANT), p)).toThrow()
-    // Un ménage lancé à tort aurait eu largement le temps d'agir.
-    await new Promise<void>((resolve) => setTimeout(resolve, 400))
-    expect(existsSync(archive)).toBe(true)
-    rmSync(`${p}.tmp`, { recursive: true, force: true })
+    // L'obstacle levé, le démarrage suivant compacte normalement, toujours sans perte.
+    rmSync(obstacle, { recursive: true, force: true })
+    persistConversations(new ConversationStore(() => MAINTENANT), p)
+    await attendreEcrituresConversations()
+    expect(existsSync(conversationJournalPath(p))).toBe(false)
+    expect(idsDuSnapshot(p)).toContain(vieux)
   })
 
   it('supprimer un fil ACTIF retire aussi une archive périmée restée sur le disque', async () => {

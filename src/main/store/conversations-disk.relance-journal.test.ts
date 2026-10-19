@@ -20,18 +20,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from './conversations'
-import { conversationJournalPath, loadConversations, persistConversations } from './conversations-disk'
+import {
+  attendreEcrituresConversations,
+  conversationJournalPath,
+  loadConversations,
+  persistConversations
+} from './conversations-disk'
 
 const dir = mkdtempSync(join(tmpdir(), 'aos-relance-journal-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 /** Une session : un fil existant (conv-570 du snapshot) + trois fils créés par les tâches planifiées. */
-function sessionAvecFilsSeulementDansLeJournal(p: string): {
+async function sessionAvecFilsSeulementDansLeJournal(p: string): Promise<{
   store: ConversationStore
   quitter: () => void
   ids: string[]
   ancien: string
-} {
+}> {
   // Démarrage n°1 : pose le snapshot de base avec un fil ancien.
   const amorce = new ConversationStore(() => 1000)
   persistConversations(amorce, p)
@@ -41,6 +46,8 @@ function sessionAvecFilsSeulementDansLeJournal(p: string): {
   let horloge = 2000
   const store = new ConversationStore(() => horloge++)
   const quitter = persistConversations(store, p)
+  // La compaction de démarrage est posée hors du fil principal (conv-359) : on l'attend.
+  await attendreEcrituresConversations()
   expect(existsSync(conversationJournalPath(p))).toBe(false)
 
   store.append(ancien, { role: 'user', content: 'suite du 02/10 après le snapshot' })
@@ -56,9 +63,9 @@ function sessionAvecFilsSeulementDansLeJournal(p: string): {
 }
 
 describe('relance avec journal présent (incident du 05/10 08:04)', () => {
-  it('les fils qui n’existent QUE dans le journal survivent au démarrage, et le journal est replié', () => {
+  it('les fils qui n’existent QUE dans le journal survivent au démarrage, et le journal est replié', async () => {
     const p = join(dir, 'survie.json')
-    const { quitter, ids, ancien } = sessionAvecFilsSeulementDansLeJournal(p)
+    const { quitter, ids, ancien } = await sessionAvecFilsSeulementDansLeJournal(p)
     // Avant la fermeture : le snapshot ignore les trois fils, seul le journal les porte.
     expect(existsSync(conversationJournalPath(p))).toBe(true)
     quitter() // before-quit de la relance « mise à jour appliquée »
@@ -74,14 +81,15 @@ describe('relance avec journal présent (incident du 05/10 08:04)', () => {
     }
     expect(relance.get(ancien)?.messages.at(-1)?.content).toBe('suite du 02/10 après le snapshot')
     // Le journal est replié dans le snapshot : les trois fils y sont, le journal est vide.
+    await attendreEcrituresConversations()
     expect(existsSync(conversationJournalPath(p))).toBe(false)
     expect(loadConversations(p).map((c) => c.id)).toEqual(expect.arrayContaining(ids))
     expect(avertissements).toBe(0)
   })
 
-  it('seule une SUPPRESSION journalisée les fait disparaître — en silence, comme le 05/10', () => {
+  it('seule une SUPPRESSION journalisée les fait disparaître — en silence, comme le 05/10', async () => {
     const p = join(dir, 'suppression.json')
-    const { store, quitter, ids, ancien } = sessionAvecFilsSeulementDansLeJournal(p)
+    const { store, quitter, ids, ancien } = await sessionAvecFilsSeulementDansLeJournal(p)
     expect(store.removeMany(ids)).toEqual(ids)
     quitter()
 
@@ -97,5 +105,6 @@ describe('relance avec journal présent (incident du 05/10 08:04)', () => {
     expect(avertissements).toBe(0)
     // Le plancher d'identifiants a tenu : un fil neuf ne réutilise pas un id supprimé.
     expect(ids).not.toContain(relance.create({ title: 'neuf', provider: 'claude' }).id)
+    await attendreEcrituresConversations()
   })
 })

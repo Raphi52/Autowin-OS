@@ -377,4 +377,109 @@ describe('relance réelle (bash + lancement survivable)', () => {
       temoin.kill()
     }
   }, 60_000)
+
+  /*
+   * MAIS LE RELAIS D'UNE AUTRE SESSION SE RECONNAIT, ET S'ARRETE. Mesure du 2026-10-19 (conv-359) :
+   * une boucle `until [ -f … ]` relancee a 15:15, Autowin redemarre ensuite ; a la duree maximale,
+   * « NON arrêtée » — et la boucle tournait encore a 17:16, sans fin possible (son fichier attendu
+   * avait ete supprime). Le relais porte dans sa ligne de commande le chemin de SON journal (base64,
+   * lot UUID) : un numero reattribue ne le porte pas. Le reconnaitre suffit pour l'arreter : la
+   * commande ENTIERE meurt avec lui (bash et ses enfants), sans preuve de sortie — le runner tombe
+   * avec son relais. D'ou la preuve par les processus encore vivants, retrouves par un jeton unique.
+   */
+  it.skipIf(process.platform !== 'win32')(
+    'au demarrage, un lot depasse ARRETE le relais d’une autre session quand il porte son journal',
+    async () => {
+      const { spawnSurvivable } = await import('../runs/survivable-spawn')
+      const { execFile } = await import('node:child_process')
+      const { randomUUID } = await import('node:crypto')
+      dossier = mkdtempSync(join(tmpdir(), 'relance-autre-session-'))
+      const journaux = join(dossier, 'journaux')
+      const jeton = `relance-${randomUUID()}`
+      const commande = `echo debut; sleep 120; echo fin # ${jeton}`
+      /** Processus dont la ligne de commande porte le jeton (la requete elle-meme ne le porte pas). */
+      const processusDeLaCommande = (): Promise<number> =>
+        new Promise((resolve, reject) =>
+          execFile(
+            'powershell.exe',
+            [
+              '-NoProfile',
+              '-Command',
+              'Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }'
+            ],
+            { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+            (erreur, stdout) =>
+              erreur
+                ? reject(erreur)
+                : resolve(
+                    String(stdout)
+                      .split(/\r?\n/)
+                      .filter((l) => l.includes(jeton)).length
+                  )
+          )
+        )
+      const run = spawnSurvivable({
+        bin: resoudreBash(),
+        args: argumentsBash(commande),
+        cwd: dossier,
+        runId: 'lot-ancien-a1',
+        journalRoot: journaux,
+        onJournalPrepared: () => {}
+      })
+      run.release()
+      const pidRelais = run.pid!
+      const vivant = (): boolean => {
+        try {
+          process.kill(pidRelais, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        // La commande TOURNE vraiment (comme 2 h apres son lancement), pas un runner encore en train
+        // de compiler : sans cela, le relais meurt avant que la commande n'existe.
+        const { readFileSync } = await import('node:fs')
+        for (let i = 0; i < 300; i++) {
+          if (readFileSync(run.journalPath!, 'utf8').includes('debut')) break
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        expect(readFileSync(run.journalPath!, 'utf8')).toContain('debut')
+        expect(await processusDeLaCommande()).toBeGreaterThan(0)
+        magasinLotsSurDisque(join(dossier, 'lots')).ecrire('lot-ancien', [
+          {
+            lot: 'lot-ancien',
+            conversationId: 'conv-a',
+            id: 'a1',
+            commande,
+            cwd: dossier,
+            debut: Date.now() - 3 * 60 * 60 * 1000,
+            journalPath: run.journalPath!,
+            pid: pidRelais
+          }
+        ])
+        const envois: string[] = []
+        // Une AUTRE instance du relanceur : celle d'une app redemarree, qui n'a rien lance.
+        await creerRelanceurSurDisque({
+          dossier,
+          conversationOccupee: () => false,
+          envoyerTour: async (_c, prompt) => void envois.push(prompt)
+        }).reprendreAuDemarrage()
+        expect(envois).toHaveLength(1)
+        expect(envois[0]).toContain('ARRÊTÉE —')
+        expect(envois[0]).not.toContain('NON arrêtée')
+        expect(vivant()).toBe(false)
+        // L'arbre ENTIER est tombe avec le relais : plus aucun bash ni `sleep` de la commande.
+        let restants = await processusDeLaCommande()
+        for (let i = 0; i < 10 && restants > 0; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          restants = await processusDeLaCommande()
+        }
+        expect(restants).toBe(0)
+      } finally {
+        if (vivant()) process.kill(pidRelais)
+      }
+    },
+    60_000
+  )
 })

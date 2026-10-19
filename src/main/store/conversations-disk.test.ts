@@ -243,7 +243,7 @@ describe('conversations-disk structured restart', () => {
     expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('fragment-final')
   })
 
-  it('compacte au redemarrage le journal rejoue dans un snapshot canonique', () => {
+  it('compacte au redemarrage le journal rejoue dans un snapshot canonique', async () => {
     const p = join(dir, 'startup-compaction.json')
     const first = new ConversationStore(() => 1000)
     persistConversations(first, p)
@@ -254,9 +254,46 @@ describe('conversations-disk structured restart', () => {
 
     const restarted = new ConversationStore(() => 2000)
     persistConversations(restarted, p)
+    // Hors du fil principal depuis conv-359 : la compaction est déposée, pas encore posée.
+    await attendreEcrituresConversations()
 
     expect(existsSync(journal)).toBe(false)
     expect(loadConversations(p)[0].messages[0].content).toBe('persisted once')
+  })
+
+  /*
+   * Mesure du 2026-10-19 (conv-359) : la réécriture de démarrage figeait l'app 432 ms (jusqu'à
+   * 923 ms) avant la fenêtre. Avec `compactionApres`, rien n'est réécrit avant le signal.
+   */
+  it('ne compacte qu’au signal `compactionApres`, et sans rien perdre entre-temps', async () => {
+    const p = join(dir, 'compaction-differee.json')
+    const first = new ConversationStore(() => 1000)
+    persistConversations(first, p)
+    const conversation = first.create({ title: 'Différée', provider: 'codex' })
+    first.append(conversation.id, { role: 'user', content: 'avant le redemarrage' })
+    await attendreEcrituresConversations()
+    const journal = `${p}.journal.jsonl`
+    const snapshotAvant = readFileSync(p, 'utf8')
+
+    let afficher: () => void = () => {}
+    const fenetre = new Promise<void>((resolve) => (afficher = resolve))
+    const restarted = new ConversationStore(() => 2000)
+    persistConversations(restarted, p, { compactionApres: fenetre })
+    restarted.append(conversation.id, { role: 'user', content: 'pendant le demarrage' })
+    await attendreEcrituresConversations()
+    // Avant l'affichage : snapshot intact, le journal porte tout.
+    expect(readFileSync(p, 'utf8')).toBe(snapshotAvant)
+    expect(existsSync(journal)).toBe(true)
+
+    afficher()
+    await fenetre
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await attendreEcrituresConversations()
+    expect(existsSync(journal)).toBe(false)
+    expect(loadConversations(p)[0].messages.map((m) => m.content)).toEqual([
+      'avant le redemarrage',
+      'pendant le demarrage'
+    ])
   })
 
   it('restores ordered parts, results and status after restart', () => {

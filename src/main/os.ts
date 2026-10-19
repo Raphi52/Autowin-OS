@@ -90,6 +90,7 @@ import {
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { defaultProcessIdentity, WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import { surveillerReferencesGit } from './store/surveillance-references-git'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { WorktreeRunStateStore } from './store/worktree-run-state'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
@@ -484,6 +485,9 @@ export class AutowinOS {
           // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
           deferRecoveryUntil: interfaceVisible,
           manager,
+          // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
+          // (conv-360) : sans lire git, seulement les fichiers de références sous `.git`.
+          surveillerReferences: (siChange) => surveillerReferencesGit(executionWorkspace, siChange),
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
           /**
            * PREVENIR quand un travail est abandonne. Verifie le 2026-08-23 : l'application ne

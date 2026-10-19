@@ -805,7 +805,9 @@ const persistanceConversations = {
   onArchivesChargees: (ajoutees: number) => {
     if (ajoutees > 0) broadcast({ type: 'refresh', scope: 'conversations' })
   },
-  archivage: { apresMs: 2 * 60_000, intervalleMs: 24 * 60 * 60_000 }
+  archivage: { apresMs: 2 * 60_000, intervalleMs: 24 * 60 * 60_000 },
+  // Réécriture de `conversations.json` (0,4 à 0,9 s mesurées, conv-359) : après la fenêtre.
+  compactionApres: interfaceVisible
 }
 
 let flushConversations: () => void

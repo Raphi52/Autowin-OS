@@ -196,6 +196,50 @@ describe('collectStdoutJournals — les sorties d erreur aussi', () => {
     }
   })
 
+  /*
+   * Mesure du 2026-10-19 (conv-359) : 3 452 `.exit.json` dans le vrai `run-stdout`, 3 341 sans leur
+   * journal, le plus ancien du 2 octobre — le menage ne les voyait pas.
+   */
+  it('supprime une preuve de sortie ORPHELINE et ancienne, garde celles qui servent encore', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
+    try {
+      const vieux = new Date(Date.now() - DEFAULT_MAX_AGE_MS - 60_000)
+      const recent = new Date(Date.now() - DEFAULT_ASSUME_DEAD_MS - 60_000)
+      const ecrire = (nom: string, contenu: string, date: Date): string => {
+        const chemin = join(root, nom)
+        writeFileSync(chemin, contenu)
+        utimesSync(chemin, date, date)
+        return chemin
+      }
+      const preuve = '{"type":"autowin.survivable-exit","exit_code":0}'
+      const orpheline = ecrire('a.stdout.jsonl.exit.json', preuve, vieux)
+      const orphelineRecente = ecrire('b.stdout.jsonl.exit.json', preuve, recent)
+      // Journal encore la (jeune) : sa preuve, meme ancienne, reste avec lui.
+      ecrire('c.stdout.jsonl', 'sortie', recent)
+      const accompagnee = ecrire('c.stdout.jsonl.exit.json', preuve, vieux)
+      // Journal ancien supprime DANS CE passage : sa preuve part avec lui.
+      const journalVieux = ecrire('d.stdout.jsonl', 'sortie', vieux)
+      const preuveDuVieux = ecrire('d.stdout.jsonl.exit.json', preuve, vieux)
+      // Journal attendu par une reservation : sa preuve est intouchable, meme journal absent.
+      const protegee = ecrire('e.stdout.jsonl.exit.json', preuve, vieux)
+
+      const outcome = await collectStdoutJournals(root, {
+        protectedPaths: [join(root, 'e.stdout.jsonl')]
+      })
+
+      expect(existsSync(orpheline)).toBe(false)
+      expect(existsSync(journalVieux)).toBe(false)
+      expect(existsSync(preuveDuVieux)).toBe(false)
+      expect(existsSync(orphelineRecente)).toBe(true)
+      expect(existsSync(accompagnee)).toBe(true)
+      expect(existsSync(protegee)).toBe(true)
+      expect(outcome.removed).toBe(3)
+      expect(outcome.freedBytes).toBe(preuve.length * 2 + 'sortie'.length)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('protege un .stderr.log encore ecrit (meme garde que la sortie standard)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
     try {

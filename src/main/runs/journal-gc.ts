@@ -174,7 +174,41 @@ export function planJournalGc(entries: JournalEntry[], policy: JournalGcPolicy):
   return [...doomed]
 }
 
+/** `x.stdout.jsonl.exit.json` → `x.stdout.jsonl` : la preuve de sortie porte le nom de son journal. */
+const SUFFIXE_PREUVE = '.exit.json'
+
+/**
+ * Decide quelles PREUVES DE SORTIE (`.exit.json`) supprimer. PUR.
+ *
+ * Mesure du 2026-10-19 (conv-359) : 3 452 preuves dans `run-stdout`, dont 3 341 sans leur journal et
+ * 2 915 de plus de 7 jours — rien ne les nettoyait, le menage ne prenait que les journaux. Une preuve
+ * ne vaut qu'AVEC son journal : elle dit qu'un appel a fini, le journal dit ce qu'il a rendu (seule,
+ * elle a laisse le run de conv-43 « fini mais illisible » — voir `protectedPaths`). Regle :
+ * - preuve dont le journal existe encore : intouchable, elle partira apres lui ;
+ * - preuve dont le journal est PROTEGE par une reservation : intouchable, meme journal absent ;
+ * - preuve orpheline : supprimee une fois plus vieille que la fenetre des journaux (7 jours), la
+ *   meme que celle du journal de tour qui pourrait encore y renvoyer.
+ */
+export function planExitProofGc(
+  proofs: readonly JournalEntry[],
+  journauxPresents: Iterable<string>,
+  policy: JournalGcPolicy
+): string[] {
+  const maxAgeMs = policy.maxAgeMs ?? DEFAULT_MAX_AGE_MS
+  const presents = new Set<string>()
+  for (const path of journauxPresents) presents.add(cleDeChemin(path))
+  for (const path of policy.protectedPaths ?? []) presents.add(cleDeChemin(path))
+  return proofs
+    .filter((proof) => {
+      if (!proof.path.endsWith(SUFFIXE_PREUVE)) return false
+      if (presents.has(cleDeChemin(proof.path.slice(0, -SUFFIXE_PREUVE.length)))) return false
+      return policy.nowMs - proof.modifiedMs > maxAgeMs
+    })
+    .map((proof) => proof.path)
+}
+
 export interface JournalGcOutcome {
+  /** Fichiers supprimes : journaux, sorties d'erreur et preuves de sortie orphelines. */
   removed: number
   freedBytes: number
 }
@@ -205,31 +239,55 @@ export async function collectStdoutJournals(
   }
 
   const entries: JournalEntry[] = []
+  const proofs: JournalEntry[] = []
   for (const name of names) {
     // Les DEUX sorties d'un run detache. Mesure conv-131 : seul `.stdout.jsonl` entrait dans le
     // nettoyage, si bien que les `.stderr.log` s'accumulaient sans limite d'age ni de nombre.
-    if (!name.endsWith('.stdout.jsonl') && !name.endsWith('.stderr.log')) continue
+    // Et leurs preuves de sortie, dans le meme cas jusqu'au 2026-10-19 (`planExitProofGc`).
+    const preuve = name.endsWith(SUFFIXE_PREUVE)
+    if (!preuve && !name.endsWith('.stdout.jsonl') && !name.endsWith('.stderr.log')) continue
     const path = join(root, name)
     try {
       const infos = await stat(path)
       if (!infos.isFile()) continue
-      entries.push({ path, size: infos.size, modifiedMs: infos.mtimeMs })
+      const lu = { path, size: infos.size, modifiedMs: infos.mtimeMs }
+      if (preuve) proofs.push(lu)
+      else entries.push(lu)
     } catch {
       /* disparu entre le listing et le stat : rien a faire */
     }
   }
 
+  const nowMs = Date.now()
   const inventaire = new Map(entries.map((entry) => [entry.path, entry]))
+  const journauxSupprimes = new Set<string>()
   let removed = 0
   let freedBytes = 0
-  for (const path of planJournalGc(entries, { nowMs: Date.now(), ...policy })) {
+  for (const path of planJournalGc(entries, { nowMs, ...policy })) {
     try {
       const avant = inventaire.get(path)
       const maintenant = await stat(path)
       if (maintenant.mtimeMs !== avant?.modifiedMs || maintenant.size !== avant?.size) continue
       await rm(path, { force: true })
+      journauxSupprimes.add(path)
       removed += 1
       freedBytes += avant?.size ?? 0
+    } catch {
+      /* verrouille ou deja parti : le prochain passage s'en chargera */
+    }
+  }
+
+  // APRES les journaux : une preuve dont le journal vient de partir est orpheline des CE passage.
+  // Une preuve n'est ecrite qu'une fois, a la fin de son appel : pas de relecture avant suppression.
+  const journauxPresents = entries
+    .map((entry) => entry.path)
+    .filter((path) => !journauxSupprimes.has(path))
+  const tailles = new Map(proofs.map((proof) => [proof.path, proof.size]))
+  for (const path of planExitProofGc(proofs, journauxPresents, { nowMs, ...policy })) {
+    try {
+      await rm(path, { force: true })
+      removed += 1
+      freedBytes += tailles.get(path) ?? 0
     } catch {
       /* verrouille ou deja parti : le prochain passage s'en chargera */
     }

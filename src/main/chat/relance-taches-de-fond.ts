@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import {
   appendFileSync,
@@ -96,8 +97,11 @@ export interface DependancesRelance {
   codeDeSortie(journalPath: string): number | undefined
   /** Fin de la sortie (stdout + stderr fusionnés). */
   lireSortie(journalPath: string): string
-  /** Rend `false` quand elle n'arrete RIEN (processus pas lance par cette session). */
-  arreter(pid: number | undefined): boolean | void
+  /**
+   * Rend `false` quand elle n'arrete RIEN : processus ni lance par cette session, ni reconnu comme
+   * le relais de CE journal (pid peut-etre reattribue depuis un redemarrage).
+   */
+  arreter(pid: number | undefined, journalPath?: string): boolean | void | Promise<boolean | void>
   conversationOccupee(conversationId: string): boolean
   envoyerTour(conversationId: string, prompt: string): Promise<unknown>
   magasin: MagasinLots
@@ -126,7 +130,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
   /** `conversation:task_id` déjà relancés : une tâche signalée deux fois ne part qu'une fois. */
   const dejaRelancees = new Set<string>()
 
-  const issueDe = (tache: TacheRelancee): IssueTacheRelancee | undefined => {
+  const issueDe = async (tache: TacheRelancee): Promise<IssueTacheRelancee | undefined> => {
     if (tache.erreurDemarrage || !tache.journalPath)
       return { type: 'non-demarree', erreur: tache.erreurDemarrage ?? 'aucun journal de sortie' }
     const code = deps.codeDeSortie(tache.journalPath)
@@ -134,7 +138,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
     if (maintenant() - tache.debut >= limiteMs) {
       let arretee = false
       try {
-        arretee = deps.arreter(tache.pid) !== false
+        arretee = (await deps.arreter(tache.pid, tache.journalPath)) !== false
       } catch (erreur) {
         journaliser(`[taches de fond] arrêt impossible de « ${tache.commande} »`, erreur)
       }
@@ -159,11 +163,11 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
         })
     const issues = new Map<number, IssueTacheRelancee>()
     for (;;) {
-      taches.forEach((tache, index) => {
-        if (issues.has(index)) return
-        const issue = issueDe(tache)
+      for (const [index, tache] of taches.entries()) {
+        if (issues.has(index)) continue
+        const issue = await issueDe(tache)
         if (issue) issues.set(index, issue)
-      })
+      }
       if (issues.size === taches.length) break
       await attendre(intervalleMs)
     }
@@ -253,7 +257,7 @@ export function composerPromptDeReprise(resultats: readonly ResultatTacheRelance
         : r.issue.type === 'duree-depassee'
           ? r.issue.arretee
             ? `ARRÊTÉE — durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min), résultat incomplet`
-            : `durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min) — NON arrêtée : lancée avant le redémarrage d’Autowin, son numéro de processus a pu être réattribué ; résultat incomplet`
+            : `durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min) — NON arrêtée : lancée avant le redémarrage d’Autowin, et son numéro de processus ne désigne plus son relais (réattribué ou introuvable) ; résultat incomplet`
           : `NON DÉMARRÉE — ${r.issue.erreur}`
     const sortie =
       r.sortie.length > FIN_DE_SORTIE_CARACTERES
@@ -349,6 +353,39 @@ export function lireFinDeFichier(chemin: string, octets = 16 * 1024): string {
 }
 
 /**
+ * Le relais Windows recoit le chemin de son journal en base64 (`invocationRelais`,
+ * runs/survivable-spawn.ts). Ce chemin contient l'UUID du lot : un processus qui le porte EST le
+ * relais de cette tache, un numero reattribue a un autre programme ne le porte pas.
+ */
+export function relaisDeCeJournal(ligneDeCommande: string, journalPath: string): boolean {
+  return ligneDeCommande.includes(Buffer.from(journalPath, 'utf8').toString('base64'))
+}
+
+/**
+ * Ligne de commande d'un processus, SANS tenir la boucle d'evenements : PowerShell coute 1 a 3 s, et
+ * davantage quand le disque D: sature. Appelee une seule fois par tache, a sa duree maximale.
+ * Hors Windows il n'y a pas de relais (le pid est la commande elle-meme) : rien a reconnaitre.
+ */
+export function ligneDeCommandeDuProcessus(pid: number): Promise<string | undefined> {
+  if (process.platform !== 'win32' || !Number.isInteger(pid) || pid <= 0)
+    return Promise.resolve(undefined)
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine`
+      ],
+      { windowsHide: true, timeout: 60_000 },
+      (erreur, stdout) => resolve(erreur ? undefined : String(stdout).trim() || undefined)
+    )
+  })
+}
+
+/**
  * Le relanceur câblé sur le vrai système : bash, lancement survivable (journal + preuve de sortie
  * `.exit.json` écrite par le relais, même app fermée), lots dans `dossier/lots`.
  */
@@ -356,6 +393,8 @@ export function creerRelanceurSurDisque(entree: {
   dossier: string
   conversationOccupee: (conversationId: string) => boolean
   envoyerTour: (conversationId: string, prompt: string) => Promise<unknown>
+  /** Pour les tests : la ligne de commande d'un processus, `undefined` s'il n'existe pas. */
+  ligneDeCommande?: (pid: number) => Promise<string | undefined>
 }): RelanceurTachesDeFond {
   const journaux = join(entree.dossier, 'journaux')
   /** Pids des relais lances par CETTE session : les seuls qu'on peut arreter sans risque. */
@@ -403,9 +442,19 @@ export function creerRelanceurSurDisque(entree: {
     // Journal efface parce que VIDE : la commande n'a rien ecrit, ce n'est pas une sortie illisible.
     lireSortie: (journalPath) => (existsSync(journalPath) ? lireFinDeFichier(journalPath) : ''),
     // Un pid lu sur disque apres un redemarrage a pu etre donne a un AUTRE programme : on ne tue que
-    // ce que cette session a lance (test « ne tue JAMAIS un pid lance par une autre session »).
-    arreter: (pid) => {
-      if (!pid || !lancesIci.has(pid)) return false
+    // ce que cette session a lance (test « ne tue JAMAIS un pid lance par une autre session »)...
+    // ...OU le relais qui porte encore, dans sa ligne de commande, le chemin de CE journal. Sans ce
+    // second cas, une commande relancee avant un redemarrage n'etait plus jamais arretee : mesure du
+    // 2026-10-19 (conv-359), une boucle d'attente tournait encore 2 h apres sa duree maximale. Tuer
+    // le relais suffit : la commande entiere tombe avec lui, bash et sous-processus compris (test
+    // « ARRETE le relais d'une autre session » : zero processus restant), sans preuve de sortie.
+    arreter: async (pid, journalPath) => {
+      if (!pid) return false
+      if (!lancesIci.has(pid)) {
+        if (!journalPath) return false
+        const ligne = await (entree.ligneDeCommande ?? ligneDeCommandeDuProcessus)(pid)
+        if (!ligne || !relaisDeCeJournal(ligne, journalPath)) return false
+      }
       process.kill(pid)
       return true
     },

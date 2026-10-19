@@ -163,6 +163,16 @@ export interface RunWorktreeCoordinatorDeps {
    * arrivait alors à 26 047 ms. Le blocage avait été déplacé, pas supprimé. Voir `startup-gate.ts`.
    */
   deferRecoveryUntil?: Promise<unknown>
+  /**
+   * Surveille les références git du dépôt et appelle `siChange` quand elles bougent ; rend la
+   * fonction qui arrête la surveillance (`surveillance-references-git.ts`).
+   *
+   * Sans elle, la liste des travaux non publiés ne se refait que sur NOS gestes (fin de run,
+   * publication, tri) : une référence supprimée ou créée en ligne de commande y restait figée
+   * jusqu'au redémarrage — constaté le 2026-10-19 (conv-360) après un /salvage. Absente = ce
+   * comportement d'avant, gardé pour les tests qui n'ont pas de dépôt.
+   */
+  surveillerReferences?: (siChange: () => void) => (() => void) | undefined
 }
 
 interface Tracked {
@@ -362,6 +372,7 @@ export class RunWorktreeCoordinator {
     this.preparerCopie = deps.preparerCopie
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
+    this.arreterSurveillance = deps.surveillerReferences?.(() => this.referencesGitChangees())
     /*
      * ARMER LE FILET DES LA CONSTRUCTION, et pas depuis un point de cablage lointain.
      *
@@ -1454,6 +1465,39 @@ export class RunWorktreeCoordinator {
     a: number
     ids: Set<string>
     apercu: Map<string, { date: string; fichiers: string[] }>
+    /** L'état des références git que ce relevé a lu (cf. `generationReferences`). */
+    generation: number
+  }
+
+  /**
+   * Compte les changements de références git vus par la surveillance. Un relevé fait sous une
+   * génération plus ancienne a lu un dépôt qui n'existe plus : il est PÉRIMÉ.
+   */
+  private generationReferences = 0
+  private arreterSurveillance?: () => void
+
+  /**
+   * Les références git ont bougé — geste de l'app OU geste fait à la main en ligne de commande.
+   *
+   * Défaut du 2026-10-19 (conv-360) : un /salvage supprime treize références par
+   * `git update-ref -d`, et `get_state` liste encore l'une d'elles. Rien ne refaisait le relevé :
+   * ses seuls déclencheurs étaient nos propres gestes. On écoute maintenant le dépôt lui-même.
+   *
+   * Le relevé est relancé TOUT DE SUITE quand une liste est déjà servie, pour que l'écran se mette
+   * à jour sans attendre une lecture. Sans liste servie, la prochaine lecture le fera : inutile de
+   * le payer avant.
+   */
+  referencesGitChangees(): void {
+    this.generationReferences++
+    if (this.cacheNonPublies && this.manager.recensementNonPubliesAsync) {
+      this.demanderRecensement()
+    }
+  }
+
+  /** Arrête la surveillance des références — fermeture, ou test qui ne veut pas de veilleur vivant. */
+  arreterLaSurveillanceDesReferences(): void {
+    this.arreterSurveillance?.()
+    this.arreterSurveillance = undefined
   }
 
   /**
@@ -1491,9 +1535,15 @@ export class RunWorktreeCoordinator {
      * publication, tri d'un travail). Le commentaire de `invaliderRecensement` le dit lui-même —
      * « la TTL est un pari sur le temps ; la fin d'un run est un fait connu d'ici ». Ce pari coûtait
      * 18 secondes de fenêtre morte par minute, pour une réponse que rien n'avait rendue fausse.
+     *
+     * RÉSERVE établie le 2026-10-19 (conv-360) : ces appels ne couvraient que NOS gestes. Un geste
+     * git fait à la main (`git update-ref -d`, une branche supprimée) laissait la liste figée.
+     * C'est la surveillance des références (`referencesGitChangees`) qui couvre ce fait-là — un
+     * événement du dépôt, toujours pas une horloge.
      */
-    if (this.cacheNonPublies) {
-      return { ids: this.cacheNonPublies.ids, apercu: this.cacheNonPublies.apercu }
+    const cache = this.cacheNonPublies
+    if (cache && cache.generation === this.generationReferences) {
+      return { ids: cache.ids, apercu: cache.apercu }
     }
     /*
      * CACHE FROID = LE GEL DE 14 SECONDES.
@@ -1510,8 +1560,17 @@ export class RunWorktreeCoordinator {
      */
     if (this.manager.recensementNonPubliesAsync) {
       this.demanderRecensement()
-      return { ids: new Set<string>(), apercu: new Map() }
+      /*
+       * Relevé PÉRIMÉ par un changement de références : on rend l'ANCIEN pendant que le nouveau se
+       * fait. Une liste vide ferait répondre « rien à fusionner » à un agent qui lirait entre les
+       * deux — le défaut d'origine que `invaliderRecensement` décrit. L'écart dure le temps d'un
+       * relevé, et `demanderRecensement` ré-émet l'activité dès qu'il est posé.
+       */
+      return cache
+        ? { ids: cache.ids, apercu: cache.apercu }
+        : { ids: new Set<string>(), apercu: new Map() }
     }
+    const generation = this.generationReferences
     /*
      * UN RUN QUI TOURNE N'EST PAS UN TRAVAIL OUBLIE.
      *
@@ -1541,7 +1600,7 @@ export class RunWorktreeCoordinator {
         { date: entree.date, fichiers: entree.fichiers }
       ])
     )
-    this.cacheNonPublies = { a: maintenant, ids, apercu }
+    this.cacheNonPublies = { a: maintenant, ids, apercu, generation }
     return { ids, apercu }
   }
 
@@ -1915,6 +1974,8 @@ export class RunWorktreeCoordinator {
 
   private demanderRecensement(): void {
     if (this.recensementEnVol) return
+    // L'état des références AU DÉPART du relevé : c'est lui que le relevé aura lu.
+    const generation = this.generationReferences
     const releve = this.manager.recensementNonPubliesAsync?.('HEAD', 6)
     if (!releve) return
     this.recensementEnVol = releve
@@ -1927,7 +1988,8 @@ export class RunWorktreeCoordinator {
         this.cacheNonPublies = {
           a: this.now(),
           ids: new Set(r.ids.filter((agentId) => !enCours.has(agentId))),
-          apercu: new Map(r.apercu.map((e) => [e.agentId, { date: e.date, fichiers: e.fichiers }]))
+          apercu: new Map(r.apercu.map((e) => [e.agentId, { date: e.date, fichiers: e.fichiers }])),
+          generation
         }
         this.emit()
       })
@@ -1937,6 +1999,10 @@ export class RunWorktreeCoordinator {
       })
       .finally(() => {
         this.recensementEnVol = undefined
+        // Les références ont bougé PENDANT le relevé : il a lu un dépôt déjà dépassé. Un seul
+        // relevé en vol à la fois oblige à le refaire ici, sinon la suppression attendrait le
+        // prochain changement pour apparaître.
+        if (generation !== this.generationReferences) this.demanderRecensement()
       })
   }
 

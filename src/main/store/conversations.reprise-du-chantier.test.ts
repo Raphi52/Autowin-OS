@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
-import { persistConversations } from './conversations-disk'
+import { attendreEcrituresConversations, persistConversations } from './conversations-disk'
 
 /**
  * UN SEUL message « Reprise du fil » PAR CHANTIER, mis à jour au lieu d'être empilé.
@@ -53,7 +53,7 @@ describe('ConversationStore — reprise du fil d’un chantier', () => {
     ])
   })
 
-  it('le repère du chantier SURVIT au rechargement du disque — sinon chaque redémarrage réempilerait', () => {
+  it('le repère du chantier SURVIT au rechargement du disque — sinon chaque redémarrage réempilerait', async () => {
     const p = join(dir, 'conversations.json')
     const avant = new ConversationStore(() => 1000)
     persistConversations(avant, p)
@@ -68,7 +68,9 @@ describe('ConversationStore — reprise du fil d’un chantier', () => {
     )
     expect(apres.get(c.id)!.messages.map((m) => m.content)).toEqual(['reprise 1 + 2'])
 
-    // Et la mise à jour elle-même est écrite : un troisième démarrage la relit.
+    // Et la mise à jour elle-même est écrite : un troisième démarrage la relit. Les écritures de la
+    // session précédente sont posées d'abord (compaction de démarrage hors du fil principal, conv-359).
+    await attendreEcrituresConversations()
     const encoreApres = new ConversationStore(() => 3000)
     persistConversations(encoreApres, p)
     expect(encoreApres.get(c.id)!.messages.map((m) => m.content)).toEqual(['reprise 1 + 2'])

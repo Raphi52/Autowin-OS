@@ -963,6 +963,12 @@ export function persistConversations(
      * Absente (tests) : aucune minuterie, la passe ne part que sur appel explicite d'`archiver`.
      */
     archivage?: { apresMs: number; intervalleMs: number; seuilMs?: number }
+    /**
+     * La compaction de démarrage (snapshot réécrit, journal effacé) n'est DÉPOSÉE qu'à la résolution
+     * de cette promesse — en production, l'affichage de la fenêtre. Absente (tests) : déposée tout
+     * de suite, et `attendreEcrituresConversations` l'attend.
+     */
+    compactionApres?: PromiseLike<unknown>
   }
 ): PersistanceConversations {
   const journalPresentAtStartup = existsSync(conversationJournalPath(path))
@@ -1380,13 +1386,36 @@ export function persistConversations(
   // Le replay est amorti sur le démarrage : une fois hydraté, le journal devient un snapshot
   // canonique puis repart vide. Il ne grossit donc pas à travers les sessions et chaque delta de la
   // session courante reste limité à la seule conversation touchée.
-  if (migrated || journalPresentAtStartup) saveConversations(actives(), path)
-  else if (!existsSync(path)) writeConversationSnapshot([], path)
+  //
+  // HORS DU FIL PRINCIPAL, et APRÈS l'affichage quand l'appelant le demande (`compactionApres`).
+  // Mesure du 2026-10-19 (conv-359, 23,7 Mo, 232 fils) : cette réécriture synchrone figeait le
+  // démarrage 432 ms en médiane, jusqu'à 923 ms — 120 ms de sérialisation, le reste en écriture
+  // sur le disque D: mécanique. Elle passe par la MÊME file que le journal (`reecrireSnapshot`) :
+  // un lot écrit avant elle est absorbé, un lot écrit après rejoint le journal neuf. Son échec ne
+  // perd rien : le journal n'est effacé qu'APRÈS un snapshot posé, il reste donc la référence et
+  // le prochain démarrage recompacte. Et il ne met plus l'historique de côté : la version
+  // synchrone levait, et `index.ts` ouvrait alors l'app sur un historique VIDE pour un simple
+  // fichier tenu (cas vécu : `.tmp` resté en dossier, conv-914).
+  if (migrated || journalPresentAtStartup) {
+    const compacter = (): void => {
+      void reecrireSnapshot().catch((erreur: unknown) =>
+        console.warn(
+          '[conversations] compaction de démarrage en échec — le journal reste la référence, ' +
+            'nouvel essai au prochain démarrage',
+          erreur
+        )
+      )
+    }
+    if (options?.compactionApres)
+      void Promise.resolve(options.compactionApres).then(compacter, compacter)
+    else compacter()
+  } else if (!existsSync(path)) writeConversationSnapshot([], path)
 
-  // RIEN ne part en arrière-plan avant que l'écriture de démarrage ait RÉUSSI. Si elle lève,
-  // l'appelant met ce store de côté et rebranche une persistance neuve (`index.ts`) : des tâches
-  // laissées par celle-ci écriraient alors le même fichier en parallèle de la nouvelle, ou
-  // retireraient des archives dont la seule autre copie vient d'être mise de côté.
+  // RIEN ne part en arrière-plan avant que le démarrage SYNCHRONE ait réussi (lecture, premier
+  // snapshot vide). S'il lève, l'appelant met ce store de côté et rebranche une persistance neuve
+  // (`index.ts`) : des tâches laissées par celle-ci écriraient alors le même fichier en parallèle
+  // de la nouvelle, ou retireraient des archives dont la seule autre copie vient d'être mise de
+  // côté. La compaction, elle, ne lève plus ici : en échec, le journal garde tout.
   if (archivees.size > 0) {
     // FENÊTRE DE RELECTURE : jusqu'à ce que les archives soient dans le store, un fil archivé
     // demandé par son id (tâche planifiée liée à un vieux fil, `chat_send` d'un agent) est lu À LA
