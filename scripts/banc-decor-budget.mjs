@@ -82,7 +82,27 @@ export function resumerImages(images) {
     triangles: champ('triangles'),
     msFilDuDecor: champ('ms'),
     msCarteGraphique: champ('gpu'),
-    imagesAvecReflet: pleines.filter((i) => i.dessinsReflet > 0).length
+    imagesAvecReflet: pleines.filter((i) => i.dessinsReflet > 0).length,
+    ...regulariteAffichage(pleines)
+  }
+}
+
+/**
+ * LA RÉGULARITÉ DES IMAGES (conv-347, « pas assez lissé ») : une image s'affiche à la fin de la tâche
+ * qui la dessine (`finEcran`, la passe écran). Des écarts qui alternent 33 / 67 ms se voient, même à
+ * cadence moyenne correcte. `regularite` = part des écarts à moins de 8 ms (un demi-battement 60 Hz)
+ * de l'écart médian. Limite : dans l'instance cachée, le screencast cadence la page à 40-57 images/s,
+ * pas 60 — les battements y sont eux-mêmes irréguliers, la mesure y reste donc pessimiste.
+ */
+export function regulariteAffichage(images) {
+  const fins = images.map((i) => i.finEcran ?? i.fin).filter((t) => typeof t === 'number')
+  const ecarts = fins.slice(1).map((t, k) => t - fins[k])
+  const stats = statistiques(ecarts)
+  if (!stats) return { ecartsAffichage: null, regulariteAffichage: null }
+  const proches = ecarts.filter((x) => Math.abs(x - stats.mediane) <= 8).length
+  return {
+    ecartsAffichage: stats,
+    regulariteAffichage: Math.round((100 * proches) / ecarts.length) / 100
   }
 }
 
@@ -257,12 +277,34 @@ export const ESPION = `(() => {
     const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT)
     B.attente = B.attente.filter(([q, img]) => {
       if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) return true
-      if (!disjoint) img.gpu = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6
+      // une image peut porter deux mesures (passe écran, puis son reflet) : elles s'additionnent
+      if (!disjoint) img.gpu = (img.gpu ?? 0) + gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6
       gl.deleteQuery(q)
       return false
     })
   }
   const enrober = (f) => function (e) {
+    // LE REFLET APRÈS L'IMAGE (conv-347) : le Worker le dessine dans la tâche qui SUIT l'image, par
+    // ce même point d'entrée. Il est compté avec son image (dessins, temps), sinon le banc verrait un
+    // faux gain ; finEcran garde la fin de la passe écran, quand l'image s'affiche.
+    if (e && e.data && e.data.type === 'reflet') {
+      const img = B.images[B.images.length - 1]
+      if (!img) return f.call(this, e)
+      B.courante = img
+      B.horsEcran = false
+      let q = null
+      if (B.gl && B.ext) { q = B.gl.createQuery(); B.gl.beginQuery(B.ext.TIME_ELAPSED_EXT, q) }
+      const t0 = performance.now()
+      try {
+        return f.call(this, e)
+      } finally {
+        img.ms += performance.now() - t0
+        img.fin = maintenant()
+        if (q) { B.gl.endQuery(B.ext.TIME_ELAPSED_EXT); B.attente.push([q, img]) }
+        B.courante = null
+        relever()
+      }
+    }
     if (!e || !e.data || e.data.type !== 'image') return f.call(this, e)
     const img = { debut: maintenant(), fin: 0, ms: 0, gpu: null, dessins: 0, dessinsReflet: 0, programmes: 0, programmesReflet: 0, triangles: 0, trianglesReflet: 0, paires: B.analyse ? {} : null }
     if (B.tempsFige !== undefined && e.data) e.data.temps = B.tempsFige
@@ -277,6 +319,7 @@ export const ESPION = `(() => {
     } finally {
       img.ms = performance.now() - t0
       img.fin = maintenant()
+      img.finEcran = img.fin
       if (q) { B.gl.endQuery(B.ext.TIME_ELAPSED_EXT); B.attente.push([q, img]) }
       B.courante = null
       B.images.push(img)

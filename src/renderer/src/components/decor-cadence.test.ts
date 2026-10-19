@@ -53,6 +53,48 @@ describe('la cadence du décor de fond', () => {
   })
 })
 
+describe('la cadence d un décor dessiné dans son propre fil (conv-347)', () => {
+  const BATTEMENT = 1000 / 60
+  const palierApres = (couts: number[]): number => {
+    const c = creerCadence()
+    for (const ms of couts) c.noterCout(ms, 'dedie')
+    return c.intervalle()
+  }
+
+  it('le coût du Worker règle l intervalle, en battements entiers d écran (33, 50, 67 ms…)', () => {
+    expect(palierApres(Array(20).fill(12))).toBeCloseTo(2 * BATTEMENT, 5)
+    expect(palierApres(Array(20).fill(36))).toBeCloseTo(3 * BATTEMENT, 5)
+    // reflet une image sur deux : c'est l'image LOURDE qui compte, pas la moyenne
+    expect(palierApres(Array.from({ length: 20 }, (_, i) => (i % 2 ? 52 : 30)))).toBeCloseTo(
+      4 * BATTEMENT,
+      5
+    )
+  })
+
+  it('un pic isolé ne change pas le palier', () => {
+    const couts = Array(20).fill(12)
+    couts[7] = 480
+    expect(palierApres(couts)).toBeCloseTo(2 * BATTEMENT, 5)
+  })
+
+  it('hystérésis : le palier ne redescend que si le coût passe nettement dessous', () => {
+    const c = creerCadence()
+    for (let i = 0; i < 20; i++) c.noterCout(40, 'dedie') // 50 ms → 3 battements
+    expect(c.intervalle()).toBeCloseTo(3 * BATTEMENT, 5)
+    for (let i = 0; i < 20; i++) c.noterCout(26, 'dedie') // 32,5 ms : tout juste sous 33 → reste
+    expect(c.intervalle()).toBeCloseTo(3 * BATTEMENT, 5)
+    for (let i = 0; i < 20; i++) c.noterCout(18, 'dedie') // 22,5 ms : nettement dessous → 30 i/s
+    expect(c.intervalle()).toBeCloseTo(2 * BATTEMENT, 5)
+  })
+
+  it('le coût d un fil dédié ne réclame pas la moitié de l interface : 30 ms ne divise pas la cadence par deux', () => {
+    const c = creerCadence()
+    for (let i = 0; i < 20; i++) c.noterCout(24, 'dedie')
+    // règle du fil principal : 24 / 0,5 = 48 ms ; fil dédié : 24 / 0,8 = 30 → 2 battements
+    expect(c.intervalle()).toBeCloseTo(2 * BATTEMENT, 5)
+  })
+})
+
 describe('la cadence au repos (conv-337)', () => {
   const compter = (hz: number, secondes: number, auRepos: (t: number) => boolean): number => {
     const c = creerCadence()

@@ -5,6 +5,7 @@ import {
   delai,
   evaluerSeuils,
   lire,
+  regulariteAffichage,
   resumerImages,
   SEUILS_PAR_DEFAUT,
   statistiques
@@ -21,6 +22,24 @@ describe('banc-decor-budget — partie pure', () => {
     expect(statistiques([])).toBeNull()
     const s = statistiques([5, 1, 3, 2, 4, Number.NaN])
     expect(s).toMatchObject({ n: 5, moyenne: 3, mediane: 3, min: 1, max: 5 })
+  })
+
+  it('regulariteAffichage : 33 / 67 ms en alternance = irrégulier ; 50 ms tenus = régulier (conv-347)', () => {
+    const fins = (ecarts) => ecarts.reduce((t, e) => [...t, t[t.length - 1] + e], [0])
+    const alterne = regulariteAffichage(
+      fins(Array.from({ length: 40 }, (_, i) => (i % 2 ? 66.7 : 33.3))).map((f) => ({
+        finEcran: f
+      }))
+    )
+    expect(alterne.regulariteAffichage).toBeLessThanOrEqual(0.55)
+    const tenu = regulariteAffichage(
+      fins(Array.from({ length: 40 }, (_, i) => 50 + (i % 3) - 1)).map((f) => ({ finEcran: f }))
+    )
+    expect(tenu.regulariteAffichage).toBe(1)
+    expect(tenu.ecartsAffichage.mediane).toBe(50)
+    // sans finEcran (ancienne mesure), la fin de l'image sert
+    expect(regulariteAffichage([{ fin: 0 }, { fin: 40 }]).ecartsAffichage.n).toBe(1)
+    expect(regulariteAffichage([]).regulariteAffichage).toBeNull()
   })
 
   it('resumerImages : les images sans dessin (rue pas compilée) ne comptent pas', () => {
