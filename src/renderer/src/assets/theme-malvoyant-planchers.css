@@ -123,6 +123,12 @@
   color: var(--text);
 }
 
+/* components/Bloc3D.css — tailles */
+:root[data-theme^='malvoyant-'] .bloc-3d__nom,
+:root[data-theme^='malvoyant-'] .bloc-3d__barre button {
+  font-size: 13px;
+}
+
 /* components/BrainMarkdown.css — tailles */
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
@@ -640,12 +646,14 @@
   font-size: 13px;
 }
 
+/* components/JugesPanel.css — tailles */
+:root[data-theme^='malvoyant-'] .jpan-suivi,
+:root[data-theme^='malvoyant-'] .jpan-juge-absent {
+  font-size: 13px;
+}
+
 /* components/JugesPanel.css — gris en dur */
-:root[data-theme^='malvoyant-'] .jpan-compte,
-:root[data-theme^='malvoyant-'] .jpan-juge,
-:root[data-theme^='malvoyant-'] .jpan-q li,
-:root[data-theme^='malvoyant-'] .jpan-cout,
-:root[data-theme^='malvoyant-'] .jpan-verdict p {
+:root[data-theme^='malvoyant-'] .jpan-verdict.is-valide {
   color: var(--text);
 }
 

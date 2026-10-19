@@ -362,6 +362,118 @@
   border-top: 0;
 }
 
+/* PILE D'IMAGES (conv-332, 2026-10-18 : « implémente la 2 + 6 quand déployed », ArtifactPile.tsx).
+   La carte de devant est une capsule ordinaire (classes `thinking-block cadre-anneau`) : seul le
+   reste est dessiné ici, et UNIQUEMENT avec les jetons du thème — les deux couleurs des capsules,
+   le voile, le texte — pour rester juste en sombre comme en clair. */
+.artifact-pile {
+  --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
+  --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
+  width: min(100%, 720px);
+  margin: 2px 0 6px;
+}
+.artifact-pile > .thinking-block.cadre-anneau {
+  width: 100%;
+  margin: 0;
+}
+/* Pastille « +N » : les autres images de la pile, en aplat dégradé des capsules. */
+.artifact-pile__compte {
+  flex: none;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background-image: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
+  color: var(--on-accent);
+  -webkit-text-fill-color: var(--on-accent);
+  font: 700 0.92em/1.5 var(--mono, ui-monospace, Consolas, monospace);
+}
+/* Les deux bords qui dépassent sous la carte de devant : un U creux de 2 px, le même calque évidé
+   par masque que le bord des capsules (anneau-activite.css), de plus en plus étroit et pâle. */
+.artifact-pile__tranches {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.artifact-pile__tranches > span {
+  box-sizing: border-box;
+  height: 6px;
+  padding: 0 2px 2px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.artifact-pile__tranches > span:first-child {
+  width: 95%;
+  opacity: 0.8;
+}
+.artifact-pile__tranches > span:last-child {
+  width: 90%;
+  opacity: 0.5;
+}
+/* DÉPLOYÉE : la planche contact, dans le cadre, alignée sur les deux lignes de l'en-tête. */
+.artifact-pile__planche {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0 0.85em 0.7em 3.5em;
+}
+.artifact-pile__vignette {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+}
+.artifact-pile__apercu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(var(--voile-rgb), 0.06);
+  box-shadow: inset 0 0 0 1px rgba(var(--voile-rgb), 0.16);
+}
+.artifact-pile__apercu > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.artifact-pile__vignette:hover .artifact-pile__apercu,
+.artifact-pile__vignette:focus-visible .artifact-pile__apercu {
+  box-shadow: inset 0 0 0 1.5px var(--capsule-chaud);
+}
+.artifact-pile__vignette:focus-visible {
+  outline: none;
+}
+.artifact-pile__erreur {
+  padding: 0 6px;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  text-align: center;
+}
+.artifact-pile__legende {
+  overflow: hidden;
+  color: var(--text-dim);
+  font: 0.88em/1.4 var(--mono, ui-monospace, Consolas, monospace);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.artifact-pile__legende > b {
+  color: var(--text);
+}
+
 /* LECTEUR VIDÉO IMAGE PAR IMAGE (conv-253, 2026-10-11) : la vidéo, puis une barre sous elle —
    ±1 s / ±1 image, temps au centième + « image N/total », et « Pointer ce moment ». Le corps de la
    carte est borné à 430 px : la vidéo cède 90 px pour que la barre reste visible sans défilement.

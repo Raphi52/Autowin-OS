@@ -871,15 +871,26 @@ export const CATALOG: CommandSpec[] = [
      * par AUCUN outil : la rétrospective etait branchee pour l'oeil, pas pour le modele qui analyse.
      *
      * Lit le store VIVANT (`os.conversations`), jamais le fichier : c'est la seule source a jour.
+     *
+     * Defaut vecu le 2026-10-19 (conv-335) : pour relire SON propre fil, l'agent a lance un
+     * `node -e` sur `conversations.json`, n'y a pas trouve le fil (cree a 23:30, fichier ecrit a
+     * 09:06), et a annonce a l'utilisateur que « le fichier sur disque a du retard » — formule
+     * reprise de cette description. Le fil etait pourtant sur le disque, dans le journal : le
+     * snapshot n'est reecrit qu'au demarrage ou quand le journal depasse 16 Mo
+     * (`JOURNAL_MAX_BYTES`, store/conversations-disk.ts). La description dit donc OU vit un fil
+     * recent, et que cet outil vaut aussi pour la conversation en cours.
      */
     name: 'conversation_read',
     description:
-      "Lire le CONTENU REEL d'une autre conversation (ses messages), depuis l'etat vivant de l'app. " +
-      'Appelle-le des que la demande cite une conversation : « la derniere conversation », ' +
-      "« conv-1291 », « compare avec ce qu'on a dit hier », une retrospective ou une analyse " +
-      "comparative. L'etat general n'expose que des titres tronques, et le fichier sur disque peut " +
-      'avoir des heures de retard. Ne reponds JAMAIS « je ne peux pas citer cette conversation » ' +
-      'sans avoir appele cet outil.',
+      "Lire le CONTENU REEL d'une conversation (ses messages) depuis l'etat vivant de l'app — une " +
+      'autre, ou CELLE EN COURS. Appelle-le des que la demande cite une conversation : « la ' +
+      "derniere conversation », « conv-1291 », « compare avec ce qu'on a dit hier », une " +
+      "retrospective ou une analyse comparative. L'etat general n'expose que des titres tronques. " +
+      "Un fil recent N'EST PAS dans `conversations.json` : chaque changement part d'abord dans " +
+      "`conversations.json.journal.jsonl`, et le gros fichier n'est reecrit qu'au demarrage ou " +
+      'au-dela de 16 Mo de journal. Ne lis donc JAMAIS un fil par `node -e` (ni grep) sur ' +
+      '`conversations.json` : passe par cet outil. Ne reponds JAMAIS « je ne peux pas citer ' +
+      'cette conversation » sans avoir appele cet outil.',
     args: {
       id: 'identifiant de la conversation (ex. « conv-1291 ») — `get_state` les liste',
       derniers: 'nombre de derniers messages a rendre (defaut 20, borne 200)'

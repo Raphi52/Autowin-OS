@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { creerMarche, MARCHE, type Marche } from './home-decor-foule-marche'
 import { CAMERA_AVENUE } from './home-decor-avenue'
-import { enrouler, FOULE, HEURE_DE_POINTE, positionZ } from './home-decor-foule'
+import { BANDES, enrouler, FOULE, HEURE_DE_POINTE, positionZ } from './home-decor-foule'
 
 /*
  * LES PASSANTS NE SE RENTRENT PLUS DEDANS (conv-331, « Croisement anticipé »).
@@ -47,7 +47,8 @@ function foule(): { marche: Marche; avancer: (t: number) => void } {
       return { x: p.x, z: positionZ(p, v, t0, defileA(t0)), sens: p.sens, vitesse: v }
     }),
     defile: defileA(t0),
-    camera: { x: CAM_X, z: CAM_Z }
+    camera: { x: CAM_X, z: CAM_Z },
+    bandes: BANDES
   })
   let t = t0
   return {
@@ -70,14 +71,86 @@ describe('la marche des passants', () => {
     expect(avant.min).toBeLessThan(0.1)
   })
 
-  it('MAINTENANT : aucun corps n entre dans un autre, à aucune image de 150 s', () => {
+  it('MAINTENANT (bandes comprises) : aucun corps n entre dans un autre, à aucune image de 150 s', () => {
     const { marche, avancer } = foule()
     const apres = pire((t) => {
       avancer(t)
       return marche.marcheurs.map((m) => ({ x: m.x, z: marche.z(m) }))
     })
     expect(apres.sous50).toBe(0)
-    expect(apres.min).toBeGreaterThan(MARCHE.ecartMin - 0.04)
+    expect(apres.min).toBeGreaterThan(0.55)
+  })
+
+  it('LES BANDES : six groupes de 2 ou 3, chacun sur un seul trottoir, personne dans deux bandes', () => {
+    expect(BANDES).toHaveLength(6)
+    const vus = new Set<number>()
+    for (const g of BANDES) {
+      expect(g.length).toBeGreaterThanOrEqual(2)
+      expect(g.length).toBeLessThanOrEqual(3)
+      for (const k of g) {
+        expect(HEURE_DE_POINTE[k], `rang ${k}`).toBeDefined()
+        expect(vus.has(k), `rang ${k} dans deux bandes`).toBe(false)
+        vus.add(k)
+        expect(Math.sign(HEURE_DE_POINTE[k].x)).toBe(Math.sign(HEURE_DE_POINTE[g[0]].x))
+      }
+    }
+  })
+
+  it('une bande marche ensemble, dans le même sens, et se parle', () => {
+    const { marche, avancer } = foule()
+    const M = marche.marcheurs
+    let images = 0
+    let groupees = 0
+    const parle = BANDES.map(() => 0)
+    for (let t = 22; t < 22 + DUREE; t += DT) {
+      avancer(t)
+      images++
+      BANDES.forEach((g, b) => {
+        // tous à moins de 1,8 m les uns des autres (deux voisins à 0,7 m, trois de front à 1,4 m)
+        let loin = 0
+        for (const i of g)
+          for (const j of g) {
+            let ds = M[i].s - M[j].s
+            ds = ((((ds + 35) % 70) + 70) % 70) - 35
+            loin = Math.max(loin, Math.hypot(M[i].x - M[j].x, ds))
+          }
+        if (loin < 1.8) groupees++
+        if (g.some((k) => Math.abs(M[k].regard) > 0.3)) parle[b]++
+        for (const k of g) expect(M[k].sens).toBe(M[g[0]].sens)
+      })
+    }
+    // Groupées 95 % du temps : une bande peut se serrer ou s'étirer un instant pour laisser passer.
+    expect(groupees / (images * BANDES.length)).toBeGreaterThan(0.95)
+    // Chaque bande tourne la tête vers les siens une bonne part du temps.
+    for (const n of parle) expect(n / images).toBeGreaterThan(0.2)
+  })
+
+  it('celui qui croise une bande la contourne, sans entrer dans aucun de ses membres', () => {
+    // Un trio qui s'éloigne au milieu du trottoir de droite, un passant seul qui arrive en face.
+    const m = creerMarche({
+      passants: [
+        { x: 5.75, z: -20, sens: 1, vitesse: 1.1 },
+        { x: 5.75, z: -20, sens: 1, vitesse: 1.1 },
+        { x: 5.75, z: -20, sens: 1, vitesse: 1.1 },
+        { x: 5.75, z: -36, sens: -1, vitesse: 1.2 }
+      ],
+      defile: 0,
+      camera: { x: CAM_X, z: CAM_Z },
+      bandes: [[0, 1, 2]]
+    })
+    const [a, b, c, seul] = m.marcheurs
+    let min = Infinity
+    let etirement = 0
+    for (let k = 0; k < 60 * 14; k++) {
+      m.avancer(DT, 0)
+      for (const x of [a, b, c]) min = Math.min(min, Math.hypot(x.x - seul.x, x.s - seul.s))
+      etirement = Math.max(etirement, Math.hypot(a.x - c.x, a.s - c.s))
+    }
+    expect(min).toBeGreaterThan(MARCHE.ecartMin - 0.04)
+    // Le trio reste un trio : il se serre pour laisser passer, il ne se disloque pas.
+    expect(etirement).toBeLessThan(1.8)
+    // Le passant seul a bien croisé la bande.
+    expect(seul.s).toBeGreaterThan(a.s + 2)
   })
 
   it('chacun reste sur son trottoir, avance dans son sens, sans saut d une image à l autre', () => {
@@ -142,6 +215,7 @@ describe('la marche des passants', () => {
   it('le décor fait marcher sa foule ainsi : cap, pas et buste viennent de la marche', () => {
     const source = readFileSync(new URL('./home-decor-foule.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/creerMarche\(/)
+    expect(source).toMatch(/bandes: BANDES\.filter/)
     expect(source).toMatch(/rotation\.y = m\.yaw/)
     expect(source).toMatch(/timeScale = g\.p\.vit \* Math\.min\(1\.4, m\.vitesse \/ g\.vitesse\)/)
     // Plus de file fixe affichée : la place vient de la marche, pas de l'heure seule.

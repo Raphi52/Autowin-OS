@@ -7,10 +7,18 @@ export interface PersistedChatTextPart {
   kind: 'text'
   text: string
   streamId?: string
+  /**
+   * HEURE D'APPARITION de la part (ms depuis l'époque) : celle de son premier fragment. Elle place
+   * la part sur le RAIL du tour (conv-338, « Implémenter 1 + 5 » : colonne d'heures à gauche du
+   * fil). Absente sur les tours antérieurs : le rail n'affiche alors aucune heure, il n'en invente pas.
+   */
+  at?: number
 }
 
 export interface PersistedChatActionPart {
   kind: 'action'
+  /** Heure de la commande (ms depuis l'époque) — même rôle que `PersistedChatTextPart.at`. */
+  at?: number
   actionId?: string
   name: string
   args?: unknown
@@ -170,7 +178,8 @@ export const ACTIONS_LOG_MAX = 500
 export const ACTIONS_LINE_MAX = 300
 
 export type ChatTurnEvent =
-  | { kind: 'delta'; streamId: string; text: string }
+  /** `at` : heure du fragment ; seul celui qui OUVRE une part la date (`PersistedChatTextPart.at`). */
+  | { kind: 'delta'; streamId: string; text: string; at?: number }
   /** Raisonnement du modèle : s'accumule dans le tour, n'entre JAMAIS dans la réponse (`parts`). */
   | { kind: 'reasoning'; text: string }
   /** Journal des actions du tour, écrit EN UNE FOIS à la clôture (comme `reasoning`). */
@@ -184,6 +193,8 @@ export type ChatTurnEvent =
       actionId: string
       name: string
       args?: unknown
+      /** Heure de la commande : date l'action qu'elle crée (`PersistedChatActionPart.at`). */
+      at?: number
       /**
        * `actionId` d'une action de meme nom qui avait ECHOUE plus tot dans le tour et que celle-ci
        * retente. Absent sur les anciens evenements et sur les actions qui ne rattrapent rien : tout
@@ -285,6 +296,31 @@ function avecMotSiVide(parts: PersistedChatPart[], mot: string): PersistedChatPa
   return parts.length > 0 ? parts : [{ kind: 'text', text: mot }]
 }
 
+/**
+ * L'heure d'un événement ne sert QUE s'il ouvre une part (`reduceChatTurn` la pose sur la part
+ * créée). Un delta qui prolonge la part en cours la retire donc avant d'être écrit dans le journal
+ * de la conversation : sinon chaque fragment de texte y porterait une heure que rien ne lira.
+ */
+export function sansHeureInutile(
+  parts: readonly PersistedChatPart[],
+  event: ChatTurnEvent
+): ChatTurnEvent {
+  if (event.kind === 'delta' && event.at !== undefined) {
+    const previous = parts.at(-1)
+    if (previous?.kind === 'text' && previous.streamId === event.streamId) {
+      const { at: _inutile, ...sansHeure } = event
+      return sansHeure
+    }
+  }
+  if (event.kind === 'command' && event.at !== undefined) {
+    if (parts.some((part) => part.kind === 'action' && part.actionId === event.actionId)) {
+      const { at: _inutile, ...sansHeure } = event
+      return sansHeure
+    }
+  }
+  return event
+}
+
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
   if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
 
@@ -318,7 +354,13 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     const previous = parts.at(-1)
     if (previous?.kind === 'text' && previous.streamId === event.streamId)
       parts[parts.length - 1] = { ...previous, text: previous.text + event.text }
-    else parts.push({ kind: 'text', streamId: event.streamId, text: event.text })
+    else
+      parts.push({
+        kind: 'text',
+        streamId: event.streamId,
+        text: event.text,
+        ...(event.at === undefined ? {} : { at: event.at })
+      })
     return { ...state, status: 'streaming', parts }
   }
 
@@ -345,7 +387,9 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       kind: 'action' as const,
       actionId: event.actionId,
       name: event.name,
-      ...(event.args === undefined ? {} : { args: sanitizePersistedValue(event.args) })
+      ...(event.args === undefined ? {} : { args: sanitizePersistedValue(event.args) }),
+      // Une commande RE-EMISE garde l'heure de sa part existante (`...precedent` ci-dessous).
+      ...(event.at === undefined ? {} : { at: event.at })
     }
     if (existant < 0) return { ...state, parts: [...state.parts, nouvelleAction] }
     const parts = state.parts.slice()

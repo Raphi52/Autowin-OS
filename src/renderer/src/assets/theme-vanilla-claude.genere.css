@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs vanilla-claude -- ne pas modifier a la main.
    Theme « Vanilla Claude » : les regles de la base claire qui ecrivent une couleur en dur, transposees
    vers Claude clair (or et rose -> terracotta, bleus, cyans, violets et gris bleutes -> gris chauds).
-   47 regles, 87 declarations. Voir genererVanillaClaude. */
+   48 regles, 93 declarations. Voir genererVanillaClaude. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='vanilla-claude'][data-base='clair'] .topology-runtime-limit {
@@ -48,6 +48,11 @@
     box-shadow: 0 1px 3px rgba(31, 30, 27, 0.35)
 }
 
+/* ---- src/renderer/src/components/JugesPanel.css ---- */
+:root[data-theme='vanilla-claude'][data-base='clair'] .jpan {
+    --jpan-rose-texte: rgb(159, 66, 36)
+}
+
 /* ---- src/renderer/src/assets/theme-modes.css ---- */
 :root[data-theme='vanilla-claude'][data-base='clair'] {
     --bg-0: rgb(237, 236, 229);
@@ -68,7 +73,12 @@
     --accent-soft: rgba(184, 77, 42, 0.1);
     --warn: rgb(139, 58, 31);
     --info: rgb(92, 90, 79);
-    --violet: rgb(146, 142, 126)
+    --violet: rgb(146, 142, 126);
+    --chat-rail-trait: rgb(151, 147, 132);
+    --chat-rail-reponse: rgb(156, 153, 139);
+    --chat-rail-point-texte: rgb(173, 170, 159);
+    --chat-rail-heure: rgb(152, 148, 134);
+    --chat-rail-fond: rgb(247, 247, 244)
 }
 :root[data-theme='vanilla-claude'][data-base='clair'] .shell, :root[data-theme='vanilla-claude'][data-base='clair'] .shell.theme-serious {
     --surface-inset: rgba(27, 26, 23, 0.05);

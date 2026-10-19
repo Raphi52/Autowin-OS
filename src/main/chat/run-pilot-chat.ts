@@ -685,11 +685,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const applyDurableEvent = (pilotEvent: PilotEvent): void => {
         if (!conversationId || !os.conversations.get(conversationId)) return
         let durableEvent: ChatTurnEvent | undefined
+        const heure = pilotEvent.at === undefined ? {} : { at: pilotEvent.at }
         if (pilotEvent.kind === 'delta' && pilotEvent.text && pilotEvent.streamId)
           durableEvent = {
             kind: 'delta',
             streamId: pilotEvent.streamId,
-            text: pilotEvent.text
+            text: pilotEvent.text,
+            ...heure
           }
         else if (pilotEvent.kind === 'stream-reset' && pilotEvent.streamId)
           durableEvent = { kind: 'stream-reset', streamId: pilotEvent.streamId }
@@ -697,7 +699,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           durableEvent = {
             kind: 'delta',
             streamId: `fallback:${pilotEvent.iteration ?? 0}`,
-            text: pilotEvent.text
+            text: pilotEvent.text,
+            ...heure
           }
         else if (pilotEvent.kind === 'command' && pilotEvent.name)
           durableEvent = {
@@ -705,6 +708,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${traceActionIndex}`,
             name: pilotEvent.name,
             args: pilotEvent.args,
+            ...heure,
             // Le lien de reprise vers l'action echouee que celle-ci retente. Sans cette recopie il
             // serait jete ICI, a la frontiere de persistance, comme le cout l'a deja ete.
             ...(pilotEvent.repriseProbableDe
@@ -919,7 +923,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
 
       const handlePilotEvent = (incomingPilotEvent: PilotEvent): void => {
         dernierSigneDeVie = Date.now()
-        let pilotEvent = incomingPilotEvent
+        // UNE SEULE HEURE par evenement, posee ICI (rail du tour, conv-338) : la meme valeur part
+        // au fil en direct (`pilot:event`) et a l'enregistrement (`applyDurableEvent`, qui ne la
+        // garde que sur le texte et les commandes), donc le tour relu apres un redemarrage affiche
+        // les memes heures que le direct. Le fil date aussi le DEBUT du tour au premier evenement.
+        let pilotEvent =
+          incomingPilotEvent.at === undefined
+            ? { ...incomingPilotEvent, at: dernierSigneDeVie }
+            : incomingPilotEvent
         if (conversationId && pilotEvent.kind === 'artifact' && pilotEvent.artifact) {
           try {
             pilotEvent = {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
+import { ATLANTIC, caisseAtlantic } from './home-decor-avenue-atlantic'
 import { carrosserie, FILES, FORMES, GAREE, type Forme } from './home-decor-avenue-voitures'
 
 /*
@@ -9,6 +10,7 @@ import { carrosserie, FILES, FORMES, GAREE, type Forme } from './home-decor-aven
  *
  * Ce que ces tests tiennent, sans carte graphique :
  *   1. aucune carrosserie n'est la copie d'une autre (l'ancien défaut : deux caisses du même profil) ;
+ *      depuis conv-330, la garée est l'« Atlantic volante » (home-decor-avenue-atlantic.ts) ;
  *   2. chaque caisse est une surface fermée tournée vers l'extérieur (sinon elle s'affiche à l'envers) ;
  *   3. la voiture garée n'est sur le chemin d'aucune file, et ses roues restent avant la bordure ;
  *   4. aucune lumière ajoutée (chaque programme de la rue serait recompilé), et le branchement dans
@@ -16,12 +18,13 @@ import { carrosserie, FILES, FORMES, GAREE, type Forme } from './home-decor-aven
  */
 
 const source = readFileSync(new URL('./home-decor-avenue-voitures.ts', import.meta.url), 'utf8')
+const sourceAtlantic = readFileSync(new URL('./home-decor-avenue-atlantic.ts', import.meta.url), 'utf8')
 const avenue = readFileSync(new URL('./home-decor-avenue.ts', import.meta.url), 'utf8')
 const demiLargeur = (f: Forme): number => Math.max(...f.cles.map((c) => c[1]))
 
 describe('les voitures de l avenue (conv-320)', () => {
-  it('cinq carrosseries, toutes différentes', () => {
-    const formes = Object.values(FORMES)
+  it('quatre carrosseries qui roulent et une garée, toutes différentes', () => {
+    const formes = [...Object.values(FORMES), ATLANTIC]
     expect(formes).toHaveLength(5)
     const signatures = new Set(formes.map((f) => JSON.stringify(f.cles)))
     expect(signatures.size).toBe(5)
@@ -61,8 +64,30 @@ describe('les voitures de l avenue (conv-320)', () => {
     }
   )
 
-  it('la voiture garée n est sur le chemin d aucune file, et ses roues restent avant la bordure', () => {
-    expect(demiLargeur(FORMES.nacre)).toBeLessThanOrEqual(GAREE.demiLargeur)
+  it('la voiture garée (Atlantic volante) est une caisse fermée, tournée vers l extérieur', () => {
+    const { geo } = caisseAtlantic(ATLANTIC)
+    const pos = geo.getAttribute('position')
+    const nor = geo.getAttribute('normal')
+    const p = new THREE.Vector3()
+    const n = new THREE.Vector3()
+    const yMilieu = ATLANTIC.cles.reduce((s, c) => s + (c[2] + c[4]) / 2, 0) / ATLANTIC.cles.length
+    let dehors = 0
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i)
+      n.fromBufferAttribute(nor, i)
+      if (n.dot(p.clone().sub(new THREE.Vector3(0, yMilieu, p.z))) > 0) dehors++
+    }
+    expect(dehors / pos.count).toBeGreaterThan(0.95)
+    expect(geo.groups.map((g) => g.materialIndex)).toEqual([0, 1, 2])
+    expect(geo.groups[1].count).toBeGreaterThan(0)
+  })
+
+  it('la voiture garée tient dans sa place : sur le chemin d aucune file', () => {
+    // la largeur RÉELLE de la caisse, ailes gonflées comprises
+    const { geo } = caisseAtlantic(ATLANTIC)
+    geo.computeBoundingBox()
+    const boite = geo.boundingBox!
+    expect(Math.max(-boite.min.x, boite.max.x)).toBeLessThanOrEqual(GAREE.demiLargeur)
     const garee = { de: GAREE.x - GAREE.demiLargeur, a: GAREE.x + GAREE.demiLargeur }
     for (const [nom, file] of Object.entries(FILES)) {
       const w = demiLargeur(FORMES[nom as keyof typeof FILES])
@@ -71,16 +96,13 @@ describe('les voitures de l avenue (conv-320)', () => {
       const chevauche = de < garee.a && a > garee.de
       expect(chevauche, nom).toBe(false)
     }
-    // la bordure du trottoir de droite commence à 3,88 m (ROUTE 4, bordure de 0,24 m centrée)
-    const roues = source.match(/nom: 'nacre'[\s\S]*?roues: \{ r: [\d.]+, l: ([\d.]+), x: ([\d.]+)/)
-    expect(roues).not.toBeNull()
-    const [, l, x] = roues!.map(Number)
-    expect(GAREE.x + x + l / 2).toBeLessThan(3.88)
   })
 
   it('aucune lumière ajoutée, aucun fichier chargé', () => {
     expect(source).not.toMatch(/Light\s*\(/)
     expect(source).not.toMatch(/\bfetch\s*\(|\.src\s*=|import\.meta\.glob/)
+    expect(sourceAtlantic).not.toMatch(/Light\s*\(/)
+    expect(sourceAtlantic).not.toMatch(/\bfetch\s*\(|\.src\s*=|import\.meta\.glob/)
   })
 
   it('branchée dans l avenue : montée avant la compilation, animée, libérée', () => {

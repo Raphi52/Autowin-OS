@@ -48,6 +48,15 @@ export type ChatTextPart = PersistedChatTextPart & {
 export type ChatPart = PersistedChatPart
 type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
+/**
+ * PILE D'IMAGES (conv-332, 2026-10-18 : « un moyen de grouper ces blocs car souvent ils
+ * s'enchainent »). Deux images ou plus qui se suivent sans texte entre elles ne font plus qu'un
+ * bloc ; une image seule reste une capsule ordinaire. Rendu par `ArtifactPile.tsx`.
+ */
+export type ChatArtifactPileBlock = {
+  kind: 'artifact-pile'
+  artifacts: ChatArtifactPart['artifact'][]
+}
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatCandidatsPickBlock = {
   kind: 'candidats-pick'
@@ -71,6 +80,7 @@ export type ChatAskDecisionBlock = {
 export type ChatRenderBlock =
   | ChatTextPart
   | ChatArtifactPart
+  | ChatArtifactPileBlock
   | ChatErrorPart
   | ChatActivityBlock
   | ChatSuggestionsBlock
@@ -115,6 +125,12 @@ export interface HydratedAssistantMessage {
    * pendant le tour, la capsule compte elle-même ; ce chiffre sert quand ce compteur n'existe plus.
    */
   reasoningMs?: number
+  /**
+   * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail (conv-338). Relu du message
+   * enregistre (`ts`, pose par le main au debut du tour) ; en direct, pris au premier evenement
+   * date. Absent : le rail n'affiche aucune heure.
+   */
+  debutDuTour?: number
 }
 
 export interface StoredAssistantMessage {
@@ -130,6 +146,8 @@ export interface StoredAssistantMessage {
   actionsLog?: string[]
   /** Durée du raisonnement (ms) conservée par le tour : le compteur de la capsule après rechargement. */
   reasoningMs?: number
+  /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail (conv-338). */
+  ts?: number
 }
 
 export type ConversationStateKey =
@@ -258,6 +276,8 @@ export interface AssistantPilotEvent {
   ok?: boolean
   data?: unknown
   artifact?: PersistedChatArtifactPart['artifact']
+  /** Heure posee par le main a la reception (rail du tour, conv-338) : date la part ouverte. */
+  at?: number
 }
 
 /**
@@ -816,14 +836,30 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
       : {}),
     // La DURÉE DU RAISONNEMENT survit de la même façon : sans elle, la capsule d'un tour relu
     // disait « Raisonnement terminé » sans compteur (R5, conv-162).
-    ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {})
+    ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
+    ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {})
   }
 }
 
 /** Borne de l'historique des signes de vie : de quoi relire un tour long sans gonfler la vue. */
 const STATUTS_MAX = 500
 
+/**
+ * Le reducteur du fil, plus le DEBUT DU TOUR (rail, conv-338) : un tour en direct n'a pas encore
+ * d'heure de debut ; le premier evenement date par le main la lui donne, puis elle ne bouge plus.
+ */
 export function reduceAssistantPilotEvent(
+  message: HydratedAssistantMessage,
+  event: AssistantPilotEvent
+): HydratedAssistantMessage {
+  const suivant = reduireEvenementDuPilote(message, event)
+  const debut =
+    message.debutDuTour ?? (!message.done && typeof event.at === 'number' ? event.at : undefined)
+  if (debut === undefined || suivant.debutDuTour === debut) return suivant
+  return { ...suivant, debutDuTour: debut }
+}
+
+function reduireEvenementDuPilote(
   message: HydratedAssistantMessage,
   event: AssistantPilotEvent
 ): HydratedAssistantMessage {
@@ -849,22 +885,25 @@ export function reduceAssistantPilotEvent(
     return { ...message, turnId, reasoning: merged.slice(-4_000) }
   }
   let turnEvent: ChatTurnEvent | undefined
+  const heure = typeof event.at === 'number' ? { at: event.at } : {}
   if (event.kind === 'delta' && event.text && event.streamId)
-    turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text }
+    turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text, ...heure }
   else if (event.kind === 'stream-reset' && event.streamId)
     turnEvent = { kind: 'stream-reset', streamId: event.streamId }
   else if (event.kind === 'think' && event.text)
     turnEvent = {
       kind: 'delta',
       streamId: `fallback:${event.iteration ?? 0}`,
-      text: event.text
+      text: event.text,
+      ...heure
     }
   else if (event.kind === 'command' && event.name)
     turnEvent = {
       kind: 'command',
       actionId: event.actionId ?? `action:${message.parts.length}`,
       name: event.name,
-      args: event.args
+      args: event.args,
+      ...heure
     }
   else if (event.kind === 'result' && event.name) {
     const matching = [...message.parts]
@@ -1636,7 +1675,7 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
   const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
   const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
   let textIndex = 0
-  let pendingText: Array<{ text: string; continuationPrefix?: string }> = []
+  let pendingText: Array<{ text: string; continuationPrefix?: string; at?: number }> = []
   const flushText = (): void => {
     // Même séparateur que `markdownCodeLineProtection` / `reconcileClosedOrchestrationTextParts` :
     // hydratation et affichage doivent projeter exactement le même flux Markdown.
@@ -1646,10 +1685,13 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
     // appartenir à une preuve. `trim()` changeait donc la sémantique entre hydratation et écran.
     if (text.trim()) {
       const continuationPrefix = pendingText[0]?.continuationPrefix
+      // L'heure du bloc fusionne est celle de sa PREMIERE part datee (rail du tour, conv-338).
+      const at = pendingText.find((part) => part.at !== undefined)?.at
       compact.push({
         kind: 'text',
         text,
-        ...(continuationPrefix ? { markdownContinuationPrefix: continuationPrefix } : {})
+        ...(continuationPrefix ? { markdownContinuationPrefix: continuationPrefix } : {}),
+        ...(at === undefined ? {} : { at })
       })
     }
     pendingText = []
@@ -1662,7 +1704,8 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
     }
     pendingText.push({
       text: part.text,
-      continuationPrefix: continuationPrefixes[textIndex++]
+      continuationPrefix: continuationPrefixes[textIndex++],
+      ...(part.at === undefined ? {} : { at: part.at })
     })
   }
   flushText()
@@ -1733,7 +1776,11 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       })
       continue
     }
-    if (part.kind === 'artifact' || part.kind === 'error') {
+    if (part.kind === 'artifact') {
+      empilerImage(blocks, part)
+      continue
+    }
+    if (part.kind === 'error') {
       blocks.push(part)
       continue
     }
@@ -1758,6 +1805,35 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     blocks.push(decision)
   }
   return blocks
+}
+
+/** Les seules capsules repliables (ArtifactPreview `isCollapsible`) : ce sont elles qui s'enchaînent. */
+function estImageEmpilable(artifact: ChatArtifactPart['artifact']): boolean {
+  return artifact.kind === 'image' || artifact.kind === 'vector'
+}
+
+/**
+ * Une image qui SUIT immédiatement une autre image (aucun texte, aucune action affichée entre
+ * elles) rejoint sa pile, ou en ouvre une avec elle. Tout autre artefact garde son propre bloc.
+ */
+function empilerImage(blocks: ChatRenderBlock[], part: ChatArtifactPart): void {
+  if (!estImageEmpilable(part.artifact)) {
+    blocks.push(part)
+    return
+  }
+  const previous = blocks.at(-1)
+  if (previous?.kind === 'artifact-pile') {
+    previous.artifacts.push(part.artifact)
+    return
+  }
+  if (previous?.kind === 'artifact' && estImageEmpilable(previous.artifact)) {
+    blocks[blocks.length - 1] = {
+      kind: 'artifact-pile',
+      artifacts: [previous.artifact, part.artifact]
+    }
+    return
+  }
+  blocks.push(part)
 }
 
 function normaliserQuestion(question: string): string {

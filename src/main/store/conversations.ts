@@ -3,6 +3,7 @@ import {
   createChatTurn,
   flattenChatParts,
   reduceChatTurn,
+  sansHeureInutile,
   type ChatTurnEvent,
   type ChatTurnRuntime,
   type ChatTurnStatus,
@@ -540,6 +541,15 @@ export { canonicalProjectPath } from '../../shared/project-path'
  * Mute le message en place et le retourne ; `undefined` si aucun message du tour n'existe —
  * l'appelant décide quoi en faire.
  */
+/** Les parts du tour `turnId` (dernier message assistant qui le porte), sans copier la liste. */
+function partsDuTour(messages: readonly Msg[], turnId: string): PersistedChatPart[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const candidate = messages[index]
+    if (candidate.role === 'assistant' && candidate.turnId === turnId) return candidate.parts ?? []
+  }
+  return []
+}
+
 export function applyTurnEventToMessages(
   messages: readonly Msg[],
   turnId: string,
@@ -1167,12 +1177,15 @@ export class ConversationStore {
   }
 
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
-  applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
+  applyTurnEvent(id: string, turnId: string, eventRecu: ChatTurnEvent): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
+    // L'heure (rail du tour, conv-338) ne reste que sur l'evenement qui OUVRE une part : c'est cet
+    // evenement-la qui part au journal, et le rejeu au demarrage redonne donc la meme heure.
+    const event = sansHeureInutile(partsDuTour(conversation.messages, turnId), eventRecu)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
     /*
      * LE CONTENU MUTE ICI, il n'est pas pousse : `indexerMessage` doit donc etre appele DEPUIS ce

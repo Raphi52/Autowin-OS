@@ -84,6 +84,32 @@ describe('semerConversation — une conversation copiée dans l’instance cach�
     expect(existsSync(join(destination, 'runs', 'conv-1'))).toBe(false)
   })
 
+  it('copie les fichiers montrés dans le fil (images lues), puis les retire', () => {
+    const source = racineSource()
+    ecrire(join(source, 'chat-artifacts', 'conv-955-ab12', 't1', 'capture.png'), 'png')
+    ecrire(join(source, 'chat-artifacts', 'conv-9551-cd34', 't1', 'autre.png'), 'png')
+    const chemin = (racine) => join(racine, 'chat-artifacts', 'conv-955-ab12', 't1', 'capture.png')
+    ecrire(
+      join(source, 'conversations.json.journal.jsonl'),
+      ligne({
+        op: 'turn-event',
+        id: 'conv-955',
+        turnId: 't1',
+        event: { kind: 'artifact', artifact: { id: 'a1', path: chemin(source) } }
+      })
+    )
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-955' })
+    expect(readFileSync(chemin(destination), 'utf8')).toBe('png')
+    // Le chemin enregistré pointe la COPIE : l'instance refuse tout fichier hors de sa racine.
+    const journal = readFileSync(join(destination, 'conversations.json.journal.jsonl'), 'utf8')
+    expect(JSON.parse(journal.trim()).event.artifact.path).toBe(chemin(destination))
+    expect(existsSync(join(destination, 'chat-artifacts', 'conv-9551-cd34'))).toBe(false)
+    const { restants } = retirerSemence(destination, rapport)
+    expect(restants).toEqual([])
+    expect(existsSync(join(destination, 'chat-artifacts', 'conv-955-ab12'))).toBe(false)
+  })
+
   it('ne copie JAMAIS ce qui ferait reprendre un tour ou relancer un run', () => {
     const destination = join(temporaire(), 'instance')
     semerConversation({ source: racineSource(), destination, id: 'conv-955' })

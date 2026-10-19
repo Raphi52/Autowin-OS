@@ -29,7 +29,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 /** Même règle que l'archive des conversations : un identifiant est un nom de fichier, rien de plus. */
 const ID_DE_CONVERSATION = /^[A-Za-z0-9._-]{1,120}$/
@@ -51,6 +51,22 @@ export const fichiersDeConversation = (id) => [
 
 /** Dossiers propres à une conversation. `turn-journals/<id>` en est EXCLU à dessein (voir en-tête). */
 export const dossiersDeConversation = (id) => [join('runs', id)]
+
+/**
+ * Fichiers montrés DANS le fil (images lues, fichiers produits) : `chat-artifacts/<id>-<empreinte>`.
+ * Sans eux, la copie affichait chaque image « Aperçu indisponible » — mesuré conv-332, 2026-10-18,
+ * preuve de la pile d'images. Le tiret final empêche « conv-33 » de prendre « conv-332-… ».
+ */
+export const relocaliserArtefacts = (source, destination) => {
+  const ancien = JSON.stringify(resolve(source, 'chat-artifacts')).slice(1, -1)
+  const nouveau = JSON.stringify(resolve(destination, 'chat-artifacts')).slice(1, -1)
+  return (texte) => (ancien === nouveau ? texte : texte.split(ancien).join(nouveau))
+}
+
+export const dossiersDArtefacts = (racine, id) =>
+  readdirSafe(join(racine, 'chat-artifacts'))
+    .filter((nom) => nom.startsWith(`${id}-`))
+    .map((nom) => join('chat-artifacts', nom))
 
 /**
  * Les lignes du journal des conversations qui concernent CETTE conversation. Une création porte son
@@ -93,15 +109,23 @@ export function semerConversation({ source, destination, id }) {
   mkdirSync(destination, { recursive: true })
   const ecrits = []
   const cible = join(destination, 'conversations.json')
-  writeFileSync(cible, JSON.stringify(entree ? [entree] : []), 'utf8')
+  // Chaque artefact garde le chemin ABSOLU de son fichier ; l'instance ne lit que sous SA racine
+  // (`isStoredArtifactPath`, chat-artifact-store.ts : « Chemin d’artefact non autorisé »). Les chemins
+  // vers `chat-artifacts` sont donc réécrits vers la copie, sous leur forme échappée JSON.
+  const relocaliser = relocaliserArtefacts(source, destination)
+  writeFileSync(cible, relocaliser(JSON.stringify(entree ? [entree] : [])), 'utf8')
   ecrits.push('conversations.json')
   if (lignes.length > 0) {
-    writeFileSync(`${cible}.journal.jsonl`, `${lignes.join('\n')}\n`, 'utf8')
+    writeFileSync(`${cible}.journal.jsonl`, `${lignes.map(relocaliser).join('\n')}\n`, 'utf8')
     ecrits.push('conversations.json.journal.jsonl')
   }
   if (archivee) {
     mkdirSync(`${cible}.archive`, { recursive: true })
-    copyFileSync(archive, join(`${cible}.archive`, `${id}.json`))
+    writeFileSync(
+      join(`${cible}.archive`, `${id}.json`),
+      relocaliser(readFileSync(archive, 'utf8')),
+      'utf8'
+    )
     ecrits.push(join('conversations.json.archive', `${id}.json`))
   }
   for (const relatif of fichiersDeConversation(id)) {
@@ -116,6 +140,10 @@ export function semerConversation({ source, destination, id }) {
     cpSync(join(source, relatif), join(destination, relatif), { recursive: true })
     ecrits.push(relatif)
     if (relatif.startsWith('runs')) runs = readdirSafe(join(destination, relatif)).length
+  }
+  for (const relatif of dossiersDArtefacts(source, id)) {
+    cpSync(join(source, relatif), join(destination, relatif), { recursive: true })
+    ecrits.push(relatif)
   }
   return {
     ok: true,
@@ -166,7 +194,13 @@ export function retirerSemence(destination, rapport) {
         (nom) => nom.startsWith('conversations.json') && !nom.includes('/') && !nom.includes('\\')
       )
     : []
-  const aRetirer = [...new Set([...emplacementsDeConversation(rapport.conversation), ...variantes])]
+  const aRetirer = [
+    ...new Set([
+      ...emplacementsDeConversation(rapport.conversation),
+      ...dossiersDArtefacts(destination, rapport.conversation),
+      ...variantes
+    ])
+  ]
   for (const relatif of aRetirer) {
     const chemin = join(destination, relatif)
     if (!existsSync(chemin)) continue

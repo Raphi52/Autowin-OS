@@ -15,6 +15,7 @@ import { CandidatsPickPanel } from './CandidatsPickPanel'
 import { AskDecisionBlock } from './AskDecision'
 import { JugesPanel } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
+import { ArtifactPile } from './ArtifactPile'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { clotureEnDernier } from './cloture-en-dernier'
 import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
@@ -24,8 +25,16 @@ import {
   groupAssistantActivity,
   libelleCoutDuTour,
   type ChatErrorPart,
-  type ChatPart
+  type ChatPart,
+  type ChatRenderBlock
 } from './chat-view-model'
+import {
+  heureSurLeRail,
+  instantDuBloc,
+  natureDuBloc,
+  placeDeLaReponse,
+  type NatureDuNoeud
+} from './rail-du-tour'
 import { bilanDuTour, formaterBilan } from './bilan-tour'
 import { estErreurAuthExpiree } from './erreur-auth'
 import type { TerminalStatus } from './chat-resume-refine'
@@ -228,6 +237,18 @@ function terminalFailureReason(message: Msg): string | undefined {
 
 type AssistantTimelineItem =
   { kind: 'parts'; parts: ChatPart[] } | { kind: 'receipt'; receipt: DirectiveReceipt }
+
+/**
+ * Clé d'un point du rail : celle que portait le bloc avant le rail. Une question `ask` garde
+ * l'identité de son action (son verrou « déjà répondu » ne doit pas repartir à zéro), une image
+ * celle de son fichier ; le reste, son rang.
+ */
+function cleDuBloc(part: ChatRenderBlock, index: number): string {
+  if (part.kind === 'ask-decision') return `ask-${part.askId}`
+  if (part.kind === 'artifact') return part.artifact.id
+  if (part.kind === 'artifact-pile') return `pile-${part.artifacts[0].id}`
+  return String(index)
+}
 
 function splitAssistantTimeline(
   parts: ChatPart[],
@@ -510,8 +531,161 @@ export const ChatMessageRow = memo(
         </div>
       )
     }
+    // RAIL DU TOUR (conv-338, « Implementer 1 + 5 ») : chaque element du tour devient un POINT d'un
+    // rail trace a gauche du message — heures du tour a gauche (la 1), verdict des juges puis
+    // reponse en bleu au bout (la 5). Calculs dans rail-du-tour.ts, dessin dans ChatView.css.
+    const timeline = splitAssistantTimeline(
+      // TOUR TERMINE : le bloc de cloture se lit en DERNIER, meme si une action a ete
+      // declenchee apres son ecriture (demande du 2026-09-12). Pendant l'ecriture, on ne
+      // touche a rien : le texte doit apparaitre dans l'ordre ou il arrive.
+      message.done ? clotureEnDernier(message.parts) : message.parts,
+      directiveReceipts ?? []
+    )
+    const blocsParElement = timeline.map((element) =>
+      element.kind === 'receipt' ? [] : groupAssistantActivity(element.parts)
+    )
+    const reponse = placeDeLaReponse(blocsParElement, message.done)
+    const debut = message.debutDuTour
+    // Une colonne d'heures n'a de sens que si le tour a ete enregistre AVEC elles : un texte ou une
+    // action date. Les images ont toujours eu leur heure : sur un tour d'avant le rail, elles seules
+    // remplissaient la colonne, trouee partout ailleurs (conv-338, 2026-10-19). Ce tour-la se dessine
+    // donc sans colonne.
+    const avecHeures =
+      debut !== undefined &&
+      message.parts.some(
+        (part) => (part.kind === 'text' || part.kind === 'action') && typeof part.at === 'number'
+      )
+    const noeud = (
+      cle: string,
+      nature: NatureDuNoeud,
+      instant: number | undefined,
+      contenu: React.ReactNode
+    ): React.ReactNode => {
+      if (contenu === null || contenu === undefined || contenu === false) return null
+      const heure = avecHeures ? heureSurLeRail(instant, debut) : undefined
+      return (
+        <div key={cle} className="rail-noeud" data-nature={nature} data-testid="rail-noeud">
+          {heure ? <span className="rail-heure">{heure}</span> : null}
+          {contenu}
+        </div>
+      )
+    }
+    /* Panneau des JUGES : décisions en barre, verdict complet en dépliant — même manière que les
+       candidats du scout (14/08). Rendu sous les tours qui ont orchestré, alimenté par le fil de
+       sous-agents persisté du dernier run. Sur le rail, c'est l'AVANT-DERNIER point : juste avant
+       la réponse (la 5 du /draft conv-338), au lieu d'un bandeau sous elle. */
+    const juges =
+      conversationId &&
+      message.status === 'completed' &&
+      message.parts.some(
+        (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
+      )
+        ? noeud('juges', 'juge', undefined, <JugesPanel conversationId={conversationId} />)
+        : null
+    const rendreBloc = (part: ChatRenderBlock, index: number): React.ReactNode =>
+      part.kind === 'text' ? (
+        // Le clic ne fait qu'ÉCOUTER les liens `#autowin-prompt` du bloc html-render :
+        // le clavier passe par le lien lui-même (Entrée y déclenche ce même clic).
+        <div
+          key={index}
+          className="msg-body"
+          dir="auto"
+          data-prompts={promptsOuverts ? 'ouverts' : 'fermes'}
+          onClick={surClicPrompt}
+        >
+          <Markdown
+            text={part.text}
+            continuationPrefix={part.markdownContinuationPrefix}
+            highlightFinalSummary
+          />
+        </div>
+      ) : part.kind === 'suggestions' ? (
+        <SuggestionGrid
+          key={index}
+          groups={part.groups}
+          onPick={(prompt) => onPickSuggestion?.(prompt)}
+        />
+      ) : part.kind === 'ask-decision' ? (
+        /* Cle STABLE = l'identite de l'action `ask`. Avec `key={index}` le bloc etait
+           remonte des que le flux se regroupait, et son verrou « deja repondu »
+           repartait a zero : c'est ce qui rendait le spam-clic possible.
+
+           LE BLOC N'EXISTE QU'UNE FOIS LE TOUR TERMINE (2026-09-02, defaut vecu :
+           « le bloc ask apparait avant que le tour finisse et quand je click trop tot
+           ca marche pas »). Pendant le tour, un clic passe par l'injection dans le
+           tour en cours ; celle-ci n'est plus relue apres l'execution des commandes,
+           et ce qui n'a pas ete lu est efface a la fermeture du tour — la reponse
+           disparaissait pendant que le bloc se verrouillait sur « Repondu ». Rien a
+           cliquer avant la fin = aucune reponse perdue. */
+        !message.done ? null : (
+          <AskDecisionBlock
+            key={`ask-${part.askId}`}
+            decision={part.decision}
+            dejaRepondu={askReponse !== undefined}
+            reponseDuFil={askReponse}
+            onPick={(prompt) => onAnswerAsk?.(prompt)}
+          />
+        )
+      ) : part.kind === 'candidats-pick' ? (
+        <CandidatsPickPanel
+          key={index}
+          candidats={part.candidats}
+          texteScout={part.texteScout}
+          autoLancer={
+            autoLancerCandidats === true &&
+            !tourRefusePourAutoLancer(
+              message.status,
+              message.parts.flatMap((p) => (p.kind === 'text' ? [p.text] : []))
+            )
+          }
+          onPick={(prompt) => onPickSuggestion?.(prompt)}
+        />
+      ) : part.kind === 'error' ? (
+        <ChatErrorBlock
+          key={index}
+          part={part}
+          bilan={formaterBilan(bilanDuTour(message.parts))}
+          retryPrompt={retryPrompt?.trim()}
+          onResend={onResend}
+          onRefineResume={onRefineResume}
+          onLogin={onLogin}
+        />
+      ) : part.kind === 'artifact' ? (
+        <ArtifactPreview
+          key={part.artifact.id}
+          artifact={part.artifact}
+          conversationId={conversationId}
+          turnId={message.turnId}
+          onOpenImage={onOpenImage}
+          live={!message.done}
+        />
+      ) : part.kind === 'artifact-pile' ? (
+        <ArtifactPile
+          key={`pile-${part.artifacts[0].id}`}
+          artifacts={part.artifacts}
+          conversationId={conversationId}
+          turnId={message.turnId}
+          onOpenImage={onOpenImage}
+          live={!message.done}
+        />
+      ) : (
+        <AssistantActivityGroup
+          key={index}
+          actions={part.actions}
+          onOpenLiveAction={onOpenLiveAction}
+          // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
+          // persisté et repart à la phase suivante, sans écrire dans le fil un message que
+          // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
+          // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
+          // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
+          onResume={(task) =>
+            window.api?.orchestrate?.(task, conversationId ?? undefined) ??
+            Promise.resolve({ ok: false, error: 'orchestration indisponible' })
+          }
+        />
+      )
     return (
-      <div className="msg assistant fade-in">
+      <div className={`msg assistant fade-in msg--rail${avecHeures ? ' avec-heures' : ''}`}>
         {/* PLUS DE LIGNE « AGENT » au-dessus de la reponse, dans aucun theme (conv-227, 2026-10-11 :
             « enleve carrement cette ligne de tous les themes elle pollue pour rien »). Son spinner
             part avec elle : le tour en cours se lit aux capsules Raisonnement / Actions et au bouton
@@ -530,137 +704,55 @@ export const ChatMessageRow = memo(
         {(message.reasoning ||
           message.providerStatusLog?.length ||
           message.providerStatus ||
-          (!message.done && message.parts.length === 0)) && (
-          <ThinkingBlock
-            text={message.reasoning ?? ''}
-            done={message.done}
-            {...(message.providerStatus ? { status: message.providerStatus } : {})}
-            {...(message.providerStatusLog?.length ? { statusLog: message.providerStatusLog } : {})}
-            {...(message.turnId ? { turnId: message.turnId } : {})}
-            {...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})}
-          />
-        )}
-        <div className="msg-turn">
-          {splitAssistantTimeline(
-            // TOUR TERMINE : le bloc de cloture se lit en DERNIER, meme si une action a ete
-            // declenchee apres son ecriture (demande du 2026-09-12). Pendant l'ecriture, on ne
-            // touche a rien : le texte doit apparaitre dans l'ordre ou il arrive.
-            message.done ? clotureEnDernier(message.parts) : message.parts,
-            directiveReceipts ?? []
-          ).map(
-            (timelineItem, timelineIndex) =>
-              timelineItem.kind === 'receipt' ? (
-                <DirectiveReceiptRow
-                  key={`receipt-${timelineItem.receipt.id}`}
-                  receipt={timelineItem.receipt}
-                />
-              ) : (
-                <Fragment key={`parts-${timelineIndex}`}>
-                  {groupAssistantActivity(timelineItem.parts).map((part, index) =>
-                    part.kind === 'text' ? (
-                      // Le clic ne fait qu'ÉCOUTER les liens `#autowin-prompt` du bloc html-render :
-                      // le clavier passe par le lien lui-même (Entrée y déclenche ce même clic).
-                      <div
-                        key={index}
-                        className="msg-body"
-                        dir="auto"
-                        data-prompts={promptsOuverts ? 'ouverts' : 'fermes'}
-                        onClick={surClicPrompt}
-                      >
-                        <Markdown
-                          text={part.text}
-                          continuationPrefix={part.markdownContinuationPrefix}
-                          highlightFinalSummary
-                        />
-                      </div>
-                    ) : part.kind === 'suggestions' ? (
-                      <SuggestionGrid
-                        key={index}
-                        groups={part.groups}
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
-                      />
-                    ) : part.kind === 'ask-decision' ? (
-                      /* Cle STABLE = l'identite de l'action `ask`. Avec `key={index}` le bloc etait
-                         remonte des que le flux se regroupait, et son verrou « deja repondu »
-                         repartait a zero : c'est ce qui rendait le spam-clic possible.
-
-                         LE BLOC N'EXISTE QU'UNE FOIS LE TOUR TERMINE (2026-09-02, defaut vecu :
-                         « le bloc ask apparait avant que le tour finisse et quand je click trop tot
-                         ca marche pas »). Pendant le tour, un clic passe par l'injection dans le
-                         tour en cours ; celle-ci n'est plus relue apres l'execution des commandes,
-                         et ce qui n'a pas ete lu est efface a la fermeture du tour — la reponse
-                         disparaissait pendant que le bloc se verrouillait sur « Repondu ». Rien a
-                         cliquer avant la fin = aucune reponse perdue. */
-                      !message.done ? null : (
-                        <AskDecisionBlock
-                          key={`ask-${part.askId}`}
-                          decision={part.decision}
-                          dejaRepondu={askReponse !== undefined}
-                          reponseDuFil={askReponse}
-                          onPick={(prompt) => onAnswerAsk?.(prompt)}
-                        />
-                      )
-                    ) : part.kind === 'candidats-pick' ? (
-                      <CandidatsPickPanel
-                        key={index}
-                        candidats={part.candidats}
-                        texteScout={part.texteScout}
-                        autoLancer={
-                          autoLancerCandidats === true &&
-                          !tourRefusePourAutoLancer(
-                            message.status,
-                            message.parts.flatMap((p) => (p.kind === 'text' ? [p.text] : []))
-                          )
-                        }
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
-                      />
-                    ) : part.kind === 'error' ? (
-                      <ChatErrorBlock
-                        key={index}
-                        part={part}
-                        bilan={formaterBilan(bilanDuTour(message.parts))}
-                        retryPrompt={retryPrompt?.trim()}
-                        onResend={onResend}
-                        onRefineResume={onRefineResume}
-                        onLogin={onLogin}
-                      />
-                    ) : part.kind === 'artifact' ? (
-                      <ArtifactPreview
-                        key={part.artifact.id}
-                        artifact={part.artifact}
-                        conversationId={conversationId}
-                        turnId={message.turnId}
-                        onOpenImage={onOpenImage}
-                        live={!message.done}
-                      />
-                    ) : (
-                      <AssistantActivityGroup
-                        key={index}
-                        actions={part.actions}
-                        onOpenLiveAction={onOpenLiveAction}
-                        // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
-                        // persisté et repart à la phase suivante, sans écrire dans le fil un message que
-                        // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
-                        // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
-                        // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
-                        onResume={(task) =>
-                          window.api?.orchestrate?.(task, conversationId ?? undefined) ??
-                          Promise.resolve({ ok: false, error: 'orchestration indisponible' })
-                        }
-                      />
-                    )
-                  )}
-                  {/* Panneau des JUGES : décisions en barre, verdict complet en dépliant — même
-                      manière que les candidats du scout (14/08). Rendu sous les tours qui ont
-                      orchestré, alimenté par le fil de sous-agents persisté du dernier run. */}
-                  {conversationId &&
-                    message.status === 'completed' &&
-                    message.parts.some(
-                      (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
-                    ) && <JugesPanel conversationId={conversationId} />}
-                </Fragment>
-              )
+          (!message.done && message.parts.length === 0)) &&
+          noeud(
+            'tour',
+            'tour',
+            debut,
+            <ThinkingBlock
+              text={message.reasoning ?? ''}
+              done={message.done}
+              {...(message.providerStatus ? { status: message.providerStatus } : {})}
+              {...(message.providerStatusLog?.length
+                ? { statusLog: message.providerStatusLog }
+                : {})}
+              {...(message.turnId ? { turnId: message.turnId } : {})}
+              {...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})}
+            />
           )}
+        <div className="msg-turn">
+          {timeline.map((timelineItem, timelineIndex) =>
+            timelineItem.kind === 'receipt' ? (
+              noeud(
+                `receipt-${timelineItem.receipt.id}`,
+                'autre',
+                undefined,
+                <DirectiveReceiptRow receipt={timelineItem.receipt} />
+              )
+            ) : (
+              <Fragment key={`parts-${timelineIndex}`}>
+                {blocsParElement[timelineIndex].map((part, index) => {
+                  const estReponse = reponse?.[0] === timelineIndex && reponse[1] === index
+                  const point = noeud(
+                    cleDuBloc(part, index),
+                    estReponse ? 'reponse' : natureDuBloc(part),
+                    instantDuBloc(part),
+                    rendreBloc(part, index)
+                  )
+                  return estReponse && juges ? (
+                    <Fragment key="reponse-et-juges">
+                      {juges}
+                      {point}
+                    </Fragment>
+                  ) : (
+                    point
+                  )
+                })}
+              </Fragment>
+            )
+          )}
+          {/* Tour sans réponse écrite (orchestration seule) : le verdict reste le dernier point. */}
+          {reponse ? null : juges}
         </div>
         {/* Statuts terminaux MUETS : un tour annulé, interrompu ou EN ÉCHEC ne poussait aucune
             action — la bulle restait une impasse. `failed` rejoint le bloc : sans lui, un tour

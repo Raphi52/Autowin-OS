@@ -248,6 +248,12 @@
   --chat-frise-ko:                  #e07a6a;   /* frise du bloc Actions : action en échec */
   --chat-icone-tour:                #9a9a9a;   /* icones sous un message (copier, inspecter, brancher) au repos : gris NEUTRE, aucune teinte (conv-203) */
   --chat-icone-tour-survol:         #ffffff;   /* les memes au survol : blanc pur (conv-203) */
+  --chat-rail-trait:                #9155c6;   /* trait et points pleins du rail du tour : le violet du milieu des capsules bleu > rose (conv-338) */
+  --chat-rail-reponse:             #3c6eeb;   /* point de la reponse au bout du rail et fin du trait qui y mene : le bleu plein des capsules (conv-338, au lieu de l or) */
+  --chat-rail-juge:                 #00ff55;   /* point du verdict des juges : le seul vert (conv-338) */
+  --chat-rail-point-texte:          #6e6a84;   /* petit point discret d une phrase sur le rail (conv-338) */
+  --chat-rail-heure:                #6e6a84;   /* colonne d heures du rail, a gauche (conv-338) */
+  --chat-rail-fond:                 #0d0d0d;   /* interieur des points : le fond du fil, qui cache le trait sous le point (conv-338) */
   --chat-capsule-reflet-haut:       #ffffff66;   /* reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % (conv-173) */
   --chat-capsule-reflet-milieu:     #ffffff1a;   /* meme reflet a 55 % du rayon : blanc a 10 % */
   --chat-capsule-reflet-fin:        #ffffff00;   /* fin du reflet : blanc transparent */

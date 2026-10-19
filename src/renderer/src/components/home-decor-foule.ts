@@ -186,6 +186,21 @@ export const HEURE_DE_POINTE: readonly Passant[] = [
   { av: 'M18', marche: 'm_walk_neutral_01', x: 6.623, zf: -36.129, sens: 1, dec: 0.288, vit: 1.065 }
 ]
 
+/**
+ * LES BANDES (conv-331, proposition 3 du /draft) : des duos et des trios de HEURE_DE_POINTE qui
+ * marchent ensemble, côte à côte, et se parlent ; les autres les contournent. Rangs dans
+ * HEURE_DE_POINTE, le premier donne le sens ; chaque bande tient sur un seul trottoir.
+ * 12 passants sur 18 en bande, 6 seuls.
+ */
+export const BANDES: readonly (readonly number[])[] = [
+  [0, 4],
+  [2, 6, 8],
+  [10, 16],
+  [1, 3],
+  [5, 7],
+  [13, 17]
+]
+
 /** Le réglage du brouillon validé (direction 6). */
 export const FOULE = {
   // La lumière propre aux personnages dépend de leur tribu : `STYLE_TRIBU` (home-decor-foule-tribus.ts).
@@ -873,7 +888,9 @@ export async function chargerFoule(
           vitesse: g.vitesse
         })),
         defile,
-        camera
+        camera,
+        // L'avenue passe une tranche du casting : une bande n'existe que si tous ses membres en sont.
+        bandes: BANDES.filter((g) => g.every((k) => passants[k] === HEURE_DE_POINTE[k]))
       })
       // Les figurants : un corps à contourner, à l'écart qu'ils demandent (`ECART_FIGURANT.distance`).
       marche.avancer(

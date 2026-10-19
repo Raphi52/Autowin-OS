@@ -45,12 +45,20 @@ import devIcon from '../../resources/autowin-os-dev.png?asset'
 import iconIco from '../../resources/icon.ico?asset'
 import devIconIco from '../../resources/autowin-os-dev.ico?asset'
 import { iconeNotification } from '../shared/os-presence'
+import { surveillerNavigation } from './filet-navigation'
 
 /**
  * Au-delà, l'écran d'attente est réputé perdu et l'interface est demandée sans lui. Le document
  * d'attente est autonome et local : il se charge normalement en quelques millisecondes.
  */
 const DELAI_MAX_ECRAN_ATTENTE_MS = 10_000
+
+/**
+ * Au-delà, une interface qui n'a encore RIEN engagé est réputée perdue et redemandée (voir
+ * `filet-navigation.ts`). Le document de vite répond en moins d'une seconde : 20 s couvre un disque saturé.
+ */
+const DELAI_FILET_INTERFACE_MS = 20_000
+const ESSAIS_FILET_INTERFACE = 3
 
 /** Ce que le fenêtrage prenait dans `index.ts` — désormais passé explicitement. */
 export type WindowingDeps = {
@@ -543,22 +551,35 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       // L'écoute est posée ICI, et pas plus haut : posée à la création de la fenêtre, elle captait le
       // `did-finish-load` de l'ÉCRAN D'ATTENTE — MESURÉ, elle partait à 7 149 ms, avant même que le vrai
       // document soit demandé, et les 23 s de réconciliation synchrone repoussaient `loadURL` à 30 400 ms.
+      // `desarmerFilet` est assigné juste après : l'événement ne peut pas partir avant.
+      let desarmerFilet = (): void => {}
       mainWindow.webContents.once('did-finish-load', () => {
+        desarmerFilet()
         jalonDemarrage('interface chargée')
         // Le demarrage est FINI : sans cette cloture, son jalon reste en pile et etiquette a tort
         // tous les gels de la session (49 sur 173 dans le journal du 2026-08-30).
         cloreDemarrage()
         signalerInterfaceVisible()
       })
-      if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-        const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
-        if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')
-        void mainWindow.loadURL(rendererUrl.toString())
-      } else {
-        void mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-          query: isolatedTestInstance ? { instance: 'test' } : undefined
-        })
+      const demanderDocument = (): void => {
+        if (mainWindow.isDestroyed()) return
+        if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+          const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
+          if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')
+          void mainWindow.loadURL(rendererUrl.toString())
+        } else {
+          void mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+            query: isolatedTestInstance ? { instance: 'test' } : undefined
+          })
+        }
       }
+      demanderDocument()
+      desarmerFilet = surveillerNavigation({
+        page: mainWindow.webContents,
+        redemander: demanderDocument,
+        delaiMs: DELAI_FILET_INTERFACE_MS,
+        essaisMax: ESSAIS_FILET_INTERFACE
+      })
     }
 
     /**

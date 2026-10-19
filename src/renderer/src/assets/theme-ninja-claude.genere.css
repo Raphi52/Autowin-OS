@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   876 regles, 1246 declarations. Voir genererNinjaClaude.
+   871 regles, 1250 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -1692,23 +1692,20 @@
 }
 
 /* ---- src/renderer/src/components/JugesPanel.css ---- */
-:root[data-theme='ninja-claude'] .jpan-tete {
-    border-image: linear-gradient(90deg, rgba(215, 110, 76, 0.55), rgba(215, 110, 76, 0.06)) 1
-}
-:root[data-theme='ninja-claude'] .jpan-compte {
-    color: rgb(187, 185, 178)
-}
-:root[data-theme='ninja-claude'] .jpan-juge {
-    color: rgb(231, 230, 228)
-}
-:root[data-theme='ninja-claude'] .jpan-q li {
-    color: rgb(231, 230, 228)
-}
-:root[data-theme='ninja-claude'] .jpan-cout {
-    color: rgb(167, 164, 155)
-}
-:root[data-theme='ninja-claude'] .jpan-verdict p {
-    color: rgb(231, 230, 228)
+:root[data-theme='ninja-claude'] .jpan {
+    --jpan-texte: var(--text, rgb(240, 240, 239));
+    --jpan-dim: var(--text-dim, rgb(199, 197, 191));
+    --jpan-pale: var(--text-faint, rgb(161, 159, 149));
+    --jpan-rose: var(--rose, rgb(214, 110, 76));
+    --jpan-nacre: linear-gradient(
+    100deg,
+    var(--jpan-bleu) 0%,
+    var(--jpan-rose) 30%,
+    #d9d9d9 55%,
+    rgb(234, 179, 161) 78%,
+    var(--jpan-bleu) 100%
+  );
+    --jpan-rose-texte: rgb(234, 179, 161)
 }
 
 /* ---- src/renderer/src/components/ModelActivityLogPane.css ---- */
@@ -3169,6 +3166,10 @@
     --chat-envoi-bleu: rgb(144, 141, 129);
     --chat-envoi-bleu-survol: rgb(171, 169, 160);
     --chat-lot-rose: rgb(227, 155, 132);
+    --chat-rail-trait: rgb(148, 146, 135);
+    --chat-rail-point-texte: rgb(126, 123, 112);
+    --chat-rail-heure: rgb(126, 123, 112);
+    --chat-rail-fond: rgb(38, 38, 36);
     --chat-surlignage-texte: rgb(22, 22, 20);
     --chat-depot-texte: rgb(245, 244, 243);
     --chat-depot-detail: rgb(156, 154, 144)

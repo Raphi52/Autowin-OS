@@ -35,6 +35,8 @@ export const MARCHE = {
   buste: 0.42,
   /** Fréquence des coups d'œil (1 = un toutes les 4 à 10 s quand quelqu'un arrive). */
   regard: 0.6,
+  /** Les bandes : écart entre deux voisins (m), avance de celui du milieu à trois, allure commune. */
+  bande: { ecart: 0.7, avance: 0.25, allure: 0.95 },
   /** Pas de calcul maximal : une image plus longue est découpée. */
   pas: 1 / 30,
   /**
@@ -66,18 +68,21 @@ function graine(n: number): () => number {
 
 export interface Marcheur {
   readonly i: number
-  readonly sens: 1 | -1
+  /** Son sens de marche (en bande, celui du premier de la bande). */
+  sens: 1 | -1
   readonly cote: 'gauche' | 'droite'
+  /** Les rangs (dans `passants`) de sa bande, lui compris ; `null` s'il marche seul. */
+  bande: readonly number[] | null
   /** Position en travers (m). */
   x: number
   /** Position le long de la rue (m, repère de la rue). */
   s: number
   vx: number
   vs: number
-  /** Sa vitesse de marche naturelle (m/s), celle de son clip. */
-  readonly vPref: number
+  /** Sa vitesse de marche naturelle (m/s), celle de son clip ; en bande, l'allure commune. */
+  vPref: number
   /** Sa file : là où il revient quand personne ne le gêne. */
-  readonly xPref: number
+  xPref: number
   /** Son cap (rad, même sens que `rotation.y`) : il suit sa trajectoire. */
   yaw: number
   /** Sa vitesse réelle (m/s) : le pas de l'animation la suit, les pieds ne glissent pas. */
@@ -104,6 +109,12 @@ export interface Marche {
 }
 
 interface Etat extends Marcheur {
+  /** Sa place dans sa bande : à côté du centre (`dx`), un peu devant (`ds`), son rang `r` sur `n`. */
+  place: { dx: number; ds: number; r: number; n: number } | null
+  /** La file de la bande (pour le premier de la bande). */
+  xBande: number
+  /** Pour le premier de la bande : 0 = de front, 1 = serrée en échelon pour laisser passer. */
+  serrage: number
   coteBuste: number
   regardQui: Etat | null
   regardFin: number
@@ -127,6 +138,8 @@ export function creerMarche(options: {
   passants: readonly { x: number; z: number; sens: 1 | -1; vitesse: number }[]
   defile: number
   camera: { x: number; z: number }
+  /** Les bandes : rangs dans `passants`, le premier donne le sens ; tous sur le même trottoir. */
+  bandes?: readonly (readonly number[])[]
   graine?: number
 }): Marche {
   const rnd = graine(options.graine ?? 7)
@@ -139,6 +152,10 @@ export function creerMarche(options: {
     i,
     sens: p.sens,
     cote: p.x < 0 ? 'gauche' : 'droite',
+    bande: null,
+    place: null,
+    xBande: p.x,
+    serrage: 0,
     x: p.x,
     s: p.z - defile,
     vx: 0,
@@ -154,6 +171,60 @@ export function creerMarche(options: {
     regardFin: 0,
     prochainRegard: rnd() * 4
   }))
+
+  // ── LES BANDES : côte à côte, à l'allure du plus lent, centrées sur la file du premier ; à trois,
+  // celui du milieu un peu devant (en V). Les autres les contournent comme un seul bloc.
+  for (const g of options.bandes ?? []) {
+    const chef = agents[g[0]]
+    if (g.some((k) => !agents[k] || agents[k].cote !== chef.cote))
+      throw new Error(`[decor] bande invalide : ${g.join(', ')} (rangs absents ou sur deux trottoirs)`)
+    const v = Math.min(...g.map((k) => agents[k].vPref)) * MARCHE.bande.allure
+    const n = g.length
+    const [x0, x1] = MARCHE.trottoirs[chef.cote]
+    const demi = ((n - 1) / 2) * MARCHE.bande.ecart + MARCHE.rayon
+    chef.xBande = borne(chef.xPref, x0 + demi, x1 - demi)
+    g.forEach((k, r) => {
+      const a = agents[k]
+      a.bande = g
+      a.sens = chef.sens
+      a.vPref = v
+      a.vs = -a.sens * v
+      a.yaw = chef.yaw
+      a.place = { dx: (r - (n - 1) / 2) * MARCHE.bande.ecart, ds: n === 3 && r === 1 ? MARCHE.bande.avance : 0, r, n }
+      a.xPref = chef.xBande + a.place.dx
+      a.x = a.xPref
+      a.s = chef.s - chef.sens * a.place.ds
+    })
+  }
+
+  /**
+   * La place d'un membre, selon que sa bande marche de front ou se serre : en échelon, l'écart en
+   * travers fond de 60 % et chacun se décale le long de la rue, si bien que deux voisins restent à
+   * 0,7 m l'un de l'autre. Un trio passe de 1,9 m à 1,1 m de large.
+   */
+  function placeDe(b: Etat): { dx: number; ds: number } {
+    if (!b.place || !b.bande) return { dx: 0, ds: 0 }
+    const S = agents[b.bande[0]].serrage
+    const { dx, ds, r, n } = b.place
+    return { dx: dx * (1 - 0.6 * S), ds: ds - S * (r - (n - 1) / 2) * 0.62 }
+  }
+
+  /** Quelqu'un d'autre approche la bande (ou la longe) : elle se serre ; une fois seule, elle se rouvre. */
+  function serrer(h: number): void {
+    for (const g of options.bandes ?? []) {
+      const chef = agents[g[0]]
+      let proche = 0
+      for (const b of agents) {
+        if (b.bande === chef.bande || b.cote !== chef.cote) continue
+        for (const k of g) {
+          const a = agents[k]
+          const ds = enroulerDiff(b.s - a.s)
+          if (Math.abs(b.x - a.x) < 1.6 && Math.abs(ds) < 5 && (ds * -a.sens > -1 || b.sens !== a.sens)) proche = 1
+        }
+      }
+      chef.serrage += (proche - chef.serrage) * Math.min(1, h * (proche ? 2.5 : 0.8))
+    }
+  }
 
   function voisins(a: Etat): Voisin[] {
     const out: Voisin[] = []
@@ -177,8 +248,19 @@ export function creerMarche(options: {
 
   function pas(h: number): void {
     horloge += h
+    serrer(h)
+    const centres = new Map<readonly number[], number>()
+    for (const g of options.bandes ?? []) centres.set(g, g.reduce((t, k) => t + agents[k].x, 0) / g.length)
+    const centre = (b: Etat): number => (b.bande ? (centres.get(b.bande) ?? b.x) : b.x)
     const R = MARCHE.rayon
-    const desirs: { a: Etat; vxD: number; vsD: number; buste: number; regard: Voisin | null }[] = []
+    const desirs: {
+      a: Etat
+      vxFile: number
+      vxEvite: number
+      vsD: number
+      buste: number
+      regard: Voisin | null
+    }[] = []
     for (const a of agents) {
       const f = -a.sens // sens de marche le long de s
       const [x0, x1] = MARCHE.trottoirs[a.cote]
@@ -189,7 +271,26 @@ export function creerMarche(options: {
       let regard: Voisin | null = null
       let evite = 0
       const vers: number[] = []
+      // en bande : garder sa place à côté des autres (la file de la bande suit leurs écarts)
+      let xCible = a.xPref
+      let vsCorr = 0
+      if (a.bande && a.place) {
+        const chef = agents[a.bande[0]]
+        let cx = 0
+        let cs = 0
+        for (const k of a.bande) {
+          const b = agents[k]
+          cx += b.x - placeDe(b).dx
+          cs += enroulerDiff(b.s - chef.s) + b.sens * placeDe(b).ds
+        }
+        cx /= a.bande.length
+        cs = chef.s + cs / a.bande.length
+        const ici = placeDe(a)
+        xCible = 0.5 * chef.xBande + 0.5 * cx + ici.dx
+        vsCorr = borne(enroulerDiff(cs + f * ici.ds - a.s) * 0.9, -0.35, 0.35)
+      }
       for (const n of voisins(a)) {
+        if (a.bande && n.b && n.b.bande === a.bande) continue
         const px = n.dx
         const ps = n.ds
         const dist = Math.hypot(px, ps)
@@ -209,7 +310,8 @@ export function creerMarche(options: {
           const gauche = a.sens === 1 ? -1 : 1
           const xDouble = a.x + gauche * 0.8
           const place = gauche > 0 ? x1 - xDouble - R : xDouble - R - x0
-          if (a.vPref > vDevant + 0.06 && place > 0) {
+          // une bande ne double pas : elle suit
+          if (!a.bande && a.vPref > vDevant + 0.06 && place > 0) {
             vxEvite += gauche * 0.55 * (1 - borne((Math.abs(ps) - 1.2) / 2, 0, 1) * 0.5)
           } else {
             vCap = Math.min(vCap, Math.max(0, vDevant + (Math.abs(ps) - 1.1) * 0.9))
@@ -235,9 +337,11 @@ export function creerMarche(options: {
         if (dmin >= vise) continue
         const urgence = (1 - tc / MARCHE.horizon) * ((vise - dmin) / vise)
         evite += urgence
-        // passer à l'opposé de là où il sera ; de face, chacun prend sa droite
-        let cote = -Math.sign(cx)
-        if (Math.abs(cx) < 0.08) cote = a.sens === 1 ? 1 : -1
+        // passer à l'opposé de là où il sera ; de face, chacun prend sa droite. Une bande compte pour
+        // UN corps large : le côté se choisit entre les centres des bandes, pas membre par membre.
+        const cxCentres = cx + ((n.b ? centre(n.b) : 0) - (n.b?.x ?? 0)) - (centre(a) - a.x)
+        let cote = -Math.sign(cxCentres)
+        if (Math.abs(cxCentres) < 0.08) cote = a.sens === 1 ? 1 : -1
         const devant = ps * f > 0
         if (memeSens && devant && n.b && n.b.vitesse > 0.15) continue
         // un corps immobile (figurant, caméra) : on le contourne du côté où il y a la place
@@ -253,22 +357,32 @@ export function creerMarche(options: {
         if (n.b && dist > 1.5 && dist < 7 && devant && !regard) regard = n
       }
       // vitesse voulue : revenir à sa file (pas pendant qu'on s'écarte, ni à travers celui qu'on
-      // croise), s'écarter, ne pas foncer en s'écartant
-      let vxFile = borne((a.xPref - a.x) * 1.2, -0.45, 0.45) * Math.max(0, 1 - 4 * evite)
+      // croise), et s'écarter
+      let vxFile = borne((xCible - a.x) * 1.2, -0.45, 0.45) * Math.max(0, 1 - 4 * evite)
       if (vers.includes(Math.sign(vxFile))) vxFile = 0
+      const vsD = f * Math.min(a.vPref * allonge, vCap) + vsCorr
+      desirs.push({ a, vxFile, vxEvite, vsD, buste, regard })
+    }
+
+    // UNE BANDE S'ÉCARTE D'UN BLOC : chaque membre prend l'écart moyen des siens. Sinon chacun
+    // s'écarte de son côté, la bande s'ouvre et celui qui arrive passe au milieu (mesuré, conv-331).
+    for (const g of options.bandes ?? []) {
+      const membres = desirs.filter((d) => d.a.bande === g)
+      const moyen = membres.reduce((t, d) => t + d.vxEvite, 0) / membres.length
+      for (const d of membres) d.vxEvite = moyen
+    }
+
+    // intégration : un corps ne change pas de cap d'un coup (accélérations bornées)
+    for (const { a, vxFile, vxEvite, vsD: vsVoulu, buste, regard } of desirs) {
+      // ne pas foncer en s'écartant
       let vxD = borne(vxFile + vxEvite, -1.1, 1.1)
-      let vsD = f * Math.min(a.vPref * allonge, vCap)
+      let vsD = vsVoulu
       const vTot = Math.hypot(vxD, vsD)
       const vMax = Math.max(0.01, a.vPref * 1.25)
       if (vTot > vMax) {
         vxD *= vMax / vTot
         vsD *= vMax / vTot
       }
-      desirs.push({ a, vxD, vsD, buste, regard })
-    }
-
-    // intégration : un corps ne change pas de cap d'un coup (accélérations bornées)
-    for (const { a, vxD, vsD, buste, regard } of desirs) {
       a.vx += borne(vxD - a.vx, -1.6 * h, 1.6 * h)
       a.vs += borne(vsD - a.vs, -1.2 * h, 1.2 * h)
       a.x += a.vx * h
@@ -294,6 +408,10 @@ export function creerMarche(options: {
       if (a.regardQui && horloge < a.regardFin) {
         const b = a.regardQui
         regardVise = borne(angleDiff(Math.atan2(b.x - a.x, enroulerDiff(b.s - a.s)) - a.yaw), -1, 1)
+      } else if (a.bande && Math.sin(horloge * 0.5 + a.i * 1.7) > 0.35) {
+        // en bande, on se parle : la tête se tourne vers le voisin, par moments
+        const autre = agents[a.bande[(a.bande.indexOf(a.i) + 1) % a.bande.length]]
+        regardVise = borne(angleDiff(Math.atan2(autre.x - a.x, enroulerDiff(autre.s - a.s)) - a.yaw), -1.1, 1.1)
       }
       a.regard += (regardVise - a.regard) * Math.min(1, h * 4)
       // le cap suit la trajectoire : il s'écarte en marchant de travers, pas en pas chassés

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ArtifactKind, ChatArtifact } from '../../../shared/artifacts'
-import { chatMediaUrl, isChatMediaUrl } from '../../../shared/chat-media'
+import type { ChatArtifact } from '../../../shared/artifacts'
+import { chatMediaUrl } from '../../../shared/chat-media'
+import { fileSize, inlineDataUrl, kindLabel, nomRepeteLeLibelle } from './artifact-outils'
 import { BrainMarkdown } from './BrainMarkdown'
 import { ArtifactArchivePreview } from './ArtifactArchivePreview'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
@@ -12,61 +13,9 @@ import { RondDIcone } from './anneau-activite'
 import './ArtifactPreview.css'
 import { Spinner } from './Spinner'
 
-const LABELS: Record<ArtifactKind, string> = {
-  image: 'Image',
-  vector: 'Vecteur',
-  markdown: 'Markdown',
-  text: 'Texte',
-  code: 'Code',
-  diff: 'Diff',
-  'structured-data': 'Données',
-  table: 'Tableau',
-  diagram: 'Diagramme',
-  pdf: 'PDF',
-  document: 'Document',
-  presentation: 'Présentation',
-  spreadsheet: 'Tableur',
-  notebook: 'Notebook',
-  audio: 'Audio',
-  video: 'Vidéo',
-  web: 'Web',
-  archive: 'Archive',
-  model3d: '3D',
-  font: 'Police',
-  executable: 'Exécutable',
-  binary: 'Binaire'
-}
-
-/**
- * Le libellé ne doit pas AFFIRMER une génération que rien ne prouve : une image publiée par un
- * outil (capture, lecture de fichier) n'est pas une image produite par le modèle. On nomme donc
- * l'outil quand il existe, et on ne dit « générée » que pour une sortie directe du modèle.
- */
-function kindLabel(artifact: ChatArtifact): string {
-  const base = LABELS[artifact.kind]
-  if (artifact.kind !== 'image' && artifact.kind !== 'vector') return base
-  if (artifact.source.tool) return `${base} · ${artifact.source.tool}`
-  return `${base} générée`
-}
-
-/**
- * Un nom qui ne fait que REDIRE le libellé de la capsule n'est pas affiché à côté d'elle
- * (conv-195 : « image-Read » en petit à côté de « Image · Read », « image envoyée » à côté de
- * « Image envoyée »). Les nouveaux artefacts lus portent le nom du fichier (claude.ts), mais ceux
- * déjà enregistrés gardent leur nom fabriqué : on compare donc sans casse ni séparateurs.
- */
-function nomRepeteLeLibelle(nom: string, libelle: string): boolean {
-  const aplatir = (texte: string): string =>
-    texte
-      .toLowerCase()
-      .replace(/[\s·_-]+/g, ' ')
-      .trim()
-  return aplatir(nom) === aplatir(libelle)
-}
-
 /** Cadre photo (soleil + montagnes) : l'icône du rond de la capsule d'image, au trait de l'icône
  *  Raisonnement de ThinkingBlock.tsx (16 × 16, `currentColor`). */
-const ICONE_IMAGE = (
+export const ICONE_IMAGE = (
   <svg viewBox="0 0 16 16" focusable="false">
     <rect
       x="1.75"
@@ -82,20 +31,6 @@ const ICONE_IMAGE = (
     <path d="M2.6 12.4 L6.4 8.6 L8.9 11 L10.9 9 L13.4 11.5 V12.4 Z" fill="currentColor" />
   </svg>
 )
-
-function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
-}
-
-function inlineDataUrl(artifact: ChatArtifact): string | undefined {
-  if (artifact.url?.startsWith('data:')) return artifact.url
-  // Vidéo/son conservés : adresse lue par plages depuis le disque (`chat-media-protocol.ts`).
-  if (isChatMediaUrl(artifact.url)) return artifact.url
-  if (artifact.content === undefined || artifact.encoding !== 'base64') return undefined
-  return `data:${artifact.mimeType};base64,${artifact.content}`
-}
 
 function inlineText(artifact: ChatArtifact): string | undefined {
   if (artifact.content === undefined) return undefined

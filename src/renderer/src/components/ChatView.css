@@ -4713,6 +4713,123 @@ button.chat-project-dot:disabled {
   flex-basis: 100%;
 }
 
+/* RAIL DU TOUR (conv-338, 2026-10-19, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et
+   mes blocs ») : chaque élément d'un tour — le cadre Raisonnement / Actions / Étapes, une phrase, un
+   groupe d'actions, une image, le verdict des juges, la réponse — est un POINT d'un rail tracé à
+   gauche du message (ChatMessageRow.tsx, `.rail-noeud`, calculs dans rail-du-tour.ts).
+   De la 1 « Rail net » : la colonne d'HEURES du tour à gauche (seulement si le tour en porte), un
+   point plein pour un bloc, un petit point discret pour une phrase. De la 5 « Réponse au bout du
+   rail » : le verdict des juges est l'avant-dernier point, la réponse le dernier, en OR, et le trait
+   qui y mène passe du violet au bleu (bleu demandé à la place de l'or, conv-338).
+   Le trait est dessiné PAR SEGMENTS : chaque point trace le sien jusqu'au point suivant (le bas de
+   son élément + l'écart entre éléments + la hauteur du point suivant) ; l'intérieur plein du point
+   suivant cache le dépassement. */
+.msg.msg--rail {
+  --rail-axe: 5px;
+  --rail-retrait: 22px;
+}
+.msg.msg--rail.avec-heures {
+  --rail-axe: 47px;
+  --rail-retrait: 62px;
+}
+.msg--rail .rail-noeud {
+  /* Hauteur du point dans son élément : le milieu d'une capsule (deux lignes, ~44 px). */
+  --rail-point-y: 24px;
+  position: relative;
+  min-width: 0;
+  padding-left: var(--rail-retrait);
+}
+/* Un élément qui ne rend rien (panneau des juges encore vide) ne pose aucun point. */
+.msg--rail .rail-noeud:empty {
+  display: none;
+}
+/* Le milieu de la PREMIÈRE LIGNE du texte : les thèmes ne laissent que 1 à 2 px au-dessus
+   (theme-nebuleuse-verre.css, cosmic-outline.css), mesuré sur capture le 2026-10-19. */
+.msg--rail .rail-noeud[data-nature='texte'],
+.msg--rail .rail-noeud[data-nature='reponse'] {
+  --rail-point-y: 14px;
+}
+/* Le milieu de la ligne « VALIDE » du panneau des juges : sa marge haute (10 px), son bord et son
+   remplissage (10 px) passent avant elle (JugesPanel.css, .jpan). Mesuré sur capture de conv-314 le
+   2026-10-19 : 21 px posait le point 18 px au-dessus, sur le bord du panneau. */
+.msg--rail .rail-noeud[data-nature='juge'] {
+  --rail-point-y: 39px;
+}
+.msg--rail .rail-noeud::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--rail-axe) - 1px);
+  top: var(--rail-point-y);
+  bottom: calc(-1 * var(--s2) - 24px);
+  width: 2px;
+  background: var(--chat-rail-trait);
+  pointer-events: none;
+}
+.msg--rail .rail-noeud::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--rail-axe) - 5px);
+  top: calc(var(--rail-point-y) - 5px);
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--chat-rail-trait);
+  background: var(--chat-rail-fond);
+  pointer-events: none;
+}
+.msg--rail .rail-noeud[data-nature='texte']::after {
+  left: calc(var(--rail-axe) - 3px);
+  top: calc(var(--rail-point-y) - 3px);
+  width: 6px;
+  height: 6px;
+  border-width: 1.5px;
+  border-color: var(--chat-rail-point-texte);
+}
+.msg--rail .rail-noeud[data-nature='juge']::after {
+  border-color: var(--chat-rail-juge);
+}
+.msg--rail .rail-noeud[data-nature='reponse']::after {
+  left: calc(var(--rail-axe) - 7px);
+  top: calc(var(--rail-point-y) - 7px);
+  width: 14px;
+  height: 14px;
+  border-color: var(--chat-rail-reponse);
+  background: radial-gradient(circle, var(--chat-rail-reponse) 0 3px, var(--chat-rail-fond) 3.5px);
+}
+/* Vers un texte, le tronçon s'arrête plus haut : son point est sur la première ligne. */
+.msg--rail
+  .rail-noeud:has(+ .rail-noeud:is([data-nature='texte'], [data-nature='reponse']))::before,
+.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before {
+  bottom: calc(-1 * var(--s2) - 14px);
+}
+/* Vers le verdict des juges, le tronçon descend jusqu'à sa ligne « VALIDE ». */
+.msg--rail .rail-noeud:has(+ .rail-noeud[data-nature='juge'])::before {
+  bottom: calc(-1 * var(--s2) - 39px);
+}
+/* Le dernier tronçon, celui qui mène à la réponse, passe du violet au bleu. */
+.msg--rail .rail-noeud:has(+ .rail-noeud[data-nature='reponse'])::before,
+.msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before {
+  background: linear-gradient(var(--chat-rail-trait), var(--chat-rail-reponse));
+}
+/* Aucun tronçon après le dernier point visible du tour, ni sous le cadre du tour s'il est seul. */
+.msg--rail .msg-turn > .rail-noeud:not(:has(~ .rail-noeud:not(:empty)))::before,
+.msg.msg--rail:not(:has(.msg-turn > .rail-noeud:not(:empty))) > .rail-noeud::before {
+  display: none;
+}
+.msg--rail .rail-heure {
+  position: absolute;
+  left: 0;
+  top: calc(var(--rail-point-y) - 7px);
+  width: calc(var(--rail-axe) - 13px);
+  font: 10px/14px var(--mono, ui-monospace, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--chat-rail-heure);
+  pointer-events: none;
+}
+
 /* Interrupteur de vue liste <-> mosaique — deplace depuis ui-system.css, qui ne porte que
    des primitives reutilisables (contrat ui-system.test.ts). Consomme par ChatView.tsx. */
 /* Squelette du switch et de la mosaique : habillage fin a faire en design. */

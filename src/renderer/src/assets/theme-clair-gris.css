@@ -253,15 +253,6 @@
   color: var(--text-dim);
 }
 
-/* components/JugesPanel.css */
-:root[data-base='clair'] .jpan-compte,
-:root[data-base='clair'] .jpan-juge,
-:root[data-base='clair'] .jpan-q li,
-:root[data-base='clair'] .jpan-cout,
-:root[data-base='clair'] .jpan-verdict p {
-  color: var(--text-dim);
-}
-
 /* components/ModelActivityLogPane.css */
 :root[data-base='clair'] .model-log-time,
 :root[data-base='clair'] .model-log-detail,

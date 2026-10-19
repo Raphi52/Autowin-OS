@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { monterAtlantic } from './home-decor-avenue-atlantic'
 
 /*
  * LES VOITURES DE L'AVENUE : TOUTES DIFFÉRENTES, ET UNE GARÉE (conv-320).
@@ -12,7 +13,8 @@ import * as THREE from 'three'
  *   - « Bloc », fourgon blindé à facettes graphite, barre ambre pleine largeur (file de gauche) ;
  *   - « Flottante », berline volante magenta sans roues, quatre réacteurs bleus (file de gauche) ;
  *   - « Cycle », moto carénée rouge à roues sans moyeu, pilote caché sous la bulle (file de droite) ;
- *   - « Nacre », GT nacrée GARÉE le long du trottoir de droite, branchée à sa borne, warnings ambre.
+ *   - GARÉE le long du trottoir de droite, branchée à sa borne, warnings ambre : depuis conv-330,
+ *     l'« Atlantic volante » (home-decor-avenue-atlantic.ts) remplace la GT nacrée « Nacre ».
  *
  * POURQUOI DU CODE ET PAS DES FICHIERS, comme la foule : aucun modèle de voiture futuriste de cette
  * qualité n'est libre de droits et téléchargeable sans compte (recherche du 2026-10-17 : le seul
@@ -211,27 +213,7 @@ const CYCLE: Forme = {
   bas: -0.55
 }
 
-/** Grand tourisme : long capot, habitacle reculé, poupe fastback. */
-const NACRE: Forme = {
-  cles: [
-    [-2.45, 0.34, 0.31, 0.44, 0.51, 2.6, 0],
-    [-2.3, 0.82, 0.22, 0.49, 0.63, 3.2, 0],
-    [-1.6, 0.93, 0.2, 0.55, 0.77, 3.6, 0.06],
-    [-0.7, 0.95, 0.2, 0.59, 0.84, 3.6, 0.18],
-    [-0.28, 0.95, 0.2, 0.61, 1.05, 3.2, 0.36],
-    [0.5, 0.95, 0.2, 0.62, 1.19, 3, 0.44],
-    [1.4, 0.95, 0.21, 0.63, 1.0, 3.2, 0.36],
-    [2.1, 0.92, 0.24, 0.65, 0.82, 4, 0.18],
-    [2.45, 0.58, 0.3, 0.63, 0.7, 4, 0.06]
-  ],
-  S: 72,
-  R: 48,
-  lisse: true,
-  vitre: { z0: -0.36, z1: 1.62, seuil: 0.5, toit: 0.965, arrondi: 0.32 },
-  bas: -0.36
-}
-
-export const FORMES = { lame: LAME, bloc: BLOC, flottante: FLOTTANTE, cycle: CYCLE, nacre: NACRE }
+export const FORMES = { lame: LAME, bloc: BLOC, flottante: FLOTTANTE, cycle: CYCLE }
 
 // ---------- LA CARROSSERIE : UNE SURFACE TIRÉE DE SES SECTIONS ----------
 
@@ -773,25 +755,13 @@ export function monterVoitures(ctx: ContexteVoitures): Flotte {
   enCirculation(assembler(cycle), cycle, FILES.cycle, 0)
   enCirculation(assembler(flottante), flottante, FILES.flottante, 0.5)
 
-  // ---------- LA VOITURE GARÉE : une GT nacrée en charge, warnings allumés ----------
-  const nacre: Habillage = {
-    nom: 'nacre',
-    forme: NACRE,
-    peinture: physique(0xb9bdcb, 0.55, 0.22, { clearcoatRoughness: 0.03 }),
-    // garée, l'habitacle reste éclairé : la vitre laisse passer une lueur violette
-    vitre: vitrage(0x2e1658),
-    avant: { couleur: 0xc9a8ff, a: 0.07, z: -1.85, rayon: 0.016 },
-    arriere: { couleur: 0xb06cff, a: 0.18, z: 2.05, rayon: 0.018 },
-    ceinture: { couleur: 0xb07cff, a: -0.3, z0: -2.0, z1: 2.1 },
-    roues: { r: 0.37, l: 0.26, x: 0.8, z: [-1.55, 1.5], anneau: 0xb07cff }
-  }
-  const gt = assembler(nacre)
-  const garee = gt.g
+  // ---------- LA VOITURE GARÉE : l'Atlantic volante (conv-330), en charge, warnings allumés ----------
+  // Elle remplace la GT nacrée : voir home-decor-avenue-atlantic.ts.
+  const atlantic = monterAtlantic(ctx, env.texture)
+  const garee = atlantic.g
   garee.position.set(GAREE.x, 0, 600)
-  // sous la caisse, la lueur violette sur l'asphalte mouillé
-  flaque(0x9a5cff, 3.2, 6, 0.32, garee).position.set(0, 0.025, 0)
   // les feux de détresse : quatre éclats ambre aux coins, qui battent ensemble
-  const warnings = [...gt.phares, ...gt.feux].map((p) =>
+  const warnings = [...atlantic.phares, ...atlantic.feux].map((p) =>
     glow(0xffa328, 1.1, p.x, p.y, p.z, 0, garee)
   )
   // la borne de recharge, sur le trottoir, et son câble qui pulse
@@ -827,8 +797,9 @@ export function monterVoitures(ctx: ContexteVoitures): Flotte {
   const cableMat = new THREE.MeshBasicMaterial({ color: 0x3ae6ff })
   tube(
     [
-      new THREE.Vector3(0.93, 0.78, 1.25),
-      new THREE.Vector3(1.05, 0.35, 1.1),
+      // le câble pend du flanc droit de la voiture, qui flotte, jusqu'au trottoir
+      atlantic.prise.clone(),
+      atlantic.prise.clone().add(new THREE.Vector3(0.18, -0.45, -0.12)),
       new THREE.Vector3(1.35, ctx.TROTTOIR + 0.06, 0.85),
       new THREE.Vector3(borne.position.x - 0.15, ctx.TROTTOIR + 0.45, 0.72),
       new THREE.Vector3(borne.position.x - 0.13, ctx.TROTTOIR + 0.85, 0.7)
@@ -881,8 +852,10 @@ export function monterVoitures(ctx: ContexteVoitures): Flotte {
           }
         secousse = Math.max(secousse, Math.max(0, 1 - Math.abs(z - zCamera) / 9) * 0.06)
       })
-      // la GT garée suit la rue ; ses warnings battent à 1,6 Hz, son câble pulse
+      // la voiture garée suit la rue, flotte et fait tourner ses turbines ; ses warnings battent à
+      // 1,6 Hz, son câble pulse
       garee.position.z = zGaree
+      atlantic.animer(t)
       const allume = Math.floor(t * 1.6) % 2 === 0 ? 0.95 : 0
       for (const w of warnings) w.material.opacity = allume
       cableMat.color.copy(BLEU_CABLE).multiplyScalar(0.55 + 0.45 * Math.max(0, Math.sin(t * 3.2)))

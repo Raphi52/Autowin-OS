@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   554 regles, 837 declarations. Voir genererCoucheClaire. */
+   553 regles, 841 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -1086,11 +1086,12 @@
 }
 
 /* ---- src/renderer/src/components/JugesPanel.css ---- */
-:root[data-theme='holographique-clair'] .jpan-tete {
-    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
-}
-:root[data-theme='holographique-clair'] .jpan-vote.is-valide {
-    color: #09712c
+:root[data-theme='holographique-clair'] .jpan {
+    --jpan-plaque: color-mix(in srgb, var(--jpan-voile) 10%, var(--bg-0, #fdfdff));
+    --jpan-creux: color-mix(in srgb, var(--jpan-voile) 13%, var(--bg-0, #fdfdff));
+    --jpan-aplat: color-mix(in srgb, var(--jpan-voile) 16%, var(--bg-0, #fdfdff));
+    --jpan-aplat-clair: color-mix(in srgb, var(--jpan-voile) 22%, var(--bg-0, #fdfdff));
+    --jpan-rose-texte: #aa0e5f
 }
 
 /* ---- src/renderer/src/components/ModelActivityLogPane.css ---- */
@@ -2072,6 +2073,7 @@
     --chat-cran-reco: #09712c;
     --chat-cran-focus: #aa0e5f;
     --chat-saisie-fond: #fdfdff;
+    --chat-rail-fond: #fdfdff;
     --chat-depot-texte: #0e31aa
 }
 :root[data-theme='holographique-clair'] body::after {

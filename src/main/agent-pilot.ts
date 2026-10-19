@@ -327,6 +327,8 @@ export interface PilotEvent {
   sessionId?: string
   streamId?: string
   actionId?: string
+  /** Heure de l'evenement (ms), posee a sa reception par le chat : rail du tour (conv-338). */
+  at?: number
   /** Cf. la variante `command` : action echouee que cette action retente (heuristique). */
   repriseProbableDe?: string
   artifact?: ChatArtifact
