@@ -70,6 +70,53 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
+   * LA DEMANDE (conv-354, 2026-10-19) : « quand je fais nouvelle conv je suis obligé d'écrire un
+   * premier message avant que ça affiche la branche ». Le badge de branche lisait le dossier de la
+   * conversation OUVERTE, sinon le dépôt par défaut : sur un fil neuf, il ignorait le dossier armé
+   * sur la pastille. Il annonçait donc la branche d'un autre dépôt, et son menu listait — et
+   * basculait — les branches de cet autre dépôt, jusqu'à ce que le premier message crée le fil.
+   */
+  it('affiche et liste les branches du dossier choisi AVANT le premier message', async () => {
+    const getGitState = vi.fn((cwd?: string) =>
+      Promise.resolve({
+        available: true,
+        state: {
+          branch: cwd === 'D:/Projets/Cible' ? 'feat/cible' : 'main',
+          ahead: 0,
+          behind: 0,
+          changes: []
+        }
+      })
+    )
+    const getGitBranches = vi.fn().mockResolvedValue(['main', 'feat/cible'])
+    const conversationsCreate = vi.fn().mockResolvedValue(conversation('neuf'))
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([]),
+        conversation: vi.fn().mockResolvedValue({ id: 'neuf', messages: [] }),
+        pickGitRepo: vi.fn().mockResolvedValue('D:/Projets/Cible'),
+        getGitState,
+        getGitBranches,
+        conversationsCreate
+      })
+    )
+
+    await harness.click('[data-testid="chat-project-dot"]')
+    await act(async () => {
+      document.querySelector<HTMLElement>('[data-testid="conv-project-pick"]')!.click()
+    })
+
+    const badge = harness.container.querySelector<HTMLElement>('[data-testid="chat-git-branch"]')
+    expect(badge?.textContent).toContain('feat/cible')
+    await act(async () => {
+      badge!.click()
+    })
+    expect(getGitBranches.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Cible')
+    // Rien n'a été écrit : le fil n'existe pas encore.
+    expect(conversationsCreate).not.toHaveBeenCalled()
+  })
+
+  /**
    * DEFAUT VECU (kaizen conv-113, 2026-10-06) : « la conversation a dévié vers le CWD sans
    * raison ». `conv-113` est ne avec un lien GitHub vers PaperTrading et a recu, a la creation,
    * `D:\Chirurgien\AssistantChirurgien` — le dossier arme des semaines plus tot pour un AUTRE fil
