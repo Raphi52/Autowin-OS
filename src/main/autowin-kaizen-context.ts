@@ -5,7 +5,7 @@ import { loadConvActivity, type ConvActivityEntry } from './activity/conv-activi
 import { readBrainTraces, type BrainTrace } from './activity/brain-trace-spool'
 import { TraceStore } from './activity/trace-store'
 import { loadPromptCalls } from './activity/prompt-observability'
-import { readConversationTurnJournals } from './runs/turn-journal'
+import { readConversationTurnJournals, type TurnJournalEvent } from './runs/turn-journal'
 import type { TraceEventV1 } from './activity/trace-event'
 import type { Conversation } from './store/conversations'
 import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
@@ -320,6 +320,40 @@ function readPromptCalls(
   }
 }
 
+/*
+  FRAGMENTS DE FLUX FUSIONNES. Mesure conv-338, tour 8ce6230c-374c-4de3-9429-583a648e286c :
+  1 641 des 1 776 evenements du journal sont des `reasoning-step` de quelques mots — le flux du
+  raisonnement, un evenement par paquet recu. Les `turnEvents` derniers gardes par tour n'etaient
+  plus que ces miettes, et les deux `remember` refuses (« forbidden ») avec leurs resultats, coeur
+  du defaut a expliquer, manquaient au dossier. Les fragments CONSECUTIFS d'un meme flux (meme
+  type, meme `streamId` ou meme iteration) deviennent un seul evenement : texte concatene, heure du
+  premier fragment, et `fragments` = combien ont ete reunis. Une action intercalee coupe le flux.
+*/
+const FLUX_FRAGMENTES = new Set(['reasoning-step', 'delta'])
+
+function cleDeFlux(event: TurnJournalEvent): string | undefined {
+  if (!FLUX_FRAGMENTES.has(String(event.kind)) || typeof event.text !== 'string') return undefined
+  return `${String(event.kind)}::${String(event.streamId ?? event.iteration ?? '')}`
+}
+
+export function fusionnerFragmentsDeFlux(events: readonly TurnJournalEvent[]): TurnJournalEvent[] {
+  const sortie: TurnJournalEvent[] = []
+  let clePrecedente: string | undefined
+  for (const event of events) {
+    const cle = cleDeFlux(event)
+    const precedent = sortie[sortie.length - 1]
+    if (cle !== undefined && cle === clePrecedente && precedent) {
+      precedent.text = String(precedent.text) + String(event.text)
+      precedent.fragments = (typeof precedent.fragments === 'number' ? precedent.fragments : 1) + 1
+      continue
+    }
+    // Copie : le journal lu n'est jamais modifie en place.
+    sortie.push(cle !== undefined ? { ...event } : event)
+    clePrecedente = cle
+  }
+  return sortie
+}
+
 function readTurnEvents(
   conversationId: string,
   appData: string,
@@ -332,7 +366,7 @@ function readTurnEvents(
       plafonds.turnJournals
     )
       .flatMap(({ turnId, events }) =>
-        events.slice(-plafonds.turnEvents).map((event) => {
+        fusionnerFragmentsDeFlux(events).slice(-plafonds.turnEvents).map((event) => {
           const { kind, ...reste } = event
           return {
             turnId,

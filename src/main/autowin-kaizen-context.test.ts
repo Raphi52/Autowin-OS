@@ -649,6 +649,99 @@ describe('dossier de preuve /kaizen — le deroule des 3 tours arrive en entier'
   })
 })
 
+describe('dossier de preuve /kaizen — les fragments de flux ne chassent plus les actions', () => {
+  /*
+    Mesure conv-338, tour 8ce6230c-374c-4de3-9429-583a648e286c : 1 641 des 1 776 evenements du
+    journal sont des `reasoning-step` de quelques mots (« ment variables as a », « potential but »).
+    Les 40 derniers gardes par tour n'etaient plus que ces miettes : les deux `remember` refuses
+    (« forbidden ») et leurs resultats — le coeur du defaut — manquaient au dossier.
+  */
+  it('fusionne les fragments consécutifs d’un même flux et garde commande et résultat', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-fragments-'))
+    mkdirSync(join(appData, 'turn-journals', 'conv-frag'), { recursive: true })
+    const lignes = [
+      { kind: 'command', actionId: 'natif:0:0', name: 'remember' },
+      { kind: 'result', actionId: 'natif:0:0', name: 'remember', ok: false, detail: 'MUR_FORBIDDEN' },
+      ...Array.from({ length: 60 }, (_, index) => ({
+        kind: 'reasoning-step',
+        iteration: 1,
+        text: `r${index} `,
+        at: 1_000 + index
+      })),
+      ...Array.from({ length: 50 }, (_, index) => ({
+        kind: 'delta',
+        streamId: '1:0',
+        text: `d${index} `
+      })),
+      { kind: 'done', at: 9_999 }
+    ]
+    writeFileSync(
+      join(appData, 'turn-journals', 'conv-frag', 'turn-frag.jsonl'),
+      lignes.map((ligne) => JSON.stringify(ligne)).join('\n') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-frag',
+          title: 'Fragments',
+          provider: 'claude',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      const kinds = (evidence.turnEvents ?? []).map((event) => event.kind)
+      expect(kinds).toEqual(['command', 'result', 'reasoning-step', 'delta', 'done'])
+      const raisonnement = JSON.parse(evidence.turnEvents![2].payload) as Record<string, unknown>
+      expect(raisonnement.fragments).toBe(60)
+      // L'heure gardee est celle du PREMIER fragment : celle ou le flux a commence.
+      expect(raisonnement.at).toBe(1_000)
+      expect(String(raisonnement.text).startsWith('r0 r1 r2 ')).toBe(true)
+      expect(buildAutowinKaizenTask('/kaizen', evidence)).toContain('MUR_FORBIDDEN')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it('ne fusionne pas deux flux distincts ni à travers une action', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-fragments-2-'))
+    mkdirSync(join(appData, 'turn-journals', 'conv-frag2'), { recursive: true })
+    const lignes = [
+      { kind: 'delta', streamId: '0:0', text: 'a' },
+      { kind: 'delta', streamId: '0:1', text: 'b' },
+      { kind: 'provider-status', text: 'Bash · ls' },
+      { kind: 'delta', streamId: '0:1', text: 'c' },
+      { kind: 'delta', streamId: '0:1', text: 'd' }
+    ]
+    writeFileSync(
+      join(appData, 'turn-journals', 'conv-frag2', 'turn-2.jsonl'),
+      lignes.map((ligne) => JSON.stringify(ligne)).join('\n') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-frag2',
+          title: 'Flux',
+          provider: 'claude',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      const textes = (evidence.turnEvents ?? []).map(
+        (event) => (JSON.parse(event.payload) as { text?: string }).text
+      )
+      expect(textes).toEqual(['a', 'b', 'Bash · ls', 'cd'])
+      // Un fragment seul ne porte pas de compteur : rien n'a ete fusionne.
+      expect(JSON.parse(evidence.turnEvents![0].payload)).not.toHaveProperty('fragments')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+})
+
 /*
   DEFAUT VECU 2026-09-04. Les plafonds du dossier sont un BUDGET DE PROMPT (`/kaizen` doit tenir
   dans 28 000 signes), pas une verite sur ce qui s'est passe. L'outil `retrospective` rendait
