@@ -155,7 +155,7 @@ import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
-import { AppCommandBus, type AppEvent } from './commands'
+import { AppCommandBus, outilOffert, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
 import {
   executeCurationTransaction,
@@ -271,7 +271,7 @@ import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore } from './profile-store'
 import { capabilityEnabled } from './capability-controls'
-import { seedRegistrySnapshot } from './native-registry'
+import { amorcerRegistreOutils } from './registre-outils'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import {
   defaultBehaviourWorkspace,
@@ -1095,7 +1095,8 @@ const bus = new AppCommandBus(
   broadcast,
   undefined,
   undefined,
-  (name) => capabilityEnabled('tools', name) !== false,
+  // `outilOffert` : interrupteur local ET liste des outils débranchés (OUTILS_DEBRANCHES, commands.ts).
+  (name) => outilOffert(name, capabilityEnabled('tools', name)),
   undefined,
   // Fermetures PARESSEUSES : le service Tickets est construit plus bas dans ce module, alors que le
   // bus l'est ici. Elles ne sont évaluées qu'à l'exécution d'une commande, donc bien après.
@@ -1161,16 +1162,9 @@ os.setSkillCommandRunner({
       .filter((c) => OUTILS_NOEUD_SKILL.includes(c.name as (typeof OUTILS_NOEUD_SKILL)[number]))
       .map((c) => ({ name: c.name, description: c.description, args: c.args }))
 })
-seedRegistrySnapshot({
-  tools: bus.catalog().map((command) => ({
-    id: command.name,
-    label: command.name,
-    description: command.description,
-    enabled: true,
-    mutable: true,
-    source: 'app-command-bus'
-  }))
-})
+// Depuis le catalogue COMPLET, jamais `bus.catalog()` déjà filtré par l'interrupteur : un outil
+// coupé à l'écran y perdait sa ligne et se rallumait un démarrage sur deux (registre-outils.ts).
+amorcerRegistreOutils()
 /**
  * LE DOSSIER DE TRAVAIL N'EST PLUS GLOBAL — il est resolu a CHAQUE tour depuis la conversation.
  *

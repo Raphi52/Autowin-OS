@@ -54,17 +54,16 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     expect(labels.some((l) => l.includes('régime') || l.includes('regime'))).toBe(true)
     expect(labels.some((l) => l.includes('circuit-breaker'))).toBe(true)
     expect(labels.some((l) => l.includes('constitution'))).toBe(true)
-    expect(labels.some((l) => l.includes('graphify'))).toBe(true)
+    // Graphify est débranché (conv-353) : il n'influe plus sur un tour, il ne se décrit donc plus.
+    expect(labels.some((l) => l.includes('graphify'))).toBe(false)
   })
 
-  it('décrit le RAG Brain + Graphify du chat cockpit visible', () => {
+  it('décrit le RAG Brain du chat cockpit visible, sans preuves Graphify', () => {
     const cockpit = build().cockpit
-    expect(cockpit.retrievedContext.map(({ label }) => label)).toEqual([
-      'Brain signé',
-      'preuves Graphify'
-    ])
+    expect(cockpit.retrievedContext.map(({ label }) => label)).toEqual(['Brain signé'])
     expect(JSON.stringify(cockpit)).toContain('dernier message utilisateur')
-    expect(JSON.stringify(cockpit)).toContain('fallback')
+    // Le repli à vide en cas de panne reste décrit (porté par le Brain depuis le retrait de Graphify).
+    expect(JSON.stringify(cockpit)).toContain('une panne dégrade ce bloc à vide')
   })
 
   it('décrit tous les influenceurs variables du cockpit', () => {

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
+import { AppCommandBus, isolateWatchdogPromptPaths, outilOffert } from './commands'
+import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { APP_DESTINATIONS } from '../shared/navigation'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1488,6 +1489,28 @@ describe('AppCommandBus command execution policy', () => {
       workspaceRoot: process.cwd(),
       path: 'packages/api'
     })
+  })
+
+  it('débranche graphify avec le filtre de l’app : ni offert, ni exécuté, ni conseillé (conv-353)', async () => {
+    const graphify = vi.fn()
+    // Le MÊME prédicat que index.ts, interrupteur local muet (aucun choix enregistré).
+    const bus = new AppCommandBus(
+      fakeOs(),
+      () => {},
+      undefined,
+      graphify,
+      (name) => outilOffert(name, undefined)
+    )
+    const offerts = bus.catalog().map((tool) => tool.name)
+
+    expect(offerts).not.toContain('graphify')
+    expect(offerts).toEqual(expect.arrayContaining(['verify', 'brain_query', 'brain_graph']))
+    await expect(bus.exec('graphify', {})).resolves.toMatchObject({ ok: false })
+    expect(graphify).not.toHaveBeenCalled()
+    expect(buildChatPilotagePrompt(bus.catalog())).not.toMatch(/graphify/i)
+    // L'interrupteur local garde son effet sur les autres outils.
+    expect(outilOffert('verify', false)).toBe(false)
+    expect(outilOffert('verify', undefined)).toBe(true)
   })
 
   it('isole edit_file dans un bureau puis publie seulement sa copie', async () => {

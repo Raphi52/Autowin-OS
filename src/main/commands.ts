@@ -691,6 +691,23 @@ export function circonstanceDePublication(finalized: Record<string, unknown>): s
   }
 }
 
+/**
+ * OUTILS DÉBRANCHÉS : présents dans le catalogue et dans le code, mais jamais offerts aux agents de
+ * l'app. Retirer un nom d'ici le rebranche partout d'un coup (liste du prompt, outils directs,
+ * registre de l'écran Comportement) ; le texte du prompt qui pousse à s'en servir suit le catalogue.
+ *
+ * `graphify` (conv-353, 2026-10-19) : proposé 257 fois dans les 75 traces depuis le 11/10, appelé
+ * 0 fois ; sur ce poste son CLI est absent (« CLI Graphify introuvable »), et la carte du code injectée
+ * à chaque étape avait été mesurée contre-productive le 2026-07-22 (orchestrator.ts, +206k tokens
+ * sans moins de lecture). Le décrire dans chaque prompt coûtait donc sans jamais servir.
+ */
+export const OUTILS_DEBRANCHES: ReadonlySet<string> = new Set(['graphify'])
+
+/** Un outil est offert s'il n'est pas débranché et que l'interrupteur local ne l'a pas coupé. */
+export function outilOffert(name: string, interrupteur: boolean | undefined): boolean {
+  return !OUTILS_DEBRANCHES.has(name) && interrupteur !== false
+}
+
 /** Le catalogue BRUT, expose pour que les tests puissent en mesurer le poids dans le prompt. */
 export const CATALOG: CommandSpec[] = [
   {
