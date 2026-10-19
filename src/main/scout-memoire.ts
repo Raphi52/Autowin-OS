@@ -332,20 +332,42 @@ function runsQueLaDemandeDesigne(
   const designes = new Set<string>()
   if (sujet.length === 0) return designes
   const racinesParRun = new Map<string, string[]>()
+  const lignesParTableau = new Map<string, number>()
   for (const e of historique) {
     if (typeof e.run !== 'string' || !e.run) continue
     const horsCode = e.titre.replace(/`[^`]*`/gu, ' ')
     racinesParRun.set(e.run, [...(racinesParRun.get(e.run) ?? []), ...racinesDuSujet(horsCode)])
+    const tableau = `${e.run}\u0000${e.vuLe}`
+    lignesParTableau.set(tableau, (lignesParTableau.get(tableau) ?? 0) + 1)
   }
   const plafond = Math.max(1, Math.floor(racinesParRun.size / 5))
+  const grands = new Set(
+    [...lignesParTableau]
+      .filter(([, lignes]) => lignes > MAX_LIGNES_D_UN_SUJET)
+      .map(([tableau]) => tableau.split('\u0000')[0]!)
+  )
   for (const mot of sujet) {
     const runs = [...racinesParRun]
       .filter(([, racines]) => racines.some((racine) => memeRacine(racine, mot)))
       .map(([run]) => run)
-    if (runs.length <= plafond) for (const run of runs) designes.add(run)
+    if (runs.length <= plafond) for (const run of runs) if (!grands.has(run)) designes.add(run)
   }
   return designes
 }
+
+/*
+ * UN GRAND TABLEAU N'A PAS UN SUJET. « Un scout = un sujet » vaut pour un tableau de scout ordinaire :
+ * sur la mémoire réelle du 19/10, 17 runs sur 18 n'ont que des tableaux de 3 à 9 lignes (un run
+ * refait garde une ligne par version : 3 × 9 pour celui de conv-339). Le 18e, run-b83811373741-1,
+ * a des tableaux de 25 et 27 lignes : un inventaire des outils, du navigateur, de Teams, du coffre et
+ * du téléphone. « téléphone » n'y est que dans 2 titres, et ramenait ses 57 titres. Un run dont un
+ * tableau dépasse 12 lignes ne revient donc que titre par titre. 12 sépare le plus grand tableau
+ * d'un sujet mesuré (9) du plus petit inventaire (25). Limite : un mot rare pris dans un autre sens
+ * fait encore revenir un petit tableau — « prévenir le modèle », « peuvent finir ».
+ * fix-ok: rejeu de pistesDejaConnues sur scout-pistes.json réel : 49, 31 et 31 titres pour les trois
+ * demandes du juge (téléphone, Teams et Outlook, coffre), tout run-b83811373741-1 compris.
+ */
+const MAX_LIGNES_D_UN_SUJET = 12
 
 /** Mots qui ne disent rien du SUJET d'une demande ou d'une piste (sans accents, au singulier). */
 const MOTS_CREUX = new Set(

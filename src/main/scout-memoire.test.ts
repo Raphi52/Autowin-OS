@@ -403,6 +403,26 @@ describe('pistes déjà proposées : le scout précédent sur le même sujet res
       maintenant: quand,
       chemin
     })
+  /*
+   * Le scout de conv-339 a rendu 3 versions de son tableau de 9 lignes (scout-pistes.json réel) :
+   * chaque version est notée à part, comme `noterPistesScout` le fait en production.
+   */
+  const VERSIONS_F085 = [
+    '2026-10-18T22:23:30.413Z',
+    '2026-10-18T22:26:45.491Z',
+    '2026-10-18T22:31:53.823Z'
+  ]
+  const noterVersions = (
+    chemin: string,
+    run: string,
+    quand: readonly string[],
+    titres: readonly string[]
+  ): void => {
+    const parTableau = Math.ceil(titres.length / quand.length)
+    quand.forEach((q, i) =>
+      noterRun(chemin, run, q, titres.slice(i * parTableau, (i + 1) * parTableau))
+    )
+  }
 
   it('la demande de conv-339 reçoit les pistes du scout précédent sur les humains, pas celles des outils', () => {
     const chemin = fichier()
@@ -412,10 +432,10 @@ describe('pistes déjà proposées : le scout précédent sur le même sujet res
       '2026-10-10T21:38:01Z',
       lire('scout-conv-339-deja-propose.txt')
     )
-    noterRun(
+    noterVersions(
       chemin,
       'run-f085fcccbb82-1',
-      '2026-10-18T22:31:53Z',
+      VERSIONS_F085,
       lire('scout-conv-339-pistes-du-run.txt')
     )
     const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin, demande: DEMANDE_CONV_339 })
@@ -511,5 +531,106 @@ describe('pistes déjà proposées : le scout précédent sur le même sujet res
         'Une ligne abîmée rend la vue indisponible'
       ].sort()
     )
+  })
+
+  /*
+   * UN GRAND TABLEAU N'A PAS UN SUJET (objection du juge, 19/10). Le scout run-b83811373741-1 a rendu
+   * des tableaux de 5, 25 et 27 lignes sur des sujets sans lien : outils, navigateur, Teams, coffre,
+   * téléphone. « téléphone » n'y est que dans 2 titres, et faisait revenir les 57 : 49 titres pour
+   * « prévenir sur mon téléphone quand un travail est fini ».
+   * fix-ok: rejeu de pistesDejaConnues sur scout-pistes.json réel : 49, 31 et 31 titres rendus pour
+   * les trois demandes du juge, dont tout run-b83811373741-1 ramené par un seul mot rare.
+   */
+  const lireTableaux = (nom: string): { quand: string; titres: string[] }[] => {
+    const tableaux: { quand: string; titres: string[] }[] = []
+    for (const ligne of lire(nom)) {
+      if (ligne.startsWith('--- ')) tableaux.push({ quand: ligne.slice(4), titres: [] })
+      else tableaux[tableaux.length - 1]!.titres.push(ligne)
+    }
+    return tableaux
+  }
+  const memoireReelle = (): string => {
+    const chemin = fichier()
+    for (const { quand, titres } of lireTableaux('scout-b83811373741-tables.txt'))
+      noterRun(chemin, 'run-b83811373741-1', quand, titres)
+    noterVersions(
+      chemin,
+      'run-f085fcccbb82-1',
+      VERSIONS_F085,
+      lire('scout-conv-339-pistes-du-run.txt')
+    )
+    return chemin
+  }
+
+  it.each([
+    [
+      'prévenir sur mon téléphone quand un travail est fini',
+      /t[ée]l[ée]phone|pr[ée]ven|travail|fini/iu
+    ],
+    ['améliore les notifications Teams et Outlook', /notification|teams|outlook/iu],
+    ['le coffre de connexions', /coffre|connexion/iu]
+  ])(
+    '« %s » : un tableau de plus de 12 lignes ne revient pas en entier',
+    (demande, ditLaDemande) => {
+      const connues = pistesDejaConnues({ depot: 'D:/Autowin', chemin: memoireReelle(), demande })
+      expect(connues.length).toBeGreaterThan(0)
+      expect(connues.filter((t) => !ditLaDemande.test(t))).toEqual([])
+    }
+  )
+
+  it('jumeau : sur la même mémoire, les 3 tableaux de 9 lignes sur les humains reviennent en entier', () => {
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin: memoireReelle(),
+      demande: DEMANDE_CONV_339
+    })
+    for (const piste of [/peau moins/iu, /visages vivants/iu, /ombres sont des taches/iu])
+      expect(connues.filter((t) => piste.test(t))).toHaveLength(1)
+  })
+
+  /* La borne, des deux côtés : un tableau de 12 lignes revient en entier, un de 13 non. */
+  const unTableauDe = (lignes: number): string => {
+    const chemin = fichier()
+    const autres = [
+      'Peau moins plastique',
+      'Visages vivants',
+      'Ombres rondes peintes',
+      'Textures réduites',
+      'Reflets des néons',
+      'Sol mouillé sans miroir',
+      'Pluie trop régulière',
+      'Rames du métro figées',
+      'Brouillard uniforme',
+      'Enseignes sans clignement',
+      'Voitures trop lentes',
+      'Vapeur des bouches absente'
+    ]
+    const titres = ['La foule disparaît sans message', ...autres.slice(0, lignes - 1)]
+    noterRun(chemin, 'r-foule', '2026-10-10T10:00:00Z', titres)
+    ;[
+      'Préfixe du juge',
+      'Tri des conversations',
+      'Écriture du journal',
+      'Thème blanc trop pâle'
+    ].forEach((titre, i) => noterRun(chemin, `r${i}`, `2026-10-1${i + 1}T10:00:00Z`, [titre]))
+    return chemin
+  }
+
+  it('un tableau de 12 lignes est un sujet : ses 12 titres reviennent', () => {
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin: unTableauDe(12),
+      demande: '/scout la foule'
+    })
+    expect(connues).toHaveLength(12)
+  })
+
+  it('jumeau : un tableau de 13 lignes ne revient que par ses titres qui disent « foule »', () => {
+    const connues = pistesDejaConnues({
+      depot: 'D:/Autowin',
+      chemin: unTableauDe(13),
+      demande: '/scout la foule'
+    })
+    expect(connues).toEqual(['La foule disparaît sans message'])
   })
 })
