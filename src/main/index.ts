@@ -142,7 +142,7 @@ import {
   fermerHdesk,
   type GesteTv
 } from './hdesk-tv'
-import { bureauxGeres, creerBureau, fermerBureauGere } from './hdesk-gestion'
+import { bureauxGeres, choisirExecutable, creerBureau, fermerBureauGere } from './hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
@@ -910,7 +910,9 @@ ${incident.detail}`,
  */
 async function pickPath(
   sender: Electron.WebContents,
-  kind: 'openDirectory' | 'openFile'
+  kind: 'openDirectory' | 'openFile',
+  // conv-344 : filtre facultatif (« Parcourir… » des bureaux cachés : .exe seulement).
+  filters?: Electron.FileFilter[]
 ): Promise<string | null> {
   if (headlessTestInstance) return null
   const parent = BrowserWindow.fromWebContents(sender)
@@ -922,7 +924,10 @@ async function pickPath(
     )
     return null
   }
-  const result = await dialog.showOpenDialog(visible, { properties: [kind] })
+  const result = await dialog.showOpenDialog(visible, {
+    properties: [kind],
+    ...(filters ? { filters } : {})
+  })
   return result.canceled ? null : (result.filePaths[0] ?? null)
 }
 
@@ -1820,6 +1825,13 @@ function registerHdeskTvIpc(): void {
     if (process.platform !== 'win32')
       return { ok: false, code: null, message: 'Windows uniquement.' }
     return fermerBureauGere(racineScriptsHorsArchive(app.getAppPath()), String(id))
+  })
+  // « Parcourir… » (conv-344) : le sélecteur natif, filtré sur les .exe ; le main juge le résultat.
+  ipcMain.handle('hdesk:gestion:choisirExe', (event) => {
+    assertTrustedRendererSender(event, 'Vue Bureaux cachés')
+    return choisirExecutable(() =>
+      pickPath(event.sender, 'openFile', [{ name: 'Applications', extensions: ['exe'] }])
+    )
   })
   ipcMain.handle('hdesk:gestion:creer', (event, demande: DemandeCreationBureau) => {
     assertTrustedRendererSender(event, 'Vue Bureaux cachés')

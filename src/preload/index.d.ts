@@ -72,6 +72,7 @@ import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
 import type {
   DemandeCreationBureau,
+  ResultatChoixExe,
   ResultatCreationBureau,
   ResultatFermetureGeree,
   ResultatListeBureaux
@@ -113,6 +114,7 @@ interface ChatApi {
   hdeskGestionBureaux: () => Promise<ResultatListeBureaux>
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
+  hdeskGestionChoisirExe: () => Promise<ResultatChoixExe>
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
     phrase: string,

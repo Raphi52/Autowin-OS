@@ -27,6 +27,8 @@ import {
   refusCreation,
   type BureauGere,
   type DemandeCreationBureau,
+  type LancementRecent,
+  type ResultatChoixExe,
   type ResultatCreationBureau,
   type ResultatFermetureGeree,
   type ResultatListeBureaux
@@ -101,7 +103,77 @@ export async function bureauxGeres(
 ): Promise<ResultatListeBureaux> {
   const r = await lire()
   if (!r.ok) return r
-  return { ok: true, bureaux: listerTousLesBureaux(r.vivants, lireRegistre(registre)) }
+  return {
+    ok: true,
+    bureaux: listerTousLesBureaux(r.vivants, lireRegistre(registre)),
+    recents: lireRecents(registre, r.vivants)
+  }
+}
+
+export const RECENTS_MAX = 5
+
+/**
+ * « Récents » (conv-344, scout n°6) : les derniers lancements réussis de `historique.jsonl` (écrit par
+ * hdesk-lancer.ps1, borné à 50 lignes), plus récent d'abord. Une ligne abîmée ou incomplète est
+ * ignorée ; le même lancement répété (même identifiant, exécutable et arguments) compte une fois ;
+ * un bureau encore vivant n'en est pas : il est déjà dans la liste.
+ */
+export function lireRecents(registre: string, vivants: readonly string[]): LancementRecent[] {
+  const chemin = join(registre, 'historique.jsonl')
+  let texte: string
+  try {
+    texte = existsSync(chemin) ? readFileSync(chemin, 'utf8') : ''
+  } catch {
+    return []
+  }
+  const enVie = new Set(vivants.map((v) => v.toLowerCase()))
+  const vus = new Set<string>()
+  const recents: LancementRecent[] = []
+  const chaine = (v: unknown): string => (typeof v === 'string' ? v : '')
+  for (const ligne of texte
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .reverse()) {
+    if (recents.length >= RECENTS_MAX) break
+    let e: Record<string, unknown>
+    try {
+      e = JSON.parse(ligne) as Record<string, unknown>
+    } catch {
+      continue
+    }
+    const id = chaine(e?.id)
+    const executable = chaine(e.executable)
+    const travail = chaine(e.travail)
+    if (!ID_BUREAU.test(id) || !executable.trim() || !travail.trim()) continue
+    if (enVie.has(id.toLowerCase())) continue
+    const args = chaine(e.arguments)
+    const cle = `${id.toLowerCase()}|${executable.toLowerCase()}|${args}`
+    if (vus.has(cle)) continue
+    vus.add(cle)
+    recents.push({
+      id,
+      executable,
+      arguments: args,
+      travail,
+      conversationId: chaine(e.conversationId),
+      ...(chaine(e.lanceLe) ? { lanceLe: chaine(e.lanceLe) } : {})
+    })
+  }
+  return recents
+}
+
+/**
+ * « Parcourir… » (conv-344, scout n°10) : le sélecteur natif choisit le fichier, cette fonction le
+ * juge. `null` = annulé (ou sélecteur refusé : instance de test, aucune fenêtre visible) ; un fichier
+ * qui n'est pas un .exe est refusé AVANT d'arriver au lanceur.
+ */
+export async function choisirExecutable(
+  choisir: () => Promise<string | null>
+): Promise<ResultatChoixExe> {
+  const chemin = await choisir()
+  if (!chemin) return { ok: false }
+  if (!/\.exe$/i.test(chemin)) return { ok: false, message: 'Choisis un fichier .exe.' }
+  return { ok: true, chemin }
 }
 
 /** Résultat du script de fermeture, dit pour un humain. */

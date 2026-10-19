@@ -13,9 +13,12 @@ import type { ImageTv } from '../../../main/hdesk-tv'
 import {
   CREATION_ATTENTE_MS,
   FIL_MANUEL,
+  proposerIdentifiant,
   refusCreation,
   type BureauGere,
   type DemandeCreationBureau,
+  type LancementRecent,
+  type ResultatChoixExe,
   type ResultatCreationBureau,
   type ResultatFermetureGeree,
   type ResultatListeBureaux
@@ -28,6 +31,8 @@ export interface HdeskGestionApi {
   hdeskGestionBureaux: () => Promise<ResultatListeBureaux>
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
+  /** « Parcourir… » : sélecteur natif filtré sur les .exe (conv-344). Absent = pas de bouton. */
+  hdeskGestionChoisirExe?: () => Promise<ResultatChoixExe>
   /** Aperçu et bascule : mêmes canaux que la petite TV du chat. */
   hdeskTvImage?: (id: string) => Promise<ImageTv>
   hdeskTvBasculer?: (id: string) => Promise<{ ok: boolean; message?: string }>
@@ -72,6 +77,8 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
   const [form, setForm] = useState<Formulaire>(FORMULAIRE_VIDE)
   const [creationEnCours, setCreationEnCours] = useState(false)
   const [retourCreation, setRetourCreation] = useState<ResultatCreationBureau | null>(null)
+  // Identifiant tapé à la main : la proposition tirée du nom de l'appli ne l'écrase jamais (conv-344).
+  const [idTouche, setIdTouche] = useState(false)
   const rafraichirRef = useRef<(() => void) | null>(null)
   // fix-ok: pont absent = fait DÉRIVÉ du rendu, pas un état posé dans l'effet (lint 2026-10-16 :
   // setState synchrone dans un effet, rendus en cascade).
@@ -180,10 +187,10 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
     }))
   }
 
-  const creer = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
+  // Création par le formulaire OU par « Relancer » (Récents) : même chemin, même refus avant lancement.
+  const lancer = async (demande: DemandeCreationBureau): Promise<void> => {
     if (creationEnCours) return
-    const refus = refusCreation(form)
+    const refus = refusCreation(demande)
     if (refus) {
       setRetourCreation({ ok: false, code: null, message: refus })
       return
@@ -192,7 +199,7 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
     if (!f) return
     setCreationEnCours(true)
     setRetourCreation(null)
-    const r = await f({ ...form }).catch((err: unknown): ResultatCreationBureau => ({
+    const r = await f({ ...demande }).catch((err: unknown): ResultatCreationBureau => ({
       ok: false,
       code: null,
       message: String(err)
@@ -201,9 +208,41 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
     setRetourCreation(r)
     if (r.ok) {
       setForm(FORMULAIRE_VIDE)
+      setIdTouche(false)
       setFormOuvert(false)
       rafraichirRef.current?.()
     }
+  }
+
+  const creer = (e: React.FormEvent): void => {
+    e.preventDefault()
+    void lancer(form)
+  }
+
+  const relancer = (r: LancementRecent): void =>
+    void lancer({
+      id: r.id,
+      executable: r.executable,
+      arguments: r.arguments,
+      travail: r.travail,
+      conversationId: r.conversationId
+    })
+
+  // Identifiants déjà vivants : la proposition les contourne (le lanceur reste juge, exit 5).
+  const idsVivants = etatListe?.ok ? etatListe.bureaux.map((b) => b.id) : []
+  const changerExecutable = (chemin: string): void =>
+    setForm((avant) => ({
+      ...avant,
+      executable: chemin,
+      ...(!idTouche && chemin.trim() ? { id: proposerIdentifiant(chemin, idsVivants) } : {})
+    }))
+
+  const parcourir = async (): Promise<void> => {
+    const f = cible()?.hdeskGestionChoisirExe
+    if (!f) return
+    const r = await f().catch((e: unknown): ResultatChoixExe => ({ ok: false, message: String(e) }))
+    if (r.ok) changerExecutable(r.chemin)
+    else if (r.message) setRetourCreation({ ok: false, code: null, message: r.message })
   }
 
   const champ = (cle: keyof Formulaire, libelle: string, aide: string): React.JSX.Element => (
@@ -213,7 +252,12 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
         data-testid={`hdesk-champ-${cle}`}
         value={form[cle]}
         placeholder={aide}
-        onChange={(e) => setForm((avant) => ({ ...avant, [cle]: e.target.value }))}
+        onChange={(e) => {
+          const v = e.target.value
+          if (cle === 'executable') return changerExecutable(v)
+          if (cle === 'id') setIdTouche(v.trim() !== '')
+          setForm((avant) => ({ ...avant, [cle]: v }))
+        }}
       />
     </label>
   )
@@ -254,8 +298,15 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
 
       {formOuvert && (
         <form className="hdesk-formulaire" data-testid="hdesk-formulaire" onSubmit={creer}>
-          {champ('id', 'Identifiant', 'ex. appli-essai')}
-          {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
+          <div className="hdesk-champ-exe">
+            {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
+            {cible()?.hdeskGestionChoisirExe && (
+              <button type="button" data-testid="hdesk-parcourir" onClick={() => void parcourir()}>
+                Parcourir…
+              </button>
+            )}
+          </div>
+          {champ('id', 'Identifiant', 'proposé à partir de l’application')}
           {champ('arguments', 'Arguments (facultatif)', 'ex. /mode test')}
           {champ('travail', 'Ce que tu y fais', 'ex. Essai de mon appli sur une branche de test')}
           {champ('conversationId', 'Fil (facultatif)', FIL_MANUEL)}
@@ -352,6 +403,33 @@ export function HdeskGestionView({ active, api, intervalleMs = 4000 }: Props): R
             )
           })}
         </ul>
+      )}
+
+      {etatListe?.ok && (etatListe.recents?.length ?? 0) > 0 && (
+        <section className="hdesk-recents" data-testid="hdesk-recents" aria-label="Récents">
+          <h3>Récents</h3>
+          <ul>
+            {etatListe.recents!.map((r) => (
+              <li
+                key={`${r.id}|${r.executable}|${r.arguments}`}
+                data-testid={`hdesk-recent-${r.id}`}
+              >
+                <strong>{r.travail}</strong>
+                <span title={r.executable}>{nomDeFichier(r.executable)}</span>
+                <span>{r.id}</span>
+                <span>{quand(r.lanceLe)}</span>
+                <button
+                  type="button"
+                  data-testid={`hdesk-relancer-${r.id}`}
+                  disabled={creationEnCours}
+                  onClick={() => relancer(r)}
+                >
+                  Relancer
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   )

@@ -238,3 +238,110 @@ describe('HdeskGestionView — Créer', () => {
     expect(api.hdeskGestionCreer).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * conv-344 — « pk je suis obligé de choisir un path de programme ? ». Le chemin reste obligatoire
+ * (un bureau vide est détruit par Windows) : il se CHOISIT (« Parcourir… », scout n°10), l'identifiant
+ * se PROPOSE (n°11), et un bureau fermé se RELANCE sans rien retaper (n°6).
+ */
+describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
+  const champ = (h: HTMLElement, cle: string): HTMLInputElement =>
+    $(h, `hdesk-champ-${cle}`) as HTMLInputElement
+
+  it('« Parcourir… » remplit le chemin et propose un identifiant libre', async () => {
+    const api = faux([ZOX], {
+      hdeskGestionChoisirExe: vi.fn(async () => ({
+        ok: true as const,
+        chemin: 'C:\\zox\\exe\\ZOX.exe'
+      }))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('C:\\zox\\exe\\ZOX.exe')
+    // « zox » est déjà un bureau vivant : la proposition le contourne.
+    expect(champ(h, 'id').value).toBe('zox-2')
+  })
+
+  it('« Parcourir… » annulé : le champ reste tel quel, sans message', async () => {
+    const api = faux([], { hdeskGestionChoisirExe: vi.fn(async () => ({ ok: false as const })) })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await saisir(h, 'executable', 'C:\\deja\\la.exe')
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('C:\\deja\\la.exe')
+    expect($(h, 'hdesk-retour-creation')).toBeNull()
+  })
+
+  it('un fichier refusé (pas un .exe) : le refus est dit, le champ reste tel quel', async () => {
+    const api = faux([], {
+      hdeskGestionChoisirExe: vi.fn(async () => ({
+        ok: false as const,
+        message: 'Choisis un fichier .exe.'
+      }))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await cliquer($(h, 'hdesk-parcourir'))
+    expect(champ(h, 'executable').value).toBe('')
+    expect($(h, 'hdesk-retour-creation')?.textContent).toBe(
+      'Création refusée : Choisis un fichier .exe.'
+    )
+  })
+
+  it('le chemin tapé propose l’identifiant ; un identifiant tapé à la main n’est jamais écrasé', async () => {
+    const h = await monter(faux([]))
+    await cliquer($(h, 'hdesk-nouveau'))
+    await saisir(h, 'executable', 'C:\\Program Files\\Mon Appli\\Mon Appli.exe')
+    expect(champ(h, 'id').value).toBe('mon-appli')
+    await saisir(h, 'id', 'le-mien')
+    await saisir(h, 'executable', 'C:\\Windows\\notepad.exe')
+    expect(champ(h, 'id').value).toBe('le-mien')
+    // Identifiant vidé à la main : la proposition reprend.
+    await saisir(h, 'id', '')
+    await saisir(h, 'executable', 'C:\\Windows\\notepad.exe ')
+    expect(champ(h, 'id').value).toBe('notepad')
+  })
+
+  it('sans pont « Parcourir » (ancienne version) : pas de bouton', async () => {
+    const h = await monter(faux([]))
+    await cliquer($(h, 'hdesk-nouveau'))
+    expect($(h, 'hdesk-parcourir')).toBeNull()
+  })
+
+  it('« Récents » : un bureau fermé se relance avec exactement ses champs', async () => {
+    const recent = {
+      id: 'roblox',
+      executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
+      arguments: '-mode test',
+      travail: 'Essai du jeu',
+      conversationId: 'conv-526',
+      lanceLe: '2026-10-19T08:00:00+02:00'
+    }
+    const api = faux([], {
+      hdeskGestionBureaux: vi.fn(async () => ({
+        ok: true as const,
+        bureaux: [],
+        recents: [recent]
+      }))
+    })
+    const h = await monter(api)
+    const ligne = $(h, 'hdesk-recent-roblox')!
+    expect(ligne.textContent).toContain('Essai du jeu')
+    expect(ligne.textContent).toContain('RobloxStudioBeta.exe')
+    await cliquer($(h, 'hdesk-relancer-roblox'))
+    expect(api.hdeskGestionCreer).toHaveBeenCalledWith({
+      id: 'roblox',
+      executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
+      arguments: '-mode test',
+      travail: 'Essai du jeu',
+      conversationId: 'conv-526'
+    })
+    expect($(h, 'hdesk-retour-creation')?.textContent).toBe('Bureau « x » prêt.')
+  })
+
+  it('aucun récent : pas de section', async () => {
+    const h = await monter(faux([ZOX]))
+    expect($(h, 'hdesk-recents')).toBeNull()
+  })
+})

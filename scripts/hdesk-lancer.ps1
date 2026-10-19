@@ -121,7 +121,17 @@ $hBureau = [AutowinHdeskLanceur]::CreateDesktop($nomBureau, [IntPtr]::Zero, [Int
 if ($hBureau -eq [IntPtr]::Zero) { throw "CreateDesktop('$nomBureau') a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
 $ligne = New-Object System.Text.StringBuilder
 [void]$ligne.Append('"').Append($Executable).Append('"')
-if ($Arguments) { [void]$ligne.Append(' ').Append($Arguments) }
+# PROFIL PROPRE AU BUREAU POUR LES NAVIGATEURS (conv-344, scout n°12) : sans --user-data-dir, Chrome
+# et Brave partagent le profil de la copie deja ouverte sur l'ecran de l'utilisateur (deux instances
+# ne tiennent pas le meme dossier de profil) et lui confient la page. Ajoute EN FIN de ligne. Edge est
+# exclu : un Edge a profil neuf se connecte seul au compte Microsoft de la session (note du 26/09).
+# Un profil deja fourni est respecte. Les arguments SAISIS restent ceux de l'historique.
+$ArgumentsEffectifs = $Arguments
+if (@('chrome.exe', 'brave.exe') -contains [IO.Path]::GetFileName($Executable).ToLowerInvariant() -and $Arguments -notmatch '--user-data-dir') {
+  $profil = Join-Path (Join-Path $registreId 'profils') $Id
+  $ArgumentsEffectifs = ("$Arguments --user-data-dir=" + '"' + $profil + '"').Trim()
+}
+if ($ArgumentsEffectifs) { [void]$ligne.Append(' ').Append($ArgumentsEffectifs) }
 $si = New-Object AutowinHdeskLanceur+STARTUPINFO
 $si.cb = [Runtime.InteropServices.Marshal]::SizeOf([type][AutowinHdeskLanceur+STARTUPINFO])
 $si.lpDesktop = $nomBureau
@@ -194,7 +204,7 @@ if ($fenetres -le 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
   [pscustomobject]@{
     id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = 0; pret = $false
     erreur = "L'application s'est arretee AVANT d'ouvrir une fenetre (code de sortie $codeSortie) : elle a passe la main a une copie deja ouverte (sa fenetre est peut-etre sur l'ecran de l'utilisateur) ou a plante au demarrage. Rien n'est isole : corrige la cause avant de capturer ou de conclure."
-    codeSortie = $codeSortie; journalWindows = $journal
+    codeSortie = $codeSortie; journalWindows = $journal; arguments = $ArgumentsEffectifs
   } | ConvertTo-Json -Compress
   [Console]::Error.WriteLine("hdesk-lancer : $nomExe arrete avant toute fenetre (code $codeSortie). " + ($journal -join ' || '))
   exit 2
@@ -204,7 +214,7 @@ if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
   [pscustomobject]@{
     id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = $false
     erreur = "L'application s'est fermee apres avoir ouvert sa fenetre (code de sortie $codeSortie). Corrige la cause avant de capturer ou de conclure."
-    codeSortie = $codeSortie; journalWindows = $journal
+    codeSortie = $codeSortie; journalWindows = $journal; arguments = $ArgumentsEffectifs
   } | ConvertTo-Json -Compress
   [Console]::Error.WriteLine("hdesk-lancer : $nomExe mort apres demarrage (code $codeSortie). " + ($journal -join ' || '))
   exit 4
@@ -227,6 +237,6 @@ if ($fenetres -gt 0) {
     [IO.File]::WriteAllText($histo, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
   } catch { [Console]::Error.WriteLine("hdesk-lancer : historique non ecrit ($($_.Exception.Message))") }
 }
-[pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0) } | ConvertTo-Json -Compress
+[pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0); arguments = $ArgumentsEffectifs } | ConvertTo-Json -Compress
 if ($fenetres -le 0) { exit 3 }
 exit 0

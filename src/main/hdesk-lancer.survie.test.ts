@@ -4,7 +4,7 @@
  * exit 0. Le lanceur doit signaler la mort de l'app DANS l'appel (exit 4), sans l'inscrire pour la TV.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -112,5 +112,88 @@ describe.skipIf(process.platform !== 'win32')(
         rmSync(registre, { recursive: true, force: true })
       }
     }, 70_000)
+  }
+)
+
+/**
+ * conv-344 (scout n°12) : un navigateur lancé sans `--user-data-dir` partage le profil de la copie
+ * déjà ouverte sur l'écran de l'utilisateur (deux Chrome ne peuvent pas tenir le même dossier de
+ * profil). Le lanceur ajoute un profil PROPRE AU BUREAU pour chrome et brave. Edge est exclu : une
+ * note du 26/09 mesure qu'un Edge à profil neuf se connecte seul au compte Microsoft de la session.
+ * Aucun vrai navigateur n'est lancé : une COPIE de cmd.exe nommée chrome.exe s'arrête aussitôt
+ * (exit 2) et le JSON rend les arguments réellement passés.
+ */
+describe.skipIf(process.platform !== 'win32')(
+  'hdesk-lancer : profil séparé pour les navigateurs',
+  () => {
+    const lancerSous = (nom: string, args: string): Record<string, unknown> => {
+      const id = `kznav${process.pid}`
+      const registre = mkdtempSync(join(tmpdir(), 'hdesk-registre-nav-'))
+      const dossier = mkdtempSync(join(tmpdir(), 'hdesk-faux-nav-'))
+      const exe = join(dossier, nom)
+      copyFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe'), exe)
+      try {
+        const r = spawnSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-File',
+            join(process.cwd(), 'scripts', 'hdesk-lancer.ps1'),
+            '-Id',
+            id,
+            '-Executable',
+            exe,
+            '-Arguments',
+            args,
+            '-Travail',
+            'test',
+            '-Conversation',
+            'conv-344',
+            '-Registre',
+            registre,
+            '-AttenteSecondes',
+            '8'
+          ],
+          { encoding: 'utf8', timeout: 60_000 }
+        )
+        const sortie = JSON.parse(
+          r.stdout
+            .trim()
+            .split(/\r?\n/)
+            .reverse()
+            .find((l) => l.startsWith('{')) ?? '{}'
+        ) as Record<string, unknown>
+        return { ...sortie, code: r.status, registre }
+      } finally {
+        rmSync(registre, { recursive: true, force: true })
+        rmSync(dossier, { recursive: true, force: true })
+      }
+    }
+
+    it.each(['chrome.exe', 'Brave.EXE'])(
+      '%s sans profil : --user-data-dir du bureau ajouté APRÈS les arguments',
+      (nom) => {
+        const r = lancerSous(nom, '/c exit 7')
+        expect(r.code).toBe(2)
+        expect(r.arguments).toBe(
+          `/c exit 7 --user-data-dir="${join(String(r.registre), 'profils', `kznav${process.pid}`)}"`
+        )
+      },
+      70_000
+    )
+
+    it('profil déjà fourni : arguments intacts', () => {
+      expect(lancerSous('chrome.exe', '/c exit 7 --user-data-dir=C:\\p').arguments).toBe(
+        '/c exit 7 --user-data-dir=C:\\p'
+      )
+    }, 70_000)
+
+    it.each(['msedge.exe', 'cmd.exe'])(
+      '%s : arguments intacts',
+      (nom) => {
+        expect(lancerSous(nom, '/c exit 7').arguments).toBe('/c exit 7')
+      },
+      70_000
+    )
   }
 )
