@@ -3,6 +3,7 @@ import { formatCostCoverage, formatUsd, resolveCostCoverage } from './cost-estim
 import type { TokenUsage } from './token-usage'
 import { phasesRestantes, runDAnalyseSeule } from './portee-de-phase'
 import { extraireBilan } from './bilan-d-etape'
+import { localiserTableauScout } from './scout-table'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -757,11 +758,104 @@ function boundedMarkdownResult(
   const trouve = extraireBilan(result)
   const bilan = trouve && trouve.bilan.length + 400 < maxLength ? trouve.bilan : undefined
   const corps = bilan && trouve ? trouve.avant : result
-  const truncated = corps.slice(0, bilan ? maxLength - bilan.length - 2 : maxLength)
-  const open = openMarkdownFence(truncated)
-  const closure = open ? `\n${open.prefix}${open.marker.repeat(open.length)}` : ''
+  const piedBilan = bilan ? `\n\n${bilan}` : ''
+  /*
+   * LA COUPE NE TOMBE JAMAIS AU MILIEU D'UNE LIGNE DE TABLEAU (conv-339) : le /scout y rendait 9
+   * pistes, la bulle en montrait une ligne et demie — or pour un scout, le tableau EST le résultat.
+   *  - le tableau du SCOUT traversé par la borne est gardé entier, jusqu'à `plafond` ;
+   *  - tout autre tableau perd des lignes ENTIÈRES : la bulle reste bornée (conv-914, voir
+   *    `agent-pilot.resultat-entier-au-modele.test.ts`), le modèle reçoit tout par ailleurs.
+   * Au-delà du plafond, même un tableau de scout est coupé entre deux lignes, jamais dans une ligne.
+   * fix-ok: sortie réelle de conv-339 (fixture scout-conv-339-sortie.md) : 2 lignes sur 9 affichées
+   * avant, 9 après (orchestration-outcome.tableau-entier.test.ts).
+   */
+  const tableaux = tableauxMarkdown(corps)
+  const plafond = maxLength * 3
+  let coupe = bilan ? maxLength - bilan.length - 2 : maxLength
+  const traverse = tableaux.find((t) => t.debut < coupe && coupe < t.fin)
+  if (traverse) {
+    coupe =
+      traverse.scout && traverse.fin <= plafond
+        ? traverse.fin
+        : finDeLigneAvant(traverse, traverse.scout ? plafond : coupe)
+  }
+  if (corps.slice(coupe).trim() === '') return `${corps.trimEnd()}${piedBilan}`
+  const fermer = (texte: string): string => {
+    const open = openMarkdownFence(texte)
+    return open ? `${texte}\n${open.prefix}${open.marker.repeat(open.length)}` : texte
+  }
+  /*
+   * Le tableau du SCOUT tombe tout entier après la borne (longue `## Cible`) : il serait perdu. On
+   * coupe alors le texte d'AVANT, on dit combien, et le tableau suit — entier sous le plafond.
+   */
+  const scout = tableaux.some((t) => t.scout && t.debut < coupe)
+    ? undefined
+    : tableaux.find((t) => t.scout && t.debut >= coupe)
+  const finScout = !scout
+    ? 0
+    : coupe + scout.fin - scout.debut <= plafond
+      ? scout.fin
+      : finDeLigneAvant(scout, scout.debut + plafond - coupe)
+  if (scout && finScout > scout.debut) {
+    const omisAvant = scout.debut - coupe
+    const omisApres = corps.slice(finScout).trim() === '' ? 0 : corps.length - finScout
+    const marqueApres = omisApres
+      ? `\n…[tronqué : ${omisApres} caractères de plus après le tableau${ou}]`
+      : ''
+    return `${fermer(corps.slice(0, coupe))}\n…[${omisAvant} caractères omis avant le tableau]\n\n${corps.slice(scout.debut, finScout)}${marqueApres}${piedBilan}`
+  }
+  const truncated = corps.slice(0, coupe)
   const reste = corps.length - truncated.length
-  return `${truncated}${closure}\n…[tronqué : ${reste} caractères de plus${ou}]${bilan ? `\n\n${bilan}` : ''}`
+  return `${fermer(truncated)}\n…[tronqué : ${reste} caractères de plus${ou}]${piedBilan}`
+}
+
+interface TableauMarkdown {
+  debut: number
+  /** Juste après sa dernière ligne. */
+  fin: number
+  /** La fin de chaque ligne de DONNÉES (après la séparation) : les seuls endroits où le couper. */
+  finsDeLigne: number[]
+  /** Au format du tableau de pistes du /scout (`localiserTableauScout`). */
+  scout: boolean
+}
+
+/**
+ * Les tableaux Markdown du texte, en positions de caractères. Un tableau = des lignes consécutives
+ * qui commencent par `|`, dont une ligne de séparation (`|---|`) — sans elle, ce n'est qu'un texte
+ * qui commence par une barre.
+ */
+function tableauxMarkdown(texte: string): TableauMarkdown[] {
+  const tableaux: TableauMarkdown[] = []
+  let position = 0
+  let courant: { debut: number; fin: number; finsDeLigne: number[]; separe: boolean } | undefined
+  const clore = (): void => {
+    if (courant?.separe) {
+      const { debut, fin, finsDeLigne } = courant
+      const scout = localiserTableauScout(texte.slice(debut, fin)) !== null
+      tableaux.push({ debut, fin, finsDeLigne, scout })
+    }
+    courant = undefined
+  }
+  for (const ligne of texte.split('\n')) {
+    if (!ligne.trim().startsWith('|')) clore()
+    else {
+      courant ??= { debut: position, fin: position, finsDeLigne: [], separe: false }
+      const fin = position + ligne.length
+      if (courant.separe) courant.finsDeLigne.push(fin)
+      else if (/^\s*\|?[\s:|-]+\|?\s*$/u.test(ligne) && ligne.includes('-')) courant.separe = true
+      courant.fin = fin
+    }
+    position += ligne.length + 1
+  }
+  clore()
+  return tableaux
+}
+
+/** La fin de la dernière ligne ENTIÈRE du tableau avant `limite` ; son début si aucune ne tient. */
+function finDeLigneAvant(tableau: TableauMarkdown, limite: number): number {
+  let fin = tableau.debut
+  for (const finDeLigne of tableau.finsDeLigne) if (finDeLigne <= limite) fin = finDeLigne
+  return fin
 }
 
 /**
