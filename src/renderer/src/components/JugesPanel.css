@@ -90,6 +90,25 @@
   color: var(--jpan-texte);
   background: var(--jpan-aplat-clair);
 }
+/* EN COURS (conv-1021) : un juge écrit, aucun verdict n'est rendu — le gel bleu → rose de NOUVELLE,
+   jamais le rouge ni le vert, qui diraient une décision. Le point bat tant qu'il écrit. */
+.jpan-verdict.is-encours {
+  color: var(--jpan-encre);
+  background: var(--jpan-gel);
+}
+.jpan-pouls {
+  animation: jpan-pouls 1.4s ease-in-out infinite;
+}
+@keyframes jpan-pouls {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jpan-pouls {
+    animation: none;
+  }
+}
 .jpan-titre {
   display: flex;
   flex: 1 1 170px;
@@ -317,6 +336,9 @@
 }
 .jpan-juge.is-valide .jpan-score {
   color: var(--jpan-vert);
+}
+.jpan-juge.is-encours .jpan-juge-absent {
+  color: var(--jpan-rose-texte);
 }
 .jpan-juge-absent {
   font-size: 11.5px;

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { blocDesJuges, objectionsDuVerdict, passagesJuges } from './juges-bloc'
+import {
+  blocDesJuges,
+  blocDesJugesEnDirect,
+  objectionsDuVerdict,
+  passagesJuges
+} from './juges-bloc'
 import type { StepDeRun } from './juges-votes'
 import trace from './juges-bloc.conv253.fixture.json'
 
@@ -124,5 +129,90 @@ describe('objectionsDuVerdict — cas limites', () => {
   it('la section s’arrête à la section suivante', () => {
     const o = objectionsDuVerdict('OBJECTIONS:\n- MINEUR: a\nPREUVES:\n- b', false)
     expect(o.map((x) => x.texte)).toEqual(['a'])
+  })
+})
+
+/**
+ * EN DIRECT (conv-1021) : la même trace de conv-253, coupée là où le run en était. Le dernier
+ * verdict (index 27, réparation 5) est en train de s'écrire ; celui d'avant (index 21, réparation 4)
+ * est rendu.
+ */
+describe('blocDesJugesEnDirect — le bloc pendant que ça juge', () => {
+  const avantDernierJuge = steps.slice(0, 27)
+  const verdictFinal = steps[27].text ?? ''
+  const debutObjections = verdictFinal.indexOf('OBJECTIONS:')
+  const finPremiere = verdictFinal.indexOf('\n- MINEUR', debutObjections + 'OBJECTIONS:'.length + 2)
+  const juge = { step: 'judge', model: 'claude-opus-5-5' }
+
+  it('le juge écrit : ses objections apparaissent au fil du texte reçu', () => {
+    const avant = blocDesJugesEnDirect({
+      steps: avantDernierJuge,
+      enCours: true,
+      phase: juge,
+      texte: verdictFinal.slice(0, debutObjections)
+    })
+    expect(avant.enCours).toMatchObject({
+      libelle: 'claude-opus-5-5',
+      lisible: true,
+      reparation: 5
+    })
+    expect(avant.enCours?.objections).toEqual([])
+    const une = blocDesJugesEnDirect({
+      steps: avantDernierJuge,
+      enCours: true,
+      phase: juge,
+      texte: verdictFinal.slice(0, finPremiere)
+    })
+    expect(une.enCours?.objections.map((o) => [o.gravite, o.suivi])).toEqual([['MINEUR', 'partie']])
+    const toutes = blocDesJugesEnDirect({
+      steps: avantDernierJuge,
+      enCours: true,
+      phase: juge,
+      texte: verdictFinal
+    })
+    expect(toutes.enCours?.objections.map((o) => o.suivi)).toEqual([
+      'partie',
+      'reprise',
+      'nouvelle'
+    ])
+    // Le verdict d'avant reste là : c'est lui qui donne le suivi des objections.
+    expect(toutes.bloc?.reparation).toBe(4)
+  })
+
+  it('plusieurs juges en parallèle : leur texte mêlé n’est pas lu', () => {
+    const etat = blocDesJugesEnDirect({
+      steps: avantDernierJuge,
+      enCours: true,
+      phase: { ...juge, execution: { groupId: 'judge:fanout' } },
+      texte: verdictFinal
+    })
+    expect(etat.enCours).toMatchObject({ lisible: false, objections: [] })
+  })
+
+  it('une réparation tourne après le verdict : le bloc montre ce verdict et dit laquelle', () => {
+    const etat = blocDesJugesEnDirect({
+      steps: steps.slice(0, 26),
+      enCours: true,
+      phase: { step: 'exec', model: 'claude-opus-5-5' }
+    })
+    expect(etat.enCours).toBeUndefined()
+    expect(etat.bloc?.reparation).toBe(4)
+    expect(etat.reparationEnCours).toBe(5)
+  })
+
+  it('le run arrêté : plus rien n’est en cours, seul le dernier verdict compte', () => {
+    const etat = blocDesJugesEnDirect({
+      steps: steps.slice(0, 26),
+      enCours: false,
+      phase: juge,
+      texte: verdictFinal
+    })
+    expect(etat).toEqual({ bloc: blocDesJuges(steps.slice(0, 26)) })
+  })
+
+  it('avant le premier verdict : rien à montrer tant qu’aucun juge n’écrit', () => {
+    expect(
+      blocDesJugesEnDirect({ steps: steps.slice(0, 4), enCours: true, phase: { step: 'exec' } })
+    ).toEqual({ bloc: null })
   })
 })

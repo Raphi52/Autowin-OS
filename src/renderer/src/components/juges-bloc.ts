@@ -268,6 +268,90 @@ function constatsDuVerdict(texte: string): number {
   return pucesDuVerdict(texte).filter((p) => p.gravite === 'OK').length
 }
 
+/**
+ * LE BLOC SE REMPLIT PENDANT QUE ÇA JUGE (demande du 2026-10-19, conv-1021 : « dans mon autre conv
+ * ça judge depuis 2 heures […] je veux que pendant que ça judge ça remplisse le bloc en live »).
+ *
+ * Le bloc ne lisait que `trace.json`, que le main n'écrit qu'à la FIN du run (`commands.ts`,
+ * `saveConvRunTrace`) : un run en boucle juge → réparation → juge (conv-1019, 2 h) n'y montrait rien.
+ * Le fil, lui, reçoit tout en direct : chaque étape terminée (`orchestrate-step`), la phase qui
+ * démarre (`orchestrate-phase`, celle du juge comprise) et le texte qu'il écrit (`orchestrate-delta`),
+ * rangés dans `ScopedLiveRun` (`chat-view-model.ts`). Cette fonction lit ces trois morceaux.
+ */
+export interface PhaseEnDirect {
+  step: string
+  model?: string
+  provider?: string
+  /** `judge:fanout` = plusieurs juges en parallèle (orchestrator.ts) : leurs textes arrivent mêlés. */
+  execution?: { groupId?: string }
+}
+
+export interface JugeEnCours {
+  libelle: string
+  /** Ce que le juge a déjà écrit — le texte reçu jusqu'ici. */
+  texte: string
+  /**
+   * Faux quand plusieurs juges écrivent en même temps : les morceaux de leurs textes arrivent
+   * entrelacés dans un seul flux, sans dire qui écrit quoi. Les lire produirait des objections
+   * coupées au milieu d'une autre ; on attend alors leurs verdicts, qui arrivent un par un.
+   */
+  lisible: boolean
+  /** Rang de réparation du passage jugé (0 = le premier build). */
+  reparation: number
+  objections: ObjectionDuJuge[]
+}
+
+export interface BlocEnDirect {
+  /** Le dernier verdict RENDU — `null` avant le premier. */
+  bloc: BlocDesJuges | null
+  /** Le juge qui écrit en ce moment. */
+  enCours?: JugeEnCours
+  /** Une réparation tourne après le dernier verdict : son rang. */
+  reparationEnCours?: number
+}
+
+function rangDuPassageCourant(steps: readonly StepDeRun[]): number {
+  let rang = 0
+  for (const step of steps) {
+    if (step.step !== 'gate') continue
+    const passage = NOUVEAU_PASSAGE.exec((step.detail || step.text || '').trim())
+    if (passage) rang = Number(passage[1])
+  }
+  return rang
+}
+
+export function blocDesJugesEnDirect(entree: {
+  steps: readonly StepDeRun[]
+  /** Le run tourne encore. Faux = plus rien n'est « en cours », seul le dernier verdict compte. */
+  enCours: boolean
+  phase?: PhaseEnDirect
+  texte?: string
+}): BlocEnDirect {
+  const bloc = blocDesJuges(entree.steps)
+  if (!entree.enCours) return { bloc }
+  const rang = rangDuPassageCourant(entree.steps)
+  const phase = entree.phase
+  if (phase?.step === 'judge') {
+    const libelle = phase.model || phase.provider || 'juge'
+    const texte = entree.texte ?? ''
+    const lisible = phase.execution?.groupId !== 'judge:fanout'
+    const passagePrecedent = passagesJuges(entree.steps).length > 0
+    return {
+      bloc,
+      enCours: {
+        libelle,
+        texte,
+        lisible,
+        reparation: rang,
+        objections: lisible
+          ? objectionsDuVerdict(texte, passagePrecedent).map((o) => ({ ...o, juge: libelle }))
+          : []
+      }
+    }
+  }
+  return bloc && rang > bloc.reparation ? { bloc, reparationEnCours: rang } : { bloc }
+}
+
 /** Le bloc à afficher : le dernier passage jugé du run, ou `null` s'il n'y a aucun vote. */
 export function blocDesJuges(steps: readonly StepDeRun[]): BlocDesJuges | null {
   const passages = passagesJuges(steps)
