@@ -6,6 +6,7 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { configureAutowinAppDataBase } from './app-data'
 import type { PromptSnapshot } from './commands'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../shared/chat-turn'
+import { RELANCE_CHIFFRE_NON_VERIFIE } from './chat-turn-messages'
 
 /*
  * ISOLATION : un echec d'action est inscrit au registre des murs, qui PERSISTE sur disque. Sans
@@ -159,10 +160,31 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
       `Il y a 12 fichiers dans src, nombre relu.`
     ])
     expect(appels).toBe(2)
-    expect(consignes.at(-1)).toContain('SANS avoir appelé la moindre commande')
+    expect(consignes.at(-1)).toContain(RELANCE_CHIFFRE_NON_VERIFIE)
     expect(occurrences(fil, 'Il y a 12 fichiers dans src')).toBe(1)
     expect(fil).toContain('nombre relu')
     expect(consignes.at(-1)).toContain('REMPLACE')
+  })
+
+  // conv-335 (2026-10-19) : la relance partait sur une réponse SANS aucun chiffre, et lui disait
+  // pourtant « tu viens d'avancer un nombre ». L'agent est allé « vérifier ses chiffres » : un Glob
+  // de 25 s en délai dépassé, puis 2 minutes de lectures payées pour une question sans compte.
+  // Le texte envoyé dit la VRAIE raison : la demande réclame un compte, et rien n'a été lu.
+  it('chiffre non vérifié sans aucun chiffre : le texte envoyé dit « compte demandé, rien lu »', async () => {
+    const { appels, consignes } = await jouer('combien de fichiers dans src ?', [
+      'Je ne peux pas le savoir sans regarder le dossier.',
+      'Il y a 12 fichiers dans src.'
+    ])
+    expect(appels).toBe(2)
+    const envoye = consignes.at(-1) ?? ''
+    expect(envoye).toContain(RELANCE_CHIFFRE_NON_VERIFIE)
+    expect(envoye).toMatch(/réclame un compte/)
+    expect(envoye).toMatch(/AUCUNE commande de lecture/)
+    // L'ordre reste le même : lire, puis redonner la réponse entière.
+    expect(envoye).toMatch(/list_files/)
+    expect(envoye).toMatch(/EN ENTIER/)
+    // Plus jamais l'accusation d'un nombre qu'il n'a pas écrit.
+    expect(envoye).not.toMatch(/avancer un nombre|avancé un nombre/)
   })
 
   it('conclusion absente après un dépôt mémoire : même remplacement, troisième point de relance', async () => {
@@ -237,7 +259,7 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
       ],
       [{ ok: true, data: { lance: true, exitCode: 0, detail: 'envoyés = 3, reçus = 3' } }]
     )
-    expect(consignes.some((c) => c.includes('SANS avoir appelé la moindre commande'))).toBe(false)
+    expect(consignes.some((c) => c.includes(RELANCE_CHIFFRE_NON_VERIFIE))).toBe(false)
     expect(appels).toBe(2)
     expect(occurrences(fil, 'Le ping a reçu 3 réponses.')).toBe(1)
   })
@@ -252,6 +274,6 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
       ],
       [{ ok: true, data: { lance: false, detail: 'Commande refusée : non autorisée' } }]
     )
-    expect(consignes.some((c) => c.includes('SANS avoir appelé la moindre commande'))).toBe(true)
+    expect(consignes.some((c) => c.includes(RELANCE_CHIFFRE_NON_VERIFIE))).toBe(true)
   })
 })

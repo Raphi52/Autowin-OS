@@ -414,6 +414,90 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
   })
 })
 
+describe('exigeUnChiffreVerifie — le texte RECOLLÉ d’une réponse de l’agent n’est pas la demande', () => {
+  // Cas RÉEL de conv-335 (2026-10-19) : l'utilisateur recolle la réponse précédente de l'agent, telle
+  // que le fil l'affiche (gras, code et numéros de liste perdus au copier), et n'ajoute qu'UNE
+  // question à lui : « Ca sert vraiment ces lecons? ». Le texte recollé contient deux fois
+  // « liste » ; la garde y lisait une demande de compte et forçait une relance — un Glob de 25 s
+  // tombé en délai dépassé, puis 2 minutes de vérifications payées pour une question sans chiffre.
+  const CONV_335_REPONSE_PRECEDENTE = `Je regarde d'où vient ce « 0/1 » : ce que le bloc a reçu au dernier tour, puis la fonction qui en tire les étapes.
+
+Ce fil n'est pas encore écrit dans \`conversations.json\` : le fichier sur disque a du retard sur l'app. Je lis donc directement la fonction qui fabrique les étapes.
+
+C'est corrigé. L'étape #12 est retirée, et il ne reste plus aucune étape ouverte dans ce fil : toutes les autres sont terminées. La mesure elle-même n'est pas abandonnée : elle vit maintenant dans le Task Manager (tâche \`c79cca66\`, le 22/10 à 9 h).
+
+Ce tour-ci ne devrait plus afficher de bloc Étapes : l'étape reprise a été supprimée juste après.
+
+**Leçon** : quand le travail d'une étape est confié à une tâche programmée, je retire l'étape de la liste du fil à ce moment-là. Sinon, le prochain tour qui touche aux étapes la ressort comme « à faire », alors que plus rien n'est en attente dans le fil.
+
+
+Tu as raison, j'ai mal lu ton reproche. Au tour « fais une tâche planifiée », l'étape à afficher était **« Créer la tâche planifiée de mesure »**. Je l'ai faite, mais je ne l'ai jamais posée dans la liste. À la place, j'ai juste retouché la description de l'ancienne étape #12, et c'est elle que le bloc a ressortie, à faire : d'où **0/1** sur un tour pourtant fini.
+
+Ce que j'aurais dû faire à ce tour-là :
+1. créer l'étape « Créer la tâche planifiée de mesure » ;
+2. la passer en cours puis terminée : le bloc aurait affiché **1/1** ;
+3. retirer #12 en même temps, puisque son travail venait d'être confié au Task Manager.
+
+Le bloc de ce tour reste tel quel dans l'historique. Je ne réécris pas le journal d'un tour passé. L'état actuel, lui, est propre : #12 est retirée et aucune étape ne reste ouverte.
+
+**Leçon corrigée** : pour une demande d'action, les étapes du bloc sont celles de ce que **ce tour** fait, créées au début et cochées à la fin. On ne recycle jamais une étape d'un tour précédent pour en tenir lieu.`
+
+  const CONV_335_MESSAGE = `Ce fil n'est pas encore écrit dans conversations.json : le fichier sur disque a du retard sur l'app. Je lis donc directement la fonction qui fabrique les étapes.
+C'est corrigé. L'étape #12 est retirée, et il ne reste plus aucune étape ouverte dans ce fil : toutes les autres sont terminées. La mesure elle-même n'est pas abandonnée : elle vit maintenant dans le Task Manager (tâche c79cca66, le 22/10 à 9 h).
+Ce tour-ci ne devrait plus afficher de bloc Étapes : l'étape reprise a été supprimée juste après.
+Leçon : quand le travail d'une étape est confié à une tâche programmée, je retire l'étape de la liste du fil à ce moment-là. Sinon, le prochain tour qui touche aux étapes la ressort comme « à faire », alors que plus rien n'est en attente dans le fil.
+Tu as raison, j'ai mal lu ton reproche. Au tour « fais une tâche planifiée », l'étape à afficher était « Créer la tâche planifiée de mesure ». Je l'ai faite, mais je ne l'ai jamais posée dans la liste. À la place, j'ai juste retouché la description de l'ancienne étape #12, et c'est elle que le bloc a ressortie, à faire : d'où 0/1 sur un tour pourtant fini.
+Ce que j'aurais dû faire à ce tour-là :
+créer l'étape « Créer la tâche planifiée de mesure » ;
+la passer en cours puis terminée : le bloc aurait affiché 1/1 ;
+retirer #12 en même temps, puisque son travail venait d'être confié au Task Manager.
+Le bloc de ce tour reste tel quel dans l'historique. Je ne réécris pas le journal d'un tour passé. L'état actuel, lui, est propre : #12 est retirée et aucune étape ne reste ouverte.
+Leçon corrigée : pour une demande d'action, les étapes du bloc sont celles de ce que ce tour fait, créées au début et cochées à la fin. On ne recycle jamais une étape d'un tour précédent pour en tenir lieu.
+
+Ca sert vraiment ces lecons?`
+
+  const REPONSE = 'Les deux « leçons » que tu as recollées n’ont servi à rien.'
+
+  it('ne mord PAS sur le message réel de conv-335 : seule « Ca sert vraiment ces lecons? » est à lui', () => {
+    expect(
+      exigeUnChiffreVerifie(CONV_335_MESSAGE, REPONSE, false, [CONV_335_REPONSE_PRECEDENTE])
+    ).toBe(false)
+  })
+
+  it('mord TOUJOURS sur une vraie demande de compte écrite sous le texte recollé', () => {
+    const message = `${CONV_335_MESSAGE}\nCombien de fichiers .test.ts dans src/main ?`
+    expect(exigeUnChiffreVerifie(message, REPONSE, false, [CONV_335_REPONSE_PRECEDENTE])).toBe(true)
+  })
+
+  it('mord TOUJOURS sur la suggestion de l’agent renvoyée telle quelle, ou complétée', () => {
+    // Le champ de saisie est prégarni par la ligne AUTOWIN_PROMPT_V1 : l'envoyer, c'est la DEMANDER.
+    const reponseAvecSuggestion =
+      'Je n’ai rien compté.\n\nAUTOWIN_PROMPT_V1: Compte les fichiers .test.ts de src/main et donne le total'
+    const suggestion = 'Compte les fichiers .test.ts de src/main et donne le total'
+    expect(exigeUnChiffreVerifie(suggestion, 'Il y en a 42.', false, [reponseAvecSuggestion])).toBe(
+      true
+    )
+    expect(
+      exigeUnChiffreVerifie(`${suggestion}\nfais vite`, 'Il y en a 42.', false, [
+        reponseAvecSuggestion
+      ])
+    ).toBe(true)
+  })
+
+  it('mord TOUJOURS quand le message n’est que du texte de l’agent, sans un mot de l’utilisateur', () => {
+    const reponse = 'Je liste les fichiers du dossier src/main un par un pour les compter.'
+    expect(exigeUnChiffreVerifie(reponse, 'Il y en a 42.', false, [reponse])).toBe(true)
+  })
+
+  it('ne retire PAS une ligne courte qui se trouve aussi par hasard dans une réponse', () => {
+    // « liste les fichiers » est dans la réponse précédente, mais c'est sa demande à lui.
+    const precedente = 'Je liste les fichiers du dossier quand tu veux.'
+    expect(
+      exigeUnChiffreVerifie('ok\nliste les fichiers', 'Il y en a 42.', false, [precedente])
+    ).toBe(true)
+  })
+})
+
 describe('exigeDireLEchec — un « Fait » posé sur un échec', () => {
   const AVEC_ECHEC = true
 

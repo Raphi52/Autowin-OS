@@ -50,6 +50,7 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  RELANCE_CHIFFRE_NON_VERIFIE,
   commandeAObserveLeReel,
   exigePreuveAvantDePromettre,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
@@ -3371,7 +3372,11 @@ export class AgentPilot {
           exigeUnChiffreVerifie(
             latestUserMessage,
             visibleTextThisTurn,
-            anyReadExecuted || sortieDeCommandeObservee
+            anyReadExecuted || sortieDeCommandeObservee,
+            // conv-335 : une réponse recollée dans son message n'est pas SA demande de compte.
+            history
+              .filter((message) => message.role === 'assistant')
+              .map((message) => message.content)
           )
         ) {
           chiffreNonVerifieRecoveryAvailable = false
@@ -3379,14 +3384,7 @@ export class AgentPilot {
           // D2 : la reponse verifiee REMPLACE celle-ci dans le fil — d'ou la consigne de la redonner
           // EN ENTIER (« corrige-toi » supposait une premiere reponse restee affichee).
           effacerReponseRelancee()
-          convo.push(
-            'SYSTÈME: tu viens d’avancer un nombre SANS avoir appelé la moindre commande de ' +
-              'lecture. Tu ne peux pas connaître le contenu d’un dossier sans le lister : ce ' +
-              'chiffre est une supposition, pas une réponse. Appelle MAINTENANT `list_files` (ou ' +
-              '`find_in_files`) sur le dossier concerné, puis donne le nombre RÉELLEMENT observé. ' +
-              'Ta nouvelle réponse REMPLACE la précédente à l’écran : redonne-la EN ENTIER avec ' +
-              'le nombre observé, et dis s’il diffère de celui que tu avais écrit.'
-          )
+          convo.push(RELANCE_CHIFFRE_NON_VERIFIE)
           continue
         }
         // JAMAIS de bulle vide. Cause racine des « conversations qui echouent » (conv-1141) :

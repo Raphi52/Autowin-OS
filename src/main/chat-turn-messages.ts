@@ -546,14 +546,9 @@ export function commandeAObserveLeReel(
   return false
 }
 
-export function exigeUnChiffreVerifie(
-  question: string | undefined,
-  reponse: string,
-  lectureEffectuee: boolean
-): boolean {
-  if (lectureEffectuee) return false
-  const q = (question ?? '').toLowerCase().replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
-  const demandeUnCompte =
+function demandeUnCompte(texte: string): boolean {
+  const q = texte.toLowerCase().replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
+  return (
     /\bcombien\b/.test(q) ||
     /\bnombre\b/.test(q) ||
     /\bcompte[rz]?\b/.test(q) ||
@@ -563,7 +558,71 @@ export function exigeUnChiffreVerifie(
     // jusqu'au 2026-08-26 : la question passait au travers du garde, et un chiffre devine
     // pouvait sortir sans qu'aucune lecture ne l'etaye.
     /\btotal\b/.test(q)
-  if (!demandeUnCompte) return false
+  )
+}
+
+/** Une ligne plus courte ne se retire jamais : 3-4 mots repris par hasard restent SA demande. */
+const MOTS_MIN_LIGNE_RECOLLEE = 5
+
+/** Lettres et chiffres seuls : le copier depuis le fil perd le gras, le code et les numéros de liste. */
+function normaliserPourComparer(texte: string): string {
+  return texte
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+/**
+ * Retire du message les lignes RECOLLÉES depuis une réponse précédente de l'agent (conv-335, 2026-10-19).
+ *
+ * Mesure : l'utilisateur recolle la réponse de l'agent et n'y ajoute qu'une question à lui (« Ca sert
+ * vraiment ces lecons? »). Le texte recollé disait deux fois « la liste du fil » ; la garde du chiffre
+ * y a lu une demande de compte et a forcé une relance payée pour rien. Les mots de l'agent ne sont pas
+ * la demande de l'utilisateur.
+ *
+ * Une ligne est retirée si, une fois normalisée, elle figure telle quelle dans une réponse précédente
+ * et compte au moins MOTS_MIN_LIGNE_RECOLLEE mots. Deux exceptions la gardent comme SA demande :
+ * - la suggestion `AUTOWIN_PROMPT_V1` prégarnit son champ de saisie : l'envoyer, c'est la demander ;
+ * - un message fait UNIQUEMENT de texte de l'agent est rendu entier : rien d'autre ne dit ce qu'il veut.
+ */
+export function retirerTexteRecolle(
+  message: string,
+  reponsesPrecedentes: readonly string[]
+): string {
+  const references = reponsesPrecedentes
+    .map((reponse) =>
+      normaliserPourComparer(
+        reponse
+          .split('\n')
+          .filter((ligne) => !/^\s*AUTOWIN_(?:PROMPT|FIN)_V1\b/.test(ligne))
+          .join('\n')
+      )
+    )
+    .filter((reference) => reference.length > 0)
+    .map((reference) => ` ${reference} `)
+  if (references.length === 0) return message
+  const lignesASoi = message.split('\n').filter((ligne) => {
+    const normalisee = normaliserPourComparer(ligne)
+    if (normalisee.split(' ').length < MOTS_MIN_LIGNE_RECOLLEE) return true
+    return !references.some((reference) => reference.includes(` ${normalisee} `))
+  })
+  const restant = lignesASoi.join('\n')
+  return normaliserPourComparer(restant) ? restant : message
+}
+
+export function exigeUnChiffreVerifie(
+  question: string | undefined,
+  reponse: string,
+  lectureEffectuee: boolean,
+  /** Réponses précédentes de l'agent dans ce fil : le texte qui en est recollé n'est pas la demande. */
+  reponsesPrecedentes: readonly string[] = []
+): boolean {
+  if (lectureEffectuee) return false
+  // Le message brut d'abord : sans mot de compte, inutile de comparer aux réponses précédentes.
+  if (!demandeUnCompte(question ?? '')) return false
+  if (!demandeUnCompte(retirerTexteRecolle(question ?? '', reponsesPrecedentes))) return false
   /*
     AUCUN chiffre n'est exigé dans la réponse, et c'est une CORRECTION mesurée.
 
@@ -579,6 +638,23 @@ export function exigeUnChiffreVerifie(
   */
   return reponse.trim().length > 0
 }
+
+/**
+ * Ce qu'on renvoie à l'agent quand `exigeUnChiffreVerifie` mord : la VRAIE raison de la relance.
+ *
+ * Avant (conv-335, 2026-10-19) : « tu viens d'avancer un nombre SANS avoir appelé la moindre commande
+ * de lecture ». Or la garde ne cherche aucun nombre dans la réponse (voir plus haut) : elle mord sur
+ * une demande de compte restée sans lecture. Accusé d'un chiffre qu'il n'avait pas écrit, l'agent est
+ * allé « vérifier ses chiffres » — un Glob de 25 s en délai dépassé, puis 2 minutes de lectures.
+ */
+export const RELANCE_CHIFFRE_NON_VERIFIE =
+  'SYSTÈME: la demande de l’utilisateur réclame un compte (combien, nombre, liste, total…) et ' +
+  'tu n’as appelé AUCUNE commande de lecture dans ce tour. Sans lecture, ta réponse ne peut être ' +
+  'qu’une supposition : un chiffre deviné, une vérification annoncée mais pas faite, ou un « je ne ' +
+  'peux pas le savoir ». Appelle MAINTENANT `list_files` (ou `find_in_files`, `read_file`) sur ce ' +
+  'que la demande vise, puis réponds avec ce que tu as RÉELLEMENT observé. Ta nouvelle réponse ' +
+  'REMPLACE la précédente à l’écran : redonne-la EN ENTIER ; si la précédente contenait déjà un ' +
+  'nombre, dis s’il diffère de celui observé.'
 
 /**
  * Le tour a AGI mais sa réponse ne CONCLUT pas — l'utilisateur ne sait ni où il en est, ni la suite.
