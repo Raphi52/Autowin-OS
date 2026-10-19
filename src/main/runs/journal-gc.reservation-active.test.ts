@@ -79,7 +79,7 @@ describe('un journal reference par une reservation non soldee', () => {
     expect(reference).toEqual(['E:\\d\\run-stdout\\build.stdout.jsonl'])
   })
 
-  it('un point de reprise ECRIT SUR DISQUE protege son journal du menage', () => {
+  it('un point de reprise ECRIT SUR DISQUE protege son journal du menage', async () => {
     // Meme composition que le demarrage de l'app (`src/main/index.ts`) : les checkpoints reels
     // alimentent la liste des journaux a proteger, puis le menage tourne.
     const root = mkdtempSync(join(tmpdir(), 'gc-bout-en-bout-'))
@@ -132,7 +132,7 @@ describe('un journal reference par une reservation non soldee', () => {
         updatedAt: 2
       })
 
-      const bilan = collectStdoutJournals(journalRoot, {
+      const bilan = await collectStdoutJournals(journalRoot, {
         nowMs: NOW,
         maxFiles: 0,
         protectedPaths: journauxReferencesParUneReservation(loadOrchestrationStates(stateRoot))
@@ -146,7 +146,7 @@ describe('un journal reference par une reservation non soldee', () => {
     }
   })
 
-  it('protege le fichier reel sur le disque, casse de lecteur comprise', () => {
+  it('protege le fichier reel sur le disque, casse de lecteur comprise', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gc-reservation-'))
     try {
       const protege = join(root, 'agent-build.stdout.jsonl')
@@ -155,7 +155,7 @@ describe('un journal reference par une reservation non soldee', () => {
         writeFileSync(path, 'x'.repeat(1000), 'utf8')
         utimesSync(path, new Date(VIEUX_DE_43_H), new Date(VIEUX_DE_43_H))
       }
-      const bilan = collectStdoutJournals(root, {
+      const bilan = await collectStdoutJournals(root, {
         nowMs: NOW,
         maxFiles: 0,
         // Meme chemin, casse differente : c'est ce que produit un checkpoint ecrit par un autre process.

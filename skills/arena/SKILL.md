@@ -236,7 +236,7 @@ d'amélioration du code. Familles à balayer (au moins 4) :
 - **routage** — quelle phase joue, dans quel ordre ; phases sautées ou fusionnées ;
 - **profondeur** — lecture directe + édition ciblée vs pipeline complet (surdimensionnement) ;
 - **parallélisme** — 1 agent vs fan-out, et sur quel découpage ;
-- **contexte** — ce qu'on injecte d'abord (`brain_query`, `conversation_search`, graphify) pour ne
+- **contexte** — ce qu'on injecte d'abord (`brain_query`, `conversation_search`) pour ne
   pas refaire du déjà-fait ;
 - **preuve** — quelle vérification, à quel moment (cible vs suite entière) ;
 - **prémisse cassée** — et si on ne faisait PAS l'étape que tout le monde fait ?

@@ -41,6 +41,7 @@ import {
   captureMutationTraceBase
 } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
+import { lireLigneDErreur } from '../shared/erreur-d-action'
 import { avertirSiLeconNonRetenue, ecritUnFichierDeMemoire } from './lecon-non-retenue'
 import {
   buildTurnMessageBlocks,
@@ -2543,10 +2544,15 @@ export class AgentPilot {
                */
               // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres (conv-861).
               const statutEntier = statutComplet(chunk.status, chunk.statusTarget)
-              if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
-              // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
-              if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
-              if (ecritUnFichierDeMemoire(statutEntier)) depotMemoireCeTour = true
+              // Le message d'erreur d'une action rouge (conv-341) n'est ni une lecture ni un geste :
+              // son action a été classée à son départ. Les classeurs reconnaissent un outil natif à
+              // son NOM en tête de ligne : « Glob erreur - … » passerait sinon pour une lecture.
+              if (!lireLigneDErreur(chunk.status)) {
+                if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
+                // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
+                if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
+                if (ecritUnFichierDeMemoire(statutEntier)) depotMemoireCeTour = true
+              }
               // Un outil direct de l'app a DEJA sa carte d'action : son battement la doublerait.
               if (estUnOutilDirectDuChat(chunk.status)) return
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.

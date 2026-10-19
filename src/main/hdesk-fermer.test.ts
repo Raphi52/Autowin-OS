@@ -10,7 +10,7 @@
  * ouvrir l'app sur l'ecran reel de l'utilisateur pour la prouver violerait la regle qu'on teste.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -52,6 +52,26 @@ describe('argumentsFermer / resultatFermeture : ce que l app envoie au script, e
     ['delai non entier', { id: 'x', conversationId: 'conv-1', delaiDouxSecondes: 2.5 }]
   ])('refuse avant de lancer quoi que ce soit : %s', (_cas, demande) => {
     expect(() => argumentsFermer('C:\\app', demande)).toThrow()
+  })
+  // conv-344 (scout n°1) : mode « sans fiche » de la vue Bureaux caches. Aucun fil : le script n'en
+  // exige pas, et en accepter un ferait croire qu'il sert de garde.
+  it('sans fiche : -SansFiche, aucun -Conversation', () => {
+    const args = argumentsFermer('C:\\app', { id: 'ui-capture-7208', sansFiche: true })
+    expect(args).toContain('-SansFiche')
+    expect(args).not.toContain('-Conversation')
+    expect(args.slice(args.indexOf('-Id'), args.indexOf('-Id') + 2)).toEqual([
+      '-Id',
+      'ui-capture-7208'
+    ])
+    expect(argumentsFermer('C:\\app', { id: 'x', conversationId: 'conv-1' })).not.toContain(
+      '-SansFiche'
+    )
+  })
+  it.each([
+    ['sans fiche ET un fil', { id: 'x', sansFiche: true, conversationId: 'conv-1' }],
+    ['sans fiche, identifiant qui injecte', { id: 'a;b', sansFiche: true }]
+  ])('refuse avant de lancer quoi que ce soit : %s', (_cas, demande) => {
+    expect(() => argumentsFermer('C:\\app', demande as DemandeFermeture)).toThrow()
   })
   it('lit la derniere ligne JSON et fait foi du code de sortie', () => {
     const r = resultatFermeture(
@@ -196,7 +216,7 @@ describe.skipIf(process.platform !== 'win32')(
 
     afterAll(() => {
       // Filet : rien ne doit survivre au test, meme en echec.
-      for (const id of [X, Y, T])
+      for (const id of [X, Y, T, S])
         spawnSync(
           'powershell',
           [
@@ -214,32 +234,36 @@ describe.skipIf(process.platform !== 'win32')(
           ],
           { timeout: 60_000 }
         )
-      // Le bureau du test « sans fiche » a perdu sa fiche : son filet passe par le meme mode.
-      spawnSync(
-        'powershell',
-        [
-          '-NoProfile',
-          '-File',
-          join(SCRIPTS, 'hdesk-fermer.ps1'),
-          '-Id',
-          S,
-          '-SansFiche',
-          '-Registre',
-          registre,
-          '-DelaiDouxSecondes',
-          '1'
-        ],
-        { timeout: 60_000 }
-      )
       rmSync(registre, { recursive: true, force: true })
       rmSync(fixtures, { recursive: true, force: true })
     })
 
     it('ferme l app du bureau X, epargne la MEME app du bureau Y, et libere X pour une relance', () => {
+      // conv-344 (scout n°6) : l'historique des lancements réussis survit à la purge des fiches et
+      // garde les ARGUMENTS (la fiche ne les a pas) ; il est borné aux 50 derniers.
+      const historique = join(registre, 'historique.jsonl')
+      writeFileSync(
+        historique,
+        Array.from({ length: 60 }, (_, i) => JSON.stringify({ id: `ancien-${i}` })).join('\n') +
+          '\n',
+        'utf8'
+      )
       const x = lancer(X, 'conv-a', docile)
       const y = lancer(Y, 'conv-b', docile)
       expect(x.code, String(x.stderr)).toBe(0)
       expect(y.code, String(y.stderr)).toBe(0)
+      const lignes = readFileSync(historique, 'utf8').trim().split(/\r?\n/)
+      expect(lignes).toHaveLength(50)
+      const [avantDerniere, derniere] = lignes.slice(-2).map((l) => JSON.parse(l))
+      expect(avantDerniere).toMatchObject({
+        id: X,
+        executable: POWERSHELL,
+        travail: 'test hdesk-fermer',
+        conversationId: 'conv-a'
+      })
+      expect(String(avantDerniere.arguments)).toContain(docile)
+      expect(typeof avantDerniere.lanceLe).toBe('string')
+      expect(derniere).toMatchObject({ id: Y, conversationId: 'conv-b' })
       expect(vivant(x.pid)).toBe(true)
 
       const r = fermer(X, 'conv-a')
@@ -305,51 +329,46 @@ describe.skipIf(process.platform !== 'win32')(
       expect(String(r.erreur)).toMatch(/aucun bureau/i)
     }, 60_000)
 
-    // conv-1016 (2026-10-17) : les bureaux ui-capture-* naissent sans fiche (autowin-headless.ps1) et
-    // survivaient a leur capture, tenus par un Outlook ; la vue « Bureaux caches » ne pouvait pas les fermer.
-    it('sans fiche (-SansFiche) : ferme ce qui a une fenetre sur CE bureau, sans exiger de fil', () => {
-      const s = lancer(S, 'conv-a', docile)
-      expect(s.code, String(s.stderr)).toBe(0)
-      rmSync(join(registre, `${S}.json`), { force: true })
-      // Sans le mode, le refus historique tient : aucun bureau a ce nom dans le registre.
-      expect(fermer(S, 'conv-a').code).toBe(2)
-      expect(vivant(s.pid)).toBe(true)
-
-      const r = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
-      expect(r.code, JSON.stringify(r)).toBe(0)
-      expect(r).toMatchObject({ ferme: true, sansFiche: true, ficheRetiree: false })
-      expect(r.survivants).toEqual([])
-      expect(vivant(s.pid)).toBe(false)
-    }, 120_000)
-
-    it('sans fiche : un bureau INSCRIT est refuse (exit 1) et reste intact — son fil fait foi', () => {
-      const s = lancer(S, 'conv-b', docile)
-      const pidS = s.code === 0 ? s.pid : s.pidOccupant
-      const r = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
-      expect(r.code, JSON.stringify(r)).toBe(1)
-      expect(r.conversationOccupante).toBe('conv-b')
-      expect(vivant(pidS)).toBe(true)
-      expect(fermer(S, 'conv-b').code).toBe(0)
-      expect(vivant(pidS)).toBe(false)
-    }, 120_000)
-
-    it('sans fiche : un bureau Windows inexistant rend 2, rien n est ferme', () => {
-      const r = lancerPs('hdesk-fermer.ps1', [
-        '-Id',
-        `${base}fantome`,
-        '-SansFiche',
-        '-Registre',
-        registre
-      ])
-      expect(r.code, JSON.stringify(r)).toBe(2)
-      expect(r).toMatchObject({ ferme: false, sansFiche: true })
-    }, 60_000)
-
     it('la chaine de l outil (fermerHdesk) lance le vrai script et lit son refus', async () => {
       const r = await fermerHdesk(process.cwd(), { id: `${base}chaine`, conversationId: 'conv-a' })
       expect(r).toMatchObject({ ok: false, code: 2, ferme: false })
       expect(String(r.erreur)).toMatch(/aucun bureau/i)
     }, 60_000)
+
+    // conv-344 (scout n°1) : -SansFiche n'avait AUCUN test depuis son ajout (41359673). Un bureau
+    // dont la fiche n'est pas dans le registre lu (ici : fiche dans un AUTRE dossier, vide est lu),
+    // comme les ui-capture-* d'autowin-headless.ps1 qui n'en ecrivent pas.
+    it('sans fiche : ferme l app du bureau (exit 0, sansFiche) — et refuse ce mode si une fiche existe', () => {
+      const s = lancer(S, 'conv-a', docile)
+      expect(s.code, String(s.stderr)).toBe(0)
+      // Jumeau refuse : la fiche existe dans CE registre, son fil fait foi.
+      const refus = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', registre])
+      expect(refus.code, JSON.stringify(refus)).toBe(1)
+      expect(String(refus.erreur)).toMatch(/inscrit au registre/)
+      expect(vivant(s.pid)).toBe(true)
+
+      const vide = mkdtempSync(join(tmpdir(), 'hdesk-fermer-vide-'))
+      try {
+        const r = lancerPs('hdesk-fermer.ps1', [
+          '-Id',
+          S,
+          '-SansFiche',
+          '-Registre',
+          vide,
+          '-DelaiDouxSecondes',
+          '2'
+        ])
+        expect(r.code, JSON.stringify(r)).toBe(0)
+        expect(r.sansFiche).toBe(true)
+        expect(r.survivants).toEqual([])
+        expect(vivant(s.pid)).toBe(false)
+        // Plus rien a fermer : le bureau n'est plus la (code 2), sans erreur cachee.
+        const encore = lancerPs('hdesk-fermer.ps1', ['-Id', S, '-SansFiche', '-Registre', vide])
+        expect([0, 2]).toContain(encore.code)
+      } finally {
+        rmSync(vide, { recursive: true, force: true })
+      }
+    }, 120_000)
 
     it('refuse un identifiant absent ou invalide (exit non nul)', () => {
       const absent = lancerPs('hdesk-fermer.ps1', [

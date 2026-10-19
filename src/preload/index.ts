@@ -101,6 +101,7 @@ import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
 import type {
   DemandeCreationBureau,
+  ResultatChoixExe,
   ResultatCreationBureau,
   ResultatFermetureGeree,
   ResultatListeBureaux
@@ -134,6 +135,8 @@ const api = {
     ipcRenderer.invoke('hdesk:gestion:fermer', id),
   hdeskGestionCreer: (demande: DemandeCreationBureau): Promise<ResultatCreationBureau> =>
     ipcRenderer.invoke('hdesk:gestion:creer', demande),
+  hdeskGestionChoisirExe: (): Promise<ResultatChoixExe> =>
+    ipcRenderer.invoke('hdesk:gestion:choisirExe'),
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
   // jeton opaque borne a une cible, une operation et cinq minutes.

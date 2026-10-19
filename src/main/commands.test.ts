@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
+import { AppCommandBus, isolateWatchdogPromptPaths, outilOffert } from './commands'
+import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { APP_DESTINATIONS } from '../shared/navigation'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -660,6 +661,36 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     // Le FIL, pas seulement l'étiquette de la conversation : sans lui le sous-agent recevait la
     // phrase-tâche nue et devait DEVINER l'intention (défaut mesuré le 2026-08-23, conv-1376).
     expect(collected).toContain('le worktree est resté ouvert')
+  })
+
+  /*
+   * conv-344 (saisie ts 1792393145414) : « /scout comment améliorer la feature overall » a été
+   * classé trivial, donc lancé SANS le fil. Le scout n'a reçu que la phrase et a deviné « la
+   * feature » : le fond 3D de l'Accueil, alors que la conversation parlait des bureaux cachés.
+   */
+  it('joint le fil de la conversation à un « /scout comment … » qui désigne son sujet par le fil', async () => {
+    const os = fakeOs()
+    const recus: string[] = []
+    os.runTask = async (...args: unknown[]) => {
+      recus.push(String(args[5] ?? ''))
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, () => {})
+    await bus.exec('orchestrate', { task: '/scout comment améliorer la feature overall' }, 'conv-1')
+    // Jumeau : une vraie micro-édition reste lancée sans collecte, comme avant.
+    await bus.exec('orchestrate', { task: '/build corrige la typo dans le commentaire' }, 'conv-1')
+
+    expect(recus).toHaveLength(2)
+    expect(recus[0]).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
+    expect(recus[0]).toContain('le worktree est resté ouvert')
+    expect(recus[1]).toBe('')
   })
 
   it('met la preuve watchdog en quarantaine sans la transformer en ordre provider', async () => {
@@ -1501,6 +1532,28 @@ describe('AppCommandBus command execution policy', () => {
       workspaceRoot: process.cwd(),
       path: 'packages/api'
     })
+  })
+
+  it('débranche graphify avec le filtre de l’app : ni offert, ni exécuté, ni conseillé (conv-353)', async () => {
+    const graphify = vi.fn()
+    // Le MÊME prédicat que index.ts, interrupteur local muet (aucun choix enregistré).
+    const bus = new AppCommandBus(
+      fakeOs(),
+      () => {},
+      undefined,
+      graphify,
+      (name) => outilOffert(name, undefined)
+    )
+    const offerts = bus.catalog().map((tool) => tool.name)
+
+    expect(offerts).not.toContain('graphify')
+    expect(offerts).toEqual(expect.arrayContaining(['verify', 'brain_query', 'brain_graph']))
+    await expect(bus.exec('graphify', {})).resolves.toMatchObject({ ok: false })
+    expect(graphify).not.toHaveBeenCalled()
+    expect(buildChatPilotagePrompt(bus.catalog())).not.toMatch(/graphify/i)
+    // L'interrupteur local garde son effet sur les autres outils.
+    expect(outilOffert('verify', false)).toBe(false)
+    expect(outilOffert('verify', undefined)).toBe(true)
   })
 
   it('isole edit_file dans un bureau puis publie seulement sa copie', async () => {
@@ -2487,5 +2540,73 @@ describe('orchestrate transmet le fichier de la sortie entière', () => {
 
   it('sans sortie d’étape à écrire : la copie de run-livrables, telle que le run la rend', async () => {
     expect(await lancer([{ phase: 'scout', text: '  ' }])).toBe('D:/donnees/run-livrables/run-abc-1.md')
+  })
+})
+
+/*
+ * conv-339 : « Brain : aucune leçon proposée » sous un run dont l'étape learn venait d'écrire 2
+ * notes au Brain. Le suivi des leçons n'en voyait rien (aucune leçon de fin de run) : le nombre
+ * compté par le run (`notesBrainDeposees`) doit atteindre la ligne affichée.
+ */
+describe('issue d’orchestration — les notes déposées par l’étape learn se voient', () => {
+  const busAvecSuivi = (notesBrainDeposees?: number): AppCommandBus => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'tableau rendu',
+      // Texte vide A DESSEIN : un texte d'étape lance l'écriture de `livrable.md` sans l'attendre,
+      // et le nettoyage de fin de fichier la croisait (EPERM sur `livrable.md.tmp`).
+      phaseOutputs: [{ phase: 'learn', text: '' }],
+      ...(notesBrainDeposees === undefined ? {} : { notesBrainDeposees })
+    })
+    const suivi = {
+      reserveProposal: () => undefined,
+      recordProposal: () => {},
+      // Ce que rend le vrai superviseur sans leçon de fin de run (`reconcile`).
+      observeOutcome: async () => ({ state: 'none', detail: 'aucune leçon proposée pour ce run' })
+    }
+    return new AppCommandBus(
+      os,
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      suivi as never
+    )
+  }
+
+  it('2 notes déposées : la bulle dit qu’elles sont en revue, et plus « aucune leçon »', async () => {
+    const res = (await busAvecSuivi(2).exec(
+      'orchestrate',
+      { task: `/scout humains de l Accueil ${Date.now()}` },
+      'conv-1'
+    )) as { data?: Record<string, unknown> }
+    expect(res.data?.learning).toMatchObject({ state: 'inbox', notesEnRevue: 2 })
+    const bulle = formatOrchestrationOutcome(true, res.data as never)
+    expect(bulle).toContain('Brain : 2 notes candidates gardées en revue')
+    expect(bulle).not.toContain('aucune leçon proposée')
+  })
+
+  it('jumeau : sans note déposée, « aucune leçon proposée » reste vrai et reste affiché', async () => {
+    const res = (await busAvecSuivi().exec(
+      'orchestrate',
+      { task: `/scout humains de l Accueil ${Date.now()}` },
+      'conv-1'
+    )) as { data?: Record<string, unknown> }
+    expect(res.data?.learning).toMatchObject({ state: 'none' })
+    expect(formatOrchestrationOutcome(true, res.data as never)).toContain(
+      'Brain : aucune leçon proposée'
+    )
   })
 })

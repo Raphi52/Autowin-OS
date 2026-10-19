@@ -207,6 +207,15 @@ export interface OptionsAvenue {
   ratio?: () => number
   /** Appelé à la première image de la rue, à la place du fondu que la page fait elle-même. */
   surApparition?: () => void
+  /**
+   * LE REFLET APRÈS L'IMAGE, dans une tâche à part (Worker, conv-347). `render` ne dessine plus le
+   * reflet : `apresImage` le fait, juste après, pour l'image SUIVANTE. Raison : une image ne s'affiche
+   * qu'à la fin de la tâche qui la dessine ; le reflet (une image sur deux) retardait donc une image
+   * sur deux d'environ 20 ms, et les écarts entre images alternaient 33 / 67 ms (« pas lissé »).
+   * Le reflet a une image de retard de plus — l'eau, ridée par la pluie à chaque image, ne le montre
+   * pas (même raisonnement que `REFLET_UNE_IMAGE_SUR`). Dans la page, rien ne change.
+   */
+  refletApresImage?: boolean
 }
 
 export function createAvenueScene(options: OptionsAvenue = {}): DecorScene | null {
@@ -2171,6 +2180,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       })
   }
 
+  /** Le reflet de l'eau (une image sur deux, voir home-decor-avenue-spirale.ts), foule et viaduc exclus. */
+  const dessinerReflet = (): void => spirale.avantRendu([foule?.groupe, ...aretesViaduc])
+
   let prevPont: number | null = null
   let pluieT = 0
   let tPrecedent: number | null = null
@@ -2283,11 +2295,19 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       scene.updateMatrixWorld()
       // ce qui ne dépend pas de la caméra, lu une fois pour les deux passes (reflet, écran)
       lots.nouvelleImage()
-      // le reflet de l'eau, caméra posée ; la foule n'y est pas (voir home-decor-avenue-spirale.ts)
-      spirale.avantRendu([foule?.groupe, ...aretesViaduc])
+      // le reflet de l'eau, caméra posée ; la foule n'y est pas (voir home-decor-avenue-spirale.ts).
+      // Dans le Worker, il est dessiné après l'image, dans sa propre tâche (`apresImage`).
+      if (!options.refletApresImage) dessinerReflet()
       renderer.render(scene, camera)
       if (!apparue) apparaitre()
     },
+
+    // Le reflet de l'image suivante, à l'état (scène, caméra) de celle qu'on vient de dessiner.
+    apresImage: options.refletApresImage
+      ? () => {
+          if (rueCompilee && vivante) dessinerReflet()
+        }
+      : undefined,
 
     dispose() {
       vivante = false

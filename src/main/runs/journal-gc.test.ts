@@ -125,7 +125,7 @@ describe('planJournalGc — politique', () => {
 })
 
 describe('collectStdoutJournals — application au disque', () => {
-  it('supprime reellement, rend le compte et les octets liberes', () => {
+  it('supprime reellement, rend le compte et les octets liberes', async () => {
     const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
     try {
       const vieux = join(root, 'vieux.stdout.jsonl')
@@ -142,7 +142,7 @@ describe('collectStdoutJournals — application au disque', () => {
       const gardeDate = new Date(Date.now() - ELEVEN_MINUTES_MS)
       utimesSync(garde, gardeDate, gardeDate)
 
-      const outcome = collectStdoutJournals(root)
+      const outcome = await collectStdoutJournals(root)
 
       expect(outcome.removed).toBe(2)
       expect(outcome.freedBytes).toBe(100)
@@ -154,7 +154,7 @@ describe('collectStdoutJournals — application au disque', () => {
     }
   })
 
-  it('ignore ce qui n’est pas un journal (et les sous-dossiers)', () => {
+  it('ignore ce qui n’est pas un journal (et les sous-dossiers)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
     try {
       const autre = join(root, 'notes.txt')
@@ -163,7 +163,7 @@ describe('collectStdoutJournals — application au disque', () => {
       const vieuxDate = new Date(Date.now() - DEFAULT_MAX_AGE_MS - 60_000)
       utimesSync(autre, vieuxDate, vieuxDate)
 
-      expect(collectStdoutJournals(root).removed).toBe(0)
+      expect((await collectStdoutJournals(root)).removed).toBe(0)
       expect(existsSync(autre)).toBe(true)
       expect(readdirSync(root)).toHaveLength(2)
     } finally {
@@ -171,14 +171,14 @@ describe('collectStdoutJournals — application au disque', () => {
     }
   })
 
-  it('un dossier absent n’est pas une erreur (premier lancement)', () => {
-    const outcome = collectStdoutJournals(join(tmpdir(), 'journal-gc-inexistant-xyz'))
+  it('un dossier absent n’est pas une erreur (premier lancement)', async () => {
+    const outcome = await collectStdoutJournals(join(tmpdir(), 'journal-gc-inexistant-xyz'))
     expect(outcome).toEqual({ removed: 0, freedBytes: 0 })
   })
 })
 
 describe('collectStdoutJournals — les sorties d erreur aussi', () => {
-  it('nettoie un .stderr.log ancien au meme titre qu un .stdout.jsonl', () => {
+  it('nettoie un .stderr.log ancien au meme titre qu un .stdout.jsonl', async () => {
     const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
     try {
       const erreurs = join(root, 'run-42.stderr.log')
@@ -186,7 +186,7 @@ describe('collectStdoutJournals — les sorties d erreur aussi', () => {
       const vieuxDate = new Date(Date.now() - DEFAULT_MAX_AGE_MS - 60_000)
       utimesSync(erreurs, vieuxDate, vieuxDate)
 
-      const outcome = collectStdoutJournals(root)
+      const outcome = await collectStdoutJournals(root)
 
       expect(outcome.removed).toBe(1)
       expect(outcome.freedBytes).toBe(80)
@@ -196,12 +196,12 @@ describe('collectStdoutJournals — les sorties d erreur aussi', () => {
     }
   })
 
-  it('protege un .stderr.log encore ecrit (meme garde que la sortie standard)', () => {
+  it('protege un .stderr.log encore ecrit (meme garde que la sortie standard)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
     try {
       const vivant = join(root, 'run-vivant.stderr.log')
       writeFileSync(vivant, '')
-      expect(collectStdoutJournals(root).removed).toBe(0)
+      expect((await collectStdoutJournals(root)).removed).toBe(0)
       expect(existsSync(vivant)).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })

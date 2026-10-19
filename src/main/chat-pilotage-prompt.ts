@@ -136,7 +136,12 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
   // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
   `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique — pour ` +
-  `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
+  `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache. ` +
+  // OUTILS DEDIES D'ABORD (conv-344, scout n°4) : recopier les commandes ci-dessous donnait des
+  // identifiants inventes et des fils oublies ; les outils fixent le fil et l'identifiant.
+  `Tes OUTILS d'abord : \`bureau_cache_lancer\` (le fil et ton identifiant de bureau sont fixes pour toi), ` +
+  `\`bureau_cache_observer\` (la capture t'est jointe), \`bureau_cache_agir\` (clic, frappe, touche, molette, ` +
+  `aux pixels de la capture), \`bureau_cache_fermer\`. Sans ces outils : \`powershell -NoProfile -File ` +
   `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
   `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
   // CODE EN COURS (2026-09-26, conv-863) : sans `--code-dev`, l'instance cachee lance le binaire
@@ -152,7 +157,8 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // 2026-09-15). ContosoV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
   // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
   `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
-  `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
+  `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 2 = l'app s'est arretee avant sa fenetre — ` +
+  `instance unique qui a passe la main a sa copie ouverte, ou plantage au demarrage —, 3 = aucune fenetre, 1 = echec) n'est ` +
   `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
   `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
   `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
@@ -262,6 +268,7 @@ export function buildChatPilotagePrompt(
   // `horsLecture` les retire de ce tour-là ; tout autre tour reçoit le texte intact.
   const lectureSeule = catalogueLectureSeule(catalog)
   const horsLecture = (texte: string): string => (lectureSeule ? '' : texte)
+  const aGraphify = catalog.some((command) => command.name === 'graphify')
   return (
     `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
     `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
@@ -555,8 +562,8 @@ export function buildChatPilotagePrompt(
     // dix minutes du run, le panneau Graphe se remplissait et le fil restait sur « Réflexion… ».
     // L'interdit d'annoncer un SUCCES etait lu comme un interdit d'ECRIRE. On separe les deux : la
     // commande garde sa place en tete, mais le silence complet devient une faute.
-    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run, ` +
-    `graphify), tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
+    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run` +
+    `${aGraphify ? ', graphify' : ''}), tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
     `que tu lances, sur quoi, et ce que tu attends comme résultat. Un message qui ne contient ` +
     `qu'un bloc <cmd> laisse l'utilisateur devant un fil muet pendant toute la durée du travail : ` +
     `il voit la machine tourner ailleurs et rien dans la conversation. Écris ces lignes au présent ` +
@@ -675,9 +682,14 @@ export function buildChatPilotagePrompt(
     `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
     `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
     `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +
-    `est large. AVANT une exploration large d'une codebase, appelle \`graphify\` : il crée ou met à ` +
-    `jour son graphe local et te rend le chemin, les nœuds et les liens réellement produits. Ne le ` +
-    `lance pas pour une simple question ou un fichier déjà connu. Tu peux ensuite lire les fichiers ` +
+    `est large. ` +
+    // Le conseil `graphify` ne part que si l'outil est OFFERT : débranché (OUTILS_DEBRANCHES,
+    // commands.ts), il poussait à appeler une commande absente du catalogue (conv-353).
+    (aGraphify
+      ? `AVANT une exploration large d'une codebase, appelle \`graphify\` : il crée ou met à ` +
+        `jour son graphe local et te rend le chemin, les nœuds et les liens réellement produits. Ne le ` +
+        `lance pas pour une simple question ou un fichier déjà connu. Tu peux ensuite lire les fichiers `
+      : `Tu lis les fichiers `) +
     `nécessaires : c'est infiniment moins cher qu'un ` +
     `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
     `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +

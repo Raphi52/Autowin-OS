@@ -1,6 +1,8 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
+import { ligneDErreurDAction } from '../../shared/erreur-d-action'
+import { redactTrace } from '../activity/trace-redact'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
@@ -2367,6 +2369,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // Le détail du geste voyage avec sa ligne de fin : c'est elle qui l'écrit dans la trace.
             statusDetail: { envoye: call.envoye, retour: outputEntier }
           })
+          // ACTION ROUGE : son message d'erreur la suit dans le journal d'actions, que le fil
+          // sauvegarde et dessine sous la ligne rouge — aucun appel au modèle (conv-341). Masqué
+          // comme la trace (`redactTrace`) : une sortie en échec peut recopier un secret.
+          const ligneErreur = part.is_error
+            ? ligneDErreurDAction(call.name, String(redactTrace(outputEntier)))
+            : undefined
+          if (ligneErreur) queue.push({ delta: '', status: ligneErreur })
           const output = outputEntier.slice(-20_000)
           collectArtifacts(part.content, call.name, call.filePath)
           const isFile = Boolean(call.filePath)

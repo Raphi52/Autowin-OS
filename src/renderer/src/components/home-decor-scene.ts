@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { createAvenueEnArrierePlan } from './decor-avenue-hote'
+import { DECOR_DEFAUT } from './fond-accueil'
 
 /**
  * Le décor 3D de la page d'accueil : la scène, sans React.
@@ -330,6 +331,19 @@ export interface DecorScene {
   resize(width: number, height: number): void
   dispose(): void
   readonly canvas: HTMLCanvasElement
+  /**
+   * Scène dessinée dans son propre fil (decor-avenue-hote.ts) : faux tant que l'image demandée n'y est
+   * pas dessinée — la boucle attend alors au lieu de perdre son tour (DecorDeFond, decor-cadence.ts).
+   * Absent = toujours prête.
+   */
+  pret?(): boolean
+  /** Même cas : ce qu'a coûté, dans ce fil, la dernière image dessinée (ms) ; `null` avant la première. */
+  coutDerniereImage?(): number | null
+  /**
+   * Côté Worker seulement (avenue montée avec `refletApresImage`) : le travail à faire APRÈS
+   * l'image, dans une tâche à part, pour que l'image s'affiche sans l'attendre (le reflet de l'eau).
+   */
+  apresImage?(): void
 }
 
 /** Un tirage déterministe : deux lancements donnent le MÊME ciel, sinon le décor « bouge » entre deux ouvertures. */
@@ -1815,7 +1829,9 @@ export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
  * contrebas remplacent les planetes. Comme pour `poussiere` avant elles, les planetes ne sont pas
  * effacees : `actuel` reste choisissable et sa promesse reste testee sous son NOM.
  */
-export const DECOR_DEFAUT: DecorVariant = 'avenue'
+// La valeur vit dans fond-accueil.ts, seule source du fond choisi (menu des réglages de l'Accueil,
+// conv-346) : le menu la lit sans charger three.js. Ré-exportée ici, où l'on cherche le défaut du décor.
+export { DECOR_DEFAUT }
 
 /**
  * Une valeur lue du stockage est-elle une direction connue ?

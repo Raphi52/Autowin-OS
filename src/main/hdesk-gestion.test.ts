@@ -3,18 +3,18 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
-  argumentsFermerSansFiche,
   bureauxGeres,
+  choisirExecutable,
   creerBureau,
   fermerBureauGere,
-  interpreterListeVivants,
-  lireBureauxVivants,
+  lireGestes,
+  lireRecents,
   listerTousLesBureaux,
   scriptEnveloppeCreation,
   type DependancesCreation
 } from './hdesk-gestion'
-import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
-import { refusCreation } from '../shared/hdesk-gestion'
+import { CapteurHdesk, type DemandeFermeture, type ResultatFermeture } from './hdesk-tv'
+import { proposerIdentifiant, refusCreation } from '../shared/hdesk-gestion'
 
 const RACINE = join('C:', 'autowin')
 const vivantSauf =
@@ -60,19 +60,23 @@ describe('vue Bureaux cachés — TOUS les bureaux, quel que soit le fil (conv-9
   })
 
   it('une liste illisible est une ERREUR, jamais une liste vide', async () => {
-    expect(interpreterListeVivants('{"pret":true}\n{"bureaux":["x","y"]}')).toEqual({
-      ok: true,
-      vivants: ['x', 'y']
-    })
-    expect(interpreterListeVivants('', 'powershell absent')).toEqual({
-      ok: false,
-      message: 'Liste des bureaux illisible : powershell absent'
-    })
-    const r = await bureauxGeres(RACINE, registre([]), async () => ({
-      ok: false as const,
-      message: 'capture morte'
-    }))
+    const r = await bureauxGeres(
+      async () => ({ ok: false as const, message: 'capture morte' }),
+      registre([])
+    )
     expect(r).toEqual({ ok: false, message: 'capture morte' })
+  })
+
+  // conv-344 (scout n°7) : la liste passe par le processus de capture DÉJÀ ouvert (CapteurHdesk),
+  // plus par un PowerShell neuf à chaque tour. bureauxGeres ne lance plus rien lui-même.
+  it('chaque tour interroge la source donnée, une fois, et relie les fiches', async () => {
+    const lire = vi.fn(async () => ({ ok: true as const, vivants: ['zox'] }))
+    const d = registre([{ id: 'zox', conversationId: 'conv-1', travail: 'Essai' }])
+    for (let i = 0; i < 3; i++) {
+      const r = await bureauxGeres(lire, d)
+      expect(r).toMatchObject({ ok: true, bureaux: [{ id: 'zox', travail: 'Essai', relie: true }] })
+    }
+    expect(lire).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -106,40 +110,28 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/fil/)
   })
 
-  // conv-1016 (2026-10-17) : « ui-capture-7208 : Fermeture refusée : Ce bureau n'a pas de fiche ».
-  // Les bureaux des captures naissent sans fiche ; le geste de l'utilisateur doit les fermer.
-  it('bureau sans fiche : fermé PAR BUREAU, sans fil — jamais par le chemin des fiches', async () => {
-    const fermer = vi.fn()
-    const sansFiche = vi.fn(async (_r: string, _id: string) => resultat({ ferme: true }))
-    const r = await fermerBureauGere(RACINE, 'ui-capture-7208', registre([]), fermer, sansFiche)
-    expect(fermer).not.toHaveBeenCalled()
-    expect(sansFiche).toHaveBeenCalledWith(RACINE, 'ui-capture-7208')
-    expect(r).toMatchObject({ ok: true, code: 0, message: 'Application fermée, bureau libéré.' })
+  // conv-344 (scout n°1) : ce cas rendait « Ce bureau n'a pas de fiche » alors que le script sait
+  // fermer ces bureaux depuis le 17/10 (-SansFiche, commit 41359673) — la vue ne le lui demandait pas.
+  it('bureau sans fiche : fermé en mode « sans fiche », SANS fil — jumeau du cas avec fiche', async () => {
+    const fermer = vi.fn(async (_r: string, _d: DemandeFermeture) =>
+      resultat({ ferme: true, sansFiche: true })
+    )
+    const r = await fermerBureauGere(RACINE, 'ui-capture-7208', registre([]), fermer)
+    expect(fermer).toHaveBeenCalledTimes(1)
+    expect(fermer).toHaveBeenCalledWith(RACINE, { id: 'ui-capture-7208', sansFiche: true })
+    expect(r).toMatchObject({ ok: true, code: 0 })
   })
 
-  it('bureau AVEC fiche : jamais le chemin sans fiche', async () => {
-    const sansFiche = vi.fn()
-    const d = registre([{ id: 'zox', conversationId: 'conv-1' }])
-    await fermerBureauGere(RACINE, 'zox', d, async () => resultat({}), sansFiche)
-    expect(sansFiche).not.toHaveBeenCalled()
-  })
-
-  it('arguments du mode sans fiche : -SansFiche, aucun fil, délai laissé à Outlook', () => {
-    const args = argumentsFermerSansFiche(RACINE, 'ui-capture-7208')
-    expect(args).toEqual([
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      join(RACINE, 'scripts', 'hdesk-fermer.ps1'),
-      '-Id',
-      'ui-capture-7208',
-      '-SansFiche',
-      '-DelaiDouxSecondes',
-      '15'
-    ])
-    expect(args).not.toContain('-Conversation')
-    expect(() => argumentsFermerSansFiche(RACINE, 'a b;c')).toThrow(/invalide/)
+  it('bureau sans fiche disparu entre la liste et le clic (code 2) : dit « n’existe plus », pas un échec', async () => {
+    const r = await fermerBureauGere(RACINE, 'ui-capture-1', registre([]), async () => ({
+      ok: false,
+      code: 2,
+      ferme: false,
+      sansFiche: true,
+      erreur: "Aucun bureau cache 'AutowinTest_ui-capture-1' vivant : rien n'a ete ferme."
+    }))
+    expect(r).toMatchObject({ ok: true, code: 2, dejaFerme: true })
+    expect(r.message).toMatch(/n’existe plus/)
   })
 
   it('identifiant invalide : refus avant toute lecture', async () => {
@@ -234,6 +226,22 @@ describe('vue Bureaux cachés — Créer', () => {
     expect(executer).toHaveBeenCalledTimes(1)
   })
 
+  // conv-344 (scout n°3) : le lanceur rend 2 quand l'app meurt AVANT sa fenêtre (instance unique qui
+  // passe la main, plantage au démarrage) — avant, 30 s d'attente puis « aucune fenêtre » (code 3).
+  it('app arrêtée avant sa fenêtre (code 2) : le dit en clair, avec son code de sortie', async () => {
+    const { deps } = depsCreation({
+      code: 2,
+      sortie:
+        '{"id":"zox2","pret":false,"fenetresVisibles":0,"codeSortie":7,"journalWindows":[],"erreur":"arretee AVANT"}',
+      erreur: 'arrete avant toute fenetre'
+    })
+    const r = await creerBureau(RACINE, demande, deps)
+    expect(r).toMatchObject({ ok: false, code: 2 })
+    expect(r.message).toMatch(/avant d’ouvrir sa fenêtre \(code de sortie 7\)/)
+    expect(r.message).toMatch(/passé la main à une copie déjà ouverte/)
+    expect(r.message).toMatch(/planté au démarrage/)
+  })
+
   it('exécutable introuvable (code 1) : le message du lanceur est rendu tel quel', async () => {
     const { deps } = depsCreation({
       code: 1,
@@ -287,9 +295,15 @@ describe('vue Bureaux cachés — Créer', () => {
 describe.skipIf(process.platform !== 'win32')('vue Bureaux cachés — chaîne réelle', () => {
   const racine = process.cwd()
 
-  it('liste les bureaux vivants par un appel ponctuel', async () => {
-    const r = await lireBureauxVivants(racine)
-    expect(r.ok).toBe(true)
+  it('liste les bureaux vivants par le vrai processus de capture', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestion-reel-'))
+    const capteur = new CapteurHdesk(racine, reg)
+    try {
+      const r = await bureauxGeres(() => capteur.listeVivants(), reg)
+      expect(r.ok).toBe(true)
+    } finally {
+      capteur.detruire()
+    }
   }, 30_000)
 
   // Apostrophes TYPOGRAPHIQUES (’ ‘) : PowerShell les prend aussi pour des fins de chaîne. Courantes
@@ -305,4 +319,141 @@ describe.skipIf(process.platform !== 'win32')('vue Bureaux cachés — chaîne r
     expect(r).toMatchObject({ ok: false, code: 1 })
     expect(r.message).toBe(`Executable introuvable : ${exe}`)
   }, 60_000)
+})
+
+/**
+ * conv-344 — la question de départ : « pk je suis obligé de choisir un path de programme ? ». Le
+ * chemin reste obligatoire (un bureau vide est détruit par Windows), mais il se CHOISIT (scout n°10)
+ * et l'identifiant se PROPOSE (n°11).
+ */
+describe('vue Bureaux cachés — choisir l’application (conv-344)', () => {
+  it('« Parcourir… » annulé : aucun chemin, aucun message', async () => {
+    expect(await choisirExecutable(async () => null)).toEqual({ ok: false })
+  })
+
+  it('un fichier qui n’est pas un .exe est refusé, nommé', async () => {
+    const r = await choisirExecutable(async () => 'C:\\docs\\notes.txt')
+    expect(r).toEqual({ ok: false, message: 'Choisis un fichier .exe.' })
+  })
+
+  it('jumeau accepté : un .exe, majuscules comprises', async () => {
+    expect(await choisirExecutable(async () => 'C:\\Apps\\Zox.EXE')).toEqual({
+      ok: true,
+      chemin: 'C:\\Apps\\Zox.EXE'
+    })
+  })
+
+  it.each([
+    ['nominal, accent et espaces', 'C:\\x\\Mon Appli é 2.exe', [], 'mon-appli-e-2'],
+    ['vide après nettoyage', 'C:\\x\\日本.exe', [], 'appli'],
+    ['seulement « .exe »', 'C:\\x\\.exe', [], 'appli'],
+    ['énorme : coupé à 40', `C:\\x\\${'a'.repeat(200)}.exe`, [], 'a'.repeat(40)],
+    ['déjà pris deux fois', 'C:\\Windows\\notepad.exe', ['notepad', 'Notepad-2'], 'notepad-3'],
+    ['chemin à barres obliques', 'D:/outils/Roblox Studio.exe', [], 'roblox-studio']
+  ])('identifiant proposé — %s', (_cas, exe, pris, attendu) => {
+    const id = proposerIdentifiant(exe, pris)
+    expect(id).toBe(attendu)
+    expect(refusCreation({ id, executable: exe, travail: 'x' })).toBeNull()
+  })
+})
+
+/** conv-344 (scout n°6) : « Relancer » un bureau fermé sans tout retaper. */
+describe('vue Bureaux cachés — Récents (historique des lancements)', () => {
+  const histo = (lignes: string[]): string => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-recents-'))
+    writeFileSync(join(d, 'historique.jsonl'), lignes.join('\n') + '\n')
+    return d
+  }
+  const ligne = (id: string, quand: string, extra: Record<string, unknown> = {}): string =>
+    JSON.stringify({
+      id,
+      executable: `C:\\apps\\${id}.exe`,
+      arguments: '',
+      travail: `travail ${id}`,
+      conversationId: 'manuel',
+      lanceLe: quand,
+      ...extra
+    })
+
+  it('historique absent : aucun récent', () => {
+    expect(lireRecents(mkdtempSync(join(tmpdir(), 'hdesk-recents-vide-')), [])).toEqual([])
+  })
+
+  it('plus récent d’abord, une ligne abîmée ignorée, le même lancement répété compte une fois', () => {
+    const d = histo([
+      ligne('zox', '2026-10-19T08:00:00+02:00'),
+      '{pas du json',
+      ligne('zox', '2026-10-19T09:00:00+02:00'),
+      ligne('zox', '2026-10-19T10:00:00+02:00'),
+      ligne('roblox', '2026-10-19T11:00:00+02:00', { arguments: '-mode test' }),
+      JSON.stringify({ id: 'sans-executable', travail: 'x' })
+    ])
+    const r = lireRecents(d, [])
+    expect(r.map((e) => e.id)).toEqual(['roblox', 'zox'])
+    expect(r[0]).toEqual({
+      id: 'roblox',
+      executable: 'C:\\apps\\roblox.exe',
+      arguments: '-mode test',
+      travail: 'travail roblox',
+      conversationId: 'manuel',
+      lanceLe: '2026-10-19T11:00:00+02:00'
+    })
+    expect(r[1].lanceLe).toBe('2026-10-19T10:00:00+02:00')
+  })
+
+  it('un bureau encore vivant n’est pas « récent » : il est dans la liste', () => {
+    const d = histo([
+      ligne('zox', '2026-10-19T08:00:00+02:00'),
+      ligne('a', '2026-10-19T09:00:00+02:00')
+    ])
+    expect(lireRecents(d, ['zox']).map((e) => e.id)).toEqual(['a'])
+  })
+
+  it('au plus 5', () => {
+    const d = histo(
+      Array.from({ length: 9 }, (_, i) => ligne(`b${i}`, `2026-10-19T0${i}:00:00+02:00`))
+    )
+    expect(lireRecents(d, []).map((e) => e.id)).toEqual(['b8', 'b7', 'b6', 'b5', 'b4'])
+  })
+
+  it('la liste de la vue porte les récents', async () => {
+    const d = histo([ligne('zox', '2026-10-19T08:00:00+02:00')])
+    const r = await bureauxGeres(async () => ({ ok: true as const, vivants: [] }), d)
+    expect(r).toMatchObject({ ok: true, bureaux: [], recents: [{ id: 'zox' }] })
+  })
+})
+
+/** conv-344 (scout n°5) : le journal des gestes (écrit par hdesk-act.ps1) sur la carte du bureau. */
+describe('vue Bureaux cachés — derniers gestes du bureau', () => {
+  it('journal absent : aucun geste', () => {
+    expect(lireGestes(mkdtempSync(join(tmpdir(), 'hdesk-gestes-vide-')), 'zox')).toEqual([])
+  })
+
+  it('les 5 derniers, dans l’ordre ; une ligne abîmée est ignorée', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-gestes-lus-'))
+    const lignes = Array.from({ length: 8 }, (_, i) =>
+      JSON.stringify({ quand: `2026-10-19T10:00:0${i}+02:00`, ok: true, x: i, y: i, clic: true })
+    )
+    lignes.splice(6, 0, '{abîmé')
+    writeFileSync(join(d, 'zox.gestes.jsonl'), lignes.join('\n') + '\n')
+    expect(lireGestes(d, 'zox').map((g) => g.x)).toEqual([3, 4, 5, 6, 7])
+  })
+
+  it('identifiant invalide : rien n’est lu', () => {
+    expect(lireGestes(mkdtempSync(join(tmpdir(), 'hdesk-gestes-inv-')), '../x')).toEqual([])
+  })
+
+  it('la liste attache les gestes à leur bureau', async () => {
+    const d = registre([{ id: 'zox', conversationId: 'conv-1', travail: 'Essai' }])
+    writeFileSync(
+      join(d, 'zox.gestes.jsonl'),
+      JSON.stringify({ quand: '2026-10-19T10:00:00+02:00', ok: true, x: 1, y: 2, clic: true }) +
+        '\n'
+    )
+    const r = await bureauxGeres(async () => ({ ok: true as const, vivants: ['zox'] }), d)
+    expect(r).toMatchObject({
+      ok: true,
+      bureaux: [{ id: 'zox', gestes: [{ ok: true, x: 1, y: 2, clic: true }] }]
+    })
+  })
 })

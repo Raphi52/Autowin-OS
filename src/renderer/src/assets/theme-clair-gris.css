@@ -91,8 +91,9 @@
 }
 
 /* components/CadrageHypotheses.css */
-:root[data-base='clair'] .cadrage-hyp-masquer,
-:root[data-base='clair'] .cadrage-hyp-masquer:hover {
+:root[data-base='clair'] .cadrage-hyp-plier,
+:root[data-base='clair'] .cadrage-hyp-plier:hover,
+:root[data-base='clair'] .cadrage-hyp-compte {
   color: var(--text-dim);
 }
 

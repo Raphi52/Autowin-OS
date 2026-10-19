@@ -1054,12 +1054,20 @@ export function ChatView({
   const autoFilAmorceRef = useRef<string | null>(null)
   /*
    * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
-   * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
-   * arrive. Rien n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
+   * evenement de run, sont remplacees par un nouveau cadrage et disparaissent a la fin du run. Rien
+   * n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
    */
   const [hypothesesCadrage, setHypothesesCadrage] = useState<Record<string, HypotheseDeCadrage[]>>(
     {}
   )
+  /*
+   * REPLI DU BLOC CADRAGE, PAR CONVERSATION (conv-358, 19/10 : « garde l'etat replie [...] pour qu'il
+   * reste ferme quand je change de fil et que je reviens »). La valeur est le run replie : un cadrage
+   * d'un AUTRE run arrive ouvert (suppositions neuves), meme si la fin du precedent s'est perdue.
+   * La fin du run efface l'entree avec les suppositions.
+   */
+  const [cadrageReplie, setCadrageReplie] = useState<Record<string, string>>({})
+  const runDuCadrageRef = useRef<Record<string, string>>({})
   /**
    * Palette `/` déduite des skills réellement installées. MÊME source que l'exécutabilité et que la
    * palette de briques (`useSkillsInventory`) : deux lectures écrites à la main divergeraient, et
@@ -1278,9 +1286,18 @@ export function ChatView({
     bascule les branches du depot de la CONVERSATION. Cliquer une branche basculait donc un depot
     dont le badge ne parlait pas : l'ecran ne « se positionnait » jamais dessus. Meme cwd des deux
     cotes, sinon le badge ment.
+
+    Meme regle pour un fil NEUF (conv-354, 2026-10-19 : « je suis oblige d'ecrire un premier
+    message avant que ca affiche la branche ») : sans conversation ouverte, le dossier est celui
+    ARME sur la pastille. Le badge l'ignorait et lisait le depot par defaut — il annoncait, listait
+    et basculait les branches d'un autre depot jusqu'a la creation du fil. Une seule source pour la
+    pastille et le badge : `dossierProjetAffiche`.
   */
-  const gitCwd =
-    convs.find((c) => c.id === activeId)?.projectPath?.trim() || defaultWorkspace || undefined
+  const convAffichee = convs.find((c) => c.id === activeId)
+  const dossierProjetAffiche = convAffichee
+    ? convAffichee.projectPath?.trim()
+    : (dossierNouveauFil ?? undefined)
+  const gitCwd = dossierProjetAffiche || defaultWorkspace || undefined
   // `getGitBranch`, pas `getGitState` : ce dernier creait 2 processus git sur le fil principal a
   // chaque relecture (toutes les 5 s) — 9 gels de 3,3 a 9,8 s (heal conv-1013).
   const lireEtatGit = useCallback(
@@ -2776,7 +2793,15 @@ export function ChatView({
       ) {
         const convId = e.convId
         const recues = e.hypotheses as HypotheseDeCadrage[]
+        const run = typeof e.runPath === 'string' ? e.runPath : ''
+        runDuCadrageRef.current[convId] = run
         setHypothesesCadrage((current) => ({ ...current, [convId]: recues }))
+        setCadrageReplie((current) => {
+          if (current[convId] === undefined || current[convId] === run) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
       } else if (e.type === 'orchestrate-end' && e.convId) {
         const convId = e.convId
         const runPath = e.runPath
@@ -2795,6 +2820,13 @@ export function ChatView({
           delete suivant[convId]
           return suivant
         })
+        setCadrageReplie((current) => {
+          if (current[convId] === undefined) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
+        delete runDuCadrageRef.current[convId]
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, {
             type: 'end',
@@ -7229,9 +7261,8 @@ export function ChatView({
                       le premier tour, donc ce premier tour partait toujours dans le depot de repli
                       (« je dois pouvoir choisir mon CWD dans un nouveau fil », 2026-09-09).
                     */
-                    const dossierProjet = active
-                      ? active.projectPath?.trim()
-                      : (dossierNouveauFil ?? undefined)
+                    // Meme source que le badge de branche (`gitCwd`), sinon les deux divergent.
+                    const dossierProjet = dossierProjetAffiche
                     const cheminEffectif = dossierProjet || defaultWorkspace
                     const labelDossier = estDossierPersonnel(cheminEffectif)
                       ? 'This computer'
@@ -7834,10 +7865,12 @@ Cliquer pour choisir une autre branche.`}
                   <CadrageHypotheses
                     hypotheses={hypothesesCadrage[activeId]}
                     onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
-                    onMasquer={() =>
-                      setHypothesesCadrage((current) => {
+                    replie={cadrageReplie[activeId] !== undefined}
+                    onBasculerRepli={() =>
+                      setCadrageReplie((current) => {
                         const suivant = { ...current }
-                        delete suivant[activeId]
+                        if (suivant[activeId] !== undefined) delete suivant[activeId]
+                        else suivant[activeId] = runDuCadrageRef.current[activeId] ?? ''
                         return suivant
                       })
                     }

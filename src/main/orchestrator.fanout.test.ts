@@ -226,6 +226,8 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
    * pour qu'ils soient ultra quali comme dans le jeu cyberpunk? » est classé « trivial » (2 places),
    * et le canevas Exploration compose 5 angles. La coupe gardait les deux premiers, « dette » et
    * « fragilité » (« tu ignores l'esthétique »). Elle garde désormais la veille externe et la rupture.
+   * Depuis conv-344, cette demande n'est plus triviale (« comment » = « how », et un scout n'est
+   * jamais trivial, `task-regime.ts`) : elle a 4 places. La coupe à 2 est donc posée à la main.
    */
   it('un panel scout coupé par le devis garde ses angles les plus utiles, pas les premiers du canevas', async () => {
     const provider = new RecordingProvider()
@@ -233,7 +235,8 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     const tache =
       "/scout comment améliorer les humains pour qu'ils soient ultra quali comme dans le jeu cyberpunk?"
     const quote = compileExecutionQuote(tache)
-    expect(quote.limits.maxConcurrency).toBe(2)
+    expect(quote.limits.maxConcurrency).toBeGreaterThan(2)
+    quote.limits.maxConcurrency = 2
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
     const roles = new RoleModelConfig({
       orchestrator: { provider: provider.id, model: 'orch' },

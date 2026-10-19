@@ -288,3 +288,53 @@ describe('liste des fichiers du dépôt : pré-lecture asynchrone', () => {
     expect(appelsSynchrones).toBe(1)
   })
 })
+
+/*
+ * AFFIRMER UNE ABSENCE SANS LA MONTRER (conv-339). Le juge a refusé deux fois le tableau du /scout
+ * « humains comme dans Cyberpunk » (notes 66 et 70) pour des absences affirmées à tort — « three.js
+ * n'a rien de tout fait », « aucun test n'impose ce choix » : deux tours de jugement payés. Les
+ * lignes ci-dessous sont RECOPIÉES de ses sorties (`run-livrables/run-f085fcccbb82-1.md`).
+ */
+describe('plafond de preuve : une absence affirmée doit être montrée', () => {
+  const ENTETE_A =
+    '| # | Score | Vu par | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|---|\n'
+  const ENTETE_B = '| # | Score | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|\n'
+  const PEAU_68 =
+    "| 8 | 68 | B (A le cite à part) | 🆕 feature | Une peau moins « plastique » | La peau est une matière standard de rugosité 0,55 (`FOULE.rugositePeau`). Elle ne simule pas la lumière qui traverse la peau. three.js n'a rien de tout fait pour ça ([fil three.js](https://discourse.threejs.org/t/skin-shading-with-screen-space-sub-surface-scattering/83939)). A le classe comme un chantier séparé. | Ajouter un léger éclairage enveloppant dans le code de rendu de `nuancer()`, que `home-decor-foule-tribus.ts:205` modifie déjà. |"
+  const PEAU_100 =
+    "| 5 | 100 | 🆕 feature | Une peau moins « plastique » | La peau est une matière standard de rugosité 0,55 (`FOULE.rugositePeau`). Elle ne simule pas la lumière qui traverse la peau, et three.js n'a rien de tout fait pour ça ([fil three.js](https://discourse.threejs.org/t/skin-shading-with-screen-space-sub-surface-scattering/83939)). | Ajouter un éclairage enveloppant léger dans `nuancer()`, que `home-decor-foule-tribus.ts:205` modifie déjà. |"
+  const COMMENTAIRE_73 =
+    "| 7 | 73 | 🔧 fix | Un commentaire périmé annonce 34 ms par image et fait croire qu'il ne reste aucune marge de calcul | `home-decor-foule.ts:356-362` parle encore au présent d'un coût de 34 ms par image. Ce défaut est pourtant corrigé par les matières en double (« jumelles »). Elles sont branchées par `matieresDuReflet` dans `home-decor-avenue-spirale.ts:958`, et le test « LE REFLET DESSINE DES JUMELLES » les vérifie (`spirale.test.ts:383`). | Réécrire ce paragraphe avec le coût mesuré aujourd'hui. |"
+  const notes = (texte: string): Array<[string, number | undefined]> =>
+    parseScoutTable(texte)!.map((ligne) => [ligne.num, ligne.score])
+
+  it('la ligne réelle notée 68 (« three.js n’a rien de tout fait », une URL pour seule preuve) tombe à 50', () => {
+    const sortie = plafonnerNotesScout(`${ENTETE_A}${PEAU_68}\n`)
+    expect(notes(sortie)).toEqual([['8', 50]])
+    expect(sortie).toMatch(/ramenée à 50/u)
+    expect(sortie).toContain("three.js n'a rien de tout fait")
+    expect(sortie).toMatch(/absence/u)
+  })
+
+  it('la ligne réelle notée 100 tombe à 50 ; la ligne notée 73, qui montre son fichier, reste à 73', () => {
+    const sortie = plafonnerNotesScout(`${ENTETE_B}${PEAU_100}\n${COMMENTAIRE_73}\n`)
+    expect(notes(sortie)).toEqual([
+      ['7', 73],
+      ['5', 50]
+    ])
+  })
+
+  it('jumeau : une absence citée avec son grep ou son fichier garde sa note', () => {
+    const texte =
+      ENTETE_B +
+      '| 1 | 80 | 🆕 feature | Des ombres portées | Aucune ombre portée dans le décor (`grep -rn castShadow src/renderer` : 0 résultat). | Activer les ombres |\n' +
+      '| 2 | 76 | 🆕 feature | Un clignement des yeux | Rien ne lit les formes du visage dans `src/renderer/src/components/home-decor-foule.ts`. | Ajouter |\n'
+    const sortie = plafonnerNotesScout(texte)
+    expect(sortie).toBe(texte)
+  })
+
+  it('jumeau : une note déjà au plafond ou en dessous ne bouge pas, et rien n’est écrit', () => {
+    const texte = `${ENTETE_B}| 1 | 50 | 🆕 feature | Peau | three.js n'a rien de tout fait. | Ajouter |\n`
+    expect(plafonnerNotesScout(texte)).toBe(texte)
+  })
+})

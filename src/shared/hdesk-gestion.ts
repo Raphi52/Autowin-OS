@@ -15,21 +15,98 @@ export const MOTIF_IDENTIFIANT = /^[a-zA-Z0-9_-]+$/
  */
 export const FIL_MANUEL = 'manuel'
 
+/**
+ * Attente maximale d'une création par la vue (lanceur : 30 s de fenêtre + 6 s de survie + journal
+ * Windows, plus le lancement détaché). Partagée : l'écran annonçait « 40 s » en dur (conv-344).
+ */
+export const CREATION_ATTENTE_MS = 90_000
+
+/**
+ * Une ligne du journal des gestes d'un bureau (`<id>.gestes.jsonl`, écrit par scripts/hdesk-act.ps1,
+ * conv-344). Jamais le texte tapé : seulement son nombre de caractères.
+ */
+export interface GesteJournal {
+  quand: string
+  ok: boolean
+  x?: number
+  y?: number
+  /** Faux = frappe ou touche sans reclic. */
+  clic?: boolean
+  caracteres?: number
+  entree?: boolean
+  touche?: string
+  molette?: number
+  touches?: number
+  erreur?: string
+}
+
 /** Un bureau caché VIVANT, quel que soit son fil. */
 export interface BureauGere {
   id: string
   /** Libellé du travail ; « travail non relié » quand le bureau n'a pas de fiche au registre. */
   travail: string
-  /** Faux quand aucune fiche ne relie ce bureau à un travail : Autowin ne sait pas le fermer. */
+  /**
+   * Faux quand aucune fiche ne relie ce bureau à un travail (ui-capture-*, preuve-*). Il se ferme
+   * quand même, en mode « sans fiche » : seules ses fenêtres sont visées (conv-344).
+   */
   relie: boolean
   conversationId?: string
   lanceLe?: string
   pid?: number
   executable?: string
+  /** Derniers gestes (5 au plus, le plus ancien d'abord) — de la TV, de la vue ou d'un agent. */
+  gestes?: GesteJournal[]
+}
+
+/**
+ * Un lancement réussi, gardé par hdesk-lancer.ps1 dans `historique.jsonl` (conv-344, scout n°6) : de
+ * quoi relancer un bureau fermé sans rien retaper — la fiche, elle, est effacée à la fermeture.
+ */
+export interface LancementRecent {
+  id: string
+  executable: string
+  arguments: string
+  travail: string
+  conversationId: string
+  lanceLe?: string
 }
 
 export type ResultatListeBureaux =
-  { ok: true; bureaux: BureauGere[] } | { ok: false; message: string }
+  { ok: true; bureaux: BureauGere[]; recents?: LancementRecent[] } | { ok: false; message: string }
+
+/** « Parcourir… » : un chemin d'.exe ; sans message = annulé. */
+export type ResultatChoixExe = { ok: true; chemin: string } | { ok: false; message?: string }
+
+/** Longueur maximale d'un identifiant PROPOSÉ (même borne que identifiantBureauCacheChat). */
+const ID_PROPOSE_MAX = 40
+
+/**
+ * Identifiant proposé à partir du nom de l'application (conv-344, scout n°11) : sans accent, en
+ * minuscules, « - » pour tout le reste, 40 caractères au plus, « appli » si rien ne reste ; suffixe
+ * -2, -3… s'il est déjà pris (comparaison sans casse : le registre vit sur un disque Windows). Le
+ * lanceur garde le dernier mot (refus « occupé », exit 5).
+ */
+export function proposerIdentifiant(executable: string, pris: readonly string[]): string {
+  const nom = String(executable ?? '')
+    .trim()
+    .split(/[\\/]/)
+    .pop()!
+    .replace(/\.exe$/i, '')
+  const base =
+    nom
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, ID_PROPOSE_MAX)
+      .replace(/-+$/g, '') || 'appli'
+  const occupes = new Set(pris.map((p) => p.toLowerCase()))
+  if (!occupes.has(base)) return base
+  let n = 2
+  while (occupes.has(`${base}-${n}`)) n++
+  return `${base}-${n}`
+}
 
 export interface ResultatFermetureGeree {
   ok: boolean

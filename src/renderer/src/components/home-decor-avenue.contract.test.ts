@@ -122,9 +122,14 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
   })
 
   it('la clé de stockage est versionnée pour que le nouveau défaut atteigne toutes les machines', () => {
+    // La clé vit dans fond-accueil.ts depuis le menu « Fond » des réglages (conv-346) : le menu et le
+    // décor la lisent à la même source.
+    const choix = readFileSync(new URL('./fond-accueil.ts', import.meta.url), 'utf8')
+    expect(choix).toMatch(/autowinStorageKey\('home\.decor\.v3'\)/)
+    expect(sans(choix)).not.toMatch(/home\.decor\.v[12]\b/)
+    // Le décor ne lit plus de clé à lui : une seconde lecture recopiée finirait par se contredire.
     const decor = readFileSync(new URL('./DecorDeFond.tsx', import.meta.url), 'utf8')
-    expect(decor).toMatch(/autowinStorageKey\('home\.decor\.v3'\)/)
-    expect(sans(decor)).not.toMatch(/home\.decor\.v[12]\b/)
+    expect(sans(decor)).not.toMatch(/autowinStorageKey|localStorage/)
   })
 })
 

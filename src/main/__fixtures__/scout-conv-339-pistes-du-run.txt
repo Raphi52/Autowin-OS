@@ -1,0 +1,27 @@
+Une peau moins « plastique »
+Des visages vivants : clignements des yeux, regard
+Faire apparaître les passants dans le reflet du sol mouillé (le miroir d'eau de la Spirale)
+Donner aux passants les reflets des néons dont profitent déjà les voitures
+Un seul fichier manquant fait disparaître toute la foule, sans message visible
+Des humains filmés en volume (« splats »)
+Un commentaire périmé laisse croire qu'il n'y a aucune marge de calcul
+Les ombres sont des taches peintes
+Les textures sont plus petites que la source, et on ne sait pas les refabriquer
+Une peau moins « plastique »
+Des humains filmés en volume (« splats »)
+Un commentaire périmé annonce 34 ms par image et fait croire qu'il ne reste aucune marge de calcul
+Des visages vivants : clignement des yeux, regard
+Donner aux passants les reflets des néons, comme aux voitures
+Un seul fichier manquant fait disparaître toute la foule
+Les textures sont réduites, et on ne sait pas les refabriquer
+Les ombres sont des taches rondes peintes
+Faire apparaître les passants dans le reflet du sol mouillé (le miroir d'eau de la Spirale)
+Reflets des néons sur les passants
+Peau moins « plastique »
+Commentaire périmé : « 34 ms par image »
+Un seul fichier manquant fait disparaître toute la foule
+Textures réduites, sans moyen de les refabriquer
+Visages vivants : clignement, regard
+Passants absents du reflet du sol mouillé
+Les ombres sont des taches rondes peintes
+Humains filmés en volume (« splats »)

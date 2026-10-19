@@ -52,7 +52,7 @@ describe('planCausalTraceGc', () => {
 })
 
 describe('collectCausalTraces', () => {
-  it('supprime les traces anciennes, épargne les récentes et les compteurs de séquence', () => {
+  it('supprime les traces anciennes, épargne les récentes et les compteurs de séquence', async () => {
     const root = mkdtempSync(join(tmpdir(), 'causal-trace-gc-'))
     const vieille = join(root, 'conv-vieille.jsonl')
     const fraiche = join(root, 'conv-fraiche.jsonl')
@@ -64,16 +64,17 @@ describe('collectCausalTraces', () => {
     utimesSync(vieille, vieux, vieux)
     utimesSync(compteur, vieux, vieux)
 
-    const outcome = collectCausalTraces(root)
+    const outcome = await collectCausalTraces(root)
 
     expect(outcome.removed).toBe(1)
     expect(outcome.freedBytes).toBe(2048)
     expect(readdirSync(root).sort()).toEqual(['.conv-vieille.sequence', 'conv-fraiche.jsonl'])
   })
 
-  it('ne casse pas sur une racine absente', () => {
-    expect(collectCausalTraces(join(tmpdir(), 'causal-trace-gc-inexistant-xyz')).removed).toBe(0)
-    expect(inventoryCausalTraces(join(tmpdir(), 'causal-trace-gc-inexistant-xyz'))).toEqual([])
+  it('ne casse pas sur une racine absente', async () => {
+    const absente = join(tmpdir(), 'causal-trace-gc-inexistant-xyz')
+    expect((await collectCausalTraces(absente)).removed).toBe(0)
+    expect(await inventoryCausalTraces(absente)).toEqual([])
   })
 
   it('garde la même fenêtre que les journaux de tour', () => {

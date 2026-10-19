@@ -170,6 +170,13 @@ if (-not (Test-Path -LiteralPath $cacheModeles)) {
   Copy-Item -LiteralPath $semence -Destination $cacheModeles -Force
 }
 $env:APPDATA = $appData
+# LA RACINE DES JOURNAUX DE RUN NE S'HÉRITE PAS. L'app la pose par `??=` (index.ts) et la transmet à
+# ses enfants : un lanceur démarré depuis un fil Autowin la reçoit donc, pointée sur le VRAI
+# `run-stdout` de l'utilisateur. Mesuré le 2026-10-19 (conv-359) : deux instances de mesure ont fait
+# leur ménage de démarrage dans ce dossier réel, 63 journaux supprimés — sans la protection des runs à
+# reprendre, puisque leur `run-state` était celui, vide, de l'instance. Retirée ici, l'instance la
+# recalcule sous son propre profil.
+Remove-Item Env:AUTOWIN_RUN_JOURNAL_ROOT -ErrorAction SilentlyContinue
 if (-not [string]::IsNullOrWhiteSpace($AppPath)) {
   if (-not (Test-Path -LiteralPath (Join-Path $AppPath 'package.json') -PathType Leaf)) { throw "Dossier d'application sans package.json : $AppPath" }
   $AppPath = (Get-Item -LiteralPath $AppPath).FullName

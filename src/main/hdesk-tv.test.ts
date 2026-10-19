@@ -45,7 +45,14 @@ describe('petite TV — application installée', () => {
 
   it('les trois fichiers de capture sont extraits de l’archive au packaging', () => {
     const config = readFileSync(join(process.cwd(), 'electron-builder.yml'), 'utf8')
-    for (const f of ['scripts/hdesk-tv.ps1', 'scripts/hdesk-observe.ps1', 'scripts/hdesk-shot.cs', 'scripts/hdesk-act.ps1', 'scripts/hdesk-act.cs', 'scripts/hdesk-basculer.ps1'])
+    for (const f of [
+      'scripts/hdesk-tv.ps1',
+      'scripts/hdesk-observe.ps1',
+      'scripts/hdesk-shot.cs',
+      'scripts/hdesk-act.ps1',
+      'scripts/hdesk-act.cs',
+      'scripts/hdesk-basculer.ps1'
+    ])
       expect(config).toContain(`- ${f}`)
   })
 })
@@ -161,6 +168,94 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
   }
 )
 
+/**
+ * conv-344 (scout n°7) : la vue « Bureaux cachés » lançait un PowerShell NEUF à chaque tour de liste
+ * (toutes les 4 s, 0,92 s mesurées par appel) alors que le processus de capture déjà ouvert sait
+ * répondre `list`. Et seule la TV purgeait les fiches des bureaux fermés (scout n°13).
+ * Faux hdesk-tv.ps1 : même protocole que le vrai, il compte ses démarrages dans un fichier.
+ */
+describe.skipIf(process.platform !== 'win32')(
+  'processus de capture — liste brute pour la vue Bureaux cachés',
+  () => {
+    const fauxCapteur = (reponse: string): { racine: string; compteur: string } => {
+      const racine = mkdtempSync(join(tmpdir(), 'tv-liste-'))
+      mkdirSync(join(racine, 'scripts'))
+      const compteur = join(racine, 'demarrages.txt')
+      writeFileSync(
+        join(racine, 'scripts', 'hdesk-tv.ps1'),
+        [
+          `Add-Content -LiteralPath '${compteur}' -Value 'demarrage'`,
+          '[Console]::Out.WriteLine(\'{"pret":true}\'); [Console]::Out.Flush()',
+          'while ($null -ne ($l = [Console]::In.ReadLine())) {',
+          `  if ($l.Trim() -eq 'list') { [Console]::Out.WriteLine('${reponse}'); [Console]::Out.Flush() }`,
+          '}'
+        ].join('\n'),
+        'utf8'
+      )
+      return { racine, compteur }
+    }
+    const fiches = (reg: string): void => {
+      for (const id of ['vivant', 'mort'])
+        writeFileSync(join(reg, `${id}.json`), JSON.stringify({ id, conversationId: 'conv-1' }))
+      writeFileSync(join(reg, 'historique.jsonl'), '{"id":"mort"}\n')
+    }
+
+    it('trois tours de liste = UN seul PowerShell, et la fiche du bureau fermé est purgée', async () => {
+      const { racine, compteur } = fauxCapteur('{"bureaux":["vivant","sans-fiche"]}')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        for (let i = 0; i < 3; i++)
+          expect(await c.listeVivants()).toEqual({ ok: true, vivants: ['vivant', 'sans-fiche'] })
+        expect(readFileSync(compteur, 'utf8').trim().split(/\r?\n/)).toEqual(['demarrage'])
+        expect(existsSync(join(reg, 'mort.json'))).toBe(false)
+        expect(existsSync(join(reg, 'vivant.json'))).toBe(true)
+        // L'historique des lancements n'est pas une fiche : la purge n'y touche pas.
+        expect(existsSync(join(reg, 'historique.jsonl'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+
+    it('liste en erreur : une ERREUR, jamais une liste vide, et rien n’est purgé', async () => {
+      const { racine } = fauxCapteur('{"erreur":"EnumDesktops a echoue"}')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        expect(await c.listeVivants()).toEqual({ ok: false, message: 'EnumDesktops a echoue' })
+        expect(existsSync(join(reg, 'mort.json'))).toBe(true)
+        expect(existsSync(join(reg, 'vivant.json'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+
+    it('processus de capture mort : une erreur nommée, rien n’est purgé', async () => {
+      const racine = mkdtempSync(join(tmpdir(), 'tv-liste-mort-'))
+      mkdirSync(join(racine, 'scripts'))
+      writeFileSync(join(racine, 'scripts', 'hdesk-tv.ps1'), 'exit 1\n')
+      const reg = mkdtempSync(join(tmpdir(), 'tv-liste-reg-'))
+      fiches(reg)
+      const c = new CapteurHdesk(racine, reg)
+      try {
+        const r = await c.listeVivants()
+        expect(r.ok).toBe(false)
+        expect(existsSync(join(reg, 'mort.json'))).toBe(true)
+      } finally {
+        c.detruire()
+        rmSync(racine, { recursive: true, force: true })
+        rmSync(reg, { recursive: true, force: true })
+      }
+    }, 30000)
+  }
+)
+
 describe.skipIf(process.platform !== 'win32')(
   'petite TV — repli quand le processus de capture meurt',
   () => {
@@ -208,9 +303,12 @@ describe('fusionnerBureaux — application morte', () => {
       { id: 'vif', travail: 'B', conversationId: 'c', pid: 22 },
       { id: 'sanspid', travail: 'C', conversationId: 'c' }
     ]
-    const ids = fusionnerBureaux(['mort', 'vif', 'sanspid'], registre, 'c', (pid) => pid === 22).map(
-      (b) => b.id
-    )
+    const ids = fusionnerBureaux(
+      ['mort', 'vif', 'sanspid'],
+      registre,
+      'c',
+      (pid) => pid === 22
+    ).map((b) => b.id)
     expect(ids.sort()).toEqual(['sanspid', 'vif'])
   })
 
@@ -224,7 +322,17 @@ import { argumentsAct, agirHdesk, TOUCHES_TV } from './hdesk-tv'
 describe('TV interactive — geste vers hdesk-act', () => {
   it('construit l’appel de hdesk-act.ps1 avec clic arrondi, texte et Entrée', () => {
     const a = argumentsAct('R', { id: 'run-1', x: 10.6, y: 4.2, texte: 'abc', entree: true })
-    expect(a.slice(5)).toEqual(['-InstanceId', 'run-1', '-X', '11', '-Y', '4', '-Texte', 'abc', '-Entree'])
+    expect(a.slice(5)).toEqual([
+      '-InstanceId',
+      'run-1',
+      '-X',
+      '11',
+      '-Y',
+      '4',
+      '-Texte',
+      'abc',
+      '-Entree'
+    ])
     expect(a[4]).toBe(join('R', 'scripts', 'hdesk-act.ps1'))
   })
   it('refuse un identifiant hors ^[a-zA-Z0-9_-]+$ sans rien lancer', async () => {
@@ -237,6 +345,163 @@ describe('TV interactive — geste vers hdesk-act', () => {
   it('refuse des coordonnées non finies ou négatives', () => {
     expect(() => argumentsAct('R', { id: 'a', x: NaN, y: 1 })).toThrow()
     expect(() => argumentsAct('R', { id: 'a', x: -1, y: 1 })).toThrow()
+  })
+  // conv-344 : hdesk-act.cs range x et y sur 16 bits (lParam) — x = 70000 cliquait AILLEURS, sans erreur.
+  it('refuse des coordonnées énormes (> 32767) ; jumeau accepté à 32767', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: 70000, y: 1 })).toThrow(/hors bornes/)
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 32768 })).toThrow(/hors bornes/)
+    expect(argumentsAct('R', { id: 'a', x: 32767, y: 32767 })).toContain('32767')
+  })
+  it('refuse une frappe énorme (> 1000 caractères) ; jumeau accepté à 1000', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, texte: 'x'.repeat(1001) })).toThrow(
+      /trop long/
+    )
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1, texte: 'x'.repeat(1000) })).toContain(
+      'x'.repeat(1000)
+    )
+  })
+  it('un registre donné (tests) part en -Registre ; sans lui, rien n’est ajouté', () => {
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1 }, 'C:\\reg').slice(-2)).toEqual([
+      '-Registre',
+      'C:\\reg'
+    ])
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1 })).not.toContain('-Registre')
+  })
+})
+
+/**
+ * conv-344 (scout n°5) : chaque geste — de la TV, de la vue ou d'un agent — est noté dans
+ * `<registre>/<id>.gestes.jsonl`, réussi ou refusé, SANS le texte tapé (seulement son nombre de
+ * caractères). La carte du bureau montre les derniers. Vrai hdesk-act.ps1, registre temporaire.
+ */
+describe.skipIf(process.platform !== 'win32')('journal des gestes — vrai hdesk-act.ps1', () => {
+  const lignes = (reg: string, id: string): Array<Record<string, unknown>> =>
+    readFileSync(join(reg, `${id}.gestes.jsonl`), 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+
+  it('geste refusé (aucun bureau) : noté ok=false, avec le nombre de caractères, jamais le texte', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-'))
+    const id = `kzgeste${process.pid}`
+    try {
+      const r = await agirHdesk(
+        process.cwd(),
+        { id, x: 10, y: 20, texte: 'secret123', entree: true },
+        reg
+      )
+      expect(r.ok).toBe(false)
+      const brut = readFileSync(join(reg, `${id}.gestes.jsonl`), 'utf8')
+      expect(brut).not.toContain('secret123')
+      expect(lignes(reg, id)).toEqual([
+        expect.objectContaining({
+          ok: false,
+          x: 10,
+          y: 20,
+          clic: true,
+          caracteres: 9,
+          entree: true,
+          erreur: expect.any(String)
+        })
+      ])
+      expect(typeof lignes(reg, id)[0].quand).toBe('string')
+    } finally {
+      rmSync(reg, { recursive: true, force: true })
+    }
+  }, 30000)
+
+  it('geste réussi sur une vraie fenêtre : noté ok=true avec la cible', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-ok-'))
+    const fixtures = mkdtempSync(join(tmpdir(), 'hdesk-gestes-app-'))
+    const id = `kzgesteok${process.pid}`
+    const ps = join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe'
+    )
+    const fenetre = join(fixtures, 'fenetre.ps1')
+    writeFileSync(
+      fenetre,
+      "Add-Type -AssemblyName System.Windows.Forms\n$f = New-Object System.Windows.Forms.Form; $f.Text = 'gestes'; $f.StartPosition = 'Manual'; $f.Location = New-Object System.Drawing.Point(0, 0); $f.Size = New-Object System.Drawing.Size(400, 300)\n[void]$f.ShowDialog()\n"
+    )
+    const script = (nom: string, args: string[]): string =>
+      execFileSync(
+        'powershell',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join('scripts', nom), ...args],
+        { encoding: 'utf8' }
+      )
+    try {
+      script('hdesk-lancer.ps1', [
+        '-Id',
+        id,
+        '-Executable',
+        ps,
+        '-Arguments',
+        `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${fenetre}"`,
+        '-Travail',
+        'test journal',
+        '-Conversation',
+        'conv-344',
+        '-Registre',
+        reg,
+        '-SurvieSecondes',
+        '1'
+      ])
+      const r = await agirHdesk(process.cwd(), { id, x: 120, y: 150 }, reg)
+      expect(r.ok, JSON.stringify(r)).toBe(true)
+      expect(lignes(reg, id).at(-1)).toMatchObject({ ok: true, x: 120, y: 150, clic: true })
+    } finally {
+      try {
+        script('hdesk-fermer.ps1', [
+          '-Id',
+          id,
+          '-Conversation',
+          'conv-344',
+          '-Registre',
+          reg,
+          '-DelaiDouxSecondes',
+          '1'
+        ])
+      } catch {
+        /* le filet ne doit pas masquer l'échec du test */
+      }
+      rmSync(reg, { recursive: true, force: true })
+      rmSync(fixtures, { recursive: true, force: true })
+    }
+  }, 90000)
+
+  it('journal borné aux 200 dernières lignes', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-'))
+    const id = `kzgesteb${process.pid}`
+    writeFileSync(
+      join(reg, `${id}.gestes.jsonl`),
+      Array.from({ length: 205 }, (_, i) => JSON.stringify({ n: i })).join('\n') + '\n'
+    )
+    try {
+      await agirHdesk(process.cwd(), { id, x: 1, y: 2, touche: 'Tab', sansClic: true }, reg)
+      const l = lignes(reg, id)
+      expect(l).toHaveLength(200)
+      expect(l.at(-1)).toMatchObject({ touche: 'Tab', clic: false, x: 1, y: 2 })
+      expect(l[0]).toEqual({ n: 6 })
+    } finally {
+      rmSync(reg, { recursive: true, force: true })
+    }
+  }, 30000)
+})
+
+describe('bureau caché fermé — le journal des gestes part avec lui', () => {
+  it('efface <id>.gestes.jsonl des bureaux fermés, fiche ou pas ; garde celui des vivants', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-purge-gestes-'))
+    writeFileSync(join(d, 'mort.json'), JSON.stringify({ id: 'mort' }))
+    for (const id of ['mort', 'vivant', 'ui-capture-1'])
+      writeFileSync(join(d, `${id}.gestes.jsonl`), '{"ok":true}\n')
+    purgerBureauxFermes(d, ['vivant'])
+    expect(existsSync(join(d, 'mort.gestes.jsonl'))).toBe(false)
+    expect(existsSync(join(d, 'ui-capture-1.gestes.jsonl'))).toBe(false)
+    expect(existsSync(join(d, 'vivant.gestes.jsonl'))).toBe(true)
+    rmSync(d, { recursive: true, force: true })
   })
 })
 
@@ -373,10 +638,13 @@ describe('bascule de l’écran réel vers un bureau caché', () => {
 
 describe('TV interactive — touches et molette (conv-35)', () => {
   it('transmet une touche nommée, la molette et -SansClic', () => {
-    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, touche: 'CtrlV', sansClic: true }).slice(9)).toEqual([
-      '-Y', '2', '-Touche', 'CtrlV', '-SansClic'
+    expect(
+      argumentsAct('R', { id: 'a', x: 1, y: 2, touche: 'CtrlV', sansClic: true }).slice(9)
+    ).toEqual(['-Y', '2', '-Touche', 'CtrlV', '-SansClic'])
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, molette: -3 }).slice(-2)).toEqual([
+      '-Molette',
+      '-3'
     ])
-    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, molette: -3 }).slice(-2)).toEqual(['-Molette', '-3'])
   })
   it('refuse une touche hors liste et une molette hors bornes', () => {
     expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, touche: 'F13; calc' })).toThrow(/Touche/)

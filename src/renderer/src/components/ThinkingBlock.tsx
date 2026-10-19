@@ -404,12 +404,27 @@ function FriseDesActions({
                   aria-hidden="true"
                 />
                 {a.texte}
+                <ErreurDeLAction action={a} />
               </div>
             )}
           </Fragment>
         ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne (conv-341, 2026-10-19 : « c'est possible
+ * d'avoir le message d'erreur que l'action a rencontré ? […] un truc qui coûte pas de token »). C'est
+ * le texte que l'outil a RENDU, déjà reçu par l'app : aucun appel au modèle.
+ */
+function ErreurDeLAction({ action }: { action: ActionFrise }): React.JSX.Element | null {
+  if (action.etat !== 'ko' || !action.erreur) return null
+  return (
+    <span className="thinking-frise-erreur" data-testid="action-frise-erreur">
+      {action.erreur}
+    </span>
   )
 }
 
@@ -435,6 +450,7 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
       >
         <span className="thinking-frise-chevron" aria-hidden="true" />
         <span className="thinking-frise-tache-nom">{action.texte}</span>
+        <ErreurDeLAction action={action} />
       </summary>
       {ouvert && (
         <ul className="thinking-frise-sous-actions" data-testid="action-frise-sous-actions">

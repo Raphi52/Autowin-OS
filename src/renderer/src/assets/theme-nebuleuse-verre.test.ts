@@ -644,11 +644,15 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
 describe('Boutons a chanfrein Platine', () => {
   const BOUTONS = {
     envoyer: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-send`,
+    // Stop (conv-349, « fais un bouton stop a chanfrin pour la barre de prompt ») : 28 px, pose
+    // sous Envoyer, la meme coupe que lui.
+    stop: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-stop`,
     'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`,
     details: `${PREFIXE} .workflow-capsule > summary .thinking-capsule`
   }
   const MESURES: Record<string, [string, string]> = {
     envoyer: ['6px', '12px'],
+    stop: ['6px', '12px'],
     'nouveau fil': ['9px', '18px'],
     details: ['6px', '12px']
   }
@@ -704,8 +708,19 @@ describe('Boutons a chanfrein Platine', () => {
     expect(derniere(`${ENVOI}:hover`)['border-width']).toBe('0')
   })
 
+  it('ne laisse aucun bord sous Stop : ChatView.css lui pose 1 px a tous ses etats', () => {
+    // La regle du bouton (0,5,0) passe devant les `border: 1px solid` de ChatView.css, au repos
+    // (0,4,0) comme eteint (0,3,0) ; les etats du dome rouge ne repeignent que la couleur du bord.
+    expect(derniere(BOUTONS.stop)['border-width']).toBe('0')
+    const DOME = `${PREFIXE} .composer-input-row > .composer-stop:not(:disabled)`
+    for (const etat of [DOME, `${DOME}:hover`, `${DOME}:active`]) {
+      expect(derniere(etat)['border-width'], etat).toBeUndefined()
+      expect(derniere(etat).border, etat).toBeUndefined()
+    }
+  })
+
   it('allume tout le cadre au focus clavier, que la coupe empeche de detourer', () => {
-    for (const nom of ['envoyer', 'nouveau fil'] as const) {
+    for (const nom of ['envoyer', 'stop', 'nouveau fil'] as const) {
       expect(derniere(`${BOUTONS[nom]}:focus-visible`)['--nv-bouton-cotes'], nom).toBe(
         'var(--nv-chanfrein-haut)'
       )

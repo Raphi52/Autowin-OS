@@ -7,6 +7,7 @@ import { CLE_VISIBILITE_WIDGETS } from './home-widgets-visibility'
 import { CLE_NOM_JARVIS } from './jarvis-nom'
 import { oublierOuvertureReglages } from './home-reglages-ouverture'
 import { CLE_VOIX_JARVIS, lireReglageVoix } from './jarvis-voix-reglage'
+import { autowinStorageKey } from '../storage-keys'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
@@ -334,6 +335,53 @@ describe('les reglages de l assistant vivent DANS son widget', () => {
 
     for (const id of ['jarvis-nom', 'jarvis-voix', 'jarvis-debit', 'jarvis-hauteur', 'jarvis-voix-test']) {
       expect(q(tuile, `[data-testid="${id}"]`)).not.toBeNull()
+    }
+  })
+})
+
+describe('le choix du fond de l accueil', () => {
+  /**
+   * DEMANDE DE L'UTILISATEUR (2026-10-19, conv-346) : « je veux dans les settings de l'accueil un
+   * menu pour choisir un fond noir ou l'image cyberpunk ou les planetes ». Avant, la direction du
+   * fond n'avait AUCUN reglage : elle ne changeait qu'en editant le stockage a la main.
+   */
+  it('propose exactement Noir, Cyberpunk et Planetes, sur le fond affiche par defaut', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const menu = q<HTMLSelectElement>(container, '[data-testid="home-fond"]')!
+    expect(menu).not.toBeNull()
+    expect(Array.from(menu.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['noir', 'Noir'],
+      ['avenue', 'Cyberpunk'],
+      ['actuel', 'Planètes']
+    ])
+    // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, l'avenue cyberpunk.
+    expect(menu.value).toBe('avenue')
+  })
+
+  it('choisir un fond l enregistre et previent le decor dans la meme fenetre', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const menu = q<HTMLSelectElement>(container, '[data-testid="home-fond"]')!
+    const prevenu = vi.fn()
+    window.addEventListener('autowin:fond-accueil', prevenu)
+    try {
+      await act(async () => {
+        menu.value = 'noir'
+        menu.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v3'))).toBe('noir')
+      // L'ENTREE QUI CASSERAIT UN FAUX FIX : `storage` n'est emis que pour les AUTRES fenetres. Sans
+      // cet evenement, le decor, monte a cote de l'Accueil, ne changerait qu'au redemarrage.
+      expect(prevenu).toHaveBeenCalled()
+      expect(menu.value).toBe('noir')
+      await act(async () => {
+        menu.value = 'actuel'
+        menu.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v3'))).toBe('actuel')
+    } finally {
+      window.removeEventListener('autowin:fond-accueil', prevenu)
     }
   })
 })

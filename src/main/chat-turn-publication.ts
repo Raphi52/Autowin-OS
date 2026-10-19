@@ -224,6 +224,38 @@ async function importsLocaux(repo: string, gitPath: string): Promise<string[]> {
   return [...cibles]
 }
 
+/**
+ * Ce qu'un fichier de code atteint par ses imports relatifs : ses imports DIRECTS, puis, en
+ * profondeur, ceux des fichiers qu'il importe (`indirects`). Chaque fichier n'est lu qu'une fois par
+ * publication (`dejaLus`) ; un chemin qui sort du dépôt n'est pas suivi.
+ */
+async function importsAtteints(
+  repo: string,
+  gitPath: string,
+  dejaLus: Map<string, string[]>
+): Promise<{ directs: string[]; indirects: string[] }> {
+  const lire = async (chemin: string): Promise<string[]> => {
+    const connus = dejaLus.get(chemin)
+    if (connus) return connus
+    const cibles = (await importsLocaux(repo, chemin)).filter((cible) => !cible.startsWith('../'))
+    dejaLus.set(chemin, cibles)
+    return cibles
+  }
+  const directs = await lire(gitPath)
+  const vus = new Set([gitPath, ...directs])
+  const indirects: string[] = []
+  const aSuivre = [...directs]
+  for (let k = 0; k < aSuivre.length; k++) {
+    for (const cible of await lire(aSuivre[k])) {
+      if (vus.has(cible)) continue
+      vus.add(cible)
+      indirects.push(cible)
+      aSuivre.push(cible)
+    }
+  }
+  return { directs, indirects }
+}
+
 function messageDeCommit(conversationId: string, request: string): string {
   const head = request.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail du chat'
   return `auto(${conversationId}): ${head}`
@@ -284,6 +316,8 @@ export async function publierTourDeChat(input: {
   )
 
   const duTour = new Set<string>()
+  /** Tracés par CE fil, à ce tour ou à un précédent : son travail, publié ou encore en attente. */
+  const duFil = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
   const concurrents = new Set<string>()
   /** Nommés par une commande shell d'écriture de CE tour. */
@@ -314,6 +348,7 @@ export async function publierTourDeChat(input: {
         continue
       }
       if (!SOURCES_DU_CHAT.has(trace.source)) continue
+      duFil.add(key)
       if (trace.turnId === turnId) {
         duTour.add(key)
         if (trace.nommeParCommande) nommesParLeTour.add(key)
@@ -363,16 +398,34 @@ export async function publierTourDeChat(input: {
    * UN FICHIER PUBLIÉ N'IMPORTE AUCUN FICHIER LOCAL RESTÉ HORS DU COMMIT. Vécu le 2026-10-01
    * (a7602f5c) : `commands.ts` partait, `src/shared/heredocs.ts` qu'il importe restait non suivi —
    * main ne compilait plus. Point fixe : écarter un fichier peut laisser dehors ce qu'un autre importe.
+   *
+   * NI, PAR UN INTERMÉDIAIRE, LE TRAVAIL DU FIL RESTÉ EN ATTENTE. Vécu le 2026-10-19 (conv-358,
+   * ba71a03e) : `ChatView.cadrage-hypotheses.test.tsx` est parti seul ; `ChatView.tsx`, qu'il
+   * vérifie, était le travail du même fil, écarté (« modifie-avant-le-tour »), et le test ne
+   * l'atteint que par `ChatView.harness.tsx`, propre. main a reçu un test rouge sans son code.
+   * Au-delà des imports directs, seul le travail DU FIL retient : un fichier sale d'un AUTRE fil,
+   * quelque part sous une grande vue, retiendrait presque tout test de cette vue, et ferait revenir
+   * le code publié sans son test (d7af3730, dd0c3d6a).
    */
   const dehors = new Set(changesDuDepot.map((gitPath) => cle(resolve(repo, gitPath))))
+  const importsDejaLus = new Map<string, string[]>()
   for (let ecarte = true; ecarte;) {
     ecarte = false
     const partants = new Set(publier.map((gitPath) => cle(resolve(repo, gitPath))))
+    const resteDehors = (cible: string): boolean => {
+      const key = cle(resolve(repo, cible))
+      return dehors.has(key) && !partants.has(key)
+    }
+    // Aucun travail du fil en attente : les imports directs suffisent, rien à lire en profondeur.
+    const filEnAttente = [...duFil].some((key) => dehors.has(key) && !partants.has(key))
     for (const gitPath of [...publier]) {
-      const manquants = (await importsLocaux(repo, gitPath)).filter((cible) => {
-        const key = cle(resolve(repo, cible))
-        return dehors.has(key) && !partants.has(key)
-      })
+      const { directs, indirects } = filEnAttente
+        ? await importsAtteints(repo, gitPath, importsDejaLus)
+        : { directs: await importsLocaux(repo, gitPath), indirects: [] }
+      const manquants = [
+        ...directs.filter(resteDehors),
+        ...indirects.filter((cible) => resteDehors(cible) && duFil.has(cle(resolve(repo, cible))))
+      ]
       if (!manquants.length) continue
       publier.splice(publier.indexOf(gitPath), 1)
       exclus.push({ path: gitPath, motif: 'import-hors-commit', importsHorsCommit: manquants })

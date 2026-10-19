@@ -70,6 +70,36 @@ describe('classifyRegime', () => {
     expect(classifyRegime(long)).not.toBe('trivial')
   })
 
+  /*
+   * conv-344, demande « /scout comment améliorer la feature overall » (saisie ts 1792393145414) :
+   * classée « trivial » parce que `comment` (l'anglais pour « commentaire ») figurait dans les mots
+   * triviaux. En français, « comment » veut dire « how ». Le régime trivial a privé ce scout du fil
+   * (`commands.ts`, `substantial`) : il a répondu sur le fond 3D de l'Accueil alors que la
+   * conversation portait sur les bureaux cachés.
+   */
+  it("ne classe pas trivial une question « comment … » : en français c'est « how », pas un commentaire", () => {
+    expect(classifyRegime('/scout comment améliorer la feature overall')).not.toBe('trivial')
+    expect(classifyRegime('comment améliorer la feature overall')).not.toBe('trivial')
+    expect(classifyRegime('comment faire pour lancer les tests')).not.toBe('trivial')
+    // Jumeau : le commentaire de code reste une micro-édition, en français comme en anglais.
+    expect(classifyRegime('corrige la typo dans le commentaire')).toBe('trivial')
+    expect(classifyRegime('fix the comment above parseRow')).toBe('trivial')
+    expect(classifyRegime('add a comment to the retry loop')).toBe('trivial')
+  })
+
+  /*
+   * Le régime trivial veut dire « micro-édition déjà précise : un seul pas de build ». Un /scout est
+   * l'inverse — « quoi faire ? » — et ce régime lui retirait le fil de la conversation, la moitié de
+   * ses éclaireurs (2 au lieu de 4) et un cran de réflexion, sur un simple mot visuel.
+   */
+  it("ne classe jamais trivial une demande de scout, même courte avec un mot d'apparence", () => {
+    expect(classifyRegime('/scout la couleur des pastilles')).not.toBe('trivial')
+    expect(classifyRegime('scout le fond noir de l’accueil')).not.toBe('trivial')
+    // Jumeau : la même retouche demandée comme édition reste triviale.
+    expect(classifyRegime('change la couleur des pastilles')).toBe('trivial')
+    expect(classifyRegime('/build change la couleur des pastilles')).toBe('trivial')
+  })
+
   it('doute → régime supérieur, jamais sous-traité (critical prime sur trivial)', () => {
     // Contient un signal trivial (renomme) ET un signal critical (architecture) → critical gagne.
     expect(classifyRegime('renomme le module architecture')).toBe('critical')

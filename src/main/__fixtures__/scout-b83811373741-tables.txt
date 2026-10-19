@@ -1,0 +1,60 @@
+--- 2026-10-10T21:38:01.966Z
+Il existe deux listes de fichiers protégés, et elles ont divergé. La plus faible est la seule réellement utilisée.
+Le garde-fou contre les arrêts larges ne protège qu'Autowin lui-même.
+La commande `run` n'applique pas `refusArretHote` ni `refusBoucle`.
+Un mot de passe tapé dans le chat est enregistré en clair sur le disque.
+Les garde-fous du terminal des agents se déclenchent à tort sur des commandes de simple lecture.
+--- 2026-10-10T21:45:14.129Z
+**Outil navigateur intégré** (ex-#16). Il ouvre une page, lit son texte, liste et remplit les champs, clique, joint un fichier et capture. Il pilote un Chrome d
+**`scripts/hdesk-fermer.ps1 -Id <id>`** (ex-#12). Il ferme l'application de son propre bureau caché, avec une fermeture automatique en fin de run.
+**Deux listes de fichiers protégés** (ex-#1). Seule la plus faible protège les `Edit`/`Write` natifs.
+**Une seule boîte à outils, avec une liste d'outils par rôle** (ex-#21). Chaque outil est déclaré une fois : paramètres, lecture seule ou destructif, rôles auto
+**`mods/autowin` existe en deux versions** (ex-#9). La version testée n'est pas celle qui est chargée.
+**Coffre de connexions** (ex-#17). Tu enregistres « site → identifiant » une fois, et le navigateur le tape sans que le mot de passe passe par le chat.
+**Les 7 commandes fichiers et `run` font doublon avec les outils natifs** (ex-#8).
+**Envoyer ou chercher un message Teams ou Outlook depuis le chat** (ex-#18).
+**Capture d'écran et bureau caché en vrais outils** (`ui_capture`, `bureau_cache`, ex-#14).
+**Les garde-fous du terminal se déclenchent à tort sur de simples lectures** (ex-#5).
+**Un mot de passe tapé dans le chat est enregistré en clair** (ex-#4).
+**Le garde-fou contre les arrêts larges ne protège qu'Autowin** (ex-#2).
+**Codex est privé du serveur d'outils (MCP) à cause d'un commentaire périmé** (ex-#7).
+**La recette du bureau caché est copiée à 6 endroits, et les copies divergent** (ex-#13).
+**L'assistant ne fait pas tout ce que l'écran sait faire** (ex-#19) : 199 canaux de l'interface contre 44 commandes.
+**Te prévenir sur ton téléphone** (ex-#20) : question en attente, travail bloqué, travail fini.
+**La consigne laisse partir une action destructive « sans demande d'approbation »** (ex-#25).
+**Autowin comme point de passage unique des outils pour les agents externes** (ex-#22) : Claude Code en terminal, VS Code.
+**`load_graph` est héritée et n'a plus d'effet utile** (ex-#10).
+**Une étape de run est invitée à poser une question « qu'Autowin affiche », mais rien ne la transmet** (ex-#24). P4 la notait 45 au départ.
+**Compter l'usage de chaque commande** (ex-#11).
+**La commande `run` n'applique pas `refusArretHote`** (ex-#3). P4 ajoute `refusBoucle`.
+**Brancher tes propres serveurs d'outils au chat** (ex-#23).
+**`hdesk-lancer.ps1` a dépassé 120 s** (ex-#15).
+**Les sous-agents Codex ont tous les droits, sans garde-fou** (ex-#6).
+--- 2026-10-10T21:55:22.898Z
+**Un outil navigateur dans le bureau caché** : ouvrir une page, lire, remplir, cliquer, joindre un fichier et capturer. Il pilote un Chrome par son port de débo
+**`scripts/hdesk-fermer.ps1 -Id <id>`** pour fermer l'application de son propre bureau caché, et une fermeture automatique en fin de run.
+**Deux listes de fichiers protégés, et seule la plus faible protège les `Edit`/`Write` natifs.** **Extension P4 :** un seul contrôle pour tous les appels, qui l
+**Une seule boîte à outils, avec une liste par rôle** : chat, étapes en lecture seule, build/clean, nœud skill, Codex. P4 en fait une porte unique : le serveur 
+**`mods/autowin` existe en deux versions, et la version testée n'est pas celle qui est chargée.**
+**Un coffre de connexions** : tu enregistres un site et son identifiant une fois, et le navigateur tape le mot de passe sans qu'il passe par le chat.
+**Les 7 commandes fichiers et `run` (8 commandes) font doublon avec les outils natifs.**
+**Envoyer ou chercher un message Teams ou Outlook depuis le chat.**
+**Faire de la capture d'écran (`ui_capture`) et du bureau caché de vrais outils.**
+**Un mot de passe tapé dans le chat est enregistré en clair.**
+**Le garde-fou contre les arrêts larges ne protège qu'Autowin.**
+**Codex n'a pas accès au serveur d'outils, à cause d'un commentaire périmé.**
+**La recette du bureau caché est copiée à 6 endroits, et les copies divergent.**
+**L'assistant ne sait pas faire ce que l'écran fait** : 199 canaux de l'interface, contre 44 commandes.
+**Te prévenir sur ton téléphone** quand une question t'attend ou qu'un travail est fini.
+**La consigne laisse partir une action destructive « sans demande d'approbation ».**
+**Autowin comme point de passage unique des outils pour les agents externes.**
+**`load_graph` est héritée et ne sert plus.**
+**Une étape de run est invitée à poser une question, mais rien ne la transmet.**
+**Compter l'usage de chaque commande.**
+**La commande `run` n'applique ni `refusArretHote` ni `refusBoucle`.**
+**Brancher tes propres serveurs d'outils (MCP) au chat.**
+**`hdesk-lancer.ps1` a dépassé 120 s.**
+**Les sous-agents Codex ont tous les droits, sans garde-fou.**
+**Les garde-fous refusent à tort des commandes qui n'écrivent rien.**
+**Une fois #4 mesuré, retirer pour Claude le format texte `<cmd>`**, et le garder en secours pour les modèles sans outils natifs.
+**Le serveur d'outils ne transmet pas les mentions « lecture seule » ou « destructif ».**

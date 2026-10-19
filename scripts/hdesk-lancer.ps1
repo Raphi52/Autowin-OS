@@ -7,6 +7,8 @@
   lance RobloxStudioBeta.exe par Bash sur le bureau INTERACTIF puis capture l'ecran reel ; l'utilisateur
   a annule 7 s plus tard. Le bureau cache n'existait que pour Autowin (autowin-headless.ps1).
 
+  Codes : 0 pret · 1 echec · 2 app arretee AVANT sa fenetre · 3 aucune fenetre dans le delai
+          4 app arretee APRES sa fenetre · 5 identifiant deja pris par un travail vivant
   Usage : powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id roblox -Executable "C:\...\app.exe" -Travail "ce que je fais" -Conversation conv-526 [-Arguments "a b"] [-AttenteSecondes 30]
   Puis  : powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId roblox -Output capture.png
   Clic et frappe dans ce bureau : scripts/hdesk-act.ps1 (desktop_act vise l'ecran reel). Limites : une app
@@ -51,7 +53,22 @@ $ficheId = Join-Path $registreId "$Id.json"
 if (Test-Path -LiteralPath $ficheId) {
   try { $fiche = Get-Content -LiteralPath $ficheId -Raw | ConvertFrom-Json } catch { $fiche = $null }
   $vivant = $false
-  if ($fiche -and $fiche.pid) { $vivant = [bool](Get-Process -Id ([int]$fiche.pid) -ErrorAction SilentlyContinue) }
+  # MEME PROGRAMME, NE AVANT SON INSCRIPTION (conv-344, scout n°13) : Windows reutilise les numeros de
+  # processus, un numero vivant ne prouve pas que l'occupant vit encore. Meme regle que
+  # hdesk-fermer.ps1 : meme executable ET ne avant lanceLe + 5 s. Ce qui ne se lit pas (processus
+  # protege, fiche ancienne sans executable ni date) reste « occupe » : jamais de relance par-dessus.
+  if ($fiche -and $fiche.pid) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$([int]$fiche.pid)" -ErrorAction SilentlyContinue
+    if ($proc) {
+      $memeExe = $true
+      if ($fiche.executable -and $proc.ExecutablePath) {
+        try { $memeExe = ([IO.Path]::GetFullPath([string]$proc.ExecutablePath) -ieq [IO.Path]::GetFullPath([string]$fiche.executable)) } catch { $memeExe = $true }
+      }
+      $avant = $true
+      if ($fiche.lanceLe -and $proc.CreationDate) { try { $avant = ($proc.CreationDate -le ([DateTime]::Parse([string]$fiche.lanceLe)).AddSeconds(5)) } catch { $avant = $true } }
+      $vivant = $memeExe -and $avant
+    }
+  }
   if ($vivant) {
     $libre = "$Id-$Conversation-$PID"
     [pscustomobject]@{
@@ -104,7 +121,17 @@ $hBureau = [AutowinHdeskLanceur]::CreateDesktop($nomBureau, [IntPtr]::Zero, [Int
 if ($hBureau -eq [IntPtr]::Zero) { throw "CreateDesktop('$nomBureau') a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
 $ligne = New-Object System.Text.StringBuilder
 [void]$ligne.Append('"').Append($Executable).Append('"')
-if ($Arguments) { [void]$ligne.Append(' ').Append($Arguments) }
+# PROFIL PROPRE AU BUREAU POUR LES NAVIGATEURS (conv-344, scout n°12) : sans --user-data-dir, Chrome
+# et Brave partagent le profil de la copie deja ouverte sur l'ecran de l'utilisateur (deux instances
+# ne tiennent pas le meme dossier de profil) et lui confient la page. Ajoute EN FIN de ligne. Edge est
+# exclu : un Edge a profil neuf se connecte seul au compte Microsoft de la session (note du 26/09).
+# Un profil deja fourni est respecte. Les arguments SAISIS restent ceux de l'historique.
+$ArgumentsEffectifs = $Arguments
+if (@('chrome.exe', 'brave.exe') -contains [IO.Path]::GetFileName($Executable).ToLowerInvariant() -and $Arguments -notmatch '--user-data-dir') {
+  $profil = Join-Path (Join-Path $registreId 'profils') $Id
+  $ArgumentsEffectifs = ("$Arguments --user-data-dir=" + '"' + $profil + '"').Trim()
+}
+if ($ArgumentsEffectifs) { [void]$ligne.Append(' ').Append($ArgumentsEffectifs) }
 $si = New-Object AutowinHdeskLanceur+STARTUPINFO
 $si.cb = [Runtime.InteropServices.Marshal]::SizeOf([type][AutowinHdeskLanceur+STARTUPINFO])
 $si.lpDesktop = $nomBureau
@@ -136,9 +163,16 @@ $lanceA = Get-Date
 # de fenetre ; le lacher plus tot detruit le bureau sous ses pieds.
 $fin = (Get-Date).AddSeconds($AttenteSecondes)
 $fenetres = 0
+# MORTE AVANT SA FENETRE (conv-344, scout n°3) : la boucle ne comptait que les fenetres. Une app qui
+# plante au demarrage, ou qui passe la main a sa copie deja ouverte (instance unique : la fenetre
+# s'ouvre alors sur l'ecran de l'utilisateur), faisait attendre $AttenteSecondes pour un faux
+# « aucune fenetre » (exit 3). Mesure avant correctif : exit 3 en 9,2 s pour -AttenteSecondes 8.
+$codeSortie = [uint32][AutowinHdeskLanceur]::STILL_ACTIVE
 do {
   $fenetres = [AutowinHdeskLanceur]::CompterFenetres($hBureau)
   if ($fenetres -gt 0) { break }
+  [void][AutowinHdeskLanceur]::GetExitCodeProcess($pi.hProcess, [ref]$codeSortie)
+  if ($codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) { break }
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $fin)
 [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
@@ -147,7 +181,6 @@ do {
 # pret=true / exit 0 et l'agent ne l'a appris que sur une capture ulterieure. On surveille donc le
 # processus $SurvieSecondes apres la fenetre : s'il meurt, exit 4 avec code de sortie et erreurs du
 # journal Windows — l'erreur arrive DANS le tour, a l'appel meme, et rien n'est inscrit pour la TV.
-$codeSortie = [uint32][AutowinHdeskLanceur]::STILL_ACTIVE
 if ($fenetres -gt 0) {
   $finSurvie = (Get-Date).AddSeconds($SurvieSecondes)
   do {
@@ -157,18 +190,31 @@ if ($fenetres -gt 0) {
   } while ((Get-Date) -lt $finSurvie)
 }
 [void][AutowinHdeskLanceur]::CloseHandle($pi.hProcess)
-if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
-  $nomExe = [IO.Path]::GetFileName($Executable)
-  $journal = @()
+$nomExe = [IO.Path]::GetFileName($Executable)
+# Erreurs du journal Windows qui citent l'executable depuis le lancement (plantage .NET, WER).
+function JournalWindows {
   try {
-    $journal = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $lanceA.AddSeconds(-2) } -MaxEvents 30 -ErrorAction Stop |
+    return @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $lanceA.AddSeconds(-2) } -MaxEvents 30 -ErrorAction Stop |
       Where-Object { $_.Message -like "*$nomExe*" } | Select-Object -First 3 |
       ForEach-Object { "$($_.ProviderName): " + (($_.Message -split "`r?`n" | Where-Object { $_.Trim() }) | Select-Object -First 6) -join ' | ' })
-  } catch { }
+  } catch { return @() }
+}
+if ($fenetres -le 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
+  $journal = @(JournalWindows)
+  [pscustomobject]@{
+    id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = 0; pret = $false
+    erreur = "L'application s'est arretee AVANT d'ouvrir une fenetre (code de sortie $codeSortie) : elle a passe la main a une copie deja ouverte (sa fenetre est peut-etre sur l'ecran de l'utilisateur) ou a plante au demarrage. Rien n'est isole : corrige la cause avant de capturer ou de conclure."
+    codeSortie = $codeSortie; journalWindows = $journal; arguments = $ArgumentsEffectifs
+  } | ConvertTo-Json -Compress
+  [Console]::Error.WriteLine("hdesk-lancer : $nomExe arrete avant toute fenetre (code $codeSortie). " + ($journal -join ' || '))
+  exit 2
+}
+if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
+  $journal = @(JournalWindows)
   [pscustomobject]@{
     id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = $false
     erreur = "L'application s'est fermee apres avoir ouvert sa fenetre (code de sortie $codeSortie). Corrige la cause avant de capturer ou de conclure."
-    codeSortie = $codeSortie; journalWindows = $journal
+    codeSortie = $codeSortie; journalWindows = $journal; arguments = $ArgumentsEffectifs
   } | ConvertTo-Json -Compress
   [Console]::Error.WriteLine("hdesk-lancer : $nomExe mort apres demarrage (code $codeSortie). " + ($journal -join ' || '))
   exit 4
@@ -178,7 +224,19 @@ if ($fenetres -gt 0) {
   New-Item -ItemType Directory -Path $registre -Force | Out-Null
   $entree = [pscustomobject]@{ id = $Id; pid = $pi.dwProcessId; executable = $Executable; travail = $Travail; conversationId = $Conversation; lanceLe = (Get-Date).ToString('o') }
   [IO.File]::WriteAllText((Join-Path $registre "$Id.json"), ($entree | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+  # HISTORIQUE DES LANCEMENTS REUSSIS (conv-344, scout n°6) : la fiche est effacee des que le bureau se
+  # ferme (purgerBureauxFermes) et ne garde pas les arguments ; « Relancer » dans la vue lit ce fichier.
+  # .jsonl, pas .json : le registre (lireRegistre) ne le prend pas pour une fiche, et un bureau nomme
+  # « historique » garde sa fiche historique.json. Borne aux 50 derniers. Un echec ici ne casse rien.
+  $histo = Join-Path $registre 'historique.jsonl'
+  $ligneHisto = [pscustomobject]@{ id = $Id; executable = $Executable; arguments = $Arguments; travail = $Travail; conversationId = $Conversation; lanceLe = $entree.lanceLe } | ConvertTo-Json -Compress
+  try {
+    $anciennes = @()
+    if (Test-Path -LiteralPath $histo) { $anciennes = @(Get-Content -LiteralPath $histo -Encoding UTF8 | Where-Object { $_.Trim() }) }
+    $gardees = @(@($anciennes) + @($ligneHisto) | Select-Object -Last 50)
+    [IO.File]::WriteAllText($histo, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+  } catch { [Console]::Error.WriteLine("hdesk-lancer : historique non ecrit ($($_.Exception.Message))") }
 }
-[pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0) } | ConvertTo-Json -Compress
+[pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0); arguments = $ArgumentsEffectifs } | ConvertTo-Json -Compress
 if ($fenetres -le 0) { exit 3 }
 exit 0

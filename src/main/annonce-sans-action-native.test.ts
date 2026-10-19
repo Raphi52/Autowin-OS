@@ -33,6 +33,26 @@ describe('statusEstUneAction — un outil natif qui agit compte comme une action
     expect(statusEstUneAction(undefined)).toBe(false)
   })
 
+  /*
+   * Une commande émet son DÉPART (`Bash · grep …`), ses BATTEMENTS et sa FIN : seul le départ porte
+   * la commande. Lire « terminé - 3 s » comme une commande en faisait une ACTION (conv-341) — un tour
+   * qui n'avait fait que lire passait pour un tour qui avait agi.
+   */
+  it('les lignes de fin et de battement d’un Bash ne sont pas des actions', () => {
+    expect(statusEstUneAction('Bash · grep -rn statusEstUneAction src')).toBe(false)
+    expect(statusEstUneAction('Bash terminé - 3 s')).toBe(false)
+    expect(statusEstUneAction('Bash échoué - 25 s')).toBe(false)
+    expect(statusEstUneAction('Bash terminé - 2 min 30 s')).toBe(false)
+    expect(statusEstUneAction('Bash en cours - 1 min')).toBe(false)
+    expect(statusEstUneAction('Bash en cours - 1 min - grep -rn statusEstUneAction src')).toBe(
+      false
+    )
+    expect(statusEstUneAction('Bash erreur - Exit code 1 · grep: src/x: No such file')).toBe(false)
+    // Le départ d'une commande qui agit reste une action, comme un Bash sans commande.
+    expect(statusEstUneAction('Bash · rm -rf build')).toBe(true)
+    expect(statusEstUneAction('Bash')).toBe(true)
+  })
+
   it('le garde « annonce sans action » voit les actions natives', () => {
     const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
     expect(source).toMatch(/statusEstUneAction\(statutEntier\)\)\s*actionNativeCeTour = true/)

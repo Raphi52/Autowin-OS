@@ -228,6 +228,104 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect((await fichiersDuDernierCommitDistant(remote)).sort()).toEqual(['aide.ts', 'mine.ts'])
   })
 
+  /**
+   * Vécu le 2026-10-19 (conv-358, ba71a03e) : le tour a publié SEUL
+   * `ChatView.cadrage-hypotheses.test.tsx`. `ChatView.tsx`, que ce test vérifie, était le travail du
+   * même fil (écrit par un script `node - <<'EOF'`, sans preuve par lignes) et restait en attente
+   * (« modifie-avant-le-tour »). Le contrôle des imports n'a rien vu : le test importe
+   * `ChatView.harness.tsx`, propre, qui importe `ChatView.tsx`. main a reçu un test sans son code.
+   */
+  async function vueCommitee(repo: string): Promise<void> {
+    writeFileSync(join(repo, 'vue.ts'), 'export const vue = 0\n')
+    writeFileSync(
+      join(repo, 'vue.harness.ts'),
+      "import { vue } from './vue'\nexport const monter = (): number => vue\n"
+    )
+    writeFileSync(
+      join(repo, 'vue.cadrage.test.ts'),
+      "import { monter } from './vue.harness'\nexport const t0 = monter()\n"
+    )
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'vue'], { cwd: repo })
+    await run('git', ['push', 'origin', 'travail'], { cwd: repo })
+  }
+
+  it('laisse en attente un test qui atteint, par un intermédiaire, le travail du fil resté hors du commit (ba71a03e)', async () => {
+    const { repo, remote } = await depot()
+    await vueCommitee(repo)
+    // Tour précédent DU MÊME FIL : `vue.ts` réécrit par un script, aucune ligne réclamée.
+    writeFileSync(join(repo, 'vue.ts'), 'export const vue = 1\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    const distantAvant = await fichiersDuDernierCommitDistant(remote)
+    // Ce tour : le script retouche `vue.ts`, le test est complété par l'outil d'édition.
+    writeFileSync(join(repo, 'vue.ts'), 'export const vue = 2\n')
+    appendFileSync(join(repo, 'vue.cadrage.test.ts'), 'export const t1 = monter() === 2\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'garde le repli par conversation',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, { turnId: 'tour-A-0000', timestamp: AVANT, paths: ['vue.ts'] }),
+        trace(repo, { paths: ['vue.ts'] }),
+        trace(repo, {
+          paths: ['vue.cadrage.test.ts'],
+          pathLineFingerprints: {
+            'vue.cadrage.test.ts': lignes('export const t1 = monter() === 2')
+          }
+        })
+      ]
+    })
+
+    expect(report?.project).toMatchObject({ status: 'skipped', reason: 'unattributed' })
+    expect(report?.exclus).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'vue.ts', motif: 'modifie-avant-le-tour' }),
+        expect.objectContaining({
+          path: 'vue.cadrage.test.ts',
+          motif: 'import-hors-commit',
+          importsHorsCommit: ['vue.ts']
+        })
+      ])
+    )
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(distantAvant)
+  })
+
+  it('publie un test et le code qu’il atteint par un intermédiaire quand les deux partent', async () => {
+    const { repo, remote } = await depot()
+    await vueCommitee(repo)
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'vue.ts'), 'export const vue = 2\n')
+    appendFileSync(join(repo, 'vue.cadrage.test.ts'), 'export const t1 = monter() === 2\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'garde le repli par conversation',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['vue.ts', 'vue.cadrage.test.ts'],
+          pathLineFingerprints: {
+            'vue.ts': lignes('export const vue = 2'),
+            'vue.cadrage.test.ts': lignes('export const t1 = monter() === 2')
+          }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 2 } })
+    expect((await fichiersDuDernierCommitDistant(remote)).sort()).toEqual([
+      'vue.cadrage.test.ts',
+      'vue.ts'
+    ])
+  })
+
   it('laisse en attente un fichier sans preuve par lignes déjà modifié avant le tour', async () => {
     const { repo } = await depot()
     writeFileSync(join(repo, 'partage.ts'), 'export const partage = 1\n')

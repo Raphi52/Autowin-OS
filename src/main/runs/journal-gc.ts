@@ -1,4 +1,4 @@
-import { readdirSync, rmSync, statSync } from 'node:fs'
+import { readdir, rm, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { JOURNAL_RETENTION_MS } from './turn-journal'
 
@@ -185,14 +185,21 @@ export interface JournalGcOutcome {
  *
  * NE PAS croire qu'un enfant vivant protege son fichier : libuv ouvre en FILE_SHARE_DELETE, la
  * suppression reussit meme fd ouvert. La surete vient UNIQUEMENT de `planJournalGc`.
+ *
+ * ASYNCHRONE, et lancee APRES l'affichage de la fenetre (index.ts, `interfaceVisible`) : mesure du
+ * 2026-10-19 (`gels.jsonl`, conv-359), ce passage faisait 209 `statSync` au demarrage, 8 s de fenetre
+ * figee sur le disque D: sature. Les fichiers sont lus UN PAR UN (jamais en rafale) : sur un disque
+ * mecanique, des lectures paralleles se gênent au lieu d'aller plus vite. Le plan est calcule sur un
+ * inventaire qui peut avoir vieilli de quelques secondes : chaque fichier est donc relu juste avant
+ * sa suppression, et epargne s'il a bouge depuis (un run repris a recommence a y ecrire).
  */
-export function collectStdoutJournals(
+export async function collectStdoutJournals(
   root: string,
   policy: Partial<JournalGcPolicy> = {}
-): JournalGcOutcome {
+): Promise<JournalGcOutcome> {
   let names: string[]
   try {
-    names = readdirSync(root)
+    names = await readdir(root)
   } catch {
     return { removed: 0, freedBytes: 0 }
   }
@@ -204,22 +211,25 @@ export function collectStdoutJournals(
     if (!name.endsWith('.stdout.jsonl') && !name.endsWith('.stderr.log')) continue
     const path = join(root, name)
     try {
-      const stat = statSync(path)
-      if (!stat.isFile()) continue
-      entries.push({ path, size: stat.size, modifiedMs: stat.mtimeMs })
+      const infos = await stat(path)
+      if (!infos.isFile()) continue
+      entries.push({ path, size: infos.size, modifiedMs: infos.mtimeMs })
     } catch {
       /* disparu entre le listing et le stat : rien a faire */
     }
   }
 
-  const sizeOf = new Map(entries.map((entry) => [entry.path, entry.size]))
+  const inventaire = new Map(entries.map((entry) => [entry.path, entry]))
   let removed = 0
   let freedBytes = 0
   for (const path of planJournalGc(entries, { nowMs: Date.now(), ...policy })) {
     try {
-      rmSync(path, { force: true })
+      const avant = inventaire.get(path)
+      const maintenant = await stat(path)
+      if (maintenant.mtimeMs !== avant?.modifiedMs || maintenant.size !== avant?.size) continue
+      await rm(path, { force: true })
       removed += 1
-      freedBytes += sizeOf.get(path) ?? 0
+      freedBytes += avant?.size ?? 0
     } catch {
       /* verrouille ou deja parti : le prochain passage s'en chargera */
     }

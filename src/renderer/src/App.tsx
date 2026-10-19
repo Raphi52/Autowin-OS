@@ -706,7 +706,10 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('hdesk') && (
           <div className={`view-slot${tab === 'hdesk' ? ' is-active' : ''}`}>
             <VueMesuree id="hdesk">
-              <HdeskGestionView active={tab === 'hdesk'} />
+              <HdeskGestionView
+                active={tab === 'hdesk'}
+                onOpenConversation={openTaskConversation}
+              />
             </VueMesuree>
           </div>
         )}

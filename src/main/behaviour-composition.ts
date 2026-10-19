@@ -3,7 +3,7 @@
  *
  * Assemble, depuis les modules SOURCES réels, TOUT ce qui VA influer sur le comportement du chat
  * Autowin — et RIEN d'autre. Trois chemins DISTINCTS :
- *  - `cockpit` : le chat visible (AgentPilot) — pilotage, contexte projet et RAG Brain+Graphify.
+ *  - `cockpit` : le chat visible (AgentPilot) — pilotage, contexte projet et RAG Brain.
  *  - `orchestrated` : le pipeline (os:orchestrate → Orchestrator.run) — phases, Brain, modèle/rôle,
  *    régime, garde-fous.
  *  - `direct` : os.chat — beaucoup plus simple (CONSTITUTION + binding de rôle, aucun garde-fou/phase).
@@ -372,13 +372,9 @@ export function buildBehaviourComposition(
         value:
           'Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.',
         source: 'src/main/agent-pilot.ts:216'
-      },
-      {
-        label: 'preuves Graphify',
-        value:
-          "Le même provider RAG interroge en parallèle Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
-        source: 'src/main/brain-context.ts:175'
       }
+      // « preuves Graphify » retiré (conv-353) : la source `graph` n'est plus poussée depuis le
+      // 2026-09-18 (`sources: []`, index.ts) — EXCLUSIVITÉ : un non-influenceur ne se décrit pas.
     ],
     turnContext: [
       {

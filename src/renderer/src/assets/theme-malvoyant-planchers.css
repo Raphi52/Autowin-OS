@@ -155,8 +155,9 @@
 }
 
 /* components/CadrageHypotheses.css — gris en dur */
-:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer,
-:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer:hover {
+:root[data-theme^='malvoyant-'] .cadrage-hyp-plier,
+:root[data-theme^='malvoyant-'] .cadrage-hyp-plier:hover,
+:root[data-theme^='malvoyant-'] .cadrage-hyp-compte {
   color: var(--text);
 }
 
@@ -293,6 +294,7 @@
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
 :root[data-theme^='malvoyant-'] .conv-status-filter,
 :root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort,
+:root[data-theme^='malvoyant-'] .thinking-frise-erreur,
 :root[data-theme^='malvoyant-'] .thinking-frise-icone[data-famille='commande']::before {
   font-size: 13px;
 }
@@ -532,6 +534,11 @@
 :root[data-theme^='malvoyant-'] .node-links__relation,
 :root[data-theme^='malvoyant-'] .node-panel__copier {
   color: var(--text);
+}
+
+/* components/HdeskGestionView.css — tailles */
+:root[data-theme^='malvoyant-'] .hdesk-journal {
+  font-size: 13px;
 }
 
 /* components/HomeView.css — tailles */

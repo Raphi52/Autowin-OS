@@ -1149,9 +1149,17 @@ export function statutComplet(status: string | undefined, statusTarget?: string)
   return outil ? `${outil[1]} · ${statusTarget}` : texte
 }
 
-/** Le texte de commande d'un battement `Bash · ...`, ou null si ce n'est pas un `Bash`. */
+/**
+ * Le texte de commande du DÉPART d'un `Bash` (`Bash · <commande>`, ou `Bash` nu), sinon null.
+ *
+ * Seul le départ porte la commande. Ses battements (`Bash en cours - 1 min - …`), sa fin
+ * (`Bash terminé - 3 s`) et son message d'erreur (`Bash erreur - …`) parlent d'une commande déjà
+ * classée à son départ. Avec un « · » facultatif, « terminé - 3 s » devenait la commande à juger,
+ * qui n'est pas une lecture, donc une ACTION : un tour qui n'avait fait qu'un `grep` passait pour
+ * un tour qui avait agi, et la garde « annonce sans action » se taisait (conv-341, 2026-10-19).
+ */
 function commandeBash(texte: string): string | null {
-  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
+  const bash = /^Bash(?:\s*·\s*(.*))?$/s.exec(texte)
   return bash ? (bash[1] ?? '') : null
 }
 

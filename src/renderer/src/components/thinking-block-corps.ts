@@ -4,6 +4,7 @@
  * (regle react-refresh/only-export-components). Le calcul est pur, il n'a pas besoin du composant.
  */
 import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/etapes-du-tour'
+import { lireLigneDErreur } from '../../../shared/erreur-d-action'
 
 /**
  * Corps du bloc RAISONNEMENT : la pensee du modele, et rien d'autre.
@@ -116,6 +117,8 @@ export type ActionFrise = {
   tache?: { nom: string; etat: EtatAction }
   /** Les commandes enchainees par cette ligne — ce qu'on lit en depliant une tache nommee. */
   sousActions?: string[]
+  /** Message rendu par l'outil en ÉCHEC (ligne `<outil> erreur - …`, conv-341) : dit sous la ligne. */
+  erreur?: string
 }
 
 /**
@@ -243,9 +246,24 @@ export function actionsDuTour(
     etat: 'encours',
     secondes
   })
+  // L'action que la DERNIÈRE ligne de fin a fermée : son message d'erreur la suit immédiatement.
+  let fermeeEnDernier = -1
   for (const { ligne, i } of lignes) {
     dater()
     origine = i
+    // MESSAGE D'ERREUR d'une action rouge (conv-341) : il ne crée pas de ligne, il se range SOUS
+    // l'action que la ligne de fin précédente vient de fermer — la plus récente en échec de son
+    // outil si cette fin manque (journal borné, tour relu).
+    const erreur = lireLigneDErreur(ligne)
+    if (erreur) {
+      const juste = sortie[fermeeEnDernier]
+      const cible =
+        juste?.outil === erreur.outil && juste.etat === 'ko'
+          ? juste
+          : sortie.findLast((a) => a.outil === erreur.outil && a.etat === 'ko')
+      if (cible) cible.erreur = erreur.message
+      continue
+    }
     const tache = TACHE.exec(ligne)
     if (tache) {
       const nom = (tache[2] ?? '').trim()
@@ -295,9 +313,13 @@ export function actionsDuTour(
       sortie.push(
         nouvelle(fin ? `${outil}${suite ? ` — ${suite}` : ''}` : ligne, outil, secondesDe(suite))
       )
-      if (fin) sortie.at(-1)!.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
+      if (fin) {
+        sortie.at(-1)!.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
+        fermeeEnDernier = sortie.length - 1
+      }
       continue
     }
+    if (fin) fermeeEnDernier = index
     const action = sortie[index]!
     if (!fin && BATTEMENT.test(action.texte)) action.texte = ligne
     else
@@ -338,10 +360,13 @@ export function dernierStatutDAction(
   statusLog: readonly string[] | undefined,
   status: string | undefined
 ): string | undefined {
-  if (status && !estLigneDEtape(status)) return status
+  // Le message d'erreur d'une action (conv-341) se lit sous sa ligne, déplié : sous la capsule,
+  // c'est « Glob échoué - 25 s » qui reste, pas 280 caractères de sortie d'outil.
+  const parle = (ligne: string): boolean => !estLigneDEtape(ligne) && !lireLigneDErreur(ligne)
+  if (status && parle(status)) return status
   for (let i = (statusLog?.length ?? 0) - 1; i >= 0; i -= 1) {
     const ligne = statusLog![i]!
-    if (ligne && !estLigneDEtape(ligne)) return ligne
+    if (ligne && parle(ligne)) return ligne
   }
   return undefined
 }

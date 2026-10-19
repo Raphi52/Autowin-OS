@@ -74,13 +74,31 @@ describe('CadrageHypotheses — les suppositions du run, contestables sans l’a
     expect(hote.querySelector('.askd-touche')).toBeNull()
   })
 
-  it('se masque à la demande, et seulement si on lui donne le moyen', () => {
-    const masquer = vi.fn()
-    rendre({ onMasquer: masquer })
-    act(() => hote.querySelector<HTMLButtonElement>('.cadrage-hyp-masquer')!.click())
-    expect(masquer).toHaveBeenCalledTimes(1)
+  /*
+   * REPLI SUR UNE LIGNE — demande du 19/10 (conv-358) : « ce bloc je veux pouvoir le réduire à une
+   * ligne, remplace la croix par une flèche down up ». La croix FAISAIT DISPARAÎTRE le bloc ; la
+   * flèche le replie sur sa ligne de titre et le rouvre : les suppositions restent à portée.
+   */
+  it('une flèche replie le bloc sur sa ligne de titre, et le rouvre', () => {
     rendre()
-    expect(hote.querySelector('.cadrage-hyp-masquer')).toBeNull()
+    const fleche = hote.querySelector<HTMLButtonElement>('.cadrage-hyp-plier')!
+    expect(hote.textContent).not.toContain('×')
+    expect(fleche.getAttribute('aria-expanded')).toBe('true')
+    expect(hote.querySelectorAll('[data-testid="cadrage-hypothese"]')).toHaveLength(2)
+
+    act(() => fleche.click())
+    expect(fleche.getAttribute('aria-expanded')).toBe('false')
+    expect(hote.querySelector('[data-testid="cadrage-hypotheses"]')!.classList).toContain(
+      'is-replie'
+    )
+    expect(hote.querySelector('.askd-liste')).toBeNull()
+    expect(hote.querySelector('.askd-pied')).toBeNull()
+    // Replié, la ligne dit encore COMBIEN de suppositions attendent : rien n'a disparu.
+    expect(hote.querySelector('.cadrage-hyp-compte')?.textContent).toBe('2 suppositions')
+
+    act(() => fleche.click())
+    expect(fleche.getAttribute('aria-expanded')).toBe('true')
+    expect(hote.querySelectorAll('[data-testid="cadrage-hypothese"]')).toHaveLength(2)
   })
 
   it('déplie sur la RAISON du cadrage, pas sur une phrase toute faite', () => {

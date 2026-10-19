@@ -20,6 +20,21 @@ const envoyer = (m: MessageDuDecor): void => portee.postMessage(m)
 
 let scene: DecorScene | null = null
 let ratio = 1
+/** Ce qu'a coûté la passe « écran » de l'image en cours, en attendant son reflet. */
+let coutEcran = 0
+
+/**
+ * L'IMAGE, PUIS SON REFLET, EN DEUX TÂCHES (conv-347). L'image dessinée s'affiche à la fin de la
+ * tâche qui la dessine : la passe « écran » finit donc la sienne, et le reflet de l'image suivante
+ * part dans la tâche d'après — chaque image s'affiche avec le même délai, qu'un reflet la suive ou
+ * non. `rendue` n'est envoyée qu'après le reflet : la page ne redemande rien tant que le Worker est
+ * occupé, et règle sa cadence sur le coût des deux passes.
+ */
+const refletEnSuite = (): void => {
+  setTimeout(() =>
+    portee.onmessage?.({ data: { type: 'reflet' } } as MessageEvent<MessageVersDecor>)
+  )
+}
 
 portee.onmessage = (evenement: MessageEvent<MessageVersDecor>): void => {
   const m = evenement.data
@@ -31,7 +46,8 @@ portee.onmessage = (evenement: MessageEvent<MessageVersDecor>): void => {
         scene = createAvenueScene({
           canvas: m.canvas,
           ratio: () => ratio,
-          surApparition: () => envoyer({ type: 'apparue' })
+          surApparition: () => envoyer({ type: 'apparue' }),
+          refletApresImage: true
         })
         envoyer(scene ? { type: 'montee', ok: true } : { type: 'montee', ok: false })
       } catch (erreur) {
@@ -46,7 +62,17 @@ portee.onmessage = (evenement: MessageEvent<MessageVersDecor>): void => {
     case 'image': {
       const debut = performance.now()
       scene?.render(m.temps, m.regard)
-      envoyer({ type: 'rendue', ms: performance.now() - debut })
+      coutEcran = performance.now() - debut
+      if (scene?.apresImage) refletEnSuite()
+      else envoyer({ type: 'rendue', ms: coutEcran })
+      return
+    }
+    case 'reflet': {
+      // libérée entre-temps : plus rien à dessiner, ni à signaler
+      if (!scene) return
+      const debut = performance.now()
+      scene.apresImage?.()
+      envoyer({ type: 'rendue', ms: coutEcran + performance.now() - debut })
       return
     }
     case 'liberer':

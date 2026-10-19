@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
-import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
+import type { DemandeFermeture, GesteTv, ImageTv, ResultatFermeture } from './hdesk-tv'
+import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
 
 /*
  * LOT 1 du RUN outils-agent-1-2-4-6-7 (conv-222) : l'outil Autowin `bureau_cache_fermer`.
@@ -58,6 +59,15 @@ describe('bureau_cache_fermer', () => {
     expect(appels).toEqual([{ id: 'run-abc', conversationId: 'conv-222', delaiDouxSecondes: 3 }])
   })
 
+  // conv-344 : le mode « sans fiche » (aucun fil exigé) est réservé à la vue Bureaux cachés. Un
+  // modèle qui le glisse en argument ne doit pas pouvoir fermer le bureau d'un autre fil par là.
+  it('ignore un `sansFiche` glissé par le modèle : le fil courant reste exigé', async () => {
+    const { bus, appels } = busAvec()
+    await bus.exec('bureau_cache_fermer', { id: 'ui-capture-1', sansFiche: true }, 'conv-222')
+    expect(appels).toEqual([{ id: 'ui-capture-1', conversationId: 'conv-222' }])
+    expect(Object.keys(appels[0])).not.toContain('sansFiche')
+  })
+
   it('rend le refus du script (autre conversation) sans le maquiller', async () => {
     const { bus } = busAvec({
       ok: false,
@@ -82,4 +92,145 @@ describe('bureau_cache_fermer', () => {
     expect(r.data).toMatchObject({ ferme: false })
     expect(String((r.data as { detail?: string }).detail)).toMatch(/indisponible/i)
   })
+})
+
+/*
+ * conv-344 (scout n°4) : lancer, observer et agir étaient des commandes PowerShell que l'agent
+ * RECOPIAIT de sa consigne — d'où les identifiants inventés et les fils oubliés (le lanceur a dû
+ * rendre -Travail obligatoire). Ces outils fixent le fil (celui de l'appel, jamais un argument) et
+ * l'identifiant par défaut (`chat-<fil>`) ; observer et agir refusent le bureau d'un autre fil.
+ */
+describe('bureau_cache_lancer / observer / agir', () => {
+  const FICHE_A_MOI = { id: 'chat-conv-222', conversationId: 'conv-222', pid: 1 }
+  const IMAGE: ImageTv = {
+    statut: 'ok',
+    id: 'chat-conv-222',
+    dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+    width: 800,
+    height: 600
+  }
+  const busOutils = (fiches: Array<{ id: string; conversationId?: string }> = [FICHE_A_MOI]) => {
+    const bus = new AppCommandBus(os, () => undefined)
+    const lancements: DemandeCreationBureau[] = []
+    const observes: string[] = []
+    const gestes: GesteTv[] = []
+    bus.lancerBureauCache = async (d) => (
+      lancements.push(d),
+      { ok: true, id: d.id, pid: 42, message: `Bureau « ${d.id} » prêt.` }
+    )
+    bus.observerBureauCache = async (id) => (observes.push(id), { ...IMAGE, id })
+    bus.agirBureauCache = async (g) => (gestes.push(g), { ok: true, action: { cible: 'Edit' } })
+    bus.ficheBureauCache = (id) => fiches.find((f) => f.id === id)
+    return { bus, lancements, observes, gestes }
+  }
+
+  it('sont déclarés au catalogue, sans argument de conversation', () => {
+    const cat = new AppCommandBus(os, () => undefined).catalog()
+    for (const nom of ['bureau_cache_lancer', 'bureau_cache_observer', 'bureau_cache_agir']) {
+      const spec = cat.find((c) => c.name === nom)
+      expect(spec, nom).toBeDefined()
+      expect(Object.keys(spec?.args ?? {})).not.toContain('conversationId')
+    }
+    expect(cat.find((c) => c.name === 'bureau_cache_observer')?.annotations?.readOnlyHint).toBe(
+      true
+    )
+  })
+
+  it('lancer : fil de l’appel, identifiant chat-<fil> par défaut ; un conversationId glissé est ignoré', async () => {
+    const { bus, lancements } = busOutils()
+    const r = await bus.exec(
+      'bureau_cache_lancer',
+      {
+        executable: 'C:\\Windows\\System32\\charmap.exe',
+        arguments: '/x',
+        travail: 'Essai',
+        conversationId: 'conv-pirate'
+      },
+      'conv-222'
+    )
+    expect(r.ok).toBe(true)
+    expect(lancements).toEqual([
+      {
+        id: 'chat-conv-222',
+        executable: 'C:\\Windows\\System32\\charmap.exe',
+        arguments: '/x',
+        travail: 'Essai',
+        conversationId: 'conv-222'
+      }
+    ])
+    expect(r.data).toMatchObject({ ok: true, id: 'chat-conv-222' })
+  })
+
+  it.each([
+    ['exécutable absent', { travail: 'Essai' }],
+    ['travail absent', { executable: 'C:\\a.exe' }]
+  ])('lancer : %s → refus nommé, rien n’est lancé', async (_cas, args) => {
+    const { bus, lancements } = busOutils()
+    const r = await bus.exec('bureau_cache_lancer', args, 'conv-222')
+    expect(lancements).toEqual([])
+    expect(r.data).toMatchObject({ ok: false })
+  })
+
+  it('observer : l’image part en pièce jointe pour le modèle', async () => {
+    const { bus, observes } = busOutils()
+    const r = await bus.exec('bureau_cache_observer', {}, 'conv-222')
+    expect(observes).toEqual(['chat-conv-222'])
+    expect(r.attachments).toEqual([
+      {
+        name: 'bureau-chat-conv-222.png',
+        mimeType: 'image/png',
+        size: expect.any(Number),
+        kind: 'image',
+        content: 'iVBORw0KGgo='
+      }
+    ])
+    expect(r.data).toMatchObject({ statut: 'ok', id: 'chat-conv-222', width: 800, height: 600 })
+  })
+
+  it('agir : le geste part avec le fil vérifié, aux pixels de la capture', async () => {
+    const { bus, gestes } = busOutils()
+    const r = await bus.exec(
+      'bureau_cache_agir',
+      { x: '120', y: 80, texte: 'bonjour', entree: true },
+      'conv-222'
+    )
+    expect(gestes).toEqual([{ id: 'chat-conv-222', x: 120, y: 80, texte: 'bonjour', entree: true }])
+    expect(r.data).toMatchObject({ ok: true })
+  })
+
+  it('agir : le texte tapé n’atteint jamais la trace (un mot de passe passe par ici)', async () => {
+    const { bus } = busOutils()
+    const traces: Array<Record<string, unknown>> = []
+    bus.trace = (_nom, args) => traces.push(args)
+    await bus.exec('bureau_cache_agir', { x: 1, y: 1, texte: 'secret123' }, 'conv-222')
+    expect(JSON.stringify(traces)).not.toContain('secret123')
+    expect(traces[0]).toMatchObject({ texte: '[9 caractères]' })
+  })
+
+  it.each(['bureau_cache_observer', 'bureau_cache_agir'])(
+    '%s : bureau d’un AUTRE fil, ou sans fiche → refus, rien n’est lancé',
+    async (outil) => {
+      const { bus, observes, gestes } = busOutils([{ id: 'chat-conv-b', conversationId: 'conv-b' }])
+      const autre = await bus.exec(outil, { id: 'chat-conv-b', x: 1, y: 1 }, 'conv-222')
+      expect(autre.data).toMatchObject({ ok: false })
+      expect(String((autre.data as { detail?: string }).detail)).toMatch(/autre fil/)
+      const sansFiche = await bus.exec(outil, { id: 'ui-capture-1', x: 1, y: 1 }, 'conv-222')
+      expect(sansFiche.data).toMatchObject({ ok: false })
+      expect(observes).toEqual([])
+      expect(gestes).toEqual([])
+    }
+  )
+
+  it.each(['bureau_cache_lancer', 'bureau_cache_observer', 'bureau_cache_agir'])(
+    '%s : sans conversation courante → refus ; non câblé → « indisponible »',
+    async (outil) => {
+      const { bus, lancements, observes, gestes } = busOutils()
+      const args = { executable: 'C:\\a.exe', travail: 'x', x: 1, y: 1 }
+      expect((await bus.exec(outil, args)).data).toMatchObject({ ok: false })
+      expect([...lancements, ...observes, ...gestes]).toEqual([])
+      const nonCable = new AppCommandBus(os, () => undefined)
+      const r = await nonCable.exec(outil, args, 'conv-222')
+      expect(String((r.data as { detail?: string }).detail)).toMatch(/indisponible/i)
+    }
+  )
 })

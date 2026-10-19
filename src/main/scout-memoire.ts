@@ -263,22 +263,169 @@ export function pistesDejaConnues(entree: {
   sauf?: string
   chemin?: string
   stockVeille?: readonly string[]
+  /** La demande du run : seuls les titres qui en touchent le sujet sont gardés. */
+  demande?: string
 }): string[] {
   const depot = cleDepot(entree.depot)
   const historique = lireMemoireScout(entree.chemin ?? cheminMemoireScout())
     .entrees.filter((e) => e.depot === depot && (!entree.sauf || e.run !== entree.sauf))
     .sort((a, b) => b.vuLe.localeCompare(a.vuLe))
-    .map((e) => e.titre)
+  const sujet = racinesDuSujet(entree.demande ?? '')
+  const runsDuSujet = runsQueLaDemandeDesigne(historique, sujet)
+  const candidats: { titre: string; run?: string }[] = [
+    ...historique,
+    ...(entree.stockVeille ?? []).map((titre) => ({ titre }))
+  ]
   const vus = new Set<string>()
+  const tetes: string[][] = []
   const titres: string[] = []
-  for (const titre of [...historique, ...(entree.stockVeille ?? [])]) {
+  for (const { titre, run } of candidats) {
     const cle = cleTitre(titre)
     if (!cle || vus.has(cle)) continue
     vus.add(cle)
+    // Filtrer AVANT la borne : les 60 titres les plus récents peuvent tous être hors sujet.
+    const duSujet = (run !== undefined && runsDuSujet.has(run)) || toucheLeSujet(titre, sujet)
+    if (sujet.length > 0 && !duSujet) continue
+    const tete = racinesDuSujet(teteDuTitre(titre))
+    if (tetes.some((connue) => reditLaMemePiste(tete, connue))) continue
+    tetes.push(tete)
     titres.push(titre)
     if (titres.length >= MAX_PISTES_CONNUES) break
   }
   return titres
+}
+
+/*
+ * SEULEMENT LES PISTES QUI TOUCHENT LA DEMANDE, ET UNE SEULE FOIS CHACUNE (conv-339).
+ *
+ * Un /scout sur les humains de l'Accueil (« ultra quali comme dans Cyberpunk ») a reçu 60 titres
+ * « DÉJÀ PROPOSÉ » : les plus récents du dépôt, quel qu'en soit le sujet — outils, serveurs MCP,
+ * navigateur, coffre de mots de passe —, dont 25 en « (ex-#N) » redisant un titre déjà listé. Du
+ * contexte payé à chaque éclaireur, qui ne pouvait rien lui interdire d'utile.
+ *
+ * Règle lexicale, donc testable : un titre est gardé s'il partage une racine de mot avec la demande.
+ * Une demande SANS sujet (« /scout améliore Autowin ») garde l'ancien comportement : tous les titres
+ * récents, car c'est là que le scout risque le plus de refaire le précédent.
+ * fix-ok: bloc réel de la consigne du scout de conv-339 (fixture scout-conv-339-deja-propose.txt) :
+ * 36 titres d'outillage sur 60 passaient, « mot de passe tapé dans le chat » 3 fois (scout-memoire.test.ts).
+ */
+
+/*
+ * LE SUJET D'UNE PISTE SE LIT AUSSI SUR SON RUN. Un scout répond à UNE demande : ses pistes en
+ * partagent le sujet, même quand leurs mots diffèrent. Filtrées titre par titre, les 9 pistes du
+ * scout de conv-339 sur les humains n'en gardaient qu'une (« Humains filmés en volume ») : « peau »,
+ * « visages », « passants », « ombres », « foule » ne disent pas « humains », et le scout suivant sur
+ * le sujet les aurait reproposées. Un mot de la demande désigne donc les runs ENTIERS dont un titre
+ * le porte — s'il est rare : présent dans un run sur cinq au plus. Un mot courant ne désigne rien,
+ * sinon tout revient : sur la mémoire réelle du 19/10 (18 runs), « humain » est dans 1 run, « chat »
+ * dans 4, « outil » dans 6. Un nom de code entre accents graves ne compte pas : « `load_graph` est
+ * héritée » cite un objet en passant, et faisait revenir les 57 titres du scout sur les outils pour
+ * une demande sur le graphe du chat. Limite : un run qui n'a jamais employé un mot de la demande
+ * n'est reconnu que titre par titre.
+ * fix-ok: rejeu de `pistesDejaConnues` sur `scout-pistes.json` réel, demande de conv-339 : 1 titre
+ * sur les humains rendu, contre les 9 pistes de run-f085fcccbb82-1 (objection du juge).
+ */
+function runsQueLaDemandeDesigne(
+  historique: readonly EntreeMemoireScout[],
+  sujet: readonly string[]
+): Set<string> {
+  const designes = new Set<string>()
+  if (sujet.length === 0) return designes
+  const racinesParRun = new Map<string, string[]>()
+  const lignesParTableau = new Map<string, number>()
+  for (const e of historique) {
+    if (typeof e.run !== 'string' || !e.run) continue
+    const horsCode = e.titre.replace(/`[^`]*`/gu, ' ')
+    racinesParRun.set(e.run, [...(racinesParRun.get(e.run) ?? []), ...racinesDuSujet(horsCode)])
+    const tableau = `${e.run}\u0000${e.vuLe}`
+    lignesParTableau.set(tableau, (lignesParTableau.get(tableau) ?? 0) + 1)
+  }
+  const plafond = Math.max(1, Math.floor(racinesParRun.size / 5))
+  const grands = new Set(
+    [...lignesParTableau]
+      .filter(([, lignes]) => lignes > MAX_LIGNES_D_UN_SUJET)
+      .map(([tableau]) => tableau.split('\u0000')[0]!)
+  )
+  for (const mot of sujet) {
+    const runs = [...racinesParRun]
+      .filter(([, racines]) => racines.some((racine) => memeRacine(racine, mot)))
+      .map(([run]) => run)
+    if (runs.length <= plafond) for (const run of runs) if (!grands.has(run)) designes.add(run)
+  }
+  return designes
+}
+
+/*
+ * UN GRAND TABLEAU N'A PAS UN SUJET. « Un scout = un sujet » vaut pour un tableau de scout ordinaire :
+ * sur la mémoire réelle du 19/10, 17 runs sur 18 n'ont que des tableaux de 3 à 9 lignes (un run
+ * refait garde une ligne par version : 3 × 9 pour celui de conv-339). Le 18e, run-b83811373741-1,
+ * a des tableaux de 25 et 27 lignes : un inventaire des outils, du navigateur, de Teams, du coffre et
+ * du téléphone. « téléphone » n'y est que dans 2 titres, et ramenait ses 57 titres. Un run dont un
+ * tableau dépasse 12 lignes ne revient donc que titre par titre. 12 sépare le plus grand tableau
+ * d'un sujet mesuré (9) du plus petit inventaire (25). Limite : un mot rare pris dans un autre sens
+ * fait encore revenir un petit tableau — « prévenir le modèle », « peuvent finir ».
+ * fix-ok: rejeu de pistesDejaConnues sur scout-pistes.json réel : 49, 31 et 31 titres pour les trois
+ * demandes du juge (téléphone, Teams et Outlook, coffre), tout run-b83811373741-1 compris.
+ */
+const MAX_LIGNES_D_UN_SUJET = 12
+
+/** Mots qui ne disent rien du SUJET d'une demande ou d'une piste (sans accents, au singulier). */
+const MOTS_CREUX = new Set(
+  (
+    'les des une est sont pas qui que quoi aux par sur ses son mes tes nos vos leur avec dans pour ' +
+    'plus moins sans tout tous toute mais comme comment quand elle ils lui eux nous vous cette ces ' +
+    'cet ceci cela etre avoir fait faire fai font peut peux doit encore deja aussi tres trop bien ' +
+    'mieux ultra vraiment quel quelle dont soit soient sera entre apres avant depuis chaque autre ' +
+    'meme rien aucun aucune jamais toujour pourquoi alor donc ainsi via ver chez sous lor afin car ' +
+    'ont ici the and for with how what why this that from into amelio trouver trouve chercher ' +
+    'cherche proposer propose rendre mettre corriger corrige idee piste scout autowin app ' +
+    'application projet depot code chose truc nouveau nouvelle nouveaux meilleur meilleure faut ' +
+    'veux voudrai aimerai besoin'
+  ).split(' ')
+)
+
+/** Les racines des mots qui portent le sujet : minuscules, sans accents ni pluriel, 6 lettres au plus. */
+function racinesDuSujet(texte: string): string[] {
+  const racines = new Set<string>()
+  const mots = texte
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/gu, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+  for (const mot of mots) {
+    if (mot.length < 3 || /^\d+$/u.test(mot)) continue
+    const singulier = mot.length > 3 ? mot.replace(/[sx]$/u, '') : mot
+    const racine = singulier.slice(0, 6)
+    if (MOTS_CREUX.has(mot) || MOTS_CREUX.has(singulier) || MOTS_CREUX.has(racine)) continue
+    racines.add(racine)
+  }
+  return [...racines]
+}
+
+/** « humain » et « humains », « quali » et « qualité » : même racine, ou l'une préfixe de l'autre. */
+const memeRacine = (a: string, b: string): boolean =>
+  a === b || (Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a)))
+
+function toucheLeSujet(titre: string, sujet: readonly string[]): boolean {
+  return racinesDuSujet(titre).some((racine) => sujet.some((mot) => memeRacine(racine, mot)))
+}
+
+/** Le titre court : sa partie en gras quand il en a une, sinon sa première phrase ; sans « ex-#N ». */
+function teteDuTitre(titre: string): string {
+  const gras = /^\s*\*\*(.+?)\*\*/u.exec(titre)
+  return (gras ? gras[1]! : titre.split(/\.\s/u)[0]!).replace(/ex-#\d+/giu, ' ')
+}
+
+/**
+ * Deux titres redisent la même piste quand presque tous les mots du plus court sont dans l'autre :
+ * « Peau moins plastique » / « Une peau moins plastique ». « Reflets des néons sur les passants » et
+ * « Passants absents du reflet du sol » partagent 2 mots sur 3 : deux pistes, gardées toutes deux.
+ */
+function reditLaMemePiste(a: readonly string[], b: readonly string[]): boolean {
+  const [court, long] = a.length <= b.length ? [a, b] : [b, a]
+  if (court.length < 2) return false
+  const communs = court.filter((racine) => long.some((autre) => memeRacine(racine, autre))).length
+  return communs / court.length >= 0.8
 }
 
 /**
