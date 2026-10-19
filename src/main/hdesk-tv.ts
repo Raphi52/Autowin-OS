@@ -444,12 +444,19 @@ export const BASCULE_MAX_SECONDES = 120
  * ferme PAR BUREAU, jamais par nom, et refuse le bureau d'une autre conversation. Codes du script :
  * 0 ferme / deja ferme · 1 entree invalide · 2 aucun bureau a ce nom · 5 autre conversation · 6 survivants.
  */
-export interface DemandeFermeture {
+export type DemandeFermeture = {
   id: string
-  conversationId: string
   /** Attente de la fermeture douce (WM_CLOSE) avant l'arret force, 1 a 30 s. Defaut du script : 5. */
   delaiDouxSecondes?: number
-}
+} & (
+  | { conversationId: string; sansFiche?: false }
+  /**
+   * BUREAU SANS FICHE (conv-344) : `-SansFiche` du script, reserve a la vue « Bureaux caches », sur le
+   * geste de l'utilisateur. Jamais de fil : le script refuse ce mode des qu'une fiche existe.
+   * L'outil agent `bureau_cache_fermer` ne construit jamais cette forme.
+   */
+  | { sansFiche: true; conversationId?: undefined }
+)
 
 export interface ResultatFermeture {
   /** Le script a rendu 0 : plus rien ne vit dans ce bureau (ou rien n'y vivait deja). */
@@ -463,6 +470,8 @@ export interface ResultatFermeture {
   survivants?: number[]
   epargnes?: Array<{ pid: number; motif: string }>
   ficheRetiree?: boolean
+  /** Le script a ferme en mode « sans fiche ». */
+  sansFiche?: boolean
   conversationOccupante?: string
   erreur?: string
 }
@@ -471,7 +480,10 @@ export interface ResultatFermeture {
 export function argumentsFermer(racine: string, d: DemandeFermeture): string[] {
   if (typeof d?.id !== 'string' || !ID_BUREAU.test(d.id))
     throw new Error('Identifiant de bureau invalide.')
-  if (typeof d.conversationId !== 'string' || !ID_BUREAU.test(d.conversationId))
+  const sansFiche = d.sansFiche === true
+  if (sansFiche && d.conversationId !== undefined)
+    throw new Error('Fermeture sans fiche : aucun fil ne doit etre passe (le script le refuserait).')
+  if (!sansFiche && (typeof d.conversationId !== 'string' || !ID_BUREAU.test(d.conversationId)))
     throw new Error('Conversation invalide : impossible de savoir quels bureaux sont les tiens.')
   const args = [
     '-NoProfile',
@@ -481,8 +493,7 @@ export function argumentsFermer(racine: string, d: DemandeFermeture): string[] {
     join(racine, 'scripts', 'hdesk-fermer.ps1'),
     '-Id',
     d.id,
-    '-Conversation',
-    d.conversationId
+    ...(sansFiche ? ['-SansFiche'] : ['-Conversation', d.conversationId as string])
   ]
   if (d.delaiDouxSecondes !== undefined) {
     if (

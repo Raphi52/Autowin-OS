@@ -37,6 +37,7 @@ export function consigneBureauCache(runId: string): string {
     `puis capture avec \`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId ${id} -Output <chemin.png>\` et LIS l'image. ` +
     `N'emploie aucun autre identifiant de bureau : ${id} est réservé à ce run, c'est ce qui empêche ` +
     `deux travaux parallèles de se parasiter. Un code de sortie non nul du lanceur (4 = l'app est morte, ` +
+    `2 = l'app s'est arrêtée avant sa fenêtre — instance unique qui a passé la main ou plantage au démarrage —, ` +
     `3 = aucune fenêtre, 1 = échec) est une erreur de TON tour : lis \`erreur\` et \`journalWindows\`, ` +
     `corrige la cause, relance — ne bascule pas sur l'écran de l'utilisateur.\n`
   )

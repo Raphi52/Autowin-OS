@@ -22,6 +22,7 @@ import {
   type ResultatFermeture
 } from './hdesk-tv'
 import {
+  CREATION_ATTENTE_MS,
   filDeLaDemande,
   refusCreation,
   type BureauGere,
@@ -146,6 +147,9 @@ export async function bureauxGeres(
 
 /** Résultat du script de fermeture, dit pour un humain. */
 export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree {
+  // Code 2 = plus aucun bureau a ce nom (disparu entre la liste et le clic) : rien a fermer, pas un échec.
+  if (r.code === 2)
+    return { ok: true, code: 2, dejaFerme: true, message: 'Ce bureau n’existe plus : rien à fermer.' }
   if (r.ok && r.dejaFerme)
     return { ok: true, code: r.code, dejaFerme: true, message: 'Ce bureau était déjà vide.' }
   if (r.ok) return { ok: true, code: r.code, message: 'Application fermée, bureau libéré.' }
@@ -165,8 +169,10 @@ export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree 
 /**
  * Ferme le bureau `id`, quel que soit son fil. Le fil passé au script est TOUJOURS celui de la FICHE,
  * jamais une valeur venue de l'écran : le refus « bureau d'une autre conversation » (code 5) protège
- * les agents entre eux et reste intact pour eux (outil bureau_cache_fermer, commands.ts). Un bureau
- * sans fiche ou sans fil n'est pas fermé : aucun script n'est lancé, la raison est rendue.
+ * les agents entre eux et reste intact pour eux (outil bureau_cache_fermer, commands.ts).
+ * Un bureau SANS fiche (ui-capture-*, preuve-* : autowin-headless.ps1 n'en écrit pas) est fermé en mode
+ * « sans fiche » (conv-344) : le script ne vise que ce qui a une fenêtre sur ce bureau, et refuse ce
+ * mode si une fiche est apparue entre-temps. Une fiche SANS fil n'est pas fermée : la raison est rendue.
  */
 export async function fermerBureauGere(
   racine: string,
@@ -177,13 +183,7 @@ export async function fermerBureauGere(
   if (typeof id !== 'string' || !ID_BUREAU.test(id))
     return { ok: false, code: null, message: 'Identifiant de bureau invalide.' }
   const fiche = lireRegistre(registre).find((e) => e.id === id)
-  if (!fiche)
-    return {
-      ok: false,
-      code: null,
-      message:
-        "Ce bureau n'a pas de fiche : Autowin ne sait pas quelle application y tourne. Rien n'a été fermé."
-    }
+  if (!fiche) return traduireFermeture(await fermer(racine, { id, sansFiche: true }))
   const fil = typeof fiche.conversationId === 'string' ? fiche.conversationId : ''
   if (!ID_BUREAU.test(fil))
     return {
@@ -201,7 +201,7 @@ export async function fermerBureauGere(
  * s'exécute pas du tout (leçon du 2026-10-16, bouton ⇄). Détaché, le lanceur ne rend ni sa sortie ni
  * son code : une petite enveloppe les écrit dans un fichier d'état, que l'on attend.
  */
-export const CREATION_ATTENTE_MS = 90_000 // lanceur : 30 s de fenêtre + 6 s de survie + journal Windows
+export { CREATION_ATTENTE_MS }
 const CREATION_SONDE_MS = 300
 
 export interface DependancesCreation {
@@ -332,7 +332,10 @@ export function lireEtatEnveloppe(texte: string | null): EtatEnveloppe | null {
   }
 }
 
-/** Verdict du lanceur (codes de hdesk-lancer.ps1 : 0 prêt · 1 échec · 3 sans fenêtre · 4 morte · 5 occupé). */
+/**
+ * Verdict du lanceur (codes de hdesk-lancer.ps1 : 0 prêt · 1 échec · 2 arrêtée avant sa fenêtre ·
+ * 3 sans fenêtre · 4 arrêtée après sa fenêtre · 5 occupé).
+ */
 export function interpreterCreation(id: string, etat: EtatEnveloppe): ResultatCreationBureau {
   const j = derniereLigneJson(etat.sortie)
   const texte = (v: unknown): string | undefined =>
@@ -354,6 +357,14 @@ export function interpreterCreation(id: string, etat: EtatEnveloppe): ResultatCr
       ...(texte(j?.conversationOccupante)
         ? { conversationOccupante: texte(j?.conversationOccupante) }
         : {})
+    }
+  if (etat.code === 2)
+    return {
+      ok: false,
+      code: 2,
+      message:
+        `L’application s’est arrêtée avant d’ouvrir sa fenêtre (code de sortie ${typeof j?.codeSortie === 'number' ? j.codeSortie : 'inconnu'}) : ` +
+        'elle a passé la main à une copie déjà ouverte — sa fenêtre est peut-être sur ton écran — ou a planté au démarrage.'
     }
   if (etat.code === 3)
     return {

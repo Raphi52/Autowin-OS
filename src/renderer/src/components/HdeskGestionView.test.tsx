@@ -7,10 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { HdeskGestionView, type HdeskGestionApi } from './HdeskGestionView'
-import type {
-  BureauGere,
-  ResultatCreationBureau,
-  ResultatFermetureGeree
+import {
+  CREATION_ATTENTE_MS,
+  type BureauGere,
+  type ResultatCreationBureau,
+  type ResultatFermetureGeree
 } from '../../../shared/hdesk-gestion'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -200,6 +201,23 @@ describe('HdeskGestionView — Créer', () => {
     })
     expect($(h, 'hdesk-formulaire')).toBeNull()
     expect($(h, 'hdesk-retour-creation')?.textContent).toBe('Bureau « x » prêt.')
+  })
+
+  // conv-344 : le bouton disait « jusqu’à 40 s » alors que l’application attend jusqu’à 90 s.
+  it('pendant la création, le bouton annonce l’attente réelle', async () => {
+    let finir: (r: ResultatCreationBureau) => void = () => undefined
+    const api = faux([], {
+      hdeskGestionCreer: vi.fn(() => new Promise<ResultatCreationBureau>((r) => (finir = r)))
+    })
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-nouveau'))
+    await remplir(h, { id: 'zox', executable: 'C:\\zox\\Zox.exe', travail: 'Essai' })
+    await cliquer($(h, 'hdesk-creer'))
+    expect($(h, 'hdesk-creer')?.textContent).toBe(
+      `Création… (jusqu’à ${CREATION_ATTENTE_MS / 1000} s)`
+    )
+    expect(CREATION_ATTENTE_MS).toBe(90_000)
+    await act(async () => finir({ ok: true, id: 'zox', message: 'Bureau « zox » prêt.' }))
   })
 
   it('identifiant occupé : propose l’identifiant libre, sans relancer tout seul', async () => {

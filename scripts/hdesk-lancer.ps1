@@ -7,6 +7,8 @@
   lance RobloxStudioBeta.exe par Bash sur le bureau INTERACTIF puis capture l'ecran reel ; l'utilisateur
   a annule 7 s plus tard. Le bureau cache n'existait que pour Autowin (autowin-headless.ps1).
 
+  Codes : 0 pret · 1 echec · 2 app arretee AVANT sa fenetre · 3 aucune fenetre dans le delai
+          4 app arretee APRES sa fenetre · 5 identifiant deja pris par un travail vivant
   Usage : powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id roblox -Executable "C:\...\app.exe" -Travail "ce que je fais" -Conversation conv-526 [-Arguments "a b"] [-AttenteSecondes 30]
   Puis  : powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId roblox -Output capture.png
   Clic et frappe dans ce bureau : scripts/hdesk-act.ps1 (desktop_act vise l'ecran reel). Limites : une app
@@ -136,9 +138,16 @@ $lanceA = Get-Date
 # de fenetre ; le lacher plus tot detruit le bureau sous ses pieds.
 $fin = (Get-Date).AddSeconds($AttenteSecondes)
 $fenetres = 0
+# MORTE AVANT SA FENETRE (conv-344, scout n°3) : la boucle ne comptait que les fenetres. Une app qui
+# plante au demarrage, ou qui passe la main a sa copie deja ouverte (instance unique : la fenetre
+# s'ouvre alors sur l'ecran de l'utilisateur), faisait attendre $AttenteSecondes pour un faux
+# « aucune fenetre » (exit 3). Mesure avant correctif : exit 3 en 9,2 s pour -AttenteSecondes 8.
+$codeSortie = [uint32][AutowinHdeskLanceur]::STILL_ACTIVE
 do {
   $fenetres = [AutowinHdeskLanceur]::CompterFenetres($hBureau)
   if ($fenetres -gt 0) { break }
+  [void][AutowinHdeskLanceur]::GetExitCodeProcess($pi.hProcess, [ref]$codeSortie)
+  if ($codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) { break }
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $fin)
 [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
@@ -147,7 +156,6 @@ do {
 # pret=true / exit 0 et l'agent ne l'a appris que sur une capture ulterieure. On surveille donc le
 # processus $SurvieSecondes apres la fenetre : s'il meurt, exit 4 avec code de sortie et erreurs du
 # journal Windows — l'erreur arrive DANS le tour, a l'appel meme, et rien n'est inscrit pour la TV.
-$codeSortie = [uint32][AutowinHdeskLanceur]::STILL_ACTIVE
 if ($fenetres -gt 0) {
   $finSurvie = (Get-Date).AddSeconds($SurvieSecondes)
   do {
@@ -157,14 +165,27 @@ if ($fenetres -gt 0) {
   } while ((Get-Date) -lt $finSurvie)
 }
 [void][AutowinHdeskLanceur]::CloseHandle($pi.hProcess)
-if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
-  $nomExe = [IO.Path]::GetFileName($Executable)
-  $journal = @()
+$nomExe = [IO.Path]::GetFileName($Executable)
+# Erreurs du journal Windows qui citent l'executable depuis le lancement (plantage .NET, WER).
+function JournalWindows {
   try {
-    $journal = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $lanceA.AddSeconds(-2) } -MaxEvents 30 -ErrorAction Stop |
+    return @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $lanceA.AddSeconds(-2) } -MaxEvents 30 -ErrorAction Stop |
       Where-Object { $_.Message -like "*$nomExe*" } | Select-Object -First 3 |
       ForEach-Object { "$($_.ProviderName): " + (($_.Message -split "`r?`n" | Where-Object { $_.Trim() }) | Select-Object -First 6) -join ' | ' })
-  } catch { }
+  } catch { return @() }
+}
+if ($fenetres -le 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
+  $journal = @(JournalWindows)
+  [pscustomobject]@{
+    id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = 0; pret = $false
+    erreur = "L'application s'est arretee AVANT d'ouvrir une fenetre (code de sortie $codeSortie) : elle a passe la main a une copie deja ouverte (sa fenetre est peut-etre sur l'ecran de l'utilisateur) ou a plante au demarrage. Rien n'est isole : corrige la cause avant de capturer ou de conclure."
+    codeSortie = $codeSortie; journalWindows = $journal
+  } | ConvertTo-Json -Compress
+  [Console]::Error.WriteLine("hdesk-lancer : $nomExe arrete avant toute fenetre (code $codeSortie). " + ($journal -join ' || '))
+  exit 2
+}
+if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
+  $journal = @(JournalWindows)
   [pscustomobject]@{
     id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = $false
     erreur = "L'application s'est fermee apres avoir ouvert sa fenetre (code de sortie $codeSortie). Corrige la cause avant de capturer ou de conclure."

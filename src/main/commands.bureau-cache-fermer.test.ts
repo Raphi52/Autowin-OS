@@ -58,6 +58,15 @@ describe('bureau_cache_fermer', () => {
     expect(appels).toEqual([{ id: 'run-abc', conversationId: 'conv-222', delaiDouxSecondes: 3 }])
   })
 
+  // conv-344 : le mode « sans fiche » (aucun fil exigé) est réservé à la vue Bureaux cachés. Un
+  // modèle qui le glisse en argument ne doit pas pouvoir fermer le bureau d'un autre fil par là.
+  it('ignore un `sansFiche` glissé par le modèle : le fil courant reste exigé', async () => {
+    const { bus, appels } = busAvec()
+    await bus.exec('bureau_cache_fermer', { id: 'ui-capture-1', sansFiche: true }, 'conv-222')
+    expect(appels).toEqual([{ id: 'ui-capture-1', conversationId: 'conv-222' }])
+    expect(Object.keys(appels[0])).not.toContain('sansFiche')
+  })
+
   it('rend le refus du script (autre conversation) sans le maquiller', async () => {
     const { bus } = busAvec({
       ok: false,

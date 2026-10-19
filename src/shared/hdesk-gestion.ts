@@ -15,12 +15,21 @@ export const MOTIF_IDENTIFIANT = /^[a-zA-Z0-9_-]+$/
  */
 export const FIL_MANUEL = 'manuel'
 
+/**
+ * Attente maximale d'une création par la vue (lanceur : 30 s de fenêtre + 6 s de survie + journal
+ * Windows, plus le lancement détaché). Partagée : l'écran annonçait « 40 s » en dur (conv-344).
+ */
+export const CREATION_ATTENTE_MS = 90_000
+
 /** Un bureau caché VIVANT, quel que soit son fil. */
 export interface BureauGere {
   id: string
   /** Libellé du travail ; « travail non relié » quand le bureau n'a pas de fiche au registre. */
   travail: string
-  /** Faux quand aucune fiche ne relie ce bureau à un travail : Autowin ne sait pas le fermer. */
+  /**
+   * Faux quand aucune fiche ne relie ce bureau à un travail (ui-capture-*, preuve-*). Il se ferme
+   * quand même, en mode « sans fiche » : seules ses fenêtres sont visées (conv-344).
+   */
   relie: boolean
   conversationId?: string
   lanceLe?: string

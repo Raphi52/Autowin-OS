@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { consigneBureauCache, identifiantBureauCache } from './consigne-bureau-cache'
 
 describe('consigne du bureau caché injectée aux agents de run', () => {
+  it('cite le code 2 du lanceur (app arrêtée avant sa fenêtre, conv-344)', () => {
+    expect(consigneBureauCache('abc123')).toMatch(/2 = l'app s'est arrêtée avant sa fenêtre/)
+  })
+
   it('nomme la voie du bureau caché', () => {
     const texte = consigneBureauCache('run-abc123')
     expect(texte).toContain('scripts/hdesk-lancer.ps1')
