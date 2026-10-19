@@ -750,6 +750,31 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
     expect(container.querySelector('[data-testid="update-incoming"]')).toBeNull()
   })
 
+  it('le préfixe auto(conv-NNN): n’est pas une note de version — retiré de la liste, gardé dans l’infobulle (conv-1020)', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        incoming: [
+          { ...incoming[0], hash: 'a1', subject: 'auto(conv-348): répare les scouts' },
+          { ...incoming[0], hash: 'b2', subject: 'auto(run-36461be778d0-1): corrige le juge' }
+        ]
+      })
+    })
+    await render()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-incoming-toggle"]')!.click()
+    )
+    const sujets = [...container.querySelectorAll('.rail-update-commit-subject')].map(
+      (el) => el.textContent
+    )
+    expect(sujets).toEqual(['répare les scouts', 'corrige le juge'])
+    expect(
+      container.querySelector('[data-testid="update-incoming-commit"]')!.getAttribute('title')
+    ).toContain('auto(conv-348): répare les scouts')
+  })
+
   it('l’œil est FERMÉ tant que la liste est repliée et s’OUVRE avec elle (A5, conv-182)', async () => {
     api({
       checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main', incoming })

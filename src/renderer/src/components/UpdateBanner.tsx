@@ -51,6 +51,16 @@ function nomDeFichier(chemin: string): string {
   return chemin.split('/').pop() || chemin
 }
 
+/**
+ * Le sujet tel qu'une NOTE DE VERSION le dit. Les commits automatiques portent `auto(conv-NNN): `
+ * ou `auto(<run>): ` (chat-turn-publication.ts, run-autoclose.ts) pour être reconnaissables dans
+ * l'historique git ; dans cette liste, ce préfixe n'apprend rien à qui lit — retiré à l'affichage
+ * seulement, l'infobulle garde le sujet entier (demande du 2026-10-19, conv-1020).
+ */
+function sujetLisible(sujet: string): string {
+  return sujet.replace(/^auto\([^)]*\):\s*/, '') || sujet
+}
+
 /** Infobulle d'un commit : ce que la ligne compacte ne peut pas montrer (hash, date exacte, TOUS les fichiers lus). */
 function infobulleCommit(commit: IncomingCommit): string {
   const reste = commit.fileCount - commit.files.length
@@ -426,7 +436,7 @@ export function UpdateBanner({
                 <b className="rail-update-commit-author">{commit.author}</b>
                 <span className="rail-update-commit-when">{depuis(commit.date)}</span>
               </div>
-              <div className="rail-update-commit-subject">{commit.subject}</div>
+              <div className="rail-update-commit-subject">{sujetLisible(commit.subject)}</div>
               {commit.fileCount > 0 && (
                 <div className="rail-update-commit-files">
                   {commit.files.slice(0, 3).map(nomDeFichier).join(', ')}
