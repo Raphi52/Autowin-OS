@@ -251,6 +251,18 @@ export async function readSignedBrainPayload(
   return decoded as SignedBrainPayload
 }
 
+/**
+ * La signature est bien formée mais ne colle pas au jeton d'Autowin : le serveur qui répond signe
+ * avec une AUTRE clé. Classe à part pour que l'appelant puisse nommer cette cause précise (conv-338 :
+ * un ancien serveur Brain, d'une autre installation, tenait le port) sans comparer un message.
+ */
+export class SignatureBrainInvalide extends Error {
+  constructor() {
+    super('Signature Brain invalide')
+    this.name = 'SignatureBrainInvalide'
+  }
+}
+
 function verifySignature(message: string, signature: unknown, token: string): void {
   if (typeof signature !== 'string') throw new Error('Reponse Brain invalide')
   const expected = createHmac('sha256', token).update(message, 'utf8').digest('hex')
@@ -260,7 +272,7 @@ function verifySignature(message: string, signature: unknown, token: string): vo
     actualBuffer.length !== expectedBuffer.length ||
     !timingSafeEqual(actualBuffer, expectedBuffer)
   ) {
-    throw new Error('Signature Brain invalide')
+    throw new SignatureBrainInvalide()
   }
 }
 

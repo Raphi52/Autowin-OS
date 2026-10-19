@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import {
   readSignedBrainPayload,
   sealBrainRequest,
+  SignatureBrainInvalide,
   verifySignedBrainPayload
 } from './brain-protocol'
 import { lireReglage, sharedBrainOrigin } from './brain-paths'
@@ -111,6 +112,9 @@ export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
  * - `query-refused` : `POST /query-secure` a répondu non-ok (jeton rejeté, index dégradé…).
  * - `network` : rien n'a répondu (serveur arrêté, délai dépassé, réseau).
  * - `test-mode` : neutralisation Vitest, jamais une panne réelle.
+ * - `foreign-signature` (statut `invalid`, pas `unavailable`) : `GET /challenge` a répondu, mais
+ *   signé avec une AUTRE clé que le jeton d'Autowin — un autre serveur Brain tient le port (conv-338,
+ *   2026-10-19 : l'ancien serveur d'une autre installation). Aucune question n'est partie.
  */
 export type BrainUnavailableReason =
   | 'no-token'
@@ -119,6 +123,7 @@ export type BrainUnavailableReason =
   | 'query-refused'
   | 'network'
   | 'test-mode'
+  | 'foreign-signature'
 
 export interface BrainRetrievalResult {
   context: string
@@ -276,7 +281,10 @@ export async function retrieveBrainContext(
       const challengeNonce = /^challenge:([0-9a-f]{24})$/.exec(challenge.context)?.[1]
       if (!challengeNonce) return { context: '', status: 'invalid' }
       nonce = challengeNonce
-    } catch {
+    } catch (error) {
+      // Signature bien formée mais d'une autre clé : la cause est CONNUE ici, on la transmet.
+      if (error instanceof SignatureBrainInvalide)
+        return { context: '', status: 'invalid', unavailableReason: 'foreign-signature' }
       return { context: '', status: 'invalid' }
     }
 

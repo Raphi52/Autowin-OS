@@ -113,7 +113,12 @@ const CAUSES_INDISPONIBLE: Record<BrainUnavailableReason, string> = {
     'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok : jeton rejete ou index degrade)',
   network: 'cause exacte : rien n’a repondu (serveur arrete, delai depasse ou reseau)',
   'test-mode':
-    'neutralisation sous test : ce n’est PAS une panne reelle, aucune reparation n’est attendue ici'
+    'neutralisation sous test : ce n’est PAS une panne reelle, aucune reparation n’est attendue ici',
+  'foreign-signature':
+    'cause exacte : le serveur qui repond sur le port du Brain signe avec un autre jeton que celui ' +
+    'd’Autowin - un AUTRE serveur Brain (une autre installation) tient ce port. Aucune question n’est ' +
+    'partie et aucun fait n’est en cause : verifie quel processus ecoute sur ce port et quel fichier ' +
+    'de jeton il lit (sans jamais recopier sa valeur)'
 }
 
 const PANNE_GENERIQUE =
@@ -142,7 +147,11 @@ export function buildBrainOutcome(
   if (!knowledge) {
     const note =
       effectiveStatus === 'invalid'
-        ? "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
+        ? unavailableReason === 'foreign-signature'
+          ? // conv-338 (2026-10-19, tour 8ce6230c) : la note anonyme ne disait pas qu'un autre serveur
+            // tenait le port ; l'agent a reecrit ses faits avant de regarder le serveur.
+            `reponse Brain rejetee - ${CAUSES_INDISPONIBLE['foreign-signature']}. ${PANNE_GENERIQUE}`
+          : "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
         : effectiveStatus === 'empty'
           ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
           : // PANNE = TACHE, PAS FIN DE ROUTE (kaizen conv-151, saisie ts=1788375174361 :

@@ -96,6 +96,20 @@ describe('buildBrainOutcome status', () => {
     expect(buildBrainOutcome('q', '', 'invalid').note).toContain('integrite')
   })
 
+  /*
+   * conv-338 (2026-10-19, tour 8ce6230c-374c-4de3-9429-583a648e286c) : « identite ou integrite
+   * invalide » ne disait pas que le serveur sur le port n'avait pas le jeton d'Autowin. L'agent a
+   * reecrit ses faits avant de regarder le serveur. La cause connue du code doit etre dite.
+   */
+  it('nomme un autre serveur Brain quand le défi est signé avec un autre jeton', () => {
+    const outcome = buildBrainOutcome('q', '', 'invalid', 'foreign-signature')
+    expect(outcome.status).toBe('invalid')
+    expect(outcome.unavailableReason).toBe('foreign-signature')
+    expect(outcome.note).toMatch(/autre jeton/u)
+    expect(outcome.note).toMatch(/processus/u)
+    expect(outcome.note).toMatch(/PANNE/u)
+  })
+
   it.each([' ', '\n\t', '\r\n'])(
     'normalise un contexte sans caractère utile annoncé found en empty (%j)',
     (context) => {

@@ -424,6 +424,40 @@ describe('retrieveBrainContext', () => {
     expect(res).toMatchObject({ context: '', status: 'invalid' })
   })
 
+  /*
+   * UN AUTRE SERVEUR BRAIN SUR LE PORT. Mesure conv-338 (2026-10-19, tour
+   * 8ce6230c-374c-4de3-9429-583a648e286c) : un ancien serveur, d'une autre installation, tenait le
+   * port avec SON jeton. `/challenge` n'exige aucun jeton : il repond, mais signe avec une autre
+   * cle. La lecture rendait un « invalid » anonyme, le meme que pour une reponse forgee ou un
+   * protocole divergent ; le code sait pourtant que c'est la signature du DEFI qui ne colle pas.
+   */
+  it('nomme la signature étrangère quand le défi est signé avec un autre jeton', async () => {
+    const autreJeton = 'y'.repeat(40)
+    const defiEtranger = (() => {
+      const authenticated = JSON.stringify({ context: `challenge:${SERVER_NONCE}`, navigation: null })
+      return {
+        service: 'autowin-brain',
+        protocol: 2,
+        authenticated,
+        signature: createHmac('sha256', autreJeton)
+          .update(`autowin-brain\n2\n${authenticated}`, 'utf8')
+          .digest('hex')
+      }
+    })()
+    const calls: string[] = []
+    const fetchFn = (async (url: unknown) => {
+      calls.push(String(url))
+      return textResponse(defiEtranger)
+    }) as unknown as typeof fetch
+    const result = await retrieveBrainContext('question', {
+      env: { AUTOWIN_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn
+    })
+    expect(result).toEqual({ context: '', status: 'invalid', unavailableReason: 'foreign-signature' })
+    // La question ne part jamais vers un serveur qui n'a pas prouve son identite.
+    expect(calls).toHaveLength(1)
+  })
+
   it('ne divulgue ni token ni requête à un faux listener loopback', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
     const fetchFn = (async (url: unknown, init?: RequestInit) => {
