@@ -734,6 +734,42 @@ describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', ()
       details.find((chunk) => chunk.status === 'Bash · npm test')?.statusDetail
     ).toBeUndefined()
   })
+
+  // conv-341 (2026-10-19) : « quand y a une action rouge, c'est possible d'avoir le message d'erreur
+  // […] un truc qui coûte pas de token ». Le texte rendu par l'outil en échec suit sa ligne de fin,
+  // dans le journal d'actions que le fil sauvegarde — sans aucun appel au modèle.
+  it('fait suivre la ligne de fin d’un échec par le message d’erreur de l’outil', async () => {
+    const DELAI =
+      'Ripgrep search timed out after 20 seconds. The search may have matched files but did not complete in time.'
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 't1', name: 'Glob', input: { pattern: '**/*.ts' } },
+            { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: 'src/a.ts' } }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', is_error: true, content: DELAI },
+            { type: 'tool_result', tool_use_id: 't2', content: 'ok' }
+          ]
+        }
+      },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    const fin = statuts.findIndex((s) => s.startsWith('Glob échoué'))
+    expect(fin).toBeGreaterThanOrEqual(0)
+    expect(statuts[fin + 1]).toBe(`Glob erreur - ${DELAI}`)
+    // Une action réussie n'a pas de ligne d'erreur.
+    expect(statuts.some((s) => s.startsWith('Read erreur'))).toBe(false)
+  })
 })
 
 /**
