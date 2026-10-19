@@ -619,6 +619,36 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(collected).toContain('le worktree est resté ouvert')
   })
 
+  /*
+   * conv-344 (saisie ts 1792393145414) : « /scout comment améliorer la feature overall » a été
+   * classé trivial, donc lancé SANS le fil. Le scout n'a reçu que la phrase et a deviné « la
+   * feature » : le fond 3D de l'Accueil, alors que la conversation parlait des bureaux cachés.
+   */
+  it('joint le fil de la conversation à un « /scout comment … » qui désigne son sujet par le fil', async () => {
+    const os = fakeOs()
+    const recus: string[] = []
+    os.runTask = async (...args: unknown[]) => {
+      recus.push(String(args[5] ?? ''))
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, () => {})
+    await bus.exec('orchestrate', { task: '/scout comment améliorer la feature overall' }, 'conv-1')
+    // Jumeau : une vraie micro-édition reste lancée sans collecte, comme avant.
+    await bus.exec('orchestrate', { task: '/build corrige la typo dans le commentaire' }, 'conv-1')
+
+    expect(recus).toHaveLength(2)
+    expect(recus[0]).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
+    expect(recus[0]).toContain('le worktree est resté ouvert')
+    expect(recus[1]).toBe('')
+  })
+
   it('met la preuve watchdog en quarantaine sans la transformer en ordre provider', async () => {
     const os = fakeOs()
     let receivedTask = ''

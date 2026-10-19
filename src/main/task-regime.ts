@@ -54,9 +54,27 @@ const NEGATED_CRITICAL_SIGNALS =
  * Mesuré sur conv-210 : chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
  * seul pas de build suffit. La rétrogradation reste bornée : `critical` est testé AVANT, et la tâche
  * doit rester courte et mono-clause.
+ *
+ * `comment` NU N'Y EST PLUS — conv-344, saisie ts 1792393145414 : en français « comment » veut dire
+ * « how ». « /scout comment améliorer la feature overall », « comment faire pour lancer les tests »
+ * partaient en trivial. Le commentaire de code reste couvert par `commentaire` et, en anglais, par
+ * un déterminant devant `comment(s)` (« the comment », « a comment »), qu'aucune question française
+ * ne porte.
  */
 const TRIVIAL_SIGNALS =
-  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|bo[iî]te|encadr\w*|ombre|shadow|espacement|plus gros|plus petit)\b|\b(?:taille|couleur)\s+(?:de\s+)?(?:la\s+|du\s+|des\s+)?(?:police|texte|titre|fond|font)\b|\b(?:border-radius|border-color|background-color|font-size|line-height|box-shadow|text-align)\b/i
+  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|reformul\w*|un mot|one word|bump\w*|version|lint|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|bo[iî]te|encadr\w*|ombre|shadow|espacement|plus gros|plus petit)\b|\b(?:a|an|the|this|that|code|inline)\s+comments?\b|\b(?:taille|couleur)\s+(?:de\s+)?(?:la\s+|du\s+|des\s+)?(?:police|texte|titre|fond|font)\b|\b(?:border-radius|border-color|background-color|font-size|line-height|box-shadow|text-align)\b/i
+
+/**
+ * UN SCOUT N'EST JAMAIS TRIVIAL. Le régime trivial veut dire « micro-édition déjà précise, un seul
+ * pas de build » ; un scout demande « quoi faire ? », c'est l'inverse. Or ce régime décide aussi de
+ * ce que le scout reçoit : sans lui, pas de fil de conversation (`commands.ts`, `substantial`),
+ * 2 éclaireurs au lieu de 4 (`execution-quote.ts`, `maxConcurrency`) et un cran de réflexion en
+ * moins (`roles.ts`, `CRANS_RENDUS_PAR_DIFFICULTE`). Un mot d'apparence (« couleur », « noir »)
+ * suffisait à l'y faire tomber.
+ */
+function demandeDeScout(task: string): boolean {
+  return routeSkillRequest(task)?.explicitPhase === 'scout' || matchExplicitPhase(task) === 'scout'
+}
 
 /**
  * Classe une tâche. Ordre : critical d'abord (prudence), puis trivial (signal FORT + tâche courte),
@@ -71,7 +89,7 @@ export function classifyRegime(task: string): TaskRegime {
   // PAS n'importe quel point (« 1.0.1 » n'est pas multi-clause).
   const hasClauseBreak = /[;\n]|\.\s+\S|\b(puis|ensuite|then|and then)\b/i.test(t)
   const isShort = t.length <= 120 && !hasClauseBreak
-  if (TRIVIAL_SIGNALS.test(t) && isShort) return 'trivial'
+  if (TRIVIAL_SIGNALS.test(t) && isShort && !demandeDeScout(t)) return 'trivial'
   return 'standard'
 }
 
