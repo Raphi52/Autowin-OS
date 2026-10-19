@@ -290,7 +290,15 @@ import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import { addedLineFingerprints } from './exact-line-fingerprint'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
 import type { DesktopController } from './desktop-control'
-import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
+import type {
+  DemandeFermeture,
+  EntreeRegistre,
+  GesteTv,
+  ImageTv,
+  ResultatFermeture,
+  ResultatGeste
+} from './hdesk-tv'
+import type { DemandeCreationBureau, ResultatCreationBureau } from '../shared/hdesk-gestion'
 import { identifiantBureauCacheChat } from './consigne-bureau-cache'
 import {
   OutcomeLearningSupervisor,
@@ -1642,6 +1650,65 @@ export const CATALOG: CommandSpec[] = [
       idempotentHint: true,
       openWorldHint: false
     }
+  },
+  /**
+   * conv-344 (scout n°4) : lancer, observer, agir étaient des commandes PowerShell RECOPIÉES de la
+   * consigne — d'où les identifiants inventés et les fils oubliés (le lanceur a dû rendre -Travail
+   * obligatoire). Le fil est celui de l'APPEL, jamais un argument ; l'identifiant par défaut est
+   * `chat-<fil>` ; observer et agir refusent le bureau d'un autre fil (fiche du registre).
+   */
+  {
+    name: 'bureau_cache_lancer',
+    description:
+      'Lancer une application graphique dans TON bureau Windows caché, sans toucher l’écran de l’utilisateur (même chemin que la vue « Bureaux cachés » : lanceur détaché, l’app survit à ton tour). Rend prêt seulement si une fenêtre est ouverte ET si l’app tient. Codes d’échec : 2 = arrêtée avant sa fenêtre (instance unique qui a passé la main, ou plantage), 3 = aucune fenêtre, 4 = arrêtée après sa fenêtre, 5 = identifiant déjà pris. Chrome et Brave reçoivent un profil propre au bureau. Ensuite : bureau_cache_observer, bureau_cache_agir, bureau_cache_fermer',
+    args: {
+      executable: 'chemin complet du .exe à lancer',
+      travail: 'ce que tu fais dans ce bureau, en quelques mots (affiché à l’utilisateur)',
+      arguments: 'facultatif — arguments de la ligne de commande',
+      id: 'facultatif — identifiant du bureau (lettres, chiffres, - et _). Absent = `chat-<id du fil>`'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
+    name: 'bureau_cache_observer',
+    description:
+      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
+    args: {
+      id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'bureau_cache_agir',
+    description:
+      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (messages fenêtre : jamais la vraie souris ni le vrai clavier de l’utilisateur). Toujours un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. Re-observe ensuite pour vérifier. Seulement les bureaux de cette conversation',
+    args: {
+      x: 'entier — pixels de la capture de bureau_cache_observer (0 à 32767)',
+      y: 'entier — pixels de la capture de bureau_cache_observer (0 à 32767)',
+      texte: 'facultatif — texte à taper après le clic (1000 caractères au plus)',
+      entree: 'facultatif — booléen, appuyer sur Entrée après la frappe',
+      touche:
+        'facultatif — une touche nommée : Tab, Echap, Retour, Entree, Suppr, Haut, Bas, Gauche, Droite, Debut, Fin, PageHaut, PageBas, CtrlA, CtrlC, CtrlV, CtrlX, CtrlZ',
+      molette: 'facultatif — crans de molette, entier de -20 à 20 (positif = vers le haut)',
+      sansClic: 'facultatif — booléen, taper sans recliquer (garde le curseur posé)',
+      id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
   }
 ]
 
@@ -1787,6 +1854,12 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
       newText: '[REDACTED]'
     }
   }
+  // conv-344 : un mot de passe peut passer par la frappe — seul son nombre de caractères est gardé.
+  if (name === 'bureau_cache_agir' && typeof args.texte === 'string')
+    return redactTrace({ ...args, texte: `[${args.texte.length} caractères]` }) as Record<
+      string,
+      unknown
+    >
   return redactTrace(args) as Record<string, unknown>
 }
 
@@ -2173,6 +2246,17 @@ export class AppCommandBus {
    * l'outil annonce l'indisponibilité au lieu de prétendre avoir fermé.
    */
   fermerBureauCache?: (demande: DemandeFermeture) => Promise<ResultatFermeture>
+
+  /**
+   * Outils `bureau_cache_lancer / observer / agir` (conv-344), câblés depuis index.ts sur
+   * `creerBureau`, le processus de capture et `agirHdesk`. `ficheBureauCache` lit la fiche du
+   * registre : observer et agir refusent un bureau sans fiche ou d'un autre fil. Absents -> l'outil
+   * annonce l'indisponibilité.
+   */
+  lancerBureauCache?: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
+  observerBureauCache?: (id: string) => Promise<ImageTv>
+  agirBureauCache?: (geste: GesteTv) => Promise<ResultatGeste>
+  ficheBureauCache?: (id: string) => EntreeRegistre | undefined
 
   /**
    * Lance un VRAI tour dans une conversation NOMMEE, cable tardivement depuis index.ts sur la
@@ -2661,6 +2745,16 @@ export class AppCommandBus {
           return { ok: false, error: refusActionSansDemande }
         }
       }
+      if (
+        name === 'bureau_cache_lancer' ||
+        name === 'bureau_cache_observer' ||
+        name === 'bureau_cache_agir'
+      ) {
+        const r = await this.outilBureauCache(name, args, conversationId)
+        this.trace?.(name, redactedArgs(name, args), true)
+        noterIssue(r.data.ok)
+        return { ok: true, data: r.data, ...(r.attachments ? { attachments: r.attachments } : {}) }
+      }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
       this.trace?.(name, redactedArgs(name, args), true)
       noterIssue(true)
@@ -2669,6 +2763,119 @@ export class AppCommandBus {
       this.trace?.(name, redactedArgs(name, args), false)
       noterIssue(false)
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  /**
+   * `bureau_cache_lancer / observer / agir` (conv-344, scout n°4). Le fil est celui de l'APPEL : un
+   * `conversationId` glissé dans `a` est ignoré. Observer et agir exigent une fiche de CE fil.
+   */
+  private async outilBureauCache(
+    name: 'bureau_cache_lancer' | 'bureau_cache_observer' | 'bureau_cache_agir',
+    a: Record<string, unknown>,
+    conversationId?: string
+  ): Promise<{
+    data: Record<string, unknown> & { ok: boolean }
+    attachments?: NonNullable<Message['attachments']>
+  }> {
+    const refus = (detail: string): { data: { ok: false; detail: string } } => ({
+      data: { ok: false, detail }
+    })
+    const fil = conversationId ?? this.activeConversationId ?? ''
+    if (!fil)
+      return refus(
+        'Refusé : aucune conversation courante — impossible de savoir quels bureaux sont les tiens.'
+      )
+    const s = (k: string): string =>
+      a[k] === undefined || a[k] === null ? '' : typeof a[k] === 'string' ? a[k] : String(a[k])
+    const id = s('id').trim() || identifiantBureauCacheChat(fil)
+
+    if (name === 'bureau_cache_lancer') {
+      if (!this.lancerBureauCache)
+        return refus('Lancement indisponible : aucun lanceur de scripts câblé dans ce processus.')
+      const executable = s('executable').trim()
+      const travail = s('travail').trim()
+      if (!executable) return refus('Refusé : passe `executable`, le chemin complet du .exe.')
+      if (!travail) return refus('Refusé : passe `travail`, ce que tu fais dans ce bureau.')
+      const r = await this.lancerBureauCache({
+        id,
+        executable,
+        arguments: s('arguments'),
+        travail,
+        conversationId: fil
+      })
+      return { data: { ...r, id, detail: r.message } }
+    }
+
+    const brancheOk =
+      name === 'bureau_cache_observer' ? this.observerBureauCache : this.agirBureauCache
+    if (!this.ficheBureauCache || !brancheOk)
+      return refus(
+        `${name === 'bureau_cache_observer' ? 'Capture' : 'Geste'} indisponible : aucun lanceur de scripts câblé dans ce processus.`
+      )
+    const fiche = this.ficheBureauCache(id)
+    if (!fiche)
+      return refus(
+        `Refusé : le bureau ${id} n'a pas de fiche — ce n'est pas un bureau lancé pour ce fil (bureau_cache_lancer).`
+      )
+    if (fiche.conversationId !== fil)
+      return refus(
+        `Refusé : le bureau ${id} appartient à un autre fil (${fiche.conversationId ?? 'inconnu'}).`
+      )
+
+    if (name === 'bureau_cache_observer') {
+      const img = await this.observerBureauCache!(id)
+      if (img.statut === 'ok' || img.statut === 'uni') {
+        const content = img.dataUrl.slice(img.dataUrl.indexOf(',') + 1)
+        return {
+          data: {
+            ok: true,
+            id,
+            statut: img.statut,
+            ...(img.statut === 'ok' ? { width: img.width, height: img.height } : {}),
+            detail:
+              img.statut === 'uni'
+                ? `Image unie (page web ou rendu GPU) : lis le titre de la fenêtre, ou pilote le navigateur par son port de débogage.`
+                : `Capture de ${id} jointe (${img.width}×${img.height} px).`
+          },
+          attachments: [
+            {
+              name: `bureau-${id}.png`,
+              mimeType: 'image/png',
+              size: Math.floor((content.length * 3) / 4),
+              kind: 'image',
+              content
+            }
+          ]
+        }
+      }
+      return refus(
+        img.statut === 'ferme'
+          ? `Bureau ${id} fermé : relance-le avec bureau_cache_lancer.`
+          : `Capture impossible : ${img.message}`
+      )
+    }
+
+    const nombre = (k: string): number | undefined =>
+      a[k] === undefined || a[k] === null || a[k] === '' ? undefined : Number(a[k])
+    const vrai = (k: string): boolean => a[k] === true || a[k] === 'true'
+    const geste: GesteTv = { id, x: Number(a.x), y: Number(a.y) }
+    if (s('texte')) geste.texte = s('texte')
+    if (vrai('entree')) geste.entree = true
+    if (s('touche')) geste.touche = s('touche')
+    const crans = nombre('molette')
+    if (crans !== undefined) geste.molette = crans
+    if (vrai('sansClic')) geste.sansClic = true
+    const r = await this.agirBureauCache!(geste)
+    return {
+      data: r.ok
+        ? {
+            ok: true,
+            id,
+            ...(r.action ? { action: r.action } : {}),
+            detail: 'Geste envoyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
+          }
+        : { ok: false, id, detail: `Geste refusé : ${r.message}` }
     }
   }
 
