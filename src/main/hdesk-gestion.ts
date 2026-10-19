@@ -27,6 +27,7 @@ import {
   refusCreation,
   type BureauGere,
   type DemandeCreationBureau,
+  type GesteJournal,
   type LancementRecent,
   type ResultatChoixExe,
   type ResultatCreationBureau,
@@ -105,12 +106,43 @@ export async function bureauxGeres(
   if (!r.ok) return r
   return {
     ok: true,
-    bureaux: listerTousLesBureaux(r.vivants, lireRegistre(registre)),
+    bureaux: listerTousLesBureaux(r.vivants, lireRegistre(registre)).map((b) => {
+      const gestes = lireGestes(registre, b.id)
+      return gestes.length ? { ...b, gestes } : b
+    }),
     recents: lireRecents(registre, r.vivants)
   }
 }
 
 export const RECENTS_MAX = 5
+export const GESTES_MONTRES = 5
+
+/**
+ * Derniers gestes d'un bureau (conv-344, scout n°5), le plus ancien d'abord : le journal
+ * `<id>.gestes.jsonl` qu'écrit scripts/hdesk-act.ps1 pour TOUT geste (TV, vue, agent). Ligne abîmée
+ * ignorée ; journal absent = aucun geste.
+ */
+export function lireGestes(registre: string, id: string): GesteJournal[] {
+  if (!ID_BUREAU.test(id)) return []
+  const chemin = join(registre, `${id}.gestes.jsonl`)
+  let texte: string
+  try {
+    texte = existsSync(chemin) ? readFileSync(chemin, 'utf8') : ''
+  } catch {
+    return []
+  }
+  const gestes: GesteJournal[] = []
+  for (const ligne of texte.split(/\r?\n/)) {
+    try {
+      const g = JSON.parse(ligne) as GesteJournal
+      if (g && typeof g === 'object' && typeof g.quand === 'string' && typeof g.ok === 'boolean')
+        gestes.push(g)
+    } catch {
+      /* ligne abîmée : ignorée */
+    }
+  }
+  return gestes.slice(-GESTES_MONTRES)
+}
 
 /**
  * « Récents » (conv-344, scout n°6) : les derniers lancements réussis de `historique.jsonl` (écrit par

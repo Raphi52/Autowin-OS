@@ -62,12 +62,17 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function monter(api: HdeskGestionApi): Promise<HTMLElement> {
+async function monter(
+  api: HdeskGestionApi,
+  props: { onOpenConversation?: (t: { conversationId: string }) => void } = {}
+): Promise<HTMLElement> {
   hote = document.createElement('div')
   document.body.appendChild(hote)
   racine = createRoot(hote)
   await act(async () => {
-    racine!.render(createElement(HdeskGestionView, { active: true, api, intervalleMs: 60_000 }))
+    racine!.render(
+      createElement(HdeskGestionView, { active: true, api, intervalleMs: 60_000, ...props })
+    )
   })
   await act(async () => {
     await Promise.resolve()
@@ -343,5 +348,219 @@ describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
   it('aucun récent : pas de section', async () => {
     const h = await monter(faux([ZOX]))
     expect($(h, 'hdesk-recents')).toBeNull()
+  })
+})
+
+/**
+ * conv-344 (scout n°2, 5, 9) : agir dans l'appli cachée SANS basculer l'écran réel. La petite image
+ * agrandit l'aperçu (aucun geste par mégarde) ; dans l'aperçu agrandi, clic / frappe / molette partent
+ * au bureau par hdesk-act, l'un après l'autre ; un point montre le dernier clic.
+ */
+describe('HdeskGestionView — agir dans l’aperçu (conv-344)', () => {
+  const image800 = vi.fn(async (id: string) => ({
+    statut: 'ok' as const,
+    id,
+    dataUrl: 'data:image/png;base64,AA',
+    width: 800,
+    height: 600
+  }))
+  const boite = (img: Element): void => {
+    ;(img as HTMLElement).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+        right: 400,
+        bottom: 300,
+        x: 0,
+        y: 0,
+        toJSON: () => ({})
+      }) as DOMRect
+  }
+  const cliquerA = async (el: Element, x: number, y: number): Promise<void> => {
+    await act(async () => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }))
+    })
+  }
+  const ouvrir = async (api: HdeskGestionApi): Promise<{ h: HTMLElement; img: Element }> => {
+    const h = await monter(api)
+    await cliquer($(h, 'hdesk-apercu-zox'))
+    const img = $(h, 'hdesk-agrandi-image')!
+    boite(img)
+    return { h, img }
+  }
+
+  it('un clic sur la petite image AGRANDIT l’aperçu, sans aucun geste', async () => {
+    const agir = vi.fn(async () => ({ ok: true as const }))
+    const h = await monter(faux([ZOX], { hdeskTvAct: agir, hdeskTvImage: image800 }))
+    await cliquer($(h, 'hdesk-apercu-zox'))
+    expect($(h, 'hdesk-agrandi')).not.toBeNull()
+    expect(agir).not.toHaveBeenCalled()
+    await cliquer($(h, 'hdesk-agrandi-fermer'))
+    expect($(h, 'hdesk-agrandi')).toBeNull()
+  })
+
+  it('clic aux coordonnées de la CAPTURE, puis frappe + Entrée sans reclic, puis molette', async () => {
+    const agir = vi.fn(async () => ({ ok: true as const }))
+    const { h, img } = await ouvrir(faux([ZOX], { hdeskTvAct: agir, hdeskTvImage: image800 }))
+    await cliquerA(img, 100, 75)
+    expect(agir).toHaveBeenLastCalledWith({ id: 'zox', x: 200, y: 150 })
+    const champ = $(h, 'hdesk-agrandi-texte') as HTMLInputElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        champ,
+        'bonjour'
+      )
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      $(h, 'hdesk-agrandi-saisie')!.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true })
+      )
+    })
+    expect(agir).toHaveBeenLastCalledWith({
+      id: 'zox',
+      x: 200,
+      y: 150,
+      texte: 'bonjour',
+      entree: true,
+      sansClic: true
+    })
+    // Le moteur de test ne recopie pas clientX/clientY d'un WheelEvent : posés comme Chromium.
+    const sansPosition = new WheelEvent('wheel', { bubbles: true, deltaY: 300 })
+    await act(async () => {
+      img.dispatchEvent(sansPosition)
+    })
+    expect(agir).toHaveBeenCalledTimes(2) // position illisible : aucun geste en NaN
+    const roue = new WheelEvent('wheel', { bubbles: true, deltaY: 300 })
+    Object.defineProperty(roue, 'clientX', { value: 200 })
+    Object.defineProperty(roue, 'clientY', { value: 150 })
+    await act(async () => {
+      img.dispatchEvent(roue)
+    })
+    expect(agir).toHaveBeenLastCalledWith({ id: 'zox', x: 400, y: 300, molette: -3 })
+  })
+
+  it('frappe sans clic préalable : rien n’est envoyé, la raison est dite', async () => {
+    const agir = vi.fn(async () => ({ ok: true as const }))
+    const { h } = await ouvrir(faux([ZOX], { hdeskTvAct: agir, hdeskTvImage: image800 }))
+    expect(($(h, 'hdesk-agrandi-texte') as HTMLInputElement).disabled).toBe(true)
+    expect(($(h, 'hdesk-agrandi-texte') as HTMLInputElement).placeholder).toMatch(/Clique d’abord/)
+    expect(agir).not.toHaveBeenCalled()
+  })
+
+  it('deux clics rapides : le second attend la fin du premier', async () => {
+    let finir: () => void = () => undefined
+    const agir = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((r) => (finir = () => r({ ok: true as const }))))
+      .mockResolvedValue({ ok: true as const })
+    const { img } = await ouvrir(faux([ZOX], { hdeskTvAct: agir, hdeskTvImage: image800 }))
+    await cliquerA(img, 10, 10)
+    await cliquerA(img, 20, 20)
+    expect(agir).toHaveBeenCalledTimes(1)
+    await act(async () => finir())
+    expect(agir).toHaveBeenCalledTimes(2)
+  })
+
+  it('le point du dernier clic est posé à l’endroit cliqué', async () => {
+    const agir = vi.fn(async () => ({ ok: true as const }))
+    const { h, img } = await ouvrir(faux([ZOX], { hdeskTvAct: agir, hdeskTvImage: image800 }))
+    expect($(h, 'hdesk-point')).toBeNull()
+    await cliquerA(img, 100, 75)
+    const point = $(h, 'hdesk-point') as HTMLElement
+    expect(point.style.left).toBe('25%')
+    expect(point.style.top).toBe('25%')
+  })
+
+  it('le point montre aussi le dernier clic d’un AGENT, lu dans le journal (moins de 5 s)', async () => {
+    const recent = new Date().toISOString()
+    const ancien = new Date(Date.now() - 60_000).toISOString()
+    const bureau = (quand: string): BureauGere => ({
+      ...ZOX,
+      gestes: [{ quand, ok: true, x: 400, y: 150, clic: true }]
+    })
+    const { h } = await ouvrir(faux([bureau(recent)], { hdeskTvImage: image800 }))
+    const point = $(h, 'hdesk-point') as HTMLElement
+    expect([point.style.left, point.style.top]).toEqual(['50%', '25%'])
+    await act(async () => racine!.unmount())
+    racine = null
+    hote?.remove()
+    const { h: h2 } = await ouvrir(faux([bureau(ancien)], { hdeskTvImage: image800 }))
+    expect($(h2, 'hdesk-point')).toBeNull()
+  })
+
+  it('la carte montre les derniers gestes, jamais le texte tapé', async () => {
+    const h = await monter(
+      faux([
+        {
+          ...ZOX,
+          gestes: [
+            { quand: '2026-10-19T10:00:00+02:00', ok: true, x: 10, y: 20, clic: true },
+            {
+              quand: '2026-10-19T10:00:01+02:00',
+              ok: true,
+              x: 10,
+              y: 20,
+              clic: false,
+              caracteres: 9,
+              entree: true
+            },
+            {
+              quand: '2026-10-19T10:00:02+02:00',
+              ok: false,
+              x: 5,
+              y: 5,
+              clic: true,
+              erreur: 'Aucune fenetre en (5,5) dans ce bureau.'
+            }
+          ]
+        }
+      ])
+    )
+    const g = $(h, 'hdesk-gestes-zox')!.textContent ?? ''
+    expect(g).toContain('clic 10,20')
+    expect(g).toContain('9 caractères + Entrée')
+    expect(g).toContain('refusé')
+  })
+})
+
+/** conv-344 (scout n°8) : le fil s'affichait comme un identifiant brut, sans lien. */
+describe('HdeskGestionView — le fil par son titre, cliquable (conv-344)', () => {
+  const titres = (liste: Array<{ id: string; title: string }>) =>
+    vi.fn(async () => liste as unknown as Array<{ id: string; title: string }>)
+
+  it('titre du fil ; un clic ouvre la conversation', async () => {
+    const ouvrir = vi.fn()
+    const h = await monter(
+      faux([ZOX], { conversations: titres([{ id: 'conv-951', title: 'Refonte du bureau' }]) }),
+      { onOpenConversation: ouvrir }
+    )
+    const lien = $(h, 'hdesk-fil-zox')!
+    expect(lien.textContent).toBe('Refonte du bureau')
+    expect(lien.getAttribute('title')).toBe('conv-951')
+    await cliquer(lien)
+    expect(ouvrir).toHaveBeenCalledWith({ conversationId: 'conv-951' })
+  })
+
+  it('fil inconnu de la liste, ou liste en échec : l’identifiant, toujours cliquable', async () => {
+    const ouvrir = vi.fn()
+    const h = await monter(
+      faux([ZOX], { conversations: vi.fn(async () => Promise.reject(new Error('x'))) }),
+      { onOpenConversation: ouvrir }
+    )
+    expect($(h, 'hdesk-fil-zox')!.textContent).toBe('conv-951')
+    await cliquer($(h, 'hdesk-fil-zox'))
+    expect(ouvrir).toHaveBeenCalledWith({ conversationId: 'conv-951' })
+  })
+
+  it('fil « manuel » ou absent : texte simple, sans lien', async () => {
+    const h = await monter(faux([{ ...ZOX, conversationId: 'manuel' }, ORPHELIN]), {
+      onOpenConversation: vi.fn()
+    })
+    expect($(h, 'hdesk-fil-zox')).toBeNull()
+    expect($(h, 'hdesk-bureau-zox')!.textContent).toContain('Fil : manuel')
+    expect($(h, 'hdesk-bureau-orphelin')!.textContent).toContain('Fil : aucun')
   })
 })

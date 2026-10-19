@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
 import { toucheTv } from './hdesk-tv-touches'
+import { cransMolette, enfilerGeste, pointDansImage } from './hdesk-gestes'
 
 export interface HdeskTvApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
@@ -98,17 +99,13 @@ export function HdeskTv({
   // dans le même bureau (clic du second pendant la frappe du premier).
   const fileRef = useRef<Promise<void>>(Promise.resolve())
   const rafraichirRef = useRef<(() => void) | null>(null)
-  const envoyer = (geste: GesteTv): Promise<void> => {
-    const agir = apiAct()
-    if (!agir) return Promise.resolve()
-    fileRef.current = fileRef.current.then(async () => {
-      const r = await agir(geste).catch((e: unknown) => ({ ok: false as const, message: String(e) }))
+  // File et conversions partagées avec l'aperçu de la vue « Bureaux cachés » (hdesk-gestes.ts, conv-344).
+  const envoyer = (geste: GesteTv): Promise<void> =>
+    enfilerGeste(fileRef, apiAct(), geste, (r) => {
       setRetourGeste(r.ok ? null : `Action refusée : ${r.message}`)
       // Rafraîchir tout de suite : sans cela l'effet du geste n'apparaît qu'au tour suivant de la boucle.
       rafraichirRef.current?.()
     })
-    return fileRef.current
-  }
   const apiBasculer = (): HdeskTvApi['hdeskTvBasculer'] =>
     (api ?? (window as unknown as { api?: Partial<HdeskTvApi> }).api)?.hdeskTvBasculer
   // Geste sur l'ÉCRAN RÉEL : confirmation explicite à chaque fois.
@@ -127,16 +124,10 @@ export function HdeskTv({
   // Le clic dans l'image réduite est ramené aux coordonnées de la capture (x * largeur / largeur affichée).
   // fix-ok: cause mesurée — le clic sortait sur `statut !== 'ok'` alors qu'une page web sort unie (test image unie rouge→vert) ; la frappe remontait au chat faute de stopPropagation ; deux gestes se chevauchaient sans file (tests rouges reproduits puis verts).
   const cliquerImage = (e: React.MouseEvent<HTMLImageElement>): void => {
-    if (image?.statut !== 'ok' && image?.statut !== 'uni') return
-    // Une capture unie (page web) ne porte pas sa taille : on prend celle de l'image reçue.
-    const largeur = image.statut === 'ok' ? image.width : e.currentTarget.naturalWidth
-    const hauteur = image.statut === 'ok' ? image.height : e.currentTarget.naturalHeight
-    const rect = e.currentTarget.getBoundingClientRect()
-    if (!rect.width || !rect.height || !largeur || !hauteur) return
-    const x = Math.round(((e.clientX - rect.left) * largeur) / rect.width)
-    const y = Math.round(((e.clientY - rect.top) * hauteur) / rect.height)
-    setDernierClic({ id: image.id, x, y })
-    void envoyer({ id: image.id, x, y })
+    const p = pointDansImage(e, image)
+    if (!p || !image) return
+    setDernierClic({ id: image.id, ...p })
+    void envoyer({ id: image.id, ...p })
   }
   // La frappe vise la fenêtre du dernier point cliqué SANS recliquer : un reclic déplacerait le curseur
   // posé par les flèches ou Début/Fin entre deux frappes.
@@ -147,15 +138,10 @@ export function HdeskTv({
   }
   // Molette sur l'image : 1 cran par tranche de 100 px de deltaY (bas = négatif, comme Windows).
   const molette = (e: React.WheelEvent<HTMLImageElement>): void => {
-    if (image?.statut !== 'ok' && image?.statut !== 'uni') return
-    const largeur = image.statut === 'ok' ? image.width : e.currentTarget.naturalWidth
-    const hauteur = image.statut === 'ok' ? image.height : e.currentTarget.naturalHeight
-    const rect = e.currentTarget.getBoundingClientRect()
-    if (!rect.width || !rect.height || !largeur || !hauteur || !e.deltaY) return
-    const crans = Math.max(-20, Math.min(20, -Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 100))))
-    const x = Math.round(((e.clientX - rect.left) * largeur) / rect.width)
-    const y = Math.round(((e.clientY - rect.top) * hauteur) / rect.height)
-    void envoyer({ id: image.id, x, y, molette: crans })
+    const p = pointDansImage(e, image)
+    const crans = cransMolette(e.deltaY)
+    if (!p || !image || !crans) return
+    void envoyer({ id: image.id, ...p, molette: crans })
   }
   const connusRef = useRef<BureauTv[]>([])
 

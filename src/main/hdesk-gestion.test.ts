@@ -7,6 +7,7 @@ import {
   choisirExecutable,
   creerBureau,
   fermerBureauGere,
+  lireGestes,
   lireRecents,
   listerTousLesBureaux,
   scriptEnveloppeCreation,
@@ -419,5 +420,40 @@ describe('vue Bureaux cachés — Récents (historique des lancements)', () => {
     const d = histo([ligne('zox', '2026-10-19T08:00:00+02:00')])
     const r = await bureauxGeres(async () => ({ ok: true as const, vivants: [] }), d)
     expect(r).toMatchObject({ ok: true, bureaux: [], recents: [{ id: 'zox' }] })
+  })
+})
+
+/** conv-344 (scout n°5) : le journal des gestes (écrit par hdesk-act.ps1) sur la carte du bureau. */
+describe('vue Bureaux cachés — derniers gestes du bureau', () => {
+  it('journal absent : aucun geste', () => {
+    expect(lireGestes(mkdtempSync(join(tmpdir(), 'hdesk-gestes-vide-')), 'zox')).toEqual([])
+  })
+
+  it('les 5 derniers, dans l’ordre ; une ligne abîmée est ignorée', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-gestes-lus-'))
+    const lignes = Array.from({ length: 8 }, (_, i) =>
+      JSON.stringify({ quand: `2026-10-19T10:00:0${i}+02:00`, ok: true, x: i, y: i, clic: true })
+    )
+    lignes.splice(6, 0, '{abîmé')
+    writeFileSync(join(d, 'zox.gestes.jsonl'), lignes.join('\n') + '\n')
+    expect(lireGestes(d, 'zox').map((g) => g.x)).toEqual([3, 4, 5, 6, 7])
+  })
+
+  it('identifiant invalide : rien n’est lu', () => {
+    expect(lireGestes(mkdtempSync(join(tmpdir(), 'hdesk-gestes-inv-')), '../x')).toEqual([])
+  })
+
+  it('la liste attache les gestes à leur bureau', async () => {
+    const d = registre([{ id: 'zox', conversationId: 'conv-1', travail: 'Essai' }])
+    writeFileSync(
+      join(d, 'zox.gestes.jsonl'),
+      JSON.stringify({ quand: '2026-10-19T10:00:00+02:00', ok: true, x: 1, y: 2, clic: true }) +
+        '\n'
+    )
+    const r = await bureauxGeres(async () => ({ ok: true as const, vivants: ['zox'] }), d)
+    expect(r).toMatchObject({
+      ok: true,
+      bureaux: [{ id: 'zox', gestes: [{ ok: true, x: 1, y: 2, clic: true }] }]
+    })
   })
 })

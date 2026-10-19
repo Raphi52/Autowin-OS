@@ -346,6 +346,163 @@ describe('TV interactive — geste vers hdesk-act', () => {
     expect(() => argumentsAct('R', { id: 'a', x: NaN, y: 1 })).toThrow()
     expect(() => argumentsAct('R', { id: 'a', x: -1, y: 1 })).toThrow()
   })
+  // conv-344 : hdesk-act.cs range x et y sur 16 bits (lParam) — x = 70000 cliquait AILLEURS, sans erreur.
+  it('refuse des coordonnées énormes (> 32767) ; jumeau accepté à 32767', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: 70000, y: 1 })).toThrow(/hors bornes/)
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 32768 })).toThrow(/hors bornes/)
+    expect(argumentsAct('R', { id: 'a', x: 32767, y: 32767 })).toContain('32767')
+  })
+  it('refuse une frappe énorme (> 1000 caractères) ; jumeau accepté à 1000', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, texte: 'x'.repeat(1001) })).toThrow(
+      /trop long/
+    )
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1, texte: 'x'.repeat(1000) })).toContain(
+      'x'.repeat(1000)
+    )
+  })
+  it('un registre donné (tests) part en -Registre ; sans lui, rien n’est ajouté', () => {
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1 }, 'C:\\reg').slice(-2)).toEqual([
+      '-Registre',
+      'C:\\reg'
+    ])
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 1 })).not.toContain('-Registre')
+  })
+})
+
+/**
+ * conv-344 (scout n°5) : chaque geste — de la TV, de la vue ou d'un agent — est noté dans
+ * `<registre>/<id>.gestes.jsonl`, réussi ou refusé, SANS le texte tapé (seulement son nombre de
+ * caractères). La carte du bureau montre les derniers. Vrai hdesk-act.ps1, registre temporaire.
+ */
+describe.skipIf(process.platform !== 'win32')('journal des gestes — vrai hdesk-act.ps1', () => {
+  const lignes = (reg: string, id: string): Array<Record<string, unknown>> =>
+    readFileSync(join(reg, `${id}.gestes.jsonl`), 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+
+  it('geste refusé (aucun bureau) : noté ok=false, avec le nombre de caractères, jamais le texte', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-'))
+    const id = `kzgeste${process.pid}`
+    try {
+      const r = await agirHdesk(
+        process.cwd(),
+        { id, x: 10, y: 20, texte: 'secret123', entree: true },
+        reg
+      )
+      expect(r.ok).toBe(false)
+      const brut = readFileSync(join(reg, `${id}.gestes.jsonl`), 'utf8')
+      expect(brut).not.toContain('secret123')
+      expect(lignes(reg, id)).toEqual([
+        expect.objectContaining({
+          ok: false,
+          x: 10,
+          y: 20,
+          clic: true,
+          caracteres: 9,
+          entree: true,
+          erreur: expect.any(String)
+        })
+      ])
+      expect(typeof lignes(reg, id)[0].quand).toBe('string')
+    } finally {
+      rmSync(reg, { recursive: true, force: true })
+    }
+  }, 30000)
+
+  it('geste réussi sur une vraie fenêtre : noté ok=true avec la cible', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-ok-'))
+    const fixtures = mkdtempSync(join(tmpdir(), 'hdesk-gestes-app-'))
+    const id = `kzgesteok${process.pid}`
+    const ps = join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe'
+    )
+    const fenetre = join(fixtures, 'fenetre.ps1')
+    writeFileSync(
+      fenetre,
+      "Add-Type -AssemblyName System.Windows.Forms\n$f = New-Object System.Windows.Forms.Form; $f.Text = 'gestes'; $f.StartPosition = 'Manual'; $f.Location = New-Object System.Drawing.Point(0, 0); $f.Size = New-Object System.Drawing.Size(400, 300)\n[void]$f.ShowDialog()\n"
+    )
+    const script = (nom: string, args: string[]): string =>
+      execFileSync(
+        'powershell',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join('scripts', nom), ...args],
+        { encoding: 'utf8' }
+      )
+    try {
+      script('hdesk-lancer.ps1', [
+        '-Id',
+        id,
+        '-Executable',
+        ps,
+        '-Arguments',
+        `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${fenetre}"`,
+        '-Travail',
+        'test journal',
+        '-Conversation',
+        'conv-344',
+        '-Registre',
+        reg,
+        '-SurvieSecondes',
+        '1'
+      ])
+      const r = await agirHdesk(process.cwd(), { id, x: 120, y: 150 }, reg)
+      expect(r.ok, JSON.stringify(r)).toBe(true)
+      expect(lignes(reg, id).at(-1)).toMatchObject({ ok: true, x: 120, y: 150, clic: true })
+    } finally {
+      try {
+        script('hdesk-fermer.ps1', [
+          '-Id',
+          id,
+          '-Conversation',
+          'conv-344',
+          '-Registre',
+          reg,
+          '-DelaiDouxSecondes',
+          '1'
+        ])
+      } catch {
+        /* le filet ne doit pas masquer l'échec du test */
+      }
+      rmSync(reg, { recursive: true, force: true })
+      rmSync(fixtures, { recursive: true, force: true })
+    }
+  }, 90000)
+
+  it('journal borné aux 200 dernières lignes', async () => {
+    const reg = mkdtempSync(join(tmpdir(), 'hdesk-gestes-'))
+    const id = `kzgesteb${process.pid}`
+    writeFileSync(
+      join(reg, `${id}.gestes.jsonl`),
+      Array.from({ length: 205 }, (_, i) => JSON.stringify({ n: i })).join('\n') + '\n'
+    )
+    try {
+      await agirHdesk(process.cwd(), { id, x: 1, y: 2, touche: 'Tab', sansClic: true }, reg)
+      const l = lignes(reg, id)
+      expect(l).toHaveLength(200)
+      expect(l.at(-1)).toMatchObject({ touche: 'Tab', clic: false, x: 1, y: 2 })
+      expect(l[0]).toEqual({ n: 6 })
+    } finally {
+      rmSync(reg, { recursive: true, force: true })
+    }
+  }, 30000)
+})
+
+describe('bureau caché fermé — le journal des gestes part avec lui', () => {
+  it('efface <id>.gestes.jsonl des bureaux fermés, fiche ou pas ; garde celui des vivants', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-purge-gestes-'))
+    writeFileSync(join(d, 'mort.json'), JSON.stringify({ id: 'mort' }))
+    for (const id of ['mort', 'vivant', 'ui-capture-1'])
+      writeFileSync(join(d, `${id}.gestes.jsonl`), '{"ok":true}\n')
+    purgerBureauxFermes(d, ['vivant'])
+    expect(existsSync(join(d, 'mort.gestes.jsonl'))).toBe(false)
+    expect(existsSync(join(d, 'ui-capture-1.gestes.jsonl'))).toBe(false)
+    expect(existsSync(join(d, 'vivant.gestes.jsonl'))).toBe(true)
+    rmSync(d, { recursive: true, force: true })
+  })
 })
 
 import { resultatAct } from './hdesk-tv'
