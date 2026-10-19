@@ -186,6 +186,7 @@ import { collectStdoutJournals, journauxReferencesParUneReservation } from './ru
 import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
+import { interfaceVisible } from './startup-gate'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
   closeConvRun,
@@ -242,18 +243,9 @@ import {
   loadPromptCalls,
   applyRecoveredUsage,
   costSamplesFrom,
-  summarizeCostSamples,
-  cheminPromptCalls
+  summarizeCostSamples
 } from './activity/prompt-observability'
-import {
-  doitMigrerLaConversation,
-  ecrireEtatMigration,
-  empreinteFichier,
-  lireEtatMigration,
-  type EtatMigrationTraces
-} from './activity/migration-traces-etat'
 import { recoverUnpricedCallsUsage } from './activity/cli-usage-recovery'
-import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
 import { installTraceEventSink, TraceStore } from './activity/trace-store'
@@ -1568,55 +1560,92 @@ function askModelQuestion(
 // Racine des journaux de SORTIE BRUTE des CLI (mode détaché opt-in AUTOWIN_DETACHED_RUNS=1) :
 // transmise aux providers par l'environnement, pour qu'ils n'aient pas à connaître Electron.
 process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdout')
-// Un journal est ecrit a CHAQUE spawn de CLI et rien ne les supprimait : 435 fichiers / 10,6 Mo
-// mesures en 2 jours d'usage. Passe au demarrage (les runs detaches en cours sont proteges par la
-// garde d'inactivite du GC), best-effort : un echec de menage ne doit jamais retarder l'app.
-//
-// PROTECTION PAR REFERENCE (2026-09-06). La garde d'inactivite ne suffisait pas : le journal de
-// l'agent `build` de conv-43 a ete supprime a 43 h alors que son appel provider n'etait pas solde.
-// Son run est devenu insolvable et s'est rejoue rouge a chaque demarrage. On passe donc au menage la
-// liste des journaux qu'un point de reprise ATTEND encore — un fait, pas une date.
-try {
-  const journauxAttendus = journauxReferencesParUneReservation(
-    loadOrchestrationStates(join(ensureAutowinAppData(), 'run-state'))
-  )
-  const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT, {
-    protectedPaths: journauxAttendus
-  })
-  // Ces chiffres n'existaient que le temps d'un `console.log` de demarrage : on les RETIENT pour
-  // que l'interface puisse enfin montrer ce que le menage a libere.
-  retenirMenageDemarrage({
-    famille: 'run-stdout',
-    supprimes: collected.removed,
-    octetsLiberes: collected.freedBytes
-  })
-  if (collected.removed > 0) {
-    console.log(
-      `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`
+/**
+ * LES MÉNAGES DE DÉMARRAGE, lancés APRÈS l'affichage de la fenêtre (`interfaceVisible`, dans
+ * `app.whenReady`) et en lectures non bloquantes, un fichier à la fois.
+ *
+ * Mesure du 2026-10-19 (`gels.jsonl`, conv-359) : avant la fenêtre, les ménages de `run-stdout/`
+ * (209 `statSync`, 8 s), de `causal-trace/` et des workspaces de runs (108 `openSync` + 120
+ * `readSync`, 16,7 s) figeaient le démarrage du matin sur le disque D: saturé, alors qu'aucun n'est
+ * nécessaire pour afficher quoi que ce soit. Ils s'enchaînent ici, l'un après l'autre : lancés
+ * ensemble, ils se disputeraient le même disque mécanique.
+ */
+async function menagesApresAffichage(): Promise<void> {
+  // Un journal est ecrit a CHAQUE spawn de CLI et rien ne les supprimait : 435 fichiers / 10,6 Mo
+  // mesures en 2 jours d'usage. Les runs detaches en cours sont proteges par la garde d'inactivite
+  // du GC ; best-effort : un echec de menage ne doit jamais gener l'app.
+  //
+  // PROTECTION PAR REFERENCE (2026-09-06). La garde d'inactivite ne suffisait pas : le journal de
+  // l'agent `build` de conv-43 a ete supprime a 43 h alors que son appel provider n'etait pas solde.
+  // Son run est devenu insolvable et s'est rejoue rouge a chaque demarrage. On passe donc au menage
+  // la liste des journaux qu'un point de reprise ATTEND encore — un fait, pas une date.
+  try {
+    const journauxAttendus = journauxReferencesParUneReservation(
+      loadOrchestrationStates(join(ensureAutowinAppData(), 'run-state'))
     )
+    const collected = await collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT!, {
+      protectedPaths: journauxAttendus
+    })
+    // Ces chiffres n'existaient que le temps d'un `console.log` de demarrage : on les RETIENT pour
+    // que l'interface puisse enfin montrer ce que le menage a libere.
+    retenirMenageDemarrage({
+      famille: 'run-stdout',
+      supprimes: collected.removed,
+      octetsLiberes: collected.freedBytes
+    })
+    if (collected.removed > 0) {
+      console.log(
+        `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`
+      )
+    }
+  } catch {
+    /* menage best-effort */
   }
-} catch {
-  /* menage best-effort : jamais bloquant au demarrage */
-}
-// Traces causales : rien ne bornait cet arbre — 441 fichiers / 668 Mo en 12 jours mesurés le
-// 2026-09-12, premier poste de volume de `.autowin-data` et cause dominante des gels (83 des
-// 117 gels du jour sont des entrées-sorties disque synchrones). Même fenêtre de 7 jours que les
-// journaux de tour. Best-effort : un échec de ménage ne retarde jamais le démarrage.
-try {
-  const tracesPurgees = collectCausalTraces(join(app.getPath('userData'), 'causal-trace'))
-  retenirMenageDemarrage({
-    famille: 'causal-trace',
-    supprimes: tracesPurgees.removed,
-    octetsLiberes: tracesPurgees.freedBytes,
-    restants: tracesPurgees.remaining
-  })
-  if (tracesPurgees.removed > 0) {
-    console.log(
-      `[causal-trace] ${tracesPurgees.removed} traces purgees (${Math.round(tracesPurgees.freedBytes / 1048576)} Mo), reste ${tracesPurgees.remaining}`
-    )
+  // Traces causales : rien ne bornait cet arbre — 441 fichiers / 668 Mo en 12 jours mesurés le
+  // 2026-09-12. Même fenêtre de 7 jours que les journaux de tour. Lancé AVANT la fenêtre, aucune
+  // conversation ne pouvait écrire ; maintenant si : une conversation touchée depuis le démarrage
+  // est protégée, quel que soit l'âge de sa trace (et `collectCausalTraces` relit chaque trace
+  // juste avant de la supprimer).
+  try {
+    const tracesPurgees = await collectCausalTraces(join(app.getPath('userData'), 'causal-trace'), {
+      protectedConversationIds: os.conversations
+        .list()
+        .filter((conversation) => conversation.updatedAt >= T0_DEMARRAGE)
+        .map((conversation) => conversation.id)
+    })
+    retenirMenageDemarrage({
+      famille: 'causal-trace',
+      supprimes: tracesPurgees.removed,
+      octetsLiberes: tracesPurgees.freedBytes,
+      restants: tracesPurgees.remaining
+    })
+    if (tracesPurgees.removed > 0) {
+      console.log(
+        `[causal-trace] ${tracesPurgees.removed} traces purgees (${Math.round(tracesPurgees.freedBytes / 1048576)} Mo), reste ${tracesPurgees.remaining}`
+      )
+    }
+  } catch {
+    /* menage best-effort */
   }
-} catch {
-  /* menage best-effort : jamais bloquant au demarrage */
+  // RAMASSE-MIETTES DES WORKSPACES DE RUNS. La réconciliation des runs abandonnés ne SUPPRIME rien :
+  // elle repeint `open` en `red`, donc elle fait grossir la population de bloqués. Mesuré le
+  // 2026-08-18 sur la racine dev : 11 784 RUN.md dont 9 341 verts — c'est là qu'est la masse.
+  // Trois gardes cumulatives (non clos jamais touché · moins de 7 j gardé · 50 plus récents par
+  // conversation gardés) + les runs reprenables explicitement protégés. Voir `workspace-gc.ts`.
+  try {
+    const gc = await collectRunWorkspaces(convRunsRoot(), {
+      protectedRunIds: os.resumableOrchestrations().map((state) => state.runId)
+    })
+    if (gc.removed || gc.remaining) {
+      // Journalisé, jamais muet : une suppression de masse silencieuse est indéfendable.
+      console.log(
+        `[runs] GC workspaces : ${gc.removed} dossier(s) clos et anciens supprimé(s), ${gc.remaining} au prochain démarrage`
+      )
+      for (const chemin of gc.paths) console.log('[runs] GC workspace supprimé', chemin)
+    }
+  } catch (error) {
+    console.warn('[runs] GC des workspaces de runs impossible', error)
+  }
 }
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
@@ -4627,97 +4656,6 @@ Le fil reprend ensuite normalement.`
     // externe (spool externe retiré).
     return readNativePreflight(nativeSpoolRoot(), 100)
   }
-  const migrateLegacyCausalTraces = (): void => {
-    const nativePreflight = loadNativeTraces()
-    /*
-     * NE PAS REFAIRE CE QUI EST DÉJÀ FAIT. Cette migration est idempotente, mais elle relisait la
-     * trace causale ET le journal de prompts de CHAQUE conversation à CHAQUE démarrage : mesure du
-     * 2026-09-05 (`gels.jsonl`), 3579 ms de fenêtre figée dont 1347 ms dans 283 `readFileSync`, et
-     * ce coût grandit à chaque conversation créée. On compare désormais une empreinte (`statSync`)
-     * avant d'ouvrir quoi que ce soit ; au moindre doute on migre comme avant.
-     */
-    const cheminEtat = join(ensureAutowinAppData(), 'migration-traces-causales.json')
-    const etatPrecedent = lireEtatMigration(cheminEtat)
-    const empreinteSpool = empreinteFichier(nativeSpoolRoot())
-    const etatSuivant: EtatMigrationTraces = { spool: empreinteSpool, conversations: {} }
-    for (const conversation of os.conversations.list()) {
-      const conversationId = conversation.id
-      const empreintePrompts = empreinteFichier(cheminPromptCalls(conversationId))
-      if (
-        !doitMigrerLaConversation(conversationId, empreintePrompts, etatPrecedent, empreinteSpool)
-      ) {
-        // Rien n'a bougé : on reporte tel quel ce qu'on savait, sans ouvrir un seul fichier.
-        etatSuivant.conversations[conversationId] = etatPrecedent!.conversations[conversationId]
-        continue
-      }
-      const events = causalTrace.readConversation(conversationId)
-      const knownIds = new Set(events.map((traceEvent) => traceEvent.id))
-      let nextSequence = events.length
-        ? Math.max(...events.map((traceEvent) => traceEvent.sequence)) + 1
-        : 0
-      const nativeCalls = loadPromptCalls(conversationId)
-      for (const call of nativeCalls) {
-        if (knownIds.has(`${call.id}:0`)) continue
-        for (const traceEvent of promptCallToTraceEvents(call, nextSequence)) {
-          causalTrace.append(traceEvent)
-          knownIds.add(traceEvent.id)
-          nextSequence = traceEvent.sequence + 1
-        }
-      }
-      // Anti-double-frontière : une conversation avec des appels NATIFS Autowin (codex/claude)
-      // porte déjà sa propre frontière par appel. Les préflight legacy dupliqueraient la
-      // même frontière dans la timeline → on ne les fusionne QUE pour les convs sans natif
-      // (aucun appel natif). Les diagnostics globaux restent disponibles via promptTracesGlobal.
-      const preflightTraces = nativeCalls.length
-        ? []
-        : filterNativePreflight(nativePreflight, conversationId)
-      for (const trace of preflightTraces) {
-        const id = `native:${trace.apiRequestId}`
-        if (knownIds.has(id)) continue
-        causalTrace.append({
-          schema: 'autowin.trace/v1',
-          id,
-          conversationId,
-          turnId: trace.turnId,
-          timestamp: trace.timestamp,
-          sequence: nextSequence++,
-          type: 'boundary',
-          status: 'completed',
-          actor: { id: 'native', kind: 'hook', label: 'Trace préflight' },
-          recipient: { id: trace.provider, kind: 'provider', label: trace.provider },
-          channel: 'internal',
-          payloads: [
-            {
-              kind: 'resource',
-              name: 'Requête native',
-              mediaType: 'application/json',
-              content: JSON.stringify(trace.request)
-            }
-          ],
-          observation: {
-            boundary: trace.boundary,
-            fidelity: 'exact',
-            limitation: 'Secrets masqués avant persistance.'
-          },
-          provider: {
-            id: trace.provider,
-            model: trace.model,
-            transport: trace.apiMode,
-            sessionId: trace.sessionId
-          }
-        })
-        knownIds.add(id)
-      }
-      // Ce qu'on vient de migrer, et de quoi cette conversation dépendait : c'est ce qui permettra
-      // de la sauter au prochain démarrage si rien n'a bougé.
-      etatSuivant.conversations[conversationId] = {
-        prompts: empreintePrompts,
-        natif: nativeCalls.length > 0
-      }
-    }
-    ecrireEtatMigration(cheminEtat, etatSuivant)
-  }
-  migrateLegacyCausalTraces()
   ipcMain.handle('os:promptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Native trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
@@ -5079,27 +5017,12 @@ app.whenReady().then(async () => {
     .catch((error: unknown) => {
       console.warn('[runs] réconciliation des runs abandonnés impossible', error)
     })
+  // Ménages de `run-stdout/`, `causal-trace/` et des workspaces de runs : APRÈS l'affichage de la
+  // fenêtre, en lectures non bloquantes (voir `menagesApresAffichage`).
+  void interfaceVisible.then(() =>
+    pendantOperation('menage:apres-affichage', menagesApresAffichage)
+  )
   setImmediate(() => {
-    // RAMASSE-MIETTES DES WORKSPACES DE RUNS. La réconciliation ci-dessus ne SUPPRIME rien : elle
-    // repeint `open` en `red`, donc elle fait grossir la population de bloqués. Mesuré le
-    // 2026-08-18 sur la racine dev : 11 784 RUN.md dont 9 341 verts — c'est là qu'est la masse.
-    // Trois gardes cumulatives (non clos jamais touché · moins de 7 j gardé · 50 plus récents par
-    // conversation gardés) + les runs reprenables explicitement protégés. Voir `workspace-gc.ts`.
-    try {
-      const gc = collectRunWorkspaces(convRunsRoot(), {
-        protectedRunIds: os.resumableOrchestrations().map((state) => state.runId)
-      })
-      if (gc.removed || gc.remaining) {
-        // Journalisé, jamais muet : une suppression de masse silencieuse est indéfendable.
-        console.log(
-          `[runs] GC workspaces : ${gc.removed} dossier(s) clos et anciens supprimé(s), ${gc.remaining} au prochain démarrage`
-        )
-        for (const chemin of gc.paths) console.log('[runs] GC workspace supprimé', chemin)
-      }
-    } catch (error) {
-      console.warn('[runs] GC des workspaces de runs impossible', error)
-    }
-
     // COPIES ISOLÉES ORPHELINES. Un run tué avec l'app laisse son bureau isolé sur le disque ;
     // il est déjà marqué `interrupted` par le coordinateur, mais restait introuvable. On les NOMME
     // ici. Jamais de suppression automatique : le travail de l'agent est récupérable, et une

@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs'
+import { open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { supprimerArbre } from '../fs-supprimer'
 
@@ -142,51 +142,57 @@ export function planWorkspaceGc(
 }
 
 /** Lit le `status:` en tête d'un RUN.md sans charger le document. */
-function lireStatut(runPath: string): string {
-  const tampon = Buffer.alloc(96)
-  let fd: number | undefined
+async function lireStatut(runPath: string): Promise<string> {
+  let fichier: Awaited<ReturnType<typeof open>> | undefined
   try {
-    fd = openSync(runPath, 'r')
-    const lus = readSync(fd, tampon, 0, tampon.length, 0)
-    const tete = tampon.subarray(0, lus).toString('utf8')
+    fichier = await open(runPath, 'r')
+    const { bytesRead, buffer } = await fichier.read(Buffer.alloc(96), 0, 96, 0)
+    const tete = buffer.subarray(0, bytesRead).toString('utf8')
     return tete.match(/^\s*status:\s*(\S+)/i)?.[1].toLowerCase() ?? 'unknown'
   } catch {
     return 'unknown' // illisible = non clos = protégé
   } finally {
-    if (fd !== undefined) closeSync(fd)
+    await fichier?.close().catch(() => undefined)
   }
 }
 
-/** Inventorie les workspaces sous la racine des runs de conversation. */
-function inventoryRunWorkspaces(root: string): WorkspaceEntry[] {
+/** Le workspace tel qu'il est sur le disque À CET INSTANT, ou `undefined` s'il n'en est pas un. */
+async function lireWorkspace(dossier: string, convId: string): Promise<WorkspaceEntry | undefined> {
+  const runPath = join(dossier, 'RUN.md')
+  try {
+    const { mtimeMs } = await stat(runPath)
+    return { path: dossier, convId, status: await lireStatut(runPath), modifiedMs: mtimeMs }
+  } catch {
+    return undefined // pas de RUN.md ici : ce n'est pas un workspace de run, on n'y touche pas
+  }
+}
+
+/**
+ * Inventorie les workspaces sous la racine des runs de conversation.
+ *
+ * ASYNCHRONE, un RUN.md à la fois : mesure du 2026-10-19 (`gels.jsonl`, conv-359), la version
+ * synchrone ouvrait et lisait chaque RUN.md sur le fil de la fenêtre qui se charge — 108 `openSync`
+ * et 120 `readSync`, 16,7 s de fenêtre figée sur le disque D: saturé.
+ */
+async function inventoryRunWorkspaces(root: string): Promise<WorkspaceEntry[]> {
   const entries: WorkspaceEntry[] = []
   let convs: string[]
   try {
-    convs = readdirSync(root)
+    convs = await readdir(root)
   } catch {
     return entries // racine absente : rien à faire, et surtout rien à casser
   }
   for (const convId of convs) {
     let workspaces: string[]
     try {
-      workspaces = readdirSync(join(root, convId))
+      workspaces = await readdir(join(root, convId))
     } catch {
       continue
     }
     for (const ws of workspaces) {
       if (!ws.endsWith('-workspace')) continue
-      const dossier = join(root, convId, ws)
-      const runPath = join(dossier, 'RUN.md')
-      try {
-        entries.push({
-          path: dossier,
-          convId,
-          status: lireStatut(runPath),
-          modifiedMs: statSync(runPath).mtimeMs
-        })
-      } catch {
-        /* pas de RUN.md ici : ce n'est pas un workspace de run, on n'y touche pas */
-      }
+      const entree = await lireWorkspace(join(root, convId, ws), convId)
+      if (entree) entries.push(entree)
     }
   }
   return entries
@@ -204,14 +210,28 @@ export interface WorkspaceGcOutcome {
  * passe. La sûreté vient UNIQUEMENT de `planWorkspaceGc` — un dossier verrouillé par un run vivant
  * n'est pas protégé par l'OS sous Windows (libuv ouvre en FILE_SHARE_DELETE).
  */
-export function collectRunWorkspaces(
+export async function collectRunWorkspaces(
   root: string,
   policy: Partial<WorkspaceGcPolicy> = {}
-): WorkspaceGcOutcome {
-  const plan = planWorkspaceGc(inventoryRunWorkspaces(root), { nowMs: Date.now(), ...policy })
+): Promise<WorkspaceGcOutcome> {
+  const entries = await inventoryRunWorkspaces(root)
+  const inventaire = new Map(entries.map((entry) => [entry.path, entry]))
+  const plan = planWorkspaceGc(entries, { nowMs: Date.now(), ...policy })
   const paths: string[] = []
   for (const dossier of plan.doomed) {
     try {
+      // L'inventaire a pu vieillir pendant la passe : un RUN.md qui a bougé depuis (statut repeint,
+      // run repris) est épargné. La suppression reste `supprimerArbre`, SYNCHRONE à dessein : elle
+      // seule retire une jonction sans vider sa cible (voir fs-supprimer.ts), et elle ne touche que
+      // les quelques dossiers condamnés, pas tout l'arbre.
+      const avant = inventaire.get(dossier)
+      const maintenant = await lireWorkspace(dossier, avant?.convId ?? '')
+      if (
+        !maintenant ||
+        maintenant.modifiedMs !== avant?.modifiedMs ||
+        maintenant.status !== avant?.status
+      )
+        continue
       supprimerArbre(dossier)
       paths.push(dossier)
     } catch {

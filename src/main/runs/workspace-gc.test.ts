@@ -150,13 +150,13 @@ describe('collectRunWorkspaces — l applicateur mince', () => {
     return dossier
   }
 
-  it('supprime le DOSSIER entier — le sidecar trace.json ne reste pas orphelin', () => {
+  it('supprime le DOSSIER entier — le sidecar trace.json ne reste pas orphelin', async () => {
     const root = racine()
     const vieuxVert = workspace(root, 'conv-1', 'ancien', 'green', 60)
     const jeuneVert = workspace(root, 'conv-1', 'recent', 'green', 1)
     const vieuxRouge = workspace(root, 'conv-1', 'echec', 'red', 60)
 
-    const bilan = collectRunWorkspaces(root, { maxPerConversation: 1 })
+    const bilan = await collectRunWorkspaces(root, { maxPerConversation: 1 })
 
     expect(bilan.removed).toBe(1)
     expect(bilan.paths).toEqual([vieuxVert])
@@ -166,8 +166,8 @@ describe('collectRunWorkspaces — l applicateur mince', () => {
     expect(existsSync(vieuxRouge)).toBe(true) // non clos : intact, quel que soit son age
   })
 
-  it('une racine absente n est pas une erreur', () => {
-    expect(collectRunWorkspaces(join(tmpdir(), 'autowin-gc-inexistant-xyz'))).toEqual({
+  it('une racine absente n est pas une erreur', async () => {
+    expect(await collectRunWorkspaces(join(tmpdir(), 'autowin-gc-inexistant-xyz'))).toEqual({
       removed: 0,
       remaining: 0,
       paths: []

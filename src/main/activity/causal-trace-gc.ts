@@ -1,4 +1,4 @@
-import { readdirSync, rmSync, statSync } from 'node:fs'
+import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
@@ -79,25 +79,26 @@ export function planCausalTraceGc(
 }
 
 /** Inventorie les traces d'un dossier `causal-trace/`. Les sidecars cachés sont ignorés. */
-export function inventoryCausalTraces(root: string): CausalTraceEntry[] {
+export async function inventoryCausalTraces(root: string): Promise<CausalTraceEntry[]> {
   let names: string[]
   try {
-    names = readdirSync(root)
+    names = await readdir(root)
   } catch {
     return []
   }
   const entries: CausalTraceEntry[] = []
+  // Un fichier à la fois : sur un disque mécanique, des lectures en rafale se gênent.
   for (const name of names) {
     if (name.startsWith('.') || !name.endsWith('.jsonl')) continue
     const path = join(root, name)
     try {
-      const stat = statSync(path)
-      if (!stat.isFile()) continue
+      const infos = await stat(path)
+      if (!infos.isFile()) continue
       entries.push({
         path,
         conversationId: name.slice(0, -'.jsonl'.length),
-        size: stat.size,
-        modifiedMs: stat.mtimeMs
+        size: infos.size,
+        modifiedMs: infos.mtimeMs
       })
     } catch {
       /* disparu entre le listing et le stat */
@@ -112,21 +113,33 @@ export interface CausalTraceGcOutcome {
   remaining: number
 }
 
-/** Applique le plan. La sûreté vient UNIQUEMENT de `planCausalTraceGc`. */
-export function collectCausalTraces(
+/**
+ * Applique le plan. La sûreté vient UNIQUEMENT de `planCausalTraceGc`.
+ *
+ * ASYNCHRONE, et lancée APRÈS l'affichage de la fenêtre (index.ts, `interfaceVisible`) : mesure du
+ * 2026-10-19 (conv-359), un `statSync` par trace au démarrage, sur le disque D: saturé. Lancée
+ * avant, aucune conversation ne pouvait encore écrire ; lancée après, une conversation ancienne que
+ * l'utilisateur rouvre peut se remettre à écrire PENDANT la passe. D'où deux gardes : l'appelant
+ * protège les conversations touchées depuis le démarrage (`protectedConversationIds`), et chaque
+ * trace est relue juste avant sa suppression — épargnée si elle a bougé depuis l'inventaire.
+ */
+export async function collectCausalTraces(
   root: string,
   policy: Partial<CausalTraceGcPolicy> = {}
-): CausalTraceGcOutcome {
-  const entries = inventoryCausalTraces(root)
-  const tailles = new Map(entries.map((entry) => [entry.path, entry.size]))
+): Promise<CausalTraceGcOutcome> {
+  const entries = await inventoryCausalTraces(root)
+  const inventaire = new Map(entries.map((entry) => [entry.path, entry]))
   const plan = planCausalTraceGc(entries, { nowMs: Date.now(), ...policy })
   let removed = 0
   let freedBytes = 0
   for (const path of plan.doomed) {
     try {
-      rmSync(path, { force: true })
+      const avant = inventaire.get(path)
+      const maintenant = await stat(path)
+      if (maintenant.mtimeMs !== avant?.modifiedMs || maintenant.size !== avant?.size) continue
+      await rm(path, { force: true })
       removed += 1
-      freedBytes += tailles.get(path) ?? 0
+      freedBytes += avant?.size ?? 0
     } catch {
       /* verrouillé ou déjà parti : le prochain passage s'en chargera */
     }
