@@ -140,9 +140,16 @@ import {
   agirHdesk,
   basculerHdesk,
   fermerHdesk,
+  lireRegistre,
   type GesteTv
 } from './hdesk-tv'
-import { bureauxGeres, choisirExecutable, creerBureau, fermerBureauGere } from './hdesk-gestion'
+import {
+  bureauxGeres,
+  choisirExecutable,
+  creerBureau,
+  fermerBureauGere,
+  registreParDefaut
+} from './hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
@@ -1680,6 +1687,14 @@ bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) 
 // `app.asar.unpacked` une fois installee.
 bus.fermerBureauCache = (demande) =>
   fermerHdesk(racineScriptsHorsArchive(app.getAppPath()), demande)
+// Outils `bureau_cache_lancer / observer / agir` (conv-344) : mêmes chemins que la vue « Bureaux
+// cachés » — lanceur détaché (l'app survit au tour), processus de capture déjà ouvert, hdesk-act.
+bus.lancerBureauCache = (demande) =>
+  creerBureau(racineScriptsHorsArchive(app.getAppPath()), demande)
+bus.observerBureauCache = (id) =>
+  (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath()))).image(id)
+bus.agirBureauCache = (geste) => agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
+bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.id === id)
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )

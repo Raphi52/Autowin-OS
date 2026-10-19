@@ -31,6 +31,12 @@ describe('pilotage non invasif par defaut', () => {
     expect(prompt).toContain('ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR')
     // conv-344 : code 2 du lanceur = app arrêtée AVANT sa fenêtre (instance unique, plantage).
     expect(prompt).toMatch(/2 = l'app s'est arretee avant sa fenetre/)
+    // conv-344 (scout n°4) : les outils dédiés passent AVANT les commandes recopiées.
+    for (const outil of ['bureau_cache_lancer', 'bureau_cache_observer', 'bureau_cache_agir'])
+      expect(prompt.indexOf(outil), outil).toBeGreaterThan(-1)
+    expect(prompt.indexOf('bureau_cache_lancer')).toBeLessThan(
+      prompt.indexOf('scripts/hdesk-lancer.ps1')
+    )
     expect(prompt).toContain('journalWindows')
     expect(prompt).not.toContain('pid disparu')
   })

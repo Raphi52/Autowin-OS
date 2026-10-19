@@ -136,7 +136,12 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
   // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
   `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique — pour ` +
-  `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
+  `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache. ` +
+  // OUTILS DEDIES D'ABORD (conv-344, scout n°4) : recopier les commandes ci-dessous donnait des
+  // identifiants inventes et des fils oublies ; les outils fixent le fil et l'identifiant.
+  `Tes OUTILS d'abord : \`bureau_cache_lancer\` (le fil et ton identifiant de bureau sont fixes pour toi), ` +
+  `\`bureau_cache_observer\` (la capture t'est jointe), \`bureau_cache_agir\` (clic, frappe, touche, molette, ` +
+  `aux pixels de la capture), \`bureau_cache_fermer\`. Sans ces outils : \`powershell -NoProfile -File ` +
   `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
   `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
   // CODE EN COURS (2026-09-26, conv-863) : sans `--code-dev`, l'instance cachee lance le binaire
