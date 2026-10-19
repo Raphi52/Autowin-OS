@@ -40,6 +40,7 @@ import {
   captureMutationTraceBase
 } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
+import { avertirSiLeconNonRetenue, ecritUnFichierDeMemoire } from './lecon-non-retenue'
 import {
   buildTurnMessageBlocks,
   exigeAgirPasAnnoncer,
@@ -1309,6 +1310,8 @@ export class AgentPilot {
      * verite au texte deja livre.
      */
     let refusRememberAuxiliaire: string | undefined
+    /** Un `remember` accepté ou une note de mémoire écrite CE tour : une « Leçon : » est retenue. */
+    let depotMemoireCeTour = false
     /** Le raccourci `remember` a AVALE la garde de cloture : une relance est due (voir plus bas). */
     let consigneClotureApresRemember = false
     /**
@@ -2053,6 +2056,7 @@ export class AgentPilot {
         // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
         // precedent, sinon la cloture porterait un « NON deposee » dementi par la reprise.
         refusRememberAuxiliaire = motifDepotMemoireNonAbouti(r)
+        if (!refusRememberAuxiliaire) depotMemoireCeTour = true
       }
       /*
        * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
@@ -2225,11 +2229,13 @@ export class AgentPilot {
        * l'utilisateur n'apprenaient que rien n'avait ete ecrit. La mention est donc portee par le
        * point de cloture COMMUN, et elle s'efface d'elle-meme quand un depot rejoue reussit.
        */
+      // Une « Leçon : » écrite sans AUCUN dépôt dans le tour le dit aussi (conv-335) ; un refus
+      // encore debout le dit déjà, d'où l'une OU l'autre mention, jamais les deux.
       return refusRememberAuxiliaire
         ? `${texte}
 
 ⚠️ Mémoire NON déposée — ${refusRememberAuxiliaire}`
-        : texte
+        : avertirSiLeconNonRetenue(texte, depotMemoireCeTour)
     }
     // L'etat ENTIER part deja dans le premier message du tour : les iterations suivantes n'en
     // repoussent que le DELTA (voir `etat-diff.ts`).
@@ -2528,6 +2534,7 @@ export class AgentPilot {
               if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
               // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
               if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
+              if (ecritUnFichierDeMemoire(statutEntier)) depotMemoireCeTour = true
               // Un outil direct de l'app a DEJA sa carte d'action : son battement la doublerait.
               if (estUnOutilDirectDuChat(chunk.status)) return
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
