@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   872 regles, 1251 declarations. Voir genererNinjaClaude.
+   873 regles, 1252 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -412,11 +412,14 @@
 :root[data-theme='ninja-claude'] .cadrage-hyp .askd-badge {
     border: 1px solid rgba(215, 110, 76, 0.45)
 }
-:root[data-theme='ninja-claude'] .cadrage-hyp-masquer {
+:root[data-theme='ninja-claude'] .cadrage-hyp-plier {
     color: rgb(187, 185, 178)
 }
-:root[data-theme='ninja-claude'] .cadrage-hyp-masquer:hover {
+:root[data-theme='ninja-claude'] .cadrage-hyp-plier:hover {
     color: rgb(231, 230, 228)
+}
+:root[data-theme='ninja-claude'] .cadrage-hyp-compte {
+    color: rgb(187, 185, 178)
 }
 
 /* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */

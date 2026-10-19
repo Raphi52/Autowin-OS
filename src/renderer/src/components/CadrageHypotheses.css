@@ -20,20 +20,63 @@
   font-size: 13px;
   font-weight: 600;
 }
-.cadrage-hyp-masquer {
+/*
+ * REPLI SUR UNE LIGNE (conv-358, 19/10 : « remplace la croix par une fleche down up »). La fleche
+ * remplace la croix qui faisait disparaitre le bloc. Chevron DESSINE par deux bords, comme celui des
+ * capsules du fil (anneau-activite.css) : bas = deplie, haut = replie (inverse a la demande, conv-358).
+ */
+.cadrage-hyp-plier {
   margin-left: auto;
+  align-self: center;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   background: none;
   border: 0;
+  border-radius: 6px;
   color: #a9b2c4;
-  font:
-    15px/1 ui-monospace,
-    Consolas,
-    monospace;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0;
 }
-.cadrage-hyp-masquer:hover {
+.cadrage-hyp-plier:hover {
   color: #dde3ee;
+}
+.cadrage-hyp-chevron {
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  /* Ouvert : pointe vers le BAS. Le decalage recentre l'œil sur la pointe, pas sur la boite. */
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.cadrage-hyp.is-replie .cadrage-hyp-chevron {
+  transform: translateY(2px) rotate(-135deg);
+}
+/* Replie : une seule ligne. La phrase cede la place (ellipse), le compte et la fleche restent. */
+.cadrage-hyp.is-replie .askd-tete {
+  align-items: center;
+  padding-bottom: 0;
+}
+.cadrage-hyp.is-replie .askd-question {
+  /* `contain: inline-size` : la phrase sur une ligne n'impose PAS sa largeur aux parents. Sans lui,
+     mesure du 19/10 : bloc replie large de 1140 px dans une fenetre de 1000, fleche hors champ. */
+  contain: inline-size;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cadrage-hyp-compte {
+  flex: none;
+  font-size: 12px;
+  color: #a9b2c4;
+  white-space: nowrap;
 }
 /* « Corriger » est un mot, pas une touche : il ne doit pas se lire comme un raccourci clavier. */
 .cadrage-hyp .askd-entree {

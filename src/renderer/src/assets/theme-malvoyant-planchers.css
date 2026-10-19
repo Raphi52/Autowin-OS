@@ -155,8 +155,9 @@
 }
 
 /* components/CadrageHypotheses.css — gris en dur */
-:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer,
-:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer:hover {
+:root[data-theme^='malvoyant-'] .cadrage-hyp-plier,
+:root[data-theme^='malvoyant-'] .cadrage-hyp-plier:hover,
+:root[data-theme^='malvoyant-'] .cadrage-hyp-compte {
   color: var(--text);
 }
 

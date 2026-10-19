@@ -1003,12 +1003,20 @@ export function ChatView({
   const autoFilAmorceRef = useRef<string | null>(null)
   /*
    * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
-   * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
-   * arrive. Rien n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
+   * evenement de run, sont remplacees par un nouveau cadrage et disparaissent a la fin du run. Rien
+   * n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
    */
   const [hypothesesCadrage, setHypothesesCadrage] = useState<Record<string, HypotheseDeCadrage[]>>(
     {}
   )
+  /*
+   * REPLI DU BLOC CADRAGE, PAR CONVERSATION (conv-358, 19/10 : « garde l'etat replie [...] pour qu'il
+   * reste ferme quand je change de fil et que je reviens »). La valeur est le run replie : un cadrage
+   * d'un AUTRE run arrive ouvert (suppositions neuves), meme si la fin du precedent s'est perdue.
+   * La fin du run efface l'entree avec les suppositions.
+   */
+  const [cadrageReplie, setCadrageReplie] = useState<Record<string, string>>({})
+  const runDuCadrageRef = useRef<Record<string, string>>({})
   /**
    * Palette `/` déduite des skills réellement installées. MÊME source que l'exécutabilité et que la
    * palette de briques (`useSkillsInventory`) : deux lectures écrites à la main divergeraient, et
@@ -2721,7 +2729,15 @@ export function ChatView({
       ) {
         const convId = e.convId
         const recues = e.hypotheses as HypotheseDeCadrage[]
+        const run = typeof e.runPath === 'string' ? e.runPath : ''
+        runDuCadrageRef.current[convId] = run
         setHypothesesCadrage((current) => ({ ...current, [convId]: recues }))
+        setCadrageReplie((current) => {
+          if (current[convId] === undefined || current[convId] === run) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
       } else if (e.type === 'orchestrate-end' && e.convId) {
         const convId = e.convId
         const runPath = e.runPath
@@ -2740,6 +2756,13 @@ export function ChatView({
           delete suivant[convId]
           return suivant
         })
+        setCadrageReplie((current) => {
+          if (current[convId] === undefined) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
+        delete runDuCadrageRef.current[convId]
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, {
             type: 'end',
@@ -7791,10 +7814,12 @@ Cliquer pour choisir une autre branche.`}
                   <CadrageHypotheses
                     hypotheses={hypothesesCadrage[activeId]}
                     onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
-                    onMasquer={() =>
-                      setHypothesesCadrage((current) => {
+                    replie={cadrageReplie[activeId] !== undefined}
+                    onBasculerRepli={() =>
+                      setCadrageReplie((current) => {
                         const suivant = { ...current }
-                        delete suivant[activeId]
+                        if (suivant[activeId] !== undefined) delete suivant[activeId]
+                        else suivant[activeId] = runDuCadrageRef.current[activeId] ?? ''
                         return suivant
                       })
                     }
