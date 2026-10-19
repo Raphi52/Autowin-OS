@@ -85,7 +85,12 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
     const emit = await monter()
     await act(async () => emit(evenement('A')))
     await act(async () =>
-      emit({ type: 'orchestrate-end', convId: 'conv-etrangere', runPath: 'RUN.md', status: 'green' })
+      emit({
+        type: 'orchestrate-end',
+        convId: 'conv-etrangere',
+        runPath: 'RUN.md',
+        status: 'green'
+      })
     )
     expect(harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')).not.toBeNull()
   })
@@ -94,5 +99,132 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
     const emit = await monter()
     await act(async () => emit({ type: 'orchestrate-hypotheses', convId: 'A', hypotheses: [] }))
     expect(harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')).toBeNull()
+  })
+})
+
+/**
+ * LE REPLI SE GARDE PAR CONVERSATION — demande du 19/10 (conv-358) : « garde l'état replié du bloc
+ * cadrage par conversation, pour qu'il reste fermé quand je change de fil et que je reviens ».
+ *
+ * Avant : le repli vivait DANS le composant. Changer pour un fil sans cadrage démontait le bloc et
+ * l'état repartait « ouvert » au retour ; changer pour un fil AVEC cadrage gardait la même instance,
+ * donc le repli de A s'appliquait à B.
+ */
+describe('ChatView — le repli du cadrage suit la conversation', () => {
+  let harness: ChatHarness | undefined
+
+  beforeAll(installRafShim)
+  afterEach(async () => {
+    // Le fil actif est memorise : sans remise a zero, le test suivant s'ouvrirait sur B ou C.
+    localStorage.clear()
+    await harness?.unmount()
+    harness = undefined
+  })
+
+  const stubs = [
+    { id: 'A', title: 'Conversation A', category: 'codex', provider: 'codex', updatedAt: 3 },
+    { id: 'B', title: 'Conversation B', category: 'codex', provider: 'codex', updatedAt: 2 },
+    { id: 'C', title: 'Conversation C', category: 'codex', provider: 'codex', updatedAt: 1 }
+  ]
+
+  async function monter(): Promise<(event: Record<string, unknown>) => void> {
+    let emit!: (event: Record<string, unknown>) => void
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue(stubs),
+        conversation: vi.fn(async (id: string) => ({
+          ...stubs.find((s) => s.id === id),
+          messages: []
+        })),
+        onAppEvent: vi.fn((listener) => {
+          emit = listener as (event: Record<string, unknown>) => void
+          return vi.fn()
+        })
+      })
+    )
+    return emit
+  }
+
+  const hypotheses = (convId: string, runPath?: string): Record<string, unknown> => ({
+    type: 'orchestrate-hypotheses',
+    convId,
+    runPath,
+    hypotheses: [{ affirmation: `supposition de ${convId}`, source: 'besoin' }]
+  })
+
+  const ouvrir = async (id: string): Promise<void> => {
+    const pick = [...harness!.container.querySelectorAll<HTMLElement>('.conv-pick')].find((el) =>
+      el.textContent?.includes(`Conversation ${id}`)
+    )
+    if (!pick) throw new Error(`conversation ${id} absente de la liste`)
+    await act(async () => pick.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+  }
+
+  const replie = (): boolean | null => {
+    const bloc = harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')
+    return bloc ? bloc.classList.contains('is-replie') : null
+  }
+
+  const plier = async (): Promise<void> => {
+    const fleche = harness!.container.querySelector<HTMLButtonElement>('.cadrage-hyp-plier')!
+    await act(async () => fleche.click())
+  }
+
+  it('replié dans A, ouvert dans B, toujours replié au retour dans A', async () => {
+    const emit = await monter()
+    await act(async () => {
+      emit(hypotheses('A'))
+      emit(hypotheses('B'))
+    })
+    await plier()
+    expect(replie()).toBe(true)
+
+    await ouvrir('B')
+    expect(replie()).toBe(false)
+    expect(harness!.container.textContent).toContain('supposition de B')
+
+    await ouvrir('A')
+    expect(replie()).toBe(true)
+    // Et c'est bien le bloc de A : deplie, il montre SES suppositions.
+    await plier()
+    expect(replie()).toBe(false)
+    expect(harness!.container.textContent).toContain('supposition de A')
+  })
+
+  it('reste replié après un passage par un fil SANS cadrage (le bloc y est démonté)', async () => {
+    const emit = await monter()
+    await act(async () => emit(hypotheses('A')))
+    await plier()
+
+    await ouvrir('C')
+    expect(replie()).toBeNull()
+
+    await ouvrir('A')
+    expect(replie()).toBe(true)
+  })
+
+  it('un NOUVEAU run du même fil rouvre le bloc : ses suppositions sont neuves', async () => {
+    const emit = await monter()
+    await act(async () => emit(hypotheses('A')))
+    await plier()
+    await act(async () =>
+      emit({ type: 'orchestrate-end', convId: 'A', runPath: 'RUN.md', status: 'green' })
+    )
+    await act(async () => emit(hypotheses('A')))
+    expect(replie()).toBe(false)
+  })
+
+  it('un re-cadrage du MÊME run garde le repli ; celui d’un AUTRE run arrive ouvert, fin perdue ou pas', async () => {
+    const emit = await monter()
+    await act(async () => emit(hypotheses('A', 'runs/r1/RUN.md')))
+    await plier()
+    await act(async () => emit(hypotheses('A', 'runs/r1/RUN.md')))
+    expect(replie()).toBe(true)
+    // Aucun `orchestrate-end` pour r1 : la fin s'est perdue, le run r2 cadre quand meme.
+    await act(async () => emit(hypotheses('A', 'runs/r2/RUN.md')))
+    expect(replie()).toBe(false)
   })
 })
