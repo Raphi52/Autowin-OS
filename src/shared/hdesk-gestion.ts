@@ -21,6 +21,25 @@ export const FIL_MANUEL = 'manuel'
  */
 export const CREATION_ATTENTE_MS = 90_000
 
+/**
+ * Une ligne du journal des gestes d'un bureau (`<id>.gestes.jsonl`, écrit par scripts/hdesk-act.ps1,
+ * conv-344). Jamais le texte tapé : seulement son nombre de caractères.
+ */
+export interface GesteJournal {
+  quand: string
+  ok: boolean
+  x?: number
+  y?: number
+  /** Faux = frappe ou touche sans reclic. */
+  clic?: boolean
+  caracteres?: number
+  entree?: boolean
+  touche?: string
+  molette?: number
+  touches?: number
+  erreur?: string
+}
+
 /** Un bureau caché VIVANT, quel que soit son fil. */
 export interface BureauGere {
   id: string
@@ -35,6 +54,8 @@ export interface BureauGere {
   lanceLe?: string
   pid?: number
   executable?: string
+  /** Derniers gestes (5 au plus, le plus ancien d'abord) — de la TV, de la vue ou d'un agent. */
+  gestes?: GesteJournal[]
 }
 
 /**

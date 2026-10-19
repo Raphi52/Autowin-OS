@@ -172,6 +172,16 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
       // Fichier encore tenu par un processus qui se termine : repris au prochain passage.
     }
   }
+  // JOURNAL DES GESTES (conv-344) : part avec son bureau, qu'il ait une fiche ou non (ui-capture-*).
+  for (const nom of existsSync(dossier) ? readdirSync(dossier) : []) {
+    const m = /^([a-zA-Z0-9_-]+)\.gestes\.jsonl$/.exec(nom)
+    if (!m || enVie.has(m[1])) continue
+    try {
+      rmSync(join(dossier, nom), { force: true })
+    } catch {
+      // Tenu à l'instant par un geste qui écrit : repris au prochain passage.
+    }
+  }
   return effaces
 }
 
@@ -406,11 +416,24 @@ export const TOUCHES_TV = [
 ] as const
 
 /** Arguments PowerShell d'un geste ; lève si l'identifiant ou les coordonnées sont invalides. */
-export function argumentsAct(racine: string, g: GesteTv): string[] {
+/** hdesk-act.cs range x et y sur 16 bits (lParam) : au-delà, le clic partirait AILLEURS (conv-344). */
+export const COORDONNEE_MAX = 32767
+/** Frappe bornée : un texte énorme bloquerait le geste jusqu'au délai de 20 s (conv-344). */
+export const FRAPPE_MAX = 1000
+
+/**
+ * `registre` : dossier du journal des gestes (`<id>.gestes.jsonl`, conv-344) ; absent = celui du script
+ * (%LOCALAPPDATA%/autowin-hdesk, le même que CapteurHdesk). Les TESTS passent un dossier temporaire.
+ */
+export function argumentsAct(racine: string, g: GesteTv, registre?: string): string[] {
   if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id))
     throw new Error('Identifiant de bureau invalide.')
   if (!Number.isFinite(g.x) || !Number.isFinite(g.y) || g.x < 0 || g.y < 0)
     throw new Error('Coordonnées invalides.')
+  if (g.x > COORDONNEE_MAX || g.y > COORDONNEE_MAX)
+    throw new Error(`Coordonnées hors bornes (${COORDONNEE_MAX} au plus).`)
+  if (typeof g.texte === 'string' && g.texte.length > FRAPPE_MAX)
+    throw new Error(`Texte trop long (${FRAPPE_MAX} caractères au plus).`)
   const args = [
     '-NoProfile',
     '-ExecutionPolicy',
@@ -436,6 +459,7 @@ export function argumentsAct(racine: string, g: GesteTv): string[] {
     args.push('-Molette', String(g.molette))
   }
   if (g.sansClic === true) args.push('-SansClic')
+  if (typeof registre === 'string' && registre) args.push('-Registre', registre)
   return args
 }
 
@@ -465,10 +489,10 @@ export function resultatAct(out: string): ResultatGeste {
   return { ok: true }
 }
 
-export function agirHdesk(racine: string, g: GesteTv): Promise<ResultatGeste> {
+export function agirHdesk(racine: string, g: GesteTv, registre?: string): Promise<ResultatGeste> {
   let args: string[]
   try {
-    args = argumentsAct(racine, g)
+    args = argumentsAct(racine, g, registre)
   } catch (e) {
     return Promise.resolve({ ok: false, message: (e as Error).message })
   }

@@ -30,12 +30,39 @@ param(
   [ValidateRange(-20, 20)][int]$Molette = 0,
   # Touches virtuelles en hexadecimal, « 28x15,0D » = 15 x Fleche bas puis Entree (menus Qt de Studio).
   [string]$Touches = '',
-  [switch]$SansClic
+  [switch]$SansClic,
+  # Dossier du journal des gestes. Defaut : %LOCALAPPDATA%/autowin-hdesk (meme registre que le lanceur).
+  # Les TESTS passent un dossier temporaire.
+  [string]$Registre = ''
 )
 $ErrorActionPreference = 'Stop'
-trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+# JOURNAL DES GESTES (conv-344, scout n°5) : chaque geste — de la petite TV, de la vue « Bureaux
+# caches » ou d'un agent — ajoute une ligne a <registre>/<id>.gestes.jsonl, reussi ou refuse. JAMAIS le
+# texte tape (un mot de passe passe par ici) : seulement son nombre de caracteres. Borne aux 200
+# dernieres lignes ; efface avec le bureau (purgerBureauxFermes). Un echec du journal ne casse pas le geste.
+function NoterGeste([bool]$ok, [string]$erreur) {
+  try {
+    $dossier = if ([string]::IsNullOrWhiteSpace($Registre)) { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk' } else { $Registre }
+    New-Item -ItemType Directory -Path $dossier -Force | Out-Null
+    $journal = Join-Path $dossier "$InstanceId.gestes.jsonl"
+    $champs = [ordered]@{ quand = (Get-Date).ToString('o'); ok = $ok; x = $X; y = $Y; clic = (-not $SansClic) }
+    if ($Texte) { $champs.caracteres = $Texte.Length }
+    if ($Entree) { $champs.entree = $true }
+    if ($Touche) { $champs.touche = $Touche }
+    if ($Molette) { $champs.molette = $Molette }
+    if ($Touches) { $champs.touches = @($Touches -split ',' | Where-Object { $_ }).Count }
+    if ($erreur) { $champs.erreur = $erreur }
+    $ligne = [pscustomobject]$champs | ConvertTo-Json -Compress
+    $anciennes = @()
+    if (Test-Path -LiteralPath $journal) { $anciennes = @(Get-Content -LiteralPath $journal -Encoding UTF8 | Where-Object { $_.Trim() }) }
+    $gardees = @(@($anciennes) + @($ligne) | Select-Object -Last 200)
+    [IO.File]::WriteAllText($journal, (($gardees -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+  } catch { }
+}
+trap { NoterGeste $false $_.Exception.Message; [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
 Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'hdesk-act.cs'))
 $r = [AutowinHdeskAct]::Run("AutowinTest_$InstanceId", $X, $Y, $Texte, [bool]$Entree, $Touche, $Molette, $Touches, [bool]$SansClic)
 if ($r.Error) { throw $r.Error }
+NoterGeste $true ''
 [pscustomobject]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes } | ConvertTo-Json -Compress
 exit 0
