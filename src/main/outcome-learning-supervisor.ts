@@ -21,6 +21,28 @@ export interface OutcomeLearningResult {
   detail: string
   candidateId?: string
   knowledgeId?: string
+  /** Notes écrites au Brain par les nœuds du run (`remember` de l'étape learn), parties en revue. */
+  notesEnRevue?: number
+}
+
+/**
+ * L'ÉTAT D'APPRENTISSAGE D'UN RUN COMPTE AUSSI LES NOTES DE SES ÉTAPES (conv-339).
+ *
+ * Ce superviseur ne suit que LA leçon de fin de run (`AUTOWIN_LESSON_V1`). Les notes que l'étape
+ * `learn` écrit par `remember` vont pourtant au Brain, en revue — sans conversation ni tour, donc
+ * jamais vues ici : l'état restait `none` et la bulle affichait « aucune leçon proposée » sous un run
+ * qui en avait déposé deux. Sans leçon de fin de run, l'état devient `inbox` (c'est là qu'elles
+ * sont), le détail reste vide et le nombre porte le libellé ; sinon le nombre s'ajoute à l'état.
+ */
+export function avecNotesDeposees(
+  learning: OutcomeLearningResult | undefined,
+  notes: number | undefined
+): OutcomeLearningResult | undefined {
+  if (!notes || notes <= 0) return learning
+  if (!learning || learning.state === 'none') {
+    return { state: 'inbox', detail: '', notesEnRevue: notes }
+  }
+  return { ...learning, notesEnRevue: notes }
 }
 
 export interface OutcomeLearningSupervisorDeps {

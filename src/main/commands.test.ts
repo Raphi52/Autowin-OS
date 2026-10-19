@@ -2446,3 +2446,71 @@ describe('orchestrate transmet le fichier de la sortie entière', () => {
     expect(await lancer([{ phase: 'scout', text: '  ' }])).toBe('D:/donnees/run-livrables/run-abc-1.md')
   })
 })
+
+/*
+ * conv-339 : « Brain : aucune leçon proposée » sous un run dont l'étape learn venait d'écrire 2
+ * notes au Brain. Le suivi des leçons n'en voyait rien (aucune leçon de fin de run) : le nombre
+ * compté par le run (`notesBrainDeposees`) doit atteindre la ligne affichée.
+ */
+describe('issue d’orchestration — les notes déposées par l’étape learn se voient', () => {
+  const busAvecSuivi = (notesBrainDeposees?: number): AppCommandBus => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'tableau rendu',
+      // Texte vide A DESSEIN : un texte d'étape lance l'écriture de `livrable.md` sans l'attendre,
+      // et le nettoyage de fin de fichier la croisait (EPERM sur `livrable.md.tmp`).
+      phaseOutputs: [{ phase: 'learn', text: '' }],
+      ...(notesBrainDeposees === undefined ? {} : { notesBrainDeposees })
+    })
+    const suivi = {
+      reserveProposal: () => undefined,
+      recordProposal: () => {},
+      // Ce que rend le vrai superviseur sans leçon de fin de run (`reconcile`).
+      observeOutcome: async () => ({ state: 'none', detail: 'aucune leçon proposée pour ce run' })
+    }
+    return new AppCommandBus(
+      os,
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      suivi as never
+    )
+  }
+
+  it('2 notes déposées : la bulle dit qu’elles sont en revue, et plus « aucune leçon »', async () => {
+    const res = (await busAvecSuivi(2).exec(
+      'orchestrate',
+      { task: `/scout humains de l Accueil ${Date.now()}` },
+      'conv-1'
+    )) as { data?: Record<string, unknown> }
+    expect(res.data?.learning).toMatchObject({ state: 'inbox', notesEnRevue: 2 })
+    const bulle = formatOrchestrationOutcome(true, res.data as never)
+    expect(bulle).toContain('Brain : 2 notes candidates gardées en revue')
+    expect(bulle).not.toContain('aucune leçon proposée')
+  })
+
+  it('jumeau : sans note déposée, « aucune leçon proposée » reste vrai et reste affiché', async () => {
+    const res = (await busAvecSuivi().exec(
+      'orchestrate',
+      { task: `/scout humains de l Accueil ${Date.now()}` },
+      'conv-1'
+    )) as { data?: Record<string, unknown> }
+    expect(res.data?.learning).toMatchObject({ state: 'none' })
+    expect(formatOrchestrationOutcome(true, res.data as never)).toContain(
+      'Brain : aucune leçon proposée'
+    )
+  })
+})

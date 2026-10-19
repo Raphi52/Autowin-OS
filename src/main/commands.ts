@@ -294,6 +294,7 @@ import type { DemandeFermeture, ResultatFermeture } from './hdesk-tv'
 import { identifiantBureauCacheChat } from './consigne-bureau-cache'
 import {
   OutcomeLearningSupervisor,
+  avecNotesDeposees,
   type OutcomeLearningResult
 } from './outcome-learning-supervisor'
 import {
@@ -3449,6 +3450,8 @@ export class AppCommandBus {
             role: lessonStep?.role ?? 'orchestrator',
             proposalAttestations: r.learningAttestations
           })
+          // conv-339 : les notes que l'étape learn a déposées au Brain comptent dans l'état affiché.
+          const learningDuRun = avecNotesDeposees(learning, r.notesBrainDeposees)
           const terminalStatus =
             r.gateBlocked || !r.valid
               ? 'red'
@@ -3563,7 +3566,7 @@ export class AppCommandBus {
             // du conseil — qui decide si le `👉 Recommandé` du worker s'adresse encore a un arbre
             // qui a recu son code (cf. `demoteUnvalidatedSuccessClaims`).
             workRetained: r.retainedWorkspace !== undefined,
-            ...(learning ? { learning } : {})
+            ...(learningDuRun ? { learning: learningDuRun } : {})
           }
         } catch (e) {
           await this.observeOutcomeLearning({

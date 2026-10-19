@@ -454,6 +454,7 @@ import {
   compteRenduDesOutils,
   demandeUnOutil,
   executerOutilsDuNoeud,
+  lanceurQuiCompteLesNotes,
   promptOutilsNoeudSkill,
   type LanceurCommandeSkill
 } from './skill-node-tools'
@@ -621,6 +622,11 @@ export interface OrchestrationResult {
   livrableEntier?: string
   /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
   learningAttestations?: IndependentLearningAttestation[]
+  /**
+   * Notes que les nœuds du run (l'étape `learn` surtout) ont ÉCRITES au Brain par `remember` :
+   * elles partent en revue, et la bulle doit le dire au lieu de « aucune leçon proposée » (conv-339).
+   */
+  notesBrainDeposees?: number
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
   brainQuery?: string
   /** Heure à laquelle la récupération Brain s'est terminée, avant le premier appel modèle. */
@@ -3949,6 +3955,16 @@ ${CONTRAT_OBJECTIONS}`
      */
     let phasesJouees = 0
     /**
+     * LES NOTES QUE LE RUN DEPOSE AU BRAIN (conv-339) : chaque `remember` confirme d'un noeud, par
+     * outil natif comme par repli texte, passe par CE lanceur. Le compte sort du run
+     * (`notesBrainDeposees`) pour que la bulle dise « N notes en revue », pas « aucune leçon ».
+     */
+    let notesBrainDeposees = 0
+    const lanceurQuiCompte = (): LanceurCommandeSkill | undefined => {
+      const lanceur = this.deps.skillCommands?.()
+      return lanceur && lanceurQuiCompteLesNotes(lanceur, () => (notesBrainDeposees += 1))
+    }
+    /**
      * LA GARDE « un scout engage une cible » (`scout-cible.ts`), appliquee AU TEXTE DE PHASE.
      *
      * Appliquee dans `recordPhase` SEULE, elle ne servait a rien : ce qui part vers la phase
@@ -4861,7 +4877,7 @@ ${CONTRAT_OBJECTIONS}`
        * Son échec n'est JAMAIS fatal : sans serveur, la boucle à protocole texte reste en place et
        * la phase se déroule normalement — on trace la privation au lieu de perdre le run.
        */
-      const lanceurDuNoeud = isPipelinePhase(phase) ? undefined : this.deps.skillCommands?.()
+      const lanceurDuNoeud = isPipelinePhase(phase) ? undefined : lanceurQuiCompte()
       let serveurOutils: ServeurOutilsNoeudSkill | undefined
       /**
        * On n'ouvre un serveur que pour un provider qui le CONSOMME reellement.
@@ -5243,7 +5259,7 @@ ${CONTRAT_OBJECTIONS}`
        * Rien ici ne coupe : plafond atteint, outil en echec ou commande refusee, on garde le
        * dernier texte, on le TRACE, et la phase se termine normalement.
        */
-      const lanceurOutils = isPipelinePhase(phase) ? undefined : this.deps.skillCommands?.()
+      const lanceurOutils = isPipelinePhase(phase) ? undefined : lanceurQuiCompte()
       if (lanceurOutils) {
         for (let tour = 0; tour < TOURS_OUTILS_MAX; tour++) {
           if (!demandeUnOutil(texteDePhase)) break
@@ -6315,6 +6331,7 @@ ${CONTRAT_OBJECTIONS}`
         ? { livrableEntier: cheminDuLivrableEntierDuRun() }
         : {}),
       ...(learningAttestations.length ? { learningAttestations } : {}),
+      ...(notesBrainDeposees > 0 ? { notesBrainDeposees } : {}),
       brainQuery,
       brainRetrievedAt,
       brainNavigation: scopedBrain.navigation,

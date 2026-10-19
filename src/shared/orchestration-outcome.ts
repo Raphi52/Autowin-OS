@@ -67,6 +67,8 @@ export interface OrchestrationOutcome {
     detail?: unknown
     candidateId?: unknown
     knowledgeId?: unknown
+    /** Notes écrites au Brain par les étapes du run, en revue (`avecNotesDeposees`, conv-339). */
+    notesEnRevue?: unknown
   }
   error?: unknown
 }
@@ -1599,7 +1601,24 @@ function composerLIssue(
       suppressed: 'doublon ou leçon non recevable écarté',
       unknown: 'état de la leçon inconnu'
     }
-    const label = learningLabels[learningState] ?? learningState
+    /*
+     * LES NOTES DES ÉTAPES SE COMPTENT (conv-339) : « aucune leçon proposée » s'affichait sous un run
+     * dont l'étape learn venait d'en déposer deux. `inbox` sans détail = les seules notes du run
+     * (`avecNotesDeposees`) : leur nombre EST le libellé ; sinon il s'ajoute à celui de l'état.
+     */
+    const compte = Number(outcome.learning?.notesEnRevue)
+    const notes = Number.isInteger(compte) && compte > 0 ? compte : 0
+    const enRevue =
+      notes === 1
+        ? '1 note candidate gardée en revue'
+        : `${notes} notes candidates gardées en revue`
+    const libelleEtat = learningLabels[learningState] ?? learningState
+    const label =
+      notes === 0
+        ? libelleEtat
+        : learningState === 'inbox' && !learningDetail?.trim()
+          ? enRevue
+          : `${libelleEtat} · ${enRevue}`
     // Le detail ne s'ajoute que s'il APPREND quelque chose. « aucune leçon proposée — aucune leçon
     // proposée pour ce run » disait deux fois la meme chose, ses deux moities venant de deux sources
     // qui s'ignorent (`outcome-learning-supervisor.ts` pour le detail, ce tableau pour le libelle).
