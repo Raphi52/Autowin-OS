@@ -216,8 +216,8 @@ describe('notes écrites au Brain par un nœud : le run les compte (outils natif
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      executionWorkspace: 'C:\workspace',
-      worktrees: makeTestWorktrees('C:\workspace'),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
       execPhases: ['learn'] as never,
       skillCommands: () => lanceurBrain
     }).run('retiens ce que ce run a appris')
