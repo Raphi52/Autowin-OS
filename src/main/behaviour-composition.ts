@@ -107,6 +107,9 @@ const ORCHESTRATED_PHASES: PipelinePhase[] = [
   'kaizen'
 ]
 
+/** Compte annoncé par le titre « ## Les N réflexes » de la constitution, testé égal au compte réel. */
+const NOMBRE_DE_REFLEXES = /## Les (\d+) réflexes/u.exec(CONSTITUTION)?.[1] ?? '?'
+
 function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   const brief = PHASE_BRIEFS[phase] ?? ''
   const blocks: InfluencerField[] = []
@@ -115,8 +118,9 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   if (phase !== 'judge') {
     blocks.push({
       label: 'constitution',
-      value:
-        'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
+      // Nombre LU dans le titre de la constitution : le chiffre figé « 13 » a dérivé à l'ajout du
+      // réflexe 14 (conv-1024).
+      value: `Constitution (${NOMBRE_DE_REFLEXES} réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.`,
       source: 'src/main/constitution.ts:14',
       excerpt: injectedText(CONSTITUTION)
     })

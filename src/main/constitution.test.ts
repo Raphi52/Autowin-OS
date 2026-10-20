@@ -60,7 +60,8 @@ describe('CONSTITUTION (source unique du soul)', () => {
 
     expect(derniere).toBeGreaterThan(0)
     expect(CONSTITUTION).toContain(`Les ${derniere} réflexes`)
-    expect(CONSTITUTION).not.toContain('Les 14 réflexes')
+    // L'ancien compte annoncé ne doit pas survivre à l'ajout du réflexe 14 (conv-1024).
+    expect(CONSTITUTION).not.toContain('Les 13 réflexes')
     expect(CONSTITUTION).toContain('La limite honnête')
   })
 
@@ -213,6 +214,36 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).not.toContain('ts=1788375433820')
     expect(SOURCE_CONSTITUTION).toContain('ts=1788375433820')
     expect(SOURCE_CONSTITUTION).toContain('ts=1788351936324')
+  })
+})
+
+/**
+ * DEPOT GIT PARTAGE — demande utilisateur conv-1024 (2026-10-20) : « ajoute un reflexe pour eviter
+ * les conflits gits ». Cause mesuree : la mise a jour 45780edd (conv-1023) a tranche 6 conflits, dont
+ * 2 fonctions faites en double en local et sur le distant ; stash du dossier partage rate (8 fichiers
+ * bouges entre-temps) ; « add » puis « commit » qui a publie le travail a moitie ecrit d'un autre run.
+ */
+describe('reflexe 14 : prevenir les conflits dans un depot git partage (conv-1024)', () => {
+  it('fait verifier le fichier AVANT de l ecrire, localement et en amont', () => {
+    expect(CONSTITUTION).toMatch(/^14\. Dépôt git PARTAGÉ/mu)
+    expect(CONSTITUTION).toContain("le conflit se PRÉVIENT avant d'écrire")
+    expect(CONSTITUTION).toContain('git status -- <fichier>')
+    expect(CONSTITUTION).toContain('git log HEAD..@{u} -- <fichier>')
+    expect(CONSTITUTION).toContain('jamais de réécriture entière ni de reformatage')
+  })
+
+  it('isole commit, comparaison et fusion du travail des autres', () => {
+    expect(CONSTITUTION).toContain('git commit -- <tes chemins>')
+    expect(CONSTITUTION).toContain('copie séparée (worktree), jamais stash')
+    expect(CONSTITUTION).toContain('git merge-tree --write-tree')
+    expect(CONSTITUTION).toContain('tranche par CONTENU')
+    expect(CONSTITUTION).toContain('jamais -X ours/theirs en bloc')
+    expect(CONSTITUTION).toContain('merge --abort')
+  })
+
+  it('reste une regle a part, annoncee dans le compte des reflexes', () => {
+    expect(CONSTITUTION).toContain('Les 14 réflexes (1-11 cardinaux, 12-13 kaizen, 14 git)')
+    expect(SOURCE_CONSTITUTION).toContain('45780edd')
   })
 })
 
