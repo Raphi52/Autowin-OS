@@ -6,6 +6,7 @@ import json
 import re
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,47 @@ def bm25_document(metadata, body):
 def bm25_candidate_count(k, total):
     """Keep enough lexical candidates for path-level deduplication and fusion."""
     return min(max(k * 10, 50), total)
+
+
+def fold_accents(text):
+    """Retire les accents (« dépôt » -> « depot ») sans toucher aux lettres elles-mêmes."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+# PyStemmer : « The algorithm has internal state, so must not be called concurrently ».
+# query() tourne HORS de _lock pour que les requêtes des harnais se chevauchent : un raciniseur
+# par thread, jamais une instance partagée.
+_STEMMERS = threading.local()
+
+
+def _french_stemmer():
+    stemmer = getattr(_STEMMERS, "french", None)
+    if stemmer is None:
+        import Stemmer
+        stemmer = Stemmer.Stemmer("french")
+        _STEMMERS.french = stemmer
+    return stemmer
+
+
+def bm25_tokenize(texts):
+    """Tokenisation UNIQUE de l'axe lexical : la même à l'indexation et à la requête.
+
+    Avant (conv-1030, 2026-10-20), bm25s.tokenize par défaut ne faisait que les minuscules :
+    « activite » ne trouvait pas « activités », ni « depot » « dépôt ». Les accents sont
+    retirés AVANT la racinisation, pas après : le raciniseur français coupe « activités » en
+    « activ » mais « activites » en « activit » — plier d'abord donne la même racine aux deux
+    graphies, ce qui est exactement l'insensibilité aux accents recherchée. Prix connu : les
+    terminaisons accentuées (« -ées ») ne sont plus reconnues, « indexées » et « indexe »
+    gardent deux racines.
+    Mesure du 2026-10-20 (k=5, même index) — rag-golden : recall 0,6897 -> 0,8276, MRR
+    0,6063 -> 0,6782 ; rag-heldout : recall 1,0 inchangé, MRR 0,925 -> 0,950. L'ordre inverse
+    (racine puis accents) faisait 0,900 sur rag-heldout ; les accents seuls ne changeaient rien.
+    """
+    import bm25s
+    return bm25s.tokenize(
+        [fold_accents(text) for text in texts], stemmer=_french_stemmer(),
+    )
 
 
 # RRF's classic k0=60 (Cormack 2009) was tuned to fuse MANY independent TREC systems. query()
@@ -243,11 +285,11 @@ class BrainRetriever:
             try:
                 import bm25s
                 bm25 = bm25s.BM25()
-                bm25.index(bm25s.tokenize([
+                bm25.index(bm25_tokenize([
                     bm25_document(item, body) for item, body in zip(meta, bodies)
                 ]))
                 bm25_meta = bm25s.BM25()
-                bm25_meta.index(bm25s.tokenize([
+                bm25_meta.index(bm25_tokenize([
                     bm25_metadata_document(item) for item in meta
                 ]))
             except Exception:
@@ -603,18 +645,16 @@ class BrainRetriever:
         ranks = [dense_rank]
         if bm25 is not None:
             try:
-                import bm25s
                 candidate_count = bm25_candidate_count(k, len(bodies))
-                rows, _ = bm25.retrieve(bm25s.tokenize([text]), k=candidate_count)
+                rows, _ = bm25.retrieve(bm25_tokenize([text]), k=candidate_count)
                 bm25_rank = [int(i) for i in rows[0]]
                 ranks.extend([bm25_rank, bm25_rank])
             except Exception:
                 pass
         if bm25_meta is not None:
             try:
-                import bm25s
                 rows, _ = bm25_meta.retrieve(
-                    bm25s.tokenize([text]), k=bm25_candidate_count(k, len(bodies)),
+                    bm25_tokenize([text]), k=bm25_candidate_count(k, len(bodies)),
                 )
                 metadata_rank = [int(i) for i in rows[0]]
                 ranks.extend([metadata_rank, metadata_rank])
