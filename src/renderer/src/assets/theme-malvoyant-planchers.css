@@ -561,13 +561,10 @@
 }
 
 /* components/HdeskGestionView.css — tailles */
-:root[data-theme^='malvoyant-'] .hdesk-direct-rec,
-:root[data-theme^='malvoyant-'] .hdesk-tag-antenne,
-:root[data-theme^='malvoyant-'] .hdesk-tag-antenne.is-petit,
-:root[data-theme^='malvoyant-'] .hdesk-bandeau > strong,
-:root[data-theme^='malvoyant-'] .hdesk-moniteur,
-:root[data-theme^='malvoyant-'] .hdesk-moniteur-ecran,
-:root[data-theme^='malvoyant-'] .hdesk-moniteur-etat {
+:root[data-theme^='malvoyant-'] .hdesk-ligne-sous,
+:root[data-theme^='malvoyant-'] .hdesk-recents h3,
+:root[data-theme^='malvoyant-'] .hdesk-vise,
+:root[data-theme^='malvoyant-'] .hdesk-pied {
   font-size: 13px;
 }
 

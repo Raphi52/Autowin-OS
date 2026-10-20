@@ -19,6 +19,11 @@
  * REPRIS DE conv-344 (aperçu agrandi, écarté au profit de l'Antenne le 2026-10-19, conv-1023) : ce qui
  * ne dépend pas de la façon de montrer les bureaux — « Parcourir… » + identifiant proposé, « Récents /
  * Relancer », et le fil affiché par son titre, cliquable. Le journal des gestes de conv-344 reste dehors.
+ * DISPOSITION « CONSOLE » (conv-1025, 2026-10-20, skill draft, proposition 1) : « implémente la 1 en
+ * enlevant le mot multi color et le filtre télévision et en mettant un cadre en fonction du thème au
+ * lieu du cadre rose sur le bureau sélectionné ». La liste des bureaux à gauche (le choisi porte le
+ * cadre du choix du thème), l'aperçu à droite avec Regarder / Piloter : tout tient sans défiler. Plus
+ * d'antenne géante ni de moniteurs ; « l'antenne » reste le nom interne du bureau choisi.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
@@ -61,7 +66,7 @@ interface Props {
   onOpenConversation?: (target: { conversationId: string }) => void
   /** Cadence de la liste et de TOUS les aperçus, en Regarder. */
   intervalleMs?: number
-  /** Cadence de l'antenne seule, en Piloter (les moniteurs ne sont plus capturés). */
+  /** Cadence du bureau choisi seul, en Piloter (les autres ne sont plus capturés). */
   intervallePiloteMs?: number
   /** Sans geste pendant ce délai, la vue repasse seule en Regarder. */
   delaiPilotageMs?: number
@@ -76,12 +81,35 @@ const FORMULAIRE_VIDE: Formulaire = {
   conversationId: ''
 }
 
-const quand = (iso?: string): string => {
-  if (!iso) return 'inconnu'
+/** « 20/10 10:53 » (pied du bureau choisi, maquette Console de conv-1025). */
+const quand = (iso: string): string => {
   const d = new Date(iso)
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+    : d.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+}
+
+/**
+ * Moment court d'une ligne de liste : « 10:53 » le jour même, « hier », sinon « 18/10 ».
+ * `reference` = l'instant de la dernière lecture de la liste (jamais l'horloge au rendu).
+ */
+const momentCourt = (iso: string | undefined, reference: number): string | null => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const jour = (t: Date): string => t.toLocaleDateString('fr-FR')
+  const ref = new Date(reference || d.getTime())
+  if (jour(d) === jour(ref))
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  const veille = new Date(ref)
+  veille.setDate(ref.getDate() - 1)
+  if (jour(d) === jour(veille)) return 'hier'
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
 const nomDeFichier = (chemin: string): string => chemin.split(/[\\/]/).pop() || chemin
@@ -127,6 +155,8 @@ export function HdeskGestionView({
 }: Props): React.JSX.Element {
   const cible = (): Partial<HdeskGestionApi> | undefined => cibleDe(api)
   const [liste, setListe] = useState<ResultatListeBureaux | null>(null)
+  // Instant de la dernière lecture : référence de « 10:53 / hier » des lignes, posée hors rendu.
+  const [luA, setLuA] = useState(0)
   const [titres, setTitres] = useState<Record<string, string>>({})
   const [images, setImages] = useState<Record<string, ImageTv>>({})
   const [enFermeture, setEnFermeture] = useState<ReadonlySet<string>>(new Set())
@@ -182,6 +212,7 @@ export function HdeskGestionView({
       }))
       if (!actif) return
       setListe(r)
+      setLuA(Date.now())
       if (!r.ok) return
       // L'antenne survit tant que son bureau vit ; sinon elle passe au premier, sans pilotage.
       const ids = r.bureaux.map((b) => b.id)
@@ -492,8 +523,8 @@ export function HdeskGestionView({
     </label>
   )
 
-  /** Contenu d'un écran (antenne ou moniteur) selon le statut de sa dernière capture. */
-  const ecran = (b: BureauGere, grand: boolean): React.JSX.Element => {
+  /** Contenu de l'écran du bureau choisi selon le statut de sa dernière capture. */
+  const ecran = (b: BureauGere): React.JSX.Element => {
     const img = images[b.id]
     if (imageVisible(img))
       return (
@@ -501,10 +532,10 @@ export function HdeskGestionView({
           <img
             src={img.dataUrl}
             alt={`Aperçu du bureau ${b.id}`}
-            data-testid={grand ? 'hdesk-antenne-image' : undefined}
+            data-testid="hdesk-antenne-image"
             className={img.statut === 'uni' ? 'is-uni' : undefined}
-            onClick={grand ? cliquerImage : undefined}
-            onWheel={grand ? molette : undefined}
+            onClick={cliquerImage}
+            onWheel={molette}
           />
           {img.statut === 'uni' && <span className="hdesk-ecran-note">Image unie</span>}
         </>
@@ -514,7 +545,27 @@ export function HdeskGestionView({
     return <span>Capture…</span>
   }
 
+  /** Pastille d'une ligne : verte, orange (sans fil, image unie, aperçu en échec) ou éteinte. */
+  const etatPoint = (b: BureauGere): string => {
+    const statut = images[b.id]?.statut
+    if (statut === 'ferme') return 'is-eteint'
+    if (!b.conversationId || statut === 'uni' || statut === 'erreur') return 'is-alerte'
+    return 'is-ok'
+  }
+
+  /** « notepad.exe · conv-1019 · 10:53 » ; un bureau sans fiche : « image unie · sans fil ». */
+  const sousLigne = (b: BureauGere): string =>
+    [
+      b.executable ? nomDeFichier(b.executable) : null,
+      images[b.id]?.statut === 'uni' ? 'image unie' : null,
+      b.conversationId ?? 'sans fil',
+      momentCourt(b.lanceLe, luA)
+    ]
+      .filter(Boolean)
+      .join(' · ')
+
   const bureaux = etatListe?.ok ? etatListe.bureaux : []
+  const recents = etatListe?.ok ? (etatListe.recents ?? []) : []
   const antenne = bureaux.find((b) => b.id === antenneId) ?? bureaux[0]
   const imageAntenne = antenne ? images[antenne.id] : undefined
   const pilotable = Boolean(cible()?.hdeskTvAct) && imageVisible(imageAntenne)
@@ -528,19 +579,32 @@ export function HdeskGestionView({
       <ViewTopBar
         eyebrow="OUTILS"
         title="Bureaux cachés"
-        description="Les bureaux Windows invisibles où les agents (et toi) lancent des applications sans toucher ton écran."
         actions={
-          <button
-            type="button"
-            className="btn btn-accent"
-            data-testid="hdesk-nouveau"
-            onClick={() => {
-              setFormOuvert((o) => !o)
-              setRetourCreation(null)
-            }}
-          >
-            {formOuvert ? 'Annuler' : '+ Nouveau bureau'}
-          </button>
+          <span className="hdesk-entete">
+            {bureaux.length > 0 && (
+              <span className="hdesk-stats" data-testid="hdesk-direct">
+                <span>
+                  <b>{bureaux.length}</b> {bureaux.length > 1 ? 'ouverts' : 'ouvert'}
+                </span>
+                {sansFil > 0 && (
+                  <span className="is-alerte">
+                    <b>{sansFil}</b> sans fil
+                  </span>
+                )}
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn btn-accent"
+              data-testid="hdesk-nouveau"
+              onClick={() => {
+                setFormOuvert((o) => !o)
+                setRetourCreation(null)
+              }}
+            >
+              {formOuvert ? 'Annuler' : '+ Nouveau bureau'}
+            </button>
+          </span>
         }
       />
 
@@ -620,39 +684,146 @@ export function HdeskGestionView({
         <p className="hdesk-etat hdesk-retour is-erreur" role="alert" data-testid="hdesk-erreur">
           Liste des bureaux impossible : {etatListe.message}
         </p>
-      ) : !antenne ? (
-        <div className="hdesk-etat" data-testid="hdesk-vide">
-          <p>Aucun bureau caché ouvert.</p>
-          {!formOuvert && (
-            <button type="button" className="btn" onClick={() => setFormOuvert(true)}>
-              Créer un bureau
-            </button>
-          )}
-        </div>
       ) : (
-        <>
-          <div className="hdesk-direct" data-testid="hdesk-direct">
-            <span className="hdesk-direct-rec">En direct</span>
-            <span>
-              <b>{bureaux.length}</b> {bureaux.length > 1 ? 'bureaux' : 'bureau'}
-            </span>
-            {sansFil > 0 && (
-              <span className="hdesk-direct-alerte">
-                <b>{sansFil}</b> sans fil
-              </span>
+        <div className={`hdesk-console${antenne ? '' : ' is-vide'}`}>
+          <nav className="hdesk-cote" aria-label="Bureaux cachés">
+            {antenne ? (
+              <ul className="hdesk-liste" data-testid="hdesk-liste">
+                {bureaux.map((b) => {
+                  const choisi = b.id === antenne.id
+                  const enCours = enFermeture.has(b.id)
+                  return (
+                    <li key={b.id} className={`hdesk-ligne-case${enCours ? ' is-fermeture' : ''}`}>
+                      {/* Le bureau choisi porte LE CADRE DU CHOIX du thème (conv-1025), plus le
+                          cadre --err ni l'étiquette « À l'antenne ». */}
+                      <button
+                        type="button"
+                        className={`hdesk-ligne${choisi ? ' is-choisi' : ''}`}
+                        data-testid={`hdesk-moniteur-${b.id}`}
+                        aria-pressed={choisi}
+                        title={b.executable ? `${b.travail}\n${b.executable}` : b.travail}
+                        onClick={() => choisir(b.id)}
+                      >
+                        <i className={`hdesk-point ${etatPoint(b)}`} aria-hidden="true" />
+                        <span className="hdesk-ligne-texte">
+                          <b className={b.relie ? undefined : 'hdesk-non-relie'}>{b.travail}</b>
+                          <span className="hdesk-ligne-sous">{sousLigne(b)}</span>
+                        </span>
+                      </button>
+                      {/* LA CROIX (conv-1002) : « met des croix sur les ptites box en bas pour fermer
+                          les hdesk ». Bouton FRÈRE de la ligne (un bouton ne peut pas en contenir un
+                          autre) ; même fermeture que « Fermer », donc même confirmation. */}
+                      <button
+                        type="button"
+                        className="hdesk-ligne-fermer"
+                        data-testid={`hdesk-fermer-moniteur-${b.id}`}
+                        aria-label={`Fermer le bureau « ${b.travail} »`}
+                        title={enCours ? 'Fermeture…' : 'Fermer ce bureau caché'}
+                        disabled={enCours}
+                        onClick={() => void fermer(b)}
+                      >
+                        <svg viewBox="0 0 12 12" aria-hidden="true">
+                          <path d="M3 3l6 6M9 3l-6 6" />
+                        </svg>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <div className="hdesk-etat hdesk-vide" data-testid="hdesk-vide">
+                <p>Aucun bureau caché ouvert.</p>
+                {!formOuvert && (
+                  <button type="button" className="btn" onClick={() => setFormOuvert(true)}>
+                    Créer un bureau
+                  </button>
+                )}
+              </div>
             )}
-            <span className="hdesk-direct-cadence">
-              {pilote
-                ? `image toutes les ${secondes(intervallePiloteMs)} à l'antenne`
-                : `image toutes les ${secondes(intervalleMs)}`}
-            </span>
-          </div>
 
-          <article className="hdesk-antenne" data-testid="hdesk-antenne" data-bureau={antenne.id}>
-            <header className="hdesk-antenne-tete">
-              <span className="hdesk-tag-antenne">À l&apos;antenne</span>
-              <strong className={antenne.relie ? '' : 'hdesk-non-relie'}>{antenne.travail}</strong>
-              <span className="hdesk-gestes">
+            {/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper — aussi quand plus
+                aucun bureau n'est ouvert, c'est même là qu'il sert le plus. */}
+            {recents.length > 0 && (
+              <section className="hdesk-recents" data-testid="hdesk-recents" aria-label="Récents">
+                <h3>Récents</h3>
+                <ul>
+                  {recents.map((r) => (
+                    <li
+                      key={`${r.id}|${r.executable}|${r.arguments}`}
+                      data-testid={`hdesk-recent-${r.id}`}
+                      title={`${r.id} · ${r.executable}`}
+                    >
+                      <i className="hdesk-point is-eteint" aria-hidden="true" />
+                      <span className="hdesk-ligne-texte">
+                        <b>{r.travail}</b>
+                        <span className="hdesk-ligne-sous">
+                          {[nomDeFichier(r.executable), momentCourt(r.lanceLe, luA)]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-sm hdesk-btn-discret"
+                        data-testid={`hdesk-relancer-${r.id}`}
+                        disabled={creationEnCours}
+                        onClick={() => relancer(r)}
+                      >
+                        Relancer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </nav>
+
+          {antenne && (
+            <article
+              className="hdesk-detail"
+              data-testid="hdesk-antenne"
+              data-bureau={antenne.id}
+              aria-label={`Bureau « ${antenne.travail} »`}
+            >
+              <div
+                className={`hdesk-barre${pilote ? ' is-pilote' : ''}`}
+                data-testid="hdesk-bandeau"
+              >
+                <span className="hdesk-mode" role="group" aria-label="Mode de l’aperçu">
+                  <button
+                    type="button"
+                    data-testid="hdesk-regarder"
+                    aria-pressed={!pilote}
+                    onClick={quitterPilotage}
+                  >
+                    Regarder
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="hdesk-piloter"
+                    aria-pressed={pilote}
+                    disabled={!pilotable}
+                    title={pilotable ? undefined : 'Pas d’image à piloter pour l’instant'}
+                    onClick={piloter}
+                  >
+                    Piloter
+                  </button>
+                </span>
+                {pilote ? (
+                  <span className="hdesk-barre-etat">
+                    <strong>Tu pilotes ce bureau</strong> · retour en Regarder dans{' '}
+                    <b data-testid="hdesk-compte-a-rebours">{minutesSecondes(restantMs)}</b> sans
+                    geste
+                  </span>
+                ) : (
+                  <span
+                    className="hdesk-barre-etat"
+                    title="Un clic dans l’image ne fait rien : passe en Piloter pour agir."
+                  >
+                    lecture seule
+                  </span>
+                )}
+                <span className="hdesk-espace" />
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -660,7 +831,7 @@ export function HdeskGestionView({
                   title="Afficher ce bureau sur mon écran (retour : bouton Revenir, Échap ou 2 min)"
                   onClick={() => void basculer(antenne)}
                 >
-                  ⇄ Afficher sur mon écran
+                  Afficher sur mon écran
                 </button>
                 <button
                   type="button"
@@ -671,201 +842,103 @@ export function HdeskGestionView({
                 >
                   {enFermeture.has(antenne.id) ? 'Fermeture…' : 'Fermer'}
                 </button>
-              </span>
-            </header>
-            <p className="hdesk-fiche">
-              <span>Bureau : {antenne.id}</span>
-              <span>Fil : {fil(antenne)}</span>
-              <span>Lancé : {quand(antenne.lanceLe)}</span>
-              {antenne.executable && (
-                <span title={antenne.executable}>{nomDeFichier(antenne.executable)}</span>
-              )}
-            </p>
-            {retours[antenne.id] && (
-              <p
-                className={`hdesk-retour ${retours[antenne.id].ok ? 'is-ok' : 'is-erreur'}`}
-                role={retours[antenne.id].ok ? 'status' : 'alert'}
-                data-testid={`hdesk-retour-${antenne.id}`}
-              >
-                {retours[antenne.id].message}
-              </p>
-            )}
-
-            {/* LA TV (conv-1002) : bandeau + écran dans un seul cadre holographique, orange sous
-                Ninja Claude ; voir `.hdesk-tv` dans la feuille. */}
-            <div className={`hdesk-tv${pilote ? ' is-pilote' : ''}`} data-testid="hdesk-tv">
-              {pilote ? (
-                <div className="hdesk-bandeau is-pilote" data-testid="hdesk-bandeau">
-                  <strong>Tu pilotes ce bureau</strong>
-                  <span>
-                    tes clics et ta frappe partent dans le bureau caché · retour en Regarder dans{' '}
-                    <b data-testid="hdesk-compte-a-rebours">{minutesSecondes(restantMs)}</b> sans
-                    geste
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    data-testid="hdesk-regarder"
-                    onClick={quitterPilotage}
-                  >
-                    Regarder
-                  </button>
-                  <span className="hdesk-bandeau-jauge" aria-hidden="true">
+                {pilote && (
+                  <span className="hdesk-jauge" aria-hidden="true">
                     <i style={{ width: `${(restantMs / delaiPilotageMs) * 100}%` }} />
                   </span>
-                </div>
-              ) : (
-                <div className="hdesk-bandeau is-regarde" data-testid="hdesk-bandeau">
-                  <strong>Regarder</strong>
-                  <span>lecture seule · un clic dans l&apos;image ne fait rien</span>
+                )}
+              </div>
+
+              {retours[antenne.id] && (
+                <p
+                  className={`hdesk-retour ${retours[antenne.id].ok ? 'is-ok' : 'is-erreur'}`}
+                  role={retours[antenne.id].ok ? 'status' : 'alert'}
+                  data-testid={`hdesk-retour-${antenne.id}`}
+                >
+                  {retours[antenne.id].message}
+                </p>
+              )}
+
+              {/* Plus de « TV » (conv-1025) : ni liseré irisé, ni lignes de balayage, ni reflet. En
+                  Piloter, l'écran prend le cadre du choix du thème. */}
+              <div className={`hdesk-ecran${pilote ? ' is-pilote' : ''}`} data-testid="hdesk-ecran">
+                {ecran(antenne)}
+              </div>
+
+              {pilote && (
+                <form
+                  className="hdesk-dock"
+                  data-testid="hdesk-saisie"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    taper(true)
+                  }}
+                  // La frappe destinée au bureau caché ne doit pas déclencher les raccourcis de l'app.
+                  onKeyDown={(e) => {
+                    e.stopPropagation()
+                    const t = toucheTv(e, !texte)
+                    if (!t || !dernierClic || dernierClic.id !== antenne.id) return
+                    // Touche spéciale : le texte en cours part d'abord, la touche ensuite.
+                    e.preventDefault()
+                    if (texte) {
+                      void envoyer({ ...dernierClic, texte, sansClic: true })
+                      setTexte('')
+                    }
+                    void envoyer({ ...dernierClic, touche: t, sansClic: true })
+                  }}
+                >
+                  {visePret && dernierClic && (
+                    <span className="hdesk-vise" title="Point visé, en pixels de la capture">
+                      ({dernierClic.x}, {dernierClic.y})
+                    </span>
+                  )}
+                  <input
+                    data-testid="hdesk-texte"
+                    value={texte}
+                    onChange={(e) => setTexte(e.target.value)}
+                    disabled={!visePret}
+                    placeholder={
+                      visePret
+                        ? 'Texte à taper au point cliqué (Entrée = valider)'
+                        : "Clique d'abord dans l'image pour viser un champ"
+                    }
+                  />
                   <button
                     type="button"
                     className="btn btn-sm btn-accent"
-                    data-testid="hdesk-piloter"
-                    disabled={!pilotable}
-                    title={pilotable ? undefined : 'Pas d’image à piloter pour l’instant'}
-                    onClick={piloter}
+                    data-testid="hdesk-taper"
+                    disabled={!visePret || !texte}
+                    onClick={() => taper(false)}
                   >
-                    Piloter
+                    Taper
                   </button>
-                </div>
+                </form>
+              )}
+              {retourGeste && (
+                <p className="hdesk-retour is-erreur" role="alert" data-testid="hdesk-retour-geste">
+                  {retourGeste}
+                </p>
               )}
 
-              <div className="hdesk-ecran">{ecran(antenne, true)}</div>
-            </div>
-
-            {pilote && (
-              <form
-                className="hdesk-dock"
-                data-testid="hdesk-saisie"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  taper(true)
-                }}
-                // La frappe destinée au bureau caché ne doit pas déclencher les raccourcis de l'app.
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  const t = toucheTv(e, !texte)
-                  if (!t || !dernierClic || dernierClic.id !== antenne.id) return
-                  // Touche spéciale : le texte en cours part d'abord, la touche ensuite.
-                  e.preventDefault()
-                  if (texte) {
-                    void envoyer({ ...dernierClic, texte, sansClic: true })
-                    setTexte('')
-                  }
-                  void envoyer({ ...dernierClic, touche: t, sansClic: true })
-                }}
-              >
-                {visePret && dernierClic && (
-                  <span className="hdesk-vise" title="Point visé, en pixels de la capture">
-                    ({dernierClic.x}, {dernierClic.y})
-                  </span>
+              <p className="hdesk-pied" data-testid="hdesk-pied">
+                <span title="Identifiant du bureau caché">{antenne.id}</span>
+                {antenne.conversationId ? (
+                  <span>Fil {fil(antenne)}</span>
+                ) : (
+                  <span className="is-alerte">Sans fil</span>
                 )}
-                <input
-                  data-testid="hdesk-texte"
-                  value={texte}
-                  onChange={(e) => setTexte(e.target.value)}
-                  disabled={!visePret}
-                  placeholder={
-                    visePret
-                      ? 'Texte à taper au point cliqué (Entrée = valider)'
-                      : "Clique d'abord dans l'image pour viser un champ"
-                  }
-                />
-                <button
-                  type="button"
-                  className="btn btn-sm btn-accent"
-                  data-testid="hdesk-taper"
-                  disabled={!visePret || !texte}
-                  onClick={() => taper(false)}
-                >
-                  Taper
-                </button>
-              </form>
-            )}
-            {retourGeste && (
-              <p className="hdesk-retour is-erreur" role="alert" data-testid="hdesk-retour-geste">
-                {retourGeste}
+                {antenne.lanceLe && <span>Lancé {quand(antenne.lanceLe)}</span>}
+                <span className="hdesk-espace" />
+                <span className="hdesk-cadence">
+                  <i className="hdesk-point is-ok" aria-hidden="true" />
+                  {pilote
+                    ? `image toutes les ${secondes(intervallePiloteMs)}`
+                    : `image toutes les ${secondes(intervalleMs)}`}
+                </span>
               </p>
-            )}
-          </article>
-
-          <ul className="hdesk-moniteurs" data-testid="hdesk-liste">
-            {bureaux.map((b) => {
-              const img = images[b.id]
-              const surAntenne = b.id === antenne.id
-              const enCours = enFermeture.has(b.id)
-              return (
-                <li key={b.id} className={`hdesk-moniteur-case${enCours ? ' is-fermeture' : ''}`}>
-                  <button
-                    type="button"
-                    className={`hdesk-moniteur${surAntenne ? ' is-antenne' : ''}`}
-                    data-testid={`hdesk-moniteur-${b.id}`}
-                    aria-pressed={surAntenne}
-                    title={surAntenne ? 'À l’antenne' : 'Passer ce bureau à l’antenne'}
-                    onClick={() => choisir(b.id)}
-                  >
-                    <span className="hdesk-moniteur-ecran">{ecran(b, false)}</span>
-                    <span className="hdesk-moniteur-legende">
-                      {surAntenne && <span className="hdesk-tag-antenne is-petit">Antenne</span>}
-                      <span className={b.relie ? '' : 'hdesk-non-relie'}>{b.travail}</span>
-                    </span>
-                    {img?.statut === 'uni' && (
-                      <span className="hdesk-moniteur-etat is-alerte">image unie</span>
-                    )}
-                    {!b.conversationId && <span className="hdesk-moniteur-etat">sans fil</span>}
-                  </button>
-                  {/* LA CROIX (conv-1002) : « met des croix sur les ptites box en bas pour fermer les
-                      hdesk ». Bouton FRÈRE du moniteur (un bouton ne peut pas en contenir un autre) ;
-                      même fermeture que l'antenne, donc même confirmation avant toute perte. */}
-                  <button
-                    type="button"
-                    className="hdesk-moniteur-fermer"
-                    data-testid={`hdesk-fermer-moniteur-${b.id}`}
-                    aria-label={`Fermer le bureau « ${b.travail} »`}
-                    title={enCours ? 'Fermeture…' : 'Fermer ce bureau caché'}
-                    disabled={enCours}
-                    onClick={() => void fermer(b)}
-                  >
-                    <svg viewBox="0 0 12 12" aria-hidden="true">
-                      <path d="M3 3l6 6M9 3l-6 6" />
-                    </svg>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-
-      {/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper — aussi quand plus aucun
-          bureau n'est ouvert, c'est même là qu'il sert le plus. */}
-      {etatListe?.ok && (etatListe.recents?.length ?? 0) > 0 && (
-        <section className="hdesk-recents" data-testid="hdesk-recents" aria-label="Récents">
-          <h3>Récents</h3>
-          <ul>
-            {etatListe.recents!.map((r) => (
-              <li
-                key={`${r.id}|${r.executable}|${r.arguments}`}
-                data-testid={`hdesk-recent-${r.id}`}
-              >
-                <strong>{r.travail}</strong>
-                <span title={r.executable}>{nomDeFichier(r.executable)}</span>
-                <span>{r.id}</span>
-                <span>{quand(r.lanceLe)}</span>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  data-testid={`hdesk-relancer-${r.id}`}
-                  disabled={creationEnCours}
-                  onClick={() => relancer(r)}
-                >
-                  Relancer
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+            </article>
+          )}
+        </div>
       )}
     </section>
   )

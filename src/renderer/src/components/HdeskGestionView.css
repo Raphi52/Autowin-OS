@@ -1,15 +1,50 @@
 /*
- * Vue « Bureaux cachés » (conv-951, refonte conv-1002) : antenne + moniteurs, bandeau « Tu pilotes ».
- * AUCUNE couleur en dur (« en fonction du thème », conv-1002) : tout passe par les variables du thème
- * actif (--accent, --err, --warn, --ok, --line, --text*, --surface-*), mélangées par color-mix.
- * Le cadre, le fond et le liseré de la page viennent de .view-page.
+ * Vue « Bureaux cachés » (conv-951) — disposition CONSOLE (conv-1025, 2026-10-20, skill draft,
+ * proposition 1) : la liste des bureaux à gauche, l'aperçu du bureau choisi à droite.
+ * RETIRÉS à la demande (« en enlevant le mot multi color et le filtre télévision et en mettant un
+ * cadre en fonction du thème au lieu du cadre rose sur le bureau sélectionné ») : le « REGARDER »
+ * écrit en dégradé, le liseré irisé qui tournait autour de la TV, ses lignes de balayage et son
+ * reflet (conv-1002), l'étiquette rouge « À l'antenne » et le cadre --err du bureau choisi.
+ * AUCUNE couleur en dur : tout passe par les variables du thème actif.
  */
 .hdesk-gestion-view {
+  /* LE CADRE DU CHOIX du thème : celui du fil ouvert dans le chat (--nv-choisi-*, thèmes Nébuleuse
+     et Holographique). Un thème qui n'en définit pas retombe sur son bord fort et son voile de
+     sélection — jamais sur une couleur posée ici. */
+  --hdesk-choisi-cadre: var(
+    --nv-choisi-cadre,
+    linear-gradient(var(--container-border-strong), var(--container-border-strong))
+  );
+  --hdesk-choisi-fond: var(--nv-choisi-fond, var(--surface-selected));
+  --hdesk-mono: ui-monospace, Consolas, monospace;
   display: flex;
   flex-direction: column;
   gap: var(--s3, 12px);
   min-height: 0;
   overflow: auto;
+  container-type: inline-size;
+}
+
+/* ---------- En-tête : compteurs + Nouveau bureau ---------- */
+.hdesk-entete {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.hdesk-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.hdesk-stats b {
+  color: var(--text);
+}
+.hdesk-stats .is-alerte,
+.hdesk-stats .is-alerte b {
+  color: var(--warn);
 }
 
 /* ---------- Création ---------- */
@@ -53,6 +88,9 @@
 .hdesk-etat {
   color: var(--text-dim);
 }
+.hdesk-vide p {
+  margin: 0 0 8px;
+}
 .hdesk-retour {
   display: flex;
   align-items: center;
@@ -74,303 +112,341 @@
   color: var(--err);
   border-color: color-mix(in srgb, var(--err) 45%, transparent);
 }
+.hdesk-espace {
+  flex: 1 1 0;
+}
 
-/* ---------- Bandeau EN DIRECT ---------- */
-.hdesk-direct {
+/* ---------- La console : liste | bureau choisi ---------- */
+.hdesk-console {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 14px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-card);
-  font-size: 12px;
-  color: var(--text-dim);
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
 }
-.hdesk-direct b {
-  color: var(--text);
-}
-.hdesk-direct-rec {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--err);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.hdesk-direct-rec::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--err);
-}
-.hdesk-direct-alerte {
-  color: var(--warn);
-}
-.hdesk-direct-alerte b {
-  color: var(--warn);
-}
-.hdesk-direct-cadence {
-  margin-left: auto;
-  color: var(--text-faint);
-}
-
-/* ---------- Antenne ---------- */
-.hdesk-antenne {
+.hdesk-cote {
+  flex: 1 1 220px;
+  max-width: 330px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  gap: 12px;
 }
-.hdesk-antenne-tete {
+.hdesk-console.is-vide .hdesk-cote {
+  max-width: none;
+}
+.hdesk-detail {
+  flex: 3 1 320px;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  min-width: 0;
 }
-.hdesk-antenne-tete strong {
-  font-size: 15px;
-  color: var(--text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Colonne étroite : la liste passe au-dessus de l'aperçu, en pleine largeur. */
+@container (max-width: 620px) {
+  .hdesk-console {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  /* En colonne, la base de 200 / 320 px deviendrait une HAUTEUR : un vide sous la liste. */
+  .hdesk-cote,
+  .hdesk-detail {
+    flex: none;
+    max-width: none;
+  }
 }
-.hdesk-gestes {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
+
+/* Pastille d'état d'une ligne. */
+.hdesk-point {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
 }
-.hdesk-tag-antenne {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  border-radius: 3px;
-  background: var(--err);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
+.hdesk-point.is-alerte {
+  background: var(--warn);
 }
-.hdesk-tag-antenne.is-petit {
-  font-size: 8.5px;
-  padding: 0 4px;
+.hdesk-point.is-eteint {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-faint);
 }
-.hdesk-fiche {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
+
+/* ---------- Liste des bureaux ---------- */
+.hdesk-liste,
+.hdesk-recents ul {
+  list-style: none;
   margin: 0;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.hdesk-fiche > span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-/* Bandeau d'état collé au-dessus de l'image : Regarder (neutre) ou Tu pilotes (hachures d'accent). */
-.hdesk-bandeau {
+  padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 14px;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: var(--surface-card);
-  font-size: 12px;
-  color: var(--text-dim);
+  flex-direction: column;
+  gap: 2px;
 }
-.hdesk-bandeau > strong {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+.hdesk-ligne-case {
+  position: relative;
 }
-.hdesk-bandeau > .btn {
-  margin-left: auto;
+.hdesk-ligne-case.is-fermeture .hdesk-ligne {
+  opacity: 0.45;
 }
-.hdesk-bandeau.is-pilote {
-  border: 2px solid var(--accent);
-  border-bottom: 0;
-  color: var(--text);
-  background: repeating-linear-gradient(
-    45deg,
-    color-mix(in srgb, var(--accent) 24%, transparent) 0 8px,
-    color-mix(in srgb, var(--accent) 8%, transparent) 8px 16px
-  );
-}
-.hdesk-bandeau.is-pilote > strong {
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  color: var(--text);
-}
-.hdesk-bandeau.is-pilote b {
-  font-family: ui-monospace, Consolas, monospace;
-}
-.hdesk-bandeau-jauge {
-  flex: 1 0 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  overflow: hidden;
-}
-.hdesk-bandeau-jauge i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.9s linear;
-}
-
-.hdesk-ecran {
+.hdesk-ligne {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 220px;
-  max-height: 62vh;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 0 0 8px 8px;
-  background: var(--surface-inset);
-  color: var(--text-faint);
-  font-size: 12px;
-}
-.hdesk-ecran img {
-  display: block;
-  max-width: 100%;
-  max-height: 62vh;
-  object-fit: contain;
-}
-.hdesk-tv.is-pilote .hdesk-ecran img {
-  cursor: crosshair;
-}
-.hdesk-ecran img.is-uni,
-.hdesk-moniteur-ecran img.is-uni {
-  opacity: 0.5;
-}
-.hdesk-ecran-note {
-  position: absolute;
-  z-index: 2;
-  bottom: 4px;
-  right: 6px;
-}
-
-/* ---------- La TV holographique ----------
-   conv-1002 : « fais un style holo sur la tv et orange pour claude ninja ». La TV = bandeau + écran
-   à l'antenne, dans UN cadre : liseré irisé qui tourne (dégradé conique sur un anneau masqué, même
-   technique que le cadre des panneaux du thème holographique), lueur assortie, fines lignes de
-   balayage et un reflet qui passe sur l'image. Les teintes sont une LISTE en variable : un thème
-   n'a qu'à la remplacer (Ninja Claude, plus bas, en orange).
-   Pas de neutralisation sous prefers-reduced-motion : ce poste l'a actif et l'effet ne se verrait
-   jamais (même choix que CandidatsPickPanel.css). La rotation est lente et ne bouge rien d'autre. */
-@property --hdesk-holo-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-.hdesk-tv {
-  --hdesk-tv-teintes: #5ee7ff, #8b6cff, #ff5fd2, #ffd27a, #6dffc7, #5ee7ff;
-  --hdesk-tv-lueur: rgba(139, 108, 255, 0.3);
-  position: relative;
-  padding: 2px;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 32px 7px 10px;
+  border: 0;
   border-radius: 10px;
-  box-shadow: 0 0 16px var(--hdesk-tv-lueur);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.hdesk-tv::before {
+.hdesk-ligne:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.hdesk-ligne:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* LE CHOIX : le voile et le cadre du thème. Le cadre est un calque ÉVIDÉ par masque (même technique
+   que les panneaux du thème) : il se pose sur n'importe quel fond, même translucide, sans le teinter
+   ni décaler le contenu. */
+.hdesk-ligne.is-choisi {
+  background: var(--hdesk-choisi-fond);
+}
+.hdesk-ligne.is-choisi::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 3;
-  padding: 2px;
+  padding: 1.5px;
   border-radius: inherit;
-  background: conic-gradient(from var(--hdesk-holo-angle), var(--hdesk-tv-teintes));
+  background: var(--hdesk-choisi-cadre);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-  animation: hdesk-holo-tourne 12s linear infinite;
 }
-/* En Piloter, la TV s'anime plus vite et luit davantage : on sent qu'elle est « en main ». */
-.hdesk-tv.is-pilote {
-  box-shadow: 0 0 24px var(--hdesk-tv-lueur);
+.hdesk-ligne-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
 }
-.hdesk-tv.is-pilote::before {
-  animation-duration: 4s;
+.hdesk-ligne-texte > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
 }
-@keyframes hdesk-holo-tourne {
-  to {
-    --hdesk-holo-angle: 360deg;
-  }
+.hdesk-ligne-texte > b,
+.hdesk-ligne-sous {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* Le cadre est porté par la TV : le bandeau et l'écran n'ont plus le leur. */
-.hdesk-tv .hdesk-bandeau,
-.hdesk-tv .hdesk-bandeau.is-pilote {
+.hdesk-ligne-sous {
+  /* font-size et non le raccourci `font` : le plancher des thèmes malvoyants ne lit que font-size. */
+  font-family: var(--hdesk-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+/* La croix : au bout de la ligne, discrète, rouge au survol. */
+.hdesk-ligne-fermer {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  transform: translateY(-50%);
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
-.hdesk-tv .hdesk-ecran {
+.hdesk-ligne-fermer svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.hdesk-ligne-fermer:hover:not(:disabled),
+.hdesk-ligne-fermer:focus-visible {
+  background: color-mix(in srgb, var(--err) 16%, transparent);
+  color: var(--err);
+}
+.hdesk-ligne-fermer:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper. */
+.hdesk-recents h3 {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-family: var(--hdesk-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.hdesk-recents li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+  border-radius: 10px;
+}
+.hdesk-recents li .hdesk-ligne-texte > b {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.hdesk-btn-discret {
+  flex: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+}
+.hdesk-btn-discret:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* ---------- Bureau choisi : barre Regarder / Piloter ---------- */
+.hdesk-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hdesk-mode {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.hdesk-mode button {
+  padding: 3px 12px;
   border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
-/* « REGARDER » écrit dans les teintes du liseré. */
-.hdesk-tv .hdesk-bandeau.is-regarde > strong {
-  background: linear-gradient(90deg, var(--hdesk-tv-teintes));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.hdesk-mode button:hover:not(:disabled) {
+  color: var(--text);
 }
-/* Lignes de balayage + reflet qui traverse l'image toutes les 7 s ; jamais devant un clic. */
-.hdesk-tv .hdesk-ecran::before,
-.hdesk-tv .hdesk-ecran::after {
+.hdesk-mode button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+.hdesk-mode button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.hdesk-barre-etat {
+  min-width: 0;
+}
+.hdesk-barre-etat strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.hdesk-barre-etat b {
+  font-family: var(--hdesk-mono);
+  color: var(--text);
+}
+/* Le temps qui reste avant le retour en Regarder, aux couleurs du cadre du choix. */
+.hdesk-jauge {
+  flex: 1 0 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+.hdesk-jauge i {
+  display: block;
+  height: 100%;
+  background: var(--hdesk-choisi-cadre);
+  transition: width 0.9s linear;
+}
+
+/* ---------- Bureau choisi : l'écran ---------- */
+.hdesk-ecran {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 64vh;
+  overflow: hidden;
+  padding: 1px;
+  border-radius: 8px;
+  background: var(--surface-inset);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.hdesk-ecran img {
+  display: block;
+  max-width: 100%;
+  max-height: 64vh;
+  object-fit: contain;
+  border-radius: 7px;
+}
+.hdesk-ecran img.is-uni {
+  opacity: 0.5;
+}
+.hdesk-ecran-note {
+  position: absolute;
+  z-index: 2;
+  bottom: 6px;
+  right: 8px;
+}
+/* En Piloter, l'écran prend le cadre du choix du thème : on voit qu'il est « en main ». */
+.hdesk-ecran.is-pilote {
+  box-shadow: none;
+}
+.hdesk-ecran.is-pilote::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 1;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: var(--hdesk-choisi-cadre);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
   pointer-events: none;
 }
-.hdesk-tv .hdesk-ecran::before {
-  background: repeating-linear-gradient(
-    0deg,
-    color-mix(in srgb, #fff 5%, transparent) 0 1px,
-    transparent 1px 3px
-  );
-}
-.hdesk-tv .hdesk-ecran::after {
-  background: linear-gradient(
-    105deg,
-    transparent 42%,
-    color-mix(in srgb, #fff 12%, transparent) 50%,
-    transparent 58%
-  );
-  background-size: 250% 100%;
-  animation: hdesk-holo-reflet 7s ease-in-out infinite;
-}
-@keyframes hdesk-holo-reflet {
-  0% {
-    background-position: 0% 0;
-  }
-  45%,
-  100% {
-    background-position: 100% 0;
-  }
-}
-/* Ninja Claude : la même TV, en orange (les teintes de son accent #d97757). */
-:root[data-theme='ninja-claude'] .hdesk-tv {
-  --hdesk-tv-teintes: #d97757, #f2a65a, #ffd8a8, #c4512a, #f0b27a, #d97757;
-  --hdesk-tv-lueur: rgba(217, 119, 87, 0.32);
+.hdesk-ecran.is-pilote img {
+  cursor: crosshair;
 }
 
 .hdesk-dock {
@@ -384,130 +460,40 @@
   min-width: 0;
 }
 .hdesk-vise {
-  font:
-    11px ui-monospace,
-    Consolas,
-    monospace;
-  color: var(--accent);
+  font-family: var(--hdesk-mono);
+  font-size: 11px;
+  color: var(--text-dim);
   white-space: nowrap;
 }
 
-/* ---------- Moniteurs ---------- */
-.hdesk-moniteurs {
-  list-style: none;
+/* ---------- Bureau choisi : le pied technique ---------- */
+.hdesk-pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
   margin: 0;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
-.hdesk-moniteur {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-dim);
-  font: inherit;
+  font-family: var(--hdesk-mono);
   font-size: 11.5px;
-  text-align: left;
-  cursor: pointer;
-}
-.hdesk-moniteur-ecran {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 84px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-inset);
+  line-height: 1.45;
   color: var(--text-faint);
-  font-size: 11px;
 }
-.hdesk-moniteur:hover .hdesk-moniteur-ecran {
-  border-color: var(--accent);
-}
-.hdesk-moniteur.is-antenne .hdesk-moniteur-ecran {
-  border: 2px solid var(--err);
-}
-.hdesk-moniteur-ecran img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.hdesk-moniteur-legende {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  color: var(--text);
-}
-.hdesk-moniteur-legende > span:last-child {
+.hdesk-pied > span:not(.hdesk-espace) {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hdesk-moniteur-etat {
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
-.hdesk-moniteur-etat.is-alerte {
+.hdesk-pied .is-alerte {
   color: var(--warn);
 }
-/* La croix : posée sur le coin haut-droit de la vignette, toujours visible, rouge au survol. */
-.hdesk-moniteur-case {
-  position: relative;
-}
-.hdesk-moniteur-case.is-fermeture .hdesk-moniteur {
-  opacity: 0.45;
-}
-.hdesk-moniteur-fermer {
-  position: absolute;
-  top: 5px;
-  right: 5px;
+.hdesk-cadence {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 50%;
-  /* Pastille sombre et croix blanche FIXES, hors thème : elle se pose sur une capture d'écran,
-     dont le fond est quelconque ; aux couleurs du thème clair, elle sortait gris sur gris. */
-  border: 1px solid color-mix(in srgb, #fff 35%, transparent);
-  background: color-mix(in srgb, #000 62%, transparent);
-  color: #fff;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-.hdesk-moniteur-fermer svg {
-  width: 11px;
-  height: 11px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
-.hdesk-moniteur-fermer:hover:not(:disabled),
-.hdesk-moniteur-fermer:focus-visible {
-  background: var(--err);
-  border-color: var(--err);
-  color: #fff;
-}
-.hdesk-moniteur-fermer:disabled {
-  cursor: progress;
-  opacity: 0.6;
+  gap: 6px;
 }
 
-/* ---------- Repris de conv-344 ---------- */
-/* Le fil, par son titre, ouvre la conversation. */
+/* Le fil, par son titre, ouvre la conversation (conv-344). */
 .hdesk-lien {
   padding: 0;
   border: 0;
@@ -517,39 +503,4 @@
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-/* « Récents » : relancer un bureau fermé sans rien retaper. */
-.hdesk-recents h3 {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-.hdesk-recents ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.hdesk-recents li {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--surface-inset);
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.hdesk-recents li > :not(button) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hdesk-recents li strong {
-  color: var(--text);
-  font-weight: 500;
 }

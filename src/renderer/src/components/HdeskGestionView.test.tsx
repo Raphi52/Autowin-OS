@@ -3,6 +3,7 @@
  * conv-951 : vue « Bureaux cachés ». Cas limites du cadrage : aucun bureau, liste illisible, bureau
  * sans fiche, fermeture répétée, saisie invalide refusée sans lancement, identifiant occupé.
  */
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -104,27 +105,47 @@ async function saisir(h: HTMLElement, cle: string, valeur: string): Promise<void
   })
 }
 
-describe('HdeskGestionView — antenne et moniteurs', () => {
-  it('le premier bureau passe à l’antenne avec sa fiche, son aperçu et ses gestes ; tous ont un moniteur', async () => {
+// conv-1025 : disposition « Console » — la liste à gauche (une ligne par bureau, le choisi au cadre du
+// thème), le bureau choisi à droite (Regarder / Piloter, aperçu, pied technique).
+describe('HdeskGestionView — la console', () => {
+  it('le premier bureau est choisi : aperçu, gestes et pied ; chaque bureau a sa ligne', async () => {
     const h = await monter(faux([ZOX, ORPHELIN]))
     const antenne = $(h, 'hdesk-antenne')!
     expect(antenne.getAttribute('data-bureau')).toBe('zox')
-    expect(antenne.textContent).toContain('ZOX Rapture')
-    expect(antenne.textContent).toContain('Fil : conv-951')
-    expect(antenne.textContent).toContain('ZoxClientAccueil.exe')
+    expect(antenne.getAttribute('aria-label')).toBe('Bureau « ZOX Rapture »')
+    expect($(h, 'hdesk-pied')?.textContent).toContain('zox')
+    expect($(h, 'hdesk-pied')?.textContent).toContain('Fil conv-951')
     expect($(h, 'hdesk-antenne-image')?.getAttribute('src')).toBe('data:image/png;base64,AA')
     expect($(h, 'hdesk-fermer-zox')).not.toBeNull()
-    expect($(h, 'hdesk-basculer-zox')).not.toBeNull()
-    expect($(h, 'hdesk-moniteur-zox')?.getAttribute('aria-pressed')).toBe('true')
+    expect($(h, 'hdesk-basculer-zox')?.textContent).toBe('Afficher sur mon écran')
+    // La ligne dit le travail, l'application et le fil ; un bureau sans fiche le dit aussi.
+    const ligne = $(h, 'hdesk-moniteur-zox')!
+    expect(ligne.textContent).toContain('ZOX Rapture')
+    expect(ligne.textContent).toContain('ZoxClientAccueil.exe · conv-951')
+    expect($(h, 'hdesk-moniteur-orphelin')?.textContent).toContain('sans fil')
+    expect(ligne.getAttribute('aria-pressed')).toBe('true')
     expect($(h, 'hdesk-moniteur-orphelin')?.getAttribute('aria-pressed')).toBe('false')
+    expect($(h, 'hdesk-direct')?.textContent).toContain('2 ouverts')
     expect($(h, 'hdesk-direct')?.textContent).toContain('1 sans fil')
   })
 
-  it('un clic sur un moniteur le passe à l’antenne', async () => {
+  it('un seul bureau porte le cadre du choix ; plus d’étiquette « À l’antenne »', async () => {
+    const h = await monter(faux([ZOX, ORPHELIN]))
+    expect(
+      [...h.querySelectorAll('.hdesk-ligne.is-choisi')].map((e) => e.getAttribute('data-testid'))
+    ).toEqual(['hdesk-moniteur-zox'])
+    expect(h.textContent).not.toContain('antenne')
+    await cliquer($(h, 'hdesk-moniteur-orphelin'))
+    expect(
+      [...h.querySelectorAll('.hdesk-ligne.is-choisi')].map((e) => e.getAttribute('data-testid'))
+    ).toEqual(['hdesk-moniteur-orphelin'])
+  })
+
+  it('un clic sur une ligne choisit ce bureau', async () => {
     const h = await monter(faux([ZOX, ORPHELIN]))
     await cliquer($(h, 'hdesk-moniteur-orphelin'))
     expect($(h, 'hdesk-antenne')?.getAttribute('data-bureau')).toBe('orphelin')
-    expect($(h, 'hdesk-antenne')?.textContent).toContain('Fil : aucun')
+    expect($(h, 'hdesk-pied')?.textContent).toContain('Sans fil')
     expect($(h, 'hdesk-fermer-orphelin')).not.toBeNull()
   })
 
@@ -218,17 +239,49 @@ describe('HdeskGestionView — Fermer', () => {
   })
 })
 
-describe('HdeskGestionView — la TV', () => {
-  it('bandeau et écran sont dans un seul cadre TV, marqué « en main » en Piloter', async () => {
+describe('HdeskGestionView — l’écran', () => {
+  it('Regarder / Piloter est un sélecteur à deux boutons ; l’écran est marqué « en main » en Piloter', async () => {
     const h = await monter(
       faux([ZOX], { hdeskTvAct: vi.fn(async (): Promise<{ ok: true }> => ({ ok: true })) })
     )
-    const tv = $(h, 'hdesk-tv')!
-    expect(tv.querySelector('[data-testid="hdesk-bandeau"]')).not.toBeNull()
-    expect(tv.querySelector('[data-testid="hdesk-antenne-image"]')).not.toBeNull()
-    expect(tv.className).toBe('hdesk-tv')
+    const ecran = $(h, 'hdesk-ecran')!
+    expect(ecran.querySelector('[data-testid="hdesk-antenne-image"]')).not.toBeNull()
+    expect(ecran.className).toBe('hdesk-ecran')
+    expect($(h, 'hdesk-regarder')?.getAttribute('aria-pressed')).toBe('true')
+    expect($(h, 'hdesk-piloter')?.getAttribute('aria-pressed')).toBe('false')
     await cliquer($(h, 'hdesk-piloter'))
-    expect($(h, 'hdesk-tv')?.className).toBe('hdesk-tv is-pilote')
+    expect($(h, 'hdesk-ecran')?.className).toBe('hdesk-ecran is-pilote')
+    expect($(h, 'hdesk-regarder')?.getAttribute('aria-pressed')).toBe('false')
+    expect($(h, 'hdesk-piloter')?.getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+/**
+ * conv-1025 : « en enlevant le mot multi color et le filtre télévision et en mettant un cadre en
+ * fonction du thème au lieu du cadre rose sur le bureau sélectionné ». Un rendu ne se lit pas dans
+ * happy-dom : on lit la feuille elle-même.
+ */
+describe('HdeskGestionView — la feuille de style (conv-1025)', () => {
+  // Chemin depuis la racine du dépôt : sous happy-dom, import.meta.url n'est pas un `file:`.
+  const css = readFileSync('src/renderer/src/components/HdeskGestionView.css', 'utf8')
+  // Les commentaires citent ce qui a été retiré : on ne lit que les règles.
+  const regles = css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('plus de mot multicolore ni de filtre télé (balayage, reflet, liseré irisé)', () => {
+    expect(regles).not.toMatch(/background-clip\s*:\s*text/)
+    expect(regles).not.toMatch(/repeating-linear-gradient/)
+    expect(regles).not.toMatch(/conic-gradient/)
+    expect(regles).not.toMatch(/@keyframes/)
+    // Aucune couleur en dur (conv-1002) ; le `#000` des masques n'est qu'une opacité.
+    expect(regles.replace(/-webkit-mask:[^;]*;/g, '')).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+
+  it('le bureau choisi prend le cadre du choix du thème, jamais la couleur d’erreur', () => {
+    expect(regles).toMatch(/--hdesk-choisi-cadre:\s*var\(\s*--nv-choisi-cadre\s*,/)
+    expect(regles).toMatch(/--hdesk-choisi-fond:\s*var\(--nv-choisi-fond\s*,/)
+    const choisi = regles.match(/\.hdesk-ligne\.is-choisi::before\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(choisi).toMatch(/background:\s*var\(--hdesk-choisi-cadre\)/)
+    expect(regles).not.toMatch(/is-choisi[^{]*\{[^}]*--err/)
   })
 })
 
@@ -532,7 +585,7 @@ describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
     expect($(h, 'hdesk-retour-creation')?.textContent).toBe('Bureau « x » prêt.')
   })
 
-  it('« Récents » à côté de l’antenne : la liste reste visible sous les moniteurs', async () => {
+  it('« Récents » à côté de l’antenne : la liste reste visible sous les bureaux ouverts', async () => {
     const api = faux([ZOX], {
       hdeskGestionBureaux: vi.fn(async () => ({
         ok: true as const,
@@ -585,17 +638,17 @@ describe('HdeskGestionView — le fil par son titre, cliquable (conv-344)', () =
       onOpenConversation: vi.fn()
     })
     expect($(h, 'hdesk-fil-zox')).toBeNull()
-    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : manuel')
-    // L'orphelin passe à l'antenne : sa fiche dit « aucun », sans lien.
+    expect($(h, 'hdesk-pied')!.textContent).toContain('Fil manuel')
+    // L'orphelin est choisi : son pied dit « Sans fil », sans lien.
     await cliquer($(h, 'hdesk-moniteur-orphelin'))
     expect($(h, 'hdesk-antenne')!.getAttribute('data-bureau')).toBe('orphelin')
-    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : aucun')
+    expect($(h, 'hdesk-pied')!.textContent).toContain('Sans fil')
     expect($(h, 'hdesk-fil-orphelin')).toBeNull()
   })
 
   it('sans moyen d’ouvrir une conversation : l’identifiant en texte, sans lien', async () => {
     const h = await monter(faux([ZOX]))
     expect($(h, 'hdesk-fil-zox')).toBeNull()
-    expect($(h, 'hdesk-antenne')!.textContent).toContain('Fil : conv-951')
+    expect($(h, 'hdesk-pied')!.textContent).toContain('Fil conv-951')
   })
 })
