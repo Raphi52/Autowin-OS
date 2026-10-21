@@ -126,6 +126,46 @@ import { comparerALaBase } from './comparaison-a-la-base'
 const DECLENCHEUR_MAX = 120
 
 /**
+ * Longueur de la FRONTIERE (« PAS pour : … ») accolee au declencheur (conv-1033, 2026-10-21).
+ *
+ * `kit-cliquets.test.ts` impose cette clause a chaque description, pour qu'une skill ne soit pas
+ * choisie a la place d'une voisine (heal, qui CORRIGE, pour un audit de `judge`). Mesure le
+ * 2026-10-21 : les 23 clauses du kit commencent toutes apres le 120e caractere — la coupe a
+ * DECLENCHEUR_MAX les retirait TOUTES, et le chat choisissait une skill sans jamais voir sa
+ * frontiere. 90 garde la premiere voisine, celle qu'on confond. Cout mesure sur les 26 skills :
+ * le bloc passe de 3 443 a 5 602 caracteres par tour (ligne la plus longue : 229).
+ */
+const FRONTIERE_MAX = 90
+
+/** Meme reconnaissance que le cliquet `kit-cliquets.test.ts` (CLAUSE), qui impose la phrase. */
+const CLAUSE_FRONTIERE =
+  /PAS pour|NE PAS utiliser|Ne pas utiliser|NE PAS l'utiliser|PAS l'utiliser/u
+
+const couper = (texte: string, max: number): string =>
+  texte.length > max ? `${texte.slice(0, max).trimEnd()}…` : texte
+
+/**
+ * Une ligne de `skillsDisponibles` : `id — <debut de description>[ · <frontiere>]`.
+ *
+ * La frontiere s'arrete a la fin de SA phrase (la suite de la description parle d'autre chose),
+ * puis a FRONTIERE_MAX ; le declencheur s'arrete avant elle pour ne jamais la dire deux fois.
+ */
+export function ligneDeSkill(id: string, description: string | undefined): string {
+  const brut = (description ?? '').replace(/\s+/gu, ' ').trim()
+  if (!brut || brut === 'Skill (SKILL.md)') return id
+  const debut = CLAUSE_FRONTIERE.exec(brut)?.index ?? -1
+  if (debut < 0) return `${id} — ${couper(brut, DECLENCHEUR_MAX)}`
+  const declencheur = couper(brut.slice(0, debut).trimEnd(), DECLENCHEUR_MAX)
+  const clause = brut.slice(debut)
+  const finDePhrase = clause.search(/\.\s/u)
+  const frontiere = couper(
+    finDePhrase > 0 ? clause.slice(0, finDePhrase + 1) : clause,
+    FRONTIERE_MAX
+  )
+  return declencheur ? `${id} — ${declencheur} · ${frontiere}` : `${id} — ${frontiere}`
+}
+
+/**
  * Skills ACTIVES sur disque, chacune avec son DECLENCHEUR : `id — <debut de description>`.
  *
  * Defaut vecu le 2026-08-28 : le snapshot ne portait que des NOMS NUS (`forge`, `heal`, `look`...).
@@ -142,13 +182,7 @@ export function skillsInvocables(): string[] {
   try {
     return nativeSkills()
       .filter((s) => s.enabled)
-      .map((s) => {
-        const brut = (s.description ?? '').replace(/\s+/gu, ' ').trim()
-        if (!brut || brut === 'Skill (SKILL.md)') return s.id
-        const declencheur =
-          brut.length > DECLENCHEUR_MAX ? `${brut.slice(0, DECLENCHEUR_MAX).trimEnd()}…` : brut
-        return `${s.id} — ${declencheur}`
-      })
+      .map((s) => ligneDeSkill(s.id, s.description))
       .sort()
   } catch {
     return []
@@ -1328,6 +1362,19 @@ export const CATALOG: CommandSpec[] = [
     }
   },
   {
+    // Le modèle choisit lui-même une skill (conv-1034) : voir `skill-charger-command.ts`.
+    name: 'skill_charger',
+    description:
+      'Charger la PROCÉDURE complète d’une skill d’Autowin (skills/<nom>/SKILL.md) que TU choisis d’appliquer, sans que l’utilisateur l’ait tapée — dès que sa demande correspond au déclencheur d’une skill listée dans skillsDisponibles. Rend le contenu à suivre et le dossier de ses fichiers compagnons. Inutile si cette procédure est déjà dans ton contexte (bloc « === SKILL <NOM> (kit) === »)',
+    args: { nom: 'nom de la skill, tel que listé dans skillsDisponibles (ex. look)' },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'ticket_create',
     description:
       'Créer une fiche (work item) chez le fournisseur de tickets configuré — écrit dans le backlog de l’équipe, sous l’identité de l’utilisateur : ne l’utiliser que sur une demande explicite',
@@ -1361,19 +1408,6 @@ export const CATALOG: CommandSpec[] = [
       readOnlyHint: false,
       // On ajoute, on ne supprime rien ; deux appels créent DEUX tâches. L'effet reste dans l'app.
       destructiveHint: false,
-  {
-    // Le modèle choisit lui-même une skill (conv-1034) : voir `skill-charger-command.ts`.
-    name: 'skill_charger',
-    description:
-      'Charger la PROCÉDURE complète d’une skill d’Autowin (skills/<nom>/SKILL.md) que TU choisis d’appliquer, sans que l’utilisateur l’ait tapée — dès que sa demande correspond au déclencheur d’une skill listée dans skillsDisponibles. Rend le contenu à suivre et le dossier de ses fichiers compagnons. Inutile si cette procédure est déjà dans ton contexte (bloc « === SKILL <NOM> (kit) === »)',
-    args: { nom: 'nom de la skill, tel que listé dans skillsDisponibles (ex. look)' },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false
-    }
-  },
       idempotentHint: false,
       openWorldHint: false
     }
@@ -4407,6 +4441,8 @@ export class AppCommandBus {
         const deps = { token: brainServiceToken(), corpus: corpus ?? null }
         return name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
       }
+      case 'skill_charger':
+        return chargerSkillPourLeModele(a)
       case 'ticket_create':
         // Écriture chez un tiers : la cible et les bornes sont décidées hors du modèle
         // (`ticket-create-command.ts` + `TicketService`), jamais d'après les arguments bruts.
@@ -4441,8 +4477,6 @@ export class AppCommandBus {
             ...(this.porteProd ? { porteProd: this.porteProd } : {}),
             // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
             // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
-      case 'skill_charger':
-        return chargerSkillPourLeModele(a)
             ...(this.guichetProd ? { guichetProd: this.guichetProd } : {})
           }
         )
