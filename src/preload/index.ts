@@ -758,6 +758,8 @@ const api = {
     ipcRenderer.invoke('veille:marquer', id, statut),
   veilleGenerer: (conversationId?: string): Promise<unknown> =>
     ipcRenderer.invoke('veille:generer', conversationId),
+  scoutMotif: (titre: string, motif: string, conversationId?: string): Promise<boolean> =>
+    ipcRenderer.invoke('scout:motif', titre, motif, conversationId),
   taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
     ipcRenderer.invoke('task-manager:snapshot'),
   /**

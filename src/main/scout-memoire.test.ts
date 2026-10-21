@@ -6,11 +6,15 @@ import {
   MAX_PISTES_CONNUES,
   bilanDesChoix,
   blocPistesDejaConnues,
+  dernierResultatParRun,
   facteursDesChoix,
   lireMemoireScout,
   noterChoixScout,
+  noterMotifScout,
   noterPistesScout,
   pistesDejaConnues,
+  pistesDejaLivrees,
+  resultatsDesEvenements,
   titresChoisisDansLaDemande
 } from './scout-memoire'
 // fix-ok: les scouts du chat ne laissaient aucune trace relisible (RUN.md garde 2 lignes du tableau) ;
@@ -222,7 +226,9 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       ['Tri instable', 'prise'],
       ['Logs', 'laissee']
     ])
-    expect(parRun('ancien').every(([, choix]) => choix === undefined)).toBe(true)
+    // La sélection n'a pas touché l'ancien scout (« Écriture du cache » y serait « prise ») : il est
+    // « ignoree » depuis l'arrivée de r1, sans aucun choix (piste 2 de conv-1033).
+    expect(parRun('ancien').map(([, choix]) => choix)).toEqual(['ignoree', 'ignoree'])
     expect(parRun('r9').every(([, choix]) => choix === undefined)).toBe(true)
   })
 
@@ -292,6 +298,336 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       chemin
     })
     expect(facteursDesChoix({ depot: 'D:/w', chemin })).toEqual({})
+  })
+
+  /*
+   * PISTE 5 (conv-1033) — un scout réparé garde une ligne par VERSION de son tableau. Mesuré dans
+   * `scout-pistes.json` le 21/10 : run-8e6410f195c5-1 = 93 lignes, 11 versions, dernier tableau de 9
+   * lignes ; il fournissait 93 des pistes « jugées ». L'utilisateur n'a vu que le DERNIER tableau.
+   * Entrée qui tue une correction fausse : X, Y, Z n'existent que dans la version 1. Dédoublonner par
+   * (run, titre) les compterait encore « laissées » (8 jugées au lieu de 5).
+   */
+  it('un tableau refait ne compte que sa dernière version, celle que l’utilisateur a vue', () => {
+    const chemin = fichier()
+    const noter = (quand: string, ...titres: string[]): void =>
+      noterPistesScout({
+        depot: 'D:/w',
+        texte: scout(...titres),
+        run: 'r1',
+        maintenant: quand,
+        chemin
+      })
+    noter('2026-10-15T08:00:00Z', 'A', 'B', 'C', 'X', 'Y', 'Z')
+    noter('2026-10-15T08:20:00Z', 'A', 'B', 'C', 'D', 'E')
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'B'), maintenant: 't', chemin })
+    expect(bilanDesChoix({ depot: 'D:/w', chemin })).toMatch(
+      /\(5 pistes jugées\) : 2 prises sur 5/u
+    )
+  })
+
+  it('jumeau : deux runs distincts aux mêmes titres comptent chacun leur tableau', () => {
+    const chemin = fichier()
+    for (const run of ['r1', 'r2']) {
+      noterPistesScout({ depot: 'D:/w', texte: scout('A', 'B', 'C'), run, maintenant: run, chemin })
+      noterChoixScout({ depot: 'D:/w', demande: selection('A'), maintenant: run, chemin })
+    }
+    expect(bilanDesChoix({ depot: 'D:/w', chemin })).toMatch(
+      /\(6 pistes jugées\) : 2 prises sur 6/u
+    )
+  })
+
+  /*
+   * PISTE 2 (conv-1033) — un scout dont rien n'est pris ne laissait AUCUNE trace : sans message de
+   * sélection, `noterChoixScout` sort avant d'écrire. Mesuré le 21/10 : 6 runs scout sur 10 sans
+   * aucun choix. Le scout SUIVANT du même dépôt le constate et le marque « ignoree ».
+   * Entrée qui tue une correction fausse : la 2e version du MÊME run (une réparation) — marquer
+   * « toute ligne sans choix » ferait d'un scout réparé un scout ignoré par lui-même.
+   */
+  it('un scout dont rien n’a été pris passe en « ignoree » quand le scout suivant arrive', () => {
+    const chemin = fichier()
+    const noter = (depot: string, run: string, quand: string, ...titres: string[]): void =>
+      noterPistesScout({ depot, texte: scout(...titres), run, maintenant: quand, chemin })
+    const choixDe = (run: string): Array<string | undefined> =>
+      lireMemoireScout(chemin)
+        .entrees.filter((e) => e.run === run)
+        .map((e) => e.choix)
+    noter('D:/w', 'r1', '2026-10-21T07:00:00Z', 'A', 'B')
+    noter('D:/autre', 'r9', '2026-10-21T07:05:00Z', 'Q')
+    noter('D:/w', 'r1', '2026-10-21T07:10:00Z', 'A', 'B', 'C')
+    expect(choixDe('r1')).toEqual([undefined, undefined, undefined, undefined, undefined])
+    noter('D:/w', 'r2', '2026-10-21T08:00:00Z', 'D')
+    expect(choixDe('r1')).toEqual(['ignoree', 'ignoree', 'ignoree', 'ignoree', 'ignoree'])
+    expect(choixDe('r2')).toEqual([undefined])
+    expect(choixDe('r9')).toEqual([undefined])
+  })
+
+  it('jumeau : un scout déjà jugé garde ses choix, et une sélection tardive remplace « ignoree »', () => {
+    const chemin = fichier()
+    const noter = (run: string, quand: string, ...titres: string[]): void =>
+      noterPistesScout({ depot: 'D:/w', texte: scout(...titres), run, maintenant: quand, chemin })
+    const choixDe = (run: string): Array<string | undefined> =>
+      lireMemoireScout(chemin)
+        .entrees.filter((e) => e.run === run)
+        .map((e) => e.choix)
+    noter('r1', '2026-10-21T07:00:00Z', 'A', 'B')
+    noterChoixScout({ depot: 'D:/w', demande: selection('A'), maintenant: 'm', chemin })
+    noter('r2', '2026-10-21T08:00:00Z', 'C', 'D')
+    expect(choixDe('r1')).toEqual(['prise', 'laissee'])
+    noter('r3', '2026-10-21T09:00:00Z', 'E')
+    expect(choixDe('r2')).toEqual(['ignoree', 'ignoree'])
+    noterChoixScout({ depot: 'D:/w', demande: selection('D'), maintenant: 'm', chemin })
+    expect(choixDe('r2')).toEqual(['laissee', 'prise'])
+  })
+
+  it('« ignoree » n’entre pas dans le taux de prise ; le bilan compte les scouts sans aucun choix', () => {
+    const chemin = fichier()
+    const tableau =
+      ENTETE +
+      '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 70 | 🔧 fix | B | p | a.ts:1 |\n' +
+      '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
+    noterPistesScout({ depot: 'D:/w', texte: tableau, run: 'r1', maintenant: 't1', chemin })
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'C'), maintenant: 't2', chemin })
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: scout('F', 'G', 'H'),
+      run: 'r2',
+      maintenant: 't3',
+      chemin
+    })
+    noterPistesScout({ depot: 'D:/w', texte: scout('I'), run: 'r3', maintenant: 't4', chemin })
+    const bilan = bilanDesChoix({ depot: 'D:/w', chemin })
+    expect(bilan).toMatch(/\(5 pistes jugées\) : 2 prises sur 5/u)
+    expect(bilan).toMatch(/1 scout sans aucune piste prise/u)
+  })
+
+  /*
+   * PISTE 2, second pas (conv-1033) — « Pourquoi pas ? » : le motif d'une piste laissée. Il va sur le
+   * DERNIER scout qui la proposait, et le bilan le rend au scout suivant.
+   * Entrée qui tue une correction fausse : le même titre dans un scout plus ancien. Le motif dit
+   * pourquoi l'utilisateur écarte CE tableau, pas un tableau d'il y a une semaine.
+   */
+  it('le motif d’une piste refusée va sur le dernier scout qui la proposait, et le bilan le compte', () => {
+    const chemin = fichier()
+    const tableau =
+      ENTETE +
+      '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 70 | 🔧 fix | B | p | a.ts:1 |\n' +
+      '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: scout('B'),
+      run: 'vieux',
+      maintenant: '2026-10-10T08:00:00Z',
+      chemin
+    })
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau,
+      run: 'r1',
+      maintenant: '2026-10-21T08:00:00Z',
+      chemin
+    })
+    expect(noterMotifScout({ depot: 'd:\\w', titre: 'B', motif: 'deja-fait', chemin })).toBe(true)
+    expect(noterMotifScout({ depot: 'D:/w', titre: 'D', motif: 'hors-sujet', chemin })).toBe(true)
+    expect(noterMotifScout({ depot: 'D:/w', titre: 'E', motif: 'deja-fait', chemin })).toBe(true)
+    expect(noterMotifScout({ depot: 'D:/autre', titre: 'B', motif: 'faux', chemin })).toBe(false)
+    const motifs = lireMemoireScout(chemin).entrees.map((e) => [e.run, e.titre, e.motif])
+    expect(motifs).toContainEqual(['vieux', 'B', undefined])
+    expect(motifs).toContainEqual(['r1', 'B', 'deja-fait'])
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'C'), maintenant: 't', chemin })
+    // La sélection garde les motifs : elle ne réécrit que le choix.
+    expect(
+      lireMemoireScout(chemin).entrees.find((e) => e.run === 'r1' && e.titre === 'B')?.motif
+    ).toBe('deja-fait')
+    expect(bilanDesChoix({ depot: 'D:/w', chemin })).toMatch(
+      /motifs des refus : 2 déjà fait, 1 hors sujet/u
+    )
+  })
+
+  /*
+   * Relu à la reprise de conv-1033 : le motif se donne sur une ligne DÉCOCHÉE, mais l'utilisateur peut
+   * la recocher et la lancer. Une piste PRISE n'a pas été refusée : son motif n'est plus un refus.
+   * Entrée qui tue une correction fausse : compter tous les motifs du dernier tableau.
+   */
+  it('un motif posé sur une piste finalement prise ne compte pas comme un refus', () => {
+    const chemin = fichier()
+    const tableau =
+      ENTETE +
+      '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 70 | 🔧 fix | B | p | a.ts:1 |\n' +
+      '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau,
+      run: 'r1',
+      maintenant: '2026-10-21T08:00:00Z',
+      chemin
+    })
+    noterMotifScout({ depot: 'D:/w', titre: 'A', motif: 'trop-petit', chemin })
+    noterMotifScout({ depot: 'D:/w', titre: 'D', motif: 'hors-sujet', chemin })
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'C'), maintenant: 't', chemin })
+    const bilan = bilanDesChoix({ depot: 'D:/w', chemin })
+    expect(bilan).toMatch(/motifs des refus : 1 hors sujet\b/u)
+    expect(bilan).not.toMatch(/trop petit/u)
+  })
+
+  /*
+   * PISTE 1 (conv-1033) — « prise » ne dit pas si le travail a abouti. L'app note DÉJÀ la fin de
+   * chaque run (`OutcomeObservedV1`, `outcome-learning/events-v1.jsonl`) : la piste prise garde le
+   * run qui l'a traitée, et le bilan lit son résultat là, sans second suivi.
+   * Entrée qui tue une correction fausse : un run qui a DEUX résultats (une reprise). Le plus récent
+   * fait foi ; lire le premier trouvé rendrait l'échec d'une tentative déjà réparée.
+   */
+  it('une piste prise garde le run qui l’a traitée, et le bilan dit combien ont été livrées', () => {
+    const chemin = fichier()
+    const tableau =
+      ENTETE +
+      '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 70 | 🔧 fix | B | p | a.ts:1 |\n' +
+      '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
+    noterPistesScout({ depot: 'D:/w', texte: tableau, run: 'scout-1', maintenant: 't1', chemin })
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: selection('A', 'C'),
+      maintenant: 't2',
+      run: 'run-build',
+      chemin
+    })
+    const traitees = lireMemoireScout(chemin).entrees.map((e) => [e.titre, e.traitePar])
+    expect(traitees).toEqual([
+      ['A', 'run-build'],
+      ['B', undefined],
+      ['C', 'run-build'],
+      ['D', undefined],
+      ['E', undefined]
+    ])
+    const resultats = dernierResultatParRun([
+      {
+        runId: 'run-build',
+        createdAt: '2026-10-21T08:00:00Z',
+        status: 'failed',
+        terminalClass: 'defect'
+      },
+      {
+        runId: 'run-build',
+        createdAt: '2026-10-21T09:00:00Z',
+        status: 'succeeded',
+        terminalClass: 'delivered'
+      },
+      {
+        runId: 'autre',
+        createdAt: '2026-10-21T10:00:00Z',
+        status: 'failed',
+        terminalClass: 'defect'
+      }
+    ])
+    expect(resultats.get('run-build')).toBe('delivered')
+    const bilan = bilanDesChoix({
+      depot: 'D:/w',
+      chemin,
+      resultatDuRun: (run) => resultats.get(run)
+    })
+    expect(bilan).toMatch(/prises traitées : 2 livrées, 0 en échec/u)
+    const enEchec = bilanDesChoix({ depot: 'D:/w', chemin, resultatDuRun: () => 'defect' })
+    expect(enEchec).toMatch(/prises traitées : 0 livrée, 2 en échec/u)
+    // Sans lecteur de résultats (ou sans run connu), le bilan se tait sur la livraison.
+    expect(bilanDesChoix({ depot: 'D:/w', chemin })).not.toMatch(/livrée/u)
+  })
+
+  // Le journal de l'app mêle propositions, décisions et résultats : seuls les résultats comptent.
+  it('lit les résultats dans les événements du journal de l’app, et rien d’autre', () => {
+    const resultats = resultatsDesEvenements([
+      { kind: 'proposal', value: { runId: 'x' } },
+      {
+        kind: 'outcome',
+        value: {
+          runId: 'run-a19492c9b620-1',
+          createdAt: '2026-10-21T07:40:31.427Z',
+          status: 'succeeded',
+          terminalClass: 'delivered'
+        }
+      }
+    ] as never)
+    expect([...resultats]).toEqual([['run-a19492c9b620-1', 'delivered']])
+  })
+
+  it('jumeau : un résultat sans classe se lit sur son statut ; les pistes livrées sont rendues', () => {
+    const resultats = dernierResultatParRun([
+      { runId: 'a', createdAt: '2026-10-21T08:00:00Z', status: 'succeeded' },
+      { runId: 'b', createdAt: '2026-10-21T08:00:00Z', status: 'failed' }
+    ])
+    expect(resultats.get('a')).toBe('delivered')
+    expect(resultats.get('b')).toBe('indeterminate')
+    const chemin = fichier()
+    noterPistesScout({ depot: 'D:/w', texte: scout('A', 'B'), run: 's1', maintenant: 't1', chemin })
+    noterChoixScout({ depot: 'D:/w', demande: selection('A'), maintenant: 't2', run: 'a', chemin })
+    noterPistesScout({ depot: 'D:/w', texte: scout('C', 'D'), run: 's2', maintenant: 't3', chemin })
+    noterChoixScout({ depot: 'D:/w', demande: selection('C'), maintenant: 't4', run: 'b', chemin })
+    expect(
+      pistesDejaLivrees({ depot: 'D:/w', chemin, resultatDuRun: (run) => resultats.get(run) })
+    ).toEqual([{ titre: 'A', run: 'a' }])
+  })
+
+  /*
+   * PISTE 6 (conv-1033) — les 11 premières pistes prises venaient des 15 et 16/10, d'une même séance
+   * sur les animations, et pesaient autant qu'un choix d'hier. Un choix vieillit : son poids est
+   * divisé par deux toutes les `DEMI_VIE_CHOIX_JOURS`.
+   * Entrée qui tue une correction fausse : deux séances SYMÉTRIQUES (l'ancienne prend tous les fix,
+   * la récente tous les new). Sans pondération, les taux s'égalisent et aucun facteur ne sort.
+   */
+  it('un choix ancien pèse moins qu’un choix récent dans le facteur de note', () => {
+    const chemin = fichier()
+    const tableau = (fix: string[], neufs: string[]): string =>
+      ENTETE +
+      [
+        ...fix.map((t, i) => `| ${i + 1} | 70 | 🔧 fix | ${t} | p | a.ts:1 |`),
+        ...neufs.map((t, i) => `| ${i + 4} | 70 | 🆕 new | ${t} | p | x |`)
+      ].join('\n')
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau(['A', 'B', 'C'], ['D', 'E', 'F']),
+      run: 'ancien',
+      maintenant: '2026-07-01T10:00:00Z',
+      chemin
+    })
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'B', 'C'), maintenant: 'm', chemin })
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau(['G', 'H', 'I'], ['J', 'K', 'L']),
+      run: 'recent',
+      maintenant: '2026-10-20T10:00:00Z',
+      chemin
+    })
+    noterChoixScout({ depot: 'D:/w', demande: selection('J', 'K', 'L'), maintenant: 'm', chemin })
+    expect(facteursDesChoix({ depot: 'D:/w', chemin, maintenant: '2026-10-21T10:00:00Z' })).toEqual(
+      { fix: 0.5, new: 1.5 }
+    )
+  })
+
+  it('jumeau : deux séances du même jour pèsent pareil, les taux s’égalisent, aucun facteur', () => {
+    const chemin = fichier()
+    const tableau = (fix: string[], neufs: string[]): string =>
+      ENTETE +
+      [
+        ...fix.map((t, i) => `| ${i + 1} | 70 | 🔧 fix | ${t} | p | a.ts:1 |`),
+        ...neufs.map((t, i) => `| ${i + 4} | 70 | 🆕 new | ${t} | p | x |`)
+      ].join('\n')
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau(['A', 'B', 'C'], ['D', 'E', 'F']),
+      run: 'matin',
+      maintenant: '2026-10-21T08:00:00Z',
+      chemin
+    })
+    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'B', 'C'), maintenant: 'm', chemin })
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: tableau(['G', 'H', 'I'], ['J', 'K', 'L']),
+      run: 'soir',
+      maintenant: '2026-10-21T18:00:00Z',
+      chemin
+    })
+    noterChoixScout({ depot: 'D:/w', demande: selection('J', 'K', 'L'), maintenant: 'm', chemin })
+    expect(facteursDesChoix({ depot: 'D:/w', chemin, maintenant: '2026-10-21T18:00:00Z' })).toEqual(
+      {}
+    )
   })
 })
 

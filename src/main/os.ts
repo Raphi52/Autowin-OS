@@ -147,8 +147,11 @@ import {
   bilanDesChoix,
   facteursDesChoix,
   pistesDejaConnues,
-  titresStockVeilleAutowin
+  titresStockVeilleAutowin,
+  type ClasseResultatRun,
+  type LecteurResultatRun
 } from './scout-memoire'
+import { sujetsDejaFaits } from './scout-plafond'
 import type { LanceurCommandeSkill } from './skill-node-tools'
 import {
   executionWorkspacePreferenceFile,
@@ -422,6 +425,8 @@ export class AutowinOS {
   private recoveredCausalClaimsListener?: WatchdogMutationClaimsSink
   private readonly pendingRecoveredCausalClaims: WatchdogMutationClaims[] = []
   private causalMemoryRetriever?: (conversationId: string) => string
+  /** Le dernier résultat de chaque run, lu dans le journal de l'app (cf. `setResultatsDesRuns`). */
+  private resultatsDesRuns?: () => ReadonlyMap<string, ClasseResultatRun>
   /** Outils Brain d'un noeud skill, branches apres creation du bus (cf. `setSkillCommandRunner`). */
   private skillCommandRunner?: LanceurCommandeSkill
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
@@ -616,11 +621,13 @@ export class AutowinOS {
           }),
         noter: (depot, texteScout, run) =>
           noterPistesScout({ depot, texte: texteScout, run, maintenant: new Date().toISOString() }),
-        choisir: (depot, demande) =>
-          noterChoixScout({ depot, demande, maintenant: new Date().toISOString() }),
-        bilan: (depot) => bilanDesChoix({ depot }),
+        choisir: (depot, demande, run) =>
+          noterChoixScout({ depot, demande, run, maintenant: new Date().toISOString() }),
+        bilan: (depot) => bilanDesChoix({ depot, resultatDuRun: this.lecteurResultatRun() }),
         // fix-ok: sans cette ligne, la note ajustee sur les choix reels restait vide en production.
-        facteurs: (depot) => facteursDesChoix({ depot })
+        facteurs: (depot) => facteursDesChoix({ depot }),
+        // Piste 4 de conv-1033 : commits recents et pistes deja livrees, pour la marque « deja fait ? ».
+        dejaFaits: (depot) => sujetsDejaFaits({ depot, resultatDuRun: this.lecteurResultatRun() })
       },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
@@ -898,6 +905,20 @@ export class AutowinOS {
    */
   setSkillCommandRunner(runner: LanceurCommandeSkill): void {
     this.skillCommandRunner = runner
+  }
+
+  /**
+   * Branche la lecture des résultats de runs (journal `outcome-learning`, construit dans le point
+   * d'entrée) : la mémoire du scout y relit ce que sont devenues les pistes prises (piste 1, conv-1033).
+   */
+  setResultatsDesRuns(lecteur: () => ReadonlyMap<string, ClasseResultatRun>): void {
+    this.resultatsDesRuns = lecteur
+  }
+
+  /** Une lecture du journal par appel ; non branché → `undefined`, le bilan se tait sur la livraison. */
+  private lecteurResultatRun(): LecteurResultatRun | undefined {
+    const resultats = this.resultatsDesRuns?.()
+    return resultats ? (run) => resultats.get(run) : undefined
   }
 
   /** Branche la mémoire causale après création du TraceStore (construit dans le point d'entrée). */

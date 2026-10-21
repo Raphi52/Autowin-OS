@@ -12,6 +12,21 @@
 
 export type Band = 'g' | 'y' | 'r' | null
 export type ScoutType = 'fix' | 'new' | null
+
+/**
+ * « Pourquoi pas ? » sur une piste décochée (piste 2, conv-1033) : les 4 raisons de laisser une
+ * piste, au plus un clic. L'interface les affiche, la mémoire du scout les garde et les rend au scout
+ * suivant. Partagé ici : les deux processus lisent déjà ce module.
+ */
+export const MOTIFS_REFUS = {
+  'deja-fait': 'déjà fait',
+  faux: 'faux',
+  'trop-petit': 'trop petit',
+  'hors-sujet': 'hors sujet'
+} as const
+export type MotifRefus = keyof typeof MOTIFS_REFUS
+export const estMotifRefus = (valeur: unknown): valeur is MotifRefus =>
+  typeof valeur === 'string' && Object.hasOwn(MOTIFS_REFUS, valeur)
 export interface ScoutRow {
   num: string
   /** Note /100 normalisee quand la colonne Score en porte une de lisible. */
@@ -22,6 +37,11 @@ export interface ScoutRow {
   what: string
   why: string
   how: string
+  /**
+   * La commande de preuve que la machine pourra lancer (`npx vitest run …`) : 7e colonne FACULTATIVE
+   * `Commande`. Le « signal de fait » d'un correctif n'était que de la prose (piste 3, conv-1033).
+   */
+  commande?: string
 }
 
 function band(cell: string): Band {
@@ -120,6 +140,13 @@ const COLONNES_VALEUR = ['why', 'pourquoi', 'valeur', 'preuve', 'evidence', 'pro
  * (Note/Comment) rendait `null` (sonde tsx, exit 0) ; « Commentaire » reste exclu (test vert).
  */
 const estColonneNote = (entete: string): boolean => /^note(?![a-z])/i.test(entete.trim())
+/**
+ * La colonne de la commande de preuve (piste 3, conv-1033), en tête de cellule. Hors de
+ * `COLONNES_VALEUR` (« Preuve » y est déjà le Why) et de `COLONNES_DEPART` ; « Comment », le How de
+ * la skill, n'est pas « Command » : il diverge à la 5e lettre.
+ */
+const estColonneCommande = (entete: string): boolean =>
+  /^command(?:e|es|s)?(?![a-z])/i.test(entete.trim())
 const estColonneComment = (entete: string): boolean => /^comment(?![a-z])/i.test(entete.trim())
 
 function isScoutHeader(headers: string[]): boolean {
@@ -150,6 +177,8 @@ export interface TableauScoutLocalise {
     what: number
     why: number
     how: number
+    /** -1 sans colonne `Commande` : elle est facultative. */
+    commande: number
   }
   /** Les lignes CANDIDATES, dans l'ordre du texte, avec leur index dans `lignesTexte`. */
   lignes: Array<{ index: number; cellules: string[] }>
@@ -159,12 +188,14 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
   const tableau = localiserTableauScout(text)
   if (!tableau) return null
   const { num: iNum, impact: iImpact, effort: iEffort, score: iScore } = tableau.colonnes
-  const { type: iType, what: iWhat, why: iWhy, how: iHow } = tableau.colonnes
+  const { type: iType, what: iWhat, why: iWhy, how: iHow, commande: iCommande } = tableau.colonnes
   const rows: ScoutRow[] = []
   for (const { cellules: c } of tableau.lignes) {
     const at = (idx: number, fallback = ''): string =>
       idx >= 0 && idx < c.length ? c[idx] : fallback
     const note = iScore >= 0 ? scoreSur100(at(iScore)) : undefined
+    // Une cellule vide ou un simple tiret ne portent aucune commande.
+    const commande = iCommande >= 0 ? at(iCommande).trim() : ''
     rows.push({
       num: at(iNum, String(rows.length + 1)),
       ...(note === undefined ? {} : { score: note }),
@@ -179,7 +210,8 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
       // `iWhat` est garanti présent par `isScoutHeader` : plus de repli sur la colonne 1 « au hasard ».
       what: at(iWhat),
       why: at(iWhy),
-      how: at(iHow)
+      how: at(iHow),
+      ...(commande && !/^[-—–\s]*$/u.test(commande) ? { commande } : {})
     })
   }
   return rows.length ? rows : null
@@ -209,6 +241,7 @@ export function localiserTableauScout(text: string): TableauScoutLocalise | null
   const iWhy = colOf(headers, COLONNES_VALEUR)
   const iHowNomme = colOf(headers, COLONNES_DEPART)
   const iHow = iHowNomme >= 0 ? iHowNomme : headers.findIndex(estColonneComment)
+  const iCommande = headers.findIndex(estColonneCommande)
 
   /**
    * Une ligne de STRUCTURE n'est pas un candidat.
@@ -259,7 +292,8 @@ export function localiserTableauScout(text: string): TableauScoutLocalise | null
       type: iType,
       what: iWhat,
       why: iWhy,
-      how: iHow
+      how: iHow,
+      commande: iCommande
     },
     lignes
   }

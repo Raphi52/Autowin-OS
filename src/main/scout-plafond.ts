@@ -25,7 +25,12 @@ import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { localiserTableauScout, scoreSur100 } from '../shared/scout-table'
-import type { FacteursChoix } from './scout-memoire'
+import {
+  memeSujetQue,
+  pistesDejaLivrees,
+  type FacteursChoix,
+  type LecteurResultatRun
+} from './scout-memoire'
 
 export const PLAFOND_PREUVE = 50
 
@@ -236,6 +241,120 @@ export function ajusterNotesSurChoix(texte: string, facteurs: FacteursChoix): st
     notes,
     `> ${MARQUE_AJUSTEMENT} : ${detail} (taux de prise de chaque type rapporté au taux global, sur tes pistes déjà jugées).`
   )
+}
+
+/*
+ * « DÉJÀ FAIT ? » CONTRÔLÉ EN CODE (piste 4, conv-1033). La règle « réfute avant de rendre » n'était
+ * que du texte dans `phase-briefs.ts`. Une piste dont le titre redit un commit récent du dépôt, ou une
+ * piste déjà LIVRÉE par un run précédent (`pistesDejaLivrees`), reçoit une marque sous le tableau.
+ * Une marque, pas un plafond : deux textes qui partagent leurs mots ne prouvent pas que le travail
+ * est fait — c'est le lecteur qui tranche, la ligne lui dit où regarder.
+ */
+const MARQUE_DEJA_FAIT = 'Déjà fait ? Autowin a trouvé un sujet voisin'
+
+/** Un sujet déjà traité : sa provenance (« commit 398a1b7e », « piste livrée par run-… ») et son texte. */
+export interface SujetDejaFait {
+  origine: string
+  texte: string
+}
+
+export function marquerDejaFait(texte: string, faits: readonly SujetDejaFait[]): string {
+  if (faits.length === 0 || (texte ?? '').includes(MARQUE_DEJA_FAIT)) return texte
+  const tableau = localiserTableauScout(texte ?? '')
+  if (!tableau) return texte
+  const { what: iWhat, num: iNum } = tableau.colonnes
+  const marques: string[] = []
+  for (const { cellules } of tableau.lignes) {
+    const titre = cellules[iWhat] ?? ''
+    const fait = faits.find((f) => f.texte && memeSujetQue(titre, f.texte))
+    if (!fait) continue
+    const nom = iNum >= 0 ? `ligne ${cellules[iNum]}` : `« ${titre} »`
+    const court = fait.texte.length > 80 ? `${fait.texte.slice(0, 79)}…` : fait.texte
+    marques.push(`${nom} ↔ ${fait.origine} « ${court} »`)
+  }
+  if (marques.length === 0) return texte
+  const lignes = [...tableau.lignesTexte]
+  let fin = Math.max(...tableau.lignes.map((l) => l.index))
+  while ((lignes[fin + 1] ?? '').trim().startsWith('|')) fin += 1
+  lignes.splice(
+    fin + 1,
+    0,
+    '',
+    `> ${MARQUE_DEJA_FAIT} : ${marques.join(' ; ')}. Vérifie avant de la reprendre.`
+  )
+  return lignes.join('\n')
+}
+
+/**
+ * Le sujet d'un commit sans ce qui ne dit rien du TRAVAIL : préfixe `type(zone):`, `auto(conv-N):`,
+ * `agent run-…:`, suffixe `(conv-N)`, et l'en-tête d'un message de sélection (« Traite ENSEMBLE ces
+ * N candidats issus du scout interne d'Autowin : »), qui partage ses mots avec toute piste sur la
+ * sélection. Rien ne reste → ''.
+ */
+export function sujetDeCommit(sujet: string): string {
+  return sujet
+    .replace(/^\s*agent\s+run-[\w-]+\s*:?\s*/iu, '')
+    .replace(/^\s*[a-z]+(?:\([^)]*\))?!?\s*:\s*/iu, '')
+    .replace(/\(\s*conv-\d+\s*\)/giu, ' ')
+    .replace(
+      /t?raite\s+(?:ensemble\s+ces\s+\d+\s+candidats|ce\s+candidat)\s+issus?\s+du\s+scout(?:\s+interne)?(?:\s+d['’]autowin)?\s*:?/iu,
+      ' '
+    )
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+/** Lance `git log` dans un dossier ; `null` en cas d'échec. Injecté pour tester sans git. */
+export type LanceurGitLog = (racine: string) => Promise<string | null>
+
+const gitLogRecent: LanceurGitLog = (racine) =>
+  new Promise((resoudre) => {
+    execFile(
+      'git',
+      ['log', '--since=30.days', '--no-merges', '--format=%h%x09%s'],
+      { ...optionsListeFichiers(resolve(racine)) },
+      (erreur, stdout) => resoudre(erreur ? null : String(stdout))
+    )
+  })
+
+/**
+ * Les sujets des commits des 30 derniers jours, nettoyés. ASYNCHRONE à dessein, comme la liste des
+ * fichiers (`lecteurAncrageDepuisDisque`) : un `git` synchrone a déjà figé l'app 1,5 s (conv-204).
+ */
+export async function sujetsDesCommitsRecents(
+  racine: string,
+  lancer: LanceurGitLog = gitLogRecent
+): Promise<SujetDejaFait[]> {
+  const sortie = await lancer(racine).catch(() => null)
+  if (!sortie) return []
+  return sortie
+    .split('\n')
+    .map((ligne) => /^([0-9a-f]{4,40})\t(.*)$/iu.exec(ligne.trim()))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => ({ origine: `commit ${m[1]}`, texte: sujetDeCommit(m[2]!) }))
+    .filter((fait) => fait.texte)
+}
+
+/**
+ * Tout ce qui est déjà traité sur un dépôt : les commits des 30 derniers jours, puis les pistes prises
+ * dont le run a LIVRÉ (piste 1). Les commits de sélection ne citent aucune piste (« agent run-…:
+ * raite ENSEMBLE ces 8 candidats… ») : sans la mémoire, une piste livrée par l'un d'eux passerait.
+ */
+export async function sujetsDejaFaits(entree: {
+  depot: string
+  resultatDuRun?: LecteurResultatRun
+  chemin?: string
+  lancer?: LanceurGitLog
+}): Promise<SujetDejaFait[]> {
+  const commits = await sujetsDesCommitsRecents(entree.depot, entree.lancer)
+  const livrees = entree.resultatDuRun
+    ? pistesDejaLivrees({
+        depot: entree.depot,
+        resultatDuRun: entree.resultatDuRun,
+        ...(entree.chemin ? { chemin: entree.chemin } : {})
+      }).map(({ titre, run }) => ({ origine: `piste livrée par ${run}`, texte: titre }))
+    : []
+  return [...commits, ...livrees]
 }
 
 /** Réécrit les lignes modifiées, retrie par note décroissante et ajoute l'explication dessous. */

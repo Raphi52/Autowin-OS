@@ -63,6 +63,12 @@ export type ChatCandidatsPickBlock = {
   candidats: CandidatAffiche[]
   /** Le texte d'origine du scout : il porte la ligne `CIBLE:`/`CIBLES:` qui pré-coche les cases. */
   texteScout?: string
+  /**
+   * Vrai pour un TABLEAU de scout : ses pistes vivent dans la mémoire du scout, qui peut noter le
+   * motif d'une piste décochée (« Pourquoi pas ? », piste 2 de conv-1033). Les candidats de la veille
+   * web vivent ailleurs et ont leur propre « Écarter ».
+   */
+  deTableauScout?: boolean
 }
 export type ChatAskDecisionBlock = {
   kind: 'ask-decision'
@@ -1734,7 +1740,8 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
         blocks.push({
           kind: 'candidats-pick',
           candidats: candidatsDepuisScoutTable(scoutRows),
-          texteScout: part.text
+          texteScout: part.text,
+          deTableauScout: true
         })
         continue
       }

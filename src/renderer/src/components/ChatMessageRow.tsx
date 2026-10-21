@@ -650,6 +650,14 @@ export const ChatMessageRow = memo(
             )
           }
           onPick={(prompt) => onPickSuggestion?.(prompt)}
+          // « Pourquoi pas ? » : seulement pour un TABLEAU de scout, dont les pistes vivent dans la
+          // mémoire du scout (piste 2, conv-1033). Sans pont vers le processus principal : pas de bouton.
+          onMotif={
+            part.deTableauScout && window.api?.scoutMotif
+              ? (candidat, motif) =>
+                  window.api.scoutMotif(candidat.titre, motif, conversationId ?? undefined)
+              : undefined
+          }
         />
       ) : part.kind === 'error' ? (
         <ChatErrorBlock

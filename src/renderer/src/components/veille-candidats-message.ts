@@ -27,6 +27,8 @@ export interface CandidatAffiche {
   what?: string
   why?: string
   how?: string
+  /** La commande de preuve de la ligne du tableau scout (colonne `Commande`, piste 3 de conv-1033). */
+  commande?: string
   /**
    * Pastilles du tableau scout, telles quelles ('g' | 'y' | 'r'). Sur un scout au format
    * Impact/Effort il n'existe AUCUN nombre : ces deux pastilles SONT l'indication de valeur de la
@@ -133,6 +135,7 @@ export function candidatsDepuisScoutTable(
     what: string
     why: string
     how: string
+    commande?: string
   }[]
 ): CandidatAffiche[] {
   return rows.map((row) => {
@@ -146,7 +149,8 @@ export function candidatsDepuisScoutTable(
       ...(row.type ? { type: row.type } : {}),
       ...(row.what.trim() ? { what: row.what.trim() } : {}),
       ...(row.why.trim() ? { why: row.why.trim() } : {}),
-      ...(row.how.trim() ? { how: row.how.trim() } : {})
+      ...(row.how.trim() ? { how: row.how.trim() } : {}),
+      ...(row.commande?.trim() ? { commande: row.commande.trim() } : {})
     }
   })
 }
@@ -176,6 +180,7 @@ export function redigerPromptWorkflowSelection(selection: readonly CandidatAffic
       candidat.what ? `   Quoi : ${candidat.what}` : undefined,
       candidat.why ? `   Pourquoi : ${candidat.why}` : undefined,
       candidat.how ? `   Comment : ${candidat.how}` : undefined,
+      candidat.commande ? `   Preuve à lancer : ${candidat.commande}` : undefined,
       candidat.dateSource ? `   Date source : ${candidat.dateSource}` : undefined,
       candidat.langue ? `   Langue : ${candidat.langue}` : undefined
     ].filter((detail): detail is string => detail !== undefined)

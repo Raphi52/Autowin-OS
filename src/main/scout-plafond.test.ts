@@ -7,7 +7,11 @@ import { parseScoutTable } from '../shared/scout-table'
 import {
   ajusterNotesSurChoix,
   lecteurAncrageDepuisDisque,
+  marquerDejaFait,
   plafonnerNotesScout,
+  sujetDeCommit,
+  sujetsDejaFaits,
+  sujetsDesCommitsRecents,
   type EtatAncrage
 } from './scout-plafond'
 
@@ -336,5 +340,154 @@ describe('plafond de preuve : une absence affirmée doit être montrée', () => 
   it('jumeau : une note déjà au plafond ou en dessous ne bouge pas, et rien n’est écrit', () => {
     const texte = `${ENTETE_B}| 1 | 50 | 🆕 feature | Peau | three.js n'a rien de tout fait. | Ajouter |\n`
     expect(plafonnerNotesScout(texte)).toBe(texte)
+  })
+})
+
+/*
+ * PISTE 4 (conv-1033) — « réfute avant de rendre » n'était que du texte (`phase-briefs.ts`). Une piste
+ * dont le sujet redit un commit récent, ou une piste déjà livrée, reçoit une MARQUE sous le tableau.
+ * Une marque, pas un plafond : la ressemblance de mots est un indice, pas une preuve.
+ * Sujets réels de `git log --since=30.days` (21/10).
+ */
+describe('déjà fait ? : une piste qui redit un commit récent ou une piste livrée est marquée', () => {
+  const tableau = (...titres: string[]): string =>
+    '## Cible\nligne 1\n\n' +
+    ENTETE +
+    titres.map((t, i) => `| ${i + 1} | ${80 - i} | 🆕 new | ${t} | p | \`a.ts:1\` |`).join('\n') +
+    '\n\nSUITE: fin'
+
+  it('nettoie le sujet d’un commit : préfixe de type, auto(conv-N), agent run-…, (conv-N)', () => {
+    expect(
+      sujetDeCommit(
+        "auto(conv-1030): Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+      )
+    ).toBe(
+      "Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+    )
+    expect(
+      sujetDeCommit('feat(hdesk): vue Bureaux cachés en disposition « Console » (conv-1025)')
+    ).toBe('vue Bureaux cachés en disposition « Console »')
+    // En-tête d'un message de sélection, sans aucune piste : il ne dit rien de ce qui a été fait.
+    expect(
+      sujetDeCommit(
+        "agent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :"
+      )
+    ).toBe('')
+    // Commit réel 56800c14 : un run d'agent sans sujet, sans deux-points.
+    expect(sujetDeCommit('agent run-2cbeb058350e-1')).toBe('')
+  })
+
+  it('la piste qui redit le commit 398a1b7e est marquée ; sa voisine sur BM25 ne l’est pas', () => {
+    const faits = [
+      {
+        origine: 'commit 398a1b7e',
+        texte: sujetDeCommit(
+          "auto(conv-1030): Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+        )
+      }
+    ]
+    const sortie = marquerDejaFait(
+      tableau(
+        '**Raciniseur français et insensibilité aux accents dans la recherche BM25**',
+        '**Recherche BM25 : pondérer les titres des notes**'
+      ),
+      faits
+    )
+    expect(sortie).toMatch(
+      /> Déjà fait \? Autowin a trouvé un sujet voisin : ligne 1 ↔ commit 398a1b7e/u
+    )
+    expect(sortie).not.toMatch(/ligne 2 ↔/u)
+    // Les notes et l'ordre ne bougent pas : c'est une marque, pas un plafond.
+    expect(sortie).toContain('| 1 | 80 | 🆕 new | **Raciniseur')
+    expect(sortie).toContain('| 2 | 79 | 🆕 new | **Recherche BM25')
+    expect(marquerDejaFait(sortie, faits)).toBe(sortie)
+  })
+
+  /*
+   * Entrée qui tue une correction fausse : l'en-tête brut d'un commit de sélection. Comparé tel quel,
+   * il partage 4 racines sur 5 (ensemble, candidats, issus, interne) avec une vraie piste sur la
+   * sélection groupée, et la marquerait « déjà faite » à chaque nouveau commit de sélection.
+   */
+  it('jumeau : l’en-tête nettoyé d’un commit de sélection ne marque pas une piste sur ce sujet', () => {
+    const brut =
+      "agent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :"
+    const piste = tableau('**Traiter ensemble les candidats issus du scout interne**')
+    expect(marquerDejaFait(piste, [{ origine: 'commit 3927ddf1', texte: brut }])).toMatch(
+      /ligne 1 ↔/u
+    )
+    expect(
+      marquerDejaFait(piste, [{ origine: 'commit 3927ddf1', texte: sujetDeCommit(brut) }])
+    ).toBe(piste)
+  })
+
+  it('une piste déjà livrée par un run précédent est marquée avec ce run', () => {
+    const sortie = marquerDejaFait(
+      tableau('**Une piste livrée, pas seulement prise** — relier au résultat du run'),
+      [
+        {
+          origine: 'piste livrée par run-ef173fb3c45b-1',
+          texte: '**Une piste « livrée », pas seulement « prise ».**'
+        }
+      ]
+    )
+    expect(sortie).toMatch(/ligne 1 ↔ piste livrée par run-ef173fb3c45b-1/u)
+  })
+
+  it('sans fait connu ou sans tableau, la sortie ne change pas', () => {
+    expect(marquerDejaFait(tableau('**A b c**'), [])).toBe(tableau('**A b c**'))
+    expect(
+      marquerDejaFait('pas de tableau', [{ origine: 'commit x', texte: 'pas de tableau' }])
+    ).toBe('pas de tableau')
+  })
+
+  it('les sujets déjà faits réunissent les commits récents et les pistes livrées de la mémoire', async () => {
+    const chemin = join(mkdtempSync(join(tmpdir(), 'autowin-dejafait-')), 'scout-pistes.json')
+    writeFileSync(
+      chemin,
+      JSON.stringify({
+        entrees: [
+          {
+            depot: 'd:/w',
+            titre: 'Piste livrée',
+            vuLe: 't1',
+            run: 's1',
+            choix: 'prise',
+            traitePar: 'run-ok'
+          },
+          {
+            depot: 'd:/w',
+            titre: 'Piste ratée',
+            vuLe: 't1',
+            run: 's1',
+            choix: 'prise',
+            traitePar: 'run-ko'
+          }
+        ]
+      })
+    )
+    const faits = await sujetsDejaFaits({
+      depot: 'D:/w',
+      chemin,
+      resultatDuRun: (run) => (run === 'run-ok' ? 'delivered' : 'defect'),
+      lancer: async () => '398a1b7e	auto(conv-1030): Ajoute un raciniseur français'
+    })
+    expect(faits).toEqual([
+      { origine: 'commit 398a1b7e', texte: 'Ajoute un raciniseur français' },
+      { origine: 'piste livrée par run-ok', texte: 'Piste livrée' }
+    ])
+    // Sans lecteur de résultats, seuls les commits comptent.
+    expect(await sujetsDejaFaits({ depot: 'D:/w', chemin, lancer: async () => null })).toEqual([])
+  })
+
+  it('les sujets de commit sont lus par git log, nettoyés ; un échec de git ne rend rien', async () => {
+    const lus = await sujetsDesCommitsRecents('D:/w', async () =>
+      [
+        '398a1b7e\tauto(conv-1030): Ajoute un raciniseur français',
+        "3927ddf1\tagent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :",
+        ''
+      ].join('\n')
+    )
+    expect(lus).toEqual([{ origine: 'commit 398a1b7e', texte: 'Ajoute un raciniseur français' }])
+    expect(await sujetsDesCommitsRecents('D:/w', async () => null)).toEqual([])
   })
 })

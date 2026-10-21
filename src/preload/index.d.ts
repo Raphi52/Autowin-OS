@@ -581,6 +581,15 @@ interface ChatApi {
   veilleMarquer: (id: string, statut: 'nouveau' | 'ecarte' | 'prompte') => Promise<StockVeille>
   /** Lance la passe INTERNE (scout local) et rend le résultat ; le stock est réécrit côté main. */
   veilleGenerer: (conversationId?: string) => Promise<{ retenus: number; stock: StockVeille }>
+  /**
+   * « Pourquoi pas ? » sur une piste décochée du panneau du scout (piste 2, conv-1033) : vrai si la
+   * mémoire du scout du dossier de la conversation connaissait la piste.
+   */
+  scoutMotif: (
+    titre: string,
+    motif: 'deja-fait' | 'faux' | 'trop-petit' | 'hors-sujet',
+    conversationId?: string
+  ) => Promise<boolean>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>

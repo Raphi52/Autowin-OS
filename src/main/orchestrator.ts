@@ -139,7 +139,9 @@ import { shaHeadSurDisque } from './depot-git'
 import {
   ajusterNotesSurChoix,
   lecteurAncrageDepuisDisque,
-  plafonnerNotesScout
+  marquerDejaFait,
+  plafonnerNotesScout,
+  type SujetDejaFait
 } from './scout-plafond'
 import { blocPistesDejaConnues, type FacteursChoix } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
@@ -730,12 +732,21 @@ export interface OrchestratorCollaboratorDeps {
     /** `demande` = la tâche du run : seuls les titres qui en touchent le sujet reviennent (conv-339). */
     connues: (depot: string, sauf: string, demande?: string) => string[]
     noter: (depot: string, texteScout: string, run: string) => void
-    /** Les pistes prises/laissées, lues dans la demande du run (message de sélection). */
-    choisir?: (depot: string, demande: string) => void
+    /**
+     * Les pistes prises/laissées, lues dans la demande du run (message de sélection). `run` = ce
+     * run, qui TRAITE les pistes prises : leur résultat se relit sur lui (piste 1, conv-1033).
+     */
+    choisir?: (depot: string, demande: string, run: string) => void
     /** Le bilan des choix réels sur ce dépôt ; '' tant qu'il y a trop peu de pistes jugées. */
     bilan?: (depot: string) => string
     /** Le facteur de note par type, tiré des choix réels (`facteursDesChoix`) ; {} sans mesure. */
     facteurs?: (depot: string) => FacteursChoix
+    /**
+     * Les sujets déjà traités sur ce dépôt (commits récents, pistes livrées) : une piste qui les
+     * redit est marquée « déjà fait ? » (`marquerDejaFait`, piste 4 de conv-1033). Lu en tâche de
+     * fond au début du run, comme la liste des fichiers du plafond.
+     */
+    dejaFaits?: (depot: string) => Promise<readonly SujetDejaFait[]>
   }
 }
 
@@ -3705,7 +3716,7 @@ ${CONTRAT_OBJECTIONS}`
     try {
       // D'abord les CHOIX : une demande de sélection dit quelles pistes du scout précédent ont été
       // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
-      this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task)
+      this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task, runId)
       blocPistesConnues = blocPistesDejaConnues(
         this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId, task) ?? [],
         this.deps.memoireScout?.bilan?.(this.deps.executionWorkspace) ?? ''
@@ -3974,14 +3985,40 @@ ${CONTRAT_OBJECTIONS}`
     // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
     // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
     const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
-    this.lecturesDeFondByRun.set(runId, lireAncrages.pret)
+    // « Déjà fait ? » (piste 4, conv-1033) : `git log` tourne DANS le dossier de travail, donc sa
+    // lecture rejoint celle des fichiers, que la fin du run attend (EBUSY, voir `lecturesDeFondByRun`).
+    // Pas encore revenue quand le scout finit : pas de marque, rien d'autre ne change.
+    let dejaFaits: readonly SujetDejaFait[] = []
+    const lireDejaFaits = this.deps.memoireScout?.dejaFaits
+    const lectureDejaFaits = lireDejaFaits
+      ? Promise.resolve()
+          .then(() => lireDejaFaits(this.deps.executionWorkspace))
+          .then(
+            (liste) => {
+              dejaFaits = liste
+            },
+            (erreur: unknown) =>
+              push({
+                step: 'gate',
+                role: 'gate',
+                detail: `sujets déjà traités illisibles (${erreur instanceof Error ? erreur.message : String(erreur)}) — pas de marque « déjà fait ? »`
+              })
+          )
+      : Promise.resolve()
+    this.lecturesDeFondByRun.set(
+      runId,
+      Promise.all([lireAncrages.pret, lectureDejaFaits]).then(() => undefined)
+    )
     // La note ajustee sur les choix reels passe AVANT le plafond : un aveu reste a 50.
     // fix-ok: le facteur des choix (piste 7, conv-890) n'atteignait pas la note sans ce branchement :
     // orchestrator.scout-cible.test.ts rend 72 au lieu de 36 quand il manque.
     const garderCibleScout = (phase: NodePhase, texte: string): string =>
       phase === 'scout'
         ? sortieScoutAvecCible(
-            plafonnerNotesScout(ajusterNotesSurChoix(texte, facteursChoix), lireAncrages)
+            marquerDejaFait(
+              plafonnerNotesScout(ajusterNotesSurChoix(texte, facteursChoix), lireAncrages),
+              dejaFaits
+            )
           )
         : texte
 

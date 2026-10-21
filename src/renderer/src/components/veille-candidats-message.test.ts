@@ -161,6 +161,29 @@ describe('redigerPromptWorkflowSelection', () => {
     expect(prompt).toContain('Date source : 2026-08-14')
     expect(prompt).toContain('Langue : fr')
   })
+
+  // Piste 3 de conv-1033 : la commande de preuve du tableau scout part avec la sélection, et le run
+  // qui la reçoit la lit à côté du Comment. Rouge avant : la colonne était jetée au passage.
+  it('transmet la commande de preuve d’une ligne du tableau scout', () => {
+    const [candidat] = candidatsDepuisScoutTable([
+      {
+        num: '1',
+        score: 82,
+        impact: 'g',
+        effort: null,
+        type: 'fix',
+        what: 'Statistiques dédoublonnées',
+        why: 'p',
+        how: 'h',
+        commande: '`npx vitest run src/main/scout-memoire.test.ts`'
+      }
+    ])
+    expect(candidat!.commande).toBe('`npx vitest run src/main/scout-memoire.test.ts`')
+    const prompt = redigerPromptWorkflowSelection([candidat!])
+    expect(prompt).toContain('   Preuve à lancer : `npx vitest run src/main/scout-memoire.test.ts`')
+    // La ligne ajoutée ne devient pas une piste prise de plus (`titresChoisisDansLaDemande`).
+    expect(prompt.match(/^ {3}Quoi : /gmu)).toHaveLength(1)
+  })
 })
 
 describe('texteSansChargeJson', () => {

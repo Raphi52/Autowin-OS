@@ -162,6 +162,7 @@ import {
   reconcileCurationIntents
 } from './outcome-learning-curation-transaction'
 import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
+import { resultatsDesEvenements } from './scout-memoire'
 import { PariPhaseStore } from './activity/pari-phase-store'
 import { resumerMesure, traiterStepPourPari } from './activity/pari-step'
 import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './outcome-learning-supervisor'
@@ -490,6 +491,7 @@ import {
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import { OUTLOOK_HORS_INSTANCE_CACHEE, OutlookLocalGateway } from './outlook/outlook-local'
 import { registerVeilleIpc } from './veille/veille-ipc'
+import { registerScoutMotifIpc } from './scout-motif-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
 import { unePasseALaFois } from './veille/une-passe-a-la-fois'
@@ -984,8 +986,11 @@ try {
 } catch {
   // Premier démarrage : le défaut auto reste explicite et le contrôle UI créera le fichier.
 }
+const outcomeLearningLedger = new OutcomeLearningLedger(
+  join(outcomeLearningDirectory, 'events-v1.jsonl')
+)
 const outcomeLearning = new OutcomeLearningSupervisor({
-  ledger: new OutcomeLearningLedger(join(outcomeLearningDirectory, 'events-v1.jsonl')),
+  ledger: outcomeLearningLedger,
   mode: parseOutcomeLearningMode(
     process.env.AUTOWIN_OUTCOME_LEARNING_MODE ?? persistedOutcomeLearningMode
   ),
@@ -1724,6 +1729,18 @@ bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.i
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
+// La mémoire du scout relit ici ce que sont devenues les pistes prises (piste 1, conv-1033). Un
+// journal illisible ne prive le scout que de cette ligne du bilan : on le dit, on ne bloque rien.
+os.setResultatsDesRuns(() => {
+  try {
+    return resultatsDesEvenements(outcomeLearningLedger.read().events)
+  } catch (erreur) {
+    console.warn(
+      `[scout-memoire] résultats des runs illisibles — bilan sans livraison : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+    )
+    return new Map()
+  }
+})
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
 /**
@@ -4079,6 +4096,13 @@ Le fil reprend ensuite normalement.`
     // Le dépôt que ce même scout lit : ses ancrages `src/…:N` y sont relatifs. Chaque service du
     // stock re-vérifie que la ligne citée d'une correction y est encore, sinon elle sort « périmée ».
     racineDepot: os.executionWorkspace
+  })
+  // « Pourquoi pas ? » sur une piste décochée du panneau du scout (piste 2, conv-1033) : le motif va
+  // dans la mémoire du scout du dossier de LA CONVERSATION, celle où l'orchestrateur a noté ses pistes.
+  registerScoutMotifIpc({
+    ipc: ipcMain,
+    assertTrusted: assertTrustedRendererSender,
+    depotDe: dossierDuTour
   })
   /**
    * CAPITALISATION : plus AUCUN declenchement automatique.

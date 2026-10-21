@@ -209,6 +209,8 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     const provider = new ScoutQuiAvoue()
     const ordre: string[] = []
     const demandes: string[] = []
+    const runsDuChoix: string[] = []
+    const runsExclus: string[] = []
     const orch = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
       roles: new RoleModelConfig({
@@ -222,14 +224,16 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
       worktrees: makeTestWorktrees('C:\base'),
       execPhases: [],
       memoireScout: {
-        connues: () => {
+        connues: (_depot, sauf) => {
           ordre.push('connues')
+          runsExclus.push(sauf)
           return ['Écriture du cache']
         },
         noter: () => undefined,
-        choisir: (_depot, demande) => {
+        choisir: (_depot, demande, run) => {
           ordre.push('choisir')
           demandes.push(demande)
+          runsDuChoix.push(run)
         },
         bilan: () => 'TES CHOIX RÉELS sur ce dépôt (6 pistes jugées) : 5 prises sur 6'
       }
@@ -246,6 +250,10 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     const consigneScout =
       [...provider.systemes, ...provider.prompts].find((p) => p.includes('phase SCOUT')) ?? ''
     expect(demandes[0]).toContain('améliore la vue Knowledge')
+    // Piste 1 de conv-1033 : le run qui porte la sélection est celui qui TRAITE les pistes prises.
+    // Rouge avant le branchement : `choisir` ne recevait pas le run (undefined).
+    expect(runsDuChoix[0]).toBeTruthy()
+    expect(runsDuChoix[0]).toBe(runsExclus[0])
     expect(ordre.slice(0, 2)).toEqual(['choisir', 'connues'])
     expect(consigneScout).toContain('TES CHOIX RÉELS sur ce dépôt (6 pistes jugées)')
   })
@@ -290,6 +298,50 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     // 72 × 0,5 = 36 : sous le plafond de preuve, qui ne le remonte pas.
     expect(scout).toMatch(/\| 1 \| 36 \|/u)
     expect(scout).toContain('Note ajustée sur tes choix réels par Autowin : 🔧 fix ×0,5')
+    expect(depots).toEqual(['C:\base'])
+  })
+
+  // Piste 4 de conv-1033 : les sujets déjà traités sont lus au début du run (en tâche de fond, comme
+  // la liste des fichiers) et la marque « déjà fait ? » arrive dans le texte que la suite reçoit.
+  // Rouge avant le branchement : le texte du scout ne portait aucune marque.
+  it('une piste qui redit un sujet déjà traité arrive marquée « déjà fait ? » à la suite', async () => {
+    const provider = new ScoutQuiAvoue()
+    const depots: string[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout', 'frame'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: () => [],
+        noter: () => undefined,
+        dejaFaits: async (depot) => {
+          depots.push(depot)
+          return [{ origine: 'commit abc1234', texte: 'le cache périmé du graphe est relu' }]
+        }
+      }
+    })
+    const result = await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const scout = result.phaseOutputs.find((output) => output.phase === 'scout')?.text ?? ''
+    expect(scout).toContain(
+      'Déjà fait ? Autowin a trouvé un sujet voisin : ligne 1 ↔ commit abc1234'
+    )
+    expect(provider.prompts.some((p) => p.includes('ligne 1 ↔ commit abc1234'))).toBe(true)
     expect(depots).toEqual(['C:\base'])
   })
 })

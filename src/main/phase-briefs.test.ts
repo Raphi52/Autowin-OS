@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { GARDE_TACHE, PHASE_BRIEFS, phaseBrief } from './phase-briefs'
 import { PIPELINE_PHASES } from './skill-pipeline'
+import { parseScoutTable } from '../shared/scout-table'
 
 describe('phase-briefs (consignes courtes in-app)', () => {
   it('couvre les 6 phases avec un brief non vide et COURT', () => {
@@ -21,6 +22,19 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     // Score agrégé /100 + tri décroissant explicites.
     expect(scout).toMatch(/\/100/)
     expect(scout).toMatch(/d[ée]croissant/i)
+  })
+
+  // Piste 3 de conv-1033 : la colonne de la commande de preuve n'existe que si le scout l'écrit. Le
+  // nom annoncé par la consigne doit être celui que le lecteur du tableau reconnaît.
+  it('le nom de la colonne de preuve annoncé au scout est celui que le lecteur du tableau lit', () => {
+    const nom = /colonne `(\w+)`/u.exec(PHASE_BRIEFS.scout)?.[1]
+    expect(nom).toBeTruthy()
+    const tableau = [
+      `| # | Score | Type | What | Why | How | ${nom} |`,
+      '|---|---|---|---|---|---|---|',
+      '| 1 | 82 | 🔧 fix | A | B | C | npx vitest run src/a.test.ts |'
+    ].join('\n')
+    expect(parseScoutTable(tableau)?.[0]?.commande).toBe('npx vitest run src/a.test.ts')
   })
 
   // Defaut vecu le 2026-08-18 (conv-1293) : le modele a rempli la colonne Score avec « 🟢 ».

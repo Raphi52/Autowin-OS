@@ -19,7 +19,8 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
-import { parseScoutTable } from '../shared/scout-table'
+import { MOTIFS_REFUS, parseScoutTable, type MotifRefus } from '../shared/scout-table'
+import type { OutcomeLearningEventV1, OutcomeObservedV1 } from '../shared/run-learning'
 import { lireStockVeille } from './veille/candidats-store'
 
 /** Même borne que le scout de la veille (`veille/scout-interne.ts`, `dejaConnus.slice(0, 60)`). */
@@ -36,9 +37,22 @@ export interface EntreeMemoireScout {
   /** La note du tableau, quand elle est lisible : c'est ce que le bilan des choix confronte. */
   note?: number
   type?: 'fix' | 'new'
-  /** Ce que l'utilisateur en a fait, lu dans le message de sélection du run suivant. */
-  choix?: 'prise' | 'laissee'
+  /**
+   * Ce que l'utilisateur en a fait, lu dans le message de sélection du run suivant. « ignoree » :
+   * aucune piste de ce scout n'a été prise avant le scout suivant du même dépôt (piste 2, conv-1033).
+   */
+  choix?: 'prise' | 'laissee' | 'ignoree'
+  /**
+   * Le run qui a traité la piste prise (celui du message de sélection). Son résultat est déjà noté
+   * par l'app (`OutcomeObservedV1`) : on le relit là, sans second suivi (piste 1, conv-1033).
+   */
+  traitePar?: string
+  /** « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2, conv-1033). */
+  motif?: MotifRefus
 }
+
+/** La classe de fin d'un run, telle que l'app la note déjà (`outcome-learning/events-v1.jsonl`). */
+export type ClasseResultatRun = NonNullable<OutcomeObservedV1['terminalClass']>
 
 export interface MemoireScout {
   entrees: EntreeMemoireScout[]
@@ -108,7 +122,30 @@ export function noterPistesScout(entree: {
   if (ajouts.length === 0) return
   const chemin = entree.chemin ?? cheminMemoireScout()
   const memoire = lireMemoireScout(chemin)
-  ecrireMemoireScout(chemin, [...memoire.entrees, ...ajouts])
+  ecrireMemoireScout(chemin, [
+    ...marquerScoutsIgnores(memoire.entrees, depot, entree.run),
+    ...ajouts
+  ])
+}
+
+/*
+ * UN SCOUT DONT RIEN N'EST PRIS (piste 2, conv-1033). Sans sélection, aucun message n'arrive :
+ * `noterChoixScout` sort avant d'écrire, et le scout restait sans trace de son échec — 6 runs scout
+ * sur 10 dans `scout-pistes.json` le 21/10. Le scout SUIVANT du même dépôt le constate : chaque run
+ * précédent sans aucun choix passe en « ignoree ». Le run en cours est exclu (une réparation n'est
+ * pas un scout suivant) ; une sélection tardive le remplace par « prise »/« laissee ».
+ */
+function marquerScoutsIgnores(
+  entrees: EntreeMemoireScout[],
+  depot: string,
+  runEnCours: string
+): EntreeMemoireScout[] {
+  const runsJuges = new Set(entrees.filter((e) => e.depot === depot && e.choix).map((e) => e.run))
+  return entrees.map((e) =>
+    e.depot === depot && e.run !== runEnCours && !runsJuges.has(e.run)
+      ? { ...e, choix: 'ignoree' }
+      : e
+  )
 }
 
 function ecrireMemoireScout(chemin: string, entrees: EntreeMemoireScout[]): void {
@@ -163,6 +200,8 @@ export function noterChoixScout(entree: {
   depot: string
   demande: string
   maintenant: string
+  /** Le run qui porte la sélection : il TRAITE les pistes prises (piste 1, conv-1033). */
+  run?: string
   chemin?: string
 }): void {
   const prises = titresChoisisDansLaDemande(entree.demande)
@@ -176,9 +215,139 @@ export function noterChoixScout(entree: {
   if (!source) return
   const entrees = memoire.entrees.map((e): EntreeMemoireScout => {
     if (e.depot !== depot || e.run !== source.run) return e
-    return { ...e, choix: prises.some((p) => memePiste(p, e.titre)) ? 'prise' : 'laissee' }
+    const suivante: EntreeMemoireScout = { ...e }
+    delete suivante.traitePar
+    if (!prises.some((p) => memePiste(p, e.titre))) return { ...suivante, choix: 'laissee' }
+    return { ...suivante, choix: 'prise', ...(entree.run ? { traitePar: entree.run } : {}) }
   })
   ecrireMemoireScout(chemin, entrees)
+}
+
+/**
+ * Le DERNIER résultat de chaque run : un run repris ou réparé en a plusieurs (67 runs sur 443 dans
+ * `events-v1.jsonl` le 21/10), et l'échec d'une tentative déjà réparée ne dit plus rien. Un résultat
+ * sans classe se lit sur son statut : vert = livré, sinon indéterminé.
+ */
+export function dernierResultatParRun(
+  resultats: ReadonlyArray<
+    Pick<OutcomeObservedV1, 'runId' | 'createdAt' | 'status'> & {
+      terminalClass?: OutcomeObservedV1['terminalClass']
+    }
+  >
+): Map<string, ClasseResultatRun> {
+  const derniers = new Map<string, { quand: string; classe: ClasseResultatRun }>()
+  for (const r of resultats) {
+    const connu = derniers.get(r.runId)
+    if (connu && connu.quand > r.createdAt) continue
+    const classe = r.terminalClass ?? (r.status === 'succeeded' ? 'delivered' : 'indeterminate')
+    derniers.set(r.runId, { quand: r.createdAt, classe })
+  }
+  return new Map([...derniers].map(([run, { classe }]) => [run, classe]))
+}
+
+/** Les résultats de runs du journal de l'app (`OutcomeLearningLedger.read().events`), le dernier par run. */
+export function resultatsDesEvenements(
+  evenements: readonly OutcomeLearningEventV1[]
+): Map<string, ClasseResultatRun> {
+  return dernierResultatParRun(
+    evenements.flatMap((evenement) => (evenement.kind === 'outcome' ? [evenement.value] : []))
+  )
+}
+
+/** Lit la classe de fin d'un run ; `undefined` tant qu'il n'est pas fini ou s'il est inconnu. */
+export type LecteurResultatRun = (run: string) => ClasseResultatRun | undefined
+
+/** Les pistes prises dont le run qui les a traitées a LIVRÉ, la plus récente d'abord, sans doublon. */
+export function pistesDejaLivrees(entree: {
+  depot: string
+  resultatDuRun: LecteurResultatRun
+  chemin?: string
+}): Array<{ titre: string; run: string }> {
+  const depot = cleDepot(entree.depot)
+  const vues = new Set<string>()
+  const livrees: Array<{ titre: string; run: string }> = []
+  const entrees = lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees
+  for (const e of [...entrees].sort((a, b) => b.vuLe.localeCompare(a.vuLe))) {
+    if (e.depot !== depot || e.choix !== 'prise' || !e.traitePar) continue
+    if (entree.resultatDuRun(e.traitePar) !== 'delivered') continue
+    const cle = cleTitre(e.titre)
+    if (vues.has(cle)) continue
+    vues.add(cle)
+    livrees.push({ titre: e.titre, run: e.traitePar })
+  }
+  return livrees
+}
+
+/*
+ * LES PISTES QUE L'UTILISATEUR A VRAIMENT JUGÉES (piste 5, conv-1033). Un scout réparé garde une
+ * ligne par VERSION de son tableau, et la sélection les marque toutes : run-8e6410f195c5-1 comptait
+ * 93 lignes jugées pour 11 versions, alors que son dernier tableau — le seul affiché — en avait 9.
+ * Seule la DERNIÈRE version de chaque run compte : un titre qui n'existe que dans une version
+ * antérieure n'a jamais été vu, il ne peut pas avoir été « laissé ». « ignoree » n'est pas un choix
+ * entre pistes : elle reste hors du taux de prise.
+ */
+function pistesJugees(entrees: readonly EntreeMemoireScout[], depot: string): EntreeMemoireScout[] {
+  return dernierTableauDeChaqueRun(entrees, depot).filter(
+    (e) => e.choix === 'prise' || e.choix === 'laissee'
+  )
+}
+
+/** Les lignes du dépôt qui appartiennent à la DERNIÈRE version du tableau de leur run. */
+function dernierTableauDeChaqueRun(
+  entrees: readonly EntreeMemoireScout[],
+  depot: string
+): EntreeMemoireScout[] {
+  const derniereVersion = new Map<string, string>()
+  for (const e of entrees) {
+    if (e.depot !== depot) continue
+    const connue = derniereVersion.get(e.run)
+    if (connue === undefined || e.vuLe > connue) derniereVersion.set(e.run, e.vuLe)
+  }
+  return entrees.filter((e) => e.depot === depot && e.vuLe === derniereVersion.get(e.run))
+}
+
+/**
+ * Le motif d'une piste laissée (« Pourquoi pas ? », piste 2 de conv-1033), sur le DERNIER scout du
+ * dépôt qui la proposait — toutes ses versions, comme la sélection. Le panneau ne connaît ni le run
+ * ni le dépôt : le titre suffit, comme pour le message de sélection. Faux si aucune piste ne répond.
+ */
+export function noterMotifScout(entree: {
+  depot: string
+  titre: string
+  motif: MotifRefus
+  chemin?: string
+}): boolean {
+  const chemin = entree.chemin ?? cheminMemoireScout()
+  const depot = cleDepot(entree.depot)
+  const memoire = lireMemoireScout(chemin)
+  const source = memoire.entrees
+    .filter((e) => e.depot === depot && memePiste(entree.titre, e.titre))
+    .sort((a, b) => b.vuLe.localeCompare(a.vuLe))[0]
+  if (!source) return false
+  ecrireMemoireScout(
+    chemin,
+    memoire.entrees.map((e) =>
+      e.depot === depot && e.run === source.run && memePiste(entree.titre, e.titre)
+        ? { ...e, motif: entree.motif }
+        : e
+    )
+  )
+  return true
+}
+
+/**
+ * Les motifs donnés sur le dernier tableau de chaque run, comptés : « 2 déjà fait, 1 hors sujet ».
+ * Une piste recochée puis PRISE n'a pas été refusée : son motif ne compte plus.
+ */
+function motifsDesRefus(entrees: readonly EntreeMemoireScout[], depot: string): string {
+  const comptes = new Map<MotifRefus, number>()
+  for (const e of dernierTableauDeChaqueRun(entrees, depot)) {
+    if (e.motif && e.choix !== 'prise') comptes.set(e.motif, (comptes.get(e.motif) ?? 0) + 1)
+  }
+  return [...comptes]
+    .sort((a, b) => b[1] - a[1])
+    .map(([motif, n]) => `${n} ${MOTIFS_REFUS[motif]}`)
+    .join(', ')
 }
 
 /** En dessous, un taux de prise est du bruit : le bilan se tait plutôt que d'orienter sur 2 cas. */
@@ -190,11 +359,15 @@ export const MIN_PISTES_JUGEES = 5
  * « ajustée sur ce que l'utilisateur choisit vraiment » (piste 7 de conv-890) : le scout reçoit la
  * mesure, au lieu de noter sur son seul avis. Moins de `MIN_PISTES_JUGEES` : chaîne vide.
  */
-export function bilanDesChoix(entree: { depot: string; chemin?: string }): string {
+export function bilanDesChoix(entree: {
+  depot: string
+  chemin?: string
+  /** Le résultat déjà noté par l'app pour le run qui a traité une piste prise (piste 1). */
+  resultatDuRun?: LecteurResultatRun
+}): string {
   const depot = cleDepot(entree.depot)
-  const jugees = lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees.filter(
-    (e) => e.depot === depot && e.choix
-  )
+  const toutes = lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees
+  const jugees = pistesJugees(toutes, depot)
   if (jugees.length < MIN_PISTES_JUGEES) return ''
   const prises = jugees.filter((e) => e.choix === 'prise')
   const laissees = jugees.filter((e) => e.choix === 'laissee')
@@ -209,15 +382,47 @@ export function bilanDesChoix(entree: { depot: string; chemin?: string }): strin
       : undefined
   }
   const types = [parType('fix', '🔧 fix'), parType('new', '🆕 new')].filter(Boolean).join(', ')
+  const motifs = motifsDesRefus(toutes, depot)
+  const ignores = new Set(
+    toutes.filter((e) => e.depot === depot && e.choix === 'ignoree').map((e) => e.run)
+  ).size
   const faits = [
     `TES CHOIX RÉELS sur ce dépôt (${jugees.length} pistes jugées) : ${prises.length} prises sur ${jugees.length}`,
     `note moyenne des prises ${moyenne(prises)}, des laissées ${moyenne(laissees)}`,
-    ...(types ? [`prises par type : ${types}`] : [])
-  ]
+    ...(types ? [`prises par type : ${types}`] : []),
+    ...(entree.resultatDuRun ? [livraisonDesPrises(prises, entree.resultatDuRun)] : []),
+    ...(ignores > 0
+      ? [`${ignores} ${ignores > 1 ? 'scouts' : 'scout'} sans aucune piste prise`]
+      : []),
+    ...(motifs ? [`motifs des refus : ${motifs}`] : [])
+  ].filter(Boolean)
   return (
     faits.join(' ; ') +
     ". Note d'après ce qui est réellement pris : une piste du genre de celles laissées ne passe pas devant."
   )
+}
+
+/*
+ * CE QUE SONT DEVENUES LES PISTES PRISES (piste 1, conv-1033) : le résultat du run qui les a traitées,
+ * lu dans ce que l'app note déjà. Seuls les runs FINIS comptent ; aucun → rien n'est dit. « en échec »
+ * reste un fait sur le RUN, pas un verdict sur la piste : la classe d'un échec est déduite d'un motif
+ * de texte (`commands.ts`), et un run peut échouer pour une cause sans rapport avec elle.
+ */
+function livraisonDesPrises(
+  prises: readonly EntreeMemoireScout[],
+  resultatDuRun: LecteurResultatRun
+): string {
+  const classes = prises
+    .map((e) => (e.traitePar ? resultatDuRun(e.traitePar) : undefined))
+    .filter((c): c is ClasseResultatRun => c !== undefined)
+  if (classes.length === 0) return ''
+  const livrees = classes.filter((c) => c === 'delivered').length
+  const enEchec = classes.filter((c) => c === 'defect').length
+  const autres = classes.length - livrees - enEchec
+  return [
+    `prises traitées : ${livrees} ${livrees > 1 ? 'livrées' : 'livrée'}, ${enEchec} en échec`,
+    ...(autres > 0 ? [`${autres} ${autres > 1 ? 'interrompues' : 'interrompue'}`] : [])
+  ].join(', ')
 }
 
 /** En dessous, le taux de prise d'UN type est du bruit : ce type garde la note du modèle. */
@@ -233,24 +438,53 @@ export type FacteursChoix = Partial<Record<'fix' | 'new', number>>
  * fix-ok: le bilan (`bilanDesChoix`) n'était qu'un texte remis au modèle : la note restait SON avis
  * (objection du juge, conv-890) ; ce facteur est appliqué en code par `ajusterNotesSurChoix`.
  */
-export function facteursDesChoix(entree: { depot: string; chemin?: string }): FacteursChoix {
+export function facteursDesChoix(entree: {
+  depot: string
+  chemin?: string
+  /** L'instant du calcul (ISO) : l'âge de chaque choix s'y mesure. Défaut : maintenant. */
+  maintenant?: string
+}): FacteursChoix {
   const depot = cleDepot(entree.depot)
-  const jugees = lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees.filter(
-    (e) => e.depot === depot && e.choix
+  const jugees = pistesJugees(
+    lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees,
+    depot
   )
   const prises = jugees.filter((e) => e.choix === 'prise').length
   if (jugees.length < MIN_PISTES_JUGEES || prises === 0 || prises === jugees.length) return {}
+  const instant = Date.parse(entree.maintenant ?? new Date().toISOString())
+  const poids = (e: EntreeMemoireScout): number => poidsDuChoix(e.vuLe, instant)
+  const somme = (liste: readonly EntreeMemoireScout[]): number =>
+    liste.reduce((total, e) => total + poids(e), 0)
+  const prisesDe = (liste: readonly EntreeMemoireScout[]): EntreeMemoireScout[] =>
+    liste.filter((e) => e.choix === 'prise')
   const lisse = (pris: number, total: number): number => (pris + 1) / (total + 2)
-  const global = lisse(prises, jugees.length)
+  const global = lisse(somme(prisesDe(jugees)), somme(jugees))
   const facteurs: FacteursChoix = {}
   for (const type of ['fix', 'new'] as const) {
     const du = jugees.filter((e) => e.type === type)
     if (du.length < MIN_PISTES_PAR_TYPE) continue
-    const brut = lisse(du.filter((e) => e.choix === 'prise').length, du.length) / global
+    const brut = lisse(somme(prisesDe(du)), somme(du)) / global
     const facteur = Math.round(Math.min(1.5, Math.max(0.5, brut)) * 100) / 100
     if (Math.abs(facteur - 1) >= 0.05) facteurs[type] = facteur
   }
   return facteurs
+}
+
+/*
+ * UN CHOIX VIEILLIT (piste 6, conv-1033). Les 11 premières pistes prises venaient des 15 et 16/10,
+ * d'une même séance sur les animations, et pesaient autant qu'un choix d'hier sur un tout autre
+ * sujet. Le poids d'un choix est divisé par deux toutes les `DEMI_VIE_CHOIX_JOURS`. 14 jours est un
+ * choix, pas une mesure : assez court pour qu'une séance d'il y a un mois ne pèse plus qu'un quart.
+ * Les seuils (`MIN_PISTES_JUGEES`, `MIN_PISTES_PAR_TYPE`) restent en nombre de pistes réelles.
+ */
+export const DEMI_VIE_CHOIX_JOURS = 14
+const JOUR_MS = 24 * 60 * 60 * 1000
+
+/** Poids d'un choix vu à `vuLe` ; une date illisible (ou future) garde le poids plein. */
+function poidsDuChoix(vuLe: string, instant: number): number {
+  const vu = Date.parse(vuLe)
+  if (!Number.isFinite(vu) || !Number.isFinite(instant) || vu >= instant) return 1
+  return 0.5 ** ((instant - vu) / JOUR_MS / DEMI_VIE_CHOIX_JOURS)
 }
 
 /**
@@ -426,6 +660,14 @@ function reditLaMemePiste(a: readonly string[], b: readonly string[]): boolean {
   if (court.length < 2) return false
   const communs = court.filter((racine) => long.some((autre) => memeRacine(racine, autre))).length
   return communs / court.length >= 0.8
+}
+
+/**
+ * Deux textes libres (titre de piste, sujet de commit) redisent-ils la même piste ? Même règle que
+ * le dédoublonnage des pistes connues : la tête de chaque texte, ses racines, 80 % du plus court.
+ */
+export function memeSujetQue(a: string, b: string): boolean {
+  return reditLaMemePiste(racinesDuSujet(teteDuTitre(a)), racinesDuSujet(teteDuTitre(b)))
 }
 
 /**

@@ -181,3 +181,55 @@ describe('colonne Score remplie avec une PASTILLE et non un nombre', () => {
     expect(rows[2].impact).toBe('g')
   })
 })
+
+/*
+ * PISTE 3 (conv-1033) — le « signal de fait » d'un correctif n'était que de la prose : une 7e colonne
+ * FACULTATIVE `Commande` porte la commande de preuve que la machine pourra lancer. Elle n'est ni la
+ * valeur (Why) ni le premier pas (How).
+ * Entrée qui tue une correction fausse : l'ancien en-tête de la skill (`Comment`), qui est le How —
+ * un lecteur « commence par comm » en ferait une commande et viderait le premier pas.
+ */
+describe('colonne facultative Commande : la preuve que la machine lancera', () => {
+  const AVEC_COMMANDE = [
+    '| # | Score | Type | What | Why | How | Commande |',
+    '|---|---|---|---|---|---|---|',
+    '| 1 | 82 | 🔧 fix | Statistiques dédoublonnées | 93 lignes pour 9 vues | `scout-memoire.ts:193` | `npx vitest run src/main/scout-memoire.test.ts` |',
+    '| 2 | 70 | 🆕 new | Sans preuve lançable | une raison | un pas | — |'
+  ].join('\n')
+
+  it('lit la commande sans toucher au Why ni au How', () => {
+    const rows = parseScoutTable(AVEC_COMMANDE)!
+    expect(rows[0]).toMatchObject({
+      why: '93 lignes pour 9 vues',
+      how: '`scout-memoire.ts:193`',
+      commande: '`npx vitest run src/main/scout-memoire.test.ts`'
+    })
+    // Une cellule vide ou un tiret ne sont pas une commande.
+    expect(rows[1].commande).toBeUndefined()
+  })
+
+  // Relu à la reprise de conv-1033 : le filtre des tirets contenait la LETTRE « s » au lieu de `\s`.
+  // Deux tirets séparés d'une espace passaient pour une commande ; un mot fait de « s » disparaissait.
+  it('des tirets séparés d’espaces ne sont pas une commande, une commande en lettres « s » en reste une', () => {
+    const tableau = [
+      '| # | Score | Type | What | Why | How | Commande |',
+      '|---|---|---|---|---|---|---|',
+      '| 1 | 82 | 🔧 fix | A | B | C | — — |',
+      '| 2 | 70 | 🆕 new | D | E | F | ss |'
+    ].join('\n')
+    const rows = parseScoutTable(tableau)!
+    expect(rows[0].commande).toBeUndefined()
+    expect(rows[1].commande).toBe('ss')
+  })
+
+  it('jumeau : l’en-tête « Comment » de la skill reste le How, et aucun tableau à 6 colonnes n’a de commande', () => {
+    const skill = [
+      '| # | Note | Type | Quoi | Pourquoi | Comment |',
+      '|---|---|---|---|---|---|',
+      '| 1 | 70 | 🔧 fix | A | B | lancer le test |'
+    ].join('\n')
+    const rows = parseScoutTable(skill)!
+    expect(rows[0].how).toBe('lancer le test')
+    expect(rows[0].commande).toBeUndefined()
+  })
+})

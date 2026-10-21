@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { CandidatAffiche } from './veille-candidats-message'
+import { MOTIFS_REFUS, type MotifRefus } from './scout-table'
 import {
   emojiType,
   redigerPromptWorkflowSelection,
@@ -32,7 +33,8 @@ export function CandidatsPickPanel({
   candidats,
   texteScout,
   autoLancer,
-  onPick
+  onPick,
+  onMotif
 }: {
   candidats: CandidatAffiche[]
   /** Le texte du scout : s'il déclare `CIBLE:`/`CIBLES:`, ce choix pré-coche les cases. */
@@ -44,6 +46,12 @@ export function CandidatsPickPanel({
    */
   autoLancer?: boolean
   onPick?: (prompt: string) => void
+  /**
+   * « Pourquoi pas ? » sur une ligne DÉCOCHÉE (piste 2, conv-1033) : le motif part dans la mémoire du
+   * scout, qui le rend au scout suivant. Absent = pas de bouton (les candidats de la veille web ont
+   * leur propre « Écarter », sur un autre stock).
+   */
+  onMotif?: (candidat: CandidatAffiche, motif: MotifRefus) => Promise<boolean> | void
 }): React.JSX.Element {
   /*
    * QUI COCHE ? L'agent quand il a DÉCLARÉ son choix, l'habitude sinon.
@@ -58,6 +66,25 @@ export function CandidatsPickPanel({
     auto ?? new Set(candidats.map((_, i) => i))
   )
   const [deplies, setDeplies] = useState<ReadonlySet<number>>(new Set())
+  const [motifOuvert, setMotifOuvert] = useState<number | null>(null)
+  // Ce que la mémoire a répondu, ligne par ligne : « Noté » ne s'affiche qu'une fois écrit.
+  const [motifs, setMotifs] = useState<ReadonlyMap<number, string>>(new Map())
+  const noterMotif = (index: number, motif: MotifRefus): void => {
+    const afficher = (texte: string): void =>
+      setMotifs((courant) => new Map(courant).set(index, texte))
+    setMotifOuvert(null)
+    afficher('…')
+    Promise.resolve(onMotif?.(candidats[index]!, motif)).then(
+      (ecrit) =>
+        afficher(
+          ecrit === false
+            ? 'Non noté : piste absente de la mémoire du scout'
+            : `Noté : ${MOTIFS_REFUS[motif]}`
+        ),
+      (erreur: unknown) =>
+        afficher(`Non noté : ${erreur instanceof Error ? erreur.message : String(erreur)}`)
+    )
+  }
   const basculer = (index: number): void => {
     setCoches((courant) => {
       const suivant = new Set(courant)
@@ -169,7 +196,39 @@ export function CandidatsPickPanel({
                 )}
               </span>
             )}
+            {onMotif && !coches.has(index) && (
+              <button
+                type="button"
+                className="cpick-pourquoi"
+                data-testid="cpick-pourquoi"
+                aria-expanded={motifOuvert === index}
+                onClick={() => setMotifOuvert((courant) => (courant === index ? null : index))}
+              >
+                Pourquoi pas ?
+              </button>
+            )}
           </div>
+          {onMotif && !coches.has(index) && (motifOuvert === index || motifs.has(index)) && (
+            <div className="cpick-motifs">
+              {motifOuvert === index ? (
+                (Object.keys(MOTIFS_REFUS) as MotifRefus[]).map((motif) => (
+                  <button
+                    key={motif}
+                    type="button"
+                    className="cpick-motif"
+                    data-testid="cpick-motif"
+                    onClick={() => noterMotif(index, motif)}
+                  >
+                    {MOTIFS_REFUS[motif]}
+                  </button>
+                ))
+              ) : (
+                <span className="cpick-motif-note" data-testid="cpick-motif-note">
+                  {motifs.get(index)}
+                </span>
+              )}
+            </div>
+          )}
           {deplies.has(index) && (
             <div className="cpick-details fade-in" data-testid="cpick-details">
               {/* Trois blocs, un par QUESTION — c'est tout (demande du 14/08). Les anciens
