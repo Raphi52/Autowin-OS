@@ -42,6 +42,14 @@ export const LIMITE_OCTETS_PAR_DEFAUT = 5 * 1024 * 1024
 /** Même budget que la photo des fichiers modifiés (`photographierDebutDeTour`) : jamais bloquant. */
 const DELAI_MAX_MS = 5_000
 
+/**
+ * « Essaie 3 façons » est un CLIC : l'utilisateur attend ses copies, rien ne part sans elles. Le budget
+ * du début de tour (5 s, fait pour ne jamais retenir un tour) faisait échouer le bouton dès que la
+ * machine était chargée, avec un message qui accusait le dépôt (conv-1038, 2026-10-21 :
+ * garder-un-essai.test.ts rouge en suite de 30 fichiers, vert 3 fois sur 3 seul).
+ */
+const DELAI_PHOTO_ESSAIS_MS = 30_000
+
 /** L'auteur des photos : jamais l'identité de l'utilisateur, qui n'a rien commité. */
 const AUTEUR = {
   GIT_AUTHOR_NAME: 'Autowin',
@@ -324,7 +332,8 @@ export async function ouvrirCopiesDEssai(entree: {
     dossier: entree.dossier,
     conversationId: entree.conversationId,
     quand,
-    runGit: entree.runGit
+    runGit: entree.runGit,
+    delaiMaxMs: DELAI_PHOTO_ESSAIS_MS
   })
   if (!photo)
     return {

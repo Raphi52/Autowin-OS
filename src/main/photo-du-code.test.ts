@@ -5,14 +5,25 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from './fs-supprimer'
+import { defaultGitRunner, type GitRunner } from './run-autoclose'
 import {
   ouvrirCopieDeLaPhoto,
   ouvrirCopiesDEssai,
   photoDuTour,
-  photographierLeCode,
+  photographierLeCode as photographierAvecBudgetDuTour,
   revenirAuCodeDuTour,
   refDePhoto
 } from './photo-du-code'
+
+/**
+ * Aucun test de ce fichier ne porte sur le budget de 5 s du début de tour : sur une machine chargée,
+ * il faisait rendre « pas de photo » en silence et le test échouait sur autre chose (conv-1038,
+ * 2026-10-21 : « une photo plus vieille… sort » rouge à 18,8 s). Le budget reste celui du produit.
+ */
+const photographierLeCode = (
+  entree: Parameters<typeof photographierAvecBudgetDuTour>[0]
+): ReturnType<typeof photographierAvecBudgetDuTour> =>
+  photographierAvecBudgetDuTour({ delaiMaxMs: 60_000, ...entree })
 
 /**
  * REVENIR AU CODE D'UN TOUR (conv-1038, 2026-10-21 — décision « branches-rewind », étape 2 : le
@@ -314,6 +325,39 @@ describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copie
     writeFileSync(join(chemins[0], 'a.txt'), 'façon 1\n')
     expect(lu(join(chemins[1], 'a.txt'))).toBe('état au moment de l’essai\n')
     expect(await git(repo, 'status', '--porcelain')).toBe(statut)
+  })
+
+  it('machine chargée : le clic attend sa photo au-delà des 5 s du début de tour', async () => {
+    // conv-1038, 2026-10-21 : garder-un-essai.test.ts est tombé rouge en suite chargée (photo
+    // abandonnée à 5 s, « son dossier n’est pas un dépôt git… »), vert 3 fois sur 3 seul. Git est
+    // ici retenu le temps que l'horloge dépasse 5 s, puis relâché : la photo doit aboutir.
+    const repo = await depot()
+    const vraiGit = await defaultGitRunner()
+    let relacher!: () => void
+    const porte = new Promise<void>((resolve) => {
+      relacher = resolve
+    })
+    const lent: GitRunner = async (args, cwd, options) => {
+      await porte
+      return vraiGit(args, cwd, options)
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const enCours = ouvrirCopiesDEssai({
+        dossier: repo,
+        conversationId: 'conv-1',
+        dossierDesRetours: join(repo, '..', 'essais-lents'),
+        nombre: 2,
+        quand: 6_000,
+        runGit: lent
+      })
+      await vi.advanceTimersByTimeAsync(5_001)
+      vi.useRealTimers()
+      relacher()
+      expect(await enCours).toMatchObject({ ok: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('hors dépôt git : refusé avec la raison, aucune copie', async () => {
