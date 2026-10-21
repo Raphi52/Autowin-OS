@@ -121,6 +121,12 @@ export interface ContexteToile {
    * (conv-319 : « j'éclaircis les câbles devant le vaisseau »). Absente, la toile reste entière.
    */
   eclaircie?: { direction: THREE.Vector3; rayon: number }
+  /**
+   * La hauteur du mur sur rue à l'abscisse `u` d'une travée (conv-1037) : depuis que la rangée de
+   * droite est en volumes, un câble s'accroche SOUS le toit du lot qu'il touche, pas dans le vide
+   * au-dessus d'une machiya basse. Absente, le mur fait 24 m partout, comme le plan peint d'avant.
+   */
+  hauteurMur?: (u: number) => number
 }
 
 /**
@@ -395,7 +401,11 @@ export function monterToile(c: ContexteToile): ToileElectrique {
     for (const dz of [-0.7, 0.7]) pts.push(V(x + 0.1, TROTTOIR + 8.36, z + dz))
     hauts.push(pts)
   })
-  const mur = (z: number): THREE.Vector3 => V(FACADE - 0.05, 5.5 + rnd() * 9, z)
+  // Le point d'attache reste tiré d'UN nombre au hasard, comme avant : la graine de la toile ne glisse
+  // pas, et sur un mur de 24 m (sans `hauteurMur`) chaque câble garde exactement sa place.
+  const plafond = (z: number): number => (c.hauteurMur?.(z) ?? 24) - 0.8
+  const sousLeToit = (z: number): number => Math.min(14.5, plafond(z))
+  const mur = (z: number): THREE.Vector3 => V(FACADE - 0.05, 5.5 + rnd() * (sousLeToit(z) - 5.5), z)
   const traverses: THREE.CatmullRomCurve3[] = []
   hauts.forEach((pts, k) =>
     pts.forEach((h) => {
@@ -415,7 +425,10 @@ export function monterToile(c: ContexteToile): ToileElectrique {
   for (let i = 0; i < TOILE.facade; i++) {
     const a = mur(rnd() * c.P)
     a.x = FACADE - 0.2
-    cable(a, V(FACADE - 0.2, a.y + (rnd() - 0.5) * 3, a.z - 3 - rnd() * 8), 0.4 + rnd() * 1.2, 0.03)
+    // mêmes tirages, dans le même ordre ; le bout est ramené sous le toit qu'il atteint
+    const dy = (rnd() - 0.5) * 3
+    const zb = a.z - 3 - rnd() * 8
+    cable(a, V(FACADE - 0.2, Math.min(a.y + dy, plafond(zb)), zb), 0.4 + rnd() * 1.2, 0.03)
   }
   for (const z of [8, 25.5])
     cable(V(GARDE + 0.05, TROTTOIR + 6.3, z), mur(z - 20 + rnd() * 30), 1.5, 0.02)
