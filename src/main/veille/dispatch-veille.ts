@@ -68,9 +68,22 @@ export function dispatcherAvecVeille(deps: DispatchVeilleDeps): TaskDispatcher {
         const resultat = await deps.executerPasse()
         // Une passe où AUCUNE source n'a répondu est un ÉCHEC, pas un succès à zéro candidat. Sans
         // cette distinction, une veille définitivement muette s'afficherait verte indéfiniment.
-        const rienLu =
+        //
+        // Toutes les sources WEB muettes suffisent : `retenus` et `refuses` comptent AUSSI les
+        // candidats internes du dépôt, triés dans la même passe — un seul d'entre eux rendait verte
+        // une passe qui n'avait lu aucune page (relecture de conv-1032).
+        const toutesLesPagesMuettes =
+          resultat.sourcesWeb > 0 && resultat.echecs.length >= resultat.sourcesWeb
+        // Règle d'origine, inchangée : une source muette et rien du tout de trié.
+        const rienTrie =
           resultat.echecs.length > 0 && resultat.retenus === 0 && resultat.refuses.length === 0
-        return rienLu
+        if (toutesLesPagesMuettes) {
+          return {
+            status: 'failed',
+            error: `Aucune source web lue (${resultat.echecs.length}/${resultat.sourcesWeb}). ${resumerPasse(resultat)}`
+          }
+        }
+        return rienTrie
           ? { status: 'failed', error: resumerPasse(resultat) }
           : { status: 'completed', error: undefined, outcome: undefined }
       } catch (erreur) {

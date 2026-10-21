@@ -24,6 +24,7 @@ const passeVide: ResultatPasse = {
   retenus: 0,
   refuses: [],
   echecs: [],
+  sourcesWeb: 1,
   stock: { candidats: [], echecs: [], dernierePasse: '2026-10-26T07:00:00Z' }
 }
 

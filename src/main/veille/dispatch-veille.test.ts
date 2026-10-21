@@ -31,6 +31,7 @@ const passe = (partiel: Partial<ResultatPasse> = {}): ResultatPasse => ({
   retenus: 2,
   refuses: [],
   echecs: [],
+  sourcesWeb: 1,
   stock: { candidats: [], echecs: [] },
   ...partiel
 })
@@ -102,6 +103,50 @@ describe('ce que l’occurrence raconte', () => {
 
     expect(resultat.status).toBe('failed')
     expect(resultat.error).toContain('1 source muette')
+  })
+
+  // Défaut relevé par la relecture de conv-1032 : la passe planifiée trie AUSSI les candidats
+  // internes du dépôt. Un seul interne retenu ou refusé (« deja connu », le cas courant) suffisait à
+  // rendre verte une passe dont aucun scout web n'avait lu sa page.
+  const muette = (concurrent: string): ResultatPasse['echecs'][number] => ({
+    concurrent,
+    url: `https://${concurrent.toLowerCase()}.test`,
+    detail: 'scout sorti en 1 : sans message',
+    vuLe: 'x'
+  })
+  const refusInterne = {
+    raison: 'deja connu' as const,
+    brut: { concurrent: 'Autowin OS', titre: 'défaut connu', url: 'src/main/x.ts:12' }
+  }
+
+  it.each([
+    ['retenus', { retenus: 3, refuses: [] }],
+    ['refusés', { retenus: 0, refuses: [refusInterne] }]
+  ])(
+    'toutes les sources WEB muettes = ÉCHEC, même avec des candidats internes %s',
+    async (_cas, tries) => {
+      const d = dispatcherAvecVeille({
+        suivant: { run: async () => ({ status: 'completed' as const }) },
+        executerPasse: async () =>
+          passe({ ...tries, sourcesWeb: 2, echecs: [muette('Codex'), muette('Cursor')] })
+      })
+
+      const resultat = await d.run(tache({ action: 'veille' }), occurrence)
+
+      expect(resultat.status).toBe('failed')
+      expect(resultat.error).toMatch(/aucune source web lue/i)
+      expect(resultat.error).toContain('2 sources muettes')
+    }
+  )
+
+  it('une source web muette parmi d’autres LUES reste un succès', async () => {
+    // Le garde-fou inverse : une page morte (Kimi) ne doit pas rendre rouge chaque passe.
+    const d = dispatcherAvecVeille({
+      suivant: { run: async () => ({ status: 'completed' as const }) },
+      executerPasse: async () => passe({ retenus: 3, sourcesWeb: 2, echecs: [muette('Kimi')] })
+    })
+
+    expect((await d.run(tache({ action: 'veille' }), occurrence)).status).toBe('completed')
   })
 
   it('une passe qui ne trouve rien de NEUF reste un succès', async () => {

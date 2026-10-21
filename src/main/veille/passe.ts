@@ -29,6 +29,14 @@ export interface ResultatPasse {
   retenus: number
   refuses: Refus[]
   echecs: EchecSource[]
+  /**
+   * Le nombre de sources WEB que la passe a tenté de lire (0 pour une passe interne seule).
+   *
+   * Sans lui, `echecs` ne dit pas si TOUTES les pages sont restées muettes : `retenus` et `refuses`
+   * mêlent les candidats web et internes, donc un seul interne trié rendait verte une passe qui
+   * n'avait lu aucune page (relecture de conv-1032).
+   */
+  sourcesWeb: number
   stock: StockVeille
 }
 
@@ -254,7 +262,7 @@ export async function executerPasse(deps: {
   })
   const stock = fusionnerPasse(stockAvant, { retenus, echecs, maintenant })
   ecrireStockVeille(stock, deps.chemin)
-  return { retenus: retenus.length, refuses, echecs, stock }
+  return { retenus: retenus.length, refuses, echecs, sourcesWeb: sources.length, stock }
 }
 
 /**

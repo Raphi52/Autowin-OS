@@ -2,10 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { ScheduledTask, TaskOccurrence } from '../task-manager/types'
 import { lireStockVeille } from './candidats-store'
+import { dispatcherAvecVeille } from './dispatch-veille'
 import {
   construirePromptScout,
   executerPasse,
+  executerPasseInterne,
   extraireCandidats,
   redigerPromptCandidat
 } from './passe'
@@ -219,6 +222,47 @@ describe('une passe complète', () => {
     })
     expect(seconde.retenus).toBe(0)
     expect(lireStockVeille(p).candidats).toHaveLength(1)
+  })
+
+  it('compte les sources WEB tentées : toutes muettes = tâche planifiée en échec, internes triés ou non', async () => {
+    // Bout en bout avec la VRAIE passe : c'est elle qui doit remplir `sourcesWeb`, sinon la
+    // condition du dispatcheur ne voit jamais « toutes muettes » (relecture de conv-1032).
+    const autre: SourceVeille = { concurrent: 'Cursor', url: 'https://autre.test/changelog' }
+    const res = await executerPasse({
+      chemin: chemin(),
+      sources: [SOURCE, autre],
+      maintenant: () => MAINTENANT,
+      lancerScout: async () => {
+        throw new Error('scout sorti en 1 : sans message')
+      },
+      candidatsInternes: [
+        {
+          concurrent: 'Autowin OS',
+          titre: 'défaut interne',
+          url: 'src/main/x.ts:12',
+          type: 'correction'
+        }
+      ]
+    })
+    expect(res.sourcesWeb).toBe(2)
+    expect(res.echecs).toHaveLength(2)
+    expect(res.refuses).toHaveLength(1)
+
+    const d = dispatcherAvecVeille({
+      suivant: { run: async () => ({ status: 'completed' as const }) },
+      executerPasse: async () => res
+    })
+    const issue = await d.run({ action: 'veille' } as ScheduledTask, { id: 'o1' } as TaskOccurrence)
+    expect(issue.status).toBe('failed')
+  })
+
+  it('une passe INTERNE seule annonce 0 source web : rien à déclarer muet', async () => {
+    const res = await executerPasseInterne({
+      chemin: chemin(),
+      maintenant: () => MAINTENANT,
+      candidatsInternes: async () => []
+    })
+    expect(res.sourcesWeb).toBe(0)
   })
 })
 
