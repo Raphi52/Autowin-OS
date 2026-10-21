@@ -15,6 +15,35 @@ export function ForkIcon(): React.JSX.Element {
   )
 }
 
+/** Icône « modifier et relancer » — un crayon, monochrome via currentColor (conv-1038). */
+export function EditIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M10.8 2.7l2.5 2.5L5.6 12.9l-3.1.6.6-3.1 7.7-7.7z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Icône « revenir à ce tour » — une flèche qui repart en arrière, monochrome (conv-1038). */
+export function RewindIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M3.5 5.5h6a3.5 3.5 0 010 7H6M3.5 5.5L6 3M3.5 5.5L6 8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /** Icône « copier » — deux feuillets superposés, monochrome via currentColor. */
 export function CopyIcon(): React.JSX.Element {
   return (

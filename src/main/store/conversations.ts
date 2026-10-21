@@ -2245,17 +2245,28 @@ export class ConversationStore {
    * pour naviguer entre des histoires invisibles depuis la liste des conversations.
    *
    * L'originale n'est pas touchée : forker n'enlève rien à ce qui existait.
+   *
+   * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (conv-1038, 2026-10-21). Mesuré : `projectPath`, que
+   * `dossierDuTour` relit à chaque tour, n'était pas recopié — la branche d'un fil qui travaille dans
+   * `D:\GIT\Contoso` repartait dans le dossier d'Autowin sans le dire. Elle garde désormais celui de
+   * sa source. `options.dossier` l'impose À LA CRÉATION (copie séparée de « revenir à ce tour » et
+   * d'« essaie 3 façons ») : un second appel de rangement pouvait échouer sans être lu, et la
+   * branche écrivait alors dans le dossier partagé. Un dossier imposé qui n'est pas un chemin refuse
+   * la branche ENTIÈRE, avant toute création.
    */
-  fork(id: string, fromMessageId: string): Conversation {
+  fork(id: string, fromMessageId: string, options: { dossier?: string } = {}): Conversation {
     const source = this.conversations.get(id)
     if (!source) throw new Error(`Conversation inconnue: ${id}`)
     if (!fromMessageId) throw new Error('fromMessageId requis') // sinon matche un message legacy sans id
     const cut = source.messages.findIndex((m) => m.messageId === fromMessageId)
     if (cut < 0) throw new Error(`Message inconnu: ${fromMessageId}`)
+    if (options.dossier !== undefined && !estCheminDeDossier(options.dossier))
+      throw new Error(`Dossier de la branche invalide (chemin absolu attendu) : ${options.dossier}`)
 
     const forked = this.create({
       title: forkTitle(source.title),
-      provider: source.provider
+      provider: source.provider,
+      projectPath: options.dossier ?? source.projectPath
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).

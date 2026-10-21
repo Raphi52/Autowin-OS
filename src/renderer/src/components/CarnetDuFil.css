@@ -1,0 +1,199 @@
+/* Carnet vivant du fil (conv-1038) : une ligne repliée en haut du fil, un panneau borné en hauteur
+   une fois déplié — il ne doit jamais pousser la conversation hors de l'écran. Couleurs tirées des
+   variables du thème, pour suivre chaque thème sans règle dédiée. */
+.carnet-du-fil {
+  flex: none;
+  margin: 0 var(--s2, 8px) 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r2, 8px);
+  background: var(--s2);
+  font-size: 12.5px;
+}
+
+.carnet-bascule {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.carnet-bascule:hover .carnet-titre,
+.carnet-bascule:focus-visible .carnet-titre {
+  color: var(--accent);
+}
+
+.carnet-chevron {
+  width: 10px;
+  color: var(--text-faint);
+}
+
+.carnet-titre {
+  font-weight: 600;
+}
+
+.carnet-resume {
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carnet-corps {
+  max-height: 38vh;
+  overflow-y: auto;
+  padding: 2px 10px 8px 28px;
+}
+
+.carnet-absence {
+  position: relative;
+  margin: 2px 0 8px;
+  padding: 6px 28px 6px 9px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r1, 6px);
+  background: var(--s3, var(--s2));
+  color: var(--text);
+}
+
+/* Ce que le carnet n'a pas pu lire (conv-1038) : une lecture ratée ne doit pas passer pour du vide. */
+.carnet-lecture-ratee {
+  margin: 2px 0 8px;
+  padding: 6px 9px;
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r1, 6px);
+  color: var(--warn);
+  font-size: 11.5px;
+}
+
+/*
+ * Ce que « Compacter » garde (conv-1038, idée 5) : l'état du compactage, puis une phrase sous le titre
+ * de la rubrique pour dire ce que l'agent ne relit plus. Mêmes couleurs que les encarts voisins.
+ */
+.carnet-compactage {
+  margin: 2px 0 8px;
+  padding: 6px 9px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r1, 6px);
+  color: var(--text-dim, var(--text));
+  font-size: 11.5px;
+}
+
+.carnet-compactage.is-rate {
+  border-left-color: var(--warn);
+  color: var(--warn);
+}
+
+.carnet-garde-explication {
+  margin: 2px 0 4px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.carnet-absence-fermer {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.carnet-rubrique + .carnet-rubrique {
+  margin-top: 6px;
+}
+
+.carnet-rubrique-titre {
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.carnet-rubrique ul {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carnet-ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+  color: var(--text);
+}
+
+.carnet-ligne[data-rubrique='fichier'] .carnet-ligne-texte {
+  font-family: var(--mono, monospace);
+  font-size: 11.5px;
+}
+
+.carnet-ligne-texte {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.carnet-ligne.is-barree .carnet-ligne-texte {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+/* Un oubli raté se lit SOUS sa ligne barrée (conv-1038) : barrée ne veut pas dire oubliée.
+   fix-ok: cause mesurée (rejeu du 2026-10-21) — CarnetDuFil.tsx avalait l'échec de l'oubli (`.catch(() => undefined)`) : aucun état « raté » n'existait à afficher. Ces règles donnent sa place à la ligne d'alerte. Entrée qui fait rougir une version fausse : un oubli rejeté par le main (ChatView.carnet-du-fil.test.tsx, 2 rouges en remettant le catch). */
+.carnet-ligne[data-oubli='rate'] {
+  flex-wrap: wrap;
+}
+
+.carnet-oubli-rate {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  color: var(--warn);
+}
+
+/* Les gestes n'apparaissent qu'au survol de leur ligne : le carnet se lit d'abord. */
+.carnet-gestes {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.carnet-ligne:hover .carnet-gestes,
+.carnet-gestes:focus-within {
+  opacity: 1;
+}
+
+.carnet-gestes button {
+  padding: 0 5px;
+  border: 0;
+  border-radius: var(--r1, 6px);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.carnet-gestes button:hover,
+.carnet-gestes button:focus-visible {
+  background: var(--accent);
+  color: var(--on-accent, var(--text));
+  outline: none;
+}
+
+.carnet-correction {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r1, 6px);
+  background: var(--bg-2, var(--s1));
+  color: var(--text);
+  font: inherit;
+}

@@ -46,6 +46,7 @@ import type {
 } from '../shared/tickets'
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
@@ -688,8 +689,14 @@ const api = {
     title: string
     category: string
     provider: string
-  }): Promise<{ id: string; title: string; category: string; provider: string }> =>
-    ipcRenderer.invoke('os:conversations:create', p),
+    projectPath?: string
+  }): Promise<{
+    id: string
+    title: string
+    category: string
+    provider: string
+    projectPath?: string
+  }> => ipcRenderer.invoke('os:conversations:create', p),
   conversationsRename: (
     id: string,
     title: string
@@ -715,8 +722,39 @@ const api = {
   /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
   conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setInactive', id, on),
-  conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
-    ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
+  conversationsFork: (
+    id: string,
+    messageId: string,
+    options?: { dossier?: string }
+  ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:fork', id, messageId, options),
+  /** Ce que l'agent a retenu dans ce fil (carnet du fil, conv-1038). */
+  conversationMemoire: (
+    id: string
+  ): Promise<Array<{ title: string; body: string; state?: 'depose' | 'inconnu' | 'local' }>> =>
+    ipcRenderer.invoke('os:conversations:memoire', id),
+  /** Retire un fait barré dans le carnet : l'agent ne le relit plus (conv-1038). */
+  conversationOublierFait: (id: string, title: string): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:oublierFait', id, title),
+  /** Rouvre le code du début du tour d'un message dans une copie séparée (conv-1038). */
+  conversationRevenirAuTour: (
+    id: string,
+    messageId: string
+  ): Promise<
+    { ok: true; chemin: string; deja: boolean; quand: number } | { ok: false; raison: string }
+  > => ipcRenderer.invoke('os:conversations:revenirAuTour', id, messageId),
+  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche (conv-1038). */
+  conversationEssaisEnParallele: (
+    id: string,
+    nombre: number
+  ): Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('os:conversations:essaisEnParallele', id, nombre),
+  /** La carte de comparaison des façons : écart, état du tour, vérifications (conv-1038). */
+  conversationComparerLesFacons: (ids: string[]): Promise<ComparaisonDUneFacon[]> =>
+    ipcRenderer.invoke('os:conversations:comparerLesFacons', ids),
+  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies (conv-1038). */
+  conversationGarderEssai: (id: string): Promise<ResultatGarderUneFacon> =>
+    ipcRenderer.invoke('os:conversations:garderEssai', id),
   /**
    * Importe une session Claude Code (référence issue de l'inventaire `activitySessions`)
    * en conversation Autowin. Rend un RÉSUMÉ — le fil complet se recharge par `conversation(id)`.
@@ -953,6 +991,8 @@ const api = {
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
       textes?: string[]
+      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`, conv-1038). */
+      texte?: string
     }) => void
   ): (() => void) => {
     const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)

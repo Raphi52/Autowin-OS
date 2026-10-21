@@ -506,7 +506,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     }
 
     return (
-      <div className="composer">
+      // `data-origine` : lu par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+      <div className="composer" data-origine="saisie">
         <div className="composer-field">
           {props.attachmentsNode}
           {props.errorNode}

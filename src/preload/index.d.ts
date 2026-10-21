@@ -32,6 +32,7 @@ import type {
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
@@ -522,11 +523,18 @@ interface ChatApi {
     terme: string
   ) => Promise<Array<{ id: string; extrait: string; occurrences: number }>>
   conversation: (id: string) => Promise<Conversation | null>
-  conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
+  conversationsCreate: (p: {
+    title: string
+    category: string
+    provider: string
+    /** Dossier de travail dès la création (conv-1038) ; un non-chemin est refusé. */
+    projectPath?: string
+  }) => Promise<{
     id: string
     title: string
     category: string
     provider: string
+    projectPath?: string
   }>
   /** Renomme et rend le titre RELU (`undefined` = id inconnu, rien renomme). */
   conversationsRename: (
@@ -546,7 +554,34 @@ interface ChatApi {
   /** Le dossier personnel (cible de « This computer ») ; absent d'un preload d'avant redémarrage. */
   dossierPersonnel?: () => Promise<string>
   conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
-  conversationsFork: (id: string, messageId: string) => Promise<Conversation>
+  /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
+  conversationsFork: (
+    id: string,
+    messageId: string,
+    options?: { dossier?: string }
+  ) => Promise<Conversation>
+  /** Ce que l'agent a retenu dans ce fil (carnet du fil, conv-1038) ; absent d'un preload ancien. */
+  conversationMemoire?: (
+    id: string
+  ) => Promise<Array<{ title: string; body: string; state?: 'depose' | 'inconnu' | 'local' }>>
+  /** Retire un fait barré dans le carnet : l'agent ne le relit plus (conv-1038). */
+  conversationOublierFait?: (id: string, title: string) => Promise<boolean>
+  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche (conv-1038). */
+  conversationEssaisEnParallele?: (
+    id: string,
+    nombre: number
+  ) => Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }>
+  /** La carte de comparaison des façons : écart, état du tour, vérifications (conv-1038). */
+  conversationComparerLesFacons?: (ids: string[]) => Promise<ComparaisonDUneFacon[]>
+  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies (conv-1038). */
+  conversationGarderEssai?: (id: string) => Promise<ResultatGarderUneFacon>
+  /** Rouvre le code du début du tour d'un message dans une copie séparée (conv-1038). */
+  conversationRevenirAuTour?: (
+    id: string,
+    messageId: string
+  ) => Promise<
+    { ok: true; chemin: string; deja: boolean; quand: number } | { ok: false; raison: string }
+  >
   /**
    * Importe une session Claude Code de l'inventaire en conversation Autowin. Rend un résumé.
    * fix-ok: cause mesurée des retouches — la signature a suivi le contrat réel du canal
@@ -733,6 +768,8 @@ interface ChatApi {
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
       textes?: string[]
+      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`, conv-1038). */
+      texte?: string
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>

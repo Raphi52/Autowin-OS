@@ -18,7 +18,7 @@ import { ArtifactPreview } from './ArtifactPreview'
 import { ArtifactPile } from './ArtifactPile'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { clotureEnDernier } from './cloture-en-dernier'
-import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
+import { CheckIcon, CopyIcon, EditIcon, ForkIcon, InspectIcon, RewindIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
 import { formaterHeureComplete, formaterHeureMessage } from './heure-message'
 import {
@@ -361,6 +361,8 @@ export const ChatMessageRow = memo(
     conversationId,
     onInspectTurn,
     onFork,
+    onModifier,
+    onRevenir,
     onOpenImage,
     onPickSuggestion,
     onOpenLiveAction,
@@ -394,6 +396,16 @@ export const ChatMessageRow = memo(
     onLogin?: () => void
     onInspectTurn?: (target: InspectTurnTarget) => void
     onFork?: (messageId: string) => void
+    /**
+     * « Modifier et relancer » un message de l'utilisateur (conv-1038) : repartir d'une copie du fil
+     * arrêtée JUSTE AVANT lui, son texte dans la saisie. N'envoie rien.
+     */
+    onModifier?: (messageId: string) => void
+    /**
+     * « Revenir à ce tour, code et fil » (conv-1038) : le code du début de ce tour rouvert dans une
+     * copie séparée, et une copie du fil arrêtée juste avant ce message qui y travaille.
+     */
+    onRevenir?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
     /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
@@ -437,7 +449,12 @@ export const ChatMessageRow = memo(
     }
     if (message.role === 'user') {
       return (
-        <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
+        <div
+          className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}
+          // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+          data-origine="message-utilisateur"
+          data-message-id={message.messageId}
+        >
           {/* PLUS DE LIGNE « TOI » au-dessus des messages de l'utilisateur, dans aucun theme
               (conv-227, 2026-10-11, apres la ligne « Agent »). L'en-tete ne reste que pour porter
               l'etiquette d'orientation ; l'heure passe dans la rangee de boutons sous la bulle. */}
@@ -525,6 +542,28 @@ export const ChatMessageRow = memo(
                 onClick={() => onFork(message.messageId!)}
               >
                 <ForkIcon />
+              </button>
+            )}
+            {message.messageId && message.content && onModifier && (
+              <button
+                type="button"
+                className="msg-turn-icon"
+                title="Modifier et relancer : repart d’une copie du fil juste avant ce message, son texte dans la saisie"
+                aria-label="Modifier et relancer ce message"
+                onClick={() => onModifier(message.messageId!)}
+              >
+                <EditIcon />
+              </button>
+            )}
+            {message.messageId && onRevenir && (
+              <button
+                type="button"
+                className="msg-turn-icon"
+                title="Revenir à ce tour : le code de son début dans une copie séparée, le fil juste avant ce message"
+                aria-label="Revenir à ce tour, code et fil"
+                onClick={() => onRevenir(message.messageId!)}
+              >
+                <RewindIcon />
               </button>
             )}
           </div>
@@ -704,7 +743,14 @@ export const ChatMessageRow = memo(
         />
       )
     return (
-      <div className={`msg assistant fade-in msg--rail${avecHeures ? ' avec-heures' : ''}`}>
+      <div
+        className={`msg assistant fade-in msg--rail${avecHeures ? ' avec-heures' : ''}`}
+        // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+        data-origine="reponse-agent"
+        data-turn-id={message.turnId}
+        data-fil-du-tour={message.turnConversationId}
+        data-message-id={message.messageId}
+      >
         {/* PLUS DE LIGNE « AGENT » au-dessus de la reponse, dans aucun theme (conv-227, 2026-10-11 :
             « enleve carrement cette ligne de tous les themes elle pollue pour rien »). Son spinner
             part avec elle : le tour en cours se lit aux capsules Raisonnement / Actions et au bouton

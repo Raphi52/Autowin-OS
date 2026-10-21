@@ -562,6 +562,10 @@ export type AppEvent =
   | { type: 'navigate'; tab: string; origin?: string }
   | { type: 'refresh'; scope: string; convId?: string }
   | { type: 'toast'; text: string; noticeId?: number }
+  // Clic sur la notification de fin de tour (conv-1038) : ouvrir CE fil, pas celui affiché.
+  | { type: 'open-conversation'; convId: string }
+  // Bouton de suite de la même notification (conv-1038) : envoyer CETTE suite dans CE fil.
+  | { type: 'suite-depuis-notification'; convId: string; texte: string }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
   | { type: 'orchestrate-start'; convId?: string; runPath?: string; task: string }
   | { type: 'orchestrate-phase'; convId?: string; runPath?: string; phase: OrchestrationPhase }

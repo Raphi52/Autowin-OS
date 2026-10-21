@@ -5682,6 +5682,31 @@ button.chat-project-dot:disabled {
   stroke: var(--text);
   color: var(--text);
 }
+/* « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la même pastille que le trombone voisin — rond de
+   32 px, trait et contour en --text —, avec son libellé « ×3 » à la place d'une icône. Sans ces
+   deux règles, `.btn` seul en faisait une gélule plus large que ses voisins (capture du jour). */
+.composer-input-row > .composer-trois-facons,
+.cosmic-outline .composer-input-row > .composer-trois-facons {
+  display: inline-flex;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 600;
+}
+.composer-input-row > .composer-trois-facons.btn:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+  opacity: 1;
+}
 
 /* CENTRAGE OPTIQUE DU TROMBONE (demande du 2026-09-08) : géométriquement centré, il paraît d'un
    pixel trop bas. On ne bouge que le DESSIN, pas la pastille.

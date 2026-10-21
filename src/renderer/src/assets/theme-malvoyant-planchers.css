@@ -211,6 +211,14 @@
   color: var(--text);
 }
 
+/* components/CarnetDuFil.css — tailles */
+:root[data-theme^='malvoyant-'] .carnet-lecture-ratee,
+:root[data-theme^='malvoyant-'] .carnet-rubrique-titre,
+:root[data-theme^='malvoyant-'] .carnet-ligne[data-rubrique='fichier'] .carnet-ligne-texte,
+:root[data-theme^='malvoyant-'] .carnet-oubli-rate {
+  font-size: 13px;
+}
+
 /* components/ChatComposerExtras.css — tailles */
 :root[data-theme^='malvoyant-'] .composer-friction,
 :root[data-theme^='malvoyant-'] .composer-suite-score {
@@ -298,6 +306,8 @@
 :root[data-theme^='malvoyant-'] .composer-dictee-message,
 :root[data-theme^='malvoyant-'] .msg-orientation-tag,
 :root[data-theme^='malvoyant-'] .conv-auto-notice,
+:root[data-theme^='malvoyant-'] .composer-input-row > .composer-trois-facons,
+:root[data-theme^='malvoyant-'] .cosmic-outline .composer-input-row > .composer-trois-facons,
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
 :root[data-theme^='malvoyant-'] .conv-status-filter,
 :root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
-import { deciderRelanceAuto } from './chat-auto-mode'
+import { deciderRelanceAuto, lignesDeRubrique } from './chat-auto-mode'
 
 /*
  * BORNAGE DE LA RUBRIQUE « ⏳ Reste à faire » (conv-787, sondage sur 2970 clotures reelles).
@@ -40,6 +40,36 @@ describe('rubrique « Reste à faire » — bornée à elle-même', () => {
       action: 'arreter',
       raison: 'reste-rien'
     })
+  })
+  /*
+   * L'INTITULÉ « Recommandé » N'ÉTAIT JAMAIS RECONNU (conv-1038, 2026-10-21) : l'expression des
+   * intitulés finit par \b, qui ne connaît que les lettres SANS accent — après le « é » final,
+   * aucune frontière de mot. La rubrique « Reste à faire » avale donc « 👉 Recommandé » et sa suite.
+   * La lecture EXACTE (celle du carnet du fil) la borne. Entrées qui font échouer une version fausse :
+   * l'intitulé suivi d'un deux-points, l'intitulé NU, et un mot qui le PROLONGE (« Recommandées »).
+   */
+  it('lecture exacte : s’arrête à l’intitulé « Recommandé », accent final compris', () => {
+    const lire = (t: string, r: 'Reste à faire' | 'Recommandé'): string[] =>
+      lignesDeRubrique(t, r, 'exacte')
+    expect(lire('⏳ Reste à faire\n- a\n👉 Recommandé : b', 'Reste à faire')).toEqual(['- a'])
+    expect(lire('⏳ Reste à faire\n- a\n👉 Recommandé\n- b', 'Reste à faire')).toEqual(['- a'])
+    expect(lire('⏳ Reste à faire\n- a\n👉 Recommandé : b', 'Recommandé')).toEqual(['b'])
+  })
+  it('lecture exacte : un mot qui PROLONGE l’intitulé n’en est pas un', () => {
+    expect(
+      lignesDeRubrique('⏳ Reste à faire\n- a\n👉 Recommandées : b', 'Reste à faire', 'exacte')
+    ).toEqual(['- a', '👉 Recommandées : b'])
+  })
+  /*
+   * CARACTÉRISATION, PAS UN SOUHAIT : la lecture du mode auto garde le défaut tant que son réglage
+   * n'est pas tranché (la corriger fait passer reste-rien de 37 à 53 sur le banc réel). Le jour où
+   * on la corrige, ce test doit rougir et être réécrit EN MÊME TEMPS que les bornes du banc.
+   */
+  it('lecture du mode auto : inchangée, la recommandation reste dans « Reste à faire »', () => {
+    expect(lignesDeRubrique('⏳ Reste à faire\n- a\n👉 Recommandé : b', 'Reste à faire')).toEqual([
+      '- a',
+      '👉 Recommandé : b'
+    ])
   })
   it('sur plusieurs clôtures dans un message, seule la DERNIÈRE compte', () => {
     const t =

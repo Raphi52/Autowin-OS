@@ -78,6 +78,9 @@ import './assets/theme-nier-automata.genere.css'
 import './assets/theme-nier-automata.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
+import { deposerOuvertureConversation } from './components/pending-conversation-open'
+import { lireBrouillons, memoriserBrouillon } from './components/brouillons-persistes'
+import { ajouterAuBrouillon } from './components/passage-selectionne'
 
 const NAV = APP_DESTINATIONS
 
@@ -177,6 +180,11 @@ export function MainApp(): React.JSX.Element {
    */
   const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
+  /** Lu par l'écouteur d'événements (monté une fois) : le chat est-il déjà monté ? */
+  const chatMonteRef = useRef(false)
+  useEffect(() => {
+    chatMonteRef.current = visitedTabs.has('chat')
+  }, [visitedTabs])
   useEffect(() => {
     // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
     // plutot que de propager une erreur. Silence = rien a signaler, jamais « on ne sait pas ».
@@ -489,6 +497,30 @@ export function MainApp(): React.JSX.Element {
     // le fil de chat en plein tour d'agent).
     let disposed = false
     const off = window.api.onAppEvent((e) => {
+      /*
+       * CLIC SUR LA NOTIFICATION DE FIN DE TOUR (conv-1038) : ouvrir le fil du tour. Chat jamais
+       * monté → la demande est DÉPOSÉE, il la réclamera à son montage (l'événement n'aurait aucun
+       * auditeur). Chat déjà monté → l'événement seul : un dépôt resterait en attente et volerait
+       * la sélection au prochain montage.
+       */
+      if (e.type === 'open-conversation' && e.convId) {
+        if (!chatMonteRef.current) deposerOuvertureConversation(e.convId)
+        openTaskConversation({ conversationId: e.convId })
+        return
+      }
+      /*
+       * BOUTON DE SUITE DE LA NOTIFICATION (conv-1038) : le chat monté l'envoie lui-même
+       * (`ChatView`). Chat jamais monté, personne ne peut l'envoyer : la suite attend dans le
+       * brouillon de CE fil, après ce qui y était écrit, et le fil s'ouvre au montage du chat.
+       */
+      if (e.type === 'suite-depuis-notification' && e.convId && e.texte?.trim()) {
+        if (chatMonteRef.current) return
+        const avant = lireBrouillons()[e.convId] ?? ''
+        memoriserBrouillon(e.convId, ajouterAuBrouillon(avant, e.texte.trim()))
+        deposerOuvertureConversation(e.convId)
+        openTaskConversation({ conversationId: e.convId })
+        return
+      }
       if (e.type === 'navigate' && e.tab) {
         navigationGeneration.current += 1
         applyLocation(e.tab)

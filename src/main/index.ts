@@ -92,6 +92,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeTheme,
+  Notification,
   safeStorage
 } from 'electron'
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
@@ -380,6 +381,8 @@ import {
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
 import { photographierDebutDeTour } from './chat-turn-publication'
+import { creerNotifieurDeFinDeTour, libelleDeBouton } from './notification-fin-de-tour'
+import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -3088,7 +3091,9 @@ Le fil reprend ensuite normalement.`
     pickDirectory,
     compterLectureIsolee: () => {
       isolatedConversationReadCount += 1
-    }
+    },
+    dossierDuFil: (id) => dossierDuTour(id),
+    dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
@@ -3492,6 +3497,42 @@ Le fil reprend ensuite normalement.`
   }
 
   /*
+   * FIL ASYNCHRONE (conv-1038, 2026-10-21) : un tour fini SONNE quand aucune fenetre d'Autowin
+   * n'est regardee (tour median 226 s, p90 ~17 min). Le clic ouvre le fil du tour ; la decision et
+   * le texte vivent dans `notification-fin-de-tour.ts`, testes sans fenetre.
+   */
+  const notifierFinDeTour = creerNotifieurDeFinDeTour({
+    fabrique: (contenu) => {
+      if (!Notification.isSupported()) throw new Error('Notifications non supportees')
+      return new Notification({
+        title: contenu.title,
+        body: contenu.body,
+        // Les suites du tour en boutons (Windows et macOS depuis Electron 44) : la suite part entiere.
+        ...(contenu.suites
+          ? {
+              actions: contenu.suites.map((suite) => ({
+                type: 'button' as const,
+                text: libelleDeBouton(suite)
+              }))
+            }
+          : {})
+      })
+    },
+    fenetreRegardee: () => BrowserWindow.getFocusedWindow() !== null,
+    // Les instances cachees (capture, tache planifiee) ne s'affichent jamais chez l'utilisateur.
+    instanceDeTest: isolatedTestInstance || headlessTestInstance,
+    titreDuFil: (id) => os.conversations.get(id)?.title,
+    ouvrirFil: (id) => {
+      showMainWindow()
+      // L'interface bascule elle-meme sur le chat (`App.tsx`, `openTaskConversation`).
+      broadcast({ type: 'open-conversation', convId: id })
+    },
+    // Sans ramener la fenetre : l'interface envoie la suite dans ce fil (`ChatView`, `App.tsx`).
+    envoyerSuite: (id, suite) =>
+      broadcast({ type: 'suite-depuis-notification', convId: id, texte: suite })
+  })
+
+  /*
    * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
    *
    * Avant, le tour ATTENDAIT l'appel au modele qui range la conversation (~5 s au premier message) :
@@ -3544,8 +3585,22 @@ Le fil reprend ensuite normalement.`
       const debutPublication = os.autoCloseEnabled()
         ? await photographierDebutDeTour(dossierDuTour(conversationId))
         : undefined
+      /*
+       * PHOTO DU CODE AU DEBUT DU TOUR (conv-1038, 2026-10-21) : de quoi « revenir a ce tour » plus
+       * tard, dans une copie separee (`photo-du-code.ts`, ~200 ms, jamais bloquante au-dela de 5 s).
+       * Pas pour un tour REPRIS apres un redemarrage (`args[4]`) : il a commence avant, la photo
+       * montrerait un etat a moitie ecrit sous le nom de son debut.
+       */
+      if (args[4] === undefined)
+        await photographierLeCode({ dossier: dossierDuTour(conversationId), conversationId })
       try {
         const resultat = await lancerTour(...args)
+        notifierFinDeTour(conversationId, {
+          ...resultat,
+          tourDeFond: args[5]?.background === true,
+          // Les gardes de publication des suites lisent la demande du tour (boutons de la bulle).
+          demandeDuTour: [...args[1]].reverse().find((m) => m.role === 'user')?.content
+        })
         if (debutPublication && resultat.ok && !resultat.cancelled) {
           const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
           void os

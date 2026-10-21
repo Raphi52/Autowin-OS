@@ -28,6 +28,33 @@
   font-size: 13px;
   opacity: 0.6;
 }
+/* L'AVIS DE L'APPLICATION EN MOSAIQUE (conv-1038, 2026-10-21) : il ne s'affichait que dans la vue du
+   fil unique, et « Essaie 3 façons » écrit le sien (copies, coût) juste après avoir basculé ici.
+   Il flotte au-dessus des fenêtres, hors du flux : la grille ne bouge pas quand il apparaît. */
+.chat-layout.is-mosaic {
+  position: relative;
+}
+/* OPAQUE, SANS DISPUTER LE FOND AUX THEMES. Mesuré le 2026-10-21 : le titre de la fenêtre se lisait
+   à travers le bandeau. Les thèmes peignent eux-mêmes `.chat-workflow-notice` en voile (Nébuleuse de
+   verre : `:root[data-theme=…] .chat-workflow-notice` ; Vanilla Claude, clair : un cran de plus), plus
+   loin dans la feuille : chaque surenchère de poids ici perdait contre le thème suivant. Le fond
+   opaque vit donc sur CE support, qu'aucun thème ne vise ; le bandeau garde son allure par-dessus.
+   `--bg-0` est opaque dans tous les thèmes (même peau que `.rail-update-incoming.is-floating`) ; le
+   rayon est celui du bandeau (ChatView.css), qu'aucun thème ne change. */
+.chat-avis-mosaique {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 5;
+  width: min(720px, 70%);
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: var(--bg-0);
+  box-shadow: var(--container-shadow);
+}
+.chat-avis-mosaique > .chat-workflow-notice {
+  margin: 0;
+}
 /* LA FENETRE EST UN PANNEAU DE CHAT (conv-817, 2026-10-13 : « mes chat dans le mode mosaique doivent
    avoir le style de chat normal avec les chanfreins et tout »). Elle porte les classes du chat plein
    (`lisere-dessus chat`, ChatMosaic.tsx) : le panneau, le cadre a coins coupes, la saisie detachee,
@@ -242,4 +269,18 @@
 .chat-mosaic-window > .composer .composer-dictee-message {
   font-size: 10px;
   margin-top: 3px;
+}
+
+/*
+ * L'EN-TÊTE DE LA MOSAÏQUE (conv-1038, 2026-10-21 — « Essaie 3 façons ») : la carte de comparaison
+ * couvre toute la largeur, et sa rangée suit sa hauteur. Sans `grid-template-rows: auto`, à 1 ou 2
+ * fenêtres (`grid-auto-rows: 1fr`), la carte aurait pris la même hauteur qu'une fenêtre.
+ */
+.chat-mosaic > .comparaison-facons {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.chat-mosaic:has(> .comparaison-facons) {
+  grid-template-rows: auto;
 }

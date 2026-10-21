@@ -1,0 +1,33 @@
+/* Barre « répondre à un passage » (conv-1038) : posée juste au-dessus de la sélection, dans le
+   cadre du fil. Couleurs tirées des variables du thème, pour suivre chaque thème sans règle dédiée. */
+.barre-passage {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line2, var(--line));
+  border-radius: var(--r2, 8px);
+  background: var(--s2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  translate: 0 calc(-100% - 6px);
+}
+
+.barre-passage-geste {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: var(--r1, 6px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.barre-passage-geste:hover,
+.barre-passage-geste:focus-visible {
+  background: var(--accent);
+  color: var(--on-accent, var(--text));
+  outline: none;
+}

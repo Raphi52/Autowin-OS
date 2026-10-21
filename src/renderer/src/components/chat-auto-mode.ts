@@ -131,6 +131,20 @@ const EN_TETES_CLOTURE =
   // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** », conv-733).
   /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
 
+/*
+ * DÉFAUT CONNU DE LA LECTURE CI-DESSUS, LAISSÉ EN PLACE EXPRÈS (conv-1038, 2026-10-21).
+ * `\b` ne connaît que les lettres ASCII : après le « é » final il ne voit aucune frontière, donc
+ * l'intitulé « Recommandé » n'est JAMAIS reconnu (et « Recommandées » l'est, à tort). La rubrique
+ * « Reste à faire » avale ainsi la recommandation qui la suit. Le corriger ici change les arrêts du
+ * mode auto : sur les 2 970 clôtures du banc (`chat-auto-mode.corpus-reel.test.ts`), `reste-rien`
+ * passe de 37 à 53 — « Reste : rien » suivi d'une vraie recommandation arrêterait la chaîne au lieu
+ * de l'enchaîner. C'est un réglage du mode auto à trancher à part, pas un effet de bord du carnet.
+ * La lecture EXACTE ci-dessous sert au carnet du fil ; le mode auto garde la sienne.
+ * fix-ok: cause mesurée (conv-1038) — `/Recommandé\b/u.test('👉 Recommandé : x')` rend false : `\b` ne connaît que [A-Za-z0-9_], même avec `u` ; `(?![\p{L}\p{N}_])` borne le mot, rouge→vert dans chat-auto-mode.rubrique-bornee.test.ts.
+ */
+const EN_TETES_CLOTURE_EXACTS =
+  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)(?![\p{L}\p{N}_])/u
+
 /**
  * Contenu de la rubrique « ✅ Fait » : le reste de sa ligne d'en-tête ET les lignes qui la suivent,
  * jusqu'à la rubrique d'après. Précision utilisateur du 2026-09-02 : « dans le prompt il n'écrit
@@ -143,20 +157,28 @@ function lignesDuBlocFait(texte: string): string[] {
 /**
  * Les lignes d'UNE rubrique de clôture. Deux rubriques portent le mot « rien » — « ✅ Fait » et
  * « ⏳ Reste à faire » —, et la seconde est celle qu'Autowin écrit lui-même en fin de chaîne.
+ * Exportée pour le carnet du fil (conv-1038), qui relit les quatre rubriques avec le MÊME découpage
+ * (bornes, dernière clôture gagnante) mais la lecture `exacte` des intitulés — voir
+ * `EN_TETES_CLOTURE_EXACTS` pour l'écart avec le mode auto, et pourquoi il n'est pas refermé ici.
  */
-function lignesDeRubrique(texte: string, rubrique: 'Fait' | 'Reste à faire'): string[] {
+export function lignesDeRubrique(
+  texte: string,
+  rubrique: 'Fait' | 'Maintenant' | 'Reste à faire' | 'Recommandé',
+  lecture: 'mode-auto' | 'exacte' = 'mode-auto'
+): string[] {
+  const enTetes = lecture === 'exacte' ? EN_TETES_CLOTURE_EXACTS : EN_TETES_CLOTURE
   const lignes = texte.split('\n')
   const sortie: string[] = []
   let dedans = false
   for (const brute of lignes) {
-    const entete = brute.match(EN_TETES_CLOTURE)
+    const entete = brute.match(enTetes)
     if (entete) {
       dedans = entete[1] === rubrique
       if (dedans) {
         // PLUSIEURS CLOTURES DANS UN MESSAGE (sondage conv-787 : jusqu'a 3) — seule la DERNIERE dit
         // l'etat final. Les fusionner melangeait un « rien » ancien avec du travail encore listé.
         sortie.length = 0
-        const reste = brute.replace(EN_TETES_CLOTURE, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
+        const reste = brute.replace(enTetes, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
         if (reste.trim()) sortie.push(reste)
       }
       continue

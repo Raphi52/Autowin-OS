@@ -31,6 +31,12 @@ export type ChatMosaicWindow = {
 
 export type ChatMosaicProps = {
   fenetres: readonly ChatMosaicWindow[]
+  /**
+   * Un encart sur TOUTE la largeur, au-dessus des fenêtres : la carte de comparaison
+   * d'« Essaie 3 façons » (conv-1038, 2026-10-21). Hors de la grille des fenêtres, il ne déplace
+   * aucune d'elles.
+   */
+  entete?: React.ReactNode
   onClose: (id: string) => void
   /** Quitte la mosaique et ouvre CETTE conversation seule dans le fil unique. */
   onOuvrirSeule: (id: string) => void
@@ -269,6 +275,7 @@ const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
 
 export function ChatMosaic({
   fenetres,
+  entete,
   onClose,
   onOuvrirSeule,
   rendreComposer,
@@ -300,6 +307,7 @@ export function ChatMosaic({
       data-count={fenetres.length}
       style={{ gridTemplateColumns: `repeat(${colonnesPour(fenetres.length)}, minmax(0, 1fr))` }}
     >
+      {entete}
       {fenetres.map((fenetre) => (
         <FenetreChat
           key={fenetre.id}

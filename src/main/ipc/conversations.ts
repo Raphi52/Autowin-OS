@@ -28,7 +28,12 @@ import { removeConvActivity } from '../activity/conv-activity'
 import { deletePromptCalls } from '../activity/prompt-observability'
 import { assertTrustedRendererSender } from '../ipc-senders'
 import { guardString } from '../ipc-guards'
+import { estCheminDeDossier } from '../../shared/project-path'
 import { removeConversationArtifacts } from '../store/chat-artifact-store'
+import { oublierFaitRetenu, rememberedFacts } from '../session-memory-echo'
+import { ouvrirCopiesDEssai, revenirAuCodeDuTour } from '../photo-du-code'
+import { bilanDeLaFacon, ecartDeLEssai, garderLEssai } from '../garder-un-essai'
+import { nomDeCopieDEssai } from '../../shared/essai-trois-facons'
 import type { AutowinOS } from '../os'
 import type { ActiveChatTurns } from '../active-chat-turns'
 import type { TraceStore } from '../activity/trace-store'
@@ -46,6 +51,10 @@ export type ConversationsIpcDeps = {
   pickDirectory: (sender: Electron.WebContents) => Promise<string | null>
   /** Fait avancer le compteur de lectures lu par `app:test:conversation-read-count`. */
   compterLectureIsolee: () => void
+  /** Le dossier ou travaillent les tours de ce fil (le sien, ou celui de l'application). */
+  dossierDuFil: (conversationId: string) => string
+  /** Ou s'ouvrent les copies « revenir a ce tour » : hors du dossier partage, jamais dedans. */
+  dossierDesRetours: () => string
 }
 
 export function registerConversationsIpc({
@@ -56,7 +65,9 @@ export function registerConversationsIpc({
   isolatedTestInstance,
   broadcast,
   pickDirectory,
-  compterLectureIsolee
+  compterLectureIsolee,
+  dossierDuFil,
+  dossierDesRetours
 }: ConversationsIpcDeps): void {
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
@@ -85,6 +96,11 @@ export function registerConversationsIpc({
         /** Contrat renderer INCHANGE : encore accepte, mais plus persiste — `provider` fait foi. */
         category?: string
         provider: string
+        /**
+         * Dossier de travail dès la création : le fil neuf de « revenir au premier tour » naît dans
+         * sa copie séparée (conv-1038). Un rangement après coup pouvait échouer sans être lu.
+         */
+        projectPath?: string
       }
     ) => {
       assertTrustedRendererSender(event, 'Conversation create')
@@ -101,7 +117,18 @@ export function registerConversationsIpc({
        */
       const title = guardString((p as { title?: unknown } | undefined)?.title, 'title')
       const provider = guardString((p as { provider?: unknown } | undefined)?.provider, 'provider')
-      const conversation = os.conversations.create({ title, provider })
+      const brut = (p as { projectPath?: unknown } | undefined)?.projectPath
+      const projectPath = brut === undefined ? undefined : guardString(brut, 'projectPath')
+      // Le store IGNORE un non-chemin ; demandé explicitement, il refuse ici le fil entier — sinon le
+      // fil naîtrait sans dossier, donc dans le dossier partagé, alors que l'appelant l'isolait.
+      // fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — create passait un non-chemin au store, qui l'ignore sans rien dire, et fork n'avait pas d'options. Entrées qui font rougir une version fausse (conversations.dossier-branche.test.ts) : projectPath « Factures » ou « retours/relatif » sans ce refus (2 rouges), dossier ignoré par fork (3 rouges).
+      if (projectPath !== undefined && !estCheminDeDossier(projectPath))
+        throw new Error(`IPC projectPath: chemin absolu attendu (${projectPath})`)
+      const conversation = os.conversations.create({
+        title,
+        provider,
+        ...(projectPath ? { projectPath } : {})
+      })
       broadcast({ type: 'refresh', scope: 'conversations' })
       return conversation
     }
@@ -203,9 +230,164 @@ export function registerConversationsIpc({
       ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {})
     }
   })
-  ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
-    assertTrustedRendererSender(event, 'Conversation fork')
-    return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))
+  ipcMain.handle(
+    'os:conversations:fork',
+    (event, rawId: string, rawMessageId: string, rawOptions?: unknown) => {
+      assertTrustedRendererSender(event, 'Conversation fork')
+      // `dossier` : la copie séparée où la branche travaille DÈS sa création (conv-1038) — le store
+      // refuse un non-chemin avant de créer quoi que ce soit.
+      const dossier = (rawOptions as { dossier?: unknown } | undefined)?.dossier
+      return os.conversations.fork(
+        guardString(rawId, 'id'),
+        guardString(rawMessageId, 'messageId'),
+        dossier === undefined ? {} : { dossier: guardString(dossier, 'dossier') }
+      )
+    }
+  )
+  /*
+   * LA MEMOIRE DU FIL, VUE ET CORRIGEE PAR L'UTILISATEUR (conv-1038, 2026-10-21 — carnet du fil).
+   * L'echo (`session-memory-echo.ts`) n'etait relu que par l'agent : invisible, donc incorrigeable.
+   * Lecture : titre, corps et sort du depot, rien d'autre. Oubli : le fait barre sort de l'echo et
+   * l'agent ne le relit plus au tour suivant.
+   */
+  ipcMain.handle('os:conversations:memoire', (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation memory')
+    return rememberedFacts(guardString(rawId, 'id')).map(({ title, body, state }) => ({
+      title,
+      body,
+      ...(state ? { state } : {})
+    }))
+  })
+  ipcMain.handle('os:conversations:oublierFait', (event, rawId: unknown, rawTitle: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation memory forget')
+    return oublierFaitRetenu(guardString(rawId, 'id'), guardString(rawTitle, 'title'))
+  })
+  /*
+   * « REVENIR A CE TOUR » (conv-1038, 2026-10-21) : la photo du code prise au debut du tour d'un
+   * message, rouverte dans une COPIE SEPAREE (decision « branches-rewind », etape 2). Le dossier
+   * partage n'est jamais touche. La branche du fil qui y travaille est creee par l'interface.
+   */
+  ipcMain.handle(
+    'os:conversations:revenirAuTour',
+    async (event, rawId: unknown, rawMessageId: unknown) => {
+      assertTrustedRendererSender(event, 'Conversation rewind')
+      const id = guardString(rawId, 'id')
+      const conversation = os.conversations.get(id)
+      if (!conversation) return { ok: false, raison: 'Conversation inconnue.' }
+      return revenirAuCodeDuTour({
+        conversationId: id,
+        messages: conversation.messages,
+        messageId: guardString(rawMessageId, 'messageId'),
+        dossier: dossierDuFil(id),
+        dossierDesRetours: dossierDesRetours()
+      }).catch((erreur: unknown) => ({
+        ok: false as const,
+        raison: erreur instanceof Error ? erreur.message : String(erreur)
+      }))
+    }
+  )
+  /*
+   * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : une photo du code maintenant, et une copie
+   * séparée par branche. Deux ou trois, jamais plus : chaque façon est un tour payé.
+   */
+  ipcMain.handle(
+    'os:conversations:essaisEnParallele',
+    async (event, rawId: unknown, rawNombre: unknown) => {
+      assertTrustedRendererSender(event, 'Conversation parallel trials')
+      const id = guardString(rawId, 'id')
+      if (!os.conversations.get(id)) return { ok: false, raison: 'Conversation inconnue.' }
+      const nombre =
+        typeof rawNombre === 'number' && Number.isInteger(rawNombre)
+          ? Math.min(3, Math.max(2, rawNombre))
+          : 3
+      return ouvrirCopiesDEssai({
+        dossier: dossierDuFil(id),
+        conversationId: id,
+        dossierDesRetours: dossierDesRetours(),
+        nombre
+      }).catch((erreur: unknown) => ({
+        ok: false as const,
+        raison: erreur instanceof Error ? erreur.message : String(erreur)
+      }))
+    }
+  )
+  /*
+   * « ESSAIE 3 FAÇONS » : LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (conv-1038, 2026-10-21 —
+   * idée 6). Comparer : pour chaque branche, l'écart de SA copie depuis la photo de l'essai, et le
+   * bilan de son tour (`garder-un-essai.ts`). Garder : cet écart publié par le chemin des copies
+   * (`os.worktrees`, le même que les commandes), avec sa garde des fichiers non commités du dossier
+   * partagé, son attente et son repêchage. Rien n'est écrit dans le dossier partagé d'ici.
+   * check: garder-un-essai.test.ts (11 cas sur de vrais dépôts) et garder-un-essai.bilan.test.ts.
+   */
+  ipcMain.handle('os:conversations:comparerLesFacons', async (event, rawIds: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation trials compare')
+    if (!Array.isArray(rawIds)) throw new Error('IPC ids: tableau attendu')
+    const raisonDe = (erreur: unknown): string =>
+      erreur instanceof Error ? erreur.message : String(erreur)
+    return Promise.all(
+      rawIds.slice(0, 6).map(async (brut) => {
+        const id = guardString(brut, 'id')
+        const conversation = os.conversations.get(id)
+        if (!conversation) return { id, ok: false as const, raison: 'Conversation inconnue.' }
+        const bilan = bilanDeLaFacon(conversation.messages)
+        if (!conversation.projectPath)
+          return {
+            id,
+            ok: true as const,
+            bilan,
+            ecart: { ok: false as const, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
+          }
+        const ecart = await ecartDeLEssai({
+          copie: conversation.projectPath,
+          dossierDesRetours: dossierDesRetours()
+        }).catch((erreur: unknown) => ({ ok: false as const, raison: raisonDe(erreur) }))
+        return {
+          id,
+          ok: true as const,
+          bilan,
+          // La photo et l'arbre restent ici : l'interface n'a besoin que des fichiers et des lignes.
+          ecart: ecart.ok
+            ? {
+                ok: true as const,
+                fichiers: ecart.fichiers,
+                ajouts: ecart.ajouts,
+                retraits: ecart.retraits
+              }
+            : ecart
+        }
+      })
+    )
+  })
+  ipcMain.handle('os:conversations:garderEssai', async (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation trial keep')
+    const id = guardString(rawId, 'id')
+    const conversation = os.conversations.get(id)
+    if (!conversation?.projectPath)
+      return { ok: false as const, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
+    const worktrees = os.worktrees
+    if (!worktrees)
+      return {
+        ok: false as const,
+        raison: 'La publication par copie n’est pas disponible dans cette instance.'
+      }
+    const nom = nomDeCopieDEssai(conversation.projectPath)
+    const tache = `feat(essai): garder la façon ${nom?.rang ?? '?'} — ${conversation.title} (${nom?.fil ?? id})`
+    return garderLEssai({
+      copie: conversation.projectPath,
+      dossierDesRetours: dossierDesRetours(),
+      publication: {
+        ouvrir: (runId) =>
+          worktrees.beginAsync(runId, 'Garder une façon', true, {
+            task: tache,
+            role: 'command',
+            conversationId: id
+          }),
+        fermer: (runId, publier) => worktrees.endAsync(runId, { merge: publier })
+      }
+    }).catch((erreur: unknown) => ({
+      ok: false as const,
+      raison: erreur instanceof Error ? erreur.message : String(erreur)
+    }))
   })
   ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
     assertTrustedRendererSender(event, 'Conversations')

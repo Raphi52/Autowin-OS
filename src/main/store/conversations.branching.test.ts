@@ -350,3 +350,55 @@ describe('ConversationStore — fork', () => {
     expect(() => store.fork(id, '')).toThrow()
   })
 })
+
+/**
+ * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (conv-1038, 2026-10-21 — ancrage du scout : « la branche
+ * depuis un message copie seulement les messages, pas l'état des fichiers »).
+ *
+ * Mesuré : `fork` ne recopiait PAS `projectPath`, que `dossierDuTour` (index.ts) relit à chaque tour.
+ * Une branche — ou « Modifier et relancer », ou la reprise après une erreur 529 — d'un fil qui
+ * travaille dans `D:\GIT\Contoso` repartait donc dans le dossier d'Autowin, sans le dire.
+ * « Revenir à ce tour » et « Essaie 3 façons » rattachaient leur copie séparée par un SECOND appel
+ * (`setProject`) dont l'échec n'était pas lu : la branche pouvait écrire dans le dossier partagé.
+ *
+ * Entrées qui font échouer une version fausse : une source rangée sur un dossier (la branche doit le
+ * garder) ; un dossier imposé (il l'emporte sur celui de la source) ; un LIBELLÉ à la place d'un
+ * chemin (la branche entière est refusée, AUCUNE conversation créée — sinon elle retomberait dans
+ * le dossier partagé alors que l'appelant croit l'avoir isolée).
+ */
+describe('ConversationStore — fork : le dossier de travail', () => {
+  function seedDansDossier(): { store: ConversationStore; id: string; ancre: string } {
+    const store = new ConversationStore(() => 1)
+    const conv = store.create({ title: 'T', provider: 'codex', projectPath: 'D:\\GIT\\Contoso' })
+    store.append(conv.id, { role: 'user', content: 'u1' })
+    return { store, id: conv.id, ancre: store.get(conv.id)!.messages[0].messageId! }
+  }
+
+  it('la branche travaille dans le MÊME dossier que sa source', () => {
+    const { store, id, ancre } = seedDansDossier()
+    expect(store.fork(id, ancre).projectPath).toBe('D:\\GIT\\Contoso')
+  })
+
+  it('une source sans dossier donne une branche sans dossier (repli inchangé)', () => {
+    const { store, id, ids } = seed()
+    expect(store.fork(id, ids[0]).projectPath).toBeUndefined()
+  })
+
+  it('un dossier imposé (copie séparée) l’emporte sur celui de la source', () => {
+    const { store, id, ancre } = seedDansDossier()
+    const branche = store.fork(id, ancre, { dossier: 'D:/donnees/retours-de-tour/retour__A-3050' })
+    expect(branche.projectPath).toBe('D:\\donnees\\retours-de-tour\\retour__A-3050')
+    // La source garde le sien : imposer un dossier à la branche ne déplace pas l'originale.
+    expect(store.get(id)!.projectPath).toBe('D:\\GIT\\Contoso')
+  })
+
+  it.each(['Factures', '', '   ', 'retours/relatif'])(
+    'un dossier imposé qui n’est pas un chemin (%j) refuse la branche ENTIÈRE',
+    (dossier) => {
+      const { store, id, ancre } = seedDansDossier()
+      const avant = store.list().length
+      expect(() => store.fork(id, ancre, { dossier })).toThrow(/dossier/i)
+      expect(store.list().length).toBe(avant)
+    }
+  )
+})

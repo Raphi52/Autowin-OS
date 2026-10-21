@@ -2599,7 +2599,7 @@
    ce theme. Le bord transparent de 1 px de `.btn` est la place du cadre : rien ne bouge au survol.
    Gris tires de --text et --bg-0 : Holographique blanc, derive de ce fichier, les eclaircit seul.
    Le micro EN ECOUTE (rouge qui bat) et EN TRANSCRIPTION n'est pas une selection : il garde son habit. */
-:root[data-theme='holographique-clair'] .composer-input-row > :is(.composer-auto, .attachment-button, .composer-dictee) {
+:root[data-theme='holographique-clair'] .composer-input-row > :is(.composer-auto, .attachment-button, .composer-trois-facons, .composer-dictee) {
   --nv-pastille-gris: color-mix(in srgb, var(--text) 14%, var(--bg-0));
   --nv-pastille-gris-clair: color-mix(in srgb, var(--text) 21%, var(--bg-0));
   --nv-pastille-nacre: linear-gradient(
@@ -2631,6 +2631,7 @@
   > :is(
     .composer-auto:not(.actif),
     .attachment-button,
+    .composer-trois-facons,
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ) {
   border-color: transparent;
@@ -2642,6 +2643,7 @@
   > :is(
     .composer-auto:not(.actif),
     .attachment-button,
+    .composer-trois-facons,
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ):hover:not(:disabled) {
   border-color: transparent;

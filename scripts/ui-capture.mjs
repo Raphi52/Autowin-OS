@@ -70,6 +70,9 @@
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
  *                                    une capture silencieuse de la vue fermee.
+ *                                    Prefixes d'etape (conv-1038) : `alt:<sel>` = Alt+clic,
+ *                                    `selection:<sel>` = selectionne le texte de la cible puis
+ *                                    relache la souris (barre « repondre a un passage »).
  *         [--state attention] [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
  *                                    Zero element touche = echec nomme (code 7).
@@ -237,6 +240,47 @@ export const accuseDImage = (message) =>
  * Certains affichages ne s'ouvrent qu'a la FRAPPE (la palette `/` du composer, conv-981) : aucun
  * `--click` ne les montre. Le champ par defaut est le premier `textarea` de la page.
  */
+/**
+ * LE GESTE D'UNE ETAPE de la chaine `--click` (conv-1038, 2026-10-21). `element.click()` ne savait
+ * ni tenir Alt ni selectionner : la barre posee sur un passage selectionne et l'Alt+clic
+ * « C'est quoi ca ? » du chat ne se prouvaient sur aucune capture. Seuls les prefixes EXACTS
+ * `alt:` et `selection:` changent le geste : un `:` de pseudo-classe (`button:not(...)`) reste un
+ * selecteur de clic ordinaire.
+ */
+export const gesteDeLEtape = (etape) => {
+  const prefixe = /^(alt|selection):\s*(.+)$/u.exec(etape.trim())
+  if (!prefixe) return { geste: 'clic', selecteur: etape.trim() }
+  return { geste: prefixe[1] === 'alt' ? 'alt-clic' : 'selection', selecteur: prefixe[2].trim() }
+}
+
+/** Le script joue dans la page pour ce geste ; il rend `true` si la cible existe. */
+export const scriptDuGeste = ({ geste, selecteur }) => {
+  const cible = `const cible = document.querySelector(${JSON.stringify(selecteur)})`
+  if (geste === 'alt-clic')
+    return `(() => {
+        ${cible}
+        cible?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }))
+        return Boolean(cible)
+      })()`
+  if (geste === 'selection')
+    return `(() => {
+        ${cible}
+        if (!cible) return false
+        const plage = document.createRange()
+        plage.selectNodeContents(cible)
+        const selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(plage)
+        cible.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+        return true
+      })()`
+  return `(() => {
+        ${cible}
+        cible?.click()
+        return Boolean(cible)
+      })()`
+}
+
 export const saisieDemandee = (argv) => {
   const i = argv.indexOf('--taper')
   const texte = i >= 0 ? argv[i + 1] : undefined
@@ -1254,11 +1298,7 @@ const main = async () => {
       .filter(Boolean)
     declencheurTrouve = true
     for (const etape of etapes) {
-      const trouve = await evaluer(`(() => {
-        const cible = document.querySelector(${JSON.stringify(etape)})
-        cible?.click()
-        return Boolean(cible)
-      })()`)
+      const trouve = await evaluer(scriptDuGeste(gesteDeLEtape(etape)))
       if (!trouve) {
         declencheurTrouve = false
         break

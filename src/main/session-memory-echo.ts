@@ -272,6 +272,24 @@ export function rememberedFacts(
   })
 }
 
+/**
+ * Retire de CE fil le fait que l'utilisateur a barré dans le carnet (conv-1038, 2026-10-21).
+ *
+ * Sans ce retrait, la correction ne valait rien : l'agent relisait le fait barré au tour suivant.
+ * Égalité EXACTE du titre — la même clé que la supersession de `noteRemembered` — : « Décision A »
+ * n'emporte pas « Décision A bis ». Le retrait n'est pas une éviction : il n'est pas compté comme
+ * une perte, puisque c'est l'utilisateur qui l'a voulu.
+ */
+export function oublierFaitRetenu(conversationId: string, title: string): boolean {
+  const echo = byConversation.get(conversationId)
+  if (!echo) return false
+  const avant = echo.facts.length
+  echo.facts = echo.facts.filter((fact) => fact.title !== title)
+  if (echo.facts.length === avant) return false
+  persistEcho()
+  return true
+}
+
 /** Combien de faits le plafond a fait sortir de ce fil. Sert à DIRE la perte. */
 export function evictedCount(conversationId: string | undefined, workspace?: string): number {
   const echo = conversationId ? byConversation.get(conversationId) : undefined

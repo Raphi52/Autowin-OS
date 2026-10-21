@@ -588,7 +588,8 @@ describe('Envoyer en gel fondu bleu-rose', () => {
  * information gardent leur habit : mode auto allume (or), micro en ecoute ou en transcription.
  */
 describe('Icones de la saisie nues (Lineaire B)', () => {
-  const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-dictee:not(.is-recording):not(.is-transcribing))`
+  // « ×3 » (Essaie 3 façons, conv-1038) suit les trois icônes voisines : même habit nu, même survol.
+  const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-trois-facons, .composer-dictee:not(.is-recording):not(.is-transcribing))`
   /** Le formateur peut couper `:is(...)` sur plusieurs lignes : on compare sans ces blancs. */
   const aplati = (s: string): string =>
     s.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim()
@@ -622,7 +623,7 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
 
   it('tire ses gris du texte et du fond, et son cadre du nacre du bloc de question', () => {
     const jetons = derniere(
-      `${PREFIXE} .composer-input-row > :is(.composer-auto, .attachment-button, .composer-dictee)`
+      `${PREFIXE} .composer-input-row > :is(.composer-auto, .attachment-button, .composer-trois-facons, .composer-dictee)`
     )
     expect(jetons['--nv-pastille-gris']).toBe('color-mix(in srgb, var(--text) 14%, var(--bg-0))')
     expect(jetons['--nv-pastille-gris-clair']).toBe('color-mix(in srgb, var(--text) 21%, var(--bg-0))')

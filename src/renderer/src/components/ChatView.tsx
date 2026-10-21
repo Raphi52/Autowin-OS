@@ -90,6 +90,18 @@ import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
 import { HdeskTv } from './HdeskTv'
+import { BarrePassage, type PassageAffiche } from './BarrePassage'
+import {
+  ajouterAuBrouillon,
+  passageDuFil,
+  texteDeLActionSurPassage,
+  type ActionPassage
+} from './passage-selectionne'
+import { referenceDeLElement } from './reference-element'
+import { departPourModifier } from './modifier-relancer'
+import { CarnetDuFil } from './CarnetDuFil'
+import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
+import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
@@ -1767,10 +1779,107 @@ export function ChatView({
    * descente (dependant de `messages`) ne se rejoue jamais, et personne ne descend.
    */
   const [atterrissageDemande, setAtterrissageDemande] = useState(0)
+  /**
+   * Passage du fil sélectionné à la souris, où poser sa barre, et le fil où il a été pris
+   * (conv-1038) : changer de fil la fait disparaître sans effet de remise à zéro.
+   */
+  const [passageSelectionne, setPassageSelectionne] = useState<
+    (PassageAffiche & { fil: string | null }) | null
+  >(null)
+  /*
+   * La barre suit la sélection : elle disparaît quand la sélection se vide (clic ailleurs), quand
+   * le fil défile (elle resterait à l'écran, plus collée au passage), et sur Échap.
+   */
+  const barrePassageOuverte = passageSelectionne !== null
+  useEffect(() => {
+    if (!barrePassageOuverte) return
+    const fermer = (): void => setPassageSelectionne(null)
+    const surSelection = (): void => {
+      if (window.getSelection()?.isCollapsed !== false) fermer()
+    }
+    const surTouche = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') fermer()
+    }
+    const fil = scrollRef.current
+    document.addEventListener('selectionchange', surSelection)
+    document.addEventListener('keydown', surTouche)
+    fil?.addEventListener('scroll', fermer, { passive: true })
+    return () => {
+      document.removeEventListener('selectionchange', surSelection)
+      document.removeEventListener('keydown', surTouche)
+      fil?.removeEventListener('scroll', fermer)
+    }
+  }, [barrePassageOuverte])
+
+  /**
+   * Repère « non lu » du fil lu AVANT de l'ouvrir (conv-1038, carte « Pendant ton absence » du
+   * carnet) : `loadConv` le remplace aussitôt par la date du fil, il faut donc le saisir avant.
+   */
+  const [vueAvantOuverture, setVueAvantOuverture] = useState<{
+    conv: string
+    vueA: number
+  } | null>(null)
 
   /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
   function texteDuComposer(): string {
     return getComposerDraft(composerDraftKeyRef.current).input
+  }
+
+  /**
+   * RÉPONDRE À UN PASSAGE (conv-1038, 2026-10-21) : au relâchement de la souris dans le fil, une
+   * sélection DANS un message fait apparaître sa barre, posée au-dessus du passage (coordonnées
+   * dans le cadre du fil, celui du bouton « ↓ Dernier message »).
+   */
+  function surRelachementDansLeFil(): void {
+    const selection = window.getSelection()
+    const texte = passageDuFil(selection, scrollRef.current)
+    const cadre = scrollRef.current?.parentElement
+    if (!texte || !selection || !cadre) {
+      setPassageSelectionne(null)
+      return
+    }
+    const zone = selection.getRangeAt(0).getBoundingClientRect()
+    const bord = cadre.getBoundingClientRect()
+    setPassageSelectionne({
+      fil: activeRef.current,
+      texte,
+      gauche: Math.max(0, zone.left - bord.left),
+      // La barre se pose AU-DESSUS du passage : jamais au ras du haut, où elle serait coupée.
+      haut: Math.max(40, zone.top - bord.top)
+    })
+  }
+
+  /** Le geste choisi pose son texte dans la saisie, SANS envoyer : l'utilisateur relit et envoie. */
+  function agirSurPassage(action: ActionPassage, texte: string): void {
+    setDraftInput(
+      composerDraftKeyRef.current,
+      ajouterAuBrouillon(texteDuComposer(), texteDeLActionSurPassage(action, texte))
+    )
+    window.getSelection()?.removeAllRanges()
+    setPassageSelectionne(null)
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+
+  /** Une ligne barrée ou corrigée du carnet du fil rejoint la saisie, SANS envoyer (conv-1038). */
+  function ajouterCorrectionDuCarnet(texte: string): void {
+    setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), texte))
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+
+  /**
+   * « C'EST QUOI ÇA ? » (conv-1038, 2026-10-21) : Alt+clic sur un élément du chat pose sa
+   * référence exacte dans la saisie (`reference-element.ts`), sans envoyer. Le clic est ABSORBÉ en
+   * phase de capture : Alt+clic sur « brancher » ne crée pas de branche, sur un lien ne l'ouvre pas.
+   * En mosaïque, la saisie principale n'est pas à l'écran : le clic garde son sens ordinaire.
+   */
+  function surAltClic(event: React.MouseEvent<HTMLDivElement>): void {
+    if (!event.altKey || convViewMode === 'mosaic' || !(event.target instanceof Element)) return
+    const reference = referenceDeLElement(event.target, { conversationId: activeRef.current })
+    if (!reference) return
+    event.preventDefault()
+    event.stopPropagation()
+    setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), reference))
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
 
   function getComposerDraft(key: string): ComposerDraft {
@@ -2588,6 +2697,19 @@ export function ChatView({
           const text = e.text
           setAppNotice((current) => newestNotice(current, { text, noticeId: e.noticeId }))
         }
+      } else if (e.type === 'suite-depuis-notification') {
+        /*
+         * BOUTON DE SUITE DE LA NOTIFICATION DE FIN DE TOUR (conv-1038, 2026-10-21) : la suite part
+         * dans le fil DU TOUR comme un message tapé, sans changer le fil affiché ni vider son
+         * brouillon. Fil encore occupé (un tour est reparti entre-temps) : elle attend en file et
+         * part à la fin du tour, comme un message tapé pendant un tour.
+         */
+        const convId = e.convId
+        const texte = typeof e.texte === 'string' ? e.texte.trim() : ''
+        if (convId && texte) {
+          if (busyConversationsRef.current.has(convId)) enqueueMessage(convId, texte)
+          else void send(texte, { targetConversationId: convId, keepComposerDraft: true })
+        }
       } else if (e.type === 'directives-orphelines') {
         /*
          * ORIENTATION ARRIVEE TROP TARD : le tour s'est termine sans jamais la lire.
@@ -3313,6 +3435,20 @@ export function ChatView({
     // Retenu ICI : `loadConv` est le point de passage unique de toute ouverture (clic, reprise,
     // inbox d'agents), donc le seul endroit ou la memoire ne peut pas se desynchroniser.
     memoriserDerniereConversation(c.id)
+    /*
+     * Seulement à une VRAIE ouverture (un autre fil que celui affiché) : `loadConv` sert aussi à
+     * recharger le fil qu'on regarde, et un tour fini sous les yeux de l'utilisateur n'a pas eu
+     * lieu « pendant son absence ».
+     */
+    if (activeRef.current !== c.id) {
+      const vuesAvant = lireConversationsVues(
+        typeof localStorage === 'undefined' ? undefined : localStorage
+      )
+      const vueA = vuesAvant[c.id]
+      setVueAvantOuverture(
+        vueA !== undefined && estNonVue(c, vuesAvant) ? { conv: c.id, vueA } : null
+      )
+    }
     marquerConversationVue(c.id, c.updatedAt)
     const requestId = ++loadConversationRequestRef.current
     // Le numéro de requête arbitre AUSSI l'affichage : une réponse (ou un échec) PÉRIMÉ ne
@@ -3897,6 +4033,196 @@ export function ChatView({
       return
     }
     void loadConv(target)
+  }
+  /**
+   * « MODIFIER ET RELANCER » (conv-1038, 2026-10-21) : reprendre un de ses messages en le corrigeant.
+   * La copie du fil s'arrête JUSTE AVANT lui (`departPourModifier`), s'ouvre, et le texte du message
+   * attend dans sa saisie : rien n'est envoyé, l'utilisateur corrige puis envoie. Avant le premier
+   * message, il n'y a rien à copier : un fil neuf. Même retenue que la branche pendant un tour : on ne
+   * quitte pas le fil qui travaille, un avis dit où la copie attend. Seule la conversation revient en
+   * arrière, pas les fichiers (décision « branches-rewind », étape 1).
+   */
+  async function modifierEtRelancer(messageId: string): Promise<void> {
+    const source = activeRef.current
+    if (!source) return
+    const message = messages.find((candidat) => candidat.messageId === messageId)
+    if (!message || message.role !== 'user' || !message.content) return
+    const depart = departPourModifier(messages, messageId)
+    if (!depart) return
+    if (depart.kind === 'fil-neuf') {
+      newConv()
+      setDraftInput(NEW_DRAFT_KEY, message.content)
+      requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+      return
+    }
+    const tourEnCours = busyConversationsRef.current.has(source)
+    const copie = (await window.api.conversationsFork(source, depart.ancre)) as Conv | undefined
+    const fraiches = (await window.api.conversations()) as Conv[]
+    setConvs(fraiches)
+    const cible = copie?.id
+      ? fraiches.find((conversation) => conversation.id === copie.id)
+      : undefined
+    if (!cible) {
+      await reloadActiveFromStore(source) // copie refusée : on reste où on est
+      return
+    }
+    // Le brouillon de la copie est posé AVANT son ouverture : l'ouverture le relit tel quel.
+    setDraftInput(cible.id, message.content)
+    if (tourEnCours) {
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: `Copie « ${cible.title} » créée avec ton message à modifier. Le tour en cours continue ici — elle t'attend dans la liste.`
+        })
+      )
+      return
+    }
+    await loadConv(cible)
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+  /**
+   * « REVENIR À CE TOUR, CODE ET FIL » (conv-1038, 2026-10-21 — décision « branches-rewind »,
+   * étape 2). Le main rouvre la photo du code prise au début du tour de ce message dans une COPIE
+   * SÉPARÉE (`photo-du-code.ts`) ; ici, la copie du fil s'arrête juste avant le message (comme
+   * « Modifier et relancer ») et travaille DANS cette copie : son tour suivant n'écrit jamais dans le
+   * dossier partagé. Le texte du message attend dans la saisie, rien n'est envoyé. Sans photo, aucune
+   * branche n'est créée et la raison est dite.
+   */
+  async function revenirAuTour(messageId: string): Promise<void> {
+    const source = activeRef.current
+    if (!source) return
+    const message = messages.find((candidat) => candidat.messageId === messageId)
+    if (!message || message.role !== 'user') return
+    const depart = departPourModifier(messages, messageId)
+    if (!depart) return
+    const retour = await window.api.conversationRevenirAuTour?.(source, messageId)
+    if (!retour) return
+    if (!retour.ok) {
+      setAppNotice((current) => newestNotice(current, { text: retour.raison }))
+      return
+    }
+    const branche = await brancheDansLaCopie(
+      source,
+      depart.kind === 'copie' ? depart.ancre : undefined,
+      retour.chemin,
+      'Retour au premier tour'
+    )
+    if (!branche.ok) {
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: `Code remis à son état du début de ce tour dans ${retour.chemin}, mais la branche du fil n'a pas pu être rattachée à cette copie (${branche.raison}). Rien n'a été ouvert : elle aurait travaillé dans le dossier partagé.`
+        })
+      )
+      return
+    }
+    const cibleId = branche.id
+    const fraiches = (await window.api.conversations()) as Conv[]
+    setConvs(fraiches)
+    const cible = fraiches.find((conversation) => conversation.id === cibleId)
+    if (!cible) return
+    setDraftInput(cible.id, message.content)
+    setAppNotice((current) =>
+      newestNotice(current, {
+        text: `Code remis à son état du début de ce tour, dans une copie séparée : ${retour.chemin}. Ce fil y travaille ; le dossier partagé n'a pas bougé. Les dépendances (node_modules) n'y sont pas reliées : installe-les avant d'y lancer les tests.`
+      })
+    )
+    if (busyConversationsRef.current.has(source)) return
+    await loadConv(cible)
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+  /**
+   * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la demande tapée part dans TROIS branches du fil,
+   * chacune rattachée à SA copie séparée du code (le main les ouvre à une même photo) et chacune avec
+   * une façon imposée (`trois-facons.ts`). Les trois s'ouvrent en mosaïque pour être comparées. Rien
+   * n'est fusionné dans le dossier partagé : garder une façon reste un geste de l'utilisateur. Chaque
+   * branche est un tour payé — trois fois le coût d'un tour, et l'avis le dit.
+   */
+  async function essayerTroisFacons(): Promise<void> {
+    const source = activeRef.current
+    const demande = texteDuComposer().trim()
+    if (!source || !demande) {
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: source
+            ? 'Écris d’abord la demande à essayer de 3 façons.'
+            : 'Ouvre d’abord le fil où essayer cette demande de 3 façons.'
+        })
+      )
+      return
+    }
+    const essai = await window.api.conversationEssaisEnParallele?.(source, 3)
+    if (!essai) return
+    if (!essai.ok) {
+      setAppNotice((current) => newestNotice(current, { text: essai.raison }))
+      return
+    }
+    const filSource = liveMessagesRef.current.get(source) ?? messages
+    const ancre = [...filSource].reverse().find((message) => message.messageId)?.messageId
+    const titre =
+      convsRef.current.find((conversation) => conversation.id === source)?.title ?? 'Essai'
+    const total = essai.chemins.length
+    // Chaque branche garde SON rang : son titre (« façon 3/3 ») et sa façon imposée restent
+    // d'accord même quand une autre façon n'a pas pu partir.
+    const branches: Array<{ id: string; rang: number }> = []
+    const refusees: string[] = []
+    for (const [rang, chemin] of essai.chemins.entries()) {
+      const branche = await brancheDansLaCopie(source, ancre, chemin, titre)
+      if (!branche.ok) {
+        refusees.push(`façon ${rang + 1} (${branche.raison})`)
+        continue
+      }
+      await window.api.conversationsRename?.(branche.id, titreDeLaFacon(titre, rang, total))
+      branches.push({ id: branche.id, rang })
+    }
+    if (branches.length > 0) setDraftInput(composerDraftKeyRef.current, '')
+    const fraiches = (await window.api.conversations()) as Conv[]
+    convsRef.current = fraiches
+    setConvs(fraiches)
+    if (branches.length > 0) setConvViewMode('mosaic')
+    for (const { id, rang } of branches) {
+      await ouvrirDansMosaique(id)
+      void send(demandePourLaFacon(demande, rang, total), { targetConversationId: id })
+    }
+    const lancees = `${branches.length} façon${branches.length > 1 ? 's' : ''} lancée${branches.length > 1 ? 's' : ''}, chacune dans sa copie séparée : ${essai.chemins.join(' · ')}. Compare-les dans la mosaïque ; rien n'est fusionné dans le dossier partagé. Coût : ${branches.length} tour${branches.length > 1 ? 's' : ''}.`
+    const nonParties = refusees.length
+      ? ` Non envoyée${refusees.length > 1 ? 's' : ''}, la branche n'a pas pu être rattachée à sa copie : ${refusees.join(' · ')}.`
+      : ''
+    setAppNotice((current) => newestNotice(current, { text: `${lancees}${nonParties}` }))
+  }
+  /**
+   * Une branche du fil NÉE dans sa copie séparée (conv-1038, 2026-10-21) : le dossier part AVEC la
+   * branche (`fork(…, { dossier })`, ou la création d'un fil neuf quand il n'y a rien à copier), et
+   * la réponse est RELUE. Mesuré avant : la branche était créée puis rangée par un second appel dont
+   * l'échec n'était pas lu — elle s'ouvrait, recevait la demande et travaillait dans le dossier
+   * PARTAGÉ. Un processus principal d'avant ce correctif ignore `dossier` : la relecture le voit.
+   * fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — rattachement par un 2e appel dont l'échec n'était pas lu. Sans la relecture ci-dessous, 2 tests rouges (revenir-au-tour, trois-facons) ; sans `{ dossier }` passé au fork, 3 rouges. Entrée décisive : une branche rendue sans `projectPath`.
+   */
+  async function brancheDansLaCopie(
+    source: string,
+    ancre: string | undefined,
+    chemin: string,
+    titre: string
+  ): Promise<{ ok: true; id: string } | { ok: false; raison: string }> {
+    const attendu = canonicalProjectPath(chemin)
+    try {
+      let branche: { id?: string; projectPath?: string } | undefined
+      if (ancre) {
+        branche = (await window.api.conversationsFork(source, ancre, { dossier: chemin })) as Conv
+      } else {
+        const identity = await refreshRuntimeIdentity()
+        branche = await window.api.conversationsCreate({
+          title: titre,
+          category: identity.provider,
+          provider: identity.provider,
+          projectPath: chemin
+        })
+      }
+      if (!branche?.id) return { ok: false, raison: 'branche refusée' }
+      if (!attendu || branche.projectPath !== attendu)
+        return { ok: false, raison: 'dossier de travail non posé' }
+      return { ok: true, id: branche.id }
+    } catch (erreur) {
+      return { ok: false, raison: erreur instanceof Error ? erreur.message : String(erreur) }
+    }
   }
   /**
    * REPRISE APRÈS SURCHARGE DU MODÈLE (529) — demande utilisateur du 2026-09-03 : « quand le modèle
@@ -4702,6 +5028,13 @@ export function ChatView({
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
+  // Callback STABLE pour la ligne mémoïsée, comme `handleFork` : passe par un ref.
+  const modifierRef = useRef(modifierEtRelancer)
+  modifierRef.current = modifierEtRelancer
+  const handleModifier = useCallback((messageId: string) => void modifierRef.current(messageId), [])
+  const revenirRef = useRef(revenirAuTour)
+  revenirRef.current = revenirAuTour
+  const handleRevenir = useCallback((messageId: string) => void revenirRef.current(messageId), [])
   /**
    * Un choix cliqué se comporte comme un message TAPÉ, tour en cours ou non.
    *
@@ -5678,6 +6011,33 @@ export function ChatView({
   }
 
   /** Fenetres de la mosaique, dans l'ordre d'ouverture, avec leur fil peint et leur etat occupe. */
+  /*
+   * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON (conv-1038, 2026-10-21 — idée 6). Elle s'affiche en
+   * haut d'un fil qui est une façon (sa copie s'appelle `essai__…`), et au-dessus de la mosaïque dès
+   * qu'une de ses fenêtres en est une. La signature change quand une façon démarre ou finit un tour :
+   * la carte relit alors l'écart, les vérifications et le coût.
+   * check: ComparaisonDesFacons.test.tsx (7 cas, dont le clic unique qui ne publie rien) et
+   * trois-facons.comparaison.test.ts (regroupement par essai) ; typage vérifié par npm run typecheck.
+   */
+  const faconsDuFilActif = useMemo(
+    () => (activeId ? faconsDuMemeEssai(convs, activeId) : []),
+    [convs, activeId]
+  )
+  const faconsDeLaMosaique = useMemo(() => {
+    for (const id of mosaicIds) {
+      const facons = faconsDuMemeEssai(convs, id)
+      if (facons.length > 0) return facons
+    }
+    return []
+  }, [convs, mosaicIds])
+  const signatureDesFacons = (facons: readonly { id: string }[]): string =>
+    facons
+      .map((facon) => {
+        const conv = convs.find((candidat) => candidat.id === facon.id)
+        return `${facon.id}:${busyConversations.has(facon.id) ? 1 : 0}:${conv?.messageCount ?? ''}:${conv?.lastAssistantStatus ?? ''}`
+      })
+      .join('|')
+
   const fenetresMosaique = useMemo<ChatMosaicWindow[]>(
     () =>
       mosaicIds.map((id) => ({
@@ -6267,6 +6627,8 @@ export function ChatView({
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
+              onModifier={handleModifier}
+              onRevenir={handleRevenir}
               onOpenImage={setOpenImage}
               onOpenLiveAction={revealLiveAction}
               retryPrompt={
@@ -6299,6 +6661,7 @@ export function ChatView({
       answerAsk,
       onInspectTurn,
       handleFork,
+      handleModifier,
       revealLiveAction,
       refineResumeDraft,
       ouvrirLogin
@@ -6406,6 +6769,21 @@ export function ChatView({
     ]
   )
 
+  /*
+   * L'AVIS DE L'APPLICATION, DANS LES DEUX VUES (conv-1038, 2026-10-21). Il ne vivait que dans la
+   * vue du fil unique : en mosaïque, rien ne l'affichait. Mesuré sur « Essaie 3 façons », qui bascule
+   * en mosaïque PUIS écrit son avis (copies ouvertes, coût en tours) — l'utilisateur ne le voyait
+   * jamais. En mosaïque, il flotte au-dessus des fenêtres, dans `.chat-avis-mosaique` (ChatMosaic.css).
+   */
+  const avisApp = appNotice ? (
+    <div className="chat-workflow-notice fade-in" data-testid="chat-workflow-notice" role="alert">
+      <span>{appNotice.text}</span>
+      <button type="button" onClick={() => setAppNotice(null)} aria-label="Fermer l’avertissement">
+        ×
+      </button>
+    </div>
+  ) : null
+
   return (
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}${
@@ -6413,6 +6791,7 @@ export function ChatView({
       }`}
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
+      onClickCapture={surAltClic}
     >
       {/* HARNAIS DE PROFILAGE (heal gels vue chat, 2026-09-18) : `vue-chat` seul ne disait pas QUELLE
           zone tenait le fil d'affichage (1,3 a 2,8 s sur conv-680). Chaque zone signale son propre
@@ -7132,9 +7511,18 @@ export function ChatView({
       />
 
       {/* ---- Centre : mosaique multi-chat, ou le fil unique ---- */}
+      {convViewMode === 'mosaic' && avisApp && <div className="chat-avis-mosaique">{avisApp}</div>}
       {convViewMode === 'mosaic' ? (
         <ChatMosaic
           fenetres={fenetresMosaique}
+          entete={
+            faconsDeLaMosaique.length > 0 ? (
+              <ComparaisonDesFacons
+                facons={faconsDeLaMosaique}
+                signature={signatureDesFacons(faconsDeLaMosaique)}
+              />
+            ) : undefined
+          }
           onClose={fermerFenetreStable}
           onOuvrirSeule={ouvrirSeuleStable}
           rendreComposer={rendreComposerStable}
@@ -7425,22 +7813,7 @@ Cliquer pour choisir une autre branche.`}
           )}
           {listeNonPubliee && <TravauxNonPublies onFermer={() => setListeNonPubliee(false)} />}
 
-          {appNotice && (
-            <div
-              className="chat-workflow-notice fade-in"
-              data-testid="chat-workflow-notice"
-              role="alert"
-            >
-              <span>{appNotice.text}</span>
-              <button
-                type="button"
-                onClick={() => setAppNotice(null)}
-                aria-label="Fermer l’avertissement"
-              >
-                ×
-              </button>
-            </div>
-          )}
+          {avisApp}
           {activeId && arretsAuto[activeId] && (
             <div
               className="chat-workflow-notice fade-in"
@@ -7667,9 +8040,31 @@ Cliquer pour choisir une autre branche.`}
             </div>
           )}
 
+          {activeId && faconsDuFilActif.length > 0 && (
+            <ComparaisonDesFacons
+              facons={faconsDuFilActif}
+              signature={signatureDesFacons(faconsDuFilActif)}
+              onOuvrir={(id) => {
+                const cible = convsRef.current.find((conversation) => conversation.id === id)
+                if (cible && id !== activeId) void loadConv(cible)
+              }}
+            />
+          )}
+          {activeId && (
+            <CarnetDuFil
+              key={activeId}
+              conversationId={activeId}
+              fil={messages}
+              vueAvantOuverture={
+                vueAvantOuverture?.conv === activeId ? vueAvantOuverture.vueA : undefined
+              }
+              onCorrection={ajouterCorrectionDuCarnet}
+            />
+          )}
           <div
             className={`chat-scroll scroll-y${repriseEnCours ? ' chat-scroll--reprise' : ''}`}
             ref={scrollRef}
+            onMouseUp={surRelachementDansLeFil}
             role="log"
             aria-live="polite"
             aria-relevant="additions text"
@@ -7804,6 +8199,10 @@ Cliquer pour choisir une autre branche.`}
                 n'est rendu sans bureau cache vivant relie a ce fil ; `key` la remet a zero par fil. */}
             <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
+
+          {passageSelectionne && passageSelectionne.fil === activeId && (
+            <BarrePassage passage={passageSelectionne} onAction={agirSurPassage} />
+          )}
 
           {(hasNewActivity || scrolledAwayFromTail) && (
             <button
@@ -7961,6 +8360,16 @@ Cliquer pour choisir une autre branche.`}
                         strokeLinejoin="round"
                       />
                     </svg>
+                  </button>
+                  {/* « ESSAIE 3 FAÇONS » (conv-1038) : la demande tapée, en trois branches comparées. */}
+                  <button
+                    type="button"
+                    className="btn composer-trois-facons"
+                    onClick={() => void essayerTroisFacons()}
+                    aria-label="Essaie 3 façons"
+                    title="Essaie 3 façons : la demande tapée part dans 3 branches du fil, chacune dans sa copie séparée du code, ouvertes en mosaïque. Coûte 3 tours."
+                  >
+                    ×3
                   </button>
                   <input
                     ref={fileInputRef}
