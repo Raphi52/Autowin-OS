@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   565 regles, 781 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   569 regles, 786 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -226,6 +226,18 @@
     border: 1px solid rgba(0, 255, 85, 0.3);
     background: rgba(0, 255, 85, 0.08);
     color: rgb(0, 255, 85)
+}
+
+/* ---- src/renderer/src/components/ChatComposerExtras.css ---- */
+:root[data-theme='nebuleuse-verre'] .composer-suite:hover, :root[data-theme='nebuleuse-verre'] .composer-suite:focus-visible {
+    border-color: var(--gold-bright, rgb(255, 108, 182))
+}
+:root[data-theme='nebuleuse-verre'] .composer-suite.is-best {
+    border-color: rgba(251, 91, 171, 0.55)
+}
+:root[data-theme='nebuleuse-verre'] .composer-suite-score {
+    background: rgba(251, 91, 171, 0.16);
+    color: var(--gold-bright, rgb(255, 108, 182))
 }
 
 /* ---- src/renderer/src/components/ChatMosaic.css ---- */
@@ -485,6 +497,14 @@
 :root[data-theme='nebuleuse-verre'] .conv-status-filter {
     border: 1px solid rgba(251, 91, 171, 0.45);
     background: rgba(251, 91, 171, 0.08)
+}
+
+/* ---- src/renderer/src/components/ContexteDetaille.css ---- */
+:root[data-theme='nebuleuse-verre'] .ctx-panneau .ctx-pied {
+    background: rgb(10, 10, 10)
+}
+:root[data-theme='nebuleuse-verre'] .ctx-c-messages {
+    background: rgb(0, 255, 85)
 }
 
 /* ---- src/renderer/src/components/ConversationCostIndicator.css ---- */
@@ -814,9 +834,6 @@
 }
 
 /* ---- src/renderer/src/components/HomeView.css ---- */
-:root[data-theme='nebuleuse-verre'] .home-view::after {
-    background: radial-gradient(58% 48% at 50% 46%, rgba(10, 10, 10, 0.46), transparent 78%)
-}
 :root[data-theme='nebuleuse-verre'] .home-view__masthead {
     background: var(--bg-1, rgba(10, 10, 10, 0.56))
 }

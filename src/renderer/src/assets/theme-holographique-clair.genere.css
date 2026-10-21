@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   554 regles, 842 declarations. Voir genererCoucheClaire. */
+   559 regles, 848 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -262,6 +262,18 @@
     color: #09712c
 }
 
+/* ---- src/renderer/src/components/ChatComposerExtras.css ---- */
+:root[data-theme='holographique-clair'] .composer-suite:hover, :root[data-theme='holographique-clair'] .composer-suite:focus-visible {
+    border-color: var(--gold-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .composer-suite.is-best {
+    border-color: rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .composer-suite-score {
+    background: rgba(208, 43, 140, 0.16);
+    color: var(--gold-bright, #aa0e5f)
+}
+
 /* ---- src/renderer/src/components/ChatMosaic.css ---- */
 :root[data-theme='holographique-clair'] .chat-mosaic-window-anneau {
     background: rgba(208, 43, 140, 0.28)
@@ -497,6 +509,14 @@
 :root[data-theme='holographique-clair'] .conv-status-filter {
     border: 1px solid rgba(170, 14, 95, 0.45);
     background: rgba(208, 43, 140, 0.08)
+}
+
+/* ---- src/renderer/src/components/ContexteDetaille.css ---- */
+:root[data-theme='holographique-clair'] .ctx-panneau .ctx-pied {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .ctx-pied .quota-context-compact {
+    border: 1px solid var(--border, rgba(20, 15, 40, 0.2))
 }
 
 /* ---- src/renderer/src/components/ConversationCostIndicator.css ---- */

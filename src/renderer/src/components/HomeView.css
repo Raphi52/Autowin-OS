@@ -28,21 +28,23 @@
      Cette cause N EXISTE PLUS : le PNG est retire de `body`, et le decor 3D est monte a la racine
      de la coque (`DecorDeFond`), DERRIERE toutes les vues. Garder un noir opaque ici masquerait
      desormais ce decor -- l Accueil serait la seule vue SANS fond, exactement l inverse du but.
-     La lisibilite reste portee par l assombrissement du centre (.home-view::after) et par le fond
-     opaque de chaque tuile, pas par une couche pleine. */
+     La lisibilite reste portee par le fond opaque de chaque tuile, pas par une couche pleine
+     (l assombrissement du centre, .home-view::after, est retire depuis conv-1037). */
   background: transparent;
   border-radius: var(--container-radius-page, 16px);
 }
 
-/* Assombrissement du CENTRE seulement : le décor porte ses nébuleuses sur les bords et garde le
-   milieu noir, donc la lisibilité se gagne là où les tuiles se posent, sans éteindre la scène. */
+/* Le calque du CENTRE, sans teinte en sombre : il assombrissait le milieu à 46 % pour un décor
+   « qui garde le milieu noir » (les nébuleuses). Sur l'avenue, le milieu, c'est la rue et ses
+   néons : retiré le 2026-10-21 (conv-1037, « ya un filtre qui assombrit je veux des couleurs
+   petantes »). La lisibilité reste portée par le fond opaque de chaque tuile. Le calque reste :
+   la base claire y pose son éclairci central (theme-modes.css). */
 .home-view::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(58% 48% at 50% 46%, rgba(0, 0, 4, 0.46), transparent 78%);
 }
 
 /* L'en-tête : UNE rangée qui se replie, et non deux blocs posés en absolu chacun dans son coin.

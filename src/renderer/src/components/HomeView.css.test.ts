@@ -51,10 +51,37 @@ describe('HomeView.css — l accueil laisse passer le decor 3D global', () => {
     expect(brut).not.toMatch(/\.home-view__decor/)
   })
 
-  it('la lisibilite reste assuree par l assombrissement du centre, pas par un fond plein', () => {
-    // Contre-exemple utile : si quelqu un rend le fond transparent MAIS retire l assombrissement,
-    // le texte redevient illisible sur les nebuleuses. Les deux vont ensemble.
-    expect(css).toMatch(/\.home-view::after\s*\{[^}]*radial-gradient/)
+  /*
+   * CHANGEMENT DE DECISION, assume (conv-1037, 2026-10-21) : « ya un filtre qui assombrit je veux des
+   * couleurs petantes ». Ce test imposait un assombrissement de 46 % au centre, pense pour les
+   * nebuleuses ; sur l'avenue, il eteignait la rue. La lisibilite tient desormais au fond opaque de
+   * chaque tuile (HomeView.css.lisibilite-tuiles.test.ts) et a l'ombre portee des titres poses sur
+   * le decor.
+   *
+   * ENTREES QUI DOIVENT LE FAIRE ECHOUER : remettre un `background` sur `.home-view::after`, remettre
+   * le decor a `opacity: 0.6` dans Holographique, ou retirer l'ombre des titres de tuile.
+   */
+  it('le decor de l accueil n est plus assombri : ni voile au centre, ni decor attenue', () => {
+    const calque = css.match(/\.home-view::after\s*\{([^}]*)\}/)
+    expect(calque, 'le calque du centre reste : la base claire y pose son eclairci').not.toBeNull()
+    expect((calque as RegExpMatchArray)[1]).not.toMatch(/background/)
+    const holo = readFileSync(
+      new URL('../assets/theme-nebuleuse-verre.css', import.meta.url),
+      'utf8'
+    ).replace(/\/\*[\s\S]*?\*\//g, '')
+    const decor = holo.match(/\[data-theme='nebuleuse-verre'\] \.decor-de-fond\s*\{([^}]*)\}/)
+    expect(decor?.[1]).toMatch(/opacity:\s*1;/)
+    // la couche generee recopiait l'assombrissement : elle doit avoir ete regeneree sans lui
+    const genere = readFileSync(
+      new URL('../assets/theme-nebuleuse-verre.genere.css', import.meta.url),
+      'utf8'
+    )
+    expect(genere).not.toMatch(/\.home-view::after/)
+  })
+
+  it('les titres poses sur le decor restent lisibles par leur ombre portee', () => {
+    const titre = css.match(/\.home-tile__label h2\s*\{([^}]*)\}/)
+    expect(titre?.[1]).toMatch(/text-shadow:\s*0 1px 10px rgba\(0, 0, 0, 0\.9\d?\)/)
   })
 })
 

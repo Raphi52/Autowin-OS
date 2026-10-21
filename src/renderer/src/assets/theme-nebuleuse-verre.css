@@ -329,8 +329,11 @@
 :root[data-theme='nebuleuse-verre'] body::before {
   opacity: 0.05;
 }
+/* Le décor à PLEINE intensité (conv-1037, 2026-10-21 : « ya un filtre qui assombrit je veux des
+   couleurs petantes »). Il était à 0,6 depuis le 2026-10-09 (128ffd16), pour la nébuleuse de
+   l'époque ; sur l'avenue, ce voile éteignait les néons. Les tuiles gardent leur fond opaque. */
 :root[data-theme='nebuleuse-verre'] .decor-de-fond {
-  opacity: 0.6;
+  opacity: 1;
 }
 :root[data-theme='nebuleuse-verre'] ::selection {
   background: rgba(230, 60, 160, 0.38);

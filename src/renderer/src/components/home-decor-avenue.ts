@@ -13,6 +13,7 @@ import { monterToile } from './home-decor-avenue-toile'
 import { GAREE, monterVoitures } from './home-decor-avenue-voitures'
 import { AMBIANCE_KOWLOON, monterVille } from './home-decor-avenue-ville'
 import { eclaircieVaisseau, monterVaisseau } from './home-decor-avenue-vaisseau'
+import { hauteurMurRangee, monterRangee, VITRINES_RANGEE } from './home-decor-avenue-rangee'
 import { regrouperHalos } from './home-decor-lots-halos'
 
 /**
@@ -59,6 +60,13 @@ import { regrouperHalos } from './home-decor-lots-halos'
  * qualité comme les piétons ». Les deux caisses extrudées identiques et la moto en pavés laissent
  * place à quatre carrosseries continues (hypercar, fourgon à facettes, berline volante, moto carénée)
  * et à une GT nacrée garée en charge le long du trottoir de droite : voir `home-decor-avenue-voitures.ts`.
+ *
+ * LA RANGÉE DE DROITE EST EN VOLUMES DEPUIS conv-1037 : « la barre d'immeuble de droite a les toits
+ * qui forment une ligne droite ca fait pas naturelle et les boutiques et tags font trop basique »,
+ * puis, après deux tours de /draft, « implémenter 1+2 ». Le plan peint de 140 × 24 m laisse place à
+ * une pagode-tour qui se coiffe étage par étage sous sa grue, une ruelle de yatai dans une dent
+ * creuse, un pignon mitoyen aux papiers peints repeint d'un 夢, et des machiya basses : voir
+ * `home-decor-avenue-rangee.ts`.
  *
  * CE QUI EST REPRIS TEL QUEL : la géométrie, les nuanceurs, les couleurs et les animations du
  * brouillon.
@@ -469,143 +477,15 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   const Z0 = 10 - L
   const decor = new THREE.Group()
   scene.add(decor)
-  // les vitrines du rez-de-chaussée : [début dans la travée (m), largeur (m), couleur de la lumière]
-  const VITRINES: [number, number, string][] = [
-    [3, 6, '#ff4fb0'],
-    [22, 5, '#2ee8ff']
-  ]
-  function facade(): THREE.CanvasTexture {
-    const W2 = 2048
-    const H2 = 1404
-    const m = W2 / P
-    const [c, g] = toile(W2, H2)
-    const Y = (h: number): number => H2 - h * m
-    g.fillStyle = '#120d18'
-    g.fillRect(0, 0, W2, H2)
-    for (let i = 0; i < 5000; i++) {
-      g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '40,30,60' : '0,0,0') + ',' + rnd() * 0.3 + ')'
-      g.fillRect(rnd() * W2, rnd() * H2, 2 + rnd() * 30, 2 + rnd() * 20)
-    }
-    // les étages : dalles, fenêtres éclairées ou non, silhouettes, climatiseurs
-    for (let et = 0; et < 6; et++) {
-      const y0 = 5.2 + et * 3.1
-      g.fillStyle = 'rgba(0,0,0,.6)'
-      g.fillRect(0, Y(y0), W2, 9)
-      for (let k = 0; k < 12; k++) {
-        const x = 30 + (k * (W2 - 60)) / 12 + (et % 2) * 12
-        const w = 95
-        const h = 1.7 * m
-        const yy = Y(y0 + 2.3)
-        const r = rnd()
-        g.fillStyle =
-          r < 0.5
-            ? '#08070c'
-            : ['#ffd9a8', '#ff8fd0', '#9fb6ff', '#ffe2b8', '#2ee8ff', '#ffb878'][
-                Math.floor(rnd() * 6)
-              ]
-        g.fillRect(x, yy, w, h)
-        if (r >= 0.5) {
-          g.fillStyle = 'rgba(10,6,16,.55)'
-          g.fillRect(x, yy, w * (0.2 + rnd() * 0.5), h)
-          if (rnd() < 0.3) {
-            g.fillStyle = 'rgba(10,6,16,.85)'
-            g.beginPath()
-            g.ellipse(x + w * 0.7, yy + h * 0.5, 9, 15, 0, 0, Math.PI * 2)
-            g.fill()
-            g.fillRect(x + w * 0.7 - 15, yy + h * 0.66, 30, h * 0.34)
-          }
-        }
-        g.strokeStyle = '#050407'
-        g.lineWidth = 5
-        g.strokeRect(x, yy, w, h)
-        g.beginPath()
-        g.moveTo(x + w / 2, yy)
-        g.lineTo(x + w / 2, yy + h)
-        g.stroke()
-        if (rnd() < 0.22) {
-          g.fillStyle = '#1e1a26'
-          g.fillRect(x + 12, Y(y0 + 0.75), 62, 0.55 * m)
-          g.fillStyle = '#0c0a10'
-          g.fillRect(x + 18, Y(y0 + 0.65), 48, 6)
-        }
-      }
-    }
-    // le rez-de-chaussée : rideaux de fer tagués et vitrines éclairées
-    g.fillStyle = '#0d0a12'
-    g.fillRect(0, Y(4.8), W2, 4.8 * m)
-    for (let y = 0.3; y < 4.2; y += 0.09) {
-      g.fillStyle = 'rgba(255,255,255,.03)'
-      g.fillRect(0, Y(y), W2, 2)
-      g.fillStyle = 'rgba(0,0,0,.4)'
-      g.fillRect(0, Y(y) + 3, W2, 2)
-    }
-    VITRINES.forEach(([u, w, col]) => {
-      const x = u * m
-      const gr = g.createLinearGradient(0, Y(4), 0, Y(0.3))
-      gr.addColorStop(0, col)
-      gr.addColorStop(1, '#ffffff')
-      g.fillStyle = gr
-      g.fillRect(x, Y(4), w * m, 3.7 * m)
-      // présentoirs et silhouettes dans la vitrine
-      g.fillStyle = 'rgba(12,8,18,.75)'
-      for (let k = 0; k < 4; k++)
-        g.fillRect(x + 20 + (k * (w * m - 40)) / 4, Y(1.4), (w * m) / 5, 0.12 * m)
-      g.fillRect(x + w * m * 0.3, Y(2.6), 22, 1.8 * m)
-      g.beginPath()
-      g.ellipse(x + w * m * 0.3 + 11, Y(2.75), 13, 18, 0, 0, Math.PI * 2)
-      g.fill()
-      g.strokeStyle = '#06040a'
-      g.lineWidth = 10
-      g.strokeRect(x, Y(4), w * m, 3.7 * m)
-      // enseigne au-dessus de la vitrine
-      g.font = 'bold 70px Bahnschrift'
-      g.textAlign = 'center'
-      g.shadowColor = col
-      g.shadowBlur = 25
-      g.fillStyle = col
-      g.fillText(u < 10 ? 'KISSATEN' : 'PHONE · REPAIR', x + (w * m) / 2, Y(4.25))
-      g.shadowBlur = 0
-    })
-    g.globalAlpha = 0.2
-    for (let i = 0; i < 10; i++)
-      tag(
-        g,
-        ['AW', 'OS', 'RUN', 'SCOUT', 'X'][i % 5],
-        rnd() * W2,
-        Y(1 + rnd() * 3),
-        70 + rnd() * 70,
-        '#8fa8ff',
-        '#5b3c8a',
-        'Ink Free',
-        (rnd() - 0.5) * 0.4
-      )
-    g.globalAlpha = 1
-    tag(g, 'AUTOWIN', 13.5 * m, Y(1.3), 125, '#2ee8ff', '#ff2fa0', 'Impact')
-    tag(g, 'OS', 19.8 * m, Y(1.5), 120, '#3c6eeb', '#8fa8ff', 'Impact')
-    tag(g, 'noir holo', 31 * m, Y(1.5), 92, '#ff2fa0', '#2ee8ff', 'Ink Free')
-    tag(g, 'scout', 1.5 * m, Y(2.2), 60, '#2ee8ff', '#ffffff', 'Ink Free')
-    tag(g, 'JUDGE', 13 * m, Y(3.5), 70, '#e63ca0', '#ff6bb5', 'Impact', 0.05, 4)
-    const t = tex(c)
-    t.wrapS = THREE.RepeatWrapping
-    t.repeat.set(L / P, 1)
-    return t
-  }
-  {
-    const t = facade()
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(L, 24),
-      new THREE.MeshStandardMaterial({
-        map: t,
-        emissiveMap: t,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.9,
-        roughness: 0.9
-      })
-    )
-    m.position.set(FACADE, 12, 10 - L / 2)
-    m.rotation.y = -Math.PI / 2
-    decor.add(m)
-  }
+  /**
+   * LA RANGÉE DE DROITE (conv-1037, « implémenter 1+2 ») : des volumes à la place du plan peint de
+   * 140 × 24 m — pagode-tour sous sa grue, ruelle de yatai dans une dent creuse, pignon mitoyen au 夢,
+   * machiya basses (voir home-decor-avenue-rangee.ts). Montée ici, avant la compilation de la rue,
+   * pour que ses programmes se compilent avec elle en tâche de fond. Elle n'ajoute aucune lumière.
+   */
+  const rangee = monterRangee({ decor, P, Z0, copies: L / P, FACADE, TROTTOIR, toile, tex, glow })
+  // les boutiques de la rangée : [début dans la travée (m), largeur (m), couleur de la lumière]
+  const VITRINES = VITRINES_RANGEE
   // la chaussée : asphalte mouillé, lignes, et les trottoirs carrelés avec leurs bordures
   {
     const [c, g] = toile(512, 1024)
@@ -2054,7 +1934,9 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     emettre,
     enseignes,
     // conv-319 : « j'éclaircis les câbles devant le vaisseau » (le vaisseau mère, en haut au centre)
-    eclaircie: eclaircieVaisseau()
+    eclaircie: eclaircieVaisseau(),
+    // conv-1037 : la rangée n'est plus un mur de 24 m, les câbles s'accrochent sous ses toits
+    hauteurMur: (u) => hauteurMurRangee(u, P)
   })
   /**
    * LA SPIRALE (conv-310, « implémente spirale ») : la rue inondée, la tour de contrôle et la rame
@@ -2272,6 +2154,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       })
       // après le scintillement des enseignes : les deux qui lâchent y sont reprises par la toile
       toileElectrique.maj(t, dt, v)
+      rangee.animer(t)
       majParticules(dt)
       spirale.animer(t, parcours)
 
