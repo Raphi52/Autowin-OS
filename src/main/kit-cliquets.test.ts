@@ -178,8 +178,10 @@ describe('cliquet kit — marge de description sur TOUTES les skills', () => {
    * l'ecriture d'une skill). DETTE mesuree le 2026-09-12 : quatre descriptions n'en portent pas —
    * leur clause vit dans le CORPS, donc le routeur ne la voit pas. Elles sont NOMMEES ici plutot
    * que reecrites sans demande, et la liste ne peut que RETRECIR (test suivant).
+   * `heal` en est sorti le 2026-10-21 (conv-1042) : sa description dit desormais « PAS pour :
+   * auditer sans corriger → judge », la frontiere qui confondait les deux skills.
    */
-  const DETTE_FRONTIERE = ['clean', 'curate', 'heal', 'residus']
+  const DETTE_FRONTIERE = ['clean', 'curate', 'residus']
   const CLAUSE = /PAS pour|NE PAS utiliser|Ne pas utiliser|NE PAS l'utiliser|PAS l'utiliser/u
 
   it('chaque description hors dette dit ce pour quoi elle ne doit PAS servir', () => {
