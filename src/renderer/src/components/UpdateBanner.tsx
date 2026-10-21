@@ -103,15 +103,16 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
   } catch {
     /* navigation refusée : le prompt reste préparé dans la conversation */
   }
+  /*
+   * LA PROCÉDURE VIT DANS `skills/maj/SKILL.md`, le bouton ne fait que l'invoquer (conv-1036).
+   * L'ancienne consigne en ligne disait « mets le fichier de côté (git stash) » : le garde-fou le
+   * refuse aux agents (src/shared/garde-git-destructeur.ts), et conv-1023 s'est rabattu sur une
+   * branche `autowin/recovery/…` que l'app a publiée et poussée toute seule. La skill porte la voie
+   * sûre (branche `sauvegarde/…`) et la règle « ne réintroduis jamais ce que main a retiré ».
+   */
   const prompt =
-    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage puis relance la mise à ` +
-    `jour. Mon travail local peut être PÉRIMÉ : une vieille copie reprise ici contient souvent des ` +
-    `choses que main a retirées depuis (annulation, suppression). Avant de committer ou de trancher un ` +
-    `conflit, compare chaque fichier à la version entrante (git fetch puis git diff HEAD..origin/main, ` +
-    `et git log origin/main sur ces fichiers) : ne réintroduis jamais ce que main a supprimé ou annulé, ` +
-    `garde seulement mes vraies modifications récentes. Dans le doute, mets le fichier de côté ` +
-    `(git stash) plutôt que de le committer. Termine par la liste de ce que tu as gardé et de ce que ` +
-    `tu as écarté.`
+    `/maj La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage puis relance la ` +
+    `mise à jour. Termine par la liste de ce que tu as gardé et de ce que tu as écarté.`
   window.dispatchEvent(
     new CustomEvent('autowin:prefill-conversation', {
       detail: { conversationId: conversation.id, prompt, send: true }

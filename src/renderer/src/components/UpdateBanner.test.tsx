@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -450,14 +452,26 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
       expect(events).toHaveLength(1)
       expect(events[0].detail).toMatchObject({ conversationId: 'conv-fix', send: true })
       const prompt = (events[0].detail as { prompt: string }).prompt
+      // La procédure est la skill `maj` : le message COMMENCE par elle, donc son corps est chargé.
+      expect(prompt.startsWith('/maj ')).toBe(true)
       expect(prompt).toContain('bloquée')
       expect(prompt).toContain('ton travail non committé bloque')
-      // Incident du 2026-09-21 : un vieux travail local re-poussé a ressuscité des onglets retirés sur main.
-      expect(prompt).toContain('ne réintroduis jamais')
-      expect(prompt).toContain('git diff')
+      // conv-1036 : le bouton ne prescrit plus `git stash`, que le garde-fou refuse aux agents.
+      expect(prompt).not.toContain('stash')
     } finally {
       window.removeEventListener('autowin:prefill-conversation', listener)
     }
+  })
+
+  it('la skill invoquée par « Faire réparer » existe et porte la voie sûre', () => {
+    const corps = readFileSync(join(process.cwd(), 'skills', 'maj', 'SKILL.md'), 'utf8')
+    // Incident du 2026-09-21 : un vieux travail local re-poussé a ressuscité des onglets retirés sur main.
+    expect(corps).toContain('ne réintroduis jamais')
+    expect(corps).toContain('git diff HEAD origin/main')
+    expect(corps).toContain('merge-tree')
+    // conv-1023 : une branche `autowin/recovery/…` a été publiée et poussée toute seule par l'app.
+    expect(corps).toContain('refs/heads/sauvegarde/')
+    expect(corps).toMatch(/jamais `git stash`/)
   })
 
   it('rail REPLIÉ + blocage → « Faire réparer » reste CLIQUABLE (icône seule, pas masqué)', async () => {
