@@ -27,6 +27,29 @@ import { isExpiredAuth } from './task-manager/watchdog-suppression'
  */
 const FOURNISSEUR_NON_CONNECTE = /\bnon authentifi[ée] — lance npm run \S+:login\b/i
 
+/** Le vocabulaire historique du contrôle final (ex-ternaire en ligne de `commands.ts`). */
+const RAISON_HORS_DU_TRAVAIL = /quota|rate.?limit|annul|cancel|canary|flaky|timeout|provider/iu
+/**
+ * Le run était VERT, mais la base portait le travail non commité d'un autre (`base-dirty`) ou une
+ * fusion en cours (`base-in-progress`). Le contrôle final n'écrit ces raisons qu'après un vert
+ * (`orchestrator.ts`, garde `green && !integrated`). `merge-failed` (un conflit) reste un défaut.
+ */
+const INTEGRATION_BLOQUEE_PAR_LA_BASE = /\bbase-(?:dirty|in-progress)\b/u
+
+/**
+ * LA CLASSE D'UN RUN ALLÉ AU BOUT MAIS REFUSÉ PAR LE CONTRÔLE FINAL (piste 1, conv-1033). La mémoire
+ * du scout relit cette classe pour dire ce que sont devenues les pistes prises : un run vert bloqué
+ * par la base y passait pour un échec de la piste (conv-981, 2026-10-16). Le refus du contrôle des
+ * causes reste `defect` : il porte sur la preuve du travail lui-même.
+ */
+export function classeTerminaleDuControle(raisons: readonly string[]): 'external' | 'defect' {
+  return raisons.some(
+    (raison) => RAISON_HORS_DU_TRAVAIL.test(raison) || INTEGRATION_BLOQUEE_PAR_LA_BASE.test(raison)
+  )
+    ? 'external'
+    : 'defect'
+}
+
 export function classeTerminaleDEchec(erreur: unknown, annule: boolean): 'external' | 'defect' {
   if (annule) return 'external'
   const message = erreur instanceof Error ? erreur.message : String(erreur ?? '')

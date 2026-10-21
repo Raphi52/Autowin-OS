@@ -4,7 +4,7 @@ import {
   type LearningProposalV1,
   type OutcomeObservedV1
 } from '../shared/run-learning'
-import { classeTerminaleDEchec } from './classe-terminale-echec'
+import { classeTerminaleDEchec, classeTerminaleDuControle } from './classe-terminale-echec'
 import { decideOutcomeLearning } from './outcome-learning-policy'
 import {
   createIndependentLearningAttestation,
@@ -141,5 +141,47 @@ describe('classeTerminaleDEchec', () => {
     const decision = decideOutcomeLearning(lecon, observation(classe))
     expect(decision.route).toBe('inbox')
     expect(decision.reasons).toContain('terminal-external')
+  })
+})
+
+/*
+ * UN RUN VERT REFUSÉ À L'INTÉGRATION (piste 1, conv-1033). Le contrôle final n'ajoute
+ * `blocage d’intégration: base-dirty` que si le run était vert (`orchestrator.ts`, garde
+ * `green && !integrated`) : ce sont les fichiers non commités d'un AUTRE travail qui bloquent.
+ * Raisons RÉELLEMENT écrites dans le RUN.md du run conv-981 du 2026-10-16.
+ * Entrée qui tue une correction fausse : le refus du contrôle des causes, qui porte sur la preuve
+ * du travail lui-même et doit rester `defect`.
+ */
+describe('classeTerminaleDuControle', () => {
+  const BASE_DIRTY_981 = [
+    'intégration locale non terminée',
+    'blocage d’intégration: base-dirty — cause: des fichiers non committés de la base bloquent la publication — fichiers en cause: src/renderer/src/assets/app-shell.css',
+    'Commit demande sans identite Git publiee verifiable'
+  ]
+
+  it('classe external un run vert bloqué par la base (base-dirty, base-in-progress)', () => {
+    expect(classeTerminaleDuControle(BASE_DIRTY_981)).toBe('external')
+    expect(
+      classeTerminaleDuControle([
+        'blocage d’intégration: base-in-progress — cause: fusion en cours'
+      ])
+    ).toBe('external')
+  })
+
+  it('garde le vocabulaire historique (quota, annulation, flaky…) en external', () => {
+    expect(classeTerminaleDuControle(['provider indisponible'])).toBe('external')
+    expect(classeTerminaleDuControle(['run annulé par l’utilisateur'])).toBe('external')
+    expect(classeTerminaleDuControle(['test FLAKY relancé'])).toBe('external')
+  })
+
+  it('laisse defect le contrôle des causes, un conflit de fusion et un test rouge', () => {
+    expect(
+      classeTerminaleDuControle(['contrôle des causes : correctif sans cause tracée sur roles.ts'])
+    ).toBe('defect')
+    expect(
+      classeTerminaleDuControle(['blocage d’intégration: merge-failed — conflit sur a.ts'])
+    ).toBe('defect')
+    expect(classeTerminaleDuControle(['3 tests rouges'])).toBe('defect')
+    expect(classeTerminaleDuControle([])).toBe('defect')
   })
 })

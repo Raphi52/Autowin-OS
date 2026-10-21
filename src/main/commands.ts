@@ -274,7 +274,7 @@ import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
 import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
-import { classeTerminaleDEchec } from './classe-terminale-echec'
+import { classeTerminaleDEchec, classeTerminaleDuControle } from './classe-terminale-echec'
 import { PIPELINE_PHASES } from '../shared/pipeline-phases'
 import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../shared/relance-sans-objet'
 import {
@@ -2196,11 +2196,7 @@ export class AppCommandBus {
         input.terminalClass ??
         (input.valid && !input.gateBlocked
           ? 'delivered'
-          : input.gateReasons.some((reason) =>
-                /quota|rate.?limit|annul|cancel|canary|flaky|timeout|provider/iu.test(reason)
-              )
-            ? 'external'
-            : 'defect')
+          : classeTerminaleDuControle(input.gateReasons))
       return await this.outcomeLearning.observeOutcome({
         conversationId: input.conversationId,
         turnId: input.turnId,
