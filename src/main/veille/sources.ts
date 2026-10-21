@@ -27,6 +27,14 @@ export const SOURCES_VEILLE: readonly SourceVeille[] = [
     note: 'fichier brut ; les entrées portent le numéro de version, pas toujours une date'
   },
   { concurrent: 'Codex', url: 'https://github.com/openai/codex/releases' },
+  {
+    concurrent: 'Cursor',
+    url: 'https://cursor.com/changelog',
+    // Ajoutée le 2026-10-21 (conv-1032) après récupération : 200, page rendue côté serveur (texte
+    // lisible sans JavaScript), entrées datées — la plus récente lue : « Oct 16, 2026 ». Absente
+    // jusque-là alors que le scout de conv-1032 citait trois nouveautés Cursor d'octobre 2026.
+    note: 'entrees datees en anglais (« Oct 16, 2026 ») ; flux RSS aussi a /changelog/rss.xml'
+  },
   { concurrent: 'OpenCode', url: 'https://github.com/sst/opencode/releases' },
   { concurrent: 'Antigravity', url: 'https://antigravity.google/changelog' },
   { concurrent: 'Grok', url: 'https://docs.x.ai/developers/release-notes' },

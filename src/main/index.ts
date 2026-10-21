@@ -446,6 +446,7 @@ import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
 import { seedMaintenanceTask } from './task-manager/maintenance-seed'
 import { seedGcTask } from './task-manager/gc-seed'
 import { seedCurateTask } from './task-manager/curate-seed'
+import { seedVeilleTask } from './task-manager/veille-seed'
 import {
   MailChannelWatcher,
   MailWatchMemory,
@@ -4437,6 +4438,10 @@ Le fil reprend ensuite normalement.`
         console.log('[watchdog] règles mails : plafond relevé à 240/h, sans plafond du jour')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
+      // Sans elle, `dispatcherVeille` ne voyait jamais de tâche `veille` : aucun scout web n'avait
+      // tourné sur ce poste (conv-1032, 2026-10-21).
+      if (seedVeilleTask(scheduledTasks))
+        console.log('[task-manager] tâche Veille concurrents hebdomadaire posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
       // l'historique déjà écrit ne réveille personne au démarrage.
       await watchdogEngine?.start()
