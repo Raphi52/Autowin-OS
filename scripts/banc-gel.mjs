@@ -5,22 +5,37 @@
  * reanimation automatique du processus principal (src/main/gel-reanimation.ts) au lieu d'exiger un
  * redemarrage complet. Rend un verdict chiffre et le motif lu dans le journal des gels.
  *
- * Usage : node scripts/banc-gel.mjs <vue> [essais]     ex. node scripts/banc-gel.mjs knowledge 3
+ * Usage, dans une instance CACHÉE (jamais l'app ouverte de l'utilisateur par défaut) :
+ *   node scripts/avec-instance-headless.mjs --code-dev -- node scripts/banc-gel.mjs <vue> [essais]
+ * Cible et journal : scripts/banc-gel-cible.mjs (`--port`, `--journal`, `--app-ouverte`).
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { WebSocket } from 'ws'
+import { cibleDuBanc } from './banc-gel-cible.mjs'
 
-const vue = process.argv[2] ?? 'knowledge'
-const essais = Number(process.argv[3] ?? 3)
-const JOURNAL = '.autowin-data/autowin-os/gels.jsonl'
-const lirePort = () =>
-  readFileSync('.autowin-data/autowin-os/DevToolsActivePort', 'utf8').split('\n')[0].trim()
+// Les positionnels SANS les options : avec-instance-headless ajoute `--port N` en fin de ligne, et
+// `Number('--port')` donnait NaN essais, donc une boucle qui ne tournait jamais.
+const AVEC_VALEUR = new Set(['--port', '--journal'])
+const positionnels = process.argv
+  .slice(2)
+  .filter((a, i, tous) => !a.startsWith('--') && !AVEC_VALEUR.has(tous[i - 1]))
+const vue = positionnels[0] ?? 'knowledge'
+const essais = Number(positionnels[1] ?? 3)
+const cible = cibleDuBanc()
+if (cible.refus) {
+  console.error(cible.refus)
+  process.exit(2)
+}
+const JOURNAL = cible.journal
+console.log(
+  `banc-gel : port ${cible.port} (${cible.origine}) — journal ${JOURNAL ?? 'introuvable : la réanimation ne pourra pas être lue'}`
+)
 
 const lignesJournal = () =>
-  existsSync(JOURNAL) ? readFileSync(JOURNAL, 'utf8').split('\n').filter(Boolean) : []
+  JOURNAL && existsSync(JOURNAL) ? readFileSync(JOURNAL, 'utf8').split('\n').filter(Boolean) : []
 
 async function session() {
-  const liste = await (await fetch(`http://127.0.0.1:${lirePort()}/json/list`)).json()
+  const liste = await (await fetch(`http://127.0.0.1:${cible.port}/json/list`)).json()
   const page = liste.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
   if (!page) throw new Error('aucune page ouverte')
   const ws = new WebSocket(page.webSocketDebuggerUrl)

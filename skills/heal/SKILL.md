@@ -39,6 +39,8 @@ Aucune optimisation ne démarre sans un chiffre qui existe AVANT le changement.
 
 - Perf : les mesures propres à l'app (vue / traces / temps) si elles existent ; sinon un harnais de
   chronométrage reproductible, ajouté ici avant tout changement.
+- Gel d'Autowin OS (fenêtre figée, « freeze ») : joue d'abord `gel` (`skills/gel/SKILL.md`). Son
+  classement du journal des gels, remonté aux `fichier:ligne`, EST la référence de cette étape.
 - Bugs : un test ROUGE qui reproduit, ou une trace d'exécution. Un rapport de bug n'est pas un symptôme.
 - Structure : un signal dénombrable (implémentations dupliquées, taille de fichier, points chauds de complexité).
 
