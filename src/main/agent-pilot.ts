@@ -1765,6 +1765,13 @@ export class AgentPilot {
     this.dernierEtatPousse.set(cleEtat, snapshot)
     const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
     const convo: string[] = blocsDuTour.map((bloc) => bloc.text)
+    /**
+     * Les blocs d'ouverture de `convo` sont-ils encore ceux d'une REPRISE (historique absent, diff
+     * d'état) ? Ils ne se reconstruisent qu'une fois par tour, et `blocsInitiaux` suit leur nombre
+     * pour que cette reconstruction remplace exactement eux, jamais un échange intra-tour.
+     */
+    let blocsInitiauxAmputes = Boolean(resumeSessionId)
+    let blocsInitiaux = blocsDuTour.length
     /** Decomposition NOMMEE de ce qui part cote user, relue a l'instant de l'envoi. */
     const contextBlocksDuTour = (): Array<{ name: string; chars: number }> =>
       convo.map((entree) => ({
@@ -2452,6 +2459,45 @@ export class AgentPilot {
         if (bilan.lecture) anyReadExecuted = true
         if (bilan.action) actionNativeCeTour = true
       }
+      /**
+       * SESSION ABANDONNÉE = FIL ENTIER RENVOYÉ, ET SESSION OUBLIÉE PARTOUT.
+       *
+       * Point unique des trois sorties qui lâchent la session du fournisseur en cours de tour
+       * (« Prompt is too long », plantage du CLI à 0 jeton, refus du filtre de sécurité). Seule la
+       * branche « refus » reconstruisait le message : les deux autres repartaient dans une session
+       * NEUVE avec le message d'une reprise — sans historique, et affirmant « ta session en porte
+       * l'historique » (audit conv-1040, `agent-pilot.reprise-abandonnee.test.ts`). Et « Prompt is too
+       * long » n'oubliait la session qu'en mémoire : elle revenait du disque après un redémarrage.
+       *
+       * Le message renvoyé est `convo` ENTIER : blocs d'ouverture refaits sans reprise (historique
+       * complet, état entier au lieu d'un diff) + tous les échanges déjà faits dans ce tour, qu'une
+       * itération reprise n'envoyait plus puisque la session les portait.
+       */
+      const repartirSansSession = (): void => {
+        sessionEnCours = undefined
+        delete options.resumeSessionId
+        if (conversationId) {
+          this.chatSessions.delete(conversationId)
+          this.forgetPersistedChatSession(conversationId)
+        }
+        if (blocsInitiauxAmputes) {
+          const blocsSansReprise = buildTurnMessageBlocks({
+            ...partiesDuMessage,
+            resumeSessionId: undefined
+          })
+          for (const bloc of blocsSansReprise) nomsDuTour.set(bloc.text, bloc.name)
+          convo.splice(0, blocsInitiaux, ...blocsSansReprise.map((bloc) => bloc.text))
+          blocsInitiaux = blocsSansReprise.length
+          blocsInitiauxAmputes = false
+        }
+        segmentsDejaEnvoyes = convo.length
+        messages[0] = {
+          ...messages[0],
+          content: `${convo.map(baliserRelanceAutomatique).join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`
+        }
+        contextBlocks = contextBlocksDuTour()
+        options.contextBlocks = contextBlocks
+      }
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
@@ -2635,15 +2681,14 @@ export class AgentPilot {
            * chaque relance rejouait l'echec, aucun message ne pouvait plus y passer.
            *
            * Reprendre une session dont le contenu ne tient plus dans la fenetre est sans issue :
-           * on l'oublie, et on repart a blanc avec le fil (borne) que ce tour porte deja. Le cout
+           * on l'oublie, et on repart a blanc avec le fil ENTIER, reconstruit par
+           * `repartirSansSession` (avant conv-1040, le message ampute d'une reprise). Le cout
            * est une perte de contexte cote fournisseur, DIT au modele par le fil lui-meme —
            * infiniment moins cher qu'un fil definitivement mort.
            */
           const promptTropLong = /prompt is too long|prompt too long/i.test(message)
           if (promptTropLong && sessionEnCours) {
-            sessionEnCours = undefined
-            delete options.resumeSessionId
-            if (conversationId) this.chatSessions.delete(conversationId)
+            repartirSansSession()
             if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
             emit({
               kind: 'retry',
@@ -2677,27 +2722,9 @@ export class AgentPilot {
               modeleApresRefus = repliRefus.modele
               options.model = repliRefus.modele
             } else {
-              sessionEnCours = undefined
-              delete options.resumeSessionId
-              if (conversationId) {
-                this.chatSessions.delete(conversationId)
-                this.forgetPersistedChatSession(conversationId)
-              }
               // Le message d'une reprise est AMPUTE de l'historique (il vivait dans la session) :
               // une session neuve doit recevoir le fil entier, et l'etat entier au lieu d'un diff.
-              const blocsSansReprise = buildTurnMessageBlocks({
-                ...partiesDuMessage,
-                resumeSessionId: undefined
-              })
-              for (const bloc of blocsSansReprise) nomsDuTour.set(bloc.text, bloc.name)
-              convo.splice(0, blocsDuTour.length, ...blocsSansReprise.map((bloc) => bloc.text))
-              segmentsDejaEnvoyes = convo.length
-              messages[0] = {
-                ...messages[0],
-                content: `${convo.map(baliserRelanceAutomatique).join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`
-              }
-              contextBlocks = contextBlocksDuTour()
-              options.contextBlocks = contextBlocks
+              repartirSansSession()
             }
             if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
             attempt += 1
@@ -2750,20 +2777,15 @@ export class AgentPilot {
            *
            * On ne lache que la session HERITEE d'un tour precedent (`sessionEnCours ===
            * resumeSessionId`) : une session ouverte PAR ce tour porte les iterations deja payees,
-           * l'abandonner les perdrait. Meme mecanique que « Prompt is too long » ci-dessus, et le
-           * fil (borne) que ce tour porte deja fournit le contexte au nouvel appel.
+           * l'abandonner les perdrait. Meme mecanique que « Prompt is too long » ci-dessus : le fil
+           * ENTIER est reconstruit par `repartirSansSession` pour le nouvel appel.
            */
           const crashSansCout =
             error instanceof ProviderCallError &&
             error.retryable &&
             estCrashDExecutionDuCli(message)
           if (crashSansCout && sessionEnCours && sessionEnCours === resumeSessionId) {
-            sessionEnCours = undefined
-            delete options.resumeSessionId
-            if (conversationId) {
-              this.chatSessions.delete(conversationId)
-              this.forgetPersistedChatSession(conversationId)
-            }
+            repartirSansSession()
           }
           const rejeu = deciderRejeuDeChat(message, attempt)
           if (!rejeu.rejouer) throw error

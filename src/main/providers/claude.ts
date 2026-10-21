@@ -14,6 +14,7 @@ import { DEFAULT_TIMEOUT_MS as GRAPHIFY_TIMEOUT_MS } from '../graphify-command'
 import { verifyTimeoutMs } from '../verify-command'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
+import { StringDecoder } from 'node:string_decoder'
 import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   copyFile as copyFileAsync,
@@ -1624,52 +1625,44 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       )
       args.push('--settings', settingsFile)
     } catch {
-      settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
+      // Impossible d'ecrire : on garde le comportement d'origine (sans ces reglages), mais le
+      // dossier deja cree ne reste pas derriere (audit conv-1040, `claude.prompt-systeme.test.ts`).
+      const dossierPartiel = settingsDir
+      settingsDir = undefined
+      await nettoyerTemporairesDeLAppel({ settingsDir: dossierPartiel })
     }
     // Les orphelins laisses par une fermeture ou un plantage anterieur partent AVANT qu'on en cree
     // de nouveaux. Borne a un seul passage par demarrage, cf. `balayerOrphelinsUneFois`.
     balayerOrphelinsUneFois()
     let systemPromptDir: string | undefined
-    if (systemInjected && system!.length > 4_000) {
-      systemPromptDir = mkdtempSync(join(tmpdir(), 'autowin-os-system-'))
-      const systemPromptFile = join(systemPromptDir, 'system.md')
-      writeFileSync(systemPromptFile, system!, 'utf8')
-      args.push('--system-prompt-file', systemPromptFile)
-    } else if (systemInjected) {
-      args.push('--system-prompt', system!)
-    }
-    if (opts.resumeSessionId) {
-      args.push('--resume', opts.resumeSessionId)
-      // PROMPT SYSTEME FIGE A LA REPRISE. Par defaut (`--system-prompt-snapshot on`), le CLI
-      // enregistre le prompt systeme au PREMIER tour et le renvoie tel quel a chaque `--resume`,
-      // en ignorant le texte qu'on lui repasse. Mesure du 2026-09-22 (CLI 2.1.280) : premier tour
-      // « reponds ANANAS », reprise avec « reponds MANGUE » -> ANANAS ; avec `off` -> MANGUE.
-      // Une conversation commencee avant une retouche de la constitution ou du pilotage ne la
-      // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (conv-792 :
-      // 1 prompt distinct sur 7 tours), donc le cache reste valide ; il ne se reconstruit qu'au
-      // tour qui suit une vraie retouche — c'est exactement le but.
-      if (systemInjected) args.push('--system-prompt-snapshot', 'off')
-    }
-    appendClaudeSelectionArgs(args, opts)
-
-    opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
-
     /** Fin de la sortie d'erreur du CLI, bornee : la cause d'un exit non nul est ecrite la. */
     let stderrTail = ''
+    /**
+     * ÉCHEC D'ÉCRITURE DU MESSAGE SUR L'ENTRÉE DU CLI (tuyau direct, audit conv-1040).
+     *
+     * Un CLI mort avant d'avoir lu son message fait émettre `write EOF` / `EPIPE` à son entrée. Sans
+     * écoute, cette erreur sortait du processus principal, dont le gestionnaire de plantage arrête
+     * TOUTES les orchestrations (`index.ts`, `abortAllOrchestrations`) — mesuré : 20 sur 20. Elle
+     * n'est pas avalée : le CLI qui n'a pas lu son message sort en échec (`claude -p` sans entrée
+     * rend 1), et ce message d'échec la nomme. Garde : `claude.tuyau-direct.test.ts`.
+     */
+    let erreurEntree: Error | undefined
     const spawnToken = randomUUID()
     let intentPose = false
     /**
-     * MENAGE DES SORTIES PAR EXCEPTION *AVANT* LE LANCEMENT.
+     * ENVIRONNEMENT DU TOUR, calculé AVANT l'invocation pour que le relais Windows le reçoive.
      *
-     * Les deux dossiers temporaires sont crees plus haut (system-prompt, settings), mais le CLI
-     * n'est lance qu'a la fin de ce bloc. Entre les deux, trois sorties par exception : la garde
-     * anti-ligne-de-commande-trop-longue, le journal survivable indisponible, et l'echec de
-     * `onJournal`. Aucune ne passait par `close` ni par `error` : le couple restait dans %TEMP%.
-     * Garde : `claude.nettoyage-sur-exception-avant-spawn.test.ts`.
+     * Le relais repartait de `process.env` entier, fusionné APRÈS `withClaudeAccountEnv` : un
+     * `CLAUDE_CONFIG_DIR` hérité du processus écrasait le compte actif — le tour tournait sous une
+     * autre identité et un autre quota (audit conv-1040, `claude.lancement.test.ts`).
+     * `withClaudeAccountEnv` POSE le dossier du compte actif, ou le RETIRE pour le compte par défaut.
      */
-    // Un `claude update` en cours retire le binaire quelques secondes : on attend qu'il revienne.
-    await attendreMiseAJourClaudeCli()
+    let envDuTour: NodeJS.ProcessEnv
     let journal: StdoutJournalHandle | undefined
+    /** Vrai tant que le descripteur du journal est à nous : il ne se ferme qu'une fois. */
+    let fdJournalOuvert = false
+    /** Message écrit sur le disque pour le relais : à retirer si l'appel s'arrête avant le lancement. */
+    let entreePreparee: string | undefined
     let invocation:
       | InvocationSurvivable
       | {
@@ -1680,7 +1673,60 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           inputPath: undefined
           completionPath: string
         }
+    /**
+     * MENAGE DES SORTIES PAR EXCEPTION *AVANT* LE LANCEMENT.
+     *
+     * Le CLI n'est lance qu'a la fin de ce bloc, et tout ce qui le precede peut lever : l'ecriture
+     * du prompt systeme, la garde anti-ligne-de-commande-trop-longue, le journal survivable
+     * indisponible, l'echec de `onJournal`, le Stop. Aucune de ces sorties ne passe par `close` ni
+     * par `error` : sans ce bloc, les temporaires deja crees (reglages, prompt systeme, config MCP
+     * qui porte un jeton) restaient dans %TEMP%.
+     * Le prompt systeme s'ecrivait juste AVANT ce bloc, en synchrone : un echec a cet endroit
+     * abandonnait tout ce qui precede (audit conv-1040).
+     * Gardes : `claude.nettoyage-sur-exception-avant-spawn.test.ts`, `claude.prompt-systeme.test.ts`.
+     */
     try {
+      if (systemInjected && system!.length > 4_000) {
+        // Asynchrone, comme les reglages juste au-dessus : ce fichier s'ecrit a CHAQUE appel, et une
+        // ecriture synchrone tient la fenetre pendant toute lenteur du disque (99 s mesurees sur le
+        // dossier voisin, voir le bloc des reglages).
+        systemPromptDir = await mkdtempAsync(join(tmpdir(), 'autowin-os-system-'))
+        const systemPromptFile = join(systemPromptDir, 'system.md')
+        await writeFileAsync(systemPromptFile, system!, 'utf8')
+        args.push('--system-prompt-file', systemPromptFile)
+      } else if (systemInjected) {
+        args.push('--system-prompt', system!)
+      }
+      if (opts.resumeSessionId) {
+        args.push('--resume', opts.resumeSessionId)
+        // PROMPT SYSTEME FIGE A LA REPRISE. Par defaut (`--system-prompt-snapshot on`), le CLI
+        // enregistre le prompt systeme au PREMIER tour et le renvoie tel quel a chaque `--resume`,
+        // en ignorant le texte qu'on lui repasse. Mesure du 2026-09-22 (CLI 2.1.280) : premier tour
+        // « reponds ANANAS », reprise avec « reponds MANGUE » -> ANANAS ; avec `off` -> MANGUE.
+        // Une conversation commencee avant une retouche de la constitution ou du pilotage ne la
+        // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (conv-792 :
+        // 1 prompt distinct sur 7 tours), donc le cache reste valide ; il ne se reconstruit qu'au
+        // tour qui suit une vraie retouche — c'est exactement le but.
+        if (systemInjected) args.push('--system-prompt-snapshot', 'off')
+      }
+      appendClaudeSelectionArgs(args, opts)
+
+      opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
+
+      // Un `claude update` en cours retire le binaire quelques secondes : on attend qu'il revienne.
+      await attendreMiseAJourClaudeCli()
+      envDuTour = environnementAgent(
+        {
+          ...withClaudeAccountEnv(process.env),
+          // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
+          ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+          // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
+          ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
+          // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
+          ...envFiletElectronAgent(modAutowin, process.env)
+        },
+        execution?.agentEnv
+      )
       assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
       execution?.onSpawnIntent?.(spawnToken, true)
       intentPose = true
@@ -1699,6 +1745,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Asynchrone : un `openSync` ici a figé la fenêtre 9,9 s (gels.jsonl 2026-10-11 14:15)
           // pendant que le disque saturait. Voir `openStdoutJournalAsync`.
           journal = await openStdoutJournalAsync(journalRoot, spawnToken)
+          fdJournalOuvert = true
         } catch {
           journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
         }
@@ -1714,6 +1761,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           onJournal(spawnToken, journal.path)
         } catch (error) {
           try {
+            fdJournalOuvert = false
             closeSync(journal.fd)
           } catch {
             /* déjà fermé */
@@ -1733,7 +1781,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             args,
             journalRoot!,
             journal.path,
-            lastUser
+            lastUser,
+            undefined,
+            undefined,
+            // Le relais transmet CET environnement au CLI, jamais le `process.env` d'Autowin.
+            envDuTour
           )
         : {
             bin: this.bin,
@@ -1743,12 +1795,31 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             inputPath: undefined,
             completionPath: ''
           }
+      entreePreparee = invocation.inputPath
+      /**
+       * STOP RELU JUSTE AVANT LE LANCEMENT (audit conv-1040, `claude.lancement.test.ts`).
+       *
+       * L'écoute du Stop n'est posée qu'après le lancement, et un signal DÉJÀ levé ne redéclenche
+       * pas `abort`. Un Stop cliqué pendant la préparation (réglages, journal, binaire, jusqu'à 180 s
+       * d'attente d'une mise à jour du CLI) était donc perdu : le CLI, outillé en écriture, faisait
+       * son tour en entier, et l'appelant l'attendait jusqu'à son plafond de silence de 45 min.
+       */
+      if (opts.signal?.aborted) throw abortFailure('claude CLI', opts.signal)
     } catch (error) {
+      if (journal && fdJournalOuvert) {
+        fdJournalOuvert = false
+        try {
+          closeSync(journal.fd)
+        } catch {
+          /* déjà fermé */
+        }
+      }
       // Point de menage unique de ce chemin : idempotent, asynchrone (jamais de retour au
       // synchrone, qui figeait la fenetre 1,6 s), tolerant a un temporaire deja parti.
       await nettoyerTemporairesDeLAppel({
         systemPromptDir,
         settingsDir,
+        inputPath: entreePreparee,
         journalPath: journal?.path
       })
       await mcpConfigDir?.nettoyer()
@@ -1756,30 +1827,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (intentPose) execution?.onSpawnIntent?.(spawnToken, false)
       throw error
     }
-    const envDuTour = environnementAgent(
-      {
-        ...withClaudeAccountEnv(process.env),
-        // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
-        ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
-        // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
-        ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
-        // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
-        ...envFiletElectronAgent(modAutowin, process.env),
-        ...(invocation.env ?? {})
-      },
-      execution?.agentEnv
-    )
     const child = spawn(invocation.bin, invocation.args, {
       shell: false,
       windowsHide: true,
       cwd: execution?.cwd ?? readOnlyCwd,
       // Toujours un env EXPLICITE : sans lui le fils hérite du nôtre et peut ouvrir un pager, un
       // navigateur d'aide ou une invite d'identifiants. Voir NON_INTERACTIVE_ENV.
-      // `withClaudeAccountEnv` POSE le CLAUDE_CONFIG_DIR du compte actif, ou le RETIRE pour le
-      // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
-      // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
-      // explicitement une variable garde le dernier mot.
-      env: envDuTour,
+      // Relais Windows : son env est `envDuTour` + son propre drapeau de lancement, qu'il retire
+      // avant de lancer le CLI. Il n'est donc plus fusionné par-dessus le compte actif.
+      env: invocation.env ?? envDuTour,
       ...(journal
         ? {
             detached: true,
@@ -1964,10 +2020,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         forceSettle(new Error('claude CLI figé (aucune sortie) — tué par le watchdog'))
       }
     })
-    opts.signal?.addEventListener('abort', () => {
+    const surStop = (): void => {
       killEscalate(child)
       forceSettle(abortFailure('claude CLI', opts.signal))
-    })
+    }
+    /*
+     * ÉCOUTE RETIRÉE À LA FIN DU PROCESSUS (audit conv-1040) : elle restait accrochée au signal pour
+     * toujours, si bien qu'un Stop levé APRÈS le tour tuait encore ce fils terminé et retenait sa
+     * fermeture en mémoire. Un Stop levé entre la vérification d'avant lancement et cette ligne
+     * (rappel `onSpawned` d'un appelant) est rattrapé tout de suite : un signal déjà levé ne
+     * redéclenche jamais `abort`.
+     */
+    opts.signal?.addEventListener('abort', surStop, { once: true })
+    const retirerEcouteStop = (): void => opts.signal?.removeEventListener('abort', surStop)
+    if (opts.signal?.aborted) surStop()
     // Voir `delaiFinApresResultatMs` : un CLI encore en vie apres son `result` est arrete et sa
     // reponse RENDUE (ou son erreur terminale levee), au lieu d'attendre le detecteur de silence.
     let finApresResultat: ReturnType<typeof setTimeout> | undefined
@@ -2571,6 +2637,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Mode DÉTACHÉ : la sortie est dans un FICHIER (elle survit à la mort de l'app) et on la SUIT.
       // Le fd parent est fermé (l'enfant garde le sien) ; le tail lit par chemin.
       try {
+        fdJournalOuvert = false
         closeSync(journal.fd)
       } catch {
         /* déjà fermé */
@@ -2585,7 +2652,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         (error: unknown) => error
       )
     } else {
-      child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
+      // Décodeur À ÉTAT : un caractère coupé entre deux morceaux du tuyau attend sa suite au lieu
+      // de devenir « �� » (audit conv-1040, `claude.tuyau-direct.test.ts`). Le mode journal a la
+      // même garantie dans `readChunkFromAsync`.
+      const decodeur = new StringDecoder('utf8')
+      child.stdout?.on('data', (chunk: Buffer) => consumeText(decodeur.write(chunk)))
     }
     // Sortie d'ERREUR du CLI : personne ne la lisait, donc un « claude CLI exit 1 » arrivait NU a
     // l'utilisateur alors que la cause (cle invalide, /login, quota) est ecrite juste la. On garde
@@ -2627,6 +2698,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     child.on('error', async (e) => {
       if (finApresResultat) clearTimeout(finApresResultat)
+      retirerEcouteStop()
       arreterGuetSortie?.()
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
@@ -2662,6 +2734,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     child.once('close', async (code) => {
       childClosed = true
       if (finApresResultat) clearTimeout(finApresResultat)
+      retirerEcouteStop()
       arreterGuetSortie?.()
       const tailError = await tailSettled
       watchdog.dispose()
@@ -2710,7 +2783,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 ...(usedModel ? { model: usedModel } : {}),
                 code
               }) +
-              (detail ? ` — sortie du CLI : ${detail}` : '')
+              (detail ? ` — sortie du CLI : ${detail}` : '') +
+              (erreurEntree ? ` — message non remis au CLI : ${erreurEntree.message}` : '')
           )
         }
       }
@@ -2740,11 +2814,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
 
     // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.
-    // Best-effort : un stdin fermé (process déjà mort) ne doit pas jeter hors du flux normal.
-    try {
-      if (!journal) child.stdin?.end(lastUser)
-    } catch {
-      /* stdin indisponible (process mort avant écriture) → close/error prendront le relais */
+    if (!journal && child.stdin) {
+      // Écoute posée AVANT l'écriture : l'erreur d'un CLI déjà mort arrive après coup, en événement
+      // (voir `erreurEntree`). `on` manque à certains doubles de test, jamais à un vrai processus.
+      if (typeof child.stdin.on === 'function') {
+        child.stdin.on('error', (error: Error) => {
+          erreurEntree ??= error
+        })
+      }
+      try {
+        child.stdin.end(lastUser)
+      } catch (error) {
+        erreurEntree ??= error instanceof Error ? error : new Error(String(error))
+      }
     }
 
     // pompe : yield les chunks au fil de l'eau

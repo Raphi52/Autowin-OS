@@ -205,6 +205,37 @@ export interface TailResult {
   stopped: boolean
 }
 
+/**
+ * NOMBRE D'OCTETS QUI FORMENT DES CARACTÈRES UTF-8 COMPLETS au début de `octets`.
+ *
+ * Le journal est relu pendant que le CLI l'écrit : une lecture peut s'arrêter au milieu d'un « é »
+ * (2 octets) ou d'un emoji (4). Décodé seul, ce morceau devenait « � », puis le reste « � » à la
+ * lecture suivante — et `tailJournalOnce`, qui recalcule la position depuis le texte décodé, la
+ * plaçait au mauvais octet (audit conv-1040, `stdout-journal.utf8-coupe.test.ts`).
+ *
+ * Seule une séquence INCOMPLÈTE EN FIN est retenue (au plus 3 octets), pour la lecture suivante :
+ * un octet invalide au milieu reste décodé tel quel, il n'attendra jamais de suite.
+ */
+export function octetsDeCaracteresComplets(octets: Buffer): number {
+  const n = octets.length
+  for (let recul = 1; recul <= Math.min(4, n); recul++) {
+    const octet = octets[n - recul]!
+    if ((octet & 0xc0) === 0x80) continue // octet de suite : la tête de séquence est plus haut
+    // Longueur annoncée par la tête : 110xxxxx → 2, 1110xxxx → 3, 11110xxx → 4 ; ASCII ou tête
+    // invalide → 1 (rien à attendre).
+    const annoncee =
+      octet >= 0xf8 ? 1 : octet >= 0xf0 ? 4 : octet >= 0xe0 ? 3 : octet >= 0xc0 ? 2 : 1
+    return annoncee > recul ? n - recul : n
+  }
+  return n // que des octets de suite : invalides, le décodeur les rend en « � »
+}
+
+/** Décode la partie complète d'une lecture et rend la position juste après elle. */
+function morceauDecode(octets: Buffer, offset: number): { text: string; next: number } {
+  const complets = octetsDeCaracteresComplets(octets)
+  return { text: octets.subarray(0, complets).toString('utf8'), next: offset + complets }
+}
+
 /** Lit les octets disponibles depuis `offset` (lecture bornée, sans charger tout le fichier). */
 export function readChunkFrom(
   path: string,
@@ -219,7 +250,7 @@ export function readChunkFrom(
   const fd = openSync(path, 'r')
   try {
     const read = readSync(fd, buffer, 0, length, offset)
-    return { text: buffer.subarray(0, read).toString('utf8'), next: offset + read }
+    return morceauDecode(buffer.subarray(0, read), offset)
   } finally {
     closeSync(fd)
   }
@@ -247,7 +278,7 @@ export async function readChunkFromAsync(
   try {
     const buffer = Buffer.allocUnsafe(length)
     const { bytesRead } = await handle.read(buffer, 0, length, offset)
-    return { text: buffer.subarray(0, bytesRead).toString('utf8'), next: offset + bytesRead }
+    return morceauDecode(buffer.subarray(0, bytesRead), offset)
   } finally {
     await handle.close()
   }
