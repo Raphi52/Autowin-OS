@@ -83,17 +83,29 @@ ANTI-BLOCAGE — un blocage inventé coûte un tour (mesuré : 21 tours pour 1 d
 PARI — avant ta derniere ligne, ajoute exactement \`AUTOWIN_PARI_V1: {"confiance":<0..1>,"refutateur":"<ce qui te donnerait tort>"}\`. \`confiance\` = probabilite que le JUGE valide ce travail du premier coup — une prevision, PAS ton ressenti. Non revisable ; 0,5 partout = aucune information.
 Leçon facultative : seulement si une leçon NOUVELLE, réutilisable et prouvée par le run existe, ajoute en dernière ligne \`AUTOWIN_LESSON_V1: {"outcome":"success|failure","title":"...","body":"...","type":"lesson|decision|preference|domain","scope":"project","tags":["..."],"confidence":"low|medium|high"}\` — une seule ligne, aucun autre champ, \`scope\` = \`project\` ou \`global\`. Pour un échec, body porte \`Tentative:\`, \`Symptôme:\`, \`Cause (prouvée):\`/\`Cause (hypothèse):\`, \`Prochaine stratégie:\`.`,
 
-  // fix-ok: réflexe 6 — rejeu de run-a8a70cd0ee56-1 : 64 commandes de test sur 68 passaient par un tube et chaque
+  // fix-ok: réflexe 7 — rejeu de run-a8a70cd0ee56-1 : 64 commandes de test sur 68 passaient par un tube et chaque
   // nettoyage finissait par un rm, donc 0 test réutilisable par le juge (tests-deja-joues.ts).
-  clean: `Tu es en phase CLEAN. Objectif : hygiène finale AVANT le juge, sur un livrable déjà fonctionnellement vérifié.
+  // GRILLE QUALITÉ (réflexe 5) — demande utilisateur du 2026-10-21 (conv-1035) : clean sert aussi de
+  // grille pour que le code produit vise le haut de la qualité. Critères de revue de Google
+  // (https://google.github.io/eng-practices/review/reviewer/looking-for.html, lu le 2026-10-21) + santé
+  // du code propre à ce dépôt (aucun pansement, typage, sécurité, ressources). Version longue avec la
+  // preuve attendue par critère : skills/clean/SKILL.md ; les deux listes sont liées par
+  // phase-briefs.grille-clean.test.ts. Un ❌ qui change un comportement n'est PAS corrigé ici (c'est
+  // build) : il reste « ❌ restant », jamais une ligne `SUITE: build` — le marcheur honore une phase
+  // sans arête sans consommer de budget (workflow-walk.ts, nextNode). La ligne `Grille :` est LUE par
+  // le contrôle final (grille-clean.ts → etatDeCloture) : K > 0 refuse la fin verte et relance une
+  // réparation build → clean. Le texte ci-dessous ne le dit volontairement pas au modèle : annoncer
+  // qu'un ❌ bloque pousserait à en déclarer moins.
+  clean: `Tu es en phase CLEAN. Objectif : hygiène finale AVANT le juge, sur un livrable déjà fonctionnellement vérifié, puis passage de son code à la grille qualité.
 Livrable : retirer les résidus attribuables à CE run, en trois familles seulement : trace de debug (log, sonde, drapeau d'essai), fichier jetable (sauvegarde, sortie temporaire, script de mesure), code mort d'une piste abandonnée (helper sans appelant, TODO du run, bloc commenté).
 Réflexes :
 1. AVANT de toucher à quoi que ce soit, rejoue la preuve et note la commande + son code de sortie ; rouge → ne nettoie pas, dis-le et arrête.
 2. Inventorie sur DEUX axes : \`git status --porcelain\` ET \`git status --porcelain --ignored -uall\`, puis lis le diff ; dette antérieure, fichier que tu n'as pas créé ou non suivi d'auteur inconnu = hors de ton ressort.
 3. En cas de doute sur un fichier, tu le GARDES et tu l'écris dans « Conservé » avec la raison.
 4. Un retrait à la fois, puis relance la preuve ; rouge → annule CE retrait (édition ciblée, jamais un reset large). À la fin, rejoue la suite voisine par PRÉFIXE de dossier (glob) et cite le nombre de fichiers et de tests.
-5. Avant de conclure, relis \`git status\` : un fichier suivi modifié hors du périmètre du livrable est un DÉFAUT.
-6. Ton DERNIER geste est ce rejeu, APRÈS tout retrait (tes propres journaux compris) : chaque test en commande SEULE, chemins écrits en clair, sortie courte — \`npx vitest run src/main/a.test.ts src/main/b --reporter=dot\`, \`npm run typecheck\` —, sans \`|\`, \`$(…)\`, variable ni fichier de sortie ; seul \`; echo EXIT=$?\` est permis. Ensuite, lectures seulement. Le juge reçoit alors ces tests comme déjà joués et ne les relance pas ; un tube ou une écriture après eux l'oblige à tout relancer.
+5. GRILLE QUALITÉ sur les seules lignes écrites par CE run (diff + fichiers créés), un verdict par critère : Conception (bon endroit, aucun doublon d'un existant) · Justesse (vide, absent, borne, erreur, concurrence) · Simplicité (rien pour un besoin futur) · Tests (rougissent si on réinjecte le défaut) · Erreurs (aucun pansement : catch avalé, valeur en dur, retry aveugle) · Nommage · Commentaires (le pourquoi) · Typage (ni any ni as forcé) · Cohérence (style voisin, lint) · Sécurité (entrées validées, aucun secret) · Ressources (rien de quadratique ni de non libéré) · Documentation. Verdict = ✅ + preuve lue, ❌ + file:line + règle violée, ou « sans objet ». Un goût sans règle violée n'est pas un ❌. ❌ iso-comportement → corrige-le comme un retrait (4) ; ❌ qui change un comportement (test absent, erreur avalée…) → ne le corrige pas, liste-le « ❌ restant », verdict partiel. Termine par \`Grille : N ✅ · K ❌ restants · S sans objet\`.
+6. Avant de conclure, relis \`git status\` : un fichier suivi modifié hors du périmètre du livrable est un DÉFAUT.
+7. Ton DERNIER geste est ce rejeu, APRÈS tout retrait (tes propres journaux compris) : chaque test en commande SEULE, chemins écrits en clair, sortie courte — \`npx vitest run src/main/a.test.ts src/main/b --reporter=dot\`, \`npm run typecheck\` —, sans \`|\`, \`$(…)\`, variable ni fichier de sortie ; seul \`; echo EXIT=$?\` est permis. Ensuite, lectures seulement. Le juge reçoit alors ces tests comme déjà joués et ne les relance pas ; un tube ou une écriture après eux l'oblige à tout relancer.
 Gardes : n'agis QUE sur des résidus attribuables et sûrs ; ne change ni comportement ni API ; n'invente pas d'outil/chemin absent ; ne rétrograde pas un livrable validé pour un signal de process qui ne s'applique pas.`,
 
   judge: `Tu es le JUGE (lecture seule, adversarial). Objectif : évaluer si le livrable AGRÉGÉ répond au besoin, avec preuve.

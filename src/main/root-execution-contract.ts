@@ -2,6 +2,7 @@ import type { ExecutionEvidence } from './providers/types'
 import { attributedPaths, normalized } from './providers/causal-verification-evidence'
 import { classifyMutationConfidence } from './task-mutation-classifier'
 import { cadrageRefuse } from './frame-cas-limites'
+import { grilleCleanEnDefaut, libelleGrilleEnDefaut } from './grille-clean'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -448,6 +449,14 @@ export function etatDeCloture(
     indexDernierFrame >= 0 && !buildApresCadrage && cadrageRefuse(dernierFrame?.text ?? '')
   if (cadrageEnRefus) {
     checks.push({ label: 'Cadrage accepté par le contrôle des cas limites', checked: false })
+  }
+  // Garde « grille qualité » (conv-1035, 21/10) : tant que le dernier clean déclare un ❌ restant,
+  // le run ne ferme pas vert. Une case non cochée, et PAS le statut `red` : ce refus se répare
+  // (build puis clean rejoués), alors que `red` le présenterait comme un échec qu'aucune
+  // réparation ne lève (`CLOSURE_UPSTREAM_REFUSAL`, gates/stopgate.ts).
+  const grilleEnDefaut = grilleCleanEnDefaut(phases)
+  if (grilleEnDefaut) {
+    checks.push({ label: libelleGrilleEnDefaut(grilleEnDefaut), checked: false })
   }
   return {
     status: !cibleManquee && !cadrageEnRefus && (lectureSeule || evidenceOk) ? 'green' : 'red',
