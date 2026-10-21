@@ -106,7 +106,8 @@
 /* components/CandidatsPickPanel.css */
 :root[data-base='clair'] .cpick-tete,
 :root[data-base='clair'] .cpick-titre,
-:root[data-base='clair'] .cpick-q p {
+:root[data-base='clair'] .cpick-q p,
+:root[data-base='clair'] .cpick-motif {
   color: var(--text-dim);
 }
 

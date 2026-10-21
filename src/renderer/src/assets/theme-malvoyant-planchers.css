@@ -169,14 +169,18 @@
 
 /* components/CandidatsPickPanel.css — tailles */
 :root[data-theme^='malvoyant-'] .cpick-compte,
-:root[data-theme^='malvoyant-'] .cpick-auto {
+:root[data-theme^='malvoyant-'] .cpick-auto,
+:root[data-theme^='malvoyant-'] .cpick-pourquoi,
+:root[data-theme^='malvoyant-'] .cpick-motif,
+:root[data-theme^='malvoyant-'] .cpick-motif-note {
   font-size: 13px;
 }
 
 /* components/CandidatsPickPanel.css — gris en dur */
 :root[data-theme^='malvoyant-'] .cpick-tete,
 :root[data-theme^='malvoyant-'] .cpick-titre,
-:root[data-theme^='malvoyant-'] .cpick-q p {
+:root[data-theme^='malvoyant-'] .cpick-q p,
+:root[data-theme^='malvoyant-'] .cpick-motif {
   color: var(--text);
 }
 
@@ -213,6 +217,8 @@
 
 /* components/CarnetDuFil.css — tailles */
 :root[data-theme^='malvoyant-'] .carnet-lecture-ratee,
+:root[data-theme^='malvoyant-'] .carnet-compactage,
+:root[data-theme^='malvoyant-'] .carnet-garde-explication,
 :root[data-theme^='malvoyant-'] .carnet-rubrique-titre,
 :root[data-theme^='malvoyant-'] .carnet-ligne[data-rubrique='fichier'] .carnet-ligne-texte,
 :root[data-theme^='malvoyant-'] .carnet-oubli-rate {
@@ -326,6 +332,13 @@
 :root[data-theme^='malvoyant-'] .composer-input-row > .composer-stop:disabled,
 :root[data-theme^='malvoyant-'] .composer-dictee-apercu-texte {
   color: var(--text);
+}
+
+/* components/ComparaisonDesFacons.css — tailles */
+:root[data-theme^='malvoyant-'] .comparaison-facons-note,
+:root[data-theme^='malvoyant-'] .comparaison-facon-nom span,
+:root[data-theme^='malvoyant-'] .comparaison-facon-resultat {
+  font-size: 13px;
 }
 
 /* components/ContexteDetaille.css — tailles */
