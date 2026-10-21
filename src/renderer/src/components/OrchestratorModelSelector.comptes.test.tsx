@@ -36,20 +36,23 @@ describe('OrchestratorModelSelector — compte de la conversation', () => {
     host = null
   })
 
-  const monter = async (comptes?: Parameters<typeof OrchestratorModelSelector>[0]['comptes']) => {
+  const monter = async (
+    comptes?: Parameters<typeof OrchestratorModelSelector>[0]['comptes'],
+    options: { busy?: boolean; onSelect?: () => void } = {}
+  ) => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
       root?.render(
         createElement(OrchestratorModelSelector, {
-          busy: false,
+          busy: options.busy ?? false,
           catalogLoaded: true,
           models: modeles,
           binding: { provider: 'claude', model: 'opus', reasoningEffort: 'medium' },
           pending: false,
           error: null,
-          onSelect: () => {},
+          onSelect: options.onSelect ?? (() => {}),
           comptes
         })
       )
@@ -107,5 +110,61 @@ describe('OrchestratorModelSelector — compte de la conversation', () => {
       hote.querySelector<HTMLButtonElement>('[data-testid="conv-claude-account-compte-2"]')?.click()
     })
     expect(onSelect).toHaveBeenCalledWith('compte-2')
+  })
+
+  /**
+   * Pendant un tour (2026-10-21) : la pop-up s'ouvre pour le COMPTE, mais le MODÈLE reste refusé.
+   * Sans la seconde moitié, rouvrir la pop-up aurait aussi rouvert le changement de modèle en
+   * plein tour, que personne n'a demandé.
+   */
+  it('tour en cours : compte cliquable, modèle toujours verrouillé', async () => {
+    const onSelectCompte = vi.fn()
+    const onSelectModele = vi.fn()
+    const hote = await monter(
+      {
+        accounts: deuxComptes,
+        selectedId: undefined,
+        activeId: 'default',
+        busy: false,
+        error: null,
+        onSelect: onSelectCompte
+      },
+      { busy: true, onSelect: onSelectModele }
+    )
+    expect(hote.querySelector('details')?.hasAttribute('data-disabled')).toBe(false)
+    const puce = hote.querySelector<HTMLButtonElement>(
+      '[data-testid="conv-claude-account-compte-2"]'
+    )
+    expect(puce?.disabled).toBe(false)
+    await act(async () => puce?.click())
+    expect(onSelectCompte).toHaveBeenCalledWith('compte-2')
+
+    const cellules = Array.from(
+      hote.querySelectorAll<HTMLButtonElement>('.effort-matrix-row button')
+    )
+    expect(cellules.length).toBeGreaterThan(0)
+    for (const cellule of cellules) expect(cellule.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => cellules[0].click())
+    expect(onSelectModele).not.toHaveBeenCalled()
+  })
+
+  it('tour en cours SANS bloc compte : la pop-up reste fermée comme avant', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root?.render(
+        createElement(OrchestratorModelSelector, {
+          busy: true,
+          catalogLoaded: true,
+          models: modeles,
+          binding: { provider: 'claude', model: 'opus', reasoningEffort: 'medium' },
+          pending: false,
+          error: null,
+          onSelect: () => {}
+        })
+      )
+    })
+    expect(host.querySelector('details')?.getAttribute('data-disabled')).toBe('true')
   })
 })

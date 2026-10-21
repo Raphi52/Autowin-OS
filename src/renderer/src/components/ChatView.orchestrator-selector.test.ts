@@ -467,7 +467,12 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toContain('compactionAutoRef.current.add(conversationId)')
     expect(source).toContain('send(COMPACT_REQUEST, { targetConversationId: conversationId })')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
-    expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
+    // Pendant un tour, le MODÈLE est verrouillé mais pas le COMPTE (conv-1039, 2026-10-21) : la
+    // pop-up reste ouvrable quand elle porte le bloc « Compte ». Le refus du modèle ligne par ligne
+    // est vérifié en comportement par ChatView.compte-pendant-tour.test.tsx.
+    expect(selectorSource).toContain(
+      'const disabled = (busy && !porteDesComptes) || pending || models.length === 0'
+    )
     // Menu devenu FLOTTANT : il porte `is-flottant` en plus et part dans un portail. Ce qui est
     // verifie reste qu'il existe UNE seule classe de menu, portee par le composant extrait.
     expect(selectorSource).toContain('className={`model-select-menu is-flottant')

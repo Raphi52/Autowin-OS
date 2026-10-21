@@ -2123,7 +2123,10 @@ export function ChatView({
           ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
           : undefined,
         activeId: comptesClaude.activeId,
-        busy: compteBusy || busy,
+        // Seule la bascule elle-même verrouille les puces, JAMAIS le tour en cours (2026-10-21) :
+        // c'est pendant un tour qu'on bute sur un quota épuisé, et changer de compte ne touche pas
+        // le CLI déjà lancé — il a lu son compte au départ, le tour suivant repart sur le nouveau.
+        busy: compteBusy,
         error: compteError,
         onSelect: (accountId) => void choisirCompteDeConversation(accountId)
       }

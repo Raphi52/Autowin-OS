@@ -71,6 +71,8 @@ const STATUT_LABEL: Record<string, string> = {
 /** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
 const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
 
+const MODELE_VERROUILLE = 'Modèle verrouillé pendant le tour en cours de cette conversation'
+
 export function OrchestratorModelSelector({
   busy,
   catalogLoaded,
@@ -202,10 +204,12 @@ export function OrchestratorModelSelector({
           model: option.model,
           option,
           efforts: option.reasoningEfforts.filter((effort) => effort !== 'none'),
-          blocked: injoignable,
+          blocked: injoignable || busy,
           blockedReason: injoignable
             ? `${option.provider} : ${STATUT_LABEL[statut as string] ?? statut} — reconnecte ce provider dans Routage`
-            : undefined
+            : busy
+              ? MODELE_VERROUILLE
+              : undefined
         }
       })
       .filter((row) => row.efforts.length > 0)
@@ -215,7 +219,13 @@ export function OrchestratorModelSelector({
       ? `${binding.provider}:${currentCatalogModel ?? binding.model}`
       : null
 
-  const disabled = busy || pending || models.length === 0
+  /*
+   * PENDANT UN TOUR, LE MODÈLE EST VERROUILLÉ, PAS LE COMPTE (2026-10-21). La pop-up reste donc
+   * ouvrable quand elle porte le bloc « Compte » : c'est le seul chemin vers lui depuis la tête de
+   * conversation. Le modèle, lui, reste refusé ligne par ligne (`blocked`) tant que le tour tourne.
+   */
+  const porteDesComptes = Boolean(comptes && comptes.accounts.length > 0)
+  const disabled = (busy && !porteDesComptes) || pending || models.length === 0
   const currentLabel = !catalogLoaded ? (
     <>
       <Spinner /> Chargement des modèles…
@@ -296,7 +306,8 @@ export function OrchestratorModelSelector({
                   type="button"
                   className={`router-account-chip${defaut.actif ? ' is-active' : ''}`}
                   aria-pressed={defaut.actif}
-                  disabled={defaut.actif}
+                  disabled={defaut.actif || busy}
+                  title={busy && !defaut.actif ? MODELE_VERROUILLE : undefined}
                   onClick={() => {
                     dropdownRef.current?.removeAttribute('open')
                     setAncre(null)
@@ -354,11 +365,13 @@ export function OrchestratorModelSelector({
                           role="option"
                           aria-selected={active}
                           data-provider-status={statut}
-                          aria-disabled={injoignable || undefined}
+                          aria-disabled={injoignable || busy || undefined}
                           title={
                             injoignable
                               ? `${option.provider} : ${STATUT_LABEL[statut] ?? statut} — reconnecte ce provider dans Routage avant de l’imposer par défaut`
-                              : undefined
+                              : busy
+                                ? MODELE_VERROUILLE
+                                : undefined
                           }
                           aria-expanded={
                             selectableEfforts.length > 0 ? expandedModel === optionKey : undefined
@@ -366,7 +379,7 @@ export function OrchestratorModelSelector({
                           onClick={() => {
                             // Un provider expiré, absent ou en standby échouerait au premier prompt :
                             // le choix est REFUSÉ au moment où il se fait, pas découvert à l'envoi.
-                            if (injoignable) return
+                            if (injoignable || busy) return
                             if (selectableEfforts.length === 0) {
                               dropdownRef.current?.removeAttribute('open')
                               setExpandedModel(null)
@@ -464,7 +477,9 @@ export function OrchestratorModelSelector({
       </details>
       <span id={`${idBase}-help`} className="model-select-help">
         {busy
-          ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
+          ? porteDesComptes
+            ? 'Modèle verrouillé pendant le tour en cours ; le compte reste modifiable.'
+            : 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
           : (aide ??
             (defaut
               ? 'Le changement s’appliquera au prochain tour de cette conversation seulement. Son historique est conservé.'
