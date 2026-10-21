@@ -34,6 +34,64 @@ const CODEX_STALE_MS = 15 * 60_000
 let cached: { expiresAt: number; collectionSequence: number; value: ModelQuotaSnapshot } | undefined
 let collectionSequence = 0
 
+/**
+ * RENOUVELER LA SESSION CLAUDE D'UN COMPTE avant de lire son quota (conv-1031, 2026-10-21).
+ *
+ * Symptome rapporte : « quand je change de compte, la barre de quota ne s'actualise pas, je suis
+ * oblige d'envoyer un message ». Cause mesuree : le jeton d'acces d'un compte vit 8 h (ecart
+ * `expiresAt` - ecriture de `.credentials.json`, verifie sur les deux comptes du poste) et seul le
+ * CLI le renouvelle, au premier appel d'API. Un compte laisse de cote plus de 8 h repondait donc 401
+ * a la sonde ; la sonde retombait sur l'historique du client Desktop, qui est UN SEUL fichier pour
+ * tous les comptes : la barre gardait les memes chiffres apres la bascule, jusqu'a ce qu'un message
+ * fasse tourner le CLI. On fait ici exactement ce geste, en plus petit.
+ *
+ * Injecte (meme patron que `configureClaudeAccountEnv`) : par defaut il ne fait RIEN, donc un module
+ * non configure — les tests — ne lance jamais de vrai CLI sur le compte de la machine.
+ * Rend `true` si le CLI a tourne jusqu'au bout ; la verite reste la relecture du fichier ensuite.
+ */
+export type RenouvellementSessionClaude = (configDir: string | undefined) => Promise<boolean>
+
+let renouvellementSession: RenouvellementSessionClaude = async () => false
+
+export function configureClaudeSessionRenewal(renouveler: RenouvellementSessionClaude): void {
+  renouvellementSession = renouveler
+}
+
+/** Un jeton qui expire dans la minute est traite comme expire : la sonde partirait a la limite. */
+const MARGE_EXPIRATION_MS = 60_000
+/**
+ * Au plus un renouvellement par compte sur cette duree. Apres un succes le jeton vaut 8 h, donc cela
+ * ne joue que sur un ECHEC (session revoquee, CLI absent) : sans ce frein, la relecture periodique
+ * de 60 s relancerait le CLI chaque minute.
+ */
+const RENOUVELLEMENT_MIN_INTERVALLE_MS = 5 * 60_000
+const renouvellementsEnVol = new Map<string, Promise<boolean>>()
+const derniersRenouvellements = new Map<string, number>()
+
+async function renouvelerUneFois(
+  configDir: string | undefined,
+  now: number,
+  renouveler: RenouvellementSessionClaude
+): Promise<boolean> {
+  const cle = configDir ?? '<defaut>'
+  const enVol = renouvellementsEnVol.get(cle)
+  if (enVol) return enVol
+  const dernier = derniersRenouvellements.get(cle)
+  if (dernier !== undefined && now - dernier < RENOUVELLEMENT_MIN_INTERVALLE_MS) return false
+  derniersRenouvellements.set(cle, now)
+  const tentative = renouveler(configDir)
+    .catch(() => false)
+    .finally(() => renouvellementsEnVol.delete(cle))
+  renouvellementsEnVol.set(cle, tentative)
+  return tentative
+}
+
+/** Remet a zero le frein des renouvellements — reserve aux tests. */
+export function resetClaudeSessionRenewalForTests(): void {
+  renouvellementsEnVol.clear()
+  derniersRenouvellements.clear()
+}
+
 function percent(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.min(100, Math.max(0, value))
@@ -271,7 +329,8 @@ async function claudePlanHistoryQuota(home: string, now: number): Promise<Provid
 async function claudeQuota(
   fetchFn: typeof fetch,
   home: string,
-  now: number
+  now: number,
+  renouveler: RenouvellementSessionClaude
 ): Promise<ProviderQuota> {
   try {
     // Le token lu doit etre celui du compte ACTIF : le routage bascule les CLI via
@@ -281,40 +340,69 @@ async function claudeQuota(
     const credentialsPath = configDir
       ? join(configDir, '.credentials.json')
       : join(home, '.claude', '.credentials.json')
-    const credentialsInfo = await stat(credentialsPath).catch(() => undefined)
-    if (!credentialsInfo || credentialsInfo.size > MAX_CREDENTIAL_BYTES) {
-      throw new Error('Session Claude indisponible')
-    }
-    const credentials = JSON.parse(await readFile(credentialsPath, 'utf8')) as {
-      claudeAiOauth?: { accessToken?: unknown }
-    }
-    const accessToken = credentials.claudeAiOauth?.accessToken
-    if (typeof accessToken !== 'string' || accessToken.length < 20) {
-      throw new Error('Session Claude indisponible')
+    const lireSession = async (): Promise<{ accessToken: string; expiresAt?: number }> => {
+      const credentialsInfo = await stat(credentialsPath).catch(() => undefined)
+      if (!credentialsInfo || credentialsInfo.size > MAX_CREDENTIAL_BYTES) {
+        throw new Error('Session Claude indisponible')
+      }
+      const credentials = JSON.parse(await readFile(credentialsPath, 'utf8')) as {
+        claudeAiOauth?: { accessToken?: unknown; expiresAt?: unknown }
+      }
+      const accessToken = credentials.claudeAiOauth?.accessToken
+      if (typeof accessToken !== 'string' || accessToken.length < 20) {
+        throw new Error('Session Claude indisponible')
+      }
+      const expiresAt = credentials.claudeAiOauth?.expiresAt
+      return typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+        ? { accessToken, expiresAt }
+        : { accessToken }
     }
     // `/api/oauth/usage` est ABANDONNÉ ici : il répond 429 systématiquement pour un token
     // d'abonnement (bug ouvert non résolu côté Claude Code — issues 31021 / 31637 / 30930 ; vérifié
     // sur ce poste : /api/oauth/profile → 200 avec le MÊME token, /usage → 429 quels que soient les
     // en-têtes). Le quota réel vit dans les en-têtes d'un appel d'inférence accepté : une requête
     // invalide (400) ne les porte PAS (testé), d'où la sonde minimale ci-dessous.
-    const response = await fetchFn('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'anthropic-beta': 'oauth-2025-04-20',
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: CLAUDE_PROBE_MODEL,
-        max_tokens: 1,
-        messages: [{ role: 'user', content: '.' }]
-      }),
-      signal: AbortSignal.timeout(10_000)
-    })
-    if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
+    const sonder = (accessToken: string): Promise<Response> =>
+      fetchFn('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'anthropic-beta': 'oauth-2025-04-20',
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: CLAUDE_PROBE_MODEL,
+          max_tokens: 1,
+          messages: [{ role: 'user', content: '.' }]
+        }),
+        signal: AbortSignal.timeout(10_000)
+      })
+    let session = await lireSession()
+    // Jeton deja expire d'apres le fichier : la sonde rendrait un 401 certain. On fait renouveler
+    // la session par le CLI d'abord (voir `configureClaudeSessionRenewal`), puis on relit.
+    let renouvelee = false
+    if (session.expiresAt !== undefined && session.expiresAt <= now + MARGE_EXPIRATION_MS) {
+      renouvelee = await renouvelerUneFois(configDir, now, renouveler)
+      if (renouvelee) session = await lireSession()
+    }
+    let response = await sonder(session.accessToken)
+    // 401 sans date d'expiration lisible (ou jeton revoque avant terme) : meme remede, une fois.
+    if (response.status === 401 && !renouvelee) {
+      if (await renouvelerUneFois(configDir, now, renouveler)) {
+        session = await lireSession()
+        response = await sonder(session.accessToken)
+      }
+    }
     const windows = parseClaudeRateLimitHeaders(response.headers)
-    if (windows.length === 0) throw new Error('Claude ne publie aucune fenêtre')
+    // Les en-tetes, quand ils sont LA, sont la mesure — quel que soit le statut. Cas reel du
+    // 2026-10-21 : un compte dont le 7 j est epuise repond 429 en publiant
+    // `…-7d-utilization: 1.0` / `…-7d-status: rejected`. Les jeter faisait retomber la barre sur
+    // l'historique Desktop, commun a tous les comptes, donc sans rapport avec le compte choisi.
+    if (windows.length === 0) {
+      if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
+      throw new Error('Claude ne publie aucune fenêtre')
+    }
     return {
       status: 'available',
       source: 'Quota Claude (en-têtes API)',
@@ -566,14 +654,25 @@ export function invalidateModelQuotaCache(): void {
 
 export async function getModelQuotaSnapshot(
   models: readonly ImportedModel[],
-  options: { fetchFn?: typeof fetch; home?: string; now?: number; force?: boolean } = {}
+  options: {
+    fetchFn?: typeof fetch
+    home?: string
+    now?: number
+    force?: boolean
+    renouvelerSession?: RenouvellementSessionClaude
+  } = {}
 ): Promise<ModelQuotaSnapshot> {
   const now = options.now ?? Date.now()
   if (!options.force && cached && cached.expiresAt > now) return cached.value
   const currentCollectionSequence = ++collectionSequence
   const home = options.home ?? homedir()
   const [claude, codex] = await Promise.all([
-    claudeQuota(options.fetchFn ?? fetch, home, now),
+    claudeQuota(
+      options.fetchFn ?? fetch,
+      home,
+      now,
+      options.renouvelerSession ?? renouvellementSession
+    ),
     codexQuota(home, now)
   ])
   const value = buildModelQuotaSnapshot(models, { claude, codex }, new Date(now).toISOString())

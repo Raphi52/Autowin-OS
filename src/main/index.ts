@@ -152,7 +152,8 @@ import {
   registreParDefaut
 } from './hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
-import { invalidateModelQuotaCache } from './model-quotas'
+import { configureClaudeSessionRenewal, invalidateModelQuotaCache } from './model-quotas'
+import { renouvelerSessionClaude } from './claude-session-renewal'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
@@ -1307,6 +1308,9 @@ configureClaudeActiveAccountId(() => claudeAccounts.active().id)
 // Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
+// La sonde de quota fait renouveler par le CLI la session expiree du compte qu'elle lit : sans ce
+// cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message (conv-1031).
+configureClaudeSessionRenewal((configDir) => renouvelerSessionClaude(configDir))
 // Tout changement du compte actif (interface, depart d'un tour, rotation) rend le quota memorise
 // faux et la liste des comptes de l'interface perimee : on jette l'un et on previent l'autre.
 claudeAccounts.onActiveChange(() => {

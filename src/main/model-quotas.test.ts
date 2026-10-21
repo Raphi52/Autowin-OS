@@ -8,13 +8,15 @@ import {
   parseLatestCodexRateLimitSample,
   aggregateClaudeLocalUsage,
   parseClaudeRateLimitHeaders,
-  parseClaudePlanUsageHistory
+  parseClaudePlanUsageHistory,
+  resetClaudeSessionRenewalForTests
 } from './model-quotas'
 
 const temporaryHomes: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
+  resetClaudeSessionRenewalForTests()
   for (const path of temporaryHomes.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
@@ -560,5 +562,171 @@ describe('quota Claude réel (en-têtes API + repli client Desktop)', () => {
         now
       )
     ).toBeUndefined()
+  })
+})
+
+/*
+ * BASCULE DE COMPTE : la barre doit parler du compte choisi SANS attendre un message (conv-1031,
+ * 2026-10-21). Deux causes mesurees sur le poste : un compte au 7 j epuise repond 429 (en-tetes
+ * presents) et un compte laisse de cote plus de 8 h a un jeton expire (401). Dans les deux cas la
+ * sonde retombait sur l'historique du client Desktop, UN fichier commun a tous les comptes.
+ */
+describe('sonde Claude apres une bascule de compte', () => {
+  const NOW = Date.parse('2026-10-21T07:15:00Z')
+
+  function homeAvecSession(session: Record<string, unknown>): string {
+    const home = mkdtempSync(join(tmpdir(), 'autowin-model-quotas-bascule-'))
+    temporaryHomes.push(home)
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: session })
+    )
+    // L'historique Desktop, commun a tous les comptes : s'il ressort, le defaut est revenu.
+    mkdirSync(join(home, 'AppData', 'Roaming', 'Claude'), { recursive: true })
+    writeFileSync(
+      join(home, 'AppData', 'Roaming', 'Claude', 'plan-usage-history.json'),
+      JSON.stringify({ samples: [{ t: NOW - 60_000, u: { fh: 80, sd: 55 } }] })
+    )
+    return home
+  }
+
+  const reponseQuota = (status: number, cinqHeures: string, septJours: string): Response =>
+    new Response('{}', {
+      status,
+      headers: {
+        'anthropic-ratelimit-unified-5h-utilization': cinqHeures,
+        'anthropic-ratelimit-unified-5h-reset': '1792584600',
+        'anthropic-ratelimit-unified-7d-utilization': septJours,
+        'anthropic-ratelimit-unified-7d-reset': '1792638000'
+      }
+    })
+
+  const claudeDe = (snapshot: Awaited<ReturnType<typeof getModelQuotaSnapshot>>) =>
+    snapshot.models.find((model) => model.provider === 'claude')
+
+  it('lit les chiffres du compte dans une réponse 429 au lieu de l’historique Desktop', async () => {
+    const home = homeAvecSession({ accessToken: 'jeton-du-compte-epuise-assez-long' })
+    const fetchFn = vi.fn(async () => reponseQuota(429, '0.0', '1.0'))
+
+    const claude = claudeDe(
+      await getModelQuotaSnapshot(models, { home, fetchFn, force: true, now: NOW })
+    )
+
+    expect(claude).toMatchObject({ status: 'available', source: 'Quota Claude (en-têtes API)' })
+    expect(claude?.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'seven-day', remainingPercent: 0 }),
+        expect.objectContaining({ id: 'five-hour', remainingPercent: 100 })
+      ])
+    )
+  })
+
+  it('fait renouveler un jeton expiré avant de sonder, puis sonde avec le jeton neuf', async () => {
+    const home = homeAvecSession({
+      accessToken: 'jeton-perime-depuis-cette-nuit-xx',
+      expiresAt: NOW - 3_600_000
+    })
+    // Le « CLI » simule : il reecrit le fichier avec un jeton neuf, comme le vrai.
+    const renouvelerSession = vi.fn(async (configDir: string | undefined) => {
+      expect(configDir).toBeUndefined() // compte par defaut : ~/.claude
+      writeFileSync(
+        join(home, '.claude', '.credentials.json'),
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'jeton-neuf-du-cli-assez-long-xx',
+            expiresAt: NOW + 8 * 3_600_000
+          }
+        })
+      )
+      return true
+    })
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) =>
+      new Headers(init?.headers).get('authorization') === 'Bearer jeton-neuf-du-cli-assez-long-xx'
+        ? reponseQuota(200, '0.01', '0.06')
+        : new Response('{}', { status: 401 })
+    )
+
+    const claude = claudeDe(
+      await getModelQuotaSnapshot(models, {
+        home,
+        fetchFn,
+        renouvelerSession,
+        force: true,
+        now: NOW
+      })
+    )
+
+    expect(renouvelerSession).toHaveBeenCalledOnce()
+    expect(fetchFn).toHaveBeenCalledOnce() // aucun 401 gaspille : le jeton perime n'est pas envoye
+    expect(claude).toMatchObject({ status: 'available', source: 'Quota Claude (en-têtes API)' })
+    expect(claude?.windows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'five-hour', remainingPercent: 99 })])
+    )
+  })
+
+  it('sur un 401 sans date d’expiration lisible : renouvelle une fois et resonde', async () => {
+    const home = homeAvecSession({ accessToken: 'jeton-revoque-sans-date-assez-long' })
+    const renouvelerSession = vi.fn(async () => {
+      writeFileSync(
+        join(home, '.claude', '.credentials.json'),
+        JSON.stringify({ claudeAiOauth: { accessToken: 'jeton-neuf-apres-401-assez-long' } })
+      )
+      return true
+    })
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) =>
+      new Headers(init?.headers).get('authorization') === 'Bearer jeton-neuf-apres-401-assez-long'
+        ? reponseQuota(200, '0.2', '0.3')
+        : new Response('{}', { status: 401 })
+    )
+
+    const claude = claudeDe(
+      await getModelQuotaSnapshot(models, {
+        home,
+        fetchFn,
+        renouvelerSession,
+        force: true,
+        now: NOW
+      })
+    )
+
+    expect(renouvelerSession).toHaveBeenCalledOnce()
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+    expect(claude).toMatchObject({ status: 'available' })
+  })
+
+  it('ne relance pas le CLI à chaque relecture quand le renouvellement échoue', async () => {
+    const home = homeAvecSession({
+      accessToken: 'jeton-perime-et-revoque-assez-long',
+      expiresAt: NOW - 1
+    })
+    const renouvelerSession = vi.fn(async () => false)
+    const fetchFn = vi.fn(async () => new Response('{}', { status: 401 }))
+
+    for (const decalage of [0, 60_000, 120_000]) {
+      await getModelQuotaSnapshot(models, {
+        home,
+        fetchFn,
+        renouvelerSession,
+        force: true,
+        now: NOW + decalage
+      })
+    }
+
+    expect(renouvelerSession).toHaveBeenCalledOnce()
+  })
+
+  it('ne touche pas au CLI quand le jeton est encore valide', async () => {
+    const home = homeAvecSession({
+      accessToken: 'jeton-valide-encore-sept-heures-xx',
+      expiresAt: NOW + 7 * 3_600_000
+    })
+    const renouvelerSession = vi.fn(async () => true)
+    const fetchFn = vi.fn(async () => reponseQuota(200, '0.5', '0.5'))
+
+    await getModelQuotaSnapshot(models, { home, fetchFn, renouvelerSession, force: true, now: NOW })
+
+    expect(renouvelerSession).not.toHaveBeenCalled()
+    expect(fetchFn).toHaveBeenCalledOnce()
   })
 })
