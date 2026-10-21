@@ -147,6 +147,13 @@ export interface VaisseauMere {
   anneaux: THREE.Points
   /** Les feux fixes : jante, bord du disque, et ceux des toits au bout de leur mât. */
   feux: THREE.Points
+  /**
+   * La taille de TOUS ses feux, en pixels d'écran (elle suit la hauteur du canevas). Exposée pour le
+   * reflet de l'eau, dessiné à demi-résolution, qui doit la réduire le temps de son dessin
+   * (`suivreLaResolution` de la Spirale, conv-1037) : sans cela, dans l'eau, les feux des toits étaient
+   * deux fois trop gros et débordaient sur la plaque qui doit les cacher.
+   */
+  tailleFeux: { value: number }
   animer(t: number): void
 }
 
@@ -528,6 +535,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     mats,
     anneaux,
     feux: feuxPoses,
+    tailleFeux: uE,
     animer(t) {
       // il flotte : quelques mètres de houle, jamais de traversée ; la roue emporte sa ville
       groupe.position.y = y0 + Math.sin(t * 0.1) * 5

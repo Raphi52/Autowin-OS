@@ -6,6 +6,7 @@ import {
   brumePour,
   ECLAT,
   eclaircieVaisseau,
+  GROSSISSEMENT_FEUX,
   monterVaisseau,
   MOYEU_CITE,
   VAISSEAU,
@@ -404,6 +405,22 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     expect(largeur / 195).toBeLessThan(2.4)
   })
 
+  it('TOUS SES FEUX partagent une seule taille en pixels, exposée pour que le reflet la réduise (conv-1037)', () => {
+    // Dans l'eau (image à demi-résolution), cette taille doit être réduite de moitié : sinon chaque feu
+    // de toit y est deux fois trop gros et déborde sur la plaque qui devrait le cacher.
+    const { vaisseau } = monter()
+    const points: THREE.Points[] = []
+    vaisseau.groupe.traverse((o) => {
+      if ((o as THREE.Points).isPoints) points.push(o as THREE.Points)
+    })
+    expect(points.length).toBeGreaterThanOrEqual(3)
+    points.forEach((p) =>
+      expect((p.material as THREE.ShaderMaterial).uniforms.uE).toBe(vaisseau.tailleFeux)
+    )
+    vaisseau.animer(2)
+    expect(vaisseau.tailleFeux.value).toBeCloseTo(900 * 0.9 * GROSSISSEMENT_FEUX, 5)
+  })
+
   it('flotte sans s en aller, et la roue tourne en emportant sa ville', () => {
     const { vaisseau } = monter()
     vaisseau.animer(0)
@@ -434,5 +451,12 @@ describe('branchement dans le fond de l Accueil (home-decor-avenue.ts)', () => {
       /import \{ eclaircieVaisseau, monterVaisseau \} from '\.\/home-decor-avenue-vaisseau'/
     )
     expect(sans).toMatch(/monterToile\(\{[\s\S]*?eclaircie: eclaircieVaisseau\(\)[\s\S]*?\}\)/)
+  })
+
+  it('confie la taille de ses feux au reflet de l eau, qui la réduit à sa résolution (conv-1037)', () => {
+    expect(sans).toMatch(/spirale\.suivreLaResolution\(vaisseau\.tailleFeux\)/)
+    expect(sans.indexOf('spirale.suivreLaResolution(')).toBeGreaterThan(
+      sans.indexOf('const spirale = monterSpirale(')
+    )
   })
 })

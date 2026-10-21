@@ -1968,6 +1968,11 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       texture: TEX_ENSEIGNES[i]
     }))
   })
+  // Le reflet de l'eau est dessiné à demi-résolution : la taille des feux du vaisseau (pixels d'écran)
+  // y est réduite d'autant. conv-1037 : « les reflets de la ville flottante sont dans la rue mais ils
+  // devraient pas etre visibile car cachés par le socle » — deux fois trop gros, les feux des toits
+  // débordaient dans l'eau sur la plaque qui les cache.
+  spirale.suivreLaResolution(vaisseau.tailleFeux)
   /**
    * LES HALOS PAR LOTS (conv-323) : les 424 halos additifs de la rue, de la ville, de la Spirale et
    * des nuages, dessinés un par un à chaque passe, passent en quelques dessins instanciés, sans rien
