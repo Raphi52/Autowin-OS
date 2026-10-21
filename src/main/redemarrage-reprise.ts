@@ -56,29 +56,49 @@ export function poserReprise(
 }
 
 /**
- * Lit la consigne en attente ET la supprime, qu'elle soit valide ou non.
+ * Demarrage du processus qui charge ce module — le processus PRINCIPAL dans l'app.
+ *
+ * Une consigne posee APRES cet instant l'a ete par ce processus-ci : elle attend le SUIVANT.
+ */
+const DEMARRAGE_DU_PROCESSUS = Date.now() - process.uptime() * 1000
+
+/**
+ * Lit la consigne en attente ET la supprime, qu'elle soit valide ou non — sauf si elle a ete
+ * posee par le processus qui demande (`demarreA` anterieur a la pose).
  *
  * La suppression precede toute decision de validite : un fichier corrompu qui resterait la
  * ferait echouer chaque demarrage suivant de la meme facon.
+ *
+ * MEME PROCESSUS = PAS DE REPRISE (conv-1033, 2026-10-21). `restart_app` mis en file pose la
+ * consigne tout de suite (commands.ts), et le renderer la reclame a CHAQUE montage de ChatView,
+ * pas seulement apres un redemarrage. Mesure : l'interface l'a reprise a 15:20:30 alors que le
+ * processus principal tournait depuis 10:22 et que le redemarrage attendait encore trois fils —
+ * la verification est partie sur l'ancien code. Le fichier reste donc en place pour le processus
+ * suivant ; la peremption ci-dessous borne toujours sa duree de vie.
  */
 export function consommerReprise(
   racineDonnees: string,
-  maintenant: number = Date.now()
+  maintenant: number = Date.now(),
+  demarreA: number = DEMARRAGE_DU_PROCESSUS
 ): RepriseEnAttente | null {
   const chemin = cheminReprise(racineDonnees)
   if (!existsSync(chemin)) return null
   let brut = ''
-  try {
-    brut = readFileSync(chemin, 'utf8')
-  } finally {
-    rmSync(chemin, { force: true })
-  }
   let parse: unknown
   try {
+    brut = readFileSync(chemin, 'utf8')
     parse = JSON.parse(brut)
   } catch {
+    rmSync(chemin, { force: true })
     return null
   }
+  const poseeParCeProcessus =
+    !!parse &&
+    typeof parse === 'object' &&
+    typeof (parse as Partial<RepriseEnAttente>).poseeA === 'number' &&
+    ((parse as Partial<RepriseEnAttente>).poseeA as number) >= demarreA
+  if (poseeParCeProcessus) return null
+  rmSync(chemin, { force: true })
   if (!parse || typeof parse !== 'object') return null
   const candidat = parse as Partial<RepriseEnAttente>
   if (typeof candidat.conversationId !== 'string' || !candidat.conversationId.trim()) return null

@@ -9,6 +9,9 @@ import {
   PEREMPTION_REPRISE_MS
 } from './redemarrage-reprise'
 
+/** Un processus principal demarre APRES la pose — le cas d'un vrai redemarrage. */
+const apresRedemarrage = (): number => Date.now() + 1
+
 let racine = ''
 beforeEach(() => {
   racine = mkdtempSync(join(tmpdir(), 'aw-reprise-'))
@@ -22,7 +25,7 @@ describe('reprise apres redemarrage', () => {
       consigne: 'reprends la tâche X',
       raison: 'dev'
     })
-    expect(consommerReprise(racine)).toMatchObject({
+    expect(consommerReprise(racine, Date.now(), apresRedemarrage())).toMatchObject({
       conversationId: 'conv-1',
       consigne: 'reprends la tâche X',
       raison: 'dev'
@@ -31,8 +34,8 @@ describe('reprise apres redemarrage', () => {
 
   it('ne rejoue JAMAIS deux fois la meme consigne', () => {
     poserReprise(racine, { conversationId: 'conv-1', consigne: 'reprends' })
-    expect(consommerReprise(racine)).not.toBeNull()
-    expect(consommerReprise(racine)).toBeNull()
+    expect(consommerReprise(racine, Date.now(), apresRedemarrage())).not.toBeNull()
+    expect(consommerReprise(racine, Date.now(), apresRedemarrage())).toBeNull()
     expect(existsSync(cheminReprise(racine))).toBe(false)
   })
 
@@ -58,5 +61,27 @@ describe('reprise apres redemarrage', () => {
 
   it('rend null quand rien n a ete pose', () => {
     expect(consommerReprise(racine)).toBeNull()
+  })
+
+  /*
+   * conv-1033, 2026-10-21 : `restart_app` mis en file pose la consigne TOUT DE SUITE (commands.ts),
+   * et le renderer la reclame a chaque montage de ChatView. A 15:20:30, l'interface l'a reprise
+   * alors que le processus principal tournait depuis 10:22 : la verification du redemarrage est
+   * partie sur l'ancien code, le redemarrage lui-meme etant encore en attente.
+   */
+  it('ne rend pas a un rechargement de l interface une consigne posee par CE processus', () => {
+    const demarreA = Date.now() - 60_000
+    poserReprise(racine, { conversationId: 'conv-1', consigne: 'verifie apres redemarrage' })
+    expect(consommerReprise(racine, Date.now(), demarreA)).toBeNull()
+    expect(existsSync(cheminReprise(racine))).toBe(true)
+  })
+
+  it('la rend au processus suivant, demarre apres la pose', () => {
+    poserReprise(racine, { conversationId: 'conv-1', consigne: 'verifie apres redemarrage' })
+    expect(consommerReprise(racine, Date.now(), Date.now() - 120_000)).toBeNull()
+    expect(consommerReprise(racine, Date.now(), Date.now() + 1)).toMatchObject({
+      consigne: 'verifie apres redemarrage'
+    })
+    expect(existsSync(cheminReprise(racine))).toBe(false)
   })
 })

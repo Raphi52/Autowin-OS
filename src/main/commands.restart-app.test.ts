@@ -21,6 +21,13 @@ const os = {
   executionWorkspace: process.cwd()
 } as unknown as ConstructorParameters<typeof AppCommandBus>[0]
 
+/**
+ * Ce que lira le processus SUIVANT, demarre apres la pose : une consigne n'est jamais rendue au
+ * processus qui l'a posee (conv-1033, `redemarrage-reprise.ts`).
+ */
+const repriseAuDemarrageSuivant = (): ReturnType<typeof consommerReprise> =>
+  consommerReprise(ensureAutowinAppData(), Date.now(), Date.now() + 1)
+
 let appdata = ''
 let appdataPrecedent: string | undefined
 beforeEach(() => {
@@ -69,7 +76,7 @@ describe('restart_app', () => {
     expect(result.ok).toBe(true)
     expect((result.data as { redemarre: boolean }).redemarre).toBe(true)
     // La consigne est sur le DISQUE avant que le process meure : c'est tout l'objet du mécanisme.
-    expect(consommerReprise(ensureAutowinAppData())).toMatchObject({
+    expect(repriseAuDemarrageSuivant()).toMatchObject({
       conversationId: 'conv-42',
       consigne: 'reprends le câblage du bus',
       raison: 'src/main modifié'
@@ -89,7 +96,7 @@ describe('restart_app', () => {
 
     expect((result.data as { redemarre: boolean }).redemarre).toBe(false)
     expect(relance).not.toHaveBeenCalled()
-    expect(consommerReprise(ensureAutowinAppData())).toBeNull()
+    expect(repriseAuDemarrageSuivant()).toBeNull()
   })
 
   it('annonce l indisponibilite plutot que de promettre une relance non cablee', async () => {
@@ -99,7 +106,7 @@ describe('restart_app', () => {
 
     expect((result.data as { redemarre: boolean; detail: string }).redemarre).toBe(false)
     expect((result.data as { detail: string }).detail).toContain('indisponible')
-    expect(consommerReprise(ensureAutowinAppData())).toBeNull()
+    expect(repriseAuDemarrageSuivant()).toBeNull()
   })
 
   /*
@@ -135,9 +142,9 @@ describe('restart_app', () => {
     expect(demandes).toHaveLength(1)
     expect(demandes[0]!.cause).toBe('restart_app (conv-304) — claude.ts modifié')
     // La consigne est sur le disque, et la file la repose (horodatage frais) juste avant de relancer.
-    expect(consommerReprise(ensureAutowinAppData())).toMatchObject({ conversationId: 'conv-304' })
+    expect(repriseAuDemarrageSuivant()).toMatchObject({ conversationId: 'conv-304' })
     demandes[0]!.avantRelance?.()
-    expect(consommerReprise(ensureAutowinAppData())).toMatchObject({
+    expect(repriseAuDemarrageSuivant()).toMatchObject({
       consigne: 'vérifie le bloc Étapes sur un vrai tour'
     })
     vi.useRealTimers()
@@ -158,7 +165,7 @@ describe('restart_app', () => {
     expect(data.detail).toMatch(/conv-303 tourne encore/)
     vi.runAllTimers()
     expect(relance).not.toHaveBeenCalled()
-    expect(consommerReprise(ensureAutowinAppData())).toBeNull()
+    expect(repriseAuDemarrageSuivant()).toBeNull()
     vi.useRealTimers()
   })
 
