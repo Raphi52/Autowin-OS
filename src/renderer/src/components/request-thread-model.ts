@@ -64,6 +64,7 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   list_files: 'lire',
   brain_read: 'lire',
   brain_graph: 'lire',
+  skill_charger: 'lire',
   load_graph: 'lire',
   conversation_read: 'lire',
   retrospective: 'lire',

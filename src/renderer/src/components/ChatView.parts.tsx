@@ -42,7 +42,9 @@ const CMD_LABEL: Record<string, string> = {
   set_role: 'Rôle réglé',
   resolve_decision: 'Décision résolue',
   load_graph: 'Graphe chargé',
-  get_state: 'Lecture d’état'
+  get_state: 'Lecture d’état',
+  // Skill choisie par le modèle (conv-1034) : le fil montrait « skill_charger » brut.
+  skill_charger: 'Skill chargée'
 }
 
 /**

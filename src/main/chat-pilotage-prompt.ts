@@ -112,7 +112,10 @@ export const REGLES_VISUELLES: string =
   // n'etait nommee nulle part dans ce que le chat recoit.
   `TOUTE IMAGE SE LIT AVEC LA PROCEDURE look (skills/look/SKILL.md) : image jointe, capture, .png lu. ` +
   `Avant d'en tirer une conclusion, ecris ce qu'elle MONTRE — au minimum VU LE · QUESTION · TEXTE LU ` +
-  `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie. Rien d'infere ` +
+  // conv-1034 (2026-10-21) : sans route nommee, le modele s'arretait au resume ci-dessus et ne
+  // chargeait jamais la checklist exigee pour une anomalie (mesure en instance cachee).
+  `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie (« ce qui ` +
+  `cloche ») — charge-la alors avec \`skill_charger\` (look) avant de lire l'image. Rien d'infere ` +
   `du code ou d'une attente : ce qui n'est pas lisible est « non visible ».\n` +
   ''
 
@@ -486,6 +489,17 @@ export function buildChatPilotagePrompt(
     `perdu. Cela ne contourne pas la RÈGLE PREMIÈRE : une skill d'ANALYSE (kaizen, scout, rendement, ` +
     `residus, look) se joue avec tes propres outils de lecture et se rend dans le fil, pas avec un ` +
     `pipeline.
+` +
+    // SKILL CHOISIE PAR LE MODELE (conv-1034, 2026-10-21) : `skillsDisponibles` remettait le
+    // declencheur de chaque skill, mais le corps n'entrait QUE sur un nom tape par l'utilisateur
+    // (agent-pilot.ts, `invokedSkillId`). Le modele savait QUAND une skill servait, sans route pour
+    // la jouer : `skill_charger` (skill-charger-command.ts) est cette route.
+    `SKILL CHOISIE PAR TOI. Au moment où la demande correspond au DÉCLENCHEUR d'une skill de ` +
+    `skillsDisponibles sans que l’utilisateur la nomme, charge sa procédure avec \`skill_charger\` ` +
+    `(nom de la skill) AVANT d'agir, puis suis-la dans CE tour, et dis en une ligne laquelle tu ` +
+    `appliques et pourquoi. Ne charge que celle qui sert vraiment cette demande, une seule fois par ` +
+    `tour, jamais pour une réponse conversationnelle triviale. La RÈGLE PREMIÈRE tient toujours : ` +
+    `une skill qui lance un pipeline (heal, remake, arena) exige une demande de modification.
 ` +
     // DEMANDE DE TEXTE — meme mesure : « donne-moi un bon prompt pour ... » a declenche un run.
     `UNE DEMANDE DE TEXTE N'EST PAS UNE DEMANDE D'ACTION. « donne-moi un prompt », « écris-moi le ` +

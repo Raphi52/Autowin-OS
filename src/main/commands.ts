@@ -110,6 +110,7 @@ import {
 import { readLastCommitFiles, readTestsCitant } from './git-read-main'
 import type { VerificationAvantPublication } from './run-autoclose'
 import { nativeSkills } from './native-registry'
+import { chargerSkillPourLeModele } from './skill-charger-command'
 import { supprimerArbre } from './fs-supprimer'
 import { comparerALaBase } from './comparaison-a-la-base'
 
@@ -1360,6 +1361,19 @@ export const CATALOG: CommandSpec[] = [
       readOnlyHint: false,
       // On ajoute, on ne supprime rien ; deux appels créent DEUX tâches. L'effet reste dans l'app.
       destructiveHint: false,
+  {
+    // Le modèle choisit lui-même une skill (conv-1034) : voir `skill-charger-command.ts`.
+    name: 'skill_charger',
+    description:
+      'Charger la PROCÉDURE complète d’une skill d’Autowin (skills/<nom>/SKILL.md) que TU choisis d’appliquer, sans que l’utilisateur l’ait tapée — dès que sa demande correspond au déclencheur d’une skill listée dans skillsDisponibles. Rend le contenu à suivre et le dossier de ses fichiers compagnons. Inutile si cette procédure est déjà dans ton contexte (bloc « === SKILL <NOM> (kit) === »)',
+    args: { nom: 'nom de la skill, tel que listé dans skillsDisponibles (ex. look)' },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
       idempotentHint: false,
       openWorldHint: false
     }
@@ -4427,6 +4441,8 @@ export class AppCommandBus {
             ...(this.porteProd ? { porteProd: this.porteProd } : {}),
             // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
             // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
+      case 'skill_charger':
+        return chargerSkillPourLeModele(a)
             ...(this.guichetProd ? { guichetProd: this.guichetProd } : {})
           }
         )

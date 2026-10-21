@@ -31,6 +31,7 @@ const TOOL_TITLES: Record<string, string | readonly [string, string]> = {
   brain_query: 'Brain interrogé',
   brain_read: ['Note lue', 'Notes lues'],
   brain_graph: 'Liens suivis',
+  skill_charger: ['Skill chargée', 'Skills chargées'],
   load_graph: 'Graphe chargé',
   graphify: 'Graphe du code',
   conversation_search: ['Fils cherchés', 'Fils cherchés'],
