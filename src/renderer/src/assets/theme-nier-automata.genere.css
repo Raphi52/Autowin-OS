@@ -1,0 +1,266 @@
+/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nier-automata -- ne pas modifier a la main.
+   Theme « NieR:Automata » : les regles de la base claire qui ecrivent une couleur en dur, transposees
+   vers le papier beige et l'encre brune du jeu. 59 regles, 120 declarations. */
+
+/* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
+:root[data-theme='nier-automata'][data-base='clair'] .topology-runtime-limit {
+    border-color: rgb(80, 76, 66);
+    background: rgba(22, 21, 18, 0.82);
+    color: rgb(185, 182, 172)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .topology-runtime-limit b {
+    color: rgb(185, 181, 171)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .topology-panel > header > b {
+    background: rgba(27, 26, 23, 0.05)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+    border-color: rgba(93, 89, 77, 0.6);
+    color: rgb(75, 72, 63)
+}
+
+/* ---- src/renderer/src/components/ChatView.css ---- */
+:root[data-theme='nier-automata'][data-base='clair'] .md-final-summary {
+    background: linear-gradient(145deg, rgba(93, 89, 77, 0.1), rgba(252, 251, 250, 0.96));
+    border-color: rgba(93, 89, 77, 0.42)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .activity-step-pipeline {
+    background: rgba(27, 26, 23, 0.04)
+}
+
+/* ---- src/renderer/src/components/GraphView.css ---- */
+:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__track {
+    border-color: rgba(32, 30, 26, 0.28);
+    background: linear-gradient(180deg, rgb(244, 243, 239), rgb(237, 234, 227));
+    box-shadow: inset 0 2px 5px rgba(32, 30, 26, 0.12)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__thumb {
+    background: radial-gradient(circle at 32% 30%, #ffffff, rgb(229, 226, 216) 68%);
+    box-shadow: 0 2px 5px rgba(32, 30, 26, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__track {
+    background: linear-gradient(180deg, rgb(235, 232, 224), rgb(222, 218, 205));
+    border-color: rgba(32, 30, 26, 0.34)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .graph-mode-switch__thumb {
+    border: 1px solid rgba(32, 30, 26, 0.45);
+    box-shadow: 0 1px 3px rgba(32, 30, 26, 0.35)
+}
+
+/* ---- src/renderer/src/components/JugesPanel.css ---- */
+:root[data-theme='nier-automata'][data-base='clair'] .jpan {
+    --jpan-rouge-texte: rgb(152, 73, 73);
+    --jpan-rose-texte: rgb(106, 102, 89);
+    --jpan-vert: rgb(40, 82, 54)
+}
+
+/* ---- src/renderer/src/assets/theme-modes.css ---- */
+:root[data-theme='nier-automata'][data-base='clair'] {
+    --bg-0: rgb(237, 235, 229);
+    --bg-1: rgb(237, 235, 229);
+    --bg-2: rgb(233, 230, 221);
+    --bg-3: rgba(27, 26, 23, 0.06);
+    --bg-inset: rgb(244, 243, 239);
+    --line: rgba(32, 30, 26, 0.16);
+    --line-strong: rgba(32, 30, 26, 0.34);
+    --text: rgb(34, 32, 28);
+    --text-dim: rgb(98, 94, 82);
+    --titlebar-symbol: rgb(34, 32, 28);
+    --text-faint: rgb(118, 113, 98);
+    --gold: rgb(75, 72, 63);
+    --gold-bright: rgb(113, 109, 95);
+    --gold-doux: rgb(86, 83, 72);
+    --gold-clair: rgb(97, 93, 81);
+    --rose: rgb(123, 118, 103);
+    --rose-bright: rgb(101, 97, 85);
+    --cyan: rgb(93, 89, 78);
+    --accent-dim: rgb(229, 225, 215);
+    --accent-soft: rgba(123, 118, 103, 0.1);
+    --ok: rgb(68, 113, 55);
+    --warn: rgb(93, 89, 77);
+    --err: rgb(155, 79, 75);
+    --info: rgb(93, 89, 78);
+    --violet: rgb(147, 141, 125);
+    --chat-rail-trait: rgb(152, 147, 131);
+    --chat-rail-reponse: rgb(157, 152, 138);
+    --chat-rail-juge: rgb(40, 82, 54);
+    --chat-rail-point-texte: rgb(174, 170, 158);
+    --chat-rail-heure: rgb(152, 147, 134);
+    --chat-rail-fond: rgb(247, 246, 244)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .shell, :root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
+    --surface-inset: rgba(27, 26, 23, 0.05);
+    --surface-hover: rgba(27, 26, 23, 0.05);
+    --surface-selected: rgba(123, 118, 103, 0.09);
+    --container-border: rgba(32, 30, 26, 0.16);
+    --container-border-strong: rgba(32, 30, 26, 0.32)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .brand-name {
+    color: rgb(24, 23, 20)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .sg-chip:hover {
+    background: rgba(27, 26, 23, 0.05)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-panel-title {
+    color: rgb(93, 89, 78)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view {
+    --surface-selected: rgba(93, 89, 77, 0.14);
+    --text-muted: rgb(98, 94, 82)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-group-head b {
+    color: color-mix(in srgb, var(--zone-accent) 55%, rgb(29, 28, 24))
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-conversations > button.is-active, :root[data-theme='nier-automata'][data-base='clair'] .observatory-calls button.is-active, :root[data-theme='nier-automata'][data-base='clair'] .observatory-event.is-selected, :root[data-theme='nier-automata'][data-base='clair'] .observatory-view-switch button.is-active, :root[data-theme='nier-automata'][data-base='clair'] .observatory-quick-filters button.is-active, :root[data-theme='nier-automata'][data-base='clair'] .observatory-causal-controls button.is-active {
+    border-color: rgba(93, 89, 77, 0.5)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .md-html {
+    border: 1px solid rgba(32, 30, 26, 0.14)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .md-html, :root[data-theme='nier-automata'][data-base='clair'] .md-html * {
+    color: rgb(41, 39, 34) !important;
+    border-color: rgba(32, 30, 26, 0.16) !important
+}
+:root[data-theme='nier-automata'][data-base='clair'] .md-html code, :root[data-theme='nier-automata'][data-base='clair'] .md-html kbd, :root[data-theme='nier-automata'][data-base='clair'] .md-html pre {
+    background-color: rgba(32, 30, 26, 0.05) !important
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.user .msg-body {
+    background: rgba(123, 118, 103, 0.08);
+    border-color: rgba(123, 118, 103, 0.35);
+    color: rgb(39, 37, 32)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .chat-workflow-notice, :root[data-theme='nier-automata'][data-base='clair'] .chat-travail-non-publie {
+    background: rgba(93, 89, 77, 0.08);
+    border-color: rgba(93, 89, 77, 0.35)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .chat-workflow-notice button, :root[data-theme='nier-automata'][data-base='clair'] .chat-travail-non-publie button {
+    border-color: rgba(93, 89, 77, 0.45)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .conv-menu-pop {
+    box-shadow: 0 10px 28px rgba(32, 30, 26, 0.18)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .conv-menu-pop button:hover {
+    background: rgba(27, 26, 23, 0.06)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .activity-step-detail {
+    background: rgba(27, 26, 23, 0.04)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile__panel {
+    border-color: rgba(32, 30, 26, 0.22);
+    box-shadow: 0 20px 46px rgba(32, 30, 26, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis {
+    --jv-or: rgb(86, 83, 72);
+    border-color: rgba(86, 83, 72, 0.35);
+    background: linear-gradient(180deg, rgba(252, 251, 250, 0.95), rgba(249, 249, 247, 0.97)),
+    repeating-linear-gradient(0deg, rgba(86, 83, 72, 0.05) 0 1px, transparent 1px 5px);
+    box-shadow: inset 0 0 26px rgba(86, 83, 72, 0.07)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .enregistrements {
+    background: linear-gradient(
+      180deg,
+      rgba(var(--hud), 0.06),
+      rgba(252, 251, 250, 0.95) 48%,
+      rgba(var(--or), 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(var(--hud), 0.05) 0 1px, transparent 1px 4px)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule {
+    color: rgb(72, 69, 60)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule:hover, :root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule:focus-visible {
+    color: rgb(46, 44, 39)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-texte > strong {
+    color: rgb(46, 44, 39)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-coeur {
+    fill: rgba(252, 251, 250, 0.92);
+    stroke: rgba(86, 83, 72, 0.35)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-etat {
+    stroke: rgba(32, 30, 26, 0.14)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .enregistrements__titre {
+    color: rgba(74, 71, 62, 0.95)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__audio-champ select, :root[data-theme='nier-automata'][data-base='clair'] .jarvis__audio-champ input[type='text'], :root[data-theme='nier-automata'][data-base='clair'] .jarvis__audio-champ select option, :root[data-theme='nier-automata'][data-base='clair'] .enregistrements__champ select, :root[data-theme='nier-automata'][data-base='clair'] .enregistrements__champ select option {
+    border-color: rgba(86, 83, 72, 0.3)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .activity-step {
+    color: rgb(34, 32, 28)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .activity-step-icon {
+    background: rgba(27, 26, 23, 0.1)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .activity-step-link {
+    border-color: rgba(32, 30, 26, 0.3)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .attachment-thumb {
+    background: rgba(27, 26, 23, 0.06)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover {
+    box-shadow: 0 18px 48px rgba(27, 26, 23, 0.18)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover small, :root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover footer, :root[data-theme='nier-automata'][data-base='clair'] .model-quota-values small, :root[data-theme='nier-automata'][data-base='clair'] .model-quota-unavailable {
+    color: rgb(100, 96, 84)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-window > strong {
+    color: rgb(34, 32, 28)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover header button {
+    color: rgb(74, 71, 61)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-scope {
+    border-color: rgba(93, 89, 77, 0.35);
+    color: rgb(73, 70, 61)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-meter {
+    background: rgba(27, 26, 23, 0.12)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-error {
+    background: rgba(125, 120, 105, 0.07);
+    color: rgb(102, 98, 85)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-select-menu {
+    box-shadow: 0 24px 64px rgba(27, 26, 23, 0.22)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond::after {
+    background: linear-gradient(
+      170deg,
+      rgba(248, 247, 245, 0.9) 0%,
+      rgba(245, 244, 240, 0.86) 45%,
+      rgba(242, 240, 235, 0.9) 100%
+    ),
+    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .shell, :root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
+    --surface-panel: rgb(237, 235, 229);
+    --surface-card: rgb(244, 243, 239);
+    --surface-inset: rgb(244, 243, 239)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme-serious .rail, :root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-pane {
+    background: rgb(237, 235, 229)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme-serious .brand {
+    background: rgb(244, 243, 239)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .shell, :root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
+    --surface-panel: rgb(223, 219, 208);
+    --surface-card: rgb(233, 230, 221);
+    --surface-inset: rgb(233, 230, 221)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme- eriou  .rail, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .conv-pane, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .chat-head, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .compo er {
+    background: rgb(223, 219, 208)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat::after {
+    background: rgb(223, 219, 208)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme- eriou  .brand, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .compo er-field, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .conv- earch, :root[data-theme='nier-automata'][data-base='clair'] .co mic-outline .chat- ugge t .btn {
+    background: rgb(233, 230, 221)
+}
+:root[data-theme='nier-automata'][data-base='clair'] .artifact-preview {
+    background: rgb(233, 230, 221)
+}

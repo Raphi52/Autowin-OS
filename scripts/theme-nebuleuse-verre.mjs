@@ -40,7 +40,7 @@ const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
 const PREFIXE = `:root[data-theme='${THEME}']`
 // AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
-const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
+const EXCLUS = /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([
@@ -964,7 +964,7 @@ export function genererCoucheClaire() {
 const NINJA_ID = 'ninja-claude'
 const NINJA_PREFIXE = `:root[data-theme='${NINJA_ID}']`
 /** AskDecision.css N'EST PAS exclu ici : son or (choix fait pour Holographique) devient terracotta. */
-const NINJA_EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude/
+const NINJA_EXCLUS = /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude/
 /** Terracotta de Claude (#d97757) : teinte et saturation, la luminosite suit la couleur d'origine. */
 const NINJA_TERRACOTTA = rgbVersHsl({ r: 217, g: 119, b: 87 })
 /** Teinte des neutres chauds de Claude (#c2c0b6, #9c9a92, #30302e : 48-60 deg, saturation 3-9 %). */
@@ -1091,7 +1091,7 @@ const VANILLA_ID = 'vanilla-claude'
 const VANILLA_PREFIXE = `:root[data-theme='${VANILLA_ID}'][data-base='clair']`
 /** Les feuilles d'un AUTRE theme ne sont pas la base claire commune. */
 const VANILLA_EXCLUS =
-  /theme-holographique-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|theme-vanilla-claude/
+  /theme-holographique-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|theme-vanilla-claude|theme-nier-automata/
 const BASE_CLAIRE = /^:root\[data-base='clair'\]/
 
 /** Coupe une liste de selecteurs aux virgules de PREMIER niveau (pas celles d'un `:is(...)` imbrique). */
@@ -1171,17 +1171,66 @@ export function genererVanillaClaude() {
   return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
 }
 
+
+/* =================================================================================================
+ * NIER:AUTOMATA (id `nier-automata`, conv-281, 2026-10-19). Demande : « Fait moi un theme Nier
+ * Automata pour Autowin ». Base CLAIRE, meme mecanique que Vanilla Claude : les regles de la base
+ * claire qui ecrivent une couleur en dur sont re-prefixees et transposees vers l'interface du jeu —
+ * papier beige #dad4bb, encre brune #4e4b42. Toute teinte saturee (or, rose, bleus, violets) devient
+ * un brun-gris de meme luminosite ; verts, rouges et jaunes d'etat restent lisibles mais desatures.
+ * Regenerer : node scripts/theme-nebuleuse-verre.mjs nier-automata
+ * ================================================================================================= */
+const NIER_ID = 'nier-automata'
+const NIER_PREFIXE = `:root[data-theme='${NIER_ID}'][data-base='clair']`
+const NIER_TEINTE = 45
+
+function prefixerNier(selecteur) {
+  const s = selecteur.trim()
+  if (!BASE_CLAIRE.test(s)) return null
+  const reste = s.replace(BASE_CLAIRE, '')
+  if (/data-theme/.test(reste)) return null
+  const branches = branchesDuIsFinal(reste)
+  if (branches) return branches.map((b) => `${NIER_PREFIXE} ${b.replace(/s+/g, ' ')}`)
+  return NIER_PREFIXE + reste
+}
+
+function transposerNier(rgb) {
+  const { h, s, l } = rgbVersHsl(rgb)
+  if (s <= 0.05) return null
+  // Etats (vert, rouge, jaune) : garder la teinte, l'eteindre ; tout le reste : brun-gris du papier.
+  const etat = (h < 15 || h >= 345 || (h >= 85 && h <= 160)) && s >= 0.35
+  if (etat) return hslVersRgb({ h, s: Math.min(s, 0.35), l })
+  return hslVersRgb({ h: NIER_TEINTE, s: Math.min(s, l > 0.7 ? 0.2 : 0.09), l })
+}
+
+export function genererNierAutomata() {
+  const { blocs, regles, declarations } = genererCoucheClaude({
+    sources: fichiers(VANILLA_EXCLUS),
+    prefixe: prefixerNier,
+    transposer: transposerNier,
+    jetonFond: NINJA_JETON_FOND
+  })
+  const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${NIER_ID} -- ne pas modifier a la main.
+   Theme « NieR:Automata » : les regles de la base claire qui ecrivent une couleur en dur, transposees
+   vers le papier beige et l'encre brune du jeu. ${regles} regles, ${declarations} declarations. */\n\n`
+  return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
+}
+
 /** Arguments acceptes. Tout autre argument est REFUSE : il reecrivait la couche d'Holographique. */
-const ARGUMENTS_CONNUS = new Set([undefined, THEME, CLAIR_ID, NINJA_ID, VANILLA_ID])
+const ARGUMENTS_CONNUS = new Set([undefined, THEME, CLAIR_ID, NINJA_ID, VANILLA_ID, NIER_ID])
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (!ARGUMENTS_CONNUS.has(process.argv[2])) {
     console.error(
-      `theme inconnu : « ${process.argv[2]} ». Attendu : rien (${THEME}), ${CLAIR_ID}, ${NINJA_ID} ou ${VANILLA_ID}. Aucun fichier ecrit.`
+      `theme inconnu : « ${process.argv[2]} ». Attendu : rien (${THEME}), ${CLAIR_ID}, ${NINJA_ID}, ${VANILLA_ID} ou ${NIER_ID}. Aucun fichier ecrit.`
     )
     process.exit(2)
   }
-  if (process.argv[2] === VANILLA_ID) {
+  if (process.argv[2] === NIER_ID) {
+    const couche = genererNierAutomata()
+    writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${NIER_ID}.genere.css`), couche.css)
+    console.log(`theme-${NIER_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)
+  } else if (process.argv[2] === VANILLA_ID) {
     const couche = genererVanillaClaude()
     writeFileSync(join(RACINE, `src/renderer/src/assets/theme-${VANILLA_ID}.genere.css`), couche.css)
     console.log(`theme-${VANILLA_ID}.genere.css : ${couche.regles} regles, ${couche.declarations} declarations`)

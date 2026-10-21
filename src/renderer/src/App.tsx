@@ -73,6 +73,9 @@ import './assets/theme-ninja-claude.css'
 // regles de la base claire elles-memes (un attribut de plus, elle gagne sur elles).
 import './assets/theme-vanilla-claude.genere.css'
 import './assets/theme-vanilla-claude.css'
+// NieR:Automata (conv-281) : meme mecanique que Vanilla Claude, genere puis feuille a la main.
+import './assets/theme-nier-automata.genere.css'
+import './assets/theme-nier-automata.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 

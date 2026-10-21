@@ -1,0 +1,863 @@
+/* =================================================================================================
+ * THEME « NIER:AUTOMATA » (id `nier-automata`, conv-281, 2026-10-19). Demande : « Fait moi un theme
+ * Nier Automata pour Autowin ». Base CLAIRE. Structure reprise de theme-vanilla-claude.css, couleurs
+ * et formes de l'interface du jeu (menus de YoRHa) :
+ *   - papier beige #dad4bb, quadrille tres fin, panneaux #cdc8b0 ; encre brune #4e4b42 ;
+ *   - element survole ou ouvert EN NEGATIF (fond encre, texte papier), petit carre ■ devant ;
+ *   - coins CARRES partout, titres en capitales espacees, aucun degrade ni ombre ;
+ *   - le seul rouge est celui des erreurs (#a3302a).
+ * Contraste mesure : #4e4b42 sur #dad4bb = 6,6:1, textes secondaires >= 4,5:1 sur la page ET les panneaux (test).
+ * Couleurs EN DUR de la base claire : theme-nier-automata.genere.css (importee AVANT).
+ * ================================================================================================= */
+
+/* ---- 1. JETONS ---------------------------------------------------------------------------------- */
+:root[data-theme='nier-automata'][data-base='clair'] {
+  color-scheme: light;
+  --bg-0: #dad4bb;
+  --bg-1: #dad4bb;
+  --bg-2: #c8c2a8;
+  --bg-3: rgba(78, 75, 66, 0.05);
+  --bg-inset: #e4dfc9;
+
+  --line: rgba(78, 75, 66, 0.12);
+  --line-strong: rgba(78, 75, 66, 0.24);
+  --voile-rgb: 20, 20, 19;
+
+  --text: #4e4b42;
+  --text-dim: #45423a;
+  --text-faint: #4f4c43;
+  --titlebar-symbol: #4e4b42;
+
+  /* Pas d'or chez Claude : tout ce qui designait l'or (un TEXTE en base claire) devient terracotta. */
+  --gold: #36342d;
+  --gold-bright: #4e4b42;
+  --gold-doux: #36342d;
+  --gold-clair: #4e4b42;
+  --rose: #4e4b42;
+  --rose-bright: #36342d;
+  --accent: #4e4b42;
+  --accent-dim: #bdb79c;
+  --accent-soft: rgba(78, 75, 66, 0.1);
+  /* Ni cyan ni violet : gris chauds. */
+  --cyan: #57544a;
+  --violet: #5e5a4e;
+  --info: #57544a;
+
+  --on-accent: #e4dfc9;
+
+  --font: 'Anthropic Sans', 'Styrene B', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --display: 'Anthropic Serif', 'Copernicus', 'Tiempos Headline', Georgia, 'Times New Roman', serif;
+  --mono: 'Anthropic Mono', 'Cascadia Mono', 'Cascadia Code', ui-monospace, Consolas, monospace;
+
+  --r1: 0;
+  --r2: 0;
+  --r3: 0;
+}
+
+:root[data-theme='nier-automata'][data-base='clair'] .shell,
+:root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
+  --surface-page: #dad4bb;
+  --surface-panel: #dad4bb;
+  --surface-card: #e4dfc9;
+  --surface-inset: #cdc8b0;
+  --surface-hover: rgba(78, 75, 66, 0.04);
+  --surface-selected: rgba(78, 75, 66, 0.07);
+  --container-border: rgba(78, 75, 66, 0.1);
+  --container-border-strong: rgba(78, 75, 66, 0.2);
+  --container-radius-page: 0;
+  --container-radius-panel: 0;
+  --container-radius-card: 0;
+  --container-shadow: none;
+  --container-blur: 0px;
+  --lisere-degrade: none;
+  --module-title-font: var(--display);
+  --module-title-color: #4e4b42;
+  --module-eyebrow-color: #5e5a4e;
+}
+
+/* ---- 2. FOND PLAT : ni image, ni grain, ni decor, ni reflet ------------------------------------- */
+:root[data-theme='nier-automata'][data-base='clair'] body {
+  background: #dad4bb;
+  color: var(--text);
+}
+:root[data-theme='nier-automata'][data-base='clair'] body::before,
+:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond {
+  display: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] body::after {
+  background: none;
+  box-shadow: none;
+}
+/* Casse normale partout, comme Ninja Claude : Autowin met ses titres en CAPITALES ESPACEES. */
+:root[data-theme='nier-automata'][data-base='clair'] * {
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  scrollbar-color: rgba(78, 75, 66, 0.2) transparent;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile__rule {
+  background: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] ::selection {
+  background: rgba(78, 75, 66, 0.25);
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 2px solid rgba(78, 75, 66, 0.8);
+  outline-offset: 2px;
+}
+:root[data-theme='nier-automata'][data-base='clair'] textarea,
+:root[data-theme='nier-automata'][data-base='clair'] input {
+  caret-color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] ::placeholder {
+  color: #5e5a4e;
+  opacity: 1;
+}
+
+/* ---- 3. COLONNE DE GAUCHE : un cran plus soutenue, element ouvert en ivoire --------------------- */
+:root[data-theme='nier-automata'][data-base='clair'] .rail,
+:root[data-theme='nier-automata'][data-base='clair'] .theme-serious .rail {
+  border: 0;
+  border-right: 1px solid rgba(78, 75, 66, 0.08);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .theme-serious .brand {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .brand::after {
+  background: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .brand-name {
+  font-family: var(--display);
+  color: #4e4b42;
+}
+/* Le meme eclat terracotta que Ninja Claude (dessin vectoriel inline, aucun fichier ajoute). */
+:root[data-theme='nier-automata'][data-base='clair'] .brand-logo {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5v6.5M12 15v6.5M2.5 12H9M15 12h6.5M5.3 5.3l4.6 4.6M14.1 14.1l4.6 4.6M5.3 18.7l4.6-4.6M14.1 9.9l4.6-4.6' stroke='%234e4b42' stroke-width='2.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+}
+/* Menu monochrome : les icones colorees passent en gris, un cran plus sombre que sur le noir. */
+:root[data-theme='nier-automata'][data-base='clair'] .space-toy-icon {
+  filter: grayscale(1) brightness(0.8);
+  opacity: 0.8;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item.active .space-toy-icon {
+  opacity: 1;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 0;
+  color: #57544a;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item:hover {
+  background: rgba(78, 75, 66, 0.04);
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item.active {
+  border: 1px solid transparent;
+  background: rgba(78, 75, 66, 0.07);
+  box-shadow: none;
+  color: #4e4b42;
+}
+
+/* ---- 4. BRIQUES COMMUNES : cartes, boutons, champs, badges ------------------------------------- */
+:root[data-theme='nier-automata'][data-base='clair'] .card,
+:root[data-theme='nier-automata'][data-base='clair'] .panel,
+:root[data-theme='nier-automata'][data-base='clair'] .surface-panel {
+  border-color: rgba(78, 75, 66, 0.1);
+  background: #e4dfc9;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .view-page {
+  border-color: rgba(78, 75, 66, 0.08);
+  background: #dad4bb;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .btn {
+  border-color: rgba(78, 75, 66, 0.15);
+  border-radius: 0;
+  background: #e4dfc9;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .btn:hover:not(:disabled) {
+  border-color: rgba(78, 75, 66, 0.28);
+  background: #cdc8b0;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .btn-accent,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .btn-accent {
+  border-color: #4e4b42;
+  background: #4e4b42;
+  box-shadow: none;
+  color: #e4dfc9;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .btn-accent:hover:not(:disabled),
+:root[data-theme='nier-automata'][data-base='clair']
+  .cosmic-outline
+  .btn-accent:hover:not(:disabled) {
+  border-color: #36342d;
+  background: #36342d;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .btn-danger {
+  border-color: rgba(181, 51, 42, 0.45);
+  background: transparent;
+  color: #a3302a;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  .cosmic-outline
+  :where(.input, .select, textarea.input),
+:root[data-theme='nier-automata'][data-base='clair'] :where(.input, .select) {
+  border-color: rgba(78, 75, 66, 0.15);
+  border-radius: 0;
+  background: #e4dfc9;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  .cosmic-outline
+  :where(.input, .select, textarea.input):focus,
+:root[data-theme='nier-automata'][data-base='clair'] :where(.input, .select):focus {
+  border-color: rgba(78, 75, 66, 0.35);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .select option {
+  background: #e4dfc9;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .badge {
+  border-color: rgba(78, 75, 66, 0.12);
+  background: #c8c2a8;
+  color: #57544a;
+}
+
+/* ---- 5. CHAT ------------------------------------------------------------------------------------ */
+/* La base claire peint ces panneaux en gris bleu #cfd6e0 via `:is(...)` (4 classes au total) : le
+   selecteur ci-dessous en compte 5, il gagne. */
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-layout,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .runs-pane,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-head,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer {
+  border-color: rgba(78, 75, 66, 0.08);
+  background: #dad4bb;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat::after {
+  background: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat::before {
+  display: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-pane {
+  border-color: rgba(78, 75, 66, 0.08);
+  background: #cdc8b0;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-head-title,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-head h2 {
+  font-family: var(--font);
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-item {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-item:hover {
+  background: rgba(78, 75, 66, 0.04);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-item.active {
+  border-color: transparent;
+  background: rgba(78, 75, 66, 0.07);
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-label {
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-meta {
+  color: #5e5a4e;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  :is(.cosmic-outline .conv-search, .cosmic-outline .chat-suggest .btn) {
+  background: #e4dfc9;
+}
+
+/* La question : une bulle ivoire, sans bord ni degrade. */
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.user .msg-body {
+  border: 0;
+  border-radius: 0;
+  background: #c8c2a8;
+  box-shadow: none;
+  color: #4e4b42;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.user .msg-body::before {
+  display: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.user .msg-role {
+  color: #5e5a4e;
+}
+/* La reponse : du texte en serif, sans cadre ni filet (la base claire posait un filet or a gauche). */
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.assistant .msg-body {
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #4e4b42;
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1.7;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  .cosmic-outline
+  .msg.assistant
+  .msg-body
+  :is(code, pre, kbd, samp) {
+  font-family: var(--mono);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.assistant .msg-role {
+  color: #36342d;
+}
+
+/* La zone de saisie : un cadre blanc arrondi, le bouton d'envoi terracotta. */
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-field {
+  border: 1px solid rgba(78, 75, 66, 0.12);
+  border-radius: 0;
+  background: #e4dfc9;
+  box-shadow: 0 4px 20px rgba(78, 75, 66, 0.05);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-field:focus-within {
+  border-color: rgba(78, 75, 66, 0.25);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-field textarea {
+  background: transparent;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-send {
+  border: 0;
+  border-radius: 0;
+  background: #4e4b42;
+  box-shadow: none;
+  color: #e4dfc9;
+}
+:root[data-theme='nier-automata'][data-base='clair']
+  .cosmic-outline
+  .composer-send:hover:not(:disabled) {
+  background: #36342d;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-send:disabled {
+  background: rgba(78, 75, 66, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ---- 6. SIGNATURE YORHA ------------------------------------------------------------------------- */
+:root[data-theme='nier-automata'][data-base='clair'] {
+  --font: 'Rodin', 'FOT-Rodin Pro', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --display: 'Rodin', 'FOT-Rodin Pro', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --on-accent: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .shell,
+:root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
+  --module-title-font: var(--display);
+}
+/* Le papier quadrille du jeu : deux reseaux de lignes a peine visibles. */
+:root[data-theme='nier-automata'][data-base='clair'] body {
+  background-color: #dad4bb;
+  background-image:
+    linear-gradient(rgba(78, 75, 66, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(78, 75, 66, 0.06) 1px, transparent 1px);
+  background-size: 6px 6px;
+}
+/* Capitales espacees sur les titres et la navigation (le corps du texte reste en casse normale). */
+:root[data-theme='nier-automata'][data-base='clair']
+  :is(h1, h2, h3, .brand-name, .nav-item, .chat-head-title, .msg-role, .btn, .badge) {
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .msg.assistant .msg-body {
+  font-family: var(--font);
+}
+/* Survol et selection EN NEGATIF, avec le carre devant. */
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item:hover,
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item.active,
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-item.active,
+:root[data-theme='nier-automata'][data-base='clair'] .btn:hover:not(:disabled) {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .conv-item.active :is(.conv-label, .conv-meta) {
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item.active .space-toy-icon,
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item:hover .space-toy-icon {
+  filter: grayscale(1) brightness(2.2);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .nav-item.active::before {
+  content: '■';
+  margin-right: 6px;
+  font-size: 9px;
+}
+/* Panneaux : un filet encre en haut, comme les fenetres de menu du jeu. */
+:root[data-theme='nier-automata'][data-base='clair'] :is(.card, .panel, .surface-panel) {
+  border-top: 3px solid #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .msg.user .msg-body {
+  border-left: 3px solid #4e4b42;
+}
+/* Logo : le losange des menus YoRHa. */
+:root[data-theme='nier-automata'][data-base='clair'] .brand-logo {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 22 12 12 22 2 12Z' fill='none' stroke='%234e4b42' stroke-width='2'/%3E%3Crect x='9' y='9' width='6' height='6' fill='%234e4b42'/%3E%3C/svg%3E");
+}
+
+/* ---- 7. ACCUEIL ET SUGGESTIONS : cartes papier, coins carres, ni blanc ni ombre --------------- */
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile .home-tile__panel,
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile[data-held='true'] .home-tile__panel,
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile:focus-visible .home-tile__panel {
+  border: 1px solid rgba(78, 75, 66, 0.25);
+  border-top: 3px solid #4e4b42;
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .home-tile__label {
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-suggest .btn {
+  border: 1px solid rgba(78, 75, 66, 0.35);
+  border-radius: 0;
+  background: #cdc8b0;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .chat-suggest .btn:hover:not(:disabled) {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .composer-field {
+  border-radius: 0;
+  background: #e4dfc9;
+  box-shadow: none;
+}
+/* Les suggestions du chat sont des `.sg-chip` (SuggestionGrid), pas des `.btn`. */
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .suggestion-grid .sg-chip,
+:root[data-theme='nier-automata'][data-base='clair'] .suggestion-grid .sg-chip {
+  border: 1px solid rgba(78, 75, 66, 0.35);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .cosmic-outline .suggestion-grid .sg-chip:hover,
+:root[data-theme='nier-automata'][data-base='clair'] .suggestion-grid .sg-chip:hover {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+
+/* ---- 8. JAUGE DES QUOTAS ET ETIQUETTE « CONTEXTE » -------------------------------------------- */
+/* La jauge des quotas (ModelQuotaIndicator) : le degrade rouge -> vert GARDE son sens (restant),
+   mais en tons terre, eteints comme ceux du jeu. Les 4 couleurs sont lues aussi par la pastille. */
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-trigger {
+  --quota-rouge: #8a3a2e;
+  --quota-orange: #94683c;
+  --quota-jaune: #8a7f4a;
+  --quota-vert: #5c7350;
+  color: #57544a;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-bar {
+  border-radius: 0;
+  background: rgba(78, 75, 66, 0.16);
+}
+/* Pastille du nombre : un carre encre, chiffre papier. */
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-bar-value {
+  border: 1px solid #4e4b42;
+  border-radius: 0;
+  background: #4e4b42;
+  color: #dad4bb;
+}
+/* Le mot « contexte » au bout de la jauge : etiquette carree encre au lieu de la capsule noire. */
+:root[data-theme='nier-automata'][data-base='clair'] .chat-context-rule-libelle {
+  border-radius: 0;
+  background: #4e4b42;
+  color: #dad4bb;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+}
+
+/* ---- 9. WIDGET JARVIS : un terminal de Pod, papier et encre ------------------------------------- */
+/* Le widget pilote presque tout par `--jv-or` (HomeView.css) : le passer a l'encre suffit pour les
+   equerres et les bords ; fond, anneau et boutons sont repris ci-dessous. */
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis {
+  --jv-or: #4e4b42;
+  border: 1px solid rgba(78, 75, 66, 0.25);
+  border-top: 3px solid #4e4b42;
+  border-radius: 0;
+  background:
+    linear-gradient(rgba(78, 75, 66, 0.05) 1px, transparent 1px) 0 0 / 6px 6px,
+    #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+  scrollbar-color: rgba(78, 75, 66, 0.35) transparent;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__mute {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #dad4bb;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule:hover,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__bascule:focus-visible,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__mute:hover,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__mute:focus-visible,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis[data-ecoute='true'] .jarvis__bascule {
+  border-color: #4e4b42;
+  background: #4e4b42;
+  color: #dad4bb;
+}
+/* Sourdine active : le rouge d'alerte garde son sens, eteint comme la jauge des quotas. */
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__mute[aria-pressed='true'] {
+  border-color: #8a3a2e;
+  background: rgba(138, 58, 46, 0.12);
+  color: #8a3a2e;
+}
+/* L'anneau : traits d'encre, sans halo ; le disque central devient papier. */
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-graduations,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-arcs {
+  stroke: rgba(78, 75, 66, 0.45);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-ambre {
+  stroke: #4e4b42;
+  filter: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-etat {
+  stroke: rgba(78, 75, 66, 0.25);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-coeur {
+  fill: #dad4bb;
+  stroke: rgba(78, 75, 66, 0.5);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-texte > strong,
+:root[data-theme='nier-automata'][data-base='clair'] .jarvis__anneau-texte > span {
+  color: #4e4b42;
+  text-shadow: none;
+}
+
+/* ---- 10. LES AUTRES VUES (captures du 2026-10-19) ---------------------------------------------- */
+/* Onglets de vue (ViewTopBar, toutes les vues) : la pilule rose devient l'onglet en negatif. */
+:root[data-theme='nier-automata'][data-base='clair'] .domain-tabs button {
+  border-radius: 0;
+  box-shadow: none;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .domain-tabs button:hover {
+  border-color: rgba(78, 75, 66, 0.4);
+  background: rgba(78, 75, 66, 0.08);
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .domain-tabs button.is-active {
+  border-color: #4e4b42;
+  background: #4e4b42;
+  color: #dad4bb;
+}
+/* Boutons SANS classe (Worktrees, Bureaux caches, Tests...) : sinon le gris-blanc du systeme. */
+:root[data-theme='nier-automata'][data-base='clair'] button:not([class]),
+:root[data-theme='nier-automata'][data-base='clair'] .tests-run {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] button:not([class]):hover:not(:disabled),
+:root[data-theme='nier-automata'][data-base='clair'] .tests-run:hover:not(:disabled) {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+/* Observatory : les cartes de chiffres, blanches, deviennent papier a filet encre. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-metrics strong {
+  border: 1px solid rgba(78, 75, 66, 0.25);
+  border-top: 3px solid #4e4b42;
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+/* Etats (Task Manager, Agent Studio) : pastilles carrees, vert et rouge eteints. */
+:root[data-theme='nier-automata'][data-base='clair'] :is(.task-manager-health, .topology-state) {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .task-manager-health.is-error {
+  border-color: #8a3a2e;
+  color: #8a3a2e;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .topology-profiles {
+  border: 1px solid rgba(78, 75, 66, 0.25);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+}
+
+/* ---- 11. DERNIERE PASSE : Knowledge, Agent Studio, Task Manager, Tests, menu ------------------- */
+/* Knowledge : boutons noirs de l'atelier, pastille orange du compteur. */
+:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-workbench-button, .graph-refresh, .graph-settings-button) {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] :is(.graph-workbench-button, .graph-refresh, .graph-settings-button):hover:not(:disabled) {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .graph-workbench-badge {
+  border-radius: 0;
+  background: #4e4b42;
+  box-shadow: none;
+  color: #dad4bb;
+}
+/* Agent Studio : la lettre du fournisseur, violette, devient un carre encre. */
+:root[data-theme='nier-automata'][data-base='clair'] .topology-model-mark {
+  border: 0;
+  border-radius: 0;
+  background: #4e4b42;
+  box-shadow: none;
+  color: #dad4bb;
+}
+/* Task Manager : la pastille bleue du mode. */
+:root[data-theme='nier-automata'][data-base='clair'] .task-manager-mode {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  color: #4e4b42;
+}
+/* Tests : onglets Suites / Latence. */
+:root[data-theme='nier-automata'][data-base='clair'] .tests-tabs button {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-tabs button.is-active {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+/* Bouton « Mettre a jour » : la capsule et son bord degrade, en encre et carre. */
+:root[data-theme='nier-automata'][data-base='clair'] .rail-update-btn .thinking-capsule {
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+  --capsule-froid: #4e4b42;
+  --capsule-chaud: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .rail-update-btn .thinking-capsule::before {
+  border-radius: 0;
+  padding: 1px;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .rail-update-btn .rail-update-count {
+  border-radius: 0;
+  background: #4e4b42;
+  color: #dad4bb;
+}
+
+/* ---- 12. RETOURS UTILISATEUR (conv-286) -------------------------------------------------------- */
+/* Fenetre des quotas (clic sur « tokens restants ») : elle sortait blanche, « fait mal aux yeux ».
+   Papier fonce, filet encre en haut, coins carres, comme les autres fenetres du theme. */
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover {
+  border: 1px solid rgba(78, 75, 66, 0.35);
+  border-top: 3px solid #4e4b42;
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: 0 6px 18px rgba(78, 75, 66, 0.25);
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover :is(header, footer) {
+  background: #c4bfa6;
+  border-color: rgba(78, 75, 66, 0.25);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover :is(small, footer, header button, .model-quota-window > strong, .model-quota-values small, .model-quota-unavailable, .model-quota-reset-message) {
+  color: #57544a;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover :is(.model-quota-row, .model-quota-provider-chip, .model-quota-reset, .model-quota-resets) {
+  border-color: rgba(78, 75, 66, 0.25);
+  border-radius: 0;
+  background: transparent;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover .model-quota-provider-chip.is-active {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover .model-quota-meter {
+  border-radius: 0;
+  background: rgba(78, 75, 66, 0.16);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover .model-quota-meter i {
+  border-radius: 0;
+  background: #4e4b42;
+}
+
+/* Observatory : « trop de couleur ». Le jeu est monochrome : toute la vue passe en encre sur papier
+   (les couleurs restent distinguables en valeur, pas en teinte). */
+:root[data-theme='nier-automata'][data-base='clair'] :is(.knowledge-inbox, .task-manager-view, [data-testid='agent-studio-view'], .worktree-tab) {
+  filter: grayscale(1) sepia(0.32) contrast(1.35) brightness(0.88);
+}
+
+/* Spinner : l'atome trois couleurs devient le losange YoRHa du logo, qui tourne. */
+:root[data-theme='nier-automata'][data-base='clair'] .spinner {
+  border: 0;
+  transform: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 22 12 12 22 2 12Z' fill='none' stroke='%234e4b42' stroke-width='2'/%3E%3Crect x='9' y='9' width='6' height='6' fill='%234e4b42'/%3E%3C/svg%3E") center / contain no-repeat;
+  animation: nier-losange 4s linear infinite;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .spinner::before,
+:root[data-theme='nier-automata'][data-base='clair'] .spinner::after {
+  display: none;
+}
+@keyframes nier-losange {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Pastilles « Quota partagé » et badge du compte : carres, papier et encre. */
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover :is(.model-quota-scope, .router-account-chip, .router-account-tier) {
+  border: 1px solid rgba(78, 75, 66, 0.4);
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: none;
+  color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover .router-account-chip.is-active {
+  background: #4e4b42;
+  color: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover .router-account-chip.is-active .router-account-tier {
+  border-color: #dad4bb;
+  background: transparent;
+  color: #dad4bb;
+}
+/* Le spinner REEL de l'app est le composant <Spinner/> (.aw-atom, liste des fils, tours en cours) :
+   la regle `.spinner` plus haut ne couvrait que l'ancien atome CSS. Meme losange YoRHa, meme rotation. */
+:root[data-theme='nier-automata'][data-base='clair'] .aw-atom {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 22 12 12 22 2 12Z' fill='none' stroke='%234e4b42' stroke-width='2'/%3E%3Crect x='9' y='9' width='6' height='6' fill='%234e4b42'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: none;
+  box-shadow: none;
+  animation: nier-losange 4s linear infinite;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .aw-atom > *,
+:root[data-theme='nier-automata'][data-base='clair'] .aw-atom::before,
+:root[data-theme='nier-automata'][data-base='clair'] .aw-atom::after {
+  display: none;
+}
+/* Vue Tests : PAS de grisage global. Le vert pale des reussites devenait un gris illisible
+   (capture conv-286). Reussite = encre, echec = rouge eteint du theme, ignore = encre attenuee. */
+:root[data-theme='nier-automata'][data-base='clair'] .tests-summary .ok {
+  color: #4e4b42;
+  font-weight: 700;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-summary .ko {
+  color: #8a3a2e;
+  font-weight: 700;
+}
+:root[data-theme='nier-automata'][data-base='clair'] :is(.tests-summary .sk, .tests-summary .meta) {
+  color: #6e6a5d;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-barre {
+  border-radius: 0;
+  background: rgba(78, 75, 66, 0.16);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-barre-ok {
+  border-radius: 0;
+  background: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-barre-ko {
+  border-radius: 0;
+  background: repeating-linear-gradient(135deg, #8a3a2e 0 4px, #a5523f 4px 8px);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .tests-case.is-failed {
+  border-left: 3px solid #8a3a2e;
+  color: #8a3a2e;
+}
+
+/* Knowledge : le graphe CODE ses themes par couleur. En gris pur, pastilles et noeuds devenaient
+   identiques (capture conv-286). Teintes GARDEES mais eteintes, tirees vers le papier du jeu. */
+:root[data-theme='nier-automata'][data-base='clair'] .graph-observatory {
+  filter: saturate(0.45) sepia(0.25) brightness(0.94);
+}
+
+/* Gris trop clairs (capture conv-286) : ces textes ont des couleurs PASTEL ecrites en dur (une par
+   type d'evenement, or du jalon, couleurs de branche). Passees au gris, elles tombaient presque au
+   blanc sur le papier. On les remet en encre. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view :is(.observatory-event, .observatory-event p, .observatory-event p strong, .observatory-event b, .observatory-event span, .observatory-event small) {
+  color: #7a766a;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view :is(.observatory-turn > header, .observatory-turn > header *, .observatory-event-when small) {
+  color: #7a766a;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-turn > header::before {
+  border-color: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .worktree-tab .wt-st-ref {
+  border-color: #4e4b42;
+  border-radius: 0;
+  color: #3e3b34;
+  opacity: 1;
+}
+/* Les traits de branche du graphe Git : clairs une fois gris, on les fonce. */
+:root[data-theme='nier-automata'][data-base='clair'] .worktree-tab .wt-topologie-defilement svg {
+  filter: brightness(0.55) contrast(1.4);
+}
+/* Numero d'ordre des cartes de la chronologie (`<i>` de .observatory-event) : encre, pas gris pale. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-event > i {
+  color: #7a766a;
+  opacity: 1;
+}
+
+/* Observatory : retour au rendu d'avant (choix utilisateur conv-286), filtre doux sans contraste. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view {
+  /* Sepia franc (choix utilisateur) : moins blanc, ni rose ; brightness tire le papier vers le beige. */
+  filter: none;
+}
+/* Observatory = MEME code couleur que Settings (choix utilisateur conv-286) : aucun filtre, la palette
+   du theme telle quelle. Seules les couleurs ecrites en dur de la chronologie sont ramenees a l'encre :
+   zones (Sortant bleu, Reponse or, violet), barres et points par type d'evenement, axe or. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view {
+  --tl-line: rgba(78, 75, 66, 0.35);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-group[class] {
+  --zone-accent: #4e4b42;
+  border-radius: 0;
+  background: #d2ccb4;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-event-row[data-kind] {
+  --tl-dot: #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-event[class] {
+  border-color: rgba(78, 75, 66, 0.3);
+  border-radius: 0;
+  box-shadow: inset 3px 0 #4e4b42;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-event.is-error[class] {
+  box-shadow: inset 3px 0 #8a3a2e;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-event-row[data-kind='error'] {
+  --tl-dot: #8a3a2e;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view :is(.observatory-timeline, .observatory-turn, [class*='observatory-tl']) {
+  --tl-line: rgba(78, 75, 66, 0.35);
+}
+/* Axe vertical de la chronologie : trace par .observatory-turn::before (ObservatoryView.css),
+   couleur portee par --tl-line declaree SUR .observatory-turn (or). Pose directe en encre. */
+:root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-turn::before {
+  background: rgba(78, 75, 66, 0.55);
+}

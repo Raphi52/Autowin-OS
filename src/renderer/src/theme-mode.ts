@@ -67,6 +67,10 @@ export const THEMES: readonly Theme[] = [
   // terracotta, titres en serif. Couche generee par scripts/theme-nebuleuse-verre.mjs vanilla-claude,
   // plus la feuille ecrite a la main assets/theme-vanilla-claude.css.
   { id: 'vanilla-claude', libelle: 'Vanilla Claude', base: 'clair' },
+  // NieR:Automata (conv-281, 2026-10-19) : papier beige #dad4bb, encre brune #4e4b42, coins carres,
+  // selection en negatif. Couche generee par scripts/theme-nebuleuse-verre.mjs nier-automata,
+  // plus la feuille ecrite a la main assets/theme-nier-automata.css.
+  { id: 'nier-automata', libelle: 'NieR:Automata', base: 'clair' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },
