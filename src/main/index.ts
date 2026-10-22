@@ -3613,6 +3613,7 @@ Le fil reprend ensuite normalement.`
               conversationId,
               turnId: resultat.turnId,
               request: demande,
+              compteRendu: resultat.text,
               debut: debutPublication,
               // Un autre fil encore en cours n'a peut-être rien écrit au journal des fichiers.
               autresToursEnCours: () =>

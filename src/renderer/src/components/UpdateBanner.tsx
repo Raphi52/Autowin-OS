@@ -56,9 +56,18 @@ function nomDeFichier(chemin: string): string {
  * ou `auto(<run>): ` (chat-turn-publication.ts, run-autoclose.ts) pour être reconnaissables dans
  * l'historique git ; dans cette liste, ce préfixe n'apprend rien à qui lit — retiré à l'affichage
  * seulement, l'infobulle garde le sujet entier (demande du 2026-10-19, conv-1020).
+ * Depuis conv-1069, ces commits prennent le format du dépôt `type(zone): phrase (conv-N)`
+ * (titre-de-commit.ts) : le préfixe `type(zone):` et le suffixe `(conv-N)` / `(run-…)` sont retirés
+ * de la même façon, sinon la règle de conv-1020 ne cachait plus rien.
  */
 function sujetLisible(sujet: string): string {
-  return sujet.replace(/^auto\([^)]*\):\s*/, '') || sujet
+  return (
+    sujet
+      .replace(/^auto\([^)]*\):\s*/, '')
+      .replace(/^[a-z]+\([^)]*\)!?:\s*/, '')
+      .replace(/\s*\((?:conv|run)-[\w-]+\)\s*$/, '')
+      .trim() || sujet
+  )
 }
 
 /** Infobulle d'un commit : ce que la ligne compacte ne peut pas montrer (hash, date exacte, TOUS les fichiers lus). */

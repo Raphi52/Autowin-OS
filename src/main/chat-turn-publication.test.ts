@@ -121,9 +121,36 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(report?.brain).toBeUndefined()
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
     const subject = (await run('git', ['log', '-1', '--format=%s'], { cwd: repo })).stdout.trim()
-    expect(subject).toBe('auto(conv-A): ajoute la constante a')
+    // Titre `type(zone): phrase (conv-N)` (AGENTS.md, conv-1069) : zone = le fichier publié.
+    expect(subject).toBe('feat(mine): ajoute la constante a (conv-A)')
     // Le travail de l'autre fil est intact, toujours en attente.
     expect(await enAttente(repo)).toContain('base.txt')
+  })
+
+  it('titre le commit avec la 1re action de « ✅ Fait », pas la demande elliptique (conv-1069)', async () => {
+    // L'entrée qui ferait échouer ce test si la correction était fausse : la demande « vazy ».
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+
+    await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'vazy',
+      compteRendu:
+        '### ✅ Fait\n1. **Corrigé** la constante `a` qui manquait\n\n📍 Maintenant : vert',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ]
+    })
+
+    const subject = (await run('git', ['log', '-1', '--format=%s'], { cwd: repo })).stdout.trim()
+    expect(subject).toBe('fix(mine): Corrigé la constante a qui manquait (conv-A)')
   })
 
   it('laisse en attente un fichier sans preuve par lignes quand un autre fil y a touché pendant le tour', async () => {

@@ -1,3 +1,4 @@
+import { titreDeCommitAuto } from './titre-de-commit'
 import type { TypageAvantPublication } from './typage-avant-publication'
 
 /**
@@ -614,10 +615,17 @@ export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
   )
 }
 
-/** Message de commit : la tâche du run, bornée, préfixée pour être reconnaissable dans l'historique. */
+/**
+ * Message de commit : `type(zone): phrase (run-…)` tiré de la tâche du run (`titre-de-commit.ts`,
+ * conv-1069) ; une tâche qui ne nomme pas le travail garde l'ancien `auto(run-…): …`.
+ */
 function autoCloseMessage(task: string, runId: string): string {
-  const head = task.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail agent'
-  return `auto(${runId}): ${head}`
+  return titreDeCommitAuto({
+    id: runId,
+    demande: task,
+    zoneParDefaut: 'agent',
+    repli: 'travail agent'
+  })
 }
 
 /**

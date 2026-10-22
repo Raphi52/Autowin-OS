@@ -848,6 +848,8 @@ export class AutowinOS {
     conversationId: string
     turnId: string
     request: string
+    /** Texte final du tour : son « ✅ Fait » titre le commit (conv-1069). */
+    compteRendu?: string
     debut: ChatTurnStart
     /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
     autresToursEnCours?: () => readonly string[]

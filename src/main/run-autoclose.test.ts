@@ -276,6 +276,12 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
       expect(committed).toContain(mine)
       expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
     }
+    // conv-1069 : le commit fabriqué par la clôture (ici celui du Brain) suit `type(zone): phrase
+    // (run-…)` (`titre-de-commit.ts`). Entrée qui ferait échouer ce test si la correction était
+    // fausse : l'ancien titre `auto(run-77): ajoute deux fichiers`, rendu par le code d'avant.
+    expect((await realGit(['log', '-1', '--format=%s'], brain)).trim()).toBe(
+      'feat(agent): ajoute deux fichiers (run-77)'
+    )
   })
 
   /**
@@ -316,7 +322,11 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
 
     // Projet : seul le commit du run part ; le fichier de l'autre conversation n'est commité nulle part.
     expect(report.project).toMatchObject({ status: 'pushed', files: 1 })
-    expect(await realGit(['log', '--format=%s'], repo)).not.toMatch(/^auto\(/m)
+    // Aucun commit fabriqué par la clôture : ni l'ancien `auto(run-…)`, ni le titre tiré de la
+    // tâche (`titre-de-commit.ts`, conv-1069) — sans ce second motif, l'assertion passait à vide.
+    const sujets = await realGit(['log', '--format=%s'], repo)
+    expect(sujets).not.toMatch(/^auto\(/m)
+    expect(sujets).not.toMatch(/\(run-77\)$/m)
     expect(await realGit(['status', '--porcelain', '--', 'travail-d-une-autre-conv.ts'], repo)).toMatch(/^\?\?/)
     // Brain : la leçon du run part, la note de l'autre fil reste où elle est, non commitée.
     expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
