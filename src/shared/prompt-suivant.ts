@@ -75,6 +75,17 @@ export interface PropositionSuite {
 export const MAX_PROPOSITIONS = 3
 
 /**
+ * UN CHOIX, PAS UN REMPLISSAGE (conv-1087, 2026-10-22) : « il me propose à chaque fois un choix
+ * pertinent et les autres sont complètement useless ». Mesuré sur les 90 tours notés du 16 au
+ * 22/10 : la suite secondaire valait 45 en médiane, 25 points sous la meilleure — des à-côtés
+ * (vieille idée du fil, vérification de confort) que la consigne invitait à écrire « avec une note
+ * basse ». Une ALTERNATIVE notée sous ce plancher n'est donc plus montrée ; la consigne
+ * (`response-style.ts`) ancre la même échelle : 60-79 = un autre choix pertinent. La MIEUX notée,
+ * elle, reste toujours, même basse : c'est celle de Tab et du mode auto.
+ */
+export const NOTE_MIN_ALTERNATIVE = 60
+
+/**
  * La note se pose en TÊTE du message, entre crochets (`[85]`, `[85/100]`) ou en `85/100`. Pas de
  * forme nue « 85 » ni « 85 % » : un prompt qui commence par un nombre (« 3 fichiers à relire »,
  * « 100 % des tests… ») perdrait son début et gagnerait une note qu'il n'a jamais eue.
@@ -152,6 +163,8 @@ export function extrairePropositionsSuite(
   const propositions: PropositionSuite[] = []
   for (const { texte: suite, score } of gardees) {
     if (vues.has(suite)) continue
+    // Une ligne SANS note (ancien format) n'est pas jugée : elle garde l'ancien comportement.
+    if (propositions.length > 0 && score !== null && score < NOTE_MIN_ALTERNATIVE) continue
     vues.add(suite)
     propositions.push({ texte: suite, score })
     if (propositions.length === MAX_PROPOSITIONS) break
