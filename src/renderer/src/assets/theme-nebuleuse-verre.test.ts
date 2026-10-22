@@ -1481,6 +1481,21 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     expect(garder.background).toBe('var(--nv-pop-aplat)')
     expect(garder.background).not.toBe(danger.background)
   })
+
+  // conv-1078 (« le premier bouton doit etre en mode plein bleu et violet et celui du dessous avec
+  // liserai bleu et violet ») : sur la carte de suppression des fils, les deux boutons prennent le
+  // degrade du theme ; la carte du RUN garde son verre rouge (regle ci-dessus, non touchee).
+  it('carte de suppression des fils : « Supprimer » plein au degrade, « Garder » cerne d’un liseré du degrade', () => {
+    const plein = derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)
+    expect(plein.background).toContain('var(--nv-degrade)')
+    expect(plein.color).toBe('var(--on-accent)')
+    const garder = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel`)
+    expect(garder.background).toBe('transparent')
+    const lisere = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
+    expect(lisere.background).toBe('var(--nv-degrade)')
+    expect(lisere.padding).toBe('1px')
+    expect(lisere['-webkit-mask']).toContain('content-box')
+  })
 })
 
 /**
