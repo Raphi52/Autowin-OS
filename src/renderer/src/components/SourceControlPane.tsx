@@ -79,6 +79,8 @@ interface Exclusion {
     | 'typage-rouge'
   /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
   lignesNonReclamees?: number
+  /** Motif `touche-par-un-autre-fil` : les fils qui tiennent le fichier (conv-1083). */
+  fils?: string[]
   /** Motif `tests-rouges` : les fichiers de test en échec. */
   testsEnEchec?: string[]
   /** Motif `typage-rouge` : les premières erreurs nouvelles, `fichier: TSxxxx: message`. */
@@ -152,7 +154,10 @@ function libelleVerification(verification: Verification): string {
 
 /** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */
 function libelleExclusion(item: Exclusion): string {
-  const motif = MOTIFS_EXCLUSION[item.motif] ?? item.motif
+  // Le fil qui tient le fichier, nommé (conv-1083) : « touché aussi par conv-B ».
+  const motif = item.fils?.length
+    ? `touché aussi par ${item.fils.join(', ')}`
+    : (MOTIFS_EXCLUSION[item.motif] ?? item.motif)
   if (item.testsEnEchec?.length) return `${item.path} (${motif} : ${item.testsEnEchec.join(', ')})`
   if (item.erreursDeTypage?.length) return `${item.path} (${motif} : ${item.erreursDeTypage[0]})`
   const n = item.lignesNonReclamees

@@ -564,6 +564,8 @@ export interface AutoCloseReport {
       | 'typage-rouge'
     /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
     lignesNonReclamees?: number
+    /** Motif `touche-par-un-autre-fil` : les fils qui ont touché le fichier pendant le tour. */
+    fils?: string[]
     /** Motif `tests-rouges` : les fichiers de test en échec. */
     testsEnEchec?: string[]
     /** Motif `import-hors-commit` : les fichiers locaux importés qui ne partiraient pas avec lui. */

@@ -39,6 +39,19 @@ export interface Message {
 export interface SendOptions {
   /** Modèle exact choisi dans Agents. */
   model?: string
+  /**
+   * Modèle ADVISOR (Claude Code `--advisor`) : un modèle plus fort que l'agent consulte aux moments
+   * qui décident. Posé par l'étape (`phaseModel[étape].advisorModel`). Ne part que si l'accord avec
+   * `model` est dans la table de la doc (`claude-advisor.ts`) : hors table, le CLI tournerait sans
+   * advisor ou s'arrêterait au lancement, selon le cas.
+   */
+  advisorModel?: string
+  /**
+   * Le fil (conversation) au nom duquel cet appel ÉDITE des fichiers. Le hook des agents s'en sert
+   * pour réserver les fichiers édités et refuser ceux qu'un autre fil tient (conv-1083,
+   * `shared/reservation-fichiers.ts`). Un run le porte déjà dans `execution.agentEnv`.
+   */
+  conversationId?: string
   /** Plafond dur transmis au provider quand son transport sait l'appliquer avant la depense. */
   maxBudgetUsd?: number
   /** Surface d'outils imposee par le controleur pour les tours automatiques sensibles. */

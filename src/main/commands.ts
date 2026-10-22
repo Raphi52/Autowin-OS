@@ -5,6 +5,7 @@ import {
   editDiff,
   refusRacineSysteme
 } from './edit-file-command'
+import { refusCommitDeFichierReserve, refusReservationEdition } from './reservation-fichiers-app'
 import {
   decideCreateFile,
   decideDeleteFile,
@@ -238,6 +239,7 @@ import {
   saveConvRunTrace
 } from './runs/conv-runs'
 import { cheminDuLivrableDuRun, ecrireLivrableDuRun } from './runs/livrable-entier'
+import { mettreAJourPlanDuRun } from './runs/plan-en-vagues'
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import {
@@ -3494,6 +3496,9 @@ export class AppCommandBus {
                   }))
                 populateConvRunSections(runPath, livePhases)
               }
+              // Le plan du build découpé, relisible AVANT le code et suivi sous-tâche par sous-tâche
+              // (conv-1083). Sans découpage, aucune lecture du RUN.md.
+              if (runPath) mettreAJourPlanDuRun(runPath, steps)
               /*
                * LA TRACE SUR DISQUE SUIT LE RUN ÉTAPE PAR ÉTAPE (conv-1021, 2026-10-19).
                *
@@ -4322,6 +4327,13 @@ export class AppCommandBus {
         }
         const cwd = this.workspaceDuTour
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
+        // Même garde que le hook du CLI (conv-1083, objection du contrôle final) : un `git commit`
+        // qui emporterait le fichier non commité qu'un AUTRE fil tient est refusé, en le nommant.
+        // Sans fil (appel IPC direct), personne n'est au nom de qui réserver : rien n'est vérifié.
+        if (conversationId) {
+          const refusCommit = refusCommitDeFichierReserve(conversationId, shell, cwd)
+          if (refusCommit) return { lance: false, detail: `Commande refusée : ${refusCommit}` }
+        }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
         // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
         // Le Stop de l'utilisateur doit atteindre CE process : une commande qui ne rend jamais la
@@ -5953,6 +5965,15 @@ export class AppCommandBus {
       const baseDecision = decideEdit(input, this.workspaceDuTour, (absolutePath) =>
         existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
       )
+      /*
+       * RÉSERVATION DES FICHIERS ENTRE FILS (conv-1083) : le même registre que le hook des agents
+       * Claude, consulté AVANT la bifurcation dépôt d'Autowin / autre dépôt, pour tout modèle IA.
+       * Un fichier qu'un autre fil a modifié et pas encore commité est refusé en nommant ce fil.
+       */
+      if (baseDecision.allowed && conversationId) {
+        const refusReserve = refusReservationEdition(conversationId, baseDecision.absolutePath)
+        if (refusReserve) return { allowed: false, reason: refusReserve }
+      }
       /*
        * CIBLE DANS UN AUTRE DEPOT — ecriture DIRECTE, sans bureau isole ni verification vitest.
        *

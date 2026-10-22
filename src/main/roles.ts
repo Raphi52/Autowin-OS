@@ -34,18 +34,34 @@ export interface RoleBinding {
    * vit dans la topology (`AgentTopology.panels`) → `AutowinOS.fanOut`/`setFanOut` → deps orchestrateur
    * `phaseFanOut`/`judgeFanOut`. `phaseModel` n'est PAS consommé par le fan-out topology.
    */
-  phaseModel?: Partial<Record<PipelinePhase, { model?: string; reasoningEffort?: ReasoningEffort }>>
+  phaseModel?: Partial<
+    Record<
+      PipelinePhase,
+      {
+        model?: string
+        reasoningEffort?: ReasoningEffort
+        /**
+         * Modèle ADVISOR de l'étape (Claude Code `--advisor`, conv-1083) : par exemple build sur
+         * Sonnet avec Opus en renfort aux moments qui décident. Absent = pas d'advisor (défaut).
+         * Ne part que sur un accord accepté par le CLI (`providers/claude-advisor.ts`).
+         */
+        advisorModel?: string
+      }
+    >
+  >
 }
 
 /** Résout le (modèle, effort) EFFECTIF d'une phase pour un binding (override phase → défaut binding). */
 export function resolvePhaseBinding(
   binding: RoleBinding,
   phase: NodePhase
-): { model?: string; reasoningEffort?: ReasoningEffort } {
+): { model?: string; reasoningEffort?: ReasoningEffort; advisorModel?: string } {
   const override = binding.phaseModel?.[phase as PipelinePhase]
   return {
     model: override?.model ?? binding.model,
-    reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort
+    reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort,
+    // L'advisor est PAR ÉTAPE seulement : il n'hérite d'aucun réglage du rôle (conv-1083).
+    ...(override?.advisorModel ? { advisorModel: override.advisorModel } : {})
   }
 }
 

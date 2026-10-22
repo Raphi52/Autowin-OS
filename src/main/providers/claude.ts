@@ -78,6 +78,8 @@ import {
   etapesSurDisque
 } from './claude-etapes'
 import { abortFailure } from './abort-diagnostic'
+import { advisorAccepte } from './claude-advisor'
+import { cheminRegistreReservations } from '../reservation-fichiers-app'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
   describeExitCode,
@@ -855,6 +857,13 @@ const EFFORTS_CLI_CLAUDE = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 /** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
 export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
   if (opts.model) args.push('--model', opts.model)
+  // ADVISOR (conv-1083) : seulement sur un accord de la table de la doc. Hors table, le CLI tourne
+  // sans advisor (advisor classé sous le principal) ou s'arrête au lancement (Haiku 4.5 comme
+  // advisor, entre autres) — un cas de chaque mesuré sur 2.1.308, `claude-advisor.ts`. Ici il ne
+  // part pas, et l'orchestrateur dit pourquoi dans le run.
+  if (opts.advisorModel && advisorAccepte(opts.model, opts.advisorModel).accepte) {
+    args.push('--advisor', opts.advisorModel)
+  }
   if (Number.isFinite(opts.maxBudgetUsd) && (opts.maxBudgetUsd as number) > 0) {
     args.push('--max-budget-usd', String(opts.maxBudgetUsd))
   }
@@ -1021,6 +1030,21 @@ export function dossierModAutowin(
  * vérifiée « from settings » par `/autocompact` (claude.compaction-fenetre.test.ts).
  */
 export const FENETRE_COMPACTION_CLI = 300_000
+
+/**
+ * Ce que le hook des agents lit à côté de son script pour la RÉSERVATION DES FICHIERS (conv-1083) :
+ * le fil qui écrit, et le registre unique partagé par tous les agents. Fil du chat
+ * (`conversationId`), sinon celui du run (`AUTOWIN_CONVERSATION_ID`). Sans fil connu, rien : le hook
+ * ne réserve ni ne refuse aucun fichier.
+ */
+export function confReservationFichiers(
+  opts: SendOptions,
+  racineDonnees: string
+): { fil: string; registre: string } | undefined {
+  const fil =
+    opts.conversationId?.trim() || opts.execution?.agentEnv?.AUTOWIN_CONVERSATION_ID?.trim()
+  return fil ? { fil, registre: cheminRegistreReservations(racineDonnees) } : undefined
+}
 
 export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
@@ -1624,6 +1648,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         'utf8'
       )
       args.push('--settings', settingsFile)
+      // RÉSERVATION DES FICHIERS (conv-1083) : le fil qui écrit, lu par le hook à côté de son script.
+      // Son propre filet : un échec ici ne doit pas retirer les autres gardes du lancement.
+      const reservation = confReservationFichiers(opts, autowinAppDataRoot())
+      if (reservation) {
+        try {
+          await writeFileAsync(
+            join(settingsDir, 'reservation.json'),
+            JSON.stringify(reservation),
+            'utf8'
+          )
+        } catch {
+          // Sans ce fichier, le hook ne réserve rien pour ce lancement : comportement d'avant.
+        }
+      }
     } catch {
       // Impossible d'ecrire : on garde le comportement d'origine (sans ces reglages), mais le
       // dossier deja cree ne reste pas derriere (audit conv-1040, `claude.prompt-systeme.test.ts`).

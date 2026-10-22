@@ -577,6 +577,24 @@ describe("Orchestrator — l'issue de décomposition est OBSERVABLE, pas seuleme
     expect(decomposeSteps[0].detail).toContain('atomique')
   })
 
+  it('un plan ADMIS voyage sur l’étape de découpage, avec ses dépendances (RUN.md, conv-1083)', async () => {
+    const provider = new GreedyProvider()
+    const steps: OrchestrationStep[] = []
+    const nodes: GreedyTaskNode[] = [
+      { id: 'A', deps: [], prompt: 'fais A\nle détail ne monte pas dans le plan' },
+      { id: 'B', deps: ['A'], prompt: 'fais B' }
+    ]
+    await makeGreedy(provider, decomposerReporting({ kind: 'plan', nodes }), () => ['build']).run(
+      'répare le module',
+      (s) => steps.push(s)
+    )
+    const decoupage = steps.find((s) => s.role === 'decompose')
+    expect(decoupage?.plan).toEqual([
+      { id: 'A', consigne: 'fais A', deps: [] },
+      { id: 'B', consigne: 'fais B', deps: ['A'] }
+    ])
+  })
+
   it('un décomposeur historique à 2 paramètres reste accepté (rétrocompat du contrat)', async () => {
     const provider = new GreedyProvider()
     const steps: OrchestrationStep[] = []

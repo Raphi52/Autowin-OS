@@ -279,7 +279,9 @@ describe('SourceControlPane (prompt-first)', () => {
             { path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' },
             // Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que rien le dise.
             { path: 'src/b.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 2 },
-            { path: 'src/c.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 }
+            { path: 'src/c.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 },
+            // conv-1083 : le fil qui tient le fichier est nommé, quand la publication le connaît.
+            { path: 'src/d.ts', motif: 'touche-par-un-autre-fil', fils: ['conv-1038'] }
           ]
         }
       })
@@ -293,7 +295,8 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
       'Laissé en attente · src/partage.ts (touché aussi par un autre fil), ' +
         'src/b.ts (déjà modifié avant le tour, 2 lignes non réclamées), ' +
-        'src/c.ts (déjà modifié avant le tour, 1 ligne non réclamée)'
+        'src/c.ts (déjà modifié avant le tour, 1 ligne non réclamée), ' +
+        'src/d.ts (touché aussi par conv-1038)'
     )
     const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
     expect(toggle.title).toContain('chaque tour de chat')
