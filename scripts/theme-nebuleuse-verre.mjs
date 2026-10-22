@@ -588,9 +588,32 @@ const COMPLEMENT_CLAIR = `
   background: transparent;
   color: #000000;
 }
-/* Fond UNI (« Le plus blanc ») : le decor de fond ressortait en formes grises sur l'Accueil. */
-:root[data-theme='${CLAIR_ID}'] .decor-de-fond {
-  display: none;
+/* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (conv-1076, 2026-10-22 : « dans le theme holographique
+   blanc faut aussi le fond d'accueil cyberpunk »). Il etait cache ici depuis le « Le plus blanc »
+   (0e753829, 2026-10-11) : sous le voile ivoire de la base claire (theme-modes.css,
+   \`[data-base='clair'] .decor-de-fond::after\`, blanc a 86-90 %), l'avenue ne ressortait qu'en formes
+   grises. Le decor reste donc AFFICHE, et le voile part : l'avenue garde ses neons, comme en
+   Holographique noir. Le menu Fond de l'Accueil s'applique ici aussi ; « Noir » y reste l'aplat
+   blanc #fdfdff de la couche generee, donc le fond uni reste a un clic. */
+:root[data-theme='${CLAIR_ID}'] .decor-de-fond::after {
+  content: none;
+}
+/* Les ETIQUETTES des tuiles (titre, filet, compteur, « Actualiser ») sont posees a meme le decor,
+   hors des panneaux : l'encre foncee du blanc y disparaissait sur l'avenue sombre (capture conv-1076).
+   Elles reprennent donc l'encre CLAIRE d'Holographique noir tant qu'un decor est affiche ; sur
+   l'aplat « Noir » (blanc ici), \`data-fond='noir'\` les laisse foncees. Le decor est le frere qui
+   PRECEDE le contenu dans \`.shell\` (App.tsx), d'ou le \`~\` plutot qu'un \`:has\` sur la racine. */
+:root[data-theme='${CLAIR_ID}'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label {
+  --text: #ece8f7;
+  --text-dim: #b9b2d4;
+  --line: rgba(255, 255, 255, 0.18);
+  --line-strong: rgba(255, 255, 255, 0.3);
+}
+:root[data-theme='${CLAIR_ID}'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label h2 {
+  color: color-mix(in srgb, var(--nv-neon-a) 30%, #ffffff);
+}
+:root[data-theme='${CLAIR_ID}'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__action {
+  background: rgba(255, 255, 255, 0.045);
 }
 /* CAPSULE D'ACTIONS (« 1 action terminee », conv-212 : « pas ouf »). Le noir la peint par sa couche
    generee : trait vif a gauche, teinte d'etat qui s'efface vers la droite. La base claire commune
