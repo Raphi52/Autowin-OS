@@ -3,6 +3,7 @@ import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
 import { abonnerFondAccueil, DECOR_DEFAUT, FOND_NOIR, lireFondAccueil } from './fond-accueil'
 import { createDecorScene, type DecorScene, type DecorVariant } from './home-decor-scene'
+import { signalerSceneSousLaBarre } from '../theme-mode'
 
 /**
  * LE DECOR 3D, FOND DE TOUTE L'APPLICATION.
@@ -76,6 +77,17 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
     actifRef.current = actif
     if (actif) decorRef.current?.reprendre()
   }, [actif])
+
+  /*
+   * LES BOUTONS DE FENETRE suivent ce qui est sous eux (conv-1076) : une scene affichee sur
+   * l'Accueil les eclaircit dans un theme clair ; une autre vue, « Aucun » ou le decor demonte les
+   * rend au theme. Voir `signalerSceneSousLaBarre` dans theme-mode.ts.
+   */
+  const sceneAffichee = actif && variante !== FOND_NOIR
+  useEffect(() => {
+    signalerSceneSousLaBarre(sceneAffichee)
+    return () => signalerSceneSousLaBarre(false)
+  }, [sceneAffichee])
 
   useEffect(() => {
     const host = hostRef.current

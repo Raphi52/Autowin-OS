@@ -166,6 +166,30 @@ function accorderSchemaDeCouleurs(base: ThemeBase): void {
   })
 }
 
+/** Symboles des boutons de fenetre poses sur une scene sombre (ville, planetes) : clairs. */
+export const SYMBOLE_SUR_SCENE = '#e6e9f2'
+
+/** Vrai tant qu'une scene du fond de l'Accueil est affichee, donc sous les boutons de fenetre. */
+let sceneSousLaBarre = false
+
+/**
+ * Appele par `DecorDeFond` : une scene de l'Accueil (Cyberpunk, Planetes) vient d'apparaitre sous
+ * la barre, ou de disparaitre (autre vue, fond « Aucun », decor demonte).
+ *
+ * Sans ce signal, la couleur des boutons n'etait recalculee qu'au changement de THEME : changer de
+ * vue ou de fond ne la touchait pas (conv-1076). Rien n'est envoye si l'etat ne change pas.
+ */
+export function signalerSceneSousLaBarre(affichee: boolean): void {
+  if (affichee === sceneSousLaBarre) return
+  sceneSousLaBarre = affichee
+  const racine = globalThis.document?.documentElement
+  if (!racine) return
+  accorderBoutonsDeFenetre(
+    racine,
+    racine.getAttribute('data-base') === 'clair' ? 'clair' : 'sombre'
+  )
+}
+
 /**
  * LES BOUTONS DE FENETRE — reduire / agrandir / fermer — ne sont PAS dessines par la page : c'est
  * Windows qui les peint, d'apres une couleur fixee a la creation de la fenetre. Aucune feuille de
@@ -182,6 +206,17 @@ function accorderSchemaDeCouleurs(base: ThemeBase): void {
 function accorderBoutonsDeFenetre(racine: Element, base: ThemeBase): void {
   const pont = (globalThis as { api?: { setTitlebarSymbolColor?: (c: string) => unknown } }).api
   if (!pont?.setTitlebarSymbolColor) return
+  /*
+   * UNE SCENE DE L'ACCUEIL SOUS LA BARRE, theme clair : symboles clairs (conv-1076, 2026-10-22).
+   * Depuis que le menu « Fond » de l'Accueil fait foi sous tous les themes, un theme clair affiche
+   * la ville ou les planetes, sombres, juste sous ces boutons : ses symboles fonces, faits pour la
+   * page claire des autres vues, s'y perdaient. Demande : « rends les boutons clairs dans les themes
+   * clairs, et laisse-les fonces sur les autres vues ». Les themes sombres gardent leur jeton.
+   */
+  if (base === 'clair' && sceneSousLaBarre) {
+    void pont.setTitlebarSymbolColor(SYMBOLE_SUR_SCENE)
+    return
+  }
   try {
     const styles = globalThis.getComputedStyle?.(racine)
     /*
@@ -198,7 +233,8 @@ function accorderBoutonsDeFenetre(racine: Element, base: ThemeBase): void {
      */
     const declaree = styles?.getPropertyValue('--titlebar-symbol').trim() ?? ''
     // Repli si le theme n'a pas declare le jeton : clair au-dessus du decor sombre, `--text` sinon.
-    const repli = base === 'clair' ? '#e6e9f2' : (styles?.getPropertyValue('--text').trim() ?? '')
+    const repli =
+      base === 'clair' ? SYMBOLE_SUR_SCENE : (styles?.getPropertyValue('--text').trim() ?? '')
     const couleur = enHexadecimal(declaree) ?? enHexadecimal(repli)
     if (couleur) void pont.setTitlebarSymbolColor(couleur)
   } catch {
