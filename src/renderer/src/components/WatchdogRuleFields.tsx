@@ -115,8 +115,9 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                 onChange={(event) =>
                   onChange({
                     ...rule,
+                    // `...source` garde le fil surveillé posé par `task_create` (conv-1069).
                     source: {
-                      kind: 'app-event',
+                      ...source,
                       events: event.target.checked
                         ? [...source.events, entry.value]
                         : source.events.filter((value) => value !== entry.value)

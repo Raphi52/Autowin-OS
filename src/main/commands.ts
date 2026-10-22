@@ -1408,7 +1408,7 @@ export const CATALOG: CommandSpec[] = [
       `Le "prompt" part SEUL dans la conversation, sans le fil : rédige-le sur ce modèle, un bloc par ligne — ${MODELE_PROMPT_TACHE_COURT}. Ni limite de temps, ni « boucle jusqu’au vert » ; pour une surveillance, l’app ajoute elle-même l’événement et la ligne ISSUE.`,
     args: {
       task:
-        'objet JSON de la tâche, même forme que l’écran Task Manager : { "title", "prompt", "enabled": true|false, "mode": "active-only"|"windows", "destination": { "kind": "existing", "conversationId" } ou { "kind": "new", "title", "category", "provider" }, "action"?: "chat"|"veille", et SOIT "schedule": { "startDate": "AAAA-MM-JJ", "time": "HH:MM", "timeZone": "Europe/Paris", "recurrence": { "unit": "none"|"minute"|"hour"|"day"|"week"|"month", "interval": 1 } } (recurrence obligatoire ; "none" = une seule fois) SOIT "watchdog": { "source", "guards", "action" } }'
+        'objet JSON de la tâche, même forme que l’écran Task Manager : { "title", "prompt", "enabled": true|false, "mode": "active-only"|"windows", "destination": { "kind": "existing", "conversationId" } ou { "kind": "new", "title", "category", "provider" }, "action"?: "chat"|"veille", et SOIT "schedule": { "startDate": "AAAA-MM-JJ", "time": "HH:MM", "timeZone": "Europe/Paris", "recurrence": { "unit": "none"|"minute"|"hour"|"day"|"week"|"month", "interval": 1 } } (recurrence obligatoire ; "none" = une seule fois) SOIT "watchdog": { "source", "guards", "action" } }. Attendre la fin d’un tour d’un autre fil (au lieu de le sonder) : "source": { "kind": "app-event", "events": ["chat-turn-done"], "conversationId": "conv-N" }'
     },
     annotations: {
       readOnlyHint: false,

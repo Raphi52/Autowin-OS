@@ -130,6 +130,8 @@ import {
   signatureTour,
   DELAI_SONDAGE_FICHIER,
   DUREE_MAX_SONDAGE_FICHIER,
+  DELAI_SONDAGE_FIL,
+  DUREE_MAX_SONDAGE_FIL
 } from './chat-auto-mode'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
@@ -4658,8 +4660,14 @@ export function ChatView({
    */
   function programmerRelanceAuto(
     id: string,
-    decision: { texte: string; signature: string; echeance: number; fichier?: string },
-    /** Re-sondage gratuit d'un fichier attendu : ne consomme PAS une relance payée. */
+    decision: {
+      texte: string
+      signature: string
+      echeance: number
+      fichier?: string
+      filAttendu?: string
+    },
+    /** Re-sondage gratuit d'un fichier ou d'un fil attendu : ne consomme PAS une relance payée. */
     sondeDepuis?: number
   ): void {
     annulerRelanceProgrammee(id)
@@ -4677,6 +4685,44 @@ export function ChatView({
             ? messagesAfficheAutoRef.current
             : (liveMessagesRef.current.get(id) ?? [])
         if (signatureTour(fil) !== decision.signature) return
+        // fix-ok: conv-1069 — « quand le tour de conv-N est terminé » n'était pas une suite différée
+        // (`suiteEstDifferee` rendait false sur ef5762bf) : elle partait aussitôt et payait un tour.
+        if (decision.filAttendu) {
+          /*
+           * « quand le tour de conv-N est terminé » (conv-1069) : l'état du fil est demandé au
+           * processus principal, gratuitement, AVANT de payer un tour. SEUL `active === false`
+           * envoie : une réponse inconnue ne prouve rien. Mesuré sur conv-1065 : 2 tours payés pour
+           * lire « pas terminé », fin vue 51 min en retard.
+           */
+          const filAttendu = decision.filAttendu
+          const sonde = window.api.pilotChatActive
+          if (!sonde) {
+            setAppNotice({
+              text: `Mode auto : je ne peux pas vérifier si le tour de ${filAttendu} est terminé (vérificateur indisponible — redémarre l'app). La suite attend.`
+            })
+            return
+          }
+          void Promise.resolve(sonde(filAttendu))
+            .catch(() => undefined)
+            .then((etatDuFil) => {
+              if (etatDuFil?.active === false) return envoyer()
+              if (etatDuFil?.active !== true)
+                console.warn('[mode-auto] vérification de fil sans réponse', filAttendu, etatDuFil)
+              const debut = sondeDepuis ?? Date.now()
+              if (Date.now() - debut >= DUREE_MAX_SONDAGE_FIL) {
+                setAppNotice({
+                  text: `Mode auto : le tour de ${filAttendu} n'est toujours pas terminé après ${Math.round(DUREE_MAX_SONDAGE_FIL / 3_600_000)} h. J'arrête d'attendre — relance la suite quand tu veux.`
+                })
+                return
+              }
+              programmerRelanceAuto(
+                id,
+                { ...decision, echeance: Date.now() + DELAI_SONDAGE_FIL },
+                debut
+              )
+            })
+          return
+        }
         // fix-ok: la relance « quand X existe » payait un tour même fichier absent (sendAutoRef appelé sans sonde) — on sonde fs:exists avant.
         if (decision.fichier && !window.api.fichierExiste) {
           // Sans vérificateur, « existe » est invérifiable : payer un tour pour le constater est le
@@ -4837,7 +4883,9 @@ export function ChatView({
       setAppNotice({
         text: decision.fichier
           ? `Mode auto : la suite proposée attend ${decision.fichier}. Je vérifie toutes les 5 min, sans frais, et je la relance seul dès qu'il existe (éteins ∞ ou écris un message pour annuler).`
-          : `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
+          : decision.filAttendu
+            ? `Mode auto : la suite proposée attend la fin du tour de ${decision.filAttendu}. Je vérifie chaque minute, sans frais, et je la relance seul dès qu'il est terminé (éteins ∞ ou écris un message pour annuler).`
+            : `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
       })
       return
     }

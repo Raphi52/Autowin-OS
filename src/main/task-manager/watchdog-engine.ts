@@ -269,6 +269,8 @@ export class WatchdogEngine {
         !source.events.includes(event)
       )
         continue
+      // Fil surveillé (conv-1069) : l'événement d'un AUTRE fil ne concerne pas cette règle.
+      if (source.conversationId && source.conversationId !== sourceConversationId) continue
       const destinationConversationId = task.destination.conversationId
       if (
         sourceConversationId &&

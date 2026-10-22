@@ -646,6 +646,8 @@ export type DecisionAuto =
       echeance: number
       /** « quand fin.txt existe » : sondé (lecture seule) avant d'envoyer le tour. */
       fichier?: string
+      /** « quand le tour de conv-N est terminé » : son état est sondé, gratuitement, avant le tour. */
+      filAttendu?: string
     }
   | { action: 'attendre'; raison: RaisonArret }
   | { action: 'arreter'; raison: RaisonArret; message: string }
@@ -804,9 +806,36 @@ export function fichierAttenduSuiteDifferee(
   return m ? m[1] : null
 }
 
+/**
+ * LE FIL ATTENDU d'une suite « quand le tour de conv-N est terminé » (conv-1069). Mesuré sur
+ * conv-1065 : la question « conv-N a-t-il fini ? » est partie 5 fois, dont 2 tours PAYÉS pour lire
+ * « pas terminé », et la fin a été vue 51 min en retard. Le mode auto sonde désormais l'état du fil
+ * — lecture gratuite (`pilotChatActive`, l'autorité du processus principal) — avant de payer un tour.
+ * `null` = aucune condition de fin de fil lisible. `\b` ignore « é » : la fin est bornée par une lettre.
+ */
+const FIL_ATTENDU = new RegExp(
+  [
+    String.raw`\b(?:quand|d[eè]s\s+que|lorsque)\b[^\n]{0,60}?\b(conv-\d+)\b[^\n]{0,40}?\b(?:est|sera|a|aura)\s+(?:fini|termin[ée]e?|achev[ée]e?|clos)(?![\p{L}])`,
+    String.raw`(?:^|[\s(])[àa]\s+la\s+fin\s+(?:du\s+tour\s+)?de\s+(conv-\d+)\b`
+  ].join('|'),
+  'iu'
+)
+export const DELAI_SONDAGE_FIL = MINUTE
+export const DUREE_MAX_SONDAGE_FIL = 24 * 60 * MINUTE
+
+export function filAttenduSuiteDifferee(
+  suite: string,
+  recommandation: string | null
+): string | null {
+  const m = FIL_ATTENDU.exec(`${suite}\n${recommandation ?? ''}`)
+  return m ? (m[1] ?? m[2] ?? null) : null
+}
+
 export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
   return (
-    SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
+    SUITE_DIFFEREE.test(suite) ||
+    (recommandation !== null && SUITE_DIFFEREE.test(recommandation)) ||
+    filAttenduSuiteDifferee(suite, recommandation) !== null
   )
 }
 
@@ -1081,15 +1110,20 @@ ${suite}`
    */
   if (differee) {
     const fichier = fichierAttenduSuiteDifferee(suite, recommandationDifferee)
+    const filAttendu = fichier ? null : filAttenduSuiteDifferee(suite, recommandationDifferee)
+    const maintenant = entree.maintenant ?? Date.now()
     return {
       action: 'programmer',
       texte,
       signature,
-      // Chemin lisible : la première vérification est une sonde gratuite, donc on regarde tôt.
+      // Chemin ou fil lisible : la première vérification est une sonde gratuite, donc on regarde tôt.
       echeance: fichier
-        ? (entree.maintenant ?? Date.now()) + DELAI_SONDAGE_FICHIER
-        : echeanceSuiteDifferee(suite, recommandationDifferee, entree.maintenant ?? Date.now()),
-      ...(fichier ? { fichier } : {})
+        ? maintenant + DELAI_SONDAGE_FICHIER
+        : filAttendu
+          ? maintenant + DELAI_SONDAGE_FIL
+          : echeanceSuiteDifferee(suite, recommandationDifferee, maintenant),
+      ...(fichier ? { fichier } : {}),
+      ...(filAttendu ? { filAttendu } : {})
     }
   }
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
