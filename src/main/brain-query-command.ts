@@ -110,8 +110,17 @@ const CAUSES_INDISPONIBLE: Record<BrainUnavailableReason, string> = {
   'challenge-refused':
     'cause exacte : le serveur est vivant mais a refuse d’ouvrir la session (GET /challenge non-ok)',
   'query-refused':
-    'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok : jeton rejete ou index degrade)',
-  network: 'cause exacte : rien n’a repondu (serveur arrete, delai depasse ou reseau)',
+    'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok hors 503 : jeton rejete ou requete invalide)',
+  // conv-1053 (2026-10-22) : 503 = le serveur, sain, revérifie ou attend la reconstruction de son
+  // index après une modification du savoir ; il refuse de servir tant qu'il ne l'a pas prouvé à jour.
+  reindexing:
+    'cause exacte : le serveur Brain est vivant mais revérifie son index apres une modification du ' +
+    'savoir (POST /query-secure -> 503). C’est TRANSITOIRE : ne rien reparer, rejouer la question dans ' +
+    'quelques minutes ; si le refus dure plus de 10 minutes, `npm run brain:doctor` dit pourquoi',
+  timeout:
+    'cause exacte : le delai de la requete a expire avant la reponse - le serveur repondait peut-etre, ' +
+    'trop lentement',
+  network: 'cause exacte : rien n’a repondu (serveur arrete, port ferme ou reseau)',
   'test-mode':
     'neutralisation sous test : ce n’est PAS une panne reelle, aucune reparation n’est attendue ici',
   'foreign-signature':
@@ -129,7 +138,9 @@ const PANNE_GENERIQUE =
   "qu'apres avoir dit ce que tu as essaye."
 
 function noteIndisponible(reason?: BrainUnavailableReason): string {
-  if (reason === 'test-mode') return CAUSES_INDISPONIBLE['test-mode']
+  // Ni une neutralisation de test ni une revérification d'index ne sont des pannes : la consigne
+  // « diagnostique et répare » ferait dépenser une session sur un serveur sain (conv-4, 2026-10-03).
+  if (reason === 'test-mode' || reason === 'reindexing') return CAUSES_INDISPONIBLE[reason]
   if (!reason) return PANNE_GENERIQUE
   return `${CAUSES_INDISPONIBLE[reason]}. ${PANNE_GENERIQUE}`
 }

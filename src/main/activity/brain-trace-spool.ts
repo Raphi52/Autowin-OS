@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { ensureAutowinAppData } from '../app-data'
 import { redactTrace } from './trace-redact'
-import type { BrainNavigation } from '../brain-retrieval'
+import type { BrainNavigation, BrainUnavailableReason } from '../brain-retrieval'
 
 /**
  * SPOOL DE TRACES BRAIN (observabilité Observatory) — Autowin enregistre, par run, ce que le Brain
@@ -134,6 +134,14 @@ export interface BrainTrace {
   query: string
   found?: boolean
   status?: 'found' | 'empty' | 'invalid' | 'unavailable'
+  /**
+   * POURQUOI `unavailable`, et combien de temps l'appel a pris — conv-1053 (2026-10-22). Sans eux,
+   * départager un délai dépassé d'un refus du serveur a demandé de recouper chaque trace avec
+   * l'heure de début de son tour. Absents sur les traces historiques et sur les points qui ne les
+   * renseignent pas encore.
+   */
+  unavailableReason?: BrainUnavailableReason
+  durationMs?: number
   injectedChars: number
   navigation?: BrainNavigation
 }

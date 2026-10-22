@@ -147,6 +147,27 @@ describe('createBrainTitresDuTour — le branchement du tour de chat', () => {
     expect(traces[0]).toMatchObject({ found: false, status: 'unavailable', injectedChars: 0 })
   })
 
+  // conv-1053 (2026-10-22) : la trace ne disait que « unavailable ». Départager un délai dépassé
+  // d'un refus du serveur a demandé de recouper chaque trace avec l'heure de début de son tour.
+  it('une indisponibilité trace son motif exact et la durée de l’appel', async () => {
+    const { titres, traces } = monter(async () => ({
+      context: '',
+      status: 'unavailable',
+      unavailableReason: 'reindexing'
+    }))
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toBe('')
+    expect(traces[0]).toMatchObject({ status: 'unavailable', unavailableReason: 'reindexing' })
+    expect(typeof traces[0].durationMs).toBe('number')
+    expect(traces[0].durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('une réussite trace sa durée, sans motif d’indisponibilité', async () => {
+    const { titres, traces } = monter(async () => resultat([candidat(1, 0.62)]))
+    await titres(QUESTION, { conversationId: 'conv-1' })
+    expect(typeof traces[0].durationMs).toBe('number')
+    expect(traces[0]).not.toHaveProperty('unavailableReason')
+  })
+
   it('un dossier sans corpus Brain autorisé n’interroge rien (même fermeture que brain_query)', async () => {
     vi.stubEnv('AUTOWIN_BRAIN_CORPUS', ',')
     const { titres, appels } = monter(async () => resultat([candidat(1, 0.9)]))

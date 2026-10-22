@@ -7,6 +7,7 @@ import re
 import stat
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 
 
@@ -249,6 +250,39 @@ def _candidate_title(hit: dict, note: Path) -> str:
     return note.stem
 
 
+# VÉRIFICATIONS DISQUE EN PARALLÈLE (conv-1053, 2026-10-22). Le chat demande la liste de candidates
+# à CHAQUE tour avec un délai de 1,5 s (`TITRES_DELAI_MS`, src/main/brain-titres-du-tour.ts), et un
+# tour sur trois rendait « unavailable ». Mesure sur le serveur vivant : /query-secure en mode
+# candidates prenait 0,87 à 1,56 s (médiane 1,27 s, 3 appels sur 20 au-delà de 1,5 s), et décrire
+# 30 notes du partage réseau coûtait À LUI SEUL 1,3 s — `resolve()` 30 × ≈ 0,9 s, `is_file()` puis
+# `stat()` ≈ 0,4 s —, appel après appel. Chaque vérification attend le réseau, pas le processeur :
+# les lancer ensemble garde EXACTEMENT les mêmes contrôles (confinement après `resolve()`, fichier
+# ordinaire) en ne payant plus 30 fois la latence du partage. Un seul `stat()` remplace aussi la
+# paire `is_file()` + `stat()`, qui interrogeait deux fois le partage pour la même note.
+DESCRIBE_WORKERS = 16
+
+
+def _verified_note(hit, roots, resolution_base) -> tuple[Path, str, int] | None:
+    """La note d'un hit si elle est listable (confinée, fichier ordinaire), avec sa taille."""
+    if not isinstance(hit, dict):
+        return None
+    path_value = hit.get("path")
+    if not isinstance(path_value, str) or not path_value:
+        return None
+    note = Path(path_value)
+    if resolution_base is not None and not note.is_absolute():
+        note = resolution_base / note
+    if roots and not _confined(note, roots):
+        return None
+    try:
+        info = note.stat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return note, path_value, info.st_size
+
+
 def describe_candidates(hits: list[dict], allowed_root=None, *, base=None) -> list[dict]:
     """Décrit chaque note candidate SANS en lire le contenu : titre, chemin, taille.
 
@@ -260,24 +294,16 @@ def describe_candidates(hits: list[dict], allowed_root=None, *, base=None) -> li
     listée, pas plus qu'elle ne serait servie.
     """
     roots, resolution_base = _roots_and_base(allowed_root, base)
+    if not hits:
+        return []
+    # Les vérifications disque partent EN PARALLÈLE, l'assemblage reste dans l'ordre du classement.
+    with ThreadPoolExecutor(max_workers=min(DESCRIBE_WORKERS, len(hits))) as pool:
+        checked = list(pool.map(lambda hit: _verified_note(hit, roots, resolution_base), hits))
     described = []
-    for hit in hits:
-        if not isinstance(hit, dict):
+    for hit, verified in zip(hits, checked):
+        if verified is None:
             continue
-        path_value = hit.get("path")
-        if not isinstance(path_value, str) or not path_value:
-            continue
-        note = Path(path_value)
-        if resolution_base is not None and not note.is_absolute():
-            note = resolution_base / note
-        if roots and not _confined(note, roots):
-            continue
-        try:
-            if not note.is_file():
-                continue
-            size = note.stat().st_size
-        except OSError:
-            continue
+        note, path_value, size = verified
         title = _candidate_title(hit, note)
         kind = str(hit.get("type", "")).strip()
         rank = hit.get("rank", len(described) + 1)

@@ -110,6 +110,21 @@ describe('buildBrainOutcome status', () => {
     expect(outcome.note).toMatch(/PANNE/u)
   })
 
+  // conv-1053 (2026-10-22) : un 503 du serveur en revérification d'index est transitoire. La note
+  // générique « diagnostique, répare » a déjà fait dépenser une session sur un serveur sain (conv-4).
+  it('un index en revérification est dit transitoire, sans ordre de réparer', () => {
+    const outcome = buildBrainOutcome('q', '', 'unavailable', 'reindexing')
+    expect(outcome.unavailableReason).toBe('reindexing')
+    expect(outcome.note).toMatch(/TRANSITOIRE/u)
+    expect(outcome.note).not.toMatch(/PANNE a reparer/u)
+  })
+
+  it('un délai dépassé reste une panne, nommée comme telle', () => {
+    const outcome = buildBrainOutcome('q', '', 'unavailable', 'timeout')
+    expect(outcome.note).toMatch(/delai/u)
+    expect(outcome.note).toMatch(/PANNE/u)
+  })
+
   it.each([' ', '\n\t', '\r\n'])(
     'normalise un contexte sans caractère utile annoncé found en empty (%j)',
     (context) => {

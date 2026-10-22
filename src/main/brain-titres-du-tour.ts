@@ -117,6 +117,7 @@ export function createBrainTitresDuTour(
     const corpus = brainCorpusForWorkspace(options.workspace?.(meta?.conversationId))
     // Même fermeture que `brain_query` : un dossier sans corpus déclaré n'interroge rien.
     if (corpus?.length === 0) return ''
+    const debut = performance.now()
     const brut = await retrieve(requete, {
       ...(corpus ? { corpus } : {}),
       mode: 'candidates',
@@ -126,6 +127,7 @@ export function createBrainTitresDuTour(
       status: 'unavailable',
       unavailableReason: 'network'
     }))
+    const durationMs = Math.round(performance.now() - debut)
     const resultat = scopeBrainRetrieval(brut, corpus)
     const dejaMontres = meta?.conversationId ? montresParFil.get(meta.conversationId) : undefined
     const titres = selectionnerTitres(resultat, dejaMontres)
@@ -141,6 +143,8 @@ export function createBrainTitresDuTour(
         query: requete.slice(0, 300),
         found: titres.length > 0,
         status: resultat.status,
+        ...(resultat.unavailableReason ? { unavailableReason: resultat.unavailableReason } : {}),
+        durationMs,
         injectedChars: bloc.length,
         ...(resultat.navigation ? { navigation: resultat.navigation } : {})
       })

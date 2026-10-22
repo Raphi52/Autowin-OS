@@ -109,8 +109,16 @@ export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
  * - `no-token` : aucun jeton de service lisible → aucune requête n'est partie.
  * - `empty-query` : requête vide côté appelant → aucune requête n'est partie.
  * - `challenge-refused` : `GET /challenge` a répondu non-ok (serveur vivant mais refusant).
- * - `query-refused` : `POST /query-secure` a répondu non-ok (jeton rejeté, index dégradé…).
- * - `network` : rien n'a répondu (serveur arrêté, délai dépassé, réseau).
+ * - `query-refused` : `POST /query-secure` a répondu non-ok, hors 503 (jeton rejeté, requête invalide…).
+ * - `reindexing` : `POST /query-secure` a répondu 503 — le serveur, SAIN, revérifie ou recharge son
+ *   index après une modification du savoir et refuse de servir tant qu'il ne l'a pas prouvé à jour
+ *   (`brain_retrieval.py`, barrière de fraîcheur). Transitoire : attendre, ne rien réparer.
+ * - `timeout` : NOTRE délai a coupé l'appel (le serveur répondait peut-être, trop lentement).
+ * - `network` : rien n'a répondu (serveur arrêté, port fermé, réseau).
+ *
+ * `reindexing` et `timeout` sont arrivés le 2026-10-22 (conv-1053) : un tour de chat sur trois
+ * rendait « unavailable », et seule la durée de chaque échec, recoupée à la main avec l'heure de
+ * début de son tour, a pu départager 57 refus 503 en 0,1-0,3 s de 23 délais dépassés à ~1,6 s.
  * - `test-mode` : neutralisation Vitest, jamais une panne réelle.
  * - `foreign-signature` (statut `invalid`, pas `unavailable`) : `GET /challenge` a répondu, mais
  *   signé avec une AUTRE clé que le jeton d'Autowin — un autre serveur Brain tient le port (conv-338,
@@ -121,6 +129,8 @@ export type BrainUnavailableReason =
   | 'empty-query'
   | 'challenge-refused'
   | 'query-refused'
+  | 'reindexing'
+  | 'timeout'
   | 'network'
   | 'test-mode'
   | 'foreign-signature'
@@ -305,7 +315,11 @@ export async function retrieveBrainContext(
       signal: controller.signal
     })
     if (!res.ok)
-      return { context: '', status: 'unavailable', unavailableReason: 'query-refused' }
+      return {
+        context: '',
+        status: 'unavailable',
+        unavailableReason: res.status === 503 ? 'reindexing' : 'query-refused'
+      }
     let verified: ReturnType<typeof verifySignedBrainPayload>
     try {
       const data = await readSignedBrainPayload(res)
@@ -345,8 +359,12 @@ export async function retrieveBrainContext(
     }
     return result
   } catch {
-    // serveur down / timeout / réseau
-    return { context: '', status: 'unavailable', unavailableReason: 'network' }
+    // Notre délai a coupé l'appel, ou rien n'a répondu (serveur arrêté, réseau).
+    return {
+      context: '',
+      status: 'unavailable',
+      unavailableReason: controller.signal.aborted ? 'timeout' : 'network'
+    }
   } finally {
     clearTimeout(timer)
   }
