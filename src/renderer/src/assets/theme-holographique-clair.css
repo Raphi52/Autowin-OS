@@ -3680,6 +3680,86 @@
   background: rgba(255, 90, 110, 0.28);
   color: #2a171a;
 }
+/* CARTE DE SUPPRESSION DES FILS (conv-1078, 2026-10-22 : /draft, mélange « 4 et 5 mais adapté en
+   fonction du theme », puis « Implémenter la 2 · En-tête en ligne ») — la mise en page commune est dans
+   ChatView.css ; ici, l'habit.
+   - Cadre NACRÉ d'1 px, le cycle bleu > rose > argent > rose clair du bloc de question
+     (--nv-askd-nacre), qui suit AUSSI les deux coins coupés : un anneau `::before` découpé par
+     --nv-chanfrein-anneau. La carte perd son bord : le bord transparent du bloc commun décalait
+     l'anneau d'1 px vers l'intérieur, et `overflow: hidden` l'aurait rogné. Le trait blanc des coins
+     (--nv-chanfrein-trait-fond) part : la nacre le remplace.
+   - Tuile au coin coupé (8 px), aplat gris sans bord ; corbeille au trait dégradé bleu > rose.
+   - Lignes carrées, liseré rouge du verre de suppression.
+   - Les deux boutons au DÉGRADÉ DU THÈME, bleu > violet (--nv-degrade) — conv-1078, même jour :
+     « quand je suis en theme holo le premier bouton doit etre en mode plein bleu et violet et celui
+     du dessous avec liserai bleu et violet ». Le geste irréversible quitte son rouge : c'est le
+     choix de l'utilisateur, et la carte nomme déjà les fils qui partent.
+     · « Supprimer » : PLEIN, même relief que le bouton d'envoi (RELIEF-PERLE), texte --on-accent,
+       gardé blanc par Holographique blanc ;
+     · « Garder » : fond transparent cerné d'un LISERÉ d'1 px du même dégradé. Survol : l'aplat gris.
+     Les règles des deux boutons sont COMMUNES à tous les thèmes (ChatView.css, même jour : « applique
+     a tous les themes mais avec des couleurs en fonction du theme ») ; ce thème n'en règle que les
+     propriétés --suppr-*. Le reflet du survol s'appelle `-vif`, pas `-survol` : le générateur
+     d'Holographique blanc changerait un blanc de « survol » en encre, et le relief virerait au gris.
+   Les cartes du RUN et du renommage ne portent pas `--fils` : verre rouge et trait des coins restent. */
+:root[data-theme='holographique-clair'] .delete-confirm-card--fils {
+  --nv-suppr-nacre: linear-gradient(
+    100deg,
+    #3c6eeb 0%,
+    #d02b8c 30%,
+    #d9d9d9 55%,
+    #ff8cc8 78%,
+    #3c6eeb 100%
+  );
+  --suppr-plein:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%), var(--nv-degrade);
+  --suppr-plein-vif:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
+    var(--nv-degrade);
+  --suppr-plein-texte: var(--on-accent);
+  --suppr-lisere: var(--nv-degrade);
+  --suppr-garder-texte: var(--nv-pop-texte);
+  --suppr-garder-fond: var(--nv-pop-aplat-survol);
+  border-width: 0;
+  background: linear-gradient(var(--nv-pop-voile), var(--nv-pop-voile)), var(--nv-satin);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-card--fils::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  clip-path: var(--nv-chanfrein-anneau);
+  background: var(--nv-suppr-nacre);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-tuile {
+  border-width: 0;
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  background: var(--nv-pop-aplat);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-tuile-arret-a {
+  stop-color: #5b86ff;
+}
+:root[data-theme='holographique-clair'] .delete-confirm-tuile-arret-b {
+  stop-color: #d02b8c;
+}
+:root[data-theme='holographique-clair'] .delete-confirm-fil {
+  border-radius: 0;
+  background: var(--nv-pop-aplat);
+  box-shadow: inset 2px 0 0 rgba(255, 90, 110, 0.7);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-fil--autres {
+  box-shadow: inset 2px 0 0 rgba(var(--voile-rgb), 0.18);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-fil-titre {
+  color: var(--nv-pop-texte);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-fil--autres .delete-confirm-fil-titre {
+  color: var(--nv-pop-texte-doux);
+}
+:root[data-theme='holographique-clair'] .delete-confirm-fil-nombre {
+  color: var(--nv-pop-texte-pale);
+}
 
 /* ---------------------------------------------------------------------------
    6 bis. TYPO MODERNE (variante 7.4 choisie le 2026-10-09, conv-124) : titres un

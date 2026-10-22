@@ -1735,6 +1735,22 @@
    habit (Holographique y ajoute le cadre nacré et le gel). Les cartes du RUN et du renommage ne portent
    pas `--fils` et ne changent pas. */
 .delete-confirm-card--fils {
+  /* Les deux boutons dans TOUS les thèmes, aux couleurs de chacun (conv-1078 : « applique a tous les
+     themes mais avec des couleurs en fonction du theme ») : « Supprimer » PLEIN de l'accent du thème,
+     « Garder » cerné d'un LISERÉ de ce même accent. Les valeurs viennent des jetons partagés que
+     chaque thème définit déjà (--accent, --on-accent, --text) ; un thème qui veut mieux surcharge
+     ces propriétés sur `.delete-confirm-card--fils` (Holographique : son dégradé et son relief ;
+     Ninja Claude : son terracotta de bouton plein ; Machine à écrire et malvoyant sombre : un texte
+     sombre sur leur accent vif). Des IMAGES, pas des couleurs : un dégradé y entre tel quel. */
+  --suppr-plein: linear-gradient(var(--accent), var(--accent));
+  --suppr-plein-vif: linear-gradient(
+    color-mix(in srgb, var(--accent) 84%, var(--text)),
+    color-mix(in srgb, var(--accent) 84%, var(--text))
+  );
+  --suppr-plein-texte: var(--on-accent);
+  --suppr-lisere: linear-gradient(var(--accent), var(--accent));
+  --suppr-garder-texte: var(--text);
+  --suppr-garder-fond: rgba(var(--voile-rgb), 0.06);
   width: min(440px, 100%);
   padding: 24px 24px 20px;
 }
@@ -1826,6 +1842,59 @@
   width: 100%;
   min-height: 34px;
   text-align: center;
+}
+/* Sélecteurs volontairement LOURDS (0,6,0, et 0,8,0 au survol) : la carte est rendue dans `body` et
+   ChatView.css est chargé AVANT les thèmes, dont les règles `.btn` (jusqu'à 0,5,0 au survol)
+   l'emporteraient sinon — Ninja Claude rendait les deux boutons gris (capture de l'utilisateur,
+   conv-1078). Le liseré est un `::before` évidé par masque (le fond moins sa boîte de contenu) : il
+   suit l'arrondi du bouton de chaque thème, pilule ou coins de 8 px, et accepte un dégradé. */
+:root
+  .delete-confirm-card.delete-confirm-card--fils
+  .delete-confirm-actions--pile
+  > .btn.delete-confirm-gel {
+  border-color: transparent;
+  background: var(--suppr-plein);
+  box-shadow: none;
+  color: var(--suppr-plein-texte);
+}
+:root
+  .delete-confirm-card.delete-confirm-card--fils
+  .delete-confirm-actions--pile
+  > .btn.delete-confirm-gel:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--suppr-plein-vif);
+  color: var(--suppr-plein-texte);
+}
+:root
+  .delete-confirm-card.delete-confirm-card--fils
+  .delete-confirm-actions--pile
+  > .btn.delete-confirm-cancel {
+  position: relative;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--suppr-garder-texte);
+}
+:root
+  .delete-confirm-card.delete-confirm-card--fils
+  .delete-confirm-actions--pile
+  > .btn.delete-confirm-cancel:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--suppr-garder-fond);
+  color: var(--suppr-garder-texte);
+}
+:root
+  .delete-confirm-card.delete-confirm-card--fils
+  .delete-confirm-actions--pile
+  > .btn.delete-confirm-cancel::before {
+  /* Le calque évidé vient du BORD DÉGRADÉ des capsules (même feuille) : un seul masque écrit. Ici,
+     1 px posé SUR le bord transparent du bouton, au plan du bouton (la capsule le met en -1, sous
+     elle : sur la carte il passerait sous son fond). */
+  inset: -1px;
+  z-index: auto;
+  box-sizing: border-box;
+  padding: 1px;
+  background: var(--suppr-lisere);
 }
 /* D2c-3 : le rappel des raccourcis etait en 8 px — illisible, donc inutile. Il n'occupe
    plus d'etage : il vit en info-bulle sur le bouton d'envoi. */
@@ -4298,9 +4367,12 @@ button.chat-project-dot:disabled {
 /* BORD DEGRADE : un calque evide par masque, comme les cartes de fichier du theme Nebuleuse de
    verre. `border-image` ignore l'arrondi, et un fond `border-box` masquerait le fil sous la
    capsule. 2 px depuis Fumé net. Tour fini : le bord palit a 55 %, la capsule reste lisible sans
-   tirer l'oeil. */
+   tirer l'oeil. Le liseré de « Garder » sur la carte de suppression des fils (conv-1078) prend ce
+   même calque, par un sélecteur LÉGER : sa règle propre, plus haut et plus lourde, en change
+   l'épaisseur, la couleur et le plan quel que soit l'ordre. */
 .thinking-block > summary .thinking-capsule::before,
-.capsule-bouton .thinking-capsule::before {
+.capsule-bouton .thinking-capsule::before,
+.delete-confirm-card--fils .delete-confirm-cancel::before {
   content: '';
   position: absolute;
   inset: 0;

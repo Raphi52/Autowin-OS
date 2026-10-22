@@ -734,6 +734,11 @@
   --info: #33ff99;
   --voile-rgb: 51, 255, 51;
 }
+/* Carte de suppression des fils (conv-1078) : le bouton plein prend l'accent vert du thème ; un texte
+   blanc (--on-accent par défaut) y serait illisible, il prend le noir du fond. */
+:root[data-theme='machine-a-ecrire'] .delete-confirm-card--fils {
+  --suppr-plein-texte: var(--bg-0);
+}
 :root[data-theme='machine-a-ecrire'] body {
   background: #000000;
 }
@@ -955,6 +960,11 @@
   --info: var(--cyan);
   --voile-rgb: 0, 0, 0;
   --focus-malvoyant: #ffd84a;
+}
+/* Carte de suppression des fils (conv-1078) : texte NOIR sur l'accent jaune (#ffd84a) du bouton plein ;
+   le blanc par défaut (--on-accent) y tomberait sous 1,5:1. */
+:root[data-theme='malvoyant-sombre'] .delete-confirm-card--fils {
+  --suppr-plein-texte: var(--bg-0);
 }
 :root[data-theme='malvoyant-sombre'] .shell,
 :root[data-theme='malvoyant-sombre'] .shell.theme-serious {

@@ -228,6 +228,13 @@
   border-color: #d97757;
   background: #d97757;
 }
+/* Carte de suppression des fils (conv-1078) : son bouton plein prend le terracotta des boutons pleins
+   de ce thème (#c96442, survol #d97757), comme `.btn-accent` ci-dessus ; --accent seul (#d97757)
+   donnait un texte blanc à 3:1. Le liseré de « Garder » garde --accent. */
+:root[data-theme='ninja-claude'] .delete-confirm-card--fils {
+  --suppr-plein: linear-gradient(#c96442, #c96442);
+  --suppr-plein-vif: linear-gradient(#d97757, #d97757);
+}
 :root[data-theme='ninja-claude'] .btn-danger {
   border-color: rgba(221, 94, 85, 0.5);
   background: transparent;
