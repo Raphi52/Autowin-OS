@@ -463,6 +463,10 @@ describe('projectLatestRequestExecution', () => {
   // écrit `display.title`, qui valait « skill · learn » ; la table des libellés (« Learn ») n'était
   // lue par aucun affichage d'étape. Entrée qui fait échouer ces tests si le titre ne passe plus par
   // la table : la phase `learn` (titre « skill · learn » ou « learn » au lieu de « Learn »).
+  // fix-ok: run-43f8396b503d-1 — ces tests ont été réécrits parce que leur première version
+  // vérifiait `label`, champ qu'aucun nœud d'étape n'affiche (WorkflowExecutionGraph.tsx:922 lit
+  // `display.title`) : mesuré en rendant le graphe, qui montrait « skill · learn » avec les tests
+  // verts. La 3e édition corrigeait une barre oblique inverse mal échappée par le shell.
   it('titre les étapes build, judge, learn et salvage par leur libellé, hors run', () => {
     const timeline = buildHarnessTimelineFromTrace(
       ['build', 'judge', 'learn', 'salvage'].map((phase, index) =>
