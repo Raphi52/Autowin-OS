@@ -973,3 +973,12 @@ details:not(
 .decor-de-fond[data-fond='noir'] {
   background: #000;
 }
+
+/* Fond d'accueil « Nier Automata (radar) » (menu Fond de l'Accueil, defaut sous ce theme) : le radar
+   du Pod (balayage anime en SMIL) et la devise YoRHa, peints sur l'hote du decor, sans scene 3D. */
+.decor-de-fond[data-fond='nier'] {
+  background:
+    url('./nier-automata-devise.svg') left 240px bottom 18px / 420px auto no-repeat,
+    url('./nier-automata-radar.svg') right -12vmin center / 95vmin 95vmin no-repeat,
+    #dad4bb;
+}

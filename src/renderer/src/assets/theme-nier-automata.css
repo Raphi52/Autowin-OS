@@ -885,14 +885,3 @@
 :root[data-theme='nier-automata'][data-base='clair'] .brand {
   gap: 12px;
 }
-/* Fond d'accueil : le radar du Pod (balayage anime en SMIL) et la devise YoRHa. */
-:root[data-theme='nier-automata'][data-base='clair'] .home-view::before {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    url('./nier-automata-devise.svg') right 28px top 64px / 200px auto no-repeat,
-    url('./nier-automata-radar.svg') right -12vmin center / 95vmin 95vmin no-repeat;
-  pointer-events: none;
-  content: '';
-}

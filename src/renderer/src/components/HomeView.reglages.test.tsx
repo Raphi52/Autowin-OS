@@ -347,7 +347,7 @@ describe('le choix du fond de l accueil', () => {
    */
   // « Aucun » et non plus « Noir » (conv-1076, 2026-10-22 : « desfois c pas noir selon le theme ») :
   // en Holographique blanc, ce choix peint un aplat BLANC. La valeur enregistree reste `noir`.
-  it('propose exactement Aucun, Cyberpunk et Planetes, sur le fond affiche par defaut', async () => {
+  it('propose exactement Aucun, Cyberpunk, Planetes et Nier Automata (radar), sur le fond affiche par defaut', async () => {
     const container = await mount()
     await ouvrirReglages(container)
     const menu = q<HTMLSelectElement>(container, '[data-testid="home-fond"]')!
@@ -355,7 +355,8 @@ describe('le choix du fond de l accueil', () => {
     expect(Array.from(menu.options).map((o) => [o.value, o.textContent])).toEqual([
       ['noir', 'Aucun'],
       ['avenue', 'Cyberpunk'],
-      ['actuel', 'Planètes']
+      ['actuel', 'Planètes'],
+      ['nier', 'Nier Automata (radar)']
     ])
     // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, l'avenue cyberpunk.
     expect(menu.value).toBe('avenue')

@@ -22,10 +22,22 @@ import type { DecorVariant } from './home-decor-scene'
 export const DECOR_DEFAUT: DecorVariant = 'avenue'
 
 /** Un fond d'Accueil : une direction du décor 3D, ou le noir, qui n'en monte aucune. */
-export type FondAccueil = DecorVariant | 'noir'
+export type FondAccueil = DecorVariant | 'noir' | 'nier'
 
 /** Le noir : aucune scène 3D, l'hôte du décor peint un aplat noir (theme.css). */
 export const FOND_NOIR = 'noir' satisfies FondAccueil
+
+/**
+ * Le radar du Pod du thème Nier Automata (2026-10-22, conv-295) : aucune scène 3D, l'hôte du décor
+ * peint le papier beige, le radar animé et la devise (theme-nier-automata.css). C'est le fond par
+ * défaut sous ce thème tant que rien n'a été choisi dans le menu.
+ */
+export const FOND_NIER = 'nier' satisfies FondAccueil
+
+/** Les fonds qui ne montent aucune scène 3D : l'hôte du décor les peint en CSS. */
+export function fondSansScene(fond: FondAccueil): boolean {
+  return fond === FOND_NOIR || fond === FOND_NIER
+}
 
 /**
  * LA MÊME CLÉ QUE LE DÉCOR L'A TOUJOURS LUE.
@@ -58,7 +70,8 @@ export const EVENEMENT_FOND_ACCUEIL = 'autowin:fond-accueil'
 export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
   { id: FOND_NOIR, nom: 'Aucun' },
   { id: 'avenue', nom: 'Cyberpunk' },
-  { id: 'actuel', nom: 'Planètes' }
+  { id: 'actuel', nom: 'Planètes' },
+  { id: FOND_NIER, nom: 'Nier Automata (radar)' }
 ]
 
 /**
@@ -69,7 +82,12 @@ export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
  */
 export function lireFondAccueil(): FondAccueil {
   if (typeof window === 'undefined') return DECOR_DEFAUT
-  return (window.localStorage.getItem(CLE_FOND_ACCUEIL) ?? DECOR_DEFAUT) as FondAccueil
+  const enregistre = window.localStorage.getItem(CLE_FOND_ACCUEIL)
+  if (enregistre) return enregistre as FondAccueil
+  // Rien de choisi : le thème Nier Automata prend son radar, les autres le défaut.
+  return document.documentElement.getAttribute('data-theme') === 'nier-automata'
+    ? FOND_NIER
+    : DECOR_DEFAUT
 }
 
 /** Enregistre le fond choisi et prévient la fenêtre : le décor change sans redémarrer. */

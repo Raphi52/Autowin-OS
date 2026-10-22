@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
-import { abonnerFondAccueil, DECOR_DEFAUT, FOND_NOIR, lireFondAccueil } from './fond-accueil'
+import { abonnerFondAccueil, DECOR_DEFAUT, fondSansScene, lireFondAccueil } from './fond-accueil'
 import { createDecorScene, type DecorScene, type DecorVariant } from './home-decor-scene'
 import { signalerSceneSousLaBarre } from '../theme-mode'
 
@@ -71,7 +71,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
    */
   // Le noir non plus : il ne monte aucune scène.
   const cleTheme =
-    variante === 'avenue' || variante === FOND_NOIR ? 'palette-propre' : themeApplique
+    variante === 'avenue' || fondSansScene(variante) ? 'palette-propre' : themeApplique
 
   useEffect(() => {
     actifRef.current = actif
@@ -83,7 +83,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
    * l'Accueil les eclaircit dans un theme clair ; une autre vue, « Aucun » ou le decor demonte les
    * rend au theme. Voir `signalerSceneSousLaBarre` dans theme-mode.ts.
    */
-  const sceneAffichee = actif && variante !== FOND_NOIR
+  const sceneAffichee = actif && !fondSansScene(variante)
   useEffect(() => {
     signalerSceneSousLaBarre(sceneAffichee)
     return () => signalerSceneSousLaBarre(false)
@@ -92,7 +92,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   useEffect(() => {
     const host = hostRef.current
     // FOND NOIR : aucune scène, aucun contexte WebGL, aucune boucle — l'hôte peint l'aplat noir.
-    if (!host || variante === FOND_NOIR) return
+    if (!host || fondSansScene(variante)) return
     /*
      * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17, conv-301).
      *
@@ -124,7 +124,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
       className="decor-de-fond"
       ref={hostRef}
       aria-hidden="true"
-      data-fond={variante === FOND_NOIR ? FOND_NOIR : undefined}
+      data-fond={fondSansScene(variante) ? variante : undefined}
       style={actif ? undefined : { display: 'none' }}
     />
   )
