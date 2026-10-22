@@ -7,6 +7,7 @@ import { surveillerGelsRenderer } from './gel-renderer'
 import { vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
 import { installerCopiePropre } from './copie-propre'
+import { installerAnimationsParCrans } from './animations-par-crans'
 
 /*
  * Le mode d'affichage est posé AVANT le premier rendu : appliqué après, l'application
@@ -19,6 +20,13 @@ appliquerThemeMode(lireThemeMode())
  * la copie passe désormais par un HTML sans styles, pour toute la fenêtre.
  */
 installerCopiePropre()
+
+/*
+ * Les indicateurs « ça travaille » (atomes, point de la carte du fil) avancent par crans de 100 ms,
+ * tous calés sur la même horloge : en continu, un seul faisait recomposer toute la fenêtre 60 fois
+ * par seconde, 20 à 33 % de la carte graphique de l'utilisateur (conv-1075).
+ */
+installerAnimationsParCrans()
 
 /*
  * La sonde demarre AVANT le premier rendu, et pour toute la duree de la session : un gel se produit
