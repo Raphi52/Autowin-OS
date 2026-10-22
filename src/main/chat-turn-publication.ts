@@ -1,6 +1,7 @@
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
+import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from './comparaison-a-la-base'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import type { TypageAvantPublication } from './typage-avant-publication'
 import {
@@ -281,14 +282,17 @@ export async function publierTourDeChat(input: {
    */
   autresToursEnCours?: readonly string[]
   /**
-   * Rejoue les tests des fichiers que le tour va publier, dans le VRAI dépôt, AVANT le commit.
-   * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main
-   * rouge 20 h. Absent = comportement d'avant (aucune vérification).
+   * Rejoue les tests des fichiers que le tour va publier, AVANT le commit, dans `racine` : une copie
+   * propre de CE QUI PART (dernier commit + ces seuls fichiers), jamais l'arbre partagé — voir
+   * `verifierCeQuiPart`. Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test
+   * et a laissé main rouge 20 h. Absent = comportement d'avant (aucune vérification).
    */
   verifierAvantPublication?: (
-    repo: string,
+    racine: string,
     fichiers: readonly string[]
   ) => Promise<VerificationAvantPublication>
+  /** Copie propre du dernier commit où les tests se rejouent (défaut : `ouvrirCopieDeBase`). */
+  ouvrirCopie?: (repo: string) => Promise<CopieDeBase>
   /**
    * Type ce qui PART (copie propre du dernier commit + fichiers du tour), AVANT les tests. Vécu le
    * 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant, écarté, a cassé la
@@ -459,7 +463,9 @@ export async function publierTourDeChat(input: {
   }
   // Un rouge (ou un plafond de temps) ne se pousse pas : les fichiers restent en attente, nommés
   // avec les tests en échec. Un fichier qu'aucun test ne juge part comme avant, mais le rapport le dit.
-  const verification = await input.verifierAvantPublication?.(repo, publier)
+  const verification = input.verifierAvantPublication
+    ? await verifierCeQuiPart(repo, publier, input.verifierAvantPublication, input.ouvrirCopie)
+    : undefined
   if (verification?.statut === 'echec') {
     const rouges = publier.map<Exclusion>((path) => ({
       path,
@@ -484,6 +490,51 @@ export async function publierTourDeChat(input: {
     ...(input.openPr ? { openPr: input.openPr } : {})
   })
   return rapport(input, project, exclus, verification, typage)
+}
+
+/**
+ * LES TESTS JUGENT CE QUI PART, COMME LE TYPAGE : une copie propre du dernier commit, avec les seuls
+ * fichiers publiés posés dessus (mêmes `ouvrirCopieDeBase` et `appliquerLeTour` que
+ * `typerCeQuiPart`).
+ *
+ * Vécu le 2026-10-22 (salvage conv-1091) : `973b70e2` (conv-1078) a publié un test de style sans le
+ * CSS qu'il lit, et `b86a144e` (conv-1087) du code sans son test. Les fichiers restés dehors avaient
+ * aussi été modifiés par d'autres fils. Rejoués dans l'arbre partagé, où ces fichiers étaient encore
+ * là, les tests étaient verts. Même défaut déjà vu le 2026-10-15 (`b0c4c099`, conv-969).
+ *
+ * Une copie impossible à ouvrir ne bloque pas la publication : comme pour le typage, elle part et le
+ * rapport dit `non-verifie` avec la raison. Coût mesuré le 2026-10-22 : 1,7 s pour copier ce dépôt.
+ */
+async function verifierCeQuiPart(
+  repo: string,
+  fichiers: readonly string[],
+  verifier: (racine: string, fichiers: readonly string[]) => Promise<VerificationAvantPublication>,
+  ouvrirCopie: (repo: string) => Promise<CopieDeBase> = ouvrirCopieDeBase
+): Promise<VerificationAvantPublication> {
+  const message = (erreur: unknown): string =>
+    erreur instanceof Error ? erreur.message : String(erreur)
+  let copie: CopieDeBase
+  try {
+    copie = await ouvrirCopie(repo)
+  } catch (erreur) {
+    return {
+      statut: 'non-verifie',
+      raison: `copie propre du dernier commit impossible : ${message(erreur)}`
+    }
+  }
+  try {
+    try {
+      appliquerLeTour(repo, copie.chemin, fichiers)
+    } catch (erreur) {
+      return {
+        statut: 'non-verifie',
+        raison: `fichiers du tour non posés sur la copie propre : ${message(erreur)}`
+      }
+    }
+    return await verifier(copie.chemin, fichiers)
+  } finally {
+    await copie.fermer()
+  }
 }
 
 function brancheDuTour(conversationId: string, turnId: string): string {
