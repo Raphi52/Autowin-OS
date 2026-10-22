@@ -9,7 +9,9 @@ import {
   aggregateClaudeLocalUsage,
   parseClaudeRateLimitHeaders,
   parseClaudePlanUsageHistory,
-  resetClaudeSessionRenewalForTests
+  quotaClaudeDuCompte,
+  resetClaudeSessionRenewalForTests,
+  resetQuotasParCompteForTests
 } from './model-quotas'
 
 const temporaryHomes: string[] = []
@@ -17,6 +19,7 @@ const temporaryHomes: string[] = []
 afterEach(() => {
   vi.restoreAllMocks()
   resetClaudeSessionRenewalForTests()
+  resetQuotasParCompteForTests()
   for (const path of temporaryHomes.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
@@ -728,5 +731,80 @@ describe('sonde Claude apres une bascule de compte', () => {
 
     expect(renouvelerSession).not.toHaveBeenCalled()
     expect(fetchFn).toHaveBeenCalledOnce()
+  })
+})
+
+/**
+ * Le quota d'un compte NOMMÉ, pas du compte actif (conv-1069, 2026-10-22) : la bascule avant
+ * lancement doit savoir si l'AUTRE compte a de la marge avant d'y partir.
+ */
+describe('quota d’un compte nommé', () => {
+  const NOW = Date.parse('2026-10-22T09:00:00Z')
+
+  function dossierDeCompte(accessToken: string | undefined): { home: string; dir: string } {
+    const home = mkdtempSync(join(tmpdir(), 'autowin-quota-compte-'))
+    temporaryHomes.push(home)
+    const dir = join(home, 'comptes', 'compte-2')
+    mkdirSync(dir, { recursive: true })
+    if (accessToken) {
+      writeFileSync(
+        join(dir, '.credentials.json'),
+        JSON.stringify({ claudeAiOauth: { accessToken } })
+      )
+    }
+    // L'historique Desktop est COMMUN à tous les comptes : il ne doit jamais servir de mesure ici.
+    mkdirSync(join(home, 'AppData', 'Roaming', 'Claude'), { recursive: true })
+    writeFileSync(
+      join(home, 'AppData', 'Roaming', 'Claude', 'plan-usage-history.json'),
+      JSON.stringify({ samples: [{ t: NOW - 60_000, u: { fh: 10, sd: 10 } }] })
+    )
+    return { home, dir }
+  }
+
+  const enTetes = (cinqHeures: string, septJours: string): Response =>
+    new Response('{}', {
+      status: 200,
+      headers: {
+        'anthropic-ratelimit-unified-5h-utilization': cinqHeures,
+        'anthropic-ratelimit-unified-7d-utilization': septJours
+      }
+    })
+
+  it('sonde avec la session du dossier du compte, pas celle du compte actif', async () => {
+    const { home, dir } = dossierDeCompte('jeton-du-compte-deux-assez-long')
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      void _url
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        'Bearer jeton-du-compte-deux-assez-long'
+      )
+      return enTetes('0.92', '0.40')
+    })
+    const fenetres = await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW })
+    expect(fenetres).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'five-hour', usedPercent: 92 }),
+        expect.objectContaining({ id: 'seven-day', usedPercent: 40 })
+      ])
+    )
+  })
+
+  it('compte non connecté : aucune mesure, jamais l’historique Desktop partagé', async () => {
+    const { home, dir } = dossierDeCompte(undefined)
+    const fetchFn = vi.fn(async () => enTetes('0.1', '0.1'))
+    expect(await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW })).toBeUndefined()
+    expect(fetchFn).not.toHaveBeenCalled()
+  })
+
+  it('deux lancements dans la minute ne paient qu’une sonde', async () => {
+    const { home, dir } = dossierDeCompte('jeton-du-compte-deux-assez-long')
+    const fetchFn = vi.fn(async () => enTetes('0.5', '0.5'))
+    await Promise.all([
+      quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW }),
+      quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW })
+    ])
+    await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW + 30_000 })
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+    await quotaClaudeDuCompte(dir, { home, fetchFn, now: NOW + 61_000 })
+    expect(fetchFn).toHaveBeenCalledTimes(2)
   })
 })

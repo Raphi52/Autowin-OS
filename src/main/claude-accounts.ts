@@ -257,6 +257,28 @@ export function claudeRotateAccount(walledAccountId: string): string | undefined
 }
 
 /**
+ * BASCULE AVANT LE LANCEMENT (conv-1069, 2026-10-22), injectee comme la rotation : quitte le compte
+ * actif presque epuise AVANT l'appel (`bascule-quota.ts`). Par defaut elle ne fait RIEN : un module
+ * non configure — les tests — garde exactement le comportement d'avant, sans aucune sonde.
+ */
+let preventiveSwitchProvider: (activeAccountId: string) => Promise<string | undefined> = async () =>
+  undefined
+
+export function configureClaudePreventiveSwitch(
+  provider: (activeAccountId: string) => Promise<string | undefined>
+): void {
+  preventiveSwitchProvider = provider
+}
+
+export async function claudePreventiveSwitch(activeAccountId: string): Promise<string | undefined> {
+  try {
+    return await preventiveSwitchProvider(activeAccountId)
+  } catch {
+    return undefined // une bascule impossible laisse l'appel partir sur le compte actif
+  }
+}
+
+/**
  * Env d'un processus fils Claude, EXPLICITE : `CLAUDE_CONFIG_DIR` y est POSE (compte dedie) ou
  * RETIRE (compte par defaut), jamais laisse a ce que le processus parent trainait.
  *

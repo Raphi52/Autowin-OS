@@ -326,6 +326,87 @@ async function claudePlanHistoryQuota(home: string, now: number): Promise<Provid
   }
 }
 
+/**
+ * Les fenetres de quota d'UN compte, lues dans les en-tetes d'une sonde faite avec SA session
+ * (`configDir` = son `CLAUDE_CONFIG_DIR`, `undefined` = le compte par defaut `~/.claude`). Leve une
+ * erreur au vocabulaire stable quand la mesure est impossible : a l'appelant de choisir son repli.
+ */
+async function sonderEnTetesClaude(
+  fetchFn: typeof fetch,
+  configDir: string | undefined,
+  home: string,
+  now: number,
+  renouveler: RenouvellementSessionClaude
+): Promise<ModelQuotaWindow[]> {
+  const credentialsPath = configDir
+    ? join(configDir, '.credentials.json')
+    : join(home, '.claude', '.credentials.json')
+  const lireSession = async (): Promise<{ accessToken: string; expiresAt?: number }> => {
+    const credentialsInfo = await stat(credentialsPath).catch(() => undefined)
+    if (!credentialsInfo || credentialsInfo.size > MAX_CREDENTIAL_BYTES) {
+      throw new Error('Session Claude indisponible')
+    }
+    const credentials = JSON.parse(await readFile(credentialsPath, 'utf8')) as {
+      claudeAiOauth?: { accessToken?: unknown; expiresAt?: unknown }
+    }
+    const accessToken = credentials.claudeAiOauth?.accessToken
+    if (typeof accessToken !== 'string' || accessToken.length < 20) {
+      throw new Error('Session Claude indisponible')
+    }
+    const expiresAt = credentials.claudeAiOauth?.expiresAt
+    return typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+      ? { accessToken, expiresAt }
+      : { accessToken }
+  }
+  // `/api/oauth/usage` est ABANDONNÉ ici : il répond 429 systématiquement pour un token
+  // d'abonnement (bug ouvert non résolu côté Claude Code — issues 31021 / 31637 / 30930 ; vérifié
+  // sur ce poste : /api/oauth/profile → 200 avec le MÊME token, /usage → 429 quels que soient les
+  // en-têtes). Le quota réel vit dans les en-têtes d'un appel d'inférence accepté : une requête
+  // invalide (400) ne les porte PAS (testé), d'où la sonde minimale ci-dessous.
+  const sonder = (accessToken: string): Promise<Response> =>
+    fetchFn('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'anthropic-beta': 'oauth-2025-04-20',
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: CLAUDE_PROBE_MODEL,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: '.' }]
+      }),
+      signal: AbortSignal.timeout(10_000)
+    })
+  let session = await lireSession()
+  // Jeton deja expire d'apres le fichier : la sonde rendrait un 401 certain. On fait renouveler
+  // la session par le CLI d'abord (voir `configureClaudeSessionRenewal`), puis on relit.
+  let renouvelee = false
+  if (session.expiresAt !== undefined && session.expiresAt <= now + MARGE_EXPIRATION_MS) {
+    renouvelee = await renouvelerUneFois(configDir, now, renouveler)
+    if (renouvelee) session = await lireSession()
+  }
+  let response = await sonder(session.accessToken)
+  // 401 sans date d'expiration lisible (ou jeton revoque avant terme) : meme remede, une fois.
+  if (response.status === 401 && !renouvelee) {
+    if (await renouvelerUneFois(configDir, now, renouveler)) {
+      session = await lireSession()
+      response = await sonder(session.accessToken)
+    }
+  }
+  const windows = parseClaudeRateLimitHeaders(response.headers)
+  // Les en-tetes, quand ils sont LA, sont la mesure — quel que soit le statut. Cas reel du
+  // 2026-10-21 : un compte dont le 7 j est epuise repond 429 en publiant
+  // `…-7d-utilization: 1.0` / `…-7d-status: rejected`. Les jeter faisait retomber la barre sur
+  // l'historique Desktop, commun a tous les comptes, donc sans rapport avec le compte choisi.
+  if (windows.length === 0) {
+    if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
+    throw new Error('Claude ne publie aucune fenêtre')
+  }
+  return windows
+}
+
 async function claudeQuota(
   fetchFn: typeof fetch,
   home: string,
@@ -337,72 +418,8 @@ async function claudeQuota(
     // `CLAUDE_CONFIG_DIR`, donc lire `~/.claude` en dur affichait le quota de l'ANCIEN compte apres
     // une bascule. Repli sur le dossier historique quand aucun compte dedie n'est actif.
     const configDir = claudeAccountEnv().CLAUDE_CONFIG_DIR
-    const credentialsPath = configDir
-      ? join(configDir, '.credentials.json')
-      : join(home, '.claude', '.credentials.json')
-    const lireSession = async (): Promise<{ accessToken: string; expiresAt?: number }> => {
-      const credentialsInfo = await stat(credentialsPath).catch(() => undefined)
-      if (!credentialsInfo || credentialsInfo.size > MAX_CREDENTIAL_BYTES) {
-        throw new Error('Session Claude indisponible')
-      }
-      const credentials = JSON.parse(await readFile(credentialsPath, 'utf8')) as {
-        claudeAiOauth?: { accessToken?: unknown; expiresAt?: unknown }
-      }
-      const accessToken = credentials.claudeAiOauth?.accessToken
-      if (typeof accessToken !== 'string' || accessToken.length < 20) {
-        throw new Error('Session Claude indisponible')
-      }
-      const expiresAt = credentials.claudeAiOauth?.expiresAt
-      return typeof expiresAt === 'number' && Number.isFinite(expiresAt)
-        ? { accessToken, expiresAt }
-        : { accessToken }
-    }
-    // `/api/oauth/usage` est ABANDONNÉ ici : il répond 429 systématiquement pour un token
-    // d'abonnement (bug ouvert non résolu côté Claude Code — issues 31021 / 31637 / 30930 ; vérifié
-    // sur ce poste : /api/oauth/profile → 200 avec le MÊME token, /usage → 429 quels que soient les
-    // en-têtes). Le quota réel vit dans les en-têtes d'un appel d'inférence accepté : une requête
-    // invalide (400) ne les porte PAS (testé), d'où la sonde minimale ci-dessous.
-    const sonder = (accessToken: string): Promise<Response> =>
-      fetchFn('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          'anthropic-beta': 'oauth-2025-04-20',
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: CLAUDE_PROBE_MODEL,
-          max_tokens: 1,
-          messages: [{ role: 'user', content: '.' }]
-        }),
-        signal: AbortSignal.timeout(10_000)
-      })
-    let session = await lireSession()
-    // Jeton deja expire d'apres le fichier : la sonde rendrait un 401 certain. On fait renouveler
-    // la session par le CLI d'abord (voir `configureClaudeSessionRenewal`), puis on relit.
-    let renouvelee = false
-    if (session.expiresAt !== undefined && session.expiresAt <= now + MARGE_EXPIRATION_MS) {
-      renouvelee = await renouvelerUneFois(configDir, now, renouveler)
-      if (renouvelee) session = await lireSession()
-    }
-    let response = await sonder(session.accessToken)
-    // 401 sans date d'expiration lisible (ou jeton revoque avant terme) : meme remede, une fois.
-    if (response.status === 401 && !renouvelee) {
-      if (await renouvelerUneFois(configDir, now, renouveler)) {
-        session = await lireSession()
-        response = await sonder(session.accessToken)
-      }
-    }
-    const windows = parseClaudeRateLimitHeaders(response.headers)
-    // Les en-tetes, quand ils sont LA, sont la mesure — quel que soit le statut. Cas reel du
-    // 2026-10-21 : un compte dont le 7 j est epuise repond 429 en publiant
-    // `…-7d-utilization: 1.0` / `…-7d-status: rejected`. Les jeter faisait retomber la barre sur
-    // l'historique Desktop, commun a tous les comptes, donc sans rapport avec le compte choisi.
-    if (windows.length === 0) {
-      if (!response.ok) throw new Error(`Claude /usage HTTP ${response.status}`)
-      throw new Error('Claude ne publie aucune fenêtre')
-    }
+    const windows = await sonderEnTetesClaude(fetchFn, configDir, home, now, renouveler)
+    memoriserQuotaDuCompte(configDir, windows, now)
     return {
       status: 'available',
       source: 'Quota Claude (en-têtes API)',
@@ -650,6 +667,73 @@ async function codexQuota(home: string, now: number): Promise<ProviderQuota> {
  */
 export function invalidateModelQuotaCache(): void {
   cached = undefined
+}
+
+/**
+ * QUOTA D'UN COMPTE NOMME, pour la bascule avant lancement (conv-1069, `bascule-quota.ts`) : savoir
+ * si l'AUTRE compte a de la marge avant d'y partir. Indexe par dossier de compte, donc jamais perime
+ * par une bascule, a l'inverse du snapshot ci-dessus. Une mesure ratee est memorisee aussi : un
+ * compte non connecte ne doit pas etre resonde a chaque tour.
+ */
+const quotasParCompte = new Map<
+  string,
+  { expiresAt: number; fenetres: ModelQuotaWindow[] | undefined }
+>()
+const sondesParCompteEnVol = new Map<string, Promise<ModelQuotaWindow[] | undefined>>()
+
+const cleDeCompte = (configDir: string | undefined): string => configDir ?? '<defaut>'
+
+/** La sonde de la barre de quota (compte actif) alimente la meme memoire : pas de double sonde. */
+function memoriserQuotaDuCompte(
+  configDir: string | undefined,
+  fenetres: ModelQuotaWindow[] | undefined,
+  now: number
+): void {
+  quotasParCompte.set(cleDeCompte(configDir), { expiresAt: now + CACHE_MS, fenetres })
+}
+
+/**
+ * Les fenetres du compte dont `configDir` est le dossier (`undefined` = compte par defaut), ou
+ * `undefined` si elles ne sont pas mesurables. JAMAIS de repli sur l'historique du client Desktop ni
+ * sur les transcripts : ces sources sont communes a tous les comptes, elles feraient croire qu'un
+ * compte a de la marge sur la foi des chiffres d'un autre.
+ */
+export async function quotaClaudeDuCompte(
+  configDir: string | undefined,
+  options: {
+    fetchFn?: typeof fetch
+    home?: string
+    now?: number
+    renouvelerSession?: RenouvellementSessionClaude
+  } = {}
+): Promise<ModelQuotaWindow[] | undefined> {
+  const now = options.now ?? Date.now()
+  const cle = cleDeCompte(configDir)
+  const memorise = quotasParCompte.get(cle)
+  if (memorise && memorise.expiresAt > now) return memorise.fenetres
+  const enVol = sondesParCompteEnVol.get(cle)
+  if (enVol) return enVol
+  const sonde = sonderEnTetesClaude(
+    options.fetchFn ?? fetch,
+    configDir,
+    options.home ?? homedir(),
+    now,
+    options.renouvelerSession ?? renouvellementSession
+  )
+    .catch(() => undefined)
+    .then((fenetres) => {
+      memoriserQuotaDuCompte(configDir, fenetres, now)
+      return fenetres
+    })
+    .finally(() => sondesParCompteEnVol.delete(cle))
+  sondesParCompteEnVol.set(cle, sonde)
+  return sonde
+}
+
+/** Vide la memoire des quotas par compte — reserve aux tests. */
+export function resetQuotasParCompteForTests(): void {
+  quotasParCompte.clear()
+  sondesParCompteEnVol.clear()
 }
 
 export async function getModelQuotaSnapshot(

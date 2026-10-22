@@ -16,7 +16,12 @@ import {
   rolesFixture,
   scenarioDemande
 } from './fixture-orchestration'
-import { claudeActiveAccountId, claudeRotateAccount, claudeAccountEnv } from './claude-accounts'
+import {
+  claudeActiveAccountId,
+  claudePreventiveSwitch,
+  claudeRotateAccount,
+  claudeAccountEnv
+} from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
 import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
@@ -444,7 +449,11 @@ export class AutowinOS {
       // 4e argument : la ROTATION. Un abonnement epuise ne doit pas arreter le travail s'il en reste
       // un autre. Seul `claude` est multi-comptes ; les autres providers rendent `undefined` et
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
-      (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined)
+      (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined),
+      // 5e argument : la BASCULE AVANT LANCEMENT (conv-1069). Quitter un compte presque epuise avant
+      // l'appel plutot qu'apres son refus ; seul `claude` a plusieurs comptes.
+      (providerId, actif) =>
+        providerId === 'claude' ? claudePreventiveSwitch(actif) : Promise.resolve(undefined)
     )
       // Claude est le SEUL moteur enregistré. Codex, Kimi et Gemini sont des projets abandonnés :
       // leurs adaptateurs restent dans l'arbre (relecture de l'historique, types) mais ne sont plus

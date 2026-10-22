@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from '../claude-accounts'
+import { basculerAvantLancement } from '../bascule-quota'
 import { ProviderRegistry } from './registry'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './types'
 
@@ -445,5 +446,161 @@ describe('rotation d’abonnement sur quota epuise', () => {
     await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
     expect(calls).toEqual([DEFAULT_ACCOUNT_ID, 'compte-2', 'compte-3'])
     expect(store.active().id).toBe('compte-3')
+  })
+})
+
+/**
+ * BASCULE AVANT LE LANCEMENT (conv-1069, 2026-10-22) : le compte presque épuisé est quitté AVANT
+ * l'appel, au lieu d'attendre que le fournisseur le refuse. Cas réel conv-1065 : cinq tours Opus
+ * partis en parallèle ont vidé la session d'un compte en trois minutes, l'autre compte était libre.
+ */
+describe('bascule avant le lancement', () => {
+  /** Un pool figé sur `compte-A`, qui note le compte de chaque appel réellement parti. */
+  function pool(): { actif: () => string; appels: string[]; claude: ProviderAdapter } {
+    const appels: string[] = []
+    return {
+      actif: () => 'compte-A',
+      appels,
+      claude: {
+        id: 'claude',
+        async auth() {
+          return true
+        },
+        // eslint-disable-next-line require-yield
+        async *send() {
+          appels.push('compte-A')
+          return { text: 'ok', provider: 'claude', systemInjected: false }
+        }
+      }
+    }
+  }
+
+  it('le premier appel part DIRECTEMENT sur le compte qui a de la marge', async () => {
+    let actif = 'compte-A'
+    const appels: string[] = []
+    const claude: ProviderAdapter = {
+      id: 'claude',
+      async auth() {
+        return true
+      },
+      // eslint-disable-next-line require-yield
+      async *send() {
+        appels.push(actif)
+        return { text: 'ok', provider: 'claude', systemInjected: false }
+      }
+    }
+    const demandes: string[] = []
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      undefined,
+      async (_providerId, compte) => {
+        demandes.push(compte)
+        actif = 'compte-B'
+        return 'compte-B'
+      }
+    ).register(claude)
+
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(demandes).toEqual(['compte-A'])
+    expect(appels).toEqual(['compte-B']) // aucun appel n'a été brûlé sur le compte presque vide
+  })
+
+  it('une bascule en échec ne bloque jamais l’appel : il part sur le compte actif', async () => {
+    const { actif, appels, claude } = pool()
+    const registry = new ProviderRegistry(undefined, undefined, actif, undefined, async () => {
+      throw new Error('sonde de quota en panne')
+    }).register(claude)
+
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(appels).toEqual(['compte-A'])
+  })
+
+  it('la rotation après refus ne rejoue PAS la bascule préventive (une seule par envoi)', async () => {
+    let actif = 'compte-A'
+    const claude = new FauxProvider('claude')
+    claude.erreur = MUR_DE_QUOTA
+    const demandes: string[] = []
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      (_providerId, walled) => {
+        if (walled !== 'compte-A') return undefined
+        actif = 'compte-B'
+        claude.erreur = undefined
+        return 'compte-B'
+      },
+      async (_providerId, compte) => {
+        demandes.push(compte)
+        return undefined // le compte actif avait encore de la marge d'après la sonde
+      }
+    ).register(claude)
+
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(demandes).toEqual(['compte-A'])
+    expect(claude.appels).toBe(2)
+  })
+
+  it('chaîne de production : vrai store, vraie décision — le CLI part sur le compte libre', async () => {
+    const store = new ClaudeAccountsStore('C:/state/accounts.json', 'C:/state/accounts', {
+      readFile: () =>
+        JSON.stringify({
+          version: 1,
+          activeId: DEFAULT_ACCOUNT_ID,
+          accounts: [
+            { id: DEFAULT_ACCOUNT_ID, addedAt: '2026-10-22T00:00:00.000Z' },
+            {
+              id: 'compte-2',
+              dir: 'C:/state/accounts/compte-2',
+              addedAt: '2026-10-22T00:00:00.000Z'
+            }
+          ]
+        }),
+      writeFile: () => undefined,
+      makeDir: () => undefined,
+      removeDir: () => undefined,
+      now: () => '2026-10-22T00:00:00.000Z'
+    })
+    // Mesures du 22/10 : le compte par défaut à 91 % de sa session, le second à 12 %.
+    const utilisation: Record<string, number> = { [DEFAULT_ACCOUNT_ID]: 91, 'compte-2': 12 }
+    const comptesDesAppels: string[] = []
+    const claude: ProviderAdapter = {
+      id: 'claude',
+      async auth() {
+        return true
+      },
+      // eslint-disable-next-line require-yield
+      async *send() {
+        comptesDesAppels.push(store.active().id)
+        return { text: 'ok', provider: 'claude', systemInjected: false }
+      }
+    }
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => store.active().id,
+      (_providerId, walled) => store.rotateAwayFrom(walled),
+      (_providerId, actifId) =>
+        basculerAvantLancement({
+          actifId,
+          comptes: store.current().accounts.map((compte) => compte.id),
+          mesurer: async (id) => utilisation[id],
+          actifCourant: () => store.active().id,
+          basculer: (id) => void store.switchTo(id)
+        })
+    ).register(claude)
+
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(comptesDesAppels).toEqual(['compte-2'])
+    expect(store.active().id).toBe('compte-2')
+  })
+
+  it('sans bascule préventive branchée, le comportement d’avant est inchangé', async () => {
+    const { actif, appels, claude } = pool()
+    const registry = new ProviderRegistry(undefined, undefined, actif).register(claude)
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(appels).toEqual(['compte-A'])
   })
 })
