@@ -830,7 +830,10 @@ details:not(
   place-items: center;
   width: 0.8375em;
   height: 0.8375em;
-  animation: aw-atom-spin 2.7s linear infinite;
+  /* PAR CRANS DE 100 MS, pas en continu (conv-1075) : une rotation fluide fait recomposer toute la
+     fenetre 60 fois par seconde — 20 a 25 % d'une GT 1030 pour ces atomes. Crans = duree / 0,1 s ;
+     le calage sur une horloge commune est dans animations-par-crans.ts. */
+  animation: aw-atom-spin 2.7s steps(27) infinite;
 }
 .aw-atom__rot > * {
   grid-area: 1/1;
@@ -846,11 +849,13 @@ details:not(
 }
 .aw-atom__rot--2 {
   animation-duration: 3.3s;
+  animation-timing-function: steps(33);
   animation-delay: -0.9s;
   animation-direction: reverse;
 }
 .aw-atom__rot--3 {
   animation-duration: 3.9s;
+  animation-timing-function: steps(39);
   animation-delay: -1.8s;
 }
 .aw-atom__trail {
@@ -907,7 +912,8 @@ details:not(
 }
 .aw-atom__star {
   clip-path: polygon(50% 0%, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0% 50%, 42% 42%);
-  animation: aw-atom-tw 1.6s ease-in-out infinite;
+  /* Par crans de 100 ms, comme les orbites (conv-1075) : 0,8 s par demi-battement = 8 crans. */
+  animation: aw-atom-tw 1.6s steps(8) infinite;
 }
 .aw-atom__star--edge {
   width: 0.2875em;
