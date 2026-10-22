@@ -45,3 +45,45 @@ describe('ui-capture — gestes de la chaîne --click', () => {
     expect(selection).toContain("'mouseup'")
   })
 })
+
+/**
+ * `survol:` (conv-1059, 2026-10-22) : le détail d'une station de la carte du fil ne s'ouvre qu'au
+ * SURVOL ou au FOCUS, ce que fait une vraie souris avant son clic — `element.click()` ne fait ni
+ * l'un ni l'autre. Sans ce geste, « le détail est transparent, on voit rien » ne se prouvait sur
+ * aucune capture. Le script est JOUÉ ici : React écoute `mouseover` (pour onMouseEnter) et `focusin`.
+ */
+describe('ui-capture — geste survol:', () => {
+  it('survol: → survol, sélecteur intact', () => {
+    expect(gesteDeLEtape('survol: li:has(.repere) .carte-point')).toEqual({
+      geste: 'survol',
+      selecteur: 'li:has(.repere) .carte-point'
+    })
+  })
+
+  it('le script survole ET donne le focus à la cible, sans cliquer', () => {
+    const recus = []
+    const cible = {
+      dispatchEvent: (evenement) => recus.push(`${evenement.type}:${evenement.bubbles}`),
+      focus: () => recus.push('focus'),
+      click: () => recus.push('click')
+    }
+    const document = { querySelector: (selecteur) => (selecteur === '.a' ? cible : null) }
+    // Les constructeurs d'évènements du navigateur, absents de Node : une doublure suffit ici.
+    class Evenement {
+      constructor(type, init) {
+        this.type = type
+        this.bubbles = init?.bubbles === true
+      }
+    }
+    const jouer = (selecteur) =>
+      new Function(
+        'document',
+        'MouseEvent',
+        'PointerEvent',
+        `return ${scriptDuGeste({ geste: 'survol', selecteur })}`
+      )(document, Evenement, Evenement)
+    expect(jouer('.a')).toBe(true)
+    expect(recus).toEqual(['pointerover:true', 'mouseover:true', 'focus'])
+    expect(jouer('.absent')).toBe(false)
+  })
+})

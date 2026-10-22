@@ -2,8 +2,11 @@ import { portCdp } from './cdp-port.mjs'
 // Harnais de mesure tokens d'orchestration (repo-map #1 + compaction juge #3).
 //
 // S'abonne au flux RÉEL `onOrchestrateStep` (chaque step exec porte .prompt = messages envoyés au
-// sous-agent, incluant la repo-map, et .usage = inputTokens), déclenche une orchestration, approuve
-// les décisions d'autorité, puis rapporte par phase : repo-map injectée ? tokens input/output ?
+// sous-agent, incluant la repo-map, et .usage = inputTokens), déclenche une orchestration, puis
+// rapporte par phase : repo-map injectée ? tokens input/output ?
+// (Plus d'approbation d'autorité : `authorityPending`/`authorityResolve` ont quitté le pont le
+// 2026-08-09, commit 75210ccf ; la boucle qui les appelait rendait `[]` en silence — residus
+// 2026-10-22, conv-1062.)
 //
 // Usage : RUN_LABEL=on RUN_TASK="..." node scripts/measure-orchestration-tokens.mjs
 // A/B : lancer une fois avec graphify-out/ présent (repo-map ON), une fois renommé (OFF), comparer.
@@ -77,21 +80,9 @@ await ev(String.raw`(() => {
 
 await ev(`window.api.orchestrate(${JSON.stringify(fullTask)})`, false)
 
-let approved = 0
 let idle = 0
 for (let i = 0; i < 160; i++) {
   await sleep(2500)
-  const pend = await ev(
-    `(async()=>{try{const p=await window.api.authorityPending();return p.map(d=>d.id)}catch(e){return []}})()`
-  )
-  if (Array.isArray(pend) && pend.length) {
-    for (const id of pend) {
-      await ev(`window.api.authorityResolve(${JSON.stringify(id)},true)`, false)
-      approved++
-    }
-    idle = 0
-    continue
-  }
   // Fin : le dernier step est un 'gate' ou un 'judge' completed, et plus rien ne bouge.
   const snap = await ev(
     `(() => { const s = window.__mSteps || []; const last = s[s.length-1]; return { n: s.length, lastStep: last && last.step, lastStatus: last && last.status } })()`
@@ -109,7 +100,6 @@ const exec = steps.filter((s) => s.step === 'exec')
 const report = {
   label: LABEL,
   sentinel,
-  approved,
   totalSteps: steps.length,
   execPhases: exec.length,
   repoMapReached: exec.some((s) => s.repoMapInUser || s.repoMapInSys),
