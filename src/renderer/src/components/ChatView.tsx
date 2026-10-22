@@ -2595,6 +2595,29 @@ export function ChatView({
     drainApresVerrouRef.current.add(id)
     return true
   }
+  /**
+   * LA COMPACTION AUTOMATIQUE ATTEND LE VERROU, ELLE AUSSI (conv-1080, 2026-10-22).
+   *
+   * Décidée au `done` qui franchit le palier critique — donc dans l'intervalle où le verrou d'envoi
+   * tient encore (voir `teteRetenueParLeVerrou`). `send` la refusait sans un mot, alors que le fil
+   * était déjà noté compacté (`compactionAutoRef`) : plus aucune tentative avant que la jauge
+   * redescende, ce qu'elle ne fait pas sans résumé. Verrou tenu ou tour reparti = elle attend, et la
+   * fin de clôture de `send` la relance. Témoin : `ChatView.compaction-auto-verrou.test.tsx`.
+   */
+  const compactionEnAttenteRef = useRef(new Set<string>())
+  function lancerCompactionAuto(conversationId: string): void {
+    if (
+      sendLocksRef.current.has(conversationId) ||
+      busyConversationsRef.current.has(conversationId)
+    ) {
+      compactionEnAttenteRef.current.add(conversationId)
+      return
+    }
+    compactionEnAttenteRef.current.delete(conversationId)
+    // Un résumé est déjà parti pendant l'attente (bouton Compacter) : un second serait payé pour rien.
+    if (dernierMessageUtilisateurDe(conversationId)?.trim() === COMPACT_REQUEST) return
+    void send(COMPACT_REQUEST, { targetConversationId: conversationId })
+  }
   /** Le drain retenu par le verrou, rejoué quand l'envoi qui le tenait s'est clos. */
   function drainerApresVerrou(id: string): void {
     // Un tour est reparti entre-temps (mode auto, message tapé) : la fin de CE tour drainera.
@@ -3356,10 +3379,13 @@ export function ChatView({
         if (doitCompacterAutomatiquement(jauge, dernierMessageUtilisateurDe(conversationId))) {
           if (!compactionAutoRef.current.has(conversationId)) {
             compactionAutoRef.current.add(conversationId)
-            void send(COMPACT_REQUEST, { targetConversationId: conversationId })
+            // Ce `done` arrive AVANT la réponse de `pilotChat` : le verrou d'envoi tient encore, la
+            // compaction l'attend au lieu d'être refusée sans un mot (conv-1080).
+            lancerCompactionAuto(conversationId)
           }
         } else if (jauge && jauge.level !== 'critique') {
           compactionAutoRef.current.delete(conversationId)
+          compactionEnAttenteRef.current.delete(conversationId)
         }
       }
       if (e.kind === 'stream-reset' && e.streamId)
@@ -5924,6 +5950,9 @@ export function ChatView({
       // est déjà en cours » et serait avalé sans bruit.
       if (repriseApresSurcharge && convId)
         void relancerApresSurcharge(convId, value, outgoingAttachments, repriseApresSurcharge)
+      // La compaction décidée au `done` de CE tour attendait son verrou : elle passe AVANT la file,
+      // comme quand elle partait directement au `done` ; la file attendra la fin du résumé.
+      if (convId && compactionEnAttenteRef.current.has(convId)) lancerCompactionAuto(convId)
       // Même raison : un drain a vu le fil libre pendant que CET envoi tenait encore son verrou ;
       // la tête de file l'a attendu, elle part maintenant (`teteRetenueParLeVerrou`, conv-1080).
       if (convId && drainApresVerrouRef.current.delete(convId)) drainerApresVerrou(convId)
