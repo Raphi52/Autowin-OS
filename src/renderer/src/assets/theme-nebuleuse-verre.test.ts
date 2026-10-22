@@ -679,7 +679,9 @@ describe('Boutons a chanfrein Platine', () => {
   /* conv-1068 (2026-10-22 : « remet des bords arrondis sur le bouton envoyer stop et nouveau
      fil ») : ces trois-la quittent la coupe pour des coins arrondis, Details la garde. ENTREE QUI
      DOIT FAIRE ECHOUER : une coupe restee sur l'un des trois, ou un cadre encore taille en
-     polygone (il ne suivrait pas l'arrondi et deborderait aux coins). */
+     polygone (il ne suivrait pas l'arrondi et deborderait aux coins). Meme jour, « enleve le bord
+     blanc dans les coins » : leurs pans allumes (haut gauche, bas droit) disparaissent, l'anneau
+     n'a plus que ses cotes ; un pan revenu sur l'un des trois doit faire echouer. */
   const ARRONDIS: Record<string, string> = {
     envoyer: '8px',
     stop: '8px',
@@ -701,7 +703,7 @@ describe('Boutons a chanfrein Platine', () => {
       expect(r['border-radius'], nom).toBe('var(--nv-bouton-rayon)')
       expect(r['--nv-bouton-rayon'], nom).toBe(rayon)
       expect(r['--nv-bouton-coupe'], nom).toBeUndefined()
-      expect(r['--nv-bouton-pans'], nom).toBe(MESURES[nom][1])
+      expect(r['--nv-bouton-pans'], nom).toBeUndefined()
       expect(r.position, nom).toBe('relative')
     }
   })
@@ -712,12 +714,12 @@ describe('Boutons a chanfrein Platine', () => {
       expect(cadre.content, nom).toBe("''")
       expect([cadre.position, cadre.inset], nom).toEqual(['absolute', '0'])
       expect(cadre['pointer-events'], nom).toBe('none')
-      expect(cadre.background, nom).toContain('var(--nv-chanfrein-haut)')
-      expect(cadre.background, nom).toContain('var(--nv-chanfrein-bas)')
-      expect(cadre.background, nom).toContain('var(--nv-bouton-pans) var(--nv-bouton-pans)')
       expect(cadre.background, nom).not.toMatch(/#[0-9a-f]{3,6}\b/i)
       if (nom in ARRONDIS) {
-        // Anneau evide par masque, qui suit l'arrondi du bouton.
+        // Anneau evide par masque, qui suit l'arrondi du bouton ; cotes seules, aucun pan clair.
+        expect(cadre.background, nom).toBe(
+          'linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes))'
+        )
         expect(cadre.padding, nom).toBe('1px')
         expect(cadre['border-radius'], nom).toBe('inherit')
         expect(cadre['clip-path'], nom).toBe('none')
@@ -725,6 +727,9 @@ describe('Boutons a chanfrein Platine', () => {
           'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)'
         )
       } else {
+        expect(cadre.background, nom).toContain('var(--nv-chanfrein-haut)')
+        expect(cadre.background, nom).toContain('var(--nv-chanfrein-bas)')
+        expect(cadre.background, nom).toContain('var(--nv-bouton-pans) var(--nv-bouton-pans)')
         expect(cadre.padding, nom).toBe('0')
         expect(cadre.mask, nom).toBe('none')
         expect(cadre['clip-path'], nom).toMatch(/^polygon\(evenodd,/)
