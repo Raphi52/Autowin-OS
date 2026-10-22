@@ -310,7 +310,9 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // propriété n'ait bougé — et un garde qui crie à tort finit par ne plus être cru.
     // fix-ok: b389b5fe a deplace l'objet `env: {` du spawn dans `environnementAgent(` — le
     // repere litteral n'existait plus (indexOf = -1). On lit l'APPEL reel et la fonction.
-    const start = source.indexOf('env: environnementAgent(')
+    // f8bd6612 (2026-10-21, conv-1040) calcule l'env UNE fois (`envDuTour`) et le passe au spawn ET
+    // au relais Windows : on lit cette affectation, puis on exige que le spawn l'utilise (conv-1056).
+    const start = source.indexOf('envDuTour = environnementAgent(')
     expect(start).toBeGreaterThan(-1)
     // (b) porte par la fonction : NON_INTERACTIVE_ENV etale EN DERNIER dans son retour.
     expect(source).toMatch(/return \{\s*\.\.\.base,\s*\.\.\.\(agentEnv \?\? \{\}\),\s*\.\.\.NON_INTERACTIVE_ENV\s*\}/)
@@ -342,10 +344,15 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // La base reste `process.env` — eventuellement NORMALISEE par `withClaudeAccountEnv`, qui
     // pose ou RETIRE le seul CLAUDE_CONFIG_DIR (multi-comptes) et ne touche a rien d'autre.
     // Ce n'est pas un desserrage : tout autre point de depart que l'env herite reste refuse.
-    const base = /env: environnementAgent\(\s*\{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
+    const base = /envDuTour = environnementAgent\(\s*\{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
       envBlock
     )
     expect(base?.[1]).toBeDefined()
+    // Le spawn reçoit `envDuTour`, ou l'env du relais qui en DÉRIVE (étendu de son seul drapeau de
+    // lancement, que le relais retire avant de lancer le CLI).
+    expect(source).toContain('env: invocation.env ?? envDuTour,')
+    const relais = readFileSync(join(__dirname, '..', 'runs', 'survivable-spawn.ts'), 'utf8')
+    expect(relais).toMatch(/env: \{ \.\.\.baseEnv, ELECTRON_RUN_AS_NODE: '1' \}/)
   })
 })
 
