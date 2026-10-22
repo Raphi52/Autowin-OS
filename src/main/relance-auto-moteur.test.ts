@@ -337,16 +337,47 @@ describe('empreinteDuCodeCompile', () => {
     if (dossier) rmSync(dossier, { recursive: true, force: true })
   })
 
-  it('ne regarde que les .js : une carte de sources (.map) ne change pas l’empreinte', () => {
+  it('ne regarde que les .js : une carte de sources (.map) ne change pas l’empreinte', async () => {
     dossier = mkdtempSync(join(tmpdir(), 'empreinte-moteur-'))
     mkdirSync(join(dossier, 'main', 'chunks'), { recursive: true })
     writeFileSync(join(dossier, 'main', 'index.js'), 'a()')
     writeFileSync(join(dossier, 'main', 'chunks', 'x.js'), 'b()')
-    const avant = empreinteDuCodeCompile(dossier)
+    const avant = await empreinteDuCodeCompile(dossier)
     writeFileSync(join(dossier, 'main', 'index.js.map'), '{"sourcesContent":["// commentaire"]}')
-    expect(empreinteDuCodeCompile(dossier)).toBe(avant)
+    expect(await empreinteDuCodeCompile(dossier)).toBe(avant)
     writeFileSync(join(dossier, 'main', 'chunks', 'x.js'), 'c()')
-    expect(empreinteDuCodeCompile(dossier)).not.toBe(avant)
+    expect(await empreinteDuCodeCompile(dossier)).not.toBe(avant)
+  })
+
+  // Valeur figée le 2026-10-22 avec la version SYNCHRONE (conv-1077) : passer en lecture asynchrone
+  // ne doit pas changer l'empreinte, sinon la première compilation après la mise à jour verrait un
+  // « moteur changé » qui n'existe pas et relancerait l'app pour rien.
+  it('garde exactement l’empreinte de la version synchrone (ordre, séparateurs, sous-dossiers)', async () => {
+    dossier = mkdtempSync(join(tmpdir(), 'empreinte-moteur-'))
+    mkdirSync(join(dossier, 'main', 'chunks'), { recursive: true })
+    mkdirSync(join(dossier, 'preload'), { recursive: true })
+    writeFileSync(join(dossier, 'main', 'index.js'), 'a()')
+    writeFileSync(join(dossier, 'main', 'chunks', 'x.js'), 'b()')
+    writeFileSync(join(dossier, 'main', 'index.js.map'), '{}')
+    writeFileSync(join(dossier, 'preload', 'index.js'), 'p()')
+    writeFileSync(join(dossier, 'Z.js'), 'z()')
+    expect(await empreinteDuCodeCompile(dossier)).toBe('fa5c7119302fd9c84129a06fb9e9dcd7bddeaca4')
+  })
+
+  // Gels conv-1077 : la lecture synchrone de tout le code compilé, faite dans le `close` de la
+  // compilation, figeait la fenêtre (22 lectures lentes, 56,6 s du 15 au 22/10, gels.jsonl). Une
+  // lecture qui rend la main laisse passer la boucle d'événements avant d'avoir fini.
+  it('rend la main à la boucle d’événements pendant le calcul', async () => {
+    dossier = mkdtempSync(join(tmpdir(), 'empreinte-moteur-'))
+    mkdirSync(join(dossier, 'main'), { recursive: true })
+    writeFileSync(join(dossier, 'main', 'index.js'), 'a()')
+    let bouclePassee = false
+    const calcul = empreinteDuCodeCompile(dossier)
+    setImmediate(() => {
+      bouclePassee = true
+    })
+    await calcul
+    expect(bouclePassee).toBe(true)
   })
 })
 
