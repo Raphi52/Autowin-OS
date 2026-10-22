@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import { bailDeviceMetricsOverride, withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 
 const metrics = {
   width: 1500,
@@ -57,6 +57,25 @@ describe('withDeviceMetricsOverride', () => {
       { method: 'Emulation.clearDeviceMetricsOverride', params: {} },
       { method: 'restore-state', params: {} },
       { method: 'Page.reload', params: { ignoreCache: false } }
+    ])
+  })
+})
+
+describe('bailDeviceMetricsOverride', () => {
+  it('pose la taille, la retire UNE fois au premier liberer(), sans recharger la page', async () => {
+    const calls = []
+    const send = async (method, params = {}) => {
+      calls.push({ method, params })
+    }
+
+    const liberer = await bailDeviceMetricsOverride(send, metrics)
+    expect(calls).toEqual([{ method: 'Emulation.setDeviceMetricsOverride', params: metrics }])
+
+    await liberer()
+    await liberer()
+    expect(calls).toEqual([
+      { method: 'Emulation.setDeviceMetricsOverride', params: metrics },
+      { method: 'Emulation.clearDeviceMetricsOverride', params: {} }
     ])
   })
 })

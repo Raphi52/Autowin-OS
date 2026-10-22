@@ -177,7 +177,11 @@ describe('discipline de pipeline canonique', () => {
     const source = readFileSync(new URL('../../scripts/ui-capture.mjs', import.meta.url), 'utf8')
     const optionsLues = [
       ...new Set(
-        [...source.matchAll(/(?:argument|drapeau)\((?:'|")(--[a-z-]+)(?:'|")/g)].map((m) => m[1])
+        // `valeurApres(...)` (choixDeListe, conv-981) est le TROISIEME idiome de lecture : `--tour`
+        // y a demenage et sortait du classement sans bruit (rouge constate le 2026-10-22, conv-1056).
+        [...source.matchAll(/(?:argument|drapeau|valeurApres)\((?:'|")(--[a-z-]+)(?:'|")/g)].map(
+          (m) => m[1]
+        )
       )
     ].sort()
 
@@ -199,8 +203,12 @@ describe('discipline de pipeline canonique', () => {
     //   indicateur de chargement ; sans lui, la vue chargee n'est jamais prouvee. Contrat.
     // `--retraits` : MESURE au rendu le retrait du contenu dans le cadre de page — un ecart de 18 a
     //   38 px ne se lit pas sur une image. Aucune capture ne donne ce chiffre. Contrat.
+    // `--choisir <selecteur> --valeur <v>` (conv-981, classe le 2026-10-22, conv-1056) : choisir une
+    //   valeur dans N'IMPORTE QUELLE liste <select> — le meme mur que `--theme` : le menu natif
+    //   s'ouvre hors de la page, aucun clic n'y choisit. Il ouvre une preuve : contrat.
     const CONTRAT_DE_PREUVE = [
       '--attendre',
+      '--choisir',
       '--click',
       '--code-dev',
       '--css',
@@ -210,6 +218,7 @@ describe('discipline de pipeline canonique', () => {
       '--retraits',
       '--state',
       '--theme',
+      '--valeur',
       '--view'
     ]
     // Reglages a valeur par defaut suffisante : ils affinent une preuve deja accessible, ils n'en
@@ -223,6 +232,9 @@ describe('discipline de pipeline canonique', () => {
     //   prouver un changement frais. Ils affinent cette preuve, ils n'en ouvrent aucune.
     // `--hauteur` (128ffd16) : ne sert qu'avec `--largeur`, qui ouvre la preuve ; son defaut (largeur
     //   x 9/16, un ecran courant) suffit. Il affine cette preuve, il n'en ouvre aucune.
+    // `--stockage-local` (b49ce52a, conv-1000) : seme des cles localStorage, REFUSE hors de
+    //   l'instance cachee ou `--conversation` a copie un fil. Comme `--donnees` et `--tour`, il
+    //   affine la preuve que `--conversation` ouvre ; il n'en ouvre aucune.
     const REGLAGES = [
       '--donnees',
       '--frames',
@@ -231,6 +243,7 @@ describe('discipline de pipeline canonique', () => {
       '--port',
       '--scroll',
       '--state-selector',
+      '--stockage-local',
       '--tour'
     ]
 

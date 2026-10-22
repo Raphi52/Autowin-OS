@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Spinner } from './Spinner'
 import type {
   EtatPorteProd,
   NiveauProtectionProd,
@@ -204,7 +205,13 @@ export function ProdProtectionSettings(): React.JSX.Element {
           disabled={calcul}
           onClick={() => void proposer()}
         >
-          {calcul ? 'Lecture du catalogue…' : 'Proposer la liste depuis le catalogue SQL'}
+          {calcul ? (
+            <>
+              <Spinner size={12} /> Lecture du catalogue…
+            </>
+          ) : (
+            'Proposer la liste depuis le catalogue SQL'
+          )}
         </button>
         {proposition && !proposition.ok && (
           <p className="prod-message prod-message-erreur" role="alert">

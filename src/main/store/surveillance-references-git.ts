@@ -13,8 +13,9 @@
  * Ce module ne lance AUCUN processus git : il lit le système de fichiers. Coût à vide : deux
  * veilleurs du système, aucun sondage.
  */
-import { readFileSync, statSync, watch, type FSWatcher } from 'node:fs'
+import { readFileSync, statSync, type FSWatcher } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
+import { surveillerDossier } from '../surveiller-dossier'
 
 /**
  * Le répertoire git COMMUN d'un dépôt (celui qui porte `refs/` et `packed-refs`), sans lancer git.
@@ -125,14 +126,18 @@ export function surveillerReferencesGit(
 
   try {
     veilleurs.push(
-      watch(commun, { persistent: false }, (_type, nom) => {
+      surveillerDossier(commun, { persistent: false }, (_type, nom) => {
         if (changementTouchantLeRecensement('racine', nom)) signaler()
       })
     )
     veilleurs.push(
-      watch(join(commun, 'refs'), { persistent: false, recursive: true }, (_type, nom) => {
-        if (changementTouchantLeRecensement('refs', nom)) signaler()
-      })
+      surveillerDossier(
+        join(commun, 'refs'),
+        { persistent: false, recursive: true },
+        (_type, nom) => {
+          if (changementTouchantLeRecensement('refs', nom)) signaler()
+        }
+      )
     )
   } catch (erreur) {
     enPanne(erreur)

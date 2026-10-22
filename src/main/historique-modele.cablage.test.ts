@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { flattenChatParts, flattenChatPartsForModel } from '../shared/chat-turn'
+import { contenuAssistantPourLeModele } from './chat/dernier-run-entier'
 
 /**
  * L'HISTORIQUE DU MODELE EST-IL REELLEMENT RECONSTRUIT ?
@@ -26,10 +27,23 @@ describe('câblage — l’entrée du modèle est reconstruite depuis les parts'
   it('le résultat ALIMENTE le contenu envoyé, il ne reste pas inutilisé', () => {
     // L'entrée qui doit faire échouer un débranchement : sans cette ligne, la map serait remplie
     // puis ignorée, et le modèle continuerait de recevoir l'étiquette nue.
-    expect(INDEX, 'le contenu envoyé au modèle doit venir de flattenChatPartsForModel').toContain(
-      'const pourLeModele = parts ? flattenChatPartsForModel(parts) || m.content : m.content'
+    //
+    // Depuis 1d20dd6c (2026-10-16, conv-989) le DERNIER run est relu en entier dans son journal :
+    // l'appel passe par `contenuAssistantPourLeModele`, qui rend `flattenChatPartsForModel` sur
+    // toutes ses branches (vérifié par comportement ci-dessous, pas par texte). Aligné le
+    // 2026-10-22 (conv-1056).
+    expect(INDEX, 'le contenu envoyé au modèle doit venir des parts reconstruites').toMatch(
+      /const pourLeModele = parts \? contenuAssistantPourLeModele\( parts,[^;]*?\) \|\| m\.content : m\.content/
     )
     expect(INDEX).toContain("content: guardString(pourLeModele, 'content')")
+  })
+
+  it('sans run à relire, l’entrée du modèle EST flattenChatPartsForModel', () => {
+    const parts = [
+      { kind: 'text' as const, text: 'Je lance la vérification.' },
+      { kind: 'action' as const, actionId: 'a1', name: 'verify', ok: true, data: { exitCode: 0 } }
+    ]
+    expect(contenuAssistantPourLeModele(parts)).toBe(flattenChatPartsForModel(parts))
   })
 
   it('l’affichage garde l’étiquette courte — les deux besoins restent séparés', () => {

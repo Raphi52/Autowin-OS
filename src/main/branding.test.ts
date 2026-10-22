@@ -198,7 +198,13 @@ describe('identite Autowin OS', () => {
      */
     expect(theme).toContain("url('./autowin-galaxy-bg-hq.png')")
     expect(theme).toMatch(/body \{[\s\S]*?background:[^;]*#[0-9a-f]{6}\s*;/i)
-    expect(appShell).toContain("{tab === 'accueil' && <DecorDeFond />}")
+    // Depuis 1b6b42c4 (2026-10-19, perf) le decor reste MONTE quelques minutes hors de l'Accueil
+    // pour un retour en 106 ms, mais CACHE et sa boucle arretee : il n'est VISIBLE que sur
+    // l'Accueil. On verifie ce choix-la (test aligne le 2026-10-22, conv-1056).
+    expect(appShell).toContain("<DecorDeFond actif={tab === 'accueil'} />")
+    expect(
+      readFileSync(join(ROOT, 'src/renderer/src/components/DecorDeFond.tsx'), 'utf8')
+    ).toContain("style={actif ? undefined : { display: 'none' }}")
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
     expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)

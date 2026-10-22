@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './ModelActivityLogPane.css'
 import type { Msg } from './chat-view-types'
 import { HumanJson } from './HumanJson'
+import { Spinner } from './Spinner'
 import {
   deltaMs,
   grouperParTour,
@@ -707,7 +708,7 @@ function LogRow({
             {detailDeplie ? <div className="model-log-texte">{detailDeplie}</div> : null}
             {contenus && 'enCours' in contenus ? (
               <div className="model-log-texte" data-testid="model-log-contenus-en-cours">
-                Lecture du contenu…
+                <Spinner size={12} /> Lecture du contenu…
               </div>
             ) : null}
             {contenus && 'erreur' in contenus ? (

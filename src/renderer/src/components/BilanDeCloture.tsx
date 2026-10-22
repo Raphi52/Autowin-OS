@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './Spinner'
 import type { RunClosureObservation } from '../../../shared/run-execution'
 import type { RunEntry } from './chat-view-types'
 import { DerouleRejouable } from './ObservatoryAgentGantt'
@@ -151,7 +152,11 @@ function VerdictDuJugeAffiche({
 }): React.JSX.Element | null {
   if (etat.etat === 'aucun') return null
   if (etat.etat === 'chargement') {
-    return <p className="bilan-cloture__note">Lecture du verdict du juge…</p>
+    return (
+      <p className="bilan-cloture__note">
+        <Spinner size={12} /> Lecture du verdict du juge…
+      </p>
+    )
   }
   if (etat.etat === 'illisible') {
     return (

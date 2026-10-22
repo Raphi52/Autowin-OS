@@ -77,7 +77,12 @@ describe('supprimerArbre — cas limites', () => {
     expect(motifDeRefus(undefined)).toMatch(/mal typé/)
     expect(motifDeRefus(parse(process.cwd()).root)).toMatch(/racine/)
     expect(motifDeRefus(process.cwd())).toMatch(/dossier courant/)
-    expect(motifDeRefus(dirname(process.cwd()))).toMatch(/dossier courant/)
+    // Le parent du dossier courant peut ETRE la racine du lecteur (dépôt à `D:\AutoWinOS`) : il
+    // est alors refusé comme racine, contrôle qui passe en premier (conv-1056, 2026-10-22).
+    const parent = dirname(process.cwd())
+    expect(motifDeRefus(parent)).toMatch(
+      parent === parse(parent).root ? /racine/ : /dossier courant/
+    )
     // Jumeau accepté : un dossier ordinaire hors du dossier courant passe.
     expect(motifDeRefus(d)).toBeNull()
   })

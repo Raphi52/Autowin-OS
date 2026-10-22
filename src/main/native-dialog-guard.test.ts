@@ -26,7 +26,9 @@ describe('dialogues natifs — jamais bloquants quand personne ne regarde', () =
 
   it('les deux helpers passent une fenêtre PARENTE, jamais un dialogue sans parent', () => {
     // `showOpenDialog({...})` sans parent est modal à l'application entière : il vole le focus.
-    expect(source).toContain('dialog.showOpenDialog(visible, { properties: [kind] })')
+    // Depuis 61152fed (2026-10-19) l'ouverture porte aussi des `filters` optionnels (choisir un
+    // .exe) : on exige la fenêtre `visible` en premier argument et le `kind` demandé, rien de plus.
+    expect(source).toMatch(/dialog\.showOpenDialog\(visible, \{\s*properties: \[kind\]/)
     expect(source).toContain('dialog.showSaveDialog(visible, { defaultPath })')
     expect(source).not.toMatch(/dialog\.show(?:Open|Save)Dialog\(\{/)
   })

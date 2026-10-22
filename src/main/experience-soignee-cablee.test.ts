@@ -39,9 +39,20 @@ describe('câblage de l’expérience soignée', () => {
       LE test qui manquait. Sans cet argument, les gardes ne s'arment jamais et l'utilisateur reçoit
       exactement ce qu'il a décrit : des réponses sans conclusion, marquées réussies.
     */
-    const compact = main.replace(/\s+/g, ' ')
-    const appel = compact.slice(compact.indexOf('turnPilot.chat('))
-    expect(appel.slice(0, 1200)).toContain('routingUserMessageOverride')
-    expect(appel.slice(0, 1200)).toMatch(/routingUserMessageOverride,[^)]*true/)
+    // L'APPEL ENTIER, jusqu'a sa parenthese fermante — plus une fenetre fixe de 1200 caracteres :
+    // l'appel a grossi (journal du fournisseur, bornes du tour) et le `true` final en sortait,
+    // alors qu'il etait toujours passe (rouge constate le 2026-10-22, conv-1056).
+    const sansCommentaires = main.replace(/\/\/[^\n]*/g, '')
+    const debut = sansCommentaires.indexOf('turnPilot.chat(')
+    expect(debut).toBeGreaterThan(-1)
+    let profondeur = 0
+    let fin = debut + 'turnPilot.chat'.length
+    for (; fin < sansCommentaires.length; fin++) {
+      if (sansCommentaires[fin] === '(') profondeur++
+      else if (sansCommentaires[fin] === ')' && --profondeur === 0) break
+    }
+    const appel = sansCommentaires.slice(debut, fin + 1).replace(/\s+/g, ' ')
+    // `routingUserMessageOverride`, le tour coupe (`undefined`), puis le drapeau en DERNIER argument.
+    expect(appel).toMatch(/routingUserMessageOverride, [^,]+, true \)$/)
   })
 })

@@ -111,12 +111,15 @@ const CAUSES_INDISPONIBLE: Record<BrainUnavailableReason, string> = {
     'cause exacte : le serveur est vivant mais a refuse d’ouvrir la session (GET /challenge non-ok)',
   'query-refused':
     'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok hors 503 : jeton rejete ou requete invalide)',
-  // conv-1053 (2026-10-22) : 503 = le serveur, sain, revérifie ou attend la reconstruction de son
-  // index après une modification du savoir ; il refuse de servir tant qu'il ne l'a pas prouvé à jour.
+  // conv-1053 (2026-10-22) : depuis que l'index précédent répond pendant qu'une modification de
+  // notes est revérifiée (brain_retrieval.py, `_stale_serving_reason`), un 503 ne reste que dans deux
+  // cas : la toute première vérification après le démarrage du serveur, ou un index douteux en
+  // lui-même (autre version du code, racines, surveillance du corpus en panne).
   reindexing:
-    'cause exacte : le serveur Brain est vivant mais revérifie son index apres une modification du ' +
-    'savoir (POST /query-secure -> 503). C’est TRANSITOIRE : ne rien reparer, rejouer la question dans ' +
-    'quelques minutes ; si le refus dure plus de 10 minutes, `npm run brain:doctor` dit pourquoi',
+    'cause exacte : le serveur Brain est vivant mais n’a pas encore verifie son index depuis son ' +
+    'demarrage, ou le juge douteux (POST /query-secure -> 503). Le plus souvent TRANSITOIRE : ne rien ' +
+    'reparer, rejouer la question dans quelques minutes ; si le refus dure plus de 10 minutes, ' +
+    '`npm run brain:doctor` dit pourquoi',
   timeout:
     'cause exacte : le delai de la requete a expire avant la reponse - le serveur repondait peut-etre, ' +
     'trop lentement',

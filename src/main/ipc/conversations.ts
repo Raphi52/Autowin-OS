@@ -32,10 +32,12 @@ import { estCheminDeDossier } from '../../shared/project-path'
 import { removeConversationArtifacts } from '../store/chat-artifact-store'
 import { oublierFaitRetenu, rememberedFacts } from '../session-memory-echo'
 import { ouvrirCopiesDEssai, revenirAuCodeDuTour } from '../photo-du-code'
-import { bilanDeLaFacon, ecartDeLEssai, garderLEssai } from '../garder-un-essai'
+import { bilanDeLaFacon, ecartDeLEssai, garderLEssai, type EcartDeLEssai } from '../garder-un-essai'
+import { ressemblanceDesEcarts } from '../ressemblance-des-facons'
 import { nomDeCopieDEssai } from '../../shared/essai-trois-facons'
 import type { AutowinOS } from '../os'
 import type { ActiveChatTurns } from '../active-chat-turns'
+import { arreterLesTravauxDuFil } from '../arret-avant-suppression'
 import type { TraceStore } from '../activity/trace-store'
 import type { AppEvent } from '../commands'
 
@@ -55,6 +57,11 @@ export type ConversationsIpcDeps = {
   dossierDuFil: (conversationId: string) => string
   /** Ou s'ouvrent les copies « revenir a ce tour » : hors du dossier partage, jamais dedans. */
   dossierDesRetours: () => string
+  /**
+   * Coupe le run de developpement d'un fil (`bus.abortOrchestration`) : supprimer un fil l'arrete
+   * comme le bouton Stop, au lieu d'attendre sa fin (conv-1060, `arret-avant-suppression.ts`).
+   */
+  couperLeRun: (conversationId: string, motif: string) => boolean
 }
 
 export function registerConversationsIpc({
@@ -67,7 +74,8 @@ export function registerConversationsIpc({
   pickDirectory,
   compterLectureIsolee,
   dossierDuFil,
-  dossierDesRetours
+  dossierDesRetours,
+  couperLeRun
 }: ConversationsIpcDeps): void {
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
@@ -324,39 +332,49 @@ export function registerConversationsIpc({
     if (!Array.isArray(rawIds)) throw new Error('IPC ids: tableau attendu')
     const raisonDe = (erreur: unknown): string =>
       erreur instanceof Error ? erreur.message : String(erreur)
-    return Promise.all(
+    const mesures = await Promise.all(
       rawIds.slice(0, 6).map(async (brut) => {
         const id = guardString(brut, 'id')
         const conversation = os.conversations.get(id)
-        if (!conversation) return { id, ok: false as const, raison: 'Conversation inconnue.' }
+        if (!conversation) return { id, connue: false as const }
         const bilan = bilanDeLaFacon(conversation.messages)
-        if (!conversation.projectPath)
-          return {
-            id,
-            ok: true as const,
-            bilan,
-            ecart: { ok: false as const, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
-          }
-        const ecart = await ecartDeLEssai({
-          copie: conversation.projectPath,
-          dossierDesRetours: dossierDesRetours()
-        }).catch((erreur: unknown) => ({ ok: false as const, raison: raisonDe(erreur) }))
-        return {
-          id,
-          ok: true as const,
-          bilan,
-          // La photo et l'arbre restent ici : l'interface n'a besoin que des fichiers et des lignes.
-          ecart: ecart.ok
-            ? {
-                ok: true as const,
-                fichiers: ecart.fichiers,
-                ajouts: ecart.ajouts,
-                retraits: ecart.retraits
-              }
-            : ecart
-        }
+        const copie = conversation.projectPath ?? ''
+        const ecart: EcartDeLEssai = !copie
+          ? { ok: false, raison: 'Ce fil ne travaille pas dans une copie d’essai.' }
+          : await ecartDeLEssai({ copie, dossierDesRetours: dossierDesRetours() }).catch(
+              (erreur: unknown) => ({ ok: false as const, raison: raisonDe(erreur) })
+            )
+        return { id, connue: true as const, bilan, copie, ecart }
       })
     )
+    // Le contrôle de ressemblance (conv-1057, 2026-10-22) : chaque façon contre ses voisines de la
+    // même photo — rien ne disait que deux façons avaient rendu le même code.
+    const ressemblances = await ressemblanceDesEcarts(
+      mesures.flatMap((mesure) => (mesure.connue ? [mesure] : []))
+    )
+    return mesures.map((mesure) => {
+      if (!mesure.connue)
+        return { id: mesure.id, ok: false as const, raison: 'Conversation inconnue.' }
+      const { id, bilan, ecart } = mesure
+      return {
+        id,
+        ok: true as const,
+        bilan,
+        // La photo et l'arbre restent ici : l'interface n'a besoin que des fichiers et des lignes.
+        ecart: ecart.ok
+          ? {
+              ok: true as const,
+              fichiers: ecart.fichiers,
+              ajouts: ecart.ajouts,
+              retraits: ecart.retraits
+            }
+          : ecart,
+        ressemblance: ressemblances.get(id) ?? {
+          etat: 'sans-objet' as const,
+          raison: 'non mesurée'
+        }
+      }
+    })
   })
   ipcMain.handle('os:conversations:garderEssai', async (event, rawId: unknown) => {
     assertTrustedRendererSender(event, 'Conversation trial keep')
@@ -392,7 +410,7 @@ export function registerConversationsIpc({
   ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
     assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')
-    await activeChatTurns.abortAndWait(id, 'conversation-deleted')
+    await arreterLesTravauxDuFil(id, { couperLeRun, tours: activeChatTurns })
     const removed = os.conversations.remove(id)
     if (removed) {
       removeConversationArtifacts(id)
@@ -416,7 +434,7 @@ export function registerConversationsIpc({
     if (ids.length > LOT_SUPPRESSION_MAX) {
       throw new Error(`lot de suppression trop grand : ${ids.length} > ${LOT_SUPPRESSION_MAX}`)
     }
-    for (const id of ids) await activeChatTurns.abortAndWait(id, 'conversation-deleted')
+    for (const id of ids) await arreterLesTravauxDuFil(id, { couperLeRun, tours: activeChatTurns })
     const removed = os.conversations.removeMany(ids)
     for (const id of removed) {
       removeConversationArtifacts(id)

@@ -110,9 +110,11 @@ export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
  * - `empty-query` : requête vide côté appelant → aucune requête n'est partie.
  * - `challenge-refused` : `GET /challenge` a répondu non-ok (serveur vivant mais refusant).
  * - `query-refused` : `POST /query-secure` a répondu non-ok, hors 503 (jeton rejeté, requête invalide…).
- * - `reindexing` : `POST /query-secure` a répondu 503 — le serveur, SAIN, revérifie ou recharge son
- *   index après une modification du savoir et refuse de servir tant qu'il ne l'a pas prouvé à jour
- *   (`brain_retrieval.py`, barrière de fraîcheur). Transitoire : attendre, ne rien réparer.
+ * - `reindexing` : `POST /query-secure` a répondu 503 — le serveur, SAIN, n'a pas encore prouvé son
+ *   index depuis son démarrage, ou le juge douteux en lui-même (autre version du code, racines,
+ *   surveillance du corpus en panne). Une simple modification de notes ne le provoque plus : l'index
+ *   précédent répond pendant la revérification (`brain_retrieval.py`, `_stale_serving_reason`,
+ *   conv-1053). Le plus souvent transitoire : attendre, ne rien réparer.
  * - `timeout` : NOTRE délai a coupé l'appel (le serveur répondait peut-être, trop lentement).
  * - `network` : rien n'a répondu (serveur arrêté, port fermé, réseau).
  *

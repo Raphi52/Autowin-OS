@@ -292,7 +292,11 @@ describe('renderer chat IPC contract', () => {
       // `provider`, que le chargeur refuse ensuite : l'app est devenue inbootable, 1175
       // conversations inaccessibles. On exige donc desormais que les deux champs traversent
       // `guardString` AVANT d'atteindre le store.
-      /'os:conversations:create'[\s\S]*?guardString\([\s\S]*?'title'\)[\s\S]*?guardString\([\s\S]*?'provider'\)[\s\S]*?os\.conversations\.create\(\{ title, provider \}\)[\s\S]*?scope: 'conversations'/
+      //
+      // Depuis a77507ed (2026-10-21, conv-1038) l'appel passe aussi un `projectPath` optionnel,
+      // lui-meme gardé (`guardString` + chemin absolu) : l'objet s'ecrit sur plusieurs lignes. On
+      // exige toujours `title` et `provider` gardés, en tete de l'objet transmis.
+      /'os:conversations:create'[\s\S]*?guardString\([\s\S]*?'title'\)[\s\S]*?guardString\([\s\S]*?'provider'\)[\s\S]*?os\.conversations\.create\(\{\s*title,\s*provider\b[\s\S]*?scope: 'conversations'/
     )
     expect(sources.main).toMatch(
       /'os:conversations:remove'[\s\S]*?os\.conversations\.remove\(id\)[\s\S]*?scope: 'conversations'/

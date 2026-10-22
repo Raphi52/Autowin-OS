@@ -1,14 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { realpathSync, watch, type FSWatcher } from 'node:fs'
+import { type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import {
   readGitDiff,
   readGitDiffHeadBatch,
   readGitState,
   readNoIndexGitDiff
 } from '../git-read-main'
+import { realCanonique, surveillerDossier } from '../surveiller-dossier'
 import { decoderCheminGit, type GitDiffResult } from '../../shared/git-read'
 import type { ExecutionEvidence } from './types'
 import {
@@ -35,35 +36,13 @@ const watchedDirectories = new Map<string, FSWatcher>()
 const pathWatchGenerations = new Map<string, number>()
 
 /**
- * Forme CANONIQUE d'un chemin — la seule que `fs.watch` accepte sans tuer le processus.
- *
- * DÉFAUT REPRODUIT (2026-08-31, exit 127) : `fs.watch` sur un dossier dont le chemin traverse un
- * nom court 8.3 de Windows (`C:\Users\PRENOM~1.NOM\...`, la forme que rend `os.tmpdir()` sur ce
- * poste) fait ABORTER le processus — `Assertion failed: !_wcsnicmp(filename, dir, dirlen), file
- * src\win\fs-event.c, line 72`. libuv compare le nom LONG que Windows lui rend dans l'événement au
- * chemin COURT qu'on lui a donné : ils diffèrent, il assert. Reproduit en isolation sur 5 fichiers
- * touchés : chemin court → exit 127 ; MÊME dossier via `realpathSync.native` → exit 0, événements
- * reçus. Ni le `try/catch` ci-dessous ni `watcher.on('error')` n'y peuvent quoi que ce soit : un
- * `abort()` en C n'est pas une exception JS. C'est ce qui tuait `vitest run` en cours de suite.
- *
- * On canonicalise donc AVANT de watcher, et on le fait dans `filesystemPathKey` pour que la clé de
- * lecture et la clé d'écriture des générations restent la MÊME chaîne. Un chemin encore absent
- * (cas normal : on surveille l'apparition d'un fichier) n'a pas de realpath : on canonicalise alors
- * son parent et on rattache le nom.
+ * `realCanonique` (forme canonique d'un chemin, seule acceptée par `fs.watch` sans abort de libuv
+ * sur un nom court 8.3 — défaut reproduit le 2026-08-31, exit 127) vit désormais dans
+ * `../surveiller-dossier`, la seule porte vers `fs.watch` du processus principal (récidive du
+ * 2026-10-22, conv-1056). On canonicalise dans `filesystemPathKey` pour que la clé de lecture et la
+ * clé d'écriture des générations restent la MÊME chaîne.
  */
-export function realCanonique(chemin: string): string {
-  try {
-    return realpathSync.native(chemin)
-  } catch {
-    const parent = dirname(chemin)
-    if (parent === chemin) return chemin
-    try {
-      return join(realpathSync.native(parent), basename(chemin))
-    } catch {
-      return chemin
-    }
-  }
-}
+export { realCanonique }
 
 function filesystemPathKey(path: string): string {
   const normalized = realCanonique(resolve(path)).replaceAll('\\', '/')
@@ -76,7 +55,7 @@ function ensurePathGenerationWatcher(absolutePath: string): void {
   const parentKey = filesystemPathKey(parent)
   if (watchedDirectories.has(parentKey)) return
   try {
-    const watcher = watch(parent, { persistent: false }, (_event, filename) => {
+    const watcher = surveillerDossier(parent, { persistent: false }, (_event, filename) => {
       if (!filename) return
       const changedPath = filesystemPathKey(resolve(parent, filename.toString()))
       const generation = (pathWatchGenerations.get(changedPath) ?? 0) + 1

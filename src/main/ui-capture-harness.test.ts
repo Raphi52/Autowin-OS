@@ -153,8 +153,15 @@ describe('verdict quand la preuve exige un clic', () => {
     // fix-ok: cause mesurée — verdictCapture exigeait une hausse du nombre d'éléments (>=) ; ce test, rouge avant le correctif de scripts/ui-capture.mjs, est vert après.
     // 2026-10-02 : clic sur l'onglet Budget des reglages, 521 elements -> 354, panneau visible sur
     // l'image, et pourtant « clic-sans-effet » (code 5) : la garde exigeait une HAUSSE.
+    // Depuis conv-1014 (2026-10-16) la cible de `--scroll` est REMESUREE a la photo (`cadrage`) :
+    // une cible retrouvee mais hors du cadre est refusee. L'onglet ouvert la montre entiere.
     expect(
-      verdictCapture({ ...ouvert, elementsAvantClic: 400, defilementVers: '.mode-auto-seuils' })
+      verdictCapture({
+        ...ouvert,
+        elementsAvantClic: 400,
+        defilementVers: '.mode-auto-seuils',
+        cadrage: { hauteur: 120, hauteurVisible: 120, largeurVisible: 600, hauteurCadre: 640 }
+      })
     ).toEqual({ ok: true, echecs: [] })
   })
 

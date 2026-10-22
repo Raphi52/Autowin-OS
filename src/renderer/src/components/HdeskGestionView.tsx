@@ -26,6 +26,7 @@
  * d'antenne géante ni de moniteurs ; « l'antenne » reste le nom interne du bureau choisi.
  */
 import { useEffect, useRef, useState } from 'react'
+import { Spinner } from './Spinner'
 import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
 import {
   CREATION_ATTENTE_MS,
@@ -409,7 +410,9 @@ export function HdeskGestionView({
     )
     if (!ok) return
     setEnFermeture((prec) => new Set(prec).add(b.id))
-    setRetours((prec) => ({ ...prec, [b.id]: { ok: true, message: 'Fermeture en cours…' } }))
+    // Le libellé d'attente est rendu dans le JSX, AVEC son spinner, tant que `enFermeture` porte
+    // l'id (conv-1056) : l'entrée vide réserve seulement la place du retour.
+    setRetours((prec) => ({ ...prec, [b.id]: { ok: true, message: '' } }))
     const r = await f(b.id).catch((e: unknown): ResultatFermetureGeree => ({
       ok: false,
       code: null,
@@ -674,12 +677,21 @@ export function HdeskGestionView({
           role={r.ok ? 'status' : 'alert'}
           data-testid={`hdesk-retour-${id}`}
         >
-          {id} : {r.message}
+          {id} :{' '}
+          {enFermeture.has(id) ? (
+            <>
+              <Spinner size={12} /> Fermeture en cours…
+            </>
+          ) : (
+            r.message
+          )}
         </p>
       ))}
 
       {etatListe === null ? (
-        <p className="hdesk-etat">Lecture des bureaux…</p>
+        <p className="hdesk-etat">
+          <Spinner size={12} /> Lecture des bureaux…
+        </p>
       ) : !etatListe.ok ? (
         <p className="hdesk-etat hdesk-retour is-erreur" role="alert" data-testid="hdesk-erreur">
           Liste des bureaux impossible : {etatListe.message}
@@ -855,7 +867,13 @@ export function HdeskGestionView({
                   role={retours[antenne.id].ok ? 'status' : 'alert'}
                   data-testid={`hdesk-retour-${antenne.id}`}
                 >
-                  {retours[antenne.id].message}
+                  {enFermeture.has(antenne.id) ? (
+                    <>
+                      <Spinner size={12} /> Fermeture en cours…
+                    </>
+                  ) : (
+                    retours[antenne.id].message
+                  )}
                 </p>
               )}
 

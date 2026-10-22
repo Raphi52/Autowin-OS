@@ -42,7 +42,10 @@ describe('ChatView — progression d’une orchestration après une orientation'
     appEvent: (event: Record<string, unknown>) => void
   }> {
     let pilote!: (event: Record<string, unknown>) => void
-    let appEvent!: (event: Record<string, unknown>) => void
+    const abonnes = new Set<(event: Record<string, unknown>) => void>()
+    const appEvent = (event: Record<string, unknown>): void => {
+      for (const abonne of [...abonnes]) abonne(event)
+    }
     let avecConsigne = false
     h = await mountChat(
       chatApi({
@@ -88,9 +91,12 @@ describe('ChatView — progression d’une orchestration après une orientation'
           pilote = listener as (event: Record<string, unknown>) => void
           return vi.fn()
         }),
+        // TOUS les abonnés reçoivent l'événement, comme le vrai preload (`ipcRenderer.on`). Garder
+        // le seul DERNIER abonné rendait ce test faux dès qu'un composant monté dans le chat
+        // s'abonnait après ChatView : le `refresh` n'atteignait plus le fil (conv-1056).
         onAppEvent: vi.fn((listener) => {
-          appEvent = listener as (event: Record<string, unknown>) => void
-          return vi.fn()
+          abonnes.add(listener as (event: Record<string, unknown>) => void)
+          return () => abonnes.delete(listener as (event: Record<string, unknown>) => void)
         })
       })
     )

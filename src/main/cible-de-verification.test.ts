@@ -213,7 +213,11 @@ describe('le routage est réellement branché', () => {
   const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
 
   it('une cible marquée `parPortee` passe par la vérification de portée', () => {
-    expect(source).toMatch(/verdict\.parPortee[\s\S]{0,400}?runRelatedVerifyAt\(decision\.cwd, \[verdict\.chemin\]\)/)
+    // L'appel porte desormais le `signal` d'arret (bouton Stop) en dernier argument : on exige la
+    // meme cible, quel que soit ce qui suit (aligne le 2026-10-22, conv-1056).
+    expect(source).toMatch(
+      /verdict\.parPortee[\s\S]{0,400}?runRelatedVerifyAt\(decision\.cwd, \[verdict\.chemin\][,)]/
+    )
   })
 
   it('une portée indéterminable retombe sur la suite, elle ne rend pas un refus', () => {
