@@ -1728,6 +1728,105 @@
 .delete-confirm-danger:hover {
   background: var(--chat-suppr-bouton-survol);
 }
+/* CARTE DE SUPPRESSION DES FILS (conv-1078, 2026-10-22 : /draft « une plus jolie popup pour quand je
+   supprime les convs », puis « Implémenter la 2 · En-tête en ligne ») — SuppressionConversationsCarte.tsx.
+   En-tête EN LIGNE (tuile corbeille, surtitre chiffré, titre), fils NOMMÉS avec leurs messages, bouton
+   irréversible en pleine largeur au-dessus de « Garder ». Rien que des jetons : chaque thème garde son
+   habit (Holographique y ajoute le cadre nacré et le gel). Les cartes du RUN et du renommage ne portent
+   pas `--fils` et ne changent pas. */
+.delete-confirm-card--fils {
+  width: min(440px, 100%);
+  padding: 24px 24px 20px;
+}
+.delete-confirm-tete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.delete-confirm-tete-texte {
+  min-width: 0;
+}
+.delete-confirm-tuile {
+  display: grid;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(var(--voile-rgb), 0.05);
+}
+.delete-confirm-tuile svg {
+  display: block;
+}
+.delete-confirm-tuile-arret-a,
+.delete-confirm-tuile-arret-b {
+  stop-color: var(--chat-suppr-orbite);
+}
+.delete-confirm-card--fils .delete-confirm-kicker {
+  margin-bottom: 3px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.delete-confirm-card--fils h2 {
+  font-size: 19px;
+  line-height: 1.25;
+}
+.delete-confirm-fils {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+/* Le liseré gauche reprend le rouge du bouton : chaque ligne nommée est un fil qui part. */
+.delete-confirm-fil {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(var(--voile-rgb), 0.045);
+  box-shadow: inset 2px 0 0 var(--chat-suppr-bouton);
+}
+.delete-confirm-fil--autres {
+  box-shadow: inset 2px 0 0 var(--line);
+}
+.delete-confirm-fil-titre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--chat-suppr-fort);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delete-confirm-fil--autres .delete-confirm-fil-titre {
+  color: var(--text-muted);
+}
+.delete-confirm-fil-nombre {
+  flex: none;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.delete-confirm-card--fils p {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+.delete-confirm-actions--pile {
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+.delete-confirm-actions--pile > .btn {
+  width: 100%;
+  min-height: 34px;
+  text-align: center;
+}
 /* D2c-3 : le rappel des raccourcis etait en 8 px — illisible, donc inutile. Il n'occupe
    plus d'etage : il vit en info-bulle sur le bouton d'envoi. */
 .composer-hint {
