@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { join, parse } from 'node:path'
+import { dirname, join, parse } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const chr10 = String.fromCharCode(10)
@@ -19,7 +19,10 @@ afterEach(() => {
 const dossier = (fichiers) => {
   const d = mkdtempSync(join(tmpdir(), 'scout-residus-'))
   aNettoyer.push(d)
-  for (const [nom, contenu] of Object.entries(fichiers)) writeFileSync(join(d, nom), contenu, 'utf8')
+  for (const [nom, contenu] of Object.entries(fichiers)) {
+    mkdirSync(dirname(join(d, nom)), { recursive: true })
+    writeFileSync(join(d, nom), contenu, 'utf8')
+  }
   return d
 }
 
@@ -134,5 +137,91 @@ describe('scout-residus — chemins morts : ce qui n est PAS mort', () => {
       dossier({ 'b.mjs': "const racine = 'C:/nulle-part-xyz/socle'" + chr10 + 'readFileSync(racine)' + chr10 })
     )
     expect(rapport).toMatch(/b\.mjs:1/)
+  })
+})
+
+// Pourquoi ces cas : au /residus du 2026-10-22 (conv-1062), les 59 « chemins absolus morts » de la
+// passe 0 bis etaient TOUS des faux positifs — 30 commentaires et 5 fixtures dans `src/`, 24 lignes
+// d'aide, de commentaire ou de donnees de test `_test.py` dans `scripts/`. Une section qui ne
+// rapporte que du bruit apprend au lecteur a l'ignorer, y compris le jour ou elle a raison.
+// Les chemins a barres obliques inverses passent par `String.raw` : en chaine ordinaire, `C:\nulle`
+// porterait un saut de ligne et le cas ne testerait plus rien.
+describe('scout-residus — chemins morts : commentaires, aide et donnees de test', () => {
+  const aucun = /## 0 bis\. Chemins absolus morts — aucun/
+
+  it('ignore une ligne de commentaire // ou * (bloc JS)', () => {
+    const rapport = sonde(
+      dossier({
+        'a.mjs': [
+          '// mesure faite dans C:/nulle-part-xyz/ancien-depot',
+          '/**',
+          String.raw` * ouverte dans E:\nulle-part-xyz\Autowin-OS, tour mort`,
+          ' */',
+          'export const a = 1',
+          ''
+        ].join(chr10)
+      })
+    )
+    expect(rapport).toMatch(aucun)
+  })
+
+  it('ignore un commentaire # et un bloc d aide <# … #> PowerShell', () => {
+    const rapport = sonde(
+      dossier({
+        'outil.ps1': [
+          '<#',
+          String.raw`  Usage : powershell -File outil.ps1 -Executable "C:\nulle-part-xyz\app.exe"`,
+          '#>',
+          String.raw`# modele : D:\nulle-part-xyz\Smoke\Runner.cs`,
+          'Write-Host ok',
+          ''
+        ].join(chr10)
+      })
+    )
+    expect(rapport).toMatch(aucun)
+  })
+
+  it('ignore un test Python _test.py, qui invente ses chemins comme un .test.mjs', () => {
+    const rapport = sonde(
+      dossier({
+        'logo_test.py': String.raw`copie = r"D:\nulle-part-xyz\worktrees\icon.ico"` + chr10
+      })
+    )
+    expect(rapport).toMatch(aucun)
+  })
+
+  it('ignore une fixture __fixtures__/ ou *.fixture.json', () => {
+    const rapport = sonde(
+      dossier({
+        '__fixtures__/sortie.md': String.raw`| 1 | C:\nulle-part-xyz\application.exe |` + chr10,
+        'juges.fixture.json': '{ "detail": "D:/nulle-part-xyz/worktrees/a.ts" }' + chr10
+      })
+    )
+    expect(rapport).toMatch(aucun)
+  })
+
+  it('signale ENCORE une racine de code qui suit un bloc de commentaire ferme', () => {
+    const rapport = sonde(
+      dossier({
+        'c.mjs': [
+          '/* ancien : C:/nulle-part-xyz/a */',
+          "const r = 'C:/nulle-part-xyz/socle'",
+          ''
+        ].join(chr10)
+      })
+    )
+    expect(rapport).toMatch(/c\.mjs:2/)
+    expect(rapport).not.toMatch(/c\.mjs:1/)
+  })
+
+  it('signale ENCORE une racine de code PowerShell apres un bloc <# … #> ferme', () => {
+    const rapport = sonde(
+      dossier({
+        'run.ps1': ['<# aide #>', String.raw`Set-Location 'Q:\nulle-part-xyz\socle'`, ''].join(
+          chr10
+        )
+      })
+    )
+    expect(rapport).toMatch(/run\.ps1:2/)
   })
 })

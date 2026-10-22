@@ -52,7 +52,15 @@ for (const f of tousFichiers) {
   // Un fichier de TEST invente ses chemins : `C:/repo/src/a.ts` y est une donnee d'essai, pas une
   // racine de production. Les inclure noyait la passe (282 signalements sur `src/`, presque tous
   // des fixtures) et rendait la section illisible, donc inutile.
-  if (/\.(test|spec)\./.test(f) || /[\\/](fixtures?|__mocks__)[\\/]/.test(f)) continue
+  // Memes donnees d'essai sous d'autres noms (residus 2026-10-22, conv-1062) : les tests Python
+  // `x_test.py` de `scripts/`, les dossiers `__fixtures__/` et les fichiers `*.fixture.json`.
+  if (
+    /\.(test|spec)\./.test(f) ||
+    /_test\.py$/.test(f) ||
+    /[\\/](_*fixtures?_*|__mocks__)[\\/]/.test(f) ||
+    /\.fixtures?\./.test(f)
+  )
+    continue
   let contenu
   try {
     contenu = readFileSync(f, 'utf8')
@@ -68,7 +76,30 @@ for (const f of tousFichiers) {
   // v3 (2026-09-06) : ~10 signalements etaient refutes par la ligne meme qui les portait.
   if (/mkdirSync\s*\([^)]*recursive\s*:\s*true/.test(contenu)) continue
   const lignes = contenu.split(String.fromCharCode(10))
+  // UN COMMENTAIRE N'EXECUTE RIEN. Au /residus du 2026-10-22 (conv-1062), 30 des 37 signalements
+  // de `src/` et la plupart des 24 de `scripts/` etaient des chemins CITES en commentaire ou dans
+  // une aide (`<# Usage : … "C:\…\app.exe" #>`) : un historique, pas une racine. On saute donc les
+  // lignes `//`, les blocs `/* … */`, et — hors JavaScript, ou `#` ouvre un champ prive — les
+  // lignes `#`, les blocs d'aide PowerShell `<# … #>` et les docstrings Python.
+  const dieseCommente = !EXT.has(extname(f))
+  let finDeBloc = null
   for (let i = 0; i < lignes.length; i += 1) {
+    if (finDeBloc) {
+      if (lignes[i].includes(finDeBloc)) finDeBloc = null
+      continue
+    }
+    const tete = lignes[i].trimStart()
+    const ouvreBloc = (ouverture, fermeture) => {
+      if (!tete.startsWith(ouverture)) return false
+      if (!tete.slice(ouverture.length).includes(fermeture)) finDeBloc = fermeture
+      return true
+    }
+    if (ouvreBloc('/*', '*/')) continue
+    const blocHorsJs =
+      dieseCommente &&
+      (ouvreBloc('<#', '#>') || ouvreBloc('"""', '"""') || ouvreBloc("'''", "'''"))
+    if (blocHorsJs) continue
+    if (tete.startsWith('//') || (dieseCommente && tete.startsWith('#'))) continue
     // Un chemin qui n'est qu'un DEFAUT surchargeable n'est pas une racine morte : derriere un
     // drapeau CLI (`arg('--out-dir', 'C:/…')`) ou un repli d'environnement
     // (`process.env.X || 'C:/…'`), la valeur reelle vient de l'appelant.

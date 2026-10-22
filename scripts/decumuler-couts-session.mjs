@@ -8,7 +8,13 @@
  * des cumuls. Mesure sur le poste : 9 320 $ affichés pour 4 428 $ réellement dépensés.
  *
  * Le correctif à la source ne répare pas le passé. Ce script le fait, sur les DEUX journaux que lit
- * l'indicateur (`prompt-observability/*.jsonl` et `activity/*.jsonl`).
+ * l'indicateur (`prompt-observability/*.jsonl` et `activity/*.jsonl`) et sur le registre de coût
+ * `cost.jsonl` qui alimente le plafond (ajouté le 2026-10-22, residus conv-1062).
+ *
+ * Rechute connue : le 2026-10-12 (conv-879), une session reprise après 11 jours a vu son cumul
+ * purgé par la rétention de 7 jours de `claude-session-cost.ts` — 9,04 $ comptés pour 1,91 $.
+ * Cause fermée à la source le 2026-10-14 (une session encore rattachée à une conversation n'est
+ * plus purgée) ; ce script a réparé la ligne le 2026-10-22.
  *
  * DÉCISION PAR LA PREUVE, PAS PAR UNE HEURISTIQUE DE FORME : pour chaque session, on compare la
  * suite BRUTE et la suite DÉ-CUMULÉE au coût recalculé depuis les tokens du tour au tarif public.
@@ -201,10 +207,51 @@ for (const nom of existsSync(dossierActivite) ? readdirSync(dossierActivite) : [
   }
 }
 
+// REGISTRE DE COÛT (`cost.jsonl`) : c'est lui qui alimente le plafond et l'alerte à 80 %, et il
+// reçoit le MÊME montant que l'activité (`ChatTurnCostRecorder`, `role: supervisor`). Constat du
+// 2026-10-22 (residus, conv-1062) sur conv-879, tour f6b7d7ad : 9,04 $ ici aussi, alors que ce
+// script ne réparait que les deux journaux d'affichage. Même table, restreinte à la conversation
+// de la ligne. L'app ÉCRIT ce fichier en marche (lots ajoutés en fin) : on recolle toute queue
+// ajoutée entre la lecture et l'écriture, et on refuse d'écrire si le DÉBUT a changé.
+let registreLignes = 0
+let registreNonReecrit = false
+const cheminCout = join(RACINE, 'cost.jsonl')
+if (correction.size > 0 && existsSync(cheminCout)) {
+  const lu = readFileSync(cheminCout, 'utf-8')
+  const sortie = lu
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((ligne) => {
+      let rec
+      try {
+        rec = JSON.parse(ligne)
+      } catch {
+        return ligne
+      }
+      if (typeof rec?.costUsd !== 'number' || !rec.conversationId) return ligne
+      const nouveau = correction.get(rec.conversationId)?.get(rec.costUsd.toFixed(9))
+      if (nouveau === undefined) return ligne
+      registreLignes += 1
+      return JSON.stringify({ ...rec, costUsd: nouveau })
+    })
+  if (ECRIRE && registreLignes > 0) {
+    const sauvegarde = `${cheminCout}.avant-decumul.bak`
+    if (!existsSync(sauvegarde)) copyFileSync(cheminCout, sauvegarde)
+    const actuel = readFileSync(cheminCout, 'utf-8')
+    if (actuel.startsWith(lu)) {
+      writeFileSync(cheminCout, `${sortie.join('\n')}\n${actuel.slice(lu.length)}`, 'utf-8')
+    } else {
+      registreNonReecrit = true
+    }
+  }
+}
+
 console.log(
   `${ECRIRE ? 'RÉÉCRIT' : 'SIMULATION'} — journaux d'appels : ${fichiersModifies} fichiers · ` +
-    `journaux d'activité : ${activiteModifiee} fichiers`
+    `journaux d'activité : ${activiteModifiee} fichiers · registre de coût : ${registreLignes} lignes`
 )
+if (registreNonReecrit)
+  console.log('cost.jsonl a changé pendant la lecture : NON réécrit, relance le script.')
 console.log(
   `Total affiché avant : ${avant.toFixed(2)} $ → après : ${apres.toFixed(2)} $ ` +
     `(${(avant - apres).toFixed(2)} $ de cumuls comptés deux fois)`
