@@ -459,6 +459,103 @@ describe('projectLatestRequestExecution', () => {
     ])
   })
 
+  // LE TITRE VISIBLE D'UNE ÉTAPE ÉTAIT SON IDENTIFIANT BRUT (conv-1094, 2026-10-22) : le graphe
+  // écrit `display.title`, qui valait « skill · learn » ; la table des libellés (« Learn ») n'était
+  // lue par aucun affichage d'étape. Entrée qui fait échouer ces tests si le titre ne passe plus par
+  // la table : la phase `learn` (titre « skill · learn » ou « learn » au lieu de « Learn »).
+  it('titre les étapes build, judge, learn et salvage par leur libellé, hors run', () => {
+    const timeline = buildHarnessTimelineFromTrace(
+      ['build', 'judge', 'learn', 'salvage'].map((phase, index) =>
+        trace(`agent-${phase}`, 'turn-1', index + 1, {
+          actor: { id: phase, kind: 'agent', label: phase },
+          execution: { phase, agentId: phase, taskId: phase }
+        })
+      )
+    )
+
+    const phases = projectLatestRequestExecution(timeline).events.filter(
+      (event) => event.display?.kind === 'phase'
+    )
+
+    expect(phases.map((event) => event.display?.title)).toEqual([
+      'Build',
+      'Judge',
+      'Learn',
+      'Salvage'
+    ])
+    expect(phases.map((event) => event.label)).toEqual(['Build', 'Judge', 'Learn', 'Salvage'])
+  })
+
+  // Le graphe d'un VRAI run passe par l'autre projection (nœuds `skill`) : c'est elle qu'on voit.
+  it('titre les étapes d’un run par leur libellé, et garde la phase brute pour la skill', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      runTrace('workspace', 'turn-1', 1, 'run-1', {
+        type: 'boundary',
+        execution: { runId: 'run-1' },
+        run: {
+          stage: 'workspace',
+          runId: 'run-1',
+          timestampMs: 100,
+          workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: 'C:\\wt\\run-1' }
+        }
+      }),
+      ...['build', 'judge', 'learn', 'salvage'].map((phase, index) =>
+        runTrace(`agent-${phase}`, 'turn-1', index + 2, 'run-1', {
+          execution: {
+            runId: 'run-1',
+            attemptId: `attempt-${phase}`,
+            phase,
+            agentId: phase,
+            taskId: phase
+          }
+        })
+      )
+    ])
+
+    const skills = projectLatestRequestExecution(timeline).events.filter(
+      (event) => event.display?.kind === 'skill'
+    )
+
+    expect(skills.map((event) => event.display?.title)).toEqual([
+      'Build',
+      'Judge',
+      'Learn',
+      'Salvage'
+    ])
+    // L'identifiant reste porté pour la ligne « phase · learn » du détail et l'attribut du nœud.
+    expect(skills.map((event) => event.display?.skillName)).toEqual([
+      'build',
+      'judge',
+      'learn',
+      'salvage'
+    ])
+  })
+
+  it.each([
+    ['think', 'Think'],
+    ['learn', 'Learn'],
+    ['salvage', 'Salvage'],
+    ['remake', 'Remake'],
+    ['gel', 'Gel'],
+    ['residus', 'Résidus'],
+    ['steal', 'Steal'],
+    // Le jumeau : une étape que la table ne connaît pas garde son identifiant, sans être masquée.
+    ['etape-inconnue', 'etape-inconnue']
+  ])('titre le nœud de l’étape %s « %s »', (phase, libelle) => {
+    const timeline = buildHarnessTimelineFromTrace([
+      trace(`agent-${phase}`, 'turn-1', 1, {
+        execution: { phase, agentId: phase, taskId: phase }
+      })
+    ])
+
+    const etape = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.display?.kind === 'phase'
+    )
+
+    expect(etape?.display?.title).toBe(libelle)
+    expect(etape?.label).toBe(libelle)
+  })
+
   it('ne fabrique pas de causalité entre deux phases indépendantes', () => {
     const timeline = buildHarnessTimelineFromTrace([
       trace('build-agent', 'turn-1', 1, {
