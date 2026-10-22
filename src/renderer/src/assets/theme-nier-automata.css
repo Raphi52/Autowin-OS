@@ -866,3 +866,33 @@
 :root[data-theme='nier-automata'][data-base='clair'] .observatory-view .observatory-turn::before {
   background: rgba(78, 75, 66, 0.55);
 }
+
+/* ---- MENU REDUIT, TITRE, FOND D'ACCUEIL (2026-10-22, conv-295) -------------------------------- */
+/* Menu reduit : le carre « ■ » de l'item actif prenait 6 px + sa largeur dans la case de 36 px et
+   poussait l'icone hors du carre. Replie, seule l'icone reste. */
+:root[data-theme='nier-automata'][data-base='clair'] .rail.is-collapsed .nav-item.active::before {
+  content: none;
+}
+/* Titre « AUTOWIN OS » colle au bouton de repli : les capitales espacees a 0.12em le rendaient
+   plus large que sa place. Espacement reduit et vrai blanc avant le bouton. */
+:root[data-theme='nier-automata'][data-base='clair'] .brand-name {
+  letter-spacing: 0.05em !important;
+  font-size: 13px;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .rail-toggle {
+  margin-left: auto;
+}
+:root[data-theme='nier-automata'][data-base='clair'] .brand {
+  gap: 12px;
+}
+/* Fond d'accueil : le radar du Pod (balayage anime en SMIL) et la devise YoRHa. */
+:root[data-theme='nier-automata'][data-base='clair'] .home-view::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    url('./nier-automata-devise.svg') right 28px top 64px / 200px auto no-repeat,
+    url('./nier-automata-radar.svg') right -12vmin center / 95vmin 95vmin no-repeat;
+  pointer-events: none;
+  content: '';
+}
