@@ -184,7 +184,7 @@ import { type ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
-import { classeTerminaleDEchec } from './classe-terminale-echec'
+import { causeDInterruption, classeTerminaleDEchec } from './classe-terminale-echec'
 import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
 import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
@@ -193,6 +193,7 @@ import { interfaceVisible } from './startup-gate'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
   closeConvRun,
+  statutDuRunMd,
   convRunsRoot,
   deleteConvRun,
   listConvRuns,
@@ -5253,6 +5254,8 @@ app.whenReady().then(async () => {
     executionCostCoverageFields,
     reconcileLateRunLifecycle,
     classifierRefusDeReprise,
+    statutDuRunMd,
+    causeDInterruption,
     randomUUID,
     fenetresVivantes: () => BrowserWindow.getAllWindows(),
     defaultProcessIdentity,

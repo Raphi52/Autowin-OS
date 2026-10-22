@@ -6,6 +6,7 @@ import {
   createConvRun,
   reuseOrCreateConvRun,
   closeConvRun,
+  statutDuRunMd,
   ligneJournalDErreur,
   deleteConvRun,
   listConvRuns,
@@ -13,6 +14,7 @@ import {
   loadConvRunTrace
 } from './conv-runs'
 import type { OrchestrationStep } from '../orchestrator'
+import { isBlocked } from '../../shared/run-blocked'
 
 const root = mkdtempSync(join(tmpdir(), 'aos-convruns-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -61,6 +63,15 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const degraded = (await listConvRuns('conv-9', [], root)).find((x) => x.path === d)!
     expect(degraded.summary.status).toBe('degraded-closed')
     expect(degraded.summary.dodChecked).toBe(0)
+
+    // INTERROMPU (piste 4, conv-1070) : écrit tel quel et relu tel quel — sans lui dans la liste
+    // de `parseRun`, il serait relu `unknown`, donc bloqué, exactement comme `red`.
+    const i = createConvRun('conv-9', 'modifie le projet puis coupe', root, () => 3600)
+    closeConvRun(i, 'interrupted', 'Interrompu : arrêt demandé (Stop).')
+    const interrompu = (await listConvRuns('conv-9', [], root)).find((x) => x.path === i)!
+    expect(interrompu.summary.status).toBe('interrupted')
+    expect(interrompu.summary.dodChecked).toBeLessThan(interrompu.summary.dodTotal)
+    expect(isBlocked(interrompu.summary)).toBe(false)
 
     const o = createConvRun('conv-9', 'tâche encore ouverte', root, () => 3750)
     closeConvRun(o, 'open', 'Ne doit pas clore le RUN.')
@@ -231,5 +242,24 @@ describe('ligneJournalDErreur — la raison survit, le format tient', () => {
 
   it('reste borne : un message geant ne noie pas le Journal', () => {
     expect(ligneJournalDErreur(new Error('x'.repeat(5000))).length).toBeLessThanOrEqual(600)
+  })
+})
+
+/**
+ * LE STATUT ÉCRIT DANS RUN.md DEPUIS LA CLÔTURE DU MOTEUR (piste 4, conv-1070). Le moteur clôt
+ * `red` tout run non vert ; il note à côté la cause quand elle est extérieure au travail. L'entrée
+ * qui ferait échouer ce test si le correctif était faux : une clôture `red` SANS cause — un refus
+ * du juge — qui doit rester `red`.
+ */
+describe('statutDuRunMd', () => {
+  const base = { totalDurationMs: 1, totalCostUsd: 0 }
+  it('red + cause extérieure → interrupted', () => {
+    expect(statutDuRunMd({ ...base, status: 'red', interruption: 'quota' })).toBe('interrupted')
+    expect(statutDuRunMd({ ...base, status: 'red', interruption: 'arret' })).toBe('interrupted')
+  })
+  it('red sans cause → red ; un vert garde son statut', () => {
+    expect(statutDuRunMd({ ...base, status: 'red' })).toBe('red')
+    expect(statutDuRunMd({ ...base, status: 'green', interruption: 'arret' })).toBe('green')
+    expect(statutDuRunMd({ ...base, status: 'open' })).toBe('open')
   })
 })

@@ -11,6 +11,7 @@ export type RunSummary = {
     | 'red'
     | 'green'
     | 'degraded-closed'
+    | 'interrupted'
     | 'unknown'
   regime?: string
   dodTotal: number
@@ -28,7 +29,10 @@ const STATUSES = new Set([
   'open',
   'red',
   'green',
-  'degraded-closed'
+  'degraded-closed',
+  // Coupé de l'extérieur (Stop, quota, panne) : sans lui ici, il serait relu `unknown`, donc
+  // bloqué — exactement le défaut qu'il corrige (piste 4, conv-1070).
+  'interrupted'
 ])
 
 /**

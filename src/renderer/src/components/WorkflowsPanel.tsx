@@ -63,7 +63,9 @@ const RUN_DOT: Record<string, string> = {
   green: 'st-ok',
   open: 'st-warn',
   red: 'st-err',
-  'degraded-closed': 'st-violet'
+  'degraded-closed': 'st-violet',
+  // Coupé par Stop, quota ou panne : ni échec ni succès (piste 4, conv-1070).
+  interrupted: 'st-warn'
 }
 
 const EFFORT_FR: Record<string, string> = {

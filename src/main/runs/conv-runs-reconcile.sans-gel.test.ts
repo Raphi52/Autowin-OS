@@ -80,7 +80,7 @@ describe('reconcileAbandonedConvRuns — sans gel du démarrage', () => {
       expect(vi.mocked(fs[nom]), `${nom} tient le fil principal`).not.toHaveBeenCalled()
     }
     expect(bilan.closed).toBe(1)
-    expect(statutDe(abandonne)).toBe('status: red')
+    expect(statutDe(abandonne)).toBe('status: interrupted')
     expect(statutDe(fini)).toBe('status: green')
   })
 
@@ -124,7 +124,7 @@ describe('reconcileAbandonedConvRuns — sans gel du démarrage', () => {
     })
 
     expect(second.closed).toBe(1)
-    expect(statutDe(enVol)).toBe('status: red')
+    expect(statutDe(enVol)).toBe('status: interrupted')
   })
 
   it('une passe tronquée par le plafond n’avance pas le mémo — le reste est repris', async () => {
@@ -144,7 +144,7 @@ describe('reconcileAbandonedConvRuns — sans gel du démarrage', () => {
     const troisieme = await reconcileAbandonedConvRuns({ root, memoPath, max: 2 })
     expect(troisieme).toMatchObject({ closed: 1, remaining: 0 })
 
-    expect(chemins.map(statutDe)).toEqual(Array(5).fill('status: red'))
+    expect(chemins.map(statutDe)).toEqual(Array(5).fill('status: interrupted'))
   })
 
   it('un mémo illisible fait tout réexaminer, sans faire échouer la passe', async () => {
@@ -157,6 +157,6 @@ describe('reconcileAbandonedConvRuns — sans gel du démarrage', () => {
     const bilan = await reconcileAbandonedConvRuns({ root, memoPath })
 
     expect(bilan.closed).toBe(1)
-    expect(statutDe(abandonne)).toBe('status: red')
+    expect(statutDe(abandonne)).toBe('status: interrupted')
   })
 })

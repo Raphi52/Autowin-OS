@@ -158,6 +158,53 @@ export function reservesMineuresDuScout(phaseNommee: string | undefined, text: s
   return objections.map((o) => o.texte)
 }
 
+/**
+ * UNE RELECTURE SEULE QUI A NOMMÉ CE QU'ELLE A VU EST LIVRÉE (piste 5, conv-1070).
+ *
+ * Mesuré : conv-955, conv-984, conv-1043 et conv-1056 — quatre `/judge` sans autre phase ont fini
+ * « Gate BLOQUÉ: Promis mais pas fait : « Objection du juge : … » » et `status: red`. Or la demande
+ * était la relecture, et l'orchestrateur le dit déjà (« aucune réparation : la demande nomme le juge
+ * seul, son verdict est la réponse »). Ses objections ne sont pas des promesses non tenues : elles
+ * disent que le travail RELU est défectueux.
+ *
+ * Rend ces objections (gravité comprise) quand le juge a REFUSÉ en les nommant, `[]` sinon : une
+ * autre phase nommée, une phase d'exécution jouée, un VALIDE (déjà vert), ou un refus SANS objection
+ * (« aucun juge n'a répondu », quorum non atteint) — ce dernier n'est pas une relecture, il reste
+ * bloqué. Les deux informations restent séparées : la relecture livrée fixe le statut, les défauts
+ * du travail relu sont écrits en tête du résultat (`resultatDeRelectureSeule`), et la calibration
+ * du juge garde son vote réel.
+ */
+export function defautsDeLaRelectureSeule(
+  phaseNommee: string | undefined,
+  phasesExecutees: number,
+  text: string
+): string[] {
+  if (phaseNommee !== 'judge' || phasesExecutees > 0) return []
+  if (!/\bDEFAUT\s*:/i.test(text ?? '')) return []
+  return objectionsClassees(text, false).map((o) =>
+    o.gravite ? `${o.gravite}: ${o.texte}` : o.texte
+  )
+}
+
+/**
+ * La ligne de Journal du RUN.md d'une relecture livrée avec défauts : elle remplace « Juge: validé
+ * — clôture autorisée », qui contredisait le verdict affiché (objection du juge, conv-1070).
+ */
+export function ligneDeJournalDeRelecture(defauts: readonly string[], cout: string): string {
+  const nombre = `${defauts.length} objection${defauts.length > 1 ? 's' : ''}`
+  return `Relecture livrée — le travail relu a des défauts (${nombre}), rien n'a été corrigé (${cout}).`
+}
+
+/** Le verdict d'une relecture seule, précédé de ce qu'il veut dire pour le travail relu. */
+export function resultatDeRelectureSeule(verdict: string, defauts: readonly string[]): string {
+  if (defauts.length === 0) return verdict
+  const nombre = `${defauts.length} objection${defauts.length > 1 ? 's' : ''}`
+  return (
+    `Relecture livrée — le travail relu a des défauts (${nombre} ci-dessous). ` +
+    `Une relecture ne corrige rien : rien n'a été modifié.\n\n${verdict}`
+  )
+}
+
 /** Nombre maximal de réserves recopiées dans le résultat, et longueur de chacune (même borne que la DoD). */
 const RESERVES_MAX = 8
 const RESERVE_LONGUEUR_MAX = 500

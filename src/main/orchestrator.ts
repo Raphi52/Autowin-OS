@@ -18,7 +18,9 @@ import {
   empreintesDesFichiers,
   motifsTestModifie,
   reservesMineuresDuScout,
-  resultatAvecReservesDuJuge
+  resultatAvecReservesDuJuge,
+  defautsDeLaRelectureSeule,
+  resultatDeRelectureSeule
 } from './objections-juge'
 
 /**
@@ -469,6 +471,7 @@ import {
 } from './skill-node-mcp'
 import { sharedBrainRoot } from './brain-paths'
 import { protegerRappel } from './observabilite-non-bloquante'
+import { causeDInterruption } from './classe-terminale-echec'
 
 function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -617,6 +620,12 @@ export interface OrchestrationResult {
   }[]
   /** Verdict terminal du juge, tel qu'écrit — annexé au RUN.md pour la mémoire inter-runs. */
   judgeText?: string
+  /**
+   * PRÉSENT seulement quand une relecture seule (`/judge`) est LIVRÉE en nommant des défauts du
+   * travail relu (`defautsDeLaRelectureSeule`) : le Journal du RUN.md doit le dire, au lieu de
+   * « Juge: validé » (piste 5, conv-1070).
+   */
+  defautsDuTravailRelu?: string[]
   /**
    * Fichier de la copie ENTIÈRE des sorties d'étapes (`runs/livrable-entier.ts`), quand quelqu'un
    * l'écrit : la bulle coupée le nomme au lieu de promettre un « livrable entier » introuvable (conv-989).
@@ -2749,6 +2758,13 @@ ${annonceCommit}`
         timestampMs: Date.now(),
         closure: {
           status: green && (integrated || retained) ? 'green' : 'red',
+          // La cause d'un arrêt étranger au travail : elle ne change pas ce statut — le run n'a rien
+          // livré —, elle dit au RUN.md qu'il est interrompu, pas en échec (piste 4, conv-1070).
+          ...(() => {
+            if (green) return {}
+            const interruption = causeDInterruption(erreurDuRun, signal?.aborted === true)
+            return interruption ? { interruption } : {}
+          })(),
           totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
           totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
           // Un run qui PLANTE (quota, connexion, phase en échec) n'a pas de rapport : la clôture
@@ -5516,13 +5532,22 @@ ${CONTRAT_OBJECTIONS}`
      */
     let reservesDuJuge: string[] = []
     /**
+     * Les objections d'une RELECTURE SEULE qui a refusé en les nommant (piste 5, conv-1070,
+     * `defautsDeLaRelectureSeule`) : la relecture est livrée, et ces défauts du travail relu sont
+     * écrits en tête du résultat. Vidé à chaque jugement.
+     */
+    let defautsDeLaRelecture: string[] = []
+    /**
      * Le texte RENDU à l'utilisateur : l'agrégat du DERNIER jugement SANS les versions remplacées
      * d'une étape rejouée (conv-339, `exec.rendu`). Figé avec `exec` : learn, joué après, n'y entre
      * pas. Le juge garde `exec.text`.
      * fix-ok: conv-339 tour b6150a1a — `result` reprenait `exec.text`, l'agrégat écrit pour le juge :
      * la réponse affichée commençait par deux « [phase scout] (version remplacée…, plus bas) ».
      */
-    const texteRendu = (): string => (phaseOutputs.length > 0 ? exec.rendu : lastJudgeText)
+    const texteRendu = (): string =>
+      phaseOutputs.length > 0
+        ? exec.rendu
+        : resultatDeRelectureSeule(lastJudgeText, defautsDeLaRelecture)
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
@@ -5606,8 +5631,14 @@ ${CONTRAT_OBJECTIONS}`
         const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves, pas un refus.
         const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, resumedJudgeText) : []
-        const ok = evidenceOk && (verdictDuJuge || reserves.length > 0)
+        // Piste 5 (conv-1070) : une relecture seule qui nomme ses objections est livrée.
+        const defautsRelus =
+          evidenceOk && !verdictDuJuge
+            ? defautsDeLaRelectureSeule(phaseNommee, phaseOutputs.length, resumedJudgeText)
+            : []
+        const ok = evidenceOk && (verdictDuJuge || reserves.length > 0 || defautsRelus.length > 0)
         reservesDuJuge = verdictDuJuge ? [] : reserves
+        defautsDeLaRelecture = defautsRelus
         lastJudgeText = resumedJudgeText.trim()
         lastJudgeMemoire = lastJudgeText
         // Le juge repris a statué sur le texte repris, celui que porte `exec` ici.
@@ -5630,7 +5661,9 @@ ${CONTRAT_OBJECTIONS}`
           detail: ok
             ? reservesDuJuge.length > 0
               ? 'verdict repris · validé avec réserves mineures'
-              : 'verdict repris · validé'
+              : defautsDeLaRelecture.length > 0
+                ? 'verdict repris · relecture livrée, défauts relevés dans le travail relu'
+                : 'verdict repris · validé'
             : 'verdict repris · défaut',
           status: 'completed',
           execution: {
@@ -6003,8 +6036,15 @@ ${CONTRAT_OBJECTIONS}`
       // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves ajoutées au résultat,
       // pas un refus qui relance scout + juge. Un MAJEUR, et tout autre run, gardent le blocage.
       const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, verdict.text) : []
-      const ok = evidenceOk && (verdictDuJuge || reserves.length > 0)
+      // Piste 5 (conv-1070) : une relecture seule qui nomme ses objections est LIVRÉE — son verdict
+      // est la réponse. Le vote du juge, lui, reste `red` dans la calibration ci-dessous.
+      const defautsRelus =
+        evidenceOk && !verdictDuJuge
+          ? defautsDeLaRelectureSeule(phaseNommee, phaseOutputs.length, verdict.text)
+          : []
+      const ok = evidenceOk && (verdictDuJuge || reserves.length > 0 || defautsRelus.length > 0)
       reservesDuJuge = verdictDuJuge ? [] : reserves
+      defautsDeLaRelecture = defautsRelus
       lastJudgeText = verdict.text.trim()
       lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
@@ -6025,7 +6065,13 @@ ${CONTRAT_OBJECTIONS}`
         tokens: verdict.usage ? verdict.usage.inputTokens + verdict.usage.outputTokens : undefined,
         costUsd: verdict.usage?.costUsd,
         usage: verdict.usage,
-        detail: ok ? (reservesDuJuge.length > 0 ? 'validé avec réserves mineures' : 'validé') : 'défaut',
+        detail: ok
+          ? reservesDuJuge.length > 0
+            ? 'validé avec réserves mineures'
+            : defautsDeLaRelecture.length > 0
+              ? 'relecture livrée, défauts relevés dans le travail relu'
+              : 'validé'
+          : 'défaut',
         prompt: judgeMembers.length >= 2 ? undefined : judgeEnvelope,
         status: 'completed',
         durationMs: performance.now() - judgeStartedAt,
@@ -6363,6 +6409,9 @@ ${CONTRAT_OBJECTIONS}`
       // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
       // jamais le RUN.md, donc jamais la mémoire inter-runs (conv-1405).
       ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
+      ...(valid && !gate.blocked && defautsDeLaRelecture.length > 0
+        ? { defautsDuTravailRelu: [...defautsDeLaRelecture] }
+        : {}),
       // conv-989 : seulement si une étape a écrit quelque chose — un fichier vide n'est pas écrit.
       ...(phaseOutputs.some((sortie) => sortie.text.trim()) && cheminDuLivrableEntierDuRun()
         ? { livrableEntier: cheminDuLivrableEntierDuRun() }

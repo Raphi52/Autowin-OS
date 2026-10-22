@@ -19,8 +19,26 @@
  * Un statut illisible (`unknown`) bloque également : un RUN.md corrompu doit rester visible.
  */
 export function isBlocked(s: { status: string; dodTotal: number; dodChecked: number }): boolean {
+  // INTERROMPU (piste 4, conv-1070) : coupé par Stop, la limite de session ou une panne en face.
+  // Seule exception à la règle de DoD, et elle est forcée : un run arrêté avant sa fin a TOUJOURS
+  // une DoD incomplète, donc le garder « bloqué » à ce titre le bloquait pour toujours. Il n'a pas
+  // échoué ; l'interface le montre comme reprenable, à part des runs bloqués.
+  if (s.status === 'interrupted') return false
   return (
     ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
     s.dodChecked < s.dodTotal
   )
+}
+
+/**
+ * La mention écrite à côté du statut d'un run (rail de l'Observatoire). Un run INTERROMPU n'est
+ * pas bloqué : on peut le relancer, et la limite de session le reprend seule (piste 4, conv-1070).
+ */
+export function mentionDEtatDuRun(s: {
+  status: string
+  dodTotal: number
+  dodChecked: number
+}): string {
+  if (s.status === 'interrupted') return 'interrompu, relançable'
+  return isBlocked(s) ? 'bloqué' : ''
 }

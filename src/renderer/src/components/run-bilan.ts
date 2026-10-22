@@ -147,7 +147,8 @@ const CLOTURE_LIBELLE: Record<string, string> = {
   green: 'acceptée',
   red: 'refusée',
   'degraded-closed': 'close en mode dégradé',
-  open: 'pas encore close'
+  open: 'pas encore close',
+  interrupted: 'interrompue'
 }
 
 const INTEGRATION_LIBELLE: Record<string, string> = {

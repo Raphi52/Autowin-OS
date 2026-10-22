@@ -5,7 +5,7 @@ import { parseRun } from '../dashboards/runs'
 import { scanRunsBounded, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
-import type { RunClosureStatus } from '../../shared/run-execution'
+import type { RunClosureObservation, RunFileStatus } from '../../shared/run-execution'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 import { rootDodLabels, rootRequirementChecks } from '../root-execution-contract'
 import type { ExecutionEvidence } from '../providers/types'
@@ -428,7 +428,7 @@ export function ligneJournalDErreur(e: unknown): string {
 }
 
 /** Texte d'un RUN.md une fois clos : partagé par la clôture synchrone et la réconciliation. */
-function texteClos(md: string, status: RunClosureStatus, journalLine: string): string {
+function texteClos(md: string, status: RunFileStatus, journalLine: string): string {
   // Le cochage auto de « le juge valide … » est retiré avec la case elle-même : il cochait un
   // pseudo-critère au moment où le statut le disait déjà. Une DoD RÉELLE, elle, n'est jamais cochée
   // par la clôture — c'est à celui qui produit la preuve de la cocher, sinon la case ne prouve rien.
@@ -438,7 +438,18 @@ function texteClos(md: string, status: RunClosureStatus, journalLine: string): s
     .replace(/(## Journal\n)/, `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`)
 }
 
-export function closeConvRun(path: string, status: RunClosureStatus, journalLine: string): void {
+/**
+ * LE STATUT DU RUN.md À PARTIR DE LA CLÔTURE DU MOTEUR (piste 4, conv-1070) : une clôture `red` qui
+ * nomme une cause extérieure devient `interrupted` — ni échec, ni bloqué. Tout le reste passe tel
+ * quel : un refus du juge reste `red`.
+ */
+export function statutDuRunMd(
+  closure: Pick<RunClosureObservation, 'status' | 'interruption'>
+): RunFileStatus {
+  return closure.status === 'red' && closure.interruption ? 'interrupted' : closure.status
+}
+
+export function closeConvRun(path: string, status: RunFileStatus, journalLine: string): void {
   if (status === 'open') return
   try {
     writeFileSync(path, texteClos(readFileSync(path, 'utf8'), status, journalLine), 'utf8')
@@ -510,7 +521,15 @@ function estAbsent(error: unknown): boolean {
 
 type ExamenRun = 'absent' | 'recent' | 'deja-verifie' | 'clos' | 'ouvert' | 'illisible'
 
-/** Clôture ASYNCHRONE d'un run abandonné ; faux si l'écriture n'a pas abouti. */
+/**
+ * Clôture ASYNCHRONE d'un run abandonné ; faux si l'écriture n'a pas abouti. `interrupted`, pas
+ * `red` (piste 4, conv-1070) : l'app s'est arrêtée sous lui, aucun juge ne l'a refusé — `red` le
+ * laissait « bloqué » pour toujours (482 RUN.md ainsi clos, comptés le 2026-10-22).
+ * fix-ok: conv-1070 — cause mesurée : cette fonction écrivait `red` ; le test « clos `interrupted`
+ * … et ne bloque pas » (conv-runs-reconcile.test.ts) rendait « expected 'status: red' » avant, vert
+ * après. Le texte « Abandonné : » reste : `runAbandonne` le relit, et sa reformulation rougit le test
+ * du contrat de tâche du même fichier.
+ */
 async function clorePourAbandon(path: string): Promise<boolean> {
   try {
     const md = await readFile(path, 'utf8')
@@ -518,7 +537,8 @@ async function clorePourAbandon(path: string): Promise<boolean> {
       path,
       texteClos(
         md,
-        'red',
+        'interrupted',
+        // Texte inchangé : `runAbandonne` (conversation-task-contract.ts) le relit à la lettre.
         "Abandonné : l'app s'est arrêtée avant la clôture, aucun verdict n'a été rendu."
       ),
       'utf8'
@@ -535,9 +555,9 @@ async function clorePourAbandon(path: string): Promise<boolean> {
  * `closeConvRun` n'est appelé qu'à la FIN d'une orchestration : si l'app s'arrête avant — crash,
  * fermeture, coupure — le `RUN.md` garde `status: open` et rien ne l'en sort jamais. Mesuré le
  * 2026-08-05 sur l'état réel (8888 workspaces) : 151 runs `open` dont **141 vieux de plus de 24 h**.
- * Le taux de réussite se lisant dans ces fichiers, ces 141 le faussaient en silence — ni succès, ni
- * échec, alors que ce sont des échecs. `red` est le statut juste : la docstring de `closeConvRun` le
- * dit déjà, « red = rejeté/crash ».
+ * Le taux de réussite se lisant dans ces fichiers, ces 141 le faussaient en silence. Ils étaient clos
+ * `red` ; depuis conv-1070 ils le sont `interrupted` : arrêtés avec l'app, pas jugés — `red` les
+ * comptait parmi les échecs et les gardait « bloqués » pour toujours.
  *
  * Le SEUIL protège les runs en vol et ceux que la reprise va récupérer : ceux-là ont un `mtime` de
  * quelques secondes, jamais de plusieurs heures. Le PLAFOND borne le travail au démarrage, et le

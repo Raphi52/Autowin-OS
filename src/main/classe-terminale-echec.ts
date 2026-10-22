@@ -1,5 +1,6 @@
 import { isUpstreamOutage } from '../shared/panne-amont'
 import { estMurDeQuota } from '../shared/reprise-quota'
+import type { RunInterruption } from '../shared/run-execution'
 import { isExpiredAuth } from './task-manager/watchdog-suppression'
 
 /**
@@ -58,4 +59,26 @@ export function classeTerminaleDEchec(erreur: unknown, annule: boolean): 'extern
   if (isUpstreamOutage(message, '')) return 'external'
   if (isExpiredAuth(message) || FOURNISSEUR_NON_CONNECTE.test(message)) return 'external'
   return 'defect'
+}
+
+/**
+ * POURQUOI CE RUN S'EST-IL ARRÊTÉ, QUAND CE N'EST PAS LA FAUTE DU TRAVAIL (piste 4, conv-1070).
+ *
+ * `classeTerminaleDEchec` ne servait qu'à la mémoire d'apprentissage : le RUN.md, lui, recevait
+ * `red` dans tous les cas, et `isBlocked` gardait ainsi « bloqués » pour toujours des runs coupés
+ * par le bouton Stop ou par la limite de session (mesuré le 2026-10-22 : 8 runs, dont
+ * `judge-carnet-fil`, conv-1058, coupé par Stop). Cette cause nommée est ce qui écrit
+ * `status: interrupted` à la place, et ce que la vue Workflows retire de ses taux.
+ *
+ * MÊME règle que `classe external`, sans une de plus : `undefined` ⇔ `defect`. Un run allé au
+ * bout puis refusé (aucune exception, aucun arrêt) n'est jamais une interruption.
+ *
+ * fix-ok: conv-1070 — cause lue dans le code puis mesurée : `commands.ts` écrivait `closeConvRun(…, 'red')` sans condition et l'orchestrateur émettait sa clôture terminale sans cause ; le test « mur de quota → red, interruption quota » (orchestrator.mur-de-quota.test.ts) était rouge avant ce module, vert après.
+ */
+export function causeDInterruption(erreur: unknown, annule: boolean): RunInterruption | undefined {
+  if (annule) return 'arret'
+  if (erreur === undefined || erreur === null) return undefined
+  if (classeTerminaleDEchec(erreur, false) !== 'external') return undefined
+  const message = erreur instanceof Error ? erreur.message : String(erreur)
+  return estMurDeQuota(message) ? 'quota' : 'externe'
 }

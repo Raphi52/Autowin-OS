@@ -243,22 +243,16 @@ export class AutowinOS {
   directivesEnAttente?: (conversationId: string) => string[]
   private readonly orchestratorDeps: OrchestratorDeps
   /**
-   * Workflow nommé imposé au run en cours. Les runs d'une confrontation s'enchaînent en série, donc
-   * un seul à la fois — la confrontation le pose puis le retire, y compris quand le run échoue.
+   * Le workflow ACTIF de la vue Workflows (`index.ts`, `appliquerWorkflowActif`), imposé à chaque
+   * run du chat tant qu'il est actif. La confrontation qui le posait autour de ses runs a été retirée
+   * (`workflow-run-override.ts`) ; depuis le commit 5bb2bf99 (05/08), c'est le bouton « activer » de
+   * la vue qui le pose — un choix explicite, que la vue écrit désormais en clair (conv-1070).
    */
   private workflowImpose?: WorkflowRunOverride
   setActiveWorkflow(workflow: WorkflowRunOverride | undefined): void {
     this.workflowImpose = workflow
   }
 
-  /**
-   * Pose le workflow choisi POUR CETTE CONVERSATION le temps du run. Rend `true` s'il a posé quelque
-   * chose, pour que l'appelant sache s'il doit le retirer.
-   *
-   * Ne fait rien si un workflow est déjà actif : la confrontation pose le sien autour de chaque run,
-   * et il doit gagner — sinon un banc lancé depuis une conversation comparerait le workflow de cette
-   * conversation à lui-même.
-   */
   /**
    * L'orchestrateur de CE run, avec SA closure de workflow.
    *
@@ -310,8 +304,10 @@ export class AutowinOS {
     conversationId?: string,
     task?: string
   ): Promise<WorkflowRunOverride | undefined> {
-    // La confrontation IMPOSE son workflow autour de chaque run et gagne : sinon un banc lancé
-    // depuis une conversation comparerait le workflow de cette conversation à lui-même.
+    // Le workflow ACTIF de la vue passe avant tout le reste, choix automatique compris : c'est le
+    // sens du bouton « activer » (commit 5bb2bf99). Mesuré le 2026-10-22 : 39 démarrages sur 39 en
+    // source `manuel` dans `causal-trace/` — tant qu'un workflow est actif, le choix automatique ne
+    // tourne jamais. La vue le dit (`workflow-active-imposed`, conv-1070).
     if (this.workflowImpose) return this.workflowImpose
     const selections = loadWorkflowSelections()
     // Un refus EXPLICITE se respecte : l'utilisateur a retiré le workflow de cette conversation, le

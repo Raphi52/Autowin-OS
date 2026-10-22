@@ -270,6 +270,10 @@ interface ChatApi {
   arenaDuelsParWorkflow: (
     derniers?: number
   ) => Promise<Record<string, import('../main/arena-duels').AgregatDuels>>
+  /** Ce que chaque workflow a réellement donné (runs aboutis, en échec, interrompus), par nom. */
+  workflowResultatsReels: () => Promise<
+    Record<string, import('../main/activity/resultats-reels-workflows').ResultatsReelsWorkflow>
+  >
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<

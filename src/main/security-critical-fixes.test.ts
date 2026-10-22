@@ -597,7 +597,17 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     partent entre apostrophes PowerShell echappees dans une commande encodee, jamais par un shell.
     //   `unguarded` reste VIDE.
     // Fusion des deux (mise a jour du 2026-10-18, conv-322) : 224 + 1 + 3 = 228.
-    expect(handlers).toHaveLength(228)
+    // MISE A JOUR 2026-10-22 (conv-1070) — 228 -> 236. ATTRIBUTION MESUREE : canaux de 0a9296e6
+    //   (dernier compte) compares a l'arbre de ce travail — NEUF ajoutes, UN retire
+    //   (`os:conversations:routeMessage`). Ce test etait DEJA rouge a 235 sur main avant ce travail.
+    //   HUIT ajoutes par d'autres fils (+7 nets avec le retrait), deja dans main et gardes : `git:branch`,
+    //   `hdesk:gestion:choisirExe`, `os:conversations:memoire`, `…:oublierFait`,
+    //   `…:revenirAuTour`, `…:essaisEnParallele`, `…:comparerLesFacons`, `…:garderEssai`.
+    //   UN ajoute par ce travail : `workflows:resultatsReels` (`ipc/perf.ts`), garde des sa
+    //   PREMIERE ligne par `assertTrustedRendererSender(event, 'WorkflowResultatsReels')` — LECTURE
+    //   des traces causales pour la vue Workflows ; AUCUN argument du renderer, le dossier lu vient
+    //   du processus principal ; n'ecrit rien. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(236)
     expect(unguarded).toEqual([])
   })
 

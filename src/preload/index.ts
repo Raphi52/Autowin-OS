@@ -296,6 +296,8 @@ const api = {
   // Mesures d'arene deja journalisees, agregees par workflow (lecture seule, aucun rejeu).
   arenaDuelsParWorkflow: (derniers?: number) =>
     ipcRenderer.invoke('arena:duelsParWorkflow', derniers),
+  // Résultats RÉELS de chaque workflow, relus dans la trace causale (lecture seule, conv-1070).
+  workflowResultatsReels: () => ipcRenderer.invoke('workflows:resultatsReels'),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
   signalerGelRenderer: (dureeMs: number, etiquette?: string) =>
     ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette),

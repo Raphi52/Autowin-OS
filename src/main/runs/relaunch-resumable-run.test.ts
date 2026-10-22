@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { admitAutomaticResumeRuntime, type OrchestrationRunState } from './orchestration-state'
 import { creerRelanceDeRunReprenable, type DependancesDeRelance } from './relaunch-resumable-run'
-import { loadConvRunTrace, saveConvRunTrace } from './conv-runs'
+import { loadConvRunTrace, saveConvRunTrace, statutDuRunMd } from './conv-runs'
+import { causeDInterruption } from '../classe-terminale-echec'
 import { supprimerArbre } from '../fs-supprimer'
 
 /**
@@ -203,6 +204,8 @@ function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<
     reconcileLateRunLifecycle:
       reglages.reconcileLateRunLifecycle ?? ((precedent: unknown) => precedent),
     classifierRefusDeReprise: () => undefined,
+    statutDuRunMd,
+    causeDInterruption,
     randomUUID: () => 'uuid-migration',
     fenetresVivantes: () => [],
     defaultProcessIdentity: {}
@@ -429,6 +432,38 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     })
     await b.relance()
     expect(b.observe.clotures[0].statut).toBe('red')
+  })
+
+  /**
+   * PISTE 4 (conv-1070) : une reprise coupée de l'extérieur s'écrit `interrupted`. L'entrée qui
+   * ferait échouer ces tests si le correctif était faux : la clôture `red` sans cause juste
+   * au-dessus, et l'erreur ordinaire de « sur l echec », qui restent `red`.
+   */
+  it('une clôture rouge qui nomme une interruption écrit interrupted', async () => {
+    const b = banc({
+      cyclesDeVie: [
+        { stage: 'closure', runId: 'run-repris', closure: { status: 'red', interruption: 'quota' } }
+      ]
+    })
+    await b.relance()
+    expect(b.observe.clotures[0].statut).toBe('interrupted')
+  })
+
+  it('une reprise arrêtée par la limite de session écrit interrupted, pas red', async () => {
+    const b = banc({
+      resultat: async () => {
+        throw new Error(
+          "Claude a interrompu l'appel : You've hit your session limit · resets 1pm (Europe/Paris)"
+        )
+      }
+    })
+    await b.relance()
+    expect(b.observe.clotures).toEqual([
+      expect.objectContaining({
+        statut: 'interrupted',
+        note: expect.stringContaining('interrompue')
+      })
+    ])
   })
 
   /**
