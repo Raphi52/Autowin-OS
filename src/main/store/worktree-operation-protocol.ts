@@ -18,6 +18,8 @@ export interface WorktreeRecoveryInventory {
 export type WorktreeOperationRequest =
   | { operation: 'prepare'; agentId: string; context?: WorktreeRunContext }
   | { operation: 'changedFiles'; agentId: string }
+  /** Fichiers libres ET deja commites de la copie (`fichiersDuTravailDeLaCopie`, conv-1074). */
+  | { operation: 'fichiersDuTravail'; agentId: string }
   | {
       operation: 'finalize'
       agentId: string
@@ -26,6 +28,8 @@ export type WorktreeOperationRequest =
         expectedAgentSha?: string
         task?: string
         conflictStrategy?: 'ours' | 'theirs'
+        /** Barreau 2 de `finalize`, autorisé par le coordinateur (conv-1086). */
+        preserverEditionLocale?: boolean
       }
     }
   | {

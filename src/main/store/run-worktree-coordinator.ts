@@ -30,6 +30,18 @@ import {
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 
 /**
+ * L'AUTORISATION DU BARREAU 2, portee par l'appelant comme `worktree-manager.ts` l'exige : faire
+ * atterrir le travail d'un run malgre le travail non commite de la base, en le gardant par une
+ * fusion a 3 branches (pre-vol a blanc, sauvegarde, restauration au moindre doute).
+ *
+ * Accordee par l'utilisateur le 2026-08-27 (« l'echelle complete ») et redemandee le 2026-10-22
+ * (conv-1086) : sans elle, aucun appel de production ne jouait ce barreau, et run-edcf9630aaf1-1,
+ * vert et juge a 88, a ete refuse en `base-dirty` sur des fichiers que la fusion savait garder.
+ * Chaque fin de run qui publie la porte : fin normale, fin en production, reprise et repechage.
+ */
+const FUSION_PRESERVANTE = { preserverEditionLocale: true } as const
+
+/**
  * Coordinateur worktree AU NIVEAU RUN (le "flip live" du volet B).
  *
  * L'orchestrateur appelle `begin(runId, agentName, isMutation)` avant d'exécuter un run et
@@ -84,6 +96,8 @@ export interface RunWorktreeCoordinatorDeps {
         | 'readConflictDiff'
         | 'prepareAsync'
         | 'changedFilesAsync'
+        | 'fichiersDuTravailDeLaCopie'
+        | 'fichiersDuTravailDeLaCopieAsync'
         | 'finalizeAsync'
         | 'cleanupPublishedAsync'
         | 'acknowledgePublication'
@@ -1008,6 +1022,7 @@ export class RunWorktreeCoordinator {
     const res = this.manager.finalize(runId, {
       baseBranch: tracked.baseBranch,
       ...(tracked.task ? { task: tracked.task } : {}),
+      ...FUSION_PRESERVANTE,
       onPrepared: (agentSha, baseSha) => {
         tracked.publicationAgentSha = agentSha
         tracked.publicationBaseSha = baseSha
@@ -1190,6 +1205,7 @@ export class RunWorktreeCoordinator {
       const res = await this.enFilePublication(() =>
         this.manager.finalizeAsync!(runId, {
           baseBranch: tracked.baseBranch,
+          ...FUSION_PRESERVANTE,
           onPrepared: (agentSha, baseSha) => {
             tracked.publicationAgentSha = agentSha
             tracked.publicationBaseSha = baseSha
@@ -1746,8 +1762,19 @@ export class RunWorktreeCoordinator {
    * Fichiers changés dans la copie du run, mesurés MAINTENANT (contrat `RunWorktrees`, orchestrator.ts).
    * Sans le `try/catch` de `changedFilesAsync` : une erreur doit remonter, car l'appelant en déduit
    * qu'une copie n'a rien produit, et un « [] » par défaut ouvrirait cette porte à tort.
+   *
+   * La mesure compte aussi le travail DÉJÀ COMMITÉ dans la copie : `git status` seul l'ignorait, et
+   * run-bc699a65bae7-1 (conv-1074, 2026-10-22) — 35 fichiers commités par l'agent, fusion refusée
+   * `base-dirty` — a été déclaré intégré, sans que la cause atteigne le RUN.md. Les deux voies de
+   * repli ne servent qu'un gestionnaire qui ne connaît pas encore cette mesure.
    */
   async fichiersChangesDeLaCopie(runId: string): Promise<readonly string[]> {
+    if (this.manager.fichiersDuTravailDeLaCopieAsync) {
+      return await this.manager.fichiersDuTravailDeLaCopieAsync(runId)
+    }
+    if (this.manager.fichiersDuTravailDeLaCopie) {
+      return this.manager.fichiersDuTravailDeLaCopie(runId)
+    }
     return this.manager.changedFilesAsync
       ? await this.manager.changedFilesAsync(runId)
       : this.manager.changedFiles(runId)
@@ -3044,6 +3071,7 @@ export class RunWorktreeCoordinator {
               ...((record?.baseBranch ?? tracked.baseBranch)
                 ? { baseBranch: record?.baseBranch ?? tracked.baseBranch }
                 : {}),
+              ...FUSION_PRESERVANTE,
               ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
                 ? {
                     expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
@@ -3238,6 +3266,7 @@ export class RunWorktreeCoordinator {
             ? await this.manager.finalizeAsync(runId, {
                 ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
+                ...FUSION_PRESERVANTE,
                 ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
                   ? {
                       expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
@@ -3261,7 +3290,8 @@ export class RunWorktreeCoordinator {
             : this.manager.finalize(runId, {
                 ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
-                ...(publishedSha ? { expectedAgentSha: publishedSha } : {})
+                ...(publishedSha ? { expectedAgentSha: publishedSha } : {}),
+                ...FUSION_PRESERVANTE
               })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)

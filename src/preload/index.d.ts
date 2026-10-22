@@ -32,6 +32,7 @@ import type {
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { CarteDesBesoins } from '../shared/carte-des-besoins'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatPiper } from '../main/piper-local'
@@ -302,6 +303,8 @@ interface ChatApi {
   }) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
+  /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
+  setPaletteCarteFinDeTour: (palette: Record<string, string>) => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number
@@ -527,6 +530,8 @@ interface ChatApi {
   ) => Promise<Array<{ nom: string; chemin: string; octets: number; le: number }>>
   transcriptRevealer: (chemin: string) => Promise<{ ok: true }>
   conversations: () => Promise<ConversationSummary[]>
+  /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
+  carteDesBesoins: () => Promise<CarteDesBesoins>
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (
     terme: string

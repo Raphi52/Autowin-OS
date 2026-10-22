@@ -118,6 +118,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { sansThinkPerime } from './think-briefing'
+import { workflowSansScoutPourSelection } from './selection-sans-scout'
 import { ensureAutowinAppData } from './app-data'
 import {
   loadAutoClose,
@@ -322,7 +323,15 @@ export class AutowinOS {
     // ne passe plus avant ce choix (conv-1070, 2026-10-22).
     if (!profileId) {
       const proposition = task ? await this.poseWorkflowDynamique(task) : undefined
-      return proposition ?? this.workflowParDefaut
+      if (proposition) return proposition
+      // Le REPLI subit la même garde que le choix du modèle (conv-1070, 2026-10-22) : un workflow
+      // actif de réparation (« Correctif » : think, build, clean, judge) sur un symptôme dont la
+      // cause est inconnue ferait sauter le cadrage. On rend alors la main au régime, qui le joue.
+      const parDefaut = this.workflowParDefaut
+      const phasesParDefaut =
+        parDefaut?.graph?.nodes.map((node) => node.phase) ?? parDefaut?.phases ?? []
+      if (profilEcraseLeCadrage(task ?? '', phasesParDefaut)) return undefined
+      return parDefaut
     }
     const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
     if (!profile) return undefined
@@ -1340,9 +1349,16 @@ export class AutowinOS {
           // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
           // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
           // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
+          //
+          // Une sélection de candidats scout ne rejoue pas le scout du workflow du fil (conv-1080,
+          // `selection-sans-scout.ts`). Le workflow actif de la vue, devenu une simple valeur par
+          // défaut (conv-1070), passe par le même filtre : il n'y a plus de workflow imposé.
           const workflowDuRun =
             runOptions.workflowOverride ??
-            (await this.poseConversationWorkflow(conversationId, task))
+            workflowSansScoutPourSelection(
+              await this.poseConversationWorkflow(conversationId, task),
+              task
+            )
           const orchestrator = this.orchestrateurPour(workflowDuRun, task, runOptions.workspace)
           const result = await orchestrator.run(
             task,

@@ -407,9 +407,12 @@
      (« ... ») — la forme dit « j'attends ta reponse ». Trois fonds radiaux, sans balise ajoutee.
      DEMANDE DU 2026-10-10 : les points tournent de 90 degres — une COLONNE, comme les reponses
      proposees listees l'une sous l'autre — precedee d'un « ? » (::before). Les deux animations
-     sont COMBINEES en UN cycle de 1.8s : le « ? » gigote (0-26 %), PUIS chaque point avance a
-     droite a tour de role, de haut en bas (26-74 %), puis pause. Les deux @keyframes ont la MEME
+     sont COMBINEES en UN cycle de 1.8s : le « ? » gigote (0-500 ms), PUIS chaque point avance a
+     droite a tour de role, de haut en bas (500-1300 ms), puis pause. Les deux @keyframes ont la MEME
      duree et demarrent ensemble (meme element, meme changement de classe) : elles restent calees.
+     PAR CRANS DE 100 MS (conv-1075) : en continu, cette pastille faisait recomposer toute la fenetre
+     60 fois par seconde. Ses images cles tombent donc sur des dix-huitiemes du cycle (100 ms : d'ou
+     27.7778 % au lieu de 26 %), et le calage sur l'horloge commune vit dans animations-par-crans.ts.
      Boite de 18px : le « ? » a gauche, puis une piste de 9px ou la colonne avance de 5px. Tout est
      DANS la boite : la ligne de liste ne rogne rien et le titre ne chevauche rien. */
   width: 18px;
@@ -425,7 +428,7 @@
   background-size: 4px 4px;
   background-repeat: no-repeat;
   background-position: 9px 0, 9px 50%, 9px 100%;
-  animation: conv-asking-list 1.8s infinite ease-in-out;
+  animation: conv-asking-list 1.8s steps(2) infinite;
 }
 .conversation-state.is-asking::before {
   content: '?';
@@ -438,43 +441,45 @@
   font: 700 12px/1 system-ui, sans-serif;
   color: currentColor;
   transform-origin: 50% 75%;
-  animation: conv-asking-wiggle 1.8s infinite ease-in-out;
+  animation: conv-asking-wiggle 1.8s steps(1) infinite;
 }
-/* Temps 1 du cycle : le « ? » s'agite, puis se tient droit pendant que la colonne defile. */
+/* Temps 1 du cycle : le « ? » s'agite, puis se tient droit pendant que la colonne defile. Une
+   position par cran de 100 ms (5.5556 % = 1/18 du cycle). */
 @keyframes conv-asking-wiggle {
   0%,
-  26%,
+  27.7778%,
   100% {
     transform: rotate(0);
   }
-  5% {
+  5.5556% {
     transform: rotate(-16deg);
   }
-  10% {
+  11.1111% {
     transform: rotate(13deg);
   }
-  15% {
+  16.6667% {
     transform: rotate(-8deg);
   }
-  20% {
+  22.2222% {
     transform: rotate(4deg);
   }
 }
-/* Temps 2 du cycle : la colonne « liste » ses points, de haut en bas (100 % = bord droit). */
+/* Temps 2 du cycle : la colonne « liste » ses points, de haut en bas (100 % = bord droit). Chaque
+   point met 200 ms (deux crans) pour aller et revenir. */
 @keyframes conv-asking-list {
   0%,
-  26%,
-  74%,
+  27.7778%,
+  72.2222%,
   100% {
     background-position: 9px 0, 9px 50%, 9px 100%;
   }
-  38% {
+  38.8889% {
     background-position: 100% 0, 9px 50%, 9px 100%;
   }
   50% {
     background-position: 9px 0, 100% 50%, 9px 100%;
   }
-  62% {
+  61.1111% {
     background-position: 9px 0, 9px 50%, 100% 100%;
   }
 }
@@ -4733,7 +4738,10 @@ button.chat-project-dot:disabled {
   );
   background-repeat: repeat-y;
   background-size: 2px 18px;
-  animation: etape-flux 1.2s linear infinite;
+  /* Les trois indicateurs d'une étape en cours (flux du rail, pouls de la pastille, reflet de la
+     jauge) avancent PAR CRANS DE 100 MS, calés sur l'horloge commune (animations-par-crans.ts) :
+     en continu, chacun faisait recomposer toute la fenêtre 60 fois par seconde (conv-1075). */
+  animation: etape-flux 1.2s steps(12) infinite;
 }
 /* La PASTILLE : opaque, elle cache le rail qui passe dessous. */
 .etape-pastille {
@@ -4768,7 +4776,8 @@ button.chat-project-dot:disabled {
   color: var(--on-accent);
   background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
   box-shadow: none;
-  animation: etape-pouls 1.4s ease-in-out infinite;
+  /* Par crans de 100 ms : 0,7 s par demi-battement = 7 crans (voir le rail, ci-dessus). */
+  animation: etape-pouls 1.4s steps(7) infinite;
 }
 .etape-valeur {
   padding: 1px 0 3px 8px;
@@ -4839,7 +4848,8 @@ button.chat-project-dot:disabled {
   background-size:
     40% 100%,
     100% 100%;
-  animation: etape-reflet 1.8s linear infinite;
+  /* Par crans de 100 ms : 18 crans sur 1,8 s (voir le rail des étapes). */
+  animation: etape-reflet 1.8s steps(18) infinite;
 }
 .etapes-pied-segment[data-statut='pending'] .etapes-pied-barre {
   background: repeating-linear-gradient(

@@ -113,6 +113,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { bailDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 import {
   estIdDeConversation,
@@ -139,6 +140,8 @@ export const VUES_CONNUES = [
   // Vue Bureaux cachés (conv-951).
   'hdesk',
   'tickets',
+  // Carte des besoins (conv-1089) — `ui-capture.vues.test.mjs` garde cette liste égale au catalogue.
+  'besoins',
   'settings'
 ]
 
@@ -248,9 +251,10 @@ export const accuseDImage = (message) =>
  * selecteur de clic ordinaire.
  */
 export const gesteDeLEtape = (etape) => {
-  const prefixe = /^(alt|selection):\s*(.+)$/u.exec(etape.trim())
+  const prefixe = /^(alt|selection|survol):\s*(.+)$/u.exec(etape.trim())
   if (!prefixe) return { geste: 'clic', selecteur: etape.trim() }
-  return { geste: prefixe[1] === 'alt' ? 'alt-clic' : 'selection', selecteur: prefixe[2].trim() }
+  const geste = { alt: 'alt-clic', selection: 'selection', survol: 'survol' }[prefixe[1]]
+  return { geste, selecteur: prefixe[2].trim() }
 }
 
 /** Le script joue dans la page pour ce geste ; il rend `true` si la cible existe. */
@@ -272,6 +276,18 @@ export const scriptDuGeste = ({ geste, selecteur }) => {
         selection.removeAllRanges()
         selection.addRange(plage)
         cible.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+        return true
+      })()`
+  // SURVOL + FOCUS, sans clic (conv-1059) : ce que fait une vraie souris sur un élément. React lit
+  // `mouseover` pour onMouseEnter et `focusin` pour onFocus ; `element.click()` ne fait ni l'un ni
+  // l'autre, donc un détail ouvert au survol n'apparaissait sur aucune capture.
+  if (geste === 'survol')
+    return `(() => {
+        ${cible}
+        if (!cible) return false
+        cible.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+        cible.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+        cible.focus()
         return true
       })()`
   return `(() => {
@@ -923,10 +939,13 @@ const main = async () => {
   // en tiroir et la disposition en colonnes, celle d'un ecran 1920 px, n'etait jamais capturable
   // (constate le 2026-10-09, conv-124). On emule la taille demandee sur la page elle-meme : les
   // media queries et la mise en page voient cette largeur, la capture la rend a l'echelle 1.
+  // Posee par BAIL (cdp-device-metrics.mjs) : `rendre` sort par process.exit, aucun finally ne
+  // tournerait — chaque sortie la rend par `restaurerVue` (conv-1056).
   const largeurDemandee = Number(argument('--largeur') ?? 0)
+  let libererLargeur
   if (largeurDemandee > 0) {
     const hauteurDemandee = Number(argument('--hauteur') ?? Math.round((largeurDemandee * 9) / 16))
-    await envoyer('Emulation.setDeviceMetricsOverride', {
+    libererLargeur = await bailDeviceMetricsOverride(envoyer, {
       width: Math.round(largeurDemandee),
       height: Math.round(hauteurDemandee),
       deviceScaleFactor: 1,
@@ -1058,9 +1077,7 @@ const main = async () => {
     // La taille emulee par --largeur ne survit JAMAIS a la capture : sur une fenetre reelle
     // (--port, --fenetre-reelle), elle laisserait l'app de l'utilisateur mise en page a une
     // largeur qui n'est pas celle de son ecran. Toutes les sorties passent par ici.
-    if (largeurDemandee > 0) {
-      await envoyer('Emulation.clearDeviceMetricsOverride').catch(() => {})
-    }
+    if (libererLargeur) await libererLargeur().catch(() => {})
     if (saisieARestaurer) {
       await evaluer(`(() => {
         const el = document.querySelector(${JSON.stringify(saisieARestaurer.champ)})
@@ -1089,6 +1106,9 @@ const main = async () => {
     return Boolean(bouton)
   })()`)
   if (!navigue) {
+    // Cette sortie quittait sans retirer la taille de --largeur (conv-1056) : sur une fenetre
+    // reelle, l'app de l'utilisateur restait mise en page a une largeur emulee.
+    await restaurerVue()
     socket.close()
     rendre({ ok: false, echecs: [`bouton-nav-absent(nav-${vue})`], vue }, 4)
   }

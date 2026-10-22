@@ -1055,6 +1055,13 @@ export class WorktreeManager {
       : this.changedFiles(agentId)
   }
 
+  /** `fichiersDuTravailDeLaCopie` hors du thread main quand le worker est disponible. */
+  async fichiersDuTravailDeLaCopieAsync(agentId: string): Promise<string[]> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'fichiersDuTravail', agentId })
+      : this.fichiersDuTravailDeLaCopie(agentId)
+  }
+
   async finalizeAsync(
     agentId: string,
     options: {
@@ -1064,6 +1071,8 @@ export class WorktreeManager {
       task?: string
       /** Résolution humaine d'un conflit : garder la base (`ours`) ou l'agent (`theirs`). */
       conflictStrategy?: 'ours' | 'theirs'
+      /** Barreau 2, autorisé par l'appelant : voir `finalize`. Traverse le worker tel quel. */
+      preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}
@@ -5708,6 +5717,31 @@ exit 0
     return [...new Set([...this.workingTreeFiles(path), ...this.preservedIgnoredFiles(path)])]
   }
 
+  /**
+   * TOUT CE QUE LA COPIE APPORTE A LA BASE : ses fichiers libres (`changedFiles`) ET ceux qu'elle a
+   * deja commites au-dela de la base — le meme `HEAD...<copie>` que lit `finalizeSansSecours` pour
+   * decider `base-dirty`.
+   *
+   * `changedFiles` ne lit que `git status`. Vecu le 2026-10-22 (conv-1074, run-bc699a65bae7-1) :
+   * l'agent avait commite ses 35 fichiers DANS sa copie, `git status` y etait vide, et
+   * l'orchestrateur, qui exige une copie vide pour accepter une livraison par Git externe, a declare
+   * integre un run dont la fusion venait d'etre refusee. La cause `base-dirty` n'a jamais atteint le
+   * RUN.md. `changedFiles` garde son sens (activite affichee, recensements) : cette mesure-ci sert
+   * la question « la copie porte-t-elle du travail ? », et seulement elle.
+   *
+   * Une erreur git REMONTE (`this.git` leve) : l'appelant en deduirait sinon une copie vide.
+   */
+  fichiersDuTravailDeLaCopie(agentId: string): string[] {
+    const path = this.pathFor(agentId)
+    if (!existsSync(path)) return []
+    if (this.refManquanteDeHead(path)) return []
+    const sha = this.git(path, ['rev-parse', 'HEAD'])
+    const commites = parseNullSeparatedPaths(
+      this.git(this.baseRepo, ['diff', '--name-only', '-z', `HEAD...${sha}`])
+    )
+    return [...new Set([...this.changedFiles(agentId), ...commites])]
+  }
+
   /** Lit le diff figé d'un conflit sans accepter de cwd ou de révision venant du renderer. */
   readConflictDiff(
     agentId: string,
@@ -5851,7 +5885,8 @@ exit 0
   /**
    * La fusion a 3 branches passerait-elle, SANS rien ecrire dans le depot ?
    *
-   * Les trois versions (base commune, celle de l'utilisateur, celle de la copie) sont extraites dans
+   * Les trois versions (base commune, celle de l'utilisateur, celle que la fusion de la copie
+   * installerait) sont extraites dans
    * un dossier temporaire, et `git merge-file` rend un code de sortie : 0 = fusion propre, > 0 =
    * conflits. Rien n'est ecrit dans l'arbre, l'index, ni un ref. En cas de doute — extraction
    * impossible, fichier binaire, erreur de git — on rend FAUX : ne pas savoir vaut refuser.
@@ -5863,13 +5898,35 @@ exit 0
     if (agentSha.code !== 0) return false
     const baseSha = this.tryGitFn(this.baseRepo, ['rev-parse', 'HEAD'])
     if (baseSha.code !== 0) return false
+    /*
+     * LE COTE « COPIE » EST LE RESULTAT DE LA FUSION, PAS LA COPIE SEULE.
+     *
+     * Ce qui atterrit chez l'utilisateur, c'est la fusion de la copie DANS sa base. Quand la copie
+     * est partie d'`origin/main` et que le main local a des commits a lui (`describeForLaunch`,
+     * historiques divergents), la version de la copie n'a pas ces commits : comparee a la base, elle
+     * semble les ANNULER. Vecu le 2026-10-22 (conv-1086) : une edition non commitee posee juste a
+     * cote d'un commit local etait jugee en conflit, alors que git la fusionnait sans heurt — le
+     * pre-vol refusait a tort, et le run retombait en `base-dirty`.
+     *
+     * `merge-tree --write-tree` calcule l'arbre de cette fusion sans toucher arbre, index ni ref.
+     * Code 1 = la fusion elle-meme conflicte ; tout autre echec = on ne sait pas. Dans les deux cas,
+     * refuser : ne pas savoir vaut refuser.
+     */
+    const fusion = this.tryGitFn(this.baseRepo, [
+      'merge-tree',
+      '--write-tree',
+      baseSha.stdout.trim(),
+      agentSha.stdout.trim()
+    ])
+    const arbreFusionne = fusion.code === 0 ? fusion.stdout.split('\n')[0]?.trim() : ''
+    if (!arbreFusionne || !/^[0-9a-f]{40,64}$/i.test(arbreFusionne)) return false
     const bac = mkdtempSync(join(tmpdir(), 'autowin-fusion-blanc-'))
     try {
       for (const fichier of fichiers) {
         const versions: Record<string, string> = {}
         for (const [nom, revision] of [
           ['base', `${baseSha.stdout.trim()}:${fichier}`],
-          ['agent', `${agentSha.stdout.trim()}:${fichier}`]
+          ['agent', `${arbreFusionne}:${fichier}`]
         ] as const) {
           const contenu = this.tryGitFn(this.baseRepo, ['show', revision])
           // Un fichier absent d'un cote (ajout pur) n'est pas un conflit de contenu : cote vide.

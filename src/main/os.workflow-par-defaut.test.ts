@@ -47,13 +47,47 @@ type Os = {
 const proto = AutowinOS.prototype as unknown as Os
 
 /** Un faux `this` : le workflow actif posé par le VRAI `setActiveWorkflow`, le modèle simulé. */
-function os(actif: WorkflowRunOverride | undefined, proposition: WorkflowRunOverride | undefined) {
+function os(
+  actif: WorkflowRunOverride | undefined,
+  proposition: WorkflowRunOverride | undefined,
+  tache = TACHE
+) {
   const poseWorkflowDynamique = vi.fn(async () => proposition)
   const fake = { poseWorkflowDynamique } as unknown as Record<string, unknown>
   proto.setActiveWorkflow.call(fake, actif)
   const pose = (): Promise<WorkflowRunOverride | undefined> =>
-    proto.poseConversationWorkflow.call(fake, CONV, TACHE)
+    proto.poseConversationWorkflow.call(fake, CONV, tache)
   return { pose, poseWorkflowDynamique }
+}
+
+/** Un symptôme nu : la cause n'est pas connue, le cadrage doit dire QUOI corriger. */
+const SYMPTOME = 'quand je reviens dans ma conversation je vois plus l’historique'
+/** Le graphe du « Correctif » semé (`workflow-defaults.ts`) : aucune phase `frame` ni `scout`. */
+const CORRECTIF_ACTIF: WorkflowRunOverride = {
+  explicit: true,
+  identity: { name: 'Correctif', source: 'manuel' },
+  graph: {
+    entry: 'think-1',
+    nodes: [
+      { id: 'think-1', phase: 'think' },
+      { id: 'build-1', phase: 'build' },
+      { id: 'clean-1', phase: 'clean' },
+      { id: 'judge-1', phase: 'judge' }
+    ],
+    edges: [
+      { from: 'think-1', to: 'build-1', when: 'always' },
+      { from: 'build-1', to: 'clean-1', when: 'always' },
+      { from: 'clean-1', to: 'judge-1', when: 'always' }
+    ]
+  },
+  instructionFor: () => undefined
+}
+/** Un workflow actif qui cadre déjà : rien à lui retirer. */
+const FEATURE_ACTIF: WorkflowRunOverride = {
+  explicit: true,
+  identity: { name: 'Feature', source: 'manuel' },
+  phases: ['frame', 'build', 'judge'],
+  instructionFor: () => undefined
 }
 
 describe('workflow actif = valeur par défaut, le choix automatique passe avant', () => {
@@ -83,5 +117,36 @@ describe('workflow actif = valeur par défaut, le choix automatique passe avant'
     const { pose, poseWorkflowDynamique } = os(ACTIF, CHOIX_DU_MODELE)
     await expect(pose()).resolves.toBeUndefined()
     expect(poseWorkflowDynamique).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * LA GARDE DU CADRAGE VAUT AUSSI POUR LE WORKFLOW PAR DÉFAUT (conv-1070, 2026-10-22).
+ *
+ * Le choix automatique écarte un profil de réparation quand la demande est un symptôme dont la
+ * cause est inconnue (`profilEcraseLeCadrage`, `workflow-dynamic.ts`) : le régime reprend la main et
+ * joue le cadrage. Le workflow actif, devenu repli quand le modèle répond « aucun », passait sans
+ * cette garde : « Correctif » partait encore sans cadrage sur un « je vois plus X ». Même règle,
+ * même source : un graphe sans `frame` ni `scout` s'efface devant un symptôme.
+ */
+describe('le workflow par défaut ne saute pas le cadrage sur un symptôme', () => {
+  beforeEach(() => {
+    selections.byConversation = {}
+  })
+
+  it('un « Correctif » actif s’efface devant un symptôme quand le modèle ne propose rien', async () => {
+    const { pose } = os(CORRECTIF_ACTIF, undefined, SYMPTOME)
+    await expect(pose()).resolves.toBeUndefined()
+  })
+
+  it('le même « Correctif » pilote dès que l’utilisateur a nommé sa cible', async () => {
+    const tache = 'corrige src/main/os.ts, le cache est cassé'
+    const { pose } = os(CORRECTIF_ACTIF, undefined, tache)
+    await expect(pose()).resolves.toBe(CORRECTIF_ACTIF)
+  })
+
+  it('un workflow actif qui cadre déjà reste le repli, même sur un symptôme', async () => {
+    const { pose } = os(FEATURE_ACTIF, undefined, SYMPTOME)
+    await expect(pose()).resolves.toBe(FEATURE_ACTIF)
   })
 })

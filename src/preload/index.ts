@@ -46,6 +46,7 @@ import type {
 } from '../shared/tickets'
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { CarteDesBesoins } from '../shared/carte-des-besoins'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatDiarisation } from '../main/diarisation'
@@ -345,6 +346,9 @@ const api = {
   // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.
   setColorScheme: (schema: 'dark' | 'light'): Promise<boolean> =>
     ipcRenderer.invoke('app:color-scheme', schema),
+  // Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090).
+  setPaletteCarteFinDeTour: (palette: Record<string, string>): Promise<boolean> =>
+    ipcRenderer.invoke('app:carte-fin-de-tour-palette', palette),
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{
     available: boolean
@@ -681,6 +685,8 @@ const api = {
     ipcRenderer.invoke('os:transcript:revealer', chemin),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
+  /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
+  carteDesBesoins: (): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins'),
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (
     terme: string
