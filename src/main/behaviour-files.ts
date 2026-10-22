@@ -7,9 +7,10 @@ import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { AUTOWIN_WORKSPACE_ENV, legacyWorkspaceEnvName } from '../shared/app-identity'
 import { teamWorkspaces } from './brain-paths'
 import {
-  loadProjectContext,
+  loadProjectContextStack,
   PROJECT_CONTEXT_CHAIN,
-  PROJECT_CONTEXT_MAX_BYTES
+  PROJECT_CONTEXT_MAX_BYTES,
+  type ProjectContextStack
 } from './context-files'
 
 export type BehaviourEngine = 'codex' | 'claude' | 'autowin'
@@ -280,26 +281,24 @@ const CODEX_FICHIERS_PROJET_COUPES =
  *
  * conv-984 (2026-10-16) : ces fichiers s'affichaient « codex · active · Au démarrage de la session
  * Codex ». Or `codexExecSpec` lance TOUJOURS le CLI avec `-c project_doc_max_bytes=0` : Codex ne lit
- * aucun AGENTS.md de projet (ni `AGENTS.override.md`). Seul le fichier retenu par la chaîne d'Autowin
- * (`loadProjectContext` sur le dossier de travail) atteint le prompt, replié par Autowin.
+ * aucun AGENTS.md de projet (ni `AGENTS.override.md`). Seuls les fichiers retenus par la chaîne
+ * d'Autowin (`loadProjectContextStack` sur le dossier de travail) atteignent le prompt, repliés par Autowin.
  */
-function raisonCodexProjet(path: string, cleReplieParAutowin: string | undefined): string {
-  if (cleReplieParAutowin && cleFichier(path) === cleReplieParAutowin)
+function raisonCodexProjet(path: string, repliesParAutowin: ReadonlySet<string>): string {
+  const cle = cleFichier(path)
+  if (cle && repliesParAutowin.has(cle))
     return `${CODEX_FICHIERS_PROJET_COUPES} : Autowin le replie lui-même dans le prompt (entrée autowin)`
   if (basename(path).toLowerCase() === 'agents.override.md')
     return `${CODEX_FICHIERS_PROJET_COUPES}, et Autowin ne lit pas AGENTS.override.md : jamais chargé`
-  return `${CODEX_FICHIERS_PROJET_COUPES} : Autowin ne le replie que si ce dossier devient le dossier de travail d’une conversation`
+  return `${CODEX_FICHIERS_PROJET_COUPES} : Autowin ne le replie que si ce dossier est le dossier de travail d’une conversation, ou l’un de ses parents dans le même dépôt git`
 }
 
 function codexFiles(
   query: Required<BehaviourQuery>,
   discovered: string[],
-  gagnantAutowin: string | undefined
+  repliesParAutowin: ReadonlySet<string>
 ): BehaviourFile[] {
   const files: BehaviourFile[] = []
-  const cleReplieParAutowin = gagnantAutowin
-    ? cleFichier(join(query.contextRoot, gagnantAutowin))
-    : undefined
   // Le GLOBAL (`~/.codex`) reste chargé par Codex : la clé ne coupe que la boucle des fichiers de
   // projet, le global est ajouté avant elle (codex-rs/core/src/agents_md.rs,
   // `load_project_instructions`, vérifié sur la v0.151.0 installée le 2026-10-16). Sa règle propre
@@ -349,7 +348,7 @@ function codexFiles(
             'codex',
             'shadowed',
             scopeFor(dir, query),
-            raisonCodexProjet(path, cleReplieParAutowin)
+            raisonCodexProjet(path, repliesParAutowin)
           )
         )
     }
@@ -363,14 +362,18 @@ function codexFiles(
         'codex',
         'shadowed',
         scopeFor(dirname(path), query),
-        raisonCodexProjet(path, cleReplieParAutowin)
+        raisonCodexProjet(path, repliesParAutowin)
       )
     )
   }
   return files
 }
 
-function claudeFiles(query: Required<BehaviourQuery>, discovered: string[]): BehaviourFile[] {
+function claudeFiles(
+  query: Required<BehaviourQuery>,
+  discovered: string[],
+  repliesParAutowin: ReadonlySet<string>
+): BehaviourFile[] {
   const files: BehaviourFile[] = []
   // Autowin lance le CLI Claude NU : `--setting-sources ""` (`providers/claude.ts`). La mémoire
   // utilisateur globale n'est donc JAMAIS chargée sous Autowin — elle gouverne les sessions Claude
@@ -393,20 +396,27 @@ function claudeFiles(query: Required<BehaviourQuery>, discovered: string[]): Beh
     // (`context-files.ts`) : `AGENTS.md` → `CLAUDE.md` → `.cursorrules`, LE PREMIER TROUVÉ. Donc un
     // `CLAUDE.md` voisin d'un `AGENTS.md` ne sert pas, et `CLAUDE.local.md` n'est pas dans la chaîne
     // du tout — deux cas qui s'affichaient « actifs » sans jamais atteindre un prompt.
+    // conv-1067 : « actif » se demande au CHARGEUR, pas à la seule absence d'un AGENTS.md voisin. Un
+    // `CLAUDE.md` d'un dossier parent s'affichait actif alors que seul le dossier de travail était lu.
     const agentsPresent = ['AGENTS.md', 'agents.md'].some((nom) => existsSync(join(dir, nom)))
     const claudeMd = join(dir, 'CLAUDE.md')
-    if (existsSync(claudeMd))
+    if (existsSync(claudeMd)) {
+      const cle = cleFichier(claudeMd)
+      const replie = cle !== undefined && repliesParAutowin.has(cle)
       files.push(
         instruction(
           claudeMd,
           'claude',
-          agentsPresent ? 'shadowed' : 'active',
+          replie ? 'active' : 'shadowed',
           scopeFor(dir, query),
-          agentsPresent
-            ? 'Masqué par AGENTS.md, premier de la chaîne de contexte projet'
-            : 'Contexte projet replié dans le prompt'
+          replie
+            ? 'Contexte projet replié dans le prompt'
+            : agentsPresent
+              ? 'Masqué par AGENTS.md, premier de la chaîne de contexte projet'
+              : 'Non replié : vide, illisible, ou hors de l’empilement (racine du dépôt git → dossier de travail)'
         )
       )
+    }
     const claudeLocal = join(dir, 'CLAUDE.local.md')
     if (existsSync(claudeLocal))
       files.push(
@@ -446,58 +456,93 @@ const CHAINE_LISIBLE = PROJECT_CONTEXT_CHAIN.filter(
  * conv-984 (2026-10-16) : cette entrée tenait sa propre liste (`AGENTS.md`, `CLAUDE.md`,
  * `.cursorrules`) et affichait le gagnant « declared · injection non tracée », alors que
  * `projectContextBlock` le replie dans le prompt de chaque tour du chat (`index.ts`) et de chaque étape
- * lancée (`orchestrator.ts`). Le gagnant est maintenant demandé à `loadProjectContext` lui-même : même
+ * lancée (`orchestrator.ts`). Le gagnant est maintenant demandé au chargeur lui-même : même
  * chaîne, mêmes sauts (fichier vide ou illisible), donc la vue ne peut plus diverger du prompt.
+ *
+ * conv-1067 (2026-10-22) : le chargeur EMPILE désormais un fichier par dossier, de la racine du dépôt
+ * git au dossier de travail, sous un plafond partagé. La vue parcourt donc les MÊMES dossiers que lui
+ * (`loadProjectContextStack(...).dossiers`) — y compris un parent au-dessus du workspace inspecté — et
+ * dit, fichier par fichier, s'il est replié entier, coupé ou omis faute de place.
  */
 function autowinFiles(
   query: Required<BehaviourQuery>,
-  gagnant: string | undefined
+  empilement: ProjectContextStack
 ): BehaviourFile[] {
   const files: BehaviourFile[] = []
-  const rangGagnant = gagnant
-    ? PROJECT_CONTEXT_CHAIN.indexOf(gagnant)
-    : PROJECT_CONTEXT_CHAIN.length
   const vus = new Set<string>()
-  PROJECT_CONTEXT_CHAIN.forEach((name, rang) => {
-    const path = join(query.contextRoot, name)
-    try {
-      if (!existsSync(path) || !statSync(path).isFile()) return
-    } catch {
-      return
-    }
-    // Windows : `AGENTS.md` et `agents.md` sont le MÊME fichier ; sans clé d'identité il ressortirait
-    // une seconde fois « masqué par lui-même ».
-    const cle = cleFichier(path)
-    if (!cle || vus.has(cle)) return
-    vus.add(cle)
-    const scope = scopeFor(query.contextRoot, query)
-    if (rang === rangGagnant) {
-      const coupe = statSync(path).size > PROJECT_CONTEXT_MAX_BYTES
+  for (const dir of empilement.dossiers) {
+    const part = empilement.parts.find((candidat) => candidat.dir === dir)
+    const rangGagnant = part
+      ? PROJECT_CONTEXT_CHAIN.indexOf(part.file)
+      : PROJECT_CONTEXT_CHAIN.length
+    const parent = dir !== query.contextRoot
+    PROJECT_CONTEXT_CHAIN.forEach((name, rang) => {
+      const path = join(dir, name)
+      try {
+        if (!existsSync(path) || !statSync(path).isFile()) return
+      } catch {
+        return
+      }
+      // Windows : `AGENTS.md` et `agents.md` sont le MÊME fichier ; sans clé d'identité il ressortirait
+      // une seconde fois « masqué par lui-même ».
+      const cle = cleFichier(path)
+      if (!cle || vus.has(cle)) return
+      vus.add(cle)
+      const scope = scopeFor(dir, query)
+      if (part && rang === rangGagnant) {
+        if (part.keptBytes === 0) {
+          files.push(
+            instruction(
+              path,
+              'autowin',
+              'shadowed',
+              scope,
+              `Omis faute de place : le plafond partagé de ${PROJECT_CONTEXT_MAX_BYTES} octets est pris par les fichiers plus proches du dossier de travail (l’agent reçoit seulement son chemin)`
+            )
+          )
+          return
+        }
+        files.push(
+          instruction(
+            path,
+            'autowin',
+            'injected',
+            scope,
+            (parent
+              ? `Empilé dans le prompt de chaque tour du chat et de chaque étape lancée (dossier parent, de la racine du dépôt au dossier de travail) : premier fichier lisible de la chaîne ${CHAINE_LISIBLE}`
+              : `Replié dans le prompt de chaque tour du chat et de chaque étape lancée : premier fichier lisible de la chaîne ${CHAINE_LISIBLE}`) +
+              (part.keptBytes < part.bytes
+                ? ` · coupé à ${part.keptBytes} octets sur ${part.bytes} (plafond partagé de ${PROJECT_CONTEXT_MAX_BYTES} octets)`
+                : '')
+          )
+        )
+        return
+      }
       files.push(
         instruction(
           path,
           'autowin',
-          'injected',
+          'shadowed',
           scope,
-          `Replié dans le prompt de chaque tour du chat et de chaque étape lancée : premier fichier lisible de la chaîne ${CHAINE_LISIBLE}` +
-            (coupe ? ` · coupé à ${PROJECT_CONTEXT_MAX_BYTES} octets` : '')
+          rang < rangGagnant
+            ? 'Vide ou illisible : sauté par la chaîne de contexte projet'
+            : `Masqué par ${part?.file}, premier de la chaîne de contexte projet`
         )
       )
-      return
-    }
-    files.push(
-      instruction(
-        path,
-        'autowin',
-        'shadowed',
-        scope,
-        rang < rangGagnant
-          ? 'Vide ou illisible : sauté par la chaîne de contexte projet'
-          : `Masqué par ${gagnant}, premier de la chaîne de contexte projet`
-      )
-    )
-  })
+    })
+  }
   return files
+}
+
+/** Les fichiers que le chargeur replie réellement, par identité (casse et noms courts neutralisés). */
+function clesRepliees(empilement: ProjectContextStack): Set<string> {
+  return new Set(
+    empilement.parts.flatMap((part) => {
+      if (part.keptBytes === 0) return []
+      const cle = cleFichier(part.path)
+      return cle ? [cle] : []
+    })
+  )
 }
 
 export async function listBehaviourFiles(
@@ -508,20 +553,22 @@ export async function listBehaviourFiles(
     normalized.workspaceRoot,
     new Set(['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'CLAUDE.local.md'])
   )
-  // Le fichier que le CHARGEUR RÉEL replie dans le prompt : demandé une seule fois, partagé par
-  // l'entrée Autowin (qui l'affiche injecté) et l'entrée Codex (qui dit qu'Autowin le replie).
-  const gagnantAutowin = loadProjectContext(normalized.contextRoot)?.file
+  // Ce que le CHARGEUR RÉEL replie dans le prompt : demandé une seule fois, partagé par l'entrée
+  // Autowin (qui l'affiche injecté), Codex (qui dit qu'Autowin le replie) et Claude (actif ou non).
+  const empilement = loadProjectContextStack(normalized.contextRoot)
+  const replies = clesRepliees(empilement)
   const groups = [
     codexFiles(
       normalized,
       discovered.filter((path) => /^AGENTS(?:\.override)?\.md$/i.test(basename(path))),
-      gagnantAutowin
+      replies
     ),
     claudeFiles(
       normalized,
-      discovered.filter((path) => /^CLAUDE(?:\.local)?\.md$/i.test(basename(path)))
+      discovered.filter((path) => /^CLAUDE(?:\.local)?\.md$/i.test(basename(path))),
+      replies
     ),
-    autowinFiles(normalized, gagnantAutowin)
+    autowinFiles(normalized, empilement)
   ]
   return cappedBehaviourFiles(groups)
 }
@@ -535,10 +582,18 @@ export async function readBehaviourFileFromManifest(
   const normalized = normalizeQuery(query)
   const file = manifest.find((candidate) => candidate.id === id)
   if (!file) throw new Error('Fichier de comportement inconnu ou hors du workspace autorisé')
+  // conv-1067 : un fichier d'un dossier PARENT du workspace, dans le même dépôt git, est replié dans
+  // chaque prompt par le chargeur. Le montrer n'expose rien de plus que ce que le modèle reçoit déjà ;
+  // seul CE fichier est admis (son dossier comme racine), pas le reste de l'arbre parent.
+  const cleDemandee = cleFichier(file.path)
+  const replieHorsWorkspace = loadProjectContextStack(normalized.contextRoot)
+    .parts.filter((part) => part.keptBytes > 0 && cleFichier(part.path) === cleDemandee)
+    .map((part) => dirname(realpathSync(part.path)))
   const allowedRoots = [
     normalized.workspaceRoot,
     join(normalized.homeRoot, '.codex'),
-    join(normalized.homeRoot, '.claude')
+    join(normalized.homeRoot, '.claude'),
+    ...(cleDemandee ? replieHorsWorkspace : [])
   ]
   if (!allowedRoots.some((root) => canonicalInside(file.path, root)))
     throw new Error('Fichier hors des racines autorisées')

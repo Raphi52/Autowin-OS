@@ -118,13 +118,49 @@ describe('behaviour instruction map', () => {
     //      `AGENTS.md` → `CLAUDE.md` → `.cursorrules`, le PREMIER trouvé. `CLAUDE.local.md` n'y est
     //      pas du tout.
     // Seul le `CLAUDE.md` du workspace est donc réellement replié dans un prompt.
+    //
+    // conv-1067 (2026-10-22) : ce test le déclarait actif sans `.git`, alors que le chargeur ne lisait
+    // QUE le contexte sélectionné (`projectA`) — la vue mentait. Le chargeur empile désormais de la
+    // racine du dépôt git au contexte : le workspace est donc rendu racine d'un dépôt ici, et le cas
+    // hors dépôt est prouvé juste après.
+    mkdirSync(join(opts.workspaceRoot, '.git'))
+    const claudeEnDepot = select(await listBehaviourFiles(opts), 'claude')
     expect(
-      claude.filter((file) => file.state === 'active').map((file) => normalized(file.path))
+      claudeEnDepot.filter((file) => file.state === 'active').map((file) => normalized(file.path))
     ).toEqual([normalized(workspace)])
+    expect(claude.find((file) => file.path === workspace)?.state).toBe('shadowed')
+    expect(claude.find((file) => file.path === workspace)?.reason).toMatch(/empilement/)
     expect(claude.find((file) => file.path === global)?.state).toBe('shadowed')
     expect(claude.find((file) => file.path === global)?.reason).toMatch(/--setting-sources/)
     expect(claude.find((file) => file.path === projectA)?.state).toBe('shadowed')
     expect(claude.find((file) => file.path === projectB)?.state).toBe('conditional')
+  })
+
+  // conv-1067 (2026-10-22) : un fil rangé sur un SOUS-dossier d'un dépôt reçoit aussi les consignes des
+  // dossiers parents. La vue doit les montrer injectés — même au-dessus du workspace inspecté — et
+  // savoir en lire l'extrait (sinon l'IPC de la vue tombe « hors des racines autorisées »).
+  it('un AGENTS.md parent, dans le même dépôt, est affiché EMPILÉ et son extrait se lit', async () => {
+    const root = sandbox()
+    mkdirSync(join(root, '.git'))
+    const parent = put(join(root, 'AGENTS.md'), '# Consignes du dépôt\n')
+    const front = join(root, 'front')
+    const local = put(join(front, 'AGENTS.md'), '# Consignes du front\n')
+    const opts = { workspaceRoot: front, contextRoot: front, homeRoot: join(root, 'home') }
+
+    const manifest = await listBehaviourFiles(opts)
+    const autowin = select(manifest, 'autowin')
+    const empile = autowin.find((file) => normalized(file.path) === normalized(parent))
+    expect(empile?.state).toBe('injected')
+    expect(empile?.reason).toMatch(/dossier parent/)
+    expect(autowin.find((file) => normalized(file.path) === normalized(local))?.state).toBe(
+      'injected'
+    )
+    expect(
+      select(manifest, 'codex').find((file) => normalized(file.path) === normalized(parent))
+    ).toBeUndefined()
+    await expect(readBehaviourFileFromManifest(empile!.id, manifest, opts)).resolves.toBe(
+      '# Consignes du dépôt\n'
+    )
   })
 
   it('un CLAUDE.md voisin d’un AGENTS.md est MASQUÉ : la chaîne prend le premier', async () => {

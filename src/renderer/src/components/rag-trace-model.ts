@@ -31,7 +31,7 @@ const markerIndexIn = (value: string): number => {
   const index = value.search(MARKER)
   return index >= 0 ? index : Infinity
 }
-// Canal fichier de contexte projet (context-files.ts:79 → `=== CONTEXTE PROJET (<fichier>) ===`).
+// Canal fichier de contexte projet (context-files.ts:211 → `=== CONTEXTE PROJET (<fichier(s)>) ===`).
 // Distinct du RAG Brain mais c'est bien du contexte INJECTÉ : sans cette détection, la carte
 // affichait un faux « Non utilisé » alors qu'un CLAUDE.md/AGENTS.md était bien transmis au modèle.
 const PROJECT_MARKER = /=== CONTEXTE PROJET \(([^)]*)\) ===/
