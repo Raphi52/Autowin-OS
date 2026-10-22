@@ -102,3 +102,41 @@ ${JSON.stringify(event(1, 'y'.repeat(400_000)))}
     expect(reader.sequenceScanBytes - apresMiseEnRoute).toBeLessThan(4_000)
   })
 })
+
+/**
+ * SA PROPRE LIGNE NE SE RELIT PAS (conv-1069, candidat 7 du scout). Gels résolus avec la carte de
+ * la compilation de 07:10 le 2026-10-22 : `openSync` à `trace-store.ts:579` appelé par
+ * `rebaseTraceSequence` (:770), 8,9 s puis 1,0 s de fenêtre figée. `append` écrivait sans avancer le
+ * curseur de `nextSequence` : l'appel suivant voyait le fichier grandir et le ROUVRAIT pour relire la
+ * ligne qu'il venait d'écrire — une ouverture de fichier par événement tracé.
+ *
+ * L'entrée qui ferait échouer ces tests si la correction était fausse : deux événements écrits par
+ * le MÊME magasin — un curseur non avancé relit chacun (≈ 2 Ko). Le jumeau : la ligne d'un AUTRE
+ * processus, écrite entre les deux, doit toujours être relue, sinon le numéro rendu serait faux.
+ */
+describe('TraceStore — le curseur suit ses propres écritures', () => {
+  it('après sa propre écriture, nextSequence ne relit rien', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-curseur-'))
+    const store = new TraceStore(root)
+    expect(store.nextSequence('conv-1')).toBe(0)
+    store.append(event(0))
+    const avant = store.sequenceScanBytes
+    expect(store.nextSequence('conv-1')).toBe(1)
+    store.append(event(1))
+    expect(store.nextSequence('conv-1')).toBe(2)
+    expect(store.sequenceScanBytes).toBe(avant)
+  })
+
+  it('JUMEAU : la ligne d’un autre processus, écrite entre deux des nôtres, est relue', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-curseur-autre-'))
+    const nous = new TraceStore(root)
+    const autre = new TraceStore(root)
+    expect(nous.nextSequence('conv-1')).toBe(0)
+    nous.append(event(0))
+    expect(autre.nextSequence('conv-1')).toBe(1)
+    autre.append(event(1))
+    const avant = nous.sequenceScanBytes
+    expect(nous.nextSequence('conv-1')).toBe(2)
+    expect(nous.sequenceScanBytes).toBeGreaterThan(avant)
+  })
+})
