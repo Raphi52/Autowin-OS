@@ -221,5 +221,186 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'learn-1', to: 'salvage-1', when: 'always' }
       ]
     }
+  },
+  /*
+   * LES SEPT SUIVANTS VIENNENT DU CORPUS, pas d'une idée — conv-1094, 2026-10-22.
+   *
+   * 921 conversations relues (snapshot + archives), classées par la première demande humaine.
+   * Chaque profil ci-dessous couvre une famille de demandes RÉCURRENTE qu'aucun des sept premiers
+   * ne servait bien ; le compte entre parenthèses est le nombre de fils qui en contiennent une.
+   *   kaizen (87) · retouche d'interface (337, dont 228 ouverts par elle) · retrait d'une fonction
+   *   (72) · gel/lenteur (35) · audit en lecture seule (16) · code mort (4) · veille marché (4).
+   * Écartés, et pourquoi : /draft (le choix se fait au clic dans le fil, un run ne peut pas
+   * l'attendre) ; /salvage seul (il travaille sur l'arbre réel, un run sur une copie séparée) ;
+   * les questions (réponse directe, aucun workflow) ; les lots de candidats d'un scout (couverts par
+   * Chantier/Feature — leurs rouges venaient d'un fichier bloqué par un autre fil, pas du graphe).
+   */
+  {
+    id: 'kaizen',
+    name: 'Kaizen',
+    description:
+      'L’agent s’est mal comporté (il a rendu la main trop tôt, oublié une étape, menti sur un vert) : on retrace la conversation, on corrige le levier qui CAUSE le défaut, on fait juger la correction. Un refus renvoie au diagnostic, une fois.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        { id: 'kaizen-1', phase: 'kaizen' },
+        { id: 'clean-1', phase: 'clean' },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'think-1', to: 'kaizen-1', when: 'always' },
+        { from: 'kaizen-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'kaizen-1', when: 'red', maxTraversals: 1 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
+  },
+  {
+    id: 'retouche-interface',
+    name: 'Retouche d’interface',
+    description:
+      'Un petit réglage visible (bouton, badge, couleur, marge, popup qui déborde) : on corrige avec une preuve, puis un juge vérifie que c’est bien ce qui était demandé. Pas de cadrage ni de découverte. Un refus renvoie au build, au plus deux fois.',
+    graph: {
+      entry: 'build-1',
+      nodes: [
+        { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'build-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
+  },
+  {
+    id: 'retrait',
+    name: 'Retrait',
+    description:
+      'Enlever une fonction, une option ou un élément d’interface EN ENTIER : on le retire, on cherche ce qu’il laisse derrière lui (code mort, réglages, textes, tests), on nettoie, et un juge traque les restes. Un refus renvoie au build, au plus deux fois.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
+        { id: 'residus-1', phase: 'residus' },
+        { id: 'clean-1', phase: 'clean' },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'think-1', to: 'build-1', when: 'always' },
+        { from: 'build-1', to: 'residus-1', when: 'always' },
+        { from: 'residus-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
+  },
+  {
+    id: 'gel',
+    name: 'Gel',
+    description:
+      'Autowin a figé ou rame : on classe le journal des gels jusqu’au fichier et à la ligne coupables, on corrige avec un test rouge d’abord, on fait juger. Un refus renvoie au build, au plus deux fois.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        { id: 'gel-1', phase: 'gel' },
+        { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
+        { id: 'clean-1', phase: 'clean' },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'think-1', to: 'gel-1', when: 'always' },
+        { from: 'gel-1', to: 'build-1', when: 'always' },
+        { from: 'build-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
+  },
+  {
+    id: 'audit',
+    name: 'Audit',
+    description:
+      'Juger un livrable qui EXISTE déjà, sans rien modifier : trois juges aux angles différents (justesse, sécurité, lisibilité), quorum de 2. Aucun build, aucun commit — le résultat est le verdict et ses preuves.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        {
+          id: 'judge-1',
+          phase: 'judge',
+          quorum: 2,
+          agents: [agentStudio('correcteur'), agentStudio('gardien'), agentStudio('naif')]
+        }
+      ],
+      edges: [{ from: 'think-1', to: 'judge-1', when: 'always' }]
+    }
+  },
+  {
+    id: 'menage',
+    name: 'Ménage du code',
+    description:
+      'Retirer le code mort : on balaie les fichiers, branches et scripts que plus rien n’atteint, on n’efface que ce qui est prouvé mort, on fait juger la sur-ingénierie restante. Un refus renvoie au build, au plus deux fois.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        { id: 'residus-1', phase: 'residus' },
+        { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
+        { id: 'clean-1', phase: 'clean' },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'think-1', to: 'residus-1', when: 'always' },
+        { from: 'residus-1', to: 'build-1', when: 'always' },
+        { from: 'build-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
+  },
+  {
+    id: 'veille-marche',
+    name: 'Veille marché',
+    description:
+      'Recenser tous les acteurs qui vendent un produit (startups, éditeurs, open source), prendre le meilleur de chacun, puis cadrer ce qu’on en reprend. Aucun build : le but est de décider quoi voler.',
+    graph: {
+      entry: 'think-1',
+      nodes: [
+        { id: 'think-1', phase: 'think' },
+        { id: 'steal-1', phase: 'steal' },
+        { id: 'frame-1', phase: 'frame', agents: [agentStudio('probleme')] },
+        { id: 'learn-1', phase: 'learn' },
+        { id: 'salvage-1', phase: 'salvage' }
+      ],
+      edges: [
+        { from: 'think-1', to: 'steal-1', when: 'always' },
+        { from: 'steal-1', to: 'frame-1', when: 'always' },
+        { from: 'frame-1', to: 'learn-1', when: 'always' },
+        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+      ]
+    }
   }
 ]
