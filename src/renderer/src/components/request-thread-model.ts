@@ -70,6 +70,7 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   retrospective: 'lire',
   get_state: 'lire',
   run_status: 'lire',
+  proprietaire_fichier: 'lire',
   task_list: 'lire',
   ticket_get: 'lire',
   sql_query: 'lire',

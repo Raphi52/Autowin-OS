@@ -52,6 +52,7 @@ const TOOL_TITLES: Record<string, string | readonly [string, string]> = {
   move_file: ['Fichier déplacé', 'Fichiers déplacés'],
   delete_file: ['Fichier supprimé', 'Fichiers supprimés'],
   run_status: 'Copies inspectées',
+  proprietaire_fichier: ['Propriétaire vérifié', 'Propriétaires vérifiés'],
   marquer_travail_trie: 'Travail trié',
   marquer_travaux_tries: 'Travaux triés',
   confirmer_verdict_juge: 'Verdict confirmé',

@@ -249,6 +249,7 @@ import {
   normalizeWorkspaceTracePath,
   workspaceTracePathKey
 } from './activity/conversation-file-trace-spool'
+import { lireProprietairesDeFichiers } from './proprietaire-fichier'
 import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
@@ -1690,6 +1691,26 @@ export const CATALOG: CommandSpec[] = [
     args: {
       agentId:
         'facultatif — identifiant de la copie de travail (lettres, chiffres, _ et - seulement). Absent = état global'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /*
+     * Le réflexe 14 (dépôt partagé) en UN appel — scout conv-1086 : 514 appels git à la main dans
+     * 143 journaux, alors que l'app savait déjà quel fil avait touché quel fichier. Voir
+     * `proprietaire-fichier.ts`.
+     */
+    name: 'proprietaire_fichier',
+    description:
+      'À qui est ce fichier ? AVANT d’éditer un fichier d’un dossier partagé : dit s’il est modifié et non commité par un AUTRE fil (conversation, tour, heure), s’il est en cours dans la copie d’un run, et s’il a changé en amont (sans git fetch : `dernierFetch` date la réponse). Remplace git status / git log HEAD..@{u} faits à la main. Lecture seule',
+    args: {
+      chemins:
+        'chemin ou liste de chemins, relatifs au dossier de travail (50 au plus) — ex. ["src/main/commands.ts"]'
     },
     annotations: {
       readOnlyHint: true,
@@ -4825,6 +4846,12 @@ export class AppCommandBus {
         )
       case 'run_status':
         return await this.runWorktreeStatus(a.agentId)
+      case 'proprietaire_fichier':
+        return await lireProprietairesDeFichiers({
+          workspace: this.workspaceDuTour,
+          chemins: a.chemins,
+          ...(conversationId ? { conversationId } : {})
+        })
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
