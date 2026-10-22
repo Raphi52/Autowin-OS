@@ -1664,6 +1664,13 @@ describe('Orchestrator — une copie qui porte du travail ne passe pas pour une 
     const result = await orch.run('mets a jour le depot reel C:\\base puis verifie les refs')
     expect(result.gateBlocked).toBe(true)
     expect(result.gateReasons).toContain('intégration locale non terminée')
+    // La CAUSE et ses fichiers atteignent le rapport, donc le journal du RUN.md : run-bc699a65bae7-1
+    // (conv-1074) n'y portait que « Commit demande sans identite Git publiee verifiable ».
+    expect(
+      result.gateReasons.some(
+        (raison) => raison.includes('base-dirty') && raison.includes('src/a.ts')
+      )
+    ).toBe(true)
     expect(close).not.toHaveBeenCalled()
   })
 

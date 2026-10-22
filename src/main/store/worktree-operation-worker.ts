@@ -35,6 +35,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
       case 'changedFiles':
         value = manager.changedFiles(request.agentId)
         break
+      case 'fichiersDuTravail':
+        value = manager.fichiersDuTravailDeLaCopie(request.agentId)
+        break
       case 'finalize':
         value = manager.finalize(request.agentId, {
           ...request.options,
