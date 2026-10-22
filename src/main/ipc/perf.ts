@@ -13,10 +13,12 @@
  * Déplacement MÉCANIQUE depuis `index.ts` : corps identiques, mêmes gardes d'expéditeur, mêmes
  * bornes. La racine des données est reçue telle quelle et résolue à CHAQUE appel, comme avant.
  */
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { ensureAutowinAppData } from '../app-data'
 import { lireLatenceTours } from '../perf-lag-main'
 import { journaliserGel, lireGels } from '../gel-main'
+import { demarrerReleveMemoire, releveMemoireFrais } from '../releve-memoire'
+import { lireMessagesDeGel } from '../../shared/gel-detector'
 import { lireDuelsParWorkflow } from '../arena-duels'
 import { lireResultatsReelsParWorkflow } from '../activity/resultats-reels-workflows'
 import { join } from 'node:path'
@@ -40,8 +42,21 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
   ipcMain.handle('perf:gels', (event, derniers?: unknown) => {
     assertTrustedRendererSender(event, 'PerfGels')
     const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
-    return lireGels(ensureAutowinAppData(appDataRoot), n)
+    // fix-ok: cause mesurée 2026-10-22 — un canal à part portait le compte des ipcMain.handle à 236 (security-critical-fixes.test.ts rouge).
+    // Memoire et CPU par processus (conv-1077) : dernier releve en memoire, joint SANS nouveau canal
+    // (le compte de `security-critical-fixes.test.ts` est un fil-piege des canaux exposes).
+    return { ...lireGels(ensureAutowinAppData(appDataRoot), n), memoire: releveMemoireFrais() }
   })
+  /*
+   * MEMOIRE ET CPU DE CHAQUE PROCESSUS (conv-1077, 2026-10-22). Trois `electron.exe` pesaient ~872,
+   * 433 et 307 Mo sans que rien ne dise lequel est quoi. Releve une fois par minute des
+   * l'enregistrement des canaux ; `perf:gels` rend le dernier releve, sans rien relire.
+   */
+  if (typeof app?.getAppMetrics === 'function')
+    demarrerReleveMemoire({
+      dossier: ensureAutowinAppData(appDataRoot),
+      lire: () => app.getAppMetrics()
+    })
   /*
    * Vue des workflows : les mesures d'arene DEJA sur disque, agregees par workflow.
    * Lecture seule et bornee — ce canal ne relance AUCUN duel, il relit `arena-duels.jsonl`.
@@ -69,24 +84,30 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
    * chemin d'ecriture. Le prefixe 'renderer:' est ce qui permet enfin de trancher main vs
    * interface en relisant gels.jsonl.
    */
-  ipcMain.handle('perf:gelRenderer', (event, dureeMs: unknown, etiquette?: unknown) => {
-    assertTrustedRendererSender(event, 'PerfGelRenderer')
-    const ms = typeof dureeMs === 'number' && Number.isFinite(dureeMs) ? Math.floor(dureeMs) : 0
-    if (ms <= 0) return false
-    // `longtask` disait COMBIEN, jamais QUOI : 31,8 s cumulees a l'ouverture de Memory etaient
-    // imputees au thread d'interface en bloc, sans nommer le calcul fautif. Une etiquette
-    // facultative — bornee et assainie — permet d'attribuer la tache longue a son bloc de code.
-    const nom =
-      typeof etiquette === 'string' && /^[a-z0-9:-]{1,48}$/i.test(etiquette)
-        ? `renderer:${etiquette}`
-        : 'renderer:longtask'
-    journaliserGel({
-      ts: new Date().toISOString(),
-      blocageMs: ms,
-      operation: nom,
-      // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
-      cause: 'boucle-tenue'
-    })
-    return true
-  })
+  ipcMain.handle(
+    'perf:gelRenderer',
+    (event, dureeMs: unknown, etiquette?: unknown, detail?: unknown) => {
+      assertTrustedRendererSender(event, 'PerfGelRenderer')
+      const ms = typeof dureeMs === 'number' && Number.isFinite(dureeMs) ? Math.floor(dureeMs) : 0
+      if (ms <= 0) return false
+      // `longtask` disait COMBIEN, jamais QUOI : 31,8 s cumulees a l'ouverture de Memory etaient
+      // imputees au thread d'interface en bloc, sans nommer le calcul fautif. Une etiquette
+      // facultative — bornee et assainie — permet d'attribuer la tache longue a son bloc de code.
+      const nom =
+        typeof etiquette === 'string' && /^[a-z0-9:-]{1,48}$/i.test(etiquette)
+          ? `renderer:${etiquette}`
+          : 'renderer:longtask'
+      // Gel du FIL : les messages qui ont rendu pendant lui (conv-1077), relus champ par champ.
+      const messages = lireMessagesDeGel(detail)
+      journaliserGel({
+        ts: new Date().toISOString(),
+        blocageMs: ms,
+        operation: nom,
+        // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
+        cause: 'boucle-tenue',
+        ...(messages ? { messages } : {})
+      })
+      return true
+    }
+  )
 }

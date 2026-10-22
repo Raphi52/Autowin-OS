@@ -1,4 +1,4 @@
-import { SEUIL_GEL_MS } from '../../../shared/gel-detector'
+import { MESSAGES_DE_GEL_MAX, SEUIL_GEL_MS, type MessageDeGel } from '../../../shared/gel-detector'
 
 /**
  * QUELLE VUE tient le fil d'affichage — ce que `renderer:longtask` ne disait pas.
@@ -12,7 +12,13 @@ import { SEUIL_GEL_MS } from '../../../shared/gel-detector'
  * n'ecrit que lorsqu'un rendu atteint le meme seuil que le detecteur du main — l'instrument se
  * tait quand tout va bien, et il ecrit par le canal deja existant, jamais par un second.
  */
-type CanalGel = { signalerGelRenderer?: (ms: number, etiquette?: string) => unknown }
+type CanalGel = {
+  signalerGelRenderer?: (
+    ms: number,
+    etiquette?: string,
+    detail?: { messages: MessageDeGel[] }
+  ) => unknown
+}
 
 export function signalerRenduLong(
   id: string,
@@ -28,7 +34,13 @@ export function signalerRenduLong(
     if (typeof api?.signalerGelRenderer !== 'function') return false
     // L'etiquette est bornee par le canal principal ([a-z0-9:-], 48 signes) : on la respecte ici.
     // Un sous-bloc mesure DANS la vue (harnais ChatView) donne son nom : `vue-chat-fil`, pas `vue-chat`.
-    api.signalerGelRenderer(ms, `vue-${sousBlocDominant(id)}`.slice(0, 48))
+    const bloc = sousBlocDominant(id)
+    const etiquette = `vue-${bloc}`.slice(0, 48)
+    // Gel du FIL : il emporte ses messages les plus lourds (conv-1077). Chaque ligne du fil rend
+    // AVANT la vue qui l'englobe (React appelle les Profiler internes d'abord) : ils sont deja notes.
+    const messages = bloc === 'chat-fil' ? messagesLesPlusLourds() : []
+    if (messages.length > 0) api.signalerGelRenderer(ms, etiquette, { messages })
+    else api.signalerGelRenderer(ms, etiquette)
     return true
   } catch {
     /* observabilite best-effort : un canal indisponible ne doit rien casser */
@@ -96,7 +108,49 @@ export function sousBlocDominant(id: string, maintenant: number = Date.now()): s
   return [...parBloc].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
 }
 
+/**
+ * LE FIL MESURE MESSAGE PAR MESSAGE (conv-1077, 2026-10-22). `renderer:vue-chat-fil` = 28 gels pour
+ * 62,4 s depuis le 15/10 (pire 7,6 s), mais le fil etait mesure D'UN BLOC : rien ne disait QUEL
+ * message coutait. Chaque ligne (`ChatMessageRow`) note son propre rendu ici, dans un registre A PART
+ * — le melanger a `rendusRecents` changerait le sous-bloc dominant des vues.
+ * fix-ok: cause mesurée 2026-10-22 — sans ce registre, le gel du fil ne nomme aucun message (réinjection : 3 tests rouges).
+ */
+const rendusDeMessages: Array<Omit<MessageDeGel, 'rendus'> & { a: number }> = []
+
+export function noterRenduMessage(
+  rendu: Omit<MessageDeGel, 'rendus'>,
+  maintenant: number = Date.now()
+): void {
+  if (!Number.isFinite(rendu.ms) || rendu.ms <= 0) return
+  rendusDeMessages.push({ ...rendu, a: maintenant })
+  while (rendusDeMessages.length > 0 && maintenant - rendusDeMessages[0].a > FENETRE_RECENTE_MS) {
+    rendusDeMessages.shift()
+  }
+}
+
+/** Les messages qui ont le plus rendu dans la fenetre recente, cumules par cle, du plus lourd. */
+export function messagesLesPlusLourds(
+  n: number = MESSAGES_DE_GEL_MAX,
+  maintenant: number = Date.now()
+): MessageDeGel[] {
+  const parCle = new Map<string, MessageDeGel>()
+  for (const r of rendusDeMessages) {
+    if (maintenant - r.a > FENETRE_RECENTE_MS) continue
+    const deja = parCle.get(r.cle)
+    if (deja) {
+      deja.ms += r.ms
+      deja.rendus += 1
+      deja.taille = r.taille
+    } else parCle.set(r.cle, { cle: r.cle, role: r.role, taille: r.taille, ms: r.ms, rendus: 1 })
+  }
+  return [...parCle.values()]
+    .map((m) => ({ ...m, ms: Math.round(m.ms) }))
+    .sort((a, b) => b.ms - a.ms || a.cle.localeCompare(b.cle))
+    .slice(0, n)
+}
+
 /** Vide le registre — reserve aux tests, pour qu’une mesure ne fuite pas dans la suivante. */
 export function oublierRendusRecents(): void {
   rendusRecents.length = 0
+  rendusDeMessages.length = 0
 }

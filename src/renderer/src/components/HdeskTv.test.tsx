@@ -421,3 +421,83 @@ describe('HdeskTv — touches, molette, rafraîchissement (conv-35)', () => {
     vi.useRealTimers()
   })
 })
+
+/**
+ * conv-1077 (2026-10-22) : sans bureau, la TV redemandait la liste toutes les 500 ms — et chaque
+ * demande pouvait relancer PowerShell côté main. Sans bureau : rythme du guet (5 s). Liste en échec :
+ * l'attente double à chaque échec, plafonnée à 60 s.
+ */
+describe('HdeskTv — rythme sans bureau et après échec (conv-1077)', () => {
+  beforeEach(() => sessionStorage.clear())
+  const appels = (api: HdeskTvApi): number =>
+    (api.hdeskTvBureaux as ReturnType<typeof vi.fn>).mock.calls.length
+  const avancer = async (ms: number): Promise<void> => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  it('aucun bureau : la liste n’est redemandée qu’au rythme du guet (5 s), pas à chaque intervalle', async () => {
+    // ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST si le rythme sans bureau reste celui de l'intervalle :
+    // une liste vide avec un intervalle de 1 s (4 demandes en 4,9 s au lieu d'une).
+    const api = faux({ bureaux: [], image: ok })
+    await monter(api)
+    expect(appels(api)).toBe(1)
+    await avancer(4900)
+    expect(appels(api)).toBe(1)
+    await avancer(200)
+    expect(appels(api)).toBe(2)
+    vi.useRealTimers()
+  })
+
+  it('jumeau : un bureau affiché garde le rythme de l’intervalle', async () => {
+    const api = faux({ bureaux: [{ id: 'a', travail: 'Jeu' }], image: ok })
+    await monter(api)
+    expect(appels(api)).toBe(1)
+    await avancer(1000)
+    expect(appels(api)).toBe(2)
+    vi.useRealTimers()
+  })
+
+  it('liste en échec : l’attente double à chaque échec (5 s, 10 s, 20 s), plafonnée à 60 s', async () => {
+    const api = faux({ bureaux: [], image: ok })
+    api.hdeskTvBureaux = vi.fn(async () => {
+      throw new Error('Processus de capture arrete.')
+    })
+    await monter(api)
+    expect(appels(api)).toBe(1)
+    await avancer(5000)
+    expect(appels(api)).toBe(2)
+    await avancer(9900)
+    expect(appels(api)).toBe(2)
+    await avancer(100)
+    expect(appels(api)).toBe(3)
+    await avancer(20000)
+    expect(appels(api)).toBe(4)
+    // 40 s, puis le plafond : 60 s, et pas 80 s.
+    await avancer(40000)
+    expect(appels(api)).toBe(5)
+    await avancer(60000)
+    expect(appels(api)).toBe(6)
+    vi.useRealTimers()
+  })
+
+  it('jumeau : une liste réussie après des échecs remet l’attente au rythme normal', async () => {
+    let echoue = true
+    const api = faux({ bureaux: [{ id: 'a', travail: 'Jeu' }], image: ok })
+    const reussir = api.hdeskTvBureaux
+    api.hdeskTvBureaux = vi.fn(async (c?: string) => {
+      if (echoue) throw new Error('x')
+      return reussir(c)
+    })
+    await monter(api)
+    await avancer(5000)
+    expect(appels(api)).toBe(2)
+    echoue = false
+    await avancer(10000)
+    expect(appels(api)).toBe(3)
+    await avancer(1000)
+    expect(appels(api)).toBe(4)
+    vi.useRealTimers()
+  })
+})

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -115,30 +115,99 @@ export function journaliserSaisie(saisie: SaisieUtilisateur, racine?: string): b
  */
 const SEPARATEUR_LIGNE = /\r?\n/
 
+type EntreeJournal = SaisieJournalisee | RattachementDeSaisie
+
+/**
+ * LECTURE INCRÉMENTALE (conv-1077, 2026-10-22). Le journal (2,64 Mo le 22/10) était relu EN ENTIER,
+ * de façon synchrone sur le fil principal, à chaque message (`rattacherSaisieAuTour`), à chaque
+ * ouverture de fil (`lireOrientationsRattachees`) et par le dossier kaizen. Disque lent : 7 gels pour
+ * 56,2 s, plus 4 lectures pour 26,7 s côté orientations (gels.jsonl). Le fichier n'est QU'EN AJOUT :
+ * on garde ses lignes en mémoire par conversation et on ne lit que les octets ajoutés depuis.
+ * Un fichier plus court, ou dont l'en-tête a changé, a été réécrit : il est relu depuis le début.
+ * fix-ok: cause mesurée 2026-10-22 — relecture complète : 310 864 octets relus pour une ligne de 371, 932 845 pour les trois lecteurs (test rouge).
+ */
+interface IndexJournal {
+  /** Octets déjà lus, jusqu'à la dernière fin de ligne : une ligne en cours d'écriture attend. */
+  octets: number
+  /** Premiers octets du fichier : s'ils changent, le fichier a été réécrit. */
+  entete: string
+  parConversation: Map<string, EntreeJournal[]>
+}
+const TAILLE_ENTETE = 256
+const indexParChemin = new Map<string, IndexJournal>()
+
+function lireOctets(fd: number, debut: number, longueur: number): Buffer {
+  const tampon = Buffer.alloc(longueur)
+  let lus = 0
+  while (lus < longueur) {
+    const n = readSync(fd, tampon, lus, longueur - lus, debut + lus)
+    if (n === 0) break
+    lus += n
+  }
+  return tampon.subarray(0, lus)
+}
+
+/** Lignes de CETTE conversation, dans l'ordre du fichier. Lève sur une erreur disque. */
+function entreesDuJournal(conversationId: string, racine?: string): readonly EntreeJournal[] {
+  const chemin = journalSaisiePath(racine)
+  if (!existsSync(chemin)) {
+    indexParChemin.delete(chemin)
+    return []
+  }
+  const fd = openSync(chemin, 'r')
+  try {
+    const taille = fstatSync(fd).size
+    let index = indexParChemin.get(chemin)
+    if (
+      index &&
+      (taille < index.octets ||
+        lireOctets(fd, 0, index.entete.length).toString('latin1') !== index.entete)
+    )
+      index = undefined
+    if (!index) {
+      index = { octets: 0, entete: '', parConversation: new Map() }
+      indexParChemin.set(chemin, index)
+    }
+    if (taille > index.octets) {
+      const neuf = lireOctets(fd, index.octets, taille - index.octets)
+      const fin = neuf.lastIndexOf(0x0a)
+      if (fin >= 0) {
+        for (const ligne of neuf.subarray(0, fin).toString('utf8').split(SEPARATEUR_LIGNE)) {
+          if (!ligne.trim()) continue
+          try {
+            const entree = JSON.parse(ligne) as EntreeJournal
+            if (typeof entree?.conversationId !== 'string') continue
+            const liste = index.parConversation.get(entree.conversationId)
+            if (liste) liste.push(entree)
+            else index.parConversation.set(entree.conversationId, [entree])
+          } catch {
+            /* ligne illisible : ignoree, comme partout dans ce journal */
+          }
+        }
+        index.octets += fin + 1
+        if (!index.entete)
+          index.entete = lireOctets(fd, 0, Math.min(TAILLE_ENTETE, index.octets)).toString('latin1')
+      }
+    }
+    return index.parConversation.get(conversationId) ?? []
+  } finally {
+    closeSync(fd)
+  }
+}
+
 export function lireSaisies(
   conversationId: string,
   racine?: string,
   limite = 30
 ): SaisieJournalisee[] {
   try {
-    const chemin = journalSaisiePath(racine)
-    if (!existsSync(chemin)) return []
-    const saisies = readFileSync(chemin, 'utf8')
-      .split(SEPARATEUR_LIGNE)
-      .filter((ligne) => ligne.trim())
-      .flatMap((ligne) => {
-        try {
-          const entree = JSON.parse(ligne) as SaisieJournalisee
-          // Filtre STRICT sur la conversation ciblée : un dossier de preuve ne doit jamais
-          // emporter le texte tapé dans une autre conversation.
-          // Filtre STRICT sur le schéma : les lignes de RATTACHEMENT partagent le fichier et la
-          // conversation, mais ne portent aucun texte — les rendre ici polluerait tout lecteur.
-          if (entree?.schema !== 'autowin.saisie/v1') return []
-          return entree?.conversationId === conversationId ? [entree] : []
-        } catch {
-          return []
-        }
-      })
+    // Filtre STRICT sur la conversation ciblée (fait par l'index) : un dossier de preuve ne doit
+    // jamais emporter le texte tapé dans une autre conversation.
+    // Filtre STRICT sur le schéma : les lignes de RATTACHEMENT partagent le fichier et la
+    // conversation, mais ne portent aucun texte — les rendre ici polluerait tout lecteur.
+    const saisies = entreesDuJournal(conversationId, racine).filter(
+      (entree): entree is SaisieJournalisee => entree.schema === 'autowin.saisie/v1'
+    )
     return saisies.slice(-limite)
   } catch {
     return []
@@ -195,23 +264,12 @@ export function saisieDuTour(
   racine?: string
 ): SaisieJournalisee | undefined {
   try {
-    const chemin = journalSaisiePath(racine)
-    if (!existsSync(chemin)) return undefined
-    const lignes = readFileSync(chemin, 'utf8')
-      .split(SEPARATEUR_LIGNE)
-      .filter((ligne) => ligne.trim())
     let saisieTs: number | undefined
     const saisies: SaisieJournalisee[] = []
-    for (const ligne of lignes) {
-      try {
-        const entree = JSON.parse(ligne) as SaisieJournalisee | RattachementDeSaisie
-        if (entree?.conversationId !== conversationId) continue
-        if (entree.schema === 'autowin.saisie-tour/v1' && entree.turnId === turnId)
-          saisieTs = entree.saisieTs
-        else if (entree.schema === 'autowin.saisie/v1') saisies.push(entree)
-      } catch {
-        /* ligne illisible : ignoree, comme partout dans ce journal */
-      }
+    for (const entree of entreesDuJournal(conversationId, racine)) {
+      if (entree.schema === 'autowin.saisie-tour/v1' && entree.turnId === turnId)
+        saisieTs = entree.saisieTs
+      else if (entree.schema === 'autowin.saisie/v1') saisies.push(entree)
     }
     if (saisieTs === undefined) return undefined
     return saisies.find((saisie) => saisie.ts === saisieTs)
@@ -246,24 +304,15 @@ export function lireOrientationsRattachees(
   limite = 50
 ): OrientationRattachee[] {
   try {
-    const chemin = journalSaisiePath(racine)
-    if (!existsSync(chemin)) return []
     const orientations: OrientationRattachee[] = []
     // Le rattachement est ecrit APRES la saisie, dans une ligne SUPPLEMENTAIRE : on collecte donc
     // les deux formes en un seul passage, puis on joint par `saisieTs`.
     const tourParSaisie = new Map<number, string>()
-    for (const ligne of readFileSync(chemin, 'utf8').split(SEPARATEUR_LIGNE)) {
-      if (!ligne.trim()) continue
-      try {
-        const entree = JSON.parse(ligne) as SaisieJournalisee | RattachementDeSaisie
-        if (entree?.conversationId !== conversationId) continue
-        if (entree.schema === 'autowin.saisie-tour/v1')
-          tourParSaisie.set(entree.saisieTs, entree.turnId)
-        else if (entree.schema === 'autowin.saisie/v1' && entree.voie === 'orientation')
-          orientations.push({ ts: entree.ts, texte: entree.texte })
-      } catch {
-        /* ligne illisible : ignoree, comme partout dans ce journal */
-      }
+    for (const entree of entreesDuJournal(conversationId, racine)) {
+      if (entree.schema === 'autowin.saisie-tour/v1')
+        tourParSaisie.set(entree.saisieTs, entree.turnId)
+      else if (entree.schema === 'autowin.saisie/v1' && entree.voie === 'orientation')
+        orientations.push({ ts: entree.ts, texte: entree.texte })
     }
     return orientations.slice(-limite).map((orientation) => {
       const turnId = tourParSaisie.get(orientation.ts)

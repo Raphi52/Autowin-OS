@@ -7,7 +7,8 @@
  * (comparateur data-only en bas de fichier).
  */
 import { tourRefusePourAutoLancer } from './veille-candidats-message'
-import React, { Fragment, memo, useRef, useState } from 'react'
+import React, { Fragment, memo, Profiler, useRef, useState } from 'react'
+import { noterRenduMessage } from './rendu-long'
 import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
@@ -355,6 +356,48 @@ function sentImageArtifact(file: AttachmentMeta, index: number): ChatArtifact | 
 
 /** Le prompt utilisateur qui a DÉCLENCHÉ le tour affiché à `index` (le renvoi/reprise s'y rattache). */
 
+/** Signes du texte et des parties textuelles d'un message : un ordre de grandeur, jamais le texte. */
+function tailleDuMessage(message: Msg): number {
+  if (message.role === 'user')
+    return typeof message.content === 'string' ? message.content.length : 0
+  let n = 0
+  if (Array.isArray(message.parts))
+    for (const p of message.parts) if ('text' in p && typeof p.text === 'string') n += p.text.length
+  return n
+}
+
+/**
+ * CHAQUE LIGNE MESURE SON RENDU (conv-1077, 2026-10-22) : le fil était mesuré d'un bloc (28 gels
+ * `vue-chat-fil`, 62,4 s depuis le 15/10) sans dire QUEL message coûtait. Voir rendu-long.ts.
+ */
+// fix-ok: src/renderer/src/components/ChatMessageRow.tsx — composant et pas `return mesurer(<div…>)` : une ligne qui ne rend pas du JSX directement fait perdre ses props typées à react/prop-types (mesuré : 0 erreur avant, 44 après)
+function LigneMesuree({
+  message,
+  children
+}: {
+  message: Msg
+  children: React.JSX.Element
+}): React.JSX.Element {
+  return (
+    <Profiler
+      id="message"
+      onRender={(_id, _phase, ms) =>
+        noterRenduMessage({
+          cle:
+            message.messageId ??
+            (message.role === 'assistant' ? message.turnId : undefined) ??
+            'sans-cle',
+          role: message.role,
+          taille: tailleDuMessage(message),
+          ms
+        })
+      }
+    >
+      {children}
+    </Profiler>
+  )
+}
+
 export const ChatMessageRow = memo(
   function ChatMessageRow({
     message,
@@ -448,7 +491,7 @@ export const ChatMessageRow = memo(
       onAnswerAsk?.(prompt)
     }
     if (message.role === 'user') {
-      return (
+      const ligne = (
         <div
           className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}
           // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
@@ -569,6 +612,7 @@ export const ChatMessageRow = memo(
           </div>
         </div>
       )
+      return <LigneMesuree message={message}>{ligne}</LigneMesuree>
     }
     // RAIL DU TOUR (conv-338, « Implementer 1 + 5 ») : chaque element du tour devient un POINT d'un
     // rail trace a gauche du message — heures du tour a gauche (la 1), verdict des juges puis
@@ -742,7 +786,7 @@ export const ChatMessageRow = memo(
           }
         />
       )
-    return (
+    const ligne = (
       <div
         className={`msg assistant fade-in msg--rail${avecHeures ? ' avec-heures' : ''}`}
         // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
@@ -912,6 +956,7 @@ export const ChatMessageRow = memo(
         </div>
       </div>
     )
+    return <LigneMesuree message={message}>{ligne}</LigneMesuree>
   },
   (prev, next) =>
     // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation/reçus).

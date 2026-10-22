@@ -7,7 +7,16 @@ import {
 } from '../../../shared/perf-lag'
 import { SEUIL_GEL_MS, type ResumeGels } from '../../../shared/gel-detector'
 import type { InventaireDisque } from '../../../main/store/inventaire-disque'
+import type { EtatReleveMemoire } from '../../../main/releve-memoire'
 import { formaterOctets } from './formater-octets'
+
+/** Rôle Electron → mot courant (conv-1077) : « Tab » ne dit rien à qui regarde ses processus. */
+const ROLE_PROCESSUS: Record<string, string> = {
+  Browser: 'Processus principal',
+  Tab: 'Fenêtre',
+  GPU: 'GPU',
+  Utility: 'Service'
+}
 
 /**
  * Onglet LATENCE de la vue Tests — « ou passe le temps ? », repondu par des faits.
@@ -27,6 +36,9 @@ interface RapportTours extends RapportLatence {
 interface RapportGels extends ResumeGels {
   disponible: boolean
   source: string
+  // fix-ok: cause mesurée 2026-10-22 — section absente (PerfLagPanel.memoire.test.tsx rouge) ; joint à perf:gels car un canal de plus portait à 236 le compte de security-critical-fixes.test.ts.
+  /** Memoire et CPU par processus, joint a la reponse de `perf:gels` (conv-1077). */
+  memoire?: EtatReleveMemoire
 }
 
 type ApiPerf = {
@@ -104,6 +116,7 @@ export function PerfLagPanel(): React.JSX.Element {
     }
   }, [])
 
+  const memoire = gels?.memoire
   return (
     <div className="perf-panel" data-testid="perf-panel">
       <div className="perf-head">
@@ -276,6 +289,43 @@ export function PerfLagPanel(): React.JSX.Element {
             Rien n’est supprimé par cet écran : il MONTRE ce que le ménage du démarrage a déjà fait.
             Un poids marqué « au moins » a été arrêté par le plafond de comptage — un plancher, pas
             un total.
+          </p>
+        </section>
+      )}
+
+      {memoire?.dernier && (
+        <section className="perf-disque" data-testid="perf-memoire">
+          <h3>
+            Mémoire et processeur — {memoire.dernier.totalMo} Mo (pic depuis le lancement :{' '}
+            {memoire.picTotalMo} Mo)
+          </h3>
+          <table className="perf-table">
+            <thead>
+              <tr>
+                <th>Processus</th>
+                <th>PID</th>
+                <th>Mémoire</th>
+                <th>Processeur</th>
+              </tr>
+            </thead>
+            <tbody>
+              {memoire.dernier.processus.map((p) => (
+                <tr key={p.pid} data-testid="perf-memoire-processus">
+                  <td>
+                    {ROLE_PROCESSUS[p.type] ?? p.type}
+                    {p.nom && p.nom !== p.type ? ` (${p.nom})` : ''}
+                  </td>
+                  <td>{p.pid}</td>
+                  <td>{p.memoireMo} Mo</td>
+                  <td>{p.cpuPct} %</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="perf-disque-note">
+            Relevé du {new Date(memoire.dernier.ts).toLocaleTimeString()}, un toutes les{' '}
+            {Math.round(memoire.periodeMs / 1000)} s ({memoire.echantillons} depuis le lancement).
+            Mémoire = ensemble de travail de chaque processus.
           </p>
         </section>
       )}

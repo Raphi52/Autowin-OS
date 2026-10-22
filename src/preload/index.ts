@@ -299,8 +299,10 @@ const api = {
   // Résultats RÉELS de chaque workflow, relus dans la trace causale (lecture seule, conv-1070).
   workflowResultatsReels: () => ipcRenderer.invoke('workflows:resultatsReels'),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
-  signalerGelRenderer: (dureeMs: number, etiquette?: string) =>
-    ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette),
+  // fix-ok: cause mesurée 2026-10-22 — sans `detail`, le gel du fil arrivait au main sans ses messages (rendu-long.messages.test.tsx rouge) ; le pont du canal mémoire à part est retiré avec lui.
+  // `detail` : messages du fil mesures pendant un gel du fil (conv-1077), relus par le main.
+  signalerGelRenderer: (dureeMs: number, etiquette?: string, detail?: { messages?: unknown[] }) =>
+    ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette, detail),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
