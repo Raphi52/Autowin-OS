@@ -33,14 +33,17 @@ const LIGNES: ComparaisonDUneFacon[] = [
       ],
       ajouts: 10,
       retraits: 2
-    }
+    },
+    ressemblance: { etat: 'mesuree', avec: 3, part: 1, identique: true }
   },
   {
     id: 'B2',
     ok: true,
     bilan: { etat: 'fini', vertes: 0, rouges: 0 },
-    ecart: { ok: true, fichiers: [], ajouts: 0, retraits: 0 }
+    ecart: { ok: true, fichiers: [], ajouts: 0, retraits: 0 },
+    ressemblance: { etat: 'sans-objet', raison: 'aucun changement à comparer' }
   },
+  // B3 n'a pas de ressemblance : la réponse d'un processus principal d'avant ce contrôle.
   {
     id: 'B3',
     ok: true,
@@ -127,6 +130,23 @@ describe('ComparaisonDesFacons', () => {
     expect(ligne('B2').textContent).toContain('aucun changement')
     expect(ligne('B3').textContent).toContain('en cours')
     expect(ligne('B3').textContent).toContain('inconnu')
+  })
+
+  /*
+   * LE CONTRÔLE DE RESSEMBLANCE (conv-1057, 2026-10-22) : deux façons au même code doivent se voir
+   * d'un coup d'œil, sans comparer les chiffres à la main.
+   */
+  it('ressemblance : une façon identique à une autre est dite et mise en évidence', async () => {
+    await rendre(api())
+    const premiere = ligne('B1').querySelector('[data-mesure="ressemblance"]')
+    expect(premiere?.textContent).toBe('identique à la façon 3')
+    expect(premiere?.classList.contains('is-proche')).toBe(true)
+    const deuxieme = ligne('B2').querySelector('[data-mesure="ressemblance"]')
+    expect(deuxieme?.textContent).toBe('aucun changement à comparer')
+    expect(deuxieme?.classList.contains('is-proche')).toBe(false)
+    expect(ligne('B3').querySelector('[data-mesure="ressemblance"]')?.textContent).toBe(
+      'Autowin doit redémarrer pour la mesurer'
+    )
   })
 
   it('rien à garder (aucun changement, ou tour en cours) : le bouton est éteint', async () => {

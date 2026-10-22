@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { AVENUE, CAMERA_AVENUE, FONDU_ENTREE_MS, MARQUES_AVENUE } from './home-decor-avenue'
 import {
   AVATARS,
-  ECART_CAMERA,
-  ecarterDeLaCamera,
   enrouler,
   FOULE,
   HEURE_DE_POINTE,
@@ -292,33 +290,8 @@ describe('fond de l Accueil — la foule réaliste « Heure de pointe »', () =>
     expect(positionZ(p, 1, FOULE.tRef + 10, 0)).toBeCloseTo(enrouler(p.zf - 10), 9)
   })
 
-  it('personne ne traverse la caméra : on s écarte en approchant, on reprend sa file une fois passé', () => {
-    const [camX, , camZ] = CAMERA_AVENUE.position
-    // La caméra est posée dans la file de gauche : c'est ce qui rend l'écart nécessaire.
-    expect(HEURE_DE_POINTE.some((p) => Math.abs(p.x - camX) < ECART_CAMERA.distance)).toBe(true)
-    for (const p of HEURE_DE_POINTE) {
-      for (let z = camZ - 8; z <= camZ + 8; z += 0.05) {
-        const x = ecarterDeLaCamera(p.x, z, camX, camZ)
-        // Jamais plus près que l'écart quand on est à hauteur de la caméra.
-        if (Math.abs(z - camZ) < ECART_CAMERA.plein)
-          expect(Math.abs(x - camX), `${p.av} z=${z.toFixed(2)}`).toBeGreaterThanOrEqual(
-            ECART_CAMERA.distance - 1e-9
-          )
-        // Toujours sur le trottoir (de -7,2 à -4 à gauche).
-        if (p.x < 0) expect(x).toBeGreaterThan(-7.2)
-        if (p.x < 0) expect(x).toBeLessThan(-4)
-      }
-      // Loin de la caméra, chacun est dans sa file.
-      expect(ecarterDeLaCamera(p.x, camZ - 20, camX, camZ)).toBe(p.x)
-    }
-    // Un écart continu : pas de saut d'un pas à l'autre.
-    let avant = ecarterDeLaCamera(-5.5, camZ - 6, camX, camZ)
-    for (let z = camZ - 6; z <= camZ + 6; z += 0.01) {
-      const x = ecarterDeLaCamera(-5.5, z, camX, camZ)
-      expect(Math.abs(x - avant)).toBeLessThan(0.01)
-      avant = x
-    }
-  })
+  // « Personne ne traverse la caméra » est tenu par la marche elle-même depuis conv-1054 :
+  // home-decor-foule-marche.test.ts, « LA CAMÉRA : la marche la contourne elle-même… ».
 
   it('la foule n ajoute aucune lumière, et décode ses images hors du fil principal', () => {
     // Rien de lourd dans la première image de la foule : sa sphère englobante est posée d'avance

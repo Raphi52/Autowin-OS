@@ -1,6 +1,55 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { win32 } from 'node:path'
 import { cheminWindows, cibleNpmQuiModifie, refusNpmModulesPartages } from './garde-npm-modules.mjs'
+
+/*
+ * LE HOOK DU DÉPÔT NE DÉPEND D'AUCUN SHELL — mesuré le 2026-10-22 (conv-1056), CLI 2.1.308.
+ *
+ * En forme shell (`node "$CLAUDE_PROJECT_DIR/scripts/garde-npm-modules.mjs"`), une session où le
+ * CLI ne trouve pas Git Bash (Git installé dans AppData\Local\Programs, sans
+ * CLAUDE_CODE_GIT_BASH_PATH) lance le hook dans PowerShell. `$CLAUDE_PROJECT_DIR` n'y est pas une
+ * variable d'environnement : node cherche D:\scripts\garde-npm-modules.mjs, sort en 1, et le CLI
+ * REFUSE chaque commande (« blocking because Git Bash wasn't found… ») — même un `git log`.
+ * La forme exec (`command` + `args`) lance node SANS shell, et c'est le CLI qui remplace
+ * `${CLAUDE_PROJECT_DIR}` (https://code.claude.com/docs/en/hooks, « Exec form and shell form »).
+ */
+const SCRIPT_DU_HOOK = ['$', '{CLAUDE_PROJECT_DIR}/scripts/garde-npm-modules.mjs'].join('')
+
+function gardeNpmDuDepot(reglages) {
+  for (const groupe of reglages?.hooks?.PreToolUse ?? []) {
+    for (const hook of groupe.hooks ?? []) {
+      if (JSON.stringify(hook).includes('garde-npm-modules.mjs'))
+        return { matcher: groupe.matcher, hook }
+    }
+  }
+  return undefined
+}
+
+const enFormeExec = (hook) =>
+  hook?.command === 'node' &&
+  Array.isArray(hook.args) &&
+  hook.args.length === 1 &&
+  hook.args[0] === SCRIPT_DU_HOOK
+
+describe('.claude/settings.json — le hook du garde npm', () => {
+  it('est en forme exec, sur Bash ET PowerShell', () => {
+    const reglages = JSON.parse(
+      readFileSync(new URL('../.claude/settings.json', import.meta.url), 'utf8')
+    )
+    const garde = gardeNpmDuDepot(reglages)
+    expect(garde?.matcher).toBe('Bash|PowerShell')
+    expect(enFormeExec(garde?.hook), JSON.stringify(garde?.hook)).toBe(true)
+  })
+
+  it("refuse l'ancienne forme shell, cassée quand Git Bash est introuvable", () => {
+    const ancienne = {
+      type: 'command',
+      command: 'node "$CLAUDE_PROJECT_DIR/scripts/garde-npm-modules.mjs"'
+    }
+    expect(enFormeExec(ancienne)).toBe(false)
+  })
+})
 
 const resoudre = (base, rel) => win32.resolve(cheminWindows(base), cheminWindows(rel))
 const cible = (cmd, cwd = 'D:/Autowin') => cibleNpmQuiModifie(cmd, cwd, resoudre)?.split('\\').join('/')

@@ -7,13 +7,34 @@ import re
 import threading
 import time
 import unicodedata
-from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import numpy as np
 
-from brain_index import INDEX_FORMAT_VERSION, canonical_source_roots
+from brain_index import INDEX_FORMAT_VERSION, _parse_note_source, canonical_source_roots
 
 MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+# Motif posé pendant qu'une génération publiée se charge : transitoire par construction.
+RELOAD_IN_PROGRESS = "index reload in progress"
+
+# INSTANTANÉ PRÉCÉDENT PENDANT UNE REVÉRIFICATION (conv-1053, 2026-10-22). Du 13 au 22/10, 57 tours
+# de chat sur 344 n'ont reçu AUCUNE note du Brain : la recherche refusait (503) dès qu'une note
+# bougeait — le temps de rehacher le partage réseau, puis jusqu'à la reconstruction de l'index —, en
+# salves pendant les tris de notes. L'instantané déjà chargé répond désormais, et chaque note qu'il
+# propose est RELUE sur le disque juste avant d'être rendue (`_note_as_indexed_now`) : une note
+# supprimée, déplacée, `superseded` ou vidée ne sort jamais. Ces lectures partent en parallèle,
+# pour la même raison que `brain_context.DESCRIBE_WORKERS` : chacune attend le partage, pas le CPU.
+STALE_VERIFY_WORKERS = 16
+# Les champs que l'indexeur recopie du frontmatter (`brain_index.build_note_rows`).
+_FRONTMATTER_FIELDS = ("type", "kind", "scope", "uid", "tags", "author_agent", "model", "created")
+_TITLE = re.compile(r"(?m)^#\s+(.+?)\s*$")
+
+
+def _format_and_roots_fresh(freshness):
+    """L'index lui-même est sain (code et racines) — seul le contenu des notes peut avoir bougé."""
+    return freshness.get("format_fresh") is True and freshness.get("roots_fresh") is True
 
 
 def current_embedding_signature():
@@ -114,7 +135,10 @@ class BrainRetriever:
 
     State contract (all mutations below happen under ``_lock``):
     - ``generation``/``manifest``/``_stamp`` identify the last fully loaded snapshot.
-    - ``freshness is None`` means no query may be served while ``allow_unavailable`` is enabled.
+    - ``freshness is None`` means the corpus is not proven to match the snapshot. In server mode
+      (``allow_unavailable``) the snapshot still answers ONLY while ``_stale_serving_reason`` names
+      a content-only staleness of a ``_proven_manifest`` (code version and roots proven sound), and
+      every hit is then re-read from disk; anything else stays fail-closed (conv-1053).
     - a corpus event increments ``_corpus_epoch`` and invalidates freshness immediately; an older
       worker result is discarded when its generation, manifest identity or epoch no longer matches.
     - ``_watcher_error`` outranks a successful hash and remains blocking until every desired root is
@@ -123,8 +147,8 @@ class BrainRetriever:
       freshness is evaluated, so a manifest may remove a now-obsolete watched root.
 
     ``allow_unavailable`` is server-mode compatibility: construction may succeed without a usable
-    index so ``/health`` can explain the failure. It does not allow queries during an unproven or
-    failed freshness state; those remain deliberately fail-closed.
+    index so ``/health`` can explain the failure. ``/health`` keeps reporting the unproven or failed
+    freshness state; only a content-only staleness is served, flagged ``stale`` in the result.
     """
     def __init__(
         self, index_dir, embedder=None, enable_bm25=True, expected_embedding_signature=None,
@@ -157,6 +181,9 @@ class BrainRetriever:
         self._reload_thread = None
         self._observed_generation = None
         self.freshness = None
+        # Le manifeste dont la version de code et les racines ont été prouvées saines : seul lui
+        # peut encore servir pendant qu'on revérifie le CONTENU des notes.
+        self._proven_manifest = None
         self._lock = threading.Lock()
         self._stamp = None
         self.meta, self.bodies = [], []
@@ -331,6 +358,7 @@ class BrainRetriever:
         freshness = self._evaluate_freshness(manifest)
         self._freshness_checked_at = time.monotonic()
         self.freshness = freshness
+        self._proven_manifest = manifest if _format_and_roots_fresh(freshness) else None
         error = self._freshness_error(freshness)
         if error:
             raise ValueError(error)
@@ -340,6 +368,11 @@ class BrainRetriever:
     def _on_corpus_change(self, error=None):
         with self._lock:
             self._corpus_epoch += 1
+            # Le verdict de fraîcheur jugeait un corpus qui n'existe plus : il cesse d'être LE motif
+            # de refus. Sans cela, un tri de notes (modifications en rafale) refaisait refuser la
+            # recherche à chaque modification après la première (conv-1053).
+            if self.freshness is not None and self.last_reload_error == self._freshness_error(self.freshness):
+                self.last_reload_error = self._watcher_error
             self.freshness = None
             self._freshness_checked_at = 0.0
             if error:
@@ -415,7 +448,7 @@ class BrainRetriever:
                 if current != self.generation and not self._reload_checking:
                     self._reload_checking = True
                     self.freshness = None
-                    self.last_reload_error = "index reload in progress"
+                    self.last_reload_error = RELOAD_IN_PROGRESS
                     self._reload_thread = threading.Thread(
                         target=self._reload_worker,
                         args=(current,),
@@ -433,11 +466,12 @@ class BrainRetriever:
                 expected_embedding_signature=self.expected_embedding_signature,
             )
             # Loading validates files off-lock; confinement is checked without hashing the SMB
-            # corpus.  After adoption the armed corpus watcher and one freshness worker provide
-            # the single authoritative content proof for this generation.
+            # corpus.  The armed corpus watcher and one freshness proof provide the single
+            # authoritative content proof for this generation.
             replacement.source_roots = canonical_source_roots(
                 replacement.source_roots, brain_root=self.brain_root,
             )
+            proof, proof_epoch = self._prove_before_adoption(replacement)
             latest = self._current_generation()
             if (
                 self._closed.is_set() or latest != expected_generation
@@ -456,11 +490,25 @@ class BrainRetriever:
                 self.source_roots = list(replacement.source_roots)
                 self.manifest = replacement.manifest
                 self._stamp = replacement._stamp
-                self.freshness = None
-                self._freshness_checked_at = 0.0
-                self.last_reload_error = self._watcher_error
-                self._ensure_watcher()
-                self._start_freshness_check()
+                if (
+                    proof is not None and self._corpus_epoch == proof_epoch
+                    and not self._watcher_error
+                ):
+                    # Prouvée AVANT l'adoption, sans événement du corpus depuis : la nouvelle
+                    # génération sert dès la bascule, sans fenêtre de refus (conv-1053).
+                    self.freshness = proof
+                    self._freshness_checked_at = time.monotonic()
+                    self._proven_manifest = (
+                        replacement.manifest if _format_and_roots_fresh(proof) else None
+                    )
+                    self.last_reload_error = self._freshness_error(proof)
+                    self._ensure_watcher()
+                else:
+                    self.freshness = None
+                    self._freshness_checked_at = 0.0
+                    self.last_reload_error = self._watcher_error
+                    self._ensure_watcher()
+                    self._start_freshness_check()
         except (OSError, EOFError, ValueError) as exc:
             with self._lock:
                 self.last_reload_error = str(exc)
@@ -468,6 +516,111 @@ class BrainRetriever:
         finally:
             with self._lock:
                 self._reload_checking = False
+
+    def _prove_before_adoption(self, replacement):
+        """La preuve de fraîcheur d'une génération publiée, calculée PENDANT que l'ancienne sert.
+
+        Rend ``(preuve, époque du corpus au départ)``, ou ``(None, None)`` quand la surveillance en
+        place ne couvre pas exactement les racines de la nouvelle génération : un événement sur une
+        racine non surveillée passerait inaperçu, on retombe alors sur la preuve après adoption.
+        """
+        if self.brain_root is None or replacement.manifest is None:
+            return None, None
+        with self._lock:
+            epoch = self._corpus_epoch
+            covered = (
+                self._watcher is not None and not self._watcher_error
+                and sorted(self.source_roots) == sorted(replacement.source_roots)
+            )
+        if not covered:
+            return None, None
+        try:
+            return self._evaluate_freshness(replacement.manifest), epoch
+        except Exception:
+            return None, None
+
+    def _stale_serving_reason(self, observation_error):
+        """Pourquoi l'instantané chargé peut ENCORE répondre, ou None s'il faut refuser (503).
+
+        Appelée sous ``_lock``, seulement quand la fraîcheur n'est pas prouvée. Trois états
+        servent, tous limités au CONTENU des notes d'un index dont le code et les racines ont été
+        prouvés sains : ``reload`` (une génération publiée se charge et se prouve),
+        ``freshness-check`` (une note a bougé, le hachage tourne), ``content-changed`` (des notes
+        ont changé, l'index n'est pas encore reconstruit). Tout le reste refuse : pointeur illisible,
+        surveillance du corpus en panne, index jamais prouvé, autre version du code, racines.
+        """
+        if (
+            observation_error or self._watcher_error or self.brain_root is None
+            or self.generation is None or self.manifest is None
+            or self._proven_manifest is not self.manifest
+        ):
+            return None
+        error, freshness = self.last_reload_error, self.freshness
+        if error == RELOAD_IN_PROGRESS:
+            return "reload"
+        if freshness is None:
+            return None if error else "freshness-check"
+        if (
+            freshness.get("content_fresh") is False and _format_and_roots_fresh(freshness)
+            and error == self._freshness_error(freshness)
+        ):
+            return "content-changed"
+        return None
+
+    def _note_as_indexed_now(self, item, chunk):
+        """Le hit tel que l'indexeur l'écrirait AUJOURD'HUI, ou None s'il ne l'indexerait plus.
+
+        Mêmes règles que ``brain_index.collect_note_paths``/``build_note_rows`` : une note absente,
+        illisible, ``superseded`` ou sans corps n'est pas indexable, donc jamais servie. Les
+        métadonnées sont relues du disque ; si les octets indexés du passage ont changé, la tranche
+        est retirée pour que la note soit servie depuis son début plutôt qu'en morceau décalé.
+        """
+        path_value = item.get("path")
+        if not isinstance(path_value, str) or not path_value:
+            return None
+        relative, windows = PurePosixPath(path_value), PureWindowsPath(path_value)
+        if (
+            relative.is_absolute() or windows.drive or windows.root or ".." in windows.parts
+            or relative.suffix != ".md" or relative.name == "_TEMPLATE.md"
+        ):
+            return None
+        try:
+            frontmatter, body, _body_start, source = _parse_note_source(self.brain_root / relative)
+        except (OSError, ValueError):
+            return None
+        if frontmatter.get("status") == "superseded" or not body.strip():
+            return None
+        hit = dict(item)
+        for key in _FRONTMATTER_FIELDS:
+            hit[key] = frontmatter.get(key, "")
+        hit["status"] = frontmatter.get("status", "active")
+        title = _TITLE.search(body)
+        hit["title"] = title.group(1).strip() if title else ""
+        start, end = item.get("chunk_byte_start"), item.get("chunk_byte_end")
+        unchanged = (
+            isinstance(start, int) and isinstance(end, int) and isinstance(chunk, str)
+            and source.encode("utf-8")[start:end] == chunk.encode("utf-8")
+        )
+        if not unchanged:
+            hit.pop("chunk_byte_start", None)
+            hit.pop("chunk_byte_end", None)
+            hit["preview"] = body[:200]
+        return hit
+
+    def _verified_stale_hits(self, ordered, meta, bodies, dense_scores, k):
+        """Les k premières notes encore indexables, relues par lots parallèles dans l'ordre du rang."""
+        kept = []
+        cursor = 0
+        with ThreadPoolExecutor(max_workers=STALE_VERIFY_WORKERS) as pool:
+            while len(kept) < k and cursor < len(ordered):
+                batch = ordered[cursor:cursor + k - len(kept)]
+                cursor += len(batch)
+                checked = pool.map(lambda idx: self._note_as_indexed_now(meta[idx], bodies[idx]), batch)
+                kept.extend((idx, hit) for idx, hit in zip(batch, checked) if hit is not None)
+        return [
+            {"rank": rank + 1, **hit, "dense_cos": round(float(dense_scores[idx]), 4)}
+            for rank, (idx, hit) in enumerate(kept)
+        ]
 
     def close(self):
         """Stop every worker and release native handles before returning."""
@@ -500,6 +653,7 @@ class BrainRetriever:
                 self._freshness_checked_at = time.monotonic()
                 if freshness is not None:
                     self.freshness = freshness
+                    self._proven_manifest = manifest if _format_and_roots_fresh(freshness) else None
                 self.last_reload_error = self._watcher_error or error
             self._freshness_checking = False
 
@@ -546,7 +700,7 @@ class BrainRetriever:
                         and not (self.generation is None and self.last_reload_error)
                     ):
                         self.freshness = None
-                        self.last_reload_error = "index reload in progress"
+                        self.last_reload_error = RELOAD_IN_PROGRESS
                         self._index_event.set()
                     generation_is_current = (
                         not observation_error and observed_generation == self.generation
@@ -596,7 +750,7 @@ class BrainRetriever:
                     and not (self.generation is None and self.last_reload_error)
                 ):
                     self.freshness = None
-                    self.last_reload_error = "index reload in progress"
+                    self.last_reload_error = RELOAD_IN_PROGRESS
                     self._index_event.set()
                 self._check_watcher_health()
                 if not self.allow_unavailable and self._current_stamp() != self._stamp:
@@ -618,18 +772,27 @@ class BrainRetriever:
                 error = str(exc)
                 if "signature mismatch" in error or "freshness mismatch" in error:
                     self.last_reload_error = error
-                    if self.allow_unavailable:
+                    if not self.allow_unavailable:
+                        raise
+                    if "signature mismatch" in error:
                         raise RuntimeError(error) from exc
-                    raise
+                    # Fraîcheur : servir l'ancien instantané ou refuser se décide juste en dessous,
+                    # au même endroit que pour la preuve faite en tâche de fond.
                 # A partial/corrupt publish may be transient: retry next query.
-            if self.last_reload_error and self.allow_unavailable:
-                raise RuntimeError(self.last_reload_error)
-            if self.freshness is None and self.brain_root is not None and self.allow_unavailable:
-                raise RuntimeError("index freshness check in progress")
+            stale = None
+            if self.allow_unavailable and (
+                self.last_reload_error
+                or (self.freshness is None and self.brain_root is not None)
+            ):
+                stale = self._stale_serving_reason(observation_error)
+                if stale is None:
+                    raise RuntimeError(self.last_reload_error or "index freshness check in progress")
+            flag = {"stale": stale} if stale else {}
             if not self.meta:
                 return {
                     "query": text, "hits": [], "axes": 0,
                     "generation": self.generation, "source_roots": list(self.source_roots),
+                    **flag,
                 }
             # Immutable-by-replacement snapshot: reload never mutates these objects after publish.
             meta, bodies, vecs = self.meta, self.bodies, self.vecs
@@ -670,13 +833,18 @@ class BrainRetriever:
                 continue
             seen_paths.add(path_key)
             selected.append(idx)
-            if len(selected) == k:
+            # Instantané non prouvé : on garde toute la file, les notes retirées depuis seront
+            # écartées à la relecture et remplacées par les suivantes.
+            if len(selected) == k and not stale:
                 break
-        hits = [
-            {"rank": rank + 1, **meta[idx], "dense_cos": round(float(dense_scores[idx]), 4)}
-            for rank, idx in enumerate(selected)
-        ]
+        if stale:
+            hits = self._verified_stale_hits(selected, meta, bodies, dense_scores, k)
+        else:
+            hits = [
+                {"rank": rank + 1, **meta[idx], "dense_cos": round(float(dense_scores[idx]), 4)}
+                for rank, idx in enumerate(selected)
+            ]
         return {
             "query": text, "hits": hits, "axes": len(ranks),
-            "generation": generation, "source_roots": source_roots,
+            "generation": generation, "source_roots": source_roots, **flag,
         }

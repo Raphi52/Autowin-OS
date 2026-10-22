@@ -88,6 +88,12 @@
   margin: 0;
 }
 
+/* Deux façons au même code, ou presque (conv-1057) : on paie trois tours pour un seul avis. */
+.comparaison-facon-mesures dd.is-proche {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .comparaison-facon-gestes,
 .comparaison-facon-confirmer {
   display: flex;

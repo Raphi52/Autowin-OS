@@ -7,7 +7,11 @@
  * `ouvrirCopiesDEssai`), avec une façon IMPOSÉE : sans elle, trois tours du même modèle sur le même
  * texte rendraient trois fois le même avis, pour trois fois le prix.
  */
-import { nomDeCopieDEssai, type ComparaisonDUneFacon } from '../../../shared/essai-trois-facons'
+import {
+  nomDeCopieDEssai,
+  type ComparaisonDUneFacon,
+  type RessemblanceDUneFacon
+} from '../../../shared/essai-trois-facons'
 
 // La 3e façon est la plus CRÉATIVE (choix utilisateur, conv-1057, 2026-10-22) : « une approche
 // différente des deux plus évidentes » obligeait la branche à deviner ce que font les deux autres,
@@ -113,4 +117,31 @@ export function phraseDuCout(cout: { usd: number; partiel: boolean } | null): st
   if (!cout) return 'inconnu'
   const montant = `${cout.usd.toFixed(2).replace('.', ',')} $`
   return cout.partiel ? `au moins ${montant}` : montant
+}
+
+/*
+ * LA RESSEMBLANCE (conv-1057, 2026-10-22 — calculée par `src/main/ressemblance-des-facons.ts`).
+ * Les arrondis ne mentent pas : un code qui n'est pas identique ne s'affiche jamais « 100 % », et
+ * une ligne commune ne s'affiche jamais « 0 % ».
+ */
+export function phraseDeLaRessemblance(ressemblance: RessemblanceDUneFacon | undefined): string {
+  if (!ressemblance) return 'Autowin doit redémarrer pour la mesurer'
+  if (ressemblance.etat === 'sans-objet') return ressemblance.raison
+  const { avec, part, identique } = ressemblance
+  if (identique) return `identique à la façon ${avec}`
+  if (part >= 1) return `mêmes lignes que la façon ${avec}, code différent`
+  if (part <= 0) return 'aucune ligne commune avec les autres façons'
+  const pourcent = Math.round(part * 100)
+  if (pourcent < 1) return `moins de 1 % de lignes communes avec la façon ${avec}`
+  return `${Math.min(99, pourcent)} % de lignes communes avec la façon ${avec}`
+}
+
+/** Seuil d'AFFICHAGE seulement (mise en évidence) : la phrase garde le chiffre exact. */
+const SEUIL_TRES_PROCHE = 0.8
+
+export function estTresProche(ressemblance: RessemblanceDUneFacon | undefined): boolean {
+  return (
+    ressemblance?.etat === 'mesuree' &&
+    (ressemblance.identique || ressemblance.part >= SEUIL_TRES_PROCHE)
+  )
 }

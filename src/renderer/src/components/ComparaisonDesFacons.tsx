@@ -20,6 +20,8 @@ import {
   FACONS,
   LIBELLES_ETAT_DE_LA_FACON,
   coutDesLignes,
+  estTresProche,
+  phraseDeLaRessemblance,
   phraseDeLEcart,
   phraseDesVerifications,
   phraseDuCout,
@@ -188,6 +190,17 @@ export function ComparaisonDesFacons({
                   <div>
                     <dt>Vérifications</dt>
                     <dd>{mesuree ? phraseDesVerifications(mesuree.bilan) : '…'}</dd>
+                  </div>
+                  {/* Le contrôle de ressemblance (conv-1057, 2026-10-22) : deux façons au même
+                      code se voient d'un coup d'œil. */}
+                  <div>
+                    <dt>Ressemblance</dt>
+                    <dd
+                      data-mesure="ressemblance"
+                      className={estTresProche(mesuree?.ressemblance) ? 'is-proche' : undefined}
+                    >
+                      {mesuree ? phraseDeLaRessemblance(mesuree.ressemblance) : '…'}
+                    </dd>
                   </div>
                   <div>
                     <dt>Coût</dt>

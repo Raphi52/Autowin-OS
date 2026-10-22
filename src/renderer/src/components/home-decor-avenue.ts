@@ -1968,11 +1968,6 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       texture: TEX_ENSEIGNES[i]
     }))
   })
-  // Le reflet de l'eau est dessiné à demi-résolution : la taille des feux du vaisseau (pixels d'écran)
-  // y est réduite d'autant. conv-1037 : « les reflets de la ville flottante sont dans la rue mais ils
-  // devraient pas etre visibile car cachés par le socle » — deux fois trop gros, les feux des toits
-  // débordaient dans l'eau sur la plaque qui les cache.
-  spirale.suivreLaResolution(vaisseau.tailleFeux)
   /**
    * LES HALOS PAR LOTS (conv-323) : les 424 halos additifs de la rue, de la ville, de la Spirale et
    * des nuages, dessinés un par un à chaque passe, passent en quelques dessins instanciés, sans rien
@@ -2067,8 +2062,18 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
       })
   }
 
-  /** Le reflet de l'eau (une image sur deux, voir home-decor-avenue-spirale.ts), foule et viaduc exclus. */
-  const dessinerReflet = (): void => spirale.avantRendu([foule?.groupe, ...aretesViaduc])
+  /**
+   * Le reflet de l'eau (une image sur deux, voir home-decor-avenue-spirale.ts), foule et viaduc exclus,
+   * ainsi que les FEUX DES TOITS du vaisseau (conv-1037 : « les lumieres sur le toit des immeubles de la
+   * ville flottante […] ne devaient pas se refléter dans l'eau », les feux sous la plaque restent).
+   * Pourquoi la plaque ne les cachait pas dans l'eau (mesuré sur la carte graphique le 2026-10-22) : la
+   * caméra du reflet est coupée au ras de l'eau, sa profondeur suit donc la HAUTEUR au-dessus de l'eau ;
+   * sur la plaque inclinée, elle varie de ~0,001 d'un pixel à l'autre, alors que ces feux ne sont que
+   * 0,0001 à 0,0005 derrière elle. Un feu est un point dessiné à profondeur constante sur 10 à 20 pixels :
+   * une partie passait devant la plaque.
+   */
+  const dessinerReflet = (): void =>
+    spirale.avantRendu([foule?.groupe, ...aretesViaduc, vaisseau.feuxToits])
 
   let prevPont: number | null = null
   let pluieT = 0

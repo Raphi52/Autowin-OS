@@ -385,32 +385,6 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
     expect([spirale.cibleReflet.width, spirale.cibleReflet.height]).toEqual([400, 200])
   })
 
-  it('LES FEUX TENUS AILLEURS SUIVENT LA RÉSOLUTION DU REFLET : réduits pendant son dessin, rendus après', () => {
-    // conv-1037 : « les reflets de la ville flottante sont dans la rue mais ils devraient pas etre
-    // visibile car caches par le socle ». La taille des feux du vaisseau (pixels de l'écran) n'était
-    // pas réduite dans le reflet, dessiné à demi-résolution : chaque feu de toit y était deux fois trop
-    // gros, et ceux qui dépassent à peine du bord de la plaque étalaient leur halo par-dessus.
-    // ENTRÉE QUI DOIT LE FAIRE ÉCHOUER : retirer la réduction de `avantRendu`, ou oublier de rendre
-    // la valeur d'écran après le reflet.
-    const { spirale, rendu, ctx } = monter()
-    const tailleFeux = { value: 1530 }
-    spirale.suivreLaResolution(tailleFeux)
-    spirale.suivreLaResolution(tailleFeux)
-    const pendant: number[] = []
-    const dessiner = ctx.renderer.render.bind(ctx.renderer)
-    ctx.renderer.render = (s: THREE.Object3D, c: THREE.Camera): void => {
-      pendant.push(tailleFeux.value)
-      dessiner(s, c)
-    }
-    spirale.animer(1, 0)
-    spirale.activerReflet()
-    spirale.avantRendu([])
-    expect(rendu.rendus).toHaveLength(1)
-    // une seule réduction, même confiée deux fois
-    expect(pendant).toEqual([1530 * SPIRALE.miroir.resolution])
-    expect(tailleFeux.value).toBe(1530)
-  })
-
   it('LE REFLET DESSINE DES JUMELLES : matières distinctes de l écran, lues en direct, rendues après', () => {
     // Portées par les mêmes matières que l'écran, les versions « reflet » faisaient rebasculer chaque
     // matière de programme deux fois par image : ~34 ms de setProgram par image (2026-10-18).
@@ -578,8 +552,9 @@ describe('la Spirale est branchée dans l avenue', () => {
 
   it('anime la spirale et dessine son reflet, foule et arêtes du viaduc exclues, juste avant le rendu', () => {
     expect(source).toMatch(/spirale\.animer\(t, parcours\)/)
+    // depuis conv-1037, les feux des toits du vaisseau en sont exclus aussi
     expect(source).toMatch(
-      /const dessinerReflet = \(\): void => spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc\]\)/
+      /const dessinerReflet = \(\): void =>\s*spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc, vaisseau\.feuxToits\]\)/
     )
     // dans la page : juste avant le rendu, comme avant
     expect(source).toMatch(

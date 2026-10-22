@@ -145,15 +145,15 @@ export interface VaisseauMere {
   mats: THREE.InstancedMesh
   /** Les cercles de feux d'atterrissage sous la plaque. */
   anneaux: THREE.Points
-  /** Les feux fixes : jante, bord du disque, et ceux des toits au bout de leur mât. */
+  /** Les feux fixes de la roue : la jante et le bord du disque. */
   feux: THREE.Points
   /**
-   * La taille de TOUS ses feux, en pixels d'écran (elle suit la hauteur du canevas). Exposée pour le
-   * reflet de l'eau, dessiné à demi-résolution, qui doit la réduire le temps de son dessin
-   * (`suivreLaResolution` de la Spirale, conv-1037) : sans cela, dans l'eau, les feux des toits étaient
-   * deux fois trop gros et débordaient sur la plaque qui doit les cacher.
+   * Les feux des TOITS de la cité, au bout de leur mât, et les balises des plus hautes tours : un groupe
+   * à part, pour que le reflet de l'eau les retire (conv-1037 : « les lumieres sur le toit des immeubles
+   * de la ville flottante […] ne devaient pas se refléter dans l'eau »). Dans le reflet, la plaque ne les
+   * cachait pas : voir `dessinerReflet` dans home-decor-avenue.ts.
    */
-  tailleFeux: { value: number }
+  feuxToits: THREE.Points
   animer(t: number): void
 }
 
@@ -497,10 +497,12 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
   // ---------- DESSUS : quelques lumières sur la ville, chacune au bout d'un mât ----------
   // Vu d'en dessous, un feu posé à ras du toit serait caché par le toit lui-même : le mât dépasse
   // d'environ la demi-largeur du toit, plus quelques mètres.
+  // Un groupe à part (`feuxToits`), que le reflet de l'eau retire (conv-1037).
+  const feuxDesToits: Feu[] = []
   const toitFeu = (t: Toit, c: number, taille: number, plus: number): void => {
     const hauteurMat = Math.max(t.w, t.d) * 0.5 + plus
     t.mat = Math.max(t.mat, hauteurMat)
-    feuxFixes.push([t.x, t.y, t.z - hauteurMat, c, taille])
+    feuxDesToits.push([t.x, t.y, t.z - hauteurMat, c, taille])
   }
   for (const t of toits
     .slice()
@@ -525,6 +527,8 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
   roue.add(mats)
   const feuxPoses = feux(roue, feuxFixes)
   feuxPoses.name = 'feux'
+  const feuxToits = feux(roue, feuxDesToits)
+  feuxToits.name = 'feux-des-toits'
 
   ctx.scene.add(groupe)
 
@@ -535,7 +539,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
     mats,
     anneaux,
     feux: feuxPoses,
-    tailleFeux: uE,
+    feuxToits,
     animer(t) {
       // il flotte : quelques mètres de houle, jamais de traversée ; la roue emporte sa ville
       groupe.position.y = y0 + Math.sin(t * 0.1) * 5

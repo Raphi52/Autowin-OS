@@ -42,6 +42,16 @@ export function nomDeCopieDEssai(chemin: string | undefined): CopieDEssai | null
   return { fil, quand, rang }
 }
 
+/**
+ * LA RESSEMBLANCE d'une façon avec la plus proche des autres (conv-1057, 2026-10-22 — calculée par
+ * `src/main/ressemblance-des-facons.ts`). `identique` : même état du code que cette autre façon.
+ * `part` : lignes changées en commun sur l'ensemble des lignes changées par les deux (0 à 1).
+ * `avec` : le rang de cette autre façon (1 à 3).
+ */
+export type RessemblanceDUneFacon =
+  | { etat: 'mesuree'; avec: number; part: number; identique: boolean }
+  | { etat: 'sans-objet'; raison: string }
+
 /** Une ligne de la carte de comparaison, telle que la rend `os:conversations:comparerLesFacons`. */
 export type ComparaisonDUneFacon =
   | {
@@ -52,6 +62,8 @@ export type ComparaisonDUneFacon =
         vertes: number
         rouges: number
       }
+      /** Absente quand le processus principal date d'avant ce contrôle (pas encore redémarré). */
+      ressemblance?: RessemblanceDUneFacon
       ecart:
         | {
             ok: true

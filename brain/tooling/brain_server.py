@@ -185,6 +185,17 @@ def build_context(
     )["context"]
 
 
+def _stale_navigation(payload):
+    """Signale, DANS la navigation signée, une réponse servie par l'instantané précédent.
+
+    conv-1053 (2026-10-22) : pendant qu'une note bouge, l'index déjà chargé répond au lieu d'un 503
+    (`BrainRetriever._stale_serving_reason`). Les notes les plus récentes peuvent y manquer : le
+    client doit pouvoir le dire. Un client qui ignore ce champ reste compatible.
+    """
+    stale = payload.get("stale")
+    return {"stale": stale} if isinstance(stale, str) and stale else {}
+
+
 def build_context_result(
     retriever, query, knowledge_root, max_chars=2000, min_dense=MIN_DENSE,
     allowed_roots=None, brain_root=None, trace=None, harness="unknown", trace_id="unknown",
@@ -241,6 +252,7 @@ def build_context_result(
             **({"chunkByteStart": hit["chunk_byte_start"]} if "chunk_byte_start" in hit else {}),
             **({"chunkByteEnd": hit["chunk_byte_end"]} if "chunk_byte_end" in hit else {}),
         } for hit in hits],
+        **_stale_navigation(payload),
     }
     return {
         "context": context,
@@ -313,6 +325,7 @@ def build_candidates_result(
             **({"title": listed[hit["path"]]["title"]} if hit.get("path") in listed else {}),
             **({"sizeBytes": listed[hit["path"]]["sizeBytes"]} if hit.get("path") in listed else {}),
         } for hit in hits],
+        **_stale_navigation(payload),
     }
     return {
         "context": context,

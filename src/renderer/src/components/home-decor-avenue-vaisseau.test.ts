@@ -6,7 +6,6 @@ import {
   brumePour,
   ECLAT,
   eclaircieVaisseau,
-  GROSSISSEMENT_FEUX,
   monterVaisseau,
   MOYEU_CITE,
   VAISSEAU,
@@ -194,8 +193,8 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
 
   it('le DESSUS a quelques lumières : six toits sur dix allumés, balises rouges sur les plus hautes tours', () => {
     const { vaisseau } = monter()
-    const pos = vaisseau.feux.geometry.getAttribute('position')
-    const taille = vaisseau.feux.geometry.getAttribute('aS')
+    const pos = vaisseau.feuxToits.geometry.getAttribute('position')
+    const taille = vaisseau.feuxToits.geometry.getAttribute('aS')
     let dessus = 0
     let balises = 0
     for (let i = 0; i < pos.count; i++) {
@@ -232,7 +231,7 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
       expect(e.y).toBeGreaterThan(toit!.demi + 3)
     }
     // et les feux du dessus sont au bout des mâts, pas à ras des toits
-    const pos = vaisseau.feux.geometry.getAttribute('position')
+    const pos = vaisseau.feuxToits.geometry.getAttribute('position')
     for (let i = 0; i < pos.count; i++) {
       if (pos.getZ(i) > -20) continue
       const toit = toits.get(cle(pos.getX(i), pos.getY(i)))
@@ -405,20 +404,21 @@ describe('le vaisseau mère : la 6 · Anneaux d approche (une cité sur le moyeu
     expect(largeur / 195).toBeLessThan(2.4)
   })
 
-  it('TOUS SES FEUX partagent une seule taille en pixels, exposée pour que le reflet la réduise (conv-1037)', () => {
-    // Dans l'eau (image à demi-résolution), cette taille doit être réduite de moitié : sinon chaque feu
-    // de toit y est deux fois trop gros et déborde sur la plaque qui devrait le cacher.
+  it('les feux des TOITS forment un groupe à part, pour que le reflet de l eau puisse les retirer (conv-1037)', () => {
+    // « les lumieres sur le toit des immeubles de la ville flottante […] ne devaient pas se refléter dans
+    // l'eau » ; « j'aimais bien les lumieres sous la plaque ». Mêlés aux feux de la jante dans un seul
+    // groupe de points, ils ne pouvaient pas être retirés du reflet sans emporter la jante.
+    // ENTRÉE QUI DOIT LE FAIRE ÉCHOUER : remettre les feux des toits dans `feux`.
     const { vaisseau } = monter()
-    const points: THREE.Points[] = []
-    vaisseau.groupe.traverse((o) => {
-      if ((o as THREE.Points).isPoints) points.push(o as THREE.Points)
-    })
-    expect(points.length).toBeGreaterThanOrEqual(3)
-    points.forEach((p) =>
-      expect((p.material as THREE.ShaderMaterial).uniforms.uE).toBe(vaisseau.tailleFeux)
-    )
-    vaisseau.animer(2)
-    expect(vaisseau.tailleFeux.value).toBeCloseTo(900 * 0.9 * GROSSISSEMENT_FEUX, 5)
+    expect(vaisseau.feuxToits).not.toBe(vaisseau.feux)
+    expect(vaisseau.feuxToits.parent).toBe(vaisseau.roue)
+    const toits = vaisseau.feuxToits.geometry.getAttribute('position')
+    expect(toits.count).toBeGreaterThan(MOYEU_CITE.tours * 0.45)
+    // tous au-dessus du disque (−z = le haut de la cité)…
+    for (let i = 0; i < toits.count; i++) expect(toits.getZ(i)).toBeLessThan(-20)
+    // … et `feux` ne garde que la jante et le bord du disque, dans le plan de la roue
+    const fixes = vaisseau.feux.geometry.getAttribute('position')
+    for (let i = 0; i < fixes.count; i++) expect(fixes.getZ(i)).toBe(0)
   })
 
   it('flotte sans s en aller, et la roue tourne en emportant sa ville', () => {
@@ -453,10 +453,13 @@ describe('branchement dans le fond de l Accueil (home-decor-avenue.ts)', () => {
     expect(sans).toMatch(/monterToile\(\{[\s\S]*?eclaircie: eclaircieVaisseau\(\)[\s\S]*?\}\)/)
   })
 
-  it('confie la taille de ses feux au reflet de l eau, qui la réduit à sa résolution (conv-1037)', () => {
-    expect(sans).toMatch(/spirale\.suivreLaResolution\(vaisseau\.tailleFeux\)/)
-    expect(sans.indexOf('spirale.suivreLaResolution(')).toBeGreaterThan(
-      sans.indexOf('const spirale = monterSpirale(')
+  it('retire du reflet de l eau les feux des toits, que la plaque du vaisseau cache (conv-1037)', () => {
+    // Le reflet est dessiné avec une projection coupée au ras de l'eau : la profondeur y suit la
+    // hauteur, et sur la plaque inclinée elle varie de ~0,001 d'un pixel à l'autre, quand ces feux ne
+    // sont que 0,0001 à 0,0005 derrière elle. Un feu, dessiné à profondeur constante sur 10 à 20 pixels,
+    // passait donc en partie devant la plaque (mesuré sur la carte graphique le 2026-10-22).
+    expect(sans).toMatch(
+      /const dessinerReflet = \(\): void =>\s*spirale\.avantRendu\(\[[^\]]*vaisseau\.feuxToits[^\]]*\]\)/
     )
   })
 })

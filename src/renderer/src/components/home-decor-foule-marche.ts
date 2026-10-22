@@ -40,6 +40,19 @@ export const MARCHE = {
   /** Pas de calcul maximal : une image plus longue est découpée. */
   pas: 1 / 30,
   /**
+   * ON CONTOURNE LA CAMÉRA. Elle est posée SUR le trottoir de gauche (x = -5,55), en plein dans la file
+   * des passants : sans écart, un corps la traversait et remplissait l'écran (constaté le 2026-10-17,
+   * capture de l'Accueil à 16 s). À hauteur de la caméra (`plein` mètres le long de la rue), personne
+   * ne passe à moins de `distance` de son axe ; l'écart s'ouvre en douceur à partir de `portee`.
+   * C'est la MARCHE qui le tient, avec les autres corps (conv-1054) : appliqué après elle sur l'image,
+   * l'écart rechoisissait son côté à chaque image (saut de 1,90 m) et plaquait les passants les uns
+   * sur les autres.
+   * `derriere` : la caméra regarde vers -z et coupe à 0,1 m ; un corps centré à plus de 0,4 m derrière
+   * elle (demi-largeur 0,27 + 0,1) n'est jamais à l'image. L'écart y est inutile, et il y coinçait deux
+   * passants de sens opposés dans un couloir de 35 cm, là où la rue boucle (z = 14, 4 m derrière).
+   */
+  camera: { distance: 0.95, plein: 1.5, portee: 4.5, derriere: { plein: 0.4, portee: 1.6 } },
+  /**
    * Où marchent les centres des corps, en x : le trottoir moins un pas de la bordure, du mur ou de la
    * rambarde (home-decor-avenue.ts : ROUTE = 4, FACADE = 7,5, GARDE = -7,2).
    */
@@ -50,6 +63,10 @@ const FENETRE = 70
 const DEBUT = -56
 
 const borne = (v: number, a: number, b: number): number => Math.min(b, Math.max(a, v))
+const lisse = (u: number): number => {
+  const v = borne(u, 0, 1)
+  return v * v * (3 - 2 * v)
+}
 const enroulerDiff = (d: number): number => ((((d + FENETRE / 2) % FENETRE) + FENETRE) % FENETRE) - FENETRE / 2
 const angleDiff = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a))
 const enroulerZ = (z: number): number => ((((z - DEBUT) % FENETRE) + FENETRE) % FENETRE) + DEBUT
@@ -128,6 +145,8 @@ interface Voisin {
   vx: number
   vs: number
   r: number
+  /** C'est la caméra. */
+  cam?: true
 }
 
 /**
@@ -209,7 +228,19 @@ export function creerMarche(options: {
     return { dx: dx * (1 - 0.6 * S), ds: ds - S * (r - (n - 1) / 2) * 0.62 }
   }
 
-  /** Quelqu'un d'autre approche la bande (ou la longe) : elle se serre ; une fois seule, elle se rouvre. */
+  /** L'écart à garder avec l'axe de la caméra, pour qui est en `s` sur son trottoir (0 loin d'elle). */
+  const coteCamera = camera.x < 0 ? 'gauche' : 'droite'
+  function ecartCamera(s: number): number {
+    // > 0 : derrière la caméra (elle regarde vers -z)
+    const d = enroulerDiff(s - (camera.z - defile))
+    const { plein, portee } = d > 0 ? MARCHE.camera.derriere : MARCHE.camera
+    return MARCHE.camera.distance * lisse((portee - Math.abs(d)) / (portee - plein))
+  }
+
+  /**
+   * Quelqu'un d'autre approche la bande (ou la longe) : elle se serre ; une fois seule, elle se rouvre.
+   * La caméra compte : ses couloirs sont trop étroits pour deux de front (mesuré, conv-1054).
+   */
   function serrer(h: number): void {
     for (const g of options.bandes ?? []) {
       const chef = agents[g[0]]
@@ -222,6 +253,12 @@ export function creerMarche(options: {
           if (Math.abs(b.x - a.x) < 1.6 && Math.abs(ds) < 5 && (ds * -a.sens > -1 || b.sens !== a.sens)) proche = 1
         }
       }
+      if (chef.cote === coteCamera)
+        for (const k of g) {
+          const a = agents[k]
+          const ds = enroulerDiff(camera.z - defile - a.s)
+          if (Math.abs(camera.x - a.x) < 1.6 && Math.abs(ds) < 5 && ds * -a.sens > -1) proche = 1
+        }
       chef.serrage += (proche - chef.serrage) * Math.min(1, h * (proche ? 2.5 : 0.8))
     }
   }
@@ -237,7 +274,7 @@ export function creerMarche(options: {
     // la caméra recule dans le repère de la rue : un obstacle qui bouge, plus large qu'un corps
     const dsc = enroulerDiff(camera.z - defile - a.s)
     const dxc = camera.x - a.x
-    if (Math.abs(dsc) < 12 && Math.abs(dxc) < 3) out.push({ b: null, dx: dxc, ds: dsc, vx: 0, vs: -vRue, r: 0.65 })
+    if (Math.abs(dsc) < 12 && Math.abs(dxc) < 3) out.push({ b: null, dx: dxc, ds: dsc, vx: 0, vs: -vRue, r: 0.65, cam: true })
     for (const o of statiques) {
       const ds = enroulerDiff(o.s - a.s)
       const dx = o.x - a.x
@@ -344,8 +381,11 @@ export function creerMarche(options: {
         if (Math.abs(cxCentres) < 0.08) cote = a.sens === 1 ? 1 : -1
         const devant = ps * f > 0
         if (memeSens && devant && n.b && n.b.vitesse > 0.15) continue
-        // un corps immobile (figurant, caméra) : on le contourne du côté où il y a la place
-        if (!n.b || n.b.vitesse < 0.15) {
+        // la caméra : on la passe sur sa droite, comme quelqu'un qu'on croise de face. Ses deux couloirs
+        // (MARCHE.camera) sont trop étroits pour s'y croiser : chaque sens prend le sien (conv-1054).
+        if (n.cam) cote = a.sens === 1 ? 1 : -1
+        // un corps immobile (figurant) : on le contourne du côté où il y a la place
+        else if (!n.b || n.b.vitesse < 0.15) {
           const xo = a.x + px
           cote = x1 - (xo + n.r + R) > xo - n.r - R - x0 ? 1 : -1
         }
@@ -424,7 +464,7 @@ export function creerMarche(options: {
     separer(3)
   }
 
-  /** Séparation dure : aucun corps n'entre dans un autre, ni dans un figurant. */
+  /** Séparation dure : aucun corps n'entre dans un autre, ni dans un figurant, ni dans la caméra. */
   function separer(iterations: number): void {
     for (let it = 0; it < iterations; it++) {
       for (let i = 0; i < agents.length; i++) {
@@ -451,6 +491,13 @@ export function creerMarche(options: {
           if (d >= min || d < 1e-6) continue
           a.x += (dx / d) * (min - d)
           a.s += (ds / d) * (min - d) * 0.5
+        }
+        // La caméra : on reste du côté de son axe où l'on est déjà. L'écart s'ouvre de quelques
+        // millimètres par pas, donc le corps glisse, il ne saute pas.
+        if (a.cote === coteCamera) {
+          const e = ecartCamera(a.s)
+          const dx = a.x - camera.x
+          if (Math.abs(dx) < e) a.x = camera.x + (dx < 0 ? -e : e)
         }
       }
       // poussé ou pas, on reste sur son trottoir (la séparation le fait glisser le long de l'autre)

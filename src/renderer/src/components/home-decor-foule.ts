@@ -233,24 +233,6 @@ export function positionZ(p: Passant, vitesse: number, t: number, defile: number
   return enrouler(p.zf + defile - p.sens * vitesse * (t - FOULE.tRef))
 }
 
-/**
- * ON CONTOURNE LA CAMÉRA. Elle est posée SUR le trottoir de gauche (x = -5,55), en plein dans la file
- * des passants : sans écart, un corps la traversait et remplissait l'écran (constaté le 2026-10-17,
- * capture de l'Accueil à 16 s). En approchant, le passant glisse de côté jusqu'à `ecartCamera` de
- * l'axe de la caméra, du côté où il se trouve déjà, et reprend sa file une fois passé.
- */
-export const ECART_CAMERA = {
-  /** Distance latérale gardée avec la caméra, en mètres. */
-  distance: 0.95,
-  /** En deçà de cette distance le long de l'avenue, l'écart est complet. */
-  plein: 1.5,
-  /** Au-delà, le passant est dans sa file ; entre les deux, il s'écarte en douceur. */
-  portee: 4.5
-} as const
-export function ecarterDeLaCamera(x: number, z: number, camX: number, camZ: number): number {
-  return ecarter(x, z, { x: camX, z: camZ, ...ECART_CAMERA })
-}
-
 /** Ce que les passants gardent d'écart avec un figurant : ils passent côté chaussée. */
 export const ECART_FIGURANT = { distance: 0.8, plein: 1.0, portee: 3.5 } as const
 
@@ -903,11 +885,11 @@ export async function chargerFoule(
         g.marche.timeScale = g.p.vit * Math.min(1.4, m.vitesse / g.vitesse)
         g.mixer.update(dt)
         const z = marche!.z(m)
-        // Garde-fous de toujours, par-dessus la marche : on passe côté chaussée d'un figurant, et
-        // personne ne traverse la caméra. La marche les a déjà contournés : ils ne jouent qu'en dernier recours.
+        // Garde-fou de toujours, par-dessus la marche : on passe côté chaussée d'un figurant. La marche
+        // les a déjà contournés : il ne joue qu'en dernier recours. La caméra, elle, est contournée DANS
+        // la marche (MARCHE.camera, conv-1054) : écartée ici, sur l'image, elle faisait sauter les passants.
         let x = m.x
         for (const o of obstacles) x = ecarter(x, z, o)
-        x = ecarterDeLaCamera(x, z, camera.x, camera.z)
         g.racine.position.set(x, sol, z)
         g.racine.rotation.y = m.yaw
         g.racine.updateMatrixWorld(true)

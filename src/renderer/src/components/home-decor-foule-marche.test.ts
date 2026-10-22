@@ -223,6 +223,31 @@ describe('la marche des passants', () => {
     expect(source).not.toMatch(/rotation\.y = g\.p\.sens === 1/)
   })
 
+  it('LA CAMÉRA : la marche la contourne elle-même, et l écran montre la marche telle quelle', () => {
+    // Constat du 2026-10-22 (conv-1054) : « les piétons se téléportent en cas de collision ». Le
+    // contournement de la caméra était appliqué APRÈS la marche, sur l'image : son côté se rechoisissait
+    // à chaque image, et un passant poussé d'un centimètre à travers l'axe de la caméra sautait de
+    // 1,90 m. Il plaquait aussi tout le monde sur le même couloir : 3 406 paires d'images sous 50 cm
+    // devant la caméra en 600 s, quand la marche seule n'en a aucune.
+    expect(HEURE_DE_POINTE.some((p) => Math.abs(p.x - CAM_X) < MARCHE.camera.distance)).toBe(true)
+    const { marche, avancer } = foule()
+    let pres = 0
+    for (let t = 20; t < 20 + DUREE; t += DT) {
+      avancer(t)
+      for (const m of marche.marcheurs) {
+        // à hauteur de la caméra : 1,5 m devant elle (z < CAM_Z, elle regarde vers -z), 0,4 m derrière
+        const d = marche.z(m) - CAM_Z
+        const aHauteur = d > -MARCHE.camera.plein && d < MARCHE.camera.derriere.plein
+        if (aHauteur && Math.abs(m.x - CAM_X) < MARCHE.camera.distance - 1e-6) pres++
+      }
+    }
+    expect(pres).toBe(0)
+    // Ce que l'écran pose est la place de la marche : aucun garde-fou ne la redéplace par-dessus.
+    const source = readFileSync(new URL('./home-decor-foule.ts', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/ecarterDeLaCamera\(/)
+    expect(source).toMatch(/creerMarche\(\{[\s\S]*?camera,/)
+  })
+
   it('un figurant immobile sur le chemin est contourné, jamais traversé', () => {
     const m = creerMarche({
       passants: [{ x: 5.5, z: -10, sens: 1, vitesse: 1.2 }],

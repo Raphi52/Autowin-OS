@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   coutDesLignes,
+  estTresProche,
   faconsDuMemeEssai,
+  phraseDeLaRessemblance,
   phraseDeLEcart,
   phraseDesVerifications,
   phraseDuCout
@@ -99,5 +101,35 @@ describe('les colonnes de la carte, en mots', () => {
     expect(phraseDuCout({ usd: 0.75, partiel: false })).toBe('0,75 $')
     expect(phraseDuCout({ usd: 0.25, partiel: true })).toBe('au moins 0,25 $')
     expect(phraseDuCout(null)).toBe('inconnu')
+  })
+
+  /*
+   * LA RESSEMBLANCE (conv-1057, 2026-10-22). Les arrondis qui mentiraient : 99,6 % affiché « 100 % »
+   * pour deux codes qui ne sont PAS identiques, et 0,3 % affiché « 0 % » alors qu'une ligne est
+   * commune.
+   */
+  it('ressemblance : identique, part commune, arrondis honnêtes, sans objet', () => {
+    const mesuree = (part: number, identique = false) =>
+      ({ etat: 'mesuree', avec: 2, part, identique }) as const
+    expect(phraseDeLaRessemblance(mesuree(1, true))).toBe('identique à la façon 2')
+    expect(phraseDeLaRessemblance(mesuree(0.62))).toBe('62 % de lignes communes avec la façon 2')
+    expect(phraseDeLaRessemblance(mesuree(0.996))).toBe('99 % de lignes communes avec la façon 2')
+    expect(phraseDeLaRessemblance(mesuree(1))).toBe('mêmes lignes que la façon 2, code différent')
+    expect(phraseDeLaRessemblance(mesuree(0.003))).toBe(
+      'moins de 1 % de lignes communes avec la façon 2'
+    )
+    expect(phraseDeLaRessemblance(mesuree(0))).toBe('aucune ligne commune avec les autres façons')
+    expect(
+      phraseDeLaRessemblance({ etat: 'sans-objet', raison: 'aucun changement à comparer' })
+    ).toBe('aucun changement à comparer')
+    expect(phraseDeLaRessemblance(undefined)).toBe('Autowin doit redémarrer pour la mesurer')
+  })
+
+  it('très proche : identique, ou au moins 80 % de lignes communes', () => {
+    expect(estTresProche({ etat: 'mesuree', avec: 1, part: 1, identique: true })).toBe(true)
+    expect(estTresProche({ etat: 'mesuree', avec: 1, part: 0.8, identique: false })).toBe(true)
+    expect(estTresProche({ etat: 'mesuree', avec: 1, part: 0.79, identique: false })).toBe(false)
+    expect(estTresProche({ etat: 'sans-objet', raison: 'x' })).toBe(false)
+    expect(estTresProche(undefined)).toBe(false)
   })
 })

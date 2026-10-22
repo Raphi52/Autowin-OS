@@ -670,8 +670,32 @@ describe('motif d’indisponibilité — la cause, pas une énumération', () =>
   })
 
   it('requête refusée par le serveur', async () => {
-    const res = await retrieveBrainContext('q', { env, fetchFn: fetchKo(503) })
+    const res = await retrieveBrainContext('q', { env, fetchFn: fetchKo(500) })
     expect(res.unavailableReason).toBe('query-refused')
+  })
+
+  // conv-1053 (2026-10-22) : 57 tours de chat « unavailable » en 0,1-0,3 s étaient des 503 du
+  // serveur en revérification d'index (salves des 15 et 16/10, pendant la curation). Confondus avec
+  // un jeton rejeté sous « query-refused », ils poussaient à « réparer » un serveur sain.
+  it('index en revérification (503) : motif à part, distinct d’un refus', async () => {
+    const res = await retrieveBrainContext('q', { env, fetchFn: fetchKo(503) })
+    expect(res.status).toBe('unavailable')
+    expect(res.unavailableReason).toBe('reindexing')
+  })
+
+  // conv-1053 : 23 tours « unavailable » à ~1,6 s étaient le délai de 1,5 s dépassé, rangé sous
+  // « network » avec un serveur arrêté — la trace ne pouvait pas dire lequel des deux.
+  it('délai dépassé : motif à part, distinct d’un serveur qui ne répond pas', async () => {
+    const res = await retrieveBrainContext('q', {
+      env,
+      timeoutMs: 20,
+      fetchFn: ((_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        })) as unknown as typeof fetch
+    })
+    expect(res.status).toBe('unavailable')
+    expect(res.unavailableReason).toBe('timeout')
   })
 
   it('rien ne répond', async () => {

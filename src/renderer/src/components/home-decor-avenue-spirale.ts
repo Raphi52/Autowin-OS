@@ -180,14 +180,6 @@ export interface Spirale {
    * `sansReflet`.
    */
   avantRendu(exclus?: (THREE.Object3D | null | undefined)[]): void
-  /**
-   * Une taille de lumière en PIXELS D'ÉCRAN tenue par un autre module (les feux du vaisseau mère) :
-   * le temps du reflet, elle est réduite à la résolution de son image (`SPIRALE.miroir.resolution`),
-   * comme les nuées de la Spirale, puis rendue à sa valeur d'écran. Sans cela, un tel feu est dessiné
-   * deux fois trop gros dans l'eau (conv-1037 : les feux des toits du vaisseau débordaient sur sa
-   * plaque). Confier deux fois la même taille ne la réduit qu'une fois.
-   */
-  suivreLaResolution(taille: { value: number }): void
   /** Libère ce que le parcours de la scène ne libère pas (l'image du reflet). */
   liberer(): void
 }
@@ -982,9 +974,6 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
     ...portiques.map((p) => p.g),
     ...anneaux.map((a) => a.g)
   ]
-  /** Les tailles en pixels tenues hors de la Spirale (`suivreLaResolution`), et leur valeur d'écran. */
-  const taillesSuivies: { value: number }[] = []
-  const taillesEcran: number[] = []
   /** Le reflet n'est dessiné qu'une fois ses programmes prêts ; `null` = pas encore. */
   let debutFondu: number | null = null
   let imagesDepuisReflet = 0
@@ -1167,10 +1156,6 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
       e[14] = _clip.w
       camMiroir.projectionMatrixInverse.copy(camMiroir.projectionMatrix).invert()
       echelles.forEach((v) => (v.value = echelle * SPIRALE.miroir.resolution))
-      for (let i = 0; i < taillesSuivies.length; i++) {
-        taillesEcran[i] = taillesSuivies[i].value
-        taillesSuivies[i].value *= SPIRALE.miroir.resolution
-      }
       const caches = [...exclus, ...sansReflet].filter((o): o is THREE.Object3D => !!o && o.visible)
       caches.forEach((o) => (o.visible = false))
       miroirs.forEach((m) => (m.visible = false))
@@ -1183,11 +1168,6 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
       miroirs.forEach((m) => (m.visible = true))
       caches.forEach((o) => (o.visible = true))
       echelles.forEach((v) => (v.value = echelle))
-      for (let i = 0; i < taillesSuivies.length; i++) taillesSuivies[i].value = taillesEcran[i]
-    },
-
-    suivreLaResolution(taille) {
-      if (!taillesSuivies.includes(taille)) taillesSuivies.push(taille)
     },
 
     liberer() {
