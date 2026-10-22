@@ -1,5 +1,12 @@
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -220,6 +227,125 @@ describe('ouvrirCopieDeLaPhoto — le code du tour, dans une copie séparée', (
     await expect(
       ouvrirCopieDeLaPhoto({ dossier: repo, sha: photo!.sha, destination })
     ).resolves.toEqual({ chemin: destination, deja: true })
+  })
+})
+
+/*
+ * CHEMINS LONGS (conv-1050, 2026-10-22). Partout ailleurs, Autowin ouvre ses copies par
+ * `git -c core.longpaths=true worktree add` (store/worktree-manager.ts, comparaison-a-la-base.ts) ;
+ * « Revenir à ce tour » et « Essaie 3 façons » le faisaient sans. Git pour Windows refuse alors tout
+ * fichier dont le chemin COMPLET dépasse 260 caractères (« Filename too long ») : la copie d'un
+ * dépôt aux chemins profonds, ouverte un peu loin de la racine, échouait.
+ *
+ * Mesuré ce jour (git 2.54.0.windows.1, LongPathsEnabled = 0) : avec l'option, une destination de
+ * 215 caractères accueille un fichier à 311 ; à partir de 216, git refuse la destination ELLE-MÊME
+ * (« '$GIT_DIR' too big » : GIT_DIR = destination + « /.git », borné à PATH_MAX − 40 = 220), avec
+ * ou sans l'option. Une destination de plus de 260 caractères ne peut donc pas réussir : l'avis
+ * doit alors le dire en une phrase.
+ *
+ * Le dépôt de test porte `core.longpaths=false` dans SA config : le test reste rouge sans le
+ * correctif, même sur un poste qui active l'option globalement. L'option passée en ligne de
+ * commande l'emporte — Autowin ne touche pas à la config de l'utilisateur.
+ */
+describe('ouvrirCopieDeLaPhoto — des fichiers à plus de 260 caractères dans la copie', () => {
+  const FICHIER_PROFOND = [
+    'src',
+    'renderer',
+    'src',
+    'components',
+    'conversation-et-fil',
+    `ChatView.${'cas-de-progression-apres-orientation-'.repeat(2)}longue.test.tsx`
+  ]
+
+  async function depotAuxChemins(): Promise<{ repo: string; racine: string; sha: string }> {
+    const repo = await depot()
+    await git(repo, 'config', 'core.longpaths', 'false')
+    mkdirSync(join(repo, ...FICHIER_PROFOND.slice(0, -1)), { recursive: true })
+    writeFileSync(join(repo, ...FICHIER_PROFOND), 'au fond\n')
+    const photo = await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
+    // Forme longue du chemin (C:\Users\nom.complet\…) : c'est elle que git mesure.
+    return { repo, racine: realpathSync.native(join(repo, '..')), sha: photo!.sha }
+  }
+
+  /** Un chemin de `longueur` caractères exactement sous `base`, en segments de 50 au plus. */
+  function cheminDe(base: string, longueur: number): string {
+    let chemin = base
+    let restant = longueur - chemin.length
+    if (restant < 2) throw new Error(`base déjà trop longue : ${chemin.length} caractères`)
+    while (restant > 0) {
+      // Un segment coûte son séparateur : on ne laisse jamais un reste de 1, impossible à combler.
+      const segment = restant <= 51 ? restant - 1 : restant === 52 ? 49 : 50
+      chemin = join(chemin, 'd'.repeat(segment))
+      restant = longueur - chemin.length
+    }
+    return chemin
+  }
+
+  const lu = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
+
+  it('« Revenir à ce tour » : destination de 200 caractères, fichier à plus de 260 — la copie s’ouvre', async () => {
+    const { repo, racine, sha } = await depotAuxChemins()
+    const destination = cheminDe(join(racine, 'retours'), 200)
+    const fichier = join(destination, ...FICHIER_PROFOND)
+    expect(destination.length).toBe(200)
+    expect(fichier.length).toBeGreaterThan(260)
+
+    const copie = await ouvrirCopieDeLaPhoto({ dossier: repo, sha, destination })
+
+    expect(copie).toEqual({ chemin: destination, deja: false })
+    expect(lu(fichier)).toBe('au fond\n')
+  })
+
+  it('« Essaie 3 façons » : trois copies aux fichiers à plus de 260, chaque copie par core.longpaths', async () => {
+    const { repo, racine } = await depotAuxChemins()
+    const dossierDesRetours = cheminDe(join(racine, 'essais'), 180)
+    const vrai = await defaultGitRunner()
+    const ajouts: string[][] = []
+    const runGit: GitRunner = (args, cwd, options) => {
+      if (args.includes('worktree') && args.includes('add')) ajouts.push(args)
+      return vrai(args, cwd, options)
+    }
+
+    const essai = await ouvrirCopiesDEssai({
+      dossier: repo,
+      conversationId: 'conv-1',
+      dossierDesRetours,
+      nombre: 3,
+      quand: 5_000,
+      runGit
+    })
+
+    expect(essai).toMatchObject({ ok: true })
+    const chemins = (essai as { chemins: string[] }).chemins
+    expect(chemins).toHaveLength(3)
+    for (const chemin of chemins) {
+      expect(join(chemin, ...FICHIER_PROFOND).length).toBeGreaterThan(260)
+      expect(lu(join(chemin, ...FICHIER_PROFOND))).toBe('au fond\n')
+    }
+    // Hors Windows, aucun chemin n'est « trop long » : ce contrôle garde le correctif partout.
+    expect(ajouts).toHaveLength(3)
+    for (const args of ajouts) expect(args.slice(0, 2)).toEqual(['-c', 'core.longpaths=true'])
+  })
+
+  it('destination ELLE-MÊME de plus de 260 caractères : git la refuse, l’avis le dit en une phrase', async () => {
+    const { repo, racine, sha } = await depotAuxChemins()
+    const destination = cheminDe(join(racine, 'retours'), 300)
+    expect(destination.length).toBe(300)
+
+    const erreur = await ouvrirCopieDeLaPhoto({ dossier: repo, sha, destination }).then(
+      () => null,
+      (raison: unknown) => raison as Error
+    )
+
+    // Git pour Windows refuse tout GIT_DIR au-delà de 220 caractères ; ailleurs, la copie s'ouvre.
+    if (process.platform === 'win32') {
+      expect(erreur?.message).toBe(
+        'La copie séparée du code n’a pas pu être créée : dossier de la copie trop long pour git (215 caractères au plus).'
+      )
+      expect(existsSync(destination)).toBe(false)
+    } else {
+      expect(erreur).toBeNull()
+    }
   })
 })
 

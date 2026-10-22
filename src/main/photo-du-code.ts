@@ -257,6 +257,12 @@ export async function photoDuTour(entree: {
  * cause, en mots courants ; la sortie brute reste dans `cause` de l'erreur levée.
  */
 const CAUSES_D_ECHEC_DE_COPIE: ReadonlyArray<readonly [RegExp, string]> = [
+  /*
+   * Même avec `core.longpaths`, git pour Windows refuse une DESTINATION de 216 caractères ou plus :
+   * son GIT_DIR (destination + « /.git ») est borné à PATH_MAX − 40 = 220. Mesuré le 2026-10-22
+   * (git 2.54.0.windows.1). Avant les chemins longs, ce cas se disait « Filename too long ».
+   */
+  [/\$GIT_DIR'? too big/iu, 'dossier de la copie trop long pour git (215 caractères au plus)'],
   [/filename too long/iu, 'chemin trop long pour Windows (plus de 260 caractères)'],
   [/no space left on device|not enough space/iu, 'disque plein'],
   [/permission denied|access is denied/iu, 'accès refusé à l’emplacement de la copie'],
@@ -319,7 +325,17 @@ export async function ouvrirCopieDeLaPhoto(entree: {
     throw new Error(`Le dossier ${entree.destination} existe déjà et ne porte pas cette photo.`)
   }
   try {
-    await git(['worktree', 'add', '--detach', entree.destination, entree.sha], repo)
+    /*
+     * `core.longpaths` par la LIGNE DE COMMANDE, comme toutes les copies d'Autowin
+     * (store/worktree-manager.ts, comparaison-a-la-base.ts), jamais dans la config de l'utilisateur.
+     * Sans elle, git pour Windows refuse tout fichier de la copie à plus de 260 caractères
+     * (« Filename too long ») : « Revenir à ce tour » et « Essaie 3 façons » échouaient sur un dépôt
+     * aux chemins profonds (conv-1050, 2026-10-22).
+     */
+    await git(
+      ['-c', 'core.longpaths=true', 'worktree', 'add', '--detach', entree.destination, entree.sha],
+      repo
+    )
   } catch (erreur) {
     throw new Error(
       `La copie séparée du code n’a pas pu être créée : ${causeDEchecDeCopie(erreur)}.`,
