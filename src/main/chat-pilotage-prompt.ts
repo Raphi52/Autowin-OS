@@ -781,7 +781,11 @@ export function buildChatPilotagePrompt(
         `Retiens quand tu viens d'établir quelque chose de DURABLE et de partageable, en prenant le ` +
         `\`type\` dans ces QUATRE valeurs et jamais un mot à toi : \`lesson\` — une leçon réutilisable, ` +
         `y compris une cause racine vérifiée · \`decision\` — un choix technique tranché et son motif · ` +
-        `\`preference\` — un goût ou une règle de l'utilisateur · \`domain\` — un fait du système : une ` +
+        // conv-1098 : un goût PERSONNEL a son propre canal, relu en entier à chaque tour
+        // (`profil-utilisateur.ts`) ; le Brain garde ce qui vaut pour l'équipe.
+        `\`preference\` — un goût ou une règle de l'utilisateur qui vaut pour l'équipe (un goût ` +
+        `PERSONNEL, le sien seul, va dans \`profil_ajouter\`, pas ici) · ` +
+        `\`domain\` — un fait du système : une ` +
         `contrainte, un invariant, un chiffre mesuré. ` +
         // PORTEE (conv-142, 2026-09-02) : ce bloc detaillait les quatre `type` et les sept formes de
         // `source`, et ne disait RIEN de `scope` — pourtant OBLIGATOIRE. Le depot a ete refuse « portee
