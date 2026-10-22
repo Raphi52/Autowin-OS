@@ -1,3 +1,5 @@
+import { isPipelinePhase } from '../shared/pipeline-phases'
+
 /**
  * DÉRIVE DE ROUTE — juger le flux d'un sous-agent PENDANT qu'il travaille.
  *
@@ -270,7 +272,15 @@ export function readRouteVerdict(texte: string): RouteVerdict {
     .toLowerCase()
   if (!valeur || /^continuer?$/.test(valeur)) return { kind: 'continuer' }
   if (/^(fin|stop|aucune?|rien)$/.test(valeur)) return { kind: 'stop' }
-  return { kind: 'phase', phase: valeur }
+  // conv-1097 : l'arbitre est désormais le modèle des PETITES TÂCHES (Haiku par défaut). Tout le
+  // reste de la ligne partait tel quel comme nom de phase : « `build` (car…) » devenait une phase
+  // « `build` (car…) » dans la ligne SUITE. On ne garde que le premier mot, et seulement s'il nomme
+  // une phase du pipeline ; sinon, comme pour une réponse illisible : on n'interrompt rien.
+  const premierMot = /^[`'"«\s]*([a-z]+)/.exec(valeur)?.[1]
+  if (premierMot && /^(fin|stop)$/.test(premierMot)) return { kind: 'stop' }
+  if (premierMot && /^continuer?$/.test(premierMot)) return { kind: 'continuer' }
+  if (premierMot && isPipelinePhase(premierMot)) return { kind: 'phase', phase: premierMot }
+  return { kind: 'continuer' }
 }
 
 /**

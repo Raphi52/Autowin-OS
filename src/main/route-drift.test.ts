@@ -159,6 +159,21 @@ describe('arbitrage', () => {
     expect(readRouteVerdict('ROUTE: fin')).toEqual({ kind: 'stop' })
   })
 
+  // conv-1097 : l'arbitre est un petit modèle ; le reste de sa ligne ne devient plus un nom de phase.
+  it('ne garde que le premier mot, et seulement s’il nomme une phase du pipeline', () => {
+    expect(readRouteVerdict('ROUTE: `build` (car le défaut est localisé)')).toEqual({
+      kind: 'phase',
+      phase: 'build'
+    })
+    expect(readRouteVerdict('ROUTE: scout — chercher une autre approche')).toEqual({
+      kind: 'phase',
+      phase: 'scout'
+    })
+    expect(readRouteVerdict('ROUTE: réparer le test')).toEqual({ kind: 'continuer' })
+    expect(readRouteVerdict('ROUTE: fin, plus rien à faire')).toEqual({ kind: 'stop' })
+    expect(readRouteVerdict('ROUTE: continuer (il va s’en sortir)')).toEqual({ kind: 'continuer' })
+  })
+
   it("une sortie illisible n'avorte JAMAIS le travail en cours", () => {
     expect(readRouteVerdict('je pense que la route est mauvaise')).toEqual({ kind: 'continuer' })
     expect(readRouteVerdict('')).toEqual({ kind: 'continuer' })
