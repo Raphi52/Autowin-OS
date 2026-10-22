@@ -4,6 +4,7 @@ import {
   MODELES,
   environnementPropre,
   prompt,
+  remplacerExact,
   testsVoisins
 } from './banc-modeles-petits-defauts.mjs'
 
@@ -37,5 +38,16 @@ describe('banc-modeles-petits-defauts (conv-1097)', () => {
     expect(prompt('animation')).not.toContain('ANIMATION_DECLAREE')
     expect(MODELES.map((m) => m.bras)).toEqual(['a', 'b', 'c'])
     expect(Object.keys(DEFAUTS)).toEqual(['poids', 'animation'])
+  })
+
+  // Le juge « comportement » réécrit le test caché : s'il ne trouve plus le texte à réécrire (test du
+  // correctif modifié), il doit REFUSER, jamais jouer un test non ajusté en le croyant ajusté.
+  it('refuse un ajustement du juge qui ne trouve pas exactement une occurrence', () => {
+    expect(remplacerExact("kind = 'chat')", "kind = 'chat')", "kind = 'chat-usage')")).toBe(
+      "kind = 'chat-usage')"
+    )
+    expect(() => remplacerExact('rien a voir', "kind = 'chat')", 'x')).toThrow(/0 occurrence/)
+    expect(() => remplacerExact('a a', 'a', 'b')).toThrow(/2 occurrence/)
+    expect(() => DEFAUTS.poids.ajusterComportement('test sans le motif')).toThrow(/ajustement/)
   })
 })

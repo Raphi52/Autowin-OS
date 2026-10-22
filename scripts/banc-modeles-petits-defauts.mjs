@@ -28,7 +28,15 @@
  * Exit 0 = banc joué (ou cycle prouvé) · 1 = cycle non prouvé / rejeu rouge · 2 = entrée illisible.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  rmdirSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,7 +66,19 @@ export const DEFAUTS = {
 fonction \`coupesParPoids\`) ne s'est JAMAIS déclenchée en usage réel. Un fil de chat a enchaîné six
 tours sur la même session CLI avec une occupation de contexte de 260 866 puis jusqu'à 582 617 tokens
 au dernier appel, alors que le seuil de coupe est 200 000. Les tests du fichier passent pourtant.
-Trouve la cause, corrige-la à sa source, et couvre-la par un test qui l'aurait attrapée.`
+Trouve la cause, corrige-la à sa source, et couvre-la par un test qui l'aurait attrapée.`,
+    // Juge « comportement » (2026-10-22, conv-1097) : le test du correctif fabrique ses tours en
+    // `kind: 'chat'`, un CHOIX du correctif (garder la lecture des anciens journaux). Or la seule ligne
+    // `chat` écrite par le code (chat/run-pilot-chat.ts:1591 à la base, le repli sans superviseur) ne
+    // porte jamais `derniereEntree` : un correctif qui ne lit plus que `chat-usage` est juste en usage
+    // réel, et le juge strict le refusait (essai poids-opus-1). On rejoue donc les MÊMES contrats sur
+    // le genre de ligne qui porte réellement l'occupation.
+    ajusterComportement: (t) =>
+      remplacerExact(
+        remplacerExact(t, "kind = 'chat')", "kind = 'chat-usage')"),
+        "{ kind: 'chat' }], 200_000)).toBe(0)",
+        "{ kind: 'chat-usage' }], 200_000)).toBe(0)"
+      )
   },
   animation: {
     libelle: 'détecteur d’animation trompé par une simple mention (fe41a34a)',
@@ -71,8 +91,33 @@ déclenché :
    \`PREUVE DE MOUVEMENT : si ce que tu changes est ANIME (@keyframes, animation:, transition:), cette capture ne suffit PAS\` ;
 2. dans src/main/gates/hooks.ts, une retouche de la ligne qui définit le motif de détection lui-même.
 Une vraie déclaration d'animation (règle CSS, ou style en objet dans un fichier .ts) doit toujours
-exiger la preuve. Corrige à la cause et couvre par un test.`
+exiger la preuve. Corrige à la cause et couvre par un test.`,
+    // Juge « comportement » (2026-10-22, conv-1097) : le test du correctif RELIT hooks.ts et exige que
+    // la ligne qui suit `const ANIMATION_AJOUTEE` contienne `@keyframes|` — la FORME du fichier, pas le
+    // comportement. Les trois modèles du premier lot ont réécrit ou commenté cette définition et ont
+    // été refusés là-dessus seul (26/27 tests verts chacun). On teste à la place la ligne de définition
+    // D'ORIGINE, celle que l'énoncé décrit (point 2) : même assertion de comportement, sans dépendre de
+    // la façon dont le modèle a rangé son fichier.
+    ajusterComportement: (t) =>
+      remplacerExact(
+        t,
+        `const source = readFileSync(new URL('./hooks.ts', import.meta.url), 'utf8').split(/\\r?\\n/)
+    const ligneDuMotif =
+      source[source.findIndex((l) => l.startsWith('const ANIMATION_AJOUTEE')) + 1]`,
+        // `void readFileSync` : l'import du test reste utilisé, sinon le typage (noUnusedLocals) rougit.
+        'void readFileSync\n    const ligneDuMotif = String.raw`  /^\\+(?!\\+\\+).*(?:@keyframes|animation\\s*:|animation-name\\s*:|transition\\s*:)/`'
+      )
   }
+}
+
+/** Remplace UNE occurrence exacte, ou lève : un juge ajusté en silence ne jugerait plus rien. */
+export function remplacerExact(texte, avant, apres) {
+  const n = texte.split(avant).length - 1
+  if (n !== 1)
+    throw new Error(
+      `ajustement du juge impossible : ${n} occurrence(s) de ${JSON.stringify(avant)}`
+    )
+  return texte.replace(avant, () => apres)
 }
 
 /** Les trois joueurs : identifiant exact (pas d'alias, il avance avec le CLI) et lettre de bras. */
@@ -176,10 +221,15 @@ export function capturerDiff(dossier) {
  * L'oracle : test du correctif remis depuis git, tests voisins remis à leur version de base
  * (un test affaibli par le modèle ne compte pas), puis vitest et typage du processus principal.
  */
-export function oracle(defaut, dossier, touches) {
+export function oracle(defaut, dossier, touches, { mode = 'strict', typage = true } = {}) {
   const d = DEFAUTS[defaut]
-  for (const f of d.oracle)
-    writeFileSync(path.join(dossier, f), git(DEPOT, ['show', `${d.correctif}:${f}`]))
+  for (const f of d.oracle) {
+    const texte = git(DEPOT, ['show', `${d.correctif}:${f}`])
+    writeFileSync(
+      path.join(dossier, f),
+      mode === 'comportement' ? d.ajusterComportement(texte) : texte
+    )
+  }
   const existe = (f) => existsSync(path.join(dossier, f))
   const voisins = testsVoisins(touches, existe).filter((t) => !d.oracle.includes(t))
   const deBase = voisins.filter((t) => touches.includes(t))
@@ -190,23 +240,32 @@ export function oracle(defaut, dossier, touches) {
     [path.join(dossier, 'node_modules', 'vitest', 'vitest.mjs'), 'run', ...d.oracle, ...voisins],
     { cwd: dossier, encoding: 'utf8', env, timeout: 10 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 }
   )
-  const tsc = spawnSync(
-    process.execPath,
-    [
-      path.join(dossier, 'node_modules', 'typescript', 'bin', 'tsc'),
-      '--noEmit',
-      '-p',
-      'tsconfig.node.json',
-      '--composite',
-      'false'
-    ],
-    { cwd: dossier, encoding: 'utf8', env, timeout: 10 * 60 * 1000, maxBuffer: 64 * 1024 * 1024 }
-  )
+  // `typage: false` au rejugement seulement : le typage ne dépend pas du juge, il est déjà mesuré.
+  const tsc = !typage
+    ? { status: null, stdout: '(typage non rejoué)', stderr: '' }
+    : spawnSync(
+        process.execPath,
+        [
+          path.join(dossier, 'node_modules', 'typescript', 'bin', 'tsc'),
+          '--noEmit',
+          '-p',
+          'tsconfig.node.json',
+          '--composite',
+          'false'
+        ],
+        {
+          cwd: dossier,
+          encoding: 'utf8',
+          env,
+          timeout: 10 * 60 * 1000,
+          maxBuffer: 64 * 1024 * 1024
+        }
+      )
   const queue = (r) => `${r.stdout ?? ''}${r.stderr ?? ''}`.split('\n').slice(-25).join('\n')
   return {
     tests: { code: vitest.status, fichiers: [...d.oracle, ...voisins], sortie: queue(vitest) },
     typage: { code: tsc.status, sortie: queue(tsc) },
-    vert: vitest.status === 0 && tsc.status === 0
+    vert: vitest.status === 0 && (!typage || tsc.status === 0)
   }
 }
 
@@ -344,28 +403,38 @@ async function unEssai({ defaut, modele, replique, racineCopies, racineResultats
 }
 
 /** Avant de payer : défaut ressemé -> oracle ROUGE ; correctif remis -> oracle VERT. */
-function cycle() {
+function cycle(mode = 'strict') {
   const racine = path.join(os.tmpdir(), 'banc-modeles', `cycle-${Date.now()}`)
   let ok = true
   for (const defaut of Object.keys(DEFAUTS)) {
     const d = DEFAUTS[defaut]
     const dossier = preparer(defaut, path.join(racine, defaut))
-    const rouge = oracle(defaut, dossier, [])
+    const rouge = oracle(defaut, dossier, [], { mode })
     const code = git(DEPOT, ['show', '--name-only', '--format=', d.correctif])
       .split('\n')
       .filter((f) => f && !d.oracle.includes(f))
     for (const f of code)
       writeFileSync(path.join(dossier, f), git(DEPOT, ['show', `${d.correctif}:${f}`]))
-    const vert = oracle(defaut, dossier, code)
+    const vert = oracle(defaut, dossier, code, { mode })
     const bon = !rouge.vert && rouge.typage.code === 0 && vert.vert
     ok &&= bon
     console.log(
-      `${bon ? 'OK  ' : 'RATE'} ${defaut} : défaut -> tests ${rouge.tests.code} / typage ${rouge.typage.code} ; correctif -> tests ${vert.tests.code} / typage ${vert.typage.code}`
+      `${bon ? 'OK  ' : 'RATE'} ${defaut} [juge ${mode}] : défaut -> tests ${rouge.tests.code} / typage ${rouge.typage.code} ; correctif -> tests ${vert.tests.code} / typage ${vert.typage.code}`
     )
     if (!bon) console.log(rouge.tests.sortie, '\n', vert.tests.sortie, '\n', vert.typage.sortie)
     nettoyer(dossier)
   }
+  retirerSiVide(racine)
   return ok
+}
+
+/** Retire un dossier parent de copies s'il est VIDE — jamais récursif : une copie restante y reste. */
+export function retirerSiVide(dossier) {
+  try {
+    if (existsSync(dossier) && readdirSync(dossier).length === 0) rmdirSync(dossier)
+  } catch {
+    /* dossier repris entre-temps par un autre banc : il reste, rien n'est perdu */
+  }
 }
 
 async function lancer({ repliques, parallele, budget }) {
@@ -407,25 +476,81 @@ async function lancer({ repliques, parallele, budget }) {
     }
   }
   await Promise.all(Array.from({ length: parallele }, ouvrier))
+  retirerSiVide(racineCopies)
   writeFileSync(path.join(racineResultats, 'synthese.json'), JSON.stringify(resultats, null, 2))
   console.log(`synthèse : ${path.join(racineResultats, 'synthese.json')}`)
 }
 
 /** Rejoue l'oracle sur le diff d'un essai, dans une copie neuve : la preuve d'une ligne du journal. */
-function rejouer(defaut, patch) {
-  const dossier = preparer(defaut, path.join(os.tmpdir(), 'banc-modeles', `rejeu-${Date.now()}`))
+function rejouer(defaut, patch, options = {}, bavard = true) {
+  const dossier = preparer(
+    defaut,
+    path.join(
+      os.tmpdir(),
+      'banc-modeles',
+      `rejeu-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    )
+  )
   try {
     if (readFileSync(patch, 'utf8').trim())
       git(dossier, ['apply', '--whitespace=nowarn', path.resolve(patch)])
-    const touches = git(dossier, ['diff', '--name-only', 'HEAD']).split('\n').filter(Boolean)
-    const o = oracle(defaut, dossier, touches)
-    console.log(
-      `${o.tests.sortie}\n--- typage : ${o.typage.code}\nORACLE: ${o.vert ? 'VERT' : 'ROUGE'}`
-    )
-    return o.vert
+    // Fichiers neufs compris : `git apply` les crée sans les indexer.
+    git(dossier, ['add', '-A'])
+    const touches = git(dossier, ['diff', '--cached', '--name-only', 'HEAD'])
+      .split('\n')
+      .filter(Boolean)
+    const o = oracle(defaut, dossier, touches, options)
+    if (bavard)
+      console.log(
+        `${o.tests.sortie}\n--- typage : ${o.typage.code}\nORACLE: ${o.vert ? 'VERT' : 'ROUGE'}`
+      )
+    return o
   } finally {
     nettoyer(dossier)
   }
+}
+
+/**
+ * Rejuge chaque essai TERMINÉ d'un banc avec le juge « comportement » (sans retoucher son verdict
+ * strict) : `rejuge.json` à côté de `resultat.json`, et un tableau des deux verdicts.
+ */
+function rejuger(racineResultats) {
+  const lignes = []
+  for (const nom of readdirSync(racineResultats).sort()) {
+    const res = path.join(racineResultats, nom)
+    const fResultat = path.join(res, 'resultat.json')
+    if (!existsSync(fResultat)) continue
+    const r = JSON.parse(readFileSync(fResultat, 'utf8'))
+    const o = rejouer(
+      r.defaut,
+      path.join(res, 'diff.patch'),
+      {
+        mode: 'comportement',
+        typage: false
+      },
+      false
+    )
+    const comportement = o.tests.code === 0 && r.typage === 0
+    writeFileSync(
+      path.join(res, 'rejuge.json'),
+      JSON.stringify(
+        {
+          juge: 'comportement',
+          tests: o.tests.code,
+          typage: r.typage,
+          atteint: comportement,
+          sortie: o.tests.sortie
+        },
+        null,
+        2
+      )
+    )
+    lignes.push({ nom, strict: r.atteint, comportement })
+    console.log(
+      `${nom.padEnd(22)} strict ${r.atteint ? 'VERT ' : 'ROUGE'} · comportement ${comportement ? 'VERT ' : 'ROUGE'}`
+    )
+  }
+  return lignes
 }
 
 if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
@@ -434,15 +559,25 @@ if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1])))
     const k = args.indexOf(nom)
     return k >= 0 ? Number(args[k + 1]) : defaut
   }
-  if (args[0] === '--cycle') process.exit(cycle() ? 0 : 1)
-  else if (args[0] === '--lancer')
+  if (args[0] === '--cycle')
+    process.exit(cycle(args.includes('--comportement') ? 'comportement' : 'strict') ? 0 : 1)
+  else if (args[0] === '--rejuger' && args[1] && existsSync(args[1])) {
+    rejuger(path.resolve(args[1]))
+    process.exit(0)
+  } else if (args[0] === '--lancer')
     await lancer({
       repliques: opt('--repliques', 2),
       parallele: opt('--parallele', 3),
       budget: opt('--budget', 3)
     })
   else if (args[0] === '--rejouer' && DEFAUTS[args[1]] && args[2] && existsSync(args[2]))
-    process.exit(rejouer(args[1], args[2]) ? 0 : 1)
+    process.exit(
+      rejouer(args[1], args[2], {
+        mode: args.includes('--comportement') ? 'comportement' : 'strict'
+      }).vert
+        ? 0
+        : 1
+    )
   else {
     console.error(
       'usage : --cycle | --lancer [--repliques N] [--parallele N] [--budget USD] | --rejouer <defaut> <diff.patch>'
