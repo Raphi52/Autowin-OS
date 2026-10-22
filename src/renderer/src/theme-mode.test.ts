@@ -204,3 +204,62 @@ describe('mode d’affichage sombre / clair', () => {
     }
   })
 })
+
+/*
+ * LA CARTE DE FIN DE TOUR SUIT LE THÈME (conv-1090, 2026-10-22) : elle vit dans sa propre fenêtre,
+ * hors des feuilles de style ; la page lui envoie les jetons CALCULÉS du thème appliqué.
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CES CAS : ne plus envoyer la palette quand le thème s'applique,
+ * envoyer un jeton non converti (`rgb(...)`, `#fff`), ou une palette à laquelle il manque une couleur.
+ */
+describe('carte de fin de tour — les couleurs du thème appliqué partent au processus principal', () => {
+  const JETONS: Record<string, string> = {
+    '--bg-0': '#262624',
+    '--text': 'rgb(250, 249, 245)',
+    '--text-dim': '#c2c0b6',
+    '--accent': '#D97757',
+    '--violet': '#a8a59b',
+    '--gold': '#d97757',
+    '--on-accent': '#fff',
+    '--err': '#dd5e55'
+  }
+
+  function appliquerAvecJetons(jetons: Record<string, string>): unknown[] {
+    const racine = document.documentElement
+    const [theme, base] = [racine.getAttribute('data-theme'), racine.getAttribute('data-base')]
+    const recues: unknown[] = []
+    const g = globalThis as { api?: unknown }
+    const avant = g.api
+    for (const [nom, valeur] of Object.entries(jetons)) racine.style.setProperty(nom, valeur)
+    g.api = { setPaletteCarteFinDeTour: (p: unknown) => (recues.push(p), Promise.resolve(true)) }
+    try {
+      appliquerThemeMode('ninja-claude')
+    } finally {
+      g.api = avant
+      for (const nom of Object.keys(jetons)) racine.style.removeProperty(nom)
+      if (theme === null) racine.removeAttribute('data-theme')
+      else racine.setAttribute('data-theme', theme)
+      if (base === null) racine.removeAttribute('data-base')
+      else racine.setAttribute('data-base', base)
+    }
+    return recues
+  }
+
+  it('envoie les huit jetons calculés du thème, convertis en #rrggbb', () => {
+    expect(appliquerAvecJetons(JETONS)).toEqual([
+      {
+        fond: '#262624',
+        texte: '#faf9f5',
+        texteDoux: '#c2c0b6',
+        accent: '#d97757',
+        accent2: '#a8a59b',
+        accent3: '#d97757',
+        surAccent: '#ffffff',
+        erreur: '#dd5e55'
+      }
+    ])
+  })
+
+  it('un jeton illisible : rien ne part, la carte garde sa dernière palette', () => {
+    expect(appliquerAvecJetons({ ...JETONS, '--err': '' })).toEqual([])
+  })
+})

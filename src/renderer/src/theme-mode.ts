@@ -145,6 +145,52 @@ export function appliquerThemeMode(mode: ThemeId): void {
   else racine.setAttribute('data-base', base)
   accorderBoutonsDeFenetre(racine, base)
   accorderSchemaDeCouleurs(base)
+  accorderCarteDeFinDeTour(racine)
+}
+
+/**
+ * LA CARTE DE FIN DE TOUR (conv-1090, 2026-10-22) — « fais suivre à la carte de fin de tour le
+ * thème choisi dans Réglages · Interface ». La carte vit dans SA fenêtre, en bas à droite de
+ * l'écran (`src/main/notification-popup.ts`) : aucune feuille de style ne l'atteint. Même chemin
+ * que les boutons de fenêtre : on lit les jetons CALCULÉS du thème appliqué et on les envoie.
+ * Un thème ajouté demain n'a rien à déclarer : ces huit jetons sont posés par `theme.css`.
+ *
+ * Tout ou rien : un jeton illisible n'envoie rien, la carte garde sa dernière palette valable plutôt
+ * que de mêler deux thèmes. Silencieux hors d'Electron (pont absent).
+ */
+const JETONS_DE_LA_CARTE = {
+  fond: '--bg-0',
+  texte: '--text',
+  texteDoux: '--text-dim',
+  accent: '--accent',
+  accent2: '--violet',
+  accent3: '--gold',
+  surAccent: '--on-accent',
+  erreur: '--err'
+} as const
+
+function accorderCarteDeFinDeTour(racine: Element): void {
+  const pont = (
+    globalThis as {
+      api?: { setPaletteCarteFinDeTour?: (p: Record<string, string>) => unknown }
+    }
+  ).api
+  if (!pont?.setPaletteCarteFinDeTour) return
+  try {
+    const styles = globalThis.getComputedStyle?.(racine)
+    if (!styles) return
+    const palette: Record<string, string> = {}
+    for (const [champ, jeton] of Object.entries(JETONS_DE_LA_CARTE)) {
+      const couleur = enHexadecimal(styles.getPropertyValue(jeton).trim())
+      if (!couleur) return
+      palette[champ] = couleur
+    }
+    void Promise.resolve(pont.setPaletteCarteFinDeTour(palette)).catch(() => {
+      // Processus principal plus ancien que ce canal : la carte garde les couleurs d'Holographique.
+    })
+  } catch {
+    // Style non calculable (document détaché) : la carte garde sa dernière palette.
+  }
 }
 
 /**
