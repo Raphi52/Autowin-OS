@@ -12,7 +12,11 @@ import {
 } from 'node:fs'
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { flattenChatParts, type ChatTurnEvent } from '../../shared/chat-turn'
+import {
+  flattenChatParts,
+  sontDesTestsDuTerminal,
+  type ChatTurnEvent
+} from '../../shared/chat-turn'
 import {
   applyTurnEventToMessages,
   ConversationStore,
@@ -274,6 +278,8 @@ function isConversationMessage(value: unknown): boolean {
   ) {
     return false
   }
+  if (value.testsDuTerminal !== undefined && !sontDesTestsDuTerminal(value.testsDuTerminal))
+    return false
   if (value.runtime !== undefined && !isChatTurnRuntime(value.runtime)) return false
   if (
     value.parts !== undefined &&

@@ -10,6 +10,7 @@ import {
   readConversationTurnFileMutations,
   readCurrentConversationPathOwnership
 } from './activity/conversation-file-trace-spool'
+import { pickResumeForTask } from './runs/orchestration-state'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import { readBrainTraces } from './activity/brain-trace-spool'
 import { WorktreeManager } from './store/worktree-manager'
@@ -2250,6 +2251,55 @@ describe('AppCommandBus command execution policy', () => {
     } else {
       expect(md).toContain('Juge: validé — clôture autorisée')
     }
+  })
+
+  it('« REPREND » reprend le point de reprise de la tâche que le pilote délègue mot pour mot', async () => {
+    // conv-1038, 2026-10-21, 14 h 19 : l'utilisateur tape « REPREND », le pilote délègue la tâche
+    // d'origine telle que le point de reprise la porte. L'objectif devient « REPREND » + marqueur +
+    // tâche, que la recherche comparait en entier au point de reprise : aucune reprise, run complet
+    // repayé (2 h, ~36 $). La vraie recherche tourne ici, pas un double qui dirait oui à tout.
+    const os = fakeOs()
+    const tache =
+      'Traite ENSEMBLE ces 7 candidats issus du scout interne d’Autowin : fil asynchrone, revenir à un tour.'
+    const pointDeReprise = {
+      runId: 'run-d0fadac9063f-1',
+      task: tache,
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'build' as const, text: '4 idées sur 7 construites' }],
+      startedAt: 1,
+      updatedAt: Date.now() - 4 * 60 * 60 * 1000
+    }
+    os.resumableOrchestrationForTask = (
+      task: string,
+      conversationId: string | undefined,
+      nowMs: number,
+      bindingOverride: never,
+      runtimeSnapshot: never
+    ) =>
+      pickResumeForTask([pointDeReprise], {
+        task,
+        conversationId,
+        nowMs,
+        bindingOverride,
+        runtimeSnapshot
+      })
+    let repris: unknown
+    const runTaskReel = os.runTask
+    os.runTask = async (...args: unknown[]) => {
+      repris = args[12]
+      return runTaskReel(args[0])
+    }
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: tache, rootTask: 'REPREND' },
+      'conv-1'
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    // L'objectif reste celui de l'utilisateur, avec la cible du pilote : rien de cela ne change.
+    expect(os.calls.lastTask).toMatch(/^REPREND\n\nCIBLE CONTEXTUALISEE : Traite ENSEMBLE/u)
+    expect(repris).toMatchObject({ runId: 'run-d0fadac9063f-1' })
   })
 
   it('clot en SUCCES un checkpoint dont la publication Git est deja acquise, sans repayer', async () => {

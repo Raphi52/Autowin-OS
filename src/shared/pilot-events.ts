@@ -44,3 +44,8 @@ export type PilotEventKind =
    * (`src/main/chat/relance-taches-de-fond.ts`). Consommé par le main ; jamais affiché tel quel.
    */
   | 'taches-de-fond'
+  /**
+   * Tests joués par l'agent dans son terminal et leur code de sortie (`data` : `TestDuTerminal[]`),
+   * relayés dès leur résultat. Le tour les garde ; la carte du fil les lit comme des vérifications.
+   */
+  | 'tests-du-terminal'

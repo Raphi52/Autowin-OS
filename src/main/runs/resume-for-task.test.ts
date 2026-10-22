@@ -6,6 +6,7 @@ import {
   pickResumeForTask,
   type OrchestrationRunState
 } from './orchestration-state'
+import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 
 /**
  * REPRENDRE SANS REPAYER.
@@ -135,6 +136,58 @@ describe('pickResumeForTask — reprend, ou refuse en le justifiant', () => {
 
   it('aucun état → null', () => {
     expect(pickResumeForTask([], { task: 'x', conversationId: 'conv-1', nowMs: NOW })).toBeNull()
+  })
+})
+
+/**
+ * « REPREND » RETROUVE LA TÂCHE QU'IL PORTE (conv-1038, 2026-10-21).
+ *
+ * Une relance sans objet devient l'objectif du run, enveloppée par commands.ts :
+ * `<relance>\n\nCIBLE CONTEXTUALISEE : <tâche déléguée>`. Le point de reprise, lui, porte la tâche
+ * d'origine. Comparées en entier, les deux ne s'appariaient jamais : le « REPREND » de 14 h 19 a
+ * relancé un run complet (2 h, ~36 $) alors que le pilote déléguait la tâche d'origine MOT POUR MOT
+ * — 5 249 caractères identiques, relus dans les deux RUN.md de conv-1038.
+ *
+ * Une reprise réécrit son point de reprise avec la tâche enveloppée ; la relance suivante (« go »,
+ * « vazy ») doit donc la retrouver aussi, et la tâche retapée en clair également.
+ */
+describe('pickResumeForTask — « reprend » compare aussi la tâche déléguée', () => {
+  const TACHE = 'Traite ENSEMBLE ces 7 candidats issus du scout interne d’Autowin : …'
+  const enveloppe = (relance: string, cible: string): string =>
+    `${relance}\n\n${MARQUEUR_CIBLE_CONTEXTUALISEE} ${cible}`
+  const cherche = (etatTache: string, demande: string, conversationId = 'conv-1') =>
+    pickResumeForTask([state({ runId: 'run-d0fadac9063f-1', task: etatTache })], {
+      task: demande,
+      conversationId,
+      nowMs: NOW
+    })
+
+  it('point de reprise de la tâche d’origine, « REPREND » qui la délègue → REPRIS', () => {
+    expect(cherche(TACHE, enveloppe('REPREND', TACHE))?.runId).toBe('run-d0fadac9063f-1')
+  })
+
+  it('point de reprise déjà réécrit par un « REPREND », relance « vazy » → REPRIS', () => {
+    expect(cherche(enveloppe('REPREND', TACHE), enveloppe('vazy', TACHE))?.runId).toBe(
+      'run-d0fadac9063f-1'
+    )
+  })
+
+  it('point de reprise réécrit par un « reprend », tâche retapée en clair → REPRIS', () => {
+    expect(cherche(enveloppe('reprend', TACHE), TACHE)?.runId).toBe('run-d0fadac9063f-1')
+  })
+
+  it('« reprend » qui délègue une AUTRE tâche n’est pas repris', () => {
+    expect(cherche(TACHE, enveloppe('reprend', 'supprimer le module'))).toBeNull()
+  })
+
+  it('un message qui NOMME son objet n’ouvre pas la tâche citée après le marqueur', () => {
+    // Seule une relance sans objet est enveloppée par commands.ts : le texte avant le marqueur doit
+    // en être une, sinon le message de l'utilisateur reste seul maître du run.
+    expect(cherche(TACHE, enveloppe('corrige le bouton Revenir', TACHE))).toBeNull()
+  })
+
+  it('« reprend » dans une AUTRE conversation ne reprend jamais le travail de celle-ci', () => {
+    expect(cherche(TACHE, enveloppe('reprend', TACHE), 'conv-2')).toBeNull()
   })
 })
 

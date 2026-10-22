@@ -168,6 +168,60 @@ export interface ChatTurnState {
    * aucun compteur. Absente sur les tours antérieurs : la capsule n'invente alors aucun chiffre.
    */
   reasoningMs?: number
+  /**
+   * TESTS LANCÉS PAR L'AGENT DANS SON PROPRE TERMINAL, avec leur code de sortie — dans l'ordre.
+   *
+   * Demande conv-1059 (2026-10-22) : la carte du fil ne comptait comme preuve que `verify` et les
+   * orchestrations. Le tour « vazy » de conv-1038, 295/295 tests verts joués au terminal, y restait
+   * « sans preuve » : l'adaptateur tenait la commande et son issue, et n'en laissait sortir que
+   * deux lignes de texte (« Bash · … », « Bash terminé »). Absent sur les tours antérieurs.
+   */
+  testsDuTerminal?: TestDuTerminal[]
+}
+
+/**
+ * Un test joué par l'agent dans son terminal. Le code est celui DU TEST — jamais celui d'un
+ * `| tail` ou d'un `echo` qui le suit : `src/main/providers/tests-du-terminal.ts` en décide.
+ */
+export interface TestDuTerminal {
+  /** La commande de test, sans ses redirections ni son `timeout` : « npm run typecheck ». */
+  commande: string
+  codeDeSortie: number
+  /** Heure d'arrivée du résultat (ms epoch) : range la preuve parmi les `verify` du même tour. */
+  at?: number
+}
+
+/** Plafond des tests gardés par tour : un tour qui boucle sur ses tests ne gonfle pas le fil. */
+export const TESTS_DU_TERMINAL_MAX = 100
+const COMMANDE_DE_TEST_MAX = 300
+
+function estUnTestDuTerminal(valeur: unknown): valeur is TestDuTerminal {
+  if (!valeur || typeof valeur !== 'object') return false
+  const test = valeur as Record<string, unknown>
+  return (
+    typeof test.commande === 'string' &&
+    test.commande.trim() !== '' &&
+    Number.isInteger(test.codeDeSortie) &&
+    (test.at === undefined || (typeof test.at === 'number' && Number.isFinite(test.at)))
+  )
+}
+
+/** Validation STRICTE (fichier des conversations) : tout ou rien, comme les autres champs du tour. */
+export function sontDesTestsDuTerminal(valeur: unknown): valeur is TestDuTerminal[] {
+  return Array.isArray(valeur) && valeur.every(estUnTestDuTerminal)
+}
+
+/**
+ * Lecture TOLÉRANTE (événement reçu d'ailleurs) : garde les entrées valides, jette le reste. Un
+ * code non entier n'est pas un code de sortie : l'entrée est jetée, jamais arrondie.
+ */
+export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
+  if (!Array.isArray(valeur)) return []
+  return valeur.filter(estUnTestDuTerminal).map((test) => ({
+    commande: test.commande.trim().slice(0, COMMANDE_DE_TEST_MAX),
+    codeDeSortie: test.codeDeSortie,
+    ...(test.at === undefined ? {} : { at: test.at })
+  }))
 }
 
 /** Plafond du raisonnement conservé par tour — aligné sur ce que le fil affiche en direct. */
@@ -186,6 +240,11 @@ export type ChatTurnEvent =
   | { kind: 'actions-log'; lines: string[] }
   /** Durée du raisonnement (début du tour -> clôture), écrite EN UNE FOIS à la clôture. */
   | { kind: 'reasoning-duration'; ms: number }
+  /**
+   * Tests joués par l'agent dans son terminal, écrits DÈS leur résultat (pas à la clôture) : un tour
+   * qui plante après ses tests garde quand même leur preuve. `at` date chacun d'eux.
+   */
+  | { kind: 'tests-du-terminal'; tests: TestDuTerminal[]; at?: number }
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
   | {
@@ -346,6 +405,23 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     // déjà clos qui la reçoit reste clos. Une valeur qui n'est pas une durée est ignorée.
     if (!Number.isFinite(event.ms) || event.ms < 0) return state
     return { ...state, reasoningMs: Math.round(event.ms) }
+  }
+
+  if (event.kind === 'tests-du-terminal') {
+    // Statut INCHANGÉ : un test joué n'est ni une réponse ni une clôture.
+    const recus = lireTestsDuTerminal(event.tests).map((test) => {
+      const at = event.at ?? test.at
+      return {
+        commande: test.commande,
+        codeDeSortie: test.codeDeSortie,
+        ...(at === undefined ? {} : { at })
+      }
+    })
+    if (recus.length === 0) return state
+    return {
+      ...state,
+      testsDuTerminal: [...(state.testsDuTerminal ?? []), ...recus].slice(-TESTS_DU_TERMINAL_MAX)
+    }
   }
 
   if (event.kind === 'delta') {

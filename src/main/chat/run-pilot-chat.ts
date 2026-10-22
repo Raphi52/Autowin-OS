@@ -35,7 +35,11 @@ import {
   boundedTurnHistory,
   depuisDerniereCompaction
 } from '../chat-turn-messages'
-import { type ChatTurnEvent, type PersistedChatPart } from '../../shared/chat-turn'
+import {
+  lireTestsDuTerminal,
+  type ChatTurnEvent,
+  type PersistedChatPart
+} from '../../shared/chat-turn'
 import {
   contenuAssistantPourLeModele,
   rangDuDernierRun,
@@ -750,7 +754,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           )
         else if (pilotEvent.kind === 'artifact' && pilotEvent.artifact)
           durableEvent = { kind: 'artifact', artifact: pilotEvent.artifact }
-        else if (pilotEvent.kind === 'done') {
+        else if (pilotEvent.kind === 'tests-du-terminal') {
+          // Écrits DÈS le résultat, pas à la clôture : un tour qui plante après ses tests garde
+          // leur preuve sur la carte du fil (conv-1059).
+          const tests = lireTestsDuTerminal(pilotEvent.data)
+          if (tests.length > 0) durableEvent = { kind: 'tests-du-terminal', tests, ...heure }
+        } else if (pilotEvent.kind === 'done') {
           /**
            * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.
            *
@@ -1549,7 +1558,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               : pilot
             const watchdogReadOnlyProfile = policy?.readOnly && policy.background
             const pilotSendLimits =
-              policy?.maxBudgetUsd || watchdogReadOnlyProfile
+              policy?.maxBudgetUsd || watchdogReadOnlyProfile || policy?.background
                 ? {
                     ...(policy?.maxBudgetUsd ? { maxBudgetUsd: policy.maxBudgetUsd } : {}),
                     ...(watchdogReadOnlyProfile

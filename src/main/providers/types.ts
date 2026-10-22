@@ -270,6 +270,11 @@ export interface StreamChunk {
    * le journal de tour : seule la trace causale le garde, bornée et rédigée.
    */
   statusDetail?: { envoye: string; retour: string }
+  /**
+   * TESTS JOUÉS PAR L'AGENT DANS SON TERMINAL et leur code de sortie, lus au résultat d'un `Bash`
+   * (`tests-du-terminal.ts`). Fragment SANS texte : le pilote le relaie au tour, jamais au fil lu.
+   */
+  testsDuTerminal?: Array<{ commande: string; codeDeSortie: number }>
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }

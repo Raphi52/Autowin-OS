@@ -46,6 +46,7 @@ import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
 import { tacheRelanceeParAutowin } from './taches-de-fond-suivies'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
+import { codeDeSortieDuResultatClaude, testsDuTerminal } from './tests-du-terminal'
 import {
   appendWorkspaceMutationEvidence,
   captureWorkspaceMutationSnapshot
@@ -2480,6 +2481,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ? ligneDErreurDAction(call.name, String(redactTrace(outputEntier)))
             : undefined
           if (ligneErreur) queue.push({ delta: '', status: ligneErreur })
+          // TESTS DU TERMINAL (conv-1059) : la commande et son issue sont tenues ICI et nulle part
+          // ailleurs — le fil n'en recevait que les deux lignes de texte ci-dessus. Une commande en
+          // FOND rend la main avant la fin : son « succès » n'est pas celui du test, on l'écarte.
+          const appelShell = appelsShell.get(part.tool_use_id)
+          if (call.name === 'Bash' && appelShell && !appelShell.enFond) {
+            const tests = testsDuTerminal(appelShell.commande, {
+              codeDeSortie: codeDeSortieDuResultatClaude(part.is_error === true, outputEntier),
+              sortie: outputEntier
+            })
+            if (tests.length > 0) queue.push({ delta: '', testsDuTerminal: tests })
+          }
           const output = outputEntier.slice(-20_000)
           collectArtifacts(part.content, call.name, call.filePath)
           const isFile = Boolean(call.filePath)

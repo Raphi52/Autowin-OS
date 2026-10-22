@@ -21,6 +21,7 @@ import type { ExecutionEvidence } from '../providers/types'
 // de chat inacheves. Deux constantes qui divergent, c'est un mecanisme qui oublie et l'autre qui se
 // souvient pour le MEME demarrage. Re-exportee pour les appelants qui la nommaient d'ici.
 import { RESUME_STALE_AFTER_MS, resumeIsStale } from '../../shared/resume-staleness'
+import { cibleDUneRelance } from '../../shared/relance-sans-objet'
 export { RESUME_STALE_AFTER_MS }
 
 /**
@@ -1318,17 +1319,32 @@ export function pickAcquiredAnalysis(
   }))
 }
 
+/**
+ * Les clés sous lesquelles une tâche se reconnaît pour une reprise : son texte, et, pour une
+ * relance sans objet enveloppée par commands.ts (« REPREND » + CIBLE CONTEXTUALISEE), la tâche
+ * déléguée qu'elle porte. Le point de reprise garde la tâche d'origine, et une reprise le réécrit
+ * avec la tâche enveloppée : comparer les deux formes des deux côtés couvre la première relance,
+ * la suivante (« vazy ») et la tâche retapée en clair (conv-1038, 2026-10-21).
+ */
+function clesDeReprise(task: string): string[] {
+  const cible = cibleDUneRelance(task)
+  return [normalizeTaskKey(task), ...(cible ? [normalizeTaskKey(cible)] : [])].filter(Boolean)
+}
+
 export function pickResumeForTask(
   states: readonly OrchestrationRunState[],
   lookup: ResumeLookup
 ): OrchestrationRunState | null {
   if (!lookup.conversationId) return null
-  const wanted = normalizeTaskKey(lookup.task)
-  if (!wanted) return null
+  const voulues = new Set(clesDeReprise(lookup.task))
+  if (voulues.size === 0) return null
   const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
   const usable = states.filter((state) => {
     if (state.terminal) return false
-    if (state.conversationId !== lookup.conversationId || normalizeTaskKey(state.task) !== wanted) {
+    if (
+      state.conversationId !== lookup.conversationId ||
+      !clesDeReprise(state.task).some((cle) => voulues.has(cle))
+    ) {
       return false
     }
     // Un appel encore actif est un VERROU, pas un livrable à réutiliser. Il reste prioritaire

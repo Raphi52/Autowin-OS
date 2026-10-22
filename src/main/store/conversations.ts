@@ -7,7 +7,8 @@ import {
   type ChatTurnEvent,
   type ChatTurnRuntime,
   type ChatTurnStatus,
-  type PersistedChatPart
+  type PersistedChatPart,
+  type TestDuTerminal
 } from '../../shared/chat-turn'
 import {
   finishedRunNotice,
@@ -65,6 +66,8 @@ export interface Msg {
   actionsLog?: string[]
   /** Durée du raisonnement (ms) — le compteur de la capsule « Raisonnement » après un rechargement. */
   reasoningMs?: number
+  /** Tests joués par l'agent dans son terminal et leur code de sortie — preuves de la carte du fil. */
+  testsDuTerminal?: TestDuTerminal[]
   /**
    * Message utilisateur ÉCRIT PENDANT un tour (orientation injectée) : il précise, il ne REPOND pas.
    *
@@ -585,7 +588,8 @@ export function applyTurnEventToMessages(
       ...(message.error ? { error: message.error } : {}),
       ...(message.reasoning ? { reasoning: message.reasoning } : {}),
       ...(message.actionsLog?.length ? { actionsLog: message.actionsLog } : {}),
-      ...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})
+      ...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {}),
+      ...(message.testsDuTerminal?.length ? { testsDuTerminal: message.testsDuTerminal } : {})
     },
     event
   )
@@ -598,6 +602,7 @@ export function applyTurnEventToMessages(
   message.actionsLog = next.actionsLog
   // Recopie CONDITIONNELLE : les messages des tours sans duree ne recoivent aucune cle de plus.
   if (next.reasoningMs !== undefined) message.reasoningMs = next.reasoningMs
+  if (next.testsDuTerminal?.length) message.testsDuTerminal = next.testsDuTerminal
   return message
 }
 
