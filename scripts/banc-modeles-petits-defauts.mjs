@@ -20,8 +20,9 @@
  *  - `node_modules` est une jonction vers celui du dépôt (une copie n'a pas de dépendances).
  *
  * Usage :
- *   node scripts/banc-modeles-petits-defauts.mjs --cycle                 # prouve rouge->vert sans modèle
+ *   node scripts/banc-modeles-petits-defauts.mjs --cycle [--comportement] # prouve rouge->vert sans modèle
  *   node scripts/banc-modeles-petits-defauts.mjs --lancer [--repliques 2] [--parallele 3] [--budget 3]
+ *                                                [--modeles haiku,opus]  # défaut : les trois modèles
  *   node scripts/banc-modeles-petits-defauts.mjs --rejouer <defaut> <diff.patch>
  * Résultats : `.autowin-data/autowin-os/banc-modeles/<horodatage>/` + une ligne par essai dans
  * `arena-duels.jsonl` (scripts/arena-duel.mjs).
@@ -54,7 +55,7 @@ export const REGLES = `Règles :
 - Termine en donnant le code de sortie des tests que tu as LU.`
 
 /**
- * Les deux défauts. Chacun est un vrai correctif d'UN fichier de code, avec un test de comportement.
+ * Les quatre défauts. Chacun est un vrai correctif d'UN fichier de code, avec un test de comportement.
  * L'énoncé donne le fichier et le symptôme observé (ce qu'une étape de run reçoit), jamais la cause.
  */
 export const DEFAUTS = {
@@ -107,7 +108,38 @@ exiger la preuve. Corrige à la cause et couvre par un test.`,
         // `void readFileSync` : l'import du test reste utilisé, sinon le typage (noUnusedLocals) rougit.
         'void readFileSync\n    const ligneDuMotif = String.raw`  /^\\+(?!\\+\\+).*(?:@keyframes|animation\\s*:|animation-name\\s*:|transition\\s*:)/`'
       )
+  },
+  // Défauts 3 et 4 (2026-10-22, conv-1097, élargissement du banc à 4) : leurs tests cachés appellent
+  // une fonction PUBLIQUE qui existait déjà avant le correctif (`redactTrace`, `extraireCandidats`) et
+  // comparent une sortie : ils jugent le comportement, pas la forme du fichier. Aucun ajustement.
+  secret: {
+    libelle: 'mot de passe collé après une adresse mail recopié en clair (ee4ee257)',
+    correctif: 'ee4ee257',
+    oracle: ['src/main/activity/trace-redact.test.ts'],
+    enonce: `Défaut signalé : un utilisateur a tapé dans le chat son adresse mail suivie de son mot de passe, par
+exemple \`user@corp365.onmicrosoft.com Secr3t2026! je suis a l hopital\`. Le texte a été recopié TEL QUEL
+dans un dossier d'analyse, alors que les traces passent par \`redactTrace\` (src/main/activity/trace-redact.ts),
+qui doit masquer les secrets. Attendu : le mot de passe est masqué comme les autres secrets du fichier ;
+l'adresse mail, qui n'est pas un secret, reste lisible ; une phrase ordinaire qui cite une adresse mail
+(\`écris à user@corp.com merci\`) n'est pas modifiée. Corrige à la cause et couvre par un test.`
+  },
+  veille: {
+    libelle: 'bloc json du scout de veille illisible à cause d’un texte ajouté après (7e37986a)',
+    correctif: '7e37986a',
+    oracle: ['src/main/veille/passe.test.ts'],
+    enonce: `Défaut signalé : une passe de veille n'a créé AUCUN ticket alors que le scout avait bien rendu 4 candidats.
+\`extraireCandidats\` (src/main/veille/passe.ts) a rendu \`undefined\` sur sa réponse. Celle-ci contenait, dans
+l'ordre : une synthèse dans un bloc \`\`\`html-render (qui peut contenir des crochets), le bloc \`\`\`json avec
+les 4 candidats, puis un avertissement que l'app ajoute après coup (« Tâche de fond pas terminée »), dont le
+texte citait une commande \`sed\` contenant des crochets. Une sortie illisible doit toujours rendre
+\`undefined\` (pas de réparation d'un JSON cassé). Corrige à la cause et couvre par un test.`
   }
+}
+
+/** Le test caché tel que le juge le joue : ajusté si le défaut l'exige, sinon le test du correctif. */
+export function testDuJuge(defaut, texte, mode) {
+  const ajuster = DEFAUTS[defaut].ajusterComportement
+  return mode === 'comportement' && ajuster ? ajuster(texte) : texte
 }
 
 /** Remplace UNE occurrence exacte, ou lève : un juge ajusté en silence ne jugerait plus rien. */
@@ -225,10 +257,7 @@ export function oracle(defaut, dossier, touches, { mode = 'strict', typage = tru
   const d = DEFAUTS[defaut]
   for (const f of d.oracle) {
     const texte = git(DEPOT, ['show', `${d.correctif}:${f}`])
-    writeFileSync(
-      path.join(dossier, f),
-      mode === 'comportement' ? d.ajusterComportement(texte) : texte
-    )
+    writeFileSync(path.join(dossier, f), testDuJuge(defaut, texte, mode))
   }
   const existe = (f) => existsSync(path.join(dossier, f))
   const voisins = testsVoisins(touches, existe).filter((t) => !d.oracle.includes(t))
@@ -437,7 +466,25 @@ export function retirerSiVide(dossier) {
   }
 }
 
-async function lancer({ repliques, parallele, budget }) {
+/**
+ * Les joueurs retenus par `--modeles haiku,opus` (noms courts). Un nom inconnu LÈVE : un banc qui
+ * jouerait en silence moins de modèles que demandé rendrait une comparaison incomplète.
+ */
+export function choisirModeles(liste) {
+  if (liste === undefined) return MODELES
+  const noms = liste
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const inconnus = noms.filter((n) => !MODELES.some((m) => m.court === n))
+  if (inconnus.length || !noms.length)
+    throw new Error(
+      `modèle(s) inconnu(s) : ${inconnus.join(', ') || '(liste vide)'} — attendus : ${MODELES.map((m) => m.court).join(', ')}`
+    )
+  return MODELES.filter((m) => noms.includes(m.court))
+}
+
+async function lancer({ repliques, parallele, budget, modeles = MODELES }) {
   const horodatage = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const racineCopies = path.join(os.tmpdir(), 'banc-modeles', horodatage)
   const racineResultats = path.join(
@@ -452,7 +499,7 @@ async function lancer({ repliques, parallele, budget }) {
   const file = []
   for (let n = 1; n <= repliques; n++)
     for (const defaut of Object.keys(DEFAUTS))
-      for (const modele of MODELES) file.push({ defaut, modele, replique: n })
+      for (const modele of modeles) file.push({ defaut, modele, replique: n })
   console.log(
     `banc ${banc} : ${file.length} essais, ${parallele} à la fois, plafond ${budget} $ par essai`
   )
@@ -564,13 +611,16 @@ if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1])))
   else if (args[0] === '--rejuger' && args[1] && existsSync(args[1])) {
     rejuger(path.resolve(args[1]))
     process.exit(0)
-  } else if (args[0] === '--lancer')
+  } else if (args[0] === '--lancer') {
+    const k = args.indexOf('--modeles')
     await lancer({
       repliques: opt('--repliques', 2),
       parallele: opt('--parallele', 3),
-      budget: opt('--budget', 3)
+      budget: opt('--budget', 3),
+      // `--modeles` sans valeur -> '' -> refus, jamais les trois modèles par défaut.
+      modeles: choisirModeles(k >= 0 ? (args[k + 1] ?? '') : undefined)
     })
-  else if (args[0] === '--rejouer' && DEFAUTS[args[1]] && args[2] && existsSync(args[2]))
+  } else if (args[0] === '--rejouer' && DEFAUTS[args[1]] && args[2] && existsSync(args[2]))
     process.exit(
       rejouer(args[1], args[2], {
         mode: args.includes('--comportement') ? 'comportement' : 'strict'
@@ -580,7 +630,7 @@ if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1])))
     )
   else {
     console.error(
-      'usage : --cycle | --lancer [--repliques N] [--parallele N] [--budget USD] | --rejouer <defaut> <diff.patch>'
+      'usage : --cycle [--comportement] | --lancer [--repliques N] [--parallele N] [--budget USD] [--modeles haiku,opus] | --rejouer <defaut> <diff.patch> | --rejuger <dossier>'
     )
     process.exit(2)
   }

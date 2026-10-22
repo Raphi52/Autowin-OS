@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAUTS,
   MODELES,
+  choisirModeles,
   environnementPropre,
   prompt,
   remplacerExact,
+  testDuJuge,
   testsVoisins
 } from './banc-modeles-petits-defauts.mjs'
 
@@ -36,8 +38,28 @@ describe('banc-modeles-petits-defauts (conv-1097)', () => {
     expect(prompt('poids')).toContain('src/main/chat-session-poids.ts')
     expect(prompt('poids')).not.toContain('chat-usage')
     expect(prompt('animation')).not.toContain('ANIMATION_DECLAREE')
+    expect(prompt('secret')).toContain('src/main/activity/trace-redact.ts')
+    expect(prompt('secret')).not.toContain('EMAIL_CREDENTIAL')
+    expect(prompt('veille')).toContain('src/main/veille/passe.ts')
+    expect(prompt('veille')).not.toContain('matchAll')
     expect(MODELES.map((m) => m.bras)).toEqual(['a', 'b', 'c'])
-    expect(Object.keys(DEFAUTS)).toEqual(['poids', 'animation'])
+    expect(Object.keys(DEFAUTS)).toEqual(['poids', 'animation', 'secret', 'veille'])
+  })
+
+  // Élargissement à 4 défauts (conv-1097) : un défaut sans ajustement joue le test du correctif tel quel,
+  // dans les DEUX modes ; un défaut qui en a un ne l'applique qu'en mode comportement.
+  it('joue le test du correctif tel quel quand le défaut ne déclare aucun ajustement', () => {
+    expect(testDuJuge('secret', 'texte du test', 'comportement')).toBe('texte du test')
+    expect(testDuJuge('veille', 'texte du test', 'strict')).toBe('texte du test')
+    expect(testDuJuge('poids', 'sans motif', 'strict')).toBe('sans motif')
+    expect(() => testDuJuge('poids', 'sans motif', 'comportement')).toThrow(/ajustement/)
+  })
+
+  it('restreint le banc aux modèles nommés, refuse un nom inconnu', () => {
+    expect(choisirModeles('haiku,opus').map((m) => m.court)).toEqual(['haiku', 'opus'])
+    expect(choisirModeles(undefined)).toBe(MODELES)
+    expect(() => choisirModeles('haiku,gpt')).toThrow(/gpt/)
+    expect(() => choisirModeles('')).toThrow(/liste vide/)
   })
 
   // Le juge « comportement » réécrit le test caché : s'il ne trouve plus le texte à réécrire (test du
