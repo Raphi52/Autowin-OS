@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { watch, mkdtempSync, readdirSync, readFileSync, rmSync, type FSWatcher } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { watch, mkdtempSync, rmSync, type FSWatcher } from 'node:fs'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -408,22 +408,33 @@ export function surveillerSourcesDuMoteur(
   }
 }
 
-/** Empreinte du code compilé : les `.js` seulement (les `.map` portent les commentaires d'origine). */
-export function empreinteDuCodeCompile(dossier: string): string {
+/**
+ * Empreinte du code compilé : les `.js` seulement (les `.map` portent les commentaires d'origine).
+ * Lecture ASYNCHRONE depuis le 2026-10-22 (conv-1077) : appelée dans le `close` de la compilation,
+ * donc sur le processus principal, la version synchrone figeait la fenêtre le temps de relire tout
+ * le code compilé (22 lectures lentes, 56,6 s du 15 au 22/10 dans gels.jsonl). La valeur ne change
+ * pas — même ordre, mêmes séparateurs —, sinon la première compilation après la mise à jour
+ * annoncerait un « moteur changé » fictif.
+ */
+export async function empreinteDuCodeCompile(dossier: string): Promise<string> {
   const fichiers: string[] = []
-  const parcourir = (courant: string): void => {
-    for (const entree of readdirSync(courant, { withFileTypes: true })) {
+  const parcourir = async (courant: string): Promise<void> => {
+    for (const entree of await readdir(courant, { withFileTypes: true })) {
       const chemin = join(courant, entree.name)
-      if (entree.isDirectory()) parcourir(chemin)
+      if (entree.isDirectory()) await parcourir(chemin)
       else if (entree.name.endsWith('.js')) fichiers.push(chemin)
     }
   }
-  parcourir(dossier)
+  await parcourir(dossier)
   const hash = createHash('sha1')
   for (const chemin of fichiers
     .map((f) => ({ f, rel: relative(dossier, f).split(sep).join('/') }))
     .sort((a, b) => a.rel.localeCompare(b.rel))) {
-    hash.update(chemin.rel).update('\0').update(readFileSync(chemin.f)).update('\0')
+    hash
+      .update(chemin.rel)
+      .update('\0')
+      .update(await readFile(chemin.f))
+      .update('\0')
   }
   return hash.digest('hex')
 }
@@ -487,22 +498,24 @@ export function compilerLeMoteur(racine: string, executable: string): Promise<Re
     })
     enfant.on('close', (code, signal) => {
       clearTimeout(delai)
-      try {
-        if (code === 0) {
-          resolve({ ok: true, empreinte: empreinteDuCodeCompile(dossier) })
-        } else {
-          resolve({
-            ok: false,
-            erreur:
-              sortie.trim() ||
-              `compilation arrêtée (code ${code ?? '?'}, signal ${signal ?? 'aucun'})`
-          })
-        }
-      } catch (e) {
-        resolve({ ok: false, erreur: `empreinte illisible : ${e}` })
-      } finally {
+      if (code !== 0) {
         nettoyer()
+        resolve({
+          ok: false,
+          erreur:
+            sortie.trim() ||
+            `compilation arrêtée (code ${code ?? '?'}, signal ${signal ?? 'aucun'})`
+        })
+        return
       }
+      // Le dossier temporaire part APRÈS la lecture : l'empreinte est asynchrone (conv-1077), un
+      // `finally` synchrone l'effacerait pendant qu'elle le lit encore.
+      empreinteDuCodeCompile(dossier)
+        .then(
+          (empreinte) => resolve({ ok: true, empreinte }),
+          (e) => resolve({ ok: false, erreur: `empreinte illisible : ${e}` })
+        )
+        .finally(nettoyer)
     })
   })
 }
