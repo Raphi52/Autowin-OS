@@ -42,6 +42,7 @@ import {
   captureMutationTraceBase
 } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
+import { blocProfilUtilisateur } from './profil-utilisateur'
 import { lireLigneDErreur } from '../shared/erreur-d-action'
 import { avertirSiLeconNonRetenue, ecritUnFichierDeMemoire } from './lecon-non-retenue'
 import {
@@ -1673,7 +1674,11 @@ export class AgentPilot {
             { name: 'constitution', text: CONSTITUTION },
             { name: 'pilotage', text: pilotage },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: this.projectContext(conversationId) },
+            // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
+            {
+              name: 'projectContext',
+              text: this.projectContext(conversationId) + blocProfilUtilisateur()
+            },
             /**
              * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
              * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour

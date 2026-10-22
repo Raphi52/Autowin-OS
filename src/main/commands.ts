@@ -310,6 +310,7 @@ import { memoireDesRunsPrecedents, phasesAvecJuge, resumeDesTours } from './orch
 import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
 import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
+import { PROFIL_UTILISATEUR_MAX_BYTES, profilAjouter, profilRetirer } from './profil-utilisateur'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
@@ -1295,6 +1296,34 @@ export const CATALOG: CommandSpec[] = [
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true
+    }
+  },
+  // PROFIL UTILISATEUR (conv-1098) : le plafond est tenu par `profil-utilisateur.ts`, hors du modèle.
+  {
+    name: 'profil_ajouter',
+    description:
+      'Noter un goût PERSONNEL que l’utilisateur vient d’énoncer (ton, format, langue, habitude de travail) dans SON profil local, relu en entier en tête de chaque tour. Pas pour une règle d’équipe (→ remember), une leçon ni un fait. ' +
+      `Plafond de ${PROFIL_UTILISATEUR_MAX_BYTES} octets : un ajout qui le dépasse est REFUSÉ et rien n’est écrit — dis-le à l’utilisateur et propose de retirer une entrée`,
+    args: { preference: 'la préférence, en une phrase courte' },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'profil_retirer',
+    description:
+      'Retirer une entrée du profil local de l’utilisateur : quand il la révoque, ou pour faire de la place quand le profil est plein',
+    args: {
+      preference: 'le texte exact de l’entrée, tel qu’il figure dans le bloc PROFIL UTILISATEUR'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   {
@@ -4516,6 +4545,11 @@ export class AppCommandBus {
         )
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
+      case 'profil_ajouter':
+        // Un refus (profil plein, identité inconnue, préférence vide) LÈVE : rien n'est écrit (conv-1098).
+        return profilAjouter(a.preference)
+      case 'profil_retirer':
+        return profilRetirer(a.preference)
       case 'brain_graph':
       case 'brain_read': {
         const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
