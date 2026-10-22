@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -7,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import {
   processusVivant,
   CapteurHdesk,
+  type LanceurCapture,
   fusionnerBureaux,
   interpreterCapture,
   lireRegistre,
@@ -255,6 +258,109 @@ describe.skipIf(process.platform !== 'win32')(
     }, 30000)
   }
 )
+
+/**
+ * conv-1077 (2026-10-22) : boucle de lancements PowerShell pendant le disque lent du 21/10. `spawn`
+ * fige le fil principal ~20 s ; le minuteur d'inactivité (8 s) était armé AVANT le lancement, donc
+ * expiré à son retour : le processus était tué avant de répondre, la TV réessayait 500 ms plus tard.
+ * 6 lancements = 120,2 s figées sur 148,3 s de gels (gels.jsonl, `spawn powershell.exe`).
+ * Faux processus : même protocole que scripts/hdesk-tv.ps1, réponses APRÈS une vraie E/S (minuteur).
+ * fix-ok: entrées qui font échouer si le correctif est faux — minuteur armé avant le lancement (rouge : « Processus de capture arrete. »), garde sans fiche retirée (rouge : 1 lancement au lieu de 0) ; réinjectées le 2026-10-22.
+ */
+describe('processus de capture — lancement lent et fil sans bureau (conv-1077)', () => {
+  const fauxLanceur = (
+    bureaux: string[],
+    bloqueMs = 0
+  ): { lancer: LanceurCapture; lancements: number[]; tues: number[] } => {
+    const lancements: number[] = []
+    const tues: number[] = []
+    const lancer: LanceurCapture = () => {
+      // `spawn` synchrone qui fige le fil principal : aucun minuteur ne peut tourner pendant ce temps.
+      const debut = Date.now()
+      while (Date.now() - debut < bloqueMs) {
+        // attente active voulue
+      }
+      const n = lancements.push(Date.now())
+      const stdout = new PassThrough()
+      const stdin = new PassThrough()
+      const proc = Object.assign(new EventEmitter(), {
+        stdout,
+        stdin,
+        killed: false,
+        kill(): boolean {
+          proc.killed = true
+          tues.push(n)
+          proc.emit('exit', null)
+          return true
+        }
+      })
+      stdin.setEncoding('utf8')
+      stdin.on('data', (ligne: string) => {
+        if (ligne.trim() === 'list')
+          setTimeout(() => stdout.write(`${JSON.stringify({ bureaux })}\n`), 10)
+      })
+      setTimeout(() => stdout.write('{"pret":true}\n'), 5)
+      return proc as unknown as ChildProcessWithoutNullStreams
+    }
+    return { lancer, lancements, tues }
+  }
+
+  it('lancement plus lent que le délai d’inactivité : le processus survit à sa première demande', async () => {
+    // ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST si le minuteur est armé avant le lancement :
+    // un lancement qui fige 300 ms pour un délai d'inactivité de 100 ms.
+    const f = fauxLanceur(['a'], 300)
+    const reg = mkdtempSync(join(tmpdir(), 'tv-lent-reg-'))
+    const c = new CapteurHdesk(tmpdir(), reg, { lancer: f.lancer, inactiviteMs: 100 })
+    try {
+      expect(await c.listeVivants()).toEqual({ ok: true, vivants: ['a'] })
+      expect(f.lancements).toHaveLength(1)
+      // Jumeau : l'inactivité arrête toujours le processus, une fois la demande servie.
+      expect(f.tues).toHaveLength(0)
+      await new Promise((r) => setTimeout(r, 250))
+      expect(f.tues).toHaveLength(1)
+    } finally {
+      c.detruire()
+      rmSync(reg, { recursive: true, force: true })
+    }
+  })
+
+  it('aucune fiche pour ce fil : aucun lancement de PowerShell, liste vide', async () => {
+    const f = fauxLanceur(['autre'])
+    const reg = mkdtempSync(join(tmpdir(), 'tv-sansfiche-reg-'))
+    writeFileSync(
+      join(reg, 'autre.json'),
+      JSON.stringify({ id: 'autre', conversationId: 'conv-x' })
+    )
+    const c = new CapteurHdesk(tmpdir(), reg, { lancer: f.lancer })
+    try {
+      expect(await c.bureaux('conv-1')).toEqual([])
+      expect(await c.bureaux(undefined)).toEqual([])
+      expect(f.lancements).toHaveLength(0)
+    } finally {
+      c.detruire()
+      rmSync(reg, { recursive: true, force: true })
+    }
+  })
+
+  it('jumeau : une fiche pour ce fil → UN lancement, et son bureau vivant est rendu', async () => {
+    const f = fauxLanceur(['vivant'])
+    const reg = mkdtempSync(join(tmpdir(), 'tv-fiche-reg-'))
+    writeFileSync(
+      join(reg, 'vivant.json'),
+      JSON.stringify({ id: 'vivant', travail: 'preuve', conversationId: 'conv-1' })
+    )
+    const c = new CapteurHdesk(tmpdir(), reg, { lancer: f.lancer })
+    try {
+      expect(await c.bureaux('conv-1')).toEqual([
+        { id: 'vivant', travail: 'preuve', conversationId: 'conv-1' }
+      ])
+      expect(f.lancements).toHaveLength(1)
+    } finally {
+      c.detruire()
+      rmSync(reg, { recursive: true, force: true })
+    }
+  })
+})
 
 describe.skipIf(process.platform !== 'win32')(
   'petite TV — repli quand le processus de capture meurt',

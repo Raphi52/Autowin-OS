@@ -216,6 +216,18 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
 /** Liste brute des bureaux vivants : une ERREUR n'est jamais une liste vide (elle purgerait tout). */
 export type ListeVivants = { ok: true; vivants: string[] } | { ok: false; message: string }
 
+/** Lance le processus de capture. Les TESTS en passent un faux (lancement lent, aucun lancement). */
+export type LanceurCapture = (
+  commande: string,
+  args: readonly string[],
+  options: { windowsHide: boolean }
+) => ChildProcessWithoutNullStreams
+
+export interface OptionsCapteur {
+  lancer?: LanceurCapture
+  inactiviteMs?: number
+}
+
 export class CapteurHdesk {
   private proc: ChildProcessWithoutNullStreams | null = null
   private tampon = ''
@@ -226,15 +238,31 @@ export class CapteurHdesk {
   /** Origine du recadrage de la derniere image rendue, par bureau (conv-1009). */
   private readonly origines = new Map<string, OrigineCapture>()
 
+  private readonly lancer: LanceurCapture
+  private readonly inactiviteMs: number
+
   constructor(
     private readonly racine: string,
-    private readonly registre = join(process.env.LOCALAPPDATA ?? tmpdir(), 'autowin-hdesk')
+    private readonly registre = join(process.env.LOCALAPPDATA ?? tmpdir(), 'autowin-hdesk'),
+    options: OptionsCapteur = {}
   ) {
+    this.lancer = options.lancer ?? ((c, a, o) => spawn(c, [...a], o))
+    this.inactiviteMs = options.inactiviteMs ?? INACTIVITE_MS
     purgerDossiersOrphelins(tmpdir())
     this.dossierImages = mkdtempSync(join(tmpdir(), PREFIXE_DOSSIER))
   }
 
   async bureaux(conversationId?: string): Promise<BureauTv[]> {
+    // fix-ok: cause mesurée 2026-10-22 — sans cette garde, un fil sans fiche lance PowerShell (test « aucune fiche » : 1 lancement au lieu de 0)
+    // AUCUNE FICHE POUR CE FIL = AUCUN POWERSHELL (conv-1077, 2026-10-22) : `fusionnerBureaux` ne
+    // rend que les bureaux dont la fiche porte ce fil ; sans fiche, la liste ne pouvait QUE finir vide,
+    // et chaque fil ouvert relançait le processus de capture pour rien. La purge des fiches fermées
+    // attend la prochaine vraie liste (un fil qui a un bureau, ou la vue « Bureaux cachés »).
+    if (
+      !conversationId ||
+      !lireRegistre(this.registre).some((e) => e.conversationId === conversationId)
+    )
+      return []
     const r = await this.demander('list')
     const vivants = Array.isArray(r.bureaux) ? (r.bureaux as string[]) : []
     if (!r.erreur && Array.isArray(r.bureaux)) purgerBureauxFermes(this.registre, vivants)
@@ -321,8 +349,12 @@ export class CapteurHdesk {
   }
 
   private envoyer(commande: string): Promise<Reponse> {
-    this.rearmer()
+    // fix-ok: cause mesurée 2026-10-22 — rearmer() avant demarrer() : lancement figé 300 ms pour 100 ms d’inactivité → « Processus de capture arrete. » (test rouge)
+    // MINUTEUR ARMÉ APRÈS LE LANCEMENT (conv-1077, 2026-10-22) : `spawn` est synchrone. Disque lent du
+    // 21/10 : il a figé l'app ~20 s, le minuteur de 8 s armé AVANT était expiré au retour, le processus
+    // tué avant sa première réponse, relancé 500 ms plus tard — 6 lancements, 120,2 s figées.
     const p = this.demarrer()
+    this.rearmer()
     return new Promise<Reponse>((resolve, reject) => {
       const delai = setTimeout(() => {
         this.arreter()
@@ -339,7 +371,7 @@ export class CapteurHdesk {
 
   private demarrer(): ChildProcessWithoutNullStreams {
     if (this.proc) return this.proc
-    const p = spawn(
+    const p = this.lancer(
       'powershell.exe',
       [
         '-NoProfile',
@@ -386,7 +418,7 @@ export class CapteurHdesk {
 
   private rearmer(): void {
     if (this.minuterie) clearTimeout(this.minuterie)
-    this.minuterie = setTimeout(() => this.arreter(), INACTIVITE_MS)
+    this.minuterie = setTimeout(() => this.arreter(), this.inactiviteMs)
   }
 
   /** Repli : une capture = un hdesk-observe.ps1 (plus lent, meme resultat). */

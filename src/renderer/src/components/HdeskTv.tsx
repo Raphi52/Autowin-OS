@@ -75,6 +75,8 @@ const bureauxMasques = {
 }
 /** Cadence du guet quand la TV est masquee : la liste seule, jamais d'image. */
 const GUET_MS = 5000
+/** Plafond de l'attente qui double après chaque liste en échec (conv-1077). */
+const ATTENTE_ECHEC_MAX_MS = 60000
 const cleMasquage = (conversationId?: string | null): string => conversationId ?? ''
 
 export function HdeskTv({
@@ -173,15 +175,22 @@ export function HdeskTv({
       }
     }
 
-    const tour = async (): Promise<void> => {
-      if (typeof document !== 'undefined' && document.hidden) return
+    // fix-ok: cause mesurée 2026-10-22 — sans bureau, retour aux 500 ms = 5 demandes de liste au lieu d’une (HdeskTv.test.tsx rouge)
+    // RYTHME SELON LE TOUR (conv-1077, 2026-10-22) : sans bureau, la liste partait toutes les 500 ms,
+    // et chaque demande pouvait relancer PowerShell côté main (boucle du 21/10 : 120,2 s figées).
+    // Sans bureau → rythme du guet ; liste en échec → attente doublée à chaque échec, plafonnée.
+    let echecs = 0
+    const tour = async (): Promise<'image' | 'vide' | 'echec'> => {
+      if (typeof document !== 'undefined' && document.hidden) return 'image'
       let liste: BureauTv[]
       try {
         liste = await a.hdeskTvBureaux(conversationId ?? undefined)
       } catch {
-        return
+        echecs++
+        return 'echec'
       }
-      if (!actif) return
+      echecs = 0
+      if (!actif) return 'vide'
       const precedent = choisiRef.current
       let courant = precedent && liste.some((b) => b.id === precedent) ? precedent : null
       if (precedent && !courant) {
@@ -197,21 +206,28 @@ export function HdeskTv({
       setChoisi(courant)
       if (!courant) {
         setImage(null)
-        return
+        return 'vide'
       }
       const img = await a
         .hdeskTvImage(courant)
         .catch((e: unknown): ImageTv => ({ statut: 'erreur', id: courant!, message: String(e) }))
-      if (!actif || choisiRef.current !== img.id) return
+      if (!actif || choisiRef.current !== img.id) return 'image'
       if (img.statut === 'ferme') {
         setFerme(liste.find((b) => b.id === img.id) ?? { id: img.id, travail: img.id })
         choisiRef.current = null
         setChoisi(null)
         setImage(null)
-        return
+        return 'image'
       }
       setImage(img)
+      return 'image'
     }
+    const attenteApres = (r: 'image' | 'vide' | 'echec'): number =>
+      r === 'echec'
+        ? Math.min(GUET_MS * 2 ** (echecs - 1), ATTENTE_ECHEC_MAX_MS)
+        : r === 'vide'
+          ? Math.max(intervalleMs, GUET_MS)
+          : intervalleMs
 
     let enCours = false
     let encore = false
@@ -223,13 +239,13 @@ export function HdeskTv({
       enCours = true
       if (minuterie) clearTimeout(minuterie)
       minuterie = null
-      await tour()
+      const r = await tour()
       enCours = false
       if (!actif) return
       if (encore) {
         encore = false
         void boucle()
-      } else minuterie = setTimeout(() => void boucle(), intervalleMs)
+      } else minuterie = setTimeout(() => void boucle(), attenteApres(r))
     }
     rafraichirRef.current = () => void boucle()
     void boucle()

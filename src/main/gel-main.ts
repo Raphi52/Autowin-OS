@@ -146,11 +146,43 @@ export function preleverAccesCumules(): AccesCumule[] {
  */
 let demarrageClos = false
 
+/*
+ * JALONS DU DEMARRAGE SUR DISQUE (conv-1077, 2026-10-22). 39 gels pour 103,8 s depuis le 15/10 sous
+ * `demarrage:corps du module terminé, whenReady enregistré`, mais les jalons de `jalonDemarrage`
+ * (index.ts, window.ts) ne vivaient que dans `console.log` : rien ne disait, lancement par lancement,
+ * ou le temps passait ENTRE deux jalons. Ils passent tous par `marquerOperation('demarrage:…')` :
+ * on les garde ici, horodates depuis le lancement du PROCESSUS (`performance.now()`), et on les
+ * ecrit en UNE ligne a la cloture — y compris ceux poses avant `demarrerDetecteurDeGel`.
+ */
+const jalonsDemarrage: Array<{ etape: string; ms: number }> = []
+
 /** Ce que le main declare faire ICI et MAINTENANT — joint au gel pour NOMMER le coupable. */
 export function marquerOperation(nom: string): void {
   if (demarrageClos && nom.startsWith('demarrage:')) return
+  if (nom.startsWith('demarrage:'))
+    jalonsDemarrage.push({
+      etape: nom.slice('demarrage:'.length),
+      ms: Math.round(performance.now())
+    })
   pile.length = 0
   if (nom) pile.push(nom)
+}
+
+/** Une ligne par lancement dans `demarrages.jsonl` — asynchrone, best-effort, comme les gels. */
+function ecrireJalonsDemarrage(): void {
+  if (!dossier || jalonsDemarrage.length === 0) return
+  const racine = dossier
+  const ligne =
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      pid: process.pid,
+      jalons: jalonsDemarrage.splice(0)
+    }) + '\n'
+  void mkdir(racine, { recursive: true })
+    .then(() => appendFile(join(racine, 'demarrages.jsonl'), ligne, 'utf8'))
+    .catch(() => {
+      /* observabilite best-effort : un journal muet ne doit jamais casser l'application */
+    })
 }
 
 /** Empile une operation et rend la fonction qui la depile — sur d'usage en `finally`. */
@@ -195,7 +227,9 @@ export function pendantOperation<T>(nom: string, action: () => T): T {
  */
 export function cloreDemarrage(): void {
   pile.length = 0
+  const premiereCloture = !demarrageClos
   demarrageClos = true
+  if (premiereCloture) ecrireJalonsDemarrage()
 }
 
 /** Rend l'operation la plus INTERNE encore ouverte (utile aux tests et au diagnostic). */
