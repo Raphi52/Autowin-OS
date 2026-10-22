@@ -128,7 +128,7 @@
   color: #dde3ee;
   max-width: 78ch;
 }
-/* Deux voies côte à côte (conv-1080) : place FIXE, seul l'accent `btn-accent` désigne la recommandée. */
+/* Le workflow intelligent (conv-1080) : la ligne dit la voie choisie, un seul bouton la lance. */
 .cpick-voie {
   margin-top: 10px;
   font-size: 12px;
