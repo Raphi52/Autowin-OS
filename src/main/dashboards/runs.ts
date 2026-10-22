@@ -1,5 +1,9 @@
 // Parseur de RUN.md pour le dashboard des runs vivants (candidat ④/visu workflow).
 
+import { estArretParStop } from '../../shared/arret-par-stop'
+import { estMurDeQuota } from '../../shared/reprise-quota'
+import type { RunInterruption } from '../../shared/run-blocked'
+
 /** Résumé normalisé d'un RUN.md pour affichage dashboard. */
 export type RunSummary = {
   status:
@@ -19,6 +23,8 @@ export type RunSummary = {
   journalEvents: number
   defauts: number
   subject?: string
+  /** Run rouge parce qu'il a été COUPÉ (Stop du chat, quota), pas parce que le travail a échoué. */
+  interruption?: RunInterruption
 }
 
 const STATUSES = new Set([
@@ -55,6 +61,32 @@ function extractSection(lines: string[], heading: string): string[] {
     section.push(line)
   }
   return section
+}
+
+/** La ligne qu'écrit `closeConvRun` quand l'orchestration lève (`commands.ts`, « Orchestration en échec »). */
+const CLOTURE_EN_ECHEC = /^\[\d{4}-\d{2}-\d{2}\] Orchestration en échec: (.*)$/
+
+/**
+ * POURQUOI CE RUN ROUGE S'EST ARRÊTÉ — lu dans sa ligne de clôture, et elle seule (conv-1069).
+ *
+ * Le 2026-10-22, la liste des runs « bloqués » servie à chaque tour comptait des runs coupés par le
+ * bouton Stop (conv-1058) ou par le quota (conv-1056) : rien à réparer dans le code. Le RUN.md n'a
+ * pas d'autre trace de la cause que cette ligne. `closeConvRun` l'insère EN TÊTE du journal : la
+ * première trouvée est la plus récente — un run suspendu puis repris jusqu'à un vrai défaut est un
+ * échec. Un texte de quota ou de Stop CITÉ ailleurs dans le journal ne compte pas.
+ *
+ * `ligneJournalDErreur` a replié les retours à la ligne de l'erreur en « · » : on les rétablit pour
+ * que `estArretParStop` retrouve une ligne par modèle et la fin du motif. Le quota l'emporte sur le
+ * Stop : un modèle tombé sur son quota avant le Stop d'un autre n'est pas un arrêt voulu.
+ */
+function interruptionDeCloture(journal: string[]): RunInterruption | undefined {
+  for (const ligne of journal) {
+    const erreur = CLOTURE_EN_ECHEC.exec(ligne.trim())?.[1]
+    if (erreur === undefined) continue
+    if (estMurDeQuota(erreur)) return 'quota'
+    return estArretParStop(erreur.replace(/ · /g, '\n')) ? 'stop' : undefined
+  }
+  return undefined
 }
 
 /**
@@ -112,7 +144,18 @@ export function parseRun(md: string, subject?: string): RunSummary {
     return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('//')
   }).length
 
-  return { status, regime, dodTotal, dodChecked, journalEvents, defauts, subject }
+  const interruption = status === 'red' ? interruptionDeCloture(journalLines) : undefined
+
+  return {
+    status,
+    regime,
+    dodTotal,
+    dodChecked,
+    journalEvents,
+    defauts,
+    subject,
+    ...(interruption ? { interruption } : {})
+  }
 }
 
 // La règle du « bloqué » vit dans `src/shared/run-blocked.ts` : l'interface en a besoin aussi,
