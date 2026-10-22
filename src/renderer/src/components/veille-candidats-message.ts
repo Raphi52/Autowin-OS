@@ -8,6 +8,7 @@
  *
  * Module PUR : détection + rédaction du prompt, testables sans React.
  */
+import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
 
 export interface CandidatAffiche {
   titre: string
@@ -163,11 +164,147 @@ export function candidatsDepuisScoutTable(
  * pas seulement le cadrage. Le préfixe `/frame` réduisait le run à la seule phase frame
  * (`skill-routing.ts` → `explicitPhase`), donc l'ancienne version ne pouvait rien livrer. Ici :
  * AUCUN préfixe de phase, et le mot « pipeline » dans la consigne classe la tâche en régime
- * `critical` (`task-regime.ts` : CRITICAL_SIGNALS), qui joue scout → frame → build → clean
- * puis le juge, sans qu'une intention en langage naturel puisse l'amputer.
+ * `critical` (`shared/signaux-de-risque.ts`, lu par `task-regime.ts`), qui joue scout → frame →
+ * build → clean puis le juge, sans qu'une intention en langage naturel puisse l'amputer.
  */
 export function redigerPromptWorkflowSelection(selection: readonly CandidatAffiche[]): string {
-  const lignes = selection.map((candidat, index) => {
+  return [
+    enteteSelection(selection),
+    '',
+    ...lignesDesCandidats(selection),
+    '',
+    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis joue le',
+    'PIPELINE complet — cadrage, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
+    'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
+  ].join('\n')
+}
+
+/**
+ * LA CORRECTION DIRECTE — le même contrat de fin (commit publié et vérifié), sans recadrer.
+ *
+ * Demande utilisateur du 2026-10-22 (conv-1080) : « après un scout ça me propose toujours lancer le
+ * workflow complet… mais parfois y a pas besoin du workflow complet ». Le pipeline complet rejoue un
+ * scout, un cadrage et un nettoyage sur une piste que le scout vient de LOCALISER : pour une
+ * correction ancrée, c'est payer trois fois l'éclairage déjà fait.
+ *
+ * Le préfixe `/build` en PREMIÈRE ligne est une phase NOMMÉE : `agent-pilot` l'orchestre lui-même,
+ * sans que le modèle du chat puisse la réinterpréter, et `regimePhases` ne joue que `build` — le juge
+ * et la capitalisation (`learn`) restent ajoutés par l'orchestrateur (task-regime.ts,
+ * `phasesApresJugeHorsGraphe`). L'en-tête « Traite… issu du scout » reste lisible par la mémoire du
+ * scout (`scout-memoire.ts`, ENTETE_SELECTION), qui note les pistes prises.
+ */
+export function redigerPromptCorrectionDirecte(selection: readonly CandidatAffiche[]): string {
+  return [
+    '/build',
+    enteteSelection(selection),
+    '',
+    ...lignesDesCandidats(selection),
+    '',
+    'Correction DIRECTE, sans recadrer : le scout a déjà localisé chaque piste. Pour chacune, relis',
+    'son ancrage, reproduis le défaut en rouge (ou constate le manque), corrige au plus juste, puis',
+    'rejoue sa preuve jusqu’au vert — jusqu’au COMMIT PUBLIÉ et vérifié.',
+    'Si une piste s’avère plus large qu’une correction ciblée (plusieurs modules, un choix de',
+    'conception à trancher), ne la force pas : dis-le, elle relève du workflow complet. Si un ancrage',
+    'ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
+  ].join('\n')
+}
+
+/** Les deux façons de traiter une sélection de candidats scout. */
+export type VoieSelection = 'directe' | 'complete'
+
+/** Au-delà, une sélection est un chantier, pas une série de corrections ponctuelles. */
+const MAX_PISTES_CORRECTION_DIRECTE = 3
+
+/** Une PREUVE de localisation : un ancrage de code `chemin:ligne`, pas une URL de page web. */
+const ANCRAGE_DE_CODE = /(?:^|[\s(`])[\w./-]+\.[a-z]{1,6}:\d+/iu
+
+function estLocalisee(candidat: CandidatAffiche): boolean {
+  if (candidat.commande) return true
+  return [candidat.url, candidat.how, candidat.what].some(
+    (champ) => champ !== undefined && ANCRAGE_DE_CODE.test(` ${champ}`)
+  )
+}
+
+/**
+ * QUELLE VOIE POUR CETTE SÉLECTION ? — une recommandation lue sur la FORME de ce que le scout a écrit,
+ * jamais sur la qualité de son choix (le producteur et le juge sont le même modèle : contrainte du
+ * Brain « sélection auto des candidats scout »).
+ *
+ * La correction directe n'est recommandée que si CHAQUE piste cochée est une correction (`fix`) déjà
+ * localisée (ancrage de code ou commande de preuve), sans effort fort déclaré, sans signal de risque
+ * (le même motif que `classifyRegime` : ce que le panneau recommande en direct, l'orchestrateur ne
+ * l'aurait pas classé en chantier), et si la sélection reste courte. Le moindre doute — nature
+ * inconnue, ajout, piste non localisée — garde le workflow complet : se tromper vers le complet coûte
+ * de l'argent, se tromper vers le direct coûte un cadrage qui manquait.
+ */
+export function voieRecommandee(selection: readonly CandidatAffiche[]): {
+  voie: VoieSelection
+  motif: string
+} {
+  if (selection.length === 0) return { voie: 'complete', motif: 'aucune piste cochée' }
+  if (selection.length > MAX_PISTES_CORRECTION_DIRECTE) {
+    return {
+      voie: 'complete',
+      motif: `${selection.length} pistes ensemble : c’est un chantier, il se cadre`
+    }
+  }
+  for (const candidat of selection) {
+    const nom = `« ${candidat.titre} »`
+    if (candidat.type !== 'fix' && candidat.type !== 'correction') {
+      return {
+        voie: 'complete',
+        motif:
+          candidat.type === 'new' || candidat.type === 'ajout'
+            ? `${nom} est un ajout : il se cadre avant de s’écrire`
+            : `${nom} n’a pas de nature déclarée`
+      }
+    }
+    if (candidat.effort === 'r') {
+      return { voie: 'complete', motif: `${nom} est annoncé à effort fort` }
+    }
+    const texte = [candidat.titre, candidat.what, candidat.why, candidat.how]
+      .filter(Boolean)
+      .join(' ')
+    if (porteUnSignalDeRisque(texte)) {
+      return {
+        voie: 'complete',
+        motif: `${nom} touche un sujet à risque (architecture, sécurité, migration…)`
+      }
+    }
+    if (!estLocalisee(candidat)) {
+      return {
+        voie: 'complete',
+        motif: `${nom} n’est pas localisé (ni ancrage ni preuve à lancer)`
+      }
+    }
+  }
+  return {
+    voie: 'directe',
+    motif:
+      selection.length > 1
+        ? `${selection.length} corrections déjà localisées par le scout, effort contenu`
+        : 'correction déjà localisée par le scout, effort contenu'
+  }
+}
+
+/** Le message de la voie choisie : une seule porte d'entrée pour le bouton ET le clic automatique. */
+export function redigerPromptSelon(
+  voie: VoieSelection,
+  selection: readonly CandidatAffiche[]
+): string {
+  return voie === 'directe'
+    ? redigerPromptCorrectionDirecte(selection)
+    : redigerPromptWorkflowSelection(selection)
+}
+
+function enteteSelection(selection: readonly CandidatAffiche[]): string {
+  return selection.length > 1
+    ? `Traite ENSEMBLE ces ${selection.length} candidats issus du scout interne d'Autowin :`
+    : `Traite ce candidat issu du scout interne d'Autowin :`
+}
+
+function lignesDesCandidats(selection: readonly CandidatAffiche[]): string[] {
+  return selection.map((candidat, index) => {
     const morceaux = [
       candidat.url
         ? `${index + 1}. ${candidat.titre} — ancrage ${candidat.url}`
@@ -186,17 +323,6 @@ export function redigerPromptWorkflowSelection(selection: readonly CandidatAffic
     ].filter((detail): detail is string => detail !== undefined)
     return [morceaux.join(' — '), ...details].join('\n')
   })
-  return [
-    selection.length > 1
-      ? `Traite ENSEMBLE ces ${selection.length} candidats issus du scout interne d'Autowin :`
-      : `Traite ce candidat issu du scout interne d'Autowin :`,
-    '',
-    ...lignes,
-    '',
-    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis joue le',
-    'PIPELINE complet — cadrage, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
-    'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
-  ].join('\n')
 }
 
 /**

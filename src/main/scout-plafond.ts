@@ -297,7 +297,7 @@ export function sujetDeCommit(sujet: string): string {
     .replace(/^\s*[a-z]+(?:\([^)]*\))?!?\s*:\s*/iu, '')
     .replace(/\(\s*conv-\d+\s*\)/giu, ' ')
     .replace(
-      /t?raite\s+(?:ensemble\s+ces\s+\d+\s+candidats|ce\s+candidat)\s+issus?\s+du\s+scout(?:\s+interne)?(?:\s+d['’]autowin)?\s*:?/iu,
+      /(?:\/build\s+)?t?raite\s+(?:ensemble\s+ces\s+\d+\s+candidats|ce\s+candidat)\s+issus?\s+du\s+scout(?:\s+interne)?(?:\s+d['’]autowin)?\s*:?/iu,
       ' '
     )
     .replace(/\s+/gu, ' ')

@@ -21,6 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { MOTIFS_REFUS, parseScoutTable, type MotifRefus } from '../shared/scout-table'
 import type { OutcomeLearningEventV1, OutcomeObservedV1 } from '../shared/run-learning'
+import { estSelectionDeScout } from '../shared/selection-scout'
 import { lireStockVeille } from './veille/candidats-store'
 
 /** Même borne que le scout de la veille (`veille/scout-interne.ts`, `dejaConnus.slice(0, 60)`). */
@@ -160,21 +161,14 @@ function ecrireMemoireScout(chemin: string, entrees: EntreeMemoireScout[]): void
 }
 
 /**
- * L'en-tête du message de sélection (`redigerPromptWorkflowSelection`, `veille-candidats-message.ts`).
- * Le « T » est facultatif : la demande de conv-890 est arrivée en « raite ENSEMBLE… », collée sans
- * sa première lettre.
- */
-const ENTETE_SELECTION =
-  /(?:^|\n)\s*(?:t[âa]che\s*:\s*)?t?raite\s+(?:ensemble\s+ces\s+\d+\s+candidats|ce\s+candidat)\s+issus?\s+du\s+scout/iu
-
-/**
  * Les pistes PRISES, lues dans un message de sélection : ses lignes « Quoi : », sinon ses lignes
  * numérotées sans leurs suffixes (« — ancrage », « — preuve », « — pertinence »). Une demande libre
  * n'est pas une sélection : liste vide.
  */
 export function titresChoisisDansLaDemande(demande: string): string[] {
   const texte = demande ?? ''
-  if (!ENTETE_SELECTION.test(texte)) return []
+  // L'en-tête du message de sélection, source unique partagée (`shared/selection-scout.ts`).
+  if (!estSelectionDeScout(texte)) return []
   const nettoyer = (brut: string): string => brut.replace(/\*\*/gu, '').replace(/\s+/gu, ' ').trim()
   const quoi = [...texte.matchAll(/^\s+Quoi : (.+)$/gmu)].map((m) => nettoyer(m[1]!))
   if (quoi.length > 0) return quoi.filter(Boolean)

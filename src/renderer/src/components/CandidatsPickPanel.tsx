@@ -3,8 +3,9 @@ import type { CandidatAffiche } from './veille-candidats-message'
 import { MOTIFS_REFUS, type MotifRefus } from './scout-table'
 import {
   emojiType,
-  redigerPromptWorkflowSelection,
-  selectionAutoDepuisScout
+  redigerPromptSelon,
+  selectionAutoDepuisScout,
+  voieRecommandee
 } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
@@ -104,16 +105,25 @@ export function CandidatsPickPanel({
   const tous = coches.size === candidats.length
   const selection = candidats.filter((_, index) => coches.has(index))
   /*
+   * DEUX VOIES, UNE RECOMMANDÉE (conv-1080) : « parfois y a pas besoin du workflow complet ». La
+   * recommandation suit les cases cochées, en direct ; les deux boutons restent à leur place (un
+   * bouton qui saute sous le pointeur fait cliquer le mauvais), seul l'accent change de bouton.
+   */
+  const recommandation = voieRecommandee(selection)
+  /*
    * L'AGENT APPUIE SUR LE BOUTON. Une seule fois par panneau (`lanceRef`) : un re-rendu ne renvoie
    * rien. Condition stricte — le mode auto est allume ET le scout a ecrit son choix ET ce choix
-   * retient au moins une ligne. Un workflow complet jusqu'au commit ne part pas d'un defaut.
+   * retient au moins une ligne. Un travail jusqu'au commit ne part pas d'un defaut. La voie est
+   * celle que recommande la sélection du scout : le doute retombe toujours sur le workflow complet.
    */
+  const choixAuto = auto === null ? [] : candidats.filter((_, index) => auto.has(index))
+  const voieAuto = voieRecommandee(choixAuto).voie
   const lanceRef = useRef(false)
   useEffect(() => {
     if (!autoLancer || lanceRef.current) return
-    if (auto === null || auto.size === 0) return
+    if (choixAuto.length === 0) return
     lanceRef.current = true
-    onPick?.(redigerPromptWorkflowSelection(candidats.filter((_, index) => auto.has(index))))
+    onPick?.(redigerPromptSelon(voieAuto, choixAuto))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLancer])
   return (
@@ -133,7 +143,7 @@ export function CandidatsPickPanel({
           <span className="cpick-auto" data-testid="cpick-auto">
             {auto.size === 0
               ? 'Le scout n’a retenu aucun candidat — rien n’est coché.'
-              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? 'lancé automatiquement.' : 'à toi de lancer.'}`}
+              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? (voieAuto === 'directe' ? 'lancé automatiquement en correction directe.' : 'lancé automatiquement en workflow complet.') : 'à toi de lancer.'}`}
           </span>
         )}
         <span className="cpick-compte">
@@ -255,16 +265,37 @@ export function CandidatsPickPanel({
           )}
         </div>
       ))}
-      <button
-        type="button"
-        className="btn-accent btn cpick-lancer"
-        data-testid="cpick-lancer"
-        disabled={selection.length === 0}
-        onClick={() => onPick?.(redigerPromptWorkflowSelection(selection))}
-        title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → build → nettoyage → jugement) jusqu'au commit publié"
-      >
-        Lancer le workflow complet sur la sélection
-      </button>
+      {selection.length > 0 && (
+        <div className="cpick-voie" data-testid="cpick-voie">
+          Recommandé :{' '}
+          <b>{recommandation.voie === 'directe' ? 'correction directe' : 'workflow complet'}</b> —{' '}
+          {recommandation.motif}.
+        </div>
+      )}
+      <div className="cpick-actions">
+        <button
+          type="button"
+          className={`btn cpick-lancer${recommandation.voie === 'complete' ? ' btn-accent' : ''}`}
+          data-testid="cpick-lancer"
+          data-recommande={recommandation.voie === 'complete' ? 'oui' : undefined}
+          disabled={selection.length === 0}
+          onClick={() => onPick?.(redigerPromptSelon('complete', selection))}
+          title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → build → nettoyage → jugement) jusqu'au commit publié"
+        >
+          Lancer le workflow complet
+        </button>
+        <button
+          type="button"
+          className={`btn cpick-lancer${recommandation.voie === 'directe' ? ' btn-accent' : ''}`}
+          data-testid="cpick-direct"
+          data-recommande={recommandation.voie === 'directe' ? 'oui' : undefined}
+          disabled={selection.length === 0}
+          onClick={() => onPick?.(redigerPromptSelon('directe', selection))}
+          title="Envoie les candidats cochés en correction DIRECTE (build → jugement), sans recadrer : pour des corrections que le scout a déjà localisées, jusqu'au commit publié"
+        >
+          Corriger directement
+        </button>
+      </div>
     </div>
   )
 }

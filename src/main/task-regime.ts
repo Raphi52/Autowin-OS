@@ -13,6 +13,8 @@
 import type { PipelinePhase } from './skill-pipeline'
 import { matchIntentPhase } from './intent-phase-routing'
 import { routeSkillRequest } from './skill-routing'
+import { porteUnSignalDeRisque } from '../shared/signaux-de-risque'
+import { estSelectionDeScout } from '../shared/selection-scout'
 
 export type TaskRegime = 'trivial' | 'standard' | 'critical'
 
@@ -31,17 +33,9 @@ const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
   critical: ['scout', 'frame', 'build', 'clean']
 }
 
-/** Signaux de COMPLEXITÉ (→ critical) : architecture, transverse, risque, irréversible. */
-const CRITICAL_SIGNALS =
-  /\b(architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|(?<!\/)orchestrat(?!e\b)\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/i
-
-/**
- * Une contrainte négative décrit précisément ce qu'il NE faut pas faire ; elle ne doit donc pas
- * promouvoir seule une correction bornée en chantier critique. On retire uniquement le signal
- * placé dans la petite fenêtre de la négation : tout autre signal positif reste classé critical.
- */
-const NEGATED_CRITICAL_SIGNALS =
-  /\b(?:ne\s+pas|n['’]\s*|pas\s+de|aucun(?:e)?|sans|ni|do\s+not|don't|without)\s+(?:[^\s.;,:!?]+\s+){0,5}(?:architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/gi
+// Signaux de COMPLEXITÉ (→ critical) et leurs négations : `src/shared/signaux-de-risque.ts`, source
+// unique partagée avec le panneau des candidats scout, qui ne doit pas recommander une correction
+// directe là où ce classement verrait un chantier (conv-1080).
 
 /**
  * Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise.
@@ -83,8 +77,7 @@ function demandeDeScout(task: string): boolean {
 export function classifyRegime(task: string): TaskRegime {
   const t = task.trim()
   if (!t) return 'standard'
-  const positiveComplexity = t.replace(NEGATED_CRITICAL_SIGNALS, '')
-  if (CRITICAL_SIGNALS.test(positiveComplexity)) return 'critical'
+  if (porteUnSignalDeRisque(t)) return 'critical'
   // Multi-clause = vraie coupure de phrase (`;`, retour ligne, `. ` suivi de texte, « puis/then »),
   // PAS n'importe quel point (« 1.0.1 » n'est pas multi-clause).
   const hasClauseBreak = /[;\n]|\.\s+\S|\b(puis|ensuite|then|and then)\b/i.test(t)
@@ -168,7 +161,15 @@ export function regimePhases(task: string): PipelinePhase[] {
   // registre, pas une autorisation de réduire une tâche à risque. Mon test anti-régression passait à
   // côté : il exerçait une tâche critique SANS intention en tête.
   // Une phase NOMMÉE, elle, garde le droit de réduire (au-dessus) : c'est une décision explicite.
-  if (regime === 'critical') return [...REGIME_PHASES[regime]]
+  // UNE SÉLECTION DE CANDIDATS SCOUT NE REJOUE PAS LE SCOUT (conv-1080, « le doublon enlève-le ») :
+  // la demande sort d'un scout qui vient d'éclairer et de localiser ces pistes ; le régime critique
+  // le relançait en tête (4 runs de sélection sur 43 mesurés). La vérification que le besoin tient
+  // toujours est demandée au cadrage par le message lui-même.
+  if (regime === 'critical') {
+    return estSelectionDeScout(task)
+      ? REGIME_PHASES.critical.filter((phase) => phase !== 'scout')
+      : [...REGIME_PHASES[regime]]
+  }
 
   const intentPhase = naturalIntent
   // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker : une demande
