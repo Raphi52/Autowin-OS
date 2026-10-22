@@ -135,6 +135,12 @@
   font-size: 13px;
 }
 
+/* components/BlocDonnees.css — tailles */
+:root[data-theme^='malvoyant-'] .md-donnees__titre,
+:root[data-theme^='malvoyant-'] .md-donnees__recommande {
+  font-size: 13px;
+}
+
 /* components/BrainMarkdown.css — tailles */
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
@@ -274,6 +280,7 @@
 :root[data-theme^='malvoyant-'] .md-table th,
 :root[data-theme^='malvoyant-'] .md-badge,
 :root[data-theme^='malvoyant-'] .md-ref,
+:root[data-theme^='malvoyant-'] .md-html .aw-kicker,
 :root[data-theme^='malvoyant-'] .prompt-envelope summary,
 :root[data-theme^='malvoyant-'] .prompt-envelope-meta span,
 :root[data-theme^='malvoyant-'] .prompt-envelope-limit,

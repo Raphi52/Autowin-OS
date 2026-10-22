@@ -145,3 +145,40 @@ describe('session non reprise : le modèle relit le DERNIER run en entier', () =
     expect(rangDuDernierRun([{ parts: undefined }], (message) => message.parts)).toBe(-1)
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : le dernier run relu EN ENTIER portait le code de ses pages `html-render`.
+ * Le filtre passe AVANT la borne de tout resultat injecte (120 000 caracteres) : applique apres, il
+ * laisserait la borne couper ce qui SUIT une page longue. Entree qui ferait echouer une mauvaise
+ * correction : une page de plus de 120 000 caracteres suivie de `APRES-LA-PAGE`.
+ */
+describe('dernier run relu en entier : ses pages html-render en texte visible', () => {
+  it('le texte qui suit une page plus longue que la borne n’est plus coupé', () => {
+    const page =
+      '```html-render\n<style>.c{color:#d4a94f}</style>\n' +
+      '<p class="c">PAGE-VUE</p>\n'.repeat(6_000) +
+      '```\nAPRES-LA-PAGE'
+    expect(page.length).toBeGreaterThan(120_000)
+    const issue = { ...ISSUE, result: page }
+    const journalRoot = mkdtempSync(join(tmpdir(), 'dernier-run-page-'))
+    racines.push(journalRoot)
+    const evenements: ChatTurnEvent[] = [
+      { kind: 'command', actionId: 'route:0', name: 'orchestrate', args: { task: 'scout' } },
+      { kind: 'result', actionId: 'route:0', name: 'orchestrate', ok: true, data: issue },
+      { kind: 'done' }
+    ]
+    let etat = createChatTurn('tour-page')
+    for (const evenement of evenements) {
+      etat = reduceChatTurn(etat, evenement)
+      appendTurnEvent(journalRoot, CONV, 'tour-page', evenement as never)
+    }
+    const contenu = contenuAssistantPourLeModele(etat.parts, {
+      journalRoot,
+      conversationId: CONV,
+      turnId: 'tour-page'
+    })
+    expect(contenu).toContain('PAGE-VUE')
+    expect(contenu).toContain('APRES-LA-PAGE')
+    expect(contenu).not.toContain('#d4a94f')
+  })
+})

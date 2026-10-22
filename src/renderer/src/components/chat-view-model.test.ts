@@ -1446,6 +1446,9 @@ describe('groupAssistantActivity', () => {
     expect(blocs[0].kind === 'candidats-pick' && blocs[0].candidats).toEqual([
       {
         titre: 'Le journal accepte une ligne mal formee',
+        // Le numero de la ligne du tableau suit le candidat : c'est lui que la cible du scout
+        // designe, meme sur un tableau retrie (conv-1074).
+        num: '1',
         url: 'src/main/activity/ledger.ts:63',
         type: 'fix',
         // Les pastilles Impact/Effort suivent la ligne : sur ce format il n'y a aucun nombre, elles

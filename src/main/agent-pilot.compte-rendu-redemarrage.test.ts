@@ -169,3 +169,32 @@ describe('deux tours exécutés sans le modèle d’affilée arrivent tous les d
     expect(dernier).toContain('PISTE-DU-CADRAGE')
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : le compte-rendu d'un tour execute SANS le modele lui est remis au tour
+ * suivant, puis reste dans sa session pour tous les tours d'apres. Il portait le code ENTIER des
+ * pages `html-render` du run. Entree qui ferait echouer une mauvaise correction : `#d4a94f`, la
+ * couleur du `<style>` de la page, et le texte place APRES une page plus longue que la borne de tout
+ * resultat injecte (un filtre applique apres la coupe ne le verrait jamais).
+ */
+describe('le compte-rendu remis au modèle porte le texte des pages, pas leur code', () => {
+  it('une page html-render du run arrive en texte visible au tour suivant', async () => {
+    const envoyes: string[] = []
+    const page =
+      '```html-render\n<style>.c{color:#d4a94f}</style>\n' +
+      '<p class="c">PAGE-VUE</p>\n'.repeat(6_000) +
+      '```\nAPRES-LA-PAGE'
+    expect(page.length).toBeGreaterThan(120_000)
+    const p = pilote(envoyes, [page])
+    await p.chat([{ role: 'user', content: 'bonjour' }], () => {}, undefined, 12, CONV)
+    await p.chat([{ role: 'user', content: '/scout cherche' }], () => {}, undefined, 12, CONV)
+    await p.chat([{ role: 'user', content: 'résume' }], () => {}, undefined, 12, CONV)
+
+    const dernier = envoyes.at(-1) ?? ''
+    expect(dernier).toContain('hors de ta session')
+    expect(dernier).toContain('PAGE-VUE')
+    expect(dernier).toContain('APRES-LA-PAGE')
+    expect(dernier).not.toContain('#d4a94f')
+    expect(dernier).not.toMatch(/<\/?(p|style)\b/i)
+  })
+})

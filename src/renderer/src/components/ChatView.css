@@ -2147,6 +2147,60 @@ ol.md-list li {
   padding: 6px 10px;
   border: 1px solid var(--line);
 }
+/* CLASSES DE L'APP POUR LES PAGES html-render (conv-1074, 2026-10-22). Le modele ecrivait des
+   couleurs de nuit en dur ; il nomme maintenant un ROLE, et l'app le peint avec les jetons du theme
+   choisi. Liste et usages : src/shared/classes-pages-html.ts (le prompt la lit). Une seule classe de
+   force : une regle ecrite par le modele dans son bloc l'emporte toujours. Reprise en theme clair :
+   theme-modes.css. */
+.md-html .aw-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-doux);
+}
+.md-html .aw-chiffre {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-clair);
+}
+.md-html .aw-discret {
+  color: var(--text-dim);
+}
+.md-html .aw-chip {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--text) 5%, transparent);
+  overflow-wrap: anywhere;
+}
+.md-html .aw-filet {
+  height: 1px;
+  margin: 10px 0;
+  border: 0;
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--gold-doux) 55%, transparent),
+    color-mix(in srgb, var(--gold-doux) 6%, transparent)
+  );
+}
+.md-html .aw-ok {
+  color: var(--ok);
+}
+.md-html .aw-ko {
+  color: var(--err);
+}
+.md-html .aw-attention {
+  color: var(--warn);
+}
+.md-html .aw-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 10px 14px;
+}
 
 .prompt-envelope {
   margin-top: 8px;

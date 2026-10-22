@@ -4,6 +4,7 @@ import {
   CONTEXT_MESSAGE_LIMIT,
   clip
 } from './conversation-window'
+import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
 
 /**
  * Contexte collecté AVANT toute orchestration substantielle. Cette collecte est locale,
@@ -53,7 +54,15 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
       `Conversation: ${input.conversation.id}${input.conversation.title ? ` — ${input.conversation.title}` : ''}`,
       `Workflows attachés: ${input.conversation.runPaths?.length ?? 0}`
     )
-    const recents = (input.conversation.messages ?? []).slice(-CONTEXT_MESSAGE_LIMIT)
+    // Les pages `html-render` des reponses arrivent en texte VISIBLE : le run lisait sinon leurs
+    // balises et leur `<style>`, jusqu'a 12 000 caracteres pour la derniere reponse (conv-1074).
+    const recents = (input.conversation.messages ?? [])
+      .slice(-CONTEXT_MESSAGE_LIMIT)
+      .map((message) =>
+        message.role === 'user'
+          ? message
+          : { ...message, content: pagesHtmlEnTexte(message.content) }
+      )
     if (recents.length) {
       lines.push(
         'Échanges récents (le fil qui a produit la demande — sa lettre ne dit pas tout) :',

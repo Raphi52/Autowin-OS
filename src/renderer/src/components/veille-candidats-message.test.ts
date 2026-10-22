@@ -383,3 +383,58 @@ describe('selectionAutoDepuisScout', () => {
     expect(selectionAutoDepuisScout(candidats, '## Cible\n\n## Suite')).toBeNull()
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : l'app RETRIE le tableau du scout apres avoir ajuste les notes, en gardant
+ * les numeros d'origine (`scout-plafond.ts:19`). La selection automatique comparait la cible a la
+ * POSITION : sur un tableau retrie 4, 1, 3, « La ligne 1 passe devant. » cochait la ligne n° 4.
+ * Entree qui ferait echouer une mauvaise correction : ce tableau retrie et cette cible.
+ */
+describe('un tableau retrié : la cible désigne le NUMÉRO de ligne, pas la position', () => {
+  const RETRIE = [
+    '| # | Score | Type | What | Why | How |',
+    '|---|---|---|---|---|---|',
+    '| 4 | 81 | 🆕 new | Blocs de donnees | b | `markdown-blocs.ts:14` |',
+    '| 1 | 66 | 🔧 fix | Filtre du HTML renvoye | a | `chat-turn.ts:547` |',
+    '| 3 | 63 | 🔧 fix | Numeros des candidats | c | `veille-candidats-message.ts:253` |'
+  ].join('\n')
+
+  it('le panneau garde le numéro de chaque ligne', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(RETRIE)!)
+    expect(candidats.map((candidat) => candidat.num)).toEqual(['4', '1', '3'])
+  })
+
+  it('« La ligne 1 passe devant. » coche la ligne n° 1, pas la première affichée', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(RETRIE)!)
+    const choix = selectionAutoDepuisScout(
+      candidats,
+      `## Cible\nLa ligne 1 passe devant.\n\n${RETRIE}`
+    )
+    expect([...(choix ?? [])]).toEqual([1])
+    expect(candidats[1]!.titre).toBe('Filtre du HTML renvoye')
+  })
+
+  it('« CIBLES: 3, 4 » coche les lignes n° 3 et n° 4, où qu’elles soient', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(RETRIE)!)
+    expect([...(selectionAutoDepuisScout(candidats, 'CIBLES: 3, 4') ?? [])].sort()).toEqual([0, 2])
+  })
+
+  it('jumeau : une cible « 2 » sur ce tableau sans ligne n° 2 ne coche rien', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(RETRIE)!)
+    expect(selectionAutoDepuisScout(candidats, 'CIBLE: 2')).toBeNull()
+  })
+
+  it('jumeau : des candidats SANS numéro (veille web) gardent la position', () => {
+    const candidats = [{ titre: 'Alpha' }, { titre: 'Beta' }, { titre: 'Gamma' }]
+    expect([...(selectionAutoDepuisScout(candidats, 'CIBLE: 2') ?? [])]).toEqual([1])
+  })
+
+  it('jumeau : des numéros en double ne sont pas fiables, la position reprend la main', () => {
+    const candidats = [
+      { titre: 'Alpha', num: '1' },
+      { titre: 'Beta', num: '1' },
+      { titre: 'Gamma', num: '3' }
+    ]
+    expect([...(selectionAutoDepuisScout(candidats, 'CIBLE: 2') ?? [])]).toEqual([1])
+  })
+})

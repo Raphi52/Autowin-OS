@@ -10,6 +10,8 @@
  * (`fichier:ligne`) et une citation recopiée d'un artefact réellement lu. `trierCandidats` refuse déjà
  * ce qui n'en porte pas — le même contrôle en aval que pour le web, aucun chemin privilégié.
  */
+import { CONSIGNE_CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
+
 export interface ParametresScoutInterne {
   /** Racine du dépôt — le scout y lit le code et les workflows. */
   racineDepot: string
@@ -41,10 +43,9 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '   pagination from/lines). Une réponse sans lecture préalable ne vaut rien et sera rejetée.',
     '2. Écris ensuite une courte synthèse humaine dans un bloc fermé ```html-render, direction',
     '   « transparence totale » (choix utilisateur) : AUCUN panneau ni fond opaque — la',
-    '   typographie se pose sur le fond sombre de l’app ; sections séparées par des filets fins',
-    '   dégradés or (rgba(212,169,79,.55)→.06) ; kickers en petites capitales monospace or',
-    '   (#d4a94f-#e3ba55) ; texte #dde3ee ; chemins en chips monospace discrètes (fond',
-    '   rgba(255,255,255,.045), bordure rgba(255,255,255,.13)) ; jamais de halos, aucun JavaScript.',
+    '   typographie se pose sur le fond de l’app ; jamais de halos, aucun JavaScript.',
+    // Les classes de l'app remplacent la recette de couleurs en dur (conv-1074).
+    `   ${CONSIGNE_CLASSES_PAGES_HTML}`,
     '   Contenu : les fichiers lus et 2-3 lignes de constats, C’EST TOUT — ne liste PAS les',
     '   candidats, l’application les affiche elle-même juste en dessous avec cases et détails.',
     '   COMPACT : interlignes 1.45-1.55, marges de section ≤10px, pas de grands vides — la synthèse',

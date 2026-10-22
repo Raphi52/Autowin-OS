@@ -416,6 +416,34 @@
 :root[data-base='clair'] .md-html pre {
   background-color: rgba(18, 24, 40, 0.05) !important;
 }
+/* LES CLASSES DE L'APP (`aw-*`, conv-1074) ECHAPPENT A L'ECRASEMENT ci-dessus : elles ne portent pas
+   une couleur de nuit ecrite par le modele, mais un jeton du theme, deja lisible en clair. Le cout
+   assume plus haut (« les accents dores passent en sombre ») ne vaut plus pour elles. Le
+   `[data-html-scope]` (pose sur chaque page rendue, Markdown.tsx) n'est pas decoratif : sans lui,
+   ces regles n'auraient que la force de l'ecrasement GENERE de Vanilla Claude et NieR (0,4,0),
+   charge APRES ce fichier — et perdraient (verrou : ChatView.classes-pages.test.ts). */
+:root[data-base='clair'] .md-html[data-html-scope] .aw-kicker {
+  color: var(--gold-doux) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-chiffre {
+  color: var(--gold-clair) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-discret {
+  color: var(--text-dim) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-chip {
+  background-color: color-mix(in srgb, var(--text) 5%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text) 14%, transparent) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-ok {
+  color: var(--ok) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-ko {
+  color: var(--err) !important;
+}
+:root[data-base='clair'] .md-html[data-html-scope] .aw-attention {
+  color: var(--warn) !important;
+}
 
 /* Le bloc de clôture (Fait / Maintenant / Reste à faire / Recommandé) en thème
    clair est traité dans `ChatView.css`, juste après la règle sombre d'origine —

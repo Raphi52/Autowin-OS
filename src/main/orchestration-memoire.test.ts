@@ -130,3 +130,24 @@ describe('resumeDesTours', () => {
     expect(resumeDesTours([{ role: 'user', content: 'a' }], 10)).toEqual([])
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : le resume d'une ligne d'un tour ancien coupait la reponse a 180
+ * caracteres — une reponse qui commence par une page `html-render` n'y laissait que du code.
+ * Entree qui ferait echouer une mauvaise correction : la couleur `#d4a94f` au debut de la page.
+ */
+describe('resumeDesTours — une page html-render y est résumée par son texte', () => {
+  it('le résumé d’une réponse-page montre son texte, pas son <style>', () => {
+    const page =
+      '```html-render\n<style>.c{color:#d4a94f;padding:4px}</style>\n<p class="c">TEXTE-DU-TOUR</p>\n```'
+    const [resume] = resumeDesTours(
+      [
+        { role: 'assistant', content: page },
+        { role: 'user', content: 'récent' }
+      ],
+      1
+    )
+    expect(resume).toContain('TEXTE-DU-TOUR')
+    expect(resume).not.toContain('#d4a94f')
+  })
+})

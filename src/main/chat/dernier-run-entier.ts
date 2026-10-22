@@ -10,6 +10,7 @@ import {
   type OrchestrationOutcome
 } from '../../shared/orchestration-outcome'
 import { bornerResultatDeCommande } from '../resultat-de-commande-borne'
+import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
 import { readTurnJournal } from '../runs/turn-journal'
 
 /**
@@ -108,9 +109,13 @@ export function contenuAssistantPourLeModele(
         `\n[RÉSULTAT coupé à ${String(MAX_STRING).replace(/\B(?=(\d{3})+$)/g, ' ')} caractères à l'enregistrement du ` +
         `fil, et le journal de ce tour n'existe plus : la fin du résultat n'est PAS ici.]`
       : ''
+  // Les pages `html-render` du run passent en texte visible AVANT la borne : filtrees apres, la
+  // borne aurait deja coupe ce qui suit une page longue (conv-1074).
   const compteRendu = bornerResultatDeCommande(
     'orchestrate',
-    formatOrchestrationOutcomePourLeModele(true, entiere ?? copieDuFil) + avisDeCoupe
+    pagesHtmlEnTexte(
+      formatOrchestrationOutcomePourLeModele(true, entiere ?? copieDuFil) + avisDeCoupe
+    )
   )
 
   // La BULLE de l'app est le meme compte-rendu, coupe : on la reconnait a sa premiere ligne (statut,

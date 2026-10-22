@@ -14,6 +14,7 @@ import { parseFileRef } from '../../../shared/file-ref'
 import { tokenizeMarkdownCodeBlocks } from './markdown-blocs'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
 import { Bloc3D } from './Bloc3D'
+import { BlocDonnees } from './BlocDonnees'
 import { SceneDuCarrousel } from './SceneDuCarrousel'
 import { CLASSE_PLACE_SCENE, rattacherScenesAuxCarrousels } from './draft-scene-3d'
 import { splitFinalSummary } from './markdown-cloture'
@@ -132,6 +133,16 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
         // Scene three.js VIVANTE, executee dans un cadre isole sans reseau (Bloc3D.tsx). Le code
         // n'entre jamais dans la page de l'app.
         <Bloc3D key={`${keyPrefix}-scene-3d-${index}`} code={block.content} />
+      )
+
+    if (block.kind === 'donnees' && block.donnees)
+      return (
+        // Bloc de DONNEES (conv-1074) : le modele a envoye un JSON, l'app le met en page.
+        <BlocDonnees
+          key={`${keyPrefix}-donnees-${index}`}
+          donnees={block.donnees}
+          source={block.content}
+        />
       )
 
     if (block.kind === 'code')

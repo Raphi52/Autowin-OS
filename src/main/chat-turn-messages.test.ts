@@ -949,3 +949,41 @@ describe('commandeAObserveLeReel — run et verify qui ont tourné valent une le
     expect(commandeAObserveLeReel('remember', { ok: true, data: { stored: true } })).toBe(false)
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : une session NEUVE relit l'historique du fil. Chaque page `html-render`
+ * d'une reponse y repartait en CODE — balises et `<style>` — a chaque tour. Le modele relit
+ * desormais le texte visible de la page ; les mots de l'utilisateur, eux, restent intacts.
+ * Entree qui ferait echouer une mauvaise correction : la couleur `#d4a94f` du `<style>`.
+ */
+describe('buildTurnMessages — une page html-render de l’agent revient en texte visible', () => {
+  const page =
+    'Voici la page.\n```html-render\n<style>.c{color:#d4a94f}</style>\n<div class="c">TEXTE-VU</div>\n```'
+
+  it('la réponse de l’agent n’emporte ni balise ni style dans l’historique', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'montre' },
+        { role: 'assistant', content: page }
+      ]
+    })
+    const toi = entries.find((entry) => entry.startsWith('TOI: ')) ?? ''
+    expect(toi).toContain('Voici la page.')
+    expect(toi).toContain('TEXTE-VU')
+    expect(toi).not.toContain('#d4a94f')
+    expect(toi).not.toMatch(/<\/?[a-z]/i)
+  })
+
+  it('jumeau : un message de l’UTILISATEUR garde son texte mot pour mot', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [{ role: 'user', content: page }]
+    })
+    expect(entries.join('\n')).toContain('<div class="c">TEXTE-VU</div>')
+  })
+})

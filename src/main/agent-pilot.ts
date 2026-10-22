@@ -138,6 +138,8 @@ import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 import { protegerRappel } from './observabilite-non-bloquante'
 import { bornerResultatDeCommande } from './resultat-de-commande-borne'
+import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
+import { CONSIGNE_CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
 import {
   cleAppelNatif,
   estUnOutilDirectDuChat,
@@ -1415,15 +1417,19 @@ export class AgentPilot {
        *
        * Le depot porte le resultat ENTIER, pas la bulle coupee a 4 000 caracteres (conv-914 : 6 pistes
        * trouvees, une seule visible pour l'agent). Seule la borne de tout resultat injecte s'applique.
+       * Les pages `html-render` du run y passent en texte visible AVANT la borne : ce compte-rendu reste
+       * ensuite dans la session du modele pour tous les tours suivants (conv-1074).
        */
       if (conversationId)
         this.deposerCompteRendu(
           conversationId,
           bornerResultatDeCommande(
             'orchestrate',
-            avecAvisEnTete(
-              formatOrchestrationOutcomePourLeModele(result.ok, issueDuRun, erreurDuRun),
-              directiveNotice
+            pagesHtmlEnTexte(
+              avecAvisEnTete(
+                formatOrchestrationOutcomePourLeModele(result.ok, issueDuRun, erreurDuRun),
+                directiveNotice
+              )
             )
           )
         )
@@ -1524,11 +1530,12 @@ export class AgentPilot {
                 'EXPRESSION VISUELLE : hors format strict demande, des que ta reponse a une STRUCTURE ' +
                 '(comparaison, etapes, statuts, chiffres, recapitulatif), prefere un bloc ferme ' +
                 '```html-render en DIRECTION « transparence totale » (choix utilisateur) : aucun ' +
-                'panneau ni fond opaque, typographie sur le fond sombre de l’app, filets fins degrades or ' +
-                '(rgba(212,169,79,.55) vers .06), accents or #d4a94f-#e3ba55 pour kickers mono et chiffres ' +
-                'cles, texte #dde3ee, chips monospace discretes, mise en page COMPACTE (interlignes 1.45-1.55, ' +
-                'marges de section <=10px, aucun grand vide vertical), jamais de halos ; sans ' +
-                'JavaScript ni URL externe. Garde le texte simple pour une ou deux phrases.\n'
+                'panneau ni fond opaque, typographie sur le fond de l’app, mise en page COMPACTE ' +
+                '(interlignes 1.45-1.55, marges de section <=10px, aucun grand vide vertical), jamais de ' +
+                'halos ; sans JavaScript ni URL externe. ' +
+                // Les classes de l'app remplacent la recette de couleurs en dur (conv-1074).
+                CONSIGNE_CLASSES_PAGES_HTML +
+                ' Garde le texte simple pour une ou deux phrases.\n'
             },
             // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
             // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).

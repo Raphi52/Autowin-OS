@@ -302,4 +302,43 @@ describe('CandidatsPickPanel', () => {
       container.querySelector('[data-testid="cpick-details"]')?.classList.contains('fade-in')
     ).toBe(true)
   })
+
+  /**
+   * conv-1074 (2026-10-22) : « dans scout les candidats sont pas numérotés donc je sais meme pas si tu
+   * comprend 1 2 3 ». Chaque ligne montre le NUMÉRO du tableau du scout — celui que la cible désigne,
+   * même quand l'app a retrié le tableau. Entrée qui ferait échouer une mauvaise correction : des
+   * numéros 4, 1, 3 dans cet ordre (une numérotation par position afficherait 1, 2, 3).
+   */
+  it('chaque ligne montre le numéro du tableau du scout, dans l’ordre retrié', () => {
+    act(() =>
+      root.render(
+        <CandidatsPickPanel
+          candidats={[
+            { titre: 'Blocs', num: '4' },
+            { titre: 'Filtre', num: '1' },
+            { titre: 'Numéros', num: '3' }
+          ]}
+          texteScout="CIBLE: 1"
+        />
+      )
+    )
+    const numeros = [...container.querySelectorAll('[data-testid="cpick-num"]')].map(
+      (element) => element.textContent
+    )
+    expect(numeros).toEqual(['4.', '1.', '3.'])
+    const coches = [...container.querySelectorAll<HTMLInputElement>('.cpick-ligne input')].map(
+      (caseACocher) => caseACocher.checked
+    )
+    expect(coches).toEqual([false, true, false])
+  })
+
+  it('jumeau : des candidats sans numéro sont numérotés par leur position', () => {
+    act(() =>
+      root.render(<CandidatsPickPanel candidats={[{ titre: 'Alpha' }, { titre: 'Beta' }]} />)
+    )
+    const numeros = [...container.querySelectorAll('[data-testid="cpick-num"]')].map(
+      (element) => element.textContent
+    )
+    expect(numeros).toEqual(['1.', '2.'])
+  })
 })

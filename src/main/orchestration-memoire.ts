@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { clip } from './conversation-window'
+import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
 
 /**
  * MÉMOIRE INTER-RUNS D'UNE CONVERSATION — ce qu'un run doit hériter du précédent.
@@ -155,7 +156,15 @@ export function resumeDesTours(
 ): string[] {
   const anciens = messages.slice(0, Math.max(0, messages.length - fenetre))
   if (!anciens.length) return []
-  return anciens
-    .slice(-MAX_RESUME_TOURS)
-    .map((m) => `${m.role === 'user' ? 'U' : 'A'}: ${clip(m.content, MAX_RESUME_CHARS)}`)
+  return (
+    anciens
+      .slice(-MAX_RESUME_TOURS)
+      // Une reponse qui ouvre sur une page `html-render` ne laissait que du code dans ses 180
+      // caracteres : on resume son texte visible (conv-1074).
+      .map((m) =>
+        m.role === 'user'
+          ? `U: ${clip(m.content, MAX_RESUME_CHARS)}`
+          : `A: ${clip(pagesHtmlEnTexte(m.content), MAX_RESUME_CHARS)}`
+      )
+  )
 }

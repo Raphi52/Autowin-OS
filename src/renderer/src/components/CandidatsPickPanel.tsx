@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { CandidatAffiche } from './veille-candidats-message'
+import { type CandidatAffiche, numerosDesCandidats } from './veille-candidats-message'
 import { MOTIFS_REFUS, type MotifRefus } from './scout-table'
 import {
   emojiType,
@@ -63,6 +63,8 @@ export function CandidatsPickPanel({
    * « enchaîne sur tout », décocher est l'exception). Le bouton, lui, reste toujours à cliquer.
    */
   const auto = selectionAutoDepuisScout(candidats, texteScout)
+  // Le numéro du tableau du scout — celui que sa cible désigne, même sur un tableau retrié (conv-1074).
+  const numeros = numerosDesCandidats(candidats)
   const [coches, setCoches] = useState<ReadonlySet<number>>(
     auto ?? new Set(candidats.map((_, i) => i))
   )
@@ -171,6 +173,9 @@ export function CandidatsPickPanel({
             </button>
             <span className="cpick-type" title={candidat.type ?? 'nature inconnue'}>
               {emojiType(candidat.type)}
+            </span>
+            <span className="cpick-num" data-testid="cpick-num">
+              {numeros[index]}.
             </span>
             <span className="cpick-titre" onClick={() => deplier(index)}>
               {candidat.titre}

@@ -13,6 +13,7 @@
 
 import { COMPACT_REQUEST } from '../shared/context-gauge'
 import { BALISE_MESSAGE_UTILISATEUR } from '../shared/balise-message-utilisateur'
+import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
 import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
 
 export interface TurnMessageParts {
@@ -486,9 +487,12 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'memoryEcho', text: parts.memoryEcho },
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
+        // Une page `html-render` de l'agent y revient en texte VISIBLE, pas en code : sinon ses
+        // balises et son `<style>` repartaient a chaque tour (conv-1074). Les mots de l'utilisateur,
+        // eux, restent intacts.
         ...parts.history.map((m, rang) => ({
           name: `historique:${m.role === 'user' ? 'utilisateur' : 'agent'}:${rang}`,
-          text: `${m.role === 'user' ? `UTILISATEUR: ${motsUtilisateur(m.content)}` : `TOI: ${m.content}`}${nommerPiecesJointes(m.attachments)}`
+          text: `${m.role === 'user' ? `UTILISATEUR: ${motsUtilisateur(m.content)}` : `TOI: ${pagesHtmlEnTexte(m.content)}`}${nommerPiecesJointes(m.attachments)}`
         }))
       ]
   return nommes.filter((bloc) => bloc.text.trim().length > 0)

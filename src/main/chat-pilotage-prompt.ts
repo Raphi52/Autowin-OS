@@ -1,5 +1,7 @@
 import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
 import { consigneBureauCacheChat } from './consigne-bureau-cache'
+import { CONSIGNE_CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
+import { CONSIGNE_BLOCS_DONNEES } from '../shared/blocs-donnees'
 
 /**
  * Prompt de PILOTAGE du chat, extrait de `AgentPilot.chat()`.
@@ -401,27 +403,30 @@ export function buildChatPilotagePrompt(
     `\`node scripts/scene-3d-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le fil : ` +
     `code 0 exige, 3 = erreur JavaScript, 4 = rendu vide ; lis ses captures.
 ` +
+    // Blocs de donnees (conv-1074) : l'app met en page un JSON. Source unique de la redaction et du
+    // lecteur : src/shared/blocs-donnees.ts.
+    `${CONSIGNE_BLOCS_DONNEES}\n` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
     `mini-page autonome en HTML/CSS, puis ferme-le par \`\`\`. DIRECTION VISUELLE FIGÉE (choix ` +
     `utilisateur, « transparence totale ») : AUCUN panneau ni carte ni fond de page — la ` +
-    `typographie se pose directement sur le fond sombre de l'application (body transparent, ne peins ` +
-    `jamais un fond opaque) ; sections séparées par des filets fins DÉGRADÉS or ` +
-    `(linear-gradient(90deg, rgba(212,169,79,.55), rgba(212,169,79,.06)) en border-image) ; accents ` +
-    `OR sobres (#d4a94f à #e3ba55) pour les kickers en petites capitales monospace et les chiffres ` +
-    `clés ; texte #dde3ee, libellés secondaires #a9b2c4 ; chemins/valeurs techniques en chips ` +
-    `monospace discrètes (fond rgba(255,255,255,.045), bordure rgba(255,255,255,.13)) ; mise en page ` +
+    `typographie se pose directement sur le fond de l'application (body transparent, ne peins ` +
+    `jamais un fond opaque) ; sections séparées par des filets fins dégradés or, kickers en petites ` +
+    `capitales monospace or, chiffres clés en or, chemins/valeurs techniques en chips monospace ` +
+    `discrètes — avec les CLASSES de l'app (liste plus bas) ; mise en page ` +
     `COMPACTE — interlignes 1.45-1.55, marges de section ≤10px, padding de bloc ≤12px, aucun grand ` +
-    `vide vertical : la page doit se lire sans scroller des kilomètres —, corps 14px ; les couleurs ` +
+    `vide vertical : la page doit se lire sans scroller des kilomètres —, corps 14px. ` +
     `GRAS PORTEUR : dans chaque phrase de contenu, mets en \`<b>\` le mot qui porte l'information — ` +
     `le verdict, le chiffre, le nom de la chose, la différence entre deux options — pour que la page ` +
     `se lise en diagonale sans lire les phrases entières ; vise au moins un \`<b>\` par ligne de ` +
     `contenu, jamais une phrase entière en gras, et garde le gras dans la couleur du texte ` +
-    `(#dde3ee) ou en or #e3ba55 quand c'est un chiffre clé. Un tableau ou une liste sans aucun ` +
+    `ou en \`aw-chiffre\` quand c'est un chiffre clé. Un tableau ou une liste sans aucun ` +
     `\`<b>\` est une page ratée : le lecteur doit tout relire pour trouver l'essentiel. ` +
-    `restent lisibles si le thème change ` +
-    `(\`prefers-color-scheme\`) ; JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
+    // Classes de l'app (conv-1074) : la recette de couleurs en dur (#dde3ee, or #d4a94f-#e3ba55)
+    // etait ecrasee en theme clair. Source unique : src/shared/classes-pages-html.ts.
+    `${CONSIGNE_CLASSES_PAGES_HTML} ` +
+    `JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
     `texte ou le Markdown normal pour ce qui est court et purement conversationnel : une ou deux ` +
     `phrases n'ont pas besoin d'une page. ` +
     `Elle est rendue dans le fil, sans JavaScript, sans ` +

@@ -1,0 +1,123 @@
+/* BLOCS DE DONNEES dessines par l'app (conv-1074, BlocDonnees.tsx). Uniquement des jetons du theme :
+   chaque theme (sombre, clair, Nebuleuse, NieR…) les peint sans regle a lui. Direction « transparence
+   totale » des pages html-render : aucun fond opaque, des filets fins, l'or pour les accents. */
+.md-donnees {
+  margin: var(--s2, 8px) 0;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+.md-donnees__titre {
+  margin-bottom: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-doux);
+}
+.md-donnees__note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Tons d'une cellule ou d'un verdict — les memes roles que les classes aw-* des pages. */
+.md-donnees__ton--ok {
+  color: var(--ok);
+}
+.md-donnees__ton--ko {
+  color: var(--err);
+}
+.md-donnees__ton--attention {
+  color: var(--warn);
+}
+.md-donnees__ton--chiffre {
+  color: var(--gold-clair);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.md-donnees__ton--discret {
+  color: var(--text-dim);
+}
+
+/* COMPARAISON : options cote a cote, qui passent a la ligne dans une colonne etroite. */
+.md-donnees__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px 14px;
+}
+.md-donnees__option {
+  min-width: 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--line);
+}
+.md-donnees__option[data-recommande='oui'] {
+  border-left-color: var(--gold-doux);
+}
+.md-donnees__recommande {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-doux);
+}
+.md-donnees__nom {
+  font-weight: 700;
+}
+.md-donnees__points {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.md-donnees__verdict {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ETAPES : liste ordonnee, statut en glyphe (son libelle est dans aria-label et title). */
+.md-donnees__etapes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.md-donnees__etapes > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  line-height: 1.45;
+}
+.md-donnees__statut {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  color: var(--text-dim);
+}
+.md-donnees__etapes > li[data-statut='fait'] .md-donnees__statut {
+  color: var(--ok);
+}
+.md-donnees__etapes > li[data-statut='en-cours'] .md-donnees__statut {
+  color: var(--gold-clair);
+}
+.md-donnees__etapes > li[data-statut='echec'] .md-donnees__statut {
+  color: var(--err);
+}
+.md-donnees__rang {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.md-donnees__etape {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.md-donnees__etapes > li[data-statut='fait'] .md-donnees__etape-titre {
+  color: var(--text-dim);
+}
+.md-donnees__detail {
+  font-size: 12px;
+  color: var(--text-dim);
+}

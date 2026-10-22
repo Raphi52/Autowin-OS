@@ -9,10 +9,13 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { authoritativeOrchestrationClosureSpan } from '../../../shared/orchestration-outcome'
 import { createBoundedCache } from './bounded-cache'
 import { MAX_SCENE_3D_CHARS } from '../../../shared/scene-3d'
+import { estFormeDonnees, lireBlocDonnees, type BlocDonnees } from '../../../shared/blocs-donnees'
 
 export type MarkdownBlock = {
-  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d'
+  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d' | 'donnees'
   content: string
+  /** Bloc `donnees` seulement : la source deja LUE (conv-1074). Le decoupage est cache par contenu. */
+  donnees?: BlocDonnees
 }
 
 /**
@@ -184,6 +187,19 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       ferme &&
       span.content.trim().length > 0 &&
       span.content.length <= MAX_SCENE_3D_CHARS
+    // Bloc de DONNEES (conv-1074, src/shared/blocs-donnees.ts) : fence close ET JSON lisible, sinon
+    // du code — un JSON a moitie ecrit pendant le streaming ne doit jamais devenir un tableau faux.
+    const donnees =
+      ferme && estFormeDonnees(span.language)
+        ? lireBlocDonnees(span.language, span.content)
+        : undefined
+    if (donnees && !('erreur' in donnees)) {
+      blocks.push({ kind: 'donnees', content: span.content, donnees })
+      cursor = span.end
+      sur = span.end
+      blocsSurs = blocks.length
+      continue
+    }
     blocks.push({
       kind: mermaidRendu
         ? 'mermaid'

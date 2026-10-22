@@ -109,6 +109,31 @@ function jetonsDuTheme(id) {
   return bloc ? `:root[data-theme='${id}']{${bloc[1].trim()}}` : null
 }
 
+/**
+ * Les JETONS DE BASE de l'app (`--gold-doux`, `--text-dim`, `--ok`, `--mono`…) : ceux du `:root` de
+ * theme.css, et en `--clair` ceux de `:root[data-base='clair']` (theme-modes.css). Les classes `aw-*`
+ * des pages (conv-1074, src/shared/classes-pages-html.ts) ne portent AUCUNE couleur : elles lisent
+ * ces jetons. Sans eux, l'apercu les rendait dans la couleur du texte — un or que personne ne voyait,
+ * avec un code 0. Seules les variables sont reprises : le reste du `:root` n'est pas a l'apercu.
+ */
+// fix-ok: conv-1074 — mesure Edge sans tete : sans ces jetons, `.md-html .aw-kicker` sortait en
+// rgb(221, 227, 238) (couleur du texte, var(--gold-doux) indefinie) ; avec eux, rgb(212, 169, 79).
+function jetonsDeBase(clair) {
+  const variables = (fichier, motif) => {
+    const css = readFileSync(join(RACINE, fichier), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const bloc = motif.exec(css)
+    return bloc ? (bloc[1].match(/--[\w-]+\s*:[^;]+;/g) ?? []).join('') : ''
+  }
+  const sombre = variables('src/renderer/src/assets/theme.css', /(?:^|\n):root\s*\{([^}]*)\}/)
+  const claire = clair
+    ? variables(
+        'src/renderer/src/assets/theme-modes.css',
+        /:root\[data-base='clair'\]\s*\{([^}]*)\}/
+      )
+    : ''
+  return `:root{${sombre}}` + (claire ? `\n:root[data-base='clair']{${claire}}` : '')
+}
+
 async function compilerFiltre() {
   const sortie = await build({
     stdin: {
@@ -150,7 +175,11 @@ async function main() {
       erreur: `--theme ${theme} : aucun bloc :root[data-theme='${theme}'] dans src/renderer/src/assets/theme-${theme}.css`
     })
   const conteneur =
-    reglesConteneur() + (clair ? '\n' + reglesThemeClair() : '') + (jetons ? '\n' + jetons : '')
+    jetonsDeBase(clair) +
+    '\n' +
+    reglesConteneur() +
+    (clair ? '\n' + reglesThemeClair() : '') +
+    (jetons ? '\n' + jetons : '')
   // Fond du fil en theme clair : le panneau de Holographique blanc (`rgba(253, 253, 255, 0.985)`).
   const corps = clair ? 'background:#fdfdff;color:#1c172b' : 'background:#0b0b0e;color:#dde3ee'
   const browser = await chromium.launch({ executablePath, headless: true })

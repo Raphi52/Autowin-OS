@@ -13,6 +13,12 @@ import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
 export interface CandidatAffiche {
   titre: string
   /**
+   * Le NUMÉRO de la ligne dans le tableau du scout (colonne `#`), tel qu'écrit. L'app retrie le
+   * tableau après avoir ajusté les notes en GARDANT ces numéros (`scout-plafond.ts`) : la position
+   * dans la liste n'est donc pas le numéro que la cible du scout désigne (conv-1074).
+   */
+  num?: string
+  /**
    * Ancrage interne `src/...:ligne` ou URL web — affiché tel quel, jamais réécrit.
    *
    * OPTIONNEL depuis le 2026-08-18 : un scout de code rend un tableau markdown dont toutes les
@@ -143,6 +149,7 @@ export function candidatsDepuisScoutTable(
     const ancrage = ancrageDansCellules([row.how, row.what, row.why])
     return {
       titre: row.what.trim() || `Candidat #${row.num}`,
+      ...(row.num.trim() ? { num: row.num.trim() } : {}),
       ...(row.score === undefined ? {} : { pertinence: row.score }),
       ...(row.impact ? { impact: row.impact } : {}),
       ...(row.effort ? { effort: row.effort } : {}),
@@ -350,6 +357,30 @@ export function emojiType(type: string | undefined): string {
 }
 
 /**
+ * Le numéro qu'affiche chaque ligne du panneau — et que la cible du scout désigne. Une seule règle
+ * pour les deux : un numéro affiché qui ne serait pas celui que la sélection lit referait le défaut
+ * de conv-1074 (« ligne 1 » qui cochait la ligne n° 4 d'un tableau retrié).
+ */
+export function numerosDesCandidats(candidats: readonly CandidatAffiche[]): number[] {
+  return numerosDuTableau(candidats) ?? candidats.map((_, index) => index + 1)
+}
+
+/**
+ * Les numéros du tableau, s'ils sont FIABLES : tous présents, entiers et distincts. Sinon `null`, et
+ * la position reprend la main — pour TOUTE la liste, jamais ligne par ligne : mélanger les deux
+ * ferait désigner deux lignes par le même numéro. Les candidats de la veille web n'en ont aucun.
+ */
+function numerosDuTableau(candidats: readonly CandidatAffiche[]): number[] | null {
+  if (candidats.length === 0) return null
+  const numeros = candidats.map((candidat) => {
+    const brut = candidat.num?.trim() ?? ''
+    return /^\d{1,3}$/u.test(brut) ? Number(brut) : NaN
+  })
+  if (numeros.some((numero) => !Number.isInteger(numero))) return null
+  return new Set(numeros).size === numeros.length ? numeros : null
+}
+
+/**
  * LA SÉLECTION DÉCIDÉE PAR L'AGENT — le pont entre le choix ÉCRIT du scout et les cases du panneau.
  *
  * Défaut nommé (2026-09-06) : deux systèmes de choix coexistaient sans se parler. Les cases du
@@ -374,9 +405,11 @@ export function selectionAutoDepuisScout(
   const numeros = new Set(
     Array.from(nu.matchAll(/(?:^|[^\d])(\d{1,2})(?![\d])/gu), (trouve) => Number(trouve[1]))
   )
+  // Le NUMÉRO de la ligne, pas sa position : l'app retrie le tableau en gardant ses numéros (conv-1074).
+  const numerosLignes = numerosDesCandidats(candidats)
   const retenus = new Set<number>()
   candidats.forEach((candidat, index) => {
-    if (numeros.has(index + 1)) {
+    if (numeros.has(numerosLignes[index])) {
       retenus.add(index)
       return
     }

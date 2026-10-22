@@ -125,3 +125,46 @@ FIN-DE-REPONSE`
     expect(context).toContain('| Format stocké | JSON |\n')
   })
 })
+
+/**
+ * conv-1074 (2026-10-22) : le contexte d'un run joignait la derniere reponse EN ENTIER, page
+ * `html-render` comprise — balises et `<style>` jusqu'a 12 000 caracteres. Le run lit desormais le
+ * texte VISIBLE de la page. Entree qui ferait echouer une mauvaise correction : la couleur `#e3ba55`.
+ */
+describe('contexte d’un run : les pages html-render y arrivent en texte visible', () => {
+  const page = `Bilan :\n\`\`\`html-render\n<style>.c{color:#e3ba55}</style>\n${'<p class="c">LIGNE-VUE</p>\n'.repeat(900)}\`\`\`\nFIN-DU-BILAN`
+
+  it('la dernière réponse jointe en entier ne porte plus le code de la page', () => {
+    const context = collectOrchestrationContext({
+      task: 'juge ça',
+      conversation: {
+        id: 'conv-1074',
+        messages: [
+          { role: 'user', content: 'montre le bilan' },
+          { role: 'assistant', content: page }
+        ]
+      }
+    })
+    expect(context).toContain('LIGNE-VUE')
+    expect(context).toContain('FIN-DU-BILAN')
+    expect(context).not.toContain('#e3ba55')
+    expect(context).not.toMatch(/<\/?(p|style)\b/i)
+  })
+
+  it('les échanges récents (600 caractères) ne montrent pas non plus de balises', () => {
+    const context = collectOrchestrationContext({
+      task: 'continue',
+      conversation: {
+        id: 'conv-1074',
+        messages: [
+          {
+            role: 'assistant',
+            content: '```html-render\n<div style="color:#e3ba55">COURT</div>\n```'
+          }
+        ]
+      }
+    })
+    expect(context).toContain('COURT')
+    expect(context).not.toContain('#e3ba55')
+  })
+})
