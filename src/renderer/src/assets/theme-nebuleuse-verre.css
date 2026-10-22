@@ -1475,7 +1475,8 @@
    Reprendre) : un bouton qui changerait de forme selon l'etat se lirait comme deux boutons.
    L'avion passe a 16 px, la moitie du carre comme il etait la moitie du rond. Stop (bouton
    `.composer-stop` a part) n'est pas touche. Ses coins de 3 px sont redevenus droits : la forme
-   vient du chanfrein « Platine » (bloc BOUTONS-CHANFREIN, conv-302). */
+   vient du chanfrein « Platine » (bloc BOUTONS-CHANFREIN, conv-302) -- arrondie a 8 px depuis
+   conv-1068 (meme bloc). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send {
   --nv-envoi-fond: #d9ae52;
   --nv-envoi-fond-survol: #e3ba55;
@@ -2411,19 +2412,28 @@
    voisins aux coupes differentes se liraient comme deux familles. Il garde son dome rouge (bloc
    RELIEF-PERLE) ; ChatView.css lui pose un bord d'1 px au repos comme eteint, d'ou son
    `border-width: 0`. */
+/* COINS ARRONDIS POUR ENVOYER, STOP ET NOUVEAU FIL (conv-1068, 2026-10-22 : « remet des bords
+   arrondis sur le bouton envoyer stop et nouveau fil »). Les trois boutons quittent la coupe a
+   45 deg : Envoyer (32 px) et Stop (28 px) restent des CARRES (« Lineaire B », conv-302) a coins
+   de 8 px, Nouveau fil redevient sa PILULE (« Capsule », conv-171). Le cadre « Platine » reste :
+   memes jetons, pans allumes en haut a gauche et en bas a droite, cotes a 7 %. Seule la facon de
+   le tracer change : la coupe en `clip-path` ne suit pas un arrondi, l'anneau d'1 px est donc
+   evide par masque (le fond, moins sa boite de contenu), et il prend l'arrondi du bouton par
+   `border-radius: inherit`. Details garde son chanfrein (non nomme dans la demande).
+   Sans `clip-path`, le contour de focus n'est plus rogne ; le cadre s'allume quand meme au clavier.
+   PLUS DE PANS ALLUMES (conv-1068, meme jour : « enleve le bord blanc dans les coins ») : sur un
+   arrondi, les deux equerres claires du haut gauche et du bas droit se lisaient comme un bord blanc
+   pose dans les coins. L'anneau ne garde que les cotes a 7 %, uniformes ; Details garde les siens. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send {
-  --nv-bouton-coupe: 6px;
-  --nv-bouton-pans: 12px;
+  --nv-bouton-rayon: 8px;
   border-width: 0;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop {
-  --nv-bouton-coupe: 6px;
-  --nv-bouton-pans: 12px;
+  --nv-bouton-rayon: 8px;
   border-width: 0;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
-  --nv-bouton-coupe: 9px;
-  --nv-bouton-pans: 18px;
+  --nv-bouton-rayon: 999px;
 }
 :root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
   --nv-bouton-coupe: 6px;
@@ -2431,7 +2441,12 @@
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop,
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
+  --nv-bouton-cotes: var(--nv-chanfrein-cotes);
+  position: relative;
+  border-radius: var(--nv-bouton-rayon);
+  clip-path: none;
+}
 :root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
   --nv-bouton-cotes: var(--nv-chanfrein-cotes);
   position: relative;
@@ -2447,7 +2462,25 @@
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send::before,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop::before,
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row::before,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  clip-path: none;
+  pointer-events: none;
+}
 :root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule::before {
   content: '';
   position: absolute;

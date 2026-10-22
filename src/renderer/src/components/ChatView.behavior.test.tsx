@@ -1622,13 +1622,21 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.run-row')
     expect(container!.querySelector('.run-detail-box')).toBeTruthy()
     await act(async () => deleteButton.click())
-    expect(container!.querySelector('[role="dialog"]')?.textContent).toContain('ancien-run')
+    // La carte est rendue dans `body` (portail, conv-1078) : sous le panneau du chat, la poignée de
+    // largeur de la liste des fils passait au-dessus d'elle. On la cherche donc dans le document.
+    expect(container!.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('ancien-run')
+    const cliquerCarte = async (selecteur: string): Promise<void> => {
+      const bouton = document.querySelector<HTMLButtonElement>(selecteur)
+      expect(bouton, selecteur).toBeTruthy()
+      await act(async () => bouton!.click())
+    }
 
-    await click('.run-delete-cancel')
+    await cliquerCarte('.run-delete-cancel')
     expect(deleteConversationRun).not.toHaveBeenCalled()
 
     await act(async () => deleteButton.click())
-    await click('.run-delete-confirm')
+    await cliquerCarte('.run-delete-confirm')
 
     expect(deleteConversationRun).toHaveBeenCalledOnce()
     expect(deleteConversationRun).toHaveBeenCalledWith('A', run.path)

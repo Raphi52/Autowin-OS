@@ -21,7 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { MOTIFS_REFUS, parseScoutTable, type MotifRefus } from '../shared/scout-table'
 import type { OutcomeLearningEventV1, OutcomeObservedV1 } from '../shared/run-learning'
-import { estSelectionDeScout } from '../shared/selection-scout'
+import { estSelectionDeScout, lotDeLaSelection, voieDeLaSelection } from '../shared/selection-scout'
 import { lireStockVeille } from './veille/candidats-store'
 
 /** Même borne que le scout de la veille (`veille/scout-interne.ts`, `dejaConnus.slice(0, 60)`). */
@@ -48,6 +48,12 @@ export interface EntreeMemoireScout {
    * par l'app (`OutcomeObservedV1`) : on le relit là, sans second suivi (piste 1, conv-1033).
    */
   traitePar?: string
+  /**
+   * La voie qui a traité la piste prise, lue sur le message de sélection (conv-1080) : `directe`
+   * (build → jugement) ou `complete` (cadrage → build → nettoyage → jugement). Avec le résultat du
+   * run (`traitePar`), c'est la mesure qui dira si le seuil de la correction directe est le bon.
+   */
+  voie?: 'directe' | 'complete'
   /** « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2, conv-1033). */
   motif?: MotifRefus
 }
@@ -189,6 +195,11 @@ function memePiste(prise: string, gardee: string): boolean {
  * Note ce que l'utilisateur a fait des pistes : sur le DERNIER scout de ce dépôt qui proposait au
  * moins une piste prise, chaque piste devient « prise » ou « laissee ». Demande libre, ou aucun
  * scout connu qui la proposait : rien n'est écrit.
+ *
+ * LOTS (conv-1080) : une sélection découpée arrive en plusieurs messages, un par lot. Le lot 1
+ * remet le scout à plat comme une sélection d'un seul tenant ; les lots suivants AJOUTENT leurs
+ * pistes sans toucher aux autres — sinon le lot 2 aurait marqué « laissee » les pistes prises par
+ * le lot 1 et effacé le run qui les a traitées.
  */
 export function noterChoixScout(entree: {
   depot: string
@@ -207,12 +218,23 @@ export function noterChoixScout(entree: {
     .filter((e) => e.depot === depot && prises.some((p) => memePiste(p, e.titre)))
     .sort((a, b) => b.vuLe.localeCompare(a.vuLe))[0]
   if (!source) return
+  const lot = lotDeLaSelection(entree.demande)
+  const lotSuivant = lot !== null && lot.numero > 1
+  const voie = voieDeLaSelection(entree.demande)
   const entrees = memoire.entrees.map((e): EntreeMemoireScout => {
     if (e.depot !== depot || e.run !== source.run) return e
+    const prise = prises.some((p) => memePiste(p, e.titre))
+    if (lotSuivant && !prise) return e
     const suivante: EntreeMemoireScout = { ...e }
     delete suivante.traitePar
-    if (!prises.some((p) => memePiste(p, e.titre))) return { ...suivante, choix: 'laissee' }
-    return { ...suivante, choix: 'prise', ...(entree.run ? { traitePar: entree.run } : {}) }
+    delete suivante.voie
+    if (!prise) return { ...suivante, choix: 'laissee' }
+    return {
+      ...suivante,
+      choix: 'prise',
+      ...(entree.run ? { traitePar: entree.run } : {}),
+      ...(voie ? { voie } : {})
+    }
   })
   ecrireMemoireScout(chemin, entrees)
 }
@@ -385,6 +407,7 @@ export function bilanDesChoix(entree: {
     `note moyenne des prises ${moyenne(prises)}, des laissées ${moyenne(laissees)}`,
     ...(types ? [`prises par type : ${types}`] : []),
     ...(entree.resultatDuRun ? [livraisonDesPrises(prises, entree.resultatDuRun)] : []),
+    ...(entree.resultatDuRun ? [livraisonParVoie(prises, entree.resultatDuRun)] : []),
     ...(ignores > 0
       ? [`${ignores} ${ignores > 1 ? 'scouts' : 'scout'} sans aucune piste prise`]
       : []),
@@ -417,6 +440,67 @@ function livraisonDesPrises(
     `prises traitées : ${livrees} ${livrees > 1 ? 'livrées' : 'livrée'}, ${enEchec} en échec`,
     ...(autres > 0 ? [`${autres} ${autres > 1 ? 'interrompues' : 'interrompue'}`] : [])
   ].join(', ')
+}
+
+/** Le bilan d'une voie : pistes prises traitées par un run FINI, et combien de ces runs ont livré. */
+export interface BilanDUneVoie {
+  traitees: number
+  livrees: number
+}
+
+/**
+ * LA MESURE DU WORKFLOW INTELLIGENT (conv-1080) : pour chaque voie, les pistes prises dont le run a
+ * fini, et celles qu'il a livrées. C'est l'option « noter puis régler » des routeurs entraînés sur
+ * leurs résultats (Not Diamond, RouteLLM) ramenée à ce qu'on peut compter honnêtement : un run
+ * couvre tout son lot, donc une piste livrée est une piste d'un lot livré. Les seuils du choix
+ * (`voieDeLaPiste`) ne bougent pas seuls : la mesure les ÉCLAIRE.
+ */
+export function bilanDesVoies(entree: {
+  depot: string
+  resultatDuRun: LecteurResultatRun
+  chemin?: string
+}): Record<'directe' | 'complete', BilanDUneVoie> {
+  const depot = cleDepot(entree.depot)
+  const prises = pistesJugees(
+    lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees,
+    depot
+  ).filter((e) => e.choix === 'prise')
+  return compterParVoie(prises, entree.resultatDuRun)
+}
+
+function compterParVoie(
+  prises: readonly EntreeMemoireScout[],
+  resultatDuRun: LecteurResultatRun
+): Record<'directe' | 'complete', BilanDUneVoie> {
+  const bilan = {
+    directe: { traitees: 0, livrees: 0 },
+    complete: { traitees: 0, livrees: 0 }
+  }
+  for (const e of prises) {
+    if (!e.voie || !e.traitePar) continue
+    const classe = resultatDuRun(e.traitePar)
+    if (classe === undefined) continue
+    bilan[e.voie].traitees += 1
+    if (classe === 'delivered') bilan[e.voie].livrees += 1
+  }
+  return bilan
+}
+
+/** « par voie : correction directe 2/3 livrées, workflow complet 0/4 » — vide sans aucune voie notée. */
+function livraisonParVoie(
+  prises: readonly EntreeMemoireScout[],
+  resultatDuRun: LecteurResultatRun
+): string {
+  const bilan = compterParVoie(prises, resultatDuRun)
+  const morceaux = [
+    ...(bilan.directe.traitees > 0
+      ? [`correction directe ${bilan.directe.livrees}/${bilan.directe.traitees} livrées`]
+      : []),
+    ...(bilan.complete.traitees > 0
+      ? [`workflow complet ${bilan.complete.livrees}/${bilan.complete.traitees} livrées`]
+      : [])
+  ]
+  return morceaux.length > 0 ? `par voie : ${morceaux.join(', ')}` : ''
 }
 
 /** En dessous, le taux de prise d'UN type est du bruit : ce type garde la note du modèle. */

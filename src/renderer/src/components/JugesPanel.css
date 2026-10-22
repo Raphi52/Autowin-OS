@@ -62,13 +62,43 @@
   overflow-wrap: anywhere;
 }
 
-/* Bandeau : verdict, titre et décompte, quorum. */
+/* Bandeau : verdict, titre et décompte, quorum. C'est un bouton (conv-1081) : le bloc est plié par
+   défaut, un clic sur le bandeau déplie objections et juges ; le chevron se retourne. */
 .jpan-bandeau {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
+  width: 100%;
+  margin: 0;
   padding: 0 2px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.jpan-bandeau:focus-visible {
+  outline: 2px solid var(--jpan-rose);
+  outline-offset: 3px;
+}
+.jpan-chevron {
+  flex: 0 0 auto;
+  color: var(--jpan-dim);
+  transition: transform 0.15s ease;
+}
+.jpan-bandeau:hover .jpan-chevron {
+  color: var(--jpan-texte);
+}
+.jpan.is-deplie .jpan-chevron {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jpan-chevron {
+    transition: none;
+  }
 }
 .jpan-verdict {
   display: inline-flex;

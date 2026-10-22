@@ -221,13 +221,10 @@
   color: var(--text);
 }
 
-/* components/CarnetDuFil.css — tailles */
-:root[data-theme^='malvoyant-'] .carnet-lecture-ratee,
-:root[data-theme^='malvoyant-'] .carnet-compactage,
-:root[data-theme^='malvoyant-'] .carnet-garde-explication,
-:root[data-theme^='malvoyant-'] .carnet-rubrique-titre,
-:root[data-theme^='malvoyant-'] .carnet-ligne[data-rubrique='fichier'] .carnet-ligne-texte,
-:root[data-theme^='malvoyant-'] .carnet-oubli-rate {
+/* components/CarteDuFil.css — tailles */
+:root[data-theme^='malvoyant-'] .carte-libelle b,
+:root[data-theme^='malvoyant-'] .carte-libelle small,
+:root[data-theme^='malvoyant-'] .carte-detail-puces code {
   font-size: 13px;
 }
 
@@ -276,6 +273,7 @@
 :root[data-theme^='malvoyant-'] .msg-error-bilan,
 :root[data-theme^='malvoyant-'] .msg-error-action,
 :root[data-theme^='malvoyant-'] .delete-confirm-kicker,
+:root[data-theme^='malvoyant-'] .delete-confirm-fil-nombre,
 :root[data-theme^='malvoyant-'] .file-drop-overlay span,
 :root[data-theme^='malvoyant-'] .md-table th,
 :root[data-theme^='malvoyant-'] .md-badge,

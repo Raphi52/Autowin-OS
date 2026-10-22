@@ -19,7 +19,13 @@ import { dureeLisible, secondesDuChrono } from './thinking-block-corps'
 let root: Root | null = null
 let host: HTMLDivElement | null = null
 
-type Props = { text: string; done: boolean; turnId?: string; reasoningMs?: number }
+type Props = {
+  text: string
+  done: boolean
+  turnId?: string
+  reasoningMs?: number
+  debutDuTour?: number
+}
 
 function monter(props: Props): void {
   host = document.createElement('div')
@@ -146,6 +152,41 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     expect(compteur(), 'dès le premier battement, sans attendre une seconde').toBe('7 s')
     avancer(2_000)
     expect(compteur(), 'un tour en cours avance').toBe('9 s')
+  })
+
+  // conv-1084 (2026-10-22) : « le timer du bloc raisonnement démarre que quand je retourne sur la
+  // conv ». Le tour a démarré pendant que l'utilisateur regardait un autre fil : le bloc n'était pas
+  // monté, et le chrono partait de son montage. L'heure de début posée par le main fait foi.
+  it('compte depuis le DÉBUT du tour, pas depuis le retour sur la conversation', () => {
+    const debutDuTour = Date.now()
+    avancer(40_000)
+    monter({ text: '', done: false, turnId: 'tour-en-fond', debutDuTour })
+    expect(compteur(), 'le tour tourne depuis 40 s').toBe('40 s')
+    avancer(5_000)
+    expect(compteur()).toBe('45 s')
+    rendre({ text: '', done: true, turnId: 'tour-en-fond', debutDuTour })
+    avancer(10_000)
+    expect(compteur(), 'figé à la clôture').toBe('45 s')
+  })
+
+  it('adopte le début du tour qui arrive APRÈS le montage (premier événement daté)', () => {
+    const debutDuTour = Date.now()
+    avancer(20_000)
+    monter({ text: '', done: false, turnId: 'tour-date-tard' })
+    expect(compteur()).toBe('0 s')
+    rendre({ text: '', done: false, turnId: 'tour-date-tard', debutDuTour })
+    expect(compteur()).toBe('20 s')
+  })
+
+  it('corrige un chrono déjà mémorisé à partir du retour sur le fil', () => {
+    const debutDuTour = Date.now()
+    avancer(30_000)
+    monter({ text: '', done: false, turnId: 'tour-memo-tardif' })
+    avancer(5_000)
+    rendre({ text: '', done: true, turnId: 'tour-memo-tardif' })
+    demonter()
+    monter({ text: '', done: true, turnId: 'tour-memo-tardif', debutDuTour })
+    expect(compteur(), 'depuis le début réel, pas depuis le montage').toBe('35 s')
   })
 
   it('passe en minutes au-delà de 59 s', () => {

@@ -33,6 +33,16 @@ export type ContenuNotification = {
    * un BOUTON de la bulle et part, entière, dans le fil au clic. Absent quand il n'y en a pas.
    */
   suites?: string[]
+  /**
+   * Titre NU du fil et issue du tour : la carte en bas à droite (`notification-popup.ts`, conv-1066)
+   * les met sur deux lignes distinctes, là où la bulle Windows les recolle dans `title`.
+   * fix-ok: pas un correctif à l'aveugle — les trois modifications de ce fichier posent ce même
+   * couple `fil`/`issue` (ce type, le retour d'échec, le retour réussi), parce que `title` colle le
+   * titre du fil à son issue ; attentes de notification-fin-de-tour.test.ts rouges avant, vertes
+   * après (conv-1066).
+   */
+  fil: string
+  issue: 'prete' | 'echec'
 }
 
 /**
@@ -108,7 +118,9 @@ export function contenuDeNotificationDeFinDeTour(
     const premiere = (entree.error ?? '').split(/\r?\n/u).find((ligne) => ligne.trim()) ?? ''
     return {
       title: `${titre} — le tour a échoué`,
-      body: couper(premiere.trim()) || 'Le tour s’est arrêté sur une erreur.'
+      body: couper(premiere.trim()) || 'Le tour s’est arrêté sur une erreur.',
+      fil: titre,
+      issue: 'echec'
     }
   }
   const suites = extrairePropositionsSuite(entree.text, entree.demandeDuTour)
@@ -117,7 +129,9 @@ export function contenuDeNotificationDeFinDeTour(
   return {
     title: `${titre} — réponse prête`,
     body: corpsDeReponse(entree.text),
-    ...(suites.length > 0 ? { suites } : {})
+    ...(suites.length > 0 ? { suites } : {}),
+    fil: titre,
+    issue: 'prete'
   }
 }
 

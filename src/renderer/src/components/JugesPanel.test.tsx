@@ -28,9 +28,35 @@ async function monter(steps: readonly StepDeRun[]): Promise<HTMLElement> {
 
 const texte = (el: Element | null): string => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
 
+/** Le bloc est plié par défaut (conv-1081) : un clic sur le bandeau le déplie. */
+async function deplier(host: HTMLElement): Promise<void> {
+  const bandeau = host.querySelector<HTMLButtonElement>('[data-testid="jpan-bandeau"]')!
+  if (bandeau.getAttribute('aria-expanded') !== 'true') await act(async () => bandeau.click())
+}
+
 describe('JugesPanel — bloc Nacre', () => {
+  it('plié par défaut : le bandeau seul, un clic déplie puis replie', async () => {
+    const host = await monter(trace as StepDeRun[])
+    const bandeau = host.querySelector<HTMLButtonElement>('[data-testid="jpan-bandeau"]')!
+    expect(bandeau.getAttribute('aria-expanded')).toBe('false')
+    expect(texte(host.querySelector('.jpan-titre b'))).toBe('3 objections à corriger')
+    expect(host.querySelector('.jpan-section')).toBeNull()
+    expect(host.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(0)
+    expect(host.querySelectorAll('[data-testid="jpan-ligne"]')).toHaveLength(0)
+
+    await act(async () => bandeau.click())
+    expect(bandeau.getAttribute('aria-expanded')).toBe('true')
+    expect(host.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(3)
+    expect(host.querySelectorAll('[data-testid="jpan-ligne"]')).toHaveLength(1)
+
+    await act(async () => bandeau.click())
+    expect(bandeau.getAttribute('aria-expanded')).toBe('false')
+    expect(host.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(0)
+  })
+
   it('un seul juge en pied, pas un par passage de réparation', async () => {
     const host = await monter(trace as StepDeRun[])
+    await deplier(host)
     const juges = host.querySelectorAll('[data-testid="jpan-ligne"]')
     expect(juges).toHaveLength(1)
     expect(texte(juges[0].querySelector('.jpan-juge-nom'))).toBe('claude-opus-5-5')
@@ -51,6 +77,7 @@ describe('JugesPanel — bloc Nacre', () => {
 
   it('chaque objection porte son état, son adresse, et la 1re son déjà-corrigé', async () => {
     const host = await monter(trace as StepDeRun[])
+    await deplier(host)
     const objections = [...host.querySelectorAll('[data-testid="jpan-objection"]')]
     expect(objections.map((o) => texte(o.querySelector('.jpan-suivi')))).toEqual([
       'REPRISE · EN PARTIE',
@@ -66,6 +93,7 @@ describe('JugesPanel — bloc Nacre', () => {
 
   it('le verdict complet se déplie au clic sur le juge', async () => {
     const host = await monter(trace as StepDeRun[])
+    await deplier(host)
     expect(host.querySelector('[data-testid="jpan-verdict"]')).toBeNull()
     const juge = host.querySelector<HTMLButtonElement>('[data-testid="jpan-ligne"]')!
     await act(async () => juge.click())
@@ -75,6 +103,7 @@ describe('JugesPanel — bloc Nacre', () => {
 
   it('un long texte se replie et se déplie', async () => {
     const host = await monter(trace as StepDeRun[])
+    await deplier(host)
     const premiere = host.querySelector('[data-testid="jpan-objection"]')!
     expect(premiere.querySelector('.jpan-obj-texte.is-replie')).not.toBeNull()
     await act(async () => premiere.querySelector<HTMLButtonElement>('.jpan-suite')!.click())
@@ -96,6 +125,7 @@ describe('JugesPanel — bloc Nacre', () => {
     expect(texte(host.querySelector('.jpan-titre'))).toBe(
       'Aucune objection à corriger1 constat vérifié'
     )
+    await deplier(host)
     expect(host.querySelector('.jpan-section')).toBeNull()
   })
 
@@ -153,6 +183,7 @@ describe('JugesPanelEnDirect — le bloc se remplit pendant que ça juge', () =>
     expect(texte(host.querySelector('.jpan-verdict'))).toBe('EN COURS')
     expect(texte(host.querySelector('.jpan-titre b'))).toBe('Le juge relit le travail')
     expect(texte(host.querySelector('.jpan-quorum'))).toBe('réparation 5')
+    await deplier(host)
     expect(texte(host.querySelector('[data-testid="jpan-ligne"]'))).toBe('claude-opus-5-5écrit…')
 
     await pousser(run({ phase: juge, liveText: verdictFinal.slice(0, finPremiere) }))

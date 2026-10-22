@@ -1483,18 +1483,21 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
   })
 
   // conv-1078 (« le premier bouton doit etre en mode plein bleu et violet et celui du dessous avec
-  // liserai bleu et violet ») : sur la carte de suppression des fils, les deux boutons prennent le
-  // degrade du theme ; la carte du RUN garde son verre rouge (regle ci-dessus, non touchee).
+  // liserai bleu et violet », puis « applique a tous les themes mais avec des couleurs en fonction du
+  // theme ») : les regles des deux boutons sont communes (ChatView.css) ; ce theme ne regle que leurs
+  // couleurs, au degrade du theme. La carte du RUN garde son verre rouge (regle ci-dessus, non touchee).
   it('carte de suppression des fils : « Supprimer » plein au degrade, « Garder » cerne d’un liseré du degrade', () => {
-    const plein = derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)
-    expect(plein.background).toContain('var(--nv-degrade)')
-    expect(plein.color).toBe('var(--on-accent)')
-    const garder = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel`)
-    expect(garder.background).toBe('transparent')
-    const lisere = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
-    expect(lisere.background).toBe('var(--nv-degrade)')
-    expect(lisere.padding).toBe('1px')
-    expect(lisere['-webkit-mask']).toContain('content-box')
+    const carte = derniere(`${PREFIXE} .delete-confirm-card--fils`)
+    expect(carte['--suppr-plein']).toContain('var(--nv-degrade)')
+    expect(carte['--suppr-plein-vif']).toContain('var(--nv-degrade)')
+    expect(carte['--suppr-plein-texte']).toBe('var(--on-accent)')
+    expect(carte['--suppr-lisere']).toBe('var(--nv-degrade)')
+    // Plus aucune regle de bouton propre au theme : elle passerait devant la regle commune ou la
+    // contredirait selon l'ordre de chargement.
+    expect(derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)).toEqual({})
+    expect(
+      derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
+    ).toEqual({})
   })
 })
 

@@ -142,6 +142,37 @@
   font-size: 12px;
   opacity: 0.8;
 }
+/* Les lots, dans l'ordre où ils partiront (conv-1080) : une ligne par lot, sans retrait profond. */
+.cpick-lots {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.cpick-lots li {
+  line-height: 1.5;
+}
+/* La voie de CHAQUE piste (conv-1080) : un point de couleur ET un mot — jamais la couleur seule. */
+.cpick-voie-piste {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #a9b2c4;
+  cursor: help;
+}
+.cpick-voie-piste::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.cpick-voie-directe::before {
+  background: #34d399;
+}
+.cpick-voie-complete::before {
+  background: #fbbf24;
+}
 .cpick-actions {
   display: flex;
   flex-wrap: wrap;

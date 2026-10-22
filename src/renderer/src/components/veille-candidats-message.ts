@@ -9,6 +9,7 @@
  * Module PUR : détection + rédaction du prompt, testables sans React.
  */
 import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
+import { ligneDuLot, type RangDuLot } from '../../../shared/selection-scout'
 
 export interface CandidatAffiche {
   titre: string
@@ -171,10 +172,16 @@ export function candidatsDepuisScoutTable(
  * pas seulement le cadrage. Le préfixe `/frame` réduisait le run à la seule phase frame
  * (`skill-routing.ts` → `explicitPhase`), donc l'ancienne version ne pouvait rien livrer. Ici :
  * AUCUN préfixe de phase, et le mot « pipeline » dans la consigne classe la tâche en régime
- * `critical` (`shared/signaux-de-risque.ts`, lu par `task-regime.ts`), qui joue scout → frame →
- * build → clean puis le juge, sans qu'une intention en langage naturel puisse l'amputer.
+ * `critical` (`shared/signaux-de-risque.ts`, lu par `task-regime.ts`), qui joue frame → build →
+ * clean puis le juge — sans rejouer le scout qui vient d'être fait (`selection-sans-scout.ts`).
+ *
+ * `lot` : la place de ce message dans une sélection découpée (`planDeLancement`) ; absent ou seul lot,
+ * aucune ligne de plus.
  */
-export function redigerPromptWorkflowSelection(selection: readonly CandidatAffiche[]): string {
+export function redigerPromptWorkflowSelection(
+  selection: readonly CandidatAffiche[],
+  lot?: RangDuLot
+): string {
   return [
     enteteSelection(selection),
     '',
@@ -182,7 +189,8 @@ export function redigerPromptWorkflowSelection(selection: readonly CandidatAffic
     '',
     'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis joue le',
     'PIPELINE complet — cadrage, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
-    'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
+    'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.',
+    ...lignesDuLot(lot)
   ].join('\n')
 }
 
@@ -191,16 +199,19 @@ export function redigerPromptWorkflowSelection(selection: readonly CandidatAffic
  *
  * Demande utilisateur du 2026-10-22 (conv-1080) : « après un scout ça me propose toujours lancer le
  * workflow complet… mais parfois y a pas besoin du workflow complet ». Le pipeline complet rejoue un
- * scout, un cadrage et un nettoyage sur une piste que le scout vient de LOCALISER : pour une
- * correction ancrée, c'est payer trois fois l'éclairage déjà fait.
+ * cadrage et un nettoyage sur une piste que le scout vient de LOCALISER : pour une correction ancrée,
+ * c'est payer deux fois l'éclairage déjà fait.
  *
  * Le préfixe `/build` en PREMIÈRE ligne est une phase NOMMÉE : `agent-pilot` l'orchestre lui-même,
  * sans que le modèle du chat puisse la réinterpréter, et `regimePhases` ne joue que `build` — le juge
  * et la capitalisation (`learn`) restent ajoutés par l'orchestrateur (task-regime.ts,
  * `phasesApresJugeHorsGraphe`). L'en-tête « Traite… issu du scout » reste lisible par la mémoire du
- * scout (`scout-memoire.ts`, ENTETE_SELECTION), qui note les pistes prises.
+ * scout (`shared/selection-scout.ts`), qui note les pistes prises et leur voie.
  */
-export function redigerPromptCorrectionDirecte(selection: readonly CandidatAffiche[]): string {
+export function redigerPromptCorrectionDirecte(
+  selection: readonly CandidatAffiche[],
+  lot?: RangDuLot
+): string {
   return [
     '/build',
     enteteSelection(selection),
@@ -212,15 +223,23 @@ export function redigerPromptCorrectionDirecte(selection: readonly CandidatAffic
     'rejoue sa preuve jusqu’au vert — jusqu’au COMMIT PUBLIÉ et vérifié.',
     'Si une piste s’avère plus large qu’une correction ciblée (plusieurs modules, un choix de',
     'conception à trancher), ne la force pas : dis-le, elle relève du workflow complet. Si un ancrage',
-    'ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
+    'ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.',
+    ...lignesDuLot(lot)
   ].join('\n')
 }
 
-/** Les deux façons de traiter une sélection de candidats scout. */
+function lignesDuLot(lot: RangDuLot | undefined): string[] {
+  return lot && lot.total > 1 ? ['', ligneDuLot(lot)] : []
+}
+
+/** Les deux façons de traiter des candidats scout. */
 export type VoieSelection = 'directe' | 'complete'
 
-/** Au-delà, une sélection est un chantier, pas une série de corrections ponctuelles. */
-const MAX_PISTES_CORRECTION_DIRECTE = 3
+/** La voie d'UNE piste, et pourquoi — c'est ce que la pastille de la ligne affiche. */
+export interface VoieDeLaPiste {
+  voie: VoieSelection
+  motif: string
+}
 
 /** Une PREUVE de localisation : un ancrage de code `chemin:ligne`, pas une URL de page web. */
 const ANCRAGE_DE_CODE = /(?:^|[\s(`])[\w./-]+\.[a-z]{1,6}:\d+/iu
@@ -233,75 +252,148 @@ function estLocalisee(candidat: CandidatAffiche): boolean {
 }
 
 /**
- * QUELLE VOIE POUR CETTE SÉLECTION ? — une recommandation lue sur la FORME de ce que le scout a écrit,
- * jamais sur la qualité de son choix (le producteur et le juge sont le même modèle : contrainte du
- * Brain « sélection auto des candidats scout »).
+ * QUELLE VOIE POUR CETTE PISTE ? — lue sur la FORME de ce que le scout a écrit, jamais sur la qualité
+ * de son choix (le producteur et le juge sont le même modèle : contrainte du Brain « sélection auto
+ * des candidats scout »), ni sur une confiance que le modèle déclarerait lui-même.
  *
- * La correction directe n'est recommandée que si CHAQUE piste cochée est une correction (`fix`) déjà
- * localisée (ancrage de code ou commande de preuve), sans effort fort déclaré, sans signal de risque
- * (le même motif que `classifyRegime` : ce que le panneau recommande en direct, l'orchestrateur ne
- * l'aurait pas classé en chantier), et si la sélection reste courte. Le moindre doute — nature
- * inconnue, ajout, piste non localisée — garde le workflow complet : se tromper vers le complet coûte
- * de l'argent, se tromper vers le direct coûte un cadrage qui manquait.
+ * PISTE PAR PISTE depuis le 2026-10-22 (conv-1080, « fais le truc parfait ») : la règle décidait pour
+ * la sélection ENTIÈRE, et 26 sélections sur 49 étaient mixtes — une seule piste à cadrer envoyait
+ * toutes les corrections localisées dans le workflow complet. Le reproche que la recherche fait à
+ * l'adaptation « par demande entière » (DAAO, arXiv 2509.11079 : trop grossière) était exactement
+ * le nôtre. Les signaux restent visibles et vérifiables, comme le Plan Mode de Cursor ou la note de
+ * confiance par tâche de Devin 2.1.
+ *
+ * Correction directe seulement si la piste est une correction (`fix`) déjà localisée (ancrage de code
+ * ou commande de preuve), sans effort fort déclaré, sans signal de risque (le même motif que
+ * `classifyRegime` : ce que le panneau envoie en direct, l'orchestrateur ne l'aurait pas classé en
+ * chantier). Le moindre doute garde le workflow complet : se tromper vers le complet coûte de
+ * l'argent, se tromper vers le direct coûte un cadrage qui manquait.
  */
-export function voieRecommandee(selection: readonly CandidatAffiche[]): {
-  voie: VoieSelection
-  motif: string
-} {
-  if (selection.length === 0) return { voie: 'complete', motif: 'aucune piste cochée' }
-  if (selection.length > MAX_PISTES_CORRECTION_DIRECTE) {
+export function voieDeLaPiste(candidat: CandidatAffiche): VoieDeLaPiste {
+  if (candidat.type !== 'fix' && candidat.type !== 'correction') {
     return {
       voie: 'complete',
-      motif: `${selection.length} pistes ensemble : c’est un chantier, il se cadre`
+      motif:
+        candidat.type === 'new' || candidat.type === 'ajout'
+          ? 'un ajout : il se cadre avant de s’écrire'
+          : 'nature non déclarée par le scout'
     }
   }
-  for (const candidat of selection) {
-    const nom = `« ${candidat.titre} »`
-    if (candidat.type !== 'fix' && candidat.type !== 'correction') {
-      return {
-        voie: 'complete',
-        motif:
-          candidat.type === 'new' || candidat.type === 'ajout'
-            ? `${nom} est un ajout : il se cadre avant de s’écrire`
-            : `${nom} n’a pas de nature déclarée`
-      }
+  if (candidat.effort === 'r') return { voie: 'complete', motif: 'effort annoncé fort' }
+  const texte = [candidat.titre, candidat.what, candidat.why, candidat.how]
+    .filter(Boolean)
+    .join(' ')
+  if (porteUnSignalDeRisque(texte)) {
+    return {
+      voie: 'complete',
+      motif: 'sujet à risque (architecture, sécurité, migration…)'
     }
-    if (candidat.effort === 'r') {
-      return { voie: 'complete', motif: `${nom} est annoncé à effort fort` }
-    }
-    const texte = [candidat.titre, candidat.what, candidat.why, candidat.how]
-      .filter(Boolean)
-      .join(' ')
-    if (porteUnSignalDeRisque(texte)) {
-      return {
-        voie: 'complete',
-        motif: `${nom} touche un sujet à risque (architecture, sécurité, migration…)`
-      }
-    }
-    if (!estLocalisee(candidat)) {
-      return {
-        voie: 'complete',
-        motif: `${nom} n’est pas localisé (ni ancrage ni preuve à lancer)`
-      }
-    }
+  }
+  if (!estLocalisee(candidat)) {
+    return { voie: 'complete', motif: 'pas localisée (ni ancrage de code ni preuve à lancer)' }
   }
   return {
     voie: 'directe',
-    motif:
-      selection.length > 1
-        ? `${selection.length} corrections déjà localisées par le scout, effort contenu`
-        : 'correction déjà localisée par le scout, effort contenu'
+    motif: candidat.commande
+      ? 'correction localisée, avec sa preuve à lancer'
+      : 'correction localisée par le scout'
   }
 }
 
-/** Le message de la voie choisie : une seule porte d'entrée pour le bouton ET le clic automatique. */
+/**
+ * Au plus 3 pistes par lot. Sur nos 49 runs de sélection (mesure du 2026-10-22, conv-1080), 16 ont
+ * été coupés par la limite de session ou de quota du modèle, avec 6 pistes en moyenne : tout ce
+ * qu'ils avaient fait était perdu. Un lot court finit, et chaque lot vert est livré.
+ */
+export const MAX_PISTES_PAR_LOT = 3
+
+/** Un lancement : une voie, et les pistes qu'elle traite ensemble. */
+export interface LotDeLancement {
+  voie: VoieSelection
+  /** Le rang de chaque piste dans la sélection reçue (0 = la première), dans l'ordre du scout. */
+  positions: number[]
+  candidats: CandidatAffiche[]
+}
+
+/**
+ * LE PLAN DU WORKFLOW INTELLIGENT : chaque piste reçoit sa voie, puis les pistes d'une même voie sont
+ * groupées en lots de `MAX_PISTES_PAR_LOT` au plus, ÉQUILIBRÉS (4 pistes → 2 + 2, pas 3 + 1).
+ *
+ * Les corrections directes partent EN PREMIER : courtes, elles livrent vite, et le cadrage des lots
+ * suivants part d'une base déjà corrigée. Dans chaque voie, l'ordre du scout est gardé. Les lots
+ * s'enchaînent dans le fil, l'un après l'autre (file d'attente de `ChatView`) : jamais deux runs en
+ * même temps sur le même dépôt.
+ */
+export function planDeLancement(selection: readonly CandidatAffiche[]): LotDeLancement[] {
+  const voies = selection.map(voieDeLaPiste)
+  const lots: LotDeLancement[] = []
+  for (const voie of ['directe', 'complete'] as const) {
+    const positions = selection.flatMap((_, rang) => (voies[rang]!.voie === voie ? [rang] : []))
+    if (positions.length === 0) continue
+    const nombre = Math.ceil(positions.length / MAX_PISTES_PAR_LOT)
+    let debut = 0
+    for (let rangLot = 0; rangLot < nombre; rangLot++) {
+      // 7 pistes → 3 + 2 + 2 : les premiers lots prennent le reste de la division, un par un.
+      const taille =
+        Math.floor(positions.length / nombre) + (rangLot < positions.length % nombre ? 1 : 0)
+      const tranche = positions.slice(debut, debut + taille)
+      debut += taille
+      lots.push({ voie, positions: tranche, candidats: tranche.map((rang) => selection[rang]!) })
+    }
+  }
+  return lots
+}
+
+/** Le message de chaque lot, dans l'ordre : une seule porte d'entrée pour le bouton ET le clic auto. */
+export function redigerPromptsDuPlan(plan: readonly LotDeLancement[]): string[] {
+  return plan.map((lot, rang) =>
+    redigerPromptSelon(lot.voie, lot.candidats, { numero: rang + 1, total: plan.length })
+  )
+}
+
+/** Le message d'une voie sur des pistes données. */
 export function redigerPromptSelon(
   voie: VoieSelection,
-  selection: readonly CandidatAffiche[]
+  selection: readonly CandidatAffiche[],
+  lot?: RangDuLot
 ): string {
   return voie === 'directe'
-    ? redigerPromptCorrectionDirecte(selection)
-    : redigerPromptWorkflowSelection(selection)
+    ? redigerPromptCorrectionDirecte(selection, lot)
+    : redigerPromptWorkflowSelection(selection, lot)
+}
+
+/** Le plan en une phrase courte, pour le bandeau du choix du scout : « 2 lots (1 direct, 1 complet) ». */
+export function resumeDuPlan(plan: readonly LotDeLancement[]): string {
+  const directs = plan.filter((lot) => lot.voie === 'directe').length
+  const complets = plan.length - directs
+  if (plan.length === 1) {
+    return directs === 1 ? 'en correction directe' : 'en workflow complet'
+  }
+  const parts = [
+    ...(directs > 0 ? [`${directs} en correction directe`] : []),
+    ...(complets > 0 ? [`${complets} en workflow complet`] : [])
+  ]
+  return `en ${plan.length} lots à la suite (${parts.join(', ')})`
+}
+
+/** Ce que joue une voie, en clair : l'utilisateur voit les étapes avant de cliquer. */
+export function libelleVoie(voie: VoieSelection): string {
+  return voie === 'directe'
+    ? 'correction directe (build → jugement)'
+    : 'workflow complet (cadrage → build → nettoyage → jugement)'
+}
+
+/** Pourquoi ce lot prend sa voie : nommé pour une seule piste, motifs distincts sinon. */
+export function motifDuLot(lot: LotDeLancement): string {
+  if (lot.voie === 'directe') {
+    return lot.candidats.length > 1
+      ? `${lot.candidats.length} corrections déjà localisées par le scout`
+      : 'correction déjà localisée par le scout'
+  }
+  const motifs = [...new Set(lot.candidats.map((candidat) => voieDeLaPiste(candidat).motif))]
+  return lot.candidats.length === 1
+    ? `« ${lot.candidats[0]!.titre} » : ${motifs[0]}`
+    : motifs.join(' ; ')
 }
 
 function enteteSelection(selection: readonly CandidatAffiche[]): string {

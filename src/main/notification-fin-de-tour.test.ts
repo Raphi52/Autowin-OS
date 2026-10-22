@@ -43,7 +43,10 @@ describe('contenuDeNotificationDeFinDeTour — quand sonner', () => {
   it('fenêtre non regardée + tour réussi : sonne, avec les DEUX premiers faits de « ✅ Fait »', () => {
     expect(contenuDeNotificationDeFinDeTour(BASE)).toEqual({
       title: 'Refonte du chat — réponse prête',
-      body: 'Barre flottante sur la sélection du fil\nAlt+clic remplit la saisie avec une référence exacte'
+      body: 'Barre flottante sur la sélection du fil\nAlt+clic remplit la saisie avec une référence exacte',
+      // La carte en bas à droite affiche le titre NU du fil et son issue (popup conv-1066).
+      fil: 'Refonte du chat',
+      issue: 'prete'
     })
   })
 
@@ -74,7 +77,9 @@ describe('contenuDeNotificationDeFinDeTour — quand sonner', () => {
       })
     ).toEqual({
       title: 'Refonte du chat — le tour a échoué',
-      body: 'Le modèle est surchargé (529)'
+      body: 'Le modèle est surchargé (529)',
+      fil: 'Refonte du chat',
+      issue: 'echec'
     })
   })
 })

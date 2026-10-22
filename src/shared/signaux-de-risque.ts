@@ -3,7 +3,7 @@
  *
  * Côté processus principal, `classifyRegime` (src/main/task-regime.ts) classe en régime `critical`
  * toute tâche qui porte l'un de ces mots, et lui fait jouer le pipeline complet. Côté interface, le
- * panneau des candidats scout (`voieRecommandee`, veille-candidats-message.ts) refuse de recommander
+ * panneau des candidats scout (`voieRecommandee`, veille-candidats-message.ts) refuse de choisir
  * une correction directe sur une piste qui en porte un. Déplacé ici le 2026-10-22 (conv-1080) : une
  * copie du motif dans l'interface aurait divergé du classement réel au premier mot ajouté.
  */

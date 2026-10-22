@@ -1,8 +1,8 @@
 /**
  * LA CORRECTION DIRECTE NE JOUE QUE LA CORRECTION — preuve HORS du texte (conv-1080).
  *
- * Le bouton « Corriger directement » du panneau des candidats scout envoie un message préfixé
- * `/build`. Ce test passe le message RÉEL au routeur du chat puis au routeur de phases : il doit en
+ * Quand le workflow intelligent du panneau des candidats scout choisit la correction directe, il
+ * envoie un message préfixé `/build`. Ce test passe le message RÉEL au routeur du chat puis au routeur de phases : il doit en
  * sortir la seule phase build (le juge est ajouté par l'orchestrateur), la capitalisation `learn`, et
  * la mémoire du scout doit toujours reconnaître les pistes prises.
  */
@@ -16,7 +16,7 @@ import {
   redigerPromptWorkflowSelection
 } from '../renderer/src/components/veille-candidats-message'
 
-describe('bouton « Corriger directement » de la shortlist scout', () => {
+describe('voie directe du workflow intelligent de la shortlist scout', () => {
   const selection = [
     { titre: 'Compteur jamais remis à zéro', type: 'fix', url: 'src/main/compteur.ts:42' },
     { titre: 'Journal permissif', type: 'fix', url: 'src/main/activity/ledger.ts:63' }

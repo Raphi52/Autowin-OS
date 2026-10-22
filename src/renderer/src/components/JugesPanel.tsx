@@ -277,6 +277,9 @@ function sousTitreEnCours(enCours: JugeEnCours): string {
  */
 function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JSX.Element | null {
   const [ouvert, setOuvert] = useState<number | 'direct' | null>(null)
+  // Plié par défaut (conv-1081, « je veux que ce bloc soit plié par défaut et dépliable ») : le
+  // bandeau suffit à lire le verdict ; objections et juges se déplient au clic sur lui.
+  const [deplie, setDeplie] = useState(false)
   if (!enCours && (!bloc || bloc.votes.length === 0)) return null
 
   const votes = enCours ? [] : (bloc?.votes ?? [])
@@ -318,8 +321,19 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
   const juge: VoteJuge | undefined = typeof ouvert === 'number' ? votes[ouvert] : undefined
 
   return (
-    <section className="jpan" data-testid="juges-panel" data-verdict={verdict}>
-      <div className="jpan-bandeau">
+    <section
+      className={`jpan${deplie ? ' is-deplie' : ''}`}
+      data-testid="juges-panel"
+      data-verdict={verdict}
+    >
+      <button
+        type="button"
+        className="jpan-bandeau"
+        data-testid="jpan-bandeau"
+        aria-expanded={deplie}
+        title={deplie ? 'Replier le bloc des juges' : 'Déplier les objections et les juges'}
+        onClick={() => setDeplie((valeur) => !valeur)}
+      >
         <span className={`jpan-verdict is-${verdict}`}>
           <IconeVerdict verdict={verdict} />
           {LIBELLE_VERDICT[verdict]}
@@ -346,8 +360,18 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
             </span>
           )
         )}
-      </div>
-      {n > 0 && (
+        <svg className="jpan-chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+          <path
+            d="M3 4.5 6 7.5 9 4.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {deplie && n > 0 && (
         <>
           <div className="jpan-section">
             <span className="jpan-kicker">À corriger</span>
@@ -363,49 +387,51 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
           ))}
         </>
       )}
-      <div className="jpan-pied">
-        {enCours ? (
-          <button
-            type="button"
-            className={`jpan-juge is-encours${ouvert === 'direct' ? ' is-ouvert' : ''}`}
-            data-testid="jpan-ligne"
-            aria-expanded={ouvert === 'direct'}
-            title={ouvert === 'direct' ? 'Replier le texte' : 'Lire ce que le juge a déjà écrit'}
-            onClick={() => setOuvert((courant) => (courant === 'direct' ? null : 'direct'))}
-          >
-            <span className="jpan-juge-nom">{enCours.libelle}</span>
-            <span className="jpan-juge-absent">écrit…</span>
-          </button>
-        ) : (
-          votes.map((vote, index) => (
+      {deplie && (
+        <div className="jpan-pied">
+          {enCours ? (
             <button
-              key={`${vote.libelle}-${index}`}
               type="button"
-              className={`jpan-juge is-${vote.vote}${ouvert === index ? ' is-ouvert' : ''}`}
+              className={`jpan-juge is-encours${ouvert === 'direct' ? ' is-ouvert' : ''}`}
               data-testid="jpan-ligne"
-              aria-expanded={ouvert === index}
-              title={ouvert === index ? 'Replier le verdict' : 'Lire le verdict complet'}
-              onClick={() => setOuvert((courant) => (courant === index ? null : index))}
+              aria-expanded={ouvert === 'direct'}
+              title={ouvert === 'direct' ? 'Replier le texte' : 'Lire ce que le juge a déjà écrit'}
+              onClick={() => setOuvert((courant) => (courant === 'direct' ? null : 'direct'))}
             >
-              <span className="jpan-juge-nom">{vote.libelle}</span>
-              {vote.vote === 'echec' ? (
-                <span className="jpan-juge-absent">n’a pas voté</span>
-              ) : vote.score !== undefined ? (
-                <b className="jpan-score">{vote.score}</b>
-              ) : (
-                <b className="jpan-score">{vote.vote === 'valide' ? 'VALIDE' : 'DÉFAUT'}</b>
-              )}
+              <span className="jpan-juge-nom">{enCours.libelle}</span>
+              <span className="jpan-juge-absent">écrit…</span>
             </button>
-          ))
-        )}
-      </div>
-      {enCours && ouvert === 'direct' && (
+          ) : (
+            votes.map((vote, index) => (
+              <button
+                key={`${vote.libelle}-${index}`}
+                type="button"
+                className={`jpan-juge is-${vote.vote}${ouvert === index ? ' is-ouvert' : ''}`}
+                data-testid="jpan-ligne"
+                aria-expanded={ouvert === index}
+                title={ouvert === index ? 'Replier le verdict' : 'Lire le verdict complet'}
+                onClick={() => setOuvert((courant) => (courant === index ? null : index))}
+              >
+                <span className="jpan-juge-nom">{vote.libelle}</span>
+                {vote.vote === 'echec' ? (
+                  <span className="jpan-juge-absent">n’a pas voté</span>
+                ) : vote.score !== undefined ? (
+                  <b className="jpan-score">{vote.score}</b>
+                ) : (
+                  <b className="jpan-score">{vote.vote === 'valide' ? 'VALIDE' : 'DÉFAUT'}</b>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {deplie && enCours && ouvert === 'direct' && (
         <div className="jpan-complet" data-testid="jpan-verdict">
           <span className="jpan-complet-tete">Texte en cours · {enCours.libelle}</span>
           <p>{enCours.texte.trim() || 'Le juge n’a encore rien écrit.'}</p>
         </div>
       )}
-      {juge && (
+      {deplie && juge && (
         <div className="jpan-complet" data-testid="jpan-verdict">
           <span className="jpan-complet-tete">
             Verdict complet · {juge.libelle}

@@ -1,6 +1,6 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nier-automata -- ne pas modifier a la main.
    Theme « NieR:Automata » : les regles de la base claire qui ecrivent une couleur en dur, transposees
-   vers le papier beige et l'encre brune du jeu. 59 regles, 120 declarations. */
+   vers le papier beige et l'encre brune du jeu. 59 regles, 121 declarations. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nier-automata'][data-base='clair'] .topology-runtime-limit {
@@ -227,14 +227,9 @@
 :root[data-theme='nier-automata'][data-base='clair'] .model-select-menu {
     box-shadow: 0 24px 64px rgba(27, 26, 23, 0.22)
 }
-:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond::after {
-    background: linear-gradient(
-      170deg,
-      rgba(248, 247, 245, 0.9) 0%,
-      rgba(245, 244, 240, 0.86) 45%,
-      rgba(242, 240, 235, 0.9) 100%
-    ),
-    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%)
+:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label {
+    --text: rgb(243, 241, 236);
+    --text-dim: rgb(207, 201, 183)
 }
 :root[data-theme='nier-automata'][data-base='clair'] .shell, :root[data-theme='nier-automata'][data-base='clair'] .shell.theme-serious {
     --surface-panel: rgb(237, 235, 229);

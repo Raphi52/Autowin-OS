@@ -3,9 +3,14 @@ import { type CandidatAffiche, numerosDesCandidats } from './veille-candidats-me
 import { MOTIFS_REFUS, type MotifRefus } from './scout-table'
 import {
   emojiType,
-  redigerPromptSelon,
+  libelleVoie,
+  MAX_PISTES_PAR_LOT,
+  motifDuLot,
+  planDeLancement,
+  redigerPromptsDuPlan,
+  resumeDuPlan,
   selectionAutoDepuisScout,
-  voieRecommandee
+  voieDeLaPiste
 } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
@@ -46,7 +51,12 @@ export function CandidatsPickPanel({
    * `## Cible`, ou sur une declaration vide, rien n'est envoye et le bouton attend un clic humain.
    */
   autoLancer?: boolean
-  onPick?: (prompt: string) => void
+  /**
+   * Le lancement : le message du PREMIER lot, et ceux des lots suivants quand la sélection en compte
+   * plusieurs — à envoyer l'un après l'autre, un par tour (conv-1080). Une sélection d'un seul lot
+   * n'a pas de `suite`.
+   */
+  onPick?: (prompt: string, suite?: readonly string[]) => void
   /**
    * « Pourquoi pas ? » sur une ligne DÉCOCHÉE (piste 2, conv-1033) : le motif part dans la mémoire du
    * scout, qui le rend au scout suivant. Absent = pas de bouton (les candidats de la veille web ont
@@ -105,27 +115,37 @@ export function CandidatsPickPanel({
     })
   }
   const tous = coches.size === candidats.length
-  const selection = candidats.filter((_, index) => coches.has(index))
+  const retenus = candidats.flatMap((_, index) => (coches.has(index) ? [index] : []))
+  const selection = retenus.map((index) => candidats[index]!)
   /*
-   * DEUX VOIES, UNE RECOMMANDÉE (conv-1080) : « parfois y a pas besoin du workflow complet ». La
-   * recommandation suit les cases cochées, en direct ; les deux boutons restent à leur place (un
-   * bouton qui saute sous le pointeur fait cliquer le mauvais), seul l'accent change de bouton.
+   * UN SEUL BOUTON, LE WORKFLOW INTELLIGENT (conv-1080) : « ça doit retenir les candidats puis lancer
+   * le workflow intelligent ». Le choix se fait PISTE PAR PISTE (« fais le truc parfait », même fil) :
+   * chaque ligne porte sa voie et sa raison, les pistes d'une même voie partent ensemble par lots de
+   * `MAX_PISTES_PAR_LOT`, lancés l'un après l'autre. Le bloc au-dessus du bouton dit le plan en
+   * direct — un choix fait à la place de l'utilisateur ne doit jamais être invisible.
    */
-  const recommandation = voieRecommandee(selection)
+  const voies = candidats.map(voieDeLaPiste)
+  const plan = planDeLancement(selection)
+  const lancer = (prompts: readonly string[]): void => {
+    const [premier, ...suite] = prompts
+    if (premier === undefined) return
+    if (suite.length > 0) onPick?.(premier, suite)
+    else onPick?.(premier)
+  }
   /*
    * L'AGENT APPUIE SUR LE BOUTON. Une seule fois par panneau (`lanceRef`) : un re-rendu ne renvoie
    * rien. Condition stricte — le mode auto est allume ET le scout a ecrit son choix ET ce choix
-   * retient au moins une ligne. Un travail jusqu'au commit ne part pas d'un defaut. La voie est
-   * celle que recommande la sélection du scout : le doute retombe toujours sur le workflow complet.
+   * retient au moins une ligne. Un travail jusqu'au commit ne part pas d'un defaut. Le plan est celui
+   * que le workflow intelligent tire de la sélection du scout — la même règle que le bouton.
    */
   const choixAuto = auto === null ? [] : candidats.filter((_, index) => auto.has(index))
-  const voieAuto = voieRecommandee(choixAuto).voie
+  const planAuto = planDeLancement(choixAuto)
   const lanceRef = useRef(false)
   useEffect(() => {
     if (!autoLancer || lanceRef.current) return
     if (choixAuto.length === 0) return
     lanceRef.current = true
-    onPick?.(redigerPromptSelon(voieAuto, choixAuto))
+    lancer(redigerPromptsDuPlan(planAuto))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLancer])
   return (
@@ -145,7 +165,7 @@ export function CandidatsPickPanel({
           <span className="cpick-auto" data-testid="cpick-auto">
             {auto.size === 0
               ? 'Le scout n’a retenu aucun candidat — rien n’est coché.'
-              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? (voieAuto === 'directe' ? 'lancé automatiquement en correction directe.' : 'lancé automatiquement en workflow complet.') : 'à toi de lancer.'}`}
+              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? `lancé automatiquement ${resumeDuPlan(planAuto)}.` : 'à toi de lancer.'}`}
           </span>
         )}
         <span className="cpick-compte">
@@ -179,6 +199,15 @@ export function CandidatsPickPanel({
             </span>
             <span className="cpick-titre" onClick={() => deplier(index)}>
               {candidat.titre}
+            </span>
+            <span
+              className={`cpick-voie-piste cpick-voie-${voies[index]!.voie}`}
+              data-testid="cpick-voie-piste"
+              data-voie={voies[index]!.voie}
+              title={voies[index]!.motif}
+              aria-label={`${voies[index]!.voie === 'directe' ? 'Correction directe' : 'À cadrer'} : ${voies[index]!.motif}`}
+            >
+              {voies[index]!.voie === 'directe' ? 'direct' : 'à cadrer'}
             </span>
             {/* La valeur de la ligne : une note quand le scout en donne une, sinon les deux
                 pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre. */}
@@ -270,35 +299,42 @@ export function CandidatsPickPanel({
           )}
         </div>
       ))}
-      {selection.length > 0 && (
+      {plan.length === 1 && (
         <div className="cpick-voie" data-testid="cpick-voie">
-          Recommandé :{' '}
-          <b>{recommandation.voie === 'directe' ? 'correction directe' : 'workflow complet'}</b> —{' '}
-          {recommandation.motif}.
+          Le workflow intelligent jouera : <b>{libelleVoie(plan[0]!.voie)}</b> —{' '}
+          {motifDuLot(plan[0]!)}.
+        </div>
+      )}
+      {plan.length > 1 && (
+        <div className="cpick-voie" data-testid="cpick-voie">
+          Le workflow intelligent lancera <b>{plan.length} lots à la suite</b>, un par tour,{' '}
+          {MAX_PISTES_PAR_LOT} pistes au plus chacun :
+          <ol className="cpick-lots">
+            {plan.map((lot, rang) => (
+              <li key={rang} data-testid="cpick-lot" data-voie={lot.voie}>
+                <b>{libelleVoie(lot.voie)}</b> — piste{lot.positions.length > 1 ? 's' : ''}{' '}
+                {lot.positions.map((position) => retenus[position]! + 1).join(', ')}
+              </li>
+            ))}
+          </ol>
         </div>
       )}
       <div className="cpick-actions">
         <button
           type="button"
-          className={`btn cpick-lancer${recommandation.voie === 'complete' ? ' btn-accent' : ''}`}
+          className="btn btn-accent cpick-lancer"
           data-testid="cpick-lancer"
-          data-recommande={recommandation.voie === 'complete' ? 'oui' : undefined}
+          data-voie={
+            plan.length > 0 && plan.every((lot) => lot.voie === plan[0]!.voie)
+              ? plan[0]!.voie
+              : 'mixte'
+          }
+          data-lots={plan.length}
           disabled={selection.length === 0}
-          onClick={() => onPick?.(redigerPromptSelon('complete', selection))}
-          title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → build → nettoyage → jugement) jusqu'au commit publié"
+          onClick={() => lancer(redigerPromptsDuPlan(plan))}
+          title="Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Les pistes partent par lots de 3 au plus, l'un après l'autre, chacun jusqu'au commit publié"
         >
-          Lancer le workflow complet
-        </button>
-        <button
-          type="button"
-          className={`btn cpick-lancer${recommandation.voie === 'directe' ? ' btn-accent' : ''}`}
-          data-testid="cpick-direct"
-          data-recommande={recommandation.voie === 'directe' ? 'oui' : undefined}
-          disabled={selection.length === 0}
-          onClick={() => onPick?.(redigerPromptSelon('directe', selection))}
-          title="Envoie les candidats cochés en correction DIRECTE (build → jugement), sans recadrer : pour des corrections que le scout a déjà localisées, jusqu'au commit publié"
-        >
-          Corriger directement
+          Lancer le workflow intelligent{plan.length > 1 ? ` (${plan.length} lots)` : ''}
         </button>
       </div>
     </div>

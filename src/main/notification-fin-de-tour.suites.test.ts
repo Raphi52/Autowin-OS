@@ -82,7 +82,9 @@ describe('contenuDeNotificationDeFinDeTour — les suites deviennent des boutons
   it('aucune suite proposée : le contenu reste celui d’avant, sans champ vide', () => {
     expect(contenuDeNotificationDeFinDeTour({ ...BASE, text: 'Rien à proposer.' })).toEqual({
       title: 'Refonte du chat — réponse prête',
-      body: 'Rien à proposer.'
+      body: 'Rien à proposer.',
+      fil: 'Refonte du chat',
+      issue: 'prete'
     })
   })
 })
