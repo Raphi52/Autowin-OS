@@ -89,6 +89,9 @@ describe('le choix atteint réellement le run du chat', () => {
     expect(os).not.toMatch(
       /poseConversationWorkflow[\s\S]{0,300}if \(this\.workflowParDefaut\) return/
     )
-    expect(os).toMatch(/return proposition \?\? this\.workflowParDefaut/)
+    // Le repli ne vient qu'après la proposition, et passe la garde du cadrage (conv-1070).
+    expect(os).toMatch(
+      /if \(proposition\) return proposition[\s\S]{0,700}profilEcraseLeCadrage\(task \?\? '', phasesParDefaut\)\) return undefined\s*return parDefaut/
+    )
   })
 })
