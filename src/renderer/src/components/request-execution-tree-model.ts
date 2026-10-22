@@ -49,14 +49,34 @@ const TECHNICAL_PROVIDER_KINDS = new Set<HarnessTimelineEvent['kind']>([
   'model-response'
 ])
 
+// Les étapes des workflows livrés (`workflow-defaults.ts`) en plus des historiques (conv-1094,
+// 2026-10-22 : learn dans 13 traces causales, think dans 12, salvage dans 8). C'est le nom que le
+// graphe AFFICHE pour une étape, via `display.title` (voir `nomDEtape`).
 const PHASE_LABELS: Record<string, string> = {
   scout: 'Scout',
   frame: 'Frame',
   terrain: 'Terrain',
+  think: 'Think',
   build: 'Build',
   clean: 'Clean',
   judge: 'Judge',
-  kaizen: 'Kaizen'
+  kaizen: 'Kaizen',
+  learn: 'Learn',
+  salvage: 'Salvage',
+  remake: 'Remake',
+  gel: 'Gel',
+  residus: 'Résidus',
+  steal: 'Steal'
+}
+
+/**
+ * LE TITRE VISIBLE D'UNE ÉTAPE (conv-1094, 2026-10-22). Le graphe écrit `display.title` : il valait
+ * « skill · learn », l'identifiant brut, et la table ci-dessus n'était lue par aucun affichage
+ * d'étape. L'identifiant reste dans `skillName` (attribut du nœud, ligne « phase · learn » du
+ * détail) ; une étape inconnue de la table garde son identifiant plutôt que d'être masquée.
+ */
+function nomDEtape(phase: string): string {
+  return PHASE_LABELS[phase] ?? phase
 }
 
 function observationBoundary(event: HarnessTimelineEvent): string | undefined {
@@ -141,7 +161,7 @@ function phaseRoot(
     parentId,
     kind: 'decision',
     actor: 'Autowin OS',
-    label: PHASE_LABELS[phase] ?? phase,
+    label: nomDEtape(phase),
     content: '',
     detail: `Phase ${phase} observée dans la trace`,
     timestamp,
@@ -151,7 +171,7 @@ function phaseRoot(
     execution: { phase },
     display: {
       kind: 'phase',
-      title: `skill · ${phase}`,
+      title: nomDEtape(phase),
       observedEventIds: [],
       workflow: 'autowin',
       skillName: phase
@@ -565,7 +585,7 @@ function projectRunExecutions(
         execution: { phase, runId },
         display: {
           kind: 'skill',
-          title: `skill · ${phase}`,
+          title: nomDEtape(phase),
           runId,
           skillName: phase,
           skillIdentity: 'phase-alias',
@@ -636,7 +656,7 @@ function projectRunExecutions(
       events.push(agent)
     }
 
-    // UNE PHASE ROUGE L'EST PARCE QU'UN DE SES SOUS-AGENTS A ÉCHOUÉ (conv-966) : « skill · clean »
+    // UNE PHASE ROUGE L'EST PARCE QU'UN DE SES SOUS-AGENTS A ÉCHOUÉ (conv-966) : le nœud « Clean »
     // ne disait que « alias de phase ». Le dernier sous-agent en échec de la phase dit pourquoi.
     for (const [phase, skill] of skillByPhase) {
       if (skill.status !== 'failed' || !skill.display) continue
