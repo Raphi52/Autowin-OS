@@ -23,7 +23,14 @@ export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowPro
   // possédait déjà un profil n'aurait JAMAIS reçu le catalogue (constaté en réel — un seul profil
   // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
   // suivant ce que l'utilisateur a délibérément supprimé.
-  if (actuel.seeded) {
+  //
+  // Le marqueur seul ne suffisait plus le jour où le catalogue a GRANDI (conv-1094, 2026-10-22) :
+  // une installation déjà semée ne recevait jamais un workflow livré après coup. On retient donc
+  // QUELS workflows livrés ont déjà été proposés — chacun l'est une fois, et un workflow supprimé
+  // ne revient pas. Un fichier semé avant ce suivi a reçu le catalogue d'alors : on le présume.
+  const proposes = new Set(actuel.seededIds ?? (actuel.seeded ? CATALOGUE_AVANT_SUIVI_PAR_ID : []))
+  const aProposer = DEFAULT_WORKFLOWS.filter((p) => !proposes.has(p.id))
+  if (actuel.seeded && actuel.seededIds && aProposer.length === 0) {
     if (actuel !== charge) saveWorkflowProfiles(actuel, path)
     return actuel
   }
@@ -31,14 +38,30 @@ export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowPro
   const fichier: WorkflowProfilesFile = {
     ...actuel,
     seeded: true,
+    seededIds: [...new Set([...proposes, ...DEFAULT_WORKFLOWS.map((p) => p.id)])],
     profiles: [
       ...actuel.profiles,
-      ...DEFAULT_WORKFLOWS.filter((p) => !connus.has(p.id)).map((profile) => ({ ...profile }))
+      ...aProposer.filter((p) => !connus.has(p.id)).map((profile) => ({ ...profile }))
     ]
   }
   saveWorkflowProfiles(fichier, path)
   return fichier
 }
+
+/**
+ * Le catalogue livré tel qu'il était quand seul le marqueur `seeded` existait. Un fichier semé à
+ * cette époque l'a reçu en entier : ce qui en manque a été SUPPRIMÉ par l'utilisateur, et ne doit
+ * pas revenir. Liste figée exprès — elle décrit le passé, elle ne suit pas `DEFAULT_WORKFLOWS`.
+ */
+const CATALOGUE_AVANT_SUIVI_PAR_ID = [
+  'eclair',
+  'correctif',
+  'feature',
+  'chantier-autowin',
+  'panel-critique',
+  'exploration',
+  'remake'
+]
 
 /** Description d'Exploration semée avant l'ajout de l'angle « externe » (conv-890). */
 const DESCRIPTION_EXPLORATION_SANS_VEILLE =
@@ -268,6 +291,13 @@ export interface WorkflowProfilesFile {
    * ensuite ce qui a été supprimé exprès.
    */
   seeded?: boolean
+  /**
+   * Les identifiants des workflows livrés DÉJÀ proposés à cette installation (conv-1094).
+   *
+   * `seeded` dit « le catalogue a été semé », pas LEQUEL : un workflow ajouté au catalogue ensuite
+   * n'arrivait jamais. Absent sur un fichier semé avant ce suivi — voir `seedDefaultWorkflows`.
+   */
+  seededIds?: string[]
 }
 
 const EMPTY: WorkflowProfilesFile = { profiles: [], activeId: null }
@@ -412,8 +442,18 @@ function decodeWorkflowProfiles(parsed: unknown): WorkflowProfilesFile | undefin
   // Un profil sélectionné qui n'existe plus vaut « aucun » : jamais une sélection fantôme.
   const activeId = activeCandidate && seen.has(activeCandidate) ? activeCandidate : null
   // Le marqueur de semis se RELIT : sans lui, chaque démarrage resèmerait le catalogue et
-  // ressusciterait les workflows livrés que l'utilisateur a supprimés.
-  return { profiles, activeId, ...(parsed.seeded === true ? { seeded: true } : {}) }
+  // ressusciterait les workflows livrés que l'utilisateur a supprimés. Même chose pour la liste des
+  // workflows déjà proposés : la perdre ferait revenir un workflow livré supprimé.
+  if (parsed.seededIds !== undefined && !Array.isArray(parsed.seededIds)) return undefined
+  const seededIds = Array.isArray(parsed.seededIds)
+    ? [...new Set(parsed.seededIds.map(safeId).filter((id): id is string => Boolean(id)))]
+    : undefined
+  return {
+    profiles,
+    activeId,
+    ...(parsed.seeded === true ? { seeded: true } : {}),
+    ...(seededIds ? { seededIds } : {})
+  }
 }
 
 export function loadWorkflowProfiles(path = workflowProfilesPath()): WorkflowProfilesFile {

@@ -27,7 +27,15 @@ export const CRAN_MS = 100
 export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   'aw-atom-spin', // orbites de l'atome <Spinner/> (theme.css)
   'aw-atom-tw', // étoile de l'atome (theme.css)
-  'carte-bat' // point « en cours » de la carte du fil (CarteDuFil.css)
+  'carte-bat', // point « en cours » de la carte du fil (CarteDuFil.css)
+  'carte-file', // tirets qui filent vers l'étape en cours de la carte du fil (conv-1088)
+  // Étape en cours d'une réponse : rail, pastille, jauge du pied (ChatView.css) — conv-1075.
+  'etape-flux',
+  'etape-pouls',
+  'etape-reflet',
+  // Pastille « question en attente » de la liste des fils : colonne de points et « ? » (::before).
+  'conv-asking-list',
+  'conv-asking-wiggle'
 ])
 
 /** Ce qu'on lit et écrit d'une animation : son nom CSS et son départ sur l'horloge du document. */
@@ -58,7 +66,10 @@ export function installerAnimationsParCrans(cible: Document = document): () => v
     if (!ANIMATIONS_PAR_CRANS.has(nom)) return
     const element = evenement.target as Element | null
     if (!element || typeof element.getAnimations !== 'function') return
-    calerSurLHorloge(element.getAnimations() as unknown as AnimationCalable[], nom)
+    // `subtree` : une animation posée sur ::before (le « ? » de la question en attente) part de
+    // l'élément porteur, mais `getAnimations()` seul ne la rend pas. Les descendants du même nom
+    // éventuellement inclus sont recalés aussi, ce qui est leur place de toute façon.
+    calerSurLHorloge(element.getAnimations({ subtree: true }) as unknown as AnimationCalable[], nom)
   }
   // En capture : un `stopPropagation` posé plus bas ne doit pas laisser un indicateur hors grille.
   cible.addEventListener('animationstart', auDemarrage, true)

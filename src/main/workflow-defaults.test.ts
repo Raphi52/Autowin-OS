@@ -53,6 +53,49 @@ describe('semis du catalogue', () => {
     expect(second.profiles.map((x) => x.id)).not.toContain('eclair')
   })
 
+  /*
+   * Défaut CONSTATÉ le 2026-10-22 (conv-1094) : le fichier réel de l'utilisateur portait
+   * `seeded: true` et les sept workflows d'origine. Tout workflow ajouté au catalogue après ce
+   * premier semis restait invisible — le marqueur disait « semé », pas « semé de QUOI ».
+   */
+  it('une installation semée AVANT le suivi reçoit les workflows livrés depuis, sans ressusciter un supprimé', () => {
+    const p = chemin()
+    const anciens = [
+      'eclair',
+      'correctif',
+      'feature',
+      'chantier-autowin',
+      'panel-critique',
+      'exploration',
+      'remake'
+    ]
+    // L'utilisateur avait supprimé `eclair` : il ne doit pas revenir.
+    const avant = DEFAULT_WORKFLOWS.filter((w) => anciens.includes(w.id) && w.id !== 'eclair')
+    saveWorkflowProfiles({ seeded: true, activeId: 'correctif', profiles: avant }, p)
+
+    const apres = seedDefaultWorkflows(p)
+    const ids = apres.profiles.map((w) => w.id)
+    const nouveaux = DEFAULT_WORKFLOWS.map((w) => w.id).filter((id) => !anciens.includes(id))
+    expect(nouveaux.length).toBeGreaterThan(0)
+    for (const id of nouveaux) expect(ids, id).toContain(id)
+    expect(ids).not.toContain('eclair')
+    expect(apres.activeId).toBe('correctif')
+    // Relu du disque : le suivi survit à l'écriture, sinon le démarrage suivant repartirait de zéro.
+    expect(new Set(seedDefaultWorkflows(p).seededIds)).toEqual(
+      new Set(DEFAULT_WORKFLOWS.map((w) => w.id))
+    )
+  })
+
+  it('un workflow livré proposé puis supprimé ne revient pas au démarrage suivant', () => {
+    const p = chemin()
+    const premier = seedDefaultWorkflows(p)
+    expect(premier.profiles.map((w) => w.id)).toContain('kaizen')
+    saveWorkflowProfiles(removeWorkflowProfile(premier, 'kaizen'), p)
+    const second = seedDefaultWorkflows(p)
+    expect(second.profiles.map((w) => w.id)).not.toContain('kaizen')
+    expect(second.profiles).toHaveLength(DEFAULT_WORKFLOWS.length - 1)
+  })
+
   it('migre un workflow livre intact qui forcait Claude, sans toucher une variante utilisateur', () => {
     const p = chemin()
     /*
