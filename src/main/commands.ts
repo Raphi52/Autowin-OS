@@ -1704,6 +1704,9 @@ export const CATALOG: CommandSpec[] = [
      * Le réflexe 14 (dépôt partagé) en UN appel — scout conv-1086 : 514 appels git à la main dans
      * 143 journaux, alors que l'app savait déjà quel fil avait touché quel fichier. Voir
      * `proprietaire-fichier.ts`.
+     * fix-ok: conv-1086 — commands.ts écrivait le journal des fichiers sans jamais l'exposer :
+     * sans le `case 'proprietaire_fichier'` de l'aiguillage d'AppCommandBus, 8 tests sur 9 de
+     * proprietaire-fichier.test.ts rendent « commande inconnue: proprietaire_fichier ».
      */
     name: 'proprietaire_fichier',
     description:

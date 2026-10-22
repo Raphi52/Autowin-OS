@@ -509,6 +509,11 @@ export function readCurrentConversationPathOwnership(
  * refaisait le réflexe 14 à la main (514 appels git dans 143 journaux) alors que cette donnée
  * existait, lue seulement par l'interface et seulement pour le fil affiché.
  * Rendu aligné sur `paths` (même ordre, une liste — vide — par chemin).
+ *
+ * fix-ok: conv-1086 — `readCurrentConversationPathOwnership` filtre sur le fil qui DEMANDE, il ne
+ * peut donc pas dire à conv-b que conv-a tient le fichier : ce filtre remis dans
+ * proprietaire-fichier.ts donne 2 rouges sur 9 (« signale à conv-b… »). D'où la génération
+ * factorisée, lue par chemin sans filtre de fil.
  */
 export function readCurrentPathOwners(
   workspaceRoot: string,
