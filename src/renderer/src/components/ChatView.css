@@ -5683,15 +5683,18 @@ button.chat-project-dot:disabled {
   color: var(--text);
 }
 /* « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la même pastille que le trombone voisin — rond de
-   32 px, trait et contour en --text —, avec son libellé « ×3 » à la place d'une icône. Sans ces
-   deux règles, `.btn` seul en faisait une gélule plus large que ses voisins (capture du jour). */
+   24 px, trait et contour en --text —, avec son libellé « ×3 » à la place d'une icône. Sans ces
+   deux règles, `.btn` seul en faisait une gélule plus large que ses voisins (capture du jour).
+   24 px et non 32 (conv-1052, 2026-10-22 : « le cercle ×3 est plus gros que les autres icônes ») :
+   les 32 px venaient de la règle groupée du trombone, mais la règle « rangée compacte » plus haut
+   ramène trombone et micro à 24 px, et ∞ fait 24 px — le ×3 était le seul rond resté à 32. */
 .composer-input-row > .composer-trois-facons,
 .cosmic-outline .composer-input-row > .composer-trois-facons {
   display: inline-flex;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
   flex: none;
   align-items: center;
   justify-content: center;
