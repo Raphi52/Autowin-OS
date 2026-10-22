@@ -576,7 +576,8 @@ export function bilanDesActions(actions: readonly ActionFrise[]): string {
  * CHRONO DU RAISONNEMENT — le compteur de secondes de la capsule « Raisonnement » (variante R5,
  * conv-162 : « pas les mots de raisonnement, seulement un compteur de secondes »).
  *
- * PENDANT le tour, le chrono est MESURE A L'ECRAN, de l'apparition du bloc jusqu'a la fin du tour.
+ * PENDANT le tour, le chrono est MESURE A L'ECRAN jusqu'a la fin du tour, a partir du DEBUT DU TOUR
+ * quand le message le porte (`chronoDepuisLeDebutDuTour`), sinon de l'apparition du bloc.
  * A la cloture, le processus principal enregistre la meme mesure avec le tour (`reasoningMs` de
  * `ChatTurnState`, run-pilot-chat.ts) : un tour relu sans chrono en memoire affiche cette valeur.
  * Un tour ancien qui n'a ni l'un ni l'autre n'affiche aucun compteur plutot qu'un chiffre invente.
@@ -598,6 +599,21 @@ export function memoriserChrono(cle: string, chrono: Chrono): void {
   CHRONOS.set(cle, chrono)
   // Borne : on oublie le plus ancien tour, jamais le courant (il vient d'etre re-insere en dernier).
   if (CHRONOS.size > CHRONOS_MAX) CHRONOS.delete(CHRONOS.keys().next().value!)
+}
+
+/**
+ * Le chrono, recale sur l'HEURE DE DEBUT DU TOUR quand elle est connue et plus ancienne que son
+ * debut mesure a l'ecran (conv-1084, 2026-10-22 : « le timer du bloc raisonnement demarre que quand
+ * je retourne sur la conv »). Un tour lance pendant que l'utilisateur regardait un autre fil n'avait
+ * aucun bloc monte : le compteur partait du retour sur le fil. `debutDuTour` est pose par le main au
+ * debut du tour — la meme origine que `reasoningMs` — et seul un debut PLUS ANCIEN est adopte.
+ */
+export function chronoDepuisLeDebutDuTour(
+  chrono: Chrono | null,
+  debutDuTour: number | undefined
+): Chrono | null {
+  if (!chrono || debutDuTour === undefined || !Number.isFinite(debutDuTour)) return chrono
+  return debutDuTour < chrono.debut ? { ...chrono, debut: debutDuTour } : chrono
 }
 
 /** Secondes ecoulees : jusqu'a la fin memorisee si elle existe, sinon jusqu'a `maintenant`. */
