@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extrairePromptSuivant,
   extrairePropositionsSuite,
+  NOTE_MIN_ALTERNATIVE,
   retirerLignePromptSuivant,
   estPromptDePublication,
   PROMPT_SALVAGE
@@ -70,8 +71,26 @@ describe('trois suites notées', () => {
   it('les rend de la mieux notée à la moins bien notée, note détachée du texte', () => {
     expect(extrairePropositionsSuite(TROIS)).toEqual([
       { texte: 'Corrige le libellé du bouton Envoyer dans ChatComposer.tsx.', score: 91 },
-      { texte: 'Relance la suite de tests complète.', score: 62 },
-      { texte: 'Ajoute une capture de la vue chat.', score: 40 }
+      { texte: 'Relance la suite de tests complète.', score: 62 }
+    ])
+  })
+
+  /*
+   * UN CHOIX, PAS UN REMPLISSAGE (conv-1087, 2026-10-22) : « il me propose à chaque fois un choix
+   * pertinent et les autres sont complètement useless ». Mesuré sur 90 tours : la suite secondaire
+   * valait 45 en médiane. Une alternative notée sous le plancher ne s'affiche plus ; la mieux notée,
+   * elle, reste TOUJOURS — c'est celle de Tab et du mode auto.
+   */
+  it('masque une alternative notée sous le plancher, garde la meilleure même basse', () => {
+    expect(NOTE_MIN_ALTERNATIVE).toBe(60)
+    const texte = [
+      'AUTOWIN_PROMPT_V1: [75] Vérifie le compteur après un changement de fil.',
+      'AUTOWIN_PROMPT_V1: [60] Prouve-le plutôt par un test du composant.',
+      'AUTOWIN_PROMPT_V1: [45] Ajoute une fermeture automatique à la carte.'
+    ].join('\n')
+    expect(extrairePropositionsSuite(texte).map((p) => p.score)).toEqual([75, 60])
+    expect(extrairePropositionsSuite('AUTOWIN_PROMPT_V1: [40] Relis le journal.')).toEqual([
+      { texte: 'Relis le journal.', score: 40 }
     ])
   })
 
