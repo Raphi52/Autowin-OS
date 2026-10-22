@@ -48,9 +48,15 @@ export const CLE_FOND_ACCUEIL = autowinStorageKey('home.decor.v3')
  */
 export const EVENEMENT_FOND_ACCUEIL = 'autowin:fond-accueil'
 
-/** Les choix du menu, dans l'ordre affiché, avec les mots de la demande. */
+/**
+ * Les choix du menu, dans l'ordre affiché, avec les mots de la demande.
+ *
+ * Le fond sans scène s'affiche « Aucun » et non plus « Noir » (conv-1076, 2026-10-22 : « desfois c
+ * pas noir selon le theme ») : Holographique blanc le peint en blanc (#fdfdff, couche générée). Son
+ * identifiant reste `noir` : c'est la valeur déjà enregistrée sur les postes qui l'ont choisi.
+ */
 export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
-  { id: FOND_NOIR, nom: 'Noir' },
+  { id: FOND_NOIR, nom: 'Aucun' },
   { id: 'avenue', nom: 'Cyberpunk' },
   { id: 'actuel', nom: 'Planètes' }
 ]

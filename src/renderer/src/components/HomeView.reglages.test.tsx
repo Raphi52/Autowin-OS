@@ -345,13 +345,15 @@ describe('le choix du fond de l accueil', () => {
    * menu pour choisir un fond noir ou l'image cyberpunk ou les planetes ». Avant, la direction du
    * fond n'avait AUCUN reglage : elle ne changeait qu'en editant le stockage a la main.
    */
-  it('propose exactement Noir, Cyberpunk et Planetes, sur le fond affiche par defaut', async () => {
+  // « Aucun » et non plus « Noir » (conv-1076, 2026-10-22 : « desfois c pas noir selon le theme ») :
+  // en Holographique blanc, ce choix peint un aplat BLANC. La valeur enregistree reste `noir`.
+  it('propose exactement Aucun, Cyberpunk et Planetes, sur le fond affiche par defaut', async () => {
     const container = await mount()
     await ouvrirReglages(container)
     const menu = q<HTMLSelectElement>(container, '[data-testid="home-fond"]')!
     expect(menu).not.toBeNull()
     expect(Array.from(menu.options).map((o) => [o.value, o.textContent])).toEqual([
-      ['noir', 'Noir'],
+      ['noir', 'Aucun'],
       ['avenue', 'Cyberpunk'],
       ['actuel', 'Planètes']
     ])
