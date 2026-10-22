@@ -7,6 +7,9 @@
  * locale — sans que l'interface aille lire du code du processus principal.
  */
 
+/** Un run rouge COUPÉ — par le bouton Stop du chat, ou par le quota de l'abonnement — et non raté. */
+export type RunInterruption = 'stop' | 'quota'
+
 /**
  * True si le run est BLOQUÉ, c'est-à-dire ni clos ni concluant.
  *
@@ -17,13 +20,26 @@
  * fossile de SUCCÈS, il hérite donc du traitement de `green`, condition de DoD comprise.
  * Une DoD incomplète bloque quel que soit le statut : c'est la règle, sans exception par statut.
  * Un statut illisible (`unknown`) bloque également : un RUN.md corrompu doit rester visible.
+ *
+ * Un run `red` COUPÉ (`interruption`, lue dans sa clôture par `parseRun`) ne bloque pas, DoD
+ * incomplète comprise : arrêté par le Stop, il est annulé ; coupé par le quota, il est suspendu.
+ * Aucun des deux ne dit que le travail a échoué — les compter ici remplissait la liste servie à
+ * chaque tour de runs sans rien à réparer (15 entrées le 2026-10-22, conv-1069).
  */
-export function isBlocked(s: { status: string; dodTotal: number; dodChecked: number }): boolean {
+export function isBlocked(s: {
+  status: string
+  dodTotal: number
+  dodChecked: number
+  interruption?: RunInterruption
+}): boolean {
   // INTERROMPU (piste 4, conv-1070) : coupé par Stop, la limite de session ou une panne en face.
   // Seule exception à la règle de DoD, et elle est forcée : un run arrêté avant sa fin a TOUJOURS
   // une DoD incomplète, donc le garder « bloqué » à ce titre le bloquait pour toujours. Il n'a pas
   // échoué ; l'interface le montre comme reprenable, à part des runs bloqués.
   if (s.status === 'interrupted') return false
+  // Même cas pour un RUN.md écrit AVANT `status: interrupted` (d7d3765c) : il porte `red`, et
+  // seule sa ligne de clôture dit qu'il a été coupé (conv-1069 : 10 Stop et 29 quotas sur le poste).
+  if (s.status === 'red' && s.interruption) return false
   return (
     ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
     s.dodChecked < s.dodTotal
@@ -38,7 +54,9 @@ export function mentionDEtatDuRun(s: {
   status: string
   dodTotal: number
   dodChecked: number
+  interruption?: RunInterruption
 }): string {
-  if (s.status === 'interrupted') return 'interrompu, relançable'
+  if (s.status === 'interrupted' || (s.status === 'red' && s.interruption))
+    return 'interrompu, relançable'
   return isBlocked(s) ? 'bloqué' : ''
 }

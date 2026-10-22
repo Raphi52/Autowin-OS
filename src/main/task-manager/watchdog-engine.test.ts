@@ -101,6 +101,37 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     expect(dispatch.calls).toHaveLength(0)
   })
 
+  /*
+   * conv-1069, candidat 3 : une regle « fin du tour de conv-1065 » ne se reveille QUE pour ce fil.
+   * L'entree qui ferait echouer ce test si le filtre etait faux : la fin d'un tour d'un AUTRE fil.
+   */
+  it('chat-turn-done : reveille pour le fil nomme, jamais pour un autre fil', async () => {
+    const dispatch = spy()
+    const task = watchdogTask(logPath, {
+      destination: { kind: 'existing', conversationId: 'conv-1069' },
+      watchdog: {
+        source: { kind: 'app-event', events: ['chat-turn-done'], conversationId: 'conv-1065' },
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    await engine.notifyAppEvent(
+      'chat-turn-done',
+      'Le tour t-1 de conv-2000 est terminé.',
+      'conv-2000'
+    )
+    expect(dispatch.calls).toHaveLength(0)
+
+    await engine.notifyAppEvent(
+      'chat-turn-done',
+      'Le tour t-2 de conv-1065 est terminé.',
+      'conv-1065'
+    )
+    expect(dispatch.calls).toHaveLength(1)
+    expect(dispatch.calls[0].context).toContain('conv-1065')
+  })
+
   it('ne reveille jamais une regle sur un incident produit par sa propre conversation', async () => {
     const dispatch = spy()
     const task = watchdogTask(logPath, {

@@ -199,6 +199,31 @@ export function verdictVeilleurInactivite(etat: {
   return etat.inactifDepuisMs < etat.plafondMs ? 'patienter' : 'couper'
 }
 
+/**
+ * Annonce la FIN d'un tour aux règles `task_create` « quand le tour de conv-N est terminé »
+ * (conv-1069 : sur conv-1065, attendre un autre fil a coûté 5 envois et 2 tours payés pour lire
+ * « pas terminé »). L'issue (réussi, arrêté, échec) n'est pas connue ici : le contexte renvoie au
+ * fil plutôt que d'en inventer une. Best-effort : un réveil raté ne casse jamais la fin d'un tour.
+ * Garde : `run-pilot-chat.test.ts`.
+ */
+export function annoncerFinDeTour(
+  moteur: Pick<WatchdogEngine, 'notifyAppEvent'> | undefined,
+  conversationId: string,
+  turnId: string
+): void {
+  if (!moteur) return
+  // `notifyAppEvent` est asynchrone : une panne arrive en rejet, jamais en exception immédiate.
+  void moteur
+    .notifyAppEvent(
+      'chat-turn-done',
+      `Le tour ${turnId} du fil ${conversationId} vient de se terminer. Lis la fin de ce fil pour connaître son issue.`,
+      conversationId
+    )
+    .catch((erreur: unknown) =>
+      console.warn('[watchdog] fin de tour non annoncée', conversationId, erreur)
+    )
+}
+
 export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
   const {
     os,
@@ -1741,6 +1766,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (conversationId) {
         activeChatTurns.delete(conversationId, controller)
         broadcast({ type: 'refresh', scope: 'conversations' })
+        // APRÈS la sortie des tours actifs : l'agent réveillé lit alors `pilotChatActive` à faux.
+        // fix-ok: conv-1069 — aucun événement « fin de tour » n'était émis : une règle task_create ne pouvait pas attendre un autre fil (rouge : run-pilot-chat.test.ts).
+        annoncerFinDeTour(deps.watchdogEngine(), conversationId, turnId)
         /*
          * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
          *

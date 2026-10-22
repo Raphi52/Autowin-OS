@@ -413,6 +413,8 @@ export class AutowinOS {
   readonly worktreeManager?: WorktreeManager
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
+  /** Prévenu quand un run vient d'être SUSPENDU par le quota (`reveil-apres-quota.ts`, conv-1069). */
+  private murDeQuotaListener?: () => void
   private refusIntegrationListener?: (refus: {
     cause: string
     agentId: string
@@ -730,6 +732,8 @@ export class AutowinOS {
           .catch((erreur: unknown) =>
             console.warn('[orchestration] mur de quota non noté sur le checkpoint', runId, erreur)
           )
+          // APRÈS l'écriture : le réveil relit l'heure de retour sur le disque (conv-1069).
+          .then(() => this.murDeQuotaListener?.())
       },
       // Fan-out multi-modèles : les blocs topology scout/frame/terrain → phases composées ; judge → juges.
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
@@ -848,6 +852,8 @@ export class AutowinOS {
     conversationId: string
     turnId: string
     request: string
+    /** Texte final du tour : son « ✅ Fait » titre le commit (conv-1069). */
+    compteRendu?: string
     debut: ChatTurnStart
     /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
     autresToursEnCours?: () => readonly string[]
@@ -1051,6 +1057,14 @@ export class AutowinOS {
 
   async discardHeldWorktree(agentId: string): Promise<boolean> {
     return (await this.worktrees?.discardHeldAsync(agentId)) ?? false
+  }
+
+  /**
+   * Abonne le réveil des runs suspendus : sans lui, un run coupé par le quota app ouverte ne
+   * repartait qu'au redémarrage suivant (conv-1069). Idempotent.
+   */
+  onMurDeQuota(listener: () => void): void {
+    this.murDeQuotaListener = listener
   }
 
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */

@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
 import { exactLineFingerprint } from './exact-line-fingerprint'
+import { titreDeCommitAuto } from './titre-de-commit'
 import type { TypageAvantPublication } from './typage-avant-publication'
 import {
   autoCloseBranch,
@@ -256,9 +257,20 @@ async function importsAtteints(
   return { directs, indirects }
 }
 
-function messageDeCommit(conversationId: string, request: string): string {
-  const head = request.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail du chat'
-  return `auto(${conversationId}): ${head}`
+/** `type(zone): phrase (conv-N)` depuis ce que le tour a FAIT (`titre-de-commit.ts`, conv-1069). */
+function messageDeCommit(
+  conversationId: string,
+  request: string,
+  compteRendu: string | undefined,
+  fichiers: readonly string[]
+): string {
+  return titreDeCommitAuto({
+    id: conversationId,
+    demande: request,
+    compteRendu,
+    fichiers,
+    repli: 'travail du chat'
+  })
 }
 
 /**
@@ -270,8 +282,10 @@ function messageDeCommit(conversationId: string, request: string): string {
 export async function publierTourDeChat(input: {
   conversationId: string
   turnId: string
-  /** Demande de l'utilisateur : sert au message de commit. */
+  /** Demande de l'utilisateur : repli du message de commit quand le tour n'a pas dit ce qu'il a fait. */
   request: string
+  /** Texte final du tour : son bloc « ✅ Fait » donne le titre du commit (conv-1069). */
+  compteRendu?: string
   debut: ChatTurnStart
   traces: readonly ConversationFileTrace[]
   /**
@@ -477,7 +491,7 @@ export async function publierTourDeChat(input: {
   const project = await autoCloseRun({
     repo,
     branch: brancheDuTour(conversationId, turnId),
-    message: messageDeCommit(conversationId, input.request),
+    message: messageDeCommit(conversationId, input.request, input.compteRendu, publier),
     paths: publier,
     runGit,
     direct: true,

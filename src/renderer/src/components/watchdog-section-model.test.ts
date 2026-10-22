@@ -58,6 +58,17 @@ describe('description d’une règle', () => {
     )
   })
 
+  // conv-1069 : une règle posée par `task_create` attend la fin d'UN fil — l'écran le nomme.
+  it('décrit la fin de tour attendue avec le fil surveillé', () => {
+    expect(
+      describeWatchdogSource({
+        kind: 'app-event',
+        events: ['chat-turn-done'],
+        conversationId: 'conv-1065'
+      })
+    ).toBe('Quand le tour de conv-1065 se termine')
+  })
+
   it('rend les BORNES visibles — c’est la contrepartie du pouvoir accordé', () => {
     const text = describeWatchdogGuards(guards)
 

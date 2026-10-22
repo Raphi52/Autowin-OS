@@ -789,6 +789,44 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
     ).toContain('auto(conv-348): répare les scouts')
   })
 
+  /*
+   * Les commits automatiques prennent le format du dépôt `type(zone): phrase (conv-N)` (titre-de-commit.ts,
+   * conv-1069). Sans ce test, la règle de conv-1020 ne retirait plus rien : la note de version
+   * aurait affiché « feat(chat): … (conv-1069) », le préfixe et le numéro de fil qu'elle cachait.
+   */
+  it('le format type(zone): … (conv-N) n’est pas une note de version non plus — gardé dans l’infobulle (conv-1069)', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        incoming: [
+          {
+            ...incoming[0],
+            hash: 'c3',
+            subject: 'fix(run-blocked): un run coupé par le Stop n’est plus bloqué (conv-1069)'
+          },
+          {
+            ...incoming[0],
+            hash: 'd4',
+            subject: 'feat(agent): relance après le quota (run-36461be778d0-1)'
+          }
+        ]
+      })
+    })
+    await render()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-incoming-toggle"]')!.click()
+    )
+    const sujets = [...container.querySelectorAll('.rail-update-commit-subject')].map(
+      (el) => el.textContent
+    )
+    expect(sujets).toEqual(['un run coupé par le Stop n’est plus bloqué', 'relance après le quota'])
+    expect(
+      container.querySelector('[data-testid="update-incoming-commit"]')!.getAttribute('title')
+    ).toContain('fix(run-blocked): un run coupé par le Stop n’est plus bloqué (conv-1069)')
+  })
+
   it('l’œil est FERMÉ tant que la liste est repliée et s’OUVRE avec elle (A5, conv-182)', async () => {
     api({
       checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main', incoming })

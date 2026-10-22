@@ -226,7 +226,8 @@ const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [
   'task-missed',
   'workflow-gate-failed',
   'workflow-unverified',
-  'workflow-proof-lost'
+  'workflow-proof-lost',
+  'chat-turn-done'
 ]
 
 /** Bornes des gardes. Ce sont des valeurs qui arrivent du renderer : on les CONTRAINT, on ne les
@@ -300,8 +301,15 @@ function watchdog(raw: unknown): WatchdogRule {
     // l'entrée plutôt que de laisser croire qu'elle surveille quelque chose.
     const events = WATCHDOG_APP_EVENTS.filter((candidate) => raw.includes(candidate))
     if (!events.length) throw new Error('Choisis au moins un événement interne à surveiller')
+    const conversationId =
+      typeof source.conversationId === 'string' ? source.conversationId.trim().slice(0, 200) : ''
+    // conv-1069 : sans fil nommé, « fin de tour » réveillerait la règle à chaque tour de chaque fil.
+    if (events.includes('chat-turn-done') && !conversationId)
+      throw new Error(
+        'Nomme le fil dont la fin de tour réveille la règle : watchdog.source.conversationId (ex. "conv-1065")'
+      )
     return {
-      source: { kind: 'app-event', events },
+      source: { kind: 'app-event', events, ...(conversationId ? { conversationId } : {}) },
       guards: guards(value.guards),
       ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
     }

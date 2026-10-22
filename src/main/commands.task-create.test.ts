@@ -70,6 +70,54 @@ describe('task_create — câblage du bus', () => {
     expect(store.remove(store.listTasks()[0]!.id)).toBe(true)
   })
 
+  /*
+   * conv-1069, candidat 3 : « attendre la fin d'un autre fil » sans le sonder. L'entrée qui ferait
+   * échouer ce test si la correction était fausse : la même règle SANS fil — elle réveillerait sur
+   * chaque tour de chaque fil, y compris celui qu'elle lance elle-même.
+   */
+  it('crée une règle « fin du tour de conv-N » et refuse la même sans fil nommé', async () => {
+    const store = new TaskStore()
+    const bus = new AppCommandBus(os as never, () => undefined)
+    bus.taskManager = {
+      create: (i) => store.create(i),
+      list: () => store.listTasks(),
+      refresh: async () => {},
+      onChanged: () => undefined
+    }
+    const regle = (source: Record<string, unknown>): string =>
+      JSON.stringify({
+        title: 'Relire conv-1065',
+        prompt: 'Relis la conclusion de conv-1065.',
+        enabled: true,
+        mode: 'active-only',
+        destination: { kind: 'existing', conversationId: 'conv-1069' },
+        watchdog: { source, guards: {} }
+      })
+
+    const sansFil = await bus.exec('task_create', {
+      task: regle({ kind: 'app-event', events: ['chat-turn-done'] })
+    })
+    expect(sansFil.data).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/conversationId/)
+    })
+    expect(store.listTasks()).toHaveLength(0)
+
+    const avecFil = await bus.exec('task_create', {
+      task: regle({ kind: 'app-event', events: ['chat-turn-done'], conversationId: 'conv-1065' })
+    })
+    expect(avecFil.data).toMatchObject({ ok: true })
+    expect(store.listTasks()[0]?.watchdog?.source).toEqual({
+      kind: 'app-event',
+      events: ['chat-turn-done'],
+      conversationId: 'conv-1065'
+    })
+    // L'agent le lit au moment de créer : la forme est dans le catalogue, pas à deviner.
+    expect(JSON.stringify(bus.catalog().find((c) => c.name === 'task_create'))).toContain(
+      'chat-turn-done'
+    )
+  })
+
   it('sans Task Manager câblé : refus nommé, rien créé', async () => {
     const bus = new AppCommandBus(os as never, () => undefined)
     const result = await bus.exec('task_create', { task: JSON.stringify(tache) })

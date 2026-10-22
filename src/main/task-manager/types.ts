@@ -34,7 +34,15 @@ export type TaskDestination =
  */
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
-  | { kind: 'app-event'; events: WatchdogAppEvent[] }
+  | {
+      kind: 'app-event'
+      events: WatchdogAppEvent[]
+      /**
+       * Fil surveillé : seuls les événements de CE fil réveillent la règle. Obligatoire avec
+       * `chat-turn-done` (conv-1069) — sans lui, la règle se réveillerait à chaque tour de chaque fil.
+       */
+      conversationId?: string
+    }
   /**
    * `outlook-mail` : un mail NON LU arrive dans la boite Outlook locale (passerelle COM,
    * `outlook/outlook-local.ts`). Comme `file-match`, seuls les mails apparus APRES le demarrage
@@ -76,6 +84,11 @@ export interface WatchdogSender {
  *    globale (`status === 'succeeded' && result.valid !== true`). C'est le plus dangereux des trois :
  *    il annonce un succes que rien n'etaye, et personne ne va le lire ;
  *  - `workflow-proof-lost`   : une reprise a perdu des preuves de son propre journal.
+ *
+ * `chat-turn-done` (conv-1069) : un tour de chat vient de se terminer, quelle qu'en soit l'issue.
+ * Émis dans le `finally` du tour (`chat/run-pilot-chat.ts`, `annoncerFinDeTour`), APRÈS sa sortie
+ * des tours actifs : c'est l'instant où `pilotChatActive` passe à faux. Sur conv-1065, attendre un
+ * autre fil a coûté 5 envois et 2 tours payés pour lire « pas terminé ».
  */
 export type WatchdogAppEvent =
   | 'orchestration-red'
@@ -84,6 +97,7 @@ export type WatchdogAppEvent =
   | 'workflow-proof-lost'
   | 'task-failed'
   | 'task-missed'
+  | 'chat-turn-done'
 
 /**
  * Les bornes qui rendent le reveil evenementiel tenable. Elles ne sont pas facultatives : un

@@ -15,10 +15,12 @@ export type WatchdogAppEvent =
   | 'workflow-proof-lost'
   | 'task-failed'
   | 'task-missed'
+  | 'chat-turn-done'
 
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
-  | { kind: 'app-event'; events: WatchdogAppEvent[] }
+  /** `conversationId` : fil surveillé, posé par `task_create` avec `chat-turn-done` (conv-1069). */
+  | { kind: 'app-event'; events: WatchdogAppEvent[]; conversationId?: string }
   | {
       kind: 'outlook-mail'
       /** Absent = Outlook ET Teams (ancienne règle unique). */
@@ -86,7 +88,8 @@ const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
   'workflow-unverified': 'un workflow se dit réussi SANS preuve de validation',
   'workflow-proof-lost': 'une reprise perd des preuves de son journal',
   'task-failed': 'une tâche planifiée échoue',
-  'task-missed': 'une tâche planifiée est manquée'
+  'task-missed': 'une tâche planifiée est manquée',
+  'chat-turn-done': 'un tour de chat se termine'
 }
 
 export function describeWatchdogSource(source: WatchdogSource): string {
@@ -103,7 +106,15 @@ export function describeWatchdogSource(source: WatchdogSource): string {
   if (source.kind === 'app-event') {
     if (!source.events.length)
       return 'Aucun événement surveillé — cette règle ne se déclenchera jamais'
-    return `Quand ${source.events.map((event) => APP_EVENT_LABEL[event]).join(', ou ')}`
+    // fix-ok: conv-1069 — `chat-turn-done` sans libellé s'affichait « Quand  » (rouge : watchdog-section-model.test.ts).
+    const fil = source.conversationId
+    const libelle = (event: WatchdogAppEvent): string =>
+      event === 'chat-turn-done' && fil ? `le tour de ${fil} se termine` : APP_EVENT_LABEL[event]
+    const quand = `Quand ${source.events.map(libelle).join(', ou ')}`
+    // Le filtre vaut pour TOUS les événements de la règle : le taire laisserait croire à une règle large.
+    return fil && source.events.some((event) => event !== 'chat-turn-done')
+      ? `${quand} (fil ${fil} seulement)`
+      : quand
   }
   const sensitivity = source.caseSensitive ? ' (casse respectée)' : ''
   return `Quand une ligne de ${source.path} correspond à « ${source.pattern} »${sensitivity}`

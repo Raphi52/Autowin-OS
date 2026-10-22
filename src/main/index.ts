@@ -209,6 +209,7 @@ import { regimePhases } from './task-regime'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { creerReprendreTout } from './runs/resume-all-interrupted-runs'
+import { creerReveilApresQuota } from './runs/reveil-apres-quota'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
 import { creerRelanceDeRunReprenable } from './runs/relaunch-resumable-run'
@@ -3613,6 +3614,7 @@ Le fil reprend ensuite normalement.`
               conversationId,
               turnId: resultat.turnId,
               request: demande,
+              compteRendu: resultat.text,
               debut: debutPublication,
               // Un autre fil encore en cours n'a peut-être rien écrit au journal des fichiers.
               autresToursEnCours: () =>
@@ -5160,11 +5162,14 @@ app.whenReady().then(async () => {
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
   const worktreeActivityAtStartup = os.getWorktreeActivity()
+  // UN SEUL instant pour le tri du démarrage ET le réveil après quota : un mur échu à cet instant
+  // est relancé ici, un mur échu après l'est par `reveil-apres-quota.ts` — ni trou, ni doublon.
+  const instantDuDemarrage = Date.now()
   const resumableRuns = os.resumableOrchestrations().filter((state) => {
     // Run SUSPENDU par le mur de quota avant l'heure que le refus annonçait : le relancer ne ferait
     // que se cogner au même refus. Il reste reprenable (et protégé du ménage des copies) ; seule la
     // relance AUTOMATIQUE attend. Après l'heure, ou sans heure annoncée, il repart comme les autres.
-    if (repriseAutoRetenueParQuota(state, Date.now())) {
+    if (repriseAutoRetenueParQuota(state, instantDuDemarrage)) {
       console.warn(
         '[resume-orchestration]',
         state.runId,
@@ -5275,6 +5280,24 @@ app.whenReady().then(async () => {
     mettreEnFile: (tache) => startupResumeQueue.enqueue(tache),
     relancer: (state) => relaunchResumableRun(state)
   })
+  /*
+   * RÉVEIL APRÈS LE QUOTA (conv-1069). Un run suspendu par le quota ne repartait qu'au démarrage
+   * suivant ou par « Reprendre tout » : app ouverte, il attendait indéfiniment. Même triage et même
+   * file que « Reprendre tout » ; replanifié à chaque nouveau mur noté sur un checkpoint.
+   */
+  const reveilApresQuota = creerReveilApresQuota<OrchestrationRunState>({
+    demarrageMs: instantDuDemarrage,
+    listerRunsReprenables: () => os.resumableOrchestrations(),
+    publicationDejaProuvee: (state) =>
+      Boolean(publishedWorktreeProofForResume(state.runId, os.getWorktreeActivity())),
+    actionDeReprise: (state) =>
+      resumeActionFor(state, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs),
+    mettreEnFile: (tache) => startupResumeQueue.enqueue(tache),
+    relancer: (state) => relaunchResumableRun(state),
+    journal: (message) => console.warn('[resume-orchestration]', message)
+  })
+  os.onMurDeQuota(() => reveilApresQuota.replanifier())
+  reveilApresQuota.replanifier()
   ipcMain.handle('runs:resumeAll', (event) => {
     assertTrustedRendererSender(event, 'Reprendre tout')
     return reprendreTousLesRuns.reprendreTout()

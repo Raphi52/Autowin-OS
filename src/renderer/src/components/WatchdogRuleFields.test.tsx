@@ -115,6 +115,22 @@ describe('WatchdogRuleFields — créer une règle à la souris', () => {
     )
   })
 
+  // conv-1069 : cocher une case reconstruisait la source et effaçait le fil d'une règle
+  // « fin du tour de conv-N » posée par `task_create` — l'enregistrement était alors refusé.
+  it('cocher un événement garde le fil surveillé d’une règle de fin de tour', () => {
+    render({
+      source: { kind: 'app-event', events: ['chat-turn-done'], conversationId: 'conv-1065' },
+      guards: { ...DEFAULT_DRAFT_GUARDS }
+    })
+
+    act(() => field<HTMLInputElement>('watchdog-event-task-failed').click())
+    expect(current.source).toEqual({
+      kind: 'app-event',
+      events: ['chat-turn-done', 'task-failed'],
+      conversationId: 'conv-1065'
+    })
+  })
+
   it('les BORNES sont visibles dans le formulaire, pas repliées', () => {
     render()
 

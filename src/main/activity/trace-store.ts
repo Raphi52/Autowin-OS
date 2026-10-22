@@ -3,6 +3,7 @@ import {
   close as fermerDescripteurAsync,
   closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   open as ouvrirDescripteur,
   openSync,
@@ -408,7 +409,12 @@ export class TraceStore {
     if (event.parentId && !seen.has(event.parentId))
       throw new Error(`parent causal introuvable: ${event.parentId}`)
     const descriptor = this.descripteurOuvert(event.conversationId)
-    writeSync(descriptor, `${JSON.stringify(event)}\n`, undefined, 'utf8')
+    const ligne = `${JSON.stringify(event)}\n`
+    const ecrits = writeSync(descriptor, ligne, undefined, 'utf8')
+    // fix-ok: conv-1069 — `append` n'avançait pas le curseur de `nextSequence` : chaque événement
+    // rouvrait le journal pour relire sa propre ligne (test borne-warmup rouge sur ef5762bf).
+    if (ecrits === Buffer.byteLength(ligne, 'utf8'))
+      this.avancerCurseurApresEcriture(event.conversationId, descriptor, ecrits, event.sequence)
     seen.add(event.id)
     this.ids.set(event.conversationId, seen)
     this.lastSequences.set(event.conversationId, event.sequence)
@@ -423,6 +429,38 @@ export class TraceStore {
       // Une projection ou une télémétrie optionnelle ne devient jamais une dépendance du run.
     }
     return this
+  }
+
+  /**
+   * LE CURSEUR DE `nextSequence` SUIT NOS PROPRES ÉCRITURES (conv-1069). Gels résolus avec la carte
+   * de la compilation du 2026-10-22 07:10 : `openSync` du journal (`nextSequence`, appelé par
+   * `rebaseTraceSequence`), 8,9 s puis 1,0 s de fenêtre figée. `append` écrivait sans avancer ce
+   * curseur : l'appel suivant voyait le fichier grandir et le ROUVRAIT pour relire la ligne qu'il
+   * venait d'écrire — une ouverture de fichier par événement tracé, bloquante sur un disque saturé.
+   *
+   * `fstatSync` lit l'empreinte sur le descripteur DÉJÀ ouvert, sans rouvrir le chemin. On n'avance
+   * que si la taille vaut exactement « curseur + notre ligne » : une ligne d'un autre processus,
+   * écrite entre-temps, laisse le curseur en place et sera relue, comme avant.
+   */
+  private avancerCurseurApresEcriture(
+    conversationId: string,
+    descriptor: number,
+    octets: number,
+    sequence: number
+  ): void {
+    const curseur = this.sequenceCursors.get(conversationId)
+    if (!curseur) return
+    try {
+      const stats = fstatSync(descriptor)
+      if (stats.size !== curseur.offset + octets) return
+      this.sequenceCursors.set(conversationId, {
+        offset: stats.size,
+        mtimeMs: stats.mtimeMs,
+        lastSequence: Math.max(curseur.lastSequence, sequence)
+      })
+    } catch {
+      // Empreinte illisible : le curseur reste en place, la relecture d'avant sert de repli.
+    }
   }
 
   /*
