@@ -28,6 +28,7 @@ export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   'aw-atom-spin', // orbites de l'atome <Spinner/> (theme.css)
   'aw-atom-tw', // étoile de l'atome (theme.css)
   'carte-bat', // point « en cours » de la carte du fil (CarteDuFil.css)
+  'carte-file', // tirets qui filent vers l'étape en cours de la carte du fil (conv-1088)
   // Étape en cours d'une réponse : rail, pastille, jauge du pied (ChatView.css) — conv-1075.
   'etape-flux',
   'etape-pouls',

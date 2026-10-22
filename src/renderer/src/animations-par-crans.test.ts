@@ -83,6 +83,7 @@ const FICHIER_DE: Record<string, string> = {
   'aw-atom-spin': 'assets/theme.css',
   'aw-atom-tw': 'assets/theme.css',
   'carte-bat': 'components/CarteDuFil.css',
+  'carte-file': 'components/CarteDuFil.css',
   'etape-flux': 'components/ChatView.css',
   'etape-pouls': 'components/ChatView.css',
   'etape-reflet': 'components/ChatView.css',
