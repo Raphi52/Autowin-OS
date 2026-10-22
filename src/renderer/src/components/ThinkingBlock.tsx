@@ -208,9 +208,15 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
   const [entier, setEntier] = useState(false)
   const [deborde, setDeborde] = useState(false)
   // Coupé : calé sur la FIN et mesuré. Déplié en entier, rien à caler ni à mesurer.
+  // Bloc PLIÉ (le cas de tout l'historique) : rien à mesurer non plus. Lire `scrollHeight` y force
+  // quand même la mise en page du fil ENTIER dès qu'un autre code l'a salie entre deux blocs. Mesuré
+  // le 2026-10-22 (conv-1055, ouverture de conv-826 en instance cachée) : 4,6 à 5,3 s de temps
+  // propre ici quand la carte du fil (état intermédiaire de conv-1059) la salissait, 0 après. Sans
+  // cascade, le coût d'UNE mise en page (~0,8 s) passe simplement au lecteur suivant. Au dépliage,
+  // l'événement `toggle` (ci-dessous) et l'observateur de taille font la mesure.
   const mesurer = useEffectEvent(() => {
     const el = ref.current
-    if (!el || entier) return
+    if (!el || entier || el.closest('details')?.open === false) return
     el.scrollTop = el.scrollHeight
     setDeborde(el.scrollHeight > el.clientHeight + 1)
   })
@@ -222,6 +228,15 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
     const observateur = new ResizeObserver(() => mesurer())
     observateur.observe(el)
     return () => observateur.disconnect()
+  }, [])
+  // Et au DÉPLIAGE lui-même : la mesure sautée tant que le bloc était plié se fait là, sans dépendre
+  // de la façon dont l'observateur de taille signale un corps qui passe de « sans boîte » à visible.
+  useEffect(() => {
+    const details = ref.current?.closest('details')
+    if (!details) return
+    const surBascule = (): void => mesurer()
+    details.addEventListener('toggle', surBascule)
+    return () => details.removeEventListener('toggle', surBascule)
   }, [])
   const n = paragraphes.length
   return (

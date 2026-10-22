@@ -19,14 +19,18 @@
  * ne sont donc pas ceux-ci. Ce script ne le remplace pas, il ajoute l'appelant et sa source.
  *
  * Usage : node scripts/gels-classement.mjs [--jours 14 | --depuis <ISO>] [--journal <chemin>]
- *                                          [--out <dossier du bundle>] [--top 10] [--json]
+ *                                          [--out <dossier du bundle>] [--cartes <archive>]
+ *                                          [--top 10] [--json]
+ * `--cartes` : l'archive des cartes de chaque construction (défaut : `gels-cartes/` à côté du
+ * journal, remplie par le build — scripts/gels-cartes-archive.mjs).
  * Sortie 0 = classement rendu ; 2 = journal absent ; 3 = ni gel ni démarrage de l'instrument dans la
  * période (un journal muet ne prouve alors rien).
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { SourceMap } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { carteArchivee, lireArchive, lireCarteArchivee } from './gels-cartes-archive.mjs'
 
 /** Une frame qui retombe dans l'instrument lui-même ne nomme pas le coupable : on la saute. */
 const SOURCES_DE_L_INSTRUMENT = /(^|\/)gel-(main|detector)\.ts$/
@@ -42,6 +46,9 @@ const SOURCES_DE_L_INSTRUMENT = /(^|\/)gel-(main|detector)\.ts$/
 const GRAVITE_DE_LA_CARTE = [
   'sans-objet',
   'en-vigueur',
+  // La carte du bundle qui tournait, retrouvée dans l'archive des constructions
+  // (scripts/gels-cartes-archive.mjs, conv-1055) : aussi fiable qu'une carte en vigueur.
+  'archivee',
   'absente',
   'posterieure-au-demarrage',
   'posterieure-au-gel'
@@ -216,7 +223,7 @@ export function fichierDuBundle(frame, racineOut) {
   if (!m) return undefined
   const fichier =
     m[1] === 'main' ? join(racineOut, 'main', m[2]) : join(racineOut, 'main', 'chunks', m[2])
-  return { fichier, ligne: Number(m[3]), colonne: Number(m[4]) }
+  return { fichier, cle: `${m[1]}/${m[2]}`, ligne: Number(m[3]), colonne: Number(m[4]) }
 }
 
 /**
@@ -225,8 +232,16 @@ export function fichierDuBundle(frame, racineOut) {
  * `carte` dit si la position est FIABLE : une carte réécrite APRÈS le gel (`posterieure-au-gel`), ou
  * après le démarrage `demarrageMs` qui le précède (`posterieure-au-demarrage`, juge de conv-1043),
  * décrit un autre bundle que celui que l'app avait chargé — la ligne obtenue tombe alors à côté.
+ *
+ * `archive` ({ dossier, entrees }, scripts/gels-cartes-archive.mjs) rend la carte du bundle CHARGÉ :
+ * celle de la dernière construction écrite avant le démarrage qui précède le gel. Elle n'est
+ * consultée QUE si ce démarrage est connu : sans lui, on garde la carte de `out/` et ses étiquettes
+ * de prudence. Sans archive, chaque reconstruction rendait les gels plus anciens illisibles (conv-1055).
  */
-export function resoudreAppelant(appelant, { racineOut, gelTs, demarrageMs, cache = new Map() }) {
+export function resoudreAppelant(
+  appelant,
+  { racineOut, gelTs, demarrageMs, archive, cache = new Map() }
+) {
   const frames = String(appelant ?? '')
     .split(' < ')
     .map((f) => f.trim())
@@ -244,20 +259,15 @@ export function resoudreAppelant(appelant, { racineOut, gelTs, demarrageMs, cach
       continue
     }
     const chemin = `${cible.fichier}.map`
-    let entree = cache.get(chemin)
-    if (entree === undefined) {
-      entree = existsSync(chemin)
+    let locale = cache.get(chemin)
+    if (locale === undefined) {
+      locale = existsSync(chemin)
         ? {
             carte: new SourceMap(JSON.parse(readFileSync(chemin, 'utf8'))),
             ecriteMs: statSync(chemin).mtimeMs
           }
         : null
-      cache.set(chemin, entree)
-    }
-    if (!entree) {
-      carte = pire(carte, 'absente')
-      sources.push(`${frame} (carte absente)`)
-      continue
+      cache.set(chemin, locale)
     }
     const gelMs = Date.parse(gelTs ?? '')
     // Un démarrage POSTÉRIEUR au gel n'a pas chargé le code qui a gelé : il ne compte pas.
@@ -265,13 +275,48 @@ export function resoudreAppelant(appelant, { racineOut, gelTs, demarrageMs, cach
       Number.isFinite(demarrageMs) && (!Number.isFinite(gelMs) || demarrageMs <= gelMs)
         ? demarrageMs
         : undefined
+    // L'archive ne sert que si le DÉMARRAGE qui précède le gel est connu : sans lui, la dernière
+    // construction avant le gel peut n'avoir jamais tourné (revue de conv-1055). On retombe alors
+    // sur la carte de `out/` et ses étiquettes de prudence, comme avant.
+    const archivee =
+      archive && chargeMs !== undefined
+        ? carteArchivee(archive.entrees ?? [], cible.cle, chargeMs)
+        : undefined
+    // La carte de `out/` reste la bonne si elle était déjà là au chargement ET plus récente que
+    // la construction archivée (une construction que l'archive aurait manquée).
+    const localeEnVigueur =
+      locale && archivee && locale.ecriteMs <= chargeMs && locale.ecriteMs > archivee.construitMs
+    let entree = locale
+    if (archivee && !localeEnVigueur) {
+      const cle = `archive:${archivee.empreinte}`
+      entree = cache.get(cle)
+      if (entree === undefined) {
+        try {
+          entree = {
+            carte: new SourceMap(lireCarteArchivee(archive.dossier, archivee.empreinte)),
+            archivee: true
+          }
+        } catch {
+          // Carte archivée illisible (fichier retiré à la main) : on retombe sur `out/`.
+          entree = locale
+        }
+        cache.set(cle, entree)
+      }
+    }
+    if (!entree) {
+      carte = pire(carte, 'absente')
+      sources.push(`${frame} (carte absente)`)
+      continue
+    }
     carte = pire(
       carte,
-      Number.isFinite(gelMs) && entree.ecriteMs > gelMs
-        ? 'posterieure-au-gel'
-        : chargeMs !== undefined && entree.ecriteMs > chargeMs
-          ? 'posterieure-au-demarrage'
-          : 'en-vigueur'
+      entree.archivee
+        ? 'archivee'
+        : Number.isFinite(gelMs) && entree.ecriteMs > gelMs
+          ? 'posterieure-au-gel'
+          : chargeMs !== undefined && entree.ecriteMs > chargeMs
+            ? 'posterieure-au-demarrage'
+            : 'en-vigueur'
     )
     // findEntry compte lignes et colonnes à partir de 0 ; la pile V8, à partir de 1.
     const pos = entree.carte.findEntry(cible.ligne - 1, cible.colonne - 1)
@@ -290,7 +335,7 @@ const secondes = (ms) => `${(ms / 1000).toFixed(1)} s`
 const jour = (ts) => (typeof ts === 'string' ? ts.slice(0, 16).replace('T', ' ') : '')
 
 /** Le classement en Markdown, prêt à coller dans le fil. */
-export function rendreClassement(classement, { racineOut, top = 10, periode = '' } = {}) {
+export function rendreClassement(classement, { racineOut, archive, top = 10, periode = '' } = {}) {
   const { totaux } = classement
   const cache = new Map()
   const l = []
@@ -330,6 +375,7 @@ export function rendreClassement(classement, { racineOut, top = 10, periode = ''
           racineOut,
           gelTs: a.dernierTs,
           demarrageMs: demarrageAvant(classement.demarragesMs, a.dernierTs),
+          archive,
           cache
         })
       : { sources: [], carte: 'sans-objet' }
@@ -374,6 +420,10 @@ function argument(argv, nom) {
 export function principal(argv = process.argv.slice(2), sortie = console.log) {
   const journal = resolve(argument(argv, '--journal') ?? '.autowin-data/autowin-os/gels.jsonl')
   const racineOut = resolve(argument(argv, '--out') ?? 'out')
+  // L'archive des cartes vit à côté du journal (scripts/gels-cartes-archive.mjs).
+  const dossierArchive = resolve(
+    argument(argv, '--cartes') ?? join(dirname(journal), 'gels-cartes')
+  )
   const top = Number(argument(argv, '--top') ?? 10)
   const depuisIso = argument(argv, '--depuis')
   const jours = Number(argument(argv, '--jours') ?? 14)
@@ -388,7 +438,8 @@ export function principal(argv = process.argv.slice(2), sortie = console.log) {
   if (argv.includes('--json')) {
     sortie(JSON.stringify({ journal, periode, illisibles, ...classement }, null, 2))
   } else {
-    sortie(rendreClassement(classement, { racineOut, top, periode }))
+    const archive = { dossier: dossierArchive, entrees: lireArchive(dossierArchive) }
+    sortie(rendreClassement(classement, { racineOut, archive, top, periode }))
     if (illisibles) sortie(`\n${illisibles} ligne(s) illisible(s) dans le journal.`)
   }
   const { totaux } = classement

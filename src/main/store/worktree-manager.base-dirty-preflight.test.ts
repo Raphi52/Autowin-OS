@@ -54,3 +54,24 @@ describe('WorktreeManager — pré-vol base-dirty en LECTURE SEULE', () => {
     expect(wm.baseDirtyFiles()).toEqual([])
   })
 })
+
+describe('WorktreeManager — même lecture SANS tenir la boucle (conv-1055)', () => {
+  it('rend la même liste que la version synchrone, sans muter git', async () => {
+    const repo = tempRepo()
+    const wm = manager(repo)
+    writeFileSync(join(repo, 'a.txt'), 'travail non committé de l’utilisateur\n')
+    writeFileSync(join(repo, 'brouillon.md'), 'note perso\n')
+
+    const avant = empreinte(repo)
+    const asynchrone = await wm.baseDirtyFilesAsync()
+
+    expect(asynchrone).toEqual(wm.baseDirtyFiles())
+    expect(asynchrone).toEqual(expect.arrayContaining(['a.txt', 'brouillon.md']))
+    expect(empreinte(repo)).toEqual(avant)
+  })
+
+  it('base illisible : `undefined`, jamais une liste vide qui se lirait « rien de sale »', async () => {
+    const wm = manager(join(tempRepo(), 'dossier-inexistant'))
+    expect(await wm.baseDirtyFilesAsync()).toBeUndefined()
+  })
+})

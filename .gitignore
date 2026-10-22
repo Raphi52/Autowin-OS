@@ -103,3 +103,8 @@ mods/*/tsconfig.json
 # le seul dépôt GitHub (2026-10-16, conv-994). Son historique d'avant vit dans la branche locale
 # sauvegarde/main-azure-2026-10-16.
 /entreprise/
+
+# Copie TEMPORAIRE de la config, ecrite par electron-vite pendant son chargement
+# (`electron.vite.config.<horodatage>.mjs`) puis effacee — sauf si le chargement est interrompu.
+# Un reste du 2026-10-21 22:08 trainait non suivi a la racine (conv-1055).
+/electron.vite.config.*.mjs

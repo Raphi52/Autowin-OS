@@ -29,7 +29,15 @@ export function estMurDeQuota(texte: string | undefined | null): boolean {
   // « session limit » est le texte RÉELLEMENT enregistré par Claude dans conversations.json
   // (mesuré le 2026-09-05 : 3 fils sur 12 rouges). Il annonce une remise à zéro à heure fixe
   // (« resets 2am »), pas une attente de quelques secondes : c'est bien un quota mort.
-  return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
+  // « weekly limit » (conv-1055, 2026-10-22) : même mur, autre fenêtre. Sur disque 355 fois
+  // (« You've hit your weekly limit · resets 5am (Europe/Paris) », run-stdout/ et causal-trace/) ;
+  // ignoré, il rendait le run `…mvi7i58s` (conv-1038) définitif au lieu de le suspendre. Seule la
+  // forme « hit your … » est reconnue : nu, « weekly limit » attraperait un nom de test ou un titre.
+  // « Opus limit » est EXCLU à dessein (revue de conv-1055) : c'est la limite d'UN modèle, alors que
+  // le mur que ce vocabulaire ferme est celui du COMPTE entier (`quotaWallKey`, registry.ts) — il
+  // refuserait aussi Sonnet et Haiku jusqu'à l'heure annoncée. Sa vraie réponse est de changer de
+  // modèle, ce qu'aucun code ne sait faire aujourd'hui.
+  return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session|weekly)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
     t
   )
 }
@@ -63,6 +71,25 @@ export function conversationsCoupeesParQuota<T extends ConversationCandidateQuot
   )
 }
 
+/** Les mois tels que Claude les abrège dans « resets Sep 29, 2am ». */
+const MOIS_ANGLAIS = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec'
+]
+
+/** Au-delà, une date annoncée est périmée ou mal lue : aucune limite d'abonnement ne dure un mois. */
+const ECHEANCE_DATEE_MAX_MS = 31 * 24 * 3_600_000
+
 /**
  * L'HEURE DE RETOUR QUE LE REFUS ANNONCE LUI-MÊME.
  *
@@ -89,12 +116,19 @@ export function instantDeRetourAnnonce(
   const depart = maintenant.valueOf()
   if (!Number.isFinite(depart)) return undefined
   // « resets 3:20pm », « resets 6pm », « resets 2am » — les trois formes réellement relevées.
+  // « resets Sep 29, 2am » — la forme DATÉE de la limite hebdomadaire (44 occurrences dans les
+  // journaux le 2026-10-22, conv-1055) : sans elle, le mur ne retombait qu'au redémarrage.
   // `(?![\w:])` : « 3:5pm » ne doit pas se lire « 3 » en laissant tomber le « :5pm ».
-  const heure = /\bresets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\w:])/i.exec(t)
+  const heure =
+    /\bresets?\s+(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(?:at\s+)?)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\w:])/i.exec(
+      t
+    )
   if (!heure) return undefined
-  let h = Number(heure[1])
-  const min = heure[2] ? Number(heure[2]) : 0
-  const meridien = heure[3]?.toLowerCase()
+  const moisAnnonce = heure[1] ? MOIS_ANGLAIS.indexOf(heure[1].toLowerCase()) + 1 : undefined
+  const jourAnnonce = heure[2] ? Number(heure[2]) : undefined
+  let h = Number(heure[3])
+  const min = heure[4] ? Number(heure[4]) : 0
+  const meridien = heure[5]?.toLowerCase()
   if (h > 23 || min > 59) return undefined
   // Sur 12 heures, seules 1 à 12 existent : « 13pm » ou « 0am » sont illisibles, pas 13h ou minuit.
   if (meridien && (h < 1 || h > 12)) return undefined
@@ -105,6 +139,24 @@ export function instantDeRetourAnnonce(
   const fuseau = /\(([A-Za-z]+(?:\/[A-Za-z_+-]+)+)\)/.exec(t)?.[1]
   const mur = murLocal(depart, fuseau)
   if (!mur) return undefined
+  if (moisAnnonce !== undefined && jourAnnonce !== undefined) {
+    if (jourAnnonce < 1 || jourAnnonce > 31) return undefined
+    // L'année n'est pas écrite : celle du refus, ou la suivante quand « Jan 2 » tombe en décembre.
+    for (const annee of [mur.annee, mur.annee + 1]) {
+      // « Sep 31 » n'existe pas : `Date.UTC` le roulerait au 1er octobre sans rien dire.
+      if (new Date(Date.UTC(annee, moisAnnonce - 1, jourAnnonce)).getUTCDate() !== jourAnnonce) {
+        return undefined
+      }
+      const instant = instantDepuisMur(annee, moisAnnonce, jourAnnonce, h, min, fuseau)
+      // Une date relue APRÈS son échéance (refus périmé) n'annonce plus rien : on ne la reporte
+      // pas d'un an. Le plafond borne aussi une date mal lue — une limite d'abonnement ne
+      // dépasse pas le mois.
+      if (instant !== undefined && instant > depart && instant - depart <= ECHEANCE_DATEE_MAX_MS) {
+        return instant
+      }
+    }
+    return undefined
+  }
   // Aujourd'hui puis demain : « resets 2am » écrit à 23h désigne le lendemain.
   for (const decalageJours of [0, 1]) {
     const instant = instantDepuisMur(mur.annee, mur.mois, mur.jour + decalageJours, h, min, fuseau)

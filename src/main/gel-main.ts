@@ -627,11 +627,14 @@ export function instrumenterEntreesSortiesDuMain(
   /*
    * APPLIQUER LES CARTES DE SOURCES AUX PILES CAPTUREES.
    *
-   * Le build emet les `.map` (cible `main` de electron.vite.config.ts) ; c'est cet appel qui fait
-   * que `new Error().stack` rend `src/main/store/worktree-manager.ts:494` au lieu de
-   * `chunks/worktree-manager-C3-Z8-U7.js:494`. Sans lui, 46 appelants sur 60 nommaient une ligne
-   * introuvable dans le depot (mesure du 2026-09-12). Le cout ne se paie qu'a la construction
-   * d'une pile, et ce module n'en construit que sur un appel DEJA au-dela du seuil.
+   * Le build emet les `.map` (cible `main` de electron.vite.config.ts). CET APPEL NE TRADUIT PAS
+   * LES PILES DU BUNDLE, contrairement a ce que ce commentaire affirmait depuis le 2026-09-12 : la
+   * doc Node le dit, « Only source maps in JavaScript files that are loaded after source maps has
+   * been enabled will be parsed and loaded », et `index.js` comme ses morceaux statiques sont deja
+   * charges quand on arrive ici. Mesure du 2026-10-22 (conv-1055) : aucune des 11 887 lignes de
+   * `gels.jsonl` ne porte un chemin `src/`. La traduction se fait donc APRES coup, par
+   * `scripts/gels-classement.mjs`, avec les cartes que chaque build archive
+   * (`scripts/gels-cartes-archive.mjs`). L'appel reste pour un code charge plus tard.
    */
   process.setSourceMapsEnabled?.(true)
   const requiert = createRequire(import.meta.url)

@@ -55,8 +55,13 @@ Lis la colonne **Carte** avant de croire une source :
 - `en-vigueur` : la carte date d'avant le démarrage qui précède le gel, donc du code que l'app avait
   chargé. Ouvre le `fichier:ligne` et vérifie qu'il porte bien l'appel nommé (`readFileSync`,
   `spawn git status`…).
+- `archivee` : la carte du code qui tournait, retrouvée dans l'archive que chaque build remplit
+  (`.autowin-data/autowin-os/gels-cartes/`, `scripts/gels-cartes-archive.mjs`, depuis conv-1055) :
+  la dernière construction écrite avant le démarrage qui précède le gel. Consultée SEULEMENT quand
+  ce démarrage est connu. Aussi fiable que `en-vigueur` : même vérification de la ligne.
 - `posterieure-au-gel` ou `posterieure-au-demarrage` : le bundle a été reconstruit après le chargement
-  du code qui a gelé. La frame reste brute, `(non résolu)`. Ne cherche pas la ligne à la main dans le
+  du code qui a gelé, et l'archive ne remonte pas jusqu'à ce code (gel antérieur au 2026-10-22, ou
+  archive vidée). La frame reste brute, `(non résolu)`. Ne cherche pas la ligne à la main dans le
   bundle actuel : attends un gel survenu après le dernier démarrage, ou reproduis (étape 3).
 - `absente` : aucune carte. Cherche l'appel nommé dans `src/main` avec grep, sans conclure sur une ligne.
 
@@ -75,6 +80,23 @@ node scripts/avec-instance-headless.mjs --code-dev -- node scripts/banc-gel.mjs 
 Le banc refuse de viser l'app ouverte sans `--app-ouverte` : il clique une vue et attend qu'elle gèle,
 donc sur l'app ouverte c'est la fenêtre de l'utilisateur qui se fige. Verdict : sortie 0 = vivante,
 1 = gel (avec la réanimation lue dans le journal de l'instance), 2 = aucune cible.
+
+Pour un gel du FIL (`renderer:vue-chat-fil`, `renderer:chat-fil`), qui ne porte jamais de pile, ouvre
+une conversation longue réelle sous le profileur CPU — la sonde la copie dans sa propre instance
+cachée, puis l'efface :
+
+```
+node scripts/cdp-profil-ouverture-fil.mjs --conversation <id> [--essais 3] [--out <rapport.json>]
+```
+
+Elle classe le temps PROPRE par fonction (`fichier:ligne` du code servi par le serveur de dev — lis
+la ligne dans `http://localhost:5173/src/...`, pas dans la source TSX). Une fonction de mesure
+(`scrollHeight`, `getBoundingClientRect`, `getBBox`) en tête paie la mise en page du fil entier :
+c'est le PREMIER lecteur qui la paie, donc retirer une lecture déplace le coût vers la suivante
+(conv-1055 : 818 ms de `FilDePensee.mesurer` devenus ~730 ms d'`ajusterALaLargeur`). Un gain réel
+vient d'une CASCADE supprimée (écriture entre deux lectures : plusieurs mises en page au lieu d'une)
+ou d'un fil moins coûteux à mettre en page — pas d'une lecture de moins. Compare avant/après sur le
+MÊME arbre : un autre fil peut avoir ajouté du code au fil entre deux mesures.
 Pour un gel du processus principal sans vue précise, la reproduction est un test `src/main/*.test.ts`
 qui prouve l'appel synchrone sur le chemin nommé (`src/main/behaviour-files.sans-gel.test.ts` en est le modèle).
 

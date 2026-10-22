@@ -6,7 +6,7 @@ import type { VerdictBureau } from './verdict-bureau'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
 import { CAUSES_REESSAYABLES } from './repechage-automatique'
-import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
+import { estRepechable, INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
 import { avertissementCollisionProbable } from './avertissement-collision-probable'
 import {
   messageSansSigneDeVie,
@@ -99,6 +99,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'sweepAbandonedAgentCopiesAsync'
         | 'recensementNonPubliesAsync'
         | 'baseDirtyFiles'
+        | 'baseDirtyFilesAsync'
       >
     >
   stateStore?: WorktreeRunStateStore
@@ -1451,6 +1452,18 @@ export class RunWorktreeCoordinator {
    */
   baseDirtyFiles(): readonly string[] {
     return this.manager.baseDirtyFiles?.() ?? []
+  }
+
+  /**
+   * Meme pre-vol, sans tenir la boucle (balayage de fond, conv-1055). `undefined` = base illisible.
+   * Un manager sans version asynchrone (doubles de test au contrat minimal) repond par la version
+   * synchrone : le produit, lui, expose toujours `baseDirtyFilesAsync`.
+   */
+  async baseDirtyFilesAsync(): Promise<ReadonlySet<string> | undefined> {
+    const fichiers = this.manager.baseDirtyFilesAsync
+      ? await this.manager.baseDirtyFilesAsync()
+      : this.baseDirtyFiles()
+    return fichiers === undefined ? undefined : new Set(fichiers)
   }
 
   /** Activité courante, prête pour le modèle du cockpit UI. */
@@ -3296,14 +3309,32 @@ export class RunWorktreeCoordinator {
      * (l'attente serait sans fin pour rien), et un fichier encore en collision ne doit pas declencher
      * une tentative qui echouerait a l'identique.
      *
-     * Lecture seule (`git status`), et une base illisible rend une liste VIDE : dans ce cas
-     * `travauxARepecher` retombe sur plafond + delai, jamais sur une conclusion inventee.
+     * Lecture seule (`git status`), et une base ILLISIBLE fait jeter l'observateur : dans ce cas
+     * `travauxARepecher` retombe sur plafond + delai, jamais sur une conclusion inventee. (Avant le
+     * 2026-10-22, une base illisible rendait une liste vide, lue « plus rien de sale » : le travail
+     * repartait aussitot, sans plafond, au lieu d'attendre.)
+     *
+     * UN SEUL `git status`, ASYNCHRONE, AVANT le tri (conv-1055) : il etait relance pour CHAQUE
+     * candidat et en `execFileSync`, sur une minuterie de 5 min. Mesure le 2026-10-21 a 20:14
+     * (`gels.jsonl`) : un seul de ces appels a fige la fenetre 60,1 s. Il n'est meme pas lance
+     * quand aucun candidat REPECHABLE n'attend une base propre. Une lecture qui JETTE vaut une base
+     * illisible : le reste du lot (autres causes, runs sans signe de vie) continue d'etre traite.
      */
+    const attendUneBasePropre = (run: Tracked): boolean =>
+      estRepechable(run) && run.attentionReason === 'base-dirty' && run.files.length > 0
+    let sales: ReadonlySet<string> | undefined = new Set<string>()
+    if ([...this.runs.values()].some(attendUneBasePropre)) {
+      try {
+        sales = await this.baseDirtyFilesAsync()
+      } catch {
+        sales = undefined
+      }
+    }
     const causeEncoreLa = (candidat: { runId: string; attentionReason?: string }): boolean => {
       if (candidat.attentionReason !== 'base-dirty') return true
       const bloquants = (this.runs.get(candidat.runId)?.files ?? []).map((fichier) => fichier.path)
       if (bloquants.length === 0) return true
-      const sales = new Set(this.baseDirtyFiles())
+      if (sales === undefined) throw new Error('base illisible : etat des fichiers inconnu')
       return bloquants.some((chemin) => sales.has(chemin))
     }
     const aRepecher = travauxARepecher(

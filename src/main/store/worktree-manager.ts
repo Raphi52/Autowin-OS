@@ -217,6 +217,9 @@ export function tryGitAsync(
   })
 }
 
+/** `git status` de la base — une seule source, partagée par la lecture sync et async (conv-1055). */
+const ARGS_STATUT_DE_LA_BASE = ['status', '--porcelain=v1', '-z', '--untracked-files=all'] as const
+
 /** `git worktree remove` d'une copie — une seule source, partagee par le retrait sync et async. */
 function argsDeRetraitDeCopie(path: string, force: boolean): string[] {
   return ['worktree', 'remove', ...(force ? ['--force'] : []), path]
@@ -5664,13 +5667,25 @@ exit 0
    * qui, sans lui, serait parti (le refus de fin de course reste le filet).
    */
   baseDirtyFiles(): string[] {
-    const status = this.tryGitFn(this.baseRepo, [
-      'status',
-      '--porcelain=v1',
-      '-z',
-      '--untracked-files=all'
-    ])
+    const status = this.tryGitFn(this.baseRepo, [...ARGS_STATUT_DE_LA_BASE])
     if (status.code !== 0) return []
+    return parsePorcelainPaths(status.stdout)
+  }
+
+  /**
+   * MÊME LECTURE, SANS TENIR LA BOUCLE — pour la vérification de fond des travaux en attente.
+   *
+   * Mesuré le 2026-10-21 à 20:14 (`gels.jsonl`) : UN `git status` synchrone de la base a figé la
+   * fenêtre 60,1 s (`baseDirtyFiles`, appelé depuis `repecherLesTravauxEnAttente`, minuterie de
+   * 5 min). Le travail n'a rien d'illégitime ; c'est sa forme synchrone qui gèle l'app (conv-1055).
+   *
+   * Contrat différent sur un point, à dessein : une base ILLISIBLE rend `undefined`, pas une liste
+   * vide. « Rien de sale » et « je n'ai pas pu lire » ne mènent pas à la même décision : le premier
+   * libère les travaux en attente, le second doit les laisser au plafond et au délai.
+   */
+  async baseDirtyFilesAsync(): Promise<string[] | undefined> {
+    const status = await this.tryGitAsyncFn(this.baseRepo, [...ARGS_STATUT_DE_LA_BASE])
+    if (status.code !== 0) return undefined
     return parsePorcelainPaths(status.stdout)
   }
 

@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { pluginScene3d } from './src/renderer/scene-3d/page-scene-3d.mjs'
+import { pluginArchiveCartesGels } from './scripts/gels-cartes-archive.mjs'
 
 /**
  * IDENTITE DE BUILD, injectee au build et affichee en bas a gauche de l'app.
@@ -44,6 +45,13 @@ export default defineConfig({
        */
       sourcemap: true,
       rollupOptions: {
+        /*
+         * ET ON LES GARDE APRES LA CONSTRUCTION SUIVANTE (conv-1055, 2026-10-22). Chaque build
+         * reecrit ces `.map` : un gel d'hier pointait vers un morceau disparu et restait
+         * « (non resolu) ». Le greffon archive les cartes de CE bundle hors de `out/`, datees, pour
+         * que `scripts/gels-classement.mjs` retrouve celles du code qui tournait au moment du gel.
+         */
+        plugins: [pluginArchiveCartesGels()],
         input: {
           index: resolve('src/main/index.ts'),
           'brain-worker': resolve('src/main/viz/brain-worker.ts'),
