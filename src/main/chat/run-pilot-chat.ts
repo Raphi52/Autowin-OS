@@ -1563,7 +1563,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                     ...(policy?.maxBudgetUsd ? { maxBudgetUsd: policy.maxBudgetUsd } : {}),
                     ...(watchdogReadOnlyProfile
                       ? { systemProfile: 'watchdog-read-only' as const }
-                      : {})
+                      : {}),
+                    // Tâche planifiée ou veille : personne ne répondrait à la question des deux
+                    // lectures (deux-lectures.ts, conv-1092).
+                    ...(policy?.background ? { tourDeFond: true } : {})
                   }
                 : undefined
             return turnPilot.chat(

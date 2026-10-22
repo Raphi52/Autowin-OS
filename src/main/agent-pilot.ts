@@ -84,6 +84,19 @@ import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
+import { nativeSkills } from './native-registry'
+import {
+  AVIS_DEUX_LECTURES,
+  CONSIGNE_DEUX_LECTURES,
+  chargeDeuxLectures,
+  commandesCitees,
+  demandeDeChangementDeRendu,
+  dernierMessageAgent,
+  lireDeuxLectures,
+  meriteUneLecture,
+  questionDesDeuxLectures,
+  suitUneQuestionDesLectures
+} from './deux-lectures'
 import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
@@ -953,6 +966,27 @@ export function snapshotDuTour<T extends { activeConversationId?: string }>(
   return conversationId ? { ...snapshot, activeConversationId: conversationId } : snapshot
 }
 
+/**
+ * La description (SKILL.md) des commandes citées, pour le contrôle des deux lectures. Même source
+ * que la palette `/`. Une lecture du disque qui échoue rend `{}` : le contrôle lit alors sans elles.
+ */
+function descriptionsDesCommandes(noms: readonly string[]): Record<string, string> {
+  if (!noms.length) return {}
+  try {
+    const parNom = new Map(
+      nativeSkills().map((skill) => [skill.id.toLowerCase(), skill.description])
+    )
+    return Object.fromEntries(
+      noms.flatMap((nom) => {
+        const description = parNom.get(nom)
+        return description ? [[nom, description]] : []
+      })
+    )
+  } catch {
+    return {}
+  }
+}
+
 export class AgentPilot {
   constructor(
     private readonly registry: ProviderRegistry,
@@ -978,7 +1012,13 @@ export class AgentPilot {
      * plus du texte `<cmd>`. Faux par defaut : seul `index.ts` l'active, les fixtures et les tests
      * existants restent au texte seul. Un objet sert aux tests a injecter le demarrage du serveur.
      */
-    private readonly outilsNatifs: boolean | Pick<OuvertureOutilsNatifs, 'demarrer'> = false
+    private readonly outilsNatifs: boolean | Pick<OuvertureOutilsNatifs, 'demarrer'> = false,
+    /**
+     * Le petit modèle qui lit la demande AVANT un run payant ou un changement d'affichage, et dit
+     * si elle a deux lectures plausibles (`deux-lectures.ts`, conv-1092). Absent = aucun contrôle :
+     * seul `index.ts` le branche, les fixtures et les tests existants gardent leurs appels exacts.
+     */
+    private readonly demanderDeuxLectures?: (systeme: string, charge: string) => Promise<string>
   ) {}
 
   /**
@@ -1141,6 +1181,11 @@ export class AgentPilot {
     sendLimits?: Pick<SendOptions, 'maxBudgetUsd'> & {
       /** Profil minimal du triage automatique : aucune commande, aucun pipeline, aucun gros kit. */
       systemProfile?: 'watchdog-read-only'
+      /**
+       * Tour lancé sans humain devant (tâche planifiée, veille). Personne ne répondrait à une
+       * question : le contrôle des deux lectures ne joue pas.
+       */
+      tourDeFond?: boolean
     },
     /** Dernière vraie demande humaine, quand le dernier message transport est une instruction interne. */
     routingUserMessageOverride?: string,
@@ -1385,6 +1430,72 @@ export class AgentPilot {
     // hors pipeline (`/look`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
     // courant — mais reste jouee par le MODELE avec le corps de sa skill injecte : la router vers un
     // run payant serait une orchestration que l'utilisateur n'a jamais demandee.
+    /*
+     * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (deux-lectures.ts, conv-1092).
+     *
+     * Trois points de passage, un seul appel au petit modèle par tour (promesse mémorisée) :
+     * le `/scout …` routé ci-dessous SANS modèle (conv-767 : 2,47 $ sur une mauvaise lecture), une
+     * demande qui change l'affichage (lue AVANT de passer la main au modèle, dont les éditions
+     * natives ne sont pas interceptables), et l'`orchestrate` émis par le modèle. Jamais sur une
+     * reprise interne, un tour de fond ni la réponse à cette même question.
+     */
+    const lectureATrancher =
+      Boolean(this.demanderDeuxLectures) &&
+      routingUserMessageOverride === undefined &&
+      !sendLimits?.tourDeFond &&
+      sendLimits?.systemProfile !== 'watchdog-read-only' &&
+      meriteUneLecture(latestUserMessage) &&
+      !suitUneQuestionDesLectures(history)
+    let lecturesMemorisees: Promise<[string, string] | undefined> | undefined
+    const deuxLecturesDuTour = (): Promise<[string, string] | undefined> => {
+      const demande = latestUserMessage
+      const demander = this.demanderDeuxLectures
+      if (!lectureATrancher || !demande || !demander) return Promise.resolve(undefined)
+      // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
+      // conv-767 comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
+      const descriptions = descriptionsDesCommandes(commandesCitees(demande))
+      lecturesMemorisees ??= demander(
+        CONSIGNE_DEUX_LECTURES,
+        chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions)
+      )
+        .then((reponse) => lireDeuxLectures(reponse, demande))
+        // Un contrôle en panne ne bloque jamais le travail : il part comme avant.
+        .catch(() => undefined)
+      return lecturesMemorisees
+    }
+    const poserLaQuestionDesLectures = async (
+      actionId: string,
+      lectures: [string, string]
+    ): Promise<void> => {
+      const args = questionDesDeuxLectures(lectures, latestUserMessage ?? '')
+      emit({ kind: 'command', actionId, name: 'ask', args })
+      const reponse = await execCommand('ask', args)
+      emit({
+        kind: 'result',
+        actionId,
+        name: 'ask',
+        ok: commandResultSucceeded(reponse),
+        data: reponse.ok ? reponse.data : reponse.error
+      })
+    }
+    const fermerSurLaQuestionDesLectures = async (
+      actionId: string,
+      lectures: [string, string]
+    ): Promise<void> => {
+      await poserLaQuestionDesLectures(actionId, lectures)
+      emit({
+        kind: 'done',
+        text: AVIS_DEUX_LECTURES,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+      })
+    }
+    if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
+      const lecturesDeLaRoute = await deuxLecturesDuTour()
+      if (lecturesDeLaRoute) {
+        await fermerSurLaQuestionDesLectures('lectures:0', lecturesDeLaRoute)
+        return
+      }
+    }
     if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
       const actionId = 'route:0'
       const args = { task: directRoute.task }
@@ -1450,11 +1561,20 @@ export class AgentPilot {
       })
       return
     }
+    // Lancée AVANT la recherche Brain et attendue après : son délai se cache derrière elle.
+    const lecturesAvantRendu = demandeDeChangementDeRendu(latestUserMessage)
+      ? deuxLecturesDuTour()
+      : undefined
     const retrievedContext =
       this.retrieveContext && latestUserMessage
         ? await this.retrieveContext(latestUserMessage, { conversationId, turnId }).catch(() => '')
         : ''
     timer.mark('ragBrain')
+    const lecturesDuRendu = await lecturesAvantRendu
+    if (lecturesDuRendu) {
+      await fermerSurLaQuestionDesLectures('lectures:0', lecturesDuRendu)
+      return
+    }
 
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
@@ -1973,6 +2093,8 @@ export class AgentPilot {
      * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
      */
     let questionPoseeCeTour = false
+    /** La question posée est celle des deux lectures : aucune relance « question sans lecture ». */
+    let questionDesLecturesPosee = false
     /**
      * La reponse que l'utilisateur a envoyee PENDANT que le tour posait sa question. Non vide = la
      * question est deja repondue : on ne la repose pas et on ne clot pas le tour sur elle.
@@ -3646,6 +3768,26 @@ export class AgentPilot {
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name
         )
+        if (
+          token.name === 'orchestrate' &&
+          !settledAction &&
+          !orchestrationIssued &&
+          !questionPoseeCeTour
+        ) {
+          // Le run n'est PAS lancé : la question remplace l'orchestration (deux-lectures.ts).
+          const lecturesAvantRun = await deuxLecturesDuTour()
+          if (lecturesAvantRun) {
+            await poserLaQuestionDesLectures(actionId, lecturesAvantRun)
+            questionPoseeCeTour = true
+            questionDesLecturesPosee = true
+            results.push(
+              'orchestrate → NON LANCÉ : la demande a deux lectures plausibles, la question est ' +
+                'posée à l’utilisateur. Ne relance rien dans ce tour.'
+            )
+            tokenIndex += 1
+            continue
+          }
+        }
         if (!settledAction)
           emit({
             kind: 'command',
@@ -3972,6 +4114,17 @@ export class AgentPilot {
        * donc relance, comme avant ; on ne clot que la question legitime.
        */
       if (questionPoseeCeTour) {
+        if (questionDesLecturesPosee) {
+          // Le modèle avait annoncé le run : la clôture dit qu'il n'est pas parti, et pourquoi.
+          emit({
+            kind: 'done',
+            text: [spoken.trim() ? texteDeCloture(spoken) : '', AVIS_DEUX_LECTURES]
+              .filter(Boolean)
+              .join('\n\n'),
+            usage
+          })
+          return
+        }
         if (
           questionSansLectureRecoveryAvailable &&
           questionPoseeSansAvoirLu(questionPoseeCeTour, anyReadExecuted)

@@ -1253,7 +1253,20 @@ const pilot = new AgentPilot(
   (conversationId?: string) => projectContextBlock(dossierDuTour(conversationId)),
   (conversationId?: string) => dossierDuTour(conversationId),
   // Commandes du chat AUSSI servies comme outils directs du modèle quand il les porte (chat-mcp.ts).
-  true
+  true,
+  // Deux lectures plausibles → une question avant de payer (deux-lectures.ts, conv-1092). Le modèle
+  // des petites tâches (réglage du Routeur) ; une panne rend une erreur, et le travail part comme avant.
+  async (systeme, charge) => {
+    const binding = os.roles.bindingDesPetitesTaches()
+    const reponse = await os.registry.send(binding.provider, [{ role: 'user', content: charge }], {
+      system: systeme,
+      systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
+      model: binding.model,
+      reasoningEffort: binding.reasoningEffort,
+      requestId: randomUUID()
+    })
+    return reponse.text ?? ''
+  }
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
@@ -3512,10 +3525,11 @@ Le fil reprend ensuite normalement.`
       dossierActif: actif,
       // Un seul appel court, sur le PREMIER message : le nom du projet est souvent absent du
       // message (cas conv-611), seul le SUJET le rattache. Une panne du modele rend null et le
-      // tour part comme avant.
+      // tour part comme avant. Un choix dans une liste, sans outil : le modèle des PETITES TÂCHES
+      // (`roles.ts`, Haiku par défaut — conv-1097). Il partait sur le modèle du chat, effort xhigh.
       demanderAuModele: async (systeme, charge) => {
         await os.waitUntilReady()
-        const binding = os.roles.getBinding('orchestrator')
+        const binding = os.roles.bindingDesPetitesTaches()
         const reponse = await os.registry.send(
           binding.provider,
           [{ role: 'user', content: charge }],
