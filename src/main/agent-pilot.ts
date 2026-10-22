@@ -15,6 +15,7 @@ import {
 import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
 import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
+import { basculeApresQuota } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
 import {
@@ -283,6 +284,12 @@ export type PilotEventVariant =
     }
   /** Commandes shell coupees par le CLI en fin de tour, que le tour de chat va RELANCER. */
   | { kind: 'taches-de-fond'; iteration: number; data: TacheDeFondARelancer[] }
+  /** Tests joués par l'agent dans son terminal et leur code de sortie (conv-1059). */
+  | {
+      kind: 'tests-du-terminal'
+      iteration: number
+      data: Array<{ commande: string; codeDeSortie: number }>
+    }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
   | {
@@ -1621,7 +1628,12 @@ export class AgentPilot {
      * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
      */
     const coupesPoids = conversationId ? coupesParPoids(loadConvActivity(conversationId)) : 0
-    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
+    // Une FONCTION du compte (conv-1063) : un tour qui bascule de compte en cours de route range sa
+    // nouvelle session sous le compte qui l'a RÉELLEMENT ouverte, pas sous celui du départ.
+    const cleDeSession = (compte: string | undefined): string =>
+      `${provider}:${binding.model ?? ''}:${compte ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
+    const compteAuDepart = claudeActiveAccountId()
+    const sessionKey = cleDeSession(compteAuDepart)
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()
@@ -1644,6 +1656,14 @@ export class AgentPilot {
      * ouverte — sinon la 2e itération repart à blanc (voir le bloc d'options plus bas).
      */
     let sessionEnCours = resumeSessionId
+    /**
+     * Compte Claude qui a ouvert `sessionEnCours` (conv-1063). Une session CLI vit dans le dossier
+     * de SON compte : dès que le compte actif diffère — bascule à la main pendant le tour, ou rotation
+     * après un quota épuisé —, la reprendre rend « No conversation found » et le tour meurt.
+     */
+    let compteDeSession = compteAuDepart
+    /** Comptes dont le quota est tombé PENDANT ce tour : jamais de rejeu vers l'un d'eux. */
+    const comptesEpuisesCeTour = new Set<string>()
     /**
      * REPLI APRES UN REFUS DU FILTRE DE SECURITE (`deciderRepliApresRefus`) : joue UNE fois par tour.
      * Le modele voisin reste celui du tour une fois choisi : le message refuse est desormais dans la
@@ -2508,8 +2528,14 @@ export class AgentPilot {
         contextBlocks = contextBlocksDuTour()
         options.contextBlocks = contextBlocks
       }
+      /** Compte actif au départ de l'envoi : c'est lui qui ouvre la session qu'il rendra. */
+      let compteDeCetEnvoi = claudeActiveAccountId()
       while (!res) {
         const streamId = `${i}:${attempt}`
+        compteDeCetEnvoi = claudeActiveAccountId()
+        // Le compte a changé depuis l'ouverture de la session (conv-1063) : elle est inouvrable
+        // depuis le nouveau dossier, on la lâche et le fil ENTIER part sur le compte actif.
+        if (sessionEnCours && compteDeCetEnvoi !== compteDeSession) repartirSansSession()
         const visibleFilter = new VisibleStreamFilter()
         let attemptStreamedPrefix = ''
         let commandBoundarySeen = false
@@ -2587,6 +2613,12 @@ export class AgentPilot {
                 emit({ kind: 'artifact', artifact, iteration: i })
               }
               if (!chunk.delta) return
+            }
+            // TESTS DU TERMINAL (conv-1059) : le tour les garde, la carte du fil les lit comme des
+            // vérifications. Fragment sans texte : il ne doit pas passer pour le premier mot.
+            if (chunk.testsDuTerminal?.length) {
+              emit({ kind: 'tests-du-terminal', data: chunk.testsDuTerminal, iteration: i })
+              if (!chunk.delta && !chunk.status) return
             }
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
@@ -2706,6 +2738,33 @@ export class AgentPilot {
               name: provider,
               text: `${message} — session du fournisseur abandonnee, nouvel essai sans reprise`,
               data: { attempt, maxAttempts: 2 }
+            })
+            continue
+          }
+          /*
+           * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+           *
+           * Cas réel : `run-stdout/c6ba0030-…stdout.jsonl`, 31 min et 96 blocs de texte, fini sur
+           * « You've hit your session limit ». Le registre a basculé le pool sur un compte LIBRE et
+           * l'a marqué sur l'erreur (`basculeApresQuota`) ; le rejeu se fait ICI, seul endroit qui
+           * sait le faire proprement : texte coupé effacé, session lâchée (elle vit dans le dossier
+           * du compte épuisé), fil ENTIER renvoyé. Ce qui a été fait sur disque avant la coupure
+           * reste : le modèle le retrouve en relisant. Jamais vers un compte déjà tombé dans ce tour.
+           */
+          const bascule = basculeApresQuota(error)
+          if (bascule && !comptesEpuisesCeTour.has(bascule.compteSuivant)) {
+            comptesEpuisesCeTour.add(bascule.compteEpuise)
+            repartirSansSession()
+            if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
+            attempt += 1
+            emit({
+              kind: 'retry',
+              iteration: i,
+              name: provider,
+              text:
+                `Quota épuisé sur le compte Claude « ${bascule.compteEpuise} » — le tour repart ` +
+                `sur « ${bascule.compteSuivant} » avec tout le fil`,
+              data: { attempt, maxAttempts: attempt + 1, basculeDeCompte: bascule }
             })
             continue
           }
@@ -2839,11 +2898,15 @@ export class AgentPilot {
       // relance. Le cache mémoire reste la source rapide ; le disque est le filet.
       // La session avance AUSSI au sein du tour, même sans `conversationId` : l'itération suivante
       // doit reprendre celle-ci et non repartir à blanc.
-      if (res.sessionId && providerResumes) sessionEnCours = res.sessionId
+      if (res.sessionId && providerResumes) {
+        sessionEnCours = res.sessionId
+        compteDeSession = compteDeCetEnvoi
+      }
       if (conversationId) {
         if (res.sessionId && providerResumes) {
-          this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
-          this.persistChatSession(conversationId, sessionKey, res.sessionId)
+          const cle = cleDeSession(compteDeSession)
+          this.chatSessions.set(conversationId, { key: cle, sessionId: res.sessionId })
+          this.persistChatSession(conversationId, cle, res.sessionId)
         } else {
           // Un provider qui ne rend pas de nouvelle session ne garantit pas que ce tour appartient
           // à la précédente. La conserver ferait élider un historique qu'il n'a peut-être jamais reçu.

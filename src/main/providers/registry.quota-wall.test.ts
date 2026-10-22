@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from '../claude-accounts'
 import { basculerAvantLancement } from '../bascule-quota'
-import { ProviderRegistry } from './registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './types'
+import { ProviderRegistry, basculeApresQuota } from './registry'
+import {
+  ProviderCallError,
+  type Message,
+  type ProviderAdapter,
+  type SendOptions,
+  type SendResult,
+  type StreamChunk
+} from './types'
 
 /**
  * UN QUOTA ÉPUISÉ DOIT FERMER LA PORTE, PAS SEULEMENT ÊTRE BIEN NOMMÉ.
@@ -602,5 +609,172 @@ describe('bascule avant le lancement', () => {
     const registry = new ProviderRegistry(undefined, undefined, actif).register(claude)
     await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
     expect(appels).toEqual(['compte-A'])
+  })
+})
+
+/**
+ * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+ *
+ * La rotation ci-dessus ne joue que si le refus arrive AVANT le premier fragment. Or le cas réel est
+ * l'inverse : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl` est UN appel de 31 min,
+ * 96 blocs de texte affichés, qui finit sur « You've hit your session limit · resets 11:30am ». Le
+ * registre levait l'erreur sans rien basculer : le tour mourait en pastille rouge alors qu'un autre
+ * abonnement était libre, et l'utilisateur devait relancer chaque fil à la main.
+ *
+ * Le registre ne PEUT pas rejouer lui-même : le texte déjà affiché serait doublé, et la session du
+ * CLI vit dans le dossier du compte épuisé — seul l'appelant sait effacer l'affichage et renvoyer le
+ * fil entier. Contrat : il bascule le pool sur un compte libre, puis rend l'erreur MARQUÉE de cette
+ * bascule (`basculeApresQuota`), pour que l'appelant rejoue.
+ */
+describe('quota épuisé APRÈS du texte affiché : bascule rendue à l’appelant', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-22T08:00:00Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** Le refus RÉEL de Claude, tel que `claude.ts` le lève sur l'événement `result` en erreur. */
+  const SESSION_LIMIT = (): ProviderCallError =>
+    new ProviderCallError(
+      "Claude a interrompu l'appel : You've hit your session limit · resets 11:30am (Europe/Paris)",
+      { code: 'success', retryable: false }
+    )
+
+  /**
+   * Un faux Claude multi-comptes : sur un compte de `epuises`, il AFFICHE d'abord du texte puis tombe
+   * sur le mur — la forme exacte du tour de 31 min. Ailleurs, il répond.
+   */
+  function claudeQuiCoupeApresTexte(
+    compteActif: () => string,
+    epuises: Set<string>,
+    pendantLAppel?: () => void
+  ): ProviderAdapter & { appels: string[] } {
+    const appels: string[] = []
+    return {
+      id: 'claude',
+      appels,
+      async auth() {
+        return true
+      },
+      async *send() {
+        const compte = compteActif()
+        appels.push(compte)
+        if (epuises.has(compte)) {
+          yield { delta: 'Je commence le travail, je lis les fichiers…' }
+          pendantLAppel?.()
+          throw SESSION_LIMIT()
+        }
+        return { text: 'ok', provider: 'claude', systemInjected: false }
+      }
+    }
+  }
+
+  it('bascule le pool sur le compte libre et MARQUE l’erreur — sans rejouer à l’aveugle', async () => {
+    let actif = 'compte-A'
+    const rotations: string[] = []
+    const claude = claudeQuiCoupeApresTexte(() => actif, new Set(['compte-A']))
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      (_providerId, walled) => {
+        actif = walled === 'compte-A' ? 'compte-B' : 'compte-A'
+        rotations.push(`${walled}->${actif}`)
+        return actif
+      }
+    ).register(claude)
+
+    const vus: string[] = []
+    const erreur = await registry
+      .send('claude', UN_TOUR, {}, (c) => vus.push(c.delta))
+      .catch((e: unknown) => e)
+
+    // L'erreur remonte : rejouer ici doublerait le texte déjà affiché.
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    expect(claude.appels).toEqual(['compte-A'])
+    expect(vus).toEqual(['Je commence le travail, je lis les fichiers…'])
+    // … mais le pool a BASCULÉ, et l'erreur dit vers où : c'est ce qui permet le rejeu.
+    expect(rotations).toEqual(['compte-A->compte-B'])
+    expect(basculeApresQuota(erreur)).toEqual({
+      compteEpuise: 'compte-A',
+      compteSuivant: 'compte-B'
+    })
+
+    // Le rejeu de l'appelant part directement sur B, sans retoucher le mur de A.
+    await expect(registry.send('claude', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
+    expect(claude.appels).toEqual(['compte-A', 'compte-B'])
+  })
+
+  it('saute un compte déjà muré pour annoncer le premier compte LIBRE', async () => {
+    let actif = 'compte-A'
+    const ordre = ['compte-A', 'compte-B', 'compte-C']
+    const claude = claudeQuiCoupeApresTexte(() => actif, new Set(['compte-A']))
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      (_providerId, walled) => {
+        actif = ordre[(ordre.indexOf(walled) + 1) % ordre.length]!
+        return actif
+      }
+    ).register(claude)
+    // B est déjà tombé plus tôt dans la journée : son mur tient toujours.
+    ;(registry as unknown as { quotaWalls: Map<string, { raison: string }> }).quotaWalls.set(
+      'claude\u0000compte-B',
+      { raison: "You've hit your session limit" }
+    )
+
+    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
+    expect(basculeApresQuota(erreur)).toEqual({
+      compteEpuise: 'compte-A',
+      compteSuivant: 'compte-C'
+    })
+    expect(actif).toBe('compte-C')
+  })
+
+  it('aucun compte libre : AUCUNE bascule annoncée — le rejeu serait condamné', async () => {
+    const claude = claudeQuiCoupeApresTexte(() => 'compte-A', new Set(['compte-A']))
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => 'compte-A',
+      () => undefined
+    ).register(claude)
+
+    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
+    expect(erreur).toBeInstanceOf(ProviderCallError)
+    expect(basculeApresQuota(erreur)).toBeUndefined()
+  })
+
+  it('respecte le compte choisi À LA MAIN pendant l’appel au lieu de le faire tourner', async () => {
+    // Le cas de l'utilisateur : il a basculé à la main pendant que le tour tournait sur l'ancien
+    // compte. Faire tourner le pool depuis A l'enverrait sur B, écrasant son choix (C).
+    let actif = 'compte-A'
+    const rotations: string[] = []
+    const claude = claudeQuiCoupeApresTexte(
+      () => actif,
+      new Set(['compte-A']),
+      () => (actif = 'compte-C')
+    )
+    const registry = new ProviderRegistry(
+      undefined,
+      undefined,
+      () => actif,
+      (_providerId, walled) => {
+        rotations.push(walled)
+        actif = 'compte-B'
+        return actif
+      }
+    ).register(claude)
+
+    const erreur = await registry.send('claude', UN_TOUR).catch((e: unknown) => e)
+    expect(basculeApresQuota(erreur)).toEqual({
+      compteEpuise: 'compte-A',
+      compteSuivant: 'compte-C'
+    })
+    expect(rotations).toEqual([])
+    expect(actif).toBe('compte-C')
   })
 })

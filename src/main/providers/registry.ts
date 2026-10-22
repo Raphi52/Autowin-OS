@@ -76,6 +76,30 @@ function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuo
 }
 
 /**
+ * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+ *
+ * Cas réel : `run-stdout/c6ba0030-…stdout.jsonl`, un appel de 31 min et 96 blocs de texte, fini sur
+ * « You've hit your session limit ». La rotation interne du registre ne joue qu'AVANT le premier
+ * fragment ; ici elle ne peut pas jouer du tout — le rejeu doublerait le texte déjà affiché, et la
+ * session du CLI vit dans le dossier du compte épuisé. Seul l'appelant sait effacer l'affichage et
+ * renvoyer le fil entier. Le registre bascule donc le pool, puis MARQUE l'erreur de cette bascule :
+ * l'erreur d'origine reste intacte (classe, coût, message), l'appelant qui sait rejouer la lit ici.
+ */
+export interface BasculeApresQuota {
+  /** Compte dont le quota est tombé pendant l'appel. */
+  readonly compteEpuise: string
+  /** Compte désormais actif, au quota encore ouvert : l'appel peut y être rejoué. */
+  readonly compteSuivant: string
+}
+
+const basculesApresQuota = new WeakMap<object, BasculeApresQuota>()
+
+/** La bascule portée par une erreur de `send`, ou rien si aucun compte libre n'a été trouvé. */
+export function basculeApresQuota(error: unknown): BasculeApresQuota | undefined {
+  return typeof error === 'object' && error !== null ? basculesApresQuota.get(error) : undefined
+}
+
+/**
  * Routeur d'adaptateurs. Le seul point par lequel l'app envoie un tour :
  * choisit l'adaptateur par id, INJECTE le bloc système (kit condensé) de façon
  * uniforme, délègue le streaming à l'adaptateur, et centralise la traçabilité.
@@ -160,6 +184,17 @@ export class ProviderRegistry {
     providerId: string,
     walledAccountId: string
   ): Promise<string | undefined> {
+    // Le compte a déjà changé depuis le départ de l'appel (bascule faite À LA MAIN, conv-1063) et
+    // il est libre : c'est lui la suite. Faire tourner le pool depuis le compte épuisé écraserait
+    // le choix de l'utilisateur dès qu'il a plus de deux comptes.
+    const actif = this.activeAccountOf?.(providerId)
+    if (
+      actif &&
+      actif !== walledAccountId &&
+      !this.murEncoreDebout(this.quotaWallKey(providerId, actif))
+    ) {
+      return actif
+    }
     const wallKey = this.quotaWallKey(providerId, walledAccountId)
     const knownSuccessor = this.quotaSuccessors.get(wallKey)
     if (knownSuccessor && this.activeAccountOf?.(providerId) === knownSuccessor) {
@@ -181,6 +216,27 @@ export class ProviderRegistry {
         this.quotaRotationFlights.delete(wallKey)
       }
     }
+  }
+
+  /**
+   * Premier compte au quota OUVERT après `compteEpuise`, en sautant les comptes déjà murés. Annoncer
+   * un compte muré ferait effacer le texte affiché pour un rejeu condamné d'avance. Même borne de
+   * huit comptes que `sendPossiblyRotating`, et arrêt au premier retour sur un compte déjà vu.
+   */
+  private async compteLibreApresQuota(
+    providerId: string,
+    compteEpuise: string
+  ): Promise<string | undefined> {
+    const vus = new Set([compteEpuise])
+    let mure = compteEpuise
+    while (vus.size <= 8) {
+      const suivant = await this.rotateAfterQuota(providerId, mure)
+      if (!suivant || vus.has(suivant)) return undefined
+      if (!this.murEncoreDebout(this.quotaWallKey(providerId, suivant))) return suivant
+      vus.add(suivant)
+      mure = suivant
+    }
+    return undefined
   }
 
   register(adapter: ProviderAdapter): this {
@@ -505,6 +561,15 @@ export class ProviderRegistry {
       // delta déjà livré (sinon duplication à l'écran), et aucun retour vers un compte déjà visité.
       const raison = quotaWallReason(error)
       const compteMure = accountAtStart
+      // Texte déjà affiché : pas de rejeu ici (il serait doublé), mais le pool bascule et l'erreur
+      // le dit (`basculeApresQuota`) — l'appelant qui sait effacer et renvoyer le fil rejoue.
+      if (mayRotate && raison && compteMure && chunksLivres > 0) {
+        const suivant = await this.compteLibreApresQuota(route.id, compteMure)
+        if (suivant && typeof error === 'object' && error !== null) {
+          basculesApresQuota.set(error, { compteEpuise: compteMure, compteSuivant: suivant })
+        }
+        throw error
+      }
       if (
         !mayRotate ||
         !raison ||
