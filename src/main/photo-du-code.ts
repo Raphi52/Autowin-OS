@@ -208,14 +208,21 @@ export async function photographierLeCode(entree: {
 }
 
 /**
- * La photo prise au début du tour d'un message : la première à partir de `depuis` (l'heure du
- * message), et avant `avant` (l'heure du message suivant) quand il y en a un.
+ * La photo prise au début du tour d'un message : la DERNIÈRE prise jusqu'à `jusqua` (l'heure du
+ * message), et après `apres` (l'heure du message précédent) quand il y en a un.
+ *
+ * Pourquoi AVANT le message (conv-1050, 2026-10-22) : la photo est prise avant le tour
+ * (`index.ts`, `photographierLeCode` puis `lancerTour`), et l'heure du message n'est posée
+ * qu'ensuite, par `beginTurn` (`store/conversations.ts`). Mesuré sur 5 vrais tours : photo 393 à
+ * 613 ms avant son message. L'ancienne règle (« la première à partir du message ») ne trouvait donc
+ * jamais la photo du tour, et rendait celle du tour SUIVANT dès qu'il y en avait un. La DERNIÈRE de
+ * la fenêtre, parce qu'une photo d'« Essaie 3 façons » prise entre deux tours y tombe aussi.
  */
 export async function photoDuTour(entree: {
   dossier: string
   conversationId: string
-  depuis: number
-  avant?: number
+  jusqua: number
+  apres?: number
   runGit?: GitRunner
 }): Promise<{ ref: string; sha: string; quand: number } | null> {
   const prefixe = refDePhoto(entree.conversationId, 0)?.replace(/0$/u, '')
@@ -234,12 +241,12 @@ export async function photoDuTour(entree: {
       (photo): photo is NonNullable<typeof photo> =>
         photo !== null &&
         photo.fil === entree.conversationId &&
-        photo.quand >= entree.depuis &&
-        (entree.avant === undefined || photo.quand < entree.avant)
+        photo.quand <= entree.jusqua &&
+        (entree.apres === undefined || photo.quand > entree.apres)
     )
-    .sort((a, b) => a.quand - b.quand)
-  const premiere = candidates[0]
-  return premiere ? { ref: premiere.ref, sha: premiere.sha, quand: premiere.quand } : null
+    .sort((a, b) => b.quand - a.quand)
+  const derniere = candidates[0]
+  return derniere ? { ref: derniere.ref, sha: derniere.sha, quand: derniere.quand } : null
 }
 
 /**
@@ -269,8 +276,8 @@ export type RetourAuTour =
   { ok: true; chemin: string; deja: boolean; quand: number } | { ok: false; raison: string }
 
 /**
- * « REVENIR À CE TOUR » sur un message de l'utilisateur : la photo prise au début de SON tour — à
- * partir de l'heure du message, avant celle du message suivant —, rouverte dans une copie séparée
+ * « REVENIR À CE TOUR » sur un message de l'utilisateur : la photo prise au début de SON tour — la
+ * dernière avant l'heure du message, après celle du message précédent —, rouverte dans une copie séparée
  * sous `dossierDesRetours`. Un tour sans photo (antérieur au 2026-10-21, dossier hors git, photo
  * coupée par le délai) le DIT, sans rien créer.
  */
@@ -286,14 +293,15 @@ export async function revenirAuCodeDuTour(entree: {
   const message = entree.messages[rang]
   if (!message || message.role !== 'user' || typeof message.ts !== 'number')
     return { ok: false, raison: 'Seul un message de ta part marque le début d’un tour.' }
-  const suivant = entree.messages
-    .slice(rang + 1)
+  const precedent = entree.messages
+    .slice(0, rang)
+    .reverse()
     .find((candidat) => candidat.role === 'user' && typeof candidat.ts === 'number')
   const photo = await photoDuTour({
     dossier: entree.dossier,
     conversationId: entree.conversationId,
-    depuis: message.ts,
-    avant: suivant?.ts,
+    jusqua: message.ts,
+    apres: precedent?.ts,
     runGit: entree.runGit
   })
   if (!photo)

@@ -171,17 +171,22 @@ describe('photographierLeCode — au début du tour, sans toucher au dossier par
 })
 
 describe('photoDuTour — la photo prise au début du tour d’un message', () => {
-  it('la première photo à partir du message, avant le message suivant', async () => {
+  it('la dernière photo jusqu’au message, après le message précédent', async () => {
     const repo = await depot()
     for (const quand of [1_000, 2_000, 3_000])
       await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand })
     expect(
-      (await photoDuTour({ dossier: repo, conversationId: 'conv-1', depuis: 1_500 }))?.quand
+      (await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_500 }))?.quand
+    ).toBe(2_000)
+    // Bornes : l'heure du message est incluse, celle du message précédent exclue.
+    expect(
+      (await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_000, apres: 1_000 }))
+        ?.quand
     ).toBe(2_000)
     expect(
-      await photoDuTour({ dossier: repo, conversationId: 'conv-1', depuis: 1_500, avant: 1_900 })
+      await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_500, apres: 2_000 })
     ).toBeNull()
-    expect(await photoDuTour({ dossier: repo, conversationId: 'conv-9', depuis: 0 })).toBeNull()
+    expect(await photoDuTour({ dossier: repo, conversationId: 'conv-9', jusqua: 9_999 })).toBeNull()
   })
 })
 
@@ -226,12 +231,19 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
     { role: 'assistant', content: 'r2', ts: 3_100, messageId: 'm4' }
   ]
 
+  /*
+   * ORDRE RÉEL (conv-1050, 2026-10-22) : la photo est prise AVANT le tour (`index.ts`,
+   * `photographierLeCode` avant `lancerTour`) et l'heure du message n'est posée qu'ensuite, par
+   * `beginTurn` (`store/conversations.ts`). Mesuré sur 5 vrais tours : photo 393 à 613 ms AVANT
+   * son message. Ces tests posaient l'ordre inverse (photo 50 ms après) : ils étaient verts
+   * pendant que la vraie fonction ne retrouvait aucune photo, 0 sur 5.
+   */
   it('chaque message rouvre la photo de SON tour, pas celle du tour suivant', async () => {
     const repo = await depot()
     writeFileSync(join(repo, 'a.txt'), 'tour 1\n')
-    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 1_050 })
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
     writeFileSync(join(repo, 'a.txt'), 'tour 2\n')
-    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 3_050 })
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 2_600 })
     const retours = join(repo, '..', 'retours')
 
     const premier = await revenirAuCodeDuTour({
@@ -241,7 +253,7 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
       dossier: repo,
       dossierDesRetours: retours
     })
-    expect(premier).toMatchObject({ ok: true, quand: 1_050, deja: false })
+    expect(premier).toMatchObject({ ok: true, quand: 600, deja: false })
     const lu = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
     expect(lu(join((premier as { chemin: string }).chemin, 'a.txt'))).toBe('tour 1\n')
 
@@ -252,8 +264,31 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
       dossier: repo,
       dossierDesRetours: retours
     })
-    expect(second).toMatchObject({ ok: true, quand: 3_050 })
+    expect(second).toMatchObject({ ok: true, quand: 2_600 })
     expect(lu(join((second as { chemin: string }).chemin, 'a.txt'))).toBe('tour 2\n')
+  })
+
+  it('une photo prise ENTRE deux tours (« Essaie 3 façons ») ne remplace pas celle du tour', async () => {
+    // Les copies d'essai photographient sous le même préfixe que les tours (`ouvrirCopiesDEssai`).
+    const repo = await depot()
+    writeFileSync(join(repo, 'a.txt'), 'tour 1\n')
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
+    writeFileSync(join(repo, 'a.txt'), 'après le tour 1\n')
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 2_000 })
+    writeFileSync(join(repo, 'a.txt'), 'tour 2\n')
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 2_600 })
+    const retours = join(repo, '..', 'retours')
+    const revenir = (messageId: string): Promise<unknown> =>
+      revenirAuCodeDuTour({
+        conversationId: 'conv-1',
+        messages: fil,
+        messageId,
+        dossier: repo,
+        dossierDesRetours: retours
+      })
+
+    expect(await revenir('m1')).toMatchObject({ ok: true, quand: 600 })
+    expect(await revenir('m3')).toMatchObject({ ok: true, quand: 2_600 })
   })
 
   it('un tour sans photo (antérieur à la fonction) le DIT, sans rien créer', async () => {
@@ -287,7 +322,9 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
 describe('revenirAuCodeDuTour — jamais la photo d’un AUTRE tour', () => {
   it('seul le tour suivant a une photo : le premier message n’en a pas', async () => {
     const repo = await depot()
-    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 3_050 })
+    // Prise 400 ms AVANT le second message, donc APRÈS le premier : c'est elle qu'attrapait
+    // l'ancienne recherche (« la première photo à partir du message »).
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 2_600 })
     const retour = await revenirAuCodeDuTour({
       conversationId: 'conv-1',
       messages: [
