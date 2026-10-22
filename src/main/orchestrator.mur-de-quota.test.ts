@@ -11,6 +11,7 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import type { RunClosureObservation, RunLifecycleEvent } from '../shared/run-execution'
 
 /**
  * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA EST SUSPENDU, PAS CLOS.
@@ -138,5 +139,52 @@ describe('mur de quota pendant un run', () => {
     expect(onRunQuotaWalled).toHaveBeenCalledTimes(1)
     expect(onRunQuotaWalled.mock.calls[0][1].reason).toMatch(/session limit/)
     expect(onRunSettled).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * LA CLÔTURE DU MOTEUR DIT POURQUOI LE RUN S'EST ARRÊTÉ (piste 4, conv-1070). Elle reste `red` —
+ * le run n'a rien livré —, mais elle porte `interruption` quand la cause est hors du travail :
+ * c'est ce qui écrit `status: interrupted` dans le RUN.md, et ce que la vue Workflows retire de ses
+ * taux. L'entrée qui ferait échouer ce test si le correctif était faux : `TypeError: boom`, une
+ * vraie erreur du travail, qui ne doit porter AUCUNE interruption.
+ */
+describe('cause d’interruption portée par la clôture', () => {
+  async function cloture(message: string): Promise<RunClosureObservation> {
+    const { orch } = monter(message)
+    const evenements: RunLifecycleEvent[] = []
+    await expect(
+      orch.run(
+        'modifie le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '',
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        (e) => evenements.push(e)
+      )
+    ).rejects.toThrow()
+    // La première clôture émise est celle d'OUVERTURE (`status: open`) : on lit la terminale.
+    // fix-ok: conv-1070 — mesuré : la première version lisait `find` (1re clôture) et le jumeau « TypeError: boom » rougissait AVANT tout correctif en recevant `status: 'open'` ; on lit donc la dernière clôture non `open`, comme `commands.ts`.
+    const fin = evenements
+      .flatMap((e) => (e.stage === 'closure' && e.closure.status !== 'open' ? [e.closure] : []))
+      .pop()
+    if (!fin) throw new Error('aucune clôture terminale émise')
+    return fin
+  }
+
+  it('mur de quota → red, interruption quota', async () => {
+    expect(await cloture(REFUS_DU_13_10)).toMatchObject({ status: 'red', interruption: 'quota' })
+  })
+
+  it('erreur du travail → red, sans interruption', async () => {
+    const fin = await cloture('TypeError: boom')
+    expect(fin.status).toBe('red')
+    expect(fin).not.toHaveProperty('interruption')
   })
 })

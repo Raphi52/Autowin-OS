@@ -1,4 +1,4 @@
-import { isBlocked } from '../../../shared/run-blocked'
+import { isBlocked, mentionDEtatDuRun } from '../../../shared/run-blocked'
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
 import type {
@@ -130,7 +130,7 @@ export function ObservatoryRail({
               >
                 <strong>
                   {run.summary.status}
-                  {isBlocked(run.summary) ? ' · bloqué' : ''}
+                  {mentionDEtatDuRun(run.summary) ? ` · ${mentionDEtatDuRun(run.summary)}` : ''}
                   {run.publicationLabel ? ` · travail ${run.publicationLabel}` : ''} ·{' '}
                   {run.subject}
                 </strong>

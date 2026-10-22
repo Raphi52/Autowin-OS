@@ -230,6 +230,7 @@ import { tachesDeFondEnCours } from './providers/taches-de-fond-suivies'
 import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
+  statutDuRunMd,
   convRunsRoot,
   reuseOrCreateConvRun,
   populateConvRunSections,
@@ -309,7 +310,12 @@ import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
 import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
-import { classeTerminaleDEchec, classeTerminaleDuControle } from './classe-terminale-echec'
+import {
+  causeDInterruption,
+  classeTerminaleDEchec,
+  classeTerminaleDuControle
+} from './classe-terminale-echec'
+import { ligneDeJournalDeRelecture } from './objections-juge'
 import { PIPELINE_PHASES } from '../shared/pipeline-phases'
 import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../shared/relance-sans-objet'
 import {
@@ -3661,8 +3667,9 @@ export class AppCommandBus {
                 if (runPath && lifecycle.closure.status !== 'open') {
                   closeConvRun(
                     runPath,
-                    lifecycle.closure.status,
-                    `Cycle de vie terminal: ${lifecycle.closure.status} (${lifecycle.closure.totalDurationMs} ms).`
+                    // Coupé par Stop, quota ou panne : `interrupted`, pas `red` (piste 4, conv-1070).
+                    statutDuRunMd(lifecycle.closure),
+                    `Cycle de vie terminal: ${lifecycle.closure.status}${lifecycle.closure.interruption ? ` (interrompu : ${lifecycle.closure.interruption})` : ''} (${lifecycle.closure.totalDurationMs} ms).`
                   )
                   this.broadcast({ type: 'refresh', scope: 'workflows' })
                 }
@@ -3696,7 +3703,7 @@ export class AppCommandBus {
               if (runPath) {
                 closeConvRun(
                   runPath,
-                  terminalLifecycle.closure.status,
+                  statutDuRunMd(terminalLifecycle.closure),
                   `Usage provider finalisee apres cloture: ${usage.totalTokens} tokens, ${costCoverage ?? 'cout non rapporte'}, ${usage.activeCalls} appel(s) actif(s).`
                 )
               }
@@ -3793,7 +3800,13 @@ export class AppCommandBus {
               runPath,
               terminalStatus,
               terminalDetail ??
-                `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
+                // Piste 5 (conv-1070) : une relecture livrée avec défauts ne s'écrit pas « validé ».
+                (r.defautsDuTravailRelu?.length
+                  ? ligneDeJournalDeRelecture(
+                      r.defautsDuTravailRelu,
+                      costCoverage ?? 'coût non rapporté'
+                    )
+                  : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`)
             )
           }
           this.broadcast({
@@ -3895,7 +3908,14 @@ export class AppCommandBus {
           })
           if (runPath) {
             saveConvRunTrace(runPath, steps)
-            closeConvRun(runPath, 'red', `Orchestration en échec: ${ligneJournalDErreur(e)}`)
+            // Le moteur a d'ordinaire déjà écrit le statut (clôture du cycle de vie) ; ce chemin
+            // couvre l'erreur levée avant elle. Même règle : arrêt extérieur → `interrupted`.
+            const interrompu = causeDInterruption(e, abortController.signal.aborted)
+            closeConvRun(
+              runPath,
+              interrompu ? 'interrupted' : 'red',
+              `${interrompu ? 'Orchestration interrompue' : 'Orchestration en échec'}: ${ligneJournalDErreur(e)}`
+            )
           }
           this.broadcast({
             type: 'orchestrate-end',

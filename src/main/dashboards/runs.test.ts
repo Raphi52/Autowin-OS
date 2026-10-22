@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isBlocked, parseRun } from './runs'
+import { mentionDEtatDuRun } from '../../shared/run-blocked'
 
 const OPEN_RUN = `status: open
 regime: standard
@@ -135,6 +136,28 @@ describe('isBlocked', () => {
     expect(isBlocked(parseRun(`status: failed\n\n## Besoin\n- [x] a\n`))).toBe(true)
   })
 
+  /**
+   * INTERROMPU (piste 4, conv-1070) : Stop, quota ou panne en face. Le travail n'a pas échoué, il
+   * s'est arrêté avant sa fin — sa DoD est donc forcément incomplète, et c'est exactement ce qui
+   * le gardait « bloqué ». L'entrée qui ferait échouer ce test si le correctif était faux : la
+   * MÊME DoD sous `status: red`, qui doit rester bloquée (jumeau ci-dessous).
+   */
+  it('false sur interrupted, même DoD incomplète : ni échec ni bloqué', () => {
+    const interrompu = parseRun(`status: interrupted\n\n## Besoin\n- [ ] a\n`)
+    expect(interrompu.status).toBe('interrupted')
+    expect(isBlocked(interrompu)).toBe(false)
+  })
+
+  it('true sur red avec la même DoD : l’exception ne vaut que pour interrupted', () => {
+    expect(isBlocked(parseRun(`status: red\n\n## Besoin\n- [ ] a\n`))).toBe(true)
+  })
+
+  it('true sur un statut voisin mal écrit (interrompu) : illisible reste visible', () => {
+    const illisible = parseRun(`status: interrompu\n\n## Besoin\n- [ ] a\n`)
+    expect(illisible.status).toBe('unknown')
+    expect(isBlocked(illisible)).toBe(true)
+  })
+
   it('true sur pending et running : figés depuis des semaines = abandonnés', () => {
     expect(isBlocked(parseRun(`status: pending\n\n## Besoin\n- [x] a\n`))).toBe(true)
     expect(isBlocked(parseRun(`status: running\n\n## Besoin\n- [x] a\n`))).toBe(true)
@@ -142,5 +165,22 @@ describe('isBlocked', () => {
 
   it('true sur un statut illisible : un RUN.md corrompu reste visible', () => {
     expect(isBlocked(parseRun(`status: CORROMPU\n\n## Besoin\n- [x] a\n`))).toBe(true)
+  })
+})
+
+/**
+ * CE QUE LE RAIL DE L'OBSERVATOIRE ÉCRIT À CÔTÉ DU STATUT (piste 4, conv-1070). Un run interrompu
+ * ne dit plus « bloqué » : il dit qu'on peut le relancer. L'entrée qui ferait échouer ce test si le
+ * correctif était faux : un `red` à DoD incomplète, qui doit garder « bloqué ».
+ */
+describe('mentionDEtatDuRun', () => {
+  it('interrompu → relançable, jamais bloqué', () => {
+    expect(mentionDEtatDuRun(parseRun(`status: interrupted\n\n## Besoin\n- [ ] a\n`))).toBe(
+      'interrompu, relançable'
+    )
+  })
+  it('red → bloqué ; green complet → rien', () => {
+    expect(mentionDEtatDuRun(parseRun(`status: red\n\n## Besoin\n- [ ] a\n`))).toBe('bloqué')
+    expect(mentionDEtatDuRun(parseRun(`status: green\n\n## Besoin\n- [x] a\n`))).toBe('')
   })
 })

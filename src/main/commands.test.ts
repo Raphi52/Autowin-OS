@@ -2076,6 +2076,103 @@ describe('AppCommandBus command execution policy', () => {
     }
   })
 
+  /**
+   * UN RUN COUPÉ DE L'EXTÉRIEUR S'ÉCRIT `interrupted`, PAS `red` (piste 4, conv-1070). Mesuré le
+   * 2026-10-22 : `judge-carnet-fil` (conv-1058), coupé par Stop, porte `status: red` et reste
+   * bloqué pour toujours. Deux chemins écrivent le statut : la clôture du moteur (en premier) et,
+   * à défaut, le `catch`. L'entrée qui ferait échouer ce test si le correctif était faux : la
+   * clôture `red` SANS cause suivie d'une vraie erreur (`TypeError: boom`) — elle doit rester `red`.
+   */
+  it.each([
+    {
+      cas: 'clôture du moteur qui nomme un arrêt (Stop)',
+      interruption: 'arret' as const,
+      erreur: "[abort] claude CLI interrompu : arret demande par l'utilisateur (Stop du chat)",
+      attendu: 'interrupted'
+    },
+    {
+      cas: 'mur de quota levé avant toute clôture (chemin du catch)',
+      interruption: undefined,
+      sansCloture: true,
+      erreur:
+        "Claude a interrompu l'appel : You've hit your session limit · resets 1pm (Europe/Paris)",
+      attendu: 'interrupted'
+    },
+    {
+      cas: 'vraie erreur du travail',
+      interruption: undefined,
+      erreur: 'TypeError: boom',
+      attendu: 'red'
+    }
+  ])('RUN.md : $cas → status $attendu', async ({ interruption, erreur, attendu, ...reste }) => {
+    const os = fakeOs()
+    const broadcasts: Array<Record<string, unknown>> = []
+    os.runTask = async (...args: unknown[]) => {
+      const onLifecycle = args[11] as (event: unknown) => void
+      if (!('sansCloture' in reste)) {
+        onLifecycle({
+          runId: 'run-coupe',
+          timestampMs: 2,
+          stage: 'closure',
+          closure: {
+            status: 'red',
+            totalDurationMs: 20,
+            totalCostUsd: 0,
+            ...(interruption ? { interruption } : {})
+          }
+        })
+      }
+      throw new Error(erreur)
+    }
+    const bus = new AppCommandBus(os, (event) => broadcasts.push(event as Record<string, unknown>))
+    await bus
+      .exec(
+        'orchestrate',
+        { task: `/build corriger le module ${attendu}-${erreur.length}` },
+        'conv-1'
+      )
+      .catch(() => undefined)
+    const fin = broadcasts.find((b) => b.type === 'orchestrate-end')
+    const runPath = fin?.runPath as string | undefined
+    expect(runPath).toBeTruthy()
+    expect(readFileSync(runPath as string, 'utf8')).toMatch(new RegExp(`^status: ${attendu}$`, 'm'))
+  })
+
+  /**
+   * UNE RELECTURE LIVRÉE AVEC DÉFAUTS NE S'ÉCRIT PAS « Juge: validé » (piste 5, objection du juge,
+   * conv-1070). Le statut reste `green` — la relecture est livrée —, mais le Journal du RUN.md doit
+   * dire que le travail RELU a des défauts. Entrée qui fait rougir ce test si la correction est
+   * fausse : le résultat porteur de `defautsDuTravailRelu` journalisé « Juge: validé ». Jumeau : le
+   * même résultat SANS défauts garde « Juge: validé ».
+   */
+  it.each([
+    { cas: 'relecture avec défauts', defauts: ['MAJEUR: a.ts:1 casse', 'MINEUR: b'] },
+    { cas: 'run validé sans défauts', defauts: undefined }
+  ])('RUN.md Journal : $cas', async ({ defauts }) => {
+    const os = fakeOs()
+    const broadcasts: Array<Record<string, unknown>> = []
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'verdict',
+      phaseOutputs: [],
+      ...(defauts ? { defautsDuTravailRelu: defauts } : {})
+    })
+    const bus = new AppCommandBus(os, (event) => broadcasts.push(event as Record<string, unknown>))
+    await bus.exec('orchestrate', { task: `/judge le travail ${defauts?.length ?? 0}` }, 'conv-1')
+    const runPath = broadcasts.find((b) => b.type === 'orchestrate-end')?.runPath as string
+    const md = readFileSync(runPath, 'utf8')
+    expect(md).toMatch(/^status: green$/m)
+    if (defauts) {
+      expect(md).toContain('Relecture livrée — le travail relu a des défauts (2 objections)')
+      expect(md).not.toContain('Juge: validé')
+    } else {
+      expect(md).toContain('Juge: validé — clôture autorisée')
+    }
+  })
+
   it('clot en SUCCES un checkpoint dont la publication Git est deja acquise, sans repayer', async () => {
     // Mesure sur conv-1145 (13/08) : le run run-5f5a75a0208d-1 avait PUBLIE — verdict green,
     // publication complete, SHA 30a1b368 pousse sur origin/auto/… — puis la reprise du checkpoint

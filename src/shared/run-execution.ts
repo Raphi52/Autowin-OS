@@ -3,6 +3,17 @@ export type RunGitOutcome = 'merged' | 'nothing' | 'conflict' | 'blocked' | 'kep
 export type RunClosureStatus = 'open' | 'green' | 'degraded-closed' | 'red'
 
 /**
+ * Le statut ÉCRIT dans un RUN.md. Il ajoute `interrupted` à ceux du moteur : un run coupé de
+ * l'extérieur (bouton Stop, limite de session, panne du fournisseur) n'a ni échoué ni abouti, il
+ * s'est arrêté (piste 4, conv-1070). Le moteur, lui, garde `red` — le run n'a rien livré — et nomme
+ * la cause dans `RunClosureObservation.interruption` ; `statutDuRunMd` fait la traduction.
+ */
+export type RunFileStatus = RunClosureStatus | 'interrupted'
+
+/** Cause d'un arrêt étrangère au travail (`causeDInterruption`, `classe-terminale-echec.ts`). */
+export type RunInterruption = 'arret' | 'quota' | 'externe'
+
+/**
  * D'où vient le workflow qui pilote le run. Le NOM seul ne suffit pas : un workflow que
  * l'utilisateur n'a jamais demandé — choisi par le modèle, voire composé par lui à la volée —
  * n'engage pas la même confiance qu'un workflow choisi à la main. C'est justement le cas où
@@ -74,6 +85,12 @@ export interface RunClosureObservation {
   totalDurationMs: number
   totalCostUsd: number
   gateReasons?: string[]
+  /**
+   * PRÉSENT seulement sur une clôture `red` dont la cause est hors du travail : `arret` (Stop,
+   * fermeture de l'app), `quota` (limite de session), `externe` (panne en face, session expirée).
+   * ABSENT = un vrai échec, ou une trace écrite avant ce champ (piste 4, conv-1070).
+   */
+  interruption?: RunInterruption
   integrationOutcome?: string
   /**
    * Chemin du RUN.md de ce run. Le moteur ne le connaît pas : c'est l'appelant qui a créé le RUN.md

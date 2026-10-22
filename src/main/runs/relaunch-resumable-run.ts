@@ -64,6 +64,10 @@ export type DependancesDeRelance = {
   executionCostCoverageFields: typeof import('../../shared/orchestration-outcome').executionCostCoverageFields
   reconcileLateRunLifecycle: typeof import('../activity/late-run-usage-settlement').reconcileLateRunLifecycle
   classifierRefusDeReprise: typeof import('./resume-refusal').classifierRefusDeReprise
+  /** Clôture `red` qui nomme une cause extérieure → `interrupted` (piste 4, conv-1070). */
+  statutDuRunMd: typeof import('./conv-runs').statutDuRunMd
+  /** Stop, quota, panne en face : la cause d'un arrêt étranger au travail (piste 4, conv-1070). */
+  causeDInterruption: typeof import('../classe-terminale-echec').causeDInterruption
   randomUUID: () => string
   /** Fenetres vivantes a notifier. Injecte pour que le module ne depende pas d'`electron`. */
   fenetresVivantes: () => { webContents: { send: (canal: string, charge: unknown) => void } }[]
@@ -107,6 +111,8 @@ export function creerRelanceDeRunReprenable(
     executionCostCoverageFields,
     reconcileLateRunLifecycle,
     classifierRefusDeReprise,
+    statutDuRunMd,
+    causeDInterruption,
     randomUUID,
     fenetresVivantes,
     defaultProcessIdentity,
@@ -398,7 +404,7 @@ export function creerRelanceDeRunReprenable(
           )
           const closureStatus =
             resumedTerminalLifecycle && resumedTerminalLifecycle.closure.status !== 'open'
-              ? resumedTerminalLifecycle.closure.status
+              ? statutDuRunMd(resumedTerminalLifecycle.closure)
               : deliveryStatus
           closeConvRun(
             resumedRunFile.path,
@@ -486,7 +492,12 @@ export function creerRelanceDeRunReprenable(
         durableResumeTurn.fail(message, false)
         if (resumedRunFile) {
           saveConvRunTrace(resumedRunFile.path, resumedSteps)
-          closeConvRun(resumedRunFile.path, 'red', `Reprise en échec: ${message.slice(0, 120)}`)
+          const interrompue = causeDInterruption(error, false)
+          closeConvRun(
+            resumedRunFile.path,
+            interrompue ? 'interrupted' : 'red',
+            `${interrompue ? 'Reprise interrompue' : 'Reprise en échec'}: ${message.slice(0, 120)}`
+          )
           broadcast({ type: 'refresh', scope: 'workflows' })
         }
         broadcast({

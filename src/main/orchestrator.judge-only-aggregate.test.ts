@@ -140,3 +140,106 @@ describe('juge sans phase d’exécution : le prompt ne réclame pas un agrégat
     expect(promptDuJuge).toContain('confronte au moins une preuve d')
   })
 })
+
+/**
+ * UNE RELECTURE SEULE QUI REND SON VERDICT EST LIVRÉE (piste 5, conv-1070).
+ *
+ * Mesuré : conv-955, conv-984, conv-1043 et conv-1056 — quatre `/judge` qui ont trouvé des défauts
+ * finissent « Gate BLOQUÉ: Promis mais pas fait : « Objection du juge : … » » et `status: red`. Or
+ * la demande était la relecture : le verdict est la réponse (`orchestrator.ts`, « aucune réparation
+ * : la demande nomme le juge seul »). Les objections ne sont pas des promesses non tenues ; elles
+ * disent que le travail RELU est défectueux, et c'est ce que le résultat doit afficher.
+ *
+ * L'entrée qui ferait échouer ce test si le correctif était faux : un refus SANS objection
+ * (« DEFAUT: aucun juge n’a répondu »), qui n'est pas une relecture et doit rester bloqué.
+ */
+class JugeQuiRepond implements ProviderAdapter {
+  readonly id = 'juge-fixe'
+  readonly supportsExecution = true
+  constructor(private readonly verdict: string) {}
+  // eslint-disable-next-line require-yield
+  async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+    return { text: this.verdict, provider: this.id, systemInjected: false }
+  }
+  async auth(): Promise<boolean> {
+    return true
+  }
+}
+
+function relire(verdict: string, tache = '/judge la clôture du chantier chat') {
+  const provider = new JugeQuiRepond(verdict)
+  const trust = new TrustLedger()
+  const votes: string[] = []
+  const enregistrer = trust.record.bind(trust)
+  trust.record = (v) => {
+    votes.push(v.verdict)
+    enregistrer(v)
+  }
+  const orch = new Orchestrator({
+    registry: new ProviderRegistry().register(provider),
+    roles: new RoleModelConfig({
+      subagent: { provider: provider.id, model: 'ouvrier' },
+      judge: { provider: provider.id, model: 'juge-dedie' }
+    }),
+    cost: new CostAggregator(),
+    trust,
+    executionWorkspace: 'C:\\base',
+    worktrees: makeTestWorktrees('C:\\base'),
+    execPhases: []
+  })
+  return {
+    votes,
+    resultat: orch.run(tache, undefined, undefined, undefined, undefined, undefined, [])
+  }
+}
+
+const VERDICT_AVEC_DEFAUTS = [
+  'DEFAUT: deux défauts dans le travail relu',
+  'OBJECTIONS:',
+  '- MAJEUR: `src/main/store/surveillance-references-git.ts:128` surveille un dossier en nom court.',
+  '- MINEUR: le commentaire de la ligne 40 date du mauvais jour.',
+  'SCORE: 55'
+].join('\n')
+
+describe('relecture seule : le verdict est livré, les défauts du travail relu sont affichés', () => {
+  it('un DEFAUT avec objections clôt la relecture, sans « Promis mais pas fait »', async () => {
+    const { resultat } = relire(VERDICT_AVEC_DEFAUTS)
+    const r = await resultat
+    expect(r.gateBlocked).toBe(false)
+    expect(r.gateReasons.join(' ')).not.toContain('Promis mais pas fait')
+    // Le sens « le travail relu est défectueux » reste écrit, en tête, avec chaque objection.
+    expect(r.result).toMatch(/^Relecture livrée — le travail relu a des défauts/)
+    expect(r.result).toContain('surveillance-references-git.ts:128')
+    expect(r.result).toContain('le commentaire de la ligne 40')
+  })
+
+  it('le vote du juge garde son sens : la calibration reçoit red, pas green', async () => {
+    const { votes, resultat } = relire(VERDICT_AVEC_DEFAUTS)
+    await resultat
+    expect(votes).toEqual(['red'])
+  })
+
+  it('un refus SANS objection n’est pas une relecture : il reste bloqué', async () => {
+    const r = await relire('DEFAUT: aucun juge n’a répondu (tous en échec)').resultat
+    expect(r.gateBlocked).toBe(true)
+  })
+
+  it('un VALIDE reste un VALIDE, sans en-tête de défauts', async () => {
+    const r = await relire('VALIDE\n- OK: rien à redire.\nSCORE: 90').resultat
+    expect(r.gateBlocked).toBe(false)
+    expect(r.result).not.toContain('Relecture livrée — le travail relu a des défauts')
+    expect(r.defautsDuTravailRelu).toBeUndefined()
+  })
+
+  // Le RUN.md est écrit par `commands.ts`, qui ne voit que ce résultat : sans ce champ, il écrivait
+  // « Juge: validé — clôture autorisée » sous un verdict qui dit le contraire (objection du juge,
+  // conv-1070). Entrée qui fait rougir ce test : VERDICT_AVEC_DEFAUTS rendu sans ses défauts.
+  // fix-ok: conv-1070 — mesuré : rouge avant le champ `defautsDuTravailRelu` (« Target cannot be
+  // null or undefined »), vert après. Retouche antérieure du fichier : `'C:\base'` contenait un
+  // retour arrière (0x08) né d'un heredoc, remplacé par `'C:\\base'`.
+  it('les défauts du travail relu sortent du run, pour le Journal du RUN.md', async () => {
+    const r = await relire(VERDICT_AVEC_DEFAUTS).resultat
+    expect(r.defautsDuTravailRelu).toHaveLength(2)
+    expect(r.defautsDuTravailRelu?.[0]).toMatch(/^MAJEUR: .*surveillance-references-git\.ts:128/)
+  })
+})

@@ -18,6 +18,8 @@ import { ensureAutowinAppData } from '../app-data'
 import { lireLatenceTours } from '../perf-lag-main'
 import { journaliserGel, lireGels } from '../gel-main'
 import { lireDuelsParWorkflow } from '../arena-duels'
+import { lireResultatsReelsParWorkflow } from '../activity/resultats-reels-workflows'
+import { join } from 'node:path'
 import { assertTrustedRendererSender } from '../ipc-senders'
 
 /** Ce que les canaux de latence prenaient dans `index.ts` — désormais passé explicitement. */
@@ -48,6 +50,15 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
     assertTrustedRendererSender(event, 'ArenaDuelsParWorkflow')
     const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 500
     return lireDuelsParWorkflow(ensureAutowinAppData(appDataRoot), n)
+  })
+  /*
+   * Vue des workflows : ce que chaque workflow a RÉELLEMENT donné en usage, relu dans la trace
+   * causale (piste 1, conv-1070). Lecture seule, AUCUN argument du renderer : le dossier lu vient du
+   * processus principal. Lecture asynchrone ligne à ligne, gardée en mémoire par fichier.
+   */
+  ipcMain.handle('workflows:resultatsReels', (event) => {
+    assertTrustedRendererSender(event, 'WorkflowResultatsReels')
+    return lireResultatsReelsParWorkflow(join(ensureAutowinAppData(appDataRoot), 'causal-trace'))
   })
   /*
    * Gels du RENDERER, deposes dans le MEME journal que ceux du main.

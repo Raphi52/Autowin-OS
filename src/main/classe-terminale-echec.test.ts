@@ -4,7 +4,11 @@ import {
   type LearningProposalV1,
   type OutcomeObservedV1
 } from '../shared/run-learning'
-import { classeTerminaleDEchec, classeTerminaleDuControle } from './classe-terminale-echec'
+import {
+  causeDInterruption,
+  classeTerminaleDEchec,
+  classeTerminaleDuControle
+} from './classe-terminale-echec'
 import { decideOutcomeLearning } from './outcome-learning-policy'
 import {
   createIndependentLearningAttestation,
@@ -183,5 +187,35 @@ describe('classeTerminaleDuControle', () => {
     ).toBe('defect')
     expect(classeTerminaleDuControle(['3 tests rouges'])).toBe('defect')
     expect(classeTerminaleDuControle([])).toBe('defect')
+  })
+})
+
+/**
+ * UN RUN ARRÊTÉ DE L'EXTÉRIEUR N'EST NI EN ÉCHEC NI BLOQUÉ (piste 4, conv-1070).
+ *
+ * Le 2026-10-22, `judge-carnet-fil` (conv-1058) a été coupé par le bouton Stop et son RUN.md dit
+ * `status: red` : il reste « bloqué » pour toujours. L'entrée qui ferait échouer ce test si le
+ * correctif était faux : un run REFUSÉ par le juge (aucune exception, aucun arrêt) — il doit
+ * rester `red`, sinon l'interruption avalerait les vrais échecs.
+ */
+describe('causeDInterruption', () => {
+  it('nomme la cause quand elle est hors du travail : Stop, quota, panne en face', () => {
+    expect(causeDInterruption(new Error('Gate bloqué : test rouge'), true)).toBe('arret')
+    expect(causeDInterruption(new Error(MUR_DU_13_10), false)).toBe('quota')
+    expect(causeDInterruption(new Error(MUR_FAN_OUT), false)).toBe('quota')
+    expect(causeDInterruption(new Error('API Error: 529 Overloaded'), false)).toBe('externe')
+  })
+
+  it('ne dit rien d’un vrai échec : refus du juge sans exception, ou erreur du travail', () => {
+    expect(causeDInterruption(undefined, false)).toBeUndefined()
+    expect(causeDInterruption(new Error('TypeError: boom'), false)).toBeUndefined()
+    expect(causeDInterruption(new Error(''), false)).toBeUndefined()
+  })
+
+  it('suit exactement la classe `external` de classeTerminaleDEchec, jamais une règle de plus', () => {
+    for (const message of [MUR_DU_13_10, 'API Error: 529 Overloaded', 'TypeError: boom', '']) {
+      const externe = classeTerminaleDEchec(new Error(message), false) === 'external'
+      expect(causeDInterruption(new Error(message), false) !== undefined).toBe(externe)
+    }
   })
 })

@@ -1436,7 +1436,9 @@ const STATUTS_LISIBLES: Record<string, string> = {
   blocked: 'bloqué',
   open: 'pas terminé',
   cancelled: 'annulé',
-  'degraded-closed': 'clos en connaissance de cause'
+  'degraded-closed': 'clos en connaissance de cause',
+  // Stop, limite de session ou panne en face : le travail n'a pas échoué (piste 4, conv-1070).
+  interrupted: 'interrompu'
 }
 
 function statutLisible(statut: string): string {

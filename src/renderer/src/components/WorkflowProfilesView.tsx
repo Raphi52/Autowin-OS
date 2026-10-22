@@ -248,10 +248,52 @@ function phraseMesures(nom: string, duels: Record<string, AgregatDuels>): string
   }`
 }
 
+/**
+ * CE QUE LE WORKFLOW A RÉELLEMENT DONNÉ EN USAGE (piste 1, conv-1070), relu dans la trace causale
+ * par `resultats-reels-workflows.ts`. Les runs INTERROMPUS (Stop, limite de session, panne en
+ * face) sont dits, mais hors du taux de réussite et des médianes : l'abonnement qui dit non ne rend
+ * pas un workflow mauvais. Rapprochement EXACT par nom : c'est le nom écrit dans la trace au départ
+ * du run, pas un libellé de banc.
+ */
+interface ResultatsReels {
+  runs: number
+  abouties: number
+  echecs: number
+  interrompues: number
+  nonCloses: number
+  dureeMedianeMs?: number
+  coutMedianUsd?: number
+}
+
+function pluriel(n: number, mot: string, motPluriel = `${mot}s`): string {
+  return `${n} ${n > 1 ? motPluriel : mot}`
+}
+
+function phraseResultatsReels(nom: string, reels: Record<string, ResultatsReels>): string {
+  const cible = nom.trim().toLowerCase()
+  const r = Object.entries(reels).find(([k]) => k.trim().toLowerCase() === cible)?.[1]
+  if (!r || r.runs === 0) return 'Usage réel : aucun run enregistré sous ce nom'
+  const morceaux = [pluriel(r.runs, 'run')]
+  const allesAuBout = r.abouties + r.echecs
+  const issues = [pluriel(r.abouties, 'abouti'), `${r.echecs} en échec`]
+  morceaux.push(
+    allesAuBout > 0
+      ? `${issues.join(', ')} (${Math.round((r.abouties / allesAuBout) * 100)} % de réussite)`
+      : issues.join(', ')
+  )
+  if (r.interrompues > 0) morceaux.push(`${pluriel(r.interrompues, 'interrompu')}, hors taux`)
+  if (r.nonCloses > 0) morceaux.push(pluriel(r.nonCloses, 'non clos', 'non clos'))
+  if (r.dureeMedianeMs !== undefined) morceaux.push(`${dureeLisible(r.dureeMedianeMs)} médian`)
+  if (r.coutMedianUsd !== undefined) morceaux.push(`${coutLisible(r.coutMedianUsd)} médian`)
+  return `Usage réel : ${morceaux.join(' · ')}`
+}
+
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   /** Duels deja mesures, par nom de workflow. Lecture seule : rien n'est rejoue ici. */
   const [duels, setDuels] = useState<Record<string, AgregatDuels>>({})
+  /** Résultats réels par nom de workflow, relus dans la trace causale (piste 1, conv-1070). */
+  const [reels, setReels] = useState<Record<string, ResultatsReels>>({})
   /**
    * Un noeud peut porter une SKILL du disque et non une phase du pipeline. Sans cet inventaire, la
    * vue declarait « phase inconnue » une brique que sa propre palette propose, et bloquait son
@@ -285,6 +327,14 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       })
       .catch(() => {
         /* journal absent ou illisible : la liste s'affiche sans mesure */
+      })
+    // Même règle que les bancs : un BONUS, qui ne retarde ni ne casse la liste.
+    void Promise.resolve(window.api.workflowResultatsReels?.())
+      .then((agr) => {
+        if (!annule && agr) setReels(agr)
+      })
+      .catch(() => {
+        /* trace absente ou illisible : la liste s'affiche sans résultat réel */
       })
     return () => {
       annule = true
@@ -520,6 +570,22 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         ) : null
       })()}
 
+      {/* CE QUE « ACTIF » VEUT DIRE (piste 3, conv-1070). Le workflow actif passe AVANT le choix
+          automatique (`os.ts`, `poseConversationWorkflow`) : tant qu'il l'est, chaque demande du
+          chat tourne sous lui, cadrage ou non. Choix voulu (commit 5bb2bf99), mais dit seulement
+          dans une info-bulle : « implémente theme actuel » (conv-1066) a tourné en Correctif sans
+          étape de cadrage. La vue l'écrit désormais en clair. */}
+      {(() => {
+        const actifProfil = file.profiles.find((p) => p.id === file.activeId)
+        return actifProfil ? (
+          <p className="workflow-profiles-sub" role="note" data-testid="workflow-active-imposed">
+            « {actifProfil.name} » est imposé à toutes les demandes du chat : le choix automatique
+            du workflow ne joue pas tant qu’il est actif. Re-clique-le pour revenir au choix
+            automatique.
+          </p>
+        ) : null
+      })()}
+
       {/* L'état vide était gardé par `!loading` mais AUCUNE branche ne couvrait le chargement :
           pendant la lecture, la vue ne rendait ni liste ni message. */}
       {loading && file.profiles.length === 0 ? (
@@ -558,6 +624,12 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   data-testid={`workflow-mesures-${profile.id}`}
                 >
                   {phraseMesures(nom, duels)}
+                </p>
+                <p
+                  className="workflow-profile-mesures"
+                  data-testid={`workflow-reels-${profile.id}`}
+                >
+                  {phraseResultatsReels(nom, reels)}
                 </p>
                 {/* En-tête sur UNE ligne, puis portée et éditeur PLEINE LARGEUR dessous. Sans cette
                     séparation, la ligne étant un flex horizontal, l'éditeur se retrouvait comprimé
