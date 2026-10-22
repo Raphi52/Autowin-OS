@@ -429,6 +429,15 @@ describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
     expect(decision.confidence).toBe('medium')
   })
 
+  // L'outil direct publie TOUS ses arguments en `type: 'string'` (skill-node-mcp.ts, schemaEntree) :
+  // « glean, conv-1053 » arrivait en texte et repartait en `tags: []`, sans un mot (conv-1100).
+  it('des étiquettes en texte séparé par des virgules sont gardées, pas jetées', () => {
+    const decision = decideRemember({ ...FAIT_VALIDE, tags: 'glean, conv-1053 ,notes proches,' })
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.tags).toEqual(['glean', 'conv-1053', 'notes proches'])
+  })
+
   it('un titre manquant est refusé — un fait sans titre est introuvable', () => {
     const decision = decideRemember({ ...FAIT_VALIDE, title: '   ' })
     expect(decision.allowed).toBe(false)

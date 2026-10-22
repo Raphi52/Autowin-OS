@@ -423,7 +423,15 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
   const confidence =
     rawConfidence === 'low' || rawConfidence === 'high' ? rawConfidence : ('medium' as const)
 
-  const rawTags = Array.isArray(args.tags) ? args.tags : []
+  // Une CHAÎNE est découpée aux virgules, comme `supersedes` (parseSupersedes) : l'outil direct publie
+  // tous ses arguments en `type: 'string'` (skill-node-mcp.ts, schemaEntree), donc « a, b » arrivait
+  // en texte et repartait en `tags: []` sans un mot (conv-1100). Pas aux espaces : une étiquette peut
+  // en porter (« notes proches »).
+  const rawTags: unknown[] = Array.isArray(args.tags)
+    ? args.tags
+    : typeof args.tags === 'string'
+      ? args.tags.split(',')
+      : []
   const tags = rawTags
     .map((tag) => text(tag).slice(0, REMEMBER_TAG_MAX))
     .filter(Boolean)
