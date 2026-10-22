@@ -94,31 +94,34 @@ quand la variable `AUTOWIN_OS_WORKSPACE` est présente (l'app l'injecte dans cha
 quand le push part d'un worktree d'agent (`agent__…`, `integration__…`). Un **humain** dans son checkout
 passe : la règle vise l'automate, pas vous.
 
-Exception explicite et tracée, dans les deux cas : `ALLOW_MAIN_PUSH=1 git push`. (`npm run bootstrap:deps`
-active le hook automatiquement.)
+**Sur ce dépôt, on pousse DIRECTEMENT sur `main`, sans Pull Request** (règle en vigueur, 2026-10-22).
+Un agent le fait avec l'exception tracée `ALLOW_MAIN_PUSH=1 git push` — ou `npm run publier:main`, qui
+pose la variable puis pousse `origin main`. Le refus du hook ne sert qu'à rendre ce push assumé et tracé.
+(`npm run bootstrap:deps` active le hook automatiquement.)
 
-> Pourquoi cette distinction (2026-07-29) : le hook bloquait d'abord **tout** push sur `main`, humain
-> compris. Résultat, celui qui consolidait ses propres branches enjambait sa garde à chaque fois — et une
-> garde qu'on contourne systématiquement ne protège plus rien. La revue par Pull Request reste la règle
-> pour le travail à plusieurs ; le hook, lui, n'empêche plus que ce qu'aucun humain ne relit.
+> Pourquoi le hook ne vise que les agents (2026-07-29) : il bloquait d'abord **tout** push sur `main`,
+> humain compris. Résultat, celui qui consolidait ses propres branches enjambait sa garde à chaque fois —
+> et une garde qu'on contourne systématiquement ne protège plus rien.
 
-Ne travaillez **jamais tous sur la même branche** : le working tree se retrouve avec des changements
-entremêlés impossibles à committer proprement — vécu sur ce repo (fichiers supprimés sous une autre
-session, HEAD incohérent). Règle :
+Pousser sur `main` ne veut pas dire travailler à plusieurs dans le même checkout : le working tree se
+retrouve avec des changements entremêlés impossibles à committer proprement — vécu sur ce repo
+(fichiers supprimés sous une autre session, HEAD incohérent). Règle :
 
 1. Partir de `main` à jour : `git checkout main && git pull`.
-2. Créer **sa** branche : `git checkout -b feat/<sujet>` (ou `fix/<sujet>`).
-3. Committer par petits pas vérifiés (typecheck + tests verts avant chaque commit).
-4. Pousser : `git push -u origin feat/<sujet>`.
-5. Ouvrir une **Pull Request** vers `main` (le gabarit `.github/pull_request_template.md` se
-   pré-remplit : ce que ça change, la **preuve de vérification**, le périmètre) ; faire relire, puis merger.
-6. Une branche = un sujet. Ne pas mélanger deux features dans le même working tree.
+2. Committer par petits pas vérifiés (typecheck + tests verts avant chaque commit), en ne committant
+   que **ses** fichiers : `git commit -- <chemins>`.
+3. Pousser directement : `git push origin main` (humain) ou `ALLOW_MAIN_PUSH=1 git push` (agent).
+   Refus « non fast-forward » : `git pull --rebase origin main`, puis repousser.
+4. Un commit = un sujet. Ne pas mélanger deux sujets dans le même commit.
 
 **Deux personnes ou deux agents en parallèle ?** N'utilisez jamais le même checkout — donnez à chacun
-son propre working tree, sinon vos fichiers se marchent dessus (vécu ici) :
+son propre working tree, sinon vos fichiers se marchent dessus (vécu ici). Il se publie ensuite sur
+`main` de la même façon :
 
 ```bash
-git worktree add ../autowin-<sujet> -b feat/<sujet>
+git worktree add ../autowin-<sujet> -b <sujet>
+# ...commits vérifiés, puis :
+git pull --rebase origin main && git push origin HEAD:main
 ```
 
 ## 8. Repères de structure

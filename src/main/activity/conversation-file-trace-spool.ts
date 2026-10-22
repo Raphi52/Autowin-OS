@@ -401,23 +401,30 @@ interface ConversationPathOwnership {
   generationMarker?: string
 }
 
+/** Un fil de la génération courante d'un chemin, avec le DERNIER de ses tours qui l'a touché. */
+export interface CurrentPathOwner extends ConversationPathOwnership {
+  turnId?: string
+  timestamp: string
+}
+
+interface PathGeneration {
+  fingerprint?: string
+  generationMarker?: string
+  owners: Map<string, CurrentPathOwner>
+}
+
+function pathGenerationKey(workspaceRoot: string, path: string): string {
+  return `${canonicalWorkspaceRoot(workspaceRoot)}\0${workspaceTracePathKey(path)}`
+}
+
 /**
  * Génération causale courante par workspace+chemin. Une chaîne before→after conserve tous ses
  * contributeurs ; une base absente ou différente ouvre une nouvelle génération et révoque l'ancienne.
+ * Lue dans les DEUX sens : par fil (onglet Fichiers) et par chemin (`proprietaire_fichier`).
  */
-export function readCurrentConversationPathOwnership(
-  conversationId: string,
-  base = ensureAutowinAppData()
-): ConversationPathOwnership[] {
+function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
   const root = spoolRoot(base)
-  const generations = new Map<
-    string,
-    {
-      fingerprint?: string
-      generationMarker?: string
-      owners: Map<string, ConversationPathOwnership>
-    }
-  >()
+  const generations = new Map<string, PathGeneration>()
   const traces = [
     ...readFileTraces(join(root, 'events.archive.jsonl')),
     ...readFileTraces(join(root, 'events.previous.jsonl')),
@@ -440,12 +447,8 @@ export function readCurrentConversationPathOwnership(
       const generationMarker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
         ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
       )?.[1]
-      const key = `${workspaceRoot}\0${workspaceTracePathKey(normalized)}`
-      const generation: {
-        fingerprint?: string
-        generationMarker?: string
-        owners: Map<string, ConversationPathOwnership>
-      } = generations.get(key) ?? { owners: new Map() }
+      const key = pathGenerationKey(workspaceRoot, normalized)
+      const generation: PathGeneration = generations.get(key) ?? { owners: new Map() }
       if (
         !baseMatch ||
         !baseGenerationMatch ||
@@ -461,18 +464,67 @@ export function readCurrentConversationPathOwnership(
         workspaceRoot,
         path: normalized,
         ...(fingerprint ? { fingerprint } : {}),
-        ...(generationMarker ? { generationMarker } : {})
+        ...(generationMarker ? { generationMarker } : {}),
+        ...(trace.turnId ? { turnId: trace.turnId } : {}),
+        timestamp: trace.timestamp
       })
       generations.set(key, generation)
     }
   }
-  return [...generations.values()].flatMap((generation) =>
+  return generations
+}
+
+/** Empreinte et marqueur de la génération, qui priment sur ceux du dernier tour du fil. */
+function ownerOfGeneration(generation: PathGeneration, owner: CurrentPathOwner): CurrentPathOwner {
+  return {
+    ...owner,
+    ...(generation.fingerprint ? { fingerprint: generation.fingerprint } : {}),
+    ...(generation.generationMarker ? { generationMarker: generation.generationMarker } : {})
+  }
+}
+
+export function readCurrentConversationPathOwnership(
+  conversationId: string,
+  base = ensureAutowinAppData()
+): ConversationPathOwnership[] {
+  return [...readCurrentPathGenerations(base).values()].flatMap((generation) =>
     [...generation.owners.values()]
       .filter((ownership) => ownership.conversationId === conversationId)
-      .map((ownership) => ({
-        ...ownership,
-        ...(generation.fingerprint ? { fingerprint: generation.fingerprint } : {}),
-        ...(generation.generationMarker ? { generationMarker: generation.generationMarker } : {})
-      }))
+      // Forme rendue INCHANGÉE pour l'onglet Fichiers : le tour et l'heure ne servent qu'au sens
+      // « par chemin » ci-dessous.
+      .map((owner): ConversationPathOwnership => {
+        const {
+          turnId: _turnId,
+          timestamp: _timestamp,
+          ...ownership
+        } = ownerOfGeneration(generation, owner)
+        return ownership
+      })
   )
+}
+
+/**
+ * L'INVERSE de `readCurrentConversationPathOwnership` : pour chaque chemin d'un workspace, TOUS les
+ * fils de sa génération courante, quel que soit le fil qui demande. Scout conv-1086 : l'agent
+ * refaisait le réflexe 14 à la main (514 appels git dans 143 journaux) alors que cette donnée
+ * existait, lue seulement par l'interface et seulement pour le fil affiché.
+ * Rendu aligné sur `paths` (même ordre, une liste — vide — par chemin).
+ *
+ * fix-ok: conv-1086 — `readCurrentConversationPathOwnership` filtre sur le fil qui DEMANDE, il ne
+ * peut donc pas dire à conv-b que conv-a tient le fichier : ce filtre remis dans
+ * proprietaire-fichier.ts donne 2 rouges sur 9 (« signale à conv-b… »). D'où la génération
+ * factorisée, lue par chemin sans filtre de fil.
+ */
+export function readCurrentPathOwners(
+  workspaceRoot: string,
+  paths: readonly string[],
+  base = ensureAutowinAppData()
+): CurrentPathOwner[][] {
+  const generations = readCurrentPathGenerations(base)
+  return paths.map((path) => {
+    const generation = generations.get(pathGenerationKey(workspaceRoot, normalizedStoredPath(path)))
+    return generation
+      ? [...generation.owners.values()].map((owner) => ownerOfGeneration(generation, owner))
+      : []
+  })
 }
