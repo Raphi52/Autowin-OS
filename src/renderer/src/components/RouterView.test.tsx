@@ -468,7 +468,7 @@ describe('RouterView — le modèle par défaut connaît l’état des providers
 })
 
 describe('RouterView — modèle des petites tâches', () => {
-  const effectif = { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'low' }
+  const effectif = { provider: 'claude', model: 'haiku', reasoningEffort: 'low' }
 
   async function monter(api: Record<string, unknown>): Promise<void> {
     propsSelecteur.length = 0
@@ -494,19 +494,19 @@ describe('RouterView — modèle des petites tâches', () => {
   const selecteurDesPetitesTaches = (): Record<string, unknown> | undefined =>
     [...propsSelecteur].reverse().find((props) => props.binding === effectif)
 
-  it('non réglé : affiche la section, le modèle effectif et « Suit le chat »', async () => {
+  it('non réglé : affiche la section, le modèle effectif et « Par défaut » (Haiku)', async () => {
     await monter({ petitesTaches: async () => ({ reglage: null, effectif }) })
 
     const section = container.querySelector('[data-testid="router-petites-taches"]')
     expect(section?.querySelector('h3')?.textContent).toBe('Modèle des petites tâches')
     const props = selecteurDesPetitesTaches()
-    expect(props?.libelle).toBe('Suit le chat')
+    expect(props?.libelle).toBe('Par défaut')
     expect(props?.aide).toBe(
-      'S’applique au prochain tri de conversation et au prochain choix de workflow.'
+      'S’applique au prochain choix de workflow, aux deux lectures et au rangement du premier message.'
     )
     expect(
-      container.querySelector('[data-testid="router-petites-taches-suit-chat"]')?.textContent
-    ).toBe('Non réglé : suit le modèle du chat, en effort low.')
+      container.querySelector('[data-testid="router-petites-taches-defaut"]')?.textContent
+    ).toBe('Non réglé : Haiku par défaut, en effort low.')
     // Identifiants propres : le sélecteur du chat est sur la même page.
     expect(props?.idBase).toBe('router-petites-taches-modele')
     expect(container.querySelector('.router-petites-taches-reset')).toBeNull()
@@ -530,7 +530,7 @@ describe('RouterView — modèle des petites tâches', () => {
     expect(propsSelecteur[propsSelecteur.length - 1].libelle).toBe('Réglé')
   })
 
-  it('« Suivre le modèle du chat » efface le réglage', async () => {
+  it('« Revenir au défaut (Haiku) » efface le réglage', async () => {
     const setPetitesTaches = vi.fn(async () => ({ reglage: null, effectif }))
     await monter({
       petitesTaches: async () => ({
@@ -541,7 +541,7 @@ describe('RouterView — modèle des petites tâches', () => {
     })
 
     const bouton = container.querySelector<HTMLButtonElement>('.router-petites-taches-reset')
-    expect(bouton?.textContent).toBe('Suivre le modèle du chat')
+    expect(bouton?.textContent).toBe('Revenir au défaut (Haiku)')
     await act(async () => bouton?.click())
     await flush()
 

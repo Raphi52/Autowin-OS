@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
  * LE CHOIX AUTOMATIQUE DU WORKFLOW LIT LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11).
  *
  * `poseWorkflowDynamique` envoyait le modèle du chat avec un effort `low` écrit en dur. Il part
- * désormais sur le réglage « modèle des petites tâches » (écran Routeur) ; non réglé, sur le modèle
- * du chat en effort low — le même effort qu'avant, mais affiché à l'écran au lieu d'être caché.
+ * désormais sur le réglage « modèle des petites tâches » (écran Routeur) ; non réglé, sur l'alias
+ * `haiku` du CLI en effort low (conv-1097 — avant : le modèle du chat en effort low).
  */
 vi.mock('./role-store', () => ({ loadRoleBindings: () => undefined, saveRoleBindings: vi.fn() }))
 vi.mock('./workflow-profiles', async (original) => ({
@@ -52,10 +52,11 @@ describe('choix automatique du workflow — modèle des petites tâches', () => 
     })
   })
 
-  it('non réglé : modèle du chat, effort low', async () => {
+  // conv-1097 : non réglé, le défaut n'est plus le modèle du chat mais l'alias Haiku du CLI.
+  it('non réglé : alias haiku, effort low', async () => {
     await expect(appelDuChoix(new RoleModelConfig({ orchestrator: CHAT }))).resolves.toEqual({
       provider: 'claude',
-      model: 'claude-opus-5-5',
+      model: 'haiku',
       reasoningEffort: 'low'
     })
   })

@@ -367,7 +367,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
         <section className="router-default" data-testid="router-petites-taches">
           <header>
             <h3>Modèle des petites tâches</h3>
-            <small>choix automatique du workflow</small>
+            <small>choix du workflow · deux lectures · rangement du premier message</small>
           </header>
           <OrchestratorModelSelector
             busy={false}
@@ -381,12 +381,13 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             idBase="router-petites-taches-modele"
             // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
             // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
-            libelle={petitesTaches?.reglage ? 'Réglé' : 'Suit le chat'}
-            aide="S’applique au prochain tri de conversation et au prochain choix de workflow."
+            // Non réglé = Haiku en effort low (`roles.ts`, conv-1097), plus le modèle du chat.
+            libelle={petitesTaches?.reglage ? 'Réglé' : 'Par défaut'}
+            aide="S’applique au prochain choix de workflow, aux deux lectures et au rangement du premier message."
           />
           {petitesTaches && !petitesTaches.reglage && (
-            <p className="router-hint" data-testid="router-petites-taches-suit-chat">
-              Non réglé : suit le modèle du chat, en effort low.
+            <p className="router-hint" data-testid="router-petites-taches-defaut">
+              Non réglé : Haiku par défaut, en effort low.
             </p>
           )}
           {petitesTaches?.reglage && (
@@ -396,7 +397,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
               disabled={petitesTachesPending}
               onClick={() => void changePetitesTaches(null)}
             >
-              Suivre le modèle du chat
+              Revenir au défaut (Haiku)
             </button>
           )}
         </section>

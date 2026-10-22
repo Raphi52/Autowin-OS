@@ -296,12 +296,24 @@ describe('role-store Autowin OS', () => {
 describe('modèle des petites tâches', () => {
   const chat = { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' as const }
 
-  it('non réglé : suit le modèle du chat en effort low', () => {
+  // conv-1097 : les petites tâches non réglées partent sur l'alias Haiku du CLI, plus sur le chat.
+  it('non réglé, chat sur Claude : alias haiku en effort low, quel que soit le modèle du chat', () => {
     const cfg = new RoleModelConfig({ orchestrator: chat })
     expect(cfg.getPetitesTaches()).toBeUndefined()
     expect(cfg.bindingDesPetitesTaches()).toEqual({
       provider: 'claude',
-      model: 'claude-opus-5-5',
+      model: 'haiku',
+      reasoningEffort: 'low'
+    })
+    cfg.setBinding('orchestrator', { provider: 'claude', model: 'claude-sonnet-4-6' })
+    expect(cfg.bindingDesPetitesTaches().model).toBe('haiku')
+  })
+
+  it('non réglé, chat sur un autre moteur : suit le modèle du chat en effort low', () => {
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'autre', model: 'm-1' } })
+    expect(cfg.bindingDesPetitesTaches()).toEqual({
+      provider: 'autre',
+      model: 'm-1',
       reasoningEffort: 'low'
     })
   })
@@ -311,12 +323,11 @@ describe('modèle des petites tâches', () => {
     expect(cfg.bindingDesPetitesTaches()).toEqual({ provider: 'claude' })
   })
 
-  it('effacé : revient au modèle du chat, et suit un changement du chat', () => {
+  it('effacé : revient au défaut (alias haiku), pas au dernier réglage', () => {
     const cfg = new RoleModelConfig({ orchestrator: chat })
-      .setPetitesTaches({ provider: 'claude', model: 'claude-haiku-4-5' })
+      .setPetitesTaches({ provider: 'claude', model: 'claude-sonnet-4-6' })
       .setPetitesTaches(undefined)
-    cfg.setBinding('orchestrator', { provider: 'claude', model: 'claude-sonnet-4-6' })
-    expect(cfg.bindingDesPetitesTaches().model).toBe('claude-sonnet-4-6')
+    expect(cfg.bindingDesPetitesTaches().model).toBe('haiku')
   })
 })
 

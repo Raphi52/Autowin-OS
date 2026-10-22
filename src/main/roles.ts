@@ -175,16 +175,33 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
  * `activity/*.jsonl`), le choix du workflow forçait l'effort `low` sur le modèle du chat.
  *
  * Désormais l'utilisateur le règle lui-même (écran Routeur, clé `petitesTaches` de `roles.json`).
- * Non réglé, il suit le modèle du CHAT — un choix qu'il a fait — en effort `low` : l'effort d'avant
- * pour ces deux appels, affiché tel quel à l'écran. Aucun modèle n'est inventé par le code.
+ *
+ * HAIKU PAR DÉFAUT (conv-1097, 2026-10-22). Demande de l'utilisateur : « utiliser haiku pour toutes
+ * les petites opérations faciles qui n'ont qu'un résultat ». Ce sont des appels sans outil, à réponse
+ * unique (un oui/non, un choix dans une liste) : la DÉCISION DU WORKFLOW (`os.ts`), les DEUX LECTURES
+ * (`deux-lectures.ts`) et le RANGEMENT DU PREMIER MESSAGE (`rangement-premier-message.ts`). Non réglé,
+ * le défaut suivait le chat, donc Opus. Le défaut devient l'ALIAS `haiku` du CLI — pas un id figé :
+ * le CLI le résout côté serveur vers le dernier Haiku (mesuré le 2026-10-22 : `claude-haiku-5-5`,
+ * 0,0006 $ l'appel contre 0,003 à 0,018 $ sur Opus 5.5). Il n'est posé que si le chat est sur Claude :
+ * un autre moteur garde son propre modèle. Un réglage du Routeur passe toujours devant.
  */
 export const EFFORT_PETITES_TACHES_NON_REGLE: ReasoningEffort = 'low'
+
+/** Alias de famille du CLI Claude (catalogue : `claude/haiku`, `models.ts`), jamais un id versionné. */
+export const MODELE_PETITES_TACHES_NON_REGLE_CLAUDE = 'haiku'
 
 export function bindingDesPetitesTaches(
   reglage: RoleBinding | undefined,
   chat: RoleBinding
 ): RoleBinding {
   if (reglage) return { ...reglage }
+  if (chat.provider === 'claude') {
+    return {
+      provider: 'claude',
+      model: MODELE_PETITES_TACHES_NON_REGLE_CLAUDE,
+      reasoningEffort: EFFORT_PETITES_TACHES_NON_REGLE
+    }
+  }
   return {
     provider: chat.provider,
     ...(chat.model ? { model: chat.model } : {}),
@@ -237,7 +254,7 @@ export class RoleModelConfig {
     return this
   }
 
-  /** Le binding qui part VRAIMENT pour le tri et le choix du workflow. */
+  /** Le binding qui part VRAIMENT pour les petites tâches (workflow, deux lectures, rangement). */
   bindingDesPetitesTaches(): RoleBinding {
     return bindingDesPetitesTaches(this.petitesTaches, this.getBinding('orchestrator'))
   }
