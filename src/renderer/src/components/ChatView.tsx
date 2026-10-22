@@ -2575,6 +2575,44 @@ export function ChatView({
     return true
   }
   /**
+   * LA TÊTE DE LA FILE ATTEND LE VERROU D'ENVOI, ELLE NE SORT PAS POUR ÊTRE JETÉE (conv-1080).
+   *
+   * `busy` tombe à l'événement `done`, mais le verrou d'envoi (`sendLocksRef`) ne se relâche que dans
+   * le `finally` de `send`, à la RÉPONSE de `pilotChat` — que le main rend après son propre `finally`
+   * (`run-pilot-chat.ts`, qui diffuse aussi `directives-orphelines` avant de répondre). Entre les
+   * deux, un drain voyait le fil libre, sortait la tête de la file, et `send` la refusait sans un mot.
+   * Perte réelle : conv-996, 2026-10-16, orientation « basé sur les axes que t'as généré tour 1 scout
+   * des améliorations » (saisie ts 1792149113401), jamais lue ni renvoyée ; la suite du mode auto est
+   * partie à sa place 22 ms après le `done`.
+   *
+   * À consulter par CHAQUE sortie automatique de la file, avant d'en retirer la tête : verrou tenu =
+   * elle reste en file, visible, et `send` relance le drain à la fin de sa clôture
+   * (`drainerApresVerrou`).
+   */
+  const drainApresVerrouRef = useRef(new Set<string>())
+  function teteRetenueParLeVerrou(id: string): boolean {
+    if (!sendLocksRef.current.has(id)) return false
+    drainApresVerrouRef.current.add(id)
+    return true
+  }
+  /** Le drain retenu par le verrou, rejoué quand l'envoi qui le tenait s'est clos. */
+  function drainerApresVerrou(id: string): void {
+    // Un tour est reparti entre-temps (mode auto, message tapé) : la fin de CE tour drainera.
+    if (busyConversationsRef.current.has(id) || teteRetenueParLeVerrou(id)) return
+    // Un Stop survenu pendant l'attente garde sa promesse : rien ne repart seul.
+    if (stoppedQueueDrainRef.current.has(id) || stopDemandeRef.current.has(id)) return
+    if (lotsRetenusDansLeFil(id)) return
+    const [tete, ...reste] = queueRef.current.get(id) ?? []
+    if (!tete) return
+    setConversationQueue(id, reste)
+    void send(tete.text, {
+      keepComposerDraft: true,
+      automatique: true,
+      targetConversationId: id,
+      ...(tete.attachments?.length ? { piecesJointesImposees: tete.attachments } : {})
+    })
+  }
+  /**
    * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
    * sans cette insertion, le message suivant tape par l'utilisateur atterrissait APRES le message
    * marque BTW, ce qui defaisait silencieusement la promesse du bouton (« remettre a la fin ») —
@@ -2840,11 +2878,14 @@ export function ChatView({
           // Des lots de sélection retenus par la limite de quota gardent la tête de la file : les
           // orientations attendent derrière eux, la reprise du fil les relâchera (conv-1080).
           const retenues = !gele && lotsRetenusDansLeFil(convId)
+          // Cet événement part du `finally` du main, AVANT la réponse de `pilotChat` : le verrou
+          // d'envoi est encore tenu, la tête attend donc sa levée (conv-996, conv-1080).
           if (
             !gele &&
             !retenues &&
             convId === activeRef.current &&
-            !busyConversationsRef.current.has(convId)
+            !busyConversationsRef.current.has(convId) &&
+            !teteRetenueParLeVerrou(convId)
           ) {
             const enFile = queueRef.current.get(convId) ?? []
             const [tete, ...suite] = enFile
@@ -4712,6 +4753,8 @@ export function ChatView({
     if (!queued || queued.length === 0) return
     // Le lot d'avant a buté sur la limite de quota : le suivant attend la reprise (conv-1080).
     if (lotsRetenusDansLeFil(id)) return
+    // `done` est arrivé, la réponse de `pilotChat` pas encore : la tête attend le verrou (conv-1080).
+    if (teteRetenueParLeVerrou(id)) return
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
@@ -5153,6 +5196,7 @@ export function ChatView({
       // Retenus par la limite de quota : rien ne part, et seul un NOUVEAU tour vu dans ce fil (la
       // reprise) les relâchera à sa fin (conv-1080).
       if (lotsRetenusDansLeFil(id)) continue
+      if (teteRetenueParLeVerrou(id)) continue
       const [tete, ...reste] = queueRef.current.get(id) ?? []
       if (!tete) continue
       setConversationQueue(id, reste)
@@ -5880,6 +5924,9 @@ export function ChatView({
       // est déjà en cours » et serait avalé sans bruit.
       if (repriseApresSurcharge && convId)
         void relancerApresSurcharge(convId, value, outgoingAttachments, repriseApresSurcharge)
+      // Même raison : un drain a vu le fil libre pendant que CET envoi tenait encore son verrou ;
+      // la tête de file l'a attendu, elle part maintenant (`teteRetenueParLeVerrou`, conv-1080).
+      if (convId && drainApresVerrouRef.current.delete(convId)) drainerApresVerrou(convId)
     }
   }
 
