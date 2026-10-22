@@ -249,9 +249,59 @@ export async function photoDuTour(entree: {
   return derniere ? { ref: derniere.ref, sha: derniere.sha, quand: derniere.quand } : null
 }
 
+/*
+ * L'ÉCHEC DE LA COPIE EN UNE PHRASE (conv-1050, 2026-10-22). L'erreur d'execFile porte
+ * `Command failed: git worktree add …` puis TOUTE la sortie de git : en « Filename too long », une
+ * ligne par fichier mêlée aux « Updating files: NN% ». L'avis du chat (« Revenir à ce tour »,
+ * « Essaie 3 façons ») en faisait un écran entier, la cause noyée dedans. On n'en garde que la
+ * cause, en mots courants ; la sortie brute reste dans `cause` de l'erreur levée.
+ */
+const CAUSES_D_ECHEC_DE_COPIE: ReadonlyArray<readonly [RegExp, string]> = [
+  [/filename too long/iu, 'chemin trop long pour Windows (plus de 260 caractères)'],
+  [/no space left on device|not enough space/iu, 'disque plein'],
+  [/permission denied|access is denied/iu, 'accès refusé à l’emplacement de la copie'],
+  [
+    /\.lock\b[^\n]*file exists|another git process/iu,
+    'un autre processus git verrouille le dépôt (fichier .lock)'
+  ],
+  [
+    /invalid reference|not a valid object name|unknown revision|bad object/iu,
+    'la photo n’existe plus dans le dépôt'
+  ],
+  [/already exists/iu, 'le dossier de la copie existe déjà']
+]
+
+/** Une cause inconnue se dit par la ligne de git qui l'explique, bornée : jamais toute la sortie. */
+const LONGUEUR_MAX_LIGNE_GIT = 160
+
+/** La cause d'un `git worktree add` en échec, en quelques mots. Pure. */
+function causeDEchecDeCopie(erreur: unknown): string {
+  const message = erreur instanceof Error ? erreur.message : String(erreur)
+  const stderr = (erreur as { stderr?: unknown } | null)?.stderr
+  const sortie = typeof stderr === 'string' && stderr.trim() ? stderr : message
+  // La sortie de git, pas la ligne de commande : le chemin de destination n'est pas une cause.
+  const connue = CAUSES_D_ECHEC_DE_COPIE.find(([motif]) => motif.test(sortie))
+  if (connue) return connue[1]
+  const lignes = sortie
+    .split(/\r?\n/u)
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+  const ligne = (
+    lignes.find((candidate) => /^(fatal|error):/iu.test(candidate)) ??
+    lignes.find(
+      (candidate) => !/^(command failed:|preparing worktree|updating files:)/iu.test(candidate)
+    )
+  )?.replace(/^(fatal|error):\s*/iu, '')
+  if (!ligne) return 'git a échoué sans dire pourquoi'
+  const bornee =
+    ligne.length > LONGUEUR_MAX_LIGNE_GIT ? `${ligne.slice(0, LONGUEUR_MAX_LIGNE_GIT - 1)}…` : ligne
+  return `git a répondu « ${bornee} »`
+}
+
 /**
  * Ouvre une copie git DÉTACHÉE à la photo. Déjà ouverte au même endroit : rendue telle quelle
- * (`deja`), jamais recréée par-dessus — elle peut porter du travail.
+ * (`deja`), jamais recréée par-dessus — elle peut porter du travail. Un échec de git se lève en UNE
+ * phrase qui nomme sa cause (voir `causeDEchecDeCopie`), la sortie brute en `cause`.
  */
 export async function ouvrirCopieDeLaPhoto(entree: {
   dossier: string
@@ -268,7 +318,14 @@ export async function ouvrirCopieDeLaPhoto(entree: {
     if (head === entree.sha) return { chemin: entree.destination, deja: true }
     throw new Error(`Le dossier ${entree.destination} existe déjà et ne porte pas cette photo.`)
   }
-  await git(['worktree', 'add', '--detach', entree.destination, entree.sha], repo)
+  try {
+    await git(['worktree', 'add', '--detach', entree.destination, entree.sha], repo)
+  } catch (erreur) {
+    throw new Error(
+      `La copie séparée du code n’a pas pu être créée : ${causeDEchecDeCopie(erreur)}.`,
+      { cause: erreur }
+    )
+  }
   return { chemin: entree.destination, deja: false }
 }
 

@@ -223,6 +223,133 @@ describe('ouvrirCopieDeLaPhoto — le code du tour, dans une copie séparée', (
   })
 })
 
+/*
+ * L'ÉCHEC DE LA COPIE SE DIT EN UNE PHRASE (conv-1050, 2026-10-22). Constaté à l'écran : un
+ * `git worktree add` en « Filename too long » remplissait l'avis du chat de TOUTE la sortie de git
+ * (la commande, puis une ligne `error: unable to create file …` par fichier, mêlée aux « Updating
+ * files: NN% ») — un écran entier, la cause noyée dedans. L'erreur ci-dessous a la forme exacte de
+ * celle d'execFile : `Command failed: <commande>` puis la sortie, et `stderr`, `code` à part.
+ */
+describe('ouvrirCopieDeLaPhoto — un échec de git se dit en une phrase, avec sa cause', () => {
+  function echecDeGit(args: readonly string[], sortie: string): Error {
+    return Object.assign(new Error(`Command failed: git ${args.join(' ')}\n${sortie}`), {
+      code: 128,
+      stderr: sortie,
+      stdout: ''
+    })
+  }
+
+  /** Le vrai git, sauf `worktree add`, qui échoue avec la sortie donnée. */
+  async function gitQuiEchoueALaCopie(
+    sortie: string
+  ): Promise<{ runGit: GitRunner; erreurs: Error[] }> {
+    const vrai = await defaultGitRunner()
+    const erreurs: Error[] = []
+    const runGit: GitRunner = async (args, cwd, options) => {
+      if (args.includes('worktree') && args.includes('add')) {
+        const erreur = echecDeGit(args, sortie)
+        erreurs.push(erreur)
+        throw erreur
+      }
+      return vrai(args, cwd, options)
+    }
+    return { runGit, erreurs }
+  }
+
+  const raisonDe = (promesse: Promise<unknown>): Promise<Error> =>
+    promesse.then(
+      () => {
+        throw new Error('la copie aurait dû échouer')
+      },
+      (erreur: unknown) => erreur as Error
+    )
+
+  const SORTIE_CHEMIN_TROP_LONG = [
+    'Preparing worktree (detached HEAD 9d9adf0e)',
+    ...Array.from({ length: 80 }, (_, rang) =>
+      rang % 10 === 9
+        ? `Updating files:  ${60 + rang / 10}% (${2400 + rang}/3839)`
+        : `error: unable to create file src/renderer/src/components/ChatView.cas-${rang}.test.tsx: Filename too long`
+    )
+  ].join('\n')
+
+  it('« Filename too long » sur le bouton « Revenir à ce tour » : une phrase, la cause, rien de brut', async () => {
+    const repo = await depot()
+    const photo = await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand: 600 })
+    const { runGit, erreurs } = await gitQuiEchoueALaCopie(SORTIE_CHEMIN_TROP_LONG)
+
+    const erreur = await raisonDe(
+      revenirAuCodeDuTour({
+        conversationId: 'conv-1',
+        messages: [{ role: 'user', ts: 1_000, messageId: 'm1' }],
+        messageId: 'm1',
+        dossier: repo,
+        dossierDesRetours: join(repo, '..', 'retours'),
+        runGit
+      })
+    )
+
+    expect(photo).not.toBeNull()
+    expect(erreur.message).toBe(
+      'La copie séparée du code n’a pas pu être créée : chemin trop long pour Windows (plus de 260 caractères).'
+    )
+    // La sortie brute n'est pas perdue : elle reste attachée à l'erreur, pour qui diagnostique.
+    expect(erreur.cause).toBe(erreurs[0])
+  })
+
+  it.each([
+    ['fatal: invalid reference: 9d9adf0e', 'la photo n’existe plus dans le dépôt'],
+    ["fatal: '/d/retours/retour__conv-1-600' already exists", 'le dossier de la copie existe déjà'],
+    ['error: unable to write file src/a.ts: No space left on device', 'disque plein'],
+    [
+      'error: unable to create file src/a.ts: Permission denied',
+      'accès refusé à l’emplacement de la copie'
+    ],
+    [
+      "fatal: Unable to create 'D:/depot/.git/index.lock': File exists.",
+      'un autre processus git verrouille le dépôt (fichier .lock)'
+    ]
+  ])('cause connue « %s » → « %s »', async (sortie, cause) => {
+    const repo = await depot()
+    const { runGit } = await gitQuiEchoueALaCopie(
+      `Preparing worktree (detached HEAD 9d9adf0e)\n${sortie}`
+    )
+    const erreur = await raisonDe(
+      ouvrirCopieDeLaPhoto({
+        dossier: repo,
+        sha: 'HEAD',
+        destination: join(repo, '..', 'c'),
+        runGit
+      })
+    )
+    expect(erreur.message).toBe(`La copie séparée du code n’a pas pu être créée : ${cause}.`)
+  })
+
+  it('cause inconnue : la ligne de git qui dit pourquoi, sur UNE ligne et bornée', async () => {
+    const repo = await depot()
+    const longue = `fatal: quelque chose d’inattendu ${'x'.repeat(400)}`
+    const { runGit } = await gitQuiEchoueALaCopie(
+      ['Preparing worktree (detached HEAD 9d9adf0e)', 'Updating files:  12% (1/8)', longue].join(
+        '\n'
+      )
+    )
+    const erreur = await raisonDe(
+      ouvrirCopieDeLaPhoto({
+        dossier: repo,
+        sha: 'HEAD',
+        destination: join(repo, '..', 'c'),
+        runGit
+      })
+    )
+    expect(erreur.message).toMatch(
+      /^La copie séparée du code n’a pas pu être créée : git a répondu « quelque chose d’inattendu x+… »\.$/u
+    )
+    expect(erreur.message).not.toContain('\n')
+    expect(erreur.message).not.toContain('Command failed')
+    expect(erreur.message.length).toBeLessThanOrEqual(240)
+  })
+})
+
 describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un message', () => {
   const fil = [
     { role: 'user', content: 'premier', ts: 1_000, messageId: 'm1' },
