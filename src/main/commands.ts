@@ -220,7 +220,9 @@ const PUBLICATION_DIFFEREE =
 const EDITION_ARRETEE_PAR_STOP =
   'Édition non publiée : vérification arrêtée par l’utilisateur (Stop) — rien n’est prouvé et le ' +
   'fichier du dépôt est inchangé. Ne pas rejouer cette édition sans nouvelle demande.'
-import { lastUserMessageAt } from './store/conversations'
+import { lastUserMessageAt, LOT_SUPPRESSION_MAX } from './store/conversations'
+import type { ActiveChatTurns } from './active-chat-turns'
+import { arreterLesTravauxDuFil } from './arret-avant-suppression'
 import {
   piecesJointesDuDernierTour,
   porteDesPiecesJointes,
@@ -2090,6 +2092,19 @@ export class AppCommandBus {
     return true
   }
 
+  /**
+   * Arrête le tour et le run du fil `id` avant sa suppression par l'agent (conv-1060). `appelant` est
+   * le fil du tour qui supprime ; sans lui, le fil actif. S'il s'agit du même fil, le tour est coupé
+   * SANS être attendu : il attend lui-même la fin de cet appel.
+   */
+  private arreterAvantSuppression(id: string, appelant: string | undefined): Promise<void> {
+    return arreterLesTravauxDuFil(
+      id,
+      { couperLeRun: (fil, motif) => this.abortOrchestration(fil, motif), tours: this.toursDeChat },
+      id === (appelant ?? this.activeConversationId)
+    )
+  }
+
   /** Nombre d'orchestrations en vol : la relance automatique du moteur attend qu'il tombe à zéro. */
   orchestrationsEnVol(): number {
     return this.activeOrchestrations.size
@@ -2331,6 +2346,13 @@ export class AppCommandBus {
   conversationsEnVol?: () => string[]
 
   /**
+   * Les tours de chat en vol, câblés depuis index.ts : `remove_conversation(s)` les coupe avant de
+   * supprimer, comme le fait l'écran (conv-1060, `arret-avant-suppression.ts`). Absent -> seul le
+   * run du fil est coupé.
+   */
+  toursDeChat?: Pick<ActiveChatTurns, 'abort' | 'abortAndWait'>
+
+  /**
    * FILE DE REDÉMARRAGE (`relance-auto-moteur.ts`, `mettreEnFile`) : relance au prochain repos, après
    * préavis. Rend `false` si la file n'existe pas (version installée, relance auto désactivée).
    * Conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : sans elle, `restart_app` coupait conv-303
@@ -2527,21 +2549,6 @@ export class AppCommandBus {
       activeConversationId: this.activeConversationId,
       providers: this.os.registry.ids(),
       roles: this.os.roles.all(),
-      conversations: this.os.conversations
-        .list()
-        // Le nom `category` de CETTE sortie est un contrat d'agent : il reste, sa source devient
-        // `provider` (les deux valeurs etaient toujours egales).
-        .map((c) => {
-          const userAt = lastUserMessageAt(c.messages ?? [])
-          return {
-            id: c.id,
-            title: c.title,
-            category: c.provider,
-            updatedAt: c.updatedAt,
-            ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {}),
-            ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
-          }
-        }),
       // Les 12 plus récents pour l'affichage, mais un run BLOQUÉ lu plus loin dans la fenêtre n'est
       // jamais coupé : `runsBlocked` filtre CETTE liste, et la coupe à 12 le faisait disparaître.
       runs: runs
@@ -2566,7 +2573,26 @@ export class AppCommandBus {
         'snapshot:travauxNonPublies',
         () => this.os.travauxNonPubliesBornes?.() ?? []
       ),
-      ...budgetSnapshot(this.os.budget())
+      ...budgetSnapshot(this.os.budget()),
+      // EN DERNIER, toujours : c'est la seule liste sans borne (908 fils le 2026-10-22). Placee en
+      // tete, elle faisait depasser les 120 000 caracteres de `resultat-de-commande-borne.ts` et la
+      // coupe emportait `travauxNonPublies`, jamais lu (conv-1048). Ici, la coupe ne retire que les
+      // fils les plus anciens.
+      conversations: this.os.conversations
+        .list()
+        // Le nom `category` de CETTE sortie est un contrat d'agent : il reste, sa source devient
+        // `provider` (les deux valeurs etaient toujours egales).
+        .map((c) => {
+          const userAt = lastUserMessageAt(c.messages ?? [])
+          return {
+            id: c.id,
+            title: c.title,
+            category: c.provider,
+            updatedAt: c.updatedAt,
+            ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {}),
+            ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
+          }
+        })
     }
   }
 
@@ -4154,6 +4180,8 @@ export class AppCommandBus {
       }
       case 'remove_conversation': {
         const id = s('id')
+        // Comme le Stop : le tour et le run du fil s'arrêtent AVANT qu'il disparaisse (conv-1060).
+        await this.arreterAvantSuppression(id, conversationId)
         const removed = this.os.conversations.remove(id)
         if (removed) {
           this.onConversationRemoved?.(id)
@@ -4164,7 +4192,12 @@ export class AppCommandBus {
       case 'remove_conversations': {
         const brut = listeEnvoyee(a.ids, 'remove_conversations : ids doit etre une liste')
         const ids = brut.map((v) => String(v))
-        // removeMany REFUSE au-dela du plafond AVANT toute suppression : rien de partiel.
+        // removeMany REFUSE au-dela du plafond AVANT toute suppression : rien de partiel. Le même
+        // refus passe ici AVANT l'arrêt des fils, sinon un lot refusé aurait déjà coupé leur travail.
+        if (ids.length > LOT_SUPPRESSION_MAX) {
+          throw new Error(`lot de suppression trop grand : ${ids.length} > ${LOT_SUPPRESSION_MAX}`)
+        }
+        for (const id of ids) await this.arreterAvantSuppression(id, conversationId)
         const removed = this.os.conversations.removeMany(ids)
         for (const id of removed) this.onConversationRemoved?.(id)
         if (removed.length > 0) this.broadcast({ type: 'refresh', scope: 'conversations' })

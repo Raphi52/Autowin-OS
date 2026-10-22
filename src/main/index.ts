@@ -21,6 +21,8 @@ import { registerPiperIpc } from './ipc/piper'
 import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
+import { registerCarteDesBesoinsIpc } from './ipc/carte-des-besoins'
+import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
@@ -390,7 +392,12 @@ import {
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
 import { photographierDebutDeTour } from './chat-turn-publication'
-import { creerNotifieurDeFinDeTour, libelleDeBouton } from './notification-fin-de-tour'
+import {
+  creerNotifieurDeFinDeTour,
+  libelleDeBouton,
+  type ContenuNotification
+} from './notification-fin-de-tour'
+import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
 import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -648,6 +655,12 @@ jalonDemarrage('verrou instance obtenu')
 const os = new AutowinOS()
 jalonDemarrage('noyau applicatif construit')
 const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
+// Carte des besoins, lot 2 (conv-1089) : à chaque tour de chat, qui a prompté (identité git du
+// dossier du fil) et la ligne AUTOWIN_BESOIN_V1 de la réponse, dans `besoins.jsonl`.
+const journalDesBesoins = creerJournalDesBesoins({
+  racine: app.getPath('userData'),
+  identite: creerIdentitesEnCache()
+})
 const brainWorkerPath = join(__dirname, 'brain-worker.js')
 const brainWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
@@ -1747,6 +1760,8 @@ bus.redemarrerApp = (): void => restartApplication(app)
 // FILE DE REDÉMARRAGE (conv-304) : quand d'autres agents tournent, `restart_app` dépose sa demande
 // dans la relance au repos au lieu de les couper. Pas de file (version installée) -> `false`.
 bus.conversationsEnVol = (): string[] => activeChatTurns.inFlightConversations()
+// `remove_conversation(s)` arrête le tour et le run du fil supprimé, comme le Stop (conv-1060).
+bus.toursDeChat = activeChatTurns
 bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) ?? false
 // Outil `bureau_cache_fermer` (lot 1, conv-222) : meme racine de scripts que la TV et les gestes,
 // `app.asar.unpacked` une fois installee.
@@ -2039,6 +2054,12 @@ function registerChatIpc(): void {
     if (schema !== 'dark' && schema !== 'light') return false
     nativeTheme.themeSource = schema
     return true
+  })
+  // Les couleurs du thème choisi pour la carte de fin de tour, qui vit hors de la page (conv-1090).
+  // `definirPaletteDeCarte` n'accepte que huit `#rrggbb` : ces valeurs finissent dans du CSS.
+  ipcMain.handle('app:carte-fin-de-tour-palette', (event, palette: unknown) => {
+    assertTrustedRendererSender(event, 'Couleurs de la carte de fin de tour')
+    return definirPaletteDeCarte(palette)
   })
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
@@ -3124,10 +3145,13 @@ Le fil reprend ensuite normalement.`
       isolatedConversationReadCount += 1
     },
     dossierDuFil: (id) => dossierDuTour(id),
-    dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')
+    dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour'),
+    couperLeRun: (id, motif) => bus.abortOrchestration(id, motif)
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
+  // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
+  registerCarteDesBesoinsIpc({ os, journal: journalDesBesoins })
 
   // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
   // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
@@ -3532,24 +3556,50 @@ Le fil reprend ensuite normalement.`
    * n'est regardee (tour median 226 s, p90 ~17 min). Le clic ouvre le fil du tour ; la decision et
    * le texte vivent dans `notification-fin-de-tour.ts`, testes sans fenetre.
    */
+  /*
+   * POPUP « VERRE NACRE » (conv-1066, 2026-10-22) : la fin d'un tour s'affiche dans une carte au
+   * theme d'Autowin en bas a droite (`notification-popup.ts`), plus dans la bulle Windows, que
+   * rien ne permet de styler. La bulle reste le SECOURS si la carte ne peut pas se creer.
+   * Les cartes n'existent que tant qu'Autowin n'est pas regarde : une fenetre d'Autowin qui
+   * reprend le focus les ferme toutes (elles couvriraient sinon le bas de la fenetre, la saisie).
+   */
+  const bulleWindows = (contenu: ContenuNotification): Notification => {
+    if (!Notification.isSupported()) throw new Error('Notifications non supportees')
+    return new Notification({
+      title: contenu.title,
+      body: contenu.body,
+      // Les suites du tour en boutons (Windows et macOS depuis Electron 44) : la suite part entiere.
+      ...(contenu.suites
+        ? {
+            actions: contenu.suites.map((suite) => ({
+              type: 'button' as const,
+              text: libelleDeBouton(suite)
+            }))
+          }
+        : {})
+    })
+  }
+  // La bulle sert DEUX fois de secours : carte impossible a creer (`fabriquer` jette, ci-dessous) et
+  // page de carte non chargee, qui n'arrive qu'APRES `fabriquer` (la pile passe alors la main).
+  const popupsDeFinDeTour = creerPopupsDeFinDeTour({ secours: bulleWindows })
+  app.on('browser-window-focus', (_evenement, fenetre) => {
+    if (!popupsDeFinDeTour.estUneCarte(fenetre)) popupsDeFinDeTour.toutFermer()
+  })
   const notifierFinDeTour = creerNotifieurDeFinDeTour({
     fabrique: (contenu) => {
-      if (!Notification.isSupported()) throw new Error('Notifications non supportees')
-      return new Notification({
-        title: contenu.title,
-        body: contenu.body,
-        // Les suites du tour en boutons (Windows et macOS depuis Electron 44) : la suite part entiere.
-        ...(contenu.suites
-          ? {
-              actions: contenu.suites.map((suite) => ({
-                type: 'button' as const,
-                text: libelleDeBouton(suite)
-              }))
-            }
-          : {})
-      })
+      try {
+        return popupsDeFinDeTour.fabriquer(contenu)
+      } catch (erreur) {
+        console.warn('[fin-de-tour] carte impossible, bulle Windows a la place —', String(erreur))
+      }
+      return bulleWindows(contenu)
     },
-    fenetreRegardee: () => BrowserWindow.getFocusedWindow() !== null,
+    // Une carte n'est pas une fenetre d'Autowin « regardee » (elle ne prend jamais le focus, mais
+    // si Windows la lui donnait, la carte suivante ne doit pas se taire pour autant).
+    fenetreRegardee: () => {
+      const fenetre = BrowserWindow.getFocusedWindow()
+      return fenetre !== null && !popupsDeFinDeTour.estUneCarte(fenetre)
+    },
     // Les instances cachees (capture, tache planifiee) ne s'affichent jamais chez l'utilisateur.
     instanceDeTest: isolatedTestInstance || headlessTestInstance,
     titreDuFil: (id) => os.conversations.get(id)?.title,
@@ -3626,6 +3676,16 @@ Le fil reprend ensuite normalement.`
         await photographierLeCode({ dossier: dossierDuTour(conversationId), conversationId })
       try {
         const resultat = await lancerTour(...args)
+        // Carte des besoins (conv-1089) : jamais attendu, un échec n'atteint jamais la réponse.
+        void journalDesBesoins
+          .noterTour({
+            conversationId,
+            turnId: resultat.turnId,
+            messages: os.conversations.get(conversationId)?.messages ?? [],
+            dossier: dossierDuTour(conversationId),
+            texteReponse: resultat.text
+          })
+          .catch((error) => console.warn('[besoins] tour non noté :', error))
         notifierFinDeTour(conversationId, {
           ...resultat,
           tourDeFond: args[5]?.background === true,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
-import { carteDuFil } from './carte-du-fil'
+import { carteDuFil, quaisDe, type EtapeCarte } from './carte-du-fil'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 
 /**
@@ -153,6 +153,57 @@ describe('carteDuFil — la couleur suit la PREUVE', () => {
   })
 })
 
+// LE BILAN DE L'EN-TÊTE (« Tout ensemble », /draft conv-1088, 2026-10-22) : une couleur = un compte,
+// et le coût du fil n'additionne que les coûts CONNUS — l'étape à venir ne compte nulle part.
+describe('carteDuFil — le bilan de l’en-tête', () => {
+  it('compte chaque couleur et additionne les seuls coûts connus', () => {
+    const carte = carteDuFil({
+      fil: [
+        user('prouve-moi', 1),
+        asst(2, [verify('npm test', 0)], { coutUsd: 1.25 }),
+        user('refuse', 3),
+        asst(4, [texte('x')], { status: 'failed', error: 'quota', coutUsd: 0.5 }),
+        user('explique', 5),
+        asst(6, [texte(CLOTURE('Relancer le juge.'))]),
+        user('continue', 7),
+        asst(8, [], { status: 'streaming', done: false })
+      ]
+    })
+    expect(carte).toMatchObject({
+      prouvees: 1,
+      refusees: 1,
+      sansPreuve: 1,
+      enCours: 1,
+      total: 4,
+      coutConnuUsd: 1.75
+    })
+  })
+
+  it('les quais alternent haut/bas, sans quai avant le compactage, le repère toujours en bas', () => {
+    const etape = (cle: string, horsMemoire = false): EtapeCarte =>
+      ({ cle, horsMemoire }) as EtapeCarte
+    const etapes = [etape('a', true), etape('b', true), etape('c'), etape('d'), etape('e')]
+    expect(quaisDe(etapes, null)).toEqual([null, null, 'haut', 'bas', 'haut'])
+    expect(quaisDe(etapes, 'c')).toEqual([null, null, 'bas', 'haut', 'bas'])
+    expect(quaisDe(etapes, 'd')).toEqual([null, null, 'haut', 'bas', 'haut'])
+    expect(quaisDe(etapes, 'a')).toEqual([null, null, 'haut', 'bas', 'haut'])
+  })
+
+  it('le quai garde un titre court, la fiche reçoit le titre ENTIER', () => {
+    const longue = `fais compter comme preuve ${'les tests du terminal '.repeat(8)}fin`
+    const { etapes } = carteDuFil({ fil: [user(longue, 1), asst(2, [texte('ok')])] })
+    expect(etapes[0].titre).toHaveLength(120)
+    expect(etapes[0].titre.endsWith('…')).toBe(true)
+    expect(etapes[0].titreEntier).toBe(longue.trim())
+  })
+
+  it('aucun coût connu : pas de coût, jamais un zéro', () => {
+    const carte = carteDuFil({ fil: [user('explique', 1), asst(2, [texte('voilà')])] })
+    expect(carte.coutConnuUsd).toBeUndefined()
+    expect(carte.sansPreuve).toBe(1)
+  })
+})
+
 describe('carteDuFil — l’étape à venir', () => {
   it('la suite recommandée par la dernière clôture devient une étape « à venir »', () => {
     const { etapes, total } = carteDuFil({
@@ -240,5 +291,75 @@ describe('carteDuFil — compactage et fichiers', () => {
       ]
     })
     expect(etapes.map((etape) => etape.fichiers)).toEqual([['src/a.ts'], ['src/b.ts', 'src/a.ts']])
+  })
+})
+
+/**
+ * TESTS LANCÉS DANS LE TERMINAL DE L'AGENT (conv-1059, 2026-10-22). Le tour « vazy » de conv-1038
+ * affichait 295/295 tests verts, joués par l'agent dans son propre terminal : sans leur code de
+ * sortie, la carte le montrait « sans preuve ». Le tour garde maintenant ces codes
+ * (`testsDuTerminal`) ; la carte les lit avec la MÊME règle que les `verify` : une commande = une
+ * clé, la dernière issue compte, deux commandes différentes ne se rachètent pas (conv-76) — y
+ * compris d'une source à l'autre.
+ */
+describe('carteDuFil — les tests lancés dans le terminal de l’agent', () => {
+  const terminal = (commande: string, codeDeSortie: number, at: number): unknown => ({
+    commande,
+    codeDeSortie,
+    at
+  })
+
+  it('un test passé dans le terminal prouve l’étape, avec son code de sortie', () => {
+    const { etapes, prouvees } = carteDuFil({
+      fil: [
+        user('vazy', 1),
+        asst(2, [texte('fini')], {
+          testsDuTerminal: [terminal('npx vitest run src/a.test.ts', 0, 3)]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('prouve')
+    expect(etapes[0].constat).toBe('npx vitest run src/a.test.ts → exit 0')
+    expect(prouvees).toBe(1)
+  })
+
+  it('un test rouge dans le terminal : refusé, même si un `verify` différent passe ensuite', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [{ ...(verify('npm test', 0) as object), at: 5 }], {
+          testsDuTerminal: [terminal('npm run typecheck', 2, 3)]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('refuse')
+    expect(etapes[0].constat).toBe('npm run typecheck → exit 2')
+  })
+
+  it('la même commande rouge PUIS verte dans le terminal : prouvé', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('fini')], {
+          testsDuTerminal: [
+            terminal('npx vitest run a.test.ts', 1, 3),
+            terminal('npx vitest run a.test.ts', 0, 4)
+          ]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('prouve')
+  })
+
+  it('l’ordre réel compte : le constat est la DERNIÈRE preuve, d’où qu’elle vienne', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [{ ...(verify('npm test', 0) as object), at: 9 }], {
+          testsDuTerminal: [terminal('npx vitest run a.test.ts', 0, 4)]
+        })
+      ]
+    })
+    expect(etapes[0].constat).toBe('npm test → exit 0')
   })
 })

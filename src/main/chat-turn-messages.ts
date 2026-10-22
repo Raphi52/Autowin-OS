@@ -550,8 +550,34 @@ export function commandeAObserveLeReel(
   return false
 }
 
+/*
+ * UN CALCUL N'EST PAS UN COMPTE (conv-1095, 2026-10-22, tour 1e32407a). « Question rapide, sans rien
+ * lancer : combien font 2 + 2 ? » a été relancé comme une demande de compte restée sans lecture : un
+ * second appel au modèle payé, et une réponse alourdie d'un paragraphe sur la relance. La garde
+ * existe parce qu'un compte de choses du MONDE (fichiers, tests, lignes) ne se devine pas ; ici les
+ * opérandes sont DANS la question, il n'y a rien à observer. Seul est retiré « combien font/fait/vaut
+ * <nombre> <opérateur> <nombre>… » : « combien de fichiers font 2 Ko » reste un compte.
+ */
+/*
+ * Les nombres en LETTRES aussi (même jour) : « combien font deux plus deux » est le même calcul. Un
+ * mot-nombre ne compte que suivi d'un OPÉRATEUR puis d'un autre nombre : « combien font deux fichiers
+ * plus trois tests » reste un compte, car « fichiers » coupe le calcul.
+ */
+const MOT_NOMBRE = String.raw`(?:z[ée]ro|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingts?|trente|quarante|cinquante|soixante|cents?|mille)`
+const NOMBRE_EN_LETTRES = String.raw`(?<![\p{L}])${MOT_NOMBRE}(?:(?:-|\s+et\s+|\s+)${MOT_NOMBRE})*(?![\p{L}])`
+const NOMBRE = String.raw`\(?\s*(?:-?\d+(?:[.,]\d+)?|${NOMBRE_EN_LETTRES})\s*\)?`
+const OPERATEUR = String.raw`(?:[-+*/×÷x^]|plus|moins|fois|(?:divis|multipli)ée?s?\s+par)`
+const CALCUL_POSE = new RegExp(
+  String.raw`\bcombien\s+(?:font|fait|vaut|valent|donnent|donne|égalent|égale)\s+` +
+    String.raw`${NOMBRE}(?:\s*${OPERATEUR}\s*${NOMBRE})+`,
+  'gu'
+)
+
 function demandeUnCompte(texte: string): boolean {
-  const q = texte.toLowerCase().replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
+  const q = texte
+    .toLowerCase()
+    .replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
+    .replace(CALCUL_POSE, ' ')
   return (
     /\bcombien\b/.test(q) ||
     /\bnombre\b/.test(q) ||

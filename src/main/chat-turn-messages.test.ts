@@ -412,6 +412,53 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
       exigeUnChiffreVerifie('Combien de comptes rendus dans docs/ ?', 'Il y en a 4.', false)
     ).toBe(true)
   })
+
+  // Cas RÉEL de conv-1095 (2026-10-22, tour 1e32407a) : un calcul posé dans la question a été relancé
+  // comme un compte à aller lire — un second appel au modèle payé, et une réponse alourdie d'un
+  // paragraphe sur « cette relance automatique ». Les opérandes sont DANS la question : rien à lire.
+  it('ne mord PAS sur un calcul posé dans la question (phrase réelle de conv-1095)', () => {
+    expect(
+      exigeUnChiffreVerifie(
+        'Question rapide, sans rien lancer : combien font 2 + 2 ? Réponds en une ligne.',
+        '2 + 2 = 4.\n\nAUTOWIN_BESOIN_V1: aucun',
+        false
+      )
+    ).toBe(false)
+    for (const demande of [
+      'combien fait 12 × 7 ?',
+      'Combien font 3 fois 4',
+      'combien vaut 10/4 ?',
+      'combien font 1,5 + 2,25 - 0,75 ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Le résultat.', false), demande).toBe(false)
+  })
+
+  it('mord TOUJOURS sur un vrai compte, même avec des chiffres ou le verbe « faire »', () => {
+    for (const demande of [
+      'Combien de fichiers font plus de 2 Ko dans src/main ?',
+      'Combien font les tests de src/main en tout ?',
+      'combien font 2 + 2, et combien de fichiers dans src/main ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Il y en a 12.', false), demande).toBe(true)
+  })
+
+  it('ne mord PAS sur un calcul écrit en toutes lettres', () => {
+    for (const demande of [
+      'combien font deux plus deux ?',
+      'Combien fait sept fois huit',
+      'combien font vingt et un moins trois ?',
+      'combien font dix-sept + 4 ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Le résultat.', false), demande).toBe(false)
+  })
+
+  it('mord TOUJOURS quand les mots-nombres comptent des choses du dépôt', () => {
+    for (const demande of [
+      'combien font deux fichiers plus trois tests dans src/main ?',
+      'Combien de fichiers font plus de deux Ko ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Il y en a 5.', false), demande).toBe(true)
+  })
 })
 
 describe('exigeUnChiffreVerifie — le texte RECOLLÉ d’une réponse de l’agent n’est pas la demande', () => {

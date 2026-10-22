@@ -259,6 +259,25 @@ export function catalogueLectureSeule(
   return catalog.length > 0 && catalog.every((c) => c.annotations?.readOnlyHint === true)
 }
 
+/**
+ * LIGNE DE BESOIN (carte des besoins, lot 2, conv-1089, 2026-10-22). Demande de l'utilisateur : une
+ * ligne invisible par laquelle l'agent dit si un message est un nouveau besoin ou la suite d'un
+ * besoin existant — au moment où il a le fil en tête, donc sans aucun appel de modèle de plus. Lue
+ * par `src/shared/ligne-besoin.ts`, écrite dans `besoins.jsonl` par `journal-des-besoins.ts`, retirée
+ * de l'affichage par `retirerLignePromptSuivant`. Elle passe AVANT les lignes de suite et de fin :
+ * celles-ci restent les dernières, comme leurs propres consignes l'exigent. Texte FIXE (cache).
+ */
+export const CONSIGNE_LIGNE_BESOIN =
+  `LIGNE DE BESOIN — chaque réponse à un message de l'utilisateur porte UNE ligne exactement ` +
+  `\`AUTOWIN_BESOIN_V1: <nature>\`, posée juste après ton texte (après le bloc de clôture s'il y en ` +
+  `a un, AVANT les lignes \`AUTOWIN_PROMPT_V1\` ou \`AUTOWIN_FIN_V1\`). Elle range sa demande dans la ` +
+  `carte des besoins : \`nouveau\` — il demande un changement ou un livrable qui n'était pas encore ` +
+  `demandé · \`suite\` — il poursuit, corrige, précise ou relance la demande précédente de CE fil · ` +
+  `\`suite conv-NNN\` — il reprend la demande d'un AUTRE fil, dont tu connais l'identifiant · ` +
+  `\`aucun\` — une question, un avis, une explication : pas un besoin. Tu dis DE QUEL besoin il ` +
+  `s'agit, jamais s'il est fini : l'état vient des preuves, pas de toi. Ligne INVISIBLE : ` +
+  `l'interface la retire ; ne l'annonce pas, ne la commente pas.\n`
+
 export function buildChatPilotagePrompt(
   catalog: ReadonlyArray<{
     name: string
@@ -861,6 +880,7 @@ export function buildChatPilotagePrompt(
         `modification. Avec \`ask\`, demande un choix concret entre fonctionnalité, correction, ` +
         `document ou autre livrable. Cette information est indispensable à toute preuve vérifiable.\n`
     ) +
+    CONSIGNE_LIGNE_BESOIN +
     `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
     `porte sur le CODE et demande d'y TRAVAILLER (écrire à plusieurs endroits, mener un chantier), ` +
     `lance \`orchestrate\` avec la demande ` +

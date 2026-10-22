@@ -16,6 +16,7 @@
  */
 
 import { suivreBlocsDeCode } from './bloc-de-code'
+import { estLigneBesoinAMasquer } from './ligne-besoin'
 
 const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
@@ -209,7 +210,9 @@ export function retirerLignePromptSuivant(texte: string): string {
         nu.includes(MARQUEUR_PROMPT_SUIVANT) ||
         PREFIXES_PARTIELS.includes(nu) ||
         LIGNE_FIN.test(nu.replace(/`/g, '')) ||
-        PREFIXES_FIN.includes(nu)
+        PREFIXES_FIN.includes(nu) ||
+        // Ligne de la carte des besoins (conv-1089) : même canal invisible, même retrait.
+        estLigneBesoinAMasquer(nu)
       ) {
         retireeEnFin = true
         continue
@@ -255,8 +258,15 @@ export function retirerLignePromptSuivant(texte: string): string {
  * l'alternative insensible a la casse : deux lettres aussi courtes ne se reconnaissent qu'en
  * MAJUSCULES, sinon n'importe quel « pr » isole redeviendrait une pull request.
  */
-const BORD_GAUCHE = '(?<![\\p{L}\\p{N}_])'
-const BORD_DROIT = '(?![\\p{L}\\p{N}_])'
+/*
+ * UNE ADRESSE N'EST PAS UN ACTE (conv-1093, 2026-10-22). Un mot de publication collé à un nom de
+ * fichier, de branche ou de hook — `chat-turn-publication.ts`, `public/version-github`, `pre-push`,
+ * `non-merged` — DÉSIGNE une chose, il ne demande pas de publier. Le bord gauche refuse donc aussi
+ * `- . / \` juste avant le mot ; le bord droit refuse `/ \` et une extension (`.ts`). Il laisse
+ * passer `-` : « publie-le », « pousse-les » sont de vrais impératifs.
+ */
+const BORD_GAUCHE = '(?<![\\p{L}\\p{N}_./\\\\-])'
+const BORD_DROIT = '(?![\\p{L}\\p{N}_/\\\\])(?!\\.\\p{L})'
 
 const ACTES_DE_PUBLICATION = new RegExp(
   `${BORD_GAUCHE}(?:commit\\p{L}*|push\\p{L}*|pousse[rz]?|pull request|merge\\p{L}*|fusionn\\p{L}*|publi\\p{L}*|livre[rz]?|livraison|d[ée]ploi\\p{L}*|d[ée]ploy\\p{L}*|release|mets? en ligne|mise en ligne)${BORD_DROIT}`,
@@ -266,9 +276,50 @@ const ACTES_DE_PUBLICATION = new RegExp(
 /** Le sigle seul, en MAJUSCULES uniquement : « pr » minuscule est trop court pour etre sur. */
 const SIGLE_PULL_REQUEST = new RegExp(`${BORD_GAUCHE}PR${BORD_DROIT}`, 'u')
 
-/** Un texte parle-t-il de PUBLIER ? Point d'entree unique : les deux motifs se lisent ensemble. */
+/*
+ * ENVOYER VERS LA BRANCHE PRINCIPALE, SANS LE MOT (conv-1093, 2026-10-22). Trois suites réelles
+ * des fils publiaient sans aucun mot de la liste : « intègre-la dans main », « envoie-la sur
+ * Azure », « Fais rejoindre au dépôt principal la copie… ». Elles passaient sans proposer de tri.
+ *
+ * Le verbe ne compte qu'à l'IMPÉRATIF et en TÊTE de proposition (début, ponctuation, « et »,
+ * « puis »…) : « la branche s'intègre dans main », « le script qui envoie sur GitHub », « Ne
+ * l'intègre pas » décrivent ou refusent, ils ne demandent rien. Et seulement devant une cible qui
+ * EST la branche principale ou un dépôt distant : « à la main », `src/main`, `main.tsx`, « doit
+ * rejoindre la liste », « Supprime sur Azure » restent hors du garde-fou.
+ *
+ * Même famille au tour suivant : « Reporte dans le dépôt principal le travail de run-X ». Mais
+ * « reporter » veut aussi dire remettre à plus tard ou signaler un bug (« Reporte le bug sur
+ * GitHub ») : il ne compte que devant la cible LOCALE — branche ou dépôt principal —, jamais devant
+ * un dépôt distant.
+ */
+const CIBLE_LOCALE = String.raw`(?:(?:la\s+branche\s+)?(?:origin\/)?(?:main|master)|(?:la\s+)?branche\s+principale|(?:le\s+)?d[ée]p[ôo]t\s+principal)`
+const CIBLE_DISTANTE = String.raw`(?:(?:le\s+)?d[ée]p[ôo]t\s+distant|azure(?:\s+devops)?|github|origin)`
+const FIN_DE_CIBLE = String.raw`(?![\p{L}\p{N}_\/\\-])(?!\.\p{L})`
+const TETE_DE_PROPOSITION = String.raw`(?<=(?:^|[,;:.!?—–]|(?<![\p{L}])(?:et|puis|ensuite|alors|enfin|sinon|aussi|donc))\s*)`
+/** Jusqu'à huit mots entre le verbe et sa cible, sans franchir une ponctuation ni une conjonction. */
+const ENTRE_VERBE_ET_CIBLE = String.raw`(?:\s+(?!(?:et|puis|ou|si|quand|mais)\s)[^\s,;:!?]*[^\s.,;:!?]){0,8}?`
+const PREPOSITION_DE_CIBLE = String.raw`(?:dans|sur|vers|à|au)\s+`
+const ENVOI_VERS_LA_BRANCHE_PRINCIPALE = new RegExp(
+  `${TETE_DE_PROPOSITION}(?:` +
+    // « intègre-la dans main », « envoie-la sur Azure », « Intégrez-les dans origin/main »
+    String.raw`(?:int[èée]gr(?:e|ez)|envo(?:ie|yez))(?:-(?:la|le|les|y|lui|leur))?(?![\p{L}])${ENTRE_VERBE_ET_CIBLE}\s+${PREPOSITION_DE_CIBLE}` +
+    String.raw`(?:${CIBLE_LOCALE}|${CIBLE_DISTANTE})` +
+    // « Fais rejoindre au dépôt principal la copie… », « Fais-la rejoindre main »
+    String.raw`|fai(?:s|tes)(?:-(?:la|le|les))?\s+rejoindre${ENTRE_VERBE_ET_CIBLE}\s+(?:${PREPOSITION_DE_CIBLE})?` +
+    String.raw`(?:${CIBLE_LOCALE}|${CIBLE_DISTANTE})` +
+    // « Reporte dans le dépôt principal le travail de run-X », « reporte-le sur main »
+    String.raw`|report(?:e|ez)(?:-(?:la|le|les|y|lui|leur))?(?![\p{L}])${ENTRE_VERBE_ET_CIBLE}\s+${PREPOSITION_DE_CIBLE}${CIBLE_LOCALE}` +
+    `)${FIN_DE_CIBLE}`,
+  'iu'
+)
+
+/** Un texte parle-t-il de PUBLIER ? Point d'entree unique : les trois motifs se lisent ensemble. */
 function mentionneUnActeDePublication(texte: string): boolean {
-  return ACTES_DE_PUBLICATION.test(texte) || SIGLE_PULL_REQUEST.test(texte)
+  return (
+    ACTES_DE_PUBLICATION.test(texte) ||
+    SIGLE_PULL_REQUEST.test(texte) ||
+    ENVOI_VERS_LA_BRANCHE_PRINCIPALE.test(texte)
+  )
 }
 
 export const PROMPT_SALVAGE =
@@ -387,7 +438,90 @@ export function estPromptDePublication(
   if (!depotPresent) return false
   if (ordreDeTriDejaJoue(demandeDuTour)) return false
   if (ORDRE_DE_TRI.test(prompt)) return false
-  const charniere = prompt.search(CHARNIERE_DE_SUITE)
-  if (charniere > 0 && !mentionneUnActeDePublication(prompt.slice(0, charniere))) return false
-  return mentionneUnActeDePublication(prompt)
+  const acte = sansApartes(prompt)
+  const charniere = acte.search(CHARNIERE_DE_SUITE)
+  if (charniere > 0 && !demandeUnActeDePublication(acte.slice(0, charniere))) return false
+  return demandeUnActeDePublication(acte)
+}
+
+/*
+ * NOMMER N'EST PAS DEMANDER (conv-1093, 2026-10-22). La suite [62] d'un tour a disparu parce
+ * qu'elle finissait par « aucune vraie publication ne doit être perdue » : une INTERDICTION, lue
+ * comme une demande de publier, puis supprimée. Même famille sur les 3 671 suites réelles des fils :
+ * « le commit bf2aa822 », « les modifications non commitées », « sans commit », « déjà publié »
+ * NOMMENT une chose ou l'excluent — 86 suites classées publication à tort, une seule vraie
+ * publication perdue (« Fais rejoindre au dépôt principal… », attrapée jusque-là par le seul hasard
+ * de « non commitées » plus loin).
+ *
+ * Ne s'applique qu'à la SUITE proposée, jamais à la demande de l'utilisateur : chez lui, ne plus
+ * voir un mot ne pourrait que faire supprimer davantage de suites.
+ *
+ * Un mot de publication cesse de compter :
+ * - derrière une négation ou un état acquis (« sans », « non », « déjà », « jamais », « aucune »,
+ *   « refuse de », « empêche »…) ;
+ * - quand il est un nom DÉSIGNÉ : article défini, démonstratif ou contracté (« du commit »), placé
+ *   derrière une préposition, une subordonnée ou un verbe de lecture et de correction.
+ * Derrière un verbe inconnu, il RESTE un acte : « Repousse ce commit », « Complète la PR 916 ».
+ * Prudence voulue — le garde-fou empêche de publier sans tri ; un nom mal lu en sa faveur coûte
+ * moins qu'une publication qui passe sans lui.
+ */
+const DETERMINANT = String.raw`(?:le|la|les|l['’]|un|une|des|du|de|d['’]|au|aux|ce|cet|cette|ces|son|sa|ses|leurs?|mon|ma|mes|ton|ta|tes|notre|nos|votre|vos)`
+/** Un mot libre entre le déterminant et le nom : « les 43 commits », « aucune vraie publication ». */
+const MOT_LIBRE = String.raw`(?:[\p{L}\p{N}]+\s+)?`
+const NIE_OU_ACQUIS = new RegExp(
+  String.raw`(?<![\p{L}])(?:sans|non|d[ée]j[àa]|jamais|pas encore|aucun(?:e|s|es)?|ne|n['’]|refuse[rz]?|emp[eê]che[rz]?|interdi[rst]e?|[ée]vite[rz]?)\s*(?:${DETERMINANT}\s*)?${MOT_LIBRE}$`,
+  'iu'
+)
+const NOM_DETERMINE = new RegExp(
+  String.raw`(?:^|([\p{L}]+)\s+)(${DETERMINANT})\s*${MOT_LIBRE}$`,
+  'iu'
+)
+const DETERMINANT_INDEFINI = /^(?:un|une)$/u
+const DETERMINANT_CONTRACTE = /^(?:du|des|au|aux)$/u
+const DETERMINANT_POSSESSIF = /^(?:son|sa|ses|leurs?|mon|ma|mes|ton|ta|tes|notre|nos|votre|vos)$/u
+/** Le mot qui précède le déterminant et fait du nom une chose DÉSIGNÉE, pas un acte demandé. */
+const CONTEXTE_QUI_DESIGNE =
+  /^(?:corrige[rz]?|montre[rz]?|reli[st]|relire|li[st]|lire|regarde[rz]?|examine[rz]?|v[ée]rifie[rz]?|analyse[rz]?|compare[rz]?|annule[rz]?|retire[rz]?|r[ée]sume[rz]?|explique[rz]?|di[st]|dire|trouve[rz]?|rejoue[rz]?|teste[rz]?|juge[rz]?|audite[rz]?|mesure[rz]?|inspecte[rz]?|fait|font|contient|contiennent|que|qu|qui|quand|si|o[ùu]|dont|par|sur|dans|depuis|avant|apr[èe]s|entre|pour|vers|contre|avec|selon|pendant|comme)$/iu
+/** « Procède au commit », « passe au merge » : le contracté redevient un acte derrière eux. */
+const VERBE_PORTEUR = /^(?:fai(?:s|tes)|proc[èe]de[rz]?|passe[rz]?)$/iu
+
+function demandeUnActeDePublication(texte: string): boolean {
+  // Déjà borné à l'impératif en tête de proposition : il n'a pas besoin de la lecture du nom.
+  if (ENVOI_VERS_LA_BRANCHE_PRINCIPALE.test(texte)) return true
+  for (const motif of [ACTES_DE_PUBLICATION, SIGLE_PULL_REQUEST]) {
+    for (const trouve of texte.matchAll(new RegExp(motif.source, `${motif.flags}g`))) {
+      if (estUnActe(texte.slice(0, trouve.index ?? 0))) return true
+    }
+  }
+  return false
+}
+
+/** `avant` = le texte qui précède le mot de publication trouvé. */
+function estUnActe(avant: string): boolean {
+  if (NIE_OU_ACQUIS.test(avant)) return false
+  const nom = NOM_DETERMINE.exec(avant)
+  if (!nom) return true
+  const mot = nom[1] ?? ''
+  const determinant = nom[2].toLowerCase()
+  if (DETERMINANT_INDEFINI.test(determinant)) return true
+  if (DETERMINANT_CONTRACTE.test(determinant)) return VERBE_PORTEUR.test(mot)
+  // « dans son propre commit » demande un commit ; « dans le commit 424dd2b5 » en désigne un.
+  if (DETERMINANT_POSSESSIF.test(determinant) && /^dans$/iu.test(mot)) return true
+  return !CONTEXTE_QUI_DESIGNE.test(mot)
+}
+
+/*
+ * UN APARTÉ N'EST PAS L'ACTE (conv-1093, 2026-10-22). Une parenthèse précise ou rappelle — « le cas
+ * 973b70e2 (test de style publié sans son CSS) », « (commit 6a690851) » — elle ne porte jamais ce
+ * que la suite demande de faire. Elle sort donc de la lecture du PROMPT, pas de celle de la demande
+ * de l'utilisateur : là, retirer un mot ne pourrait que faire supprimer davantage de suites.
+ */
+function sansApartes(texte: string): string {
+  let avant: string
+  let apres = texte
+  do {
+    avant = apres
+    apres = avant.replace(/\([^()]*\)/gu, ' ')
+  } while (apres !== avant)
+  return apres
 }

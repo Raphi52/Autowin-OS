@@ -5,7 +5,8 @@
  * bas du fil. La carte montre ce que le défilement ne montre pas : le CHEMIN entier du fil, une
  * étape par demande, et ce que chacune a PROUVÉ.
  *
- * La couleur suit la PREUVE, jamais l'impression : vert seulement si une vérification (`verify`) ou
+ * La couleur suit la PREUVE, jamais l'impression : vert seulement si une vérification (`verify`), un
+ * test joué par l'agent dans son terminal (code de sortie gardé par le tour, `testsDuTerminal`) ou
  * une orchestration a passé ; un tour fini sans aucune vérification reste « sans preuve »
  * (auto-déclaré). Les issues sont lues par `verifyOutcomeSummary`/`orchestrateOutcomeSummary`, les
  * mêmes que les pastilles du fil : la carte ne peut pas dire autre chose que le message.
@@ -43,6 +44,12 @@ export interface EtapeCarte {
   cible: number
   messageId?: string
   titre: string
+  /**
+   * Le titre ENTIER pour la fiche (« Tout ensemble », conv-1088 : la fiche promet le titre entier) ;
+   * `titre`, coupé à 120 caractères (`MAX_TITRE`), reste celui des quais. Borné quand même : une première
+   * ligne collée de plusieurs pages ne doit pas noyer la fiche.
+   */
+  titreEntier: string
   statut: StatutEtape
   /** Le constat qui justifie la couleur : « npm test → exit 0 », « tour arrêté avant la fin »… */
   constat: string
@@ -66,11 +73,21 @@ export interface Carte {
   prouvees: number
   /** Étapes réelles, hors étape à venir. */
   total: number
+  /**
+   * LE BILAN de l'en-tête (« Tout ensemble », /draft conv-1088, 2026-10-22) : le compte de chaque
+   * couleur et le coût CONNU du fil. Le coût est la somme des seuls coûts reçus en direct : absent
+   * si aucun n'est connu, jamais un zéro qui ferait croire à un fil gratuit.
+   */
+  refusees: number
+  sansPreuve: number
+  enCours: number
+  coutConnuUsd?: number
 }
 
 const MAX_TITRE = 120
+const MAX_TITRE_ENTIER = 600
 
-function nettoyer(ligne: string): string {
+function nettoyer(ligne: string, max = MAX_TITRE): string {
   const nue = ligne
     .replace(/\*\*/g, '')
     .replace(/`/g, '')
@@ -78,11 +95,11 @@ function nettoyer(ligne: string): string {
     .replace(/^\s*#{1,6}\s+/u, '')
     .replace(/\s+/gu, ' ')
     .trim()
-  return nue.length > MAX_TITRE ? `${nue.slice(0, MAX_TITRE - 1)}…` : nue
+  return nue.length > max ? `${nue.slice(0, max - 1)}…` : nue
 }
 
-function premiereLigne(texte: string): string {
-  return nettoyer(texte.split(/\r?\n/u).find((ligne) => ligne.trim() !== '') ?? '')
+function premiereLigne(texte: string, max = MAX_TITRE): string {
+  return nettoyer(texte.split(/\r?\n/u).find((ligne) => ligne.trim() !== '') ?? '', max)
 }
 
 function texteDe(message: AsstMsg): string {
@@ -109,20 +126,58 @@ function estCompactage(message: Msg): boolean {
 }
 
 /** La première ligne de « Recommandé » de la dernière réponse FINIE avant `rang`. */
-function recommandeAvant(fil: readonly Msg[], rang: number): string | null {
+function recommandeAvant(fil: readonly Msg[], rang: number, max = MAX_TITRE): string | null {
   for (let i = rang - 1; i >= 0; i -= 1) {
     const message = fil[i]
     if (message.role !== 'assistant' || !estFini(message as AsstMsg)) continue
     const ligne = lignesDeRubrique(texteDe(message as AsstMsg), 'Recommandé', 'exacte')
-      .map(nettoyer)
+      .map((ligne) => nettoyer(ligne, max))
       .find((texte) => texte !== '' && texte !== '---')
     return ligne ?? null
   }
   return null
 }
 
+interface Constat {
+  cle: string
+  issue: OutcomeSummary
+  at?: number
+}
+
 /**
- * La DERNIÈRE issue de chaque vérification DISTINCTE (une commande `verify` = une clé, toutes les
+ * Les vérifications d'UNE réponse, dans l'ordre où elles ont eu lieu : ses actions `verify` et
+ * `orchestrate`, puis les tests joués dans son terminal (conv-1059), rangés ensemble par heure.
+ * Une commande a la MÊME clé d'où qu'elle vienne : `npm test` rouge par `verify` puis vert au
+ * terminal est la même boucle.
+ */
+function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
+  const constats: Constat[] = []
+  for (const part of reponse.parts ?? []) {
+    if (part.kind !== 'action') continue
+    const issue = verifyOutcomeSummary(part) ?? orchestrateOutcomeSummary(part)
+    // `refused` : rien n'a été vérifié (vérification impossible, run réutilisé) — ni preuve ni échec.
+    if (!issue || issue.state === 'refused') continue
+    const commande = (part.data as { command?: unknown } | undefined)?.command
+    const cle = part.name === 'verify' ? `commande:${String(commande ?? '')}` : part.name
+    constats.push({ cle, issue, ...(part.at === undefined ? {} : { at: part.at }) })
+  }
+  for (const test of reponse.testsDuTerminal ?? [])
+    constats.push({
+      cle: `commande:${test.commande}`,
+      issue: {
+        label: `${test.commande} → exit ${test.codeDeSortie}`,
+        state: test.codeDeSortie === 0 ? 'ok' : 'failed'
+      },
+      ...(test.at === undefined ? {} : { at: test.at })
+    })
+  // Tri STABLE : sans heure (tours anciens), l'ordre d'écriture est gardé.
+  return constats.sort(
+    (a, b) => (a.at ?? Number.NEGATIVE_INFINITY) - (b.at ?? Number.NEGATIVE_INFINITY)
+  )
+}
+
+/**
+ * La DERNIÈRE issue de chaque vérification DISTINCTE (une commande = une clé, toutes les
  * orchestrations = une clé). Une même commande rouge puis verte est la boucle normale : verte. Deux
  * commandes différentes ne se rachètent pas l'une l'autre (conv-76 : `typecheck exit 1` puis
  * `npm test exit 0` ne prouvent PAS l'étape).
@@ -130,13 +185,7 @@ function recommandeAvant(fil: readonly Msg[], rang: number): string | null {
 function issuesDuSegment(reponses: readonly AsstMsg[]): OutcomeSummary[] {
   const issues = new Map<string, OutcomeSummary>()
   for (const reponse of reponses)
-    for (const part of reponse.parts ?? []) {
-      if (part.kind !== 'action') continue
-      const issue = verifyOutcomeSummary(part) ?? orchestrateOutcomeSummary(part)
-      // `refused` : rien n'a été vérifié (vérification impossible, run réutilisé) — ni preuve ni échec.
-      if (!issue || issue.state === 'refused') continue
-      const commande = (part.data as { command?: unknown } | undefined)?.command
-      const cle = part.name === 'verify' ? `verify:${String(commande ?? '')}` : part.name
+    for (const { cle, issue } of constatsDeLaReponse(reponse)) {
       issues.delete(cle)
       issues.set(cle, issue)
     }
@@ -173,6 +222,28 @@ function statutDuSegment(
   return { statut: 'sans-preuve', constat: 'fini sans vérification' }
 }
 
+export type Quai = 'haut' | 'bas'
+
+/**
+ * LES QUAIS ALTERNÉS (« Tout ensemble », /draft conv-1088, 2026-10-22) : le titre d'une station se
+ * pose AU-DESSUS de la ligne, celui de la suivante EN DESSOUS, et ainsi de suite. Chaque titre
+ * s'étale ainsi sur sa voisine, dont le quai est de l'autre côté : presque deux fois plus de place,
+ * contre « 5 titres sur 6 coupés » mesurés sur la carte d'origine (captures de conv-1059).
+ *
+ * Les étapes d'avant le compactage n'ont pas de quai (`null`) : tassées, l'agent ne les relit plus.
+ * La station du repère ▼ prend toujours son quai EN BAS : la flèche se pose au-dessus de son point.
+ */
+export function quaisDe(etapes: readonly EtapeCarte[], repere: string | null): (Quai | null)[] {
+  const titrees = etapes.flatMap((etape, rang) => (etape.horsMemoire ? [] : [rang]))
+  const rangDuRepere = titrees.findIndex((rang) => etapes[rang].cle === repere)
+  const decalage = rangDuRepere >= 0 ? (rangDuRepere + 1) % 2 : 0
+  const quais: (Quai | null)[] = etapes.map(() => null)
+  titrees.forEach((rang, k) => {
+    quais[rang] = (k + decalage) % 2 === 0 ? 'haut' : 'bas'
+  })
+  return quais
+}
+
 export function carteDuFil(entree: {
   fil: readonly Msg[]
   /** Repère « non lu » lu AVANT d'ouvrir le fil (`conversation-seen.ts`) ; absent = fil déjà vu. */
@@ -198,14 +269,16 @@ export function carteDuFil(entree: {
     const auBoutDuFil = k === rangs.length - 1
     const message = fil[rang]
     const lecture = lectureDeLaDemande(fil, rang)
-    const titre = estCompactage(message)
-      ? 'Compactage du fil'
-      : lecture?.genre === 'accord'
-        ? (() => {
-            const suite = recommandeAvant(fil, rang)
-            return suite ? `Suite : ${suite}` : 'Suite acceptée'
-          })()
-        : premiereLigne(lecture?.texte ?? '')
+    const titreDe = (max: number): string =>
+      estCompactage(message)
+        ? 'Compactage du fil'
+        : lecture?.genre === 'accord'
+          ? (() => {
+              const suite = recommandeAvant(fil, rang, max)
+              return suite ? `Suite : ${suite}` : 'Suite acceptée'
+            })()
+          : premiereLigne(lecture?.texte ?? '', max)
+    const titre = titreDe(MAX_TITRE)
     const lu = statutDuSegment(reponses, auBoutDuFil)
     const statut = lu.statut
     let constat = lu.constat
@@ -224,6 +297,7 @@ export function carteDuFil(entree: {
       cible: rang,
       ...(message.messageId ? { messageId: message.messageId } : {}),
       titre: titre || 'Demande',
+      titreEntier: titreDe(MAX_TITRE_ENTIER) || 'Demande',
       statut,
       constat,
       ...(instants.length > 0 ? { debut: instants[0] } : {}),
@@ -257,12 +331,14 @@ export function carteDuFil(entree: {
     dernierMessage?.role === 'assistant'
   ) {
     const suite = recommandeAvant(fil, fil.length)
+    const suiteEntiere = recommandeAvant(fil, fil.length, MAX_TITRE_ENTIER)
     if (suite && !/aucune suite/iu.test(suite))
       etapes.push({
         cle: 'a-venir',
         rang: null,
         cible: fil.length - 1,
         titre: suite,
+        titreEntier: suiteEntiere ?? suite,
         statut: 'a-venir',
         constat: 'proposé par l’agent — rien n’est lancé',
         fichiers: [],
@@ -280,10 +356,21 @@ export function carteDuFil(entree: {
       ? (vues.at(-1)?.cle ?? null)
       : null
 
+  const compter = (statut: StatutEtape): number =>
+    reelles.filter((etape) => etape.statut === statut).length
+  const couts = reelles
+    .map((etape) => etape.coutUsd)
+    .filter((cout): cout is number => cout !== undefined)
   return {
     etapes,
     tuEtaisLa,
-    prouvees: reelles.filter((etape) => etape.statut === 'prouve').length,
-    total: reelles.length
+    prouvees: compter('prouve'),
+    total: reelles.length,
+    refusees: compter('refuse'),
+    sansPreuve: compter('sans-preuve'),
+    enCours: compter('en-cours'),
+    ...(couts.length > 0
+      ? { coutConnuUsd: Math.round(couts.reduce((a, b) => a + b, 0) * 10_000) / 10_000 }
+      : {})
   }
 }

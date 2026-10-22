@@ -9,6 +9,9 @@ export const APP_DESTINATIONS = [
   // Bureaux cachés (conv-951, 2026-10-16) : « une view dédiée pour gérer tous mes Hdesk ».
   { id: 'hdesk', label: 'Bureaux cachés', icon: '🖥️' },
   { id: 'tickets', label: 'Tickets', icon: '🎫' },
+  // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet. Placée
+  // APRÈS Tickets pour ne décaler aucun raccourci Ctrl+1…9.
+  { id: 'besoins', label: 'Besoins', icon: '🗺️' },
   { id: 'tests', label: 'Tests', icon: '🧪' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ] as const
@@ -115,6 +118,14 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   'bureaux caches': 'hdesk',
   'bureau-cache': 'hdesk',
   'bureaux-caches': 'hdesk',
+  // La carte des besoins : l'utilisateur l'a nommée « map des besoins », un agent dit aussi « demandes ».
+  besoin: 'besoins',
+  'carte des besoins': 'besoins',
+  'carte-des-besoins': 'besoins',
+  'map des besoins': 'besoins',
+  needs: 'besoins',
+  demandes: 'besoins',
+  backlog: 'besoins',
   // La vue Tests est multi-projets : un agent l'adresse aussi par « suite » ou « vitest ».
   test: 'tests',
   suite: 'tests',

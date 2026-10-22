@@ -9,10 +9,23 @@
  *
  * Un cinquième état existe, « sans preuve » : un tour fini sans aucune vérification n'est pas vert.
  * Le montrer vert aurait fait de la carte une déclaration de succès, pas un constat.
+ *
+ * « TOUT ENSEMBLE » (/draft conv-1088, 2026-10-22, choisi par l'utilisateur parmi 6 mélanges) :
+ * dépliée, la carte porte un BILAN en tête (barre de proportions, un compte par couleur, coût connu),
+ * le rail prend la couleur de chaque étape, le numéro vit dans le point, les titres se posent en
+ * QUAIS ALTERNÉS (dessus / dessous), la ligne se remplit à l'arrivée, et le CLIC ouvre une FICHE
+ * sous la ligne (constat, fichiers, mémoire, coût, « aller au message ») au lieu d'y emmener direct.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Msg, AsstMsg } from './chat-view-types'
-import { carteDuFil, LIBELLES_STATUT, type EtapeCarte } from './carte-du-fil'
+import {
+  carteDuFil,
+  quaisDe,
+  LIBELLES_STATUT,
+  type Carte,
+  type EtapeCarte,
+  type StatutEtape
+} from './carte-du-fil'
 import { resumeDAbsence, type ResumeAbsence } from './carnet-du-fil'
 import './CarteDuFil.css'
 
@@ -69,8 +82,42 @@ function descriptionDe(etape: EtapeCarte, numero: number): string {
       `${etape.fichiers.length} fichier${etape.fichiers.length > 1 ? 's' : ''} touché${etape.fichiers.length > 1 ? 's' : ''}`
     )
   if (etape.coutUsd !== undefined) morceaux.push(`coût connu ${etape.coutUsd.toFixed(2)} $`)
-  morceaux.push('clic : aller au message')
+  morceaux.push('clic : ouvrir sa fiche')
   return morceaux.join(' · ')
+}
+
+/** « 2 prouvées · 1 refusée · 2 sans preuve · 1 en cours » : un compte par couleur présente. */
+function Bilan({ carte }: { carte: Carte }): React.JSX.Element {
+  const morceaux: { statut: StatutEtape; n: number; libelle: string }[] = [
+    { statut: 'prouve', n: carte.prouvees, libelle: `prouvée${carte.prouvees > 1 ? 's' : ''}` },
+    { statut: 'refuse', n: carte.refusees, libelle: `refusée${carte.refusees > 1 ? 's' : ''}` },
+    { statut: 'sans-preuve', n: carte.sansPreuve, libelle: 'sans preuve' },
+    { statut: 'en-cours', n: carte.enCours, libelle: 'en cours' }
+  ]
+  // « prouvées » reste même à zéro : « 0 prouvée » est le constat le plus utile de tous.
+  const presents = morceaux.filter((m) => m.n > 0 || m.statut === 'prouve')
+  return (
+    <span className="carte-compte" data-testid="carte-compte">
+      {presents.map((m, k) => (
+        <React.Fragment key={m.statut}>
+          {k > 0 && ' · '}
+          <b data-statut={m.statut}>{m.n}</b> {m.libelle}
+        </React.Fragment>
+      ))}
+    </span>
+  )
+}
+
+/** La barre de proportions de l'en-tête : une case par étape réelle, rangées par couleur. */
+const ORDRE_DE_LA_BARRE: StatutEtape[] = ['prouve', 'refuse', 'sans-preuve', 'en-cours']
+
+function memoireDe(etape: EtapeCarte, oubliees: number): string | null {
+  if (etape.compactage)
+    return oubliees > 0
+      ? `◆ compactage ici — l’agent ne relit plus ${oubliees > 1 ? `les étapes 1 – ${oubliees}` : 'l’étape 1'}`
+      : '◆ compactage ici — l’agent repart de ce résumé'
+  if (etape.horsMemoire) return 'avant le compactage — l’agent ne relit plus cette étape'
+  return null
 }
 
 export function CarteDuFil({
@@ -88,7 +135,9 @@ export function CarteDuFil({
 }): React.JSX.Element | null {
   const [traces, setTraces] = useState<TraceDeFichier[]>([])
   const [ouverte, setOuverte] = useState(lireOuverte)
-  const [survol, setSurvol] = useState<string | null>(null)
+  // L'étape dont la FICHE est ouverte (« Tout ensemble », conv-1088) : le clic ouvre la fiche, le
+  // bouton « aller au message » de la fiche ramène au message. Le survol ne détaille plus rien.
+  const [choisie, setChoisie] = useState<string | null>(null)
   const ligneRef = useRef<HTMLOListElement | null>(null)
   const ouverteParLeRepere = useRef(false)
 
@@ -119,6 +168,7 @@ export function CarteDuFil({
     () => resumeDAbsence({ fil, vueA: vueAvantOuverture, traces }),
     [fil, vueAvantOuverture, traces]
   )
+  const quais = useMemo(() => quaisDe(carte.etapes, carte.tuEtaisLa), [carte])
 
   // Un fil non lu s'ouvre sur le repère : une fois, sans toucher au choix enregistré.
   useEffect(() => {
@@ -149,14 +199,34 @@ export function CarteDuFil({
     ecrireOuverte(suivante)
   }
 
-  const etapeSurvolee = carte.etapes.find((etape) => etape.cle === survol)
+  // Repliée, un clic sur un point déplie la carte sur sa fiche — sans changer le choix enregistré.
+  function choisir(cle: string): void {
+    if (!ouverte) {
+      setOuverte(true)
+      setChoisie(cle)
+      return
+    }
+    setChoisie((avant) => (avant === cle ? null : cle))
+  }
+
+  const etapeChoisie = carte.etapes.find((etape) => etape.cle === choisie)
   const numeroDe = (etape: EtapeCarte): number => carte.etapes.indexOf(etape) + 1
+  const oubliees = carte.etapes.filter((etape) => etape.horsMemoire).length
+  const reelles = carte.etapes.filter((etape) => etape.statut !== 'a-venir')
+  const cases = ORDRE_DE_LA_BARRE.flatMap((statut) =>
+    reelles.filter((etape) => etape.statut === statut)
+  )
+  const premiereTitree = quais.findIndex((quai) => quai !== null)
+  const memoire = etapeChoisie ? memoireDe(etapeChoisie, oubliees) : null
 
   return (
     <section
       className={`carte-du-fil${ouverte ? ' is-ouverte' : ''}`}
       data-origine="carte-du-fil"
       aria-label="Carte du fil"
+      onKeyDown={(evenement) => {
+        if (evenement.key === 'Escape' && choisie) setChoisie(null)
+      }}
     >
       <div className="carte-entete">
         <button
@@ -171,21 +241,61 @@ export function CarteDuFil({
           </span>
           <span className="carte-titre">Carte du fil</span>
         </button>
-        <span className="carte-compte" data-testid="carte-compte">
-          <b>
-            {carte.prouvees} / {carte.total}
-          </b>{' '}
-          prouvée{carte.prouvees > 1 ? 's' : ''}
-        </span>
+        {ouverte ? (
+          <>
+            <span
+              className="carte-barre"
+              data-dense={cases.length > 16 ? 'oui' : undefined}
+              aria-hidden="true"
+            >
+              {cases.map((etape) => (
+                <i key={etape.cle} data-statut={etape.statut} />
+              ))}
+            </span>
+            <Bilan carte={carte} />
+            {carte.coutConnuUsd !== undefined && (
+              <span className="carte-cout" data-testid="carte-cout">
+                coût connu <b>{carte.coutConnuUsd.toFixed(2)} $</b>
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="carte-compte" data-testid="carte-compte">
+            <b data-statut="prouve">
+              {carte.prouvees} / {carte.total}
+            </b>{' '}
+            prouvée{carte.prouvees > 1 ? 's' : ''}
+          </span>
+        )}
       </div>
-      <ol
-        ref={ligneRef}
-        className={`carte-ligne${carte.tuEtaisLa ? ' avec-repere' : ''}`}
-        onMouseLeave={() => setSurvol(null)}
-      >
+      <ol ref={ligneRef} className={`carte-ligne${carte.tuEtaisLa ? ' avec-repere' : ''}`}>
         {carte.etapes.map((etape, rang) => {
           const repere = etape.cle === carte.tuEtaisLa
           const description = descriptionDe(etape, rang + 1)
+          const quai = quais[rang]
+          const bord =
+            quai !== null && rang === premiereTitree && rang <= 1
+              ? 'debut'
+              : quai !== null && rang === nombre - 1
+                ? 'fin'
+                : undefined
+          const fleche = (
+            <span
+              className="carte-repere"
+              data-testid={repere ? 'carte-repere' : undefined}
+              aria-hidden={!repere}
+              title={repere && absence ? `Depuis ton passage : ${phraseAbsence(absence)}` : ''}
+            >
+              {/* La flèche seule : le texte « tu étais là » encombrait la ligne (conv-1059). */}
+              {repere ? '▼' : ''}
+            </span>
+          )
+          const surLeQuai = (
+            <span className="carte-quai" aria-hidden="true">
+              <b>{etape.titre}</b>
+              <small>{libelleCourt(etape)}</small>
+            </span>
+          )
           return (
             <li
               key={etape.cle}
@@ -196,81 +306,110 @@ export function CarteDuFil({
               data-hors-memoire={etape.horsMemoire ? 'oui' : undefined}
               data-compactage={etape.compactage ? 'oui' : undefined}
               data-question={etape.question ? 'oui' : undefined}
+              data-quai={ouverte && quai ? quai : undefined}
+              data-bord={ouverte ? bord : undefined}
+              data-choisie={ouverte && etape.cle === choisie ? 'oui' : undefined}
+              style={{ '--carte-rang': Math.min(rang, 15) } as CSSProperties}
             >
-              {carte.tuEtaisLa && (
-                <span
-                  className="carte-repere"
-                  data-testid={repere ? 'carte-repere' : undefined}
-                  aria-hidden={!repere}
-                  title={repere && absence ? `Depuis ton passage : ${phraseAbsence(absence)}` : ''}
-                >
-                  {repere ? '▼ tu étais là' : ''}
-                </span>
+              {ouverte ? (
+                <span className="carte-haut">{quai === 'haut' ? surLeQuai : repere && fleche}</span>
+              ) : (
+                carte.tuEtaisLa && fleche
               )}
               <span className="carte-rail">
                 <i className="carte-troncon is-avant" />
                 <button
                   type="button"
                   className="carte-point"
+                  aria-expanded={ouverte ? etape.cle === choisie : undefined}
                   aria-label={
                     repere && absence
-                      ? `${description} · tu étais là ; depuis : ${phraseAbsence(absence)}`
+                      ? `${description} · depuis ton passage : ${phraseAbsence(absence)}`
                       : description
                   }
-                  onMouseEnter={() => setSurvol(etape.cle)}
-                  onFocus={() => setSurvol(etape.cle)}
-                  onBlur={() => setSurvol(null)}
-                  onClick={() => onAller(etape.cible)}
-                />
+                  onClick={() => choisir(etape.cle)}
+                >
+                  {ouverte && <b>{etape.statut === 'a-venir' ? '→' : rang + 1}</b>}
+                </button>
                 <i className="carte-troncon is-apres" />
               </span>
-              {ouverte && (
-                <span className="carte-libelle" aria-hidden="true">
-                  <b>{etape.titre}</b>
-                  <small>{libelleCourt(etape)}</small>
-                </span>
-              )}
+              {ouverte && <span className="carte-bas">{quai === 'bas' && surLeQuai}</span>}
             </li>
           )
         })}
       </ol>
-      {etapeSurvolee && (
+      {ouverte && etapeChoisie && (
         <div
-          className="carte-detail"
-          data-testid="carte-detail"
-          data-statut={etapeSurvolee.statut}
-          role="status"
+          className="carte-fiche"
+          data-testid="carte-fiche"
+          data-statut={etapeChoisie.statut}
+          role="region"
+          aria-label={`Fiche de l’étape : ${etapeChoisie.titre}`}
         >
-          <b className="carte-detail-titre">
-            {etapeSurvolee.statut === 'a-venir' ? 'À venir' : `Étape ${numeroDe(etapeSurvolee)}`} ·{' '}
-            {etapeSurvolee.titre}
-          </b>
-          <span className="carte-detail-constat">
-            {LIBELLES_STATUT[etapeSurvolee.statut]} — {etapeSurvolee.constat}
-          </span>
-          {etapeSurvolee.horsMemoire && (
-            <span className="carte-detail-oubli">
-              l’agent ne relit plus cette étape depuis le compactage
+          <div className="carte-fiche-tete">
+            <span className="carte-fiche-no">
+              {etapeChoisie.statut === 'a-venir' ? '→' : numeroDe(etapeChoisie)}
             </span>
-          )}
-          {etapeSurvolee.cle === carte.tuEtaisLa && absence && (
-            <span className="carte-detail-absence">
-              tu étais là · depuis : {phraseAbsence(absence)}
-            </span>
-          )}
-          {(etapeSurvolee.fichiers.length > 0 || etapeSurvolee.coutUsd !== undefined) && (
-            <span className="carte-detail-puces">
-              {etapeSurvolee.fichiers.slice(0, 4).map((chemin) => (
-                <code key={chemin}>{chemin.split(/[\\/]/u).at(-1)}</code>
+            <b className="carte-fiche-titre">{etapeChoisie.titreEntier}</b>
+            <b className="carte-fiche-statut">{libelleCourt(etapeChoisie)}</b>
+            <button
+              type="button"
+              className="carte-fiche-fermer"
+              aria-label="Fermer la fiche"
+              title="Fermer la fiche (Échap)"
+              onClick={() => setChoisie(null)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="carte-fiche-ligne">
+            <span className="carte-fiche-cle">constat</span>
+            <code className="carte-fiche-constat">
+              {LIBELLES_STATUT[etapeChoisie.statut]} — {etapeChoisie.constat}
+            </code>
+          </div>
+          {etapeChoisie.fichiers.length > 0 && (
+            <div className="carte-fiche-ligne">
+              <span className="carte-fiche-cle">fichiers</span>
+              {etapeChoisie.fichiers.slice(0, 4).map((chemin) => (
+                <code key={chemin} title={chemin}>
+                  {chemin.split(/[\\/]/u).at(-1)}
+                </code>
               ))}
-              {etapeSurvolee.fichiers.length > 4 && (
-                <span>+{etapeSurvolee.fichiers.length - 4}</span>
+              {etapeChoisie.fichiers.length > 4 && (
+                <span className="carte-fiche-plus">+{etapeChoisie.fichiers.length - 4}</span>
               )}
-              {etapeSurvolee.coutUsd !== undefined && (
-                <span className="carte-detail-cout">{etapeSurvolee.coutUsd.toFixed(2)} $</span>
-              )}
-            </span>
+            </div>
           )}
+          {memoire && (
+            <div className="carte-fiche-ligne">
+              <span className="carte-fiche-cle">mémoire</span>
+              <span className="carte-fiche-memoire">{memoire}</span>
+            </div>
+          )}
+          {etapeChoisie.cle === carte.tuEtaisLa && absence && (
+            <div className="carte-fiche-ligne">
+              <span className="carte-fiche-cle">passage</span>
+              <span className="carte-fiche-absence">
+                depuis ton passage : {phraseAbsence(absence)}
+              </span>
+            </div>
+          )}
+          <div className="carte-fiche-ligne carte-fiche-pied">
+            {etapeChoisie.coutUsd !== undefined && (
+              <>
+                <span className="carte-fiche-cle">coût</span>
+                <b className="carte-fiche-cout">{etapeChoisie.coutUsd.toFixed(2)} $</b>
+              </>
+            )}
+            <button
+              type="button"
+              className="carte-fiche-aller"
+              onClick={() => onAller(etapeChoisie.cible)}
+            >
+              aller au message ↓
+            </button>
+          </div>
         </div>
       )}
     </section>

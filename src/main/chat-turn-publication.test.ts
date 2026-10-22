@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -655,11 +656,16 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
       verifierAvantPublication: verifier
     })
 
-    // La vérification porte sur les fichiers QUE le tour allait publier, dans le vrai dépôt (chemin
-    // RÉEL : sous Windows, le dossier temporaire arrive en nom court, git le rend en nom long).
+    // La vérification porte sur les fichiers QUE le tour allait publier, dans une copie propre de ce
+    // qui part — jamais dans l'arbre partagé (973b70e2, voir le test suivant).
     expect(verifier).toHaveBeenCalledTimes(1)
-    const [depotVerifie, fichiersVerifies] = verifier.mock.calls[0] as unknown as [string, string[]]
-    expect(realpathSync.native(depotVerifie)).toBe(realpathSync.native(repo))
+    const [racineVerifiee, fichiersVerifies] = verifier.mock.calls[0] as unknown as [
+      string,
+      string[]
+    ]
+    expect(racineVerifiee).not.toBe(realpathSync.native(repo))
+    // Refermée après la vérification, rouge compris.
+    expect(existsSync(racineVerifiee)).toBe(false)
     expect(fichiersVerifies).toEqual(['mine.ts'])
     expect(report).toMatchObject({
       project: { status: 'skipped', reason: 'tests-rouges' },
@@ -669,6 +675,96 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
     expect(await enAttente(repo)).toContain('mine.ts')
+  })
+
+  /*
+   * Vécu le 2026-10-22 (salvage conv-1091) : `973b70e2` (conv-1078) a publié un test de style sans
+   * le CSS qu'il lit, et `b86a144e` (conv-1087) du code sans son test. Les fichiers restés dehors
+   * avaient aussi été modifiés par d'autres fils. Rejoués dans l'arbre partagé, où ils étaient
+   * encore là, les tests étaient verts. Ils doivent juger CE QUI PART, comme le typage.
+   */
+  it('les tests jugent CE QUI PART : dernier commit + fichiers publiés, jamais l’arbre partagé (973b70e2)', async () => {
+    const { repo, remote } = await depot()
+    // Un autre fil a modifié `partage.ts` avant le tour : le tour y touche aussi, il reste en attente.
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 1\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 2\n')
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+    const vu: { racine: string; mine: string; partage: string }[] = []
+    // Fins de ligne ramenées à LF : sans `.gitattributes`, un `core.autocrlf=true` du poste extrait
+    // la copie en CRLF — sans rapport avec ce qu'on mesure ici (quel CONTENU voient les tests).
+    const lire = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
+    const verifier = vi.fn(async (racine: string) => {
+      vu.push({
+        racine: realpathSync.native(racine),
+        mine: lire(join(racine, 'mine.ts')),
+        partage: lire(join(racine, 'partage.ts'))
+      })
+      return { statut: 'vert' as const, commande: 'vitest related mine.ts --run', testsJoues: 1 }
+    })
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        }),
+        trace(repo, { paths: ['partage.ts'] })
+      ],
+      verifierAvantPublication: verifier
+    })
+
+    expect(vu).toHaveLength(1)
+    expect(vu[0].racine).not.toBe(realpathSync.native(repo))
+    expect(vu[0].mine).toBe('export const a = 1\n')
+    // Le dernier commit, pas l'arbre partagé : `partage.ts` ne part pas, les tests ne le voient pas.
+    expect(vu[0].partage).toBe('export const partage = 0\n')
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      exclus: [{ path: 'partage.ts', motif: 'modifie-avant-le-tour' }],
+      verification: { statut: 'vert' }
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+    // La copie est refermée et désinscrite ; l'arbre partagé n'a pas bougé.
+    expect(existsSync(vu[0].racine)).toBe(false)
+    const copies = (await run('git', ['worktree', 'list', '--porcelain'], { cwd: repo })).stdout
+    expect(copies.match(/^worktree /gm)).toHaveLength(1)
+    expect(readFileSync(join(repo, 'partage.ts'), 'utf8')).toBe('export const partage = 2\n')
+  })
+
+  it('copie propre impossible : les tests ne sont pas joués, la publication part et le rapport dit pourquoi', async () => {
+    const { remote, debut, traces } = await tourQuiModifieMine()
+    const verifier = vi.fn()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      verifierAvantPublication: verifier,
+      ouvrirCopie: async () => {
+        throw new Error('worktree add refusé')
+      }
+    })
+
+    expect(verifier).not.toHaveBeenCalled()
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      verification: {
+        statut: 'non-verifie',
+        raison: expect.stringContaining(
+          'copie propre du dernier commit impossible : worktree add refusé'
+        )
+      }
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
   })
 
   // Vécu le 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant a cassé la

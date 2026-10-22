@@ -72,6 +72,22 @@ describe('outilsFaussementAbsents — la précision avant la couverture', () => 
     expect(outilsFaussementAbsents("`edit_file` n'existe pas", [])).toEqual([])
   })
 
+  it('NE déclenche PAS sur le nom commun « un run » (phrase réelle, conv-1092)', () => {
+    // Texte exact relu dans le journal : apostrophe DROITE (la typographique ne déclenchait rien).
+    const texte = "Le déclencheur « une question avant un run payant ambigu » n'existe pas encore."
+    expect(outilsFaussementAbsents(texte, [...CATALOGUE, 'run'])).toEqual([])
+    expect(outilsFaussementAbsents("le run n'est pas disponible", [...CATALOGUE, 'run'])).toEqual(
+      []
+    )
+  })
+
+  it('attrape toujours l’outil cité, même après un déterminant (jumeau du cas précédent)', () => {
+    const avecRun = [...CATALOGUE, 'run']
+    expect(outilsFaussementAbsents("le `run` n'est pas disponible", avecRun)).toEqual(['run'])
+    expect(outilsFaussementAbsents("run n'est pas disponible ici", avecRun)).toEqual(['run'])
+    expect(outilsFaussementAbsents("l'outil `run` n'existe pas", avecRun)).toEqual(['run'])
+  })
+
   it('ne signale un outil qu’une fois, même répété', () => {
     const texte = "`edit_file` n'existe pas. Je répète : `edit_file` non disponible."
     expect(outilsFaussementAbsents(texte, CATALOGUE)).toEqual(['edit_file'])
@@ -150,6 +166,52 @@ describe('conversationPretendueInaccessible — la précision avant la couvertur
         AVEC_LECTURE
       )
     ).toBeNull()
+  })
+
+  it('ne déclenche PAS sur une ligne de journal à venir (phrase RÉELLE de conv-1089, 2026-10-22)', () => {
+    // Bloc exact du tour 2425d493 : la négation parle d'une ligne de journal pas encore écrite ; le seul
+    // « conversation » du texte est la clé JSON `conversationId`, trois puces plus haut.
+    const texte =
+      '**Point 1 — `besoins.jsonl` dans l\'app réelle**\n- L\'app a redémarré à 18:39:05, sur un processus principal construit à 18:39:04 qui contient le journal.\n- Au début de ce tour, le fichier n\'existait pas encore. Aucun tour ne s\'était terminé normalement : les reprises de conv-1056 et conv-1074 ont échoué (« copie durable absente »), et celui-ci tournait encore.\n- Pour le prouver sans attendre, j\'ai envoyé une question simple dans un fil de test, **conv-1095**. Sa ligne est arrivée **8 s** après l\'envoi (email masqué) :\n  `{"conversationId":"conv-1095","messageId":"message-conv-1095-1","demandeur":{"nom":"Raph","email":"(masqué)","dossier":"D:\\\\AutoWinOS"},"besoin":{"nature":"aucun"}}`\n- **Demandeur non nul**, et **besoin non nul** : `aucun` est le bon classement pour une question.\n- ⚠️ **Pas encore vérifié** : la ligne de conv-1089. Elle s\'écrit à la fin de ce tour-ci, que je ne peux pas relire de l\'intérieur.'
+    expect(conversationPretendueInaccessible(texte, AVEC_LECTURE)).toBeNull()
+  })
+
+  it('attrape toujours la négation quand la MÊME phrase parle d’une conversation ou d’un tour passé', () => {
+    expect(
+      conversationPretendueInaccessible(
+        'Résumé fait. Je ne peux pas relire la conversation conv-1291, elle est trop ancienne.',
+        AVEC_LECTURE
+      )
+    ).toBe('conversation_read')
+    expect(
+      conversationPretendueInaccessible(
+        'Je ne peux pas relire ce tour passé : je repars de zéro.',
+        AVEC_LECTURE
+      )
+    ).toBe('conversation_read')
+  })
+
+  it('ne déclenche PAS sur une négation CITÉE entre guillemets ou accents graves (conv-1089)', () => {
+    // Paragraphe exact de la réponse à la relance (tour 2425d493) : la négation y est citée pour
+    // expliquer la garde, elle n'affirme rien. Deux de ses phrases relançaient encore.
+    const texte =
+      "**Pourquoi la relance s'est déclenchée** : la garde `src/shared/outil-pretendu-absent.ts` a pris ma phrase « que je ne peux pas relire de l'intérieur » pour un refus de lire une conversation. Elle se déclenche sur « je ne peux pas relire » (ligne 218) dès qu'un mot comme « conversation » apparaît à proximité (ligne 226), même quand la phrase parle d'autre chose. C'est la deuxième relance à tort vue aujourd'hui, après celle sur « 2 + 2 » dans conv-1095. Je n'y touche pas, car ce n'est pas l'objet de cette demande."
+    expect(conversationPretendueInaccessible(texte, AVEC_LECTURE)).toBeNull()
+    expect(
+      conversationPretendueInaccessible(
+        'La description de l’outil interdit `je ne peux pas citer cette conversation`.',
+        AVEC_LECTURE
+      )
+    ).toBeNull()
+  })
+
+  it('attrape toujours une négation HORS des guillemets, même si la conversation y est citée', () => {
+    expect(
+      conversationPretendueInaccessible(
+        'Je ne peux pas citer « la conversation d’hier », elle est trop longue.',
+        AVEC_LECTURE
+      )
+    ).toBe('conversation_read')
   })
 
   it('ne déclenche pas sur un texte vide ou absent', () => {

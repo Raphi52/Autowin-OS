@@ -1,0 +1,343 @@
+/* VUE « BESOINS » (conv-1089, 2026-10-22). Couleurs tirées des variables du thème, comme la carte du
+   fil : vert = --ok, refusé = --err, en cours = --accent, sans preuve = --text-dim. ATTENTION :
+   `--s1`/`--s2`/`--s3` sont des ESPACEMENTS (theme.css), jamais des couleurs. */
+
+.besoins-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3, 12px);
+  min-height: 0;
+  overflow: auto;
+  container-type: inline-size;
+}
+
+/* ---------- En-tête ---------- */
+.besoins-entete {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.besoins-stats,
+.besoins-projet-chiffres {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.besoins-stats b,
+.besoins-projet-chiffres b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.besoins-view .is-ok {
+  color: var(--ok);
+}
+.besoins-view .is-err {
+  color: var(--err);
+}
+.besoins-view .is-accent {
+  color: var(--accent);
+}
+.besoins-view .is-alerte,
+.besoins-view .is-alerte b {
+  color: var(--err);
+}
+
+/* ---------- Filtres par état ---------- */
+.besoins-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 var(--s2, 8px);
+}
+.besoins-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.besoins-filtre b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.besoins-filtre:hover {
+  color: var(--text);
+}
+.besoins-filtre.is-actif {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.besoins-filtre[data-statut='prouve'] b {
+  color: var(--ok);
+}
+.besoins-filtre[data-statut='refuse'] b {
+  color: var(--err);
+}
+.besoins-filtre[data-statut='en-cours'] b {
+  color: var(--accent);
+}
+
+/* ---------- Un projet ---------- */
+.besoins-projets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 var(--s2, 8px);
+}
+.besoins-projet {
+  border: 1px solid var(--line);
+  border-radius: var(--r2, 8px);
+}
+.besoins-projet > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.besoins-projet > summary::-webkit-details-marker {
+  display: none;
+}
+.besoins-projet > summary::before {
+  content: '▸';
+  color: var(--text-faint);
+  transition: transform 120ms ease;
+}
+.besoins-projet[open] > summary::before {
+  transform: rotate(90deg);
+}
+.besoins-projet-nom {
+  font-weight: 700;
+  color: var(--text);
+  min-width: 8ch;
+}
+.besoins-projet-fils {
+  color: var(--text-faint);
+}
+
+/* La barre empilée : une part par état, largeur proportionnelle au compte. */
+.besoins-barre {
+  display: inline-flex;
+  flex: 1 1 120px;
+  max-width: 240px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-faint) 25%, transparent);
+}
+.besoins-barre > span {
+  flex-basis: 0;
+  min-width: 2px;
+}
+.besoins-barre > [data-statut='prouve'] {
+  background: var(--ok);
+}
+.besoins-barre > [data-statut='refuse'] {
+  background: var(--err);
+}
+.besoins-barre > [data-statut='en-cours'] {
+  background: var(--accent);
+}
+.besoins-barre > [data-statut='sans-preuve'] {
+  background: var(--text-dim);
+  opacity: 0.55;
+}
+
+.besoins-projet-corps {
+  padding: 0 12px 10px;
+}
+.besoins-sous-titre {
+  margin: 8px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.besoins-sous-titre span {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---------- Lignes ---------- */
+.besoins-liste {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.besoins-demande,
+.besoins-run {
+  display: grid;
+  grid-template-columns: 11ch 10ch minmax(0, 1fr) minmax(0, 14rem);
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 4px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  font-size: 13px;
+}
+.besoins-date {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.besoins-pastille {
+  justify-self: start;
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.besoins-pastille[data-statut='prouve'] {
+  color: var(--ok);
+}
+.besoins-pastille[data-statut='refuse'] {
+  color: var(--err);
+}
+.besoins-pastille[data-statut='en-cours'] {
+  color: var(--accent);
+}
+.besoins-corps {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.besoins-titre {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.besoins-constat {
+  color: var(--text-dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Lot 2 : qui a prompté, ce que l'agent a déclaré ---------- */
+.besoins-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.besoins-demandeur {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Déduit de la config git actuelle : moins affirmé qu'une identité relevée au moment du prompt. */
+.besoins-demandeur[data-origine='git-du-dossier'] {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-style: italic;
+}
+.besoins-demandeur.is-inconnu {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.besoins-deduit {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.besoins-besoin {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.besoins-besoin[data-nature='nouveau'] {
+  color: var(--accent);
+  border-color: currentColor;
+}
+.besoins-besoin[data-nature='aucun'] {
+  color: var(--text-faint);
+}
+button.besoins-besoin {
+  cursor: pointer;
+}
+button.besoins-besoin:hover {
+  color: var(--text);
+}
+.besoins-filtres-demandeurs {
+  margin-top: 6px;
+  align-items: center;
+}
+.besoins-filtres-libelle {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.besoins-fil {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-align: right;
+  cursor: pointer;
+}
+.besoins-fil:hover {
+  text-decoration: underline;
+}
+.besoins-fil.is-sans-fil {
+  color: var(--text-faint);
+  cursor: default;
+}
+.besoins-plus {
+  margin-top: 6px;
+}
+
+/* Colonne étroite : le fil passe sous la demande au lieu d'écraser le titre. */
+@container (max-width: 640px) {
+  .besoins-demande,
+  .besoins-run {
+    grid-template-columns: 11ch minmax(0, 1fr);
+  }
+  .besoins-corps,
+  .besoins-run .besoins-titre {
+    grid-column: 1 / -1;
+  }
+  .besoins-fil {
+    justify-self: start;
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
+
+/* ---------- États ---------- */
+.besoins-vide,
+.besoins-pied {
+  margin: 0 var(--s2, 8px);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.besoins-erreur {
+  margin: 0 var(--s2, 8px);
+  color: var(--err);
+}

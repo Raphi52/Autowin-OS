@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import type { ConversationFileTrace } from './activity/conversation-file-trace-spool'
+import { photographierDebutDeTour, publierTourDeChat } from './chat-turn-publication'
 import { AppCommandBus } from './commands'
+import { exactLineFingerprint } from './exact-line-fingerprint'
+import type { GitRunner } from './run-autoclose'
 
 /**
  * LA VÉRIFICATION AVANT PUBLICATION, AVEC LE VRAI RUNNER.
@@ -339,5 +343,95 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
     const verdict = await bus(repo).verifierAvantPublication(repo, ['notes.md'])
 
     expect(verdict.statut).toBe('non-verifie')
+  })
+})
+
+/**
+ * REJEU DE 973b70e2 (conv-1078, relevé par le salvage conv-1091 le 2026-10-22), AVEC LE VRAI RUNNER.
+ *
+ * Un test de style est parti seul : le CSS qu'il lit était resté en attente, parce qu'un autre fil
+ * l'avait modifié avant le tour. Les tests, rejoués dans l'arbre partagé où ce CSS était complet,
+ * étaient verts — main a reçu un test rouge. Ici, la vraie publication appelle la vraie vérification :
+ * si les tests se rejouent ailleurs que sur ce qui part, le test est publié et ce cas échoue.
+ */
+describe('vérification avant publication — sur ce qui part, pas sur l’arbre partagé', () => {
+  const DEBUT = 1_000_000
+  const PENDANT = new Date(DEBUT + 5_000).toISOString()
+  const realGit: GitRunner = async (args, cwd) =>
+    execFileSync('git', [...args], { cwd, encoding: 'utf8' })
+  const trace = (
+    repo: string,
+    chemin: string,
+    lignes: readonly string[]
+  ): ConversationFileTrace => ({
+    timestamp: PENDANT,
+    conversationId: 'conv-A',
+    turnId: 'tour-A-0001',
+    workspaceRoot: repo,
+    source: 'chat_tool',
+    paths: [chemin],
+    pathLineFingerprints: { [chemin]: lignes.map(exactLineFingerprint) }
+  })
+
+  it('ARRÊTE un test publié sans le CSS qu’il lit, resté en attente pour un autre fil (973b70e2)', async () => {
+    const repo = depot()
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    writeFileSync(join(repo, 'theme.css'), `.ancienne { color: red; }${SAUT}`, 'utf8')
+    git('add', 'theme.css')
+    git('commit', '-q', '-m', 'theme')
+    const headAvant = git('rev-parse', 'HEAD')
+    // Un autre fil a modifié le CSS avant le tour.
+    writeFileSync(
+      join(repo, 'theme.css'),
+      `.ancienne { color: red; }${SAUT}.autre-fil { color: blue; }${SAUT}`,
+      'utf8'
+    )
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    // Le tour ajoute sa règle au CSS et le test qui la lit.
+    const regle = '.nouvelle { color: gold; }'
+    writeFileSync(
+      join(repo, 'theme.css'),
+      `.ancienne { color: red; }${SAUT}.autre-fil { color: blue; }${SAUT}${regle}${SAUT}`,
+      'utf8'
+    )
+    const test = [
+      "import { readFileSync } from 'node:fs'",
+      "import { expect, it } from 'vitest'",
+      "it('le thème porte la règle .nouvelle', () => {",
+      "  const css = readFileSync(new URL('./theme.css', import.meta.url), 'utf8')",
+      "  expect(css).toContain('.nouvelle')",
+      '})'
+    ]
+    writeFileSync(join(repo, 'theme.test.ts'), [...test, ''].join(SAUT), 'utf8')
+    // Dans l'arbre partagé, le test est vert : c'est ce qui faisait partir le test seul.
+    const partage = await bus(repo).verifierAvantPublication(repo, ['theme.test.ts'])
+    expect(partage.statut).toBe('vert')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la règle .nouvelle et son test',
+      debut,
+      runGit: realGit,
+      traces: [trace(repo, 'theme.test.ts', test), trace(repo, 'theme.css', [regle])],
+      verifierAvantPublication: (racine, fichiers) =>
+        bus(repo).verifierAvantPublication(racine, fichiers)
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'tests-rouges' },
+      verification: { statut: 'echec', testsEnEchec: ['theme.test.ts'] }
+    })
+    expect(report?.exclus).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'theme.css', motif: 'modifie-avant-le-tour' }),
+        expect.objectContaining({ path: 'theme.test.ts', motif: 'tests-rouges' })
+      ])
+    )
+    expect(git('rev-parse', 'HEAD')).toBe(headAvant)
+    expect(git('status', '--porcelain', '-uall')).toContain('theme.test.ts')
+    // Les copies de vérification sont refermées : seul le dépôt reste inscrit.
+    expect(git('worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1)
   })
 })

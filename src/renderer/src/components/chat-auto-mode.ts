@@ -196,7 +196,7 @@ export function lignesDeRubrique(
 
 /** Ce qui ferme une rubrique de cloture autrement qu'une autre rubrique : une nouvelle section. */
 const FIN_DE_RUBRIQUE =
-  /^\s*(?:\[phase\s|#{1,6}\s|(?:---|___|\*\*\*)\s*$|AUTOWIN_PROMPT_V1\s*:|\*\*[^*]+\s*[:：]\*\*\s*$|```)/u
+  /^\s*(?:\[phase\s|#{1,6}\s|(?:---|___|\*\*\*)\s*$|AUTOWIN_(?:PROMPT|BESOIN)_V1\s*:|\*\*[^*]+\s*[:：]\*\*\s*$|```)/u
 
 /**
  * « rien » posé SEUL sur une ligne (puce comprise) = la rubrique est vide. C'est le signal d'arrêt.

@@ -10,8 +10,11 @@
 /** Les autres en-tetes du bloc de cloture : ils BORNENT la rubrique « Recommandé ». */
 const AUTRE_EN_TETE = /^\s*(?:✅|⚠️?|📍|⏳|👉)/u
 
-/** Ligne technique du prompt pre-garni : ce n'est pas le texte de la rubrique. */
-const LIGNE_TECHNIQUE = /^\s*AUTOWIN_PROMPT_V1\s*:/u
+/**
+ * Lignes techniques (prompt pre-garni, carte des besoins conv-1089) : ce n'est pas le texte de la
+ * rubrique, et la ligne de besoin peut suivre « Recommandé » de pres.
+ */
+const LIGNE_TECHNIQUE = /^\s*AUTOWIN_(?:PROMPT|BESOIN)_V1\s*:/u
 
 function nettoyer(texte: string): string {
   return texte

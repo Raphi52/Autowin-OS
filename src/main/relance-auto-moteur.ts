@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { watch, mkdtempSync, rmSync, type FSWatcher } from 'node:fs'
+import { mkdtempSync, rmSync, type FSWatcher } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
+import { surveillerDossier } from './surveiller-dossier'
 
 /**
  * RELANCE AUTOMATIQUE DU MOTEUR EN DÉVELOPPEMENT — compiler en coulisse, relancer au repos.
@@ -394,9 +395,15 @@ export function surveillerSourcesDuMoteur(
   const veilleurs: FSWatcher[] = []
   for (const dossier of DOSSIERS_DU_MOTEUR) {
     try {
-      const veilleur = watch(join(racine, dossier), { recursive: true }, (_evenement, fichier) => {
-        surChangement(join(dossier, fichier ? fichier.toString() : ''))
-      })
+      // Nom court 8.3 dans `racine` = abort de libuv (code 127) : on passe par la seule porte qui
+      // canonicalise (`surveiller-dossier.ts`, conv-1056).
+      const veilleur = surveillerDossier(
+        join(racine, dossier),
+        { recursive: true },
+        (_evenement, fichier) => {
+          surChangement(join(dossier, fichier ? fichier.toString() : ''))
+        }
+      )
       veilleur.on('error', (e) => journaliser(`surveillance ${dossier} : ${e}`))
       veilleurs.push(veilleur)
     } catch (e) {

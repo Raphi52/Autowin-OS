@@ -47,6 +47,20 @@ function sansAccent(texte: string): string {
   return texte.normalize('NFD').replace(/[\u0300-\u036f]/gu, '')
 }
 
+/*
+ * LE NOM D'OUTIL QUI EST AUSSI UN NOM COMMUN (conv-1092, 2026-10-22). \u00ab Le d\u00e9clencheur \u00ab une
+ * question avant un run payant ambigu \u00bb n'existe pas encore \u00bb a d\u00e9clench\u00e9 la relance \u00ab tu affirmes
+ * ne pas disposer de `run` \u00bb : ici, \u00ab run \u00bb est le nom courant d'une ex\u00e9cution, pas l'outil. Ce
+ * qui marque l'usage commun est le D\u00c9TERMINANT qui le pr\u00e9c\u00e8de. Une mention CIT\u00c9E entre accents
+ * graves (\u00ab le `run` n'est pas disponible \u00bb) d\u00e9signe l'outil et reste d\u00e9tect\u00e9e.
+ */
+const DETERMINANT_AVANT =
+  /(?:^|[^\w-])(?:un|une|le|la|les|du|des|ce|cet|cette|ces|chaque|mon|ton|son|mes|tes|ses|notre|votre|leur|nos|vos|leurs|au|aux|a|an|the)\s+$/u
+
+function precedeParUnDeterminant(plat: string, position: number): boolean {
+  return DETERMINANT_AVANT.test(plat.slice(Math.max(0, position - 12), position))
+}
+
 /**
  * TROISIEME FORME : le TABLEAU de capacites (mesure conv-650, 2026-09-17).
  *
@@ -109,7 +123,20 @@ export function outilsFaussementAbsents(texte: unknown, catalogue: readonly stri
    * entre le nom et sa negation, donc toute mention citee — c'est-a-dire toutes les vraies —
    * etait rejetee comme rupture. Cinq tests rouges sur ce seul caractere.
    */
-  const plat = sansAccent(texte).toLowerCase().split(String.fromCharCode(96)).join('')
+  const brut = sansAccent(texte).toLowerCase()
+  let plat = ''
+  // Pour chaque caractère de `plat` : vrai s'il suivait immédiatement un accent grave (nom cité).
+  const cite: boolean[] = []
+  let apresAccentGrave = false
+  for (let i = 0; i < brut.length; i++) {
+    if (brut[i] === String.fromCharCode(96)) {
+      apresAccentGrave = true
+      continue
+    }
+    cite.push(apresAccentGrave)
+    plat += brut[i]
+    apresAccentGrave = false
+  }
   const trouves: string[] = []
 
   for (const nom of catalogue) {
@@ -125,6 +152,7 @@ export function outilsFaussementAbsents(texte: unknown, catalogue: readonly stri
       const avant = plat[position - 1]
       const apres = plat[depuis]
       if ((avant && /[\w-]/u.test(avant)) || (apres && /[\w-]/u.test(apres))) continue
+      if (!cite[position] && precedeParUnDeterminant(plat, position)) continue
       const suite = plat.slice(depuis, depuis + PLAFOND_INTERCALAIRE + 30)
       for (const negation of NEGATIONS) {
         const index = suite.indexOf(sansAccent(negation).toLowerCase())
@@ -181,7 +209,8 @@ const OUTIL_CONVERSATION = 'conversation_read'
  * Ce qui compte comme « je ne peux pas atteindre cette conversation ».
  *
  * Chaque motif vient d'une phrase REELLEMENT ecrite, ou de la formule que la description de l'outil
- * interdit nommement. On exige la mention d'une CONVERSATION (ou d'un scout/tour passe) a proximite :
+ * interdit nommement. On exige la mention d'une CONVERSATION (ou d'un scout/tour passe) dans la meme
+ * phrase (`SUJET_CONVERSATION`) :
  * « je n'ai pas acces au serveur » ne doit rien declencher.
  */
 const INACCESSIBLE = [
@@ -193,9 +222,35 @@ const INACCESSIBLE = [
   /pas\s+(?:d.acc[èe]s|acc[èe]s)\s+[àa]\s+(?:l.historique|mes\s+conversations)/iu
 ]
 
-/** Le sujet doit etre une conversation ou un tour passe, sinon le refus d'acces est peut-etre vrai. */
+/**
+ * Le sujet doit etre une conversation ou un tour passe, sinon le refus d'acces est peut-etre vrai —
+ * et il doit l'etre DANS LA MEME PHRASE que la negation.
+ *
+ * FAUX POSITIF DU 2026-10-22 (conv-1089, tour 2425d493) : « Elle s'ecrit a la fin de ce tour-ci, que
+ * je ne peux pas relire de l'interieur » parlait d'une ligne de journal pas encore ecrite. Le seul
+ * « conversation » du texte etait la cle JSON `conversationId`, trois puces plus haut : sujet et
+ * negation etaient cherches chacun dans TOUT le texte, alors que le commentaire ci-dessus promettait
+ * la proximite. Le mot doit donc etre ENTIER (`conversationId` n'en est pas un) et partager la phrase.
+ */
 const SUJET_CONVERSATION =
-  /conversation|scout|tour\s+pr[ée]c[ée]dent|historique|ce\s+qu.on\s+a\s+dit/iu
+  /(?<![\p{L}\p{N}_])(?:conversations?|scout|tours?\s+(?:pr[ée]c[ée]dents?|pass[ée]s?)|historique|ce\s+qu.on\s+a\s+dit)(?![\p{L}\p{N}_])/iu
+
+/** Une phrase : coupee sur . ! ? … suivis d'un blanc, et a chaque saut de ligne (puce, titre). */
+const FIN_DE_PHRASE = /[.!?…]+(?=\s|$)|\n/u
+
+/*
+ * UNE NEGATION CITEE N'AFFIRME RIEN (conv-1089, 2026-10-22, tour 2425d493). Pour expliquer la garde,
+ * la reponse ecrivait : « …a pris ma phrase « que je ne peux pas relire de l'interieur » pour un refus
+ * de lire une conversation. » La negation y est un OBJET de discours, pas une declaration de l'agent.
+ * Elle n'est donc cherchee que HORS des guillemets (« », “ ”, " ") et des accents graves ; le SUJET,
+ * lui, reste cherche dans toute la phrase : « je ne peux pas citer « la conversation d'hier » »
+ * declare bien l'inaccessibilite. Un guillemet ouvert sans fermeture court jusqu'a la fin de la phrase.
+ */
+const PASSAGE_CITE = /«[^»]*(?:»|$)|“[^”]*(?:”|$)|"[^"]*(?:"|$)|`[^`]*(?:`|$)/gu
+
+function horsCitations(phrase: string): string {
+  return phrase.replace(PASSAGE_CITE, ' ')
+}
 
 /**
  * L'agent declare-t-il inaccessible une conversation que le catalogue sait lire ?
@@ -209,8 +264,14 @@ export function conversationPretendueInaccessible(
 ): string | null {
   if (typeof texte !== 'string' || !texte.trim()) return null
   if (!catalogue.includes(OUTIL_CONVERSATION)) return null
-  if (!SUJET_CONVERSATION.test(texte)) return null
-  return INACCESSIBLE.some((motif) => motif.test(texte)) ? OUTIL_CONVERSATION : null
+  const nie = texte
+    .split(FIN_DE_PHRASE)
+    .some(
+      (phrase) =>
+        SUJET_CONVERSATION.test(phrase) &&
+        INACCESSIBLE.some((motif) => motif.test(horsCitations(phrase)))
+    )
+  return nie ? OUTIL_CONVERSATION : null
 }
 
 /** La correction : elle cite l'instruction que l'outil porte deja, pour ne pas inventer une regle. */
