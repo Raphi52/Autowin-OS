@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -111,21 +112,39 @@ describe('mode clair — vignette de pièce jointe du champ de saisie', () => {
  * n'étaient pas couvertes, et le décor y restait noir opaque (`FOND_DECOR`) sous du texte sombre.
  * Il est passé sur `.decor-de-fond::after`, qui est `fixed inset: 0`.
  *
- * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre le voile sur un calque intérieur à une vue —
- * la bande du haut redeviendrait noire sous du texte sombre, sans que rien ne le signale.
+ * LE VOILE DU DÉCOR EST RETIRÉ le 2026-10-22 (conv-1076 : « c le select de l'accueil qui fait foi
+ * pour le fond de l'accueil pas le theme choisi »). Lavé à 86-90 %, le fond choisi dans le menu de
+ * l'Accueil (Cyberpunk, Planètes) n'était plus qu'un ciel gris propre au thème clair, et quatre
+ * thèmes le cachaient même entièrement. Le décor s'affiche désormais tel quel sous TOUS les thèmes ;
+ * ce qui est posé dessus (étiquettes des tuiles) s'éclaircit à la place. Hors Accueil, le décor
+ * n'est pas monté : la galaxie du `body` garde son voile.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : un thème qui remet `display: none` sur le décor, ou un
+ * voile peint par-dessus lui — le menu Fond de l'Accueil redeviendrait sans effet sous ce thème.
  */
-describe('mode clair — le voile couvre TOUTE la surface du décor', () => {
-  it('le voile est posé sur le décor lui-même, pas sur une vue', () => {
-    const regle = /:root\[data-base='clair'\] \.decor-de-fond::after \{([^}]*)\}/.exec(css)
-    expect(regle, 'voile clair absent du décor').toBeTruthy()
-    expect(regle![1], 'le voile doit être fixe et couvrir toute la fenêtre').toMatch(
-      /position:\s*fixed/
-    )
-    expect(regle![1]).toMatch(/inset:\s*0/)
-    // Régression du 2026-09-23 (8072d4e9) : une règle plus bas coupait le voile par display:none,
-    // et le test restait vert. Aucune règle ne doit masquer ce voile.
-    expect(css).not.toMatch(/\.decor-de-fond::after\s*\{\s*display:\s*none/)
-    // Hors Accueil le décor 3D n'est pas monté : la galaxie du body doit porter le même voile.
+describe('le fond de l Accueil suit son menu, quel que soit le thème', () => {
+  it('aucune feuille de thème ne cache le décor ni ne le lave sous un voile', () => {
+    const dossier = 'src/renderer/src/assets'
+    const fautes: string[] = []
+    for (const fichier of readdirSync(dossier).filter((f) => /^theme.*\.css$/.test(f))) {
+      postcss.parse(readFileSync(`${dossier}/${fichier}`, 'utf8')).walkRules((regle) => {
+        for (const selecteur of regle.selectors) {
+          const cache =
+            /\.decor-de-fond$/.test(selecteur) &&
+            regle.nodes.some((d) => d.type === 'decl' && d.prop === 'display' && d.value === 'none')
+          const voile =
+            /\.decor-de-fond::after$/.test(selecteur) &&
+            regle.nodes.some((d) => d.type === 'decl' && d.prop.startsWith('background'))
+          if (cache || voile)
+            fautes.push(`${fichier} : ${selecteur}${cache ? ' (caché)' : ' (voilé)'}`)
+        }
+      })
+    }
+    expect(fautes).toEqual([])
+  })
+
+  it('hors Accueil, la galaxie du body reste lavée en clair', () => {
+    // Hors Accueil le décor 3D n'est pas monté : la galaxie du body porte le voile ivoire.
     const bodies = [...css.matchAll(/:root\[data-base='clair'\] body \{([^}]*)\}/g)]
     const body = bodies[bodies.length - 1]
     expect(body?.[1] ?? '', 'galaxie du body non lavée en clair').toMatch(/rgba\(250, 248, 243, 0\.9\)/)

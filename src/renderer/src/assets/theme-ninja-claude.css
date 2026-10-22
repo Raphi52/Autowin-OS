@@ -97,8 +97,13 @@
   background: #262624;
   color: var(--text);
 }
-:root[data-theme='ninja-claude'] body::before,
-:root[data-theme='ninja-claude'] .decor-de-fond {
+/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (conv-1076, 2026-10-22 : « c le select de
+   l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi »). Le decor suit le menu
+   Fond de l'Accueil ; « Aucun » y reprend l'aplat de ce theme. */
+:root[data-theme='ninja-claude'] .decor-de-fond[data-fond='noir'] {
+  background: #262624;
+}
+:root[data-theme='ninja-claude'] body::before {
   display: none;
 }
 :root[data-theme='ninja-claude'] body::after {

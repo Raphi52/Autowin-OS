@@ -670,13 +670,10 @@
    se cale juste sous le blanc des fenêtres pour qu'elles se détachent encore.
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
    chantier de shaders. */
-:root[data-base='clair'] .home-view::after {
-  /* ALLEGE le 2026-09-21 : le voile ivoire est passe sur le decor entier (fin de fichier), donc
-     ce calque-ci ferait un SECOND voile et sur-blanchirait l'Accueil. Il ne garde que l'eclairci
-     central, qui aide les tuiles a se detacher. L'assombrissement du sombre (HomeView.css) reste
-     neutralise : il n'a pas de sens sur un fond lave. */
-  background: radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.4), transparent 80%);
-}
+/* L'eclairci central de l'Accueil (`.home-view::after`, blanc a 40 %) est RETIRE le 2026-10-22
+   (conv-1076 : « c le select de l'accueil qui fait foi pour le fond de l'accueil pas le theme
+   choisi ») : il delavait le milieu du fond choisi sous les seuls themes clairs. Le calque reste
+   sans teinte, comme en sombre depuis conv-1037 (HomeView.css). */
 
 /* MACHINE A ECRIRE -- copie d Internet Typewriter (writer.bighugelabs.com), theme vert
    phosphore : fond NOIR, texte VERT, filets vert sombre, police a chasse fixe. Base SOMBRE. */
@@ -868,20 +865,34 @@
    (celle-ci avait ete essayee et refusee : « c'est tout le haut qui n'est pas
    visible », et elle balafrait le decor). La galaxie reste visible, lavee comme
    un ciel de jour — elle n'est ni cachee ni remplacee.
+
+   VOILE RETIRE le 2026-10-22 (conv-1076 : « c le select de l'accueil qui fait foi pour le fond de
+   l'accueil pas le theme choisi »). Lave a 86-90 %, le decor n'etait plus le fond choisi dans le
+   menu de l'Accueil (Cyberpunk, Planetes) mais des formes grises propres au theme clair. Le decor
+   s'affiche donc tel quel sous tous les themes, et c'est ce qui est POSE dessus qui s'eclaircit :
+   les etiquettes des tuiles, juste en dessous. Le fond « Aucun » garde l'aplat du theme.
    ============================================================================ */
-:root[data-base='clair'] .decor-de-fond::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      170deg,
-      rgba(250, 248, 243, 0.9) 0%,
-      rgba(246, 244, 239, 0.86) 45%,
-      rgba(243, 240, 234, 0.9) 100%
-    ),
-    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
+/* Etiquettes des tuiles (titre, filet, compteur, « Actualiser ») : posees a meme le decor, hors des
+   panneaux. Encre claire tant qu'une scene est affichee ; sur « Aucun » (`data-fond='noir'`), elles
+   gardent l'encre du theme. Le decor est le frere qui PRECEDE le contenu dans `.shell` (App.tsx),
+   d'ou le `~` plutot qu'un `:has` sur la racine. */
+:root[data-base='clair'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label {
+  --text: #ece8f7;
+  --text-dim: #b9b2d4;
+  --line: rgba(255, 255, 255, 0.18);
+  --line-strong: rgba(255, 255, 255, 0.3);
+}
+:root[data-base='clair'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__label h2 {
+  color: var(--text);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
+}
+:root[data-base='clair'] .decor-de-fond:not([data-fond='noir']) ~ * .home-tile .home-tile__action {
+  background: rgba(255, 255, 255, 0.045);
+}
+/* « Aucun » en clair : l'aplat de la page du theme, pas le noir de la base sombre (theme.css).
+   `:where` garde le poids le plus faible : les themes qui posent leur propre aplat le gardent. */
+:root[data-base='clair'] :where(.decor-de-fond[data-fond='noir']) {
+  background: var(--bg-0);
 }
 
 /* SPECIAL MALVOYANT -- deux themes d accessibilite. Texte courant >= 7:1 (AAA), texte
@@ -1028,13 +1039,15 @@
   color: var(--text-dim);
   background: var(--bg-2);
 }
-/* Fond decoratif (image galaxie du body, decor 3D de l'Accueil) : du bruit visuel derriere le
-   texte. On le remplace par l'aplat du theme. */
+/* Fond decoratif (image galaxie du body) : du bruit visuel derriere le texte. On le remplace par
+   l'aplat du theme. Le decor 3D de l'Accueil n'est PLUS retire ici (conv-1076, 2026-10-22 : « c le
+   select de l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi ») : il suit le
+   menu Fond de l'Accueil, dont « Aucun » reprend cet aplat. */
 :root[data-theme^='malvoyant-'] body {
   background: var(--bg-0);
 }
-:root[data-theme^='malvoyant-'] .decor-de-fond {
-  display: none;
+:root[data-theme^='malvoyant-'] .decor-de-fond[data-fond='noir'] {
+  background: var(--bg-0);
 }
 
 /* Malvoyant clair — capture Accueil du 2026-09-22 : le widget Jarvis restait ivoire trame d'or

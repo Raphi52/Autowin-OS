@@ -80,8 +80,13 @@
   background: #dad4bb;
   color: var(--text);
 }
-:root[data-theme='nier-automata'][data-base='clair'] body::before,
-:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond {
+/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (conv-1076, 2026-10-22 : « c le select de
+   l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi »). Le decor suit le menu
+   Fond de l'Accueil ; « Aucun » y reprend l'aplat de ce theme. */
+:root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond[data-fond='noir'] {
+  background: #dad4bb;
+}
+:root[data-theme='nier-automata'][data-base='clair'] body::before {
   display: none;
 }
 :root[data-theme='nier-automata'][data-base='clair'] body::after {
