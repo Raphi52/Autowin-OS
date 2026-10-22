@@ -12,9 +12,9 @@ import { WorkflowProfilesView } from './WorkflowProfilesView'
  * l'affichage était faux : 3 runs INTERROMPUS (Stop, quota) — ils doivent rester hors du taux de
  * réussite (1 sur 2, pas 1 sur 5).
  *
- * Piste 3 : le workflow actif est imposé à TOUTES les demandes du chat et le choix automatique ne
- * joue pas tant qu'il l'est (`os.ts`, `poseConversationWorkflow`) ; la vue ne le disait que dans une
- * info-bulle. L'entrée qui ferait échouer ce test : aucun workflow actif — la phrase ne doit PAS
+ * Piste 3 : le workflow actif n'est plus qu'une valeur par défaut, le choix automatique passe avant
+ * lui (`os.ts`, `poseConversationWorkflow`, 2026-10-22). La vue doit le dire, et ne plus dire
+ * « imposé ». L'entrée qui ferait échouer ce test : aucun workflow actif — la phrase ne doit PAS
  * apparaître.
  */
 let container: HTMLDivElement
@@ -90,17 +90,18 @@ describe('vue Workflows — résultats réels', () => {
     expect(texte).not.toContain('%')
   })
 
-  it('un workflow actif est dit IMPOSÉ à toutes les demandes, à la place du choix automatique', async () => {
+  it('un workflow actif est dit PAR DÉFAUT, derrière le choix automatique', async () => {
     api({}, 'correctif')
     await render()
-    const phrase = container.querySelector('[data-testid="workflow-active-imposed"]')
-    expect(phrase?.textContent ?? '').toMatch(/Correctif.*imposé à toutes les demandes/)
-    expect(phrase?.textContent ?? '').toMatch(/choix automatique/)
+    const phrase = container.querySelector('[data-testid="workflow-active-default"]')
+    expect(phrase?.textContent ?? '').toMatch(/Correctif.*workflow par défaut/)
+    expect(phrase?.textContent ?? '').toMatch(/choix automatique passe avant lui/)
+    expect(phrase?.textContent ?? '').not.toMatch(/imposé/)
   })
 
-  it('aucun workflow actif : aucune phrase d’imposition', async () => {
+  it('aucun workflow actif : aucune phrase de workflow par défaut', async () => {
     api({}, null)
     await render()
-    expect(container.querySelector('[data-testid="workflow-active-imposed"]')).toBeNull()
+    expect(container.querySelector('[data-testid="workflow-active-default"]')).toBeNull()
   })
 })

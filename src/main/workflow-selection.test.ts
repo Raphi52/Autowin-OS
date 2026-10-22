@@ -68,7 +68,9 @@ describe('le choix atteint réellement le run du chat', () => {
    * le défaut exact que ce fichier existe pour empêcher.
    */
   it('faute de choix manuel, le mode dynamique est sollicité', () => {
-    expect(os).toMatch(/if \(!profileId\) return task \? await this\.poseWorkflowDynamique\(task\)/)
+    expect(os).toMatch(
+      /if \(!profileId\) \{\s*const proposition = task \? await this\.poseWorkflowDynamique\(task\)/
+    )
     // Et il retombe sur « aucun workflow » plutôt que d'empêcher le run de partir.
     expect(os).toMatch(/if \(!meriteUneDecision\(task\)\) return undefined/)
   })
@@ -80,8 +82,13 @@ describe('le choix atteint réellement le run du chat', () => {
     expect(os).not.toMatch(/this\.activeWorkflow/)
   })
 
-  it('la confrontation garde la priorité sur le workflow de la conversation', () => {
-    // Sinon un banc lancé depuis une conversation comparerait son workflow à lui-même.
-    expect(os).toMatch(/poseConversationWorkflow[\s\S]{0,500}if \(this\.workflowImpose\) return this\.workflowImpose/)
+  it('le workflow actif de la vue ne passe plus avant le choix automatique', () => {
+    // Inversé le 2026-10-22 (conv-1070) : la confrontation qui justifiait cette priorité n'existe
+    // plus, et le workflow actif court-circuitait le choix automatique sur 39 démarrages sur 39.
+    // Le comportement est prouvé dans `os.workflow-par-defaut.test.ts` ; ici, le retour anticipé.
+    expect(os).not.toMatch(
+      /poseConversationWorkflow[\s\S]{0,300}if \(this\.workflowParDefaut\) return/
+    )
+    expect(os).toMatch(/return proposition \?\? this\.workflowParDefaut/)
   })
 })

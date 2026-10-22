@@ -243,14 +243,16 @@ export class AutowinOS {
   directivesEnAttente?: (conversationId: string) => string[]
   private readonly orchestratorDeps: OrchestratorDeps
   /**
-   * Le workflow ACTIF de la vue Workflows (`index.ts`, `appliquerWorkflowActif`), imposé à chaque
-   * run du chat tant qu'il est actif. La confrontation qui le posait autour de ses runs a été retirée
-   * (`workflow-run-override.ts`) ; depuis le commit 5bb2bf99 (05/08), c'est le bouton « activer » de
-   * la vue qui le pose — un choix explicite, que la vue écrit désormais en clair (conv-1070).
+   * Le workflow ACTIF de la vue Workflows (`index.ts`, `appliquerWorkflowActif`) : une VALEUR PAR
+   * DÉFAUT, plus un forçage (choix de l'utilisateur, conv-1070, 2026-10-22). Il ne pilote un run que
+   * si ni la conversation ni le choix automatique ne proposent de workflow (`poseConversationWorkflow`).
+   * Avant, il passait avant tout : 39 démarrages sur 39 en source `manuel` dans `causal-trace/`, le
+   * choix automatique ne tournait jamais. La confrontation qui imposait autrefois son workflow par ce
+   * champ a été retirée (`workflow-run-override.ts`).
    */
-  private workflowImpose?: WorkflowRunOverride
+  private workflowParDefaut?: WorkflowRunOverride
   setActiveWorkflow(workflow: WorkflowRunOverride | undefined): void {
-    this.workflowImpose = workflow
+    this.workflowParDefaut = workflow
   }
 
   /**
@@ -304,19 +306,19 @@ export class AutowinOS {
     conversationId?: string,
     task?: string
   ): Promise<WorkflowRunOverride | undefined> {
-    // Le workflow ACTIF de la vue passe avant tout le reste, choix automatique compris : c'est le
-    // sens du bouton « activer » (commit 5bb2bf99). Mesuré le 2026-10-22 : 39 démarrages sur 39 en
-    // source `manuel` dans `causal-trace/` — tant qu'un workflow est actif, le choix automatique ne
-    // tourne jamais. La vue le dit (`workflow-active-imposed`, conv-1070).
-    if (this.workflowImpose) return this.workflowImpose
     const selections = loadWorkflowSelections()
     // Un refus EXPLICITE se respecte : l'utilisateur a retiré le workflow de cette conversation, le
     // mode dynamique n'a pas à lui en réimposer un. C'est la différence entre proposer et forcer.
+    // Le workflow actif de la vue ne le contourne pas non plus : ce n'est qu'une valeur par défaut.
     if (refusExplicite(selections, conversationId)) return undefined
     const profileId = workflowForConversation(selections, conversationId)
     // MODE DYNAMIQUE : l'utilisateur ne s'est JAMAIS prononcé → on demande au modèle lequel convient.
-    // Il a le droit de répondre « aucun », et c'est souvent la bonne réponse.
-    if (!profileId) return task ? await this.poseWorkflowDynamique(task) : undefined
+    // Il a le droit de répondre « aucun ». Le workflow actif de la vue n'est alors que le REPLI : il
+    // ne passe plus avant ce choix (conv-1070, 2026-10-22).
+    if (!profileId) {
+      const proposition = task ? await this.poseWorkflowDynamique(task) : undefined
+      return proposition ?? this.workflowParDefaut
+    }
     const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
     if (!profile) return undefined
     const effectif = applyWorkflowProfile({ roles: {} }, profile)

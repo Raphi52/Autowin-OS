@@ -570,18 +570,18 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         ) : null
       })()}
 
-      {/* CE QUE « ACTIF » VEUT DIRE (piste 3, conv-1070). Le workflow actif passe AVANT le choix
-          automatique (`os.ts`, `poseConversationWorkflow`) : tant qu'il l'est, chaque demande du
-          chat tourne sous lui, cadrage ou non. Choix voulu (commit 5bb2bf99), mais dit seulement
-          dans une info-bulle : « implémente theme actuel » (conv-1066) a tourné en Correctif sans
-          étape de cadrage. La vue l'écrit désormais en clair. */}
+      {/* CE QUE « ACTIF » VEUT DIRE (piste 3, conv-1070). Le workflow actif n'est plus qu'une
+          VALEUR PAR DÉFAUT (choix de l'utilisateur, 2026-10-22) : le choix automatique passe avant
+          lui, et il ne pilote que les demandes pour lesquelles ce choix n'en propose aucun
+          (`os.ts`, `poseConversationWorkflow`). Avant, il passait avant tout : 39 démarrages sur 39
+          en source `manuel`. */}
       {(() => {
         const actifProfil = file.profiles.find((p) => p.id === file.activeId)
         return actifProfil ? (
-          <p className="workflow-profiles-sub" role="note" data-testid="workflow-active-imposed">
-            « {actifProfil.name} » est imposé à toutes les demandes du chat : le choix automatique
-            du workflow ne joue pas tant qu’il est actif. Re-clique-le pour revenir au choix
-            automatique.
+          <p className="workflow-profiles-sub" role="note" data-testid="workflow-active-default">
+            « {actifProfil.name} » est le workflow par défaut : le choix automatique passe avant
+            lui, et il ne pilote que les demandes pour lesquelles ce choix n’en propose aucun.
+            Re-clique-le pour n’avoir aucun workflow par défaut.
           </p>
         ) : null
       })()}
