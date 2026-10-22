@@ -151,8 +151,8 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     },
     {
       label: 'projectContext',
-      value: `Chaîne premier-trouvé-gagne : ${PROJECT_CONTEXT_CHAIN.join(' → ')} (cap ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets), lue par Autowin depuis le workspace d'exécution.`,
-      source: 'src/main/context-files.ts:77'
+      value: `Dans chaque dossier, premier trouvé de ${PROJECT_CONTEXT_CHAIN.join(' → ')} ; empilés de la racine du dépôt git au workspace d'exécution, le plus proche en dernier (plafond partagé ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets, coupe signalée), lus par Autowin.`,
+      source: 'src/main/context-files.ts:211'
     }
   )
   return { phase, blocks }
