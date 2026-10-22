@@ -303,6 +303,19 @@
   background: var(--accent-soft, rgba(120, 160, 255, 0.18));
   border-color: var(--accent, rgba(120, 160, 255, 0.5));
 }
+/* Onglets à gauche, commandes des suites à droite, sur UNE rangée (conv-1101) : la rangée porte le
+   retrait latéral, les onglets n'en ajoutent pas un second. */
+.tests-rangee-onglets {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px;
+}
+.tests-rangee-onglets .tests-tabs {
+  padding: 0;
+}
 .perf-panel {
   display: flex;
   flex-direction: column;

@@ -105,9 +105,10 @@ describe('App inspect-turn navigation', () => {
       'Worktrees',
       'Bureaux cachés',
       'Tickets',
-      // Carte des besoins (conv-1089, 2026-10-22), placée entre Tickets et Tests dans navigation.ts.
+      // Carte des besoins (conv-1089, 2026-10-22), placée entre Tickets et Maintenance dans navigation.ts.
       'Besoins',
-      'Tests',
+      // L'ancienne vue Tests, renommée Maintenance (conv-1101) : même identifiant `tests`.
+      'Maintenance',
       'Settings'
     ]
     expect(navItems).toHaveLength(expectedLabels.length)

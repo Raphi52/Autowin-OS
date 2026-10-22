@@ -12,7 +12,10 @@ export const APP_DESTINATIONS = [
   // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet. Placée
   // APRÈS Tickets pour ne décaler aucun raccourci Ctrl+1…9.
   { id: 'besoins', label: 'Besoins', icon: '🗺️' },
-  { id: 'tests', label: 'Tests', icon: '🧪' },
+  // Vue « Maintenance » (conv-1101, 2026-10-22 : « la view tests est nulle, appelle-la maintenance
+  // et mets des boutons pour faire toutes nos skills de maintenance »). L'identifiant reste `tests` :
+  // les suites y vivent toujours, et un agent qui dit « tests » doit continuer d'y aboutir.
+  { id: 'tests', label: 'Maintenance', icon: '🛠️' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ] as const
 

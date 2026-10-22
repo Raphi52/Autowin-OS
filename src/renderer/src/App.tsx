@@ -80,6 +80,7 @@ import './assets/theme-nier-automata.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 import { deposerOuvertureConversation } from './components/pending-conversation-open'
+import { installerRelaisPrefill } from './components/relais-prefill'
 import { lireBrouillons, memoriserBrouillon } from './components/brouillons-persistes'
 import { ajouterAuBrouillon } from './components/passage-selectionne'
 
@@ -186,6 +187,10 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     chatMonteRef.current = visitedTabs.has('chat')
   }, [visitedTabs])
+  // Un bouton qui lance une skill dans une conversation (Maintenance, /curate, mise à jour…) émet
+  // son message juste après avoir ouvert le chat : chat jamais affiché, il était PERDU (mesuré
+  // conv-1101). Le relais le garde jusqu'à ce que le chat l'écoute.
+  useEffect(() => installerRelaisPrefill(), [])
   useEffect(() => {
     // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
     // plutot que de propager une erreur. Silence = rien a signaler, jamais « on ne sait pas ».

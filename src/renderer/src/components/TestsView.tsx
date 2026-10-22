@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ViewTopBar } from './ViewTopBar'
 import { PerfLagPanel } from './PerfLagPanel'
+import { MaintenanceSkillsPanel } from './MaintenanceSkillsPanel'
 import './ViewPage.css'
 import './TestsView.css'
 import { Spinner } from './Spinner'
 import { largeursDeLaBarre } from './tests-barre'
 
 /**
- * Vue Tests — MULTI-PROJETS par construction.
+ * Vue Maintenance (ex-« Tests », renommée le 2026-10-22, conv-1101) : en tête, les boutons qui
+ * lancent les skills d'entretien d'Autowin (MaintenanceSkillsPanel) ; dessous, les suites de tests.
+ *
+ * Les suites restent MULTI-PROJETS par construction.
  *
  * Un projet y est une racine du registre (`test-projects.json`), jamais le dépôt de l'app : le même
  * écran sert Autowin OS et n'importe quel projet ajouté ensuite. Le verdict affiché vient du rapport
@@ -243,11 +247,41 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   return (
     <section className="view-page tests-view" data-testid="tests-view">
       <ViewTopBar
-        eyebrow="QUALITÉ"
-        title="Tests"
-        description="Lance les suites de tes projets et lis le verdict réel du harnais."
+        eyebrow="ENTRETIEN"
+        title="Maintenance"
+        description="Lance les skills d’entretien d’Autowin, et les suites de tests de tes projets."
         detail={projetActif?.root}
-        actions={
+      />
+
+      <MaintenanceSkillsPanel />
+
+      {/* Les commandes des SUITES vivent sur la rangée de leurs onglets, plus dans la barre du titre :
+        elles y repoussaient « Maintenance » sous le champ de filtre (capture du 2026-10-22, conv-1101),
+        et elles ne commandent que l'onglet Suites. */}
+      <div className="tests-rangee-onglets">
+        <div className="tests-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            data-testid="tests-tab-suites"
+            aria-selected={onglet === 'suites'}
+            className={onglet === 'suites' ? 'is-active' : ''}
+            onClick={() => setOnglet('suites')}
+          >
+            Suites
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-testid="tests-tab-latence"
+            aria-selected={onglet === 'latence'}
+            className={onglet === 'latence' ? 'is-active' : ''}
+            onClick={() => setOnglet('latence')}
+          >
+            Latence
+          </button>
+        </div>
+        {onglet === 'suites' && (
           <div className="tests-actions">
             <input
               className="tests-filter"
@@ -277,30 +311,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
               {encours ? 'Exécution…' : 'Lancer la suite'}
             </button>
           </div>
-        }
-      />
-
-      <div className="tests-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          data-testid="tests-tab-suites"
-          aria-selected={onglet === 'suites'}
-          className={onglet === 'suites' ? 'is-active' : ''}
-          onClick={() => setOnglet('suites')}
-        >
-          Suites
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-testid="tests-tab-latence"
-          aria-selected={onglet === 'latence'}
-          className={onglet === 'latence' ? 'is-active' : ''}
-          onClick={() => setOnglet('latence')}
-        >
-          Latence
-        </button>
+        )}
       </div>
 
       {onglet === 'latence' && <PerfLagPanel />}

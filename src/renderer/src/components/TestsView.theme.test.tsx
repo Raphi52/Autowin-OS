@@ -39,7 +39,8 @@ describe('TestsView — meme theme que les autres vues', () => {
     expect(container.querySelector('.view-topbar')).toBeTruthy()
     expect(container.querySelector('.view-topbar .module-header')).toBeTruthy()
     expect(container.querySelector('.tests-view > h2')).toBeNull()
-    expect(container.textContent).toContain('Tests')
+    // Renommée « Maintenance » le 2026-10-22 (conv-1101) ; les suites de tests y restent.
+    expect(container.textContent).toContain('Maintenance')
   })
 
   it('la feuille consomme les tokens et ne peint plus de fond opaque en dur', () => {

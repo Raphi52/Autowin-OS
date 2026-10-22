@@ -34,6 +34,7 @@ import {
 import { SuggestionGrid } from './SuggestionGrid'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
+import { fermerEcouteurPrefill, ouvrirEcouteurPrefill } from './relais-prefill'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
@@ -3988,7 +3989,12 @@ export function ChatView({
     }
     window.addEventListener('autowin:prefill-conversation', prefill)
     window.addEventListener('autowin:brainwash', openBrainwash)
+    // Une demande émise AVANT le premier affichage du chat a été gardée par le relais (conv-1101,
+    // `relais-prefill.ts`) : on la réclame dans le MÊME bloc que la pose de l'écouteur.
+    const gardee = ouvrirEcouteurPrefill()
+    if (gardee) prefill(new CustomEvent('autowin:prefill-conversation', { detail: gardee }))
     return () => {
+      fermerEcouteurPrefill()
       window.removeEventListener('autowin:prefill-conversation', prefill)
       window.removeEventListener('autowin:brainwash', openBrainwash)
     }
