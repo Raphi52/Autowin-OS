@@ -40,6 +40,7 @@ import {
   avancementDesEtapes,
   avancerChronosDesEtapes,
   bilanDesActions,
+  chronoDepuisLeDebutDuTour,
   chronoMemorise,
   chronosDesEtapesMemorises,
   corpsDuBloc,
@@ -499,18 +500,26 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
  * nouvelle bulle l'adopte. La `fin` mémorisée de cette clôture ne vaut plus : la garder figeait le
  * compteur à 15 min 9 s sous le libellé « Raisonnement » d'un tour en cours. Il reprend donc depuis le
  * DÉBUT du tour, au montage comme sous les yeux.
+ *
+ * LE DÉBUT, C'EST CELUI DU TOUR (conv-1084, 2026-10-22) : quand le message porte `debutDuTour`, le
+ * compteur part de là et non du montage du bloc — sinon un tour lancé pendant qu'on regardait un
+ * autre fil ne comptait qu'à partir du retour sur la conversation.
  */
 function useChronoDuRaisonnement(
   turnId: string | undefined,
   done: boolean,
-  conserveMs: number | undefined
+  conserveMs: number | undefined,
+  debutDuTour: number | undefined
 ): number | null {
-  const [chrono, setChrono] = useState<Chrono | null>(() => {
+  const [chronoVu, setChrono] = useState<Chrono | null>(() => {
     const memorise = chronoMemorise(turnId)
     if (done) return memorise
     return { debut: memorise?.debut ?? Date.now() }
   })
-  const [maintenant, setMaintenant] = useState(() => chrono?.fin ?? Date.now())
+  const [maintenant, setMaintenant] = useState(() => chronoVu?.fin ?? Date.now())
+  const chrono = chronoDepuisLeDebutDuTour(chronoVu, debutDuTour)
+  const debut = chrono?.debut
+  const fin = chrono?.fin
   useEffect(() => {
     if (done) return
     // Chaque battement retire aussi la `fin` d'une clôture démentie — tour rallumé SOUS LES YEUX,
@@ -530,9 +539,9 @@ function useChronoDuRaisonnement(
   }, [done])
   // Memorise le debut (et, tour fini, la fin) pour qu'un remontage ne reparte pas de zero.
   useEffect(() => {
-    if (!turnId || !chrono) return
-    memoriserChrono(turnId, done ? { debut: chrono.debut, fin: chrono.fin ?? maintenant } : chrono)
-  }, [turnId, chrono, done, maintenant])
+    if (!turnId || debut === undefined) return
+    memoriserChrono(turnId, done ? { debut, fin: fin ?? maintenant } : { debut })
+  }, [turnId, debut, fin, done, maintenant])
   if (!chrono) return done && conserveMs !== undefined ? Math.floor(conserveMs / 1000) : null
   return secondesDuChrono(
     done ? { ...chrono, fin: chrono.fin ?? maintenant } : { debut: chrono.debut },
@@ -586,7 +595,8 @@ export function ThinkingBlock({
   status,
   statusLog,
   turnId,
-  reasoningMs
+  reasoningMs,
+  debutDuTour
 }: {
   text: string
   done: boolean
@@ -598,6 +608,8 @@ export function ThinkingBlock({
   turnId?: string
   /** Durée du raisonnement CONSERVÉE par le tour (ms) : le compteur d'un tour relu du disque. */
   reasoningMs?: number
+  /** Heure de DÉBUT du tour (ms epoch), posée par le main : le zéro du chrono (conv-1084). */
+  debutDuTour?: number
 }): React.JSX.Element {
   const pensee = corpsDuBloc(text)
   const frise = actionsDuTour(statusLog, status, done)
@@ -607,7 +619,7 @@ export function ThinkingBlock({
   // (conv-904) : tour fini, la seconde ligne garde la DERNIERE ligne de la pensee — sa conclusion.
   // Une pensee chiffree par le modele (corps vide) n'invente rien : le bloc reste sur une ligne.
   const dernierePensee = derniereLigneDuRaisonnement(pensee)
-  const secondesPensee = useChronoDuRaisonnement(turnId, done, reasoningMs)
+  const secondesPensee = useChronoDuRaisonnement(turnId, done, reasoningMs, debutDuTour)
   const secondesActions = secondesDesActions(frise)
   const etapes = etapesDuJournal(statusLog?.length ? statusLog : status ? [status] : [])
   const etapesFaites = etapes.filter((e) => e.statut === 'completed').length
