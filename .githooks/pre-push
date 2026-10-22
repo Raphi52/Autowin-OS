@@ -2,11 +2,16 @@
 # Deux garde-fous :
 #   1. Anti-fuite (pour tous) : refuse tout push vers GitHub dont un commit contient `entreprise/`
 #      — section « DÉPÔT PUBLIC » plus bas, prouvée par src/main/githooks-pre-push.test.ts.
-#   2. Anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS.
+#   2. Anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS, et seulement
+#      sans `ALLOW_MAIN_PUSH=1`.
 #
 # Contexte d'origine : plusieurs devs/agents travaillant sur `main` dans le même checkout ont produit
 # des changements entremêlés, des fichiers supprimés sous les pieds d'une autre session et un HEAD
-# incohérent. Règle de l'équipe (ONBOARDING.md §7) : 1 branche par sujet + Pull Request.
+# incohérent. La règle d'alors était « 1 branche par sujet + Pull Request ».
+#
+# RÈGLE ACTUELLE de ce dépôt (2026-10-22, conv-1074) : on pousse DIRECTEMENT sur `main` avec
+# `ALLOW_MAIN_PUSH=1`, sans PR (`npm run publier:main` pose la variable). Le refus reste pour qu'un
+# push d'agent sur `main` soit un geste assumé et tracé, jamais un accident ; son message le dit.
 #
 # CORRIGÉ le 2026-07-29 — l'intention et l'implémentation divergeaient. La règle visait les AGENTS
 # autonomes d'Autowin OS, mais le hook bloquait TOUT push sur `main`, humain compris. Conséquence
@@ -116,16 +121,14 @@ if [ -n "$blocked" ] && [ "$is_agent" = "1" ] && [ "$ALLOW_MAIN_PUSH" != "1" ]; 
 
   ⛔ Push direct refusé sur : $blocked
 
-  Ce push vient d'un contexte AGENT (Autowin OS). Règle d'équipe : 1 branche par sujet + Pull
-  Request (ONBOARDING.md §7) — un agent ne publie pas sur la branche par défaut sans revue.
+  Ce push vient d'un contexte AGENT (Autowin OS). Sur ce dépôt, on pousse DIRECTEMENT sur
+  $blocked, sans PR ni branche de sujet : le refus sert seulement à ce que ce push soit un
+  geste assumé et tracé, jamais un accident.
 
   Marche à suivre depuis la branche courante ($current) :
 
-    git switch -c feat/<sujet>
-    git push -u origin feat/<sujet>
-    # puis ouvrir la Pull Request vers $blocked
-
-  Exception assumée et tracée :  ALLOW_MAIN_PUSH=1 git push
+    ALLOW_MAIN_PUSH=1 git push
+    # ou, depuis main : npm run publier:main  (pose la variable puis pousse origin main)
 
 EOF
   exit 1

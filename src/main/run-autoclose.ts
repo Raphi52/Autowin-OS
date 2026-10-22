@@ -1,12 +1,14 @@
 import type { TypageAvantPublication } from './typage-avant-publication'
 
 /**
- * Clôture automatique d'un run VERT : commit du travail puis publication sur une branche DÉDIÉE.
+ * Clôture automatique d'un run VERT : commit du travail puis publication — directement sur la branche
+ * courante en mode `direct`, sinon (ou en repli) sur une branche DÉDIÉE.
  *
  * Deux garde-fous structurels, non contournables depuis l'appelant :
- *  1. **Jamais `main`/`master`** — la règle d'équipe (1 branche + PR, `.githooks/pre-push`) reste
- *     valable pour une machine comme pour un humain : l'automatisation ne doit pas devenir la faille
- *     que le hook ferme. On pousse `HEAD:refs/heads/<branche auto>`.
+ *  1. **La branche DÉDIÉE n'est jamais `main`/`master`** (`PROTECTED`). Sur ce dépôt, la règle est le
+ *     push DIRECT sur `main` avec `ALLOW_MAIN_PUSH=1`, sans PR (2026-10-22, conv-1074) : c'est le mode
+ *     `direct` qui le fait (`ACCORD_PUSH_DIRECT`, plus bas). La branche dédiée
+ *     `HEAD:refs/heads/<branche auto>` et sa PR ne sont que le repli quand un dépôt refuse ce push.
  *  2. **On ne déplace jamais le HEAD local** — pas de `checkout -b` : l'utilisateur travaille peut-être
  *     dans ce dépôt. Le commit va sur la branche courante, la publication sur une branche distante.
  *
