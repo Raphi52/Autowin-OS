@@ -257,6 +257,29 @@ export const gesteDeLEtape = (etape) => {
   return { geste, selecteur: prefixe[2].trim() }
 }
 
+/**
+ * LA VUE QU'OUVRE UNE CHAINE --click (conv-1105, 2026-10-22). Pure. `--conversation` exige
+ * `--view chat` : l'Observatory d'une conversation copiee ne s'atteint qu'en cliquant `nav-observatory`.
+ * Le verdict comparait pourtant la vue active a `--view` et rendait `navigation-non-appliquee` sur une
+ * photo qui montrait bien la vue cliquee. La vue attendue est celle du DERNIER bouton de navigation
+ * CLIQUE (un survol ne navigue pas) ; un bouton hors catalogue ou aucun = `vue`, comme avant.
+ */
+export const vueAttendueApresClics = (vue, declencheur) => {
+  if (!declencheur) return vue
+  let attendue = vue
+  const etapes = declencheur
+    .split('>>')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  for (const etape of etapes) {
+    const { geste, selecteur } = gesteDeLEtape(etape)
+    if (geste !== 'clic' && geste !== 'alt-clic') continue
+    const id = /^\[data-testid=(["']?)nav-([a-z-]+)\1\]$/u.exec(selecteur)?.[2]
+    if (id && VUES_CONNUES.includes(id)) attendue = id
+  }
+  return attendue
+}
+
 /** Le script joue dans la page pour ce geste ; il rend `true` si la cible existe. */
 export const scriptDuGeste = ({ geste, selecteur }) => {
   const cible = `const cible = document.querySelector(${JSON.stringify(selecteur)})`
@@ -419,7 +442,9 @@ export const verdictCapture = (mesures) => {
   if (mesures.codeDevExige && !SOURCES_CODE_EN_COURS.includes(mesures.interfaceCapturee?.source)) {
     echecs.push(`code-dev-non-servi(${mesures.interfaceCapturee?.source ?? 'inconnue'})`)
   }
-  if (mesures.destinationActive && mesures.vue && mesures.destinationActive !== mesures.vue) {
+  // La vue attendue est celle qu'a ouverte la chaine --click quand elle navigue (conv-1105).
+  const vueAttendue = mesures.vueAttendue ?? mesures.vue
+  if (mesures.destinationActive && vueAttendue && mesures.destinationActive !== vueAttendue) {
     echecs.push(`navigation-non-appliquee(${mesures.destinationActive})`)
   }
   // Photo prise pendant le fondu d'une vue a l'autre (2026-10-16, ninja-chat.png : « Accueil » encore
@@ -1242,9 +1267,24 @@ const main = async () => {
   // affichee dessine ~2 images/s (une capture sur deux expire, 33 images/s avec le flux) ; une
   // ouverture de 130 ms finit avant la 1re image (600 ms d'attente apres le declencheur).
   const mesureMouvement = drapeau('--motion')
-  if (mesureMouvement) {
-    await envoyer('Page.startScreencast', { format: 'jpeg', quality: 10, maxWidth: 64, maxHeight: 64 })
+  // UN SEUL flux d'images pour tout le pilotage : la mesure de mouvement, la chaine --click et le
+  // cadrage --scroll en ont besoin, et chacun l'ouvrait de son cote.
+  let fluxOuvert = false
+  const ouvrirFlux = async () => {
+    if (fluxOuvert) return
+    await envoyer('Page.startScreencast', {
+      format: 'jpeg',
+      quality: 10,
+      maxWidth: 64,
+      maxHeight: 64
+    })
+    fluxOuvert = true
   }
+  const lireFondu = () =>
+    evaluer(
+      `${JSON.stringify(CLASSES_DE_FONDU)}.some((c) => document.documentElement.classList.contains(c))`
+    )
+  if (mesureMouvement) await ouvrirFlux()
   const tauxDeLecture = tauxDeLectureDuMouvement(process.argv)
   if (tauxDeLecture !== 1) {
     await envoyer('Animation.enable')
@@ -1303,6 +1343,7 @@ const main = async () => {
   }
 
   const declencheur = argument('--click')
+  const vueAttendue = vueAttendueApresClics(vue, declencheur)
   let declencheurTrouve
   let elementsAvantClic
   if (declencheur) {
@@ -1316,6 +1357,14 @@ const main = async () => {
       .split('>>')
       .map((s) => s.trim())
       .filter(Boolean)
+    // LA FENETRE CACHEE DOIT DESSINER PENDANT LES CLICS (conv-1105, 2026-10-22). Un clic de
+    // navigation passe par `document.startViewTransition` (transition-de-vue.ts) : la nouvelle vue
+    // n'est montee qu'a l'image SUIVANTE, et la fenetre cachee n'en dessine presque pas sans flux
+    // (voir --scroll). Mesure : 600 ms apres `nav-observatory`, page encore sur « chat » et
+    // `vue-en-transition` pose — --scroll et --taper ne trouvaient pas leur cible (code 9) ; seule la
+    // photo, qui force une image, montrait l'Observatory. Avec le flux, on attend en plus la fin du
+    // fondu apres CHAQUE etape : l'etape suivante vise un element de la vue qui vient de s'ouvrir.
+    await ouvrirFlux()
     declencheurTrouve = true
     for (const etape of etapes) {
       const trouve = await evaluer(scriptDuGeste(gesteDeLEtape(etape)))
@@ -1324,6 +1373,7 @@ const main = async () => {
         break
       }
       await new Promise((r) => setTimeout(r, 600))
+      await attendreFinDeTransition(lireFondu)
     }
     if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
@@ -1446,22 +1496,28 @@ const main = async () => {
       `Boolean(document.querySelector(${JSON.stringify(cibleDefilement)}))`
     )
     if (!trouve) {
+      const etatPage = await mesurerDom().catch(() => ({}))
       await restaurerVue()
       socket.close()
-      rendre({ ok: false, echecs: [`scroll-cible-absente(${cibleDefilement})`], vue }, 9)
+      rendre(
+        {
+          ok: false,
+          echecs: [`scroll-cible-absente(${cibleDefilement})`],
+          vue,
+          // Ce que la page montrait quand la cible manquait : une vue encore en transition ou restee
+          // sur l'ancien onglet dit que le clic n'avait pas fini, pas que la cible n'existe pas.
+          destinationActive: etatPage.destinationActive ?? null,
+          enTransition: Boolean(etatPage.enTransition)
+        },
+        9
+      )
     }
     // LA PHOTO DOIT SUIVRE LE DEFILEMENT. La fenetre cachee ne dessine que ~2 images/s sans flux
     // ouvert (voir `accuseDImage`), et `Page.captureScreenshot` rend la DERNIERE image dessinee.
     // Mesure du 2026-10-16 (conv-1014) : sans flux, 2 photos sur 2 montraient le fil AVANT le
     // cadrage alors que la page mesurait la cible en place (761 px sur 761) ; avec le flux, 3 sur 3
     // conformes a la mesure. Le flux reste ouvert jusqu'a la photo.
-    if (!mesureMouvement)
-      await envoyer('Page.startScreencast', {
-        format: 'jpeg',
-        quality: 10,
-        maxWidth: 64,
-        maxHeight: 64
-      })
+    await ouvrirFlux()
     let tenue = 0
     for (let essai = 0; essai < 8 && tenue < 2; essai++) {
       if (tenue === 0) {
@@ -1740,11 +1796,7 @@ const main = async () => {
   // tombait en plein fondu dans l'instance cachee (ninja-chat.png). On attend que <html> perde la
   // classe du fondu ; s'il a fallu attendre, la page est remesuree, car l'etat lu plus tot etait
   // celui du fondu. Fondu encore en cours au bout de 10 s = `capture-pendant-le-fondu` (code 5).
-  const fondu = await attendreFinDeTransition(() =>
-    evaluer(
-      `${JSON.stringify(CLASSES_DE_FONDU)}.some((c) => document.documentElement.classList.contains(c))`
-    )
-  )
+  const fondu = await attendreFinDeTransition(lireFondu)
   if (fondu.attendu && !fondu.enTransition) {
     await new Promise((r) => setTimeout(r, 300))
     mesuresDom = await mesurerDom()
@@ -1753,9 +1805,9 @@ const main = async () => {
   // Le cadrage de la cible --scroll, lu JUSTE AVANT la photo : c'est lui que le verdict juge.
   const cadrage = cibleDefilement ? await mesurerCadrage() : undefined
   const capture = await envoyer('Page.captureScreenshot', { format: 'png', fromSurface: true })
-  // Le flux ouvert pour le cadrage --scroll n'a plus de raison d'etre. Un echec de cet arret ne
+  // Le flux ouvert pour --click ou --scroll n'a plus de raison d'etre. Un echec de cet arret ne
   // touche pas la photo deja prise, et la connexion se ferme juste apres : on l'ignore.
-  if (cibleDefilement && !mesureMouvement) await envoyer('Page.stopScreencast').catch(() => {})
+  if (fluxOuvert) await envoyer('Page.stopScreencast').catch(() => {})
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(sortie, Buffer.from(capture.data, 'base64'))
   const octetsPng = statSync(sortie).size
@@ -1770,6 +1822,7 @@ const main = async () => {
     ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
     ...(cibleDefilement ? { defilementVers: cibleDefilement, cadrage } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
+    ...(vueAttendue !== vue ? { vueAttendue } : {}),
     ...(retraits !== undefined ? { retraits } : {}),
     ...(conversationOuverte ? { conversation: conversationOuverte } : {}),
     ...(tourChoisi ? { tour: tourChoisi } : {}),
@@ -1792,7 +1845,7 @@ const main = async () => {
       erreursConsole: erreursConsole.slice(0, 5),
       // Ce que le producteur peut CITER au juge comme preuve hors-modèle.
       preuve: verdict.ok
-        ? `capture ${sortie} (${octetsPng} octets), vue « ${vue} » active, ${mesures.elements} éléments rendus`
+        ? `capture ${sortie} (${octetsPng} octets), vue « ${vueAttendue} » active, ${mesures.elements} éléments rendus`
         : null
     },
     verdict.ok ? 0 : 5

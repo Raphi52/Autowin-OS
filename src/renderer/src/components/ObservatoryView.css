@@ -1947,6 +1947,12 @@
 .observatory-gantt__lane[data-phase='learn'] {
   --gantt-color: #8b6cf2;
 }
+/* Lignes d'OUTILS (Bash, Read…) d'un tour de chat, conv-1105 : un vert-jaune qu'aucune phase ne prend
+   (l'orange touchait l'ocre de build et la terracotta de Ninja, le turquoise le vert de judge) ;
+   ObservatoryAgentGantt.couleurs.test.ts le tient a 30 deg au moins de chaque agent, dans chaque theme. */
+.observatory-gantt__lane[data-phase='outil'] {
+  --gantt-color: #9fc23f;
+}
 .observatory-gantt__who {
   display: grid;
   min-width: 0;
