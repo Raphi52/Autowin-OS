@@ -6,12 +6,19 @@ import App from './App'
 import { surveillerGelsRenderer } from './gel-renderer'
 import { vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
+import { installerCopiePropre } from './copie-propre'
 
 /*
  * Le mode d'affichage est posé AVANT le premier rendu : appliqué après, l'application
  * clignoterait en sombre le temps d'une image à chaque démarrage.
  */
 appliquerThemeMode(lireThemeMode())
+
+/*
+ * Un Ctrl+C collé dans Gmail emportait le fond sombre de l'app, en bandes noires (conv-1073) :
+ * la copie passe désormais par un HTML sans styles, pour toute la fenêtre.
+ */
+installerCopiePropre()
 
 /*
  * La sonde demarre AVANT le premier rendu, et pour toute la duree de la session : un gel se produit
