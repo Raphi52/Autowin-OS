@@ -72,3 +72,19 @@ export function estRelanceSansObjet(texte: string): boolean {
   if (!replie) return false
   return MOTIFS.some((motif) => motif.test(replie))
 }
+
+/**
+ * La tâche que porte un objectif enveloppé `<relance>\n\nCIBLE CONTEXTUALISEE : <cible>`
+ * (commands.ts) ; `undefined` si l'objectif n'en est pas un.
+ *
+ * Le texte avant le marqueur doit être une relance sans objet : seule une relance est enveloppée,
+ * et un message qui nomme son objet reste seul maître du run même s'il cite le marqueur.
+ * Sert à la recherche du point de reprise (`pickResumeForTask`) : « REPREND » comparé en entier ne
+ * retrouvait jamais la tâche qu'il porte (conv-1038, 2026-10-21 — run complet repayé, ~36 $).
+ */
+export function cibleDUneRelance(objectif: string): string | undefined {
+  const separateur = `\n\n${MARQUEUR_CIBLE_CONTEXTUALISEE}`
+  const rang = objectif.indexOf(separateur)
+  if (rang <= 0 || !estRelanceSansObjet(objectif.slice(0, rang))) return undefined
+  return objectif.slice(rang + separateur.length).trim() || undefined
+}
