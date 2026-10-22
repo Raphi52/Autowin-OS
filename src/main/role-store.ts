@@ -36,6 +36,8 @@ function decodePhaseModels(value: unknown): RoleBinding['phaseModel'] | undefine
       return undefined
     }
     if (rawOverride.model !== undefined && !nonEmptyString(rawOverride.model)) return undefined
+    if (rawOverride.advisorModel !== undefined && !nonEmptyString(rawOverride.advisorModel))
+      return undefined
     if (
       rawOverride.reasoningEffort !== undefined &&
       !isReasoningEffort(rawOverride.reasoningEffort)
@@ -44,6 +46,9 @@ function decodePhaseModels(value: unknown): RoleBinding['phaseModel'] | undefine
     }
     decoded[rawPhase as PipelinePhase] = {
       ...(rawOverride.model === undefined ? {} : { model: rawOverride.model.trim() }),
+      ...(rawOverride.advisorModel === undefined
+        ? {}
+        : { advisorModel: rawOverride.advisorModel.trim() }),
       ...(rawOverride.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: rawOverride.reasoningEffort })

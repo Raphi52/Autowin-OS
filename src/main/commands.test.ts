@@ -524,6 +524,68 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
   })
 
+  it('pose le plan découpé dans le RUN.md AVANT le build, puis l’état de chaque sous-tâche', async () => {
+    // conv-1083 (objection du contrôle final) : l'appel `mettreAJourPlanDuRun` du suivi d'étapes
+    // n'avait aucun test au site d'appel. Entrée qui fait échouer ce test si l'appel manque : une
+    // étape de découpage à 2 sous-tâches (b après a) → aucune section « ## Plan » dans le RUN.md.
+    const os = fakeOs()
+    let runPath: string | undefined
+    const lireRun = (): string =>
+      runPath && existsSync(runPath) ? readFileSync(runPath, 'utf8') : ''
+    const vu = { avantBuild: '', apresA: '' }
+    os.runTask = async (...args: unknown[]) => {
+      const onStep = args[1] as (step: OrchestrationStep) => void
+      // Forme émise par l'orchestrateur (orchestrator.ts, `role: 'decompose'`).
+      onStep({
+        step: 'gate',
+        role: 'decompose',
+        status: 'completed',
+        detail: 'plan de 2 sous-tâches',
+        plan: [
+          { id: 'a', consigne: 'écrire le module', deps: [] },
+          { id: 'b', consigne: 'brancher le module', deps: ['a'] }
+        ]
+      })
+      vu.avantBuild = lireRun()
+      onStep({
+        step: 'exec',
+        status: 'completed',
+        detail: 'phase build',
+        text: 'module écrit',
+        execution: { taskId: 'a', groupId: 'build:greedy' }
+      })
+      vu.apresA = lireRun()
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, (event) => {
+      const e = event as Record<string, unknown>
+      if (e.type === 'orchestrate-start') runPath = e.runPath as string | undefined
+    })
+    try {
+      await bus.exec('orchestrate', { task: `/build plan en vagues ${Date.now()}` }, 'conv-1')
+      expect(runPath).toBeTypeOf('string')
+      // Relisible AVANT le code : la section est là dès l'étape de découpage.
+      expect(vu.avantBuild).toContain('## Plan')
+      expect(vu.avantBuild).toContain('### Vague 1\n- [ ] a · écrire le module — à faire')
+      expect(vu.avantBuild).toContain(
+        '### Vague 2\n- [ ] b · brancher le module (après a) — à faire'
+      )
+      // Suivie EN DIRECT : la sous-tâche rendue est cochée, l'autre attend toujours.
+      expect(vu.apresA).toContain('- [x] a · écrire le module — faite')
+      expect(vu.apresA).toContain('- [ ] b · brancher le module (après a) — à faire')
+      expect(vu.apresA.match(/^## Plan$/gm)).toHaveLength(1)
+    } finally {
+      if (runPath) supprimerArbre(dirname(runPath))
+    }
+  })
+
   it("n'emet RIEN quand la phase n'est pas frame, ni quand le cadrage n'a aucune supposition", async () => {
     const cas = [
       { detail: 'phase build', text: '## Confiance\n- x — NON VÉRIFIÉ' },
@@ -1241,6 +1303,12 @@ describe('AppCommandBus command execution policy', () => {
     }
   })
 
+  /*
+   * Depuis la réservation des fichiers entre fils (conv-1083) : deux tours du MÊME fil s'enchaînent
+   * sur le même fichier, un AUTRE fil est refusé en nommant le premier tant que le fichier reste
+   * modifié et non commité. Avant, ce test faisait passer conv-2 derrière conv-1 sur `target.txt`
+   * encore modifié : exactement le cas qui bloquait ensuite la publication des deux fils.
+   */
   it('sérialise deux edit_file réellement concurrents et conserve leur chaîne causale', async () => {
     const previousAppData = process.env.APPDATA
     const appData = mkdtempSync(join(tmpdir(), 'autowin-concurrent-edit-scope-'))
@@ -1266,7 +1334,7 @@ describe('AppCommandBus command execution policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const [first, second] = await Promise.all([
+      const [first, second, autreFil] = await Promise.all([
         bus.exec(
           'edit_file',
           { path: 'target.txt', oldText: 'zéro', newText: 'un' },
@@ -1277,21 +1345,32 @@ describe('AppCommandBus command execution policy', () => {
         bus.exec(
           'edit_file',
           { path: 'target.txt', oldText: 'un', newText: 'deux' },
-          'conv-2',
+          'conv-1',
           undefined,
           'turn-2'
+        ),
+        bus.exec(
+          'edit_file',
+          { path: 'target.txt', oldText: 'deux', newText: 'trois' },
+          'conv-2',
+          undefined,
+          'turn-3'
         )
       ])
 
       expect(first).toMatchObject({ ok: true, data: { allowed: true } })
       expect(second).toMatchObject({ ok: true, data: { allowed: true } })
+      // Le troisième n'a pu voir « deux » qu'après les deux premiers : c'est la RÉSERVATION qui le
+      // refuse, pas un extrait introuvable.
+      expect(autreFil).toMatchObject({ ok: true, data: { allowed: false } })
+      expect(String((autreFil.data as { reason?: string }).reason)).toContain(
+        'Fichier réservé par conv-1'
+      )
       expect(readFileSync(join(workspace, 'target.txt'), 'utf8')).toBe('deux\n')
       expect(readCurrentConversationPathOwnership('conv-1')).toEqual([
         expect.objectContaining({ conversationId: 'conv-1', path: 'target.txt' })
       ])
-      expect(readCurrentConversationPathOwnership('conv-2')).toEqual([
-        expect.objectContaining({ conversationId: 'conv-2', path: 'target.txt' })
-      ])
+      expect(readCurrentConversationPathOwnership('conv-2')).toEqual([])
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData

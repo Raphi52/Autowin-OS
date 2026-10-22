@@ -76,6 +76,7 @@ const JUDGE_FORMAT_CONTRACT =
   `d'un /100 : ce ne sont pas des défauts ici. Juge le FOND.\n`
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { effortParDefautDeLEtape, resolvePhaseBinding } from './roles'
+import { advisorAccepte } from './providers/claude-advisor'
 import { effortsDeclaresDuModele } from './models'
 import { raisonDeBlocageIntegration } from '../shared/raison-de-blocage'
 import { defaultQuorumThreshold } from './quorum'
@@ -405,6 +406,7 @@ import {
   WORKFLOW_IS_A_TOOL_INSTRUCTION
 } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
+import { resumeConsigne, type SousTachePlan } from './runs/plan-en-vagues'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
@@ -565,6 +567,11 @@ export interface OrchestrationStep {
   artifacts?: ChatArtifact[]
   /** Raisonnement/thinking du sous-agent (si le provider le remonte), conservé pour observation. */
   thinking?: string
+  /**
+   * Étape de découpage seulement : les sous-tâches ADMISES et leurs dépendances, pour que le RUN.md
+   * montre le plan avant le build (`runs/plan-en-vagues.ts`, conv-1083).
+   */
+  plan?: SousTachePlan[]
   /** Provenance causale stable utilisée par le graphe demande → phases → agents. */
   execution?: {
     phase?: NodePhase
@@ -1496,7 +1503,7 @@ export class Orchestrator {
     phase: NodePhase,
     task: string,
     fige: boolean
-  ): { model?: string; reasoningEffort?: ReasoningEffort } {
+  ): { model?: string; reasoningEffort?: ReasoningEffort; advisorModel?: string } {
     const resolu = resolvePhaseBinding(binding, phase)
     if (fige || binding.phaseModel?.[phase as PipelinePhase]?.reasoningEffort) return resolu
     return {
@@ -2364,6 +2371,24 @@ export class Orchestrator {
                   : outcome.kind === 'atomic'
                     ? 'tâche jugée atomique — séquentiel'
                     : `plan de ${outcome.nodes.length} sous-tâches`,
+              // Le plan ADMIS (même borne que plus bas) : c'est lui que le build exécutera, et que
+              // le RUN.md montre avant le code (conv-1083).
+              ...(outcome.kind === 'plan'
+                ? {
+                    plan: (executionQuote
+                      ? limitGreedyPlan(
+                          outcome.nodes,
+                          executionQuote.allocation?.maxGreedyNodes ??
+                            executionQuote.decomposition.maxNodes
+                        )
+                      : outcome.nodes
+                    ).map((n) => ({
+                      id: n.id,
+                      consigne: resumeConsigne(n.prompt),
+                      deps: [...n.deps]
+                    }))
+                  }
+                : {}),
               execution: { runId }
             })
           }
@@ -3237,6 +3262,7 @@ ${CONTRAT_OBJECTIONS}`
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
+                ...(phaseBinding.advisorModel ? { advisorModel: phaseBinding.advisorModel } : {}),
                 execution: this.executionOptions(
                   workCwd,
                   sandbox,
@@ -4861,6 +4887,13 @@ ${CONTRAT_OBJECTIONS}`
         task,
         jugeDedie || Boolean(bindingOverride)
       )
+      // Un advisor réglé mais refusé par la table du CLI ne part pas (claude.ts) : on dit pourquoi,
+      // sinon le réglage disparaîtrait sans un mot (conv-1083).
+      if (phaseBinding.advisorModel && providerDeLaPhase === 'claude') {
+        const accord = advisorAccepte(phaseBinding.model, phaseBinding.advisorModel)
+        if (!accord.accepte)
+          onDelta?.('exec', `[advisor] Phase ${phase} — non transmis : ${accord.raison}\n`)
+      }
       // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
       // à chaque phase gonfle le contexte pour rien ("ENGINE injectée N fois", "1M3 tokens"). On ne
@@ -5003,6 +5036,7 @@ ${CONTRAT_OBJECTIONS}`
         contextBlocks: userBlocks,
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
+        ...(phaseBinding.advisorModel ? { advisorModel: phaseBinding.advisorModel } : {}),
         // Pas la session de l'exécution pour un juge dédié : elle n'existe pas chez son provider, et
         // la lui passer l'enverrait reprendre un fil inconnu. `resuming` est déjà faux — cohérence.
         resumeSessionId: jugeDedie ? undefined : prevSessionId,

@@ -149,6 +149,9 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
       project: { status: 'skipped', reason: 'unattributed' },
       exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
     })
+    // Le refus NOMME le fil qui tient le fichier (conv-1083) : sans lui, l'utilisateur ne sait pas
+    // quelle conversation finir ou commiter pour débloquer la publication.
+    expect(report?.exclus?.[0].fils).toEqual(['conv-B'])
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
     expect(await enAttente(repo)).toContain('partage.ts')

@@ -320,6 +320,8 @@ export async function publierTourDeChat(input: {
   const duFil = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
   const concurrents = new Set<string>()
+  /** Pour chaque fichier touché par un autre fil pendant le tour : QUELS fils (conv-1083). */
+  const filsConcurrents = new Map<string, Set<string>>()
   /** Nommés par une commande shell d'écriture de CE tour. */
   const nommesParLeTour = new Set<string>()
   /**
@@ -343,6 +345,7 @@ export async function publierTourDeChat(input: {
       if (autreFil) {
         if (!pendantLeTour) continue
         concurrents.add(key)
+        filsConcurrents.set(key, (filsConcurrents.get(key) ?? new Set()).add(trace.conversationId))
         if (trace.nommeParCommande || lignes?.length || trace.source !== 'chat_tool')
           ecritsParUnAutreFil.add(key)
         continue
@@ -390,7 +393,13 @@ export async function publierTourDeChat(input: {
       exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour', ...detail })
     else if (nommesParLeTour.has(key) && !ecritsParUnAutreFil.has(key)) publier.push(gitPath)
     else if (concurrents.has(key))
-      exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
+      exclus.push({
+        path: gitPath,
+        motif: 'touche-par-un-autre-fil',
+        // Le fil qui tient le fichier, nommé : c'est lui qu'il faut finir ou commiter (conv-1083).
+        fils: [...(filsConcurrents.get(key) ?? [])].sort(),
+        ...detail
+      })
     else if (autreFilEnCours) exclus.push({ path: gitPath, motif: 'autre-fil-en-cours', ...detail })
     else publier.push(gitPath)
   }

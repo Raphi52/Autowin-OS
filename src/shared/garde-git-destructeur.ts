@@ -4,6 +4,7 @@ import { refusEcriturePythonCrlf } from './garde-python-crlf'
 import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
 import { refusTacheWindows } from './garde-tache-windows'
+import { refusCommitReserve, reserverOuRefuser } from './reservation-fichiers'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -272,6 +273,18 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
     fn: 'refusSqlAgent',
     label: 'Client SQL vers la prod',
     description: 'Refuse un client SQL lancé par un agent, sauf vers une base déclarée non-prod.'
+  },
+  {
+    fn: 'refusFichierReserve',
+    label: 'Fichier réservé par un autre fil',
+    description:
+      "Refuse l'édition d'un fichier qu'un autre fil a modifié depuis moins de 30 min et pas encore commité, en nommant ce fil (conv-1083)."
+  },
+  {
+    fn: 'refusCommitDeFichierReserve',
+    label: "Commit qui emporte le travail d'un autre fil",
+    description:
+      'Refuse un git commit qui emporterait un fichier réservé par un autre fil (commit -a, git add -A, fichier nommé ou déjà indexé), en nommant ce fil (conv-1083).'
   }
 ]
 
@@ -310,6 +323,66 @@ const refusTacheWindows = ${refusTacheWindows.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
+const reserverOuRefuser = ${reserverOuRefuser.toString()};
+const refusCommitReserve = ${refusCommitReserve.toString()};
+// Réservation des fichiers entre fils (conv-1083, shared/reservation-fichiers.ts). Le fil qui écrit
+// est posé par Autowin dans reservation.json, à côté de ce script ; sans lui, rien n'est réservé.
+const OUTILS_D_EDITION = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+const confReservation = () => {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  let conf;
+  try {
+    conf = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), 'reservation.json'), 'utf8'));
+  } catch { return undefined; }
+  return conf && typeof conf.fil === 'string' && conf.fil && typeof conf.registre === 'string' ? conf : undefined;
+};
+const ioReservation = () => {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  const cp = process.getBuiltinModule('node:child_process');
+  const git = (dossier, args) => cp.spawnSync('git', args, { cwd: dossier, encoding: 'utf8', timeout: 5000, windowsHide: true });
+  return {
+    lire: (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return undefined; } },
+    ecrire: (p, t) => {
+      const tmp = p + '.' + process.pid + '.tmp';
+      fs.writeFileSync(tmp, t);
+      try { fs.renameSync(tmp, p); } catch (e) { try { fs.unlinkSync(tmp); } catch {} throw e; }
+    },
+    estPropre: (c) => {
+      const r = git(path.dirname(c), ['status', '--porcelain', '--', c]);
+      return r.status === 0 ? !String(r.stdout || '').trim() : undefined;
+    },
+    estIndexe: (c) => {
+      const r = git(path.dirname(c), ['diff', '--cached', '--name-only', '--', c]);
+      return r.status === 0 ? !!String(r.stdout || '').trim() : undefined;
+    },
+    racineDepot: (d) => {
+      const r = git(d, ['rev-parse', '--show-toplevel']);
+      const s = r.status === 0 ? String(r.stdout || '').trim() : '';
+      return s || undefined;
+    }
+  };
+};
+const refusFichierReserve = (j, chemin) => {
+  if (!chemin || !OUTILS_D_EDITION.test(String(j.tool_name || ''))) return undefined;
+  try {
+    const conf = confReservation();
+    if (!conf) return undefined;
+    const path = process.getBuiltinModule('node:path');
+    return reserverOuRefuser(ioReservation(), conf, path.resolve(chemin), Date.now(), process.platform === 'win32');
+  } catch { return undefined; }
+};
+// Le COMMIT d'un agent consulte le même registre (objection du contrôle final, conv-1083) : refus
+// d'un commit qui emporterait le travail non commité d'un autre fil.
+const refusCommitDeFichierReserve = (j, shell) => {
+  if (!/\\bcommit\\b/.test(shell)) return undefined;
+  try {
+    const conf = confReservation();
+    if (!conf) return undefined;
+    return refusCommitReserve(ioReservation(), conf, shell, String(j.cwd || process.cwd()), Date.now(), process.platform === 'win32');
+  } catch { return undefined; }
+};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
@@ -341,7 +414,7 @@ process.stdin.on('end', () => {
       fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
     }
   } catch {}
-  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
