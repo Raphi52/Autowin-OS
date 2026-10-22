@@ -182,6 +182,31 @@ export interface TableauScoutLocalise {
   }
   /** Les lignes CANDIDATES, dans l'ordre du texte, avec leur index dans `lignesTexte`. */
   lignes: Array<{ index: number; cellules: string[] }>
+  /** Index dans `lignesTexte` de l'en-tête du tableau. */
+  entete: number
+  /** Index dans `lignesTexte` de la première ligne APRÈS le tableau (`lignesTexte.length` s'il finit le texte). */
+  fin: number
+}
+
+/**
+ * Le texte AUTOUR du tableau de candidats, sans le tableau ; `null` s'il n'y a pas de tableau.
+ *
+ * Défaut nommé le 2026-10-22 (conv-1083) : le panneau de sélection remplaçait le message ENTIER, et
+ * le texte avant le tableau (le rapport) comme après (la ligne `CIBLE:`, la clôture) disparaissait
+ * sans signal. Seul le tableau devient le panneau ; le reste doit garder sa place.
+ */
+export function texteAutourDuTableauScout(text: string): { avant: string; apres: string } | null {
+  const tableau = localiserTableauScout(text)
+  if (!tableau) return null
+  const { lignesTexte, entete, fin } = tableau
+  return {
+    avant: lignesTexte.slice(0, entete).join('\n').replace(/\s+$/u, ''),
+    apres: lignesTexte
+      .slice(fin)
+      .join('\n')
+      .replace(/^(?:[ \t]*\r?\n)+/u, '')
+      .replace(/\s+$/u, '')
+  }
 }
 
 export function parseScoutTable(text: string): ScoutRow[] | null {
@@ -265,8 +290,12 @@ export function localiserTableauScout(text: string): TableauScoutLocalise | null
     c.length > 0 && c.every((cellule) => /^:?-{2,}:?$/u.test(cellule.trim()))
 
   const lignes: TableauScoutLocalise['lignes'] = []
+  let fin = lines.length
   for (let i = headerIdx + 2; i < lines.length; i++) {
-    if (!isTableRow(lines[i])) break
+    if (!isTableRow(lines[i])) {
+      fin = i
+      break
+    }
     const c = cells(lines[i])
     if (separateur(c) || memeQueEntete(c)) continue
     /**
@@ -295,6 +324,8 @@ export function localiserTableauScout(text: string): TableauScoutLocalise | null
       how: iHow,
       commande: iCommande
     },
-    lignes
+    lignes,
+    entete: headerIdx,
+    fin
   }
 }

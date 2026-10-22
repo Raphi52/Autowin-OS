@@ -94,6 +94,10 @@ export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Elem
 function libelleAttente(receipt: DirectiveReceipt): string {
   if (receipt.attenteMotif === 'commande' && receipt.commande)
     return `⏸ Attend la fin du tour — lu comme la commande « ${receipt.commande} », qui ne s’ajoute pas à un tour en cours`
+  if (receipt.attenteMotif === 'lot')
+    return '⏸ Lot suivant de la sélection — il partira tout seul à la fin du tour en cours'
+  if (receipt.attenteMotif === 'lot-quota')
+    return '⏸ Lot suivant de la sélection — retenu : le lot précédent a été coupé par la limite de quota. Reprends-le quand la limite est levée, celui-ci partira à la fin de la reprise'
   if (receipt.attenteMotif === 'hors-tour')
     return '⏸ Attend la fin du tour — le tour se terminait, il partira juste après'
   return '⏸ Attend la fin du tour — il ne pouvait pas s’ajouter au tour en cours, il partira juste après'
@@ -450,7 +454,8 @@ export const ChatMessageRow = memo(
      */
     onRevenir?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
-    onPickSuggestion?: (prompt: string) => void
+    /** `suite` : les lots suivants d'une sélection de candidats scout, envoyés un par tour (conv-1080). */
+    onPickSuggestion?: (prompt: string, suite?: readonly string[]) => void
     /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
     autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
@@ -732,7 +737,7 @@ export const ChatMessageRow = memo(
               message.parts.flatMap((p) => (p.kind === 'text' ? [p.text] : []))
             )
           }
-          onPick={(prompt) => onPickSuggestion?.(prompt)}
+          onPick={(prompt, suite) => onPickSuggestion?.(prompt, suite)}
           // « Pourquoi pas ? » : seulement pour un TABLEAU de scout, dont les pistes vivent dans la
           // mémoire du scout (piste 2, conv-1033). Sans pont vers le processus principal : pas de bouton.
           onMotif={
@@ -827,6 +832,7 @@ export const ChatMessageRow = memo(
                 : {})}
               {...(message.turnId ? { turnId: message.turnId } : {})}
               {...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})}
+              {...(message.debutDuTour !== undefined ? { debutDuTour: message.debutDuTour } : {})}
             />
           )}
         <div className="msg-turn">

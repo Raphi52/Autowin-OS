@@ -1465,6 +1465,38 @@ describe('groupAssistantActivity', () => {
     expect(blocs.every((bloc) => bloc.kind === 'candidats-pick')).toBe(true)
   })
 
+  /*
+   * Defaut nomme le 2026-10-22 (conv-1083) : le panneau REMPLACAIT tout le message. Le texte avant le
+   * tableau (le rapport) et apres (la ligne `CIBLE:`, la cloture) disparaissaient sans signal. Un
+   * rapport `steal` — paysage, matrice, pieces citees, puis ses candidats — aurait perdu toutes ses
+   * preuves a l'ecran. Seul le TABLEAU devient le panneau ; le reste garde sa place, dans l'ordre.
+   */
+  it('garde le texte AVANT et APRES le tableau de candidats, dans l ordre', () => {
+    const texte = [
+      '## Matrice',
+      'Le rapport et ses preuves.',
+      '',
+      '| # | Score | Type | Quoi | Pourquoi | Comment |',
+      '|---|---|---|---|---|---|',
+      '| 1 | 82 | 🆕 nouveauté | Réservation des fichiers entre fils | conflits vécus | registre lu par edit_file |',
+      '',
+      'CIBLE: Réservation des fichiers entre fils — POURQUOI: friction vécue',
+      '',
+      '✅ Fait'
+    ].join('\n')
+
+    const blocs = groupAssistantActivity([{ kind: 'text', text: texte }])
+
+    expect(blocs.map((bloc) => bloc.kind)).toEqual(['text', 'candidats-pick', 'text'])
+    expect(blocs[0].kind === 'text' && blocs[0].text).toBe('## Matrice\nLe rapport et ses preuves.')
+    expect(blocs[2].kind === 'text' && blocs[2].text).toBe(
+      'CIBLE: Réservation des fichiers entre fils — POURQUOI: friction vécue\n\n✅ Fait'
+    )
+    // Le panneau garde le texte ENTIER : c'est lui qui lit la ligne `CIBLE:` pour cocher les cases.
+    expect(blocs[1].kind === 'candidats-pick' && blocs[1].texteScout).toBe(texte)
+    expect(blocs[1].kind === 'candidats-pick' && blocs[1].candidats).toHaveLength(1)
+  })
+
   it('groups consecutive actions without crossing surrounding text', () => {
     expect(
       groupAssistantActivity([

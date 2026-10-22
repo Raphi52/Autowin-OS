@@ -89,6 +89,7 @@ import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
+import { lotsRetenusParLeQuota } from './lots-retenus-quota'
 import { HdeskTv } from './HdeskTv'
 import { BarrePassage, type PassageAffiche } from './BarrePassage'
 import {
@@ -98,8 +99,9 @@ import {
   type ActionPassage
 } from './passage-selectionne'
 import { referenceDeLElement } from './reference-element'
+import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
-import { CarnetDuFil } from './CarnetDuFil'
+import { CarteDuFil } from './CarteDuFil'
 import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
 import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
@@ -829,6 +831,9 @@ export function ChatView({
   const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
+  /** Le fil courant pour la carte du fil, dont le clic peut attendre quelques images (conv-1059). */
+  const messagesRef = useRef<Msg[]>(messages)
+  messagesRef.current = messages
   /**
    * Le TEXTE en cours de frappe ne vit plus ici : il appartient à `ChatComposer` (conv-1466).
    * ChatView ne garde que la carte des brouillons (`composerDraftsRef`, source de vérité) et ce
@@ -1700,6 +1705,12 @@ export function ChatView({
    * envoyee pendant un tour STOPPE repartait seule comme un nouveau message (conv-61, 2026-10-02).
    */
   const stopDemandeRef = useRef(new Set<string>())
+  /**
+   * Fils dont les lots de sélection scout sont RETENUS par la limite de quota (conv-1080). Tenu
+   * jusqu'au prochain tour du fil (la reprise) : relire le fil ne suffit pas à l'ouverture d'un fil,
+   * dont le cache peut manquer le temps d'une relecture — le lot partirait alors dans le mur.
+   */
+  const lotsRetenusRef = useRef(new Set<string>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const [draftsVersion, setDraftsVersion] = useState(0)
@@ -1814,8 +1825,9 @@ export function ChatView({
   }, [barrePassageOuverte])
 
   /**
-   * Repère « non lu » du fil lu AVANT de l'ouvrir (conv-1038, carte « Pendant ton absence » du
-   * carnet) : `loadConv` le remplace aussitôt par la date du fil, il faut donc le saisir avant.
+   * Repère « non lu » du fil lu AVANT de l'ouvrir (conv-1038 ; depuis conv-1059, le repère « tu
+   * étais là » de la carte du fil) : `loadConv` le remplace aussitôt par la date du fil, il faut
+   * donc le saisir avant.
    */
   const [vueAvantOuverture, setVueAvantOuverture] = useState<{
     conv: string
@@ -1862,10 +1874,45 @@ export function ChatView({
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
 
-  /** Une ligne barrée ou corrigée du carnet du fil rejoint la saisie, SANS envoyer (conv-1038). */
-  function ajouterCorrectionDuCarnet(texte: string): void {
-    setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), texte))
-    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  /**
+   * CARTE DU FIL (conv-1059, 2026-10-22) : un clic sur une étape ramène le fil à son message, qui
+   * s'allume un instant. C'est un geste du LECTEUR (`gesteLecteurRef`) : sans lui, le suivi du bas
+   * reprendrait la main et redescendrait le fil pendant un tour. Un message pas encore rendu (fil
+   * long, rendu par tranches depuis la fin : `useDebutProgressif`) est attendu quelques images.
+   */
+  function allerAuMessageDeLaCarte(rang: number, essais = 30): void {
+    const conteneur = scrollRef.current
+    const message = messagesRef.current[rang]
+    if (!conteneur || !message) return
+    const selecteur =
+      message.role === 'user'
+        ? '[data-origine="message-utilisateur"]'
+        : '[data-origine="reponse-agent"]'
+    const id = message.messageId
+    let cible: HTMLElement | null = id
+      ? conteneur.querySelector<HTMLElement>(
+          `${selecteur}[data-message-id="${id.replace(/["\\]/gu, '\\$&')}"]`
+        )
+      : null
+    // Un message envoyé en direct n'a pas encore d'identifiant : on le trouve par sa place parmi
+    // les messages RENDUS du même rôle.
+    if (!cible && rang >= debutFilRef.current) {
+      const avant = messagesRef.current
+        .slice(debutFilRef.current, rang)
+        .filter((autre) => autre.role === message.role).length
+      cible = conteneur.querySelectorAll<HTMLElement>(selecteur)[avant] ?? null
+    }
+    if (!cible) {
+      if (essais > 0) requestAnimationFrame(() => allerAuMessageDeLaCarte(rang, essais - 1))
+      return
+    }
+    gesteLecteurRef.current = true
+    cible.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    cible.classList.remove('is-cible-carte')
+    void cible.offsetWidth
+    cible.classList.add('is-cible-carte')
+    const allumee = cible
+    window.setTimeout(() => allumee.classList.remove('is-cible-carte'), 1_700)
   }
 
   /**
@@ -2137,6 +2184,9 @@ export function ChatView({
     if (value) busyConversationsRef.current.add(id)
     else busyConversationsRef.current.delete(id)
     setBusyConversations(new Set(busyConversationsRef.current))
+    // UN TOUR REPART DANS LE FIL : c'est la reprise. Les lots retenus par le quota attendent de
+    // nouveau la fin d'un tour, et leur reçu le redit ; sa fin dira s'ils partent (conv-1080).
+    if (value && lotsRetenusRef.current.delete(id)) marquerRecusDesLots(id, 'lot')
   }
   function setConversationInterrupting(id: string, value: boolean): void {
     if (value) interruptingConversationsRef.current.add(id)
@@ -2488,6 +2538,41 @@ export function ChatView({
     const restants = new Set(next.map((entree) => entree.text))
     const sortis = avant.filter((entree) => !restants.has(entree.text)).map((e) => e.text)
     if (sortis.length) retirerRecusEnAttente(id, sortis)
+    // Plus rien en file (parti, ou rendu au composer par Stop) : plus rien à retenir.
+    if (next.length === 0) lotsRetenusRef.current.delete(id)
+  }
+  /** Le reçu des lots en attente dit pourquoi ils attendent : fin du tour, ou reprise après le quota. */
+  function marquerRecusDesLots(id: string, motif: 'lot' | 'lot-quota'): void {
+    setDirectiveReceipts((current) => {
+      const receipts = current[id]
+      if (!receipts?.some((r) => r.attenteMotif === 'lot' || r.attenteMotif === 'lot-quota'))
+        return current
+      return {
+        ...current,
+        [id]: receipts.map((receipt) =>
+          receipt.status === 'attente' &&
+          (receipt.attenteMotif === 'lot' || receipt.attenteMotif === 'lot-quota')
+            ? { ...receipt, attenteMotif: motif }
+            : receipt
+        )
+      }
+    })
+  }
+  /**
+   * LE LOT SUIVANT NE PART PAS DANS LE MUR DE QUOTA (conv-1080, 2026-10-22). À consulter par CHAQUE
+   * sortie automatique de la file, avant d'en relâcher la tête : le lot d'avant coupé par la limite
+   * (`lots-retenus-quota.ts`), le suivant partait aussitôt, retombait sur le même refus et relâchait le
+   * troisième — la sélection entière se vidait en échecs. Retenus, ils restent en file, visibles, et
+   * partent à la fin du prochain tour qui ne bute pas sur la limite (la reprise, par l'utilisateur).
+   */
+  function lotsRetenusDansLeFil(id: string): boolean {
+    const file = queueRef.current.get(id) ?? []
+    if (file[0]?.lot !== true) return false
+    if (lotsRetenusRef.current.has(id)) return true
+    if (!lotsRetenusParLeQuota(file, liveMessagesRef.current.get(id) ?? [])) return false
+    lotsRetenusRef.current.add(id)
+    marquerRecusDesLots(id, 'lot-quota')
+    return true
   }
   /**
    * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
@@ -2500,7 +2585,9 @@ export function ChatView({
     id: string,
     text: string,
     mode?: QueuedDirective['mode'],
-    attachments?: ChatAttachment[]
+    attachments?: ChatAttachment[],
+    /** `lot` : un lot de sélection scout mis en file par le panneau (conv-1080). */
+    origine?: Pick<QueuedDirective, 'lot'>
   ): void {
     // Un texte qui arrive en file APRES un Stop est un geste explicite de l'utilisateur : il LEVE le
     // gel one-shot pose par Stop. Sans cette ligne, « stop puis j'ecris dans la foulee » perdait le
@@ -2513,7 +2600,8 @@ export function ChatView({
       id: nextQueueEntryIdRef.current++,
       text,
       mode,
-      ...(attachments && attachments.length ? { attachments } : {})
+      ...(attachments && attachments.length ? { attachments } : {}),
+      ...(origine?.lot ? { lot: true as const } : {})
     }
     if (mode === 'btw') {
       setConversationQueue(id, [...current, entry])
@@ -2749,7 +2837,15 @@ export function ChatView({
            * Sans ce coup de pouce, la file resterait dormante jusqu'au prochain tour, et l'oubli
            * qu'on corrige se rejouerait sous une autre forme (message en attente que rien ne part).
            */
-          if (!gele && convId === activeRef.current && !busyConversationsRef.current.has(convId)) {
+          // Des lots de sélection retenus par la limite de quota gardent la tête de la file : les
+          // orientations attendent derrière eux, la reprise du fil les relâchera (conv-1080).
+          const retenues = !gele && lotsRetenusDansLeFil(convId)
+          if (
+            !gele &&
+            !retenues &&
+            convId === activeRef.current &&
+            !busyConversationsRef.current.has(convId)
+          ) {
             const enFile = queueRef.current.get(convId) ?? []
             const [tete, ...suite] = enFile
             if (tete) {
@@ -2764,7 +2860,11 @@ export function ChatView({
             }
           }
           const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
-            gele ? 'remise(s) dans la zone de saisie (Stop demandé)' : 'renvoyée(s) comme nouveau message'
+            gele
+              ? 'remise(s) dans la zone de saisie (Stop demandé)'
+              : retenues
+                ? 'gardée(s) en file derrière les lots retenus par la limite de quota'
+                : 'renvoyée(s) comme nouveau message'
           }.`
           setAppNotice((current) => newestNotice(current, { text }))
         }
@@ -4610,6 +4710,8 @@ export function ChatView({
     if (stoppedQueueDrainRef.current.delete(id)) return
     const queued = queueRef.current.get(id)
     if (!queued || queued.length === 0) return
+    // Le lot d'avant a buté sur la limite de quota : le suivant attend la reprise (conv-1080).
+    if (lotsRetenusDansLeFil(id)) return
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
@@ -4770,6 +4872,10 @@ export function ChatView({
     function envoyer(): void {
       if (!autoArmePourRef.current(id)) return
       if (busyConversationsRef.current.has(id)) return
+      // Des messages attendent dans la file de CE fil (lots suivants d'une sélection scout, textes
+      // tapés pendant le tour) : ils passent avant la suite du mode auto, qui reprendra sur leur fin
+      // de tour (conv-1080). Sinon la suite proposée par l'agent s'intercalait entre deux lots.
+      if ((queueRef.current.get(id)?.length ?? 0) > 0) return
       // Le minuteur sonne parfois des heures plus tard : le garde-fou de la chaîne est relu ICI.
       const g = gardeChaine(id)
       const fil =
@@ -4950,6 +5056,9 @@ export function ChatView({
       autoSuiviesRef.current.delete(id)
       // Le fil affiché a son propre effet, qui sait en plus respecter un brouillon en cours.
       if (id === activeId) continue
+      // Sa file passe d'abord (lots suivants d'une sélection scout, conv-1080) : le mode auto
+      // reprendra sur la fin de tour du dernier message en attente.
+      if ((queueRef.current.get(id)?.length ?? 0) > 0) continue
       const etat = autoEtat(id)
       const decision = deciderRelanceAuto({
         depotPresent,
@@ -5015,6 +5124,46 @@ export function ChatView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
+
+  /**
+   * LES LOTS CONTINUENT QUAND ON REGARDE AILLEURS (conv-1080). Le drain de la file ne sert que le fil
+   * AFFICHÉ (transition `busy→false`) : un fil quitté pendant le lot 1 gardait les lots 2 et 3 en
+   * file jusqu'à ce qu'on y revienne — « lancés à la suite » ne tenait que les yeux sur l'écran.
+   *
+   * Borné aux fils où le panneau des candidats a MIS des lots en file (`filsAvecLotsRef`), et
+   * seulement après les avoir VUS tourner (`lotsEnCoursRef`) : une fin de tour qu'on n'a pas vue ne
+   * relâche rien. Le fil affiché garde son propre drain ; un Stop gèle la file, comme ailleurs.
+   */
+  const filsAvecLotsRef = useRef(new Set<string>())
+  const lotsEnCoursRef = useRef(new Set<string>())
+  useEffect(() => {
+    for (const id of [...filsAvecLotsRef.current]) {
+      if ((queueRef.current.get(id)?.length ?? 0) === 0) {
+        filsAvecLotsRef.current.delete(id)
+        lotsEnCoursRef.current.delete(id)
+        continue
+      }
+      if (busyConversations.has(id)) {
+        lotsEnCoursRef.current.add(id)
+        continue
+      }
+      if (!lotsEnCoursRef.current.has(id) || id === activeId) continue
+      if (stoppedQueueDrainRef.current.has(id) || stopDemandeRef.current.has(id)) continue
+      lotsEnCoursRef.current.delete(id)
+      // Retenus par la limite de quota : rien ne part, et seul un NOUVEAU tour vu dans ce fil (la
+      // reprise) les relâchera à sa fin (conv-1080).
+      if (lotsRetenusDansLeFil(id)) continue
+      const [tete, ...reste] = queueRef.current.get(id) ?? []
+      if (!tete) continue
+      setConversationQueue(id, reste)
+      void send(tete.text, {
+        keepComposerDraft: true,
+        automatique: true,
+        targetConversationId: id
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busyConversations, activeId])
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
@@ -5175,12 +5324,45 @@ export function ChatView({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convs])
-  const pickRef = useRef<(prompt: string) => void>(() => {})
-  pickRef.current = (prompt: string) => {
+  const pickRef = useRef<(prompt: string, suite?: readonly string[]) => void>(() => {})
+  pickRef.current = (prompt: string, suite?: readonly string[]) => {
+    /*
+     * LES LOTS D'UNE SÉLECTION SCOUT (conv-1080) : le panneau découpe la sélection en lots courts, qui
+     * passent par la FILE du fil — un lot par tour, chacun sa paire question/réponse, jamais deux runs
+     * en même temps sur le dépôt. Pendant un tour, TOUS attendent sa fin : un lot injecté dans le run
+     * en cours deviendrait une consigne de ce run, pas son propre travail. Stop rend la file au
+     * composer, comme pour tout message en attente.
+     */
+    const id = activeRef.current
+    if (suite && suite.length > 0 && id) {
+      // Un lot en file se VOIT : son reçu « Lot suivant » part avec lui quand la file le relâche
+      // (`retirerRecusEnAttente`). Ids distincts du reçu et de l'entrée de file, comme `submitBtw`.
+      const mettreEnFile = (texte: string): void => {
+        setDirectiveReceipt(
+          id,
+          { id: nextQueueEntryIdRef.current++, text: texte },
+          'attente',
+          undefined,
+          { attenteMotif: 'lot' }
+        )
+        enqueueMessage(id, texte, undefined, undefined, { lot: true })
+        filsAvecLotsRef.current.add(id)
+      }
+      if (busy) {
+        for (const texte of [prompt, ...suite]) mettreEnFile(texte)
+        return
+      }
+      void sendRef.current(prompt)
+      for (const texte of suite) mettreEnFile(texte)
+      return
+    }
     if (busy) void submitBtw(prompt, 'normal')
     else void sendRef.current(prompt)
   }
-  const pickSuggestion = useCallback((prompt: string) => pickRef.current(prompt), [])
+  const pickSuggestion = useCallback(
+    (prompt: string, suite?: readonly string[]) => pickRef.current(prompt, suite),
+    []
+  )
   /**
    * LE CLIC AUTOMATIQUE SUR LES CANDIDATS — mode auto seulement, et UNE SEULE FOIS par message.
    *
@@ -6645,6 +6827,8 @@ export function ChatView({
   // Un long fil s'ouvre par sa fin puis se complète par tranches (fil-progressif.ts, cause des
   // gels `vue-chat`) ; les index restent ceux du fil ENTIER, clés et balayages compris.
   const debutFil = useDebutProgressif(activeId, messages.length)
+  const debutFilRef = useRef(debutFil)
+  debutFilRef.current = debutFil
   const filRendu = useMemo(
     () =>
       messages.slice(debutFil).map((message, rang) => {
@@ -7896,200 +8080,147 @@ Cliquer pour choisir une autre branche.`}
             </div>
           )}
 
-          {renameCandidate && (
-            <div
-              className="delete-confirm-layer"
-              role="presentation"
-              onClick={() => setRenameCandidate(null)}
-            >
-              <form
-                className="delete-confirm-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="rename-conv-title"
-                data-testid="rename-conv-dialog"
-                onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void confirmRenameConv()
-                }}
+          {/* Rendues dans `body`, comme la carte de suppression des fils (conv-1078) : dans le panneau
+              du chat, la poignée de largeur de la liste (`.conv-pane-resizer`) passait au-dessus. */}
+          {renameCandidate &&
+            createPortal(
+              <div
+                className="delete-confirm-layer"
+                role="presentation"
+                onClick={() => setRenameCandidate(null)}
               >
-                <span className="delete-confirm-kicker">RENOMMER</span>
-                <h2 id="rename-conv-title">Nouveau titre</h2>
-                <input
-                  className="rename-conv-input"
-                  data-testid="rename-conv-input"
-                  aria-label="Nouveau titre de la conversation"
-                  value={renameCandidate.value}
-                  autoFocus
-                  onChange={(event) =>
-                    setRenameCandidate((current) =>
-                      current ? { ...current, value: event.target.value } : current
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') setRenameCandidate(null)
+                <form
+                  className="delete-confirm-card"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="rename-conv-title"
+                  data-testid="rename-conv-dialog"
+                  onClick={(event) => event.stopPropagation()}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void confirmRenameConv()
                   }}
-                />
-                <div className="delete-confirm-actions">
-                  <button
-                    type="button"
-                    className="btn delete-confirm-cancel"
-                    onClick={() => setRenameCandidate(null)}
-                  >
-                    Annuler
-                  </button>
-                  <button type="submit" className="btn" data-testid="rename-conv-confirm">
-                    Renommer
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {deleteCandidate && (
-            <div
-              className="delete-confirm-layer"
-              role="presentation"
-              onClick={() => setDeleteCandidate(null)}
-            >
-              <section
-                className="delete-confirm-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-confirm-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="delete-confirm-orbit" aria-hidden="true">
-                  ✦
-                </div>
-                <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
-                <h2 id="delete-confirm-title">Supprimer la conversation ?</h2>
-                <p>
-                  <strong>« {deleteCandidate.title} »</strong> et son historique local seront
-                  retirés de cet appareil.
-                </p>
-                <div className="delete-confirm-actions">
-                  <button
-                    className="btn delete-confirm-cancel"
-                    onClick={() => setDeleteCandidate(null)}
+                >
+                  <span className="delete-confirm-kicker">RENOMMER</span>
+                  <h2 id="rename-conv-title">Nouveau titre</h2>
+                  <input
+                    className="rename-conv-input"
+                    data-testid="rename-conv-input"
+                    aria-label="Nouveau titre de la conversation"
+                    value={renameCandidate.value}
                     autoFocus
-                  >
-                    Garder la conversation
-                  </button>
-                  <button
-                    className="btn delete-confirm-danger"
-                    onClick={() => void confirmRemoveConv()}
-                  >
-                    Supprimer définitivement
-                  </button>
-                </div>
-              </section>
-            </div>
+                    onChange={(event) =>
+                      setRenameCandidate((current) =>
+                        current ? { ...current, value: event.target.value } : current
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenameCandidate(null)
+                    }}
+                  />
+                  <div className="delete-confirm-actions">
+                    <button
+                      type="button"
+                      className="btn delete-confirm-cancel"
+                      onClick={() => setRenameCandidate(null)}
+                    >
+                      Annuler
+                    </button>
+                    <button type="submit" className="btn" data-testid="rename-conv-confirm">
+                      Renommer
+                    </button>
+                  </div>
+                </form>
+              </div>,
+              document.body
+            )}
+
+          {/* Une conversation ou un lot : la même carte, qui nomme les fils et leurs messages
+              (conv-1078, « Implémenter la 2 · En-tête en ligne »). */}
+          {deleteCandidate && (
+            <SuppressionConversationsCarte
+              fils={[deleteCandidate]}
+              total={1}
+              onGarder={() => setDeleteCandidate(null)}
+              onSupprimer={() => void confirmRemoveConv()}
+            />
           )}
 
           {bulkDeleteAsking && (
-            <div
-              className="delete-confirm-layer"
-              role="presentation"
-              onClick={() => setBulkDeleteAsking(false)}
-            >
-              <section
-                className="delete-confirm-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="bulk-delete-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
-                <h2 id="bulk-delete-title">Supprimer {selectedConvIds.size} conversations ?</h2>
-                <p>
-                  Leur historique local sera retiré de cet appareil. Les conversations non
-                  sélectionnées ne sont pas touchées.
-                </p>
-                {bulkDeleteError && <p className="c-danger">{bulkDeleteError}</p>}
-                <div className="delete-confirm-actions">
-                  <button
-                    className="btn delete-confirm-cancel"
-                    onClick={() => setBulkDeleteAsking(false)}
-                    autoFocus
-                  >
-                    Garder
-                  </button>
-                  <button
-                    className="btn delete-confirm-danger"
-                    onClick={() => void confirmBulkDelete()}
-                  >
-                    Supprimer définitivement
-                  </button>
-                </div>
-              </section>
-            </div>
+            <SuppressionConversationsCarte
+              fils={convs.filter((c) => selectedConvIds.has(c.id))}
+              total={selectedConvIds.size}
+              erreur={bulkDeleteError}
+              onGarder={() => setBulkDeleteAsking(false)}
+              onSupprimer={() => void confirmBulkDelete()}
+            />
           )}
 
-          {deleteRunCandidate && (
-            <div
-              className="delete-confirm-layer"
-              role="presentation"
-              onClick={() => {
-                if (!runDeletePending) setDeleteRunCandidate(null)
-              }}
-            >
-              <section
-                className="delete-confirm-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="run-delete-confirm-title"
-                onClick={(event) => event.stopPropagation()}
+          {deleteRunCandidate &&
+            createPortal(
+              <div
+                className="delete-confirm-layer"
+                role="presentation"
+                onClick={() => {
+                  if (!runDeletePending) setDeleteRunCandidate(null)
+                }}
               >
-                <div className="delete-confirm-orbit" aria-hidden="true">
-                  ✦
-                </div>
-                <span className="delete-confirm-kicker">
-                  {deleteRunCandidate.scope === 'conv' &&
-                  deleteRunCandidate.run.session === 'attaché'
-                    ? 'PIÈCE JOINTE EXTERNE'
-                    : 'ACTION IRRÉVERSIBLE'}
-                </span>
-                <h2 id="run-delete-confirm-title">
-                  {deleteRunCandidate.scope === 'conv' &&
-                  deleteRunCandidate.run.session === 'attaché'
-                    ? 'Détacher ce RUN ?'
-                    : 'Supprimer ce RUN ?'}
-                </h2>
-                <p>
-                  <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
-                  {deleteRunCandidate.scope === 'conv' &&
-                  deleteRunCandidate.run.session === 'attaché'
-                    ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
-                    : 'et sa trace locale seront supprimés de cet appareil.'}
-                </p>
-                {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
-                <div className="delete-confirm-actions">
-                  <button
-                    className="btn delete-confirm-cancel run-delete-cancel"
-                    onClick={() => setDeleteRunCandidate(null)}
-                    disabled={runDeletePending}
-                    autoFocus
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    className="btn delete-confirm-danger run-delete-confirm"
-                    onClick={() => void confirmDeleteRun()}
-                    disabled={runDeletePending}
-                  >
-                    {runDeletePending
-                      ? 'Traitement…'
-                      : deleteRunCandidate.scope === 'conv' &&
-                          deleteRunCandidate.run.session === 'attaché'
-                        ? 'Détacher'
-                        : 'Supprimer définitivement'}
-                  </button>
-                </div>
-              </section>
-            </div>
-          )}
+                <section
+                  className="delete-confirm-card"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="run-delete-confirm-title"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="delete-confirm-orbit" aria-hidden="true">
+                    ✦
+                  </div>
+                  <span className="delete-confirm-kicker">
+                    {deleteRunCandidate.scope === 'conv' &&
+                    deleteRunCandidate.run.session === 'attaché'
+                      ? 'PIÈCE JOINTE EXTERNE'
+                      : 'ACTION IRRÉVERSIBLE'}
+                  </span>
+                  <h2 id="run-delete-confirm-title">
+                    {deleteRunCandidate.scope === 'conv' &&
+                    deleteRunCandidate.run.session === 'attaché'
+                      ? 'Détacher ce RUN ?'
+                      : 'Supprimer ce RUN ?'}
+                  </h2>
+                  <p>
+                    <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
+                    {deleteRunCandidate.scope === 'conv' &&
+                    deleteRunCandidate.run.session === 'attaché'
+                      ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
+                      : 'et sa trace locale seront supprimés de cet appareil.'}
+                  </p>
+                  {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
+                  <div className="delete-confirm-actions">
+                    <button
+                      className="btn delete-confirm-cancel run-delete-cancel"
+                      onClick={() => setDeleteRunCandidate(null)}
+                      disabled={runDeletePending}
+                      autoFocus
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      className="btn delete-confirm-danger run-delete-confirm"
+                      onClick={() => void confirmDeleteRun()}
+                      disabled={runDeletePending}
+                    >
+                      {runDeletePending
+                        ? 'Traitement…'
+                        : deleteRunCandidate.scope === 'conv' &&
+                            deleteRunCandidate.run.session === 'attaché'
+                          ? 'Détacher'
+                          : 'Supprimer définitivement'}
+                    </button>
+                  </div>
+                </section>
+              </div>,
+              document.body
+            )}
 
           {activeId && faconsDuFilActif.length > 0 && (
             <ComparaisonDesFacons
@@ -8102,14 +8233,14 @@ Cliquer pour choisir une autre branche.`}
             />
           )}
           {activeId && (
-            <CarnetDuFil
+            <CarteDuFil
               key={activeId}
               conversationId={activeId}
               fil={messages}
               vueAvantOuverture={
                 vueAvantOuverture?.conv === activeId ? vueAvantOuverture.vueA : undefined
               }
-              onCorrection={ajouterCorrectionDuCarnet}
+              onAller={(rang) => allerAuMessageDeLaCarte(rang)}
             />
           )}
           <div

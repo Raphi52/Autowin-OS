@@ -10,7 +10,9 @@ import { extrairePropositionsSuite } from '../../../shared/prompt-suivant'
  * et cliquer au lieu de faire Tab ». Le test part d'une VRAIE fin de réponse (les lignes
  * `AUTOWIN_PROMPT_V1` telles que le modèle les écrit), passe par le même lecteur que l'écran du
  * chat, et vérifie ce que l'utilisateur voit et obtient : trois boutons classés, leur note, et un
- * clic qui remplit le champ comme Tab.
+ * clic qui remplit le champ comme Tab. Depuis conv-1087 (2026-10-22), une alternative notée sous
+ * `NOTE_MIN_ALTERNATIVE` n'a plus de bouton : l'utilisateur veut choisir entre des suites
+ * PERTINENTES, pas lire des à-côtés.
  */
 beforeAll(() => {
   ;(globalThis as never as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
@@ -18,9 +20,10 @@ beforeAll(() => {
 
 const FIN_DE_REPONSE = [
   '👉 Recommandé — corriger le libellé',
-  'AUTOWIN_PROMPT_V1: [55] Relance la suite de tests du composer.',
+  'AUTOWIN_PROMPT_V1: [70] Relance la suite de tests du composer.',
   'AUTOWIN_PROMPT_V1: [90] Corrige le libellé du bouton Envoyer.',
-  'AUTOWIN_PROMPT_V1: [30] Capture la vue chat pour vérifier.'
+  'AUTOWIN_PROMPT_V1: [30] Ajoute une fermeture automatique à la carte de fin de tour.',
+  'AUTOWIN_PROMPT_V1: [65] Capture la vue chat pour vérifier.'
 ].join('\n')
 
 const proprietes = (over: Partial<ChatComposerProps> = {}): ChatComposerProps => ({
@@ -70,7 +73,7 @@ const boutons = (h: HTMLElement): HTMLButtonElement[] => [
 ]
 
 describe('ChatComposer — suites notées en boutons', () => {
-  it('montre les trois suites, la mieux notée en premier, avec leur note', async () => {
+  it('montre les trois suites pertinentes, la mieux notée en premier, sans l’à-côté', async () => {
     const h = await monter(proprietes())
     const liste = boutons(h)
     expect(liste.map((b) => b.querySelector('.composer-suite-texte')?.textContent)).toEqual([
@@ -80,8 +83,8 @@ describe('ChatComposer — suites notées en boutons', () => {
     ])
     expect(liste.map((b) => b.querySelector('.composer-suite-score')?.textContent)).toEqual([
       '90',
-      '55',
-      '30'
+      '70',
+      '65'
     ])
     expect(liste[0].className).toContain('is-best')
     expect(liste[1].className).not.toContain('is-best')

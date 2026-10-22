@@ -3355,9 +3355,18 @@ ${CONTRAT_OBJECTIONS}`
               try {
                 const result = await registry.send(subProvider, messages, options, (chunk) => {
                   supervision.onDelta(chunk.delta)
-                  // La NOTE remonte a l'interface, jamais au livrable : un battement d'outil dit
-                  // que le sous-agent travaille, il ne fait pas partie de sa reponse.
                   if (chunk.reasoning) onDelta?.('exec', '', undefined, chunk.reasoning)
+                  // La NOTE remonte a l'interface, jamais au livrable : un battement d'outil dit
+                  // que le sous-agent travaille, il ne fait pas partie de sa reponse. Ce commentaire
+                  // l'annonçait mais le code ne la relayait pas (constaté en conv-1085). Les
+                  // sous-tâches tournent en parallèle sur la MÊME ligne : chacune la signe.
+                  if (chunk.status) {
+                    onDelta?.(
+                      'exec',
+                      '',
+                      `${subBindings.length > 1 ? `${node.id} · ${memberKey}` : node.id} · ${chunk.status}`
+                    )
+                  }
                 })
                 const derive = supervision.trip()
                 if (derive) {
@@ -4573,6 +4582,20 @@ ${CONTRAT_OBJECTIONS}`
               const res = await registry.send(member.provider, fanMessages, opts, (c) => {
                 supervision.onDelta(c.delta)
                 if (c.reasoning) onDelta?.('exec', '', undefined, c.reasoning)
+                // LE BATTEMENT D'OUTIL, comme sur le chemin du binding du rôle (conv-42). Ce chemin
+                // le jetait : une étape à modèle attitré — build sur le poste de l'utilisateur —
+                // restait 46 à 53 min sans une ligne d'activité au fil (conv-1069/1070/1077,
+                // mesuré en conv-1085). Plusieurs membres battent en parallèle sur la MÊME ligne :
+                // chacun la signe de son modèle, sinon on ne sait plus qui fait quoi.
+                if (c.status) {
+                  onDelta?.(
+                    'exec',
+                    '',
+                    fanMembers.length > 1
+                      ? `${member.model ?? member.provider} · ${c.status}`
+                      : c.status
+                  )
+                }
               })
               const derive = supervision.trip()
               if (derive) {

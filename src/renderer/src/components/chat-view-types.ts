@@ -192,6 +192,11 @@ export type QueuedDirective = {
   text: string
   mode?: 'btw'
   attachments?: ChatAttachment[]
+  /**
+   * Un lot d'une sélection de candidats scout, mis en file par le panneau (conv-1080). Il ne part
+   * pas après un tour coupé par la limite de quota : il attend la reprise (`lots-retenus-quota.ts`).
+   */
+  lot?: true
 }
 export type DirectiveReceipt = {
   id: number
@@ -212,8 +217,13 @@ export type DirectiveReceipt = {
    * sur un refus voulu (conv-891, 2026-09-30). `failed` ne sert plus qu'à une vraie erreur d'envoi.
    */
   status: 'sending' | 'sent' | 'differee' | 'attente' | 'failed'
-  /** Pourquoi le texte attend, quand l'app principale l'a dit (`attente` seulement). */
-  attenteMotif?: 'commande' | 'hors-tour'
+  /**
+   * Pourquoi le texte attend, quand l'app principale l'a dit (`attente` seulement). `lot` : un lot
+   * suivant d'une sélection de candidats scout, mis en file exprès pour partir après (conv-1080).
+   * `lot-quota` : ce même lot, RETENU parce que le lot d'avant a buté sur la limite de quota ; il
+   * repasse à `lot` dès qu'un tour reprend dans le fil.
+   */
+  attenteMotif?: 'commande' | 'hors-tour' | 'lot' | 'lot-quota'
   /** La commande de skill lue dans le texte (`scout`…), quand `attenteMotif` vaut `commande`. */
   commande?: string
   afterMessageIndex: number

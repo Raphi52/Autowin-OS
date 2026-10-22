@@ -1,4 +1,5 @@
 import {
+  lireTestsDuTerminal,
   reduceChatTurn,
   type ChatTurnEvent,
   type ChatTurnStatus,
@@ -8,11 +9,12 @@ import {
   type PersistedChatPart,
   type PersistedChatTextPart,
   type PipelineChoice,
-  type PipelinePrompt
+  type PipelinePrompt,
+  type TestDuTerminal
 } from '../../../shared/chat-turn'
 import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
-import { parseScoutTable } from './scout-table'
+import { parseScoutTable, texteAutourDuTableauScout } from './scout-table'
 import {
   candidatsDepuisScoutTable,
   extraireCandidatsAffiches,
@@ -132,6 +134,11 @@ export interface HydratedAssistantMessage {
    */
   reasoningMs?: number
   /**
+   * Tests joués par l'agent dans son terminal et leur code de sortie (conv-1059) : la carte du fil
+   * les compte comme des vérifications. Relus du disque, et reçus EN DIRECT pendant le tour.
+   */
+  testsDuTerminal?: TestDuTerminal[]
+  /**
    * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail (conv-338). Relu du message
    * enregistre (`ts`, pose par le main au debut du tour) ; en direct, pris au premier evenement
    * date. Absent : le rail n'affiche aucune heure.
@@ -152,6 +159,8 @@ export interface StoredAssistantMessage {
   actionsLog?: string[]
   /** Durée du raisonnement (ms) conservée par le tour : le compteur de la capsule après rechargement. */
   reasoningMs?: number
+  /** Tests joués au terminal, conservés par le tour : les preuves de la carte après rechargement. */
+  testsDuTerminal?: TestDuTerminal[]
   /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail (conv-338). */
   ts?: number
 }
@@ -820,6 +829,8 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
       ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
       : removePersistedAuthoritativeClosures(settleUnresolvedActions(parts))
     : parts
+  // Relu tolérant : une entrée abîmée est jetée, elle ne fait pas tomber l'affichage du tour.
+  const testsDuTerminal = lireTestsDuTerminal(message.testsDuTerminal)
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
@@ -843,6 +854,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // La DURÉE DU RAISONNEMENT survit de la même façon : sans elle, la capsule d'un tour relu
     // disait « Raisonnement terminé » sans compteur (R5, conv-162).
     ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
+    ...(testsDuTerminal.length > 0 ? { testsDuTerminal } : {}),
     ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {})
   }
 }
@@ -890,8 +902,22 @@ function reduireEvenementDuPilote(
     const merged = `${message.reasoning ?? ''}${event.text}`
     return { ...message, turnId, reasoning: merged.slice(-4_000) }
   }
-  let turnEvent: ChatTurnEvent | undefined
   const heure = typeof event.at === 'number' ? { at: event.at } : {}
+  if (event.kind === 'tests-du-terminal') {
+    // Même réduction que le tour enregistré : le direct et le relu ne peuvent pas diverger.
+    const { testsDuTerminal } = reduceChatTurn(
+      {
+        turnId,
+        status: message.status,
+        parts: message.parts,
+        ...(message.testsDuTerminal ? { testsDuTerminal: message.testsDuTerminal } : {})
+      },
+      { kind: 'tests-du-terminal', tests: lireTestsDuTerminal(event.data), ...heure }
+    )
+    if (!testsDuTerminal || testsDuTerminal === message.testsDuTerminal) return message
+    return { ...message, turnId, testsDuTerminal }
+  }
+  let turnEvent: ChatTurnEvent | undefined
   if (event.kind === 'delta' && event.text && event.streamId)
     turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text, ...heure }
   else if (event.kind === 'stream-reset' && event.streamId)
@@ -963,7 +989,9 @@ function reduireEvenementDuPilote(
     status: next.status,
     done,
     ...(next.error ? { error: next.error } : {}),
-    ...(coutUsd !== undefined ? { coutUsd } : {})
+    ...(coutUsd !== undefined ? { coutUsd } : {}),
+    // Reçus plus tôt dans le tour : un delta ou la clôture ne doivent pas les effacer.
+    ...(message.testsDuTerminal ? { testsDuTerminal: message.testsDuTerminal } : {})
   }
 }
 
@@ -1737,12 +1765,23 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       // sélection passe donc AVANT le rendu en lecture seule.
       const scoutRows = parseScoutTable(part.text)
       if (scoutRows) {
+        // Seul le TABLEAU devient le panneau (conv-1083) : le texte avant (le rapport, ses preuves)
+        // et après (`CIBLE:`, la clôture) disparaissait avec lui. Le texte d'après ne continue aucun
+        // bloc de code ouvert plus haut : il ne reprend pas le préfixe de continuation.
+        const autour = texteAutourDuTableauScout(part.text)
+        if (autour?.avant.trim()) blocks.push({ ...part, text: autour.avant })
         blocks.push({
           kind: 'candidats-pick',
           candidats: candidatsDepuisScoutTable(scoutRows),
           texteScout: part.text,
           deTableauScout: true
         })
+        if (autour?.apres.trim())
+          blocks.push({
+            kind: 'text',
+            text: autour.apres,
+            ...(part.at === undefined ? {} : { at: part.at })
+          })
         continue
       }
       // Scout de veille : charge utile JSON de candidats → panneau de sélection natif (cases +
