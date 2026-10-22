@@ -264,7 +264,12 @@ interface ChatApi {
   perfGels: (
     derniers?: number
   ) => Promise<
-    import('../shared/gel-detector').ResumeGels & { disponible: boolean; source: string }
+    import('../shared/gel-detector').ResumeGels & {
+      disponible: boolean
+      source: string
+      /** Memoire et CPU de chaque processus : dernier releve, total et pic (conv-1077). */
+      memoire?: import('../main/releve-memoire').EtatReleveMemoire
+    }
   >
   /** Duels d'arene deja mesures, agreges par nom de workflow. Aucun duel n'est rejoue. */
   arenaDuelsParWorkflow: (

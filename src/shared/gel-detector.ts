@@ -100,6 +100,53 @@ export interface Gel {
    * quand un appel depasse deja le seuil : cout nul sur le chemin normal.
    */
   appelant?: string
+  /**
+   * LES MESSAGES DU FIL qui ont rendu pendant un gel d'affichage du fil (conv-1077, 2026-10-22).
+   * `renderer:vue-chat-fil` portait 28 gels pour 62,4 s sans dire QUEL message coutait : le fil
+   * etait mesure d'un bloc. Cle, role, taille et duree — jamais le texte.
+   */
+  messages?: MessageDeGel[]
+}
+
+/** Un message du fil mesure pendant un gel d'affichage (conv-1077). */
+export interface MessageDeGel {
+  /** `messageId` ou `turnId` : de quoi retrouver le message, pas son contenu. */
+  cle: string
+  role: 'user' | 'assistant'
+  /** Signes du contenu (texte + parties), un ordre de grandeur de ce qu'il a fallu rendre. */
+  taille: number
+  /** Temps de rendu cumule de ce message sur la fenetre recente. */
+  ms: number
+  rendus: number
+}
+
+export const MESSAGES_DE_GEL_MAX = 5
+const CLE_DE_MESSAGE = /^[A-Za-z0-9:._-]{1,64}$/
+
+/**
+ * Detail VENU DU RENDERER, donc relu champ par champ : cle bornee (jamais un texte de message),
+ * role connu, entiers positifs, 5 au plus. Rien de valide = `undefined` (le gel s'ecrit sans).
+ */
+export function lireMessagesDeGel(detail: unknown): MessageDeGel[] | undefined {
+  const brut = (detail as { messages?: unknown } | null | undefined)?.messages
+  if (!Array.isArray(brut)) return undefined
+  const entier = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : undefined
+  const messages = brut
+    .flatMap((m: unknown): MessageDeGel[] => {
+      const e = m as Partial<Record<keyof MessageDeGel, unknown>> | null
+      const cle = e?.cle
+      const role = e?.role
+      const taille = entier(e?.taille)
+      const ms = entier(e?.ms)
+      const rendus = entier(e?.rendus)
+      if (typeof cle !== 'string' || !CLE_DE_MESSAGE.test(cle)) return []
+      if (role !== 'user' && role !== 'assistant') return []
+      if (taille === undefined || ms === undefined || rendus === undefined) return []
+      return [{ cle, role, taille, ms, rendus }]
+    })
+    .slice(0, MESSAGES_DE_GEL_MAX)
+  return messages.length > 0 ? messages : undefined
 }
 
 /** Temps synchrone total passe dans UN appel, sur la fenetre d'un battement. */
