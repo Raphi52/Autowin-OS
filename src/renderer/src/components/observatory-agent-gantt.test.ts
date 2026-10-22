@@ -372,3 +372,103 @@ describe('rejeuDeLaBarre', () => {
     expect(Math.max(...fins)).toBeLessThanOrEqual(10_000)
   })
 })
+
+/**
+ * LE MÊME GRAPHE SUR LES TOURS DE CHAT (conv-1105, suite de conv-981) : « observatory doit ressembler
+ * au graph timeline des bilans de runs ». Un tour de chat n'a qu'un agent, l'orchestrateur : sans ses
+ * outils, il n'aurait qu'une ligne et l'Observatory n'y montrait que la liste. Avec `outils`, chaque
+ * outil qu'il appelle a sa ligne et chaque appel sa barre. Forme relevée dans `causal-trace/conv-1101`
+ * (`chat-turn-trace.ts`) : un `tool-call` horodaté à son DÉBUT, avec sa durée, et l'outil en
+ * destinataire.
+ */
+describe('couloirs d’outils d’un tour de chat', () => {
+  function appel(
+    outil: string,
+    debutS: number,
+    dureeS: number,
+    entree: Record<string, unknown>,
+    extra: Partial<HarnessTimelineEvent> = {}
+  ): HarnessTimelineEvent {
+    const content = JSON.stringify(entree)
+    return ev({
+      kind: 'tool-call',
+      actor: 'Orchestrateur',
+      recipient: outil,
+      status: 'completed',
+      timestamp: at(debutS),
+      durationMs: dureeS * 1000,
+      content,
+      payloads: [{ kind: 'tool-call', name: outil, content }],
+      ...extra
+    })
+  }
+  const tourDeChat = (): HarnessTimelineEvent[] => [
+    ev({ kind: 'message', actor: 'Utilisateur', timestamp: at(0), content: 'corrige le bouton' }),
+    appel('Grep', 4, 1, { pattern: 'Envoyer', path: 'src' }),
+    appel('Bash', 6, 6, { command: 'npx vitest run x.test.ts', description: 'Rejoue le test' }),
+    appel('Bash', 20, 0, { command: 'npm run typecheck' }, { status: 'failed' }),
+    ev({
+      kind: 'model-response',
+      actor: 'claude',
+      status: 'completed',
+      timestamp: at(30),
+      durationMs: 30_000,
+      outputTokens: 900,
+      costUsd: 0.12,
+      model: 'claude-opus-5-5',
+      content: 'Corrigé.'
+    })
+  ]
+
+  it('sans l’option, un tour de chat reste une seule ligne : le bilan du run ne change pas', () => {
+    expect(buildAgentGantt(tourDeChat(), { minLanes: 2 })).toBeNull()
+  })
+
+  it('avec les outils : une ligne par outil sous l’orchestrateur, une barre par appel', () => {
+    const gantt = buildAgentGantt(tourDeChat(), { minLanes: 2, outils: true })!
+    expect(gantt.lanes.map((lane) => lane.label)).toEqual(['Orchestrateur', 'Grep', 'Bash'])
+    const bash = gantt.lanes.find((lane) => lane.label === 'Bash')!
+    expect(bash.phase).toBe('outil')
+    expect(bash.detail).toBe('outil · 2 appels')
+    expect(gantt.lanes[0].detail).toBeUndefined()
+    // Horodaté au DÉBUT : la barre va de l'horodatage à horodatage + durée.
+    expect(bash.spans.map((span) => [span.start - T0, span.end - T0, span.status])).toEqual([
+      [6_000, 12_000, 'ok'],
+      [20_000, 20_000, 'failed']
+    ])
+    expect(bash.spans[0].summary).toBe('Rejoue le test')
+    expect(bash.spans[1].summary).toBe('npm run typecheck')
+    expect(gantt.lanes.find((lane) => lane.label === 'Grep')!.spans[0].summary).toBe('Envoyer')
+    expect(gantt.start - T0).toBe(0)
+    expect(gantt.end - T0).toBe(30_000)
+  })
+
+  it('laisse les outils d’un agent de run dans SA barre (ses actions), sans ligne d’outil', () => {
+    const events = [
+      ...execution('build:minimal', 10, 60),
+      appel(
+        'Edit',
+        30,
+        0,
+        { file_path: 'src/a.ts' },
+        {
+          execution: { phase: 'build', agentId: 'build:minimal' }
+        }
+      )
+    ]
+    const gantt = buildAgentGantt(events, { outils: true })!
+    expect(gantt.lanes.map((lane) => lane.key)).toEqual(['build:minimal'])
+    expect(gantt.lanes[0].spans[0].actions).toBe(1)
+  })
+
+  it('range les outils APRÈS les agents, chacun par ordre de premier appel', () => {
+    const events = [...tourDeChat(), ...execution('judge:single', 1, 5)]
+    const gantt = buildAgentGantt(events, { outils: true })!
+    expect(gantt.lanes.map((lane) => lane.label)).toEqual([
+      'Orchestrateur',
+      'judge',
+      'Grep',
+      'Bash'
+    ])
+  })
+})

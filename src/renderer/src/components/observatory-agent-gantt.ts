@@ -62,6 +62,11 @@ export interface AgentLane {
   /** Variante de l'agent (`dette`, `synthesis`…), absente pour `subagent`/`single`. */
   variant?: string
   model?: string
+  /**
+   * Sous-titre de la ligne quand ce n'est pas un modèle : une ligne d'OUTIL (`outil · 3 appels`),
+   * qui n'a pas de modèle à afficher (conv-1105).
+   */
+  detail?: string
   /** Seulement sur la ligne de l'orchestrateur : le tour entier, sous ses propres réponses. */
   envelope?: AgentEnvelope
   spans: AgentSpan[]
@@ -261,6 +266,75 @@ function buildLaneSpans(
   return spans.sort((a, b) => a.start - b.start)
 }
 
+/**
+ * LIGNES D'OUTILS (conv-1105) : « observatory doit ressembler au graph timeline des bilans de runs ».
+ * Un tour de chat n'a qu'un agent, l'orchestrateur ; ce sont ses OUTILS qui font le déroulé. Seuls
+ * ses propres appels ont une ligne : ceux d'un agent de run restent comptés dans SA barre (actions).
+ */
+const OUTIL = 'outil'
+const OUTIL_PREFIXE = `${OUTIL}:`
+
+function nomDOutil(event: HarnessTimelineEvent): string | null {
+  if (event.kind !== 'tool-call' || event.execution?.agentId) return null
+  const nom =
+    event.recipient ?? event.payloads.find((payload) => payload.kind === 'tool-call')?.name
+  return nom?.trim() || null
+}
+
+/** Champs d'entrée qui disent ce que l'appel FAIT, du plus parlant au moins parlant. */
+const CHAMPS_PARLANTS = [
+  'description',
+  'command',
+  'file_path',
+  'pattern',
+  'query',
+  'question',
+  'path',
+  'url'
+] as const
+
+function resumeDAppel(event: HarnessTimelineEvent): string {
+  const brut =
+    event.payloads.find((payload) => payload.kind === 'tool-call')?.content ?? event.content
+  try {
+    const entree: unknown = JSON.parse(brut)
+    if (entree && typeof entree === 'object')
+      for (const champ of CHAMPS_PARLANTS) {
+        const valeur = (entree as Record<string, unknown>)[champ]
+        if (typeof valeur === 'string' && valeur.trim()) return firstLine(valeur)
+      }
+  } catch {
+    // Pas du JSON (geste nu, texte libre) : sa première ligne dit déjà ce qu'il fait.
+  }
+  return firstLine(brut)
+}
+
+/**
+ * Une barre par appel. La trace horodate un geste à son DÉBUT (`chat-turn-trace.ts`,
+ * `evenementGesteAgent`) : la barre va donc de l'horodatage à horodatage + durée — l'inverse d'un
+ * agent, écrit à sa fin.
+ */
+function buildToolSpans(appels: HarnessTimelineEvent[], turnEnd: number): AgentSpan[] {
+  const spans: AgentSpan[] = []
+  for (const appel of appels) {
+    const start = time(appel)
+    if (start == null) continue
+    const enCours = appel.status === 'running' && appel.durationMs == null
+    const end = enCours ? Math.max(start, turnEnd) : start + Math.max(0, appel.durationMs ?? 0)
+    spans.push({
+      id: appel.id,
+      eventId: appel.id,
+      start,
+      end,
+      durationMs: end - start,
+      status: enCours ? 'open' : appel.status === 'failed' ? 'failed' : 'ok',
+      actions: 0,
+      summary: resumeDAppel(appel)
+    })
+  }
+  return spans.sort((a, b) => a.start - b.start)
+}
+
 const TICK_STEPS_MS = [
   1_000, 2_000, 5_000, 10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 900_000,
   1_800_000, 3_600_000, 7_200_000, 10_800_000, 21_600_000
@@ -293,11 +367,13 @@ export function buildGanttTicks(start: number, end: number): AgentGanttTick[] {
 /**
  * Déroulé par agent d'un tour, ou null s'il n'y a rien à mettre en barres. Un tour de simple
  * conversation n'a qu'un couloir (l'orchestrateur) : `minLanes` permet de ne montrer le diagramme
- * que quand il apprend quelque chose que la liste ne dit pas déjà.
+ * que quand il apprend quelque chose que la liste ne dit pas déjà. `outils` ajoute une ligne par outil
+ * de l'orchestrateur (conv-1105) : l'Observatory s'en sert pour donner aux tours de chat le même
+ * graphe que le bilan d'un run ; le bilan, lui, garde ses seuls agents.
  */
 export function buildAgentGantt(
   events: ReadonlyArray<HarnessTimelineEvent>,
-  { minLanes = 1 }: { minLanes?: number } = {}
+  { minLanes = 1, outils = false }: { minLanes?: number; outils?: boolean } = {}
 ): AgentGantt | null {
   const gatesByParent = new Map<string, HarnessTimelineEvent>()
   for (const event of events)
@@ -341,15 +417,35 @@ export function buildAgentGantt(
       spans
     })
   }
+
+  if (outils) {
+    const parOutil = new Map<string, HarnessTimelineEvent[]>()
+    for (const event of events) {
+      const nom = nomDOutil(event)
+      if (nom) parOutil.set(nom, [...(parOutil.get(nom) ?? []), event])
+    }
+    for (const [nom, appels] of parOutil) {
+      const spans = buildToolSpans(appels, turnEnd)
+      if (!spans.length) continue
+      lanes.push({
+        key: `${OUTIL_PREFIXE}${nom}`,
+        phase: OUTIL,
+        label: nom,
+        detail: `${OUTIL} · ${spans.length} appel${spans.length > 1 ? 's' : ''}`,
+        spans
+      })
+    }
+  }
   if (lanes.length < Math.max(1, minLanes)) return null
 
   const firstStart = (lane: AgentLane): number =>
     Math.min(lane.envelope?.start ?? Infinity, ...lane.spans.map((span) => span.start))
-  lanes.sort((a, b) => {
-    if (a.key === ORCHESTRATOR) return -1
-    if (b.key === ORCHESTRATOR) return 1
-    return firstStart(a) - firstStart(b) || a.key.localeCompare(b.key)
-  })
+  // L'orchestrateur en tête, puis ses agents, puis ses outils : chacun par ordre de départ.
+  const rang = (lane: AgentLane): number =>
+    lane.key === ORCHESTRATOR ? 0 : lane.phase === OUTIL ? 2 : 1
+  lanes.sort(
+    (a, b) => rang(a) - rang(b) || firstStart(a) - firstStart(b) || a.key.localeCompare(b.key)
+  )
   const bounds = lanes.flatMap((lane) => [
     ...lane.spans.flatMap((span) => [span.start, span.end]),
     ...(lane.envelope ? [lane.envelope.start, lane.envelope.end] : [])

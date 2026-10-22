@@ -178,7 +178,7 @@ export function ObservatoryAgentGantt({
           >
             <div className="observatory-gantt__who" title={lane.key}>
               <b>{laneName(lane)}</b>
-              <small>{lane.model ?? 'modèle non tracé'}</small>
+              <small>{lane.detail ?? lane.model ?? 'modèle non tracé'}</small>
             </div>
             <div className="observatory-gantt__track">
               {gantt.ticks.map((tick) => (

@@ -439,12 +439,14 @@ export function ObservatoryView({
    * Déroulé par agent de chaque tour (conv-232). Calculé sur TOUS les événements du tour, pas sur la
    * vue filtrée : un filtre « Outils » ne doit pas faire disparaître la barre de l'agent qui les a
    * lancés. Seuil de deux lignes : un tour de simple conversation n'aurait qu'une barre, que la
-   * liste dit déjà.
+   * liste dit déjà. Les OUTILS de l'orchestrateur ont leur ligne (conv-1105 : « observatory doit
+   * ressembler au graph timeline des bilans de runs ») : un tour de chat qui a agi reçoit le même
+   * graphe qu'un run, et non plus la seule liste.
    */
   const ganttByTurn = useMemo(() => {
     const byTurn = new Map<string, AgentGantt>()
     for (const turn of scopedTurns) {
-      const gantt = buildAgentGantt(turn.events, { minLanes: 2 })
+      const gantt = buildAgentGantt(turn.events, { minLanes: 2, outils: true })
       if (gantt) byTurn.set(turn.id, gantt)
     }
     return byTurn
