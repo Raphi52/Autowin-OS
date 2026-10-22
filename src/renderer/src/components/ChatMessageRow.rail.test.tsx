@@ -147,7 +147,14 @@ describe('rail du tour : rendu', () => {
     expect(natures(tour, { visibles: true }).at(-1)).toBe('juge')
     const bloc = tour.querySelector('[data-nature="juge"] [data-testid="juges-panel"]')
     expect(bloc?.getAttribute('data-verdict')).toBe('encours')
-    expect(bloc?.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(1)
+    // Le bloc est PLIÉ par défaut (conv-1081, « je veux que ce bloc soit plié par défaut et
+    // dépliable ») : le bandeau porte le COMPTE des objections lues dans le texte en direct, le
+    // détail n'apparaît qu'au dépliage (couvert par JugesPanel.test.tsx, aide `deplier`). `rendre`
+    // rend une copie figée du DOM : on y lit le bandeau, on ne peut pas y cliquer.
+    const bandeau = bloc?.querySelector('[data-testid="jpan-bandeau"]')
+    expect(bandeau?.getAttribute('aria-expanded')).toBe('false')
+    expect(bandeau?.textContent).toContain('1 objection à corriger')
+    expect(bloc?.querySelectorAll('[data-testid="jpan-objection"]')).toHaveLength(0)
   })
 })
 

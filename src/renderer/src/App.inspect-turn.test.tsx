@@ -76,7 +76,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders exactly the eleven canonical product destinations', async () => {
+  it('renders exactly the twelve canonical product destinations', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -105,6 +105,8 @@ describe('App inspect-turn navigation', () => {
       'Worktrees',
       'Bureaux cachés',
       'Tickets',
+      // Carte des besoins (conv-1089, 2026-10-22), placée entre Tickets et Tests dans navigation.ts.
+      'Besoins',
       'Tests',
       'Settings'
     ]
@@ -120,6 +122,7 @@ describe('App inspect-turn navigation', () => {
       'worktree',
       'hdesk',
       'tickets',
+      'besoins',
       'tests',
       'settings'
     ]) {

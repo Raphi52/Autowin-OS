@@ -1,4 +1,6 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
+// happy-dom, comme les 353 autres tests de l'interface : jsdom n'est pas une dépendance du dépôt, ce
+// fichier ne se chargeait pas (« Cannot find package jsdom », salvage conv-1096).
 import { afterEach, describe, expect, it } from 'vitest'
 import { CLE_FOND_ACCUEIL, DECOR_DEFAUT, FONDS_ACCUEIL, FOND_NIER, fondSansScene, lireFondAccueil } from './fond-accueil'
 

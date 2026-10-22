@@ -34,8 +34,16 @@ export const FOND_NOIR = 'noir' satisfies FondAccueil
  */
 export const FOND_NIER = 'nier' satisfies FondAccueil
 
-/** Les fonds qui ne montent aucune scène 3D : l'hôte du décor les peint en CSS. */
-export function fondSansScene(fond: FondAccueil): boolean {
+/**
+ * Les fonds qui ne montent aucune scène 3D : l'hôte du décor les peint en CSS.
+ *
+ * Garde de TYPE, pas un simple booléen (salvage conv-1096, 2026-10-22) : `DecorDeFond` sort tôt sur
+ * `fondSansScene(variante)` puis passe la variante à `monterDecor(…: DecorVariant)`. Avec un `boolean`,
+ * TypeScript ne retirait pas `'noir' | 'nier'` du type, et le typage web était rouge depuis 5a4086cb.
+ */
+export function fondSansScene(
+  fond: FondAccueil
+): fond is typeof FOND_NOIR | typeof FOND_NIER {
   return fond === FOND_NOIR || fond === FOND_NIER
 }
 

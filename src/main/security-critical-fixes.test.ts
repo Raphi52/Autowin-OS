@@ -607,7 +607,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   PREMIERE ligne par `assertTrustedRendererSender(event, 'WorkflowResultatsReels')` — LECTURE
     //   des traces causales pour la vue Workflows ; AUCUN argument du renderer, le dossier lu vient
     //   du processus principal ; n'ecrit rien. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(236)
+    // MISE A JOUR 2026-10-22 (salvage conv-1096) — 236 -> 238. ATTRIBUTION MESUREE : canaux
+    //   d'origin/main 4cc80ec2 compares a l'arbre du salvage — DEUX ajoutes, aucun retire :
+    //   `os:carteDesBesoins` ('CarteDesBesoins', `ipc/carte-des-besoins.ts`, conv-1089) — LECTURE
+    //     seule du journal des besoins ; aucun argument du renderer, n'ecrit rien.
+    //   `app:carte-fin-de-tour-palette` ('Couleurs de la carte de fin de tour', `index.ts`, conv-1090)
+    //     — `definirPaletteDeCarte` n'accepte que huit `#rrggbb` avant de les poser dans du CSS.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(238)
     expect(unguarded).toEqual([])
   })
 
