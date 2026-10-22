@@ -21,6 +21,12 @@ describe('demandePourLaFacon', () => {
     }
   })
 
+  it('la 3e façon est la plus créative (choix utilisateur, conv-1057)', () => {
+    expect(demandePourLaFacon('x', 2, 3)).toMatch(/façon imposée : la plus créative/)
+    expect(demandePourLaFacon('x', 0, 3)).not.toMatch(/créative/)
+    expect(demandePourLaFacon('x', 1, 3)).not.toMatch(/créative/)
+  })
+
   it('dit à chaque branche de ne rien publier ni fusionner, et de rendre de quoi comparer', () => {
     const texte = demandePourLaFacon('x', 0, 3)
     expect(texte).toMatch(/ne publie rien/i)

@@ -9,10 +9,13 @@
  */
 import { nomDeCopieDEssai, type ComparaisonDUneFacon } from '../../../shared/essai-trois-facons'
 
+// La 3e façon est la plus CRÉATIVE (choix utilisateur, conv-1057, 2026-10-22) : « une approche
+// différente des deux plus évidentes » obligeait la branche à deviner ce que font les deux autres,
+// qu'elle ne voit pas.
 export const FACONS = [
   'la plus simple qui réponde à la demande',
   'la plus robuste, quitte à être plus longue',
-  'une approche différente des deux plus évidentes'
+  'la plus créative, quitte à sortir des sentiers battus'
 ] as const
 
 export function demandePourLaFacon(demande: string, rang: number, total: number): string {
