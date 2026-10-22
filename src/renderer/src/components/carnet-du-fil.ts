@@ -1,6 +1,9 @@
 /**
  * CARNET VIVANT DU FIL (conv-1038, 2026-10-21) — le socle PUR du panneau `CarnetDuFil`.
  *
+ * Depuis conv-1059 (2026-10-22), le panneau est REMPLACÉ par la carte du fil (`CarteDuFil.tsx`,
+ * `carte-du-fil.ts`), qui relit d'ici `compactageDuFil`, `questionOuverte` et `resumeDAbsence`.
+ *
  * Constat du scout du même jour : les fils longs dérivent (p90 = 14 messages de l'utilisateur par
  * fil), et la mémoire du fil (« ce que tu as retenu », `session-memory-echo.ts`) n'existait que pour
  * l'agent — l'utilisateur ne la voyait pas et ne pouvait pas la corriger.
@@ -98,7 +101,7 @@ function derniereCloture(fil: readonly Msg[]): string | null {
 }
 
 /** Question à choix au BOUT du fil : un message de l'utilisateur après elle l'a répondue. */
-function questionOuverte(fil: readonly Msg[]): string | null {
+export function questionOuverte(fil: readonly Msg[]): string | null {
   const dernier = fil.at(-1)
   if (!dernier || dernier.role !== 'assistant') return null
   const decisions = ((dernier as AsstMsg).parts ?? []).flatMap((part) => {

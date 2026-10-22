@@ -213,8 +213,9 @@ export function ContextGaugeDetail({
                 title={
                   busy === true
                     ? 'Compaction indisponible : un tour est déjà en cours'
-                    : // Le carnet du fil montre ensuite ce qui est gardé (conv-1038, idée 5).
-                      'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé : le carnet du fil montre ensuite ce qui est gardé'
+                    : // La carte du fil (conv-1059, à la place du carnet de conv-1038) montre
+                      // ensuite les étapes que l'agent ne relit plus.
+                      'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé : la carte du fil montre ensuite les étapes que l’agent ne relit plus'
                 }
                 onClick={() => {
                   fermer?.()

@@ -35,7 +35,8 @@ const ORIGINES: Record<string, Bloc> = {
   'reponse-agent': { libelle: 'réponse de l’agent', source: `${C}ChatMessageRow.tsx` },
   'message-utilisateur': { libelle: 'ton message', source: `${C}ChatMessageRow.tsx` },
   saisie: { libelle: 'zone de saisie', source: `${C}ChatComposer.tsx` },
-  'carnet-du-fil': { libelle: 'carnet du fil', source: `${C}CarnetDuFil.tsx` }
+  // La carte du fil a remplacé le carnet (conv-1059, 2026-10-22).
+  'carte-du-fil': { libelle: 'carte du fil', source: `${C}CarteDuFil.tsx` }
 }
 
 const LONGUEUR_MAX_TEXTE = 120

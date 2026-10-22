@@ -383,6 +383,31 @@ export function derniereDemandeHumaine(fil: readonly Msg[]): string | null {
 }
 
 /**
+ * CE QUE DEMANDE UN MESSAGE PRÉCIS du fil, lu avec les MÊMES règles que `derniereDemandeHumaine`,
+ * mais sans remonter plus haut (conv-1059, carte du fil : une étape par demande, chacune titrée).
+ * `accord` : « go », « ok »… accepte la suite proposée sans la nommer — l'appelant la retrouve dans
+ * la clôture qui précède. `auto` : envoyé par le mode auto ; son texte est le prompt envoyé, SANS
+ * l'ancrage qui le suit (l'ancrage cite une demande plus ancienne, pas celle de cette étape).
+ */
+export type LectureDemande = { genre: 'demande' | 'auto'; texte: string } | { genre: 'accord' }
+
+export function lectureDeLaDemande(fil: readonly Msg[], rang: number): LectureDemande | null {
+  const m = fil[rang]
+  if (!m || m.role !== 'user') return null
+  const nu = ((m as Extract<Msg, { role: 'user' }>).content ?? '').trim()
+  if (!nu) return null
+  if (ANCRE_DEJA_ECRITE.test(nu))
+    return { genre: 'auto', texte: borner(nu.slice(0, nu.search(/\(Mode auto — /u)).trim()) }
+  if (estUneReleve(nu)) return { genre: 'auto', texte: borner(nu) }
+  if (ACCORD_NU.test(replierAccord(nu))) return { genre: 'accord' }
+  if (CHOIX_PAR_NUMEROS.test(nu)) {
+    const resolu = optionsChoisies(fil, rang, nu)
+    return { genre: 'demande', texte: borner(resolu ?? nu) }
+  }
+  return { genre: 'demande', texte: borner(nu) }
+}
+
+/**
  * Relit la demande citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaDemande`.
  * L'ancienne formule (« tâche initiale de ce fil », avant le 2026-09-30) reste lue : elle vit dans
  * les fils deja ecrits.
