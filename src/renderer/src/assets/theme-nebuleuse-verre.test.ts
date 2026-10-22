@@ -676,13 +676,33 @@ describe('Boutons a chanfrein Platine', () => {
   const COUPE =
     'polygon(var(--nv-bouton-coupe) 0, 100% 0, 100% calc(100% - var(--nv-bouton-coupe)), calc(100% - var(--nv-bouton-coupe)) 100%, 0 100%, 0 var(--nv-bouton-coupe))'
 
-  it('coupe les coins haut gauche et bas droit des trois boutons, pans deux fois la coupe', () => {
-    for (const [nom, selecteur] of Object.entries(BOUTONS)) {
-      const r = derniere(selecteur)
-      expect(r['clip-path'], nom).toBe(COUPE)
-      expect(r['border-radius'], nom).toBe('0')
+  /* conv-1068 (2026-10-22 : « remet des bords arrondis sur le bouton envoyer stop et nouveau
+     fil ») : ces trois-la quittent la coupe pour des coins arrondis, Details la garde. ENTREE QUI
+     DOIT FAIRE ECHOUER : une coupe restee sur l'un des trois, ou un cadre encore taille en
+     polygone (il ne suivrait pas l'arrondi et deborderait aux coins). */
+  const ARRONDIS: Record<string, string> = {
+    envoyer: '8px',
+    stop: '8px',
+    'nouveau fil': '999px'
+  }
+
+  it('coupe les coins haut gauche et bas droit de Details, pans deux fois la coupe', () => {
+    const r = derniere(BOUTONS.details)
+    expect(r['clip-path']).toBe(COUPE)
+    expect(r['border-radius']).toBe('0')
+    expect(r.position).toBe('relative')
+    expect([r['--nv-bouton-coupe'], r['--nv-bouton-pans']]).toEqual(MESURES.details)
+  })
+
+  it('arrondit Envoyer, Stop et Nouveau fil au lieu de les couper', () => {
+    for (const [nom, rayon] of Object.entries(ARRONDIS)) {
+      const r = derniere(BOUTONS[nom as keyof typeof BOUTONS])
+      expect(r['clip-path'], nom).toBe('none')
+      expect(r['border-radius'], nom).toBe('var(--nv-bouton-rayon)')
+      expect(r['--nv-bouton-rayon'], nom).toBe(rayon)
+      expect(r['--nv-bouton-coupe'], nom).toBeUndefined()
+      expect(r['--nv-bouton-pans'], nom).toBe(MESURES[nom][1])
       expect(r.position, nom).toBe('relative')
-      expect([r['--nv-bouton-coupe'], r['--nv-bouton-pans']], nom).toEqual(MESURES[nom])
     }
   })
 
@@ -690,15 +710,26 @@ describe('Boutons a chanfrein Platine', () => {
     for (const [nom, selecteur] of Object.entries(BOUTONS)) {
       const cadre = derniere(`${selecteur}::before`)
       expect(cadre.content, nom).toBe("''")
-      expect([cadre.position, cadre.inset, cadre.padding], nom).toEqual(['absolute', '0', '0'])
+      expect([cadre.position, cadre.inset], nom).toEqual(['absolute', '0'])
       expect(cadre['pointer-events'], nom).toBe('none')
-      expect(cadre.mask, nom).toBe('none')
-      expect(cadre['clip-path'], nom).toMatch(/^polygon\(evenodd,/)
-      expect(cadre['clip-path'], nom).toContain('calc(var(--nv-bouton-coupe) + 0.414px) 1px')
       expect(cadre.background, nom).toContain('var(--nv-chanfrein-haut)')
       expect(cadre.background, nom).toContain('var(--nv-chanfrein-bas)')
       expect(cadre.background, nom).toContain('var(--nv-bouton-pans) var(--nv-bouton-pans)')
       expect(cadre.background, nom).not.toMatch(/#[0-9a-f]{3,6}\b/i)
+      if (nom in ARRONDIS) {
+        // Anneau evide par masque, qui suit l'arrondi du bouton.
+        expect(cadre.padding, nom).toBe('1px')
+        expect(cadre['border-radius'], nom).toBe('inherit')
+        expect(cadre['clip-path'], nom).toBe('none')
+        expect(cadre.mask, nom).toBe(
+          'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)'
+        )
+      } else {
+        expect(cadre.padding, nom).toBe('0')
+        expect(cadre.mask, nom).toBe('none')
+        expect(cadre['clip-path'], nom).toMatch(/^polygon\(evenodd,/)
+        expect(cadre['clip-path'], nom).toContain('calc(var(--nv-bouton-coupe) + 0.414px) 1px')
+      }
     }
   })
 
