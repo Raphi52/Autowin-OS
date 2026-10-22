@@ -45,9 +45,11 @@ function envPropre(): NodeJS.ProcessEnv {
 
 function git(
   cwd: string,
-  args: string[]
+  args: string[],
+  envEnPlus: NodeJS.ProcessEnv = {}
 ): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: envPropre(), windowsHide: true })
+  const env = { ...envPropre(), ...envEnPlus }
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8', env, windowsHide: true })
   return { status: r.status, stdout: (r.stdout ?? '').trim(), stderr: r.stderr ?? '' }
 }
 
@@ -157,5 +159,42 @@ describe('.githooks/pre-push — rien de entreprise/ vers GitHub', () => {
 
     expect(r.status, r.stderr).toBe(0)
     expect(refDistante(publicNu, 'travail')).toBe(sha)
+  })
+})
+
+/**
+ * Garde « agent » : le message de refus doit donner la marche à suivre DU DÉPÔT.
+ *
+ * Pourquoi (2026-10-22, conv-1074) : sur ce dépôt on pousse directement sur `main` avec
+ * `ALLOW_MAIN_PUSH=1`, sans pull request. Le refus conseillait encore « 1 branche par sujet +
+ * Pull Request » : un agent l'a suivi, a poussé une branche pour une PR qui ne devait pas exister,
+ * puis a dû la supprimer. Le message est la seule consigne qu'un agent lit à ce moment-là.
+ */
+describe(".githooks/pre-push — push direct d'un agent sur main", () => {
+  const AGENT = { AUTOWIN_OS_WORKSPACE: '1' }
+
+  it('refuse sans ALLOW_MAIN_PUSH=1 et nomme le push direct comme marche à suivre, sans PR', () => {
+    const { local, interneNu } = depots()
+    commit(local, { 'a.txt': 'a\n' }, 'base')
+
+    const r = git(local, ['push', 'origin', 'HEAD:refs/heads/main'], AGENT)
+
+    expect(r.status).not.toBe(0)
+    expect(refDistante(interneNu, 'main')).toBeNull()
+    expect(r.stderr).toContain('ALLOW_MAIN_PUSH=1 git push')
+    expect(r.stderr).not.toMatch(/pull request|feat\/<sujet>/i)
+  })
+
+  it('laisse passer le même push avec ALLOW_MAIN_PUSH=1', () => {
+    const { local, interneNu } = depots()
+    const sha = commit(local, { 'a.txt': 'a\n' }, 'base')
+
+    const r = git(local, ['push', 'origin', 'HEAD:refs/heads/main'], {
+      ...AGENT,
+      ALLOW_MAIN_PUSH: '1'
+    })
+
+    expect(r.status, r.stderr).toBe(0)
+    expect(refDistante(interneNu, 'main')).toBe(sha)
   })
 })
