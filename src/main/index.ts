@@ -442,6 +442,7 @@ import { planifierBalayage } from './store/balayage-retention'
 import { chargerShaConsignes } from './store/registres-consignes'
 import {
   appendExecutionEvidenceFileTrace,
+  flushConversationFileTraces,
   readConversationFileTraces,
   readConversationTurnFileMutations,
   readConversationTurnFilePaths
@@ -5824,6 +5825,9 @@ app.on('before-quit', (event) => {
   // Les appels modele s'ecrivent hors du fil principal : ce qui est encore en vol doit atteindre
   // le disque avant l'arret, sinon l'Observatory perdrait les derniers appels de la session.
   flushAllPromptCalls()
+  // Les traces de fichiers des fils s'ecrivent en DIFFERE depuis /gel conv-1118 (appendFileSync
+  // figeait la fenetre jusqu'a 10 s) : ce qui reste en tampon doit atteindre le disque avant l'arret.
+  flushConversationFileTraces()
   // Le cout des tours s'ecrit desormais en DIFFERE (appendFileSync figeait l'interface 9,4 s,
   // mesure du 2026-09-12) : ce qui reste en tampon doit atteindre le disque avant l'arret.
   os.cost.flushPersistSync()
