@@ -44,8 +44,16 @@ describe('isolation du workflow entre conversations', () => {
    */
   it('chaque run construit son orchestrateur, avec SA closure de workflow', () => {
     // Un override explicite reste propre au run ; sinon le workflow du tour est résolu normalement.
+    // Depuis c55b4bb2 (conv-1091, 2026-10-22), le workflow résolu passe par UN filtre nommé,
+    // `workflowSansScoutPourSelection` : fonction PURE de (workflow, tâche) qui rend une copie, sans
+    // aucun état partagé (`selection-sans-scout.ts`). Le motif l'admet, LUI seul et par son nom :
+    // tout autre intermédiaire — un champ, un cache, une autre fonction — refait rougir la garde.
+    // Rouge mesuré par heal conv-1115 : 1 test sur 17 499 de la suite complète.
     expect(os).toMatch(
-      /const workflowDuRun\s*=\s*runOptions\.workflowOverride\s*\?\?\s*\(await this\.poseConversationWorkflow\(/
+      /const workflowDuRun\s*=\s*runOptions\.workflowOverride\s*\?\?\s*(?:workflowSansScoutPourSelection\(\s*)?\(?await this\.poseConversationWorkflow\(/
+    )
+    expect(os).toMatch(
+      /import \{[^}]*\bworkflowSansScoutPourSelection\b[^}]*\} from '\.\/selection-sans-scout'/
     )
     /*
      * …puis enfermé dans un orchestrateur bâti pour lui seul, via la fabrique.

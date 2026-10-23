@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, unlinkS
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
-import { supprimerArbre } from './fs-supprimer'
+import { supprimerArbreAsync } from './fs-supprimer'
 import { delierLesDependances, lierLesDependances } from './store/dependances-copie-agent'
 import { echecsDuRapport, verdictDifferentiel } from './verify-command'
 
@@ -70,9 +70,13 @@ async function git(repo: string, args: readonly string[]): Promise<string> {
  * Copie propre du DERNIER COMMIT de `repo`, hors du dépôt et hors de `%TEMP%/autowin*` (le ménage
  * de fin de suite des tests vide ces dossiers-là, y compris ceux des AUTRES suites).
  *
- * La suppression passe par `supprimerArbre`, qui ne suit JAMAIS une jonction : jamais par
+ * La suppression passe par `supprimerArbreAsync`, qui ne suit JAMAIS une jonction : jamais par
  * `git worktree remove`, qui efface le `node_modules` du dépôt à travers la jonction encore posée
  * (vécu, voir la note « publier un commit isolé »). `git worktree prune` retire ensuite l'inscription.
+ *
+ * Elle est ASYNCHRONE depuis /gel conv-1118 (2026-10-23) : la forme synchrone effaçait les ~3 970
+ * fichiers de la copie sur le fil de la fenêtre, à chaque publication de tour — 320 s de fenêtre
+ * figée du 21 au 23/10 dans `gels.jsonl`, pire 153,8 s (`comparaison-a-la-base.sans-gel.test.ts`).
  */
 export async function ouvrirCopieDeBase(repo: string): Promise<CopieDeBase> {
   const parent = realpathSync.native(mkdtempSync(join(tmpdir(), 'aw-base-')))
@@ -83,7 +87,7 @@ export async function ouvrirCopieDeBase(repo: string): Promise<CopieDeBase> {
       console.warn(`[comparaison a la base] jonction des modules non retiree (${retrait.raison})`)
     }
     try {
-      supprimerArbre(parent)
+      await supprimerArbreAsync(parent)
     } catch (erreur) {
       console.warn(`[comparaison a la base] copie ${parent} non supprimee :`, erreur)
     }

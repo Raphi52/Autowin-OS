@@ -42,7 +42,7 @@ import {
   messageLiaison,
   type LiaisonDependances
 } from './dependances-copie-agent'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre, supprimerArbreAsync } from '../fs-supprimer'
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -453,6 +453,13 @@ export interface WorktreeManagerOptions {
   tryGitAsyncFn?: typeof tryGitAsync
   /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
   removeDirFn?: (path: string) => void
+  /**
+   * Pendant ASYNCHRONE de `removeDirFn`, pour le retrait disque du balayage horaire (heal conv-1115 :
+   * 153,8 s de fenêtre figée sur une copie supprimée en synchrone). Défaut : `supprimerArbreAsync` —
+   * sauf si un `removeDirFn` a été injecté seul, auquel cas c'est LUI qui répond : un test qui
+   * simule le disque le simule partout (même règle que `tryGitAsyncFn`).
+   */
+  removeDirAsyncFn?: (path: string) => Promise<void>
   /** Publication atomique du verrou index, injectable pour les tests de crash. */
   linkFileFn?: (existingPath: string, newPath: string) => void
   /** Suppression du verrou index, injectable pour les tests de contention Windows. */
@@ -972,6 +979,7 @@ export class WorktreeManager {
   private readonly tryGitFn: typeof tryGit
   private readonly tryGitAsyncFn: typeof tryGitAsync
   private readonly removeDirFn: (path: string) => void
+  private readonly removeDirAsyncFn: (path: string) => Promise<void>
   private readonly linkFileFn: (existingPath: string, newPath: string) => void
   private readonly removeIndexLockFn: (path: string) => void
   private readonly configuredBaseBranch?: string
@@ -1005,6 +1013,12 @@ export class WorktreeManager {
       opts.tryGitAsyncFn ??
       (tryGitInjecte ? async (repo, args) => tryGitInjecte(repo, args) : tryGitAsync)
     this.removeDirFn = opts.removeDirFn ?? ((path) => supprimerArbre(path))
+    const removeDirInjecte = opts.removeDirFn
+    this.removeDirAsyncFn =
+      opts.removeDirAsyncFn ??
+      (removeDirInjecte
+        ? async (path) => removeDirInjecte(path)
+        : (path) => supprimerArbreAsync(path))
     this.linkFileFn = opts.linkFileFn ?? linkSync
     this.removeIndexLockFn = opts.removeIndexLockFn ?? ((path) => rmSync(path, { force: true }))
     this.configuredBaseBranch = opts.baseBranch
@@ -2681,23 +2695,45 @@ export class WorktreeManager {
     return this.finirBalayageParLeDisque(path)
   }
 
-  /** `balayerLeChemin` dont les retraits git ne tiennent pas la boucle (balayage horaire). */
+  /**
+   * `balayerLeChemin` dont les retraits ne tiennent pas la boucle (balayage horaire) — ni git, ni
+   * le disque. Le retrait disque était resté synchrone : 153,8 s de fenêtre figée le 2026-10-22
+   * sur une copie oubliée de git (heal conv-1115, `balayage-disque-async.test.ts`).
+   */
   private async balayerLeCheminAsync(path: string): Promise<boolean> {
     if ((await this.cleanupWorktreeAsync(path, false)).ok) return this.oublierEchecDeBalayage(path)
     if (this.estWorktreeEnregistree(path) && (await this.cleanupWorktreeAsync(path, true)).ok) {
       return this.oublierEchecDeBalayage(path)
     }
-    return this.finirBalayageParLeDisque(path)
+    return this.finirBalayageParLeDisque(path, await this.tenterRetraitDisqueAsync(path))
   }
 
-  /** Dernier recours commun aux deux formes : le disque, puis `worktree prune`, puis l'echec VISIBLE. */
-  private finirBalayageParLeDisque(path: string): boolean {
-    let detail = ''
+  /** Retrait disque d'une copie : '' s'il a réussi, sinon la cause (qui nomme le fichier bloquant). */
+  private tenterRetraitDisque(path: string): string {
     try {
       this.removeDirFn(path)
+      return ''
     } catch (error) {
-      detail = error instanceof Error ? error.message : String(error)
+      return error instanceof Error ? error.message : String(error)
     }
+  }
+
+  /** Le même retrait, hors du fil principal : seule la FORME change, jamais le verdict. */
+  private async tenterRetraitDisqueAsync(path: string): Promise<string> {
+    try {
+      await this.removeDirAsyncFn(path)
+      return ''
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /**
+   * Dernier recours commun aux deux formes : le disque, puis `worktree prune`, puis l'echec VISIBLE.
+   * `detailDisque` : retrait disque DÉJÀ tenté par la forme asynchrone ; absent, il est fait ici.
+   */
+  private finirBalayageParLeDisque(path: string, detailDisque?: string): boolean {
+    const detail = detailDisque ?? this.tenterRetraitDisque(path)
     this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
     if (!existsSync(path)) return this.oublierEchecDeBalayage(path)
 
@@ -5208,6 +5244,10 @@ exit 0
    * par la forme synchrone — 1 747, 1 444 et 4 253 ms de fenetre figee. Seul l'appel a git change
    * de forme : la preparation et la conclusion (coquille, historique CLI, escalade) sont PARTAGEES,
    * donc aucune protection du retrait ne peut diverger entre les deux chemins.
+   *
+   * heal conv-1115 : l'escalade disque (git en echec, `force`) changeait elle aussi de forme sans le
+   * dire — elle restait synchrone. Elle est tentee ici en asynchrone, puis remise a la conclusion
+   * partagee, qui ne la refait pas.
    */
   private async cleanupWorktreeAsync(
     path: string,
@@ -5215,7 +5255,9 @@ exit 0
   ): Promise<{ ok: boolean; detail?: string }> {
     const voisines = this.preparerRetraitDeCopie(path)
     const remove = await this.tryGitAsyncFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
-    return this.conclureRetraitDeCopie(path, force, remove, voisines)
+    const detailDisque =
+      remove.code !== 0 && force ? await this.tenterRetraitDisqueAsync(path) : undefined
+    return this.conclureRetraitDeCopie(path, force, remove, voisines, detailDisque)
   }
 
   private preparerRetraitDeCopie(path: string): string[] {
@@ -5242,7 +5284,9 @@ exit 0
     path: string,
     force: boolean,
     remove: { code: number; stdout: string; stderr: string },
-    voisines: string[]
+    voisines: string[],
+    /** Escalade disque DÉJÀ tentée par la forme asynchrone ; absente, elle est faite ici. */
+    detailDisque?: string
   ): { ok: boolean; detail?: string } {
     if (remove.code === 0) {
       /*
@@ -5278,12 +5322,7 @@ exit 0
       return { ok: false, detail: causeGit(remove) || undefined }
     }
 
-    let filesystemDetail = ''
-    try {
-      this.removeDirFn(path)
-    } catch (error) {
-      filesystemDetail = error instanceof Error ? error.message : String(error)
-    }
+    const filesystemDetail = detailDisque ?? this.tenterRetraitDisque(path)
     const prune = this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
     if (!existsSync(path) && prune.code === 0) {
       supprimerHistoriqueCli(path, voisines)

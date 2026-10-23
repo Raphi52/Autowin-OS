@@ -1,4 +1,5 @@
 import { chmodSync, lstatSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs'
+import { chmod, lstat, readdir, rmdir, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path'
 
 /**
@@ -177,4 +178,120 @@ export function supprimerArbre(chemin: string, options: OptionsSuppression = {})
   const tentatives = Math.max(1, options.tentatives ?? TENTATIVES_PAR_DEFAUT)
   const pauseMs = Math.max(0, options.pauseMs ?? PAUSE_PAR_DEFAUT_MS)
   retirer(resolve(chemin), tentatives, pauseMs)
+}
+
+/*
+ * LA MÊME SUPPRESSION, SANS TENIR LA BOUCLE — heal conv-1115, 2026-10-23.
+ *
+ * Mesuré dans `gels.jsonl` (2026-10-22) : 273,7 s de fenêtre figée, dont un gel de 153,8 s, pour
+ * 10 190 `unlinkSync` d'une copie d'agent retirée par le balayage horaire. Chaque appel synchrone
+ * tient le fil principal ; sur un disque saturé, un seul fichier a tenu 10 s.
+ *
+ * Ici chaque geste passe par `fs/promises` : il s'exécute hors du fil principal et la boucle
+ * d'événements est servie entre deux fichiers. Le parcours est le MÊME, cas par cas, que la forme
+ * synchrone ci-dessus (lien retiré sans être suivi, lecture seule levée, verrous passagers
+ * réessayés) — `fs-supprimer.async.test.ts` rejoue ses cas limites sur cette forme. Les éléments
+ * sont retirés un par un, pas en rafale : une copie de 10 000 fichiers n'ouvre pas 10 000 requêtes
+ * d'un coup dans le pool de libuv, que les autres E/S de l'app partagent.
+ */
+
+const pause = (ms: number): Promise<void> =>
+  ms > 0 ? new Promise((fin) => setTimeout(fin, ms)) : Promise.resolve()
+
+async function avecReessaisAsync(
+  geste: () => Promise<void>,
+  tentatives: number,
+  pauseMs: number
+): Promise<void> {
+  for (let essai = 1; ; essai++) {
+    try {
+      await geste()
+      return
+    } catch (erreur) {
+      if (code(erreur) === 'ENOENT') return
+      if (essai >= tentatives || !CODES_PASSAGERS.has(code(erreur) ?? '')) throw erreur
+      await pause(pauseMs)
+    }
+  }
+}
+
+async function retirerLienAsync(chemin: string): Promise<void> {
+  try {
+    await unlink(chemin)
+  } catch (erreur) {
+    if (code(erreur) === 'EPERM' || code(erreur) === 'EISDIR') await rmdir(chemin)
+    else throw erreur
+  }
+}
+
+async function retirerFichierAsync(chemin: string): Promise<void> {
+  try {
+    await unlink(chemin)
+  } catch (erreur) {
+    if (code(erreur) !== 'EPERM' && code(erreur) !== 'EACCES') throw erreur
+    await chmod(chemin, 0o666)
+    await unlink(chemin)
+  }
+}
+
+async function retirerDossierVideAsync(chemin: string): Promise<void> {
+  try {
+    await rmdir(chemin)
+  } catch (erreur) {
+    if (code(erreur) !== 'EPERM' && code(erreur) !== 'EACCES') throw erreur
+    await chmod(chemin, 0o777)
+    await rmdir(chemin)
+  }
+}
+
+async function retirerAsync(chemin: string, tentatives: number, pauseMs: number): Promise<void> {
+  let infos
+  try {
+    infos = await lstat(chemin)
+  } catch (erreur) {
+    if (code(erreur) === 'ENOENT') return
+    throw erreur
+  }
+  // `lstat` NE SUIT PAS le lien : c'est toute la garde. Jamais `stat` ici.
+  if (infos.isSymbolicLink()) {
+    await avecReessaisAsync(() => retirerLienAsync(chemin), tentatives, pauseMs)
+    return
+  }
+  if (!infos.isDirectory()) {
+    await avecReessaisAsync(() => retirerFichierAsync(chemin), tentatives, pauseMs)
+    return
+  }
+  for (let essai = 1; ; essai++) {
+    let enfants: string[]
+    try {
+      enfants = await readdir(chemin)
+    } catch (erreur) {
+      if (code(erreur) === 'ENOENT') return
+      throw erreur
+    }
+    for (const nom of enfants) await retirerAsync(join(chemin, nom), tentatives, pauseMs)
+    try {
+      await retirerDossierVideAsync(chemin)
+      return
+    } catch (erreur) {
+      if (code(erreur) === 'ENOENT') return
+      if (essai >= tentatives || !CODES_PASSAGERS.has(code(erreur) ?? '')) throw erreur
+      await pause(pauseMs)
+    }
+  }
+}
+
+/**
+ * `supprimerArbre` sans tenir le fil principal : mêmes refus, mêmes garanties, même erreur
+ * (qui nomme le fichier bloquant) si un élément reste verrouillé. Rejette au lieu de jeter.
+ */
+export async function supprimerArbreAsync(
+  chemin: string,
+  options: OptionsSuppression = {}
+): Promise<void> {
+  const refus = motifDeRefus(chemin)
+  if (refus) throw new Error(`supprimerArbre : ${refus}`)
+  const tentatives = Math.max(1, options.tentatives ?? TENTATIVES_PAR_DEFAUT)
+  const pauseMs = Math.max(0, options.pauseMs ?? PAUSE_PAR_DEFAUT_MS)
+  await retirerAsync(resolve(chemin), tentatives, pauseMs)
 }
