@@ -31,6 +31,12 @@ import type {
 } from '../shared/carte-des-besoins'
 import { dossierDeTravailDuTour } from './bascule-dossier-conversation'
 import { cleDuJournal, type EntreeDuJournal, type IdentiteGit } from './journal-des-besoins'
+import {
+  etatVide,
+  lierLesDemandesDuFil,
+  referencesDuPrompt,
+  type EtatDesLiens
+} from './liens-work-items'
 
 /** Le message tel qu'il est stocké — le strict nécessaire, pour rester testable sans le store. */
 export type MessageStockePourLaCarte = Partial<StoredAssistantMessage> & {
@@ -95,6 +101,10 @@ export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeL
   const demandes: DemandeDeLaCarte[] = []
   for (const etape of etapes) {
     if (etape.rang === null || etape.compactage || etape.statut === 'a-venir') continue
+    // Les work items que le prompt NOMME (conv-1127) : lus ici, avec le fil, pour rester en cache
+    // avec lui ; le lien lui-même est posé à l'assemblage, d'après `liens-work-items.jsonl`.
+    const texte = conversation.messages[etape.rang]?.content
+    const references = typeof texte === 'string' ? referencesDuPrompt(texte) : []
     demandes.push({
       conversationId: conversation.id,
       conversationTitre: conversation.title,
@@ -103,7 +113,8 @@ export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeL
       titre: etape.titre,
       statut: etape.statut,
       constat: borner(etape.constat, MAX_CONSTAT),
-      ...(etape.debut === undefined ? {} : { debut: etape.debut })
+      ...(etape.debut === undefined ? {} : { debut: etape.debut }),
+      ...(references.length ? { references } : {})
     })
   }
   return demandes
@@ -192,9 +203,12 @@ export function assemblerLaCarte(entree: {
   journal?: ReadonlyMap<string, EntreeDuJournal>
   /** Identité git ACTUELLE par dossier (`dossierGitDuFil`), pour les demandes antérieures au journal. */
   identitesParDossier?: ReadonlyMap<string, IdentiteGit | null>
+  /** `liens-work-items.jsonl` relu (conv-1127) ; absent = seuls les liens écrits par la vue Tickets. */
+  liens?: EtatDesLiens
   calculeeA: number
   dureeMs: number
 }): CarteDesBesoins {
+  const liens = entree.liens ?? etatVide()
   const projets = new Map<string, ProjetDeLaCarte>()
   const projetDe = (conversation: ConversationPourLaCarte | undefined): ProjetDeLaCarte => {
     const groupe = conversation
@@ -239,11 +253,14 @@ export function assemblerLaCarte(entree: {
     projet.conversations += 1
     const dossierGit = dossierGitDuFil(conversation, entree.dossierParDefaut)
     const identiteDeduite = dossierGit ? entree.identitesParDossier?.get(dossierGit) : undefined
-    for (const brute of demandes) {
+    const enrichies = demandes.map((brute) => {
       const journalisee = brute.messageId
         ? entree.journal?.get(cleDuJournal(conversation.id, brute.messageId))
         : undefined
-      const demande = enrichirDemande(brute, journalisee, identiteDeduite)
+      return enrichirDemande(brute, journalisee, identiteDeduite)
+    })
+    // Les work items APRÈS la ligne de besoin : une demande `suite` hérite du lien de la précédente.
+    for (const demande of lierLesDemandesDuFil(conversation.id, enrichies, liens)) {
       if (demande.demandeur?.origine === 'journal') journalisees += 1
       if (demande.demandeur) {
         const connu = demandeurs.get(demande.demandeur.cle)
@@ -327,6 +344,11 @@ export function creerCalculateurDeCarte(deps: {
   /** Lot 2 : `besoins.jsonl` relu, et l'identité git d'un dossier (avec sa propre mémoire). */
   lireJournal?: () => ReadonlyMap<string, EntreeDuJournal>
   identiteDuDossier?: (dossier: string) => Promise<IdentiteGit | null>
+  /**
+   * `liens-work-items.jsonl` relu (conv-1127). Un FICHIER, jamais la source de tickets : le calcul
+   * de la carte ne fait aucun appel réseau.
+   */
+  lireLiens?: () => EtatDesLiens
   calculerDemandes?: (conversation: ConversationPourLaCarte) => DemandeDeLaCarte[]
   ceder?: () => Promise<void>
   maintenant?: () => number
@@ -399,6 +421,7 @@ export function creerCalculateurDeCarte(deps: {
       ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       ...(dossierParDefaut ? { dossierParDefaut } : {}),
       ...(deps.lireJournal ? { journal: deps.lireJournal() } : {}),
+      ...(deps.lireLiens ? { liens: deps.lireLiens() } : {}),
       identitesParDossier,
       calculeeA: maintenant(),
       dureeMs: maintenant() - debut

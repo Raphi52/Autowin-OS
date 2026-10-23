@@ -1,0 +1,461 @@
+/*
+ * LA RIVIÈRE À ÉTAGES (/draft conv-1113, 2026-10-23). Visuel choisi au /draft : un TABLEAU BLANC
+ * (encre bleu nuit, feutre), un trait de couleur par étage, des post-it pastel dont l'aimant porte la
+ * couleur de la personne. Le tableau garde ce papier clair dans tous les thèmes : c'est l'objet
+ * montré et choisi, pas un panneau de l'app.
+ */
+.riviere {
+  --riviere-feutre: 'Segoe Print', 'Comic Sans MS', cursive;
+  --riviere-encre: #1f2a44;
+  /* Le gris des noms de jours appartient au PAPIER, qui reste clair dans tous les thèmes : écrit en
+     dur, scripts/gen-malvoyant-planchers.mjs le remplaçait par le texte du thème — clair en thème
+     sombre, donc illisible sur ce papier (conv-1113). */
+  --riviere-encre-jour: #4b5563;
+  --riviere-courbe: cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Seule dans sa vue, qui ne défile plus (conv-1113) : elle prend toute la hauteur restante. */
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.riviere-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.riviere-personnes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.riviere-puce {
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--riviere-personne, var(--line, rgba(255, 255, 255, 0.2)));
+  background: transparent;
+  color: var(--text);
+  font: 600 11.5px/1.3 var(--font, system-ui, sans-serif);
+}
+
+.riviere-puce.is-actif {
+  background: var(--riviere-personne, var(--accent));
+  color: #14121c;
+}
+
+.riviere-compte {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+/* Le papier du tableau : la bande des jours, fixe, puis la partie qui défile. */
+.riviere-cadre {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f3f5f7;
+  box-shadow: inset 0 0 0 1px rgba(154, 164, 178, 0.45);
+}
+
+.riviere-tete {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(154, 164, 178, 0.45);
+  user-select: none;
+}
+
+/* La place du tableau : rien ne défile (« tout doit rentrer dans l'écran en hauteur », conv-1113).
+   Le composant la mesure et y fait tenir les étages. */
+.riviere-plateau {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.riviere-tableau {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+.riviere-jour {
+  position: absolute;
+  top: 0;
+  border-left: 1px solid rgba(154, 164, 178, 0.35);
+  box-sizing: border-box;
+  transition:
+    left 0.3s var(--riviere-courbe),
+    width 0.3s var(--riviere-courbe);
+}
+
+/* Un clic sur une colonne y amène la loupe (conv-1130) : sur son nom comme sur son fond. */
+.riviere-tete .riviere-jour,
+.riviere-tableau > .riviere-jour,
+.riviere-etage {
+  cursor: pointer;
+}
+
+.riviere-jour:first-child {
+  border-left: 0;
+}
+
+/* À 1 et 3 mois, les colonnes serrées ne tracent plus leur bord ; seuls les repères restent. */
+.riviere-jour[data-serre]:not([data-repere]) {
+  border-left-color: transparent;
+}
+
+.riviere-jour[data-repere='mois'] {
+  border-left-color: rgba(31, 42, 68, 0.5);
+}
+
+.riviere-jour[data-foyer] {
+  background: rgba(60, 110, 235, 0.06);
+}
+
+.riviere-jour[data-aujourdhui] {
+  background: rgba(233, 189, 78, 0.14);
+}
+
+.riviere-jour[data-aujourdhui][data-foyer] {
+  background:
+    linear-gradient(rgba(60, 110, 235, 0.06), rgba(60, 110, 235, 0.06)), rgba(233, 189, 78, 0.14);
+}
+
+.riviere-jour-nom {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+  font-family: var(--riviere-feutre);
+  font-weight: 700;
+  color: var(--riviere-encre-jour);
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    font-size 0.3s var(--riviere-courbe);
+}
+
+/* Un repère (début de mois, lundi, aujourd'hui) dans une colonne serrée : posé au bord, il déborde
+   sur les jours voisins, que etiquettesDesJours a laissés sans nom. */
+.riviere-jour-nom[data-mode='repere'] {
+  left: 3px;
+  right: auto;
+  overflow: visible;
+  text-align: left;
+}
+
+.riviere-jour-nom[data-mode='repere'][data-ancre='fin'] {
+  left: auto;
+  right: 3px;
+  text-align: right;
+}
+
+.riviere-jour[data-repere='mois'] .riviere-jour-nom[data-mode='repere'] {
+  color: var(--riviere-encre);
+}
+
+.riviere-jour[data-aujourdhui] .riviere-jour-nom {
+  color: #c0392b;
+}
+
+.riviere-etage {
+  position: absolute;
+  left: 0;
+  box-sizing: border-box;
+  border-top: 3px solid var(--riviere-etage, #9aa4b2);
+  border-bottom: 1px solid rgba(154, 164, 178, 0.55);
+  pointer-events: none;
+  /* Les étages suivent la loupe (disposerEtages) : ils glissent avec les post-it. */
+  transition:
+    top 0.3s var(--riviere-courbe),
+    height 0.3s var(--riviere-courbe);
+}
+
+.riviere-etage[data-etage='a-faire'] {
+  --riviere-etage: #7aa7ff;
+}
+.riviere-etage[data-etage='en-cours'] {
+  --riviere-etage: #e63ca0;
+}
+.riviere-etage[data-etage='refuse'] {
+  --riviere-etage: #ff5a52;
+}
+.riviere-etage[data-etage='sans-preuve'] {
+  --riviere-etage: #8a84a6;
+}
+.riviere-etage[data-etage='prouve'] {
+  --riviere-etage: #9fd08a;
+}
+
+.riviere-etage-nom {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font: 700 13px/1.2 var(--riviere-feutre);
+  color: var(--riviere-encre);
+  pointer-events: auto;
+  cursor: help;
+}
+
+.riviere-postit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 9px 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  text-align: left;
+  color: #16202e;
+  background: var(--riviere-papier, #e4e0f4);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 3px 8px rgba(0, 0, 0, 0.08);
+  transform-origin: 50% 0;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    transform 0.3s var(--riviere-courbe),
+    opacity 0.2s;
+}
+
+.riviere-postit[data-etage='a-faire'] {
+  --riviere-papier: #c4d8ff;
+}
+.riviere-postit[data-etage='en-cours'] {
+  --riviere-papier: #ffb6e8;
+}
+.riviere-postit[data-etage='refuse'] {
+  --riviere-papier: #ffa79c;
+}
+.riviere-postit[data-etage='sans-preuve'] {
+  --riviere-papier: #e4e0f4;
+}
+.riviere-postit[data-etage='prouve'] {
+  --riviere-papier: #b9f09c;
+}
+
+.riviere-postit[data-manuel] {
+  outline: 2px dashed rgba(31, 42, 68, 0.55);
+  outline-offset: -4px;
+}
+
+.riviere-postit[data-estompe] {
+  opacity: 0.12;
+}
+
+.riviere-postit[data-choisi] {
+  z-index: 15;
+  box-shadow: 0 0 0 3px rgba(60, 110, 235, 0.6);
+}
+
+.riviere-postit[data-glisse] {
+  z-index: 20;
+  cursor: grabbing;
+  transition: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+
+.riviere-postit[data-taille='puce'] .riviere-postit-titre,
+.riviere-postit[data-taille='puce'] .riviere-postit-meta {
+  visibility: hidden;
+}
+
+.riviere-aimant {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.riviere-postit-titre {
+  display: -webkit-box;
+  overflow: hidden;
+  padding-right: 12px;
+  font: 700 12px/1.2 var(--riviere-feutre);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.riviere-postit-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 500 10px/1.2 var(--font, system-ui, sans-serif);
+  opacity: 0.7;
+}
+
+.riviere-fiche {
+  position: absolute;
+  z-index: 30;
+  box-sizing: border-box;
+  max-height: calc(100% - 8px);
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 3px;
+  color: #16202e;
+  background: var(--riviere-papier, #e4e0f4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  transform: rotate(-1.2deg);
+  font: 12px/1.4 var(--font, system-ui, sans-serif);
+}
+
+.riviere-fiche[data-etage='a-faire'] {
+  --riviere-papier: #c4d8ff;
+}
+.riviere-fiche[data-etage='en-cours'] {
+  --riviere-papier: #ffb6e8;
+}
+.riviere-fiche[data-etage='refuse'] {
+  --riviere-papier: #ffa79c;
+}
+.riviere-fiche[data-etage='sans-preuve'] {
+  --riviere-papier: #e4e0f4;
+}
+.riviere-fiche[data-etage='prouve'] {
+  --riviere-papier: #b9f09c;
+}
+
+.riviere-fiche-fermer {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  border: 0;
+  background: none;
+  color: #16202e;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.riviere-fiche-titre {
+  display: block;
+  padding-right: 18px;
+  font: 700 15px/1.25 var(--riviere-feutre);
+}
+
+.riviere-fiche-meta {
+  display: block;
+  margin: 2px 0 6px;
+  font-size: 11.5px;
+  opacity: 0.75;
+}
+
+.riviere-fiche-manuel {
+  display: block;
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  border: 1px dashed rgba(31, 42, 68, 0.5);
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+.riviere-fiche-lien {
+  padding: 0 0 0 6px;
+  border: 0;
+  background: none;
+  color: #1f4fbf;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.riviere-fiche-demandes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.riviere-fiche-demandes li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.riviere-fiche-plus {
+  opacity: 0.6;
+}
+
+.riviere-point {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7a7494;
+}
+.riviere-point[data-statut='prouve'] {
+  background: #3f9d4a;
+}
+.riviere-point[data-statut='refuse'] {
+  background: #e0483e;
+}
+.riviere-point[data-statut='en-cours'] {
+  background: #d02f8c;
+}
+
+.riviere-fiche-heure {
+  flex: none;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.riviere-fiche-texte {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* PAS le bouton de l'app (.btn) : chaque thème le peint pour SON fond, avec une règle plus forte
+   (:root[data-theme] .btn), et sur le papier pastel il disparaissait (capture de l'app réelle,
+   conv-1113). Encre du tableau, papier éclairci. */
+.riviere-fiche-ouvrir {
+  padding: 4px 12px;
+  border: 1px solid rgba(31, 42, 68, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #16202e;
+  font: 600 12px/1.3 var(--font, system-ui, sans-serif);
+  cursor: pointer;
+}
+
+.riviere-fiche-ouvrir:hover {
+  background: #ffffff;
+}
+
+.riviere-pied {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Pas de coupure sous prefers-reduced-motion : la machine de l'utilisateur l'a ACTIF (theme.css,
+   conv-929) et la loupe sauterait d'un bloc au lieu de glisser — le mouvement EST l'information. */

@@ -11,7 +11,11 @@ export const APP_DESTINATIONS = [
   { id: 'tickets', label: 'Tickets', icon: '🎫' },
   // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet. Placée
   // APRÈS Tickets pour ne décaler aucun raccourci Ctrl+1…9.
-  { id: 'besoins', label: 'Besoins', icon: '🗺️' },
+  // Renommée « Carte du projet » (conv-1113, 2026-10-23) ; l'identifiant reste `besoins`, comme
+  // `tests` pour Maintenance, pour qu'un agent qui navigue vers « besoins » y aboutisse toujours.
+  // Renommée « Board » (conv-1126, 2026-10-23, proposition 5 : « le mot que tu emploies, ce
+  // board ») ; son icône est dessinée (BoardIcon, App.tsx), l'émoji ne sert que de repli.
+  { id: 'besoins', label: 'Board', icon: '📋' },
   // Vue « Maintenance » (conv-1101, 2026-10-22 : « la view tests est nulle, appelle-la maintenance
   // et mets des boutons pour faire toutes nos skills de maintenance »). L'identifiant reste `tests` :
   // les suites y vivent toujours, et un agent qui dit « tests » doit continuer d'y aboutir.
@@ -38,7 +42,6 @@ export type SettingsSection =
   | 'tools'
   // Routage : connexion des providers, comptes, modèle par défaut (venu d'Agent Studio, conv-963).
   | 'routing'
-  | 'budget'
   | 'behaviour'
   | 'providers'
   | 'preflight'
@@ -137,6 +140,9 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   'carte des besoins': 'besoins',
   'carte-des-besoins': 'besoins',
   'map des besoins': 'besoins',
+  // Ses anciens libellés (conv-1113 puis conv-1126) : un agent qui a lu « Carte du projet » y aboutit.
+  'carte du projet': 'besoins',
+  'carte-du-projet': 'besoins',
   needs: 'besoins',
   demandes: 'besoins',
   backlog: 'besoins',
@@ -174,7 +180,6 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   mods: { destination: 'settings', section: 'mods' },
   plugins: { destination: 'settings', section: 'mods' },
   tools: { destination: 'settings', section: 'tools' },
-  budget: { destination: 'settings', section: 'budget' },
   interface: { destination: 'settings', section: 'interface' },
   apparence: { destination: 'settings', section: 'interface' },
   theme: { destination: 'settings', section: 'interface' },

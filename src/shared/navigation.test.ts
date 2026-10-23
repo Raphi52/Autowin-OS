@@ -43,9 +43,18 @@ describe('registre canonique des destinations Autowin', () => {
     ['scheduler', 'task-manager'],
     ['hdesk', 'hdesk'],
     ['bureau caché', 'hdesk'],
-    ['bureaux caches', 'hdesk']
+    ['bureaux caches', 'hdesk'],
+    // Les anciens libellés de la vue Board (conv-1113 puis conv-1126).
+    ['Carte du projet', 'besoins'],
+    ['carte-du-projet', 'besoins']
   ] as const)('normalise %s vers %s', (input, expected) => {
     expect(normalizeDestination(input)).toBe(expected)
+  })
+
+  it('ouvre le Board par son nom affiché comme par ses anciens noms', () => {
+    expect(resolveAppLocation('Board')).toEqual({ destination: 'besoins' })
+    expect(resolveAppLocation('carte du projet')).toEqual({ destination: 'besoins' })
+    expect(resolveAppLocation('besoins')).toEqual({ destination: 'besoins' })
   })
 
   it('replie une destination inconnue sur Chat plutôt que sur une vue vide', () => {

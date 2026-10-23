@@ -127,6 +127,35 @@ describe('navigation humaine synchronisée avec le main', () => {
     await act(async () => root.unmount())
   })
 
+  // conv-1126 : la vue `besoins` s'appelle « Board » et porte un tableau à post-it dessiné.
+  it('affiche le Board avec son icône vectorielle, sans émoji', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    const bouton = container.querySelector('[data-testid="nav-besoins"]')
+    expect(bouton?.textContent).toContain('Board')
+    expect(bouton?.textContent).not.toContain('📋')
+    const icon = bouton?.querySelector('svg[data-icon="board"]')
+    expect(icon?.querySelector('linearGradient stop[stop-color="#36e6ff"]')).not.toBeNull()
+    expect(icon?.querySelector('rect[fill="#fb7185"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
   it.each([
     {
       interaction: 'un clic rail',

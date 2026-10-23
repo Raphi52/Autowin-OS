@@ -32,7 +32,11 @@ import type {
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
-import type { CarteDesBesoins } from '../shared/carte-des-besoins'
+import type {
+  BilanDesMentions,
+  CarteDesBesoins,
+  ResultatDuRattachement
+} from '../shared/carte-des-besoins'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatPiper } from '../main/piper-local'
@@ -147,23 +151,6 @@ interface ChatApi {
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   /** Le moteur qui tourne contient-il encore les sources ? Voir `shared/moteur-perime`. */
   etatDuMoteur: () => Promise<{ perime: boolean; fichier?: string; retardMs?: number }>
-  orchestrationBudget: () => Promise<{
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }>
-  setOrchestrationBudget: (settings: {
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }) => Promise<{
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }>
   /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */
   shadowRoutingPilot: () => Promise<ShadowRoutingPilotState>
   setShadowRoutingPilot: (enabled: boolean) => Promise<ShadowRoutingPilotState>
@@ -532,6 +519,22 @@ interface ChatApi {
   conversations: () => Promise<ConversationSummary[]>
   /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
   carteDesBesoins: () => Promise<CarteDesBesoins>
+  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
+  carteLierWorkItem: (cible: {
+    conversationId: string
+    demande: string
+    saisie: string
+    sourceId?: string
+  }) => Promise<ResultatDuRattachement>
+  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas (conv-1127). */
+  carteDelierWorkItem: (cible: {
+    conversationId: string
+    demande: string
+    sourceId: string
+    id: string
+  }) => Promise<{ ok: true } | { ok: false; raison: string }>
+  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent (conv-1127). */
+  carteVerifierMentions: () => Promise<BilanDesMentions>
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (
     terme: string

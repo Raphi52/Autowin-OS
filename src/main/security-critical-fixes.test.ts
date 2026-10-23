@@ -614,7 +614,20 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `app:carte-fin-de-tour-palette` ('Couleurs de la carte de fin de tour', `index.ts`, conv-1090)
     //     — `definirPaletteDeCarte` n'accepte que huit `#rrggbb` avant de les poser dans du CSS.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(238)
+    // MISE A JOUR 2026-10-23 (conv-1127) — 238 -> 239. ATTRIBUTION MESUREE : noms de canaux de HEAD
+    //   (e78e0c30) compares a l'arbre de ce travail. Ce test etait DEJA rouge a 236 avant ce travail :
+    //   DEUX retires par un travail NON COMMITE d'un autre fil (`index.ts` et
+    //   `orchestration-budget.ts` modifies) : `os:orchestrationBudget:get` et `…:set`.
+    //   TROIS ajoutes par ce travail (`ipc/carte-des-besoins.ts`, liens prompt -> work item), gardes
+    //   des leur PREMIERE ligne par `assertTrustedRendererSender(event, 'CarteDesBesoins')` :
+    //   `os:carte:lierWorkItem` — ECRIT une ligne dans `liens-work-items.jsonl` (userData), seulement
+    //     apres avoir verifie que la demande existe dans son fil et LU la fiche chez le fournisseur ;
+    //     le numero passe par `lireSaisieDeWorkItem` (entier positif 32 bits) avant tout appel.
+    //   `os:carte:delierWorkItem` — ECRIT une ligne « delier » dans le meme fichier, memes controles.
+    //   `os:carte:verifierMentions` — AUCUN argument ; LIT des fiches (plafond 20 par passe). Aucun
+    //     des trois ne recoit d'ecriture chez le fournisseur (seul `tickets.get` leur est passe).
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(239)
     expect(unguarded).toEqual([])
   })
 

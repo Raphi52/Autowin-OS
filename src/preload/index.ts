@@ -46,7 +46,11 @@ import type {
 } from '../shared/tickets'
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
-import type { CarteDesBesoins } from '../shared/carte-des-besoins'
+import type {
+  BilanDesMentions,
+  CarteDesBesoins,
+  ResultatDuRattachement
+} from '../shared/carte-des-besoins'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatDiarisation } from '../main/diarisation'
@@ -301,9 +305,13 @@ const api = {
   workflowResultatsReels: () => ipcRenderer.invoke('workflows:resultatsReels'),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
   // fix-ok: cause mesurée 2026-10-22 — sans `detail`, le gel du fil arrivait au main sans ses messages (rendu-long.messages.test.tsx rouge) ; le pont du canal mémoire à part est retiré avec lui.
-  // `detail` : messages du fil mesures pendant un gel du fil (conv-1077), relus par le main.
-  signalerGelRenderer: (dureeMs: number, etiquette?: string, detail?: { messages?: unknown[] }) =>
-    ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette, detail),
+  // `detail` : messages du fil mesures pendant un gel du fil (conv-1077), ou lignes redessinees et
+  // declencheurs de la liste des conversations (conv-1115) ; relus champ par champ par le main.
+  signalerGelRenderer: (
+    dureeMs: number,
+    etiquette?: string,
+    detail?: { messages?: unknown[]; liste?: unknown }
+  ) => ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette, detail),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
@@ -439,23 +447,6 @@ const api = {
   /** Le moteur qui tourne contient-il encore les sources ? Voir `shared/moteur-perime`. */
   etatDuMoteur: (): Promise<{ perime: boolean; fichier?: string; retardMs?: number }> =>
     ipcRenderer.invoke('os:moteur:etat'),
-  orchestrationBudget: (): Promise<{
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }> => ipcRenderer.invoke('os:orchestrationBudget:get'),
-  setOrchestrationBudget: (settings: {
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }): Promise<{
-    maxUsd: number | null
-    maxProviderCalls: number
-    maxChatProviderCalls: number
-    maxTotalTokens: number
-  }> => ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */
   shadowRoutingPilot: (): Promise<ShadowRoutingPilotState> =>
     ipcRenderer.invoke('os:shadowRoutingPilot:get'),
@@ -687,6 +678,24 @@ const api = {
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
   carteDesBesoins: (): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins'),
+  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
+  carteLierWorkItem: (cible: {
+    conversationId: string
+    demande: string
+    saisie: string
+    sourceId?: string
+  }): Promise<ResultatDuRattachement> => ipcRenderer.invoke('os:carte:lierWorkItem', cible),
+  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas (conv-1127). */
+  carteDelierWorkItem: (cible: {
+    conversationId: string
+    demande: string
+    sourceId: string
+    id: string
+  }): Promise<{ ok: true } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('os:carte:delierWorkItem', cible),
+  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent (conv-1127). */
+  carteVerifierMentions: (): Promise<BilanDesMentions> =>
+    ipcRenderer.invoke('os:carte:verifierMentions'),
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (
     terme: string

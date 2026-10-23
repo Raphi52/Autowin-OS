@@ -106,7 +106,8 @@ describe('App inspect-turn navigation', () => {
       'Bureaux cachés',
       'Tickets',
       // Carte des besoins (conv-1089, 2026-10-22), placée entre Tickets et Maintenance dans navigation.ts.
-      'Besoins',
+      // Renommée « Carte du projet » (conv-1113), puis « Board » (conv-1126) : même identifiant `besoins`.
+      'Board',
       // L'ancienne vue Tests, renommée Maintenance (conv-1101) : même identifiant `tests`.
       'Maintenance',
       'Settings'

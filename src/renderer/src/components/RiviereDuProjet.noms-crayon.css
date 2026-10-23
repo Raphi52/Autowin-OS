@@ -1,0 +1,42 @@
+/*
+ * LES NOMS DU BOARD AU CRAYON (conv-1132, 2026-10-23 : « met les noms en mode doodle / sketch, ça
+ * les barre quand ils sont désélectionnés »). Même feutre que les post-it, un contour tremblé et
+ * penché comme tracé à la main ; un nom écarté par le choix d'une autre personne est rayé d'un
+ * trait de crayon (`data-barre`, posé par RiviereDuProjet.tsx).
+ * Feuille à part : RiviereDuProjet.css était réservé par un autre fil (conv-1130) au moment de
+ * l'écrire. Le trait est un MASQUE (seule sa forme compte) peint dans la couleur du texte : il suit
+ * le thème au lieu d'une couleur écrite en dur.
+ */
+.riviere-personnes .riviere-puce {
+  position: relative;
+  padding: 2px 11px 3px;
+  border-width: 1.5px;
+  border-radius: 14px 5px 12px 6px / 6px 12px 5px 14px;
+  font: 700 12.5px/1.3 var(--riviere-feutre);
+  transform: rotate(-1.2deg);
+}
+
+.riviere-personnes .riviere-puce:nth-child(even) {
+  border-radius: 6px 13px 5px 12px / 12px 5px 13px 6px;
+  transform: rotate(1deg);
+}
+
+.riviere-personnes .riviere-puce[data-barre='true'] {
+  color: var(--text-dim);
+}
+
+.riviere-personnes .riviere-puce[data-barre='true']::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 50%;
+  height: 9px;
+  margin-top: -4px;
+  background: var(--text);
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'%3E%3Cpath d='M2 7 C20 3 38 8 56 5 S86 2 98 4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5 5 C30 7 62 3 95 6' fill='none' stroke='%23000' stroke-width='1.2' stroke-linecap='round' stroke-opacity='0.7' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'%3E%3Cpath d='M2 7 C20 3 38 8 56 5 S86 2 98 4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5 5 C30 7 62 3 95 6' fill='none' stroke='%23000' stroke-width='1.2' stroke-linecap='round' stroke-opacity='0.7' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+}

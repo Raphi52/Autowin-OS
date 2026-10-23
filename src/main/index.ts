@@ -162,7 +162,7 @@ import {
   quotaClaudeDuCompte
 } from './model-quotas'
 import { renouvelerSessionClaude } from './claude-session-renewal'
-import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
+import { DEFAULT_ORCHESTRATION_BUDGET } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, outilOffert, type AppEvent } from './commands'
@@ -391,6 +391,7 @@ import {
 } from './bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
+import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace'
 import { photographierDebutDeTour } from './chat-turn-publication'
 import {
   creerNotifieurDeFinDeTour,
@@ -1259,12 +1260,24 @@ const pilot = new AgentPilot(
   // des petites tâches (réglage du Routeur) ; une panne rend une erreur, et le travail part comme avant.
   async (systeme, charge) => {
     const binding = os.roles.bindingDesPetitesTaches()
-    const reponse = await os.registry.send(binding.provider, [{ role: 'user', content: charge }], {
-      system: systeme,
-      systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
-      model: binding.model,
-      reasoningEffort: binding.reasoningEffort,
-      requestId: randomUUID()
+    const reponse = await os.registry
+      .send(binding.provider, [{ role: 'user', content: charge }], {
+        system: systeme,
+        systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
+        model: binding.model,
+        reasoningEffort: binding.reasoningEffort,
+        requestId: randomUUID()
+      })
+      .catch((error: unknown) => {
+        signalerPanneAppelCourt('deuxLectures', error)
+        throw error
+      })
+    // Modèle réel, coût et réponse brute dans `cost.jsonl` (conv-1097, `petites-taches-trace.ts`).
+    noterAppelCourt(os.cost, {
+      appel: 'deuxLectures',
+      binding,
+      res: reponse,
+      issue: reponse.text ?? ''
     })
     return reponse.text ?? ''
   }
@@ -1812,7 +1825,6 @@ const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json')
  * peremption (bundle non reconstruit, ou bundle reconstruit sans relance du processus).
  */
 const demarrageDuMoteurMs = Date.now()
-const orchestrationBudgetPath = join(app.getPath('userData'), 'orchestration-budget.json')
 // Catalogue SQL propre à l'utilisateur : sans ce fichier, aucune base n'est lisible.
 loadSqlCatalogConfigFile(join(app.getPath('userData'), 'sql-catalog.json'))
 const ticketSources = new TicketSourceStore(join(app.getPath('userData'), 'ticket-sources.json'))
@@ -2581,7 +2593,7 @@ Le fil reprend ensuite normalement.`
       os.roles,
       process.env,
       agentTopology,
-      loadOrchestrationBudget(orchestrationBudgetPath).maxUsd
+      DEFAULT_ORCHESTRATION_BUDGET.maxUsd
     )
     const files = await listBehaviourFiles(workspace)
     const inspectedFiles = await Promise.all(
@@ -2778,14 +2790,6 @@ Le fil reprend ensuite normalement.`
       return { perime: false }
     }
   })
-  ipcMain.handle('os:orchestrationBudget:get', (event) => {
-    assertTrustedRendererSender(event, 'Orchestration budget')
-    return loadOrchestrationBudget(orchestrationBudgetPath)
-  })
-  ipcMain.handle('os:orchestrationBudget:set', (event, value: unknown) => {
-    assertTrustedRendererSender(event, 'Orchestration budget')
-    return saveOrchestrationBudget(orchestrationBudgetPath, value)
-  })
   ipcMain.handle('os:shadowRoutingPilot:get', (event) => {
     assertTrustedRendererSender(event, 'Pilote de routage shadow')
     return shadowRoutingPilotState()
@@ -2933,7 +2937,7 @@ Le fil reprend ensuite normalement.`
         confidence: 'insufficient' as const,
         phase: safePhase,
         reason:
-          'Routeur shadow desactive : activez « Mesurer les routes (pilote shadow) » dans Settings > Budget pour que l app commence a mesurer quelle route tient le vert au cout le plus bas.'
+          'Routeur shadow desactive : activez « Mesurer les routes (pilote shadow) » dans Settings > Routage pour que l app commence a mesurer quelle route tient le vert au cout le plus bas.'
       }
     }
     if (!champion || typeof champion !== 'object') throw new Error('Champion invalide')
@@ -3165,7 +3169,17 @@ Le fil reprend ensuite normalement.`
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
   // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
-  registerCarteDesBesoinsIpc({ os, journal: journalDesBesoins })
+  // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
+  // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.
+  registerCarteDesBesoinsIpc({
+    os,
+    journal: journalDesBesoins,
+    racineDesLiens: app.getPath('userData'),
+    tickets: {
+      listSources: () => ticketSources.list(),
+      get: (request) => tickets.get(request)
+    }
+  })
 
   // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
   // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
@@ -3531,17 +3545,25 @@ Le fil reprend ensuite normalement.`
       demanderAuModele: async (systeme, charge) => {
         await os.waitUntilReady()
         const binding = os.roles.bindingDesPetitesTaches()
-        const reponse = await os.registry.send(
-          binding.provider,
-          [{ role: 'user', content: charge }],
-          {
+        const reponse = await os.registry
+          .send(binding.provider, [{ role: 'user', content: charge }], {
             system: systeme,
             systemBlocks: [{ name: 'rangementPremierMessage', chars: systeme.length }],
             model: binding.model,
             reasoningEffort: binding.reasoningEffort,
             requestId: randomUUID()
-          }
-        )
+          })
+          .catch((error: unknown) => {
+            signalerPanneAppelCourt('rangementPremierMessage', error)
+            throw error
+          })
+        noterAppelCourt(os.cost, {
+          appel: 'rangementPremierMessage',
+          binding,
+          res: reponse,
+          issue: reponse.text ?? '',
+          conversationId
+        })
         return reponse.text
       },
       finDuTour,
