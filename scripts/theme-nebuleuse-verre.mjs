@@ -984,6 +984,15 @@ const NINJA_PAGE = { r: 38, g: 38, b: 36 } // #262624
 /** Un jeton dont le NOM dit qu'il peint un fond : ses noirs suivent l'echelle de fonds. */
 const NINJA_JETON_FOND = /fond|bg|surface|background|panel|card|inset/
 
+/**
+ * Selecteurs JAMAIS recopies dans la couche Ninja. Une regle PAR DEFAUT recopiee avec le prefixe du
+ * theme (0,3,0) bat ses variantes de la base (0,2,0) que la transposition laisse telles quelles,
+ * puisque celles-ci n'ont alors aucune copie prefixee. Cas mesure le 2026-10-23 (conv-1105) : le gris
+ * bleute de `.observatory-gantt__lane` devenait un gris chaud qui ecrasait le bleu de scout, l'ocre
+ * de build et le vert de judge dans le deroule de l'Observatory.
+ */
+const NINJA_SELECTEURS_EXCLUS = new Set(['.observatory-gantt__lane'])
+
 function transposerNinja(rgb, enFond) {
   const cle = `${rgb.r},${rgb.g},${rgb.b}`
   const { h, s, l } = rgbVersHsl(rgb)
@@ -1065,7 +1074,7 @@ function genererCoucheClaude({ sources, prefixe, transposer, jetonFond }) {
 export function genererNinjaClaude() {
   const { blocs, regles, declarations } = genererCoucheClaude({
     sources: fichiers(NINJA_EXCLUS),
-    prefixe: (s) => prefixerPour(s, NINJA_PREFIXE),
+    prefixe: (s) => (NINJA_SELECTEURS_EXCLUS.has(s.trim()) ? null : prefixerPour(s, NINJA_PREFIXE)),
     transposer: transposerNinja,
     jetonFond: NINJA_JETON_FOND
   })
