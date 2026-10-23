@@ -453,13 +453,39 @@ export class OutcomeLearningSupervisor {
     }
   }
 
-  /** Rejoue au démarrage les projections sans décision durable (crash promotion→invalidation). */
+  /**
+   * Rejoue au démarrage les projections sans décision durable (crash promotion→invalidation).
+   *
+   * Ne rejoue QUE les tours dont la proposition n'a pas de décision scellée — heal conv-1115 : chaque
+   * `reconcile` relit et réanalyse TOUT le journal, et le démarrage le faisait pour chaque tour
+   * (~209 lectures de 6 Mo, 1,1 s de fenêtre figée à chaque lancement, `gels.jsonl`). Pour un tour
+   * déjà décidé, `reconcile` rend sans rien écrire : l'écarter ici, depuis la lecture unique, ne
+   * change aucun verdict. Même règle que `reconcile` : seule la PREMIÈRE proposition du tour compte.
+   *
+   * Écarte AUSSI les tours que la projection ne décide pas (proposition sans issue observée pour son
+   * run) : `reconcile` y relisait les 6 Mo pour rendre « aucune décision » sans rien écrire — 40 tours
+   * sur ce poste, ~1 s à chaque démarrage (conv-1115). La projection ne lie la décision d'un tour qu'à
+   * SA proposition et SES issues : les décisions scellées par les rejeux de cette boucle ne peuvent
+   * pas en faire naître une pour un autre tour, donc une seule projection vaut pour toute la boucle.
+   */
   async reconcilePending(): Promise<void> {
-    const turns = new Set<string>()
-    for (const event of this.deps.ledger.read().events) {
-      if (event.kind !== 'proposal') continue
-      turns.add(`${event.value.conversationId}\0${event.value.turnId}`)
+    const events = this.deps.ledger.read().events
+    const decidees = new Set<string>()
+    for (const event of events) {
+      if (event.kind === 'decision') decidees.add(event.value.proposalId)
     }
+    const decidables = new Set(
+      projectOutcomeLearning(events).decisions.map(({ proposalId }) => proposalId)
+    )
+    const premiereProposition = new Map<string, string>()
+    for (const event of events) {
+      if (event.kind !== 'proposal') continue
+      const cle = `${event.value.conversationId}\0${event.value.turnId}`
+      if (!premiereProposition.has(cle)) premiereProposition.set(cle, event.value.eventId)
+    }
+    const turns = [...premiereProposition]
+      .filter(([, proposalId]) => !decidees.has(proposalId) && decidables.has(proposalId))
+      .map(([cle]) => cle)
     for (const key of turns) {
       const [conversationId, turnId] = key.split('\0')
       try {

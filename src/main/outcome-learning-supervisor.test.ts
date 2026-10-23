@@ -286,3 +286,127 @@ describe('OutcomeLearningSupervisor', () => {
     expect(invalidate).toHaveBeenCalledTimes(2)
   })
 })
+
+/**
+ * LE DÉMARRAGE RELISAIT LE JOURNAL ENTIER UNE FOIS PAR TOUR — heal conv-1115, 2026-10-23.
+ *
+ * Mesuré dans `gels.jsonl` : chaque démarrage tient la fenêtre ~3 s (16 démarrages sur 16), dont
+ * 1,1 s dans ~209 `readFileSync` remontés par la carte du bundle à `outcome-learning-ledger.ts:156`
+ * < `outcome-learning-supervisor.ts:382`. `reconcilePending` lisait le journal, puis appelait
+ * `reconcile` pour CHAQUE tour porteur d'une proposition — et chaque appel relisait et réanalysait
+ * tout le journal (6 Mo, 826 lignes sur ce poste), y compris pour les 118 tours sur 158 dont la
+ * décision était déjà scellée et pour lesquels `reconcile` rend sans rien écrire.
+ */
+describe('reconcilePending au démarrage', () => {
+  function tourDecide(
+    supervisor: OutcomeLearningSupervisor,
+    turnId: string
+  ): Promise<{ state: string }> {
+    propose(supervisor, { turnId, source: `session:${turnId}`, candidateId: `inbox/${turnId}.md` })
+    return supervisor.observeOutcome({ ...strongOutcome, turnId })
+  }
+
+  it('tours déjà décidés : le journal est lu UNE fois, aucun n’est rejoué', async () => {
+    const { supervisor, ledger, promote } = harness()
+    for (const turnId of ['turn-a', 'turn-b', 'turn-c', 'turn-d']) {
+      await expect(tourDecide(supervisor, turnId)).resolves.toMatchObject({ state: 'published' })
+    }
+    expect(promote).toHaveBeenCalledTimes(4)
+    const lectures = vi.spyOn(ledger, 'read')
+
+    await supervisor.reconcilePending()
+
+    expect(lectures).toHaveBeenCalledTimes(1)
+    expect(promote).toHaveBeenCalledTimes(4)
+  })
+
+  it('un tour resté sans décision est encore rejoué, et lui seul', async () => {
+    const { ledger, promote } = harness()
+    const invalidate = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('worker down'))
+      .mockResolvedValue(undefined)
+    const supervisor = new OutcomeLearningSupervisor({ ledger, mode: 'auto', promote, invalidate })
+    await expect(tourDecide(supervisor, 'turn-a')).resolves.toMatchObject({ state: 'published' })
+    await expect(tourDecide(supervisor, 'turn-b')).resolves.toMatchObject({ state: 'published' })
+    await expect(tourDecide(supervisor, 'turn-c')).resolves.toMatchObject({ state: 'unknown' })
+    const decisions = (): number =>
+      ledger.read().events.filter(({ kind }) => kind === 'decision').length
+    expect(decisions()).toBe(2)
+    const lectures = vi.spyOn(ledger, 'read')
+
+    await supervisor.reconcilePending()
+
+    // L'inventaire, puis le rejeu du SEUL tour en attente : sa lecture par `reconcile` et celle de
+    // `append`, qui relit pour écarter un doublon avant de sceller la décision. Avant le correctif :
+    // 5 (les deux tours décidés étaient relus aussi).
+    expect(lectures).toHaveBeenCalledTimes(3)
+    lectures.mockRestore()
+    expect(decisions()).toBe(3)
+    expect(invalidate).toHaveBeenCalledTimes(4)
+  })
+
+  /**
+   * Second temps du même heal (conv-1115) : sur le journal réel, les 40 tours encore sans décision
+   * ont TOUS une proposition sans aucune issue observée (40/40). Pour eux `reconcile` relisait les
+   * 6 Mo, ne trouvait aucune décision à prendre et rendait « aucune décision » sans rien écrire —
+   * ~1 s perdue à chaque démarrage, pour rien.
+   */
+  it('tours sans issue observée : aucune relecture, aucune écriture', async () => {
+    const { supervisor, ledger, promote } = harness()
+    await expect(tourDecide(supervisor, 'turn-a')).resolves.toMatchObject({ state: 'published' })
+    for (const turnId of ['turn-b', 'turn-c', 'turn-d']) {
+      propose(supervisor, {
+        turnId,
+        source: `session:${turnId}`,
+        candidateId: `inbox/${turnId}.md`
+      })
+    }
+    // Issue d'un AUTRE run que celui de la proposition : elle ne la concerne pas non plus.
+    propose(supervisor, { turnId: 'turn-e', source: 'session:turn-e', candidateId: 'inbox/e.md' })
+    ledger.append({
+      kind: 'outcome',
+      value: {
+        ...ledger.read().events.find(({ kind }) => kind === 'outcome')!.value,
+        eventId: 'outcome:autre-run',
+        turnId: 'turn-e',
+        runId: 'run-autre'
+      } as never
+    })
+    const avant = ledger.read().events.length
+    const lectures = vi.spyOn(ledger, 'read')
+
+    await supervisor.reconcilePending()
+
+    // Avant le correctif : 5 (l'inventaire, puis une relecture par tour sans issue).
+    expect(lectures).toHaveBeenCalledTimes(1)
+    lectures.mockRestore()
+    expect(ledger.read().events).toHaveLength(avant)
+    expect(promote).toHaveBeenCalledTimes(1)
+  })
+
+  it('un tour dont l’issue arrive après coup est rejoué au démarrage suivant', async () => {
+    const { supervisor, ledger, promote } = harness()
+    propose(supervisor, { turnId: 'turn-a', source: 'session:turn-a', candidateId: 'inbox/a.md' })
+    await supervisor.reconcilePending()
+    expect(promote).not.toHaveBeenCalled()
+
+    // L'issue est journalisée sans passer par `observeOutcome` (crash juste après l'écriture).
+    const sonde = harness()
+    propose(sonde.supervisor, {
+      turnId: 'turn-a',
+      source: 'session:turn-a',
+      candidateId: 'inbox/a.md'
+    })
+    await sonde.supervisor.observeOutcome({ ...strongOutcome, turnId: 'turn-a' })
+    const issue = sonde.ledger.read().events.find(({ kind }) => kind === 'outcome')!
+    ledger.append(issue)
+
+    await supervisor.reconcilePending()
+
+    expect(promote).toHaveBeenCalledTimes(1)
+    expect(ledger.read().events.filter(({ kind }) => kind === 'decision')).toHaveLength(1)
+  })
+})
