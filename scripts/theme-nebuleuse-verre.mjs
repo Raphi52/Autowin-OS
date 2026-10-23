@@ -30,6 +30,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import postcss from 'postcss'
+import { analyser, feuillesDuDisque } from './couches-theme-ecrasements.mjs'
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url))
 const SOURCES = ['src/renderer/src/components', 'src/renderer/src/assets']
@@ -1012,63 +1013,122 @@ function transposerNinja(rgb, enFond) {
  * La boucle commune aux couches de Claude (Ninja en sombre, Vanilla en clair) : chaque regle de
  * `sources` dont un selecteur passe `prefixe` est recopiee avec ses SEULES declarations de couleur
  * que `transposer` change (alpha conserve). Un jeton dont le nom passe `jetonFond` compte comme fond.
+ *
+ * VARIANTES (conv-1105, 2026-10-23), avec `variantes: { theme, prefixe }` : la copie prefixee d'une
+ * regle GENERALE (`.x`) bat les variantes plus precises (`.x.is-on`, `.x[data-phase]`, `.p .x:hover`)
+ * que la transposition n'a pas recopiees — mesure : 105 variantes sous Ninja (vert de
+ * `.control-status.is-on`, rouge de `.sc-diff-action.is-armed`, scout/build/judge du deroule), 8 sous
+ * Vanilla (bouton « galaxie » de GraphView.css). Chaque variante battue est donc recopiee a son tour,
+ * avec le meme prefixe (sa couleur transposee si le theme la change, telle quelle sinon), jusqu'a ce
+ * que l'analyse de couches-theme-ecrasements.mjs — celle du test — ne trouve plus aucun cas.
  */
-function genererCoucheClaude({ sources, prefixe, transposer, jetonFond }) {
-  const blocs = []
-  let regles = 0
-  let declarations = 0
-  for (const fichier of sources) {
-    const racine = postcss.parse(readFileSync(fichier, 'utf8'), { from: fichier })
-    const sortie = postcss.root()
-    racine.walkRules((regle) => {
-      if (regle.parent?.type === 'atrule' && /keyframes/i.test(regle.parent.name)) return
-      // `prefixe` rend un selecteur, une LISTE de selecteurs (Vanilla deplie ses `:is()`), ou null.
-      const selecteurs = regle.selectors.flatMap((s) => prefixe(s) ?? [])
-      if (selecteurs.length === 0) return
-      const nouvelles = []
-      regle.walkDecls((decl) => {
-        if (decl.parent !== regle) return
-        const prop = decl.prop.toLowerCase()
-        if (!PROPRIETES_COULEUR.test(prop)) return
-        // Une valeur qui porte une IMAGE (fond galaxie du body) n'est jamais recopiee : Claude
-        // n'a pas de decor, la recopier ramenerait l'image.
-        if (/url\(/i.test(decl.value)) return
-        const enFond = /^background/.test(prop) || (prop.startsWith('--') && jetonFond.test(prop))
-        let change = false
-        const valeur = decl.value.replace(COULEUR, (brut) => {
-          let rgb
-          if (brut.startsWith('#')) {
-            if (![4, 5, 7, 9].includes(brut.length)) return brut
-            rgb = hexVersRgb(brut)
-          } else {
-            const n = brut.match(/[\d.]+/g).map(Number)
-            rgb = { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
-          }
-          const t = transposer(rgb, enFond)
-          if (!t) return brut
-          change = true
-          return rgb.a === 1 ? `rgb(${t.r}, ${t.g}, ${t.b})` : `rgba(${t.r}, ${t.g}, ${t.b}, ${rgb.a})`
-        })
-        if (change) nouvelles.push(postcss.decl({ prop: decl.prop, value: valeur, important: decl.important }))
-      })
-      if (nouvelles.length === 0) return
-      const copie = postcss.rule({ selectors: selecteurs })
-      copie.append(nouvelles)
-      let cible = copie
-      for (let p = regle.parent; p && p.type === 'atrule'; p = p.parent) {
-        const enveloppe = postcss.atRule({ name: p.name, params: p.params })
-        enveloppe.append(cible)
-        cible = enveloppe
+function genererCoucheClaude({ sources, prefixe, transposer, jetonFond, variantes }) {
+  /** La valeur transposee, ou null si `transposer` ne change aucune de ses couleurs. */
+  const transposee = (decl) => {
+    const prop = decl.prop.toLowerCase()
+    const enFond = /^background/.test(prop) || (prop.startsWith('--') && jetonFond.test(prop))
+    let change = false
+    const valeur = decl.value.replace(COULEUR, (brut) => {
+      let rgb
+      if (brut.startsWith('#')) {
+        if (![4, 5, 7, 9].includes(brut.length)) return brut
+        rgb = hexVersRgb(brut)
+      } else {
+        const n = brut.match(/[\d.]+/g).map(Number)
+        rgb = { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
       }
-      sortie.append(cible)
-      regles += 1
-      declarations += nouvelles.length
+      const t = transposer(rgb, enFond)
+      if (!t) return brut
+      change = true
+      return rgb.a === 1 ? `rgb(${t.r}, ${t.g}, ${t.b})` : `rgba(${t.r}, ${t.g}, ${t.b}, ${rgb.a})`
     })
-    if (sortie.nodes.length > 0) {
-      blocs.push(`/* ---- ${relative(RACINE, fichier).replace(/\\/g, '/')} ---- */\n${sortie.toString()}`)
-    }
+    return change ? valeur : null
   }
-  return { blocs, regles, declarations }
+  /** `copie` dans les memes @media / @supports que `regle`. */
+  const envelopper = (copie, regle) => {
+    let cible = copie
+    for (let p = regle.parent; p && p.type === 'atrule'; p = p.parent) {
+      const enveloppe = postcss.atRule({ name: p.name, params: p.params })
+      enveloppe.append(cible)
+      cible = enveloppe
+    }
+    return cible
+  }
+  const emettre = (aRecopier) => {
+    const blocs = []
+    let regles = 0
+    let declarations = 0
+    for (const fichier of sources) {
+      const fichierRelatif = relative(RACINE, fichier).replace(/\\/g, '/')
+      const racine = postcss.parse(readFileSync(fichier, 'utf8'), { from: fichier })
+      const sortie = postcss.root()
+      racine.walkRules((regle) => {
+        if (regle.parent?.type === 'atrule' && /keyframes/i.test(regle.parent.name)) return
+        // `prefixe` rend un selecteur, une LISTE de selecteurs (Vanilla deplie ses `:is()`), ou null.
+        const selecteurs = regle.selectors.flatMap((s) => prefixe(s) ?? [])
+        const nouvelles = []
+        regle.each((decl) => {
+          if (decl.type !== 'decl' || !PROPRIETES_COULEUR.test(decl.prop.toLowerCase())) return
+          // Une valeur qui porte une IMAGE (fond galaxie du body) n'est jamais recopiee : Claude
+          // n'a pas de decor, la recopier ramenerait l'image.
+          if (/url\(/i.test(decl.value)) return
+          const valeur = transposee(decl)
+          if (valeur !== null)
+            nouvelles.push(
+              postcss.decl({ prop: decl.prop, value: valeur, important: decl.important })
+            )
+        })
+        if (selecteurs.length > 0 && nouvelles.length > 0) {
+          const copie = postcss.rule({ selectors: selecteurs })
+          copie.append(nouvelles)
+          sortie.append(envelopper(copie, regle))
+          regles += 1
+          declarations += nouvelles.length
+        }
+        if (aRecopier.size === 0) return
+        // Les variantes battues : une copie par selecteur, juste apres celle de la regle.
+        for (const selecteur of regle.selectors) {
+          const recopiees = []
+          regle.each((decl) => {
+            if (decl.type !== 'decl' || /url\(/i.test(decl.value)) return
+            const id = `${fichierRelatif}|${decl.source?.start?.line}|${decl.prop.toLowerCase()}|${selecteur.trim()}`
+            if (!aRecopier.has(id)) return
+            const valeur = transposee(decl) ?? decl.value.trim()
+            recopiees.push(
+              postcss.decl({ prop: decl.prop, value: valeur, important: decl.important })
+            )
+          })
+          const prefixes = [variantes.prefixe(selecteur) ?? []].flat()
+          if (recopiees.length === 0 || prefixes.length === 0) continue
+          const copie = postcss.rule({ selectors: prefixes })
+          copie.append(recopiees)
+          sortie.append(envelopper(copie, regle))
+          regles += 1
+          declarations += recopiees.length
+        }
+      })
+      if (sortie.nodes.length > 0) {
+        blocs.push(`/* ---- ${fichierRelatif} ---- */\n${sortie.toString()}`)
+      }
+    }
+    return { blocs, regles, declarations }
+  }
+  if (!variantes) return emettre(new Set())
+  // Recopier une variante peut a son tour battre une regle plus precise qu'elle : on reanalyse la
+  // couche obtenue jusqu'a ce qu'il n'y ait plus rien de nouveau a recopier.
+  const disque = feuillesDuDisque(variantes.theme)
+  const aRecopier = new Set()
+  for (let tour = 0; tour < 12; tour += 1) {
+    const couche = emettre(aRecopier)
+    const css = couche.blocs.join('\n\n')
+    const feuilles = disque.map((f) => (f.origine === 'couche' ? { ...f, css } : f))
+    const nouveaux = analyser(variantes.theme, feuilles).filter((c) => !aRecopier.has(c.identite))
+    if (nouveaux.length === 0) return couche
+    for (const c of nouveaux) aRecopier.add(c.identite)
+  }
+  throw new Error(
+    `couche ${variantes.theme} : les variantes a recopier ne se stabilisent pas en 12 tours`
+  )
 }
 
 export function genererNinjaClaude() {
@@ -1076,7 +1136,8 @@ export function genererNinjaClaude() {
     sources: fichiers(NINJA_EXCLUS),
     prefixe: (s) => (NINJA_SELECTEURS_EXCLUS.has(s.trim()) ? null : prefixerPour(s, NINJA_PREFIXE)),
     transposer: transposerNinja,
-    jetonFond: NINJA_JETON_FOND
+    jetonFond: NINJA_JETON_FOND,
+    variantes: { theme: NINJA_ID, prefixe: (s) => prefixerPour(s, NINJA_PREFIXE) }
   })
   const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${NINJA_ID} -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
@@ -1180,7 +1241,12 @@ export function genererVanillaClaude() {
     sources: fichiers(VANILLA_EXCLUS),
     prefixe: prefixerVanilla,
     transposer: transposerVanilla,
-    jetonFond: NINJA_JETON_FOND
+    jetonFond: NINJA_JETON_FOND,
+    // Une variante d'un COMPOSANT (hors base claire) prend le prefixe complet du theme.
+    variantes: {
+      theme: VANILLA_ID,
+      prefixe: (s) => prefixerVanilla(s) ?? prefixerPour(s, VANILLA_PREFIXE)
+    }
   })
   const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ${VANILLA_ID} -- ne pas modifier a la main.
    Theme « Vanilla Claude » : les regles de la base claire qui ecrivent une couleur en dur, transposees
