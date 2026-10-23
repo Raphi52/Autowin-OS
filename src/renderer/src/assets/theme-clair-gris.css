@@ -107,12 +107,12 @@
 :root[data-base='clair'] .cpick-tete,
 :root[data-base='clair'] .cpick-titre,
 :root[data-base='clair'] .cpick-q p,
+:root[data-base='clair'] .cpick-voie-piste,
 :root[data-base='clair'] .cpick-motif {
   color: var(--text-dim);
 }
 
 /* components/CapabilitiesView.css */
-:root[data-base='clair'] .cockpit-tabs small,
 :root[data-base='clair'] .control-source-badge,
 :root[data-base='clair'] .cockpit-inspector code {
   color: var(--text-dim);

@@ -106,6 +106,11 @@
   color: var(--text);
 }
 
+/* components/AscenseurDuFil.css — tailles */
+:root[data-theme^='malvoyant-'] .adf-etiquette .adf-apercu-t {
+  font-size: 13px;
+}
+
 /* components/AskDecision.css — tailles */
 :root[data-theme^='malvoyant-'] .askd-pied,
 :root[data-theme^='malvoyant-'] .askd-envoyer-compte {
@@ -175,6 +180,7 @@
 
 /* components/CandidatsPickPanel.css — tailles */
 :root[data-theme^='malvoyant-'] .cpick-compte,
+:root[data-theme^='malvoyant-'] .cpick-voie-piste,
 :root[data-theme^='malvoyant-'] .cpick-auto,
 :root[data-theme^='malvoyant-'] .cpick-pourquoi,
 :root[data-theme^='malvoyant-'] .cpick-motif,
@@ -186,6 +192,7 @@
 :root[data-theme^='malvoyant-'] .cpick-tete,
 :root[data-theme^='malvoyant-'] .cpick-titre,
 :root[data-theme^='malvoyant-'] .cpick-q p,
+:root[data-theme^='malvoyant-'] .cpick-voie-piste,
 :root[data-theme^='malvoyant-'] .cpick-motif {
   color: var(--text);
 }
@@ -215,21 +222,20 @@
 }
 
 /* components/CapabilitiesView.css — gris en dur */
-:root[data-theme^='malvoyant-'] .cockpit-tabs small,
 :root[data-theme^='malvoyant-'] .control-source-badge,
 :root[data-theme^='malvoyant-'] .cockpit-inspector code {
   color: var(--text);
 }
 
-/* components/CarteDuFil.css — tailles */
-:root[data-theme^='malvoyant-'] .carte-libelle b,
-:root[data-theme^='malvoyant-'] .carte-libelle small,
-:root[data-theme^='malvoyant-'] .carte-detail-puces code {
+/* components/CarteDesBesoinsView.css — tailles */
+:root[data-theme^='malvoyant-'] .besoins-section {
   font-size: 13px;
 }
 
 /* components/ChatComposerExtras.css — tailles */
 :root[data-theme^='malvoyant-'] .composer-friction,
+:root[data-theme^='malvoyant-'] .composer-suites-titre,
+:root[data-theme^='malvoyant-'] .composer-suite-case,
 :root[data-theme^='malvoyant-'] .composer-suite-score {
   font-size: 13px;
 }
@@ -323,7 +329,8 @@
 :root[data-theme^='malvoyant-'] .conv-status-filter,
 :root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort,
 :root[data-theme^='malvoyant-'] .thinking-frise-erreur,
-:root[data-theme^='malvoyant-'] .thinking-frise-icone[data-famille='commande']::before {
+:root[data-theme^='malvoyant-'] .thinking-frise-icone[data-famille='commande']::before,
+:root[data-theme^='malvoyant-'] .msg-lecture-etiquette {
   font-size: 13px;
 }
 
@@ -719,6 +726,13 @@
   color: var(--text);
 }
 
+/* components/MaintenanceSkillsPanel.css — tailles */
+:root[data-theme^='malvoyant-'] .maint-groupe-titre,
+:root[data-theme^='malvoyant-'] .maint-bouton-nom,
+:root[data-theme^='malvoyant-'] .maint-bouton-role {
+  font-size: 13px;
+}
+
 /* components/ModelActivityLogPane.css — tailles */
 :root[data-theme^='malvoyant-'] .model-log-filter select,
 :root[data-theme^='malvoyant-'] .model-log-json,
@@ -899,6 +913,12 @@
   font-size: 13px;
 }
 
+/* components/RiviereDuProjet.css — tailles */
+:root[data-theme^='malvoyant-'] .riviere-fiche-meta,
+:root[data-theme^='malvoyant-'] .riviere-fiche-manuel {
+  font-size: 13px;
+}
+
 /* components/RouterView.css — gris en dur */
 :root[data-theme^='malvoyant-'] .router-view,
 :root[data-theme^='malvoyant-'] .router-actions .router-standby {
@@ -982,6 +1002,11 @@
 
 /* components/SuggestionGrid.css — tailles */
 :root[data-theme^='malvoyant-'] .sg-key {
+  font-size: 13px;
+}
+
+/* components/TachesDeLaDemande.css — tailles */
+:root[data-theme^='malvoyant-'] .taches {
   font-size: 13px;
 }
 
@@ -1108,6 +1133,11 @@
 /* components/VeilleCandidatsSection.css — gris en dur */
 :root[data-theme^='malvoyant-'] .veille-citation {
   color: var(--text);
+}
+
+/* components/VerificationDuBoard.css — tailles */
+:root[data-theme^='malvoyant-'] .riviere-verif-refus {
+  font-size: 13px;
 }
 
 /* components/WorkflowCanvas.css — tailles */

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   892 regles, 1272 declarations. Voir genererNinjaClaude.
+   1031 regles, 1431 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -131,6 +131,9 @@
 :root[data-theme='ninja-claude'] .theme-serious .topology-model, :root[data-theme='ninja-claude'] .theme-serious .topology-slot {
     color: rgb(242, 242, 241)
 }
+:root[data-theme='ninja-claude'] .theme-serious .topology-model:hover {
+    border-color: rgba(255, 255, 255, 0.34)
+}
 :root[data-theme='ninja-claude'] .theme-serious .topology-model.is-selected {
     border-color: rgba(221, 135, 107, 0.88)
 }
@@ -147,6 +150,9 @@
 :root[data-theme='ninja-claude'] .theme-serious .topology-panel.is-drop-target {
     border-color: rgba(221, 135, 107, 0.82);
     background: rgba(38, 38, 36, 0.86)
+}
+:root[data-theme='ninja-claude'] .theme-serious .topology-panel.is-drop-target {
+    box-shadow: none
 }
 :root[data-theme='ninja-claude'] .theme-serious .topology-eyebrow, :root[data-theme='ninja-claude'] .theme-serious .topology-panel > header span, :root[data-theme='ninja-claude'] .theme-serious .topology-parallel-heading span, :root[data-theme='ninja-claude'] .theme-serious .topology-model small, :root[data-theme='ninja-claude'] .theme-serious .topology-slot-copy span, :root[data-theme='ninja-claude'] .theme-serious .topology-slot-copy small, :root[data-theme='ninja-claude'] .theme-serious .topology-slot label, :root[data-theme='ninja-claude'] .theme-serious .topology-toolbar p, :root[data-theme='ninja-claude'] .theme-serious .topology-panel > header p {
     color: rgb(150, 148, 139)
@@ -171,6 +177,9 @@
 }
 :root[data-theme='ninja-claude'] .artifact-preview__source, :root[data-theme='ninja-claude'] .artifact-notebook__cell pre {
     color: rgb(223, 222, 218)
+}
+:root[data-theme='ninja-claude'] .artifact-preview__source.is-diff {
+    color: #b8e6cb
 }
 :root[data-theme='ninja-claude'] .artifact-table-wrap table {
     color: rgb(224, 224, 221)
@@ -235,6 +244,16 @@
     color: rgb(220, 128, 98)
 }
 
+/* ---- src/renderer/src/components/AscenseurDuFil.css ---- */
+:root[data-theme='ninja-claude'] .adf {
+    --adf-rose: rgb(214, 110, 76);
+    --adf-texte: var(--text, rgb(248, 248, 248));
+    --adf-fond: var(--bg-0, rgb(31, 30, 29))
+}
+:root[data-theme='ninja-claude'] .adf-apercu-k {
+    color: var(--gold, rgb(218, 124, 93))
+}
+
 /* ---- src/renderer/src/components/AskDecision.css ---- */
 :root[data-theme='ninja-claude'] .askd {
     border-image: linear-gradient(
@@ -271,14 +290,35 @@
 :root[data-theme='ninja-claude'] .askd-tri {
     color: rgba(187, 185, 178, 0.75)
 }
+:root[data-theme='ninja-claude'] .askd-item:hover .askd-tri {
+    color: var(--gold-clair)
+}
+:root[data-theme='ninja-claude'] .askd-item.est-reco .askd-tri {
+    color: var(--gold-clair)
+}
+:root[data-theme='ninja-claude'] .askd-item:focus-within .askd-tri {
+    color: var(--gold-clair)
+}
 :root[data-theme='ninja-claude'] .askd-consequence {
     color: rgb(187, 185, 178)
 }
 :root[data-theme='ninja-claude'] .askd-touche {
     color: rgba(187, 185, 178, 0.55)
 }
+:root[data-theme='ninja-claude'] .askd-item:hover .askd-touche {
+    color: var(--gold-clair)
+}
+:root[data-theme='ninja-claude'] .askd-item:focus-within .askd-touche {
+    color: var(--gold-clair)
+}
+:root[data-theme='ninja-claude'] .askd-item.est-reco .askd-touche {
+    color: var(--gold-clair)
+}
 :root[data-theme='ninja-claude'] .askd-q b {
     color: rgb(187, 185, 178)
+}
+:root[data-theme='ninja-claude'] .askd-q.est-residuel b {
+    color: var(--gold-doux)
 }
 :root[data-theme='ninja-claude'] .askd-q.est-residuel p {
     color: rgb(187, 185, 178)
@@ -383,6 +423,9 @@
 :root[data-theme='ninja-claude'] .brain-markdown a:hover {
     color: rgb(222, 221, 217)
 }
+:root[data-theme='ninja-claude'] .brain-markdown a:hover {
+    text-decoration-color: currentColor
+}
 :root[data-theme='ninja-claude'] .brain-markdown li::marker {
     color: rgb(218, 121, 89)
 }
@@ -430,6 +473,9 @@
 :root[data-theme='ninja-claude'] .cadrage-hyp .askd-badge {
     border: 1px solid rgba(215, 110, 76, 0.45)
 }
+:root[data-theme='ninja-claude'] .cadrage-hyp .askd-badge {
+    color: var(--gold-clair)
+}
 :root[data-theme='ninja-claude'] .cadrage-hyp-plier {
     color: rgb(187, 185, 178)
 }
@@ -454,8 +500,14 @@
 :root[data-theme='ninja-claude'] .cpick-q p {
     color: rgb(231, 230, 228)
 }
+:root[data-theme='ninja-claude'] .cpick-voie-piste {
+    color: rgb(187, 185, 178)
+}
 :root[data-theme='ninja-claude'] .cpick-motif {
     color: rgb(231, 230, 228)
+}
+:root[data-theme='ninja-claude'] .cpick-motif:hover {
+    color: var(--gold-doux)
 }
 
 /* ---- src/renderer/src/components/CapabilitiesView.css ---- */
@@ -471,21 +523,30 @@
 :root[data-theme='ninja-claude'] .cockpit-sources button.is-future {
     border: 1px dashed rgba(173, 171, 162, 0.28)
 }
-:root[data-theme='ninja-claude'] .cockpit-tabs small {
-    color: rgb(187, 186, 179)
-}
 :root[data-theme='ninja-claude'] .control-row:hover {
     border-color: rgba(163, 161, 152, 0.28)
 }
 :root[data-theme='ninja-claude'] .control-row.is-selected {
     border-color: rgba(194, 193, 187, 0.48)
 }
+:root[data-theme='ninja-claude'] .control-row.is-selected {
+    background: var(--surface-selected)
+}
 :root[data-theme='ninja-claude'] .control-status {
     background: rgb(104, 102, 92)
+}
+:root[data-theme='ninja-claude'] .control-status.is-on {
+    background: #66e8b8
 }
 :root[data-theme='ninja-claude'] .control-source-badge {
     border: 1px solid rgba(169, 167, 158, 0.25);
     color: rgb(191, 189, 182)
+}
+:root[data-theme='ninja-claude'] .control-source-badge.is-claude {
+    color: #ffbd87
+}
+:root[data-theme='ninja-claude'] .control-source-badge.is-codex {
+    color: #82f4d3
 }
 :root[data-theme='ninja-claude'] .control-source-badge.is-native {
     border-color: rgba(174, 172, 163, 0.42);
@@ -502,6 +563,12 @@
 }
 :root[data-theme='ninja-claude'] .control-toggle i {
     background: rgb(135, 132, 119)
+}
+:root[data-theme='ninja-claude'] .control-toggle.is-on {
+    background: #133a2c
+}
+:root[data-theme='ninja-claude'] .control-toggle.is-on i {
+    background: #71e7ba
 }
 :root[data-theme='ninja-claude'] .cockpit-inspector {
     border-left: 1px solid rgba(163, 161, 152, 0.12)
@@ -529,13 +596,26 @@
         border-top: 1px solid rgba(163, 161, 152, 0.12)
     }
 }
+@container settings (max-width: 880px) {
+    :root[data-theme='ninja-claude'] .cockpit-inspector {
+        border-left: 0
+    }
+}
 @container settings (max-width: 600px) {
     :root[data-theme='ninja-claude'] .cockpit-sources {
         border-bottom: 1px solid rgba(163, 161, 152, 0.12)
     }
 }
+@container settings (max-width: 600px) {
+    :root[data-theme='ninja-claude'] .cockpit-sources {
+        border-right: 0
+    }
+}
 
 /* ---- src/renderer/src/components/ChatComposerExtras.css ---- */
+:root[data-theme='ninja-claude'] .composer-suites-titre {
+    color: var(--text-dim, rgba(231, 230, 228, 0.6))
+}
 :root[data-theme='ninja-claude'] .composer-suite {
     color: var(--text, rgb(231, 230, 228))
 }
@@ -544,6 +624,17 @@
 }
 :root[data-theme='ninja-claude'] .composer-suite.is-best {
     border-color: rgba(215, 110, 76, 0.55)
+}
+:root[data-theme='ninja-claude'] .composer-suite.is-cochee {
+    border-color: var(--gold-bright, rgb(218, 124, 94));
+    background: rgba(215, 110, 76, 0.1)
+}
+:root[data-theme='ninja-claude'] .composer-suite-case {
+    color: var(--gold-bright, rgb(218, 124, 94))
+}
+:root[data-theme='ninja-claude'] .composer-suite.is-cochee .composer-suite-case {
+    border-color: var(--gold-bright, rgb(218, 124, 94));
+    background: rgba(215, 110, 76, 0.16)
 }
 :root[data-theme='ninja-claude'] .composer-suite-score {
     background: rgba(215, 110, 76, 0.16);
@@ -579,6 +670,9 @@
 }
 
 /* ---- src/renderer/src/components/ChatView.css ---- */
+:root[data-theme='ninja-claude'] .conv-item:hover {
+    background: var(--bg-2)
+}
 :root[data-theme='ninja-claude'] .conv-highlight {
     background: rgba(215, 110, 76, 0.28)
 }
@@ -746,9 +840,18 @@
 :root[data-theme='ninja-claude'] .effort-matrix-row.is-active .effort-cran.is-filled i {
     box-shadow: 0 0 10px rgba(230, 167, 147, 0.55)
 }
+:root[data-theme='ninja-claude'] .effort-matrix-row.is-active .effort-cran.is-filled i {
+    background: var(--chat-cran-rempli)
+}
 :root[data-theme='ninja-claude'] .effort-cran.is-live.is-selected i {
     box-shadow: 0 0 0 4px rgba(230, 167, 147, 0.18),
     0 0 16px rgba(230, 167, 147, 0.7)
+}
+:root[data-theme='ninja-claude'] .effort-matrix-row .effort-cran.is-recommended i {
+    box-shadow: 0 0 7px rgba(53, 208, 127, 0.8)
+}
+:root[data-theme='ninja-claude'] .effort-matrix-row.is-active .effort-cran.is-recommended i {
+    box-shadow: 0 0 7px rgba(53, 208, 127, 0.8)
 }
 :root[data-theme='ninja-claude'] .effort-cran:hover i {
     box-shadow: 0 0 12px rgba(230, 167, 147, 0.6)
@@ -912,6 +1015,9 @@
 :root[data-theme='ninja-claude'] .diff-line {
     border-bottom: 1px solid color-mix(in srgb, var(--line, rgb(47, 46, 42)) 55%, transparent)
 }
+:root[data-theme='ninja-claude'] .diff-line:last-child {
+    border-bottom: 0
+}
 :root[data-theme='ninja-claude'] .diff-gutter {
     border-right: 1px solid var(--line, rgb(47, 46, 42));
     color: var(--text-faint, rgb(122, 120, 109))
@@ -954,6 +1060,9 @@
 :root[data-theme='ninja-claude'] .diff-comment-retirer {
     color: var(--muted, rgb(155, 153, 143))
 }
+:root[data-theme='ninja-claude'] .diff-comment-retirer:hover {
+    color: var(--danger, #e6635b)
+}
 :root[data-theme='ninja-claude'] .diff-editeur-texte {
     border: 1px solid var(--line, rgb(47, 46, 42));
     background: var(--surface, rgb(38, 38, 36));
@@ -968,6 +1077,12 @@
 /* ---- src/renderer/src/components/Evidence.css ---- */
 :root[data-theme='ninja-claude'] .evidence-item {
     background: rgba(31, 30, 29, 0.28)
+}
+:root[data-theme='ninja-claude'] .evidence-diff .diff-add {
+    color: #6be0aa
+}
+:root[data-theme='ninja-claude'] .evidence-diff .diff-del {
+    color: #ff8ea1
 }
 :root[data-theme='ninja-claude'] .run-cost-recap {
     background: rgba(31, 30, 29, 0.2)
@@ -1012,6 +1127,9 @@
     0 0 16px rgba(255, 93, 222, 0.28),
     0 0 34px rgba(176, 174, 166, 0.18)
 }
+:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy .graph-mode-switch__track {
+    background: linear-gradient(120deg, #1b1038, #3d1150 55%, #131c3f)
+}
 :root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy .graph-mode-switch__thumb {
     background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.92), transparent 34%),
     conic-gradient(from 210deg, #ff5dde, rgb(185, 184, 177), rgb(169, 167, 159), #ff5dde);
@@ -1022,12 +1140,18 @@
 :root[data-theme='ninja-claude'] .graph-mode-switch:hover .graph-mode-switch__track {
     border-color: rgb(104, 102, 93)
 }
+:root[data-theme='ninja-claude'] .graph-mode-switch.is-galaxy:hover .graph-mode-switch__track {
+    border-color: #ff8fe9
+}
 :root[data-theme='ninja-claude'] .graph-mode-switch:focus-visible .graph-mode-switch__track {
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55),
     0 0 0 2px rgba(190, 188, 182, 0.55)
 }
 :root[data-theme='ninja-claude'] .graph-clean-memory {
     background: rgba(31, 30, 29, 0.34)
+}
+:root[data-theme='ninja-claude'] .graph-clean-memory:hover {
+    background: rgba(103, 225, 178, 0.12)
 }
 :root[data-theme='ninja-claude'] .graph-toolbar__stats {
     color: rgb(127, 124, 113)
@@ -1065,6 +1189,13 @@
 }
 :root[data-theme='ninja-claude'] .node-search-result {
     color: var(--text-dim, rgb(175, 173, 165))
+}
+:root[data-theme='ninja-claude'] .node-search-result:hover {
+    color: var(--text, #f4f0e8)
+}
+:root[data-theme='ninja-claude'] .node-search-result:focus-visible {
+    background: rgba(184, 70, 116, 0.12);
+    color: var(--text, #f4f0e8)
 }
 :root[data-theme='ninja-claude'] .node-search-result i {
     color: var(--rose-bright, rgb(218, 121, 89))
@@ -1115,6 +1246,15 @@
 :root[data-theme='ninja-claude'] .tree-branch-controls button:hover, :root[data-theme='ninja-claude'] .tree-branch-controls button:focus-visible, :root[data-theme='ninja-claude'] .tree-branch-controls button.is-collapsed {
     border-color: rgb(190, 188, 182);
     color: rgb(244, 244, 243)
+}
+:root[data-theme='ninja-claude'] .tree-branch-controls button:hover {
+    background: rgba(21, 54, 70, 0.94)
+}
+:root[data-theme='ninja-claude'] .tree-branch-controls button:focus-visible {
+    background: rgba(21, 54, 70, 0.94)
+}
+:root[data-theme='ninja-claude'] .tree-branch-controls button.is-collapsed {
+    background: rgba(21, 54, 70, 0.94)
 }
 :root[data-theme='ninja-claude'] .tree-branch-controls button small {
     color: rgb(141, 138, 126)
@@ -1225,6 +1365,9 @@
     border-color: rgb(75, 74, 67);
     color: rgb(247, 247, 246)
 }
+:root[data-theme='ninja-claude'] .node-links button:hover {
+    background: #102634
+}
 :root[data-theme='ninja-claude'] .node-panel__loading {
     color: rgb(126, 123, 111)
 }
@@ -1273,6 +1416,12 @@
 :root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter:hover, :root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter.is-active {
     background: linear-gradient(90deg, rgba(92, 90, 82, 0.5), rgba(24, 33, 73, 0.58));
     box-shadow: inset 2px 0 rgb(182, 180, 172)
+}
+:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter:hover {
+    border-color: #654995
+}
+:root[data-theme='ninja-claude'] .graph-observatory--galaxy .theme-filter.is-active {
+    border-color: #654995
 }
 :root[data-theme='ninja-claude'] .graph-observatory--galaxy .toggle-row input:checked + i {
     background: linear-gradient(90deg, rgb(113, 111, 101), rgb(114, 112, 102))
@@ -1442,6 +1591,9 @@
 :root[data-theme='ninja-claude'] .theme-sidebar__retrieval.is-unavailable {
     color: rgb(234, 181, 163)
 }
+:root[data-theme='ninja-claude'] .theme-sidebar__retrieval.is-failed {
+    color: #ffc4cd
+}
 :root[data-theme='ninja-claude'] .graph-workbench-badge {
     color: rgb(25, 24, 22)
 }
@@ -1456,6 +1608,30 @@
 }
 :root[data-theme='ninja-claude'] .graph-brains-retry:hover, :root[data-theme='ninja-claude'] .graph-themes-retry:hover, :root[data-theme='ninja-claude'] .graph-theme-nodes-retry:hover, :root[data-theme='ninja-claude'] .graph-status__retry:hover, :root[data-theme='ninja-claude'] .graph-empty-reindex:hover, :root[data-theme='ninja-claude'] .graph-empty-brains:hover, :root[data-theme='ninja-claude'] .graph-truncation__extend:hover, :root[data-theme='ninja-claude'] .node-panel__retry:hover {
     border-color: rgb(177, 175, 167)
+}
+:root[data-theme='ninja-claude'] .graph-brains-retry:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-themes-retry:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-theme-nodes-retry:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-status__retry:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-empty-reindex:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-empty-brains:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .graph-truncation__extend:hover {
+    color: #f2f7ff
+}
+:root[data-theme='ninja-claude'] .node-panel__retry:hover {
+    color: #f2f7ff
 }
 :root[data-theme='ninja-claude'] .graph-brains-retry:focus-visible, :root[data-theme='ninja-claude'] .graph-themes-retry:focus-visible, :root[data-theme='ninja-claude'] .graph-theme-nodes-retry:focus-visible, :root[data-theme='ninja-claude'] .graph-status__retry:focus-visible, :root[data-theme='ninja-claude'] .graph-empty-reindex:focus-visible, :root[data-theme='ninja-claude'] .graph-empty-brains:focus-visible, :root[data-theme='ninja-claude'] .graph-truncation__extend:focus-visible, :root[data-theme='ninja-claude'] .node-panel__retry:focus-visible {
     outline: 2px solid rgb(218, 124, 93)
@@ -1556,9 +1732,16 @@
     border-color: rgba(215, 110, 76, 0.65);
     color: rgb(234, 181, 163)
 }
+:root[data-theme='ninja-claude'] .jarvis__mute[aria-pressed='true'] {
+    color: #ffb4b4;
+    background: rgba(224, 96, 96, 0.14)
+}
 :root[data-theme='ninja-claude'] .jarvis__bascule:hover, :root[data-theme='ninja-claude'] .jarvis__bascule:focus-visible {
     color: rgb(234, 181, 163);
     border-color: rgba(215, 110, 76, 0.65)
+}
+:root[data-theme='ninja-claude'] .jarvis[data-ecoute='true'] .jarvis__bascule {
+    color: var(--jv-or)
 }
 :root[data-theme='ninja-claude'] .jarvis__whisper-bouton {
     background: rgba(215, 110, 76, 0.08)
@@ -1660,6 +1843,15 @@
     background: radial-gradient(circle at 14px 50%, rgba(var(--hud), 0.32), transparent 60%),
     linear-gradient(135deg, rgba(var(--or), 0.14), rgba(31, 30, 29, 0.35) 60%, rgba(var(--hud), 0.12))
 }
+:root[data-theme='ninja-claude'] .enregistrements__bouton:hover {
+    color: #ffffff
+}
+:root[data-theme='ninja-claude'] .enregistrements__bouton:focus-visible {
+    color: #ffffff
+}
+:root[data-theme='ninja-claude'] .enregistrements[data-enregistre='true'] .enregistrements__bouton {
+    color: #ffe4e4
+}
 :root[data-theme='ninja-claude'] .enregistrements__champ > span {
     color: rgb(187, 185, 178)
 }
@@ -1738,6 +1930,9 @@
 /* ---- src/renderer/src/components/HumanJson.css ---- */
 :root[data-theme='ninja-claude'] .human-json__toggle {
     background: rgba(38, 38, 36, 0.72)
+}
+:root[data-theme='ninja-claude'] .human-json__toggle:hover {
+    background: rgba(93, 242, 214, 0.14)
 }
 :root[data-theme='ninja-claude'] .human-json__tree {
     border: 1px solid rgba(152, 149, 139, 0.26);
@@ -1819,6 +2014,9 @@
 }
 :root[data-theme='ninja-claude'] .model-log-label {
     color: rgb(231, 230, 228)
+}
+:root[data-theme='ninja-claude'] .model-log-row[data-log-ok='false'] .model-log-label {
+    color: #f0a9a9
 }
 :root[data-theme='ninja-claude'] .model-log-resume {
     color: rgba(187, 185, 178, 0.8)
@@ -2084,6 +2282,12 @@
 :root[data-theme='ninja-claude'] .observatory-event.is-compared {
     box-shadow: inset 3px 0 rgb(177, 175, 167)
 }
+:root[data-theme='ninja-claude'] .observatory-event.is-error:hover {
+    border-color: #ff6078
+}
+:root[data-theme='ninja-claude'] .observatory-event.is-error.is-selected {
+    border-color: #ff6078
+}
 :root[data-theme='ninja-claude'] .observatory-event.is-model-response {
     box-shadow: inset 3px 0 rgb(193, 192, 186)
 }
@@ -2129,6 +2333,9 @@
 :root[data-theme='ninja-claude'] .observatory-injections li[data-testid='observatory-injection-unattributed'] > span, :root[data-theme='ninja-claude'] .observatory-injections li[data-testid='observatory-injection-unattributed'] > b {
     color: var(--warn, rgb(218, 124, 93))
 }
+:root[data-theme='ninja-claude'] .observatory-payload--markdown .brain-markdown {
+    color: inherit
+}
 :root[data-theme='ninja-claude'] .observatory-turn-load {
     background: rgba(41, 40, 37, 0.95)
 }
@@ -2143,6 +2350,9 @@
 }
 :root[data-theme='ninja-claude'] .observatory-authority-ledger article {
     border-left-color: rgb(177, 175, 167)
+}
+:root[data-theme='ninja-claude'] .observatory-authority-ledger article[data-decision='deny'] {
+    border-left-color: #ef7d7d
 }
 :root[data-theme='ninja-claude'] .observatory-authority-ledger article[data-decision='confirm'] {
     border-left-color: rgb(218, 124, 93)
@@ -2160,11 +2370,17 @@
     --surface-selected: rgba(221, 135, 107, 0.1);
     color: rgb(244, 244, 243)
 }
+:root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-diagnostics button {
+    border-color: rgba(255, 255, 255, 0.18)
+}
 :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-toolbar input, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-toolbar select, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-toolbar button, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-toolbar summary, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-view-switch, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-event-detail button, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-diff button {
     color: rgb(234, 234, 232)
 }
 :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-panel-title, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-head p, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-conversations small, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-diagnostics span, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-turn > header, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-event p small {
     color: rgb(150, 148, 139)
+}
+:root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-event:hover {
+    border-color: rgba(255, 255, 255, 0.34)
 }
 :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-conversations > button.is-active, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-calls button.is-active, :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-event.is-selected {
     border-color: rgba(221, 135, 107, 0.88);
@@ -2180,6 +2396,9 @@
 :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-turn-focus {
     border-color: rgba(221, 135, 107, 0.52);
     color: rgb(230, 165, 143)
+}
+:root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-turn-focus {
+    background: var(--surface-selected)
 }
 :root[data-theme='ninja-claude'] .theme-serious .observatory-view .observatory-event-detail {
     border-color: rgba(221, 135, 107, 0.52)
@@ -2214,8 +2433,8 @@
 :root[data-theme='ninja-claude'] .observatory-empty button {
     border: 1px solid rgb(54, 53, 48)
 }
-:root[data-theme='ninja-claude'] .observatory-gantt__lane {
-    --gantt-color: rgb(160, 158, 148)
+:root[data-theme='ninja-claude'] .observatory-gantt {
+    --gantt-defaut: rgb(160, 158, 148)
 }
 :root[data-theme='ninja-claude'] .observatory-gantt__lane[data-phase='orchestrator'] {
     --gantt-color: rgb(190, 188, 181)
@@ -2334,6 +2553,92 @@
     box-shadow: inset 2px 0 0 rgb(215, 110, 76)
 }
 
+/* ---- src/renderer/src/components/RiviereDuProjet.css ---- */
+:root[data-theme='ninja-claude'] .riviere {
+    --riviere-encre: rgb(52, 51, 47);
+    --riviere-encre-jour: rgb(92, 90, 82)
+}
+:root[data-theme='ninja-claude'] .riviere-puce.is-actif {
+    color: rgb(24, 24, 22)
+}
+:root[data-theme='ninja-claude'] .riviere-cadre {
+    background: rgb(246, 245, 244);
+    box-shadow: inset 0 0 0 1px rgba(171, 169, 161, 0.45)
+}
+:root[data-theme='ninja-claude'] .riviere-tete {
+    border-bottom: 1px solid rgba(171, 169, 161, 0.45)
+}
+:root[data-theme='ninja-claude'] .riviere-jour {
+    border-left: 1px solid rgba(171, 169, 161, 0.35)
+}
+:root[data-theme='ninja-claude'] .riviere-jour:first-child {
+    border-left: 0
+}
+:root[data-theme='ninja-claude'] .riviere-jour[data-repere='mois'] {
+    border-left-color: rgba(52, 51, 47, 0.5)
+}
+:root[data-theme='ninja-claude'] .riviere-jour[data-aujourdhui] {
+    background: rgba(218, 124, 93, 0.14)
+}
+:root[data-theme='ninja-claude'] .riviere-jour[data-aujourdhui][data-foyer] {
+    background: linear-gradient(rgba(60, 110, 235, 0.06), rgba(60, 110, 235, 0.06)), rgba(218, 124, 93, 0.14)
+}
+:root[data-theme='ninja-claude'] .riviere-etage {
+    border-top: 3px solid var(--riviere-etage, rgb(171, 169, 161));
+    border-bottom: 1px solid rgba(171, 169, 161, 0.55)
+}
+:root[data-theme='ninja-claude'] .riviere-etage[data-etage='en-cours'] {
+    --riviere-etage: rgb(214, 110, 76)
+}
+:root[data-theme='ninja-claude'] .riviere-etage[data-etage='sans-preuve'] {
+    --riviere-etage: rgb(155, 153, 143)
+}
+:root[data-theme='ninja-claude'] .riviere-postit {
+    color: rgb(36, 35, 32);
+    background: var(--riviere-papier, rgb(235, 235, 233))
+}
+:root[data-theme='ninja-claude'] .riviere-postit[data-etage='en-cours'] {
+    --riviere-papier: rgb(234, 181, 163)
+}
+:root[data-theme='ninja-claude'] .riviere-postit[data-etage='sans-preuve'] {
+    --riviere-papier: rgb(235, 235, 233)
+}
+:root[data-theme='ninja-claude'] .riviere-postit[data-manuel] {
+    outline: 2px dashed rgba(52, 51, 47, 0.55)
+}
+:root[data-theme='ninja-claude'] .riviere-fiche {
+    color: rgb(36, 35, 32);
+    background: var(--riviere-papier, rgb(235, 235, 233))
+}
+:root[data-theme='ninja-claude'] .riviere-fiche[data-etage='en-cours'] {
+    --riviere-papier: rgb(234, 181, 163)
+}
+:root[data-theme='ninja-claude'] .riviere-fiche[data-etage='sans-preuve'] {
+    --riviere-papier: rgb(235, 235, 233)
+}
+:root[data-theme='ninja-claude'] .riviere-fiche-fermer {
+    color: rgb(36, 35, 32)
+}
+:root[data-theme='ninja-claude'] .riviere-fiche-manuel {
+    border: 1px dashed rgba(52, 51, 47, 0.5)
+}
+:root[data-theme='ninja-claude'] .riviere-point {
+    background: rgb(139, 136, 125)
+}
+:root[data-theme='ninja-claude'] .riviere-point[data-statut='prouve'] {
+    background: #3f9d4a
+}
+:root[data-theme='ninja-claude'] .riviere-point[data-statut='refuse'] {
+    background: #e0483e
+}
+:root[data-theme='ninja-claude'] .riviere-point[data-statut='en-cours'] {
+    background: rgb(208, 87, 47)
+}
+:root[data-theme='ninja-claude'] .riviere-fiche-ouvrir {
+    border: 1px solid rgba(52, 51, 47, 0.45);
+    color: rgb(36, 35, 32)
+}
+
 /* ---- src/renderer/src/components/RouterView.css ---- */
 :root[data-theme='ninja-claude'] .router-view {
     color: rgb(239, 239, 237)
@@ -2350,6 +2655,9 @@
 :root[data-theme='ninja-claude'] .router-account-chip {
     background: var(--surface-card, rgba(31, 30, 29, 0.46))
 }
+:root[data-theme='ninja-claude'] .router-account-chip:hover:not(:disabled) {
+    background: var(--surface-hover)
+}
 :root[data-theme='ninja-claude'] .router-account-chip.is-active, :root[data-theme='ninja-claude'] .router-account-chip.is-active:disabled {
     background: var(--surface-selected, rgba(215, 110, 76, 0.14));
     border-color: var(--accent, rgb(215, 110, 76))
@@ -2364,6 +2672,12 @@
 }
 :root[data-theme='ninja-claude'] .run-bilan__verdict {
     color: var(--fg-faint, rgb(187, 185, 178))
+}
+:root[data-theme='ninja-claude'] .run-bilan[data-verdict='vert'] .run-bilan__verdict {
+    color: #63c08a
+}
+:root[data-theme='ninja-claude'] .run-bilan[data-verdict='rouge'] .run-bilan__verdict {
+    color: #e2705f
 }
 :root[data-theme='ninja-claude'] .run-bilan[data-verdict='en cours'] .run-bilan__verdict {
     color: rgb(218, 124, 94)
@@ -2407,6 +2721,9 @@
 :root[data-theme='ninja-claude'] .html-render-preview {
     border: 1px solid color-mix(in srgb, var(--accent, rgb(220, 128, 98)) 34%, rgb(52, 51, 47));
     background: rgb(31, 30, 29)
+}
+:root[data-theme='ninja-claude'] .html-render-preview.is-embedded {
+    border: 0
 }
 :root[data-theme='ninja-claude'] .html-render-preview__identity {
     color: rgb(230, 229, 227)
@@ -2546,6 +2863,9 @@
     border: 1px solid var(--line2, rgb(59, 58, 53));
     color: var(--muted, rgb(155, 153, 143))
 }
+:root[data-theme='ninja-claude'] .sc-diff-card .diff-view {
+    border: 0
+}
 :root[data-theme='ninja-claude'] .sc-diff-actions {
     border-top: 1px solid var(--line, rgb(47, 46, 42));
     background: var(--surface2, rgb(38, 38, 36))
@@ -2569,6 +2889,9 @@
 :root[data-theme='ninja-claude'] .sc-brain-call {
     border-top: 1px solid var(--line, rgb(47, 46, 42))
 }
+:root[data-theme='ninja-claude'] .sc-brain-call:first-of-type {
+    border-top: 0
+}
 :root[data-theme='ninja-claude'] .sc-brain-call > header, :root[data-theme='ninja-claude'] .sc-brain-call > footer {
     color: var(--muted, rgb(155, 153, 143))
 }
@@ -2590,6 +2913,13 @@
 }
 :root[data-theme='ninja-claude'] .sc-diff-action.is-armed {
     color: var(--text, rgb(235, 235, 233))
+}
+:root[data-theme='ninja-claude'] .sc-diff-action.is-armed {
+    background: var(--danger, #e6635b);
+    border-color: var(--danger, #e6635b)
+}
+:root[data-theme='ninja-claude'] .sc-diff-action.is-armed:hover {
+    background: var(--danger, #e6635b)
 }
 :root[data-theme='ninja-claude'] .sc-annule-path {
     color: var(--muted, rgb(155, 153, 143))
@@ -2633,6 +2963,13 @@
 :root[data-theme='ninja-claude'] .sc-lancement-bouton.is-on {
     color: var(--text, rgb(235, 235, 233))
 }
+:root[data-theme='ninja-claude'] .sc-lancement-bouton.is-on {
+    background: transparent;
+    border-color: var(--danger, #e6635b)
+}
+:root[data-theme='ninja-claude'] .sc-lancement-bouton.is-on:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger, #e6635b) 22%, transparent)
+}
 :root[data-theme='ninja-claude'] .sc-lancement-commande {
     border: 1px solid var(--line2, rgb(59, 58, 53))
 }
@@ -2647,6 +2984,9 @@
 }
 :root[data-theme='ninja-claude'] .sc-lancement-info a {
     color: var(--gold-bright, rgb(218, 124, 94))
+}
+:root[data-theme='ninja-claude'] .sc-lancement-info.is-echec {
+    color: var(--danger, #e6635b)
 }
 :root[data-theme='ninja-claude'] .sc-lancement-sortie summary {
     color: var(--muted, rgb(155, 153, 143))
@@ -2675,6 +3015,27 @@
     background: var(--surface, rgb(38, 38, 36))
 }
 
+/* ---- src/renderer/src/components/TachesDeLaDemande.css ---- */
+:root[data-theme='ninja-claude'] .tache {
+    border: 1px solid rgba(52, 51, 47, 0.4);
+    color: rgb(36, 35, 32)
+}
+:root[data-theme='ninja-claude'] .tache-detacher {
+    color: rgb(36, 35, 32)
+}
+:root[data-theme='ninja-claude'] .tache-bouton {
+    border: 1px solid rgba(52, 51, 47, 0.45);
+    color: rgb(36, 35, 32)
+}
+:root[data-theme='ninja-claude'] .tache-source {
+    border: 1px solid rgba(52, 51, 47, 0.5);
+    color: rgb(36, 35, 32)
+}
+:root[data-theme='ninja-claude'] .tache-saisie {
+    border: 1px solid rgba(52, 51, 47, 0.5);
+    color: rgb(36, 35, 32)
+}
+
 /* ---- src/renderer/src/components/TaskManagerView.css ---- */
 :root[data-theme='ninja-claude'] .task-manager-primary {
     color: var(--rose-bright, rgb(228, 157, 133)) !important
@@ -2694,6 +3055,9 @@
 }
 :root[data-theme='ninja-claude'] .watchdog-stats .watchdog-pending strong {
     color: rgb(227, 153, 129)
+}
+:root[data-theme='ninja-claude'] .watchdog-status.status-failed {
+    color: #ff8094
 }
 :root[data-theme='ninja-claude'] .watchdog-stats .watchdog-cancelled strong, :root[data-theme='ninja-claude'] .watchdog-status.status-cancelled {
     color: rgb(227, 153, 129)
@@ -2762,6 +3126,15 @@
     border-color: color-mix(in srgb, var(--rose, rgb(225, 147, 121)) 70%, transparent);
     background: color-mix(in srgb, var(--rose, rgb(225, 147, 121)) 18%, transparent)
 }
+:root[data-theme='ninja-claude'] .ticket-open-conversation.is-succeeded {
+    background: color-mix(in srgb, var(--success, #73d9a2) 18%, transparent)
+}
+:root[data-theme='ninja-claude'] .ticket-open-conversation.is-failed {
+    background: color-mix(in srgb, var(--danger, #ff7185) 18%, transparent)
+}
+:root[data-theme='ninja-claude'] .ticket-open-conversation.is-interrupted {
+    background: color-mix(in srgb, var(--danger, #ff7185) 18%, transparent)
+}
 :root[data-theme='ninja-claude'] .tickets-mode {
     color: var(--muted, rgb(171, 169, 161))
 }
@@ -2806,6 +3179,9 @@
 :root[data-theme='ninja-claude'] .veille-message {
     color: var(--text-faint, rgba(248, 248, 248, 0.5))
 }
+:root[data-theme='ninja-claude'] .veille-message.is-error {
+    color: var(--gold)
+}
 :root[data-theme='ninja-claude'] .veille-echecs ul {
     color: var(--text-faint, rgba(248, 248, 248, 0.55))
 }
@@ -2829,6 +3205,12 @@
 }
 :root[data-theme='ninja-claude'] .veille-colonne[data-testid='veille-colonne-corrections'] h3 b {
     color: var(--text-faint, rgba(248, 248, 248, 0.6))
+}
+
+/* ---- src/renderer/src/components/VerificationDuBoard.css ---- */
+:root[data-theme='ninja-claude'] .riviere-verif-bouton {
+    border: 1px solid rgba(52, 51, 47, 0.45);
+    color: rgb(36, 35, 32)
 }
 
 /* ---- src/renderer/src/components/WorkflowCanvas.css ---- */
@@ -2882,6 +3264,9 @@
 :root[data-theme='ninja-claude'] .workflow-profile-confirm {
     border-left: 1px solid var(--line, rgb(59, 58, 53))
 }
+:root[data-theme='ninja-claude'] .wf-badge.is-broken {
+    color: var(--err)
+}
 :root[data-theme='ninja-claude'] .wf-badge {
     border: 1px solid var(--container-border, rgb(59, 57, 52));
     color: var(--text-dim, rgb(194, 193, 187))
@@ -2919,6 +3304,15 @@
 }
 :root[data-theme='ninja-claude'] .wt-cdp-pastille {
     color: var(--text-faint, rgba(248, 248, 248, 0.4))
+}
+:root[data-theme='ninja-claude'] .wt-cdp-ligne.is-a-toi .wt-cdp-pastille {
+    color: var(--gold)
+}
+:root[data-theme='ninja-claude'] .wt-cdp-ligne.is-pret .wt-cdp-pastille {
+    color: var(--cyan)
+}
+:root[data-theme='ninja-claude'] .wt-cdp-ligne.is-en-cours .wt-cdp-pastille {
+    color: var(--rose)
 }
 :root[data-theme='ninja-claude'] .wt-cdp-sujet, :root[data-theme='ninja-claude'] .wt-cdp-compte, :root[data-theme='ninja-claude'] .wt-cdp-attente {
     color: var(--text-faint, rgba(248, 248, 248, 0.45))
@@ -2964,6 +3358,9 @@
 :root[data-theme='ninja-claude'] .rail-toggle {
     background: rgba(31, 30, 29, 0.42)
 }
+:root[data-theme='ninja-claude'] .rail.is-collapsed .brand {
+    background: transparent
+}
 :root[data-theme='ninja-claude'] .nav-item.active {
     background: rgba(217, 118, 85, 0.09)
 }
@@ -3008,6 +3405,46 @@
 }
 :root[data-theme='ninja-claude'] .model-question-options button:hover {
     background: rgba(217, 118, 85, 0.09)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-stage {
+    background: transparent
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-sidebar {
+    background: var(--surface-panel)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
+    background: var(--surface-panel)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-settings-popover {
+    background: var(--surface-card)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-settings-popover__heading {
+    background: var(--surface-card)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .graph-canvas canvas {
+    filter: saturate(1.12) contrast(1.04)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .toggle-row input:checked + i::after {
+    box-shadow: none
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-filter.is-active {
+    box-shadow: none
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .theme-cluster-label {
+    background: var(--surface-card)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .selected-node {
+    background: var(--surface-card);
+    box-shadow: none
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory--galaxy .node-panel pre {
+    background: var(--surface-card)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .model-question-layer {
+    background: var(--surface-card)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .model-question-popup {
+    background: var(--surface-card)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .chat > .composer {
     background: linear-gradient(rgba(31, 30, 29, 0.42), rgba(31, 30, 29, 0.42)), var(--surface-panel)
@@ -3102,11 +3539,23 @@
     background: rgba(31, 30, 29, 0.9);
     color: rgb(231, 169, 149)
 }
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .graph-stage {
+    background: var(--surface-panel)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .theme-sidebar {
+    background: var(--surface-panel)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .graph-observatory .visibility-sidebar {
+    background: var(--surface-panel)
+}
 :root[data-theme='ninja-claude'] .cosmic-outline .activity-steps {
     border-left: 1px dashed rgba(189, 188, 181, 0.35)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .activity-step {
     color: rgb(206, 205, 200)
+}
+:root[data-theme='ninja-claude'] .cosmic-outline .activity-step[data-state='ko'] {
+    color: #ff8a9c
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .activity-step-icon {
     background: rgba(189, 188, 181, 0.16)

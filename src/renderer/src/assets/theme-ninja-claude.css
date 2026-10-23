@@ -395,13 +395,3 @@
   background: rgba(201, 100, 66, 0.45);
   color: rgba(255, 255, 255, 0.7);
 }
-
-/* ---- 6. OBSERVATORY ----------------------------------------------------------------------------- */
-/* Lignes d'OUTILS du deroule (conv-1105, 2026-10-22). La couche generee repeint la ligne par defaut
-   en gris chaud avec un selecteur plus fort que les couleurs de phase de la base : le vert-jaune des
-   outils y etait donc gris, confondu avec l'orchestrateur (capture obs-1105-ninja-claude.png). Bleu
-   d'accent secondaire de la charte de Claude (github.com/anthropics/skills, brand-guidelines :
-   « Blue: #6a9bcc - Secondary accent ») : loin de la terracotta de frame et des gris. */
-:root[data-theme='ninja-claude'] .observatory-gantt__lane[data-phase='outil'] {
-  --gantt-color: #6a9bcc;
-}

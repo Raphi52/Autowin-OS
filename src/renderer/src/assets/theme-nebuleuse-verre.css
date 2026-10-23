@@ -3946,8 +3946,9 @@
   box-shadow: none;
   transform: none;
 }
-/* Rangees de barre laterale (Knowledge) : transparentes au repos, comme la liste des fils. */
-:root[data-theme='nebuleuse-verre'] .shell.theme-serious .theme-filter {
+/* Rangees de barre laterale (Knowledge, sections de Settings -- conv-1109) : transparentes au
+   repos, comme la liste des fils. */
+:root[data-theme='nebuleuse-verre'] .shell.theme-serious :is(.theme-filter, .settings-nav-item) {
   border: 1.5px solid transparent;
   border-radius: 14px;
   background: transparent;
@@ -3965,7 +3966,8 @@
     .observatory-view .observatory-event,
     .tickets-list [data-testid='ticket-row'],
     .workflow-profile,
-    .theme-filter
+    .theme-filter,
+    .settings-nav-item
   ):hover {
   border-color: var(--nv-liste-bord-survol);
   background: var(--nv-liste-survol);
@@ -4017,6 +4019,7 @@
     .tickets-list [data-testid='ticket-row'].is-selected,
     .workflow-profile.is-active,
     .theme-filter.is-active,
+    .settings-nav-item.is-active,
     .graph-observatory--galaxy .theme-filter.is-active,
     .wf-return-buttons button.is-active
   ) {
@@ -4050,6 +4053,7 @@
     .tickets-list [data-testid='ticket-row'].is-selected,
     .workflow-profile.is-active,
     .theme-filter.is-active,
+    .settings-nav-item.is-active,
     .graph-observatory--galaxy .theme-filter.is-active,
     .wf-return-buttons button.is-active
   ) {

@@ -1855,7 +1855,11 @@
  * pas un état) ; rouge = refus du juge ou échec ; rayé = démarré sans fin tracée. La bulle de survol
  * est sombre dans TOUS les thèmes : elle porte son propre texte clair, lisible sur fond clair aussi.
  */
+/* Couleur d'une ligne SANS couleur a elle (salvage, toute etape hors liste), en jeton du conteneur
+   (conv-1105, 2026-10-23) : une couche de theme recolore CE jeton, jamais la regle de la ligne,
+   dont la copie prefixee (0,3,0) battait scout, build et judge (0,2,0) sous Ninja. */
 .observatory-gantt {
+  --gantt-defaut: #8c96a8;
   --gantt-who: 132px;
   --gantt-lane: 26px;
   margin: 2px 0 14px;
@@ -1913,7 +1917,7 @@
   transform: translateX(-100%);
 }
 .observatory-gantt__lane {
-  --gantt-color: #8c96a8;
+  --gantt-color: var(--gantt-defaut);
   display: grid;
   grid-template-columns: var(--gantt-who) minmax(0, 1fr);
   align-items: center;
