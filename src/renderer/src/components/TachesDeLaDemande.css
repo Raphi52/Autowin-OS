@@ -1,0 +1,133 @@
+/* La task de chaque demande dans la fiche d'un post-it (conv-1127). La fiche est un papier pastel
+   aux couleurs FIXES (RiviereDuProjet.css) : mêmes encres fixes ici, jamais les boutons du thème,
+   qui disparaissent sur ce papier. */
+
+/* La ligne d'une demande passe à la ligne pour accueillir ses tasks ; le texte garde sa coupe. */
+.riviere-fiche-demandes li[data-testid='riviere-fiche-demande'] {
+  flex-wrap: wrap;
+}
+
+.riviere-fiche-demandes li[data-testid='riviere-fiche-demande'] .riviere-fiche-texte {
+  flex: 1 1 0;
+}
+
+/* `min-width: 0` + `box-sizing` : sans eux, un titre long élargissait la ligne au-delà de la fiche
+   (capture de la fiche #2182, 23/10, conv-1127 : puce coupée au bord, barre de défilement en bas). */
+.taches {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 0 3px 14px;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.tache {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid rgba(31, 42, 68, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  color: #16202e;
+}
+
+.tache[data-herite='1'] {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+/* Seul le titre se coupe : le numéro et la croix restent lisibles. */
+.tache > b,
+.tache-detacher {
+  flex: none;
+}
+
+.tache-titre {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tache-detacher {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #16202e;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tache-sans {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.tache-bouton {
+  padding: 0 7px;
+  border: 1px solid rgba(31, 42, 68, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #16202e;
+  font: 600 11px/1.5 var(--font, system-ui, sans-serif);
+  cursor: pointer;
+}
+
+.tache-bouton.is-discret {
+  border-color: transparent;
+  background: none;
+  font-weight: 400;
+}
+
+.tache-bouton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tache-champ {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Le choix de la source (plusieurs sources configurées) : sur sa propre ligne, au-dessus du numéro. */
+.tache-source {
+  flex: 1 1 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 1px 4px;
+  border: 1px solid rgba(31, 42, 68, 0.5);
+  border-radius: 4px;
+  background: #fff;
+  color: #16202e;
+  font: 12px/1.4 var(--font, system-ui, sans-serif);
+}
+
+.tache-saisie {
+  width: 96px;
+  padding: 1px 6px;
+  border: 1px solid rgba(31, 42, 68, 0.5);
+  border-radius: 4px;
+  background: #fff;
+  color: #16202e;
+  font: 12px/1.4 var(--font, system-ui, sans-serif);
+}
+
+.tache-erreur {
+  flex-basis: 100%;
+  color: #8a1c12;
+}
