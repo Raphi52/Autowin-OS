@@ -1,0 +1,154 @@
+/*
+ * ASCENSEUR DU FIL À CRANS — « 1 · Dépli en place » (draft conv-1114, 2026-10-23).
+ * Couleurs : celles des bulles de l'utilisateur (bleu -> rose, cosmic-outline.css `.msg-bulle`) et
+ * le texte du thème en transparence, pour suivre chaque thème sans couleur de fond en dur.
+ */
+.adf {
+  --adf-bleu: #3c6eeb;
+  --adf-rose: #e63ca0;
+  --adf-texte: var(--text, #f5f7fb);
+  --adf-fond: var(--bg-0, #000);
+  position: absolute;
+  z-index: 6;
+  width: 18px;
+  touch-action: none;
+  user-select: none;
+  cursor: default;
+  /* Décélération douce, commune à l'ouverture et au repli. */
+  --adf-courbe: cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Holographique blanc : le rose de ses bulles est plus profond (theme-holographique-clair.css). */
+:root[data-base='clair'] .adf {
+  --adf-rose: #d02b8c;
+}
+/* La LARGEUR change d'un coup : c'est seulement la zone de clic. Ce qui se voit est animé plus bas,
+   sans recalcul de mise en page à chaque image (une transition de `width` en demandait un). */
+.adf.is-deplie {
+  width: 72px;
+}
+.adf svg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: block;
+  overflow: visible;
+}
+.adf path,
+.adf line {
+  fill: none;
+  stroke-linecap: round;
+}
+.adf-s1 {
+  stop-color: var(--adf-bleu);
+}
+.adf-s2 {
+  stop-color: var(--adf-rose);
+}
+
+/* --- Barre fine (repos) --- */
+.adf-fine {
+  transition: opacity 150ms var(--adf-courbe);
+}
+.adf.is-deplie .adf-fine {
+  opacity: 0;
+}
+.adf-trait {
+  stroke: color-mix(in srgb, var(--adf-texte) 14%, transparent);
+  stroke-width: 2;
+}
+.adf-crans {
+  stroke-width: 2;
+  opacity: 0.72;
+}
+.adf-poignee {
+  fill: color-mix(in srgb, var(--adf-texte) 22%, transparent);
+  transition: fill 120ms ease-out;
+}
+.adf:hover .adf-poignee {
+  fill: color-mix(in srgb, var(--adf-texte) 38%, transparent);
+}
+.adf-lueur {
+  stroke-width: 3;
+}
+
+/* --- Carte du fil (dépliée) ---
+   « Pas fluide » (conv-1114) : la carte s'écrasait en largeur (scaleX 0,25 -> 1), ce qui tordait
+   bulles et lignes ; et la garde prefers-reduced-motion coupait toute transition — or ce poste a ce
+   réglage actif (theme.css, spinner) : la carte apparaissait d'un coup. Elle se DÉVOILE maintenant
+   depuis la barre fine (ses 18 px de droite) vers la gauche, sans rien déformer, et sans garde. */
+.adf-carte {
+  opacity: 0;
+  clip-path: inset(0 0 0 calc(100% - 18px) round 8px);
+  pointer-events: none;
+  /* Repli : la carte rentre dans la barre, puis s'efface. */
+  transition:
+    clip-path 200ms var(--adf-courbe),
+    opacity 140ms linear 60ms;
+}
+.adf.is-deplie .adf-carte {
+  opacity: 1;
+  clip-path: inset(0 0 0 0 round 8px);
+  /* Ouverture : 150 ms, comme arrêté au draft ; l'opacité arrive vite pour que rien ne clignote. */
+  transition:
+    clip-path 150ms var(--adf-courbe),
+    opacity 70ms linear;
+}
+.adf-plaque {
+  fill: color-mix(in srgb, var(--adf-texte) 8%, var(--adf-fond));
+  stroke: color-mix(in srgb, var(--adf-texte) 16%, transparent);
+  stroke-width: 1;
+}
+/* Réponses de l'agent : un pavé de lignes grises (trait large en pointillés = lignes de texte). */
+.adf .adf-gris path {
+  stroke: color-mix(in srgb, var(--adf-texte) 24%, transparent);
+  stroke-dasharray: 2 2;
+  stroke-linecap: butt;
+}
+.adf-bulle {
+  opacity: 0.72;
+}
+.adf-bulle.is-courant {
+  opacity: 1;
+}
+.adf-cadre {
+  fill: color-mix(in srgb, var(--adf-texte) 9%, transparent);
+  stroke: color-mix(in srgb, var(--adf-texte) 52%, transparent);
+  stroke-width: 1;
+}
+
+/* --- Aperçu au survol d'un cran : n°, heure, début du message --- */
+.adf-apercu {
+  position: absolute;
+  right: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--adf-texte) 8%, var(--adf-fond));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--adf-texte) 22%, transparent);
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.adf-apercu-k {
+  color: var(--gold, #e9bd4e);
+  font: 600 9.5px/1.3 var(--mono, ui-monospace, monospace);
+  letter-spacing: 0.06em;
+}
+.adf-apercu-t {
+  overflow: hidden;
+  color: var(--adf-texte);
+  font: 12px/1.4 var(--font, 'Segoe UI', system-ui, sans-serif);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* L'ascenseur du système s'efface : la barre à crans le remplace (ChatView, `chat-scroll--ascenseur`). */
+.chat-scroll--ascenseur {
+  scrollbar-width: none;
+}
+.chat-scroll--ascenseur::-webkit-scrollbar {
+  display: none;
+}
