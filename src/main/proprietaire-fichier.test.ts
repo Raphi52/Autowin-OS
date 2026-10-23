@@ -103,6 +103,44 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
     expect(fichier.resume).toContain('tour-a')
   })
 
+  it('lit une liste de chemins envoyée en TEXTE JSON par l’outil direct, sans rendre « libre » à tort', async () => {
+    // L'outil direct ne transmet que des chaînes (`schemaEntree`, skill-node-mcp.ts) : la liste
+    // arrive donc en texte. Lue comme UN chemin, elle rendait un seul fichier « libre », alors que
+    // conv-a tient src/partage.ts (constaté en conv-1107, 23/10/2026).
+    donnees()
+    const ws = depot()
+    const b = bus(ws)
+    await b.exec(
+      'create_file',
+      { path: 'src/partage.ts', content: 'export const a = 1\n' },
+      'conv-a',
+      undefined,
+      'tour-a'
+    )
+
+    const fichiers = await demander(b, '["src/partage.ts", "src/propre.ts"]', 'conv-b')
+
+    expect(fichiers.map((f) => f.chemin)).toEqual(['src/partage.ts', 'src/propre.ts'])
+    expect(fichiers[0]?.fils).toEqual([expect.objectContaining({ conversation: 'conv-a' })])
+    expect(fichiers[1]?.resume).toMatch(/libre/)
+  })
+
+  it('refuse en le disant une liste en texte mal formée, au lieu de la lire comme un chemin', async () => {
+    donnees()
+    const ws = depot()
+
+    const r = await bus(ws).exec(
+      'proprietaire_fichier',
+      { chemins: '["src/propre.ts", src/autre.ts]' },
+      'conv-b',
+      undefined,
+      'tour-q'
+    )
+
+    expect(r.ok).toBe(false)
+    expect(String(r.error)).toMatch(/liste/)
+  })
+
   it('jumeau : le même fichier demandé par conv-a est le SIEN, pas celui d’un autre fil', async () => {
     donnees()
     const ws = depot()

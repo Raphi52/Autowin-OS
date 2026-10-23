@@ -285,13 +285,40 @@ function resumer(f: Omit<ProprietaireDeFichier, 'resume'>): string {
     : 'libre : aucun changement non commité, aucun fil, aucune copie de run, rien en amont'
 }
 
+/**
+ * Les chemins tels que les envoient les DEUX voies d'appel. La voie <cmd> passe un vrai tableau ;
+ * l'outil direct ne peut passer qu'une CHAÎNE, car `schemaEntree` (skill-node-mcp.ts) déclare tout
+ * argument en `type: 'string'` — et la description de l'outil donne elle-même l'exemple
+ * `["src/main/commands.ts"]`. Lue comme UN chemin, cette liste rendait un seul fichier « libre » à
+ * tort (conv-1107, 23/10/2026). Même règle que `listeEnvoyee` (commands.ts, conv-927) : une chaîne
+ * qui commence par `[` est une liste JSON, mal formée elle est REFUSÉE en le disant ; toute autre
+ * chaîne reste un chemin unique.
+ */
+function cheminsEnvoyes(brut: unknown): unknown[] {
+  if (Array.isArray(brut)) return brut
+  if (typeof brut !== 'string' || !brut.trimStart().startsWith('[')) return [brut]
+  let lu: unknown
+  try {
+    lu = JSON.parse(brut)
+  } catch {
+    lu = undefined
+  }
+  if (!Array.isArray(lu)) {
+    throw new Error(
+      'proprietaire_fichier : `chemins` ressemble à une liste mais n’est pas un tableau JSON valide ' +
+        '(ex. ["src/a.ts", "src/b.ts"])'
+    )
+  }
+  return lu
+}
+
 export async function lireProprietairesDeFichiers(entree: {
   workspace: string
   chemins: unknown
   conversationId?: string
   spoolBase?: string
 }): Promise<ReponseProprietaire> {
-  const bruts = (Array.isArray(entree.chemins) ? entree.chemins : [entree.chemins]).filter(
+  const bruts = cheminsEnvoyes(entree.chemins).filter(
     (chemin): chemin is string => typeof chemin === 'string' && chemin.trim() !== ''
   )
   if (bruts.length === 0) {
