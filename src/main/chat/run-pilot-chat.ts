@@ -97,6 +97,7 @@ import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands'
 import type { ModelQuestion } from '../model-questions'
 import { collerTexteParle } from './coller-texte-parle'
+import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
@@ -309,12 +310,21 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      *
      * Il est emis par fragment (`agent-pilot.ts:543`) : ecrire un evenement causal par fragment
      * produirait des centaines de lignes pour un seul tour et rendrait la chronologie illisible.
-     * Meme patron que `streamedSpoken` — on accumule, on ecrit une fois.
+     * La TRACE causale le recoit donc en une fois, a la cloture. Le TOUR, lui, le recoit par rafale
+     * (a chaque pause du modele) : ecrit seulement a la cloture, il ne vivait que dans la memoire de
+     * l'ecran, et un rechargement de la vue en plein tour peignait un bloc vide (conv-1110,
+     * `raisonnement-au-fil-du-tour.ts`).
      */
-    let streamedReasoning = ''
+    const raisonnementDuTour = ecrivainDeRaisonnement((portion) => {
+      if (conversationId && os.conversations.get(conversationId))
+        os.conversations.applyTurnEvent(conversationId, turnId, {
+          kind: 'reasoning',
+          text: portion
+        })
+    })
     /**
      * JOURNAL DES ACTIONS du tour — mêmes lignes que le bloc « Actions » du fil, accumulées ici pour
-     * être écrites UNE FOIS à la clôture (même patron que `streamedReasoning`). Sans cette copie,
+     * être écrites UNE FOIS à la clôture (ancien patron du raisonnement). Sans cette copie,
      * ces lignes ne vivaient que le temps du stream : le bloc se vidait au rechargement de la
      * conversation, alors qu'elles sont la seule trace lisible du travail quand la pensée du modèle
      * arrive chiffrée. Une ligne répétée à l'identique n'est pas dupliquée (même règle que le fil
@@ -799,15 +809,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             }
           }
           // Le raisonnement accumule entre dans la trace ICI, une seule fois, a la cloture du tour.
-          const raisonnement = streamedReasoning.trim()
-          // ... et dans le TOUR lui-meme, sinon le bloc « Reflexion » du fil est vide des qu'on
-          // recharge la conversation : la pensee ne vivait que le temps du stream. Une seule
-          // ecriture a la cloture, pas une par delta — la vue, elle, a deja son direct.
-          if (conversationId && raisonnement)
-            os.conversations.applyTurnEvent(conversationId, turnId, {
-              kind: 'reasoning',
-              text: raisonnement
-            })
+          const raisonnement = raisonnementDuTour.texte.trim()
+          // ... et dans le TOUR lui-meme, il y est DEJA, rafale par rafale : on n'ecrit que ce qui
+          // attend encore. Reecrire le texte entier le DEDOUBLERAIT (le reducteur concatene).
+          raisonnementDuTour.vider()
           // ... et le JOURNAL DES ACTIONS avec lui, pour la même raison exactement : une seule
           // écriture à la clôture, la vue ayant déjà son direct.
           if (conversationId && streamedActions.length > 0)
@@ -1035,7 +1040,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           )
           iterationDuDernierDelta = pilotEvent.iteration
         }
-        if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
+        // Accumule la pensee ; un evenement d'une autre sorte (action, commande, texte, fin) ecrit
+        // dans le tour la rafale qui vient de finir (conv-1110).
+        raisonnementDuTour.recevoir(pilotEvent)
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
           if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
           // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée, et ce qu'il a reçu et
@@ -1704,6 +1711,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         erreur: e
       })
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
+      // Un tour qui echoue ou est coupe en pleine pensee garde la rafale en cours (conv-1110).
+      raisonnementDuTour.vider()
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
       }
