@@ -367,7 +367,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
         <section className="router-default" data-testid="router-petites-taches">
           <header>
             <h3>Modèle des petites tâches</h3>
-            <small>choix du workflow · deux lectures · rangement du premier message</small>
+            <small>
+              choix du workflow · deux lectures · rangement du premier message · arbitrage d’une
+              dérive
+            </small>
           </header>
           <OrchestratorModelSelector
             busy={false}
@@ -383,7 +386,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
             // Non réglé = Haiku en effort low (`roles.ts`, conv-1097), plus le modèle du chat.
             libelle={petitesTaches?.reglage ? 'Réglé' : 'Par défaut'}
-            aide="S’applique au prochain choix de workflow, aux deux lectures et au rangement du premier message."
+            aide="S’applique au prochain choix de workflow, aux deux lectures, au rangement du premier message et à l’arbitrage d’une dérive."
           />
           {petitesTaches && !petitesTaches.reglage && (
             <p className="router-hint" data-testid="router-petites-taches-defaut">

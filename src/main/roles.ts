@@ -179,26 +179,35 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
  * HAIKU PAR DÉFAUT (conv-1097, 2026-10-22). Demande de l'utilisateur : « utiliser haiku pour toutes
  * les petites opérations faciles qui n'ont qu'un résultat ». Ce sont des appels sans outil, à réponse
  * unique (un oui/non, un choix dans une liste) : la DÉCISION DU WORKFLOW (`os.ts`), les DEUX LECTURES
- * (`deux-lectures.ts`) et le RANGEMENT DU PREMIER MESSAGE (`rangement-premier-message.ts`). Non réglé,
- * le défaut suivait le chat, donc Opus. Le défaut devient l'ALIAS `haiku` du CLI — pas un id figé :
- * le CLI le résout côté serveur vers le dernier Haiku (mesuré le 2026-10-22 : `claude-haiku-5-5`,
- * 0,0006 $ l'appel contre 0,003 à 0,018 $ sur Opus 5.5). Il n'est posé que si le chat est sur Claude :
+ * (`deux-lectures.ts`), le RANGEMENT DU PREMIER MESSAGE (`rangement-premier-message.ts`) et
+ * l'ARBITRAGE D'UNE DÉRIVE (`orchestrator.ts`). Le petit modèle y CHOISIT, il ne compose jamais : un
+ * workflow neuf est écrit par le modèle du chat (`workflow-dynamic.ts`). Chaque appel laisse une ligne
+ * de coût et d'issue dans `cost.jsonl` (`petites-taches-trace.ts`). Non réglé,
+ * le défaut suivait le chat, donc Opus. Le défaut devient le DERNIER HAIKU du catalogue découvert
+ * (`claude/haiku-latest`, `model-aliases.ts`) — jamais un id figé. Sans catalogue, l'alias `haiku`
+ * du CLI, résolu côté serveur (mesuré le 2026-10-22 : `claude-haiku-5-5`, 0,0006 $ l'appel contre
+ * 0,003 à 0,018 $ sur Opus 5.5). Pas l'alias brut d'office : `models.ts` (dropRedundantClaudeAliases)
+ * le RETIRE du catalogue dès qu'une version nommée existe, et l'écran Routeur l'affichait alors
+ * « haiku (indisponible) » (capture du 2026-10-22). Il n'est posé que si le chat est sur Claude :
  * un autre moteur garde son propre modèle. Un réglage du Routeur passe toujours devant.
  */
 export const EFFORT_PETITES_TACHES_NON_REGLE: ReasoningEffort = 'low'
 
-/** Alias de famille du CLI Claude (catalogue : `claude/haiku`, `models.ts`), jamais un id versionné. */
+/** Repli sans catalogue : l'alias de famille du CLI Claude, jamais un id versionné. */
 export const MODELE_PETITES_TACHES_NON_REGLE_CLAUDE = 'haiku'
 
 export function bindingDesPetitesTaches(
   reglage: RoleBinding | undefined,
-  chat: RoleBinding
+  chat: RoleBinding,
+  catalog?: ImportedModel[]
 ): RoleBinding {
   if (reglage) return { ...reglage }
   if (chat.provider === 'claude') {
     return {
       provider: 'claude',
-      model: MODELE_PETITES_TACHES_NON_REGLE_CLAUDE,
+      model:
+        (catalog && resolveAlias('claude/haiku-latest', catalog)?.model) ??
+        MODELE_PETITES_TACHES_NON_REGLE_CLAUDE,
       reasoningEffort: EFFORT_PETITES_TACHES_NON_REGLE
     }
   }
@@ -209,14 +218,45 @@ export function bindingDesPetitesTaches(
   }
 }
 
+/**
+ * LE BUILD DES RUNS TRIVIAUX SUR HAIKU (conv-1097, 2026-10-22).
+ *
+ * Mesure : `scripts/banc-modeles-petits-defauts.mjs`, 4 petits défauts réels d'un seul fichier, effort
+ * xhigh, test caché du vrai correctif comme juge. Haiku 5.5 a réussi 11/12 essais pour ≈ 0,05 $
+ * l'essai, Opus 5.5 10/12 pour ≈ 1,05 $ (résultats dans `.autowin-data/autowin-os/banc-modeles/`).
+ * Décision de l'utilisateur : l'étape build d'un run de régime `trivial` (`task-regime.ts`, retouche
+ * courte et déjà précise) part sur le DERNIER HAIKU du catalogue, à l'effort du rôle. Le juge garde
+ * le rôle `judge` : il reste le contrôle final.
+ *
+ * Seulement si le rôle d'exécution est sur Claude (un autre moteur garde son modèle). Sans catalogue,
+ * l'alias `haiku` du CLI, comme pour les petites tâches. Réversible : `"buildTrivialSurHaiku": false`
+ * dans `roles.json` rend le build trivial au modèle du rôle.
+ */
+export function modeleDuBuildTrivial(
+  binding: RoleBinding,
+  catalog?: ImportedModel[]
+): string | undefined {
+  if (binding.provider !== 'claude') return undefined
+  return (
+    (catalog && resolveAlias('claude/haiku-latest', catalog)?.model) ??
+    MODELE_PETITES_TACHES_NON_REGLE_CLAUDE
+  )
+}
+
 /** Ce que l'écran Routeur lit : le réglage posé (null = jamais posé) et le binding qui part. */
 export interface PetitesTachesEtat {
   reglage: RoleBinding | null
   effectif: RoleBinding
 }
 
-/** Contenu de `roles.json` : les quatre rôles, plus le réglage des petites tâches s'il existe. */
-export type RolesPersistes = Partial<Record<Role, RoleBinding>> & { petitesTaches?: RoleBinding }
+/**
+ * Contenu de `roles.json` : les quatre rôles, plus le réglage des petites tâches et l'interrupteur du
+ * build trivial sur Haiku (absent = actif, `false` = le build trivial suit le rôle) s'ils sont posés.
+ */
+export type RolesPersistes = Partial<Record<Role, RoleBinding>> & {
+  petitesTaches?: RoleBinding
+  buildTrivialSurHaiku?: boolean
+}
 
 export class RoleModelConfig {
   private bindings: Record<Role, RoleBinding>
@@ -224,6 +264,8 @@ export class RoleModelConfig {
   private catalog?: ImportedModel[]
   /** Réglage EXPLICITE des petites tâches ; absent = suit le modèle du chat. */
   private petitesTaches?: RoleBinding
+  /** Interrupteur du build trivial sur Haiku tel que posé ; absent = actif. */
+  private buildTrivialSurHaiku?: boolean
 
   constructor(defaults?: RolesPersistes, catalog?: ImportedModel[]) {
     this.catalog = catalog
@@ -240,7 +282,23 @@ export class RoleModelConfig {
       // Jamais normalisé : la normalisation compléterait un binding sans modèle par le défaut du
       // code, exactement le choix caché que ce réglage remplace.
       if (defaults.petitesTaches) this.petitesTaches = { ...defaults.petitesTaches }
+      if (typeof defaults.buildTrivialSurHaiku === 'boolean')
+        this.buildTrivialSurHaiku = defaults.buildTrivialSurHaiku
     }
+  }
+
+  /** L'interrupteur tel que posé dans `roles.json`, `undefined` s'il ne l'a jamais été. */
+  getBuildTrivialSurHaiku(): boolean | undefined {
+    return this.buildTrivialSurHaiku
+  }
+
+  /**
+   * Le modèle du build d'un run TRIVIAL joué par `binding`, ou `undefined` pour garder celui du rôle :
+   * interrupteur coupé, ou rôle sur un autre moteur que Claude ({@link modeleDuBuildTrivial}).
+   */
+  modeleDuBuildTrivial(binding: RoleBinding): string | undefined {
+    if (this.buildTrivialSurHaiku === false) return undefined
+    return modeleDuBuildTrivial(binding, this.catalog)
   }
 
   /** Le réglage tel que l'utilisateur l'a posé, ou `undefined` s'il ne l'a jamais posé. */
@@ -256,7 +314,11 @@ export class RoleModelConfig {
 
   /** Le binding qui part VRAIMENT pour les petites tâches (workflow, deux lectures, rangement). */
   bindingDesPetitesTaches(): RoleBinding {
-    return bindingDesPetitesTaches(this.petitesTaches, this.getBinding('orchestrator'))
+    return bindingDesPetitesTaches(
+      this.petitesTaches,
+      this.getBinding('orchestrator'),
+      this.catalog
+    )
   }
 
   /**

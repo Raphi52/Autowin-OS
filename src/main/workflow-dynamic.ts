@@ -26,7 +26,22 @@ export const PLAFOND_GRAPHE_INVENTE = 12
 export type WorkflowDecision =
   | { kind: 'existing'; profile: WorkflowProfile }
   | { kind: 'new'; graph: WorkflowGraph; name: string }
+  /** Mode `choisir` : le petit modèle juge qu'il faut un graphe neuf ; un autre le COMPOSERA. */
+  | { kind: 'a-composer' }
   | { kind: 'none'; reason?: string }
+
+/**
+ * QUI FAIT QUOI DANS LA DÉCISION (conv-1097, 2026-10-22).
+ *
+ * La décision part sur le modèle des PETITES TÂCHES (Haiku par défaut, `roles.ts`), réservé aux
+ * appels à réponse unique. Or « WORKFLOW: nouveau » suivi d'un graphe JSON n'est pas un choix :
+ * c'est de la génération, et les garde-fous de `acceptProposedGraph` bornent son COÛT, pas sa
+ * pertinence. D'où deux modes :
+ * - `choisir` (petit modèle) : un id, « aucun » ou « nouveau » — une ligne, rien d'autre ; un JSON
+ *   joint est ignoré, jamais exécuté ;
+ * - `composer` (modèle du chat) : seulement quand le petit modèle a répondu « nouveau ».
+ */
+export type ModeDecision = 'choisir' | 'composer'
 
 /**
  * Faut-il seulement POSER la question ?
@@ -74,15 +89,31 @@ export function catalogueBrief(profiles: WorkflowProfile[]): string {
  * serviable en choisit toujours un, et le mode dynamique redevient exactement la laisse qu'on veut
  * éviter.
  */
-export function dynamicPrompt(task: string, profiles: WorkflowProfile[]): string {
-  return `Tu choisis la façon de travailler la mieux adaptée à une demande. Tu n'exécutes pas la demande.
+export function dynamicPrompt(
+  task: string,
+  profiles: WorkflowProfile[],
+  mode: ModeDecision = 'composer'
+): string {
+  const entete = `Tu choisis la façon de travailler la mieux adaptée à une demande. Tu n'exécutes pas la demande.
 
 WORKFLOWS DISPONIBLES
 ${catalogueBrief(profiles)}
 
 DEMANDE
 ${task}
+`
+  if (mode === 'choisir') {
+    return `${entete}
+Réponds par UNE SEULE ligne, rien d'autre :
+  WORKFLOW: <id>        pour reprendre un workflow existant
+  WORKFLOW: aucun       si la demande ne justifie pas de pipeline, ou si aucun ne convient vraiment
+  WORKFLOW: nouveau     si aucun existant n'approche du besoin (tu n'écris PAS le workflow)
 
+« aucun » est une réponse NORMALE et souvent la bonne : une demande simple, une question, une
+correction évidente ne méritent aucun workflow. N'en choisis un que s'il fait gagner quelque chose.
+« nouveau » est rare : un workflow inventé coûte plus cher à relire qu'un workflow connu.`
+  }
+  return `${entete}
 Réponds par UNE SEULE ligne, rien d'autre :
   WORKFLOW: <id>        pour reprendre un workflow existant
   WORKFLOW: aucun       si la demande ne justifie pas de pipeline, ou si aucun ne convient vraiment
@@ -128,12 +159,19 @@ export function acceptProposedGraph(
  * Lit la réponse du modèle. TOUT ce qui n'est pas compris rend « aucun » : devant une réponse
  * ambiguë, ne rien piloter est le repli sûr — c'est le comportement d'avant le mode dynamique.
  */
-export function readWorkflowDecision(text: string, profiles: WorkflowProfile[]): WorkflowDecision {
+export function readWorkflowDecision(
+  text: string,
+  profiles: WorkflowProfile[],
+  mode: ModeDecision = 'composer'
+): WorkflowDecision {
   const ligne = text.split('\n').find((l) => /^\s*WORKFLOW\s*:/i.test(l))
   if (!ligne) return { kind: 'none', reason: 'aucune décision lisible' }
   const valeur = ligne.replace(/^\s*WORKFLOW\s*:/i, '').trim()
 
   if (!valeur || /^(aucun|none|rien)$/i.test(valeur)) return { kind: 'none' }
+
+  // Le petit modèle CHOISIT : un graphe qu'il joindrait quand même n'est ni lu ni exécuté.
+  if (mode === 'choisir' && /^nouveau$/i.test(valeur)) return { kind: 'a-composer' }
 
   if (/^nouveau$/i.test(valeur)) {
     const json = extraireJson(text)
@@ -167,6 +205,20 @@ export function readWorkflowDecision(text: string, profiles: WorkflowProfile[]):
   return trouve
     ? { kind: 'existing', profile: trouve }
     : { kind: 'none', reason: `id inconnu : ${valeur}` }
+}
+
+/** Ce que la décision a donné, en une ligne lisible dans `cost.jsonl` (`petites-taches-trace.ts`). */
+export function issueDeDecision(decision: WorkflowDecision): string {
+  switch (decision.kind) {
+    case 'existing':
+      return `existant : ${decision.profile.id}`
+    case 'new':
+      return `nouveau : ${decision.name}`
+    case 'a-composer':
+      return 'nouveau — composition confiée au modèle du chat'
+    case 'none':
+      return decision.reason ? `aucun — ${decision.reason}` : 'aucun'
+  }
 }
 
 /** Extrait le premier objet JSON équilibré du texte — un modèle encadre souvent son JSON de prose. */

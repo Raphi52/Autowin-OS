@@ -955,6 +955,8 @@ describe('un briefing `think` qui ecrit SUITE: fin n’arrete pas le run', () =>
  * donc ignore lui aussi, et le plan continuait. Seule la ligne du MODELE doit l'etre.
  */
 class ThinkQuiDerive extends ThinkQuiArrete {
+  /** Options reçues par l'arbitre : son modèle et son effort (conv-1097). */
+  optionsArbitre: SendOptions | undefined
   constructor(private readonly route: string) {
     super()
   }
@@ -967,6 +969,7 @@ class ThinkQuiDerive extends ThinkQuiArrete {
     const usage = { inputTokens: 4, outputTokens: 2, costUsd: 0.001 }
     if (content === 'Tranche maintenant.') {
       this.contents.push(content)
+      this.optionsArbitre = options
       return {
         text: `ROUTE: ${this.route}`,
         provider: this.id,
@@ -1022,6 +1025,34 @@ describe('l’arbitre de dérive garde la main juste apres `think`', () => {
   it('une route decidee par l’arbitre apres `think` est suivie', async () => {
     const { phases } = await lancer('build')
     expect(phases.slice(0, 2)).toEqual(['think', 'build'])
+  })
+
+  // conv-1097 : une ligne à rendre, sans outil → le modèle des PETITES TÂCHES, pas celui de la phase.
+  it('l’arbitre part sur le modèle des petites tâches, avec son effort', async () => {
+    const provider = new ThinkQuiDerive('continuer')
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'orch' },
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' },
+      petitesTaches: { provider: provider.id, model: 'petit', reasoningEffort: 'low' }
+    })
+    const orchestrator = makeGreedy(
+      provider,
+      vi.fn().mockResolvedValue([]),
+      () => ['frame', 'build'],
+      {
+        roles,
+        currentWorkflow: () => ({ phases: ['think', 'frame', 'build'], explicit: true }) as never
+      }
+    )
+    await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step === 'exec' && event.phase) provider.phaseCourante = event.phase
+    }) as never)
+    expect(provider.optionsArbitre?.model).toBe('petit')
+    expect(provider.optionsArbitre?.reasoningEffort).toBe('low')
   })
 })
 

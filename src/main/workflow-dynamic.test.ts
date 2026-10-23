@@ -254,3 +254,27 @@ describe('les garde-fous du graphe inventé', () => {
     expect(PLAFOND_GRAPHE_INVENTE).toBeLessThan(24)
   })
 })
+
+describe('mode « choisir » : le petit modèle choisit, il ne compose pas (conv-1097)', () => {
+  const catalogue: WorkflowProfile[] = []
+  const avecGraphe =
+    'WORKFLOW: nouveau\n{"name":"Ad hoc","graph":{"entry":"b","nodes":[{"id":"b","phase":"build"}],"edges":[]}}'
+
+  it('« nouveau » rend « à composer », et le graphe joint est ignoré', () => {
+    expect(readWorkflowDecision(avecGraphe, catalogue, 'choisir')).toEqual({ kind: 'a-composer' })
+    expect(readWorkflowDecision('WORKFLOW: nouveau', catalogue, 'choisir')).toEqual({
+      kind: 'a-composer'
+    })
+  })
+
+  it('le mode « composer » (défaut) garde le graphe, comme avant', () => {
+    expect(readWorkflowDecision(avecGraphe, catalogue).kind).toBe('new')
+  })
+
+  it('la question du mode « choisir » ne montre aucun format de graphe', () => {
+    const p = dynamicPrompt('refonds la page des réglages de bout en bout', catalogue, 'choisir')
+    expect(p).toContain('WORKFLOW: nouveau')
+    expect(p).not.toMatch(/Format d'un graphe|JSON/)
+    expect(p).toMatch(/réponse NORMALE/)
+  })
+})

@@ -155,6 +155,11 @@ import {
   type RouteVerdict
 } from './route-drift'
 import {
+  noterAppelCourt,
+  ROLE_PETITES_TACHES,
+  signalerPanneAppelCourt
+} from './petites-taches-trace'
+import {
   estJugeTerminal,
   motifChaineApresJugeNonJouee,
   noeudsApresJuge,
@@ -165,7 +170,7 @@ import {
   type ModelChoice,
   type NodeVerdict
 } from './workflow-walk'
-import { classifyRegime, phasesApresJugeHorsGraphe } from './task-regime'
+import { classifyRegime, phasesApresJugeHorsGraphe, type TaskRegime } from './task-regime'
 
 /**
  * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
@@ -1499,9 +1504,13 @@ export class Orchestrator {
     model: string | undefined,
     reglage: ReasoningEffort | undefined
   ): ReasoningEffort | undefined {
-    const difficulte = this.deps.currentExecutionQuote?.()?.regime ?? classifyRegime(task)
     const efforts = effortsDeclaresDuModele(this.deps.roles.getCatalog?.(), provider, model)
-    return effortParDefautDeLEtape(phase, difficulte, reglage, efforts)
+    return effortParDefautDeLEtape(phase, this.difficulteDuRun(task), reglage, efforts)
+  }
+
+  /** La difficulté du run : celle du devis enregistré (une reprise relit la même), sinon le texte. */
+  private difficulteDuRun(task: string): TaskRegime {
+    return this.deps.currentExecutionQuote?.()?.regime ?? classifyRegime(task)
   }
 
   /**
@@ -1516,15 +1525,25 @@ export class Orchestrator {
     fige: boolean
   ): { model?: string; reasoningEffort?: ReasoningEffort; advisorModel?: string } {
     const resolu = resolvePhaseBinding(binding, phase)
-    if (fige || binding.phaseModel?.[phase as PipelinePhase]?.reasoningEffort) return resolu
+    if (fige) return resolu
+    const reglageDeLEtape = binding.phaseModel?.[phase as PipelinePhase]
+    // Build d'un run TRIVIAL sur le dernier Haiku (conv-1097, mesure et motif : roles.ts,
+    // modeleDuBuildTrivial). Un réglage de l'étape build, un binding figé ou l'interrupteur coupé
+    // gardent la main ; le juge n'est jamais concerné (rôle `judge`).
+    const haiku =
+      phase === 'build' && !reglageDeLEtape && this.difficulteDuRun(task) === 'trivial'
+        ? this.deps.roles.modeleDuBuildTrivial?.(binding)
+        : undefined
+    const choisi = haiku ? { ...resolu, model: haiku } : resolu
+    if (reglageDeLEtape?.reasoningEffort) return choisi
     return {
-      ...resolu,
+      ...choisi,
       reasoningEffort: this.effortHeriteDeLEtape(
         phase,
         task,
         binding.provider,
-        resolu.model,
-        resolu.reasoningEffort
+        choisi.model,
+        choisi.reasoningEffort
       )
     }
   }
@@ -5468,38 +5487,41 @@ ${CONTRAT_OBJECTIONS}`
         // seconde evaluation, qui pourrait annoncer une taille differente de celle envoyee.
         const briefDeLArbitrage = briefArbitrage(derive, phase, task)
         try {
+          // Une ligne à rendre, sans outil : le modèle des PETITES TÂCHES (Haiku par défaut,
+          // conv-1097). Il partait sur le modèle de la phase, donc Opus en effort maximal.
+          const arbitreBinding = roles.bindingDesPetitesTaches()
           const arbitre = await this.sendWithRoleContext(
             `arbitrage dérive ${phase}`,
-            'orchestrator',
-            providerDeLaPhase,
-            phaseBinding.model,
+            ROLE_PETITES_TACHES,
+            arbitreBinding.provider,
+            arbitreBinding.model,
             () =>
-              registry.send(providerDeLaPhase, [{ role: 'user', content: 'Tranche maintenant.' }], {
-                system: briefDeLArbitrage,
-                // Une seule injection ici, mais elle doit se NOMMER : sans bloc declare, un system
-                // non vide se lisait comme « rien d'inventorie » au lieu de « un brief d'arbitrage ».
-                systemBlocks: [{ name: 'briefArbitrage', chars: briefDeLArbitrage.length }],
-                model: phaseBinding.model,
-                // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
-                // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
-                ...(signal ? { signal } : {})
-              })
+              registry.send(
+                arbitreBinding.provider,
+                [{ role: 'user', content: 'Tranche maintenant.' }],
+                {
+                  system: briefDeLArbitrage,
+                  // Une seule injection ici, mais elle doit se NOMMER : sans bloc declare, un system
+                  // non vide se lisait comme « rien d'inventorie » au lieu de « un brief d'arbitrage ».
+                  systemBlocks: [{ name: 'briefArbitrage', chars: briefDeLArbitrage.length }],
+                  model: arbitreBinding.model,
+                  reasoningEffort: arbitreBinding.reasoningEffort,
+                  // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
+                  // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
+                  ...(signal ? { signal } : {})
+                }
+              )
           )
           verdict = readRouteVerdict(arbitre.text)
-          if (arbitre.usage) {
-            cost.add({
-              provider: arbitre.provider ?? providerDeLaPhase,
-              role: 'orchestrator',
-              model: arbitre.model ?? phaseBinding.model,
-              inputTokens: arbitre.usage.inputTokens,
-              outputTokens: arbitre.usage.outputTokens,
-              cacheReadTokens: arbitre.usage.cacheReadTokens,
-              cacheCreationTokens: arbitre.usage.cacheCreationTokens,
-              costUsd: arbitre.usage.costUsd
-            })
-          }
-        } catch {
+          noterAppelCourt(cost, {
+            appel: 'arbitrageDerive',
+            binding: arbitreBinding,
+            res: arbitre,
+            issue: verdict?.kind === 'phase' ? `phase : ${verdict.phase}` : (verdict?.kind ?? '')
+          })
+        } catch (error) {
           // Arbitre injoignable : on ne bifurque pas sur une décision qu'on n'a pas. Le plan reprend.
+          signalerPanneAppelCourt('arbitrageDerive', error)
           verdict = { kind: 'continuer' }
         }
         /**

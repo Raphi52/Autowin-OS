@@ -77,14 +77,21 @@ export function decodeRoleBinding(value: unknown): RoleBinding | undefined {
 
 /** Clé du réglage « modèle des petites tâches », posée à côté des quatre rôles. */
 const CLE_PETITES_TACHES = 'petitesTaches'
+/** Interrupteur du build trivial sur Haiku (conv-1097, `roles.ts` modeleDuBuildTrivial). */
+const CLE_BUILD_TRIVIAL = 'buildTrivialSurHaiku'
 
 function decodeRoleBindings(value: unknown): RolesPersistes | undefined {
   if (!isPlainObject(value)) return undefined
   if (
-    Object.keys(value).some((cle) => cle !== CLE_PETITES_TACHES && !ALL_ROLES.includes(cle as Role))
+    Object.keys(value).some(
+      (cle) =>
+        cle !== CLE_PETITES_TACHES && cle !== CLE_BUILD_TRIVIAL && !ALL_ROLES.includes(cle as Role)
+    )
   ) {
     return undefined
   }
+  if (value[CLE_BUILD_TRIVIAL] !== undefined && typeof value[CLE_BUILD_TRIVIAL] !== 'boolean')
+    return undefined
   const decoded: RolesPersistes = {}
   for (const role of ALL_ROLES) {
     if (value[role] === undefined) continue
@@ -97,6 +104,8 @@ function decodeRoleBindings(value: unknown): RolesPersistes | undefined {
     if (!petitesTaches) return undefined
     decoded.petitesTaches = petitesTaches
   }
+  if (typeof value[CLE_BUILD_TRIVIAL] === 'boolean')
+    decoded.buildTrivialSurHaiku = value[CLE_BUILD_TRIVIAL]
   return Object.keys(decoded).length > 0 ? decoded : undefined
 }
 
@@ -115,13 +124,18 @@ export function loadRoleBindings(): RolesPersistes | undefined {
 }
 
 /**
- * Écrit les quatre rôles ET le réglage des petites tâches : `roles.json` est réécrit en entier à
- * chaque resynchronisation de la topologie, donc un appelant qui oublierait `petitesTaches` le
- * ferait disparaître du disque.
+ * Écrit les quatre rôles, le réglage des petites tâches ET l'interrupteur du build trivial :
+ * `roles.json` est réécrit en entier à chaque resynchronisation de la topologie, donc un appelant
+ * qui oublierait l'un d'eux le ferait disparaître du disque.
  */
 export function saveRoleBindings(
   bindings: Record<Role, RoleBinding>,
-  petitesTaches: RoleBinding | undefined
+  petitesTaches: RoleBinding | undefined,
+  buildTrivialSurHaiku?: boolean
 ): void {
-  writeBindings(rolesPath(), { ...bindings, ...(petitesTaches ? { petitesTaches } : {}) })
+  writeBindings(rolesPath(), {
+    ...bindings,
+    ...(petitesTaches ? { petitesTaches } : {}),
+    ...(typeof buildTrivialSurHaiku === 'boolean' ? { buildTrivialSurHaiku } : {})
+  })
 }

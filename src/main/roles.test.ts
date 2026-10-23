@@ -277,6 +277,26 @@ describe('role-store Autowin OS', () => {
     expect(Object.keys(JSON.parse(readFileSync(path, 'utf8')))).not.toContain('petitesTaches')
   })
 
+  // conv-1097 : l'interrupteur du build trivial sur Haiku — `false` le coupe, et il survit au disque.
+  it('garde l’interrupteur du build trivial sur Haiku, et le relit', () => {
+    saveRoleBindings(bindings, undefined, false)
+    const relus = loadRoleBindings()
+    expect(relus).toEqual({ ...bindings, buildTrivialSurHaiku: false })
+    const config = new RoleModelConfig(relus)
+    expect(config.getBuildTrivialSurHaiku()).toBe(false)
+    expect(config.modeleDuBuildTrivial({ provider: 'claude', model: 'claude-opus-5-5' })).toBe(
+      undefined
+    )
+  })
+
+  it('écarte un interrupteur du build trivial qui n’est pas un booléen', () => {
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+    mkdirSync(join(appDataRoot, 'autowin-os'), { recursive: true })
+    writeFileSync(path, JSON.stringify({ ...bindings, buildTrivialSurHaiku: 'non' }), 'utf8')
+
+    expect(loadRoleBindings()).toBeUndefined()
+  })
+
   it('écarte un réglage des petites tâches mal formé', () => {
     const path = join(appDataRoot, 'autowin-os', 'roles.json')
     mkdirSync(join(appDataRoot, 'autowin-os'), { recursive: true })
@@ -306,6 +326,33 @@ describe('modèle des petites tâches', () => {
       reasoningEffort: 'low'
     })
     cfg.setBinding('orchestrator', { provider: 'claude', model: 'claude-sonnet-4-6' })
+    expect(cfg.bindingDesPetitesTaches().model).toBe('haiku')
+  })
+
+  // Capture du 2026-10-22 : l'alias brut est retiré du catalogue dès qu'une version nommée existe
+  // (`models.ts`, dropRedundantClaudeAliases), et le Routeur affichait « haiku (indisponible) ».
+  it('non réglé, avec catalogue : le DERNIER Haiku nommé du catalogue, jamais l’alias retiré', () => {
+    const modele = (model: string) => ({
+      id: `claude/${model}`,
+      provider: 'claude',
+      model,
+      label: model,
+      reasoningEfforts: ['low' as const, 'medium' as const],
+      defaultReasoningEffort: 'medium' as const
+    })
+    const catalogue = [
+      modele('claude-opus-5-5'),
+      modele('claude-haiku-4-5-20251001'),
+      modele('claude-haiku-5-5')
+    ]
+    const cfg = new RoleModelConfig({ orchestrator: chat }, catalogue)
+    expect(cfg.bindingDesPetitesTaches()).toEqual({
+      provider: 'claude',
+      model: 'claude-haiku-5-5',
+      reasoningEffort: 'low'
+    })
+    // Catalogue sans aucun Haiku : repli sur l'alias du CLI.
+    cfg.setCatalog([modele('claude-opus-5-5')])
     expect(cfg.bindingDesPetitesTaches().model).toBe('haiku')
   })
 

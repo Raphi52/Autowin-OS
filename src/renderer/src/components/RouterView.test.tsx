@@ -508,7 +508,7 @@ describe('RouterView — modèle des petites tâches', () => {
     const props = selecteurDesPetitesTaches()
     expect(props?.libelle).toBe('Par défaut')
     expect(props?.aide).toBe(
-      'S’applique au prochain choix de workflow, aux deux lectures et au rangement du premier message.'
+      'S’applique au prochain choix de workflow, aux deux lectures, au rangement du premier message et à l’arbitrage d’une dérive.'
     )
     expect(
       container.querySelector('[data-testid="router-petites-taches-defaut"]')?.textContent
