@@ -33,6 +33,13 @@ export interface ScheduledChatRuntime {
     projectPath?: string
   }): { id: string }
   bindConversation(taskId: string, conversationId: string): void
+  /**
+   * Range la conversation sur le dossier global COURANT d'Autowin. Appelé à chaque déclenchement
+   * d'une tâche dont la destination ne nomme aucun dossier (semis maintenance / gc / curate) : sans
+   * cela, la conversation réutilisée d'un jour à l'autre gardait le dossier figé à sa création
+   * (constat conv-298 : maintenance sur un ancien clone au lieu du dépôt courant).
+   */
+  alignerSurDossierGlobal?(conversationId: string): void
   isConversationBusy(conversationId: string): boolean
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
   /** Attend sans interruption que le travail interactif se termine. `false` signifie timeout. */
@@ -365,13 +372,15 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
         ? task.destination.conversationId
         : undefined
     }
+    const category = task.destination.category
+    const suitLeGlobal = !estCheminDeDossier(category)
     if (
       task.destination.conversationId &&
       this.runtime.hasConversation(task.destination.conversationId)
     ) {
+      if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(task.destination.conversationId)
       return task.destination.conversationId
     }
-    const category = task.destination.category
     const created = this.runtime.createConversation({
       title: task.destination.title,
       category,
@@ -384,6 +393,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       ...(estCheminDeDossier(category) ? { projectPath: category.trim() } : {})
     })
     this.runtime.bindConversation(task.id, created.id)
+    if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(created.id)
     return created.id
   }
 }

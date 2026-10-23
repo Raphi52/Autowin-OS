@@ -148,6 +148,36 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(second.conversationId).toBe('conv-new')
   })
 
+  // conv-298 : la conversation Maintenance, réutilisée chaque matin, restait rangée sur un ancien
+  // clone (D:\Sources\AutoWinOS) au lieu du dépôt global courant.
+  it('une tâche quotidienne sans dossier réaligne sa conversation sur le dossier global à CHAQUE run', async () => {
+    const aligner = vi.fn()
+    const target = runtime({ alignerSurDossierGlobal: aligner })
+    const dispatcher = new ScheduledChatDispatcher(target)
+    const dest = { kind: 'new' as const, title: 'Maintenance', category: 'Qualite', provider: 'claude' }
+
+    await dispatcher.run(task({ destination: dest }), occurrence)
+    await dispatcher.run(task({ destination: { ...dest, conversationId: 'conv-131' } }), {
+      ...occurrence,
+      id: 'task-1@2'
+    })
+
+    expect(aligner).toHaveBeenNthCalledWith(1, 'conv-new')
+    expect(aligner).toHaveBeenNthCalledWith(2, 'conv-131')
+  })
+
+  it('une tâche dont la catégorie est un CHEMIN garde son dossier (pas de réalignement)', async () => {
+    const aligner = vi.fn()
+    const dispatcher = new ScheduledChatDispatcher(runtime({ alignerSurDossierGlobal: aligner }))
+    await dispatcher.run(
+      task({
+        destination: { kind: 'new', title: 'P', category: 'D:\\GIT\\Projet', provider: 'claude', conversationId: 'conv-9' }
+      }),
+      occurrence
+    )
+    expect(aligner).not.toHaveBeenCalled()
+  })
+
   // fix-ok: mesuré le 2026-10-09 (conv-113) — une tâche « nouvelle conversation » dont la catégorie
   // était le chemin d'un projet tournait dans le dossier global d'Autowin : la catégorie n'atteignait
   // jamais la conversation créée (ConversationStore.create ne lisait que title et provider).
