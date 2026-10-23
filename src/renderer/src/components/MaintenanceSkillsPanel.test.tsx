@@ -62,6 +62,11 @@ describe('skills de maintenance — la liste', () => {
     const groupes = new Set(GROUPES_MAINTENANCE.map((g) => g.id))
     for (const skill of SKILLS_MAINTENANCE) expect(groupes.has(skill.groupe)).toBe(true)
   })
+
+  // Demande du 2026-10-23 (conv-1112) : « rajoute /heal dans la vue maintenance ».
+  it('propose /heal pour corriger les défauts prouvés d’Autowin', () => {
+    expect(SKILLS_MAINTENANCE.map((s) => s.nom)).toContain('heal')
+  })
 })
 
 describe('MaintenanceSkillsPanel — les boutons', () => {

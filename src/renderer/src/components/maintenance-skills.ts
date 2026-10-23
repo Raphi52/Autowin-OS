@@ -90,6 +90,15 @@ export const SKILLS_MAINTENANCE: readonly SkillMaintenance[] = [
     prompt:
       '/kaizen sur les conversations Autowin des dernières 24 h : trouve le défaut de comportement le plus coûteux et corrige sa cause.'
   },
+  // Ajout du 2026-10-23 (conv-1112) : « rajoute /heal dans la vue maintenance ».
+  {
+    nom: 'heal',
+    titre: 'Corriger les défauts',
+    role: 'Trouve les défauts prouvés du code (test rouge, lenteur mesurée) et les corrige un à un.',
+    groupe: 'analyse',
+    prompt:
+      '/heal Autowin OS : trouve les défauts prouvés (tests rouges, lenteurs mesurées) et corrige-les un à la fois, jusqu’au vert.'
+  },
   {
     nom: 'salvage',
     titre: 'Travail non publié',
