@@ -77,3 +77,53 @@ describe('completerAvecHistorique', () => {
     expect(completerAvecHistorique([], live)).toBe(live)
   })
 })
+
+/*
+ * REJEU DE conv-1118 (2026-10-23, « j'ai eu 2x le meme bloc ») : un tour lancé côté main (reprise
+ * automatique) a posé UNE question, enregistrée UNE fois — et le fil l'a montrée DEUX fois. Le tour
+ * a fini 25 ms après son premier événement : quand la lecture du store est revenue, sa copie
+ * persistée était déjà CLOSE, donc gardée, et recollée devant l'amorce live du MÊME tour.
+ */
+type LigneDeTour = Ligne & { turnId?: string }
+
+describe('un même tour ne se peint jamais deux fois (conv-1118)', () => {
+  const reprise: LigneDeTour = { role: 'user', content: '[Reprise automatique] …', messageId: 'm5' }
+  const persiste: LigneDeTour = {
+    role: 'assistant',
+    content: 'Ta demande peut se lire de deux façons…',
+    messageId: 'm6',
+    turnId: 'tour-2655',
+    done: true
+  }
+  const amorce: LigneDeTour = {
+    role: 'assistant',
+    content: 'Ta demande peut se lire de deux façons…',
+    turnId: 'tour-2655',
+    done: true
+  }
+
+  it("completerAvecHistorique : la copie persistée du tour en vol n'est pas recollée devant son amorce", () => {
+    const rendu = completerAvecHistorique([...h(), reprise, persiste], [amorce])
+    expect(rendu.filter((m) => m.turnId === 'tour-2655')).toHaveLength(1)
+    expect(rendu).toEqual([...h(), reprise, amorce])
+  })
+
+  it("filAffichable : la copie persistée CLOSE du tour en vol n'est pas peinte en plus de la queue vivante", () => {
+    const enVol: LigneDeTour = { ...amorce, done: false }
+    const rendu = filAffichable([enVol], [...h(), reprise, persiste])
+    expect(rendu).toEqual([...h(), reprise, enVol])
+  })
+
+  it("un AUTRE tour persisté reste recollé : seul le tour de l'amorce est écarté", () => {
+    const autre: LigneDeTour = { ...persiste, messageId: 'm4', turnId: 'tour-precedent' }
+    expect(completerAvecHistorique([autre, reprise, persiste], [amorce])).toEqual([
+      autre,
+      reprise,
+      amorce
+    ])
+  })
+
+  function h(): LigneDeTour[] {
+    return [{ role: 'user', content: 'vieux', messageId: 'b1' }]
+  }
+})

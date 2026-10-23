@@ -20,7 +20,30 @@
  * TETE : on repose la tete du store et on garde la queue VIVANTE du cache (le tour en vol, que le
  * store ne connait pas encore). Le fil ne peut donc plus RETRECIR.
  */
-export type MessageAffichable = { role: string; done?: boolean }
+export type MessageAffichable = { role: string; done?: boolean; turnId?: string }
+
+/**
+ * Les tours deja peints par le fil live : un message persiste du MEME tour en est une copie.
+ *
+ * conv-1118 (2026-10-23, « j'ai eu 2x le meme bloc ») : un tour lance cote main a fini 25 ms apres
+ * son premier evenement. Sa copie persistee etait donc deja CLOSE quand le store a repondu, et
+ * le filtre « assistant non clos » la laissait passer : la meme question peinte deux fois, une
+ * fois depuis le store, une fois depuis l'amorce. On decide sur l'IDENTITE du tour, pas sur son
+ * etat a l'instant de la lecture.
+ */
+function toursPeints(fil: ReadonlyArray<{ role?: string; turnId?: string }>): Set<string> {
+  const tours = new Set<string>()
+  for (const message of fil)
+    if (message.role === 'assistant' && message.turnId) tours.add(message.turnId)
+  return tours
+}
+
+function copieDUnTourPeint(
+  message: { role?: string; turnId?: string },
+  tours: ReadonlySet<string>
+): boolean {
+  return message.role === 'assistant' && !!message.turnId && tours.has(message.turnId)
+}
 
 export function filAffichable<M extends MessageAffichable>(
   cache: M[] | undefined,
@@ -33,14 +56,21 @@ export function filAffichable<M extends MessageAffichable>(
     (message) => message.role === 'assistant' && message.done !== true
   )
   if (debutVivant < 0) return duStore
+  const queue = cache.slice(debutVivant)
+  const tours = toursPeints(queue)
   const tete = [...duStore]
-  // Le tour en vol peut AUSSI avoir ete persiste non clos : ne pas le peindre deux fois.
+  // Le tour en vol peut AUSSI avoir ete persiste — non clos, ou deja clos (conv-1118) : ne pas le
+  // peindre deux fois.
   while (tete.length > 0) {
     const dernier = tete[tete.length - 1]
-    if (dernier.role === 'assistant' && dernier.done !== true) tete.pop()
+    if (
+      (dernier.role === 'assistant' && dernier.done !== true) ||
+      copieDUnTourPeint(dernier, tours)
+    )
+      tete.pop()
     else break
   }
-  return [...tete, ...cache.slice(debutVivant)]
+  return [...tete, ...queue]
 }
 
 /**
@@ -55,10 +85,9 @@ export function filAffichable<M extends MessageAffichable>(
  * On decide donc sur l'IDENTITE : si le fil live porte deja un des messages persistes, il a deja ete
  * recolle ; sinon on repose l'historique devant lui.
  */
-export function completerAvecHistorique<M extends { messageId?: string }>(
-  historique: M[],
-  courant: M[]
-): M[] {
+export function completerAvecHistorique<
+  M extends { messageId?: string; role?: string; turnId?: string }
+>(historique: M[], courant: M[]): M[] {
   if (historique.length === 0) return courant
   const identifiants = new Set(
     courant.map((message) => message.messageId).filter((id): id is string => !!id)
@@ -67,5 +96,12 @@ export function completerAvecHistorique<M extends { messageId?: string }>(
     (message) => !!message.messageId && identifiants.has(message.messageId)
   )
   if (dejaRecolle) return courant
-  return [...historique, ...courant]
+  // Le tour que le fil live peint deja n'est pas recolle depuis le store (conv-1118) : c'est le
+  // fil live qui continue de recevoir ses evenements.
+  const tours = toursPeints(courant)
+  const tete = tours.size
+    ? historique.filter((message) => !copieDUnTourPeint(message, tours))
+    : historique
+  if (tete.length === 0) return courant
+  return [...tete, ...courant]
 }

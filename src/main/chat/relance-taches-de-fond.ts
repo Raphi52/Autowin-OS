@@ -246,6 +246,19 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
   }
 }
 
+/**
+ * L'en-tête du message de reprise. Il sert AUSSI de marque : ce message est écrit par Autowin, pas
+ * par l'utilisateur, et le contrôle des deux lectures ne doit jamais lui demander de choisir entre
+ * deux sens d'un texte qu'il n'a pas écrit (conv-1118, 2026-10-23 : « tâche de fond » lu comme un
+ * changement d'affichage, à cause du mot « fond »).
+ */
+export const ENTETE_REPRISE_AUTOMATIQUE = '[Reprise automatique]'
+
+/** Ce message est-il le tour de reprise composé ci-dessous, et non une demande de l'utilisateur ? */
+export function estUneRepriseAutomatique(message: string | undefined): boolean {
+  return (message ?? '').trimStart().startsWith(ENTETE_REPRISE_AUTOMATIQUE)
+}
+
 /** Le message du tour de reprise : ce qui a tourné, comment ça a fini, et la fin de la sortie. */
 export function composerPromptDeReprise(resultats: readonly ResultatTacheRelancee[]): string {
   const blocs = resultats.map((r) => {
@@ -274,7 +287,7 @@ export function composerPromptDeReprise(resultats: readonly ResultatTacheRelance
     ].join('\n')
   })
   return [
-    '[Reprise automatique] Ton tour précédent s’est terminé pendant une tâche de fond : le CLI l’a coupée.',
+    `${ENTETE_REPRISE_AUTOMATIQUE} Ton tour précédent s’est terminé pendant une tâche de fond : le CLI l’a coupée.`,
     'Autowin l’a relancée hors du tour, dans le même dossier. Voici son résultat réel — reprends là où tu t’étais arrêté, sans la relancer.',
     '',
     blocs.join('\n\n')
