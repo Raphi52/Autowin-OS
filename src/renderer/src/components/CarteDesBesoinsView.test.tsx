@@ -239,6 +239,92 @@ describe('CarteDesBesoinsView', () => {
     )
     expect(el.querySelector('[data-testid="besoins-stats"]')).toBeNull()
   })
+  describe('la Fiche (/draft conv-1102) — carte d’un dépôt, menus Dépôt et Branches', () => {
+    const date = (quantieme: number): number => new Date(2026, 9, quantieme, 12).getTime()
+    const datee = (d: DemandeDeLaCarte, quantieme: number): DemandeDeLaCarte => ({
+      ...d,
+      debut: date(quantieme)
+    })
+    const deuxDepots = (): CarteDesBesoins =>
+      carte([
+        projet('D:/AutoWinOS', [
+          datee(demande('conv-a', 0, 'prouve'), 20), // semaine du 19/10
+          datee(demande('conv-b', 0, 'refuse'), 21), // semaine du 19/10, la plus récente
+          datee(demande('conv-c', 0, 'sans-preuve'), 6) // semaine du 05/10
+        ]),
+        projet('D:/Contoso', [datee(demande('conv-z', 0, 'prouve'), 2)])
+      ])
+    const fiche = (el: HTMLElement): HTMLElement =>
+      el.querySelector<HTMLElement>('[data-testid="besoins-fiche-fil"]')!
+    const choisie = (el: HTMLElement): string | undefined =>
+      el.querySelector<HTMLElement>('[data-testid="besoins-branche"][data-choisie]')?.dataset.cle
+    async function choisirDans(el: HTMLElement, testid: string, valeur: string): Promise<void> {
+      const menu = el.querySelector<HTMLSelectElement>(`[data-testid="${testid}"]`)!
+      await act(async () => {
+        menu.value = valeur
+        menu.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+
+    it('range par semaine par défaut, montre le dépôt le plus récent et son fil le plus récent', async () => {
+      const { el } = await monter(async () => deuxDepots())
+      const branches = el.querySelector<HTMLSelectElement>('[data-testid="besoins-menu-branches"]')!
+      expect(branches.value).toBe('semaine')
+      expect([...branches.options].map((o) => o.textContent)).toEqual([
+        'semaine',
+        'état',
+        'dernier constat'
+      ])
+      expect(el.querySelector<HTMLSelectElement>('[data-testid="besoins-menu-depot"]')!.value).toBe(
+        'D:/AutoWinOS'
+      )
+      expect(
+        el.querySelector('[data-testid="besoins-dessin"]')?.getAttribute('data-rangement')
+      ).toBe('semaine')
+      // Le peigne garde la semaine vide du 12/10 entre deux semaines actives.
+      expect(
+        [...el.querySelectorAll<HTMLElement>('[data-testid="besoins-branche"] .besoins-lib')].map(
+          (t) => t.textContent
+        )
+      ).toEqual(['05/10', '12/10', '19/10'])
+      expect(fiche(el).dataset.fil).toBe('conv-b')
+      expect(el.querySelector('[data-testid="besoins-fiche-ici"]')?.textContent).toBe(
+        'dans cette carte : branche semaine du 19/10 · 2 fils'
+      )
+    })
+
+    it('changer de rangement garde le fil choisi et déplace le cercle or sur sa branche', async () => {
+      const { el } = await monter(async () => deuxDepots())
+      await choisirDans(el, 'besoins-menu-branches', 'etat')
+      expect(fiche(el).dataset.fil).toBe('conv-b')
+      expect(choisie(el)).toBe('refuse')
+      await choisirDans(el, 'besoins-menu-branches', 'constat')
+      expect(choisie(el)).toBe('arret')
+    })
+
+    it('un clic sur une branche choisit son fil le plus récent ; la fiche ouvre le fil', async () => {
+      const { el, onOpenConversation } = await monter(async () => deuxDepots())
+      await choisirDans(el, 'besoins-menu-branches', 'etat')
+      const prouve = el.querySelector<SVGGElement>(
+        '[data-testid="besoins-branche"][data-cle="prouve"]'
+      )!
+      await act(async () => prouve.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      expect(fiche(el).dataset.fil).toBe('conv-a')
+      expect(choisie(el)).toBe('prouve')
+      await act(async () =>
+        fiche(el).querySelector<HTMLButtonElement>('.besoins-fiche-id')!.click()
+      )
+      expect(onOpenConversation).toHaveBeenLastCalledWith({ conversationId: 'conv-a' })
+    })
+
+    it('le menu Dépôt change de carte et repart du fil le plus récent du dépôt choisi', async () => {
+      const { el } = await monter(async () => deuxDepots())
+      await choisirDans(el, 'besoins-menu-depot', 'D:/Contoso')
+      expect(fiche(el).dataset.fil).toBe('conv-z')
+      expect(el.querySelector('.besoins-carte-resume')?.textContent).toContain('1 fil')
+    })
+  })
+
   it('lot 2 — montre qui a prompté (relevé ou déduit), ce que l’agent a déclaré, et filtre par personne', async () => {
     const releve: DemandeDeLaCarte = {
       ...demande('conv-1', 1, 'prouve', 'Ajoute le filtre'),

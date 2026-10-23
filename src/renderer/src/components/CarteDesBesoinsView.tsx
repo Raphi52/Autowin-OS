@@ -25,6 +25,7 @@ import type {
 import { STATUTS_DEMANDE } from '../../../shared/carte-des-besoins'
 import { LIBELLES_STATUT } from './carte-du-fil'
 import { libelleDuBesoin, titreDuDemandeur } from './carte-des-besoins-libelles'
+import { CarteDesBesoinsFiche } from './CarteDesBesoinsFiche'
 import { ViewTopBar } from './ViewTopBar'
 import { deposerOuvertureConversation } from './pending-conversation-open'
 import './ViewPage.css'
@@ -427,6 +428,12 @@ export function CarteDesBesoinsView({
           Carte impossible à calculer : {erreur}
         </p>
       )}
+
+      {/* LA FICHE (/draft conv-1102) : la carte d'UN dépôt, au-dessus de la liste de toutes les
+          demandes, qui reste telle quelle. */}
+      {carte && <CarteDesBesoinsFiche carte={carte} ouvrir={ouvrir} />}
+
+      {carte && <h2 className="besoins-section">Toutes les demandes</h2>}
 
       {carte && (
         <div className="besoins-filtres" role="group" aria-label="Filtrer par état">
