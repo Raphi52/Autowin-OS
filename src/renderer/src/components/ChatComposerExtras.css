@@ -28,6 +28,19 @@
   flex-wrap: wrap;
   gap: 6px;
   padding: 2px 2px 6px;
+  /* Le bloc prend la largeur du champ, jamais celle de sa plus longue suggestion (conv-1103) :
+     sans cela, un texte qui ne passe pas à la ligne élargissait la zone de saisie à 900 px et
+     poussait le bouton d'envoi hors de l'écran, au lieu de se couper avec « … ». */
+  contain: inline-size;
+}
+
+/* Titre « Pour continuer… » (conv-1103) : toute la largeur, au-dessus des boutons. */
+.composer-suites-titre {
+  flex: 1 0 100%;
+  padding: 0 2px;
+  color: var(--text-dim, rgba(221, 227, 238, 0.6));
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .composer-suite {
@@ -56,6 +69,34 @@
 
 .composer-suite.is-best {
   border-color: rgba(212, 169, 79, 0.55);
+}
+
+/* Suite COCHÉE (conv-1103) : plusieurs peuvent l'être, elles partent ensemble. La case porte
+   l'état à elle seule — un thème qui repeint le bord du bouton ne le fait pas disparaître. */
+.composer-suite.is-cochee {
+  border-color: var(--gold-bright, #e3ba55);
+  background: rgba(212, 169, 79, 0.1);
+}
+
+.composer-suite-case {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-left: 3px;
+  border: 1px solid var(--text-dim, rgba(255, 255, 255, 0.4));
+  border-radius: 3px;
+  color: var(--gold-bright, #e3ba55);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.composer-suite.is-cochee .composer-suite-case {
+  border-color: var(--gold-bright, #e3ba55);
+  background: rgba(212, 169, 79, 0.16);
 }
 
 .composer-suite-score {

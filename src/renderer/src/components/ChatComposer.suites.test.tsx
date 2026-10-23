@@ -10,7 +10,8 @@ import { extrairePropositionsSuite } from '../../../shared/prompt-suivant'
  * et cliquer au lieu de faire Tab ». Le test part d'une VRAIE fin de réponse (les lignes
  * `AUTOWIN_PROMPT_V1` telles que le modèle les écrit), passe par le même lecteur que l'écran du
  * chat, et vérifie ce que l'utilisateur voit et obtient : trois boutons classés, leur note, et un
- * clic qui remplit le champ comme Tab. Depuis conv-1087 (2026-10-22), une alternative notée sous
+ * clic qui remplit le champ comme Tab — et qui, depuis conv-1103, COCHE la suite pour en combiner
+ * plusieurs. Depuis conv-1087 (2026-10-22), une alternative notée sous
  * `NOTE_MIN_ALTERNATIVE` n'a plus de bouton : l'utilisateur veut choisir entre des suites
  * PERTINENTES, pas lire des à-côtés.
  */
@@ -90,7 +91,7 @@ describe('ChatComposer — suites notées en boutons', () => {
     expect(liste[1].className).not.toContain('is-best')
   })
 
-  it('un clic remplit le champ et le brouillon, comme Tab', async () => {
+  it('un clic coche la suite et remplit le champ et le brouillon, comme Tab', async () => {
     const brouillons: string[] = []
     const h = await monter(proprietes({ onDraftInput: (v) => brouillons.push(v) }))
     await act(async () => {
@@ -99,8 +100,84 @@ describe('ChatComposer — suites notées en boutons', () => {
     const champ = h.querySelector('textarea') as HTMLTextAreaElement
     expect(champ.value).toBe('Relance la suite de tests du composer.')
     expect(brouillons.at(-1)).toBe('Relance la suite de tests du composer.')
-    // Le champ n'est plus vide : les boutons s'effacent, on écrit autre chose.
+    // Les boutons RESTENT pour en cocher d'autres (conv-1103), la cochée marquée comme telle.
+    expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'true',
+      'false'
+    ])
+  })
+
+  /*
+   * COCHER PLUSIEURS SUITES (conv-1103, 2026-10-22) : « je veux pouvoir cocher plusieurs
+   * propositions ». Le champ devient la liste numérotée des suites cochées, dans l'ordre affiché
+   * (de la mieux notée à la moins bien notée), quel que soit l'ordre des clics.
+   */
+  it('cocher deux suites met les deux dans le champ, en liste numérotée', async () => {
+    const brouillons: string[] = []
+    const h = await monter(proprietes({ onDraftInput: (v) => brouillons.push(v) }))
+    await act(async () => {
+      boutons(h)[2].click()
+    })
+    await act(async () => {
+      boutons(h)[0].click()
+    })
+    const attendu =
+      '1. Corrige le libellé du bouton Envoyer.\n2. Capture la vue chat pour vérifier.'
+    const champ = h.querySelector('textarea') as HTMLTextAreaElement
+    expect(champ.value).toBe(attendu)
+    expect(brouillons.at(-1)).toBe(attendu)
+    expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'true'])
+  })
+
+  it('décocher retire la suite ; décocher la dernière vide le champ', async () => {
+    const h = await monter(proprietes())
+    await act(async () => {
+      boutons(h)[0].click()
+    })
+    await act(async () => {
+      boutons(h)[1].click()
+    })
+    await act(async () => {
+      boutons(h)[0].click()
+    })
+    const champ = h.querySelector('textarea') as HTMLTextAreaElement
+    expect(champ.value).toBe('Relance la suite de tests du composer.')
+    await act(async () => {
+      boutons(h)[1].click()
+    })
+    expect(champ.value).toBe('')
+    expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'false'
+    ])
+  })
+
+  it('retoucher le texte efface les boutons ; vider le champ les rend sans case cochée', async () => {
+    const h = await monter(proprietes())
+    await act(async () => {
+      boutons(h)[0].click()
+    })
+    const champ = h.querySelector('textarea') as HTMLTextAreaElement
+    const taper = async (valeur: string): Promise<void> => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+          champ,
+          valeur
+        )
+        champ.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    // Le texte n'est plus la composition des cases : c'est un message à soi, on n'y touche plus.
+    await taper('Corrige le libellé du bouton Envoyer, et le titre aussi.')
     expect(boutons(h)).toHaveLength(0)
+    await taper('')
+    expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'false'
+    ])
   })
 
   it('Tab prend toujours la mieux notée', async () => {
@@ -115,6 +192,17 @@ describe('ChatComposer — suites notées en boutons', () => {
   it('aucun bouton pendant un tour en cours : le champ sert alors à orienter l’agent', async () => {
     const h = await monter(proprietes({ placeholderPendantTour: true }))
     expect(boutons(h)).toHaveLength(0)
+  })
+
+  // Titre demandé par l'utilisateur (conv-1103, 2026-10-22) : « le titre de cette popup c'est :
+  // pour continuer... ». Il nomme aussi le groupe pour un lecteur d'écran.
+  it('le bloc des suites porte le titre « Pour continuer… »', async () => {
+    const h = await monter(proprietes())
+    const bloc = h.querySelector('[data-testid="composer-suites"]') as HTMLElement
+    expect(bloc.querySelector('.composer-suites-titre')?.textContent).toBe('Pour continuer…')
+    expect(bloc.getAttribute('aria-label')).toBe('Pour continuer…')
+    // Le titre n'est pas un bouton : il ne compte pas parmi les suites.
+    expect(boutons(h)).toHaveLength(3)
   })
 
   it('aucun bouton sans suite émise — le texte grisé seul, comme avant', async () => {

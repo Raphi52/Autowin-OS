@@ -225,6 +225,37 @@ function espaceAuDessus(element: HTMLElement): number {
   return Math.max(80, Math.floor(haut - borne - PONT - 4))
 }
 
+/**
+ * Le message composé par les suites cochées (conv-1103) : le texte tel quel pour une seule — le
+ * clic d'avant, inchangé —, une liste numérotée au-delà, pour que l'agent les traite TOUTES.
+ */
+function composerSuites(textes: readonly string[]): string {
+  if (textes.length <= 1) return textes[0] ?? ''
+  return textes.map((t, i) => `${i + 1}. ${t}`).join('\n')
+}
+
+/**
+ * AUTO-HAUTEUR DU CHAMP : la hauteur de son texte, 180 px au plus (règle d'avant l'extraction),
+ * et JAMAIS plus que la place laissée par la colonne (conv-1103, 2026-10-22). Mesuré à 900 × 670
+ * avec deux suggestions cochées : la zone des messages était déjà à son minimum, la saisie ne
+ * rétrécit pas, et un champ de 5 lignes poussait la rangée d'outils (∞, trombone, micro) hors du
+ * cadre. Le champ est le seul élément de la saisie qui sait défiler : c'est lui qui rend la place
+ * qui dépasse, sans descendre sous sa hauteur minimale (deux lignes, ChatView.css).
+ */
+function ajusterHauteurChamp(champ: HTMLTextAreaElement): void {
+  champ.style.height = 'auto'
+  const voulue = Math.min(champ.scrollHeight, 180)
+  champ.style.height = `${voulue}px`
+  const saisie = champ.closest('.composer')
+  const colonne = saisie?.parentElement
+  if (!saisie || !colonne) return
+  const basVisible = colonne.getBoundingClientRect().top + colonne.clientTop + colonne.clientHeight
+  const depassement = saisie.getBoundingClientRect().bottom - basVisible
+  if (depassement <= 0) return
+  const plancher = Number.parseFloat(getComputedStyle(champ).minHeight) || 0
+  champ.style.height = `${Math.max(plancher, voulue - depassement)}px`
+}
+
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
   function ChatComposer(props, ref): React.JSX.Element {
     const [input, setInput] = useState('')
@@ -236,15 +267,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [slashEspace, setSlashEspace] = useState(0)
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
+    /** Suites COCHÉES (conv-1103) : ne valent que tant que le champ est exactement leur composition. */
+    const [suitesCochees, setSuitesCochees] = useState<readonly string[]>([])
     const inputRef = useRef<HTMLTextAreaElement>(null)
 
-    // Auto-hauteur : même règle qu'avant l'extraction (180 px de plafond).
+    // Auto-hauteur à la frappe : voir `ajusterHauteurChamp`. Les suggestions qui apparaissent ou
+    // disparaissent changent aussi la place restante : effet déclaré plus bas, après leur calcul.
+
+    // Une fenêtre qui rapetisse sans frappe réduit aussi la place : on réajuste au redimensionnement
+    // de la colonne (jamais de la saisie elle-même, que le réajustement redimensionne à son tour).
     useEffect(() => {
-      const el = inputRef.current
-      if (!el) return
-      el.style.height = 'auto'
-      el.style.height = `${Math.min(el.scrollHeight, 180)}px`
-    }, [input])
+      const colonne = inputRef.current?.closest('.composer')?.parentElement
+      if (!colonne || typeof ResizeObserver === 'undefined') return
+      const observateur = new ResizeObserver(() => {
+        if (inputRef.current) ajusterHauteurChamp(inputRef.current)
+      })
+      observateur.observe(colonne)
+      return () => observateur.disconnect()
+    }, [])
 
     // Le parent n'a besoin que du BOOLÉEN « il y a un brouillon », pas de sa valeur.
     const present = input.trim().length > 0
@@ -486,17 +526,35 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     /*
      * LES SUITES EN BOUTONS (conv-1005) : seulement champ VIDE, hors tour en cours et sans palette
      * ouverte — dès qu'on tape, on écrit autre chose, et pendant un tour le champ sert à orienter.
+     * COCHABLES depuis conv-1103 (« je veux pouvoir cocher plusieurs propositions ») : les boutons
+     * restent aussi tant que le champ est EXACTEMENT la composition des cases cochées. L'état des
+     * cases est déduit de ce champ, pas tenu à part : un texte retouché, envoyé ou vidé décoche
+     * tout de lui-même, sans effet de remise à zéro à synchroniser.
      */
+    const propositions = props.propositionsSuite ?? []
+    const cocheesEnCours =
+      suitesCochees.length > 0 && input === composerSuites(suitesCochees) ? suitesCochees : []
     const suitesVisibles =
-      input.trim() === '' &&
+      (input.trim() === '' || cocheesEnCours.length > 0) &&
       !props.placeholderPendantTour &&
       mentionsVisibles.length === 0 &&
       slashVisibles.length === 0
-        ? (props.propositionsSuite ?? [])
+        ? propositions
         : []
 
-    function choisirSuite(texte: string): void {
-      pousserTexte(texte)
+    // Auto-hauteur (voir `ajusterHauteurChamp`) : à la frappe, et quand les suggestions apparaissent
+    // ou disparaissent — elles prennent ou rendent de la place au-dessus du champ (conv-1103).
+    useEffect(() => {
+      if (inputRef.current) ajusterHauteurChamp(inputRef.current)
+    }, [input, suitesVisibles.length])
+
+    function basculerSuite(texte: string): void {
+      // Ordre AFFICHÉ (mieux notée d'abord), pas ordre des clics : le champ reste prévisible.
+      const suivantes = propositions
+        .map((p) => p.texte)
+        .filter((t) => (t === texte ? !cocheesEnCours.includes(t) : cocheesEnCours.includes(t)))
+      setSuitesCochees(suivantes)
+      pousserTexte(composerSuites(suivantes))
       requestAnimationFrame(() => {
         const el = inputRef.current
         if (!el) return
@@ -590,35 +648,45 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             <div
               className="composer-suites fade-in"
               role="group"
-              aria-label="Suites proposées"
+              aria-label="Pour continuer…"
               data-testid="composer-suites"
             >
-              {suitesVisibles.map((suite, i) => (
-                <button
-                  key={suite.texte}
-                  type="button"
-                  className={`composer-suite${i === 0 ? ' is-best' : ''}`}
-                  data-testid="composer-suite"
-                  title={
-                    i === 0
-                      ? `${suite.texte}\n\nMieux notée : Tab la prend aussi, et le mode auto l’envoie.`
-                      : suite.texte
-                  }
-                  // Garde le focus du champ : le clic remplit, l'Entrée envoie juste après.
-                  onMouseDown={(ev) => ev.preventDefault()}
-                  onClick={() => choisirSuite(suite.texte)}
-                >
-                  {suite.score !== null ? (
-                    <span
-                      className="composer-suite-score mono"
-                      aria-label={`note ${suite.score} sur 100`}
-                    >
-                      {suite.score}
+              {/* Titre du bloc, demandé tel quel par l'utilisateur (conv-1103). */}
+              <span className="composer-suites-titre" aria-hidden="true">
+                Pour continuer…
+              </span>
+              {suitesVisibles.map((suite, i) => {
+                const cochee = cocheesEnCours.includes(suite.texte)
+                return (
+                  <button
+                    key={suite.texte}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={cochee}
+                    className={`composer-suite${i === 0 ? ' is-best' : ''}${cochee ? ' is-cochee' : ''}`}
+                    data-testid="composer-suite"
+                    title={`${suite.texte}\n\n${
+                      i === 0 ? 'Mieux notée : Tab la prend aussi, et le mode auto l’envoie.\n' : ''
+                    }Clic : coche ou décoche — les suites cochées partent ensemble.`}
+                    // Garde le focus du champ : le clic remplit, l'Entrée envoie juste après.
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => basculerSuite(suite.texte)}
+                  >
+                    <span className="composer-suite-case" aria-hidden="true">
+                      {cochee ? '✓' : ''}
                     </span>
-                  ) : null}
-                  <span className="composer-suite-texte">{suite.texte}</span>
-                </button>
-              ))}
+                    {suite.score !== null ? (
+                      <span
+                        className="composer-suite-score mono"
+                        aria-label={`note ${suite.score} sur 100`}
+                      >
+                        {suite.score}
+                      </span>
+                    ) : null}
+                    <span className="composer-suite-texte">{suite.texte}</span>
+                  </button>
+                )
+              })}
             </div>
           ) : null}
           <div className="composer-input-row">
@@ -706,7 +774,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 // et qu'aucun menu slash n'est actif. Remplit l'input avec l'étape recommandée.
                 if (e.key === 'Tab' && props.ghostRecommendation && input.trim() === '') {
                   e.preventDefault()
-                  pousserTexte(props.ghostRecommendation)
+                  // Tab coche la mieux notée quand elle est un bouton : on peut en ajouter d'autres.
+                  const ghost = props.ghostRecommendation
+                  setSuitesCochees(propositions.some((p) => p.texte === ghost) ? [ghost] : [])
+                  pousserTexte(ghost)
                   return
                 }
                 if (e.key === 'Enter' && !e.shiftKey) {
