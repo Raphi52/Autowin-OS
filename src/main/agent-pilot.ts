@@ -81,6 +81,7 @@ import {
 } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { suivreBlocsDeCode } from '../shared/bloc-de-code'
+import { FLUX_LECTURE_RETENUE } from '../shared/lecture-retenue'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
@@ -89,15 +90,20 @@ import { nativeSkills } from './native-registry'
 import {
   AVIS_DEUX_LECTURES,
   CONSIGNE_DEUX_LECTURES,
+  annonceDeLaLectureRetenue,
   chargeDeuxLectures,
   commandesCitees,
+  consigneDeLectureRetenue,
   demandeDeChangementDeRendu,
   dernierMessageAgent,
-  lireDeuxLectures,
+  lireLesLectures,
   meriteUneLecture,
   questionDesDeuxLectures,
-  suitUneQuestionDesLectures
+  suitUneQuestionDesLectures,
+  tacheAvecLectureRetenue,
+  type IssueDesLectures
 } from './deux-lectures'
+import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
 import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
@@ -414,7 +420,13 @@ export function commandResultSucceeded(result: CommandResult): boolean {
    * modele annoncait « je retiens ca » et rien n'etait ecrit. Le fait porteur est ce que la commande
    * dit d'ELLE-MEME (`stored` / `allowed` / `refused`), jamais la reussite du transport.
    */
-  if (data.stored === false || data.allowed === false || data.refused === true) return false
+  /*
+   * SAUF le doublon VOULU (`dejaConnu`, brain-remember.ts) : le fait est DEJA en memoire, il n'y a
+   * rien a corriger. Compte comme un echec, il relancait le tour (« ta dernière action a ÉCHOUÉ »)
+   * deux fois pour rien — conv-1114, 2026-10-23.
+   */
+  if (data.stored === false && data.dejaConnu !== true) return false
+  if (data.allowed === false || data.refused === true) return false
   /*
    * MEME FAMILLE, deux champs qui manquaient — mesure conv-244 (2026-09-04) sur les traces reelles :
    * `run` refuse rend `{ok:true, data:{lance:false, detail:"Commande refusee : ..."}}` et
@@ -1445,10 +1457,13 @@ export class AgentPilot {
       routingUserMessageOverride === undefined &&
       !sendLimits?.tourDeFond &&
       sendLimits?.systemProfile !== 'watchdog-read-only' &&
+      // Le tour de reprise d'une tâche de fond est écrit par Autowin, pas par l'utilisateur
+      // (conv-1118) : il n'a rien à départager.
+      !estUneRepriseAutomatique(latestUserMessage) &&
       meriteUneLecture(latestUserMessage) &&
       !suitUneQuestionDesLectures(history)
-    let lecturesMemorisees: Promise<[string, string] | undefined> | undefined
-    const deuxLecturesDuTour = (): Promise<[string, string] | undefined> => {
+    let lecturesMemorisees: Promise<IssueDesLectures | undefined> | undefined
+    const deuxLecturesDuTour = (): Promise<IssueDesLectures | undefined> => {
       const demande = latestUserMessage
       const demander = this.demanderDeuxLectures
       if (!lectureATrancher || !demande || !demander) return Promise.resolve(undefined)
@@ -1459,7 +1474,7 @@ export class AgentPilot {
         CONSIGNE_DEUX_LECTURES,
         chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions)
       )
-        .then((reponse) => lireDeuxLectures(reponse, demande))
+        .then((reponse) => lireLesLectures(reponse, demande))
         // Un contrôle en panne ne bloque jamais le travail : il part comme avant.
         .catch(() => undefined)
       return lecturesMemorisees
@@ -1490,16 +1505,44 @@ export class AgentPilot {
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
     }
+    /*
+     * UNE LECTURE DOMINE → ELLE PART, ANNONCÉE EN UNE LIGNE (conv-1123). Émise en vrai `delta`, pas
+     * seulement dans le `done` : le renderer jette le texte du `done` quand le tour a déjà parlé, et
+     * l'utilisateur doit voir la lecture AVANT la fin du travail pour pouvoir corriger. Une seule
+     * fois par tour : les trois points de passage partagent la même décision mémorisée.
+     */
+    let lectureRetenue: Extract<IssueDesLectures, { kind: 'retenue' }> | undefined
+    const annoncerLaLectureRetenue = (
+      issue: Extract<IssueDesLectures, { kind: 'retenue' }>
+    ): void => {
+      if (lectureRetenue) return
+      lectureRetenue = issue
+      emit({
+        kind: 'delta',
+        streamId: FLUX_LECTURE_RETENUE,
+        text: `${annonceDeLaLectureRetenue(issue.retenue, issue.ecartee)}\n\n`,
+        iteration: 0
+      })
+    }
+    let tacheDeLaRoute = directRoute?.task ?? ''
     if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
-      const lecturesDeLaRoute = await deuxLecturesDuTour()
-      if (lecturesDeLaRoute) {
-        await fermerSurLaQuestionDesLectures('lectures:0', lecturesDeLaRoute)
+      const issueDeLaRoute = await deuxLecturesDuTour()
+      if (issueDeLaRoute?.kind === 'question') {
+        await fermerSurLaQuestionDesLectures('lectures:0', issueDeLaRoute.lectures)
         return
+      }
+      if (issueDeLaRoute?.kind === 'retenue') {
+        annoncerLaLectureRetenue(issueDeLaRoute)
+        tacheDeLaRoute = tacheAvecLectureRetenue(
+          tacheDeLaRoute,
+          issueDeLaRoute.retenue,
+          issueDeLaRoute.ecartee
+        )
       }
     }
     if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
       const actionId = 'route:0'
-      const args = { task: directRoute.task }
+      const args = { task: tacheDeLaRoute }
       emit({ kind: 'command', actionId, name: 'orchestrate', args })
       signal?.throwIfAborted()
       const result = await execCommand('orchestrate', args)
@@ -1571,11 +1614,12 @@ export class AgentPilot {
         ? await this.retrieveContext(latestUserMessage, { conversationId, turnId }).catch(() => '')
         : ''
     timer.mark('ragBrain')
-    const lecturesDuRendu = await lecturesAvantRendu
-    if (lecturesDuRendu) {
-      await fermerSurLaQuestionDesLectures('lectures:0', lecturesDuRendu)
+    const issueDuRendu = await lecturesAvantRendu
+    if (issueDuRendu?.kind === 'question') {
+      await fermerSurLaQuestionDesLectures('lectures:0', issueDuRendu.lectures)
       return
     }
+    if (issueDuRendu?.kind === 'retenue') annoncerLaLectureRetenue(issueDuRendu)
 
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
@@ -1913,6 +1957,12 @@ export class AgentPilot {
       tourCoupePourCeMessage
     }
     const blocsDuTour = buildTurnMessageBlocks(partiesDuMessage)
+    // La lecture annoncée est remise au modèle, qui fait alors le travail selon elle (conv-1123).
+    if (lectureRetenue)
+      blocsDuTour.push({
+        name: 'lectureRetenue',
+        text: consigneDeLectureRetenue(lectureRetenue.retenue, lectureRetenue.ecartee)
+      })
     // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
     this.dernierEtatPousse.set(cleEtat, snapshot)
     const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
@@ -3780,9 +3830,12 @@ export class AgentPilot {
           !questionPoseeCeTour
         ) {
           // Le run n'est PAS lancé : la question remplace l'orchestration (deux-lectures.ts).
-          const lecturesAvantRun = await deuxLecturesDuTour()
-          if (lecturesAvantRun) {
-            await poserLaQuestionDesLectures(actionId, lecturesAvantRun)
+          const issueAvantRun = await deuxLecturesDuTour()
+          // Une lecture domine : le run part, mais sur ELLE (`rootTask` ci-dessous), et le fil la
+          // nomme (conv-1123).
+          if (issueAvantRun?.kind === 'retenue') annoncerLaLectureRetenue(issueAvantRun)
+          if (issueAvantRun?.kind === 'question') {
+            await poserLaQuestionDesLectures(actionId, issueAvantRun.lectures)
             questionPoseeCeTour = true
             questionDesLecturesPosee = true
             results.push(
@@ -3816,9 +3869,20 @@ export class AgentPilot {
         }
         if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
+        // `rootTask` est l'autorité du run (commands.ts) : la lecture annoncée y est jointe, sinon le
+        // run relirait la demande brute et pourrait faire l'autre lecture (conv-1123).
         const authoritativeArgs =
           token.name === 'orchestrate' && latestUserMessage
-            ? { ...token.args, rootTask: latestUserMessage }
+            ? {
+                ...token.args,
+                rootTask: lectureRetenue
+                  ? tacheAvecLectureRetenue(
+                      latestUserMessage,
+                      lectureRetenue.retenue,
+                      lectureRetenue.ecartee
+                    )
+                  : latestUserMessage
+              }
             : token.args
         const r: CommandResult = settledAction
           ? settledAction.ok

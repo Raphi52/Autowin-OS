@@ -666,8 +666,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     className={`composer-suite${i === 0 ? ' is-best' : ''}${cochee ? ' is-cochee' : ''}`}
                     data-testid="composer-suite"
                     title={`${suite.texte}\n\n${
-                      i === 0 ? 'Mieux notée : Tab la prend aussi, et le mode auto l’envoie.\n' : ''
-                    }Clic : coche ou décoche — les suites cochées partent ensemble.`}
+                      i === 0 ? 'Mieux notée : Tab la prend seule.\n' : ''
+                    }Maj+Tab prend toutes les suites ; le mode auto les envoie toutes.\nClic : coche ou décoche — les suites cochées partent ensemble.`}
                     // Garde le focus du champ : le clic remplit, l'Entrée envoie juste après.
                     onMouseDown={(ev) => ev.preventDefault()}
                     onClick={() => basculerSuite(suite.texte)}
@@ -772,6 +772,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 }
                 // Ghost-text (CLI-like) : Tab accepte la recommandation quand le champ est vide
                 // et qu'aucun menu slash n'est actif. Remplit l'input avec l'étape recommandée.
+                // MAJ+TAB = TOUTES les suites affichées, cochées (conv-1125 : « shift + tab pour
+                // les 2 et tab le premier ») ; Tab seul garde la mieux notée.
+                if (
+                  e.key === 'Tab' &&
+                  e.shiftKey &&
+                  input.trim() === '' &&
+                  suitesVisibles.length > 1
+                ) {
+                  e.preventDefault()
+                  const toutes = suitesVisibles.map((p) => p.texte)
+                  setSuitesCochees(toutes)
+                  pousserTexte(composerSuites(toutes))
+                  return
+                }
                 if (e.key === 'Tab' && props.ghostRecommendation && input.trim() === '') {
                   e.preventDefault()
                   // Tab coche la mieux notée quand elle est un bouton : on peut en ajouter d'autres.

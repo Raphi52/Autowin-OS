@@ -189,6 +189,41 @@ describe('ChatComposer — suites notées en boutons', () => {
     expect(champ.value).toBe('Corrige le libellé du bouton Envoyer.')
   })
 
+  /*
+   * MAJ+TAB PREND TOUTES LES SUITES (conv-1125, 2026-10-23 : « shift + tab pour les 2 et tab le
+   * premier »). Même champ que si on cochait chaque bouton : la liste numérotée, dans l'ordre
+   * affiché, toutes les cases cochées pour pouvoir en retirer une au clic.
+   */
+  it('Maj+Tab met toutes les suites affichées dans le champ, toutes cochées', async () => {
+    const brouillons: string[] = []
+    const h = await monter(proprietes({ onDraftInput: (v) => brouillons.push(v) }))
+    const champ = h.querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      champ.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })
+      )
+    })
+    const attendu = [
+      '1. Corrige le libellé du bouton Envoyer.',
+      '2. Relance la suite de tests du composer.',
+      '3. Capture la vue chat pour vérifier.'
+    ].join('\n')
+    expect(champ.value).toBe(attendu)
+    expect(brouillons.at(-1)).toBe(attendu)
+    expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'true', 'true'])
+  })
+
+  it('Maj+Tab sans bouton de suite reprend le texte grisé, comme Tab', async () => {
+    const h = await monter(proprietes({ propositionsSuite: [] }))
+    const champ = h.querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      champ.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })
+      )
+    })
+    expect(champ.value).toBe('Corrige le libellé du bouton Envoyer.')
+  })
+
   it('aucun bouton pendant un tour en cours : le champ sert alors à orienter l’agent', async () => {
     const h = await monter(proprietes({ placeholderPendantTour: true }))
     expect(boutons(h)).toHaveLength(0)

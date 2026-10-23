@@ -81,8 +81,11 @@ export function placeDeLaReponse(
   if (!tourFini) return undefined
   for (let element = blocsParElement.length - 1; element >= 0; element -= 1) {
     const blocs = blocsParElement[element]
-    for (let rang = blocs.length - 1; rang >= 0; rang -= 1)
-      if (blocs[rang].kind === 'text') return [element, rang]
+    for (let rang = blocs.length - 1; rang >= 0; rang -= 1) {
+      const bloc = blocs[rang]
+      // La ligne « Lecture retenue » annonce le travail, elle n'est jamais la réponse (conv-1123).
+      if (bloc.kind === 'text' && !bloc.lectureRetenue) return [element, rang]
+    }
   }
   return undefined
 }

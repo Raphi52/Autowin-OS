@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MARGE_AIMANT,
+  aimanterSurPiste,
   cibleAimant,
   cranCale,
   cranCourant,
@@ -11,12 +12,16 @@ import {
   hautDansLeContenu,
   hautDeVuePour,
   moletteFaitDefiler,
+  placerEtiquettes,
   poignee,
   positionGlissee,
+  reserveDeLaCarte,
   resumerTexte,
   scrollTopApresGlisse,
+  scrollTopSousPointeur,
   seuilMolette,
   versPiste,
+  voisinsDeLaVue,
   type Repere
 } from './ascenseur-du-fil'
 
@@ -193,5 +198,114 @@ describe('glisse de l’aimant — image par image, quel que soit le réglage du
     expect(dureeGlisse(50)).toBeLessThan(dureeGlisse(2000))
     expect(dureeGlisse(-8000)).toBe(dureeGlisse(8000))
     expect(dureeGlisse(100_000)).toBeLessThanOrEqual(420)
+  })
+})
+
+describe('barre-curseur — on l’attrape et on clique n’importe où', () => {
+  /*
+   * Demande conv-1114 : « la barre doit slider et je dois pouvoir clicker n'importe où dessus ».
+   * Avant : seul un appui sur la poignée (20 px) faisait glisser, et un clic allait au message le
+   * plus proche, pas à l'endroit cliqué. Barre de 424 px : piste 400, cadre 80, course 320 px pour
+   * 3 200 px de fil (1 px de piste = 10 px de fil).
+   */
+  it('le cadre se centre sur la souris, borné aux deux bouts', () => {
+    expect(scrollTopSousPointeur(212, geo(0), 424)).toBe(1600)
+    expect(scrollTopSousPointeur(52, geo(0), 424)).toBe(0)
+    expect(scrollTopSousPointeur(0, geo(0), 424)).toBe(0)
+    expect(scrollTopSousPointeur(424, geo(0), 424)).toBe(3200)
+  })
+
+  it('en glissant, s’arrête sur un cran à moins de 6 px de piste', () => {
+    // 1 650 : à 4 px de piste de la bulle 3 (calée à 1 690) — aimantée.
+    expect(aimanterSurPiste(1650, geo(0), crans, 424)).toEqual({ scrollTop: 1690, cran: crans[2] })
+    // 1 600 : à 9 px de piste — libre.
+    expect(aimanterSurPiste(1600, geo(0), crans, 424)).toEqual({ scrollTop: 1600, cran: null })
+  })
+
+  it('sans tes messages, rien ne s’aimante', () => {
+    expect(aimanterSurPiste(1650, geo(0), [], 424)).toEqual({ scrollTop: 1650, cran: null })
+  })
+})
+
+describe('place de la carte — elle décale la conversation, elle ne la masque pas', () => {
+  /*
+   * Demande conv-1114 : « ça doit décaler la conv et pas la masquer ». Mesuré dans l'app (1 150,
+   * 1 400 et 1 800 px) : le fil n'a que 12 px de marge de chaque côté, la carte de 72 px recouvrait
+   * 60 px de texte. La marge droite s'élargit donc à la carte + 8 px d'écart pendant qu'elle est
+   * ouverte ; une marge déjà plus large ne bouge pas.
+   */
+  it('élargit une marge étroite jusqu’à la carte plus l’écart', () => {
+    expect(reserveDeLaCarte(12, 72)).toBe(80)
+  })
+  it('ne touche pas une marge déjà assez large', () => {
+    expect(reserveDeLaCarte(120, 72)).toBe(120)
+  })
+  it('une marge illisible compte pour zéro', () => {
+    expect(reserveDeLaCarte(Number.NaN, 72)).toBe(80)
+  })
+})
+
+describe('aperçus pendant le défilement — tous à la fois, sans chevauchement', () => {
+  /*
+   * Demande conv-1114 : « pendant que je scroll je veux voir toutes les popups que je vois quand je
+   * hover mes msg ». Carte ouverte : un aperçu par message, au plus près de son cran.
+   */
+  it('des crans éloignés gardent leur aperçu en face', () => {
+    expect(placerEtiquettes([50, 150, 300], 40, 0, 500)).toEqual([50, 150, 300])
+  })
+  it('deux crans proches : leurs aperçus s’écartent autour de leur milieu', () => {
+    expect(placerEtiquettes([100, 110], 40, 0, 500)).toEqual([85, 125])
+  })
+  it('un groupe se resserre de proche en proche, sans chevaucher le suivant', () => {
+    const c = placerEtiquettes([100, 110, 140, 400], 40, 0, 500) as number[]
+    for (let i = 1; i < c.length; i++) expect(c[i] - c[i - 1]).toBeGreaterThanOrEqual(40)
+    expect(c[3]).toBe(400)
+  })
+  it('reste dans la barre, en haut comme en bas', () => {
+    expect(placerEtiquettes([5, 10], 40, 0, 500)).toEqual([20, 60])
+    expect(placerEtiquettes([495, 498], 40, 0, 500)).toEqual([440, 480])
+  })
+  it('trop d’aperçus pour la hauteur : refusé (on passera en compact)', () => {
+    expect(placerEtiquettes([10, 20, 30], 40, 0, 100)).toBeNull()
+    expect(placerEtiquettes([], 40, 0, 100)).toEqual([])
+  })
+})
+
+describe('aperçus pendant le défilement — seulement au-dessus et en dessous de là où tu es', () => {
+  /*
+   * Demande conv-1114, capture à l'appui (24 aperçus empilés sur un long fil) : « ça affiche tout
+   * quand je scroll, ça doit afficher que celui d'en bas et celui au-dessus de là où je suis ».
+   * Au-dessus : ton dernier message passé (celui dont tu lis la réponse). En dessous : le suivant.
+   */
+  it('au milieu d’une réponse : le message lu et le suivant', () => {
+    const v = voisinsDeLaVue(geo(1500), crans)
+    expect(v.avant?.numero).toBe(2)
+    expect(v.apres?.numero).toBe(3)
+  })
+  it('et le message d’avant celui que tu lis (demande conv-1114 : trois aperçus au lieu de deux)', () => {
+    expect(voisinsDeLaVue(geo(1500), crans).precedent?.numero).toBe(1)
+    expect(voisinsDeLaVue(geo(2000), crans).precedent?.numero).toBe(2)
+  })
+  it('au premier message lu, il n’y a pas de message d’avant', () => {
+    expect(voisinsDeLaVue(geo(500), crans).precedent).toBeNull()
+    expect(voisinsDeLaVue(geo(0), crans).precedent).toBeNull()
+  })
+  it('vue calée sur ton message : lui au-dessus, le suivant en dessous', () => {
+    const v = voisinsDeLaVue(geo(890), crans)
+    expect(v.avant?.numero).toBe(2)
+    expect(v.apres?.numero).toBe(3)
+  })
+  it('tout en haut : rien au-dessus', () => {
+    const v = voisinsDeLaVue(geo(0), crans)
+    expect(v.avant).toBeNull()
+    expect(v.apres?.numero).toBe(1)
+  })
+  it('après ton dernier message : rien en dessous', () => {
+    const v = voisinsDeLaVue({ scrollTop: 3900, clientHeight: 800, scrollHeight: 5000 }, crans)
+    expect(v.avant?.numero).toBe(4)
+    expect(v.apres).toBeNull()
+  })
+  it('sans tes messages : aucun aperçu', () => {
+    expect(voisinsDeLaVue(geo(1500), [])).toEqual({ precedent: null, avant: null, apres: null })
   })
 })

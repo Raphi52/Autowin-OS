@@ -24,6 +24,7 @@ import {
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import { SKILL_ALIASES } from '../../../shared/skill-aliases'
 import { estArretParStop } from '../../../shared/arret-par-stop'
+import { FLUX_LECTURE_RETENUE } from '../../../shared/lecture-retenue'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
   authoritativeOrchestrationClosureSpan,
@@ -46,6 +47,11 @@ export type ChatErrorPart = PersistedChatErrorPart
 export type ChatTextPart = PersistedChatTextPart & {
   /** Contexte de fence calculé pour le rendu seulement — jamais persisté. */
   markdownContinuationPrefix?: string
+  /**
+   * Bloc de la ligne « Lecture retenue » (flux `FLUX_LECTURE_RETENUE`, conv-1123) : rendu à part,
+   * atténué, sous une étiquette « lecture ». Calculé pour le rendu seulement — jamais persisté.
+   */
+  lectureRetenue?: true
 }
 export type ChatPart = PersistedChatPart
 type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
@@ -1741,6 +1747,20 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
       compact.push(part)
       continue
     }
+    // La ligne « Lecture retenue » ne se fond pas dans la réponse qui la suit : elle reste un bloc
+    // à part pour être repérée d'un coup d'œil (conv-1123).
+    if (part.streamId === FLUX_LECTURE_RETENUE) {
+      flushText()
+      textIndex++
+      if (part.text.trim())
+        compact.push({
+          kind: 'text',
+          text: part.text.trim(),
+          lectureRetenue: true,
+          ...(part.at === undefined ? {} : { at: part.at })
+        })
+      continue
+    }
     pendingText.push({
       text: part.text,
       continuationPrefix: continuationPrefixes[textIndex++],
@@ -1754,6 +1774,10 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
 export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
   const blocks: ChatRenderBlock[] = []
   for (const part of coalesceAssistantParts(parts)) {
+    if (part.kind === 'text' && part.lectureRetenue) {
+      blocks.push(part)
+      continue
+    }
     if (part.kind === 'text') {
       // Retour scout : tableau markdown rangé → le PANNEAU DE SÉLECTION (cases + « Enchaîner
       // (frame) sur la sélection »), pas un tableau en lecture seule.

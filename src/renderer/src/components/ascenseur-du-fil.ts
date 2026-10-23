@@ -28,6 +28,11 @@ export type Repere = {
   numero: number
   heure: string
   texte: string
+  /**
+   * L'élément du message dans le fil. Un glissement vers lui relit sa place à chaque image : le
+   * texte au-dessus peut se réagencer pendant le trajet (la carte décale le fil, conv-1114).
+   */
+  element?: HTMLElement
 }
 
 export type Geometrie = { scrollTop: number; clientHeight: number; scrollHeight: number }
@@ -161,6 +166,52 @@ export function poignee(geo: Geometrie, hauteurBarre: number): { haut: number; h
   }
 }
 
+/**
+ * `scrollTop` qui CENTRE le cadre de la vue sur la souris posée à `yPiste` : la barre est un curseur
+ * qu'on attrape et qu'on clique n'importe où (demande conv-1114, « la barre doit slider et je dois
+ * pouvoir clicker n'importe où dessus »).
+ */
+export function scrollTopSousPointeur(
+  yPiste: number,
+  geo: Geometrie,
+  hauteurBarre: number
+): number {
+  const max = maxDefilement(geo)
+  const cadre = poignee(geo, hauteurBarre).hauteur
+  const course = longueurPiste(hauteurBarre) - cadre
+  if (course <= 0 || max <= 0) return 0
+  return Math.round(borner((yPiste - MARGE_PISTE - cadre / 2) / course, 0, 1) * max)
+}
+
+/**
+ * Les crans du curseur : une position glissée s'arrête sur ton message dont la position calée est à
+ * moins de `tolerance` px DE PISTE (sous la souris, pas en px de fil : dans un long fil, 1 px de
+ * barre vaut des dizaines de px de fil, et un seuil en px de fil ne s'atteindrait jamais).
+ */
+export function aimanterSurPiste(
+  scrollTop: number,
+  geo: Geometrie,
+  crans: readonly Repere[],
+  hauteurBarre: number,
+  tolerance = 6
+): { scrollTop: number; cran: Repere | null } {
+  const max = maxDefilement(geo)
+  const course = longueurPiste(hauteurBarre) - poignee(geo, hauteurBarre).hauteur
+  if (max <= 0 || course <= 0) return { scrollTop, cran: null }
+  let meilleur: Repere | null = null
+  let distance = tolerance + 0.001
+  for (const cran of crans) {
+    const ecart = (Math.abs(hautDeVuePour(cran, geo) - scrollTop) / max) * course
+    if (ecart < distance) {
+      distance = ecart
+      meilleur = cran
+    }
+  }
+  return meilleur
+    ? { scrollTop: hautDeVuePour(meilleur, geo), cran: meilleur }
+    : { scrollTop, cran: null }
+}
+
 /** `scrollTop` après un glisser de la poignée de `dyPiste` px depuis `depart`. */
 export function scrollTopApresGlisse(
   depart: number,
@@ -207,6 +258,118 @@ export function cranSousPointeur(
   return meilleur
 }
 
+/**
+ * Centres des aperçus de tes messages, carte ouverte (conv-1114 : « pendant que je scroll je veux
+ * voir toutes les popups que je vois quand je hover mes msg »). Chaque aperçu (hauteur `hauteur`) se
+ * pose en face de son cran (`ancres`, croissantes) ; des aperçus qui se chevaucheraient forment un
+ * GROUPE, collé et centré au mieux sur ses crans, borné à [min, max]. `null` s'ils ne tiennent pas.
+ */
+export function placerEtiquettes(
+  ancres: readonly number[],
+  hauteur: number,
+  min: number,
+  max: number
+): number[] | null {
+  if (ancres.length === 0) return []
+  if (ancres.length * hauteur > max - min) return null
+  type Groupe = { debut: number; nombre: number; haut: number }
+  const hautIdeal = (debut: number, nombre: number): number => {
+    let somme = 0
+    for (let j = 0; j < nombre; j++) somme += ancres[debut + j] - hauteur / 2 - j * hauteur
+    const haut = Math.round(somme / nombre)
+    return Math.max(min, Math.min(max - nombre * hauteur, haut))
+  }
+  const groupes: Groupe[] = []
+  ancres.forEach((_, i) => {
+    groupes.push({ debut: i, nombre: 1, haut: hautIdeal(i, 1) })
+    // Tant que le dernier groupe empiète sur le précédent, ils n'en font plus qu'un.
+    while (groupes.length > 1) {
+      const dernier = groupes[groupes.length - 1]
+      const avant = groupes[groupes.length - 2]
+      if (avant.haut + avant.nombre * hauteur <= dernier.haut) break
+      groupes.pop()
+      avant.nombre += dernier.nombre
+      avant.haut = hautIdeal(avant.debut, avant.nombre)
+    }
+  })
+  return groupes.flatMap((g) =>
+    Array.from({ length: g.nombre }, (_, j) => g.haut + j * hauteur + hauteur / 2)
+  )
+}
+
+/**
+ * Les aperçus montrés pendant le défilement (conv-1114 : « ça doit afficher que celui d'en bas et
+ * celui au-dessus de là où je suis », puis « montre aussi le message d'avant celui que je lis ») :
+ * AVANT, ton dernier message passé sous la ligne d'aimant — celui dont tu lis la réponse ; PRÉCÉDENT,
+ * celui d'avant ; APRÈS, le suivant. Aux bouts du fil, il en manque.
+ */
+export function voisinsDeLaVue(
+  geo: Geometrie,
+  crans: readonly Repere[]
+): { precedent: Repere | null; avant: Repere | null; apres: Repere | null } {
+  const ligne = geo.scrollTop + MARGE_AIMANT + 1
+  let precedent: Repere | null = null
+  let avant: Repere | null = null
+  let apres: Repere | null = null
+  for (const cran of crans) {
+    if (cran.haut <= ligne) {
+      precedent = avant
+      avant = cran
+    } else {
+      apres = cran
+      break
+    }
+  }
+  return { precedent, avant, apres }
+}
+
+/** Écart entre le bord gauche de la carte ouverte et le texte qu'elle a poussé. */
+export const ECART_CARTE = 8
+
+/**
+ * Marge droite du fil pendant que la carte est ouverte : la conversation est DÉCALÉE, pas masquée
+ * (conv-1114, « ça doit décaler la conv et pas la masquer »). Le fil n'a que 12 px de marge (mesuré
+ * dans l'app à 1 150, 1 400 et 1 800 px) : la décaler par une translation aurait coupé 60 px à
+ * gauche ; on lui réserve donc la place de la carte à droite. Une marge déjà assez large ne change
+ * pas.
+ */
+export function reserveDeLaCarte(paddingDroit: number, largeurCarte: number): number {
+  const actuel = Number.isFinite(paddingDroit) ? paddingDroit : 0
+  return Math.max(actuel, largeurCarte + ECART_CARTE)
+}
+
+/**
+ * Élément en HAUT de la vue, juste sous la ligne d'aimant : c'est lui qui doit rester immobile à
+ * l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du navigateur, qui ne le
+ * fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px à 1 400 px de large,
+ * de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta bulle doit le rester.
+ * Le bord droit d'abord : tes bulles y sont alignées.
+ */
+export function elementDeLecture(conteneur: HTMLElement): HTMLElement | null {
+  const rc = conteneur.getBoundingClientRect()
+  const y = rc.top + MARGE_AIMANT + 14
+  if (typeof document.elementFromPoint === 'function') {
+    for (const fx of [0.92, 0.7, 0.5, 0.3]) {
+      const el = document.elementFromPoint(rc.left + rc.width * fx, y)
+      if (el instanceof HTMLElement && el !== conteneur && conteneur.contains(el)) return el
+    }
+  }
+  return (
+    Array.from(conteneur.querySelectorAll<HTMLElement>(SELECTEUR_MESSAGES)).find(
+      (element) => element.getBoundingClientRect().bottom > y
+    ) ?? null
+  )
+}
+
+/** Haut d'un élément dans le CONTENU du fil : ne bouge pas quand on défile, seulement quand le fil se réagence. */
+export function hautDansLeFil(element: HTMLElement, conteneur: HTMLElement): number {
+  return (
+    element.getBoundingClientRect().top -
+    conteneur.getBoundingClientRect().top +
+    conteneur.scrollTop
+  )
+}
+
 /** Début d'un message sur une seule ligne, pour l'aperçu. */
 export function resumerTexte(texte: string, max = 90): string {
   const ligne = texte.replace(/\s+/g, ' ').trim()
@@ -238,6 +401,21 @@ export function hautDansLeContenu(element: HTMLElement, conteneur: HTMLElement):
 }
 
 /**
+ * Texte d'un de tes messages pour son aperçu, tel que tu l'as écrit. Un message qui lance une skill
+ * s'affiche en bandeau (nom de la skill, puis le reste : ChatMessageRow.tsx) ; lu d'un bloc, il
+ * donnait « draftune plus jolie popup » (mesuré dans l'app, conv-1114). On le recompose en
+ * « /draft une plus jolie popup ».
+ */
+function texteDuMessage(element: HTMLElement): string {
+  const skill = element.querySelector('.msg-skill-nom')?.textContent?.trim()
+  if (skill) {
+    const reste = element.querySelector('.msg-skill-texte')?.textContent ?? ''
+    return resumerTexte(`/${skill} ${reste}`)
+  }
+  return resumerTexte(element.querySelector('.msg-body')?.textContent ?? '')
+}
+
+/**
  * Mesure les messages RENDUS du fil, dans le repère du contenu. `numeroDepart` = nombre de tes
  * messages pas encore rendus en haut du fil (rendu par tranches, `fil-progressif.ts`) : la
  * numérotation reste celle du fil entier.
@@ -248,13 +426,13 @@ export function lireReperes(conteneur: HTMLElement, numeroDepart = 0): Repere[] 
     const role = element.dataset.origine === 'message-utilisateur' ? 'user' : 'assistant'
     if (role === 'user') numero += 1
     return {
+      element,
       haut: Math.round(hautDansLeContenu(element, conteneur)),
       hauteur: Math.round(element.offsetHeight),
       role,
       numero: role === 'user' ? numero : 0,
       heure: role === 'user' ? (element.querySelector('.msg-time')?.textContent ?? '').trim() : '',
-      texte:
-        role === 'user' ? resumerTexte(element.querySelector('.msg-body')?.textContent ?? '') : ''
+      texte: role === 'user' ? texteDuMessage(element) : ''
     }
   })
 }

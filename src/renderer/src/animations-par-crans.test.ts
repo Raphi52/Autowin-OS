@@ -37,7 +37,6 @@ function cranMs(duree: string, crans: string, segments: number): number {
 
 describe('animations par crans — le CSS', () => {
   const theme = lire('assets/theme.css')
-  const carte = lire('components/CarteDuFil.css')
 
   it('les orbites des atomes avancent par crans de CRAN_MS', () => {
     const rot = bloc(theme, '.aw-atom__rot')
@@ -64,13 +63,6 @@ describe('animations par crans — le CSS', () => {
     expect(m, b).not.toBeNull()
     expect(cranMs(m![1], m![2], 2)).toBe(CRAN_MS)
   })
-
-  it('le point qui bat de la carte du fil bat par crans de CRAN_MS (deux segments)', () => {
-    const b = bloc(carte, ".carte-station[data-statut='en-cours'] .carte-point")
-    const m = /animation:\s*carte-bat\s+([\d.]+)s\s+steps\((\d+)\)\s+infinite/.exec(b)
-    expect(m, b).not.toBeNull()
-    expect(cranMs(m![1], m![2], 2)).toBe(CRAN_MS)
-  })
 })
 
 /**
@@ -82,8 +74,6 @@ describe('animations par crans — le CSS', () => {
 const FICHIER_DE: Record<string, string> = {
   'aw-atom-spin': 'assets/theme.css',
   'aw-atom-tw': 'assets/theme.css',
-  'carte-bat': 'components/CarteDuFil.css',
-  'carte-file': 'components/CarteDuFil.css',
   'etape-flux': 'components/ChatView.css',
   'etape-pouls': 'components/ChatView.css',
   'etape-reflet': 'components/ChatView.css',
@@ -219,11 +209,11 @@ describe('animations par crans — le calage sur une horloge commune', () => {
   it('cale une animation au moment où elle démarre, et se désinstalle', () => {
     const element = document.createElement('span')
     document.body.appendChild(element)
-    const animation = { animationName: 'carte-bat', startTime: 4_321.5 as number | null }
+    const animation = { animationName: 'etape-pouls', startTime: 4_321.5 as number | null }
     ;(element as unknown as { getAnimations: () => unknown[] }).getAnimations = () => [animation]
     const demarre = (): void => {
       const evenement = new Event('animationstart', { bubbles: true })
-      Object.defineProperty(evenement, 'animationName', { value: 'carte-bat' })
+      Object.defineProperty(evenement, 'animationName', { value: 'etape-pouls' })
       element.dispatchEvent(evenement)
     }
 

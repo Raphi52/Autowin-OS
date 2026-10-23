@@ -102,7 +102,6 @@ import {
 import { referenceDeLElement } from './reference-element'
 import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
-import { CarteDuFil } from './CarteDuFil'
 import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
 import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
@@ -164,6 +163,7 @@ import {
 } from './brouillons-persistes'
 import {
   memoriserPositionLecture,
+  oublierPositionLecture,
   positionLectureMemorisee,
   restaurerPositionLecture,
   type PositionLecture
@@ -233,7 +233,10 @@ import { TravauxNonPublies } from './TravauxNonPublies'
 import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
 import { VueMesuree } from './VueMesuree'
+import { reutiliserConversationsInchangees } from './conversations-stables'
+import { declencheursDeListe, noterDeclencheursListe, noterLigneListe } from './rendu-long'
 import { useDebutProgressif } from './fil-progressif'
+import { AscenseurDuFil } from './AscenseurDuFil'
 import { flattenChatParts } from '../../../shared/chat-turn'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 /** Le modèle retenu pour un fil (voir `Conversation.modeleChoisi` côté main). */
@@ -511,6 +514,8 @@ const LigneConversation = memo(function LigneConversation({
   actionsRef: { readonly current: ActionsLigneConversation }
   setConvMenu: Dispatch<SetStateAction<{ conv: Conv; top: number; left: number } | null>>
 }): React.JSX.Element {
+  // Le gel de la liste compte ses lignes redessinées (conv-1115, `rendu-long.ts`).
+  noterLigneListe(c.id)
   const conversationState = deriveConversationState({
     busy: occupe,
     messageCount: c.messageCount ?? c.messages?.length ?? 0,
@@ -1825,16 +1830,6 @@ export function ChatView({
     }
   }, [barrePassageOuverte])
 
-  /**
-   * Repère « non lu » du fil lu AVANT de l'ouvrir (conv-1038 ; depuis conv-1059, le repère « tu
-   * étais là » de la carte du fil) : `loadConv` le remplace aussitôt par la date du fil, il faut
-   * donc le saisir avant.
-   */
-  const [vueAvantOuverture, setVueAvantOuverture] = useState<{
-    conv: string
-    vueA: number
-  } | null>(null)
-
   /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
   function texteDuComposer(): string {
     return getComposerDraft(composerDraftKeyRef.current).input
@@ -1873,47 +1868,6 @@ export function ChatView({
     window.getSelection()?.removeAllRanges()
     setPassageSelectionne(null)
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
-  }
-
-  /**
-   * CARTE DU FIL (conv-1059, 2026-10-22) : un clic sur une étape ramène le fil à son message, qui
-   * s'allume un instant. C'est un geste du LECTEUR (`gesteLecteurRef`) : sans lui, le suivi du bas
-   * reprendrait la main et redescendrait le fil pendant un tour. Un message pas encore rendu (fil
-   * long, rendu par tranches depuis la fin : `useDebutProgressif`) est attendu quelques images.
-   */
-  function allerAuMessageDeLaCarte(rang: number, essais = 30): void {
-    const conteneur = scrollRef.current
-    const message = messagesRef.current[rang]
-    if (!conteneur || !message) return
-    const selecteur =
-      message.role === 'user'
-        ? '[data-origine="message-utilisateur"]'
-        : '[data-origine="reponse-agent"]'
-    const id = message.messageId
-    let cible: HTMLElement | null = id
-      ? conteneur.querySelector<HTMLElement>(
-          `${selecteur}[data-message-id="${id.replace(/["\\]/gu, '\\$&')}"]`
-        )
-      : null
-    // Un message envoyé en direct n'a pas encore d'identifiant : on le trouve par sa place parmi
-    // les messages RENDUS du même rôle.
-    if (!cible && rang >= debutFilRef.current) {
-      const avant = messagesRef.current
-        .slice(debutFilRef.current, rang)
-        .filter((autre) => autre.role === message.role).length
-      cible = conteneur.querySelectorAll<HTMLElement>(selecteur)[avant] ?? null
-    }
-    if (!cible) {
-      if (essais > 0) requestAnimationFrame(() => allerAuMessageDeLaCarte(rang, essais - 1))
-      return
-    }
-    gesteLecteurRef.current = true
-    cible.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    cible.classList.remove('is-cible-carte')
-    void cible.offsetWidth
-    cible.classList.add('is-cible-carte')
-    const allumee = cible
-    window.setTimeout(() => allumee.classList.remove('is-cible-carte'), 1_700)
   }
 
   /**
@@ -2424,7 +2378,12 @@ export function ChatView({
   /* --- données latérales --- */
 
   async function refreshConvs(): Promise<void> {
-    const loaded = (await window.api.conversations()) as Conv[]
+    // Les fils inchangés gardent leur objet : seules leurs lignes modifiées se redessinent (gel
+    // `renderer:vue-chat-liste`, conv-1115 — l'IPC rend des copies neuves, ~1 000 lignes refaites).
+    const loaded = reutiliserConversationsInchangees(
+      convsRef.current,
+      (await window.api.conversations()) as Conv[]
+    )
     convsRef.current = loaded // dispo IMMÉDIATEMENT pour la reprise auto (sans attendre le render)
     setConvs(loaded)
     void autoResumeOnce(loaded)
@@ -3608,20 +3567,6 @@ export function ChatView({
     // Retenu ICI : `loadConv` est le point de passage unique de toute ouverture (clic, reprise,
     // inbox d'agents), donc le seul endroit ou la memoire ne peut pas se desynchroniser.
     memoriserDerniereConversation(c.id)
-    /*
-     * Seulement à une VRAIE ouverture (un autre fil que celui affiché) : `loadConv` sert aussi à
-     * recharger le fil qu'on regarde, et un tour fini sous les yeux de l'utilisateur n'a pas eu
-     * lieu « pendant son absence ».
-     */
-    if (activeRef.current !== c.id) {
-      const vuesAvant = lireConversationsVues(
-        typeof localStorage === 'undefined' ? undefined : localStorage
-      )
-      const vueA = vuesAvant[c.id]
-      setVueAvantOuverture(
-        vueA !== undefined && estNonVue(c, vuesAvant) ? { conv: c.id, vueA } : null
-      )
-    }
     marquerConversationVue(c.id, c.updatedAt)
     const requestId = ++loadConversationRequestRef.current
     // Le numéro de requête arbitre AUSSI l'affichage : une réponse (ou un échec) PÉRIMÉ ne
@@ -5392,6 +5337,34 @@ export function ChatView({
         await loadConv(cible)
         return true
       },
+      /*
+       * L'AUTORITE, pas l'ecran (conv-1127, 2026-10-23) : `loadConv` lance sa sonde sans l'attendre,
+       * donc le fil paraissait libre alors que le main y tenait encore le tour qui avait appele
+       * `restart_app`. La consigne partait, etait refusee, et se perdait.
+       */
+      tourEnCours: async (conversationId) => {
+        if (busyConversationsRef.current.has(conversationId)) return true
+        try {
+          return (await window.api.pilotChatActive?.(conversationId))?.active === true
+        } catch {
+          return false
+        }
+      },
+      mettreEnFile: (consigne, conversationId) => {
+        // Fil ADOPTE comme occupe (meme geste que `reconcilierTourNonClos`) : la veille des tours le
+        // relache a la vraie fin du tour repris, et cette transition draine la file. Le drapeau de
+        // reprise du mode auto n'est PAS leve : c'est la consigne qui poursuit, pas la suite proposee
+        // par le tour repris (le mode auto attend de toute facon une file vide).
+        if (!busyConversationsRef.current.has(conversationId))
+          setConversationBusy(conversationId, true)
+        enqueueMessage(conversationId, consigne)
+        // La consigne attend EN VUE ; son recu part avec elle quand la file la relache.
+        setDirectiveReceipt(
+          conversationId,
+          { id: nextQueueEntryIdRef.current++, text: consigne },
+          'attente'
+        )
+      },
       envoyer: async (consigne, conversationId) => {
         // La chaine du mode auto REPREND ici : ce fil n'est pas « ouvert », il est poursuivi.
         autoRepriseApresRedemarrageRef.current = true
@@ -5722,8 +5695,15 @@ export function ChatView({
        *   - un fil dont le tableau de messages ne change pas d'IDENTITE au moment de l'envoi :
        *     l'effet, qui depend de `messages`, ne se rejouait jamais et personne ne descendait.
        * Envoyer un message dit sans ambiguite ou le lecteur veut etre : en bas, sur ce qu'il envoie.
+       *
+       * ... ET LA POSITION RETENUE SUR LE DISQUE PART AVEC (conv-1128, 2026-10-23 : « quand j'envoie
+       * le message ca doit me scroll down la conv »). Annuler la seule reprise EN ATTENTE ne suffisait
+       * pas : le `refresh` du fil emis juste apres l'envoi (il est retitre a chaque message) repasse
+       * par `loadConv`, qui relisait la position retenue avant l'envoi et y REMONTAIT le fil ~1 s
+       * apres la descente. Temoin : `ChatView.descente-envoi-rechargement.test.tsx`.
        */
       positionARestaurerRef.current = null
+      if (activeRef.current) oublierPositionLecture(activeRef.current)
       setAtterrissageDemande((tour) => tour + 1)
     }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
@@ -6909,8 +6889,12 @@ export function ChatView({
   // Un long fil s'ouvre par sa fin puis se complète par tranches (fil-progressif.ts, cause des
   // gels `vue-chat`) ; les index restent ceux du fil ENTIER, clés et balayages compris.
   const debutFil = useDebutProgressif(activeId, messages.length)
-  const debutFilRef = useRef(debutFil)
-  debutFilRef.current = debutFil
+  // Tes messages pas encore rendus en haut du fil : l'ascenseur à crans les compte pour garder la
+  // numérotation du fil ENTIER pendant le rendu par tranches (conv-1114).
+  const messagesUtilisateurAvantDebut = useMemo(
+    () => messages.slice(0, debutFil).filter((message) => message.role === 'user').length,
+    [messages, debutFil]
+  )
   const filRendu = useMemo(
     () =>
       messages.slice(debutFil).map((message, rang) => {
@@ -6993,6 +6977,32 @@ export function ChatView({
    * Les actions qui ne sont pas stables passent par `actionsListeRef` : toujours les dernieres,
    * sans invalider la memoire.
    */
+  /*
+   * LE GEL DE LA LISTE NOMME SON DÉCLENCHEUR (conv-1115, 2026-10-23) : les données de la liste qui
+   * ont changé depuis son dernier rendu validé partent avec le gel (`rendu-long.ts`). La référence
+   * n'avance qu'APRÈS validation : un double rendu (StrictMode) recalcule les mêmes noms.
+   */
+  const entreesDeListe = {
+    conversations: convs,
+    recherche: convQuery,
+    'recherche-contenu': correspondancesContenu,
+    'filtre-statut': convStatusFilter,
+    replis: groupesReplies,
+    'dossier-par-defaut': dossierParDefaut,
+    'survol-depot': surviole,
+    'fils-occupes': busyConversations,
+    'fil-ouvert': activeId,
+    'fils-vus': conversationsVues,
+    'mode-selection': convSelectionMode,
+    'mode-vue': convViewMode,
+    selection: selectedConvIds,
+    mosaique: mosaicIds
+  }
+  const entreesDeListeValideesRef = useRef<typeof entreesDeListe | null>(null)
+  noterDeclencheursListe(declencheursDeListe(entreesDeListeValideesRef.current, entreesDeListe))
+  useEffect(() => {
+    entreesDeListeValideesRef.current = entreesDeListe
+  })
   const actionsListeRef = useRef({
     loadConv,
     basculerDansMosaique,
@@ -8314,19 +8324,8 @@ Cliquer pour choisir une autre branche.`}
               }}
             />
           )}
-          {activeId && (
-            <CarteDuFil
-              key={activeId}
-              conversationId={activeId}
-              fil={messages}
-              vueAvantOuverture={
-                vueAvantOuverture?.conv === activeId ? vueAvantOuverture.vueA : undefined
-              }
-              onAller={(rang) => allerAuMessageDeLaCarte(rang)}
-            />
-          )}
           <div
-            className={`chat-scroll scroll-y${repriseEnCours ? ' chat-scroll--reprise' : ''}`}
+            className={`chat-scroll scroll-y chat-scroll--ascenseur${repriseEnCours ? ' chat-scroll--reprise' : ''}`}
             ref={scrollRef}
             onMouseUp={surRelachementDansLeFil}
             role="log"
@@ -8464,6 +8463,17 @@ Cliquer pour choisir une autre branche.`}
             <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
 
+          {/* Ascenseur à crans du fil (draft conv-1114, « 1 · Dépli en place ») : remplace l'ascenseur
+              du système, un cran par message de l'utilisateur, carte du fil à la molette. */}
+          <AscenseurDuFil
+            key={activeId ?? 'aucune'}
+            conteneurRef={scrollRef}
+            numeroDepart={messagesUtilisateurAvantDebut}
+            onGesteLecteur={() => {
+              gesteLecteurRef.current = true
+            }}
+          />
+
           {passageSelectionne && passageSelectionne.fil === activeId && (
             <BarrePassage passage={passageSelectionne} onAction={agirSurPassage} />
           )}
@@ -8476,6 +8486,15 @@ Cliquer pour choisir une autre branche.`}
                 followTailRef.current = true
                 setHasNewActivity(false)
                 setScrolledAwayFromTail(false)
+                /*
+                 * DESCENDRE PAR LE BOUTON, C'EST QUITTER SA LECTURE (conv-1128, 2026-10-23). La
+                 * position retenue ne partait que si un `scroll` touchait le bas pendant que le
+                 * drapeau « geste du lecteur » etait leve ; apres une reprise de lecture, il est
+                 * baisse, et le rechargement suivant du fil y RAMENAIT le lecteur. Meme regle qu'a
+                 * l'envoi. Temoin : `ChatView.bouton-dernier-message-rechargement.test.tsx`.
+                 */
+                positionARestaurerRef.current = null
+                if (activeRef.current) oublierPositionLecture(activeRef.current)
                 if (scrollRef.current) scrollChatToBottom(scrollRef.current)
               }}
             >

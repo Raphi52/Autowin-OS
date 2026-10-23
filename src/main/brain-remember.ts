@@ -488,6 +488,13 @@ export interface RememberOutcome {
    */
   unknown?: boolean
   /**
+   * Rien n'a été écrit PARCE QUE le fait est déjà connu (doublon de session, appel concurrent,
+   * quasi-doublon du Brain) : un refus VOULU, pas un échec. Sans ce marqueur, le contrôle de fin de
+   * tour (agent-pilot.ts, commandResultSucceeded) relançait l'agent pour « corriger » un dépôt qui
+   * n'avait rien à corriger — conv-1114, 2026-10-23.
+   */
+  dejaConnu?: boolean
+  /**
    * Ce qui a réellement été validé et envoyé. Présent dès que la demande est recevable, même si le dépôt
    * a échoué : c'est ce qui permet de retenir le fait DANS le fil quand le Brain ne répond pas.
    */
@@ -746,6 +753,7 @@ async function depositCandidate(
     return {
       allowed: true,
       stored: false,
+      dejaConnu: true,
       note: alreadyHere,
       detail: `déjà déposé dans cette session (${alreadyHere}) — rien de nouveau, et c’est voulu : le Brain ne dédoublonne pas la boîte de réception`
     }
@@ -762,6 +770,7 @@ async function depositCandidate(
     return {
       allowed: true,
       stored: false,
+      dejaConnu: true,
       note: joined.note,
       detail: `deja depose par l'appel concurrent (${joined.note ?? 'candidat'}) - aucun second appel reseau`
     }
@@ -848,6 +857,7 @@ async function performDepositCandidate(
       return {
         allowed: true,
         stored: false,
+        dejaConnu: true,
         detail: 'déjà connu du Brain (quasi-doublon) — rien n’a été ajouté, et c’est voulu'
       }
     }

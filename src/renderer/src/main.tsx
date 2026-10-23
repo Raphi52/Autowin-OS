@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { surveillerGelsRenderer } from './gel-renderer'
-import { vueDominanteRecente } from './components/rendu-long'
+import { detailDeGelPourVue, vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
 import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
@@ -36,7 +36,9 @@ installerAnimationsParCrans()
 surveillerGelsRenderer((dureeMs) => {
   const api = (
     window as unknown as {
-      api?: { signalerGelRenderer?: (ms: number, etiquette?: string) => unknown }
+      api?: {
+        signalerGelRenderer?: (ms: number, etiquette?: string, detail?: unknown) => unknown
+      }
     }
   ).api
   /*
@@ -44,7 +46,11 @@ surveillerGelsRenderer((dureeMs) => {
    * `renderer:longtask`, le nom qui portait 272 s de fenetre morte sans accuser personne.
    * Aucune vue mesuree = aucune etiquette, jamais un nom invente.
    */
-  api?.signalerGelRenderer?.(dureeMs, vueDominanteRecente())
+  const vue = vueDominanteRecente()
+  // Dominee par la liste des conversations : ses lignes redessinees et leurs declencheurs (conv-1115).
+  const detail = detailDeGelPourVue(vue, dureeMs)
+  if (detail) api?.signalerGelRenderer?.(dureeMs, vue, detail)
+  else api?.signalerGelRenderer?.(dureeMs, vue)
 })
 
 createRoot(document.getElementById('root')!).render(

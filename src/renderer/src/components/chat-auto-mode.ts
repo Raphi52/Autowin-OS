@@ -25,7 +25,7 @@ import type { Msg, AsstMsg } from './chat-view-types'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import type { ChatPart } from './chat-view-model'
 import {
-  extrairePromptSuivant,
+  extrairePropositionsSuite,
   estPromptDePublication,
   publicationJamaisDemandee,
   signalFinExplicite,
@@ -1052,9 +1052,13 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // Même garde qu'en affichage : si la demande de CE tour était déjà l'ordre de tri, la publication
   // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
-  const brut =
-    extrairePromptSuivant(texteReponse, demandeDuTour, entree.depotPresent ?? true) ??
-    extractRecommendation(texteReponse)
+  // Les suites AFFICHÉES en boutons, mieux notée en tête (gardes de publication déjà appliquées).
+  const propositions = extrairePropositionsSuite(
+    texteReponse,
+    demandeDuTour,
+    entree.depotPresent ?? true
+  ).map((p) => p.texte)
+  const brut = propositions[0] ?? extractRecommendation(texteReponse)
   const suite =
     brut && publicationJamaisDemandee(brut, demandeDuTour, entree.depotPresent ?? true)
       ? null
@@ -1094,15 +1098,36 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * ligne 1 », « le candidat ci-dessus ») : envoye seul, il arrive dans un tour qui n'a pas le
    * tableau sous les yeux. La cible NOMMEE est donc recopiee en tete de ce qui part.
    */
+  /*
+   * TOUTES LES SUITES AFFICHÉES PARTENT (conv-1125, 2026-10-23 : « le mode auto doit lancer toutes
+   * les suggestions de préprompt pas une seule »). Avant, seule la mieux notée partait (conv-1005).
+   * Elles partent dans UN SEUL message : un tour par suite ferait proposer de nouvelles suites dès
+   * le premier, et deux chaînes se mêleraient. La mieux notée porte les gardes ci-dessus (pause,
+   * suite différée) ; une secondaire qui attend une donnée de l'utilisateur ou un moment donné reste
+   * de côté, puisqu'elle ne peut pas être faite maintenant.
+   */
+  const secondaires =
+    suite === propositions[0]
+      ? propositions
+          .slice(1)
+          .filter((p) => !suiteAttendUneDonneeUtilisateur(p) && !suiteEstDifferee(p, null))
+      : []
+  const suites =
+    secondaires.length === 0
+      ? suite
+      : [
+          `Fais ces ${secondaires.length + 1} suites proposées, dans cet ordre :`,
+          ...[suite, ...secondaires].map((s, i) => `${i + 1}. ${s}`)
+        ].join(SAUT_ANCRAGE)
   const suiteCiblee =
     choixMulti.statut === 'cibles'
       ? `CIBLES RETENUES (traite-les ENSEMBLE, dans cet ordre) :
 ${choixMulti.cibles.map((c, i) => `${i + 1}. ${c}`).join(SAUT_ANCRAGE)}
-${suite}`
+${suites}`
       : choixScout
         ? `CIBLE RETENUE : ${choixScout.cible}
-${suite}`
-        : suite
+${suites}`
+        : suites
   const texte = ancrerSurLaDemande(suiteCiblee, derniereDemandeHumaine(entree.fil))
   /*
    * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient

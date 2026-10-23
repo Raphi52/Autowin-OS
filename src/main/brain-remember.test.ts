@@ -663,6 +663,9 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
     expect(outcome.detail).toMatch(/d[ée]j[àa] connu/i)
     // Surtout : ne pas ressembler a une panne, sinon un agent reessaie en boucle.
     expect(outcome.detail).not.toMatch(/erreur|échec|injoignable/i)
+    // Et le dire en DONNÉE, pas seulement en texte : le contrôle de fin de tour lit ce marqueur
+    // (agent-pilot.ts, commandResultSucceeded) — sans lui, deux relances pour rien (conv-1114).
+    expect(outcome.dejaConnu).toBe(true)
   })
 
   it('un 200 SANS contexte n’est ni un succès ni un refus — état INCONNU', async () => {

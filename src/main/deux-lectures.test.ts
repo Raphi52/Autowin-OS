@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   AVIS_DEUX_LECTURES,
+  ECART_MAX_POUR_DEMANDER,
+  annonceDeLaLectureRetenue,
   chargeDeuxLectures,
+  consigneDeLectureRetenue,
+  lireLesLectures,
+  tacheAvecLectureRetenue,
   demandeDeChangementDeRendu,
   lireDeuxLectures,
   meriteUneLecture,
@@ -14,12 +19,15 @@ import {
 /** La demande RÉELLE de conv-767 (premier message, 2026-09-22) — 2,47 $ sur une mauvaise lecture. */
 const DEMANDE_767 =
   '/scout une task (toujours la meme) qui est pratique pour etre évaluée via /arena'
-const LECTURES_767 = JSON.stringify({
-  lectures: [
-    'une task (toujours la meme) facile à évaluer, pour lancer des /arena dessus et comparer les workflows',
-    'une task (toujours la meme) à corriger dans le code, assez petite pour etre évaluée via /arena'
-  ]
-})
+/** La réponse du petit modèle : chaque lecture et sa probabilité, en %. */
+function reponse(...lectures: Array<[string, number]>): string {
+  return JSON.stringify({ lectures: lectures.map(([texte, proba]) => ({ texte, proba })) })
+}
+const LECTURE_ARENA_767 =
+  'une task (toujours la meme) facile à évaluer, pour lancer des /arena dessus et comparer les workflows'
+const LECTURE_CODE_767 =
+  'une task (toujours la meme) à corriger dans le code, assez petite pour etre évaluée via /arena'
+const LECTURES_767 = reponse([LECTURE_ARENA_767, 50], [LECTURE_CODE_767, 50])
 
 describe('lireDeuxLectures — la réponse du petit modèle', () => {
   it('rend les deux lectures de conv-767 quand elles reprennent ses mots', () => {
@@ -35,7 +43,44 @@ describe('lireDeuxLectures — la réponse du petit modèle', () => {
   it('une seule lecture, ou aucune, ne pose AUCUNE question', () => {
     expect(lireDeuxLectures('{"lectures":[]}', DEMANDE_767)).toBeUndefined()
     expect(
-      lireDeuxLectures('{"lectures":["une task facile à évaluer via arena"]}', DEMANDE_767)
+      lireDeuxLectures(reponse(['une task facile à évaluer via arena', 100]), DEMANDE_767)
+    ).toBeUndefined()
+  })
+
+  it('une lecture qui DOMINE ne pose AUCUNE question : seule la quasi-égalité bloque (conv-1123)', () => {
+    // Le cas réel du 2026-10-23 : « choix de période » sur la rivière, zoom ou filtre. Le zoom allait
+    // de soi ; la question a coupé le tour pour rien.
+    const demande =
+      'Ajoute à la rivière de la Carte du projet un choix de période (2 semaines, 1 mois, 3 mois), en gardant la molette qui déplace la colonne large.'
+    const zoom =
+      'Le choix 2 semaines / 1 mois / 3 mois règle la durée affichée de la rivière, la molette continuant de déplacer la colonne large.'
+    const filtre =
+      'Le choix de période filtre la rivière : elle ne garde que les éléments des 2 semaines, 1 mois ou 3 mois passés.'
+    expect(lireDeuxLectures(reponse([zoom, 70], [filtre, 30]), demande)).toBeUndefined()
+    expect(lireDeuxLectures(reponse([zoom, 56], [filtre, 44]), demande)).toBeUndefined()
+    expect(lireDeuxLectures(reponse([zoom, 55], [filtre, 45]), demande)).toEqual([zoom, filtre])
+    expect(ECART_MAX_POUR_DEMANDER).toBe(10)
+  })
+
+  it('une lecture SANS probabilité ne pose aucune question : pas de score, pas de doute prouvé', () => {
+    const sansScore = JSON.stringify({ lectures: [LECTURE_ARENA_767, LECTURE_CODE_767] })
+    expect(lireDeuxLectures(sansScore, DEMANDE_767)).toBeUndefined()
+    const scoreTexte = JSON.stringify({
+      lectures: [
+        { texte: LECTURE_ARENA_767, proba: '50' },
+        { texte: LECTURE_CODE_767, proba: 50 }
+      ]
+    })
+    expect(lireDeuxLectures(scoreTexte, DEMANDE_767)).toBeUndefined()
+  })
+
+  it('normalise les probabilités et range la plus probable d’abord', () => {
+    // 0,47 / 0,53 = 47/53 : quasi égal, et la lecture « code » passe devant, recommandée.
+    expect(
+      lireDeuxLectures(reponse([LECTURE_ARENA_767, 0.47], [LECTURE_CODE_767, 0.53]), DEMANDE_767)
+    ).toEqual([LECTURE_CODE_767, LECTURE_ARENA_767])
+    expect(
+      lireDeuxLectures(reponse([LECTURE_ARENA_767, 0], [LECTURE_CODE_767, 0]), DEMANDE_767)
     ).toBeUndefined()
   })
 
@@ -46,27 +91,68 @@ describe('lireDeuxLectures — la réponse du petit modèle', () => {
   })
 
   it('refuse deux lectures identiques', () => {
-    const memes = JSON.stringify({
-      lectures: ['une task pratique évaluée via arena', 'Une task pratique, évaluée via arena !']
-    })
+    const memes = reponse(
+      ['une task pratique évaluée via arena', 50],
+      ['Une task pratique, évaluée via arena !', 50]
+    )
     expect(lireDeuxLectures(memes, DEMANDE_767)).toBeUndefined()
   })
 
   it('refuse une lecture qui ne reprend PAS les mots de l’utilisateur', () => {
-    const savante = JSON.stringify({
-      lectures: [
-        'une task (toujours la meme) facile à évaluer via /arena',
-        'un banc de mesure reproductible pour comparer des orchestrations'
-      ]
-    })
+    const savante = reponse(
+      ['une task (toujours la meme) facile à évaluer via /arena', 50],
+      ['un banc de mesure reproductible pour comparer des orchestrations', 50]
+    )
     expect(lireDeuxLectures(savante, DEMANDE_767)).toBeUndefined()
   })
 
   it('refuse une lecture trop longue pour un bouton', () => {
-    const longue = JSON.stringify({
-      lectures: ['une task pratique évaluée via arena', `une task ${'très '.repeat(60)}via arena`]
-    })
+    const longue = reponse(
+      ['une task pratique évaluée via arena', 50],
+      [`une task ${'très '.repeat(60)}via arena`, 50]
+    )
     expect(lireDeuxLectures(longue, DEMANDE_767)).toBeUndefined()
+  })
+})
+
+describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
+  it('quasi-égalité → question ; lecture dominante → retenue, l’autre nommée', () => {
+    expect(
+      lireLesLectures(reponse([LECTURE_ARENA_767, 52], [LECTURE_CODE_767, 48]), DEMANDE_767)
+    ).toEqual({ kind: 'question', lectures: [LECTURE_ARENA_767, LECTURE_CODE_767] })
+    expect(
+      lireLesLectures(reponse([LECTURE_ARENA_767, 25], [LECTURE_CODE_767, 75]), DEMANDE_767)
+    ).toEqual({ kind: 'retenue', retenue: LECTURE_CODE_767, ecartee: LECTURE_ARENA_767 })
+  })
+
+  it('une réponse douteuse ne retient RIEN : pas d’annonce sur une lecture non validée', () => {
+    expect(lireLesLectures('{"lectures":[]}', DEMANDE_767)).toBeUndefined()
+    const savante = reponse(
+      ['une task (toujours la meme) facile à évaluer via /arena', 90],
+      ['un banc de mesure reproductible pour comparer des orchestrations', 10]
+    )
+    expect(lireLesLectures(savante, DEMANDE_767)).toBeUndefined()
+  })
+
+  it('l’annonce tient en une ligne : la lecture qui part, puis l’autre', () => {
+    const ligne = annonceDeLaLectureRetenue('zoom de la frise', 'filtre des éléments')
+    expect(ligne).toBe(
+      'Lecture retenue : « zoom de la frise » — si tu voulais plutôt « filtre des éléments », dis-le.'
+    )
+    expect(ligne).not.toContain('\n')
+  })
+
+  it('la tâche du run garde la demande entière et ne prend la précision qu’une fois', () => {
+    const une = tacheAvecLectureRetenue(DEMANDE_767, 'lecture a', 'lecture b')
+    expect(une.startsWith(DEMANDE_767)).toBe(true)
+    expect(une).toContain('« lecture a »')
+    expect(tacheAvecLectureRetenue(une, 'lecture a', 'lecture b')).toBe(une)
+  })
+
+  it('la consigne du modèle est une relance d’Autowin, jamais des mots de l’utilisateur', () => {
+    const consigne = consigneDeLectureRetenue('lecture a', 'lecture b')
+    expect(consigne.startsWith('SYSTÈME:')).toBe(true)
+    expect(consigne).toContain('« lecture a »')
   })
 })
 

@@ -42,6 +42,7 @@ import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { texteDeLaLectureRetenue } from '../../../shared/lecture-retenue'
 import { Spinner } from './Spinner'
 import { decouperSkill } from './skill-entete'
 import type { SkillInstallee } from './useSkillsInventory'
@@ -681,7 +682,14 @@ export const ChatMessageRow = memo(
             : null
         : null
     const rendreBloc = (part: ChatRenderBlock, index: number): React.ReactNode =>
-      part.kind === 'text' ? (
+      part.kind === 'text' && part.lectureRetenue ? (
+        // La lecture que l'agent a retenue (conv-1123) : atténuée, sous une petite étiquette, pour
+        // se repérer avant la réponse sans se confondre avec elle.
+        <p key={index} className="msg-lecture-retenue" dir="auto" data-testid="lecture-retenue">
+          <span className="msg-lecture-etiquette">lecture</span>
+          <span className="msg-lecture-texte">{texteDeLaLectureRetenue(part.text)}</span>
+        </p>
+      ) : part.kind === 'text' ? (
         // Le clic ne fait qu'ÉCOUTER les liens `#autowin-prompt` du bloc html-render :
         // le clavier passe par le lien lui-même (Entrée y déclenche ce même clic).
         <div

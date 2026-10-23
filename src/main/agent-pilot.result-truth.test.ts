@@ -140,6 +140,25 @@ describe('commandResultSucceeded — un refus dans la charge compte comme echec'
     ).toBe(false)
   })
 
+  /*
+   * UN DOUBLON VOULU N'EST PAS UN REFUS — conv-1114 (2026-10-23). Le Brain a repondu « déjà connu
+   * (quasi-doublon) — rien n'a été ajouté, et c'est voulu » : le fait EST en memoire. Compte comme un
+   * echec, il relancait le tour deux fois (« ta dernière action a ÉCHOUÉ ») alors qu'il n'y avait
+   * rien a corriger. Le marqueur `dejaConnu` vient de brain-remember.ts ; sans lui, stored:false
+   * reste un echec.
+   */
+  it('stored:false porte par un doublon voulu (dejaConnu) reste une reussite', () => {
+    expect(
+      commandResultSucceeded({
+        ok: true,
+        data: { allowed: true, stored: false, dejaConnu: true, detail: 'déjà connu du Brain' }
+      })
+    ).toBe(true)
+    expect(commandResultSucceeded({ ok: true, data: { stored: false, dejaConnu: false } })).toBe(
+      false
+    )
+  })
+
   it('une charge sans marqueur de refus reste une reussite', () => {
     expect(commandResultSucceeded({ ok: true, data: { stored: true } })).toBe(true)
     expect(commandResultSucceeded({ ok: true, data: { allowed: true, exitCode: 0 } })).toBe(true)

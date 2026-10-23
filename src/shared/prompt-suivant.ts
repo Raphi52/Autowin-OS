@@ -59,7 +59,8 @@ export function signalFinExplicite(texte: string): boolean {
  *
  * Le modèle peut émettre jusqu'à trois lignes `AUTOWIN_PROMPT_V1: [85] <message>` : une action
  * distincte par ligne, notée de 0 à 100. Le champ de saisie les montre en boutons, la mieux notée
- * reste le texte grisé accepté par Tab, et le mode auto envoie cette même mieux notée.
+ * reste le texte grisé accepté par Tab. Le mode auto envoyait cette mieux notée seule ; depuis
+ * conv-1125 (2026-10-23) il envoie toutes les suites affichées dans un seul message.
  *
  * Une ligne SANS note (l'ancien format, et tout l'historique des fils) reste lue : elle a
  * `score: null`, passe après les suites notées, et entre deux lignes sans note c'est la DERNIÈRE
@@ -174,7 +175,8 @@ export function extrairePropositionsSuite(
 }
 
 /**
- * Rend la suite la MIEUX notée — celle du texte grisé (Tab) et celle que le mode auto envoie.
+ * Rend la suite la MIEUX notée — celle du texte grisé (Tab). Le mode auto, lui, lit toute la liste
+ * (`extrairePropositionsSuite`) depuis conv-1125.
  * `null` s'il n'y en a pas : l'appelant retombe alors sur la recommandation, donc rien ne régresse.
  */
 export function extrairePromptSuivant(

@@ -13,9 +13,12 @@
   width: 18px;
   touch-action: none;
   user-select: none;
+  /* Flèche ordinaire, pas de main (conv-1114 : « enlève la main sur curseur »). */
   cursor: default;
-  /* Décélération douce, commune à l'ouverture et au repli. */
+  /* Repli : décélération douce. Ouverture : 800 ms, courbe régulière (voir la carte). */
   --adf-courbe: cubic-bezier(0.22, 1, 0.36, 1);
+  --adf-ouverture: 800ms;
+  --adf-courbe-ouverture: cubic-bezier(0.4, 0, 0.2, 1);
 }
 /* Holographique blanc : le rose de ses bulles est plus profond (theme-holographique-clair.css). */
 :root[data-base='clair'] .adf {
@@ -51,6 +54,8 @@
 }
 .adf.is-deplie .adf-fine {
   opacity: 0;
+  /* Croise la carte qui apparaît lentement : même durée que sa montée en opacité. */
+  transition: opacity 560ms ease-out;
 }
 .adf-trait {
   stroke: color-mix(in srgb, var(--adf-texte) 14%, transparent);
@@ -88,10 +93,14 @@
 .adf.is-deplie .adf-carte {
   opacity: 1;
   clip-path: inset(0 0 0 0 round 8px);
-  /* Ouverture : 150 ms, comme arrêté au draft ; l'opacité arrive vite pour que rien ne clignote. */
+  /* Ouverture LENTE (conv-1114 : « il doit y avoir une animation d'apparition lente de cette
+     barre », puis « encore trop rapide : passe la carte à 800 ms ») : 150 ms au draft, puis 520 ms.
+     Courbe RÉGULIÈRE (accélère puis ralentit) : la décélération du repli dévoilait la moitié de la
+     carte dès la 2e image (sonde du 23/10), un « pop » et non une apparition lente. Le fil se pousse
+     sur la même durée et la même courbe (plus bas). */
   transition:
-    clip-path 150ms var(--adf-courbe),
-    opacity 70ms linear;
+    clip-path var(--adf-ouverture) var(--adf-courbe-ouverture),
+    opacity 560ms ease-out;
 }
 .adf-plaque {
   fill: color-mix(in srgb, var(--adf-texte) 8%, var(--adf-fond));
@@ -133,6 +142,9 @@
   pointer-events: none;
 }
 .adf-apercu-k {
+  /* Numéro et heure toujours sur une ligne : en compact, l'heure passait dessous (capture conv-1114). */
+  flex: none;
+  white-space: nowrap;
   color: var(--gold, #e9bd4e);
   font: 600 9.5px/1.3 var(--mono, ui-monospace, monospace);
   letter-spacing: 0.06em;
@@ -145,9 +157,116 @@
   text-overflow: ellipsis;
 }
 
+/* --- Les aperçus de la carte ouverte : celui au-dessus de la vue et celui en dessous (conv-1114) ---
+   Même habit que l'aperçu du survol, posés à gauche de la carte et reliés chacun à son cran par un
+   trait. Ils arrivent avec la carte (un peu après elle) et repartent avec elle. Hauteurs FIXES :
+   le placement sans chevauchement (`placerEtiquettes`) compte 44 px par aperçu, 26 en compact. */
+.adf-etiquettes {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  height: 100%;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 140ms linear,
+    visibility 0s linear 140ms;
+}
+.adf.is-deplie .adf-etiquettes {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 560ms ease-out 180ms,
+    visibility 0s;
+}
+.adf-liens {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.adf .adf-liens path {
+  stroke: color-mix(in srgb, var(--adf-texte) 30%, transparent);
+  stroke-width: 1;
+}
+.adf-etiquette {
+  /* Un vrai bouton (cliquable, conv-1114) : on efface l'habit par défaut du navigateur. */
+  margin: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  pointer-events: auto;
+  position: absolute;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 240px;
+  height: 41px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--adf-texte) 8%, var(--adf-fond));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--adf-texte) 18%, transparent);
+  translate: 0 -50%;
+}
+.adf-etiquette .adf-apercu-t {
+  max-width: 222px;
+  font-size: 11.5px;
+}
+/* Celui à l'écran (ou survolé, ou visé par un glisser) : bord en dégradé de tes bulles. */
+.adf-etiquette:hover {
+  background: color-mix(in srgb, var(--adf-texte) 14%, var(--adf-fond));
+}
+.adf-etiquette:focus-visible {
+  outline: 2px solid var(--adf-bleu);
+  outline-offset: 1px;
+}
+.adf-etiquette.is-courant {
+  box-shadow:
+    inset 0 0 0 1px var(--adf-bleu),
+    inset -2px 0 0 0 var(--adf-rose);
+}
+.is-compactes .adf-etiquette {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 23px;
+  padding: 2px 8px;
+}
+.is-compactes .adf-etiquette .adf-apercu-t {
+  max-width: 180px;
+}
+
 /* L'ascenseur du système s'efface : la barre à crans le remplace (ChatView, `chat-scroll--ascenseur`). */
 .chat-scroll--ascenseur {
   scrollbar-width: none;
+}
+/* Posée sur le fil par AscenseurDuFil : NON héritée. Héritée (le défaut d'une variable CSS), elle
+   faisait recalculer le style des milliers d'éléments du fil à chaque ouverture — une image de
+   124 ms mesurée par la sonde de fluidité (conv-1114). */
+@property --adf-reserve {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 80px;
+}
+/* LA CARTE DÉCALE LA CONVERSATION au lieu de la masquer (conv-1114) : pendant qu'elle est ouverte,
+   la marge droite du fil s'élargit à sa largeur + 8 px (`--adf-reserve`, posé par AscenseurDuFil),
+   à son rythme : 800 ms à l'ouverture, le repli de la carte au retour. Sélecteurs plus précis que
+   `.chat-layout .chat-scroll` (ChatView.css), dont la marge est en !important. Le navigateur garde
+   la lecture en place quand le texte au-dessus se réajuste (ancrage du défilement). */
+.chat-layout .chat-scroll.chat-scroll--ascenseur,
+.chat .chat-scroll.chat-scroll--ascenseur {
+  transition: padding-right 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.chat-layout .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'],
+.chat .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'] {
+  padding-right: var(--adf-reserve, 80px) !important;
+  transition: padding-right 800ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .chat-scroll--ascenseur::-webkit-scrollbar {
   display: none;

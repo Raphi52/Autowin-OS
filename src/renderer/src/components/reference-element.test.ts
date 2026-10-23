@@ -96,14 +96,4 @@ describe('referenceDeLElement', () => {
       'dans : zone de saisie (src/renderer/src/components/ChatComposer.tsx)'
     )
   })
-
-  // La carte du fil (conv-1059, à la place du carnet de conv-1038) porte son étiquette : Alt+clic
-  // sur une de ses stations la nomme.
-  it('dans la carte du fil : la référence nomme la carte et sa source', () => {
-    const racine = poser(
-      '<section data-origine="carte-du-fil"><li class="carte-station"><span id="cible">idée 6</span></li></section>'
-    )
-    const reference = referenceDeLElement(racine.querySelector('#cible')!, { conversationId: 'c' })
-    expect(reference).toContain('dans : carte du fil (src/renderer/src/components/CarteDuFil.tsx)')
-  })
 })

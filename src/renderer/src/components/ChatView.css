@@ -6259,3 +6259,31 @@ button.chat-project-dot:disabled {
   word-break: break-word;
   padding: 1px 0;
 }
+
+/* LIGNE « LECTURE RETENUE » (conv-1123, 2026-10-23 : « un style distinct, texte atténué et petite
+   étiquette lecture, pour qu'elle se repère d'un coup d'œil avant la réponse »). Bloc à part
+   (`lectureRetenue`, chat-view-model.ts) : plus petit et atténué que la réponse, précédé d'une
+   étiquette en petites capitales. Le retrait haut aligne le milieu de sa première ligne sur le point
+   du rail (14 px, `.rail-noeud[data-nature='texte']`). */
+.msg-lecture-retenue {
+  margin: 0;
+  padding: 4px 0 2px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+.msg-lecture-etiquette {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 7px;
+  border: 1px solid var(--line2);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  vertical-align: 1px;
+}

@@ -14,12 +14,22 @@
  * dérivable »). Une phrase de plus n'y changerait rien : le contrôle doit vivre dans le code, au
  * point de passage.
  *
+ * SEULEMENT À QUASI-ÉGALITÉ (conv-1123, 2026-10-23). La première version posait la question dès que
+ * le petit modèle voyait DEUX lectures, même quand l'une dominait : « choix de période » sur la
+ * rivière de la Carte du projet (zoom ou filtre) a bloqué le tour alors que le zoom allait de soi.
+ * L'utilisateur : « que en cas d'extrême ambiguïté (score de proba quasi égal) ». Chaque lecture
+ * porte donc sa probabilité, et la question n'est posée que si les deux sont à
+ * `ECART_MAX_POUR_DEMANDER` points ou moins ; sinon le travail part sur la lecture dominante,
+ * ANNONCÉE en une ligne dans le fil (laquelle part, laquelle est écartée) et transmise au run ou au
+ * modèle, pour que l'utilisateur corrige après coup sans être bloqué avant.
+ *
  * Ce module ne parle à AUCUN modèle : il fabrique la consigne d'un petit modèle, VALIDE sa réponse
  * et construit la question. L'appel lui-même est injecté (`index.ts`), comme le rangement du premier
  * message. Toute réponse inexploitable rend `undefined` : le travail part comme avant. Une question
  * inutile coûte un tour à l'utilisateur ; un contrôle en panne ne doit jamais bloquer un run.
  */
 import type { ReponseAsk } from './ask-options'
+import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
 
 /**
  * La consigne du petit modèle. Stable d'un appel à l'autre (cache).
@@ -46,12 +56,23 @@ export const CONSIGNE_DEUX_LECTURES = [
   'Ne compte PAS : un détail d’exécution que l’agent tranche seul (comment coder, quel fichier), ni',
   'une règle établie (un test rouge se corrige dans le code, jamais en desserrant le test).',
   'Réponds UNIQUEMENT par une ligne JSON, sans texte autour :',
-  '{"lectures":[]} si une lecture domine nettement ;',
-  'sinon {"lectures":["<la lecture la plus probable>","<l\'autre lecture>"]}.',
-  'Chaque lecture : UNE phrase de 160 caractères au plus, qui REPREND LES MOTS de la demande et',
+  '{"lectures":[]} si une seule lecture est plausible ;',
+  'sinon {"lectures":[{"texte":"<la lecture la plus probable>","proba":<entier>},',
+  '{"texte":"<l\'autre lecture>","proba":<entier>}]}.',
+  '« proba » : la probabilité, en pourcentage, que l’utilisateur veuille dire CETTE lecture ; les',
+  'deux font 100. Estime-la honnêtement d’après les mots de la demande et le contexte, sans la',
+  'ramener vers 50 par prudence.',
+  'Chaque texte : UNE phrase de 160 caractères au plus, qui REPREND LES MOTS de la demande et',
   'précise seulement le sens du passage ambigu. Aucun jargon, aucun nom de fichier que la demande',
   'ne cite pas.'
 ].join('\n')
+
+/**
+ * Écart maximal, en points de probabilité, entre les deux lectures pour poser la question
+ * (55/45 au plus). Au-delà, une lecture domine : la question couperait le tour de l'utilisateur pour
+ * un choix que l'agent tranche seul (conv-1123).
+ */
+export const ECART_MAX_POUR_DEMANDER = 10
 
 /** Les commandes `/nom` citées dans la demande, dans l'ordre, sans doublon. */
 export function commandesCitees(demande: string): string[] {
@@ -135,14 +156,33 @@ export function reprendSesMots(lecture: string, demande: string): boolean {
   return repris >= requis
 }
 
+/** Une lecture lue dans la réponse : son texte et sa probabilité brute (normalisée ensuite). */
+function lireUneLecture(brut: unknown): { texte: string; proba: number } | undefined {
+  if (!brut || typeof brut !== 'object') return undefined
+  const { texte, proba } = brut as { texte?: unknown; proba?: unknown }
+  if (typeof texte !== 'string' || !texte.trim()) return undefined
+  if (typeof proba !== 'number' || !Number.isFinite(proba) || proba < 0) return undefined
+  return { texte: texte.trim(), proba }
+}
+
 /**
- * Les deux lectures rendues par le petit modèle, ou `undefined`.
- *
- * `undefined` dans TOUS les cas douteux — JSON illisible, une seule lecture, deux lectures
- * identiques, une lecture trop longue ou qui ne reprend pas ses mots. Le travail part alors comme
- * avant : ce contrôle ne doit jamais devenir un mur.
+ * Ce que le contrôle décide : POSER la question (quasi-égalité), ou partir sur la lecture RETENUE
+ * en l'annonçant (conv-1123 : « que je puisse corriger après coup sans être bloqué avant »).
  */
-export function lireDeuxLectures(reponse: unknown, demande: string): [string, string] | undefined {
+export type IssueDesLectures =
+  | { kind: 'question'; lectures: [string, string] }
+  | { kind: 'retenue'; retenue: string; ecartee: string }
+
+/**
+ * La décision tirée de la réponse du petit modèle, ou `undefined`.
+ *
+ * `undefined` dans TOUS les cas douteux — JSON illisible, une seule lecture, une lecture SANS
+ * probabilité, deux lectures identiques, une lecture trop longue ou qui ne reprend pas ses mots. Le
+ * travail part alors comme avant, sans annonce : ce contrôle ne doit jamais devenir un mur.
+ * Deux lectures valides : `question` si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins,
+ * sinon `retenue` — la plus probable part, l'autre est nommée pour pouvoir corriger (conv-1123).
+ */
+export function lireLesLectures(reponse: unknown, demande: string): IssueDesLectures | undefined {
   if (typeof reponse !== 'string') return undefined
   const json = reponse.match(/\{[\s\S]*\}/u)?.[0]
   if (!json) return undefined
@@ -154,13 +194,61 @@ export function lireDeuxLectures(reponse: unknown, demande: string): [string, st
   }
   const lectures = (brut as { lectures?: unknown })?.lectures
   if (!Array.isArray(lectures) || lectures.length !== 2) return undefined
-  const [a, b] = lectures.map((lecture) => (typeof lecture === 'string' ? lecture.trim() : ''))
-  if (!a || !b || a.length > PLAFOND_LECTURE || b.length > PLAFOND_LECTURE) return undefined
+  const lues = lectures.map(lireUneLecture)
+  if (!lues[0] || !lues[1]) return undefined
+  // Normalisée : un modèle qui répond 0,55/0,45 ou 60/30 reste comparable à 55/45.
+  const total = lues[0].proba + lues[1].proba
+  if (total <= 0) return undefined
+  const [premiere, seconde] = [lues[0], lues[1]].sort((x, y) => y.proba - x.proba)
+  const [a, b] = [premiere.texte, seconde.texte]
+  if (a.length > PLAFOND_LECTURE || b.length > PLAFOND_LECTURE) return undefined
   const cle = (texte: string): string =>
     sansAccent(texte).toLowerCase().replace(/\W+/gu, ' ').trim()
   if (cle(a) === cle(b)) return undefined
   if (!reprendSesMots(a, demande) || !reprendSesMots(b, demande)) return undefined
-  return [a, b]
+  const ecart = ((premiere.proba - seconde.proba) / total) * 100
+  return ecart > ECART_MAX_POUR_DEMANDER
+    ? { kind: 'retenue', retenue: a, ecartee: b }
+    : { kind: 'question', lectures: [a, b] }
+}
+
+/**
+ * Les deux lectures à soumettre à l'utilisateur, la plus probable d'abord — seulement à
+ * quasi-égalité ; `undefined` sinon (lecture dominante ou réponse douteuse).
+ */
+export function lireDeuxLectures(reponse: unknown, demande: string): [string, string] | undefined {
+  const issue = lireLesLectures(reponse, demande)
+  return issue?.kind === 'question' ? issue.lectures : undefined
+}
+
+/**
+ * La ligne affichée dans le fil quand une lecture domine : laquelle part, et laquelle est écartée,
+ * pour que l'utilisateur corrige d'un mot au lieu d'être arrêté avant (conv-1123).
+ */
+export function annonceDeLaLectureRetenue(retenue: string, ecartee: string): string {
+  return `${DEBUT_LECTURE_RETENUE}« ${retenue} » — si tu voulais plutôt « ${ecartee} », dis-le.`
+}
+
+/**
+ * La même lecture, ajoutée à la tâche d'un run : sans elle, le run relirait la demande à sa façon
+ * et pourrait faire autre chose que ce que la ligne affichée vient d'annoncer.
+ */
+export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee: string): string {
+  const precision = `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
+  return tache.includes(precision) ? tache : `${tache.trimEnd()}\n\n${precision}`
+}
+
+/**
+ * La même lecture, remise au modèle du chat quand il fait le travail lui-même (changement
+ * d'affichage). « SYSTÈME: » la fait encadrer comme une relance d'Autowin, jamais comme des mots de
+ * l'utilisateur (`baliserRelanceAutomatique`).
+ */
+export function consigneDeLectureRetenue(retenue: string, ecartee: string): string {
+  return [
+    'SYSTÈME: la demande ci-dessus pouvait se lire de deux façons ; une lecture domine nettement.',
+    `L'utilisateur a déjà vu la ligne : ${annonceDeLaLectureRetenue(retenue, ecartee)}`,
+    `Fais le travail selon cette lecture : « ${retenue} ». Ne la réannonce pas et ne pose pas la question.`
+  ].join('\n')
 }
 
 /**
