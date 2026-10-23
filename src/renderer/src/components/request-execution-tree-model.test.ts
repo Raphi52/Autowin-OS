@@ -100,7 +100,7 @@ describe('projectLatestRequestExecution', () => {
 
     expect(quote).toMatchObject({
       parentId: workspace?.id,
-      display: { kind: 'quote', title: 'Plan d’exécution', runId: 'run-quote' }
+      display: { kind: 'quote', title: 'Execution plan', runId: 'run-quote' }
     })
     expect(skill?.parentId).toBe(quote?.id)
   })
@@ -631,8 +631,25 @@ describe('projectLatestRequestExecution', () => {
     expect(quorum).toMatchObject({
       provider: undefined,
       model: undefined,
-      display: { kind: 'event', title: 'Agrégation locale' }
+      display: { kind: 'event', title: 'Local aggregation' }
     })
+  })
+
+  // Noms du graphe en anglais (conv-1094) : l'étape s'appelle « Judge », son agent aussi — plus de
+  // « Judge » au-dessus de trois « Juge ».
+  it('nomme « Judge » l’agent qui rend le verdict, comme son étape', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      trace('juge-a', 'turn-1', 1, {
+        type: 'verdict',
+        execution: { phase: 'judge', agentId: 'judge:a', taskId: 'judge:a' }
+      })
+    ])
+
+    const juge = projectLatestRequestExecution(timeline).events.find(
+      (event) => event.id === 'juge-a'
+    )
+
+    expect(juge?.display?.title).toBe('Judge')
   })
 
   it('regroupe les événements techniques d’un appel provider dans le nœud agent', () => {
@@ -1409,12 +1426,12 @@ describe('graphe lisible — actions nommées, à plat, regroupées', () => {
       expect.arrayContaining([
         'Brain interrogé',
         'Notes lues',
-        'Orchestrateur',
+        'Orchestrator',
         'Question posée',
-        'Réponse affichée'
+        'Response displayed'
       ])
     )
-    expect(titles[0]).toMatch(/^Demande du \d{2}\/\d{2}\/\d{4}/)
+    expect(titles[0]).toMatch(/^Request of \d{2}\/\d{2}\/\d{4}/)
     expect(events[0].label).toContain('dessine la barre')
   })
 
@@ -1567,7 +1584,7 @@ describe('durée du bloc « Orchestrateur » en chat direct', () => {
       (event) => event.display?.kind === 'agent'
     )
 
-    expect(agent?.display?.title).toBe('Orchestrateur')
+    expect(agent?.display?.title).toBe('Orchestrator')
     expect(agent?.durationMs).toBe(201086.5)
   })
 
@@ -1661,7 +1678,7 @@ describe('statut du bloc « Orchestrateur » en chat direct', () => {
 
     expect(events.find((event) => event.display?.kind === 'agent')?.display?.failure).toBe(cause)
     expect(events[0].status).toBe('failed')
-    expect(events[0].display?.failure).toBe(`Orchestrateur : ${cause}`)
+    expect(events[0].display?.failure).toBe(`Orchestrator : ${cause}`)
   })
 
   it('un appel qui a répondu reste terminé — discriminant', () => {
@@ -1789,7 +1806,7 @@ describe('tour en cours, gestes de l’agent, racine d’un run', () => {
     const agent = events.find((event) => event.display?.kind === 'agent')
     const outils = events.filter((event) => event.display?.kind === 'tool')
 
-    expect(agent?.display?.title).toBe('Orchestrateur')
+    expect(agent?.display?.title).toBe('Orchestrator')
     // Deux lectures ENTRECOUPÉES d'une commande font UN bloc « Fichiers lus ×2 ».
     expect(outils.map((event) => [event.display?.title, event.display?.count])).toEqual([
       ['Fichiers lus', 2],
@@ -1839,7 +1856,7 @@ describe('tour en cours, gestes de l’agent, racine d’un run', () => {
     expect(orchestrateur).toMatchObject({
       parentId: 'request:tour-run',
       durationMs: 20000,
-      display: { kind: 'agent', title: 'Orchestrateur' }
+      display: { kind: 'agent', title: 'Orchestrator' }
     })
     expect(depot?.parentId).toBe(orchestrateur?.id)
   })

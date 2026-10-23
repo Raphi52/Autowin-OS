@@ -996,8 +996,9 @@ function ExecutionConstellation({
                       </span>
                     </>
                   )}
-                  {/* Pas de ligne qui redit le titre (`hasCardMeta`) : une phase s'appelle déjà
-                      « skill · X », un outil ou un orchestrateur sans skill n'a rien à ajouter. */}
+                  {/* Pas de ligne qui redit le titre (`hasCardMeta`) : une étape porte déjà son nom
+                      en titre (« Judge », `nomDEtape`, conv-1094), un outil ou un orchestrateur
+                      sans skill n'a rien à ajouter. */}
                   {hasCardMeta(event) && (
                     <span className="workflow-execution-node-meta">
                       <ExecutionNodeMeta event={event} offsetMs={offset} sansDuree />

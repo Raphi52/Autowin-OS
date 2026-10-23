@@ -109,7 +109,7 @@ describe('buildRequestThread — une ligne et un récit par demande', () => {
       failedCalls: 0
     })
     expect(story.text).toContain('/draft une nouvelle apparence')
-    expect(story.decision).toEqual(['Chat direct', 'Orchestrateur', 'claude-opus-5-5'])
+    expect(story.decision).toEqual(['Chat direct', 'Orchestrator', 'claude-opus-5-5'])
     expect(story.families.map((family) => [family.family, family.count])).toEqual([
       ['lire', 2],
       ['chercher', 1],

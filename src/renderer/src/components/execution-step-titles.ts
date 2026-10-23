@@ -119,42 +119,43 @@ export function toolTitle(name: string | undefined, count = 1): string {
 export function stepTitle(event: HarnessTimelineEvent): string {
   switch (event.kind) {
     case 'response-displayed':
-      return 'Réponse affichée'
+      return 'Response displayed'
     case 'retry':
-      return 'Nouvel essai'
+      return 'Retry'
     case 'cancellation':
-      return 'Annulation'
+      return 'Cancellation'
     case 'error':
-      return 'Erreur'
+      return 'Error'
     case 'boundary':
-      return 'Bilan du tour'
+      return 'Turn summary'
     case 'artifact':
-      return 'Fichier produit'
+      return 'File produced'
     case 'decision':
-      return 'Décision'
+      return 'Decision'
     case 'injection':
-      return 'Consignes injectées'
+      return 'Injected instructions'
     case 'model-response':
-      return 'Réponse du modèle'
+      return 'Model response'
     case 'handoff':
-      return 'Relais'
+      return 'Handoff'
     case 'verdict':
       return 'Verdict'
     case 'gate':
-      return 'Décision de clôture'
+      return 'Closure decision'
     case 'message':
       return 'Message'
     default:
-      return 'Événement de trace'
+      return 'Trace event'
   }
 }
 
 /** Rôle lisible d'un agent : l'identifiant interne « orchestrator » ne dit rien à l'utilisateur. */
 export function roleLabel(actor: string): string {
   const lower = actor.trim().toLowerCase()
-  // « Orchestrateur » (demande du 2026-10-12) : c'est le nom du rôle dans Autowin, « Agent
-  // principal » n'en était qu'une paraphrase.
-  if (lower === 'orchestrator' || lower === 'orchestrateur') return 'Orchestrateur'
-  if (lower === 'subagent') return 'Sous-agent'
+  // Noms du graphe EN ANGLAIS (demande du 2026-10-22, conv-1094) : les étapes s'y appelaient déjà
+  // « Judge », « Learn » ; leurs agents restaient « Juge », « Sous-agent ». La table des actions
+  // (`TOOL_TITLES`) reste en français : le fil de conversation la partage.
+  if (lower === 'orchestrator' || lower === 'orchestrateur') return 'Orchestrator'
+  if (lower === 'subagent') return 'Subagent'
   return actor
 }

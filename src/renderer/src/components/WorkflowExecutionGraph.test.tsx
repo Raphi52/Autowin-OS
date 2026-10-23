@@ -238,7 +238,7 @@ describe('WorkflowExecutionGraph', () => {
       )
     ).toBe(true)
     // La racine est DATÉE, plus jamais le passe-partout « Demande utilisateur » commun à toutes.
-    expect(view.textContent).toMatch(/Demande du \d{2}\/\d{2}\/\d{4}/)
+    expect(view.textContent).toMatch(/Request of \d{2}\/\d{2}\/\d{4}/)
     expect(view.textContent).not.toContain('Demande utilisateur')
     expect(view.textContent).toContain('Construis le graphe de ma demande')
     expect(view.textContent).toContain('Builder')
@@ -353,10 +353,8 @@ describe('WorkflowExecutionGraph', () => {
 
     // LISSÉ (demande du 2026-10-12) : un chat direct sans skill est le cas NORMAL. « aucune skill ·
     // chat direct · orchestrator » s'écrivait sous chaque bloc sans rien apprendre : le bloc dit
-    // désormais seulement « Orchestrateur », et ni l'outil ni lui ne portent de ligne vide de sens.
-    expect(agent?.querySelector('.workflow-execution-node-title')?.textContent).toBe(
-      'Orchestrateur'
-    )
+    // désormais seulement « Orchestrator », et ni l'outil ni lui ne portent de ligne vide de sens.
+    expect(agent?.querySelector('.workflow-execution-node-title')?.textContent).toBe('Orchestrator')
     expect(agent?.querySelector('.workflow-execution-node-meta')).toBeNull()
     expect(view.textContent).not.toContain('aucune skill')
     expect(view.textContent).not.toContain('chat direct')

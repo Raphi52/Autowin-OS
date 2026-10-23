@@ -272,11 +272,11 @@ function agentTitle(event: HarnessTimelineEvent): string {
   const rawActorKind = (event.raw as { actor?: { kind?: string } } | undefined)?.actor?.kind
   if (rawActorKind === 'system') {
     return event.execution?.agentId === 'judge:quorum'
-      ? 'Agrégation locale'
+      ? 'Local aggregation'
       : roleLabel(event.actor)
   }
-  if (event.kind === 'verdict') return 'Juge'
-  if (event.kind === 'gate') return 'Décision de clôture'
+  if (event.kind === 'verdict') return 'Judge'
+  if (event.kind === 'gate') return 'Closure decision'
   const role = roleLabel(event.actor)
   const agentId = event.execution?.agentId
   return agentId && agentId.toLowerCase() !== event.actor.toLowerCase()
@@ -462,7 +462,7 @@ function projectRunExecutions(
       payloads: [],
       display: {
         kind: 'workspace',
-        title: 'Dépôt de travail',
+        title: 'Working repository',
         observedEventIds: relatedRunIds.flatMap((runId) =>
           workspaceFacts
             .filter((candidate) => candidate.run?.runId === runId)
@@ -507,7 +507,7 @@ function projectRunExecutions(
         execution: { runId },
         display: {
           kind: 'workspace',
-          title: 'Workspace isolé',
+          title: 'Isolated workspace',
           runId,
           observedEventIds: [workspaceFact.id],
           workspace
@@ -536,7 +536,7 @@ function projectRunExecutions(
         execution: { runId },
         display: {
           kind: 'quote',
-          title: 'Plan d’exécution',
+          title: 'Execution plan',
           runId,
           quote,
           observedEventIds: [quoteFact.id]
@@ -698,7 +698,7 @@ function projectRunExecutions(
         execution: { runId },
         display: {
           kind: 'git',
-          title: 'Git du run',
+          title: 'Run Git',
           ...(failure ? { failure } : {}),
           runId,
           git,
@@ -764,7 +764,7 @@ function projectRunExecutions(
       execution: { runId },
       display: {
         kind: 'closure',
-        title: 'Clôture du run',
+        title: 'Run closure',
         ...(closureFailure ? { failure: closureFailure } : {}),
         runId,
         closure,
@@ -915,8 +915,8 @@ function humanRequestText(turn: HarnessTimelineTurn, max: number): string {
 /** Repli honnête quand la demande n'est pas identifiable : la date du tour, jamais son contenu. */
 function turnDateLabel(ts: string): string {
   const date = new Date(ts)
-  if (Number.isNaN(date.getTime())) return 'demande sans libellé'
-  return `demande du ${new Intl.DateTimeFormat('fr-FR', {
+  if (Number.isNaN(date.getTime())) return 'unlabeled request'
+  return `request of ${new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'short',
     timeStyle: 'short'
   }).format(date)}`
