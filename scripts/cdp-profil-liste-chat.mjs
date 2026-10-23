@@ -11,6 +11,13 @@
  * conversation de la copie, que `refreshConvs` (ChatView.tsx) suit d'un `setConvs` neuf.
  *
  * Usage : node scripts/cdp-profil-liste-chat.mjs [--essais 5] [--out <rapport.json>] [--top 25]
+ *          [--sans-reutilisation]
+ * Chaque passage COMPTE aussi les lignes redessinées par rafraîchissement (appels de
+ * `LigneConversation`, compteur exact de V8 : `Profiler.startPreciseCoverage`).
+ * `--sans-reutilisation` rejoue l'AVANT du correctif conv-1115 (`conversations-stables.ts`) dans
+ * l'instance cachée SEULE : le module est intercepté à son chargement et sa réconciliation rend la
+ * liste chargée telle quelle. Rien n'est modifié sur disque ; sortie 3 si l'interception échoue —
+ * un « avant » qui n'en serait pas un mentirait sur le gain.
  * Sans `--port`, la sonde se lance ELLE-MÊME dans une instance cachée dédiée (`profil-liste-<pid>`),
  * par `avec-instance-headless.mjs --code-dev`, puis efface l'instance et sa copie. Jamais copiés :
  * `turn-journals/` (un tour inachevé y serait REPRIS) ni `run-state/` (un run y serait RELANCÉ) —
@@ -45,7 +52,42 @@ const top = Number(argument('--top', 25))
 const sortie = resolve(argument('--out', 'Audit/cdp/profil-liste-chat.json'))
 const chargeCpu = Number(argument('--sous-charge', 0))
 const rechargements = Number(argument('--rechargements', 0))
+const sansReutilisation = process.argv.includes('--sans-reutilisation')
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * L'AVANT du correctif conv-1115, servi à la place du module transformé par le serveur de dev : la
+ * fonction d'origine est renommée, et une version qui rend la liste chargée telle quelle (l'ancien
+ * `setConvs(loaded)`) prend son nom. Rend `null` si la fonction n'est pas trouvée. Pure.
+ */
+export function moduleSansReutilisation(source) {
+  // Deux formes : `export function x(` (serveur de dev de Vite) ou `function x(` exportée plus bas
+  // par `export { x }` (esbuild seul). La remplaçante prend la même forme que l'original.
+  const declaration = /(export\s+)?function reutiliserConversationsInchangees\(/
+  const trouvee = source.match(declaration)
+  if (!trouvee) return null
+  const exporte = trouvee[1] ?? ''
+  return `${source.replace(declaration, `${exporte}function reutiliserConversationsInchangeesOrigine(`)}
+${exporte}function reutiliserConversationsInchangees(_affichees, chargees) {
+  return chargees
+}
+`
+}
+
+/**
+ * Nombre d'appels de `LigneConversation` (ChatView.tsx) dans un relevé de couverture précise : une
+ * ligne de la liste redessinée = un appel. Le nom porte parfois un suffixe de l'outil de build
+ * (`LigneConversation2` : composant passé à `memo`). Pure.
+ */
+export function lignesRedessinees(couverture) {
+  let n = 0
+  for (const script of couverture ?? []) {
+    if (!/ChatView\.tsx/.test(script.url)) continue
+    for (const f of script.functions ?? [])
+      if (/^LigneConversation\d*$/.test(f.functionName)) n += f.ranges?.[0]?.count ?? 0
+  }
+  return n
+}
 
 /**
  * Occupe TOUS les cœurs en priorité « inférieure à la normale » : un processus de priorité normale
@@ -179,6 +221,27 @@ async function unRafraichissement(evaluer, cible, etat) {
   await attendre(500)
   const mesure = await evaluer(`window.__sondeListe`)
   return { murMs, fait, tachesLongues: mesure?.longues ?? [] }
+}
+
+/**
+ * COMBIEN DE LIGNES CHAQUE RAFRAÎCHISSEMENT REDESSINE — le compte exact, pas un échantillon :
+ * `takePreciseCoverage` rend les appels depuis le relevé précédent et remet les compteurs à zéro
+ * (protocole CDP, domaine Profiler). Passage séparé des essais chronométrés : le comptage ralentit
+ * l'exécution.
+ */
+async function compterLignes(cdp, evaluer, cible, n = 3) {
+  await cdp('Profiler.startPreciseCoverage', { callCount: true, detailed: false })
+  await cdp('Profiler.takePreciseCoverage')
+  const comptes = []
+  for (let i = 0; i < n; i += 1) {
+    const r = await unRafraichissement(evaluer, cible, prochainEtat)
+    prochainEtat = !prochainEtat
+    const releve = (await cdp('Profiler.takePreciseCoverage'))?.result?.result
+    comptes.push({ fait: r.fait, murMs: r.murMs, lignesRedessinees: lignesRedessinees(releve) })
+  }
+  await cdp('Profiler.stopPreciseCoverage')
+  console.log(`lignes redessinées par rafraîchissement : ${JSON.stringify(comptes)}`)
+  return comptes
 }
 
 /**
@@ -372,8 +435,13 @@ async function principal() {
   const ws = new WebSocket(page.webSocketDebuggerUrl)
   let id = 0
   const attentes = new Map()
+  const interceptions = { servies: 0, refusees: [] }
   ws.on('message', (d) => {
     const m = JSON.parse(d.toString())
+    if (m.method === 'Fetch.requestPaused') {
+      void servirSansReutilisation(m.params)
+      return
+    }
     attentes.get(m.id)?.(m)
     attentes.delete(m.id)
   })
@@ -390,6 +458,39 @@ async function principal() {
   const evaluer = async (expression) =>
     (await cdp('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }))?.result
       ?.result?.value
+  /** Sert l'AVANT du correctif à la place du module du serveur de dev (`--sans-reutilisation`). */
+  async function servirSansReutilisation(params) {
+    const { requestId } = params
+    const corps = (await cdp('Fetch.getResponseBody', { requestId }))?.result
+    const source = corps
+      ? corps.base64Encoded
+        ? Buffer.from(corps.body, 'base64').toString('utf8')
+        : corps.body
+      : ''
+    const avant = moduleSansReutilisation(source)
+    if (!avant) {
+      interceptions.refusees.push(`${params.request.url} (${params.responseStatusCode})`)
+      await cdp('Fetch.continueRequest', { requestId })
+      return
+    }
+    interceptions.servies += 1
+    await cdp('Fetch.fulfillRequest', {
+      requestId,
+      responseCode: 200,
+      responseHeaders: (params.responseHeaders ?? []).filter(
+        (h) => !/^(content-length|etag|cache-control)$/i.test(h.name)
+      ),
+      body: Buffer.from(avant, 'utf8').toString('base64')
+    })
+  }
+  if (sansReutilisation) {
+    await cdp('Network.setCacheDisabled', { cacheDisabled: true })
+    await cdp('Fetch.enable', {
+      patterns: [{ urlPattern: '*conversations-stables*', requestStage: 'Response' }]
+    })
+    await cdp('Page.reload', { ignoreCache: true })
+    await attendre(1_000)
+  }
 
   for (let i = 0; i < 120; i += 1) {
     const pret = await evaluer(`(() => {
@@ -468,13 +569,36 @@ async function principal() {
     for (const f of classe.inclusif.filter((x) => /src\//.test(x.nom)).slice(0, 12))
       console.log(`   inclusif ${f.ms} ms  ${f.nom}`)
   }
+  const comptage = await compterLignes(cdp, evaluer, inventaire.cible)
   const sousCharge = chargeCpu > 0 ? await mesurerSousCharge(cdp, evaluer, inventaire.cible) : null
   const apresRechargement = rechargements > 0 ? await mesurerRechargements(cdp, evaluer) : null
+  const mode = sansReutilisation ? 'avant (sans réutilisation)' : 'code courant'
+  console.log(`mode : ${mode} ; module intercepté ${interceptions.servies} fois`)
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(
     sortie,
-    JSON.stringify({ inventaire, lignes, resultats, sousCharge, apresRechargement }, null, 2)
+    JSON.stringify(
+      {
+        mode,
+        interceptions,
+        inventaire,
+        lignes,
+        comptage,
+        resultats,
+        sousCharge,
+        apresRechargement
+      },
+      null,
+      2
+    )
   )
+  if (sansReutilisation && interceptions.servies === 0) {
+    console.error(
+      `interception sans effet : l'AVANT n'a pas été servi (${JSON.stringify(interceptions)})`
+    )
+    ws.close()
+    return 3
+  }
   console.log(`rapport : ${sortie}`)
   ws.close()
   return 0
