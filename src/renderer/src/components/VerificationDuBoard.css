@@ -1,0 +1,99 @@
+/* LES BOUTONS « VÉRIFIER » DU BOARD (conv-1136, 2026-10-23) — voir VerificationDuBoard.tsx. */
+
+.riviere-tout-verifier {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+}
+
+.riviere-tout-verifier [role='group'] {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.riviere-tout-verifier .riviere-puce:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.riviere-tout-verifier-question {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.riviere-tout-verifier-bilan {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Les deux gestes d'un post-it : sur le papier pastel, avec l'encre du tableau (pas `.btn`, que
+   chaque thème peint pour SON fond — même raison que `.riviere-fiche-ouvrir`). */
+.riviere-verif {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.riviere-verif-bouton {
+  padding: 2px 8px;
+  border: 1px solid rgba(31, 42, 68, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #16202e;
+  font: 600 11px/1.3 var(--font, system-ui, sans-serif);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.riviere-verif-bouton:hover {
+  background: #ffffff;
+}
+
+.riviere-verif-bouton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.riviere-verif-refus {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #b3261e;
+}
+
+/* Sur le post-it : posé au coin bas-droit de son papier, montré quand la rivière le dit visible
+   (survol du post-it, ou sa fiche ouverte : `data-visible`) ou quand un de ses boutons a le focus.
+   Caché, il ne capte aucun clic : le glisser du post-it reste entier. */
+.riviere-verif-postit {
+  position: absolute;
+  z-index: 16;
+  flex-wrap: nowrap;
+  transform: translate(-100%, -100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.riviere-verif-postit[data-visible],
+.riviere-verif-postit:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.riviere-verif-postit .riviere-verif-refus {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #fff4f2;
+  white-space: nowrap;
+}
+
+/* Dans la fiche : sa propre ligne, au-dessus de « Ouvrir le fil ». */
+.riviere-verif-fiche {
+  margin: 0 0 8px;
+}
