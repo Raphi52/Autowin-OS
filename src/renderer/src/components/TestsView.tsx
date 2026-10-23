@@ -249,7 +249,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
       <ViewTopBar
         eyebrow="ENTRETIEN"
         title="Maintenance"
-        description="Lance les skills d’entretien d’Autowin, et les suites de tests de tes projets."
+        description="Lance les skills d’entretien d’Autowin, et les tests unitaires de tes projets."
         detail={projetActif?.root}
       />
 
@@ -268,7 +268,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             className={onglet === 'suites' ? 'is-active' : ''}
             onClick={() => setOnglet('suites')}
           >
-            Suites
+            Tests unitaires
           </button>
           <button
             type="button"

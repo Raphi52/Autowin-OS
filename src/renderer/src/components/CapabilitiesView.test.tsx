@@ -9,7 +9,8 @@ describe('Capabilities plugins wiring', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
   })
 
-  it('loads the plugins registry when its tab is selected', async () => {
+  // Le registre est choisi par la section de Settings depuis conv-1109, plus par un onglet interne.
+  it('loads the plugins registry when its section opens it, without internal tabs', async () => {
     const capabilityControls = vi.fn(async (kind: string) =>
       kind === 'plugins'
         ? [
@@ -38,20 +39,14 @@ describe('Capabilities plugins wiring', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(CapabilitiesView, { active: true }))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    const plugins = [...container.querySelectorAll('[role="tab"]')].find((node) =>
-      node.textContent?.includes('Mods')
-    ) as HTMLButtonElement
-    await act(async () => {
-      plugins.click()
+      root.render(createElement(CapabilitiesView, { active: true, kind: 'plugins' }))
       await Promise.resolve()
       await Promise.resolve()
     })
     expect(capabilityControls).toHaveBeenCalledWith('plugins')
     expect(container.textContent).toContain('Plugin A')
+    expect(container.querySelector('h1')?.textContent).toBe('Mods')
+    expect(container.querySelector('[role="tab"]')).toBeNull()
     await act(async () => root.unmount())
     container.remove()
   })

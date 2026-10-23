@@ -13,7 +13,6 @@ vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
-vi.mock('./OrchestrationBudgetSettings', () => ({ OrchestrationBudgetSettings: () => null }))
 // La vue Routage a ses propres tests : ici, seul compte qu'elle soit MONTÉE par la bonne section.
 vi.mock('./RouterView', async () => {
   const { createElement } = await import('react')
@@ -72,14 +71,15 @@ async function render(
 }
 
 const onglets = (): HTMLButtonElement[] => [
-  ...container.querySelectorAll<HTMLButtonElement>('.domain-tabs button')
+  // La liste de sections à gauche (conv-1109) a remplacé les pastilles de la barre du haut.
+  ...container.querySelectorAll<HTMLButtonElement>('nav.settings-nav button')
 ]
 
 describe('Settings — l’onglet Routage', () => {
   it('affiche un onglet Routage, et cliquer dessus demande la section routing', async () => {
     stub()
     const onSectionChange = vi.fn()
-    await render('budget', { onSectionChange })
+    await render('behaviour', { onSectionChange })
     const onglet = onglets().find((b) => b.textContent?.trim().startsWith('Routage'))
     expect(onglet).toBeTruthy()
     await act(async () => onglet!.click())
@@ -92,7 +92,7 @@ describe('Settings — l’onglet Routage', () => {
     expect(
       container.querySelector('[data-testid="router-view-stub"]')?.getAttribute('data-active')
     ).toBe('true')
-    await render('budget')
+    await render('behaviour')
     expect(container.querySelector('[data-testid="router-view-stub"]')).toBeNull()
   })
 
@@ -103,7 +103,7 @@ describe('Settings — l’onglet Routage', () => {
         { provider: 'claude', status: 'authenticated', testable: true }
       ])
     })
-    await render('budget')
+    await render('behaviour')
     const badge = container.querySelector('[data-testid="settings-anomaly-routing"]')
     expect(badge?.textContent).toContain('1')
     expect(badge?.getAttribute('title')).toContain('codex')
@@ -115,14 +115,14 @@ describe('Settings — l’onglet Routage', () => {
         .fn()
         .mockResolvedValue([{ provider: 'claude', status: 'authenticated', testable: true }])
     })
-    await render('budget')
+    await render('behaviour')
     expect(container.querySelector('[data-testid="settings-anomaly-routing"]')).toBeNull()
   })
 
   it('ne sonde rien tant que Settings n’est pas ouvert', async () => {
     const providerStatus = vi.fn().mockResolvedValue([])
     stub({ providerStatus })
-    await render('budget', { active: false })
+    await render('behaviour', { active: false })
     expect(providerStatus).not.toHaveBeenCalled()
   })
 
@@ -138,7 +138,7 @@ describe('Settings — l’onglet Routage', () => {
         return vi.fn()
       })
     })
-    await render('budget')
+    await render('behaviour')
     expect(container.querySelector('[data-testid="settings-anomaly-routing"]')).not.toBeNull()
     await act(async () => {
       for (const listener of listeners) listener({ type: 'refresh', scope: 'roles' })

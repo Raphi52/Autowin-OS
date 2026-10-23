@@ -1,6 +1,7 @@
-/* Budget d'orchestration — et les deux panneaux de l'onglet Budget qui reprennent ces classes
-   (ModeAutoSeuilsSettings, ShadowRoutingPilotSettings). Le retrait intérieur, le titre et le texte
-   viennent du gabarit commun des panneaux de Settings (SettingsView.css) ; la largeur, de la colonne
+/* Gabarit des panneaux de réglage à champs chiffrés. Le panneau Budget d'orchestration qui lui a
+   donné son nom a été retiré le 2026-10-23 (conv-1119) ; ModeAutoSeuilsSettings le reprend toujours,
+   d'où le nom de fichier et de classes conservé (les thèmes générés les citent). Le retrait
+   intérieur, le titre et le texte viennent du gabarit commun des panneaux de Settings (SettingsView.css) ; la largeur, de la colonne
    où le panneau est posé : plus de largeur figée ici (620 px laissaient un grand vide à droite). */
 .orchestration-budget {
   display: grid;

@@ -81,8 +81,6 @@ const evaluate = async (expression) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const action = process.argv[2]
 const reloadRenderer = action === 'reload'
-const inspectBudget = action === 'budget'
-const maximizeBudget = action === 'maximize-budget'
 const inspectCampaignRuntime = action === 'campaign-runtime'
 const retryWorktreeId = action?.startsWith('retry:') ? action.slice('retry:'.length) : undefined
 const sendConversationId = action?.startsWith('send:') ? action.slice('send:'.length) : undefined
@@ -103,8 +101,6 @@ const inspectWorktreeActivity = action === 'activity'
 const cancelConversationId =
   action &&
   !reloadRenderer &&
-  !inspectBudget &&
-  !maximizeBudget &&
   !inspectCampaignRuntime &&
   !retryWorktreeId &&
   !sendConversationId &&
@@ -122,62 +118,6 @@ if (reloadRenderer) {
   console.log(JSON.stringify({ reloaded: true }, null, 2))
   socket.close()
   process.exit(0)
-}
-
-if (inspectBudget) {
-  const budget = await evaluate('window.api.orchestrationBudget()')
-  console.log(JSON.stringify(budget, null, 2))
-  socket.close()
-  process.exit(0)
-}
-
-if (maximizeBudget) {
-  await evaluate(`document.querySelector('[data-testid="nav-settings"]')?.click()`)
-  await sleep(300)
-  const budgetOpened = await evaluate(`(() => {
-    const button = [...document.querySelectorAll('button')].find(
-      (candidate) => candidate.textContent?.trim() === 'Budget'
-    )
-    button?.click()
-    return Boolean(button)
-  })()`)
-  if (!budgetOpened) throw new Error('Section Budget introuvable')
-  await sleep(500)
-  const changed = await evaluate(`(() => {
-    const inputs = [...document.querySelectorAll('.orchestration-budget input')]
-    if (inputs.length !== 3 || inputs.some((input) => !(input instanceof HTMLInputElement))) {
-      return false
-    }
-    const values = ['24', '15000000', '']
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    inputs.forEach((input, index) => {
-      setter?.call(input, values[index])
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    return true
-  })()`)
-  if (!changed) throw new Error('Champs Budget introuvables')
-  await sleep(150)
-  const saved = await evaluate(`(() => {
-    const button = [...document.querySelectorAll('.orchestration-budget button')].find(
-      (candidate) => candidate.textContent?.trim() === 'Enregistrer'
-    )
-    if (!(button instanceof HTMLButtonElement) || button.disabled) return false
-    button.click()
-    return true
-  })()`)
-  if (!saved) throw new Error('Bouton Enregistrer indisponible')
-  await sleep(500)
-  const budget = await evaluate('window.api.orchestrationBudget()')
-  console.log(JSON.stringify({ budgetOpened, changed, saved, budget }, null, 2))
-  socket.close()
-  process.exit(
-    budget?.maxProviderCalls === 24 &&
-      budget?.maxTotalTokens === 15_000_000 &&
-      budget?.maxUsd === null
-      ? 0
-      : 1
-  )
 }
 
 if (inspectCampaignRuntime) {

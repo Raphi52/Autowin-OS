@@ -1,5 +1,3 @@
-import { readDurableJson, writeDurableJson } from './durable-json'
-
 export interface OrchestrationBudgetSettings {
   /** Maximum cumulative orchestration cost in USD. `null` deliberately disables the cost cap. */
   maxUsd: number | null
@@ -14,8 +12,7 @@ export interface OrchestrationBudgetSettings {
    * appel. Un tour agentique en consomme un PAR ÉTAPE : le plafond comptait des étapes, pas de la
    * dépense.
    *
-   * Volontairement très large : un tour ne doit pas mourir sur un compteur d'étapes. Les freins de
-   * dépense sont les tokens et l'USD, pas le nombre de coups.
+   * Volontairement très large : un tour ne doit pas mourir sur un compteur d'étapes.
    */
   maxChatProviderCalls: number
   /** Input + output tokens. Works even when a provider exposes no USD cost. */
@@ -24,112 +21,17 @@ export interface OrchestrationBudgetSettings {
 
 /*
  * DECISION UTILISATEUR DU 2026-09-12 : plus aucun plafond PAR DEFAUT ne coupe un travail en cours.
- * Ces valeurs sont hors d'atteinte d'un usage reel. Le seul frein qui subsiste est celui que
- * l'utilisateur pose LUI-MEME (`maxUsd`, `null` par defaut) : un plafond choisi reste respecte.
+ * Ces valeurs sont hors d'atteinte d'un usage reel.
+ *
+ * DECISION UTILISATEUR DU 2026-10-23 (conv-1119 : « enleve budget dans settings, ca sert a rien
+ * cette feature ») : le reglage n'existe plus. Ces plafonds sont les SEULS appliques — plus d'ecran
+ * pour les changer, et le fichier `orchestration-budget.json` deja ecrit sur un poste n'est plus lu :
+ * le garder lu aurait laisse un plafond cache (24 appels par run sur le poste de dev) que plus
+ * personne ne pouvait voir ni modifier.
  */
-export const DEFAULT_ORCHESTRATION_BUDGET: OrchestrationBudgetSettings = {
+export const DEFAULT_ORCHESTRATION_BUDGET: Readonly<OrchestrationBudgetSettings> = Object.freeze({
   maxUsd: null,
   maxProviderCalls: 20_000,
   maxChatProviderCalls: 50_000,
   maxTotalTokens: 1_000_000_000
-}
-
-function isValidCap(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-}
-
-function isValidIntegerCap(value: unknown): value is number {
-  return isValidCap(value) && Number.isSafeInteger(value)
-}
-
-export function normalizeOrchestrationBudget(value: unknown): OrchestrationBudgetSettings {
-  if (!value || typeof value !== 'object') return { ...DEFAULT_ORCHESTRATION_BUDGET }
-  const proposed = value as Partial<OrchestrationBudgetSettings>
-  return {
-    maxUsd: isValidCap(proposed.maxUsd) ? proposed.maxUsd : null,
-    maxProviderCalls: isValidIntegerCap(proposed.maxProviderCalls)
-      ? proposed.maxProviderCalls
-      : DEFAULT_ORCHESTRATION_BUDGET.maxProviderCalls,
-    maxChatProviderCalls: isValidIntegerCap(proposed.maxChatProviderCalls)
-      ? proposed.maxChatProviderCalls
-      : DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls,
-    maxTotalTokens: isValidIntegerCap(proposed.maxTotalTokens)
-      ? proposed.maxTotalTokens
-      : DEFAULT_ORCHESTRATION_BUDGET.maxTotalTokens
-  }
-}
-
-function decodeOrchestrationBudgetInput(value: unknown): OrchestrationBudgetSettings | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const proposed = value as Partial<OrchestrationBudgetSettings>
-  if (proposed.maxUsd !== undefined && proposed.maxUsd !== null && !isValidCap(proposed.maxUsd)) {
-    return undefined
-  }
-  if (proposed.maxProviderCalls !== undefined && !isValidIntegerCap(proposed.maxProviderCalls)) {
-    return undefined
-  }
-  if (
-    proposed.maxChatProviderCalls !== undefined &&
-    !isValidIntegerCap(proposed.maxChatProviderCalls)
-  ) {
-    return undefined
-  }
-  if (proposed.maxTotalTokens !== undefined && !isValidIntegerCap(proposed.maxTotalTokens)) {
-    return undefined
-  }
-  return normalizeOrchestrationBudget(value)
-}
-
-function decodeStoredOrchestrationBudget(value: unknown): OrchestrationBudgetSettings | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const proposed = value as Partial<OrchestrationBudgetSettings>
-  if (
-    !Object.prototype.hasOwnProperty.call(proposed, 'maxUsd') ||
-    !Object.prototype.hasOwnProperty.call(proposed, 'maxProviderCalls') ||
-    !Object.prototype.hasOwnProperty.call(proposed, 'maxTotalTokens')
-  ) {
-    return undefined
-  }
-  if (proposed.maxUsd !== null && !isValidCap(proposed.maxUsd)) return undefined
-  if (!isValidIntegerCap(proposed.maxProviderCalls)) return undefined
-  if (!isValidIntegerCap(proposed.maxTotalTokens)) return undefined
-  /*
-   * `maxChatProviderCalls` est LU comme optionnel, a l'inverse des trois autres qui sont exiges.
-   *
-   * C'est delibere : le reglage deja ecrit sur les machines ne porte pas cette cle. L'exiger ferait
-   * rejeter le fichier entier -- et un rejet LEVE (`DurableJsonError`), il ne retombe pas en silence
-   * sur les defauts. Le reglage existant deviendrait donc illisible, pas seulement reinitialise. Une
-   * cle absente prend le defaut ; une cle PRESENTE mais invalide reste un rejet, comme les autres.
-   */
-  if (
-    Object.prototype.hasOwnProperty.call(proposed, 'maxChatProviderCalls') &&
-    !isValidIntegerCap(proposed.maxChatProviderCalls)
-  ) {
-    return undefined
-  }
-  return {
-    maxUsd: proposed.maxUsd,
-    maxProviderCalls: proposed.maxProviderCalls,
-    maxChatProviderCalls:
-      proposed.maxChatProviderCalls ?? DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls,
-    maxTotalTokens: proposed.maxTotalTokens
-  }
-}
-
-export function loadOrchestrationBudget(path: string): OrchestrationBudgetSettings {
-  return (
-    readDurableJson(path, decodeStoredOrchestrationBudget) ?? {
-      ...DEFAULT_ORCHESTRATION_BUDGET
-    }
-  )
-}
-
-export function saveOrchestrationBudget(path: string, value: unknown): OrchestrationBudgetSettings {
-  const settings =
-    value === null ? { ...DEFAULT_ORCHESTRATION_BUDGET } : decodeOrchestrationBudgetInput(value)
-  if (!settings) {
-    throw new Error('Les plafonds doivent etre des nombres finis strictement positifs, ou absents.')
-  }
-  writeDurableJson(path, settings, decodeStoredOrchestrationBudget)
-  return settings
-}
+})

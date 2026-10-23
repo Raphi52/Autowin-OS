@@ -13,10 +13,19 @@ vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
 // `SettingsView.routage.test.tsx`) : neutralisee ici, sinon elle consommerait les reponses de
 // `providerStatus` que cette suite reserve a la section Providers.
 vi.mock('./useProvidersAReconnecter', () => ({ useProvidersAReconnecter: () => [] }))
-vi.mock('./OrchestrationBudgetSettings', async () => {
+// Les deux panneaux qui vivaient sous l'onglet Budget, retiré le 2026-10-23 (conv-1119) : des
+// témoins, pour vérifier qu'ils sont montés par la section qui les reçoit désormais.
+vi.mock('./RouterView', () => ({ RouterView: () => null }))
+vi.mock('./ModeAutoSeuilsSettings', async () => {
   const { createElement } = await import('react')
   return {
-    OrchestrationBudgetSettings: () => createElement('div', { 'data-testid': 'budget-panel' })
+    ModeAutoSeuilsSettings: () => createElement('div', { 'data-testid': 'mode-auto-seuils-stub' })
+  }
+})
+vi.mock('./ShadowRoutingPilotSettings', async () => {
+  const { createElement } = await import('react')
+  return {
+    ShadowRoutingPilotSettings: () => createElement('div', { 'data-testid': 'shadow-pilot-stub' })
   }
 })
 
@@ -216,7 +225,11 @@ describe('SettingsView diagnostic', () => {
 
     await act(async () => {
       root.render(
-        createElement(SettingsView, { active: true, section: 'budget', onSectionChange: vi.fn() })
+        createElement(SettingsView, {
+          active: true,
+          section: 'behaviour',
+          onSectionChange: vi.fn()
+        })
       )
     })
 
@@ -318,7 +331,7 @@ describe('SettingsView diagnostic', () => {
     document.body.append(container)
     const root = createRoot(container)
     mounted.push({ root, container })
-    const render = async (section: 'providers' | 'budget'): Promise<void> => {
+    const render = async (section: 'providers' | 'behaviour'): Promise<void> => {
       await act(async () => {
         root.render(
           createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() })
@@ -326,7 +339,7 @@ describe('SettingsView diagnostic', () => {
       })
     }
     await render('providers')
-    await render('budget')
+    await render('behaviour')
     await render('providers')
     expect(providerStatus).toHaveBeenCalledTimes(2)
   })
@@ -487,20 +500,44 @@ describe('SettingsView diagnostic', () => {
     expect(button?.disabled).toBe(false)
   })
 
-  it('expose le réglage de budget', async () => {
+  /*
+   * DEMANDE UTILISATEUR (conv-1119, 2026-10-23) : « enlève budget dans settings, ça sert à rien
+   * cette feature ». L'onglet disparaît ; ses deux autres panneaux, qui n'étaient pas du budget,
+   * rejoignent la section dont ils relèvent — l'arrêt du mode ∞ sous Behaviour, le pilote shadow
+   * sous Routage. Aucun réglage n'est perdu en route.
+   */
+  it('n’offre plus d’onglet Budget, et range ses deux autres panneaux sous Behaviour et Routage', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     mounted.push({ root, container })
-    await act(async () => {
-      root.render(
-        createElement(SettingsView, { active: true, section: 'budget', onSectionChange: vi.fn() })
-      )
-    })
-    expect(
-      [...container.querySelectorAll('button')].some((button) => button.textContent === 'Budget')
-    ).toBe(true)
-    expect(container.querySelector('[data-testid="budget-panel"]')).toBeTruthy()
+    const render = async (section: 'behaviour' | 'routing'): Promise<void> => {
+      await act(async () => {
+        root.render(
+          createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() })
+        )
+      })
+    }
+
+    await render('behaviour')
+    const libelles = [...container.querySelectorAll('nav.settings-nav button')].map((button) =>
+      button.textContent?.trim()
+    )
+    expect(libelles).not.toContain('Budget')
+    expect(container.querySelector('[data-testid="mode-auto-seuils-stub"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="shadow-pilot-stub"]')).toBeNull()
+
+    await render('routing')
+    expect(container.querySelector('[data-testid="shadow-pilot-stub"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="mode-auto-seuils-stub"]')).toBeNull()
   })
 
   /*

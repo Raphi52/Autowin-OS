@@ -221,24 +221,8 @@
   accent-color: var(--accent);
 }
 
-/* 4. BUDGET : trois panneaux en colonnes équilibrées dès que la largeur le permet. Les colonnes
-   vivent dans une enveloppe à hauteur naturelle : posées sur le conteneur qui défile (hauteur fixe),
-   elles déborderaient en largeur au lieu de descendre. */
-.settings-budget {
-  columns: 2 380px;
-  column-gap: var(--st-ecart);
-}
-/* Sélecteur plus fort que `.settings-content .surface-panel { margin: 0 }` : sans lui, les deux
-   panneaux de la colonne de droite se touchaient (mesuré à 1280 px). */
-.settings-content .settings-budget > .surface-panel {
-  break-inside: avoid;
-  margin-bottom: var(--st-ecart);
-}
-.settings-content .settings-budget > .surface-panel:last-child {
-  margin-bottom: 0;
-}
-/* Le pilote shadow suit le rythme des deux autres panneaux de Budget (grille, écart de 14 px) :
-   sans cela son titre collait à son texte. */
+/* 4. Le pilote shadow (section Routage depuis le retrait de Budget, conv-1119) garde le rythme des
+   autres panneaux (grille, écart de 14 px) : sans cela son titre collait à son texte. */
 .settings-content .shadow-routing-pilot {
   display: grid;
   gap: 14px;

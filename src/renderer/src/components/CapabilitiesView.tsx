@@ -3,7 +3,8 @@ import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { Spinner } from './Spinner'
 
-type Kind = 'skills' | 'hooks' | 'gates' | 'tools' | 'plugins'
+export type CapabilityKind = 'skills' | 'hooks' | 'gates' | 'tools' | 'plugins'
+type Kind = CapabilityKind
 type HookModel = 'claude' | 'codex'
 
 interface Item {
@@ -21,12 +22,32 @@ interface Item {
 
 type RelatedItem = Item & { relationKind: 'hook' | 'tool'; relationSource: string }
 
-const META: Record<Kind, { title: string; empty: string }> = {
-  skills: { title: 'Skills', empty: 'Aucune skill trouvée.' },
-  hooks: { title: 'Hooks', empty: 'Aucun hook configuré.' },
-  gates: { title: 'Gates', empty: 'Aucun contrôle de fin de run.' },
-  tools: { title: 'Tools', empty: 'Aucun toolset trouvé.' },
-  plugins: { title: 'Mods', empty: 'Aucun mod ni plugin enregistré.' }
+const META: Record<Kind, { title: string; empty: string; description: string }> = {
+  skills: {
+    title: 'Skills',
+    empty: 'Aucune skill trouvée.',
+    description: 'Les procédures que les agents peuvent suivre dans chaque run.'
+  },
+  hooks: {
+    title: 'Hooks',
+    empty: 'Aucun hook configuré.',
+    description: 'Les scripts lancés tout seuls à certains moments d’un run, côté Claude ou Codex.'
+  },
+  gates: {
+    title: 'Gates',
+    empty: 'Aucun contrôle de fin de run.',
+    description: 'Les contrôles de fin de run, écrits en code.'
+  },
+  tools: {
+    title: 'Tools',
+    empty: 'Aucun toolset trouvé.',
+    description: 'Les outils que les agents ont vraiment utilisés, et le catalogue local.'
+  },
+  plugins: {
+    title: 'Mods',
+    empty: 'Aucun mod ni plugin enregistré.',
+    description: 'Les mods et plugins installés et déclarés.'
+  }
 }
 
 const HOOK_SOURCES: Array<{ id: HookModel; label: string }> = [
@@ -42,8 +63,20 @@ function sourceClass(source?: string): string {
   return 'is-neutral'
 }
 
-export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Element {
-  const [kind, setKind] = useState<Kind>('skills')
+/**
+ * UN registre de capacités. Le registre affiché est choisi par la liste de sections de Settings, plus
+ * par des onglets internes (conv-1109, 2026-10-23 : « sépare la partie avec 4 mots en 4 views ») :
+ * Skills, Hooks, Gates, Mods et Tools y sont cinq sections. Settings remonte la vue à chaque
+ * changement de section (`key`), donc filtres, source et sélection repartent à zéro comme le
+ * faisait l'ancien changement d'onglet — chaque registre s'ouvre filtré sur l'ACTIF.
+ */
+export function CapabilitiesView({
+  active,
+  kind = 'skills'
+}: {
+  active: boolean
+  kind?: Kind
+}): React.JSX.Element {
   const [items, setItems] = useState<Item[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -233,22 +266,13 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
     }
   }
 
-  function selectKind(nextKind: Kind): void {
-    setKind(nextKind)
-    setSelectedId('')
-    // Façon 1 : chaque onglet s'ouvre filtré sur l'ACTIF (Skills · Hooks · Tools) — on ne montre
-    // par défaut que les capacités en service, pas le registre complet bruité.
-    setStatusFilter('enabled')
-    setSkillSource('all')
-  }
-
   return (
     <section className="capability-cockpit">
       <header className="cockpit-header">
         <ModuleHeader
           eyebrow="Capacités connectées"
-          title="Skills · Hooks · Gates · Mods · Tools"
-          description="Ce qui est chargé dans chaque run : skills, hooks, contrôles de fin de run (gates), mods et outils."
+          title={META[kind].title}
+          description={META[kind].description}
         />
         <div className="cockpit-toolbar">
           <input
@@ -331,7 +355,9 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
               <b>{kind === 'gates' ? 'Autowin' : 'Registre local'}</b>
               <strong>{items.length}</strong>
               <small>
-                {kind === 'gates' ? 'Contrôles de fin de run (code)' : 'Mods et plugins installés et déclarés'}
+                {kind === 'gates'
+                  ? 'Contrôles de fin de run (code)'
+                  : 'Mods et plugins installés et déclarés'}
               </small>
             </button>
           )}
@@ -354,20 +380,6 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
         </aside>
 
         <main className="cockpit-registry">
-          <div className="cockpit-tabs" role="tablist" aria-label="Registre des capacités">
-            {(['skills', 'hooks', 'gates', 'plugins', 'tools'] as const).map((candidate) => (
-              <button
-                key={candidate}
-                role="tab"
-                aria-selected={kind === candidate}
-                className={kind === candidate ? 'is-active' : ''}
-                onClick={() => selectKind(candidate)}
-              >
-                {META[candidate].title}
-                {candidate === kind && <small> · {items.length}</small>}
-              </button>
-            ))}
-          </div>
           <div className="registry-heading">
             <span>{META[kind].title} disponibles</span>
             <span>

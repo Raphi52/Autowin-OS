@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
-import { CapabilitiesView } from './CapabilitiesView'
+import { CapabilitiesView, type CapabilityKind } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { BrainSettings } from './BrainSettings'
 import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
-import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ModeAutoSeuilsSettings } from './ModeAutoSeuilsSettings'
 import { RouterView } from './RouterView'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { useProvidersAReconnecter } from './useProvidersAReconnecter'
-import { ViewTopBar } from './ViewTopBar'
+import { OngletMarques, ViewTopBar, type ViewTopBarTab } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
 import './SettingsView.css'
@@ -23,6 +22,15 @@ interface ProviderRow {
   provider: string
   status: string
   detail?: string
+}
+
+/** Le registre de capacités qu'ouvre chaque section qui en montre un (conv-1109). */
+const REGISTRE_DE_SECTION: Partial<Record<SettingsSection, CapabilityKind>> = {
+  capabilities: 'skills',
+  hooks: 'hooks',
+  gates: 'gates',
+  mods: 'plugins',
+  tools: 'tools'
 }
 
 /** Controles qui ont un plan de reparation cote main — voir planPreflightRepair. */
@@ -158,195 +166,232 @@ export function SettingsView({
   /** Alerte de l'onglet Routage, venue d'Agent Studio avec lui (conv-963). */
   const providersExpires = useProvidersAReconnecter(active)
 
+  const registre = REGISTRE_DE_SECTION[section]
+
+  const sections: readonly ViewTopBarTab<SettingsSection>[] = [
+    // Une section par registre de capacités (conv-1109) : c'était un seul écran à onglets internes.
+    { id: 'capabilities', label: 'Skills' },
+    { id: 'hooks', label: 'Hooks' },
+    { id: 'gates', label: 'Gates' },
+    { id: 'mods', label: 'Mods' },
+    { id: 'tools', label: 'Tools' },
+    { id: 'behaviour', label: 'Behaviour' },
+    { id: 'interface', label: 'Interface' },
+    { id: 'providers', label: 'Providers' },
+    {
+      id: 'routing',
+      label: 'Routage',
+      anomaly: {
+        count: providersExpires.length,
+        title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
+        testId: 'settings-anomaly-routing'
+      }
+    },
+    { id: 'rules', label: 'Rules' },
+    {
+      id: 'preflight',
+      label: 'Diagnostic',
+      alert: {
+        active: preflightAlert,
+        mark: '!',
+        title: 'Un prérequis est en échec',
+        testId: 'settings-preflight-alert'
+      }
+    }
+  ]
+
   return (
     <section className="view-page domain-shell settings-view" data-testid="settings-view">
       <ViewTopBar
         eyebrow="CONFIGURATION"
         title="Settings"
-        description="Budget, capacités accordées aux agents, comportement, apparence, providers et routage, règles d’Autowin OS et prérequis machine."
-        ariaLabel="Sections Settings"
-        active={section}
-        onSelect={onSectionChange}
-        tabs={[
-          { id: 'budget', label: 'Budget' },
-          { id: 'capabilities', label: 'Skills · Hooks · Gates · Mods · Tools' },
-          { id: 'behaviour', label: 'Behaviour' },
-          { id: 'interface', label: 'Interface' },
-          { id: 'providers', label: 'Providers' },
-          {
-            id: 'routing',
-            label: 'Routage',
-            anomaly: {
-              count: providersExpires.length,
-              title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
-              testId: 'settings-anomaly-routing'
-            }
-          },
-          { id: 'rules', label: 'Rules' },
-          {
-            id: 'preflight',
-            label: 'Diagnostic',
-            alert: {
-              active: preflightAlert,
-              mark: '!',
-              title: 'Un prérequis est en échec',
-              testId: 'settings-preflight-alert'
-            }
-          }
-        ]}
+        description="Capacités accordées aux agents, comportement, apparence, providers et routage, règles d’Autowin OS et prérequis machine."
       />
-      <div className="domain-content settings-content" data-section={section}>
-        {section === 'capabilities' && <CapabilitiesView active={active} />}
-        {section === 'budget' && (
-          <div className="settings-budget">
-            <OrchestrationBudgetSettings />
-            <ModeAutoSeuilsSettings />
-            <ShadowRoutingPilotSettings />
-          </div>
-        )}
-        {section === 'behaviour' && <BehaviourView />}
-        {section === 'interface' && <InterfaceView />}
-        {section === 'providers' && (
-          <section className="settings-providers surface-panel" aria-label="Providers">
-            <header>
-              <div>
-                <span className="domain-eyebrow">Fournisseurs</span>
-                <h2>Providers</h2>
-              </div>
-            </header>
-            {providersError && (
-              <div className="domain-warning">
-                <p role="alert">{providersError}</p>
+      {/* LES SECTIONS EN LISTE À GAUCHE, comme les conversations du chat (conv-1109, 2026-10-23).
+          Elles étaient une rangée de pastilles dans la barre du haut : avec huit sections, la rangée
+          passait sur deux lignes et repoussait le contenu. Une colonne garde chaque nom sur sa ligne,
+          et la section ouverte se repère comme la conversation ouverte. */}
+      <div className="settings-body">
+        <nav className="settings-nav" aria-label="Sections Settings">
+          {sections.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`settings-nav-item${tab.id === section ? ' is-active' : ''}`}
+              aria-current={tab.id === section ? 'page' : undefined}
+              onClick={() => onSectionChange(tab.id)}
+            >
+              <span className="settings-nav-label">{tab.label}</span>
+              <OngletMarques tab={tab} />
+            </button>
+          ))}
+        </nav>
+        <div className="domain-content settings-content" data-section={section}>
+          {registre && (
+            // `key` : changer de registre remonte la vue, donc filtres et sélection repartent à zéro.
+            <CapabilitiesView key={section} active={active} kind={registre} />
+          )}
+          {/* Section Budget retirée le 2026-10-23 (conv-1119 : « ça sert à rien cette feature »). Ses
+              deux autres panneaux n'étaient pas du budget : l'arrêt du mode ∞ règle le comportement
+              du chat, le pilote shadow mesure le routage — chacun rejoint la section dont il relève. */}
+          {section === 'behaviour' && (
+            <>
+              <BehaviourView />
+              <ModeAutoSeuilsSettings />
+            </>
+          )}
+          {section === 'interface' && <InterfaceView />}
+          {section === 'providers' && (
+            <section className="settings-providers surface-panel" aria-label="Providers">
+              <header>
+                <div>
+                  <span className="domain-eyebrow">Fournisseurs</span>
+                  <h2>Providers</h2>
+                </div>
+              </header>
+              {providersError && (
+                <div className="domain-warning">
+                  <p role="alert">{providersError}</p>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setProvidersReload((token) => token + 1)}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              )}
+              {providersLoading && (
+                <p role="status">
+                  <Spinner /> Chargement des providers…
+                </p>
+              )}
+              {!providersLoading &&
+                !providersError &&
+                (providers && providers.length > 0 ? (
+                  <ul className="settings-providers-list">
+                    {providers.map((entry) => (
+                      <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
+                        <strong>{entry.provider}</strong>
+                        <span>{entry.status}</span>
+                        {entry.detail && <span>{entry.detail}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Aucun provider n&apos;est exposé par l&apos;application.</p>
+                ))}
+              <p className="domain-hint">
+                Lecture seule : la configuration (connexion, test, mode) se pilote depuis l’onglet{' '}
+                <button
+                  type="button"
+                  className="domain-link"
+                  data-testid="settings-open-router"
+                  onClick={() => onSectionChange('routing')}
+                >
+                  Routage
+                </button>
+                .
+              </p>
+            </section>
+          )}
+          {/* Routage vit ici depuis conv-963 (2026-10-15) : il était une section d'Agent Studio. */}
+          {section === 'routing' && (
+            <>
+              <RouterView active={active} />
+              <ShadowRoutingPilotSettings />
+            </>
+          )}
+          {section === 'rules' && <RulesView />}
+          {section === 'preflight' && <ExecutionWorkspaceSettings />}
+          {section === 'preflight' && <BrainSettings />}
+          {section === 'preflight' && (
+            <section
+              className="settings-preflight surface-panel"
+              aria-label="Diagnostic de configuration"
+            >
+              <header>
+                <div>
+                  <span className="domain-eyebrow">Configuration locale</span>
+                  <h2>Diagnostic de démarrage</h2>
+                </div>
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => setProvidersReload((token) => token + 1)}
+                  onClick={() => void recheck()}
+                  disabled={checking}
                 >
-                  Réessayer
+                  {checking ? 'Vérification…' : 'Relancer le diagnostic'}
                 </button>
-              </div>
-            )}
-            {providersLoading && (
-              <p role="status">
-                <Spinner /> Chargement des providers…
-              </p>
-            )}
-            {!providersLoading &&
-              !providersError &&
-              (providers && providers.length > 0 ? (
-                <ul className="settings-providers-list">
-                  {providers.map((entry) => (
-                    <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
-                      <strong>{entry.provider}</strong>
-                      <span>{entry.status}</span>
-                      {entry.detail && <span>{entry.detail}</span>}
-                    </li>
-                  ))}
-                </ul>
+              </header>
+              {error && (
+                <p className="domain-warning" role="alert">
+                  {error}
+                </p>
+              )}
+              {repairDone && (
+                <p className="domain-ok" role="status" data-testid="settings-repair-status">
+                  Réparation effectuée pour « {repairDone} » : le diagnostic a été relancé.
+                </p>
+              )}
+              {!preflight ? (
+                <p>Relance le même contrôle que l’onboarding, à tout moment.</p>
               ) : (
-                <p>Aucun provider n&apos;est exposé par l&apos;application.</p>
-              ))}
-            <p className="domain-hint">
-              Lecture seule : la configuration (connexion, test, mode) se pilote depuis l’onglet{' '}
-              <button
-                type="button"
-                className="domain-link"
-                data-testid="settings-open-router"
-                onClick={() => onSectionChange('routing')}
-              >
-                Routage
-              </button>
-              .
-            </p>
-          </section>
-        )}
-        {/* Routage vit ici depuis conv-963 (2026-10-15) : il était une section d'Agent Studio. */}
-        {section === 'routing' && <RouterView active={active} />}
-        {section === 'rules' && <RulesView />}
-        {section === 'preflight' && <ExecutionWorkspaceSettings />}
-        {section === 'preflight' && <BrainSettings />}
-        {section === 'preflight' && (
-          <section
-            className="settings-preflight surface-panel"
-            aria-label="Diagnostic de configuration"
-          >
-            <header>
-              <div>
-                <span className="domain-eyebrow">Configuration locale</span>
-                <h2>Diagnostic de démarrage</h2>
-              </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void recheck()}
-                disabled={checking}
-              >
-                {checking ? 'Vérification…' : 'Relancer le diagnostic'}
-              </button>
-            </header>
-            {error && (
-              <p className="domain-warning" role="alert">
-                {error}
-              </p>
-            )}
-            {repairDone && (
-              <p className="domain-ok" role="status" data-testid="settings-repair-status">
-                Réparation effectuée pour « {repairDone} » : le diagnostic a été relancé.
-              </p>
-            )}
-            {!preflight ? (
-              <p>Relance le même contrôle que l’onboarding, à tout moment.</p>
-            ) : (
-              <>
-                <p className={preflight.ok ? 'domain-ok' : 'domain-warning'}>{preflight.summary}</p>
-                <ul className="settings-preflight-list">
-                  {preflight.checks.map((check) => (
-                    <li key={check.id} className={check.ok ? 'is-ok' : 'is-ko'}>
-                      <strong>
-                        <span className="settings-check-mark">{check.ok ? '✓' : '✗'}</span>{' '}
-                        {check.label}
-                      </strong>
-                      {check.detail && <span>{check.detail}</span>}
-                      {/*
+                <>
+                  <p className={preflight.ok ? 'domain-ok' : 'domain-warning'}>
+                    {preflight.summary}
+                  </p>
+                  <ul className="settings-preflight-list">
+                    {preflight.checks.map((check) => (
+                      <li key={check.id} className={check.ok ? 'is-ok' : 'is-ko'}>
+                        <strong>
+                          <span className="settings-check-mark">{check.ok ? '✓' : '✗'}</span>{' '}
+                          {check.label}
+                        </strong>
+                        {check.detail && <span>{check.detail}</span>}
+                        {/*
                         Un bouton « Reparer » sur un constat qui ne SE repare pas est un piege : il
                         promet un geste qui ne peut pas aboutir. Seuls les controles ayant un plan de
                         reparation le portent. L historique mis de cote est un CONSTAT — le fichier
                         est nomme juste au-dessus, la restauration appartient a l utilisateur.
                       */}
-                      {/*
+                        {/*
                         UN GESTE, pas seulement un chemin. Lire « votre fichier est en D:\… » sans
                         pouvoir l'ouvrir oblige a recopier un chemin a la main. Le bouton n'existe
                         que si le controle designe un fichier ; le main verifie qu'il est toujours la
                         avant de le reveler.
                       */}
-                      {check.revealPath && (
-                        <button
-                          type="button"
-                          className="settings-preflight-repair btn btn-sm"
-                          data-testid={`settings-reveal-${check.id}`}
-                          onClick={() => void window.api?.openFolder?.(check.revealPath as string)}
-                        >
-                          Ouvrir le dossier
-                        </button>
-                      )}
-                      {!check.ok && REPARABLES.has(check.id) && (
-                        <button
-                          type="button"
-                          className="settings-preflight-repair btn btn-sm"
-                          data-testid={`settings-repair-${check.id}`}
-                          onClick={() => void repair(check.id)}
-                          disabled={repairing !== null || checking}
-                        >
-                          {repairing === check.id ? 'Réparation…' : 'Réparer'}
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-        )}
+                        {check.revealPath && (
+                          <button
+                            type="button"
+                            className="settings-preflight-repair btn btn-sm"
+                            data-testid={`settings-reveal-${check.id}`}
+                            onClick={() =>
+                              void window.api?.openFolder?.(check.revealPath as string)
+                            }
+                          >
+                            Ouvrir le dossier
+                          </button>
+                        )}
+                        {!check.ok && REPARABLES.has(check.id) && (
+                          <button
+                            type="button"
+                            className="settings-preflight-repair btn btn-sm"
+                            data-testid={`settings-repair-${check.id}`}
+                            onClick={() => void repair(check.id)}
+                            disabled={repairing !== null || checking}
+                          >
+                            {repairing === check.id ? 'Réparation…' : 'Réparer'}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+        </div>
       </div>
     </section>
   )

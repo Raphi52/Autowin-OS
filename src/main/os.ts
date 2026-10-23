@@ -29,10 +29,14 @@ import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
 import {
   dynamicPrompt,
+  issueDeDecision,
   profilEcraseLeCadrage,
   meriteUneDecision,
-  readWorkflowDecision
+  readWorkflowDecision,
+  type ModeDecision,
+  type WorkflowDecision
 } from './workflow-dynamic'
+import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { CostAggregator } from './dashboards/cost'
@@ -130,9 +134,9 @@ import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/a
 import type { RapportRetention } from '../shared/rapport-retention'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
 import { compileExecutionQuote } from './execution-quote'
-import { loadOrchestrationBudget } from './orchestration-budget'
+import { DEFAULT_ORCHESTRATION_BUDGET } from './orchestration-budget'
 import { applyWorkflowProfile } from './workflow-profile-apply'
-import { graphOf, loadWorkflowProfiles } from './workflow-profiles'
+import { graphOf, loadWorkflowProfiles, type WorkflowProfile } from './workflow-profiles'
 import {
   loadWorkflowSelections,
   refusExplicite,
@@ -216,6 +220,42 @@ export function selectPhaseFanOut(fanOut: FanOutTopology, phase: NodePhase): Fan
   return phase === 'scout' || phase === 'frame' || phase === 'terrain' ? fanOut[phase] : []
 }
 
+/**
+ * UN appel de la décision de workflow, tracé dans `cost.jsonl` (conv-1097). `choisir` part sur le
+ * modèle des petites tâches, `composer` sur celui du chat. Best-effort : une panne rend « aucun »,
+ * comme avant, mais elle est désormais NOMMÉE au lieu d'être avalée.
+ */
+async function demanderDecisionWorkflow(
+  os: Pick<AutowinOS, 'registry' | 'cost'>,
+  task: string,
+  profiles: WorkflowProfile[],
+  mode: ModeDecision,
+  binding: RoleBinding
+): Promise<WorkflowDecision> {
+  const appel = mode === 'choisir' ? 'choixWorkflow' : 'compositionWorkflow'
+  if (!binding.provider) return { kind: 'none', reason: 'aucun modèle réglé' }
+  let res: Awaited<ReturnType<ProviderRegistry['send']>>
+  try {
+    res = await os.registry.send(
+      binding.provider,
+      [{ role: 'user', content: dynamicPrompt(task, profiles, mode) }],
+      { model: binding.model, reasoningEffort: binding.reasoningEffort }
+    )
+  } catch (error) {
+    signalerPanneAppelCourt(appel, error)
+    return { kind: 'none', reason: 'panne du modèle' }
+  }
+  const decision = readWorkflowDecision(res.text ?? '', profiles, mode)
+  noterAppelCourt(os.cost, {
+    appel,
+    ...(mode === 'composer' ? { role: 'orchestrator' } : {}),
+    binding,
+    res,
+    issue: issueDeDecision(decision)
+  })
+  return decision
+}
+
 /** Noyau applicatif : une instance partagée, injectée dans les handlers IPC. */
 export class AutowinOS {
   private readonly brainGraphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
@@ -223,12 +263,12 @@ export class AutowinOS {
   readonly executionSupervisor = new ExecutionSupervisor()
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
   /**
-   * Le plafond est relu à CHAQUE `budgetStatus()` depuis le réglage persisté. Avant, on passait
-   * `undefined` : `budget` restait toujours `null` et le seuil d'alerte à 80 % était donc
-   * structurellement inatteignable en production — un garde-fou affiché qui ne gardait rien.
+   * Aucun plafond de coût depuis le retrait du réglage Budget (conv-1119, 2026-10-23) : le
+   * plafond USD n'est plus réglable, `budgetStatus()` rend donc `budget: null` et aucune alerte à
+   * 80 % — honnête, puisqu'il n'y a plus de limite à approcher.
    */
   readonly cost = new CostAggregator(
-    () => loadOrchestrationBudget(join(ensureAutowinAppData(), 'orchestration-budget.json')).maxUsd,
+    () => DEFAULT_ORCHESTRATION_BUDGET.maxUsd,
     join(ensureAutowinAppData(), 'cost.jsonl')
   )
   readonly conversations = new ConversationStore()
@@ -359,23 +399,26 @@ export class AutowinOS {
     // Ne pas payer un appel de modèle pour apprendre qu'une demande de trois mots ne mérite rien.
     if (!meriteUneDecision(task)) return undefined
     const profiles = loadWorkflowProfiles().profiles
-    let reponse: string
-    try {
-      // Le modèle des petites tâches (réglage du Routeur) ; non réglé, celui du chat en effort low.
-      const binding = this.roles.bindingDesPetitesTaches()
-      if (!binding.provider) return undefined
-      const res = await this.registry.send(
-        binding.provider,
-        [{ role: 'user', content: dynamicPrompt(task, profiles) }],
-        { model: binding.model, reasoningEffort: binding.reasoningEffort }
+    // Le modèle des petites tâches (réglage du Routeur ; Haiku par défaut, conv-1097) CHOISIT dans
+    // le catalogue. Il ne compose jamais : un « nouveau » repart sur le modèle du chat, seul à
+    // écrire un graphe (`workflow-dynamic.ts`, ModeDecision).
+    let decision = await demanderDecisionWorkflow(
+      this,
+      task,
+      profiles,
+      'choisir',
+      this.roles.bindingDesPetitesTaches()
+    )
+    if (decision.kind === 'a-composer') {
+      decision = await demanderDecisionWorkflow(
+        this,
+        task,
+        profiles,
+        'composer',
+        this.roles.getBinding('orchestrator')
       )
-      reponse = res.text ?? ''
-    } catch {
-      return undefined
     }
-
-    const decision = readWorkflowDecision(reponse, profiles)
-    if (decision.kind === 'none') return undefined
+    if (decision.kind === 'none' || decision.kind === 'a-composer') return undefined
     if (decision.kind === 'existing') {
       const effectif = applyWorkflowProfile({ roles: {} }, decision.profile)
       // Un profil de REPARATION ne doit pas ecraser le cadrage quand la cause est inconnue : on rend
@@ -1146,12 +1189,10 @@ export class AutowinOS {
     // Un chat deja lance depuis un run (par exemple `chat_send` pendant AgentPilot) partage
     // l'enveloppe courante. Une nouvelle AsyncLocalStorage imbriquee remettrait les compteurs a zero.
     if (this.executionSupervisor.currentQuote()) return execute()
-    const settings = loadOrchestrationBudget(
-      join(ensureAutowinAppData(), 'orchestration-budget.json')
-    )
+    const settings = DEFAULT_ORCHESTRATION_BUDGET
     /*
-     * Le plafond d'un tour de chat vient UNIQUEMENT du REGLAGE (`maxChatProviderCalls`, 50 par
-     * defaut ; `maxTotalTokens` ; `maxUsd`).
+     * Le plafond d'un tour de chat vient UNIQUEMENT des plafonds fixes (`maxChatProviderCalls`,
+     * `maxTotalTokens`, `maxUsd`) — plus de reglage utilisateur depuis conv-1119 (2026-10-23).
      *
      * Les caps d'environnement AUTOWIN_CHAT_CALL_CAP / _TOKEN_CAP / _USD_CAP ont ete SUPPRIMES le
      * 2026-09-16 avec le budget du tour de chat : plus aucun reglage cache ne resserre un tour.
@@ -1248,7 +1289,7 @@ export class AutowinOS {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
       .setBinding(role, binding)
       .all()
-    saveRoleBindings(proposed, this.roles.getPetitesTaches())
+    saveRoleBindings(proposed, this.roles.getPetitesTaches(), this.roles.getBuildTrivialSurHaiku())
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()
   }
@@ -1259,7 +1300,7 @@ export class AutowinOS {
    * AVANT d'appliquer : un disque qui refuse l'écriture ne laisse pas un réglage fantôme en mémoire.
    */
   setPetitesTaches(binding: RoleBinding | undefined): RoleBinding | undefined {
-    saveRoleBindings(this.roles.all(), binding)
+    saveRoleBindings(this.roles.all(), binding, this.roles.getBuildTrivialSurHaiku())
     this.roles.setPetitesTaches(binding)
     return this.roles.getPetitesTaches()
   }
@@ -1274,7 +1315,7 @@ export class AutowinOS {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
     for (const [role, binding] of bindings) proposed.setBinding(role, binding)
     const all = proposed.all()
-    saveRoleBindings(all, this.roles.getPetitesTaches())
+    saveRoleBindings(all, this.roles.getPetitesTaches(), this.roles.getBuildTrivialSurHaiku())
     for (const [role] of bindings) this.roles.setBinding(role, all[role])
     return this.roles.all()
   }
@@ -1322,9 +1363,7 @@ export class AutowinOS {
     // magasin de roles. En production `roles` existe toujours ; le fallback laisse le mock intact.
     const admittedRuntime =
       runtimeSnapshot ?? (this.roles ? this.captureOrchestrationRuntime() : undefined)
-    const settings = loadOrchestrationBudget(
-      join(ensureAutowinAppData(), 'orchestration-budget.json')
-    )
+    const settings = DEFAULT_ORCHESTRATION_BUDGET
     const quote = resumeControl?.executionQuote ?? compileExecutionQuote(task, settings)
     // Runs que CE process execute en ce moment : une demande identique s'y rattache au lieu de
     // tenter une reprise de leur checkpoint (voir `isOrchestrationLive`).

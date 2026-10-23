@@ -42,7 +42,7 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
 
   useEffect(() => {
     // queueMicrotask : le chargement initial ne pousse pas d'état SYNCHRONE depuis l'effet
-    // (même discipline que OrchestrationBudgetSettings).
+    // (même discipline que CapabilitiesView).
     queueMicrotask(() => void load())
   }, [load])
 

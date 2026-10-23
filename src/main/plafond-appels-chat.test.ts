@@ -1,12 +1,7 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_ORCHESTRATION_BUDGET,
-  loadOrchestrationBudget,
-  normalizeOrchestrationBudget
-} from './orchestration-budget'
+import { DEFAULT_ORCHESTRATION_BUDGET } from './orchestration-budget'
 
 /**
  * LE DÉFAUT, mesuré le 2026-08-25 sur conv-1397. Un tour de chat a été coupé sur « Budget d'appels
@@ -17,7 +12,8 @@ import {
  * provider. Un tour agentique en consomme un PAR ÉTAPE : ce plafond comptait des coups, pas de la
  * dépense — et il tuait au milieu au lieu de refuser au départ.
  *
- * Le plafond est désormais un RÉGLAGE (`maxChatProviderCalls`), volontairement large.
+ * Le plafond est un plafond FIXE (`maxChatProviderCalls`), volontairement large. Il était aussi
+ * réglable dans Settings > Budget jusqu'au retrait de ce réglage (conv-1119, 2026-10-23).
  */
 
 describe('plafond d’appels d’un tour de chat', () => {
@@ -37,63 +33,9 @@ describe('plafond d’appels d’un tour de chat', () => {
       DEFAULT_ORCHESTRATION_BUDGET.maxProviderCalls
     )
   })
-
-  it('se laisse régler par l’utilisateur', () => {
-    expect(normalizeOrchestrationBudget({ maxChatProviderCalls: 120 }).maxChatProviderCalls).toBe(
-      120
-    )
-  })
-
-  it('refuse une valeur qui n’est pas un entier positif', () => {
-    for (const invalide of [0, -3, 2.5, 'beaucoup', null]) {
-      expect(normalizeOrchestrationBudget({ maxChatProviderCalls: invalide }).maxChatProviderCalls)
-        .toBe(DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls)
-    }
-  })
-
-  it('un réglage DÉJÀ ÉCRIT, sans la nouvelle clé, garde ses trois plafonds', () => {
-    // Le bord qui compte le plus : exiger la clé ferait rejeter le fichier entier — et un rejet
-    // LÈVE (voir le test suivant), donc le réglage déjà écrit sur les machines deviendrait
-    // illisible. Une clé absente prend le défaut ; c'est ce qui rend la migration invisible.
-    const dossier = mkdtempSync(join(tmpdir(), 'budget-'))
-    const chemin = join(dossier, 'orchestration-budget.json')
-    writeFileSync(
-      chemin,
-      JSON.stringify({ maxUsd: 7, maxProviderCalls: 33, maxTotalTokens: 9_000_000 }),
-      'utf8'
-    )
-
-    const lu = loadOrchestrationBudget(chemin)
-
-    expect(lu.maxUsd).toBe(7)
-    expect(lu.maxProviderCalls).toBe(33)
-    expect(lu.maxTotalTokens).toBe(9_000_000)
-    expect(lu.maxChatProviderCalls).toBe(DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls)
-  })
-
-  it('une clé PRÉSENTE mais invalide reste un rejet, comme les autres', () => {
-    const dossier = mkdtempSync(join(tmpdir(), 'budget-'))
-    const chemin = join(dossier, 'orchestration-budget.json')
-    writeFileSync(
-      chemin,
-      JSON.stringify({
-        maxUsd: null,
-        maxProviderCalls: 24,
-        maxChatProviderCalls: -1,
-        maxTotalTokens: 9_000_000
-      }),
-      'utf8'
-    )
-
-    // Un reglage rejete LEVE, il ne retombe pas en silence sur les defauts : c'est la bonne
-    // conduite (un fichier abime ne doit pas effacer discretement les garde-fous), et c'est ce qui
-    // rend la lecture optionnelle de la nouvelle cle INDISPENSABLE — l'exiger aurait fait planter
-    // la lecture du reglage deja present sur les machines, pas seulement le reinitialiser.
-    expect(() => loadOrchestrationBudget(chemin)).toThrow(/corrompu ou invalide/)
-  })
 })
 
-describe('le tour de chat consomme bien ce réglage, pas une constante', () => {
+describe('le tour de chat consomme bien ce plafond, pas une constante', () => {
   it('`os.ts` ne rabote plus le plafond du chat à une valeur câblée', () => {
     // Contrat sur le source : la garantie vit dans une methode qui exige tout l'OS pour tourner.
     // C'est la forme EXACTE qui a cause le defaut — la reintroduire recouperait les tours.

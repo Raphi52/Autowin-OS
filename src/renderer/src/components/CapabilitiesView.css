@@ -136,35 +136,10 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  /* En-tête, liste, relations. La rangée des onglets internes est partie avec eux (conv-1109) :
+     le registre est choisi par la liste de sections de Settings. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 18px;
-}
-.cockpit-tabs {
-  width: fit-content;
-  max-width: 100%;
-  flex-wrap: wrap;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
-  background: var(--surface-inset);
-}
-.cockpit-tabs button {
-  padding: 8px 16px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.cockpit-tabs button.is-active {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-.cockpit-tabs small {
-  color: #a9b0c5;
 }
 .registry-heading {
   display: flex;

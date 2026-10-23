@@ -7,7 +7,6 @@ import { THEMES, THEME_MODE_STORAGE_KEY } from '../theme-mode'
 
 vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
-vi.mock('./OrchestrationBudgetSettings', () => ({ OrchestrationBudgetSettings: () => null }))
 vi.mock('./ShadowRoutingPilotSettings', () => ({ ShadowRoutingPilotSettings: () => null }))
 
 ;(

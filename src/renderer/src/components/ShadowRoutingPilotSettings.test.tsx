@@ -2,6 +2,10 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// La vue Routage a ses propres tests : ici, seul compte le panneau du pilote posé à côté d'elle.
+vi.mock('./RouterView', () => ({ RouterView: () => null }))
+
 import { SettingsView } from './SettingsView'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 
@@ -121,7 +125,8 @@ describe('ShadowRoutingPilotSettings', () => {
   })
 })
 
-describe('vue Settings — section Budget', () => {
+// Section Routage depuis le retrait de l'onglet Budget (conv-1119, 2026-10-23).
+describe('vue Settings — section Routage', () => {
   it('expose la bascule du pilote shadow dans la vue existante', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -129,10 +134,6 @@ describe('vue Settings — section Budget', () => {
         getPreflight: vi.fn().mockResolvedValue(null),
         recheckPreflight: vi.fn(),
         onPreflight: () => () => {},
-        orchestrationBudget: vi
-          .fn()
-          .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxTotalTokens: 15_000_000 }),
-        setOrchestrationBudget: vi.fn(),
         shadowRoutingPilot: vi
           .fn()
           .mockResolvedValue({ enabled: false, active: false, envOverride: null }),
@@ -146,7 +147,7 @@ describe('vue Settings — section Budget', () => {
 
     await act(async () => {
       root.render(
-        createElement(SettingsView, { active: true, section: 'budget', onSectionChange: vi.fn() })
+        createElement(SettingsView, { active: true, section: 'routing', onSectionChange: vi.fn() })
       )
     })
 
