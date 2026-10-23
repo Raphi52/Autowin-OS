@@ -56,8 +56,24 @@ describe('desktop control validation', () => {
     )
   })
 
+  it('lit une liste de gestes envoyée en TEXTE JSON par l’outil direct', () => {
+    // L'outil direct ne transmet que des chaînes (`schemaEntree`, skill-node-mcp.ts) : `actions`
+    // arrivait en texte et desktop_act refusait TOUJOURS ses gestes (mesuré 3 fois en conv-942).
+    expect(
+      parseDesktopActions('[{"type":"click","x":500,"y":320},{"type":"key","keys":["CTRL","A"]}]')
+    ).toEqual([
+      { type: 'click', x: 500, y: 320, button: 'left', clicks: 1 },
+      { type: 'key', keys: ['CTRL', 'A'] }
+    ])
+  })
+
+  it('refuse en le disant une liste de gestes en texte mal formée', () => {
+    expect(() => parseDesktopActions('[{"type":"click","x":500,}]')).toThrow(/tableau JSON valide/)
+  })
+
   it.each([
     null,
+    'click',
     [],
     Array.from({ length: 21 }, () => ({ type: 'wait', ms: 1 })),
     [{ type: 'click', x: Number.NaN, y: 2 }],

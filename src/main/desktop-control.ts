@@ -201,7 +201,29 @@ function normalizedKeys(input: unknown): string[] {
   })
 }
 
-export function parseDesktopActions(input: unknown): DesktopAction[] {
+/**
+ * Les gestes tels que les envoient les DEUX voies d'appel. La voie <cmd> passe un vrai tableau ;
+ * l'outil direct ne peut passer qu'une CHAÎNE, car `schemaEntree` (skill-node-mcp.ts) déclare tout
+ * argument en `type: 'string'`. Sans cette lecture, desktop_act en outil direct refusait TOUS ses
+ * gestes (« actions doit contenir entre 1 et 20 gestes », mesuré 3 fois en conv-942). Même règle
+ * que `cheminsEnvoyes` (proprietaire-fichier.ts) et `listeEnvoyee` (commands.ts) : une chaîne qui
+ * commence par `[` est une liste JSON, mal formée elle est REFUSÉE en le disant ; le reste passe tel
+ * quel au contrôle habituel.
+ */
+function gestesEnvoyes(input: unknown): unknown {
+  if (typeof input !== 'string' || !input.trimStart().startsWith('[')) return input
+  try {
+    return JSON.parse(input) as unknown
+  } catch {
+    throw new Error(
+      'actions ressemble à une liste mais n’est pas un tableau JSON valide ' +
+        '(ex. [{"type":"click","x":500,"y":320}])'
+    )
+  }
+}
+
+export function parseDesktopActions(brut: unknown): DesktopAction[] {
+  const input = gestesEnvoyes(brut)
   if (!Array.isArray(input) || input.length === 0 || input.length > MAX_ACTIONS) {
     throw new Error(`actions doit contenir entre 1 et ${MAX_ACTIONS} gestes`)
   }
