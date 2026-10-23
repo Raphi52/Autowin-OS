@@ -16,6 +16,28 @@ describe('collecte de contexte d’orchestration', () => {
   })
 
   /**
+   * Défaut mesuré le 2026-10-22 (conv-1098, run « option-c-fichier-poste-agent-tient-mvjxdkx3 ») : le
+   * cadrage avait été rattaché au fil par `attach_run`, mais la collecte n'en donnait que le NOMBRE
+   * (« Workflows attachés: 1 », lu dans la trace du run). Le run a cherché le RUN.md ailleurs, ne l'a
+   * pas trouvé, et a refait un cadrage (10 $) qui s'écartait de l'option choisie.
+   */
+  it('donne le CHEMIN des RUN.md rattachés, le plus récent d’abord, borné', () => {
+    const runPaths = Array.from({ length: 7 }, (_, i) => `C:/runs/conv-9/r${i}-workspace/RUN.md`)
+    const context = collectOrchestrationContext({
+      task: 'construis l’option C',
+      conversation: { id: 'conv-9', runPaths }
+    })
+    expect(context).toContain('Workflows attachés: 7')
+    const lignes = context.split('\n')
+    const r6 = lignes.findIndex((l) => l.includes('r6-workspace/RUN.md'))
+    const r2 = lignes.findIndex((l) => l.includes('r2-workspace/RUN.md'))
+    expect(r6).toBeGreaterThan(-1)
+    expect(r2).toBeGreaterThan(r6)
+    expect(context).not.toContain('r1-workspace/RUN.md')
+    expect(context).toMatch(/lis-le avant de cadrer/)
+  })
+
+  /**
    * Défaut mesuré le 2026-08-23 sur conv-1376 : le sous-agent recevait la phrase-tâche NUE, sans une
    * ligne du fil qui l'avait produite — le type d'entrée n'avait même pas de champ `messages`. Il ne
    * pouvait donc pas LIRE l'intention de l'utilisateur, seulement la deviner à partir d'une phrase

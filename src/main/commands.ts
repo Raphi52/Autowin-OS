@@ -310,7 +310,12 @@ import { memoireDesRunsPrecedents, phasesAvecJuge, resumeDesTours } from './orch
 import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
 import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
-import { PROFIL_UTILISATEUR_MAX_BYTES, profilAjouter, profilRetirer } from './profil-utilisateur'
+import {
+  PROFIL_UTILISATEUR_MAX_BYTES,
+  profilAjouter,
+  profilRetirer,
+  retenirPreferenceAuProfil
+} from './profil-utilisateur'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
@@ -4633,6 +4638,9 @@ export class AppCommandBus {
           }
         )
       case 'remember': {
+        // PRÉFÉRENCE → PROFIL LOCAL (conv-1098, 2026-10-22, demande de l'utilisateur) : le type
+        // `preference` s'arrête ICI, avant tout appel au Brain partagé. Voir `retenirPreferenceAuProfil`.
+        if (a.type === 'preference') return retenirPreferenceAuProfil(a)
         const convId = conversationId ?? this.activeConversationId ?? ''
         const learningOutcome =
           a.learningOutcome === 'success' || a.learningOutcome === 'failure'

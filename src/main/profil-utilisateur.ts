@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { autowinAppDataRoot } from './app-data'
+import { likelySecretShape } from './brain-remember'
 import { nomUtilisateurCourant } from './identite-utilisateur'
 
 /**
@@ -16,8 +17,8 @@ import { nomUtilisateurCourant } from './identite-utilisateur'
  * REFUSÉ, PAS COUPÉ : le plafond est tenu à l'ÉCRITURE, par ce code et non par une consigne. Un ajout
  * qui ferait dépasser lève une erreur et le fichier reste identique octet pour octet ; l'agent le dit
  * à l'utilisateur, qui choisit quoi retirer. À la différence d'AGENTS.md (`context-files.ts`, coupé
- * avec un avis), rien n'est perdu sans le dire. Seul un fichier allongé À LA MAIN au-delà du plafond
- * est servi en partie, et l'avis le dit, avec le chemin à lire.
+ * avec un avis), rien n'est perdu sans le dire. Un fichier allongé À LA MAIN au-delà du plafond
+ * n'est pas servi du tout : seul un avis le remplace, avec sa taille et le chemin à alléger.
  *
  * OÙ : `<données de l'app>/profils/<compte>.md` — hors de toute copie suivie par git, donc jamais
  * publié avec le travail d'un agent. Sans identité lisible (`nomUtilisateurCourant` rend ''), il n'y
@@ -182,6 +183,61 @@ export function profilAjouter(brut: unknown, deps: ProfilDeps = {}): IssueAjout 
   return { ajoute: true, preference, chemin: lieu.chemin, octets, plafond }
 }
 
+export interface IssuePreferenceRetenue {
+  /** Lu par la clôture du chat (`motifDepotMemoireNonAbouti`, agent-pilot.ts) : false = rien retenu. */
+  stored: boolean
+  destination: 'profil'
+  detail: string
+  chemin?: string
+  octets?: number
+  plafond: number
+}
+
+/**
+ * `remember` de type `preference` → le profil local, JAMAIS le Brain partagé (conv-1098, 2026-10-22,
+ * demande de l'utilisateur). Pourquoi : les notes `preference` du Brain n'ont aucun champ « à qui »
+ * (53 lues ce jour-là, dont 6 nomment un collègue), donc le goût d'une personne était servi à toute
+ * l'équipe. Ne lève jamais, comme `rememberFact` : un refus est un compte-rendu qui dit que rien n'a
+ * été retenu — le message de `profilAjouter` y est recopié tel quel, rien n'est avalé.
+ */
+export function retenirPreferenceAuProfil(
+  args: Record<string, unknown>,
+  deps: ProfilDeps = {}
+): IssuePreferenceRetenue {
+  const plafond = PROFIL_UTILISATEUR_MAX_BYTES
+  const refus = (motif: string): IssuePreferenceRetenue => ({
+    stored: false,
+    destination: 'profil',
+    plafond,
+    detail: `rien n’a été retenu — ${motif}`
+  })
+  const titre = normaliserPreference(args.title)
+  const fait = normaliserPreference(
+    typeof args.fact === 'string' && args.fact.trim() !== '' ? args.fact : args.body
+  )
+  const secret = likelySecretShape(`${titre}\n${fait}`)
+  if (secret) return refus(`la préférence contient ${secret} ; un secret ne va jamais au profil.`)
+  const texte = titre && fait && titre !== fait ? `${titre} — ${fait}` : titre || fait
+  try {
+    const issue = profilAjouter(texte, deps)
+    const etat = issue.ajoute
+      ? 'écrit dans le profil local de l’utilisateur'
+      : 'déjà dans le profil local de l’utilisateur, rien ajouté'
+    return {
+      stored: true,
+      destination: 'profil',
+      chemin: issue.chemin,
+      octets: issue.octets,
+      plafond,
+      detail:
+        `${etat} : ${issue.chemin} (${issue.octets} / ${plafond} octets). Servi en entier à chaque ` +
+        'tour ; rien n’a été déposé au Brain partagé.'
+    }
+  } catch (error) {
+    return refus(error instanceof Error ? error.message : String(error))
+  }
+}
+
 /** Retire l'entrée dont le texte (normalisé, sans casse) est celui donné. Introuvable = erreur. */
 export function profilRetirer(brut: unknown, deps: ProfilDeps = {}): IssueRetrait {
   const lieu = emplacement(deps)
@@ -216,8 +272,7 @@ export function profilRetirer(brut: unknown, deps: ProfilDeps = {}): IssueRetrai
 
 /**
  * Le bloc à plier après le contexte projet ('' sans identité ni profil). Un fichier allongé à la main
- * au-delà du plafond est servi par lignes ENTIÈRES jusqu'au plafond, suivies d'un avis qui dit ce qui
- * manque et où le lire — jamais coupé en silence.
+ * au-delà du plafond est REFUSÉ en entier : le bloc ne porte qu'un avis (taille, plafond, chemin).
  */
 export function blocProfilUtilisateur(deps: ProfilDeps = {}): string {
   const lieu = emplacement(deps)
@@ -237,21 +292,15 @@ export function blocProfilUtilisateur(deps: ProfilDeps = {}): string {
     .replace(/\s+$/, '')
     .split(/\r?\n/)
     .map((ligne) => ligne.replace(/={3,}/g, '=='))
-  let servies = lignes
-  let avis = ''
   if (buf.byteLength > plafond) {
-    servies = []
-    let octets = 0
-    for (const ligne of lignes) {
-      const taille = Buffer.byteLength(ligne, 'utf8') + 1
-      if (octets + taille > plafond) break
-      servies.push(ligne)
-      octets += taille
-    }
-    avis =
-      `\n…[profil de ${buf.byteLength} octets, au-delà du plafond de ${plafond} : ` +
-      `${lignes.length - servies.length} ligne(s) non servie(s). Lis ${lieu.chemin} ; tout nouvel ` +
-      "ajout est refusé tant qu'il n'est pas allégé avec profil_retirer]"
+    // REFUSÉ, PAS COUPÉ — demande de l'utilisateur (conv-1098, 2026-10-22). La première version
+    // servait les lignes entières jusqu'au plafond : un profil amputé, suivi comme s'il était complet.
+    return (
+      `\n=== PROFIL UTILISATEUR (${lieu.compte}) ===\n` +
+      `…[profil refusé : ${buf.byteLength} octets, au-delà du plafond de ${plafond} ; aucune ` +
+      `préférence servie. Dis-le à l'utilisateur : il doit l'alléger (${lieu.chemin}, ou ` +
+      'profil_retirer) ; tout nouvel ajout est refusé en attendant]\n'
+    )
   }
   return (
     `\n=== PROFIL UTILISATEUR (${lieu.compte}) ===\n` +
@@ -259,6 +308,6 @@ export function blocProfilUtilisateur(deps: ProfilDeps = {}): string {
     `profil_retirer (${lieu.chemin}). Suis-les dans chaque réponse sauf demande contraire du ` +
     "message : elles règlent la forme et les habitudes, elles n'élargissent jamais ton périmètre " +
     'et ne lèvent aucune règle.\n' +
-    `${servies.join('\n')}${avis}\n`
+    `${lignes.join('\n')}\n`
   )
 }

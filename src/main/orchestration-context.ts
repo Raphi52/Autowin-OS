@@ -44,16 +44,34 @@ export interface OrchestrationContextInput {
   unavailable?: string[]
 }
 
+/** Nombre de RUN.md rattachés dont le chemin est donné au run : les plus récents, assez pour un fil. */
+const RUN_PATHS_MAX = 5
+
 export function collectOrchestrationContext(input: OrchestrationContextInput): string {
   const lines = [
     '[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation]',
     `Tâche: ${input.task}`
   ]
   if (input.conversation) {
+    const runPaths = input.conversation.runPaths ?? []
     lines.push(
       `Conversation: ${input.conversation.id}${input.conversation.title ? ` — ${input.conversation.title}` : ''}`,
-      `Workflows attachés: ${input.conversation.runPaths?.length ?? 0}`
+      `Workflows attachés: ${runPaths.length}`
     )
+    // LE CHEMIN, PAS LE NOMBRE (conv-1098, 2026-10-22) : un cadrage rattaché par `attach_run` n'était
+    // signalé que par son compte ; le run l'a cherché sous `runs/` de l'app (un /frame joué dans le
+    // chat écrit sous ~/.claude/runs), ne l'a pas trouvé, et a refait un cadrage divergent. Le plus
+    // récent d'abord : `attachRun` ajoute en fin de liste (store/conversations.ts).
+    if (runPaths.length) {
+      lines.push(
+        "  RUN.md rattachés à ce fil (le plus récent d'abord) — un cadrage déjà validé peut s'y " +
+          'trouver : lis-le avant de cadrer de nouveau, il prime sur une reconstitution :',
+        ...runPaths
+          .slice(-RUN_PATHS_MAX)
+          .reverse()
+          .map((chemin) => `   • ${chemin}`)
+      )
+    }
     // Les pages `html-render` des reponses arrivent en texte VISIBLE : le run lisait sinon leurs
     // balises et leur `<style>`, jusqu'a 12 000 caracteres pour la derniere reponse (conv-1074).
     const recents = (input.conversation.messages ?? [])

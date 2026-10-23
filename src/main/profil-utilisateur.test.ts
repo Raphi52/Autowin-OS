@@ -165,16 +165,15 @@ describe('profil utilisateur — cas limites d’entrée', () => {
     expect(octetsDu().toString('utf8')).toBe('- tutoie-moi\n')
   })
 
-  it('fichier allongé à la main au-delà du plafond : servi par lignes entières AVEC un avis, ajout refusé', () => {
+  it('fichier allongé à la main au-delà du plafond : REFUSÉ en entier, avis seul, ajout refusé', () => {
+    // Demande de l'utilisateur (conv-1098) : « refusé au lieu d'être coupé s'il dépasse ». Servir
+    // les 10 premières lignes revenait à couper : l'agent suivait un profil amputé.
     poser(profilDe199(15)) // 2 985 octets
     const bloc = blocProfilUtilisateur(deps())
-    expect(bloc).toContain('profil de 2985 octets, au-delà du plafond de 2000')
-    expect(bloc).toContain('5 ligne(s) non servie(s)')
+    expect(bloc).toContain('profil refusé : 2985 octets, au-delà du plafond de 2000')
     expect(bloc).toContain(cheminDe())
-    // Dix lignes de 199 octets servies, jamais une ligne coupée en son milieu.
-    const servies = bloc.split('\n').filter((ligne) => /^- \da+$/.test(ligne))
-    expect(servies).toHaveLength(10)
-    expect(servies.every((ligne) => ligne.length === 198)).toBe(true)
+    // Aucune ligne du profil servie, ni entière ni en partie.
+    expect(bloc.split('\n').filter((ligne) => /^- \d/.test(ligne))).toHaveLength(0)
     const avant = octetsDu()
     expect(() => profilAjouter('court', deps())).toThrow(/profil plein/)
     expect(octetsDu().equals(avant)).toBe(true)
@@ -251,9 +250,10 @@ describe('profil utilisateur — commandes du bus', () => {
   it('la prose MÉMOIRE envoie un goût personnel au profil, pas au Brain', () => {
     const prose = buildChatPilotagePrompt([])
     expect(prose).toContain('`profil_ajouter`')
-    expect(prose).toContain(
-      "`preference` — un goût ou une règle de l'utilisateur qui vaut pour l'équipe"
-    )
+    // Depuis la redirection de `remember` type `preference` vers le profil (conv-1098).
+    expect(prose).toContain("`preference` — un goût ou une règle de l'utilisateur, le sien")
+    expect(prose).toContain('jamais partagé (pas au Brain)')
+    expect(prose).toContain("une règle qui vaut pour l'équipe se retient en `decision`")
   })
 })
 
