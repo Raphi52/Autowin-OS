@@ -201,6 +201,66 @@ describe('Observatory · déroulé par agent', () => {
     expect(rejouer!.textContent).toBe('Rejouer encore')
   })
 
+  /**
+   * conv-1105 : « observatory doit ressembler au graph timeline des bilans de runs ». Un tour de chat
+   * qui a AGI reçoit le même déroulé que le bilan : l'orchestrateur, puis une ligne par outil appelé.
+   */
+  it('pose aussi le déroulé sur un tour de chat qui a agi : une ligne par outil', async () => {
+    const orchestrateur = { id: 'orchestrator', kind: 'agent', label: 'Orchestrateur' } as const
+    const view = await mount([
+      traceEvent({
+        id: 'grep',
+        type: 'tool-call',
+        actor: orchestrateur,
+        recipient: { id: 'Grep', kind: 'tool', label: 'Grep' },
+        channel: 'tool',
+        timestamp: at(2),
+        metrics: { durationMs: 1000 },
+        payloads: [{ kind: 'tool-call', name: 'Grep', content: '{"pattern":"Envoyer"}' }]
+      }),
+      traceEvent({
+        id: 'bash',
+        type: 'tool-call',
+        status: 'failed',
+        actor: orchestrateur,
+        recipient: { id: 'Bash', kind: 'tool', label: 'Bash' },
+        channel: 'tool',
+        timestamp: at(10),
+        metrics: { durationMs: 6000 },
+        payloads: [
+          {
+            kind: 'tool-call',
+            name: 'Bash',
+            content: '{"command":"npm run typecheck","description":"Typage"}'
+          }
+        ]
+      }),
+      traceEvent({
+        id: 'reponse',
+        type: 'model-response',
+        actor: { id: 'claude', kind: 'provider', label: 'claude' },
+        provider: { id: 'claude', model: 'claude-opus-5-5' },
+        timestamp: at(40),
+        metrics: { durationMs: 40_000 },
+        payloads: [{ kind: 'model-response', content: 'Corrigé.' }]
+      })
+    ])
+    const lanes = [...view.querySelectorAll('[data-testid="observatory-gantt-lane"]')]
+    expect(lanes.map((lane) => lane.querySelector('b')?.textContent)).toEqual([
+      'Orchestrateur',
+      'Grep',
+      'Bash'
+    ])
+    expect(lanes[0].querySelector('small')?.textContent).toBe('Opus 5.5')
+    expect(lanes[2].querySelector('small')?.textContent).toBe('outil · 1 appel')
+    const bash = lanes[2].querySelector('[data-testid="observatory-gantt-bar"]')!
+    expect(bash.getAttribute('data-status')).toBe('failed')
+    expect(bash.querySelector('q')?.textContent).toBe('Typage')
+    expect(view.querySelector('[data-testid="run-rejeu-bouton"]')?.textContent).toBe(
+      'Rejouer ce tour'
+    )
+  })
+
   it('ne montre aucun déroulé pour un tour de simple conversation', async () => {
     const view = await mount([
       traceEvent({
