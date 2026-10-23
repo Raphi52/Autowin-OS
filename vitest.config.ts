@@ -138,7 +138,10 @@ const GIT_LOURDS = [
   'src/main/githooks-pre-push.test.ts',
   'src/main/e2e-chaine*.test.ts',
   // Vrai dépôt, vraie copie propre (`git worktree add`), vrai `tsc` (conv-954).
-  'src/main/typage-avant-publication-reel.test.ts'
+  'src/main/typage-avant-publication-reel.test.ts',
+  // Copie propre de 4 000 fichiers ET une mesure de boucle en ms : seule, pour ne pas mesurer la
+  // charge des autres workers (/gel conv-1118).
+  'src/main/comparaison-a-la-base.sans-gel.test.ts'
 ]
 
 export default defineConfig({

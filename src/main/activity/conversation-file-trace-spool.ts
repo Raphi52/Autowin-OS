@@ -1,18 +1,102 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync
-} from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { appendFile, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { ExecutionEvidence } from '../providers/types'
 
 const SPOOL_MAX_BYTES = 4 * 1024 * 1024
+
+/*
+ * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE — /gel conv-1118, 2026-10-23.
+ *
+ * `gels.jsonl`, le 23/10 de 09:44:09 à 09:44:57 UTC : quatre `appendFileSync` de `events.jsonl`, une
+ * ligne de quelques Ko chacune, ont figé la fenêtre 8,2 s, 10,0 s, 9,8 s puis 7,6 s sur un disque
+ * saturé. Ils suivent chaque écriture d'un outil du chat (`trace-workspace-mutation.ts`).
+ *
+ * Même remède que le journal de tour et les appels modèle (`runs/turn-journal.ts`,
+ * `prompt-observability.ts`) : la ligne part sur le pool d'E/S de Node, une seule écriture en route
+ * par journal pour garder l'ORDRE, et les lignes pas encore posées restent LISIBLES en mémoire
+ * (`enAttente`) : tous les lecteurs de ce module les recollent, le contrôle des doublons compris.
+ *
+ * Reste SYNCHRONE : la rotation au-delà de 4 Mo (une fois tous les 4 Mo, et atomique pour les
+ * lecteurs, qui lisent les trois fichiers) et l'arrêt de l'app (`flushConversationFileTraces`, dans
+ * `before-quit`). Prix assumé : une mort BRUTALE du processus perd les traces pas encore posées.
+ * Garde : `conversation-file-trace-spool.sans-gel.test.ts`.
+ */
+const enAttente = new Map<string, string[]>()
+const ecritures = new Map<string, Promise<void>>()
+
+function lignesEnAttente(journal: string): string[] {
+  return enAttente.get(journal) ?? []
+}
+
+/** Le disque, puis les lignes en route qui n'y sont pas déjà (fenêtre de fin d'écriture). */
+function avecLignesEnAttente(journal: string, surDisque: string): string {
+  const memoire = lignesEnAttente(journal).filter((ligne) => !surDisque.includes(ligne))
+  if (memoire.length === 0) return surDisque
+  const separateur = surDisque && !surDisque.endsWith('\n') ? '\n' : ''
+  return `${surDisque}${separateur}${memoire.join('')}`
+}
+
+function tournerLeJournal(root: string, journal: string): void {
+  const previous = join(root, 'events.previous.jsonl')
+  if (existsSync(previous)) {
+    appendFileSync(join(root, 'events.archive.jsonl'), readFileSync(previous))
+    rmSync(previous, { force: true })
+  }
+  renameSync(journal, previous)
+}
+
+function planifierEcriture(root: string, journal: string): void {
+  // Une écriture déjà en route reprendra, à sa fin, les lignes arrivées entre-temps.
+  if (ecritures.has(journal)) return
+  const lot = [...lignesEnAttente(journal)]
+  if (lot.length === 0) return
+  let posees = false
+  const ecriture = (async () => {
+    try {
+      const taille = await stat(journal).then(
+        (infos) => infos.size,
+        () => 0
+      )
+      if (taille > SPOOL_MAX_BYTES) tournerLeJournal(root, journal)
+      await appendFile(journal, lot.join(''), 'utf8')
+      posees = true
+      const reste = lignesEnAttente(journal).slice(lot.length)
+      if (reste.length === 0) enAttente.delete(journal)
+      else enAttente.set(journal, reste)
+    } catch {
+      // Disque refusé : les lignes RESTENT en attente — relisibles, reprises par la prochaine trace
+      // ou par l'arrêt de l'app. Jamais perdues en silence, jamais réessayées en boucle.
+    }
+  })().finally(() => {
+    ecritures.delete(journal)
+    if (posees) planifierEcriture(root, journal)
+  })
+  ecritures.set(journal, ecriture)
+}
+
+/**
+ * Pose sur le disque, en BLOQUANT, les traces pas encore posées — réservé à l'arrêt de l'app.
+ * Une ligne dont l'écriture était déjà en route peut alors être posée deux fois : un doublon,
+ * préféré à une trace perdue (même choix que `flushAllPromptCalls`).
+ */
+export function flushConversationFileTraces(): void {
+  for (const [journal, lignes] of [...enAttente.entries()]) {
+    enAttente.delete(journal)
+    if (lignes.length === 0) continue
+    try {
+      appendFileSync(journal, lignes.join(''), 'utf8')
+    } catch {
+      // Arrêt en cours : une trace perdue ne doit pas empêcher la fermeture.
+    }
+  }
+}
+
+/** Attend que les traces en route soient posées. Pour les TESTS : la production n'attend jamais. */
+export async function attendreEcrituresDesTraces(): Promise<void> {
+  while (ecritures.size > 0) await Promise.all([...ecritures.values()])
+}
 
 export interface ConversationFileTrace {
   /** Identifiant stable d'un événement rejouable après crash. */
@@ -94,14 +178,6 @@ export function appendConversationFileTrace(
     ) {
       return 'duplicate'
     }
-    if (existsSync(path) && statSync(path).size > SPOOL_MAX_BYTES) {
-      const previous = join(root, 'events.previous.jsonl')
-      if (existsSync(previous)) {
-        appendFileSync(join(root, 'events.archive.jsonl'), readFileSync(previous))
-        rmSync(previous, { force: true })
-      }
-      renameSync(path, previous)
-    }
     const normalizedFingerprints = Object.fromEntries(
       paths.flatMap((path) => {
         const fingerprint = Object.entries(trace.pathFingerprints ?? {}).find(
@@ -142,30 +218,28 @@ export function appendConversationFileTrace(
         return fingerprints?.length ? [[path, fingerprints]] : []
       })
     )
-    appendFileSync(
-      path,
-      `${JSON.stringify({
-        ...trace,
-        workspaceRoot: canonicalWorkspaceRoot(trace.workspaceRoot),
-        paths,
-        ...(Object.keys(normalizedFingerprints).length > 0
-          ? { pathFingerprints: normalizedFingerprints }
-          : {}),
-        ...(Object.keys(normalizedBaseFingerprints).length > 0
-          ? { pathBaseFingerprints: normalizedBaseFingerprints }
-          : {}),
-        ...(Object.keys(normalizedGenerationMarkers).length > 0
-          ? { pathGenerationMarkers: normalizedGenerationMarkers }
-          : {}),
-        ...(Object.keys(normalizedBaseGenerationMarkers).length > 0
-          ? { pathBaseGenerationMarkers: normalizedBaseGenerationMarkers }
-          : {}),
-        ...(Object.keys(normalizedLineFingerprints).length > 0
-          ? { pathLineFingerprints: normalizedLineFingerprints }
-          : {})
-      })}\n`,
-      'utf8'
-    )
+    const ligne = `${JSON.stringify({
+      ...trace,
+      workspaceRoot: canonicalWorkspaceRoot(trace.workspaceRoot),
+      paths,
+      ...(Object.keys(normalizedFingerprints).length > 0
+        ? { pathFingerprints: normalizedFingerprints }
+        : {}),
+      ...(Object.keys(normalizedBaseFingerprints).length > 0
+        ? { pathBaseFingerprints: normalizedBaseFingerprints }
+        : {}),
+      ...(Object.keys(normalizedGenerationMarkers).length > 0
+        ? { pathGenerationMarkers: normalizedGenerationMarkers }
+        : {}),
+      ...(Object.keys(normalizedBaseGenerationMarkers).length > 0
+        ? { pathBaseGenerationMarkers: normalizedBaseGenerationMarkers }
+        : {}),
+      ...(Object.keys(normalizedLineFingerprints).length > 0
+        ? { pathLineFingerprints: normalizedLineFingerprints }
+        : {})
+    })}\n`
+    enAttente.set(path, [...lignesEnAttente(path), ligne])
+    planifierEcriture(root, path)
     return 'appended'
   } catch {
     // L'observabilité ne doit jamais interrompre la mutation qu'elle décrit.
@@ -265,9 +339,10 @@ export function appendExecutionEvidenceFileTrace(
 }
 
 function readFileTraces(path: string): ConversationFileTrace[] {
-  if (!existsSync(path)) return []
+  const contenu = avecLignesEnAttente(path, existsSync(path) ? readFileSync(path, 'utf8') : '')
+  if (!contenu) return []
   const traces: ConversationFileTrace[] = []
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+  for (const line of contenu.split(/\r?\n/)) {
     if (!line.trim()) continue
     try {
       const parsed = JSON.parse(line) as ConversationFileTrace
@@ -316,12 +391,10 @@ export async function readRecentConversationFileTraces(
   const root = spoolRoot(base)
   const traces: ConversationFileTrace[] = []
   for (const name of ['events.previous.jsonl', 'events.jsonl']) {
-    let raw: string
-    try {
-      raw = await readFile(join(root, name), 'utf8')
-    } catch {
-      continue // journal absent : rien à lire
-    }
+    const journal = join(root, name)
+    // Journal absent : rien sur le disque, mais peut-être des traces encore en route.
+    const raw = avecLignesEnAttente(journal, await readFile(journal, 'utf8').catch(() => ''))
+    if (!raw) continue
     for (const line of raw.split(/\r?\n/)) {
       if (!line.trim()) continue
       try {
