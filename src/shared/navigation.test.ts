@@ -59,6 +59,13 @@ describe('registre canonique des destinations Autowin', () => {
     ['routage', { destination: 'settings', section: 'routing' }],
     ['models', { destination: 'agent-studio', section: 'topology' }],
     ['capabilities', { destination: 'settings', section: 'capabilities' }],
+    // Une section par registre (conv-1109) : chaque nom ouvre SON registre.
+    ['skills', { destination: 'settings', section: 'capabilities' }],
+    ['hooks', { destination: 'settings', section: 'hooks' }],
+    ['gates', { destination: 'settings', section: 'gates' }],
+    ['mods', { destination: 'settings', section: 'mods' }],
+    ['plugins', { destination: 'settings', section: 'mods' }],
+    ['tools', { destination: 'settings', section: 'tools' }],
     ['behaviour', { destination: 'settings', section: 'behaviour' }],
     ['workflows', { destination: 'agent-studio', section: 'workflows' }],
     ['workflow', { destination: 'agent-studio', section: 'workflows' }],

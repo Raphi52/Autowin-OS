@@ -31,8 +31,78 @@
   --st-titre: var(--text);
 }
 
-/* 1. LA BARRE D'ONGLETS (passage à la ligne, soulignement holo) vit dans ViewTopBar.css, partagée
-   avec Agent Studio, Task Manager et Tickets : une seule copie de la règle pour toutes les vues. */
+/* 1. LES SECTIONS, EN LISTE À GAUCHE (conv-1109, 2026-10-23 : « je veux que les noms des sections
+   soient une liste à gauche des views comme les convs »). Elles étaient des pastilles dans la barre
+   du haut (ViewTopBar.css) ; la barre ne garde plus que le titre. La colonne reprend la carte de la
+   liste des conversations (`.conv-pane`, ChatView.css) et chaque ligne celle d'un fil
+   (`.conv-item` / `.conv-pick`) : mêmes jetons, donc elle suit le thème choisi. Classes PROPRES et
+   non `.conv-item` : les vues restent montées ensemble, et les scripts de contrôle du chat
+   (scripts/cdp-*.mjs) comptent les `.conv-item` du document entier. */
+.settings-view .settings-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--st-ecart);
+  min-height: 0;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  /* Aligné sur le premier panneau du contenu, qui commence sous le même retrait vertical. */
+  margin: var(--st-ecart) 0 6px;
+  padding: var(--s2);
+  overflow-y: auto;
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
+}
+.settings-nav-item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: 10px var(--s2);
+  border: 0;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-nav-item:hover {
+  background: var(--bg-2);
+  color: var(--text);
+}
+.settings-nav-item.is-active {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--text);
+}
+.settings-nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Fenêtre étroite : la colonne mangerait la moitié de la place. Les sections repassent au-dessus du
+   contenu, en lignes qui vont à la ligne, et le contenu garde toute la largeur. */
+@media (max-width: 760px) {
+  .settings-view .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0;
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+  .settings-nav-item {
+    width: auto;
+  }
+}
 
 /* 2. LE CONTENU DÉFILE. Skills garde sa hauteur pleine (ses trois colonnes défilent chacune) tant que
    la colonne est large ; plus étroite, sa page s'allonge et c'est ce conteneur qui défile. */
@@ -47,7 +117,15 @@
   overflow-y: auto;
   container: settings / inline-size;
 }
-.settings-view .settings-content[data-section='capabilities'] {
+/* Les cinq registres de capacités (une section chacun depuis conv-1109) gardent la hauteur pleine. */
+.settings-view
+  .settings-content:is(
+    [data-section='capabilities'],
+    [data-section='hooks'],
+    [data-section='gates'],
+    [data-section='mods'],
+    [data-section='tools']
+  ) {
   display: block;
   padding-top: 0;
   padding-bottom: 0;

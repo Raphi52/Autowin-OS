@@ -23,6 +23,40 @@ export interface ViewTopBarTab<Id extends string = string> {
 }
 
 /**
+ * Les marques d'une section (compteur d'anomalies, alerte `!`), partagées par la barre du haut et
+ * par la liste de sections à gauche de Settings (conv-1109) : deux copies du même badge finiraient
+ * par diverger, et une alerte vue dans une forme mais pas dans l'autre ne préviendrait plus personne.
+ */
+export function OngletMarques({ tab }: { tab: ViewTopBarTab }): React.JSX.Element {
+  return (
+    <>
+      {tab.anomaly && tab.anomaly.count > 0 && (
+        <span
+          className="domain-tab-anomaly"
+          // Conservé : des tests existants ciblent ces identifiants (`studio-anomaly-*`).
+          // Les perdre en factorisant la barre aurait cassé leur ancrage sans rien améliorer.
+          data-testid={tab.anomaly.testId}
+          title={tab.anomaly.title}
+          aria-label={tab.anomaly.title}
+        >
+          {tab.anomaly.count}
+        </span>
+      )}
+      {tab.alert?.active && (
+        <span
+          className="domain-badge-alert"
+          data-testid={tab.alert.testId}
+          title={tab.alert.title}
+          aria-label={tab.alert.title}
+        >
+          {tab.alert.mark}
+        </span>
+      )}
+    </>
+  )
+}
+
+/**
  * LA barre du haut, une seule fois, pour toutes les vues.
  *
  * Deux arrangements coexistaient pour la même intention : Task Manager posait un en-tête de module
@@ -77,28 +111,7 @@ export function ViewTopBar<Id extends string = string>({
               onClick={() => onSelect?.(tab.id)}
             >
               {tab.label}
-              {tab.anomaly && tab.anomaly.count > 0 && (
-                <span
-                  className="domain-tab-anomaly"
-                  // Conservé : des tests existants ciblent ces identifiants (`studio-anomaly-*`).
-                  // Les perdre en factorisant la barre aurait cassé leur ancrage sans rien améliorer.
-                  data-testid={tab.anomaly.testId}
-                  title={tab.anomaly.title}
-                  aria-label={tab.anomaly.title}
-                >
-                  {tab.anomaly.count}
-                </span>
-              )}
-              {tab.alert?.active && (
-                <span
-                  className="domain-badge-alert"
-                  data-testid={tab.alert.testId}
-                  title={tab.alert.title}
-                  aria-label={tab.alert.title}
-                >
-                  {tab.alert.mark}
-                </span>
-              )}
+              <OngletMarques tab={tab} />
             </button>
           ))}
         </nav>

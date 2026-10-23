@@ -27,7 +27,15 @@ export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
  */
 export type AgentStudioSection = 'topology' | 'workflows'
 export type SettingsSection =
+  // Les capacités, UNE section par registre (conv-1109, 2026-10-23 : « sépare la partie avec 4 mots
+  // en 4 views ») : elles formaient un seul écran « Skills · Hooks · Gates · Mods · Tools » à onglets
+  // internes. `capabilities` garde l'identifiant historique et ouvre les SKILLS : c'est la section
+  // d'arrivée de Settings (App.tsx) et l'adresse que les agents connaissent déjà.
   | 'capabilities'
+  | 'hooks'
+  | 'gates'
+  | 'mods'
+  | 'tools'
   // Routage : connexion des providers, comptes, modèle par défaut (venu d'Agent Studio, conv-963).
   | 'routing'
   | 'budget'
@@ -100,6 +108,9 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   capabilities: 'settings',
   skills: 'settings',
   hooks: 'settings',
+  gates: 'settings',
+  mods: 'settings',
+  plugins: 'settings',
   tools: 'settings',
   behaviour: 'settings',
   behavior: 'settings',
@@ -156,8 +167,13 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   run: { destination: 'agent-studio', section: 'workflows' },
   capabilities: { destination: 'settings', section: 'capabilities' },
   skills: { destination: 'settings', section: 'capabilities' },
-  hooks: { destination: 'settings', section: 'capabilities' },
-  tools: { destination: 'settings', section: 'capabilities' },
+  // Chaque registre a sa section (conv-1109) : « va sur les hooks » ouvre les hooks, plus l'écran
+  // des skills.
+  hooks: { destination: 'settings', section: 'hooks' },
+  gates: { destination: 'settings', section: 'gates' },
+  mods: { destination: 'settings', section: 'mods' },
+  plugins: { destination: 'settings', section: 'mods' },
+  tools: { destination: 'settings', section: 'tools' },
   budget: { destination: 'settings', section: 'budget' },
   interface: { destination: 'settings', section: 'interface' },
   apparence: { destination: 'settings', section: 'interface' },
