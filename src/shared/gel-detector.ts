@@ -106,6 +106,82 @@ export interface Gel {
    * etait mesure d'un bloc. Cle, role, taille et duree — jamais le texte.
    */
   messages?: MessageDeGel[]
+  /**
+   * CE QUE LA LISTE DES CONVERSATIONS A REDESSINE pendant un gel d'affichage de la liste
+   * (conv-1115, 2026-10-23). `renderer:vue-chat-liste` = 18 gels pour 73 s depuis le 20/10 (pire
+   * 12,9 s) qui disaient seulement « N ms » : le diagnostic /gel n'a pas pu nommer la cause.
+   */
+  liste?: ListeDeGel
+}
+
+/**
+ * Le rendu de la liste des conversations pendant un gel (conv-1115). Que des comptes et des noms
+ * pris dans `DECLENCHEURS_DE_LISTE` — jamais un titre ni un identifiant de fil.
+ */
+export interface ListeDeGel {
+  /** Lignes redessinées : fils distincts par rendu de la liste, additionnés sur les rendus. */
+  lignes: number
+  /**
+   * Appels de rendu de ligne. Plus que `lignes` quand un fil est montré deux fois (groupe
+   * « Récent ») ; le DOUBLE en mode développement (StrictMode rend chaque composant deux fois).
+   */
+  rendus: number
+  /** Rendus de la liste comptés dans ce gel. */
+  passages: number
+  /** Les données de la liste qui avaient changé, de la plus fréquente à la moins fréquente. */
+  declencheurs: DeclencheurDeListe[]
+}
+
+/**
+ * Les données dont dépend la liste (ChatView.tsx), sous un nom lisible dans gels.jsonl.
+ * `montage` : premier rendu de la liste (rechargement de la fenêtre, retour sur la vue).
+ * `hors-liste` : aucune n'avait changé — la vue s'est redessinée pour une autre raison.
+ */
+export const DECLENCHEURS_DE_LISTE = [
+  'montage',
+  'conversations',
+  'recherche',
+  'recherche-contenu',
+  'filtre-statut',
+  'replis',
+  'dossier-par-defaut',
+  'survol-depot',
+  'fils-occupes',
+  'fil-ouvert',
+  'fils-vus',
+  'mode-selection',
+  'mode-vue',
+  'selection',
+  'mosaique',
+  'hors-liste'
+] as const
+export type DeclencheurDeListe = (typeof DECLENCHEURS_DE_LISTE)[number]
+
+/**
+ * Detail de liste VENU DU RENDERER, relu champ par champ : entiers positifs, déclencheurs connus
+ * seulement, sans doublon. Un compte illisible = `undefined` (le gel s'écrit sans).
+ */
+export function lireListeDeGel(detail: unknown): ListeDeGel | undefined {
+  const brut = (detail as { liste?: unknown } | null | undefined)?.liste
+  if (typeof brut !== 'object' || brut === null) return undefined
+  const e = brut as Partial<Record<keyof ListeDeGel, unknown>>
+  const entier = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : undefined
+  const lignes = entier(e.lignes)
+  const rendus = entier(e.rendus)
+  const passages = entier(e.passages)
+  if (lignes === undefined || rendus === undefined || passages === undefined) return undefined
+  const connus = new Set<string>(DECLENCHEURS_DE_LISTE)
+  const declencheurs = Array.isArray(e.declencheurs)
+    ? [
+        ...new Set(
+          e.declencheurs.filter(
+            (d: unknown): d is DeclencheurDeListe => typeof d === 'string' && connus.has(d)
+          )
+        )
+      ]
+    : []
+  return { lignes, rendus, passages, declencheurs }
 }
 
 /** Un message du fil mesure pendant un gel d'affichage (conv-1077). */

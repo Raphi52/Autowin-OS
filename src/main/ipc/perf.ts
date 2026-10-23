@@ -18,7 +18,7 @@ import { ensureAutowinAppData } from '../app-data'
 import { lireLatenceTours } from '../perf-lag-main'
 import { journaliserGel, lireGels } from '../gel-main'
 import { demarrerReleveMemoire, releveMemoireFrais } from '../releve-memoire'
-import { lireMessagesDeGel } from '../../shared/gel-detector'
+import { lireListeDeGel, lireMessagesDeGel } from '../../shared/gel-detector'
 import { lireDuelsParWorkflow } from '../arena-duels'
 import { lireResultatsReelsParWorkflow } from '../activity/resultats-reels-workflows'
 import { join } from 'node:path'
@@ -99,13 +99,16 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
           : 'renderer:longtask'
       // Gel du FIL : les messages qui ont rendu pendant lui (conv-1077), relus champ par champ.
       const messages = lireMessagesDeGel(detail)
+      // Gel de la LISTE : lignes redessinées et déclencheurs (conv-1115), relus de même.
+      const liste = lireListeDeGel(detail)
       journaliserGel({
         ts: new Date().toISOString(),
         blocageMs: ms,
         operation: nom,
         // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
         cause: 'boucle-tenue',
-        ...(messages ? { messages } : {})
+        ...(messages ? { messages } : {}),
+        ...(liste ? { liste } : {})
       })
       return true
     }

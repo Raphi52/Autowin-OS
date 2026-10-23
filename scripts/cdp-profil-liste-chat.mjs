@@ -224,6 +224,27 @@ async function unRafraichissement(evaluer, cible, etat) {
 }
 
 /**
+ * Une expression évaluée sur le module `rendu-long.ts` DE LA PAGE. Importer la MÊME adresse rend la
+ * même instance que l'app ; or le serveur de dev ajoute `?t=<horodatage>` aux modules modifiés
+ * depuis son démarrage : on reprend donc l'adresse que la page a réellement chargée (mesuré
+ * conv-1115 : sans cela, une seconde instance vide répondait « aucun passage »). Erreur = son texte,
+ * jamais un faux zéro.
+ */
+const MODULE_RENDU_LONG = (expression) => `(async () => {
+  try {
+    const adresse = performance
+      .getEntriesByType('resource')
+      .map((e) => e.name)
+      .find((n) => /\\/src\\/components\\/rendu-long\\.ts(\\?|$)/.test(n))
+    if (!adresse) return { erreur: 'rendu-long.ts absent des ressources chargées' }
+    const m = await import(adresse)
+    return ${expression}
+  } catch (erreur) {
+    return { erreur: String(erreur) }
+  }
+})()`
+
+/**
  * COMBIEN DE LIGNES CHAQUE RAFRAÎCHISSEMENT REDESSINE — le compte exact, pas un échantillon :
  * `takePreciseCoverage` rend les appels depuis le relevé précédent et remet les compteurs à zéro
  * (protocole CDP, domaine Profiler). Passage séparé des essais chronométrés : le comptage ralentit
@@ -234,10 +255,19 @@ async function compterLignes(cdp, evaluer, cible, n = 3) {
   await cdp('Profiler.takePreciseCoverage')
   const comptes = []
   for (let i = 0; i < n; i += 1) {
+    // Le compteur de L'APP (conv-1115), remis à zéro avant le rafraîchissement : c'est lui que le
+    // prochain gel de la liste écrira dans gels.jsonl. Confronté au compte exact de V8 ci-dessous.
+    await evaluer(MODULE_RENDU_LONG('m.oublierRendusRecents()'))
     const r = await unRafraichissement(evaluer, cible, prochainEtat)
     prochainEtat = !prochainEtat
     const releve = (await cdp('Profiler.takePreciseCoverage'))?.result?.result
-    comptes.push({ fait: r.fait, murMs: r.murMs, lignesRedessinees: lignesRedessinees(releve) })
+    const app = await evaluer(MODULE_RENDU_LONG(`m.detailDeGelPourVue?.('chat-liste', 0) ?? null`))
+    comptes.push({
+      fait: r.fait,
+      murMs: r.murMs,
+      lignesRedessinees: lignesRedessinees(releve),
+      selonLApp: app
+    })
   }
   await cdp('Profiler.stopPreciseCoverage')
   console.log(`lignes redessinées par rafraîchissement : ${JSON.stringify(comptes)}`)
