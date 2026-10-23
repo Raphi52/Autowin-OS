@@ -73,6 +73,8 @@
  *                                    Prefixes d'etape (conv-1038) : `alt:<sel>` = Alt+clic,
  *                                    `selection:<sel>` = selectionne le texte de la cible puis
  *                                    relache la souris (barre « repondre a un passage »).
+ *                                    `point:<sel>` (conv-1130) = clic AVEC la position de la souris,
+ *                                    au centre de la cible (un geste qui lit clientX/clientY).
  *         [--state attention] [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
  *                                    Zero element touche = echec nomme (code 7).
@@ -251,9 +253,11 @@ export const accuseDImage = (message) =>
  * selecteur de clic ordinaire.
  */
 export const gesteDeLEtape = (etape) => {
-  const prefixe = /^(alt|selection|survol):\s*(.+)$/u.exec(etape.trim())
+  const prefixe = /^(alt|selection|survol|point):\s*(.+)$/u.exec(etape.trim())
   if (!prefixe) return { geste: 'clic', selecteur: etape.trim() }
-  const geste = { alt: 'alt-clic', selection: 'selection', survol: 'survol' }[prefixe[1]]
+  const geste = { alt: 'alt-clic', selection: 'selection', survol: 'survol', point: 'point' }[
+    prefixe[1]
+  ]
   return { geste, selecteur: prefixe[2].trim() }
 }
 
@@ -311,6 +315,20 @@ export const scriptDuGeste = ({ geste, selecteur }) => {
         cible.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
         cible.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         cible.focus()
+        return true
+      })()`
+  // CLIC AU POINT (conv-1130) : `element.click()` part avec clientX = clientY = 0. Un clic qui lit
+  // la position (la colonne cliquée de la rivière du Board) ne se prouvait donc sur aucune capture.
+  if (geste === 'point')
+    return `(() => {
+        ${cible}
+        if (!cible) return false
+        const r = cible.getBoundingClientRect()
+        const init = { bubbles: true, cancelable: true, button: 0, pointerId: 1,
+          clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+        cible.dispatchEvent(new PointerEvent('pointerdown', init))
+        cible.dispatchEvent(new PointerEvent('pointerup', init))
+        cible.dispatchEvent(new MouseEvent('click', init))
         return true
       })()`
   return `(() => {

@@ -87,3 +87,44 @@ describe('ui-capture — geste survol:', () => {
     expect(jouer('.absent')).toBe(false)
   })
 })
+
+/**
+ * `point:` (conv-1130, 2026-10-23) : un clic sur une colonne de la rivière du Board y amène la loupe
+ * d'après la POSITION du clic. `element.click()` part de (0, 0) : la capture montrait une loupe
+ * immobile sur un code pourtant correct. Entrée qui doit faire échouer : un clic sans position.
+ */
+describe('ui-capture — geste point:', () => {
+  it('point: → clic positionné, sélecteur intact', () => {
+    expect(gesteDeLEtape('point: [data-etage="prouve"]')).toEqual({
+      geste: 'point',
+      selecteur: '[data-etage="prouve"]'
+    })
+  })
+
+  it('le script clique au CENTRE de la cible, appui et relâchement compris', () => {
+    const recus = []
+    const cible = {
+      getBoundingClientRect: () => ({ left: 100, top: 40, width: 200, height: 20 }),
+      dispatchEvent: (e) => recus.push(`${e.type}@${e.clientX},${e.clientY}`),
+      click: () => recus.push('click()')
+    }
+    const document = { querySelector: (selecteur) => (selecteur === '.a' ? cible : null) }
+    class Evenement {
+      constructor(type, init) {
+        this.type = type
+        this.clientX = init?.clientX
+        this.clientY = init?.clientY
+      }
+    }
+    const jouer = (selecteur) =>
+      new Function(
+        'document',
+        'MouseEvent',
+        'PointerEvent',
+        `return ${scriptDuGeste({ geste: 'point', selecteur })}`
+      )(document, Evenement, Evenement)
+    expect(jouer('.a')).toBe(true)
+    expect(recus).toEqual(['pointerdown@200,50', 'pointerup@200,50', 'click@200,50'])
+    expect(jouer('.absent')).toBe(false)
+  })
+})
