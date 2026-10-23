@@ -43,7 +43,7 @@ const RE_AUTH_HINT: Record<string, string> = {
   claude:
     'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
   codex:
-    'CLI Codex ou session OAuth indisponible — installer/reconnecter Codex, puis rouvre la page.',
+    'CLI Codex ou session OAuth indisponible — installe/reconnecte Codex, puis rouvre la page.',
   kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».',
   gemini: 'Session Gemini absente — reconnecte le compte Google, puis relance « Tester ».'
 }
