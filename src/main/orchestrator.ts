@@ -437,7 +437,18 @@ import type {
   TrustedLearningOracle,
   Usage
 } from './providers/types'
-import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
+import {
+  appendWorkspaceMutationEvidence,
+  captureWorkspaceMutationSnapshot,
+  preparedCommitMutationEvidence
+} from './providers/workspace-mutation-evidence'
+import {
+  blocDEchange,
+  decisionEchangeSansCause,
+  inscrireEchangeAuJournal,
+  lignesDeCause,
+  questionSansCause
+} from './gates/echange-sans-cause'
 import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
 import type { WatchdogMutationClaims, WatchdogMutationClaimsSink } from './task-manager/types'
 import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
@@ -4380,6 +4391,14 @@ ${CONTRAT_OBJECTIONS}`
     // le changement de sandbox qui ouvre ensuite BUILD/CLEAN en ecriture.
     let prevSessionId: string | undefined
     let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
+    /**
+     * La session du DERNIER build, gardée à part : en fin de run `prevSessionId` désigne le nettoyage
+     * (chaîne des sessions). Seule cible de la question d'un refus « sans cause » (conv-1139,
+     * `gates/echange-sans-cause.ts`) ; absente = pas d'échange, réparation normale.
+     */
+    let sessionDuBuild:
+      { id: string; provider: string; options: SendOptions; model?: string } | undefined
+    let echangesSansCause = 0
     // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
     for (const output of usableResume) {
       pousserContexte(
@@ -4412,6 +4431,8 @@ ${CONTRAT_OBJECTIONS}`
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
       if (dejaPayee(phase)) return
       phasesJouees += 1
+      // Un build en parallèle ne laisse aucune session à questionner : jamais celle d'un build d'avant.
+      if (phase === 'build') sessionDuBuild = undefined
       absorberLesDirectives()
       const evidenceStart = aggregatedEvidence.length
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
@@ -5324,6 +5345,19 @@ ${CONTRAT_OBJECTIONS}`
           ? (phaseRes.sessionId ?? prevSessionId)
           : undefined
       prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
+      if (
+        phase === 'build' &&
+        phaseRes.sessionId &&
+        registry.honoursSessionResume(providerDeLaPhase)
+      ) {
+        const { observePrompt: _observe, ...optionsDuBuild } = subOptions
+        sessionDuBuild = {
+          id: phaseRes.sessionId,
+          provider: providerDeLaPhase,
+          options: optionsDuBuild,
+          model: modeleDeLaPhase
+        }
+      }
       if (phaseRes.usage) {
         cost.add({
           // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor
@@ -5574,6 +5608,10 @@ ${CONTRAT_OBJECTIONS}`
         return undefined
       }
     }
+    /** Réponses du build aux refus « sans cause », ajoutées APRÈS l'agrégat (hors coupe par étape). */
+    const blocsDEchange: string[] = []
+    const avecEchanges = (texte: string): string =>
+      blocsDEchange.length ? `${texte}\n\n${blocsDEchange.join('\n\n')}` : texte
     const buildExec = (): {
       text: string
       /** Le même agrégat, SANS les versions remplacées : ce que lit l'utilisateur (conv-339). */
@@ -5583,7 +5621,7 @@ ${CONTRAT_OBJECTIONS}`
     } => ({
       // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat n'est plus la
       // concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
-      text:
+      text: avecEchanges(
         phaseOutputs.length > 1
           ? agregerPhasesPourLeJuge(
               phaseOutputs,
@@ -5591,7 +5629,8 @@ ${CONTRAT_OBJECTIONS}`
               undefined,
               cheminDuLivrableEntierDuRun()
             )
-          : lastExecText,
+          : lastExecText
+      ),
       rendu:
         phaseOutputs.length > 1
           ? agregerPhasesPourLUtilisateur(
@@ -5654,6 +5693,8 @@ ${CONTRAT_OBJECTIONS}`
       valid: boolean
       gate: ReturnType<typeof evaluateClosure>
       learningAttestations: IndependentLearningAttestation[]
+      /** Refusé par les contrôles locaux, AVANT tout juge (seul cas qu'un échange peut lever). */
+      refusAvantJuge?: true
     }> => {
       // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
       // bloqué par pre-green clôture rouge, ou rejoint une reprise explicitement dessinée : le juge
@@ -5704,7 +5745,7 @@ ${CONTRAT_OBJECTIONS}`
           role: 'gate',
           detail: `Arrêté au contrôle final : ${preGate.reasons.join('; ')}`
         })
-        return { valid: false, gate: preGate, learningAttestations: [] }
+        return { valid: false, gate: preGate, learningAttestations: [], refusAvantJuge: true }
       }
 
       // Un juge terminal peut avoir fini dans son CLI détaché après la mort d'Electron. Le
@@ -6235,6 +6276,99 @@ ${CONTRAT_OBJECTIONS}`
       push({ step: 'gate', role: 'gate', detail: politique.motif })
     }
     /**
+     * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (conv-1139, 2026-10-24, étape 1 de
+     * l'option A du cadrage forum-agents-partie2-juge-build ; règles dans `gates/echange-sans-cause.ts`).
+     *
+     * Mesure du 24/10 : 18 refus du contrôle final faits du SEUL fix-gate, dont 10 suivis d'un refus
+     * du juge dès qu'il tourne — le juge, lui, n'avait jamais tourné. Au lieu de rejouer build +
+     * nettoyage à l'aveugle, on demande sa cause à la session du build. Rend `true` quand ses lignes
+     * de cause ont rejoint le texte contrôlé : le contrôle ET le juge se rejouent alors dans le même
+     * passage. Toute autre issue (session absente, plafond, panne, réponse vide, copie modifiée)
+     * rend `false`, DIT pourquoi dans la trace, et la réparation normale suit.
+     */
+    const echangerAvantReparation = async (motifs: readonly string[]): Promise<boolean> => {
+      const session = sessionDuBuild
+      const decision = decisionEchangeSansCause({
+        motifs,
+        echangesDuRun: echangesSansCause,
+        sessionDuBuild: Boolean(session)
+      })
+      if (!decision.tenter || !session) {
+        if (!decision.tenter && decision.motif)
+          push({ step: 'gate', role: 'gate', detail: decision.motif })
+        return false
+      }
+      echangesSansCause += 1
+      const n = echangesSansCause
+      const question = questionSansCause(decision.fichiers)
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: `Échange ${n} — tenté : refus « sans cause » seul sur ${decision.fichiers.join(', ')} — question à la session du build, sans réparation.`
+      })
+      const maintenu = (raison: string): false => {
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: `Échange ${n} — ${raison} — réparation normale.`
+        })
+        return false
+      }
+      // Aucun mode lecture seule n'existe (`sandboxForPhase`) : « ne rien modifier » tient par
+      // l'empreinte de la copie, prise avant et après la réponse.
+      const avant = await captureWorkspaceMutationSnapshot(workCwd)
+      let reponse: SendResult
+      try {
+        reponse = await registry.send(session.provider, [{ role: 'user', content: question }], {
+          ...session.options,
+          resumeSessionId: session.id,
+          ...(session.model ? { model: session.model } : {})
+        })
+      } catch (erreur) {
+        if (conversationId) inscrireEchangeAuJournal({ fil: conversationId, runId, question })
+        return maintenu(
+          `refus maintenu : panne pendant la réponse (${erreur instanceof Error ? erreur.message : String(erreur)})`
+        )
+      }
+      if (reponse.usage) {
+        cost.add({
+          provider: reponse.provider ?? session.provider,
+          role: 'subagent',
+          model: reponse.model ?? session.model,
+          inputTokens: reponse.usage.inputTokens,
+          outputTokens: reponse.usage.outputTokens,
+          cacheReadTokens: reponse.usage.cacheReadTokens,
+          cacheCreationTokens: reponse.usage.cacheCreationTokens,
+          costUsd: reponse.usage.costUsd
+        })
+      }
+      if (conversationId)
+        inscrireEchangeAuJournal({
+          fil: conversationId,
+          runId,
+          question,
+          reponse: reponse.text ?? ''
+        })
+      const delta: ExecutionEvidence[] = []
+      await appendWorkspaceMutationEvidence(avant, workCwd, delta)
+      const mutationsDeLaReponse = (reponse.executionEvidence ?? []).filter(
+        (e) => e.kind === 'mutation'
+      )
+      if (mutationsDeLaReponse.length > 0 || delta.length > 0) {
+        // La modification est réelle : elle rejoint les preuves du run, la réparation la verra.
+        aggregatedEvidence.push(
+          ...(mutationsDeLaReponse.length > 0 ? (reponse.executionEvidence ?? []) : delta)
+        )
+        return maintenu('annulé : la réponse a modifié la copie de travail')
+      }
+      const lignes = lignesDeCause(reponse.text)
+      if (lignes.length === 0)
+        return maintenu('refus maintenu : la réponse ne donne aucune ligne de cause')
+      blocsDEchange.push(blocDEchange(n, lignes))
+      exec = buildExec()
+      return true
+    }
+    /**
      * LE PLAFOND DUR, et non plus le nombre de tentatives permises.
      *
      * Avant, la boucle s'arretait quand `MAX_ATTEMPTS` etait atteint — EN SILENCE. Desormais c'est le
@@ -6355,7 +6489,18 @@ ${CONTRAT_OBJECTIONS}`
         }
       }
       const verdictDuPassagePrecedent = attempt > 0 ? lastJudgeMemoire : ''
-      const r = await judgeAndGate()
+      let r = await judgeAndGate()
+      // Refus « sans cause » seul : une question au build, puis contrôle + juge dans CE passage.
+      if (r.refusAvantJuge && (await echangerAvantReparation(r.gate.reasons))) {
+        r = await judgeAndGate()
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: r.refusAvantJuge
+            ? `Échange ${echangesSansCause} — refus maintenu : le contrôle refuse encore (${r.gate.reasons.join('; ')}) — réparation normale.`
+            : `Échange ${echangesSansCause} — refus levé : la réponse du build nomme la cause ; le juge a statué sans nouveau build.`
+        })
+      }
       valid = r.valid
       gate = r.gate
       // Une reparation qui a retouche le test designe par le juge ne clot jamais en vert.
