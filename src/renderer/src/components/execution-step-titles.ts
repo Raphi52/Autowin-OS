@@ -42,6 +42,8 @@ const TOOL_TITLES: Record<string, string | readonly [string, string]> = {
   remove_conversation: ['Fil supprimé', 'Fils supprimés'],
   remove_conversations: 'Fils supprimés',
   chat_send: ['Message envoyé', 'Messages envoyés'],
+  ecrire_a_un_fil: ['Message à un autre fil', 'Messages à d’autres fils'],
+  lire_mes_messages: 'Messages des autres fils lus',
   attach_run: 'Workflow attaché',
   read_file: ['Fichier lu', 'Fichiers lus'],
   list_files: ['Dossier listé', 'Dossiers listés'],

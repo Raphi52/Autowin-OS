@@ -5,6 +5,12 @@ import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
 import { refusTacheWindows } from './garde-tache-windows'
 import { refusCommitReserve, reserverOuRefuser } from './reservation-fichiers'
+import {
+  MESSAGES_PAR_LIVRAISON,
+  NOM_JOURNAL_MESSAGES_FILS,
+  lignesDuJournal,
+  livrerMessagesEnAttente
+} from './messages-entre-fils'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -325,6 +331,8 @@ const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefi
 const basesNonProd = ${JSON.stringify(basesNonProd)};
 const reserverOuRefuser = ${reserverOuRefuser.toString()};
 const refusCommitReserve = ${refusCommitReserve.toString()};
+const lignesDuJournal = ${lignesDuJournal.toString()};
+const livrerMessagesEnAttente = ${livrerMessagesEnAttente.toString()};
 // Réservation des fichiers entre fils (conv-1083, shared/reservation-fichiers.ts). Le fil qui écrit
 // est posé par Autowin dans reservation.json, à côté de ce script ; sans lui, rien n'est réservé.
 const OUTILS_D_EDITION = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
@@ -383,6 +391,26 @@ const refusCommitDeFichierReserve = (j, shell) => {
     return refusCommitReserve(ioReservation(), conf, shell, String(j.cwd || process.cwd()), Date.now(), process.platform === 'win32');
   } catch { return undefined; }
 };
+// MESSAGES D'AUTRES FILS, LIVRÉS EN PLEIN TOUR (conv-1139, shared/messages-entre-fils.ts). Le
+// journal vit à côté du registre des réservations. Un agent d'étape de run (son fil vient de
+// AUTOWIN_CONVERSATION_ID) n'en reçoit pas : sans les outils de l'app il ne pourrait pas répondre,
+// et le message, marqué livré, n'arriverait plus au fil. Banc réel du 2026-10-24 (CLI 2.1.309, -p) :
+// l'agent recopie le code glissé par additionalContext. Toute panne = aucun message, jamais un refus.
+const messagesEnAttente = () => {
+  try {
+    const conf = confReservation();
+    if (!conf || process.env.AUTOWIN_CONVERSATION_ID === conf.fil) return undefined;
+    const fs = process.getBuiltinModule('node:fs');
+    const path = process.getBuiltinModule('node:path');
+    const io = {
+      lire: (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { if (e && e.code === 'ENOENT') return ''; throw e; } },
+      ajouter: (p, ligne) => fs.appendFileSync(p, ligne + '\\n', 'utf8')
+    };
+    const journal = path.join(path.dirname(conf.registre), ${JSON.stringify(NOM_JOURNAL_MESSAGES_FILS)});
+    const r = livrerMessagesEnAttente(io, { fil: conf.fil, journal }, Date.now(), 'controle', lignesDuJournal, ${MESSAGES_PAR_LIVRAISON});
+    return r ? r.texte : undefined;
+  } catch { return undefined; }
+};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
@@ -420,6 +448,10 @@ process.stdin.on('end', () => {
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
     process.exit(0);
   }
+  // Pas de refus : les messages en attente partent avec cet appel d'outil (un refus les laisse
+  // pour le suivant).
+  const recus = messagesEnAttente();
+  if (recus) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: recus } }));
   process.exit(0);
 });
 `

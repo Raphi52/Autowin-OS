@@ -89,6 +89,37 @@ export function lignesDuJournal(texte, id) {
 
 const lireJson = (chemin) => JSON.parse(readFileSync(chemin, 'utf8'))
 
+/** Même nom que `NOM_JOURNAL_MESSAGES_FILS` (src/shared/messages-entre-fils.ts, conv-1139). */
+const NOM_MESSAGES_FILS = 'messages-entre-fils.jsonl'
+
+/**
+ * Les lignes du journal des messages entre fils qui concernent `id` : messages envoyés ou reçus par
+ * lui, et les remises de ces messages. Une ligne illisible est sautée. Pure.
+ */
+export function messagesEntreFilsDe(texte, id) {
+  const lues = []
+  for (const brute of texte.split('\n')) {
+    if (!brute.trim()) continue
+    try {
+      lues.push({ brute, l: JSON.parse(brute) })
+    } catch {
+      // Ligne coupée : sautée.
+    }
+  }
+  const siens = new Set(
+    lues
+      .filter(({ l }) => l?.type === 'message' && (l.a === id || l.de?.fil === id))
+      .map(({ l }) => l.id)
+  )
+  return lues
+    .filter(
+      ({ l }) =>
+        (l?.type === 'message' && siens.has(l.id)) ||
+        (l?.type === 'livre' && Array.isArray(l.ids) && l.ids.some((x) => siens.has(x)))
+    )
+    .map(({ brute }) => brute)
+}
+
 /**
  * Copie la conversation `id` de `source` vers `destination` (deux racines de données). Rend ce qui a
  * été copié, ou `{ ok: false, echec }` sans rien écrire quand la conversation n'existe pas.
@@ -134,6 +165,16 @@ export function semerConversation({ source, destination, id }) {
     copyFileSync(join(source, relatif), join(destination, relatif))
     ecrits.push(relatif)
   }
+  // Messages entre fils (conv-1139) : ceux que ce fil a envoyés ou reçus, et leurs remises — sans
+  // eux, la capture d'un fil ne peut pas montrer ce que ses agents se sont écrits.
+  const messagesFils = join(source, NOM_MESSAGES_FILS)
+  if (existsSync(messagesFils)) {
+    const lignesFils = messagesEntreFilsDe(readFileSync(messagesFils, 'utf8'), id)
+    if (lignesFils.length > 0) {
+      writeFileSync(join(destination, NOM_MESSAGES_FILS), `${lignesFils.join('\n')}\n`, 'utf8')
+      ecrits.push(NOM_MESSAGES_FILS)
+    }
+  }
   let runs = 0
   for (const relatif of dossiersDeConversation(id)) {
     if (!existsSync(join(source, relatif))) continue
@@ -172,6 +213,7 @@ export const emplacementsDeConversation = (id) => [
   'conversations.json',
   'conversations.json.journal.jsonl',
   join('conversations.json.archive', `${id}.json`),
+  NOM_MESSAGES_FILS,
   ...fichiersDeConversation(id),
   ...dossiersDeConversation(id),
   join('turn-journals', id)

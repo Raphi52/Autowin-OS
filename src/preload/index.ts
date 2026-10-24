@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
 import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
@@ -896,6 +897,9 @@ const api = {
   }),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
+  /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
+  messagesEntreFils: (conversationId: string): Promise<MessageEntreFilsAffiche[]> =>
+    ipcRenderer.invoke('os:messagesEntreFils', conversationId),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'

@@ -360,6 +360,7 @@ import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
 import { homedir, tmpdir } from 'node:os'
 import { canonicalProjectPath } from '../shared/project-path'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
+import { messagesAAfficher } from './messages-entre-fils-app'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -3371,6 +3372,12 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:appCommand', (event, name: string, args?: Record<string, unknown>) => {
     assertTrustedRendererSender(event, 'App command')
     return bus.exec(guardString(name, 'name'), args)
+  })
+  // Messages entre fils (conv-1139) : ce que le fil affiche, envoyés et reçus. Lecture SEULE —
+  // afficher ne marque rien comme livré à l'agent.
+  ipcMain.handle('os:messagesEntreFils', (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Messages entre fils')
+    return messagesAAfficher(guardString(conversationId, 'conversationId'))
   })
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).

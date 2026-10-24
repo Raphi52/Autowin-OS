@@ -109,6 +109,7 @@ import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
 // de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
+import { MessagesEntreFils } from './MessagesEntreFils'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import {
@@ -8511,6 +8512,8 @@ Cliquer pour choisir une autre branche.`}
            * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
            */}
           <ProdAutorisationHote conversationId={activeId} />
+          {/* Messages entre agents de fils du même dépôt (conv-1139) : visibles, jamais des ordres. */}
+          <MessagesEntreFils conversationId={activeId} />
           <VueMesuree id="chat-saisie" bloc>
             <ChatComposer
               ref={composerRef}

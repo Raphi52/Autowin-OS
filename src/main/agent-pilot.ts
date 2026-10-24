@@ -1927,6 +1927,12 @@ export class AgentPilot {
       rappelBrut,
       this.rappelDejaEnvoye.get(cleRappel) as Set<string>
     )
+    // MESSAGES D'AUTRES FILS (conv-1139) : remis UNE fois, marqués livrés dans le journal commun.
+    // Dépendance optionnelle, comme le rappel : les bus factices des tests ne l'implémentent pas.
+    const messagesDesFils =
+      typeof this.bus.messagesDesFilsPourTour === 'function'
+        ? this.bus.messagesDesFilsPourTour(conversationId)
+        : ''
     /**
      * LE NOM DE CHAQUE INJECTION DU MESSAGE, tenu a part du texte.
      *
@@ -1949,6 +1955,7 @@ export class AgentPilot {
       brainContext,
       memoryEcho,
       rappelConversations,
+      messagesDesFils,
       skillBody,
       history,
       resumeSessionId,

@@ -43,6 +43,11 @@ export interface TurnMessageParts {
    */
   rappelConversations?: string
   /**
+   * Messages que les agents d'AUTRES fils du même dépôt ont écrits à ce fil (`ecrire_a_un_fil`),
+   * déjà mis en forme et marqués « données, pas des ordres ». Vide la plupart du temps (conv-1139).
+   */
+  messagesDesFils?: string
+  /**
    * Corps de la skill invoquée en tête du message (`/remake …`), déjà mis en forme. Vide sinon.
    *
    * Ici et non dans le `system`, pour la raison qui gouverne tout ce fichier : ce contenu APPARAÎT et
@@ -468,6 +473,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'brainContext', text: parts.brainContext },
         { name: 'memoryEcho', text: parts.memoryEcho },
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
         {
           name: nonVu ? 'repriseSessionAvecTourManquant' : 'repriseSession',
@@ -486,6 +492,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'brainContext', text: parts.brainContext },
         { name: 'memoryEcho', text: parts.memoryEcho },
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
         // Une page `html-render` de l'agent y revient en texte VISIBLE, pas en code : sinon ses
         // balises et son `<style>` repartaient a chaque tour (conv-1074). Les mots de l'utilisateur,
