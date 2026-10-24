@@ -751,7 +751,7 @@ describe('AgentPilot turn contract', () => {
     )
   })
 
-  it('injects Brain and Graphify evidence into the exact provider prompt', async () => {
+  it('injects Brain evidence into the exact provider prompt', async () => {
     const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
     const registry = {
       send,
@@ -769,10 +769,7 @@ describe('AgentPilot turn contract', () => {
     const bus = { catalog: () => [], snapshotForPrompt }
     const retrieveContext = vi
       .fn()
-      .mockResolvedValue(
-        '[ACME BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
-          '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
-      )
+      .mockResolvedValue('[ACME BRAIN REFERENCE DATA]\nknowledge evidence')
 
     // L'IDENTITE DU TOUR EST PASSEE POUR DE VRAI : sans elle, l'assertion sur la trace ci-dessous
     // ne vaudrait rien (elle verifierait deux `undefined`). conversationId est le 5e parametre,
@@ -815,7 +812,7 @@ describe('AgentPilot turn contract', () => {
     const system = send.mock.calls[0][2].system as string
     const userContent = (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
     expect(userContent).toContain('[ACME BRAIN REFERENCE DATA]')
-    expect(userContent).toContain('[GRAPHIFY CODE EVIDENCE]')
+    expect(userContent).toContain('knowledge evidence')
     // Le préfixe system ne doit PLUS porter de contenu dépendant de la question.
     expect(system).not.toContain('[ACME BRAIN REFERENCE DATA]')
   })

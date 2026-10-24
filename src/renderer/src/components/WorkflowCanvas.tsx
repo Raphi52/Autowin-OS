@@ -126,7 +126,7 @@ function rechain(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasEdge[] {
 
 /**
  * Classe de couleur d'une brique. Les huit phases ont chacune la leur ; une skill du disque n'en a
- * aucune (`wf-ph-graphify` n'existe dans aucune feuille de style) et se rendait donc SANS couleur ni
+ * aucune (`wf-ph-<skill>` n'existe dans aucune feuille de style) et se rendait donc SANS couleur ni
  * pastille — une brique fantôme. Elles partagent une classe neutre commune, qui les distingue aussi
  * visuellement des phases : leur sémantique n'est pas la même.
  */

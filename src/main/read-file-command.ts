@@ -196,7 +196,6 @@ const DOSSIERS_EXCLUS = new Set([
   'coverage',
   '.autowin-data',
   'Audit',
-  'graphify-out',
   /*
     CACHE DE BYTECODE PYTHON. Mesure du 2026-09-10 : `find_in_files` citait
     `scripts/__pycache__/launch_dev_splash.cpython-313.pyc:43` avec des lignes de `�` — l'ASCII

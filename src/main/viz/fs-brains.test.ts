@@ -1697,7 +1697,7 @@ describe('Brain graph', () => {
     mkdirSync(join(root, 'projects'))
 
     // Sans profil (version publique) : les categories generiques seules, aucun domaine metier.
-    const neutre = scanBrainGraphs([join(root, 'projects')], root)[0]
+    const neutre = scanBrainGraphs(root)[0]
     expect(neutre).toMatchObject({
       id: 'brain',
       label: 'Brain',
@@ -1712,7 +1712,7 @@ describe('Brain graph', () => {
     // Avec le domaine metier du profil : sa categorie et ses huit projets s'ajoutent au catalogue.
     vi.stubEnv('AUTOWIN_IDENTITE_ENTREPRISE', PROFIL_METIER_FICTIF)
     try {
-      const avecMetier = scanBrainGraphs([join(root, 'projects')], root)[0]
+      const avecMetier = scanBrainGraphs(root)[0]
       expect(avecMetier.themes).toHaveLength(22)
       expect(avecMetier.themes?.map((theme) => theme.id)).toEqual(
         expect.arrayContaining([
@@ -1851,7 +1851,7 @@ describe('Brain graph', () => {
       'utf8'
     )
 
-    const ref = scanBrainGraphs([], root)[0]
+    const ref = scanBrainGraphs(root)[0]
     expect(ref.themes).toEqual(
       expect.arrayContaining([
         { id: 'theme/autowin-os', label: 'Autowin OS' },
@@ -2146,8 +2146,9 @@ tags: [${theme}]
 
   it('rejects a file in a sibling whose name only shares an allowed-root prefix', () => {
     const home = mkdtempSync(join(tmpdir(), 'autowin-os-home-'))
-    const sibling = join(home, '.graphify-evil')
-    mkdirSync(sibling)
+    // Racine autorisée : `<home>/.claude/runs` ; le voisin ne partage que son préfixe.
+    const sibling = join(home, '.claude', 'runs-evil')
+    mkdirSync(sibling, { recursive: true })
     const file = join(sibling, 'secret.md')
     writeFileSync(file, '# Secret\n', 'utf8')
     const previousHome = process.env.USERPROFILE

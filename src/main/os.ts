@@ -1715,7 +1715,7 @@ export class AutowinOS {
     // donc toute l'application gele pendant ce temps. Le seul appelant (`commands.ts`, commande
     // `load_graph`) ne cherche qu'un brain par son id et n'utilise jamais `themes`.
     // La vue Memory, elle, passe deja par le worker et demande ses themes a part.
-    return scanBrainGraphs(undefined, undefined, false)
+    return scanBrainGraphs(undefined, false)
   }
   loadBrainGraph(
     path: string,

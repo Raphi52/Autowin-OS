@@ -1777,7 +1777,6 @@ export function GraphView({
           {brains.map((brain) => (
             <option key={brain.path} value={brain.path}>
               {brain.label}
-              {brain.kind === 'graphify' ? ` · ${brain.sizeMb} Mo` : ''}
             </option>
           ))}
         </select>
@@ -2217,7 +2216,7 @@ export function GraphView({
           </button>
         )}
         {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
-            aux brains de type vault — un graphe graphify n'a ni boîte de réception ni retrieval. */}
+            aux brains de type vault, qui ont une boîte de réception et une récupération. */}
         {selectedBrain?.kind === 'vault' && (
           <button
             type="button"

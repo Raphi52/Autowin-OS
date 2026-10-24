@@ -10,7 +10,6 @@ import {
   SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { contextWindowFor } from '../../shared/context-gauge'
-import { DEFAULT_TIMEOUT_MS as GRAPHIFY_TIMEOUT_MS } from '../graphify-command'
 import { verifyTimeoutMs } from '../verify-command'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -315,9 +314,9 @@ export function envSortieMcpNoeudSkill(
  * MESURÉ ce jour-là (claude 2.1.296, serveur HTTP comme `skill-node-mcp.ts`, `MCP_TOOL_TIMEOUT` non
  * posé) : le CLI coupe un appel d'outil à 60,4 s (« The operation timed out ») alors que le serveur
  * répondait à 330 s ; avec `MCP_TOOL_TIMEOUT=200000`, un appel de 90 s est rendu. Or le chat sert en
- * direct `verify` et `run` (même exécution, plafond `verifyTimeoutMs`, 10 min par défaut) et
- * `graphify` (10 min) : coupés à 60 s, ils continuaient dans Autowin pendant que le modèle recevait
- * un échec — et pouvait les relancer.
+ * direct `verify` et `run` (même exécution, plafond `verifyTimeoutMs`, 10 min par défaut) : coupés
+ * à 60 s, ils continuaient dans Autowin pendant que le modèle recevait un échec — et pouvait les
+ * relancer.
  *
  * DEUX DÉLAIS, pas un. Avec `MCP_TOOL_TIMEOUT=900000` seul, un appel de 330 s a encore été coupé à
  * 300 s : « sent no response or progress for 300s; aborting » — le délai d'INACTIVITÉ, réglé par
@@ -337,8 +336,7 @@ export function envDelaiOutilsMcp(
   env: NodeJS.ProcessEnv
 ): Record<string, string> {
   if (!outille) return {}
-  const plusLongGeste = Math.max(verifyTimeoutMs(env), GRAPHIFY_TIMEOUT_MS)
-  const delai = String(plusLongGeste + MARGE_DELAI_OUTIL_MCP_MS)
+  const delai = String(verifyTimeoutMs(env) + MARGE_DELAI_OUTIL_MCP_MS)
   return {
     ...(env.MCP_TOOL_TIMEOUT ? {} : { MCP_TOOL_TIMEOUT: delai }),
     ...(env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ? {} : { CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: delai })

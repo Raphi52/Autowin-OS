@@ -11,7 +11,7 @@
  * INVARIANT (testé, pas jugé) :
  *  - COMPLÉTUDE : chaque catégorie A-E de l'orchestré est peuplée et tracée à sa source.
  *  - EXCLUSIVITÉ : l'objet ne décrit QUE des influenceurs réels — jamais un non-influenceur
- *    (capabilities activables, hooks natifs Claude, rôle `scout` scalaire, graphify repo-map),
+ *    (capabilities activables, hooks natifs Claude, rôle `scout` scalaire),
  *    qui sont découplés de l'orchestrateur et ne changent RIEN au prompt/comportement d'un tour.
  *
  * Ce module ne DÉCIDE rien du comportement : il le DÉCRIT fidèlement. Les valeurs volatiles
@@ -377,8 +377,6 @@ export function buildBehaviourComposition(
           'Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.',
         source: 'src/main/agent-pilot.ts:216'
       }
-      // « preuves Graphify » retiré (conv-353) : la source `graph` n'est plus poussée depuis le
-      // 2026-09-18 (`sources: []`, index.ts) — EXCLUSIVITÉ : un non-influenceur ne se décrit pas.
     ],
     turnContext: [
       {

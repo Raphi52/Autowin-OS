@@ -30,7 +30,7 @@ import { nomHistorique } from './identite-entreprise'
  * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
  * par le lanceur, qui herite de l'ancien environnement. Un `setx` du PATH suivi d'un redemarrage
  * ne suffit donc PAS. Le PATH reste volontairement HORS de cette liste (cf. en-tete), mais
- * DESIGNER le binaire est un reglage produit, comme `AUTOWIN_GRAPHIFY_BIN` ou `CODEX_BIN` : la
+ * DESIGNER le binaire est un reglage produit, comme `CODEX_BIN` : la
  * valeur vient de l'OS, le modele ne choisit que le nom.
  */
 export const VARIABLES_RECHARGEABLES = [

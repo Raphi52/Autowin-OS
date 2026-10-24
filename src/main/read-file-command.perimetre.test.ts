@@ -28,8 +28,7 @@ describe('enumererFichiersLisibles — le balayage évite les données et les pr
       'src/main',
       '.autowin-data/autowin-os/Cache/Cache_Data',
       'Audit/workspaces/20260813-x/rose-proof-profile/app-data/autowin-os/Cache',
-      'node_modules/paquet',
-      'graphify-out'
+      'node_modules/paquet'
     ]) {
       mkdirSync(join(racine, dossier), { recursive: true })
     }
@@ -46,7 +45,6 @@ describe('enumererFichiersLisibles — le balayage évite les données et les pr
       'utf8'
     )
     writeFileSync(join(racine, 'node_modules/paquet/index.js'), 'x', 'utf8')
-    writeFileSync(join(racine, 'graphify-out/graph.json'), '{}', 'utf8')
     return racine
   }
 
@@ -57,7 +55,6 @@ describe('enumererFichiersLisibles — le balayage évite les données et les pr
       expect(fichiers).toContain('src/main/vrai.ts')
       expect(fichiers.filter((f) => f.startsWith('.autowin-data'))).toEqual([])
       expect(fichiers.filter((f) => f.startsWith('Audit/'))).toEqual([])
-      expect(fichiers.filter((f) => f.startsWith('graphify-out'))).toEqual([])
     } finally {
       rmSync(racine, { recursive: true, force: true })
     }

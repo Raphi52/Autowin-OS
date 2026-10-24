@@ -4,13 +4,7 @@ import { AppCommandBus } from './commands'
 describe('capability registry runtime gate', () => {
   it('refuses a disabled command before any mutation or broadcast', async () => {
     const broadcast = vi.fn()
-    const bus = new AppCommandBus(
-      {} as never,
-      broadcast,
-      undefined,
-      undefined,
-      (name) => name !== 'navigate'
-    )
+    const bus = new AppCommandBus({} as never, broadcast, undefined, (name) => name !== 'navigate')
 
     // Le refus NOMME desormais sa sortie : un refus nu faisait boucler l'agent (huit tentatives
     // identiques mesurees le 2026-08-25). On exige donc le constat ET le geste — plus strict que
@@ -25,7 +19,7 @@ describe('capability registry runtime gate', () => {
 
   it('keeps uncatalogued or enabled commands executable', async () => {
     const broadcast = vi.fn()
-    const bus = new AppCommandBus({} as never, broadcast, undefined, undefined, () => true)
+    const bus = new AppCommandBus({} as never, broadcast, undefined, () => true)
 
     await expect(bus.exec('navigate', { tab: 'settings' })).resolves.toEqual({
       ok: true,

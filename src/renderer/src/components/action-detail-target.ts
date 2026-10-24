@@ -182,7 +182,7 @@ export function localActionDetail(action: ActionLike): LocalActionDetail | undef
     /**
      * La CAUSE d'un echec. Une commande qui echoue rend `{ ok: false, error: <message> }`
      * (`commands.ts:1120`), et ce champ n'etait lu par personne : faute de texte, l'action etait
-     * IGNOREE. Vecu le 2026-08-18 — « 1 action avec erreur — graphify » dans le fil, et rien d'autre.
+     * IGNOREE. Vecu le 2026-08-18 — « 1 action avec erreur » dans le fil, et rien d'autre.
      * Un echec sans sa raison n'apprend rien ; c'est precisement le moment ou l'utilisateur en a le
      * plus besoin. Place APRES `reason`, qui reste prioritaire : un refus explique deja pourquoi.
      */

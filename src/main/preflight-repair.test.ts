@@ -419,10 +419,9 @@ describe('réparation « runtime Brain » (brain-venv)', () => {
       resolveLoginCwd: () => '/repo/autowin'
     })
     expect(outcome.started).toBe(true)
-    expect(openLoginTerminal).toHaveBeenCalledWith(
-      './scripts/bootstrap-deps.ps1 -SkipCli -SkipGraphify',
-      { cwd: '/repo/autowin' }
-    )
+    expect(openLoginTerminal).toHaveBeenCalledWith('./scripts/bootstrap-deps.ps1 -SkipCli', {
+      cwd: '/repo/autowin'
+    })
   })
 
   it('repo introuvable → AUCUNE console ouverte, et on dit quoi lancer', async () => {

@@ -83,7 +83,6 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   conversation_search: 'chercher',
   find_in_files: 'chercher',
   ticket_search: 'chercher',
-  graphify: 'chercher',
   Grep: 'chercher',
   WebSearch: 'chercher',
   edit_file: 'modifier',

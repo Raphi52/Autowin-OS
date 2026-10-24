@@ -4292,7 +4292,7 @@ ${CONTRAT_OBJECTIONS}`
         // Une vue dérivée de la mémoire ne doit jamais empêcher le run courant.
       }
     }
-    // #1 repo-map graphify RÉFUTÉ par mesure A/B (2026-07-22) : injecter GRAPH_REPORT.md (28k) à
+    // #1 carte du code (repo-map) RÉFUTÉE par mesure A/B (2026-07-22) : injecter un rapport de graphe (28k) à
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.

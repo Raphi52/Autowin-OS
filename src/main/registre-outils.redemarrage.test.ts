@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AppCommandBus, outilOffert } from './commands'
+import { AppCommandBus } from './commands'
 import { listNativeRegistry, setNativeEnablement } from './native-registry'
 import { amorcerRegistreOutils } from './registre-outils'
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
@@ -18,12 +18,12 @@ function demarrer(base: string): AppCommandBus {
   // Même lecture que `capabilityEnabled('tools', name)` (capability-controls.ts), registre jetable.
   const interrupteur = (name: string): boolean | undefined =>
     listNativeRegistry('tools', base).find((item) => item.id === name)?.enabled
+  // Même filtre que index.ts : seul un interrupteur explicitement coupé retire l'outil.
   const bus = new AppCommandBus(
     {} as never,
     () => {},
     undefined,
-    undefined,
-    (name) => outilOffert(name, interrupteur(name))
+    (name) => interrupteur(name) !== false
   )
   // Amorçage : la MÊME fonction que index.ts (le garde en bas de fichier le tient).
   amorcerRegistreOutils(base)
@@ -74,11 +74,6 @@ describe('registre des outils : un interrupteur survit au redémarrage', () => {
       .catalog()
       .map((command) => command.name)
     expect(offerts).toContain('verify')
-  })
-
-  it('un outil débranché dans le code n’apparaît pas à l’écran comme un interrupteur', () => {
-    demarrer(base)
-    expect(listNativeRegistry('tools', base).map((item) => item.id)).not.toContain('graphify')
   })
 
   it('index.ts amorce par amorcerRegistreOutils, jamais depuis bus.catalog() filtré', () => {

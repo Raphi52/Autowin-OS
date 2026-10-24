@@ -119,7 +119,7 @@ describe('cablage du bloc d’activite', () => {
 })
 
 /**
- * DEFAUT VECU le 2026-08-18 : « 1 action avec erreur — graphify » dans le fil, et RIEN de plus.
+ * DEFAUT VECU le 2026-08-18 : « 1 action avec erreur » dans le fil, et RIEN de plus.
  *
  * Une commande qui echoue rend `{ ok: false, error: <message> }` (`commands.ts:1120`). Or
  * `localActionDetails` ne lisait que `reason`, `diff`, `output`/`exitCode` et `knowledge` : sans
@@ -129,7 +129,7 @@ describe('cablage du bloc d’activite', () => {
 describe('localActionDetails — la cause d un echec doit se lire dans le fil', () => {
   it("expose le message d'erreur d'une commande qui a echoue", () => {
     const details = localActionDetails([
-      { name: 'graphify', ok: false, data: { ok: false, error: 'graphify: binaire introuvable' } }
+      { name: 'sql_query', ok: false, data: { ok: false, error: 'sqlcmd: binaire introuvable' } }
     ])
     expect(details).toHaveLength(1)
     expect(details[0].text).toContain('binaire introuvable')
@@ -139,7 +139,7 @@ describe('localActionDetails — la cause d un echec doit se lire dans le fil', 
   it('un refus explicite garde la priorite sur le message brut', () => {
     const details = localActionDetails([
       {
-        name: 'graphify',
+        name: 'read_file',
         ok: false,
         data: { allowed: false, reason: 'chemin hors du workspace', error: 'EACCES' }
       }
@@ -148,7 +148,7 @@ describe('localActionDetails — la cause d un echec doit se lire dans le fil', 
   })
 
   it("une action qui reussit sans rien a raconter reste silencieuse", () => {
-    expect(localActionDetails([{ name: 'graphify', ok: true, data: { ok: true } }])).toHaveLength(0)
+    expect(localActionDetails([{ name: 'navigate', ok: true, data: { ok: true } }])).toHaveLength(0)
   })
 })
 

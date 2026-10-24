@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { AppCommandBus, isolateWatchdogPromptPaths, outilOffert } from './commands'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
 import { APP_DESTINATIONS } from '../shared/navigation'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -268,7 +267,6 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         () => {},
         undefined,
         undefined,
-        undefined,
         retrieve
       ).exec('brain_query', { question: 'secret transverse' })
 
@@ -307,7 +305,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         structuredContext: { preamble, sources }
       }
     })
-    const bus = new AppCommandBus(os, () => {}, undefined, undefined, undefined, retrieve)
+    const bus = new AppCommandBus(os, () => {}, undefined, undefined, retrieve)
 
     const result = await bus.exec('brain_query', { question: 'architecture CONTOSO' })
 
@@ -1578,64 +1576,6 @@ describe('AppCommandBus command execution policy', () => {
     await expect(bus.snapshot()).resolves.toMatchObject({ worktrees: [] })
   })
 
-  it('publie et exécute le tool Graphify avec un chemin borné au workspace', async () => {
-    const graphify = vi.fn(async () => ({
-      action: 'updated' as const,
-      target: 'packages/api',
-      graph: 'packages/api/graphify-out/graph.json',
-      nodes: 42,
-      links: 84,
-      durationMs: 120
-    }))
-    const os = fakeOs()
-    os.worktrees = {
-      begin: vi.fn(() => process.cwd()),
-      end: vi.fn(() => ({ outcome: 'nothing', agentId: 'command' }))
-    }
-    const bus = new AppCommandBus(os, () => {}, undefined, graphify)
-    const specification = bus.catalog().find((tool) => tool.name === 'graphify')
-
-    expect(specification).toMatchObject({
-      args: { path: expect.stringContaining('facultatif') },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-      }
-    })
-    await expect(bus.exec('graphify', { path: 'packages/api' })).resolves.toMatchObject({
-      ok: true,
-      data: { action: 'updated', nodes: 42, links: 84 }
-    })
-    expect(graphify).toHaveBeenCalledWith({
-      workspaceRoot: process.cwd(),
-      path: 'packages/api'
-    })
-  })
-
-  it('débranche graphify avec le filtre de l’app : ni offert, ni exécuté, ni conseillé (conv-353)', async () => {
-    const graphify = vi.fn()
-    // Le MÊME prédicat que index.ts, interrupteur local muet (aucun choix enregistré).
-    const bus = new AppCommandBus(
-      fakeOs(),
-      () => {},
-      undefined,
-      graphify,
-      (name) => outilOffert(name, undefined)
-    )
-    const offerts = bus.catalog().map((tool) => tool.name)
-
-    expect(offerts).not.toContain('graphify')
-    expect(offerts).toEqual(expect.arrayContaining(['verify', 'brain_query', 'brain_graph']))
-    await expect(bus.exec('graphify', {})).resolves.toMatchObject({ ok: false })
-    expect(graphify).not.toHaveBeenCalled()
-    expect(buildChatPilotagePrompt(bus.catalog())).not.toMatch(/graphify/i)
-    // L'interrupteur local garde son effet sur les autres outils.
-    expect(outilOffert('verify', false)).toBe(false)
-    expect(outilOffert('verify', undefined)).toBe(true)
-  })
-
   it('isole edit_file dans un bureau puis publie seulement sa copie', async () => {
     const base = mkdtempSync(join(tmpdir(), 'autowin-command-base-'))
     const copy = mkdtempSync(join(tmpdir(), 'autowin-command-copy-'))
@@ -1854,72 +1794,6 @@ describe('AppCommandBus command execution policy', () => {
      */
   }, 60_000)
 
-  it('bloque graphify avant exécution quand aucun bureau isolé n’est disponible', async () => {
-    const graphify = vi.fn(async () => ({
-      action: 'created' as const,
-      target: '.',
-      graph: 'graphify-out/graph.json',
-      nodes: 0,
-      links: 0,
-      durationMs: 1
-    }))
-    const os = fakeOs()
-    os.worktrees = undefined
-    const bus = new AppCommandBus(os, () => {}, undefined, graphify)
-
-    await expect(bus.exec('graphify', {}, 'conv-1')).resolves.toMatchObject({
-      ok: false,
-      error: expect.stringContaining('isolation')
-    })
-    expect(graphify).not.toHaveBeenCalled()
-  })
-
-  it('conserve le graphe dans le cache Autowin après rangement du bureau isolé', async () => {
-    const base = mkdtempSync(join(tmpdir(), 'autowin-graph-base-'))
-    const copy = mkdtempSync(join(tmpdir(), 'autowin-graph-copy-'))
-    const appData = mkdtempSync(join(tmpdir(), 'autowin-graph-appdata-'))
-    vi.stubEnv('APPDATA', appData)
-    try {
-      const graphify = vi.fn(async ({ workspaceRoot }: { workspaceRoot: string }) => {
-        const graph = join(workspaceRoot, 'graphify-out', 'graph.json')
-        mkdirSync(join(workspaceRoot, 'graphify-out'), { recursive: true })
-        writeFileSync(graph, '{"nodes":[],"links":[]}', 'utf8')
-        return {
-          action: 'created' as const,
-          target: '.',
-          graph: 'graphify-out/graph.json',
-          nodes: 0,
-          links: 0,
-          durationMs: 1
-        }
-      })
-      const os = fakeOs()
-      os.executionWorkspace = base
-      os.worktrees = {
-        begin: () => copy,
-        end: () => {
-          supprimerArbre(copy)
-          return { outcome: 'nothing', agentId: 'command' }
-        }
-      }
-      const bus = new AppCommandBus(os, () => {}, undefined, graphify)
-
-      const result = await bus.exec('graphify', {}, 'conv-1')
-      const graphPath = (result.data as { graph: string }).graph
-
-      expect(result.ok).toBe(true)
-      expect(existsSync(graphPath)).toBe(true)
-      expect(graphPath).toContain('graphify-cache')
-      expect(existsSync(join(base, 'graphify-out', 'graph.json'))).toBe(false)
-      expect(existsSync(copy)).toBe(false)
-    } finally {
-      vi.unstubAllEnvs()
-      supprimerArbre(base)
-      supprimerArbre(copy)
-      supprimerArbre(appData)
-    }
-  })
-
   it('snapshotForPrompt : projection minimale — pas de conversations inline, runs bloqués seulement', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
@@ -2044,7 +1918,6 @@ describe('AppCommandBus command execution policy', () => {
     const bus = new AppCommandBus(
       os,
       () => {},
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -2621,7 +2494,6 @@ describe('AppCommandBus — les preuves des phases remontent au suivi d’issue'
       undefined,
       undefined,
       undefined,
-      undefined,
       learning as never
     )
 
@@ -2797,7 +2669,6 @@ describe('issue d’orchestration — les notes déposées par l’étape learn 
     return new AppCommandBus(
       os,
       () => {},
-      undefined,
       undefined,
       undefined,
       undefined,

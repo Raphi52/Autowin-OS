@@ -131,7 +131,6 @@ describe('catalogue — la commande s’annonce comme une écriture externe', ()
       {} as never,
       vi.fn(),
       undefined,
-      undefined,
       () => true
     )
     const spec = bus.catalog().find((command) => command.name === 'ticket_create')

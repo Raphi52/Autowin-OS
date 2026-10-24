@@ -1748,7 +1748,7 @@ export class WorktreeManager {
    * toujours les ouvrir nommement. Ils ne CRIENT simplement plus. Les travaux de run (`run-*`), eux,
    * restent recenses : ce sont les seuls qui portent du travail acheve non publie.
    */
-  private static readonly EDITION_OUTIL = /^command-(edit|verify|graphify)-/
+  private static readonly EDITION_OUTIL = /^command-(edit|verify)-/
 
   /**
    * COMBIEN DE TEMPS UNE BRANCHE `autowin/*` MERITE-T-ELLE D'ETRE GARDEE — quatorze jours.

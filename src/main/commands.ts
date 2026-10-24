@@ -329,11 +329,6 @@ import {
 import { ligneDeJournalDeRelecture } from './objections-juge'
 import { PIPELINE_PHASES } from '../shared/pipeline-phases'
 import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../shared/relance-sans-objet'
-import {
-  runGraphify,
-  type GraphifyCommandInput,
-  type GraphifyCommandResult
-} from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import { poserReprise } from './redemarrage-reprise'
 import { annoncerFermeture } from './journal-arrets'
@@ -746,23 +741,6 @@ export function circonstanceDePublication(finalized: Record<string, unknown>): s
     default:
       return texte(finalized.detail)
   }
-}
-
-/**
- * OUTILS DÉBRANCHÉS : présents dans le catalogue et dans le code, mais jamais offerts aux agents de
- * l'app. Retirer un nom d'ici le rebranche partout d'un coup (liste du prompt, outils directs,
- * registre de l'écran Comportement) ; le texte du prompt qui pousse à s'en servir suit le catalogue.
- *
- * `graphify` (conv-353, 2026-10-19) : proposé 257 fois dans les 75 traces depuis le 11/10, appelé
- * 0 fois ; sur ce poste son CLI est absent (« CLI Graphify introuvable »), et la carte du code injectée
- * à chaque étape avait été mesurée contre-productive le 2026-07-22 (orchestrator.ts, +206k tokens
- * sans moins de lecture). Le décrire dans chaque prompt coûtait donc sans jamais servir.
- */
-export const OUTILS_DEBRANCHES: ReadonlySet<string> = new Set(['graphify'])
-
-/** Un outil est offert s'il n'est pas débranché et que l'interrupteur local ne l'a pas coupé. */
-export function outilOffert(name: string, interrupteur: boolean | undefined): boolean {
-  return !OUTILS_DEBRANCHES.has(name) && interrupteur !== false
 }
 
 /** Le catalogue BRUT, expose pour que les tests puissent en mesurer le poids dans le prompt. */
@@ -1380,12 +1358,12 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_graph',
     description:
-      'Suivre les liens du Brain : « qui dépend de X » (dependents) ou « de quoi X dépend » (dependencies) — notes liées et relations de code (calls, imports, inherits…). Pour une question d’impact, avant de lire le code',
+      'Suivre les liens entre notes du Brain : « quelles notes renvoient vers X » (dependents) ou « vers quoi X renvoie » (dependencies). Pour retrouver les notes liées à une décision ou une contrainte',
     args: {
-      entity: 'identifiant exact, nom de symbole ou chemin knowledge/…md',
+      entity: 'identifiant exact, nom de note ou chemin knowledge/…md',
       direction: 'facultatif — dependents (défaut) | dependencies',
       depth: 'facultatif — 1 à 3, défaut 1',
-      relation: 'facultatif — ne suivre qu’une relation (ex. calls)'
+      relation: 'facultatif — ne suivre qu’une relation (ex. links_to)'
     },
     annotations: {
       readOnlyHint: true,
@@ -1544,20 +1522,6 @@ export const CATALOG: CommandSpec[] = [
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: true
-    }
-  },
-  {
-    name: 'graphify',
-    description:
-      "Créer le graphe Graphify d'une codebase du workspace, ou le mettre à jour s'il existe déjà, avant une exploration large",
-    args: {
-      path: 'facultatif — chemin relatif de la codebase dans le workspace ; défaut = workspace entier'
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false
     }
   },
   {
@@ -2449,9 +2413,6 @@ export class AppCommandBus {
       role: string | undefined,
       msg: string
     ) => Promise<string>,
-    private readonly graphify: (
-      input: GraphifyCommandInput
-    ) => Promise<GraphifyCommandResult> = runGraphify,
     private readonly isCommandEnabled: (name: string) => boolean = () => true,
     private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext,
     /**
@@ -2522,7 +2483,7 @@ export class AppCommandBus {
    * demarrage etait donc DEFINITIVEMENT vide pour toute la vie du process.
    *
    * `AUTOWIN_SQLCMD_BIN` (rechargeable a chaud, cf. `env-reload.ts`) permet de DESIGNER le binaire
-   * sans redemarrer — meme motif que `AUTOWIN_GRAPHIFY_BIN` et `CODEX_BIN`. L'existence du fichier
+   * sans redemarrer — meme motif que `CODEX_BIN`. L'existence du fichier
    * est verifiee : un reglage qui pointe a cote doit laisser la main a la resolution par le PATH,
    * jamais faire echouer l'appel sur un binaire fantome.
    */
@@ -4625,18 +4586,6 @@ export class AppCommandBus {
           listSources: this.listTicketSources,
           ...(this.listTickets ? { list: this.listTickets } : {})
         })
-      case 'graphify':
-        return await this.withIsolatedMutation(
-          'graphify',
-          conversationId,
-          async (workspaceRoot) => {
-            const result = await this.graphify({
-              workspaceRoot,
-              ...(typeof a.path === 'string' && a.path.trim() ? { path: a.path.trim() } : {})
-            })
-            return this.retainGraphifyResult(workspaceRoot, result)
-          }
-        )
       case 'remember': {
         // PRÉFÉRENCE → PROFIL LOCAL (conv-1098, 2026-10-22, demande de l'utilisateur) : le type
         // `preference` s'arrête ICI, avant tout appel au Brain partagé. Voir `retenirPreferenceAuProfil`.
@@ -5059,7 +5008,7 @@ export class AppCommandBus {
   }
 
   private async withIsolatedMutation<T>(
-    command: 'edit_file' | 'graphify',
+    command: 'edit_file',
     conversationId: string | undefined,
     action: (workspaceRoot: string) => T | Promise<T>,
     /** Fichier vise par la tache : c'est lui qui donne au bureau une IDENTITE stable. */
@@ -5070,8 +5019,7 @@ export class AppCommandBus {
     if (!this.os.worktrees) {
       throw new Error(refusAvecIssue('isolation-indisponible', command))
     }
-    const famille = command === 'edit_file' ? 'edit' : 'graphify'
-    const runId = await this.identiteDeBureau(famille, conversationId, cible)
+    const runId = await this.identiteDeBureau('edit', conversationId, cible)
     const beginOptions = {
       task: command,
       role: 'command',
@@ -5476,59 +5424,11 @@ export class AppCommandBus {
       return result
     } catch (error) {
       if (!completed) {
-        /*
-         * UN ECHEC GRAPHIFY GARDE SON BUREAU — sinon il n'est pas diagnosticable.
-         *
-         * DEFAUT VECU (conv-1478) : `graphify` a echoue sur « graphe Graphify invalide » en nommant
-         * un chemin dans `worktrees/<id>/agent__command-graphify-<uuid>/`. Ce bureau etait supprime
-         * ici, dans ce catch, avant que l'erreur ne parvienne au chat : le graphe fautif, la sortie
-         * du CLI et le contenu de `graphify-out` disparaissaient avec lui. Resultat mesure : deux
-         * relances a l'identique, puis aucune conclusion possible.
-         *
-         * Graphify n'ecrit qu'un cache regenerable : conserver le bureau ne risque aucune
-         * publication involontaire (on ne fusionne pas), et l'erreur NOMME le chemin conserve pour
-         * qu'il soit lu puis range. Cout assume : un dossier de bureau reste sur le disque apres un
-         * echec — c'est le prix d'un echec inspectable. `edit_file` garde son comportement.
-         */
-        if (command === 'graphify') {
-          throw new Error(
-            `${error instanceof Error ? error.message : String(error)}${SAUT_NATURE}` +
-              `bureau isole CONSERVE pour diagnostic : ${workspaceRoot} ` +
-              `(cache regenerable, non fusionne — a supprimer apres lecture)`
-          )
-        }
         if (this.os.worktrees.endAsync) await this.os.worktrees.endAsync(runId, { merge: false })
         else this.os.worktrees.end(runId, { merge: false })
       }
       throw error
     }
-  }
-
-  /**
-   * Graphify écrit un cache régénérable. Il travaille dans le bureau isolé, puis le seul artefact
-   * utile est copié dans l'AppData Autowin avant que le bureau soit rangé. Le repo principal n'est
-   * donc jamais utilisé comme dossier de cache.
-   */
-  private retainGraphifyResult(
-    workspaceRoot: string,
-    result: GraphifyCommandResult
-  ): GraphifyCommandResult {
-    if (isAbsolute(result.graph)) throw new Error('Chemin Graphify absolu refusé')
-    const source = resolve(workspaceRoot, result.graph)
-    const rel = relative(workspaceRoot, source)
-    if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
-      throw new Error('Chemin Graphify hors du bureau isolé')
-    }
-    if (!existsSync(source)) return result
-    const repoKey = createHash('sha256')
-      // Cle du DEPOT DE BASE du bureau isole (meme raison qu'au-dessus), pas du dossier du tour.
-      .update(resolve(this.os.executionWorkspace).toLowerCase())
-      .digest('hex')
-      .slice(0, 20)
-    const destination = join(ensureAutowinAppData(), 'graphify-cache', repoKey, rel)
-    mkdirSync(dirname(destination), { recursive: true })
-    copyFileSync(source, destination)
-    return { ...result, graph: destination }
   }
 
   /**

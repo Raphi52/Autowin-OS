@@ -165,7 +165,7 @@ import { renouvelerSessionClaude } from './claude-session-renewal'
 import { DEFAULT_ORCHESTRATION_BUDGET } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
-import { AppCommandBus, outilOffert, type AppEvent } from './commands'
+import { AppCommandBus, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
 import {
   executeCurationTransaction,
@@ -1121,9 +1121,7 @@ const bus = new AppCommandBus(
   os,
   broadcast,
   undefined,
-  undefined,
-  // `outilOffert` : interrupteur local ET liste des outils débranchés (OUTILS_DEBRANCHES, commands.ts).
-  (name) => outilOffert(name, capabilityEnabled('tools', name)),
+  (name) => capabilityEnabled('tools', name) !== false,
   undefined,
   // Fermetures PARESSEUSES : le service Tickets est construit plus bas dans ce module, alors que le
   // bus l'est ici. Elles ne sont évaluées qu'à l'exécution d'une commande, donc bien après.
@@ -1217,8 +1215,6 @@ const titresBrainDuTour = createBrainTitresDuTour({
   workspace: (conversationId?: string) => dossierDuTour(conversationId)
 })
 const contexteGrapheDuTour = createBrainContextProvider({
-  graphEvidence: (raw, query, limit) =>
-    brainWorker.request('graphifyEvidence', raw, query, limit),
   // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc CONTOSO, donc une question Autowin ramenait
   // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
   // pas ecrit en dur : dans un workspace CONTOSO, la doc CONTOSO est exactement ce qu'il faut.

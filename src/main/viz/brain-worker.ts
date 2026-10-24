@@ -1,5 +1,4 @@
 import { parentPort } from 'node:worker_threads'
-import { graphifyEvidence } from '../brain-context'
 import { listInboxCandidates, readInboxCandidateBody } from '../brain-inbox'
 import { resolveHeadShas } from '../brain-source-sha'
 import {
@@ -45,7 +44,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
     let value: unknown
     switch (request.method) {
       case 'listBrains':
-        value = scanBrainGraphs(undefined, undefined, false)
+        value = scanBrainGraphs(undefined, false)
         break
       case 'loadPreview':
         value = await loadBrainGraphPreviewAsync(request.args[0], request.args[1], request.args[2])
@@ -89,9 +88,6 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
           request.args[1],
           request.args[2]
         )
-        break
-      case 'graphifyEvidence':
-        value = graphifyEvidence(request.args[0], request.args[1], request.args[2])
         break
       case 'listInbox': {
         const [root, workspaces] = request.args

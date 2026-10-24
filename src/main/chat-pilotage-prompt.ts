@@ -292,7 +292,6 @@ export function buildChatPilotagePrompt(
   // `horsLecture` les retire de ce tour-là ; tout autre tour reçoit le texte intact.
   const lectureSeule = catalogueLectureSeule(catalog)
   const horsLecture = (texte: string): string => (lectureSeule ? '' : texte)
-  const aGraphify = catalog.some((command) => command.name === 'graphify')
   return (
     `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
     `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
@@ -600,8 +599,8 @@ export function buildChatPilotagePrompt(
     // dix minutes du run, le panneau Graphe se remplissait et le fil restait sur « Réflexion… ».
     // L'interdit d'annoncer un SUCCES etait lu comme un interdit d'ECRIRE. On separe les deux : la
     // commande garde sa place en tete, mais le silence complet devient une faute.
-    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run` +
-    `${aGraphify ? ', graphify' : ''}), tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
+    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run), ` +
+    `tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
     `que tu lances, sur quoi, et ce que tu attends comme résultat. Un message qui ne contient ` +
     `qu'un bloc <cmd> laisse l'utilisateur devant un fil muet pendant toute la durée du travail : ` +
     `il voit la machine tourner ailleurs et rien dans la conversation. Écris ces lignes au présent ` +
@@ -720,15 +719,7 @@ export function buildChatPilotagePrompt(
     `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
     `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
     `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +
-    `est large. ` +
-    // Le conseil `graphify` ne part que si l'outil est OFFERT : débranché (OUTILS_DEBRANCHES,
-    // commands.ts), il poussait à appeler une commande absente du catalogue (conv-353).
-    (aGraphify
-      ? `AVANT une exploration large d'une codebase, appelle \`graphify\` : il crée ou met à ` +
-        `jour son graphe local et te rend le chemin, les nœuds et les liens réellement produits. Ne le ` +
-        `lance pas pour une simple question ou un fichier déjà connu. Tu peux ensuite lire les fichiers `
-      : `Tu lis les fichiers `) +
-    `nécessaires : c'est infiniment moins cher qu'un ` +
+    `est large. Tu lis les fichiers nécessaires : c'est infiniment moins cher qu'un ` +
     `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
     `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
     // LE VOCABULAIRE DE LA DEMANDE N'EST PAS UN ORDRE D'ORCHESTRER. La regle ci-dessus existait

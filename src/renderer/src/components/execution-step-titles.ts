@@ -33,7 +33,6 @@ const TOOL_TITLES: Record<string, string | readonly [string, string]> = {
   brain_graph: 'Liens suivis',
   skill_charger: ['Skill chargée', 'Skills chargées'],
   load_graph: 'Graphe chargé',
-  graphify: 'Graphe du code',
   conversation_search: ['Fils cherchés', 'Fils cherchés'],
   conversation_read: ['Fil lu', 'Fils lus'],
   retrospective: ['Fil examiné', 'Fils examinés'],
