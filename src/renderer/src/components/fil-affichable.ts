@@ -74,6 +74,43 @@ export function filAffichable<M extends MessageAffichable>(
 }
 
 /**
+ * LE TOUR EN VOL PERSISTE REMPLACE LA BULLE VIDE DU MEME TOUR.
+ *
+ * Vecu conv-1146 (2026-10-25 : « la conv m'affiche uniquement le bloc raisonnement vide, aucun suivi
+ * dans le chat », pendant un run de 8 h). L'ecran perd son etat (fenetre rechargee) pendant qu'un tour
+ * attend son orchestration. Le premier battement recu ensuite fait ADOPTER le tour : la vue pose une
+ * bulle VIDE pour que les patchs aient une cible, puis rattrape l'historique du store en ecartant le
+ * tour persiste non clos (« il ferait doublon avec l'amorce »). Or c'est lui qui porte la reponse
+ * ecrite et l'action `orchestrate` : les battements suivants visaient cette action, absente de la
+ * bulle vide, et rien d'autre que le bloc Raisonnement vide ne s'affichait pendant tout le run.
+ *
+ * Regle : une bulle live non close dont le store porte une copie NON CLOSE du MEME tour (`turnId`)
+ * prend cette copie pour base ; ce que seul le direct connait (raisonnement, signes de vie) reste
+ * quand la copie ne le porte pas. La copie est complete : le main enregistre chaque evenement AVANT
+ * de l'envoyer a l'ecran (`run-pilot-chat.ts`, `applyDurableEvent` puis `emitToLiveWindows`).
+ * Sans `turnId` des deux cotes, rien n'est adopte : un tour mort reste a sa place.
+ */
+export function adopterLeTourPersiste<M extends MessageAffichable>(
+  duStore: readonly M[],
+  courant: M[]
+): M[] {
+  const enVol = new Map<string, M>()
+  for (const message of duStore)
+    if (message.role === 'assistant' && message.done !== true && message.turnId)
+      enVol.set(message.turnId, message)
+  if (enVol.size === 0) return courant
+  let adopte = false
+  const suivant = courant.map((message) => {
+    if (message.role !== 'assistant' || message.done === true || !message.turnId) return message
+    const copie = enVol.get(message.turnId)
+    if (!copie) return message
+    adopte = true
+    return { ...message, ...copie }
+  })
+  return adopte ? suivant : courant
+}
+
+/**
  * RECOLLE l'historique persiste DEVANT un fil live, sans le coller DEUX FOIS.
  *
  * Meme defaut, autre bout de la chaine (conv-152, saisie ts=1788413114634) : le rattrapage de

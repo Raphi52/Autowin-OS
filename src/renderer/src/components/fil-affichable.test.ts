@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { completerAvecHistorique, filAffichable, type MessageAffichable } from './fil-affichable'
+import {
+  adopterLeTourPersiste,
+  completerAvecHistorique,
+  filAffichable,
+  type MessageAffichable
+} from './fil-affichable'
 
 const u = (content: string): MessageAffichable & { content: string } => ({
   role: 'user',
@@ -126,4 +131,35 @@ describe('un même tour ne se peint jamais deux fois (conv-1118)', () => {
   function h(): LigneDeTour[] {
     return [{ role: 'user', content: 'vieux', messageId: 'b1' }]
   }
+})
+
+// conv-1146 (2026-10-25) : la bulle vide d'une adoption prend pour base le tour persiste du MEME tour.
+describe('adopterLeTourPersiste', () => {
+  type Bulle = MessageAffichable & { parts: string[]; providerStatus?: string }
+  const amorce: Bulle = {
+    role: 'assistant',
+    done: false,
+    turnId: 'T',
+    parts: [],
+    providerStatus: 'vivant'
+  }
+  const persiste: Bulle = {
+    role: 'assistant',
+    done: false,
+    turnId: 'T',
+    parts: ['réponse', 'orchestrate']
+  }
+
+  it('remplace la bulle vide par la copie non close du même tour, en gardant le direct', () => {
+    const fil = adopterLeTourPersiste([{ role: 'user', parts: [] }, persiste], [amorce])
+    expect(fil).toEqual([{ ...persiste, providerStatus: 'vivant' }])
+  })
+
+  it("laisse la bulle d'un AUTRE tour, ou sans tour, à sa place (même tableau)", () => {
+    const autre: Bulle = { ...persiste, turnId: 'mort' }
+    const sansTour: Bulle = { role: 'assistant', done: false, parts: [] }
+    const fil = [amorce, sansTour]
+    expect(adopterLeTourPersiste([autre], fil)).toBe(fil)
+    expect(adopterLeTourPersiste([{ ...persiste, done: true }], fil)).toBe(fil)
+  })
 })
