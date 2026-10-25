@@ -46,6 +46,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
  */
 export const CONTRAT_QUESTIONS_AU_BUILD = `Facultatif, APRÈS les objections et seulement quand tu refuses : une section « QUESTIONS AU BUILD: », une puce par question (3 au plus, 2 000 caractères au plus chacune), pour une INFORMATION que le build détient et que tu ne peux pas établir toi-même (« as-tu lancé … et avec quel code de sortie ? », « d'où vient … ? ») — jamais « corrige X », qui est une objection. Si ton refus ne porte aucune objection MAJEUR ou MINEUR, l'app pose ces questions au build AVANT toute réparation, puis te fait rejuger avec sa réponse : cette réponse est une donnée rapportée, pas une preuve — rejuge sur tes propres preuves. Sinon, elles partent avec la réparation. Sans question, n'écris pas cette section.`
 
+/**
+ * LA LEÇON REFUSÉE, réserve NON bloquante (conv-1149, 2026-10-25). Sur conv-1146, cinq refus
+ * d'affilée du juge (réparations 11 à 15) ne portaient que sur la leçon proposée en fin de résultat :
+ * chacun relançait build + nettoyage + juge. La consigne du juge (`phase-briefs.ts`) range désormais
+ * ce défaut en « OK: leçon refusée — <raison> » ; ce lecteur dit au code de ne pas l'enregistrer.
+ * Un « MINEUR » n'aurait rien changé : depuis conv-844, il bloque la clôture.
+ */
+const PUCE_LECON_REFUSEE =
+  /^\s*(?:[-*•]|\d+[.)])?\s*\**\s*OK\s*\**\s*:\s*\**\s*le[çc]on\s+refus[ée]e\b/im
+
+/** Le juge a-t-il refusé la LEÇON proposée (sans refuser le livrable) ? */
+export function leconRefuseeParLeJuge(texteDuJuge: string): boolean {
+  return PUCE_LECON_REFUSEE.test(texteDuJuge ?? '')
+}
+
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /**
  * La section facultative des questions au build (conv-1139, étape 2 de l'option A du cadrage

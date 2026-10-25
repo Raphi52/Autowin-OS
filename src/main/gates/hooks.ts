@@ -60,13 +60,21 @@ export function detectRawSleep(diff: string): HookViolation[] {
 export function detectBlindFixLoop(
   editsByFile: Record<string, number>,
   causeTokensByFile: Record<string, boolean> = {},
-  threshold = 3
+  threshold = 3,
+  /*
+   * SEULS LES FICHIERS D'UN DÉPÔT COMPTENT (conv-1149, 2026-10-25). Sur conv-1146, 3 des 17
+   * réparations venaient de scripts jetables hors dépôt (« 3 édits de D:/tmp/langue-outils/
+   * codemod2.cjs ») : chaque refus rejouait build + nettoyage + juge. Le critère vient de
+   * l'appelant (lecture du disque) ; ce module reste pur, et sans critère tout compte, comme avant.
+   */
+  estFichierDuDepot: (chemin: string) => boolean = () => true
 ): HookViolation[] {
   // fix-ok: un MEME fichier remonte tantot avec des anti-slash (chemin Windows), tantot en
   // `src/main/x.ts` (chemin git) ; comptes et jetons de cause etaient alors classes sous deux
   // cles distinctes, donc le seuil n'etait jamais atteint et un jeton n'en dedouanait qu'une.
   const comptes: Record<string, number> = {}
   for (const [file, count] of Object.entries(editsByFile)) {
+    if (!estFichierDuDepot(file)) continue
     const cle = normaliseCheminHook(file)
     comptes[cle] = (comptes[cle] ?? 0) + count
   }
@@ -198,6 +206,8 @@ export function runHooks(input: {
   producedDiff?: string
   editsByFile?: Record<string, number>
   causeTokensByFile?: Record<string, boolean>
+  /** Le fichier vit-il dans un dépôt ? Absent = tout compte (voir `detectBlindFixLoop`). */
+  estFichierDuDepot?: (chemin: string) => boolean
   evidenceOkCount?: number
   requireProof?: boolean
   requireVisualProof?: boolean
@@ -207,7 +217,10 @@ export function runHooks(input: {
 }): HookViolation[] {
   const v: HookViolation[] = []
   if (input.producedDiff) v.push(...detectRawSleep(input.producedDiff))
-  if (input.editsByFile) v.push(...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile))
+  if (input.editsByFile)
+    v.push(
+      ...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile, 3, input.estFichierDuDepot)
+    )
   if (input.requireProof) v.push(...requireProofBeforeGreen(input.evidenceOkCount ?? 0))
   if (input.requireVisualProof && input.producedDiff)
     v.push(...requireVisualProofForFrontDiff(input.producedDiff, input.visualProofOkCount ?? 0))
