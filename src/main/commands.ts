@@ -4230,6 +4230,9 @@ export class AppCommandBus {
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
           messageCount: tous.length,
+          // conv-1144 : un script qui attend la fin de SON tour n'avait que `get_state` (tous les
+          // fils). Même autorité et même forme que là-bas : présent seulement quand ça tourne.
+          ...(this.tourDeChatActif?.(conversation.id) ? { tourEnCours: true } : {}),
           messages,
           note:
             `${tous.length} message(s) au total, ${messages.length} rendu(s)` +

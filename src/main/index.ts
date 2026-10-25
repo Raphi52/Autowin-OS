@@ -182,6 +182,7 @@ import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
+import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
 import { modeleDuTour } from './chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
@@ -1914,6 +1915,8 @@ function registerIdentiteIpc(): void {
 let capteurHdesk: CapteurHdesk | null = null
 /** Processus lancés par le bouton « Lancer » : arrêtés, eux seuls, à la fermeture de l’app. */
 let lancementIpc: { arreterTout: () => Promise<void> } | null = null
+/** Serveur ouvert aux scripts du poste (conv-1144) : fermé, et son fichier retiré, à la fermeture. */
+let pointEntreeLocal: PointEntreeLocal | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
     (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
@@ -4122,6 +4125,21 @@ Le fil reprend ensuite normalement.`
       (erreur) =>
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
+  // POINT D'ENTRÉE LOCAL (conv-1144) : un script du poste crée un fil, y lance un tour et le relit,
+  // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde
+  // `tourDeChatActif` câblés. Le jeton n'est jamais journalisé : il ne vit que dans le fichier.
+  // fix-ok: conv-1144 — pas une correction répétée : les 4 éditions de ce fichier sont les 4 points
+  // de branchement distincts d'un même ajout (import, variable, démarrage ici, arrêt à before-quit).
+  void demarrerPointEntreeLocal({
+    dossierDonnees: ensureAutowinAppData(appDataRoot),
+    catalogue: () => bus.catalog(),
+    exec: (nom, args) => bus.exec(nom, args)
+  })
+    .then((point) => {
+      pointEntreeLocal = point
+      console.info(`[point d'entree local] 127.0.0.1:${point.port} — adresse dans ${point.fichier}`)
+    })
+    .catch((erreur) => console.warn("[point d'entree local] non demarre :", erreur))
   /*
    * TACHES DE FOND COUPEES EN FIN DE TOUR (conv-528, conv-42) : relancees hors du tour, puis UN tour
    * de reprise rend leur resultat dans la meme conversation. Hors du devis du tour appelant, comme
@@ -5839,6 +5857,9 @@ app.on('before-quit', (event) => {
   capteurHdesk?.detruire()
   void lancementIpc?.arreterTout()
   capteurHdesk = null
+  // Le fichier est retiré dès l'appel (synchrone) : un script ne visera pas une app qui s'en va.
+  void pointEntreeLocal?.arreter()
+  pointEntreeLocal = null
   // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
   raccourciCapture?.desinstaller()
   raccourciCapture = null
