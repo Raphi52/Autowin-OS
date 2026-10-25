@@ -115,6 +115,8 @@ export function AscenseurDuFil({
     cranSousPoignee: Repere | null
   } | null>(null)
   const derniereMoletteRef = useRef(0)
+  /** Sens du dernier cran de molette : l'aimant ne tire la vue que dans ce sens (conv-1139). */
+  const sensMoletteRef = useRef<-1 | 0 | 1>(0)
   const minuteurRepliRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minuteurFinRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** Maintien de la ligne lue pendant que le fil change de largeur (voir plus bas). */
@@ -286,7 +288,7 @@ export function AscenseurDuFil({
         // Collé au bas : c'est le suivi de la fin du fil qui décide, pas l'aimant.
         if (isChatNearBottom(g)) return
         const crans = reperesRef.current.filter((r) => r.role === 'user')
-        const cible = cibleAimant(g, crans, seuilMolette(g.clientHeight))
+        const cible = cibleAimant(g, crans, seuilMolette(g.clientHeight), sensMoletteRef.current)
         if (cible !== null)
           allerA(
             cible,
@@ -302,6 +304,7 @@ export function AscenseurDuFil({
       arreterGlissement()
       ancreRef.current = null
       derniereMoletteRef.current = Date.now()
+      sensMoletteRef.current = event.deltaY > 0 ? 1 : -1
       setDeplie(true)
       programmerRepli()
     }
@@ -491,6 +494,7 @@ export function AscenseurDuFil({
     const facteur = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? conteneur.clientHeight : 1
     arreterGlissement()
     derniereMoletteRef.current = Date.now()
+    sensMoletteRef.current = event.deltaY > 0 ? 1 : -1
     setDeplie(true)
     conteneur.scrollBy({ top: event.deltaY * facteur })
   }

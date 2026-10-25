@@ -53,10 +53,27 @@ describe('aimant — la vue se cale sur TON message, à 10 px du haut', () => {
     const seuil = seuilMolette(800)
     // 40 px au-dessus du message 2 : aimanté.
     expect(cibleAimant(geo(850), crans, seuil)).toBe(890)
-    // 30 px après : aimanté aussi, dans l'autre sens.
-    expect(cibleAimant(geo(920), crans, seuil)).toBe(890)
     // Au milieu d'une longue réponse : la molette reste libre.
     expect(cibleAimant(geo(1300), crans, seuil)).toBeNull()
+  })
+
+  // conv-1139 (2026-10-25) : « quand je scroll down ça remonte tout seul ». Mesuré par sonde sur le
+  // fil réel, 4 essais sur 4 : un cran vers le bas posait la vue 20 px APRÈS ton message, et
+  // l'aimant la ramenait en arrière sur lui. L'aimant suit maintenant le SENS de la molette.
+  it('molette vers le bas : la vue n’est JAMAIS ramenée en arrière sur un message dépassé', () => {
+    const seuil = seuilMolette(800)
+    // 30 px après le message 2 en descendant : la vue reste où la molette l'a posée.
+    expect(cibleAimant(geo(920), crans, seuil, 1)).toBeNull()
+    // 40 px avant le message 2 en descendant : aimanté vers l'avant, dans le sens du geste.
+    expect(cibleAimant(geo(850), crans, seuil, 1)).toBe(890)
+  })
+
+  it('molette vers le haut : aimantée seulement sur un message au-dessus', () => {
+    const seuil = seuilMolette(800)
+    // 30 px après le message 2 en remontant : il est au-dessus, la vue y monte.
+    expect(cibleAimant(geo(920), crans, seuil, -1)).toBe(890)
+    // 40 px avant le message 2 en remontant : il est en dessous, la vue n'y redescend pas.
+    expect(cibleAimant(geo(850), crans, seuil, -1)).toBeNull()
   })
 
   it('ne rejoue pas l’aimant quand la vue est déjà calée', () => {

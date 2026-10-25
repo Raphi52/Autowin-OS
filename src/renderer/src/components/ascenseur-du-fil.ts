@@ -51,23 +51,32 @@ export function hautDeVuePour(repere: Pick<Repere, 'haut'>, geo: Geometrie): num
  * Cible de l'aimant : la position calée sur le message le plus proche, s'il est à moins de `seuil`
  * px de la vue courante. `null` quand rien n'est assez proche OU que la vue est déjà calée (sinon
  * chaque fin de défilement relancerait une animation pour rien).
+ *
+ * `sens` : celui de la molette (1 = vers le bas, -1 = vers le haut, 0 = aucun, pour le relâchement
+ * de la barre). Avec un sens, seul un message DANS ce sens peut tirer la vue. Sans lui, mesuré le
+ * 2026-10-25 (conv-1139, « quand je scroll down ça remonte tout seul ») : un cran vers le bas qui
+ * dépassait ton message de moins de 72 px était ramené en arrière sur lui, 4 essais sur 4.
  */
 export function cibleAimant(
   geo: Geometrie,
   crans: readonly Repere[],
-  seuil: number
+  seuil: number,
+  sens: -1 | 0 | 1 = 0
 ): number | null {
   let meilleure: number | null = null
   let distance = Number.POSITIVE_INFINITY
   for (const cran of crans) {
     const cible = hautDeVuePour(cran, geo)
-    const ecart = Math.abs(cible - geo.scrollTop)
-    if (ecart < distance) {
-      distance = ecart
+    const ecart = cible - geo.scrollTop
+    // Déjà calée sur un message : rien à rejouer, quel que soit le sens.
+    if (Math.abs(ecart) <= 1) return null
+    if (sens !== 0 && Math.sign(ecart) !== sens) continue
+    if (Math.abs(ecart) < distance) {
+      distance = Math.abs(ecart)
       meilleure = cible
     }
   }
-  if (meilleure === null || distance <= 1 || distance > seuil) return null
+  if (meilleure === null || distance > seuil) return null
   return meilleure
 }
 
