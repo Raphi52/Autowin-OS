@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { pickTurnToResume, rejeuDejaEnregistre, type UnfinishedTurn } from './resume-unfinished'
 
 const turn = (id: string, updatedAt: number, events = 3): UnfinishedTurn => ({
   conversationId: id,
@@ -66,5 +66,25 @@ describe('pickTurnToResume — reprise AUTOMATIQUE, sans popup', () => {
     expect(pickTurnToResume([hierSoir], maintenant)).toMatchObject({
       conversationId: 'hier-soir'
     })
+  })
+})
+
+// conv-1149 (2026-10-25) : le rejeu d'un tour encore en vol ne remplace plus son enregistrement.
+describe('rejeuDejaEnregistre', () => {
+  const enVol = { role: 'assistant', turnId: 'T', status: 'streaming', parts: [] }
+
+  it('tour enregistré encore en vol : rien à rejouer, même si son texte diffère', () => {
+    expect(rejeuDejaEnregistre([{ role: 'user', content: 'q' }, enVol], 'T', 'texte')).toBe(true)
+  })
+
+  it('tour clos qui porte déjà le texte rejoué : rien à rejouer', () => {
+    const clos = { role: 'assistant', turnId: 'T', status: 'interrupted', content: 'Bonjour à toi' }
+    expect(rejeuDejaEnregistre([clos], 'T', '  Bonjour  ')).toBe(true)
+  })
+
+  it('texte absent de l’enregistrement, ou autre tour : le rejeu reste utile', () => {
+    const clos = { role: 'assistant', turnId: 'T', status: 'interrupted', content: '' }
+    expect(rejeuDejaEnregistre([clos], 'T', 'produit app fermée')).toBe(false)
+    expect(rejeuDejaEnregistre([{ ...enVol, turnId: 'autre' }], 'T', 'x')).toBe(false)
   })
 })
