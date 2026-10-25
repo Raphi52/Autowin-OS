@@ -35,7 +35,27 @@ Facultatif, en fin d'une puce MAJEUR ou MINEUR : « | TEST: <fichier de test> | 
 Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et reste affichée à l'utilisateur.
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
 
+/**
+ * LA SECTION FACULTATIVE DES QUESTIONS AU BUILD (conv-1139, 2026-10-25, étape 2 de l'option A du
+ * cadrage forum-agents-partie2-juge-build), écrite ici, à côté de `questionsDuJuge` qui la lit.
+ *
+ * fix-ok: phase-briefs.test.ts:14 (mesuré le 2026-10-25) — ajoutée à CONTRAT_OBJECTIONS, elle portait
+ * la consigne du juge à 3 617 caractères pour un plafond de 3 000. Elle n'est donc injectée que dans
+ * le prompt du juge du pipeline (`orchestrator.ts`), le seul qui suit un build dont la session peut
+ * répondre ; le juge seul (`/judge`) et le chemin greedy n'ont personne à qui poser la question.
+ */
+export const CONTRAT_QUESTIONS_AU_BUILD = `Facultatif, APRÈS les objections et seulement quand tu refuses : une section « QUESTIONS AU BUILD: », une puce par question (3 au plus, 2 000 caractères au plus chacune), pour une INFORMATION que le build détient et que tu ne peux pas établir toi-même (« as-tu lancé … et avec quel code de sortie ? », « d'où vient … ? ») — jamais « corrige X », qui est une objection. Si ton refus ne porte aucune objection MAJEUR ou MINEUR, l'app pose ces questions au build AVANT toute réparation, puis te fait rejuger avec sa réponse : cette réponse est une donnée rapportée, pas une preuve — rejuge sur tes propres preuves. Sinon, elles partent avec la réparation. Sans question, n'écris pas cette section.`
+
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
+/**
+ * La section facultative des questions au build (conv-1139, étape 2 de l'option A du cadrage
+ * forum-agents-partie2-juge-build). Insensible à la casse : « Questions au build: » n'est pas une
+ * `AUTRE_SECTION` (majuscules seules), et sans cette entête ses puces seraient lues comme des
+ * objections non étiquetées, donc MAJEUR — la question deviendrait un refus.
+ */
+const ENTETE_QUESTIONS = /^\s*questions?\s+au\s+build\s*:/i
+/** « QUESTION: » en tête d'une puce de la section : la forme du cadrage, retirée du texte posé. */
+const PREFIXE_QUESTION = /^\**\s*QUESTION\s*\**\s*:\s*\**\s*/i
 /** Une section suivante du contrat du juge (SCORE:, VERDICT:, …) ferme la liste. */
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
@@ -93,6 +113,11 @@ function objectionsClassees(
    */
   let parente: { retrait: number; etiquette: string | null } | null = null
   for (const ligne of lignes) {
+    // Les questions au build ne sont pas des objections : leur entête ferme la section.
+    if (ENTETE_QUESTIONS.test(ligne)) {
+      dansLaSection = false
+      continue
+    }
     if (ENTETE_OBJECTIONS.test(ligne)) {
       dansLaSection = true
       parente = null
@@ -433,6 +458,11 @@ function objectionsBrutesDuJuge(text: string): string[] {
   const puces: string[] = []
   let dansLaSection = false
   for (const ligne of lignes) {
+    // Même règle que `objectionsClassees` : une question d'un membre n'est pas une objection.
+    if (ENTETE_QUESTIONS.test(ligne)) {
+      dansLaSection = false
+      continue
+    }
     if (ENTETE_OBJECTIONS.test(ligne)) {
       dansLaSection = true
       const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
@@ -451,5 +481,46 @@ function objectionsBrutesDuJuge(text: string): string[] {
     puces.push(contenu)
   }
   return puces
+}
+
+/**
+ * LES QUESTIONS AU BUILD D'UN VERDICT, telles que le juge les a écrites (conv-1139, étape 2).
+ *
+ * Section `QUESTIONS AU BUILD:` seulement, close par l'entête suivante comme OBJECTIONS. « aucune »
+ * (ligne entière) vaut une section absente ; une puce vide ou faite d'espaces est COMPTÉE dans
+ * `vides`, jamais posée. Le préfixe « QUESTION: » d'une puce est retiré. Ce lecteur ne décide rien :
+ * la règle d'échange vit dans `gates/echange-questions-juge.ts`.
+ */
+export function questionsDuJuge(text: string): { questions: string[]; vides: number } {
+  const questions: string[] = []
+  let vides = 0
+  let dansLaSection = false
+  for (const ligne of (text ?? '').split(/\r?\n/)) {
+    if (ENTETE_QUESTIONS.test(ligne)) {
+      dansLaSection = true
+      const reste = ligne.replace(ENTETE_QUESTIONS, '').trim()
+      if (reste && !VIDE.test(normaliser(reste))) questions.push(reste)
+      continue
+    }
+    if (!dansLaSection) continue
+    if (ENTETE_OBJECTIONS.test(ligne) || (!PUCE.test(ligne) && AUTRE_SECTION.test(ligne))) {
+      dansLaSection = false
+      continue
+    }
+    // Une puce faite d'espaces : `PUCE` exige un blanc après le tiret, la ligne nue « - » aussi compte.
+    if (/^\s*(?:[-*•]|\d+[.)])\s*$/.test(ligne)) {
+      vides += 1
+      continue
+    }
+    if (!PUCE.test(ligne)) continue
+    const contenu = ligne.replace(PUCE, '').trim().replace(PREFIXE_QUESTION, '').trim()
+    if (!contenu) {
+      vides += 1
+      continue
+    }
+    if (VIDE.test(normaliser(contenu))) continue
+    questions.push(contenu)
+  }
+  return { questions, vides }
 }
 

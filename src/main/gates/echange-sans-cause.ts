@@ -63,18 +63,24 @@ export function decisionEchangeSansCause(etat: {
 }): DecisionEchange {
   const fichiers = fichiersDuRefusSansCause(etat.motifs)
   if (!fichiers) return { tenter: false }
+  const motif = empechementDEchange(etat)
+  return motif ? { tenter: false, motif } : { tenter: true, fichiers }
+}
+
+/**
+ * Ce qui empêche TOUT échange, quelle que soit sa source (refus « sans cause » ou questions du juge,
+ * `echange-questions-juge.ts`) : le plafond est PARTAGÉ — le cadrage dit « deux par run », pas deux
+ * par source. `undefined` = rien n'empêche.
+ */
+export function empechementDEchange(etat: {
+  echangesDuRun: number
+  sessionDuBuild: boolean
+}): string | undefined {
   if (etat.echangesDuRun >= ECHANGES_SANS_CAUSE_MAX_PAR_RUN)
-    return {
-      tenter: false,
-      motif: `Échange non tenté : plafond de ${ECHANGES_SANS_CAUSE_MAX_PAR_RUN} échanges par run atteint — réparation normale.`
-    }
+    return `Échange non tenté : plafond de ${ECHANGES_SANS_CAUSE_MAX_PAR_RUN} échanges par run atteint — réparation normale.`
   if (!etat.sessionDuBuild)
-    return {
-      tenter: false,
-      motif:
-        'Échange impossible : aucune session du build à reprendre (modèle sans reprise de session, build en parallèle ou repris après un redémarrage) — réparation normale.'
-    }
-  return { tenter: true, fichiers }
+    return 'Échange impossible : aucune session du build à reprendre (modèle sans reprise de session, build en parallèle ou repris après un redémarrage) — réparation normale.'
+  return undefined
 }
 
 /**
