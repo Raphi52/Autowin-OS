@@ -19,6 +19,7 @@ import {
   reserveDeLaCarte,
   resumerTexte,
   scrollTopApresGlisse,
+  scrollTopDuMaintien,
   scrollTopSousPointeur,
   seuilMolette,
   versPiste,
@@ -344,5 +345,100 @@ describe('message retenu — gardé seulement si la vue est encore calée dessus
   })
   it('glissement en route vers le message : il reste retenu, la vue n’y est pas encore', () => {
     expect(ancreEncoreTenue(1200, 2333, true)).toBe(true)
+  })
+})
+
+// conv-1143 (2026-10-25), « quand je scroll tout en bas ça remonte le scroll » sur conv-1139. Sonde
+// sur le fil réel, fil de 410 px de large : la carte ouverte l'allonge de 58 959 à 70 795 px. Vue
+// au bas, la carte se replie : le navigateur ramène déjà la vue au nouveau bas, et le maintien
+// retranchait EN PLUS le rétrécissement du texte au-dessus. Vue finie 11 813 px au-dessus du bas,
+// 3 essais sur 3. Valeurs ci-dessous : celles de la sonde (vue de 264 px de haut).
+describe('maintien de la ligne lue — le bas du fil reste le bas', () => {
+  it('au bas, la carte se replie et le fil raccourcit : la vue reste au bas', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 58695, // bornée par le navigateur au nouveau bas
+        max: 58695,
+        hautLu: 58700,
+        hautLuAvant: 70513,
+        poseeAvant: 70531,
+        auBasAvant: true
+      }) ?? 58695
+    ).toBe(58695)
+  })
+  it('au bas, la carte finit de s’ouvrir et le fil s’allonge : la vue suit le bas', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 58695,
+        max: 70531,
+        hautLu: 70513,
+        hautLuAvant: 58700,
+        poseeAvant: 58695,
+        auBasAvant: true
+      })
+    ).toBe(70531)
+  })
+  it('près du bas, le navigateur borne la vue : on part de la place laissée, pas de la place bornée', () => {
+    // 200 px au-dessus du bas ; le fil perd 11 836 px, dont 11 800 au-dessus de la ligne lue : le
+    // navigateur borne la vue au nouveau bas (58 695), la ligne lue doit finir 164 px au-dessus.
+    const poseeAvant = 70531 - 200
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 58695,
+        max: 58695,
+        hautLu: 70341 - 11800,
+        hautLuAvant: 70341,
+        poseeAvant,
+        auBasAvant: false
+      })
+    ).toBe(poseeAvant - 11800)
+  })
+  it('près du bas, le texte sous la ligne lue rétrécit plus que la marge : la vue finit au bas', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 58695,
+        max: 58695,
+        hautLu: 70341 - 11000,
+        hautLuAvant: 70341,
+        poseeAvant: 70531 - 200,
+        auBasAvant: false
+      }) ?? 58695 // rien à poser : la vue bornée est déjà au bas
+    ).toBe(58695)
+  })
+  it('au milieu du fil, le texte se réagence : la ligne lue reste en place', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 20000,
+        max: 58695,
+        hautLu: 18500,
+        hautLuAvant: 20000,
+        poseeAvant: 20000,
+        auBasAvant: false
+      })
+    ).toBe(18500)
+  })
+  it('tu remontes depuis le bas pendant le maintien : ta molette garde son effet', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 58300,
+        max: 58695,
+        hautLu: 58700,
+        hautLuAvant: 58700,
+        poseeAvant: 58695,
+        auBasAvant: true
+      })
+    ).toBeNull()
+  })
+  it('rien n’a bougé : rien à poser', () => {
+    expect(
+      scrollTopDuMaintien({
+        scrollTop: 20000,
+        max: 58695,
+        hautLu: 20010,
+        hautLuAvant: 20010,
+        poseeAvant: 20000,
+        auBasAvant: false
+      })
+    ).toBeNull()
   })
 })

@@ -31,6 +31,7 @@ import {
   positionGlissee,
   reserveDeLaCarte,
   scrollTopApresGlisse,
+  scrollTopDuMaintien,
   scrollTopSousPointeur,
   SELECTEUR_MESSAGES,
   seuilMolette,
@@ -356,6 +357,11 @@ export function AscenseurDuFil({
     let lu =
       (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
     let precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+    // Place laissée à chaque image : le navigateur BORNE la vue quand le fil raccourcit sous elle,
+    // et le maintien doit le savoir pour ne pas compenser deux fois (conv-1143).
+    const auBas = (): boolean => isChatNearBottom(conteneur, 1)
+    let posee = conteneur.scrollTop
+    let auBasAvant = auBas()
     const fin = performance.now() + (deplie ? 800 : 200) + 120
     const tenir = (t: number): void => {
       maintienRef.current = 0
@@ -378,12 +384,21 @@ export function AscenseurDuFil({
         )
         if (Math.abs(conteneur.scrollTop - cible) >= 0.5) conteneur.scrollTop = cible
       } else if (lu && lu.isConnected && !pilotee) {
-        const haut = hautDansLeFil(lu, conteneur)
-        if (Math.abs(haut - precedent) >= 0.5) conteneur.scrollTop += haut - precedent
+        const cible = scrollTopDuMaintien({
+          scrollTop: conteneur.scrollTop,
+          max: conteneur.scrollHeight - conteneur.clientHeight,
+          hautLu: hautDansLeFil(lu, conteneur),
+          hautLuAvant: precedent,
+          poseeAvant: posee,
+          auBasAvant
+        })
+        if (cible !== null) conteneur.scrollTop = cible
       }
       // L'ancre suit le HAUT de la vue courante : la molette du lecteur a pu la faire défiler.
       lu = (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
       precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+      posee = conteneur.scrollTop
+      auBasAvant = auBas()
       if (t < fin) maintienRef.current = requestAnimationFrame(tenir)
     }
     if (deplie) {

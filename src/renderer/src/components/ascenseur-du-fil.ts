@@ -427,6 +427,43 @@ export function ancreEncoreTenue(
   return glissementEnCours || Math.abs(scrollTop - hautDeVueDuMessage) <= 1
 }
 
+/** État de la vue à une image du maintien de la ligne lue (voir `scrollTopDuMaintien`). */
+export type ImageDuMaintien = {
+  /** Position actuelle, telle que le navigateur la rend (déjà bornée au fil s'il a raccourci). */
+  scrollTop: number
+  /** `scrollHeight - clientHeight` actuel. */
+  max: number
+  /** Haut de l'élément lu dans le CONTENU du fil, maintenant puis à l'image précédente. */
+  hautLu: number
+  hautLuAvant: number
+  /** Position laissée à la fin de l'image précédente, et si elle était collée au bas. */
+  poseeAvant: number
+  auBasAvant: boolean
+}
+
+/**
+ * Où poser la vue à une image du MAINTIEN de la ligne lue, pendant que le fil change de largeur
+ * (la carte s'ouvre ou se replie). `null` = ne rien toucher.
+ *
+ * Mesuré le 2026-10-25 (conv-1143, « quand je scroll tout en bas ça remonte le scroll », sonde sur
+ * conv-1139) : la carte ouverte allongeait le fil de 11 836 px. Vue au bas, au repli, le navigateur
+ * ramenait déjà la vue au nouveau bas, puis le maintien lui retirait EN PLUS le rétrécissement du
+ * texte au-dessus : vue finie 11 813 px au-dessus du bas, 3 essais sur 3. D'où deux règles :
+ *  - collé au bas, le lecteur lit la FIN du fil : elle reste à l'écran, comme pour l'aimant ;
+ *  - une vue bornée par le navigateur se compense depuis la place LAISSÉE, pas depuis la place bornée.
+ * Une vue qui a REMONTÉ depuis la dernière image vient de la molette du lecteur : elle est respectée.
+ */
+export function scrollTopDuMaintien(image: ImageDuMaintien): number | null {
+  const { scrollTop, max, poseeAvant } = image
+  const auBas = scrollTop >= max - 1
+  const aRemonte = scrollTop < poseeAvant - 0.5
+  if (image.auBasAvant && (auBas || !aRemonte)) return Math.abs(scrollTop - max) >= 0.5 ? max : null
+  // Remontée ET posée au bas : seul le navigateur fait ça, quand le fil raccourcit sous la vue.
+  const depart = auBas && aRemonte ? poseeAvant : scrollTop
+  const cible = Math.max(0, Math.min(max, depart + image.hautLu - image.hautLuAvant))
+  return Math.abs(cible - scrollTop) >= 0.5 ? cible : null
+}
+
 /**
  * Texte d'un de tes messages pour son aperçu, tel que tu l'as écrit. Un message qui lance une skill
  * s'affiche en bandeau (nom de la skill, puis le reste : ChatMessageRow.tsx) ; lu d'un bloc, il
