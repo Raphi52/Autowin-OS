@@ -484,10 +484,25 @@ interface PathGeneration {
   fingerprint?: string
   generationMarker?: string
   owners: Map<string, CurrentPathOwner>
+  /** L'état courant a été posé par un OUTIL d'écriture, pas seulement vu par une comparaison. */
+  etatEcritParUnOutil?: boolean
 }
 
 function pathGenerationKey(workspaceRoot: string, path: string): string {
   return `${canonicalWorkspaceRoot(workspaceRoot)}\0${workspaceTracePathKey(path)}`
+}
+
+/**
+ * Trace qui a seulement VU ce chemin changer : la comparaison avant/après d'un tour ENTIER
+ * (`agent-pilot.ts`, `etatAvantEnvoi`), seule trace `chat_tool` qui ne revendique ni lignes écrites
+ * ni commande d'écriture. Même partage que `chat-turn-publication.ts` (`ecritsParUnAutreFil`).
+ */
+function vueParComparaison(trace: ConversationFileTrace, path: string): boolean {
+  if (trace.source !== 'chat_tool' || trace.nommeParCommande) return false
+  const lignes = Object.entries(trace.pathLineFingerprints ?? {}).find(
+    ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+  )?.[1]
+  return !lignes?.length
 }
 
 /**
@@ -522,6 +537,38 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
       )?.[1]
       const key = pathGenerationKey(workspaceRoot, normalized)
       const generation: PathGeneration = generations.get(key) ?? { owners: new Map() }
+      const vue = vueParComparaison(trace, normalized)
+      /*
+       * fix-ok: conv-1142 (25/10/2026) — `src/main/reprise-apres-arret.ts`, écrit par conv-1142
+       * (trace de son Write à 13:36:07 UTC), était rendu à conv-1143 : la comparaison de fin de tour
+       * de conv-1143 (13:40:57), ouverte AVANT la création, a vu le fichier apparaître et, sa base
+       * ne chaînant pas, a remplacé l'auteur. Or elle retombe sur l'état DÉJÀ enregistré, au même
+       * marqueur physique — qui change à toute réécriture, même à l'identique (mtime/ctime) : rien
+       * n'a été écrit depuis. Elle n'apporte donc aucun auteur. Retiré, ce garde rend
+       * `proprietaire-fichier.test.ts` rouge (« garde à son auteur… »).
+       */
+      const memeEtat =
+        generation.owners.size > 0 &&
+        fingerprint !== undefined &&
+        fingerprint === generation.fingerprint &&
+        generationMarker !== undefined &&
+        !generationMarker.startsWith('missing:') &&
+        generationMarker === generation.generationMarker
+      if (vue && memeEtat) {
+        // Si personne ne l'a écrit avec un outil, chaque fil qui l'a vu reste un candidat.
+        if (!generation.etatEcritParUnOutil) {
+          generation.owners.set(trace.conversationId, {
+            conversationId: trace.conversationId,
+            workspaceRoot,
+            path: normalized,
+            fingerprint,
+            generationMarker,
+            ...(trace.turnId ? { turnId: trace.turnId } : {}),
+            timestamp: trace.timestamp
+          })
+        }
+        continue
+      }
       if (
         !baseMatch ||
         !baseGenerationMatch ||
@@ -532,6 +579,7 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
       }
       generation.fingerprint = fingerprint
       generation.generationMarker = generationMarker
+      generation.etatEcritParUnOutil = !vue
       generation.owners.set(trace.conversationId, {
         conversationId: trace.conversationId,
         workspaceRoot,
