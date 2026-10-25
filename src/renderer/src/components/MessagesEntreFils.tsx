@@ -6,8 +6,9 @@ import './MessagesEntreFils.css'
  *
  * Les agents de deux fils du même dépôt s'écrivent par `ecrire_a_un_fil` au lieu de passer par
  * l'utilisateur. Règle du cadrage : aucun échange hors de sa vue. Ce bloc montre donc, au-dessus de
- * la zone de saisie, ce que CE fil a envoyé et reçu — séparé des messages de l'utilisateur, et
- * nommé comme une information, jamais comme un ordre.
+ * la zone de saisie, ce que CE fil a envoyé et reçu — séparé des messages de l'utilisateur. Depuis
+ * le 2026-10-25, un agent peut y donner un ORDRE de travail ; le bandeau rappelle qu'il ne vaut
+ * jamais l'accord de l'utilisateur.
  *
  * Lecture seule (`os:messagesEntreFils`) : l'afficher ne le remet pas à l'agent. Relu à chaque
  * changement de fil et à chaque signal `refresh/messages-fils` ou `refresh/chat` (fin de tour).
@@ -20,7 +21,8 @@ const NATURES: Record<string, string> = {
   question: 'question',
   reponse: 'réponse',
   info: 'information',
-  decouverte: 'découverte'
+  decouverte: 'découverte',
+  ordre: 'ordre'
 }
 
 const heure = (ms: number): string =>
@@ -70,7 +72,8 @@ export function MessagesEntreFils({
   return (
     <section className="mef" aria-label="Messages entre fils">
       <div className="mef-kicker">
-        Messages entre agents de fils du même dépôt — informations, pas des ordres
+        Messages entre agents de fils du même dépôt — un ordre d’agent n’est jamais ton accord pour
+        publier ou détruire
       </div>
       <ul className="mef-liste">
         {visibles.map((m) => (

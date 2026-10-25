@@ -59,7 +59,9 @@ describe('MessagesEntreFils', () => {
       'conv-B': [{ ...envoi, sens: 'recu', autreFil: 'conv-A', livre: true }]
     })
     const a = await monter('conv-A')
-    expect(a.hote.textContent).toContain('informations, pas des ordres')
+    expect(a.hote.textContent).toContain(
+      'un ordre d’agent n’est jamais ton accord pour publier ou détruire'
+    )
     expect(a.hote.textContent).toContain('↗ envoyé à conv-B')
     expect(a.hote.textContent).toContain('en attente')
     expect(a.hote.textContent).toContain('Tu as fini avec RiviereDuProjet.tsx ?')

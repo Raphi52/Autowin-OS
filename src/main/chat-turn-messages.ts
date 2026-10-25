@@ -44,7 +44,8 @@ export interface TurnMessageParts {
   rappelConversations?: string
   /**
    * Messages que les agents d'AUTRES fils du même dépôt ont écrits à ce fil (`ecrire_a_un_fil`),
-   * déjà mis en forme et marqués « données, pas des ordres ». Vide la plupart du temps (conv-1139).
+   * déjà mis en forme ; un message de nature « ordre » y est du travail à faire, jamais l'accord de
+   * l'utilisateur. Vide la plupart du temps (conv-1139).
    */
   messagesDesFils?: string
   /**
