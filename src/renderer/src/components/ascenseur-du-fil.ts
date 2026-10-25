@@ -466,10 +466,11 @@ function ligneDeLecture(conteneur: HTMLElement): number {
 }
 
 /**
- * Rang du premier caractère qui finit SOUS la ligne lue (pure) : celui qui passe sur la ligne, ou
- * le premier de la ligne suivante si elle tombe dans l'interligne. Par dichotomie : le texte d'un
- * bloc se pose de haut en bas. `boite(rang)` null = caractère sans boîte (espace, texte masqué),
- * sauté. `-1` : aucun caractère ne finit sous la ligne.
+ * Rang, dans UN texte, du premier caractère qui finit SOUS la ligne lue (pure) : celui qui passe
+ * sur la ligne, ou le premier de la ligne suivante si elle tombe dans l'interligne. Par
+ * dichotomie : les lignes d'un même texte se posent de haut en bas — entre deux textes, rien ne le
+ * garantit (libellés d'un schéma : voir `pointDeLecture`). `boite(rang)` null = caractère sans
+ * boîte (espace, texte masqué), sauté. `-1` : aucun caractère ne finit sous la ligne.
  */
 export function rangDuCaractereLu(
   nombre: number,
@@ -491,6 +492,15 @@ export function rangDuCaractereLu(
     } else debut = rang + 1
   }
   return trouve
+}
+
+/** Rang du dernier caractère qui a une boîte (pure) ; `-1` s'il n'y en a aucun. */
+export function rangDuDernierCaractere(
+  nombre: number,
+  boite: (rang: number) => Boite | null
+): number {
+  for (let rang = nombre - 1; rang >= 0; rang--) if (boite(rang)) return rang
+  return -1
 }
 
 /** Boîte à l'écran d'un caractère VISIBLE ; null pour un espace (replié en bout de ligne) ou sans boîte. */
@@ -565,26 +575,65 @@ export function pointDeLecture(conteneur: HTMLElement): PointDeLecture | null {
   if (!element) return null
   const plage = document.createRange()
   const textes = textesDuBloc(element, plage)
-  const debuts: number[] = []
-  let total = 0
-  for (const texte of textes) {
-    debuts.push(total)
-    total += texte.length
+  const { sous, dessus } = caractereSousLaLigne(textes, ligneDeLecture(conteneur), plage)
+  if (sous) return { element, noeud: sous.noeud, decalage: sous.decalage }
+  // La ligne lue tombe SOUS la fin du texte (encore dans la boîte du bloc) : on tient la dernière
+  // ligne au-dessus, celle que tu vois en haut, par son DÉBUT. Mesuré le 2026-10-25 (conv-1143,
+  // conv-1139 à 1 150 px, vue à 31 539) : dernière ligne finie à 23,4 px pour une ligne lue à 24.
+  // Tenir le haut du bloc, 1 050 px plus haut, laissait 87 px d'écart carte ouverte ; tenir le
+  // dernier caractère (le point final), 21 px : la dernière ligne se coupe en deux quand le fil
+  // rétrécit, et son début remonte d'une ligne.
+  if (dessus) {
+    const { noeud } = dessus
+    const boite = (rang: number): Boite | null => boiteDuCaractere(noeud, rang, plage)
+    const decalage = rangDuDernierCaractere(noeud.length, boite)
+    const derniere = decalage < 0 ? null : boite(decalage)
+    if (derniere) {
+      const debut = caractereSousLaLigne(textes, (derniere.haut + derniere.bas) / 2, plage).sous
+      return debut
+        ? { element, noeud: debut.noeud, decalage: debut.decalage }
+        : { element, noeud, decalage }
+    }
   }
-  const situer = (rang: number): { noeud: Text; decalage: number } => {
-    let i = textes.length - 1
-    while (i > 0 && debuts[i] > rang) i--
-    return { noeud: textes[i], decalage: rang - debuts[i] }
+  return { element, noeud: null, decalage: 0 }
+}
+
+/**
+ * Parmi des textes, le caractère qui porte la ligne `ligne` (le plus HAUT de ceux qui finissent
+ * dessous ; à égalité, le premier de la page : le début de la ligne), et à défaut le texte le plus
+ * BAS tout au-dessus. Texte par texte, sans supposer que la page les range de haut en bas : dans un
+ * schéma, les libellés se suivent dans un autre ordre que l'écran (mesuré conv-1139 : « réponse »
+ * à −883 px, puis « rejuge » à −942, puis « juge » à −976). Dans UN texte, les lignes se suivent.
+ */
+function caractereSousLaLigne(
+  textes: readonly Text[],
+  ligne: number,
+  plage: Range
+): {
+  sous: { noeud: Text; decalage: number; haut: number } | null
+  dessus: { noeud: Text; bas: number } | null
+} {
+  let sous: { noeud: Text; decalage: number; haut: number } | null = null
+  let dessus: { noeud: Text; bas: number } | null = null
+  for (const noeud of textes) {
+    plage.selectNodeContents(noeud)
+    const { top, bottom } = plage.getBoundingClientRect()
+    if (bottom <= ligne) {
+      // Tout au-dessus de la ligne : candidat au repli, le plus bas (à égalité, le dernier).
+      const plusBas = dessus === null ? bottom : Math.max(bottom, dessus.bas)
+      if (dessus === null || bottom >= dessus.bas - 0.5) dessus = { noeud, bas: plusBas }
+      continue
+    }
+    // Commence plus bas que le caractère déjà retenu : rien à mesurer.
+    if (sous && top >= sous.haut - 0.5) continue
+    const boite = (rang: number): Boite | null => boiteDuCaractere(noeud, rang, plage)
+    const decalage = rangDuCaractereLu(noeud.length, boite, ligne)
+    const mesure = decalage < 0 ? null : boite(decalage)
+    // Le plus HAUT sous la ligne ; à égalité, le premier de la page : le début de la ligne lue.
+    if (mesure && (!sous || mesure.haut < sous.haut - 0.5))
+      sous = { noeud, decalage, haut: mesure.haut }
   }
-  const rang = rangDuCaractereLu(
-    total,
-    (r) => {
-      const { noeud, decalage } = situer(r)
-      return boiteDuCaractere(noeud, decalage, plage)
-    },
-    ligneDeLecture(conteneur)
-  )
-  return rang < 0 ? { element, noeud: null, decalage: 0 } : { element, ...situer(rang) }
+  return { sous, dessus }
 }
 
 /** Le point tient-il encore : son bloc et son texte sont toujours dans le fil. */
