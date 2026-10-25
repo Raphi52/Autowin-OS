@@ -347,27 +347,259 @@ export function reserveDeLaCarte(paddingDroit: number, largeurCarte: number): nu
   return Math.max(actuel, largeurCarte + ECART_CARTE)
 }
 
+/** Un bloc du fil, à l'écran : haut et bas. */
+export type Boite = { haut: number; bas: number }
+
 /**
- * Élément en HAUT de la vue, juste sous la ligne d'aimant : c'est lui qui doit rester immobile à
- * l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du navigateur, qui ne le
- * fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px à 1 400 px de large,
- * de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta bulle doit le rester.
- * Le bord droit d'abord : tes bulles y sont alignées.
+ * Rang, parmi des blocs frères, de celui qui porte la ligne lue (pure). D'abord un bloc qui COUVRE
+ * la ligne, le plus serré. Sinon, si `entreLesBlocs` (leur parent n'a pas de texte à lui : la ligne
+ * tombe dans l'espace entre deux blocs), le premier bloc qui SUIT — son haut est juste sous la ligne,
+ * et le texte du bloc d'avant ne le déplace pas en se réagençant —, à défaut le dernier avant.
+ * `-1` : aucun bloc, ou la ligne tombe dans le texte du parent.
+ */
+export function rangDeLaLigne(
+  boites: readonly Boite[],
+  ligne: number,
+  entreLesBlocs: boolean
+): number {
+  let couvre = -1
+  let suit = -1
+  let precede = -1
+  boites.forEach((boite, rang) => {
+    if (!(boite.bas > boite.haut)) return
+    if (boite.haut <= ligne && ligne < boite.bas) {
+      const serre = couvre < 0 || boite.bas - boite.haut < boites[couvre].bas - boites[couvre].haut
+      if (serre) couvre = rang
+    } else if (boite.haut > ligne) {
+      if (suit < 0 || boite.haut < boites[suit].haut) suit = rang
+    } else if (precede < 0 || boite.bas > boites[precede].bas) precede = rang
+  })
+  if (couvre >= 0) return couvre
+  if (!entreLesBlocs) return -1
+  return suit >= 0 ? suit : precede
+}
+
+/** Hors du flux : un bloc collant ou superposé ne bouge pas avec le texte qu'il recouvre. */
+const HORS_DU_FLUX = new Set(['absolute', 'fixed', 'sticky'])
+
+/** Enfants qui ont une boîte ; une enveloppe sans boîte (`display: contents`) cède la place aux siens. */
+function enfantsAvecBoite(
+  element: Element,
+  boites: (Boite & { element: HTMLElement })[]
+): (Boite & { element: HTMLElement })[] {
+  for (const enfant of Array.from(element.children)) {
+    if (!(enfant instanceof HTMLElement)) continue
+    const rect = enfant.getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) {
+      if (enfant.childElementCount > 0) enfantsAvecBoite(enfant, boites)
+      continue
+    }
+    boites.push({ element: enfant, haut: rect.top, bas: rect.bottom })
+  }
+  return boites
+}
+
+const aDuTexte = (element: Element): boolean =>
+  Array.from(element.childNodes).some(
+    (noeud) => noeud.nodeType === 3 && (noeud.textContent ?? '').trim() !== ''
+  )
+
+/**
+ * Le bloc qui porte la LIGNE LUE, en haut de la vue juste sous la ligne d'aimant : c'est lui qui
+ * doit rester immobile à l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du
+ * navigateur, qui ne le fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px
+ * à 1 400 px de large, de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta
+ * bulle doit le rester.
+ *
+ * Trouvé par la MISE EN PAGE du fil, du fil vers le bloc le plus serré autour de la ligne, et non
+ * par ce qui est affiché au point visé. Mesuré le 2026-10-25 (conv-1143, sonde sur conv-1139) :
+ *  - la carte et ses aperçus sont posés PAR-DESSUS le fil ; à 6 % du fil, les 4 points visés
+ *    tombaient sur eux, et le repli prenait le message entier, dont le haut était loin au-dessus ;
+ *  - un point entre deux blocs rendait le corps du message (haut à −1 609 px).
+ * Tenir le haut d'un bloc loin au-dessus de la ligne laisse le texte entre les deux la déplacer :
+ * la vue finissait de 24 à 368 px plus bas après une ouverture et un repli, 9 positions sur 25.
  */
 export function elementDeLecture(conteneur: HTMLElement): HTMLElement | null {
-  const rc = conteneur.getBoundingClientRect()
-  const y = rc.top + MARGE_AIMANT + 14
-  if (typeof document.elementFromPoint === 'function') {
-    for (const fx of [0.92, 0.7, 0.5, 0.3]) {
-      const el = document.elementFromPoint(rc.left + rc.width * fx, y)
-      if (el instanceof HTMLElement && el !== conteneur && conteneur.contains(el)) return el
+  const ligne = ligneDeLecture(conteneur)
+  let courant: HTMLElement = conteneur
+  for (let profondeur = 0; profondeur < 40; profondeur++) {
+    const boites = enfantsAvecBoite(courant, [])
+    const entreLesBlocs = !aDuTexte(courant)
+    let suivant: HTMLElement | null = null
+    while (boites.length > 0) {
+      const rang = rangDeLaLigne(boites, ligne, entreLesBlocs)
+      if (rang < 0) break
+      const candidat = boites[rang].element
+      if (!HORS_DU_FLUX.has(getComputedStyle(candidat).position)) {
+        suivant = candidat
+        break
+      }
+      boites.splice(rang, 1)
     }
+    if (!suivant) break
+    courant = suivant
   }
-  return (
-    Array.from(conteneur.querySelectorAll<HTMLElement>(SELECTEUR_MESSAGES)).find(
-      (element) => element.getBoundingClientRect().bottom > y
-    ) ?? null
+  return courant === conteneur ? null : courant
+}
+
+/**
+ * La ligne lue retenue à l'image précédente (ou par le maintien précédent) est-elle encore la
+ * bonne ? Oui tant que la vue est restée là où le maintien l'a posée (`posee`) et qu'aucun
+ * glissement ni la barre ne la mènent (`pilotee`). Mesuré conv-1143 : reprise à chaque image, la
+ * ligne lue changeait entre l'ouverture et le repli de la carte (une ligne de liste au lieu du corps
+ * du message), et la vue ne revenait pas à sa place.
+ */
+export function garderLePointLu(scrollTop: number, posee: number, pilotee: boolean): boolean {
+  return !pilotee && Math.abs(scrollTop - posee) <= 0.5
+}
+
+/**
+ * Ce que le maintien tient immobile pendant que la carte change la largeur du fil : le bloc qui
+ * porte la ligne lue et, dans son texte, le caractère qui passe sur cette ligne (`noeud` null : le
+ * bloc n'a pas de texte à cette hauteur, on tient son haut).
+ */
+export type PointDeLecture = { element: HTMLElement; noeud: Text | null; decalage: number }
+
+/** Hauteur, à l'écran, de la ligne lue : juste sous la ligne d'aimant, en haut de la vue. */
+function ligneDeLecture(conteneur: HTMLElement): number {
+  return conteneur.getBoundingClientRect().top + MARGE_AIMANT + 14
+}
+
+/**
+ * Rang du premier caractère qui finit SOUS la ligne lue (pure) : celui qui passe sur la ligne, ou
+ * le premier de la ligne suivante si elle tombe dans l'interligne. Par dichotomie : le texte d'un
+ * bloc se pose de haut en bas. `boite(rang)` null = caractère sans boîte (espace, texte masqué),
+ * sauté. `-1` : aucun caractère ne finit sous la ligne.
+ */
+export function rangDuCaractereLu(
+  nombre: number,
+  boite: (rang: number) => Boite | null,
+  ligne: number
+): number {
+  let debut = 0
+  let fin = nombre
+  let trouve = -1
+  while (debut < fin) {
+    const milieu = (debut + fin) >>> 1
+    let rang = milieu
+    let mesure = boite(rang)
+    while (!mesure && rang + 1 < fin) mesure = boite(++rang)
+    if (!mesure) fin = milieu
+    else if (mesure.bas > ligne) {
+      trouve = rang
+      fin = milieu
+    } else debut = rang + 1
+  }
+  return trouve
+}
+
+/** Boîte à l'écran d'un caractère VISIBLE ; null pour un espace (replié en bout de ligne) ou sans boîte. */
+function boiteDuCaractere(noeud: Text, decalage: number, plage: Range): Boite | null {
+  if (decalage < 0 || decalage >= noeud.length || /\s/.test(noeud.data[decalage])) return null
+  plage.setStart(noeud, decalage)
+  plage.setEnd(noeud, decalage + 1)
+  const rects = plage.getClientRects()
+  for (let i = 0; i < rects.length; i++)
+    if (rects[i].bottom > rects[i].top) return { haut: rects[i].top, bas: rects[i].bottom }
+  return null
+}
+
+/**
+ * Les textes du bloc qui suivent sa mise en page : ni vides, ni masqués, ni posés par-dessus (un
+ * bouton « Copier » collant ne bouge pas avec le texte qu'il recouvre).
+ */
+function textesDuBloc(element: HTMLElement, plage: Range): Text[] {
+  const horsDuFlux = new Map<Element, boolean>()
+  const estHors = (el: Element | null): boolean => {
+    if (!el || el === element) return false
+    const connu = horsDuFlux.get(el)
+    if (connu !== undefined) return connu
+    const hors = HORS_DU_FLUX.has(getComputedStyle(el).position) || estHors(el.parentElement)
+    horsDuFlux.set(el, hors)
+    return hors
+  }
+  const textes: Text[] = []
+  const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  for (let noeud = parcours.nextNode(); noeud; noeud = parcours.nextNode()) {
+    const texte = noeud as Text
+    if (texte.data.trim() === '' || estHors(texte.parentElement)) continue
+    plage.selectNodeContents(texte)
+    if (plage.getClientRects().length > 0) textes.push(texte)
+  }
+  return textes
+}
+
+/** `display` d'un fragment de LIGNE (`''` : environnement sans feuille de style par défaut). */
+const EN_LIGNE = /^(|inline.*|contents|ruby.*)$/
+
+/**
+ * Le bloc qui pose la ligne lue : un fragment en ligne (gras, code, lien) retenu par
+ * `elementDeLecture` cède la place à son paragraphe ; un fragment sans texte (image, icône) reste.
+ * Mesuré le 2026-10-25 (conv-1143, fil de 510 px) : retenu, le `strong` de la ligne lue gardait
+ * son haut à 18 px quand la carte s'ouvrait, mais le DÉBUT de la ligne, dans le paragraphe
+ * réagencé, remontait à −4 px.
+ */
+function blocQuiPorteLaLigne(
+  element: HTMLElement | null,
+  conteneur: HTMLElement
+): HTMLElement | null {
+  let bloc = element
+  while (bloc && bloc.parentElement && bloc.parentElement !== conteneur) {
+    // Une image, une icône : sans texte, son haut est le bon repère, et son paragraphe peut être
+    // tout le message.
+    if (!(bloc.textContent ?? '').trim() || !EN_LIGNE.test(getComputedStyle(bloc).display)) break
+    bloc = bloc.parentElement
+  }
+  return bloc
+}
+
+/**
+ * Le point de lecture en haut de la vue : le bloc (voir `elementDeLecture`) et le PREMIER caractère
+ * de son texte sur la ligne lue — le début de la ligne que tu lis. Mesuré le 2026-10-25
+ * (conv-1143, sonde sur conv-1139) : tenir le HAUT du bloc laissait le texte descendre d'environ
+ * une ligne (19 à 22 px) pendant que la carte était ouverte, 2 positions sur 4 — un paragraphe plus
+ * étroit se réagence, et le texte lu passe plus bas DANS le paragraphe.
+ */
+export function pointDeLecture(conteneur: HTMLElement): PointDeLecture | null {
+  const element = blocQuiPorteLaLigne(elementDeLecture(conteneur), conteneur)
+  if (!element) return null
+  const plage = document.createRange()
+  const textes = textesDuBloc(element, plage)
+  const debuts: number[] = []
+  let total = 0
+  for (const texte of textes) {
+    debuts.push(total)
+    total += texte.length
+  }
+  const situer = (rang: number): { noeud: Text; decalage: number } => {
+    let i = textes.length - 1
+    while (i > 0 && debuts[i] > rang) i--
+    return { noeud: textes[i], decalage: rang - debuts[i] }
+  }
+  const rang = rangDuCaractereLu(
+    total,
+    (r) => {
+      const { noeud, decalage } = situer(r)
+      return boiteDuCaractere(noeud, decalage, plage)
+    },
+    ligneDeLecture(conteneur)
   )
+  return rang < 0 ? { element, noeud: null, decalage: 0 } : { element, ...situer(rang) }
+}
+
+/** Le point tient-il encore : son bloc et son texte sont toujours dans le fil. */
+export function pointEncoreLa(point: PointDeLecture): boolean {
+  const { element, noeud } = point
+  return element.isConnected && (!noeud || (noeud.isConnected && point.decalage < noeud.length))
+}
+
+/** Haut du point de lecture dans le CONTENU du fil (repère de `hautDansLeFil`). */
+export function hautDuPointLu(point: PointDeLecture, conteneur: HTMLElement): number {
+  const boite = point.noeud
+    ? boiteDuCaractere(point.noeud, point.decalage, document.createRange())
+    : null
+  if (!boite) return hautDansLeFil(point.element, conteneur)
+  return boite.haut - conteneur.getBoundingClientRect().top + conteneur.scrollTop
 }
 
 /** Haut d'un élément dans le CONTENU du fil : ne bouge pas quand on défile, seulement quand le fil se réagence. */
