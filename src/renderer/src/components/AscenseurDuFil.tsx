@@ -13,6 +13,7 @@ import {
 import './AscenseurDuFil.css'
 import {
   cibleAimant,
+  ancreEncoreTenue,
   aimanterSurPiste,
   cranCale,
   cranCourant,
@@ -339,6 +340,19 @@ export function AscenseurDuFil({
     if (!conteneur) return
     if (deplie === (conteneur.dataset.ascenseur === 'deplie')) return
     if (maintienRef.current) cancelAnimationFrame(maintienRef.current)
+    // Message retenu PÉRIMÉ (conv-1139) : la vue a quitté sa place par un autre moyen que la barre
+    // (clavier, recherche…). Le tenir ici recalerait la vue sur lui à l'ouverture ou à la fermeture.
+    // Mesuré AVANT que la largeur change : sa place calée est encore exacte.
+    const retenu = ancreRef.current?.isConnected ? ancreRef.current : null
+    if (
+      retenu &&
+      !ancreEncoreTenue(
+        conteneur.scrollTop,
+        hautDeVuePour({ haut: hautDansLeContenu(retenu, conteneur) }, lireGeo(conteneur)),
+        glissementRef.current !== 0 || glisseRef.current?.bouge === true
+      )
+    )
+      ancreRef.current = null
     let lu =
       (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
     let precedent = lu ? hautDansLeFil(lu, conteneur) : 0

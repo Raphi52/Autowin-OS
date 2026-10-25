@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MARGE_AIMANT,
   aimanterSurPiste,
+  ancreEncoreTenue,
   cibleAimant,
   cranCale,
   cranCourant,
@@ -324,5 +325,24 @@ describe('aperçus pendant le défilement — seulement au-dessus et en dessous 
   })
   it('sans tes messages : aucun aperçu', () => {
     expect(voisinsDeLaVue(geo(1500), [])).toEqual({ precedent: null, avant: null, apres: null })
+  })
+})
+
+// conv-1139 (2026-10-25) : après un recalage sur ton message, un défilement au CLAVIER puis la
+// fermeture de la carte ramenaient la vue sur ce message (sonde : 231 px de recul, 2 essais sur 3,
+// le 3e projeté 2 880 px plus bas). Le message retenu n'était libéré que par la molette ou la barre.
+describe('message retenu — gardé seulement si la vue est encore calée dessus', () => {
+  it('vue toujours calée sur le message : il reste retenu pendant que le fil se réagence', () => {
+    expect(ancreEncoreTenue(890, 890, false)).toBe(true)
+    // Position fractionnaire (écran à échelle) : moins d'un pixel près.
+    expect(ancreEncoreTenue(890.6, 890, false)).toBe(true)
+  })
+  it('vue déplacée ailleurs (clavier, recherche, glisser) : le message n’est plus retenu', () => {
+    // Mesuré : recalée à 2333, PageDown jusqu'à 2564.
+    expect(ancreEncoreTenue(2564, 2333, false)).toBe(false)
+    expect(ancreEncoreTenue(2300, 2333, false)).toBe(false)
+  })
+  it('glissement en route vers le message : il reste retenu, la vue n’y est pas encore', () => {
+    expect(ancreEncoreTenue(1200, 2333, true)).toBe(true)
   })
 })

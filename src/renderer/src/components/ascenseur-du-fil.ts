@@ -410,6 +410,24 @@ export function hautDansLeContenu(element: HTMLElement, conteneur: HTMLElement):
 }
 
 /**
+ * Le message RETENU après un recalage (clic sur un cran, aimant) l'est-il encore, au moment où la
+ * carte s'ouvre ou se referme ? Oui si la vue est toujours calée dessus (à moins d'un pixel), ou si un
+ * glissement est en route vers lui. Sinon, la vue a été déplacée par autre chose que la barre.
+ *
+ * Mesuré le 2026-10-25 (conv-1139, sonde sur le fil réel) : seules la molette et la barre libéraient
+ * ce message. Après un PageDown, la carte qui se refermait recalait la vue sur lui : 231 px de recul
+ * sur 2 essais, et 2 880 px de saut sur le 3e. Le contrôle porte sur la POSITION et non sur le geste :
+ * clavier, recherche dans le fil ou glisser de la barre sont tous couverts, sans liste à tenir.
+ */
+export function ancreEncoreTenue(
+  scrollTop: number,
+  hautDeVueDuMessage: number,
+  glissementEnCours: boolean
+): boolean {
+  return glissementEnCours || Math.abs(scrollTop - hautDeVueDuMessage) <= 1
+}
+
+/**
  * Texte d'un de tes messages pour son aperçu, tel que tu l'as écrit. Un message qui lance une skill
  * s'affiche en bandeau (nom de la skill, puis le reste : ChatMessageRow.tsx) ; lu d'un bloc, il
  * donnait « draftune plus jolie popup » (mesuré dans l'app, conv-1114). On le recompose en
