@@ -19,7 +19,8 @@ import {
   paletteDeCarte,
   type DependancesPile,
   type FenetrePopup,
-  type PaletteCarte
+  type PaletteCarte,
+  type Rect
 } from './notification-popup'
 
 /**
@@ -131,12 +132,17 @@ type PopupsDeFinDeTour = ReturnType<typeof creerPileDePopups> & {
   estUneCarte: (win: BrowserWindow | null) => boolean
 }
 
-/** Les cartes de fin de tour, posées en bas à droite de l'écran PRINCIPAL (là où Windows sonne). */
+/**
+ * Les cartes de fin de tour, posées en bas à droite de l'écran PRINCIPAL (là où Windows sonne).
+ * `zone` retouche la zone de travail : la mascotte du bureau (conv-1145) y retire sa colonne, et
+ * les cartes sortent alors à sa gauche au lieu de la recouvrir.
+ */
 export function creerPopupsDeFinDeTour({
-  secours
-}: Pick<DependancesPile, 'secours'>): PopupsDeFinDeTour {
+  secours,
+  zone = (zoneDeTravail) => zoneDeTravail
+}: Pick<DependancesPile, 'secours'> & { zone?: (zoneDeTravail: Rect) => Rect }): PopupsDeFinDeTour {
   const pile = creerPileDePopups({
-    zone: () => screen.getPrimaryDisplay().workArea,
+    zone: () => zone(screen.getPrimaryDisplay().workArea),
     heure: () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     palette: () => paletteCourante,
     secours,
