@@ -1,0 +1,36 @@
+{
+  "titre": "Finir et vérifier la traduction anglaise (conv-1146)",
+  "parallele": 3,
+  "plafondTours": 10,
+  "lots": [
+    {
+      "titre": "Phrases sans accent et règle de couverture",
+      "demande": "/build Traduction anglaise d'Autowin OS (réglage Langue de Settings · Interface, src/renderer/src/langue.ts). Le dernier avis du contrôle final de conv-1146 (score 85) relève un seul défaut : dans src/shared/update-contract.ts:67-68, la table UPDATE_STRATEGY_HINTS laisse en français les cas 'fast-forward' et 'merge', alors que 'rebase' et 'switch-main' passent par tp(...). Le test de couverture ne les voit pas parce que ces phrases n'ont aucun accent. Traduis ces deux phrases comme les deux autres, puis étends src/renderer/src/langue-couverture-generale.test.ts pour qu'une phrase française SANS accent soit aussi relevée (test rouge avant, vert après). Preuve : npx vitest run src/renderer/src/langue-couverture-generale.test.ts src/renderer/src/langue-couverture.test.ts → code 0.",
+      "fichiers": [
+        "src/shared/update-contract.ts",
+        "src/renderer/src/langue-couverture-generale.test.ts",
+        "src/renderer/src/langue-anglais-ecrans.ts"
+      ]
+    },
+    {
+      "titre": "Vérifier Settings, accueil et navigation en anglais",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues settings et accueil, et sur la barre de navigation. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche. Aucun texte en français : dis-le, avec les captures lues.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier le chat en anglais",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur la vue chat : liste des fils, zone de saisie, blocs du fil (actions, messages entre fils, tableau d'un plan de lots). Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture avec node scripts/ui-capture.mjs --view chat --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier Agent Studio, Observatory et Task Manager",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues agent-studio, observatory et task-manager. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier Knowledge, Worktrees, Bureaux cachés, Tickets, Besoins, Tests",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues knowledge, worktree, hdesk, tickets, besoins et tests. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    }
+  ]
+}

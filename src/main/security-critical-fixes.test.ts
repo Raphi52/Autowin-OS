@@ -627,7 +627,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:carte:verifierMentions` — AUCUN argument ; LIT des fiches (plafond 20 par passe). Aucun
     //     des trois ne recoit d'ecriture chez le fournisseur (seul `tickets.get` leur est passe).
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(239)
+    // MISE A JOUR 2026-10-26 (conv-1150) — 239 -> 241. ATTRIBUTION MESUREE (noms de canaux du commit
+    //   8ab2cbc3 qui a pose 239, de HEAD 85d86866 et de l'arbre de ce travail) : ce test etait DEJA
+    //   rouge a HEAD (240), un canal ayant ete ajoute sans mise a jour du compte :
+    //   `os:messagesEntreFils` (conv-1139) — LECTURE seule des messages affiches d'un fil, garde des
+    //     sa premiere ligne par `assertTrustedRendererSender(event, 'Messages entre fils')`.
+    //   UN ajoute par ce travail, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Plans de lots')` :
+    //   `os:plansDeLots` — tableau d'un plan de lots et gestes de l'UTILISATEUR (accepter, refuser,
+    //     arreter, reprendre) ; identifiants passes par `guardString`, le fil chef doit etre celui du
+    //     plan (`CoordinateurDesPlans`), sinon refus. C'est le seul chemin qui lance un plan : l'outil
+    //     de l'agent ne fait que deposer, lire l'etat et relancer un lot.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(241)
     expect(unguarded).toEqual([])
   })
 

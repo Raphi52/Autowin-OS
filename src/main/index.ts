@@ -180,7 +180,15 @@ import { WindowsDesktopController } from './desktop-control'
 import { captureElectronDesktop } from './electron-desktop-capture'
 import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
-import { createRunPilotChat } from './chat/run-pilot-chat'
+import {
+  annoncerLaFinDuTour,
+  createRunPilotChat,
+  issueDeCloture,
+  issueDuResultat,
+  suivreLaFinDuTour,
+  type ObservateurFinDeTour
+} from './chat/run-pilot-chat'
+import type { IssueDuTour } from '../shared/plan-de-lots'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
 import { modeleDuTour } from './chat/modele-de-conversation'
@@ -362,6 +370,7 @@ import { homedir, tmpdir } from 'node:os'
 import { canonicalProjectPath } from '../shared/project-path'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
 import { messagesAAfficher } from './messages-entre-fils-app'
+import { CoordinateurDesPlans } from './plans-de-lots-app'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -3382,12 +3391,33 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Messages entre fils')
     return messagesAAfficher(guardString(conversationId, 'conversationId'))
   })
+  // Plans de lots d'un fil chef (conv-1150) : le tableau, et les SEULS gestes qui lancent ou
+  // reprennent un plan — le clic de l'utilisateur. L'agent n'a que dépôt, état et relance d'un lot.
+  ipcMain.handle(
+    'os:plansDeLots',
+    async (event, action: unknown, conversationId: unknown, planId?: unknown) => {
+      assertTrustedRendererSender(event, 'Plans de lots')
+      const fil = guardString(conversationId, 'conversationId')
+      const coordinateur = suiviDesPlans.coordinateur
+      if (!coordinateur) return { ok: false, erreur: 'coordinateur des plans pas encore démarré.' }
+      const geste = guardString(action, 'action')
+      if (geste === 'voir') return { ok: true, vue: coordinateur.planDuFil(fil) ?? null }
+      const id = guardString(planId, 'planId')
+      if (geste === 'accepter') return coordinateur.accepter(fil, id)
+      if (geste === 'refuser') return coordinateur.refuser(fil, id)
+      if (geste === 'arreter') return coordinateur.arreter(fil, id)
+      if (geste === 'reprendre') return coordinateur.reprendre(fil, id)
+      return { ok: false, erreur: `geste « ${geste} » inconnu.` }
+    }
+  )
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   // Le corps du tour vit dans src/main/chat/run-pilot-chat.ts : il ne capturait rien d'autre que
   // les valeurs listees ici, qui lui sont desormais passees explicitement.
   /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour de reprise). */
   const relanceTachesDeFond: { relanceur?: RelanceurTachesDeFond } = {}
+  /** Assigné plus bas, une fois `lancerDansConversation` câblé (conv-1150, plans de lots). */
+  const suiviDesPlans: { coordinateur?: CoordinateurDesPlans } = {}
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -3666,7 +3696,7 @@ Le fil reprend ensuite normalement.`
    * `finDuTour` : un tour ne change jamais de dossier en cours de route.
    * La demande compte toujours comme EN COURS des sa reception (voir trackPreparation).
    */
-  const runPilotChat: typeof lancerTour = (...args) =>
+  const tourCompteDesReception: typeof lancerTour = (...args) =>
     activeChatTurns.trackPreparation(args[2], async () => {
       const conversationId = args[2]
       if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
@@ -3766,6 +3796,17 @@ Le fil reprend ensuite normalement.`
         finirTour()
       }
     })
+  /*
+   * LA FIN DU TOUR ANNONCÉE AUTOUR DU COMPTAGE, PAS DEDANS (conv-1150, 2026-10-26).
+   * Le coordinateur des plans de lots réveille un chef inactif à la fin de chaque tour. Annoncée
+   * depuis `createRunPilotChat`, la fin partait de l'intérieur de `trackPreparation` : le chef était
+   * encore compté « en cours » et son réveil était perdu (reproduit par le juge avec le vrai registre).
+   * fix-ok: annonce de fin émise avant la sortie de `trackPreparation` (`isInFlight` vrai) — mesuré.
+   * Garde : `plans-de-lots.fin-de-tour.test.ts` (vrai `ActiveChatTurns`, et cette composition).
+   */
+  const observateurDesPlans: ObservateurFinDeTour = (conversationId, issue) =>
+    suiviDesPlans.coordinateur?.surFinDeTour(conversationId, issue)
+  const runPilotChat = suivreLaFinDuTour(tourCompteDesReception, observateurDesPlans)
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation (`setRecovered`) fait
    * refuser un nouveau message par `os:pilotChat` et répondre « actif » à la sonde de l'écran,
@@ -3781,6 +3822,8 @@ Le fil reprend ensuite normalement.`
     activeChatTurns.setRecovered(call.conversationId, recoveryController, recoveryCompletion)
     setImmediate(() => {
       void (async () => {
+        // L'issue, annoncée aux plans de lots APRÈS le relâchement de la réservation (conv-1150).
+        let issueDeReprise: IssueDuTour | undefined
         try {
           const terminal = await waitForRecoverableChatProviderExit(call.journalPath, {
             signal: recoveryController.signal,
@@ -3788,6 +3831,7 @@ Le fil reprend ensuite normalement.`
           })
 
           const closeWithoutRecovery = (event: ChatTurnEvent): void => {
+            issueDeReprise = issueDeCloture(event)
             if (os.conversations.get(call.conversationId)) {
               os.conversations.applyTurnEvent(call.conversationId, call.turnId, event)
             }
@@ -3815,7 +3859,11 @@ Le fil reprend ensuite normalement.`
           }
 
           const events = readTurnJournal(turnJournalRoot, call.conversationId, call.turnId)
-          if (isTurnFinished(events)) return
+          if (isTurnFinished(events)) {
+            const clos = [...events].reverse().find((e) => isTurnFinished([e]))
+            issueDeReprise = issueDeCloture(clos ?? { kind: 'done' })
+            return
+          }
           const result = recoverCompletedChatProviderCall(call.provider, call.journalPath)
           if (!result) {
             closeWithoutRecovery({
@@ -3830,6 +3878,7 @@ Le fil reprend ensuite normalement.`
             (message) => message.role === 'assistant' && message.turnId === call.turnId
           )
           if (!conversation || assistantIndex === undefined || assistantIndex < 1) {
+            issueDeReprise = { ok: false, erreur: 'conversation ou tour d’origine introuvable' }
             appendTurnEvent(turnJournalRoot, call.conversationId, call.turnId, {
               kind: 'failed',
               error: 'Conversation ou tour d’origine introuvable pour la reprise',
@@ -3849,7 +3898,8 @@ Le fil reprend ensuite normalement.`
           // d'origine est rejoué sur ses commandes. L'imposer à tort figeait l'effort des runs
           // lancés par ce tour (conv-955, `reglagesDeReprise`).
           const reglages = reglagesDeReprise(call, assistant.runtime)
-          await runPilotChat(
+          // Rejoué SANS l'annonce de `runPilotChat` : elle partirait réservation encore tenue.
+          const rejoue = await tourCompteDesReception(
             undefined,
             messages,
             call.conversationId,
@@ -3869,7 +3919,12 @@ Le fil reprend ensuite normalement.`
             },
             call.policy
           )
+          issueDeReprise = issueDuResultat(rejoue)
         } catch (error) {
+          issueDeReprise = {
+            ok: false,
+            erreur: error instanceof Error ? error.message : String(error)
+          }
           console.warn('[resume-chat-provider] reprise impossible :', call.turnId, error)
         } finally {
           activeChatTurns.delete(call.conversationId, recoveryController)
@@ -3889,6 +3944,12 @@ Le fil reprend ensuite normalement.`
             })
           }
           resolveRecovery()
+          // Après `delete` : le fil ne compte plus « occupé », un chef repris peut être réveillé.
+          if (issueDeReprise)
+            annoncerLaFinDuTour(observateurDesPlans, call.conversationId, {
+              ...issueDeReprise,
+              repris: true
+            })
         }
       })()
     })
@@ -4125,6 +4186,34 @@ Le fil reprend ensuite normalement.`
       (erreur) =>
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
+  /*
+   * SUPER CONVERSATION (conv-1150) : le coordinateur des plans de lots. Un fil par lot, ouvert dans
+   * le dossier du chef ; lancé par la MÊME capacité que `chat_send` (hors du devis du tour appelant) ;
+   * comptes rendus par le journal des messages entre fils, l'expéditeur étant le fil du lot.
+   */
+  const coordinateurDesPlans = new CoordinateurDesPlans({
+    creerFil: (chef, titre) => {
+      const source = os.conversations.get(chef)
+      return os.conversations.create({
+        title: titre,
+        provider: source?.provider ?? 'claude',
+        ...(source?.projectPath ? { projectPath: source.projectPath } : {})
+      }).id
+    },
+    lancer: (fil, prompt) =>
+      bus.lancerDansConversation
+        ? bus.lancerDansConversation(fil, prompt)
+        : Promise.resolve({ ok: false, error: 'lancement dans un fil non câblé' }),
+    tourActif: (fil) => activeChatTurns.isInFlight(fil),
+    existe: (fil) => Boolean(os.conversations.get(fil)),
+    ecrire: (de, a, texte) => bus.ecrireDepuisLeFil(de, a, texte),
+    signaler: () => {
+      broadcast({ type: 'refresh', scope: 'plans-de-lots' })
+      broadcast({ type: 'refresh', scope: 'conversations' })
+    }
+  })
+  bus.plansDeLots = coordinateurDesPlans
+  suiviDesPlans.coordinateur = coordinateurDesPlans
   // POINT D'ENTRÉE LOCAL (conv-1144) : un script du poste crée un fil, y lance un tour et le relit,
   // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde
   // `tourDeChatActif` câblés. Le jeton n'est jamais journalisé : il ne vit que dans le fichier.

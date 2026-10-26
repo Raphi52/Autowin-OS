@@ -110,6 +110,7 @@ import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { MessagesEntreFils } from './MessagesEntreFils'
+import { TableauDesLots } from './TableauDesLots'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import {
@@ -8514,6 +8515,8 @@ Cliquer pour choisir une autre branche.`}
           <ProdAutorisationHote conversationId={activeId} />
           {/* Messages entre agents de fils du même dépôt (conv-1139) : visibles, jamais des ordres. */}
           <MessagesEntreFils conversationId={activeId} />
+          {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
+          <TableauDesLots conversationId={activeId} />
           <VueMesuree id="chat-saisie" bloc>
             <ChatComposer
               ref={composerRef}

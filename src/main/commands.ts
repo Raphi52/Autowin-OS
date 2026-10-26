@@ -261,6 +261,7 @@ import {
   lireMesMessages,
   type ContexteFils
 } from './messages-entre-fils-app'
+import type { CoordinateurDesPlans } from './plans-de-lots-app'
 import { SEUIL_ARCHIVE_MS } from './store/conversations-disk'
 import {
   captureWorkspaceMutationSnapshot,
@@ -853,6 +854,28 @@ export const CATALOG: CommandSpec[] = [
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false
+    }
+  },
+  {
+    /*
+     * SUPER CONVERSATION (conv-1150, 2026-10-26) — `plans-de-lots-app.ts`. conv-1146 avait confié
+     * 113 écrans à un seul agent. Ton fil devient CHEF : l'app ouvre un fil par lot, au plus 3 à la
+     * fois, et te réveille à chaque fin de lot avec son compte rendu. Rien ne part sans le clic de
+     * l'utilisateur sur le plan entier.
+     */
+    name: 'plan_de_lots',
+    description:
+      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : tu proposes un plan de 2 à 20 lots indépendants (fichiers séparés) ; RIEN ne part avant que l'utilisateur clique « Lancer le plan » dans le tableau de ton fil. Ensuite l'app ouvre un fil par lot (au plus 3 en même temps), y envoie sa demande, et te réveille à chaque fin de lot avec son compte rendu (messages de tes fils) : tu vérifies, tu relances un lot en échec (action « relancer »), et tu rends le bilan assemblé à la fin. Action « etat » : le tableau du plan. Une tâche courte ou d'un seul tenant n'en a pas besoin : un lot par fil coûte un tour.",
+    args: {
+      action: 'deposer|etat|relancer (défaut : deposer si « plan » est donné, sinon etat)',
+      plan: 'pour deposer — { "titre", "parallele" (1 à 3, défaut 3), "plafondTours" (défaut 2 par lot : le tour du lot et une relance), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue ; 4 000 caractères au plus), "fichiers": [chemins prévus] } ] }',
+      lot: 'pour relancer — le numéro du lot (1, 2…)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
     }
   },
   {
@@ -2447,6 +2470,9 @@ export class AppCommandBus {
    */
   tourDeChatActif?: (conversationId: string) => boolean
 
+  /** Coordinateur des plans de lots (conv-1150), câblé tardivement depuis index.ts. Absent -> refus. */
+  plansDeLots?: Pick<CoordinateurDesPlans, 'outil'>
+
   /**
    * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis
    * index.ts : le minuteur n'existe qu'après la construction du bus. Absent -> `task_create` refuse.
@@ -2821,6 +2847,15 @@ export class AppCommandBus {
       filsActifs: () => [...actifs.keys()],
       dossierDe: (fil) => (actifs.has(fil) ? this.dossierRangeSur(fil) : undefined)
     }
+  }
+
+  /**
+   * Un message écrit par l'APP au nom du fil `de` (compte rendu d'un lot au fil chef, conv-1150) :
+   * mêmes règles que `ecrire_a_un_fil` (même dépôt, bornes, doublon), sans tour lancé.
+   */
+  ecrireDepuisLeFil(de: string, a: string, texte: string): void {
+    ecrireAUnFil({ destinataire: a, texte, nature: 'info' }, { fil: de }, this.contexteDesFils())
+    this.broadcast({ type: 'refresh', scope: 'messages-fils' })
   }
 
   /**
@@ -5005,6 +5040,13 @@ export class AppCommandBus {
         const lu = lireMesMessages(conversationId ?? '')
         if (lu.livres) this.broadcast({ type: 'refresh', scope: 'messages-fils' })
         return lu
+      }
+      // conv-1150 : le chef est le fil de CET appel ; accepter ou reprendre un plan n'est pas ici
+      // (clic de l'utilisateur, canal `os:plansDeLots`).
+      case 'plan_de_lots': {
+        if (!this.plansDeLots)
+          throw new Error('plan_de_lots : coordinateur des plans non câblé dans ce processus.')
+        return this.plansDeLots.outil(conversationId ?? '', a)
       }
       default:
         throw new Error(`commande inconnue: ${name}`)
