@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
  * Si quelqu'un remet un `await` devant le rangement, l'attente revient : ce test doit tomber.
  */
 const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
-const pilote = source.slice(source.indexOf('const runPilotChat: typeof lancerTour'))
+const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
 const corps = pilote.slice(0, pilote.indexOf('startupRecoverableChatCalls'))
 
 describe('rangement automatique au premier message', () => {
@@ -44,7 +44,7 @@ describe('rangement automatique au premier message', () => {
 
   it('relit l etat courant et place son annonce au-dessus de la reponse en cours', () => {
     const rangement = source.slice(source.indexOf('const rangerSurLePremierMessage = async ('))
-    const bloc = rangement.slice(0, rangement.indexOf('const runPilotChat'))
+    const bloc = rangement.slice(0, rangement.indexOf('const tourCompteDesReception'))
     expect(bloc).toContain('toujoursNonRangee: () =>')
     expect(bloc).toContain('avantLaReponseEnCours: true')
     // conv-23 : ecrite APRES la fin du tour, l'annonce doit AUSSI passer au-dessus d'une reponse

@@ -237,6 +237,35 @@ describe('--conversation — refusée hors de l’instance cachée', () => {
     expect(existsSync(join(destination, 'messages-entre-fils.jsonl'))).toBe(false)
   })
 
+  // conv-1150 : le tableau d'un fil chef ne s'affiche que si ses plans de lots voyagent avec lui —
+  // ceux qu'il mène et ceux dont il fait un lot ; rien du plan d'un AUTRE fil.
+  it('copie les plans de lots de la conversation, et les retire après la capture', () => {
+    const source = racineSource()
+    const plan = (id, chef, fils) => ({
+      id,
+      chef,
+      lots: fils.map((fil, i) => ({ rang: i + 1, fil }))
+    })
+    ecrire(
+      join(source, 'plans-de-lots.json'),
+      JSON.stringify({
+        version: 1,
+        plans: [
+          plan('p-mene', 'conv-955', ['conv-2']),
+          plan('p-lot', 'conv-3', ['conv-955']),
+          plan('p-etranger', 'conv-1', ['conv-4'])
+        ]
+      })
+    )
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-955' })
+    expect(rapport.ecrits).toContain('plans-de-lots.json')
+    const copie = JSON.parse(readFileSync(join(destination, 'plans-de-lots.json'), 'utf8'))
+    expect(copie.plans.map((p) => p.id)).toEqual(['p-mene', 'p-lot'])
+    retirerSemence(destination, rapport)
+    expect(existsSync(join(destination, 'plans-de-lots.json'))).toBe(false)
+  })
+
   it('refuse un identifiant manquant ou dangereux', () => {
     expect(demandeDeConversation(['--conversation', '--view'])?.echec).toMatch(/invalide/)
     expect(demandeDeConversation(['--conversation', '../x'])?.echec).toMatch(/invalide/)

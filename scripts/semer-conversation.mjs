@@ -92,6 +92,26 @@ const lireJson = (chemin) => JSON.parse(readFileSync(chemin, 'utf8'))
 /** Même nom que `NOM_JOURNAL_MESSAGES_FILS` (src/shared/messages-entre-fils.ts, conv-1139). */
 const NOM_MESSAGES_FILS = 'messages-entre-fils.jsonl'
 
+/** Même nom que `NOM_FICHIER_PLANS` (src/main/plans-de-lots-app.ts, conv-1150). */
+const NOM_PLANS_DE_LOTS = 'plans-de-lots.json'
+
+/**
+ * Les plans de lots qui concernent `id` : ceux qu'il mène (chef) et ceux dont il fait un lot. Un
+ * fichier illisible ne rend rien. Pure.
+ */
+export function plansDeLotsDe(texte, id) {
+  let lu
+  try {
+    lu = JSON.parse(texte)
+  } catch {
+    return []
+  }
+  const plans = Array.isArray(lu?.plans) ? lu.plans : []
+  return plans.filter(
+    (p) => p?.chef === id || (Array.isArray(p?.lots) && p.lots.some((l) => l && l.fil === id))
+  )
+}
+
 /**
  * Les lignes du journal des messages entre fils qui concernent `id` : messages envoyés ou reçus par
  * lui, et les remises de ces messages. Une ligne illisible est sautée. Pure.
@@ -175,6 +195,19 @@ export function semerConversation({ source, destination, id }) {
       ecrits.push(NOM_MESSAGES_FILS)
     }
   }
+  // Plans de lots (conv-1150) : sans eux, le tableau d'avancement d'un fil chef ne s'affiche pas.
+  const plansDeLots = join(source, NOM_PLANS_DE_LOTS)
+  if (existsSync(plansDeLots)) {
+    const siens = plansDeLotsDe(readFileSync(plansDeLots, 'utf8'), id)
+    if (siens.length > 0) {
+      writeFileSync(
+        join(destination, NOM_PLANS_DE_LOTS),
+        JSON.stringify({ version: 1, plans: siens }, null, 2),
+        'utf8'
+      )
+      ecrits.push(NOM_PLANS_DE_LOTS)
+    }
+  }
   let runs = 0
   for (const relatif of dossiersDeConversation(id)) {
     if (!existsSync(join(source, relatif))) continue
@@ -214,6 +247,7 @@ export const emplacementsDeConversation = (id) => [
   'conversations.json.journal.jsonl',
   join('conversations.json.archive', `${id}.json`),
   NOM_MESSAGES_FILS,
+  NOM_PLANS_DE_LOTS,
   ...fichiersDeConversation(id),
   ...dossiersDeConversation(id),
   join('turn-journals', id)

@@ -118,6 +118,7 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   show_video: 'lancer',
   chat_send: 'lancer',
   ecrire_a_un_fil: 'modifier',
+  plan_de_lots: 'lancer',
   Bash: 'lancer',
   Task: 'lancer',
   Agent: 'lancer',

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * d'agent : 1 commit sur 64 poussé tout seul en deux jours, tout le travail du chat attendait un clic.
  */
 const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
-const pilote = source.slice(source.indexOf('const runPilotChat: typeof lancerTour'))
+const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
 const corps = pilote.slice(0, pilote.indexOf('startupRecoverableChatCalls'))
 
 describe('enchaînement auto du chat — câblage de fin de tour', () => {

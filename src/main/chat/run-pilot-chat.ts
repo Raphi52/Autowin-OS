@@ -99,6 +99,7 @@ import type { ModelQuestion } from '../model-questions'
 import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
+import type { IssueDuTour } from '../../shared/plan-de-lots'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -134,6 +135,15 @@ export type RunPilotChatDeps = {
    */
   relancerTachesDeFond?: (conversationId: string, taches: TacheDeFondARelancer[]) => void
 }
+
+/**
+ * Fin de CHAQUE tour de chat, avec son issue — le coordinateur des plans de lots d'un fil chef
+ * (`plans-de-lots-app.ts`, conv-1150) y note le lot d'un fil enfant et réveille le chef.
+ */
+export type ObservateurFinDeTour = (
+  conversationId: string,
+  issue: IssueDuTour
+) => void | Promise<void>
 
 /**
  * Le tour de chat lui-même, tel que `index.ts` le câble sur ses canaux IPC.
@@ -1815,4 +1825,83 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
   }
 
   return runPilotChat
+}
+
+/**
+ * LA FIN DU TOUR, AVEC SON ISSUE (conv-1150, 2026-10-26). `annoncerFinDeTour` ne dit que « fini » ;
+ * le plan de lots d'un fil chef doit savoir si le lot a réussi, échoué, buté sur le quota, et ce
+ * que l'agent a répondu (la matière du compte rendu).
+ *
+ * À poser AUTOUR du tour tel que l'app le compte (`trackPreparation`, index.ts), jamais sur la
+ * fabrique ci-dessus : sortir des tours actifs (`finally` du tour) ne suffit pas, la demande reste
+ * comptée « en cours » jusqu'à la fin de `trackPreparation`. Annoncée avant, un chef réveillé tout
+ * de suite était pris pour occupé et son réveil perdu (objection du juge, conv-1150). Même règle
+ * pour un tour REPRIS après redémarrage : sa réservation (`setRecovered`) n'est relâchée qu'à la fin
+ * de `reprendreAppelChat`, qui annonce donc lui-même, après, avec `repris`.
+ *
+ * Un défaut de l'observateur ne remonte jamais dans le tour. Gardes : `run-pilot-chat.test.ts`,
+ * `plans-de-lots.fin-de-tour.test.ts`.
+ */
+export function suivreLaFinDuTour(tour: RunPilotChat, surFin?: ObservateurFinDeTour): RunPilotChat {
+  if (!surFin) return tour
+  return async (...args) => {
+    const conversationId = args[2]
+    let resultat: Awaited<ReturnType<RunPilotChat>>
+    try {
+      resultat = await tour(...args)
+    } catch (e) {
+      if (conversationId)
+        annoncerLaFinDuTour(surFin, conversationId, {
+          ok: false,
+          erreur: e instanceof Error ? e.message : String(e)
+        })
+      throw e
+    }
+    if (conversationId) annoncerLaFinDuTour(surFin, conversationId, issueDuResultat(resultat))
+    return resultat
+  }
+}
+
+/** L'issue d'un tour lue dans son résultat — tour ordinaire comme tour repris après redémarrage. */
+export function issueDuResultat(resultat: Awaited<ReturnType<RunPilotChat>>): IssueDuTour {
+  return {
+    ok: resultat.ok,
+    tour: resultat.turnId,
+    ...(resultat.cancelled ? { annule: true } : {}),
+    ...(resultat.error ? { erreur: resultat.error } : {}),
+    ...(resultat.text ? { texte: resultat.text } : {})
+  }
+}
+
+/**
+ * L'issue d'un tour REPRIS que l'app clôt sans le rejouer (`closeWithoutRecovery` dans
+ * `reprendreAppelChat`, index.ts), ou dont le journal est déjà clos. Sans elle, un lot adopté par
+ * « Reprendre » restait en cours à jamais quand l'agent survivant mourait (conv-1150).
+ */
+export function issueDeCloture(evenement: { kind: string; error?: unknown }): IssueDuTour {
+  if (evenement.kind === 'done') return { ok: true }
+  if (evenement.kind === 'cancelled') return { ok: false, annule: true }
+  if (evenement.kind === 'interrupted')
+    return {
+      ok: false,
+      perdu: true,
+      erreur: 'agent repris après le redémarrage resté sans signe de vie : aucun résultat'
+    }
+  return { ok: false, erreur: String(evenement.error ?? `tour clos (${evenement.kind})`) }
+}
+
+/** Prévient l'observateur de fin ; un défaut de l'observateur ne remonte jamais dans le tour. */
+export function annoncerLaFinDuTour(
+  surFin: ObservateurFinDeTour | undefined,
+  conversationId: string,
+  issue: IssueDuTour
+): void {
+  if (!surFin) return
+  try {
+    void Promise.resolve(surFin(conversationId, issue)).catch((erreur: unknown) =>
+      console.warn('[plans de lots] fin de tour non traitée', conversationId, erreur)
+    )
+  } catch (erreur) {
+    console.warn('[plans de lots] fin de tour non traitée', conversationId, erreur)
+  }
 }

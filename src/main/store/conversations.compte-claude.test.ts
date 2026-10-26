@@ -35,7 +35,9 @@ describe('ConversationStore — compte Claude par conversation', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     // Le point d'application : la fonction existe et est appelee la ou TOUS les tours passent.
     expect(source).toContain('const appliquerCompteDeConversation = (conversationId: string)')
-    const runPilotChat = source.slice(source.indexOf('const runPilotChat: typeof lancerTour'))
+    const runPilotChat = source.slice(
+      source.indexOf('const tourCompteDesReception: typeof lancerTour')
+    )
     expect(runPilotChat.slice(0, 600)).toContain('appliquerCompteDeConversation(conversationId)')
     // Et le run pipeline (`os:orchestrate`), qui ne passe pas par runPilotChat.
     const orchestrate = source.slice(source.indexOf("ipcMain.handle('os:orchestrate'"))

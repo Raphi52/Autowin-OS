@@ -106,7 +106,7 @@ describe('câblage', () => {
   const roles = readFileSync(join(process.cwd(), 'src/main/ipc/roles.ts'), 'utf8')
 
   it('le lancement d’un tour applique le modèle de la conversation', () => {
-    const wrapper = index.slice(index.indexOf('const runPilotChat: typeof lancerTour'))
+    const wrapper = index.slice(index.indexOf('const tourCompteDesReception: typeof lancerTour'))
     // Jusqu'au VRAI départ du tour (le premier `lancerTour(...args)` est le cas sans conversation).
     const corps = wrapper.slice(0, wrapper.indexOf('await lancerTour(...args)'))
     expect(corps).toContain('modeleDuTour(')

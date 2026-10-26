@@ -1005,6 +1005,11 @@
   font-size: 13px;
 }
 
+/* components/TableauDesLots.css — tailles */
+:root[data-theme^='malvoyant-'] .tdl-pastille {
+  font-size: 13px;
+}
+
 /* components/TachesDeLaDemande.css — tailles */
 :root[data-theme^='malvoyant-'] .taches {
   font-size: 13px;

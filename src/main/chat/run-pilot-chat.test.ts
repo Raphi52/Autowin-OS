@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { annoncerFinDeTour, verdictVeilleurInactivite } from './run-pilot-chat'
+import {
+  annoncerFinDeTour,
+  issueDeCloture,
+  suivreLaFinDuTour,
+  verdictVeilleurInactivite,
+  type RunPilotChat
+} from './run-pilot-chat'
 
 /*
  * conv-1069, candidat 3 : une règle `task_create` « quand le tour de conv-N est terminé » attend un
@@ -37,6 +43,65 @@ describe('annoncerFinDeTour', () => {
     const annonce = fin.indexOf('annoncerFinDeTour(deps.watchdogEngine(), conversationId, turnId)')
     expect(sortie).toBeGreaterThan(0)
     expect(annonce).toBeGreaterThan(sortie)
+  })
+})
+
+/*
+ * conv-1150 — le coordinateur des plans de lots apprend la fin de CHAQUE tour, avec son issue.
+ * L'entrée qui ferait échouer ces tests : une issue sans l'échec, l'arrêt ou le texte du tour, ou
+ * un tour qui échoue sans être annoncé. OÙ l'annonce est branchée (autour de `trackPreparation`
+ * dans index.ts) est gardé par `plans-de-lots.fin-de-tour.test.ts`.
+ */
+describe('issueDeCloture — tour repris clos sans rejeu (reprendreAppelChat, index.ts)', () => {
+  it('sans signe de vie : agent PERDU (pas un résultat) ; arrêt, échec et fin gardent leur sens', () => {
+    expect(issueDeCloture({ kind: 'interrupted' })).toMatchObject({ ok: false, perdu: true })
+    expect(issueDeCloture({ kind: 'cancelled' })).toEqual({ ok: false, annule: true })
+    expect(issueDeCloture({ kind: 'failed', error: 'code 1' })).toEqual({
+      ok: false,
+      erreur: 'code 1'
+    })
+    expect(issueDeCloture({ kind: 'done' })).toEqual({ ok: true })
+  })
+})
+
+describe('suivreLaFinDuTour — l’issue du tour remise au coordinateur des plans', () => {
+  it('un tour qui lève est annoncé en échec, puis l’erreur remonte intacte', async () => {
+    const surFin = vi.fn()
+    const leve: RunPilotChat = async () => {
+      throw new Error('app pas prête')
+    }
+    const tour = suivreLaFinDuTour(leve, surFin)
+    await expect(tour(undefined, [], 'conv-7')).rejects.toThrow('app pas prête')
+    expect(surFin).toHaveBeenCalledWith('conv-7', { ok: false, erreur: 'app pas prête' })
+  })
+
+  it('rend l’issue complète : succès avec texte, échec, arrêt', async () => {
+    const surFin = vi.fn()
+    const issues: Array<Awaited<ReturnType<RunPilotChat>>> = [
+      { ok: true, cancelled: false, turnId: 't1', text: 'Lot fait, code 0.' },
+      { ok: false, cancelled: false, turnId: 't2', error: 'session limit' },
+      { ok: false, cancelled: true, turnId: 't3' }
+    ]
+    for (const issue of issues) {
+      const tour = suivreLaFinDuTour(async () => issue, surFin)
+      expect(await tour(undefined, [], 'conv-8')).toBe(issue)
+    }
+    expect(surFin.mock.calls).toEqual([
+      ['conv-8', { ok: true, tour: 't1', texte: 'Lot fait, code 0.' }],
+      ['conv-8', { ok: false, tour: 't2', erreur: 'session limit' }],
+      ['conv-8', { ok: false, tour: 't3', annule: true }]
+    ])
+  })
+
+  it('sans fil, ou si l’observateur échoue, le tour rend son résultat intact', async () => {
+    const issue = { ok: true, cancelled: false, turnId: 't1' }
+    const casse = vi.fn(() => {
+      throw new Error('coordinateur en panne')
+    })
+    const tour = suivreLaFinDuTour(async () => issue, casse)
+    expect(await tour(undefined, [], 'conv-9')).toBe(issue)
+    expect(await tour(undefined, [])).toBe(issue)
+    expect(casse).toHaveBeenCalledTimes(1)
   })
 })
 

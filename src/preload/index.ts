@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
+import type { GestePlanDeLots, ReponsePlansDeLots } from '../shared/plan-de-lots'
 import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
@@ -903,6 +904,13 @@ const api = {
   /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
   messagesEntreFils: (conversationId: string): Promise<MessageEntreFilsAffiche[]> =>
     ipcRenderer.invoke('os:messagesEntreFils', conversationId),
+  /** Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes de l'utilisateur. */
+  plansDeLots: (
+    geste: GestePlanDeLots,
+    conversationId: string,
+    planId?: string
+  ): Promise<ReponsePlansDeLots> =>
+    ipcRenderer.invoke('os:plansDeLots', geste, conversationId, planId),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'

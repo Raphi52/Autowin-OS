@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 function corpsDuRunner(): string {
-  const debut = index.indexOf('const runPilotChat: typeof lancerTour = (...args) =>')
+  const debut = index.indexOf('const tourCompteDesReception: typeof lancerTour = (...args) =>')
   const fin = index.indexOf('const resultat = await lancerTour(...args)', debut)
   expect(debut).toBeGreaterThan(-1)
   expect(fin).toBeGreaterThan(debut)
