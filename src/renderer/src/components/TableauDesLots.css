@@ -1,0 +1,199 @@
+/*
+ * Tableau d'avancement d'un plan de lots (conv-1150) — même grammaire sobre que les messages entre
+ * fils : filet, texte hérité du thème, couleurs d'état tirées des variables du thème.
+ */
+.tdl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.tdl--enfant {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tdl-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tdl-kicker {
+  font:
+    600 11px/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.tdl-titre {
+  font-weight: 600;
+}
+
+.tdl-statut {
+  font-size: 12px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tdl-statut--en-cours {
+  color: var(--accent);
+}
+
+.tdl-statut--termine {
+  color: var(--ok);
+}
+
+.tdl-statut--suspendu-quota,
+.tdl-statut--plafond-atteint,
+.tdl-statut--interrompu,
+.tdl-statut--attente-accord {
+  color: var(--warn);
+}
+
+.tdl-bilan,
+.tdl-note {
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.tdl-raison {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.tdl-avertissements {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.tdl-lots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.tdl-lot {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 12px 2px 8px;
+  border-left: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.tdl-pastille {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.tdl-lot--en-cours {
+  border-left-color: var(--accent);
+}
+
+.tdl-lot--en-cours .tdl-pastille {
+  color: var(--accent);
+}
+
+.tdl-lot--fait {
+  border-left-color: var(--ok);
+}
+
+.tdl-lot--fait .tdl-pastille {
+  color: var(--ok);
+}
+
+.tdl-lot--echec {
+  border-left-color: var(--err);
+}
+
+.tdl-lot--echec .tdl-pastille,
+.tdl-lot-raison {
+  color: var(--err);
+}
+
+.tdl-lot--interrompu {
+  border-left-color: var(--warn);
+}
+
+.tdl-lot--interrompu .tdl-pastille {
+  color: var(--warn);
+}
+
+.tdl-lot-titre {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tdl-fil {
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  opacity: 0.8;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.tdl-fil--vide {
+  cursor: default;
+  text-decoration: none;
+  opacity: 0.4;
+}
+
+.tdl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.tdl-bouton {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tdl-bouton--principal {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tdl-bouton:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.tdl-erreur {
+  color: var(--err);
+  font-size: 12px;
+}

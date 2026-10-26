@@ -118,7 +118,7 @@ describe('câblage dans index.ts', () => {
   const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
 
   it('runPilotChat enveloppe le rangement ET le lancement du tour', () => {
-    const pilote = source.slice(source.indexOf('const runPilotChat: typeof lancerTour'))
+    const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
     // Le lancement AVEC rangement : `await lancerTour` (le rangement tourne a cote, conv-867).
     const entete = pilote.slice(0, pilote.indexOf('return await lancerTour(...args)'))
     expect(entete).toContain('activeChatTurns.trackPreparation(args[2]')

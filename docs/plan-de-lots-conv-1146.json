@@ -1,0 +1,35 @@
+{
+  "titre": "Finir et vérifier la traduction anglaise (conv-1146)",
+  "parallele": 3,
+  "plafondTours": 10,
+  "lots": [
+    {
+      "titre": "Couverture de traduction : les textes de src/shared affichés par l'interface",
+      "demande": "/build Traduction anglaise d'Autowin OS (réglage Langue de Settings · Interface). NE RETRADUIS PAS les infobulles fast-forward et merge de UPDATE_STRATEGY_HINTS (src/shared/update-contract.ts) : elles passent déjà par tp(...) depuis la réparation 22 de conv-1146. NE TOUCHE PAS non plus à la détection des phrases sans accent : elle marche déjà (MOTS_OUTILS de src/renderer/src/langue-couverture-generale.test.ts ; mesuré le 26/10 : ces deux phrases posées dans src/renderer/src font échouer le test, code 1). Le trou mesuré est ailleurs : ce test ne lit que src/renderer/src (RACINE = __dirname), et sa règle des tables ne suit qu'une table placée DANS un appel de traduction. Une table de src/shared écrite en français simple puis insérée par un gabarit (UpdateBanner.tsx, title={`${UPDATE_STRATEGY_LABELS[s]} — ${UPDATE_STRATEGY_HINTS[s]}`}) n'est vue par aucun test général : seul le test d'écran UpdateBanner.test.tsx « en anglais, l'infobulle de chaque voie est en anglais » protège ce cas précis. À faire : étendre le relevé de langue-couverture-generale.test.ts aux modules de src/shared importés par un chemin relatif depuis src/renderer/src (76 modules au 26/10), hors tests. Tout texte qui ressemble au français hors tp(...)/traduirePartage(...) y est relevé, ou nommé avec sa raison dans HORS_TRADUCTION (une consigne destinée à un agent reste en français). Rouge avant, obligatoire : dans UPDATE_STRATEGY_HINTS, remets les valeurs fast-forward et merge en chaînes simples (sans get ni tp) et lance le test : il doit échouer en nommant ces deux phrases ; puis restaure le fichier à l'identique. Mesuré le 26/10 sur la sauvegarde 73ece8fd : sans extension, ce même essai laisse le test vert (code 0). Ensuite, traduis par tp(...) ce que la nouvelle règle relève, ou nomme-le avec sa raison. Preuve : npx vitest run src/renderer/src/langue-couverture-generale.test.ts src/renderer/src/langue-couverture.test.ts src/main/langue-couverture-moteur.test.ts → code 0.",
+      "fichiers": [
+        "src/renderer/src/langue-couverture-generale.test.ts",
+        "src/shared/langue-anglais-partage.ts"
+      ]
+    },
+    {
+      "titre": "Vérifier Settings, accueil et navigation en anglais",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues settings et accueil, et sur la barre de navigation. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche. Aucun texte en français : dis-le, avec les captures lues.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier le chat en anglais",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur la vue chat : liste des fils, zone de saisie, blocs du fil (actions, messages entre fils, tableau d'un plan de lots). Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture avec node scripts/ui-capture.mjs --view chat --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier Agent Studio, Observatory et Task Manager",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues agent-studio, observatory et task-manager. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    },
+    {
+      "titre": "Vérifier Knowledge, Worktrees, Bureaux cachés, Tickets, Besoins, Tests",
+      "demande": "Vérifie, SANS RIEN MODIFIER, la traduction anglaise d'Autowin OS sur les vues knowledge, worktree, hdesk, tickets, besoins et tests. Passe l'app en anglais dans une instance cachée (Settings · Interface · liste « Langue », data-testid=\"interface-langue\", valeur en), puis capture chaque vue avec node scripts/ui-capture.mjs --code-dev et LIS chaque image. Rends la liste de chaque texte resté en français : vue, texte exact, fichier:ligne trouvé par recherche.",
+      "fichiers": []
+    }
+  ]
+}
