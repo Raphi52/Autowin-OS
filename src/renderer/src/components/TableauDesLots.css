@@ -92,7 +92,8 @@
 
 .tdl-lot {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) auto;
+  /* état · titre · durée · coût · fil (durée et coût : conv-1151, lot 4) */
+  grid-template-columns: 78px minmax(0, 1fr) auto auto auto;
   align-items: baseline;
   gap: 8px;
   padding: 2px 12px 2px 8px;
@@ -142,6 +143,19 @@
 .tdl-lot-titre {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Durée et coût d'un lot : chiffres alignés, discrets ; « — » encore plus atténué. */
+.tdl-mesure {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  opacity: 0.85;
+}
+
+.tdl-mesure--inconnue {
+  opacity: 0.45;
 }
 
 .tdl-fil {
