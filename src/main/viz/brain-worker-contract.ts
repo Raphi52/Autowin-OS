@@ -46,10 +46,6 @@ export interface BrainWorkerContract {
     args: [local: BrainNoteSearchResult[], navigation?: BrainNavigation, root?: string]
     result: BrainNoteSearchResult[]
   }
-  graphifyEvidence: {
-    args: [raw: string, query: string, limit: number]
-    result: ReturnType<typeof import('../brain-context').graphifyEvidence>
-  }
   listInbox: {
     args: [root: string, workspaces: string[]]
     result: InboxCandidate[]

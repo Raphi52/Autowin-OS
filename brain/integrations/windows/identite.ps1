@@ -9,8 +9,6 @@ function Get-BrainIdentite([string]$RacineDepot) {
         dossierLocal = 'AutowinBrain'
         racinePartagee = ''
         dossierEditeur = ''
-        distributionGraphify = ''
-        sourceGraphify = ''
         variables = @{}
         brut = ''
     }
@@ -48,8 +46,6 @@ function Get-BrainIdentite([string]$RacineDepot) {
                 }
             }
             if ([string]$profil.application.dossierEditeur -cmatch '^(?!\.+$)[A-Za-z0-9._-]{1,64}$') { $identite.dossierEditeur = [string]$profil.application.dossierEditeur }
-            if ([string]$profil.graphify.distribution -cmatch '^(?!\.+$)[A-Za-z0-9._-]{1,64}$') { $identite.distributionGraphify = [string]$profil.graphify.distribution }
-            if ($profil.graphify.source -is [string]) { $identite.sourceGraphify = [string]$profil.graphify.source }
             $identite.brut = ($profil | ConvertTo-Json -Depth 10 -Compress)
         } catch {}
     }

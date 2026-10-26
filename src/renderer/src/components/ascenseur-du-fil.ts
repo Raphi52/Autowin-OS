@@ -51,23 +51,32 @@ export function hautDeVuePour(repere: Pick<Repere, 'haut'>, geo: Geometrie): num
  * Cible de l'aimant : la position calée sur le message le plus proche, s'il est à moins de `seuil`
  * px de la vue courante. `null` quand rien n'est assez proche OU que la vue est déjà calée (sinon
  * chaque fin de défilement relancerait une animation pour rien).
+ *
+ * `sens` : celui de la molette (1 = vers le bas, -1 = vers le haut, 0 = aucun, pour le relâchement
+ * de la barre). Avec un sens, seul un message DANS ce sens peut tirer la vue. Sans lui, mesuré le
+ * 2026-10-25 (conv-1139, « quand je scroll down ça remonte tout seul ») : un cran vers le bas qui
+ * dépassait ton message de moins de 72 px était ramené en arrière sur lui, 4 essais sur 4.
  */
 export function cibleAimant(
   geo: Geometrie,
   crans: readonly Repere[],
-  seuil: number
+  seuil: number,
+  sens: -1 | 0 | 1 = 0
 ): number | null {
   let meilleure: number | null = null
   let distance = Number.POSITIVE_INFINITY
   for (const cran of crans) {
     const cible = hautDeVuePour(cran, geo)
-    const ecart = Math.abs(cible - geo.scrollTop)
-    if (ecart < distance) {
-      distance = ecart
+    const ecart = cible - geo.scrollTop
+    // Déjà calée sur un message : rien à rejouer, quel que soit le sens.
+    if (Math.abs(ecart) <= 1) return null
+    if (sens !== 0 && Math.sign(ecart) !== sens) continue
+    if (Math.abs(ecart) < distance) {
+      distance = Math.abs(ecart)
       meilleure = cible
     }
   }
-  if (meilleure === null || distance <= 1 || distance > seuil) return null
+  if (meilleure === null || distance > seuil) return null
   return meilleure
 }
 
@@ -338,27 +347,308 @@ export function reserveDeLaCarte(paddingDroit: number, largeurCarte: number): nu
   return Math.max(actuel, largeurCarte + ECART_CARTE)
 }
 
+/** Un bloc du fil, à l'écran : haut et bas. */
+export type Boite = { haut: number; bas: number }
+
 /**
- * Élément en HAUT de la vue, juste sous la ligne d'aimant : c'est lui qui doit rester immobile à
- * l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du navigateur, qui ne le
- * fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px à 1 400 px de large,
- * de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta bulle doit le rester.
- * Le bord droit d'abord : tes bulles y sont alignées.
+ * Rang, parmi des blocs frères, de celui qui porte la ligne lue (pure). D'abord un bloc qui COUVRE
+ * la ligne, le plus serré. Sinon, si `entreLesBlocs` (leur parent n'a pas de texte à lui : la ligne
+ * tombe dans l'espace entre deux blocs), le premier bloc qui SUIT — son haut est juste sous la ligne,
+ * et le texte du bloc d'avant ne le déplace pas en se réagençant —, à défaut le dernier avant.
+ * `-1` : aucun bloc, ou la ligne tombe dans le texte du parent.
+ */
+export function rangDeLaLigne(
+  boites: readonly Boite[],
+  ligne: number,
+  entreLesBlocs: boolean
+): number {
+  let couvre = -1
+  let suit = -1
+  let precede = -1
+  boites.forEach((boite, rang) => {
+    if (!(boite.bas > boite.haut)) return
+    if (boite.haut <= ligne && ligne < boite.bas) {
+      const serre = couvre < 0 || boite.bas - boite.haut < boites[couvre].bas - boites[couvre].haut
+      if (serre) couvre = rang
+    } else if (boite.haut > ligne) {
+      if (suit < 0 || boite.haut < boites[suit].haut) suit = rang
+    } else if (precede < 0 || boite.bas > boites[precede].bas) precede = rang
+  })
+  if (couvre >= 0) return couvre
+  if (!entreLesBlocs) return -1
+  return suit >= 0 ? suit : precede
+}
+
+/** Hors du flux : un bloc collant ou superposé ne bouge pas avec le texte qu'il recouvre. */
+const HORS_DU_FLUX = new Set(['absolute', 'fixed', 'sticky'])
+
+/** Enfants qui ont une boîte ; une enveloppe sans boîte (`display: contents`) cède la place aux siens. */
+function enfantsAvecBoite(
+  element: Element,
+  boites: (Boite & { element: HTMLElement })[]
+): (Boite & { element: HTMLElement })[] {
+  for (const enfant of Array.from(element.children)) {
+    if (!(enfant instanceof HTMLElement)) continue
+    const rect = enfant.getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) {
+      if (enfant.childElementCount > 0) enfantsAvecBoite(enfant, boites)
+      continue
+    }
+    boites.push({ element: enfant, haut: rect.top, bas: rect.bottom })
+  }
+  return boites
+}
+
+const aDuTexte = (element: Element): boolean =>
+  Array.from(element.childNodes).some(
+    (noeud) => noeud.nodeType === 3 && (noeud.textContent ?? '').trim() !== ''
+  )
+
+/**
+ * Le bloc qui porte la LIGNE LUE, en haut de la vue juste sous la ligne d'aimant : c'est lui qui
+ * doit rester immobile à l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du
+ * navigateur, qui ne le fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px
+ * à 1 400 px de large, de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta
+ * bulle doit le rester.
+ *
+ * Trouvé par la MISE EN PAGE du fil, du fil vers le bloc le plus serré autour de la ligne, et non
+ * par ce qui est affiché au point visé. Mesuré le 2026-10-25 (conv-1143, sonde sur conv-1139) :
+ *  - la carte et ses aperçus sont posés PAR-DESSUS le fil ; à 6 % du fil, les 4 points visés
+ *    tombaient sur eux, et le repli prenait le message entier, dont le haut était loin au-dessus ;
+ *  - un point entre deux blocs rendait le corps du message (haut à −1 609 px).
+ * Tenir le haut d'un bloc loin au-dessus de la ligne laisse le texte entre les deux la déplacer :
+ * la vue finissait de 24 à 368 px plus bas après une ouverture et un repli, 9 positions sur 25.
  */
 export function elementDeLecture(conteneur: HTMLElement): HTMLElement | null {
-  const rc = conteneur.getBoundingClientRect()
-  const y = rc.top + MARGE_AIMANT + 14
-  if (typeof document.elementFromPoint === 'function') {
-    for (const fx of [0.92, 0.7, 0.5, 0.3]) {
-      const el = document.elementFromPoint(rc.left + rc.width * fx, y)
-      if (el instanceof HTMLElement && el !== conteneur && conteneur.contains(el)) return el
+  const ligne = ligneDeLecture(conteneur)
+  let courant: HTMLElement = conteneur
+  for (let profondeur = 0; profondeur < 40; profondeur++) {
+    const boites = enfantsAvecBoite(courant, [])
+    const entreLesBlocs = !aDuTexte(courant)
+    let suivant: HTMLElement | null = null
+    while (boites.length > 0) {
+      const rang = rangDeLaLigne(boites, ligne, entreLesBlocs)
+      if (rang < 0) break
+      const candidat = boites[rang].element
+      if (!HORS_DU_FLUX.has(getComputedStyle(candidat).position)) {
+        suivant = candidat
+        break
+      }
+      boites.splice(rang, 1)
+    }
+    if (!suivant) break
+    courant = suivant
+  }
+  return courant === conteneur ? null : courant
+}
+
+/**
+ * La ligne lue retenue à l'image précédente (ou par le maintien précédent) est-elle encore la
+ * bonne ? Oui tant que la vue est restée là où le maintien l'a posée (`posee`) et qu'aucun
+ * glissement ni la barre ne la mènent (`pilotee`). Mesuré conv-1143 : reprise à chaque image, la
+ * ligne lue changeait entre l'ouverture et le repli de la carte (une ligne de liste au lieu du corps
+ * du message), et la vue ne revenait pas à sa place.
+ */
+export function garderLePointLu(scrollTop: number, posee: number, pilotee: boolean): boolean {
+  return !pilotee && Math.abs(scrollTop - posee) <= 0.5
+}
+
+/**
+ * Ce que le maintien tient immobile pendant que la carte change la largeur du fil : le bloc qui
+ * porte la ligne lue et, dans son texte, le caractère qui passe sur cette ligne (`noeud` null : le
+ * bloc n'a pas de texte à cette hauteur, on tient son haut).
+ */
+export type PointDeLecture = { element: HTMLElement; noeud: Text | null; decalage: number }
+
+/** Hauteur, à l'écran, de la ligne lue : juste sous la ligne d'aimant, en haut de la vue. */
+function ligneDeLecture(conteneur: HTMLElement): number {
+  return conteneur.getBoundingClientRect().top + MARGE_AIMANT + 14
+}
+
+/**
+ * Rang, dans UN texte, du premier caractère qui finit SOUS la ligne lue (pure) : celui qui passe
+ * sur la ligne, ou le premier de la ligne suivante si elle tombe dans l'interligne. Par
+ * dichotomie : les lignes d'un même texte se posent de haut en bas — entre deux textes, rien ne le
+ * garantit (libellés d'un schéma : voir `pointDeLecture`). `boite(rang)` null = caractère sans
+ * boîte (espace, texte masqué), sauté. `-1` : aucun caractère ne finit sous la ligne.
+ */
+export function rangDuCaractereLu(
+  nombre: number,
+  boite: (rang: number) => Boite | null,
+  ligne: number
+): number {
+  let debut = 0
+  let fin = nombre
+  let trouve = -1
+  while (debut < fin) {
+    const milieu = (debut + fin) >>> 1
+    let rang = milieu
+    let mesure = boite(rang)
+    while (!mesure && rang + 1 < fin) mesure = boite(++rang)
+    if (!mesure) fin = milieu
+    else if (mesure.bas > ligne) {
+      trouve = rang
+      fin = milieu
+    } else debut = rang + 1
+  }
+  return trouve
+}
+
+/** Rang du dernier caractère qui a une boîte (pure) ; `-1` s'il n'y en a aucun. */
+export function rangDuDernierCaractere(
+  nombre: number,
+  boite: (rang: number) => Boite | null
+): number {
+  for (let rang = nombre - 1; rang >= 0; rang--) if (boite(rang)) return rang
+  return -1
+}
+
+/** Boîte à l'écran d'un caractère VISIBLE ; null pour un espace (replié en bout de ligne) ou sans boîte. */
+function boiteDuCaractere(noeud: Text, decalage: number, plage: Range): Boite | null {
+  if (decalage < 0 || decalage >= noeud.length || /\s/.test(noeud.data[decalage])) return null
+  plage.setStart(noeud, decalage)
+  plage.setEnd(noeud, decalage + 1)
+  const rects = plage.getClientRects()
+  for (let i = 0; i < rects.length; i++)
+    if (rects[i].bottom > rects[i].top) return { haut: rects[i].top, bas: rects[i].bottom }
+  return null
+}
+
+/**
+ * Les textes du bloc qui suivent sa mise en page : ni vides, ni masqués, ni posés par-dessus (un
+ * bouton « Copier » collant ne bouge pas avec le texte qu'il recouvre).
+ */
+function textesDuBloc(element: HTMLElement, plage: Range): Text[] {
+  const horsDuFlux = new Map<Element, boolean>()
+  const estHors = (el: Element | null): boolean => {
+    if (!el || el === element) return false
+    const connu = horsDuFlux.get(el)
+    if (connu !== undefined) return connu
+    const hors = HORS_DU_FLUX.has(getComputedStyle(el).position) || estHors(el.parentElement)
+    horsDuFlux.set(el, hors)
+    return hors
+  }
+  const textes: Text[] = []
+  const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+  for (let noeud = parcours.nextNode(); noeud; noeud = parcours.nextNode()) {
+    const texte = noeud as Text
+    if (texte.data.trim() === '' || estHors(texte.parentElement)) continue
+    plage.selectNodeContents(texte)
+    if (plage.getClientRects().length > 0) textes.push(texte)
+  }
+  return textes
+}
+
+/** `display` d'un fragment de LIGNE (`''` : environnement sans feuille de style par défaut). */
+const EN_LIGNE = /^(|inline.*|contents|ruby.*)$/
+
+/**
+ * Le bloc qui pose la ligne lue : un fragment en ligne (gras, code, lien) retenu par
+ * `elementDeLecture` cède la place à son paragraphe ; un fragment sans texte (image, icône) reste.
+ * Mesuré le 2026-10-25 (conv-1143, fil de 510 px) : retenu, le `strong` de la ligne lue gardait
+ * son haut à 18 px quand la carte s'ouvrait, mais le DÉBUT de la ligne, dans le paragraphe
+ * réagencé, remontait à −4 px.
+ */
+function blocQuiPorteLaLigne(
+  element: HTMLElement | null,
+  conteneur: HTMLElement
+): HTMLElement | null {
+  let bloc = element
+  while (bloc && bloc.parentElement && bloc.parentElement !== conteneur) {
+    // Une image, une icône : sans texte, son haut est le bon repère, et son paragraphe peut être
+    // tout le message.
+    if (!(bloc.textContent ?? '').trim() || !EN_LIGNE.test(getComputedStyle(bloc).display)) break
+    bloc = bloc.parentElement
+  }
+  return bloc
+}
+
+/**
+ * Le point de lecture en haut de la vue : le bloc (voir `elementDeLecture`) et le PREMIER caractère
+ * de son texte sur la ligne lue — le début de la ligne que tu lis. Mesuré le 2026-10-25
+ * (conv-1143, sonde sur conv-1139) : tenir le HAUT du bloc laissait le texte descendre d'environ
+ * une ligne (19 à 22 px) pendant que la carte était ouverte, 2 positions sur 4 — un paragraphe plus
+ * étroit se réagence, et le texte lu passe plus bas DANS le paragraphe.
+ */
+export function pointDeLecture(conteneur: HTMLElement): PointDeLecture | null {
+  const element = blocQuiPorteLaLigne(elementDeLecture(conteneur), conteneur)
+  if (!element) return null
+  const plage = document.createRange()
+  const textes = textesDuBloc(element, plage)
+  const { sous, dessus } = caractereSousLaLigne(textes, ligneDeLecture(conteneur), plage)
+  if (sous) return { element, noeud: sous.noeud, decalage: sous.decalage }
+  // La ligne lue tombe SOUS la fin du texte (encore dans la boîte du bloc) : on tient la dernière
+  // ligne au-dessus, celle que tu vois en haut, par son DÉBUT. Mesuré le 2026-10-25 (conv-1143,
+  // conv-1139 à 1 150 px, vue à 31 539) : dernière ligne finie à 23,4 px pour une ligne lue à 24.
+  // Tenir le haut du bloc, 1 050 px plus haut, laissait 87 px d'écart carte ouverte ; tenir le
+  // dernier caractère (le point final), 21 px : la dernière ligne se coupe en deux quand le fil
+  // rétrécit, et son début remonte d'une ligne.
+  if (dessus) {
+    const { noeud } = dessus
+    const boite = (rang: number): Boite | null => boiteDuCaractere(noeud, rang, plage)
+    const decalage = rangDuDernierCaractere(noeud.length, boite)
+    const derniere = decalage < 0 ? null : boite(decalage)
+    if (derniere) {
+      const debut = caractereSousLaLigne(textes, (derniere.haut + derniere.bas) / 2, plage).sous
+      return debut
+        ? { element, noeud: debut.noeud, decalage: debut.decalage }
+        : { element, noeud, decalage }
     }
   }
-  return (
-    Array.from(conteneur.querySelectorAll<HTMLElement>(SELECTEUR_MESSAGES)).find(
-      (element) => element.getBoundingClientRect().bottom > y
-    ) ?? null
-  )
+  return { element, noeud: null, decalage: 0 }
+}
+
+/**
+ * Parmi des textes, le caractère qui porte la ligne `ligne` (le plus HAUT de ceux qui finissent
+ * dessous ; à égalité, le premier de la page : le début de la ligne), et à défaut le texte le plus
+ * BAS tout au-dessus. Texte par texte, sans supposer que la page les range de haut en bas : dans un
+ * schéma, les libellés se suivent dans un autre ordre que l'écran (mesuré conv-1139 : « réponse »
+ * à −883 px, puis « rejuge » à −942, puis « juge » à −976). Dans UN texte, les lignes se suivent.
+ */
+function caractereSousLaLigne(
+  textes: readonly Text[],
+  ligne: number,
+  plage: Range
+): {
+  sous: { noeud: Text; decalage: number; haut: number } | null
+  dessus: { noeud: Text; bas: number } | null
+} {
+  let sous: { noeud: Text; decalage: number; haut: number } | null = null
+  let dessus: { noeud: Text; bas: number } | null = null
+  for (const noeud of textes) {
+    plage.selectNodeContents(noeud)
+    const { top, bottom } = plage.getBoundingClientRect()
+    if (bottom <= ligne) {
+      // Tout au-dessus de la ligne : candidat au repli, le plus bas (à égalité, le dernier).
+      const plusBas = dessus === null ? bottom : Math.max(bottom, dessus.bas)
+      if (dessus === null || bottom >= dessus.bas - 0.5) dessus = { noeud, bas: plusBas }
+      continue
+    }
+    // Commence plus bas que le caractère déjà retenu : rien à mesurer.
+    if (sous && top >= sous.haut - 0.5) continue
+    const boite = (rang: number): Boite | null => boiteDuCaractere(noeud, rang, plage)
+    const decalage = rangDuCaractereLu(noeud.length, boite, ligne)
+    const mesure = decalage < 0 ? null : boite(decalage)
+    // Le plus HAUT sous la ligne ; à égalité, le premier de la page : le début de la ligne lue.
+    if (mesure && (!sous || mesure.haut < sous.haut - 0.5))
+      sous = { noeud, decalage, haut: mesure.haut }
+  }
+  return { sous, dessus }
+}
+
+/** Le point tient-il encore : son bloc et son texte sont toujours dans le fil. */
+export function pointEncoreLa(point: PointDeLecture): boolean {
+  const { element, noeud } = point
+  return element.isConnected && (!noeud || (noeud.isConnected && point.decalage < noeud.length))
+}
+
+/** Haut du point de lecture dans le CONTENU du fil (repère de `hautDansLeFil`). */
+export function hautDuPointLu(point: PointDeLecture, conteneur: HTMLElement): number {
+  const boite = point.noeud
+    ? boiteDuCaractere(point.noeud, point.decalage, document.createRange())
+    : null
+  if (!boite) return hautDansLeFil(point.element, conteneur)
+  return boite.haut - conteneur.getBoundingClientRect().top + conteneur.scrollTop
 }
 
 /** Haut d'un élément dans le CONTENU du fil : ne bouge pas quand on défile, seulement quand le fil se réagence. */
@@ -398,6 +688,61 @@ export function hautDansLeContenu(element: HTMLElement, conteneur: HTMLElement):
   // Fil positionné : les offsetTop sont déjà dans son repère. Sinon, on retire sa propre place.
   if (noeud === conteneur) return y
   return y - conteneur.offsetTop - (conteneur.clientTop || 0)
+}
+
+/**
+ * Le message RETENU après un recalage (clic sur un cran, aimant) l'est-il encore, au moment où la
+ * carte s'ouvre ou se referme ? Oui si la vue est toujours calée dessus (à moins d'un pixel), ou si un
+ * glissement est en route vers lui. Sinon, la vue a été déplacée par autre chose que la barre.
+ *
+ * Mesuré le 2026-10-25 (conv-1139, sonde sur le fil réel) : seules la molette et la barre libéraient
+ * ce message. Après un PageDown, la carte qui se refermait recalait la vue sur lui : 231 px de recul
+ * sur 2 essais, et 2 880 px de saut sur le 3e. Le contrôle porte sur la POSITION et non sur le geste :
+ * clavier, recherche dans le fil ou glisser de la barre sont tous couverts, sans liste à tenir.
+ */
+export function ancreEncoreTenue(
+  scrollTop: number,
+  hautDeVueDuMessage: number,
+  glissementEnCours: boolean
+): boolean {
+  return glissementEnCours || Math.abs(scrollTop - hautDeVueDuMessage) <= 1
+}
+
+/** État de la vue à une image du maintien de la ligne lue (voir `scrollTopDuMaintien`). */
+export type ImageDuMaintien = {
+  /** Position actuelle, telle que le navigateur la rend (déjà bornée au fil s'il a raccourci). */
+  scrollTop: number
+  /** `scrollHeight - clientHeight` actuel. */
+  max: number
+  /** Haut de l'élément lu dans le CONTENU du fil, maintenant puis à l'image précédente. */
+  hautLu: number
+  hautLuAvant: number
+  /** Position laissée à la fin de l'image précédente, et si elle était collée au bas. */
+  poseeAvant: number
+  auBasAvant: boolean
+}
+
+/**
+ * Où poser la vue à une image du MAINTIEN de la ligne lue, pendant que le fil change de largeur
+ * (la carte s'ouvre ou se replie). `null` = ne rien toucher.
+ *
+ * Mesuré le 2026-10-25 (conv-1143, « quand je scroll tout en bas ça remonte le scroll », sonde sur
+ * conv-1139) : la carte ouverte allongeait le fil de 11 836 px. Vue au bas, au repli, le navigateur
+ * ramenait déjà la vue au nouveau bas, puis le maintien lui retirait EN PLUS le rétrécissement du
+ * texte au-dessus : vue finie 11 813 px au-dessus du bas, 3 essais sur 3. D'où deux règles :
+ *  - collé au bas, le lecteur lit la FIN du fil : elle reste à l'écran, comme pour l'aimant ;
+ *  - une vue bornée par le navigateur se compense depuis la place LAISSÉE, pas depuis la place bornée.
+ * Une vue qui a REMONTÉ depuis la dernière image vient de la molette du lecteur : elle est respectée.
+ */
+export function scrollTopDuMaintien(image: ImageDuMaintien): number | null {
+  const { scrollTop, max, poseeAvant } = image
+  const auBas = scrollTop >= max - 1
+  const aRemonte = scrollTop < poseeAvant - 0.5
+  if (image.auBasAvant && (auBas || !aRemonte)) return Math.abs(scrollTop - max) >= 0.5 ? max : null
+  // Remontée ET posée au bas : seul le navigateur fait ça, quand le fil raccourcit sous la vue.
+  const depart = auBas && aRemonte ? poseeAvant : scrollTop
+  const cible = Math.max(0, Math.min(max, depart + image.hautLu - image.hautLuAvant))
+  return Math.abs(cible - scrollTop) >= 0.5 ? cible : null
 }
 
 /**

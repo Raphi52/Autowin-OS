@@ -10,7 +10,7 @@ import { ConversationStore } from './store/conversations'
  *
  * (a) INJECTION. Le bloc imitait les libelles reels du tour (`utilisateur:` / `toi:` contre
  *     `UTILISATEUR:` / `TOI:`) et ne portait AUCUN avertissement de non-confiance -- alors que les
- *     deux autres blocs injectes dans le MEME prompt, graphify et Brain, en portent un. Une
+ *     autres blocs injectes dans le MEME prompt, dont le Brain, en portaient un. Une
  *     incoherence de posture dans un seul prompt : le contenu le moins verifie etait presente comme
  *     le plus fiable. Un message colle depuis une page web, ou la sortie d'un sous-agent, pouvait
  *     donc rejouer des semaines plus tard une fausse consigne au format du vrai dialogue.

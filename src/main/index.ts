@@ -165,7 +165,7 @@ import { renouvelerSessionClaude } from './claude-session-renewal'
 import { DEFAULT_ORCHESTRATION_BUDGET } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
-import { AppCommandBus, outilOffert, type AppEvent } from './commands'
+import { AppCommandBus, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
 import {
   executeCurationTransaction,
@@ -182,6 +182,7 @@ import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
+import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
 import { modeleDuTour } from './chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
@@ -360,6 +361,7 @@ import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
 import { homedir, tmpdir } from 'node:os'
 import { canonicalProjectPath } from '../shared/project-path'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
+import { messagesAAfficher } from './messages-entre-fils-app'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -1121,9 +1123,7 @@ const bus = new AppCommandBus(
   os,
   broadcast,
   undefined,
-  undefined,
-  // `outilOffert` : interrupteur local ET liste des outils débranchés (OUTILS_DEBRANCHES, commands.ts).
-  (name) => outilOffert(name, capabilityEnabled('tools', name)),
+  (name) => capabilityEnabled('tools', name) !== false,
   undefined,
   // Fermetures PARESSEUSES : le service Tickets est construit plus bas dans ce module, alors que le
   // bus l'est ici. Elles ne sont évaluées qu'à l'exécution d'une commande, donc bien après.
@@ -1217,8 +1217,6 @@ const titresBrainDuTour = createBrainTitresDuTour({
   workspace: (conversationId?: string) => dossierDuTour(conversationId)
 })
 const contexteGrapheDuTour = createBrainContextProvider({
-  graphEvidence: (raw, query, limit) =>
-    brainWorker.request('graphifyEvidence', raw, query, limit),
   // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc CONTOSO, donc une question Autowin ramenait
   // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
   // pas ecrit en dur : dans un workspace CONTOSO, la doc CONTOSO est exactement ce qu'il faut.
@@ -1917,6 +1915,8 @@ function registerIdentiteIpc(): void {
 let capteurHdesk: CapteurHdesk | null = null
 /** Processus lancés par le bouton « Lancer » : arrêtés, eux seuls, à la fermeture de l’app. */
 let lancementIpc: { arreterTout: () => Promise<void> } | null = null
+/** Serveur ouvert aux scripts du poste (conv-1144) : fermé, et son fichier retiré, à la fermeture. */
+let pointEntreeLocal: PointEntreeLocal | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
     (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
@@ -3376,6 +3376,12 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'App command')
     return bus.exec(guardString(name, 'name'), args)
   })
+  // Messages entre fils (conv-1139) : ce que le fil affiche, envoyés et reçus. Lecture SEULE —
+  // afficher ne marque rien comme livré à l'agent.
+  ipcMain.handle('os:messagesEntreFils', (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Messages entre fils')
+    return messagesAAfficher(guardString(conversationId, 'conversationId'))
+  })
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   // Le corps du tour vit dans src/main/chat/run-pilot-chat.ts : il ne capturait rien d'autre que
@@ -4125,6 +4131,21 @@ Le fil reprend ensuite normalement.`
       (erreur) =>
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
+  // POINT D'ENTRÉE LOCAL (conv-1144) : un script du poste crée un fil, y lance un tour et le relit,
+  // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde
+  // `tourDeChatActif` câblés. Le jeton n'est jamais journalisé : il ne vit que dans le fichier.
+  // fix-ok: conv-1144 — pas une correction répétée : les 4 éditions de ce fichier sont les 4 points
+  // de branchement distincts d'un même ajout (import, variable, démarrage ici, arrêt à before-quit).
+  void demarrerPointEntreeLocal({
+    dossierDonnees: ensureAutowinAppData(appDataRoot),
+    catalogue: () => bus.catalog(),
+    exec: (nom, args) => bus.exec(nom, args)
+  })
+    .then((point) => {
+      pointEntreeLocal = point
+      console.info(`[point d'entree local] 127.0.0.1:${point.port} — adresse dans ${point.fichier}`)
+    })
+    .catch((erreur) => console.warn("[point d'entree local] non demarre :", erreur))
   /*
    * TACHES DE FOND COUPEES EN FIN DE TOUR (conv-528, conv-42) : relancees hors du tour, puis UN tour
    * de reprise rend leur resultat dans la meme conversation. Hors du devis du tour appelant, comme
@@ -5842,6 +5863,9 @@ app.on('before-quit', (event) => {
   capteurHdesk?.detruire()
   void lancementIpc?.arreterTout()
   capteurHdesk = null
+  // Le fichier est retiré dès l'appel (synchrone) : un script ne visera pas une app qui s'en va.
+  void pointEntreeLocal?.arreter()
+  pointEntreeLocal = null
   // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
   raccourciCapture?.desinstaller()
   raccourciCapture = null

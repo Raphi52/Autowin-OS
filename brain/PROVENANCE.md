@@ -15,7 +15,7 @@ Union de DEUX copies qui avaient diverge :
    `brain_server.py`, le correctif IBAN de `brain_candidate_policy.py` (les identifiants
    hexadecimaux ne sont plus pris pour des IBAN), et `attach_to_mocs` dans `brain_curate.py`.
 2. **`E:\GIT\brain-tooling`** (copie de travail locale, sans depot distant). Elle a fourni 8 fichiers
-   que la PR n'avait pas : `tooling/brain_sync_code.sh`, `tooling/eval/rag-golden.json` (jeu d'évaluation propre au Brain de
+   que la PR n'avait pas : `tooling/brain_sync_code.sh` (retiré depuis), `tooling/eval/rag-golden.json` (jeu d'évaluation propre au Brain de
    l'entreprise, rangé depuis dans `entreprise/<nom>/brain/eval/`) et 6 fichiers
    de tests (`test_brain_eval`, `test_brain_validate`, `test_obsidian_graph` et trois tests des
    outils de couverture propres a l'entreprise, ranges depuis avec eux dans

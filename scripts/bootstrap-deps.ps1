@@ -8,7 +8,6 @@
 
   Ce qu'il fait :
     - installe la CLI claude (@anthropic-ai/claude-code) si absente ;
-    - prépare Graphify depuis la source partagée GED avec un cache uv local par machine ;
     - crée/complète le venv Python du brain_server (uv venv + requirements) dans le tooling résolu ;
   Ce qu'il GUIDE (manuel, non automatisable) :
     - login Claude (claude auth login) et token Brain (AUTOWIN_BRAIN_TOKEN, ou son ancien nom
@@ -28,7 +27,6 @@
   jamais le code que la machine execute.
 
 .PARAMETER SkipCli   Ne pas toucher aux CLI npm.
-.PARAMETER SkipGraphify Ne pas préparer Graphify depuis la GED.
 .PARAMETER SkipBrain Ne pas toucher au venv brain.
 #>
 [CmdletBinding()]
@@ -37,10 +35,7 @@ param(
   # (Split-Path échouait sur une chaîne vide avant même le premier Write-Host).
   [string]$HermesBrainRepo = '',
   [string]$BrainRoot = '',
-  # Vide = celle du profil d'entreprise (`graphify.source`), resolue apres le bloc param.
-  [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '' }),
   [switch]$SkipCli,
-  [switch]$SkipGraphify,
   [switch]$SkipBrain
 )
 $ErrorActionPreference = 'Stop'
@@ -51,7 +46,6 @@ $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyI
 $identite = Get-BrainIdentite (Split-Path -Parent $scriptDir)
 $nomRacine = Get-BrainNomVariable $identite 'AUTOWIN_BRAIN_ROOT'
 $nomJeton = Get-BrainNomVariable $identite 'AUTOWIN_BRAIN_TOKEN'
-if (-not $GraphifySource) { $GraphifySource = $identite.sourceGraphify }
 if (-not $BrainRoot) {
   $BrainRoot = if ($env:AUTOWIN_BRAIN_ROOT) { $env:AUTOWIN_BRAIN_ROOT }
     elseif ([Environment]::GetEnvironmentVariable($nomRacine)) { [Environment]::GetEnvironmentVariable($nomRacine) }
@@ -107,65 +101,6 @@ if (-not $SkipCli) {
   Warn "Kimi Code (optionnel, standby par défaut) : installer séparément puis 'kimi login' si utilisé."
 } else { Step "CLI providers — ignoré (-SkipCli)" }
 
-# --- Graphify partagé ---
-if (-not $SkipGraphify) {
-  Step "Graphify partagé vérifié (wheelhouse GED, installation locale hors ligne)"
-  $wheelName = 'graphifyy-0.9.11-py3-none-any.whl'
-  $expectedHash = '750B77232F460275ABA596B09A1B8F289A1238A41EF5AD0EDC29464E523B28CA'
-  $expectedRequirementsHash = 'F1240F8372936D5EE15DD2CDF6BACE762C998D57845EC64373723D6517084436'
-  if (-not $GraphifySource) {
-    throw "source Graphify inconnue : definir AUTOWIN_GRAPHIFY_SOURCE ou graphify.source du profil d'entreprise (sinon -SkipGraphify)"
-  }
-  $distribution = if ($identite.distributionGraphify) { $identite.distributionGraphify } else { 'v0.9.11' }
-  $sharedDistribution = Join-Path $GraphifySource "dist\$distribution"
-  $sharedWheel = Join-Path $sharedDistribution $wheelName
-  $sharedRequirements = Join-Path $sharedDistribution 'requirements.lock'
-  $sharedWheelhouse = Join-Path $sharedDistribution 'wheelhouse'
-  # Meme dossier que celui que l'app lit (graphify-command.ts) : <editeur du profil>\Autowin OS\graphify.
-  $sousDossierCache = if ($identite.dossierEditeur) { Join-Path $identite.dossierEditeur 'Autowin OS\graphify' } else { 'Autowin OS\graphify' }
-  $cacheRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) $sousDossierCache
-  $localDistribution = Join-Path $cacheRoot 'distribution'
-  $localWheel = Join-Path $localDistribution $wheelName
-  $localRequirements = Join-Path $localDistribution 'requirements.lock'
-  $localWheelhouse = Join-Path $localDistribution 'wheelhouse'
-  $venv = Join-Path $cacheRoot '.venv'
-  $venvPython = Join-Path $venv 'Scripts\python.exe'
-  $venvGraphify = Join-Path $venv 'Scripts\graphify.exe'
-  if (-not (Test-Path $sharedWheel) -or (Get-FileHash -Algorithm SHA256 $sharedWheel).Hash -ne $expectedHash) {
-    throw "artefact Graphify GED absent ou empreinte invalide : $sharedWheel"
-  }
-  if (-not (Test-Path $sharedRequirements) -or (Get-FileHash -Algorithm SHA256 $sharedRequirements).Hash -ne $expectedRequirementsHash) {
-    throw "lock Graphify GED absent ou empreinte invalide : $sharedRequirements"
-  }
-  if (-not (Test-Path $sharedWheelhouse)) {
-    throw "wheelhouse Graphify GED absent : $sharedWheelhouse"
-  }
-  if (-not (Have 'uv')) {
-    throw "'uv' absent → installer avec 'winget install astral-sh.uv', puis relancer le bootstrap."
-  }
-  New-Item -ItemType Directory -Force -Path $localDistribution, $localWheelhouse | Out-Null
-  Copy-Item -LiteralPath $sharedWheel, $sharedRequirements -Destination $localDistribution -Force
-  Copy-Item -Path (Join-Path $sharedWheelhouse '*') -Destination $localWheelhouse -Force
-  if ((Get-FileHash -Algorithm SHA256 $localWheel).Hash -ne $expectedHash -or
-      (Get-FileHash -Algorithm SHA256 $localRequirements).Hash -ne $expectedRequirementsHash) {
-    throw 'distribution Graphify invalide après copie locale'
-  }
-  uv venv --python 3.12 --no-managed-python --no-python-downloads --clear $venv
-  if ($LASTEXITCODE -ne 0) { throw 'impossible de créer le venv Graphify local avec Python 3.12' }
-  uv pip install --python $venvPython --no-index --find-links $localWheelhouse --require-hashes --requirement $localRequirements
-  if ($LASTEXITCODE -ne 0) { throw 'échec installation hors ligne des dépendances Graphify verrouillées' }
-  uv pip install --python $venvPython --no-index --no-deps $localWheel
-  if ($LASTEXITCODE -ne 0) { throw 'échec installation hors ligne du wheel Graphify vérifié' }
-  @{
-    version = '0.9.11'
-    wheelSha256 = $expectedHash.ToLowerInvariant()
-    requirementsSha256 = $expectedRequirementsHash.ToLowerInvariant()
-  } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText((Join-Path $cacheRoot 'installation.json'), $_, (New-Object Text.UTF8Encoding $false)) }
-  & $venvGraphify --version
-  if ($LASTEXITCODE -ne 0) { throw 'installation Graphify locale inutilisable' }
-  Ok "Graphify 0.9.11 installé hors ligne depuis le wheelhouse GED vérifié"
-} else { Step "Graphify partagé — ignoré (-SkipGraphify)" }
-
 # --- Runtime Brain (venv + tooling), DELEGUE a Hermes-Brain ---
 #
 # On ne recree PAS ici ce que install.ps1 sait deja faire. Deux raisons, pas une preference de style :
@@ -189,7 +124,7 @@ if (-not $SkipBrain) {
     Warn "  puis relancer ce script (ou passer -HermesBrainRepo <chemin>)."
   }
   elseif (-not (Have "uv")) {
-    Warn "uv absent (createur du venv) -> installer https://docs.astral.sh/uv/ , puis relancer -SkipCli -SkipGraphify."
+    Warn "uv absent (createur du venv) -> installer https://docs.astral.sh/uv/ , puis relancer -SkipCli."
   }
   else {
     Warn "installation du runtime Brain (fastembed etc., peut durer plusieurs minutes)..."

@@ -1,0 +1,75 @@
+/*
+ * Messages entre fils (conv-1139) — même grammaire sobre que les blocs du fil : filet, texte hérité
+ * du thème, aucune couleur codée en dur (les couleurs dérivent de `currentColor`, donc de chaque thème).
+ */
+.mef {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.mef-kicker {
+  font:
+    600 11px/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.mef-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mef-ligne {
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.mef-ligne--recu {
+  border-left-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.mef-entete {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.mef-sens {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+}
+
+.mef-meta,
+.mef-reste,
+.mef-preuve {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.mef-texte,
+.mef-preuve {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mef-texte {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

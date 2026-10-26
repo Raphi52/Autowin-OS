@@ -38,7 +38,7 @@ export function isPipelinePhase(value: string): value is PipelinePhase {
 
 /**
  * Ce qu'un NŒUD de graphe peut porter : une phase du pipeline, OU l'identifiant d'une skill
- * quelconque découverte sur disque (`think`, `learn`, `graphify`…).
+ * quelconque découverte sur disque (`think`, `learn`, `kaizen`…).
  *
  * `PipelinePhase` reste un type FERMÉ : les huit phases gardent leur sémantique (verdict du juge,
  * quorum, droits d'écriture de build/clean) et l'exhaustivité de leurs `Record`. Un nœud skill est

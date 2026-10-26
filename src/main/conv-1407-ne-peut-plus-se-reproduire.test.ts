@@ -129,12 +129,4 @@ describe('conv-1407 : une demande de quatre mots retrouve son sens', () => {
 
     expect(bus.rappelPourDemande(explicite, 'conv-qui-n-existe-pas')).toBe('')
   })
-
-  it('la connaissance injectee ne remplit plus sa place de bruit', async () => {
-    const { graphifyEvidence } = await import('./brain-context')
-    const graphe = JSON.stringify({
-      nodes: [{ id: 'n1', label: '.all()', source_file: 'src/main/roles.ts' }]
-    })
-    expect(graphifyEvidence(graphe, 'remake les pastilles de couleurs')).toBe('')
-  })
 })

@@ -94,7 +94,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
 
   /**
    * DONNEES RAPPORTEES — la defense contre l'injection indirecte vivait UNIQUEMENT dans
-   * l'avertissement que chaque bloc RAG/graphify porte lui-meme : une source qui l'oublie
+   * l'avertissement que chaque bloc RAG porte lui-meme : une source qui l'oublie
    * n'etait plus couverte. Diagnostic conv-475 (2026-09-11), manque n2.
    */
   it("refuse aux donnees RAPPORTEES le statut d'instruction, sans dependre de leur etiquette", () => {

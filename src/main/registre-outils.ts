@@ -1,4 +1,4 @@
-import { CATALOG, OUTILS_DEBRANCHES } from './commands'
+import { CATALOG } from './commands'
 import { seedRegistrySnapshot, type RegistryItem } from './native-registry'
 
 /**
@@ -11,11 +11,10 @@ import { seedRegistrySnapshot, type RegistryItem } from './native-registry'
  * sur trois redémarrages : l'outil disparaissait de l'écran (impossible à rallumer : « Capacité
  * inconnue ») et redevenait offert aux agents un démarrage sur deux.
  *
- * Les lignes viennent donc du catalogue COMPLET. Seuls les outils débranchés dans le code
- * (`OUTILS_DEBRANCHES`) en sont exclus : un interrupteur sur eux n'aurait aucun effet.
+ * Les lignes viennent donc du catalogue COMPLET.
  */
 export function lignesDuRegistreOutils(): RegistryItem[] {
-  return CATALOG.filter((command) => !OUTILS_DEBRANCHES.has(command.name)).map((command) => ({
+  return CATALOG.map((command) => ({
     id: command.name,
     label: command.name,
     description: command.description,

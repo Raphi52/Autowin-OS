@@ -9,7 +9,7 @@ import { portCdp } from './cdp-port.mjs'
 // 2026-10-22, conv-1062.)
 //
 // Usage : RUN_LABEL=on RUN_TASK="..." node scripts/measure-orchestration-tokens.mjs
-// A/B : lancer une fois avec graphify-out/ présent (repo-map ON), une fois renommé (OFF), comparer.
+// A/B : lancer une fois avec le levier mesuré actif (RUN_LABEL=on), une fois sans (off), comparer.
 //
 // Lecture seule côté code app ; DÉCLENCHE un vrai run (vrais tokens sous-agent) → coût réel.
 

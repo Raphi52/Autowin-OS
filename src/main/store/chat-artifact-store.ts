@@ -128,6 +128,52 @@ export function materializeUserImageArtifact(
   )
 }
 
+/**
+ * L'ORIGINAL D'UNE PIÈCE JOINTE QUI N'EST PAS UNE IMAGE (fichier texte, PDF, archive…) —
+ * conv-1147, 2026-10-25. Seules les images étaient écrites à l'envoi : un journal ou un PDF joint
+ * ne gardait que son nom, sa taille et son type. Le tour suivant ne pouvait plus le lire, et « Lancer
+ * en N fils » fait justement le travail AU TOUR SUIVANT (une branche, ou à la suite ici).
+ * `kind: 'text'` arrive en UTF-8, le reste en base64 (contrat `providers/types.ts`, `Attachment`).
+ */
+export function materializeUserAttachmentArtifact(
+  attachment: {
+    name: string
+    mimeType: string
+    size: number
+    kind: 'text' | 'file'
+    content: string
+  },
+  conversationId: string,
+  turnId: string,
+  base?: string
+): ChatArtifact {
+  const encoding: ArtifactEncoding = attachment.kind === 'text' ? 'utf8' : 'base64'
+  const attachmentHash = createHash('sha256')
+    .update(Buffer.from(attachment.content, encoding))
+    .update('\0')
+    .update(attachment.name)
+    .update('\0')
+    .update(attachment.mimeType)
+    .digest('hex')
+    .slice(0, 24)
+  return materializeChatArtifact(
+    {
+      id: `user-attachment-${attachmentHash}`,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      kind: attachment.kind === 'text' ? 'text' : 'binary',
+      size: attachment.size,
+      createdAt: Date.now(),
+      encoding,
+      content: attachment.content,
+      source: { provider: 'user' }
+    },
+    conversationId,
+    turnId,
+    base
+  )
+}
+
 export interface ChatArtifactReadResult {
   ok: boolean
   artifact?: ChatArtifact

@@ -40,3 +40,44 @@ export function pickTurnToResume(
   if (usable.length === 0) return null
   return usable.reduce((best, turn) => (turn.updatedAt > best.updatedAt ? turn : best))
 }
+
+/** Ce que le rejeu lit d'un message enregistré : son tour, son état et son texte. */
+export type MessageEnregistre = {
+  role?: string
+  turnId?: string
+  status?: string
+  content?: string
+  parts?: ReadonlyArray<{ kind?: string; text?: string }>
+}
+
+/**
+ * LE REJEU N'A RIEN À AJOUTER QUAND L'ENREGISTREMENT PORTE DÉJÀ LE TOUR.
+ *
+ * Vécu conv-1149 (2026-10-25), sur le défaut de conv-1146 (« uniquement le bloc raisonnement vide »),
+ * reproduit dans une instance cachée. Au rechargement de la fenêtre, la reprise vise un tour ENCORE EN
+ * VOL ; un brouillon retient l'écran sur un autre fil, et le texte du tour est rejoué depuis son
+ * journal en une bulle « terminée ». Ce rejeu ne lisait pas l'enregistrement : il posait un fil réduit
+ * à cette bulle — sans la demande ni l'action en cours — et ce fil-là gagnait ensuite à l'ouverture.
+ *
+ * Le rejeu sert au tour dont l'enregistrement N'A PAS reçu le texte (l'app était fermée). Il est donc
+ * inutile quand l'enregistrement porte le même tour encore EN VOL — le processus principal enregistre
+ * chaque événement avant de l'envoyer à l'écran, l'enregistrement est complet — ou quand il porte
+ * déjà le texte rejoué.
+ */
+export function rejeuDejaEnregistre(
+  messages: readonly MessageEnregistre[],
+  turnId: string,
+  texteRejoue: string
+): boolean {
+  const copie = messages.find(
+    (message) => message.role === 'assistant' && message.turnId === turnId
+  )
+  if (!copie) return false
+  if (copie.status === 'streaming') return true
+  const attendu = texteRejoue.trim()
+  const texte = [
+    copie.content ?? '',
+    ...(copie.parts ?? []).map((part) => (part.kind === 'text' ? (part.text ?? '') : ''))
+  ].join('\n')
+  return attendu !== '' && texte.includes(attendu)
+}

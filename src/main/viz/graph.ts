@@ -1,10 +1,10 @@
 /**
- * Normalisation d'un graphe au format graphify (node-link JSON) vers un format
+ * Normalisation d'un graphe au format node-link JSON (networkx) vers un format
  * adapté à une visualisation 3D, avec support LOD (level of detail) et filtrage
  * par communauté.
  */
 
-/** Format d'entrée brut produit par graphify. */
+/** Format d'entrée brut (node-link JSON). */
 export interface RawGraph {
   directed?: boolean
   nodes: {
@@ -48,13 +48,13 @@ export interface VizGraph {
 }
 
 /**
- * Normalise un RawGraph (format graphify) en VizGraph exploitable par la visu 3D.
+ * Normalise un RawGraph (node-link JSON) en VizGraph exploitable par la visu 3D.
  * - label par défaut = id
  * - group par défaut = 0 (community absente)
  * - file = source_file (optionnel)
  * - weight des liens par défaut = 1
  * - un lien dont source ou target ne référence pas un nœud existant est IGNORÉ
- *   (robustesse face à un export graphify incohérent).
+ *   (robustesse face à un export incohérent).
  */
 export function normalize(raw: RawGraph): VizGraph {
   const nodes: VizNode[] = raw.nodes.map((n) => ({

@@ -82,7 +82,10 @@ export function reserverOuRefuser(
       `Fichier réservé par ${entree.fil} : ce fil l'a modifié il y a ${ilYA} min et son travail n'est pas encore commité (${chemin}). ` +
       `Deux fils sur le même fichier non commité, c'est une publication bloquée pour les deux. ` +
       `Travaille sur un autre fichier : la réservation tombe dès que ${entree.fil} commite ce fichier, ou dans ${reste} min sans nouvelle édition de sa part. ` +
-      `Si ce fichier est indispensable à ta tâche, dis-le à l'utilisateur en nommant ${entree.fil}.`
+      `Si ce fichier est indispensable à ta tâche, dis-le à l'utilisateur en nommant ${entree.fil}. ` +
+      // conv-1139 : l'utilisateur recopiait le message d'un fil à l'autre (26 refus en deux jours).
+      // « Si tu en disposes » : un agent d'étape de run n'a pas les outils de l'app.
+      `Si tu disposes de l'outil ecrire_a_un_fil, écris-lui directement avec l'outil ecrire_a_un_fil (destinataire ${entree.fil}).`
     )
   }
   const suivant: Record<string, { fil: string; at: number }> = {}

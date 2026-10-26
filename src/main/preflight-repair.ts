@@ -249,10 +249,10 @@ export async function repairPreflightCheck(
       const open =
         deps.openLoginTerminal ??
         ((command, opts): void => spawnLoginTerminal(command, { ...opts, spawnFn: deps.spawnFn }))
-      // `-SkipCli -SkipGraphify` : le bouton répare CE prérequis, pas les autres. Élargir en douce
+      // `-SkipCli` : le bouton répare CE prérequis, pas les autres. Élargir en douce
       // ferait installer des CLI que l'utilisateur n'a pas demandées depuis un bouton « Installer »
       // posé sous « runtime Brain ».
-      open('./scripts/bootstrap-deps.ps1 -SkipCli -SkipGraphify', { cwd })
+      open('./scripts/bootstrap-deps.ps1 -SkipCli', { cwd })
       return {
         started: true,
         detail:

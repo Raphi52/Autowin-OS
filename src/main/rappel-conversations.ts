@@ -138,7 +138,7 @@ const BUDGET_MS = 60
 /**
  * L'en-tete AVERTIT, il ne rassure pas.
  *
- * Ce bloc entre dans le meme prompt que les blocs graphify et Brain, qui portent tous deux un
+ * Ce bloc entre dans le meme prompt que le bloc Brain, qui porte un
  * marqueur de non-confiance explicite. Le rappel n'en avait AUCUN, alors qu'il transporte le contenu
  * le MOINS verifie des trois : des messages bruts, parfois colles depuis une page web ou produits
  * par un sous-agent. Le bloc le moins fiable etait presente comme le plus credible -- « ce qu'on

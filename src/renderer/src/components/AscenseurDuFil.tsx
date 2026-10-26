@@ -13,6 +13,7 @@ import {
 import './AscenseurDuFil.css'
 import {
   cibleAimant,
+  ancreEncoreTenue,
   aimanterSurPiste,
   cranCale,
   cranCourant,
@@ -30,6 +31,7 @@ import {
   positionGlissee,
   reserveDeLaCarte,
   scrollTopApresGlisse,
+  scrollTopDuMaintien,
   scrollTopSousPointeur,
   SELECTEUR_MESSAGES,
   seuilMolette,
@@ -115,6 +117,8 @@ export function AscenseurDuFil({
     cranSousPoignee: Repere | null
   } | null>(null)
   const derniereMoletteRef = useRef(0)
+  /** Sens du dernier cran de molette : l'aimant ne tire la vue que dans ce sens (conv-1139). */
+  const sensMoletteRef = useRef<-1 | 0 | 1>(0)
   const minuteurRepliRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minuteurFinRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** Maintien de la ligne lue pendant que le fil change de largeur (voir plus bas). */
@@ -286,7 +290,7 @@ export function AscenseurDuFil({
         // Collé au bas : c'est le suivi de la fin du fil qui décide, pas l'aimant.
         if (isChatNearBottom(g)) return
         const crans = reperesRef.current.filter((r) => r.role === 'user')
-        const cible = cibleAimant(g, crans, seuilMolette(g.clientHeight))
+        const cible = cibleAimant(g, crans, seuilMolette(g.clientHeight), sensMoletteRef.current)
         if (cible !== null)
           allerA(
             cible,
@@ -302,6 +306,7 @@ export function AscenseurDuFil({
       arreterGlissement()
       ancreRef.current = null
       derniereMoletteRef.current = Date.now()
+      sensMoletteRef.current = event.deltaY > 0 ? 1 : -1
       setDeplie(true)
       programmerRepli()
     }
@@ -336,9 +341,27 @@ export function AscenseurDuFil({
     if (!conteneur) return
     if (deplie === (conteneur.dataset.ascenseur === 'deplie')) return
     if (maintienRef.current) cancelAnimationFrame(maintienRef.current)
+    // Message retenu PÉRIMÉ (conv-1139) : la vue a quitté sa place par un autre moyen que la barre
+    // (clavier, recherche…). Le tenir ici recalerait la vue sur lui à l'ouverture ou à la fermeture.
+    // Mesuré AVANT que la largeur change : sa place calée est encore exacte.
+    const retenu = ancreRef.current?.isConnected ? ancreRef.current : null
+    if (
+      retenu &&
+      !ancreEncoreTenue(
+        conteneur.scrollTop,
+        hautDeVuePour({ haut: hautDansLeContenu(retenu, conteneur) }, lireGeo(conteneur)),
+        glissementRef.current !== 0 || glisseRef.current?.bouge === true
+      )
+    )
+      ancreRef.current = null
     let lu =
       (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
     let precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+    // Place laissée à chaque image : le navigateur BORNE la vue quand le fil raccourcit sous elle,
+    // et le maintien doit le savoir pour ne pas compenser deux fois (conv-1143).
+    const auBas = (): boolean => isChatNearBottom(conteneur, 1)
+    let posee = conteneur.scrollTop
+    let auBasAvant = auBas()
     const fin = performance.now() + (deplie ? 800 : 200) + 120
     const tenir = (t: number): void => {
       maintienRef.current = 0
@@ -361,12 +384,21 @@ export function AscenseurDuFil({
         )
         if (Math.abs(conteneur.scrollTop - cible) >= 0.5) conteneur.scrollTop = cible
       } else if (lu && lu.isConnected && !pilotee) {
-        const haut = hautDansLeFil(lu, conteneur)
-        if (Math.abs(haut - precedent) >= 0.5) conteneur.scrollTop += haut - precedent
+        const cible = scrollTopDuMaintien({
+          scrollTop: conteneur.scrollTop,
+          max: conteneur.scrollHeight - conteneur.clientHeight,
+          hautLu: hautDansLeFil(lu, conteneur),
+          hautLuAvant: precedent,
+          poseeAvant: posee,
+          auBasAvant
+        })
+        if (cible !== null) conteneur.scrollTop = cible
       }
       // L'ancre suit le HAUT de la vue courante : la molette du lecteur a pu la faire défiler.
       lu = (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
       precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+      posee = conteneur.scrollTop
+      auBasAvant = auBas()
       if (t < fin) maintienRef.current = requestAnimationFrame(tenir)
     }
     if (deplie) {
@@ -491,6 +523,7 @@ export function AscenseurDuFil({
     const facteur = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? conteneur.clientHeight : 1
     arreterGlissement()
     derniereMoletteRef.current = Date.now()
+    sensMoletteRef.current = event.deltaY > 0 ? 1 : -1
     setDeplie(true)
     conteneur.scrollBy({ top: event.deltaY * facteur })
   }

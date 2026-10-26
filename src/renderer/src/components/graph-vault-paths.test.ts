@@ -21,7 +21,7 @@ describe('chemins du vault — la forme RÉELLE que l’app fournit', () => {
   })
 
   it('retrouve l’ancre dans le chemin absolu quand l’id n’est PAS un chemin', () => {
-    // Cas des nœuds issus de graphify : leur id est un nom de symbole, pas un chemin.
+    // Cas d'un nœud dont l'id est un nom de symbole, pas un chemin.
     const symbole = { id: 'SymbolName', file: 'C:\\x\\Brain\\projects\\a\\g.md' }
     expect(pathSegments(relativePathOf(symbole))[0]).toBe('projects')
   })

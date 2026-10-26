@@ -133,7 +133,7 @@ describe('plafond de sortie MCP du CLI — levé pour un nœud skill', () => {
  * MESURÉ le 2026-10-11 (conv-267, claude 2.1.296) : sans MCP_TOOL_TIMEOUT, un appel d'outil MCP
  * HTTP est coupé à 60,4 s ; avec la variable posée, un appel de 90 s est rendu. Avec elle SEULE, un
  * appel de 330 s est coupé à 300 s (délai d'inactivité) ; avec CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT en
- * plus, il est rendu. Le chat sert en direct verify et run (plafond verifyTimeoutMs) et graphify.
+ * plus, il est rendu. Le chat sert en direct verify et run (plafond verifyTimeoutMs).
  */
 describe('délai d’un appel d’outil direct — jamais sous le plus long geste servi', () => {
   const delais = (ms: number): Record<string, string> => ({
@@ -151,8 +151,8 @@ describe('délai d’un appel d’outil direct — jamais sous le plus long gest
     )
   })
 
-  it('ne descend jamais sous graphify (10 min) quand verify est plafonné plus bas', () => {
-    expect(envDelaiOutilsMcp(true, { AUTOWIN_VERIFY_TIMEOUT_MS: '5000' })).toEqual(delais(600_000))
+  it('suit aussi un plafond de verify abaissé, toujours avec la marge', () => {
+    expect(envDelaiOutilsMcp(true, { AUTOWIN_VERIFY_TIMEOUT_MS: '5000' })).toEqual(delais(5_000))
   })
 
   it('rien sans outil direct ; une valeur déjà posée garde le dernier mot, variable par variable', () => {

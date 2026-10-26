@@ -47,7 +47,7 @@ export interface IdentiteBrain {
 export interface IdentiteApplication {
   /** Identifiant Windows de l'application (AppUserModelID), deja connu des postes installes. */
   appId?: string
-  /** Dossier d'editeur sous %LOCALAPPDATA% (cache Graphify) ; neutre : aucun. */
+  /** Dossier d'editeur sous %LOCALAPPDATA% ; neutre : aucun. */
   dossierEditeur?: string
 }
 

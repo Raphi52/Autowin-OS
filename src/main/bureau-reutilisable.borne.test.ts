@@ -64,7 +64,7 @@ describe('cleDeBureau — la clé nomme un dossier, sa longueur est un budget de
 
   it('deux commandes distinctes sur la même cible ne partagent pas de bureau', () => {
     expect(cleDeBureau('edit', 'conv-1', profond)).not.toBe(
-      cleDeBureau('graphify', 'conv-1', profond)
+      cleDeBureau('verify', 'conv-1', profond)
     )
   })
 

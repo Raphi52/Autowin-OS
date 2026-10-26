@@ -26,9 +26,8 @@ import {
 import { foldWindowsOrdinalCase } from './windows-ordinal-case'
 
 /**
- * Accès DISQUE aux graphes de connaissance réels (graphify) — côté main uniquement.
- * Scanne les dossiers `projects/<repo>/graphify-out/graph.json` d'un ou plusieurs
- * roots (ex. le partage Brain) et charge un graphe en le CAPANT en LOD
+ * Accès DISQUE aux graphes de connaissance réels — côté main uniquement.
+ * Expose le vault du Brain et charge un graphe en le CAPANT en LOD
  * (un graphe de 56 Mo / ~45k nœuds tuerait la visu 3D — on ne renvoie que le
  * top-N par degré).
  */
@@ -37,7 +36,7 @@ export interface BrainGraphRef {
   label: string
   path: string
   sizeMb: number
-  kind: 'vault' | 'graphify'
+  kind: 'vault'
   themes?: BrainTheme[]
   /** Domaine metier de l'entreprise (profil), pour classer ses fiches dans la vue ; absent = neutre. */
   metier?: MetierGraphe
@@ -472,14 +471,8 @@ const cataloguesMetier = new WeakMap<IdentiteMetier, BrainTheme[]>()
 
 export const BRAIN_THEMES: BrainTheme[] = brainThemes()
 
-/** Racines par défaut où chercher des graphes graphify. */
-function defaultBrainRoots(): string[] {
-  return [join(SHARED_BRAIN_ROOT, 'projects'), join(process.env.USERPROFILE ?? '.', '.graphify')]
-}
-
-/** Découvre les graphes graphify-out/graph.json sous les roots donnés. */
+/** Les graphes que la vue peut ouvrir : le vault du Brain, s'il existe. */
 export function scanBrainGraphs(
-  roots: string[] = defaultBrainRoots(),
   vaultRoot = SHARED_BRAIN_ROOT,
   includeVaultThemes = true,
   metier: IdentiteMetier | undefined = identiteMetier()
@@ -508,41 +501,16 @@ export function scanBrainGraphs(
         : {})
     })
   }
-  for (const root of roots) {
-    if (!existsSync(root)) continue
-    let entries: string[]
-    try {
-      entries = readdirSync(root)
-    } catch {
-      continue
-    }
-    for (const name of entries) {
-      const gpath = join(root, name, 'graphify-out', 'graph.json')
-      if (existsSync(gpath)) {
-        let sizeMb = 0
-        try {
-          sizeMb = Math.round(statSync(gpath).size / (1024 * 1024))
-        } catch {
-          /* stat impossible — laisse 0 */
-        }
-        // Un projet du domaine metier (`projects/<cle>-tv`) s'affiche sans le prefixe du domaine.
-        const prefixe = metier ? `${metier.cle}-` : undefined
-        const id = prefixe && name.startsWith(prefixe) ? name.slice(prefixe.length) : name
-        found.push({ id, label: id, path: gpath, sizeMb, kind: 'graphify' })
-      }
-    }
-  }
-  return found.sort((a, b) =>
-    a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind === 'vault' ? -1 : 1
-  )
+  return found
 }
 
 /** Plafond de sécurité sur la taille lue (évite d'avaler un fichier aberrant). */
 const MAX_GRAPH_BYTES = 120 * 1024 * 1024
 
 /**
- * Charge un graphe graphify depuis le disque, normalise, et CAPE en LOD :
- * top-N nœuds par degré (param lod, défaut 300), filtre communauté optionnel.
+ * Charge un graphe (vault du Brain, ou fichier node-link JSON sous le Brain) depuis le disque,
+ * normalise, et CAPE en LOD : top-N nœuds par degré (param lod, défaut 300), filtre communauté
+ * optionnel.
  */
 export function loadBrainGraph(path: string, lod = 300, community?: number): VizGraph {
   if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
@@ -550,13 +518,11 @@ export function loadBrainGraph(path: string, lod = 300, community?: number): Viz
     const root = assertAuthorizedBrainVaultSync(path)
     return loadVaultBrainGraph(root, lod)
   }
-  // Confinement (défense en profondeur, audit sécu #3) : un graphe FICHIER doit vivre sous une racine
-  // de graphes légitime (defaultBrainRoots) ou le vault — sinon lecture de fichier arbitraire via IPC.
+  // Confinement (défense en profondeur, audit sécu #3) : un graphe FICHIER doit vivre sous le vault
+  // du Brain — sinon lecture de fichier arbitraire via IPC.
   const realFile = realpathSync.native(resolve(path))
-  const underAllowedGraphRoot = [...defaultBrainRoots(), SHARED_BRAIN_ROOT].some((root) =>
-    realPathIsWithinRoot(realFile, root)
-  )
-  if (!underAllowedGraphRoot) throw new Error('graphe hors périmètre autorisé')
+  if (!realPathIsWithinRoot(realFile, SHARED_BRAIN_ROOT))
+    throw new Error('graphe hors périmètre autorisé')
   if (statSync(path).size > MAX_GRAPH_BYTES) throw new Error('graphe trop volumineux à charger')
   const raw = JSON.parse(readFileSync(path, 'utf8')) as RawGraph
   let g = normalize(raw)
@@ -1217,7 +1183,6 @@ function allowedReadRoots(): string[] {
   const executionWorkspace = process.env.AUTOWIN_OS_WORKSPACE?.trim()
   return [
     sharedBrainRoot(),
-    join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),

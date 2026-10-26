@@ -208,6 +208,35 @@ describe('--conversation — refusée hors de l’instance cachée', () => {
       demandeDeConversation(['--view', 'chat', '--conversation', 'conv-955', '--fenetre-reelle'])
     ).toEqual({ echec: 'conversation-hors-instance-cachee' })
   })
+  // conv-1139 : la preuve à l'écran des messages entre fils exige qu'ils voyagent avec le fil copié —
+  // ceux qu'il a envoyés ou reçus, et leurs remises ; rien d'un échange entre deux AUTRES fils.
+  it('copie les messages entre fils de la conversation, et les retire après la capture', () => {
+    const source = racineSource()
+    const msg = (id, de, a) =>
+      JSON.stringify({ type: 'message', id, at: 1, de: { fil: de }, a, nature: 'info', texte: id })
+    ecrire(
+      join(source, 'messages-entre-fils.jsonl'),
+      [
+        msg('m-envoye', 'conv-955', 'conv-1'),
+        msg('m-recu', 'conv-1', 'conv-955'),
+        msg('m-etranger', 'conv-1', 'conv-2'),
+        JSON.stringify({ type: 'livre', at: 2, fil: 'conv-1', ids: ['m-envoye'], par: 'tour' }),
+        JSON.stringify({ type: 'livre', at: 2, fil: 'conv-2', ids: ['m-etranger'], par: 'tour' }),
+        '{coupée'
+      ].join('\n') + '\n'
+    )
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-955' })
+    expect(rapport.ecrits).toContain('messages-entre-fils.jsonl')
+    const copie = readFileSync(join(destination, 'messages-entre-fils.jsonl'), 'utf8')
+    expect(copie).toContain('m-envoye')
+    expect(copie).toContain('m-recu')
+    expect(copie).not.toContain('m-etranger')
+    expect(copie.trim().split('\n')).toHaveLength(3)
+    retirerSemence(destination, rapport)
+    expect(existsSync(join(destination, 'messages-entre-fils.jsonl'))).toBe(false)
+  })
+
   it('refuse un identifiant manquant ou dangereux', () => {
     expect(demandeDeConversation(['--conversation', '--view'])?.echec).toMatch(/invalide/)
     expect(demandeDeConversation(['--conversation', '../x'])?.echec).toMatch(/invalide/)
