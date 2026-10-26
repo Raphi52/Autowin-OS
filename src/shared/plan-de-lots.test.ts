@@ -267,6 +267,88 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(suite.plan.statut).toBe('suspendu-quota')
   })
 
+  /*
+   * UN TOUR « OK » QUI SE DÉCLARE BLOQUÉ (conv-1153, lot 1 du plan conv-1151, 2026-10-26) : le tour
+   * finit sans erreur, mais l'agent écrit « ⛔ Bloqué » ou « ⚠️ Non résolu » (consigne de
+   * `response-style.ts`). Noté « fait », le chef ne le relançait pas. Même lecture que la carte du
+   * fil (`carte-du-fil.ts`, BLOCAGE_DECLARE).
+   */
+  it('tour ok dont la réponse se déclare « ⛔ Bloqué » : échec avec la ligne de blocage, relançable', () => {
+    const texte = [
+      'J’ai tenté deux corrections.',
+      '',
+      '⛔ Bloqué — les tests restent rouges : 3 échecs dans src/ecran-1.test.tsx.',
+      '',
+      'AUTOWIN_FIN_V1: bloqué sur les tests'
+    ].join('\n')
+    const r = noterFinDeTour(deuxEnCours(), 'conv-110', { ok: true, texte }, 3000)
+    expect(r.lot?.etat).toBe('echec')
+    expect(r.lot?.raison).toBe(
+      'le fil se déclare bloqué : ⛔ Bloqué — les tests restent rouges : 3 échecs dans src/ecran-1.test.tsx.'
+    )
+    expect(r.plan.statut).toBe('en-cours')
+    expect(lotsAPartir(r.plan)).toEqual([3])
+    expect(relancerLot(r.plan, 1).ok).toBe(true)
+    const cr = compteRenduDuLot(r.plan, r.lot!, texte)
+    expect(cr).toMatch(/« Lot 1 » : échec dans conv-110 \(le fil se déclare bloqué : ⛔ Bloqué/)
+  })
+
+  it('« ⚠️ Non résolu » compte aussi ; un marqueur seul en titre prend la ligne qui l’explique', () => {
+    const nonResolu = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      { ok: true, texte: 'Fait en partie.\n⚠️ Non résolu : le thème clair reste illisible.' },
+      3000
+    )
+    expect(nonResolu.lot).toMatchObject({
+      etat: 'echec',
+      raison: 'le fil se déclare bloqué : ⚠️ Non résolu : le thème clair reste illisible.'
+    })
+    const titre = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      { ok: true, texte: '## ⛔ Bloqué\n\nLe build échoue : module `x` introuvable.' },
+      3000
+    )
+    expect(titre.lot?.etat).toBe('echec')
+    expect(titre.lot?.raison).toBe(
+      'le fil se déclare bloqué : ⛔ Bloqué — Le build échoue : module `x` introuvable.'
+    )
+  })
+
+  it('la raison d’un blocage déclaré reste bornée à 300 caractères', () => {
+    const r = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      { ok: true, texte: `⛔ Bloqué : ${'z'.repeat(1000)}` },
+      3000
+    )
+    expect(r.lot?.etat).toBe('echec')
+    expect(r.lot?.raison?.length).toBe(300)
+  })
+
+  it('jumeaux : « bloqué » sans le marqueur, ou le marqueur dans une ligne invisible, laissent le lot fait', () => {
+    // L'entrée qui ferait échouer une lecture trop large (/bloqué/i) : un verdict ordinaire.
+    const verdict = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      { ok: true, texte: '- Verdict : fait — plus rien n’est bloqué, 12 tests verts.' },
+      3000
+    )
+    expect(verdict.lot).toMatchObject({ etat: 'fait', raison: undefined })
+    // Une suggestion invisible (retirée de l'affichage) n'est pas la réponse du fil.
+    const suggestion = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      {
+        ok: true,
+        texte: 'Écran traduit.\nAUTOWIN_PROMPT_V1: [80] /build rends lisible le ⛔ Bloqué du carnet'
+      },
+      3000
+    )
+    expect(suggestion.lot?.etat).toBe('fait')
+  })
+
   it('tous les lots finis : plan terminé, bilan complet', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 3, lots: [lot(1), lot(2), lot(3)] }))
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
@@ -472,6 +554,68 @@ describe('textes remis aux fils', () => {
     const long = compteRenduDuLot(fin.plan, fin.lot!, 'y'.repeat(5000))
     expect(long.length).toBeLessThanOrEqual(2000)
     expect(long).toMatch(/suite dans conv-110/)
+  })
+
+  /*
+   * LIGNES TECHNIQUES INVISIBLES (conv-1153, lot 1 du plan conv-1151, 2026-10-26). Le texte du lot
+   * vient de `issueDuResultat` (`resultat.text` : le texte parlé du tour, commandes `<cmd>` déjà
+   * retirées par le pilote, `agent-pilot.ts`). Mesure sur `turn-journals/` : 380 tours sur 471
+   * finissent par une ligne `AUTOWIN_…_V1`, aucun ne garde un bloc `<cmd>`. Fin réelle ci-dessous,
+   * copiée de conv-1139 (tour 6751c52b). Coupé par la FIN, le compte rendu gardait ce bruit.
+   */
+  const finReelle = [
+    'J’ai traduit l’écran 1 et relu les captures dans les deux thèmes.',
+    '',
+    '📍 Maintenant',
+    'Les fichiers sont modifiés dans `D:\\AutoWinOS` mais pas commités.',
+    '',
+    '⏳ Reste à faire',
+    '- Aucune limite connue pour cet affichage.',
+    '',
+    'AUTOWIN_BESOIN_V1: suite',
+    'AUTOWIN_FIN_V1: proposition « Bulles » implémentée et vérifiée'
+  ].join('\n')
+
+  it('le compte rendu retire les lignes techniques invisibles de la réponse du fil', () => {
+    const fin = noterFinDeTour(p, 'conv-110', { ok: true, texte: finReelle }, 3000)
+    const cr = compteRenduDuLot(fin.plan, fin.lot!, finReelle)
+    expect(cr).not.toMatch(/AUTOWIN_/)
+    expect(cr).toMatch(/⏳ Reste à faire\n- Aucune limite connue pour cet affichage\.$/)
+  })
+
+  it('les lignes techniques ne mangent plus la place du résumé dans une réponse longue', () => {
+    // Trois suggestions de suite longues : 1 800 caractères de bruit, plus que la place gardée.
+    const suggestions = [1, 2, 3].map(
+      (n) => `AUTOWIN_PROMPT_V1: [${90 - n}] /build ${'étape suivante détaillée '.repeat(24)}`
+    )
+    const reponse = `${'Détail du travail. '.repeat(300)}\n\n${finReelle}\n${suggestions.join('\n')}`
+    const fin = noterFinDeTour(p, 'conv-110', { ok: true, texte: reponse }, 3000)
+    const cr = compteRenduDuLot(fin.plan, fin.lot!, reponse)
+    expect(cr.length).toBeLessThanOrEqual(2000)
+    expect(cr).not.toMatch(/AUTOWIN_/)
+    expect(cr).toMatch(/⏳ Reste à faire\n- Aucune limite connue pour cet affichage\./)
+    expect(cr).toMatch(/suite dans conv-110/)
+  })
+
+  it('jumeaux : un marqueur cité dans une phrase ou dans un bloc de code reste dans le compte rendu', () => {
+    const reponse = [
+      'J’ai corrigé la lecture de `AUTOWIN_FIN_V1` dans le pilote.',
+      '```',
+      'AUTOWIN_FIN_V1: exemple cité',
+      '```',
+      'AUTOWIN_FIN_V1: fini'
+    ].join('\n')
+    const fin = noterFinDeTour(p, 'conv-110', { ok: true, texte: reponse }, 3000)
+    const cr = compteRenduDuLot(fin.plan, fin.lot!, reponse)
+    expect(cr).toMatch(/lecture de `AUTOWIN_FIN_V1` dans le pilote/)
+    expect(cr).toMatch(/```\nAUTOWIN_FIN_V1: exemple cité\n```$/)
+  })
+
+  it('une réponse faite SEULEMENT de lignes techniques : le compte rendu se réduit à son en-tête', () => {
+    const fin = noterFinDeTour(p, 'conv-110', { ok: true }, 3000)
+    const cr = compteRenduDuLot(fin.plan, fin.lot!, 'AUTOWIN_BESOIN_V1: suite\nAUTOWIN_FIN_V1: ok')
+    expect(cr).not.toMatch(/Réponse du fil/)
+    expect(cr).toMatch(/Lot 1\/3 « Lot 1 » : fait dans conv-110/)
   })
 
   it('le réveil du chef se présente comme un message de l’app et porte l’avancement', () => {

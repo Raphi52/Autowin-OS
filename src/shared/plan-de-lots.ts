@@ -1,3 +1,4 @@
+import { retirerLignePromptSuivant } from './prompt-suivant'
 import { estMurDeQuota } from './reprise-quota'
 
 /**
@@ -378,6 +379,49 @@ export interface IssueDuTour {
 }
 
 /**
+ * LA RÉPONSE DU FIL TELLE QUE L'UTILISATEUR LA VOIT (conv-1153, lot 1 du plan conv-1151,
+ * 2026-10-26). `issue.texte` vient de `issueDuResultat` (`resultat.text`) : le texte parlé du tour,
+ * lignes techniques comprises. Mesure sur `turn-journals/` : 380 tours sur 471 finissent par
+ * `AUTOWIN_BESOIN_V1` / `AUTOWIN_FIN_V1`. Les blocs `<cmd>` n'y arrivent pas : le pilote les retire
+ * déjà (`agent-pilot.ts`, `parseOrderedPilotTokens`), et aucun des 471 n'en garde. Même retrait que
+ * l'affichage (`Markdown.tsx`) : un marqueur cité dans un bloc de code reste.
+ * fix-ok: conv-1153 — compte rendu coupé par la fin sur un texte brut (lignes AUTOWIN mesurées) et
+ * blocage déclaré ignoré par noterFinDeTour (`etat: issue.ok ? 'fait' : …`) ; rouge puis vert.
+ */
+export function reponseVisible(texte?: string): string {
+  return texte ? retirerLignePromptSuivant(texte).trim() : ''
+}
+
+/**
+ * Même lecture que la carte du fil (`carte-du-fil.ts`, BLOCAGE_DECLARE), le sélecteur d'emoji
+ * (U+FE0F) rendu facultatif : la consigne de réponse (`response-style.ts`) fait écrire ces deux
+ * marqueurs pour un échec.
+ */
+const BLOCAGE_DECLARE = /^.*(?:⛔\uFE0F?\s*Bloqué|⚠\uFE0F?\s*Non résolu).*$/mu
+const MARQUEUR_SEUL = /^(?:⛔\uFE0F?\s*Bloqué|⚠\uFE0F?\s*Non résolu)[\s:.—–-]*$/u
+
+const ligneLisible = (ligne: string): string =>
+  ligne
+    .replace(/\*\*/g, '')
+    .replace(/^[\s#>*-]+/u, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** La ligne où le fil se déclare bloqué ; un marqueur seul (titre) prend la ligne qui l'explique. */
+function blocageDeclare(texte: string): string | undefined {
+  const m = BLOCAGE_DECLARE.exec(texte)
+  if (!m) return undefined
+  const ligne = ligneLisible(m[0])
+  if (!MARQUEUR_SEUL.test(ligne)) return ligne
+  const pourquoi = texte
+    .slice(m.index + m[0].length)
+    .split('\n')
+    .map(ligneLisible)
+    .find(Boolean)
+  return pourquoi ? `${ligne} — ${pourquoi}` : ligne
+}
+
+/**
  * Fin d'un tour dans le fil `fil`. Seule la fin du tour d'un lot EN COURS compte : une seconde
  * annonce, un fil hors plan ou un autre tour du même fil ne changent rien (plan rendu tel quel).
  * Un échec ne relance rien. Un mur de QUOTA suspend le plan entier : aucun lot ne repart seul.
@@ -386,6 +430,10 @@ export interface IssueDuTour {
  * notée — sinon son résultat et son compte rendu étaient perdus (objection du juge, conv-1150).
  * Le plan reste interrompu (rien ne repart seul), et se termine si plus aucun lot n'attend. Un
  * agent PERDU (mort avec l'app) n'apporte rien : le lot reste interrompu, « Reprendre » le relance.
+ *
+ * Un tour fini sans erreur dont la réponse se déclare bloquée (« ⛔ Bloqué », « ⚠️ Non résolu »)
+ * est un ÉCHEC, avec sa ligne de blocage pour raison : noté « fait », le chef ne le relançait pas
+ * (conv-1153). Seule la réponse visible compte, pas une suggestion invisible qui citerait le marqueur.
  */
 export function noterFinDeTour(
   plan: PlanDeLots,
@@ -400,13 +448,17 @@ export function noterFinDeTour(
   if (lot.etat !== 'en-cours' && !reprisApresRedemarrage) return { plan, effet: 'deja-note', lot }
   if (issue.tour && lot.tour && issue.tour !== lot.tour) return { plan, effet: 'autre-tour', lot }
   const erreur = (issue.erreur ?? '').trim()
-  const raison = issue.ok
-    ? undefined
-    : issue.annule
-      ? 'tour arrêté avant la fin'
-      : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
+  const blocage = issue.ok ? blocageDeclare(reponseVisible(issue.texte)) : undefined
+  const reussi = issue.ok && !blocage
+  const raison = blocage
+    ? `le fil se déclare bloqué : ${blocage}`.slice(0, RAISON_MAX)
+    : issue.ok
+      ? undefined
+      : issue.annule
+        ? 'tour arrêté avant la fin'
+        : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
   let suivant = avecLot(plan, lot.rang, {
-    etat: issue.ok ? 'fait' : 'echec',
+    etat: reussi ? 'fait' : 'echec',
     raison,
     fin: maintenant
   })
@@ -565,14 +617,15 @@ export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
 /**
  * Le compte rendu d'un lot, écrit au chef dans le journal des messages entre fils. Il tient dans
  * la borne du journal ; une réponse longue est coupée par le DÉBUT (le résumé demandé est à la fin)
- * et renvoie au fil enfant.
+ * et renvoie au fil enfant. Les lignes techniques invisibles sont retirées AVANT la coupe : elles
+ * finissent la réponse et mangeaient la place du résumé (conv-1153, `reponseVisible`).
  */
 export function compteRenduDuLot(plan: PlanDeLots, lot: LotDuPlan, reponse?: string): string {
   const tete =
     `Lot ${lot.rang}/${plan.lots.length} « ${lot.titre} » : ${LIBELLE_ETAT[lot.etat]} dans ${lot.fil ?? '?'}` +
     (lot.raison ? ` (${lot.raison})` : '') +
     `.\nAvancement du plan : ${bilanDuPlan(plan).texte}.`
-  const corps = (reponse ?? '').trim()
+  const corps = reponseVisible(reponse)
   if (!corps) return tete.slice(0, COMPTE_RENDU_MAX)
   const entete = `${tete}\nRéponse du fil (fin) :\n`
   const renvoi = `\n(suite dans ${lot.fil ?? 'le fil du lot'})`
