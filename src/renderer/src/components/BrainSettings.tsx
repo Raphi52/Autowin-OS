@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { BrainReglageState } from '../../../shared/preload-contracts'
+import { langueCourante } from '../langue'
+import { riche, traduire, useTextes } from '../textes'
 
 /**
  * Renseigner le BRAIN : un chemin et/ou un dépôt git (demande utilisateur du 2026-10-13, conv-923).
@@ -10,6 +12,9 @@ import type { BrainReglageState } from '../../../shared/preload-contracts'
  * l'écran le DIT, comme celui du dossier de travail.
  */
 export function BrainSettings(): React.JSX.Element {
+  // Textes dans la langue de Settings · Interface (conv-1146, réparation 3). `state.erreur` vient du
+  // moteur : il reste tel quel, les messages du cœur de l'app ne sont pas encore traduits.
+  const { t } = useTextes()
   const [state, setState] = useState<BrainReglageState | null>(null)
   const [chemin, setChemin] = useState('')
   const [depot, setDepot] = useState('')
@@ -31,7 +36,7 @@ export function BrainSettings(): React.JSX.Element {
         try {
           appliquer(await window.api.brainReglage())
         } catch {
-          setError('Impossible de lire le réglage du Brain.')
+          setError(traduire('brain.erreurLecture', langueCourante()))
         }
       })()
     })
@@ -43,7 +48,7 @@ export function BrainSettings(): React.JSX.Element {
       try {
         appliquer(await action())
       } catch {
-        setError('Le changement du Brain a échoué. Réessaie.')
+        setError(traduire('brain.erreurChangement', langueCourante()))
       } finally {
         setBusy(false)
       }
@@ -60,43 +65,39 @@ export function BrainSettings(): React.JSX.Element {
     <section className="settings-execution-workspace surface-panel" aria-label="Brain" data-testid="brain-reglage">
       <header>
         <div>
-          <span className="domain-eyebrow">Configuration locale</span>
+          <span className="domain-eyebrow">{t('settings.preflight.eyebrow')}</span>
           <h2>Brain</h2>
         </div>
       </header>
-      <p>
-        Le dossier où Autowin lit et dépose ce qu’il retient. <b>Sans dépôt</b>, c’est un simple dossier
-        (un partage réseau, par exemple) : Autowin n’y lance <b>aucune commande git</b>. <b>Avec un dépôt</b>,
-        il le clone s’il manque et y commite les notes de ses runs.
-      </p>
+      <p>{riche(t('brain.description'), 'b')}</p>
       {state && (
         <p data-testid="brain-reglage-actif">
-          Actif : <code>{state.actif}</code> —{' '}
-          {state.estUnDepot ? 'dépôt git' : 'simple dossier, aucune commande git'}
+          {t('diagnostic.actif')} <code>{state.actif}</code> —{' '}
+          {state.estUnDepot ? t('brain.actifDepot') : t('brain.actifDossier')}
         </p>
       )}
       <label>
-        Dossier du Brain
+        {t('brain.dossier')}
         <span style={{ display: 'flex', gap: 6 }}>
           <input
             type="text"
             value={chemin}
-            placeholder="vide = détection automatique (ou dossier local d’Autowin pour un dépôt)"
+            placeholder={t('brain.dossier.placeholder')}
             data-testid="brain-reglage-chemin"
             onChange={(event) => setChemin(event.target.value)}
             style={{ flex: 1 }}
           />
           <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void choisirDossier()}>
-            Choisir…
+            {t('brain.choisir')}
           </button>
         </span>
       </label>
       <label>
-        Dépôt git (facultatif)
+        {t('brain.depot')}
         <input
           type="text"
           value={depot}
-          placeholder="vide = simple dossier · ex. https://github.com/moi/brain.git"
+          placeholder={t('brain.depot.placeholder')}
           data-testid="brain-reglage-depot"
           onChange={(event) => setDepot(event.target.value)}
           style={{ width: '100%' }}
@@ -117,7 +118,7 @@ export function BrainSettings(): React.JSX.Element {
             )
           }
         >
-          {busy ? 'Enregistrement…' : 'Enregistrer'}
+          {busy ? t('diagnostic.enregistrement') : t('diagnostic.enregistrer')}
         </button>{' '}
         {state?.choisi && (
           <button
@@ -127,7 +128,7 @@ export function BrainSettings(): React.JSX.Element {
             data-testid="brain-reglage-reset"
             onClick={() => void run(() => window.api.resetBrainReglage())}
           >
-            Revenir à la détection automatique
+            {t('diagnostic.revenirAuto')}
           </button>
         )}
       </p>
@@ -138,13 +139,12 @@ export function BrainSettings(): React.JSX.Element {
       )}
       {state?.redemarrageNecessaire && (
         <p className="domain-warning" role="status" data-testid="brain-reglage-redemarrage">
-          Redémarre Autowin pour que <code>{state.effectif}</code> devienne le Brain actif.
+          {t('brain.redemarrer.avant')} <code>{state.effectif}</code> {t('brain.redemarrer.apres')}
         </p>
       )}
       {state?.serveurSurUnAutreDossier && (
         <p className="domain-warning" role="status" data-testid="brain-reglage-serveur">
-          Le serveur Brain déjà lancé sert encore <code>{state.serveurRacine}</code> : tant qu’il tourne,
-          ce qu’Autowin retient y part. Arrête-le pour qu’il reparte sur le bon dossier.
+          {t('brain.serveur.avant')} <code>{state.serveurRacine}</code> {t('brain.serveur.apres')}
         </p>
       )}
     </section>

@@ -78,6 +78,7 @@ import './assets/theme-vanilla-claude.css'
 import './assets/theme-nier-automata.genere.css'
 import './assets/theme-nier-automata.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
+import { nomDeDestination, useTextes } from './textes'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 import { deposerOuvertureConversation } from './components/pending-conversation-open'
 import { installerRelaisPrefill } from './components/relais-prefill'
@@ -213,6 +214,8 @@ export function MainApp(): React.JSX.Element {
   // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
   // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
   const [tab, setTab] = useState<Tab>('accueil')
+  // La barre de navigation suit la langue de Settings · Interface, sans redémarrage (conv-1146).
+  const { langue, t } = useTextes()
   // Le fond 3D reste en veille (caché, sans dessiner) quelques minutes hors de l'Accueil : un retour
   // ne le reconstruit plus (decor-veille.ts, conv-337).
   const decorMonte = useDecorEnVeille(tab === 'accueil')
@@ -658,9 +661,9 @@ export function MainApp(): React.JSX.Element {
           <button
             type="button"
             className="rail-toggle"
-            aria-label={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
+            aria-label={railCollapsed ? t('rail.deployer') : t('rail.reduire')}
             aria-expanded={!railCollapsed}
-            title={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
+            title={railCollapsed ? t('rail.deployer') : t('rail.reduire')}
             onClick={() => setRailCollapsed((collapsed) => !collapsed)}
           >
             {/* CHEVRON PEINT PAR MASQUE, PAS UN <svg> ENFANT (2026-10-10, « cette flèche aussi
@@ -692,13 +695,13 @@ export function MainApp(): React.JSX.Element {
                     it.icon
                   )}
                 </span>
-                <span>{it.label}</span>
+                <span>{nomDeDestination(it.id, langue)}</span>
                 {it.id === 'settings' && preflightAlert && alerteDemarrageArmee && (
                   <span
                     className="domain-badge-alert nav-alert-badge"
                     data-testid="nav-settings-alert"
-                    title="Un prérequis est en échec"
-                    aria-label="Un prérequis est en échec"
+                    title={t('alerte.prerequis')}
+                    aria-label={t('alerte.prerequis')}
                   >
                     !
                   </span>

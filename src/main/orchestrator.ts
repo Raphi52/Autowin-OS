@@ -431,6 +431,7 @@ import {
 import { projectContextBlock } from './context-files'
 // Le profil personnel suit le contexte projet dans CHAQUE system de phase (conv-1098).
 import { blocProfilUtilisateur } from './profil-utilisateur'
+import { blocLangueDeReponse } from './langue-reglage'
 import type {
   ExecutionEvidence,
   PromptEnvelope,
@@ -3012,7 +3013,9 @@ ${annonceCommit}`
     }
 
     const projectContext =
-      projectContextBlock(this.deps.executionWorkspace) + blocProfilUtilisateur()
+      projectContextBlock(this.deps.executionWorkspace) +
+      blocProfilUtilisateur() +
+      blocLangueDeReponse()
     const judgeBinding =
       bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
@@ -3247,7 +3250,9 @@ ${CONTRAT_OBJECTIONS}`
       }
     }
     const projectContext =
-      projectContextBlock(this.deps.executionWorkspace) + blocProfilUtilisateur()
+      projectContextBlock(this.deps.executionWorkspace) +
+      blocProfilUtilisateur() +
+      blocLangueDeReponse()
     // Une phase décomposée ne doit pas contourner son panel : chaque sous-tâche est exécutée par
     // tous les membres configurés, puis leurs sorties sont fusionnées. Sans panel (build/refine ou
     // topologie legacy vide), on conserve exactement le binding subagent historique. Un override de
@@ -3795,7 +3800,9 @@ ${CONTRAT_OBJECTIONS}`
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
     // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
     const projectContext =
-      projectContextBlock(this.deps.executionWorkspace) + blocProfilUtilisateur()
+      projectContextBlock(this.deps.executionWorkspace) +
+      blocProfilUtilisateur() +
+      blocLangueDeReponse()
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
       trace.push(s)

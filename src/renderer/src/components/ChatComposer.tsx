@@ -22,6 +22,7 @@ import {
   type ReactNode
 } from 'react'
 import { matchSlashCommands, type SlashCommand } from './chat-view-model'
+import { useTextes } from '../textes'
 import {
   applyMention,
   matchMentions,
@@ -81,9 +82,6 @@ async function whisperInstalle(): Promise<boolean | null> {
     return null
   }
 }
-
-/** Le texte affiché quand la reconnaissance vocale n'est pas installée sur le poste. */
-const DICTEE_NON_INSTALLEE = 'Installer la reconnaissance vocale (Whisper local)'
 
 /**
  * ICÔNES DU MICRO — dessinées, pas des emojis.
@@ -259,6 +257,8 @@ function ajusterHauteurChamp(champ: HTMLTextAreaElement): void {
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
   function ChatComposer(props, ref): React.JSX.Element {
     const [input, setInput] = useState('')
+    // Les textes de la zone de saisie suivent la langue de Settings · Interface (conv-1146).
+    const { t } = useTextes()
     const [slashIndex, setSlashIndex] = useState(0)
     const [slashDismissed, setSlashDismissed] = useState(false)
     /** Skill SURVOLÉE dans la palette `/` : son nom, pour afficher sa description entière. */
@@ -575,7 +575,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             <ul
               className="slash-palette mention-palette fade-in"
               role="listbox"
-              aria-label="Cibles"
+              aria-label={t('chat.cibles')}
               data-testid="mention-palette"
             >
               {mentionsVisibles.map((c, i) => (
@@ -620,7 +620,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                   </div>
                 </div>
               ) : null}
-              <ul className="slash-palette fade-in" role="listbox" aria-label="Commandes">
+              <ul className="slash-palette fade-in" role="listbox" aria-label={t('chat.commandes')}>
                 {slashVisibles.map((c, i) => (
                   <li
                     key={c.name}
@@ -648,12 +648,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             <div
               className="composer-suites fade-in"
               role="group"
-              aria-label="Pour continuer…"
+              aria-label={t('chat.suites')}
               data-testid="composer-suites"
             >
               {/* Titre du bloc, demandé tel quel par l'utilisateur (conv-1103). */}
               <span className="composer-suites-titre" aria-hidden="true">
-                Pour continuer…
+                {t('chat.suites')}
               </span>
               {suitesVisibles.map((suite, i) => {
                 const cochee = cocheesEnCours.includes(suite.texte)
@@ -666,8 +666,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     className={`composer-suite${i === 0 ? ' is-best' : ''}${cochee ? ' is-cochee' : ''}`}
                     data-testid="composer-suite"
                     title={`${suite.texte}\n\n${
-                      i === 0 ? 'Mieux notée : Tab la prend seule.\n' : ''
-                    }Maj+Tab prend toutes les suites ; le mode auto les envoie toutes.\nClic : coche ou décoche — les suites cochées partent ensemble.`}
+                      i === 0 ? `${t('chat.suites.mieuxNotee')}\n` : ''
+                    }${t('chat.suites.aide')}`}
                     // Garde le focus du champ : le clic remplit, l'Entrée envoie juste après.
                     onMouseDown={(ev) => ev.preventDefault()}
                     onClick={() => basculerSuite(suite.texte)}
@@ -678,7 +678,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     {suite.score !== null ? (
                       <span
                         className="composer-suite-score mono"
-                        aria-label={`note ${suite.score} sur 100`}
+                        aria-label={t('chat.suites.note', { score: suite.score })}
                       >
                         {suite.score}
                       </span>
@@ -810,10 +810,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               }}
               placeholder={
                 props.placeholderPendantTour
-                  ? 'Orienter l’agent sans l’interrompre (Entrée)'
+                  ? t('chat.placeholder.pendantTour')
                   : props.ghostRecommendation
                     ? `⇥ ${props.ghostRecommendation}`
-                    : 'Écrire à l’agent ou déposer des fichiers…'
+                    : t('chat.placeholder')
               }
             />
             <button
@@ -827,24 +827,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               aria-pressed={dicteeEtat === 'ecoute'}
               aria-label={
                 dicteeEtat === 'ecoute'
-                  ? 'Arrêter la dictée et transcrire'
+                  ? t('chat.dictee.arreterEtTranscrire')
                   : dicteeEtat === 'transcription'
-                    ? 'Transcription en cours'
+                    ? t('chat.dictee.transcription')
                     : dicteeInstallation
-                      ? 'Installation de la reconnaissance vocale en cours'
+                      ? t('chat.dictee.installation')
                       : dicteeInstallee === false
-                        ? DICTEE_NON_INSTALLEE
-                        : 'Dicter au micro'
+                        ? t('chat.dictee.nonInstallee')
+                        : t('chat.dictee.dicter')
               }
               title={
                 dicteeInstallation
-                  ? 'Installation de la reconnaissance vocale en cours'
+                  ? t('chat.dictee.installation')
                   : dicteeInstallee === false
-                  ? DICTEE_NON_INSTALLEE
+                  ? t('chat.dictee.nonInstallee')
                   : (dicteeErreur ??
                     (dicteeEtat === 'ecoute'
-                      ? 'Arrêter la dictée'
-                      : 'Dicter au micro (Whisper local)'))
+                      ? t('chat.dictee.arreter')
+                      : t('chat.dictee.dicterWhisper')))
               }
             >
               {dicteeInstallation ? (
@@ -865,7 +865,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 // Niveau brut ×4 : la parole normale vit vers 0,05-0,25 en valeur efficace, une
                 // barre à l'échelle 1 resterait plate et ne prouverait rien à l'oeil.
                 style={{ '--niveau': String(Math.min(1, dicteeNiveau * 4)) } as React.CSSProperties}
-                title={`Niveau du micro · volume ×${dicteeGain.toFixed(1)}`}
+                title={t('chat.dictee.niveau', { gain: dicteeGain.toFixed(1) })}
               >
                 <i aria-hidden="true" />
                 {/* Le réglage VIT SUR la barre verticale : curseur vertical transparent posé
@@ -887,8 +887,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       // Réglage non mémorisé : il vaut quand même pour la dictée en cours.
                     }
                   }}
-                  aria-label="Volume de capture du micro"
-                  title={`Volume de capture : ×${dicteeGain.toFixed(1)}`}
+                  aria-label={t('chat.dictee.volume')}
+                  title={t('chat.dictee.volumeTitre', { gain: dicteeGain.toFixed(1) })}
                 />
               </span>
             ) : null}
@@ -917,17 +917,21 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               }
               aria-label={
                 canResume
-                  ? 'Reprendre la réponse'
+                  ? t('chat.envoi.reprendreAria')
                   : props.busy
-                    ? 'Orienter l’agent sans l’interrompre'
-                    : 'Envoyer le message'
+                    ? t('chat.envoi.orienterAria')
+                    : t('chat.envoi.envoyerAria')
               }
             >
               <span className="composer-btn-glyph" aria-hidden="true">
                 {canResume ? '↻' : <IconeEnvoyer />}
               </span>
               <span className="composer-btn-label">
-                {canResume ? 'Reprendre' : props.busy ? 'Orienter' : 'Envoyer'}
+                {canResume
+                  ? t('chat.envoi.reprendre')
+                  : props.busy
+                    ? t('chat.envoi.orienter')
+                    : t('chat.envoi.envoyer')}
               </span>
             </button>
           </div>

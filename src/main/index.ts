@@ -22,6 +22,7 @@ import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
 import { registerCarteDesBesoinsIpc } from './ipc/carte-des-besoins'
+import { registerLangueIpc } from './ipc/langue'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
@@ -3168,6 +3169,8 @@ Le fil reprend ensuite normalement.`
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
+  // La langue de Settings · Interface (conv-1146) : l'agent répond dans celle qui est choisie.
+  registerLangueIpc()
   // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
   // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
   // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.

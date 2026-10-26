@@ -358,6 +358,9 @@ const api = {
   // Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090).
   setPaletteCarteFinDeTour: (palette: Record<string, string>): Promise<boolean> =>
     ipcRenderer.invoke('app:carte-fin-de-tour-palette', palette),
+  // La langue choisie dans Settings · Interface, pour la langue des réponses de l'agent (conv-1146).
+  setLangue: (langue: 'fr' | 'en'): Promise<'fr' | 'en'> =>
+    ipcRenderer.invoke('app:langue:ecrire', langue),
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{
     available: boolean

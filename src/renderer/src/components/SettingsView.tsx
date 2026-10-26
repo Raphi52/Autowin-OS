@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SettingsSection } from '../tabs'
+import { langueCourante } from '../langue'
+import { traduire, useTextes } from '../textes'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView, type CapabilityKind } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
@@ -46,6 +48,8 @@ export function SettingsView({
   onSectionChange: (section: SettingsSection) => void
 }): React.JSX.Element {
   const [preflight, setPreflight] = useState<PreflightResult>()
+  // Les textes suivent la langue de Settings · Interface, sans redémarrage (conv-1146).
+  const { t } = useTextes()
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [repairing, setRepairing] = useState<string | null>(null)
@@ -69,7 +73,7 @@ export function SettingsView({
     } catch {
       // Un diagnostic qui échoue ne doit JAMAIS être silencieux : l'utilisateur voit l'échec et
       // le bouton reste actionnable (finally) pour réessayer.
-      setError('Le diagnostic a échoué. Vérifiez la configuration puis réessayez.')
+      setError(traduire('settings.preflight.erreur', langueCourante()))
     } finally {
       setChecking(false)
     }
@@ -109,7 +113,7 @@ export function SettingsView({
     void (async () => {
       const load = window.api?.providerStatus
       if (typeof load !== 'function') {
-        if (alive) setProvidersError("L'état des providers n'est pas exposé par l'application.")
+        if (alive) setProvidersError(traduire('settings.providers.nonExpose', langueCourante()))
         return
       }
       try {
@@ -119,7 +123,7 @@ export function SettingsView({
           setProvidersError(null)
         }
       } catch {
-        if (alive) setProvidersError("La lecture de l'état des providers a échoué.")
+        if (alive) setProvidersError(traduire('settings.providers.echec', langueCourante()))
       }
     })()
     return () => {
@@ -138,7 +142,7 @@ export function SettingsView({
         setRepairDone(checkId)
       } catch {
         repairFailed = true
-        setError('La réparation a échoué. Suivez la consigne affichée puis réessayez.')
+        setError(traduire('settings.preflight.reparationEchec', langueCourante()))
       } finally {
         setRepairing(null)
         // Le re-diagnostic tranche : on n'affirme jamais qu'un prérequis est réparé.
@@ -180,21 +184,21 @@ export function SettingsView({
     { id: 'providers', label: 'Providers' },
     {
       id: 'routing',
-      label: 'Routage',
+      label: t('settings.section.routing'),
       anomaly: {
         count: providersExpires.length,
-        title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
+        title: t('settings.routing.anomalie', { liste: providersExpires.join(', ') }),
         testId: 'settings-anomaly-routing'
       }
     },
     { id: 'rules', label: 'Rules' },
     {
       id: 'preflight',
-      label: 'Diagnostic',
+      label: t('settings.section.preflight'),
       alert: {
         active: preflightAlert,
         mark: '!',
-        title: 'Un prérequis est en échec',
+        title: t('alerte.prerequis'),
         testId: 'settings-preflight-alert'
       }
     }
@@ -203,16 +207,16 @@ export function SettingsView({
   return (
     <section className="view-page domain-shell settings-view" data-testid="settings-view">
       <ViewTopBar
-        eyebrow="CONFIGURATION"
-        title="Settings"
-        description="Capacités accordées aux agents, comportement, apparence, providers et routage, règles d’Autowin OS et prérequis machine."
+        eyebrow={t('settings.eyebrow')}
+        title={t('settings.titre')}
+        description={t('settings.description')}
       />
       {/* LES SECTIONS EN LISTE À GAUCHE, comme les conversations du chat (conv-1109, 2026-10-23).
           Elles étaient une rangée de pastilles dans la barre du haut : avec huit sections, la rangée
           passait sur deux lignes et repoussait le contenu. Une colonne garde chaque nom sur sa ligne,
           et la section ouverte se repère comme la conversation ouverte. */}
       <div className="settings-body">
-        <nav className="settings-nav" aria-label="Sections Settings">
+        <nav className="settings-nav" aria-label={t('settings.nav')}>
           {sections.map((tab) => (
             <button
               key={tab.id}
@@ -245,7 +249,7 @@ export function SettingsView({
             <section className="settings-providers surface-panel" aria-label="Providers">
               <header>
                 <div>
-                  <span className="domain-eyebrow">Fournisseurs</span>
+                  <span className="domain-eyebrow">{t('settings.providers.eyebrow')}</span>
                   <h2>Providers</h2>
                 </div>
               </header>
@@ -257,13 +261,13 @@ export function SettingsView({
                     className="btn"
                     onClick={() => setProvidersReload((token) => token + 1)}
                   >
-                    Réessayer
+                    {t('settings.providers.reessayer')}
                   </button>
                 </div>
               )}
               {providersLoading && (
                 <p role="status">
-                  <Spinner /> Chargement des providers…
+                  <Spinner /> {t('settings.providers.chargement')}
                 </p>
               )}
               {!providersLoading &&
@@ -279,19 +283,19 @@ export function SettingsView({
                     ))}
                   </ul>
                 ) : (
-                  <p>Aucun provider n&apos;est exposé par l&apos;application.</p>
+                  <p>{t('settings.providers.aucun')}</p>
                 ))}
               <p className="domain-hint">
-                Lecture seule : la configuration (connexion, test, mode) se pilote depuis l’onglet{' '}
+                {t('settings.providers.aide.avant')}{' '}
                 <button
                   type="button"
                   className="domain-link"
                   data-testid="settings-open-router"
                   onClick={() => onSectionChange('routing')}
                 >
-                  Routage
+                  {t('settings.section.routing')}
                 </button>
-                .
+                {t('settings.providers.aide.apres')}
               </p>
             </section>
           )}
@@ -308,12 +312,12 @@ export function SettingsView({
           {section === 'preflight' && (
             <section
               className="settings-preflight surface-panel"
-              aria-label="Diagnostic de configuration"
+              aria-label={t('settings.preflight.aria')}
             >
               <header>
                 <div>
-                  <span className="domain-eyebrow">Configuration locale</span>
-                  <h2>Diagnostic de démarrage</h2>
+                  <span className="domain-eyebrow">{t('settings.preflight.eyebrow')}</span>
+                  <h2>{t('settings.preflight.titre')}</h2>
                 </div>
                 <button
                   type="button"
@@ -321,7 +325,9 @@ export function SettingsView({
                   onClick={() => void recheck()}
                   disabled={checking}
                 >
-                  {checking ? 'Vérification…' : 'Relancer le diagnostic'}
+                  {checking
+                    ? t('settings.preflight.verification')
+                    : t('settings.preflight.relancer')}
                 </button>
               </header>
               {error && (
@@ -331,11 +337,11 @@ export function SettingsView({
               )}
               {repairDone && (
                 <p className="domain-ok" role="status" data-testid="settings-repair-status">
-                  Réparation effectuée pour « {repairDone} » : le diagnostic a été relancé.
+                  {t('settings.preflight.reparee', { id: repairDone })}
                 </p>
               )}
               {!preflight ? (
-                <p>Relance le même contrôle que l’onboarding, à tout moment.</p>
+                <p>{t('settings.preflight.intro')}</p>
               ) : (
                 <>
                   <p className={preflight.ok ? 'domain-ok' : 'domain-warning'}>
@@ -370,7 +376,7 @@ export function SettingsView({
                               void window.api?.openFolder?.(check.revealPath as string)
                             }
                           >
-                            Ouvrir le dossier
+                            {t('settings.preflight.ouvrirDossier')}
                           </button>
                         )}
                         {!check.ok && REPARABLES.has(check.id) && (
@@ -381,7 +387,9 @@ export function SettingsView({
                             onClick={() => void repair(check.id)}
                             disabled={repairing !== null || checking}
                           >
-                            {repairing === check.id ? 'Réparation…' : 'Réparer'}
+                            {repairing === check.id
+                              ? t('settings.preflight.reparation')
+                              : t('settings.preflight.reparer')}
                           </button>
                         )}
                       </li>

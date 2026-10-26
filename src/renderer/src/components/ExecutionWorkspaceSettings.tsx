@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ExecutionWorkspaceState } from '../../../shared/preload-contracts'
+import { langueCourante } from '../langue'
+import { traduire, useTextes } from '../textes'
 
 /**
  * Voir et changer le DOSSIER DE TRAVAIL : le dépôt sur lequel les runs s'exécutent.
@@ -11,6 +13,9 @@ import type { ExecutionWorkspaceState } from '../../../shared/preload-contracts'
  * partout) : un nouveau choix ne prend donc effet qu'au redémarrage, et l'écran le DIT.
  */
 export function ExecutionWorkspaceSettings(): React.JSX.Element {
+  // Textes dans la langue de Settings · Interface (conv-1146, réparation 3 : la page Diagnostic était
+  // annoncée traduite alors que ce panneau restait en français).
+  const { t } = useTextes()
   const [state, setState] = useState<ExecutionWorkspaceState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -20,7 +25,7 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
       setState(await window.api.executionWorkspace())
       setError(null)
     } catch {
-      setError('Impossible de lire le dossier de travail.')
+      setError(traduire('dossierTravail.erreurLecture', langueCourante()))
     }
   }, [])
 
@@ -36,7 +41,7 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
       setState(await action())
       setError(null)
     } catch {
-      setError('Le changement de dossier a échoué. Réessaie.')
+      setError(traduire('dossierTravail.erreurChangement', langueCourante()))
     } finally {
       setBusy(false)
     }
@@ -45,13 +50,13 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
   return (
     <section
       className="settings-execution-workspace surface-panel"
-      aria-label="Dossier de travail"
+      aria-label={t('dossierTravail.titre')}
       data-testid="execution-workspace"
     >
       <header>
         <div>
-          <span className="domain-eyebrow">Configuration locale</span>
-          <h2>Dossier de travail</h2>
+          <span className="domain-eyebrow">{t('settings.preflight.eyebrow')}</span>
+          <h2>{t('dossierTravail.titre')}</h2>
         </div>
         <button
           type="button"
@@ -60,10 +65,10 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
           data-testid="execution-workspace-choose"
           onClick={() => void run(() => window.api.chooseExecutionWorkspace())}
         >
-          {busy ? 'Enregistrement…' : 'Changer de dossier'}
+          {busy ? t('diagnostic.enregistrement') : t('dossierTravail.changer')}
         </button>
       </header>
-      <p>Le dépôt sur lequel Autowin travaille, celui que lisent et modifient les agents.</p>
+      <p>{t('dossierTravail.description')}</p>
       {error && (
         <p className="domain-warning" role="alert">
           {error}
@@ -72,16 +77,16 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
       {state && (
         <>
           <p data-testid="execution-workspace-active">
-            Actif : <code>{state.path}</code>
+            {t('diagnostic.actif')} <code>{state.path}</code>
           </p>
           {!state.isGitRepo && (
             <p className="domain-warning" data-testid="execution-workspace-no-git">
-              Ce dossier n’est pas un dépôt git : les copies de travail isolées sont désactivées.
+              {t('dossierTravail.pasGit')}
             </p>
           )}
           {state.chosen && (
             <p data-testid="execution-workspace-chosen">
-              Choisi : <code>{state.chosen}</code>{' '}
+              {t('diagnostic.choisi')} <code>{state.chosen}</code>{' '}
               <button
                 type="button"
                 className="btn btn-sm"
@@ -89,13 +94,13 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
                 data-testid="execution-workspace-reset"
                 onClick={() => void run(() => window.api.resetExecutionWorkspace())}
               >
-                Revenir à la détection automatique
+                {t('diagnostic.revenirAuto')}
               </button>
             </p>
           )}
           {state.restartRequired && (
             <p className="domain-warning" role="status" data-testid="execution-workspace-restart">
-              Redémarre Autowin pour que ce dossier devienne actif.
+              {t('dossierTravail.redemarrer')}
             </p>
           )}
         </>

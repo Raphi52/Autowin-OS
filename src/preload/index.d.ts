@@ -293,6 +293,8 @@ interface ChatApi {
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
   setPaletteCarteFinDeTour: (palette: Record<string, string>) => Promise<boolean>
+  /** La langue choisie dans Settings · Interface ; rend celle que le moteur a enregistrée (conv-1146). */
+  setLangue: (langue: 'fr' | 'en') => Promise<'fr' | 'en'>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsView } from './SettingsView'
 import { THEMES, THEME_MODE_STORAGE_KEY } from '../theme-mode'
+import { LANGUE_STORAGE_KEY, appliquerLangue } from '../langue'
 
 vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
@@ -158,5 +159,122 @@ describe('Settings · Interface — cercle du changement de thème', () => {
 
     await act(async () => fins[0]())
     expect(racine.classList.contains('theme-en-transition')).toBe(false)
+  })
+})
+
+/**
+ * LA LISTE « LANGUE » (conv-1146, 2026-10-26, « basculer autowin OS en full anglais »). Entrée qui
+ * doit faire échouer ce bloc : une liste qui ne change pas les textes sans redémarrage, un choix non
+ * mémorisé, un envoi au moteur à chaque ouverture de l'écran, ou le français par défaut qui bouge.
+ */
+describe('Settings · Interface — langue', () => {
+  const recus: string[] = []
+  const g = globalThis as { api?: unknown }
+
+  beforeEach(() => {
+    recus.length = 0
+    appliquerLangue('fr')
+    g.api = { setLangue: (l: string) => (recus.push(l), Promise.resolve(l)) }
+  })
+  afterEach(() => {
+    delete g.api
+    appliquerLangue('fr')
+  })
+
+  const choisir = async (liste: HTMLSelectElement, valeur: string) => {
+    await act(async () => {
+      liste.value = valeur
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  it('français par défaut : la liste propose Français et English, les textes restent français', async () => {
+    const container = await monter()
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-langue"]')!
+    expect(liste.value).toBe('fr')
+    expect([...liste.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['fr', 'Français'],
+      ['en', 'English']
+    ])
+    expect(container.querySelector('h2')?.textContent).toBe('Interface')
+    expect(container.textContent).toContain('Apparence')
+    expect(container.textContent).toContain('Ce qui ne suit pas encore.')
+    expect(recus).toEqual([])
+  })
+
+  it('choisir English traduit tout de suite Settings, mémorise le choix et le transmet au moteur', async () => {
+    const container = await monter()
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-langue"]')!
+    await choisir(liste, 'en')
+
+    expect(localStorage.getItem(LANGUE_STORAGE_KEY)).toBe('en')
+    expect(document.documentElement.getAttribute('lang')).toBe('en')
+    expect(recus).toEqual(['en'])
+    // L'écran ouvert, sans redémarrage : en-tête, réglages, réserve et sections de Settings.
+    expect(container.textContent).toContain('Appearance')
+    expect(container.textContent).toContain('What does not follow yet.')
+    expect(container.textContent).not.toContain('Apparence')
+    const theme = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
+    expect([...theme.options].find((o) => o.value === 'nebuleuse-verre')?.textContent).toBe(
+      'Holographic'
+    )
+    const sections = [...container.querySelectorAll('.settings-nav-item')].map((b) => b.textContent)
+    expect(sections).toContain('Routing')
+    expect(sections).toContain('Diagnostics')
+    expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe('Settings sections')
+    // Les gras de la phrase sont gardés en anglais aussi.
+    expect(container.querySelector('[data-testid="interface-reserve"] strong')?.textContent).toBe(
+      'What does not follow yet.'
+    )
+  })
+
+  it('rouvrir l’écran ou redire la même langue ne renvoie rien au moteur', async () => {
+    localStorage.setItem(LANGUE_STORAGE_KEY, 'en')
+    appliquerLangue('en')
+    const container = await monter()
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-langue"]')!
+    expect(liste.value).toBe('en')
+    await choisir(liste, 'en')
+    expect(recus).toEqual([])
+
+    await choisir(liste, 'fr')
+    expect(recus).toEqual(['fr'])
+    expect(container.textContent).toContain('Apparence')
+    expect(localStorage.getItem(LANGUE_STORAGE_KEY)).toBe('fr')
+  })
+
+  /**
+   * L'ÉCHEC D'ENVOI SE VOIT (conv-1146, réparation après le contrôle final). Avant, un refus du
+   * moteur était avalé : l'écran passait en anglais, l'agent répondait en français, rien ne le
+   * disait. Entrée qui doit faire échouer ce cas : un refus sans avertissement à l'écran, ou un
+   * avertissement qui reste après un envoi réussi.
+   */
+  it('le moteur refuse la langue : l’écran le dit, et Réessayer l’efface quand l’envoi passe', async () => {
+    let refuser = true
+    g.api = {
+      setLangue: (l: string) => (
+        recus.push(l),
+        refuser ? Promise.reject(new Error('canal absent')) : Promise.resolve(l)
+      )
+    }
+    const container = await monter()
+    const echec = () => container.querySelector('[data-testid="interface-langue-echec"]')
+    expect(echec()).toBeNull()
+
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-langue"]')!
+    await choisir(liste, 'en')
+    expect(echec()?.querySelector('[role="alert"]')?.textContent).toContain(
+      'The agent did not receive this choice.'
+    )
+    expect(echec()?.textContent).toContain('canal absent')
+    // L'écran garde le choix : seul l'agent ne le suit pas encore.
+    expect(container.textContent).toContain('Appearance')
+
+    refuser = false
+    const reessayer = echec()!.querySelector('button')!
+    expect(reessayer.textContent).toBe('Retry')
+    await act(async () => reessayer.click())
+    expect(recus).toEqual(['en', 'en'])
+    expect(echec()).toBeNull()
   })
 })
