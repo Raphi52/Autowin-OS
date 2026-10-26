@@ -6,6 +6,7 @@ import App from './App'
 import { surveillerGelsRenderer } from './gel-renderer'
 import { detailDeGelPourVue, vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
+import { appliquerLangue, lireLangue, transmettreLangueAuMoteur } from './langue'
 import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
 
@@ -14,6 +15,15 @@ import { installerAnimationsParCrans } from './animations-par-crans'
  * clignoterait en sombre le temps d'une image à chaque démarrage.
  */
 appliquerThemeMode(lireThemeMode())
+
+/*
+ * La langue aussi, AVANT le premier rendu (conv-1146) : posée après, l'écran s'afficherait une image
+ * en français avant de basculer. Le moteur la reçoit une fois ici — une instance neuve ou un dossier
+ * de données recréé ne la connaît pas encore — puis à chaque changement dans Settings · Interface.
+ */
+const langueAuDemarrage = lireLangue()
+appliquerLangue(langueAuDemarrage)
+void transmettreLangueAuMoteur(langueAuDemarrage)
 
 /*
  * Un Ctrl+C collé dans Gmail emportait le fond sombre de l'app, en bandes noires (conv-1073) :

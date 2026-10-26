@@ -1,3 +1,6 @@
+import { LANGUES } from '../../../shared/langue'
+import { ecrireLangue, transmettreLangueAuMoteur, useEchecEnvoiLangue } from '../langue'
+import { nomDeTheme, riche, useTextes } from '../textes'
 import { useEffect, useState } from 'react'
 import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
 import { basculerTheme } from '../transition-de-vue'
@@ -31,6 +34,10 @@ const NB_MALVOYANT = THEMES.filter((t) => t.id.startsWith('malvoyant')).length
 
 export function InterfaceView(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
+  // Les textes suivent la langue choisie juste au-dessus, sans redémarrage (conv-1146).
+  const { langue, t } = useTextes()
+  // L'envoi au moteur qui a échoué se DIT ici, au lieu d'être avalé (conv-1146, contrôle final).
+  const echecLangue = useEchecEnvoiLangue()
 
   // Le thème mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
   // l'écran affiché reste d'accord avec la liste.
@@ -39,30 +46,72 @@ export function InterfaceView(): React.JSX.Element {
   }, [theme])
 
   return (
-    <section className="interface-view surface-panel" aria-label="Interface">
+    <section className="interface-view surface-panel" aria-label={t('interface.titre')}>
       <header>
         <div>
-          <span className="domain-eyebrow">Apparence</span>
-          <h2>Interface</h2>
+          <span className="domain-eyebrow">{t('interface.eyebrow')}</span>
+          <h2>{t('interface.titre')}</h2>
         </div>
       </header>
+      {/* LA LANGUE (conv-1146, 2026-10-26, « basculer autowin OS en full anglais »). Le choix part du
+          `change` de la liste, jamais d'un effet : rouvrir cet écran ne renvoie rien au moteur. */}
       <div className="interface-row">
         <div className="interface-row-text">
-          <strong>Thème</strong>
+          <strong>{t('interface.langue')}</strong>
+          <p>{riche(t('interface.langue.description'))}</p>
+          <p data-testid="interface-langue-couverture">{riche(t('interface.langue.couverture'))}</p>
+          {echecLangue && (
+            <div className="domain-warning" data-testid="interface-langue-echec">
+              <p role="alert">
+                {riche(t('interface.langue.echec'))} <code>{echecLangue.raison}</code>
+              </p>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void transmettreLangueAuMoteur(langue)}
+              >
+                {t('interface.langue.reessayer')}
+              </button>
+            </div>
+          )}
+        </div>
+        <label className="interface-theme-choix">
+          <span className="interface-theme-label">{t('interface.langue')}</span>
+          <select
+            className="interface-theme-select select"
+            value={langue}
+            aria-label={t('interface.langue')}
+            data-testid="interface-langue"
+            onChange={(e) => ecrireLangue(e.target.value)}
+          >
+            {LANGUES.map((l) => (
+              <option key={l.id} value={l.id} lang={l.id}>
+                {l.libelle}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="interface-row">
+        <div className="interface-row-text">
+          <strong>{t('interface.theme')}</strong>
           <p>
-            L’apparence de l’application : <strong>{NB_THEMES} thèmes</strong>, {NB_SOMBRES} sombres
-            et {NB_CLAIRS} clairs, dont {NB_MALVOYANT} <strong>Spécial malvoyant</strong> à très
-            fort contraste. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas
-            ne voit rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
-            redémarrage.
+            {riche(
+              t('interface.theme.description', {
+                nbThemes: NB_THEMES,
+                nbSombres: NB_SOMBRES,
+                nbClairs: NB_CLAIRS,
+                nbMalvoyant: NB_MALVOYANT
+              })
+            )}
           </p>
         </div>
         <label className="interface-theme-choix">
-          <span className="interface-theme-label">Thème</span>
+          <span className="interface-theme-label">{t('interface.theme')}</span>
           <select
             className="interface-theme-select select"
             value={theme}
-            aria-label="Thème"
+            aria-label={t('interface.theme')}
             data-testid="interface-theme"
             onChange={(e) => {
               // LE CERCLE PART D'ICI, et seulement d'ici (conv-981, 2026-10-16) : l'effet plus haut
@@ -83,28 +132,20 @@ export function InterfaceView(): React.JSX.Element {
               )
             }}
           >
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.libelle}
+            {THEMES.map((th) => (
+              <option key={th.id} value={th.id}>
+                {nomDeTheme(th.id, th.libelle, langue)}
               </option>
             ))}
           </select>
         </label>
       </div>
       <p className="interface-reserve" data-testid="interface-zoom">
-        <strong>Pour agrandir tout l’écran</strong> (utile avec les thèmes Spécial malvoyant) :
-        Ctrl + molette, ou Ctrl + « + » / Ctrl + « - ». Ctrl + 0 revient à la taille normale.
+        {riche(t('interface.zoom'))}
       </p>
-      <p className="interface-reserve">
-        <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
-        l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
-        <strong>Accueil</strong>, <strong>Observatory</strong> et <strong>Agent Studio</strong>.
-        Quatre endroits gardent leurs couleurs sombres quel que soit le thème, parce qu’ils les
-        peignent en dur : la <strong>toile du graphe Memory</strong> (ses étiquettes et son bandeau
-        d’avertissement), la vue <strong>topologie</strong> des agents, le bandeau{' '}
-        <strong>Runtime actuel</strong> au bas de l’Agent Studio, et le{' '}
-        <strong>décor animé du fond</strong>. Constaté à l’écran le 7 septembre 2026 sous un thème
-        clair.
+      {/* Le texte de la réserve vit dans `textes.ts` ; son test mesure le CSS et lit cette clé. */}
+      <p className="interface-reserve" data-testid="interface-reserve">
+        {riche(t('interface.reserve'))}
       </p>
     </section>
   )

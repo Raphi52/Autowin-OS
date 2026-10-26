@@ -43,6 +43,7 @@ import {
 } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import { blocProfilUtilisateur } from './profil-utilisateur'
+import { blocLangueDeReponse } from './langue-reglage'
 import { lireLigneDErreur } from '../shared/erreur-d-action'
 import { avertirSiLeconNonRetenue, ecritUnFichierDeMemoire } from './lecon-non-retenue'
 import {
@@ -1721,7 +1722,10 @@ export class AgentPilot {
             // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
             {
               name: 'projectContext',
-              text: this.projectContext(conversationId) + blocProfilUtilisateur()
+              text:
+                this.projectContext(conversationId) +
+                blocProfilUtilisateur() +
+                blocLangueDeReponse()
             },
             /**
              * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
