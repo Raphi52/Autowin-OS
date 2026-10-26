@@ -24,6 +24,11 @@ import {
  * SUPER CONVERSATION (conv-1150, 2026-10-26) — le plan de lots d'un fil chef, calcul pur.
  * Cas limites du cadrage : vide, un seul lot, mal typé, hors bornes, répété, fichiers partagés,
  * fin en double, fin hors plan, quota, plafond, redémarrage.
+ *
+ * fix-ok: conv-1150 (2026-10-26) — les ajouts au bloc « redémarrage » suivent des causes mesurées
+ * dans plan-de-lots.ts, rouge puis vert : `noterFinDeTour` refusait la fin d'un lot `interrompu`
+ * (garde `etat !== 'en-cours'`), `lotsAPartir`/`reprendrePlan` ignoraient un fil encore occupé
+ * (5 rouges), et un agent mort avec l'app comptait comme une fin (2 rouges, d'où `perdu`).
  */
 
 const lot = (n: number, fichiers: string[] = [`src/ecran-${n}.tsx`]): Record<string, unknown> => ({

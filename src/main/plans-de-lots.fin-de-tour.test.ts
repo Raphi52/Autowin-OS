@@ -24,6 +24,13 @@ import type { IssueDuTour } from '../shared/plan-de-lots'
  * `suivreLaFinDuTour`, vrai coordinateur, composés comme `index.ts` les compose (garde de source
  * en bas). Seul le corps du tour est faux : il s'enregistre dans le registre comme le vrai tour
  * (`set` au départ, `delete` dans son `finally`) puis attend qu'on le finisse. Aucun modèle appelé.
+ *
+ * fix-ok: conv-1150 (2026-10-26) — chaque édition de ce fichier suit une cause mesurée, rouge puis
+ * vert : (1) fin annoncée dans `trackPreparation` → chef jamais réveillé (4 rouges sur 4) ; (2) le
+ * faux `lancer` rendait un `turnId` alors que le vrai `lancerSansAttendre`
+ * (chat/lancer-sans-attendre.ts:42) rend `{ ok: true }` sans identifiant ; (3) reprise après
+ * redémarrage annoncée avant `activeChatTurns.delete(recoveryController)` → réveil du chef repris
+ * perdu (contre-épreuve rouge) ; (4) retrait d'un forçage `as unknown as`, sans effet sur le test.
  */
 
 const laisserFiler = async (): Promise<void> => {
