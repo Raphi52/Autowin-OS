@@ -39,6 +39,11 @@ export type StatutDuPlan =
   | 'termine'
   | 'suspendu-quota'
   | 'plafond-atteint'
+  /**
+   * Plus rien ne tourne et les lots restants attendent un lot en échec (« apres »). Distinct de
+   * « plafond atteint » : ici la relance du lot fautif reste permise (conv-1151, lot 2).
+   */
+  | 'bloque'
   | 'interrompu'
   | 'arrete'
   | 'refuse'
@@ -50,6 +55,11 @@ export interface LotDuPlan {
   titre: string
   demande: string
   fichiers: string[]
+  /**
+   * Rangs des lots qui doivent être FAITS avant que celui-ci parte (conv-1151, lot 2). Facultatif :
+   * un plan écrit sur disque avant ce champ n'en porte pas.
+   */
+  apres?: number[]
   etat: EtatDuLot
   /** Le fil enfant ouvert pour ce lot (gardé à la relance). */
   fil?: string
@@ -82,7 +92,8 @@ export interface PlanLu {
   titre: string
   parallele: number
   plafondTours: number
-  lots: Array<{ titre: string; demande: string; fichiers: string[] }>
+  /** `apres` : rangs triés, sans doublon, déjà vérifiés (existants, pas soi-même, sans cycle). */
+  lots: Array<{ titre: string; demande: string; fichiers: string[]; apres: number[] }>
 }
 
 export type LecturePlan =
@@ -102,6 +113,7 @@ export const LIBELLE_STATUT: Record<StatutDuPlan, string> = {
   termine: 'terminé',
   'suspendu-quota': 'suspendu : limite de quota',
   'plafond-atteint': 'arrêté : plafond de tours atteint',
+  bloque: 'bloqué : un lot attendu a échoué',
   interrompu: 'interrompu par un redémarrage',
   arrete: 'arrêté',
   refuse: 'refusé',
@@ -112,6 +124,47 @@ export const libelleEtat = (etat: EtatDuLot): string => LIBELLE_ETAT[etat]
 
 const pluriel = (n: number, mot: string, motPluriel = `${mot}s`): string =>
   `${n} ${n > 1 ? motPluriel : mot}`
+
+/** « le lot 2 », « les lots 2 et 3 », « les lots 2, 3 et 5 ». */
+const listeDeLots = (rangs: readonly number[]): string =>
+  rangs.length === 1
+    ? `le lot ${rangs[0]}`
+    : `les lots ${rangs.slice(0, -1).join(', ')} et ${rangs[rangs.length - 1]}`
+
+/** Les prérequis d'un lot ; un plan écrit sur disque avant « apres » n'en a pas. */
+const prerequisDe = (lot: LotDuPlan): readonly number[] =>
+  Array.isArray(lot.apres) ? lot.apres : []
+
+/**
+ * Le premier cycle de dépendances, commencé au plus petit rang qu'il traverse, ou `undefined`.
+ * `apresParRang[i]` : les prérequis du lot `i + 1`, déjà bornés aux rangs existants.
+ */
+function premierCycle(apresParRang: readonly (readonly number[])[]): number[] | undefined {
+  const etat = new Map<number, 'ouvert' | 'clos'>()
+  const pile: number[] = []
+  const visiter = (rang: number): number[] | undefined => {
+    etat.set(rang, 'ouvert')
+    pile.push(rang)
+    for (const r of apresParRang[rang - 1] ?? []) {
+      if (etat.get(r) === 'ouvert') return pile.slice(pile.indexOf(r))
+      if (!etat.has(r)) {
+        const cycle = visiter(r)
+        if (cycle) return cycle
+      }
+    }
+    pile.pop()
+    etat.set(rang, 'clos')
+    return undefined
+  }
+  for (let rang = 1; rang <= apresParRang.length; rang++) {
+    if (etat.has(rang)) continue
+    const cycle = visiter(rang)
+    if (!cycle) continue
+    const debut = cycle.indexOf(Math.min(...cycle))
+    return [...cycle.slice(debut), ...cycle.slice(0, debut)]
+  }
+  return undefined
+}
 
 /** Deux écritures d'un même chemin (casse, `\`, `./`) désignent le même fichier sous Windows. */
 export function normaliserChemin(chemin: string): string {
@@ -176,11 +229,35 @@ export function lirePlanDeLots(brut: unknown): LecturePlan {
         return refus(`lot ${rang} : ${l.fichiers.length} fichiers, ${FICHIERS_MAX} au plus.`)
       fichiers = (l.fichiers as string[]).map((f) => f.trim())
     }
+    // Une clé accentuée serait ignorée en silence : les lots partiraient sans attendre.
+    if ('après' in l)
+      return refus(`lot ${rang} : « après » — écris la clé sans accent : « apres ».`)
+    let apres: number[] = []
+    if (l.apres !== undefined) {
+      if (!Array.isArray(l.apres) || l.apres.some((r) => !Number.isInteger(r)))
+        return refus(`lot ${rang} : apres — liste de numéros de lots attendue (ex. [1, 2]).`)
+      for (const r of l.apres as number[]) {
+        if (r === rang)
+          return refus(`lot ${rang} : apres — un lot ne peut pas s’attendre lui-même.`)
+        if (r < 1 || r > n)
+          return refus(`lot ${rang} : apres — le lot ${r} n’existe pas (le plan a ${n} lots).`)
+      }
+      apres = [...new Set(l.apres as number[])].sort((a, b) => a - b)
+    }
     const titre =
       typeof l.titre === 'string'
         ? l.titre.trim().slice(0, TITRE_MAX)
         : (demande.split('\n')[0] ?? '').slice(0, 60)
-    lots.push({ titre, demande, fichiers })
+    lots.push({ titre, demande, fichiers, apres })
+  }
+  const cycle = premierCycle(lots.map((l) => l.apres))
+  if (cycle) {
+    const chaine = cycle
+      .map((r, i) => `${i === 0 ? `${r} attend` : 'qui attend'} ${cycle[(i + 1) % cycle.length]}`)
+      .join(', ')
+    return refus(
+      `lot ${cycle[0]} : apres crée un cycle (${chaine}) : ces lots s’attendraient sans fin.`
+    )
   }
 
   const avertissements: string[] = []
@@ -225,7 +302,11 @@ export function empreintePlan(plan: PlanLu): string {
     plan.titre,
     plan.parallele,
     plan.plafondTours,
-    plan.lots.map((l) => [l.titre, l.demande, l.fichiers.map(normaliserChemin)])
+    plan.lots.map((l) => {
+      const base = [l.titre, l.demande, l.fichiers.map(normaliserChemin)]
+      // Sans dépendance, l'empreinte reste celle d'avant « apres » : un plan sur disque garde sa clé.
+      return l.apres.length ? [...base, l.apres] : base
+    })
   ])
   let h = 0x811c9dc5
   for (let i = 0; i < texte.length; i++) {
@@ -250,7 +331,13 @@ export function creerPlan(
     statut: 'attente-accord',
     avertissements: opts.avertissements ?? [],
     creeLe: opts.maintenant,
-    lots: lu.lots.map((l, i) => ({ ...l, fichiers: [...l.fichiers], rang: i + 1, etat: 'a-faire' }))
+    lots: lu.lots.map((l, i) => ({
+      ...l,
+      fichiers: [...l.fichiers],
+      apres: [...l.apres],
+      rang: i + 1,
+      etat: 'a-faire'
+    }))
   }
 }
 
@@ -292,8 +379,9 @@ export function decisionDeDepot(
 
 /**
  * Les lots qui peuvent partir MAINTENANT, dans l'ordre du plan : places libres (parallélisme),
- * budget de tours restant, et aucun fichier annoncé en commun avec un lot en cours. Un lot bloqué
- * par un fichier laisse passer le suivant qui est libre.
+ * budget de tours restant, tous les prérequis (« apres ») faits, et aucun fichier annoncé en commun
+ * avec un lot en cours. Un lot bloqué par un fichier ou un prérequis laisse passer le suivant qui
+ * est libre, sans prendre de place ni réserver ses fichiers.
  *
  * `filOccupe` : un lot qui repart dans SON fil (relance, reprise) attend tant qu'un tour y tourne,
  * sans prendre de place. Sinon un agent repris après un redémarrage et un nouvel agent écriraient
@@ -305,10 +393,12 @@ export function lotsAPartir(plan: PlanDeLots, filOccupe?: (fil: string) => boole
   let places = plan.parallele - enCours.length
   let budget = plan.plafondTours - plan.toursLances
   const pris = new Set(enCours.flatMap((l) => l.fichiers.map(normaliserChemin)))
+  const etats = new Map(plan.lots.map((l) => [l.rang, l.etat]))
   const partants: number[] = []
   for (const lot of plan.lots) {
     if (places <= 0 || budget <= 0) break
     if (lot.etat !== 'a-faire') continue
+    if (prerequisDe(lot).some((r) => etats.get(r) !== 'fait')) continue
     if (lot.fil && filOccupe?.(lot.fil)) continue
     const fichiers = lot.fichiers.map(normaliserChemin)
     if (fichiers.some((f) => pris.has(f))) continue
@@ -350,18 +440,62 @@ export function noterTourDuLot(plan: PlanDeLots, rang: number, tour: string): Pl
   return avecLot(plan, rang, { tour })
 }
 
-/** Recalcule le statut d'un plan en cours : terminé, ou arrêté par le plafond. */
+/**
+ * Les lots en échec (ou interrompus) qui retiennent des lots à faire, directement ou par une
+ * chaîne de prérequis eux-mêmes à faire — chacun avec les rangs qu'il bloque, dans l'ordre du plan.
+ */
+function blocagesParPrerequis(plan: PlanDeLots): Array<{ lot: LotDuPlan; bloques: number[] }> {
+  const parRang = new Map(plan.lots.map((l) => [l.rang, l]))
+  const bloques = new Map<number, { lot: LotDuPlan; rangs: Set<number> }>()
+  for (const lot of plan.lots) {
+    if (lot.etat !== 'a-faire') continue
+    // `vus` borne la remontée : un plan abîmé sur disque peut porter un cycle.
+    const vus = new Set<number>()
+    const remonter = (courant: LotDuPlan): void => {
+      for (const r of prerequisDe(courant)) {
+        const p = parRang.get(r)
+        if (!p || vus.has(r)) continue
+        vus.add(r)
+        if (p.etat === 'echec' || p.etat === 'interrompu') {
+          const b = bloques.get(r) ?? { lot: p, rangs: new Set<number>() }
+          b.rangs.add(lot.rang)
+          bloques.set(r, b)
+        } else if (p.etat === 'a-faire') remonter(p)
+      }
+    }
+    remonter(lot)
+  }
+  return [...bloques.values()]
+    .sort((a, b) => a.lot.rang - b.lot.rang)
+    .map((b) => ({ lot: b.lot, bloques: [...b.rangs].sort((x, y) => x - y) }))
+}
+
+/**
+ * Recalcule le statut d'un plan en cours : terminé, bloqué par un prérequis en échec, ou arrêté par
+ * le plafond. Le plafond épuisé prime : aucune relance n'y est possible.
+ */
 function statutApres(plan: PlanDeLots): PlanDeLots {
   if (plan.statut !== 'en-cours') return plan
   const enCours = plan.lots.some((l) => l.etat === 'en-cours')
   const restants = plan.lots.filter((l) => l.etat === 'a-faire').length
   if (!enCours && restants === 0) return { ...plan, statut: 'termine', raison: undefined }
-  if (!enCours && lotsAPartir(plan).length === 0)
+  if (!enCours && lotsAPartir(plan).length === 0) {
+    // Sans ce cas, un prérequis en échec faisait tomber le plan en « plafond atteint », où la
+    // relance du lot fautif est refusée (conv-1151, lot 2).
+    const blocages = plan.toursLances < plan.plafondTours ? blocagesParPrerequis(plan) : []
+    if (blocages.length) {
+      const qui = blocages.map(
+        (b) => `le lot ${b.lot.rang} (${LIBELLE_ETAT[b.lot.etat]}) bloque ${listeDeLots(b.bloques)}`
+      )
+      const relance = `relance-${blocages.length > 1 ? 'les' : 'le'} avec plan_de_lots (action « relancer »)`
+      return { ...plan, statut: 'bloque', raison: `${qui.join(' ; ')} — ${relance}.` }
+    }
     return {
       ...plan,
       statut: 'plafond-atteint',
       raison: `plafond de ${plan.plafondTours} tours atteint : ${pluriel(restants, 'lot restant', 'lots restants')}.`
     }
+  }
   return plan
 }
 
@@ -544,7 +678,8 @@ export function reprendrePlan(
 
 /**
  * Relance d'un lot en échec ou interrompu, demandée par le chef. Elle consomme un tour du plafond.
- * Refusée sur un plan suspendu par le quota : seul l'utilisateur reprend après la limite.
+ * Refusée sur un plan suspendu par le quota : seul l'utilisateur reprend après la limite. Permise
+ * sur un plan BLOQUÉ : relancer le lot fautif est la seule sortie, ses dépendants suivront.
  */
 export function relancerLot(
   plan: PlanDeLots,
@@ -559,7 +694,7 @@ export function relancerLot(
       erreur:
         'plan suspendu par la limite de quota : seul l’utilisateur le reprend (bouton « Reprendre » du tableau).'
     }
-  if (!['en-cours', 'termine'].includes(plan.statut))
+  if (!['en-cours', 'termine', 'bloque'].includes(plan.statut))
     return { ok: false, erreur: `plan ${LIBELLE_STATUT[plan.statut]} : relance impossible.` }
   if (lot.etat !== 'echec' && lot.etat !== 'interrompu')
     return { ok: false, erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : rien à relancer.` }

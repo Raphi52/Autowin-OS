@@ -7,9 +7,11 @@ import {
   compteRenduDuLot,
   creerPlan,
   decisionDeDepot,
+  empreintePlan,
   interrompreAuDemarrage,
   lirePlanDeLots,
   lotsAPartir,
+  marquerEchec,
   marquerLance,
   noterFinDeTour,
   promptDeReveil,
@@ -530,6 +532,159 @@ describe('redémarrage : lot dont l’agent a survécu', () => {
     if (!relance.ok) return
     expect(lotsAPartir(relance.plan, occupe(['conv-110']))).toEqual([])
     expect(statutApresLancements(relance.plan).statut).toBe('en-cours')
+  })
+})
+
+/*
+ * DÉPENDANCE EXPLICITE « apres » (conv-1151, lot 2 du plan « Rendre la super conversation
+ * parfaite », 2026-10-26). Avant : les lots étaient supposés indépendants, seul un fichier partagé
+ * les ordonnait. Un lot qui a besoin du RÉSULTAT d'un autre l'annonce par « apres » : [rangs].
+ * Sans ce champ, un prérequis en échec laissait le plan tomber en « plafond atteint » — faux, et
+ * la relance du lot fautif y est refusée.
+ */
+describe('apres — dépendances explicites entre lots', () => {
+  const dep = (n: number, apres: unknown, fichiers?: string[]): Record<string, unknown> => ({
+    ...lot(n, fichiers),
+    apres
+  })
+
+  it('lecture : « apres » facultatif, trié et dédoublonné ; absent = aucune dépendance', () => {
+    const r = lu({ lots: [lot(1), lot(2), dep(3, [2, 1, 2]), dep(4, [])] })
+    expect(r.plan.lots.map((l) => l.apres)).toEqual([[], [], [1, 2], []])
+    const plan = creerPlan(r.plan, { id: 'plan-1', chef: 'conv-1', maintenant: 1 })
+    expect(plan.lots[2].apres).toEqual([1, 2])
+  })
+
+  it.each([
+    [{ lots: [lot(1), dep(2, 1)] }, /lot 2 : apres — liste de numéros de lots attendue/],
+    [{ lots: [lot(1), dep(2, ['1'])] }, /lot 2 : apres — liste de numéros de lots attendue/],
+    [{ lots: [lot(1), dep(2, [1.5])] }, /lot 2 : apres — liste de numéros de lots attendue/],
+    [{ lots: [lot(1), dep(2, [3])] }, /lot 2 : apres — le lot 3 n’existe pas \(le plan a 2 lots\)/],
+    [{ lots: [lot(1), dep(2, [0])] }, /lot 2 : apres — le lot 0 n’existe pas/],
+    [{ lots: [lot(1), dep(2, [2])] }, /lot 2 : apres — un lot ne peut pas s’attendre lui-même/],
+    [{ lots: [lot(1), { ...lot(2), après: [1] }] }, /lot 2 : « après » .*« apres »/]
+  ])('refuse un « apres » mal formé en nommant le lot fautif (%j)', (brut, motif) => {
+    const r = lirePlanDeLots(brut)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erreur).toMatch(motif)
+  })
+
+  it('refuse un cycle en nommant le lot fautif et le cycle entier', () => {
+    const deux = lirePlanDeLots({ lots: [dep(1, [2]), dep(2, [1])] })
+    expect(deux.ok).toBe(false)
+    if (!deux.ok)
+      expect(deux.erreur).toMatch(/^lot 1 : apres crée un cycle \(1 attend 2, qui attend 1\)/)
+    const trois = lirePlanDeLots({ lots: [lot(1), dep(2, [4]), dep(3, [2]), dep(4, [3])] })
+    expect(trois.ok).toBe(false)
+    if (!trois.ok)
+      expect(trois.erreur).toMatch(
+        /^lot 2 : apres crée un cycle \(2 attend 4, qui attend 3, qui attend 2\)/
+      )
+  })
+
+  it('jumeau : un losange (2 et 3 après 1, 4 après 2 et 3) n’est pas un cycle', () => {
+    const r = lu({ lots: [lot(1), dep(2, [1]), dep(3, [1]), dep(4, [3, 2])] })
+    expect(r.plan.lots[3].apres).toEqual([2, 3])
+  })
+
+  it('un lot ne part que quand TOUS ses prérequis sont faits ; un lot libre passe devant', () => {
+    let p = lancerCeQuiPart(
+      planAccepte({ parallele: 3, lots: [lot(1), lot(2), dep(3, [1, 2]), lot(4)] })
+    )
+    expect(p.lots.map((l) => l.etat)).toEqual(['en-cours', 'en-cours', 'a-faire', 'en-cours'])
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
+    expect(lotsAPartir(p)).toEqual([])
+    p = noterFinDeTour(p, 'conv-120', { ok: true }, 3001).plan
+    expect(lotsAPartir(p)).toEqual([3])
+  })
+
+  it('un lot qui attend ne réserve pas ses fichiers', () => {
+    const p = planAccepte({
+      parallele: 3,
+      lots: [lot(1, ['a.ts']), dep(2, [1], ['b.ts']), lot(3, ['b.ts'])]
+    })
+    expect(lotsAPartir(p)).toEqual([1, 3])
+  })
+
+  it('un plan relu du disque sans « apres » (écrit avant ce champ) part comme avant', () => {
+    const p = planAccepte({ parallele: 3, lots: [lot(1), lot(2)] })
+    // Même forme que le fichier relu : la clé est absente, pas vide.
+    const ancien = JSON.parse(
+      JSON.stringify({ ...p, lots: p.lots.map((l) => ({ ...l, apres: undefined })) })
+    ) as PlanDeLots
+    expect(ancien.lots[0]).not.toHaveProperty('apres')
+    expect(lotsAPartir(ancien)).toEqual([1, 2])
+  })
+
+  it('un prérequis en échec bloque ses dépendants : le plan ne reste pas « en cours » à vide, la raison nomme le lot bloquant', () => {
+    let p = lancerCeQuiPart(
+      planAccepte({ parallele: 2, lots: [lot(1), dep(2, [1]), dep(3, [2]), lot(4)] })
+    )
+    expect(p.lots.map((l) => l.etat)).toEqual(['en-cours', 'a-faire', 'a-faire', 'en-cours'])
+    p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'tests rouges' }, 3000).plan
+    // Le lot 4 tourne encore : le plan reste en cours, mais rien d'autre ne part.
+    expect(p.statut).toBe('en-cours')
+    expect(lotsAPartir(p)).toEqual([])
+    p = noterFinDeTour(p, 'conv-140', { ok: true }, 3001).plan
+    expect(p.statut).toBe('bloque')
+    expect(p.raison).toMatch(/le lot 1 \(échec\) bloque les lots 2 et 3/)
+    expect(p.raison).toMatch(/relancer/)
+    expect(lotsAPartir(p)).toEqual([])
+    expect(promptDeReveil(p, [4])).toMatch(/le lot 1 \(échec\) bloque les lots 2 et 3/)
+    // Le chef relance le lot bloquant : le plan repart, ses dépendants suivront.
+    const r = relancerLot(p, 1)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.plan.statut).toBe('en-cours')
+    expect(lotsAPartir(r.plan)).toEqual([1])
+  })
+
+  it('jumeau : l’échec d’un lot dont personne ne dépend laisse les autres finir, plan terminé', () => {
+    let p = lancerCeQuiPart(planAccepte({ parallele: 3, lots: [lot(1), dep(2, [1]), lot(3)] }))
+    p = noterFinDeTour(p, 'conv-130', { ok: false, erreur: 'rouge' }, 3000).plan
+    p = noterFinDeTour(p, 'conv-110', { ok: true }, 3001).plan
+    expect(p.statut).toBe('en-cours')
+    expect(lotsAPartir(p)).toEqual([2])
+    p = noterFinDeTour(lancerCeQuiPart(p), 'conv-120', { ok: true }, 3002).plan
+    expect(p.statut).toBe('termine')
+  })
+
+  it('plusieurs lots bloquants : chacun est nommé avec les lots qu’il bloque', () => {
+    let p = lancerCeQuiPart(
+      planAccepte({ parallele: 2, lots: [lot(1), lot(2), dep(3, [1]), dep(4, [2]), dep(5, [2])] })
+    )
+    p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
+    p = noterFinDeTour(p, 'conv-120', { ok: false, erreur: 'rouge' }, 3001).plan
+    expect(p.statut).toBe('bloque')
+    expect(p.raison).toMatch(
+      /le lot 1 \(échec\) bloque le lot 3 ; le lot 2 \(échec\) bloque les lots 4 et 5/
+    )
+  })
+
+  it('un lot qui n’a pas pu partir (fil non créé) bloque aussi ses dépendants', () => {
+    const p = marquerEchec(planAccepte({ lots: [lot(1), dep(2, [1])] }), 1, 'fil non créé', 3000)
+    expect(p.statut).toBe('bloque')
+    expect(p.raison).toMatch(/le lot 1 \(échec\) bloque le lot 2/)
+  })
+
+  it('jumeau : plafond épuisé, le plan reste « plafond atteint » même si un prérequis a échoué', () => {
+    let p = lancerCeQuiPart(
+      planAccepte({ parallele: 2, plafondTours: 2, lots: [lot(1), dep(2, [1]), lot(3)] })
+    )
+    p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
+    p = noterFinDeTour(p, 'conv-130', { ok: true }, 3001).plan
+    expect(p.statut).toBe('plafond-atteint')
+  })
+
+  it('l’empreinte inclut « apres » ; sans dépendance, elle reste celle d’avant ce champ', () => {
+    const sans = lu({ lots: [lot(1), lot(2)] }).plan
+    // Valeur calculée avec la formule d'avant « apres » : les plans déjà sur disque gardent leur clé.
+    expect(empreintePlan(sans)).toBe('63880bc3')
+    expect(empreintePlan(lu({ lots: [lot(1), dep(2, [])] }).plan)).toBe('63880bc3')
+    expect(empreintePlan(lu({ lots: [lot(1), dep(2, [1])] }).plan)).not.toBe('63880bc3')
+    expect(empreintePlan(lu({ lots: [lot(1), lot(2), dep(3, [2, 1])] }).plan)).toBe(
+      empreintePlan(lu({ lots: [lot(1), lot(2), dep(3, [1, 2, 1])] }).plan)
+    )
   })
 })
 
