@@ -798,7 +798,8 @@ export interface VuePlanDeLots {
   role: 'chef' | 'enfant'
   rang?: number
 }
-export type GestePlanDeLots = 'voir' | 'accepter' | 'refuser' | 'arreter' | 'reprendre'
+/** « relancer » porte aussi le numéro du lot (4e argument du canal os:plansDeLots) : conv-1151, lot 3. */
+export type GestePlanDeLots = 'voir' | 'accepter' | 'refuser' | 'arreter' | 'reprendre' | 'relancer'
 export type ReponsePlansDeLots =
   | { ok: true; vue?: VuePlanDeLots | null; plan?: PlanDeLots; detail?: string; deja?: boolean }
   | { ok: false; erreur: string }
