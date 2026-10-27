@@ -135,6 +135,8 @@ export function buildMentionSources(input: {
   return { runs, files }
 }
 
+// Restés en français (traduction anglaise, conv-1170) : `@fichier:` est RELU ici à l'envoi, et le
+// bloc `[contexte désigné]` est une consigne pour l'agent, pas un texte de l'écran.
 const REF_RE = /@(run|fichier|file):([^\s]+)/g
 
 /** Les références présentes dans un texte, résolues contre les sources connues. */
