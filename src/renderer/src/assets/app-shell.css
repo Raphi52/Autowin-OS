@@ -187,10 +187,16 @@
    33 x 36 dessinait un OVALE ; l'icône tombait 3 px à gauche du centre de ce rond, et 3,6 px à
    gauche du bouton de repli. Mesuré dans l'app (Nébuleuse de verre) : rond 33 x 36 centré à
    26,4 px, icône à 23,4 px, menu à 27 px. Après : 36 x 36, rond, icône et bouton à 27 px.
-   JAMAIS de translate sur l'icône : un décalage fixe défait le centrage que la flexbox donne. */
+   JAMAIS de translate sur l'icône : un décalage fixe défait le centrage que la flexbox donne.
+   LE ROND SUIT LA PISTE (2026-10-27, conv-1165 : « le rond de mon élément sélectionné est
+   légèrement cut sur la droite »). La piste ne fait 36 px qu'à 100 % : sous ce zoom, le bord de
+   1 px du cadre Nébuleuse est arrondi à un pixel d'écran entier (1,11 px à 90 %), la piste tombe
+   à 35,78 px et le rond fixe de 36 px dépassait de 0,19 px, rogné par `.nav` (overflow-x: hidden)
+   en un méplat visible. `min()` le borne à la piste, `aspect-ratio` le garde rond. */
 .rail.is-collapsed .nav-item {
-  width: 36px;
-  height: 36px;
+  width: min(36px, 100%);
+  height: auto;
+  aspect-ratio: 1;
   margin-inline: auto;
   justify-content: center;
   padding: 0;
