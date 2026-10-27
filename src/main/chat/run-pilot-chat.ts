@@ -79,11 +79,8 @@ import {
 } from '../activity/chat-turn-trace'
 import { rebaseTraceSequence } from '../activity/trace-store'
 import { guardAttachments, guardString } from '../ipc-guards'
-import {
-  materializeChatArtifact,
-  materializeUserImageArtifact,
-  rechargerContenuPieceJointe
-} from '../store/chat-artifact-store'
+import { materializeChatArtifact } from '../store/chat-artifact-store'
+import { metasDurablesDesPieces, piecesJointesPourLeModele } from './pieces-jointes-durables'
 import { latestBrainTraceId } from '../activity/brain-trace-spool'
 import type { TaskUsageSettlementSink } from '../task-manager/types'
 import { incidentFromPilotEvent } from '../pilot-incident'
@@ -99,6 +96,7 @@ import type { ModelQuestion } from '../model-questions'
 import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
+import { contenusDesToursArretes } from '../reprise-apres-arret'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
@@ -485,6 +483,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const orientations = new Set<string>()
       /** Ou relire le run d'un message de l'agent : le journal de son tour. */
       const tourParContenu = new Map<string, SourceDuRun>()
+      /** Messages de l'agent dont le tour s'est arrete avant sa fin (statut du store, conv-1142). */
+      const toursArretes = contenusDesToursArretes(
+        conversationId ? (os.conversations.get(conversationId)?.messages ?? []) : []
+      )
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
           if (stocke.role === 'user' && stocke.orientation && typeof stocke.content === 'string') {
@@ -514,20 +516,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           }
         }
       }
-      /** Retrouve le binaire d'origine d'une piece jointe remise par le renderer, sinon `undefined`. */
-      const contenuOriginal = (
-        contenuDuMessage: string,
-        piece: { name: string; mimeType?: string }
-      ): { content: string; mimeType: string } | undefined => {
-        const metas = metasParContenu.get(contenuDuMessage)
-        if (!metas?.length) return undefined
-        // Le renderer suffixe « (miniature) » quand il n'a que la vignette : on compare les noms nus.
-        const nu = piece.name.replace(/\s*\(miniature\)\s*$/, '')
-        const meta =
-          metas.find((candidate) => candidate.name === nu) ??
-          metas.find((candidate) => candidate.name === piece.name)
-        return meta ? rechargerContenuPieceJointe(meta) : undefined
-      }
       const fenetre =
         continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)
       const partsDuMessage = (m: (typeof fenetre)[number]): PersistedChatPart[] | undefined =>
@@ -536,6 +524,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const rangDernierRun = rangDuDernierRun(fenetre, partsDuMessage)
       const safe = fenetre.map((m, rang) => {
         const parts = partsDuMessage(m)
+        // L'original d'une pièce passée vient du disque, et une pièce que le renderer ne transmet
+        // pas (texte, PDF) y est rajoutée : le travail d'une branche « Lancer en N fils » part au
+        // tour SUIVANT celui du message (conv-1147, `pieces-jointes-durables.ts`).
+        const pieces =
+          m.role === 'user'
+            ? piecesJointesPourLeModele(m.attachments, metasParContenu.get(m.content), {
+                messageCourant: rang === fenetre.length - 1
+              })
+            : (m.attachments ?? [])
         // Repli sur le contenu d'origine : un message sans `parts` retrouvables (fil hydrate,
         // message d'un ancien format) doit passer tel quel, jamais disparaitre.
         const pourLeModele = parts
@@ -551,26 +548,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // consigne envoyee pendant un tour : le renderer ne transmet pas le drapeau, on le relit dans le
           // store (conv-844).
           ...(m.role === 'user' && orientations.has(m.content) ? { orientation: true } : {}),
-          ...(m.attachments?.length
-            ? {
-                attachments: guardAttachments(
-                  m.role === 'user'
-                    ? m.attachments.map((piece) => {
-                        const original = contenuOriginal(m.content, piece)
-                        return original
-                          ? {
-                              ...piece,
-                              name: piece.name.replace(/\s*\(miniature\)\s*$/, ''),
-                              mimeType: original.mimeType,
-                              size: Buffer.byteLength(original.content, 'base64'),
-                              content: original.content
-                            }
-                          : piece
-                      })
-                    : m.attachments
-                )
-              }
-            : {})
+          // Tour arrete : le message suivant explique les deux lignes que le CLI insere a la reprise
+          // (`reprise-apres-arret.ts`, conv-1142). Le renderer n'envoie pas le statut, le store l'a.
+          ...(m.role === 'assistant' && toursArretes.has(m.content) ? { arrete: true } : {}),
+          ...(pieces.length ? { attachments: guardAttachments(pieces) } : {})
         }
       })
       let traceParentId: string | undefined
@@ -683,34 +664,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           conversationId,
           {
             content: last.content,
-            attachments: last.attachments?.map(
-              ({ name, mimeType, size, kind, content, thumbnail }) => {
-                const metadata = {
-                  name,
-                  mimeType,
-                  size,
-                  ...(thumbnail && { thumbnail })
-                }
-                if (kind !== 'image') return metadata
-                try {
-                  return {
-                    ...metadata,
-                    turnId,
-                    artifact: materializeUserImageArtifact(
-                      { name, mimeType, size, content },
-                      conversationId,
-                      turnId
-                    )
-                  }
-                } catch {
-                  return {
-                    ...metadata,
-                    turnId,
-                    originalUnavailable: true
-                  }
-                }
-              }
-            )
+            // L'original de CHAQUE pièce, pas seulement des images (`pieces-jointes-durables.ts`).
+            attachments: last.attachments
+              ? metasDurablesDesPieces(last.attachments, conversationId, turnId)
+              : undefined
           },
           {
             turnId,

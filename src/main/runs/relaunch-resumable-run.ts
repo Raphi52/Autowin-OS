@@ -77,6 +77,8 @@ export type DependancesDeRelance = {
    * partage le `turnId` de son tour de chat : la relance du run ne doit pas le fermer à sa place.
    */
   appelChatReprisPourTour: (conversationId: string, turnId: string) => boolean
+  /** Une reprise qui a tué l'app au démarrage précédent n'est pas rejouée (conv-1150). */
+  gardePlantage?: import('./garde-reprise-plantage').GardeRepriseCrash
 }
 
 export function creerRelanceDeRunReprenable(
@@ -116,7 +118,8 @@ export function creerRelanceDeRunReprenable(
     randomUUID,
     fenetresVivantes,
     defaultProcessIdentity,
-    appelChatReprisPourTour
+    appelChatReprisPourTour,
+    gardePlantage
   } = deps
 
   const relaunchResumableRun = async (
@@ -141,6 +144,26 @@ export function creerRelanceDeRunReprenable(
       }
     )
     if (!resumableRun) return
+    // Avant tout chargement : c'est la reprise elle-même qui a fait mourir l'app (OOM du 26/10).
+    if (gardePlantage?.aPlanteAuparavant(resumableRun.runId)) {
+      os.forgetResumableOrchestration(resumableRun.runId)
+      gardePlantage.retirer(resumableRun.runId)
+      console.warn(
+        '[resume-orchestration]',
+        resumableRun.runId,
+        "→ l'app est morte pendant la reprise précédente : run abandonné, checkpoint retiré"
+      )
+      if (resumableRun.conversationId) {
+        appendConvActivity(resumableRun.conversationId, {
+          kind: 'exec',
+          label: 'reprise',
+          provider: 'orchestrator',
+          text: `Run ${resumableRun.runId} abandonné : sa reprise au démarrage précédent a fait planter l'app.`
+        })
+      }
+      return
+    }
+    gardePlantage?.poser(resumableRun.runId)
     try {
       await os.waitUntilReady()
     } catch (error) {

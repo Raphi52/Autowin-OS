@@ -2,6 +2,8 @@ import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
 import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
 import { CONSIGNE_BLOCS_DONNEES } from '../shared/blocs-donnees'
+import { CONSIGNE_LANCER_EN_FILS } from '../shared/lancer-en-fils'
+import { CONSIGNE_PLAN_DE_LOTS } from './consigne-plan-de-lots'
 
 /**
  * Prompt de PILOTAGE du chat, extrait de `AgentPilot.chat()`.
@@ -541,7 +543,15 @@ export function buildChatPilotagePrompt(
         `fournisseur (529 Overloaded) —, tu ne peux PAS la relancer dans ce meme tour, le second appel ` +
         `est REFUSE et perdu. Dis l'echec et sa cause, fais toi-meme ce qui reste faisable avec ` +
         `\`edit_file\` et \`verify\`, et laisse la relance du run a l'utilisateur (mets-la en ` +
-        `« Recommande »).\n`
+        `« Recommande »).\n` +
+        // PLUSIEURS TACHES DANS UN MESSAGE (conv-1147, 2026-10-25) : ce plafond faisait traiter en
+        // serie deux demandes independantes. La carte ```aw-fils propose un fil par tache.
+        `${CONSIGNE_LANCER_EN_FILS}\n`
+    ) +
+    // TÂCHE LONGUE → PLAN DE LOTS (conv-1151, 2026-10-27) : aucune ligne ne disait QUAND proposer
+    // `plan_de_lots` ; servie seulement si l'outil est au catalogue (voir consigne-plan-de-lots.ts).
+    horsLecture(
+      catalog.some((c) => c.name === 'plan_de_lots') ? `${CONSIGNE_PLAN_DE_LOTS}\n` : ''
     ) +
     // PÉRIMÈTRE DE LECTURE (mesure 2026-08-10, conv-1). Le même réglage a produit deux comportements
     // opposés : le 07/08, refus d'analyser un ticket au motif que « le dépôt CONTOSO n'est pas accessible

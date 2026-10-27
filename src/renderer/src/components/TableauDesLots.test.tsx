@@ -18,7 +18,7 @@ import {
  * l'utilisateur lance le plan d'un clic.
  */
 let ecouteur: ((e: { type: string; scope?: string }) => void) | undefined
-let appels: Array<[string, string, string | undefined]> = []
+let appels: unknown[][] = []
 let lecturesDeCout: string[] = []
 
 /** Lignes de coût rendues par `costBreakdown` pour un fil ; 'erreur' = canal qui rejette. */
@@ -41,8 +41,13 @@ function poserApi(parFil: Record<string, VuePlanDeLots | null>, couts?: CoutsDeT
   appels = []
   lecturesDeCout = []
   ;(globalThis as unknown as { window: Record<string, unknown> }).window.api = {
-    plansDeLots: (geste: string, fil: string, planId?: string): Promise<ReponsePlansDeLots> => {
-      appels.push([geste, fil, planId])
+    plansDeLots: (
+      geste: string,
+      fil: string,
+      planId?: string,
+      lot?: number
+    ): Promise<ReponsePlansDeLots> => {
+      appels.push(lot === undefined ? [geste, fil, planId] : [geste, fil, planId, lot])
       return Promise.resolve(
         geste === 'voir' ? { ok: true, vue: parFil[fil] ?? null } : { ok: true, detail: 'ok' }
       )
@@ -121,6 +126,76 @@ describe('TableauDesLots', () => {
     expect(hote.textContent).not.toContain('Lancer le plan')
     expect(hote.textContent).toContain('Arrêter (aucun nouveau lot)')
     fin()
+  })
+
+  /*
+   * conv-1151, lot 3 : seul l'agent du chef relançait un lot en échec ; l'utilisateur, qui voit
+   * l'échec ici, devait lui écrire. Chaque lot en échec porte maintenant son bouton « Relancer ».
+   */
+  describe('relancer un lot en échec', () => {
+    const bouton = (hote: HTMLElement, rang: number): HTMLButtonElement | null =>
+      hote.querySelector(`[data-testid="tdl-lot-${rang}-relancer"]`)
+
+    /** Lot 1 en échec dans conv-100, lot 2 en cours dans conv-101, lot 3 à faire. */
+    function planAvecEchec(base: PlanDeLots = plan()): PlanDeLots {
+      let p: PlanDeLots = { ...base, statut: 'en-cours' }
+      p = marquerLance(p, 1, 'conv-100', 2)
+      p = marquerLance(p, 2, 'conv-101', 2)
+      return noterFinDeTour(p, 'conv-100', { ok: false, erreur: 'tests rouges' }, 3).plan
+    }
+
+    it('plan en cours : le seul lot en échec a le bouton, qui envoie « relancer » avec son numéro', async () => {
+      poserApi({ 'conv-1': { plan: planAvecEchec(), role: 'chef' } })
+      const { hote, fin } = await monter('conv-1')
+      const b1 = bouton(hote, 1)
+      expect(b1?.textContent).toBe('Relancer')
+      expect(b1?.disabled).toBe(false)
+      expect(bouton(hote, 2)).toBeNull()
+      expect(bouton(hote, 3)).toBeNull()
+      await act(async () => b1?.click())
+      expect(appels.at(-1)).toEqual(['relancer', 'conv-1', 'plan-a', 1])
+      fin()
+    })
+
+    it('plan terminé avec un lot en échec : le bouton reste, actif', async () => {
+      const p = noterFinDeTour(planAvecEchec(), 'conv-101', { ok: true }, 4).plan
+      const termine: PlanDeLots = {
+        ...p,
+        statut: 'termine',
+        lots: p.lots.map((l) => (l.rang === 3 ? { ...l, etat: 'fait' as const } : l))
+      }
+      poserApi({ 'conv-1': { plan: termine, role: 'chef' } })
+      const { hote, fin } = await monter('conv-1')
+      expect(bouton(hote, 1)?.disabled).toBe(false)
+      expect(bouton(hote, 2)).toBeNull()
+      fin()
+    })
+
+    it('plafond de tours atteint : bouton grisé, la raison est écrite, le clic n’envoie rien', async () => {
+      const p = planAvecEchec({ ...plan(), plafondTours: 2 })
+      expect(p.toursLances).toBe(2)
+      poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+      const { hote, fin } = await monter('conv-1')
+      const b1 = bouton(hote, 1)
+      expect(b1?.disabled).toBe(true)
+      expect(b1?.title).toBe('plafond de 2 tours atteint : relance impossible.')
+      expect(hote.querySelector('.tdl-relance-raison')?.textContent).toBe(
+        'plafond de 2 tours atteint : relance impossible.'
+      )
+      const avant = appels.length
+      await act(async () => b1?.click())
+      expect(appels).toHaveLength(avant)
+      fin()
+    })
+
+    it('plan suspendu, arrêté ou en attente : aucun bouton « Relancer » (« Reprendre » y suffit)', async () => {
+      for (const statut of ['suspendu-quota', 'arrete', 'attente-accord'] as const) {
+        poserApi({ 'conv-1': { plan: { ...planAvecEchec(), statut }, role: 'chef' } })
+        const { hote, fin } = await monter('conv-1')
+        expect(bouton(hote, 1)).toBeNull()
+        fin()
+      }
+    })
   })
 
   it('se relit au signal « plans-de-lots » ; un fil sans plan n’affiche rien', async () => {

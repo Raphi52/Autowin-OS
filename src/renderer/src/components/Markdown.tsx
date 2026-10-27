@@ -15,6 +15,7 @@ import { tokenizeMarkdownCodeBlocks } from './markdown-blocs'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
 import { Bloc3D } from './Bloc3D'
 import { BlocDonnees } from './BlocDonnees'
+import { PropositionDeFils } from './PropositionDeFils'
 import { SceneDuCarrousel } from './SceneDuCarrousel'
 import { CLASSE_PLACE_SCENE, rattacherScenesAuxCarrousels } from './draft-scene-3d'
 import { splitFinalSummary } from './markdown-cloture'
@@ -141,6 +142,16 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
         <BlocDonnees
           key={`${keyPrefix}-donnees-${index}`}
           donnees={block.donnees}
+          source={block.content}
+        />
+      )
+
+    if (block.kind === 'fils' && block.taches)
+      return (
+        // Proposition « Lancer en N fils » (conv-1147) : la carte attend un clic, ChatView lance.
+        <PropositionDeFils
+          key={`${keyPrefix}-fils-${index}`}
+          taches={block.taches}
           source={block.content}
         />
       )

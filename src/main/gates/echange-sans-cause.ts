@@ -21,8 +21,12 @@ import type { IoJournalFils, LivraisonDeFil, MessageDeFil } from '../../shared/m
  * pas touché — la levée passe par le contrôle existant, rejoué tel quel.
  */
 
-/** Au plus deux échanges par run (borne HARD du cadrage) ; un seul par refus, par construction. */
-export const ECHANGES_SANS_CAUSE_MAX_PAR_RUN = 2
+/*
+ * PLUS DE PLAFOND PAR RUN (conv-1139, 2026-10-25). Le cadrage bornait à deux échanges par run ;
+ * l'utilisateur l'a retiré pour VOIR si l'échange tourne vraiment en rond. Il reste borné : un seul
+ * échange par refus et par source (orchestrateur), et le plafond dur des passages de réparation
+ * (`plafondDurReparations`) arrête le run. Chaque échange est numéroté dans la trace (« Échange n »).
+ */
 
 /** En tête de la question : la reconnaître dans un journal, et dans les tests. */
 export const MARQUE_QUESTION_SANS_CAUSE = 'QUESTION DU CONTRÔLE FINAL'
@@ -69,15 +73,13 @@ export function decisionEchangeSansCause(etat: {
 
 /**
  * Ce qui empêche TOUT échange, quelle que soit sa source (refus « sans cause » ou questions du juge,
- * `echange-questions-juge.ts`) : le plafond est PARTAGÉ — le cadrage dit « deux par run », pas deux
- * par source. `undefined` = rien n'empêche.
+ * `echange-questions-juge.ts`). `echangesDuRun` ne borne plus rien (voir plus haut) : il reste dans
+ * la signature pour numéroter la trace. `undefined` = rien n'empêche.
  */
 export function empechementDEchange(etat: {
   echangesDuRun: number
   sessionDuBuild: boolean
 }): string | undefined {
-  if (etat.echangesDuRun >= ECHANGES_SANS_CAUSE_MAX_PAR_RUN)
-    return `Échange non tenté : plafond de ${ECHANGES_SANS_CAUSE_MAX_PAR_RUN} échanges par run atteint — réparation normale.`
   if (!etat.sessionDuBuild)
     return 'Échange impossible : aucune session du build à reprendre (modèle sans reprise de session, build en parallèle ou repris après un redémarrage) — réparation normale.'
   return undefined

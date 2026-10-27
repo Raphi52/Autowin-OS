@@ -733,6 +733,14 @@
   font-size: 13px;
 }
 
+/* components/MessagesEntreFils.css — tailles */
+:root[data-theme^='malvoyant-'] .mef-reste,
+:root[data-theme^='malvoyant-'] .mef-avec,
+:root[data-theme^='malvoyant-'] .mef-preuve,
+:root[data-theme^='malvoyant-'] .mef-meta {
+  font-size: 13px;
+}
+
 /* components/ModelActivityLogPane.css — tailles */
 :root[data-theme^='malvoyant-'] .model-log-filter select,
 :root[data-theme^='malvoyant-'] .model-log-json,
@@ -908,6 +916,13 @@
   font-size: 13px;
 }
 
+/* components/PropositionDeFils.css — tailles */
+:root[data-theme^='malvoyant-'] .md-fils__rang,
+:root[data-theme^='malvoyant-'] .md-fils__fichiers,
+:root[data-theme^='malvoyant-'] .md-fils__id {
+  font-size: 13px;
+}
+
 /* components/RequestThread.css — tailles */
 :root[data-theme^='malvoyant-'] .request-story-chapter dt {
   font-size: 13px;
@@ -1006,7 +1021,9 @@
 }
 
 /* components/TableauDesLots.css — tailles */
-:root[data-theme^='malvoyant-'] .tdl-pastille {
+:root[data-theme^='malvoyant-'] .tdl-pastille,
+:root[data-theme^='malvoyant-'] .tdl-bouton--lot,
+:root[data-theme^='malvoyant-'] .tdl-relance-raison {
   font-size: 13px;
 }
 

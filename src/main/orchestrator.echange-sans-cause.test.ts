@@ -140,7 +140,7 @@ describe('refus « sans cause » seul : une question au build avant toute répar
     expect(lignesDeTrace(r)).toMatch(/Échange 1 — refus levé/)
   })
 
-  it('réponse sans ligne de cause → refus maintenu, réparation normale ; 1 échange par refus, 2 par run', async () => {
+  it('réponse sans ligne de cause → refus maintenu, réparation normale ; 1 échange par refus, aucun plafond par run', async () => {
     const provider = new ProviderEchange(() => ({ text: 'Je ne sais pas.' }))
     const r = await orchestrateur(provider).run('corrige le bug')
     expect(provider.builds).toBeGreaterThan(2)
@@ -148,10 +148,15 @@ describe('refus « sans cause » seul : une question au build avant toute répar
       /Échange 1 — refus maintenu : la réponse ne donne aucune ligne de cause/
     )
     // Un seul échange par refus : la 2e question suit un NOUVEAU build, jamais la 1re dans le même passage.
-    expect(provider.questions.map((q) => q.buildsAvant)).toEqual([1, 2])
     expect(provider.questions[1].resume).toBe('sess-build-2')
-    // Plafond : 2 échanges par run, quel que soit le nombre de réparations.
-    expect(lignesDeTrace(r)).toMatch(/Échange non tenté : plafond de 2 échanges par run atteint/)
+    // Plus de plafond par run (conv-1139, 2026-10-25) : un échange après CHAQUE build refusé, et le run
+    // s'arrête quand même, au plafond dur des passages de réparation.
+    expect(provider.questions.length).toBeGreaterThan(2)
+    expect(provider.questions.map((q) => q.buildsAvant)).toEqual(
+      Array.from({ length: provider.questions.length }, (_v, i) => i + 1)
+    )
+    expect(r.gateBlocked).toBe(true)
+    expect(lignesDeTrace(r)).not.toMatch(/plafond de d+ échanges par run/)
   })
 
   it('réponse de plus de 6 000 caractères : la ligne de cause en fin de réponse lève le refus', async () => {

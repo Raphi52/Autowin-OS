@@ -1,0 +1,68 @@
+/* Interrupteur « Mascotte du bureau » (Settings · Interface, conv-1145). Uniquement des jetons du
+   thème : il reste lisible dans tous les thèmes, clairs compris. La ligne reprend le gabarit
+   `.interface-row` d'InterfaceView.css ; un filet la sépare du réglage du thème au-dessus. */
+.interface-row[data-testid='interface-mascotte'] {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.mascotte-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mascotte-switch i {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-3);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.mascotte-switch i::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition:
+    transform var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.mascotte-switch.is-on {
+  color: var(--text);
+}
+.mascotte-switch.is-on i {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg-3));
+}
+.mascotte-switch.is-on i::after {
+  transform: translateX(16px);
+  background: var(--accent);
+}
+.mascotte-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r1);
+}
+.mascotte-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.interface-row-text p.mascotte-reglage-erreur {
+  color: var(--err, var(--text));
+}

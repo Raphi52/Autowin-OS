@@ -11,7 +11,7 @@ import { CONSTITUTION } from './constitution'
  * donc la consigne doit porter l'escalier de recherche du moins cher au plus cher.
  *
  * DEPLACE le 2026-09-12 : l'escalier vivait dans le prompt de pilotage EN PLUS de
- * SYMPTOME-HARD-GATE de la constitution, injectee dans le MEME prompt systeme — deux
+ * règle « Symptôme nu » de la constitution (ex-SYMPTOME-HARD-GATE, renommée conv-1142), injectee dans le MEME prompt systeme — deux
  * protocoles concurrents sur le meme declencheur. La constitution porte desormais l'escalier,
  * et le prompt de pilotage ne doit PAS le redupliquer.
  */
@@ -19,16 +19,16 @@ describe('symptome -> fix au moindre cout', () => {
   const prompt = buildChatPilotagePrompt([])
 
   it('ordonne un escalier de localisation et interdit la lecture d’arbre entier', () => {
-    expect(CONSTITUTION).toContain("LOCALISE PAR L'ESCALIER")
-    expect(CONSTITUTION).toContain('grep du texte VISIBLE dans le symptôme')
-    expect(CONSTITUTION).toContain('ARRÊTE-TOI dès que la cause est tenue')
+    expect(CONSTITUTION).toContain("Localise par l'escalier")
+    expect(CONSTITUTION).toContain('grep du texte visible dans le symptôme')
+    expect(CONSTITUTION).toContain('arrête-toi dès que la cause est tenue')
     expect(CONSTITUTION).toContain("Jamais de lecture d'arbre entier")
-    expect(CONSTITUTION).toContain('DEUX causes candidates')
+    expect(CONSTITUTION).toContain('deux causes candidates')
     expect(CONSTITUTION).toContain('pas un formulaire à faire remplir')
   })
 
   it('ne duplique PAS cet escalier dans le prompt de pilotage', () => {
     expect(prompt).not.toContain('SYMPTÔME → FIX, AU MOINDRE COÛT')
-    expect(prompt).not.toContain('grep du texte VISIBLE dans le symptôme')
+    expect(prompt).not.toMatch(/grep du texte visible dans le symptôme/iu)
   })
 })

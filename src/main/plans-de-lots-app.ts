@@ -326,11 +326,23 @@ export class CoordinateurDesPlans {
     return { ok: true, plan: apres, detail: bilanDuPlan(apres).texte }
   }
 
-  /** Relance d'un lot en échec, demandée par l'agent du chef. */
-  async relancer(chef: string, rang: number): Promise<ResultatPlan> {
-    const vu = this.planDuFil(chef)
-    if (!vu || vu.role !== 'chef') return { ok: false, erreur: 'aucun plan mené par ce fil.' }
-    const r = relancerLot(vu.plan, rang)
+  /**
+   * Relance d'un lot en échec : par l'agent du chef (`plan_de_lots`), ou par l'utilisateur au
+   * bouton « Relancer » du tableau (conv-1151, lot 3), qui nomme alors le plan qu'il VOIT — un
+   * tableau périmé ne relance pas un lot d'un autre plan. Même règle et même tour compté.
+   */
+  async relancer(chef: string, rang: number, planId?: string): Promise<ResultatPlan> {
+    let plan: PlanDeLots
+    if (planId === undefined) {
+      const vu = this.planDuFil(chef)
+      if (!vu || vu.role !== 'chef') return { ok: false, erreur: 'aucun plan mené par ce fil.' }
+      plan = vu.plan
+    } else {
+      const lu = this.#planDuChef(chef, planId)
+      if ('erreur' in lu) return { ok: false, erreur: lu.erreur }
+      plan = lu
+    }
+    const r = relancerLot(plan, rang)
     if (!r.ok) return { ok: false, erreur: r.erreur }
     this.#poser(r.plan)
     await this.#lancerLesSuivants(r.plan.id)

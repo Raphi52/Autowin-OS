@@ -189,7 +189,7 @@ import {
   suivreLaFinDuTour,
   type ObservateurFinDeTour
 } from './chat/run-pilot-chat'
-import type { IssueDuTour } from '../shared/plan-de-lots'
+import { plansPourLaListe, type IssueDuTour } from '../shared/plan-de-lots'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
 import { modeleDuTour } from './chat/modele-de-conversation'
@@ -231,6 +231,7 @@ import { creerReveilApresQuota } from './runs/reveil-apres-quota'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
 import { creerRelanceDeRunReprenable } from './runs/relaunch-resumable-run'
+import { cheminGardeRepriseCrash, creerGardeRepriseCrash } from './runs/garde-reprise-plantage'
 import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
@@ -411,6 +412,8 @@ import {
   type ContenuNotification
 } from './notification-fin-de-tour'
 import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
+import { creerMascotteDuBureau } from './mascotte-fenetre'
+import { ecrireMascotteAffichee, lireMascotteAffichee } from './mascotte-reglage'
 import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -1292,6 +1295,12 @@ const pilot = new AgentPilot(
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
+/**
+ * La mascotte du bureau (conv-1145, « Bille · pastille ») : la bille au-dessus de l'horloge qui dit
+ * si Autowin travaille, t'attend ou a échoué. Tenue ici car les runs (`os:presence`) et les fins
+ * de tour la nourrissent depuis deux endroits ; sa fenêtre n'existe qu'après `demarrer`.
+ */
+const mascotteDuBureau = creerMascotteDuBureau()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
 const pendingDirectives = new Map<string, string[]>()
 function drainPendingDirectives(conversationId: string): string[] {
@@ -2061,7 +2070,20 @@ function registerChatIpc(): void {
       etapesFaites: nombre('etapesFaites'),
       etapesTotales: nombre('etapesTotales')
     })
+    mascotteDuBureau.runsActifs(nombre('runsActifs'))
     return true
+  })
+  // L'interrupteur « Mascotte du bureau » de Settings · Interface (conv-1145). Le moteur garde le
+  // choix (`mascotte-reglage.ts`) : la mascotte vit hors de la fenêtre, fenêtre fermée comprise.
+  ipcMain.handle('os:mascotte', (event) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    return lireMascotteAffichee()
+  })
+  ipcMain.handle('os:mascotte:afficher', (event, affichee: unknown) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    ecrireMascotteAffichee(affichee)
+    mascotteDuBureau.afficher(lireMascotteAffichee())
+    return lireMascotteAffichee()
   })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
@@ -3395,21 +3417,31 @@ Le fil reprend ensuite normalement.`
     return messagesAAfficher(guardString(conversationId, 'conversationId'))
   })
   // Plans de lots d'un fil chef (conv-1150) : le tableau, et les SEULS gestes qui lancent ou
-  // reprennent un plan — le clic de l'utilisateur. L'agent n'a que dépôt, état et relance d'un lot.
+  // reprennent un plan — le clic de l'utilisateur. L'agent n'a que dépôt, état et relance d'un lot ;
+  // la relance a aussi son bouton (conv-1151, lot 3), qui porte le numéro du lot.
   ipcMain.handle(
     'os:plansDeLots',
-    async (event, action: unknown, conversationId: unknown, planId?: unknown) => {
+    async (event, action: unknown, conversationId: unknown, planId?: unknown, lot?: unknown) => {
       assertTrustedRendererSender(event, 'Plans de lots')
-      const fil = guardString(conversationId, 'conversationId')
+      const geste = guardString(action, 'action')
       const coordinateur = suiviDesPlans.coordinateur
       if (!coordinateur) return { ok: false, erreur: 'coordinateur des plans pas encore démarré.' }
-      const geste = guardString(action, 'action')
+      // Lecture groupée, sans fil (conv-1158) : la liste des conversations range tous les fils de
+      // lots sous leur chef en UN appel, au lieu de deviner les lots à leur titre « Lot N/M — ».
+      if (geste === 'tous') return { ok: true, plans: plansPourLaListe(coordinateur.plans()) }
+      const fil = guardString(conversationId, 'conversationId')
       if (geste === 'voir') return { ok: true, vue: coordinateur.planDuFil(fil) ?? null }
       const id = guardString(planId, 'planId')
       if (geste === 'accepter') return coordinateur.accepter(fil, id)
       if (geste === 'refuser') return coordinateur.refuser(fil, id)
       if (geste === 'arreter') return coordinateur.arreter(fil, id)
       if (geste === 'reprendre') return coordinateur.reprendre(fil, id)
+      if (geste === 'relancer') {
+        const rang = Number(lot)
+        if (!Number.isInteger(rang) || rang < 1)
+          return { ok: false, erreur: '« lot » : numéro du lot à relancer attendu (1, 2…).' }
+        return coordinateur.relancer(fil, rang, id)
+      }
       return { ok: false, erreur: `geste « ${geste} » inconnu.` }
     }
   )
@@ -3657,7 +3689,11 @@ Le fil reprend ensuite normalement.`
   }
   // La bulle sert DEUX fois de secours : carte impossible a creer (`fabriquer` jette, ci-dessous) et
   // page de carte non chargee, qui n'arrive qu'APRES `fabriquer` (la pile passe alors la main).
-  const popupsDeFinDeTour = creerPopupsDeFinDeTour({ secours: bulleWindows })
+  const popupsDeFinDeTour = creerPopupsDeFinDeTour({
+    secours: bulleWindows,
+    zone: mascotteDuBureau.zoneDesCartes,
+    page: mascotteDuBureau.decorerCarte
+  })
   app.on('browser-window-focus', (_evenement, fenetre) => {
     if (!popupsDeFinDeTour.estUneCarte(fenetre)) popupsDeFinDeTour.toutFermer()
   })
@@ -3688,6 +3724,25 @@ Le fil reprend ensuite normalement.`
     envoyerSuite: (id, suite) =>
       broadcast({ type: 'suite-depuis-notification', convId: id, texte: suite })
   })
+  // La mascotte du bureau (conv-1145) : jamais dans une instance cachée (capture, tâche planifiée),
+  // pour la même raison que les cartes — elle s'afficherait sur l'écran de l'utilisateur.
+  if (!isolatedTestInstance && !headlessTestInstance)
+    mascotteDuBureau.demarrer({
+      toursEnCours: () => activeChatTurns.inFlightConversations().length,
+      autowinRegardee: () => {
+        const fenetre = BrowserWindow.getFocusedWindow()
+        return (
+          fenetre !== null &&
+          !popupsDeFinDeTour.estUneCarte(fenetre) &&
+          !mascotteDuBureau.estLaMascotte(fenetre)
+        )
+      },
+      ouvrirFil: (id) => {
+        showMainWindow()
+        broadcast({ type: 'open-conversation', convId: id })
+      },
+      ouvrirAutowin: () => showMainWindow()
+    }, lireMascotteAffichee())
 
   /*
    * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
@@ -3767,6 +3822,10 @@ Le fil reprend ensuite normalement.`
           tourDeFond: args[5]?.background === true,
           // Les gardes de publication des suites lisent la demande du tour (boutons de la bulle).
           demandeDuTour: [...args[1]].reverse().find((m) => m.role === 'user')?.content
+        })
+        mascotteDuBureau.finDeTour(conversationId, {
+          ...resultat,
+          tourDeFond: args[5]?.background === true
         })
         if (debutPublication && resultat.ok && !resultat.cancelled) {
           const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
@@ -4421,6 +4480,17 @@ Le fil reprend ensuite normalement.`
    * est lue par le premier des deux qui atteint son point de drainage, jamais deux fois.
    */
   os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
+  /*
+   * UN RUN SE MET EN PAUSE POUR TE DEMANDER (conv-1149, 2026-10-25) : objection d'étendue répétée en
+   * mode jusqu'au vert (`gates/etendue-repetee.ts`). Même fenêtre de question que `askModelQuestion`,
+   * sur n'importe quelle fenêtre vivante ; aucune fenêtre = aucune réponse, et le run s'arrête au lieu
+   * de relancer une réparation.
+   */
+  os.questionALUtilisateur = (question, contexte, signal) => {
+    const hote = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    if (!hote) return Promise.resolve('')
+    return askModelQuestion(hote.webContents, 'loop', question, contexte, signal)
+  }
 
   /**
    * La passerelle Outlook LOCALE, pour les widgets Interlocuteurs et Agenda de la vue Accueil.
@@ -5076,14 +5146,8 @@ if (ownsInstanceLock) {
       else pendingScheduledOccurrences.add(scheduledOccurrence)
       return
     }
-    const w = BrowserWindow.getAllWindows()[0]
-    if (!w) {
-      createWindow()
-    } else {
-      if (w.isMinimized()) w.restore()
-      w.show()
-      w.focus()
-    }
+    // La fenêtre PRINCIPALE, pas la première venue : la mascotte du bureau peut l'être (conv-1142).
+    showMainWindow()
   })
 }
 
@@ -5499,7 +5563,8 @@ app.whenReady().then(async () => {
     randomUUID,
     fenetresVivantes: () => BrowserWindow.getAllWindows(),
     defaultProcessIdentity,
-    appelChatReprisPourTour
+    appelChatReprisPourTour,
+    gardePlantage: creerGardeRepriseCrash(cheminGardeRepriseCrash(app.getPath('userData')))
   })
   const startupResumeQueue = new StartupResumeQueue()
 

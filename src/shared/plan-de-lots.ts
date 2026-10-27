@@ -801,5 +801,42 @@ export interface VuePlanDeLots {
 /** « relancer » porte aussi le numéro du lot (4e argument du canal os:plansDeLots) : conv-1151, lot 3. */
 export type GestePlanDeLots = 'voir' | 'accepter' | 'refuser' | 'arreter' | 'reprendre' | 'relancer'
 export type ReponsePlansDeLots =
-  | { ok: true; vue?: VuePlanDeLots | null; plan?: PlanDeLots; detail?: string; deja?: boolean }
+  | {
+      ok: true
+      vue?: VuePlanDeLots | null
+      plan?: PlanDeLots
+      detail?: string
+      deja?: boolean
+      /** Réponse du geste « tous » (conv-1158). */
+      plans?: PlanDansLaListe[]
+    }
   | { ok: false; erreur: string }
+
+/**
+ * Un plan tel que la liste des conversations le range (geste « tous » du canal os:plansDeLots,
+ * conv-1158, 2026-10-26) : son chef et le fil de chaque lot déjà ouvert, avec son rang et le nombre
+ * total de lots. Sans les demandes ni les titres : jusqu'à 50 plans gardés de 20 lots, dont chaque
+ * demande pèse jusqu'à 4 000 caractères, n'ont pas à traverser le canal pour un rangement.
+ */
+export interface PlanDansLaListe {
+  id: string
+  chef: string
+  /** Le « M » de « lot N/M » : tous les lots du plan, ouverts ou non. */
+  total: number
+  lots: Array<{ rang: number; fil: string }>
+}
+
+/**
+ * Pur : tous les plans gardés, réduits à ce que la liste range, dans l'ordre du coordinateur (le
+ * plus récent en dernier). Un plan sans aucun fil de lot ouvert (refusé, remplacé, pas encore
+ * lancé) n'a rien à ranger et n'est pas rendu. Un plan fini l'est : ses fils restent dans la liste.
+ */
+export function plansPourLaListe(plans: readonly PlanDeLots[]): PlanDansLaListe[] {
+  const sortie: PlanDansLaListe[] = []
+  for (const plan of plans) {
+    const lots = plan.lots.flatMap((lot) => (lot.fil ? [{ rang: lot.rang, fil: lot.fil }] : []))
+    if (lots.length > 0)
+      sortie.push({ id: plan.id, chef: plan.chef, total: plan.lots.length, lots })
+  }
+  return sortie
+}

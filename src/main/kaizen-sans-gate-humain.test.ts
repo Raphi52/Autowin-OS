@@ -22,7 +22,7 @@ describe('kaizen sans gate humain', () => {
       .join('\n')
 
   it('la constitution porte la regle 19 APPLIQUEE, pas une attente d accord', () => {
-    expect(CONSTITUTION).toContain('éditions précises APPLIQUÉES directement')
+    expect(CONSTITUTION).toContain('éditions précises appliquées directement')
     expect(CONSTITUTION).toContain('commit dédié')
     expect(CONSTITUTION).not.toContain('attente d’un accord humain explicite')
   })
@@ -42,6 +42,6 @@ describe('kaizen sans gate humain', () => {
 
   it('la constitution atteint aussi le chat direct (source unique)', () => {
     const direct = composition.direct.systemPrompt.map((b) => b.excerpt ?? '').join('\n')
-    expect(direct).toContain('Kaizen provider-neutral')
+    expect(direct).toContain('Kaizen (améliorer le processus')
   })
 })

@@ -10,23 +10,34 @@
  * Elle se CACHE tant qu'une fenêtre d'Autowin est regardée : posée en bas à droite, elle couvrirait
  * le bas de la fenêtre (la saisie), pour la même raison que les cartes se ferment alors.
  */
-import { app, BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
 import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  avecLisereArcEnCiel,
+  CANAL_GESTE_MASCOTTE,
+  creerGlisserMascotte,
   creerSuiviMascotte,
   cssDeLEtat,
+  estLaFermeture,
   etatDeLaMascotte,
+  gesteDeMascotte,
   htmlDeMascotte,
   issuePourLaMascotte,
-  lienDuFragment,
-  placerMascotte,
+  placerMascotteGardee,
+  PRELOAD_MASCOTTE,
+  TAILLE_MASCOTTE,
   zoneDesCartes,
-  type LienActif
+  type PositionMascotte
 } from './mascotte'
+import {
+  ecrireMascotteAffichee,
+  ecrirePositionMascotte,
+  lirePositionMascotte
+} from './mascotte-reglage'
 import type { FinDeTourPourNotification } from './notification-fin-de-tour'
-import type { Rect } from './notification-popup'
+import type { Rect, ZoneDesCartes } from './notification-popup'
 
 export type DependancesMascotte = {
   /** Réponses de chat en cours, préparation comprise. */
@@ -47,11 +58,24 @@ export type MascotteDuBureau = {
     conversationId: string,
     fin: FinDeTourPourNotification & { tourDeFond?: boolean }
   ) => void
-  /** Crée la fenêtre (une seule fois) et la branche sur Autowin. */
-  demarrer: (deps: DependancesMascotte) => void
+  /**
+   * Branche la mascotte sur Autowin (une seule fois) ; sa fenêtre n'est créée que si elle est
+   * affichée (`affichee`, le choix de Settings · Interface lu au démarrage).
+   */
+  demarrer: (deps: DependancesMascotte, affichee: boolean) => void
+  /**
+   * L'interrupteur de Settings · Interface (conv-1145). Masquée = fenêtre FERMÉE, pas seulement
+   * cachée : rien ne reste à l'écran ni en mémoire. Réaffichée = fenêtre recréée.
+   */
+  afficher: (affichee: boolean) => void
   estLaMascotte: (fenetre: BrowserWindow | null) => boolean
-  /** La zone des cartes de fin de tour : à gauche de la mascotte quand elle existe. */
-  zoneDesCartes: (zone: Rect) => Rect
+  /**
+   * La zone des cartes de fin de tour : à côté de la bille, là où elle est et sur SON écran, quand
+   * elle est affichée (conv-1142) ; sinon la zone reçue (l'écran principal), inchangée.
+   */
+  zoneDesCartes: (zone: Rect) => ZoneDesCartes
+  /** La page d'une carte : avec le liseré arc-en-ciel quand la mascotte est affichée. */
+  decorerCarte: (html: string) => string
 }
 
 /** Les réponses de chat n'émettent aucun événement de début : relues à ce rythme. */
@@ -61,9 +85,12 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   const suivi = creerSuiviMascotte()
   let runs = 0
   let deps: DependancesMascotte | null = null
+  let affichee = true
+  /** `app.whenReady` passé : avant, aucune fenêtre ne peut naître. */
+  let prete = false
   let win: BrowserWindow | null = null
   let chargee = false
-  let lien: LienActif = 1
+  const glisser = creerGlisserMascotte()
   let feuilleCourante = ''
   let cleFeuille: string | null = null
   let fileFeuilles: Promise<void> = Promise.resolve()
@@ -79,7 +106,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   /** Pose la feuille de l'état si elle a changé ; une à la fois, dans l'ordre. */
   const rafraichir = (): void => {
     if (!win || win.isDestroyed() || !chargee) return
-    const feuille = cssDeLEtat(etatCourant(), lien)
+    const feuille = cssDeLEtat(etatCourant())
     if (feuille === feuilleCourante) return
     feuilleCourante = feuille
     const contenu = win.webContents
@@ -97,31 +124,91 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       })
   }
 
-  /** Visible seulement quand personne ne regarde Autowin. */
+  /** Visible seulement quand elle est affichée et que personne ne regarde Autowin. */
   const ajusterVisibilite = (): void => {
     if (!win || win.isDestroyed() || !chargee || !deps) return
-    if (deps.autowinRegardee()) {
+    if (!affichee || deps.autowinRegardee()) {
       if (win.isVisible()) win.hide()
     } else if (!win.isVisible()) win.showInactive()
   }
 
+  /** La place gardée si elle est encore sur un écran, sinon le coin au-dessus de l'horloge. */
+  const placement = (): ReturnType<typeof placerMascotteGardee> =>
+    placerMascotteGardee(
+      lirePositionMascotte(),
+      screen.getAllDisplays().map((ecran) => ecran.workArea),
+      screen.getPrimaryDisplay().workArea
+    )
+
   const placer = (): void => {
-    if (win && !win.isDestroyed())
-      win.setBounds(placerMascotte(screen.getPrimaryDisplay().workArea))
+    if (win && !win.isDestroyed()) win.setBounds(placement())
+  }
+
+  /** Le clic sur la bille : le fil qui t'attend, sinon Autowin. Lu AVANT que l'ouverture l'efface. */
+  const cliquer = (): void => {
+    if (!deps) return
+    const { fil } = etatCourant()
+    if (fil) deps.ouvrirFil(fil)
+    else deps.ouvrirAutowin()
+  }
+
+  /** Le lâcher d'un glisser : ramenée entière sur l'écran, puis la place est gardée. */
+  const poser = (fenetre: BrowserWindow, position: PositionMascotte): void => {
+    const rect = placerMascotteGardee(
+      position,
+      screen.getAllDisplays().map((ecran) => ecran.workArea),
+      screen.getPrimaryDisplay().workArea
+    )
+    fenetre.setBounds(rect)
+    try {
+      ecrirePositionMascotte({ x: rect.x, y: rect.y })
+    } catch (erreur) {
+      console.warn('[mascotte] place non gardée —', String(erreur))
+    }
+  }
+
+  /**
+   * Les gestes du préchargement (`PRELOAD_MASCOTTE`), acceptés de LA fenêtre de la bille seulement.
+   * Pendant un glisser, `setBounds` avec la taille fixe : un `setPosition` entre deux écrans
+   * d'échelles différentes peut changer la taille de la fenêtre.
+   */
+  const surGeste = (evenement: IpcMainEvent, brut: unknown, x: unknown, y: unknown): void => {
+    const fenetre = win
+    if (!fenetre || fenetre.isDestroyed() || evenement.sender !== fenetre.webContents) return
+    const recu = gesteDeMascotte(brut, x, y)
+    if (!recu) return
+    const { geste, curseur } = recu
+    if (geste === 'appui') {
+      const [x, y] = fenetre.getPosition()
+      glisser.appui(curseur, { x, y })
+      return
+    }
+    if (geste === 'bouge') {
+      const position = glisser.bouge(curseur)
+      if (position)
+        fenetre.setBounds({ ...position, width: TAILLE_MASCOTTE, height: TAILLE_MASCOTTE })
+      return
+    }
+    const fin = geste === 'lache' ? glisser.lache(curseur) : glisser.annule(curseur)
+    if (fin?.type === 'clic') cliquer()
+    else if (fin?.type === 'pose') poser(fenetre, fin.position)
   }
 
   const creerFenetre = (): void => {
     const fichier = join(tmpdir(), `autowin-mascotte-${process.pid}.html`)
+    const preload = join(tmpdir(), `autowin-mascotte-${process.pid}.preload.js`)
     writeFileSync(fichier, htmlDeMascotte(), 'utf8')
+    writeFileSync(preload, PRELOAD_MASCOTTE, 'utf8')
     win = new BrowserWindow({
-      ...placerMascotte(screen.getPrimaryDisplay().workArea),
+      ...placement(),
       show: false,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
       hasShadow: false,
       resizable: false,
-      movable: false,
+      // Déplacée par le moteur pendant un glisser de la bille (`surGeste`, conv-1142).
+      movable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -133,7 +220,9 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
-        javascript: false,
+        // Pour le seul préchargement : la page, elle, interdit tout script (sa politique de contenu).
+        javascript: true,
+        preload,
         spellcheck: false
       }
     })
@@ -145,22 +234,15 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       rafraichir()
       ajusterVisibilite()
     })
-    // Le clic : navigation INTERNE vers `#o1` ou `#o2`. L'état est lu AVANT que l'ouverture du fil
-    // ne ramène Autowin (qui efface « pour toi »), puis l'autre lien prend le prochain clic.
+    // La croix : navigation INTERNE vers `#fermer`. Le clic de la bille passe par `surGeste`.
     fenetre.webContents.on('did-navigate-in-page', (_evenement, url, principale) => {
-      if (!principale || !deps) return
-      const clique = lienDuFragment(url)
-      if (clique === null) return
-      const { fil } = etatCourant()
-      lien = clique === 1 ? 2 : 1
-      rafraichir()
-      if (fil) deps.ouvrirFil(fil)
-      else deps.ouvrirAutowin()
+      if (principale && deps && estLaFermeture(url)) fermerDepuisLaBille()
     })
     fenetre.webContents.on('will-navigate', (evenement) => evenement.preventDefault())
     fenetre.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     fenetre.once('closed', () => {
       rmSync(fichier, { force: true })
+      rmSync(preload, { force: true })
       if (win === fenetre) win = null
       chargee = false
     })
@@ -169,6 +251,41 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       console.warn('[mascotte] page non chargée —', String(erreur))
       if (!fenetre.isDestroyed()) fenetre.close()
     })
+  }
+
+  /** Crée la fenêtre si elle doit exister et n'existe pas encore. */
+  const assurerFenetre = (): void => {
+    if (!prete || !deps || !affichee || (win && !win.isDestroyed())) return
+    try {
+      creerFenetre()
+    } catch (erreur) {
+      console.warn('[mascotte] fenêtre impossible —', String(erreur))
+    }
+  }
+
+  const visible = (): boolean => deps !== null && affichee
+
+  const afficher = (oui: boolean): void => {
+    affichee = oui
+    if (oui) {
+      assurerFenetre()
+      ajusterVisibilite()
+    } else if (win && !win.isDestroyed()) win.close()
+  }
+
+  /**
+   * La croix de la bille (conv-1142) : le MÊME choix que l'interrupteur « Masquée » de Settings ·
+   * Interface, donc gardé — fermée, elle ne revient pas au prochain démarrage, et c'est
+   * l'interrupteur qui la rouvre. Un enregistrement impossible la ferme quand même : l'utilisateur
+   * a demandé qu'elle parte, elle ne reviendra qu'au prochain démarrage.
+   */
+  function fermerDepuisLaBille(): void {
+    try {
+      ecrireMascotteAffichee(false)
+    } catch (erreur) {
+      console.warn('[mascotte] fermeture non gardée —', String(erreur))
+    }
+    afficher(false)
   }
 
   return {
@@ -183,16 +300,14 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       suivi.finDeTour(conversationId, issue)
       rafraichir()
     },
-    demarrer: (dependances) => {
+    demarrer: (dependances, afficheeAuDemarrage) => {
       if (deps) return
       deps = dependances
+      affichee = afficheeAuDemarrage
+      ipcMain.on(CANAL_GESTE_MASCOTTE, surGeste)
       void app.whenReady().then(() => {
-        try {
-          creerFenetre()
-        } catch (erreur) {
-          console.warn('[mascotte] fenêtre impossible —', String(erreur))
-          return
-        }
+        prete = true
+        assurerFenetre()
         // Regarder Autowin efface « pour toi » et « problème », comme les cartes, et cache la bille.
         app.on('browser-window-focus', (_evenement, fenetre) => {
           if (fenetre === win || !deps?.autowinRegardee()) return
@@ -210,7 +325,14 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
         setInterval(rafraichir, RYTHME_MS).unref?.()
       })
     },
+    afficher,
     estLaMascotte: (fenetre) => fenetre !== null && fenetre === win,
-    zoneDesCartes: (zone) => (deps ? zoneDesCartes(zone) : zone)
+    zoneDesCartes: (zone) => {
+      if (!visible()) return zone
+      // La fenêtre si elle existe ; pas encore créée, la place où elle va naître.
+      const bille = win && !win.isDestroyed() ? win.getBounds() : placement()
+      return zoneDesCartes(bille, screen.getDisplayMatching(bille).workArea)
+    },
+    decorerCarte: (html) => (visible() ? avecLisereArcEnCiel(html) : html)
   }
 }

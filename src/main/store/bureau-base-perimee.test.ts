@@ -82,6 +82,41 @@ describe('acquire — un bureau retrouve ne doit pas rester sur une base perimee
     expect(existsSync(join(chemin, 'brouillon.txt'))).toBe(true)
   })
 
+  /*
+   * DEFAUT MESURE (bulletin de maintenance du 2026-10-24, conv-1048) : `verify` recopie dans sa
+   * copie `command-verify-<conv>` les fichiers non commites du depot, pour verifier l'etat courant
+   * (`synchroniserBureauDeVerification`). Ces fichiers sont un MIROIR, jamais du travail. Des que la
+   * base avancait, le refus ci-dessus les prenait pour du travail non publie : la copie restait
+   * bloquee pour toujours et chaque `verify` retombait sur le dossier partage — 17 verdicts sur 37
+   * le 23/10, 2 sur 2 le 24/10.
+   */
+  it('rafraichit une copie de verification perimee : ses fichiers recopies ne sont pas du travail', () => {
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const ancien = git(repo, 'rev-parse', 'HEAD')
+    const chemin = wm.acquire('command-verify-conv-9', {
+      workspacePath: repo,
+      worktreePath: cheminDe(wm, 'command-verify-conv-9'),
+      baseBranch: 'main',
+      baseSha: ancien
+    })
+    writeFileSync(join(chemin, 'a.txt'), 'copie du fichier non commite du depot\n')
+
+    writeFileSync(join(repo, 'a.txt'), 'font-size: 16px\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'base avancee')
+    const frais = git(repo, 'rev-parse', 'HEAD')
+
+    const reacquis = wm.acquire('command-verify-conv-9', {
+      workspacePath: repo,
+      worktreePath: cheminDe(wm, 'command-verify-conv-9'),
+      baseBranch: 'main',
+      baseSha: frais
+    })
+    expect(git(reacquis, 'rev-parse', 'HEAD')).toBe(frais)
+    expect(readFileSync(join(reacquis, 'a.txt'), 'utf8')).toContain('16px')
+  })
+
   it('laisse INTACT un bureau dont la tete est un commit pose au-dessus de la revision demandee', () => {
     const repo = tempRepo()
     const wm = manager(repo)

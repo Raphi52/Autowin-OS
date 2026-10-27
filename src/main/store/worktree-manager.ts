@@ -322,6 +322,25 @@ function detailFinalisationJetee(erreur: unknown): string {
   return texte.length > 600 ? texte.slice(0, 597) + '...' : texte
 }
 
+/**
+ * L'EDITION NON COMMITEE DE L'UTILISATEUR N'A PAS PU ETRE REMISE DANS SES FICHIERS (barreau 2).
+ *
+ * Vecu le 2026-10-24 (conv-1139, run run-58bfc90f8f7b-1) : la publication a atterri, deux fichiers
+ * modifies par l'utilisateur et touches par un commit entrant sont restes dans `stash@{0}`, revenus
+ * a la version commitee, et le compte rendu disait seulement « integre ». Ce champ porte le constat
+ * jusqu'au compte rendu (`annonce-edition-locale.ts`) : les fichiers, et ou leur version se trouve.
+ */
+export interface EditionLocaleNonRemise {
+  /** Fichiers dont la version de l'utilisateur n'est PAS dans l'arbre de travail. Vide = tous remis. */
+  fichiers: string[]
+  /** Adresse durable de son etat d'avant (`refs/autowin/safety/<agent>`), ecrite avant tout geste. */
+  sauvegarde: string
+  /** Sha de la remise de cote encore presente dans `git stash list`, si elle n'a pas pu etre retiree. */
+  remise?: string
+  /** Ce que git a repondu, en clair. */
+  cause: string
+}
+
 export type FinalizeResult =
   | {
       outcome: 'merged'
@@ -331,6 +350,8 @@ export type FinalizeResult =
       baseSha?: string
       /** Commit exact publié dans la branche cible (peut être un commit de merge). */
       publishedSha?: string
+      /** Barreau 2 seulement : publication faite, mais l'edition locale n'a pas ete toute remise. */
+      editionLocaleNonRemise?: EditionLocaleNonRemise
     }
   | { outcome: 'nothing'; agentId: string }
   /**
@@ -406,6 +427,8 @@ export type FinalizeResult =
        */
       stagedRef?: string
       detail?: string
+      /** Barreau 2 seulement : publication refusee, et l'edition locale n'a pas ete toute remise. */
+      editionLocaleNonRemise?: EditionLocaleNonRemise
     }
 
 export interface WorktreeRunContext {
@@ -1750,6 +1773,9 @@ export class WorktreeManager {
    */
   private static readonly EDITION_OUTIL = /^command-(edit|verify)-/
 
+  /** La copie de `verify` (`cleDuBureauDeVerification`) : ses fichiers sales sont un miroir du depot. */
+  private static readonly COPIE_DE_VERIFICATION = /^command-verify-/
+
   /**
    * COMBIEN DE TEMPS UNE BRANCHE `autowin/*` MERITE-T-ELLE D'ETRE GARDEE — quatorze jours.
    *
@@ -2623,10 +2649,20 @@ export class WorktreeManager {
     if (this.unpublishedFiles(path).length > 0) {
       // Elle retient du travail : la marge LARGE d'origine s'applique, inchangee.
       if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
-      const preserve = this.preserverEtLiberer(agentId)
-      return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
-        ? { etape: 'fait', agentId }
-        : undefined
+      /*
+       * SAUF LA COPIE DE `verify` (conv-1137, 2026-10-24) : ses fichiers sales sont un MIROIR du
+       * depot, recopie a chaque verification (`synchroniserBureauDeVerification`). Les preserver
+       * creait `autowin/recovery/command-verify-conv-1048` — 2 899 lignes, aucune neuve. Elle suit
+       * donc la garde du HEAD ci-dessous : un commit qu'aucune reference ne tient reste rattache.
+       * La marge de 24 h, elle, demeure : `verify` ne pose aucun lease, l'age seul protege un test
+       * en cours.
+       */
+      if (!WorktreeManager.COPIE_DE_VERIFICATION.test(agentId)) {
+        const preserve = this.preserverEtLiberer(agentId)
+        return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
+          ? { etape: 'fait', agentId }
+          : undefined
+      }
     }
 
     const head = this.tryGitFn(path, ['rev-parse', 'HEAD'])
@@ -5428,7 +5464,13 @@ exit 0
     const descend =
       this.tryGitFn(path, ['merge-base', '--is-ancestor', attendue, tete.stdout.trim()]).code === 0
     if (descend) return false
-    const restes = this.unpublishedFiles(path)
+    // UNE COPIE DE VERIFICATION NE PORTE QU'UN MIROIR (bulletin de maintenance, 2026-10-24) :
+    // `verify` y recopie les fichiers non commites du depot (`synchroniserBureauDeVerification`).
+    // Les compter comme du travail bloquait la copie a la premiere avancee de la base, et chaque
+    // `verify` retombait sur le dossier partage (17 verdicts sur 37 le 23/10).
+    const restes = WorktreeManager.COPIE_DE_VERIFICATION.test(agentId)
+      ? []
+      : this.unpublishedFiles(path)
     if (restes.length > 0) {
       throw new Error(
         `Bureau ${agentId} sur une base périmée : sa tête ne descend pas de ` +
@@ -5884,14 +5926,20 @@ exit 0
        * qui pose une adresse d'attente. Aucun de ces deux chemins ne rend un echec sec : c'est la
        * demande explicite du 2026-08-27, « on ne finit jamais un tour sur un echec comme ca ».
        */
+      let nonRemise: EditionLocaleNonRemise | undefined
       if (options.preserverEditionLocale === true) {
-        const atterri = this.fusionEnPreservantLEditionLocale(agentId, issue.files, () =>
+        const essai = this.fusionEnPreservantLEditionLocale(agentId, issue.files, () =>
           this.finalizeSansSecours(agentId, { ...options, preserverEditionLocale: false })
         )
-        if (atterri) return atterri
+        if (essai.issue) return essai.issue
+        nonRemise = essai.nonRemise
       }
       const attente = this.poserAttenteDIntegration(agentId)
-      return attente ? { ...issue, stagedRef: attente } : issue
+      return {
+        ...issue,
+        ...(attente ? { stagedRef: attente } : {}),
+        ...(nonRemise ? { editionLocaleNonRemise: nonRemise } : {})
+      }
     }
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return issue
@@ -6003,8 +6051,8 @@ exit 0
     agentId: string,
     fichiers: string[],
     publier: () => FinalizeResult
-  ): FinalizeResult | undefined {
-    if (fichiers.length === 0) return undefined
+  ): { issue?: FinalizeResult; nonRemise?: EditionLocaleNonRemise } {
+    if (fichiers.length === 0) return {}
     /*
      * PRE-VOL : DECIDER AVANT DE TOUCHER, pas apres.
      *
@@ -6018,15 +6066,15 @@ exit 0
      * reel se solde alors par un `undefined` immediat : l'echelle descend a l'attente, et l'arbre de
      * l'utilisateur n'a pas bouge d'un octet.
      */
-    if (!this.fusionEstPropreABlanc(agentId, fichiers)) return undefined
+    if (!this.fusionEstPropreABlanc(agentId, fichiers)) return {}
     // 1. SAUVEGARDE D'ABORD. `stash create` n'ecrit rien dans l'arbre ni dans l'index : il rend le
     //    sha d'un commit qui porte l'etat sale. Sans ce sha, on n'ecrit pas une seule ligne.
     const snapshot = this.tryGitFn(this.baseRepo, ['stash', 'create'])
     const sauvegarde = snapshot.code === 0 ? snapshot.stdout.trim() : ''
-    if (!sauvegarde) return undefined
+    if (!sauvegarde) return {}
     const refSauvegarde = `refs/autowin/safety/${agentId}`
     if (this.tryGitFn(this.baseRepo, ['update-ref', refSauvegarde, sauvegarde]).code !== 0)
-      return undefined
+      return {}
 
     /** Remet son fichier exactement comme il l'avait laisse, depuis la sauvegarde. */
     const restaurer = (): void => {
@@ -6065,28 +6113,211 @@ exit 0
     ])
     if (rangement.code !== 0) {
       restaurer()
-      return undefined
+      return {}
     }
+    /*
+     * LE SHA DE NOTRE REMISE, lu tout de suite. La pile `refs/stash` est PARTAGEE par tous les fils
+     * du depot : au moment du retour, `stash@{0}` peut etre celle d'un autre. On ne reprend et on
+     * ne retire que la notre, designee par son sha (`rangDeLaRemise`).
+     */
+    const lue = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', '--quiet', 'refs/stash'])
+    const remise = lue.code === 0 ? lue.stdout.trim() : ''
+    if (!remise) {
+      // Rangement « reussi » sans remise : rien n'a bouge, on ne publie pas sur une base sale.
+      restaurer()
+      return {}
+    }
+    const retour = (publiee: boolean): EditionLocaleNonRemise | undefined =>
+      this.remettreEditionLocale({ fichiers, remise, refSauvegarde, publiee, restaurer })
 
-    const publie = publier()
+    let publie: FinalizeResult
+    try {
+      publie = publier()
+    } catch (erreur) {
+      /*
+       * UNE ERREUR APRES LE RANGEMENT NE LAISSE PAS SES FICHIERS DANS LA PILE. Sans ce rattrapage,
+       * l'exception sortait d'ici avec ses editions encore rangees — la forme exacte du 24/10 si
+       * la publication venait d'atterrir. On regarde si la branche a avance, on remet en
+       * consequence, puis l'erreur continue sa route.
+       */
+      const tete = this.tryGitFn(this.baseRepo, ['rev-parse', 'HEAD'])
+      const avant = this.tryGitFn(this.baseRepo, ['rev-parse', `${remise}^1`])
+      retour(tete.code === 0 && avant.code === 0 && tete.stdout.trim() !== avant.stdout.trim())
+      throw erreur
+    }
     if (publie.outcome !== 'merged') {
       // La publication n'a pas eu lieu : on rend son arbre a l'identique et on n'invente rien.
-      this.tryGitFn(this.baseRepo, ['stash', 'pop', '--quiet'])
-      restaurer()
-      return undefined
+      const nonRemise = retour(false)
+      return nonRemise ? { nonRemise } : {}
+    }
+    /*
+     * 3. LA PUBLICATION A ATTERRI : elle est rendue comme telle, quoi qu'il arrive ensuite.
+     *
+     * Vecu le 2026-10-24 (conv-1139) et reproduit en test (`index.lock` tenu par un autre geste
+     * git pendant le retour) : un `stash pop` rate faisait rendre `undefined`, donc « bloque »
+     * pour un travail DEJA publie, puis `stash drop` jetait la remise et le fichier restait sans
+     * ses editions — elles ne survivaient que dans la sauvegarde, sans que personne le sache. Le
+     * retour est maintenant VERIFIE fichier par fichier, et ce qui n'a pas pu revenir est ANNONCE.
+     */
+    const nonRemise = retour(true)
+    return { issue: nonRemise ? { ...publie, editionLocaleNonRemise: nonRemise } : publie }
+  }
+
+  /** Rang (`stash@{n}`) de NOTRE remise dans la pile partagee, ou `undefined` si elle n'y est plus. */
+  private rangDeLaRemise(remise: string): number | undefined {
+    const liste = this.tryGitFn(this.baseRepo, ['stash', 'list', '--format=%H'])
+    if (liste.code !== 0) return undefined
+    const rang = liste.stdout
+      .split('\n')
+      .map((ligne) => ligne.trim())
+      .indexOf(remise)
+    return rang >= 0 ? rang : undefined
+  }
+
+  /** Contenu d'un fichier dans une revision, ou `undefined` s'il n'y existe pas. */
+  private contenuA(revision: string, fichier: string): string | undefined {
+    const existe = this.tryGitFn(this.baseRepo, ['cat-file', '-e', `${revision}:${fichier}`])
+    if (existe.code !== 0) return undefined
+    const lu = this.tryGitFn(this.baseRepo, ['show', `${revision}:${fichier}`])
+    return lu.code === 0 ? lu.stdout : undefined
+  }
+
+  /**
+   * Empreinte git d'un fichier tel que git le rangerait (filtres de fin de ligne compris) : celle du
+   * fichier sur le disque, ou celle d'un contenu ecrit ailleurs mais lu comme `fichier`. Lecture
+   * seule, SANS le verrou de l'index — c'est tout son interet quand un autre geste git le tient.
+   */
+  private empreinteGit(fichier: string, contenuIci?: string): string | undefined {
+    const r = this.tryGitFn(
+      this.baseRepo,
+      contenuIci ? ['hash-object', `--path=${fichier}`, contenuIci] : ['hash-object', '--', fichier]
+    )
+    return r.code === 0 ? r.stdout.trim() : undefined
+  }
+
+  /**
+   * RETOUR DE L'EDITION LOCALE APRES LA PUBLICATION — et sa PREUVE, fichier par fichier.
+   *
+   * 1. Voie git : `stash pop` de NOTRE remise (git fusionne a 3 branches et tient l'index a jour).
+   * 2. Verification sans verrou : pour chaque fichier, l'empreinte du disque doit egaler celle de
+   *    la version attendue — sa version a lui si la publication a ete refusee, la fusion a 3
+   *    branches (lui · base d'avant · nouvelle tete) si elle a atterri.
+   * 3. Voie de secours, pour un fichier pas revenu : s'il est encore EXACTEMENT dans l'etat que le
+   *    rangement ou la publication lui ont donne, on y ecrit la version attendue. S'il a change
+   *    entre-temps (autre geste, marqueurs d'un pop rate), on n'y touche PAS : on l'annonce.
+   * 4. La remise n'est retiree de la pile que si TOUS les fichiers sont prouves revenus.
+   *
+   * Rend `undefined` quand tout est revenu et la pile propre ; sinon, le constat a annoncer.
+   */
+  private remettreEditionLocale(opts: {
+    fichiers: string[]
+    remise: string
+    refSauvegarde: string
+    publiee: boolean
+    restaurer: () => void
+  }): EditionLocaleNonRemise | undefined {
+    const { fichiers, remise, refSauvegarde, publiee } = opts
+    const causes: string[] = []
+    const rangAvant = this.rangDeLaRemise(remise)
+    if (rangAvant !== undefined) {
+      const pop = this.tryGitFn(this.baseRepo, ['stash', 'pop', '--quiet', `stash@{${rangAvant}}`])
+      if (pop.code !== 0) causes.push(`git stash pop : ${causeGit(pop) || `code ${pop.code}`}`)
+    } else {
+      causes.push('la remise de côté n’est plus dans la pile')
+    }
+    // Publication refusee : son etat EXACT d'avant, octet pour octet (voir `restaurer`).
+    if (!publiee) opts.restaurer()
+
+    const nonRemis: string[] = []
+    let bac: string | undefined
+    try {
+      bac = mkdtempSync(join(tmpdir(), 'autowin-retour-edition-'))
+      for (const fichier of fichiers) {
+        // Sa version : la remise porte ses fichiers suivis ; un fichier non suivi est sous `^3`.
+        const sienne = this.contenuA(remise, fichier) ?? this.contenuA(`${remise}^3`, fichier)
+        // L'etat que le rangement ou la publication ont laisse sur le disque, avant tout retour.
+        const laisse = publiee
+          ? this.contenuA('HEAD', fichier)
+          : this.contenuA(`${remise}^1`, fichier)
+        let attendu = sienne
+        if (publiee && sienne !== undefined) {
+          const chemins = {
+            sienne: join(bac, 'sienne'),
+            base: join(bac, 'base'),
+            tete: join(bac, 'tete')
+          }
+          writeFileSync(chemins.sienne, sienne)
+          writeFileSync(chemins.base, this.contenuA(`${remise}^1`, fichier) ?? '')
+          writeFileSync(chemins.tete, laisse ?? '')
+          const fusion = this.tryGitFn(this.baseRepo, [
+            'merge-file',
+            '-q',
+            '-p',
+            chemins.sienne,
+            chemins.base,
+            chemins.tete
+          ])
+          attendu = fusion.code === 0 ? fusion.stdout : undefined
+        }
+        if (attendu === undefined) {
+          nonRemis.push(fichier)
+          causes.push(`${fichier} : version attendue incalculable`)
+          continue
+        }
+        const cheminAttendu = join(bac, 'attendu')
+        writeFileSync(cheminAttendu, attendu)
+        const empreinteAttendue = this.empreinteGit(fichier, cheminAttendu)
+        if (empreinteAttendue && this.empreinteGit(fichier) === empreinteAttendue) continue
+        // Voie de secours — seulement sur un fichier que personne n'a touche depuis notre geste,
+        // et jamais sur un contenu que l'aller-retour en UTF-8 aurait abime.
+        const cheminLaisse = join(bac, 'laisse')
+        writeFileSync(cheminLaisse, laisse ?? '')
+        const intact =
+          laisse !== undefined &&
+          this.empreinteGit(fichier) === this.empreinteGit(fichier, cheminLaisse)
+        if (!intact || attendu.includes('�')) {
+          nonRemis.push(fichier)
+          causes.push(
+            intact
+              ? `${fichier} : contenu non UTF-8, réécriture refusée`
+              : `${fichier} : modifié depuis la publication, rien écrasé`
+          )
+          continue
+        }
+        copyFileSync(cheminAttendu, join(this.baseRepo, fichier))
+        if (!empreinteAttendue || this.empreinteGit(fichier) !== empreinteAttendue) {
+          nonRemis.push(fichier)
+          causes.push(`${fichier} : réécrit mais différent de la version attendue`)
+        }
+      }
+    } catch (erreur) {
+      for (const fichier of fichiers) if (!nonRemis.includes(fichier)) nonRemis.push(fichier)
+      causes.push(erreur instanceof Error ? erreur.message : String(erreur))
+    } finally {
+      if (bac) supprimerArbre(bac)
     }
 
-    // 3. Ses editions reviennent, fusionnees a 3 branches par git lui-meme.
-    const retour = this.tryGitFn(this.baseRepo, ['stash', 'pop', '--quiet'])
-    if (retour.code !== 0) {
-      // Conflit REEL. On ne laisse aucun marqueur : son fichier revient a son etat exact, le stash
-      // est retire, et le travail publie reste publie — il est deja dans l'historique.
-      this.tryGitFn(this.baseRepo, ['checkout', '--', ...fichiers])
-      this.tryGitFn(this.baseRepo, ['stash', 'drop', '--quiet'])
-      restaurer()
-      return undefined
+    // 4. La remise ne quitte la pile que si tout est prouve revenu.
+    const rangApres = this.rangDeLaRemise(remise)
+    if (nonRemis.length === 0 && rangApres !== undefined) {
+      const retrait = this.tryGitFn(this.baseRepo, [
+        'stash',
+        'drop',
+        '--quiet',
+        `stash@{${rangApres}}`
+      ])
+      if (retrait.code !== 0) {
+        causes.push(`git stash drop : ${causeGit(retrait) || `code ${retrait.code}`}`)
+      }
     }
-    return publie
+    const resteDansLaPile = this.rangDeLaRemise(remise) !== undefined
+    if (nonRemis.length === 0 && !resteDansLaPile) return undefined
+    return {
+      fichiers: nonRemis,
+      sauvegarde: refSauvegarde,
+      ...(resteDansLaPile ? { remise } : {}),
+      cause: causes.join(' · ') || 'raison inconnue'
+    }
   }
 
   /**

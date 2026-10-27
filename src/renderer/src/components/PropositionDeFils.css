@@ -1,0 +1,64 @@
+/* CARTE « LANCER EN N FILS » (conv-1147, PropositionDeFils.tsx). Même direction que les blocs de
+   données : aucun fond opaque, des filets fins, l'or pour les accents, uniquement des jetons du
+   thème. */
+.md-fils__liste {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.md-fils__fil {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--line);
+}
+.md-fils__rang {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold-doux);
+  white-space: nowrap;
+}
+.md-fils__taches {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.md-fils__tache {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.md-fils__fichiers {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.md-fils__actions,
+.md-fils__lance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+.md-fils__lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--gold-doux);
+  cursor: pointer;
+}
+.md-fils__id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}

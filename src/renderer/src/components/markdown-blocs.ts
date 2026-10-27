@@ -10,12 +10,15 @@ import { authoritativeOrchestrationClosureSpan } from '../../../shared/orchestra
 import { createBoundedCache } from './bounded-cache'
 import { MAX_SCENE_3D_CHARS } from '../../../shared/scene-3d'
 import { estFormeDonnees, lireBlocDonnees, type BlocDonnees } from '../../../shared/blocs-donnees'
+import { FORME_FILS, lireBlocFils, type TacheDeFil } from '../../../shared/lancer-en-fils'
 
 export type MarkdownBlock = {
-  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d' | 'donnees'
+  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d' | 'donnees' | 'fils'
   content: string
   /** Bloc `donnees` seulement : la source deja LUE (conv-1074). Le decoupage est cache par contenu. */
   donnees?: BlocDonnees
+  /** Bloc `fils` seulement : les taches deja LUES de la proposition « Lancer en N fils » (conv-1147). */
+  taches?: TacheDeFil[]
 }
 
 /**
@@ -195,6 +198,16 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
         : undefined
     if (donnees && !('erreur' in donnees)) {
       blocks.push({ kind: 'donnees', content: span.content, donnees })
+      cursor = span.end
+      sur = span.end
+      blocsSurs = blocks.length
+      continue
+    }
+    // Proposition « Lancer en N fils » (conv-1147, shared/lancer-en-fils.ts) : meme regle, fence
+    // close ET JSON lisible. Une carte a boutons sur un JSON a moitie ecrit lancerait des tours faux.
+    const fils = ferme && span.language === FORME_FILS ? lireBlocFils(span.content) : undefined
+    if (fils && !('erreur' in fils)) {
+      blocks.push({ kind: 'fils', content: span.content, taches: fils.taches })
       cursor = span.end
       sur = span.end
       blocsSurs = blocks.length

@@ -587,6 +587,32 @@ export const avertissementInterface = (capturee, env) =>
     : {}
 
 /**
+ * LE PIEGE DE conv-1158 (2026-10-26), rendu visible dans le rapport : `--code-dev` sert l'interface
+ * a jour, mais le process principal et le pont sont ceux que le serveur de dev a construits a son
+ * demarrage. L'enrobage (avec-instance-headless.mjs) passe dans AUTOWIN_CAPTURE_MAIN_PERIME les
+ * sources modifiees depuis ; le rapport les recopie. Pas un echec : un changement du seul renderer
+ * reste prouve. Pure.
+ */
+export const avertissementProcessPrincipal = (env) => {
+  const brut = env?.AUTOWIN_CAPTURE_MAIN_PERIME
+  if (!brut) return {}
+  let perime
+  try {
+    perime = JSON.parse(brut)
+  } catch {
+    // Valeur posee par l'enrobage : illisible, on la rend telle quelle plutot que de la taire.
+    return {
+      avertissementProcessPrincipal: `process principal peut-etre perime (indication illisible : ${brut})`
+    }
+  }
+  const exemples = (perime.fichiers ?? []).join(', ')
+  return {
+    processPrincipalPerime: perime,
+    avertissementProcessPrincipal: `process principal construit le ${perime.construitLe}, AVANT la modification de ${perime.total} fichier(s) de src/main, src/preload ou src/shared (${exemples}) : un changement de ces fichiers n'est PAS dans cette capture — restart_app reconstruit le process principal`
+  }
+}
+
+/**
  * D'OU VIENT L'INTERFACE CAPTUREE, lu sur l'adresse de la page. C'est ce fait — pas l'option
  * demandee — qui dit ce que montre la capture. Pure.
  * - `code-dev` : serveur de dev local, le code en cours du depot principal ;
@@ -1860,6 +1886,7 @@ const main = async () => {
       vueRestauree: aRestaurer ?? null,
       ...mesures,
       ...avertissementInterface(mesures.interfaceCapturee, process.env),
+      ...avertissementProcessPrincipal(process.env),
       erreursConsole: erreursConsole.slice(0, 5),
       // Ce que le producteur peut CITER au juge comme preuve hors-modèle.
       preuve: verdict.ok

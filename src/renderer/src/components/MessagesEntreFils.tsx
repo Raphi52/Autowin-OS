@@ -5,10 +5,12 @@ import './MessagesEntreFils.css'
  * MESSAGES ENTRE FILS, DANS LE FIL (conv-1139, 2026-10-24).
  *
  * Les agents de deux fils du même dépôt s'écrivent par `ecrire_a_un_fil` au lieu de passer par
- * l'utilisateur. Règle du cadrage : aucun échange hors de sa vue. Ce bloc montre donc, au-dessus de
- * la zone de saisie, ce que CE fil a envoyé et reçu — séparé des messages de l'utilisateur. Depuis
- * le 2026-10-25, un agent peut y donner un ORDRE de travail ; le bandeau rappelle qu'il ne vaut
- * jamais l'accord de l'utilisateur.
+ * l'utilisateur. Règle du cadrage : aucun échange hors de sa vue. Ce bloc montre donc ce que CE fil
+ * a envoyé et reçu — séparé des messages de l'utilisateur. Il vit en tête de l'onglet Runs du
+ * panneau Détails (WorkflowsPanel) depuis le 2026-10-25, plus au-dessus de la zone de saisie. Depuis
+ * le 2026-10-25, un agent peut y donner un ORDRE de travail ; la bulle de chaque ordre rappelle
+ * qu'il ne vaut jamais l'accord de l'utilisateur. Mise en page « Bulles » (choisie au /draft du
+ * 2026-10-25) : un petit chat par fil correspondant, les envois de CE fil à droite.
  *
  * Lecture seule (`os:messagesEntreFils`) : l'afficher ne le remet pas à l'agent. Relu à chaque
  * changement de fil et à chaque signal `refresh/messages-fils` ou `refresh/chat` (fin de tour).
@@ -69,39 +71,70 @@ export function MessagesEntreFils({
   const messages = lu.fil === conversationId ? lu.messages : []
   if (!messages.length) return null
   const visibles = messages.slice(-max)
+  const plusAnciens = messages.length - visibles.length
+  const s = plusAnciens > 1 ? 's' : ''
   return (
     <section className="mef" aria-label="Messages entre fils">
-      <div className="mef-kicker">
-        Messages entre agents de fils du même dépôt — un ordre d’agent n’est jamais ton accord pour
-        publier ou détruire
-      </div>
-      <ul className="mef-liste">
-        {visibles.map((m) => (
-          <li key={m.id} className={`mef-ligne mef-ligne--${m.sens}`} data-message-fil={m.id}>
-            <div className="mef-entete">
-              <span className="mef-sens">
-                {m.sens === 'recu' ? `↘ reçu de ${m.autreFil}` : `↗ envoyé à ${m.autreFil}`}
-              </span>
-              <span className="mef-meta">
-                {NATURES[m.nature] ?? m.nature}
-                {m.hypothese ? ' · hypothèse (sans preuve)' : ''} · {heure(m.at)} ·{' '}
-                {m.livre
-                  ? m.sens === 'recu'
-                    ? 'remis à l’agent'
-                    : 'remis au destinataire'
-                  : 'en attente'}
-              </span>
-            </div>
-            <p className="mef-texte">{m.texte}</p>
-            {m.preuve && <p className="mef-preuve">Preuve : {m.preuve}</p>}
-          </li>
-        ))}
-      </ul>
-      {messages.length > visibles.length && (
+      {plusAnciens > 0 && (
         <div className="mef-reste">
-          {messages.length - visibles.length} message(s) plus ancien(s)
+          {plusAnciens} message{s} plus ancien{s}
         </div>
       )}
+      {parFil(visibles).map((groupe) => (
+        <div key={groupe.fil} className="mef-groupe">
+          <div className="mef-avec">
+            avec <b>{groupe.fil}</b>
+          </div>
+          <ul className="mef-liste">
+            {groupe.messages.map((m) => (
+              <li
+                key={m.id}
+                className={`mef-bulle mef-bulle--${m.sens}`}
+                data-message-fil={m.id}
+                aria-label={m.sens === 'recu' ? `reçu de ${m.autreFil}` : `envoyé à ${m.autreFil}`}
+              >
+                <div className="mef-corps">
+                  <span className={`mef-nature mef-nature--${m.nature}`}>
+                    {NATURES[m.nature] ?? m.nature}
+                    {m.hypothese ? ' · hypothèse' : ''}
+                  </span>
+                  <p className="mef-texte">{m.texte}</p>
+                  {m.preuve && <p className="mef-preuve">Preuve : {m.preuve}</p>}
+                </div>
+                <div className="mef-meta">
+                  {heure(m.at)} ·{' '}
+                  {m.livre
+                    ? m.sens === 'recu'
+                      ? 'remis à l’agent'
+                      : 'remis au destinataire'
+                    : 'en attente'}
+                  {m.nature === 'ordre' ? ' · pas ton accord pour publier ou détruire' : ''}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   )
+}
+
+/*
+ * Un groupe par fil correspondant, dans l'ordre du journal à l'intérieur ; le groupe dont le
+ * dernier message est le plus récent va EN BAS, comme dans un chat (conv-1139, 2026-10-25,
+ * proposition « Bulles » du /draft).
+ */
+function parFil(
+  messages: MessageEntreFilsVu[]
+): Array<{ fil: string; messages: MessageEntreFilsVu[] }> {
+  const groupes = new Map<string, MessageEntreFilsVu[]>()
+  for (const m of messages) {
+    const groupe = groupes.get(m.autreFil)
+    if (groupe) groupe.push(m)
+    else groupes.set(m.autreFil, [m])
+  }
+  const dernier = (ms: MessageEntreFilsVu[]): number => Math.max(...ms.map((m) => m.at))
+  return [...groupes]
+    .map(([fil, ms]) => ({ fil, messages: ms }))
+    .sort((a, b) => dernier(a.messages) - dernier(b.messages))
 }

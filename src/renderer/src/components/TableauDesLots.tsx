@@ -3,6 +3,7 @@ import {
   LIBELLE_STATUT,
   bilanDuPlan,
   libelleEtat,
+  relancerLot,
   type GestePlanDeLots,
   type LotDuPlan,
   type PlanDeLots,
@@ -120,18 +121,81 @@ function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil): string {
   return sansMesure ? `${total} · ${sansMesure} lot${sansMesure > 1 ? 's' : ''} sans mesure` : total
 }
 
-function LotsDuPlan({ plan, couts }: { plan: PlanDeLots; couts: CoutsParFil }): React.JSX.Element {
+/*
+ * RELANCER UN LOT AU CLIC (conv-1151, lot 3). Avant ce bouton, seul l'agent du chef relançait un lot
+ * en échec (`plan_de_lots`, action « relancer ») : l'utilisateur, qui voyait l'échec ici, devait lui
+ * écrire. La décision « permis » est celle de `relancerLot` — la règle même que le geste exécutera
+ * dans le coordinateur, jamais une seconde copie.
+ */
+
+/** Plans dont un lot en échec garde son bouton, grisé, quand le plafond de tours est épuisé. */
+const STATUTS_RELANCE_GRISEE = new Set<PlanDeLots['statut']>([
+  'en-cours',
+  'termine',
+  'plafond-atteint'
+])
+
+/** `null` = pas de bouton ; sinon actif, ou grisé avec sa raison. */
+function relanceAuClic(
+  plan: PlanDeLots,
+  lot: LotDuPlan
+): { possible: true } | { possible: false; raison: string } | null {
+  if (lot.etat !== 'echec' && lot.etat !== 'interrompu') return null
+  if (relancerLot(plan, lot.rang).ok) return { possible: true }
+  // Le seul refus qui garde un bouton : sans lui, l'utilisateur ne saurait pas pourquoi rien ne
+  // repart. Les autres (quota, redémarrage, arrêt) ont déjà leur bouton « Reprendre ».
+  if (plan.toursLances >= plan.plafondTours && STATUTS_RELANCE_GRISEE.has(plan.statut))
+    return {
+      possible: false,
+      raison: `plafond de ${plan.plafondTours} tours atteint : relance impossible.`
+    }
+  return null
+}
+
+function LotsDuPlan({
+  plan,
+  couts,
+  occupe,
+  relancer
+}: {
+  plan: PlanDeLots
+  couts: CoutsParFil
+  occupe: boolean
+  relancer: (rang: number) => void
+}): React.JSX.Element {
   return (
     <ol className="tdl-lots">
       {plan.lots.map((lot) => {
         const duree = dureeDuLot(lot)
         const cout = coutDuFil(couts, lot.fil)
+        const relance = relanceAuClic(plan, lot)
         return (
           <li key={lot.rang} className={`tdl-lot tdl-lot--${lot.etat}`} data-lot-etat={lot.etat}>
             <span className="tdl-pastille">{libelleEtat(lot.etat)}</span>
             <span className="tdl-lot-titre">
               {lot.rang}. {lot.titre}
               {lot.raison ? <span className="tdl-lot-raison"> — {lot.raison}</span> : null}
+              {relance ? (
+                <span className="tdl-relance">
+                  <button
+                    type="button"
+                    className="tdl-bouton tdl-bouton--lot"
+                    data-testid={`tdl-lot-${lot.rang}-relancer`}
+                    disabled={occupe || !relance.possible}
+                    title={
+                      relance.possible
+                        ? `Relancer le lot ${lot.rang} dans ${lot.fil ?? 'un nouveau fil'} — compte un tour (${plan.toursLances} sur ${plan.plafondTours})`
+                        : relance.raison
+                    }
+                    onClick={() => relancer(lot.rang)}
+                  >
+                    Relancer
+                  </button>
+                  {relance.possible ? null : (
+                    <span className="tdl-relance-raison">{relance.raison}</span>
+                  )}
+                </span>
+              ) : null}
             </span>
             <span
               className="tdl-mesure tdl-duree"
@@ -239,10 +303,14 @@ export function TableauDesLots({
   const bilan = bilanDuPlan(plan)
   const erreur = geste.fil === conversationId ? geste.erreur : undefined
   const occupe = geste.fil === conversationId && geste.enCours
-  const agir = (action: Exclude<GestePlanDeLots, 'voir'>): void => {
+  const agir = (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number): void => {
     if (occupe) return
     setGeste({ fil: conversationId, enCours: true })
-    window.api.plansDeLots(action, conversationId, plan.id).then(
+    const reponse =
+      lot === undefined
+        ? window.api.plansDeLots(action, conversationId, plan.id)
+        : window.api.plansDeLots(action, conversationId, plan.id, lot)
+    reponse.then(
       (r) =>
         setGeste({ fil: conversationId, enCours: false, ...(r.ok ? {} : { erreur: r.erreur }) }),
       (e: unknown) =>
@@ -285,7 +353,12 @@ export function TableauDesLots({
           ))}
         </ul>
       ) : null}
-      <LotsDuPlan plan={plan} couts={couts} />
+      <LotsDuPlan
+        plan={plan}
+        couts={couts}
+        occupe={occupe}
+        relancer={(rang) => agir('relancer', rang)}
+      />
       {plan.statut === 'attente-accord' ? (
         <div className="tdl-actions">
           <button

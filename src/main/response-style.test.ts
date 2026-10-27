@@ -124,7 +124,7 @@ describe('agir plutot que recommander — la cloture ne sert pas a rendre le tra
   })
 
   it('ordonne d EXECUTER l action sure, bornee et reversible au lieu de l ecrire', () => {
-    expect(consigne).toMatch(/EX[ÉE]CUTE-LA dans CE tour/u)
+    expect(consigne).toMatch(/ex[ée]cute-la dans ce tour/iu)
     expect(consigne).toMatch(/s[ûu]re, born[ée]e et r[ée]versible/u)
   })
 

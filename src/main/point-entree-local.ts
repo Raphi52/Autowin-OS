@@ -55,9 +55,38 @@ export interface PointEntreeLocal {
   arreter(): Promise<void>
 }
 
+/**
+ * Marque posée sur toute demande envoyée par cette porte (conv-1144, cadrage) : le fil montre d'où
+ * vient le tour, et l'agent le lit aussi — sur le modèle de « Ordre de <fil> »
+ * (`messages-entre-fils-app.ts`, `promptDOrdre`).
+ */
+export const MARQUE_SCRIPT = '[Lancé par un script du poste — point d’entrée local]'
+
+/**
+ * La marque va EN TÊTE ; sauf devant une `/skill`, que le pilote ne reconnaît qu'en premier mot
+ * (commands.ts, `chat_send`) : elle passe alors à la fin, pour ne pas désarmer la skill.
+ */
+export function marquerLanceParScript(message: string): string {
+  return message.trimStart().startsWith('/')
+    ? `${message}\n\n${MARQUE_SCRIPT}`
+    : `${MARQUE_SCRIPT}\n\n${message}`
+}
+
 const refusHorsPerimetre = (nom: string): string =>
   `REFUSÉ — \`${nom}\` n'est pas servi par le point d'entrée local, qui ne sert que ` +
   `${COMMANDES_POINT_ENTREE.join(', ')}. L'appel n'a pas eu lieu.`
+
+/**
+ * conv-1144 (cadrage, point resté ouvert) : sans fil, `chat_send` n'ouvre AUCUN tour — il part en
+ * simple question au modèle (commands.ts, `case 'chat_send'`). Un script n'aurait aucun tour à
+ * attendre, et l'appel serait payé pour rien. Même lecture que le bus : vide ou espaces = pas de fil.
+ */
+const REFUS_CHAT_SEND_SANS_FIL =
+  'REFUSÉ — `chat_send` exige un `conversationId` sur le point d’entrée local : sans fil, aucun ' +
+  'tour ne démarre. Créer d’abord le fil avec `create_conversation`. L’appel n’a pas eu lieu.'
+
+const filVise = (args: Record<string, unknown>): boolean =>
+  typeof args.conversationId === 'string' && args.conversationId.trim() !== ''
 
 export async function demarrerPointEntreeLocal(o: {
   dossierDonnees: string
@@ -73,7 +102,13 @@ export async function demarrerPointEntreeLocal(o: {
       // Seconde barrière : même si le filtre du serveur changeait, rien d'autre ne s'exécute ici.
       if (!COMMANDES_POINT_ENTREE.includes(nom))
         return { ok: false, error: refusHorsPerimetre(nom) }
-      const r = await o.exec(nom, args)
+      if (nom === 'chat_send' && !filVise(args))
+        return { ok: false, error: REFUS_CHAT_SEND_SANS_FIL }
+      const marques =
+        nom === 'chat_send' && typeof args.message === 'string'
+          ? { ...args, message: marquerLanceParScript(args.message) }
+          : args
+      const r = await o.exec(nom, marques)
       // Les pièces jointes et cartes du fil ne concernent pas un script : on rend le seul résultat.
       return {
         ok: r.ok,
@@ -83,7 +118,11 @@ export async function demarrerPointEntreeLocal(o: {
     }
   }
   const perimetre: PerimetreOutils = { outils: COMMANDES_POINT_ENTREE, refus: refusHorsPerimetre }
-  const serveur = await (o.demarrer ?? demarrerServeurOutilsNoeudSkill)(lanceur, { perimetre })
+  const serveur = await (o.demarrer ?? demarrerServeurOutilsNoeudSkill)(lanceur, {
+    perimetre,
+    // Ouvert toute la vie de l'app : une page web ne doit pas pouvoir le viser (conv-1144).
+    refuserRequetesNonLocales: true
+  })
   const fichier = join(o.dossierDonnees, FICHIER_POINT_ENTREE)
   const description: DescriptionPointEntree = {
     url: serveur.url,

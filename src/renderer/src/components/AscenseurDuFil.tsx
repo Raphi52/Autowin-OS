@@ -19,14 +19,16 @@ import {
   cranCourant,
   cranSousPointeur,
   dureeGlisse,
-  elementDeLecture,
+  garderLePointLu,
   hautDansLeContenu,
-  hautDansLeFil,
   hautDeVuePour,
+  hautDuPointLu,
   lireReperes,
   MARGE_PISTE,
   moletteFaitDefiler,
   placerEtiquettes,
+  pointDeLecture,
+  pointEncoreLa,
   poignee,
   positionGlissee,
   reserveDeLaCarte,
@@ -38,6 +40,7 @@ import {
   versPiste,
   voisinsDeLaVue,
   type Geometrie,
+  type PointDeLecture,
   type Repere
 } from './ascenseur-du-fil'
 import { isChatNearBottom } from './chat-view-model'
@@ -130,6 +133,11 @@ export function AscenseurDuFil({
    * 10 px de 22 à 43 px (trace de la sonde, conv-1114).
    */
   const ancreRef = useRef<HTMLElement | null>(null)
+  /**
+   * La ligne lue du dernier maintien, et la place où il a laissé la vue : le repli de la carte
+   * reprend la ligne tenue à l'ouverture si tu n'as pas bougé entre-temps (conv-1143).
+   */
+  const pointLuRef = useRef<{ point: PointDeLecture; posee: number } | null>(null)
   /** Horodatage de la dernière image où le glissement a posé la vue (voir le maintien). */
   const imageDuGlissementRef = useRef(-1)
 
@@ -354,9 +362,16 @@ export function AscenseurDuFil({
       )
     )
       ancreRef.current = null
-    let lu =
-      (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
-    let precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+    const repris = pointLuRef.current
+    const retenuAuDepart = ancreRef.current?.isConnected ? ancreRef.current : null
+    let lu: PointDeLecture | null = retenuAuDepart
+      ? { element: retenuAuDepart, noeud: null, decalage: 0 }
+      : repris &&
+          pointEncoreLa(repris.point) &&
+          garderLePointLu(conteneur.scrollTop, repris.posee, false)
+        ? repris.point
+        : pointDeLecture(conteneur)
+    let precedent = lu ? hautDuPointLu(lu, conteneur) : 0
     // Place laissée à chaque image : le navigateur BORNE la vue quand le fil raccourcit sous elle,
     // et le maintien doit le savoir pour ne pas compenser deux fois (conv-1143).
     const auBas = (): boolean => isChatNearBottom(conteneur, 1)
@@ -365,6 +380,8 @@ export function AscenseurDuFil({
     const fin = performance.now() + (deplie ? 800 : 200) + 120
     const tenir = (t: number): void => {
       maintienRef.current = 0
+      // Place AVANT toute compensation : différente de `posee`, la vue a été bougée par toi.
+      const departImage = conteneur.scrollTop
       // Un glissement vers un message ou un glisser de la barre mènent la vue : ils visent déjà la
       // bonne place, compenser en plus la déplacerait deux fois. Y compris dans l'image où le
       // glissement vient de FINIR : lancé au clic, il passe avant le maintien dans chaque image, et
@@ -383,22 +400,28 @@ export function AscenseurDuFil({
           lireGeo(conteneur)
         )
         if (Math.abs(conteneur.scrollTop - cible) >= 0.5) conteneur.scrollTop = cible
-      } else if (lu && lu.isConnected && !pilotee) {
+      } else if (lu && pointEncoreLa(lu) && !pilotee) {
         const cible = scrollTopDuMaintien({
           scrollTop: conteneur.scrollTop,
           max: conteneur.scrollHeight - conteneur.clientHeight,
-          hautLu: hautDansLeFil(lu, conteneur),
+          hautLu: hautDuPointLu(lu, conteneur),
           hautLuAvant: precedent,
           poseeAvant: posee,
           auBasAvant
         })
         if (cible !== null) conteneur.scrollTop = cible
       }
-      // L'ancre suit le HAUT de la vue courante : la molette du lecteur a pu la faire défiler.
-      lu = (ancreRef.current?.isConnected ? ancreRef.current : null) ?? elementDeLecture(conteneur)
-      precedent = lu ? hautDansLeFil(lu, conteneur) : 0
+      // La ligne lue ne change que si la vue a bougé : ta molette, un glissement, la barre. Reprise
+      // à chaque image, elle changeait d'élément pendant que le texte se réagençait, et la vue ne
+      // revenait pas à sa place au repli (conv-1143).
+      const retenuMaintenant = ancreRef.current?.isConnected ? ancreRef.current : null
+      if (retenuMaintenant) lu = { element: retenuMaintenant, noeud: null, decalage: 0 }
+      else if (!lu || !pointEncoreLa(lu) || !garderLePointLu(departImage, posee, pilotee))
+        lu = pointDeLecture(conteneur)
+      precedent = lu ? hautDuPointLu(lu, conteneur) : 0
       posee = conteneur.scrollTop
       auBasAvant = auBas()
+      pointLuRef.current = lu ? { point: lu, posee } : null
       if (t < fin) maintienRef.current = requestAnimationFrame(tenir)
     }
     if (deplie) {

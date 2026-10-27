@@ -12,7 +12,7 @@ import { questionsDuJuge } from '../objections-juge'
  * porte RIEN d'autre, l'app pose ces questions à la session du build et le fait rejuger.
  *
  * Ce module DÉCIDE et MET EN FORME ; l'appel au modèle vit dans l'orchestrateur, avec la mécanique
- * de l'étape 1 (session reprise, empreinte de la copie, journal commun, plafond partagé). La réponse
+ * de l'étape 1 (session reprise, empreinte de la copie, journal commun ; plus de plafond par run depuis le 2026-10-25). La réponse
  * est une DONNÉE : elle rejoint le texte jugé dans un bloc marqué, et seul le juge statue.
  */
 

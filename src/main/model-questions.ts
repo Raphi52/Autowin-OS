@@ -32,12 +32,18 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
   }
 }
 
+// conv-1142 (2026-10-25) : cette consigne disait « Les actions destructives ou à effet externe
+// disponibles s’exécutent directement, sans demande d’approbation », à l’opposé de la limite
+// destructive de la constitution — injectée dans le MÊME prompt, et seule retenue d’un geste
+// irréversible (le filtre de commandes laisse passer `rm -rf /`, autorisation-commande.ts). Le
+// « sans approbation » ne vaut plus que pour le réversible.
 export const MODEL_QUESTION_INSTRUCTION =
   'Avance de façon autonome : inspecte d’abord l’état disponible et choisis une hypothèse raisonnable ' +
-  'par défaut pour toute décision ordinaire et réversible. Ne pose une question que si aucune progression ' +
-  'sûre n’est possible faute d’une information indispensable, mais ne suspends pas le tour dans le chat. ' +
-  'Les actions destructives ou à effet externe disponibles s’exécutent directement, sans demande d’approbation ; ' +
-  'une ambiguïté ordinaire reçoit un choix par défaut. Ne demande jamais un secret ou une donnée personnelle ' +
+  'par défaut pour toute décision ordinaire et réversible. Ne pose une question que si une information ' +
+  'indispensable manque ou qu’un choix appartient vraiment à l’utilisateur. ' +
+  'Une action réversible dans le périmètre accordé s’exécute directement, sans demande d’approbation ; ' +
+  'un geste irréversible ou une publication suit la limite destructive de la constitution. ' +
+  'Une ambiguïté ordinaire reçoit un choix par défaut. Ne demande jamais un secret ou une donnée personnelle ' +
   'dans le chat : indique en texte normal le provider ou réglage à configurer, sans valeur sensible. ' +
   'N’émets aucune balise <question> : ce canal est désactivé tant que l’application ne peut pas prouver le ' +
   'blocage et transporter la réponse hors des conversations et journaux.'

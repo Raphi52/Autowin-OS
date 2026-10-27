@@ -1,24 +1,42 @@
 /*
- * Messages entre fils (conv-1139) — même grammaire sobre que les blocs du fil : filet, texte hérité
- * du thème, aucune couleur codée en dur (les couleurs dérivent de `currentColor`, donc de chaque thème).
+ * Messages entre fils (conv-1139) — mise en page « Bulles », choisie au /draft du 2026-10-25 :
+ * un petit chat par fil correspondant. Bulles reçues en verre (dérivé de `currentColor`), envois de
+ * CE fil à droite dans le dégradé du thème (`--violet` → `--accent`). Aucune couleur codée en dur :
+ * tout vient des variables du thème actif.
  */
 .mef {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 0 10px;
+  gap: 4px;
+  padding: 6px 0 10px;
   font-size: 13px;
   line-height: 1.45;
-  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
 }
 
-.mef-kicker {
-  font:
-    600 11px/1.4 ui-monospace,
-    monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.75;
+.mef-reste {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.mef-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mef-avec {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.mef-avec b {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 600;
+  color: var(--text-dim);
 }
 
 .mef-liste {
@@ -28,41 +46,67 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 220px;
-  overflow-y: auto;
 }
 
-.mef-ligne {
-  padding: 4px 0 4px 10px;
-  border-left: 2px solid color-mix(in srgb, currentColor 30%, transparent);
-}
-
-.mef-ligne--recu {
-  border-left-color: color-mix(in srgb, currentColor 60%, transparent);
-}
-
-.mef-entete {
+.mef-bulle {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
-.mef-sens {
-  font-family: ui-monospace, monospace;
-  font-weight: 600;
+.mef-bulle--envoye {
+  align-items: flex-end;
 }
 
-.mef-meta,
-.mef-reste,
-.mef-preuve {
-  opacity: 0.7;
-  font-size: 12px;
+.mef-corps {
+  box-sizing: border-box;
+  max-width: 84%;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 12px 12px 12px 4px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 13%, transparent);
+}
+
+/*
+ * Dégradé OPAQUE, assombri vers le noir plutôt que rendu transparent : sur un fond sombre il donne
+ * le rendu de la maquette, et sur un thème clair le texte `--on-accent` reste lisible (un dégradé
+ * transparent y virait au pastel, texte blanc illisible — capture du 2026-10-25, conv-1139).
+ */
+.mef-bulle--envoye .mef-corps {
+  border-radius: 12px 12px 4px 12px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--violet) 65%, black),
+    color-mix(in srgb, var(--accent) 65%, black)
+  );
+  box-shadow: none;
+  color: var(--on-accent);
+}
+
+.mef-nature {
+  display: block;
+  margin-bottom: 2px;
+  font: 600 10px/1.3 var(--mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.mef-bulle--recu .mef-nature--ordre {
+  color: var(--rose-bright);
+  opacity: 1;
+}
+
+.mef-bulle--recu .mef-nature--decouverte {
+  color: var(--warn, currentColor);
+  opacity: 1;
 }
 
 .mef-texte,
 .mef-preuve {
-  margin: 2px 0 0;
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -72,4 +116,21 @@
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.mef-preuve {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.mef-meta {
+  max-width: 84%;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.mef-bulle--envoye .mef-meta {
+  text-align: right;
 }

@@ -287,6 +287,15 @@ export class AutowinOS {
    * l'appel `orchestrate` et ne draine rien avant la fin.
    */
   directivesEnAttente?: (conversationId: string) => string[]
+  /**
+   * Pose une question à l'utilisateur (fenêtre de question) et attend sa réponse, branché par
+   * `index.ts`. Un run s'en sert pour se mettre en pause sur une objection d'étendue répétée.
+   */
+  questionALUtilisateur?: (
+    question: import('./model-questions').ModelQuestion,
+    contexte?: string,
+    signal?: AbortSignal
+  ) => Promise<string>
   private readonly orchestratorDeps: OrchestratorDeps
   /**
    * Le workflow ACTIF de la vue Workflows (`index.ts`, `appliquerWorkflowActif`) : une VALEUR PAR
@@ -693,6 +702,10 @@ export class AutowinOS {
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
+      // Même branchement tardif que `drainDirectives` : la fenêtre de question vit dans `index.ts`
+      // (objection d'étendue répétée, conv-1149). Absente = personne ne peut répondre.
+      demanderALUtilisateur: (question, contexte, signal) =>
+        this.questionALUtilisateur?.(question, contexte, signal),
       // Fin de run : ferme le bureau cache du run s'il a ete ouvert (lot 1, conv-222). Le chemin des
       // scripts n'est lu qu'a ce moment-la : rien ne change au demarrage.
       fermerBureauCache: (demande) =>
@@ -855,6 +868,9 @@ export class AutowinOS {
               `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
             )
           }
+          // Rendu à l'orchestrateur : l'annonce du commit dit ce qui a VRAIMENT été poussé, au lieu
+          // de « non poussé » écrit en dur (conv-1139, 2026-10-25).
+          return this.lastAutoClose.project
         }
       }
     }

@@ -1050,6 +1050,15 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
   return {
     autoMemoryDirectory: '',
     autoCompactWindow: FENETRE_COMPACTION_CLI,
+    // BOÎTE DE RÉCEPTION NATIVE FERMÉE (conv-1139, 2026-10-24). Depuis le CLI 2.1.234 sous Windows,
+    // toute session ouvre une boîte où les AUTRES sessions Claude Code du poste peuvent écrire.
+    // MESURÉ sur le CLI 2.1.309 (banc D:/tmp/sonde-boite/experience.sh) : un agent réglé comme un
+    // agent de run a reçu et recopié le message d'une session qui contourne aussi les permissions,
+    // et la sortie enregistrée par Autowin n'en garde qu'une trace vide, sans contenu ni expéditeur
+    // — un canal caché à l'app. `refuse` jette chaque message sans le livrer ; posé par `--settings`,
+    // il prime sur les réglages de l'utilisateur. Le statut de la session n'en montre rien : la
+    // preuve est le banc rejoué. Source : https://code.claude.com/docs/en/cross-session-messaging
+    crossSessionInbound: 'refuse',
     hooks: {
       PreToolUse: [
         {

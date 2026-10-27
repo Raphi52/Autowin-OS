@@ -4,6 +4,7 @@ import { nomDeTheme, riche, useTextes } from '../textes'
 import { useEffect, useState } from 'react'
 import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
 import { basculerTheme } from '../transition-de-vue'
+import { MascotteReglage } from './MascotteReglage'
 import './InterfaceView.css'
 
 /**
@@ -140,6 +141,7 @@ export function InterfaceView(): React.JSX.Element {
           </select>
         </label>
       </div>
+      <MascotteReglage />
       <p className="interface-reserve" data-testid="interface-zoom">
         {riche(t('interface.zoom'))}
       </p>

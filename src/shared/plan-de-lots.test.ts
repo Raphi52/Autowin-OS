@@ -14,6 +14,7 @@ import {
   marquerEchec,
   marquerLance,
   noterFinDeTour,
+  plansPourLaListe,
   promptDeReveil,
   promptDuLot,
   relancerLot,
@@ -779,5 +780,29 @@ describe('textes remis aux fils', () => {
     expect(texte).toMatch(/message de l’app, pas de l’utilisateur/)
     expect(texte).toMatch(/1 fait, 0 en échec, 1 en cours, 1 à faire sur 3/)
     expect(texte).toMatch(/lot 1/i)
+  })
+})
+
+describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv-1158)', () => {
+  it('rend chef, fil, rang et total de chaque lot ouvert ; un plan sans fil ouvert est omis', () => {
+    const lance = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2), lot(3)], parallele: 2 }))
+    const sansFil = { ...planAccepte({ lots: [lot(1), lot(2)] }), id: 'plan-2', chef: 'conv-2' }
+    expect(plansPourLaListe([lance, sansFil])).toEqual([
+      {
+        id: 'plan-1',
+        chef: 'conv-1',
+        total: 3,
+        lots: [
+          { rang: 1, fil: 'conv-110' },
+          { rang: 2, fil: 'conv-120' }
+        ]
+      }
+    ])
+  })
+
+  it('ne transporte ni demande ni titre : seulement de quoi ranger la liste', () => {
+    const [plan] = plansPourLaListe([lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))])
+    expect(Object.keys(plan).sort()).toEqual(['chef', 'id', 'lots', 'total'])
+    expect(Object.keys(plan.lots[0]).sort()).toEqual(['fil', 'rang'])
   })
 })

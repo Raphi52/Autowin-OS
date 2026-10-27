@@ -21,6 +21,7 @@ import {
   reservesMineuresDuScout,
   resultatAvecReservesDuJuge,
   defautsDeLaRelectureSeule,
+  leconRefuseeParLeJuge,
   objectionsDuJuge,
   resultatDeRelectureSeule
 } from './objections-juge'
@@ -476,7 +477,17 @@ import {
 import { retryOnTransientOverload } from './transient-overload'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../shared/reprise-quota'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
-import { annonceCommitLocal } from './annonce-commit-local'
+import { annonceCommitLocal, pushDuCompteRendu, type PushDuRun } from './annonce-commit-local'
+import {
+  CONTRAT_ETENDUE,
+  doitDemanderLEtendue,
+  issueDeLaReponse,
+  objectionDEtendue,
+  questionDEtendue
+} from './gates/etendue-repetee'
+import type { ModelQuestion } from './model-questions'
+import type { AutoCloseResult } from './run-autoclose'
+import { annonceEditionLocaleNonRemise } from './annonce-edition-locale'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -697,15 +708,20 @@ export interface OrchestrationResult {
   }
 }
 
-function attestJudgeApprovedLearning(
+export function attestJudgeApprovedLearning(
   aggregate: string,
   approved: boolean,
   runId: string,
   provider: string,
   model: string | undefined,
-  workspace: string
+  workspace: string,
+  /**
+   * Le texte du verdict : un livrable VALIDE dont le juge a refusé la LEÇON (« OK: leçon refusée »)
+   * n'atteste pas cette leçon (conv-1149 — sur conv-1146, refuser la leçon coûtait une réparation).
+   */
+  texteDuJuge = ''
 ): IndependentLearningAttestation[] {
-  if (!approved) return []
+  if (!approved || leconRefuseeParLeJuge(texteDuJuge)) return []
   const parsed = parseAttestedLearningProposal(aggregate)
   if (!parsed) return []
   const proposal = {
@@ -881,6 +897,17 @@ export interface OrchestratorLifecycleDeps {
    * phase suivante.
    */
   drainDirectives?: (conversationId: string) => string[]
+  /**
+   * POSER UNE QUESTION À L'UTILISATEUR ET ATTENDRE SA RÉPONSE — le run est en pause pendant ce temps
+   * (conv-1149, 2026-10-25). Branché par `index.ts` sur la fenêtre de question de l'app ; absent
+   * (app sans interface, tests) = personne ne peut répondre. Seul usage : l'objection d'étendue
+   * répétée en mode jusqu'au vert (`gates/etendue-repetee.ts`).
+   */
+  demanderALUtilisateur?: (
+    question: ModelQuestion,
+    contexte?: string,
+    signal?: AbortSignal
+  ) => Promise<string | undefined> | undefined
   /**
    * FIN DE RUN (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : ferme le bureau caché du run
    * (`identifiantBureauCache(runId)`), que le run soit vert, rouge ou planté. Une app laissée ouverte
@@ -1192,12 +1219,16 @@ export interface RunWorktrees {
  */
 export interface RunCloser {
   begin(runId: string): void
+  /**
+   * Rend le compte rendu de la publication du PROJET, ou rien si la clôture n'a rien publié
+   * (éteinte). L'annonce du commit en tire le vrai état du push (conv-1139, 2026-10-25).
+   */
   close(context: {
     runId: string
     task: string
     workCwd: string
     projectPublication?: { baseSha: string; publishedSha: string }
-  }): Promise<void>
+  }): Promise<AutoCloseResult | undefined | void>
 }
 
 /**
@@ -2523,18 +2554,21 @@ export class Orchestrator {
       let endReturned = false
       let projectPublication: { baseSha: string; publishedSha: string } | undefined
       let closeStarted = false
+      // Ce que la clôture a poussé : l'annonce du commit le dit au lieu d'écrire « non poussé » en dur.
+      let pushDuRun: PushDuRun | undefined
       const closePublishedRun = async (publication?: {
         baseSha: string
         publishedSha: string
       }): Promise<void> => {
         if (closeStarted || !green || !this.deps.closeGreenRun) return
         closeStarted = true
-        await this.deps.closeGreenRun.close({
+        const compteRendu = await this.deps.closeGreenRun.close({
           runId,
           task,
           workCwd: this.deps.executionWorkspace,
           ...(publication ? { projectPublication: publication } : {})
         })
+        pushDuRun = pushDuCompteRendu(compteRendu)
       }
       const onPublished = async (publication: {
         baseSha: string
@@ -2750,13 +2784,13 @@ export class Orchestrator {
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
-      // Le commit de transport est ANNONCÉ dans la réponse : il arrivait dans l'historique sans un mot
-      // et passait pour un commit fait en cachette malgré la consigne (conv-710).
-      const annonceCommit = produced ? annonceCommitLocal(finalized, runId, task) : undefined
-      if (produced && annonceCommit && !produced.result.includes(annonceCommit)) {
+      // Sa modification non commitée restée hors de ses fichiers après la publication est DITE :
+      // le 2026-10-24 (conv-1139), elle dormait dans `stash@{0}` sous un compte rendu « intégré ».
+      const annonceEdition = produced ? annonceEditionLocaleNonRemise(finalized) : undefined
+      if (produced && annonceEdition && !produced.result.includes(annonceEdition)) {
         produced.result = `${produced.result.trimEnd()}
 
-${annonceCommit}`
+${annonceEdition}`
       }
       const publishedCommitSha =
         projectPublication?.publishedSha ??
@@ -2785,6 +2819,18 @@ ${annonceCommit}`
         // Chemin legacy sans callback de publication. Un echec de cloture reste un rapport distant et
         // ne rend pas rouge le travail valide ; le callback durable, lui, propage l'echec pour etre rejoue.
         await closePublishedRun(projectPublication).catch(() => undefined)
+      }
+      // Le commit de transport est ANNONCÉ dans la réponse : il arrivait dans l'historique sans un mot
+      // et passait pour un commit fait en cachette malgré la consigne (conv-710). L'annonce vient
+      // APRÈS la dernière clôture possible (rappel pendant la fusion, ou chemin ci-dessus) : elle dit
+      // ce que la clôture a VRAIMENT poussé (conv-1139, 2026-10-25).
+      const annonceCommit = produced
+        ? annonceCommitLocal(finalized, runId, task, pushDuRun)
+        : undefined
+      if (produced && annonceCommit && !produced.result.includes(annonceCommit)) {
+        produced.result = `${produced.result.trimEnd()}
+
+${annonceCommit}`
       }
       // Un vert dont l'intégration n'est pas terminée reste reprenable. Un run rouge peut lui aussi
       // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait
@@ -3157,7 +3203,8 @@ ${CONTRAT_OBJECTIONS}`
         runId,
         res.provider ?? judgeProvider,
         res.model ?? judgeBinding.model,
-        workCwd
+        workCwd,
+        verdictText
       )
     }
   }
@@ -4555,8 +4602,20 @@ ${CONTRAT_OBJECTIONS}`
           member: (typeof fanMembers)[number],
           rang: number
         ): Promise<
-          | { member: (typeof fanMembers)[number]; text: string; ok: true; cause: undefined }
-          | { member: (typeof fanMembers)[number]; text: string; ok: false; cause: string }
+          | {
+              member: (typeof fanMembers)[number]
+              text: string
+              ok: true
+              cause: undefined
+              session: { id: string; options: SendOptions } | undefined
+            }
+          | {
+              member: (typeof fanMembers)[number]
+              text: string
+              ok: false
+              cause: string
+              session: undefined
+            }
         > => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
             // QUE s'il lève une ambiguïté réelle : trois membres sur le même modèle portaient
@@ -4701,7 +4760,15 @@ ${CONTRAT_OBJECTIONS}`
               })
               aggregatedEvidence.push(...(res.executionEvidence ?? []))
               supervision.dispose()
-              return { member, text: res.text, ok: true as const, cause: undefined }
+              // Sa session, pour un build à membre UNIQUE : c'est alors la session du build (conv-1149).
+              const { observePrompt: _observeMembre, ...optionsDuMembre } = opts
+              return {
+                member,
+                text: res.text,
+                ok: true as const,
+                cause: undefined,
+                session: res.sessionId ? { id: res.sessionId, options: optionsDuMembre } : undefined
+              }
             } catch (error) {
               supervision.dispose()
               push({
@@ -4722,7 +4789,8 @@ ${CONTRAT_OBJECTIONS}`
                 text: '',
                 ok: false as const,
                 // La cause est CONSERVEE : c'est elle qui manquait a l'utilisateur (2026-07-29).
-                cause: error instanceof Error ? error.message : String(error)
+                cause: error instanceof Error ? error.message : String(error),
+                session: undefined
               }
             }
           }
@@ -4790,6 +4858,27 @@ ${CONTRAT_OBJECTIONS}`
             `[phase ${phase}] ${porterVersPhaseSuivante(solo)}`
           )
           prevSessionId = undefined
+          /*
+           * fix-ok: conv-1146 (run-ec2036c0932d-1) — 7 refus « sans cause » sur 7 partis en
+           * réparation complète : « aucune session du build à reprendre ». Le profil « feature »
+           * pose un agent composé (`persona: minimal`) sur build : les 18 builds sont passés ici
+           * (bloc `persona` dans prompt-observability/conv-1146.jsonl), et ce chemin ne gardait pas
+           * la session. Un membre UNIQUE est le build lui-même ; plusieurs membres n'en ont aucune.
+           */
+          const sessionSolo = good[0].session
+          if (
+            phase === 'build' &&
+            fanMembers.length === 1 &&
+            sessionSolo &&
+            registry.honoursSessionResume(good[0].member.provider)
+          ) {
+            sessionDuBuild = {
+              id: sessionSolo.id,
+              provider: good[0].member.provider,
+              options: sessionSolo.options,
+              ...(good[0].member.model ? { model: good[0].member.model } : {})
+            }
+          }
           return
         }
         const orchBinding =
@@ -5846,7 +5935,8 @@ ${CONTRAT_OBJECTIONS}`
             runId,
             judgeProvider,
             judgeBinding.model,
-            workCwd
+            workCwd,
+            resumedJudgeText
           )
         }
       }
@@ -5932,6 +6022,7 @@ ${CONTRAT_OBJECTIONS}`
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 ${CONTRAT_OBJECTIONS}
+${CONTRAT_ETENDUE}
 ${CONTRAT_QUESTIONS_AU_BUILD}`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       texteDejaJuge = exec.text
@@ -6282,7 +6373,8 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
           runId,
           judgeMembers.length >= 2 ? 'judge-panel' : judgeProvider,
           judgeMembers.length >= 2 ? undefined : (verdict.model ?? judgeBinding.model),
-          workCwd
+          workCwd,
+          verdict.text
         )
       }
     }
@@ -6477,6 +6569,9 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     // Les tests d'orchestrateur gardent l'ancien plafond (tests/reinit-couts-session.ts).
     const jusquAuVert =
       politique.reparations > 0 && process.env.AUTOWIN_REPARATION_BORNEE !== '1'
+    // L'objection d'étendue du DERNIER verdict du juge, et si l'utilisateur a déjà tranché (conv-1149).
+    let etenduePrecedente: string | undefined
+    let etendueTranchee = false
     for (
       let attempt = 0;
       attempt <= PLAFOND_DUR || jusquAuVert;
@@ -6667,6 +6762,53 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
        * qu'un run rendait « bloque » sans qu'on sache s'il avait renonce faute de progres ou faute de
        * tours.
        */
+      /*
+       * OBJECTION D'ÉTENDUE RÉPÉTÉE → PAUSE ET QUESTION (conv-1149, règles dans
+       * `gates/etendue-repetee.ts`). Sur conv-1146, quatre refus « ta demande n'est pas remplie »
+       * ont relancé quatre réparations, en mode jusqu'au vert où rien d'autre n'arrête la boucle.
+       * Seul un verdict RENDU par le juge dans ce passage compte : un refus du contrôle avant le juge
+       * laisse `lastJudgeText` sur le verdict précédent.
+       */
+      if (!r.refusAvantJuge) {
+        const etendueCourante = objectionDEtendue(lastJudgeText)
+        const demander = doitDemanderLEtendue({
+          jusquAuVert,
+          dejaTranchee: etendueTranchee,
+          courante: etendueCourante,
+          precedente: etenduePrecedente
+        })
+        etenduePrecedente = etendueCourante
+        if (demander && etendueCourante) {
+          etendueTranchee = true
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail: `Pause : le juge refuse deux fois de suite pour l'étendue de la demande — question posée à l'utilisateur, aucune réparation avant sa réponse.`
+          })
+          const reponse = await this.deps
+            .demanderALUtilisateur?.(questionDEtendue(etendueCourante), task, signal)
+            ?.catch(() => undefined)
+          const issue = issueDeLaReponse(reponse)
+          if (issue.kind === 'arreter') {
+            gate.reasons.push(issue.motif)
+            push({ step: 'gate', role: 'gate', detail: issue.motif })
+            break
+          }
+          if (issue.kind === 'consigne')
+            pousserContexte(
+              'directiveUtilisateur',
+              `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${issue.texte}`
+            )
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail:
+              issue.kind === 'consigne'
+                ? `Reprise sur ta consigne d'étendue : « ${issue.texte.slice(0, 200)} ».`
+                : 'Reprise : tu as choisi de continuer jusqu’à couvrir toute la demande.'
+          })
+        }
+      }
       const passage = deciderDuPassage({
         attempt,
         reparationsAccordees: politique.reparations,

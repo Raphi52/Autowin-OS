@@ -15,6 +15,7 @@ import { COMPACT_REQUEST } from '../shared/context-gauge'
 import { BALISE_MESSAGE_UTILISATEUR } from '../shared/balise-message-utilisateur'
 import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
 import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
+import { noteRepriseApresArret } from './reprise-apres-arret'
 
 export interface TurnMessageParts {
   /** État courant de l'app, sérialisé. */
@@ -62,6 +63,11 @@ export interface TurnMessageParts {
     content: string
     /** Consigne envoyee PENDANT un tour (`directive-dans-le-fil.ts`), pas une demande de tour. */
     orientation?: boolean
+    /**
+     * Message de l'agent dont le tour s'est arrete avant sa fin (Stop, fermeture, erreur), relu dans
+     * le store par `run-pilot-chat.ts`. Voir `reprise-apres-arret.ts` (conv-1142).
+     */
+    arrete?: boolean
     /**
      * Pieces jointes du message. Presentes ici pour etre NOMMEES dans le fil aplati : le binaire
      * lui-meme voyage a part (`attachments` du message provider), mais sans ce nom rien n'indique
@@ -483,6 +489,8 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
             : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
         },
         { name: 'orientationsDuTourPrecedent', text: orientationsDuTourPrecedent(parts.history) },
+        // Seulement en session REPRISE : c'est le CLI qui y insere les deux lignes a expliquer.
+        { name: 'repriseApresArret', text: noteRepriseApresArret(parts.history) },
         {
           name: 'messageUtilisateur',
           text: `UTILISATEUR: ${motsUtilisateur(parts.lastUserMessage ?? '')}`

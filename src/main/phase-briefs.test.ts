@@ -357,7 +357,7 @@ describe('fusion : la regle « tache donnee » vit dans la constitution, la cons
   const { CONSTITUTION } = await import('./constitution')
   it('la constitution porte la preuve du constat ; GARDE_TACHE ne la recopie pas', () => {
     expect(CONSTITUTION).toMatch(/fichier lu et sa ligne/)
-    expect(CONSTITUTION).toMatch(/PRÉCISER/)
+    expect(CONSTITUTION).toMatch(/tu peux la préciser/iu)
     expect(GARDE_TACHE).toMatch(/réflexe \(5\)/)
     expect(GARDE_TACHE.length).toBeLessThan(300)
   })

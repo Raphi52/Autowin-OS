@@ -327,11 +327,34 @@ export function actionDuFragment(url: string): ActionPopup | null {
 }
 
 /**
- * Place les cartes en bas à droite de la zone de travail (écran sans la barre des tâches). Rang 0 =
- * la plus RÉCENTE, collée au coin ; les plus anciennes montent au-dessus (comme Windows 11).
+ * La zone où empiler les cartes. Par défaut, collées au bord DROIT et empilées du BAS vers le haut,
+ * comme Windows 11. Les deux options suivent la mascotte du bureau là où l'utilisateur l'a glissée
+ * (conv-1142, 2026-10-26, demande : « fais sortir les cartes de fin de tour à côté de la mascotte là
+ * où je l'ai déplacée ») :
+ * - `bord: 'gauche'` : collées au bord gauche de la zone (cartes à droite de la bille) ;
+ * - `sens: 'bas'` : la plus récente en HAUT de la zone, les plus anciennes descendent (bille posée
+ *   en haut de l'écran : une pile qui monterait sortirait de l'écran).
  */
-export function disposerPopups(zone: Rect, hauteursDuBasVersLeHaut: number[]): Rect[] {
-  const x = zone.x + zone.width - MARGE - LARGEUR_POPUP
+export type ZoneDesCartes = Rect & { bord?: 'droite' | 'gauche'; sens?: 'haut' | 'bas' }
+
+/** Distance entre une carte et le bord de sa zone, exportée pour qui découpe la zone (la mascotte). */
+export const MARGE_CARTE = MARGE
+
+/**
+ * Place les cartes en bas à droite de la zone de travail (écran sans la barre des tâches). Rang 0 =
+ * la plus RÉCENTE, collée au coin ; les plus anciennes montent au-dessus (comme Windows 11). Avec
+ * `sens: 'bas'`, le rang 0 est collé en haut et les plus anciennes descendent.
+ */
+export function disposerPopups(zone: ZoneDesCartes, hauteursDuBasVersLeHaut: number[]): Rect[] {
+  const x = zone.bord === 'gauche' ? zone.x + MARGE : zone.x + zone.width - MARGE - LARGEUR_POPUP
+  if (zone.sens === 'bas') {
+    let haut = zone.y + MARGE
+    return hauteursDuBasVersLeHaut.map((height) => {
+      const rect = { x, y: haut, width: LARGEUR_POPUP, height }
+      haut = rect.y + height + ECART
+      return rect
+    })
+  }
   let bas = zone.y + zone.height - MARGE
   return hauteursDuBasVersLeHaut.map((height) => {
     const rect = { x, y: bas - height, width: LARGEUR_POPUP, height }
@@ -349,7 +372,7 @@ export type FenetrePopup = {
 
 export type DependancesPile = {
   /** Zone de travail de l'écran principal, relue à chaque placement (écran changé entre-temps). */
-  zone: () => Rect
+  zone: () => ZoneDesCartes
   heure: () => string
   /** Le thème choisi dans Réglages · Interface, relu à chaque carte (conv-1090). */
   palette?: () => PaletteCarte
@@ -398,8 +421,10 @@ export function creerPileDePopups(deps: DependancesPile): {
         zone,
         [...pile].reverse().map((carte) => carte.hauteur)
       )
-      const haut = rects.at(-1)
-      return haut !== undefined && haut.y < zone.y
+      // La plus ancienne est la plus LOIN du point de départ : en haut, ou en bas si la pile descend.
+      const loin = rects.at(-1)
+      if (loin === undefined) return false
+      return zone.sens === 'bas' ? loin.y + loin.height > zone.y + zone.height : loin.y < zone.y
     }
     while (pile.length > 1 && (pile.length > MAX_POPUPS || deborde())) pile[0].fermer()
   }
