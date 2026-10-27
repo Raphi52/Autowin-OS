@@ -290,6 +290,9 @@ interface ChatApi {
     etapesFaites: number
     etapesTotales: number
   }) => Promise<boolean>
+  /** La mascotte du bureau (conv-1145) : affichée ou masquée, choix gardé par le moteur. */
+  mascotteAffichee: () => Promise<boolean>
+  afficherMascotte: (affichee: boolean) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
@@ -699,12 +702,19 @@ interface ChatApi {
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
   messagesEntreFils: (conversationId: string) => Promise<MessageEntreFilsAffiche[]>
-  /** Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes de l'utilisateur. */
-  plansDeLots: (
-    geste: GestePlanDeLots,
-    conversationId: string,
-    planId?: string
-  ) => Promise<ReponsePlansDeLots>
+  /**
+   * Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes ; `lot` pour « relancer ».
+   * « tous » (conv-1158) : tous les plans en un appel, SANS fil, pour ranger la liste.
+   */
+  plansDeLots: {
+    (geste: 'tous'): Promise<ReponsePlansDeLots>
+    (
+      geste: GestePlanDeLots,
+      conversationId: string,
+      planId?: string,
+      lot?: number
+    ): Promise<ReponsePlansDeLots>
+  }
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'

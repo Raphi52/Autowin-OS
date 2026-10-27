@@ -627,6 +627,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:carte:verifierMentions` — AUCUN argument ; LIT des fiches (plafond 20 par passe). Aucun
     //     des trois ne recoit d'ecriture chez le fournisseur (seul `tickets.get` leur est passe).
     //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-25 (conv-1145) — 239 -> 242. ATTRIBUTION MESUREE : noms de canaux de HEAD
+    //   (bbe0569f) et de 8ab2cbc3 compares a l'arbre de ce travail, avec la regex de ce test.
+    //   Ce test etait DEJA rouge a 240 sur HEAD avant ce travail : UN ajoute par un autre run
+    //   (494e7d45, `index.ts`), garde des sa PREMIERE ligne : `os:messagesEntreFils`
+    //   ('Messages entre fils') — LECTURE des messages d'agents d'un fil, identifiant passe par
+    //   `guardString`.
+    //   DEUX ajoutes par ce travail (`index.ts`, interrupteur « Mascotte du bureau » de
+    //   Settings · Interface), gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` :
+    //   `os:mascotte` — LECTURE d'un booleen (`mascotte.json`, %APPDATA%\autowin-os) ; aucun argument.
+    //   `os:mascotte:afficher` — ECRIT ce booleen ; `ecrireMascotteAffichee` refuse toute valeur
+    //     qui n'est pas un vrai booleen, puis affiche ou ferme la fenetre de la mascotte.
+    //   `unguarded` reste VIDE.
     // MISE A JOUR 2026-10-26 (conv-1150) — 239 -> 241. ATTRIBUTION MESUREE (noms de canaux du commit
     //   8ab2cbc3 qui a pose 239, de HEAD 85d86866 et de l'arbre de ce travail) : ce test etait DEJA
     //   rouge a HEAD (240), un canal ayant ete ajoute sans mise a jour du compte :
@@ -642,7 +655,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // MISE A JOUR 2026-10-26 (conv-1150, integration du fil chef sur main 04ff1bce) — 241 -> 242.
     //   UN ajoute par la traduction anglaise (run-c7dc3f2f7237-1, `ipc/langue.ts`), integree sur main
     //   sans mise a jour du compte. Mesure sur l'arbre fusionne : 242 canaux, `unguarded` VIDE.
-    expect(handlers).toHaveLength(242)
+    // REUNION 2026-10-26 (conv-1150) : fil chef + traduction (242, commit 07d5ad03) et mascotte
+    //   NON COMMITEE de conv-1145 (+2) dans le meme arbre de travail -> 244, mesure par ce test.
+    // 2026-10-26 (conv-1158) — compte INCHANGE : `os:plansDeLots` gagne un geste « tous », LECTURE
+    //   seule et sans fil (tous les plans gardes, reduits au chef et aux fils de lots), pour ranger
+    //   la liste des conversations en un appel. Meme garde des la premiere ligne ; `action` passe par
+    //   `guardString` avant tout, et les gestes qui ecrivent exigent toujours le fil chef du plan.
+    expect(handlers).toHaveLength(244)
     expect(unguarded).toEqual([])
   })
 

@@ -8,7 +8,7 @@ import {
   REPONSE_AU_JUGE_LONGUEUR_MAX,
   reponseInutilisable
 } from './echange-questions-juge'
-import { empechementDEchange, ECHANGES_SANS_CAUSE_MAX_PAR_RUN } from './echange-sans-cause'
+import { empechementDEchange } from './echange-sans-cause'
 import {
   CONTRAT_QUESTIONS_AU_BUILD,
   dodDuVerdict,
@@ -181,10 +181,10 @@ describe('examinerQuestionsDuJuge — échange ou réparation', () => {
   })
 })
 
-describe('plafond partagé, question, réponse', () => {
-  it(`même plafond que l’étape 1 : ${ECHANGES_SANS_CAUSE_MAX_PAR_RUN} échanges par run, toutes sources`, () => {
+describe('empêchement, question, réponse', () => {
+  it('aucun plafond par run, toutes sources : seule l’absence de session empêche', () => {
     expect(empechementDEchange({ echangesDuRun: 1, sessionDuBuild: true })).toBeUndefined()
-    expect(empechementDEchange({ echangesDuRun: 2, sessionDuBuild: true })).toMatch(/plafond de 2/)
+    expect(empechementDEchange({ echangesDuRun: 50, sessionDuBuild: true })).toBeUndefined()
     expect(empechementDEchange({ echangesDuRun: 0, sessionDuBuild: false })).toMatch(
       /aucune session du build/
     )

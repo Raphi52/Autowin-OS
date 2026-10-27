@@ -3,6 +3,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from './activity/trace-workspace-mutation'
 import { configureAutowinAppDataBase } from './app-data'
 import { AppCommandBus } from './commands'
 import { ConversationStore } from './store/conversations'
@@ -274,6 +278,101 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
     expect(change.amont.commits).toEqual([expect.stringContaining('change en amont')])
     expect(change.resume).toMatch(/amont/)
     expect(intact.amont.commits).toEqual([])
+  })
+
+  /*
+   * ÉCRITURE D'UN FIL, COMPARAISON DE FIN DE TOUR D'UN AUTRE (conv-1142, 25/10/2026). En fin de
+   * tour, l'app compare tout le dossier avant/après le tour (`agent-pilot.ts`, `etatAvantEnvoi`) et
+   * range au nom du fil tout ce qui a changé — y compris ce qu'un AUTRE fil a écrit pendant ce
+   * temps. Vrai cas : `src/main/reprise-apres-arret.ts`, créé par conv-1142 (trace de son Write à
+   * 13:36:07 UTC), puis compté par les comparaisons de conv-1147 (13:36:13) et de conv-1143
+   * (13:40:57) avec EXACTEMENT le même contenu et le même marqueur physique. La dernière trace
+   * l'emportait : l'outil répondait « conv-1143 » à conv-1142 sur son propre fichier.
+   */
+  const ecritAvecUnOutil = async (ws: string, fil: string, contenu: string): Promise<void> => {
+    writeFileSync(join(ws, 'src/partage.ts'), contenu)
+    await appendWorkspaceMutationTrace({
+      conversationId: fil,
+      turnId: `tour-${fil}`,
+      workspaceRoot: ws,
+      source: 'chat_tool',
+      paths: ['src/partage.ts'],
+      // Comme un Write natif du chat : il revendique ses lignes (`writtenLineFingerprints`).
+      pathLineFingerprints: { 'src/partage.ts': ['ligne-1'] }
+    })
+  }
+  const comparaisonDeFinDeTour = async (
+    ws: string,
+    fil: string,
+    avant: Awaited<ReturnType<typeof captureMutationTraceBase>>
+  ): Promise<void> => {
+    await appendWorkspaceMutationTrace({
+      conversationId: fil,
+      turnId: `tour-${fil}`,
+      workspaceRoot: ws,
+      source: 'chat_tool',
+      paths: ['src/partage.ts'],
+      before: avant
+    })
+  }
+
+  it('garde à son auteur un fichier qu’un autre fil a seulement VU apparaître pendant son tour', async () => {
+    donnees()
+    const ws = depot()
+    const avantLeTourDeB = await captureMutationTraceBase(ws, [])
+    await ecritAvecUnOutil(ws, 'conv-a', 'export const a = 1\n')
+    await comparaisonDeFinDeTour(ws, 'conv-b', avantLeTourDeB)
+
+    const [fichier] = await demander(bus(ws), ['src/partage.ts'], 'conv-a')
+
+    expect(fichier.fils).toEqual([
+      expect.objectContaining({
+        conversation: 'conv-a',
+        tour: 'tour-conv-a',
+        toi: true,
+        diffInchange: true
+      })
+    ])
+    expect(fichier.resume).not.toContain('conv-b')
+  })
+
+  it('rend le fichier à son auteur même quand la comparaison de l’autre fil est écrite AVANT', async () => {
+    // Les traces d'un tour ne s'écrivent qu'à SA fin : un tour qui finit plus tôt écrit sa
+    // comparaison avant l'écriture du vrai auteur (conv-1145 à 13:29:04, conv-1142 à 13:36:07).
+    donnees()
+    const ws = depot()
+    const avantLeTourDeB = await captureMutationTraceBase(ws, [])
+    writeFileSync(join(ws, 'src/partage.ts'), 'export const a = 1\n')
+    await comparaisonDeFinDeTour(ws, 'conv-b', avantLeTourDeB)
+    await appendWorkspaceMutationTrace({
+      conversationId: 'conv-a',
+      turnId: 'tour-conv-a',
+      workspaceRoot: ws,
+      source: 'chat_tool',
+      paths: ['src/partage.ts'],
+      pathLineFingerprints: { 'src/partage.ts': ['ligne-1'] }
+    })
+
+    const [fichier] = await demander(bus(ws), ['src/partage.ts'], 'conv-a')
+
+    expect(fichier.fils.map((f) => f.conversation)).toEqual(['conv-a'])
+  })
+
+  it('compte le fil qui a VRAIMENT réécrit un fichier pendant son tour', async () => {
+    // Garde-fou contre l'excès inverse : un contenu NOUVEAU vu par la comparaison (une commande
+    // qui écrit sans nommer le fichier) reste le travail de ce fil. Il part du contenu de conv-a :
+    // la chaîne avant→après garde les DEUX contributeurs (`readCurrentPathGenerations`).
+    donnees()
+    const ws = depot()
+    await ecritAvecUnOutil(ws, 'conv-a', 'export const a = 1\n')
+    const avantLeTourDeB = await captureMutationTraceBase(ws, [])
+    writeFileSync(join(ws, 'src/partage.ts'), 'export const a = 2 // réécrit par conv-b\n')
+    await comparaisonDeFinDeTour(ws, 'conv-b', avantLeTourDeB)
+
+    const [fichier] = await demander(bus(ws), ['src/partage.ts'], 'conv-a')
+
+    expect(fichier.fils.map((f) => f.conversation).sort()).toEqual(['conv-a', 'conv-b'])
+    expect(fichier.resume).toContain('conv-b')
   })
 
   it('se déclare en lecture seule, servie au chat comme outil direct', () => {

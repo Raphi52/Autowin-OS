@@ -127,16 +127,14 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
    */
   let tray: Tray | null = null
   let isQuitting = false
-  /** Montre la fenêtre existante (ou en recrée une si toutes fermées). */
+  /**
+   * Montre la fenêtre PRINCIPALE, ou la recrée si elle a été fermée : `createWindow` réveille
+   * `mainWindowVivante` quand elle existe. Avant (conv-1142, 2026-10-26), la première fenêtre de
+   * `getAllWindows()` : la mascotte du bureau ou une carte de fin de tour y figurent aussi, et le
+   * clic sur la bille « montrait » la bille — Autowin ne s'ouvrait pas.
+   */
   function showMainWindow(): void {
-    const existing = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-    if (existing) {
-      if (existing.isMinimized()) existing.restore()
-      existing.show()
-      existing.focus()
-    } else {
-      createWindow()
-    }
+    createWindow()
   }
   /** Icône de barre d'état : présence VISIBLE de l'app vivante (anti « process fantôme ») + quit réel. */
   function setupTray(): void {

@@ -47,7 +47,7 @@ import {
   writeFileSync,
   writeSync
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
 import { portsEnEcouteSysteme } from './port-libre.mjs'
 
@@ -173,7 +173,8 @@ export function decouperArguments(argv, pid = process.pid) {
  * - `appPath` : la racine du depot, dont le package.json designe `out/main/index.js` ;
  * - `rendererUrl` : le serveur de dev qui sert l'interface A JOUR (voir `trouverServeurDev`).
  * Le process principal vient de `out/main` tel que le serveur de dev l'a construit : une
- * modification du main non reconstruite n'y est pas, et `mainConstruitLe` le date.
+ * modification du main non reconstruite n'y est pas, et `mainConstruitLe` le date ; `mainPerime`
+ * nomme les sources modifiees depuis (voir `sourcesPlusRecentes`).
  */
 export async function preparerCodeDev({
   racine,
@@ -185,7 +186,8 @@ export async function preparerCodeDev({
   construire = construireCopie,
   lirePortFenetreDev = () => lirePortDevTools(racine),
   listerPages = listerPagesCdp,
-  sonderServeur = sonderServeurDev
+  sonderServeur = sonderServeurDev,
+  plusRecents = (depuisMs) => sourcesPlusRecentes(racine, depuisMs)
 }) {
   const lien = join(racine, 'node_modules', 'electron', 'dist', 'electron.exe')
   if (!existe(lien)) return { erreur: `electron.exe du depot introuvable : ${lien}` }
@@ -219,13 +221,49 @@ export async function preparerCodeDev({
   const joignable = await sonderServeur(serveur.rendererUrl)
   if (joignable !== true)
     return { erreur: `serveur de dev ${serveur.rendererUrl} injoignable (${joignable})` }
+  const mainConstruitLe = dateFichier(main)
+  const perimes = plusRecents(Date.parse(mainConstruitLe))
   return {
     executable,
     appPath: racine,
     rendererUrl: serveur.rendererUrl,
     source: serveur.source,
-    mainConstruitLe: dateFichier(main)
+    mainConstruitLe,
+    ...(perimes.length > 0
+      ? { mainPerime: { fichiers: perimes.slice(0, 5), total: perimes.length } }
+      : {})
   }
+}
+
+/**
+ * CE QUE LE PROCESS PRINCIPAL CAPTURE NE CONTIENT PAS (conv-1160, 2026-10-26). En depot principal,
+ * `--code-dev` lance `out/main` tel que le serveur de dev l'a construit a SON demarrage. conv-1158 y
+ * a pris une capture sur un main de 12 h 30, sans le geste qu'il venait d'ajouter a src/main : liste
+ * a plat, une capture et un aller-retour perdus avant de comprendre. `out/` ne se reconstruit pas en
+ * place (l'app ouverte y charge des morceaux a la demande) : on NOMME donc ces sources dans le
+ * rapport. Rend, relatives a la racine et triees, les sources de src/main, src/preload et src/shared
+ * (hors tests) modifiees apres `depuisMs`.
+ */
+export function sourcesPlusRecentes(racine, depuisMs) {
+  const trouves = []
+  const parcourir = (dossier) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = join(dossier, entree.name)
+      if (entree.isDirectory()) parcourir(chemin)
+      else if (
+        /\.(ts|tsx|mjs|cjs|js|json)$/.test(entree.name) &&
+        !/\.test\./.test(entree.name) &&
+        statSync(chemin).mtimeMs > depuisMs
+      )
+        trouves.push(relative(racine, chemin).split('\\').join('/'))
+    }
+  }
+  for (const dossier of ['src/main', 'src/preload', 'src/shared']) {
+    const absolu = join(racine, dossier)
+    // Un depot partiel (copie de test) peut ne pas avoir l'un de ces dossiers : rien a y relever.
+    if (existsSync(absolu)) parcourir(absolu)
+  }
+  return trouves.sort()
 }
 
 /**
@@ -684,6 +722,16 @@ async function main() {
     console.error(
       `[instance-headless] code en developpement : interface ${dev.rendererUrl ?? `fichiers construits de ${dev.appPath}`} (${dev.source}), process principal construit le ${dev.mainConstruitLe}`
     )
+    if (dev.mainPerime) {
+      console.error(
+        `[instance-headless] ATTENTION process principal PERIME : ${dev.mainPerime.total} source(s) de src/main, src/preload ou src/shared modifiee(s) depuis (${dev.mainPerime.fichiers.join(', ')})`
+      )
+      // L'enfant (ui-capture.mjs) herite de cet environnement et le recopie dans son rapport JSON.
+      process.env.AUTOWIN_CAPTURE_MAIN_PERIME = JSON.stringify({
+        construitLe: dev.mainConstruitLe,
+        ...dev.mainPerime
+      })
+    }
   }
   const { port } = reserverInstance({ instanceId, portDemande, racine, attendreMs })
 

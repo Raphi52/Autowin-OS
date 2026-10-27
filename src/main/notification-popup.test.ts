@@ -12,7 +12,8 @@ import {
   paletteDeCarte,
   type ActionPopup,
   type PaletteCarte,
-  type Rect
+  type Rect,
+  type ZoneDesCartes
 } from './notification-popup'
 
 /**
@@ -161,6 +162,30 @@ describe('disposerPopups — en bas à droite de la zone de travail, la plus ré
       height: 159
     })
   })
+
+  // conv-1142 : les cartes suivent la mascotte glissée ailleurs que dans le coin de l'horloge.
+  it('pile vers le bas : la plus récente collée en haut, les plus anciennes descendent', () => {
+    const [recente, ancienne] = disposerPopups({ ...ZONE, y: 100, sens: 'bas' }, [101, 159])
+    expect(recente).toEqual({
+      x: 1920 - 12 - LARGEUR_POPUP,
+      y: 112,
+      width: LARGEUR_POPUP,
+      height: 101
+    })
+    expect(ancienne.y).toBe(112 + 101 + 8)
+  })
+
+  it('collées au bord gauche de la zone : 12 px de son bord, dans les deux sens', () => {
+    expect(
+      disposerPopups({ x: 500, y: 0, width: 900, height: 1032, bord: 'gauche' }, [159])[0].x
+    ).toBe(512)
+    expect(
+      disposerPopups(
+        { x: 500, y: 0, width: 900, height: 1032, bord: 'gauche', sens: 'bas' },
+        [159]
+      )[0].x
+    ).toBe(512)
+  })
 })
 
 /** Fausse bulle Windows : le secours d'une carte dont la page ne se charge pas. */
@@ -201,7 +226,7 @@ function bulleDeTest(bulles: BulleDeTest[]) {
 
 /** Fausse fenêtre : garde ses placements et laisse le test cliquer à la place de l'utilisateur. */
 function pileDeTest(
-  zone: Rect = { x: 0, y: 0, width: 1920, height: 1032 },
+  zone: ZoneDesCartes = { x: 0, y: 0, width: 1920, height: 1032 },
   bulles: BulleDeTest[] = []
 ) {
   const fenetres: Array<{
@@ -321,6 +346,16 @@ describe('creerPileDePopups — le contrat d’une notification, tenu par une ca
     for (let i = 0; i < 3; i += 1) pile.fabriquer(PRETE).show()
     // 12 + 159 + 8 + 159 = 338 tient dans 400 ; une troisième carte n'y tient plus.
     expect(fenetres.map((f) => f.fermee)).toEqual([true, false, false])
+  })
+
+  it('une pile qui DESCEND ferme les plus anciennes avant de sortir par le bas (conv-1142)', () => {
+    const { pile, fenetres } = pileDeTest({ x: 0, y: 600, width: 1280, height: 400, sens: 'bas' })
+    for (let i = 0; i < 3; i += 1) pile.fabriquer(PRETE).show()
+    // Même compte que la pile qui monte : 338 tient dans 400, pas une troisième carte.
+    expect(fenetres.map((f) => f.fermee)).toEqual([true, false, false])
+    // La plus récente est collée en haut de la zone, l'autre en dessous.
+    expect(fenetres[2].rects.at(-1)?.y).toBe(612)
+    expect(fenetres[1].rects.at(-1)?.y).toBe(612 + 159 + 8)
   })
 
   it('toutFermer() ferme toutes les cartes (Autowin est de nouveau regardé)', () => {

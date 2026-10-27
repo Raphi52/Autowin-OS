@@ -46,7 +46,7 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/répare-le et poursuis/i)
     // Fusion 2026-09-18 : la partie générale vit dans « Autonomie » de la CONSTITUTION
     // (injectée avec ce bloc) ; ici ne reste que ce qui dépend de la phase.
-    expect(CONSTITUTION).toMatch(/n'est PAS la tâche/)
+    expect(CONSTITUTION).toMatch(/n'est pas la tâche/iu)
     // Les motifs d'arrêt LÉGITIMES restent nommés : sans eux la consigne dirait « ne t'arrête
     // jamais », ce qui pousserait un agent à forcer une action destructrice.
     expect(CONSTITUTION).toMatch(/destructrice ou irréversible/)
@@ -56,12 +56,12 @@ describe('discipline de pipeline canonique', () => {
   it('ne relâche AUCUNE exigence de preuve en levant le blocage', () => {
     // Le risque de cette consigne est qu'un agent lise « ne t'arrête pas » comme « passe outre la
     // preuve ». Elle doit dire l'inverse, explicitement.
-    expect(CONSTITUTION).toMatch(/ne relâche AUCUNE preuve/)
+    expect(CONSTITUTION).toMatch(/ne relâche aucune preuve/iu)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/déguiser reste interdit|ne déguise JAMAIS/)
   })
 
   it('impose de vérifier que le rouge vient du dépôt, pas de l environnement du run', () => {
-    expect(CONSTITUTION).toMatch(/vient du DÉPÔT et non de ton environnement/)
+    expect(CONSTITUTION).toMatch(/vient du dépôt et non de ton environnement/iu)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/vient du DÉPÔT et non de ton environnement/)
   })
 
@@ -263,7 +263,7 @@ describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
   it('LECTURE CIBLÉE renvoie au réflexe 11 au lieu de le redire', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/LECTURE CIBLÉE : réflexes 6 et 11/)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/jamais un dump de l'arbre entier/)
-    expect(CONSTITUTION).toMatch(/lecture CIBLÉE/)
+    expect(CONSTITUTION).toMatch(/lecture ciblée/iu)
     // Seul apport propre à la phase, gardé ici :
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/scout DOIT survoler la cible/)
   })

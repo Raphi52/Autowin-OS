@@ -213,14 +213,19 @@ describe('questions du juge : un refus fait UNIQUEMENT de questions interroge le
     expect(lignesDeTrace(r)).toMatch(/Échange 1 — refus maintenu : le juge refuse encore/)
   })
 
-  it('plafond partagé : 2 échanges par run, puis réparation normale (questions nouvelles à chaque passage)', async () => {
+  // Plus de plafond par run (conv-1139, 2026-10-25) : un échange à CHAQUE passage refusé, et le run
+  // s'arrête quand même, au plafond dur des passages de réparation.
+  it('aucun plafond par run : un échange par passage refusé, le run s’arrête au plafond des réparations', async () => {
     const provider = new ProviderQuestions((_p, n) =>
       verdict({ questions: [`${Q1} (passage ${n})`] })
     )
     const r = await orchestrateur(provider).run('corrige le bug')
-    expect(provider.questions).toHaveLength(2)
-    expect(provider.questions.map((q) => q.buildsAvant)).toEqual([1, 2])
-    expect(lignesDeTrace(r)).toMatch(/Échange non tenté : plafond de 2 échanges par run atteint/)
+    expect(provider.questions.length).toBeGreaterThan(2)
+    expect(provider.questions.map((q) => q.buildsAvant)).toEqual(
+      Array.from({ length: provider.questions.length }, (_v, i) => i + 1)
+    )
+    expect(r.gateBlocked).toBe(true)
+    expect(lignesDeTrace(r)).not.toMatch(/plafond de d+ échanges par run/)
   })
 })
 

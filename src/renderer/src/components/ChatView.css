@@ -6014,6 +6014,44 @@ button.chat-project-dot:disabled {
 .conv-pane[data-density='normal'][data-recherche] .conv-meta {
   display: flex;
 }
+/* --- ...ET pour un fil de lot, qui garde son repère « lot N/M », SEUL, à droite du titre : sans
+       lui, les fils rangés sous leur chef ne disent plus de quel plan ils sont (2026-10-26,
+       conv-1159). Même ligne que le titre, pour que le cran serré reste d'une ligne ; numéro et
+       nombre de messages restent masqués. La recherche garde sa propre règle ci-dessus. --- */
+.conv-pane[data-density='compact']:not([data-recherche]) .conv-item[data-lot] .conv-copy,
+.conv-pane[data-density='normal']:not([data-recherche]) .conv-item[data-lot] .conv-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.conv-pane[data-density='compact']:not([data-recherche]) .conv-item[data-lot] .conv-meta,
+.conv-pane[data-density='normal']:not([data-recherche]) .conv-item[data-lot] .conv-meta {
+  display: flex;
+  flex: none;
+  margin-top: 0;
+  color: var(--chat-conv-meta);
+}
+.conv-pane[data-density='compact']:not([data-recherche])
+  .conv-item[data-lot]
+  .conv-meta
+  > :not(.conv-lot),
+.conv-pane[data-density='normal']:not([data-recherche])
+  .conv-item[data-lot]
+  .conv-meta
+  > :not(.conv-lot) {
+  display: none;
+}
+/* Le séparateur « · » du thème vise `span + span` : le numéro masqué reste un frère dans le DOM. */
+.conv-pane[data-density='compact']:not([data-recherche])
+  .conv-item[data-lot]
+  .conv-meta
+  .conv-lot::before,
+.conv-pane[data-density='normal']:not([data-recherche])
+  .conv-item[data-lot]
+  .conv-meta
+  .conv-lot::before {
+  content: none;
+}
 
 .conv-pane[data-density='normal'] .conv-item,
 .conv-pane[data-density='normal'] .conv-pick,

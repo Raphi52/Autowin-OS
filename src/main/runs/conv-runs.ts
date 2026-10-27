@@ -396,8 +396,16 @@ export function populateConvRunSections(
       md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${contenuDefauts}\n`)
     }
 
+    /*
+     * Les titres `#`/`##` d'une phase sont rétrogradés (conv-1150, 2026-10-26). Un agent qui
+     * recopie le RUN.md y met un `## Reprise` : la réécriture ci-dessous s'arrêtait dessus, laissait
+     * l'ancienne annexe en place et le fichier enflait à chaque phase — 497 Mo sur conv-1146, lu
+     * au démarrage → `JavaScript heap out of memory`, l'app se fermait seule à chaque lancement.
+     */
     const annexe = phaseOutputs
-      .map((p) => `### phase ${p.phase}\n${p.text.slice(0, 2000)}`)
+      .map(
+        (p) => `### phase ${p.phase}\n${p.text.slice(0, 2000).replace(/^#{1,2}(?=\s)/gm, '####')}`
+      )
       .join('\n\n')
     const section = `## Livrable des phases\n${annexe}\n`
     if (md.includes('## Livrable des phases')) {

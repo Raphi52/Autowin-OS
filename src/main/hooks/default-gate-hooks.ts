@@ -31,6 +31,7 @@ async function syncGateHooksHandler(ctx: HookContext): Promise<HookResult> {
      * exactement ce que le hook a toujours dit faire, et qu il ne faisait pas.
      */
     editsByFile: ctx.editsByFile,
+    estFichierDuDepot: estDansUnDepotGit(ctx.cwd),
     causeTokensByFile:
       ctx.causeTokensByFile ??
       (await jetonsDeCauseParFichier(ctx.output, ctx.evidence, Object.keys(ctx.editsByFile ?? {})))
@@ -38,6 +39,46 @@ async function syncGateHooksHandler(ctx: HookContext): Promise<HookResult> {
   return violations.length
     ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
     : { block: false }
+}
+
+/**
+ * Un fichier édité par le run vit-il dans un dépôt git ? (conv-1149, 2026-10-25)
+ *
+ * fix-ok: conv-1146 (run-ec2036c0932d-1) — le contrôle « sans cause » comptait les brouillons hors
+ * dépôt : trois réparations complètes relancées pour `D:/tmp/langue-outils/codemod2.cjs` (lu dans
+ * `activity/conv-1146.jsonl`, réparations 5, 6 et 10). On ne se borne
+ * PAS au dossier du run : un run peut travailler sur un AUTRE projet (D:/GIT/..., cas réel de
+ * `jetons-de-cause.test.ts`), dont les fichiers doivent rester comptés. D'où le critère : un `.git`
+ * (dossier, ou fichier d'une copie de travail) au-dessus du fichier. Un chemin relatif est relatif au
+ * dépôt du run : il compte. Le résultat est mémorisé par dossier le temps d'un contrôle.
+ */
+export function estDansUnDepotGit(cwd?: string): (chemin: string) => boolean {
+  const memo = new Map<string, boolean>()
+  return (chemin) => {
+    const plat = chemin.trim().replace(/\\/g, '/')
+    const absolu = /^[a-z]:\//i.test(plat) || plat.startsWith('/')
+    if (!absolu && !plat.startsWith('../')) return true
+    let dossier = dirname(resolve(cwd ?? process.cwd(), plat))
+    const vus: string[] = []
+    for (;;) {
+      const connu = memo.get(dossier)
+      if (connu !== undefined) {
+        for (const vu of vus) memo.set(vu, connu)
+        return connu
+      }
+      vus.push(dossier)
+      if (existsSync(resolve(dossier, '.git'))) {
+        for (const vu of vus) memo.set(vu, true)
+        return true
+      }
+      const parent = dirname(dossier)
+      if (parent === dossier) {
+        for (const vu of vus) memo.set(vu, false)
+        return false
+      }
+      dossier = parent
+    }
+  }
 }
 
 /**

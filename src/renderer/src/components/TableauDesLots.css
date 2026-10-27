@@ -171,6 +171,25 @@
   text-decoration: underline dotted;
 }
 
+/* Bouton « Relancer » d'un lot en échec (conv-1151, lot 3) : à côté de la raison de l'échec. */
+.tdl-relance {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.tdl-bouton--lot {
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.tdl-relance-raison {
+  font-size: 11px;
+  color: var(--warn);
+}
+
 .tdl-fil--vide {
   cursor: default;
   text-decoration: none;

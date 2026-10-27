@@ -11,6 +11,7 @@ import React, { Fragment, memo, Profiler, useRef, useState } from 'react'
 import { noterRenduMessage } from './rendu-long'
 import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
+import { MessageDuFil, identiteDeLaReponse } from './message-du-fil'
 import { SuggestionGrid } from './SuggestionGrid'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
 import { AskDecisionBlock } from './AskDecision'
@@ -699,11 +700,15 @@ export const ChatMessageRow = memo(
           data-prompts={promptsOuverts ? 'ouverts' : 'fermes'}
           onClick={surClicPrompt}
         >
-          <Markdown
-            text={part.text}
-            continuationPrefix={part.markdownContinuationPrefix}
-            highlightFinalSummary
-          />
+          {/* La réponse qui porte les blocs : une carte « Lancer en N fils » s'en souvient par
+              réponse, pas par contenu (défaut D5, conv-1147, `message-du-fil.ts`). */}
+          <MessageDuFil.Provider value={identiteDeLaReponse(message, conversationId)}>
+            <Markdown
+              text={part.text}
+              continuationPrefix={part.markdownContinuationPrefix}
+              highlightFinalSummary
+            />
+          </MessageDuFil.Provider>
         </div>
       ) : part.kind === 'suggestions' ? (
         <SuggestionGrid

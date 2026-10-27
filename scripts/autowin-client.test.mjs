@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { demarrerPointEntreeLocal } from '../src/main/point-entree-local.ts'
+import { demarrerPointEntreeLocal, MARQUE_SCRIPT } from '../src/main/point-entree-local.ts'
 import {
   attendreFinDuTour,
   CODES,
@@ -199,14 +199,25 @@ describe('autowin-client — le message', () => {
     ).toHaveLength(MESSAGE_MAX_CAR)
   })
 
-  it('qui commence par « / » : transmis tel quel', async () => {
+  it('qui commence par « / » : la skill reste en tête (la marque du script passe à la fin)', async () => {
     const bus = fauxBus()
     const { point } = await serveur(bus)
     const appeler = creerAppeleur(lirePointEntree(dirname(point.fichier)))
     await executer(lireArguments(['--fil', 'conv-occupe', '--message', '/frame cadre ça']), {
       appeler
     })
-    expect(bus.appels.find(([nom]) => nom === 'chat_send')[1].message).toBe('/frame cadre ça')
+    const envoye = bus.appels.find(([nom]) => nom === 'chat_send')[1].message
+    expect(envoye.startsWith('/frame cadre ça')).toBe(true)
+    expect(envoye).toContain(MARQUE_SCRIPT)
+  })
+
+  it('accents, guillemets et retours à la ligne : transmis intacts', async () => {
+    const bus = fauxBus()
+    const { point } = await serveur(bus)
+    const appeler = creerAppeleur(lirePointEntree(dirname(point.fichier)))
+    const message = 'Réponds « oui »\n"là" — ça va ?'
+    await executer(lireArguments(['--fil', 'conv-occupe', '--message', message]), { appeler })
+    expect(bus.appels.find(([nom]) => nom === 'chat_send')[1].message.endsWith(message)).toBe(true)
   })
 })
 
@@ -245,15 +256,44 @@ describe('autowin-client — le fil visé', () => {
   })
 })
 
-describe('autowin-client — le délai d’attente', () => {
-  it('absent, zéro, négatif ou non numérique : 600 s, et c’est dit', () => {
-    expect(lireArguments(['--fil', 'c', '--attendre']).delaiS).toBe(DELAI_DEFAUT_S)
-    for (const v of ['0', '-5', 'abc']) {
-      const o = lireArguments(['--fil', 'c', '--attendre', '--delai', v])
-      expect(o.delaiS).toBe(DELAI_DEFAUT_S)
-      expect(o.avertissements[0]).toContain('invalide')
+describe('autowin-client — options répétées', () => {
+  /*
+   * conv-1144 (cadrage, cas limites) : `--delai 10 --delai 20` gardait la dernière valeur en silence.
+   * Une option répétée est refusée, jamais tranchée à la place de l'appelant.
+   */
+  it('une option donnée deux fois : refus, code 2, l’option est nommée', () => {
+    for (const argv of [
+      ['--fil', 'c', '--attendre', '--delai', '10', '--delai', '20'],
+      ['--fil', 'c', '--fil', 'd', '--attendre'],
+      ['--fil', 'c', '--attendre', '--attendre'],
+      ['--nouveau', '--message', 'a', '--message', 'b']
+    ]) {
+      let erreur
+      try {
+        lireArguments(argv)
+      } catch (e) {
+        erreur = e
+      }
+      expect(erreur).toBeInstanceOf(ErreurClient)
+      expect(erreur.code).toBe(CODES.usage)
+      expect(erreur.message).toContain('deux fois')
     }
+  })
+})
+
+describe('autowin-client — le délai d’attente', () => {
+  it('absent : 600 s', () => {
+    expect(lireArguments(['--fil', 'c', '--attendre']).delaiS).toBe(DELAI_DEFAUT_S)
     expect(lireArguments(['--fil', 'c', '--attendre', '--delai', '30']).delaiS).toBe(30)
+  })
+
+  /* conv-1144 (cadrage) : un délai invalide était remplacé par 600 s ; il est refusé. */
+  it('zéro, négatif, vide ou non numérique : refus, code 2, rien n’est lancé', () => {
+    for (const v of ['0', '-5', 'abc', '', 'Infinity']) {
+      expect(() => lireArguments(['--fil', 'c', '--attendre', '--delai', v])).toThrow(
+        expect.objectContaining({ code: CODES.usage })
+      )
+    }
   })
 
   it('atteint : code 6, le fil est nommé, le tour n’est pas arrêté', async () => {
@@ -306,18 +346,159 @@ describe('autowin-client — l’issue du tour', () => {
     expect(dernier.text).toBe('OK')
   })
 
-  it('statuts « cancelled », « interrupted », « streaming » hors tour : échec, code 8', async () => {
-    for (const statut of ['cancelled', 'interrupted', 'streaming']) {
+  it('statut « streaming » hors tour : échec, code 8', async () => {
+    const { appeler } = appeleurScripte([
+      { messageCount: 2, messages: [{ role: 'assistant', text: 'à moitié', statut: 'streaming' }] }
+    ])
+    const r = await codeDe(attendreFinDuTour(appeler, 'conv-11', { avant: 0, ...horloge() }))
+    expect(r.code).toBe(CODES.tourEchoue)
+    expect(r.message).toContain('streaming')
+  })
+
+  /*
+   * conv-1144 (cadrage) : un tour ARRÊTÉ (bouton Stop → `cancelled`, app fermée → `interrupted`,
+   * chat-turn-arret.ts) sortait en code 8 comme un échec. Ce n'est pas une panne : code distinct.
+   */
+  it('statuts « cancelled » et « interrupted » : tour arrêté, code 9, distinct de l’échec', async () => {
+    expect(CODES.tourArrete).not.toBe(CODES.tourEchoue)
+    for (const statut of ['cancelled', 'interrupted']) {
       const { appeler } = appeleurScripte([
         { messageCount: 2, messages: [{ role: 'assistant', text: 'à moitié', statut }] }
       ])
       const r = await codeDe(attendreFinDuTour(appeler, 'conv-11', { avant: 0, ...horloge() }))
-      expect(r.code).toBe(CODES.tourEchoue)
-      expect(r.message).toContain(statut)
+      expect(r.code).toBe(CODES.tourArrete)
+      expect(r.message).toContain('conv-11')
     }
   })
 
+  /*
+   * conv-1144 (cadrage) : un tour qui finit par une question à l'utilisateur sortait en code 0 comme
+   * un succès. Le fil ATTEND quelqu'un : code distinct, et la question est rendue.
+   */
+  it('tour fini sur une question : code 10, la question et ses choix sont affichés', async () => {
+    const { appeler } = appeleurScripte([
+      {
+        messageCount: 2,
+        messages: [
+          {
+            role: 'assistant',
+            text: 'Deux approches.',
+            statut: 'completed',
+            questionPosee: { question: 'Laquelle ?', options: ['A — simple', 'B — robuste'] }
+          }
+        ]
+      }
+    ])
+    const journal = []
+    const r = await executer(lireArguments(['--fil', 'conv-13', '--attendre']), {
+      appeler,
+      journal: (t) => journal.push(t),
+      attente: horloge()
+    })
+    expect(r.code).toBe(CODES.questionPosee)
+    expect(CODES.questionPosee).not.toBe(CODES.ok)
+    expect(r.sortie).toContain('Deux approches.')
+    expect(r.sortie).toContain('Laquelle ?')
+    expect(r.sortie).toContain('B — robuste')
+    expect(journal.join('\n')).toContain('conv-13')
+  })
+
   it('nominal, par le vrai script : crée, envoie, attend, affiche la réponse, code 0', async () => {
+    await nominalParLeVraiScript()
+  }, 20_000)
+})
+
+/*
+ * conv-1144 (cadrage) : un redémarrage de l'app pendant l'attente coupait la connexion, puis le jeton
+ * changeait — le script concluait « Autowin n'est pas lancé » alors que le tour allait reprendre. Il
+ * relit maintenant le fichier d'adresse et reprend l'attente du MÊME tour.
+ */
+describe('autowin-client — redémarrage de l’app pendant l’attente', () => {
+  /** Un `appeler` d'avant le redémarrage : une lecture « en cours », puis la panne donnée. */
+  const appeleurQuiTombe = (panne) => {
+    let n = 0
+    return async () => {
+      if (++n === 1) return { messageCount: 1, tourEnCours: true, messages: [] }
+      throw panne
+    }
+  }
+
+  it('connexion perdue : relit le fichier, reprend et rend la fin du même tour', async () => {
+    const apres = appeleurScripte([
+      { messageCount: 1, tourEnCours: true, messages: [] },
+      {
+        messageCount: 2,
+        messages: [{ role: 'assistant', text: 'OK après relance', statut: 'completed' }]
+      }
+    ])
+    let essais = 0
+    const reconnecter = () => {
+      // Premier essai : l'app n'est pas encore revenue.
+      if (++essais === 1) throw new ErreurClient(CODES.absent, "Autowin n'est pas lancé")
+      return apres.appeler
+    }
+    const journal = []
+    const dernier = await attendreFinDuTour(
+      appeleurQuiTombe(
+        new ErreurClient(CODES.absent, "Autowin n'est pas lancé (connexion refusée)")
+      ),
+      'conv-14',
+      { avant: 0, reconnecter, journal: (t) => journal.push(t), ...horloge() }
+    )
+    expect(dernier.text).toBe('OK après relance')
+    expect(essais).toBe(2)
+    expect(journal.join('\n')).toContain('redémarr')
+  })
+
+  it('jeton changé (nouvelle session) : même reprise', async () => {
+    const apres = appeleurScripte([
+      { messageCount: 2, messages: [{ role: 'assistant', text: 'OK', statut: 'completed' }] }
+    ])
+    const dernier = await attendreFinDuTour(
+      appeleurQuiTombe(new ErreurClient(CODES.jetonRefuse, 'Jeton refusé')),
+      'conv-15',
+      { avant: 0, reconnecter: () => apres.appeler, ...horloge() }
+    )
+    expect(dernier.text).toBe('OK')
+  })
+
+  it('juste après la reprise, un tour « interrupted » qui repart n’est pas conclu « arrêté »', async () => {
+    const apres = appeleurScripte([
+      { messageCount: 2, messages: [{ role: 'assistant', text: '', statut: 'interrupted' }] },
+      { messageCount: 2, tourEnCours: true, messages: [] },
+      { messageCount: 2, messages: [{ role: 'assistant', text: 'repris', statut: 'completed' }] }
+    ])
+    const dernier = await attendreFinDuTour(
+      appeleurQuiTombe(new ErreurClient(CODES.absent, 'connexion refusée')),
+      'conv-16',
+      { avant: 0, reconnecter: () => apres.appeler, ...horloge() }
+    )
+    expect(dernier.text).toBe('repris')
+  })
+
+  it('l’app ne revient pas avant le délai : code 3, le fil est nommé', async () => {
+    const r = await codeDe(
+      attendreFinDuTour(
+        appeleurQuiTombe(new ErreurClient(CODES.absent, 'connexion refusée')),
+        'conv-17',
+        {
+          avant: 0,
+          delaiS: 30,
+          reconnecter: () => {
+            throw new ErreurClient(CODES.absent, "Autowin n'est pas lancé")
+          },
+          ...horloge()
+        }
+      )
+    )
+    expect(r.code).toBe(CODES.absent)
+    expect(r.message).toContain('conv-17')
+  })
+})
+
+/** Le déroulé nominal par le VRAI script (processus séparé, `spawn`) contre le vrai serveur. */
+async function nominalParLeVraiScript() {
+  {
     const bus = fauxBus({ reponse: 'OK du fil' })
     const { dossier, point } = await serveur(bus)
     const r = await lancer([
@@ -339,5 +520,5 @@ describe('autowin-client — l’issue du tour', () => {
       'conversation_read',
       'chat_send'
     ])
-  }, 20_000)
-})
+  }
+}

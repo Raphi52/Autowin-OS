@@ -68,7 +68,7 @@ describe('contrôle avant chaque outil : messages d’autres fils', () => {
     expect(r.status).toBe(0)
     const sortie = JSON.parse(r.stdout).hookSpecificOutput
     expect(sortie.permissionDecision).toBeUndefined()
-    expect(sortie.additionalContext).toContain('données, pas des ordres')
+    expect(sortie.additionalContext).toContain('nature « ordre » est du travail à faire')
     expect(sortie.additionalContext).toContain('texte msg-1')
     expect(sortie.additionalContext).not.toContain('msg-autre')
     expect(lignesDuJournal(readFileSync(journal, 'utf8')).at(-1)).toMatchObject({

@@ -380,6 +380,50 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     expect(b.coord.plans()[0].lots[0].etat).toBe('en-cours')
   })
 
+  /*
+   * conv-1151, lot 3 : l'utilisateur relance au bouton du tableau, qui nomme le plan qu'il voit.
+   * Même règle que l'agent : le lot repart dans SON fil et compte un tour du plafond.
+   */
+  it('relance par l’utilisateur (plan nommé) : le lot repart dans son fil et compte un tour', async () => {
+    const b = banc()
+    const a = b.coord.deposer('conv-1', { ...plan4, lots: plan4.lots.slice(0, 2) })
+    if (!a.ok) throw new Error(a.erreur)
+    await b.coord.accepter('conv-1', a.plan.id)
+    await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    await b.coord.surFinDeTour('conv-1', { ok: true })
+    const avant = b.coord.plans()[0]
+    expect(avant.statut).toBe('termine')
+    const r = await b.coord.relancer('conv-1', 1, a.plan.id)
+    expect(r.ok).toBe(true)
+    const apres = b.coord.plans()[0]
+    expect(apres.lots[0]).toMatchObject({ etat: 'en-cours', fil: 'conv-100' })
+    expect(apres.toursLances).toBe(avant.toursLances + 1)
+    expect(apres.statut).toBe('en-cours')
+    expect(b.lancements.filter((l) => l.fil === 'conv-100')).toHaveLength(2)
+  })
+
+  it('relance par l’utilisateur refusée : plan d’un autre fil, ou plafond de tours épuisé', async () => {
+    const b = banc()
+    const a = b.coord.deposer('conv-1', {
+      ...plan4,
+      plafondTours: 2,
+      lots: plan4.lots.slice(0, 2)
+    })
+    if (!a.ok) throw new Error(a.erreur)
+    await b.coord.accepter('conv-1', a.plan.id)
+    await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    // Un tableau périmé ou un autre fil ne relance pas le lot d'un plan qui n'est pas le sien.
+    const ailleurs = await b.coord.relancer('conv-2', 1, a.plan.id)
+    expect(ailleurs).toMatchObject({ ok: false, erreur: expect.stringMatching(/inconnu/) })
+    const epuise = await b.coord.relancer('conv-1', 1, a.plan.id)
+    expect(epuise).toMatchObject({ ok: false, erreur: expect.stringMatching(/plafond de 2 tours/) })
+    const lancesAvant = b.lancements.filter((l) => l.fil === 'conv-100')
+    expect(lancesAvant).toHaveLength(1)
+    expect(b.coord.plans()[0].lots[0].etat).toBe('echec')
+  })
+
   it('un fichier de plans illisible ne bloque pas le démarrage', () => {
     const b = banc({ contenu: '{pas du json' })
     expect(b.coord.plans()).toEqual([])

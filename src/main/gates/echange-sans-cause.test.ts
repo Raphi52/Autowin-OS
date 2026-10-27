@@ -3,7 +3,6 @@ import { runHooks } from './hooks'
 import {
   blocDEchange,
   decisionEchangeSansCause,
-  ECHANGES_SANS_CAUSE_MAX_PAR_RUN,
   fichiersDuRefusSansCause,
   inscrireEchangeAuJournal,
   lignesDeCause,
@@ -44,19 +43,19 @@ describe('fichiersDuRefusSansCause', () => {
 
 describe('decisionEchangeSansCause', () => {
   const motifs = [motifReel({ 'src/a.ts': 3 })]
-  it('refus pur, session présente, sous le plafond → tenter', () => {
+  it('refus pur, session présente → tenter', () => {
     expect(decisionEchangeSansCause({ motifs, echangesDuRun: 1, sessionDuBuild: true })).toEqual({
       tenter: true,
       fichiers: ['src/a.ts']
     })
   })
-  it(`plafond de ${ECHANGES_SANS_CAUSE_MAX_PAR_RUN} par run atteint → pas d'échange, motif nommé`, () => {
-    const d = decisionEchangeSansCause({
-      motifs,
-      echangesDuRun: ECHANGES_SANS_CAUSE_MAX_PAR_RUN,
-      sessionDuBuild: true
+  // Plus de plafond par run (conv-1139, 2026-10-25, demande de l'utilisateur : « voir s'il tourne
+  // vraiment en rond ») : seul le plafond dur des passages de réparation borne encore les échanges.
+  it('aucun plafond par run : 10 échanges déjà faits → tenter quand même', () => {
+    expect(decisionEchangeSansCause({ motifs, echangesDuRun: 10, sessionDuBuild: true })).toEqual({
+      tenter: true,
+      fichiers: ['src/a.ts']
     })
-    expect(d).toMatchObject({ tenter: false, motif: expect.stringMatching(/plafond de 2/) })
   })
   it('session absente → pas d’échange, motif nommé ; refus mêlé → pas d’échange, sans motif', () => {
     expect(

@@ -351,6 +351,11 @@ const api = {
     etapesFaites: number
     etapesTotales: number
   }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
+  /** La mascotte du bureau est-elle affichée ? Le moteur garde le choix (conv-1145). */
+  mascotteAffichee: (): Promise<boolean> => ipcRenderer.invoke('os:mascotte'),
+  /** L'interrupteur de Settings · Interface : rend le choix tel que le moteur l'a enregistré. */
+  afficherMascotte: (affichee: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:mascotte:afficher', affichee),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.
@@ -904,13 +909,18 @@ const api = {
   /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
   messagesEntreFils: (conversationId: string): Promise<MessageEntreFilsAffiche[]> =>
     ipcRenderer.invoke('os:messagesEntreFils', conversationId),
-  /** Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes de l'utilisateur. */
+  /**
+   * Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes de l'utilisateur. `lot` : le
+   * numéro du lot, pour le seul geste « relancer » (conv-1151, lot 3). « tous » (conv-1158) : tous
+   * les plans en un appel, sans fil, pour ranger la liste des conversations.
+   */
   plansDeLots: (
-    geste: GestePlanDeLots,
-    conversationId: string,
-    planId?: string
+    geste: GestePlanDeLots | 'tous',
+    conversationId?: string,
+    planId?: string,
+    lot?: number
   ): Promise<ReponsePlansDeLots> =>
-    ipcRenderer.invoke('os:plansDeLots', geste, conversationId, planId),
+    ipcRenderer.invoke('os:plansDeLots', geste, conversationId, planId, lot),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'

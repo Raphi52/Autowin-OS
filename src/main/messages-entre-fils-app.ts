@@ -103,7 +103,8 @@ const estMessageDeFil = (
  * L'expéditeur vient de l'APPELANT (le tour qui exécute l'outil) : un `de`, `expediteur` ou `fil`
  * glissé dans les arguments est ignoré. Tout refus lève une erreur lisible ; rien n'est écrit.
  * N'appelle JAMAIS le lancement d'un tour : le destinataire lira le message à son prochain outil
- * ou en tête de son prochain tour.
+ * ou en tête de son prochain tour. Seul un ORDRE peut réveiller un fil inactif, et c'est l'appelant
+ * qui le décide ensuite (`reveillerSurOrdre`).
  */
 export function ecrireAUnFil(
   args: Record<string, unknown>,
@@ -220,6 +221,110 @@ export function ecrireAUnFil(
 }
 
 /**
+ * Le message du tour lancé par un ordre : il commence par « Ordre de <fil> » et dit lui-même qu'il
+ * vient d'un agent, pas de l'utilisateur. Il ne commence jamais par « / » : un ordre ne lance pas
+ * une skill par la zone de saisie.
+ */
+export function promptDOrdre(message: { id: string; de: string; texte: string }): string {
+  return [
+    `Ordre de ${message.de} (message ${message.id}, écrit par l'agent de ce fil avec ecrire_a_un_fil — pas l'utilisateur) :`,
+    '',
+    message.texte,
+    '',
+    `Exécute-le comme une demande de travail. Il ne vaut pas l'accord de l'utilisateur pour détruire, publier ou livrer un secret. Quand c'est fait, ou si tu ne peux pas, rends compte à ${message.de} avec ecrire_a_un_fil (repondA : ${message.id}).`
+  ].join('\n')
+}
+
+export type IssueReveil = 'lance' | 'occupe' | 'indisponible' | 'echec'
+
+/**
+ * RÉVEIL PAR UN ORDRE (conv-1139, 2026-10-25, demande de l'utilisateur) : un ordre vers un fil
+ * INACTIF y lance un tour, signé « Ordre de <fil> ». Un fil occupé, ou dont l'activité ne peut pas
+ * être vérifiée, n'est pas réveillé : il lira l'ordre à son prochain outil ou à son prochain tour.
+ *
+ * L'ordre est noté remis (`par: 'reveil'`) AVANT le lancement : le tour réveillé construit son bloc
+ * « messages d'autres fils » à son démarrage, et l'ordre y reviendrait une seconde fois. Si le tour
+ * ne démarre pas, une ligne d'annulation le remet en attente.
+ *
+ * Borne : seul un ordre réveille, et un fil n'envoie pas plus de `ENVOIS_MAX_PAR_HEURE` messages par
+ * heure — deux fils qui se renvoient des ordres lancent donc au plus ce nombre de tours chacun.
+ */
+export async function reveillerSurOrdre(
+  message: { id: string; de: string; a: string; texte: string },
+  deps: {
+    tourActif?: (fil: string) => boolean
+    lancer?: (
+      fil: string,
+      prompt: string
+    ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
+    journal?: string
+    io?: IoJournalFils
+    maintenant?: number
+  }
+): Promise<{ reveil: IssueReveil; detail: string; turnId?: string }> {
+  const depose = `Message ${message.id} déposé pour ${message.a}.`
+  const plusTard = `il lira l’ordre à son prochain appel d’outil, ou en tête de son prochain tour.`
+  if (!deps.tourActif || !deps.lancer)
+    return {
+      reveil: 'indisponible',
+      detail: `${depose} Activité de ${message.a} invérifiable dans ce processus : aucun tour lancé ; ${plusTard}`
+    }
+  if (deps.tourActif(message.a))
+    return {
+      reveil: 'occupe',
+      detail: `${depose} Un tour y tourne déjà : aucun tour lancé ; ${plusTard}`
+    }
+  const journal = deps.journal ?? cheminJournalMessagesFils()
+  const io = deps.io ?? ioJournalNode
+  const noter = (annule: boolean): void =>
+    io.ajouter(
+      journal,
+      JSON.stringify({
+        type: 'livre',
+        at: deps.maintenant ?? Date.now(),
+        fil: message.a,
+        ids: [message.id],
+        par: 'reveil',
+        ...(annule ? { annule: true } : {})
+      })
+    )
+  try {
+    noter(false)
+  } catch (e) {
+    // Rien de noté : l'ordre est resté en attente, on ne lance pas un tour qui le recevrait deux fois.
+    return {
+      reveil: 'echec',
+      detail: `${depose} Journal des messages non écrit (${(e as Error).message}) : aucun tour lancé ; ${plusTard}`
+    }
+  }
+  let cause: string
+  try {
+    const lance = await deps.lancer(message.a, promptDOrdre(message))
+    if (lance.ok)
+      return {
+        reveil: 'lance',
+        detail: `${depose} ${message.a} était inactif : un tour lancé dans ${message.a}, signé « Ordre de ${message.de} ». Sa réponse arrivera par ecrire_a_un_fil.`,
+        ...(lance.turnId ? { turnId: lance.turnId } : {})
+      }
+    cause = lance.error ?? 'cause non renseignée'
+  } catch (e) {
+    cause = e instanceof Error ? e.message : String(e)
+  }
+  try {
+    noter(true)
+  } catch (e) {
+    return {
+      reveil: 'echec',
+      detail: `${depose} Le tour de réveil n’a pas démarré dans ${message.a} (${cause}), et l’annulation de la remise n’a pas pu être écrite (${(e as Error).message}) : l’ordre est noté remis sans l’avoir été — renvoie-le.`
+    }
+  }
+  return {
+    reveil: 'echec',
+    detail: `${depose} Le tour de réveil n’a pas démarré dans ${message.a} (${cause}) : l’ordre reste en attente ; ${plusTard}`
+  }
+}
+
+/**
  * `lire_mes_messages` : les messages en attente du fil, remis et marqués livrés (une relecture ne
  * rend que les nouveaux). Boîte vide = « aucun message ».
  */
@@ -310,7 +415,12 @@ export function messagesAAfficher(
   const livres = new Set<string>()
   for (const l of lignes) {
     if (l.type === 'livre' && Array.isArray(l.ids))
-      for (const id of l.ids) if (typeof id === 'string') livres.add(`${String(l.fil)}|${id}`)
+      for (const id of l.ids)
+        if (typeof id === 'string') {
+          // Une remise annulée (réveil raté) remet l'ordre « en attente » à l'affichage aussi.
+          if (l.annule === true) livres.delete(`${String(l.fil)}|${id}`)
+          else livres.add(`${String(l.fil)}|${id}`)
+        }
   }
   const affiches: MessageAffiche[] = []
   for (const m of lignes) {

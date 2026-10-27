@@ -86,6 +86,30 @@ describe('plan_de_lots par le bus', () => {
     expect(outilsDuChat(CATALOG)).toContain('plan_de_lots')
   })
 
+  // conv-1151, lot 2 : sans annonce dans la description, l'agent du chef ignore que le champ existe.
+  it('la description annonce le champ « apres » (dépendance explicite entre lots)', () => {
+    const outil = CATALOG.find((c) => c.name === 'plan_de_lots')
+    expect(outil?.description).toMatch(/« apres »/)
+    expect(outil?.args?.plan).toMatch(/"apres"/)
+  })
+
+  it('« apres » au site d’appel : le lot dépendant ne part qu’après la fin réussie de son prérequis', async () => {
+    const { bus, coord, lances } = banc()
+    const ordonne = {
+      titre: 'Ordre',
+      lots: [
+        { titre: 'Un', demande: '/build lot un', fichiers: ['a.ts'] },
+        { titre: 'Deux', demande: '/build lot deux', fichiers: ['b.ts'], apres: [1] }
+      ]
+    }
+    const r = await bus.exec('plan_de_lots', { plan: ordonne }, 'conv-A')
+    expect(r.ok).toBe(true)
+    await coord.accepter('conv-A', (r.data as { plan: { id: string } }).plan.id)
+    expect(lances.map((l) => l.fil)).toEqual(['conv-L1'])
+    await coord.surFinDeTour('conv-L1', { ok: true, texte: 'Lot un fait, code 0.' })
+    expect(lances.map((l) => l.fil)).toContain('conv-L2')
+  })
+
   it('sans coordinateur câblé : refus lisible', async () => {
     const bus = new AppCommandBus(
       { conversations: { get: () => undefined } } as never,

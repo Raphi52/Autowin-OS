@@ -50,6 +50,7 @@ export type OpenRunState = {
 
 import { SourceControlPane } from './SourceControlPane'
 import { BilanDeCloture } from './BilanDeCloture'
+import { MessagesEntreFils } from './MessagesEntreFils'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
 import type { Msg } from './chat-view-types'
@@ -444,6 +445,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             data-workflow-detail={selection && !depot ? 'subagents' : 'runs'}
             style={{ gap: 'var(--s2)', minHeight: 0 }}
           >
+            {/* MESSAGES ENTRE FILS (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs ») :
+                ce que les agents des autres fils du même dépôt ont écrit à CE fil, et l'inverse.
+                Ils étaient au-dessus de la zone de saisie ; en tête de l'onglet, ils restent
+                visibles même quand la liste des RUN.md est longue. */}
+            <MessagesEntreFils conversationId={activeId} />
           {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
           {selection && !depot && fils.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>

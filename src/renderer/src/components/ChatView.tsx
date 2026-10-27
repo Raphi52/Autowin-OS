@@ -16,7 +16,7 @@ import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
-import { completerAvecHistorique, filAffichable } from './fil-affichable'
+import { adopterLeTourPersiste, completerAvecHistorique, filAffichable } from './fil-affichable'
 import {
   extrairePromptSuivant,
   extrairePropositionsSuite,
@@ -32,7 +32,7 @@ import {
   libelleReprise
 } from '../../../shared/reprise-surcharge'
 import { SuggestionGrid } from './SuggestionGrid'
-import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { pickTurnToResume, rejeuDejaEnregistre, type UnfinishedTurn } from './resume-unfinished'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { fermerEcouteurPrefill, ouvrirEcouteurPrefill } from './relais-prefill'
 import { refreshesActiveConversation } from './chat-event-routing'
@@ -103,13 +103,23 @@ import { referenceDeLElement } from './reference-element'
 import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
 import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
+import { texteDeLaTache } from '../../../shared/lancer-en-fils'
+import type { PlanDansLaListe } from '../../../shared/plan-de-lots'
+import {
+  EVT_LANCER_EN_FILS,
+  confirmerLancement,
+  lancerAvecFilet,
+  type ConfirmationDeLancement,
+  type DemandeDeLancement,
+  type FilLance,
+  type SuiviDuLancement
+} from './proposition-fils-evenements'
 import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
 // de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
-import { MessagesEntreFils } from './MessagesEntreFils'
 import { TableauDesLots } from './TableauDesLots'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
@@ -476,6 +486,86 @@ const PastilleEnTete = memo(function PastilleEnTete({
 })
 
 /**
+ * LES FILS D'UN PLAN DE LOTS RANGÉS SOUS LEUR FIL CHEF (conv-1151, lot 5 du plan-ba5b7d4a,
+ * 2026-10-26). Avec plusieurs plans, les fils « Lot N/M — … » se mêlaient aux autres et on ne
+ * savait plus à quel chef ils répondaient. Un fil de lot ne porte aucun lien vers son chef : seul
+ * le plan le sait (canal `os:plansDeLots`, `main/plans-de-lots-app.ts`).
+ */
+interface LienDeLot {
+  chef: string
+  rang: number
+  total: number
+}
+/**
+ * Pur : fil de lot → son chef, son rang et le total, d'après la réponse du geste « tous »
+ * (conv-1158). Les plans arrivent du plus ancien au plus récent : un fil présent dans deux plans
+ * suit le plus récent, comme `planDuFil` côté app. Un lot ouvert dans le fil chef lui-même n'est
+ * pas un enfant.
+ */
+function liensDesPlans(plans: readonly PlanDansLaListe[]): Map<string, LienDeLot> {
+  const liens = new Map<string, LienDeLot>()
+  for (const plan of plans)
+    for (const lot of plan.lots)
+      if (lot.fil !== plan.chef)
+        liens.set(lot.fil, { chef: plan.chef, rang: lot.rang, total: plan.total })
+  return liens
+}
+
+/** Vrai si les deux tables portent exactement les mêmes liens : rien à re-rendre. */
+function memesLiens(a: ReadonlyMap<string, LienDeLot>, b: ReadonlyMap<string, LienDeLot>): boolean {
+  if (a.size !== b.size) return false
+  for (const [fil, lien] of a) {
+    const autre = b.get(fil)
+    if (
+      !autre ||
+      autre.chef !== lien.chef ||
+      autre.rang !== lien.rang ||
+      autre.total !== lien.total
+    )
+      return false
+  }
+  return true
+}
+
+/**
+ * Pur : range chaque fil de lot juste après son chef, un cran plus à droite, par rang de lot. Un
+ * fil hors plan garde sa place ; un lot dont le chef n'est pas dans le même groupe aussi (il garde
+ * seulement son repère). Un fil jamais posé (lien circulaire) retombe en fin de groupe : on n'en
+ * perd aucun.
+ */
+function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>(
+  entrees: readonly T[],
+  liens: ReadonlyMap<string, LienDeLot>
+): Array<{ entree: T; niveau: number; lot?: string }> {
+  if (liens.size === 0) return entrees.map((entree) => ({ entree, niveau: 0 }))
+  const presents = new Set(entrees.map((e) => e.hit.conversation.id))
+  const chefPresent = (id: string): string | undefined => {
+    const chef = liens.get(id)?.chef
+    return chef && chef !== id && presents.has(chef) ? chef : undefined
+  }
+  const enfants = new Map<string, T[]>()
+  for (const e of entrees) {
+    const chef = chefPresent(e.hit.conversation.id)
+    if (chef) enfants.set(chef, [...(enfants.get(chef) ?? []), e])
+  }
+  const rangDe = (e: T): number => liens.get(e.hit.conversation.id)?.rang ?? 0
+  for (const liste of enfants.values()) liste.sort((a, b) => rangDe(a) - rangDe(b))
+  const poses = new Set<string>()
+  const sortie: Array<{ entree: T; niveau: number; lot?: string }> = []
+  const poser = (entree: T, niveau: number): void => {
+    const id = entree.hit.conversation.id
+    if (poses.has(id)) return
+    poses.add(id)
+    const lien = liens.get(id)
+    sortie.push({ entree, niveau, ...(lien ? { lot: `lot ${lien.rang}/${lien.total}` } : {}) })
+    for (const enfant of enfants.get(id) ?? []) poser(enfant, niveau + 1)
+  }
+  for (const e of entrees) if (!chefPresent(e.hit.conversation.id)) poser(e, 0)
+  for (const e of entrees) poser(e, 0)
+  return sortie
+}
+
+/**
  * UNE LIGNE DE LA LISTE DES CONVERSATIONS, memorisee (heal gels vue chat, 2026-09-18).
  * Mesure dans l'app (serveur de dev, 637 lignes) : changer de conversation recreait TOUTES les
  * lignes (~430 ms par bascule, surtout de la creation d'elements). Une ligne ne se re-rend plus que
@@ -491,6 +581,7 @@ const LigneConversation = memo(function LigneConversation({
   c,
   snippet,
   depth,
+  lot,
   actif,
   occupe,
   nonVue,
@@ -505,6 +596,8 @@ const LigneConversation = memo(function LigneConversation({
   c: Conv
   snippet?: string
   depth: number
+  /** « lot N/M » quand le fil est un lot d'un plan (conv-1151) : une chaîne, pour garder `memo`. */
+  lot?: string
   actif: boolean
   occupe: boolean
   nonVue: boolean
@@ -538,6 +631,8 @@ const LigneConversation = memo(function LigneConversation({
     <div
       className={`conv-item${actif ? ' active' : ''}${c.surlignee ? ' surlignee' : ''}`}
       style={{ marginLeft: depth * 14 }}
+      data-conversation-id={c.id}
+      {...(lot ? { 'data-lot': lot } : {})}
       // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
       // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
       // ceux qui ne peuvent pas glisser.
@@ -604,6 +699,12 @@ const LigneConversation = memo(function LigneConversation({
               qu'on a trouve la bonne conversation (2026-09-03). */}
           <span className="conv-meta">
             <span>{convQuery ? <TexteSurligne texte={c.id} terme={convQuery} /> : c.id}</span>
+            {/* Rang et total lus dans le PLAN : le titre ne sert qu'à choisir quels fils interroger. */}
+            {lot && (
+              <span className="conv-lot" title="Lot d'un plan, rangé sous son fil chef">
+                {lot}
+              </span>
+            )}
             {!convQuery && <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>}
           </span>
         </span>
@@ -2896,6 +2997,9 @@ export function ChatView({
         }
       } else if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
+        // Un plan a changé (lot ouvert, fini, relancé) : la liste relit tous les plans en UN appel
+        // (conv-1158), sans re-rendre la vue tant qu'aucun lien chef → lot ne change.
+        if (e.scope === 'plans-de-lots') relirePlansRef.current()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
         // Le compte Claude actif a change COTE MAIN (depart d'un tour, rotation sur quota epuise) :
@@ -3253,19 +3357,22 @@ export function ChatView({
           void window.api
             .conversation(conversationId)
             .then((conversation) => {
-              const historique = hydraterFilStocke(
+              const duStore = hydraterFilStocke(
                 (conversation as { messages?: MessageStocke[] })?.messages ?? []
-              ).filter(
+              )
+              const historique = duStore.filter(
                 // Un tour en vol peut être persisté NON CLOS : il ferait doublon avec l'amorce.
                 (message) => message.role !== 'assistant' || (message as AsstMsg).done === true
               )
-              if (historique.length === 0) return
-              const courant = liveMessagesRef.current.get(conversationId) ?? []
+              const avant = liveMessagesRef.current.get(conversationId) ?? []
+              // ... mais ce tour persisté porte ce que l'amorce n'a pas (réponse écrite, action
+              // `orchestrate` que visent les battements) : il DEVIENT l'amorce (conv-1146).
+              const courant = adopterLeTourPersiste(duStore, avant)
               // Decide sur l'IDENTITE, pas sur « il y a un message utilisateur » : cette heuristique
               // abandonnait l'historique des qu'un message etait tape pendant la lecture du store, et
               // le fil restait tronque a son dernier tour (conv-152, saisie ts=1788413114634).
               const complet = completerAvecHistorique(historique, courant)
-              if (complet === courant) return
+              if (complet === avant) return
               liveMessagesRef.current.set(conversationId, complet)
               publierFil(conversationId, complet)
             })
@@ -3965,10 +4072,26 @@ export function ChatView({
       .map((event) => event.text as string)
       .join('')
     if (!replayed.trim()) return
-    const current = liveMessagesRef.current.get(conversationId) ?? []
     // Dédup par TOUR, pas par texte : `JSON.stringify(message).includes(80 premiers caractères)`
     // sérialisait tout le fil à chaque rejeu ET se trompait dans les deux sens — deux tours au
     // préambule identique se masquaient, un tour reformulé à la persistance se dupliquait.
+    if (replayedTurnsRef.current.has(turnId)) return
+    // L'ENREGISTREMENT D'ABORD (conv-1149) : un tour encore en vol, ou dont le texte est déjà
+    // enregistré, n'a rien à rejouer — sa bulle rejouée remplaçait la demande et l'action en cours.
+    let enregistre: MessageStocke[] = []
+    try {
+      enregistre =
+        ((await window.api.conversation(conversationId)) as { messages?: MessageStocke[] } | null)
+          ?.messages ?? []
+    } catch (error) {
+      traceSilentFailure('turn-journal', error)
+    }
+    if (rejeuDejaEnregistre(enregistre, turnId, replayed)) {
+      replayedTurnsRef.current.add(turnId)
+      return
+    }
+    // Relu APRÈS l'attente : un événement du tour a pu poser son fil entre-temps.
+    const current = liveMessagesRef.current.get(conversationId) ?? []
     if (replayedTurnsRef.current.has(turnId)) return
     if (current.some((message) => message.role === 'assistant' && message.turnId === turnId)) {
       replayedTurnsRef.current.add(turnId)
@@ -4349,6 +4472,204 @@ export function ChatView({
       return { ok: false, raison: erreur instanceof Error ? erreur.message : String(erreur) }
     }
   }
+  /**
+   * DES MESSAGES À LA SUITE DANS UN FIL (conv-1147) : le premier part, les autres attendent dans la
+   * file du fil, un par tour. C'est le même geste que les lots du scout (`pickRef`, conv-1080), mais
+   * pour N'IMPORTE QUEL fil, affiché ou non. `filsAvecLotsRef` relâche la file d'un fil quitté, et
+   * la marque `lot` la retient après une coupure par la limite d'abonnement (`lots-retenus-quota.ts`).
+   */
+  function envoyerALaSuite(id: string, textes: readonly string[]): void {
+    const mettreEnFile = (texte: string): void => {
+      setDirectiveReceipt(
+        id,
+        { id: nextQueueEntryIdRef.current++, text: texte },
+        'attente',
+        undefined,
+        { attenteMotif: 'lot' }
+      )
+      enqueueMessage(id, texte, undefined, undefined, { lot: true })
+      filsAvecLotsRef.current.add(id)
+    }
+    const [premier, ...suite] = textes
+    if (premier === undefined) return
+    if (busyConversationsRef.current.has(id)) {
+      for (const texte of textes) mettreEnFile(texte)
+      return
+    }
+    // `keepComposerDraft` : le clic sur la carte n'est pas un envoi depuis la saisie. Sans lui,
+    // « Tout ici » (fil visé = fil affiché) emportait les pièces jointes en attente de l'utilisateur
+    // et vidait le texte qu'il tapait (défaut 1 du juge, conv-1147).
+    void send(premier, { targetConversationId: id, keepComposerDraft: true })
+    for (const texte of suite) mettreEnFile(texte)
+  }
+  /**
+   * « LANCER EN N FILS » (conv-1147, 2026-10-25 — option A du cadrage
+   * `fork-automatique-taches-independantes`). Le message de l'utilisateur portait plusieurs tâches
+   * d'action. L'agent les a regroupées par fichiers communs (```aw-fils, `PropositionDeFils.tsx`),
+   * et l'utilisateur a cliqué.
+   *
+   * « fils » : une BRANCHE du fil d'origine par groupe. Elle part du message de l'utilisateur qui
+   * précède la carte, donc avec l'historique et le dossier de travail du fil. `create_conversation`
+   * ne porte ni l'un ni l'autre. Chaque branche reçoit SA première tâche, et les suivantes du groupe
+   * (mêmes fichiers) passent à la suite dans la même branche. Les branches travaillent dans le
+   * dossier partagé, comme deux fils ouverts à la main. Une prévision de fichiers fausse est arrêtée
+   * par la réservation des fichiers entre fils (`shared/reservation-fichiers.ts`), sans rien écraser.
+   * « ici » : toutes les tâches à la suite, dans le fil d'origine.
+   */
+  async function lancerEnFils(
+    demande: DemandeDeLancement,
+    suivi: SuiviDuLancement = { fils: [], confirme: false }
+  ): Promise<void> {
+    const source = demande.conversationId ?? activeRef.current
+    // `rienNestParti` : refus AVANT toute dépense, la carte rend ses boutons (conv-1147).
+    const confirmer = (fils: FilLance[], refus: string[], rienNestParti = false): void => {
+      const detail: ConfirmationDeLancement = {
+        cle: demande.cle,
+        mode: demande.mode,
+        fils,
+        ...(refus.length ? { refus } : {}),
+        ...(rienNestParti ? { rienNestParti: true as const } : {})
+      }
+      confirmerLancement(detail)
+      suivi.confirme = true
+    }
+    const toutes = demande.plan.flatMap((fil) => fil.taches)
+    if (!source || toutes.length === 0) {
+      confirmer([], ['fil d’origine introuvable'], true)
+      return
+    }
+    if (demande.mode === 'ici' || demande.plan.length < 2) {
+      envoyerALaSuite(
+        source,
+        toutes.map((tache) => tache.demande)
+      )
+      confirmer([], [])
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: `${toutes.length} tâches à la suite dans ce fil : la première part, les autres attendent leur tour. Coût : ${toutes.length} tours.`
+        })
+      )
+      return
+    }
+    // Le point de départ se lit dans le fil STOCKÉ, pas dans la copie à l'écran : une réponse
+    // peinte en direct dans une fenêtre que rien n'a relue n'a pas d'identifiant de message, ni la
+    // demande qui la précède (relecture externe du 2026-10-25, conv-1147). Le TOUR, lui, est le
+    // même à l'écran et sur disque.
+    let filStocke: Array<{ role: string; messageId?: string; turnId?: string }>
+    try {
+      const detail = (await window.api.conversation(source)) as {
+        messages?: typeof filStocke
+      } | null
+      filStocke = detail?.messages ?? []
+    } catch (erreur) {
+      const raison = erreur instanceof Error ? erreur.message : String(erreur)
+      confirmer([], [`fil d’origine illisible (${raison})`], true)
+      return
+    }
+    const parMessage = demande.messageId
+      ? filStocke.findIndex((message) => message.messageId === demande.messageId)
+      : -1
+    const rangCarte =
+      parMessage >= 0 || !demande.turnId
+        ? parMessage
+        : filStocke.findIndex(
+            (message) => message.role === 'assistant' && message.turnId === demande.turnId
+          )
+    // Réponse introuvable sur disque = RIEN NE PART (3e relecture externe, conv-1147). Avant, le
+    // lancement repartait en silence du DERNIER message de l'utilisateur de tout le fil, peut-être
+    // écrit après la carte (« attends, ne fais rien »).
+    if (rangCarte < 0) {
+      confirmer([], ['réponse de la carte introuvable dans le fil enregistré'], true)
+      return
+    }
+    const ancre = [...filStocke.slice(0, rangCarte)]
+      .reverse()
+      .find((message) => message.role === 'user' && message.messageId)?.messageId
+    if (!ancre) {
+      confirmer([], ['message d’origine introuvable dans le fil'], true)
+      return
+    }
+    // Partagée avec le filet (`lancerAvecFilet`) : une erreur imprévue nomme les fils déjà ouverts.
+    const lances: FilLance[] = suivi.fils
+    const envois: Array<{ id: string; textes: string[] }> = []
+    const refus: string[] = []
+    for (const [rang, prevu] of demande.plan.entries()) {
+      const titre = prevu.taches.map((tache) => tache.titre).join(' + ')
+      try {
+        const branche = (await window.api.conversationsFork(source, ancre)) as Conv | undefined
+        if (!branche?.id) {
+          refus.push(`fil ${rang + 1} « ${titre} » (branche refusée)`)
+          continue
+        }
+        // Le titre est un confort : la branche EXISTE déjà. Un renommage refusé ne doit pas la
+        // laisser vide dans la barre latérale, sans tâche (défaut 4 du juge, conv-1147).
+        try {
+          await window.api.conversationsRename?.(branche.id, titre)
+        } catch {
+          // La branche garde son titre « Copie de … » et reçoit quand même sa tâche.
+        }
+        const autres = toutes.filter((tache) => !prevu.taches.includes(tache))
+        lances.push({ id: branche.id, titre })
+        envois.push({
+          id: branche.id,
+          textes: prevu.taches.map((tache) => texteDeLaTache(tache, autres))
+        })
+      } catch (erreur) {
+        const raison = erreur instanceof Error ? erreur.message : String(erreur)
+        refus.push(`fil ${rang + 1} « ${titre} » (${raison})`)
+      }
+    }
+    if (lances.length > 0) {
+      // Rafraîchir la liste est un confort, pas une condition : les branches existent déjà. Une
+      // liste en panne laissait les branches vides et la carte figée sur « Lancement demandé… »
+      // (défaut 3 du juge, conv-1147).
+      try {
+        const fraiches = (await window.api.conversations()) as Conv[]
+        convsRef.current = fraiches
+        setConvs(fraiches)
+      } catch {
+        // La barre latérale se mettra à jour au prochain rafraîchissement diffusé par le main.
+      }
+      setConvViewMode('mosaic')
+      // Le fil d'ORIGINE reste sous les yeux, à gauche des branches : sa carte y montre le reçu et
+      // les liens (demande du 2026-10-25, conv-1147). Déjà ouvert en mosaïque = laissé à sa place.
+      await ouvrirDansMosaique(source)
+    }
+    for (const { id, textes } of envois) {
+      await ouvrirDansMosaique(id)
+      envoyerALaSuite(id, textes)
+    }
+    // Aucune branche créée : rien n'est parti, la carte rend ses boutons.
+    confirmer(lances, refus, lances.length === 0)
+    // L'avis compte ce qui est PARTI, pas ce qui était prévu : il annonçait « 0 fil lancé… Coût :
+    // N tours » quand toutes les branches étaient refusées, et le coût des branches refusées lors d'un
+    // lancement partiel (4e relecture externe, conv-1147). Il dit la même chose que la carte.
+    const parties = envois.reduce((somme, envoi) => somme + envoi.textes.length, 0)
+    const texte =
+      lances.length === 0
+        ? `Rien n’est parti : ${refus.join(' · ') || 'aucune branche créée'}.`
+        : `${lances.length} fil${lances.length > 1 ? 's' : ''} lancé${lances.length > 1 ? 's' : ''} en même temps : ` +
+          `${lances.map((fil) => `${fil.titre} (${fil.id})`).join(' · ')}.` +
+          (parties > lances.length
+            ? ` Les tâches qui touchent les mêmes fichiers passent à la suite dans le même fil.`
+            : '') +
+          ` Coût : ${parties} tour${parties > 1 ? 's' : ''}.` +
+          (refus.length ? ` Non parti : ${refus.join(' · ')}.` : '')
+    setAppNotice((current) => newestNotice(current, { text: texte }))
+  }
+  const lancerEnFilsRef = useRef(lancerEnFils)
+  lancerEnFilsRef.current = lancerEnFils
+  useEffect(() => {
+    const surDemande = (event: Event): void => {
+      const demande = (event as CustomEvent<DemandeDeLancement>).detail
+      if (!demande?.plan) return
+      // Dernier filet (`lancerAvecFilet`) : une erreur imprévue répond quand même à la carte, avec
+      // les fils déjà ouverts ; un reçu déjà donné n'est jamais écrasé.
+      void lancerAvecFilet((aLancer, suivi) => lancerEnFilsRef.current(aLancer, suivi), demande)
+    }
+    window.addEventListener(EVT_LANCER_EN_FILS, surDemande)
+    return () => window.removeEventListener(EVT_LANCER_EN_FILS, surDemande)
+  }, [])
   /**
    * REPRISE APRÈS SURCHARGE DU MODÈLE (529) — demande utilisateur du 2026-09-03 : « quand le modèle
    * renvoie une erreur 529, forke la conversation et reprends (max 3 tentatives) ».
@@ -6776,6 +7097,50 @@ export function ChatView({
   /** Saisie en cours d'une categorie neuve dans le menu (null = le champ n'est pas ouvert). */
   const [saisieCategorie, setSaisieCategorie] = useState<string | null>(null)
 
+  /*
+   * À QUEL CHEF APPARTIENT CHAQUE FIL DE LOT (conv-1151 lot 5, puis conv-1158). UNE lecture groupée,
+   * `plansDeLots('tous')`, rend tous les plans gardés : le chef, et le fil, le rang et le total de
+   * chaque lot. Plus de repérage par le titre « Lot N/M — » : un fil de lot renommé reste rangé.
+   * Relue en UN appel à chaque événement `plans-de-lots` (le coordinateur le signale à chaque
+   * changement de plan, fil de lot neuf compris), jamais sur un rafraîchissement de la liste. La
+   * relecture passe par une ref et ne touche l'état que si un lien change : un lot qui avance ne
+   * re-rend pas toute la vue. Mesure : ChatView.fils-de-lots.test.tsx (1 000 fils, 2 plans → 1 appel).
+   */
+  const [liensDeLots, setLiensDeLots] = useState<ReadonlyMap<string, LienDeLot>>(() => new Map())
+  const liensDeLotsRef = useRef<ReadonlyMap<string, LienDeLot>>(liensDeLots)
+  /** Relit tous les plans ; appelée par l'abonnement unique de la vue sur `plans-de-lots`. */
+  const relirePlansRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (typeof window.api?.plansDeLots !== 'function') return
+    let vivant = true
+    let derniere = 0
+    const relire = (): void => {
+      const numero = ++derniere
+      window.api.plansDeLots('tous').then(
+        (reponse) => {
+          // Une réponse dépassée par une relecture plus récente ne s'applique pas.
+          if (!vivant || numero !== derniere) return
+          if (!reponse.ok) {
+            console.warn('[liste] plans de lots illisibles :', reponse.erreur)
+            return
+          }
+          const liens = liensDesPlans(reponse.plans ?? [])
+          if (memesLiens(liens, liensDeLotsRef.current)) return
+          liensDeLotsRef.current = liens
+          setLiensDeLots(liens)
+        },
+        // Le rangement n'est qu'un confort d'affichage : la liste reste à plat, l'erreur se voit.
+        (erreur: unknown) => console.warn('[liste] plans de lots illisibles :', erreur)
+      )
+    }
+    relirePlansRef.current = relire
+    relire()
+    return () => {
+      vivant = false
+      relirePlansRef.current = () => {}
+    }
+  }, [])
+
   /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
@@ -7061,29 +7426,34 @@ export function ChatView({
               </button>
             </div>
             {!replie &&
-              groupe.items.map(({ hit: { conversation: c, snippet } }) => (
-                <LigneConversation
-                  key={c.id}
-                  c={c}
-                  snippet={snippet}
-                  depth={groupe.depth}
-                  actif={c.id === activeId}
-                  occupe={busyConversations.has(c.id)}
-                  nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
-                  selectionnee={selectedConvIds.has(c.id)}
-                  mosaiqueOuverte={mosaicIds.includes(c.id)}
-                  convQuery={convQuery}
-                  convSelectionMode={convSelectionMode}
-                  convViewMode={convViewMode}
-                  actionsRef={actionsListeRef}
-                  setConvMenu={setConvMenu}
-                />
-              ))}
+              rangerSousLeurChef(groupe.items, liensDeLots).map(({ entree, niveau, lot }) => {
+                const { conversation: c, snippet } = entree.hit
+                return (
+                  <LigneConversation
+                    key={c.id}
+                    c={c}
+                    snippet={snippet}
+                    depth={groupe.depth + niveau}
+                    lot={lot}
+                    actif={c.id === activeId}
+                    occupe={busyConversations.has(c.id)}
+                    nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
+                    selectionnee={selectedConvIds.has(c.id)}
+                    mosaiqueOuverte={mosaicIds.includes(c.id)}
+                    convQuery={convQuery}
+                    convSelectionMode={convSelectionMode}
+                    convViewMode={convViewMode}
+                    actionsRef={actionsListeRef}
+                    setConvMenu={setConvMenu}
+                  />
+                )
+              })}
           </Fragment>
         )
       }),
     [
       groupes,
+      liensDeLots,
       convQuery,
       groupesReplies,
       surviole,
@@ -8513,8 +8883,8 @@ Cliquer pour choisir une autre branche.`}
            * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
            */}
           <ProdAutorisationHote conversationId={activeId} />
-          {/* Messages entre agents de fils du même dépôt (conv-1139) : visibles, jamais des ordres. */}
-          <MessagesEntreFils conversationId={activeId} />
+          {/* Les messages entre agents de fils du même dépôt vivent dans Détails > Runs
+              (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
           {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
           <TableauDesLots conversationId={activeId} />
           <VueMesuree id="chat-saisie" bloc>

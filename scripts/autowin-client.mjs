@@ -14,6 +14,13 @@
  *
  * SORTIE : la réponse de l'assistant sur stdout avec --attendre, sinon l'identifiant du fil. Le reste
  * (fil visé, attente) part sur stderr. Le jeton n'est JAMAIS affiché.
+ *
+ * CODES : 0 réussi · 1 erreur rendue par l'app · 2 arguments invalides (option inconnue, répétée,
+ * délai invalide, message vide ou trop long) · 3 Autowin n'est pas lancé · 4 jeton refusé · 5 fil
+ * occupé, rien envoyé · 6 délai dépassé, le tour continue · 7 tour non démarré · 8 tour en échec ·
+ * 9 tour arrêté (Stop, ou app fermée) · 10 le tour attend ta réponse à une question.
+ * Un redémarrage de l'app PENDANT l'attente n'est pas une fin : le client relit le fichier d'adresse
+ * et reprend l'attente du même tour, dans la limite du délai.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -29,8 +36,15 @@ export const CODES = Object.freeze({
   filOccupe: 5,
   delaiDepasse: 6,
   nonDemarre: 7,
-  tourEchoue: 8
+  tourEchoue: 8,
+  // conv-1144 (cadrage) : un arrêt voulu ou une app fermée n'est pas une panne, et une question
+  // posée n'est pas un succès — l'appelant doit pouvoir les distinguer.
+  tourArrete: 9,
+  questionPosee: 10
 })
+
+/** Statuts d'un tour arrêté sans panne (src/main/chat-turn-arret.ts : Stop → cancelled). */
+const STATUTS_ARRETES = new Set(['cancelled', 'interrupted'])
 
 /** Même plafond que celui d'un résultat d'outil (`PLAFOND_RESULTAT_OUTIL_CAR`, skill-node-mcp.ts). */
 export const MESSAGE_MAX_CAR = 500_000
@@ -52,8 +66,15 @@ export class ErreurClient extends Error {
 /** Lit la ligne de commande. Refuse tôt, avant tout appel à l'app. */
 export function lireArguments(argv) {
   const o = { nouveau: false, attendre: false, avertissements: [] }
+  // conv-1144 (cadrage) : une option répétée gardait la dernière valeur en silence.
+  const vues = new Set()
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
+    if (a.startsWith('--')) {
+      if (vues.has(a))
+        throw new ErreurClient(CODES.usage, `${a} est donnée deux fois : garde une seule valeur.`)
+      vues.add(a)
+    }
     const valeur = () => {
       const v = argv[++i]
       if (v === undefined) throw new ErreurClient(CODES.usage, `${a} attend une valeur.`)
@@ -85,13 +106,18 @@ export function lireArguments(argv) {
   } else if (!o.attendre) {
     throw new ErreurClient(CODES.usage, 'Avec --fil, donne un --message, --attendre, ou les deux.')
   }
-  const delai = Number(o.delaiBrut)
-  if (o.delaiBrut !== undefined && (!Number.isFinite(delai) || delai <= 0)) {
-    o.avertissements.push(
-      `Délai « ${o.delaiBrut} » invalide : délai par défaut de ${DELAI_DEFAUT_S} s.`
-    )
+  // conv-1144 (cadrage) : un délai invalide était remplacé par 600 s ; il est refusé, rien ne part.
+  if (o.delaiBrut !== undefined) {
+    const delai = o.delaiBrut.trim() === '' ? NaN : Number(o.delaiBrut)
+    if (!Number.isFinite(delai) || delai <= 0)
+      throw new ErreurClient(
+        CODES.usage,
+        `Délai « ${o.delaiBrut} » invalide : donne un nombre de secondes supérieur à 0.`
+      )
+    o.delaiS = delai
+  } else {
+    o.delaiS = DELAI_DEFAUT_S
   }
-  o.delaiS = Number.isFinite(delai) && delai > 0 ? delai : DELAI_DEFAUT_S
   return o
 }
 
@@ -189,57 +215,107 @@ const dormirParDefaut = (ms) => new Promise((r) => setTimeout(r, ms))
 /**
  * Attend la fin du tour du fil, puis rend le dernier message de l'assistant.
  * `avant` = nombre de messages lu AVANT l'envoi ; absent = on attend le tour déjà en cours.
+ * `reconnecter()` rend un nouvel `appeler` lu dans le fichier d'adresse : sans lui, une coupure finit
+ * l'attente ; avec lui, un redémarrage de l'app est attendu puis le MÊME tour est repris.
  */
-export async function attendreFinDuTour(appeler, fil, o = {}) {
+export async function attendreFinDuTour(appelerInitial, fil, o = {}) {
   const maintenant = o.maintenant ?? Date.now
   const dormir = o.dormir ?? dormirParDefaut
+  const journal = o.journal ?? (() => {})
   const intervalle = o.intervalleMs ?? INTERVALLE_MS
   const grace = o.graceMs ?? GRACE_DEMARRAGE_MS
-  const delaiMs = (o.delaiS ?? DELAI_DEFAUT_S) * 1000
+  const delaiS = o.delaiS ?? DELAI_DEFAUT_S
+  const delaiMs = delaiS * 1000
   const debut = maintenant()
+  let appeler = appelerInitial
   let vuEnCours = false
+  /** Heure de la dernière reprise après un redémarrage de l'app. */
+  let repriseA
   for (;;) {
-    const lu = await appeler('conversation_read', { id: fil, derniers: '1' })
+    let lu
+    try {
+      lu = await appeler('conversation_read', { id: fil, derniers: '1' })
+    } catch (e) {
+      /*
+       * conv-1144 (cadrage) : un redémarrage coupe la connexion, puis l'app revient avec un AUTRE
+       * jeton. Ce n'est pas la fin du tour : on relit le fichier d'adresse jusqu'au retour de l'app.
+       */
+      const coupure =
+        e instanceof ErreurClient && (e.code === CODES.absent || e.code === CODES.jetonRefuse)
+      if (!coupure || !o.reconnecter) throw e
+      journal(
+        `Autowin ne répond plus (redémarrage ?) : j'attends son retour pour reprendre le tour de ${fil}…`
+      )
+      for (;;) {
+        if (maintenant() - debut >= delaiMs)
+          throw new ErreurClient(
+            CODES.absent,
+            `Autowin n'est pas revenu avant la fin du délai (${delaiS} s) : le tour de ${fil} n'a pas pu être suivi jusqu'au bout. Relance --fil ${fil} --attendre.`
+          )
+        await dormir(intervalle)
+        try {
+          appeler = o.reconnecter()
+          break
+        } catch (e2) {
+          if (!(e2 instanceof ErreurClient && e2.code === CODES.absent)) throw e2
+        }
+      }
+      repriseA = maintenant()
+      journal(`Autowin est revenu : je reprends l'attente du tour de ${fil}.`)
+      continue
+    }
     const ecoule = maintenant() - debut
+    // Juste après une reprise, le tour coupé par le redémarrage peut ne pas être encore réenregistré
+    // (tours repris, active-chat-turns.ts) : un « interrupted » ou un silence n'y est pas une fin.
+    const justeRepris = repriseA !== undefined && maintenant() - repriseA < grace
     if (lu?.tourEnCours) {
       vuEnCours = true
     } else {
       const dernier = Array.isArray(lu?.messages) ? lu.messages.at(-1) : undefined
       const nouveau = o.avant === undefined || Number(lu?.messageCount) > o.avant
-      if (nouveau && dernier?.role === 'assistant') {
+      const statut = dernier?.statut
+      const enSuspens = justeRepris && (statut === 'interrupted' || statut === 'streaming')
+      if (nouveau && dernier?.role === 'assistant' && !enSuspens) {
         // Réussi = statut absent (`conversation_read` omet `done`) ou `completed` : mesuré sur l'app
         // réelle, un tour réussi s'y relit `completed`. Le reste de `ChatTurnStatus`
-        // (src/shared/chat-turn.ts) — failed, cancelled, interrupted, streaming hors tour — est un échec.
+        // (src/shared/chat-turn.ts) : cancelled/interrupted = arrêté, failed/streaming hors tour = échec.
         // fix-ok: conv-1144 — sur l'app réelle (D:/tmp/sonde-pel-1144/run2.log) un tour réussi s'est relu
         // `statut: completed` et sortait en code 8 « échec (completed) » ; les autres retouches de ce
         // fichier étaient le retrait puis la remise du refus « fil occupé », pour prouver que 2 tests mordent.
-        if (dernier.erreur || (dernier.statut && dernier.statut !== 'completed'))
+        if (statut && STATUTS_ARRETES.has(statut))
+          throw new ErreurClient(
+            CODES.tourArrete,
+            `Le tour de ${fil} a été arrêté (${statut === 'cancelled' ? 'bouton Stop' : 'app fermée pendant le tour'}) avant sa fin.`
+          )
+        if (dernier.erreur || (statut && statut !== 'completed'))
           throw new ErreurClient(
             CODES.tourEchoue,
-            `Le tour de ${fil} s'est terminé en échec (${dernier.statut ?? 'échec'}) : ${dernier.erreur ?? 'cause non renseignée'}`
+            `Le tour de ${fil} s'est terminé en échec (${statut ?? 'échec'}) : ${dernier.erreur ?? 'cause non renseignée'}`
           )
         return dernier
       }
-      if (vuEnCours)
-        throw new ErreurClient(
-          CODES.tourEchoue,
-          `Le tour de ${fil} s'est terminé sans réponse de l'assistant.`
-        )
-      if (o.avant === undefined)
-        throw new ErreurClient(
-          CODES.erreur,
-          `Aucun tour en cours dans ${fil}, et aucune réponse à rendre.`
-        )
-      if (ecoule >= grace)
-        throw new ErreurClient(
-          CODES.nonDemarre,
-          `Le tour n'a pas démarré dans ${fil} après ${Math.round(ecoule / 1000)} s. Rien n'est conclu : vérifie le fil dans l'app.`
-        )
+      if (!justeRepris) {
+        if (vuEnCours)
+          throw new ErreurClient(
+            CODES.tourEchoue,
+            `Le tour de ${fil} s'est terminé sans réponse de l'assistant.`
+          )
+        if (o.avant === undefined)
+          throw new ErreurClient(
+            CODES.erreur,
+            `Aucun tour en cours dans ${fil}, et aucune réponse à rendre.`
+          )
+        if (ecoule >= grace)
+          throw new ErreurClient(
+            CODES.nonDemarre,
+            `Le tour n'a pas démarré dans ${fil} après ${Math.round(ecoule / 1000)} s. Rien n'est conclu : vérifie le fil dans l'app.`
+          )
+      }
     }
     if (ecoule >= delaiMs)
       throw new ErreurClient(
         CODES.delaiDepasse,
-        `Délai de ${o.delaiS ?? DELAI_DEFAUT_S} s dépassé : le tour continue dans ${fil}, il n'est pas arrêté.`
+        `Délai de ${delaiS} s dépassé : le tour continue dans ${fil}, il n'est pas arrêté.`
       )
     await dormir(intervalle)
   }
@@ -273,6 +349,7 @@ export async function executer(options, { appeler, journal = () => {}, attente =
   if (!options.attendre) return { code: CODES.ok, sortie: fil }
   journal(`J'attends la fin du tour (délai ${options.delaiS ?? DELAI_DEFAUT_S} s)…`)
   const dernier = await attendreFinDuTour(appeler, fil, {
+    journal,
     ...attente,
     avant,
     delaiS: options.delaiS
@@ -281,6 +358,18 @@ export async function executer(options, { appeler, journal = () => {}, attente =
     journal(
       `Réponse coupée à ${dernier.text.length} caractères sur ${dernier.longueurReelle} : le reste est dans le fil ${fil}.`
     )
+  // conv-1144 (cadrage) : le tour a fini sur une question — le fil attend l'utilisateur, ce n'est
+  // pas un succès. La question et ses choix sont rendus avec la réponse.
+  if (dernier.questionPosee) {
+    journal(`Le tour de ${fil} s'est terminé sur une question : il attend ta réponse dans l'app.`)
+    const { question, options: choix = [] } = dernier.questionPosee
+    return {
+      code: CODES.questionPosee,
+      sortie: [dernier.text ?? '', `Question : ${question}`, choix.map((c) => `- ${c}`).join('\n')]
+        .filter(Boolean)
+        .join('\n\n')
+    }
+  }
   return { code: CODES.ok, sortie: dernier.text ?? '' }
 }
 
@@ -292,7 +381,13 @@ async function principal() {
       ? resolve(options.donnees)
       : dossierDonneesParDefaut(dirname(fileURLToPath(import.meta.url)))
     const appeler = creerAppeleur(lirePointEntree(dossier))
-    const { code, sortie } = await executer(options, { appeler, journal })
+    // Après un redémarrage de l'app, le port et le jeton changent : on relit le même fichier.
+    const reconnecter = () => creerAppeleur(lirePointEntree(dossier))
+    const { code, sortie } = await executer(options, {
+      appeler,
+      journal,
+      attente: { reconnecter }
+    })
     process.stdout.write(`${sortie}\n`)
     process.exitCode = code
   } catch (e) {

@@ -16,6 +16,7 @@ import type {
   ResultatDuRattachement,
   WorkItemDeLaDemande
 } from '../../../shared/carte-des-besoins'
+import { Spinner } from './Spinner'
 import './TachesDeLaDemande.css'
 
 const ORIGINES: Record<WorkItemDeLaDemande['origine'], string> = {
@@ -184,7 +185,13 @@ export function TachesDeLaDemande({
             disabled={enCours}
             onClick={() => void valider()}
           >
-            {enCours ? 'Lecture…' : 'Lier'}
+            {enCours ? (
+              <>
+                <Spinner size={12} /> Lecture…
+              </>
+            ) : (
+              'Lier'
+            )}
           </button>
           <button type="button" className="tache-bouton is-discret" onClick={fermer}>
             Annuler

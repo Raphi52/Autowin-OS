@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   commandeLanceur,
@@ -7,11 +10,13 @@ import {
   orphelinsAarreter,
   origineDevLocale,
   preparerCodeDev,
+  sourcesPlusRecentes,
   trouverServeurDev
 } from './avec-instance-headless.mjs'
 import {
   argumentsInstanceDediee,
   avertissementInterface,
+  avertissementProcessPrincipal,
   interfaceCapturee,
   verdictCapture
 } from './ui-capture.mjs'
@@ -215,8 +220,27 @@ describe('preparerCodeDev : aucun repli silencieux sur le binaire empaquete', ()
     listerPages: vi.fn(),
     resoudreLien: (chemin) => chemin,
     construire: vi.fn(() => 'le depot principal ne doit jamais etre reconstruit'),
-    dateFichier: () => '2026-09-26T08:00:00.000Z'
+    dateFichier: () => '2026-09-26T08:00:00.000Z',
+    plusRecents: () => []
   }
+
+  it('nomme les sources du process principal modifiees apres sa construction (conv-1158)', async () => {
+    const plusRecents = vi.fn(() => ['src/main/index.ts', 'src/preload/index.ts'])
+    const r = await preparerCodeDev({
+      ...base,
+      existe: () => true,
+      sonderServeur: async () => true,
+      plusRecents
+    })
+    expect(plusRecents).toHaveBeenCalledWith(Date.parse('2026-09-26T08:00:00.000Z'))
+    expect(r.mainPerime).toEqual({
+      fichiers: ['src/main/index.ts', 'src/preload/index.ts'],
+      total: 2
+    })
+    // Ce n'est pas un echec : un changement du seul renderer reste capturable.
+    expect(r).not.toHaveProperty('erreur')
+    expect(r.rendererUrl).toBe('http://localhost:5174')
+  })
 
   it('rend electron.exe, le depot et le serveur quand tout est la', async () => {
     const r = await preparerCodeDev({
@@ -352,5 +376,56 @@ describe('ui-capture : la capture dit d ou vient l interface', () => {
     )
     expect(avertissementInterface({ source: 'code-dev' }, env)).toEqual({})
     expect(avertissementInterface({ source: 'application-empaquetee' }, {})).toEqual({})
+  })
+
+  it('previent quand le process principal capture date d avant des modifications (conv-1158)', () => {
+    const env = {
+      AUTOWIN_CAPTURE_MAIN_PERIME: JSON.stringify({
+        construitLe: '2026-10-26T10:30:00.000Z',
+        fichiers: ['src/main/index.ts'],
+        total: 3
+      })
+    }
+    const r = avertissementProcessPrincipal(env)
+    expect(r.processPrincipalPerime).toEqual({
+      construitLe: '2026-10-26T10:30:00.000Z',
+      fichiers: ['src/main/index.ts'],
+      total: 3
+    })
+    expect(r.avertissementProcessPrincipal).toMatch(/3 fichier/)
+    expect(r.avertissementProcessPrincipal).toMatch(/src\/main\/index\.ts/)
+    expect(r.avertissementProcessPrincipal).toMatch(/restart_app/)
+    expect(avertissementProcessPrincipal({})).toEqual({})
+  })
+})
+
+describe('sourcesPlusRecentes : ce que le process principal construit ne contient pas', () => {
+  it('rend les sources de main, preload et shared modifiees apres la construction, hors tests', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'main-perime-'))
+    try {
+      const ecrire = (chemin, date) => {
+        const p = join(racine, chemin)
+        mkdirSync(join(p, '..'), { recursive: true })
+        writeFileSync(p, '')
+        utimesSync(p, date, date)
+      }
+      const avant = new Date('2026-10-26T10:00:00Z')
+      const apres = new Date('2026-10-26T12:00:00Z')
+      ecrire('src/main/index.ts', apres)
+      ecrire('src/main/ancien.ts', avant)
+      ecrire('src/main/x.test.ts', apres)
+      ecrire('src/preload/index.ts', apres)
+      ecrire('src/shared/plan-de-lots.ts', apres)
+      ecrire('src/renderer/src/App.tsx', apres)
+      expect(sourcesPlusRecentes(racine, Date.parse('2026-10-26T11:00:00Z'))).toEqual([
+        'src/main/index.ts',
+        'src/preload/index.ts',
+        'src/shared/plan-de-lots.ts'
+      ])
+      // Dossier absent (depot partiel) : aucune source, pas d'exception.
+      expect(sourcesPlusRecentes(join(racine, 'absent'), 0)).toEqual([])
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
   })
 })

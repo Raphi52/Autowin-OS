@@ -471,6 +471,26 @@ export async function traiterMessageMcp(
 }
 
 /**
+ * Motif de refus d'une requête qui ne vient pas d'un programme du poste, ou `undefined`.
+ *
+ * conv-1144 (risque 1 du cadrage du point d'entrée local) : une page web peut viser un port local.
+ * Un navigateur pose toujours `Origin` sur un POST ; une page servie par rebond DNS parle à
+ * 127.0.0.1 sous SON nom de domaine, donc avec un `Host` étranger. Le jeton protège déjà, ceci
+ * ferme la porte AVANT lui (même logique que l'exigence de vérifier `Origin` de la spécification
+ * MCP « Streamable HTTP »).
+ */
+export function refusRequeteNonLocale(
+  entetes: Record<string, string | string[] | undefined>,
+  port: number
+): string | undefined {
+  if (entetes.origin !== undefined) return 'requête de navigateur refusée (en-tête Origin)'
+  const host = String(entetes.host ?? '').toLowerCase()
+  if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`)
+    return 'en-tête Host refusé : seule la machine locale est servie'
+  return undefined
+}
+
+/**
  * Ouvre le serveur d'outils d'un run. `port: 0` laisse l'OS choisir : deux runs simultanes ne
  * doivent pas se disputer un port fixe.
  */
@@ -480,14 +500,29 @@ export async function demarrerServeurOutilsNoeudSkill(
     port?: number
     observer?: (appel: AppelMcpObserve) => void
     perimetre?: PerimetreOutils
+    /**
+     * Refuser (403) toute requête de navigateur (`Origin`) ou au `Host` étranger. Activé par le
+     * point d'entrée local, ouvert toute la vie de l'app ; les serveurs d'un seul envoi au modèle
+     * ne l'activent pas (conv-1144 : périmètre de la demande).
+     */
+    refuserRequetesNonLocales?: boolean
   } = {}
 ): Promise<ServeurOutilsNoeudSkill> {
   const jeton = randomUUID()
   const perimetre = options.perimetre ?? PERIMETRE_NOEUD_SKILL
+  // Connu après `listen` ; les requêtes n'arrivent qu'après.
+  let portEcoute = 0
   const serveur: Server = createServer((req, res) => {
     let brut = ''
     req.on('data', (c) => (brut += c))
     req.on('end', () => {
+      const refus = options.refuserRequetesNonLocales
+        ? refusRequeteNonLocale(req.headers, portEcoute)
+        : undefined
+      if (refus) {
+        res.writeHead(403).end(refus)
+        return
+      }
       if (req.headers['x-autowin-token'] !== jeton) {
         // Un port en loopback est joignable par tout process de la machine : le jeton n'est pas
         // decoratif.
@@ -527,6 +562,7 @@ export async function demarrerServeurOutilsNoeudSkill(
   })
   const adresse = serveur.address()
   const port = typeof adresse === 'object' && adresse ? adresse.port : 0
+  portEcoute = port
   const url = `http://127.0.0.1:${port}/mcp`
   return {
     url,

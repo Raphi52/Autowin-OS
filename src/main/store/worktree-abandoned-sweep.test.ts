@@ -201,6 +201,39 @@ describe("l'usine a copies abandonnees : une copie SANS ENJEU n'attend plus 24 h
   })
 })
 
+describe('une copie de verification ne laisse pas de branche de secours vide', () => {
+  /*
+    Mesure du 2026-10-24 (conv-1137) : le balayage a committe la copie `command-verify-conv-1048`
+    sur `autowin/recovery/command-verify-conv-1048` — 2 899 lignes, aucune neuve. `verify` ne fait
+    que RECOPIER les fichiers non commites du depot dans sa copie (`synchroniserBureauDeVerification`)
+    pour y rejouer les tests : ses fichiers « non publies » sont un miroir, jamais un travail. Chaque
+    copie de verification de plus de 24 h laissait donc une branche vide a trier a la main.
+  */
+  it('passe 24 h, la copie part SANS branche de secours : ses fichiers ne sont qu un miroir', () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 30)
+    const path = wm.acquire('command-verify-conv-42')
+    writeFileSync(join(path, 'a.txt'), 'copie du fichier modifie dans le depot\n', 'utf8')
+    writeFileSync(join(path, 'neuf.txt'), 'copie d un fichier non suivi du depot\n', 'utf8')
+
+    expect(wm.reconcileResidues().swept).toEqual(['command-verify-conv-42'])
+    expect(existsSync(path)).toBe(false)
+    expect(git(repo, 'branch', '--list', 'autowin/recovery/*')).toBe('')
+  })
+
+  it('avant 24 h, elle reste : verify ne signale pas au balayage qu une verification tourne', () => {
+    // Seul l'age protege une verification en cours (aucun lease n'est pose par `verify`) : le
+    // plancher de 24 h des copies porteuses reste donc celui de la copie de verification.
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('command-verify-conv-43')
+    writeFileSync(join(path, 'a.txt'), 'copie du fichier modifie dans le depot\n', 'utf8')
+
+    expect(wm.reconcileResidues().swept ?? []).toEqual([])
+    expect(existsSync(path)).toBe(true)
+  })
+})
+
 /**
  * LE RETRAIT D'UNE COPIE NE TIENT PLUS LA BOUCLE — heal conv-204, mesure du 2026-10-10.
  *
