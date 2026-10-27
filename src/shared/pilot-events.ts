@@ -49,3 +49,9 @@ export type PilotEventKind =
    * relayés dès leur résultat. Le tour les garde ; la carte du fil les lit comme des vérifications.
    */
   | 'tests-du-terminal'
+  /**
+   * Réponse coupée par le filtre de sécurité du fournisseur (`data` : catégorie et explication),
+   * relayée à chaque coupure (conv-1161). Écrite au journal du tour pour la rétrospective et le
+   * kaizen ; l'avis lisible, lui, est déjà dans la réponse.
+   */
+  | 'coupure-filtre'

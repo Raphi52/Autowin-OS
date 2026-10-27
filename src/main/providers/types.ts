@@ -275,6 +275,13 @@ export interface StreamChunk {
    * (`tests-du-terminal.ts`). Fragment SANS texte : le pilote le relaie au tour, jamais au fil lu.
    */
   testsDuTerminal?: Array<{ commande: string; codeDeSortie: number }>
+  /**
+   * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR, en DONNÉE (conv-1161). L'avis lisible
+   * part dans `delta` ; ce champ porte la catégorie et l'explication du fournisseur pour que le
+   * pilote l'écrive au journal du tour, où la rétrospective et le kaizen la lisent. Joint à CHAQUE
+   * coupure, même quand l'avis n'est pas répété.
+   */
+  coupureFiltre?: { categorie?: string; explication?: string }
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }
