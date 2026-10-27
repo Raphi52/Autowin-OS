@@ -85,12 +85,15 @@ describe('collapsed navigation rail', () => {
     // conv-198 : replié, l'item est un CARRÉ centré — un bord en capsule (999px) y dessine un
     // rond, pas un ovale. L'ancien 33 x 36 collé à gauche donnait un ovale décentré.
     // `width` est ancré sur une frontière pour qu'un `max-width: 36px` ne le satisfasse pas.
+    // conv-1165 : 36 px FIXE débordait la piste sous 100 % de zoom (35,78 px à 90 %, bord du cadre
+    // arrondi à 1,11 px) et `.nav` rognait le rond à droite. Il est donc BORNÉ à la piste
+    // (`min(36px, 100%)`) et gardé rond par `aspect-ratio: 1` — une hauteur fixe en px annulerait ce
+    // ratio et rendrait un ovale dès que la largeur cède.
     const collapsedNavItem =
       css.match(/\.rail\.is-collapsed \.nav-item\s*{([^}]*)}/s)?.[1] ?? ''
-    const width = collapsedNavItem.match(/(?:^|[;{\s])width:\s*(\d+)px\s*;/)?.[1]
-    const height = collapsedNavItem.match(/(?:^|[;{\s])height:\s*(\d+)px\s*;/)?.[1]
-    expect(width).toBe('36')
-    expect(height).toBe(width)
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])width:\s*min\(\s*36px\s*,\s*100%\s*\)\s*;/)
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])aspect-ratio:\s*1\s*;/)
+    expect(collapsedNavItem).not.toMatch(/(?:^|[;{\s])height:\s*\d+px/)
     expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-inline:\s*auto\s*;/)
     expect(css).toMatch(
       /\.shell:has\(\.rail\.is-collapsed\) \.main\s*{[^}]*padding-left:\s*var\(--s2\)/s

@@ -311,6 +311,13 @@ export type PilotEventVariant =
       iteration: number
       data: Array<{ commande: string; codeDeSortie: number }>
     }
+  /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure (conv-1161). */
+  | {
+      kind: 'coupure-filtre'
+      iteration: number
+      text: string
+      data: { categorie?: string; explication?: string }
+    }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
   | {
@@ -2806,6 +2813,20 @@ export class AgentPilot {
             // vérifications. Fragment sans texte : il ne doit pas passer pour le premier mot.
             if (chunk.testsDuTerminal?.length) {
               emit({ kind: 'tests-du-terminal', data: chunk.testsDuTerminal, iteration: i })
+              if (!chunk.delta && !chunk.status) return
+            }
+            // COUPURE DU FILTRE DE SÉCURITÉ (conv-1161) : une donnée pour le journal du tour, que
+            // lisent la rétrospective et le kaizen. L'avis lisible suit dans `delta`, s'il y en a un.
+            if (chunk.coupureFiltre) {
+              const categorie = chunk.coupureFiltre.categorie
+              emit({
+                kind: 'coupure-filtre',
+                iteration: i,
+                text:
+                  "Réponse coupée par le filtre de sécurité d'Anthropic" +
+                  (categorie ? ` (catégorie : ${categorie})` : ''),
+                data: chunk.coupureFiltre
+              })
               if (!chunk.delta && !chunk.status) return
             }
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
