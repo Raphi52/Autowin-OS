@@ -2297,8 +2297,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         /*
          * REPONSE COUPEE PAR LE FILTRE DE SECURITE DU FOURNISSEUR = AVIS VISIBLE. fix-ok: conv-1161
          * tours bdcc5891-038a-4f8f-95d7-e2877328d0bb et a1ddde24-e8a1-4487-9604-44daeff499cd — l'API
-         * a rendu `stop_reason: "refusal"` (categorie `cyber`, journaux run-stdout f433315a-… et
-         * aeaf1921-… l.638) ; le CLI renvoie alors au modele un message synthetique et le laisse
+         * a rendu `stop_reason: "refusal"` (categorie `cyber`, journaux run-stdout f433315a-… l.1551
+         * et aeaf1921-… l.637) ; le CLI renvoie alors au modele un message synthetique et le laisse
          * reprendre. Autowin ne lisait pas ce signal : l'utilisateur a vu l'agent s'arreter puis
          * refuser sans savoir pourquoi, et le modele lui a donne d'autres raisons (« je ne peux pas
          * depuis ce PC », puis la morale) que la vraie. On ne relance rien et on ne contourne rien :
