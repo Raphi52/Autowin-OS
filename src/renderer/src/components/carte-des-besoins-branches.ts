@@ -14,6 +14,11 @@
  */
 import type { DemandeDeLaCarte, StatutDemande } from '../../../shared/carte-des-besoins'
 
+// Libellés laissés en français (traduction anglaise, conv-1170) : la Fiche et son menu « Branches »
+// ont été retirés de la vue le 23/10 (conv-1113), ces libellés ne s'affichent plus nulle part — seul
+// `filsDuProjet` sert encore. Et `classerConstat` compare le constat français écrit par
+// `carte-du-fil.ts` (« une question t’attend ») : ce texte-là ne doit pas changer.
+
 export type Rangement = 'semaine' | 'etat' | 'constat'
 
 /** L'ordre du menu « Branches » ; la semaine d'abord, c'est le rangement par défaut. */
