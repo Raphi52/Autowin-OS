@@ -1939,6 +1939,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Vrai des qu'un `thinking_delta` partiel a ete recu : le bloc complet qui suit est alors un
     // DOUBLON du flux deja affiche, et ne doit etre ni re-pousse ni re-persiste.
     let partialThinkingSeen = false
+    // Un seul avis de coupure par tour, même si le filtre coupe plusieurs réponses (conv-1161).
+    let coupureParLeFiltreSignalee = false
     let resolvedModel: string | undefined
     let sessionId: string | undefined
     let usage: SendResult['usage']
@@ -2281,8 +2283,45 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // ignore ici — le texte de reponse reste pris sur l'evenement `assistant`, sans quoi il
         // serait compte deux fois.
         const ev = o['event'] as
-          { type?: string; delta?: { type?: string; thinking?: string } } | undefined
+          | {
+              type?: string
+              delta?: {
+                type?: string
+                thinking?: string
+                stop_reason?: string
+                stop_details?: { category?: unknown }
+              }
+            }
+          | undefined
         const delta = ev?.delta
+        /*
+         * REPONSE COUPEE PAR LE FILTRE DE SECURITE DU FOURNISSEUR = AVIS VISIBLE. fix-ok: conv-1161
+         * tours bdcc5891-038a-4f8f-95d7-e2877328d0bb et a1ddde24-e8a1-4487-9604-44daeff499cd — l'API
+         * a rendu `stop_reason: "refusal"` (categorie `cyber`, journaux run-stdout f433315a-… et
+         * aeaf1921-… l.638) ; le CLI renvoie alors au modele un message synthetique et le laisse
+         * reprendre. Autowin ne lisait pas ce signal : l'utilisateur a vu l'agent s'arreter puis
+         * refuser sans savoir pourquoi, et le modele lui a donne d'autres raisons (« je ne peux pas
+         * depuis ce PC », puis la morale) que la vraie. On ne relance rien et on ne contourne rien :
+         * on DIT ce qui s'est passe, une fois, a l'endroit de la coupure.
+         */
+        if (
+          ev?.type === 'message_delta' &&
+          delta?.stop_reason === 'refusal' &&
+          !coupureParLeFiltreSignalee
+        ) {
+          coupureParLeFiltreSignalee = true
+          const categorie =
+            typeof delta.stop_details?.category === 'string' && delta.stop_details.category.trim()
+              ? ` (catégorie : ${delta.stop_details.category.trim()})`
+              : ''
+          const avis =
+            `⚠️ Le filtre de sécurité d'Anthropic (le fournisseur du modèle IA) a coupé une partie de cette réponse${categorie}. ` +
+            "Ce n'est ni un choix d'Autowin ni une panne : la partie coupée n'est pas affichée, et les actions qu'elle allait lancer n'ont pas été exécutées."
+          const separation = text && !/\n[ \t]*$/u.test(text) ? '\n\n' : ''
+          text += separation + avis
+          queue.push({ delta: separation + avis })
+          return
+        }
         if (
           ev?.type === 'content_block_delta' &&
           delta?.type === 'thinking_delta' &&
