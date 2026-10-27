@@ -10,6 +10,7 @@ import {
   nomDeDestination,
   nomDeTheme,
   riche,
+  tableDeTextes,
   traduire,
   type CleDeTexte
 } from './textes'
@@ -74,6 +75,48 @@ describe('table des textes FR / EN', () => {
     expect(en).toContain(TEXTES_EN['settings.section.routing'])
     expect(fr).toContain('reste du chat')
     expect(en).toContain('rest of the chat')
+  })
+})
+
+/*
+ * LES TABLES DES ÉCRANS (`tableDeTextes`, conv-1170). Entrée qui doit faire échouer ce bloc : une
+ * table d'écran qui ne suit pas les règles de la table principale (repli sur le français, `{nom}`
+ * remplacé), ou un type qui accepte une table anglaise à qui il manque une clé, ou qui en a une de trop.
+ */
+describe('tableDeTextes — une table par groupe d’écrans', () => {
+  const FR = { 'ecran.titre': 'Titre', 'ecran.compte': '{n} fils sur {total}' } as const
+
+  it('rend l’anglais, retombe sur le français pour un anglais vide, et remplace les valeurs', () => {
+    const { traduire: t } = tableDeTextes(FR, { 'ecran.titre': 'Title', 'ecran.compte': ' ' })
+    expect(t('ecran.titre', 'en')).toBe('Title')
+    expect(t('ecran.titre', 'fr')).toBe('Titre')
+    expect(t('ecran.compte', 'en', { n: 3, total: 7 })).toBe('3 fils sur 7')
+    expect(t('ecran.compte', 'fr', { n: 3 })).toBe('3 fils sur {total}')
+
+    const complete = tableDeTextes(FR, {
+      'ecran.titre': 'Title',
+      'ecran.compte': '{n} threads out of {total}'
+    })
+    expect(complete.traduire('ecran.compte', 'en', { n: 3, total: 7 })).toBe('3 threads out of 7')
+  })
+
+  it('le type refuse une clé anglaise manquante ou en trop, même passée par une variable', () => {
+    const manquante = { 'ecran.titre': 'Title' }
+    const enTrop = { 'ecran.titre': 'Title', 'ecran.compte': '{n} of {total}', 'ecran.autre': 'x' }
+    // @ts-expect-error -- 'ecran.compte' manque côté anglais
+    const sansCle = tableDeTextes(FR, manquante)
+    // @ts-expect-error -- 'ecran.autre' n'existe pas côté français
+    const avecCleEnTrop = tableDeTextes(FR, enTrop)
+    // À l'exécution, la règle tient quand même : le français prend le relais.
+    expect(sansCle.traduire('ecran.compte', 'en')).toBe('{n} fils sur {total}')
+    expect(avecCleEnTrop.traduire('ecran.titre', 'en')).toBe('Title')
+  })
+
+  it('la table principale passe par la même règle : son français ne change pas', () => {
+    for (const cle of Object.keys(TEXTES_FR) as CleDeTexte[]) {
+      expect(traduire(cle, 'fr')).toBe(TEXTES_FR[cle])
+      expect(traduire(cle, 'en')).toBe(TEXTES_EN[cle])
+    }
   })
 })
 

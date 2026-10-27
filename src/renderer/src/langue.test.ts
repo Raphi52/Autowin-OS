@@ -164,6 +164,36 @@ describe('langue de l’interface — changement', () => {
     expect(prevenus).toBe(0)
   })
 
+  /*
+   * LES DATES ET LES NOMBRES SUIVENT LA LANGUE (conv-1170). Entrée qui doit faire échouer ce cas :
+   * une locale restée en dur ('fr-FR') après le passage en anglais, une date sans heure là où
+   * `toLocaleString` en donnait une, ou une date invalide qui lève au lieu de s'afficher.
+   * Les espaces insécables d'Intl (U+00A0, U+202F) sont ramenés à une espace simple pour comparer.
+   */
+  it('formaterDate et formaterNombre : fr-FR, puis en-US après le changement de langue', async () => {
+    const { formaterDate, formaterNombre, appliquerLangue } = await charger()
+    const espaces = (texte: string): string => texte.replace(/\s/gu, ' ')
+    const instant = Date.UTC(2026, 9, 27, 14, 5, 9)
+    const utc = { timeZone: 'UTC' } as const
+
+    appliquerLangue('fr')
+    expect(espaces(formaterDate(instant, utc))).toBe('27/10/2026 14:05:09')
+    expect(formaterDate(new Date(instant), { ...utc, dateStyle: 'long' })).toBe('27 octobre 2026')
+    expect(formaterDate(new Date(instant).toISOString(), { ...utc, timeStyle: 'short' })).toBe(
+      '14:05'
+    )
+    expect(espaces(formaterNombre(1234.5))).toBe('1 234,5')
+    // Sans options : le même français que l'appel en dur qu'elle remplace.
+    expect(formaterDate(instant)).toBe(new Date(instant).toLocaleString('fr-FR'))
+    expect(formaterDate('pas une date')).toBe('Invalid Date')
+
+    appliquerLangue('en')
+    expect(espaces(formaterDate(instant, utc))).toBe('10/27/2026, 2:05:09 PM')
+    expect(formaterDate(instant, { ...utc, dateStyle: 'long' })).toBe('October 27, 2026')
+    expect(formaterNombre(1234.5)).toBe('1,234.5')
+    expect(formaterNombre(0.25, { style: 'percent' })).toBe('25%')
+  })
+
   it('prévient les composants abonnés à chaque CHANGEMENT, pas pour la même langue', async () => {
     const { abonnerLangue, appliquerLangue } = await charger()
     const vus: number[] = []
