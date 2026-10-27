@@ -89,9 +89,17 @@ describe('collapsed navigation rail', () => {
     // arrondi à 1,11 px) et `.nav` rognait le rond à droite. Il est donc BORNÉ à la piste
     // (`min(36px, 100%)`) et gardé rond par `aspect-ratio: 1` — une hauteur fixe en px annulerait ce
     // ratio et rendrait un ovale dès que la largeur cède.
+    // conv-1178 : l'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) se dessine HORS du rond et
+    // `.nav` le rognait à gauche et à droite. Le rond cède 2 × `--rail-anneau` (≥ 4 px) sur la
+    // piste, et la même marge haut/bas garde le pas des icônes.
     const collapsedNavItem =
       css.match(/\.rail\.is-collapsed \.nav-item\s*{([^}]*)}/s)?.[1] ?? ''
-    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])width:\s*min\(\s*36px\s*,\s*100%\s*\)\s*;/)
+    const anneau = Number(collapsedNavItem.match(/--rail-anneau:\s*(\d+(?:\.\d+)?)px\s*;/)?.[1])
+    expect(anneau).toBeGreaterThanOrEqual(4)
+    expect(collapsedNavItem).toMatch(
+      /(?:^|[;{\s])width:\s*calc\(\s*min\(\s*36px\s*,\s*100%\s*\)\s*-\s*2\s*\*\s*var\(--rail-anneau\)\s*\)\s*;/
+    )
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-block:\s*var\(--rail-anneau\)\s*;/)
     expect(collapsedNavItem).toMatch(/(?:^|[;{\s])aspect-ratio:\s*1\s*;/)
     expect(collapsedNavItem).not.toMatch(/(?:^|[;{\s])height:\s*\d+px/)
     expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-inline:\s*auto\s*;/)

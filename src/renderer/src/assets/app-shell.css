@@ -192,12 +192,22 @@
    légèrement cut sur la droite »). La piste ne fait 36 px qu'à 100 % : sous ce zoom, le bord de
    1 px du cadre Nébuleuse est arrondi à un pixel d'écran entier (1,11 px à 90 %), la piste tombe
    à 35,78 px et le rond fixe de 36 px dépassait de 0,19 px, rogné par `.nav` (overflow-x: hidden)
-   en un méplat visible. `min()` le borne à la piste, `aspect-ratio` le garde rond. */
+   en un méplat visible. `min()` le borne à la piste, `aspect-ratio` le garde rond.
+   LE ROND LAISSE LA PLACE À SON ANNEAU (2026-10-27, conv-1178 : « il faut rétrécir le rond de
+   sélection, il est coupé à gauche et à droite »). L'item cliqué garde le focus, et l'anneau de
+   focus de Nébuleuse (`:focus-visible`, 2 px de trait + 2 px d'écart) se dessine HORS du rond :
+   rond de 35,8 px + 2 × 2,2 px dans une piste de 35,8 px, rogné des deux côtés par `.nav`
+   (mesuré dans l'app à 90 %). Le rond perd donc 2 × `--rail-anneau` (28 px à 100 %), et la même
+   marge en haut et en bas garde l'espacement des icônes (pas de 38 px) et loge l'anneau du
+   premier item sous le bord de `.nav`. Un anneau plus large que 4 px (thèmes malvoyants) n'est
+   pas couvert. */
 .rail.is-collapsed .nav-item {
-  width: min(36px, 100%);
+  --rail-anneau: 4px;
+  width: calc(min(36px, 100%) - 2 * var(--rail-anneau));
   height: auto;
   aspect-ratio: 1;
   margin-inline: auto;
+  margin-block: var(--rail-anneau);
   justify-content: center;
   padding: 0;
 }
