@@ -1045,6 +1045,40 @@ export function confReservationFichiers(
   return fil ? { fil, registre: cheminRegistreReservations(racineDonnees) } : undefined
 }
 
+/** Événements de hook du projet repris malgré `--setting-sources ""` : début et fin de tour seulement. */
+const EVENEMENTS_TOUR_PROJET = ['UserPromptSubmit', 'Stop'] as const
+
+/**
+ * Les hooks de début et de fin de tour du `.claude/settings.json` du projet. Le CLI part sans les
+ * réglages du projet : ces hooks ne jouaient jamais (RIG-V3 : temps Claude jamais compté). Le reste
+ * du fichier reste ignoré ; absent ou illisible → `{}`.
+ */
+export function hooksTourDuProjet(cwd: string | undefined): Record<string, unknown[]> {
+  if (!cwd) return {}
+  try {
+    const reglages = JSON.parse(readFileSync(join(cwd, '.claude', 'settings.json'), 'utf8')) as {
+      hooks?: Record<string, unknown>
+    }
+    const repris: Record<string, unknown[]> = {}
+    for (const evenement of EVENEMENTS_TOUR_PROJET) {
+      const groupes = reglages.hooks?.[evenement]
+      if (Array.isArray(groupes) && groupes.length > 0) repris[evenement] = groupes
+    }
+    return repris
+  } catch {
+    return {}
+  }
+}
+
+/** Ajoute aux réglages d'Autowin les hooks de tour du projet ; ses gardes `PreToolUse` restent seules. */
+export function avecHooksTourDuProjet(
+  reglages: Record<string, unknown>,
+  cwd: string | undefined
+): Record<string, unknown> {
+  const hooks = reglages.hooks as Record<string, unknown>
+  return { ...reglages, hooks: { ...hooksTourDuProjet(cwd), ...hooks } }
+}
+
 export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
@@ -1643,7 +1677,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await writeFileAsync(hookGarde, scriptDesGardesCourant(), 'utf8')
       await writeFileAsync(
         settingsFile,
-        JSON.stringify(reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin))),
+        JSON.stringify(
+          avecHooksTourDuProjet(
+            reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
+            execution?.cwd ?? readOnlyCwd
+          )
+        ),
         'utf8'
       )
       args.push('--settings', settingsFile)
