@@ -1,0 +1,476 @@
+import { tableDeTextes } from '../textes'
+
+/**
+ * TEXTES — ÉCRAN TICKETS (traduction anglaise, conv-1170, 2026-10-27).
+ *
+ * Écrans couverts : TicketsView et la section des candidats de veille (VeilleCandidatsSection).
+ *
+ * Une table par groupe d'écrans pour que les lots de traduction, menés en même temps, n'écrivent
+ * jamais dans le même fichier. Règles communes, vérifiées par `tables.test.ts` : le FRANÇAIS fait
+ * foi, mot pour mot celui de l'écran ; l'anglais a les MÊMES clés (le type refuse une clé manquante
+ * ou en trop), n'est jamais vide, diffère du français et garde les mêmes `{valeurs}`. Un anglais
+ * volontairement identique au français (nom propre, nom de produit) se déclare dans
+ * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
+ *
+ * Préfixes : `vue.` (en-tête et onglets), `date.` (date relative), `traitement.` (état d'un
+ * traitement, infobulle de la bulle), `erreur.`, `auto.` (mode auto et ses garde-fous), `source.`
+ * (sélecteur et formulaire de source), `stats.`, `barre.` (recherche, filtres, tri), `actions.`,
+ * `contenu.` (chargement, erreurs, vide), `liste.`, `detail.` — tous dans TicketsView ; `veille.`
+ * (VeilleCandidatsSection).
+ *
+ * Les noms de fournisseurs (Azure DevOps, GitHub, GitLab) et l'onglet « Autowin OS » restent en dur
+ * dans TicketsView : noms propres, identiques dans les deux langues.
+ */
+export const TEXTES_FR = {
+  // — En-tête de la vue
+  'vue.surtitre': 'Travail synchronisé',
+  'vue.titre': 'Tickets',
+  'vue.description': 'Synchronise et pilote le travail issu de tes sources externes.',
+  'vue.sections': 'Sections Tickets',
+  'vue.onglet.externes': 'Sources externes',
+
+  // — Date relative courte de la liste et du détail
+  'date.instant': 'à l’instant',
+  'date.minutes': 'il y a {n} min',
+  'date.heures': 'il y a {n} h',
+  'date.jours': 'il y a {n} j',
+
+  // — État d'un traitement (infobulle de la bulle de conversation)
+  'traitement.pret': 'prêt',
+  'traitement.enCours': 'en cours',
+  'traitement.traite': 'traité',
+  'traitement.interrompu': 'interrompu',
+  'traitement.echec': 'échec',
+
+  // — Erreurs posées par la vue
+  'erreur.chargement': 'Impossible de charger les tickets.',
+  'erreur.champsSource': 'Complète les champs obligatoires de la source.',
+
+  // — Mode auto : statut et garde-fous
+  'auto.veilleAmorcee': 'en veille · {n} ticket(s) déjà présents ignorés · {cout}',
+  'auto.arrete': 'arrêté',
+  'auto.plafondAtteint': 'arrêté · plafond de session atteint ({n} runs)',
+  'auto.traitement': 'traitement de {n} entrant(s){reportes} · {cout}',
+  'auto.reportes': ' · {n} reporté(s)',
+  'auto.aucunRole': 'en veille · aucun rôle configuré',
+  'auto.providerIndisponible': 'en veille · provider {provider} indisponible ({etat})',
+  'auto.bilan':
+    'en veille · {reussis}/{total} lancés{echecs} · {restants} run(s) restants sur le plafond',
+  'auto.echecs': ' · {n} échec(s)',
+  'auto.arreteKill': 'arrêté (kill-switch)',
+  'auto.case': 'Mode auto (traite les entrants du filtre)',
+  'auto.parallele': 'Parallèle',
+  'auto.paralleleAria': 'Runs en parallèle',
+  'auto.parCycle': 'Par cycle',
+  'auto.parCycleAria': 'Tickets traités par cycle',
+  'auto.plafond': 'Plafond session',
+  'auto.plafondAria': 'Plafond de runs pour la session',
+  'auto.lances': '{n} lancé(s)',
+  'auto.stopTitre': 'Arrêt immédiat du mode auto (kill-switch global)',
+  'auto.stop': 'Stop',
+
+  // — Sélecteur et formulaire de source
+  'source.surtitre': 'Source',
+  'source.choix': 'Source de tickets',
+  'source.fermer': 'Fermer le formulaire',
+  'source.ajouter': 'Ajouter une source',
+  'source.ajouterCourt': '＋ Source',
+  'source.fournisseur': 'Fournisseur',
+  'source.organisationAzure': 'Organisation Azure',
+  'source.organisation': 'Organisation',
+  'source.projetAzure': 'Projet Azure',
+  'source.projet': 'Projet',
+  'source.proprietaireGithub': 'Propriétaire GitHub',
+  'source.organisationOuProprietaire': 'Organisation ou propriétaire',
+  'source.namespaceGitlab': 'Namespace GitLab',
+  'source.groupe': 'Groupe / sous-groupe',
+  'source.depotAzure': 'Dépôt Azure de contexte',
+  'source.depot': 'Dépôt',
+  'source.depotContexte': 'Dépôt de contexte',
+  'source.url': 'URL personnalisée',
+  'source.urlOptionnelle': 'URL personnalisée (optionnel)',
+  'source.aideGithub':
+    'Privé : GH_TOKEN sur github.com ; pour une URL personnalisée, connecte gh à cet hôte.',
+  'source.aideGitlab':
+    'Privé : GITLAB_TOKEN sur gitlab.com ; pour une URL personnalisée, connecte glab à cet hôte.',
+  'source.enregistrerTitre': 'Enregistrer la source',
+  'source.enregistrer': 'Enregistrer',
+
+  // — Bandeau de compteurs
+  'stats.titre': 'Compteurs calculés sur la page chargée, pas sur tout le projet',
+  'stats.charges': 'chargé(s) ·',
+  'stats.affiches': 'affiché(s) · périmètre : page chargée',
+  'stats.repartition': 'Répartition par état sur la page chargée',
+  'stats.filtrerSur': 'Filtrer sur « {etat} »',
+  'stats.selection': '{n} sélectionné(s)',
+
+  // — Recherche, filtres, tri
+  'barre.rechercher': 'Rechercher les tickets',
+  'barre.rechercherIndice': 'ID, titre ou assigné… (Entrée = recherche serveur)',
+  'barre.chercherTitre':
+    'Chercher ce titre sur le serveur (tout le projet), pas seulement dans la page chargée',
+  'barre.chercher': 'Chercher',
+  'barre.serveur': 'serveur : « {requete} »',
+  'barre.effacerServeur': 'Effacer la recherche serveur',
+  'barre.filtrerType': 'Filtrer par type',
+  'barre.typesPresents': 'Types présents dans la page chargée (pas tout le projet)',
+  'barre.tousTypes': 'Tous les types',
+  'barre.filtrerEtat': 'Filtrer par état',
+  'barre.etatsPresents': 'États présents dans la page chargée (pas tout le projet)',
+  'barre.tousEtats': 'Tous les états',
+  'barre.filtrerAssigne': 'Filtrer par assigné',
+  'barre.assigneIndice': 'Assigné…',
+  'barre.trier': 'Trier',
+  'barre.tri.recent': 'Plus récents',
+  'barre.tri.priorite': 'Priorité',
+  'barre.tri.idDecroissant': 'ID décroissant',
+  'barre.tri.idCroissant': 'ID croissant',
+  'barre.tri.titre': 'Titre A→Z',
+  'barre.acces.projet': 'Projet {projet} · {acces}',
+  'barre.acces.coffre': 'Coffre configuré',
+  'barre.acces.sessionAzure': 'Session Azure CLI',
+  'barre.acces.public': 'Public · session CLI/env si privée',
+  'barre.actualiserTitre': 'Actualiser les tickets',
+  'barre.actualiser': 'Actualiser',
+
+  // — Actions sur la sélection
+  'actions.toutDeselectionner': 'Tout désélectionner',
+  'actions.toutSelectionner': 'Tout sélectionner ({n})',
+  'actions.envoyerTitre': 'Ouvre UNE conversation pour la sélection et ENVOIE le prompt',
+  'actions.preparerTitre':
+    'Ouvre UNE conversation pour la sélection et y pré-remplit le prompt, sans l’envoyer',
+  'actions.traiter': 'Traiter la sélection ({n})',
+  'actions.preparer': 'Préparer le prompt ({n})',
+  'actions.envoiImmediat': 'Traiter réellement (envoi immédiat)',
+
+  // — Contenu : chargement, erreurs, vide
+  'contenu.sourcesImpossible': 'Chargement des sources impossible',
+  'contenu.reessayerTitre': 'Réessayer le chargement des tickets',
+  'contenu.reessayer': 'Réessayer',
+  'contenu.chargementAria': 'Chargement des tickets',
+  'contenu.synchronisation': 'Synchronisation des tickets…',
+  'contenu.chargementImpossible': 'Chargement impossible',
+  'contenu.aucuneSource': 'Aucune source configurée',
+  'contenu.ajouteSource': 'Ajoute une source Azure DevOps, GitHub ou GitLab.',
+  'contenu.aucunTicket': 'Aucun ticket',
+  'contenu.aucunResultat': 'Aucun résultat',
+  'contenu.perimetreRestreint': 'Périmètre restreint par : {causes}.',
+  'contenu.sourceVide': 'Cette source ne renvoie aucun élément accessible sur la page chargée.',
+  'contenu.cause.rechercheServeur': 'recherche serveur « {valeur} »',
+  'contenu.cause.rechercheLocale': 'recherche locale « {valeur} »',
+  'contenu.cause.type': 'type « {valeur} »',
+  'contenu.cause.etat': 'état « {valeur} »',
+  'contenu.cause.assigne': 'assigné « {valeur} »',
+  'contenu.effacerTitre': 'Effacer la recherche serveur et les filtres locaux',
+  'contenu.effacer': 'Effacer la recherche et les filtres',
+  'contenu.chargement': 'Chargement…',
+  'contenu.chargerSuite': 'Charger la suite',
+  'contenu.actualisationAria': 'Actualisation des tickets en cours',
+  'contenu.actualisation': 'Actualisation…',
+  'contenu.perimees': 'Données périmées',
+  'contenu.partielImpossible': 'Chargement partiel impossible',
+
+  // — Liste des tickets
+  'liste.cocher': 'Cocher le ticket {id}',
+  'liste.nonAssigne': 'Non assigné',
+  'liste.rejoindreAria': 'Rejoindre la conversation du ticket {id}',
+  'liste.ouvrirAria': 'Ouvrir une conversation pour le ticket {id}',
+  'liste.rejoindreTitre': 'Rejoindre la conversation de #{id} ({etat})',
+  'liste.ouvrirEnvoyerTitre': 'Ouvrir une conversation pour #{id} et ENVOYER le prompt',
+  'liste.ouvrirPreparerTitre': 'Ouvrir une conversation pour #{id} (prompt pré-rempli, non envoyé)',
+  'liste.fin': 'Fin de la liste',
+
+  // — Détail d'un ticket
+  'detail.assigne': 'Assigné',
+  'detail.cree': 'Créé',
+  'detail.misAJour': 'Mis à jour',
+  'detail.description': 'Description',
+  'detail.aucuneDescription': 'Aucune description.',
+  'detail.relations': 'Relations',
+  'detail.aucuneRelation': 'Aucune relation.',
+  'detail.discussion': 'Discussion',
+  'detail.auteurInconnu': 'Auteur inconnu',
+  'detail.aucunCommentaire': 'Aucun commentaire chargé.',
+  'detail.ouvrirDans': 'Ouvrir dans {cible}',
+  'detail.laSource': 'la source',
+
+  // — Candidats de veille (VeilleCandidatsSection)
+  'veille.statut.nouveau': 'nouveau',
+  'veille.statut.prompte': 'prompté',
+  'veille.statut.ecarte': 'écarté',
+  'veille.statut.perime': 'périmé',
+  'veille.raisonPerime':
+    'La ligne citée n’est plus dans le fichier : ce défaut a sans doute déjà été corrigé.',
+  'veille.masques.ecarte': '{n} écarté',
+  'veille.masques.ecartes': '{n} écartés',
+  'veille.masques.perime': '{n} périmé',
+  'veille.masques.perimes': '{n} périmés',
+  'veille.replier': 'Replier les détails',
+  'veille.deplier': 'Déplier Quoi / Pourquoi / Comment',
+  'veille.pertinenceTitre': 'Pertinence pour Autowin, notée par le scout (0-100)',
+  'veille.nonNote': 'non noté',
+  'veille.quoi': 'Quoi ?',
+  'veille.pourquoi': 'Pourquoi ?',
+  'veille.comment': 'Comment ?',
+  'veille.preuveLue': 'Preuve lue : « {citation} »',
+  'veille.partirAncrage': "Partir de l'ancrage {url}.",
+  'veille.ouvrirSource': 'ouvrir la source',
+  'veille.prompter': 'Prompter dans Autowin',
+  'veille.ecarter': 'Écarter',
+  'veille.illisible': 'Veille illisible : {erreur}',
+  'veille.lecture': 'Lecture des candidats…',
+  'veille.nonEnvoye': '« {titre} » n’a pas été envoyé. {raison}',
+  'veille.horsStock': '« {titre} » n’est plus dans le stock : rien n’a été envoyé.',
+  'veille.candidat': 'candidat',
+  'veille.candidats': 'candidats',
+  // L'espace avant le deux-points est INSÉCABLE, comme le `&nbsp;` qu'écrivait l'écran.
+  'veille.derniereLecture': 'dernière lecture : {date}',
+  'veille.jamaisLue': 'aucune lecture effectuée pour l’instant',
+  'veille.trierPar': 'trier par',
+  'veille.tri.pertinence': 'pertinence',
+  'veille.tri.date': 'ordre de lecture',
+  'veille.masquer': 'masquer',
+  'veille.voir': 'voir',
+  'veille.actualiser': 'Actualiser',
+  'veille.genererTitre':
+    'Scout interne : analyse les conversations loggées, les workflows et le code d’Autowin pour proposer de nouveaux candidats',
+  'veille.generation': 'Génération en cours…',
+  'veille.generer': 'En générer plus',
+  'veille.echecs.un': '{n} source muette à la dernière lecture',
+  'veille.echecs.plusieurs': '{n} sources muettes à la dernière lecture',
+  'veille.vide':
+    'Aucun candidat. Une lecture n’a peut-être jamais été lancée, ou les sources n’annoncent rien.',
+  'veille.nouveautes': 'Nouveautés',
+  'veille.aucunAjout': 'Aucun ajout de capacité dans cette lecture.',
+  'veille.corrections': 'Corrections & autres',
+  'veille.aucuneCorrection': 'Aucune correction relevée.'
+} as const
+
+export type CleTickets = keyof typeof TEXTES_FR
+
+export const TEXTES_EN: Record<CleTickets, string> = {
+  'vue.surtitre': 'Synced work',
+  'vue.titre': 'Tickets',
+  'vue.description': 'Syncs and drives the work coming from your external sources.',
+  'vue.sections': 'Tickets sections',
+  'vue.onglet.externes': 'External sources',
+
+  'date.instant': 'just now',
+  'date.minutes': '{n} min ago',
+  'date.heures': '{n} h ago',
+  'date.jours': '{n} d ago',
+
+  'traitement.pret': 'ready',
+  'traitement.enCours': 'in progress',
+  'traitement.traite': 'handled',
+  'traitement.interrompu': 'interrupted',
+  'traitement.echec': 'failed',
+
+  'erreur.chargement': 'The tickets cannot be loaded.',
+  'erreur.champsSource': 'Fill in the source’s required fields.',
+
+  'auto.veilleAmorcee': 'on standby · {n} ticket(s) already present skipped · {cout}',
+  'auto.arrete': 'stopped',
+  'auto.plafondAtteint': 'stopped · session cap reached ({n} runs)',
+  'auto.traitement': 'handling {n} incoming item(s){reportes} · {cout}',
+  'auto.reportes': ' · {n} postponed',
+  'auto.aucunRole': 'on standby · no role configured',
+  'auto.providerIndisponible': 'on standby · provider {provider} unavailable ({etat})',
+  'auto.bilan':
+    'on standby · {reussis}/{total} launched{echecs} · {restants} run(s) left under the cap',
+  'auto.echecs': ' · {n} failure(s)',
+  'auto.arreteKill': 'stopped (kill switch)',
+  'auto.case': 'Auto mode (handles the filter’s incoming items)',
+  'auto.parallele': 'Parallel',
+  'auto.paralleleAria': 'Parallel runs',
+  'auto.parCycle': 'Per cycle',
+  'auto.parCycleAria': 'Tickets handled per cycle',
+  'auto.plafond': 'Session cap',
+  'auto.plafondAria': 'Run cap for the session',
+  'auto.lances': '{n} launched',
+  'auto.stopTitre': 'Immediate stop of auto mode (global kill switch)',
+  'auto.stop': 'Stop',
+
+  'source.surtitre': 'Source',
+  'source.choix': 'Ticket source',
+  'source.fermer': 'Close the form',
+  'source.ajouter': 'Add a source',
+  'source.ajouterCourt': '＋ Source',
+  'source.fournisseur': 'Provider',
+  'source.organisationAzure': 'Azure organization',
+  'source.organisation': 'Organization',
+  'source.projetAzure': 'Azure project',
+  'source.projet': 'Project',
+  'source.proprietaireGithub': 'GitHub owner',
+  'source.organisationOuProprietaire': 'Organization or owner',
+  'source.namespaceGitlab': 'GitLab namespace',
+  'source.groupe': 'Group / subgroup',
+  'source.depotAzure': 'Azure context repository',
+  'source.depot': 'Repository',
+  'source.depotContexte': 'Context repository',
+  'source.url': 'Custom URL',
+  'source.urlOptionnelle': 'Custom URL (optional)',
+  'source.aideGithub':
+    'Private: GH_TOKEN on github.com; for a custom URL, connect gh to that host.',
+  'source.aideGitlab':
+    'Private: GITLAB_TOKEN on gitlab.com; for a custom URL, connect glab to that host.',
+  'source.enregistrerTitre': 'Save the source',
+  'source.enregistrer': 'Save',
+
+  'stats.titre': 'Counters computed on the loaded page, not on the whole project',
+  'stats.charges': 'loaded ·',
+  'stats.affiches': 'shown · scope: loaded page',
+  'stats.repartition': 'Breakdown by state on the loaded page',
+  'stats.filtrerSur': 'Filter on “{etat}”',
+  'stats.selection': '{n} selected',
+
+  'barre.rechercher': 'Search the tickets',
+  'barre.rechercherIndice': 'ID, title or assignee… (Enter = server search)',
+  'barre.chercherTitre':
+    'Search this title on the server (the whole project), not only in the loaded page',
+  'barre.chercher': 'Search',
+  'barre.serveur': 'server: “{requete}”',
+  'barre.effacerServeur': 'Clear the server search',
+  'barre.filtrerType': 'Filter by type',
+  'barre.typesPresents': 'Types present in the loaded page (not the whole project)',
+  'barre.tousTypes': 'All types',
+  'barre.filtrerEtat': 'Filter by state',
+  'barre.etatsPresents': 'States present in the loaded page (not the whole project)',
+  'barre.tousEtats': 'All states',
+  'barre.filtrerAssigne': 'Filter by assignee',
+  'barre.assigneIndice': 'Assignee…',
+  'barre.trier': 'Sort',
+  'barre.tri.recent': 'Most recent',
+  'barre.tri.priorite': 'Priority',
+  'barre.tri.idDecroissant': 'ID descending',
+  'barre.tri.idCroissant': 'ID ascending',
+  'barre.tri.titre': 'Title A→Z',
+  'barre.acces.projet': 'Project {projet} · {acces}',
+  'barre.acces.coffre': 'Vault configured',
+  'barre.acces.sessionAzure': 'Azure CLI session',
+  'barre.acces.public': 'Public · CLI/env session if private',
+  'barre.actualiserTitre': 'Refresh the tickets',
+  'barre.actualiser': 'Refresh',
+
+  'actions.toutDeselectionner': 'Deselect all',
+  'actions.toutSelectionner': 'Select all ({n})',
+  'actions.envoyerTitre': 'Opens ONE conversation for the selection and SENDS the prompt',
+  'actions.preparerTitre':
+    'Opens ONE conversation for the selection and pre-fills the prompt there, without sending it',
+  'actions.traiter': 'Handle the selection ({n})',
+  'actions.preparer': 'Prepare the prompt ({n})',
+  'actions.envoiImmediat': 'Really handle (immediate send)',
+
+  'contenu.sourcesImpossible': 'Sources could not be loaded',
+  'contenu.reessayerTitre': 'Retry loading the tickets',
+  'contenu.reessayer': 'Retry',
+  'contenu.chargementAria': 'Loading the tickets',
+  'contenu.synchronisation': 'Syncing the tickets…',
+  'contenu.chargementImpossible': 'Loading impossible',
+  'contenu.aucuneSource': 'No source configured',
+  'contenu.ajouteSource': 'Add an Azure DevOps, GitHub or GitLab source.',
+  'contenu.aucunTicket': 'No ticket',
+  'contenu.aucunResultat': 'No result',
+  'contenu.perimetreRestreint': 'Scope narrowed by: {causes}.',
+  'contenu.sourceVide': 'This source returns no accessible item on the loaded page.',
+  'contenu.cause.rechercheServeur': 'server search “{valeur}”',
+  'contenu.cause.rechercheLocale': 'local search “{valeur}”',
+  'contenu.cause.type': 'type “{valeur}”',
+  'contenu.cause.etat': 'state “{valeur}”',
+  'contenu.cause.assigne': 'assignee “{valeur}”',
+  'contenu.effacerTitre': 'Clear the server search and the local filters',
+  'contenu.effacer': 'Clear the search and the filters',
+  'contenu.chargement': 'Loading…',
+  'contenu.chargerSuite': 'Load more',
+  'contenu.actualisationAria': 'Tickets refreshing',
+  'contenu.actualisation': 'Refreshing…',
+  'contenu.perimees': 'Stale data',
+  'contenu.partielImpossible': 'Partial loading impossible',
+
+  'liste.cocher': 'Tick ticket {id}',
+  'liste.nonAssigne': 'Unassigned',
+  'liste.rejoindreAria': 'Join the conversation of ticket {id}',
+  'liste.ouvrirAria': 'Open a conversation for ticket {id}',
+  'liste.rejoindreTitre': 'Join the conversation of #{id} ({etat})',
+  'liste.ouvrirEnvoyerTitre': 'Open a conversation for #{id} and SEND the prompt',
+  'liste.ouvrirPreparerTitre': 'Open a conversation for #{id} (prompt pre-filled, not sent)',
+  'liste.fin': 'End of the list',
+
+  'detail.assigne': 'Assignee',
+  'detail.cree': 'Created',
+  'detail.misAJour': 'Updated',
+  'detail.description': 'Description',
+  'detail.aucuneDescription': 'No description.',
+  'detail.relations': 'Relations',
+  'detail.aucuneRelation': 'No relation.',
+  'detail.discussion': 'Discussion',
+  'detail.auteurInconnu': 'Unknown author',
+  'detail.aucunCommentaire': 'No comment loaded.',
+  'detail.ouvrirDans': 'Open in {cible}',
+  'detail.laSource': 'the source',
+
+  'veille.statut.nouveau': 'new',
+  'veille.statut.prompte': 'prompted',
+  'veille.statut.ecarte': 'dismissed',
+  'veille.statut.perime': 'stale',
+  'veille.raisonPerime':
+    'The quoted line is no longer in the file: this defect has probably already been fixed.',
+  'veille.masques.ecarte': '{n} dismissed',
+  'veille.masques.ecartes': '{n} dismissed',
+  'veille.masques.perime': '{n} stale',
+  'veille.masques.perimes': '{n} stale',
+  'veille.replier': 'Collapse the details',
+  'veille.deplier': 'Expand What / Why / How',
+  'veille.pertinenceTitre': 'Relevance for Autowin, scored by the scout (0-100)',
+  'veille.nonNote': 'not scored',
+  'veille.quoi': 'What?',
+  'veille.pourquoi': 'Why?',
+  'veille.comment': 'How?',
+  'veille.preuveLue': 'Evidence read: “{citation}”',
+  'veille.partirAncrage': 'Start from the anchor {url}.',
+  'veille.ouvrirSource': 'open the source',
+  'veille.prompter': 'Prompt in Autowin',
+  'veille.ecarter': 'Dismiss',
+  'veille.illisible': 'Unreadable watch: {erreur}',
+  'veille.lecture': 'Reading the candidates…',
+  'veille.nonEnvoye': '“{titre}” was not sent. {raison}',
+  'veille.horsStock': '“{titre}” is no longer in the stock: nothing was sent.',
+  'veille.candidat': 'candidate',
+  'veille.candidats': 'candidates',
+  'veille.derniereLecture': 'last reading: {date}',
+  'veille.jamaisLue': 'no reading done yet',
+  'veille.trierPar': 'sort by',
+  'veille.tri.pertinence': 'relevance',
+  'veille.tri.date': 'reading order',
+  'veille.masquer': 'hide',
+  'veille.voir': 'show',
+  'veille.actualiser': 'Refresh',
+  'veille.genererTitre':
+    'Internal scout: analyzes the logged conversations, the workflows and Autowin’s code to suggest new candidates',
+  'veille.generation': 'Generating…',
+  'veille.generer': 'Generate more',
+  'veille.echecs.un': '{n} source silent at the last reading',
+  'veille.echecs.plusieurs': '{n} sources silent at the last reading',
+  'veille.vide':
+    'No candidate. A reading may never have been run, or the sources announce nothing.',
+  'veille.nouveautes': 'What’s new',
+  'veille.aucunAjout': 'No capability added in this reading.',
+  'veille.corrections': 'Fixes & others',
+  'veille.aucuneCorrection': 'No fix found.'
+}
+
+/** Clé → raison pour laquelle son anglais reste identique au français. */
+export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<CleTickets, string>>> = {
+  'vue.titre': 'nom de l’écran, même mot en anglais',
+  'auto.stop': 'même mot en anglais',
+  'source.surtitre': 'même mot en anglais',
+  'source.ajouterCourt': 'même mot en anglais, précédé du signe ＋',
+  'detail.description': 'même mot en anglais',
+  'detail.relations': 'même mot en anglais',
+  'detail.discussion': 'même mot en anglais'
+}
+
+export const { useTextes: useTextesTickets, traduire: traduireTickets } = tableDeTextes(
+  TEXTES_FR,
+  TEXTES_EN
+)
