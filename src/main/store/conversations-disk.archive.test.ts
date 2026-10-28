@@ -104,6 +104,20 @@ describe('archive des conversations inactives', () => {
     expect(apres.store.get(vieux)).toEqual(avant)
   })
 
+  it('le store dit lui-même quand ses archives sont arrivées (préchauffage du Board, conv-1248)', async () => {
+    const p = nouveauChemin()
+    const { persistance, vieux } = monterCorpus(p)
+    await persistance.archiver(MAINTENANT)
+    await attendreEcrituresConversations()
+
+    const apres = redemarrer(p)
+    // Ce que le Board préchauffe après cette promesse contient AUSSI le fil archivé.
+    expect(await apres.store.archivesChargees).toBe(1)
+    expect(apres.store.list().map((c) => c.id)).toContain(vieux)
+    // Sans archive : résolue tout de suite.
+    expect(await new ConversationStore().archivesChargees).toBe(0)
+  })
+
   it('PENDANT la relecture, un fil archivé demandé par son id est lu à la demande (revue N4)', async () => {
     const p = nouveauChemin()
     const { store, persistance, vieux } = monterCorpus(p)

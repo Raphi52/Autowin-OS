@@ -1436,6 +1436,8 @@ export function persistConversations(
       return normalisee.get(id)
     }
     archivesChargees = chargerArchives()
+    // Le store la porte aussi (conv-1248) : ses lecteurs n'ont pas accès à cette persistance.
+    store.archivesChargees = archivesChargees
   }
   void retirerArchivesPerimees()
   programmerArchivage()

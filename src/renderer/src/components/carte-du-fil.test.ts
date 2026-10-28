@@ -144,6 +144,19 @@ describe('carteDuFil — la couleur suit la PREUVE', () => {
     })
   })
 
+  it('« ⚠️ Non résolu » au milieu d’une réponse : refusé, la seule ligne qui le porte en constat', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('a', 1),
+        asst(2, [texte('Résumé du tour.\n- ⚠️ Non résolu : le test reste rouge.\nFin.')])
+      ]
+    })
+    expect(etapes[0]).toMatchObject({
+      statut: 'refuse',
+      constat: '⚠️ Non résolu : le test reste rouge.'
+    })
+  })
+
   it('un tour qui tourne, ou une demande sans réponse au bout du fil : en cours', () => {
     const tourne = carteDuFil({
       fil: [user('a', 1), asst(2, [], { status: 'streaming', done: false })]

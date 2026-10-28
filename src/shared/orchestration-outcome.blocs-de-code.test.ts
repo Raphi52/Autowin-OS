@@ -94,11 +94,51 @@ describe('blocs de code Markdown — une analyse par texte', () => {
   })
 
   it('une analyse qui echoue reste fermee : tout est protege, et elle n est pas rejouee', () => {
-    const texte = `illisible ${(numero += 1)}\nligne 2`
+    // Quatre espaces en tête : sans eux, le texte ne pourrait porter aucun bloc de code et ne serait
+    // jamais analysé (conv-1248) — la panne du parseur ne serait pas atteinte.
+    const texte = `illisible ${(numero += 1)}\n    ligne 2`
     echouerSur = texte
     expect([...markdownCodeLineProtection([texte])[0]]).toEqual([1, 2])
     expect([...markdownCodeLineProtection([texte])[0]]).toEqual([1, 2])
     expect(markdownCodeContinuationPrefixes([texte])).toEqual([undefined])
+    expect(analyses).toHaveLength(1)
+  })
+})
+
+/*
+ * UN TEXTE SANS AUCUN BLOC DE CODE POSSIBLE N'EST PAS ANALYSÉ DU TOUT (conv-1248, 2026-10-28).
+ *
+ * Mesure : première ouverture du Board, 1 083 fils et 11 385 messages relus par
+ * `hydrateStoredAssistant` — 2,0 s, dont ~75 % dans `fromMarkdown` appelé ici. La mémoire ci-dessus
+ * (256 textes) ne sert à rien sur un tel volume. Or en CommonMark un bloc `code` n'existe que par une
+ * clôture (``` ou ~~~) ou une indentation de 4 colonnes (4 espaces d'affilée, ou une tabulation) :
+ * sans aucun des quatre, la réponse est « aucun bloc » sans lancer le parseur.
+ */
+describe('blocs de code Markdown — un texte sans clôture ni indentation n est pas analysé', () => {
+  it('ni clôture, ni tabulation, ni 4 espaces : aucune analyse, aucune ligne protégée', () => {
+    const texte = `Réponse ${(numero += 1)}\n- une puce\n  suite de la puce\n> citation\n\`code en ligne\``
+    expect(markdownCodeLineProtection([texte])).toEqual([new Set()])
+    expect(markdownCodeContinuationPrefixes([texte])).toEqual([undefined])
+    expect(analyses).toHaveLength(0)
+  })
+
+  it('chacun des quatre signes suffit à lancer l analyse, et le résultat reste celui du parseur', () => {
+    const lignes = (s: Set<number>): number[] => [...s].sort((a, b) => a - b)
+    const n = (numero += 1)
+    expect(lignes(markdownCodeLineProtection([`a ${n}\n\n\`\`\`\nx\n\`\`\``])[0])).toEqual([
+      3, 4, 5
+    ])
+    expect(lignes(markdownCodeLineProtection([`b ${n}\n\n~~~\nx\n~~~`])[0])).toEqual([3, 4, 5])
+    expect(lignes(markdownCodeLineProtection([`c ${n}\n\n    x`])[0])).toEqual([3])
+    expect(lignes(markdownCodeLineProtection([`d ${n}\n\n\tx`])[0])).toEqual([3])
+    // Dans une puce : 2 colonnes pour la puce, 4 pour le code.
+    expect(lignes(markdownCodeLineProtection([`e ${n}\n- puce\n\n      x`])[0])).toEqual([4])
+    expect(analyses).toHaveLength(5)
+  })
+
+  it('4 espaces qui ne font pas de code : analysé quand même, et rien de protégé', () => {
+    const texte = `Paragraphe ${(numero += 1)}\n    suite paresseuse du paragraphe`
+    expect(markdownCodeLineProtection([texte])).toEqual([new Set()])
     expect(analyses).toHaveLength(1)
   })
 })

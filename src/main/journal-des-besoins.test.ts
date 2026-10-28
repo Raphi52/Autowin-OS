@@ -69,6 +69,24 @@ describe('identité git de qui a prompté', () => {
     await identite('D:/x')
     expect(lire).toHaveBeenCalledTimes(2)
   })
+
+  it('pour le Board, une valeur expirée est rendue TOUT DE SUITE et relue en fond (conv-1248)', async () => {
+    let instant = 0
+    let suivante: (valeur: { nom: string }) => void = () => {}
+    const lire = vi
+      .fn<(dossier: string | undefined) => Promise<{ nom: string } | null>>()
+      .mockResolvedValueOnce({ nom: 'A' })
+      .mockImplementationOnce(() => new Promise((resolve) => (suivante = resolve)))
+    const identite = creerIdentitesEnCache(lire, () => instant, 1_000, true)
+    expect(await identite('D:/x')).toEqual({ nom: 'A' })
+    instant = 2_000
+    // Le `git config` de la relecture n'a pas répondu : l'ancienne valeur, sans l'attendre.
+    expect(await identite('D:/x')).toEqual({ nom: 'A' })
+    expect(lire).toHaveBeenCalledTimes(2)
+    suivante({ nom: 'B' })
+    expect(await identite('D:/x')).toEqual({ nom: 'B' })
+    expect(lire).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('le message qui porte le tour', () => {
