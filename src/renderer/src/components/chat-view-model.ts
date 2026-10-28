@@ -1,6 +1,7 @@
 import {
   lireTestsDuTerminal,
   reduceChatTurn,
+  REASONING_MAX,
   type ChatTurnEvent,
   type ChatTurnStatus,
   type PersistedChatActionPart,
@@ -511,7 +512,7 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
  * Borne du raisonnement garde par ligne. On garde la FIN — ce que l'agent pense maintenant —, a la
  * meme borne que celle du fournisseur (`THINKING_CAP`, src/main/providers/thinking.ts).
  */
-export const RAISONNEMENT_MAX = 20_000
+export const RAISONNEMENT_MAX = REASONING_MAX
 
 /**
  * ACCUMULE un fragment de raisonnement sous la ligne de pipeline de la phase qui l'a emis.
@@ -926,7 +927,7 @@ function reduireEvenementDuPilote(
   }
   if (event.kind === 'reasoning' && event.text) {
     const merged = `${message.reasoning ?? ''}${event.text}`
-    return { ...message, turnId, reasoning: merged.slice(-4_000) }
+    return { ...message, turnId, reasoning: merged.slice(-REASONING_MAX) }
   }
   const heure = typeof event.at === 'number' ? { at: event.at } : {}
   if (event.kind === 'tests-du-terminal') {

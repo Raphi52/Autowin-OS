@@ -224,8 +224,13 @@ export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
   }))
 }
 
-/** Plafond du raisonnement conservé par tour — aligné sur ce que le fil affiche en direct. */
-export const REASONING_MAX = 4_000
+/**
+ * Plafond du raisonnement conservé par tour, et SEULE borne du fil (direct, tour enregistré, ligne de
+ * phase) : celle du fournisseur (`THINKING_CAP`, src/main/providers/thinking.ts). À 4 000, le début
+ * d'une pensée sortait du bloc pendant qu'on la lisait (conv-1228, 2026-10-28 : « le petit 1
+ * commence a disparaitre »).
+ */
+export const REASONING_MAX = 20_000
 
 /** Plafonds du journal d'actions — alignés sur ce que le fil garde en direct (`STATUTS_MAX`). */
 export const ACTIONS_LOG_MAX = 500
