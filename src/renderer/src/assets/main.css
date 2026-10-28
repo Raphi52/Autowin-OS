@@ -24,6 +24,19 @@ body {
   overflow: hidden;
 }
 
+/*
+ * CONTOUR DE FOCUS = NAVIGATION AU CLAVIER SEULEMENT (conv-1222, 2026-10-28 : « cet encerclement du
+ * bouton apparait meme quand je touche pas a mon clavier, c'est parasite »). Chromium allume
+ * `:focus-visible` sur un bouton clique a la souris des qu'une touche part ensuite, Maj seule
+ * comprise : l'app suit donc elle-meme la facon de se deplacer (`modalite-saisie.ts`). Tant qu'elle
+ * vaut `pointeur`, aucun contour sur un bouton ou un lien ; les champs de texte gardent le leur.
+ * `html:root` et `!important` : la regle doit passer devant celle de CHAQUE theme, y compris le
+ * contour `!important` des themes malvoyants (specificite 0,4,2 ; celle-ci 0,4,3).
+ */
+html:root[data-saisie='pointeur'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: none !important;
+}
+
 code {
   font-family: var(--mono);
   font-size: 85%;
