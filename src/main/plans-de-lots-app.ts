@@ -30,8 +30,9 @@ import {
 /**
  * SUPER CONVERSATION, CÔTÉ APP (conv-1150, 2026-10-26) — le coordinateur des plans de lots.
  *
- * Le fil chef dépose un plan (`plan_de_lots`) ; l'utilisateur l'accepte d'UN clic (tableau du fil,
- * canal `os:plansDeLots`). Ensuite l'app, et non l'agent :
+ * Le fil chef dépose un plan (`plan_de_lots`), qui part aussitôt (conv-1171 : plus de clic
+ * d'accord ; « Lancer le plan » ne reste que pour un plan déposé avant ce changement). Ensuite
+ * l'app, et non l'agent :
  *  - ouvre un fil par lot dans le dossier du chef et y lance la demande (au plus 3 à la fois) ;
  *  - à la fin du tour d'un fil enfant (`surFinDeTour`, branché dans index.ts AUTOUR du tour compté
  *    par `trackPreparation`, sinon le chef passerait pour occupé), note le lot, écrit au chef un
@@ -262,8 +263,7 @@ export class CoordinateurDesPlans {
         `Plan ${plan.id} déposé : ${plan.lots.length} lots, ${plan.parallele} fils en parallèle, plafond ${plan.plafondTours} tours.` +
         (lecture.avertissements.length
           ? ` Avertissements : ${lecture.avertissements.join(' ')}`
-          : '') +
-        ' RIEN N’EST LANCÉ : l’utilisateur doit cliquer « Lancer le plan » dans le tableau au-dessus de la zone de saisie de ce fil. Dis-le-lui en une phrase, puis termine ton tour : l’app te réveillera à chaque fin de lot.'
+          : '')
     }
   }
 
@@ -375,7 +375,21 @@ export class CoordinateurDesPlans {
     if (action === 'deposer') {
       const r = this.deposer(chef, args.plan)
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
-      return { ok: true, plan: resume(r.plan), detail: r.detail }
+      // LANCEMENT SANS CLIC (conv-1171, 2026-10-27) : « je ne veux pas avoir à confirmer, je veux que
+      // ça se lance tout seul ». Le dépôt par l'agent vaut lancement ; l'utilisateur garde
+      // « Arrêter » dans le tableau. Un plan déjà lancé (même contenu redéposé) n'est pas relancé.
+      if (r.plan.statut !== 'attente-accord')
+        return { ok: true, plan: resume(r.plan), detail: r.detail }
+      const lance = await this.accepter(chef, r.plan.id)
+      if (!lance.ok)
+        throw new Error(`plan_de_lots : plan ${r.plan.id} déposé mais non lancé — ${lance.erreur}`)
+      return {
+        ok: true,
+        plan: resume(lance.plan),
+        detail:
+          `${r.detail} LANCÉ : ${lance.detail}. L’app ouvre un fil par lot et te réveillera à chaque fin de lot ; ` +
+          'l’utilisateur peut l’arrêter dans le tableau au-dessus de la zone de saisie. Dis-le-lui en une phrase, puis termine ton tour.'
+      }
     }
     if (action === 'etat') {
       const vu = this.planDuFil(chef)

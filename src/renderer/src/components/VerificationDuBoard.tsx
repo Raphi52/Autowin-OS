@@ -9,16 +9,16 @@
  *     qui dit le nombre — chaque envoi est un tour de modèle payé.
  */
 import React, { useState } from 'react'
+import { langueCourante } from '../langue'
+import {
+  traduireBoardEtMaintenance,
+  useTextesBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
 import type { PostItDeLaRiviere } from './carte-riviere'
 import { resumeDuBilan, type BilanDeVerification } from './verification-du-board'
 import './VerificationDuBoard.css'
 
 export type Verifier = (conversationIds: readonly string[]) => Promise<BilanDeVerification>
-
-const AIDE_VERIFIER =
-  'Envoie /check dans ce fil : un tour y rejoue la preuve. Vert → « Fait », rouge → « Bloqué ».'
-const AIDE_A_LA_MAIN =
-  'Le pose en « Fait » sans preuve, gardé sur ce poste jusqu’à la prochaine demande du fil.'
 
 /** « Tout vérifier · N » dans la barre du tableau, avec sa confirmation sur place. */
 export function ToutVerifier({
@@ -28,6 +28,7 @@ export function ToutVerifier({
   aVerifier: readonly PostItDeLaRiviere[]
   verifier: Verifier
 }): React.JSX.Element {
+  const { t } = useTextesBoardEtMaintenance()
   const [etape, setEtape] = useState<'repos' | 'confirmer' | 'envoi'>('repos')
   const [bilan, setBilan] = useState<string | null>(null)
   const n = aVerifier.length
@@ -37,7 +38,11 @@ export function ToutVerifier({
     try {
       setBilan(resumeDuBilan(await verifier(aVerifier.map((p) => p.conversationId))))
     } catch (e) {
-      setBilan(`aucun /check lancé : ${e instanceof Error ? e.message : String(e)}`)
+      setBilan(
+        traduireBoardEtMaintenance('verif.aucunLanceErreur', langueCourante(), {
+          erreur: e instanceof Error ? e.message : String(e)
+        })
+      )
     } finally {
       setEtape('repos')
     }
@@ -46,9 +51,9 @@ export function ToutVerifier({
   return (
     <span className="riviere-tout-verifier">
       {etape === 'confirmer' ? (
-        <span role="group" aria-label="Confirmer la vérification de la ligne">
+        <span role="group" aria-label={t('verif.confirmer')}>
           <span className="riviere-tout-verifier-question">
-            Lancer /check dans {n} fil{n > 1 ? 's' : ''} ? ({n} tour{n > 1 ? 's' : ''} de modèle)
+            {t(n > 1 ? 'verif.question.plusieurs' : 'verif.question.un', { n })}
           </span>
           <button
             type="button"
@@ -56,10 +61,10 @@ export function ToutVerifier({
             data-testid="riviere-tout-verifier-confirmer"
             onClick={() => void lancer()}
           >
-            Lancer
+            {t('verif.lancer')}
           </button>
           <button type="button" className="riviere-puce" onClick={() => setEtape('repos')}>
-            Annuler
+            {t('commun.annuler')}
           </button>
         </span>
       ) : (
@@ -68,17 +73,13 @@ export function ToutVerifier({
           className="riviere-puce"
           data-testid="riviere-tout-verifier"
           disabled={n === 0 || etape === 'envoi'}
-          title={
-            n === 0
-              ? 'Aucun post-it affiché dans la ligne « À vérifier »'
-              : `Envoie /check dans les ${n} fils de la ligne « À vérifier » affichés`
-          }
+          title={n === 0 ? t('verif.aucunPostit') : t('verif.toutAide', { n })}
           onClick={() => {
             setBilan(null)
             setEtape('confirmer')
           }}
         >
-          {etape === 'envoi' ? 'Envoi…' : `Tout vérifier · ${n}`}
+          {etape === 'envoi' ? t('verif.envoi') : t('verif.tout', { n })}
         </button>
       )}
       {bilan && (
@@ -119,6 +120,7 @@ export function GestesDeVerification({
   onEntrer?: () => void
   onSortir?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesBoardEtMaintenance()
   const [envoi, setEnvoi] = useState(false)
   const [refus, setRefus] = useState<string | null>(null)
   const court = variante === 'postit'
@@ -156,30 +158,30 @@ export function GestesDeVerification({
           className="riviere-verif-bouton"
           data-testid="riviere-verifier"
           disabled={envoi}
-          title={AIDE_VERIFIER}
+          title={t('verif.aide')}
           onClick={(e) => {
             e.stopPropagation()
             void lancer()
           }}
         >
-          {envoi ? 'Envoi…' : court ? '▶ vérifier' : 'Vérifier (/check)'}
+          {envoi ? t('verif.envoi') : court ? t('verif.court') : t('verif.long')}
         </button>
       )}
       <button
         type="button"
         className="riviere-verif-bouton"
         data-testid="riviere-verifie-a-la-main"
-        title={AIDE_A_LA_MAIN}
+        title={t('verif.aideALaMain')}
         onClick={(e) => {
           e.stopPropagation()
           aLaMain()
         }}
       >
-        {court ? '✓ à la main' : 'Vérifié à la main'}
+        {court ? t('verif.mainCourt') : t('verif.mainLong')}
       </button>
       {refus && (
         <span className="riviere-verif-refus" role="alert">
-          /check refusé : {refus}
+          {t('verif.refus', { raison: refus })}
         </span>
       )}
     </span>

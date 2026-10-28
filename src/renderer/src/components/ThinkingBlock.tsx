@@ -62,6 +62,7 @@ import {
   type Chrono
 } from './thinking-block-corps'
 import { etapesDuJournal, type Etape } from '../../../shared/etapes-du-tour'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /** Étincelle : la pensée. Dessinée en SVG — l'ancien glyphe « ✻ » dépendait de la police. */
 const ICONE_RAISONNEMENT = (
@@ -204,6 +205,7 @@ function BlocRepliable({
  * pensée seule.
  */
 function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const paragraphes = paragraphesDeLaPensee(texte)
   const ref = useRef<HTMLDivElement | null>(null)
   const [entier, setEntier] = useState(false)
@@ -249,7 +251,9 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
           data-testid="thinking-block-tout-lire"
           onClick={() => setEntier((e) => !e)}
         >
-          {entier ? 'Réduire' : `Tout lire · ${n} paragraphe${n > 1 ? 's' : ''}`}
+          {entier
+            ? t('pensee.reduire')
+            : t(n > 1 ? 'pensee.toutLire.plusieurs' : 'pensee.toutLire.un', { n })}
         </button>
       )}
       <div
@@ -289,11 +293,11 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
  * faire, pleine en cours, cochée terminée (barrée). Cases en CSS, pas en glyphes : ◻ ◼ ✔ sortent en
  * émoji sous Windows et débordent de la ligne.
  */
-const MOT_DU_STATUT: Record<Etape['statut'], string> = {
-  pending: 'À faire',
-  in_progress: 'En cours',
-  completed: 'Terminée'
-}
+const CLE_DU_STATUT = {
+  pending: 'pensee.statut.pending',
+  in_progress: 'pensee.statut.in_progress',
+  completed: 'pensee.statut.completed'
+} as const satisfies Record<Etape['statut'], string>
 
 /**
  * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
@@ -317,6 +321,7 @@ function ListeDesEtapes({
   /** Durée MESURÉE à l'écran de chaque étape qui en a une (voir `useSecondesDesEtapes`). */
   secondes: ReadonlyMap<string, number>
 }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const pied = piedDesEtapes(etapes, avancement, secondes)
   return (
     <>
@@ -327,14 +332,14 @@ function ListeDesEtapes({
             className="etape"
             data-statut={e.statut}
             data-testid="etape"
-            title={MOT_DU_STATUT[e.statut]}
+            title={t(CLE_DU_STATUT[e.statut])}
           >
             <span className="etape-rail" aria-hidden="true">
               <span className="etape-pastille" data-testid="etape-pastille">
                 {e.statut === 'completed' ? <span className="etape-coche" /> : i + 1}
               </span>
             </span>
-            <span className="etape-sujet">{e.sujet || `Étape #${e.id}`}</span>
+            <span className="etape-sujet">{e.sujet || t('pensee.etape', { id: e.id })}</span>
             <span className="etape-valeur" data-testid="etape-valeur">
               {valeurDeLEtape(e, avancement.get(e.id), secondes.get(e.id) ?? null)}
             </span>
@@ -360,7 +365,7 @@ function ListeDesEtapes({
           <span
             className="etapes-pied-total"
             data-testid="etapes-pied-total"
-            title="Temps mesuré des étapes"
+            title={t('pensee.tempsMesure')}
           >
             {dureeLisible(pied.total)}
           </span>
@@ -398,6 +403,7 @@ function FriseDesActions({
   testid: string
   refCorps: (el: HTMLDivElement | null) => void
 }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   return (
     <div className="thinking-body thinking-frise" ref={refCorps} data-testid={testid}>
       <div className="thinking-frise-liste">
@@ -412,7 +418,7 @@ function FriseDesActions({
                 data-etat={a.etat}
                 data-famille={a.famille}
                 data-testid="action-frise-ligne"
-                title={a.etat === 'ko' ? 'Échec' : a.etat === 'encours' ? 'En cours' : 'Réussie'}
+                title={t(cleDeLEtat(a.etat))}
               >
                 <span
                   className="thinking-frise-icone"
@@ -449,7 +455,19 @@ function ErreurDeLAction({ action }: { action: ActionFrise }): React.JSX.Element
  * la commande (sa description), le chevron ouvre la liste des commandes qu'elle enchaine. Pliee par
  * defaut ; le detail n'est rendu qu'ouvert, comme le corps de la capsule d'orchestration.
  */
+/** L'état d'une ligne de la frise, en mots : l'infobulle de la ligne et de la tâche. */
+function cleDeLEtat(
+  etat: ActionFrise['etat']
+): 'pensee.action.echec' | 'pensee.action.enCours' | 'pensee.action.reussie' {
+  return etat === 'ko'
+    ? 'pensee.action.echec'
+    : etat === 'encours'
+      ? 'pensee.action.enCours'
+      : 'pensee.action.reussie'
+}
+
 function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const [ouvert, setOuvert] = useState(false)
   const actions = action.sousActions ?? []
   return (
@@ -462,7 +480,10 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
       onToggle={(event) => setOuvert(event.currentTarget.open)}
     >
       <summary
-        title={`${action.etat === 'ko' ? 'Échec' : action.etat === 'encours' ? 'En cours' : 'Réussie'} · ${actions.length} commande${actions.length > 1 ? 's' : ''}`}
+        title={t(actions.length > 1 ? 'pensee.tache.plusieurs' : 'pensee.tache.un', {
+          etat: t(cleDeLEtat(action.etat)),
+          n: actions.length
+        })}
       >
         <span className="thinking-frise-chevron" aria-hidden="true" />
         <span className="thinking-frise-tache-nom">{action.texte}</span>
@@ -611,6 +632,7 @@ export function ThinkingBlock({
   /** Heure de DÉBUT du tour (ms epoch), posée par le main : le zéro du chrono (conv-1084). */
   debutDuTour?: number
 }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const pensee = corpsDuBloc(text)
   const frise = actionsDuTour(statusLog, status, done)
   const actions = frise.map((a) => a.texte).join('\n')
@@ -637,7 +659,7 @@ export function ThinkingBlock({
           testid="thinking-block"
           classe="thinking-block--raisonnement"
           rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
-          libelle={done ? 'Raisonnement terminé' : 'Raisonnement'}
+          libelle={done ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
           live={!done}
           compteurs={
             secondesPensee !== null && (
@@ -658,6 +680,7 @@ export function ThinkingBlock({
             // Le nombre d'actions est dans le rond : la pastille bleue qui le portait dans la
             // capsule le dirait une seconde fois.
             rond={<RondDuCompte etats={frise.map((a) => a.etat)} testid="action-block-compte" />}
+            // « Actions » se dit pareil en anglais : aucun texte à traduire.
             libelle="Actions"
             live={!done}
             titre={bilanDesActions(frise)}
@@ -691,7 +714,7 @@ export function ThinkingBlock({
               {ICONE_ETAPES}
             </RondDIcone>
           }
-          libelle="Étapes"
+          libelle={t('pensee.etapes')}
           live={!done}
           compteurs={
             <span className="thinking-duree" data-testid="etapes-block-compte">

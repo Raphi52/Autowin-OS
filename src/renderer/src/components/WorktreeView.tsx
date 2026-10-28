@@ -20,8 +20,9 @@ import { couleurDeBranche } from './git-graph-couleurs'
 import { parserRefsCommit } from './git-graph-refs'
 import { planifierActionGit, type DemandeActionGit } from '../../../shared/git-action'
 import {
+  BRANCHE_INCONNUE,
+  CLES_VERDICT,
   formatAttente,
-  LIBELLES_VERDICT,
   regrouperParChantier,
   compterRunsInterrompus,
   resumerFlux,
@@ -31,6 +32,12 @@ import './ViewPage.css'
 import './WorktreeActivityView.css'
 import './WorktreeView.css'
 import { Spinner } from './Spinner'
+import { formaterDate, langueCourante } from '../langue'
+import {
+  traduireWorktreesEtBureaux,
+  useTextesWorktreesEtBureaux,
+  type CleWorktreesEtBureaux
+} from '../textes-ecrans/worktrees-et-bureaux'
 
 type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
 
@@ -40,19 +47,24 @@ function projectState(
   snapshot: GitGraphSnapshot | undefined,
   agents: WorktreeAgentActivity[],
   activityAvailable: boolean
-): { state: DataState; label: string; alertCount: number } {
+): { state: DataState; label: CleWorktreesEtBureaux; alertCount: number } {
   if (snapshot?.available === false)
-    return { state: 'unavailable', label: 'Indisponible', alertCount: 1 }
-  if (!snapshot || !activityAvailable) return { state: 'unknown', label: 'Inconnu', alertCount: 0 }
+    return { state: 'unavailable', label: 'sante.indisponible', alertCount: 1 }
+  if (!snapshot || !activityAvailable)
+    return { state: 'unknown', label: 'sante.inconnu', alertCount: 0 }
   if (agents.some((agent) => !agent.verdict || agent.verdict === 'unknown'))
-    return { state: 'unknown', label: 'Inconnu', alertCount: 0 }
+    return { state: 'unknown', label: 'sante.inconnu', alertCount: 0 }
   const now = Date.now()
   const stale = agents.some((agent) => now - (agent.endedAtMs ?? agent.startedAtMs) > staleAfterMs)
   const alerts = agents.filter(
     (agent) => agent.state === 'conflict' || agent.state === 'blocked'
   ).length
-  if (stale) return { state: 'stale', label: 'Obsolète', alertCount: alerts }
-  return { state: 'healthy', label: alerts ? 'Attention' : 'Sain', alertCount: alerts }
+  if (stale) return { state: 'stale', label: 'sante.obsolete', alertCount: alerts }
+  return {
+    state: 'healthy',
+    label: alerts ? 'sante.attention' : 'sante.sain',
+    alertCount: alerts
+  }
 }
 
 /** Combien de chantiers d'un coup d'œil, avant même de lire une ligne. Douze lignes au plus. */
@@ -89,6 +101,7 @@ function ResumeChefDeProjet({
    */
   recuEvenement: boolean
 }): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   // La fraîcheur est intentionnellement évaluée au rendu : elle dépend de l'heure murale.
   // eslint-disable-next-line react-hooks/purity
   const maintenant = Date.now()
@@ -102,7 +115,7 @@ function ResumeChefDeProjet({
       <section className="wt-cdp" data-testid="worktree-chef-de-projet">
         <p className="wt-cdp-indisponible" role="status">
           {/* Ne RIEN afficher serait lu comme « zéro chantier », donc comme un projet au calme. */}
-          Avancement indisponible : l’activité des copies n’a pas pu être lue.
+          {t('cdp.indisponible')}
         </p>
       </section>
     )
@@ -114,7 +127,7 @@ function ResumeChefDeProjet({
     return (
       <section className="wt-cdp" data-testid="worktree-chef-de-projet">
         <p className="wt-cdp-indisponible" role="status" data-testid="worktree-cdp-attente">
-          Lecture des copies en cours — l’avancement s’affichera dès qu’elle répond.
+          {t('cdp.attente')}
         </p>
       </section>
     )
@@ -125,19 +138,19 @@ function ResumeChefDeProjet({
       <div className="wt-cdp-flux" data-testid="worktree-flux">
         <div className="wt-cdp-nombre is-attention">
           <b>{flux.aToi}</b>
-          <span>{flux.aToi === 1 ? 'chantier t’attend' : 'chantiers t’attendent'}</span>
+          <span>{flux.aToi === 1 ? t('cdp.aToi.un') : t('cdp.aToi.plusieurs')}</span>
         </div>
         <div className="wt-cdp-nombre is-pret">
           <b>{flux.pret}</b>
-          <span>prêts à fusionner</span>
+          <span>{t('cdp.prets')}</span>
         </div>
         <div className="wt-cdp-nombre is-vivant">
           <b>{flux.enCours}</b>
-          <span>en cours</span>
+          <span>{t('cdp.enCours')}</span>
         </div>
         <div className="wt-cdp-nombre is-inconnu">
           <b>{flux.aVerifier}</b>
-          <span>à vérifier</span>
+          <span>{t('cdp.aVerifier')}</span>
         </div>
         <div className="wt-cdp-nombre">
           {/*
@@ -146,17 +159,17 @@ function ResumeChefDeProjet({
             que 119 runs l'étaient — un zéro qui se lit « aucun ».
           */}
           <b>{flux.runsInterrompus}</b>
-          <span>runs interrompus</span>
+          <span>{t('cdp.runsInterrompus')}</span>
         </div>
         <div className="wt-cdp-nombre">
           {/* Sans attente en cours on écrit « aucune », jamais un tiret muet ni un zéro trompeur. */}
-          <b>{attente ?? 'aucune'}</b>
-          <span>plus vieille attente</span>
+          <b>{attente ?? t('cdp.aucuneAttente')}</b>
+          <span>{t('cdp.plusVieilleAttente')}</span>
         </div>
       </div>
 
       {chantiers.length === 0 ? (
-        <p className="wt-cdp-vide">Aucun chantier en cours sur ce dépôt.</p>
+        <p className="wt-cdp-vide">{t('cdp.vide')}</p>
       ) : (
         <ul className="wt-cdp-liste" data-testid="worktree-chantiers">
           {chantiers.slice(0, CHANTIERS_AFFICHES).map((chantier: Chantier) => (
@@ -164,8 +177,12 @@ function ResumeChefDeProjet({
               key={chantier.branche}
               className={`wt-cdp-ligne is-${chantier.verdict}${chantier.branche === 'main' ? ' is-main' : ''}`}
             >
-              <span className="wt-cdp-pastille">{LIBELLES_VERDICT[chantier.verdict]}</span>
-              <strong className="wt-cdp-branche">{chantier.branche}</strong>
+              <span className="wt-cdp-pastille">{t(CLES_VERDICT[chantier.verdict])}</span>
+              <strong className="wt-cdp-branche">
+                {chantier.branche === BRANCHE_INCONNUE
+                  ? t('chantier.brancheInconnue')
+                  : chantier.branche}
+              </strong>
               <span className="wt-cdp-sujet">{chantier.sujet ?? ''}</span>
               <span className="wt-cdp-compte">
                 {/*
@@ -174,9 +191,13 @@ function ResumeChefDeProjet({
                   « 0 fichier » sur un chantier qui attend est l'information la plus utile de la ligne :
                   il ne retient aucun travail, il attend d'être relancé ou oublié.
                 */}
-                {chantier.aToi > 0 ? `${chantier.aToi} / ${chantier.runs} à trancher` : null}
+                {chantier.aToi > 0
+                  ? t('cdp.aTrancher', { aToi: chantier.aToi, runs: chantier.runs })
+                  : null}
                 {chantier.aToi > 0 ? ' · ' : null}
-                {chantier.fichiers} {chantier.fichiers === 1 ? 'fichier' : 'fichiers'}
+                {t(chantier.fichiers === 1 ? 'cdp.fichiers.un' : 'cdp.fichiers.plusieurs', {
+                  n: chantier.fichiers
+                })}
               </span>
               <span className="wt-cdp-attente">
                 {formatAttente(chantier.attenteDepuisMs) ?? ''}
@@ -188,8 +209,7 @@ function ResumeChefDeProjet({
       {caches > 0 && (
         <p className="wt-cdp-reste">
           {/* Une troncature muette se lirait comme « tout est là ». On dit ce qui n'est pas montré. */}
-          {caches} chantier{caches > 1 ? 's' : ''} de plus, non affiché
-          {caches > 1 ? 's' : ''} — les moins urgents.
+          {t(caches > 1 ? 'cdp.reste.plusieurs' : 'cdp.reste.un', { n: caches })}
         </p>
       )}
     </section>
@@ -206,7 +226,7 @@ function ResumeChefDeProjet({
 function formaterDateCommit(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString('fr-FR', {
+  return formaterDate(date, {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
@@ -320,6 +340,7 @@ function LigneConflit({
   onComparer?: (agentId: string) => void
   onChoisir?: (agentId: string, choix: WorktreeConflictResolutionChoice) => unknown
 }): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   const action = useOfficeAction()
   const fichier = agent.conflictFile ?? agent.files[0]?.path
   return (
@@ -336,7 +357,7 @@ function LigneConflit({
             data-testid="wt-resolve-conflict"
             onClick={() => onComparer(agent.agentId)}
           >
-            Comparer
+            {t('conflit.comparer')}
           </button>
         ) : null}
         {onChoisir ? (
@@ -348,7 +369,9 @@ function LigneConflit({
               disabled={action.pending !== null}
               onClick={() => action.run('keep-agent', () => onChoisir(agent.agentId, 'agent'))}
             >
-              {action.pending === 'keep-agent' ? 'Application…' : 'Version de l’agent'}
+              {action.pending === 'keep-agent'
+                ? t('conflit.application')
+                : t('conflit.versionAgent')}
             </button>
             <button
               type="button"
@@ -357,7 +380,7 @@ function LigneConflit({
               disabled={action.pending !== null}
               onClick={() => action.run('keep-mine', () => onChoisir(agent.agentId, 'mine'))}
             >
-              {action.pending === 'keep-mine' ? 'Application…' : 'Ma version'}
+              {action.pending === 'keep-mine' ? t('conflit.application') : t('conflit.maVersion')}
             </button>
           </>
         ) : null}
@@ -378,6 +401,7 @@ function GitTopology({
   layout: GitGraphLayout
   geste: OutilsGeste
 }): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   // Une elision est portee par la ligne du commit d'ARRIVEE : c'est au-dessus de lui que l'histoire
   // manque. Le trait pointille reste dans le SVG, le nombre devient lisible dans la description.
   const elisionParCommit = new Map<string, number>()
@@ -392,10 +416,10 @@ function GitTopology({
       style={{ '--wt-st-gouttiere': `${layout.width}px` } as React.CSSProperties}
     >
       <div className="wt-st-entete" data-testid="git-topology-entete">
-        <span className="wt-st-entete-graphe">Graphique</span>
-        <span>Description</span>
-        <span>Auteur</span>
-        <span>Date</span>
+        <span className="wt-st-entete-graphe">{t('topologie.graphique')}</span>
+        <span>{t('topologie.description')}</span>
+        <span>{t('topologie.auteur')}</span>
+        <span>{t('topologie.date')}</span>
       </div>
       <div className="wt-st-corps" style={{ height: layout.height }}>
         <svg
@@ -480,7 +504,9 @@ function GitTopology({
                     le plus large en omettant 181 commits.
                   */
                   <span className="wt-st-elision" data-testid="git-topology-elision">
-                    {`⋯ ${omis} commit${omis > 1 ? 's' : ''} non chargés`}
+                    {t(omis > 1 ? 'topologie.elision.plusieurs' : 'topologie.elision.un', {
+                      n: omis
+                    })}
                   </span>
                 ) : null}
                 <EtiquettesRef refs={node.commit.refs} geste={geste} />
@@ -501,6 +527,7 @@ function GitTopology({
 }
 
 export function WorktreeView({ active }: { active: boolean }): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot>()
   const [agents, setAgents] = useState<WorktreeAgentActivity[]>([])
   const [loading, setLoading] = useState(false)
@@ -518,12 +545,17 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     setLoading(true)
     const gitPromise = window.api?.getGitGraph?.(repoPath || undefined)
     if (!gitPromise) {
-      setSnapshot({ available: false, repoPath, error: 'Bridge Git indisponible' })
+      setSnapshot({
+        available: false,
+        repoPath,
+        error: traduireWorktreesEtBureaux('vue.gitIndisponibleBridge', langueCourante())
+      })
       setLoading(false)
       return
     }
     // `getWorktreeStatus` n'est plus appelé : il n'alimentait que le panneau de détail retiré. Garder
     // l'appel pour ranger sa réponse dans un état que personne ne lit serait un coût sans lecteur.
+    // « Activité indisponible » reste en français : personne n'affiche ce rejet, seul l'échec est lu.
     const [gitResult, activityResult] = await Promise.allSettled([
       gitPromise,
       window.api.getWorktreeActivity?.() ?? Promise.reject(new Error('Activité indisponible'))
@@ -569,7 +601,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
         saisieRef.current = undefined
         if (!saisie) return
         if (saisie.genre === 'branche' && saisie.nom === branche) {
-          setRefusGeste('Une branche ne se fusionne pas dans elle-meme.')
+          setRefusGeste(traduireWorktreesEtBureaux('geste.memeBranche', langueCourante()))
           return
         }
         const demande: DemandeActionGit =
@@ -597,17 +629,17 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     setGesteEnCours(false)
     setPropositionGeste(undefined)
     if (!resultat) {
-      setResultatGeste({ ok: false, texte: 'Le pont Git est indisponible : rien n’a été lancé.' })
+      setResultatGeste({ ok: false, texte: t('geste.pontIndisponible') })
       return
     }
     setResultatGeste(
       resultat.ok
-        ? { ok: true, texte: `${resultat.commande} — ${resultat.sortie || 'terminé'}` }
+        ? { ok: true, texte: `${resultat.commande} — ${resultat.sortie || t('geste.termine')}` }
         : { ok: false, texte: resultat.raison }
     )
     // Le graphe a bougé : le relire est la seule façon de ne pas afficher l'état d'avant.
     if (resultat.ok) void load()
-  }, [load, propositionGeste, repoPath])
+  }, [load, propositionGeste, repoPath, t])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -674,17 +706,17 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
           boutons dans un bloc à part — d'où la régression visuelle signalée. Cette vue n'a pas de
           sections : `ViewTopBar` rend alors l'identité et les actions, sans barre d'onglets vide. */}
       <ViewTopBar
-        eyebrow="COCKPIT PROJET"
-        title={snapshot?.repositoryName ?? 'Worktrees'}
-        description="Suis l’état, l’activité et les branches de ton dépôt."
-        detail={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        eyebrow={t('vue.eyebrow')}
+        title={snapshot?.repositoryName ?? t('vue.titre')}
+        description={t('vue.description')}
+        detail={snapshot?.repoPath || repoPath || t('vue.depotCourant')}
         actions={
           <>
             <button type="button" onClick={() => void pickRepo()}>
-              Choisir
+              {t('vue.choisir')}
             </button>
             <button type="button" onClick={() => void load()} disabled={loading}>
-              {loading ? 'Actualisation…' : 'Actualiser'}
+              {loading ? t('vue.actualisation') : t('vue.actualiser')}
             </button>
           </>
         }
@@ -692,7 +724,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
 
       {loading && !snapshot ? (
         <div className="cockpit-state" role="status">
-          <Spinner /> Chargement du cockpit projet…
+          <Spinner /> {t('vue.chargement')}
         </div>
       ) : (
         <div className="cockpit-scroll">
@@ -707,8 +739,8 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               supplémentaire — ces bureaux viennent de l'activité déjà chargée. */}
           {agentsEnConflit.length > 0 && (
             <section className="wt-conflits" data-testid="worktree-conflicts">
-              <h3>Conflits à trancher · {agentsEnConflit.length}</h3>
-              <div className="wt-conflits-liste" aria-label="Conflits à trancher">
+              <h3>{t('vue.conflits.titre', { n: agentsEnConflit.length })}</h3>
+              <div className="wt-conflits-liste" aria-label={t('vue.conflits.aria')}>
                 {agentsEnConflit.map((agent) => (
                   <LigneConflit
                     key={agent.agentId}
@@ -721,41 +753,43 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               <ConflitBureauPanneau conflit={conflit} />
             </section>
           )}
-          <section className={`project-strip is-${health.state}`} aria-label="Santé du projet">
+          <section className={`project-strip is-${health.state}`} aria-label={t('vue.sante')}>
             <div>
-              <span>Santé du projet</span>
-              <strong>{health.label}</strong>
+              <span>{t('vue.sante')}</span>
+              <strong>{t(health.label)}</strong>
             </div>
             <div>
-              <span>Branche</span>
-              <strong>{snapshot?.branch ?? 'Inconnue'}</strong>
+              <span>{t('vue.branche')}</span>
+              <strong>{snapshot?.branch ?? t('vue.brancheInconnue')}</strong>
             </div>
             <div>
-              <span>Changements locaux</span>
+              <span>{t('vue.changementsLocaux')}</span>
               <strong>
-                {snapshot?.available === false ? 'Indisponibles' : (snapshot?.changeCount ?? 0)}
+                {snapshot?.available === false
+                  ? t('vue.indisponibles')
+                  : (snapshot?.changeCount ?? 0)}
               </strong>
             </div>
             <div>
-              <span>Travaux actifs</span>
-              <strong>{activityAvailable ? activeAgents.length : 'Inconnus'}</strong>
+              <span>{t('vue.travauxActifs')}</span>
+              <strong>{activityAvailable ? activeAgents.length : t('vue.inconnus')}</strong>
             </div>
             <div>
-              <span>Alertes</span>
+              <span>{t('vue.alertes')}</span>
               <strong>{health.alertCount}</strong>
             </div>
           </section>
 
           {snapshot?.available === false && (
             <div className="cockpit-notice is-error" role="alert">
-              <strong>Git indisponible</strong>
-              <span>{snapshot.error ?? 'Le dépôt ne peut pas être lu.'}</span>
+              <strong>{t('vue.gitIndisponible')}</strong>
+              <span>{snapshot.error ?? t('vue.depotIllisible')}</span>
             </div>
           )}
           {!activityAvailable && (
             <div className="cockpit-notice" role="status">
-              <strong>Données partielles</strong>
-              <span>L’activité des worktrees est indisponible.</span>
+              <strong>{t('vue.donneesPartielles')}</strong>
+              <span>{t('vue.activiteIndisponible')}</span>
             </div>
           )}
 
@@ -776,10 +810,10 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               La légende ne peut plus nommer trois couleurs : il y en a désormais une par branche.
               Elle dit donc ce que les couleurs SIGNIFIENT, et ce que les deux styles de trait disent.
             */}
-            <div className="wt-topologie-legende" aria-label="Legende de la topologie Git">
-              <span className="is-couleur">Une couleur par branche</span>
-              <span className="is-main">Trait épais - ligne principale</span>
-              <span className="is-elide">Pointillé - histoire non chargée</span>
+            <div className="wt-topologie-legende" aria-label={t('vue.legende.aria')}>
+              <span className="is-couleur">{t('vue.legende.couleur')}</span>
+              <span className="is-main">{t('vue.legende.main')}</span>
+              <span className="is-elide">{t('vue.legende.elide')}</span>
             </div>
             {/*
               CE QUE LE GESTE VA FAIRE, avant de le faire. La commande est ecrite en toutes lettres :
@@ -790,8 +824,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               <div className="wt-geste" role="alertdialog" data-testid="git-geste-confirmation">
                 <strong>
                   {propositionGeste.demande.type === 'merge'
-                    ? `Fusionner ${propositionGeste.demande.source} dans ${propositionGeste.demande.cible}`
-                    : `Rapporter ce commit sur ${propositionGeste.demande.cible}`}
+                    ? t('geste.fusionner', {
+                        source: propositionGeste.demande.source,
+                        cible: propositionGeste.demande.cible
+                      })
+                    : t('geste.rapporter', { cible: propositionGeste.demande.cible })}
                 </strong>
                 <code data-testid="git-geste-commande">{propositionGeste.libelle}</code>
                 <button
@@ -800,14 +837,14 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
                   disabled={gesteEnCours}
                   onClick={() => void lancerGeste()}
                 >
-                  {gesteEnCours ? 'En cours…' : 'Lancer'}
+                  {gesteEnCours ? t('geste.enCours') : t('geste.lancer')}
                 </button>
                 <button
                   type="button"
                   data-testid="git-geste-annuler"
                   onClick={() => setPropositionGeste(undefined)}
                 >
-                  Annuler
+                  {t('commun.annuler')}
                 </button>
               </div>
             )}
@@ -826,7 +863,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               </p>
             )}
             {snapshot?.available === false ? (
-              <p className="wt-topologie-vide">Topologie indisponible.</p>
+              <p className="wt-topologie-vide">{t('vue.topologieIndisponible')}</p>
             ) : (
               <div className="wt-topologie-defilement" ref={grapheRef}>
                 <GitTopology layout={dispositionGraphe} geste={geste} />

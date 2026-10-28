@@ -19,6 +19,11 @@ import {
 } from './juges-bloc'
 import { RunsEnDirect } from './runs-en-direct'
 import { useRunReluDuDisque, type LecteurDuRunPerdu } from './run-relu-du-disque'
+import {
+  texteChatExecution as texte,
+  useTextesChatExecution,
+  type CleChatExecution
+} from '../textes-ecrans/chat-execution'
 import './JugesPanel.css'
 
 /**
@@ -32,18 +37,19 @@ import './JugesPanel.css'
  * par passage, que l'ancien panneau listait comme autant de juges. Le verdict complet de chaque
  * juge reste à un clic, sur son nom en pied (demande du 14/08 : « rentrer dans le détail »).
  */
+// Des CLÉS de texte, traduites à l'affichage (conv-1170).
 const LIBELLE_VERDICT = {
-  defaut: 'DÉFAUT',
-  valide: 'VALIDE',
-  echec: 'ÉCHEC',
+  defaut: 'juges.verdict.defaut',
+  valide: 'juges.verdict.valide',
+  echec: 'juges.verdict.echec',
   // Un juge écrit en ce moment (conv-1021) : aucun verdict n'est encore rendu.
-  encours: 'EN COURS'
-} as const
+  encours: 'juges.verdict.encours'
+} as const satisfies Record<string, CleChatExecution>
 type Verdict = keyof typeof LIBELLE_VERDICT
-const LIBELLE_SUIVI: Record<Suivi, string> = {
-  partie: 'REPRISE · EN PARTIE',
-  reprise: 'REPRISE',
-  nouvelle: 'NOUVELLE'
+const LIBELLE_SUIVI: Record<Suivi, CleChatExecution> = {
+  partie: 'juges.suivi.partie',
+  reprise: 'juges.suivi.reprise',
+  nouvelle: 'juges.suivi.nouvelle'
 }
 /**
  * Une objection se replie sur 3 lignes et se déplie au clic. Sans moteur de mise en page (rendu
@@ -51,8 +57,9 @@ const LIBELLE_SUIVI: Record<Suivi, string> = {
  */
 const TEXTE_LONG = 240
 
-function pluriel(n: number, mot: string, motPluriel = `${mot}s`): string {
-  return `${n} ${n > 1 ? motPluriel : mot}`
+/** « 1 reprise », « 2 reprises » : une clé par forme, chaque langue a ses pluriels. */
+function pluriel(n: number, cleUn: CleChatExecution, clePlusieurs: CleChatExecution): string {
+  return texte(n > 1 ? clePlusieurs : cleUn, { n })
 }
 
 /** Le texte du juge, ses `portions de code` en pastilles. */
@@ -132,14 +139,13 @@ const COCHE = (
 function titreSuivi(suivi: Suivi, reparationPrecedente: number | undefined): string {
   const precedent =
     reparationPrecedente === undefined
-      ? 'un passage précédent'
+      ? texte('juges.precedent.inconnu')
       : reparationPrecedente > 0
-        ? `la réparation ${reparationPrecedente}`
-        : 'le premier passage'
-  if (suivi === 'nouvelle') return `Le juge ne la rattache pas au verdict d'après ${precedent}`
-  if (suivi === 'partie')
-    return `Le juge la signalait déjà après ${precedent} : corrigée en partie depuis`
-  return `Le juge la signalait déjà après ${precedent}`
+        ? texte('juges.precedent.reparation', { n: reparationPrecedente })
+        : texte('juges.precedent.premier')
+  if (suivi === 'nouvelle') return texte('juges.suivi.titre.nouvelle', { precedent })
+  if (suivi === 'partie') return texte('juges.suivi.titre.partie', { precedent })
+  return texte('juges.suivi.titre.reprise', { precedent })
 }
 
 function Objection({
@@ -151,6 +157,7 @@ function Objection({
   reparationPrecedente: number | undefined
   plusieursJuges: boolean
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const [deplie, setDeplie] = useState(false)
   const [coupe, setCoupe] = useState(false)
   const refTexte = useRef<HTMLParagraphElement>(null)
@@ -187,7 +194,7 @@ function Objection({
             aria-expanded={deplie}
             onClick={() => setDeplie((valeur) => !valeur)}
           >
-            {deplie ? 'Réduire' : 'Lire la suite'}
+            {deplie ? t('juges.reduire') : t('juges.lire-la-suite')}
           </button>
         )}
         {objection.adresses.length > 0 && (
@@ -207,7 +214,7 @@ function Objection({
         )}
         {objection.corrige.length > 0 && (
           <div className="jpan-corrige" data-testid="jpan-corrige">
-            <span className="jpan-corrige-titre">Déjà corrigé dans cette objection</span>
+            <span className="jpan-corrige-titre">{t('juges.deja-corrige')}</span>
             {objection.corrige.map((element, i) => (
               <div key={i} className="jpan-corrige-ligne">
                 {COCHE}
@@ -223,7 +230,7 @@ function Objection({
             className={`jpan-suivi is-${objection.suivi}`}
             title={titreSuivi(objection.suivi, reparationPrecedente)}
           >
-            {LIBELLE_SUIVI[objection.suivi]}
+            {t(LIBELLE_SUIVI[objection.suivi])}
           </span>
         )}
         {plusieursJuges && <span className="jpan-qui">{objection.juge}</span>}
@@ -236,8 +243,8 @@ function sousTitre(bloc: BlocDesJuges, verdict: Verdict): string {
   const { objections } = bloc
   if (objections.length === 0) {
     if (verdict === 'valide' && bloc.constats > 0)
-      return pluriel(bloc.constats, 'constat vérifié', 'constats vérifiés')
-    if (verdict === 'defaut') return 'le détail est dans le verdict du juge, en dessous'
+      return pluriel(bloc.constats, 'juges.constats.un', 'juges.constats.n')
+    if (verdict === 'defaut') return texte('juges.detail-dessous')
     return ''
   }
   if (bloc.passagePrecedent) {
@@ -245,16 +252,19 @@ function sousTitre(bloc: BlocDesJuges, verdict: Verdict): string {
     const nouvelles = objections.filter((o) => o.suivi === 'nouvelle').length
     const enPartie = objections.filter((o) => o.suivi === 'partie').length
     return [
-      reprises > 0 ? pluriel(reprises, 'reprise') : '',
-      nouvelles > 0 ? pluriel(nouvelles, 'nouvelle') : '',
-      enPartie > 0 ? `${pluriel(enPartie, 'corrigée', 'corrigées')} en partie` : ''
+      reprises > 0 ? pluriel(reprises, 'juges.reprises.un', 'juges.reprises.n') : '',
+      nouvelles > 0 ? pluriel(nouvelles, 'juges.nouvelles.un', 'juges.nouvelles.n') : '',
+      enPartie > 0 ? pluriel(enPartie, 'juges.en-partie.un', 'juges.en-partie.n') : ''
     ]
       .filter(Boolean)
       .join(' · ')
   }
   const majeures = objections.filter((o) => o.gravite !== 'MINEUR').length
   const mineures = objections.length - majeures
-  return `${pluriel(majeures, 'majeure')} · ${pluriel(mineures, 'mineure')}`
+  return [
+    pluriel(majeures, 'juges.majeures.un', 'juges.majeures.n'),
+    pluriel(mineures, 'juges.mineures.un', 'juges.mineures.n')
+  ].join(' · ')
 }
 
 function dureeLisible(ms: number): string {
@@ -264,11 +274,8 @@ function dureeLisible(ms: number): string {
 
 /** Le sous-titre pendant que le juge écrit : ce qu'on sait déjà, sans rien annoncer de plus. */
 function sousTitreEnCours(enCours: JugeEnCours): string {
-  if (!enCours.lisible)
-    return 'plusieurs juges écrivent : leurs objections arrivent avec leurs verdicts'
-  return enCours.objections.length > 0
-    ? 'le juge écrit encore'
-    : 'aucune objection écrite pour l’instant'
+  if (!enCours.lisible) return texte('juges.plusieurs-ecrivent')
+  return enCours.objections.length > 0 ? texte('juges.ecrit-encore') : texte('juges.aucune-encore')
 }
 
 /**
@@ -276,6 +283,7 @@ function sousTitreEnCours(enCours: JugeEnCours): string {
  * prime : pendant qu'un passage est jugé, le verdict d'avant ne sert plus qu'au suivi de ses objections.
  */
 function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JSX.Element | null {
+  const { t } = useTextesChatExecution()
   const [ouvert, setOuvert] = useState<number | 'direct' | null>(null)
   // Plié par défaut (conv-1081, « je veux que ce bloc soit plié par défaut et dépliable ») : le
   // bandeau suffit à lire le verdict ; objections et juges se déplient au clic sur lui.
@@ -296,19 +304,19 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
   const n = objections.length
   const titre =
     n > 0
-      ? `${pluriel(n, 'objection')} à corriger`
+      ? pluriel(n, 'juges.titre.objections.un', 'juges.titre.objections.n')
       : verdict === 'encours'
-        ? 'Le juge relit le travail'
+        ? t('juges.titre.relit')
         : verdict === 'valide'
-          ? 'Aucune objection à corriger'
+          ? t('juges.titre.aucune')
           : verdict === 'defaut'
-            ? 'Refusé sans objection détaillée'
-            : 'Aucun juge n’a rendu de verdict'
+            ? t('juges.titre.refuse')
+            : t('juges.titre.sans-verdict')
   const sous = enCours
     ? sousTitreEnCours(enCours)
     : [
         bloc ? sousTitre(bloc, verdict) : '',
-        reparationEnCours ? `réparation ${reparationEnCours} en cours` : ''
+        reparationEnCours ? t('juges.reparation-en-cours', { n: reparationEnCours }) : ''
       ]
         .filter(Boolean)
         .join(' · ')
@@ -331,20 +339,22 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
         className="jpan-bandeau"
         data-testid="jpan-bandeau"
         aria-expanded={deplie}
-        title={deplie ? 'Replier le bloc des juges' : 'Déplier les objections et les juges'}
+        title={deplie ? t('juges.replier-bloc') : t('juges.deplier-bloc')}
         onClick={() => setDeplie((valeur) => !valeur)}
       >
         <span className={`jpan-verdict is-${verdict}`}>
           <IconeVerdict verdict={verdict} />
-          {LIBELLE_VERDICT[verdict]}
+          {t(LIBELLE_VERDICT[verdict])}
         </span>
         <span className="jpan-titre">
           <b>{titre}</b>
           {sous && <span className="jpan-sous">{sous}</span>}
         </span>
         {enCours ? (
-          <span className="jpan-quorum" title="Passage en train d’être jugé">
-            {enCours.reparation > 0 ? `réparation ${enCours.reparation}` : '1er passage'}
+          <span className="jpan-quorum" title={t('juges.passage-juge')}>
+            {enCours.reparation > 0
+              ? t('juges.reparation', { n: enCours.reparation })
+              : t('juges.premier-passage')}
           </span>
         ) : (
           bloc && (
@@ -352,11 +362,14 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
               className="jpan-quorum"
               title={
                 bloc.reparation > 0
-                  ? `Verdict du passage de la réparation ${bloc.reparation}`
-                  : 'Verdict du premier passage'
+                  ? t('juges.quorum.titre.reparation', { n: bloc.reparation })
+                  : t('juges.quorum.titre.premier')
               }
             >
-              {valides}/{votes.length} {valides > 1 ? 'valident' : 'valide'}
+              {t(valides > 1 ? 'juges.quorum.n' : 'juges.quorum.un', {
+                valides,
+                total: votes.length
+              })}
             </span>
           )
         )}
@@ -374,7 +387,7 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
       {deplie && n > 0 && (
         <>
           <div className="jpan-section">
-            <span className="jpan-kicker">À corriger</span>
+            <span className="jpan-kicker">{t('juges.a-corriger')}</span>
             <span className="jpan-filet" />
           </div>
           {objections.map((objection, i) => (
@@ -395,11 +408,11 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
               className={`jpan-juge is-encours${ouvert === 'direct' ? ' is-ouvert' : ''}`}
               data-testid="jpan-ligne"
               aria-expanded={ouvert === 'direct'}
-              title={ouvert === 'direct' ? 'Replier le texte' : 'Lire ce que le juge a déjà écrit'}
+              title={ouvert === 'direct' ? t('juges.replier-texte') : t('juges.lire-en-cours')}
               onClick={() => setOuvert((courant) => (courant === 'direct' ? null : 'direct'))}
             >
               <span className="jpan-juge-nom">{enCours.libelle}</span>
-              <span className="jpan-juge-absent">écrit…</span>
+              <span className="jpan-juge-absent">{t('juges.ecrit')}</span>
             </button>
           ) : (
             votes.map((vote, index) => (
@@ -409,16 +422,18 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
                 className={`jpan-juge is-${vote.vote}${ouvert === index ? ' is-ouvert' : ''}`}
                 data-testid="jpan-ligne"
                 aria-expanded={ouvert === index}
-                title={ouvert === index ? 'Replier le verdict' : 'Lire le verdict complet'}
+                title={ouvert === index ? t('juges.replier-verdict') : t('juges.lire-verdict')}
                 onClick={() => setOuvert((courant) => (courant === index ? null : index))}
               >
                 <span className="jpan-juge-nom">{vote.libelle}</span>
                 {vote.vote === 'echec' ? (
-                  <span className="jpan-juge-absent">n’a pas voté</span>
+                  <span className="jpan-juge-absent">{t('juges.pas-vote')}</span>
                 ) : vote.score !== undefined ? (
                   <b className="jpan-score">{vote.score}</b>
                 ) : (
-                  <b className="jpan-score">{vote.vote === 'valide' ? 'VALIDE' : 'DÉFAUT'}</b>
+                  <b className="jpan-score">
+                    {t(vote.vote === 'valide' ? 'juges.verdict.valide' : 'juges.verdict.defaut')}
+                  </b>
                 )}
               </button>
             ))
@@ -427,14 +442,16 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
       )}
       {deplie && enCours && ouvert === 'direct' && (
         <div className="jpan-complet" data-testid="jpan-verdict">
-          <span className="jpan-complet-tete">Texte en cours · {enCours.libelle}</span>
-          <p>{enCours.texte.trim() || 'Le juge n’a encore rien écrit.'}</p>
+          <span className="jpan-complet-tete">
+            {t('juges.texte-en-cours', { juge: enCours.libelle })}
+          </span>
+          <p>{enCours.texte.trim() || t('juges.rien-ecrit')}</p>
         </div>
       )}
       {deplie && juge && (
         <div className="jpan-complet" data-testid="jpan-verdict">
           <span className="jpan-complet-tete">
-            Verdict complet · {juge.libelle}
+            {t('juges.verdict-complet', { juge: juge.libelle })}
             {juge.costUsd !== undefined && ` · ${juge.costUsd.toFixed(2)} $`}
             {juge.durationMs !== undefined && ` · ${dureeLisible(juge.durationMs)}`}
           </span>

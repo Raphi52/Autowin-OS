@@ -1,4 +1,7 @@
 import { watchdogRegexProblem } from '../../../shared/watchdog-regex'
+import { langueCourante } from '../langue'
+import { traduireTaskManager, type CleTaskManager } from '../textes-ecrans/task-manager'
+import type { ValeursDeTexte } from '../textes'
 
 /**
  * Modèle de présentation de la section « Watchdog Agents ».
@@ -6,7 +9,13 @@ import { watchdogRegexProblem } from '../../../shared/watchdog-regex'
  * Pur et sans React, pour que ce qui décide CE QUI EST MONTRÉ soit éprouvable sans monter de vue.
  * Le Task Manager redéclare déjà ses types côté renderer ; on suit la même convention plutôt que
  * d'introduire un partage de types pour cette seule section.
+ *
+ * Les phrases suivent la langue de l'interface (traduction anglaise, conv-1170) : lues au moment de
+ * l'appel, pendant le rendu de WatchdogAgentsSection ou de TaskManagerView, qui suivent la langue.
  */
+
+const texte = (cle: CleTaskManager, valeurs?: ValeursDeTexte): string =>
+  traduireTaskManager(cle, langueCourante(), valeurs)
 
 export type WatchdogAppEvent =
   | 'orchestration-red'
@@ -82,42 +91,44 @@ export function splitByTrigger<T extends WatchdogTaskLike>(
   }
 }
 
-const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
-  'orchestration-red': 'une orchestration se termine en rouge',
-  'workflow-gate-failed': 'le gate refuse la preuve d’un workflow',
-  'workflow-unverified': 'un workflow se dit réussi SANS preuve de validation',
-  'workflow-proof-lost': 'une reprise perd des preuves de son journal',
-  'task-failed': 'une tâche planifiée échoue',
-  'task-missed': 'une tâche planifiée est manquée',
-  'chat-turn-done': 'un tour de chat se termine'
+const APP_EVENT_LABEL: Record<WatchdogAppEvent, CleTaskManager> = {
+  'orchestration-red': 'surveillance.evenement.orchestrationRouge',
+  'workflow-gate-failed': 'surveillance.evenement.gateRefuse',
+  'workflow-unverified': 'surveillance.evenement.sansPreuve',
+  'workflow-proof-lost': 'surveillance.evenement.preuvesPerdues',
+  'task-failed': 'surveillance.evenement.tacheEchoue',
+  'task-missed': 'surveillance.evenement.tacheManquee',
+  'chat-turn-done': 'surveillance.evenement.tourTermine'
 }
 
 export function describeWatchdogSource(source: WatchdogSource): string {
   if (source.kind === 'outlook-mail') {
     const muted = Object.values(source.senders ?? {}).filter((sender) => !sender.enabled).length
-    const suffix = muted ? ` — ${muted} interlocuteur(s) ignoré(s)` : ''
-    if (source.channel === 'outlook')
-      return `Quand un mail non lu arrive dans Outlook — l’agent répond par mail${suffix}`
-    if (source.channel === 'teams')
-      return `Quand un message Teams perso arrive — l’agent répond dans le même fil${suffix}`
+    const suffixe = muted ? texte('surveillance.source.ignores', { n: muted }) : ''
+    if (source.channel === 'outlook') return texte('surveillance.source.outlook', { suffixe })
+    if (source.channel === 'teams') return texte('surveillance.source.teams', { suffixe })
   }
-  if (source.kind === 'outlook-mail')
-    return 'Quand un mail non lu arrive dans Outlook, ou un message Teams perso — l’agent répond dans le même fil par un compte rendu'
+  if (source.kind === 'outlook-mail') return texte('surveillance.source.outlookEtTeams')
   if (source.kind === 'app-event') {
-    if (!source.events.length)
-      return 'Aucun événement surveillé — cette règle ne se déclenchera jamais'
+    if (!source.events.length) return texte('surveillance.source.aucunEvenement')
     // fix-ok: conv-1069 — `chat-turn-done` sans libellé s'affichait « Quand  » (rouge : watchdog-section-model.test.ts).
     const fil = source.conversationId
     const libelle = (event: WatchdogAppEvent): string =>
-      event === 'chat-turn-done' && fil ? `le tour de ${fil} se termine` : APP_EVENT_LABEL[event]
-    const quand = `Quand ${source.events.map(libelle).join(', ou ')}`
+      event === 'chat-turn-done' && fil
+        ? texte('surveillance.source.tourDuFil', { fil })
+        : texte(APP_EVENT_LABEL[event])
+    const quand = texte('surveillance.source.quand', {
+      evenements: source.events.map(libelle).join(texte('surveillance.source.ou'))
+    })
     // Le filtre vaut pour TOUS les événements de la règle : le taire laisserait croire à une règle large.
     return fil && source.events.some((event) => event !== 'chat-turn-done')
-      ? `${quand} (fil ${fil} seulement)`
+      ? texte('surveillance.source.filSeulement', { quand, fil })
       : quand
   }
-  const sensitivity = source.caseSensitive ? ' (casse respectée)' : ''
-  return `Quand une ligne de ${source.path} correspond à « ${source.pattern} »${sensitivity}`
+  return texte(
+    source.caseSensitive ? 'surveillance.source.fichierCasse' : 'surveillance.source.fichier',
+    { chemin: source.path, motif: source.pattern }
+  )
 }
 
 /**
@@ -127,37 +138,52 @@ export function describeWatchdogSource(source: WatchdogSource): string {
  */
 export function describeWatchdogGuards(guards: WatchdogGuards): string {
   const parts = [
-    `${guards.maxTriggersPerHour} réveils/h max`,
+    texte('surveillance.bornes.parHeure', { n: guards.maxTriggersPerHour }),
     ...(guards.maxTriggersPerDay === undefined
       ? []
-      : [`${guards.maxTriggersPerDay} réveils/24 h max`]),
+      : [texte('surveillance.bornes.parJour', { n: guards.maxTriggersPerDay })]),
     ...(guards.maxKnownCostUsdPerDay === undefined
       ? []
-      : [`coupe-circuit à ${guards.maxKnownCostUsdPerDay.toFixed(2)} $ connus/24 h`]),
+      : [
+          texte('surveillance.bornes.budget', {
+            montant: guards.maxKnownCostUsdPerDay.toFixed(2)
+          })
+        ]),
     ...(guards.maxUnpricedCallsPerDay === undefined
       ? []
-      : [`${guards.maxUnpricedCallsPerDay} appel(s) non chiffré(s)/24 h max`]),
+      : [texte('surveillance.bornes.nonChiffres', { n: guards.maxUnpricedCallsPerDay })]),
     guards.dedupWindowMs > 0
-      ? `même signal ignoré pendant ${Math.round(guards.dedupWindowMs / 1000)} s`
-      : 'aucune fenêtre d’apaisement',
+      ? texte('surveillance.bornes.apaisement', {
+          secondes: Math.round(guards.dedupWindowMs / 1000)
+        })
+      : texte('surveillance.bornes.sansApaisement'),
     guards.maxChainDepth === 0
-      ? 'un réveil ne peut pas en déclencher un autre'
-      : `chaîne autorisée jusqu’à ${guards.maxChainDepth}`,
-    `${guards.maxPerRoot} réveils max par même cause`
+      ? texte('surveillance.bornes.sansChaine')
+      : texte('surveillance.bornes.chaine', { n: guards.maxChainDepth }),
+    texte('surveillance.bornes.parCause', { n: guards.maxPerRoot })
   ]
   return parts.join(' · ')
 }
 
+// Accesseurs : le libellé est relu à chaque accès, donc dans la langue du moment (conv-1170).
 export const OUTCOME_LABEL: Record<WatchdogOutcome, string> = {
-  benign: 'Bénin',
-  report: 'Rapport',
-  investigate: 'Investigation',
-  repair: 'Réparation'
+  get benign() {
+    return texte('surveillance.issue.benin')
+  },
+  get report() {
+    return texte('surveillance.issue.rapport')
+  },
+  get investigate() {
+    return texte('surveillance.issue.investigation')
+  },
+  get repair() {
+    return texte('surveillance.issue.reparation')
+  }
 }
 
 /** Non renseignée ≠ bénin : ne pas savoir ce que l'agent a conclu doit se VOIR. */
 export function describeOutcome(outcome: WatchdogOutcome | undefined): string {
-  return outcome ? OUTCOME_LABEL[outcome] : 'Issue non renseignée'
+  return outcome ? OUTCOME_LABEL[outcome] : texte('surveillance.issue.nonRenseignee')
 }
 
 export function outcomeTone(
@@ -169,18 +195,18 @@ export function outcomeTone(
   return 'act'
 }
 
-const OCCURRENCE_STATUS_LABEL: Record<string, string> = {
-  claimed: 'En attente',
-  running: 'En cours',
-  completed: 'Terminé',
-  failed: 'Échec',
-  cancelled: 'Annulé',
-  missed: 'Manqué'
+const OCCURRENCE_STATUS_LABEL: Readonly<Record<string, CleTaskManager | undefined>> = {
+  claimed: 'surveillance.statut.enAttente',
+  running: 'surveillance.statut.enCours',
+  completed: 'surveillance.statut.termine',
+  failed: 'surveillance.statut.echec',
+  cancelled: 'surveillance.statut.annule',
+  missed: 'surveillance.statut.manque'
 }
 
 /** Le statut d'exécution reste distinct du tri rendu par l'agent. */
 export function describeOccurrenceStatus(status: string): string {
-  return OCCURRENCE_STATUS_LABEL[status] ?? 'Statut inconnu'
+  return texte(OCCURRENCE_STATUS_LABEL[status] ?? 'surveillance.statut.inconnu')
 }
 
 /** Historique des réveils d'une règle, du plus récent au plus ancien. */
@@ -263,26 +289,25 @@ export function toTaskPayload<T extends { schedule: unknown; watchdog?: Watchdog
 export function watchdogDraftProblem(watchdog: WatchdogRule | undefined): string | undefined {
   if (!watchdog) return undefined
   if (watchdog.source.kind === 'file-match') {
-    if (!watchdog.source.path.trim()) return 'Indique le fichier à surveiller.'
-    if (!watchdog.source.pattern.trim())
-      return 'Indique ce qui doit déclencher (texte ou expression).'
+    if (!watchdog.source.path.trim()) return texte('surveillance.probleme.fichier')
+    if (!watchdog.source.pattern.trim()) return texte('surveillance.probleme.motif')
     const regexProblem = watchdogRegexProblem(watchdog.source.pattern)
-    if (regexProblem) return `Expression de surveillance refusée : ${regexProblem}`
+    // `regexProblem` vient de shared/watchdog-regex.ts, hors de ce lot : il reste en français.
+    if (regexProblem) return texte('surveillance.probleme.expression', { raison: regexProblem })
   }
-  if (watchdog.guards.maxTriggersPerHour < 1) return 'Le plafond horaire doit valoir au moins 1.'
+  if (watchdog.guards.maxTriggersPerHour < 1) return texte('surveillance.probleme.plafondHoraire')
   if (watchdog.guards.maxTriggersPerDay !== undefined && watchdog.guards.maxTriggersPerDay < 1)
-    return 'Le plafond quotidien doit valoir au moins 1.'
+    return texte('surveillance.probleme.plafondQuotidien')
   if (
     watchdog.guards.maxKnownCostUsdPerDay !== undefined &&
     watchdog.guards.maxKnownCostUsdPerDay <= 0
   )
-    return 'Le budget quotidien doit être positif.'
+    return texte('surveillance.probleme.budget')
   if (
     watchdog.guards.maxUnpricedCallsPerDay !== undefined &&
     watchdog.guards.maxUnpricedCallsPerDay < 1
   )
-    return 'Le plafond d’appels non chiffrés doit valoir au moins 1.'
-  if (watchdog.guards.maxPerRoot < 1)
-    return 'La largeur maximale d’une cascade doit valoir au moins 1.'
+    return texte('surveillance.probleme.nonChiffres')
+  if (watchdog.guards.maxPerRoot < 1) return texte('surveillance.probleme.cascade')
   return undefined
 }

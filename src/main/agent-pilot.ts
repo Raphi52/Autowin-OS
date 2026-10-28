@@ -105,6 +105,8 @@ import {
   type IssueDesLectures
 } from './deux-lectures'
 import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
+import { estUnPromptDOrdre } from './messages-entre-fils-app'
+import { estUnMessageDuPlan } from '../shared/plan-de-lots'
 import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
@@ -1468,6 +1470,10 @@ export class AgentPilot {
       // Le tour de reprise d'une tâche de fond est écrit par Autowin, pas par l'utilisateur
       // (conv-1118) : il n'a rien à départager.
       !estUneRepriseAutomatique(latestUserMessage) &&
+      // Même chose pour le message d'un lot, d'un ordre entre fils ou du réveil du chef : composé par
+      // l'app ou un agent, sans humain pour cliquer. conv-1192 (2026-10-27) s'y est arrêté net.
+      !estUnMessageDuPlan(latestUserMessage) &&
+      !estUnPromptDOrdre(latestUserMessage) &&
       meriteUneLecture(latestUserMessage) &&
       !suitUneQuestionDesLectures(history)
     let lecturesMemorisees: Promise<IssueDesLectures | undefined> | undefined

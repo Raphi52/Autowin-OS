@@ -11,6 +11,8 @@
 
 import { isBlocked } from '../../../shared/run-blocked'
 import type { SuggestionGroup } from './scout-suggestions'
+import type { Langue } from '../../../shared/langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 
 /** Le jeu historique, conservé à l'identique comme REPLI. */
 export const STATIC_SUGGESTIONS = [
@@ -19,6 +21,17 @@ export const STATIC_SUGGESTIONS = [
   'Ouvre le graphe du brain',
   'Quel est l’état des workflows ?'
 ]
+
+/**
+ * Les mêmes phrases, par clé de la table des textes (conv-1170) : la puce cliquée part telle
+ * qu'affichée, donc dans la langue de l'interface. Même ordre que `STATIC_SUGGESTIONS`.
+ */
+const CLES_STATIQUES = [
+  'accueil.suggestion.revueArchi',
+  'accueil.suggestion.jugeCodex',
+  'accueil.suggestion.grapheBrain',
+  'accueil.suggestion.etatWorkflows'
+] as const
 
 export interface HomeSuggestionState {
   /** Runs déjà chargés (panneau workflows), résumés par `parseRun` : statut ET compte de DoD. */
@@ -40,7 +53,10 @@ export interface HomeSuggestionState {
  * Les groupes de chips à afficher sur la home. Vide en entrée → repli statique (jamais `[]`).
  * L'ordre traduit l'urgence : reprendre ce qui est en cours, puis débloquer, puis découvrir.
  */
-export function buildHomeSuggestions(state: HomeSuggestionState): SuggestionGroup[] {
+export function buildHomeSuggestions(
+  state: HomeSuggestionState,
+  langue: Langue = 'fr'
+): SuggestionGroup[] {
   const groups: SuggestionGroup[] = []
 
   // Un brouillon en cours = l'utilisateur sait déjà quoi écrire : aucune chip, pas même le repli.
@@ -55,17 +71,20 @@ export function buildHomeSuggestions(state: HomeSuggestionState): SuggestionGrou
   if (blocked.length > 0)
     groups.push({
       key: '⛔',
-      title: 'Runs bloqués',
+      title: traduireChatFil('accueil.runsBloques', langue),
       subtitle: `${blocked.length}`,
-      items: blocked.slice(0, 3).map((r) => ({ label: `Débloque @run:${r.subject}` }))
+      // `@run:` reste tel quel : c'est la mention que le chat relit pour joindre le run.
+      items: blocked
+        .slice(0, 3)
+        .map((r) => ({ label: traduireChatFil('accueil.debloque', langue, { sujet: r.subject }) }))
     })
 
   if (groups.length === 0)
     return [
       {
         key: '·',
-        title: 'Pour démarrer',
-        items: STATIC_SUGGESTIONS.map((label) => ({ label }))
+        title: traduireChatFil('accueil.pourDemarrer', langue),
+        items: CLES_STATIQUES.map((cle) => ({ label: traduireChatFil(cle, langue) }))
       }
     ]
 

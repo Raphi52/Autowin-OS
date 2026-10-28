@@ -1,4 +1,5 @@
 import { ModuleHeader } from './ModuleHeader'
+import { useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 // Importée ICI, et non « héritée » d'une autre vue. `.domain-tabs` n'est stylé que dans cette feuille,
 // et TaskManagerView ne l'importait pas : sa barre n'était correcte que parce qu'Agent Studio,
 // Settings ou Knowledge avait déjà chargé le CSS (dans un bundle, une feuille importée est globale).
@@ -95,13 +96,17 @@ export function ViewTopBar<Id extends string = string>({
   /** Boutons alignés à droite (ex. « + Nouvelle tâche »). */
   actions?: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   return (
     <header className="view-topbar">
       <div className="view-topbar-identity">
         <ModuleHeader eyebrow={eyebrow} title={title} description={description} detail={detail} />
       </div>
       {tabs && tabs.length > 0 && (
-        <nav className="domain-tabs" aria-label={ariaLabel ?? `Sections ${title}`}>
+        <nav
+          className="domain-tabs"
+          aria-label={ariaLabel ?? t('barre.sections', { titre: title })}
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}

@@ -107,8 +107,7 @@
 :root[data-base='clair'] .cpick-tete,
 :root[data-base='clair'] .cpick-titre,
 :root[data-base='clair'] .cpick-q p,
-:root[data-base='clair'] .cpick-voie-piste,
-:root[data-base='clair'] .cpick-motif {
+:root[data-base='clair'] .cpick-voie-piste {
   color: var(--text-dim);
 }
 

@@ -10,7 +10,6 @@ import {
   facteursDesChoix,
   lireMemoireScout,
   noterChoixScout,
-  noterMotifScout,
   noterPistesScout,
   pistesDejaConnues,
   pistesDejaLivrees,
@@ -401,12 +400,12 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * PISTE 2, second pas (conv-1033) — « Pourquoi pas ? » : le motif d'une piste laissée. Il va sur le
-   * DERNIER scout qui la proposait, et le bilan le rend au scout suivant.
-   * Entrée qui tue une correction fausse : le même titre dans un scout plus ancien. Le motif dit
-   * pourquoi l'utilisateur écarte CE tableau, pas un tableau d'il y a une semaine.
+   * Les motifs « Pourquoi pas ? » DÉJÀ notés (piste 2, conv-1033). Le bouton qui les écrivait est
+   * retiré (conv-1198), mais une mémoire existante en porte encore : le bilan les compte, la sélection
+   * les garde. Une piste PRISE n'a pas été refusée : son motif n'est plus un refus.
+   * Entrée qui tue une correction fausse : compter tous les motifs du dernier tableau.
    */
-  it('le motif d’une piste refusée va sur le dernier scout qui la proposait, et le bilan le compte', () => {
+  it('un motif déjà noté compte comme refus, sauf sur une piste finalement prise', () => {
     const chemin = fichier()
     const tableau =
       ENTETE +
@@ -414,58 +413,29 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
     noterPistesScout({
       depot: 'D:/w',
-      texte: scout('B'),
-      run: 'vieux',
-      maintenant: '2026-10-10T08:00:00Z',
-      chemin
-    })
-    noterPistesScout({
-      depot: 'D:/w',
       texte: tableau,
       run: 'r1',
       maintenant: '2026-10-21T08:00:00Z',
       chemin
     })
-    expect(noterMotifScout({ depot: 'd:\\w', titre: 'B', motif: 'deja-fait', chemin })).toBe(true)
-    expect(noterMotifScout({ depot: 'D:/w', titre: 'D', motif: 'hors-sujet', chemin })).toBe(true)
-    expect(noterMotifScout({ depot: 'D:/w', titre: 'E', motif: 'deja-fait', chemin })).toBe(true)
-    expect(noterMotifScout({ depot: 'D:/autre', titre: 'B', motif: 'faux', chemin })).toBe(false)
-    const motifs = lireMemoireScout(chemin).entrees.map((e) => [e.run, e.titre, e.motif])
-    expect(motifs).toContainEqual(['vieux', 'B', undefined])
-    expect(motifs).toContainEqual(['r1', 'B', 'deja-fait'])
+    // Une mémoire écrite avant le retrait du bouton : les motifs sont posés tels quels sur le disque.
+    const motifs: Record<string, string> = { A: 'trop-petit', B: 'deja-fait', D: 'hors-sujet' }
+    const memoire = lireMemoireScout(chemin)
+    writeFileSync(
+      chemin,
+      JSON.stringify({
+        entrees: memoire.entrees.map((e) =>
+          motifs[e.titre] ? { ...e, motif: motifs[e.titre] } : e
+        )
+      })
+    )
     noterChoixScout({ depot: 'D:/w', demande: selection('A', 'C'), maintenant: 't', chemin })
     // La sélection garde les motifs : elle ne réécrit que le choix.
     expect(
       lireMemoireScout(chemin).entrees.find((e) => e.run === 'r1' && e.titre === 'B')?.motif
     ).toBe('deja-fait')
-    expect(bilanDesChoix({ depot: 'D:/w', chemin })).toMatch(
-      /motifs des refus : 2 déjà fait, 1 hors sujet/u
-    )
-  })
-
-  /*
-   * Relu à la reprise de conv-1033 : le motif se donne sur une ligne DÉCOCHÉE, mais l'utilisateur peut
-   * la recocher et la lancer. Une piste PRISE n'a pas été refusée : son motif n'est plus un refus.
-   * Entrée qui tue une correction fausse : compter tous les motifs du dernier tableau.
-   */
-  it('un motif posé sur une piste finalement prise ne compte pas comme un refus', () => {
-    const chemin = fichier()
-    const tableau =
-      ENTETE +
-      '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 70 | 🔧 fix | B | p | a.ts:1 |\n' +
-      '| 3 | 60 | 🆕 new | C | p | x |\n| 4 | 40 | 🆕 new | D | p | x |\n| 5 | 30 | 🆕 new | E | p | x |\n'
-    noterPistesScout({
-      depot: 'D:/w',
-      texte: tableau,
-      run: 'r1',
-      maintenant: '2026-10-21T08:00:00Z',
-      chemin
-    })
-    noterMotifScout({ depot: 'D:/w', titre: 'A', motif: 'trop-petit', chemin })
-    noterMotifScout({ depot: 'D:/w', titre: 'D', motif: 'hors-sujet', chemin })
-    noterChoixScout({ depot: 'D:/w', demande: selection('A', 'C'), maintenant: 't', chemin })
     const bilan = bilanDesChoix({ depot: 'D:/w', chemin })
-    expect(bilan).toMatch(/motifs des refus : 1 hors sujet\b/u)
+    expect(bilan).toMatch(/motifs des refus : 1 déjà fait, 1 hors sujet\b/u)
     expect(bilan).not.toMatch(/trop petit/u)
   })
 

@@ -1,3 +1,6 @@
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
+
 /**
  * Le widget « Enregistrements », côté DÉCISIONS : tout ce qui se prouve sans micro ni disque.
  *
@@ -21,9 +24,14 @@ export interface FichierEnregistre {
 export const MAX_LIGNES_AFFICHEES = 80
 
 export function formaterTaille(octets: number): string {
-  if (octets < 1_000) return `${octets} o`
-  if (octets < 1_000_000) return `${Math.round(octets / 100) / 10} ko`
-  return `${Math.round(octets / 100_000) / 10} Mo`
+  // Les unités suivent la langue (conv-1170) ; le nombre, lui, garde son point : le français
+  // affiché ne change pas.
+  const langue = langueCourante()
+  if (octets < 1_000) return traduireAccueil('taille.octets', langue, { n: octets })
+  if (octets < 1_000_000) {
+    return traduireAccueil('taille.ko', langue, { n: Math.round(octets / 100) / 10 })
+  }
+  return traduireAccueil('taille.mo', langue, { n: Math.round(octets / 100_000) / 10 })
 }
 
 const deuxChiffres = (n: number): string => String(n).padStart(2, '0')
@@ -44,14 +52,17 @@ export function formaterQuand(le: number, maintenant: number): string {
   const ecart = maintenant - le
   const d = new Date(le)
   const heure = `${deuxChiffres(d.getHours())}:${deuxChiffres(d.getMinutes())}`
-  if (ecart < 60_000) return 'à l’instant'
-  if (ecart < 3_600_000) return `il y a ${Math.floor(ecart / 60_000)} min`
+  const langue = langueCourante()
+  if (ecart < 60_000) return traduireAccueil('quand.instant', langue)
+  if (ecart < 3_600_000) {
+    return traduireAccueil('quand.minutes', langue, { n: Math.floor(ecart / 60_000) })
+  }
   const aujourdhui = new Date(maintenant)
   const memeJour =
     d.getFullYear() === aujourdhui.getFullYear() &&
     d.getMonth() === aujourdhui.getMonth() &&
     d.getDate() === aujourdhui.getDate()
-  if (memeJour) return `aujourd’hui ${heure}`
+  if (memeJour) return traduireAccueil('quand.aujourdhui', langue, { heure })
   return `${deuxChiffres(d.getDate())}/${deuxChiffres(d.getMonth() + 1)} ${heure}`
 }
 
@@ -64,7 +75,13 @@ export function formaterQuand(le: number, maintenant: number): string {
 export function titreEnregistrement(nom: string): string {
   const m = /^enregistrement-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-\d{2}\.txt$/.exec(nom)
   if (!m) return nom
-  return `${m[3]}/${m[2]}/${m[1]} à ${m[4]}:${m[5]}`
+  return traduireAccueil('titre.enregistrement', langueCourante(), {
+    jour: m[3],
+    mois: m[2],
+    annee: m[1],
+    heure: m[4],
+    minute: m[5]
+  })
 }
 
 /** Ajoute une phrase figée à l'affichage, la plus récente en tête. Une phrase vide n'est rien. */
@@ -85,13 +102,24 @@ export function ajouterLigneAffichee(lignes: readonly string[], texte: string): 
  */
 export type Voix = 'moi' | 'interlocuteur'
 
+/**
+ * L'étiquette suit la langue de l'interface au moment où la phrase est écrite (conv-1170) : le
+ * fichier se relit par un humain, aucun code ne la reparse.
+ */
 export const ETIQUETTE_VOIX: Record<Voix, string> = {
-  moi: 'Moi',
-  interlocuteur: 'Interlocuteur'
+  get moi() {
+    return traduireAccueil('commun.moi', langueCourante())
+  },
+  get interlocuteur() {
+    return traduireAccueil('voix.interlocuteur', langueCourante())
+  }
 }
 
 export function ligneAttribuee(voix: Voix, texte: string): string {
   const propre = texte.trim()
   if (propre === '') return ''
-  return `${ETIQUETTE_VOIX[voix]} : ${propre}`
+  return traduireAccueil('voix.ligne', langueCourante(), {
+    voix: ETIQUETTE_VOIX[voix],
+    texte: propre
+  })
 }

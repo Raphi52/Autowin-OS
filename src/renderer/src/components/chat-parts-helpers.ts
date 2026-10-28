@@ -8,6 +8,8 @@
  * fonction faisaient taire l'avertissement sans regler le defaut.
  */
 import type { ChatActionPart } from './chat-view-model'
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 
 /**
  * PASTILLE D'ICONE PAR FAMILLE D'OUTIL (design converge). Le lisere porte le STATUT, l'icone porte
@@ -51,10 +53,13 @@ export function raisonDuLien(
 ): string | undefined {
   if (!prev) return undefined
   if (prev.ok === false) {
-    return prev.name === current.name ? '2ᵉ TENTATIVE' : 'REPRISE APRÈS ÉCHEC'
+    return traduireChatFil(
+      prev.name === current.name ? 'lien.deuxiemeTentative' : 'lien.repriseApresEchec',
+      langueCourante()
+    )
   }
   if (prev.ok === true && (current.name === 'verify' || current.name === 'judge')) {
-    return 'VÉRIFICATION'
+    return traduireChatFil('lien.verification', langueCourante())
   }
   return undefined
 }
@@ -139,7 +144,7 @@ export function ligneEtatLancement(actions: ChatActionPart[]): string | undefine
     typeof task === 'string' && task.trim()
       ? ` : « ${task.trim().length > 100 ? `${task.trim().slice(0, 99)}…` : task.trim()} »`
       : ''
-  return `Travail lancé${quoi} — dans une copie de travail séparée, résultat vérifié avant de revenir ici.`
+  return traduireChatFil('lancement.ligne', langueCourante(), { quoi })
 }
 
 /**

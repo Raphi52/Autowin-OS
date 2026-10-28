@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GestesDesTours, GestesDuTour } from '../../../shared/gestes-agent'
+import type { Langue } from '../../../shared/langue'
+import { formaterNombre, langueCourante } from '../langue'
+import {
+  auPluriel,
+  traduireChatFilsEtLots,
+  useTextesChatFilsEtLots,
+  type CleChatFilsEtLots
+} from '../textes-ecrans/chat-fils-et-lots'
 import type { Msg } from './chat-view-types'
 import { statusLabel } from './execution-interrupted-status'
-import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
+import {
+  buildHarnessTimelineFromTrace,
+  type HarnessTimeline,
+  type HarnessTraceEvent
+} from './harness-timeline-model'
 import { LatestRequestGate } from './observatory-reliability'
 import {
   FAMILY_CHAPTER,
@@ -47,12 +59,18 @@ function lecturesAllegeesDisponibles(): boolean {
   )
 }
 
+/*
+ * Ces fonctions lisent la langue au moment de l'appel : elles sont appelées pendant le rendu de
+ * composants qui lisent `useTextesChatFilsEtLots()`, donc redessinés au changement de langue.
+ */
+const texte = (cle: CleChatFilsEtLots, valeurs?: Record<string, string | number>): string =>
+  traduireChatFilsEtLots(cle, langueCourante(), valeurs)
+
 function formatDuration(ms: number | undefined): string {
-  if (ms == null || !Number.isFinite(ms)) return 'durée inconnue'
+  if (ms == null || !Number.isFinite(ms)) return texte('demandes.duree.inconnue')
   if (ms < 1000) return `${Math.round(ms)} ms`
   const seconds = ms / 1000
-  if (seconds < 60)
-    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(seconds)} s`
+  if (seconds < 60) return `${formaterNombre(seconds, { maximumFractionDigits: 1 })} s`
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes} min ${String(Math.round(seconds % 60)).padStart(2, '0')} s`
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
@@ -60,15 +78,17 @@ function formatDuration(ms: number | undefined): string {
 
 function formatCost(usd: number | undefined): string | undefined {
   if (usd == null || !Number.isFinite(usd)) return undefined
-  if (usd > 0 && usd < 0.01) return '< 0,01 $'
-  return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(usd)} $`
+  if (usd > 0 && usd < 0.01) return texte('demandes.cout.minuscule')
+  return texte('demandes.cout.montant', {
+    montant: formaterNombre(usd, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  })
 }
 
 /** « Lu ×9 », « Modifié ×34 »… : un morceau par famille, pour qu'aucun ne soit coupé en deux. */
 function familyPieces(
   families: ReadonlyArray<{ family: StoryFamily['family']; count: number }>
 ): string[] {
-  return families.map((family) => `${FAMILY_SHORT[family.family]} ×${family.count}`)
+  return families.map((family) => `${texte(FAMILY_SHORT[family.family])} ×${family.count}`)
 }
 
 /**
@@ -109,14 +129,17 @@ async function lireGestesDesTours(conversationId: string): Promise<GestesDesTour
 function useRequestStories(
   conversationId: string | undefined,
   active: boolean,
-  live: boolean
+  live: boolean,
+  langue: Langue
 ): {
   stories: RequestStory[]
   gestes: GestesDesTours
   loading: boolean
   error: string | null
 } {
-  const [stories, setStories] = useState<RequestStory[]>([])
+  // La trace lue, et le mode direct au moment de la lecture. Le récit est construit plus bas, dans
+  // la langue de l'écran : un changement de langue le réécrit sans relire la trace.
+  const [lue, setLue] = useState<{ timeline: HarnessTimeline; live: boolean } | null>(null)
   const [gestes, setGestes] = useState<GestesDesTours>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -134,7 +157,7 @@ function useRequestStories(
       if (!active || !conversationId) return
       const requestId = gate.current.begin()
       if (showLoading) {
-        setStories([])
+        setLue(null)
         setGestes({})
         setLoading(true)
         setError(null)
@@ -148,12 +171,12 @@ function useRequestStories(
         ])
         if (!gate.current.isCurrent(requestId)) return
         const timeline = buildHarnessTimelineFromTrace(Array.isArray(trace) ? trace : [])
-        setStories(buildRequestThread(timeline, { live: liveRef.current }))
+        setLue({ timeline, live: liveRef.current })
         setGestes(gestesLus)
         setError(null)
       } catch (reason) {
         if (!gate.current.isCurrent(requestId)) return
-        setStories([])
+        setLue(null)
         setError(reason instanceof Error ? reason.message : String(reason))
       } finally {
         if (gate.current.isCurrent(requestId)) setLoading(false)
@@ -201,6 +224,10 @@ function useRequestStories(
     })
   }, [active, conversationId, load])
 
+  const stories = useMemo(
+    () => (lue ? buildRequestThread(lue.timeline, { live: lue.live, langue }) : []),
+    [lue, langue]
+  )
   return { stories, gestes, loading, error }
 }
 
@@ -208,18 +235,22 @@ function useRequestStories(
 function gesturesTitle(gestes: GestesDuTour | undefined): string | undefined {
   const count = nativeGestureCount(gestes)
   return count > 0
-    ? `Dont ${count} geste${count > 1 ? 's' : ''} de l’agent (lectures, commandes, éditions)`
+    ? texte(
+        auPluriel(count, langueCourante()) ? 'demandes.gestes.plusieurs' : 'demandes.gestes.un',
+        { n: count }
+      )
     : undefined
 }
 
 function FamiliesChapter({ families }: { families: StoryFamily[] }): React.JSX.Element {
+  const { t } = useTextesChatFilsEtLots()
   if (families.length === 0)
-    return <p className="request-story-empty">Aucun geste enregistré pour cette demande.</p>
+    return <p className="request-story-empty">{t('demandes.aucunGeste')}</p>
   return (
     <ul className="request-story-families">
       {families.map((family) => (
         <li key={family.family} data-family={family.family}>
-          <span className="request-story-family-name">{FAMILY_CHAPTER[family.family]}</span>
+          <span className="request-story-family-name">{t(FAMILY_CHAPTER[family.family])}</span>
           <span className="request-story-family-actions">
             {family.actions.map((action, index) => (
               <span
@@ -249,12 +280,14 @@ function Chapter({
   name,
   children
 }: {
-  name: string
+  name: CleChatFilsEtLots
   children: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useTextesChatFilsEtLots()
+  // `data-chapter` garde le nom français : un repère stable, qui ne change pas avec la langue.
   return (
-    <div className="request-story-chapter" data-chapter={name}>
-      <dt>{name}</dt>
+    <div className="request-story-chapter" data-chapter={traduireChatFilsEtLots(name, 'fr')}>
+      <dt>{t(name)}</dt>
       <dd>{children}</dd>
     </div>
   )
@@ -271,6 +304,7 @@ function RequestStoryView({
   requestLabel?: string
   onSelect?: (selection: ExecutionNodeSelection | null) => void
 }): React.JSX.Element {
+  const { t } = useTextesChatFilsEtLots()
   // `story.families` porte déjà les gestes propres de l'agent (fusionnés par `RequestThread`).
   const families = story.families
   const [treeOpen, setTreeOpen] = useState(false)
@@ -283,20 +317,24 @@ function RequestStoryView({
         </p>
       )}
       <dl>
-        <Chapter name="Demande">
-          {story.text ? <b>« {story.text} »</b> : <b>Demande sans texte identifiable</b>}
+        <Chapter name="demandes.chapitre.demande">
+          {story.text ? (
+            <b>{t('demandes.citation', { texte: story.text })}</b>
+          ) : (
+            <b>{t('demandes.sansTexte')}</b>
+          )}
           {story.dateLabel && <span className="request-story-figure"> · {story.dateLabel}</span>}
         </Chapter>
-        <Chapter name="Décision">{story.decision.join(' · ')}</Chapter>
-        <Chapter name="Ce qu’il a fait">
+        <Chapter name="demandes.chapitre.decision">{story.decision.join(' · ')}</Chapter>
+        <Chapter name="demandes.chapitre.fait">
           <FamiliesChapter families={families} />
         </Chapter>
-        <Chapter name="Résultat">
+        <Chapter name="demandes.chapitre.resultat">
           <span className={story.status === 'failed' ? 'is-failed' : undefined}>
             {story.outcome.join(' · ')}
           </span>
         </Chapter>
-        <Chapter name="Bilan">
+        <Chapter name="demandes.chapitre.bilan">
           <b>{formatDuration(story.durationMs)}</b>
           {cost && <b> · {cost}</b>}
           <span className="request-story-figure"> · {statusLabel(story.status)}</span>
@@ -306,7 +344,7 @@ function RequestStoryView({
         className="request-story-tree"
         onToggle={(event) => setTreeOpen((event.currentTarget as HTMLDetailsElement).open)}
       >
-        <summary>Arbre détaillé (prompts, pensée des agents, dépôt)</summary>
+        <summary>{t('demandes.arbre')}</summary>
         {treeOpen && (
           <WorkflowExecutionGraph
             conversationId={conversationId}
@@ -351,25 +389,26 @@ function LiveStoryView({
   story: LiveStory
   families: StoryFamily[]
 }): React.JSX.Element {
+  const { t } = useTextesChatFilsEtLots()
   return (
     <div className="request-story" data-request-story={LIVE_KEY}>
       <dl>
-        <Chapter name="Demande">
-          <b>« {story.text} »</b>
+        <Chapter name="demandes.chapitre.demande">
+          <b>{t('demandes.citation', { texte: story.text })}</b>
         </Chapter>
-        <Chapter name="Maintenant">
+        <Chapter name="demandes.chapitre.maintenant">
           {story.heartbeat ? (
             <span className="request-live-heartbeat">{story.heartbeat}</span>
           ) : (
-            'Le modèle réfléchit…'
+            t('demandes.reflechit')
           )}
         </Chapter>
-        <Chapter name="Ce qu’il a fait">
+        <Chapter name="demandes.chapitre.fait">
           <FamiliesChapter families={families} />
         </Chapter>
-        <Chapter name="Bilan">
+        <Chapter name="demandes.chapitre.bilan">
           <b>{formatDuration(story.elapsedMs)}</b>
-          <span className="request-story-figure"> · en cours, le coût arrive à la fin</span>
+          <span className="request-story-figure">{t('demandes.coutALaFin')}</span>
         </Chapter>
       </dl>
     </div>
@@ -384,12 +423,13 @@ export function RequestThread({
   requestLabel,
   onSelect
 }: RequestThreadProps): React.JSX.Element {
+  const { langue, t } = useTextesChatFilsEtLots()
   const {
     stories: storiesFromTrace,
     gestes,
     loading,
     error
-  } = useRequestStories(conversationId, active, live)
+  } = useRequestStories(conversationId, active, live, langue)
   // Chaque demande reçoit les gestes propres de l'agent que l'app a résumés depuis son journal.
   const stories = useMemo(
     () =>
@@ -433,11 +473,7 @@ export function RequestThread({
     setOpened({ convId: conversationId, key: openKey === key ? null : key })
 
   if (!conversationId) {
-    return (
-      <div className="request-thread-empty">
-        Sélectionne une conversation pour voir ses demandes.
-      </div>
-    )
+    return <div className="request-thread-empty">{t('demandes.choisirConversation')}</div>
   }
 
   const count = shownStories.length + (liveStory ? 1 : 0)
@@ -445,29 +481,31 @@ export function RequestThread({
     <section
       className="request-thread"
       data-conversation-id={conversationId}
-      aria-label="Fil des demandes"
+      aria-label={t('demandes.aria')}
       aria-busy={loading}
     >
       <header className="request-thread-head">
-        <strong>Demandes</strong>
+        <strong>{t('demandes.titre')}</strong>
         <span>
-          {count} demande{count > 1 ? 's' : ''}
-          {live ? ' · en direct' : ''}
+          {t(auPluriel(count, langue) ? 'demandes.compte.plusieurs' : 'demandes.compte.un', {
+            n: count
+          })}
+          {live ? t('demandes.enDirect') : ''}
         </span>
       </header>
       {loading && count === 0 && (
         <div className="request-thread-empty" role="status">
           <Spinner />
-          Chargement des demandes…
+          {t('demandes.chargement')}
         </div>
       )}
       {!loading && error && (
         <div className="request-thread-error" role="alert">
-          Demandes indisponibles · {error}
+          {t('demandes.indisponibles', { erreur: error })}
         </div>
       )}
       {!loading && !error && count === 0 && (
-        <div className="request-thread-empty">Aucune demande tracée dans cette conversation.</div>
+        <div className="request-thread-empty">{t('demandes.aucune')}</div>
       )}
       {count > 0 && (
         <ol className="request-thread-list">
@@ -484,9 +522,11 @@ export function RequestThread({
                 onClick={() => toggle(LIVE_KEY)}
               >
                 <span className="request-row-dot" aria-hidden="true" />
-                <span className="request-row-text">{liveStory.text || 'Demande en cours'}</span>
+                <span className="request-row-text">
+                  {liveStory.text || t('demandes.enCoursTexte')}
+                </span>
                 <span className="request-row-figures">
-                  <b>en cours</b> · {formatDuration(liveStory.elapsedMs)}
+                  <b>{t('demandes.enCours')}</b> · {formatDuration(liveStory.elapsedMs)}
                 </span>
                 <span
                   className="request-row-mini"
@@ -496,7 +536,7 @@ export function RequestThread({
                   <ResumePieces
                     pieces={[
                       ...familyPieces(liveFamilyList),
-                      liveStory.heartbeat ?? 'Le modèle réfléchit…'
+                      liveStory.heartbeat ?? t('demandes.reflechit')
                     ]}
                   />
                 </span>
@@ -514,10 +554,15 @@ export function RequestThread({
               story.dateLabel,
               ...familyPieces(story.families),
               story.failedCalls > 0 && story.status === 'completed'
-                ? `${story.failedCalls} échec repris`
+                ? t(
+                    auPluriel(story.failedCalls, langue)
+                      ? 'demandes.echecRepris.plusieurs'
+                      : 'demandes.echecRepris.un',
+                    { n: story.failedCalls }
+                  )
                 : '',
               story.outcome[0],
-              story.calls > 1 ? `${story.calls} appels` : ''
+              story.calls > 1 ? t('demandes.appels', { n: story.calls }) : ''
             ].filter(Boolean)
             const storyGestes = gestes[story.turnId]
             return (
@@ -535,7 +580,8 @@ export function RequestThread({
                 >
                   <span className="request-row-dot" aria-hidden="true" />
                   <span className="request-row-text">
-                    {story.text || `Demande du ${story.dateLabel || 'jour inconnu'}`}
+                    {story.text ||
+                      t('demandes.du', { date: story.dateLabel || t('demandes.jourInconnu') })}
                   </span>
                   <span className="request-row-figures">
                     <b>{statusLabel(story.status)}</b> · {formatDuration(story.durationMs)}

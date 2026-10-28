@@ -192,22 +192,23 @@ export interface LecteurDesCollegues {
 }
 
 export function creerLecteurDesCollegues(deps: {
-  /** Le dossier du Board choisi sur ce poste ; `null` = aucun, donc aucun collègue. */
-  dossier: () => string | null
-  /** Le sous-dossier de CE poste, qu'on ne relit pas : ce sont nos propres post-it. */
-  poste: string
+  /**
+   * Le dossier du Board choisi sur ce poste, et le sous-dossier de CE poste, qu'on ne relit pas (ce
+   * sont nos propres post-it) ; `null` = aucun dossier, donc aucun collègue.
+   */
+  ou: () => { dossier: string; poste: string } | null
   maintenant?: () => number
   delaiMs?: number
 }): LecteurDesCollegues {
   const maintenant = deps.maintenant ?? Date.now
   const delaiMs = deps.delaiMs ?? DELAI_ENTRE_LECTURES_MS
-  const moi = deps.poste.toLowerCase()
   /** Par fichier : sa date et sa taille au dernier passage, et ce qui en a été lu. */
   const cache = new Map<string, { mtimeMs: number; size: number; board: BoardDUnCollegue | null }>()
   let dernier: { dossier: string; a: number; resultat: BoardsDesCollegues } | null = null
   let enCours: Promise<BoardsDesCollegues> | null = null
 
-  async function relire(dossier: string): Promise<BoardsDesCollegues> {
+  async function relire(dossier: string, poste: string): Promise<BoardsDesCollegues> {
+    const moi = poste.toLowerCase()
     let entrees
     try {
       entrees = await readdir(dossier, { withFileTypes: true })
@@ -256,12 +257,13 @@ export function creerLecteurDesCollegues(deps: {
 
   return {
     lire() {
-      const dossier = deps.dossier()
-      if (!dossier) return Promise.resolve({ collegues: [] })
+      const ici = deps.ou()
+      if (!ici) return Promise.resolve({ collegues: [] })
+      const { dossier, poste } = ici
       if (dernier && dernier.dossier === dossier && maintenant() - dernier.a < delaiMs)
         return Promise.resolve(dernier.resultat)
       if (enCours) return enCours
-      enCours = relire(dossier)
+      enCours = relire(dossier, poste)
         .then((resultat) => {
           dernier = { dossier, a: maintenant(), resultat }
           return resultat

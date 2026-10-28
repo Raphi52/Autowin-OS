@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import './BehaviourView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { Spinner } from './Spinner'
+import { useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
+import type { ValeursDeTexte } from '../textes'
 
 /**
  * Vue « Behaviour » — miroir FIDÈLE (config statique) de TOUT ce qui influe sur le comportement du
@@ -72,28 +74,35 @@ interface LearningCurationEvent {
  * fichier chargé. On compte donc les CHEMINS distincts dont au moins une ligne est active, et on dit
  * à part combien de fichiers listés ne sont chargés par personne.
  */
-function titreInspection(files: ReadonlyArray<{ path: string; active: boolean }>): string {
+function titreInspection(
+  files: ReadonlyArray<{ path: string; active: boolean }>,
+  t: (cle: CleSettings, valeurs?: ValeursDeTexte) => string
+): string {
   const charges = new Set(files.filter((file) => file.active).map((file) => file.path))
   const nonCharges = new Set(
     files.filter((file) => !charges.has(file.path)).map((file) => file.path)
   ).size
-  const suite = nonCharges > 0 ? ` · ${nonCharges} non chargée${nonCharges > 1 ? 's' : ''}` : ''
-  return `Instructions réellement lues · ${charges.size}${suite}`
+  const suite =
+    nonCharges > 0
+      ? t(nonCharges > 1 ? 'behaviour.nonChargees' : 'behaviour.nonChargee', { n: nonCharges })
+      : ''
+  return t('behaviour.instructionsLues', { n: charges.size, suite })
 }
 
 function Field({ field }: { field: InfluencerField }): React.JSX.Element {
+  const { t } = useTextesSettings()
   return (
     <li className="behaviour-field">
       <div className="behaviour-field-head">
         <strong>{field.label}</strong>
-        <code className="behaviour-field-source" title="Source dans le code (preuve d'effet réel)">
+        <code className="behaviour-field-source" title={t('behaviour.source')}>
           {field.source}
         </code>
       </div>
       <p className="behaviour-field-value">{field.value}</p>
       {field.excerpt && (
         <details className="behaviour-field-excerpt">
-          <summary>texte injecté</summary>
+          <summary>{t('behaviour.texteInjecte')}</summary>
           <pre>{field.excerpt}</pre>
         </details>
       )}
@@ -126,6 +135,10 @@ function Category({
 }
 
 export function BehaviourView(): React.JSX.Element {
+  // Textes dans la langue de Settings · Interface (conv-1170). Restent tels quels : les noms propres
+  // (Behaviour, Cockpit, Direct, System prompt), les modes lus du moteur (auto, inbox, shadow) et
+  // tout ce que rend `behaviourComposition` (libellés, valeurs et citations des champs).
+  const { t } = useTextesSettings()
   const [composition, setComposition] = useState<BehaviourComposition | null>(null)
   const [path, setPath] = useState<'cockpit' | 'orchestrated' | 'direct'>('cockpit')
   const [error, setError] = useState('')
@@ -217,13 +230,15 @@ export function BehaviourView(): React.JSX.Element {
     <section className="behaviour-view">
       <header>
         <ModuleHeader
-          eyebrow="Tout ce qui influe sur le comportement du chat — et rien d'autre"
+          eyebrow={t('behaviour.eyebrow')}
           title="Behaviour"
-          description="Configure ce qui influence les réponses et les décisions du Chat."
+          description={t('behaviour.description')}
         />
         <div className="behaviour-workspace">
           <span title={composition?.inspection?.workspace}>
-            Workspace : {composition?.inspection?.workspace ?? 'chargement…'}
+            {t('behaviour.workspace', {
+              chemin: composition?.inspection?.workspace ?? t('behaviour.chargement')
+            })}
           </span>
           <button
             type="button"
@@ -231,20 +246,20 @@ export function BehaviourView(): React.JSX.Element {
             disabled={choosing}
             onClick={() => void chooseWorkspace()}
           >
-            {choosing ? 'Sélection…' : 'Choisir un workspace'}
+            {choosing ? t('behaviour.selection') : t('behaviour.choisir')}
           </button>
         </div>
         {learningMode && (
-          <div className="behaviour-workspace" aria-label="Apprentissage Brain des runs">
+          <div className="behaviour-workspace" aria-label={t('behaviour.apprentissage')}>
             <span>
-              Brain des runs : {learningEvents} événements audités ·{' '}
-              {learningMode === 'off' ? 'arrêté' : learningMode}
+              {t('behaviour.brainDesRuns', { n: learningEvents })}{' '}
+              {learningMode === 'off' ? t('behaviour.arrete') : learningMode}
             </span>
             <label>
               Mode{' '}
               <select
                 className="select"
-                aria-label="Mode d’apprentissage Brain"
+                aria-label={t('behaviour.modeAria')}
                 value={learningMode}
                 onChange={(event) => {
                   const mode = event.currentTarget.value as OutcomeLearningMode
@@ -257,7 +272,7 @@ export function BehaviourView(): React.JSX.Element {
                 }}
               >
                 <option value="auto">Auto</option>
-                <option value="inbox">Inbox uniquement</option>
+                <option value="inbox">{t('behaviour.inbox')}</option>
                 <option value="shadow">Simulation</option>
                 <option value="off">Off · kill switch</option>
               </select>
@@ -276,7 +291,10 @@ export function BehaviourView(): React.JSX.Element {
                     )
                 }}
               >
-                Annuler {curation.value.action} · {curation.value.knowledgeId}
+                {t('behaviour.annuler', {
+                  action: curation.value.action,
+                  id: curation.value.knowledgeId
+                })}
               </button>
             ))}
             {learningCurations.length < learningCurationTotal && (
@@ -289,12 +307,12 @@ export function BehaviourView(): React.JSX.Element {
                   )
                 }
               >
-                Afficher plus de curations
+                {t('behaviour.plusDeCurations')}
               </button>
             )}
             <details>
-              <summary>Journal détaillé · {learningAudit.length} plus récents</summary>
-              <ol aria-label="Journal outcome-learning détaillé">
+              <summary>{t('behaviour.journal', { n: learningAudit.length })}</summary>
+              <ol aria-label={t('behaviour.journalAria')}>
                 {learningAudit.map((event, index) => (
                   <li key={String(event.value.eventId ?? `${event.kind}-${index}`)}>
                     <strong>{event.kind}</strong>{' '}
@@ -303,7 +321,7 @@ export function BehaviourView(): React.JSX.Element {
                         event.value.action ??
                         event.value.status ??
                         event.value.title ??
-                        'enregistré'
+                        t('behaviour.enregistre')
                     )}
                     {Array.isArray(event.value.reasons)
                       ? ` · ${event.value.reasons.join(', ')}`
@@ -314,7 +332,7 @@ export function BehaviourView(): React.JSX.Element {
             </details>
           </div>
         )}
-        <div className="behaviour-path-toggle" role="tablist" aria-label="Chemin de chat">
+        <div className="behaviour-path-toggle" role="tablist" aria-label={t('behaviour.chemin')}>
           <button
             type="button"
             role="tab"
@@ -322,7 +340,7 @@ export function BehaviourView(): React.JSX.Element {
             className={path === 'cockpit' ? 'active' : ''}
             onClick={() => setPath('cockpit')}
           >
-            Cockpit <small>(chat visible)</small>
+            Cockpit <small>{t('behaviour.chatVisible')}</small>
           </button>
           <button
             type="button"
@@ -331,7 +349,7 @@ export function BehaviourView(): React.JSX.Element {
             className={path === 'orchestrated' ? 'active' : ''}
             onClick={() => setPath('orchestrated')}
           >
-            Orchestré <small>(pipeline)</small>
+            {t('behaviour.orchestre')} <small>(pipeline)</small>
           </button>
           <button
             type="button"
@@ -349,20 +367,20 @@ export function BehaviourView(): React.JSX.Element {
         <div className="behaviour-error">
           <p role="alert">{error}</p>
           <button type="button" className="btn" onClick={() => void loadComposition(workspace)}>
-            Réessayer
+            {t('behaviour.reessayer')}
           </button>
         </div>
       )}
       {!composition && !error && (
         <p className="behaviour-empty">
-          <Spinner /> Chargement de la composition…
+          <Spinner /> {t('behaviour.chargementComposition')}
         </p>
       )}
       {composition?.inspection && (
-        <section className="behaviour-inspection" aria-label="Instructions du workspace inspecté">
-          <strong>{titreInspection(composition.inspection.files)}</strong>
+        <section className="behaviour-inspection" aria-label={t('behaviour.inspectionAria')}>
+          <strong>{titreInspection(composition.inspection.files, t)}</strong>
           {composition.inspection.files.length === 0 ? (
-            <small>Aucun fichier d’instructions découvert dans ce workspace.</small>
+            <small>{t('behaviour.aucunFichier')}</small>
           ) : (
             <ul>
               {composition.inspection.files.map((file) => (
@@ -381,28 +399,25 @@ export function BehaviourView(): React.JSX.Element {
 
       {cockpit && path === 'cockpit' && (
         <div className="behaviour-anatomy">
-          <p className="behaviour-path-note">
-            Le chat principal visible passe par AgentPilot : il reçoit la CONSTITUTION, le contexte
-            projet et un RAG dynamique Brain avant de pouvoir piloter l’application.
-          </p>
+          <p className="behaviour-path-note">{t('behaviour.cockpit.note')}</p>
           <Category
             title="System prompt"
-            hint="composition réellement envoyée au modèle du cockpit"
+            hint={t('behaviour.cockpit.systemPrompt')}
             fields={cockpit.systemPrompt}
           />
           <Category
-            title="RAG dynamique"
-            hint="récupéré pour le dernier message utilisateur, avec fallbacks indépendants"
+            title={t('behaviour.cockpit.rag')}
+            hint={t('behaviour.cockpit.rag.aide')}
             fields={cockpit.retrievedContext}
           />
           <Category
-            title="Contexte du tour"
-            hint="commandes, état, historique, pièces jointes et bornes réellement appliqués"
+            title={t('behaviour.cockpit.tour')}
+            hint={t('behaviour.cockpit.tour.aide')}
             fields={cockpit.turnContext ?? []}
           />
           <Category
-            title="Modèle / rôle"
-            hint="binding utilisé par AgentPilot"
+            title={t('behaviour.modeleRole')}
+            hint={t('behaviour.cockpit.modele.aide')}
             fields={cockpit.modelSelection}
           />
         </div>
@@ -410,16 +425,12 @@ export function BehaviourView(): React.JSX.Element {
 
       {orch && path === 'orchestrated' && (
         <div className="behaviour-anatomy">
-          <p className="behaviour-path-note">
-            Le vrai pipeline (os:orchestrate) : le system prompt VARIE par phase, du contexte est
-            injecté, le modèle/rôle est choisi, le régime décide des phases, des garde-fous
-            encadrent.
-          </p>
+          <p className="behaviour-path-note">{t('behaviour.orch.note')}</p>
 
           <section className="behaviour-category">
             <header>
-              <h3>A · System prompt par phase</h3>
-              <small>blocs concaténés dans `system`, différents selon la phase</small>
+              <h3>{t('behaviour.orch.systemPrompt')}</h3>
+              <small>{t('behaviour.orch.systemPrompt.aide')}</small>
             </header>
             {orch.systemPrompt.map((p) => (
               <details key={p.phase} className="behaviour-phase">
@@ -437,28 +448,28 @@ export function BehaviourView(): React.JSX.Element {
           </section>
 
           <Category
-            title="B · Contexte injecté"
-            hint="ajouté au message (hors system) : Brain, tâche, portage, session-resume"
+            title={t('behaviour.orch.contexte')}
+            hint={t('behaviour.orch.contexte.aide')}
             fields={orch.injectedContext}
           />
           <Category
-            title="C · Modèle / rôle / effort"
-            hint="qui répond, avec quel modèle — y compris la redirection d'exécution"
+            title={t('behaviour.orch.modele')}
+            hint={t('behaviour.orch.modele.aide')}
             fields={orch.modelSelection}
           />
           <Category
-            title="C2 · Topologie / fan-out"
-            hint="panels vivants scout, frame, terrain et judge, avec règle de quorum"
+            title={t('behaviour.orch.topologie')}
+            hint={t('behaviour.orch.topologie.aide')}
             fields={orch.topology ?? []}
           />
           <Category
-            title="D · Régime → phases"
-            hint="quelles phases tournent selon la tâche (heuristique déterministe)"
+            title={t('behaviour.orch.regime')}
+            hint={t('behaviour.orch.regime.aide')}
             fields={orch.regime}
           />
           <Category
-            title="E · Garde-fous"
-            hint="ce qui borne ou coupe le tour (déterministe)"
+            title={t('behaviour.orch.gardeFous')}
+            hint={t('behaviour.orch.gardeFous.aide')}
             fields={orch.guardrails}
           />
         </div>
@@ -466,18 +477,15 @@ export function BehaviourView(): React.JSX.Element {
 
       {direct && path === 'direct' && (
         <div className="behaviour-anatomy">
-          <p className="behaviour-path-note">
-            Le chat direct (os.chat) : beaucoup plus simple — pas de phases, pas de Brain, pas de
-            garde-fous. Son system prompt par défaut vient de la CONSTITUTION.
-          </p>
+          <p className="behaviour-path-note">{t('behaviour.direct.note')}</p>
           <Category
             title="System prompt"
-            hint="CONSTITUTION (source commune au chat direct et aux phases orchestrées)"
+            hint={t('behaviour.direct.systemPrompt.aide')}
             fields={direct.systemPrompt}
           />
           <Category
-            title="Modèle / rôle"
-            hint="binding du rôle si aucun provider explicite ; sinon override provider seul"
+            title={t('behaviour.modeleRole')}
+            hint={t('behaviour.direct.modele.aide')}
             fields={direct.modelSelection}
           />
         </div>

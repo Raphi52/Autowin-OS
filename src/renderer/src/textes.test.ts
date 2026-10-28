@@ -54,27 +54,33 @@ describe('table des textes FR / EN', () => {
   })
 
   /*
-   * LA PHRASE DE COUVERTURE NOMME CE QUI RESTE EN FRANÇAIS (objection du juge, conv-1146,
-   * réparation 3 : « les autres écrans » ne disait pas lesquels). Liée à la navigation : un écran
-   * ajouté sans être nommé ici, ou retiré de la phrase, fait échouer ce test. Chat et Settings sont
-   * en partie traduits : la phrase nomme leur reste à part.
+   * LA PHRASE DE COUVERTURE DIT CE QUI EST TRADUIT ET NOMME CE QUI RESTE EN FRANÇAIS (objection du
+   * juge, conv-1146, réparation 3 : « les autres écrans » ne disait pas lesquels). Depuis le bilan de
+   * conv-1170 (2026-10-27), chaque écran a sa table : la partie « traduit » doit citer chaque écran
+   * de la navigation — un écran ajouté sans y être nommé fait échouer ce test —, et la partie « reste »
+   * les restes réels, dont les messages de `shared/watchdog-regex.ts` et du plan de lots.
    */
-  it('la couverture nomme, dans les deux langues, chaque écran et chaque page de Settings restés en français', () => {
-    const fr = TEXTES_FR['interface.langue.couverture']
-    const en = TEXTES_EN['interface.langue.couverture']
+  it('la couverture cite chaque écran comme traduit et nomme ce qui reste en français, dans les deux langues', () => {
+    const [traduitFr, resteFr] = TEXTES_FR['interface.langue.couverture'].split('**Restent en français')
+    const [traduitEn, resteEn] = TEXTES_EN['interface.langue.couverture'].split('**Still in French')
+    expect(resteFr, 'partie « reste » en français').toBeTruthy()
+    expect(resteEn, 'partie « reste » en anglais').toBeTruthy()
     for (const d of APP_DESTINATIONS) {
-      if (d.id === 'chat' || d.id === 'settings') continue
-      expect(fr, d.id).toContain(d.label)
-      expect(en, d.id).toContain(DESTINATIONS_EN[d.id])
+      expect(traduitFr, d.id).toContain(d.label)
+      expect(traduitEn, d.id).toContain(DESTINATIONS_EN[d.id])
     }
-    for (const page of ['Skills', 'Hooks', 'Gates', 'Mods', 'Tools', 'Behaviour', 'Rules']) {
-      expect(fr, page).toContain(page)
-      expect(en, page).toContain(page)
+    expect(traduitFr).toContain(TEXTES_FR['settings.section.routing'])
+    expect(traduitEn).toContain(TEXTES_EN['settings.section.routing'])
+    for (const [fr, en] of [
+      ['plan de lots', 'lot plan'],
+      ['règle de réveil', 'wake-up rule'],
+      ['agent', 'agent'],
+      ['Jarvis', 'Jarvis'],
+      ['heure des messages', 'time of chat messages']
+    ]) {
+      expect(resteFr, fr).toContain(fr)
+      expect(resteEn, en).toContain(en)
     }
-    expect(fr).toContain(TEXTES_FR['settings.section.routing'])
-    expect(en).toContain(TEXTES_EN['settings.section.routing'])
-    expect(fr).toContain('reste du chat')
-    expect(en).toContain('rest of the chat')
   })
 })
 

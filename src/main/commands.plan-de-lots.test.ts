@@ -120,14 +120,13 @@ describe('plan_de_lots par le bus', () => {
     expect(r.error).toMatch(/non câblé/)
   })
 
-  it('le chef est le fil de l’appel ; déposer ne lance rien ; un lot fini écrit au chef depuis SON fil', async () => {
+  // Depuis conv-1171 (2026-10-27, « je ne veux pas avoir à confirmer, je veux que ça se lance tout
+  // seul »), le dépôt par l'agent VAUT lancement : plus de clic « Lancer le plan » à attendre.
+  it('le chef est le fil de l’appel ; déposer lance aussitôt ; un lot fini écrit au chef depuis SON fil', async () => {
     const { bus, coord, lances } = banc()
     const r = await bus.exec('plan_de_lots', { plan, chef: 'conv-pirate' }, 'conv-A')
     expect(r.ok).toBe(true)
-    const depot = r.data as { plan: { id: string } }
     expect(coord.plans()[0].chef).toBe('conv-A')
-    expect(lances).toEqual([])
-    await coord.accepter('conv-A', depot.plan.id)
     expect(lances.map((l) => l.fil)).toEqual(['conv-L1', 'conv-L2'])
     await coord.surFinDeTour('conv-L1', { ok: true, texte: 'Lot un fait, code 0.' })
     const messages = lignesDuJournal(readFileSync(cheminJournalMessagesFils(), 'utf8')).filter(

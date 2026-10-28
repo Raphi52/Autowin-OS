@@ -22,6 +22,8 @@
  * 4. GARDE DE CHAÎNE — quota hebdomadaire Claude ou nombre de tours auto d'affilée (voir plus bas).
  */
 import type { Msg, AsstMsg } from './chat-view-types'
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import type { ChatPart } from './chat-view-model'
 import {
@@ -626,12 +628,18 @@ export function arretChaineAuto(entree: {
   if (typeof quota === 'number' && Number.isFinite(quota) && quota >= seuils.quotaHebdoPct)
     return {
       raison: 'quota-hebdo',
-      message: `Mode auto arrêté : le quota hebdomadaire Claude est à ${Math.round(quota)} % (seuil réglé : ${seuils.quotaHebdoPct} %). ∞ est éteint sur ce fil : rallume ∞ quand le quota sera repassé sous le seuil, ou relève ce seuil dans Settings › Budget puis rallume ∞.`
+      message: traduireChatFil('autoArret.quotaHebdo', langueCourante(), {
+        quota: Math.round(quota),
+        seuil: seuils.quotaHebdoPct
+      })
     }
   if (entree.toursAutoDAffilee >= seuils.toursAutoMax)
     return {
       raison: 'tours-auto-max',
-      message: `Mode auto arrêté : ${entree.toursAutoDAffilee} tours automatiques d'affilée sans message de ta part (seuil réglé : ${seuils.toursAutoMax}). ∞ est éteint sur ce fil : écris un message (le compte repart de zéro) puis rallume ∞, ou relève ce seuil dans Settings › Budget puis rallume ∞.`
+      message: traduireChatFil('autoArret.toursAutoMax', langueCourante(), {
+        tours: entree.toursAutoDAffilee,
+        seuil: seuils.toursAutoMax
+      })
     }
   return null
 }
@@ -660,25 +668,40 @@ export type DecisionAuto =
  * suite proposée — et s'éteignait comme si le travail était fini. Une absence de suite n'est pas
  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
  */
+// Lus à l'appel, dans la langue de l'interface (conv-1170) : chaque message est un accesseur.
 const MESSAGES_ARRET: Record<string, string> = {
-  'fin-explicite': "Mode auto terminé : l'agent a signalé explicitement que le travail est fini.",
-  'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
-  'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
-  'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.',
-  'scout-sans-cible':
-    'Mode auto terminé : le scout n’a retenu aucune piste (aucune ligne `CIBLE:`). Choisis une ligne du tableau pour continuer.',
-  'cible-destructrice':
-    'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.',
-  'cibles-non-nommees':
-    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.',
-  'suite-attend-utilisateur':
-    'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
-  'suite-differee':
-    'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.',
+  get 'fin-explicite'() {
+    return traduireChatFil('autoArret.finExplicite', langueCourante())
+  },
+  get 'recommandation-rien'() {
+    return traduireChatFil('autoArret.recommandationRien', langueCourante())
+  },
+  get 'fait-rien'() {
+    return traduireChatFil('autoArret.faitRien', langueCourante())
+  },
+  get 'reste-rien'() {
+    return traduireChatFil('autoArret.resteRien', langueCourante())
+  },
+  get 'scout-sans-cible'() {
+    return traduireChatFil('autoArret.scoutSansCible', langueCourante())
+  },
+  get 'cible-destructrice'() {
+    return traduireChatFil('autoArret.cibleDestructrice', langueCourante())
+  },
+  get 'cibles-non-nommees'() {
+    return traduireChatFil('autoArret.ciblesNonNommees', langueCourante())
+  },
+  get 'suite-attend-utilisateur'() {
+    return traduireChatFil('autoArret.suiteAttendUtilisateur', langueCourante())
+  },
+  get 'suite-differee'() {
+    return traduireChatFil('autoArret.suiteDifferee', langueCourante())
+  },
   // conv-113, tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 : « en pause » alors que ∞ venait d'être
   // ÉTEINT ; vu décoché ensuite, il a fait croire qu'il n'avait jamais été allumé.
-  'tache-de-fond-coupee':
-    'Mode auto arrêté — ∞ était allumé sur ce fil et vient de s’éteindre : le dernier tour s’est fini pendant une tâche de fond, sans proposer de suite. Son résultat est perdu — relance-la toi-même, puis rallume ∞ si tu veux que la chaîne reprenne.'
+  get 'tache-de-fond-coupee'() {
+    return traduireChatFil('autoArret.tacheDeFondCoupee', langueCourante())
+  }
 }
 
 /**

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   575 regles, 866 declarations. Voir genererCoucheClaire. */
+   577 regles, 868 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -232,9 +232,6 @@
 /* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */
 :root[data-theme='holographique-clair'] .cpick-tete {
     border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
-}
-:root[data-theme='holographique-clair'] .cpick-barre {
-    background: rgba(208, 43, 140, 0.14)
 }
 
 /* ---- src/renderer/src/components/CapabilitiesView.css ---- */
@@ -1514,18 +1511,35 @@
     color: #aa0e5f
 }
 
+/* ---- src/renderer/src/components/RiviereDuProjet.collegues.css ---- */
+:root[data-theme='holographique-clair'] .riviere-fiche-collegue {
+    border: 1px dotted rgba(20, 15, 40, 0.3)
+}
+
 /* ---- src/renderer/src/components/RiviereDuProjet.css ---- */
+:root[data-theme='holographique-clair'] .riviere-tete {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.255)
+}
+:root[data-theme='holographique-clair'] .riviere-jour {
+    border-left: 1px solid rgba(20, 15, 40, 0.19)
+}
 :root[data-theme='holographique-clair'] .riviere-jour[data-repere='mois'] {
     border-left-color: rgba(20, 15, 40, 0.3)
 }
-:root[data-theme='holographique-clair'] .riviere-jour[data-aujourdhui] {
-    background: rgba(208, 43, 140, 0.14)
-}
-:root[data-theme='holographique-clair'] .riviere-jour[data-aujourdhui][data-foyer] {
-    background: linear-gradient(rgba(60, 110, 235, 0.06), rgba(60, 110, 235, 0.06)), rgba(208, 43, 140, 0.14)
+:root[data-theme='holographique-clair'] .riviere-etage {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.23)
 }
 :root[data-theme='holographique-clair'] .riviere-postit[data-manuel] {
     outline: 2px dashed rgba(20, 15, 40, 0.3)
+}
+:root[data-theme='holographique-clair'] .riviere-punaise {
+    background: radial-gradient(
+      circle at 34% 30%,
+      rgba(255, 255, 255, 0.85) 0 1.2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    radial-gradient(circle at 50% 50%, rgba(20, 15, 40, 0) 55%, rgba(20, 15, 40, 0.042) 100%),
+    var(--riviere-punaise, #9aa4b2)
 }
 :root[data-theme='holographique-clair'] .riviere-fiche-manuel {
     border: 1px dashed rgba(20, 15, 40, 0.3)

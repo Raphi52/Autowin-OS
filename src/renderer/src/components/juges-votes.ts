@@ -9,6 +9,7 @@
  * Module PUR : il classe des steps déjà chargés, testable sans IPC.
  */
 import { lireVerdictDuJuge } from './run-bilan'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 export interface StepDeRun {
   step?: string
@@ -91,8 +92,8 @@ export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
         libelle,
         vote: 'echec',
         texte: step.error
-          ? `Juge en échec : ${step.error}`
-          : 'Juge en échec (aucun verdict rendu).',
+          ? t('votes.juge-en-echec', { erreur: step.error })
+          : t('votes.juge-en-echec.sans-verdict'),
         ...(step.durationMs !== undefined ? { durationMs: step.durationMs } : {})
       })
       continue
@@ -116,7 +117,7 @@ export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
     votes.push({
       libelle,
       vote,
-      texte: texte || `(verdict non textuel — ${detail || 'sans détail'})`,
+      texte: texte || t('votes.non-textuel', { detail: detail || t('votes.sans-detail') }),
       ...lireContratEtendu(texte),
       ...(step.costUsd !== undefined ? { costUsd: step.costUsd } : {}),
       ...(step.durationMs !== undefined ? { durationMs: step.durationMs } : {})

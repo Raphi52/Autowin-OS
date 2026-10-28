@@ -3,6 +3,10 @@ import type {
   WorktreeConflictDiffResult,
   WorktreeConflictResolutionChoice
 } from '../../../shared/worktree-activity-model'
+import {
+  useTextesWorktreesEtBureaux,
+  type CleWorktreesEtBureaux
+} from '../textes-ecrans/worktrees-et-bureaux'
 
 export interface ConflitBureau {
   /** Bureau dont la comparaison est ouverte, `null` si aucune. */
@@ -27,6 +31,7 @@ export interface ConflitBureau {
  * exactement pareil des deux côtés.
  */
 export function useConflitBureau(): ConflitBureau {
+  const { t } = useTextesWorktreesEtBureaux()
   const [conflictAgentId, setConflictAgentId] = useState<string | null>(null)
   const [conflictDiff, setConflictDiff] = useState<WorktreeConflictDiffResult | null>(null)
   const [conflictResolution, setConflictResolution] = useState<string | undefined>(undefined)
@@ -66,26 +71,26 @@ export function useConflitBureau(): ConflitBureau {
   ): Promise<void> => {
     setConflictResolution(undefined)
     const request = window.api.resolveWorktreeConflict?.(agentId, choice)
-    if (!request) throw new Error('Résolution indisponible depuis cette fenêtre.')
+    if (!request) throw new Error(t('resolution.indisponible'))
     const result = await request
     if (result.resolved) {
       closeConflictDiff()
-      setConflictResolution(
-        choice === 'agent'
-          ? 'Version de l’agent appliquée : les changements sont dans ton workspace.'
-          : 'Ta version est conservée : le bureau agent n’a rien écrasé.'
-      )
+      setConflictResolution(choice === 'agent' ? t('resolution.agent') : t('resolution.mienne'))
       return
     }
-    const reasons: Record<typeof result.reason, string> = {
-      'invalid-agent': 'Ce bureau n’est plus connu d’Autowin.',
-      'not-conflict': 'Ce bureau n’est plus en conflit ; actualise la liste.',
-      unsupported: 'La résolution n’est pas disponible sur cette installation.',
-      'still-conflicting': 'Le conflit persiste : ouvre le bureau protégé pour trancher à la main.',
-      blocked: 'Résolution refusée pour protéger ton workspace.'
+    const reasons: Record<typeof result.reason, CleWorktreesEtBureaux> = {
+      'invalid-agent': 'resolution.refus.agentInconnu',
+      'not-conflict': 'resolution.refus.plusEnConflit',
+      unsupported: 'resolution.refus.nonSupportee',
+      'still-conflicting': 'resolution.refus.persiste',
+      blocked: 'resolution.refus.bloquee'
     }
+    // `detail` vient du processus principal : une donnée, gardée telle quelle.
+    const raison = t(reasons[result.reason])
     throw new Error(
-      `${reasons[result.reason]}${result.detail ? ` ${result.detail}` : ''} Rien n’a été écrasé.`
+      result.detail
+        ? t('resolution.echec.detail', { raison, detail: result.detail })
+        : t('resolution.echec', { raison })
     )
   }
 

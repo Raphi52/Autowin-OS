@@ -8,6 +8,7 @@
  */
 import type { ClaudeSessionState } from './claude-session'
 import type { RoutedProvider } from './routed-providers'
+import { traduireCoeur } from './textes-coeur'
 
 export interface PreflightCheck {
   id:
@@ -81,13 +82,16 @@ export interface PreflightOptions {
  */
 function claudeSessionDetail(state: ClaudeSessionState, binPresent: boolean): string | undefined {
   if (state === 'authenticated') return undefined
-  if (!binPresent) return 'CLI absent — voir « CLI claude » ci-dessus'
+  if (!binPresent)
+    return traduireCoeur('diagnostic.claudeSession.cliAbsent', {
+      cli: traduireCoeur('diagnostic.claude.label')
+    })
   // `unknown` couvre DEUX causes qu'on ne sait pas distinguer ici : un `auth status` muet, et un
   // binaire que le run ne sait pas résoudre (PATH n'exposant que des shims). Le message ne doit donc
   // pas affirmer la première — il enverrait diagnostiquer l'auth alors que c'est l'installation.
   return state === 'absent'
-    ? 'session absente — claude auth login'
-    : 'état de session indéterminé — le CLI claude n’a pas répondu (session ou installation)'
+    ? traduireCoeur('diagnostic.claudeSession.absente')
+    : traduireCoeur('diagnostic.claudeSession.indeterminee')
 }
 
 /** Lance les checks en parallèle et agrège. Ne throw jamais : un check qui casse = ko, pas un crash. */
@@ -134,7 +138,7 @@ export async function runPreflight(
     missing: string
   ): PreflightCheck =>
     standby.has(id)
-      ? { id, label, ok: true, standby: true, detail: 'standby — diagnostic ignoré' }
+      ? { id, label, ok: true, standby: true, detail: traduireCoeur('diagnostic.standby') }
       : { id, label, ok, detail: ok ? undefined : missing }
   let brainRuntime = false
   try {
@@ -148,38 +152,42 @@ export async function runPreflight(
   const checks: PreflightCheck[] = [
     {
       id: 'brain',
+      // Nom technique du service, le même dans les deux langues : pas d'entrée dans la table.
       label: 'brain_server (:8765)',
       ok: brain,
-      detail: brain ? undefined : 'injoignable — RAG désactivé'
+      detail: brain ? undefined : traduireCoeur('diagnostic.brain.injoignable')
     },
     // Placé APRÈS le brain et AVANT le token : c'est l'ordre du geste. Sans runtime, le serveur ne
     // peut pas démarrer ; sans token, il démarre mais le RAG reste fermé.
     {
       id: 'brain-venv',
-      label: 'runtime Brain (Python)',
+      label: traduireCoeur('diagnostic.brainVenv.label'),
       ok: brainRuntime,
-      detail: brainRuntime
-        ? undefined
-        : 'non installé sur cette machine — venv + tooling à poser une fois'
+      detail: brainRuntime ? undefined : traduireCoeur('diagnostic.brainVenv.absent')
     },
     {
       id: 'brain-token',
-      label: 'token Brain',
+      label: traduireCoeur('diagnostic.brainToken.label'),
       ok: token,
-      detail: token ? undefined : 'absent — définir AUTOWIN_BRAIN_TOKEN'
+      detail: token ? undefined : traduireCoeur('diagnostic.brainToken.absent')
     },
-    cliCheck('claude', 'CLI claude', claude, 'introuvable — installer claude'),
+    cliCheck(
+      'claude',
+      traduireCoeur('diagnostic.claude.label'),
+      claude,
+      traduireCoeur('diagnostic.claude.absent')
+    ),
     standby.has('claude')
       ? {
           id: 'claude-session',
-          label: 'Session claude',
+          label: traduireCoeur('diagnostic.claudeSession.label'),
           ok: true,
           standby: true,
-          detail: 'standby — diagnostic ignoré'
+          detail: traduireCoeur('diagnostic.standby')
         }
       : {
           id: 'claude-session',
-          label: 'Session claude',
+          label: traduireCoeur('diagnostic.claudeSession.label'),
           ok: claudeSession === 'authenticated',
           detail: claudeSessionDetail(claudeSession, claude)
         }
@@ -193,11 +201,11 @@ export async function runPreflight(
   if (options.conversationsEcartees?.length) {
     checks.unshift({
       id: 'conversations-ecartees',
-      label: 'Historique des conversations',
+      label: traduireCoeur('diagnostic.historique.label'),
       ok: false,
-      detail:
-        "illisible au demarrage — mis de cote, RIEN n'a ete supprime. " +
-        `Fichier(s) conserve(s) : ${options.conversationsEcartees.join(', ')}`,
+      detail: traduireCoeur('diagnostic.historique.ecarte', {
+        fichiers: options.conversationsEcartees.join(', ')
+      }),
       // Le premier : le snapshot, celui qui porte les conversations. Le journal part avec lui,
       // dans le MEME dossier — reveler l'un montre l'autre.
       revealPath: options.conversationsEcartees[0]
@@ -208,7 +216,9 @@ export async function runPreflight(
     ok: failed.length === 0,
     checks,
     summary: failed.length
-      ? `Configuration incomplète : ${failed.map((c) => c.label).join(', ')}. Certaines fonctions seront dégradées.`
-      : 'Tous les prérequis sont OK.'
+      ? traduireCoeur('diagnostic.resume.incomplet', {
+          liste: failed.map((c) => c.label).join(', ')
+        })
+      : traduireCoeur('diagnostic.resume.ok')
   }
 }

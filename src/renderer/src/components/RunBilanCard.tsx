@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { copierBilanEnImage } from './run-bilan-copie'
-import type { RunBilan } from './run-bilan'
+import { libelleDuVerdict, type RunBilan } from './run-bilan'
+import { useTextesChatExecution } from '../textes-ecrans/chat-execution'
 
 /**
  * Carte « bilan de run » PARTAGEABLE : le même bilan est affiché en HTML (lisible, sélectionnable)
@@ -10,14 +11,15 @@ import type { RunBilan } from './run-bilan'
  * La copie passe par un canvas local : aucune requête réseau, aucune dépendance ajoutée.
  */
 export function RunBilanCard({ bilan }: { bilan: RunBilan }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const [etat, setEtat] = useState<'pret' | 'copie' | 'refus'>('pret')
 
   return (
     <figure className="run-bilan" data-testid="run-bilan" data-verdict={bilan.verdict}>
       <figcaption className="run-bilan__entete">
-        <span className="run-bilan__kicker">Bilan de run</span>
+        <span className="run-bilan__kicker">{t('carte.kicker')}</span>
         <span className="run-bilan__verdict" data-testid="run-bilan-verdict">
-          {bilan.verdict}
+          {libelleDuVerdict(bilan.verdict)}
         </span>
       </figcaption>
       <p className="run-bilan__titre">{bilan.titre}</p>
@@ -37,7 +39,11 @@ export function RunBilanCard({ bilan }: { bilan: RunBilan }): React.JSX.Element 
           void copierBilanEnImage(bilan).then((ok) => setEtat(ok ? 'copie' : 'refus'))
         }}
       >
-        {etat === 'copie' ? 'Image copiée' : etat === 'refus' ? 'Copie refusée' : "Copier l'image"}
+        {etat === 'copie'
+          ? t('carte.copiee')
+          : etat === 'refus'
+            ? t('carte.refusee')
+            : t('carte.copier')}
       </button>
     </figure>
   )

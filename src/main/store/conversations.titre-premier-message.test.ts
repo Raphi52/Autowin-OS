@@ -6,9 +6,9 @@ import { ConversationStore } from './conversations'
 import { attendreEcrituresConversations, persistConversations } from './conversations-disk'
 
 /*
- * Demande du 2026-10-16 (conv-999) : « j'aimerais que le nom de la conv devienne basé sur mon
- * dernier message de la conv et pas le premier si je lui ai jamais donné de nom moi même ».
- * Le titre était figé au premier message ; il suit désormais chaque message qui lance un tour.
+ * Le titre d'un fil est celui de son PREMIER message et ne bouge plus. La règle « le titre suit le
+ * dernier message » (conv-999, 2026-10-16) a été annulée le 2026-10-28 (conv-1203) : « annule le
+ * changement de name des convs qui devient celui de mon dernier message ».
  */
 let tour = 0
 const envoyer = (store: ConversationStore, id: string, texte: string): void => {
@@ -16,7 +16,7 @@ const envoyer = (store: ConversationStore, id: string, texte: string): void => {
   store.beginTurn(id, { content: texte }, { turnId: `turn-${tour}` })
 }
 
-describe('le titre suit le dernier message de l utilisateur', () => {
+describe('le titre reste celui du premier message', () => {
   it('un fil créé d avance (« Nouvelle conversation ») prend son premier message (bug du 30/08)', () => {
     const store = new ConversationStore()
     const c = store.create({ title: 'Nouvelle conversation', provider: 'claude' })
@@ -25,23 +25,33 @@ describe('le titre suit le dernier message de l utilisateur', () => {
     expect(store.get(c.id)?.origineTitre).toBe('auto')
   })
 
-  it('le titre repris du premier message suit ensuite le DERNIER', () => {
+  it('un message suivant ne renomme PLUS le fil (annulation conv-1203)', () => {
     const store = new ConversationStore()
     const c = store.create({ title: 'corrige le bouton Stop', provider: 'claude' })
     envoyer(store, c.id, 'corrige le bouton Stop')
     envoyer(store, c.id, 'maintenant ajoute un export CSV des runs')
-    expect(store.get(c.id)?.title).toBe('maintenant ajoute un export CSV des runs')
+    expect(store.get(c.id)?.title).toBe('corrige le bouton Stop')
   })
 
-  it('« go » ne renomme pas : le titre reste le dernier message qui disait le sujet', () => {
+  it('un fil créé d avance garde son premier sujet malgré les messages suivants', () => {
     const store = new ConversationStore()
     const c = store.create({ title: 'Nouvelle conversation', provider: 'claude' })
-    envoyer(store, c.id, 'ajoute un export CSV')
+    envoyer(store, c.id, 'premier sujet')
+    envoyer(store, c.id, 'second sujet, tout autre')
+    expect(store.get(c.id)?.title).toBe('premier sujet')
+  })
+
+  it('« go » en premier ne nomme pas : le premier message qui dit le sujet le fait', () => {
+    const store = new ConversationStore()
+    const c = store.create({ title: 'Nouvelle conversation', provider: 'claude' })
     envoyer(store, c.id, 'go')
+    expect(store.get(c.id)?.title).toBe('Nouvelle conversation')
+    envoyer(store, c.id, 'ajoute un export CSV')
+    envoyer(store, c.id, 'puis un export JSON')
     expect(store.get(c.id)?.title).toBe('ajoute un export CSV')
   })
 
-  it('un nom donné à la main n est plus jamais réécrit', () => {
+  it('un nom donné à la main n est jamais réécrit', () => {
     const store = new ConversationStore()
     const c = store.create({ title: 'Nouvelle conversation', provider: 'claude' })
     envoyer(store, c.id, 'premier sujet')
@@ -49,14 +59,6 @@ describe('le titre suit le dernier message de l utilisateur', () => {
     envoyer(store, c.id, 'autre sujet complètement')
     expect(store.get(c.id)?.title).toBe('Factures client')
     expect(store.get(c.id)?.origineTitre).toBe('utilisateur')
-  })
-
-  it('un ancien fil renommé avant la règle (titre étranger au premier message) est gardé', () => {
-    const store = new ConversationStore()
-    const c = store.create({ title: 'Audit qualité', provider: 'claude' })
-    envoyer(store, c.id, 'regarde les tests rouges')
-    envoyer(store, c.id, 'et maintenant le lint')
-    expect(store.get(c.id)?.title).toBe('Audit qualité')
   })
 
   it('une consigne tapée pendant un tour ne renomme pas', () => {
@@ -76,22 +78,22 @@ describe('le titre suit le dernier message de l utilisateur', () => {
   })
 })
 
-describe('le titre suivi survit au redémarrage (rejeu du journal)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'aos-titre-dernier-'))
+describe('le titre survit au redémarrage (rejeu du journal)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'aos-titre-premier-'))
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('retrouve le titre du dernier message et sa provenance', async () => {
+  it('retrouve le titre du premier message et sa provenance', async () => {
     const p = join(dir, 'conversations.json')
     const a = new ConversationStore(() => 1000)
     persistConversations(a, p)
     const c = a.create({ title: 'Nouvelle conversation', provider: 'claude' })
-    envoyer(a, c.id, 'premier sujet')
-    envoyer(a, c.id, 'second sujet, le vrai')
+    envoyer(a, c.id, 'premier sujet, le vrai')
+    envoyer(a, c.id, 'second sujet')
     await attendreEcrituresConversations()
 
     const b = new ConversationStore(() => 2000)
     persistConversations(b, p)
-    expect(b.get(c.id)?.title).toBe('second sujet, le vrai')
+    expect(b.get(c.id)?.title).toBe('premier sujet, le vrai')
     expect(b.get(c.id)?.origineTitre).toBe('auto')
 
     b.rename(c.id, 'Mon nom')

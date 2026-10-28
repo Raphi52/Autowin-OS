@@ -1,14 +1,16 @@
 import ReactMarkdown from 'react-markdown'
+import { useTextesObservatory } from '../textes-ecrans/observatory'
 import remarkGfm from 'remark-gfm'
 import { markdownRendable, splitFrontmatter } from './brain-markdown-model'
 import './BrainMarkdown.css'
 
 export function BrainMarkdown({ source }: { source: string }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const { body, entries } = splitFrontmatter(source)
   return (
     <div className="brain-markdown">
       {entries.length > 0 && (
-        <dl className="brain-markdown__meta" aria-label="Métadonnées de la note">
+        <dl className="brain-markdown__meta" aria-label={t('markdown.metadonneesNote')}>
           {entries.map((entry) => (
             <div key={`${entry.key}:${entry.value}`}>
               <dt>{entry.key}</dt>
@@ -37,7 +39,7 @@ export function BrainMarkdown({ source }: { source: string }): React.JSX.Element
       ) : (
         <>
           <p className="brain-markdown__brut" role="status">
-            Note volumineuse : affichée en texte brut, sans mise en forme. Rien n’est coupé.
+            {t('markdown.noteVolumineuseAfficheeTexte')}
           </p>
           <pre className="brain-markdown__brut-corps">{body}</pre>
         </>

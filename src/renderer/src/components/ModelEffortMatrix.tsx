@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import type { OrchestratorModelOption } from './chat-view-model'
 import { effortLabel, sortEfforts } from './model-effort-labels'
 import { recommendedEffort } from './model-effort-recommendations'
@@ -47,6 +48,7 @@ export function ModelEffortMatrix({
   onSelect: (option: OrchestratorModelOption) => void
   onClose: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [preview, setPreview] = useState<{ key: string; effort: string } | null>(null)
   /**
    * Les échelles d'effort ne sont PAS comparables entre fournisseurs : `xhigh` d'OpenAI
@@ -100,12 +102,13 @@ export function ModelEffortMatrix({
     <div
       className={inline ? 'effort-matrix is-inline' : 'effort-matrix'}
       data-testid={inline ? 'effort-matrix' : undefined}
-      aria-label={inline ? (title ?? 'Matrice modèle × effort') : undefined}
+      aria-label={inline ? (title ?? t('matrice.aria')) : undefined}
     >
       {!inline && (
         <header>
+          {/* « MODEL × EFFORT » : déjà en anglais, identique dans les deux langues. */}
           <strong>{title ?? 'MODEL × EFFORT'}</strong>
-          <button type="button" aria-label="Fermer la matrice" onClick={onClose}>
+          <button type="button" aria-label={t('matrice.fermer')} onClick={onClose}>
             ✕
           </button>
         </header>
@@ -115,7 +118,7 @@ export function ModelEffortMatrix({
           key={group.provider}
           className="effort-matrix-group"
           data-provider={group.provider}
-          aria-label={`Échelle d’effort ${group.provider}`}
+          aria-label={t('matrice.echelle', { fournisseur: group.provider })}
         >
           <h4 className="effort-matrix-group-title">{group.provider}</h4>
           <div className="effort-matrix-columns" aria-hidden="true">
@@ -143,7 +146,7 @@ export function ModelEffortMatrix({
                 data-row={row.key}
                 data-shown={shown}
                 role="radiogroup"
-                aria-label={`Effort pour ${row.label}`}
+                aria-label={t('matrice.effortPour', { modele: row.label })}
               >
                 <span className="effort-matrix-name">
                   <strong>{shortModelLabel(row.label, row.option.provider)}</strong>
@@ -174,7 +177,10 @@ export function ModelEffortMatrix({
                           row.blocked
                             ? row.blockedReason
                             : recommande
-                              ? `${effortLabel(effort)} — effort recommandé pour ${row.label}`
+                              ? t('matrice.recommande', {
+                                  effort: effortLabel(effort),
+                                  modele: row.label
+                                })
                               : effortLabel(effort)
                         }
                         className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}${recommande ? ' is-recommended' : ''}`}
@@ -203,8 +209,11 @@ export function ModelEffortMatrix({
         {preview && previewRow
           ? `${previewRow.label} · ${effortLabel(preview.effort)}`
           : activeKey && activeEffort
-            ? `Actif : ${rows.find((row) => row.key === activeKey)?.label ?? activeKey} · ${effortLabel(activeEffort)}`
-            : 'Choisis un modèle et son cran d’effort.'}
+            ? t('matrice.actif', {
+                modele: rows.find((row) => row.key === activeKey)?.label ?? activeKey,
+                effort: effortLabel(activeEffort)
+              })
+            : t('matrice.choisir')}
       </footer>
     </div>
   )
@@ -217,7 +226,7 @@ export function ModelEffortMatrix({
       data-testid="effort-matrix"
       role="dialog"
       aria-modal="true"
-      aria-label={title ?? 'Matrice modèle × effort'}
+      aria-label={title ?? t('matrice.aria')}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

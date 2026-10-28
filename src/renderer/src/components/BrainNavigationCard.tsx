@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { formaterNombre } from '../langue'
+import { useTextesObservatory } from '../textes-ecrans/observatory'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import type { BrainNavigationCandidate } from '../../../main/brain-retrieval'
 import { brainBusinessError } from './graph-view-model'
@@ -27,6 +29,7 @@ function CandidateRow({
   root?: string
   minDense: number
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
@@ -50,7 +53,7 @@ function CandidateRow({
     if (!root) {
       // Trace ANCIENNE (produite avant l'exposition de `root` par le serveur) : on ne peut pas
       // résoudre le chemin absolu → message explicite au lieu d'un dépli vide silencieux.
-      setError('trace ancienne (sans racine Brain) — relance une orchestration pour voir la note')
+      setError(t('brainNav.traceAncienneSansRacine'))
       setState('error')
       return
     }
@@ -65,7 +68,7 @@ function CandidateRow({
       setState('ready')
     } catch (e) {
       if (requestGeneration !== requestGenerationRef.current) return
-      setError(brainBusinessError('Impossible de lire cette note.', e))
+      setError(brainBusinessError(t('brainNav.impossibleLireCetteNote'), e))
       setState('error')
     }
   }
@@ -74,12 +77,13 @@ function CandidateRow({
     if (state === 'loading')
       return (
         <p className="brain-nav-note-status">
-          <Spinner /> chargement…
+          <Spinner /> {t('brainNav.chargement')}
         </p>
       )
     if (state === 'error') return <p className="brain-nav-note-status">{error}</p>
     if (state !== 'ready') return <></>
-    if (!content) return <p className="brain-nav-note-status">note vide ou introuvable</p>
+    if (!content)
+      return <p className="brain-nav-note-status">{t('brainNav.noteVideOuIntrouvable')}</p>
     if (!canHighlight) {
       return <pre className="brain-nav-note">{content}</pre>
     }
@@ -110,7 +114,9 @@ function CandidateRow({
           <strong>{candidate.path}</strong>
           <span className="brain-nav-score">dense {candidate.denseCos.toFixed(3)}</span>
           <span className="brain-nav-badge">
-            {candidate.retained ? 'retenu → injecté' : `écarté (< ${minDense})`}
+            {candidate.retained
+              ? t('brainNav.retenuInjecte')
+              : t('brainNav.ecarte', { seuil: minDense })}
           </span>
         </summary>
         {renderBody()}
@@ -126,6 +132,7 @@ function CandidateRow({
  * Alimentée par la trace Brain dédiée (os:brainTraces), distincte de la reconstruction RAG depuis l'injecté.
  */
 export function BrainNavigationCard({ trace }: { trace: BrainTraceView }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const nav = trace.navigation
   const traceIdentity =
     trace.id ??
@@ -143,17 +150,19 @@ export function BrainNavigationCard({ trace }: { trace: BrainTraceView }): React
   return (
     <section className={`brain-nav-card ${status}`} data-brain-status={status}>
       <header>
-        <span>Navigation Brain</span>
+        <span>{t('brainNav.navigationBrain')}</span>
         <strong>
           {nav
-            ? `${nav.candidates.length} parcouru${nav.candidates.length > 1 ? 's' : ''} · ${retained} retenu${retained > 1 ? 's' : ''}`
-            : 'navigation non exposée'}
+            ? `${t(nav.candidates.length > 1 ? 'brainNav.parcourus' : 'brainNav.parcouru', { n: nav.candidates.length })} · ${t(retained > 1 ? 'brainNav.retenus' : 'brainNav.retenu', { n: retained })}`
+            : t('brainNav.navigationNonExposee')}
         </strong>
-        <small>{trace.injectedChars.toLocaleString('fr-FR')} caractères injectés</small>
+        <small>
+          {t('brainNav.caracteresInjectes', { n: formaterNombre(trace.injectedChars) })}
+        </small>
       </header>
       {trace.query && (
         <p className="brain-nav-query">
-          <b>Requête</b>
+          <b>{t('brainNav.requete')}</b>
           <span>{trace.query}</span>
         </p>
       )}

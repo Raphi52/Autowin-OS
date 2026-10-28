@@ -1,0 +1,40 @@
+/*
+ * LES POST-IT DES COLLÈGUES (conv-1210, 2026-10-28 : « affiche dans mon Board les post-it des
+ * collègues qui écrivent dans le même dossier de la GED, avec leur nom sur chaque post-it et en
+ * lecture seule »). Posés par RiviereDuProjet.tsx avec `data-collegue` (le compte du collègue).
+ * Feuille à part : RiviereDuProjet.css portait le travail non commité d'un autre fil (conv-1204).
+ *
+ * Lecture seule à l'œil : pas de main « saisir » (ils ne se glissent pas), et une bande claire en
+ * haut, comme un ruban adhésif, qui les distingue des nôtres sans changer la couleur de leur étage.
+ */
+.riviere-postit[data-collegue] {
+  cursor: pointer;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.5) 0 13px, rgba(255, 255, 255, 0) 13px),
+    var(--riviere-papier, #e4e0f4);
+}
+
+/* Le nom du collègue en tête de la ligne projet · heure : plein, pas atténué comme le reste. */
+.riviere-postit-collegue {
+  font-weight: 800;
+  opacity: 1;
+}
+
+.riviere-postit-meta:has(.riviere-postit-collegue) {
+  opacity: 0.85;
+}
+
+.riviere-fiche-collegue {
+  display: block;
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  border: 1px dotted rgba(31, 42, 68, 0.5);
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+.riviere-fiche-taches-collegue {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+}

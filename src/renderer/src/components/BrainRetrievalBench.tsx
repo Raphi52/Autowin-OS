@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BrainSearchEnvelope } from '../../../main/brain-search-envelope'
 import { brainBusinessError } from './graph-view-model'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
+import { formaterNombre, langueCourante } from '../langue'
+import { riche } from '../textes'
+import {
+  traduireKnowledge,
+  useTextesKnowledge,
+  type CleKnowledge
+} from '../textes-ecrans/knowledge'
 
 /**
  * BANC D'ESSAI DE RÉCUPÉRATION — poser une question au Brain DEPUIS la vue Knowledge et voir ce qu'il
@@ -33,15 +40,15 @@ export type BrainSearchEnvelopeView = BrainSearchEnvelope
  * exporté : ce fichier n'exporte qu'un composant (règle `react-refresh/only-export-components`), et
  * les tests vérifient le rendu, pas la table.
  */
-const RETRIEVAL_STATUS_LABELS: Record<BrainSearchEnvelopeView['status'], string> = {
-  found: 'savoir trouvé',
-  empty: 'aucun passage retenu',
-  invalid: 'réponse écartée',
-  unavailable: 'Brain indisponible',
-  'not-requested': 'non interrogé'
+const RETRIEVAL_STATUS_LABELS: Record<BrainSearchEnvelopeView['status'], CleKnowledge> = {
+  found: 'banc.statut.found',
+  empty: 'banc.statut.empty',
+  invalid: 'banc.statut.invalid',
+  unavailable: 'banc.statut.unavailable',
+  'not-requested': 'banc.statut.notRequested'
 }
 
-const count = (value: number): string => value.toLocaleString('fr-FR')
+const count = (value: number): string => formaterNombre(value)
 
 /** Une jauge de plafond : ce qui est consommé, sur quoi, et ce qui a été coupé. */
 function BudgetRow({
@@ -59,6 +66,7 @@ function BudgetRow({
   truncated: boolean
   available: number
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   const ratio = max > 0 ? Math.min(1, used / max) : 0
   return (
     <li className={truncated ? 'is-truncated' : ''} data-truncated={truncated ? 'yes' : 'no'}>
@@ -67,14 +75,14 @@ function BudgetRow({
         <i style={{ width: `${Math.round(ratio * 100)}%` }} />
       </span>
       <span className="brain-budget-figures">
-        {count(used)} / {count(max)} car.
+        {t('banc.budget.chiffres', { utilise: count(used), plafond: count(max) })}
       </span>
       {truncated ? (
         <strong className="brain-budget-cut">
-          tronqué — {count(dropped)} car. coupés sur {count(available)}
+          {t('banc.budget.tronque', { coupes: count(dropped), disponibles: count(available) })}
         </strong>
       ) : (
-        <small className="brain-budget-ok">dans le budget</small>
+        <small className="brain-budget-ok">{t('banc.budget.ok')}</small>
       )}
     </li>
   )
@@ -91,6 +99,7 @@ export function BrainRetrievalBench({
   resetToken?: number
   reloadToken?: number
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   const [question, setQuestion] = useState('')
   const [state, setState] = useState<BenchState>({ phase: 'idle' })
   const requestGenerationRef = useRef(0)
@@ -112,7 +121,7 @@ export function BrainRetrievalBench({
       setState({
         phase: 'failed',
         scope: requestScope,
-        message: brainBusinessError("Impossible d'exécuter le banc d'essai.", error)
+        message: brainBusinessError(traduireKnowledge('banc.erreur', langueCourante()), error)
       })
     }
   }, [brainPath, question, requestScope])
@@ -157,15 +166,15 @@ export function BrainRetrievalBench({
   const stale = state.phase !== 'idle' && state.scope !== requestScope && Boolean(question.trim())
 
   return (
-    <section className="brain-bench" aria-label="Banc d’essai de récupération">
+    <section className="brain-bench" aria-label={t('banc.titre')}>
       <header className="brain-bench__head">
-        <span>Banc d’essai de récupération</span>
-        <small>ce que le Brain aurait réellement injecté pour cette question</small>
+        <span>{t('banc.titre')}</span>
+        <small>{t('banc.sousTitre')}</small>
       </header>
       <div className="brain-bench__ask">
         <input
-          aria-label="Question posée au Brain"
-          placeholder="Poser une question au savoir…"
+          aria-label={t('banc.question.aria')}
+          placeholder={t('banc.question.placeholder')}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
@@ -176,28 +185,26 @@ export function BrainRetrievalBench({
           onClick={() => void run()}
           disabled={disabled || !brainPath || !question.trim() || running}
         >
-          {running ? 'recherche…' : 'Tester'}
+          {running ? t('banc.recherche') : t('banc.tester')}
         </button>
       </div>
 
       {stale && !running && (
         <p className="brain-bench__status is-stale" data-bench-state="stale" role="status">
-          <strong>Résultat périmé</strong>
-          <span>
-            Le savoir a été réindexé depuis cette réponse : elle a été retirée plutôt que de mentir.
-          </span>
+          <strong>{t('banc.perime')}</strong>
+          <span>{t('banc.perime.detail')}</span>
           <button type="button" className="brain-bench__relaunch" onClick={() => void run()}>
-            Relancer la question
+            {t('banc.relancer')}
           </button>
         </p>
       )}
 
       {failed && (
         <p className="brain-bench__status is-failed" data-retrieval-status="failed" role="alert">
-          <strong>Recherche impossible</strong>
+          <strong>{t('banc.impossible')}</strong>
           <span>{failed.message}</span>
           <button type="button" className="brain-bench__retry" onClick={() => void run()}>
-            Réessayer
+            {t('commun.reessayer')}
           </button>
         </p>
       )}
@@ -208,11 +215,11 @@ export function BrainRetrievalBench({
             className={`brain-bench__status is-${envelope.status}`}
             data-retrieval-status={envelope.status}
           >
-            <strong>{RETRIEVAL_STATUS_LABELS[envelope.status]}</strong>
+            <strong>{t(RETRIEVAL_STATUS_LABELS[envelope.status])}</strong>
             <span>{envelope.note}</span>
           </p>
 
-          <ul className="brain-budget" aria-label="Budget d’injection">
+          <ul className="brain-budget" aria-label={t('banc.budget')}>
             <BudgetRow
               label="Question"
               used={envelope.budget.questionChars}
@@ -222,7 +229,7 @@ export function BrainRetrievalBench({
               available={envelope.budget.questionSubmittedChars}
             />
             <BudgetRow
-              label="Savoir injecté"
+              label={t('banc.budget.savoir')}
               used={envelope.budget.knowledgeChars}
               max={envelope.budget.knowledgeMax}
               dropped={envelope.budget.knowledgeDroppedChars}
@@ -233,8 +240,7 @@ export function BrainRetrievalBench({
 
           {envelope.budget.questionTruncated && (
             <p className="brain-bench__cut" role="note">
-              La question a été tronquée à {count(envelope.budget.questionMax)} caractères avant
-              l’envoi : la fin n’a pas été cherchée.
+              {t('banc.questionTronquee', { plafond: count(envelope.budget.questionMax) })}
             </p>
           )}
 
@@ -243,9 +249,11 @@ export function BrainRetrievalBench({
           {navigationTrace && <BrainNavigationCard trace={navigationTrace} />}
 
           <p className="brain-bench__local">
-            Recherche locale du vault : <strong>{count(envelope.results.length)}</strong> fiche
-            {envelope.results.length === 1 ? '' : 's'} — indépendante du serveur, donc toujours
-            rendue.
+            {riche(
+              t(envelope.results.length === 1 ? 'banc.local.une' : 'banc.local.plusieurs', {
+                n: count(envelope.results.length)
+              })
+            )}
           </p>
         </>
       )}

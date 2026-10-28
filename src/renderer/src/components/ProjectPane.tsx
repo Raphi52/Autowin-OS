@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ProjectEntry } from '../../../main/project-files'
+import { langueCourante } from '../langue'
+import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ProjectPane.css'
 
 /**
@@ -23,13 +25,15 @@ export function ProjectPane({
   /** CWD courant : quand il CHANGE, l'arbre se recharge et l'editeur se referme. */
   racine?: string
 } = {}): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [racines, setRacines] = useState<ProjectEntry[]>([])
   const [ouverts, setOuverts] = useState<Record<string, ProjectEntry[]>>({})
   const [deplies, setDeplies] = useState<Record<string, boolean>>({})
   const [fichier, setFichier] = useState<string | null>(null)
   const [texte, setTexte] = useState('')
   const [initial, setInitial] = useState('')
-  const [etat, setEtat] = useState<string>('')
+  // L'ÉTAT, pas son texte : il se traduit à l'affichage et suit un changement de langue (conv-1170).
+  const [etat, setEtat] = useState<'' | 'enregistrement' | 'enregistre'>('')
   const [erreur, setErreur] = useState<string>('')
   const [vscodeEnCours, setVscodeEnCours] = useState(false)
 
@@ -45,7 +49,9 @@ export function ProjectPane({
   const lister = useCallback(async (chemin: string): Promise<ProjectEntry[]> => {
     const r = await window.api.listProjectDir(chemin, conversationId)
     if (!r.ok) {
-      setErreur(`Dossier illisible : ${r.reason}`)
+      setErreur(
+        traduireChatPanneaux('projet.dossierIllisible', langueCourante(), { raison: r.reason })
+      )
       return []
     }
     return r.entries
@@ -90,7 +96,7 @@ export function ProjectPane({
     setEtat('')
     const r = await window.api.readProjectFile(entry.path, conversationId)
     if (!r.ok) {
-      setErreur(`Fichier illisible : ${r.reason}`)
+      setErreur(t('projet.fichierIllisible', { raison: r.reason }))
       return
     }
     setFichier(r.path)
@@ -100,15 +106,15 @@ export function ProjectPane({
 
   const enregistrer = async (): Promise<void> => {
     if (!fichier) return
-    setEtat('Enregistrement…')
+    setEtat('enregistrement')
     const r = await window.api.writeProjectFile(fichier, texte, conversationId)
     if (!r.ok) {
       setEtat('')
-      setErreur(`Écriture refusée : ${r.reason}`)
+      setErreur(t('projet.ecritureRefusee', { raison: r.reason }))
       return
     }
     setInitial(texte)
-    setEtat('Enregistré')
+    setEtat('enregistre')
   }
 
   const modifie = fichier !== null && texte !== initial
@@ -135,14 +141,14 @@ export function ProjectPane({
           disabled={!modifie}
           onClick={() => void enregistrer()}
         >
-          Enregistrer
+          {t('projet.enregistrer')}
         </button>
         <button
           type="button"
           className="pp-fermer"
           data-testid="pp-fermer"
-          title="Fermer l’éditeur"
-          aria-label="Fermer l’éditeur"
+          title={t('projet.fermer')}
+          aria-label={t('projet.fermer')}
           onClick={fermer}
         >
           ×
@@ -158,7 +164,11 @@ export function ProjectPane({
           setEtat('')
         }}
       />
-      {etat && <div className="pp-etat">{etat}</div>}
+      {etat && (
+        <div className="pp-etat">
+          {t(etat === 'enregistrement' ? 'projet.enregistrement' : 'projet.enregistre')}
+        </div>
+      )}
       {erreur && (
         <div className="pp-erreur" role="alert">
           {erreur}
@@ -174,7 +184,7 @@ export function ProjectPane({
         className={`pp-noeud${fichier === entry.path ? ' is-active' : ''}${
           estModifie(entry) ? ' is-modifie' : ''
         }`}
-        title={estModifie(entry) ? 'Modifié par cette conversation' : undefined}
+        title={estModifie(entry) ? t('projet.modifie') : undefined}
         style={{ paddingLeft: 6 + niveau * 12 }}
         data-testid={`pp-noeud-${entry.path}`}
         onClick={() => void (entry.kind === 'dir' ? basculer(entry) : ouvrir(entry))}
@@ -198,7 +208,7 @@ export function ProjectPane({
           type="button"
           className="pp-vscode"
           data-testid="pp-vscode"
-          title="Ouvrir tout le projet dans VS Code"
+          title={t('projet.vscode.titre')}
           disabled={vscodeEnCours}
           onClick={() => {
             setVscodeEnCours(true)
@@ -206,16 +216,16 @@ export function ProjectPane({
             void window.api
               .openProjectInVscode(conversationId)
               .then((r) => {
-                if (!r.ok) setErreur(`VS Code : ${r.raison}`)
+                if (!r.ok) setErreur(t('projet.vscode.erreur', { raison: r.raison }))
               })
               .finally(() => setVscodeEnCours(false))
           }}
         >
-          {vscodeEnCours ? 'Ouverture (installation si absent)…' : 'Ouvrir dans VS Code'}
+          {vscodeEnCours ? t('projet.vscode.ouverture') : t('projet.vscode')}
         </button>
       </div>
-      <div className="pp-arbre scroll-y" role="tree" aria-label="Arborescence du projet">
-        {racines.length === 0 && <div className="c-faint pp-vide">Arborescence vide.</div>}
+      <div className="pp-arbre scroll-y" role="tree" aria-label={t('projet.arborescence')}>
+        {racines.length === 0 && <div className="c-faint pp-vide">{t('projet.vide')}</div>}
         {racines.map((e) => rendreNoeud(e, 0))}
       </div>
       {erreur && !fichier && (

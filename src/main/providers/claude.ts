@@ -2289,7 +2289,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 type?: string
                 thinking?: string
                 stop_reason?: string
-                stop_details?: { category?: unknown }
+                stop_details?: { category?: unknown; explanation?: unknown }
               }
             }
           | undefined
@@ -2304,23 +2304,38 @@ export class ClaudeCliAdapter implements ProviderAdapter {
          * refuser sans savoir pourquoi, et le modele lui a donne d'autres raisons (« je ne peux pas
          * depuis ce PC », puis la morale) que la vraie. On ne relance rien et on ne contourne rien :
          * on DIT ce qui s'est passe, une fois, a l'endroit de la coupure.
+         *
+         * ET ON LE GARDE EN DONNEE (2e passe, conv-1161). L'avis n'etait qu'un texte : le journal du
+         * tour, que lisent la retrospective et le kaizen, n'en gardait aucune trace, et le diagnostic
+         * a du fouiller `run-stdout/` pour retrouver la coupure. `coupureFiltre` porte la categorie
+         * et l'explication du fournisseur, jointe a CHAQUE coupure meme quand l'avis n'est pas repete.
+         * fix-ok: cause mesuree — le journal du tour a1ddde24 (conv-1161) ne contient aucun evenement de coupure, seulement reasoning-step/provider-status.
          */
-        if (
-          ev?.type === 'message_delta' &&
-          delta?.stop_reason === 'refusal' &&
-          !coupureParLeFiltreSignalee
-        ) {
-          coupureParLeFiltreSignalee = true
-          const categorie =
-            typeof delta.stop_details?.category === 'string' && delta.stop_details.category.trim()
-              ? ` (catégorie : ${delta.stop_details.category.trim()})`
+        if (ev?.type === 'message_delta' && delta?.stop_reason === 'refusal') {
+          const categorieDuFournisseur =
+            typeof delta.stop_details?.category === 'string'
+              ? delta.stop_details.category.trim()
               : ''
+          const explicationDuFournisseur =
+            typeof delta.stop_details?.explanation === 'string'
+              ? delta.stop_details.explanation.trim().slice(0, 500)
+              : ''
+          const coupureFiltre = {
+            ...(categorieDuFournisseur ? { categorie: categorieDuFournisseur } : {}),
+            ...(explicationDuFournisseur ? { explication: explicationDuFournisseur } : {})
+          }
+          if (coupureParLeFiltreSignalee) {
+            queue.push({ delta: '', coupureFiltre })
+            return
+          }
+          coupureParLeFiltreSignalee = true
+          const categorie = categorieDuFournisseur ? ` (catégorie : ${categorieDuFournisseur})` : ''
           const avis =
             `⚠️ Le filtre de sécurité d'Anthropic (le fournisseur du modèle IA) a coupé une partie de cette réponse${categorie}. ` +
             "Ce n'est ni un choix d'Autowin ni une panne : la partie coupée n'est pas affichée, et les actions qu'elle allait lancer n'ont pas été exécutées."
           const separation = text && !/\n[ \t]*$/u.test(text) ? '\n\n' : ''
           text += separation + avis
-          queue.push({ delta: separation + avis })
+          queue.push({ delta: separation + avis, coupureFiltre })
           return
         }
         if (

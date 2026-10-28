@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   569 regles, 786 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   568 regles, 785 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -187,9 +187,6 @@
 /* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */
 :root[data-theme='nebuleuse-verre'] .cpick-tete {
     border-image: linear-gradient(90deg, rgba(251, 91, 171, 0.55), rgba(251, 91, 171, 0.06)) 1
-}
-:root[data-theme='nebuleuse-verre'] .cpick-barre {
-    background: rgba(251, 91, 171, 0.14)
 }
 :root[data-theme='nebuleuse-verre'] .cpick-dot-g {
     background: rgb(0, 255, 85)

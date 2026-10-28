@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AgentStudioSection } from '../tabs'
+import { useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import { workflowIssues, type ExecutabilityInput } from './workflow-executability'
 import { useSkillsInventory } from './useSkillsInventory'
 import { ViewTopBar } from './ViewTopBar'
@@ -20,6 +21,7 @@ export function AgentStudioView({
   section: AgentStudioSection
   onSectionChange: (section: AgentStudioSection) => void
 }): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   /**
    * Une anomalie n'était visible qu'en OUVRANT l'onglet concerné : un workflow injouable partait donc
    * au prompt suivant sans que rien ne l'annonce depuis l'onglet voisin. La sonde est en LECTURE
@@ -69,21 +71,22 @@ export function AgentStudioView({
 
   return (
     <section className="view-page domain-shell" data-testid="agent-studio-view">
+      {/* « ORCHESTRATION », « Agent Studio » et « Workflows » : les mêmes mots en anglais. */}
       <ViewTopBar
         eyebrow="ORCHESTRATION"
         title="Agent Studio"
-        description="Quels modèles jouent quels rôles, et quels workflows les enchaînent."
-        ariaLabel="Sections Agent Studio"
+        description={t('studio.description')}
+        ariaLabel={t('studio.aria')}
         active={section}
         onSelect={onSectionChange}
         tabs={[
-          { id: 'topology', label: 'Modèles & topologie' },
+          { id: 'topology', label: t('studio.onglet.topologie') },
           {
             id: 'workflows',
             label: 'Workflows',
             anomaly: {
               count: workflowsCasses.length,
-              title: `Workflow(s) non exécutable(s) : ${workflowsCasses.join(', ')}`,
+              title: t('studio.anomalie.workflows', { liste: workflowsCasses.join(', ') }),
               testId: 'studio-anomaly-workflows'
             }
           }

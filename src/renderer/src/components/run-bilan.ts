@@ -8,6 +8,7 @@
  * vivent pas dans `OrchStep` ; les inventer donnerait une carte fausse et jolie.
  */
 import type { OrchStep } from './chat-view-model'
+import { texteChatExecution as t, type CleChatExecution } from '../textes-ecrans/chat-execution'
 
 export type RunBilanLigne = { label: string; valeur: string }
 
@@ -36,18 +37,22 @@ export function buildRunBilan(entree: RunBilanEntree): RunBilan {
   const { steps, sujet, dureeMs, enCours } = entree
   const echecs = steps.filter((s) => s.status === 'failed').length
   const faites = steps.filter((s) => s.status === 'completed').length
-  const cout = steps.reduce((t, s) => t + (s.costUsd ?? 0), 0)
+  const cout = steps.reduce((somme, s) => somme + (s.costUsd ?? 0), 0)
 
   const lignes: RunBilanLigne[] = []
   lignes.push({
-    label: 'Étapes',
-    valeur: `${faites} faites${echecs > 0 ? ` · ${echecs} en échec` : ''}`
+    label: t('bilan.etapes'),
+    valeur:
+      echecs > 0
+        ? t('bilan.etapes.faites-echecs', { faites, echecs })
+        : t('bilan.etapes.faites', { faites })
   })
-  if (typeof dureeMs === 'number') lignes.push({ label: 'Durée', valeur: formatDuree(dureeMs) })
-  if (cout > 0) lignes.push({ label: 'Coût', valeur: `${cout.toFixed(2)} $` })
+  if (typeof dureeMs === 'number')
+    lignes.push({ label: t('bilan.duree'), valeur: formatDuree(dureeMs) })
+  if (cout > 0) lignes.push({ label: t('bilan.cout'), valeur: `${cout.toFixed(2)} $` })
 
   return {
-    titre: sujet && sujet.trim().length > 0 ? sujet.trim() : 'Run sans sujet',
+    titre: sujet && sujet.trim().length > 0 ? sujet.trim() : t('bilan.sans-sujet'),
     verdict: enCours ? 'en cours' : echecs > 0 ? 'rouge' : 'vert',
     lignes
   }
@@ -57,6 +62,20 @@ const COULEUR_VERDICT: Record<RunBilan['verdict'], string> = {
   vert: '#63c08a',
   rouge: '#e2705f',
   'en cours': '#e3ba55'
+}
+
+/**
+ * Le verdict tel qu'on le LIT, dans la langue de l'interface (conv-1170). `verdict` reste le mot
+ * français : il sert de clé de couleur et d'attribut `data-verdict`, relus par le CSS et les tests.
+ */
+const VERDICT_LIBELLE: Record<RunBilan['verdict'], CleChatExecution> = {
+  vert: 'bilan.verdict.vert',
+  rouge: 'bilan.verdict.rouge',
+  'en cours': 'bilan.verdict.en-cours'
+}
+
+export function libelleDuVerdict(verdict: RunBilan['verdict']): string {
+  return t(VERDICT_LIBELLE[verdict])
 }
 
 function echapper(texte: string): string {
@@ -83,9 +102,9 @@ export function bilanEnSvg(bilan: RunBilan, largeur = 560): string {
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${largeur}" height="${hauteur}" viewBox="0 0 ${largeur} ${hauteur}">` +
     `<rect width="${largeur}" height="${hauteur}" fill="#12151c"/>` +
-    `<text x="28" y="40" fill="#e3ba55" font-family="monospace" font-size="11" letter-spacing="2">BILAN DE RUN</text>` +
+    `<text x="28" y="40" fill="#e3ba55" font-family="monospace" font-size="11" letter-spacing="2">${echapper(t('bilan.kicker-image'))}</text>` +
     `<text x="28" y="68" fill="#dde3ee" font-family="sans-serif" font-size="17" font-weight="bold">${echapper(bilan.titre)}</text>` +
-    `<text x="${largeur - 28}" y="40" fill="${COULEUR_VERDICT[bilan.verdict]}" font-family="monospace" font-size="13" text-anchor="end">${echapper(bilan.verdict)}</text>` +
+    `<text x="${largeur - 28}" y="40" fill="${COULEUR_VERDICT[bilan.verdict]}" font-family="monospace" font-size="13" text-anchor="end">${echapper(libelleDuVerdict(bilan.verdict))}</text>` +
     lignes +
     `</svg>`
   )
@@ -107,11 +126,17 @@ export type RunResume = {
  */
 export function bilanDepuisResume(resume: RunResume, titre?: string): RunBilan {
   const lignes: RunBilanLigne[] = [
-    { label: 'Définition of done', valeur: `${resume.dodChecked}/${resume.dodTotal} cochés` },
-    { label: 'Journal', valeur: `${resume.journalEvents} évènements` },
-    { label: 'Défauts', valeur: String(resume.defauts) }
+    {
+      label: t('bilan.dod'),
+      valeur: t('bilan.dod.coches', { coches: resume.dodChecked, total: resume.dodTotal })
+    },
+    {
+      label: t('bilan.journal'),
+      valeur: t('bilan.journal.evenements', { n: resume.journalEvents })
+    },
+    { label: t('bilan.defauts'), valeur: String(resume.defauts) }
   ]
-  if (resume.regime) lignes.push({ label: 'Régime', valeur: resume.regime })
+  if (resume.regime) lignes.push({ label: t('bilan.regime'), valeur: resume.regime })
   // VOCABULAIRE REEL des RUN.md (WorkflowsPanel.tsx:42) : `green`, `red`, `open`,
   // `degraded-closed`. Chercher « fail » ou « error » ratait donc `red` et `degraded-closed` —
   // constate a l'ecran le 2026-09-13 : un run badge « red » s'affichait VERT sur la carte.
@@ -120,7 +145,7 @@ export function bilanDepuisResume(resume: RunResume, titre?: string): RunBilan {
   const vert = /^green$/i.test(resume.status.trim()) && resume.defauts === 0
   const rouge = !enCours && !vert
   return {
-    titre: titre && titre.trim().length > 0 ? titre.trim() : 'Run sans sujet',
+    titre: titre && titre.trim().length > 0 ? titre.trim() : t('bilan.sans-sujet'),
     verdict: enCours ? 'en cours' : rouge ? 'rouge' : 'vert',
     lignes
   }
@@ -143,20 +168,30 @@ export type ClotureObservee = {
   usage?: { unpricedCalls?: number }
 }
 
-const CLOTURE_LIBELLE: Record<string, string> = {
-  green: 'acceptée',
-  red: 'refusée',
-  'degraded-closed': 'close en mode dégradé',
-  open: 'pas encore close',
-  interrupted: 'interrompue'
+// Des CLÉS de texte, traduites à la lecture : la table reste une constante (conv-1170).
+const CLOTURE_LIBELLE: Record<string, CleChatExecution | undefined> = {
+  green: 'bilan.cloture.green',
+  red: 'bilan.cloture.red',
+  'degraded-closed': 'bilan.cloture.degraded-closed',
+  open: 'bilan.cloture.open',
+  interrupted: 'bilan.cloture.interrupted'
 }
 
-const INTEGRATION_LIBELLE: Record<string, string> = {
-  merged: 'fusionné dans la base',
-  nothing: 'aucun changement à intégrer',
-  conflict: 'conflit à l’intégration',
-  blocked: 'intégration bloquée',
-  kept: 'gardé dans sa copie de travail'
+const INTEGRATION_LIBELLE: Record<string, CleChatExecution | undefined> = {
+  merged: 'bilan.integration.merged',
+  nothing: 'bilan.integration.nothing',
+  conflict: 'bilan.integration.conflict',
+  blocked: 'bilan.integration.blocked',
+  kept: 'bilan.integration.kept'
+}
+
+/** Le libellé d'une valeur connue de la table, sinon la valeur brute (jamais inventée). */
+function libelleOuBrut(
+  table: Record<string, CleChatExecution | undefined>,
+  valeur: string
+): string {
+  const cle = Object.prototype.hasOwnProperty.call(table, valeur) ? table[valeur] : undefined
+  return cle ? t(cle) : valeur
 }
 
 export function bilanDepuisCloture(
@@ -165,27 +200,27 @@ export function bilanDepuisCloture(
 ): RunBilan {
   const ouvert = cloture.status === 'open'
   const lignes: RunBilanLigne[] = [
-    { label: 'Clôture', valeur: CLOTURE_LIBELLE[cloture.status] ?? cloture.status }
+    { label: t('bilan.cloture'), valeur: libelleOuBrut(CLOTURE_LIBELLE, cloture.status) }
   ]
   if (!ouvert) {
-    lignes.push({ label: 'Durée', valeur: formatDuree(cloture.totalDurationMs) })
+    lignes.push({ label: t('bilan.duree'), valeur: formatDuree(cloture.totalDurationMs) })
     const sansPrix = cloture.usage?.unpricedCalls ?? 0
     lignes.push({
-      label: 'Coût',
-      valeur: `${cloture.totalCostUsd.toFixed(2)} $${sansPrix > 0 ? ` + ${sansPrix} appel(s) sans prix` : ''}`
+      label: t('bilan.cout'),
+      valeur: `${cloture.totalCostUsd.toFixed(2)} $${sansPrix > 0 ? t('bilan.sans-prix', { n: sansPrix }) : ''}`
     })
   }
   if (cloture.integrationOutcome) {
     lignes.push({
-      label: 'Intégration',
-      valeur: INTEGRATION_LIBELLE[cloture.integrationOutcome] ?? cloture.integrationOutcome
+      label: t('bilan.integration'),
+      valeur: libelleOuBrut(INTEGRATION_LIBELLE, cloture.integrationOutcome)
     })
   }
   if (options.passagesDuJuge && options.passagesDuJuge > 0) {
-    lignes.push({ label: 'Passages du juge', valeur: String(options.passagesDuJuge) })
+    lignes.push({ label: t('bilan.passages-juge'), valeur: String(options.passagesDuJuge) })
   }
   return {
-    titre: options.titre?.trim() ? options.titre.trim() : 'Run sans sujet',
+    titre: options.titre?.trim() ? options.titre.trim() : t('bilan.sans-sujet'),
     // Même prudence que `bilanDepuisResume` : seul `green` verdit, tout le reste est rouge.
     verdict: ouvert ? 'en cours' : cloture.status === 'green' ? 'vert' : 'rouge',
     lignes

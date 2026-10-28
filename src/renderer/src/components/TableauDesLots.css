@@ -10,6 +10,12 @@
   font-size: 13px;
   line-height: 1.45;
   border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  /*
+   * Hauteur bornée (conv-1171) : sans elle, un plan de 19 lots et ses avertissements poussaient la
+   * zone de saisie hors de la fenêtre. Seule la liste des lots défile ; titre, bilan et boutons restent.
+   */
+  max-height: min(40vh, 340px);
+  overflow-y: auto;
 }
 
 .tdl--enfant {
@@ -73,10 +79,20 @@
 }
 
 .tdl-avertissements {
-  margin: 0;
-  padding-left: 18px;
   font-size: 12px;
   color: var(--warn);
+}
+
+.tdl-avertissements summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.tdl-avertissements ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .tdl-lots {
@@ -87,6 +103,9 @@
   flex-direction: column;
   gap: 3px;
   max-height: 220px;
+  /* Rétrécit avant les boutons quand la hauteur du tableau est bornée. */
+  flex: 1 1 auto;
+  min-height: 48px;
   overflow-y: auto;
 }
 

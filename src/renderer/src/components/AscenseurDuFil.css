@@ -27,7 +27,8 @@
 /* La LARGEUR change d'un coup : c'est seulement la zone de clic. Ce qui se voit est animé plus bas,
    sans recalcul de mise en page à chaque image (une transition de `width` en demandait un). */
 .adf.is-deplie {
-  width: 72px;
+  /* 72 px divisé par 2 (conv-1202) : la place gagnée revient au texte du fil. */
+  width: 36px;
 }
 .adf svg {
   position: absolute;
@@ -252,26 +253,20 @@
 @property --adf-reserve {
   syntax: '<length>';
   inherits: false;
-  initial-value: 80px;
+  initial-value: 44px;
 }
-/* LA CARTE DÉCALE LA CONVERSATION au lieu de la masquer (conv-1114) : pendant qu'elle est ouverte,
-   la marge droite du fil s'élargit à sa largeur + 8 px (`--adf-reserve`, posé par AscenseurDuFil).
+/* LA CARTE NE PASSE PAS SUR LE TEXTE (conv-1114) ET LE TEXTE NE SE RÉAGENCE PAS (conv-1193, « je
+   veux pas que ça envoie des mots à la ligne comme ça ») : la place de la carte OUVERTE (36 px + 8,
+   `--adf-reserve` ; 72 + 8 avant la division par 2 de conv-1202) est réservée EN PERMANENCE à droite du fil. L'ouverture ne change plus la largeur
+   du texte : aucun mot ne passe à la ligne, aucune mise en page du fil entier à l'ouverture.
+   Avant : marge 12 px au repos, 80 px carte ouverte — poussée en 800 ms (texte recouvert pendant
+   la poussée, 130 à 240 ms par image sur un long fil), puis d'un coup (mots renvoyés à la ligne).
    Sélecteurs plus précis que `.chat-layout .chat-scroll` (ChatView.css), dont la marge est en
-   !important. La ligne lue est tenue en place par AscenseurDuFil pendant le réagencement.
-   D'UN COUP, PAS EN 800 MS (conv-1193, « la scrollbar repasse en overlay pendant que je scroll ») :
-   la marge animée relançait la mise en page du fil ENTIER à chaque image — 130 à 240 ms par image
-   sur un long fil (copie cachée de conv-1139) — pendant que la carte et ses aperçus, animés sans
-   elle, apparaissaient sur un texte pas encore poussé. La place est donc prise dans l'image même où
-   la carte commence à se dévoiler, et rendue seulement une fois la carte rentrée (200 ms : son
-   `clip-path`, et son `opacity` délai compris, plus haut). Gardé par AscenseurDuFil.style.test.ts. */
+   !important. `--adf-reserve` posé à l'ouverture par AscenseurDuFil vaut max(marge, 44) = 44 :
+   la marge ne bouge pas. Gardé par AscenseurDuFil.style.test.ts. */
 .chat-layout .chat-scroll.chat-scroll--ascenseur,
 .chat .chat-scroll.chat-scroll--ascenseur {
-  transition: padding-right 0s linear 200ms;
-}
-.chat-layout .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'],
-.chat .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'] {
-  padding-right: var(--adf-reserve, 80px) !important;
-  transition: none;
+  padding-right: var(--adf-reserve, 44px) !important;
 }
 .chat-scroll--ascenseur::-webkit-scrollbar {
   display: none;

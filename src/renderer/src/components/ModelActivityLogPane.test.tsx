@@ -612,7 +612,9 @@ describe('ModelActivityLogPane — lignes semblables qui se suivent', () => {
     const libelles = [...menu.options].map((option) => option.textContent)
     expect(libelles.filter((libelle) => libelle === 'Action')).toHaveLength(1)
     await act(async () => {
-      menu.value = 'Action'
+      // Choisie par son TEXTE, comme à l'écran : la valeur de l'option est la clé de texte de la
+      // nature, pour qu'un filtre posé survive à un changement de langue (conv-1170).
+      menu.value = [...menu.options].find((option) => option.textContent === 'Action')!.value
       menu.dispatchEvent(new Event('change', { bubbles: true }))
     })
     const kinds = [...host.querySelectorAll('.model-log-row')].map((row) =>

@@ -9,6 +9,7 @@ import type {
   StatutDemande
 } from '../../../shared/carte-des-besoins'
 import { RiviereDuProjet } from './RiviereDuProjet'
+import { POSTIT_H } from './carte-riviere'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
@@ -391,7 +392,7 @@ describe('RiviereDuProjet', () => {
         const m = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([\d.e-]+), ([\d.e-]+)\)/u.exec(
           p.style.transform
         )!
-        expect(Number(m[2]) + 54 * Number(m[4])).toBeLessThanOrEqual(H + 1e-6)
+        expect(Number(m[2]) + POSTIT_H * Number(m[4])).toBeLessThanOrEqual(H + 1e-6)
       }
       // La molette n'a qu'un rôle, la loupe : rien d'autre à faire défiler.
       const e = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true })
@@ -444,7 +445,7 @@ describe('RiviereDuProjet', () => {
         .split(/[^0-9.-]+/u)
         .filter(Boolean)
         .map(Number)
-      expect(y + 54 * k).toBeLessThanOrEqual(300 + 1e-6)
+      expect(y + POSTIT_H * k).toBeLessThanOrEqual(300 + 1e-6)
     }
     // Un étage peu chargé, lui, reste à 3.
     expect(

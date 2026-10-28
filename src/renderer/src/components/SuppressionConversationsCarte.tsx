@@ -24,6 +24,7 @@
  */
 
 import { createPortal } from 'react-dom'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { resumerSuppression, type FilASupprimer } from './suppression-conversations'
 
 function CorbeilleIcone(): React.JSX.Element {
@@ -62,11 +63,13 @@ export function SuppressionConversationsCarte({
   onGarder: () => void
   onSupprimer: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const resume = resumerSuppression(fils, total)
   const lot = total > 1
   const surtitre = lot
-    ? `SÉLECTION · ${total} FILS · ${resume.messages} MSG`
-    : `CONVERSATION · ${resume.messages} MSG`
+    ? t('suppression.surtitreLot', { total, messages: resume.messages })
+    : // « CONVERSATION · n MSG » se lit tel quel en anglais : aucune traduction à porter.
+      `CONVERSATION · ${resume.messages} MSG`
   return createPortal(
     <div className="delete-confirm-layer" role="presentation" onClick={onGarder}>
       <section
@@ -83,11 +86,11 @@ export function SuppressionConversationsCarte({
           <div className="delete-confirm-tete-texte">
             <span className="delete-confirm-kicker">{surtitre}</span>
             <h2 id="suppr-fils-titre">
-              {lot ? `Supprimer ${total} conversations ?` : 'Supprimer la conversation ?'}
+              {lot ? t('suppression.titreLot', { total }) : t('suppression.titre')}
             </h2>
           </div>
         </div>
-        <ul className="delete-confirm-fils" aria-label="Conversations supprimées">
+        <ul className="delete-confirm-fils" aria-label={t('suppression.liste')}>
           {resume.lignes.map((ligne) => (
             <li key={ligne.id} className="delete-confirm-fil">
               <span className="delete-confirm-fil-titre" title={ligne.titre}>
@@ -99,24 +102,21 @@ export function SuppressionConversationsCarte({
           {resume.autres && (
             <li className="delete-confirm-fil delete-confirm-fil--autres">
               <span className="delete-confirm-fil-titre">
-                + {resume.autres.nombre} {resume.autres.nombre > 1 ? 'autres' : 'autre'}
+                + {resume.autres.nombre}{' '}
+                {resume.autres.nombre > 1 ? t('suppression.autres') : t('suppression.autre')}
               </span>
               <span className="delete-confirm-fil-nombre">{resume.autres.messages} msg</span>
             </li>
           )}
         </ul>
-        <p>
-          {lot
-            ? 'Leur historique local sera retiré de cet appareil. Les autres conversations ne sont pas touchées.'
-            : 'Son historique local sera retiré de cet appareil.'}
-        </p>
+        <p>{lot ? t('suppression.detailLot') : t('suppression.detail')}</p>
         {erreur && <p className="c-danger">{erreur}</p>}
         <div className="delete-confirm-actions delete-confirm-actions--pile">
           <button className="btn delete-confirm-danger delete-confirm-gel" onClick={onSupprimer}>
-            {lot ? `Supprimer les ${total}` : 'Supprimer définitivement'}
+            {lot ? t('suppression.supprimerLot', { total }) : t('suppression.supprimer')}
           </button>
           <button className="btn delete-confirm-cancel" onClick={onGarder} autoFocus>
-            {lot ? 'Garder' : 'Garder la conversation'}
+            {lot ? t('suppression.garderLot') : t('suppression.garder')}
           </button>
         </div>
       </section>

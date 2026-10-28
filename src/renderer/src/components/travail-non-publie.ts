@@ -10,6 +10,9 @@
  * Ce message ne répare rien et n'accuse personne : il dit qu'il y a quelque chose à aller chercher,
  * et où. Un avertissement sans adresse n'est pas une information, c'est une inquiétude.
  */
+import { langueCourante } from '../langue'
+import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
+
 export interface EntreeTravail {
   agentId: string
   travailNonPublie?: boolean
@@ -56,13 +59,14 @@ export function messageTravailNonPublie(entrees: readonly EntreeTravail[]): stri
     if (branches.length === BRANCHES_CITEES) break
   }
   const reste = enAttente.length - branches.length
-  const quantite = enAttente.length === 1 ? '1 travail terminé' : `${enAttente.length} travaux terminés`
-
-  return (
-    `${quantite} n’${enAttente.length === 1 ? 'a' : 'ont'} jamais été publié${enAttente.length === 1 ? '' : 's'} : ` +
-    branches.join(', ') +
-    (reste > 0 ? ` et ${reste} autres` : '') +
-    '.'
+  // Une phrase entière par cas (conv-1170) : l'accord « a »/« ont » ne se traduit pas en morceaux.
+  const langue = langueCourante()
+  const valeurs = { n: enAttente.length, branches: branches.join(', '), reste }
+  if (enAttente.length === 1) return traduireChatPanneaux('tnp.message.un', langue, valeurs)
+  return traduireChatPanneaux(
+    reste > 0 ? 'tnp.message.plusieursEtAutres' : 'tnp.message.plusieurs',
+    langue,
+    valeurs
   )
 }
 
@@ -164,6 +168,9 @@ export interface TravailNonPublie {
 export function libelleTravail(travail: TravailNonPublie): string {
   if (!travail.fichiers.length) return travail.agentId
   const premier = travail.fichiers[0]
-  const reste = travail.fichiers.length > 1 ? ` +${travail.fichiers.length - 1} fichiers` : ''
-  return `${premier}${reste}`
+  if (travail.fichiers.length === 1) return premier
+  return traduireChatPanneaux('tnp.fichiersEnPlus', langueCourante(), {
+    premier,
+    n: travail.fichiers.length - 1
+  })
 }

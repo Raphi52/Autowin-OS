@@ -41,7 +41,12 @@ function ecrireBoard(dossier: string, poste: string, postIts: unknown[]): string
   const fichier = join(dossier, poste, 'board.json')
   writeFileSync(
     fichier,
-    JSON.stringify({ format: 'autowin-board/1', poste, enregistreA: '2026-10-28T10:00:00Z', postIts })
+    JSON.stringify({
+      format: 'autowin-board/1',
+      poste,
+      enregistreA: '2026-10-28T10:00:00Z',
+      postIts
+    })
   )
   return fichier
 }
@@ -98,10 +103,12 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
 describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier du Board', () => {
   it('lit les collègues et jamais le sous-dossier de ce poste', async () => {
     const dossier = dossierDuBoard()
-    ecrireBoard(dossier, 'raphael.vilain', [postIt('conv-9', 'Raphaël')])
+    ecrireBoard(dossier, 'prenom.nom', [postIt('conv-9', 'Moi')])
     ecrireBoard(dossier, 'jdupont', [postIt('conv-1', 'Jean Dupont')])
     mkdirSync(join(dossier, 'vide'))
-    const lecteur = creerLecteurDesCollegues({ dossier: () => dossier, poste: 'Raphael.Vilain' })
+    const lecteur = creerLecteurDesCollegues({
+      ou: () => ({ dossier, poste: 'Prenom.Nom' })
+    })
     const lu = await lecteur.lire()
     expect(lu.collegues.map((c) => c.poste)).toEqual(['jdupont'])
     expect(lu.collegues[0].nom).toBe('Jean Dupont')
@@ -109,15 +116,13 @@ describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier
   })
 
   it('sans dossier choisi, aucun collègue et aucune lecture', async () => {
-    const lecteur = creerLecteurDesCollegues({ dossier: () => null, poste: 'moi' })
+    const lecteur = creerLecteurDesCollegues({ ou: () => null })
     expect(await lecteur.lire()).toEqual({ collegues: [] })
   })
 
   it('dit en clair un dossier injoignable, sans lever', async () => {
-    const lecteur = creerLecteurDesCollegues({
-      dossier: () => join(dossierDuBoard(), 'absent'),
-      poste: 'moi'
-    })
+    const absent = join(dossierDuBoard(), 'absent')
+    const lecteur = creerLecteurDesCollegues({ ou: () => ({ dossier: absent, poste: 'moi' }) })
     const lu = await lecteur.lire()
     expect(lu.collegues).toEqual([])
     expect(lu.erreur).toMatch(/injoignable/)
@@ -128,7 +133,7 @@ describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier
     ecrireBoard(dossier, 'jdupont', [postIt('conv-1', 'Jean')])
     mkdirSync(join(dossier, 'casse'))
     writeFileSync(join(dossier, 'casse', 'board.json'), '{oups')
-    const lu = await creerLecteurDesCollegues({ dossier: () => dossier, poste: 'moi' }).lire()
+    const lu = await creerLecteurDesCollegues({ ou: () => ({ dossier, poste: 'moi' }) }).lire()
     expect(lu.collegues.map((c) => c.poste)).toEqual(['jdupont'])
     expect(lu.erreur).toContain('casse')
   })
@@ -138,8 +143,7 @@ describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier
     const fichier = ecrireBoard(dossier, 'jdupont', [postIt('conv-1', 'Jean')])
     let t = 0
     const lecteur = creerLecteurDesCollegues({
-      dossier: () => dossier,
-      poste: 'moi',
+      ou: () => ({ dossier, poste: 'moi' }),
       maintenant: () => t,
       delaiMs: 1000
     })

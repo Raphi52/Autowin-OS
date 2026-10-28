@@ -77,20 +77,26 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
 
   // Refus explicite : aucune commande n'a été lancée (projet sans script de test, workspace absent).
   if (data.allowed === false) {
-    const reason = typeof data.reason === 'string' && data.reason.trim() ? data.reason : 'refusée'
-    return { label: `vérification impossible — ${reason}`, state: 'refused', why: [reason.trim()] }
+    const reason =
+      typeof data.reason === 'string' && data.reason.trim() ? data.reason : t('issue.refusee')
+    return {
+      label: t('issue.verification-impossible', { raison: reason }),
+      state: 'refused',
+      why: [reason.trim()]
+    }
   }
 
-  const command = typeof data.command === 'string' && data.command ? data.command : 'vérification'
+  const command =
+    typeof data.command === 'string' && data.command ? data.command : t('issue.verification')
   const exitCode = typeof data.exitCode === 'number' ? data.exitCode : undefined
   const ok = data.ok === true
 
   if (exitCode === undefined) {
     // Lancement impossible : pas d'exit code du tout, mais ce n'est pas un succès pour autant.
     return {
-      label: `${command} → aucun code de sortie`,
+      label: t('issue.sans-code', { commande: command }),
       state: ok ? 'ok' : 'failed',
-      ...(ok ? {} : { why: [`${command} n'a produit aucun code de sortie`] })
+      ...(ok ? {} : { why: [t('issue.sans-code.pourquoi', { commande: command })] })
     }
   }
   return {
@@ -117,7 +123,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   if (typeof action.data === 'string' && action.data.trim() && action.ok === false) {
     const raison = action.data.trim()
     const short = raison.length > 120 ? raison.slice(0, 117) + '…' : raison
-    return { label: `échec : ${short}`, state: 'failed', why: [raison] }
+    return { label: t('issue.echec', { raison: short }), state: 'failed', why: [raison] }
   }
   const data = asRecord(action.data)
   if (!data) return undefined
@@ -131,7 +137,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     const reason = gateReasonLabel(data.gateReasons)
     const motifs = gateReasonLines(data.gateReasons)
     return {
-      label: `arrêté au contrôle final${reason ? ` — ${reason}` : ''}${suffix}`,
+      label: `${t('issue.controle-final')}${reason ? ` — ${reason}` : ''}${suffix}`,
       state: 'failed',
       ...(motifs.length ? { why: motifs } : {})
     }
@@ -143,12 +149,15 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
   if (errorReason) {
     const short = errorReason.length > 120 ? errorReason.slice(0, 117) + '…' : errorReason
-    return { label: `échec : ${short}${suffix}`, state: 'failed', why: [errorReason] }
+    return {
+      label: `${t('issue.echec', { raison: short })}${suffix}`,
+      state: 'failed',
+      why: [errorReason]
+    }
   }
-  if (data.valid === false)
-    return { label: `résultat refusé par le juge${suffix}`, state: 'failed' }
-  if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
-  const status = typeof data.status === 'string' && data.status ? data.status : 'terminé'
+  if (data.valid === false) return { label: `${t('issue.refuse-juge')}${suffix}`, state: 'failed' }
+  if (data.reused === true) return { label: `${t('issue.reutilise')}${suffix}`, state: 'refused' }
+  const status = typeof data.status === 'string' && data.status ? data.status : t('issue.termine')
   return { label: `${status}${suffix}`, state: 'ok' }
 }
 
@@ -214,7 +223,7 @@ function rememberOutcomeSummary(action: ActionLike): OutcomeSummary | undefined 
   if (data.allowed === false) {
     const motif = texte(data.reason)
     return {
-      label: motif ? `rien retenu — ${motif}` : 'rien retenu — depot refuse',
+      label: motif ? t('issue.rien-retenu', { motif }) : t('issue.rien-retenu.refus'),
       state: 'refused',
       ...(motif ? { why: [motif] } : {})
     }
@@ -234,14 +243,14 @@ function rememberOutcomeSummary(action: ActionLike): OutcomeSummary | undefined 
   const detail = texte(data.detail)
   if (data.unknown === true) {
     return {
-      label: detail ? `dépôt d’état inconnu — ${detail}` : 'dépôt d’état inconnu — ne pas retenter',
+      label: detail ? t('issue.depot-inconnu', { detail }) : t('issue.depot-inconnu.defaut'),
       state: 'refused',
       ...(detail ? { why: [detail] } : {})
     }
   }
   if (data.stored === false) {
     return {
-      label: detail ? `rien retenu — ${detail}` : 'rien retenu — le dépôt a échoué',
+      label: detail ? t('issue.rien-retenu', { motif: detail }) : t('issue.rien-retenu.echec'),
       state: 'failed',
       ...(detail ? { why: [detail] } : {})
     }
@@ -265,3 +274,4 @@ export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSumm
   )
 }
 import { formatExecutionCostCoverage } from '../../../shared/orchestration-outcome'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'

@@ -254,6 +254,26 @@ describe('runSqlRead — lecture du résultat', () => {
   })
 
   /**
+   * Défaut vécu (conv-1168, 27/10/2026, relevé par la maintenance du 28/10) : un agrégat sur une
+   * colonne qui contient des NULL fait écrire à SQL Server, APRÈS le JSON, l'avertissement « Warning:
+   * Null value is eliminated by an aggregate or other SET operation. » (gravité 10, donc code de
+   * sortie 0 même avec `-b`). Le JSON, valide, était rejeté en « Réponse illisible ».
+   */
+  it('accepte un message d’information écrit APRÈS le JSON', async () => {
+    const out = await lancer(
+      '[{"total":1453,"premiere":"2020-10-07T11:50:28"}]\n' +
+        'Warning: Null value is eliminated by an aggregate or other SET operation.'
+    ).resultat
+    expect(out.ok).toBe(true)
+    if (out.ok) expect(out.rows).toEqual([{ total: 1453, premiere: '2020-10-07T11:50:28' }])
+  })
+
+  it('un JSON coupé suivi de texte reste illisible, jamais une ligne partielle', async () => {
+    const out = await lancer('[{"a":1},{"b":2\nWarning: texte').resultat
+    expect(out.ok).toBe(false)
+  })
+
+  /**
    * `-f 65001` fait précéder le contenu d'un BOM UTF-8. Il n'appartient pas au résultat, et un JSON
    * qui commence par un BOM ne parse pas.
    */

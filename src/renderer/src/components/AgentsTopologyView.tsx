@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { langueCourante } from '../langue'
+import { riche } from '../textes'
+import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import { libraryModels } from './model-library'
 import { shortModelLabel } from './model-display-label'
 import { Spinner } from './Spinner'
@@ -60,6 +63,7 @@ export function AgentsTopologyView({
 }: {
   active?: boolean
 } = {}): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   const [models, setModels] = useState<ImportedModel[]>([])
   const [topology, setTopology] = useState<AgentTopology | null>(null)
   const [selectedModelId, setSelectedModelId] = useState('')
@@ -122,8 +126,11 @@ export function AgentsTopologyView({
           .catch((reason: unknown) => {
             // `setError` SEUL ne s'affichait pas : le badge ne rend le message que si
             // `state === 'error'`. L'échec de rafraîchissement était donc totalement muet.
+            // Hors `t` : l'effet ne suit que `active`, la langue est lue au moment de l'échec.
             setError(
-              `Rafraîchissement de la topologie impossible : ${reason instanceof Error ? reason.message : String(reason)}`
+              traduireAgentStudio('topo.erreur.rafraichissement', langueCourante(), {
+                raison: reason instanceof Error ? reason.message : String(reason)
+              })
             )
             setState('error')
           })
@@ -255,9 +262,7 @@ export function AgentsTopologyView({
       // Canal PROPRE : un refus de validation n'est pas un échec d'écriture. En passant par
       // `state = 'error'`, il maquillait le badge de persistance en panne jusqu'au prochain
       // enregistrement, alors que la topologie persistée était intacte.
-      setValidationError(
-        'Le fan-out des sous-agents n’est pas branché : un second sous-agent ne serait pas exécuté. Remplacez le slot existant.'
-      )
+      setValidationError(t('topo.erreur.fanout'))
       return
     }
     setValidationError('')
@@ -356,10 +361,10 @@ export function AgentsTopologyView({
           <div>
             <span>
               {target === 'orchestrator'
-                ? '01 · Autorité unique'
+                ? t('topo.rang.orchestrateur')
                 : target === 'subagents'
-                  ? '02 · Exécution bornée'
-                  : 'Panel parallèle'}
+                  ? t('topo.rang.sousAgents')
+                  : t('topo.rang.panel')}
             </span>
             <h3>{title}</h3>
             <p>{description}</p>
@@ -384,7 +389,9 @@ export function AgentsTopologyView({
                 <ModelMark provider={slot.provider} />
                 <div className="topology-slot-copy">
                   <small>{slot.slotId}</small>
-                  <strong>{model ? shortModelLabel(model.label, model.provider) : slot.modelId}</strong>
+                  <strong>
+                    {model ? shortModelLabel(model.label, model.provider) : slot.modelId}
+                  </strong>
                   <span>
                     {slot.provider} · {model?.model ?? slot.modelId}
                   </span>
@@ -392,13 +399,14 @@ export function AgentsTopologyView({
                     <b
                       className="slot-unresolved"
                       data-testid={`slot-unresolved-${slot.slotId}`}
-                      title={`Aucun modèle « ${slot.modelId} » au catalogue : déposez-en un pour résoudre ce slot`}
+                      title={t('topo.slot.introuvableTitre', { modele: slot.modelId })}
                     >
-                      modèle introuvable
+                      {t('topo.slot.introuvable')}
                     </b>
                   )}
                 </div>
                 <label>
+                  {/* « Effort » : le même mot en anglais. */}
                   Effort
                   <select
                     value={slot.reasoningEffort}
@@ -414,36 +422,34 @@ export function AgentsTopologyView({
                 {target !== 'orchestrator' && (
                   <button
                     type="button"
-                    title="Retirer ce slot"
+                    title={t('topo.slot.retirer')}
                     onClick={() => remove(target, slot.slotId)}
                   >
                     ×
                   </button>
                 )}
-                {index === 0 && <em>{target === 'orchestrator' ? 'actif' : 'rôle runtime'}</em>}
+                {index === 0 && (
+                  <em>
+                    {target === 'orchestrator' ? t('topo.slot.actif') : t('topo.slot.roleRuntime')}
+                  </em>
+                )}
                 {/* Fan-out multi-modèles branché pour scout/frame/judge : un slot >1 est RÉELLEMENT
                     exécuté en parallèle puis agrégé par l'orchestrateur. Pour subagents il ne l'est
                     pas encore (seul le 1er slot alimente les phases d'exécution) → marqué non actif. */}
                 {index > 0 &&
                   (FANOUT_ACTIVE.has(target) ? (
-                    <em
-                      className="slot-parallel"
-                      title="Exécuté en parallèle puis agrégé par l'orchestrateur (union pour scout/frame, quorum pour judge)"
-                    >
-                      parallèle · actif
+                    <em className="slot-parallel" title={t('topo.slot.paralleleTitre')}>
+                      {t('topo.slot.parallele')}
                     </em>
                   ) : (
-                    <em
-                      className="slot-inactive"
-                      title="Le fan-out des sous-agents n'est pas encore branché — ce slot n'est pas utilisé au runtime"
-                    >
-                      non actif
+                    <em className="slot-inactive" title={t('topo.slot.inactifTitre')}>
+                      {t('topo.slot.inactif')}
                     </em>
                   ))}
               </article>
             )
           })}
-          {slots.length === 0 && <div className="topology-empty">Glissez un modèle ici</div>}
+          {slots.length === 0 && <div className="topology-empty">{t('topo.vide')}</div>}
         </div>
         <button
           type="button"
@@ -455,17 +461,15 @@ export function AgentsTopologyView({
             (target === 'subagents' && slots.length > 0)
           }
           title={
-            target === 'subagents' && slots.length > 0
-              ? 'Fan-out des sous-agents non branché : un second slot ne serait pas exécuté'
-              : undefined
+            target === 'subagents' && slots.length > 0 ? t('topo.ajouter.fanoutTitre') : undefined
           }
           onClick={() => assign(selectedModel, target)}
         >
           {target === 'orchestrator'
-            ? 'Remplacer avec le modèle sélectionné'
+            ? t('topo.ajouter.remplacer')
             : target === 'subagents' && slots.length > 0
-              ? 'Fan-out non branché — remplacez le slot existant'
-              : '+ Ajouter le modèle sélectionné'}
+              ? t('topo.ajouter.fanout')
+              : t('topo.ajouter.ajouter')}
         </button>
       </section>
     )
@@ -478,7 +482,7 @@ export function AgentsTopologyView({
           `⛔ ${error}`
         ) : (
           <>
-            <Spinner /> Chargement de la topologie…
+            <Spinner /> {t('topo.chargement')}
           </>
         )}
         {state === 'error' && (
@@ -494,7 +498,7 @@ export function AgentsTopologyView({
               setReloadKey((key) => key + 1)
             }}
           >
-            Réessayer
+            {t('topo.reessayer')}
           </button>
         )}
       </div>
@@ -504,29 +508,30 @@ export function AgentsTopologyView({
   return (
     <div className="agents-topology">
       <header className="topology-toolbar">
+        {/* « Models » : déjà en anglais dans l'écran français. */}
         <ModuleHeader
-          eyebrow="Configuration des agents"
+          eyebrow={t('topo.eyebrow')}
           title="Models"
-          description="Assigne les modèles aux rôles et contrôle leur disponibilité."
+          description={t('topo.description')}
         />
         <strong
           className={`topology-state is-${state}`}
           role={state === 'error' ? 'alert' : undefined}
         >
           {state === 'saving'
-            ? 'Enregistrement…'
+            ? t('topo.etat.enregistrement')
             : state === 'error'
-              ? `Erreur · ${error}`
-              : 'Enregistré dans le profil Autowin'}
+              ? t('topo.etat.erreur', { erreur: error })
+              : t('topo.etat.enregistre')}
         </strong>
         <div className="topology-profiles">
           {namingProfile ? (
             <span className="topology-profile-naming">
               <input
                 data-testid="topology-profile-name"
-                aria-label="Nom du profil"
+                aria-label={t('topo.profil.nom')}
                 value={profileName}
-                placeholder="Nom du profil"
+                placeholder={t('topo.profil.nom')}
                 onChange={(event) => setProfileName(event.target.value)}
               />
               <button
@@ -536,7 +541,7 @@ export function AgentsTopologyView({
                 disabled={!profileName.trim() || unresolvedSlots.length > 0}
                 onClick={() => void saveProfile()}
               >
-                Enregistrer
+                {t('topo.profil.enregistrer')}
               </button>
               <button
                 type="button"
@@ -547,7 +552,7 @@ export function AgentsTopologyView({
                   setProfileName('')
                 }}
               >
-                Annuler
+                {t('topo.profil.annuler')}
               </button>
             </span>
           ) : (
@@ -556,26 +561,22 @@ export function AgentsTopologyView({
               className="topology-assign-button"
               data-testid="topology-profile-new"
               disabled={unresolvedSlots.length > 0}
-              title={
-                unresolvedSlots.length > 0
-                  ? 'Un slot pointe un modèle introuvable : résolvez-le avant de figer un profil'
-                  : undefined
-              }
+              title={unresolvedSlots.length > 0 ? t('topo.profil.gelTitre') : undefined}
               onClick={() => setNamingProfile(true)}
             >
-              ＋ Profil
+              {t('topo.profil.nouveau')}
             </button>
           )}
           {/* Select CONTRÔLÉ : en `defaultValue`, il retombait sur « Profils sauvegardés » après une
               application — rien ne disait plus quel profil était en place. */}
           <select
-            aria-label="Appliquer un profil"
+            aria-label={t('topo.profil.appliquerAria')}
             data-testid="topology-profile-select"
             value={pendingProfileId || appliedProfileId}
             disabled={unresolvedSlots.length > 0}
             onChange={(event) => setPendingProfileId(event.target.value)}
           >
-            <option value="">Profils sauvegardés</option>
+            <option value="">{t('topo.profil.sauvegardes')}</option>
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.name}
@@ -586,7 +587,7 @@ export function AgentsTopologyView({
             <span className="topology-profile-badge" data-testid="topology-profile-applied">
               {profiles.find((profile) => profile.id === appliedProfileId)?.name ??
                 appliedProfileId}
-              {topologyDirty ? ' · modifié' : ''}
+              {topologyDirty ? t('topo.profil.modifie') : ''}
             </span>
           )}
           {/* Appliquer ÉCRASE la topologie courante : le geste se confirme, et il le dit d'autant
@@ -595,12 +596,11 @@ export function AgentsTopologyView({
             <span
               className="topology-profile-confirm"
               role="alertdialog"
-              aria-label="Confirmer l’application du profil"
+              aria-label={t('topo.confirmer.aria')}
               data-testid="topology-apply-confirm"
             >
               <span>
-                Écraser la topologie courante
-                {topologyDirty ? ' (modifications non enregistrées dans un profil)' : ''} ?
+                {t(topologyDirty ? 'topo.confirmer.questionModifiee' : 'topo.confirmer.question')}
               </span>
               <button
                 type="button"
@@ -612,7 +612,7 @@ export function AgentsTopologyView({
                   void applyProfile(id)
                 }}
               >
-                Appliquer
+                {t('topo.confirmer.appliquer')}
               </button>
               <button
                 type="button"
@@ -620,7 +620,7 @@ export function AgentsTopologyView({
                 data-testid="topology-apply-no"
                 onClick={() => setPendingProfileId('')}
               >
-                Annuler
+                {t('topo.profil.annuler')}
               </button>
             </span>
           )}
@@ -633,7 +633,7 @@ export function AgentsTopologyView({
           role="alert"
           data-testid="topology-profiles-error"
         >
-          Liste des profils illisible : {profilesError}
+          {t('topo.profils.illisible', { erreur: profilesError })}
           <button
             type="button"
             className="topology-assign-button"
@@ -643,7 +643,7 @@ export function AgentsTopologyView({
               setProfilesReloadKey((key) => key + 1)
             }}
           >
-            Réessayer
+            {t('topo.reessayer')}
           </button>
         </p>
       )}
@@ -660,15 +660,16 @@ export function AgentsTopologyView({
 
       {unresolvedSlots.length > 0 && (
         <p className="topology-unresolved-banner" role="alert" data-testid="topology-unresolved">
-          {unresolvedSlots.length} slot(s) pointent un modèle introuvable au catalogue (
-          {unresolvedSlots.map((slot) => slot.slotId).join(', ')}) : profils et application gelés
-          tant qu’ils ne sont pas résolus.
+          {t('topo.slotsIntrouvables', {
+            n: unresolvedSlots.length,
+            slots: unresolvedSlots.map((slot) => slot.slotId).join(', ')
+          })}
         </p>
       )}
 
       <aside className="topology-library">
-        <span className="topology-eyebrow">Modèles importés</span>
-        <p>Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.</p>
+        <span className="topology-eyebrow">{t('topo.biblio.eyebrow')}</span>
+        <p>{t('topo.biblio.aide')}</p>
         {sortedModels.some((model) => model.provider === 'gemini') && (
           <button
             type="button"
@@ -680,13 +681,15 @@ export function AgentsTopologyView({
                 // Même défaut que le rafraîchissement : sans `state = 'error'`, le message posé
                 // n'était jamais rendu et le bouton semblait sans effet.
                 setError(
-                  `Le login Gemini n'a pas pu être lancé : ${reason instanceof Error ? reason.message : String(reason)}`
+                  t('topo.gemini.erreur', {
+                    raison: reason instanceof Error ? reason.message : String(reason)
+                  })
                 )
                 setState('error')
               })
             }
           >
-            Connecter Gemini avec Google
+            {t('topo.gemini.connecter')}
           </button>
         )}
         <div className="topology-models">
@@ -711,7 +714,9 @@ export function AgentsTopologyView({
                   {(() => {
                     // 'none' n'est pas un niveau : on ne l'affiche jamais comme effort.
                     const efforts = model.reasoningEfforts.filter((effort) => effort !== 'none')
-                    return efforts.length > 0 ? ` · efforts ${efforts.join(', ')}` : ''
+                    return efforts.length > 0
+                      ? t('topo.modele.efforts', { liste: efforts.join(', ') })
+                      : ''
                   })()}
                 </small>
               </span>
@@ -719,12 +724,9 @@ export function AgentsTopologyView({
           ))}
         </div>
         <div className="topology-authority-note">
-          <b>Autorité</b>
-          <span>La configuration est validée et persistée par le main process.</span>
-          <span>
-            Scouts, Frame, Terrain et Judges : tous les modèles déposés s’exécutent (fan-out +
-            agrégation). Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.
-          </span>
+          <b>{t('topo.autorite.titre')}</b>
+          <span>{t('topo.autorite.main')}</span>
+          <span>{t('topo.autorite.fanout')}</span>
         </div>
       </aside>
 
@@ -732,59 +734,54 @@ export function AgentsTopologyView({
         <div className="topology-primary">
           {renderTargetPanel({
             target: 'orchestrator',
-            title: 'Orchestrateur',
-            description: 'Un seul modèle pilote et consolide.',
+            title: t('topo.orchestrateur.titre'),
+            description: t('topo.orchestrateur.description'),
             accent: 'gold'
           })}
           {renderTargetPanel({
             target: 'subagents',
-            title: 'Sous-agents',
-            description: 'Zéro à plusieurs exécutants bornés.',
+            title: t('topo.sousAgents.titre'),
+            description: t('topo.sousAgents.description'),
             accent: 'cyan'
           })}
         </div>
         <div className="topology-parallel-heading">
           <div>
-            <span>Panels composés</span>
-            <h3>Exploration et vérification parallèles</h3>
+            <span>{t('topo.panels.eyebrow')}</span>
+            <h3>{t('topo.panels.titre')}</h3>
           </div>
-          <small>Les sorties restent distinctes avant synthèse.</small>
+          <small>{t('topo.panels.note')}</small>
         </div>
         <div className="topology-parallel">
           {renderTargetPanel({
             target: 'scout',
+            // « Scouts », « Frame », « Terrain », « Judges » : les noms des phases du moteur.
             title: 'Scouts',
-            description: 'Plusieurs lectures indépendantes du même front.',
+            description: t('topo.scout.description'),
             accent: 'pink'
           })}
           {renderTargetPanel({
             target: 'frame',
             title: 'Frame',
-            description: 'Plusieurs modèles cadrent la même tâche ; angles fusionnés.',
+            description: t('topo.frame.description'),
             accent: 'amber'
           })}
           {renderTargetPanel({
             target: 'terrain',
             title: 'Terrain',
-            description:
-              'Plusieurs modèles préparent le harnais et les preuves ; sorties fusionnées.',
+            description: t('topo.terrain.description'),
             accent: 'cyan'
           })}
           {renderTargetPanel({
             target: 'judge',
             title: 'Judges',
-            description: 'Plusieurs challenges indépendants avant verdict.',
+            description: t('topo.judge.description'),
             accent: 'violet'
           })}
         </div>
         <div className="topology-runtime-limit">
-          <b>Runtime actuel</b>
-          <span>
-            <b>Scouts, Frame, Terrain et Judges</b> : déposez-y plusieurs modèles — ils s’exécutent
-            en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame/Terrain,
-            quorum de vote pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot
-            alimente le runtime (fan-out des sous-agents pas encore branché).
-          </span>
+          <b>{t('topo.runtime.titre')}</b>
+          <span>{riche(t('topo.runtime.detail'), 'b')}</span>
         </div>
       </main>
     </div>

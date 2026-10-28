@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { personasFor } from '../../../shared/persona'
+import { useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import './WorkflowCanvas.css'
 import {
   PIPELINE_PHASES,
@@ -142,9 +143,13 @@ export function WorkflowCanvas({
   worstCase = null,
   skills = []
 }: WorkflowCanvasProps): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   /** Huit phases d'abord, puis les skills du disque qui n'en sont pas déjà une. */
   const palette = useMemo<readonly Phase[]>(
-    () => [...PALETTE_PHASES, ...skills.filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase))],
+    () => [
+      ...PALETTE_PHASES,
+      ...skills.filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase))
+    ],
     [skills]
   )
   const [drag, setDrag] = useState<number>()
@@ -279,6 +284,7 @@ export function WorkflowCanvas({
     <section className="wf-canvas" data-testid="workflow-canvas">
       <div className="wf-editor">
         <aside className="wf-palette-pane">
+          {/* « Phases », « Agents », « Agent N », « Angle », « Effort », « Quorum » : les mêmes mots en anglais. */}
           <p className="wf-kicker">Phases</p>
           <ul className="wf-palette" data-testid="wf-palette">
             {palette.map((phase) => (
@@ -295,9 +301,7 @@ export function WorkflowCanvas({
               </li>
             ))}
           </ul>
-          <p className="wf-hint">
-            Cliquer ajoute la phase au bout de la chaîne. Glisser un nœud le réordonne.
-          </p>
+          <p className="wf-hint">{t('canevas.aide')}</p>
         </aside>
 
         {/* Deux boîtes, pas une : le VIEWPORT défile, la SURFACE porte sa taille réelle. Elles étaient
@@ -406,7 +410,7 @@ export function WorkflowCanvas({
                       type="button"
                       className="wf-node-remove"
                       data-testid={`wf-remove-${node.id}`}
-                      title={`Retirer ${node.phase}`}
+                      title={t('canevas.retirer', { phase: node.phase })}
                       onClick={() => retirer(node.id)}
                     >
                       ×
@@ -417,11 +421,13 @@ export function WorkflowCanvas({
                           <span
                             className="wf-ag"
                             key={i}
-                            title={agent.model ?? 'modèle par défaut'}
+                            title={agent.model ?? t('canevas.modeleParDefaut')}
                           />
                         ))
                       ) : (
-                        <span className="wf-ag-label">{agents[0]?.model ?? '1 agent'}</span>
+                        <span className="wf-ag-label">
+                          {agents[0]?.model ?? t('canevas.unAgent')}
+                        </span>
                       )}
                       {node.quorum ? <span className="wf-quorum-badge">q{node.quorum}</span> : null}
                     </span>
@@ -443,14 +449,16 @@ export function WorkflowCanvas({
               la chaîne s'allonge que le devis « ≤N exéc. » doit rester sous les yeux. */}
           <div className="wf-statusbar">
             {worstCase ? (
-              <span className="wf-pill is-warn">≤{worstCase} exéc. au pire cas</span>
+              <span className="wf-pill is-warn">{t('canevas.pireCas', { n: worstCase })}</span>
             ) : null}
             {defects.length ? (
               <span className="wf-pill is-err">
-                {defects.length} défaut{defects.length > 1 ? 's' : ''}
+                {t(defects.length > 1 ? 'canevas.defaut.plusieurs' : 'canevas.defaut.un', {
+                  n: defects.length
+                })}
               </span>
             ) : (
-              <span className="wf-pill is-ok">valide</span>
+              <span className="wf-pill is-ok">{t('canevas.valide')}</span>
             )}
           </div>
         </div>
@@ -470,7 +478,7 @@ export function WorkflowCanvas({
               const index = rang.get(node.id) ?? 0
               return (
                 <div className="wf-node-detail" data-testid={`wf-detail-${node.id}`}>
-                  <p className="wf-kicker">Nœud sélectionné</p>
+                  <p className="wf-kicker">{t('canevas.noeudSelectionne')}</p>
                   <p className={`wf-insp-title ${classePhase(node.phase)}`}>
                     <span className="wf-dot" />
                     {node.id}
@@ -489,10 +497,7 @@ export function WorkflowCanvas({
                         // On PRÉSERVE les modèles déjà choisis : changer le nombre d'agents ne doit
                         // pas effacer en silence le réglage fin de ceux qui restent.
                         majNoeud(node.id, {
-                          agents: Array.from(
-                            { length: n },
-                            (_, i) => actuels[i] ?? {}
-                          ),
+                          agents: Array.from({ length: n }, (_, i) => actuels[i] ?? {}),
                           ...(node.quorum && node.quorum > n ? { quorum: n } : {})
                         })
                       }}
@@ -513,7 +518,7 @@ export function WorkflowCanvas({
                             majAgent(node, r, { persona: e.target.value || undefined })
                           }
                         >
-                          <option value="">aucun angle imposé</option>
+                          <option value="">{t('canevas.aucunAngle')}</option>
                           {personasFor(node.phase).map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.label}
@@ -522,7 +527,7 @@ export function WorkflowCanvas({
                         </select>
                       </label>
                       <label>
-                        Modèle
+                        {t('canevas.modele')}
                         <select
                           data-testid={`wf-agent-model-${node.id}-${r}`}
                           value={agent.model ?? ''}
@@ -534,11 +539,13 @@ export function WorkflowCanvas({
                             })
                           }}
                         >
-                          <option value="">modèle par défaut</option>
+                          <option value="">{t('canevas.modeleParDefaut')}</option>
                           {/* Un modèle déjà composé mais absent du catalogue reste proposé : sinon
                               ouvrir un profil ancien effacerait silencieusement son réglage. */}
                           {agent.model && !models.some((m) => m.id === agent.model) && (
-                            <option value={agent.model}>{agent.model} (indisponible)</option>
+                            <option value={agent.model}>
+                              {t('canevas.indisponible', { modele: agent.model })}
+                            </option>
                           )}
                           {models.map((m) => (
                             <option key={`${m.provider}:${m.id}`} value={m.id}>
@@ -556,7 +563,7 @@ export function WorkflowCanvas({
                             majAgent(node, r, { reasoningEffort: e.target.value || undefined })
                           }
                         >
-                          <option value="">par défaut</option>
+                          <option value="">{t('canevas.parDefaut')}</option>
                           {EFFORTS.map((effort) => (
                             <option key={effort} value={effort}>
                               {effort}
@@ -574,7 +581,7 @@ export function WorkflowCanvas({
                       max={node.agents?.length ?? 1}
                       data-testid={`wf-quorum-${node.id}`}
                       value={node.quorum ?? ''}
-                      placeholder="majorité"
+                      placeholder={t('canevas.majorite')}
                       onChange={(e) =>
                         majNoeud(node.id, {
                           quorum: e.target.value ? Number(e.target.value) : undefined
@@ -584,7 +591,7 @@ export function WorkflowCanvas({
                   </label>
                   {/* Tracer un retour depuis ce nœud vers un nœud déjà passé. */}
                   {graph.nodes.slice(0, index).length > 0 && (
-                    <p className="wf-kicker wf-kicker-sub">Renvoyer vers</p>
+                    <p className="wf-kicker wf-kicker-sub">{t('canevas.renvoyerVers')}</p>
                   )}
                   <div className="wf-return-buttons">
                     {graph.nodes.slice(0, index).map((cible) => {
@@ -601,9 +608,7 @@ export function WorkflowCanvas({
                           aria-pressed={dejaTrace}
                           disabled={dejaTrace}
                           title={
-                            dejaTrace
-                              ? `Renvoi vers ${cible.phase} déjà tracé — retirez-le dans « Retours »`
-                              : undefined
+                            dejaTrace ? t('canevas.renvoiTrace', { phase: cible.phase }) : undefined
                           }
                           data-testid={`wf-return-${node.id}-${cible.id}`}
                           onClick={() => tracerRetour(node.id, cible.id)}
@@ -617,14 +622,12 @@ export function WorkflowCanvas({
               )
             })()
           ) : (
-            <p className="wf-hint wf-insp-empty">
-              Cliquer un nœud pour régler ses agents, son quorum et ses retours.
-            </p>
+            <p className="wf-hint wf-insp-empty">{t('canevas.inspecteurVide')}</p>
           )}
 
           {retours.length > 0 && (
             <ul className="wf-returns" data-testid="wf-returns">
-              <li className="wf-kicker wf-kicker-sub">Retours</li>
+              <li className="wf-kicker wf-kicker-sub">{t('canevas.retours')}</li>
               {retours.map((edge) => {
                 return (
                   <li
@@ -634,10 +637,13 @@ export function WorkflowCanvas({
                     data-testid={`wf-edge-${edge.from}-${edge.to}`}
                   >
                     <span className="wf-return-name">
-                      {edge.from} → {edge.to} si {edge.when === 'green' ? 'vert' : 'rouge'}
+                      {t(edge.when === 'green' ? 'canevas.retourVert' : 'canevas.retourRouge', {
+                        de: edge.from,
+                        vers: edge.to
+                      })}
                     </span>
                     <label>
-                      au plus
+                      {t('canevas.auPlus')}
                       <input
                         type="number"
                         min={1}
@@ -661,7 +667,7 @@ export function WorkflowCanvas({
                       className="wf-return-drop"
                       data-testid={`wf-drop-${edge.from}-${edge.to}`}
                       onClick={() => retirerRetour(edge.from, edge.to)}
-                      title="Retirer ce retour"
+                      title={t('canevas.retirerRetour')}
                     >
                       ×
                     </button>

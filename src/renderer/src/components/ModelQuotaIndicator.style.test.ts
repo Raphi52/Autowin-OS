@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { TEXTES_FR } from '../textes-ecrans/chat-panneaux'
 
 const component = readFileSync(new URL('./ModelQuotaIndicator.tsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('./ModelQuotaIndicator.css', import.meta.url), 'utf8')
@@ -87,7 +88,9 @@ describe('barre de quota cliquable', () => {
 
   it('conserve le popover existant, désormais ouvert par la barre', () => {
     expect(component).toContain('model-quota-popover')
-    expect(component).toContain('Quotas fournisseurs')
+    // Le titre vit dans la table de textes depuis la traduction anglaise (conv-1170).
+    expect(component).toContain("t('quota.titre')")
+    expect(TEXTES_FR['quota.titre']).toBe('Quotas fournisseurs')
   })
 
   /**

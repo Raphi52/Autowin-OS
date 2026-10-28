@@ -66,14 +66,10 @@ describe('CandidatsPickPanel', () => {
   })
 
   /*
-   * PISTE 2 (conv-1033) — « Pourquoi pas ? » en un clic sur une piste DÉCOCHÉE : 4 motifs, et le motif
-   * part au processus principal par `onMotif`. Entrée qui tue une correction fausse : une ligne COCHÉE
-   * — un bouton de refus sur une piste qu'on garde enverrait un motif contraire au choix.
+   * « Pourquoi pas ? » retiré (conv-1198, « ça sert à rien ») : une ligne DÉCOCHÉE n'a plus de bouton
+   * de motif, ni ses 4 choix — décocher suffit.
    */
-  it('une ligne décochée propose « Pourquoi pas ? » et ses 4 motifs ; le motif choisi part et s’affiche', async () => {
-    const onMotif = vi.fn<(candidat: { titre: string }, motif: string) => Promise<boolean>>(
-      async () => true
-    )
+  it('une ligne décochée n’a plus de bouton « Pourquoi pas ? » ni de motifs', () => {
     act(() =>
       root.render(
         <CandidatsPickPanel
@@ -81,75 +77,14 @@ describe('CandidatsPickPanel', () => {
             { type: 'fix', titre: 'Gardée' },
             { type: 'fix', titre: 'Laissée' }
           ]}
-          onMotif={onMotif}
         />
       )
     )
-    const pourquoi = (): NodeListOf<HTMLButtonElement> =>
-      container.querySelectorAll<HTMLButtonElement>('[data-testid="cpick-pourquoi"]')
-    expect(pourquoi()).toHaveLength(0)
-    const cases = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
-    act(() => cases[2].click())
-    expect(pourquoi()).toHaveLength(1)
-    act(() => pourquoi()[0].click())
-    const motifs = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="cpick-motif"]')]
-    expect(motifs.map((b) => b.textContent)).toEqual([
-      'déjà fait',
-      'faux',
-      'trop petit',
-      'hors sujet'
-    ])
-    await act(async () => motifs[2].click())
-    expect(onMotif).toHaveBeenCalledOnce()
-    expect(onMotif.mock.calls[0][0]).toMatchObject({ titre: 'Laissée' })
-    expect(onMotif.mock.calls[0][1]).toBe('trop-petit')
-    expect(container.querySelectorAll('[data-testid="cpick-motif"]')).toHaveLength(0)
-    expect(container.querySelector('[data-testid="cpick-motif-note"]')?.textContent).toBe(
-      'Noté : trop petit'
-    )
-  })
-
-  // Un motif que la mémoire n'a pas pu poser ne s'affiche pas « Noté » : le dire, pas le maquiller.
-  it('jumeau : une piste inconnue de la mémoire, ou un échec, s’affiche « non noté »', async () => {
-    const onMotif = vi
-      .fn<() => Promise<boolean>>()
-      .mockResolvedValueOnce(false)
-      .mockRejectedValueOnce(new Error('canal fermé'))
-    act(() =>
-      root.render(
-        <CandidatsPickPanel
-          candidats={[
-            { type: 'fix', titre: 'A' },
-            { type: 'fix', titre: 'B' }
-          ]}
-          onMotif={onMotif}
-        />
-      )
-    )
-    act(() => container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[0].click())
-    for (const index of [0, 1]) {
-      act(() =>
-        container
-          .querySelectorAll<HTMLButtonElement>('[data-testid="cpick-pourquoi"]')
-          [index].click()
-      )
-      await act(async () =>
-        container.querySelectorAll<HTMLButtonElement>('[data-testid="cpick-motif"]')[0].click()
-      )
-    }
-    const notes = [...container.querySelectorAll('[data-testid="cpick-motif-note"]')].map(
-      (n) => n.textContent
-    )
-    expect(notes).toEqual([
-      'Non noté : piste absente de la mémoire du scout',
-      'Non noté : canal fermé'
-    ])
-  })
-
-  it('jumeau : sans appelant qui note le motif, une ligne décochée n’a pas de bouton', () => {
-    act(() => root.render(<CandidatsPickPanel candidats={[{ type: 'fix', titre: 'Laissée' }]} />))
-    act(() => container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1].click())
+    act(() => container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[2].click())
+    expect(container.querySelector('.cpick-compte')?.textContent).toContain('1/2')
     expect(container.querySelectorAll('[data-testid="cpick-pourquoi"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-testid="cpick-motif"]')).toHaveLength(0)
+    expect(container.textContent).not.toContain('Pourquoi pas')
   })
 
   /**
@@ -234,9 +169,9 @@ describe('CandidatsPickPanel', () => {
   })
 
   /*
-   * L'ARRIVEE DES CANDIDATS (conv-981) : cascade, barre de note, details en fondu. Les bornes sont
-   * celles du cadrage : note absente = pas de barre, note hors 0-100 = barre bornee, decalage de la
-   * cascade plafonne a l'index 10 (30 candidats ne doivent pas attendre 1,2 s).
+   * L'ARRIVEE DES CANDIDATS (conv-981) : cascade et details en fondu ; decalage de la cascade
+   * plafonne a l'index 10 (30 candidats ne doivent pas attendre 1,2 s). La barre de note est
+   * retiree (conv-1198) : le chiffre seul reste.
    */
   const candidat = (
     titre: string,
@@ -246,10 +181,7 @@ describe('CandidatsPickPanel', () => {
     url: `src/${titre}.ts:1`,
     ...(pertinence === undefined ? {} : { pertinence })
   })
-  const largeurBarre = (ligne: Element): string | null =>
-    ligne.querySelector<HTMLElement>('.cpick-barre-remplie')?.style.width ?? null
-
-  it('une barre montre la note, bornee entre 0 et 100 %', () => {
+  it('la note s’affiche en chiffre seul, sans jauge', () => {
     act(() =>
       root.render(
         <CandidatsPickPanel
@@ -258,8 +190,8 @@ describe('CandidatsPickPanel', () => {
       )
     )
     const lignes = [...container.querySelectorAll('[data-testid="cpick-ligne"]')]
-    expect(lignes.map(largeurBarre)).toEqual(['72%', '100%', '0%', '0%'])
-    // Le chiffre reste affiche tel que le scout l'a donne : la barre illustre, elle ne corrige pas.
+    expect(container.querySelector('.cpick-barre')).toBeNull()
+    // Le chiffre reste affiche tel que le scout l'a donne.
     expect(lignes.map((l) => l.querySelector('.cpick-score')?.textContent)).toEqual([
       '72',
       '140',

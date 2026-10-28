@@ -1,4 +1,6 @@
 import type { TicketItem } from '../../../shared/tickets'
+import { langueCourante } from '../langue'
+import { traduireReglagesEtDecor } from '../textes-ecrans/reglages-et-decor'
 
 /**
  * MODE AUTO — traiter les tickets ENTRANTS du filtre courant, sans intervention.
@@ -107,10 +109,13 @@ export function saveAutoModeSettings(
 export function describeAutoModeCost(settings: AutoModeSettings, pendingRuns: number): string {
   const normalized = normalizeAutoModeSettings(settings)
   const planned = Math.max(0, Math.trunc(pendingRuns))
-  return (
-    `${planned} run(s) à lancer · ${normalized.concurrency} en parallèle · ` +
-    `max ${normalized.capPerCycle}/cycle · plafond session ${normalized.maxRunsPerSession} run(s) payants`
-  )
+  // Dans la langue de l'interface (conv-1170) : la vue des tickets l'appelle pendant son rendu.
+  return traduireReglagesEtDecor('ticketsAuto.cout', langueCourante(), {
+    aLancer: planned,
+    parallele: normalized.concurrency,
+    parCycle: normalized.capPerCycle,
+    plafond: normalized.maxRunsPerSession
+  })
 }
 
 /**

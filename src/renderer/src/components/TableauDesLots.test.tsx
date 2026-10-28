@@ -198,6 +198,27 @@ describe('TableauDesLots', () => {
     })
   })
 
+  /*
+   * conv-1171 : 36 avertissements dépliés poussaient la zone de saisie hors de l'écran. Ils sont
+   * repliés derrière un compte, et restent lisibles une fois le plan parti (plus de phase d'accord).
+   */
+  it('avertissements repliés derrière leur nombre, aussi pendant que le plan tourne', async () => {
+    const avertissements = Array.from(
+      { length: 36 },
+      (_, i) => `les lots 1 et ${i + 2} annoncent le même fichier (src/x.ts) : ils passeront l’un après l’autre.`
+    )
+    poserApi({
+      'conv-1': { plan: { ...plan(), statut: 'en-cours', avertissements }, role: 'chef' }
+    })
+    const { hote, fin } = await monter('conv-1')
+    const bloc = hote.querySelector('[data-testid="tdl-avertissements"]') as HTMLDetailsElement
+    expect(bloc.tagName).toBe('DETAILS')
+    expect(bloc.open).toBe(false)
+    expect(bloc.querySelector('summary')?.textContent).toBe('36 avertissements')
+    expect(bloc.querySelectorAll('li')).toHaveLength(36)
+    fin()
+  })
+
   it('se relit au signal « plans-de-lots » ; un fil sans plan n’affiche rien', async () => {
     poserApi({ 'conv-1': null })
     const { hote, fin } = await monter('conv-1')

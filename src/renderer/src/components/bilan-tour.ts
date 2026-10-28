@@ -1,4 +1,5 @@
 import type { ChatPart } from './chat-view-model'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 /**
  * BILAN D'UN TOUR — ce qu'il a accompli, y compris quand il s'arrête mal.
@@ -56,7 +57,7 @@ function citer(libelles: readonly string[]): string {
   const uniques = [...new Set(libelles)]
   const cites = uniques.slice(0, CITES_MAX).join(' · ')
   const reste = uniques.length - CITES_MAX
-  return reste > 0 ? `${cites} · et ${reste} autre(s)` : cites
+  return reste > 0 ? t('tour.et-autres', { cites, reste }) : cites
 }
 
 /**
@@ -66,17 +67,19 @@ function citer(libelles: readonly string[]): string {
 export function formaterBilan(bilan: BilanTour): string | undefined {
   const morceaux: string[] = []
   if (bilan.reussies.length > 0) {
+    const n = bilan.reussies.length
     morceaux.push(
-      `${bilan.reussies.length} réussie${bilan.reussies.length > 1 ? 's' : ''} : ${citer(bilan.reussies)}`
+      t(n > 1 ? 'tour.reussies.n' : 'tour.reussies.un', { n, liste: citer(bilan.reussies) })
     )
   }
   if (bilan.echouees.length > 0) {
+    const n = bilan.echouees.length
     morceaux.push(
-      `${bilan.echouees.length} échouée${bilan.echouees.length > 1 ? 's' : ''} : ${citer(bilan.echouees)}`
+      t(n > 1 ? 'tour.echouees.n' : 'tour.echouees.un', { n, liste: citer(bilan.echouees) })
     )
   }
   if (bilan.sansIssue > 0) {
-    morceaux.push(`${bilan.sansIssue} sans issue connue`)
+    morceaux.push(t('tour.sans-issue', { n: bilan.sansIssue }))
   }
-  return morceaux.length > 0 ? `Avant l’arrêt — ${morceaux.join(' | ')}` : undefined
+  return morceaux.length > 0 ? t('tour.avant-arret', { morceaux: morceaux.join(' | ') }) : undefined
 }

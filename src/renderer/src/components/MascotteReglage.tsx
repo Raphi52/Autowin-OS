@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
+import { riche } from '../textes'
+import { useTextesReglagesEtDecor } from '../textes-ecrans/reglages-et-decor'
 import './MascotteReglage.css'
+
+/** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise (conv-1170). */
+type ErreurMascotte = 'mascotte.erreurLecture' | 'mascotte.erreurEnregistrement'
 
 /**
  * Settings · Interface — « Mascotte du bureau » (conv-1145, 2026-10-25).
@@ -10,10 +15,11 @@ import './MascotteReglage.css'
  * laisse pas un interrupteur dans la mauvaise position.
  */
 export function MascotteReglage(): React.JSX.Element {
+  const { t } = useTextesReglagesEtDecor()
   /** `null` tant que le moteur n'a pas répondu : l'interrupteur reste inerte. */
   const [affichee, setAffichee] = useState<boolean | null>(null)
   const [occupe, setOccupe] = useState(false)
-  const [erreur, setErreur] = useState<string | null>(null)
+  const [erreur, setErreur] = useState<ErreurMascotte | null>(null)
 
   useEffect(() => {
     let vivant = true
@@ -27,7 +33,7 @@ export function MascotteReglage(): React.JSX.Element {
           if (vivant) setAffichee(oui)
         })
         .catch(() => {
-          if (vivant) setErreur('Le réglage de la mascotte n’a pas pu être lu.')
+          if (vivant) setErreur('mascotte.erreurLecture')
         })
     }
     relire()
@@ -47,7 +53,7 @@ export function MascotteReglage(): React.JSX.Element {
     try {
       setAffichee(await window.api.afficherMascotte(!affichee))
     } catch {
-      setErreur('Le choix n’a pas pu être enregistré : la mascotte reste comme avant.')
+      setErreur('mascotte.erreurEnregistrement')
     } finally {
       setOccupe(false)
     }
@@ -56,31 +62,24 @@ export function MascotteReglage(): React.JSX.Element {
   return (
     <div className="interface-row" data-testid="interface-mascotte">
       <div className="interface-row-text">
-        <strong>Mascotte du bureau</strong>
-        <p>
-          La <strong>bille</strong> aux couleurs du logo, juste au-dessus de l’horloge, quand
-          Autowin est réduit ou derrière une autre fenêtre. Son halo dit si un agent{' '}
-          <strong>travaille</strong>, si un fil <strong>t’attend</strong> ou si un tour a{' '}
-          <strong>échoué</strong> ; un clic ouvre le fil. Au survol, sa <strong>poignée</strong> (en
-          haut à gauche) la déplace et sa <strong>croix</strong> la ferme : elle ne revient alors
-          que par cet interrupteur. Tant qu’elle est affichée, les cartes de fin de tour portent un{' '}
-          <strong>liseré arc-en-ciel</strong>. Masquée, elle disparaît aussitôt et les cartes
-          reprennent leur bord habituel.
-        </p>
-        {erreur && <p className="mascotte-reglage-erreur">{erreur}</p>}
+        <strong>{t('mascotte.titre')}</strong>
+        <p>{riche(t('mascotte.description'))}</p>
+        {erreur && <p className="mascotte-reglage-erreur">{t(erreur)}</p>}
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={affichee === true}
-        aria-label="Afficher la mascotte du bureau"
+        aria-label={t('mascotte.interrupteur')}
         className={`mascotte-switch${affichee ? ' is-on' : ''}`}
         disabled={affichee === null || occupe}
         data-testid="interface-mascotte-switch"
         onClick={() => void basculer()}
       >
         <i />
-        <span>{affichee === null ? '…' : affichee ? 'Affichée' : 'Masquée'}</span>
+        <span>
+          {affichee === null ? '…' : affichee ? t('mascotte.affichee') : t('mascotte.masquee')}
+        </span>
       </button>
     </div>
   )

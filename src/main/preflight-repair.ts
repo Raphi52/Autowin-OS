@@ -26,6 +26,7 @@ import { resolveBinOnPath } from './preflight-probes'
 import { resolveClaudeBin } from './providers/claude'
 import { claudeAccountEnv } from './claude-accounts'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
+import { traduireCoeur } from './textes-coeur'
 
 /**
  * Installation du CLI claude, EXÉCUTÉE dans la console de login quand le binaire manque.
@@ -114,6 +115,9 @@ export interface PreflightRepairOutcome {
  * Pur : aucun effet de bord, l'appelant décide de l'exécuter.
  */
 export function planPreflightRepair(checkId: string): PreflightRepairPlan | undefined {
+  // `label` et `note` restent en français : l'écran affiche SA copie (`preflight-repair-affordance.ts`,
+  // traduite côté interface), et le test de contrat de `preflight-repair.test.ts` exige l'égalité des
+  // deux sources (conv-1170, lot 18).
   switch (checkId) {
     case 'claude-session':
       return {
@@ -169,7 +173,7 @@ export async function repairPreflightCheck(
 ): Promise<PreflightRepairOutcome> {
   const plan = planPreflightRepair(checkId)
   if (!plan) {
-    return { started: false, detail: 'Aucune réparation automatique connue pour ce prérequis.' }
+    return { started: false, detail: traduireCoeur('reparation.aucune') }
   }
   try {
     if (plan.kind === 'login' && plan.provider === 'claude') {
@@ -198,7 +202,7 @@ export async function repairPreflightCheck(
         if (!reachable) {
           return {
             started: false,
-            detail: `Binaire claude introuvable (${bin}) : corrige CLAUDE_BIN ou réinstalle le CLI.`
+            detail: traduireCoeur('reparation.binaireIntrouvable', { bin })
           }
         }
       }
@@ -218,14 +222,14 @@ export async function repairPreflightCheck(
         claudeAccountEnv().CLAUDE_CONFIG_DIR
       )
       if (loginPlan.kind !== 'terminal') {
-        return { started: false, detail: 'Le login claude ne passe pas par une console.' }
+        return { started: false, detail: traduireCoeur('reparation.loginSansConsole') }
       }
       open(missing ? `${CLAUDE_CLI_INSTALL_COMMAND}; ${loginPlan.command}` : loginPlan.command, {})
       return {
         started: true,
         detail: missing
-          ? 'Console ouverte : installation du CLI claude, puis login enchaîné. Termine, puis re-vérifie.'
-          : 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
+          ? traduireCoeur('reparation.installEtLogin')
+          : traduireCoeur('reparation.login')
       }
     }
     if (plan.kind === 'brain-install') {
@@ -242,8 +246,7 @@ export async function repairPreflightCheck(
       if (!cwd) {
         return {
           started: false,
-          detail:
-            'Repo Autowin OS introuvable depuis l’app : lance « powershell -File scripts/bootstrap-deps.ps1 » dans le dossier du repo.'
+          detail: traduireCoeur('reparation.repoIntrouvable')
         }
       }
       const open =
@@ -255,8 +258,7 @@ export async function repairPreflightCheck(
       open('./scripts/bootstrap-deps.ps1 -SkipCli', { cwd })
       return {
         started: true,
-        detail:
-          'Console d’installation ouverte (plusieurs minutes). Elle affiche ce qui manque encore, puis re-vérifie.'
+        detail: traduireCoeur('reparation.installation')
       }
     }
     const start =
@@ -277,7 +279,9 @@ export async function repairPreflightCheck(
   } catch (error) {
     return {
       started: false,
-      detail: `Réparation impossible : ${error instanceof Error ? error.message : String(error)}`
+      detail: traduireCoeur('reparation.impossible', {
+        erreur: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 }

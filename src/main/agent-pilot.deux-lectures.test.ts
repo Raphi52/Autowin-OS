@@ -11,6 +11,8 @@ import {
   consigneDeLectureRetenue
 } from './deux-lectures'
 import { composerPromptDeReprise } from './chat/relance-taches-de-fond'
+import { promptDOrdre } from './messages-entre-fils-app'
+import { promptDeReveil, promptDuLot, type PlanDeLots } from '../shared/plan-de-lots'
 import type { PilotEvent } from './agent-pilot'
 import type { Message, SendResult } from './providers/types'
 import { forgetChatSession } from './runs/chat-session-store'
@@ -236,6 +238,43 @@ describe('le jumeau : sans double lecture, rien ne change', () => {
     expect(b.lecteur).not.toHaveBeenCalled()
     expect(b.executees()).not.toContain('ask')
     expect(b.registry.send).toHaveBeenCalledTimes(1)
+  })
+
+  /*
+   * Un message COMPOSÉ PAR L'APP pour un autre fil (lot d'un plan, ordre d'un fil, réveil du chef)
+   * n'a pas d'auteur humain à qui demander. Le 2026-10-27 (conv-1192), le lot 19 d'un plan s'est
+   * arrêté sur « Ta demande peut se lire de deux façons » : personne pour cliquer, le plan l'a
+   * compté « fait » sans une ligne écrite, et sa relance a été refusée.
+   */
+  const PLAN: PlanDeLots = {
+    id: 'plan-test',
+    chef: 'conv-chef',
+    cle: 'cle',
+    titre: 'Traduction',
+    parallele: 1,
+    plafondTours: 2,
+    toursLances: 1,
+    statut: 'en-cours',
+    avertissements: [],
+    creeLe: 0,
+    lots: [
+      { rang: 1, titre: 'Bilan', demande: DEMANDE_767, fichiers: [], etat: 'fait', fil: 'conv-lot' }
+    ]
+  }
+  it.each([
+    ['le message d’un lot de plan (conv-1192)', promptDuLot(PLAN, PLAN.lots[0])],
+    ['un ordre d’un autre fil', promptDOrdre({ id: 'msg-1', de: 'conv-chef', texte: DEMANDE_767 })],
+    ['le réveil du fil chef', promptDeReveil(PLAN, [1])]
+  ])('%s ne pose aucune question : aucun humain ne l’a écrit', async (_nom, message) => {
+    // Le modèle orchestre lui aussi : les trois points de passage sont armés, pas seulement `/scout`.
+    const b = banc(LECTURES_767, [
+      'Je lance le travail.\n<cmd>{"name":"orchestrate","args":{"task":"le travail du lot"}}</cmd>',
+      'Fait.'
+    ])
+    await b.jouer([{ role: 'user', content: message }])
+    expect(b.lecteur).not.toHaveBeenCalled()
+    expect(b.executees()).toContain('orchestrate')
+    expect(b.executees()).not.toContain('ask')
   })
 
   it('une lecture qui DOMINE (70/30) ne pose aucune question : le run part, annoncé et sur ELLE (conv-1123)', async () => {

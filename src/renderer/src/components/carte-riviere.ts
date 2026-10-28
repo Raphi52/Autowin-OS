@@ -33,21 +33,48 @@
  */
 import type {
   CarteDesBesoins,
+  CollegueDeLaDemande,
   DemandeDeLaCarte,
   DemandeurDeLaCarte,
   StatutDemande
 } from '../../../shared/carte-des-besoins'
+import type { Langue } from '../../../shared/langue'
+import { formaterDate, langueCourante } from '../langue'
+import {
+  traduireBoardEtMaintenance,
+  type CleBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
 import { filsDuProjet } from './carte-des-besoins-branches'
 
 export type EtageDeLaRiviere = 'a-faire' | StatutDemande
 
+/**
+ * Un étage : son nom et son aide sont lus dans la langue COURANTE à chaque lecture (conv-1170),
+ * `cle` reste l'identifiant que relisent les états manuels (`etats-manuels-carte.ts`).
+ */
+function etage(
+  cle: EtageDeLaRiviere,
+  nom: CleBoardEtMaintenance,
+  aide: CleBoardEtMaintenance
+): { cle: EtageDeLaRiviere; nom: string; aide: string } {
+  return {
+    cle,
+    get nom() {
+      return traduireBoardEtMaintenance(nom, langueCourante())
+    },
+    get aide() {
+      return traduireBoardEtMaintenance(aide, langueCourante())
+    }
+  }
+}
+
 /** Les étages de haut en bas, avec les noms du kanban montrés au /draft. */
 export const ETAGES: readonly { cle: EtageDeLaRiviere; nom: string; aide: string }[] = [
-  { cle: 'a-faire', nom: 'À faire', aide: 'posé à la main' },
-  { cle: 'en-cours', nom: 'En cours', aide: 'un tour tourne ou une question attend' },
-  { cle: 'refuse', nom: 'Bloqué', aide: 'contrôle refusé, run rouge ou tour arrêté' },
-  { cle: 'sans-preuve', nom: 'À vérifier', aide: 'fini sans aucune vérification jouée' },
-  { cle: 'prouve', nom: 'Fait', aide: 'une vérification a rendu vert' }
+  etage('a-faire', 'etage.aFaire', 'etage.aFaire.aide'),
+  etage('en-cours', 'etage.enCours', 'etage.enCours.aide'),
+  etage('refuse', 'etage.bloque', 'etage.bloque.aide'),
+  etage('sans-preuve', 'etage.aVerifier', 'etage.aVerifier.aide'),
+  etage('prouve', 'etage.fait', 'etage.fait.aide')
 ]
 
 /** Les jours affichés d'un coup : l'amplitude des maquettes du /draft. */
@@ -103,6 +130,8 @@ export interface PostItDeLaRiviere {
   t: number
   /** Ses demandes dans l'ordre du fil. */
   demandes: DemandeDeLaCarte[]
+  /** Le collègue dont vient ce post-it (conv-1210) : lecture seule, à l'étage de SON Board. */
+  collegue?: CollegueDeLaDemande
   /** Son rang dans sa case (son étage, son jour), dans l'ordre des heures : sa colonne et sa ligne
    *  en découlent, d'après le nombre de post-it de front que `disposerEtages` donne à la case. */
   rang: number
@@ -155,15 +184,15 @@ function minuit(instant: number, decalageJours: number): number {
 /** « jeu 22 » : le jour court sans le point que le français ajoute ; « jeu 22 oct. » avec le mois. */
 export function nomDuJour(debut: number, avecMois = false): string {
   const date = new Date(debut)
-  const semaine = date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace(/\.$/u, '')
+  const semaine = formaterDate(date, { weekday: 'short' }).replace(/\.$/u, '')
   const nom = `${semaine} ${date.getDate()}`
-  return avecMois ? `${nom} ${date.toLocaleDateString('fr-FR', { month: 'short' })}` : nom
+  return avecMois ? `${nom} ${formaterDate(date, { month: 'short' })}` : nom
 }
 
 function repereDuJour(debut: number): Pick<JourDeLaRiviere, 'repere' | 'texteDuRepere'> {
   const date = new Date(debut)
   if (date.getDate() === 1) {
-    const mois = date.toLocaleDateString('fr-FR', { month: 'short' })
+    const mois = formaterDate(date, { month: 'short' })
     return { repere: 'mois', texteDuRepere: `1 ${mois}` }
   }
   if (date.getDay() === 1) return { repere: 'semaine', texteDuRepere: nomDuJour(debut) }
@@ -205,7 +234,9 @@ export function riviereDe(
   maintenant: number,
   manuels: Readonly<Record<string, EtatManuel>> = {},
   n = JOURS,
-  recul = 0
+  recul = 0,
+  /** La langue des noms écrits dans la frise ; passée par la rivière pour recalculer à son changement. */
+  langue: Langue = langueCourante()
 ): Riviere {
   const r = Math.max(0, Math.round(recul))
   const bornes = Array.from({ length: n + 1 }, (_, j) => minuit(maintenant, j - (n - 1) - r))
@@ -213,11 +244,11 @@ export function riviereDe(
     j === n - 1 && r === 0
       ? {
           debut,
-          nom: 'aujourd’hui',
-          nomCourt: 'aujourd’hui',
+          nom: traduireBoardEtMaintenance('jour.aujourdhui', langue),
+          nomCourt: traduireBoardEtMaintenance('jour.aujourdhui', langue),
           repere: 'aujourdhui',
           // Court : « aujourd’hui » en entier couvrait les 16 derniers jours à 3 mois et masquait le 1er du mois.
-          texteDuRepere: 'auj.',
+          texteDuRepere: traduireBoardEtMaintenance('jour.aujourdhuiCourt', langue),
           aujourdhui: true
         }
       : {
@@ -251,16 +282,22 @@ export function riviereDe(
         continue
       }
       const etatPreuve = fil.derniere.statut
-      const manuel = manuelValable(manuels[fil.conversationId], instant, etatPreuve)
+      // Un post-it de collègue (conv-1210) est posé à l'étage de SON Board : nos états posés à la
+      // main ne le touchent pas (il ne se glisse pas d'ici).
+      const collegue = fil.derniere.collegue
+      const manuel = collegue
+        ? undefined
+        : manuelValable(manuels[fil.conversationId], instant, etatPreuve)
       const demandeur = fil.derniere.demandeur ?? fil.demandes.find((d) => d.demandeur)?.demandeur
       postits.push({
         conversationId: fil.conversationId,
         titre: fil.titre,
         projet: projet.libelle,
         ...(demandeur ? { demandeur } : {}),
-        etage: manuel?.etage ?? etatPreuve,
+        etage: collegue?.etage ?? manuel?.etage ?? etatPreuve,
         etatPreuve,
         ...(manuel ? { manuel } : {}),
+        ...(collegue ? { collegue } : {}),
         instant,
         t: jourFractionnaire(instant, bornes),
         demandes: fil.demandes,
@@ -291,16 +328,21 @@ export function riviereDe(
 export const foyerDAujourdhui = (n = JOURS): number => n - 0.5
 
 const LARGEUR_CLOCHE = 0.75
-const AMPLITUDE_2_SEMAINES = 9
+/**
+ * 9 jusqu'au 2026-10-28 (le foyer prenait ~38 % de la largeur) ; 15 depuis (~47 %) : « le post-it
+ * doit être plus grand, on optimise mal l'espace » (conv-1204) — les post-it de la loupe sont bornés
+ * par la largeur de sa colonne, et les jours voisins n'y portent que des pastilles.
+ */
+const AMPLITUDE_2_SEMAINES = 15
 /** Ce que pèse la cloche en tout, en multiples de son sommet : son jour et deux voisins de chaque côté (≈ 1,34). */
 const ETALEMENT =
   1 + 2 * Math.exp(-((1 / LARGEUR_CLOCHE) ** 2)) + 2 * Math.exp(-((2 / LARGEUR_CLOCHE) ** 2))
-/** Part de la largeur que prend le jour du foyer à 2 semaines (≈ 38 %) : on la garde à toute période. */
+/** Part de la largeur que prend le jour du foyer à 2 semaines (≈ 47 %) : on la garde à toute période. */
 const PART_DU_FOYER = (1 + AMPLITUDE_2_SEMAINES) / (JOURS + AMPLITUDE_2_SEMAINES * ETALEMENT)
 
 /**
  * L'amplitude de la cloche pour n jours : celle qui laisse au jour du foyer la même part de la
- * largeur qu'à 2 semaines — résout (1 + A) / (n + A·ÉTALEMENT) = PART_DU_FOYER, qui rend 9 à 14 jours.
+ * largeur qu'à 2 semaines — résout (1 + A) / (n + A·ÉTALEMENT) = PART_DU_FOYER, qui rend 15 à 14 jours.
  * À amplitude fixe, la colonne large tombait à ~10 % de la largeur sur 3 mois : plus rien de lisible.
  */
 export function amplitudeDe(n: number): number {
@@ -309,7 +351,7 @@ export function amplitudeDe(n: number): number {
 
 /**
  * Le poids de chaque jour pour un foyer donné : une cloche autour du foyer (largeur 0,75 jour, celle
- * des propositions 1 et 2 du /draft ; amplitude 9 à 2 semaines). Le jour du foyer prend ~38 % de la largeur.
+ * des propositions 1 et 2 du /draft ; amplitude 15 à 2 semaines). Le jour du foyer prend ~47 % de la largeur.
  */
 export function poidsDesJours(foyer: number, n = JOURS): number[] {
   const amplitude = amplitudeDe(n)
@@ -332,9 +374,29 @@ export function bordsDesColonnes(poids: readonly number[]): number[] {
   return bords
 }
 
-/** Largeur d'un post-it à pleine taille, en pixels ; sa hauteur suit. */
+/**
+ * Largeur d'un post-it à l'échelle 1, en pixels ; sa hauteur suit. 84 de haut depuis le 2026-10-28
+ * (54, puis 62 pour la bande de la punaise) : « il doit y avoir plus de texte par post it », puis
+ * « réduis un peu la taille de la police et passe à 4 lignes » (conv-1204) — le titre, coupé à 2
+ * lignes en 12 px, en tient 4 en 11 px (RiviereDuProjet.css). La largeur gagnée vient d'ETIREMENT_MAX.
+ */
 export const POSTIT_L = 124
-export const POSTIT_H = 54
+export const POSTIT_H = 84
+/**
+ * L'échelle la plus grande d'un post-it. Plafonnée à 1 jusqu'au 2026-10-28, quand l'utilisateur a
+ * constaté (conv-1204) : « le post it doit être plus grand, on optimise mal l'espace » — la colonne
+ * de la loupe gardait des post-it de 124 px au-dessus d'un tiers de tableau vide. Ils grandissent
+ * désormais jusqu'à ce que la largeur de leur colonne ou la hauteur de l'écran les arrête.
+ */
+export const ECHELLE_MAX = 1.5
+/**
+ * Le plus large qu'un post-it s'étire, en multiple de POSTIT_L. Depuis le 2026-10-28 (conv-1204,
+ * « il doit y avoir plus de texte par post it ») : quand c'est la HAUTEUR de l'écran qui fixe son
+ * échelle, il gardait 124 de large au milieu d'une case deux fois plus large — mesuré sur la capture
+ * de l'utilisateur, la moitié de la colonne du jour restait vide entre les post-it. Il s'élargit donc
+ * jusqu'à remplir sa case : plus de mots par ligne, à la même taille d'écriture.
+ */
+export const ETIREMENT_MAX = 2
 
 /**
  * Où poser un post-it : son centre x (pixels) et son échelle. La taille suit la largeur de la colonne
@@ -345,21 +407,24 @@ export const POSTIT_H = 54
  * encore — ~4 px à 3 mois —, le post-it garde cette hauteur et s'amincit (`kx`) pour ne pas déborder
  * sur les jours voisins. `echelleMax` borne l'échelle par le pas vertical de sa ligne : un étage
  * tassé pour tenir dans l'écran ne laisse pas un post-it chevaucher la ligne suivante.
+ * `largeur` est sa largeur avant l'échelle : POSTIT_L, ou plus quand l'échelle est tenue par la
+ * hauteur et que sa case a de la place (ETIREMENT_MAX) — à l'écran, `largeur × kx` reste dans sa case.
  */
 export function placer(
   jour: number,
   colonne: number,
   bords: readonly number[],
   largeurPx: number,
-  echelleMax = 1,
+  echelleMax = ECHELLE_MAX,
   colonnes = PAR_LIGNE
-): { x: number; k: number; kx: number } {
+): { x: number; k: number; kx: number; largeur: number } {
   const j = Math.min(bords.length - 2, Math.max(0, jour))
   const g = bords[j] * largeurPx
   const l = (bords[j + 1] - bords[j]) * largeurPx
   const ajuste = ajusteALaColonne(l, colonnes)
-  const k = Math.min(1, Math.max(0.09, ajuste), echelleMax)
-  return { x: g + (l * (colonne + 0.5)) / colonnes, k, kx: Math.min(k, ajuste) }
+  const k = Math.min(ECHELLE_MAX, Math.max(0.09, ajuste), echelleMax)
+  const largeur = POSTIT_L * Math.min(ETIREMENT_MAX, Math.max(1, ajuste / k))
+  return { x: g + (l * (colonne + 0.5)) / colonnes, k, kx: Math.min(k, ajuste), largeur }
 }
 
 /** L'échelle qui fait tenir `colonnes` post-it de front dans une colonne de `l` px (90 % de sa largeur). */
@@ -502,8 +567,12 @@ interface MesureDeDisposition {
   colonnes: number
 }
 
-/** Les nombres de post-it de front essayés au jour de la loupe. */
-export const COLONNES_DE_LA_LOUPE: readonly number[] = [3, 4, 5]
+/**
+ * Les nombres de post-it de front essayés au jour de la loupe. 1 et 2 depuis le 2026-10-28
+ * (conv-1204, « on optimise mal l'espace ») : une case peu chargée était tenue à 3 de front, donc à
+ * des post-it du tiers de la colonne, alors que la hauteur restait vide sous les étages.
+ */
+export const COLONNES_DE_LA_LOUPE: readonly number[] = [1, 2, 3, 4, 5]
 
 /**
  * En deçà de cet écart, deux choix de colonnes rendent la même taille au plus petit post-it : on
@@ -532,8 +601,9 @@ export interface OptionsDeDisposition {
  * prend le pas qui lui reste. « tout doit rentrer dans l'écran en hauteur » (conv-1113) : la somme
  * ne dépasse jamais.
  *
- * Au jour de la loupe, chaque case de plus de 3 post-it essaie 3, 4 et 5 de front (au plus 3^5
- * combinaisons, chacune ne coûte qu'une dichotomie). Gagne le choix dont le plus petit post-it du jour
+ * Au jour de la loupe, chaque case occupée essaie de 1 à 5 de front, sans dépasser son nombre de
+ * post-it (au plus 5^5 combinaisons, chacune ne coûte qu'une dichotomie) ; moins de colonnes
+ * échange de la largeur contre la hauteur restée libre (conv-1204). Gagne le choix dont le plus petit post-it du jour
  * est le plus grand — jamais plus petit qu'avec 3 partout ; à égalité (ECART_SANS_EFFET), celui dont
  * les post-it du jour sont en tout les plus grands, puis celui qui a le moins de colonnes.
  */
@@ -547,7 +617,7 @@ export function disposerEtages(
   const n = bords.length - 1
   const largeur = (j: number): number => (bords[j + 1] - bords[j]) * largeurPx
   const echelle = (j: number, c: number): number =>
-    Math.min(1, Math.max(0.09, ajusteALaColonne(largeur(j), c)))
+    Math.min(ECHELLE_MAX, Math.max(0.09, ajusteALaColonne(largeur(j), c)))
   const pasDe = (j: number, c: number): number =>
     Math.max(PAS_MIN_PASTILLE, o.sousLigne * echelle(j, c))
   const pasDeBase = Array.from({ length: n }, (_, j) => pasDe(j, PAR_LIGNE))
@@ -599,15 +669,16 @@ export function disposerEtages(
     return { besoins, f, g, min, somme, colonnes: cs.reduce((t, c) => t + c, 0) }
   }
 
-  // Les choix à essayer : 3 partout d'abord, puis chaque case chargée de la loupe à 4 ou 5.
+  // Les choix à essayer : 3 partout d'abord (la référence), puis chaque case occupée de la loupe à
+  // 1, 2, 4 ou 5 de front — jamais plus de colonnes que de post-it, une colonne vide ne sert à rien.
   const plafond = o.colonnesMax ?? COLONNES_DE_LA_LOUPE[COLONNES_DE_LA_LOUPE.length - 1]
-  const options = etages.map((e) =>
-    jl < 0 || e.nombreParJour[jl] <= PAR_LIGNE
-      ? [PAR_LIGNE]
-      : COLONNES_DE_LA_LOUPE.filter(
-          (c) => c <= plafond && (c === PAR_LIGNE || c <= e.nombreParJour[jl])
-        )
-  )
+  const options = etages.map((e) => {
+    const nb = jl < 0 ? 0 : e.nombreParJour[jl]
+    return [
+      PAR_LIGNE,
+      ...COLONNES_DE_LA_LOUPE.filter((c) => c !== PAR_LIGNE && c <= plafond && c <= nb)
+    ]
+  })
   let choix: number[][] = [[]]
   for (const opts of options) choix = choix.flatMap((cs) => opts.map((c) => [...cs, c]))
   const mesures = choix.map((cs) => ({ cs, m: mesurer(cs) }))

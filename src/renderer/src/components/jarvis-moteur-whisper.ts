@@ -348,6 +348,8 @@ async function fluxSonSysteme(): Promise<FluxAudio> {
   const media = navigator.mediaDevices as unknown as {
     getDisplayMedia?: (c: unknown) => Promise<MediaStream>
   }
+  // Ces deux messages RESTENT EN FRANÇAIS (conv-1170) : jamais affichés, `codeErreurMicro` ne lit
+  // que le `name` de l'erreur pour en tirer le message traduit.
   if (!media.getDisplayMedia)
     throw Object.assign(new Error('capture du son système indisponible'), {
       name: 'NotFoundError'

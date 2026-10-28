@@ -4,6 +4,8 @@
  * (regle react-refresh/only-export-components). Le calcul est pur, il n'a pas besoin du composant.
  */
 import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/etapes-du-tour'
+import { langueCourante } from '../langue'
+import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 import { lireLigneDErreur } from '../../../shared/erreur-d-action'
 
 /**
@@ -179,14 +181,33 @@ export function sousCommandes(commande: string): string[] {
  * Le signe de vie COURANT, tel que la seconde ligne du bloc plie l'affiche : une tache s'y lit par
  * ce qu'elle fait (« Run the new trace event tests »), jamais par « tache de fond en cours - … ».
  */
+/** Le texte d'une clé dans la langue de l'interface (traduction anglaise, conv-1170). */
+const tx = (
+  cle: Parameters<typeof traduireChatDecisions>[0],
+  valeurs?: Parameters<typeof traduireChatDecisions>[2]
+): string => traduireChatDecisions(cle, langueCourante(), valeurs)
+
+/*
+ * Les mots « tache de fond », « en cours », « terminee », « en echec » ci-dessous sont ceux que le
+ * journal du principal ÉCRIT : ils se relisent en français. Seuls les mots qu'AJOUTE cet écran se
+ * traduisent ; le reste du signe de vie vient du cœur et garde sa langue (lot des messages du cœur).
+ */
 export function statutLisible(statut: string): string {
   const tache = TACHE.exec(statut)
-  if (!tache) return statut.replace(/^tache de fond /, 'commande ')
+  if (!tache) {
+    const reste = /^tache de fond (.*)$/su.exec(statut)
+    return reste ? tx('pensee.commandeDeFond', { suite: reste[1]! }) : statut
+  }
   const nom = (tache[2] ?? '').trim()
   const issue = tache[1]!
-  if (issue === 'en cours') return nom || 'commande en cours'
-  const fin = issue === 'terminee' ? 'terminée' : issue === 'en echec' ? 'en échec' : issue
-  return nom ? `${nom} · ${fin}` : `commande ${fin}`
+  if (issue === 'en cours') return nom || tx('pensee.commandeEnCours')
+  const fin =
+    issue === 'terminee'
+      ? tx('pensee.fin.terminee')
+      : issue === 'en echec'
+        ? tx('pensee.fin.echec')
+        : issue
+  return nom ? `${nom} · ${fin}` : tx('pensee.commandeFinie', { fin })
 }
 
 function familleDe(outil: string): ActionFrise['famille'] {
@@ -377,10 +398,13 @@ export function dernierStatutDAction(
  */
 export function resumeDesEtapes(etapes: readonly Etape[]): string {
   const enCours = etapes.find((e) => e.statut === 'in_progress')
-  if (enCours) return enCours.sujet || `Étape #${enCours.id}`
+  if (enCours) return enCours.sujet || tx('pensee.etape', { id: enCours.id })
   const suivante = etapes.find((e) => e.statut === 'pending')
-  if (suivante) return `Ensuite : ${suivante.sujet || `étape #${suivante.id}`}`
-  return etapes.length > 0 ? 'Toutes les étapes sont terminées' : ''
+  if (suivante)
+    return tx('pensee.ensuite', {
+      sujet: suivante.sujet || tx('pensee.etapeSuivante', { id: suivante.id })
+    })
+  return etapes.length > 0 ? tx('pensee.toutesTerminees') : ''
 }
 
 /**
@@ -435,10 +459,11 @@ export function valeurDeLEtape(
   const duree = secondes > 0 ? ` · ${dureeLisible(secondes)}` : ''
   if (n === 0)
     return etape.statut === 'completed'
-      ? `terminée${duree}`
+      ? tx('pensee.valeur.terminee', { duree })
       : etape.statut === 'in_progress'
-        ? `en cours${duree}`
-        : 'à faire'
+        ? tx('pensee.valeur.enCours', { duree })
+        : tx('pensee.valeur.aFaire')
+  // « N action(s) » et les durées (« min », « s ») se disent pareil en anglais.
   return `${n} action${n > 1 ? 's' : ''}${duree}`
 }
 
@@ -565,7 +590,7 @@ export function bilanDesActions(actions: readonly ActionFrise[]): string {
   const total = secondesDesActions(actions)
   return [
     String(actions.length),
-    echecs ? `${echecs} échec${echecs > 1 ? 's' : ''}` : '',
+    echecs ? tx(echecs > 1 ? 'pensee.echecs.plusieurs' : 'pensee.echecs.un', { n: echecs }) : '',
     total ? dureeLisible(total) : ''
   ]
     .filter(Boolean)

@@ -1,3 +1,5 @@
+import { langueCourante } from '../langue'
+import { traduireObservatory } from '../textes-ecrans/observatory'
 export type RagTraceStatus = 'injected' | 'not-injected' | 'unparseable' | 'unavailable'
 
 export interface RagSourceTrace {
@@ -66,7 +68,8 @@ function summarizeProjectContext(request: object): RagTraceSummary | null {
   const marked = stringsIn(request).find((value) => PROJECT_MARKER.test(value))
   if (!marked) return null
   const match = PROJECT_MARKER.exec(marked)
-  const file = match?.[1]?.trim() || 'fichier de contexte'
+  const file =
+    match?.[1]?.trim() || traduireObservatory('ragModele.fichierContexte', langueCourante())
   // Borne le bloc au PROCHAIN délimiteur `=== …` (ou fin) : ne pas supposer que CONTEXTE PROJET
   // est le dernier bloc concaténé — sinon injectedCharacters gonfle avec tout ce qui suit.
   const start = marked.indexOf(match?.[0] ?? '')
@@ -79,7 +82,15 @@ function summarizeProjectContext(request: object): RagTraceSummary | null {
     query: '',
     injectedCharacters: block.length,
     sources: [
-      { rank: 1, path: file, type: 'contexte projet', scope: '', author: '', date: '', text: block }
+      {
+        rank: 1,
+        path: file,
+        type: traduireObservatory('ragModele.contexteProjet', langueCourante()),
+        scope: '',
+        author: '',
+        date: '',
+        text: block
+      }
     ],
     injectedText: block
   }

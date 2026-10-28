@@ -19,6 +19,20 @@ import { PropositionDeFils } from './PropositionDeFils'
 import { SceneDuCarrousel } from './SceneDuCarrousel'
 import { CLASSE_PLACE_SCENE, rattacherScenesAuxCarrousels } from './draft-scene-3d'
 import { splitFinalSummary } from './markdown-cloture'
+import { formaterNombre, langueCourante } from '../langue'
+import {
+  traduireArtefactsEtBandeaux,
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
+
+/**
+ * Les aides de rendu ci-dessous ne sont pas des composants : elles lisent la langue au moment de
+ * l'appel. `Markdown` s'abonne à la langue (`useTextesArtefactsEtBandeaux`) pour être redessiné
+ * quand elle change, sinon `memo` garderait la bulle dans l'ancienne langue (conv-1170).
+ */
+const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
+  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
 
 type MarkdownProps = {
   text: string
@@ -38,6 +52,7 @@ export const Markdown = memo(function Markdown({
   continuationPrefix,
   highlightFinalSummary = false
 }: MarkdownProps): React.JSX.Element {
+  useTextesArtefactsEtBandeaux()
   /*
    * La ligne technique du prompt suivant ne s AFFICHE jamais : elle ne sert qu a pre-garnir en grise
    * le champ de saisie. La retirer ici, au plus pres du rendu, evite de la filtrer dans chaque
@@ -67,7 +82,7 @@ function renderAvecClotures(source: string, rang: number): React.ReactNode[] {
     <section
       key={`final-summary${suffixe}`}
       className="md-final-summary"
-      aria-label="Résumé final du modèle"
+      aria-label={texte('markdown.resumeFinal')}
     >
       {renderMarkdownBlocks(finalSummary.summary, `summary${suffixe}`)}
     </section>,
@@ -90,8 +105,10 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
           data-testid="chat-inline-html-too-large"
         >
           <summary>
-            Rendu HTML ignoré — {block.content.length.toLocaleString('fr-FR')} caractères, au-delà
-            de la limite de {MAX_INLINE_HTML_CHARS.toLocaleString('fr-FR')}. Voir la source.
+            {texte('markdown.htmlIgnore', {
+              taille: formaterNombre(block.content.length),
+              limite: formaterNombre(MAX_INLINE_HTML_CHARS)
+            })}
           </summary>
           <pre className="md-code">
             <code>{block.content}</code>
@@ -172,8 +189,8 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
             type="button"
             className="md-code__copie"
             data-testid="md-code-copie"
-            title="Copier"
-            aria-label="Copier"
+            title={texte('markdown.copier')}
+            aria-label={texte('markdown.copier')}
             onClick={(evenement) => {
               void navigator.clipboard?.writeText(block.content)
               const bouton = evenement.currentTarget

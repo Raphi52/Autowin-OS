@@ -4,7 +4,15 @@
  * Symétrique de `watchdogDraftProblem` : une tâche dont l'horaire est incohérent ne partirait
  * jamais (départ déjà passé, semaine sans jour coché) ou partirait de travers, sans que rien ne le
  * dise. On refuse donc à la saisie plutôt qu'au réveil.
+ *
+ * Le message suit la langue de l'interface (traduction anglaise, conv-1170) : il est lu au moment de
+ * l'appel, pendant le rendu ou l'enregistrement de TaskManagerView.
  */
+
+import { langueCourante } from '../langue'
+import { traduireTaskManager, type CleTaskManager } from '../textes-ecrans/task-manager'
+
+const texte = (cle: CleTaskManager): string => traduireTaskManager(cle, langueCourante())
 
 export type ScheduleRecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'
 
@@ -27,19 +35,16 @@ export function scheduleDraftProblem(
   now: number = Date.now()
 ): string | undefined {
   if (!schedule) return undefined
-  if (!schedule.startDate?.trim() || !schedule.time?.trim())
-    return 'Indique une date et une heure de départ.'
+  if (!schedule.startDate?.trim() || !schedule.time?.trim()) return texte('brouillon.depart')
   const start = startInstant(schedule)
-  if (start === null) return 'Indique une date et une heure de départ.'
+  if (start === null) return texte('brouillon.depart')
 
   const { unit, interval, weekDays } = schedule.recurrence
   if (unit !== 'none' && (!Number.isFinite(interval) || interval < 1))
-    return 'L’intervalle de répétition doit valoir au moins 1.'
-  if (unit === 'week' && !(weekDays ?? []).length)
-    return 'Coche au moins un jour de la semaine pour une répétition hebdomadaire.'
+    return texte('brouillon.intervalle')
+  if (unit === 'week' && !(weekDays ?? []).length) return texte('brouillon.jourSemaine')
   if (schedule.endDate?.trim() && schedule.endDate < schedule.startDate)
-    return 'La date de fin ne peut pas précéder la date de départ.'
-  if (unit === 'none' && start < now)
-    return 'La date et l’heure de départ sont déjà passées : choisis un moment à venir.'
+    return texte('brouillon.finAvantDepart')
+  if (unit === 'none' && start < now) return texte('brouillon.departPasse')
   return undefined
 }

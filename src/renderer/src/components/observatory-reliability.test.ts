@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
+import { TEXTES_FR } from '../textes-ecrans/observatory'
 
 describe('Observatory reliability', () => {
   it('keeps only the latest request current', () => {
@@ -51,7 +52,13 @@ describe('Observatory reliability', () => {
 
     expect(source).toContain('causalRequestGate.current.begin()')
     expect(source).toContain('causalRequestGate.current.isCurrent(requestId)')
-    expect(source).toContain('Certaines sources de télémétrie sont indisponibles')
-    expect(source).toContain('Réessayer')
+    // Les textes vivent dans la table de l'écran depuis la traduction anglaise (conv-1184) : la vue
+    // porte la clé, la table garde le français mot pour mot.
+    expect(source).toContain("t('vue.certainesSourcesTelemetrieSont')")
+    expect(source).toContain("t('vue.reessayer')")
+    expect(TEXTES_FR['vue.certainesSourcesTelemetrieSont']).toBe(
+      'Certaines sources de télémétrie sont indisponibles'
+    )
+    expect(TEXTES_FR['vue.reessayer']).toBe('Réessayer')
   })
 })

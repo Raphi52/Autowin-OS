@@ -181,10 +181,47 @@ function parseJsonRows(colle: string): {
         candidats
       }
     } catch {
-      // début candidat invalide : on tente le suivant
+      // SQL Server peut écrire APRÈS le JSON un message d'information (gravité ≤ 10, code 0) :
+      // « Warning: Null value is eliminated by an aggregate… » sur un agrégat d'une colonne à NULL
+      // (conv-1168, 27/10/2026). On isole la valeur JSON entière ; le reste n'est accepté que s'il
+      // ne peut pas être la suite d'un JSON coupé (ni virgule en tête, ni crochet, ni accolade).
+      const fin = finDeValeurJson(colle, i)
+      const reste = fin < 0 ? '' : colle.slice(fin + 1).trim()
+      if (reste && !/^,|[[{]/.test(reste)) {
+        try {
+          const parsed: unknown = JSON.parse(colle.slice(i, fin + 1))
+          return {
+            rows: Array.isArray(parsed)
+              ? (parsed as Record<string, unknown>[])
+              : [parsed as Record<string, unknown>],
+            candidats
+          }
+        } catch {
+          // début candidat invalide : on tente le suivant
+        }
+      }
     }
   }
   return { candidats }
+}
+
+/** Indice de la fermeture de la valeur JSON ouverte en `debut` (chaînes sautées), -1 si aucune. */
+function finDeValeurJson(texte: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let j = debut; j < texte.length; j += 1) {
+    const c = texte[j]
+    if (dansChaine) {
+      if (c === '\\') j += 1
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '[' || c === '{') profondeur += 1
+    else if (c === ']' || c === '}') {
+      profondeur -= 1
+      if (profondeur === 0) return j
+    }
+  }
+  return -1
 }
 
 /**

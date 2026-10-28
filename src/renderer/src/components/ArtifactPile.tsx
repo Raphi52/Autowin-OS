@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import { ICONE_IMAGE } from './ArtifactPreview'
 import {
   fileSize,
@@ -31,6 +32,7 @@ function useApercu(
   conversationId: string | null | undefined,
   turnId: string | undefined
 ): { src?: string; error?: string } {
+  const { t } = useTextesArtefactsEtBandeaux()
   const direct = inlineDataUrl(artifact)
   const lecture = window.api?.readChatArtifact
   const lisible =
@@ -41,7 +43,14 @@ function useApercu(
     Boolean(turnId) &&
     Boolean(lecture)
   const cle = `${conversationId ?? ''}\u0000${turnId ?? ''}\u0000${artifact.id}`
-  const [etat, setEtat] = useState<{ cle: string; src?: string; error?: string }>()
+  // `indisponible` / `lecture` : échecs dits par l'interface, traduits au rendu pour suivre la
+  // langue (conv-1170) ; `error` : message du processus principal, montré tel quel.
+  const [etat, setEtat] = useState<{
+    cle: string
+    src?: string
+    error?: string
+    echec?: 'indisponible' | 'lecture'
+  }>()
 
   useEffect(() => {
     if (!lisible || !conversationId || !turnId || !window.api?.readChatArtifact) return
@@ -58,10 +67,16 @@ function useApercu(
                 encoding: result.encoding
               })
             : undefined
-        setEtat(src ? { cle, src } : { cle, error: result.error ?? 'Aperçu indisponible' })
+        setEtat(
+          src
+            ? { cle, src }
+            : typeof result.error === 'string'
+              ? { cle, error: result.error }
+              : { cle, echec: 'indisponible' }
+        )
       })
       .catch(() => {
-        if (actif) setEtat({ cle, error: 'Lecture de l’artefact impossible' })
+        if (actif) setEtat({ cle, echec: 'lecture' })
       })
     return () => {
       actif = false
@@ -69,8 +84,11 @@ function useApercu(
   }, [artifact, cle, conversationId, lisible, turnId])
 
   if (direct) return { src: direct }
-  if (!lisible) return { error: 'Aperçu indisponible' }
-  return etat?.cle === cle ? etat : {}
+  if (!lisible) return { error: t('apercu.indisponible') }
+  if (etat?.cle !== cle) return {}
+  if (etat.echec === 'indisponible') return { error: t('apercu.indisponible') }
+  if (etat.echec === 'lecture') return { error: t('apercu.lectureImpossible') }
+  return { src: etat.src, error: etat.error }
 }
 
 function Vignette({
@@ -86,13 +104,14 @@ function Vignette({
   turnId?: string
   onOpenImage?: OuvrirImage
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const { src, error } = useApercu(artifact, conversationId, turnId)
   return (
     <button
       type="button"
       className="artifact-pile__vignette"
       title={artifact.name}
-      aria-label={`Agrandir ${artifact.name}`}
+      aria-label={t('apercu.agrandir', { nom: artifact.name })}
       onClick={() => {
         if (src) onOpenImage?.({ src, name: artifact.name })
       }}
@@ -127,11 +146,12 @@ export function ArtifactPile({
   /** Tour en cours : la pile reste vive comme les autres capsules ; tour fini, elle pâlit avec elles. */
   live?: boolean
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const [ouverte, setOuverte] = useState(false)
   const devant = artifacts[artifacts.length - 1]
   const autres = artifacts.length - 1
   const libelle = kindLabel(devant)
-  const derniere = devant.source.tool === 'Read' ? 'la dernière lue' : 'la plus récente'
+  const derniere = t(devant.source.tool === 'Read' ? 'pile.derniereLue' : 'pile.plusRecente')
   const nom = nomRepeteLeLibelle(devant.name, libelle) ? derniere : `${devant.name} · ${derniere}`
   const noms = artifacts.map((artifact) => artifact.name)
   // Des noms tous identiques (anciens artefacts au nom fabriqué) ne distinguent rien : numéros.
@@ -174,7 +194,9 @@ export function ArtifactPile({
             </span>
             <span
               className="artifact-pile__compte"
-              aria-label={`et ${autres} autre${autres > 1 ? 's' : ''} image${autres > 1 ? 's' : ''}`}
+              aria-label={t(autres > 1 ? 'pile.autres.plusieurs' : 'pile.autres.une', {
+                nombre: autres
+              })}
             >
               +{autres}
             </span>

@@ -7,31 +7,44 @@
  */
 import type { ArtifactKind, ChatArtifact } from '../../../shared/artifacts'
 import { isChatMediaUrl } from '../../../shared/chat-media'
+import { langueCourante } from '../langue'
+import {
+  traduireArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
 
-const LABELS: Record<ArtifactKind, string> = {
+/**
+ * Libellé de chaque type : une clé de la table quand l'anglais diffère du français (conv-1170),
+ * sinon le mot lui-même, identique dans les deux langues.
+ */
+const LABELS: Record<ArtifactKind, { cle: CleArtefactsEtBandeaux } | string> = {
   image: 'Image',
-  vector: 'Vecteur',
+  vector: { cle: 'artefact.type.vector' },
   markdown: 'Markdown',
-  text: 'Texte',
+  text: { cle: 'artefact.type.text' },
   code: 'Code',
   diff: 'Diff',
-  'structured-data': 'Données',
-  table: 'Tableau',
-  diagram: 'Diagramme',
+  'structured-data': { cle: 'artefact.type.structured-data' },
+  table: { cle: 'artefact.type.table' },
+  diagram: { cle: 'artefact.type.diagram' },
   pdf: 'PDF',
   document: 'Document',
-  presentation: 'Présentation',
-  spreadsheet: 'Tableur',
+  presentation: { cle: 'artefact.type.presentation' },
+  spreadsheet: { cle: 'artefact.type.spreadsheet' },
   notebook: 'Notebook',
   audio: 'Audio',
-  video: 'Vidéo',
+  video: { cle: 'artefact.type.video' },
   web: 'Web',
   archive: 'Archive',
   model3d: '3D',
-  font: 'Police',
-  executable: 'Exécutable',
-  binary: 'Binaire'
+  font: { cle: 'artefact.type.font' },
+  executable: { cle: 'artefact.type.executable' },
+  binary: { cle: 'artefact.type.binary' }
 }
+
+/** Lu dans la langue courante au moment de l'appel : l'appelant se redessine quand elle change. */
+const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
+  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
 
 /**
  * Le libellé ne doit pas AFFIRMER une génération que rien ne prouve : une image publiée par un
@@ -39,10 +52,11 @@ const LABELS: Record<ArtifactKind, string> = {
  * l'outil quand il existe, et on ne dit « générée » que pour une sortie directe du modèle.
  */
 export function kindLabel(artifact: ChatArtifact): string {
-  const base = LABELS[artifact.kind]
+  const libelle = LABELS[artifact.kind]
+  const base = typeof libelle === 'string' ? libelle : texte(libelle.cle)
   if (artifact.kind !== 'image' && artifact.kind !== 'vector') return base
   if (artifact.source.tool) return `${base} · ${artifact.source.tool}`
-  return `${base} générée`
+  return texte(artifact.kind === 'image' ? 'artefact.genere.image' : 'artefact.genere.vector')
 }
 
 /**
@@ -61,9 +75,9 @@ export function nomRepeteLeLibelle(nom: string, libelle: string): boolean {
 }
 
 export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
+  if (bytes < 1024) return texte('artefact.poids.octets', { taille: bytes })
+  if (bytes < 1024 * 1024) return texte('artefact.poids.ko', { taille: (bytes / 1024).toFixed(1) })
+  return texte('artefact.poids.mo', { taille: (bytes / 1024 / 1024).toFixed(1) })
 }
 
 export function inlineDataUrl(artifact: ChatArtifact): string | undefined {

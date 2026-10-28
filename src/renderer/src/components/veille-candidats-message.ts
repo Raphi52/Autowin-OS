@@ -10,6 +10,18 @@
  */
 import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
 import { ligneDuLot, type RangDuLot } from '../../../shared/selection-scout'
+import { langueCourante } from '../langue'
+import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
+
+/*
+ * Ce que l'ÉCRAN dit des pistes (voie, motif, plan) suit la langue de l'interface (traduction
+ * anglaise, conv-1170) ; les PROMPTS rédigés plus bas restent en français : ce sont des consignes
+ * pour l'agent, que la langue de ses réponses règle à part.
+ */
+const tx = (
+  cle: Parameters<typeof traduireChatDecisions>[0],
+  valeurs?: Parameters<typeof traduireChatDecisions>[2]
+): string => traduireChatDecisions(cle, langueCourante(), valeurs)
 
 export interface CandidatAffiche {
   titre: string
@@ -275,28 +287,28 @@ export function voieDeLaPiste(candidat: CandidatAffiche): VoieDeLaPiste {
       voie: 'complete',
       motif:
         candidat.type === 'new' || candidat.type === 'ajout'
-          ? 'un ajout : il se cadre avant de s’écrire'
-          : 'nature non déclarée par le scout'
+          ? tx('candidats.motif.ajout')
+          : tx('candidats.motif.natureNonDeclaree')
     }
   }
-  if (candidat.effort === 'r') return { voie: 'complete', motif: 'effort annoncé fort' }
+  if (candidat.effort === 'r') return { voie: 'complete', motif: tx('candidats.motif.effortFort') }
   const texte = [candidat.titre, candidat.what, candidat.why, candidat.how]
     .filter(Boolean)
     .join(' ')
   if (porteUnSignalDeRisque(texte)) {
     return {
       voie: 'complete',
-      motif: 'sujet à risque (architecture, sécurité, migration…)'
+      motif: tx('candidats.motif.risque')
     }
   }
   if (!estLocalisee(candidat)) {
-    return { voie: 'complete', motif: 'pas localisée (ni ancrage de code ni preuve à lancer)' }
+    return { voie: 'complete', motif: tx('candidats.motif.nonLocalisee') }
   }
   return {
     voie: 'directe',
     motif: candidat.commande
-      ? 'correction localisée, avec sa preuve à lancer'
-      : 'correction localisée par le scout'
+      ? tx('candidats.motif.localiseeAvecPreuve')
+      : tx('candidats.motif.localisee')
   }
 }
 
@@ -367,33 +379,33 @@ export function resumeDuPlan(plan: readonly LotDeLancement[]): string {
   const directs = plan.filter((lot) => lot.voie === 'directe').length
   const complets = plan.length - directs
   if (plan.length === 1) {
-    return directs === 1 ? 'en correction directe' : 'en workflow complet'
+    return directs === 1 ? tx('candidats.plan.direct') : tx('candidats.plan.complet')
   }
   const parts = [
-    ...(directs > 0 ? [`${directs} en correction directe`] : []),
-    ...(complets > 0 ? [`${complets} en workflow complet`] : [])
+    ...(directs > 0 ? [tx('candidats.plan.nDirects', { n: directs })] : []),
+    ...(complets > 0 ? [tx('candidats.plan.nComplets', { n: complets })] : [])
   ]
-  return `en ${plan.length} lots à la suite (${parts.join(', ')})`
+  return tx('candidats.plan.lots', { n: plan.length, detail: parts.join(', ') })
 }
 
 /** Ce que joue une voie, en clair : l'utilisateur voit les étapes avant de cliquer. */
 export function libelleVoie(voie: VoieSelection): string {
   return voie === 'directe'
-    ? 'correction directe (build → jugement)'
-    : 'workflow complet (cadrage → build → nettoyage → jugement)'
+    ? tx('candidats.voie.libelleDirecte')
+    : tx('candidats.voie.libelleComplete')
 }
 
 /** Pourquoi ce lot prend sa voie : nommé pour une seule piste, motifs distincts sinon. */
 export function motifDuLot(lot: LotDeLancement): string {
   if (lot.voie === 'directe') {
     return lot.candidats.length > 1
-      ? `${lot.candidats.length} corrections déjà localisées par le scout`
-      : 'correction déjà localisée par le scout'
+      ? tx('candidats.lot.directs', { n: lot.candidats.length })
+      : tx('candidats.lot.direct')
   }
   const motifs = [...new Set(lot.candidats.map((candidat) => voieDeLaPiste(candidat).motif))]
   return lot.candidats.length === 1
-    ? `« ${lot.candidats[0]!.titre} » : ${motifs[0]}`
-    : motifs.join(' ; ')
+    ? tx('candidats.lot.unePiste', { titre: lot.candidats[0]!.titre, motif: motifs[0] ?? '' })
+    : motifs.join(tx('candidats.lot.separateur'))
 }
 
 function enteteSelection(selection: readonly CandidatAffiche[]): string {

@@ -28,6 +28,20 @@ import { MODELE_PROMPT_TACHE } from '../../../shared/modele-prompt-tache'
 import './ViewPage.css'
 import './TaskManagerView.css'
 import { Spinner } from './Spinner'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import {
+  traduireTaskManager,
+  useTextesTaskManager,
+  type CleTaskManager
+} from '../textes-ecrans/task-manager'
+
+/**
+ * Hors composant, le texte dans la langue courante (traduction anglaise, conv-1170) : ces fonctions
+ * sont appelées pendant le rendu de la vue, qui suit la langue par `useTextesTaskManager`.
+ */
+const texte = (cle: CleTaskManager, valeurs?: ValeursDeTexte): string =>
+  traduireTaskManager(cle, langueCourante(), valeurs)
 
 type ExecutionMode = 'windows' | 'active-only'
 type RecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'
@@ -160,25 +174,25 @@ interface Snapshot {
  */
 type ConversationSummary = Pick<StoreConversationSummary, 'id' | 'title' | 'provider'>
 
-const WEEK_DAYS = [
-  { value: 1, label: 'L' },
-  { value: 2, label: 'M' },
-  { value: 3, label: 'M' },
-  { value: 4, label: 'J' },
-  { value: 5, label: 'V' },
-  { value: 6, label: 'S' },
-  { value: 7, label: 'D' }
+const WEEK_DAYS: { value: number; label: CleTaskManager }[] = [
+  { value: 1, label: 'vue.jour.lundi' },
+  { value: 2, label: 'vue.jour.mardi' },
+  { value: 3, label: 'vue.jour.mercredi' },
+  { value: 4, label: 'vue.jour.jeudi' },
+  { value: 5, label: 'vue.jour.vendredi' },
+  { value: 6, label: 'vue.jour.samedi' },
+  { value: 7, label: 'vue.jour.dimanche' }
 ]
 
-const EFFORT_LABELS: Record<string, string> = {
-  none: 'Aucun',
-  minimal: 'Minimal',
-  low: 'Léger',
-  medium: 'Moyen',
-  high: 'Élevé',
-  xhigh: 'Très élevé',
-  max: 'Max',
-  ultra: 'Ultra'
+const EFFORT_LABELS: Readonly<Record<string, CleTaskManager | undefined>> = {
+  none: 'vue.effort.none',
+  minimal: 'vue.effort.minimal',
+  low: 'vue.effort.low',
+  medium: 'vue.effort.medium',
+  high: 'vue.effort.high',
+  xhigh: 'vue.effort.xhigh',
+  max: 'vue.effort.max',
+  ultra: 'vue.effort.ultra'
 }
 
 function localInputParts(date = new Date(Date.now() + 5 * 60_000)): {
@@ -217,7 +231,7 @@ function defaultDraft(
         }
       : {
           kind: 'new',
-          title: 'Tâche planifiée',
+          title: texte('vue.titreParDefaut'),
           category: selectedModel?.provider ?? '',
           provider: selectedModel?.provider ?? '',
           ...(selectedModel
@@ -237,73 +251,97 @@ function defaultDraft(
 }
 
 function formatDateTime(value: number | null | undefined): string {
-  if (!value) return 'Aucune échéance'
-  return new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(value)
+  if (!value) return texte('vue.aucuneEcheance')
+  return formaterDate(value, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 /** Decision de la surveillance mails, en mots : ce qui a ete fait du message, et pourquoi. */
 // fix-ok: le detail d'une regle n'affichait que les reveils de l'heure, le cout et `complaint` (vide pour une regle mails) — test « explique pourquoi un mail n'a rien déclenché » rouge avant cet ajout (2026-09-26).
-const MAIL_OUTCOMES: Record<string, string> = {
-  fired: 'agent lancé',
-  'sender-off': 'ignoré, interlocuteur coupé',
-  'in-flight': 'ignoré, un agent de cette règle tourne déjà',
-  dedup: 'ignoré, déjà traité',
-  rate: 'ignoré, plafond par heure atteint',
-  'daily-rate': 'ignoré, plafond du jour atteint',
-  'cost-budget': 'ignoré, budget de coût atteint',
-  'unpriced-budget': "ignoré, trop d'appels au coût inconnu",
-  depth: 'ignoré, chaîne de réveils trop longue',
-  'root-width': 'ignoré, même cause déjà traitée'
+const MAIL_OUTCOMES: Readonly<Record<string, CleTaskManager | undefined>> = {
+  fired: 'vue.mail.lance',
+  'sender-off': 'vue.mail.interlocuteurCoupe',
+  'in-flight': 'vue.mail.agentEnCours',
+  dedup: 'vue.mail.dejaTraite',
+  rate: 'vue.mail.plafondHeure',
+  'daily-rate': 'vue.mail.plafondJour',
+  'cost-budget': 'vue.mail.budget',
+  'unpriced-budget': 'vue.mail.nonChiffres',
+  depth: 'vue.mail.chaine',
+  'root-width': 'vue.mail.memeCause'
 }
 
+// `detail` vient du moteur de surveillance (processus principal) : il garde la langue du moteur.
 function mailOutcomeLabel(outcome: string, detail?: string): string {
-  if (outcome === 'baseline') return `ignoré, ${detail ?? 'déjà là au démarrage'}`
-  if (outcome === 'error') return `échec du lancement${detail ? ` : ${detail}` : ''}`
-  return MAIL_OUTCOMES[outcome] ?? `ignoré (${outcome})`
+  if (outcome === 'baseline')
+    return texte('vue.mail.ignore', { raison: detail ?? texte('vue.mail.dejaLa') })
+  if (outcome === 'error')
+    return detail ? texte('vue.mail.echecDetail', { detail }) : texte('vue.mail.echec')
+  const cle = MAIL_OUTCOMES[outcome]
+  return cle ? texte(cle) : texte('vue.mail.ignoreCode', { code: outcome })
 }
 
 function recurrenceLabel(schedule: TaskSchedule): string {
   const { unit, interval, weekDays } = schedule.recurrence
-  if (unit === 'none') return 'Une fois'
-  if (unit === 'minute') return interval === 1 ? 'Chaque minute' : `Toutes les ${interval} minutes`
-  if (unit === 'hour') return interval === 1 ? 'Chaque heure' : `Toutes les ${interval} heures`
-  if (unit === 'day') return interval === 1 ? 'Chaque jour' : `Tous les ${interval} jours`
-  if (unit === 'month') return interval === 1 ? 'Chaque mois' : `Tous les ${interval} mois`
-  const days = (weekDays ?? []).map((day) => WEEK_DAYS[day - 1]?.label).join(' · ')
-  return `${interval === 1 ? 'Chaque semaine' : `Toutes les ${interval} semaines`} · ${days}`
+  const n = interval
+  if (unit === 'none') return texte('vue.repetition.uneFois')
+  if (unit === 'minute')
+    return texte(interval === 1 ? 'vue.repetition.chaqueMinute' : 'vue.repetition.toutesMinutes', {
+      n
+    })
+  if (unit === 'hour')
+    return texte(interval === 1 ? 'vue.repetition.chaqueHeure' : 'vue.repetition.toutesHeures', {
+      n
+    })
+  if (unit === 'day')
+    return texte(interval === 1 ? 'vue.repetition.chaqueJour' : 'vue.repetition.tousJours', { n })
+  if (unit === 'month')
+    return texte(interval === 1 ? 'vue.repetition.chaqueMois' : 'vue.repetition.tousMois', { n })
+  const days = (weekDays ?? [])
+    .map((day) => {
+      const cle = WEEK_DAYS[day - 1]?.label
+      return cle ? texte(cle) : undefined
+    })
+    .join(' · ')
+  const semaine = texte(
+    interval === 1 ? 'vue.repetition.chaqueSemaine' : 'vue.repetition.toutesSemaines',
+    { n }
+  )
+  return `${semaine} · ${days}`
 }
 
 function modeLabel(mode: ExecutionMode | 'legacy-unknown'): string {
-  if (mode === 'legacy-unknown') return 'Mode non archivé'
-  return mode === 'windows' ? 'Autonome Windows' : 'Autowin actif uniquement'
+  if (mode === 'legacy-unknown') return texte('vue.mode.nonArchive')
+  return texte(mode === 'windows' ? 'vue.mode.windows' : 'vue.mode.actif')
 }
 
-const TRIGGER_LABELS: Record<string, string> = {
-  schedule: 'Horaire',
-  manual: 'Manuel',
-  watchdog: 'Réveil'
+const TRIGGER_LABELS: Readonly<Record<string, CleTaskManager | undefined>> = {
+  schedule: 'vue.declencheur.horaire',
+  manual: 'vue.declencheur.manuel',
+  watchdog: 'vue.declencheur.reveil'
 }
 
-const OUTCOME_LABELS: Record<string, string> = {
-  benign: 'Bénin',
-  report: 'À signaler',
-  investigate: 'À investiguer',
-  repair: 'Réparation'
+const OUTCOME_LABELS: Readonly<Record<string, CleTaskManager | undefined>> = {
+  benign: 'surveillance.issue.benin',
+  report: 'vue.issue.aSignaler',
+  investigate: 'vue.issue.aInvestiguer',
+  repair: 'surveillance.issue.reparation'
 }
 
 /** Durée réellement mesurée : sans les deux bornes, on n'affiche rien plutôt qu'un chiffre inventé. */
 function durationLabel(startedAt?: number, finishedAt?: number): string | null {
   if (!startedAt || !finishedAt || finishedAt < startedAt) return null
   const seconds = Math.round((finishedAt - startedAt) / 1000)
-  if (seconds < 60) return `Durée ${seconds} s`
+  if (seconds < 60) return texte('vue.duree.s', { s: seconds })
   const minutes = Math.floor(seconds / 60)
   const rest = seconds % 60
-  if (minutes < 60) return `Durée ${minutes} min${rest ? ` ${rest} s` : ''}`
+  if (minutes < 60)
+    return rest
+      ? texte('vue.duree.minS', { min: minutes, s: rest })
+      : texte('vue.duree.min', { min: minutes })
   const hours = Math.floor(minutes / 60)
-  return `Durée ${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`
+  return minutes % 60
+    ? texte('vue.duree.hMin', { h: hours, min: minutes % 60 })
+    : texte('vue.duree.h', { h: hours })
 }
 
 function usageMeta(usage: {
@@ -314,15 +352,23 @@ function usageMeta(usage: {
   const meta: string[] = []
   if (typeof usage.knownCostUsd === 'number') {
     meta.push(
-      `${usage.knownCostUsd.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} $ connus`
+      texte('vue.usage.connus', {
+        montant: formaterNombre(usage.knownCostUsd, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 4
+        })
+      })
     )
   }
   if (typeof usage.totalTokens === 'number') {
-    meta.push(`${usage.totalTokens.toLocaleString('fr-FR')} tokens`)
+    // « tokens » : le même mot dans les deux langues, seul le nombre suit la langue.
+    meta.push(`${formaterNombre(usage.totalTokens)} tokens`)
   }
   if (usage.unpricedCalls) {
     meta.push(
-      `${usage.unpricedCalls} appel${usage.unpricedCalls > 1 ? 's' : ''} non chiffré${usage.unpricedCalls > 1 ? 's' : ''}`
+      texte(usage.unpricedCalls > 1 ? 'vue.usage.appels' : 'vue.usage.appel', {
+        n: usage.unpricedCalls
+      })
     )
   }
   return meta
@@ -332,14 +378,16 @@ function usageMeta(usage: {
 function occurrenceMeta(occurrence: TaskOccurrence): string[] {
   const meta: string[] = []
   if (occurrence.error) meta.push(occurrence.error)
-  if (occurrence.outcome && OUTCOME_LABELS[occurrence.outcome])
-    meta.push(OUTCOME_LABELS[occurrence.outcome])
-  if (occurrence.trigger && TRIGGER_LABELS[occurrence.trigger])
-    meta.push(TRIGGER_LABELS[occurrence.trigger])
+  const issue = occurrence.outcome ? OUTCOME_LABELS[occurrence.outcome] : undefined
+  if (issue) meta.push(texte(issue))
+  const declencheur = occurrence.trigger ? TRIGGER_LABELS[occurrence.trigger] : undefined
+  if (declencheur) meta.push(texte(declencheur))
   const duration = durationLabel(occurrence.startedAt, occurrence.finishedAt)
   if (duration) meta.push(duration)
-  if (occurrence.requestedModel) meta.push(`Modèle demandé : ${occurrence.requestedModel}`)
-  if (occurrence.resolvedModel) meta.push(`Modèle exécuté : ${occurrence.resolvedModel}`)
+  if (occurrence.requestedModel)
+    meta.push(texte('vue.meta.modeleDemande', { modele: occurrence.requestedModel }))
+  if (occurrence.resolvedModel)
+    meta.push(texte('vue.meta.modeleExecute', { modele: occurrence.resolvedModel }))
   meta.push(
     ...usageMeta({
       knownCostUsd: occurrence.knownCostUsd,
@@ -348,14 +396,14 @@ function occurrenceMeta(occurrence: TaskOccurrence): string[] {
     })
   )
   if (occurrence.missedCount && occurrence.missedCount > 1)
-    meta.push(`${occurrence.missedCount} échéances agrégées`)
+    meta.push(texte('vue.meta.echeancesAgregees', { n: occurrence.missedCount }))
   const context = occurrence.watchdog?.context?.trim()
-  if (context) meta.push(`Signal : ${context.slice(0, 160)}`)
+  if (context) meta.push(texte('vue.meta.signal', { contexte: context.slice(0, 160) }))
   return meta
 }
 
 function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : 'Opération impossible.'
+  return error instanceof Error ? error.message : texte('vue.erreur.operation')
 }
 
 function hasLoadedModel(destination: TaskDestination, models: RuntimeModel[]): boolean {
@@ -415,6 +463,7 @@ export function TaskManagerView({
   section?: TaskManagerSection
   onSectionChange?: (section: TaskManagerSection) => void
 }): React.JSX.Element {
+  const { t } = useTextesTaskManager()
   // DÉFAUT = planification, pas watchdog : c'est le contenu historique de l'onglet et ce que sa propre
   // description annonce (« Planifie de vrais prompts Chat »). Basculer le défaut aurait changé en
   // silence ce que l'utilisateur voit en ouvrant Task Manager — le découpage doit ajouter un écran,
@@ -464,11 +513,13 @@ export function TaskManagerView({
     (scope) => loadErrors[scope] !== undefined
   )
   const loadErrorTitleOf = (scope: 'task-manager' | 'conversations' | 'roles'): string =>
-    scope === 'roles'
-      ? 'Chargement des modèles impossible'
-      : scope === 'conversations'
-        ? 'Chargement des conversations impossible'
-        : 'Chargement des tâches impossible'
+    t(
+      scope === 'roles'
+        ? 'vue.chargement.modeles'
+        : scope === 'conversations'
+          ? 'vue.chargement.conversations'
+          : 'vue.chargement.taches'
+    )
 
   if (catalogActive !== active) {
     setCatalogActive(active)
@@ -657,7 +708,9 @@ export function TaskManagerView({
   const openFixAfterFailure = (task: ScheduledTask, occurrence: TaskOccurrence): void => {
     openEdit(task)
     setError(
-      `Dernier échec : ${occurrence.error ?? 'erreur non enregistrée'} — corrige le prompt puis enregistre.`
+      t('vue.erreur.dernierEchec', {
+        erreur: occurrence.error ?? t('vue.erreur.nonEnregistree')
+      })
     )
   }
 
@@ -669,11 +722,11 @@ export function TaskManagerView({
 
   const save = async (): Promise<void> => {
     if (!draft || !draft.title.trim() || !draft.prompt.trim()) {
-      setError('Le titre et le prompt sont obligatoires.')
+      setError(t('vue.erreur.titrePrompt'))
       return
     }
     if (!modelCatalogReady || !hasLoadedModel(draft.destination, models)) {
-      setError('Choisis un modèle chargé dans Agent Studio pour cette tâche.')
+      setError(t('vue.erreur.modele'))
       return
     }
     const watchdogProblem = watchdogDraftProblem(draft.watchdog)
@@ -737,7 +790,7 @@ export function TaskManagerView({
     setError(undefined)
     try {
       const result = await window.api.taskManagerTeamsConnect()
-      if (!result.ok) setError(`Connexion Teams impossible : ${result.erreur}`)
+      if (!result.ok) setError(t('vue.erreur.teams', { erreur: result.erreur }))
       await refreshSnapshot()
     } catch (failure) {
       setError(errorText(failure))
@@ -747,7 +800,7 @@ export function TaskManagerView({
   }
 
   const removeTask = async (task: ScheduledTask): Promise<void> => {
-    if (!window.confirm(`Supprimer définitivement « ${task.title} » ?`)) return
+    if (!window.confirm(t('vue.confirmer.supprimer', { titre: task.title }))) return
     setSaving(true)
     setError(undefined)
     try {
@@ -767,7 +820,7 @@ export function TaskManagerView({
     setError(undefined)
     try {
       const result = await window.api.taskManagerRunNow(task.id)
-      if (!result.started) setError('La tâche n’a pas pu démarrer.')
+      if (!result.started) setError(t('vue.erreur.demarrage'))
       await refreshSnapshot()
       // Une destination « nouvelle conversation » pas encore matérialisée peut en créer une.
       if (task.destination.kind === 'new' && !task.destination.conversationId)
@@ -811,18 +864,18 @@ export function TaskManagerView({
       {draft ? (
         <div className="task-manager-editor">
           <div className="task-manager-panel-title">
-            <span>{editingId ? 'Modifier la tâche' : 'Nouvelle tâche'}</span>
+            <span>{editingId ? t('vue.editeur.modifier') : t('vue.editeur.nouvelle')}</span>
             <button type="button" onClick={closeEditor}>
-              Annuler
+              {t('vue.editeur.annuler')}
             </button>
           </div>
           <div className="task-manager-form-grid">
             <label className="task-manager-field is-wide">
-              <span>Titre</span>
+              <span>{t('vue.editeur.titre')}</span>
               <input
                 name="title"
                 value={draft.title}
-                placeholder="Ex. Veille concurrentielle"
+                placeholder={t('vue.editeur.titreExemple')}
                 onChange={(event) =>
                   setDraft((current) =>
                     current ? { ...current, title: event.target.value } : current
@@ -834,15 +887,15 @@ export function TaskManagerView({
                 l'en-tête porte donc un label `htmlFor` et le bouton à côté (conv-983, 2026-10-16). */}
             <div className="task-manager-field is-wide">
               <span className="task-manager-field-head">
-                <label htmlFor="task-manager-prompt">Prompt envoyé</label>
+                <label htmlFor="task-manager-prompt">{t('vue.prompt')}</label>
                 <button
                   type="button"
                   className="task-manager-template"
                   disabled={draft.prompt.trim() !== ''}
                   title={
                     draft.prompt.trim() === ''
-                      ? 'Remplit le champ avec le modèle de prompt, à compléter'
-                      : 'Le champ contient déjà un prompt : il n’est jamais écrasé'
+                      ? t('vue.editeur.modeleRemplir')
+                      : t('vue.editeur.modeleDejaRempli')
                   }
                   onClick={() =>
                     setDraft((current) =>
@@ -852,7 +905,7 @@ export function TaskManagerView({
                     )
                   }
                 >
-                  Partir du modèle
+                  {t('vue.editeur.partirDuModele')}
                 </button>
               </span>
               <textarea
@@ -866,10 +919,12 @@ export function TaskManagerView({
                     current ? { ...current, prompt: event.target.value } : current
                   )
                 }
+                // Le modèle de prompt est une consigne pour l'agent (shared/modele-prompt-tache.ts) :
+                // il reste en français, comme le prompt qu'il aide à écrire.
               />
             </div>
             <label className="task-manager-field">
-              <span>Mode d’exécution</span>
+              <span>{t('vue.editeur.mode')}</span>
               <select
                 value={draft.mode}
                 onChange={(event) =>
@@ -880,12 +935,12 @@ export function TaskManagerView({
                   )
                 }
               >
-                <option value="active-only">Autowin actif uniquement</option>
-                <option value="windows">Autonome Windows · réveille le PC</option>
+                <option value="active-only">{t('vue.mode.actif')}</option>
+                <option value="windows">{t('vue.editeur.modeWindows')}</option>
               </select>
             </label>
             <label className="task-manager-field">
-              <span>Destination</span>
+              <span>{t('vue.destination')}</span>
               <select
                 value={draft.destination.kind}
                 onChange={(event) => {
@@ -910,7 +965,7 @@ export function TaskManagerView({
                                 }
                               : {
                                   kind: 'new',
-                                  title: current.title || 'Tâche planifiée',
+                                  title: current.title || t('vue.titreParDefaut'),
                                   category: selectableModels[0]?.provider ?? '',
                                   provider: selectableModels[0]?.provider ?? '',
                                   ...(selectableModels[0]
@@ -926,18 +981,18 @@ export function TaskManagerView({
                   )
                 }}
               >
-                <option value="existing">Conversation existante</option>
+                <option value="existing">{t('vue.editeur.destinationExistante')}</option>
                 <option
                   value="new"
                   disabled={!modelCatalogReady || selectableModels.length === 0}
                 >
-                  Nouvelle conversation dédiée
+                  {t('vue.editeur.destinationNouvelle')}
                 </option>
               </select>
             </label>
             {draft.destination.kind === 'existing' ? (
               <label className="task-manager-field is-wide">
-                <span>Conversation ciblée</span>
+                <span>{t('vue.editeur.conversationCiblee')}</span>
                 <select
                   value={draft.destination.conversationId}
                   onChange={(event) =>
@@ -963,7 +1018,7 @@ export function TaskManagerView({
               </label>
             ) : (
               <label className="task-manager-field">
-                <span>Nom de la conversation</span>
+                <span>{t('vue.editeur.nomConversation')}</span>
                 <input
                   value={draft.destination.title}
                   onChange={(event) => {
@@ -981,7 +1036,7 @@ export function TaskManagerView({
               </label>
             )}
             <label className="task-manager-field">
-              <span>Modèle</span>
+              <span>{t('vue.editeur.modele')}</span>
               <select
                 value={draftModelId}
                 disabled={!modelCatalogReady || selectableModels.length === 0}
@@ -1030,16 +1085,16 @@ export function TaskManagerView({
                 </option>
                 {!draftModelId && draft.destination.model && (
                   <option value="" disabled>
-                    {draft.destination.model} · indisponible
+                    {t('vue.editeur.modeleIndisponible', { modele: draft.destination.model })}
                   </option>
                 )}
                 {!draftModelId && !draft.destination.model && selectableModels.length > 0 && (
                   <option value="" disabled>
-                    Choisir un modèle
+                    {t('vue.editeur.choisirModele')}
                   </option>
                 )}
                 {selectableModels.length === 0 && !draft.destination.model && (
-                  <option value="">Aucun modèle chargé dans Agent Studio</option>
+                  <option value="">{t('vue.editeur.aucunModele')}</option>
                 )}
                 {selectableModels.map((model) => (
                   <option key={model.id} value={model.id}>
@@ -1049,7 +1104,7 @@ export function TaskManagerView({
               </select>
             </label>
             <label className="task-manager-field">
-              <span>Effort</span>
+              <span>{t('vue.editeur.effort')}</span>
               <select
                 value={draftEffort}
                 disabled={!draftModel || draftEfforts.length <= 1}
@@ -1070,13 +1125,13 @@ export function TaskManagerView({
               >
                 {draftEfforts.map((effort) => (
                   <option key={effort} value={effort}>
-                    {EFFORT_LABELS[effort] ?? effort}
+                    {EFFORT_LABELS[effort] ? t(EFFORT_LABELS[effort]) : effort}
                   </option>
                 ))}
               </select>
             </label>
             <label className="task-manager-field task-manager-field-wide">
-              <span>Déclencheur</span>
+              <span>{t('vue.editeur.declencheur')}</span>
               <select
                 value={triggerKindOf(draft)}
                 data-testid="trigger-kind"
@@ -1097,8 +1152,8 @@ export function TaskManagerView({
                   )
                 }
               >
-                <option value="schedule">À une heure (planifié)</option>
-                <option value="watchdog">Sur événement (Watchdog Agent)</option>
+                <option value="schedule">{t('vue.editeur.declencheurHeure')}</option>
+                <option value="watchdog">{t('vue.editeur.declencheurEvenement')}</option>
               </select>
             </label>
             {draft.watchdog && (
@@ -1112,7 +1167,7 @@ export function TaskManagerView({
             {!draft.watchdog && (
               <>
                 <label className="task-manager-field">
-                  <span>Date de départ</span>
+                  <span>{t('vue.editeur.dateDepart')}</span>
                   <input
                     type="date"
                     value={draft.schedule.startDate}
@@ -1120,7 +1175,7 @@ export function TaskManagerView({
                   />
                 </label>
                 <label className="task-manager-field">
-                  <span>Heure</span>
+                  <span>{t('vue.editeur.heure')}</span>
                   <input
                     type="time"
                     value={draft.schedule.time}
@@ -1128,7 +1183,7 @@ export function TaskManagerView({
                   />
                 </label>
                 <label className="task-manager-field">
-                  <span>Répétition</span>
+                  <span>{t('vue.repetition')}</span>
                   <select
                     value={draft.schedule.recurrence.unit}
                     onChange={(event) =>
@@ -1141,17 +1196,17 @@ export function TaskManagerView({
                       })
                     }
                   >
-                    <option value="none">Aucune</option>
-                    <option value="minute">Minute(s)</option>
-                    <option value="hour">Heure(s)</option>
-                    <option value="day">Jour(s)</option>
-                    <option value="week">Semaine(s)</option>
-                    <option value="month">Mois</option>
+                    <option value="none">{t('vue.editeur.unite.aucune')}</option>
+                    <option value="minute">{t('vue.editeur.unite.minute')}</option>
+                    <option value="hour">{t('vue.editeur.unite.heure')}</option>
+                    <option value="day">{t('vue.editeur.unite.jour')}</option>
+                    <option value="week">{t('vue.editeur.unite.semaine')}</option>
+                    <option value="month">{t('vue.editeur.unite.mois')}</option>
                   </select>
                 </label>
                 {draft.schedule.recurrence.unit !== 'none' && (
                   <label className="task-manager-field">
-                    <span>Intervalle</span>
+                    <span>{t('vue.editeur.intervalle')}</span>
                     <input
                       type="number"
                       min={1}
@@ -1165,7 +1220,7 @@ export function TaskManagerView({
                 )}
                 {draft.schedule.recurrence.unit === 'week' && (
                   <fieldset className="task-manager-weekdays">
-                    <legend>Jours</legend>
+                    <legend>{t('vue.editeur.jours')}</legend>
                     {WEEK_DAYS.map((day) => {
                       const selected = draft.schedule.recurrence.weekDays?.includes(day.value)
                       return (
@@ -1182,14 +1237,14 @@ export function TaskManagerView({
                               })
                             }}
                           />
-                          {day.label}
+                          {t(day.label)}
                         </label>
                       )
                     })}
                   </fieldset>
                 )}
                 <label className="task-manager-field">
-                  <span>Date de fin · optionnelle</span>
+                  <span>{t('vue.editeur.dateFin')}</span>
                   <input
                     type="date"
                     value={draft.schedule.endDate ?? ''}
@@ -1210,14 +1265,12 @@ export function TaskManagerView({
                   )
                 }
               />
-              <span>Activer dès l’enregistrement</span>
+              <span>{t('vue.editeur.activer')}</span>
             </label>
           </div>
           <div className="task-manager-form-actions">
             <span>
-              {draft.mode === 'windows'
-                ? 'Windows réveillera le PC. Aucun rattrapage tardif.'
-                : 'S’exécute tant que le processus Autowin reste actif, même dans le tray.'}
+              {draft.mode === 'windows' ? t('vue.editeur.noteWindows') : t('vue.editeur.noteActif')}
             </span>
             <button
               type="button"
@@ -1227,7 +1280,11 @@ export function TaskManagerView({
               }
               onClick={() => void save()}
             >
-              {saving ? 'Enregistrement…' : editingId ? 'Enregistrer' : 'Créer la tâche'}
+              {saving
+                ? t('vue.editeur.enregistrement')
+                : editingId
+                  ? t('vue.editeur.enregistrer')
+                  : t('vue.editeur.creer')}
             </button>
           </div>
         </div>
@@ -1244,83 +1301,80 @@ export function TaskManagerView({
                   ? `${recurrenceLabel(selected.schedule)} · ${selected.schedule.timeZone}`
                   : selected.watchdog
                     ? describeWatchdogSource(selected.watchdog.source)
-                    : 'Déclencheur invalide'}
+                    : t('vue.detail.declencheurInvalide')}
               </p>
             </div>
             <div className="task-manager-detail-actions">
               <button type="button" onClick={() => openEdit(selected)}>
-                Modifier
+                {t('vue.detail.modifier')}
               </button>
               <button
                 type="button"
                 disabled={saving || !selected.enabled}
                 onClick={() => void runNow(selected)}
               >
-                Lancer maintenant
+                {t('vue.detail.lancer')}
               </button>
               <button
                 type="button"
                 onClick={() => void updateTask(selected, { enabled: !selected.enabled })}
               >
-                {selected.enabled ? 'Désactiver' : 'Activer'}
+                {selected.enabled ? t('vue.detail.desactiver') : t('vue.detail.activer')}
               </button>
               <button
                 type="button"
                 className="is-danger"
                 disabled={saving || taskIsRunning}
-                title={
-                  taskIsRunning
-                    ? 'Cette tâche est en cours et ne peut pas être supprimée.'
-                    : undefined
-                }
+                title={taskIsRunning ? t('vue.detail.suppressionImpossible') : undefined}
                 onClick={() => void removeTask(selected)}
               >
-                Supprimer
+                {t('vue.detail.supprimer')}
               </button>
             </div>
           </div>
           <div className="task-manager-prompt">
-            <span>Prompt envoyé</span>
+            <span>{t('vue.prompt')}</span>
             <p>{selected.prompt}</p>
           </div>
           <dl className="task-manager-facts">
             <div>
-              <dt>Prochaine échéance</dt>
+              <dt>{t('vue.detail.prochaineEcheance')}</dt>
               <dd>{formatDateTime(selected.nextRunAt)}</dd>
             </div>
             <div>
-              <dt>Destination</dt>
+              <dt>{t('vue.destination')}</dt>
               <dd>
                 {selected.destination.kind === 'existing'
                   ? (conversations.find(
                       ({ id }) => id === selected.destination.conversationId
                     )?.title ?? selected.destination.conversationId)
                   : selected.destination.conversationId
-                    ? `Conversation dédiée · ${selected.destination.title}`
-                    : `Nouvelle conversation · ${selected.destination.title}`}
+                    ? t('vue.detail.conversationDediee', { titre: selected.destination.title })
+                    : t('vue.detail.nouvelleConversation', { titre: selected.destination.title })}
               </dd>
             </div>
             <div>
-              <dt>Répétition</dt>
+              <dt>{t('vue.repetition')}</dt>
               <dd>
                 {selected.schedule
                   ? recurrenceLabel(selected.schedule)
                   : selected.watchdog
                     ? describeWatchdogSource(selected.watchdog.source)
-                    : 'Inconnu'}
+                    : t('vue.detail.inconnu')}
               </dd>
             </div>
             <div>
-              <dt>État</dt>
-              <dd>{selected.enabled ? 'Active' : 'Désactivée'}</dd>
+              <dt>{t('vue.detail.etat')}</dt>
+              <dd>{selected.enabled ? t('vue.detail.active') : t('vue.detail.desactivee')}</dd>
             </div>
             {selected.watchdog && (
               <>
                 <div>
-                  <dt>Activité watchdog</dt>
+                  <dt>{t('vue.detail.activite')}</dt>
                   <dd>
-                    {snapshot.watchdogs?.[selected.id]?.admittedLastHour ?? 0} réveils sur la
-                    dernière heure
+                    {t('vue.detail.reveilsHeure', {
+                      n: snapshot.watchdogs?.[selected.id]?.admittedLastHour ?? 0
+                    })}
                   </dd>
                 </div>
                 {(() => {
@@ -1333,26 +1387,31 @@ export function TaskManagerView({
                   })
                   return recentUsage.length ? (
                     <div>
-                      <dt>Coût dernière heure</dt>
+                      <dt>{t('vue.detail.coutHeure')}</dt>
                       <dd>{recentUsage.join(' · ')}</dd>
                     </div>
                   ) : null
                 })()}
                 {snapshot.watchdogs?.[selected.id]?.complaint && (
                   <div>
-                    <dt>Diagnostic</dt>
+                    <dt>{t('vue.detail.diagnostic')}</dt>
                     <dd>{snapshot.watchdogs[selected.id].complaint}</dd>
                   </div>
                 )}
                 {(() => {
                   const failure = snapshot.watchdogs?.[selected.id]?.mailReadError
                   if (!failure) return null
+                  // Teams, Outlook : des noms de produits, les mêmes dans les deux langues.
+                  const canal = failure.channel === 'teams' ? 'Teams' : 'Outlook'
                   return (
                     <div>
-                      <dt>Lecture {failure.channel === 'teams' ? 'Teams' : 'Outlook'}</dt>
+                      <dt>{t('vue.detail.lecture', { canal })}</dt>
                       <dd>
-                        Lecture {failure.channel === 'teams' ? 'Teams' : 'Outlook'} impossible
-                        depuis {formatDateTime(failure.since)} : {failure.erreur}
+                        {t('vue.detail.lectureImpossible', {
+                          canal,
+                          depuis: formatDateTime(failure.since),
+                          erreur: failure.erreur
+                        })}
                       </dd>
                     </div>
                   )
@@ -1362,14 +1421,16 @@ export function TaskManagerView({
                   if (!log?.length) return null
                   return (
                     <div className="task-manager-mail-log-card">
-                      <dt>Derniers messages</dt>
+                      <dt>{t('vue.detail.derniersMessages')}</dt>
                       <dd>
                         <ul className="task-manager-mail-log">
                           {log.map((entry, index) => (
                             <li key={`${entry.at}-${index}`}>
                               {formatDateTime(entry.at)} ·{' '}
                               {entry.from || entry.subject
-                                ? `${entry.from ?? ''}${entry.subject ? ` — ${entry.subject}` : ''} : `
+                                ? t('vue.detail.mailEntete', {
+                                    entete: `${entry.from ?? ''}${entry.subject ? ` — ${entry.subject}` : ''}`
+                                  })
                                 : ''}
                               {mailOutcomeLabel(entry.outcome, entry.detail)}
                             </li>
@@ -1384,27 +1445,30 @@ export function TaskManagerView({
                   if (!signIn) return null
                   return (
                     <div className="task-manager-mail-log-card" data-testid="watchdog-teams-signin">
-                      <dt>Connexion Teams</dt>
+                      <dt>{t('vue.teams.connexion')}</dt>
                       <dd>
                         {signIn.state === 'connected' ? (
-                          'Connecté à Microsoft Teams.'
+                          t('vue.teams.connecte')
                         ) : signIn.state === 'code' ? (
                           <>
-                            Ouvre <strong>{signIn.verificationUri}</strong> et saisis le code{' '}
+                            {t('vue.teams.ouvre')} <strong>{signIn.verificationUri}</strong>{' '}
+                            {t('vue.teams.saisis')}{' '}
                             <strong className="task-manager-teams-code">{signIn.userCode}</strong>{' '}
-                            avant {formatDateTime(signIn.expiresAt)}.
+                            {t('vue.teams.avant', { date: formatDateTime(signIn.expiresAt) })}
                           </>
                         ) : signIn.state === 'unconfigured' ? (
-                          'Teams n’est pas configuré sur ce poste (réglage AUTOWIN_TEAMS_CLIENT_ID absent).'
+                          t('vue.teams.nonConfigure')
                         ) : (
                           <>
-                            Non connecté{signIn.erreur ? ` : ${signIn.erreur}` : ''}.{' '}
+                            {signIn.erreur
+                              ? t('vue.teams.nonConnecteErreur', { erreur: signIn.erreur })
+                              : t('vue.teams.nonConnecte')}{' '}
                             <button
                               type="button"
                               disabled={saving}
                               onClick={() => void connectTeams()}
                             >
-                              Connecter Teams
+                              {t('vue.teams.connecter')}
                             </button>
                           </>
                         )}
@@ -1420,10 +1484,10 @@ export function TaskManagerView({
                   )
                   return (
                     <div className="task-manager-mail-log-card">
-                      <dt>Interlocuteurs — cochés = l’agent leur répond</dt>
+                      <dt>{t('regle.interlocuteurs')}</dt>
                       <dd>
                         {senders.length === 0 ? (
-                          'Aucune personne encore vue : chaque nouvelle personne apparaît ici, cochée.'
+                          t('vue.detail.aucunePersonne')
                         ) : (
                           <div className="task-manager-mail-senders">
                             {senders.map(([key, sender]) => (
@@ -1458,20 +1522,21 @@ export function TaskManagerView({
           </dl>
           <section className="task-manager-history">
             <div className="task-manager-panel-title">
-              <span>Historique des occurrences</span>
+              <span>{t('vue.historique')}</span>
               <small>{occurrences.length}</small>
             </div>
             {occurrences.length === 0 ? (
-              <p className="task-manager-muted">Aucune exécution pour le moment.</p>
+              <p className="task-manager-muted">{t('vue.historique.vide')}</p>
             ) : (
               occurrences.map((occurrence) => (
                 <div className="task-manager-occurrence" key={occurrence.id}>
+                  {/* Le code brut du statut (running, failed…) : une valeur technique, non traduite. */}
                   <span className={`status-${occurrence.status}`}>{occurrence.status}</span>
                   <strong>
                     {formatDateTime(occurrence.scheduledFor)} · {modeLabel(occurrence.mode)}
                   </strong>
                   <small data-testid="task-manager-occurrence-meta">
-                    {occurrenceMeta(occurrence).join(' · ') || 'Tour Chat'}
+                    {occurrenceMeta(occurrence).join(' · ') || t('vue.historique.tourChat')}
                   </small>
                   {occurrence.status === 'failed' && (
                     <span className="task-manager-occurrence-actions">
@@ -1482,7 +1547,7 @@ export function TaskManagerView({
                         disabled={saving}
                         onClick={() => void runNow(selected)}
                       >
-                        Rejouer
+                        {t('vue.historique.rejouer')}
                       </button>
                       <button
                         type="button"
@@ -1490,7 +1555,7 @@ export function TaskManagerView({
                         data-testid="task-manager-occurrence-replay-fixed"
                         onClick={() => openFixAfterFailure(selected, occurrence)}
                       >
-                        Rejouer avec prompt corrigé
+                        {t('vue.historique.rejouerCorrige')}
                       </button>
                     </span>
                   )}
@@ -1504,10 +1569,10 @@ export function TaskManagerView({
                           ...(occurrence.turnId ? { turnId: occurrence.turnId } : {})
                         })
                       }
-                      title={`Conversation ${occurrence.conversationId}`}
+                      title={t('vue.historique.conversation', { id: occurrence.conversationId })}
                       type="button"
                     >
-                      Ouvrir la conversation
+                      {t('vue.historique.ouvrir')}
                     </button>
                   )}
                 </div>
@@ -1518,13 +1583,13 @@ export function TaskManagerView({
       ) : loading ? (
         <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
           <Spinner />
-          <strong>Chargement des tâches…</strong>
+          <strong>{t('vue.chargement')}</strong>
         </div>
       ) : (
         <div className="task-manager-empty is-detail">
           <span aria-hidden="true">◷</span>
-          <strong>Sélectionne ou crée une tâche</strong>
-          <p>Les prompts planifiés apparaîtront ici avec leur historique complet.</p>
+          <strong>{t('vue.vide.selection')}</strong>
+          <p>{t('vue.vide.selectionDetail')}</p>
         </div>
       )}
     </main>
@@ -1533,22 +1598,23 @@ export function TaskManagerView({
   return (
     <section className="view-page task-manager-view" data-testid="task-manager-view">
       <ViewTopBar
-        eyebrow="AUTOMATISATION"
+        eyebrow={t('vue.entete.surtitre')}
+        // « Task Manager », « Watchdog » : noms de l'écran et de la fonction, les mêmes en anglais.
         title="Task Manager"
-        description="Planifie de vrais prompts Chat, visibles et traçables comme tes envois manuels."
-        ariaLabel="Sections Task Manager"
+        description={t('vue.entete.description')}
+        ariaLabel={t('vue.entete.sections')}
         active={sectionActive}
         onSelect={changerSection}
         tabs={[
           { id: 'watchdog', label: 'Watchdog' },
-          { id: 'planification', label: 'Planification' }
+          { id: 'planification', label: t('vue.planification') }
         ]}
         actions={
           <div className="task-manager-head-actions">
             <span
               className={`task-manager-health ${snapshot.scheduler.running ? 'is-ok' : 'is-error'}`}
             >
-              {snapshot.scheduler.running ? 'Scheduler actif' : 'Scheduler arrêté'}
+              {snapshot.scheduler.running ? t('vue.scheduler.actif') : t('vue.scheduler.arrete')}
             </span>
             <span
               className={`task-manager-health ${
@@ -1556,7 +1622,7 @@ export function TaskManagerView({
               }`}
               title={snapshot.scheduler.relayError}
             >
-              {snapshot.scheduler.relayAvailable ? 'Relais Windows prêt' : 'Relais à vérifier'}
+              {snapshot.scheduler.relayAvailable ? t('vue.relais.pret') : t('vue.relais.aVerifier')}
             </span>
             <button
               type="button"
@@ -1564,7 +1630,7 @@ export function TaskManagerView({
               disabled={loading}
               onClick={openCreate}
             >
-              + Nouvelle tâche
+              {t('vue.nouvelleTache')}
             </button>
           </div>
         }
@@ -1606,21 +1672,23 @@ export function TaskManagerView({
 
       <div className="task-manager-stats">
         <span>
-          <strong>{snapshot.tasks.length}</strong> tâches
+          <strong>{snapshot.tasks.length}</strong> {t('vue.stats.taches')}
         </span>
         <span>
-          <strong>{snapshot.tasks.filter(({ enabled }) => enabled).length}</strong> actives
+          <strong>{snapshot.tasks.filter(({ enabled }) => enabled).length}</strong>{' '}
+          {t('vue.stats.actives')}
         </span>
         {runningTaskIds.size > 0 && (
           <span className="task-manager-running" data-testid="task-manager-running-count">
-            <strong>{runningTaskIds.size}</strong> en cours
+            <strong>{runningTaskIds.size}</strong> {t('vue.stats.enCours')}
           </span>
         )}
         <span className={openAlerts.length ? 'has-alerts' : ''}>
-          <strong>{openAlerts.length}</strong> alertes
+          <strong>{openAlerts.length}</strong> {t('vue.stats.alertes')}
         </span>
         <span className="task-manager-next">
-          Prochain réveil · <strong>{formatDateTime(snapshot.scheduler.nextWakeAt)}</strong>
+          {t('vue.stats.prochainReveil')} ·{' '}
+          <strong>{formatDateTime(snapshot.scheduler.nextWakeAt)}</strong>
         </span>
       </div>
 
@@ -1642,42 +1710,42 @@ export function TaskManagerView({
               else void refreshModels()
             }}
           >
-            Réessayer
+            {t('vue.reessayer')}
           </button>
         </div>
       ))}
 
       {error && (
         <div className="task-manager-error" role="alert">
-          <strong>Action impossible</strong>
+          <strong>{t('vue.actionImpossible')}</strong>
           <span>{error}</span>
           <button type="button" onClick={() => setError(undefined)}>
-            Fermer
+            {t('vue.fermer')}
           </button>
         </div>
       )}
 
       {sectionActive === 'planification' && (
         <div className="task-manager-layout">
-          <aside className="task-manager-list" aria-label="Tâches planifiées">
+          <aside className="task-manager-list" aria-label={t('vue.liste.aria')}>
             <div className="task-manager-panel-title">
-              <span>Planification</span>
+              <span>{t('vue.planification')}</span>
               <button type="button" onClick={() => void load()} disabled={loading}>
-                {loading ? '…' : 'Actualiser'}
+                {loading ? '…' : t('vue.liste.actualiser')}
               </button>
             </div>
             {loading ? (
               <div className="task-manager-empty" data-testid="task-manager-loading">
                 <Spinner />
-                <strong>Chargement des tâches…</strong>
+                <strong>{t('vue.chargement')}</strong>
               </div>
             ) : scheduledTasks.length === 0 ? (
               <div className="task-manager-empty">
                 <span aria-hidden="true">◷</span>
-                <strong>Aucune tâche</strong>
-                <p>Crée un prompt, choisis son horaire et sa conversation.</p>
+                <strong>{t('vue.liste.vide')}</strong>
+                <p>{t('vue.liste.videDetail')}</p>
                 <button type="button" disabled={loading} onClick={openCreate}>
-                  Créer la première
+                  {t('vue.liste.creerPremiere')}
                 </button>
               </div>
             ) : (
@@ -1698,9 +1766,10 @@ export function TaskManagerView({
                   <span className="task-manager-row-meta">
                     {runningTaskIds.has(task.id) && (
                       <em className="task-manager-running" data-testid="task-manager-row-running">
-                        En cours
+                        {t('vue.liste.enCours')}
                       </em>
                     )}
+                    {/* ON/OFF, WIN/APP : des pastilles techniques, les mêmes dans les deux langues. */}
                     <b>{task.enabled ? 'ON' : 'OFF'}</b>
                     <small>{task.mode === 'windows' ? 'WIN' : 'APP'}</small>
                   </span>
@@ -1711,15 +1780,15 @@ export function TaskManagerView({
 
           {renderDetail(selected?.watchdog ? undefined : selected)}
 
-          <aside className="task-manager-alerts" aria-label="Alertes Task Manager">
+          <aside className="task-manager-alerts" aria-label={t('vue.alertes.aria')}>
             <div className="task-manager-panel-title">
-              <span>Alertes</span>
+              <span>{t('vue.alertes')}</span>
               <b>{openAlerts.length}</b>
             </div>
             {visibleAlerts.length === 0 ? (
               <div className="task-manager-alert-empty">
                 <span>✓</span>
-                <p>Aucune alerte ouverte.</p>
+                <p>{t('vue.alertes.vide')}</p>
               </div>
             ) : (
               visibleAlerts.map((alert) => (
@@ -1729,7 +1798,9 @@ export function TaskManagerView({
                 >
                   <header>
                     <strong>
-                      {alert.kind === 'missed' ? 'Échéance manquée' : 'Exécution échouée'}
+                      {alert.kind === 'missed'
+                        ? t('vue.alertes.manquee')
+                        : t('vue.alertes.echouee')}
                     </strong>
                     <time>{formatDateTime(alert.createdAt)}</time>
                   </header>
@@ -1740,12 +1811,12 @@ export function TaskManagerView({
                     onClick={() => setSelectedId(alert.taskId)}
                   >
                     {snapshot.tasks.find(({ id }) => id === alert.taskId)?.title ??
-                      'Tâche supprimée'}
+                      t('vue.alertes.tacheSupprimee')}
                   </button>
                   <p>{alert.message}</p>
                   {!alert.acknowledgedAt && (
                     <button type="button" onClick={() => void acknowledge(alert.id)}>
-                      Acquitter
+                      {t('vue.alertes.acquitter')}
                     </button>
                   )}
                 </article>
@@ -1754,7 +1825,7 @@ export function TaskManagerView({
             {snapshot.scheduler.relayError && (
               <article className="task-manager-alert">
                 <header>
-                  <strong>Relais Windows indisponible</strong>
+                  <strong>{t('vue.alertes.relaisIndisponible')}</strong>
                 </header>
                 <p>{snapshot.scheduler.relayError}</p>
               </article>

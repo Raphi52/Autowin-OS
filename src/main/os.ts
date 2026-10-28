@@ -5,6 +5,7 @@
  * (chat, orchestration, dashboards, graphe 3D).
  */
 import { Notification, app } from 'electron'
+import { traduireCoeur } from './textes-coeur'
 import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from './hdesk-tv'
 import { interfaceVisible } from './startup-gate'
 import { cheminDuLivrableEntier, ecrireLivrableEntier } from './runs/livrable-entier'
@@ -200,6 +201,22 @@ export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): 
   const executableWorkspace = gitWorkspaceFrom(dirname(input.execPath ?? process.execPath))
   if (executableWorkspace) return executableWorkspace
   return defaultBehaviourWorkspace()
+}
+
+/**
+ * Le texte de la bulle d'un travail abandonné, dans la langue réglée (conv-1170, lot 18). Sorti de
+ * `onAbandon` pour être testé sans Electron (`textes-coeur.branchement.test.ts`).
+ */
+export function contenuDeNotificationDAbandon(info: { runId: string; tache?: string }): {
+  title: string
+  body: string
+} {
+  return {
+    title: traduireCoeur('abandon.titre'),
+    body: info.tache
+      ? traduireCoeur('abandon.corps', { tache: info.tache.slice(0, 120) })
+      : traduireCoeur('abandon.corpsRun', { run: info.runId })
+  }
 }
 
 /** Un modèle membre d'un bloc de fan-out (topology → orchestrateur). */
@@ -585,12 +602,7 @@ export class AutowinOS {
           onAbandon: ({ tache, runId }) => {
             try {
               if (!Notification.isSupported()) return
-              new Notification({
-                title: 'Autowin — un travail a ete abandonne',
-                body: tache
-                  ? `« ${tache.slice(0, 120)} » n'a pas pu etre integre. Son travail reste sur sa branche de secours.`
-                  : `${runId} n'a pas pu etre integre. Son travail reste sur sa branche de secours.`
-              }).show()
+              new Notification(contenuDeNotificationDAbandon({ tache, runId })).show()
             } catch {
               // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
             }

@@ -53,6 +53,8 @@ import type {
   CarteDesBesoins,
   ResultatDuRattachement
 } from '../shared/carte-des-besoins'
+import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
+import type { BoardsDesCollegues } from '../shared/board-collegues'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatDiarisation } from '../main/diarisation'
@@ -687,7 +689,21 @@ const api = {
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
-  carteDesBesoins: (): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins'),
+  carteDesBesoins: (options?: {
+    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier (conv-1206). */
+    etatsManuels?: Record<string, EtatManuelDuBoard>
+  }): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins', options),
+  /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
+  boardDossier: (): Promise<EtatDuDossierDuBoard> => ipcRenderer.invoke('os:board-dossier'),
+  boardDossierChoisir: (): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:board-dossier:choisir'),
+  boardDossierEffacer: (): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:board-dossier:effacer'),
+  /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
+  boardDossierProjets: (projets: string[] | null): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:board-dossier:projets', projets),
+  /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
+  boardCollegues: (): Promise<BoardsDesCollegues> => ipcRenderer.invoke('os:board-collegues'),
   /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
   carteLierWorkItem: (cible: {
     conversationId: string
@@ -825,8 +841,6 @@ const api = {
     ipcRenderer.invoke('veille:marquer', id, statut),
   veilleGenerer: (conversationId?: string): Promise<unknown> =>
     ipcRenderer.invoke('veille:generer', conversationId),
-  scoutMotif: (titre: string, motif: string, conversationId?: string): Promise<boolean> =>
-    ipcRenderer.invoke('scout:motif', titre, motif, conversationId),
   taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
     ipcRenderer.invoke('task-manager:snapshot'),
   /**

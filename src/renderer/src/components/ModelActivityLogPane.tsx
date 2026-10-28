@@ -7,6 +7,8 @@
  * ne fait QUE : charger les journaux des tours affichés, et rendre le résultat du modèle pur.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { formaterDate, formaterNombre } from '../langue'
+import { useTextesChatPanneaux, type traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ModelActivityLogPane.css'
 import type { Msg } from './chat-view-types'
 import { HumanJson } from './HumanJson'
@@ -28,23 +30,29 @@ import {
   type ModelActivitySource
 } from './model-activity-log'
 
-const KIND_LABEL: Record<ModelActivityKind, string> = {
-  prompt: 'Demande',
-  'model-call': 'Modèle',
-  reasoning: 'Réflexion',
-  text: 'Réponse',
-  action: 'Action',
-  artifact: 'Artefact',
-  error: 'Erreur',
-  done: 'Fin',
-  injection: 'Injection',
-  boundary: 'Frontière',
-  usage: 'Coût',
-  status: 'Action',
-  brain: 'Brain',
-  agent: 'Sous-agent',
-  fichiers: 'Fichiers',
-  event: 'Journal'
+type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
+
+/**
+ * Nature de chaque ligne, par sa CLÉ de texte (conv-1170) : le menu de filtre retient la clé, pas le
+ * mot affiché, pour qu'un changement de langue ne vide pas un filtre posé.
+ */
+const KIND_LABEL: Record<ModelActivityKind, CleDuPanneau> = {
+  prompt: 'journal.nature.demande',
+  'model-call': 'journal.nature.modele',
+  reasoning: 'journal.nature.reflexion',
+  text: 'journal.nature.reponse',
+  action: 'journal.nature.action',
+  artifact: 'journal.nature.artefact',
+  error: 'journal.nature.erreur',
+  done: 'journal.nature.fin',
+  injection: 'journal.nature.injection',
+  boundary: 'journal.nature.frontiere',
+  usage: 'journal.nature.cout',
+  status: 'journal.nature.action',
+  brain: 'journal.nature.brain',
+  agent: 'journal.nature.sousAgent',
+  fichiers: 'journal.nature.fichiers',
+  event: 'journal.nature.journal'
 }
 
 /**
@@ -56,16 +64,16 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
  */
 const FENETRE = 300
 
-const SOURCE_LABEL: Record<ModelActivitySource, string> = {
-  thread: 'fil',
-  journal: 'journal',
-  parts: 'persisté',
-  causal: 'trace causale',
-  activity: 'activité',
-  brain: 'brain',
-  prompts: 'prompt envoyé',
-  bureaux: 'copie de travail',
-  fichiers: 'trace fichiers'
+const SOURCE_LABEL: Record<ModelActivitySource, CleDuPanneau> = {
+  thread: 'journal.source.fil',
+  journal: 'journal.source.journal',
+  parts: 'journal.source.persiste',
+  causal: 'journal.source.causal',
+  activity: 'journal.source.activite',
+  brain: 'journal.source.brain',
+  prompts: 'journal.source.prompts',
+  bureaux: 'journal.source.bureaux',
+  fichiers: 'journal.source.fichiers'
 }
 
 /**
@@ -88,7 +96,7 @@ const SOURCE_ORDRE: readonly ModelActivitySource[] = [
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
 function heure(at?: number): string | null {
   if (typeof at !== 'number' || !Number.isFinite(at)) return null
-  return new Date(at).toLocaleTimeString('fr-FR', { hour12: false })
+  return formaterDate(at, { timeStyle: 'medium', hour12: false })
 }
 
 /** Durée lisible d'un tour : ms sous la seconde, sinon secondes, sinon minutes. */
@@ -153,6 +161,7 @@ export function ModelActivityLogPane({
   messages,
   live
 }: ModelActivityLogPaneProps): React.JSX.Element {
+  const { t, langue } = useTextesChatPanneaux()
   const [journalByTurn, setJournalByTurn] = useState<
     Record<string, ReadonlyArray<Record<string, unknown>>>
   >({})
@@ -317,9 +326,16 @@ export function ModelActivityLogPane({
         bureaux: conversationId ? bureaux : [],
         fichiers: conversationId ? fichiers : []
       }),
-    [causal, activity, brain, promptCalls, bureaux, fichiers, conversationId]
+    // `langue` : les libellés des lignes s'écrivent dans la langue courante (conv-1170) ; la
+    // changer refait les lignes sans attendre une relecture des sources.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [causal, activity, brain, promptCalls, bureaux, fichiers, conversationId, langue]
   )
-  const lignesFil = useMemo(() => lignesDuFil(messages, journalByTurn), [messages, journalByTurn])
+  const lignesFil = useMemo(
+    () => lignesDuFil(messages, journalByTurn),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `langue` : même raison que ci-dessus
+    [messages, journalByTurn, langue]
+  )
   const entries = useMemo(
     () => assemblerJournal(lignesFil, lignesSources),
     [lignesFil, lignesSources]
@@ -332,7 +348,7 @@ export function ModelActivityLogPane({
     if (natureMasquee && KIND_LABEL[entry.kind] !== natureMasquee) return false
     if (sourceMasquee && entry.source !== sourceMasquee) return false
     if (!motif) return true
-    return `${entry.label} ${entry.detail ?? ''} ${KIND_LABEL[entry.kind]} ${SOURCE_LABEL[entry.source]}`
+    return `${entry.label} ${entry.detail ?? ''} ${t(KIND_LABEL[entry.kind])} ${t(SOURCE_LABEL[entry.source])}`
       .toLowerCase()
       .includes(motif)
   })
@@ -368,32 +384,32 @@ export function ModelActivityLogPane({
           type="search"
           value={filtre}
           onChange={(event) => setFiltre(event.target.value)}
-          placeholder="Filtrer les logs…"
-          aria-label="Filtrer les logs"
+          placeholder={t('journal.filtrer.placeholder')}
+          aria-label={t('journal.filtrer')}
         />
         <select
           className="input"
-          aria-label="Filtrer par nature"
+          aria-label={t('journal.filtrer.nature')}
           value={natureMasquee}
           onChange={(event) => setNatureMasquee(event.target.value)}
         >
-          <option value="">Tout</option>
+          <option value="">{t('journal.tout')}</option>
           {naturesPresentes.map((nature) => (
             <option key={nature} value={nature}>
-              {nature}
+              {t(nature)}
             </option>
           ))}
         </select>
         <select
           className="input"
-          aria-label="Filtrer par source"
+          aria-label={t('journal.filtrer.source')}
           value={sourceMasquee}
           onChange={(event) => setSourceMasquee(event.target.value as ModelActivitySource | '')}
         >
-          <option value="">Toutes sources</option>
+          <option value="">{t('journal.toutesSources')}</option>
           {sourcesPresentes.map((source) => (
             <option key={source} value={source}>
-              {SOURCE_LABEL[source]}
+              {t(SOURCE_LABEL[source])}
             </option>
           ))}
         </select>
@@ -405,9 +421,9 @@ export function ModelActivityLogPane({
           aria-pressed={erreursSeules}
           data-testid="model-log-erreurs"
           onClick={() => setErreursSeules((prev) => !prev)}
-          title="N’afficher que les gestes en échec"
+          title={t('journal.erreurs.titre')}
         >
-          Erreurs
+          {t('journal.erreurs')}
         </button>
         <button
           type="button"
@@ -415,18 +431,18 @@ export function ModelActivityLogPane({
           aria-pressed={pistes}
           data-testid="model-log-pistes"
           onClick={() => setPistes((prev) => !prev)}
-          title="Afficher une voie par source, à position fixe"
+          title={t('journal.pistes.titre')}
         >
-          Pistes
+          {t('journal.pistes')}
         </button>
         <button
           type="button"
           className="btn ghost model-log-toggle"
           data-testid="model-log-export"
           onClick={() => void navigator.clipboard?.writeText(JSON.stringify(visibles, null, 2))}
-          title="Copier les lignes affichées, filtres compris, au format JSON"
+          title={t('journal.exporter.titre')}
         >
-          Exporter
+          {t('journal.exporter')}
         </button>
         {entries.length > 0 && (
           <span className="model-log-count">
@@ -447,9 +463,7 @@ export function ModelActivityLogPane({
       >
         {visibles.length === 0 && (
           <div className="model-log-empty">
-            {conversationId
-              ? 'Aucune activité modèle tracée pour l’instant — chaque appel, commande, verdict et artefact s’inscrira ici.'
-              : 'Sélectionne une conversation pour lire ce que les modèles y ont fait.'}
+            {conversationId ? t('journal.vide') : t('journal.sansConversation')}
           </div>
         )}
         {plusAnciennes > 0 && (
@@ -464,24 +478,25 @@ export function ModelActivityLogPane({
               }))
             }
           >
-            Afficher plus ancien ({plusAnciennes})
+            {t('journal.plusAncien', { n: plusAnciennes })}
           </button>
         )}
         {tours.map((tour) => (
           <section key={tour.turnId} className="model-log-tour" data-testid="model-log-tour">
             <details open>
               <summary className="model-log-tour__head">
-                <strong>Tour {tour.index}</strong>
+                <strong>{t('journal.tour', { n: tour.index })}</strong>
                 {/* Sans heure de début, pas de case « — » : elle se lisait comme un tiret
                     entre le rang et les chiffres (conv-247, 2026-10-11). */}
                 {heure(tour.debut) ? <span>{heure(tour.debut)}</span> : null}
-                <span>{tour.entries.length} gestes</span>
+                <span>{t('journal.gestes', { n: tour.entries.length })}</span>
                 {typeof tour.dureeMs === 'number' && <span>{duree(tour.dureeMs)}</span>}
                 {typeof tour.tokens === 'number' && (
-                  <span>{tour.tokens.toLocaleString('fr-FR')} tokens</span>
+                  // « tokens » : identique dans les deux langues.
+                  <span>{formaterNombre(tour.tokens)} tokens</span>
                 )}
                 {typeof tour.cout === 'number' && <span>{tour.cout.toFixed(4)} $</span>}
-                {tour.erreur && <span className="model-log-tour__ko">échec</span>}
+                {tour.erreur && <span className="model-log-tour__ko">{t('journal.echec')}</span>}
               </summary>
               {/* La FRISE : un trait continu traverse le tour, une perle par geste — ou par rafale
                   de gestes semblables qui se suivent, repliée en un groupe (conv-270). */}
@@ -536,8 +551,9 @@ function LogGroupe({
   voie?: number
   conversationId?: string | null
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const premiere = entries[0]
-  const nature = KIND_LABEL[premiere.kind]
+  const nature = t(KIND_LABEL[premiere.kind])
   const titre = titreCourt(premiere.label, nature) ?? detailCourt(premiere.detail ?? premiere.label)
   // Même état d'échec pour toutes (clé du groupe) : rouge si elles ont échoué, vert si toutes ont
   // réussi, rien sinon — comme la pastille d'une ligne seule.
@@ -549,7 +565,7 @@ function LogGroupe({
         className="model-log-row model-log-groupe__tete"
         data-log-kind={premiere.kind}
         data-log-ok={echec ? 'false' : undefined}
-        title={`${entries.length} lignes « ${nature} » à la suite — clic pour les voir`}
+        title={t('journal.groupe.titre', { n: entries.length, nature })}
       >
         {typeof voie === 'number' && (
           <span
@@ -608,6 +624,7 @@ function LogRow({
   voie?: number
   conversationId?: string | null
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [contenus, setContenus] = useState<ContenusEtape | null>(null)
   // Garde IMMÉDIATE, pas l'état : deux signaux « ouvert » peuvent arriver avant le rendu suivant, et
   // chacun aurait relu les mêmes contenus. Relâchée sur échec : redéplier retente.
@@ -656,7 +673,7 @@ function LogRow({
   // titre COURT + résumé gris tiennent sur une ligne ; le texte complet, la source, l'écart et les
   // champs bruts clé par clé vivent dans la carte dépliée. Le filtre et l'export lisent toujours
   // l'entrée complète : seul l'affichage est raccourci.
-  const nature = KIND_LABEL[entry.kind]
+  const nature = t(KIND_LABEL[entry.kind])
   const titre = titreCourt(entry.label, nature)
   // « Demande · Demande » ne disait rien : quand le titre répète la nature, le texte prend sa place.
   const titreAffiche = titre ?? detailCourt(entry.detail ?? entry.label)
@@ -666,7 +683,7 @@ function LogRow({
       className="model-log-row"
       data-log-kind={entry.kind}
       data-log-ok={entry.ok === undefined ? undefined : String(entry.ok)}
-      title={entry.turnId ? `tour ${entry.turnId}` : undefined}
+      title={entry.turnId ? t('journal.ligne.tour', { id: entry.turnId }) : undefined}
     >
       {typeof voie === 'number' && (
         <span
@@ -708,17 +725,17 @@ function LogRow({
             {detailDeplie ? <div className="model-log-texte">{detailDeplie}</div> : null}
             {contenus && 'enCours' in contenus ? (
               <div className="model-log-texte" data-testid="model-log-contenus-en-cours">
-                <Spinner size={12} /> Lecture du contenu…
+                <Spinner size={12} /> {t('journal.lectureContenu')}
               </div>
             ) : null}
             {contenus && 'erreur' in contenus ? (
               <div className="model-log-texte" data-testid="model-log-contenus-erreur">
-                Contenu illisible : {contenus.erreur}
+                {t('journal.contenuIllisible', { erreur: contenus.erreur })}
               </div>
             ) : null}
             <div className="model-log-meta">
               <span className="model-log-source" data-log-source={entry.source}>
-                {SOURCE_LABEL[entry.source]}
+                {t(SOURCE_LABEL[entry.source])}
               </span>
               {typeof ecart === 'number' && ecart > 0 && (
                 <span className="model-log-delta">+{duree(ecart)}</span>
@@ -726,7 +743,7 @@ function LogRow({
               {titre !== null && titre !== entry.label ? (
                 <span className="model-log-titre-complet">{entry.label}</span>
               ) : null}
-              {entry.turnId ? <span>tour {entry.turnId}</span> : null}
+              {entry.turnId ? <span>{t('journal.ligne.tour', { id: entry.turnId })}</span> : null}
               <span>id {entry.id}</span>
               {typeof entry.at === 'number' ? (
                 <span>{new Date(entry.at).toISOString()}</span>
@@ -739,7 +756,7 @@ function LogRow({
                   void navigator.clipboard?.writeText(JSON.stringify(entry, null, 2))
                 }}
               >
-                Copier
+                {t('journal.copier')}
               </button>
             </div>
             {champsDeplies ? <HumanJson className="model-log-json" value={champsDeplies} /> : null}

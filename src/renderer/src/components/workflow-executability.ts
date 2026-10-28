@@ -21,6 +21,8 @@ export interface ExecutabilityInput {
 // sait jouer — et que `workflow-defaults.ts` livre PAR DÉFAUT. L'app criait au loup contre elle-même.
 // La liste vit désormais dans `shared/pipeline-phases`, importable des deux côtés de la frontière.
 import { isPipelinePhase } from '../../../shared/pipeline-phases'
+import { langueCourante } from '../langue'
+import { traduireAgentStudio } from '../textes-ecrans/agent-studio'
 
 /** Les nœuds d'un profil, que sa topologie vienne du graphe composé ou de ses seules phases. */
 export function trackNodes(
@@ -56,25 +58,28 @@ export function workflowIssues(
   skillsConnues: readonly string[] = []
 ): string[] {
   const issues: string[] = []
+  // Des phrases AFFICHÉES (onglet Workflows, infobulles) : le code n'en lit que le nombre.
+  const langue = langueCourante()
   const nodes = trackNodes(profile)
-  if (!nodes.length) return ['aucune phase : ce workflow ne jouerait rien']
+  if (!nodes.length) return [traduireAgentStudio('exec.aucunePhase', langue)]
   const skills = new Set(skillsConnues)
   for (const node of nodes) {
     if (!isPipelinePhase(node.phase) && !skills.has(node.phase)) {
       issues.push(
-        skills.size
-          ? `skill introuvable sur cette machine : ${node.phase}`
-          : `phase inconnue : ${node.phase}`
+        traduireAgentStudio(skills.size ? 'exec.skillIntrouvable' : 'exec.phaseInconnue', langue, {
+          phase: node.phase
+        })
       )
     }
-    if (node.agents < 1) issues.push(`aucun agent sur le nœud ${node.id}`)
+    if (node.agents < 1)
+      issues.push(traduireAgentStudio('exec.aucunAgent', langue, { noeud: node.id }))
   }
   const connus = new Set(nodes.map((node) => node.id))
   for (const edge of profile.graph?.edges ?? []) {
     if (!connus.has(edge.from)) {
-      issues.push(`arête orpheline : ${edge.from} → ${edge.to} (source inconnue)`)
+      issues.push(traduireAgentStudio('exec.areteSource', langue, { de: edge.from, vers: edge.to }))
     } else if (!connus.has(edge.to)) {
-      issues.push(`arête orpheline : ${edge.from} → ${edge.to} (cible inconnue)`)
+      issues.push(traduireAgentStudio('exec.areteCible', langue, { de: edge.from, vers: edge.to }))
     }
   }
   return issues

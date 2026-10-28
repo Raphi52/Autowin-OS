@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react'
+import { formaterNombre } from '../langue'
+import { useTextesObservatory, type CleObservatory } from '../textes-ecrans/observatory'
 import type React from 'react'
 import {
   rejeuDeLaBarre,
@@ -16,29 +18,29 @@ import { formatClock, formatDuration } from './observatory-timeline-axis'
  * Le calcul vit dans `observatory-agent-gantt.ts` ; ce composant ne fait que poser les barres.
  */
 
-const STATUS_BADGE: Record<AgentSpan['status'], string | null> = {
+// Des CLÉS de la table de textes, traduites au rendu : elles suivent la langue (conv-1170).
+const STATUS_BADGE: Record<AgentSpan['status'], CleObservatory | null> = {
   ok: null,
-  refused: 'Refus',
-  failed: 'Échec',
-  open: 'Sans fin'
+  refused: 'gantt.badge.refus',
+  failed: 'gantt.badge.echec',
+  open: 'gantt.badge.sansFin'
 }
-const ENVELOPE_STATUS: Record<AgentEnvelope['status'], string> = {
-  ok: 'terminé',
-  failed: 'terminé avec un appel en échec',
-  cancelled: 'arrêté',
-  open: 'en cours'
+const ENVELOPE_STATUS: Record<AgentEnvelope['status'], CleObservatory> = {
+  ok: 'gantt.enveloppe.termine',
+  failed: 'gantt.enveloppe.echec',
+  cancelled: 'gantt.enveloppe.arrete',
+  open: 'gantt.enveloppe.enCours'
 }
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000)
-    return `${(value / 1_000_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M`
-  if (value >= 1_000)
-    return `${(value / 1_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k`
-  return value.toLocaleString('fr-FR')
+    return `${formaterNombre(value / 1_000_000, { maximumFractionDigits: 1 })} M`
+  if (value >= 1_000) return `${formaterNombre(value / 1_000, { maximumFractionDigits: 1 })} k`
+  return formaterNombre(value)
 }
 
 function formatCost(value: number): string {
-  return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
+  return `${formaterNombre(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
 }
 
 function laneName(lane: AgentLane): string {
@@ -89,6 +91,7 @@ export function DerouleRejouable({
   onSelect: (eventId: string) => void
   actions?: ReactNode
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const [rejeu, setRejeu] = useState(0)
   return (
     <div className="deroule-rejouable">
@@ -99,7 +102,7 @@ export function DerouleRejouable({
           data-testid="run-rejeu-bouton"
           onClick={() => setRejeu((n) => n + 1)}
         >
-          {rejeu > 0 ? 'Rejouer encore' : libelle}
+          {rejeu > 0 ? t('gantt.rejouerEncore') : libelle}
         </button>
         {actions}
       </div>
@@ -129,6 +132,7 @@ export function ObservatoryAgentGantt({
    */
   rejeu?: number
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const spans = gantt.lanes.flatMap((lane) => lane.spans)
   const refused = spans.filter((span) => span.status === 'refused').length
   const failed = spans.filter((span) => span.status === 'failed').length
@@ -139,20 +143,22 @@ export function ObservatoryAgentGantt({
       className="observatory-gantt"
       data-testid="observatory-agent-gantt"
       data-rejeu={rejeu > 0 ? rejeu : undefined}
-      aria-label="Déroulé par agent"
+      aria-label={t('gantt.derouleAgent')}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="observatory-gantt__head">
-        <b>Déroulé par agent</b>
+        <b>{t('gantt.derouleAgent')}</b>
         <small>
-          {gantt.lanes.length} ligne{gantt.lanes.length > 1 ? 's' : ''} ·{' '}
-          {formatDuration(gantt.end - gantt.start)}
-          {startClock ? ` · départ ${startClock}` : ''}
-          {refused > 0 && <em className="is-refused"> · {refused} refus</em>}
+          {t('gantt.lignes', {
+            n: gantt.lanes.length,
+            s: gantt.lanes.length > 1 ? 's' : '',
+            duree: formatDuration(gantt.end - gantt.start)
+          })}
+          {startClock ? t('gantt.depart', { heure: startClock }) : ''}
+          {refused > 0 && <em className="is-refused">{t('gantt.refusCompte', { n: refused })}</em>}
           {failed > 0 && (
             <em className="is-failed">
-              {' '}
-              · {failed} échec{failed > 1 ? 's' : ''}
+              {t('gantt.echecsCompte', { n: failed, s: failed > 1 ? 's' : '' })}
             </em>
           )}
         </small>
@@ -178,7 +184,7 @@ export function ObservatoryAgentGantt({
           >
             <div className="observatory-gantt__who" title={lane.key}>
               <b>{laneName(lane)}</b>
-              <small>{lane.detail ?? lane.model ?? 'modèle non tracé'}</small>
+              <small>{lane.detail ?? lane.model ?? t('gantt.modeleNonTrace')}</small>
             </div>
             <div className="observatory-gantt__track">
               {gantt.ticks.map((tick) => (
@@ -193,7 +199,10 @@ export function ObservatoryAgentGantt({
                       type="button"
                       className={`observatory-gantt__envelope is-${envelope.status}${selectedId === envelope.eventId ? ' is-selected' : ''}`}
                       style={styleDeBarre({ left, width }, rejeu)}
-                      aria-label={`${laneName(lane)} : tour complet, ${formatDuration(envelope.durationMs)}`}
+                      aria-label={t('gantt.tourCompletAria', {
+                        agent: laneName(lane),
+                        duree: formatDuration(envelope.durationMs)
+                      })}
                       onClick={() => onSelect(envelope.eventId)}
                     >
                       <span className="observatory-gantt__tip" data-anchor={anchor(left)}>
@@ -204,17 +213,20 @@ export function ObservatoryAgentGantt({
                           </b>
                         </span>
                         <small>
-                          Tour complet · {formatDuration(envelope.durationMs)} ·{' '}
-                          {ENVELOPE_STATUS[envelope.status]}
+                          {t('gantt.tourComplet', {
+                            duree: formatDuration(envelope.durationMs),
+                            statut: t(ENVELOPE_STATUS[envelope.status])
+                          })}
                         </small>
-                        <q>Trait fin : il attend ses agents. Trait épais : il répond.</q>
+                        <q>{t('gantt.traitFinIlAttend')}</q>
                       </span>
                     </button>
                   )
                 })()}
               {lane.spans.map((span) => {
                 const { left, width } = spanGeometry(gantt, span)
-                const badge = STATUS_BADGE[span.status]
+                const cleBadge = STATUS_BADGE[span.status]
+                const badge = cleBadge ? t(cleBadge) : null
                 const facts = [
                   span.outputTokens != null ? `${formatTokens(span.outputTokens)} tokens` : null,
                   span.costUsd != null ? formatCost(span.costUsd) : null,
@@ -229,7 +241,7 @@ export function ObservatoryAgentGantt({
                     style={styleDeBarre({ left, width }, rejeu)}
                     data-testid="observatory-gantt-bar"
                     data-status={span.status}
-                    aria-label={`${laneName(lane)} : ${formatDuration(span.durationMs)}${badge ? `, ${badge}` : ''}`}
+                    aria-label={`${t('gantt.barreAria', { agent: laneName(lane), duree: formatDuration(span.durationMs) })}${badge ? `, ${badge}` : ''}`}
                     onClick={() => onSelect(span.eventId)}
                   >
                     <span className="observatory-gantt__tip" data-anchor={anchor(left)}>

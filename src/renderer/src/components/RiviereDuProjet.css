@@ -1,8 +1,11 @@
 /*
- * LA RIVIÈRE À ÉTAGES (/draft conv-1113, 2026-10-23). Visuel choisi au /draft : un TABLEAU BLANC
- * (encre bleu nuit, feutre), un trait de couleur par étage, des post-it pastel dont l'aimant porte la
- * couleur de la personne. Le tableau garde ce papier clair dans tous les thèmes : c'est l'objet
- * montré et choisi, pas un panneau de l'app.
+ * LA RIVIÈRE À ÉTAGES (/draft conv-1113, 2026-10-23). Visuel choisi au /draft : un tableau, un trait
+ * de couleur par étage, des post-it pastel. Le TABLEAU BLANC et ses aimants sont devenus un TABLEAU
+ * DE LIÈGE dans son cadre de bois le 2026-10-28 (conv-1204) : « le tableau de fond doit simuler un
+ * tableau en liège, les aimants disparaissent au profit d'une punaise au centre du post-it […] une
+ * couleur par personne ». Le liège reste le même dans tous les thèmes : c'est l'objet montré et
+ * choisi, pas un panneau de l'app — son grain est une IMAGE (`url(`), que les couches de thème
+ * générées ne recopient jamais.
  */
 .riviere {
   --riviere-feutre: 'Segoe Print', 'Comic Sans MS', cursive;
@@ -10,7 +13,7 @@
   /* Le gris des noms de jours appartient au PAPIER, qui reste clair dans tous les thèmes : écrit en
      dur, scripts/gen-malvoyant-planchers.mjs le remplaçait par le texte du thème — clair en thème
      sombre, donc illisible sur ce papier (conv-1113). */
-  --riviere-encre-jour: #4b5563;
+  --riviere-encre-jour: #3b2a1a;
   --riviere-courbe: cubic-bezier(0.2, 0.8, 0.2, 1);
   display: flex;
   flex-direction: column;
@@ -63,15 +66,26 @@
   min-height: 0;
   overflow: hidden;
   border-radius: 10px;
-  background: #f3f5f7;
-  box-shadow: inset 0 0 0 1px rgba(154, 164, 178, 0.45);
+  /* Le liège : grains sombres et grains clairs (bruit SVG) sur un fond ambré, dans un cadre de bois.
+     Éclairci le 2026-10-28 (conv-1207, « éclaircis un peu le liège du board ») : fond #bf8d5b →
+     #d2a679, grains sombres (filtre `s`) moins foncés et moins couvrants. */
+  border: 7px solid #7b4f2c;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.23 0 0 0 0 0.1 1.6 0 0 0 -0.7'/%3E%3C/filter%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.9 0 0 0 0 0.72 0 1.7 0 0 -0.92'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E")
+      0 0 / 240px 240px,
+    #d2a679;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 3px 9px rgba(0, 0, 0, 0.35);
 }
 
 .riviere-tete {
   position: relative;
   flex: none;
   overflow: hidden;
-  border-bottom: 1px solid rgba(154, 164, 178, 0.45);
+  border-bottom: 1px solid rgba(70, 40, 15, 0.35);
+  /* La bande des jours, une bande de papier posée sur le liège : l'encre des jours y reste lisible. */
+  background: rgba(252, 247, 236, 0.86);
   user-select: none;
 }
 
@@ -94,7 +108,7 @@
 .riviere-jour {
   position: absolute;
   top: 0;
-  border-left: 1px solid rgba(154, 164, 178, 0.35);
+  border-left: 1px solid rgba(70, 40, 15, 0.22);
   box-sizing: border-box;
   transition:
     left 0.3s var(--riviere-courbe),
@@ -122,16 +136,16 @@
 }
 
 .riviere-jour[data-foyer] {
-  background: rgba(60, 110, 235, 0.06);
+  background: rgba(255, 250, 240, 0.1);
 }
 
 .riviere-jour[data-aujourdhui] {
-  background: rgba(233, 189, 78, 0.14);
+  background: rgba(255, 238, 200, 0.2);
 }
 
 .riviere-jour[data-aujourdhui][data-foyer] {
   background:
-    linear-gradient(rgba(60, 110, 235, 0.06), rgba(60, 110, 235, 0.06)), rgba(233, 189, 78, 0.14);
+    linear-gradient(rgba(255, 250, 240, 0.1), rgba(255, 250, 240, 0.1)), rgba(255, 238, 200, 0.2);
 }
 
 .riviere-jour-nom {
@@ -179,7 +193,7 @@
   left: 0;
   box-sizing: border-box;
   border-top: 3px solid var(--riviere-etage, #9aa4b2);
-  border-bottom: 1px solid rgba(154, 164, 178, 0.55);
+  border-bottom: 1px solid rgba(70, 40, 15, 0.3);
   pointer-events: none;
   /* Les étages suivent la loupe (disposerEtages) : ils glissent avec les post-it. */
   transition:
@@ -207,6 +221,12 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  /* Une étiquette de papier sur le liège, liserée de la couleur de son étage. */
+  padding: 1px 8px 2px;
+  border-left: 4px solid var(--riviere-etage, #9aa4b2);
+  border-radius: 2px;
+  background: #fbf7ee;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   font: 700 13px/1.2 var(--riviere-feutre);
   color: var(--riviere-encre);
@@ -222,7 +242,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 9px 4px;
+  /* 14 px en haut : la bande de la punaise, au-dessus du titre (POSTIT_H, carte-riviere.ts). */
+  padding: 14px 9px 4px;
   overflow: hidden;
   border: 0;
   border-radius: 2px;
@@ -230,8 +251,8 @@
   color: #16202e;
   background: var(--riviere-papier, #e4e0f4);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.16),
-    0 3px 8px rgba(0, 0, 0, 0.08);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 4px 9px rgba(0, 0, 0, 0.18);
   transform-origin: 50% 0;
   cursor: grab;
   touch-action: none;
@@ -282,22 +303,36 @@
   visibility: hidden;
 }
 
-.riviere-aimant {
+.riviere-punaise {
   position: absolute;
-  top: 5px;
-  right: 6px;
+  top: 2px;
+  left: 50%;
   width: 11px;
   height: 11px;
+  margin-left: -5.5px;
   border-radius: 50%;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  /* Une tête de punaise bombée : reflet en haut à gauche, ombre portée sur le papier. Sans personne
+     connue (dépôt sans identité git), le gris. */
+  background:
+    radial-gradient(
+      circle at 34% 30%,
+      rgba(255, 255, 255, 0.85) 0 1.2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.28) 100%),
+    var(--riviere-punaise, #9aa4b2);
+  box-shadow: 1px 2px 2px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }
 
+/* 4 lignes en 11 px (2 lignes en 12 px avant le 2026-10-28, conv-1204 : « plus de texte par post
+   it », puis « réduis un peu la taille de la police et passe à 4 lignes ») ; la ligne projet · heure
+   en 9 px. 14 (punaise) + 4 × 13,2 + 2 + 10,8 + 4 ≤ POSTIT_H (carte-riviere.ts). */
 .riviere-postit-titre {
   display: -webkit-box;
   overflow: hidden;
-  padding-right: 12px;
-  font: 700 12px/1.2 var(--riviere-feutre);
-  -webkit-line-clamp: 2;
+  font: 700 11px/1.2 var(--riviere-feutre);
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
 }
 
@@ -305,7 +340,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font: 500 10px/1.2 var(--font, system-ui, sans-serif);
+  font: 500 9px/1.2 var(--font, system-ui, sans-serif);
   opacity: 0.7;
 }
 

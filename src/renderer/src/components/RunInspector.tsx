@@ -3,6 +3,7 @@ import { BrainMarkdown } from './BrainMarkdown'
 import { apercuDuRun } from './run-inspector-apercu'
 import { RunBilanCard } from './RunBilanCard'
 import { bilanDepuisResume } from './run-bilan'
+import { useTextesChatExecution } from '../textes-ecrans/chat-execution'
 import './RunBilanCard.css'
 import './RunInspector.css'
 
@@ -15,6 +16,8 @@ type RunInspectorSummary = {
   defauts: number
 }
 
+// Les titres de section d'un RUN.md, en français dans les deux langues : ce sont ceux du document
+// affiché dessous, et `jumpToSection` les compare au texte de ses titres (conv-1170).
 const SECTIONS = ['Besoin', 'Contraintes', 'Options', 'SOP', 'Journal', 'Défauts', 'Reprise']
 
 function hasSection(content: string, section: string): boolean {
@@ -28,6 +31,7 @@ export function RunInspector({
   content: string
   summary: RunInspectorSummary
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const contentRef = useRef<HTMLDivElement>(null)
   const sections = SECTIONS.map((name) => ({ name, present: hasSection(content, name) }))
   const apercu = apercuDuRun(content)
@@ -43,15 +47,15 @@ export function RunInspector({
   }
 
   return (
-    <section className="run-inspector" aria-label="Inspecteur du RUN">
+    <section className="run-inspector" aria-label={t('inspecteur.titre')}>
       <div className="run-inspector__summary" data-testid="run-summary">
         <span className="badge">{summary.status}</span>
         {summary.regime && <span className="badge">{summary.regime}</span>}
         <span>
           DoD {summary.dodChecked}/{summary.dodTotal}
         </span>
-        <span>Journal {summary.journalEvents}</span>
-        <span>Défauts {summary.defauts}</span>
+        <span>{t('inspecteur.journal', { n: summary.journalEvents })}</span>
+        <span>{t('inspecteur.defauts', { n: summary.defauts })}</span>
       </div>
       <RunBilanCard bilan={bilanDepuisResume(summary, apercu.besoin)} />
       {(apercu.besoin || apercu.dodRestants.length > 0 || apercu.defauts.length > 0) && (
@@ -59,7 +63,7 @@ export function RunInspector({
           {apercu.besoin && <p className="run-inspector__besoin">{apercu.besoin}</p>}
           {apercu.dodRestants.length > 0 && (
             <div className="run-inspector__ligne">
-              <span className="run-inspector__kicker">Reste à cocher</span>
+              <span className="run-inspector__kicker">{t('inspecteur.reste-a-cocher')}</span>
               <ul>
                 {apercu.dodRestants.slice(0, 4).map((item) => (
                   <li key={item}>{item}</li>
@@ -69,7 +73,7 @@ export function RunInspector({
           )}
           {apercu.defauts.length > 0 && (
             <div className="run-inspector__ligne">
-              <span className="run-inspector__kicker">Défauts</span>
+              <span className="run-inspector__kicker">{t('inspecteur.kicker.defauts')}</span>
               <ul>
                 {apercu.defauts.slice(0, 4).map((item) => (
                   <li key={item}>{item}</li>
@@ -79,7 +83,7 @@ export function RunInspector({
           )}
           {apercu.fichiers.length > 0 && (
             <div className="run-inspector__ligne">
-              <span className="run-inspector__kicker">Fichiers</span>
+              <span className="run-inspector__kicker">{t('inspecteur.fichiers')}</span>
               <span className="run-inspector__fichiers">
                 {apercu.fichiers.slice(0, 6).map((f) => (
                   <code key={f}>{f}</code>
@@ -92,17 +96,21 @@ export function RunInspector({
       <nav
         className="run-inspector__nav"
         data-testid="run-section-nav"
-        aria-label="Sections du RUN"
+        aria-label={t('inspecteur.sections')}
       >
         {sections.map(({ name, present }) => (
           <button
             key={name}
             type="button"
             disabled={!present}
-            title={present ? `Aller à ${name}` : `${name} absent`}
+            title={
+              present
+                ? t('inspecteur.aller-a', { section: name })
+                : t('inspecteur.absent', { section: name })
+            }
             onClick={() => jumpToSection(name)}
           >
-            {present ? name : `${name} absent`}
+            {present ? name : t('inspecteur.absent', { section: name })}
           </button>
         ))}
       </nav>

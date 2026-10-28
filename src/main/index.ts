@@ -22,6 +22,7 @@ import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
 import { registerCarteDesBesoinsIpc } from './ipc/carte-des-besoins'
+import { creerDossierDuBoard } from './board-dossier'
 import { registerLangueIpc } from './ipc/langue'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
@@ -527,7 +528,6 @@ import {
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import { OUTLOOK_HORS_INSTANCE_CACHEE, OutlookLocalGateway } from './outlook/outlook-local'
 import { registerVeilleIpc } from './veille/veille-ipc'
-import { registerScoutMotifIpc } from './scout-motif-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
 import { unePasseALaFois } from './veille/une-passe-a-la-fois'
@@ -1000,6 +1000,10 @@ async function pickSavePath(
 
 function broadcast(e: AppEvent): void {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send('app:event', e)
+  // La mascotte compte les runs ICI, pas d'après l'interface : fenêtre fermée, son nombre se figeait
+  // (conv-1196). Filtré avant l'accès : `mascotteDuBureau` est déclarée plus bas dans ce module.
+  if (e.type === 'orchestrate-start' || e.type === 'orchestrate-end')
+    mascotteDuBureau.evenementDeRun(e)
   // Réveil événementiel : `broadcast` est le point de passage UNIQUE de tout AppEvent, donc le seul
   // endroit où brancher un incident sans risquer d'en rater une source. Seuls les incidents dont
   // l'émission a été vérifiée dans le code sont branchés — pas un catalogue souhaité.
@@ -2070,7 +2074,6 @@ function registerChatIpc(): void {
       etapesFaites: nombre('etapesFaites'),
       etapesTotales: nombre('etapesTotales')
     })
-    mascotteDuBureau.runsActifs(nombre('runsActifs'))
     return true
   })
   // L'interrupteur « Mascotte du bureau » de Settings · Interface (conv-1145). Le moteur garde le
@@ -3205,14 +3208,23 @@ Le fil reprend ensuite normalement.`
   // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
   // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
   // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.
-  registerCarteDesBesoinsIpc({
+  // Rend la copie du Board de fin de tour (conv-1210), appelée par l'observateur de fin de tour.
+  const boardDuPoste = registerCarteDesBesoinsIpc({
     os,
     journal: journalDesBesoins,
     racineDesLiens: app.getPath('userData'),
     tickets: {
       listSources: () => ticketSources.list(),
       get: (request) => tickets.get(request)
-    }
+    },
+    // Le dossier où le Board est recopié (conv-1206) : réglé sur ce poste, rangé sous userData.
+    dossierDuBoard: creerDossierDuBoard({
+      racine: app.getPath('userData'),
+      utilisateur: nomUtilisateurCourant()
+    }),
+    choisirDossier: pickDirectory,
+    // Où la copie de fin de tour garde les états posés à la main (conv-1210).
+    racineDuPoste: app.getPath('userData')
   })
 
   // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
@@ -3694,6 +3706,8 @@ Le fil reprend ensuite normalement.`
     zone: mascotteDuBureau.zoneDesCartes,
     page: mascotteDuBureau.decorerCarte
   })
+  // Les cartes collees a la bille la suivent quand on la glisse (conv-1195, « snap ensemble »).
+  mascotteDuBureau.quandElleBouge(popupsDeFinDeTour.replacer)
   app.on('browser-window-focus', (_evenement, fenetre) => {
     if (!popupsDeFinDeTour.estUneCarte(fenetre)) popupsDeFinDeTour.toutFermer()
   })
@@ -3741,7 +3755,8 @@ Le fil reprend ensuite normalement.`
         showMainWindow()
         broadcast({ type: 'open-conversation', convId: id })
       },
-      ouvrirAutowin: () => showMainWindow()
+      ouvrirAutowin: () => showMainWindow(),
+      titreDuFil: (id) => os.conversations.get(id)?.title
     }, lireMascotteAffichee())
 
   /*
@@ -3866,8 +3881,13 @@ Le fil reprend ensuite normalement.`
    * fix-ok: annonce de fin émise avant la sortie de `trackPreparation` (`isInFlight` vrai) — mesuré.
    * Garde : `plans-de-lots.fin-de-tour.test.ts` (vrai `ActiveChatTurns`, et cette composition).
    */
-  const observateurDesPlans: ObservateurFinDeTour = (conversationId, issue) =>
+  const observateurDesPlans: ObservateurFinDeTour = (conversationId, issue) => {
     suiviDesPlans.coordinateur?.surFinDeTour(conversationId, issue)
+    // LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (conv-1210 : « que la copie du Board vers la GED se
+    // mette à jour même quand le Board n'est pas affiché ») : sans attendre, ni calcul sans dossier
+    // choisi ; une rafale de fins de tour ne calcule qu'une fois par délai (`board-dossier.ts`).
+    boardDuPoste.recopierLeBoard()
+  }
   const runPilotChat = suivreLaFinDuTour(tourCompteDesReception, observateurDesPlans)
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation (`setRecovered`) fait
@@ -4452,13 +4472,6 @@ Le fil reprend ensuite normalement.`
     // Le dépôt que ce même scout lit : ses ancrages `src/…:N` y sont relatifs. Chaque service du
     // stock re-vérifie que la ligne citée d'une correction y est encore, sinon elle sort « périmée ».
     racineDepot: os.executionWorkspace
-  })
-  // « Pourquoi pas ? » sur une piste décochée du panneau du scout (piste 2, conv-1033) : le motif va
-  // dans la mémoire du scout du dossier de LA CONVERSATION, celle où l'orchestrateur a noté ses pistes.
-  registerScoutMotifIpc({
-    ipc: ipcMain,
-    assertTrusted: assertTrustedRendererSender,
-    depotDe: dossierDuTour
   })
   /**
    * CAPITALISATION : plus AUCUN declenchement automatique.

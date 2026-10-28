@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { formaterNombre } from '../langue'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import './SandboxedHtmlPreview.css'
 
 const MAX_INLINE_HTML_RENDER_CHARS = 1_000_000
@@ -84,10 +86,13 @@ type SandboxedHtmlPreviewProps = {
 
 export function SandboxedHtmlPreview({
   source,
-  title = 'Rendu HTML',
+  title: titreDonne,
   embedded = false,
   enforceInlineLimit = true
 }: SandboxedHtmlPreviewProps): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
+  // Sans titre fourni, « Rendu HTML » dans la langue courante (conv-1170).
+  const title = titreDonne ?? t('html.titre')
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   const [reloadVersion, setReloadVersion] = useState(0)
   const [expanded, setExpanded] = useState(false)
@@ -120,7 +125,7 @@ export function SandboxedHtmlPreview({
           <span aria-hidden="true">◇</span>
           {title}
         </span>
-        <div className="html-render-preview__modes" aria-label="Mode du rendu HTML">
+        <div className="html-render-preview__modes" aria-label={t('html.modes')}>
           <button
             type="button"
             className={mode === 'preview' ? 'is-active' : ''}
@@ -128,7 +133,7 @@ export function SandboxedHtmlPreview({
             aria-pressed={mode === 'preview'}
             onClick={() => setMode('preview')}
           >
-            Aperçu
+            {t('html.apercu')}
           </button>
           <button
             type="button"
@@ -144,8 +149,8 @@ export function SandboxedHtmlPreview({
           <button
             type="button"
             data-action="html-reload"
-            title="Relancer le rendu"
-            aria-label="Relancer le rendu HTML"
+            title={t('html.relancer')}
+            aria-label={t('html.relancerAria')}
             onClick={() => {
               setMode('preview')
               setReloadVersion((version) => version + 1)
@@ -157,10 +162,10 @@ export function SandboxedHtmlPreview({
         <button
           type="button"
           data-action="html-expand"
-          aria-label={expanded ? 'Réduire le rendu HTML' : 'Agrandir le rendu HTML'}
+          aria-label={expanded ? t('html.reduireAria') : t('html.agrandirAria')}
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? 'Réduire' : 'Agrandir'}
+          {expanded ? t('commun.reduire') : t('commun.agrandir')}
         </button>
       </header>
       <div className="html-render-preview__body">
@@ -170,17 +175,19 @@ export function SandboxedHtmlPreview({
             data-testid="html-render-too-large"
             role="alert"
           >
-            <strong>Rendu HTML trop volumineux</strong>
+            <strong>{t('html.tropVolumineux')}</strong>
             <span>
-              {source.length.toLocaleString('fr-FR')} caractères. La limite du rendu dans le fil est
-              de {MAX_INLINE_HTML_RENDER_CHARS.toLocaleString('fr-FR')} caractères.
+              {t('html.limite', {
+                taille: formaterNombre(source.length),
+                limite: formaterNombre(MAX_INLINE_HTML_RENDER_CHARS)
+              })}
             </span>
             <span>
-              Consulte la source ici, ou demande à l’agent de fournir cette page comme artefact
+              {t('html.consulter')}
               <code>.html</code>.
             </span>
             <button type="button" onClick={() => setMode('source')}>
-              Voir la source
+              {t('html.voirSource')}
             </button>
           </div>
         ) : mode === 'preview' ? (
@@ -209,7 +216,7 @@ export function SandboxedHtmlPreview({
       className="html-render-preview__backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="Rendu HTML agrandi"
+      aria-label={t('html.agrandi')}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) setExpanded(false)
       }}

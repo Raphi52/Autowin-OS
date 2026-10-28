@@ -77,31 +77,6 @@
   min-width: 30px;
   text-align: right;
 }
-/* La note en BARRE (conv-981) : un rail fin, rempli a hauteur de la note sur 100, qui se remplit
-   quand sa ligne arrive (meme decalage que la cascade). */
-.cpick-barre {
-  flex: none;
-  align-self: center;
-  width: 56px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(212, 169, 79, 0.14);
-  overflow: hidden;
-}
-.cpick-barre-remplie {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--gold-doux);
-  transform-origin: left center;
-  animation: cpick-remplir 520ms ease-out both;
-  animation-delay: calc(var(--i, 0) * 40ms + 120ms);
-}
-@keyframes cpick-remplir {
-  from {
-    transform: scaleX(0);
-  }
-}
 .cpick-type {
   font-size: 13px;
 }
@@ -210,46 +185,5 @@
 /* Le choix ANNONCÉ par le scout : sans ce bandeau, des cases pré-cochées seraient un choix invisible. */
 .cpick-auto {
   font-size: 11px;
-  opacity: 0.75;
-}
-
-/* « Pourquoi pas ? » sur une ligne décochée (piste 2, conv-1033) : un lien discret, puis 4 motifs en
-   filets fins. Même registre que le reste du panneau : aucun fond plein, la couleur dorée douce. */
-.cpick-pourquoi {
-  background: none;
-  border: none;
-  padding: 0 2px;
-  color: var(--gold-doux);
-  font-size: 11.5px;
-  cursor: pointer;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-.cpick-pourquoi:hover,
-.cpick-pourquoi[aria-expanded='true'] {
-  opacity: 1;
-  text-decoration: underline;
-}
-.cpick-motifs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 2px 9px 46px;
-}
-.cpick-motif {
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  padding: 2px 9px;
-  color: #dde3ee;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.cpick-motif:hover {
-  border-color: var(--gold-doux);
-  color: var(--gold-doux);
-}
-.cpick-motif-note {
-  font-size: 11.5px;
   opacity: 0.75;
 }

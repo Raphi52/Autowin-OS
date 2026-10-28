@@ -16,11 +16,11 @@ import type {
   ComparaisonDUneFacon,
   ResultatGarderUneFacon
 } from '../../../shared/essai-trois-facons'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 import {
-  FACONS,
-  LIBELLES_ETAT_DE_LA_FACON,
   coutDesLignes,
   estTresProche,
+  libelleDeLEtatDeLaFacon,
   phraseDeLaRessemblance,
   phraseDeLEcart,
   phraseDesVerifications,
@@ -30,13 +30,24 @@ import {
 import './ComparaisonDesFacons.css'
 
 type Cout = { usd: number; partiel: boolean } | null
+type Traduire = ReturnType<typeof useTextesChatDecisions>['t']
 
-function phraseDuResultat(resultat: ResultatGarderUneFacon): string {
-  if (!resultat.ok) return `Non publiée : ${resultat.raison}`
+/*
+ * Les trois natures de façon, traduites : même ordre et même français que `FACONS` (trois-facons.ts),
+ * qui reste en français parce qu'il part dans la consigne de chaque branche.
+ */
+const NATURES = ['facons.nature.1', 'facons.nature.2', 'facons.nature.3'] as const
+
+function phraseDuResultat(resultat: ResultatGarderUneFacon, t: Traduire): string {
+  if (!resultat.ok) return t('facons.resultat.nonPubliee', { raison: resultat.raison })
   if (resultat.etat === 'publie')
-    return `Publiée dans main${resultat.sha ? ` (${resultat.sha.slice(0, 7)})` : ''} : ${resultat.fichiers.join(', ')}.`
-  if (resultat.etat === 'en-attente') return `En attente — ${resultat.detail}`
-  return `Publication différée — ${resultat.detail}`
+    return t('facons.resultat.publiee', {
+      sha: resultat.sha ? ` (${resultat.sha.slice(0, 7)})` : '',
+      fichiers: resultat.fichiers.join(', ')
+    })
+  if (resultat.etat === 'en-attente')
+    return t('facons.resultat.enAttente', { detail: resultat.detail })
+  return t('facons.resultat.differee', { detail: resultat.detail })
 }
 
 export function ComparaisonDesFacons({
@@ -49,8 +60,10 @@ export function ComparaisonDesFacons({
   signature: string
   onOuvrir?: (id: string) => void
 }): React.JSX.Element | null {
+  const { t } = useTextesChatDecisions()
   const [lignes, setLignes] = useState<ReadonlyMap<string, ComparaisonDUneFacon>>(() => new Map())
   const [couts, setCouts] = useState<ReadonlyMap<string, Cout>>(() => new Map())
+  /** Le message de l'erreur de lecture de la comparaison ; la phrase se compose au rendu. */
   const [lecture, setLecture] = useState<string | null>(null)
   const [aConfirmer, setAConfirmer] = useState<string | null>(null)
   const [enCours, setEnCours] = useState<string | null>(null)
@@ -76,10 +89,7 @@ export function ComparaisonDesFacons({
         setLignes(new Map(rendues.map((rendue) => [rendue.id, rendue])))
       },
       (erreur: unknown) => {
-        if (vivant)
-          setLecture(
-            `Comparaison illisible : ${erreur instanceof Error ? erreur.message : String(erreur)}`
-          )
+        if (vivant) setLecture(erreur instanceof Error ? erreur.message : String(erreur))
       }
     )
     // Le coût d'une branche est celui de ses propres appels : la même somme que le reste de l'app.
@@ -104,7 +114,7 @@ export function ComparaisonDesFacons({
     const noter = (resultat: ResultatGarderUneFacon): void =>
       setResultats((actuels) => new Map(actuels).set(id, resultat))
     if (!garderEssai) {
-      noter({ ok: false, raison: 'Autowin doit redémarrer pour ce geste.' })
+      noter({ ok: false, raison: t('facons.redemarrerGeste') })
       return
     }
     setEnCours(id)
@@ -124,23 +134,21 @@ export function ComparaisonDesFacons({
     <section
       className="comparaison-facons"
       data-origine="comparaison-facons"
-      aria-label="Comparer les façons"
+      aria-label={t('facons.aria')}
     >
       <header className="comparaison-facons-tete">
         {/* fix-ok: libellé lu sur la capture réelle du 2026-10-21 (« Comparer les 1 façon ») — une
             seule branche de l'essai encore ouverte se dit comme telle. */}
         <strong>
           {facons.length > 1
-            ? `Comparer les ${facons.length} façons`
-            : 'Une seule façon de cet essai'}
+            ? t('facons.titre.plusieurs', { n: facons.length })
+            : t('facons.titre.une')}
         </strong>
-        <span className="comparaison-facons-note">
-          écart depuis la photo de l’essai · vérifications lancées · coût mesuré
-        </span>
+        <span className="comparaison-facons-note">{t('facons.note')}</span>
         <button
           type="button"
           className="comparaison-facons-relire"
-          title="Relire l’écart, les vérifications et le coût de chaque façon"
+          title={t('facons.relire')}
           onClick={() => setRelire((compte) => compte + 1)}
         >
           ↻
@@ -150,7 +158,9 @@ export function ComparaisonDesFacons({
         <div className="comparaison-facons-lecture" role="status">
           {/* fix-ok: cause mesurée par eslint (« Calling setState synchronously within an effect »,
               l.65) — le message du pont absent se lit désormais au rendu, plus dans l'effet. */}
-          {pontSansComparaison ? 'Autowin doit redémarrer pour comparer les façons.' : lecture}
+          {pontSansComparaison
+            ? t('facons.redemarrerComparer')
+            : t('facons.illisible', { erreur: lecture ?? '' })}
         </div>
       )}
       <ul className="comparaison-facons-liste">
@@ -172,29 +182,29 @@ export function ComparaisonDesFacons({
           return (
             <li key={facon.id} className="comparaison-facon" data-facon={facon.id}>
               <div className="comparaison-facon-nom">
-                <strong>{`Façon ${facon.rang}`}</strong>
-                <span>{FACONS[(facon.rang - 1) % FACONS.length]}</span>
+                <strong>{t('facons.facon', { rang: facon.rang })}</strong>
+                <span>{t(NATURES[(facon.rang - 1) % NATURES.length]!)}</span>
               </div>
               {rendue && !rendue.ok ? (
                 <div className="comparaison-facon-mesures">{rendue.raison}</div>
               ) : (
                 <dl className="comparaison-facon-mesures">
                   <div>
-                    <dt>État</dt>
-                    <dd>{mesuree ? LIBELLES_ETAT_DE_LA_FACON[mesuree.bilan.etat] : '…'}</dd>
+                    <dt>{t('facons.etat')}</dt>
+                    <dd>{mesuree ? libelleDeLEtatDeLaFacon(mesuree.bilan.etat) : '…'}</dd>
                   </div>
                   <div>
-                    <dt>Écart</dt>
+                    <dt>{t('facons.ecart')}</dt>
                     <dd title={fichiers}>{mesuree ? phraseDeLEcart(mesuree.ecart) : '…'}</dd>
                   </div>
                   <div>
-                    <dt>Vérifications</dt>
+                    <dt>{t('facons.verifications')}</dt>
                     <dd>{mesuree ? phraseDesVerifications(mesuree.bilan) : '…'}</dd>
                   </div>
                   {/* Le contrôle de ressemblance (conv-1057, 2026-10-22) : deux façons au même
                       code se voient d'un coup d'œil. */}
                   <div>
-                    <dt>Ressemblance</dt>
+                    <dt>{t('facons.ressemblance')}</dt>
                     <dd
                       data-mesure="ressemblance"
                       className={estTresProche(mesuree?.ressemblance) ? 'is-proche' : undefined}
@@ -203,7 +213,7 @@ export function ComparaisonDesFacons({
                     </dd>
                   </div>
                   <div>
-                    <dt>Coût</dt>
+                    <dt>{t('facons.cout')}</dt>
                     <dd>{couts.has(facon.id) ? phraseDuCout(couts.get(facon.id) ?? null) : '…'}</dd>
                   </div>
                 </dl>
@@ -211,34 +221,27 @@ export function ComparaisonDesFacons({
               <div className="comparaison-facon-gestes">
                 {onOuvrir && (
                   <button type="button" onClick={() => onOuvrir(facon.id)}>
-                    Ouvrir
+                    {t('facons.ouvrir')}
                   </button>
                 )}
                 <button
                   type="button"
                   className="comparaison-facon-garder"
                   disabled={rienAGarder || dejaPubliee || enCours !== null}
-                  title={
-                    rienAGarder
-                      ? 'Rien à garder : cette façon n’a pas fini, ou n’a rien changé'
-                      : 'Publier dans main ce que cette façon a changé — et seulement cela'
-                  }
+                  title={rienAGarder ? t('facons.rienAGarder') : t('facons.publierTitre')}
                   onClick={() => setAConfirmer(facon.id)}
                 >
-                  {enCours === facon.id ? 'Publication…' : 'Garder celle-ci'}
+                  {enCours === facon.id ? t('facons.publication') : t('facons.garder')}
                 </button>
               </div>
               {aConfirmer === facon.id && (
                 <div className="comparaison-facon-confirmer" role="alertdialog">
-                  <span>
-                    Publier cette façon dans main ? Seul ce qu’elle a changé part ; un fichier non
-                    commité dans le dossier partagé met la publication en attente.
-                  </span>
+                  <span>{t('facons.confirmer')}</span>
                   <button type="button" onClick={() => void garder(facon.id)}>
-                    Oui, publier
+                    {t('facons.oui')}
                   </button>
                   <button type="button" onClick={() => setAConfirmer(null)}>
-                    Annuler
+                    {t('facons.annuler')}
                   </button>
                 </div>
               )}
@@ -247,7 +250,7 @@ export function ComparaisonDesFacons({
                   className={`comparaison-facon-resultat is-${resultat.ok ? resultat.etat : 'refus'}`}
                   role="status"
                 >
-                  {phraseDuResultat(resultat)}
+                  {phraseDuResultat(resultat, t)}
                 </div>
               )}
             </li>

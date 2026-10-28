@@ -1,4 +1,6 @@
 import { trackNodes, type ExecutabilityInput } from './workflow-executability'
+import { langueCourante } from '../langue'
+import { traduireAgentStudio } from '../textes-ecrans/agent-studio'
 
 export interface PromptEffectifInput {
   phases?: string[]
@@ -18,6 +20,7 @@ export interface WorkflowProfileSummaryInput {
 /** Résume un profil en une ligne : ce qu'il change, pas ce qu'il contient. */
 export function profileSummary(profile: WorkflowProfileSummaryInput): string {
   const parts: string[] = []
+  const langue = langueCourante()
   const roles = Object.entries(profile.roles ?? {})
   if (roles.length) {
     parts.push(
@@ -30,14 +33,19 @@ export function profileSummary(profile: WorkflowProfileSummaryInput): string {
   }
   if (profile.phases?.length) parts.push(profile.phases.join(' → '))
   if (typeof profile.allocation?.judgeMembers === 'number') {
-    parts.push(`${profile.allocation.judgeMembers} juge(s)`)
+    parts.push(traduireAgentStudio('resume.juges', langue, { n: profile.allocation.judgeMembers }))
   }
   if (profile.instructions) {
     parts.push(
-      profile.instructions.mode === 'replace' ? 'consignes remplacées' : 'consigne ajoutée'
+      traduireAgentStudio(
+        profile.instructions.mode === 'replace'
+          ? 'resume.consignesRemplacees'
+          : 'resume.consigneAjoutee',
+        langue
+      )
     )
   }
-  return parts.length ? parts.join(' · ') : 'aucun écart — configuration courante'
+  return parts.length ? parts.join(' · ') : traduireAgentStudio('resume.aucunEcart', langue)
 }
 
 /**

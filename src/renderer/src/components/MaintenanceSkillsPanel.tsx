@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useTextesBoardEtMaintenance } from '../textes-ecrans/board-et-maintenance'
 import {
   GROUPES_MAINTENANCE,
   SKILLS_MAINTENANCE,
@@ -15,6 +16,7 @@ import './MaintenanceSkillsPanel.css'
  * mort, et l'utilisateur recliquerait en créant des conversations vides.
  */
 export function MaintenanceSkillsPanel(): React.JSX.Element {
+  const { t } = useTextesBoardEtMaintenance()
   const [enCours, setEnCours] = useState('')
   const [erreur, setErreur] = useState('')
 
@@ -30,7 +32,7 @@ export function MaintenanceSkillsPanel(): React.JSX.Element {
     <section
       className="maint-skills"
       data-testid="maintenance-skills"
-      aria-label="Skills de maintenance"
+      aria-label={t('skills.aria')}
     >
       {GROUPES_MAINTENANCE.map((groupe) => (
         <div key={groupe.id} className="maint-groupe">
@@ -42,14 +44,14 @@ export function MaintenanceSkillsPanel(): React.JSX.Element {
                 type="button"
                 className="maint-bouton"
                 data-testid={`maintenance-skill-${skill.nom}`}
-                title={`${skill.role}\n\nEnvoie : ${skill.prompt}`}
+                title={t('skills.aide', { role: skill.role, prompt: skill.prompt })}
                 disabled={Boolean(enCours)}
                 onClick={() => void lancer(skill)}
               >
                 <span className="maint-bouton-tete">
                   <span className="maint-bouton-titre">{skill.titre}</span>
                   <span className="maint-bouton-nom">
-                    {enCours === skill.nom ? 'ouverture…' : `/${skill.nom}`}
+                    {enCours === skill.nom ? t('skills.ouverture') : `/${skill.nom}`}
                   </span>
                 </span>
                 <span className="maint-bouton-role">{skill.role}</span>

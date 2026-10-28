@@ -13,6 +13,15 @@
  * poste ; `os:carte:verifierMentions` lit les fiches que des prompts nomment (`#1234`). Les trois ne
  * reçoivent du fournisseur de tickets que sa LECTURE (`get`) : aucune écriture chez lui n'est
  * possible d'ici. Le calcul de la carte, lui, ne lit que le fichier — jamais le réseau.
+ *
+ * Dossier du Board (conv-1206, 2026-10-28) : `os:carteDesBesoins` reçoit en plus les états posés à
+ * la main (rangés dans la vue) et, si un dossier est choisi sur ce poste, y recopie le Board SANS
+ * attendre (`board-dossier.ts`). Trois canaux le règlent : `os:board-dossier` (lecture),
+ * `…:choisir` (sélecteur natif, aucun chemin reçu de la vue) et `…:effacer`.
+ *
+ * Collègues et fin de tour (conv-1210, 2026-10-28) : `os:board-collegues` rend les Boards que les
+ * AUTRES postes ont écrits dans le même dossier (`board-collegues.ts`), et `recopierLeBoard`,
+ * rendu à `index.ts`, recopie le Board à chaque fin de tour, vue fermée.
  */
 import { ipcMain } from 'electron'
 import { assertTrustedRendererSender } from '../ipc-senders'
@@ -27,6 +36,13 @@ import {
   type EtatDesLiens
 } from '../liens-work-items'
 import type { BilanDesMentions, ResultatDuRattachement } from '../../shared/carte-des-besoins'
+import { etatManuelLisible, type EtatManuelDuBoard } from '../../shared/board-dossier'
+import type { DossierDuBoard } from '../board-dossier'
+import { creerLecteurDesCollegues } from '../board-collegues'
+import { creerCopieDeFinDeTour } from '../board-copie-fin-de-tour'
+import { projetsPartagesLisibles } from '../../shared/board-projets-partages'
+import { basename } from 'node:path'
+import type { BoardsDesCollegues } from '../../shared/board-collegues'
 import type { TicketItem, TicketSourceProfile } from '../../shared/tickets'
 import type { TicketGetRequest } from '../ticket-providers/provider-contract'
 import type { AutowinOS } from '../os'
@@ -64,18 +80,50 @@ const objet = (valeur: unknown): Record<string, unknown> =>
     ? (valeur as Record<string, unknown>)
     : {}
 
+/** Plafond des états manuels relus : un par fil, bien au-delà du nombre de fils d'un poste. */
+const ETATS_MANUELS_MAX = 20_000
+
+/** Les états posés à la main que la vue joint au calcul : seuls les bien formés passent. */
+function etatsManuelsLisibles(valeur: unknown): Record<string, EtatManuelDuBoard> {
+  const lus: Record<string, EtatManuelDuBoard> = {}
+  let n = 0
+  for (const [id, brut] of Object.entries(objet(valeur))) {
+    if (n >= ETATS_MANUELS_MAX) break
+    if (!/^[\w.-]{1,80}$/.test(id)) continue
+    const etat = etatManuelLisible(brut)
+    if (etat) {
+      lus[id] = etat
+      n += 1
+    }
+  }
+  return lus
+}
+
 export function registerCarteDesBesoinsIpc({
   os,
   journal,
   racineDesLiens,
-  tickets
+  tickets,
+  dossierDuBoard,
+  choisirDossier,
+  racineDuPoste
 }: {
   os: Pick<AutowinOS, 'conversations' | 'runsWithGate' | 'executionWorkspace'>
   journal?: { lire: () => ReadonlyMap<string, EntreeDuJournal> }
   /** Dossier de `liens-work-items.jsonl` (conv-1127) ; absent = aucun lien gardé. */
   racineDesLiens?: string
   tickets?: LectureDesTickets
-}): void {
+  /** Le dossier où le Board est recopié (conv-1206) ; absent = aucune copie. */
+  dossierDuBoard?: DossierDuBoard
+  /** Le sélecteur de dossier natif (`pickDirectory` de `index.ts`). */
+  choisirDossier?: (sender: Electron.WebContents) => Promise<string | null>
+  /** Dossier de données du poste, où la copie de fin de tour garde les états posés à la main
+   *  (`board-etats-manuels.json`, conv-1210) ; absent = aucune copie de fin de tour. */
+  racineDuPoste?: string
+}): {
+  /** Recopie le Board vers le dossier sans la vue (conv-1210) : appelée à chaque fin de tour. */
+  recopierLeBoard: () => void
+} {
   const identiteDuDossier = creerIdentitesEnCache()
   const liens = racineDesLiens ? creerLiensWorkItems({ racine: racineDesLiens }) : null
   // Le type du store et celui de la carte décrivent le même JSON ; seul le typage des parts diffère.
@@ -118,10 +166,77 @@ export function registerCarteDesBesoinsIpc({
         lireFiche: (source: TicketSourceProfile, id: string) => tickets.get({ source, id })
       }
     : null
+  // Les collègues (conv-1210) : les AUTRES sous-dossiers du dossier choisi, le nôtre étant la cible.
+  const collegues = dossierDuBoard
+    ? creerLecteurDesCollegues({
+        ou: () => {
+          const { dossier, cible } = dossierDuBoard.etat()
+          return dossier && cible ? { dossier, poste: basename(cible) } : null
+        }
+      })
+    : null
+  // La copie de fin de tour (conv-1210) : même calcul que la vue, lancé sans elle.
+  const copieDeFinDeTour =
+    dossierDuBoard && racineDuPoste
+      ? creerCopieDeFinDeTour({
+          racine: racineDuPoste,
+          dossierDuBoard,
+          calculer: () => calculateur.calculer()
+        })
+      : null
 
-  ipcMain.handle('os:carteDesBesoins', (event) => {
+  ipcMain.handle('os:carteDesBesoins', async (event, options: unknown) => {
     assertTrustedRendererSender(event, 'CarteDesBesoins')
-    return calculateur.calculer()
+    const carte = await calculateur.calculer()
+    // Copie vers le dossier du Board (conv-1206), sans attendre : un partage lent ou injoignable ne
+    // retarde jamais l'affichage. Les états posés à la main vivent dans la vue, qui les joint ici.
+    const manuels = etatsManuelsLisibles(objet(options).etatsManuels)
+    // Gardés pour la copie de fin de tour, qui part sans la vue (conv-1210).
+    copieDeFinDeTour?.retenirManuels(manuels)
+    dossierDuBoard?.enregistrer(carte, manuels)
+    return carte
+  })
+
+  // Le dossier du Board (conv-1206). Le chemin vient du sélecteur natif, jamais d'un texte de la vue.
+  ipcMain.handle('os:board-dossier', (event) => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    return dossierDuBoard?.etat() ?? { dossier: null, cible: null, enCours: false }
+  })
+
+  ipcMain.handle('os:board-dossier:choisir', async (event) => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    if (!dossierDuBoard || !choisirDossier) return { dossier: null, cible: null, enCours: false }
+    const choisi = await choisirDossier(event.sender)
+    return choisi ? dossierDuBoard.choisir(choisi) : dossierDuBoard.etat()
+  })
+
+  ipcMain.handle('os:board-dossier:effacer', async (event) => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    return dossierDuBoard
+      ? dossierDuBoard.effacer()
+      : { dossier: null, cible: null, enCours: false }
+  })
+
+  // Les projets recopiés dans le dossier (conv-1211) : `null` = tous ; la liste reçue de la vue est
+  // relue par `projetsPartagesLisibles` avant d'être gardée, illisible = rien ne change.
+  ipcMain.handle('os:board-dossier:projets', (event, brute: unknown) => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    if (!dossierDuBoard) return { dossier: null, cible: null, enCours: false }
+    const projets = projetsPartagesLisibles(brute)
+    if (projets === undefined)
+      return {
+        ...dossierDuBoard.etat(),
+        erreur: 'Choix des projets illisible : rien n’a changé.'
+      }
+    return dossierDuBoard.choisirProjets(projets)
+  })
+
+  // Les Boards des collègues (conv-1210) : les AUTRES sous-dossiers du dossier du Board, relus à
+  // part de la carte pour qu'un partage lent ne retarde jamais notre Board. Aucun argument : le
+  // dossier est celui réglé sur ce poste, jamais un chemin reçu de la vue.
+  ipcMain.handle('os:board-collegues', (event): Promise<BoardsDesCollegues> => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    return collegues ? collegues.lire() : Promise.resolve({ collegues: [] })
   })
 
   ipcMain.handle(
@@ -175,4 +290,9 @@ export function registerCarteDesBesoinsIpc({
       carte.projets.flatMap((p) => p.demandes)
     )
   })
+
+  return {
+    // Le calcul n'est lancé qu'au moment d'écrire, et jamais sans dossier choisi (conv-1210).
+    recopierLeBoard: () => copieDeFinDeTour?.recopier()
+  }
 }

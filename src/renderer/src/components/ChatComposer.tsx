@@ -23,6 +23,7 @@ import {
 } from 'react'
 import { matchSlashCommands, type SlashCommand } from './chat-view-model'
 import { useTextes } from '../textes'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import {
   applyMention,
   matchMentions,
@@ -259,6 +260,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [input, setInput] = useState('')
     // Les textes de la zone de saisie suivent la langue de Settings · Interface (conv-1146).
     const { t } = useTextes()
+    const { t: tFil } = useTextesChatFil()
     const [slashIndex, setSlashIndex] = useState(0)
     const [slashDismissed, setSlashDismissed] = useState(false)
     /** Skill SURVOLÉE dans la palette `/` : son nom, pour afficher sa description entière. */
@@ -433,7 +435,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     async function installerDictee(): Promise<void> {
       const api = apiWhisper()
       if (!api?.whisperInstaller) {
-        setDicteeErreur('Installation de la reconnaissance vocale indisponible.')
+        setDicteeErreur(tFil('saisie.dictee.installationIndisponible'))
         return
       }
       setDicteeErreur(null)
@@ -441,10 +443,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       try {
         const etat = await api.whisperInstaller()
         setDicteeInstallee(etat.installe === true)
-        if (etat.installe !== true) setDicteeErreur('Installation de la reconnaissance vocale échouée.')
+        if (etat.installe !== true) setDicteeErreur(tFil('saisie.dictee.installationEchouee'))
       } catch (cause) {
         setDicteeErreur(
-          `Installation échouée : ${cause instanceof Error ? cause.message : String(cause)}`
+          tFil('saisie.dictee.installationEchoueeDetail', {
+            raison: cause instanceof Error ? cause.message : String(cause)
+          })
         )
       } finally {
         setDicteeInstallation(false)
@@ -467,7 +471,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         setDicteeEtat('inactif')
         setDicteeNiveau(0)
         if (texte === '') {
-          if (dictee?.aDejaEcrit !== true) setDicteeErreur('Rien n’a été reconnu.')
+          if (dictee?.aDejaEcrit !== true) setDicteeErreur(tFil('saisie.dictee.rienReconnu'))
           return
         }
         ecrireDictee(texte)
@@ -475,7 +479,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       }
       const transcrire = pontWhisper()
       if (!transcrire) {
-        setDicteeErreur('Reconnaissance vocale indisponible.')
+        setDicteeErreur(tFil('saisie.dictee.indisponible'))
         return
       }
       // Re-lecture au clic : l'installation a pu se faire depuis l'ouverture de la vue.
@@ -507,7 +511,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         dicteeRef.current = null
         setDicteeEtat('inactif')
         setDicteeNiveau(0)
-        setDicteeErreur('Micro indisponible.')
+        setDicteeErreur(tFil('saisie.dictee.microIndisponible'))
       }
     }
 
@@ -590,6 +594,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     acceptMention(c)
                   }}
                 >
+                  {/* « @fichier » reste tel quel : c'est la syntaxe de mention que la saisie insère
+                      et que le chat relit (`mentionRef`, chat-mentions.ts). */}
                   <span className="slash-name mono">
                     {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
                   </span>

@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { buildOrchestratorModelGroups } from './chat-view-model'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { TEXTES_FR as TEXTES_PANNEAUX_FR } from '../textes-ecrans/chat-panneaux'
 
 const source = readFileSync(
   resolve(process.cwd(), 'src/renderer/src/components/ChatView.tsx'),
@@ -477,7 +478,11 @@ describe('selecteur orchestrateur Chat', () => {
     // verifie reste qu'il existe UNE seule classe de menu, portee par le composant extrait.
     expect(selectorSource).toContain('className={`model-select-menu is-flottant')
     expect(selectorSource).toContain('createPortal(')
-    expect(selectorSource).toContain('Le changement s’appliquera au prochain tour')
+    // L'aide vit dans la table de textes depuis la traduction anglaise (conv-1170).
+    expect(selectorSource).toContain("t('selecteur.aide.application')")
+    expect(TEXTES_PANNEAUX_FR['selecteur.aide.application']).toContain(
+      'Le changement s’appliquera au prochain tour'
+    )
     expect(selectorSource).not.toMatch(
       /model-select[\s\S]{0,800}(navigate|newConv|location\.reload)/
     )

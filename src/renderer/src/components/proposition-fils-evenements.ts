@@ -7,6 +7,8 @@
  * Fichier sans composant : il ne casse pas le rechargement à chaud (react-refresh).
  */
 import type { FilPrevu } from '../../../shared/lancer-en-fils'
+import { langueCourante } from '../langue'
+import { traduireChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
 
 export const EVT_LANCER_EN_FILS = 'autowin:lancer-en-fils'
 export const EVT_FILS_LANCES = 'autowin:fils-lances'
@@ -110,14 +112,19 @@ export async function lancerAvecFilet(
   } catch (erreur) {
     if (suivi.confirme) return
     const raison = erreur instanceof Error ? erreur.message : String(erreur)
+    // Le refus est écrit dans le souvenir de la carte, dans la langue de l'écran au moment du clic.
+    const langue = langueCourante()
     confirmerLancement({
       cle: demande.cle,
       mode: demande.mode,
       fils: [...suivi.fils],
       refus: [
         suivi.fils.length > 0
-          ? `lancement interrompu après ${suivi.fils.length} fil(s) ouvert(s) (${raison})`
-          : `lancement interrompu (${raison})`
+          ? traduireChatFilsEtLots('fils.interrompuApres', langue, {
+              n: suivi.fils.length,
+              raison
+            })
+          : traduireChatFilsEtLots('fils.interrompu', langue, { raison })
       ]
     })
   }

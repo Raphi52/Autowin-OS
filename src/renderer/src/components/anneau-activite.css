@@ -100,6 +100,10 @@
 }
 .activity-anneau.cadre-anneau {
   margin: 2px 0 6px;
+  /* Le cadre n'a ni bord ni marge interne (son bord est le calque ::before) : sans contexte de
+     formatage propre, la marge basse des etages traversait le cadre, et la derniere sous-ligne
+     collait au bord bas en debordant du coin arrondi (capture de conv-1201, 2026-10-28). */
+  display: flow-root;
 }
 
 /* -- EN-TETE : grand rond, deux lignes, puis boutons et chevron, tout DANS le cadre. -- */
@@ -450,13 +454,17 @@
   gap: 0.7em;
   min-width: 0;
   padding: 0;
-  overflow: hidden;
   border: 0;
   background: none;
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+/* La coupe vit sur la COLONNE de texte, pas sur le bouton : posee sur le bouton, elle rognait la
+   lueur du rond (verdict ou en cours) en un carre a bords nets (capture de conv-1201, 2026-10-28). */
+.activity-anneau .anneau-tete .activity-group-main > .anneau-col {
+  overflow: hidden;
 }
 .activity-anneau .anneau-tete .activity-group-main[aria-disabled='true'] {
   cursor: default;
@@ -474,8 +482,10 @@
   font-size: 0.85em;
   white-space: normal;
 }
-/* Les etages deplies restent DANS le cadre, sous un filet. */
-.activity-anneau .activity-steps {
+/* Les etages deplies restent DANS le cadre, sous un filet. `.cadre-anneau` en plus : a poids egal,
+   `.cosmic-outline .activity-steps` (cosmic-outline.css, charge apres) imposait ses marges, donc
+   ni retrait sous le texte ni marge a droite (capture de conv-1201, 2026-10-28). */
+.activity-anneau.cadre-anneau .activity-steps {
   margin: 0 0.85em 0.6em 3.5em;
   padding-top: 0.35em;
 }

@@ -44,7 +44,12 @@ export interface FaitRetenu {
   body?: string
 }
 
-/** Libellés montrés à l'utilisateur, dans l'ordre d'affichage du panneau. */
+/**
+ * Libellés montrés à l'utilisateur, dans l'ordre d'affichage du panneau.
+ * Restés en français (traduction anglaise, conv-1170) : depuis conv-1059, seul `texteDeCorrection`
+ * les lit, et plus aucun écran ne l'appelle (tests seulement). Les intitulés de clôture relus plus
+ * bas (« Fait », « Maintenant »…) sont COMPARÉS au texte de l'agent : ils ne se traduisent pas.
+ */
 export const LIBELLES_CARNET: Record<RubriqueCarnet, string> = {
   objectif: 'Objectif',
   question: 'Question en attente',

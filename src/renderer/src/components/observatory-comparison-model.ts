@@ -1,4 +1,7 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import type { Langue } from '../../../shared/langue'
+import { langueCourante } from '../langue'
+import { traduireObservatory, type CleObservatory } from '../textes-ecrans/observatory'
 
 export type ObservatoryComparisonChange = 'same' | 'added' | 'removed' | 'changed'
 export type ObservatoryComparisonValue = string | number | null
@@ -33,26 +36,33 @@ function value(value: string | number | undefined): ObservatoryComparisonValue {
 
 export function compareObservatoryEvents(
   beforeEvent: HarnessTimelineEvent,
-  afterEvent: HarnessTimelineEvent
+  afterEvent: HarnessTimelineEvent,
+  langue: Langue = langueCourante()
 ): ObservatoryComparison {
+  // « Type », « Provider », « Phase », « Effort » et « Transport » se disent pareil en anglais.
+  const libelle = (cle: CleObservatory): string => traduireObservatory(cle, langue)
   const fields: Array<
     [key: string, label: string, read: (event: HarnessTimelineEvent) => ObservatoryComparisonValue]
   > = [
     ['kind', 'Type', (event) => value(event.kind)],
-    ['actor', 'Acteur', (event) => value(event.actor)],
+    ['actor', libelle('comparaison.acteur'), (event) => value(event.actor)],
     ['provider', 'Provider', (event) => value(event.provider)],
-    ['model', 'Modèle', (event) => value(event.model)],
+    ['model', libelle('comparaison.modele'), (event) => value(event.model)],
     ['phase', 'Phase', (event) => value(event.execution?.phase)],
     ['reasoningEffort', 'Effort', (event) => value(event.reasoningEffort)],
     ['transport', 'Transport', (event) => value(event.transport)],
-    ['status', 'Statut', (event) => value(event.status)],
-    ['channel', 'Canal', (event) => value(event.channel)],
-    ['content', 'Contenu / contexte', (event) => value(event.content)],
-    ['inputTokens', 'Tokens entrée', (event) => value(event.inputTokens)],
-    ['cacheReadTokens', 'Tokens cache', (event) => value(event.cacheReadTokens)],
-    ['outputTokens', 'Tokens sortie', (event) => value(event.outputTokens)],
-    ['costUsd', 'Coût USD', (event) => value(event.costUsd)],
-    ['durationMs', 'Durée ms', (event) => value(event.durationMs)]
+    ['status', libelle('comparaison.statut'), (event) => value(event.status)],
+    ['channel', libelle('comparaison.canal'), (event) => value(event.channel)],
+    ['content', libelle('comparaison.contenuContexte'), (event) => value(event.content)],
+    ['inputTokens', libelle('comparaison.tokensEntree'), (event) => value(event.inputTokens)],
+    [
+      'cacheReadTokens',
+      libelle('comparaison.tokensCache'),
+      (event) => value(event.cacheReadTokens)
+    ],
+    ['outputTokens', libelle('comparaison.tokensSortie'), (event) => value(event.outputTokens)],
+    ['costUsd', libelle('comparaison.coutUsd'), (event) => value(event.costUsd)],
+    ['durationMs', libelle('comparaison.dureeMs'), (event) => value(event.durationMs)]
   ]
 
   const rows = fields.map(([key, label, read]) => {

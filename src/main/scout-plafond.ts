@@ -44,8 +44,20 @@ export type LecteurAncrage = (chemin: string, ligne: number) => EtatAncrage
  * Les formes « n'est pas vérifiée », « sous réserve », « je n'ai pas mesuré/lu » et « c'est une
  * déduction » viennent des sorties réelles : conv-775 (60) et conv-812 (72) passaient sans elles.
  */
-const AVEU_NON_VERIFIE =
-  /je n['’]ai pas (?:encore )?(?:v[ée]rifi|mesur|ouvert|lu\b|test)\p{L}*|n['’](?:est|sont) pas (?:encore )?v[ée]rifi\p{L}*|non v[ée]rifi\p{L}*|pas encore v[ée]rifi\p{L}*|sans l['’]avoir v[ée]rifi\p{L}*|(?:^|\s)[àa] v[ée]rifier(?![\p{L}])|\(\s*pas v[ée]rifi\p{L}*|(?:^|[—([]\s*)suppos[ée]\p{L}*|sous r[ée]serve|c['’]est une d[ée]duction|par d[ée]duction/iu
+const AVEU_NON_VERIFIE = new RegExp(
+  [
+    String.raw`je n['’]ai pas (?:encore )?(?:v[ée]rifi|mesur|ouvert|lu\b|test)\p{L}*|n['’](?:est|sont) pas (?:encore )?v[ée]rifi\p{L}*|non v[ée]rifi\p{L}*|pas encore v[ée]rifi\p{L}*|sans l['’]avoir v[ée]rifi\p{L}*|(?:^|\s)[àa] v[ée]rifier(?![\p{L}])|\(\s*pas v[ée]rifi\p{L}*|(?:^|[—([]\s*)suppos[ée]\p{L}*|sous r[ée]serve|c['’]est une d[ée]duction|par d[ée]duction`,
+    /*
+     * Les mêmes aveux en anglais (conv-1197, 2026-10-28) : le scout écrit son Why en anglais quand
+     * l'interface l'est, et « I haven't verified » gardait sa note de 80.
+     */
+    String.raw`\bI\s+(?:have(?:n['’]t|\s+not)|did(?:n['’]t|\s+not))\s+(?:yet\s+)?(?:verif|check|measur|open|read\b|test)\p{L}*`,
+    String.raw`\b(?:is|are)(?:n['’]t|\s+not)\s+(?:yet\s+)?(?:verified|checked)\b|\bnot\s+(?:yet\s+)?verified\b|\bunverified\b`,
+    String.raw`\bwithout\s+(?:having\s+)?(?:verif|check)\p{L}*|(?:^|\s)to\s+be\s+(?:verified|checked|confirmed)(?![\p{L}])`,
+    String.raw`(?:^|[—([]\s*)assum(?:ed|ption)\p{L}*|\bsubject\s+to\s+confirmation|\bit(?:['’]s|\s+is)\s+an?\s+(?:deduction|inference)|\bby\s+(?:deduction|inference)`
+  ].join('|'),
+  'iu'
+)
 
 /**
  * L'EXCEPTION QUE LA CONSIGNE ÉCRIT ET QUE LA GARDE IGNORAIT : « plafonné à 50 TANT QUE les chemins
@@ -56,8 +68,9 @@ const AVEU_NON_VERIFIE =
  * fix-ok: vrai scout du 30/09 (demande de conv-382), piste 4 ramenée de 70 à 50 alors que son
  * Pourquoi nomme `gates/hooks.ts`, `orchestrator.ts` et `hooks/` : la règle 4 n'était codée qu'à moitié.
  */
+// En anglais aussi (conv-1197) : « checked in `gates/hooks.ts` », et « haven't checked in » reste nié.
 const CHEMINS_FERMES =
-  /(?<!(?:pas|non|jamais|ni)\s+(?:encore\s+)?)(?<![\p{L}])(?:v[ée]rifi[ée]e?s?|cherch[ée]e?s?|relu|lu)\s+(?:dans|sur)\s+(?:`[^`]+`|[\w.-]*[\\/][\w./\\-]*|[\w-]+\.\w+)/iu
+  /(?<!(?:pas|non|jamais|ni|not|never|n['’]t)\s+(?:(?:encore|yet)\s+)?)(?<![\p{L}])(?:v[ée]rifi[ée]e?s?|cherch[ée]e?s?|relu|lu|verified|checked|searched|grepped)\s+(?:dans|sur|in|on)\s+(?:`[^`]+`|[\w.-]*[\\/][\w./\\-]*|[\w-]+\.\w+)/iu
 
 /**
  * `chemin/fichier.ext:123` (une plage `:18-27` donne sa première ligne). Les URL sont retirées avant.

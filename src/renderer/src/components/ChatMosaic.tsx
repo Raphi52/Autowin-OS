@@ -11,6 +11,7 @@
  * brancher par fenetre est un chantier a part — a faire quand l'ergonomie de la mosaique est validee.
  */
 import { memo, useEffect, useRef, useState } from 'react'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
@@ -82,6 +83,7 @@ function FenetreChatBrut({
   /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
   signatureComposer?: string
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const filRef = useRef<HTMLDivElement>(null)
   /**
    * COLLE EN BAS par defaut. Une fenetre de mosaique est petite : sans ce suivi, chaque token
@@ -174,9 +176,9 @@ function FenetreChatBrut({
           `::before` sont desormais le panneau et le cadre du chat, que l'anneau dore ecrasait. */}
       {etat && <span className="chat-mosaic-window-anneau" aria-hidden="true" />}
       <header className="chat-mosaic-window-head">
-        <span className="chat-mosaic-window-title">{fenetre.title || 'Sans titre'}</span>
+        <span className="chat-mosaic-window-title">{fenetre.title || t('mosaique.sansTitre')}</span>
         {fenetre.busy && (
-          <span className="chat-mosaic-window-busy" aria-label="Tour en cours">
+          <span className="chat-mosaic-window-busy" aria-label={t('mosaique.tourEnCours')}>
             •
           </span>
         )}
@@ -184,8 +186,10 @@ function FenetreChatBrut({
           type="button"
           className="chat-mosaic-window-open"
           data-testid="chat-mosaic-open"
-          aria-label={`Ouvrir ${fenetre.title || 'la conversation'} en plein ecran`}
-          title="Ouvrir cette conversation seule"
+          aria-label={t('mosaique.ouvrirPleinEcran', {
+            titre: fenetre.title || t('mosaique.laConversation')
+          })}
+          title={t('mosaique.ouvrirSeule')}
           onClick={() => onOuvrirSeule(fenetre.id)}
         >
           ↗
@@ -193,7 +197,9 @@ function FenetreChatBrut({
         <button
           type="button"
           className="chat-mosaic-window-close"
-          aria-label={`Fermer ${fenetre.title || 'la conversation'}`}
+          aria-label={t('mosaique.fermer', {
+            titre: fenetre.title || t('mosaique.laConversation')
+          })}
           onClick={() => onClose(fenetre.id)}
         >
           ×
@@ -205,7 +211,7 @@ function FenetreChatBrut({
         onScroll={surDefilement}
       >
         {fenetre.messages.length === 0 ? (
-          <div className="chat-mosaic-window-empty">Aucun message.</div>
+          <div className="chat-mosaic-window-empty">{t('mosaique.aucunMessage')}</div>
         ) : (
           fenetre.messages.map((message, index) => (
             <ChatMessageRow
@@ -242,7 +248,7 @@ function FenetreChatBrut({
             setColleEnBas(true)
           }}
         >
-          ↓ Dernier message
+          {t('mosaique.dernierMessage')}
         </button>
       )}
       {/* Pas d'enveloppe : la saisie doit etre ENFANT DIRECT de `.chat`, comme en chat plein. */}
@@ -284,6 +290,7 @@ export function ChatMosaic({
   signatureComposer,
   skills
 }: ChatMosaicProps): React.JSX.Element {
+  const { t } = useTextesChatFil()
   if (fenetres.length === 0) {
     return (
       <div className="chat-mosaic-vide" data-testid="chat-mosaic">
@@ -293,10 +300,9 @@ export function ChatMosaic({
           data-testid="chat-mosaic-new"
           onClick={onNouvelleConversation}
         >
-          + Nouvelle conversation
+          {t('mosaique.nouvelle')}
         </button>
-        Clique une conversation à gauche pour l&apos;ouvrir ici. Chaque ouverture ajoute une
-        fenêtre.
+        {t('mosaique.vide')}
       </div>
     )
   }

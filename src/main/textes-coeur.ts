@@ -30,6 +30,9 @@ export const TEXTES_COEUR_FR = {
   'carte.ouvrirFil': 'Ouvrir le fil',
   'carte.fermer': 'Fermer',
   'carte.titreFenetre': 'Autowin — fin de tour',
+  // Clic droit sur la mascotte du bureau (`mascotte-menu.ts`, conv-1196).
+  'mascotte.menu.aucunFil': 'Aucun fil ne t’attend',
+  'mascotte.menu.ouvrirAutowin': 'Ouvrir Autowin',
   // Diagnostic de démarrage (`preflight.ts`).
   'diagnostic.standby': 'standby — diagnostic ignoré',
   'diagnostic.brain.injoignable': 'injoignable — RAG désactivé',
@@ -88,6 +91,8 @@ export const TEXTES_COEUR_EN: Record<CleCoeur, string> = {
   'carte.ouvrirFil': 'Open the thread',
   'carte.fermer': 'Close',
   'carte.titreFenetre': 'Autowin — end of turn',
+  'mascotte.menu.aucunFil': 'No thread is waiting for you',
+  'mascotte.menu.ouvrirAutowin': 'Open Autowin',
   'diagnostic.standby': 'standby — diagnostics skipped',
   'diagnostic.brain.injoignable': 'unreachable — RAG disabled',
   'diagnostic.brainVenv.label': 'Brain runtime (Python)',

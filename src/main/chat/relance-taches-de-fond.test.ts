@@ -216,6 +216,44 @@ describe('relance des tâches de fond coupées en fin de tour', () => {
     expect(b.envois).toHaveLength(1)
     expect(envoyeA).toBeGreaterThanOrEqual(10_000)
   })
+
+  /*
+   * conv-1211, 2026-10-28 : le tour de reprise a appelé `restart_app`. Le lot n'était effacé qu'à la
+   * FIN de ce tour (`envoyerTour` attend tout le tour) : coupé par le redémarrage, il est resté sur
+   * disque et `reprendreAuDemarrage` a renvoyé la même reprise une seconde fois (un tour payé pour rien).
+   */
+  it('cas 10 — app redémarrée PENDANT le tour de reprise : la reprise ne repart pas au démarrage', async () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'relance-fond-'))
+    try {
+      const magasin = magasinLotsSurDisque(dossier)
+      const premier = banc({ magasin })
+      premier.surAttente(() => {
+        for (const taches of magasin.lister())
+          for (const t of taches) premier.codes.set(t.journalPath!, 0)
+      })
+      let tourParti: () => void = () => {}
+      const parti = new Promise<void>((resolve) => (tourParti = resolve))
+      // Le tour de reprise démarre puis ne finit jamais : le processus est remplacé en plein tour.
+      void creerRelanceurTachesDeFond({
+        ...premier.deps,
+        envoyerTour: (conversationId, prompt) => {
+          premier.envois.push({ conversationId, prompt })
+          tourParti()
+          return new Promise<never>(() => {})
+        }
+      }).relancer('conv-7', [tache('t', 'sleep 560; date')])
+      await parti
+      expect(premier.envois).toHaveLength(1)
+
+      // Le processus suivant relit le même dossier au démarrage.
+      const second = banc({ magasin })
+      await creerRelanceurTachesDeFond(second.deps).reprendreAuDemarrage()
+      expect(second.envois).toEqual([])
+      expect(magasin.lister()).toEqual([])
+    } finally {
+      rmSync(dossier, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('prompt de reprise', () => {

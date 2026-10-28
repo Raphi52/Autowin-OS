@@ -8,6 +8,8 @@
  */
 
 import { NOM_JARVIS_DEFAUT } from './jarvis-nom'
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 export interface JarvisCommande {
   id: string
@@ -446,31 +448,33 @@ export function erreurDAutorisationMicro(code: string): boolean {
 }
 
 export function messageErreurMoteur(code: string): string {
+  // Affiché à l'écran : dans la langue de l'interface (conv-1170).
+  const langue = langueCourante()
   if (code === 'network') {
-    return 'Le moteur de reconnaissance de Chromium est injoignable dans cette fenêtre (erreur « network ») : installez l’écoute hors ligne ci-dessous.'
+    return traduireAccueil('moteur.network', langue)
   }
   // CINQ CAUSES, CINQ SORTIES. Une seule phrase pour toutes envoyait l'utilisateur chercher une
   // autorisation Windows deja accordee (mesure du 2026-09-03) : ici chaque cause nomme LE geste
   // qui la leve, et le bouton « Réessayer le micro » du widget est a cote de la phrase.
   if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'micro-refuse') {
-    return 'Micro refusé pour Autowin OS : autorisez le microphone dans Windows (Confidentialité → Microphone), puis réessayez.'
+    return traduireAccueil('moteur.refuse', langue)
   }
   if (code === 'micro-absent') {
-    return 'Aucun micro disponible sur cette machine : branchez un micro ou un casque, puis réessayez. En session à distance, le micro n’arrive que si la redirection audio est activée côté client.'
+    return traduireAccueil('moteur.absent', langue)
   }
   if (code === 'micro-occupe') {
-    return 'Le micro est déjà pris par une autre application (visio, enregistreur) : libérez-le, puis réessayez.'
+    return traduireAccueil('moteur.occupe', langue)
   }
   if (code === 'micro-introuvable') {
-    return 'Le micro choisi dans « Paramètres audio » n’existe plus : choisissez-en un autre, puis réessayez.'
+    return traduireAccueil('moteur.introuvable', langue)
   }
   if (code === 'micro-indisponible') {
-    return 'Micro indisponible : l’entrée audio n’a pas pu s’ouvrir. Vérifiez le micro choisi dans « Paramètres audio », puis réessayez.'
+    return traduireAccueil('moteur.indisponible', langue)
   }
   if (code === 'transcription-impossible') {
-    return 'La reconnaissance locale n’a pas pu transcrire : réinstallez l’écoute hors ligne.'
+    return traduireAccueil('moteur.transcription', langue)
   }
-  return `Reconnaissance vocale interrompue : ${code}`
+  return traduireAccueil('moteur.interrompue', langue, { code })
 }
 
 /**
@@ -512,6 +516,8 @@ export function phraseDeJarvis(etat: JarvisEcoute, evenement: EvenementParle): s
   if (!etat.active) return null
   if (etat.mode === 'enregistrement') return null
   const sujet = sujetLisible(evenement.sujet)
+  // RESTE EN FRANÇAIS (conv-1170) : la voix choisie d'office est française, la reconnaissance
+  // écoute en `fr-FR`, et le filtre d'écho compare ce qu'il entend à CETTE phrase.
   if (evenement.genre === 'ordre') return 'Tout de suite.'
   if (evenement.genre === 'fin') return sujet === '' ? 'C’est fait.' : `C’est fait : ${sujet}.`
   return sujet === '' ? 'Je n’ai pas pu.' : `Je n’ai pas pu : ${sujet}.`

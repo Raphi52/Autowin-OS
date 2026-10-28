@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { Spinner } from './Spinner'
+import {
+  useTextesWorktreesEtBureaux,
+  type CleWorktreesEtBureaux
+} from '../textes-ecrans/worktrees-et-bureaux'
 
 /**
  * LES BUREAUX CONSERVÉS, ET LA PRISE QUI LEUR MANQUAIT.
@@ -32,12 +36,12 @@ type VerdictBureau = 'a-reprendre' | 'trie' | 'sans-valeur' | 'inconnu'
  * du reel s'en desynchronise, un etat derive ne peut pas mentir plus longtemps que sa preuve.
  * Optionnel ici parce qu'un preload plus ancien ne le porte pas — la vue reste lisible sans.
  */
-const LIBELLE_VERDICT: Record<VerdictBureau, string> = {
-  'a-reprendre': 'À reprendre',
-  trie: 'Trié',
-  'sans-valeur': 'Sans valeur',
+const LIBELLE_VERDICT: Record<VerdictBureau, CleWorktreesEtBureaux> = {
+  'a-reprendre': 'conserves.verdict.aReprendre',
+  trie: 'conserves.verdict.trie',
+  'sans-valeur': 'conserves.verdict.sansValeur',
   // « On n'a pas pu lire » n'est pas « il n'y a rien » : le dire plutôt que de rassurer à tort.
-  inconnu: 'Lecture impossible'
+  inconnu: 'conserves.verdict.inconnu'
 }
 
 interface TravailNonPublie {
@@ -60,6 +64,7 @@ export function BureauxConserves({
 }: {
   runsInterrompus?: number
 }): JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   const [bureaux, setBureaux] = useState<TravailNonPublie[] | undefined>(undefined)
   const [patch, setPatch] = useState<{ agentId: string; texte: string } | undefined>(undefined)
   const [erreur, setErreur] = useState<Record<string, string>>({})
@@ -127,10 +132,10 @@ export function BureauxConserves({
       const relances = bilan?.relances?.length ?? 0
       setBilanReprise(
         bilan?.dejaEnCours
-          ? 'Une reprise est déjà en cours.'
+          ? t('conserves.repriseDejaEnCours')
           : relances > 0
-            ? `${relances} run(s) relancé(s).`
-            : 'Aucun run à reprendre.'
+            ? t('conserves.relances', { n: relances })
+            : t('conserves.aucunRun')
       )
       await charger()
     } catch (cause) {
@@ -145,12 +150,12 @@ export function BureauxConserves({
     // laisserait l'utilisateur valider la destruction d'un travail qu'il ne sait pas être là.
     const question =
       fichiers > 0
-        ? `Supprimer définitivement ce bureau ? Il contient ${fichiers} fichier(s) non publié(s).`
-        : 'Supprimer définitivement ce bureau ?'
+        ? t('conserves.purger.question.fichiers', { n: fichiers })
+        : t('conserves.purger.question')
     if (!window.confirm(question)) return
     try {
       const supprime = await window.api.discardHeldWorktree?.(agentId)
-      if (!supprime) throw new Error("Ce bureau n'est plus supprimable.")
+      if (!supprime) throw new Error(t('conserves.plusSupprimable'))
       await charger()
     } catch (cause) {
       nommerErreur(agentId, cause)
@@ -160,13 +165,13 @@ export function BureauxConserves({
   if (bureaux === undefined)
     return (
       <section className="bureaux-conserves">
-        <Spinner /> Lecture…
+        <Spinner /> {t('conserves.lecture')}
       </section>
     )
 
   return (
     <section className="bureaux-conserves" data-testid="bureaux-conserves">
-      <h3 className="bureaux-conserves-titre">Bureaux conservés</h3>
+      <h3 className="bureaux-conserves-titre">{t('conserves.titre')}</h3>
       {runsInterrompus === 0 && !bilanReprise ? null : (
         <div className="bureaux-conserves-reprise">
           <button
@@ -177,12 +182,12 @@ export function BureauxConserves({
           >
             {repriseEnCours ? (
               <>
-                <Spinner /> Reprise en cours…
+                <Spinner /> {t('conserves.repriseEnCours')}
               </>
             ) : runsInterrompus === undefined ? (
-              'Reprendre tout'
+              t('conserves.reprendreTout')
             ) : (
-              `Reprendre tout (${runsInterrompus})`
+              t('conserves.reprendreTout.compte', { n: runsInterrompus })
             )}
           </button>
           {bilanReprise ? (
@@ -193,7 +198,7 @@ export function BureauxConserves({
         </div>
       )}
       {bureaux.length === 0 ? (
-        <p className="bureaux-conserves-vide">Aucun bureau conservé — rien à trier.</p>
+        <p className="bureaux-conserves-vide">{t('conserves.vide')}</p>
       ) : (
         <ul className="bureaux-conserves-liste">
           {bureaux.map((bureau) => (
@@ -204,24 +209,25 @@ export function BureauxConserves({
                   className={`bureaux-conserves-verdict is-${bureau.verdict}`}
                   data-testid={`verdict-${bureau.agentId}`}
                 >
-                  {LIBELLE_VERDICT[bureau.verdict]}
+                  {t(LIBELLE_VERDICT[bureau.verdict])}
                 </span>
               )}
               <span className="bureaux-conserves-meta">
-                {bureau.date} · {bureau.fichiers.length} fichiers
+                {/* `date` vient du processus principal : une donnée, affichée telle quelle. */}
+                {t('conserves.meta', { date: bureau.date, n: bureau.fichiers.length })}
               </span>
               <button type="button" onClick={() => void voirLeDiff(bureau.agentId)}>
-                Voir le diff
+                {t('conserves.voirDiff')}
               </button>
               <button type="button" onClick={() => void reprendre(bureau.agentId)}>
-                Reprendre
+                {t('conserves.reprendre')}
               </button>
               <button
                 type="button"
                 className="bureaux-conserves-purger"
                 onClick={() => void purger(bureau.agentId, bureau.fichiers.length)}
               >
-                Purger
+                {t('conserves.purger')}
               </button>
               {erreur[bureau.agentId] && (
                 <span className="bureaux-conserves-erreur">{erreur[bureau.agentId]}</span>

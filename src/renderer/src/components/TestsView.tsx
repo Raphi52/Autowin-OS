@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { langueCourante } from '../langue'
+import { nomDeDestination } from '../textes'
+import {
+  traduireBoardEtMaintenance,
+  useTextesBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
 import { ViewTopBar } from './ViewTopBar'
 import { PerfLagPanel } from './PerfLagPanel'
 import { MaintenanceSkillsPanel } from './MaintenanceSkillsPanel'
@@ -101,6 +107,7 @@ const LIBELLE_STATUT: Record<Statut, string> = {
 }
 
 export function TestsView({ active }: { active: boolean }): React.JSX.Element {
+  const { t, langue } = useTextesBoardEtMaintenance()
   const [projets, setProjets] = useState<Projet[]>([])
   const [selection, setSelection] = useState<string>('')
   const [filtre, setFiltre] = useState('')
@@ -148,7 +155,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
     // Un canal ABSENT (moteur non reconstruit, preload périmé) ne doit pas se déguiser en « aucun
     // projet » : c'est le faux-vert exact que la vue est censée rendre impossible.
     if (typeof api().testProjects !== 'function') {
-      setErreur('canal tests:projects indisponible (moteur non reconstruit ?)')
+      setErreur(traduireBoardEtMaintenance('maint.canalAbsent', langueCourante()))
       return
     }
     try {
@@ -247,9 +254,9 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   return (
     <section className="view-page tests-view" data-testid="tests-view">
       <ViewTopBar
-        eyebrow="ENTRETIEN"
-        title="Maintenance"
-        description="Lance les skills d’entretien d’Autowin, et les tests unitaires de tes projets."
+        eyebrow={t('maint.surtitre')}
+        title={nomDeDestination('tests', langue)}
+        description={t('maint.description')}
         detail={projetActif?.root}
       />
 
@@ -268,7 +275,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             className={onglet === 'suites' ? 'is-active' : ''}
             onClick={() => setOnglet('suites')}
           >
-            Tests unitaires
+            {t('maint.onglet.suites')}
           </button>
           <button
             type="button"
@@ -278,7 +285,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             className={onglet === 'latence' ? 'is-active' : ''}
             onClick={() => setOnglet('latence')}
           >
-            Latence
+            {t('maint.onglet.latence')}
           </button>
         </div>
         {onglet === 'suites' && (
@@ -286,7 +293,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             <input
               className="tests-filter"
               data-testid="tests-filter"
-              placeholder="Filtrer (motif de fichier)"
+              placeholder={t('maint.filtre')}
               value={filtre}
               onChange={(e) => setFiltre(e.target.value)}
             />
@@ -296,10 +303,10 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                 checked={seulsEchecs}
                 onChange={(e) => setSeulsEchecs(e.target.checked)}
               />
-              Échecs seuls
+              {t('maint.echecsSeuls')}
             </label>
             <button type="button" data-testid="tests-add" onClick={() => void ajouter()}>
-              + Projet
+              {t('maint.ajouter')}
             </button>
             <button
               type="button"
@@ -308,7 +315,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
               disabled={!projetActif || Boolean(encours)}
               onClick={() => void lancer()}
             >
-              {encours ? 'Exécution…' : 'Lancer la suite'}
+              {encours ? t('maint.execution') : t('maint.lancer')}
             </button>
           </div>
         )}
@@ -319,8 +326,10 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
       {onglet === 'suites' && encours && (
         <p className="tests-progress" data-testid="tests-progress">
           <Spinner />{' '}
-          {projets.find((p) => p.id === encours)?.label ?? encours} — exécution en cours ·{' '}
-          {(chrono / 1000).toFixed(1)} s
+          {t('maint.enCours', {
+            projet: projets.find((p) => p.id === encours)?.label ?? encours,
+            secondes: (chrono / 1000).toFixed(1)
+          })}
         </p>
       )}
 
@@ -331,10 +340,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
               ne vaut que si le registre a REELLEMENT repondu vide. */}
             {erreur && <p className="tests-error">{erreur}</p>}
             {projets.length === 0 && !erreur && (
-              <p className="tests-empty">
-                Aucun projet enregistré. « + Projet » ajoute n’importe quelle racine (Autowin OS ou
-                un autre dépôt).
-              </p>
+              <p className="tests-empty">{t('maint.aucunProjet')}</p>
             )}
             {projets.map((p) => {
               const r = resultats[p.id]
@@ -350,7 +356,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                     {r && (
                       <span className="tests-project-totals">
                         {r.totals.failed > 0
-                          ? `${r.totals.failed} échec(s)`
+                          ? t('maint.echecs', { n: r.totals.failed })
                           : `${r.totals.passed} ✓`}
                       </span>
                     )}
@@ -358,7 +364,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                   </button>
                   <button
                     className="tests-project-remove"
-                    title="Retirer du registre"
+                    title={t('maint.retirer')}
                     onClick={() => void retirer(p.id)}
                   >
                     ×
@@ -377,8 +383,8 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
             {!resultat && projetActif && (
               <p className="tests-empty">
                 {projetActif.runnable
-                  ? 'Aucune exécution pour ce projet. « Lancer la suite » produit le rapport.'
-                  : (projetActif.reason ?? 'Projet non exécutable.')}
+                  ? t('maint.aucuneExecution')
+                  : (projetActif.reason ?? t('maint.nonExecutable'))}
               </p>
             )}
             {resultat && (
@@ -390,15 +396,15 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                     <span className="tests-nombre" style={compteur(resultat.totals.passed)}>
                       {resultat.totals.passed}
                     </span>{' '}
-                    passés
+                    {t('maint.passes')}
                   </span>
                   <span className="ko">
                     <span className="tests-nombre" style={compteur(resultat.totals.failed)}>
                       {resultat.totals.failed}
                     </span>{' '}
-                    échecs
+                    {t('maint.echecsTotal')}
                   </span>
-                  <span className="sk">{resultat.totals.skipped} ignorés</span>
+                  <span className="sk">{t('maint.ignores', { n: resultat.totals.skipped })}</span>
                   <span className="meta">
                     {resultat.runner} · {resultat.durationMs} ms · exit {String(resultat.exitCode)}
                   </span>
@@ -415,7 +421,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                 </div>
                 {projetActif && memorises[projetActif.id] && (
                   <p className="tests-memo" data-testid="tests-memo">
-                    ↺ dernier run mémorisé (non rejoué)
+                    {t('maint.memorise')}
                   </p>
                 )}
                 {resultat.report.invalid && (
@@ -438,13 +444,13 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                             {replie ? '▸' : '▾'} {fichier}
                           </button>
                           <span className="tests-file-count">
-                            {echecs > 0 ? `${echecs} échec(s)` : `${items.length} ✓`}
+                            {echecs > 0 ? t('maint.echecs', { n: echecs }) : `${items.length} ✓`}
                           </span>
                           <button
                             data-testid="tests-file-rerun"
                             className="tests-file-rerun"
                             disabled={Boolean(encours)}
-                            title="Rejouer ce fichier seul"
+                            title={t('maint.rejouer')}
                             onClick={() => void lancer(fichier)}
                           >
                             ⟲
@@ -477,13 +483,13 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                                         data-testid="tests-case-copy"
                                         onClick={() => void copierErreur(c)}
                                       >
-                                        Copier l’erreur
+                                        {t('maint.copier')}
                                       </button>
                                       <button
                                         data-testid="tests-case-open"
                                         onClick={() => void ouvrirErreur(c)}
                                       >
-                                        Ouvrir le fichier
+                                        {t('maint.ouvrir')}
                                       </button>
                                     </span>
                                   </>

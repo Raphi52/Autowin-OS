@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import { chatMediaUrl } from '../../../shared/chat-media'
+import {
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
 import { fileSize, inlineDataUrl, kindLabel, nomRepeteLeLibelle } from './artifact-outils'
 import { BrainMarkdown } from './BrainMarkdown'
 import { ArtifactArchivePreview } from './ArtifactArchivePreview'
@@ -84,6 +88,7 @@ function StructuredData({ text }: { text: string }): React.JSX.Element {
 }
 
 function NotebookPreview({ text }: { text: string }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const notebook = useMemo(() => {
     try {
       return JSON.parse(text) as {
@@ -109,7 +114,7 @@ function NotebookPreview({ text }: { text: string }): React.JSX.Element {
           className={`artifact-notebook__cell is-${cell.cell_type ?? 'unknown'}`}
           key={index}
         >
-          <span>{cell.cell_type ?? 'cellule'}</span>
+          <span>{cell.cell_type ?? t('apercu.cellule')}</span>
           <pre>{Array.isArray(cell.source) ? cell.source.join('') : (cell.source ?? '')}</pre>
           {(cell.outputs ?? []).slice(0, 12).map((output, outputIndex) => {
             const outputText =
@@ -122,7 +127,7 @@ function NotebookPreview({ text }: { text: string }): React.JSX.Element {
                 className="artifact-notebook__output-image"
                 key={outputIndex}
                 src={`data:${output.data?.['image/png'] ? 'image/png' : 'image/jpeg'};base64,${normalizedImage}`}
-                alt={`Sortie ${outputIndex + 1}`}
+                alt={t('apercu.sortie', { rang: outputIndex + 1 })}
               />
             ) : normalizedText ? (
               <pre className="artifact-notebook__output" key={outputIndex}>
@@ -143,6 +148,7 @@ function ArtifactBody({
   artifact: ChatArtifact
   onOpenImage?: (image: { src: string; name: string }) => void
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const text = inlineText(artifact)
   const dataUrl = inlineDataUrl(artifact)
 
@@ -151,7 +157,7 @@ function ArtifactBody({
       <button
         type="button"
         className="artifact-preview__image-button"
-        aria-label={`Agrandir ${artifact.name}`}
+        aria-label={t('apercu.agrandir', { nom: artifact.name })}
         onClick={() => onOpenImage?.({ src: dataUrl, name: artifact.name })}
       >
         <img className="artifact-preview__image" src={dataUrl} alt={artifact.name} />
@@ -190,7 +196,7 @@ function ArtifactBody({
     return (
       <SandboxedHtmlPreview
         source={text}
-        title={`Aperçu de ${artifact.name}`}
+        title={t('apercu.apercuDe', { nom: artifact.name })}
         embedded
         enforceInlineLimit={false}
       />
@@ -219,13 +225,9 @@ function ArtifactBody({
   if (artifact.kind === 'model3d') return <ArtifactModel3dPreview artifact={artifact} />
   if (artifact.kind === 'archive') return <ArtifactArchivePreview artifact={artifact} />
   if (artifact.kind === 'executable')
-    return (
-      <div className="artifact-preview__blocked">Exécution interdite · métadonnées uniquement</div>
-    )
+    return <div className="artifact-preview__blocked">{t('apercu.executionInterdite')}</div>
   if (artifact.kind === 'binary')
-    return (
-      <div className="artifact-preview__blocked">Binaire non exécuté · métadonnées uniquement</div>
-    )
+    return <div className="artifact-preview__blocked">{t('apercu.binaireNonExecute')}</div>
   if (
     artifact.kind === 'document' ||
     artifact.kind === 'presentation' ||
@@ -234,7 +236,7 @@ function ArtifactBody({
     return <ArtifactArchivePreview artifact={artifact} />
   return (
     <div className="artifact-preview__placeholder">
-      {artifact.path ? 'Fichier conservé sur le disque' : 'Aperçu indisponible'}
+      {artifact.path ? t('apercu.fichierConserve') : t('apercu.indisponible')}
     </div>
   )
 }
@@ -263,6 +265,7 @@ export function ArtifactPreview({
    *  elle pâlit avec elles. */
   live?: boolean
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const cardRef = useRef<HTMLElement | null>(null)
   // Les aperçus visuels mangeaient tout le fil : repliés par défaut, dépliables à la demande.
   const isCollapsible = artifact.kind === 'image' || artifact.kind === 'vector'
@@ -271,7 +274,10 @@ export function ArtifactPreview({
   const [loadState, setLoadState] = useState<{
     key: string
     artifact?: ChatArtifact
+    /** Message du processus principal, montré tel quel. */
     error?: string
+    /** Échec dit par l'interface : traduit au rendu, il suit un changement de langue (conv-1170). */
+    erreurLocale?: CleArtefactsEtBandeaux
   }>()
   /* VIDÉO ET SON CONSERVÉS = LUS PAR PLAGES (kaizen conv-260, 2026-10-11). La copie base64 de
      `readChatArtifact` est plafonnée à 16 Mo : la pub de 74,6 Mo du tour
@@ -321,7 +327,11 @@ export function ArtifactPreview({
       .then((result) => {
         if (!active) return
         if (!result.ok || result.content === undefined) {
-          setLoadState({ key: loadKey, error: result.error ?? 'Aperçu indisponible' })
+          setLoadState(
+            typeof result.error === 'string'
+              ? { key: loadKey, error: result.error }
+              : { key: loadKey, erreurLocale: 'apercu.indisponible' }
+          )
           return
         }
         setLoadState({
@@ -334,7 +344,7 @@ export function ArtifactPreview({
         })
       })
       .catch(() => {
-        if (active) setLoadState({ key: loadKey, error: 'Lecture de l’artefact impossible' })
+        if (active) setLoadState({ key: loadKey, erreurLocale: 'apercu.lectureImpossible' })
       })
     return () => {
       active = false
@@ -343,7 +353,9 @@ export function ArtifactPreview({
 
   const activeLoadState = loadState?.key === loadKey ? loadState : undefined
   const loaded = activeLoadState?.artifact
-  const loadError = activeLoadState?.error
+  const loadError =
+    activeLoadState?.error ??
+    (activeLoadState?.erreurLocale ? t(activeLoadState.erreurLocale) : undefined)
   const mediaUrl =
     mediaParPlages && conversationId && turnId
       ? chatMediaUrl(conversationId, turnId, artifact.id)
@@ -362,10 +374,10 @@ export function ArtifactPreview({
       {previewError ? (
         <div className="artifact-preview__blocked">{previewError}</div>
       ) : mustLoad && !isNearViewport ? (
-        <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
+        <div className="artifact-preview__placeholder">{t('apercu.chargeALApproche')}</div>
       ) : mustLoad && !loaded && !loadError ? (
         <div className="artifact-preview__placeholder" role="status">
-          <Spinner /> Chargement de l’aperçu…
+          <Spinner /> {t('apercu.chargement')}
         </div>
       ) : loadError ? (
         <div className="artifact-preview__blocked">{loadError}</div>
@@ -393,12 +405,12 @@ export function ArtifactPreview({
             void Promise.resolve(
               window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
             ).catch((error: unknown) => {
-              button.textContent = '⚠ Fichier introuvable'
+              button.textContent = t('apercu.fichierIntrouvable')
               button.title = error instanceof Error ? error.message : String(error)
             })
           }}
         >
-          Afficher le fichier
+          {t('apercu.afficherFichier')}
         </button>
       )}
     </footer>

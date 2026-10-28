@@ -9,6 +9,8 @@
  * elle ne se cache pas derrière une jolie phrase — un test l'exigeait déjà, et il avait raison.
  * On met seulement devant ce qu'il signifie.
  */
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
+
 export interface SortieCommande {
   exitCode?: number
   stdout?: string
@@ -31,10 +33,11 @@ export function libelleSortieCommande(sortie: SortieCommande): LibelleSortie | u
     const echecs = Number(synthese[1] ?? 0)
     const total = Number(synthese[3])
     if (echecs > 0) {
-      return { texte: `${echecs} test${echecs > 1 ? 's' : ''} en échec sur ${total} · exit ${sortie.exitCode}`, ok }
+      const cle = echecs > 1 ? 'preuve.tests-echec.n' : 'preuve.tests-echec.un'
+      return { texte: t(cle, { echecs, total, code: sortie.exitCode }), ok }
     }
-    if (ok) return { texte: `${total} tests verts · exit 0`, ok }
+    if (ok) return { texte: t('preuve.tests-verts', { total }), ok }
   }
 
-  return { texte: `${ok ? 'réussi' : 'échec'} · exit ${sortie.exitCode}`, ok }
+  return { texte: t(ok ? 'preuve.reussi' : 'preuve.echec', { code: sortie.exitCode }), ok }
 }

@@ -4,6 +4,7 @@ import {
   type WatchdogAppEvent,
   type WatchdogRule
 } from './watchdog-section-model'
+import { useTextesTaskManager, type CleTaskManager } from '../textes-ecrans/task-manager'
 
 /**
  * Saisie d'une règle de réveil.
@@ -11,18 +12,19 @@ import {
  * Les BORNES sont dans le formulaire principal, pas repliées derrière un « options avancées » :
  * ce sont elles qui décident si un agent capable d'écrire tout seul peut partir en boucle ou en
  * rafale. Les cacher reviendrait à faire signer un pouvoir sans montrer ses limites.
+ *
+ * Les libellés suivent la langue de l'interface (conv-1170). Les exemples de saisie (chemin de
+ * log, motif ERROR|FATAL) restent tels quels : des valeurs techniques, les mêmes dans les deux langues.
  */
 
-const APP_EVENTS: { value: WatchdogAppEvent; label: string }[] = [
-  { value: 'orchestration-red', label: 'Une orchestration se termine en ROUGE' },
-  { value: 'workflow-gate-failed', label: 'Le gate REFUSE la preuve d’un workflow' },
-  {
-    value: 'workflow-unverified',
-    label: 'Un workflow se dit RÉUSSI sans preuve de validation (le plus silencieux)'
-  },
-  { value: 'workflow-proof-lost', label: 'Une reprise PERD des preuves de son journal' },
-  { value: 'task-failed', label: 'Une tâche planifiée échoue' },
-  { value: 'task-missed', label: 'Une tâche planifiée est manquée' }
+// Des CLÉS de texte, traduites au rendu : le libellé suit la langue de l'interface (conv-1170).
+const APP_EVENTS: { value: WatchdogAppEvent; label: CleTaskManager }[] = [
+  { value: 'orchestration-red', label: 'regle.evenement.orchestrationRouge' },
+  { value: 'workflow-gate-failed', label: 'regle.evenement.gateRefuse' },
+  { value: 'workflow-unverified', label: 'regle.evenement.sansPreuve' },
+  { value: 'workflow-proof-lost', label: 'regle.evenement.preuvesPerdues' },
+  { value: 'task-failed', label: 'regle.evenement.tacheEchoue' },
+  { value: 'task-missed', label: 'regle.evenement.tacheManquee' }
 ]
 
 type Props = {
@@ -31,6 +33,7 @@ type Props = {
 }
 
 export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element {
+  const { t } = useTextesTaskManager()
   const setGuards = (patch: Partial<WatchdogRule['guards']>): void =>
     onChange({ ...rule, guards: { ...rule.guards, ...patch } })
 
@@ -41,7 +44,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
   return (
     <div className="watchdog-fields" data-testid="watchdog-rule-fields">
       <label className="task-manager-field task-manager-field-wide">
-        <span>Ce qui réveille l’agent</span>
+        <span>{t('regle.source')}</span>
         <select
           value={rule.source.kind}
           data-testid="watchdog-source-kind"
@@ -57,16 +60,16 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             })
           }
         >
-          <option value="file-match">Une ligne dans un fichier surveillé</option>
-          <option value="app-event">Un événement interne d’Autowin</option>
-          <option value="outlook-mail">Un mail reçu dans Outlook</option>
+          <option value="file-match">{t('regle.source.fichier')}</option>
+          <option value="app-event">{t('regle.source.evenement')}</option>
+          <option value="outlook-mail">{t('regle.source.mail')}</option>
         </select>
       </label>
 
       {source.kind === 'file-match' ? (
         <>
           <label className="task-manager-field task-manager-field-wide">
-            <span>Fichier à surveiller</span>
+            <span>{t('regle.fichier')}</span>
             <input
               type="text"
               value={source.path}
@@ -78,7 +81,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             />
           </label>
           <label className="task-manager-field">
-            <span>Déclenche si la ligne contient</span>
+            <span>{t('regle.motif')}</span>
             <input
               type="text"
               value={source.pattern}
@@ -100,12 +103,12 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                 })
               }
             />
-            <span>Respecter la casse</span>
+            <span>{t('regle.casse')}</span>
           </label>
         </>
       ) : source.kind === 'app-event' ? (
         <fieldset className="task-manager-field task-manager-field-wide watchdog-events">
-          <legend>Événements surveillés</legend>
+          <legend>{t('regle.evenements')}</legend>
           {APP_EVENTS.map((entry) => (
             <label key={entry.value} className="task-manager-switch">
               <input
@@ -125,19 +128,19 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                   })
                 }
               />
-              <span>{entry.label}</span>
+              <span>{t(entry.label)}</span>
             </label>
           ))}
           {source.events.length === 0 && (
             <p className="watchdog-fields-warning" role="status">
-              Aucun événement coché : cette règle ne se déclenchera jamais.
+              {t('regle.aucunEvenement')}
             </p>
           )}
         </fieldset>
       ) : (
         <>
           <label className="task-manager-field task-manager-field-wide">
-            <span>Canal écouté</span>
+            <span>{t('regle.canal')}</span>
             <select
               value={source.channel ?? 'both'}
               data-testid="watchdog-mail-channel"
@@ -152,13 +155,13 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                 })
               }}
             >
-              <option value="outlook">Outlook (mails)</option>
-              <option value="teams">Teams (messages perso)</option>
-              <option value="both">Outlook et Teams</option>
+              <option value="outlook">{t('regle.canal.outlook')}</option>
+              <option value="teams">{t('regle.canal.teams')}</option>
+              <option value="both">{t('regle.canal.lesDeux')}</option>
             </select>
           </label>
           <label className="task-manager-field task-manager-field-wide">
-            <span>Nouvelle personne qui écrit</span>
+            <span>{t('regle.nouveaux')}</span>
             <select
               value={source.newSenders ?? 'reply'}
               data-testid="watchdog-mail-new-senders"
@@ -171,18 +174,19 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                 })
               }}
             >
-              <option value="reply">L’agent lui répond (cochée)</option>
-              <option value="ignore">Ignorée jusqu’à ce que je la coche</option>
+              <option value="reply">{t('regle.nouveaux.repondre')}</option>
+              <option value="ignore">{t('regle.nouveaux.ignorer')}</option>
             </select>
           </label>
           <fieldset className="task-manager-field task-manager-field-wide watchdog-events watchdog-senders" data-testid="watchdog-senders">
-            <legend>Interlocuteurs — cochés = l’agent leur répond</legend>
+            <legend>{t('regle.interlocuteurs')}</legend>
             {Object.keys(source.senders ?? {}).length === 0 ? (
               <p className="watchdog-fields-note">
-                Aucun interlocuteur encore vu. Chaque nouvelle personne qui écrit apparaît ici,
-                {source.newSenders === 'ignore'
-                  ? ' décochée : coche-la pour que l’agent lui réponde.'
-                  : ' cochée par défaut : décoche-la pour que l’agent ne lui réponde plus.'}
+                {t(
+                  source.newSenders === 'ignore'
+                    ? 'regle.aucunInterlocuteur.decoches'
+                    : 'regle.aucunInterlocuteur.coches'
+                )}
               </p>
             ) : (
               Object.entries(source.senders ?? {})
@@ -219,7 +223,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       )}
 
       <label className="task-manager-field task-manager-field-wide">
-        <span>Ce que fait l’agent réveillé</span>
+        <span>{t('regle.action')}</span>
         <select
           value={rule.action ?? 'chat'}
           data-testid="watchdog-action"
@@ -230,21 +234,15 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             })
           }
         >
-          <option value="chat">Il analyse et rapporte (un tour de conversation)</option>
-          <option value="orchestration">
-            Il lance le pipeline complet — cadrage, correctif, gate à preuve et juge
-          </option>
+          <option value="chat">{t('regle.action.chat')}</option>
+          <option value="orchestration">{t('regle.action.orchestration')}</option>
         </select>
       </label>
 
-      <p className="watchdog-fields-note">
-        Ces bornes empêchent un réveil de partir en rafale, de dépasser son budget ou d’élargir une
-        cascade sans limite. Un agent réveillé peut travailler sans que personne regarde. Les appels
-        non chiffrés ont leur propre coupe-circuit : une absence de tarif ne vaut jamais coût nul.
-      </p>
+      <p className="watchdog-fields-note">{t('regle.bornes.note')}</p>
 
       <label className="task-manager-field">
-        <span>Réveils maximum par heure</span>
+        <span>{t('regle.parHeure')}</span>
         <input
           type="number"
           min={1}
@@ -258,7 +256,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field">
-        <span>Réveils maximum par 24 heures</span>
+        <span>{t('regle.parJour')}</span>
         <input
           type="number"
           min={1}
@@ -275,7 +273,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field">
-        <span>Coupe-circuit du coût connu sur 24 heures ($)</span>
+        <span>{t('regle.budget')}</span>
         <input
           type="number"
           min={0.01}
@@ -293,7 +291,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field">
-        <span>Appels non chiffrés maximum par 24 heures</span>
+        <span>{t('regle.nonChiffres')}</span>
         <input
           type="number"
           min={1}
@@ -310,7 +308,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field">
-        <span>Ignorer un signal identique pendant (secondes)</span>
+        <span>{t('regle.apaisement')}</span>
         <input
           type="number"
           min={0}
@@ -324,7 +322,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field">
-        <span>Réveils max issus d’une même cause</span>
+        <span>{t('regle.parCause')}</span>
         <input
           type="number"
           min={1}
@@ -336,24 +334,23 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <label className="task-manager-field task-manager-field-wide">
-        <span>Un réveil peut-il en déclencher un autre&nbsp;?</span>
+        <span>{t('regle.chaine')}</span>
         <select
           value={String(rule.guards.maxChainDepth)}
           data-testid="watchdog-chain-depth"
           onChange={(event) => setGuards({ maxChainDepth: Number(event.target.value) })}
         >
           {/* Le défaut refuse la chaîne : c'est le réglage sûr, et il doit être le premier. */}
-          <option value="0">Non — un réveil ne peut pas en provoquer un autre (conseillé)</option>
-          <option value="1">Oui, une fois</option>
-          <option value="2">Oui, jusqu’à deux niveaux</option>
-          <option value="3">Oui, jusqu’à trois niveaux</option>
+          <option value="0">{t('regle.chaine.non')}</option>
+          <option value="1">{t('regle.chaine.une')}</option>
+          <option value="2">{t('regle.chaine.deux')}</option>
+          <option value="3">{t('regle.chaine.trois')}</option>
         </select>
       </label>
 
       {rule.guards.maxChainDepth > 0 && (
         <p className="watchdog-fields-warning" role="status">
-          Une réparation qui modifie la source surveillée pourra se re-déclencher. À n’autoriser que
-          si tu sais pourquoi.
+          {t('regle.chaine.avertissement')}
         </p>
       )}
 
@@ -362,7 +359,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
         className="watchdog-fields-reset"
         onClick={() => onChange({ ...rule, guards: { ...DEFAULT_DRAFT_GUARDS } })}
       >
-        Rétablir les bornes conseillées
+        {t('regle.retablir')}
       </button>
     </div>
   )

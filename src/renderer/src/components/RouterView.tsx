@@ -8,6 +8,8 @@ import { libraryModels } from './model-library'
 import { shortModelLabel } from './model-display-label'
 import type { ClaudeAccountEntry } from '../../../preload/index.d'
 import { Spinner } from './Spinner'
+import { formaterDate } from '../langue'
+import { useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
 
 /**
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
@@ -25,13 +27,14 @@ interface ProviderStatus {
   lastCheckedAt?: number
 }
 
-const STATUS_LABEL: Record<ProviderDisplayStatus, string> = {
-  authenticated: 'Authentifié',
-  expired: 'Expiré · à reconnecter',
-  'installed-untested': 'Installé · validité non testée',
-  absent: 'Non connecté',
-  unknown: 'Indéterminé',
-  standby: 'En standby'
+// Les libellés vivent dans `textes-ecrans/settings.ts` (traduction anglaise, conv-1170).
+const STATUS_LABEL: Record<ProviderDisplayStatus, CleSettings> = {
+  authenticated: 'routeur.statut.authenticated',
+  expired: 'routeur.statut.expired',
+  'installed-untested': 'routeur.statut.installedUntested',
+  absent: 'routeur.statut.absent',
+  unknown: 'routeur.statut.unknown',
+  standby: 'routeur.statut.standby'
 }
 const PROVIDER_LABEL: Record<string, string> = {
   claude: 'Claude',
@@ -39,13 +42,11 @@ const PROVIDER_LABEL: Record<string, string> = {
   kimi: 'Kimi',
   gemini: 'Gemini'
 }
-const RE_AUTH_HINT: Record<string, string> = {
-  claude:
-    'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
-  codex:
-    'CLI Codex ou session OAuth indisponible — installe/reconnecte Codex, puis rouvre la page.',
-  kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».',
-  gemini: 'Session Gemini absente — reconnecte le compte Google, puis relance « Tester ».'
+const RE_AUTH_HINT: Record<string, CleSettings> = {
+  claude: 'routeur.reauth.claude',
+  codex: 'routeur.reauth.codex',
+  kimi: 'routeur.reauth.kimi',
+  gemini: 'routeur.reauth.gemini'
 }
 
 interface Binding {
@@ -61,6 +62,7 @@ interface PetitesTaches {
 }
 
 export function RouterView({ active = true }: { active?: boolean }): React.JSX.Element {
+  const { t } = useTextesSettings()
   const [models, setModels] = useState<RuntimeModel[]>([])
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
   const [binding, setBinding] = useState<Binding | null>(null)
@@ -339,15 +341,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   return (
     <section className="router-view">
       <ModuleHeader
-        eyebrow="Providers et modèles connectés"
-        title="Routeur"
-        description="Choisis les providers et modèles utilisés par chaque rôle."
+        eyebrow={t('routeur.eyebrow')}
+        title={t('routeur.titre')}
+        description={t('routeur.description')}
       />
 
       <section className="router-default">
         <header>
-          <h3>Modèle par défaut du chat</h3>
-          <small>le provider/modèle qui répond quand tu écris dans le Chat</small>
+          <h3>{t('routeur.defaut.titre')}</h3>
+          <small>{t('routeur.defaut.aide')}</small>
         </header>
         <OrchestratorModelSelector
           busy={false}
@@ -366,11 +368,8 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
       {(petitesTaches || petitesTachesError) && (
         <section className="router-default" data-testid="router-petites-taches">
           <header>
-            <h3>Modèle des petites tâches</h3>
-            <small>
-              choix du workflow · deux lectures · rangement du premier message · arbitrage d’une
-              dérive
-            </small>
+            <h3>{t('routeur.petites.titre')}</h3>
+            <small>{t('routeur.petites.aide')}</small>
           </header>
           <OrchestratorModelSelector
             busy={false}
@@ -385,12 +384,14 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
             // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
             // Non réglé = Haiku en effort low (`roles.ts`, conv-1097), plus le modèle du chat.
-            libelle={petitesTaches?.reglage ? 'Réglé' : 'Par défaut'}
-            aide="S’applique au prochain choix de workflow, aux deux lectures, au rangement du premier message et à l’arbitrage d’une dérive."
+            libelle={
+              petitesTaches?.reglage ? t('routeur.petites.regle') : t('routeur.petites.parDefaut')
+            }
+            aide={t('routeur.petites.application')}
           />
           {petitesTaches && !petitesTaches.reglage && (
             <p className="router-hint" data-testid="router-petites-taches-defaut">
-              Non réglé : Haiku par défaut, en effort low.
+              {t('routeur.petites.nonRegle')}
             </p>
           )}
           {petitesTaches?.reglage && (
@@ -400,7 +401,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
               disabled={petitesTachesPending}
               onClick={() => void changePetitesTaches(null)}
             >
-              Revenir au défaut (Haiku)
+              {t('routeur.petites.revenir')}
             </button>
           )}
         </section>
@@ -421,8 +422,8 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                 <strong>{PROVIDER_LABEL[provider] ?? provider}</strong>
                 <span className={`router-badge is-${st.status}`}>
                   {st.lastCheckedAt
-                    ? `Dernier test : ${STATUS_LABEL[st.status]}`
-                    : STATUS_LABEL[st.status]}
+                    ? t('routeur.dernierTest', { statut: t(STATUS_LABEL[st.status]) })
+                    : t(STATUS_LABEL[st.status])}
                 </span>
                 <span className="router-actions">
                   {st.status !== 'standby' && st.testable && (
@@ -431,7 +432,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       onClick={() => void test(provider)}
                       disabled={testing[provider]}
                     >
-                      {testing[provider] ? 'Test…' : 'Tester'}
+                      {testing[provider] ? t('routeur.test') : t('routeur.tester')}
                     </button>
                   )}
                   {st.status !== 'authenticated' && st.status !== 'standby' && (
@@ -440,7 +441,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       className="router-reconnect"
                       onClick={() => void reconnect(provider)}
                     >
-                      Se reconnecter
+                      {t('routeur.reconnecter')}
                     </button>
                   )}
                   <button
@@ -455,10 +456,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                     }
                   >
                     {modePending[provider]
-                      ? 'Enregistrement…'
+                      ? t('routeur.enregistrement')
                       : st.status === 'standby'
-                        ? 'Réactiver'
-                        : 'Mettre en standby'}
+                        ? t('routeur.reactiver')
+                        : t('routeur.mettreEnStandby')}
                   </button>
                 </span>
               </header>
@@ -468,12 +469,12 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                   role="alert"
                   data-testid={`router-provider-error-${provider}`}
                 >
-                  Action impossible : {providerError[provider]}
+                  {t('routeur.actionImpossible', { raison: providerError[provider] })}
                 </p>
               )}
               {provider === 'claude' && (
                 <div className="router-accounts" data-testid="claude-accounts">
-                  <span className="router-accounts-title">Comptes</span>
+                  <span className="router-accounts-title">{t('routeur.comptes')}</span>
                   <div className="router-accounts-list">
                     {accounts.map((account) => (
                       <span key={account.id} className="router-account">
@@ -494,7 +495,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                           <button
                             type="button"
                             className="router-account-remove"
-                            aria-label={`Retirer ${account.displayName}`}
+                            aria-label={t('routeur.retirer', { nom: account.displayName })}
                             disabled={accountBusy}
                             onClick={() =>
                               void runAccountAction(() =>
@@ -513,7 +514,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       disabled={accountBusy}
                       onClick={() => void runAccountAction(() => window.api.claudeAccountAdd())}
                     >
-                      + Ajouter un compte
+                      {t('routeur.ajouterCompte')}
                     </button>
                   </div>
                   {accountError && (
@@ -522,31 +523,23 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       role="alert"
                       data-testid="claude-account-error"
                     >
-                      Action impossible : {accountError}
+                      {t('routeur.actionImpossible', { raison: accountError })}
                     </p>
                   )}
-                  <p className="router-hint">
-                    Chaque compte garde sa propre session : basculer ne redemande pas de connexion.
-                    Ajouter un compte ouvre un terminal de login dédié.
-                  </p>
+                  <p className="router-hint">{t('routeur.comptes.aide')}</p>
                 </div>
               )}
               {st.status === 'standby' ? (
-                <p className="router-hint">
-                  Aucun test ni login automatique. Les modèles restent disponibles dans le
-                  catalogue.
-                </p>
+                <p className="router-hint">{t('routeur.standby.aide')}</p>
               ) : launched[provider] ? (
-                <p className="router-hint">
-                  Login lancé dans un terminal — termine l’authentification, puis clique « Tester ».
-                </p>
+                <p className="router-hint">{t('routeur.loginLance')}</p>
               ) : (
                 (st.status === 'expired' || st.status === 'absent') &&
-                RE_AUTH_HINT[provider] && <p className="router-hint">{RE_AUTH_HINT[provider]}</p>
+                RE_AUTH_HINT[provider] && <p className="router-hint">{t(RE_AUTH_HINT[provider])}</p>
               )}
               {st.status !== 'standby' && st.lastCheckedAt && (
                 <p className="router-hint">
-                  Dernier test réel : {new Date(st.lastCheckedAt).toLocaleString('fr-FR')}
+                  {t('routeur.dernierTestReel', { date: formaterDate(st.lastCheckedAt) })}
                 </p>
               )}
               {list.length > 0 ? (
@@ -561,16 +554,16 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                   ))}
                 </ul>
               ) : (
-                <p className="router-empty">Aucun modèle listé pour ce provider.</p>
+                <p className="router-empty">{t('routeur.aucunModele')}</p>
               )}
             </section>
           )
         })}
         {catalogError && (
           <div className="router-catalog-error" role="alert" data-testid="router-catalog-error">
-            <p>Chargement du catalogue impossible : {catalogError}</p>
+            <p>{t('routeur.catalogueErreur', { raison: catalogError })}</p>
             <button type="button" onClick={() => void reloadCatalog()}>
-              Réessayer
+              {t('routeur.reessayer')}
             </button>
           </div>
         )}
@@ -578,11 +571,11 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             catalogue réellement vide ou d'une vue cassée. */}
         {!catalogError && !loaded && (
           <p className="router-empty" role="status" aria-busy="true" data-testid="router-loading">
-            <Spinner /> Chargement des providers…
+            <Spinner /> {t('routeur.chargement')}
           </p>
         )}
         {!catalogError && loaded && providers.length === 0 && (
-          <p className="router-empty">Aucun provider détecté.</p>
+          <p className="router-empty">{t('routeur.aucunProvider')}</p>
         )}
       </div>
     </section>

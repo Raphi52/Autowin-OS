@@ -7,6 +7,8 @@ import type { AgentGantt } from './observatory-agent-gantt'
 import { RunBilanCard } from './RunBilanCard'
 import { bilanDepuisCloture, lireVerdictDuJuge, type VerdictDuJuge } from './run-bilan'
 import { libelleRun } from './run-label'
+import { riche } from '../textes'
+import { useTextesChatExecution } from '../textes-ecrans/chat-execution'
 import './RunBilanCard.css'
 import './BilanDeCloture.css'
 
@@ -49,6 +51,8 @@ export function BilanDeCloture({
    */
   onVoirDansObservatory?: () => void
 }): React.JSX.Element {
+  // Lu ici aussi : le bilan (`bilanDepuisCloture`) se recalcule dans la langue courante.
+  const { t } = useTextesChatExecution()
   const dernierVerdictId = verdictEventIds?.at(-1)
   const verdict = useDernierVerdict(conversationId, dernierVerdictId)
   const runMd = closure.runPath
@@ -80,17 +84,12 @@ export function BilanDeCloture({
       <div className="bilan-cloture__bloc" data-bilan-raisons>
         <span className="bilan-cloture__kicker">
           {ouvert
-            ? 'Pas encore de verdict'
+            ? t('cloture.sans-verdict')
             : closure.status === 'green'
-              ? 'Pourquoi accepté'
-              : 'Pourquoi refusé'}
+              ? t('cloture.pourquoi-accepte')
+              : t('cloture.pourquoi-refuse')}
         </span>
-        {ouvert && (
-          <p className="bilan-cloture__note">
-            Le run <b>n’est pas encore clos</b> : ni durée ni coût ne sont mesurés, et aucun verdict
-            final n’est écrit.
-          </p>
-        )}
+        {ouvert && <p className="bilan-cloture__note">{riche(t('cloture.pas-clos'), 'b')}</p>}
         {motifs.length > 0 && (
           <ul className="bilan-cloture__motifs" data-bilan-motifs>
             {motifs.map((motif, index) => (
@@ -102,8 +101,8 @@ export function BilanDeCloture({
         {!ouvert && motifs.length === 0 && !dernierVerdictId && (
           <p className="bilan-cloture__note">
             {closure.status === 'green'
-              ? 'Le contrôle final n’a relevé aucun motif de refus, et aucun verdict de juge n’est écrit pour ce run.'
-              : 'Aucun motif n’est écrit dans la trace pour ce refus : le RUN.md peut en dire plus.'}
+              ? t('cloture.aucun-motif-vert')
+              : t('cloture.aucun-motif-rouge')}
           </p>
         )}
       </div>
@@ -118,19 +117,16 @@ export function BilanDeCloture({
             onClick={() => onOuvrirRunMd(runMd)}
             title={runMd.path}
           >
-            Ouvrir le RUN.md de ce run
+            {t('cloture.ouvrir-runmd')}
           </button>
         ) : closure.runPath ? (
           <p className="bilan-cloture__note">
             <code className="bilan-cloture__chemin">{closure.runPath}</code>
             <br />
-            Ce fichier n’est pas dans la liste des runs de cette conversation (déplacé ou supprimé).
+            {t('cloture.runmd-hors-liste')}
           </p>
         ) : (
-          <p className="bilan-cloture__note">
-            Ce run a été clos <b>avant</b> que la trace garde le chemin de son RUN.md : il se
-            retrouve par son sujet dans l’onglet Runs.
-          </p>
+          <p className="bilan-cloture__note">{riche(t('cloture.runmd-avant'), 'b')}</p>
         )}
       </div>
     </section>
@@ -141,7 +137,8 @@ type EtatVerdict =
   | { etat: 'aucun' }
   | { etat: 'chargement' }
   | { etat: 'lu'; verdict: VerdictDuJuge }
-  | { etat: 'illisible'; raison: string }
+  /** `raison` absente : la réponse du juge n'a aucune ligne de verdict (dit à l'affichage). */
+  | { etat: 'illisible'; raison?: string }
 
 function VerdictDuJugeAffiche({
   etat,
@@ -150,18 +147,21 @@ function VerdictDuJugeAffiche({
   etat: EtatVerdict
   ouvert: boolean
 }): React.JSX.Element | null {
+  const { t } = useTextesChatExecution()
   if (etat.etat === 'aucun') return null
   if (etat.etat === 'chargement') {
     return (
       <p className="bilan-cloture__note">
-        <Spinner size={12} /> Lecture du verdict du juge…
+        <Spinner size={12} /> {t('cloture.lecture-verdict')}
       </p>
     )
   }
   if (etat.etat === 'illisible') {
     return (
       <p className="bilan-cloture__note" data-bilan-juge="illisible">
-        Verdict du juge illisible · {etat.raison}
+        {t('cloture.verdict-illisible', {
+          raison: etat.raison ?? t('cloture.verdict-sans-ligne')
+        })}
       </p>
     )
   }
@@ -170,7 +170,7 @@ function VerdictDuJugeAffiche({
     <div className="bilan-cloture__juge" data-bilan-juge={verdict.valide ? 'valide' : 'defaut'}>
       <p className="bilan-cloture__conclusion">
         <span className="bilan-cloture__qui">
-          {ouvert ? 'Dernier passage du juge' : 'Verdict final du juge'}
+          {ouvert ? t('cloture.dernier-passage') : t('cloture.verdict-final')}
         </span>{' '}
         <b>{verdict.conclusion}</b>
         {verdict.score !== undefined && (
@@ -216,9 +216,7 @@ function useDernierVerdict(
         if (vivant)
           setLu({
             cle,
-            etat: verdict
-              ? { etat: 'lu', verdict }
-              : { etat: 'illisible', raison: 'aucune ligne VALIDE ou DEFAUT dans sa réponse' }
+            etat: verdict ? { etat: 'lu', verdict } : { etat: 'illisible' }
           })
       })
       .catch((raison: unknown) => {
@@ -263,11 +261,12 @@ function RejeuDuRun({
   gantt: AgentGantt
   onVoirDansObservatory?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   return (
     <div className="bilan-cloture__bloc bilan-cloture__rejeu" data-bilan-rejeu>
       <DerouleRejouable
         gantt={gantt}
-        libelle="Rejouer ce run"
+        libelle={t('cloture.rejouer')}
         onSelect={() => undefined}
         actions={
           onVoirDansObservatory && (
@@ -275,10 +274,10 @@ function RejeuDuRun({
               type="button"
               className="deroule-rejouable__bouton"
               data-testid="run-voir-observatory"
-              title="Ouvrir ce tour dans l'Observatory : barres cliquables et liste des événements"
+              title={t('cloture.observatory.titre')}
               onClick={onVoirDansObservatory}
             >
-              Version complète dans l&apos;Observatory ↗
+              {t('cloture.observatory')}
             </button>
           )
         }

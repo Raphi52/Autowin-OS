@@ -192,24 +192,33 @@ export function cleDuLancement(source: string, reponse?: string): string {
  * seule). Une capacité que la consigne ne nomme pas reste morte : sans ce paragraphe, aucun agent
  * n'écrirait de bloc ```aw-fils. L'exemple est lu par la carte dans le test du contrat
  * (`chat-pilotage-prompt.lancer-en-fils.test.ts`), donc il ne peut pas dériver du format.
+ *
+ * PLUS D'ÉTAPE DE VALIDATION (conv-1163, 2026-10-27, sur la capture de la carte « 2 tâches dans ton
+ * message » : « je ne veux plu avoir cette etape de validation »). Depuis conv-1147, deux tâches
+ * indépendantes arrêtaient le tour sur la carte, et rien ne partait avant un clic ; quand les tâches
+ * partageaient un fichier, la carte n'offrait même qu'un bouton (« Tout ici »). Désormais l'agent les
+ * fait toutes, à la suite, dans le tour — règle d'Autonomie (4) de la constitution — et la carte ne
+ * sert plus que si l'utilisateur demande lui-même de répartir le travail en fils.
  */
 export const CONSIGNE_LANCER_EN_FILS =
   `PLUSIEURS TÂCHES DANS UN MESSAGE — au moment où le message de l'utilisateur demande au moins DEUX ` +
-  `tâches d'ACTION indépendantes (chacune modifie quelque chose, aucune ne dépend du résultat d'une ` +
-  `autre), ne commence AUCUNE d'elles. Une recherche rapide (le texte visible, un nom de fichier) ` +
-  `estime les fichiers de chacune. Rends ensuite, après une phrase, un bloc ` +
+  `tâches d'ACTION, fais-les TOUTES dans ce tour, l'une après l'autre, sans carte ni demande ` +
+  `d'accord : l'utilisateur a refusé cette étape de validation. Le bloc ` +
+  '```' +
+  `${FORME_FILS} ne se rend QUE si l'utilisateur demande LUI-MÊME de répartir le travail en plusieurs ` +
+  `fils (« répartis en fils », « lance-les en parallèle ») : une recherche rapide (le texte visible, ` +
+  `un nom de fichier) estime alors les fichiers de chaque tâche, et tu rends, après une phrase, un bloc ` +
   '```' +
   `${FORME_FILS} {"taches":[{"titre":"Titre des fiches","demande":"Corrige le titre de la vue des ` +
   `fiches","fichiers":["src/renderer/src/components/TicketsView.tsx"]},{"titre":"Tri par date",` +
   `"demande":"Ajoute un tri par date dans le rail de l'Observatoire","fichiers":["src/renderer/src/` +
   `components/ObservatoryRail.tsx"]}]} — et ton tour s'arrête là. L'app dessine une carte. « Lancer ` +
   `en N fils » ouvre une branche de ce fil par groupe, et les tâches qui partagent un fichier passent ` +
-  `l'une après l'autre dans le même fil. « Tout ici » les fait à la suite dans ce fil. Chaque ` +
+  `l'une après l'autre dans le même fil. Chaque ` +
   `\`demande\` est autoportée, comme si l'utilisateur la tapait seule, et reprend en tête la skill ` +
   `qu'il nommait (« /build … »). Les pièces jointes du message suivent chaque fil : n'y recopie ni ` +
   `leur contenu ni leur chemin temporaire (effacé à la fin de ton tour), nomme-les par leur nom ` +
   `(« le fichier joint journal.log »). \`fichiers\` liste ceux que la tâche devrait modifier ; laisse-le ` +
-  `vide si tu ne sais pas. AUCUN bloc pour : une seule action ; des questions seules, ou une action ` +
-  `avec des questions (réponds aux questions dans le même tour) ; des étapes liées (« fais X puis ` +
-  `teste-le », quand B dépend du résultat de A) ; un message qui demande lui-même de tout faire ici ` +
-  `ou à la suite.`
+  `vide si tu ne sais pas. Jamais de bloc de ta propre initiative : ni pour plusieurs tâches, ni pour ` +
+  `des étapes liées (« fais X puis teste-le », quand B dépend du résultat de A), ni pour des ` +
+  `questions seules.`

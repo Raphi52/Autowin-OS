@@ -50,7 +50,8 @@ export function carteDesProjetsPartages(
     'sans-preuve': 0
   }
   for (const p of retenus)
-    for (const statut of Object.keys(comptes) as StatutDemande[]) comptes[statut] += p.comptes[statut]
+    for (const statut of Object.keys(comptes) as StatutDemande[])
+      comptes[statut] += p.comptes[statut]
   return {
     ...carte,
     projets: retenus,

@@ -15,17 +15,22 @@ import type {
   CelluleDonnee,
   StatutEtape
 } from '../../../shared/blocs-donnees'
+import {
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
 import { useAjusterALaLargeur } from './ajuster-a-la-largeur'
 import './BlocDonnees.css'
 
 const classeDuTon = (cellule: CelluleDonnee): string | undefined =>
   cellule.ton ? `md-donnees__ton--${cellule.ton}` : undefined
 
-const STATUTS: Record<StatutEtape, { glyphe: string; libelle: string }> = {
-  fait: { glyphe: '✓', libelle: 'fait' },
-  'en-cours': { glyphe: '●', libelle: 'en cours' },
-  'a-faire': { glyphe: '○', libelle: 'à faire' },
-  echec: { glyphe: '✕', libelle: 'échec' }
+// Le libellé est une clé de la table de textes, traduite au rendu (conv-1170).
+const STATUTS: Record<StatutEtape, { glyphe: string; libelle: CleArtefactsEtBandeaux }> = {
+  fait: { glyphe: '✓', libelle: 'donnees.statut.fait' },
+  'en-cours': { glyphe: '●', libelle: 'donnees.statut.enCours' },
+  'a-faire': { glyphe: '○', libelle: 'donnees.statut.aFaire' },
+  echec: { glyphe: '✕', libelle: 'donnees.statut.echec' }
 }
 
 function Tableau({
@@ -72,6 +77,7 @@ function Comparaison({
 }: {
   donnees: Extract<Donnees, { forme: 'aw-comparaison' }>
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   return (
     <div className="md-donnees__options">
       {donnees.options.map((option, rang) => (
@@ -81,7 +87,9 @@ function Comparaison({
           data-testid="donnees-option"
           data-recommande={option.recommande ? 'oui' : undefined}
         >
-          {option.recommande ? <div className="md-donnees__recommande">Recommandé</div> : null}
+          {option.recommande ? (
+            <div className="md-donnees__recommande">{t('donnees.recommande')}</div>
+          ) : null}
           <div className="md-donnees__nom">{option.nom}</div>
           {option.points.length ? (
             <ul className="md-donnees__points">
@@ -110,6 +118,7 @@ function Etapes({
 }: {
   donnees: Extract<Donnees, { forme: 'aw-etapes' }>
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   return (
     <ol className="md-donnees__etapes">
       {donnees.etapes.map((etape, rang) => {
@@ -120,8 +129,8 @@ function Etapes({
             <span
               className="md-donnees__statut"
               role="img"
-              aria-label={STATUTS[statut].libelle}
-              title={STATUTS[statut].libelle}
+              aria-label={t(STATUTS[statut].libelle)}
+              title={t(STATUTS[statut].libelle)}
             >
               {STATUTS[statut].glyphe}
             </span>

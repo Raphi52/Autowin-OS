@@ -54,7 +54,11 @@ export interface EntreeMemoireScout {
    * run (`traitePar`), c'est la mesure qui dira si le seuil de la correction directe est le bon.
    */
   voie?: 'directe' | 'complete'
-  /** « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2, conv-1033). */
+  /**
+   * « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2, conv-1033). Le
+   * bouton est retiré (conv-1198) : plus rien ne l'écrit, mais les motifs déjà notés restent lus par
+   * le bilan.
+   */
   motif?: MotifRefus
 }
 
@@ -320,35 +324,6 @@ function dernierTableauDeChaqueRun(
     if (connue === undefined || e.vuLe > connue) derniereVersion.set(e.run, e.vuLe)
   }
   return entrees.filter((e) => e.depot === depot && e.vuLe === derniereVersion.get(e.run))
-}
-
-/**
- * Le motif d'une piste laissée (« Pourquoi pas ? », piste 2 de conv-1033), sur le DERNIER scout du
- * dépôt qui la proposait — toutes ses versions, comme la sélection. Le panneau ne connaît ni le run
- * ni le dépôt : le titre suffit, comme pour le message de sélection. Faux si aucune piste ne répond.
- */
-export function noterMotifScout(entree: {
-  depot: string
-  titre: string
-  motif: MotifRefus
-  chemin?: string
-}): boolean {
-  const chemin = entree.chemin ?? cheminMemoireScout()
-  const depot = cleDepot(entree.depot)
-  const memoire = lireMemoireScout(chemin)
-  const source = memoire.entrees
-    .filter((e) => e.depot === depot && memePiste(entree.titre, e.titre))
-    .sort((a, b) => b.vuLe.localeCompare(a.vuLe))[0]
-  if (!source) return false
-  ecrireMemoireScout(
-    chemin,
-    memoire.entrees.map((e) =>
-      e.depot === depot && e.run === source.run && memePiste(entree.titre, e.titre)
-        ? { ...e, motif: entree.motif }
-        : e
-    )
-  )
-  return true
 }
 
 /**

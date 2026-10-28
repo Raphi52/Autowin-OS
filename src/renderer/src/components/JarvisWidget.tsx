@@ -62,6 +62,8 @@ import {
   type PhraseDite,
   type SommaireDirect
 } from './jarvis-voice'
+import { langueCourante } from '../langue'
+import { traduireAccueil, useTextesAccueil } from '../textes-ecrans/accueil'
 
 /**
  * Le widget d'accueil pour PARLER a Jarvis, et pour voir ce qui se passe pendant qu'on lui parle.
@@ -188,6 +190,7 @@ function useNomJarvis(): { nom: string; nomRef: React.MutableRefObject<string> }
 }
 
 export function JarvisWidget(): React.JSX.Element {
+  const { t } = useTextesAccueil()
   const { nom: nomJarvis, nomRef } = useNomJarvis()
   /**
    * LES REGLAGES DE L'ASSISTANT, DANS SON PROPRE WIDGET.
@@ -234,6 +237,7 @@ export function JarvisWidget(): React.JSX.Element {
   }, [])
   const essayerVoix = useCallback((): void => {
     oublierVoixChoisie()
+    // RESTE EN FRANÇAIS (conv-1170) : c'est la voix française choisie d'office qui le prononce.
     void parler('Bonjour, je suis a votre ecoute.')
   }, [])
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
@@ -364,7 +368,7 @@ export function JarvisWidget(): React.JSX.Element {
     async (texte: string) => {
       const api = apiJarvis()
       if (!api?.conversationsCreate) {
-        setErreur('Passerelle des conversations indisponible')
+        setErreur(traduireAccueil('jarvis.passerelleConversations', langueCourante()))
         return
       }
       setEnvoi(texte)
@@ -379,20 +383,24 @@ export function JarvisWidget(): React.JSX.Element {
         })
         const cible = creee?.id
         if (!cible) {
-          setErreur(`Aucune conversation ${nomRef.current}`)
+          setErreur(
+            traduireAccueil('jarvis.aucuneConversation', langueCourante(), {
+              nom: nomRef.current
+            })
+          )
           dire({ genre: 'erreur' })
           return
         }
         // `pilotChat` ECRIT le message de l'utilisateur (`beginTurn`) et lance le tour : c'est le
         // seul canal d'ecriture. Un second canal en amont, c'etait le message en double.
         if (!api.pilotChat) {
-          setErreur('Passerelle du pilote indisponible : ordre non execute')
+          setErreur(traduireAccueil('jarvis.passerellePilote', langueCourante()))
           dire({ genre: 'erreur' })
           return
         }
         const resultat = await api.pilotChat([{ role: 'user', content: texte }], cible)
         if (!resultat?.ok && !resultat?.cancelled) {
-          setErreur(resultat?.error ?? 'Ordre non execute')
+          setErreur(resultat?.error ?? traduireAccueil('jarvis.ordreNonExecute', langueCourante()))
           dire({ genre: 'erreur' })
           return
         }
@@ -486,9 +494,7 @@ export function JarvisWidget(): React.JSX.Element {
       )
       if (!Fabrique) {
         actifRef.current = false
-        setErreur(
-          'Aucun moteur de reconnaissance disponible : installez la reconnaissance hors ligne ci-dessous.'
-        )
+        setErreur(traduireAccueil('jarvis.aucunMoteur', langueCourante()))
         setCodeErreur(null)
         return
       }
@@ -686,7 +692,10 @@ export function JarvisWidget(): React.JSX.Element {
       setPeripheriques(
         tous
           .filter((d) => d.kind === 'audioinput')
-          .map((d, index) => ({ id: d.deviceId, nom: d.label || `Micro ${index + 1}` }))
+          .map((d, index) => ({
+            id: d.deviceId,
+            nom: d.label || traduireAccueil('micro.numero', langueCourante(), { n: index + 1 })
+          }))
       )
     } catch {
       // Pas d'énumération possible (permission refusée, environnement sans micro) : le micro par
@@ -720,7 +729,7 @@ export function JarvisWidget(): React.JSX.Element {
     const api = apiJarvis()
     if (!api?.ouvrirReglagesMicro) return
     void api.ouvrirReglagesMicro().then((r) => {
-      if (!r?.ouvert) setErreur('Les réglages Windows ne s’ouvrent que sous Windows.')
+      if (!r?.ouvert) setErreur(traduireAccueil('jarvis.reglagesWindows', langueCourante()))
     })
   }, [])
 
@@ -825,12 +834,12 @@ export function JarvisWidget(): React.JSX.Element {
           nom={nomJarvis}
           etat={
             !ecoute.active
-              ? 'hors ligne'
+              ? t('jarvis.etatHorsLigne')
               : enregistre
-                ? 'enregistre'
+                ? t('jarvis.etatEnregistre')
                 : ecoute.eveille
-                  ? 'a l’ecoute'
-                  : 'en veille'
+                  ? t('jarvis.etatEcoute')
+                  : t('jarvis.etatVeille')
           }
         />
         <div className="jarvis__barre">
@@ -841,7 +850,7 @@ export function JarvisWidget(): React.JSX.Element {
             aria-pressed={commande}
             onClick={() => basculer('jarvis')}
           >
-            {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
+            {commande ? t('jarvis.couper') : t('jarvis.activer')}
           </button>
           {/*
             LES DEUX SOURDINES, en petit, a cote de l'interrupteur : couper le micro (on n'est plus
@@ -852,8 +861,8 @@ export function JarvisWidget(): React.JSX.Element {
             data-testid="jarvis-mute-micro"
             className="jarvis__mute"
             aria-pressed={microCoupe}
-            title={microCoupe ? 'Micro verrouillé — déverrouiller' : 'Verrouiller le micro'}
-            aria-label={microCoupe ? 'Micro verrouillé — déverrouiller' : 'Verrouiller le micro'}
+            title={microCoupe ? t('jarvis.microVerrouille') : t('jarvis.verrouillerMicro')}
+            aria-label={microCoupe ? t('jarvis.microVerrouille') : t('jarvis.verrouillerMicro')}
             onClick={basculerMicro}
           >
             <IconeMicro coupe={microCoupe} />
@@ -863,8 +872,8 @@ export function JarvisWidget(): React.JSX.Element {
             data-testid="jarvis-mute-son"
             className="jarvis__mute"
             aria-pressed={sonCoupe}
-            title={sonCoupe ? 'Voix coupée — la rétablir' : 'Couper la voix'}
-            aria-label={sonCoupe ? 'Voix coupée — la rétablir' : 'Couper la voix'}
+            title={sonCoupe ? t('jarvis.voixCoupee') : t('jarvis.couperVoix')}
+            aria-label={sonCoupe ? t('jarvis.voixCoupee') : t('jarvis.couperVoix')}
             onClick={basculerSon}
           >
             <IconeSon coupe={sonCoupe} />
@@ -876,12 +885,12 @@ export function JarvisWidget(): React.JSX.Element {
         */}
           <span className="jarvis__aide">
             {!ecoute.active
-              ? 'Micro coupé'
+              ? t('micro.coupe')
               : enregistre
-                ? `⏺ Enregistrement du transcript — ${nomJarvis} ne répond pas`
+                ? t('jarvis.enregistrement', { nom: nomJarvis })
                 : ecoute.eveille
-                  ? '🔊 Je vous écoute — dites votre demande'
-                  : `Dites « ${nomJarvis} » : un bip vous répondra`}
+                  ? t('jarvis.jeVousEcoute')
+                  : t('jarvis.dites', { nom: nomJarvis })}
           </span>
         </div>
       </div>
@@ -896,7 +905,7 @@ export function JarvisWidget(): React.JSX.Element {
               className="jarvis__whisper-bouton"
               onClick={ouvrirReglagesMicro}
             >
-              Autoriser le micro dans Windows
+              {t('jarvis.autoriserMicro')}
             </button>
           ) : null}
           {codeErreur !== null && erreurRattrapableParMicro(codeErreur) ? (
@@ -906,7 +915,7 @@ export function JarvisWidget(): React.JSX.Element {
               className="jarvis__whisper-bouton"
               onClick={reessayerMicro}
             >
-              Réessayer le micro
+              {t('jarvis.reessayerMicro')}
             </button>
           ) : null}
         </div>
@@ -927,21 +936,20 @@ export function JarvisWidget(): React.JSX.Element {
             onClick={() => void installerWhisper()}
           >
             {whisper.installation?.enCours
-              ? `Installation ${whisper.installation.etape}${
-                  whisper.installation.fraction !== null
-                    ? ` — ${Math.round(whisper.installation.fraction * 100)} %`
-                    : '…'
-                }`
-              : `Installer l’écoute hors ligne (≈ ${whisper.megaoctets} Mo, une seule fois)`}
+              ? whisper.installation.fraction !== null
+                ? t('jarvis.installationPourcent', {
+                    etape: whisper.installation.etape,
+                    pourcent: Math.round(whisper.installation.fraction * 100)
+                  })
+                : t('jarvis.installationAttente', { etape: whisper.installation.etape })
+              : t('jarvis.installerWhisper', { mo: whisper.megaoctets })}
           </button>
-          <span className="jarvis__aide">
-            Reconnaissance locale (whisper.cpp) : téléchargée une fois, puis plus aucun réseau.
-          </span>
+          <span className="jarvis__aide">{t('jarvis.whisperAide')}</span>
         </div>
       ) : null}
       {whisper?.installe ? (
         <p className="jarvis__aide" data-testid="jarvis-moteur">
-          Écoute locale prête — hors ligne
+          {t('jarvis.whisperPret')}
         </p>
       ) : null}
 
@@ -960,22 +968,20 @@ export function JarvisWidget(): React.JSX.Element {
             onClick={() => void installerPiper()}
           >
             {piper.installation?.enCours
-              ? `Installation de la voix ${piper.installation.etape}${
-                  piper.installation.fraction !== null
-                    ? ` — ${Math.round(piper.installation.fraction * 100)} %`
-                    : '…'
-                }`
-              : `Installer une vraie voix française (≈ ${piper.megaoctets} Mo, une seule fois)`}
+              ? piper.installation.fraction !== null
+                ? t('jarvis.installationVoixPourcent', {
+                    etape: piper.installation.etape,
+                    pourcent: Math.round(piper.installation.fraction * 100)
+                  })
+                : t('jarvis.installationVoixAttente', { etape: piper.installation.etape })
+              : t('jarvis.installerPiper', { mo: piper.megaoctets })}
           </button>
-          <span className="jarvis__aide">
-            Voix neuronale (Piper) : téléchargée une fois, puis plus aucun réseau. Sans elle, Jarvis
-            garde la voix de Windows.
-          </span>
+          <span className="jarvis__aide">{t('jarvis.piperAide')}</span>
         </div>
       ) : null}
       {piper?.installe ? (
         <p className="jarvis__aide" data-testid="jarvis-voix-piper">
-          Voix française installée — hors ligne
+          {t('jarvis.piperPret')}
         </p>
       ) : null}
 
@@ -999,16 +1005,16 @@ export function JarvisWidget(): React.JSX.Element {
             />
           </div>
           <span className="jarvis__aide" data-testid="jarvis-verdict" data-verdict={verdictAffiche}>
-            {microCoupe ? 'Micro verrouillé — rien n’est écouté' : MESSAGE_VERDICT[verdictAffiche]}
+            {microCoupe ? t('jarvis.microVerrouilleRien') : MESSAGE_VERDICT[verdictAffiche]}
           </span>
         </div>
       ) : null}
 
       <details className="jarvis__audio" data-testid="jarvis-reglages">
-        <summary>Réglages de l’assistant</summary>
+        <summary>{t('jarvis.reglagesAssistant')}</summary>
         {/* Le nom saisi ici EST le titre de la tuile : une seule source, jamais deux. */}
         <label className="jarvis__audio-champ">
-          <span>Son nom</span>
+          <span>{t('jarvis.sonNom')}</span>
           <input
             type="text"
             value={saisieNom}
@@ -1020,19 +1026,19 @@ export function JarvisWidget(): React.JSX.Element {
         </label>
         {/* La voix : celle du poste. Vide = l'application choisit (le francais d'abord). */}
         <label className="jarvis__audio-champ">
-          <span>Sa voix</span>
+          <span>{t('jarvis.saVoix')}</span>
           <select
             value={reglageVoix.voixURI}
             data-testid="jarvis-voix"
             onChange={(event) => changerReglageVoix({ voixURI: event.target.value })}
           >
-            <option value="">Voix automatique (français si disponible)</option>
+            <option value="">{t('jarvis.voixAuto')}</option>
             {/*
               LA VOIX NEURONALE, nommée dans la liste. Elle ne vient pas de `speechSynthesis` :
               sans cette entrée, l'utilisateur l'installait puis ne la trouvait NULLE PART.
             */}
             {piper?.installe ? (
-              <option value={VOIX_PIPER_URI}>Voix française neuronale (Piper) — hors ligne</option>
+              <option value={VOIX_PIPER_URI}>{t('jarvis.voixPiper')}</option>
             ) : null}
             {voixDisponibles.map((voix) => (
               <option key={voix.voiceURI || voix.name} value={voix.voiceURI || voix.name}>
@@ -1043,12 +1049,11 @@ export function JarvisWidget(): React.JSX.Element {
         </label>
         {voixDisponibles.length === 0 ? (
           <span className="jarvis__aide" data-testid="jarvis-voix-vide">
-            Aucune voix installée sur ce poste : l’assistant écoute mais ne répondra pas à voix
-            haute.
+            {t('jarvis.aucuneVoix')}
           </span>
         ) : null}
         <label className="jarvis__audio-champ">
-          <span>Débit — {reglageVoix.debit.toFixed(2)}×</span>
+          <span>{t('jarvis.debit', { valeur: reglageVoix.debit.toFixed(2) })}</span>
           <input
             type="range"
             min={DEBIT_MIN}
@@ -1060,7 +1065,7 @@ export function JarvisWidget(): React.JSX.Element {
           />
         </label>
         <label className="jarvis__audio-champ">
-          <span>Hauteur — {reglageVoix.hauteur.toFixed(2)}×</span>
+          <span>{t('jarvis.hauteur', { valeur: reglageVoix.hauteur.toFixed(2) })}</span>
           <input
             type="range"
             min={HAUTEUR_MIN}
@@ -1076,22 +1081,22 @@ export function JarvisWidget(): React.JSX.Element {
           className="jarvis__bascule"
           onClick={essayerVoix}
           data-testid="jarvis-voix-test"
-          title="Prononcer une phrase avec la voix et les réglages choisis"
+          title={t('jarvis.essaiTitre')}
         >
-          Écouter un essai
+          {t('jarvis.essai')}
         </button>
       </details>
 
       <details className="jarvis__audio" data-testid="jarvis-audio">
-        <summary>Paramètres audio</summary>
+        <summary>{t('audio.parametres')}</summary>
         <label className="jarvis__audio-champ">
-          <span>Micro</span>
+          <span>{t('audio.micro')}</span>
           <select
             data-testid="jarvis-peripherique"
             value={peripherique}
             onChange={(e) => setPeripherique(e.target.value)}
           >
-            <option value="">Micro par défaut du système</option>
+            <option value="">{t('audio.microDefaut')}</option>
             {peripheriques.map((micro) => (
               <option key={micro.id} value={micro.id}>
                 {micro.nom}
@@ -1100,7 +1105,7 @@ export function JarvisWidget(): React.JSX.Element {
           </select>
         </label>
         <label className="jarvis__audio-champ">
-          <span>Seuil de déclenchement</span>
+          <span>{t('jarvis.seuil')}</span>
           <input
             type="range"
             data-testid="jarvis-seuil"
@@ -1111,9 +1116,7 @@ export function JarvisWidget(): React.JSX.Element {
             onChange={(e) => setSeuil(Number(e.target.value))}
           />
         </label>
-        <span className="jarvis__aide">
-          Un changement de micro s’applique à la prochaine activation de l’écoute.
-        </span>
+        <span className="jarvis__aide">{t('jarvis.changementMicro')}</span>
       </details>
 
       <p className="jarvis__partiel" data-testid="jarvis-partiel">
@@ -1121,9 +1124,7 @@ export function JarvisWidget(): React.JSX.Element {
       </p>
 
       {envoi ? (
-        <p className="jarvis__envoi">
-          Envoi à {nomJarvis} : « {envoi} »
-        </p>
+        <p className="jarvis__envoi">{t('jarvis.envoiA', { nom: nomJarvis, texte: envoi })}</p>
       ) : null}
 
       <ul className="jarvis__paroles" data-testid="jarvis-paroles">

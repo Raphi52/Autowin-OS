@@ -10,6 +10,10 @@ import {
   type SetStateAction
 } from 'react'
 import { titreDepuisPremierMessage } from './titre-conversation'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import type { Langue } from '../../../shared/langue'
+import { traduireChatFil, useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { useBrancheCourante } from './branche-courante'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
@@ -274,12 +278,20 @@ const CLE_CONTEXTES = 'autowin.contextes-detailles.v1'
 const CONTEXTES_MEMORISES_MAX = 40
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
-/** Libellé affiché (infobulle, lecteur d'écran) de chaque valeur du filtre de statut du pied de liste. */
-const LIBELLE_FILTRE_STATUT: Record<'toutes' | 'actives' | 'inactives', string> = {
-  toutes: 'Toutes',
-  actives: 'Actives',
-  inactives: 'Archivées'
+/**
+ * Texte de CETTE vue dans la langue courante (traduction anglaise, conv-1170), pour le rendu comme pour
+ * un gestionnaire ou un effet : lu à l'appel, il n'ajoute aucune dépendance de hook. La vue se
+ * redessine quand la langue change, parce qu'elle lit `useTextesChatFil()`.
+ */
+function texteFil(cle: Parameters<typeof traduireChatFil>[0], valeurs?: ValeursDeTexte): string {
+  return traduireChatFil(cle, langueCourante(), valeurs)
 }
+/** Libellé affiché (infobulle, lecteur d'écran) de chaque valeur du filtre de statut du pied de liste. */
+const LIBELLE_FILTRE_STATUT = {
+  toutes: 'liste.filtre.toutes',
+  actives: 'liste.filtre.actives',
+  inactives: 'liste.filtre.archivees'
+} as const satisfies Record<'toutes' | 'actives' | 'inactives', Parameters<typeof texteFil>[0]>
 /**
  * Dossiers RETIRES par la croix — la memoire qui empeche l'import claude.exe de les ressusciter
  * a chaque lancement. Distincte de la liste : « absent » ne dit pas si c'est « jamais vu » ou
@@ -452,6 +464,7 @@ const PastilleEnTete = memo(function PastilleEnTete({
   tourEnCours: boolean
 }): React.JSX.Element {
   // La conversation affichee est lue par definition : jamais « non lue » (meme regle que la liste).
+  const { t } = useTextesChatFil()
   const conversationState = deriveConversationState({
     busy: occupe,
     messageCount,
@@ -468,7 +481,7 @@ const PastilleEnTete = memo(function PastilleEnTete({
         <Spinner
           size={18}
           className="conversation-state is-running"
-          label={`État de la conversation : ${stateDescription}`}
+          label={t('liste.etat', { etat: stateDescription })}
           title={stateDescription}
           data-conversation-state={conversationState.key}
         />
@@ -477,7 +490,7 @@ const PastilleEnTete = memo(function PastilleEnTete({
           className={`conversation-state is-${conversationState.key}`}
           data-conversation-state={conversationState.key}
           role="img"
-          aria-label={`État de la conversation : ${stateDescription}`}
+          aria-label={t('liste.etat', { etat: stateDescription })}
           title={stateDescription}
         />
       )}
@@ -535,7 +548,8 @@ function memesLiens(a: ReadonlyMap<string, LienDeLot>, b: ReadonlyMap<string, Li
  */
 function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>(
   entrees: readonly T[],
-  liens: ReadonlyMap<string, LienDeLot>
+  liens: ReadonlyMap<string, LienDeLot>,
+  langue: Langue
 ): Array<{ entree: T; niveau: number; lot?: string }> {
   if (liens.size === 0) return entrees.map((entree) => ({ entree, niveau: 0 }))
   const presents = new Set(entrees.map((e) => e.hit.conversation.id))
@@ -557,7 +571,10 @@ function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>
     if (poses.has(id)) return
     poses.add(id)
     const lien = liens.get(id)
-    sortie.push({ entree, niveau, ...(lien ? { lot: `lot ${lien.rang}/${lien.total}` } : {}) })
+    const lot = lien
+      ? traduireChatFil('liste.lot', langue, { rang: lien.rang, total: lien.total })
+      : undefined
+    sortie.push({ entree, niveau, ...(lot ? { lot } : {}) })
     for (const enfant of enfants.get(id) ?? []) poser(enfant, niveau + 1)
   }
   for (const e of entrees) if (!chefPresent(e.hit.conversation.id)) poser(e, 0)
@@ -611,6 +628,7 @@ const LigneConversation = memo(function LigneConversation({
 }): React.JSX.Element {
   // Le gel de la liste compte ses lignes redessinées (conv-1115, `rendu-long.ts`).
   noterLigneListe(c.id)
+  const { t } = useTextesChatFil()
   const conversationState = deriveConversationState({
     busy: occupe,
     messageCount: c.messageCount ?? c.messages?.length ?? 0,
@@ -648,7 +666,7 @@ const LigneConversation = memo(function LigneConversation({
           className="conv-select-box"
           checked={selectionnee}
           onChange={() => actionsRef.current.toggleConvSelection(c.id)}
-          aria-label={`Sélectionner « ${c.title} »`}
+          aria-label={t('liste.selectionner', { titre: c.title })}
         />
       )}
       <button
@@ -671,7 +689,7 @@ const LigneConversation = memo(function LigneConversation({
             <Spinner
               size={18}
               className="conversation-state is-running"
-              label={`État de la conversation : ${stateDescription}`}
+              label={t('liste.etat', { etat: stateDescription })}
               title={stateDescription}
               data-conversation-state={conversationState.key}
             />
@@ -680,7 +698,7 @@ const LigneConversation = memo(function LigneConversation({
               className={`conversation-state is-${conversationState.key}`}
               data-conversation-state={conversationState.key}
               role="img"
-              aria-label={`État de la conversation : ${stateDescription}`}
+              aria-label={t('liste.etat', { etat: stateDescription })}
               title={stateDescription}
             />
           )}
@@ -701,7 +719,7 @@ const LigneConversation = memo(function LigneConversation({
             <span>{convQuery ? <TexteSurligne texte={c.id} terme={convQuery} /> : c.id}</span>
             {/* Rang et total lus dans le PLAN : le titre ne sert qu'à choisir quels fils interroger. */}
             {lot && (
-              <span className="conv-lot" title="Lot d'un plan, rangé sous son fil chef">
+              <span className="conv-lot" title={t('liste.lot.titre')}>
                 {lot}
               </span>
             )}
@@ -721,10 +739,10 @@ const LigneConversation = memo(function LigneConversation({
             aria-pressed={mosaiqueOuverte ? 'true' : 'false'}
             aria-label={
               mosaiqueOuverte
-                ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
-                : `« ${c.title} » fermée — cliquer pour ouvrir`
+                ? t('liste.mosaiqueOuverte', { titre: c.title })
+                : t('liste.mosaiqueFermee', { titre: c.title })
             }
-            title={mosaiqueOuverte ? 'Ouverte' : 'Fermée'}
+            title={mosaiqueOuverte ? t('liste.ouverte') : t('liste.fermee')}
           >
             <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
           </span>
@@ -732,8 +750,9 @@ const LigneConversation = memo(function LigneConversation({
       </button>
       <button
         className="conv-menu-trigger"
+        // « Actions » s'écrit pareil en anglais.
         title="Actions"
-        aria-label="Actions de la conversation"
+        aria-label={t('liste.actions')}
         onClick={(event) => {
           event.stopPropagation()
           const rect = event.currentTarget.getBoundingClientRect()
@@ -925,6 +944,8 @@ export function ChatView({
   isActive?: boolean
   onInspectTurn?: (target: InspectTurnTarget) => void
 }): React.JSX.Element {
+  // La vue se redessine quand la langue change (`texteFil` lit la langue courante).
+  const { langue } = useTextesChatFil()
   const [convs, setConvs] = useState<Conv[]>([])
   /** Comptes Claude connus (liste + compte actif de l'application), pour la pop-up de modele. */
   const [comptesClaude, setComptesClaude] = useState<{
@@ -1088,7 +1109,9 @@ export function ChatView({
     } catch (error) {
       // Le fil part alors sur le modèle par défaut — et l'en-tête le MONTRE ; on dit pourquoi.
       setModelChangeError(
-        `Modèle non enregistré sur le nouveau fil : ${error instanceof Error ? error.message : String(error)}`
+        texteFil('modele.nonEnregistreNouveauFil', {
+          raison: error instanceof Error ? error.message : String(error)
+        })
       )
     }
   }
@@ -1720,9 +1743,10 @@ export function ChatView({
     [messages]
   )
   const homeSuggestions = useMemo(
-    // `brouillonPresent` et non le texte : `buildHomeSuggestions` ne teste que sa présence.
-    () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }),
-    [runs, brouillonPresent]
+    // `brouillonPresent` et non le texte : `buildHomeSuggestions` ne teste que sa présence. Puces dans
+    // la langue de l'interface (conv-1170) : la puce cliquée part telle qu'affichée.
+    () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }, langue),
+    [runs, brouillonPresent, langue]
   )
   const [openRun, setOpenRun] = useState<OpenRunState | null>(null)
   // Chemin du run déplié à l'instant présent : une relecture en vol vérifie dessus que
@@ -2186,7 +2210,7 @@ export function ChatView({
       if (!window.api.conversationSetModel)
         // Le pont (preload) n'est relu qu'au démarrage : une app lancée avant ce changement ne le
         // connaît pas. On le DIT au lieu d'écrire le défaut global à la place.
-        throw new Error('redémarre Autowin pour activer le modèle par conversation')
+        throw new Error(texteFil('modele.redemarrer'))
       const retenu = await window.api.conversationSetModel(
         cible,
         option ? option.provider : null,
@@ -2203,7 +2227,9 @@ export function ChatView({
       )
     } catch (error) {
       setModelChangeError(
-        `Changement non enregistré : ${error instanceof Error ? error.message : String(error)}`
+        texteFil('modele.changementNonEnregistre', {
+          raison: error instanceof Error ? error.message : String(error)
+        })
       )
     } finally {
       setModelChangePending(false)
@@ -2415,12 +2441,12 @@ export function ChatView({
       return true
     })
     if (originDraft.attachments.length + candidates.length > MAX_ATTACHMENTS) {
-      setDraftError(originDraftKey, `Maximum ${MAX_ATTACHMENTS} fichiers par message.`)
+      setDraftError(originDraftKey, texteFil('pj.maximum', { max: MAX_ATTACHMENTS }))
       return
     }
     const oversized = candidates.find((file) => file.size > MAX_ATTACHMENT_BYTES)
     if (oversized) {
-      setDraftError(originDraftKey, `${oversized.name} dépasse la limite de 10 Mo.`)
+      setDraftError(originDraftKey, texteFil('pj.tropGros', { nom: oversized.name }))
       return
     }
     /*
@@ -2432,17 +2458,14 @@ export function ChatView({
      */
     const imageVide = candidates.find((file) => file.size === 0 && file.type.startsWith('image/'))
     if (imageVide) {
-      setDraftError(
-        originDraftKey,
-        `${imageVide.name} est arrivée vide (0 octet) : le presse-papiers n’a livré aucune image. Recopie-la, puis colle-la à nouveau.`
-      )
+      setDraftError(originDraftKey, texteFil('pj.imageVide', { nom: imageVide.name }))
       return
     }
     const totalBytes =
       originDraft.attachments.reduce((sum, file) => sum + file.size, 0) +
       candidates.reduce((sum, file) => sum + file.size, 0)
     if (totalBytes > MAX_ATTACHMENTS_BYTES) {
-      setDraftError(originDraftKey, 'Le total des pièces jointes dépasse 20 Mo.')
+      setDraftError(originDraftKey, texteFil('pj.totalTropGros'))
       return
     }
     try {
@@ -2458,7 +2481,9 @@ export function ChatView({
     } catch (error) {
       setDraftError(
         originDraftKey,
-        `Lecture impossible : ${error instanceof Error ? error.message : String(error)}`
+        texteFil('pj.lectureImpossible', {
+          raison: error instanceof Error ? error.message : String(error)
+        })
       )
     }
   }
@@ -2986,13 +3011,16 @@ export function ChatView({
               })
             }
           }
-          const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
-            gele
-              ? 'remise(s) dans la zone de saisie (Stop demandé)'
-              : retenues
-                ? 'gardée(s) en file derrière les lots retenus par la limite de quota'
-                : 'renvoyée(s) comme nouveau message'
-          }.`
+          const text = texteFil('orientation.apresFin', {
+            n: textes.length,
+            suite: texteFil(
+              gele
+                ? 'orientation.remises'
+                : retenues
+                  ? 'orientation.gardees'
+                  : 'orientation.renvoyees'
+            )
+          })
           setAppNotice((current) => newestNotice(current, { text }))
         }
       } else if (e.type === 'refresh') {
@@ -3037,7 +3065,7 @@ export function ChatView({
             type: 'start',
             convId: e.convId!,
             runPath: e.runPath,
-            task: e.task ?? 'tâche'
+            task: e.task ?? texteFil('fil.tache')
           })
         )
         // Le panneau NE s’ouvre PAS tout seul au démarrage d’une orchestration (jugé invasif) :
@@ -3699,7 +3727,7 @@ export function ChatView({
     }
     if (perime()) return
     if (!detailed) {
-      setConvLoad({ status: 'error', target: c, error: 'conversation introuvable dans le store' })
+      setConvLoad({ status: 'error', target: c, error: texteFil('fil.introuvableStore') })
       return
     }
     resetConvLoad()
@@ -3876,6 +3904,8 @@ export function ChatView({
   async function nouvelleFenetreMosaique(): Promise<void> {
     const identity = await refreshRuntimeIdentity()
     const creee = await window.api.conversationsCreate({
+      // Reste en français : titre PROVISOIRE que le stockage reconnaît pour le remplacer par le
+      // premier message (voir plus bas, « provisoire « Nouvelle conversation » »).
       title: 'Nouvelle conversation',
       category: identity.provider,
       provider: identity.provider
@@ -4225,7 +4255,7 @@ export function ChatView({
       } else if (candidate.conversationId) {
         await window.api.deleteConversationRun(candidate.conversationId, candidate.run.path)
       } else {
-        throw new Error('Conversation introuvable pour ce RUN')
+        throw new Error(texteFil('run.conversationIntrouvable'))
       }
       if (openRun?.path === candidate.run.path) {
         setOpenRun(null)
@@ -4275,7 +4305,7 @@ export function ChatView({
     if (tourEnCours) {
       setAppNotice((current) =>
         newestNotice(current, {
-          text: `Branche « ${target.title} » créée. Le tour en cours continue ici — la branche t'attend dans la liste.`
+          text: texteFil('branche.creee', { titre: target.title })
         })
       )
       return
@@ -4319,7 +4349,7 @@ export function ChatView({
     if (tourEnCours) {
       setAppNotice((current) =>
         newestNotice(current, {
-          text: `Copie « ${cible.title} » créée avec ton message à modifier. Le tour en cours continue ici — elle t'attend dans la liste.`
+          text: texteFil('copie.creee', { titre: cible.title })
         })
       )
       return
@@ -4352,12 +4382,15 @@ export function ChatView({
       source,
       depart.kind === 'copie' ? depart.ancre : undefined,
       retour.chemin,
-      'Retour au premier tour'
+      texteFil('revenir.titre')
     )
     if (!branche.ok) {
       setAppNotice((current) =>
         newestNotice(current, {
-          text: `Code remis à son état du début de ce tour dans ${retour.chemin}, mais la branche du fil n'a pas pu être rattachée à cette copie (${branche.raison}). Rien n'a été ouvert : elle aurait travaillé dans le dossier partagé.`
+          text: texteFil('revenir.brancheRefusee', {
+            chemin: retour.chemin,
+            raison: branche.raison
+          })
         })
       )
       return
@@ -4370,7 +4403,7 @@ export function ChatView({
     setDraftInput(cible.id, message.content)
     setAppNotice((current) =>
       newestNotice(current, {
-        text: `Code remis à son état du début de ce tour, dans une copie séparée : ${retour.chemin}. Ce fil y travaille ; le dossier partagé n'a pas bougé. Les dépendances (node_modules) n'y sont pas reliées : installe-les avant d'y lancer les tests.`
+        text: texteFil('revenir.fait', { chemin: retour.chemin })
       })
     )
     if (busyConversationsRef.current.has(source)) return
@@ -4390,9 +4423,7 @@ export function ChatView({
     if (!source || !demande) {
       setAppNotice((current) =>
         newestNotice(current, {
-          text: source
-            ? 'Écris d’abord la demande à essayer de 3 façons.'
-            : 'Ouvre d’abord le fil où essayer cette demande de 3 façons.'
+          text: source ? texteFil('essai.ecrisDabord') : texteFil('essai.ouvreDabord')
         })
       )
       return
@@ -4406,7 +4437,8 @@ export function ChatView({
     const filSource = liveMessagesRef.current.get(source) ?? messages
     const ancre = [...filSource].reverse().find((message) => message.messageId)?.messageId
     const titre =
-      convsRef.current.find((conversation) => conversation.id === source)?.title ?? 'Essai'
+      convsRef.current.find((conversation) => conversation.id === source)?.title ??
+      texteFil('essai.titre')
     const total = essai.chemins.length
     // Chaque branche garde SON rang : son titre (« façon 3/3 ») et sa façon imposée restent
     // d'accord même quand une autre façon n'a pas pu partir.
@@ -4415,7 +4447,7 @@ export function ChatView({
     for (const [rang, chemin] of essai.chemins.entries()) {
       const branche = await brancheDansLaCopie(source, ancre, chemin, titre)
       if (!branche.ok) {
-        refusees.push(`façon ${rang + 1} (${branche.raison})`)
+        refusees.push(texteFil('essai.refusee', { rang: rang + 1, raison: branche.raison }))
         continue
       }
       await window.api.conversationsRename?.(branche.id, titreDeLaFacon(titre, rang, total))
@@ -4430,9 +4462,14 @@ export function ChatView({
       await ouvrirDansMosaique(id)
       void send(demandePourLaFacon(demande, rang, total), { targetConversationId: id })
     }
-    const lancees = `${branches.length} façon${branches.length > 1 ? 's' : ''} lancée${branches.length > 1 ? 's' : ''}, chacune dans sa copie séparée : ${essai.chemins.join(' · ')}. Compare-les dans la mosaïque ; rien n'est fusionné dans le dossier partagé. Coût : ${branches.length} tour${branches.length > 1 ? 's' : ''}.`
+    const lancees = texteFil(branches.length > 1 ? 'essai.lancees' : 'essai.lancee', {
+      n: branches.length,
+      chemins: essai.chemins.join(' · ')
+    })
     const nonParties = refusees.length
-      ? ` Non envoyée${refusees.length > 1 ? 's' : ''}, la branche n'a pas pu être rattachée à sa copie : ${refusees.join(' · ')}.`
+      ? ` ${texteFil(refusees.length > 1 ? 'essai.nonEnvoyees' : 'essai.nonEnvoyee', {
+          refus: refusees.join(' · ')
+        })}`
       : ''
     setAppNotice((current) => newestNotice(current, { text: `${lancees}${nonParties}` }))
   }
@@ -4464,9 +4501,9 @@ export function ChatView({
           projectPath: chemin
         })
       }
-      if (!branche?.id) return { ok: false, raison: 'branche refusée' }
+      if (!branche?.id) return { ok: false, raison: texteFil('branche.refusee') }
       if (!attendu || branche.projectPath !== attendu)
-        return { ok: false, raison: 'dossier de travail non posé' }
+        return { ok: false, raison: texteFil('branche.dossierNonPose') }
       return { ok: true, id: branche.id }
     } catch (erreur) {
       return { ok: false, raison: erreur instanceof Error ? erreur.message : String(erreur) }
@@ -4535,7 +4572,7 @@ export function ChatView({
     }
     const toutes = demande.plan.flatMap((fil) => fil.taches)
     if (!source || toutes.length === 0) {
-      confirmer([], ['fil d’origine introuvable'], true)
+      confirmer([], [texteFil('fils.origineIntrouvable')], true)
       return
     }
     if (demande.mode === 'ici' || demande.plan.length < 2) {
@@ -4546,7 +4583,7 @@ export function ChatView({
       confirmer([], [])
       setAppNotice((current) =>
         newestNotice(current, {
-          text: `${toutes.length} tâches à la suite dans ce fil : la première part, les autres attendent leur tour. Coût : ${toutes.length} tours.`
+          text: texteFil('fils.aLaSuite', { n: toutes.length })
         })
       )
       return
@@ -4563,7 +4600,7 @@ export function ChatView({
       filStocke = detail?.messages ?? []
     } catch (erreur) {
       const raison = erreur instanceof Error ? erreur.message : String(erreur)
-      confirmer([], [`fil d’origine illisible (${raison})`], true)
+      confirmer([], [texteFil('fils.origineIllisible', { raison })], true)
       return
     }
     const parMessage = demande.messageId
@@ -4579,14 +4616,14 @@ export function ChatView({
     // lancement repartait en silence du DERNIER message de l'utilisateur de tout le fil, peut-être
     // écrit après la carte (« attends, ne fais rien »).
     if (rangCarte < 0) {
-      confirmer([], ['réponse de la carte introuvable dans le fil enregistré'], true)
+      confirmer([], [texteFil('fils.reponseIntrouvable')], true)
       return
     }
     const ancre = [...filStocke.slice(0, rangCarte)]
       .reverse()
       .find((message) => message.role === 'user' && message.messageId)?.messageId
     if (!ancre) {
-      confirmer([], ['message d’origine introuvable dans le fil'], true)
+      confirmer([], [texteFil('fils.messageIntrouvable')], true)
       return
     }
     // Partagée avec le filet (`lancerAvecFilet`) : une erreur imprévue nomme les fils déjà ouverts.
@@ -4598,7 +4635,7 @@ export function ChatView({
       try {
         const branche = (await window.api.conversationsFork(source, ancre)) as Conv | undefined
         if (!branche?.id) {
-          refus.push(`fil ${rang + 1} « ${titre} » (branche refusée)`)
+          refus.push(texteFil('fils.brancheRefusee', { rang: rang + 1, titre }))
           continue
         }
         // Le titre est un confort : la branche EXISTE déjà. Un renommage refusé ne doit pas la
@@ -4616,7 +4653,7 @@ export function ChatView({
         })
       } catch (erreur) {
         const raison = erreur instanceof Error ? erreur.message : String(erreur)
-        refus.push(`fil ${rang + 1} « ${titre} » (${raison})`)
+        refus.push(texteFil('fils.refus', { rang: rang + 1, titre, raison }))
       }
     }
     if (lances.length > 0) {
@@ -4647,14 +4684,16 @@ export function ChatView({
     const parties = envois.reduce((somme, envoi) => somme + envoi.textes.length, 0)
     const texte =
       lances.length === 0
-        ? `Rien n’est parti : ${refus.join(' · ') || 'aucune branche créée'}.`
-        : `${lances.length} fil${lances.length > 1 ? 's' : ''} lancé${lances.length > 1 ? 's' : ''} en même temps : ` +
-          `${lances.map((fil) => `${fil.titre} (${fil.id})`).join(' · ')}.` +
-          (parties > lances.length
-            ? ` Les tâches qui touchent les mêmes fichiers passent à la suite dans le même fil.`
-            : '') +
-          ` Coût : ${parties} tour${parties > 1 ? 's' : ''}.` +
-          (refus.length ? ` Non parti : ${refus.join(' · ')}.` : '')
+        ? texteFil('fils.rienParti', {
+            raisons: refus.join(' · ') || texteFil('fils.aucuneBranche')
+          })
+        : texteFil(lances.length > 1 ? 'fils.lances' : 'fils.lance', {
+            n: lances.length,
+            fils: lances.map((fil) => `${fil.titre} (${fil.id})`).join(' · ')
+          }) +
+          (parties > lances.length ? ` ${texteFil('fils.memesFichiers')}` : '') +
+          ` ${texteFil(parties > 1 ? 'fils.couts' : 'fils.cout', { n: parties })}` +
+          (refus.length ? ` ${texteFil('fils.nonParti', { refus: refus.join(' · ') })}` : '')
     setAppNotice((current) => newestNotice(current, { text: texte }))
   }
   const lancerEnFilsRef = useRef(lancerEnFils)
@@ -5143,7 +5182,7 @@ export function ChatView({
           const sonde = window.api.pilotChatActive
           if (!sonde) {
             setAppNotice({
-              text: `Mode auto : je ne peux pas vérifier si le tour de ${filAttendu} est terminé (vérificateur indisponible — redémarre l'app). La suite attend.`
+              text: texteFil('auto.verifFilIndisponible', { fil: filAttendu })
             })
             return
           }
@@ -5156,7 +5195,10 @@ export function ChatView({
               const debut = sondeDepuis ?? Date.now()
               if (Date.now() - debut >= DUREE_MAX_SONDAGE_FIL) {
                 setAppNotice({
-                  text: `Mode auto : le tour de ${filAttendu} n'est toujours pas terminé après ${Math.round(DUREE_MAX_SONDAGE_FIL / 3_600_000)} h. J'arrête d'attendre — relance la suite quand tu veux.`
+                  text: texteFil('auto.filToujoursPasFini', {
+                    fil: filAttendu,
+                    heures: Math.round(DUREE_MAX_SONDAGE_FIL / 3_600_000)
+                  })
                 })
                 return
               }
@@ -5173,7 +5215,7 @@ export function ChatView({
           // Sans vérificateur, « existe » est invérifiable : payer un tour pour le constater est le
           // défaut mesuré conv-826 (14:38:57, fin.txt absent). On attend l'utilisateur, en le disant.
           setAppNotice({
-            text: `Mode auto : je ne peux pas vérifier si ${decision.fichier} existe (vérificateur indisponible — redémarre l'app). La suite attend.`
+            text: texteFil('auto.verifFichierIndisponible', { fichier: decision.fichier })
           })
           return
         }
@@ -5196,7 +5238,10 @@ export function ChatView({
               const debut = sondeDepuis ?? Date.now()
               if (Date.now() - debut >= DUREE_MAX_SONDAGE_FICHIER) {
                 setAppNotice({
-                  text: `Mode auto : ${fichier} n'existe toujours pas après ${Math.round(DUREE_MAX_SONDAGE_FICHIER / 3_600_000)} h de vérification. J'arrête d'attendre — relance la suite quand tu veux.`
+                  text: texteFil('auto.fichierToujoursAbsent', {
+                    fichier,
+                    heures: Math.round(DUREE_MAX_SONDAGE_FICHIER / 3_600_000)
+                  })
                 })
                 return
               }
@@ -5249,7 +5294,7 @@ export function ChatView({
     autoProgrammeesRef.current.set(id, { minuteur, signature: decision.signature })
   }
   const heureLisible = (t: number): string =>
-    new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+    formaterDate(t, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
 
   /** L'avancement de la boucle pour CE fil — créé à la demande, jamais partagé entre fils. */
   function autoEtat(conversationId: string): { tour: string | null; prompt: string | null } {
@@ -5331,10 +5376,10 @@ export function ChatView({
       programmerRelanceAuto(activeId, decision)
       setAppNotice({
         text: decision.fichier
-          ? `Mode auto : la suite proposée attend ${decision.fichier}. Je vérifie toutes les 5 min, sans frais, et je la relance seul dès qu'il existe (éteins ∞ ou écris un message pour annuler).`
+          ? texteFil('auto.attendFichier', { fichier: decision.fichier })
           : decision.filAttendu
-            ? `Mode auto : la suite proposée attend la fin du tour de ${decision.filAttendu}. Je vérifie chaque minute, sans frais, et je la relance seul dès qu'il est terminé (éteins ∞ ou écris un message pour annuler).`
-            : `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
+            ? texteFil('auto.attendFil', { fil: decision.filAttendu })
+            : texteFil('auto.attendMoment', { quand: heureLisible(decision.echeance) })
       })
       return
     }
@@ -5841,6 +5886,7 @@ export function ChatView({
       const content = m.parts
         .map((p) => {
           if (p.kind === 'text') return p.text
+          // Reste en français : historique transmis à l'agent, pas un texte de l'écran.
           if (p.kind === 'artifact') return `[artefact ${p.artifact.name}]`
           if (p.kind === 'error') return `⚠️ ${p.message}`
           return `[a exécuté ${p.name}${p.ok === false ? ' (échec)' : ''}]`
@@ -6174,7 +6220,9 @@ export function ChatView({
         setDraftAttachments(sendDraftKey, () => outgoingAttachments)
         setDraftError(
           sendDraftKey,
-          `Envoi impossible : ${error instanceof Error ? error.message : String(error)}`
+          texteFil('envoi.impossible', {
+            raison: error instanceof Error ? error.message : String(error)
+          })
         )
       } else if (convId) {
         patchLast(convId, (m) => {
@@ -6205,7 +6253,7 @@ export function ChatView({
             // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
             // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
             if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
-              m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
+              m.parts.push({ kind: 'text', text: texteFil('fil.aucuneReponse') })
           })
           setConversationBusy(convId, false)
           await new Promise<void>((resolve) =>
@@ -6317,7 +6365,11 @@ export function ChatView({
       // consommerait le quota qui vient tout juste de revenir.
       for (const [rang, id] of cibles.entries()) {
         setRepriseQuotaProgres(
-          `Reprise ${rang + 1}/${cibles.length} — ${cibles.length - rang - 1} en attente…`
+          texteFil('quota.progres', {
+            rang: rang + 1,
+            total: cibles.length,
+            attente: cibles.length - rang - 1
+          })
         )
         try {
           await resumePilotTurn(id)
@@ -6331,8 +6383,8 @@ export function ChatView({
       setRepriseQuotaProgres(null)
       setRepriseQuotaNotice(
         reprises === cibles.length
-          ? `${reprises} conversation${reprises > 1 ? 's' : ''} reprise${reprises > 1 ? 's' : ''}.`
-          : `${reprises}/${cibles.length} reprises.`
+          ? texteFil(reprises > 1 ? 'quota.reprisesFaites' : 'quota.repriseFaite', { n: reprises })
+          : texteFil('quota.reprisesPartielles', { n: reprises, total: cibles.length })
       )
     }
   }
@@ -6510,8 +6562,8 @@ export function ChatView({
               <button
                 type="button"
                 className="attachment-thumb-button"
-                aria-label={`Agrandir ${file.name}`}
-                title="Agrandir"
+                aria-label={texteFil('pj.agrandirNom', { nom: file.name })}
+                title={texteFil('pj.agrandir')}
                 onClick={() =>
                   setOpenImage({
                     src: `data:${file.mimeType};base64,${file.content}`,
@@ -6533,8 +6585,8 @@ export function ChatView({
             <button
               type="button"
               onClick={() => retirer(fileIndex)}
-              aria-label={`Retirer ${file.name}`}
-              title="Retirer"
+              aria-label={texteFil('pj.retirerNom', { nom: file.name })}
+              title={texteFil('pj.retirer')}
             >
               ×
             </button>
@@ -6591,9 +6643,9 @@ export function ChatView({
             data-testid="mosaic-auto-toggle"
             data-conv={id}
             aria-pressed={autoConvs.has(id)}
-            aria-label="Mode auto de cette conversation"
+            aria-label={texteFil('saisie.auto')}
             onClick={() => basculerModeAutoPour(id)}
-            title="Mode auto de CETTE conversation : renvoie tout seul la suite proposée."
+            title={texteFil('saisie.auto.mosaique')}
           >
             <IconeInfini />
           </button>
@@ -6614,8 +6666,8 @@ export function ChatView({
               data-testid="composer-stop"
               onClick={() => stopPilotTurn(id)}
               disabled={interruptingConversations.has(id)}
-              title="Arrêter ce tour"
-              aria-label="Arrêter ce tour"
+              title={texteFil('saisie.arreterTour')}
+              aria-label={texteFil('saisie.arreterTour')}
             >
               {/* Fenetre etroite : le carre SEUL (demande du 2026-09-04), pas le libelle. */}
               <span className="composer-btn-glyph" aria-hidden="true">
@@ -6887,7 +6939,7 @@ export function ChatView({
       if (!poser) {
         setAppNotice((current) =>
           newestNotice(current, {
-            text: 'Statut indisponible : redémarre Autowin OS pour activer « Archiver ».'
+            text: texteFil('statut.indisponible')
           })
         )
         return
@@ -6897,9 +6949,9 @@ export function ChatView({
       } catch (erreur) {
         setAppNotice((current) =>
           newestNotice(current, {
-            text: `Le statut n’a pas pu être enregistré : ${
-              erreur instanceof Error ? erreur.message : String(erreur)
-            }`
+            text: texteFil('statut.nonEnregistre', {
+              raison: erreur instanceof Error ? erreur.message : String(erreur)
+            })
           })
         )
         return
@@ -6915,9 +6967,7 @@ export function ChatView({
       if (!poser) {
         setAppNotice((current) =>
           newestNotice(current, {
-            text:
-              'Surlignage indisponible : cette version de l’application n’expose pas encore ' +
-              'l’enregistrement du repère. Redémarre Autowin OS pour l’activer.'
+            text: texteFil('surlignage.indisponible')
           })
         )
         return
@@ -6927,9 +6977,9 @@ export function ChatView({
       } catch (erreur) {
         setAppNotice((current) =>
           newestNotice(current, {
-            text: `Le surlignage n’a pas pu être enregistré : ${
-              erreur instanceof Error ? erreur.message : String(erreur)
-            }`
+            text: texteFil('surlignage.nonEnregistre', {
+              raison: erreur instanceof Error ? erreur.message : String(erreur)
+            })
           })
         )
         return
@@ -7159,12 +7209,18 @@ export function ChatView({
      * reste TOUJOURS en tête, hors du tri par date entre groupes (le trier n'aurait aucun sens : il
      * contient par construction la conversation la plus récente).
      */
-    const recent = groupeRecent(entrees, (entree) => recenceUtilisateur(entree.hit.conversation))
+    // `langue` : « Récent » et « Divers » suivent la langue de l'interface (conv-1170).
+    const recent = groupeRecent(
+      entrees,
+      (entree) => recenceUtilisateur(entree.hit.conversation),
+      undefined,
+      langue
+    )
     return [
       ...(recent ? [recent] : []),
       ...ordonnerGroupes(
         groupesVisibles(
-          grouperConversations(entrees, dossierParDefaut),
+          grouperConversations(entrees, dossierParDefaut, langue),
           // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
           convQuery.trim() ? {} : groupesReplies
         ),
@@ -7179,7 +7235,7 @@ export function ChatView({
         conversationDateOrder
       )
     ]
-  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut])
+  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut, langue])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   /**
@@ -7426,34 +7482,37 @@ export function ChatView({
               </button>
             </div>
             {!replie &&
-              rangerSousLeurChef(groupe.items, liensDeLots).map(({ entree, niveau, lot }) => {
-                const { conversation: c, snippet } = entree.hit
-                return (
-                  <LigneConversation
-                    key={c.id}
-                    c={c}
-                    snippet={snippet}
-                    depth={groupe.depth + niveau}
-                    lot={lot}
-                    actif={c.id === activeId}
-                    occupe={busyConversations.has(c.id)}
-                    nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
-                    selectionnee={selectedConvIds.has(c.id)}
-                    mosaiqueOuverte={mosaicIds.includes(c.id)}
-                    convQuery={convQuery}
-                    convSelectionMode={convSelectionMode}
-                    convViewMode={convViewMode}
-                    actionsRef={actionsListeRef}
-                    setConvMenu={setConvMenu}
-                  />
-                )
-              })}
+              rangerSousLeurChef(groupe.items, liensDeLots, langue).map(
+                ({ entree, niveau, lot }) => {
+                  const { conversation: c, snippet } = entree.hit
+                  return (
+                    <LigneConversation
+                      key={c.id}
+                      c={c}
+                      snippet={snippet}
+                      depth={groupe.depth + niveau}
+                      lot={lot}
+                      actif={c.id === activeId}
+                      occupe={busyConversations.has(c.id)}
+                      nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
+                      selectionnee={selectedConvIds.has(c.id)}
+                      mosaiqueOuverte={mosaicIds.includes(c.id)}
+                      convQuery={convQuery}
+                      convSelectionMode={convSelectionMode}
+                      convViewMode={convViewMode}
+                      actionsRef={actionsListeRef}
+                      setConvMenu={setConvMenu}
+                    />
+                  )
+                }
+              )}
           </Fragment>
         )
       }),
     [
       groupes,
       liensDeLots,
+      langue,
       convQuery,
       groupesReplies,
       surviole,
@@ -7477,7 +7536,7 @@ export function ChatView({
   const avisApp = appNotice ? (
     <div className="chat-workflow-notice fade-in" data-testid="chat-workflow-notice" role="alert">
       <span>{appNotice.text}</span>
-      <button type="button" onClick={() => setAppNotice(null)} aria-label="Fermer l’avertissement">
+      <button type="button" onClick={() => setAppNotice(null)} aria-label={texteFil('avis.fermer')}>
         ×
       </button>
     </div>
@@ -7500,6 +7559,7 @@ export function ChatView({
         <aside
           className="lisere-dessus conv-pane"
           // Le titre visible est parti (2026-10-15) : le panneau garde son NOM pour les lecteurs d'ecran.
+          // « Conversations » s'écrit pareil en anglais.
           aria-label="Conversations"
           data-view-mode={convViewMode}
           data-density={convDensity}
@@ -7516,11 +7576,11 @@ export function ChatView({
                 type="button"
                 className="conv-mosaic-close-all"
                 data-testid="conv-mosaic-close-all"
-                title="Fermer toutes les fenêtres ouvertes"
-                aria-label="Fermer toutes les fenêtres ouvertes"
+                title={texteFil('mosaique.fermerTout.titre')}
+                aria-label={texteFil('mosaique.fermerTout.titre')}
                 onClick={fermerToutesFenetresMosaique}
               >
-                Tout fermer
+                {texteFil('mosaique.fermerTout')}
               </button>
             </div>
           )}
@@ -7535,11 +7595,11 @@ export function ChatView({
             <input
               value={convQuery}
               onChange={(event) => setConvQuery(event.target.value)}
-              placeholder="Rechercher partout…"
-              aria-label="Rechercher dans les conversations"
+              placeholder={texteFil('liste.recherche')}
+              aria-label={texteFil('liste.recherche.aria')}
             />
             {convQuery && (
-              <button onClick={() => setConvQuery('')} title="Effacer la recherche">
+              <button onClick={() => setConvQuery('')} title={texteFil('liste.recherche.effacer')}>
                 ×
               </button>
             )}
@@ -7552,7 +7612,7 @@ export function ChatView({
               if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
               else newConv()
             }}
-            title="Démarrer une nouvelle conversation"
+            title={texteFil('liste.nouveau.titre')}
             aria-current={activeId === null ? 'page' : undefined}
           >
             <span className="conv-new-icon" aria-hidden="true">
@@ -7560,7 +7620,7 @@ export function ChatView({
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </span>
-            <span className="conv-new-title">Nouveau fil</span>
+            <span className="conv-new-title">{texteFil('liste.nouveau')}</span>
           </button>
           {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
@@ -7574,7 +7634,7 @@ export function ChatView({
                 className="conv-date-sort"
                 onClick={() => quitterModeSelection()}
               >
-                Annuler la sélection
+                {texteFil('selection.annuler')}
               </button>
               {(() => {
                 // Si TOUT le lot est déjà inactif, le geste utile est l'inverse.
@@ -7594,7 +7654,7 @@ export function ChatView({
                       })()
                     }}
                   >
-                    {toutInactif ? 'Désarchiver' : 'Archiver'}
+                    {toutInactif ? texteFil('liste.desarchiver') : texteFil('liste.archiver')}
                   </button>
                 )
               })()}
@@ -7615,7 +7675,7 @@ export function ChatView({
                   })
                 }}
               >
-                Ranger dans une catégorie…
+                {texteFil('liste.rangerCategorie')}
               </button>
               <button
                 type="button"
@@ -7623,7 +7683,7 @@ export function ChatView({
                 disabled={selectedConvIds.size === 0}
                 onClick={() => setBulkDeleteAsking(true)}
               >
-                Supprimer ({selectedConvIds.size})
+                {texteFil('selection.supprimer', { n: selectedConvIds.size })}
               </button>
             </div>
           )}
@@ -7640,8 +7700,8 @@ export function ChatView({
                     type="button"
                     className="conv-reprise-quota-fermer"
                     data-testid="conv-reprise-quota-fermer"
-                    aria-label="Masquer"
-                    title="Masquer (réapparaît si une autre conversation est coupée)"
+                    aria-label={texteFil('quota.masquer')}
+                    title={texteFil('quota.masquer.titre')}
                     onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
                   >
                     ×
@@ -7657,15 +7717,15 @@ export function ChatView({
                     data-testid="conv-reprise-quota-bouton"
                     disabled={repriseQuotaEnCours}
                     onClick={() => void reprendreConversationsCoupeesParQuota()}
-                    title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
+                    title={texteFil('quota.reprendre.titre')}
                   >
                     {repriseQuotaEnCours ? (
                       <>
-                        <Spinner size={12} label="Reprise des conversations en cours" />
-                        {repriseQuotaProgres ?? 'Reprise en cours…'}
+                        <Spinner size={12} label={texteFil('quota.repriseEnCours.aria')} />
+                        {repriseQuotaProgres ?? texteFil('quota.repriseEnCours')}
                       </>
                     ) : (
-                      `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                      texteFil('quota.reprendre', { n: convsCoupeesParQuota.length })
                     )}
                   </button>
                 ) : null}
@@ -7679,11 +7739,11 @@ export function ChatView({
           <div className="conv-list scroll-y">
             {convs.length === 0 && (
               <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-                Aucune conversation — écris un message pour en démarrer une.
+                {texteFil('liste.vide')}
               </div>
             )}
             {convs.length > 0 && conversationHits.length === 0 && (
-              <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
+              <div className="conv-search-empty">{texteFil('liste.aucunResultat')}</div>
             )}
             {lignesListe}
           </div>
@@ -7695,8 +7755,12 @@ export function ChatView({
               className="conv-status-filter"
               data-testid="conv-status-filter"
               data-filter={convStatusFilter}
-              title={`Statut affiché : ${LIBELLE_FILTRE_STATUT[convStatusFilter]} — cliquer pour changer`}
-              aria-label={`Filtrer par statut : ${LIBELLE_FILTRE_STATUT[convStatusFilter]}`}
+              title={texteFil('liste.filtre.titre', {
+                statut: texteFil(LIBELLE_FILTRE_STATUT[convStatusFilter])
+              })}
+              aria-label={texteFil('liste.filtre.aria', {
+                statut: texteFil(LIBELLE_FILTRE_STATUT[convStatusFilter])
+              })}
               onClick={() =>
                 setConvStatusFilter((f) =>
                   f === 'toutes' ? 'actives' : f === 'actives' ? 'inactives' : 'toutes'
@@ -7711,10 +7775,10 @@ export function ChatView({
                 </svg>
               )}
               {convStatusFilter === 'toutes'
-                ? 'Toutes'
+                ? texteFil('liste.filtre.toutes')
                 : convStatusFilter === 'actives'
-                  ? '● Actives'
-                  : '○ Archivées'}
+                  ? texteFil('liste.filtre.activesPied')
+                  : texteFil('liste.filtre.archiveesPied')}
             </button>
             <span className="conv-foot-spacer" />
         <button
@@ -7722,8 +7786,11 @@ export function ChatView({
           className="conv-density-toggle"
           data-testid="conv-density-toggle"
           data-density={convDensity}
-          title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
-          aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+          title={texteFil('densite.titre', {
+            densite: libelleDensite(convDensity),
+            suivante: libelleDensite(densiteSuivante(convDensity))
+          })}
+          aria-label={texteFil('densite.aria', { densite: libelleDensite(convDensity) })}
           onClick={() => setConvDensity(densiteSuivante(convDensity))}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -7739,8 +7806,8 @@ export function ChatView({
           data-testid="conv-view-toggle"
           role="switch"
           aria-checked={convViewMode === 'mosaic'}
-          aria-label="Vue mosaïque"
-          title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+          aria-label={texteFil('vue.mosaique.aria')}
+          title={convViewMode === 'mosaic' ? texteFil('vue.revenirListe') : texteFil('vue.passerMosaique')}
           onClick={() => {
             if (convViewMode === 'mosaic') {
               setConvViewMode('list')
@@ -7762,7 +7829,8 @@ export function ChatView({
             <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
             <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
           </svg>
-          <span className="conv-foot-libelle">{convViewMode === 'mosaic' ? 'Mosaïque' : 'Chat'}</span>
+          {/* « Chat » s'écrit pareil en anglais. */}
+          <span className="conv-foot-libelle">{convViewMode === 'mosaic' ? texteFil('vue.mosaique') : 'Chat'}</span>
           <span className="conv-view-toggle-knob" aria-hidden="true" />
         </button>
           </div>
@@ -7789,7 +7857,7 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   ✎
                 </span>
-                Renommer
+                {texteFil('menu.renommer')}
               </button>
               {/*
                 La MÊME action que le glisser-déposer, au clavier. Ce n'est pas un doublon de confort :
@@ -7807,7 +7875,7 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   🗂
                 </span>
-                Ranger dans une catégorie…
+                {texteFil('liste.rangerCategorie')}
               </button>
               {/*
                 L'entree « Choisir le repertoire de travail… » a ete RETIREE de ce menu sur demande
@@ -7832,7 +7900,7 @@ export function ChatView({
                   <span className="conv-menu-ic" aria-hidden="true">
                     ↩
                   </span>
-                  Sortir du dossier
+                  {texteFil('menu.sortirDossier')}
                 </button>
               )}
               {/*
@@ -7851,7 +7919,9 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   ★
                 </span>
-                {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+                {convMenu.conv.surlignee
+                  ? texteFil('menu.retirerSurlignage')
+                  : texteFil('menu.surligner')}
               </button>
               <button
                 role="menuitem"
@@ -7865,7 +7935,9 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   {convMenu.conv.inactive ? '●' : '○'}
                 </span>
-                {convMenu.conv.inactive ? 'Désarchiver' : 'Archiver'}
+                {convMenu.conv.inactive
+                  ? texteFil('liste.desarchiver')
+                  : texteFil('liste.archiver')}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
@@ -7885,7 +7957,7 @@ export function ChatView({
                   <span className="conv-menu-ic" aria-hidden="true">
                     ☑
                   </span>
-                  Sélectionner
+                  {texteFil('menu.selectionner')}
                 </button>
               )}
               <button
@@ -7900,7 +7972,7 @@ export function ChatView({
                 <span className="conv-menu-ic" aria-hidden="true">
                   🗑
                 </span>
-                Supprimer
+                {texteFil('menu.supprimer')}
               </button>
             </div>
           </>,
@@ -7914,7 +7986,7 @@ export function ChatView({
               ref={brancheMenuRef}
               className="conv-menu-pop"
               role="menu"
-              aria-label="Branches du depot"
+              aria-label={texteFil('branches.aria')}
               style={{ top: brancheMenu.top, left: brancheMenu.left }}
             >
               {brancheMenu.branches === null ? (
@@ -7922,11 +7994,11 @@ export function ChatView({
                   className="conv-menu-empty"
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <Spinner size={12} label="Lecture des branches en cours" />
-                  Lecture des branches…
+                  <Spinner size={12} label={texteFil('branches.lecture.aria')} />
+                  {texteFil('branches.lecture')}
                 </span>
               ) : brancheMenu.branches.length === 0 ? (
-                <span className="conv-menu-empty">Aucune branche lue</span>
+                <span className="conv-menu-empty">{texteFil('branches.aucune')}</span>
               ) : (
                 brancheMenu.branches.map((nom) => (
                   <button
@@ -7952,7 +8024,7 @@ export function ChatView({
                             window.dispatchEvent(new Event('focus'))
                           } else
                             setBrancheMenu((m) =>
-                              m ? { ...m, refus: r?.reason ?? 'Bascule refusee.' } : m
+                              m ? { ...m, refus: r?.reason ?? texteFil('branches.refusee') } : m
                             )
                         })
                         .catch((e: unknown) =>
@@ -7964,7 +8036,7 @@ export function ChatView({
                       ⑂
                     </span>
                     {nom}
-                    {nom === gitBranch ? ' · courante' : ''}
+                    {nom === gitBranch ? texteFil('branches.courante') : ''}
                   </button>
                 ))
               )}
@@ -7992,8 +8064,8 @@ export function ChatView({
               role="menu"
               aria-label={
                 convFolderMenu.mode === 'categorie'
-                  ? 'Catégories de conversations'
-                  : 'Répertoires de travail'
+                  ? texteFil('dossiers.categories.aria')
+                  : texteFil('dossiers.repertoires.aria')
               }
               style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
             >
@@ -8009,7 +8081,7 @@ export function ChatView({
                   role="menuitem"
                   data-testid="conv-project-this-computer"
                   data-project-path={dossierPersonnel}
-                  title={`Travailler sur cet ordinateur, sans projet : ${dossierPersonnel}`}
+                  title={texteFil('dossiers.cetOrdinateur.titre', { chemin: dossierPersonnel })}
                   onClick={() => {
                     const menu = convFolderMenu
                     setConvFolderMenu(null)
@@ -8041,13 +8113,13 @@ export function ChatView({
                     <span className="conv-menu-ic" aria-hidden="true">
                       🗂
                     </span>
-                    {nomDeDossier(defaultWorkspace.trim())} · par défaut
+                    {texteFil('dossiers.parDefaut', { nom: nomDeDossier(defaultWorkspace.trim()) })}
                   </button>
                 )}
               {convFolderMenu.mode !== 'dossier' ? null : dossiersConversations.length === 0 &&
                 !defaultWorkspace?.trim() &&
                 !dossierPersonnel ? (
-                <span className="conv-menu-empty">Aucun dossier de conversations</span>
+                <span className="conv-menu-empty">{texteFil('dossiers.aucun')}</span>
               ) : (
                 // Le dossier personnel est déjà proposé sous son nom, « This computer ».
                 dossiersConversations
@@ -8073,8 +8145,8 @@ export function ChatView({
                         className="conv-menu-oubli"
                         data-testid="conv-project-forget"
                         data-project-path={chemin}
-                        aria-label={`Retirer ${chemin} de la liste`}
-                        title="Retirer de la liste"
+                        aria-label={texteFil('dossiers.retirerNom', { chemin })}
+                        title={texteFil('dossiers.retirer')}
                         onClick={(event) => {
                           // Le clic ne doit PAS ranger la conversation dans le dossier qu'on retire.
                           event.stopPropagation()
@@ -8101,7 +8173,7 @@ export function ChatView({
                   <span className="conv-menu-ic" aria-hidden="true">
                     📁
                   </span>
-                  Parcourir…
+                  {texteFil('dossiers.parcourir')}
                 </button>
               )}
               {/*
@@ -8118,7 +8190,7 @@ export function ChatView({
               */}
               {convFolderMenu.mode === 'categorie' &&
                 (categoriesConnues.length > 0 || dossiersConversations.length > 0) && (
-                  <span className="conv-menu-titre">Catégories</span>
+                  <span className="conv-menu-titre">{texteFil('dossiers.categories')}</span>
                 )}
               {(convFolderMenu.mode === 'categorie' ? dossiersConversations : []).map((chemin) => (
                 <button
@@ -8168,14 +8240,14 @@ export function ChatView({
                   <span className="conv-menu-ic" aria-hidden="true">
                     ＋
                   </span>
-                  Nouvelle catégorie…
+                  {texteFil('dossiers.nouvelleCategorie')}
                 </button>
               ) : (
                 <input
                   className="conv-menu-saisie"
                   data-testid="conv-category-input"
-                  aria-label="Nom de la nouvelle catégorie"
-                  placeholder="Nom de la catégorie"
+                  aria-label={texteFil('dossiers.nomNouvelleCategorie')}
+                  placeholder={texteFil('dossiers.nomCategorie')}
                   autoFocus
                   value={saisieCategorie}
                   onChange={(event) => setSaisieCategorie(event.target.value)}
@@ -8201,7 +8273,7 @@ export function ChatView({
       <div
         className="conv-pane-resizer"
         role="separator"
-        aria-label="Redimensionner la bibliothèque de conversations"
+        aria-label={texteFil('liste.redimensionner')}
         aria-orientation="vertical"
         aria-valuemin={CHAT_PANE_LIMITS.conversations.min}
         aria-valuemax={CHAT_PANE_LIMITS.conversations.max}
@@ -8254,8 +8326,8 @@ export function ChatView({
         >
           {dragActive && (
             <div className="file-drop-overlay" aria-hidden="true">
-              <strong>Dépose tes fichiers ici</strong>
-              <span>Ils seront joints au prochain message</span>
+              <strong>{texteFil('depot.titre')}</strong>
+              <span>{texteFil('depot.detail')}</span>
             </div>
           )}
           {rechercheFilOuverte && (
@@ -8268,7 +8340,7 @@ export function ChatView({
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
                 <span className="chat-head-kicker">
-                  {active ? active.title : 'Nouvelle conversation'}
+                  {active ? active.title : texteFil('entete.nouvelle')}
                 </span>
                 <div className="chat-runtime" data-testid="chat-runtime-identity">
                   {/* La perle d'etat remplace l'ancienne boule de 26 px (conv-158) : meme case,
@@ -8290,7 +8362,7 @@ export function ChatView({
                   <span
                     className={`chat-runtime-provider is-${bindingEffectif?.provider ?? 'loading'}`}
                   >
-                    {bindingEffectif?.provider ?? 'connexion…'}
+                    {bindingEffectif?.provider ?? texteFil('entete.connexion')}
                   </span>
                   {/*
                     LE MODÈLE DU FIL, EN LISTE DÉROULANTE (conv-239, 2026-10-11). Il était affiché
@@ -8312,7 +8384,7 @@ export function ChatView({
                     defaut={{
                       label: runtimeIdentity?.modelLabel
                         ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
-                        : 'modèle de l’application',
+                        : texteFil('entete.modeleApplication'),
                       actif: modeleDuFil === null,
                       onChoisir: () => void changerModeleDuFil(null)
                     }}
@@ -8335,11 +8407,11 @@ export function ChatView({
                     data-testid="chat-runtime-conv"
                     title={
                       activeId
-                        ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
-                        : 'Aucune conversation ouverte'
+                        ? texteFil('entete.identifiant', { id: activeId })
+                        : texteFil('entete.aucuneOuverte')
                     }
                   >
-                    {activeId ?? 'aucune conversation'}
+                    {activeId ?? texteFil('entete.aucune')}
                   </span>
                   {(() => {
                     /*
@@ -8358,15 +8430,16 @@ export function ChatView({
                         : 'Autowin OS'
                     const titreDossier = dossierProjet
                       ? active
-                        ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
-                        : `Dossier de travail du prochain fil : ${dossierProjet}`
-                      : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
+                        ? texteFil('entete.dossierAssigne', { chemin: dossierProjet })
+                        : texteFil('entete.dossierProchainFil', { chemin: dossierProjet })
+                      : texteFil('entete.dossierRacine', {
+                          chemin: cheminEffectif ?? texteFil('entete.racineDepot')
+                        })
                     return (
                       <button
                         type="button"
                         className="chat-cost-dot chat-project-dot"
-                        title={`${titreDossier}
-Cliquer pour changer le dossier de travail.`}
+                        title={texteFil('entete.dossier.titre', { titre: titreDossier })}
                         aria-label={titreDossier}
                         data-testid="chat-project-dot"
                         onClick={(event) => {
@@ -8390,8 +8463,7 @@ Cliquer pour changer le dossier de travail.`}
                       type="button"
                       className="chat-git-branch-btn"
                       data-testid="chat-git-branch"
-                      title={`Branche git courante du depot : ${gitBranch}
-Cliquer pour choisir une autre branche.`}
+                      title={texteFil('entete.branche.titre', { branche: gitBranch })}
                       onClick={(event) => {
                         const r = event.currentTarget.getBoundingClientRect()
                         setBrancheMenu({ top: r.bottom + 4, left: r.left, branches: null })
@@ -8428,13 +8500,13 @@ Cliquer pour choisir une autre branche.`}
                     event.preventDefault()
                     setShowRuns((v) => !v)
                   }}
-                  title="Détails de l’exécution"
+                  title={texteFil('entete.details.titre')}
                 >
                   <span className="thinking-capsule">
                     <span className="thinking-capsule-icone" aria-hidden="true">
                       <PanelIcon />
                     </span>
-                    <span className="thinking-label">Détails</span>
+                    <span className="thinking-label">{texteFil('entete.details')}</span>
                     {openRunsCount > 0 ? (
                       <span className="thinking-duree">{openRunsCount} open</span>
                     ) : null}
@@ -8453,11 +8525,12 @@ Cliquer pour choisir une autre branche.`}
               title={(() => {
                 const j = jaugeCourante
                 if (!j) return undefined
-                return (
-                  `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
-                  `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
-                  `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-                )
+                return texteFil('contexte.jauge', {
+                  utilises: formaterNombre(j.used),
+                  limite: formaterNombre(j.limit),
+                  pourcent: Math.round(j.ratio * 100),
+                  cache: formaterNombre(j.cacheRead)
+                })
               })()}
               panelNode={(() => {
                 const j = jaugeCourante
@@ -8486,25 +8559,25 @@ Cliquer pour choisir une autre branche.`}
                 type="button"
                 data-testid="chat-travail-non-publie-traiter"
                 onClick={() => void traiterTravauxNonPublies()}
-                title="Ouvrir une conversation neuve avec un prompt pret a envoyer"
+                title={texteFil('nonPublie.traiter.titre')}
               >
-                Traiter
+                {texteFil('nonPublie.traiter')}
               </button>
               <button
                 type="button"
                 data-testid="chat-travail-non-publie-ouvrir"
                 onClick={() => setListeNonPubliee((v) => !v)}
-                title="Lister ces travaux et lire leur diff"
+                title={texteFil('nonPublie.liste.titre')}
               >
-                Voir la liste
+                {texteFil('nonPublie.liste')}
               </button>
               <button
                 type="button"
                 data-testid="chat-travail-non-publie-fermer"
                 className="chat-travail-non-publie__fermer"
                 onClick={() => setMessageNonPublieMasque(travailNonPublie)}
-                aria-label="Fermer cet avertissement"
-                title="Masquer jusqu’au prochain changement"
+                aria-label={texteFil('nonPublie.fermer')}
+                title={texteFil('nonPublie.masquer')}
               >
                 ×
               </button>
@@ -8525,7 +8598,7 @@ Cliquer pour choisir une autre branche.`}
               <button
                 type="button"
                 onClick={() => effacerArretAuto(activeId)}
-                aria-label="Fermer l’avertissement du mode auto"
+                aria-label={texteFil('auto.fermerArret')}
               >
                 ×
               </button>
@@ -8539,7 +8612,10 @@ Cliquer pour choisir une autre branche.`}
               role="status"
             >
               <span>
-                {`Mode auto : le quota hebdomadaire Claude n'a pas pu être lu. Seul le seuil de ${lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO)).toursAutoMax} tours automatiques d'affilée peut arrêter la chaîne.`}
+                {texteFil('auto.quotaInconnu', {
+                  tours: lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO))
+                    .toursAutoMax
+                })}
               </span>
             </div>
           )}
@@ -8565,12 +8641,12 @@ Cliquer pour choisir une autre branche.`}
                     void confirmRenameConv()
                   }}
                 >
-                  <span className="delete-confirm-kicker">RENOMMER</span>
-                  <h2 id="rename-conv-title">Nouveau titre</h2>
+                  <span className="delete-confirm-kicker">{texteFil('renommer.surtitre')}</span>
+                  <h2 id="rename-conv-title">{texteFil('renommer.titre')}</h2>
                   <input
                     className="rename-conv-input"
                     data-testid="rename-conv-input"
-                    aria-label="Nouveau titre de la conversation"
+                    aria-label={texteFil('renommer.champ')}
                     value={renameCandidate.value}
                     autoFocus
                     onChange={(event) =>
@@ -8588,10 +8664,10 @@ Cliquer pour choisir une autre branche.`}
                       className="btn delete-confirm-cancel"
                       onClick={() => setRenameCandidate(null)}
                     >
-                      Annuler
+                      {texteFil('dialogue.annuler')}
                     </button>
                     <button type="submit" className="btn" data-testid="rename-conv-confirm">
-                      Renommer
+                      {texteFil('menu.renommer')}
                     </button>
                   </div>
                 </form>
@@ -8642,21 +8718,21 @@ Cliquer pour choisir une autre branche.`}
                   <span className="delete-confirm-kicker">
                     {deleteRunCandidate.scope === 'conv' &&
                     deleteRunCandidate.run.session === 'attaché'
-                      ? 'PIÈCE JOINTE EXTERNE'
-                      : 'ACTION IRRÉVERSIBLE'}
+                      ? texteFil('run.pieceJointe')
+                      : texteFil('run.irreversible')}
                   </span>
                   <h2 id="run-delete-confirm-title">
                     {deleteRunCandidate.scope === 'conv' &&
                     deleteRunCandidate.run.session === 'attaché'
-                      ? 'Détacher ce RUN ?'
-                      : 'Supprimer ce RUN ?'}
+                      ? texteFil('run.detacherTitre')
+                      : texteFil('run.supprimerTitre')}
                   </h2>
                   <p>
                     <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
                     {deleteRunCandidate.scope === 'conv' &&
                     deleteRunCandidate.run.session === 'attaché'
-                      ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
-                      : 'et sa trace locale seront supprimés de cet appareil.'}
+                      ? texteFil('run.detacherDetail')
+                      : texteFil('run.supprimerDetail')}
                   </p>
                   {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
                   <div className="delete-confirm-actions">
@@ -8666,7 +8742,7 @@ Cliquer pour choisir une autre branche.`}
                       disabled={runDeletePending}
                       autoFocus
                     >
-                      Annuler
+                      {texteFil('dialogue.annuler')}
                     </button>
                     <button
                       className="btn delete-confirm-danger run-delete-confirm"
@@ -8674,11 +8750,11 @@ Cliquer pour choisir une autre branche.`}
                       disabled={runDeletePending}
                     >
                       {runDeletePending
-                        ? 'Traitement…'
+                        ? texteFil('run.traitement')
                         : deleteRunCandidate.scope === 'conv' &&
                             deleteRunCandidate.run.session === 'attaché'
-                          ? 'Détacher'
-                          : 'Supprimer définitivement'}
+                          ? texteFil('run.detacher')
+                          : texteFil('run.supprimer')}
                     </button>
                   </div>
                 </section>
@@ -8776,7 +8852,11 @@ Cliquer pour choisir une autre branche.`}
               Un fil vide muet ne disait pas la différence entre « rien à afficher » et « la
               lecture a planté ». */}
             {convLoad.status === 'loading' && (
-              <div className="conv-load-skeleton" role="status" aria-label="Chargement du fil…">
+              <div
+                className="conv-load-skeleton"
+                role="status"
+                aria-label={texteFil('fil.chargement')}
+              >
                 <span className="conv-load-skeleton-line" />
                 <span className="conv-load-skeleton-line" />
                 <span className="conv-load-skeleton-line" />
@@ -8785,7 +8865,7 @@ Cliquer pour choisir une autre branche.`}
             {convLoad.status === 'error' && (
               <div className="conv-load-error" role="alert">
                 <span className="conv-load-error-text">
-                  ⚠️ Conversation illisible : {convLoad.error}
+                  {texteFil('fil.illisible', { erreur: convLoad.error ?? '' })}
                 </span>
                 {convLoad.target && (
                   <button
@@ -8793,7 +8873,7 @@ Cliquer pour choisir une autre branche.`}
                     className="conv-load-retry"
                     onClick={() => void loadConv(convLoad.target as Conv)}
                   >
-                    ↻ Réessayer
+                    {texteFil('fil.reessayer')}
                   </button>
                 )}
               </div>
@@ -8804,11 +8884,8 @@ Cliquer pour choisir une autre branche.`}
               (!busy || activeId === null) && (
                 <div className="chat-welcome">
                   <div className="empty">
-                    <h3>Parle à l’agent</h3>
-                    <div className="c-faint">
-                      Il répond ET peut agir sur l’app (naviguer, créer une conversation, régler un
-                      rôle, ouvrir un graphe…). Ses actions apparaissent en direct.
-                    </div>
+                    <h3>{texteFil('accueil.titre')}</h3>
+                    <div className="c-faint">{texteFil('accueil.detail')}</div>
                   </div>
                   <div className="chat-suggest">
                     <SuggestionGrid groups={homeSuggestions} onPick={pickSuggestion} />
@@ -8870,7 +8947,7 @@ Cliquer pour choisir une autre branche.`}
                 if (scrollRef.current) scrollChatToBottom(scrollRef.current)
               }}
             >
-              {hasNewActivity ? '↓ Dernière réponse' : '↓ Dernier message'}
+              {hasNewActivity ? texteFil('fil.derniereReponse') : texteFil('fil.dernierMessage')}
             </button>
           )}
 
@@ -8969,16 +9046,17 @@ Cliquer pour choisir une autre branche.`}
                     }
                     aria-label={
                       autoConvs.has(activeId ?? '')
-                        ? 'Arrêter le mode auto de cette conversation'
-                        : 'Mode auto de cette conversation'
+                        ? texteFil('saisie.auto.arreter')
+                        : texteFil('saisie.auto')
                     }
                     onClick={() => basculerModeAuto()}
                     title={
                       autoConvs.has('*')
-                        ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
+                        ? texteFil('saisie.auto.tous')
                         : autoConvs.has(activeId ?? '')
-                          ? 'Arrêter le mode auto de cette conversation'
-                          : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                          ? texteFil('saisie.auto.arreter')
+                          : // « Recommandé : rien » reste en français : c'est la ligne que l'agent écrit.
+                            texteFil('saisie.auto.titre')
                     }
                   >
                     {/* Rond du mode auto, signe INFINI : « ça continue sans moi ». */}
@@ -8995,8 +9073,8 @@ Cliquer pour choisir une autre branche.`}
                     type="button"
                     className="btn attachment-button"
                     onClick={() => fileInputRef.current?.click()}
-                    aria-label="Joindre des fichiers"
-                    title="Joindre des fichiers"
+                    aria-label={texteFil('saisie.joindre')}
+                    title={texteFil('saisie.joindre')}
                   >
                     <svg
                       className="attachment-icon"
@@ -9025,8 +9103,8 @@ Cliquer pour choisir une autre branche.`}
                     type="button"
                     className="btn composer-trois-facons"
                     onClick={() => void essayerTroisFacons()}
-                    aria-label="Essaie 3 façons"
-                    title="Essaie 3 façons : la demande tapée part dans 3 branches du fil, chacune dans sa copie séparée du code, ouvertes en mosaïque. Coûte 3 tours."
+                    aria-label={texteFil('saisie.troisFacons')}
+                    title={texteFil('saisie.troisFacons.titre')}
                   >
                     ×3
                   </button>
@@ -9054,23 +9132,24 @@ Cliquer pour choisir une autre branche.`}
                     data-testid="composer-stop"
                     onClick={() => stopPilotTurn()}
                     disabled={!activeId || interruptingConversations.has(activeId ?? '')}
-                    aria-label="Arrêter la réponse"
-                    title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                    aria-label={texteFil('saisie.arreterReponse')}
+                    title={texteFil('saisie.arreterReponse.titre')}
                   >
                     <span className="composer-btn-glyph" aria-hidden="true">
                       ■
                     </span>
                     <span className="composer-btn-label">
-                      {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
+                      {/* « Stop » s'écrit pareil en anglais. */}
+                      {interruptingConversations.has(activeId ?? '')
+                        ? texteFil('saisie.arret')
+                        : 'Stop'}
                     </span>
                   </button>
                 ) : null
               }
               metaNode={
                 <div className="composer-meta">
-                  <span className="composer-hint">
-                    Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
-                  </span>
+                  <span className="composer-hint">{texteFil('saisie.aide')}</span>
                 </div>
               }
             />
@@ -9122,14 +9201,14 @@ Cliquer pour choisir une autre branche.`}
             className="image-lightbox"
             role="dialog"
             aria-modal="true"
-            aria-label={`Aperçu de ${openImage.name}`}
+            aria-label={texteFil('apercu.aria', { nom: openImage.name })}
             onClick={() => setOpenImage(null)}
           >
             <div className="image-lightbox-content" onClick={(event) => event.stopPropagation()}>
               <button
                 type="button"
                 className="image-lightbox-close"
-                aria-label="Fermer l’aperçu"
+                aria-label={texteFil('apercu.fermer')}
                 onClick={() => setOpenImage(null)}
               >
                 ×

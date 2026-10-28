@@ -6,7 +6,11 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { ChatArtifact } from '../../../shared/artifacts'
-import { validateModel3dBytes } from './artifact-model3d-validation'
+import {
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
+import { refusDuModele3d } from './artifact-model3d-validation'
 import { Spinner } from './Spinner'
 
 function artifactBytes(artifact: ChatArtifact): Uint8Array | undefined {
@@ -21,14 +25,16 @@ export function ArtifactModel3dPreview({
 }: {
   artifact: ChatArtifact
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const hostRef = useRef<HTMLDivElement>(null)
-  const [failure, setFailure] = useState<{ id: string; message: string }>()
+  // Le refus est gardé en CLÉ et traduit au rendu : il suit un changement de langue (conv-1170).
+  const [failure, setFailure] = useState<{ id: string; message: CleArtefactsEtBandeaux }>()
 
   useEffect(() => {
     const host = hostRef.current
     const bytes = artifactBytes(artifact)
     if (!host || !bytes) return
-    const validationError = validateModel3dBytes(artifact.name, bytes)
+    const validationError = refusDuModele3d(artifact.name, bytes)
     if (validationError) {
       queueMicrotask(() => setFailure({ id: artifact.id, message: validationError }))
       return
@@ -108,14 +114,14 @@ export function ArtifactModel3dPreview({
             if (!stopped)
               setFailure({
                 id: artifact.id,
-                message: 'Modèle 3D illisible ou ressources externes manquantes'
+                message: 'modele3d.illisibleOuRessources'
               })
           }
         )
       }
     } catch {
       queueMicrotask(() => {
-        if (!stopped) setFailure({ id: artifact.id, message: 'Modèle 3D illisible' })
+        if (!stopped) setFailure({ id: artifact.id, message: 'modele3d.illisible' })
       })
     }
     return () => {
@@ -127,12 +133,12 @@ export function ArtifactModel3dPreview({
     }
   }, [artifact])
 
-  const error = failure?.id === artifact.id ? failure.message : undefined
+  const error = failure?.id === artifact.id ? t(failure.message) : undefined
   if (error) return <div className="artifact-preview__blocked">{error}</div>
   return (
     <div className="artifact-model3d" ref={hostRef}>
       <span>
-        <Spinner /> Chargement de la scène 3D…
+        <Spinner /> {t('modele3d.chargement')}
       </span>
     </div>
   )

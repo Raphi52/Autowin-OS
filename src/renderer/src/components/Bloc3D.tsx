@@ -13,14 +13,17 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { NOM_PAGE_SCENE_3D, TYPE_MESSAGE_SCENE_3D } from '../../../shared/scene-3d'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import './Bloc3D.css'
 
-type EtatScene = { etat: 'chargement' } | { etat: 'lancee' } | { etat: 'erreur'; message: string }
+// `message` absent : la scène n'a rien dit, « Erreur inconnue » est traduit au rendu (conv-1170).
+type EtatScene = { etat: 'chargement' } | { etat: 'lancee' } | { etat: 'erreur'; message?: string }
 
 /** Marge autour de la colonne a partir de laquelle une scene est montee ou demontee. */
 const MARGE_VISIBILITE = '300px 0px'
 
 export function Bloc3D({ code }: { code: string }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const hoteRef = useRef<HTMLElement>(null)
   const cadreRef = useRef<HTMLIFrameElement>(null)
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined')
@@ -57,7 +60,13 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
       } else if (donnees.etat === 'lancee') {
         setEtat((courant) => (courant.etat === 'erreur' ? courant : { etat: 'lancee' }))
       } else if (donnees.etat === 'erreur') {
-        setEtat({ etat: 'erreur', message: String(donnees.message ?? 'Erreur inconnue') })
+        setEtat({
+          etat: 'erreur',
+          message:
+            donnees.message === undefined || donnees.message === null
+              ? undefined
+              : String(donnees.message)
+        })
       }
     }
     window.addEventListener('message', ecouter)
@@ -75,16 +84,16 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
       ref={hoteRef}
       className={`bloc-3d${agrandi ? ' is-agrandi' : ''}`}
       data-testid="chat-inline-scene-3d"
-      aria-label="Scène 3D"
+      aria-label={t('scene.titre')}
     >
       <header className="bloc-3d__barre">
         <span className="bloc-3d__nom">
-          Scène 3D
+          {t('scene.titre')}
           <span className="bloc-3d__aide">
-            {mode === 'scene' ? 'glisser pour pivoter · molette pour zoomer' : 'code three.js'}
+            {mode === 'scene' ? t('scene.aideScene') : t('scene.aideSource')}
           </span>
         </span>
-        <span className="bloc-3d__modes" role="group" aria-label="Affichage du bloc 3D">
+        <span className="bloc-3d__modes" role="group" aria-label={t('scene.modes')}>
           <button
             type="button"
             className={mode === 'scene' ? 'is-active' : ''}
@@ -92,7 +101,7 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
             data-action="scene-3d-scene"
             onClick={() => setMode('scene')}
           >
-            Scène
+            {t('scene.scene')}
           </button>
           <button
             type="button"
@@ -107,8 +116,8 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
         <button
           type="button"
           data-action="scene-3d-relancer"
-          title="Relancer la scène"
-          aria-label="Relancer la scène 3D"
+          title={t('scene.relancer')}
+          aria-label={t('scene.relancerAria')}
           onClick={relancer}
         >
           ↻
@@ -119,12 +128,12 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
           aria-pressed={agrandi}
           onClick={() => setAgrandi((valeur) => !valeur)}
         >
-          {agrandi ? 'Réduire' : 'Agrandir'}
+          {agrandi ? t('commun.reduire') : t('commun.agrandir')}
         </button>
       </header>
       {etat.etat === 'erreur' && mode === 'scene' && (
         <p className="bloc-3d__erreur" role="alert" data-testid="scene-3d-erreur">
-          La scène a planté : {etat.message}
+          {t('scene.plantee', { message: etat.message ?? t('scene.erreurInconnue') })}
         </p>
       )}
       {mode === 'source' ? (
@@ -137,7 +146,7 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
           ref={cadreRef}
           className="bloc-3d__cadre"
           data-testid="scene-3d-cadre"
-          title="Scène 3D du fil"
+          title={t('scene.cadre')}
           // Relative au document de l'app : `http://localhost:<port>/scene-3d.html` en
           // developpement, `file:///…/out/renderer/scene-3d.html` installee — l'adresse exacte que
           // le filtre de navigation de la fenetre accepte (isSceneFrameUrl).

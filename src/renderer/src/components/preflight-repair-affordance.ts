@@ -1,3 +1,9 @@
+import { langueCourante } from '../langue'
+import {
+  traduireReglagesEtDecor,
+  type CleReglagesEtDecor
+} from '../textes-ecrans/reglages-et-decor'
+
 /**
  * Ce que le renderer doit savoir pour AFFICHER un bouton « réparer » : quels prérequis sont
  * réparables, et sous quel libellé.
@@ -27,7 +33,30 @@ export const PREFLIGHT_REPAIRS: Record<string, RepairAffordance> = {
   }
 }
 
+/**
+ * Les clés de traduction de chaque réparable (conv-1170). `PREFLIGHT_REPAIRS` reste en français :
+ * c'est lui que le test de contrat compare, mot pour mot, au plan du moteur (`preflight-repair.ts`).
+ * Ce que l'écran AFFICHE passe par `repairAffordance`, dans la langue de l'interface.
+ */
+const CLES_REPARATION: Readonly<
+  Record<string, { label: CleReglagesEtDecor; note: CleReglagesEtDecor }>
+> = {
+  'claude-session': {
+    label: 'reparation.claudeSession.libelle',
+    note: 'reparation.claudeSession.note'
+  },
+  'brain-venv': { label: 'reparation.brainVenv.libelle', note: 'reparation.brainVenv.note' },
+  brain: { label: 'reparation.brain.libelle', note: 'reparation.brain.note' }
+}
+
 /** Affordance de réparation d'un check, ou `undefined` → aucun bouton (rien d'honnête à proposer). */
 export function repairAffordance(checkId: string): RepairAffordance | undefined {
-  return PREFLIGHT_REPAIRS[checkId]
+  const reparation = PREFLIGHT_REPAIRS[checkId]
+  const cles = CLES_REPARATION[checkId]
+  if (!reparation || !cles) return reparation
+  const langue = langueCourante()
+  return {
+    label: traduireReglagesEtDecor(cles.label, langue),
+    note: traduireReglagesEtDecor(cles.note, langue)
+  }
 }

@@ -13,6 +13,7 @@
  */
 
 import { sansSequencesAnsi } from '../../../shared/ansi'
+import { texteChatExecution } from '../textes-ecrans/chat-execution'
 
 /** Commandes qui produisent un run consultable dans Workflows. */
 const RUN_PRODUCING = new Set(['orchestrate'])
@@ -271,7 +272,8 @@ function valeurLisible(valeur: unknown): string | undefined {
       .slice(0, MAX_ENTREES_LISTE)
       .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
     const reste = valeur.length - entrees.length
-    return entrees.join('\n') + (reste > 0 ? `\n… ${reste} de plus` : '')
+    const plus = reste > 0 ? `\n${texteChatExecution('cible.de-plus', { n: reste })}` : ''
+    return entrees.join('\n') + plus
   }
   const json = JSON.stringify(valeur)
   return json && json !== '{}' ? json : undefined

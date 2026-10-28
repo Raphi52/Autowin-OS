@@ -8,6 +8,8 @@
  */
 import { tourRefusePourAutoLancer } from './veille-candidats-message'
 import React, { Fragment, memo, Profiler, useRef, useState } from 'react'
+import { langueCourante } from '../langue'
+import { traduireChatFil, useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { noterRenduMessage } from './rendu-long'
 import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
@@ -64,6 +66,7 @@ function texteCopiable(message: Msg): string {
  * coche pendant 1,5 s. Demande utilisateur du 2026-09-12 : il vit A COTE du bouton brancher.
  */
 export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Element | null {
+  const { t } = useTextesChatFil()
   const [copie, setCopie] = React.useState(false)
   const texte = texteCopiable(message)
   if (!texte) return null
@@ -72,8 +75,8 @@ export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Elem
       type="button"
       className="msg-turn-icon"
       data-testid="copy-message"
-      title="Copier ce message dans le presse-papier"
-      aria-label="Copier ce message"
+      title={t('message.copier.titre')}
+      aria-label={t('message.copier')}
       onClick={() => {
         void navigator.clipboard?.writeText(texte).then(
           () => {
@@ -94,18 +97,19 @@ export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Elem
  * jamais un échec. Sans motif (app principale plus ancienne), on dit seulement ce qui est sûr.
  */
 function libelleAttente(receipt: DirectiveReceipt): string {
+  const langue = langueCourante()
   if (receipt.attenteMotif === 'commande' && receipt.commande)
-    return `⏸ Attend la fin du tour — lu comme la commande « ${receipt.commande} », qui ne s’ajoute pas à un tour en cours`
-  if (receipt.attenteMotif === 'lot')
-    return '⏸ Lot suivant de la sélection — il partira tout seul à la fin du tour en cours'
+    return traduireChatFil('message.attente.commande', langue, { commande: receipt.commande })
+  if (receipt.attenteMotif === 'lot') return traduireChatFil('message.attente.lot', langue)
   if (receipt.attenteMotif === 'lot-quota')
-    return '⏸ Lot suivant de la sélection — retenu : le lot précédent a été coupé par la limite de quota. Reprends-le quand la limite est levée, celui-ci partira à la fin de la reprise'
+    return traduireChatFil('message.attente.lotQuota', langue)
   if (receipt.attenteMotif === 'hors-tour')
-    return '⏸ Attend la fin du tour — le tour se terminait, il partira juste après'
-  return '⏸ Attend la fin du tour — il ne pouvait pas s’ajouter au tour en cours, il partira juste après'
+    return traduireChatFil('message.attente.horsTour', langue)
+  return traduireChatFil('message.attente.defaut', langue)
 }
 
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   return (
     <div className={`msg user directive-receipt is-${receipt.status}`}>
       {/* Plus de libelle « Toi » (conv-227, 2026-10-11) ; l'etat de l'envoi, lui, reste. */}
@@ -113,22 +117,25 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending' ? (
             <>
-              <Spinner /> {receipt.reponse ? 'Réponse…' : 'Orientation…'}
+              <Spinner />{' '}
+              {receipt.reponse
+                ? t('message.recu.reponseEnvoi')
+                : t('message.recu.orientationEnvoi')}
             </>
           ) : receipt.status === 'sent' ? (
             receipt.reponse ? (
-              '✓ Répondu'
+              t('message.recu.repondu')
             ) : (
               // Pas « dans sa prochaine réponse » : l'orientation n'entre qu'à la fin de l'appel
               // en cours, et le texte suivant n'y répond pas (conv-253, tour cdbc9802, 93 s).
-              '✓ Reçue — l’agent finit ce qu’il fait, puis y répond'
+              t('message.recu.recue')
             )
           ) : receipt.status === 'differee' ? (
-            '⏸ Reçue — l’agent la lira à la phase suivante du run'
+            t('message.recu.differee')
           ) : receipt.status === 'attente' ? (
             libelleAttente(receipt)
           ) : (
-            '⚠ Erreur d’envoi — il attend la fin du tour et partira juste après'
+            t('message.recu.erreur')
           )}
         </span>
       </div>
@@ -139,10 +146,10 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
   )
 }
 
-const ERROR_CAUSE_LABEL: Record<ChatErrorPart['cause'], string> = {
-  send: 'Envoi impossible',
-  turn: 'Le tour a échoué'
-}
+const ERROR_CAUSE_LABEL = {
+  send: 'erreur.cause.envoi',
+  turn: 'erreur.cause.tour'
+} as const satisfies Record<ChatErrorPart['cause'], Parameters<typeof traduireChatFil>[0]>
 
 /**
  * Rendu DÉDIÉ d'une erreur de tour. Une erreur n'est pas du contenu : elle est annoncée
@@ -170,11 +177,12 @@ export function ChatErrorBlock({
   /** Ouvre le login du provider. Seul levier utile quand la session a expire. */
   onLogin?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   // SESSION EXPIREE : renvoyer ou reprendre echouerait a l'identique. On n'offre que le login.
   const authExpiree = estErreurAuthExpiree(part.message)
   return (
     <div className="msg-error" role="alert" data-cause={part.cause}>
-      <span className="msg-error-cause">⚠️ {ERROR_CAUSE_LABEL[part.cause]}</span>
+      <span className="msg-error-cause">⚠️ {t(ERROR_CAUSE_LABEL[part.cause])}</span>
       <span className="msg-error-message">{part.message}</span>
       {bilan && (
         <span className="msg-error-bilan" data-testid="erreur-bilan">
@@ -187,10 +195,10 @@ export function ChatErrorBlock({
             type="button"
             className="msg-error-action"
             data-testid="error-login"
-            title="Ouvrir la reconnexion Claude — la session a expiré"
+            title={t('erreur.reconnexion.titre')}
             onClick={onLogin}
           >
-            🔑 Se reconnecter
+            {t('erreur.reconnexion')}
           </button>
         </span>
       ) : (
@@ -201,10 +209,10 @@ export function ChatErrorBlock({
             <button
               type="button"
               className="msg-error-action"
-              title={`Renvoyer : ${retryPrompt}`}
+              title={t('erreur.renvoyer.titre', { prompt: retryPrompt })}
               onClick={() => onResend(retryPrompt)}
             >
-              ↻ Renvoyer
+              {t('erreur.renvoyer')}
             </button>
           )}
           {onRefineResume && (
@@ -212,10 +220,10 @@ export function ChatErrorBlock({
               type="button"
               className="msg-error-action"
               data-testid="error-refine"
-              title="Pré-remplir le composer avec ce prompt et le motif d’échec, sans envoyer"
+              title={t('erreur.preciser.titre')}
               onClick={() => onRefineResume(retryPrompt, 'failed', part.message)}
             >
-              ✎ Reprendre en précisant…
+              {t('erreur.preciser')}
             </button>
           )}
           </span>
@@ -473,6 +481,7 @@ export const ChatMessageRow = memo(
      */
     onAnswerAsk?: (prompt: string) => void
   }): React.JSX.Element {
+    const { t } = useTextesChatFil()
     /*
      * BOUTONS « PROMPTER » DES BLOCS html-render (conv-302, voir bouton-prompt-html.ts) : un lien
      * `#autowin-prompt` envoie son libellé visible par le chemin d'une réponse `ask`. Mêmes règles que
@@ -514,11 +523,8 @@ export const ChatMessageRow = memo(
               concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
           {message.orientation ? (
             <div className="msg-meta">
-              <span
-                className="msg-orientation-tag"
-                title="Envoyé pendant un tour en cours : ce texte a rejoint la réponse en cours au lieu d’ouvrir un nouveau tour"
-              >
-                orienté en cours de tour
+              <span className="msg-orientation-tag" title={t('message.orientation.titre')}>
+                {t('message.orientation')}
               </span>
             </div>
           ) : null}
@@ -552,13 +558,11 @@ export const ChatMessageRow = memo(
                   <ArtifactPreview
                     key={`${file.name}-${fileIndex}`}
                     artifact={artifact}
-                    displayName="image envoyée"
-                    provenanceLabel="Image envoyée"
-                    sourceLabel={`Envoyée · ${file.name}`}
+                    displayName={t('message.image.nom')}
+                    provenanceLabel={t('message.image.provenance')}
+                    sourceLabel={t('message.image.source', { nom: file.name })}
                     previewError={
-                      file.originalUnavailable
-                        ? 'Image originale non conservée · stockage indisponible'
-                        : undefined
+                      file.originalUnavailable ? t('message.image.nonConservee') : undefined
                     }
                     conversationId={conversationId}
                     turnId={file.turnId}
@@ -587,8 +591,8 @@ export const ChatMessageRow = memo(
               <button
                 type="button"
                 className="msg-turn-icon"
-                title="Créer une branche à partir de ce message"
-                aria-label="Créer une branche à partir de ce message"
+                title={t('message.brancher')}
+                aria-label={t('message.brancher')}
                 onClick={() => onFork(message.messageId!)}
               >
                 <ForkIcon />
@@ -598,8 +602,8 @@ export const ChatMessageRow = memo(
               <button
                 type="button"
                 className="msg-turn-icon"
-                title="Modifier et relancer : repart d’une copie du fil juste avant ce message, son texte dans la saisie"
-                aria-label="Modifier et relancer ce message"
+                title={t('message.modifier.titre')}
+                aria-label={t('message.modifier')}
                 onClick={() => onModifier(message.messageId!)}
               >
                 <EditIcon />
@@ -609,8 +613,8 @@ export const ChatMessageRow = memo(
               <button
                 type="button"
                 className="msg-turn-icon"
-                title="Revenir à ce tour : le code de son début dans une copie séparée, le fil juste avant ce message"
-                aria-label="Revenir à ce tour, code et fil"
+                title={t('message.revenir.titre')}
+                aria-label={t('message.revenir')}
                 onClick={() => onRevenir(message.messageId!)}
               >
                 <RewindIcon />
@@ -687,7 +691,7 @@ export const ChatMessageRow = memo(
         // La lecture que l'agent a retenue (conv-1123) : atténuée, sous une petite étiquette, pour
         // se repérer avant la réponse sans se confondre avec elle.
         <p key={index} className="msg-lecture-retenue" dir="auto" data-testid="lecture-retenue">
-          <span className="msg-lecture-etiquette">lecture</span>
+          <span className="msg-lecture-etiquette">{t('message.lectureRetenue')}</span>
           <span className="msg-lecture-texte">{texteDeLaLectureRetenue(part.text)}</span>
         </p>
       ) : part.kind === 'text' ? (
@@ -751,14 +755,6 @@ export const ChatMessageRow = memo(
             )
           }
           onPick={(prompt, suite) => onPickSuggestion?.(prompt, suite)}
-          // « Pourquoi pas ? » : seulement pour un TABLEAU de scout, dont les pistes vivent dans la
-          // mémoire du scout (piste 2, conv-1033). Sans pont vers le processus principal : pas de bouton.
-          onMotif={
-            part.deTableauScout && window.api?.scoutMotif
-              ? (candidat, motif) =>
-                  window.api.scoutMotif(candidat.titre, motif, conversationId ?? undefined)
-              : undefined
-          }
         />
       ) : part.kind === 'error' ? (
         <ChatErrorBlock
@@ -800,7 +796,7 @@ export const ChatMessageRow = memo(
           // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
           onResume={(task) =>
             window.api?.orchestrate?.(task, conversationId ?? undefined) ??
-            Promise.resolve({ ok: false, error: 'orchestration indisponible' })
+            Promise.resolve({ ok: false, error: t('message.orchestrationIndisponible') })
           }
         />
       )
@@ -904,19 +900,19 @@ export const ChatMessageRow = memo(
               <div className="msg-terminal" data-status={message.status}>
                 <span className="msg-terminal-text">
                   {echoue
-                    ? 'Réponse en échec'
+                    ? t('reponse.echec')
                     : annule
-                      ? 'Réponse annulée'
-                      : 'Réponse interrompue avant la fin'}
+                      ? t('reponse.annulee')
+                      : t('reponse.interrompue')}
                 </span>
                 {prompt && echoue && onResend && (
                   <button
                     type="button"
                     className="msg-terminal-action"
-                    title={`Renvoyer : ${prompt}`}
+                    title={t('erreur.renvoyer.titre', { prompt })}
                     onClick={() => onResend(prompt)}
                   >
-                    ↻ Renvoyer
+                    {t('erreur.renvoyer')}
                   </button>
                 )}
                 {/* Rejouer À L'IDENTIQUE un tour qui vient d'échouer refait le même échec. Ce
@@ -927,10 +923,10 @@ export const ChatMessageRow = memo(
                     type="button"
                     className="msg-terminal-action msg-terminal-refine"
                     data-testid="resume-refine"
-                    title="Pré-remplir le composer avec ce prompt et le motif d’échec, sans envoyer"
+                    title={t('erreur.preciser.titre')}
                     onClick={() => onRefineResume(prompt, status, raison)}
                   >
-                    ✎ Reprendre en précisant…
+                    {t('erreur.preciser')}
                   </button>
                 )}
               </div>
@@ -947,8 +943,8 @@ export const ChatMessageRow = memo(
             <button
               type="button"
               className="msg-turn-icon"
-              title="Inspecter ce tour dans l'Observatory"
-              aria-label="Inspecter ce tour"
+              title={t('reponse.inspecter.titre')}
+              aria-label={t('reponse.inspecter')}
               // Un message COPIE par un fork garde son tour, mais le journal de ce tour vit dans
               // la conversation d'origine : on l'ouvre LA-BAS plutot que de chercher sous le fork.
               onClick={() =>
@@ -965,8 +961,8 @@ export const ChatMessageRow = memo(
             <button
               type="button"
               className="msg-turn-icon"
-              title="Créer une branche à partir de ce tour"
-              aria-label="Créer une branche à partir de ce tour"
+              title={t('reponse.brancher')}
+              aria-label={t('reponse.brancher')}
               onClick={() => onFork(message.messageId!)}
             >
               <ForkIcon />

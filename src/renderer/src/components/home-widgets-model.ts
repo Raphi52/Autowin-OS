@@ -5,6 +5,8 @@
  * (`task-manager:snapshot`). Ce fichier ne fait que les trier et les résumer pour une lecture d'un
  * coup d'oeil, hors React pour que le tri soit testable sans monter d'interface.
  */
+import type { Langue } from '../../../shared/langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 export interface RoutineDeparture {
   id: string
@@ -37,7 +39,8 @@ interface TaskLike {
 export function nextDepartures(
   tasks: readonly TaskLike[],
   now: number,
-  limit = 12
+  limit = 12,
+  langue: Langue = 'fr'
 ): RoutineDeparture[] {
   return tasks
     .filter((task) => task.watchdog === undefined && typeof task.nextRunAt === 'number')
@@ -46,24 +49,29 @@ export function nextDepartures(
       title: task.title,
       at: task.nextRunAt as number,
       suspended: !task.enabled,
-      relative: relativeDelay((task.nextRunAt as number) - now)
+      relative: relativeDelay((task.nextRunAt as number) - now, langue)
     }))
     .sort((a, b) => a.at - b.at)
     .slice(0, limit)
 }
 
-export function relativeDelay(deltaMs: number): string {
-  if (deltaMs < 0) return 'en retard'
+/** Le délai avant un départ, dans la langue de l'interface (conv-1170) ; français par défaut. */
+export function relativeDelay(deltaMs: number, langue: Langue = 'fr'): string {
+  if (deltaMs < 0) return traduireAccueil('delai.enRetard', langue)
   const minutes = Math.round(deltaMs / 60000)
-  if (minutes < 1) return 'imminent'
-  if (minutes < 60) return `dans ${minutes} min`
+  if (minutes < 1) return traduireAccueil('delai.imminent', langue)
+  if (minutes < 60) return traduireAccueil('delai.minutes', langue, { minutes })
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
     const rest = minutes % 60
-    return rest === 0 ? `dans ${hours} h` : `dans ${hours} h ${rest} min`
+    return rest === 0
+      ? traduireAccueil('delai.heures', langue, { heures: hours })
+      : traduireAccueil('delai.heuresMinutes', langue, { heures: hours, minutes: rest })
   }
   const days = Math.round(hours / 24)
-  return days === 1 ? 'demain' : `dans ${days} jours`
+  return days === 1
+    ? traduireAccueil('delai.demain', langue)
+    : traduireAccueil('delai.jours', langue, { jours: days })
 }
 
 export interface AgentNotice {

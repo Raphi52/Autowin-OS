@@ -1,4 +1,6 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import { langueCourante } from '../langue'
+import { traduireObservatory } from '../textes-ecrans/observatory'
 import { extractHumanMessage } from './human-message'
 
 /**
@@ -54,32 +56,51 @@ export function humanEventPreview(kind: string, content: string, max = 140): str
     const maxAttempts = Number(data.maxAttempts ?? data.max ?? 0)
     const reason = typeof data.reason === 'string' ? ` — ${data.reason}` : ''
     if (attempt && maxAttempts)
-      return `Nouvel essai · tentative ${attempt} sur ${maxAttempts}${reason}`
-    return `Nouvel essai${reason}`
+      return traduireObservatory('apercu.nouvelEssaiTentative', langueCourante(), {
+        tentative: attempt,
+        max: maxAttempts,
+        raison: reason
+      })
+    return traduireObservatory('apercu.nouvelEssai', langueCourante(), { raison: reason })
   }
   if (kind === 'boundary' && data) {
     const parts: string[] = []
-    if ('stream' in data) parts.push(data.stream ? 'streaming' : 'sans streaming')
+    if ('stream' in data)
+      parts.push(
+        data.stream ? 'streaming' : traduireObservatory('apercu.sansStreaming', langueCourante())
+      )
     if (typeof data.reasoningEffort === 'string')
       parts.push(
-        data.reasoningEffort === 'none' ? 'effort par défaut' : `effort ${data.reasoningEffort}`
+        data.reasoningEffort === 'none'
+          ? traduireObservatory('apercu.effortDefaut', langueCourante())
+          : `effort ${data.reasoningEffort}`
       )
-    if ('resumed' in data) parts.push(data.resumed ? 'session réutilisée' : 'nouvelle session')
-    if (typeof data.model === 'string') parts.push(`modèle ${data.model}`)
+    if ('resumed' in data)
+      parts.push(
+        data.resumed
+          ? traduireObservatory('apercu.sessionReutilisee', langueCourante())
+          : traduireObservatory('apercu.nouvelleSession', langueCourante())
+      )
+    if (typeof data.model === 'string')
+      parts.push(traduireObservatory('apercu.modele', langueCourante(), { modele: data.model }))
     // Clés restantes non couvertes, pour ne rien cacher.
     for (const [k, v] of Object.entries(data)) {
       if (['stream', 'reasoningEffort', 'resumed', 'model'].includes(k)) continue
       if (v != null && typeof v !== 'object') parts.push(`${k} : ${v}`)
     }
     if (parts.length) {
-      const text = `Passage au provider · ${parts.join(' · ')}`
+      const text = traduireObservatory('apercu.passageProvider', langueCourante(), {
+        details: parts.join(' · ')
+      })
       return text.length > max ? `${text.slice(0, max)}…` : text
     }
   }
   if (kind === 'cancellation' && data) {
     const reason = typeof data.reason === 'string' ? data.reason : ''
-    if (reason === 'user') return 'Annulé par l’utilisateur'
-    return reason ? `Annulé — ${reason}` : 'Annulé'
+    if (reason === 'user') return traduireObservatory('apercu.annuleUtilisateur', langueCourante())
+    return reason
+      ? traduireObservatory('apercu.annuleRaison', langueCourante(), { raison: reason })
+      : traduireObservatory('apercu.annule', langueCourante())
   }
   // Filet générique : tout objet JSON restant → « clé : valeur · … » (jamais de JSON brut).
   if (data) {

@@ -1,4 +1,6 @@
 import { sansBaliseMessageUtilisateur } from '../../../shared/balise-message-utilisateur'
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 
 /**
  * Extraction du message HUMAIN d'un contenu de tour COMPOSÉ.
@@ -29,7 +31,7 @@ export function extractHumanMessage(content: string, max = 100): string {
       segments.find((s) => {
         const t = s.trim()
         return t && !/^(ÉTAT|ETAT|TOI\s*:|\()/.test(t) && !t.startsWith('{')
-      }) ?? '(état de l’app)'
+      }) ?? traduireChatFil('humain.etatApp', langueCourante())
   } else {
     // Contenu normal : rendu tel quel. C'est le cas le plus fréquent, et il ne doit rien perdre.
     human = content ?? ''

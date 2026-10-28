@@ -28,6 +28,8 @@ import {
   tailleLisible,
   type PieceJointeMessage
 } from './interlocuteurs-pieces'
+import { langueCourante } from '../langue'
+import { traduireAccueil, useTextesAccueil } from '../textes-ecrans/accueil'
 
 /**
  * La tuile Interlocuteurs, en TROIS écrans successifs dans la même tuile.
@@ -168,6 +170,7 @@ export function InterlocuteursWidget({
     [etape, conversations]
   )
 
+  const { t } = useTextesAccueil()
   const retour = useCallback(() => {
     setEtape((courant) => {
       if (courant.ecran === 'conversation' || courant.ecran === 'nouveau') {
@@ -182,10 +185,8 @@ export function InterlocuteursWidget({
   if (etape.ecran !== 'contacts' && contact === null) {
     return (
       <div className="home-inter">
-        <EnTete titre="Interlocuteur introuvable" onRetour={retour} />
-        <p className="home-hint">
-          Ce contact n’est plus dans les messages lus. Actualisez, ou revenez à la liste.
-        </p>
+        <EnTete titre={t('inter.introuvable')} onRetour={retour} />
+        <p className="home-hint">{t('inter.contactDisparu')}</p>
       </div>
     )
   }
@@ -219,7 +220,7 @@ export function InterlocuteursWidget({
   if (etape.ecran === 'nouveau' && contact) {
     return (
       <div className="home-inter">
-        <EnTete titre="Nouvelle conversation" sousTitre={contact.nom} onRetour={retour} />
+        <EnTete titre={t('inter.nouvelleConversation')} sousTitre={contact.nom} onRetour={retour} />
         <EcranNouveau contact={contact} onEnvoyer={onNouvelleConversation} />
       </div>
     )
@@ -228,8 +229,8 @@ export function InterlocuteursWidget({
   if (conversation === null || contact === null) {
     return (
       <div className="home-inter">
-        <EnTete titre="Fil introuvable" onRetour={retour} />
-        <p className="home-hint">Ce fil n’apparaît plus dans les messages lus.</p>
+        <EnTete titre={t('inter.filIntrouvable')} onRetour={retour} />
+        <p className="home-hint">{t('inter.filDisparu')}</p>
       </div>
     )
   }
@@ -264,6 +265,7 @@ function EnTete({
   sousTitre?: string
   onRetour: () => void
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   return (
     <div className="home-inter__bar">
       <button
@@ -273,10 +275,10 @@ function EnTete({
         // Le geste qui déplace la tuile part d'un `pointerdown` sur la tuile : sans cet arrêt,
         // cliquer « Précédent » ferait aussi glisser la tuile sous le curseur.
         onPointerDown={(event) => event.stopPropagation()}
-        title="Revenir à l’étape précédente"
+        title={t('inter.retourTitre')}
         data-testid="home-inter-retour"
       >
-        ‹ Précédent
+        {t('inter.precedent')}
       </button>
       <span className="home-inter__titre">
         <b title={titre}>{titre}</b>
@@ -304,8 +306,9 @@ function EcranContacts({
   onBasculerAlerte: (cle: string) => void
   onChoisir: (cle: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   if (fils.length === 0) {
-    return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
+    return <p className="home-hint">{t('inter.boiteVide')}</p>
   }
   const { personnes, automates, indistinct } = splitByExchange(fils)
   // Combien de fils ont du nouveau, en un coup d'œil : la pastille par contact dit « ici », ce
@@ -315,8 +318,8 @@ function EcranContacts({
     <>
       {filsNonLus > 0 ? (
         <p className="home-subhead" data-testid="home-inter-nonlus">
-          <span className="home-threads__tally">{filsNonLus}</span> conversation
-          {filsNonLus > 1 ? 's' : ''} avec du nouveau
+          <span className="home-threads__tally">{filsNonLus}</span>{' '}
+          {t(filsNonLus > 1 ? 'inter.nouveauPlusieurs' : 'inter.nouveauUn')}
         </p>
       ) : null}
       {personnes.length > 0 ? (
@@ -328,15 +331,12 @@ function EcranContacts({
         />
       ) : null}
       {personnes.length === 0 && !indistinct ? (
-        <p className="home-hint">
-          Aucun message d’une personne à qui vous avez déjà écrit. Ci-dessous, les envois
-          automatiques.
-        </p>
+        <p className="home-hint">{t('inter.aucunePersonne')}</p>
       ) : null}
       {automates.length > 0 ? (
         <>
           {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
-          <p className="home-subhead">Envois automatiques</p>
+          <p className="home-subhead">{t('inter.envoisAuto')}</p>
           <ListeContacts
             fils={sortByName(automates)}
             alertes={alertes}
@@ -360,6 +360,7 @@ function ListeContacts({
   onBasculerAlerte: (cle: string) => void
   onChoisir: (cle: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   return (
     <ul className="home-threads">
       {fils.map((fil) => (
@@ -375,7 +376,7 @@ function ListeContacts({
             className="home-threads__ouvrir"
             onClick={() => onChoisir(fil.cle)}
             onPointerDown={(event) => event.stopPropagation()}
-            title={`Voir mes fils avec ${fil.adresse || fil.nom}`}
+            title={t('inter.voirFils', { qui: fil.adresse || fil.nom })}
             data-testid={`home-contact-${fil.cle}`}
           >
             <span className="home-threads__who" aria-hidden="true">
@@ -396,7 +397,7 @@ function ListeContacts({
               aussi le fil de la personne. */}
           <label
             className="home-threads__alerte"
-            title={`Popup + son à chaque nouveau message de ${fil.nom}`}
+            title={t('inter.alerteTitre', { nom: fil.nom })}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <input
@@ -406,7 +407,7 @@ function ListeContacts({
               onChange={() => onBasculerAlerte(fil.cle)}
               data-testid={`home-contact-alerte-${fil.cle}`}
             />
-            <span aria-hidden="true">Alerte</span>
+            <span aria-hidden="true">{t('inter.alerte')}</span>
           </label>
         </li>
       ))}
@@ -435,6 +436,7 @@ function EcranFils({
   onChoisir: (cle: string) => void
   onNouveau: () => void
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   const depart =
     contact.adresse !== '' ? (
       <div className="home-chat__actions" onPointerDown={(event) => event.stopPropagation()}>
@@ -442,22 +444,20 @@ function EcranFils({
           type="button"
           className="home-chat__ouvrir"
           onClick={onNouveau}
-          title={`Écrire un nouveau message à ${contact.adresse}`}
+          title={t('inter.nouveauTitre', { adresse: contact.adresse })}
           data-testid="home-inter-nouveau"
         >
-          + Nouvelle conversation par mail
+          {t('inter.nouveauBouton')}
         </button>
       </div>
     ) : (
-      <p className="home-hint">
-        Aucune adresse connue pour ce contact : impossible de lui écrire un nouveau message.
-      </p>
+      <p className="home-hint">{t('inter.sansAdresse')}</p>
     )
   if (conversations.length === 0) {
     return (
       <>
         {depart}
-        <p className="home-hint">Aucun fil de discussion avec cette personne.</p>
+        <p className="home-hint">{t('inter.aucunFil')}</p>
       </>
     )
   }
@@ -481,7 +481,9 @@ function EcranFils({
                   <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
                 </span>
                 <span className="home-threads__last">
-                  {fil.messages.length} message{fil.messages.length > 1 ? 's' : ''}
+                  {t(fil.messages.length > 1 ? 'inter.messagesPlusieurs' : 'inter.messagesUn', {
+                    n: fil.messages.length
+                  })}
                 </span>
               </span>
               {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
@@ -522,6 +524,7 @@ function EcranConversation({
   ) => Promise<{ ok: boolean; erreur?: string }>
   onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   const [brouillon, setBrouillon] = useState('')
   const [pieces, setPieces] = useState<PieceJointeMessage[]>([])
   const [survol, setSurvol] = useState(false)
@@ -566,7 +569,7 @@ function EcranConversation({
         // Un echec AFFICHE, et rejouable : sans le retrait ci-dessous, une panne passagere d'Outlook
         // condamnerait ces messages a rester non lus jusqu'au prochain demarrage de l'application.
         for (const id of aMarquer) dejaDemandes.current.delete(id)
-        setErreurLu(resultat.erreur ?? "Outlook n'a pas pu marquer ces messages comme lus.")
+        setErreurLu(resultat.erreur ?? traduireAccueil('inter.marquerEchec', langueCourante()))
       } catch (error) {
         for (const id of aMarquer) dejaDemandes.current.delete(id)
         setErreurLu(error instanceof Error ? error.message : String(error))
@@ -604,7 +607,7 @@ function EcranConversation({
         setEnvoye(true)
       } else {
         // La cause est AFFICHÉE : un envoi qui échoue en silence fait croire que le message est parti.
-        setErreur(resultat.erreur ?? "Outlook n'a pas pu envoyer cette réponse.")
+        setErreur(resultat.erreur ?? traduireAccueil('inter.reponseEchec', langueCourante()))
       }
     } catch (error) {
       setErreur(error instanceof Error ? error.message : String(error))
@@ -700,8 +703,8 @@ function EcranConversation({
     <div className={`home-chat__zone${survol ? ' is-depot' : ''}`} {...zoneDepot}>
       {survol ? (
         <div className="home-chat__depot-calque" aria-hidden="true">
-          <strong>Déposez vos fichiers</strong>
-          <span>Ils partiront en pièce jointe de cette réponse</span>
+          <strong>{t('inter.deposez')}</strong>
+          <span>{t('inter.pieceReponse')}</span>
         </div>
       ) : null}
       <ol className="home-chat" data-testid="home-inter-conversation">
@@ -713,14 +716,12 @@ function EcranConversation({
         // Nomme, pas avale : une pastille qui ne part pas se lit comme une panne du widget, alors que
         // c'est Outlook qui a refuse l'ecriture.
         <p className="home-error" role="status" data-testid="home-inter-lu-erreur">
-          Ces messages restent non lus dans Outlook : {erreurLu}
+          {t('inter.restentNonLus', { erreur: erreurLu })}
         </p>
       ) : null}
       <div className="home-chat__repondre" onPointerDown={(event) => event.stopPropagation()}>
         {ancre === null ? (
-          <p className="home-hint">
-            Ce fil ne contient que vos envois : il n’y a pas de message auquel répondre.
-          </p>
+          <p className="home-hint">{t('inter.queVosEnvois')}</p>
         ) : (
           <>
             <textarea
@@ -733,7 +734,7 @@ function EcranConversation({
                 setConfirme(false)
                 setEnvoye(false)
               }}
-              placeholder={`Répondre à ${contact.nom}…`}
+              placeholder={t('inter.repondreA', { nom: contact.nom })}
               rows={2}
               data-testid="home-inter-saisie"
             />
@@ -751,7 +752,7 @@ function EcranConversation({
                       type="button"
                       className="home-chat__piece-retirer"
                       onClick={() => retirerPiece(index)}
-                      title={`Retirer ${piece.nom}`}
+                      title={t('inter.retirer', { nom: piece.nom })}
                       disabled={envoiEnCours}
                       data-testid={`home-inter-reponse-piece-retirer-${index}`}
                     >
@@ -762,7 +763,7 @@ function EcranConversation({
               </ul>
             ) : (
               <p className="home-hint home-chat__depot-invite">
-                Glissez un fichier ici pour le joindre ({MAX_PIECES} max, 10 Mo chacun).
+                {t('inter.glissez', { max: MAX_PIECES })}
               </p>
             )}
             <div className="home-chat__actions">
@@ -781,9 +782,11 @@ function EcranConversation({
                   className="home-chat__ouvrir"
                   onClick={() => void onOuvrir(dernier.id)}
                   disabled={ouvertureEnCours === dernier.id}
-                  title="Ouvrir ce fil dans Outlook"
+                  title={t('inter.ouvrirFilTitre')}
                 >
-                  {ouvertureEnCours === dernier.id ? 'Ouverture…' : 'Ouvrir dans Outlook'}
+                  {ouvertureEnCours === dernier.id
+                    ? t('commun.ouverture')
+                    : t('inter.ouvrirDansOutlook')}
                 </button>
               ) : null}
             </div>
@@ -794,7 +797,7 @@ function EcranConversation({
             ) : null}
             {envoye && erreur === null ? (
               <p className="home-hint" role="status">
-                Réponse envoyée. Elle apparaîtra dans le fil à la prochaine actualisation.
+                {t('inter.reponseEnvoyee')}
               </p>
             ) : null}
           </>
@@ -832,6 +835,7 @@ function EnvoiEnDeuxTemps({
   onEnvoyer: () => void | Promise<void>
   prefixeTest: string
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   if (!confirme) {
     return (
       <button
@@ -841,7 +845,7 @@ function EnvoiEnDeuxTemps({
         disabled={bloque}
         data-testid={`${prefixeTest}-envoyer`}
       >
-        Envoyer par Outlook
+        {t('inter.envoyerParOutlook')}
       </button>
     )
   }
@@ -854,7 +858,7 @@ function EnvoiEnDeuxTemps({
         disabled={envoiEnCours || bloque}
         data-testid={`${prefixeTest}-confirmer`}
       >
-        {envoiEnCours ? <Spinner /> : `Confirmer l’envoi à ${nom}`}
+        {envoiEnCours ? <Spinner /> : t('inter.confirmerEnvoi', { nom })}
       </button>
       <button
         type="button"
@@ -862,7 +866,7 @@ function EnvoiEnDeuxTemps({
         onClick={() => onConfirme(false)}
         disabled={envoiEnCours}
       >
-        Annuler
+        {t('inter.annuler')}
       </button>
     </>
   )
@@ -891,6 +895,7 @@ function EcranNouveau({
     pieces: readonly PieceJointeMessage[]
   ) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   const [objet, setObjet] = useState('')
   const [message, setMessage] = useState('')
   const [pieces, setPieces] = useState<PieceJointeMessage[]>([])
@@ -918,7 +923,7 @@ function EcranNouveau({
         setEnvoye(true)
       } else {
         // La cause est AFFICHÉE : un envoi qui échoue en silence fait croire que le message est parti.
-        setErreur(resultat.erreur ?? "Outlook n'a pas pu envoyer ce message.")
+        setErreur(resultat.erreur ?? traduireAccueil('inter.messageEchec', langueCourante()))
       }
     } catch (error) {
       setErreur(error instanceof Error ? error.message : String(error))
@@ -992,17 +997,17 @@ function EcranNouveau({
     >
       {survol ? (
         <div className="home-chat__depot-calque" aria-hidden="true">
-          <strong>Déposez vos fichiers</strong>
-          <span>Ils partiront en pièce jointe de ce message</span>
+          <strong>{t('inter.deposez')}</strong>
+          <span>{t('inter.pieceMessage')}</span>
         </div>
       ) : null}
-      <p className="home-hint">Nouveau message à {contact.adresse}</p>
+      <p className="home-hint">{t('inter.nouveauMessageA', { adresse: contact.adresse })}</p>
       <input
         type="text"
         className="home-chat__saisie"
         value={objet}
         onChange={(event) => modifier(() => setObjet(event.target.value))}
-        placeholder="Objet"
+        placeholder={t('inter.objet')}
         maxLength={255}
         data-testid="home-inter-nouveau-objet"
       />
@@ -1010,7 +1015,7 @@ function EcranNouveau({
         className="home-chat__saisie"
         value={message}
         onChange={(event) => modifier(() => setMessage(event.target.value))}
-        placeholder={`Premier message à ${contact.nom}…`}
+        placeholder={t('inter.premierMessage', { nom: contact.nom })}
         rows={3}
         data-testid="home-inter-nouveau-message"
       />
@@ -1028,7 +1033,7 @@ function EcranNouveau({
                 type="button"
                 className="home-chat__piece-retirer"
                 onClick={() => retirerPiece(index)}
-                title={`Retirer ${piece.nom}`}
+                title={t('inter.retirer', { nom: piece.nom })}
                 disabled={envoiEnCours}
                 data-testid={`home-inter-nouveau-piece-retirer-${index}`}
               >
@@ -1039,7 +1044,7 @@ function EcranNouveau({
         </ul>
       ) : (
         <p className="home-hint home-chat__depot-invite">
-          Glissez un fichier ici pour le joindre ({MAX_PIECES} max, 10 Mo chacun).
+          {t('inter.glissez', { max: MAX_PIECES })}
         </p>
       )}
       <div className="home-chat__actions">
@@ -1060,7 +1065,7 @@ function EcranNouveau({
       ) : null}
       {envoye && erreur === null ? (
         <p className="home-hint" role="status">
-          Message envoyé. La conversation apparaîtra dans la liste à la prochaine actualisation.
+          {t('inter.messageEnvoye')}
         </p>
       ) : null}
     </div>
@@ -1075,10 +1080,11 @@ function Bulle({
   message: MessageInterlocuteur
   contact: Interlocuteur
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   return (
     <li className="home-chat__ligne" data-moi={message.deMoi ? 'true' : undefined}>
       <span className="home-chat__meta">
-        <b>{message.deMoi ? 'Moi' : contact.nom}</b>
+        <b>{message.deMoi ? t('commun.moi') : contact.nom}</b>
         <em>{formatMessageDate(message.recuLe)}</em>
       </span>
       <span className="home-chat__bulle" data-unread={message.nonLu ? 'true' : undefined}>
