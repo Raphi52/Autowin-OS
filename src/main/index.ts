@@ -1313,7 +1313,8 @@ function drainPendingDirectives(conversationId: string): string[] {
   const enFile = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
   if (enFile.length) broadcast({ type: 'refresh', scope: 'directives' })
-  // conv-1241 : celles que le contrôle avant outil a déjà remises au modèle EN PLEIN APPEL ne
+  // fix-ok: conv-1241 (tour 6e6212f1) — la file n'était relue qu'ENTRE deux appels : conv-1240, tour 2e218711, saisie ts 1793225455947 absente d'un appel de 11 min.
+  // Celles que le contrôle avant outil a déjà remises au modèle EN PLEIN APPEL ne
   // repartent pas une seconde fois (`orientations-en-cours-app.ts`).
   const queued = solderOrientationsDuFil(conversationId, enFile, 'tour')
   return queued
