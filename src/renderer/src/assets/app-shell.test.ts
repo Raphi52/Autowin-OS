@@ -110,6 +110,20 @@ describe('collapsed navigation rail', () => {
     expect(css).not.toMatch(/(?:^|\n)\.nav\s*{[^}]*overflow-x:\s*hidden/s)
   })
 
+  // conv-1208 : menu DÉPLIÉ, l'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) dépassait de 4 px
+  // de chaque côté de la capsule ouverte, qui remplit `.nav` ; `overflow-y: auto` le rognait à
+  // gauche et à droite. `.nav` garde ≥ 4 px de marge intérieure, rendus par une marge négative
+  // égale pour que les items ne bougent pas. Entrée qui doit échouer : la marge retirée, ou une
+  // marge intérieure sans la marge négative (les items rétréciraient de 8 px).
+  it('leaves room inside the menu for the focus ring of the open tab', () => {
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    const nav = css.match(/(?:^|\n)\.nav\s*{([^}]*)}/s)?.[1] ?? ''
+    const anneau = Number(nav.match(/--nav-anneau:\s*(\d+(?:\.\d+)?)px\s*;/)?.[1])
+    expect(anneau).toBeGreaterThanOrEqual(4)
+    expect(nav).toMatch(/(?:^|[;{\s])padding:\s*var\(--nav-anneau\)\s*;/)
+    expect(nav).toMatch(/(?:^|[;{\s])margin:\s*calc\(\s*-1\s*\*\s*var\(--nav-anneau\)\s*\)\s*;/)
+  })
+
   // conv-198 : l'ancien translateX(-3px) mettait l'icône 3 px à gauche du centre de son rond.
   // Centrée par la flexbox seule, elle tombe au milieu du rond et sous le bouton de repli.
   it('never shifts the navigation icons off the centre of their round item', () => {
