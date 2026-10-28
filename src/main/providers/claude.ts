@@ -45,7 +45,11 @@ import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
 import { tacheRelanceeParAutowin } from './taches-de-fond-suivies'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
-import { codeDeSortieDuResultatClaude, testsDuTerminal } from './tests-du-terminal'
+import {
+  codeDeSortieDuResultatClaude,
+  scriptHookTestsNonComptes,
+  testsDuTerminal
+} from './tests-du-terminal'
 import {
   appendWorkspaceMutationEvidence,
   captureWorkspaceMutationSnapshot
@@ -1088,6 +1092,31 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
   }
 }
 
+/**
+ * AVERTISSEMENT DES TESTS NON COMPTÉS (conv-1221, 2026-10-28) : un hook APRÈS chaque commande Bash
+ * dit à l'agent qu'un test qu'il vient de lancer ne comptera pas sur le Board (script :
+ * `scriptHookTestsNonComptes`). PostToolUse ET PostToolUseFailure : une ligne qui rend un code non
+ * nul passe par le second (`npx vitest … | grep FAIL` sans résultat). Sans `onFailure` : un hook en
+ * panne ne doit rien bloquer, la commande a déjà tourné. Tours de CHAT seulement (`hookTests`
+ * absent ailleurs) : le Board ne compte que leurs tests, un agent de run relancerait pour rien.
+ */
+export function avecAvertissementDesTests(
+  reglages: Record<string, unknown>,
+  hookTests: string | undefined
+): Record<string, unknown> {
+  if (!hookTests) return reglages
+  const commande = `node "${hookTests.split('\\').join('/')}"`
+  const groupe = [{ matcher: 'Bash', hooks: [{ type: 'command', command: commande }] }]
+  return {
+    ...reglages,
+    hooks: {
+      ...(reglages.hooks as Record<string, unknown>),
+      PostToolUse: groupe,
+      PostToolUseFailure: groupe
+    }
+  }
+}
+
 /** Le garde npm du dépôt, à côté du mod (`<dépôt>/mods/autowin` → `<dépôt>/scripts`). Absent → `undefined`. */
 export function gardeNpmDuDepot(
   modAutowin: string | undefined,
@@ -1650,9 +1679,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
       await writeFileAsync(hookGarde, scriptDesGardesCourant(), 'utf8')
+      // Tests non comptés (conv-1221) : tours de chat seulement, voir `avecAvertissementDesTests`.
+      let hookTests: string | undefined
+      if (opts.conversationId?.trim()) {
+        hookTests = join(settingsDir, 'tests-non-comptes.mjs')
+        await writeFileAsync(hookTests, scriptHookTestsNonComptes(), 'utf8')
+      }
       await writeFileAsync(
         settingsFile,
-        JSON.stringify(reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin))),
+        JSON.stringify(
+          avecAvertissementDesTests(
+            reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
+            hookTests
+          )
+        ),
         'utf8'
       )
       args.push('--settings', settingsFile)

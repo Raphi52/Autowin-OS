@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { codeDeSortieDuResultatClaude, testsDuTerminal } from './tests-du-terminal'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it } from 'vitest'
+import {
+  avertissementTestsNonComptes,
+  codeDeSortieDuResultatClaude,
+  scriptHookTestsNonComptes,
+  testsDuTerminal,
+  testsNonComptes
+} from './tests-du-terminal'
 
 /**
  * TESTS DU TERMINAL (conv-1059, 2026-10-22) — lire, dans UNE ligne shell lancée par l'agent, les
@@ -116,6 +126,217 @@ describe('testsDuTerminal — le code écrit par `echo …=$?` juste après le t
     expect(lire('npx eslint x.ts 2>&1 | tail -8; echo EXIT=$?', 0, 'EXIT=0')).toEqual([])
     expect(lire("npm test; echo 'EXIT=$?'", 0, 'EXIT=$?')).toEqual([])
     expect(lire('npm test; echo EXIT=$?', 0, '…sortie coupée')).toEqual([])
+  })
+})
+
+/*
+ * conv-1221 (2026-10-28) : sur 6 jours, 251 tests lancés au terminal, 25 comptés par le Board ; 190
+ * passaient par un tube (`| tail`, `| grep`) et 12 imprimaient pourtant leur vrai code par
+ * `echo "exit ${PIPESTATUS[0]}"`. Sur 103 vitest raccourcis, 79 laissaient voir leur bilan.
+ */
+describe('testsDuTerminal — `${PIPESTATUS[k]}` imprimé après un tube', () => {
+  it('lit le code du test placé au maillon k, pas celui de `tail`', () => {
+    expect(
+      lire(
+        'npx vitest run src/a.test.ts 2>&1 | grep -E "×|FAIL" | head -15; echo "exit ${PIPESTATUS[0]}"',
+        0,
+        ' × a > b\nexit 1'
+      )
+    ).toEqual([{ commande: 'npx vitest run src/a.test.ts', codeDeSortie: 1 }])
+    expect(lire('npx eslint x.ts 2>&1 | tail -8; echo EXIT=${PIPESTATUS[0]}', 0, 'EXIT=0')).toEqual(
+      [{ commande: 'npx eslint x.ts', codeDeSortie: 0 }]
+    )
+  })
+
+  it('le maillon visé n’est pas un test, marqueur entre apostrophes, ou absent : rien', () => {
+    expect(
+      lire('npx vitest run a.test.ts | tail -3; echo "exit ${PIPESTATUS[1]}"', 0, 'exit 0')
+    ).toEqual([])
+    expect(
+      lire(
+        "npx vitest run a.test.ts | tail -3; echo 'exit ${PIPESTATUS[0]}'",
+        0,
+        'exit ${PIPESTATUS[0]}'
+      )
+    ).toEqual([])
+    expect(
+      lire('npx vitest run a.test.ts | tail -3; echo "exit ${PIPESTATUS[0]}"', 0, '…coupé')
+    ).toEqual([])
+  })
+})
+
+const BILAN_VERT = [
+  ' ✓ src/a.test.ts (3 tests) 12ms',
+  '',
+  ' Test Files  1 passed (1)',
+  '      Tests  3 passed (3)',
+  '   Start at  10:01:02',
+  '   Duration  1.23s (transform 50ms, setup 0ms)'
+].join('\n')
+
+describe('testsDuTerminal — le bilan de vitest resté visible dans la sortie', () => {
+  it('vert : bilan entier sous un `tail` (aucune ligne retirée au milieu)', () => {
+    expect(lire('npx vitest run src/a.test.ts 2>&1 | tail -6', 0, BILAN_VERT)).toEqual([
+      { commande: 'npx vitest run src/a.test.ts', codeDeSortie: 0 }
+    ])
+    // Couleurs du terminal comprises.
+    expect(
+      lire(
+        'npx vitest run a.test.ts | tail -6',
+        0,
+        BILAN_VERT.replace('Test Files', '\u001b[2mTest Files\u001b[22m')
+      )
+    ).toHaveLength(1)
+  })
+
+  it('rouge : un « failed » ou une ligne « Errors » se lit même sous un `grep`', () => {
+    expect(
+      lire(
+        'npx vitest run a.test.ts 2>&1 | grep -E "Test Files|Tests |×"',
+        0,
+        ' × a > b\n Test Files  1 failed (1)\n      Tests  1 failed | 2 passed (3)'
+      )
+    ).toEqual([{ commande: 'npx vitest run a.test.ts', codeDeSortie: 1 }])
+    expect(
+      lire(
+        'npx vitest run a.test.ts | tail -7',
+        0,
+        BILAN_VERT.replace('   Start at', '     Errors  1 error\n   Start at')
+      )
+    ).toEqual([{ commande: 'npx vitest run a.test.ts', codeDeSortie: 1 }])
+  })
+
+  it('jamais de faux vert : `grep` a pu retirer la ligne « Errors », bilan coupé, ou pas vitest seul', () => {
+    // Un `grep` qui ne garde que « Test Files|Tests » aurait aussi retiré une ligne « Errors ».
+    expect(
+      lire('npx vitest run a.test.ts | grep -E "Test Files|Tests |Duration"', 0, BILAN_VERT)
+    ).toEqual([])
+    // `tail -2` : la ligne « Test Files » n'est plus là.
+    expect(
+      lire('npx vitest run a.test.ts | tail -2', 0, BILAN_VERT.split('\n').slice(-2).join('\n'))
+    ).toEqual([])
+    // Sortie coupée avant « Duration » : le bilan n'est pas entier.
+    expect(
+      lire('npx vitest run a.test.ts | tail -6', 0, BILAN_VERT.split('\n').slice(0, 4).join('\n'))
+    ).toEqual([])
+    // `npm test` joue aussi le typage et le lint : le bilan de vitest ne dit pas son code.
+    expect(lire('npm test 2>&1 | tail -6', 0, BILAN_VERT)).toEqual([])
+    // Deux vitest dans la ligne : on ne sait plus à qui est le bilan.
+    expect(
+      lire('npx vitest run a.test.ts | tail -6; npx vitest run b.test.ts | tail -6', 0, BILAN_VERT)
+    ).toEqual([])
+  })
+})
+
+describe('testsNonComptes — les tests lancés dont le code reste illisible', () => {
+  const nonComptes = (ligne: string, code: number | null, sortie = ''): string[] =>
+    testsNonComptes(ligne, { codeDeSortie: code, sortie })
+
+  it('nomme le test raccourci par un tube, masqué par `||` ou lancé en fond', () => {
+    expect(nonComptes('npx vitest run a.test.ts 2>&1 | grep FAIL', 1)).toEqual([
+      'npx vitest run a.test.ts'
+    ])
+    expect(nonComptes('npm test || true', 0)).toEqual(['npm test'])
+    expect(nonComptes('npm test &', 0)).toEqual(['npm test'])
+    expect(nonComptes('cd x && npx tsc --noEmit | head -5; npm run lint', 0)).toEqual([
+      'npx tsc --noEmit'
+    ])
+  })
+
+  it('rien quand le test est compté, quand la ligne ne teste rien, ou quand elle est illisible', () => {
+    expect(nonComptes('npx vitest run a.test.ts', 0)).toEqual([])
+    expect(nonComptes('npx vitest run a.test.ts | tail -6', 0, BILAN_VERT)).toEqual([])
+    expect(nonComptes('git status | head', 0)).toEqual([])
+    expect(nonComptes("cat > a.ts <<'EOF'\nx\nEOF\nnpx vitest run a.ts | tail", 0)).toEqual([])
+  })
+})
+
+describe('avertissementTestsNonComptes — ce que lit l’agent', () => {
+  it('nomme le test et les trois façons de le faire compter', () => {
+    const texte = avertissementTestsNonComptes(
+      'npx vitest run a.test.ts | tail -3',
+      { codeDeSortie: 0, sortie: '' },
+      false
+    )
+    expect(texte).toContain('`npx vitest run a.test.ts`')
+    expect(texte).toContain('Board')
+    expect(texte).toContain('verify')
+    expect(texte).toContain('${PIPESTATUS[0]}')
+  })
+
+  it('en fond : tout test est non compté ; sans test illisible : aucun avertissement', () => {
+    expect(
+      avertissementTestsNonComptes(
+        'npx vitest run a.test.ts',
+        { codeDeSortie: 0, sortie: '' },
+        true
+      )
+    ).toContain('en fond')
+    expect(
+      avertissementTestsNonComptes(
+        'npx vitest run a.test.ts',
+        { codeDeSortie: 0, sortie: '' },
+        false
+      )
+    ).toBeUndefined()
+    expect(
+      avertissementTestsNonComptes('git status', { codeDeSortie: 0, sortie: '' }, true)
+    ).toBeUndefined()
+  })
+})
+
+describe('scriptHookTestsNonComptes — le VRAI script du hook, lancé par node', () => {
+  const dossier = mkdtempSync(join(tmpdir(), 'hook-tests-non-comptes-'))
+  const script = join(dossier, 'tests-non-comptes.mjs')
+  writeFileSync(script, scriptHookTestsNonComptes(), 'utf8')
+  afterAll(() => rmSync(dossier, { recursive: true, force: true }))
+  const hook = (entree: unknown): string =>
+    spawnSync(process.execPath, [script], {
+      input: typeof entree === 'string' ? entree : JSON.stringify(entree),
+      encoding: 'utf8'
+    }).stdout
+
+  it('PostToolUse : un test raccourci par `| tail` reçoit l’avertissement à côté de son résultat', () => {
+    const sortie = JSON.parse(
+      hook({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'npx vitest run a.test.ts 2>&1 | tail -3' },
+        tool_response: { stdout: 'x', stderr: '' }
+      })
+    )
+    expect(sortie.hookSpecificOutput.hookEventName).toBe('PostToolUse')
+    expect(sortie.hookSpecificOutput.additionalContext).toContain('`npx vitest run a.test.ts`')
+  })
+
+  it('PostToolUseFailure : la ligne en échec (« Exit code 1 ») est lue aussi', () => {
+    const sortie = JSON.parse(
+      hook({
+        hook_event_name: 'PostToolUseFailure',
+        tool_name: 'Bash',
+        tool_input: { command: 'npx vitest run a.test.ts | grep FAIL' },
+        error: 'Exit code 1\n',
+        is_interrupt: false
+      })
+    )
+    expect(sortie.hookSpecificOutput.hookEventName).toBe('PostToolUseFailure')
+    expect(sortie.hookSpecificOutput.additionalContext).toContain('`npx vitest run a.test.ts`')
+  })
+
+  it('silencieux : test compté, bilan lisible, autre outil, entrée illisible', () => {
+    const base = {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_response: { stdout: BILAN_VERT }
+    }
+    expect(hook({ ...base, tool_input: { command: 'npx vitest run a.test.ts' } })).toBe('')
+    expect(hook({ ...base, tool_input: { command: 'npx vitest run a.test.ts | tail -6' } })).toBe(
+      ''
+    )
+    expect(hook({ ...base, tool_name: 'Read', tool_input: { command: 'npm test | tail' } })).toBe(
+      ''
+    )
+    expect(hook('pas du json')).toBe('')
   })
 })
 
