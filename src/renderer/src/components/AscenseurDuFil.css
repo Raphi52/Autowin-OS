@@ -255,18 +255,23 @@
   initial-value: 80px;
 }
 /* LA CARTE DÉCALE LA CONVERSATION au lieu de la masquer (conv-1114) : pendant qu'elle est ouverte,
-   la marge droite du fil s'élargit à sa largeur + 8 px (`--adf-reserve`, posé par AscenseurDuFil),
-   à son rythme : 800 ms à l'ouverture, le repli de la carte au retour. Sélecteurs plus précis que
-   `.chat-layout .chat-scroll` (ChatView.css), dont la marge est en !important. Le navigateur garde
-   la lecture en place quand le texte au-dessus se réajuste (ancrage du défilement). */
+   la marge droite du fil s'élargit à sa largeur + 8 px (`--adf-reserve`, posé par AscenseurDuFil).
+   Sélecteurs plus précis que `.chat-layout .chat-scroll` (ChatView.css), dont la marge est en
+   !important. La ligne lue est tenue en place par AscenseurDuFil pendant le réagencement.
+   D'UN COUP, PAS EN 800 MS (conv-1193, « la scrollbar repasse en overlay pendant que je scroll ») :
+   la marge animée relançait la mise en page du fil ENTIER à chaque image — 130 à 240 ms par image
+   sur un long fil (copie cachée de conv-1139) — pendant que la carte et ses aperçus, animés sans
+   elle, apparaissaient sur un texte pas encore poussé. La place est donc prise dans l'image même où
+   la carte commence à se dévoiler, et rendue seulement une fois la carte rentrée (200 ms : son
+   `clip-path`, et son `opacity` délai compris, plus haut). Gardé par AscenseurDuFil.style.test.ts. */
 .chat-layout .chat-scroll.chat-scroll--ascenseur,
 .chat .chat-scroll.chat-scroll--ascenseur {
-  transition: padding-right 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding-right 0s linear 200ms;
 }
 .chat-layout .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'],
 .chat .chat-scroll.chat-scroll--ascenseur[data-ascenseur='deplie'] {
   padding-right: var(--adf-reserve, 80px) !important;
-  transition: padding-right 800ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none;
 }
 .chat-scroll--ascenseur::-webkit-scrollbar {
   display: none;
