@@ -71,6 +71,12 @@
   --s4: 16px;
   --s5: 24px;
   --s6: 32px;
+  /* MARGE DU HAUT DE LA VUE ET DU MENU : jamais moins haute que les boutons de fenêtre de Windows,
+     dont le gris de survol se dessine par-dessus la page. Ces boutons ne suivent pas le zoom de
+     l'app ; `env(titlebar-area-height)` donne leur hauteur convertie au zoom (mesuré le 2026-10-28,
+     conv-1223 : 24 px à 100 %, 30 px à 80 %, 48 px à 50 %, 16 px à 150 %). À 100 % et au-dessus, la
+     marge reste var(--s5) ; sous 100 %, elle grandit pour que le gris ne morde pas sur la vue. */
+  --marge-haut-vue: max(var(--s5), env(titlebar-area-height, 0px));
 
   --r1: 8px;
   --r2: 12px;
