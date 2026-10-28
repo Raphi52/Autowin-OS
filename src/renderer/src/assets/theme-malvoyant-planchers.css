@@ -612,7 +612,6 @@
 :root[data-theme^='malvoyant-'] .home-threads__last,
 :root[data-theme^='malvoyant-'] .home-threads__tally,
 :root[data-theme^='malvoyant-'] .home-subhead,
-:root[data-theme^='malvoyant-'] .home-notices__acquitter,
 :root[data-theme^='malvoyant-'] .home-tile__panel:has(.home-tile__scroll[data-reste-en-bas='true'])::after,
 :root[data-theme^='malvoyant-'] .home-view__alerte,
 :root[data-theme^='malvoyant-'] .jarvis__bascule,

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   1026 regles, 1423 declarations. Voir genererNinjaClaude.
+   1025 regles, 1422 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -1684,9 +1684,6 @@
     color: var(--gold-bright, rgb(229, 163, 141));
     background: rgba(218, 124, 93, 0.08);
     border: 1px solid rgba(218, 124, 93, 0.3)
-}
-:root[data-theme='ninja-claude'] .home-notices__acquitter {
-    background: var(--bg-inset, rgba(31, 30, 29, 0.58))
 }
 :root[data-theme='ninja-claude'] .home-convs button {
     background: rgba(218, 124, 93, 0.06)
