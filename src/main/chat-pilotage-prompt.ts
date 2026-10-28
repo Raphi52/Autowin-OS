@@ -799,6 +799,14 @@ export function buildChatPilotagePrompt(
         // (`projectScopeFromWorkspace`) : la prose dit ce defaut, pour que `global` reste un choix.
         `\`scope\` — la portée : omets-la et Autowin la remplit avec le projet courant ; écris ` +
         `\`global\` seulement quand le fait vaut au-delà de ce projet. ` +
+        // DEUX BRAINS (conv-1233, 2026-10-28) : l'utilisateur a choisi que l'agent range lui-même et
+        // dise où. Le compte-rendu porte `rangement` (commands.ts, cas 'remember').
+        `\`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, un outil ou un ` +
+        `système de l'équipe ; \`perso\` pour tout le reste (notes personnelles, projets perso) — le ` +
+        `Brain perso est privé, jamais partagé. Dis ensuite en une ligne où tu l'as rangé, d'après le ` +
+        `champ \`rangement\` du compte-rendu ; un refus « aucun Brain perso » se dit tel quel, sans ` +
+        `ranger à l'équipe à la place. Dans \`brain_query\`, les notes perso arrivent sous BRAIN PERSO, ` +
+        `chemins préfixés \`perso:\` : garde ce préfixe pour \`brain_read\`. ` +
         `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
         `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
         `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
