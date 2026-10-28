@@ -383,6 +383,13 @@ export function bordsDesColonnes(poids: readonly number[]): number[] {
 export const POSTIT_L = 124
 export const POSTIT_H = 84
 /**
+ * La place gardée sous un post-it « À vérifier » pour ses boutons « vérifier / à la main », à
+ * l'échelle 1 : 3 d'écart, 20 de boutons (mesurés dans Chromium), 1 de jeu. Sans elle (conv-1214,
+ * 2026-10-28), les boutons tombaient sur le haut du post-it du dessous — l'écart entre deux lignes
+ * n'est que de 8 — et la souris, plus bas dans sa carte, ne les voyait plus.
+ */
+export const PLACE_DES_GESTES = 24
+/**
  * L'échelle la plus grande d'un post-it. Plafonnée à 1 jusqu'au 2026-10-28, quand l'utilisateur a
  * constaté (conv-1204) : « le post it doit être plus grand, on optimise mal l'espace » — la colonne
  * de la loupe gardait des post-it de 124 px au-dessus d'un tiers de tableau vide. Ils grandissent
@@ -585,6 +592,11 @@ export interface OptionsDeDisposition {
   debut: number
   marge: number
   sousLigne: number
+  /**
+   * Le pas d'un étage qui garde de la place sous ses post-it (« À vérifier » et ses boutons,
+   * conv-1214), à l'échelle 1 ; les autres étages prennent `sousLigne`.
+   */
+  sousLigneParEtage?: Readonly<Partial<Record<string, number>>>
   vide: number
   /** Le jour de la loupe : ses cases chargées essaient COLONNES_DE_LA_LOUPE. Absent = 3 partout. */
   jourLoupe?: number
@@ -618,14 +630,18 @@ export function disposerEtages(
   const largeur = (j: number): number => (bords[j + 1] - bords[j]) * largeurPx
   const echelle = (j: number, c: number): number =>
     Math.min(ECHELLE_MAX, Math.max(0.09, ajusteALaColonne(largeur(j), c)))
-  const pasDe = (j: number, c: number): number =>
-    Math.max(PAS_MIN_PASTILLE, o.sousLigne * echelle(j, c))
-  const pasDeBase = Array.from({ length: n }, (_, j) => pasDe(j, PAR_LIGNE))
+  /** Le pas à l'échelle 1 de l'étage `i`. */
+  const sousLigne = etages.map((e) => o.sousLigneParEtage?.[e.cle] ?? o.sousLigne)
+  const pasDe = (i: number, j: number, c: number): number =>
+    Math.max(PAS_MIN_PASTILLE, sousLigne[i] * echelle(j, c))
+  const pasDeBase = etages.map((_, i) =>
+    Array.from({ length: n }, (_, j) => pasDe(i, j, PAR_LIGNE))
+  )
   const jl = o.jourLoupe !== undefined && o.jourLoupe >= 0 && o.jourLoupe < n ? o.jourLoupe : -1
   // Ce que chaque étage demande HORS du jour de la loupe : ne dépend pas des colonnes essayées.
-  const horsLoupe = etages.map((e) =>
+  const horsLoupe = etages.map((e, i) =>
     e.nombreParJour.reduce(
-      (m, nb, j) => (j === jl ? m : Math.max(m, Math.ceil(nb / PAR_LIGNE) * pasDeBase[j])),
+      (m, nb, j) => (j === jl ? m : Math.max(m, Math.ceil(nb / PAR_LIGNE) * pasDeBase[i][j])),
       0
     )
   )
@@ -636,7 +652,7 @@ export function disposerEtages(
     const besoins = etages.map((e, i) =>
       jl < 0
         ? horsLoupe[i]
-        : Math.max(horsLoupe[i], Math.ceil(e.nombreParJour[jl] / cs[i]) * pasDe(jl, cs[i]))
+        : Math.max(horsLoupe[i], Math.ceil(e.nombreParJour[jl] / cs[i]) * pasDe(i, jl, cs[i]))
     )
     const tenue = (f: number): number => besoins.reduce((t, b) => t + Math.max(o.vide, b * f), 0)
     let f = 1
@@ -661,8 +677,8 @@ export function disposerEtages(
         const nb = e.nombreParJour[jl]
         if (nb === 0) return
         const lignes = Math.ceil(nb / cs[i])
-        const pas = Math.min(pasDe(jl, cs[i]), (besoins[i] * f) / lignes) * g
-        const k = Math.min(echelle(jl, cs[i]), pas / o.sousLigne)
+        const pas = Math.min(pasDe(i, jl, cs[i]), (besoins[i] * f) / lignes) * g
+        const k = Math.min(echelle(jl, cs[i]), pas / sousLigne[i])
         min = Math.min(min, k)
         somme += nb * k
       })
@@ -700,7 +716,7 @@ export function disposerEtages(
     const hauteur = o.marge + Math.max(o.vide, place) + 4
     const colonnes = Array.from({ length: n }, (_, j) => (j === jl ? retenu.cs[i] : PAR_LIGNE))
     const pas = colonnes.map((c, j) => {
-      const voulu = j === jl ? pasDe(j, c) : pasDeBase[j]
+      const voulu = j === jl ? pasDe(i, j, c) : pasDeBase[i][j]
       const lignes = Math.ceil(e.nombreParJour[j] / c)
       return (lignes > 0 ? Math.min(voulu, place / lignes) : voulu) * g
     })

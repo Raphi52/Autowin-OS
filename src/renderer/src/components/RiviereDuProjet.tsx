@@ -61,6 +61,7 @@ import {
   ETAGES,
   JOURS,
   PAR_LIGNE,
+  PLACE_DES_GESTES,
   POSTIT_H,
   bordsDesColonnes,
   disposerEtages,
@@ -91,6 +92,13 @@ const HAUT_ETAGES = 2
 /** La hauteur gardée à un étage vide : il reste une cible de dépôt. */
 const HAUT_ETAGE_VIDE = 26
 const SOUS_LIGNE = POSTIT_H + 8
+/**
+ * La ligne « À vérifier » garde sous chaque post-it la place de ses boutons (conv-1214) : posés dans
+ * l'écart de 8, ils mordaient sur le post-it du dessous.
+ */
+const SOUS_LIGNE_A_VERIFIER = SOUS_LIGNE + PLACE_DES_GESTES
+const sousLigneDe = (etage: EtageDeLaRiviere): number =>
+  etage === 'sans-preuve' ? SOUS_LIGNE_A_VERIFIER : SOUS_LIGNE
 /** Entre le bas d'un post-it et ses gestes « vérifier », posés dessous (conv-1204). */
 const ECART_DES_GESTES = 3
 const MARGE_ETAGE = 12
@@ -350,6 +358,7 @@ export function RiviereDuProjet({
         debut: HAUT_ETAGES,
         marge: MARGE_ETAGE,
         sousLigne: SOUS_LIGNE,
+        sousLigneParEtage: { 'sans-preuve': SOUS_LIGNE_A_VERIFIER },
         vide: HAUT_ETAGE_VIDE
       }),
     [riviere.etages, bords, zone, taille.h, jourLoupe]
@@ -381,10 +390,11 @@ export function RiviereDuProjet({
     (p: PostItDeLaRiviere) => {
       const jour = Math.floor(p.t)
       const etage = etageDe.get(p.etage)
-      const pas = etage?.pas[jour] ?? SOUS_LIGNE
+      const sousLigne = sousLigneDe(p.etage)
+      const pas = etage?.pas[jour] ?? sousLigne
       // 3 de front, ou 4 à 5 dans une case chargée sous la loupe : la case de chaque post-it en découle.
       const c = etage?.colonnes[jour] ?? PAR_LIGNE
-      const { x, k, kx, largeur } = placer(jour, p.rang % c, bords, zone, pas / SOUS_LIGNE, c)
+      const { x, k, kx, largeur } = placer(jour, p.rang % c, bords, zone, pas / sousLigne, c)
       const ligne = Math.floor(p.rang / c)
       const y = (etage?.haut ?? 0) + (etage?.marge ?? MARGE_ETAGE) + ligne * pas
       return { x, y, k, kx, largeur }
@@ -686,6 +696,9 @@ export function RiviereDuProjet({
               if (p.etage !== 'sans-preuve' || p.collegue || glisse?.id === p.conversationId)
                 return null
               const { x, y, k } = position(p)
+              // À l'échelle de leur post-it, comme son texte, pour tenir dans la place gardée dessous
+              // (conv-1214) ; une pastille sans texte garde des boutons lisibles, comme avant.
+              const kg = k >= ECHELLE_TEXTE ? k : 1
               return (
                 <GestesDeVerification
                   key={`verif-${p.conversationId}`}
@@ -696,7 +709,13 @@ export function RiviereDuProjet({
                   visible={survol.id === p.conversationId || choisi === p.conversationId}
                   onEntrer={() => survol.entrer(p.conversationId)}
                   onSortir={survol.sortir}
-                  style={{ left: x, top: y + POSTIT_H * k + ECART_DES_GESTES }}
+                  style={
+                    {
+                      left: x,
+                      top: y + POSTIT_H * k + ECART_DES_GESTES * kg,
+                      '--riviere-gestes-echelle': kg
+                    } as React.CSSProperties
+                  }
                 />
               )
             })}
