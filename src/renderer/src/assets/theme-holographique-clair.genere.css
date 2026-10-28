@@ -1075,13 +1075,13 @@
     color: #aa0e5f
 }
 :root[data-theme='holographique-clair'] .home-inter__bar {
-    background: var(--bg-1, #fdfdff)
+    background: var(--bg-0, #fdfdff)
 }
 :root[data-theme='holographique-clair'] .home-chat__ligne[data-moi='true'] .home-chat__bulle {
     background: rgba(60, 110, 235, 0.07)
 }
 :root[data-theme='holographique-clair'] .home-chat__repondre {
-    background: var(--bg-1, #fdfdff)
+    background: var(--bg-0, #fdfdff)
 }
 :root[data-theme='holographique-clair'] .home-chat__depot-calque {
     background: rgba(253, 253, 255, 0.92)

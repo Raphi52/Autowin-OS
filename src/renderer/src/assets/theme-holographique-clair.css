@@ -339,6 +339,17 @@
   background: #3c6eeb;
   color: #ffffff;
 }
+/* Selection dans MES bulles en BLANC INVERSE (conv-1215, 2026-10-28 : « quand je selectionne mes
+   propres messages le fond rose sur rose fais que je vois pas ce que je selectionne », option 1
+   choisie sur maquette). Le rose a 38 % se fondait dans la lave rose -> bleu -> violet de la bulle ;
+   le blanc plein tranche sur toutes ses couleurs, a tout moment du mouvement. Le texte selectionne
+   prend le rose du theme. Deux selecteurs : le texte pose directement dans la bulle, et celui de
+   ses paragraphes. */
+:root[data-theme='holographique-clair'] .msg.user .msg-body::selection,
+:root[data-theme='holographique-clair'] .msg.user .msg-body ::selection {
+  background: #ffffff;
+  color: #d02b8c;
+}
 :root[data-theme='holographique-clair'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
   outline: 2px solid rgba(170, 14, 94, 0.85);
   outline-offset: 2px;
@@ -376,8 +387,9 @@
    3. RAIL (menu de gauche) : colonne de verre flottante.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair'] .theme-serious .rail {
-  /* Haut et bas : la marge des blocs (var(--s5), app-shell.css). Gauche : la marge de fenetre. */
-  margin: var(--s5) 0 var(--s5) var(--nv-marge-fenetre);
+  /* Haut et bas : la marge des blocs (app-shell.css ; en haut, --marge-haut-vue suit le zoom,
+     conv-1223). Gauche : la marge de fenetre. */
+  margin: var(--marge-haut-vue) 0 var(--s5) var(--nv-marge-fenetre);
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   border-radius: 18px;

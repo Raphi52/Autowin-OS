@@ -1622,6 +1622,41 @@ describe('Selection dans la barre de prompt', () => {
   })
 })
 
+/**
+ * SELECTION DANS MES BULLES EN BLANC INVERSE (conv-1215, 2026-10-28 : « quand je selectionne mes
+ * propres messages le fond rose sur rose fais que je vois pas ce que je selectionne »). La
+ * selection generale, rose a 38 %, se fondait dans la lave de la bulle ; option 1 choisie : fond
+ * blanc plein, texte rose du theme. Les deux selecteurs comptent : le texte nu de la bulle ET celui
+ * de ses paragraphes (`.msg-body ::selection`).
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer la regle, n'en garder qu'un selecteur, ou rendre
+ * le fond translucide.
+ */
+describe('Selection dans les bulles de l utilisateur', () => {
+  it.each([
+    ['./theme-nebuleuse-verre.css', '#e63ca0'],
+    ['./theme-holographique-clair.css', '#d02b8c']
+  ])('%s : fond blanc plein, texte rose, sur la bulle et ses paragraphes', (fichier, rose) => {
+    const selecteurs: string[] = []
+    const decls: Record<string, string> = {}
+    postcss.parse(lire(fichier)).walkRules((regle) => {
+      const siens = regle.selectors.filter((s) =>
+        /\.msg\.user \.msg-body ?::selection$/.test(s.trim())
+      )
+      if (siens.length === 0) return
+      selecteurs.push(...siens.map((s) => s.trim().replace(/^:root\[data-theme='[^']+'\] /, '')))
+      regle.walkDecls((d) => {
+        decls[d.prop] = d.value.trim()
+      })
+    })
+    expect(selecteurs.sort()).toEqual([
+      '.msg.user .msg-body ::selection',
+      '.msg.user .msg-body::selection'
+    ])
+    expect(decls.background).toBe('#ffffff')
+    expect(decls.color).toBe(rose)
+  })
+})
+
 /*
  * LE DETAIL DU COUT N'EST PAS COUPE (conv-981, 2026-10-15). La ligne d'en-tete coupe ses elements
  * trop longs (`.chat-runtime > * { overflow: hidden }`). Le cout du fil y vit depuis qu'il a quitte
