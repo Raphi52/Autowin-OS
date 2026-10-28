@@ -318,7 +318,8 @@ export const TEXTES_FR = {
     '{nom} est arrivée vide (0 octet) : le presse-papiers n’a livré aucune image. Recopie-la, puis colle-la à nouveau.',
   'pj.totalTropGros': 'Le total des pièces jointes dépasse 20 Mo.',
   'pj.lectureImpossible': 'Lecture impossible : {raison}',
-  'orientation.apresFin': '⚠️ {n} orientation(s) arrivée(s) après la fin du tour : {suite}.',
+  'orientation.apresFin':
+    '⚠️ « {titre} » : {n} orientation(s) arrivée(s) après la fin du tour : {suite}.',
   'orientation.remises': 'remise(s) dans la zone de saisie (Stop demandé)',
   'orientation.gardees': 'gardée(s) en file derrière les lots retenus par la limite de quota',
   'orientation.renvoyees': 'renvoyée(s) comme nouveau message',
@@ -824,7 +825,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     '{nom} arrived empty (0 bytes): the clipboard delivered no image. Copy it again, then paste it again.',
   'pj.totalTropGros': 'The attachments add up to more than 20 MB.',
   'pj.lectureImpossible': 'Could not read: {raison}',
-  'orientation.apresFin': '⚠️ {n} steering message(s) arrived after the end of the turn: {suite}.',
+  'orientation.apresFin':
+    '⚠️ “{titre}”: {n} steering message(s) arrived after the end of the turn: {suite}.',
   'orientation.remises': 'put back in the input (Stop requested)',
   'orientation.gardees': 'kept in the queue behind the batches held by the quota limit',
   'orientation.renvoyees': 'resent as a new message',

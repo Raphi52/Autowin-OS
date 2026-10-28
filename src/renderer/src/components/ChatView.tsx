@@ -3004,7 +3004,14 @@ export function ChatView({
               })
             }
           }
+          // LE BANDEAU NOMME SON FIL (conv-1241) : il est commun à la vue et survit au changement de
+          // fil ; celui de conv-1227 (Stop à 22:09:11) s'affichait au-dessus de conv-1240, dont le
+          // tour tournait encore, et se lisait comme parlant de l'orientation de conv-1240.
+          const titreDuFil =
+            convsRef.current.find((conversation) => conversation.id === convId)?.title?.trim() ||
+            convId
           const text = texteFil('orientation.apresFin', {
+            titre: titreDuFil.length > 48 ? `${titreDuFil.slice(0, 47)}…` : titreDuFil,
             n: textes.length,
             suite: texteFil(
               gele
