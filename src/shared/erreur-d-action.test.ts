@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ligneDErreurDAction, lireLigneDErreur, messageDErreur } from './erreur-d-action'
 import { gesteDeLaLigne } from './gestes-agent'
+import { ACTIONS_LINE_MAX } from './chat-turn'
 
 /** Les trois formes RÉELLES relevées le 2026-10-19 dans les sessions du dépôt. */
 const GLOB_DELAI =
@@ -37,9 +38,11 @@ describe('ligneDErreurDAction — la ligne qui voyage dans le journal d’action
     expect(ligneDErreurDAction('Glob', GLOB_DELAI)).toBe(`Glob erreur - ${GLOB_DELAI}`)
   })
 
-  it('tient dans les 300 caractères d’une ligne du journal, coupée par « … »', () => {
-    const ligne = ligneDErreurDAction('Bash', `Exit code 2\n${'x'.repeat(5_000)}`)!
-    expect(ligne.length).toBeLessThanOrEqual(300)
+  // conv-1228 (2026-10-28) : la borne est celle d'une ligne du journal (`ACTIONS_LINE_MAX`), plus
+  // 300 caractères — le message d'erreur était amputé avant la ligne qui disait pourquoi.
+  it('tient dans une ligne du journal, coupée par « … »', () => {
+    const ligne = ligneDErreurDAction('Bash', `Exit code 2\n${'x'.repeat(50_000)}`)!
+    expect(ligne.length).toBeLessThanOrEqual(ACTIONS_LINE_MAX)
     expect(ligne.endsWith('…')).toBe(true)
     expect(ligne.startsWith('Bash erreur - Exit code 2 · xxx')).toBe(true)
   })

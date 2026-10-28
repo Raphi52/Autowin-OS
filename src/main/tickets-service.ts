@@ -79,25 +79,30 @@ const WORK_ITEM_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9 _-]{0,63}$/
 /**
  * Bornes de l'ENRICHISSEMENT remonté du fournisseur (discussion + titre des relations).
  *
- * La discussion d'une fiche est souvent l'information décisive — mais elle est aussi le champ le
- * moins borné du fournisseur (des dizaines de messages, pièces jointes inlinées). Elle traverse
- * l'IPC puis alimente un prompt au budget fixe : on la borne ICI, à la frontière, plutôt que de
- * laisser chaque consommateur se défendre. On garde les messages les plus RÉCENTS.
+ * La discussion d'une fiche est souvent l'information décisive : elle passe ENTIÈRE. Avant
+ * (conv-1228, 2026-10-28), on n'en gardait que 20 messages de 2 000 caractères, sans le dire : l'agent
+ * lisait une fiche amputée sans le savoir. Le budget d'un prompt se règle chez le consommateur qui
+ * en a un (`ticket-treatment.ts`), pas ici pour tout le monde. Seul un message démesuré — une image
+ * collée en ligne — est borné, et la coupe est ÉCRITE dans le texte.
  */
-const MAX_COMMENTS = 20
-const MAX_COMMENT_TEXT = 2_000
+const MAX_COMMENT_TEXT = 20_000
 const MAX_RELATION_TITLE = 255
+
+function texteDeCommentaire(texte: string): string {
+  const propre = texte.trim()
+  if (propre.length <= MAX_COMMENT_TEXT) return propre
+  return `${propre.slice(0, MAX_COMMENT_TEXT)}… [${propre.length - MAX_COMMENT_TEXT} caractères coupés]`
+}
 
 function normalizeComments(item: TicketItem): TicketItem['comments'] {
   if (!Array.isArray(item.comments) || item.comments.length === 0) return undefined
   return item.comments
     .filter((comment) => comment && typeof comment.text === 'string' && comment.text.trim())
-    .slice(-MAX_COMMENTS)
     .map((comment) => ({
       ...(comment.id ? { id: String(comment.id).slice(0, 100) } : {}),
       ...(comment.author ? { author: String(comment.author).slice(0, 320) } : {}),
       ...(comment.createdAt ? { createdAt: String(comment.createdAt).slice(0, 40) } : {}),
-      text: comment.text.trim().slice(0, MAX_COMMENT_TEXT)
+      text: texteDeCommentaire(comment.text)
     }))
 }
 

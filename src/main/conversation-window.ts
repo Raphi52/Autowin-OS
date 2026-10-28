@@ -28,6 +28,14 @@ export const CONTEXT_MESSAGE_CHARS = 600
  */
 export const CONTEXT_LAST_REPLY_CHARS = 12000
 
+/**
+ * Plafond d'un message de l'UTILISATEUR repris dans le contexte d'un run. Avant conv-1228
+ * (2026-10-28), il subissait les 600 caractères du résumé : une demande détaillée faite plus tôt dans
+ * le fil arrivait amputée au run. Sa parole passe entière, à la même borne que la dernière réponse ;
+ * au-delà, la coupe est dite.
+ */
+export const CONTEXT_USER_MESSAGE_CHARS = CONTEXT_LAST_REPLY_CHARS
+
 /** Réduit un texte à une ligne bornée : espaces normalisés, coupe explicite par une ellipse. */
 export function clip(value: string, cap: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()

@@ -1236,21 +1236,9 @@ function segmentNeutre(segment: SegmentBash): boolean {
   return commande === undefined || NEUTRE_BASH.test(commande)
 }
 
-/**
- * Le battement d'outil ENTIER : `Outil · <cible complete>` quand le libelle a ete coupe.
- *
- * Le fournisseur coupe la cible a 120 caracteres pour l'affichage et garde l'entiere dans
- * `statusTarget` (providers/claude.ts). Juger une commande sur son moignon est faux dans les deux
- * sens : rejoue sur les 134 commandes Bash de conv-861, `R=...; DEST=...; for d in ...` passait pour
- * une lecture PURE alors que son `cp` / `rm -r` tombait apres la coupure. Seule la forme
- * `Outil · cible` est reconstruite ; le battement « Bash en cours - 2 min - ... » reste tel quel.
- */
-export function statutComplet(status: string | undefined, statusTarget?: string): string {
-  const texte = status ?? ''
-  if (!statusTarget) return texte
-  const outil = /^(\w+) · /.exec(texte)
-  return outil ? `${outil[1]} · ${statusTarget}` : texte
-}
+// `statutComplet` vit dans src/shared/chat-turn.ts depuis conv-1228 : le journal du bloc Actions,
+// côté interface, en a besoin aussi. Ré-exporté ici pour ses appelants du main.
+export { statutComplet } from '../shared/chat-turn'
 
 /**
  * Le texte de commande du DÉPART d'un `Bash` (`Bash · <commande>`, ou `Bash` nu), sinon null.

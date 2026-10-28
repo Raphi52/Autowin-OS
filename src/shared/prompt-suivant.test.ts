@@ -37,11 +37,11 @@ describe('extraction du prompt suivant', () => {
     expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: —')).toBeNull()
   })
 
-  it('borne un prompt délirant plutôt que de remplir le composer d’un pavé', () => {
-    const long = 'a'.repeat(1200)
-    const lu = extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${long}`)
-    expect(lu).not.toBeNull()
-    expect((lu as string).length).toBeLessThanOrEqual(600)
+  // conv-1228 (2026-10-28) : un pavé est ÉCARTÉ, jamais coupé — un ordre tronqué partait au clic
+  // comme s'il était entier (prompt-suivant.jamais-coupe.test.ts).
+  it('écarte un prompt délirant plutôt que de remplir le composer d’un pavé', () => {
+    const long = 'a'.repeat(3_000)
+    expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${long}`)).toBeNull()
   })
 
   it('retire le gras et les accents graves du markdown, un composer n’est pas du markdown', () => {

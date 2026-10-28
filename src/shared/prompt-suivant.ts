@@ -20,8 +20,12 @@ import { estLigneBesoinAMasquer } from './ligne-besoin'
 
 const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
-/** Au-delà, ce n'est plus un prompt mais un paragraphe : on le borne au lieu de noyer le champ. */
-const LONGUEUR_MAX = 600
+/**
+ * Au-delà, ce n'est plus un prompt mais un pavé : la ligne est ÉCARTÉE (fail-open, comme le dit
+ * l'en-tête), jamais coupée. Avant conv-1228 (2026-10-28), on la tronquait à 600 caractères en
+ * pleine phrase, et un clic envoyait cet ordre amputé comme s'il était entier.
+ */
+const LONGUEUR_MAX = 2_000
 
 const SAUT = String.fromCharCode(10)
 
@@ -121,11 +125,9 @@ function lirePropositionsBrutes(texte: string): PropositionSuite[] {
     )
     // Une ligne réduite à de la ponctuation est un raté du modèle, pas un prompt.
     if (!/[\p{L}\p{N}]/u.test(lue.texte)) continue
-    lues.push({
-      texte:
-        lue.texte.length > LONGUEUR_MAX ? lue.texte.slice(0, LONGUEUR_MAX).trimEnd() : lue.texte,
-      score: lue.score
-    })
+    // Un pavé n'est pas un prompt : écarté ENTIER, jamais envoyé en morceau.
+    if (lue.texte.length > LONGUEUR_MAX) continue
+    lues.push({ texte: lue.texte, score: lue.score })
   }
   return lues
 }

@@ -67,6 +67,11 @@ export interface TicketDetail {
   priority?: string | number
   description?: string
   relations?: { kind: string; target: string }[]
+  /**
+   * La discussion, du plus ancien au plus récent. Absente avant conv-1228 (2026-10-28) : l'agent qui
+   * lisait une fiche n'en voyait jamais les commentaires, souvent là où vit la décision.
+   */
+  comments?: { author?: string; createdAt?: string; text: string }[]
 }
 
 export interface TicketGetCommandDeps {
@@ -91,7 +96,16 @@ function toDetail(item: TicketItem): TicketDetail {
     ...(item.assignee ? { assignee: item.assignee } : {}),
     ...(item.priority !== undefined ? { priority: item.priority } : {}),
     ...(item.description ? { description: item.description } : {}),
-    ...(item.relations?.length ? { relations: [...item.relations] } : {})
+    ...(item.relations?.length ? { relations: [...item.relations] } : {}),
+    ...(item.comments?.length
+      ? {
+          comments: item.comments.map((comment) => ({
+            ...(comment.author ? { author: comment.author } : {}),
+            ...(comment.createdAt ? { createdAt: comment.createdAt } : {}),
+            text: comment.text
+          }))
+        }
+      : {})
   }
 }
 

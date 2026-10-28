@@ -61,9 +61,6 @@ export const ACTIONS_PASSAGE: ReadonlyArray<{
   }
 ]
 
-/** Au-delà, la saisie devient illisible : un passage de 4 000 caractères suffit à désigner. */
-const LONGUEUR_MAX_PASSAGE = 4000
-
 function enCitation(passage: string): string {
   return passage
     .split(/\r?\n/u)
@@ -111,9 +108,9 @@ export function passageDuFil(selection: Selection | null, fil: Element | null): 
     const message = element.closest('.msg')
     if (!message || !fil.contains(message)) return null
   }
+  // ENTIER : l'utilisateur a choisi ce passage à la souris. Avant conv-1228 (2026-10-28), il était
+  // coupé à 4 000 caractères, et la citation perdait sa fin — souvent le point à contester. La seule
+  // borne qui reste est celle de l'envoi d'un message (ipc-guards.ts), qui refuse en le disant.
   const texte = selection.toString().trim()
-  if (!texte) return null
-  return texte.length > LONGUEUR_MAX_PASSAGE
-    ? `${texte.slice(0, LONGUEUR_MAX_PASSAGE - 1)}…`
-    : texte
+  return texte || null
 }

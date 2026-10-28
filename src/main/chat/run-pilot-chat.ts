@@ -36,7 +36,9 @@ import {
   depuisDerniereCompaction
 } from '../chat-turn-messages'
 import {
+  cibleEntiereDe,
   lireTestsDuTerminal,
+  statutComplet,
   type ChatTurnEvent,
   type PersistedChatPart
 } from '../../shared/chat-turn'
@@ -1011,7 +1013,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // dans le tour la rafale qui vient de finir (conv-1110).
         raisonnementDuTour.recevoir(pilotEvent)
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
-          if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
+          // Le tour ENREGISTRÉ garde la commande entière, comme le direct (conv-1228) : relu, le
+          // bloc Actions ne montrait sinon qu'une commande coupée à 120 caractères.
+          const ligneEntiere = statutComplet(pilotEvent.text, cibleEntiereDe(pilotEvent.data))
+          if (streamedActions.at(-1) !== ligneEntiere) streamedActions.push(ligneEntiere)
           // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée, et ce qu'il a reçu et
           // rendu quand le modèle IA le fournit), comme les preuves d'exécution d'un run.
           const geste = conversationId ? gesteDeLaLigne(pilotEvent.text) : undefined

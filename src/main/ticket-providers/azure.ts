@@ -229,22 +229,41 @@ function linkedWorkItemIds(relations: AzureRelation[] | undefined): number[] {
   return [...ids]
 }
 
+/** Garde contre un serveur qui rendrait sans fin une page suivante (200 commentaires par page). */
+const PAGES_DE_COMMENTAIRES_MAX = 50
+
 async function fetchComments(
   baseUrl: string,
   id: string,
   authorization: string,
   context: TicketProviderContext
 ): Promise<TicketItem['comments']> {
-  const response = await fetchTicketJson<unknown>(
-    `${baseUrl}/_apis/wit/workItems/${id}/comments?$top=20&api-version=${API_VERSION}-preview.4`,
-    {
-      fetchFn: context.fetchFn,
-      signal: context.signal,
-      headers: { authorization }
-    }
-  )
-  if (!isRecord(response) || !Array.isArray(response.comments)) throw invalidResponse()
-  return (response as unknown as AzureCommentsResponse).comments.flatMap((comment) => {
+  /*
+   * TOUTE LA DISCUSSION, du plus ancien au plus récent (conv-1228, 2026-10-28). Avant : `$top=20`
+   * sans suivre la page suivante, donc une fiche longue perdait ses commentaires en silence. On suit
+   * `continuationToken` (https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/get-comments) ;
+   * `order=asc` aligne l'ordre sur le contrat de `TicketItem.comments`. La borne de pages ne protège
+   * que d'une boucle du serveur (le même jeton rendu sans fin), pas d'une discussion réelle.
+   */
+  const bruts: AzureCommentsResponse['comments'] = []
+  let jeton: string | undefined
+  for (let page = 0; page < PAGES_DE_COMMENTAIRES_MAX; page++) {
+    const suite = jeton ? `&continuationToken=${encodeURIComponent(jeton)}` : ''
+    const response = await fetchTicketJson<unknown>(
+      `${baseUrl}/_apis/wit/workItems/${id}/comments?$top=200&order=asc${suite}&api-version=${API_VERSION}-preview.4`,
+      {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        headers: { authorization }
+      }
+    )
+    if (!isRecord(response) || !Array.isArray(response.comments)) throw invalidResponse()
+    bruts.push(...(response as unknown as AzureCommentsResponse).comments)
+    const suivant = response.continuationToken
+    if (typeof suivant !== 'string' || !suivant || suivant === jeton) break
+    jeton = suivant
+  }
+  return bruts.flatMap((comment) => {
     if (typeof comment.text !== 'string' || !comment.text.trim()) return []
     const author =
       typeof comment.createdBy?.displayName === 'string'

@@ -7,6 +7,7 @@ import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/eta
 import { langueCourante } from '../langue'
 import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 import { lireLigneDErreur } from '../../../shared/erreur-d-action'
+import { estMarqueDeLignesOmises } from '../../../shared/chat-turn'
 
 /**
  * Corps du bloc RAISONNEMENT : la pensee du modele, et rien d'autre.
@@ -285,6 +286,12 @@ export function actionsDuTour(
       if (cible) cible.erreur = erreur.message
       continue
     }
+    // La ligne de tête d'un journal borné (conv-1228) dit combien d'actions anciennes manquent :
+    // elle s'affiche telle quelle, close — ce n'est pas une action en cours.
+    if (estMarqueDeLignesOmises(ligne)) {
+      sortie.push({ ...nouvelle(ligne, '…', null), etat: 'ok' })
+      continue
+    }
     const tache = TACHE.exec(ligne)
     if (tache) {
       const nom = (tache[2] ?? '').trim()
@@ -365,7 +372,9 @@ export function actionsDuTour(
     const [tete, ...suite] = a.texte.split(' — ')
     const commande = tete!.replace(/^[^·]*·\s*/, '')
     const actions = sousCommandes(commande)
-    if (actions.length && commande.length >= CIBLE_MAX) actions[actions.length - 1] += '…'
+    // Depuis conv-1228, le journal porte la commande ENTIÈRE : seule une ligne d'un tour plus ancien,
+    // coupée pile à 120 caractères, est encore un moignon à signaler.
+    if (actions.length && commande.length === CIBLE_MAX) actions[actions.length - 1] += '…'
     a.sousActions = actions
     a.texte = [a.tache.nom, ...suite].join(' — ')
   }

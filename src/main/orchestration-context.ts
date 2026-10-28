@@ -2,9 +2,30 @@ import {
   CONTEXT_LAST_REPLY_CHARS,
   CONTEXT_MESSAGE_CHARS,
   CONTEXT_MESSAGE_LIMIT,
-  clip
+  CONTEXT_USER_MESSAGE_CHARS
 } from './conversation-window'
 import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
+
+/**
+ * Une demande de l'utilisateur, ENTIÈRE et avec ses retours à la ligne (une liste de points reste
+ * une liste). Au-delà de la borne, la coupe est écrite (conv-1228).
+ */
+function demandeDeLUtilisateur(contenu: string): string {
+  const texte = contenu.trim()
+  const garde =
+    texte.length > CONTEXT_USER_MESSAGE_CHARS
+      ? `${texte.slice(0, CONTEXT_USER_MESSAGE_CHARS)}\n[…coupée à ${CONTEXT_USER_MESSAGE_CHARS} caractères sur ${texte.length}]`
+      : texte
+  return garde.replace(/\r?\n/g, '\n    ')
+}
+
+/** Une réponse ANCIENNE de l'assistant : résumée sur une ligne, en disant ce qui manque (conv-1228). */
+function resumeDeReponse(contenu: string): string {
+  const texte = contenu.replace(/\s+/g, ' ').trim()
+  return texte.length > CONTEXT_MESSAGE_CHARS
+    ? `${texte.slice(0, CONTEXT_MESSAGE_CHARS)}… [résumée : ${CONTEXT_MESSAGE_CHARS} caractères sur ${texte.length}]`
+    : texte
+}
 
 /**
  * Contexte collecté AVANT toute orchestration substantielle. Cette collecte est locale,
@@ -84,9 +105,10 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
     if (recents.length) {
       lines.push(
         'Échanges récents (le fil qui a produit la demande — sa lettre ne dit pas tout) :',
-        ...recents.map(
-          (message) =>
-            `  ${message.role === 'user' ? 'UTILISATEUR' : 'ASSISTANT'}: ${clip(message.content, CONTEXT_MESSAGE_CHARS)}`
+        ...recents.map((message) =>
+          message.role === 'user'
+            ? `  UTILISATEUR: ${demandeDeLUtilisateur(message.content)}`
+            : `  ASSISTANT: ${resumeDeReponse(message.content)}`
         )
       )
       // « juge ça / cette archi » désigne la dernière réponse : elle est jointe EN ENTIER (conv-798).

@@ -13,11 +13,17 @@
  * gestes `gestes-agent.ts`, trace du tour) : elle reste intacte, et ces lecteurs ignorent celle-ci.
  */
 
-/** Une ligne du journal d'actions plafonne à 300 caractères (`ACTIONS_LINE_MAX`, chat-turn.ts). */
-const LIGNE_MAX = 300
+import { ACTIONS_LINE_MAX } from './chat-turn'
 
-/** Ce qu'on lit de la sortie au plus : le début suffit, une sortie Bash peut faire 20 000 caractères. */
-const LECTURE_MAX = 1_000
+/**
+ * Une ligne du journal d'actions plafonne à `ACTIONS_LINE_MAX` (chat-turn.ts). Avant conv-1228
+ * (2026-10-28), 300 caractères : le message d'erreur d'une action rouge était amputé au bout de
+ * deux lignes, souvent avant la ligne qui disait POURQUOI.
+ */
+const LIGNE_MAX = ACTIONS_LINE_MAX
+
+/** Ce qu'on lit de la sortie au plus : une sortie Bash peut faire 20 000 caractères. */
+const LECTURE_MAX = ACTIONS_LINE_MAX
 
 const LIGNE_D_ERREUR = /^([A-Za-z][\w-]*) erreur - (.+)$/s
 
@@ -45,7 +51,9 @@ export function ligneDErreurDAction(outil: string, retour: string): string | und
   if (!message) return undefined
   const tete = `${outil} erreur - `
   const place = LIGNE_MAX - tete.length
-  return tete + (message.length > place ? `${message.slice(0, place - 1).trimEnd()}…` : message)
+  if (message.length > place) return `${tete}${message.slice(0, place - 1).trimEnd()}…`
+  // Une sortie plus longue que ce qu'on en lit est coupée, même si le message tient : on le dit.
+  return `${tete}${message}${retour.length > LECTURE_MAX ? '…' : ''}`
 }
 
 /** L'outil et son message, si la ligne est une ligne d'erreur d'action ; sinon rien. */

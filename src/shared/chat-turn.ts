@@ -232,9 +232,70 @@ export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
  */
 export const REASONING_MAX = 20_000
 
-/** Plafonds du journal d'actions — alignés sur ce que le fil garde en direct (`STATUTS_MAX`). */
-export const ACTIONS_LOG_MAX = 500
-export const ACTIONS_LINE_MAX = 300
+/**
+ * Plafonds du journal d'actions, les MÊMES en direct et dans le tour enregistré. Avant conv-1228
+ * (2026-10-28) : 500 lignes de 300 caractères, coupées sans le dire — sur un long tour, les premières
+ * actions sortaient du bloc pendant qu'on le lisait. Les bornes ne protègent plus que d'un tour
+ * démesuré, et toute coupe est ÉCRITE dans le journal (`bornerJournalDActions`).
+ */
+export const ACTIONS_LOG_MAX = 2_000
+export const ACTIONS_LINE_MAX = 4_000
+
+const MARQUE_LIGNES_OMISES = /^… (\d+) lignes plus anciennes non gardées/
+
+/** Une ligne du journal, entière ; au-delà de la borne, la coupe est dite. */
+export function bornerLigneDAction(ligne: string): string {
+  const propre = ligne.trim()
+  if (propre.length <= ACTIONS_LINE_MAX) return propre
+  return `${propre.slice(0, ACTIONS_LINE_MAX)}… [${propre.length - ACTIONS_LINE_MAX} caractères coupés]`
+}
+
+/**
+ * Garde les `ACTIONS_LOG_MAX` dernières lignes et, s'il en manque, une ligne de TÊTE qui dit combien.
+ * Re-borner un journal déjà borné cumule le compte : une seule marque, jamais une pile.
+ */
+export function bornerJournalDActions(lignes: readonly string[]): string[] {
+  const marque = lignes[0] ? MARQUE_LIGNES_OMISES.exec(lignes[0]) : null
+  const dejaOmises = marque ? Number(marque[1]) : 0
+  const corps = marque ? lignes.slice(1) : lignes
+  if (corps.length <= ACTIONS_LOG_MAX) return [...lignes]
+  const omises = dejaOmises + corps.length - ACTIONS_LOG_MAX
+  return [
+    `… ${omises} lignes plus anciennes non gardées (journal borné à ${ACTIONS_LOG_MAX} lignes)`,
+    ...corps.slice(-ACTIONS_LOG_MAX)
+  ]
+}
+
+/** Vrai pour la ligne de tête posée par `bornerJournalDActions`. */
+export function estMarqueDeLignesOmises(ligne: string): boolean {
+  return MARQUE_LIGNES_OMISES.test(ligne)
+}
+
+/**
+ * Le battement d'outil ENTIER : `Outil · <cible complete>` quand le libelle a ete coupe.
+ *
+ * Le fournisseur coupe la cible a 120 caracteres pour l'affichage et garde l'entiere dans
+ * `statusTarget` (providers/claude.ts). Juger une commande sur son moignon est faux dans les deux
+ * sens : rejoue sur les 134 commandes Bash de conv-861, `R=...; DEST=...; for d in ...` passait pour
+ * une lecture PURE alors que son `cp` / `rm -r` tombait apres la coupure. Seule la forme
+ * `Outil · cible` est reconstruite ; le battement « Bash en cours - 2 min - ... » reste tel quel.
+ *
+ * PARTAGÉ depuis conv-1228 (2026-10-28) : le journal du bloc Actions (direct ET tour enregistré) garde
+ * lui aussi la ligne entière — en dépliant une action, on lisait jusque-là la commande amputée.
+ */
+export function statutComplet(status: string | undefined, statusTarget?: string): string {
+  const texte = status ?? ''
+  if (!statusTarget) return texte
+  const outil = /^(\w+) · /.exec(texte)
+  return outil ? `${outil[1]} · ${statusTarget}` : texte
+}
+
+/** La cible entière qu'un `provider-status` porte dans `data.target` (agent-pilot.ts), sinon rien. */
+export function cibleEntiereDe(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const cible = (data as { target?: unknown }).target
+  return typeof cible === 'string' && cible ? cible : undefined
+}
 
 export type ChatTurnEvent =
   /** `at` : heure du fragment ; seul celui qui OUVRE une part la date (`PersistedChatTextPart.at`). */
@@ -398,11 +459,9 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
   if (event.kind === 'actions-log') {
     // Statut INCHANGÉ, comme pour `reasoning` : agir n'est ni parler ni terminer, et ce journal
     // arrive à la clôture — un tour déjà clos qui le reçoit doit rester clos.
-    const lignes = event.lines
-      .map((ligne) => ligne.trim().slice(0, ACTIONS_LINE_MAX))
-      .filter((ligne) => ligne !== '')
+    const lignes = event.lines.map(bornerLigneDAction).filter((ligne) => ligne !== '')
     if (lignes.length === 0) return state
-    return { ...state, actionsLog: lignes.slice(-ACTIONS_LOG_MAX) }
+    return { ...state, actionsLog: bornerJournalDActions(lignes) }
   }
 
   if (event.kind === 'reasoning-duration') {

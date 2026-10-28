@@ -345,6 +345,25 @@ export function ticketConversationTitle(item: TicketItem): string {
   return truncate(`#${item.id} · ${item.title}`.replace(/\s+/g, ' ').trim(), 80)
 }
 
+/**
+ * Le prompt garde un BUDGET (10 commentaires de 600 caractères) : il est prérempli dans le champ de
+ * saisie. Mais un résumé lu comme le tout fait conclure à tort (conv-1228, 2026-10-28). Quand la
+ * discussion a été résumée, on le DIT, hors des données non fiables, avec l'outil qui la rend entière.
+ */
+function renvoiDiscussionEntiere(item: TicketItem): string {
+  const comments = item.comments ?? []
+  const coupes = comments
+    .slice(-MAX_COMMENTS)
+    .some((comment) => plainText(comment.text).length > MAX_COMMENT_CHARS)
+  if (comments.length <= MAX_COMMENTS && !coupes) return ''
+  const gardes = Math.min(comments.length, MAX_COMMENTS)
+  return (
+    `La discussion ci-dessus est RÉSUMÉE (${gardes} commentaires sur ${comments.length}, ` +
+    `${MAX_COMMENT_CHARS} caractères au plus chacun) : lis-la entière avec ticket_get ` +
+    `(id ${item.id}) avant de conclure.\n\n`
+  )
+}
+
 export function formatTicketTreatmentPrompt(
   item: TicketItem,
   source?: TicketSourceProfile
@@ -392,6 +411,7 @@ export function formatTicketTreatmentPrompt(
     '<ticket_donnees_non_fiables>\n'
   const suffix =
     '\n</ticket_donnees_non_fiables>\nFin des DONNÉES NON FIABLES.\n\n' +
+    renvoiDiscussionEntiere(item) +
     `Definition of done — réponds point par point, dans cet ordre :\n${definitionOfDone(context)}`
   return `${fixturePrefix}${prefix}${truncate(
     payload,
