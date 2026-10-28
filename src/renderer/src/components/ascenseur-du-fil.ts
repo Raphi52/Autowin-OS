@@ -4,7 +4,7 @@
  * Demande conv-1114 (2026-10-23) : « une scroll bar dans les convs sophistiquées avec snappoints
  * pour mes messages », arrêtée par /draft sur « 1 · Dépli en place » : au repos une barre fine de
  * 18 px avec un cran par message de l'utilisateur ; dès la molette, elle se déplie en carte du fil
- * de 72 px ; la vue s'AIMANTE sur ses messages.
+ * de 36 px (72 avant conv-1202) ; la vue s'AIMANTE sur ses messages.
  *
  * Fichier séparé du composant pour la même raison que `chat-mesure-messages.ts` : un module de
  * composant qui exporte aussi des fonctions casse le rafraîchissement à chaud.
