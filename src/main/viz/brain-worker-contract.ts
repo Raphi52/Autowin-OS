@@ -20,7 +20,7 @@ export interface BrainWorkerContract {
   }
   loadThemes: {
     args: [path: string, corpus?: readonly string[]]
-    result: ReturnType<typeof import('./fs-brains').loadBrainThemes>
+    result: AsyncResult<typeof import('./fs-brains').loadBrainThemes>
   }
   loadThemeNodes: {
     args: [path: string, themeIds: string[], corpus?: readonly string[]]

@@ -59,11 +59,13 @@ describe('I/O du corpus Brain', () => {
       corpus,
       allowedRoot: roots[1]
     })
-    loadBrainThemes(roots[2], corpus, roots[2])
+    await loadBrainThemes(roots[2], corpus, roots[2])
     loadVaultBrainNeighborhood(roots[3], 'knowledge/domain/autowin-os-guide', corpus)
 
-    expect(observedReads.sync).toHaveLength(2)
-    expect(observedReads.async).toHaveLength(2)
+    // Les thèmes lisent en PARALLÈLE (conv-1219) : une lecture bloquante des 1931 notes du partage
+    // réseau prenait 13,7 à 16,3 s et figeait le worker, l'aperçu du graphe attendant derrière.
+    expect(observedReads.sync).toHaveLength(1)
+    expect(observedReads.async).toHaveLength(3)
     const readsInsideFixtures = [...observedReads.sync, ...observedReads.async]
     expect(readsInsideFixtures).toHaveLength(4)
     expect(readsInsideFixtures.every((path) => path.includes('autowin-os-guide.md'))).toBe(true)

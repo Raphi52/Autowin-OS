@@ -58,7 +58,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         break
       }
       case 'loadThemes':
-        value = loadBrainThemes(request.args[0], request.args[1])
+        value = await loadBrainThemes(request.args[0], request.args[1])
         break
       case 'loadThemeNodes':
         value = loadBrainThemeNodes(request.args[0], request.args[1], request.args[2])

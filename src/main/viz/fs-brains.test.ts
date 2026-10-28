@@ -1909,12 +1909,12 @@ describe('Brain graph', () => {
     expect(loadVaultBrainNodesForThemes(root, ['theme/architecture'], corpus)).toEqual([
       expect.objectContaining({ id: 'knowledge/domain/autowin-os-guide' })
     ])
-    expect(loadBrainThemes(root, corpus, root)).toEqual([
+    expect(await loadBrainThemes(root, corpus, root)).toEqual([
       { id: 'theme/architecture', label: 'Architecture', count: 1 }
     ])
   })
 
-  it('compte les themes MEME sans corpus — la vue affichait 0 et perdait ses etiquettes', () => {
+  it('compte les themes MEME sans corpus — la vue affichait 0 et perdait ses etiquettes', async () => {
     /**
      * REGRESSION du 2026-08-12. En retirant la portee par workspace, `corpus` est devenu `undefined`
      * dans le cas NORMAL. `loadBrainThemes` avait une branche dediee qui renvoyait `vaultThemeCatalog`,
@@ -1941,7 +1941,7 @@ tags: [${theme}]
       )
     }
 
-    const themes = loadBrainThemes(root, undefined, root)
+    const themes = await loadBrainThemes(root, undefined, root)
     const architecture = themes.find((theme) => theme.id === 'theme/architecture')
 
     expect(architecture).toEqual({ id: 'theme/architecture', label: 'Architecture', count: 2 })
@@ -1959,7 +1959,7 @@ tags: [${theme}]
       totalNodes: 0
     })
     expect(loadBrainThemeNodes(missing, ['theme/architecture'], [])).toEqual([])
-    expect(loadBrainThemes(missing, [])).toEqual([])
+    expect(await loadBrainThemes(missing, [])).toEqual([])
     expect(loadBrainNeighborhood(missing, 'knowledge/anything', [])).toEqual({
       nodes: [],
       links: [],
@@ -2087,7 +2087,9 @@ tags: [${theme}]
       expect(() => isolated.loadBrainNeighborhood(foreign, 'foreign-secret')).toThrow(
         'brain vault hors périmètre autorisé'
       )
-      expect(() => isolated.loadBrainThemes(foreign)).toThrow('brain vault hors périmètre autorisé')
+      await expect(isolated.loadBrainThemes(foreign)).rejects.toThrow(
+        'brain vault hors périmètre autorisé'
+      )
       expect(() => isolated.readNodeFile(join(foreign, 'foreign-secret.md'))).toThrow(
         'fichier hors périmètre autorisé'
       )

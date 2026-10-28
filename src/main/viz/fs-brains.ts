@@ -969,11 +969,17 @@ function vaultThemeCatalog(root: string, corpus?: readonly string[]): BrainTheme
   return themeCatalog(vaultNoteRecords(root, corpus))
 }
 
-export function loadBrainThemes(
+/**
+ * LECTURE PARALLELE, mesuree le 2026-10-28 (conv-1219) sur le Brain reseau de 1931 notes : la
+ * lecture bloquante prenait 13,7 a 16,3 s et figeait le worker, donc l'apercu du graphe — demande
+ * en meme temps par la vue Knowledge — attendait derriere elle. La lecture parallele prend ~4 s,
+ * et partage sa promesse en vol avec `loadBrainGraphAsync` : une seule passe sur le reseau.
+ */
+export async function loadBrainThemes(
   path: string,
   corpus?: readonly string[],
   allowedRoot = SHARED_BRAIN_ROOT
-): BrainTheme[] {
+): Promise<BrainTheme[]> {
   if (corpus?.length === 0) return []
   if (!existsSync(path) || !statSync(path).isDirectory()) return []
   const root = assertAuthorizedBrainVaultSync(path, allowedRoot)
@@ -986,7 +992,7 @@ export function loadBrainThemes(
   //
   // `vaultNoteRecords(root, undefined)` rend deja toutes les notes (hors quarantaine) : le comptage
   // ci-dessous fonctionne donc a l'identique, avec ou sans corpus.
-  const records = vaultNoteRecords(root, corpus)
+  const records = await vaultNoteRecordsAsync(root, corpus)
   const counts = new Map<string, number>()
   for (const record of records) {
     for (const theme of record.themes) counts.set(theme, (counts.get(theme) ?? 0) + 1)
