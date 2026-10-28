@@ -4178,6 +4178,8 @@ Le fil reprend ensuite normalement.`
     agentStudioBinding: () => os.roles.getBinding('orchestrator'),
     hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
     createConversation: (input) => os.conversations.create(input),
+    // « This computer » (conv-1213) : même dossier que le choix du dossier de travail du Chat.
+    dossierPersonnel: () => canonicalProjectPath(homedir()) ?? homedir(),
     bindConversation: (taskId, conversationId) => {
       scheduledTasks.bindConversation(taskId, conversationId)
     },

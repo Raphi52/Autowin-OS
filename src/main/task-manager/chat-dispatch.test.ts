@@ -174,7 +174,58 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     )
   })
 
-  it('une catégorie qui n’est PAS un chemin (doublon du moteur, libellé) ne pose aucun dossier de travail', async () => {
+  /*
+   * LA DEMANDE (conv-1213, 2026-10-28) : « dans task manager quand un agent se réveille il doit pas
+   * avoir de CWD il doit être sur this computer ». Sans chemin choisi, le fil créé tombait dans le
+   * dossier d'Autowin (dossier global) : l'agent réveillé travaillait dans le dépôt de l'app sans
+   * qu'on le lui ait demandé. Il part désormais du dossier personnel, le « This computer » du choix
+   * du dossier de travail (conv-298).
+   */
+  it('sans CHEMIN choisi, le fil créé travaille sur « This computer » (dossier personnel)', async () => {
+    const store = new ConversationStore()
+    const target = runtime({
+      createConversation: (input) => store.create(input),
+      dossierPersonnel: () => 'C:\\Users\\moi'
+    })
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    const viaFormulaire = await dispatcher.run(
+      task({ destination: { kind: 'new', title: 'A', category: 'claude', provider: 'claude' } }),
+      occurrence
+    )
+    const viaSemis = await dispatcher.run(
+      task({ destination: { kind: 'new', title: 'B', category: 'Qualite', provider: 'claude' } }),
+      { ...occurrence, id: 'task-1@next', scheduledFor: occurrence.scheduledFor + 1 }
+    )
+
+    for (const result of [viaFormulaire, viaSemis]) {
+      expect(store.get(result.conversationId as string)?.projectPath).toBe(
+        canonicalProjectPath('C:\\Users\\moi')
+      )
+    }
+  })
+
+  it('un CHEMIN choisi l’emporte sur « This computer »', async () => {
+    const store = new ConversationStore()
+    const target = runtime({
+      createConversation: (input) => store.create(input),
+      dossierPersonnel: () => 'C:\\Users\\moi'
+    })
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    const result = await dispatcher.run(
+      task({
+        destination: { kind: 'new', title: 'A', category: 'D:\\GIT\\Projet', provider: 'claude' }
+      }),
+      occurrence
+    )
+
+    expect(store.get(result.conversationId as string)?.projectPath).toBe(
+      canonicalProjectPath('D:\\GIT\\Projet')
+    )
+  })
+
+  it('sans dossier personnel connu, une catégorie qui n’est PAS un chemin ne pose aucun dossier de travail', async () => {
     const store = new ConversationStore()
     const target = runtime({ createConversation: (input) => store.create(input) })
     const dispatcher = new ScheduledChatDispatcher(target)
