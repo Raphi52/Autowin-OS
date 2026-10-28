@@ -536,6 +536,7 @@ import { lancerScoutVeille } from './veille/scout-claude'
 import { candidatsInternesDuDepot } from './veille/audit-depot'
 import { dispatcherAvecVeille } from './veille/dispatch-veille'
 import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
+import { deposerOrientationDuFil, solderOrientationsDuFil } from './orientations-en-cours-app'
 
 /**
  * ATTRIBUTION du démarrage. Le jalon « module principal évalué » est posé AVANT les 167 imports
@@ -1309,9 +1310,12 @@ const mascotteDuBureau = creerMascotteDuBureau()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
 const pendingDirectives = new Map<string, string[]>()
 function drainPendingDirectives(conversationId: string): string[] {
-  const queued = pendingDirectives.get(conversationId) ?? []
+  const enFile = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
-  if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
+  if (enFile.length) broadcast({ type: 'refresh', scope: 'directives' })
+  // conv-1241 : celles que le contrôle avant outil a déjà remises au modèle EN PLEIN APPEL ne
+  // repartent pas une seconde fois (`orientations-en-cours-app.ts`).
+  const queued = solderOrientationsDuFil(conversationId, enFile, 'tour')
   return queued
 }
 // Le fenetrage vit dans src/main/window.ts : il ne prenait ici que les valeurs listees ci-dessous.
@@ -4952,6 +4956,10 @@ Le fil reprend ensuite normalement.`
       const queued = pendingDirectives.get(conversationId) ?? []
       queued.push((directive || '(image envoyée sans texte)') + suffixe)
       pendingDirectives.set(conversationId, queued)
+      // REMISE EN PLEIN APPEL (conv-1241) : la boucle pilote ne relit la file qu'ENTRE deux appels ;
+      // un appel du CLI Claude peut durer 11 minutes (conv-1240, tour 2e218711, saisie ts
+      // 1793225455947 jamais lue). Doublée sur disque, le contrôle avant chaque outil la remet.
+      deposerOrientationDuFil(conversationId, queued[queued.length - 1])
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
       // seul temoin etait un recu vivant dans la memoire de l'ecran : un rechargement l'effacait et

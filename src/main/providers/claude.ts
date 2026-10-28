@@ -1701,9 +1701,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       const reservation = confReservationFichiers(opts, autowinAppDataRoot())
       if (reservation) {
         try {
+          // `depuis` : début de CET appel. Le contrôle ne remet que les orientations déposées
+          // depuis (conv-1241, `shared/orientations-en-cours.ts`) : une plus ancienne appartient à
+          // un appel fini ou à une vie précédente de l'app, elle ne doit pas ressurgir.
           await writeFileAsync(
             join(settingsDir, 'reservation.json'),
-            JSON.stringify(reservation),
+            JSON.stringify({ ...reservation, depuis: Date.now() }),
             'utf8'
           )
         } catch {

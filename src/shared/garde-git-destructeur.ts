@@ -11,6 +11,7 @@ import {
   lignesDuJournal,
   livrerMessagesEnAttente
 } from './messages-entre-fils'
+import { NOM_JOURNAL_ORIENTATIONS, livrerOrientationsEnAttente } from './orientations-en-cours'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -333,6 +334,7 @@ const reserverOuRefuser = ${reserverOuRefuser.toString()};
 const refusCommitReserve = ${refusCommitReserve.toString()};
 const lignesDuJournal = ${lignesDuJournal.toString()};
 const livrerMessagesEnAttente = ${livrerMessagesEnAttente.toString()};
+const livrerOrientationsEnAttente = ${livrerOrientationsEnAttente.toString()};
 // Réservation des fichiers entre fils (conv-1083, shared/reservation-fichiers.ts). Le fil qui écrit
 // est posé par Autowin dans reservation.json, à côté de ce script ; sans lui, rien n'est réservé.
 const OUTILS_D_EDITION = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
@@ -411,6 +413,26 @@ const messagesEnAttente = () => {
     return r ? r.texte : undefined;
   } catch { return undefined; }
 };
+// ORIENTATIONS DE L'UTILISATEUR, REMISES EN PLEIN APPEL (conv-1241, shared/orientations-en-cours.ts).
+// conv-1240 (tour 2e218711, saisie ts 1793225455947) : un tour d'UN seul appel de 11 minutes n'a jamais
+// relu l'orientation tapée 3 s après ses étapes — la boucle pilote ne la relit qu'entre deux appels.
+// Même chemin que les messages entre fils ; seules celles déposées depuis le début de CET appel
+// (« depuis », posé par Autowin dans reservation.json) partent. Toute panne = rien, jamais un refus.
+const orientationsEnAttente = () => {
+  try {
+    const conf = confReservation();
+    if (!conf || process.env.AUTOWIN_CONVERSATION_ID === conf.fil || typeof conf.depuis !== 'number') return undefined;
+    const fs = process.getBuiltinModule('node:fs');
+    const path = process.getBuiltinModule('node:path');
+    const io = {
+      lire: (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (e) { if (e && e.code === 'ENOENT') return ''; throw e; } },
+      ajouter: (p, ligne) => fs.appendFileSync(p, ligne + '\\n', 'utf8')
+    };
+    const journal = path.join(path.dirname(conf.registre), ${JSON.stringify(NOM_JOURNAL_ORIENTATIONS)});
+    const r = livrerOrientationsEnAttente(io, { fil: conf.fil, journal, depuis: conf.depuis }, Date.now(), lignesDuJournal);
+    return r ? r.texte : undefined;
+  } catch { return undefined; }
+};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
@@ -448,9 +470,9 @@ process.stdin.on('end', () => {
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
     process.exit(0);
   }
-  // Pas de refus : les messages en attente partent avec cet appel d'outil (un refus les laisse
-  // pour le suivant).
-  const recus = messagesEnAttente();
+  // Pas de refus : les orientations de l'utilisateur PUIS les messages en attente partent avec cet
+  // appel d'outil (un refus les laisse pour le suivant).
+  const recus = [orientationsEnAttente(), messagesEnAttente()].filter(Boolean).join('\\n\\n');
   if (recus) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: recus } }));
   process.exit(0);
 });
