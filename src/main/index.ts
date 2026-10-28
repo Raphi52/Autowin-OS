@@ -12,6 +12,7 @@ import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-
 import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
 import { estNiveauProtection } from '../shared/prod-protection'
 import { MOTIF_STOP_DU_CHAT } from '../shared/arret-par-stop'
+import { HAUTEUR_BOUTONS_FENETRE } from '../shared/barre-fenetre'
 import { nomUtilisateurCourant } from './identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
@@ -2095,7 +2096,11 @@ function registerChatIpc(): void {
     const fenetre = BrowserWindow.fromWebContents(event.sender)
     if (!fenetre || fenetre.isDestroyed()) return false
     try {
-      fenetre.setTitleBarOverlay({ color: '#00000000', symbolColor: couleur, height: 28 })
+      fenetre.setTitleBarOverlay({
+        color: '#00000000',
+        symbolColor: couleur,
+        height: HAUTEUR_BOUTONS_FENETRE
+      })
       return true
     } catch {
       // Plateforme sans overlay de barre de titre (macOS, Linux) : ce n'est pas une panne.
@@ -4519,6 +4524,9 @@ Le fil reprend ensuite normalement.`
   // ce bureau, invisible, et le garde vivant après la capture (conv-1016, 2026-10-17).
   const outlookGateway = new OutlookLocalGateway({
     appRoot: app.getAppPath(),
+    // Ouvre une piece jointe RECUE, une fois copiee par Outlook (conv-1220). `shell.openPath` rend
+    // '' en cas de succes et la cause sinon : la passerelle affiche cette cause telle quelle.
+    ouvreurFichier: (chemin) => shell.openPath(chemin),
     ...(headlessTestInstance ? { horsService: OUTLOOK_HORS_INSTANCE_CACHEE } : {})
   })
   // fix-ok: 3 edits mesures - (1) remplacement Python a casse les antislashs, (2) bloc finally repris, (3) format de mes seules lignes (index.ts deja rouge au format avant moi).
@@ -4728,6 +4736,16 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.openItem(id)
   })
+  // OUVRE une piece jointe RECUE (conv-1220) : Outlook la copie dans un dossier temporaire, Windows
+  // l'ouvre. Rien n'est ecrit dans la boite. Identifiant, rang et nom sont revalides cote main, et un
+  // type de fichier qui LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script.
+  ipcMain.handle(
+    'outlook:ouvrir-piece',
+    async (event, id: unknown, rang: unknown, nom: unknown) => {
+      assertTrustedRendererSender(event, 'Outlook')
+      return outlookGateway.openAttachment(id, rang, nom)
+    }
+  )
   // Le seul canal Outlook qui ECRIT : il envoie une reponse, donc un acte irreversible. La
   // confirmation appartient a l'interface, qui est le seul endroit ou l'utilisateur est present ; ici
   // on garde la validation du contenu, parce qu'une frontiere de confiance ne se garde pas d'un cote.
