@@ -64,14 +64,16 @@
   color: #b3261e;
 }
 
-/* Sur le post-it : posé au coin bas-droit de son papier, montré quand la rivière le dit visible
-   (survol du post-it, ou sa fiche ouverte : `data-visible`) ou quand un de ses boutons a le focus.
-   Caché, il ne capte aucun clic : le glisser du post-it reste entier. */
+/* Sous le post-it, centré sur lui : la rivière pose son haut-milieu (`left` = centre du papier, `top`
+   = son bas). Au coin bas-droit, il cachait la ligne projet · heure (conv-1204). Montré quand la
+   rivière le dit visible (survol du post-it, ou sa fiche ouverte : `data-visible`) ou quand un de ses
+   boutons a le focus. Caché, il ne capte aucun clic : le glisser du post-it reste entier. */
 .riviere-verif-postit {
   position: absolute;
   z-index: 16;
   flex-wrap: nowrap;
-  transform: translate(-100%, -100%);
+  justify-content: center;
+  transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s;
@@ -86,7 +88,8 @@
 .riviere-verif-postit .riviere-verif-refus {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   padding: 2px 6px;
   border-radius: 3px;
   background: #fff4f2;
