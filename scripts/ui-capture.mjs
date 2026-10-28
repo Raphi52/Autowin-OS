@@ -474,9 +474,19 @@ export const verdictCapture = (mesures) => {
   if (mesures.declencheur) {
     // Un declencheur introuvable ne doit JAMAIS se solder par une capture de la vue fermee : la
     // preuve montrerait autre chose que ce qu'elle affirme, et le juge la croirait.
+    // LE DELTA SE LIT AUSSI SUR CE QUI EST DESSINÉ (conv-1211, 2026-10-28). Un <details> (menu
+    // « Projets » du Board) garde sa liste dans la page même fermé : le nombre d'éléments ne bouge
+    // pas quand il s'ouvre, et le menu ouvert sur l'image était déclaré « clic-sans-effet ». Quand
+    // le total est inchangé, le compte des éléments VISIBLES décide, avec la même règle de sens.
+    const deltaTotal = (mesures.elements ?? 0) - (mesures.elementsAvantClic ?? 0)
+    const deltaVisible =
+      mesures.elementsVisibles !== undefined && mesures.elementsVisiblesAvantClic !== undefined
+        ? mesures.elementsVisibles - mesures.elementsVisiblesAvantClic
+        : 0
+    const delta = deltaTotal !== 0 ? deltaTotal : deltaVisible
     if (!mesures.declencheurTrouve) {
       echecs.push(`declencheur-absent(${mesures.declencheur})`)
-    } else if ((mesures.elementsAvantClic ?? 0) === (mesures.elements ?? 0)) {
+    } else if (delta === 0) {
       // Le declencheur existe, le clic part, et rien ne s'ouvre — deja ouvert, clic absorbe,
       // handler non pose. Sans cette garde le verdict dirait « prouve » sur une vue inchangee.
       // Le DELTA est ce qui rend le clic falsifiable ; « j'ai clique » ne l'est pas.
@@ -484,10 +494,7 @@ export const verdictCapture = (mesures) => {
       // vue (Budget : 521 -> 354 elements, panneau visible) et etait refuse. Delta nul = inerte ; une
       // baisse n'est recevable qu'avec une cible --scroll retrouvee apres le clic (garde suivante).
       echecs.push(`clic-sans-effet(${mesures.declencheur})`)
-    } else if (
-      (mesures.elementsAvantClic ?? 0) > (mesures.elements ?? 0) &&
-      !mesures.defilementVers
-    ) {
+    } else if (delta < 0 && !mesures.defilementVers) {
       // Une BAISSE peut etre un onglet qui remplace la vue... ou un menu qui se FERME, une vue qui
       // casse. Elle n'est recevable que si `--scroll` a retrouve la cible nommee APRES le clic
       // (absente => exit 9 avant ce verdict). Objection du juge du 2026-10-02.
@@ -1197,6 +1204,14 @@ const main = async () => {
       // visuelle de menu n'etait capturable. 'body' contient 'main' : le seuil de vue vide est
       // inchange pour toutes les autres captures.
       elements: document.querySelectorAll('body *').length,
+      // Les éléments DESSINÉS (conv-1211) : un <details> fermé, un panneau en display:none ou en
+      // visibility:hidden sont dans le total mais pas ici. Sans ce compte, un clic qui ne fait que
+      // RÉVÉLER du contenu déjà présent passait pour « sans effet ».
+      elementsVisibles: [...document.querySelectorAll('body *')].filter((el) =>
+        typeof el.checkVisibility === 'function'
+          ? el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })
+          : el.getClientRects().length > 0
+      ).length,
       // L'ADRESSE DU DOCUMENT MESURE, pas celle de la liste CDP lue a la decouverte : l'instance est
       // declaree prete des qu'une page autre que l'attente existe, 'about:blank' compris. Mesure du
       // 2026-09-26 : une capture --code-dev verte par ailleurs a ete classee « inconnue » une fois.
@@ -1390,8 +1405,10 @@ const main = async () => {
   const vueAttendue = vueAttendueApresClics(vue, declencheur)
   let declencheurTrouve
   let elementsAvantClic
+  let elementsVisiblesAvantClic
   if (declencheur) {
     elementsAvantClic = mesuresDom.elements
+    elementsVisiblesAvantClic = mesuresDom.elementsVisibles
     // CHAINE de clics : certaines vues ne s'atteignent pas en UN geste (ouvrir l'onglet, puis la
     // ligne, puis le sous-onglet). Les selecteurs sont separes par ` >> ` et joues DANS L'ORDRE,
     // avec une pause entre chacun — le suivant n'existe qu'apres le rendu du precedent.
@@ -1865,7 +1882,9 @@ const main = async () => {
     interfaceCapturee: interfaceCapturee(mesuresDom.adressePage ?? page.url, racineDepot()),
     ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
     ...(cibleDefilement ? { defilementVers: cibleDefilement, cadrage } : {}),
-    ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
+    ...(declencheur
+      ? { declencheur, declencheurTrouve, elementsAvantClic, elementsVisiblesAvantClic }
+      : {}),
     ...(vueAttendue !== vue ? { vueAttendue } : {}),
     ...(retraits !== undefined ? { retraits } : {}),
     ...(conversationOuverte ? { conversation: conversationOuverte } : {}),

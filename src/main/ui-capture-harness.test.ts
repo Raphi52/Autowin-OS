@@ -173,6 +173,43 @@ describe('verdict quand la preuve exige un clic', () => {
     expect(verdict.echecs).toContain('clic-reduit-vue-sans-cible([data-testid="quota-indicator"])')
   })
 
+  /*
+   * conv-1211, 2026-10-28 : clic sur le menu « Projets » du Board, un <details>. Sa liste est DÉJÀ
+   * dans la page fermée : le nombre d'éléments ne bouge pas, le menu est ouvert sur l'image, et
+   * pourtant « clic-sans-effet ». Ce qui change, c'est ce qui est DESSINÉ : le compte des éléments
+   * visibles le dit.
+   */
+  it('accepte un <details> qui S OUVRE — meme nombre d elements, plus d elements VISIBLES', () => {
+    expect(
+      verdictCapture({
+        ...ouvert,
+        elementsAvantClic: 260,
+        elementsVisiblesAvantClic: 180,
+        elementsVisibles: 205
+      })
+    ).toEqual({ ok: true, echecs: [] })
+  })
+
+  it('refuse un <details> qui se FERME sans cible nommee — moins d elements visibles', () => {
+    const verdict = verdictCapture({
+      ...ouvert,
+      elementsAvantClic: 260,
+      elementsVisiblesAvantClic: 205,
+      elementsVisibles: 180
+    })
+    expect(verdict.echecs).toContain('clic-reduit-vue-sans-cible([data-testid="quota-indicator"])')
+  })
+
+  it('refuse toujours un clic sans effet quand les elements visibles ne bougent pas non plus', () => {
+    const verdict = verdictCapture({
+      ...ouvert,
+      elementsAvantClic: 260,
+      elementsVisiblesAvantClic: 180,
+      elementsVisibles: 180
+    })
+    expect(verdict.echecs).toContain('clic-sans-effet([data-testid="quota-indicator"])')
+  })
+
   it('laisse INTACTES les captures sans clic', () => {
     // Sans `--click`, aucune des deux gardes ne doit mordre : le comportement d'origine est le
     // contrat de tous les appels existants.
