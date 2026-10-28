@@ -17,6 +17,11 @@ import { traduireAccueil } from '../textes-ecrans/accueil'
 export interface OutlookRawPiece {
   nom: string
   taille: number
+  /**
+   * Position de la pièce dans le message (base 1), pour l'OUVRIR depuis la tuile (conv-1220). Absent
+   * d'un instantané produit avant ce champ.
+   */
+  rang?: number
 }
 
 /** La forme rendue par `scripts/outlook-local-snapshot.ps1`. */
@@ -124,6 +129,11 @@ export interface MessageInterlocuteur {
 export interface PieceJointeRecue {
   nom: string
   taille: number
+  /**
+   * Position dans le message (entier 1 à 50), ou `null` quand l'instantané ne l'a pas donnée. Le
+   * script d'ouverture retrouve alors la pièce par son nom.
+   */
+  rang: number | null
 }
 
 /**
@@ -142,7 +152,13 @@ export function piecesAffichables(
     const nom = (piece?.nom ?? '').trim()
     if (nom === '') continue
     const taille = Number(piece?.taille)
-    retenues.push({ nom, taille: Number.isFinite(taille) && taille > 0 ? taille : 0 })
+    const rang = Number(piece?.rang)
+    retenues.push({
+      nom,
+      taille: Number.isFinite(taille) && taille > 0 ? taille : 0,
+      // Les bornes du canal `outlook:ouvrir-piece` : un rang hors d'elles serait refusé au clic.
+      rang: Number.isInteger(rang) && rang >= 1 && rang <= 50 ? rang : null
+    })
   }
   return retenues
 }

@@ -870,6 +870,40 @@ export function HomeView({
     [readOutlook]
   )
 
+  /**
+   * OUVRE une pièce jointe REÇUE (conv-1220) : Outlook la copie dans un dossier temporaire, Windows
+   * l'ouvre. Le résultat est RENDU à la tuile, qui affiche la cause d'un refus sous le fil — là où
+   * l'utilisateur vient de cliquer. Rien n'est écrit dans la boîte : aucune relecture à forcer.
+   */
+  const ouvrirPieceOutlook = useCallback(
+    async (
+      id: string,
+      rang: number | null,
+      nom: string
+    ): Promise<{ ok: boolean; erreur?: string }> => {
+      const api = (
+        window as unknown as {
+          api?: {
+            outlookOuvrirPiece?: (
+              id: string,
+              rang: number | null,
+              nom: string
+            ) => Promise<{ ok: boolean; erreur?: string }>
+          }
+        }
+      ).api
+      if (!api?.outlookOuvrirPiece) {
+        return { ok: false, erreur: traduireAccueil('outlook.ouvrirAbsent', langueCourante()) }
+      }
+      try {
+        return await api.outlookOuvrirPiece(id, rang, nom)
+      } catch (error) {
+        return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    []
+  )
+
   /** Acquitte une alerte d'agent depuis l'accueil, sans aller la chercher ailleurs. */
   const acquitter = useCallback(async (alertId: string): Promise<void> => {
     const api = (
@@ -1175,6 +1209,7 @@ export function HomeView({
                   onRepondre={repondreDansOutlook}
                   onNouvelleConversation={nouvelleConversationOutlook}
                   onMarquerLu={marquerLuDansOutlook}
+                  onOuvrirPiece={ouvrirPieceOutlook}
                   onAcquitter={acquitter}
                   ouvertureEnCours={ouvertureEnCours}
                 />
@@ -1210,6 +1245,7 @@ function WidgetBody({
   onRepondre,
   onNouvelleConversation,
   onMarquerLu,
+  onOuvrirPiece,
   onAcquitter,
   ouvertureEnCours
 }: {
@@ -1242,6 +1278,11 @@ function WidgetBody({
     corps: string
   ) => Promise<{ ok: boolean; erreur?: string }>
   onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
+  onOuvrirPiece: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
@@ -1284,6 +1325,7 @@ function WidgetBody({
         onRepondre={onRepondre}
         onNouvelleConversation={onNouvelleConversation}
         onMarquerLu={onMarquerLu}
+        onOuvrirPiece={onOuvrirPiece}
       />
     ) : (
       <AgendaList agenda={outlook.agenda} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />

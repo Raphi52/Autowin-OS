@@ -681,7 +681,18 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     CLES de projet (jamais un chemin lu ou ecrit), passee par `projetsPartagesLisibles`
     //     (chaines seules, 500 au plus) ; illisible = refus, rien n'est retenu. `null` = tous.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(249)
+    // MISE A JOUR 2026-10-28 (conv-1220) — 249 -> 251. ATTRIBUTION MESUREE : ce test etait DEJA
+    //   rouge a 250 avant ce changement, sur `os:board-dossiers-du-chat` (`ipc/carte-des-besoins.ts`,
+    //   travail non commite de conv-1212, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossiers du Chat')`). PLUS UN, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'Outlook')` :
+    //   `outlook:ouvrir-piece` — OUVRE une piece jointe RECUE de la tuile Interlocuteurs. Rien n'est
+    //     ecrit dans la boite. L'identifiant est valide contre `^[0-9A-Fa-f]{16,512}$`, le rang est un
+    //     entier 1..50, le nom passe `nomPieceAcceptable` (aucun separateur de chemin) et un type qui
+    //     LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script ; nom et
+    //     chemin partent par un fichier temporaire UTF-8, jamais en ligne de commande.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(251)
     expect(unguarded).toEqual([])
   })
 

@@ -98,7 +98,10 @@ function Get-Pieces($item, [int]$max) {
         if ($nom.Trim() -eq '') { continue }
         $taille = 0
         try { $taille = [int]$piece.Size } catch { $taille = 0 }
-        [void]$lues.Add([pscustomobject]@{ nom = $nom; taille = $taille })
+        # `rang` = la position de la piece dans `Attachments` (base 1). C'est ce qui permet de
+        # l'OUVRIR depuis la tuile (outlook-local-piece.ps1, conv-1220) : deux pieces d'un meme
+        # message peuvent porter le meme nom, leur rang les distingue.
+        [void]$lues.Add([pscustomobject]@{ nom = $nom; taille = $taille; rang = $rang })
       } catch { continue }
     }
   } catch { return @() }

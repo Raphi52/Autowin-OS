@@ -470,9 +470,29 @@ describe('les pieces jointes RECUES traversent jusqu au message', () => {
       })
     ])
     expect(contact.messages[0].pieces).toEqual([
-      { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335 },
-      { nom: 'appointment_813649365.ics', taille: 685 }
+      { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335, rang: null },
+      { nom: 'appointment_813649365.ics', taille: 685, rang: null }
     ])
+  })
+
+  it('garde le RANG de la piece, qui sert a l ouvrir, et ecarte un rang hors bornes', () => {
+    // conv-1220 : le rang est la position dans `Attachments` (base 1). Releve du 2026-10-28 sur la
+    // vraie boite : « RE: Bienvenue chez Passe Montagne ! » porte ses deux vraies pieces aux rangs 3
+    // et 4, les rangs 1 et 2 etant des images de signature ecartees par l'instantane. Le rang n'est
+    // donc PAS l'index dans la liste affichee.
+    const [contact] = groupByInterlocutor([
+      mail({
+        id: 'm-rangs',
+        pieces: [
+          { nom: 'ski.msg', taille: 78_963, rang: 3 },
+          { nom: 'early.msg', taille: 34_047, rang: 4 },
+          { nom: 'zero.pdf', taille: 10, rang: 0 },
+          { nom: 'trop.pdf', taille: 10, rang: 51 },
+          { nom: 'decimal.pdf', taille: 10, rang: 1.5 }
+        ]
+      })
+    ])
+    expect(contact.messages[0].pieces.map((piece) => piece.rang)).toEqual([3, 4, null, null, null])
   })
 
   it('rend une liste VIDE quand le champ manque, sans casser les anciens instantanes', () => {
@@ -494,16 +514,21 @@ describe('les pieces jointes RECUES traversent jusqu au message', () => {
         ]
       })
     ])
-    expect(contact.messages[0].pieces).toEqual([{ nom: 'reel.pdf', taille: 4096 }])
+    expect(contact.messages[0].pieces).toEqual([{ nom: 'reel.pdf', taille: 4096, rang: null }])
   })
 
   it('garde les pieces sur le message du FIL, pas seulement sur le contact', () => {
     // Le rendu lit les pieces sur le message tel que `groupThreads` le rend : si le regroupement en
     // fils reconstruisait les messages, les pieces se perdraient entre les deux etages.
     const [contact] = groupByInterlocutor([
-      mail({ id: 'm-fil', conversation: 'cx', pieces: [{ nom: 'note.pdf', taille: 2048 }] })
+      mail({
+        id: 'm-fil',
+        conversation: 'cx',
+        pieces: [{ nom: 'note.pdf', taille: 2048, rang: 2 }]
+      })
     ])
     const [premierFil] = groupThreads(contact)
-    expect(premierFil.messages[0].pieces).toEqual([{ nom: 'note.pdf', taille: 2048 }])
+    // Le rang aussi : c'est lui que le clic sur le nom envoie a Outlook (conv-1220).
+    expect(premierFil.messages[0].pieces).toEqual([{ nom: 'note.pdf', taille: 2048, rang: 2 }])
   })
 })

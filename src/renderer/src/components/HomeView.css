@@ -1900,8 +1900,10 @@
   align-items: center;
   gap: 8px;
   padding: 2px 0 5px;
-  /* Opaque, sinon le contenu qui défile passe LISIBLEMENT derrière le titre. */
-  background: var(--bg-1, #0c0d12);
+  /* Opaque, sinon le contenu qui défile passe LISIBLEMENT derrière le titre. `--bg-0` et non
+     `--bg-1` : `--bg-1` est un VOILE dans la plupart des thèmes (5 % de blanc en Holographique,
+     56 % de noir en Sombre) ; seul `--bg-0`, le fond de page, est plein partout (conv-1220). */
+  background: var(--bg-0, #0c0d12);
   border-bottom: 1px solid var(--line);
 }
 
@@ -2084,6 +2086,33 @@
   white-space: nowrap;
 }
 
+/*
+ * Le nom devient un BOUTON qui ouvre la pièce (conv-1220). Il garde l'allure du nom — même police,
+ * même troncature — et ne se distingue qu'au survol et au focus clavier : souligné, comme un lien.
+ * `min-width: 0` laisse l'ellipse jouer dans la rangée flexible, comme pour le `span` qu'il remplace.
+ */
+.home-chat__piece-ouvrir {
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.home-chat__piece-ouvrir:hover,
+.home-chat__piece-ouvrir:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  outline: none;
+}
+
+.home-chat__piece-ouvrir:disabled {
+  cursor: progress;
+  color: var(--text-faint);
+}
+
 /* La taille ne se comprime PAS : c'est elle qui dit si le document est entier ou n'est qu'un bout. */
 .home-chat__piece-taille {
   flex: none;
@@ -2105,7 +2134,9 @@
   flex-direction: column;
   gap: 5px;
   padding-top: 6px;
-  background: var(--bg-1, #0c0d12);
+  /* Plein, comme la barre du haut (même raison, conv-1220) : sous un voile, le corps du message et
+     ses pièces jointes défilaient À TRAVERS la réponse — illisibles et inatteignables au clic. */
+  background: var(--bg-0, #0c0d12);
   border-top: 1px solid var(--line);
 }
 
