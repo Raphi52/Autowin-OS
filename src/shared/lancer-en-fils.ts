@@ -199,6 +199,11 @@ export function cleDuLancement(source: string, reponse?: string): string {
  * partageaient un fichier, la carte n'offrait même qu'un bouton (« Tout ici »). Désormais l'agent les
  * fait toutes, à la suite, dans le tour — règle d'Autonomie (4) de la constitution — et la carte ne
  * sert plus que si l'utilisateur demande lui-même de répartir le travail en fils.
+ *
+ * RACCOURCIE (conv-1229, 2026-10-28) : ce bloc part à CHAQUE appel du chat, alors qu'il ne sert que
+ * sur demande explicite de fils. Retirés : l'explication de la carte côté app (« L'app dessine une
+ * carte… », mécanique que le modèle n'a pas à appliquer) et la seconde tâche de l'exemple. Toutes
+ * les consignes de comportement restent, mot pour mot ou resserrées.
  */
 export const CONSIGNE_LANCER_EN_FILS =
   `PLUSIEURS TÂCHES DANS UN MESSAGE — au moment où le message de l'utilisateur demande au moins DEUX ` +
@@ -206,19 +211,13 @@ export const CONSIGNE_LANCER_EN_FILS =
   `d'accord : l'utilisateur a refusé cette étape de validation. Le bloc ` +
   '```' +
   `${FORME_FILS} ne se rend QUE si l'utilisateur demande LUI-MÊME de répartir le travail en plusieurs ` +
-  `fils (« répartis en fils », « lance-les en parallèle ») : une recherche rapide (le texte visible, ` +
-  `un nom de fichier) estime alors les fichiers de chaque tâche, et tu rends, après une phrase, un bloc ` +
+  `fils (« répartis en fils », « lance-les en parallèle ») : estime d'abord, par une recherche rapide, ` +
+  `les fichiers de chaque tâche, puis rends, après une phrase, un bloc ` +
   '```' +
-  `${FORME_FILS} {"taches":[{"titre":"Titre des fiches","demande":"Corrige le titre de la vue des ` +
-  `fiches","fichiers":["src/renderer/src/components/TicketsView.tsx"]},{"titre":"Tri par date",` +
-  `"demande":"Ajoute un tri par date dans le rail de l'Observatoire","fichiers":["src/renderer/src/` +
-  `components/ObservatoryRail.tsx"]}]} — et ton tour s'arrête là. L'app dessine une carte. « Lancer ` +
-  `en N fils » ouvre une branche de ce fil par groupe, et les tâches qui partagent un fichier passent ` +
-  `l'une après l'autre dans le même fil. Chaque ` +
-  `\`demande\` est autoportée, comme si l'utilisateur la tapait seule, et reprend en tête la skill ` +
-  `qu'il nommait (« /build … »). Les pièces jointes du message suivent chaque fil : n'y recopie ni ` +
-  `leur contenu ni leur chemin temporaire (effacé à la fin de ton tour), nomme-les par leur nom ` +
-  `(« le fichier joint journal.log »). \`fichiers\` liste ceux que la tâche devrait modifier ; laisse-le ` +
-  `vide si tu ne sais pas. Jamais de bloc de ta propre initiative : ni pour plusieurs tâches, ni pour ` +
-  `des étapes liées (« fais X puis teste-le », quand B dépend du résultat de A), ni pour des ` +
-  `questions seules.`
+  `${FORME_FILS} {"taches":[{"titre":"Tri par date","demande":"Ajoute un tri par date dans le rail ` +
+  `de l'Observatoire","fichiers":["src/renderer/src/components/ObservatoryRail.tsx"]}]} — une entrée ` +
+  `par tâche — et ton tour s'arrête là. Chaque \`demande\` est autoportée et reprend en tête la skill ` +
+  `nommée (« /build … ») ; \`fichiers\` liste ceux qu'elle devrait modifier, vide si tu ne sais pas. ` +
+  `Les pièces jointes du message suivent chaque fil : n'y recopie ni leur contenu ni leur chemin ` +
+  `temporaire, nomme-les par leur nom. Jamais de bloc de ta propre initiative : ni pour plusieurs ` +
+  `tâches, ni pour des étapes liées (quand B dépend du résultat de A), ni pour des questions seules.`
