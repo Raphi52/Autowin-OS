@@ -49,6 +49,26 @@ export interface DemandeDeLaCarte {
   references?: ReferenceDeLaDemande[]
   /** Les work items (tasks) liés à cette demande ; absent = « sans task » (conv-1127). */
   workItems?: WorkItemDeLaDemande[]
+  /**
+   * Le collègue dont vient cette demande (conv-1210, 2026-10-28) : posé par la VUE seulement, depuis
+   * le Board qu'un autre poste a recopié dans le dossier du Board — jamais par le calcul de la
+   * carte. Une telle demande se lit, elle ne se touche pas : ni glisser, ni vérifier, ni ouvrir.
+   */
+  collegue?: CollegueDeLaDemande
+}
+
+/** D'où vient une demande d'un collègue, et ce que son Board en montre (conv-1210). */
+export interface CollegueDeLaDemande {
+  /** Son sous-dossier dans le dossier du Board : son compte Windows. */
+  poste: string
+  /** Le nom écrit sur ses post-it. */
+  nom: string
+  /** L'étage où SON Board pose le post-it, état posé à la main compris. */
+  etage: 'a-faire' | StatutDemande
+  /** L'identifiant du fil dans l'Autowin du collègue (`conv-…`), à lui demander de rouvrir. */
+  conversationId: string
+  /** Les tasks que son Board lie à cette demande, lues telles quelles. */
+  taches?: { sourceId: string; id: string; titre?: string }[]
 }
 
 /**
