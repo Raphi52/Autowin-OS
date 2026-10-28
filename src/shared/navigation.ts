@@ -14,8 +14,9 @@ export const APP_DESTINATIONS = [
   // Renommée « Carte du projet » (conv-1113, 2026-10-23) ; l'identifiant reste `besoins`, comme
   // `tests` pour Maintenance, pour qu'un agent qui navigue vers « besoins » y aboutisse toujours.
   // Renommée « Board » (conv-1126, 2026-10-23, proposition 5 : « le mot que tu emploies, ce
-  // board ») ; son icône est dessinée (BoardIcon, App.tsx), l'émoji ne sert que de repli.
-  { id: 'besoins', label: 'Board', icon: '📋' },
+  // board »). Icône 📌 (conv-1217, 2026-10-28, proposition 5) : le tableau à post-it dessiné en
+  // traits cyan-violet se fondait dans la pilule active violet-rose ; un émoji plein comme ses voisins.
+  { id: 'besoins', label: 'Board', icon: '📌' },
   // Vue « Maintenance » (conv-1101, 2026-10-22 : « la view tests est nulle, appelle-la maintenance
   // et mets des boutons pour faire toutes nos skills de maintenance »). L'identifiant reste `tests` :
   // les suites y vivent toujours, et un agent qui dit « tests » doit continuer d'y aboutir.
