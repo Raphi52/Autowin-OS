@@ -118,4 +118,19 @@ export class ProviderStateStore {
     }
     return this.mutate(id, (current) => ({ ...current, lastProbe: { status, checkedAt } }))
   }
+
+  /**
+   * UN APPEL RÉEL RÉUSSI VAUT PREUVE D'AUTHENTIFICATION (conv-1240, 2026-10-28).
+   *
+   * Le seul écrivain du statut était le bouton « Tester ». Mesuré : un test du 13/10 resté
+   * « expired » a bloqué QUINZE JOURS tout choix de modèle Claude (petites tâches, Routage), alors
+   * que chaque tour Claude réussissait. Un tour terminé est une preuve plus fraîche qu'un test
+   * daté : il la remplace. N'écrit que si le statut change — aucune écriture disque par tour.
+   */
+  noterAppelReussi(provider: string, checkedAt = Date.now()): ProviderState {
+    const id = validProvider(provider)
+    const courant = this.get(id)
+    if (courant.lastProbe?.status === 'authenticated') return courant
+    return this.recordProbe(id, 'authenticated', checkedAt)
+  }
 }
