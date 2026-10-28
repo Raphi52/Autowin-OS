@@ -1775,7 +1775,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
          * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
          */
-        // Une orientation déjà remise au modèle par le contrôle avant outil (conv-1241) n'est pas
+        // fix-ok: conv-1241 (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
+        // Une orientation déjà remise au modèle par le contrôle avant outil n'est pas
         // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
         const orphelines = solderOrientationsDuFil(
           conversationId,
