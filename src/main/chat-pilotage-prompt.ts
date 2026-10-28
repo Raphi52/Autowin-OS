@@ -846,7 +846,10 @@ export function buildChatPilotagePrompt(
     `celles pas encore listées dans ce fil. Ce sont des candidates trouvées par proximité, pas une ` +
     `réponse : environ une sur trois est hors sujet. Celle dont le nom touche vraiment la demande, ` +
     `ouvre-la avec \`brain_read\` AVANT de répondre ou de fouiller le dépôt ; ignore les autres. Pas de ` +
-    `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle.\n` +
+    `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle. ` +
+    // conv-1233 (2026-10-28) : le Brain perso y verse aussi ses notes (`brain-titres-du-tour.ts`).
+    `Une ligne \`perso:knowledge/…\` vient du Brain PERSO de l'utilisateur : ouvre-la avec ` +
+    `\`brain_read\` en gardant le préfixe \`perso:\`.\n` +
     // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
     // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (CONTOSO) a recu une
     // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne
