@@ -632,34 +632,62 @@
   outline-offset: -1px;
 }
 
+/* La ligne est une RANGÉE : le message, puis la croix qui l'acquitte, à sa droite. Avant
+   (jusqu'au 2026-10-28, conv-1225), le mot « Acquitter » apparaissait PAR-DESSUS la fin du
+   message au survol — et comme `.home-notices button` lui donnait aussi `width: 100%`, il
+   recouvrait toute la ligne. */
 .home-notices li {
-  position: relative;
+  display: flex;
+  align-items: stretch;
 }
 
-/* Acquitter : discret au repos, franc au survol. Une action de solde ne doit pas crier, mais elle ne
-   doit pas non plus se cacher. */
-.home-notices__acquitter {
-  position: absolute;
-  right: 6px;
-  bottom: 5px;
-  padding: 1px 7px;
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.05em;
+.home-notices li > button:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Les deux boutons forment une seule bande : seul le dernier garde l'arrondi de droite. */
+.home-notices li:has(> .home-notices__acquitter) > button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* La croix hérite du fond de `.home-notices button` (thèmes compris) pour prolonger la bande ;
+   sélecteur à 0,2,1 pour passer devant lui (0,1,1) sur la forme. Discrète au repos, franche au
+   survol de la ligne : une action de solde ne doit pas crier, ni se cacher. */
+.home-notices li > .home-notices__acquitter {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
   color: var(--text-faint);
-  background: var(--bg-inset, rgba(0, 0, 0, 0.58));
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  opacity: 0;
+  border-left: 0;
+  border-radius: 0 var(--r1, 8px) var(--r1, 8px) 0;
+  opacity: 0.55;
   cursor: pointer;
-  transition: opacity var(--dur) var(--ease);
+  transition:
+    opacity var(--dur) var(--ease),
+    color var(--dur) var(--ease);
 }
 
-.home-notices li:hover .home-notices__acquitter,
-.home-notices__acquitter:focus-visible {
+.home-notices li:hover > .home-notices__acquitter {
+  opacity: 1;
+}
+
+.home-notices li > .home-notices__acquitter:hover,
+.home-notices li > .home-notices__acquitter:focus-visible {
   opacity: 1;
   color: var(--text);
   outline: none;
+}
+
+.home-notices li > .home-notices__acquitter:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 /* Le débordement se DIT : un dégradé en bas du panneau quand il reste du contenu. Mesuré le

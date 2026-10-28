@@ -84,7 +84,11 @@ describe('écran Accueil — langue', () => {
     expect(tuile(ecran, 'agenda')).toContain('Calendar')
     expect(tuile(ecran, 'notifications')).toContain('Agent reports')
     expect(tuile(ecran, 'notifications')).toContain('missed run')
-    expect(tuile(ecran, 'notifications')).toContain('Acknowledge')
+    // La croix d'acquittement n'a plus de mot visible (conv-1225) : son nom accessible se traduit.
+    expect(
+      ecran.querySelector('[data-testid="home-widget-notifications"] .home-notices__acquitter')
+        ?.getAttribute('aria-label')
+    ).toBe('Acknowledge')
     expect(tuile(ecran, 'routines')).toContain('in 12 min')
     expect(tuile(ecran, 'routines')).toContain('turned off')
     expect(reglages()?.getAttribute('aria-label')).toBe('Home settings')

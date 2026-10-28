@@ -1399,16 +1399,20 @@ function WidgetBody({
             </small>
           </button>
           {/* Solder l'alerte SANS quitter l'accueil : sinon traiter une alerte demandait de la
-              retrouver ailleurs, alors que son identifiant est déjà là. Relevé par le scout (78). */}
+              retrouver ailleurs, alors que son identifiant est déjà là. Relevé par le scout (78).
+              Une croix au bout de la ligne plutôt que le mot « Acquitter » posé par-dessus au
+              survol (demande utilisateur, 2026-10-28, conv-1225) : le mot reste son nom
+              accessible et son infobulle. */}
           {!notice.acknowledged ? (
             <button
               type="button"
               className="home-notices__acquitter"
               onClick={() => void onAcquitter(notice.id)}
               title={t('remontees.acquitterTitre')}
+              aria-label={t('remontees.acquitter')}
               data-testid={`home-acquitter-${notice.id}`}
             >
-              {t('remontees.acquitter')}
+              <span aria-hidden="true">×</span>
             </button>
           ) : null}
         </li>
