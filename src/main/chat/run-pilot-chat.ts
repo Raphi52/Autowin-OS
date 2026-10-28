@@ -100,6 +100,7 @@ import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../reprise-apres-arret'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
+import { solderOrientationsDuFil } from '../orientations-en-cours-app'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -1774,7 +1775,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
          * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
          */
-        const orphelines = pendingDirectives.get(conversationId) ?? []
+        // Une orientation déjà remise au modèle par le contrôle avant outil (conv-1241) n'est pas
+        // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
+        const orphelines = solderOrientationsDuFil(
+          conversationId,
+          pendingDirectives.get(conversationId) ?? [],
+          'rendue'
+        )
         if (pendingDirectives.delete(conversationId)) {
           broadcast({ type: 'refresh', scope: 'directives' })
         }
