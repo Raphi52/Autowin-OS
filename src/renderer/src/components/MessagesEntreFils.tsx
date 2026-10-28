@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react'
+import { formaterDate } from '../langue'
+import { riche } from '../textes'
+import {
+  auPluriel,
+  useTextesChatFilsEtLots,
+  type CleChatFilsEtLots
+} from '../textes-ecrans/chat-fils-et-lots'
 import './MessagesEntreFils.css'
 
 /*
@@ -19,16 +26,16 @@ import './MessagesEntreFils.css'
 // qu'une seconde définition ne puisse pas diverger.
 export type MessageEntreFilsVu = Awaited<ReturnType<Window['api']['messagesEntreFils']>>[number]
 
-const NATURES: Record<string, string> = {
-  question: 'question',
-  reponse: 'réponse',
-  info: 'information',
-  decouverte: 'découverte',
-  ordre: 'ordre'
+// La clé `nature` (question, ordre…) vient du canal et sert de classe CSS : seul son libellé se traduit.
+const NATURES: Record<string, CleChatFilsEtLots> = {
+  question: 'messages.nature.question',
+  reponse: 'messages.nature.reponse',
+  info: 'messages.nature.info',
+  decouverte: 'messages.nature.decouverte',
+  ordre: 'messages.nature.ordre'
 }
 
-const heure = (ms: number): string =>
-  new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+const heure = (ms: number): string => formaterDate(ms, { hour: '2-digit', minute: '2-digit' })
 
 export function MessagesEntreFils({
   conversationId,
@@ -37,6 +44,7 @@ export function MessagesEntreFils({
   conversationId?: string | null
   max?: number
 }): React.JSX.Element | null {
+  const { langue, t } = useTextesChatFilsEtLots()
   // L'état porte le fil qu'il décrit : à un changement de fil, l'ancien n'est jamais affiché, et
   // aucun état n'est posé en synchrone dans l'effet (règle react-hooks/set-state-in-effect).
   const [lu, setLu] = useState<{ fil: string; messages: MessageEntreFilsVu[] }>({
@@ -72,43 +80,51 @@ export function MessagesEntreFils({
   if (!messages.length) return null
   const visibles = messages.slice(-max)
   const plusAnciens = messages.length - visibles.length
-  const s = plusAnciens > 1 ? 's' : ''
   return (
-    <section className="mef" aria-label="Messages entre fils">
+    <section className="mef" aria-label={t('messages.aria')}>
       {plusAnciens > 0 && (
         <div className="mef-reste">
-          {plusAnciens} message{s} plus ancien{s}
+          {t(
+            auPluriel(plusAnciens, langue)
+              ? 'messages.plusAnciens.plusieurs'
+              : 'messages.plusAnciens.un',
+            { n: plusAnciens }
+          )}
         </div>
       )}
       {parFil(visibles).map((groupe) => (
         <div key={groupe.fil} className="mef-groupe">
-          <div className="mef-avec">
-            avec <b>{groupe.fil}</b>
-          </div>
+          <div className="mef-avec">{riche(t('messages.avec', { fil: groupe.fil }), 'b')}</div>
           <ul className="mef-liste">
             {groupe.messages.map((m) => (
               <li
                 key={m.id}
                 className={`mef-bulle mef-bulle--${m.sens}`}
                 data-message-fil={m.id}
-                aria-label={m.sens === 'recu' ? `reçu de ${m.autreFil}` : `envoyé à ${m.autreFil}`}
+                aria-label={
+                  m.sens === 'recu'
+                    ? t('messages.recuDe', { fil: m.autreFil })
+                    : t('messages.envoyeA', { fil: m.autreFil })
+                }
               >
                 <div className="mef-corps">
                   <span className={`mef-nature mef-nature--${m.nature}`}>
-                    {NATURES[m.nature] ?? m.nature}
-                    {m.hypothese ? ' · hypothèse' : ''}
+                    {NATURES[m.nature] ? t(NATURES[m.nature]) : m.nature}
+                    {m.hypothese ? t('messages.hypothese') : ''}
                   </span>
                   <p className="mef-texte">{m.texte}</p>
-                  {m.preuve && <p className="mef-preuve">Preuve : {m.preuve}</p>}
+                  {m.preuve && (
+                    <p className="mef-preuve">{t('messages.preuve', { preuve: m.preuve })}</p>
+                  )}
                 </div>
                 <div className="mef-meta">
                   {heure(m.at)} ·{' '}
                   {m.livre
                     ? m.sens === 'recu'
-                      ? 'remis à l’agent'
-                      : 'remis au destinataire'
-                    : 'en attente'}
-                  {m.nature === 'ordre' ? ' · pas ton accord pour publier ou détruire' : ''}
+                      ? t('messages.remisAgent')
+                      : t('messages.remisDestinataire')
+                    : t('messages.enAttente')}
+                  {m.nature === 'ordre' ? t('messages.ordrePasAccord') : ''}
                 </div>
               </li>
             ))}

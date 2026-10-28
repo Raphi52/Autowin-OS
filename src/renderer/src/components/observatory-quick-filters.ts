@@ -1,4 +1,6 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import { langueCourante } from '../langue'
+import { traduireObservatory, type CleObservatory } from '../textes-ecrans/observatory'
 
 /**
  * Filtres rapides de la chronologie Observatory — extraits d'`ObservatoryView.tsx` le 2026-08-07.
@@ -17,12 +19,25 @@ export type QuickFilter =
   /** Livrables produits par le modele — traçables depuis l'ajout du type d'evenement `artifact`. */
   | 'artifacts'
 
+/**
+ * Le libellé se lit à l'affichage (accesseur) : il suit la langue courante sans que la liste soit
+ * reconstruite (conv-1170). « Prompt / RAG » et « Artefacts » se disent pareil en anglais.
+ */
+function filtre(value: QuickFilter, cle: CleObservatory): { value: QuickFilter; label: string } {
+  return {
+    value,
+    get label() {
+      return traduireObservatory(cle, langueCourante())
+    }
+  }
+}
+
 export const QUICK_FILTERS: Array<{ value: QuickFilter; label: string }> = [
-  { value: 'errors', label: 'Erreurs' },
-  { value: 'tools', label: 'Outils' },
+  filtre('errors', 'filtres.erreurs'),
+  filtre('tools', 'filtres.outils'),
   { value: 'prompt', label: 'Prompt / RAG' },
-  { value: 'agents', label: 'Sous-agents' },
-  { value: 'controls', label: 'Contrôles' },
+  filtre('agents', 'filtres.sousAgents'),
+  filtre('controls', 'filtres.controles'),
   { value: 'artifacts', label: 'Artefacts' }
 ]
 

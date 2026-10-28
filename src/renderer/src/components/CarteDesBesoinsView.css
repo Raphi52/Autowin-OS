@@ -14,10 +14,39 @@
 }
 
 /* ---------- En-tête ---------- */
-.besoins-entete {
+/* L'EN-TÊTE PASSE À LA LIGNE (conv-1211, 2026-10-28). Dans la grille commune (`ViewTopBar.css`), la
+   colonne des actions (`auto`) prend toute la largeur qu'elle veut AVANT celle du titre
+   (`minmax(0, 1fr)`) : à 900 px de fenêtre, le titre tombait à 0 px et « Board » passait sous les
+   compteurs. En flex qui passe à la ligne, le titre garde sa largeur et les actions descendent
+   dessous dès qu'elles ne tiennent plus à côté. Le Board seul : ses actions sont les plus longues. */
+.besoins-view > .view-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.besoins-view > .view-topbar > .view-topbar-identity {
+  flex: 0 0 auto;
+}
+.besoins-view > .view-topbar > .view-topbar-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.besoins-entete,
+.besoins-boutons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+/* Le dossier où le Board est recopié (conv-1206) : son bouton et la croix qui l'oublie. */
+.besoins-dossier {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 4px;
+}
+.besoins-dossier-oublier {
+  padding-inline: 6px;
 }
 .besoins-stats {
   display: inline-flex;

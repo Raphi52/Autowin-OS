@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import {
   effacerPeinture,
   indexSuivant,
@@ -29,6 +30,7 @@ export function ChatFindBar({
   racine: () => HTMLElement | null
   onFermer: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const [terme, setTerme] = useState('')
   const [rang, setRang] = useState(-1)
   const [total, setTotal] = useState(0)
@@ -72,7 +74,7 @@ export function ChatFindBar({
     return () => window.clearTimeout(attente)
   }, [terme, parcourir])
 
-  const etiquette = total > 0 ? `${rang + 1}/${total}` : terme.trim() ? 'Aucun résultat' : ' '
+  const etiquette = total > 0 ? `${rang + 1}/${total}` : terme.trim() ? t('recherche.aucun') : ' '
 
   return (
     <div className="chat-find" data-testid="chat-find" role="search">
@@ -85,8 +87,8 @@ export function ChatFindBar({
         data-testid="chat-find-input"
         type="text"
         value={terme}
-        placeholder="Chercher dans la conversation"
-        aria-label="Chercher dans la conversation"
+        placeholder={t('recherche.champ')}
+        aria-label={t('recherche.champ')}
         onChange={(event) => setTerme(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
@@ -106,8 +108,8 @@ export function ChatFindBar({
       <button
         type="button"
         className="chat-find-nav"
-        aria-label="Résultat précédent"
-        title="Résultat précédent (Maj+Entrée)"
+        aria-label={t('recherche.precedent')}
+        title={t('recherche.precedent.titre')}
         disabled={total === 0}
         onClick={() => parcourir(terme, -1, rang)}
       >
@@ -116,8 +118,8 @@ export function ChatFindBar({
       <button
         type="button"
         className="chat-find-nav"
-        aria-label="Résultat suivant"
-        title="Résultat suivant (Entrée)"
+        aria-label={t('recherche.suivant')}
+        title={t('recherche.suivant.titre')}
         disabled={total === 0}
         onClick={() => parcourir(terme, 1, rang)}
       >
@@ -127,8 +129,8 @@ export function ChatFindBar({
         type="button"
         className="chat-find-close"
         data-testid="chat-find-close"
-        aria-label="Fermer la recherche"
-        title="Fermer (Échap)"
+        aria-label={t('recherche.fermer')}
+        title={t('recherche.fermer.titre')}
         onClick={onFermer}
       >
         ✕

@@ -6,6 +6,8 @@ import type {
   RunWorkspaceObservation
 } from '../../../shared/run-execution'
 import type { AgentGantt } from './observatory-agent-gantt'
+import { formaterNombre } from '../langue'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 export type HarnessTimelineEventKind =
   | 'message'
@@ -212,9 +214,11 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
         // Le cache lu est une ventilation de l'entrée provider, pas un volume additionnel.
         const tokens = (metrics.inputTokens ?? 0) + (metrics.outputTokens ?? 0)
         const provenance = [
-          `canal ${event.channel}`,
-          `injecteur ${event.injector?.label ?? 'non applicable'}`,
-          `destinataire ${event.recipient?.label ?? 'non exposé'}`,
+          t('frise.canal', { canal: event.channel }),
+          t('frise.injecteur', { injecteur: event.injector?.label ?? t('frise.non-applicable') }),
+          t('frise.destinataire', {
+            destinataire: event.recipient?.label ?? t('frise.non-expose')
+          }),
           `${event.observation.fidelity} @ ${event.observation.boundary}`
         ].join(' · ')
         return {
@@ -302,32 +306,32 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
     if (occurrences.length > 1)
       anomalies.push({
         kind: 'duplicate-injection',
-        label: 'Injection répétée',
+        label: t('frise.repetee'),
         count: occurrences.length,
         characters,
         impact: characters * (occurrences.length - 1),
         eventId: occurrences[0].id,
         turnIds,
-        fact: `${occurrences.length} occurrences identiques · ${characters.toLocaleString('fr-FR')} caractères chacune · tours : ${turnIds.join(', ')}`,
-        hypothesis:
-          'Cette répétition peut consommer du contexte si le provider ne la met pas en cache.',
-        recommendation:
-          'Vérifier si cette instruction doit réellement être renvoyée à chaque appel.'
+        fact: t('frise.repetee.fait', {
+          n: occurrences.length,
+          caracteres: formaterNombre(characters),
+          tours: turnIds.join(', ')
+        }),
+        hypothesis: t('frise.repetee.hypothese'),
+        recommendation: t('frise.repetee.recommandation')
       })
     if (characters >= 12_000)
       anomalies.push({
         kind: 'large-injection',
-        label: 'Bloc d’instructions volumineux',
+        label: t('frise.volumineux'),
         count: occurrences.length,
         characters,
         impact: characters,
         eventId: occurrences[0].id,
         turnIds,
-        fact: `${characters.toLocaleString('fr-FR')} caractères injectés · seuil 12 000`,
-        hypothesis:
-          'Ce volume peut dominer la charge d’entrée, sans prouver que son contenu est inutile.',
-        recommendation:
-          'Vérifier si une version plus courte conserve les contraintes indispensables.'
+        fact: t('frise.volumineux.fait', { caracteres: formaterNombre(characters) }),
+        hypothesis: t('frise.volumineux.hypothese'),
+        recommendation: t('frise.volumineux.recommandation')
       })
   }
   anomalies.sort((a, b) => b.impact - a.impact || a.eventId.localeCompare(b.eventId))

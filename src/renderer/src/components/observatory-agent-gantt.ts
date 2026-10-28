@@ -1,4 +1,7 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import type { Langue } from '../../../shared/langue'
+import { langueCourante } from '../langue'
+import { traduireObservatory } from '../textes-ecrans/observatory'
 
 /**
  * DÉROULÉ PAR AGENT de la Chronologie Observatory — demande utilisateur du 2026-10-11 (conv-232) :
@@ -143,7 +146,8 @@ const OBJECTION = /«\s*Objection du juge\s*:\s*/g
  * fait : 1 point(s) annoncé(s)… », rendue telle quelle sans son préfixe « BLOQUÉ: ».
  */
 export function blockedReason(
-  gate: Pick<HarnessTimelineEvent, 'content'> | undefined
+  gate: Pick<HarnessTimelineEvent, 'content'> | undefined,
+  langue: Langue = langueCourante()
 ): string | null {
   if (!gate) return null
   const text = gate.content.trim()
@@ -157,7 +161,14 @@ export function blockedReason(
   )?.[1]
   if (!first) return firstLine(reason, 220)
   const rest = count - 1
-  return `${firstLine(first, 200)}${rest > 0 ? ` (+ ${rest} autre${rest > 1 ? 's' : ''} objection${rest > 1 ? 's' : ''})` : ''}`
+  // Deux phrases entières (singulier, pluriel) : l'accord ne se recolle pas mot à mot (conv-1170).
+  const reste =
+    rest > 1
+      ? traduireObservatory('ganttModele.autresObjections', langue, { n: rest })
+      : rest === 1
+        ? traduireObservatory('ganttModele.autreObjection', langue)
+        : ''
+  return `${firstLine(first, 200)}${reste}`
 }
 
 const PRIORITY: Record<string, number> = { verdict: 0, handoff: 1, error: 2, 'model-response': 3 }
@@ -171,7 +182,8 @@ interface Draft {
 function buildLaneSpans(
   laneEvents: HarnessTimelineEvent[],
   gatesByParent: Map<string, HarnessTimelineEvent>,
-  turnEnd: number
+  turnEnd: number,
+  langue: Langue
 ): AgentSpan[] {
   const drafts: Draft[] = []
   for (const event of laneEvents) {
@@ -197,7 +209,7 @@ function buildLaneSpans(
     const withMetrics = ordered.find((event) => event.outputTokens != null) ?? main
     const failed = ordered.find((event) => event.kind === 'error' || event.status === 'failed')
     const refusal = ordered
-      .map((event) => blockedReason(gatesByParent.get(event.id)))
+      .map((event) => blockedReason(gatesByParent.get(event.id), langue))
       .find((reason): reason is string => Boolean(reason))
     const response =
       ordered.find((event) => event.kind === 'model-response' || event.kind === 'verdict') ?? main
@@ -247,7 +259,7 @@ function buildLaneSpans(
       status: 'open',
       model: event.model,
       actions: 0,
-      summary: 'Aucune fin tracée : en cours, ou interrompu avant de rendre.'
+      summary: traduireObservatory('ganttModele.aucuneFinTraceeCours', langue)
     })
   }
 
@@ -373,7 +385,11 @@ export function buildGanttTicks(start: number, end: number): AgentGanttTick[] {
  */
 export function buildAgentGantt(
   events: ReadonlyArray<HarnessTimelineEvent>,
-  { minLanes = 1, outils = false }: { minLanes?: number; outils?: boolean } = {}
+  {
+    minLanes = 1,
+    outils = false,
+    langue = langueCourante()
+  }: { minLanes?: number; outils?: boolean; langue?: Langue } = {}
 ): AgentGantt | null {
   const gatesByParent = new Map<string, HarnessTimelineEvent>()
   for (const event of events)
@@ -393,7 +409,7 @@ export function buildAgentGantt(
 
   const lanes: AgentLane[] = []
   for (const [key, laneEvents] of byLane) {
-    const spans = buildLaneSpans(laneEvents, gatesByParent, turnEnd)
+    const spans = buildLaneSpans(laneEvents, gatesByParent, turnEnd, langue)
     const laneEnvelope = key === ORCHESTRATOR ? envelope : undefined
     if (!spans.length && !laneEnvelope) continue
     const phase =
@@ -405,7 +421,10 @@ export function buildAgentGantt(
     lanes.push({
       key,
       phase,
-      label: key === ORCHESTRATOR ? 'Orchestrateur' : key.split(':')[0],
+      label:
+        key === ORCHESTRATOR
+          ? traduireObservatory('ganttModele.orchestrateur', langue)
+          : key.split(':')[0],
       variant: variant && !SILENT_VARIANTS.has(variant) ? variant : undefined,
       model: shortModelName(
         spans.find((span) => span.model)?.model ??
@@ -431,7 +450,11 @@ export function buildAgentGantt(
         key: `${OUTIL_PREFIXE}${nom}`,
         phase: OUTIL,
         label: nom,
-        detail: `${OUTIL} · ${spans.length} appel${spans.length > 1 ? 's' : ''}`,
+        detail: traduireObservatory('ganttModele.appelsOutil', langue, {
+          outil: OUTIL,
+          n: spans.length,
+          s: spans.length > 1 ? 's' : ''
+        }),
         spans
       })
     }

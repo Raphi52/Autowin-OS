@@ -4,6 +4,7 @@
  * `passage-selectionne.ts` ; ici, seulement l'affichage.
  */
 import React from 'react'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { ACTIONS_PASSAGE, type ActionPassage } from './passage-selectionne'
 import './BarrePassage.css'
 
@@ -21,12 +22,15 @@ export function BarrePassage({
   passage: PassageAffiche
   onAction: (action: ActionPassage, texte: string) => void
 }): React.JSX.Element {
+  // Lire la langue ici redessine la barre quand elle change : les libellés de
+  // `ACTIONS_PASSAGE` sont lus à l'affichage (accesseurs de `passage-selectionne.ts`).
+  const { t } = useTextesChatFil()
   return (
     <div
       className="barre-passage"
       data-testid="barre-passage"
       role="toolbar"
-      aria-label="Répondre à ce passage"
+      aria-label={t('passage.barre')}
       style={{ left: passage.gauche, top: passage.haut }}
       // Un appui sur la barre ne doit pas effacer la sélection qu'elle désigne.
       onMouseDown={(event) => event.preventDefault()}

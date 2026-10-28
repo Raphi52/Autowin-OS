@@ -9,7 +9,18 @@ import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared
 import { quotaGradientColor } from './quota-gradient'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
 import { createPortal } from 'react-dom'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ModelQuotaIndicator.css'
+
+/**
+ * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
+ * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux` (conv-1170).
+ */
+type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
+const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
+  traduireChatPanneaux(cle, langueCourante(), valeurs)
 
 const providerLabels: Record<string, string> = {
   claude: 'Claude',
@@ -93,9 +104,10 @@ export function summaryWindowId(provider: string | undefined): string {
  */
 // eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
 export function windowIdLabel(windowId: string | undefined): string {
-  if (windowId === 'seven-day') return '7 j'
+  if (windowId === 'seven-day') return tx('quota.fenetre.7j')
+  // « 5 h » : identique dans les deux langues.
   if (windowId === 'five-hour') return '5 h'
-  return windowId ?? 'fenêtre inconnue'
+  return windowId ?? tx('quota.fenetre.inconnue')
 }
 
 /**
@@ -103,7 +115,7 @@ export function windowIdLabel(windowId: string | undefined): string {
  * chiffre qui n'est pas le weekly : un lecteur pressé (ou une capture) ne retiendrait que « 7 j ».
  */
 function wantedWindowName(windowId: string): string {
-  return windowId === 'seven-day' ? 'hebdo' : 'court terme'
+  return windowId === 'seven-day' ? tx('quota.fenetre.hebdo') : tx('quota.fenetre.courtTerme')
 }
 
 function levelOf(remainingPercent: number): ModelQuotaLevel {
@@ -173,7 +185,10 @@ export function summaryForProvider(
     window.remainingPercent < low.remainingPercent ? window : low
   )
   const windowLabel = fellBack
-    ? `${windowIdLabel(retained.id)} — ${wantedWindowName(wantedId)} non exposée`
+    ? tx('quota.fenetre.nonExposee', {
+        fenetre: windowIdLabel(retained.id),
+        voulue: wantedWindowName(wantedId)
+      })
     : windowIdLabel(retained.id)
   return {
     remainingPercent: minimum,
@@ -187,15 +202,17 @@ export function summaryForProvider(
 }
 
 function resetLabel(window: ModelQuotaWindow): string {
-  if (!window.resetsAt) return 'reset non exposé'
+  if (!window.resetsAt) return tx('quota.reset.nonExpose')
   const date = new Date(window.resetsAt)
-  if (!Number.isFinite(date.valueOf())) return 'reset non exposé'
-  return `reset ${date.toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })}`
+  if (!Number.isFinite(date.valueOf())) return tx('quota.reset.nonExpose')
+  return tx('quota.reset.le', {
+    date: formaterDate(date, {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  })
 }
 
 /**
@@ -204,49 +221,55 @@ function resetLabel(window: ModelQuotaWindow): string {
  * recharge — donc l'heure de reset de la fenetre RETENUE, jamais une date fabriquee.
  */
 function tipResetLabel(resetsAt: string | undefined): string {
-  if (!resetsAt) return 'Heure de reset non exposée'
+  if (!resetsAt) return tx('quota.tip.resetNonExpose')
   const date = new Date(resetsAt)
-  if (!Number.isFinite(date.valueOf())) return 'Heure de reset non exposée'
+  if (!Number.isFinite(date.valueOf())) return tx('quota.tip.resetNonExpose')
   const memeJour = date.toDateString() === new Date().toDateString()
-  const heure = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  if (memeJour) return `Recharge à ${heure}`
-  return `Recharge le ${date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${heure}`
+  const heure = formaterDate(date, { hour: '2-digit', minute: '2-digit' })
+  if (memeJour) return tx('quota.tip.rechargeA', { heure })
+  return tx('quota.tip.rechargeLe', {
+    date: formaterDate(date, { day: '2-digit', month: '2-digit' }),
+    heure
+  })
 }
 
 function observedLabel(observedAt: string | undefined, stale: boolean): string {
   if (!observedAt) return ''
   const date = new Date(observedAt)
   if (!Number.isFinite(date.valueOf())) return ''
-  return `${stale ? 'Mesure ancienne' : 'Mesuré'} ${date.toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })}`
+  return tx(stale ? 'quota.mesureAncienne' : 'quota.mesure', {
+    date: formaterDate(date, {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  })
 }
 
 /** Message court d'une réclamation, dans les mots du serveur (`reset`, `already_used`…). */
-const CLAIM_LABELS: Record<string, string> = {
-  reset: 'Reset appliqué : vos limites sont remises à zéro.',
-  already_used: 'Ce reset a déjà été utilisé.',
-  not_limited: 'Refusé : aucune limite à remettre à zéro pour l’instant.',
-  cooldown: 'Refusé : délai d’attente en cours.',
-  ineligible: 'Refusé : compte non éligible.',
-  unavailable: 'Reset indisponible.',
-  rate_limited: 'Trop de demandes, réessayez plus tard.',
-  auth_error: 'Session Claude refusée.',
-  error: 'Échec de la demande.'
+const CLAIM_LABELS: Record<string, CleDuPanneau> = {
+  reset: 'quota.claim.reset',
+  already_used: 'quota.claim.dejaUtilise',
+  not_limited: 'quota.claim.nonLimite',
+  cooldown: 'quota.claim.delai',
+  ineligible: 'quota.claim.nonEligible',
+  unavailable: 'quota.claim.indisponible',
+  rate_limited: 'quota.claim.tropDeDemandes',
+  auth_error: 'quota.claim.sessionRefusee',
+  error: 'quota.claim.echec'
 }
 
 function claimLabel(result: ClaudeResetClaimResult): string {
-  return CLAIM_LABELS[result.result] ?? `Réponse du serveur : ${result.result}`
+  const cle = CLAIM_LABELS[result.result]
+  return cle ? tx(cle) : tx('quota.claim.reponse', { resultat: result.result })
 }
 
 function expiresLabel(iso: string | undefined): string {
   if (!iso) return ''
   const date = new Date(iso)
   if (!Number.isFinite(date.valueOf())) return ''
-  return ` · expire le ${date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
+  return tx('quota.expire', { date: formaterDate(date, { day: '2-digit', month: 'short' }) })
 }
 
 export function ModelQuotaIndicator({
@@ -257,6 +280,7 @@ export function ModelQuotaIndicator({
   /** Choix du compte Claude (même chemin que la pop-up de modèle). Absent = bloc masqué. */
   comptes?: OrchestratorAccounts
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [resets, setResets] = useState<ClaudeResetsStatus>()
   const [claimBusy, setClaimBusy] = useState(false)
   const [claimMessage, setClaimMessage] = useState<string>()
@@ -273,7 +297,7 @@ export function ModelQuotaIndicator({
 
   const refresh = useCallback(async (): Promise<void> => {
     if (typeof window.api?.modelQuotas !== 'function') {
-      setError('Redémarrage requis pour activer les quotas')
+      setError(tx('quota.erreur.redemarrage'))
       return
     }
     const requestSequence = ++requestSequenceRef.current
@@ -291,7 +315,7 @@ export function ModelQuotaIndicator({
       if (requestSequence === requestSequenceRef.current) setSnapshot(value)
     } catch (failure) {
       if (requestSequence === requestSequenceRef.current) {
-        setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
+        setError(failure instanceof Error ? failure.message : tx('quota.erreur.indisponibles'))
       }
     } finally {
       if (requestSequence === requestSequenceRef.current) setLoading(false)
@@ -313,7 +337,7 @@ export function ModelQuotaIndicator({
         })
         .catch((failure: unknown) => {
           if (active && requestSequence === requestSequenceRef.current) {
-            setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
+            setError(failure instanceof Error ? failure.message : tx('quota.erreur.indisponibles'))
           }
         })
     }
@@ -400,7 +424,9 @@ export function ModelQuotaIndicator({
   const level = summary?.status ?? 'unknown'
   // Le libellé vient du résumé (fenêtre RETENUE), jamais du provider : au repli il dit « 5 h ».
   const windowLabel = summary?.windowLabel ?? windowIdLabel(summaryWindowId(affiche))
-  const alert = summary?.statusWindowLabel ? ` · ${summary.statusWindowLabel} plus contrainte` : ''
+  const alert = summary?.statusWindowLabel
+    ? t('quota.alerte', { fenetre: summary.statusWindowLabel })
+    : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
   /**
    * CONSOMME le reset. Irréversible : une confirmation explicite est exigée avant l'appel, pour
@@ -408,11 +434,7 @@ export function ModelQuotaIndicator({
    */
   const utiliserReset = async (grantId: string, label: string): Promise<void> => {
     if (claimBusy || typeof window.api?.claudeResetClaim !== 'function') return
-    if (!window.confirm(`Utiliser maintenant ce reset ?
-
-${label}
-
-Il sera consommé.`)) return
+    if (!window.confirm(t('quota.reset.confirmer', { label }))) return
     setClaimBusy(true)
     setClaimMessage(undefined)
     try {
@@ -420,7 +442,7 @@ Il sera consommé.`)) return
       setClaimMessage(claimLabel(result))
       if (result.result === 'reset') window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (failure) {
-      setClaimMessage(failure instanceof Error ? failure.message : 'Échec de la demande.')
+      setClaimMessage(failure instanceof Error ? failure.message : t('quota.claim.echec'))
     } finally {
       setClaimBusy(false)
     }
@@ -451,8 +473,12 @@ Il sera consommé.`)) return
         }
         aria-label={
           remaining === undefined
-            ? 'Afficher les quotas fournisseurs'
-            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${windowLabel}${alert}`
+            ? t('quota.afficher')
+            : t('quota.afficher.restant', {
+                n: Math.round(remaining),
+                fenetre: windowLabel,
+                alerte: alert
+              })
         }
         aria-expanded={open}
         onClick={() => {
@@ -478,11 +504,11 @@ Il sera consommé.`)) return
            chiffre nu. La bulle nomme ce que le chiffre MESURE, sur quelle fenetre, et rappelle
            l'occupation du fil — sans ouvrir le panneau. */}
         <span className="model-quota-tip" role="tooltip" data-testid="model-quota-tip">
-          <b>Quotas fournisseurs</b>
+          <b>{t('quota.titre')}</b>
           <span>
             {remaining === undefined
-              ? 'Occupation inconnue'
-              : `${Math.round(remaining)} % restant sur ${windowLabel}`}
+              ? t('quota.occupationInconnue')
+              : t('quota.restantSur', { n: Math.round(remaining), fenetre: windowLabel })}
             {alert}
           </span>
           <span className="model-quota-tip-hint">{tipResetLabel(summary?.resetsAt)}</span>
@@ -498,7 +524,7 @@ Il sera consommé.`)) return
           ref={popoverRef}
           className="model-quota-popover is-flottant"
           data-testid="model-quota-popover"
-          aria-label="Quotas par fournisseur"
+          aria-label={t('quota.popover')}
           style={
             ancrage
               ? {
@@ -513,21 +539,23 @@ Il sera consommé.`)) return
         >
           <header>
             <div>
-              <strong>Quotas fournisseurs</strong>
+              <strong>{t('quota.titre')}</strong>
               <small>
                 {error
-                  ? 'Indisponible'
+                  ? t('quota.indisponible')
                   : snapshot
-                    ? `Actualisé ${new Date(snapshot.observedAt).toLocaleTimeString('fr-FR', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}`
-                    : 'Lecture en cours'}
+                    ? t('quota.actualise', {
+                        heure: formaterDate(snapshot.observedAt, {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      })
+                    : t('quota.lectureEnCours')}
               </small>
             </div>
             <button
               type="button"
-              aria-label="Actualiser les quotas"
+              aria-label={t('quota.actualiser')}
               aria-busy={loading}
               onClick={() => void refresh()}
               disabled={loading}
@@ -535,7 +563,11 @@ Il sera consommé.`)) return
               {loading ? '…' : '↻'}
             </button>
           </header>
-          <div className="model-quota-providers" role="group" aria-label="Fournisseur affiche">
+          <div
+            className="model-quota-providers"
+            role="group"
+            aria-label={t('quota.fournisseurAffiche')}
+          >
             {(providerQuotas.length > 0
               ? providerQuotas.map((model) => model.provider)
               : [DEFAULT_QUOTA_PROVIDER]
@@ -546,7 +578,7 @@ Il sera consommé.`)) return
                 className={`model-quota-provider-chip${nom === affiche ? ' is-active' : ''}`}
                 data-testid={`model-quota-provider-${nom}`}
                 aria-pressed={nom === affiche}
-                title={`Afficher les quotas de ${providerLabels[nom] ?? nom} dans la barre`}
+                title={t('quota.fournisseur.titre', { fournisseur: providerLabels[nom] ?? nom })}
                 onClick={() => choisirFournisseur(nom)}
               >
                 {providerLabels[nom] ?? nom}
@@ -570,7 +602,7 @@ Il sera consommé.`)) return
                 </div>
                 {model.windows.length === 0 ? (
                   <div className="model-quota-unavailable">
-                    Non exposé
+                    {t('quota.nonExpose')}
                     {model.error && <small>{model.error}</small>}
                   </div>
                 ) : (
@@ -581,8 +613,8 @@ Il sera consommé.`)) return
                           {window.label}
                           <em className="model-quota-scope">
                             {window.modelFamily
-                              ? `Spécifique ${window.modelFamily}`
-                              : 'Quota partagé'}
+                              ? t('quota.specifique', { famille: window.modelFamily })
+                              : t('quota.partage')}
                           </em>
                         </b>
                         <small>{resetLabel(window)}</small>
@@ -592,9 +624,11 @@ Il sera consommé.`)) return
                         // CONSOMMÉS, jamais une jauge de « restant » qui serait inventée.
                         <strong className="model-quota-values">
                           <span>
-                            {(window.usedTokens ?? 0).toLocaleString('fr-FR')} tokens consommés
+                            {t('quota.tokensConsommes', {
+                              n: formaterNombre(window.usedTokens ?? 0)
+                            })}
                           </span>
-                          <small>plafond non exposé par le fournisseur</small>
+                          <small>{t('quota.plafondNonExpose')}</small>
                         </strong>
                       ) : (
                         <>
@@ -602,8 +636,12 @@ Il sera consommé.`)) return
                             <i style={{ width: `${window.remainingPercent}%` }} />
                           </div>
                           <strong className="model-quota-values">
-                            <span>{Math.round(window.remainingPercent)} % restant</span>
-                            <small>{Math.round(window.usedPercent)} % utilisé</small>
+                            <span>
+                              {t('quota.restant', { n: Math.round(window.remainingPercent) })}
+                            </span>
+                            <small>
+                              {t('quota.utilise', { n: Math.round(window.usedPercent) })}
+                            </small>
                           </strong>
                         </>
                       )}
@@ -615,7 +653,7 @@ Il sera consommé.`)) return
           </div>
           {affiche === 'claude' && resetsVisibles.length > 0 && (
             <div className="model-quota-resets" data-testid="model-quota-resets">
-              <strong>Resets offerts</strong>
+              <strong>{t('quota.resetsOfferts')}</strong>
               {resetsVisibles.map((grant) => {
                 const bloque = !grant.usableNow || grant.paused
                 return (
@@ -623,19 +661,22 @@ Il sera consommé.`)) return
                     <span>
                       <b>{grant.label}</b>
                       <small>
-                        {grant.resetsLeft} sur {grant.resetsTotal} restant
+                        {t('quota.resetsRestants', {
+                          reste: grant.resetsLeft,
+                          total: grant.resetsTotal
+                        })}
                         {expiresLabel(grant.endsAt)}
-                        {grant.useRequiresLimit ? ' · utilisable une fois la limite atteinte' : ''}
+                        {grant.useRequiresLimit ? t('quota.utilisableALimite') : ''}
                       </small>
                     </span>
                     <button
                       type="button"
                       data-testid={`model-quota-reset-${grant.id}`}
                       disabled={claimBusy || bloque}
-                      title={bloque ? 'Pas utilisable pour l’instant' : 'Consomme ce reset'}
+                      title={bloque ? t('quota.pasUtilisable') : t('quota.consomme')}
                       onClick={() => void utiliserReset(grant.id, grant.label)}
                     >
-                      {claimBusy ? '…' : 'Utiliser le reset'}
+                      {claimBusy ? '…' : t('quota.utiliser')}
                     </button>
                   </div>
                 )
@@ -649,7 +690,7 @@ Il sera consommé.`)) return
           )}
           {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
             <div className="router-accounts" data-testid="model-quota-accounts">
-              <span className="router-accounts-title">Compte de cette conversation</span>
+              <span className="router-accounts-title">{t('quota.compte')}</span>
               <div className="router-accounts-list">
                 {comptes.accounts.map((account) => {
                   const choisi =
@@ -675,12 +716,12 @@ Il sera consommé.`)) return
               </div>
               {comptes.error && (
                 <p className="router-account-error" role="alert">
-                  Action impossible : {comptes.error}
+                  {t('quota.actionImpossible', { erreur: comptes.error })}
                 </p>
               )}
             </div>
           )}
-          <footer>Capacité restante · la barre suit le fournisseur sélectionné ci-dessus</footer>
+          <footer>{t('quota.pied')}</footer>
         </section>,
         document.body
       )}

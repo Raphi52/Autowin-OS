@@ -6,7 +6,8 @@ import {
   type RuntimeModel
 } from './chat-view-model'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
-import { EFFORT_LABELS } from './model-effort-labels'
+import { effortLabel } from './model-effort-labels'
+import { useTextesChatPanneaux, type traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { shortModelLabel } from './model-display-label'
 import './ChatView.css'
 // Les puces de compte (.router-account-chip, .is-active = compte retenu encadré) sont stylées ici.
@@ -59,19 +60,17 @@ export interface OrchestratorModelDefaut {
   onChoisir: () => void
 }
 
-const STATUT_LABEL: Record<string, string> = {
-  authenticated: 'Authentifié',
-  expired: 'Expiré · à reconnecter',
-  'installed-untested': 'Installé · validité non testée',
-  absent: 'Non connecté',
-  unknown: 'Indéterminé',
-  standby: 'En standby'
+const STATUT_LABEL: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
+  authenticated: 'selecteur.statut.authentifie',
+  expired: 'selecteur.statut.expire',
+  'installed-untested': 'selecteur.statut.installeNonTeste',
+  absent: 'selecteur.statut.nonConnecte',
+  unknown: 'selecteur.statut.indetermine',
+  standby: 'selecteur.statut.standby'
 }
 
 /** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
 const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
-
-const MODELE_VERROUILLE = 'Modèle verrouillé pendant le tour en cours de cette conversation'
 
 export function OrchestratorModelSelector({
   busy,
@@ -118,6 +117,7 @@ export function OrchestratorModelSelector({
   aide?: string
   idBase?: string
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const statutDe = (provider: string): string | undefined =>
     statuses?.find((s) => s.provider === provider)?.status
   const dropdownRef = useRef<HTMLDetailsElement>(null)
@@ -171,6 +171,13 @@ export function OrchestratorModelSelector({
     document.addEventListener('click', closeOnOutsideClick)
     return () => document.removeEventListener('click', closeOnOutsideClick)
   }, [])
+  // Après les hooks du menu : plus haut, le compilateur React ne garde plus la mémoïsation de
+  // `mesurerAncre` (react-hooks/preserve-manual-memoization, mesuré le 2026-10-27).
+  const MODELE_VERROUILLE = t('selecteur.verrouille')
+  const libelleStatut = (statut: string): string => {
+    const cle = STATUT_LABEL[statut]
+    return cle ? t(cle) : statut
+  }
   const grouped = useMemo(
     () => buildOrchestratorModelGroups(models, binding ?? undefined),
     [models, binding]
@@ -206,7 +213,10 @@ export function OrchestratorModelSelector({
           efforts: option.reasoningEfforts.filter((effort) => effort !== 'none'),
           blocked: injoignable || busy,
           blockedReason: injoignable
-            ? `${option.provider} : ${STATUT_LABEL[statut as string] ?? statut} — reconnecte ce provider dans Routage`
+            ? t('selecteur.injoignable', {
+                provider: option.provider,
+                statut: libelleStatut(statut as string)
+              })
             : busy
               ? MODELE_VERROUILLE
               : undefined
@@ -228,13 +238,13 @@ export function OrchestratorModelSelector({
   const disabled = (busy && !porteDesComptes) || pending || models.length === 0
   const currentLabel = !catalogLoaded ? (
     <>
-      <Spinner /> Chargement des modèles…
+      <Spinner /> {t('selecteur.chargement')}
     </>
   ) : models.length === 0 ? (
-    'Aucun modèle disponible'
+    t('selecteur.aucunModele')
   ) : (
     shortModelLabel(
-      grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible',
+      grouped.currentMissing?.label ?? currentOption?.label ?? t('selecteur.choisirCible'),
       grouped.currentMissing?.provider ?? currentOption?.provider
     )
   )
@@ -261,7 +271,8 @@ export function OrchestratorModelSelector({
   return (
     <div className={`model-select-shell${ouverture === 'bas' ? ' is-ouverture-bas' : ''}`}>
       <span className="model-select-label">
-        {libelle ?? (defaut ? 'Modèle de cette conversation' : 'Orchestrateur')}
+        {libelle ??
+          (defaut ? t('selecteur.libelle.conversation') : t('selecteur.libelle.orchestrateur'))}
       </span>
       <details
         ref={dropdownRef}
@@ -281,7 +292,7 @@ export function OrchestratorModelSelector({
         <summary aria-disabled={disabled}>
           <strong>{currentLabel}</strong>
           {binding?.reasoningEffort && binding.reasoningEffort !== 'none' && (
-            <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
+            <em>{effortLabel(binding.reasoningEffort)}</em>
           )}
           {pending ? <Spinner /> : <i className="model-select-chevron" />}
         </summary>
@@ -291,7 +302,9 @@ export function OrchestratorModelSelector({
               ref={menuRef}
               className={`model-select-menu is-flottant${ouverture === 'bas' ? ' is-ouverture-bas' : ''}`}
               role="listbox"
-              aria-label={defaut ? 'Modèle de cette conversation' : 'Modèle orchestrateur'}
+              aria-label={
+                defaut ? t('selecteur.libelle.conversation') : t('selecteur.menu.orchestrateur')
+              }
               style={
                 ancre.top !== undefined
                   ? // `bottom: auto` : la règle de base pose `bottom: calc(100% + 7px)`, qui, avec un
@@ -314,18 +327,17 @@ export function OrchestratorModelSelector({
                     defaut.onChoisir()
                   }}
                 >
-                  {defaut.actif ? 'Suit le modèle par défaut' : 'Revenir au modèle par défaut'} ·{' '}
-                  {defaut.label}
+                  {t(defaut.actif ? 'selecteur.defaut.suit' : 'selecteur.defaut.revenir', {
+                    modele: defaut.label
+                  })}
                 </button>
-                <p className="router-hint">
-                  Ce choix ne vaut que pour cette conversation. Le modèle par défaut se règle dans
-                  Routage.
-                </p>
+                <p className="router-hint">{t('selecteur.defaut.aide')}</p>
               </div>
             )}
             {matrixRows.length > 0 && (
               <ModelEffortMatrix
                 variant="inline"
+                // Déjà en anglais, identique dans les deux langues.
                 title="MODEL × EFFORT"
                 rows={matrixRows}
                 activeKey={activeMatrixKey}
@@ -368,7 +380,10 @@ export function OrchestratorModelSelector({
                           aria-disabled={injoignable || busy || undefined}
                           title={
                             injoignable
-                              ? `${option.provider} : ${STATUT_LABEL[statut] ?? statut} — reconnecte ce provider dans Routage avant de l’imposer par défaut`
+                              ? t('selecteur.injoignable.defaut', {
+                                  provider: option.provider,
+                                  statut: libelleStatut(statut)
+                                })
                               : busy
                                 ? MODELE_VERROUILLE
                                 : undefined
@@ -394,7 +409,7 @@ export function OrchestratorModelSelector({
                             <small>{option.model}</small>
                             {statut && statut !== 'authenticated' && (
                               <small className={`model-option-status is-${statut}`}>
-                                {STATUT_LABEL[statut] ?? statut}
+                                {libelleStatut(statut)}
                               </small>
                             )}
                           </span>
@@ -403,7 +418,7 @@ export function OrchestratorModelSelector({
                         {selectableEfforts.length > 0 && expandedModel === optionKey && (
                           <div
                             className="model-effort-menu"
-                            aria-label={`Effort pour ${option.label}`}
+                            aria-label={t('matrice.effortPour', { modele: option.label })}
                           >
                             {selectableEfforts.map((effort) => {
                               const effortActive = active && effort === binding?.reasoningEffort
@@ -433,7 +448,7 @@ export function OrchestratorModelSelector({
             })}
             {comptes && comptes.accounts.length > 0 && (
               <div className="router-accounts" data-testid="conv-claude-accounts">
-                <span className="router-accounts-title">Compte de cette conversation</span>
+                <span className="router-accounts-title">{t('quota.compte')}</span>
                 <div className="router-accounts-list">
                   {comptes.accounts.map((account) => {
                     const choisi =
@@ -463,12 +478,10 @@ export function OrchestratorModelSelector({
                     role="alert"
                     data-testid="conv-claude-account-error"
                   >
-                    Action impossible : {comptes.error}
+                    {t('quota.actionImpossible', { erreur: comptes.error })}
                   </p>
                 )}
-                <p className="router-hint">
-                  Ce compte est retenu pour cette conversation : chacun de ses tours repart dessus.
-                </p>
+                <p className="router-hint">{t('selecteur.compte.aide')}</p>
               </div>
             )}
             </div>,
@@ -478,12 +491,9 @@ export function OrchestratorModelSelector({
       <span id={`${idBase}-help`} className="model-select-help">
         {busy
           ? porteDesComptes
-            ? 'Modèle verrouillé pendant le tour en cours ; le compte reste modifiable.'
-            : 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
-          : (aide ??
-            (defaut
-              ? 'Le changement s’appliquera au prochain tour de cette conversation seulement. Son historique est conservé.'
-              : 'Le changement s’appliquera au prochain tour. La conversation Autowin et son historique sont conservés.'))}
+            ? t('selecteur.aide.verrouilleCompte')
+            : t('selecteur.aide.verrouille')
+          : (aide ?? (defaut ? t('selecteur.aide.conversation') : t('selecteur.aide.application')))}
       </span>
       <span
         id={`${idBase}-status`}
@@ -492,10 +502,10 @@ export function OrchestratorModelSelector({
         aria-live="polite"
       >
         {pending
-          ? 'Enregistrement…'
+          ? t('projet.enregistrement')
           : (error ??
             (catalogLoaded && models.length === 0
-              ? 'Catalogue de modèles vide.'
+              ? t('selecteur.catalogueVide')
               : (grouped.currentMissing?.label ?? '')))}
       </span>
     </div>

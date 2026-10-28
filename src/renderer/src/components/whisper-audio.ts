@@ -11,6 +11,8 @@
  * défaut d'origine : un PRÉ-ROLL (sinon la première syllabe, donc « Jarvis », est coupée) et une
  * durée minimale (sinon chaque bruit de clavier déclenche une transcription).
  */
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 export const TAUX_WHISPER = 16_000
 
@@ -308,10 +310,21 @@ export function verdictMicro(
   return 'silence'
 }
 
+/** Lu pendant le rendu du widget : chaque message suit la langue de l'interface (conv-1170). */
 export const MESSAGE_VERDICT: Record<VerdictMicro, string> = {
-  coupe: 'Micro coupé',
-  silence: 'Aucun son détecté — vérifiez le micro ou la sensibilité',
-  faible: 'Son faible — parlez plus près du micro',
-  bon: 'Micro OK — je vous entends',
-  sature: 'Son saturé — éloignez-vous du micro'
+  get coupe() {
+    return traduireAccueil('micro.coupe', langueCourante())
+  },
+  get silence() {
+    return traduireAccueil('verdict.silence', langueCourante())
+  },
+  get faible() {
+    return traduireAccueil('verdict.faible', langueCourante())
+  },
+  get bon() {
+    return traduireAccueil('verdict.bon', langueCourante())
+  },
+  get sature() {
+    return traduireAccueil('verdict.sature', langueCourante())
+  }
 }

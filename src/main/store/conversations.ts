@@ -1165,23 +1165,22 @@ export class ConversationStore {
   }
 
   /**
-   * LE TITRE SUIT LE DERNIER MESSAGE QUI LANCE UN TOUR (conv-999, 2026-10-16), sauf nom donné à
-   * la main ou relance sans objet — la règle complète vit dans `titreApresMessage`.
+   * Un fil encore PROVISOIRE (« Nouvelle conversation ») prend le titre du premier message qui
+   * lance un tour ; ensuite le titre ne bouge plus. La règle « le titre suit le dernier message »
+   * (conv-999) a été annulée le 2026-10-28 (conv-1203) — détail dans `titreApresMessage`.
    *
    * Ici et non dans `append` : le seul message utilisateur qu'`append` reçoit est une consigne
    * tapée PENDANT un tour (« attends », « plutôt X ») ; elle oriente le sujet du tour en cours,
-   * elle ne le renomme pas. Rend le nouveau titre, déjà posé, ou `undefined` s'il n'a pas changé.
+   * elle ne le nomme pas. Rend le nouveau titre, déjà posé, ou `undefined` s'il n'a pas changé.
    */
   private titreApresLeMessage(
     conversation: Conversation,
     message: Msg,
     ts: number
   ): string | undefined {
-    const premier = conversation.messages.find((m) => m.role === 'user')
     const titre = titreApresMessage({
       titre: conversation.title,
       origine: conversation.origineTitre,
-      ...(premier ? { premierMessage: texteQuiNomme(premier) } : {}),
       message: texteQuiNomme(message),
       autresTitres: [...this.conversations.values()]
         .filter((autre) => autre.id !== conversation.id)

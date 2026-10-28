@@ -13,28 +13,36 @@
  * ce qui est sûr.
  */
 
+import { langueCourante } from '../langue'
+import { traduireChatFilsEtLots, type CleChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
+
 const C = 'src/renderer/src/components/'
 
-type Bloc = { libelle: string; source: string }
+/*
+ * La référence est la question de l'UTILISATEUR, posée dans son message : elle suit la langue de
+ * l'écran (traduction anglaise, conv-1170). Ce que l'agent cherche par grep — chemins, classes,
+ * repères de test, identifiants de fil et de tour — reste tel quel.
+ */
+type Bloc = { libelle: CleChatFilsEtLots; source: string }
 
 /** Nature d'un point du rail (`rail-du-tour.ts`, `NatureDuNoeud`) → ce que l'utilisateur voit. */
 const BLOCS_DU_TOUR: Record<string, Bloc> = {
-  tour: { libelle: 'en-tête du tour', source: `${C}ChatMessageRow.tsx` },
-  texte: { libelle: 'texte de la réponse', source: `${C}ChatMessageRow.tsx` },
-  reponse: { libelle: 'réponse finale du tour', source: `${C}ChatMessageRow.tsx` },
-  actions: {
-    libelle: 'bloc d’activité du tour (actions, raisonnement, travaux confiés)',
-    source: `${C}ChatView.parts.tsx`
-  },
-  image: { libelle: 'image ou fichier montré dans le tour', source: `${C}ArtifactPile.tsx` },
-  juge: { libelle: 'bloc des juges', source: `${C}JugesPanel.tsx` }
+  tour: { libelle: 'reference.blocs.tour', source: `${C}ChatMessageRow.tsx` },
+  texte: { libelle: 'reference.blocs.texte', source: `${C}ChatMessageRow.tsx` },
+  reponse: { libelle: 'reference.blocs.reponse', source: `${C}ChatMessageRow.tsx` },
+  actions: { libelle: 'reference.blocs.actions', source: `${C}ChatView.parts.tsx` },
+  image: { libelle: 'reference.blocs.image', source: `${C}ArtifactPile.tsx` },
+  juge: { libelle: 'reference.blocs.juge', source: `${C}JugesPanel.tsx` }
 }
 
 /** Valeurs de `data-origine` posées sur les racines des grands blocs du chat. */
 const ORIGINES: Record<string, Bloc> = {
-  'reponse-agent': { libelle: 'réponse de l’agent', source: `${C}ChatMessageRow.tsx` },
-  'message-utilisateur': { libelle: 'ton message', source: `${C}ChatMessageRow.tsx` },
-  saisie: { libelle: 'zone de saisie', source: `${C}ChatComposer.tsx` }
+  'reponse-agent': { libelle: 'reference.origine.reponse-agent', source: `${C}ChatMessageRow.tsx` },
+  'message-utilisateur': {
+    libelle: 'reference.origine.message-utilisateur',
+    source: `${C}ChatMessageRow.tsx`
+  },
+  saisie: { libelle: 'reference.origine.saisie', source: `${C}ChatComposer.tsx` }
 }
 
 const LONGUEUR_MAX_TEXTE = 120
@@ -60,44 +68,53 @@ export function referenceDeLElement(
   contexte: { conversationId: string | null }
 ): string | null {
   if (cible.closest('textarea, input, select, [contenteditable="true"]')) return null
+  const langue = langueCourante()
+  const dire = (cle: CleChatFilsEtLots, valeurs?: Record<string, string>): string =>
+    traduireChatFilsEtLots(cle, langue, valeurs)
   const morceaux: string[] = []
 
   const texte = texteVisible(cible)
-  if (texte) morceaux.push(`élément pointé : « ${texte} »`)
+  if (texte) morceaux.push(dire('reference.element', { texte }))
 
   const bouton = cible.closest('button, a, summary, [role="button"]')
   const nomDuBouton = bouton?.getAttribute('title') ?? bouton?.getAttribute('aria-label')
   if (bouton && nomDuBouton && nomDuBouton !== texte) {
     const desactive =
       bouton.hasAttribute('disabled') || bouton.getAttribute('aria-disabled') === 'true'
-    morceaux.push(`bouton « ${nomDuBouton} »${desactive ? ' (désactivé)' : ''}`)
+    morceaux.push(
+      dire('reference.bouton', { nom: nomDuBouton }) +
+        (desactive ? dire('reference.desactive') : '')
+    )
   }
 
   const classe = cible.closest('[class]')?.classList[0]
-  if (classe) morceaux.push(`classe ${classe}`)
+  if (classe) morceaux.push(dire('reference.classe', { classe }))
 
   const bloc = BLOCS_DU_TOUR[attributProche(cible, 'data-nature') ?? '']
-  if (bloc) morceaux.push(`bloc : ${bloc.libelle} (${bloc.source})`)
+  if (bloc)
+    morceaux.push(dire('reference.bloc', { libelle: dire(bloc.libelle), source: bloc.source }))
 
   const repere = attributProche(cible, 'data-testid')
-  if (repere && repere !== 'rail-noeud') morceaux.push(`repère ${repere}`)
+  if (repere && repere !== 'rail-noeud') morceaux.push(dire('reference.repere', { repere }))
 
   const cleOrigine = attributProche(cible, 'data-origine')
   if (cleOrigine) {
     const origine = ORIGINES[cleOrigine]
     // La source du message n'est redite que si le bloc n'en a pas déjà donné une, plus précise.
     morceaux.push(
-      origine
-        ? `dans : ${origine.libelle}${bloc ? '' : ` (${origine.source})`}`
-        : `dans : ${cleOrigine}`
+      dire('reference.dans', {
+        origine: origine
+          ? `${dire(origine.libelle)}${bloc ? '' : ` (${origine.source})`}`
+          : cleOrigine
+      })
     )
   }
 
   // Le journal d'un tour COPIÉ par une branche reste rangé sous le fil d'origine.
   const fil = attributProche(cible, 'data-fil-du-tour') ?? contexte.conversationId
-  if (fil) morceaux.push(`fil ${fil}`)
+  if (fil) morceaux.push(dire('reference.fil', { fil }))
   const tour = attributProche(cible, 'data-turn-id')
-  if (tour) morceaux.push(`tour ${tour}`)
+  if (tour) morceaux.push(dire('reference.tour', { tour }))
 
-  return `C’est quoi ça ? [${morceaux.join(' · ')}]`
+  return dire('reference.question', { morceaux: morceaux.join(' · ') })
 }

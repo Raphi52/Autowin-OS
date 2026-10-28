@@ -10,11 +10,13 @@ import { CATALOG } from './commands'
 describe('règle « tâche longue → plan de lots » dans la consigne du chat', () => {
   const prompt = buildChatPilotagePrompt(CATALOG)
 
-  it('dit quand proposer un plan, et que déposer ne lance rien', () => {
+  // conv-1171 : déposer lance le plan, sans clic — la consigne doit le dire à l'agent.
+  it('dit quand lancer un plan, et que déposer le lance sans clic', () => {
     expect(CATALOG.some((c) => c.name === 'plan_de_lots')).toBe(true)
-    expect(prompt).toMatch(/UNE TÂCHE LONGUE → PROPOSE UN PLAN DE LOTS/u)
+    expect(prompt).toMatch(/UNE TÂCHE LONGUE → LANCE UN PLAN DE LOTS/u)
     expect(prompt).toMatch(/au moins TROIS parties sur des fichiers séparés/u)
-    expect(prompt).toMatch(/rien ne part avant que l'utilisateur clique « Lancer le plan »/u)
+    expect(prompt).toMatch(/Déposer LANCE le plan aussitôt, sans clic de l'utilisateur/u)
+    expect(prompt).not.toMatch(/Lancer le plan/u)
   })
 
   it('la distingue de la carte des fils et de la règle première', () => {
@@ -24,8 +26,8 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
 
   it('disparaît d’un tour lecture seule, et d’un catalogue sans l’outil', () => {
     const lecture = buildChatPilotagePrompt(CATALOG.filter((c) => c.annotations?.readOnlyHint))
-    expect(lecture).not.toMatch(/PROPOSE UN PLAN DE LOTS/u)
+    expect(lecture).not.toMatch(/LANCE UN PLAN DE LOTS/u)
     const sansOutil = buildChatPilotagePrompt(CATALOG.filter((c) => c.name !== 'plan_de_lots'))
-    expect(sansOutil).not.toMatch(/PROPOSE UN PLAN DE LOTS/u)
+    expect(sansOutil).not.toMatch(/LANCE UN PLAN DE LOTS/u)
   })
 })

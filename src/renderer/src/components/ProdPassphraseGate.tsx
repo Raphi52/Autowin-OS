@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './ProdPassphraseGate.css'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /*
  * L'ÉCRAN DE LA PHRASE DE PASSE DE PRODUCTION.
@@ -59,6 +60,7 @@ export function ProdPassphraseGate({
   onConfirme,
   onAnnule
 }: ProdPassphraseGateProps): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const [etat, setEtat] = useState<EtatPhrase | null>(null)
   const [phrase, setPhrase] = useState('')
   const [message, setMessage] = useState('')
@@ -101,7 +103,7 @@ export function ProdPassphraseGate({
           return
         }
         setEtat({ ...etat, definie: true })
-        setMessage('Phrase enregistrée. Saisis-la maintenant pour autoriser ce geste.')
+        setMessage(t('prod.phraseEnregistree'))
         return
       }
       const reponse = await window.api.prodPassphraseAutoriser(phrase, {
@@ -116,11 +118,11 @@ export function ProdPassphraseGate({
       onAutorise(reponse.jeton)
     } catch {
       oublier()
-      setMessage("L'autorisation n'a pas pu être demandée.")
+      setMessage(t('prod.autorisationEchec'))
     } finally {
       setEnCours(false)
     }
-  }, [demande, enCours, etat, oublier, onAutorise, phrase])
+  }, [demande, enCours, etat, oublier, onAutorise, phrase, t])
 
   const annuler = useCallback(() => {
     oublier()
@@ -129,16 +131,18 @@ export function ProdPassphraseGate({
 
   if (demande.niveau === 'confirmation') {
     return (
-      <div className="ppg" role="dialog" aria-label="Confirmation de production">
+      <div className="ppg" role="dialog" aria-label={t('prod.confirmationAria')}>
+        {/* « Production » se dit pareil en anglais. */}
         <div className="ppg-kicker">Production</div>
         <p className="ppg-cible">
-          <b>{demande.operation}</b> sur <span className="ppg-chip">{demande.cible}</span>
+          <b>{demande.operation}</b> {t('prod.sur')}{' '}
+          <span className="ppg-chip">{demande.cible}</span>
         </p>
         {demande.raison && <p className="ppg-raison">{demande.raison}</p>}
-        <p className="ppg-question">Voulez-vous continuer ?</p>
+        <p className="ppg-question">{t('prod.question')}</p>
         <div className="ppg-actions">
           <button type="button" className="ppg-annuler" onClick={onAnnule}>
-            Annuler
+            {t('prod.annuler')}
           </button>
           <button
             type="button"
@@ -146,12 +150,10 @@ export function ProdPassphraseGate({
             data-testid="ppg-continuer"
             onClick={() => onConfirme?.()}
           >
-            Continuer
+            {t('prod.continuer')}
           </button>
         </div>
-        <p className="ppg-note">
-          Ce geste part sur une base de production. Rien n’est encore exécuté.
-        </p>
+        <p className="ppg-note">{t('prod.noteConfirmation')}</p>
       </div>
     )
   }
@@ -160,17 +162,15 @@ export function ProdPassphraseGate({
 
   const definition = !etat.definie
   return (
-    <div className="ppg" role="dialog" aria-label="Autorisation de production">
+    <div className="ppg" role="dialog" aria-label={t('prod.autorisationAria')}>
       <div className="ppg-kicker">Production</div>
       <p className="ppg-cible">
-        <b>{demande.operation}</b> sur <span className="ppg-chip">{demande.cible}</span>
+        <b>{demande.operation}</b> {t('prod.sur')} <span className="ppg-chip">{demande.cible}</span>
       </p>
       {demande.raison && <p className="ppg-raison">{demande.raison}</p>}
 
       <label className="ppg-label" htmlFor="ppg-champ">
-        {definition
-          ? `Définis la phrase de passe (${etat.longueurMinimale} caractères minimum)`
-          : 'Phrase de passe'}
+        {definition ? t('prod.definir', { min: etat.longueurMinimale }) : t('prod.phrase')}
       </label>
       <input
         id="ppg-champ"
@@ -194,7 +194,7 @@ export function ProdPassphraseGate({
       )}
       <div className="ppg-actions">
         <button type="button" className="ppg-annuler" onClick={annuler}>
-          Annuler
+          {t('prod.annuler')}
         </button>
         <button
           type="button"
@@ -202,12 +202,10 @@ export function ProdPassphraseGate({
           disabled={enCours || phrase.length === 0}
           onClick={() => void valider()}
         >
-          {definition ? 'Enregistrer' : 'Autoriser'}
+          {definition ? t('prod.enregistrer') : t('prod.autoriser')}
         </button>
       </div>
-      <p className="ppg-note">
-        L’autorisation ne vaut que pour ce geste, cinq minutes, une seule fois.
-      </p>
+      <p className="ppg-note">{t('prod.noteAutorisation')}</p>
     </div>
   )
 }

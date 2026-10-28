@@ -10,6 +10,7 @@ import {
   type RefObject,
   type WheelEvent as EvenementMolette
 } from 'react'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 import './AscenseurDuFil.css'
 import {
   cibleAimant,
@@ -50,7 +51,8 @@ import { isChatNearBottom } from './chat-view-model'
  *
  * Au repos : une barre fine de 18 px à la place de l'ascenseur du système, un cran dégradé par
  * message de l'utilisateur. Dès la molette (ou une prise de la barre), elle se DÉPLIE en carte du
- * fil de 72 px, par-dessus le bord du texte : ses bulles en dégradé, les réponses en pavés gris,
+ * fil de 36 px (72 avant conv-1202 : divisée par 2 pour laisser la place au texte), par-dessus
+ * le bord du texte : ses bulles en dégradé, les réponses en pavés gris,
  * la vue en cadre. Elle se replie 1 s après l'arrêt, sauf si la souris est dessus.
  * L'aimant : une fin de molette tout près d'un message le cale à 10 px du haut. La barre est aussi
  * un curseur : un clic n'importe où y amène la vue, et un glisser fait suivre le fil à la souris en
@@ -58,7 +60,8 @@ import { isChatNearBottom } from './chat-view-model'
  */
 
 const FINE = 18
-const CARTE = 72
+/** Largeur de la carte ouverte — doit égaler `.adf.is-deplie` (AscenseurDuFil.css). */
+const CARTE = 36
 /** Hauteur (écart compris) d'un aperçu sur deux lignes, puis compact sur une ligne (AscenseurDuFil.css). */
 const ETIQUETTE = 44
 const ETIQUETTE_COMPACTE = 26
@@ -93,6 +96,7 @@ export function AscenseurDuFil({
   /** Prévient le fil qu'un défilement vient du LECTEUR (mémoire de la position de lecture). */
   onGesteLecteur?: () => void
 }): ReactElement | null {
+  const { t } = useTextesChatFil()
   const idDegrade = `adf-deg-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const [reperes, setReperes] = useState<Repere[]>([])
   const [geo, setGeo] = useState<Geometrie>({ scrollTop: 0, clientHeight: 0, scrollHeight: 0 })
@@ -606,7 +610,7 @@ export function AscenseurDuFil({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={pourcentage}
-      aria-label="Défilement du fil : un cran par message que tu as écrit"
+      aria-label={t('ascenseur.aria')}
       data-testid="ascenseur-du-fil"
       onPointerEnter={() => {
         surBarreRef.current = true
@@ -706,7 +710,7 @@ export function AscenseurDuFil({
             key={`e${cran.numero}-${cran.haut}`}
             className={`adf-etiquette${cran === misEnAvant ? ' is-courant' : ''}`}
             style={{ top: centre }}
-            aria-label={`Aller à ton message ${cran.numero} : ${cran.texte}`}
+            aria-label={t('ascenseur.cran', { numero: cran.numero, texte: cran.texte })}
             onPointerDown={(event) => event.stopPropagation()}
             onPointerMove={(event) => {
               event.stopPropagation()

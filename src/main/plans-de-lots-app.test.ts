@@ -93,15 +93,31 @@ const plan4 = {
 }
 
 describe('CoordinateurDesPlans — dépôt et accord', () => {
-  it('déposer ne lance RIEN : le plan attend le clic de l’utilisateur', () => {
+  it('deposer() seul enregistre sans lancer : c’est l’outil qui lance', () => {
     const b = banc()
     const r = b.coord.deposer('conv-1', plan4)
     expect(r.ok).toBe(true)
-    if (r.ok) {
-      expect(r.plan.statut).toBe('attente-accord')
-      expect(r.detail).toMatch(/RIEN N’EST LANCÉ/)
-    }
+    if (r.ok) expect(r.plan.statut).toBe('attente-accord')
     expect(b.lancements).toEqual([])
+  })
+
+  /*
+   * conv-1171 (2026-10-27) : « je ne veux pas avoir à confirmer, je veux que ça se lance tout seul ».
+   * Le dépôt par l’outil de l’agent lance le plan : pas de clic « Lancer le plan ».
+   */
+  it('l’outil dépose ET lance : les premiers lots partent sans clic, une seule fois', async () => {
+    const b = banc()
+    const r = (await b.coord.outil('conv-1', { plan: plan4 })) as {
+      plan: { id: string; statut: string }
+      detail: string
+    }
+    expect(r.plan.statut).toBe('en cours')
+    expect(r.detail).toMatch(/LANCÉ/)
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101'])
+    // Le même plan redéposé ne relance rien.
+    await b.coord.outil('conv-1', { plan: plan4 })
+    expect(b.lancements).toHaveLength(2)
+    expect(b.coord.plans()).toHaveLength(1)
   })
 
   it('refus de lecture : rien n’est enregistré', () => {
@@ -272,8 +288,7 @@ describe('CoordinateurDesPlans — 4 lots, 2 en parallèle', () => {
 describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
   it('l’outil dépose, rend l’état et relance un lot en échec', async () => {
     const b = banc()
-    const dep = (await b.coord.outil('conv-1', { plan: plan4 })) as { plan: { id: string } }
-    await b.coord.accepter('conv-1', dep.plan.id)
+    await b.coord.outil('conv-1', { plan: plan4 })
     await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
     const etat = (await b.coord.outil('conv-1', { action: 'etat' })) as { tableau: string }
     expect(etat.tableau).toMatch(/1\. Écrans 1 — échec \(build rouge\) — conv-100/)

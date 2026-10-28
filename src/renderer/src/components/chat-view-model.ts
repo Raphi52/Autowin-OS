@@ -12,6 +12,8 @@ import {
   type PipelinePrompt,
   type TestDuTerminal
 } from '../../../shared/chat-turn'
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, texteAutourDuTableauScout } from './scout-table'
@@ -208,38 +210,46 @@ export function deriveConversationState(input: {
    */
   streamingTurn?: boolean
 }): ConversationState {
+  // Libellés dans la langue de l'interface (conv-1170) ; `key` reste la valeur que le code compare.
+  const langue = langueCourante()
+  const texte = (cle: Parameters<typeof traduireChatFil>[0]): string => traduireChatFil(cle, langue)
   if (input.busy || input.lastAssistantStatus === 'streaming' || input.streamingTurn) {
     return {
       key: 'running',
-      label: 'En cours',
-      detail: 'Réponse en cours de génération',
+      label: texte('etat.enCours'),
+      detail: texte('etat.enCours.detail'),
       glyph: ''
     }
   }
   if (input.lastMessageRole === 'user') {
     return {
       key: 'waiting',
-      label: 'Sans réponse',
-      detail: 'Le dernier message utilisateur est sans réponse',
+      label: texte('etat.sansReponse'),
+      detail: texte('etat.sansReponse.detail'),
       glyph: '·'
     }
   }
   if (input.lastAssistantStatus === 'failed') {
-    return { key: 'failed', label: 'Erreur', detail: 'Le dernier tour a échoué', glyph: '!' }
+    return {
+      key: 'failed',
+      label: texte('etat.erreur'),
+      detail: texte('etat.erreur.detail'),
+      glyph: '!'
+    }
   }
   if (input.lastAssistantStatus === 'interrupted') {
     return {
       key: 'interrupted',
-      label: 'Interrompue',
-      detail: 'Le dernier tour a été interrompu',
+      label: texte('etat.interrompue'),
+      detail: texte('etat.interrompue.detail'),
       glyph: 'Ⅱ'
     }
   }
   if (input.lastAssistantStatus === 'cancelled') {
     return {
       key: 'cancelled',
-      label: 'Arrêtée',
-      detail: 'Le dernier tour a été arrêté',
+      label: texte('etat.arretee'),
+      detail: texte('etat.arretee.detail'),
       glyph: '×'
     }
   }
@@ -249,8 +259,8 @@ export function deriveConversationState(input: {
   if (input.asksUser) {
     return {
       key: 'asking',
-      label: 'Ta réponse attendue',
-      detail: 'Le dernier tour pose une question à choix restée ouverte',
+      label: texte('etat.question'),
+      detail: texte('etat.question.detail'),
       glyph: '?'
     }
   }
@@ -261,20 +271,30 @@ export function deriveConversationState(input: {
     if (input.unseen) {
       return {
         key: 'unread',
-        label: 'Terminé, non lu',
-        detail: 'Le tour est terminé et la conversation n’a pas été ouverte depuis',
+        label: texte('etat.nonLu'),
+        detail: texte('etat.nonLu.detail'),
         glyph: '✓'
       }
     }
-    return { key: 'completed', label: 'À jour', detail: 'Le dernier tour est terminé', glyph: '✓' }
+    return {
+      key: 'completed',
+      label: texte('etat.aJour'),
+      detail: texte('etat.aJour.detail'),
+      glyph: '✓'
+    }
   }
   if (input.messageCount === 0) {
-    return { key: 'empty', label: 'Vide', detail: 'Aucun message', glyph: '○' }
+    return {
+      key: 'empty',
+      label: texte('etat.vide'),
+      detail: texte('etat.vide.detail'),
+      glyph: '○'
+    }
   }
   return {
     key: 'waiting',
-    label: 'Sans réponse',
-    detail: 'Le dernier message utilisateur est sans réponse',
+    label: texte('etat.sansReponse'),
+    detail: texte('etat.sansReponse.detail'),
     glyph: '·'
   }
 }
@@ -970,7 +990,10 @@ function reduireEvenementDuPilote(
     turnEvent = { kind: 'artifact', artifact: event.artifact }
   else if (event.kind === 'done') turnEvent = { kind: 'done' }
   else if (event.kind === 'error')
-    turnEvent = { kind: 'failed', error: event.text ?? 'Erreur inconnue' }
+    turnEvent = {
+      kind: 'failed',
+      error: event.text ?? traduireChatFil('modele.erreurInconnue', langueCourante())
+    }
   else if (event.kind === 'cancellation') turnEvent = { kind: 'cancelled' }
   if (!turnEvent) return message
 
@@ -1004,7 +1027,9 @@ function reduireEvenementDuPilote(
 /** Libelle du cout d'un tour ; rien quand le fournisseur ne l'a pas chiffre (jamais « 0 $ » invente). */
 export function libelleCoutDuTour(coutUsd: number | undefined): string | undefined {
   if (typeof coutUsd !== 'number' || !Number.isFinite(coutUsd) || coutUsd <= 0) return undefined
-  return `coût du tour : ${coutUsd < 0.01 ? coutUsd.toFixed(4) : coutUsd.toFixed(2)} $`
+  return traduireChatFil('modele.coutDuTour', langueCourante(), {
+    cout: coutUsd < 0.01 ? coutUsd.toFixed(4) : coutUsd.toFixed(2)
+  })
 }
 
 interface RuntimeSlot {
@@ -1217,9 +1242,17 @@ export function skillSlashCommands(
           cmd,
           ...aliases.map((a) => ({
             name: a,
-            hint: `${cmd.hint} (alias de /${cmd.name})`,
+            hint: traduireChatFil('modele.alias', langueCourante(), {
+              texte: cmd.hint,
+              skill: cmd.name
+            }),
             ...(cmd.description
-              ? { description: `${cmd.description} (alias de /${cmd.name})` }
+              ? {
+                  description: traduireChatFil('modele.alias', langueCourante(), {
+                    texte: cmd.description,
+                    skill: cmd.name
+                  })
+                }
               : {}),
             insert: `/${a} `
           }))
@@ -1305,9 +1338,21 @@ export function costByModel(steps: OrchStep[]): Array<{
 }
 
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */
+// Libellés lus à l'affichage, dans la langue de l'interface (conv-1170). « gate » est déjà le mot
+// anglais : il ne se traduit pas.
 export const STEP_META: Record<string, { icon: string; label: string }> = {
-  exec: { icon: '🤖', label: 'sous-agent' },
-  judge: { icon: '⚖️', label: 'juge' },
+  exec: {
+    icon: '🤖',
+    get label() {
+      return traduireChatFil('etape.sousAgent', langueCourante())
+    }
+  },
+  judge: {
+    icon: '⚖️',
+    get label() {
+      return traduireChatFil('etape.juge', langueCourante())
+    }
+  },
   gate: { icon: '🚦', label: 'gate' }
 }
 
@@ -1337,7 +1382,14 @@ function modelVendor(model: string): { key: string; label: string; rank: number 
   // Les routes auto/* forment LEUR PROPRE catégorie (jamais mélangées à un éditeur),
   // testées AVANT la marque pour que `auto/claude-opus` n'atterrisse pas dans Anthropic.
   const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
-  if (isAuto) return { key: 'auto', label: 'Sélection automatique', rank: 8 }
+  // Seules les catégories « Sélection automatique » et « Autres » se traduisent : les autres
+  // libellés sont des noms d'éditeurs ou de produits, les mêmes dans les deux langues.
+  if (isAuto)
+    return {
+      key: 'auto',
+      label: traduireChatFil('modele.selectionAuto', langueCourante()),
+      rank: 8
+    }
   if (id.includes('claude')) return { key: 'anthropic', label: 'Anthropic', rank: 0 }
   if (/gpt|codex|\bo\d/.test(id)) return { key: 'openai', label: 'ChatGPT', rank: 1 }
   if (id.includes('gemini') || id.includes('gemma'))
@@ -1352,7 +1404,7 @@ function modelVendor(model: string): { key: string; label: string; rank: number 
   if (id.includes('grok')) return { key: 'xai', label: 'xAI (Grok)', rank: 2 }
   if (id.includes('deepseek')) return { key: 'deepseek', label: 'DeepSeek', rank: 2 }
   if (id.includes('mistral')) return { key: 'mistral', label: 'Mistral', rank: 2 }
-  return { key: 'other', label: 'Autres', rank: 9 }
+  return { key: 'other', label: traduireChatFil('modele.autres', langueCourante()), rank: 9 }
 }
 
 /**
@@ -1437,9 +1489,12 @@ export function turnCostEq(usage: { inputTokens?: number; outputTokens?: number 
 /** Palier de coût du DERNIER tour (pastille live) — vert/orange/rouge selon les seuils réels. */
 export function costEqTier(costEq: number): { dotClass: string; label: string } {
   const k = Math.round(costEq / 1000)
-  if (costEq < COST_EQ_LOW) return { dotClass: 'st-ok', label: `Dernier tour léger (~${k}k)` }
-  if (costEq < COST_EQ_HIGH) return { dotClass: 'st-warn', label: `Dernier tour moyen (~${k}k)` }
-  return { dotClass: 'st-err', label: `Dernier tour lourd (~${k}k)` }
+  const langue = langueCourante()
+  if (costEq < COST_EQ_LOW)
+    return { dotClass: 'st-ok', label: traduireChatFil('modele.tourLeger', langue, { k }) }
+  if (costEq < COST_EQ_HIGH)
+    return { dotClass: 'st-warn', label: traduireChatFil('modele.tourMoyen', langue, { k }) }
+  return { dotClass: 'st-err', label: traduireChatFil('modele.tourLourd', langue, { k }) }
 }
 
 /**
@@ -1454,15 +1509,24 @@ export function modelCostTier(model: string): {
 } {
   const id = model.toLowerCase()
   const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
+  const langue = langueCourante()
   if (isAuto)
-    return { tier: 'unknown', dotClass: 'st-neutral', label: 'Coût variable (route auto)' }
+    return {
+      tier: 'unknown',
+      dotClass: 'st-neutral',
+      label: traduireChatFil('modele.coutVariable', langue)
+    }
   if (/opus|gpt-5\.\d+-pro|grok-\d+-reasoning/.test(id))
-    return { tier: 'high', dotClass: 'st-err', label: 'Modèle cher' }
+    return { tier: 'high', dotClass: 'st-err', label: traduireChatFil('modele.cher', langue) }
   if (/haiku|flash|mini|nano|lite|small|8b|7b|scout/.test(id))
-    return { tier: 'low', dotClass: 'st-ok', label: 'Modèle pas cher' }
+    return { tier: 'low', dotClass: 'st-ok', label: traduireChatFil('modele.pasCher', langue) }
   if (/sonnet|gpt-5|gemini-\d|glm|mimo|qwen|deepseek|llama|kimi|fable/.test(id))
-    return { tier: 'mid', dotClass: 'st-warn', label: 'Coût moyen' }
-  return { tier: 'unknown', dotClass: 'st-neutral', label: 'Coût inconnu' }
+    return { tier: 'mid', dotClass: 'st-warn', label: traduireChatFil('modele.coutMoyen', langue) }
+  return {
+    tier: 'unknown',
+    dotClass: 'st-neutral',
+    label: traduireChatFil('modele.coutInconnu', langue)
+  }
 }
 
 /**
@@ -1574,7 +1638,10 @@ export function buildOrchestratorModelGroups(
           currentMissing: {
             provider: current.provider,
             model: currentModel,
-            label: `${current.provider} · ${currentModel} (indisponible)`,
+            label: traduireChatFil('modele.indisponible', langueCourante(), {
+              provider: current.provider,
+              modele: currentModel
+            }),
             reasoningEfforts: []
           }
         }
@@ -1613,15 +1680,19 @@ export interface LiveRunPhase {
 
 /** Libellé lisible d'une phase de pipeline (A4) — sinon retombe sur le libellé d'étape. */
 export function phaseLabel(p: { step: string; phase?: string }): string {
-  const PHASE_FR: Record<string, string> = {
+  // Dans la langue de l'interface (conv-1170). « scout », « terrain » et « build » restent tels quels :
+  // ce sont les noms des skills, les mêmes dans les deux langues.
+  const langue = langueCourante()
+  const PHASES: Record<string, string> = {
     scout: 'scout',
-    frame: 'cadrage',
+    frame: traduireChatFil('phase.cadrage', langue),
     terrain: 'terrain',
     build: 'build',
-    clean: 'nettoyage',
-    judge: 'juge'
+    clean: traduireChatFil('phase.nettoyage', langue),
+    judge: traduireChatFil('phase.juge', langue)
   }
-  if (p.phase && PHASE_FR[p.phase]) return `sous-agent · ${PHASE_FR[p.phase]}`
+  if (p.phase && PHASES[p.phase])
+    return traduireChatFil('phase.sousAgent', langue, { phase: PHASES[p.phase] })
   return STEP_META[p.step]?.label ?? p.step
 }
 
@@ -1682,7 +1753,10 @@ export function resolveChatRuntimeIdentity(
     return {
       provider: role.provider,
       model: imported?.model ?? role.model ?? 'default',
-      modelLabel: imported?.label?.trim() || role.model || `${role.provider} · modèle par défaut`,
+      modelLabel:
+        imported?.label?.trim() ||
+        role.model ||
+        traduireChatFil('modele.parDefaut', langueCourante(), { provider: role.provider }),
       reasoningEffort: role.reasoningEffort ?? 'auto'
     }
   }
@@ -2337,9 +2411,10 @@ export function densiteSuivante(courante: DensiteConversation): DensiteConversat
 
 /** Nom lisible du cran — sert l'infobulle ET le lecteur d'ecran, donc jamais un mot de mecanique. */
 export function libelleDensite(densite: DensiteConversation): string {
-  if (densite === 'compact') return 'compacte'
-  if (densite === 'normal') return 'normale'
-  return 'détaillée'
+  const langue = langueCourante()
+  if (densite === 'compact') return traduireChatFil('densite.compacte', langue)
+  if (densite === 'normal') return traduireChatFil('densite.normale', langue)
+  return traduireChatFil('densite.detaillee', langue)
 }
 
 /**

@@ -180,13 +180,21 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
       issue: issues.get(index)!,
       sortie: tache.journalPath ? lireSortieSure(tache.journalPath) : ''
     }))
+    /*
+     * RENDU AVANT L'ENVOI, pas après (conv-1211, 2026-10-28) : `envoyerTour` attend la FIN du tour de
+     * reprise. Effacé seulement ensuite, le lot survivait à un redémarrage fait PENDANT ce tour
+     * (`restart_app`), et `reprendreAuDemarrage` renvoyait la même reprise : un tour payé pour rien.
+     * Un échec d'envoi effaçait déjà le lot ; seul s'ajoute l'instant entre cet effacement et
+     * l'inscription du tour. Le registre suit le même ordre : pendant le tour de reprise, la tâche
+     * est finie et ne doit plus être annoncée « en cours » à l'agent.
+     */
+    for (const tache of taches) noterTacheRendue(tache.id)
+    deps.magasin.supprimer(lot)
     try {
       await deps.envoyerTour(conversationId, composerPromptDeReprise(resultats))
     } catch (erreur) {
       journaliser(`[taches de fond] tour de reprise impossible dans ${conversationId}`, erreur)
     }
-    for (const tache of taches) noterTacheRendue(tache.id)
-    deps.magasin.supprimer(lot)
   }
 
   const lireSortieSure = (journalPath: string): string => {

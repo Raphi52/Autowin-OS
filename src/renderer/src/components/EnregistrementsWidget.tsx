@@ -15,6 +15,8 @@ import {
   type Voix
 } from './enregistrements'
 import { listerMicros, type MicroDisponible } from './micro-peripheriques'
+import { langueCourante } from '../langue'
+import { traduireAccueil, useTextesAccueil } from '../textes-ecrans/accueil'
 
 /**
  * ENREGISTRER LA PAROLE, et voir où elle a atterri.
@@ -95,6 +97,7 @@ type EtatDiarisationVue = {
 const VOIX_APPEL: readonly Voix[] = ['moi', 'interlocuteur']
 
 export function EnregistrementsWidget(): React.JSX.Element {
+  const { t } = useTextesAccueil()
   const [enregistre, setEnregistre] = useState(false)
   const [lignes, setLignes] = useState<string[]>([])
   const [partiel, setPartiel] = useState('')
@@ -170,7 +173,9 @@ export function EnregistrementsWidget(): React.JSX.Element {
       } catch (cause) {
         // ON ARRÊTE. Un enregistrement qui n'écrit plus doit se voir, pas se poursuivre.
         setErreur(
-          `Écriture impossible : ${cause instanceof Error ? cause.message : String(cause)} — enregistrement arrêté`
+          traduireAccueil('enreg.ecritureImpossible', langueCourante(), {
+            cause: cause instanceof Error ? cause.message : String(cause)
+          })
         )
         void arreter()
       }
@@ -224,7 +229,7 @@ export function EnregistrementsWidget(): React.JSX.Element {
         // que de continuer à écrire un côté de la conversation en laissant croire qu'on a les deux.
         setErreur(
           voix === 'interlocuteur'
-            ? `Le son du système s’est interrompu (${code}) — enregistrement arrêté`
+            ? traduireAccueil('enreg.sonInterrompu', langueCourante(), { code })
             : messageErreurMoteur(code)
         )
         void arreter()
@@ -244,22 +249,18 @@ export function EnregistrementsWidget(): React.JSX.Element {
   const demarrer = useCallback(async () => {
     const pont = api()
     if (!pont?.transcriptDemarrer) {
-      setErreur('Passerelle d’enregistrement indisponible')
+      setErreur(traduireAccueil('enreg.passerelle', langueCourante()))
       return
     }
     const appel = mode === 'appel'
     // LE REFUS ARRIVE AVANT LE FICHIER. Ouvrir une session pour découvrir ensuite qu'une voix est
     // impossible laisserait un fichier vide daté sur le disque.
     if (appel && !whisperRef.current) {
-      setErreur(
-        'Le mode conversation exige la reconnaissance hors ligne : installez-la depuis le widget Jarvis.'
-      )
+      setErreur(traduireAccueil('enreg.appelExigeWhisper', langueCourante()))
       return
     }
     if (!fabriqueMoteur(whisperRef.current, microRef.current || undefined)) {
-      setErreur(
-        'Aucun moteur de reconnaissance disponible : installez l’écoute hors ligne depuis le widget Jarvis.'
-      )
+      setErreur(traduireAccueil('enreg.aucunMoteur', langueCourante()))
       return
     }
     let session: { id: string; nom: string; chemin: string }
@@ -283,8 +284,8 @@ export function EnregistrementsWidget(): React.JSX.Element {
       if (!ouvrirFlux(voix, appel)) {
         setErreur(
           voix === 'interlocuteur'
-            ? 'Le son du système n’a pas pu être capté — enregistrement arrêté'
-            : 'Aucun moteur de reconnaissance disponible — enregistrement arrêté'
+            ? traduireAccueil('enreg.sonNonCapte', langueCourante())
+            : traduireAccueil('enreg.aucunMoteurArret', langueCourante())
         )
         void arreter()
         return
@@ -400,39 +401,43 @@ export function EnregistrementsWidget(): React.JSX.Element {
           disabled={mode === 'fichier' && diarisation?.installe !== true}
           onClick={basculer}
         >
-          {enregistre ? '■ Arrêter' : '⏺ Enregistrer'}
+          {enregistre ? t('enreg.arreter') : t('enreg.enregistrer')}
         </button>
         <span className="enregistrements__etat" data-testid="enregistrements-etat">
           {enregistre && depuis !== null
-            ? `${formaterDuree(maintenant - depuis)} · ${lignes.length} phrase${lignes.length > 1 ? 's' : ''} · ${formaterTaille(octets)}`
-            : 'Micro coupé — rien n’est écrit'}
+            ? t(lignes.length > 1 ? 'enreg.etatPlusieurs' : 'enreg.etatUne', {
+                duree: formaterDuree(maintenant - depuis),
+                n: lignes.length,
+                taille: formaterTaille(octets)
+              })
+            : t('enreg.microCoupe')}
         </span>
       </div>
 
       {/* LE MODE SE CHOISIT MICRO COUPÉ. Le changer en cours de séance devrait rouvrir les flux au
           milieu du fichier : la moitié des lignes serait attribuée, l'autre non. */}
       <label className="enregistrements__champ">
-        <span>Mode</span>
+        <span>{t('enreg.mode')}</span>
         <select
           data-testid="enregistrements-mode"
           value={mode}
           disabled={enregistre}
           onChange={(e) => setMode(e.target.value as ModeEnregistrement)}
         >
-          <option value="dictee">Dictée — ce que je dis</option>
-          <option value="appel">Conversation — ce que je dis et ce que j’entends</option>
-          <option value="fichier">Fichier audio — isoler les interlocuteurs d’un mp3</option>
+          <option value="dictee">{t('enreg.modeDictee')}</option>
+          <option value="appel">{t('enreg.modeAppel')}</option>
+          <option value="fichier">{t('enreg.modeFichier')}</option>
         </select>
       </label>
       {mode === 'fichier' && diarisation !== null ? (
         <span className="enregistrements__aide" data-testid="enregistrements-aide-fichier">
           {diarisation.installe
             ? diarisation.jetonPresent
-              ? 'Prêt : chaque passage sera attribué à « Locuteur 1 », « Locuteur 2 »… à l’oreille.'
-              : 'Brique posée, mais il manque le jeton Hugging Face (gratuit) : sans lui, le modèle ne se télécharge pas. Renseignez HF_TOKEN dans vos variables d’environnement.'
+              ? t('enreg.pret')
+              : t('enreg.jetonManquant')
             : diarisation.pythonPresent
-              ? `Séparer les voix d’un seul fichier exige pyannote (≈ ${diarisation.megaoctets} Mo, une seule fois).`
-              : 'Python est introuvable sur ce poste : la séparation des voix ne peut pas être posée ici.'}
+              ? t('enreg.pyannote', { mo: diarisation.megaoctets })
+              : t('enreg.pythonAbsent')}
         </span>
       ) : null}
       {/* L'OFFRE D'INSTALLATION n'apparaît QUE là où elle a un sens : mode fichier, Python présent,
@@ -452,36 +457,34 @@ export function EnregistrementsWidget(): React.JSX.Element {
         >
           {poseEnCours ? (
             <>
-              <Spinner /> Installation en cours… (plusieurs minutes)
+              <Spinner /> {t('enreg.installationEnCours')}
             </>
           ) : (
-            `Installer la séparation des voix (≈ ${diarisation.megaoctets} Mo, une seule fois)`
+            t('enreg.installerDiarisation', { mo: diarisation.megaoctets })
           )}
         </button>
       ) : null}
       {mode === 'fichier' && diarisation?.erreur ? (
         <span className="enregistrements__aide" data-testid="enregistrements-erreur-diarisation">
-          Échec : {diarisation.erreur}
+          {t('enreg.echec', { erreur: diarisation.erreur })}
         </span>
       ) : null}
       {mode === 'appel' ? (
         <span className="enregistrements__aide" data-testid="enregistrements-aide-appel">
-          {whisperInstalle
-            ? 'Le son de Teams, Meet ou du navigateur est transcrit à part, sous « Interlocuteur ». Windows uniquement.'
-            : 'Indisponible : ce mode exige la reconnaissance hors ligne, à installer depuis le widget Jarvis.'}
+          {whisperInstalle ? t('enreg.appelAide') : t('enreg.indisponible')}
         </span>
       ) : null}
 
       <details className="enregistrements__audio" data-testid="enregistrements-audio">
-        <summary>Paramètres audio</summary>
+        <summary>{t('audio.parametres')}</summary>
         <label className="enregistrements__champ">
-          <span>Micro</span>
+          <span>{t('audio.micro')}</span>
           <select
             data-testid="enregistrements-peripherique"
             value={micro}
             onChange={(e) => setMicro(e.target.value)}
           >
-            <option value="">Micro par défaut du système</option>
+            <option value="">{t('audio.microDefaut')}</option>
             {micros.map((entree) => (
               <option key={entree.id} value={entree.id}>
                 {entree.nom}
@@ -489,9 +492,7 @@ export function EnregistrementsWidget(): React.JSX.Element {
             ))}
           </select>
         </label>
-        <span className="enregistrements__aide">
-          Un changement de micro s’applique au prochain enregistrement.
-        </span>
+        <span className="enregistrements__aide">{t('enreg.changementMicro')}</span>
       </details>
 
       {erreur ? (
@@ -503,7 +504,7 @@ export function EnregistrementsWidget(): React.JSX.Element {
       {enregistre ? (
         <>
           <p className="enregistrements__cible" data-testid="enregistrements-cible">
-            Écriture au fil de l’eau dans {fichierEnCours ?? '…'}
+            {t('enreg.ecritureDans', { fichier: fichierEnCours ?? '…' })}
           </p>
           <p className="enregistrements__partiel" data-testid="enregistrements-partiel">
             {partiel || '…'}
@@ -516,10 +517,10 @@ export function EnregistrementsWidget(): React.JSX.Element {
         </>
       ) : null}
 
-      <p className="enregistrements__titre">Derniers enregistrements</p>
+      <p className="enregistrements__titre">{t('enreg.derniers')}</p>
       {fichiers.length === 0 ? (
         <p className="enregistrements__vide" data-testid="enregistrements-vide">
-          Aucun pour l’instant — appuyez sur Enregistrer.
+          {t('enreg.aucun')}
         </p>
       ) : (
         <ul className="enregistrements__fichiers" data-testid="enregistrements-fichiers">
@@ -528,7 +529,7 @@ export function EnregistrementsWidget(): React.JSX.Element {
               <button
                 type="button"
                 className="enregistrements__fichier"
-                title={`Montrer ${fichier.chemin} dans l’explorateur`}
+                title={t('enreg.montrer', { chemin: fichier.chemin })}
                 onClick={() => void api()?.transcriptRevealer?.(fichier.chemin)}
               >
                 <span className="enregistrements__fichier-nom">

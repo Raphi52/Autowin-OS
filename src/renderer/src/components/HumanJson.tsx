@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { langueCourante, formaterNombre } from '../langue'
+import { useTextesObservatory, traduireObservatory } from '../textes-ecrans/observatory'
 import './HumanJson.css'
 import { parseJsonValue, type JsonValue } from './human-json-model'
 
@@ -7,11 +9,12 @@ function isPrimitive(value: JsonValue): boolean {
 }
 
 function Leaf({ value }: { value: JsonValue }): React.JSX.Element {
-  if (value === null) return <span className="human-json__null">aucune valeur</span>
+  const { t } = useTextesObservatory()
+  if (value === null) return <span className="human-json__null">{t('json.aucuneValeur')}</span>
   if (typeof value === 'boolean')
-    return <span className="human-json__boolean">{value ? 'oui' : 'non'}</span>
+    return <span className="human-json__boolean">{value ? t('json.oui') : t('json.non')}</span>
   if (typeof value === 'number')
-    return <span className="human-json__number">{value.toLocaleString('fr-FR')}</span>
+    return <span className="human-json__number">{formaterNombre(value)}</span>
   return <span className="human-json__string">{value === '' ? '—' : String(value)}</span>
 }
 
@@ -24,8 +27,11 @@ function JsonTree({ value, depth = 0 }: { value: JsonValue; depth?: number }): R
     : Object.entries(value as Record<string, JsonValue>)
   const count = entries.length
   const label = isArray
-    ? `${count} élément${count > 1 ? 's' : ''}`
-    : `${count} propriété${count > 1 ? 's' : ''}`
+    ? traduireObservatory('json.elements', langueCourante(), { n: count, s: count > 1 ? 's' : '' })
+    : traduireObservatory('json.proprietes', langueCourante(), {
+        n: count,
+        s: count > 1 ? 's' : ''
+      })
   // Feuilles simples (ex. argv) → liste à plat pleine largeur : plus de colonne étranglée.
   const flat = entries.every(([, child]) => isPrimitive(child))
 
@@ -55,6 +61,7 @@ export function HumanJson({
   value: unknown
   className?: string
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const parsed = parseJsonValue(value)
   const [readable, setReadable] = useState(true)
   const raw = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
@@ -66,7 +73,7 @@ export function HumanJson({
         className="human-json__toggle"
         onClick={() => setReadable((current) => !current)}
       >
-        {readable ? 'Voir brut' : 'Rendre lisible'}
+        {readable ? t('json.voirBrut') : t('json.rendreLisible')}
       </button>
       {readable ? (
         <div className="human-json__tree">

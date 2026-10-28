@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { depuis } from './depuis'
+import { type IncomingCommit, type UpdateStrategy } from '../../../shared/update-contract'
+import { langueCourante } from '../langue'
 import {
-  UPDATE_STRATEGY_HINTS,
-  UPDATE_STRATEGY_LABELS,
-  type IncomingCommit,
-  type UpdateStrategy
-} from '../../../shared/update-contract'
+  traduireArtefactsEtBandeaux,
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
 import './UpdateBanner.css'
 
 interface UpdateInfo {
@@ -39,6 +40,25 @@ const POLL_INTERVAL_MS = 180_000
  * STRUCTURE de main est conservée (table + classe `is-glyph`), seules les VALEURS sont reprises du
  * travail bloqué — ⤳ et ⑃ tombent en glyphe de substitution sur les polices Windows par défaut.
  */
+/**
+ * Nom et aide de chaque voie, dans la langue de l'app (conv-1170). Le français est celui de
+ * `UPDATE_STRATEGY_LABELS` / `UPDATE_STRATEGY_HINTS` (shared/update-contract.ts), recopié dans la
+ * table des textes ; ArtefactsEtBandeaux.langue.test.tsx refuse que les deux divergent.
+ */
+const CLES_DES_VOIES: Record<
+  UpdateStrategy,
+  { nom: CleArtefactsEtBandeaux; aide: CleArtefactsEtBandeaux }
+> = {
+  'fast-forward': { nom: 'maj.voie.fast-forward', aide: 'maj.aide.fast-forward' },
+  merge: { nom: 'maj.voie.merge', aide: 'maj.aide.merge' },
+  rebase: { nom: 'maj.voie.rebase', aide: 'maj.aide.rebase' },
+  'switch-main': { nom: 'maj.voie.switch-main', aide: 'maj.aide.switch-main' }
+}
+
+/** Un texte de la table, dans la langue du moment de l'appel (hors rendu : messages d'échec). */
+const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
+  traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
+
 const UPDATE_STRATEGY_GLYPHS: Record<UpdateStrategy, string> = {
   'fast-forward': '⇧',
   merge: '⎇',
@@ -77,7 +97,7 @@ function infobulleCommit(commit: IncomingCommit): string {
     `${commit.hash.slice(0, 10)} · ${commit.author} · ${commit.date}`,
     commit.subject,
     ...commit.files,
-    ...(reste > 0 ? [`… et ${reste} autre(s) fichier(s)`] : [])
+    ...(reste > 0 ? [texte('maj.autresFichiers', { nombre: reste })] : [])
   ].join('\n')
 }
 
@@ -102,7 +122,7 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
     (roleMap ? Object.values(roleMap)[0]?.provider : undefined)
   if (!provider) return
   const conversation = await window.api.conversationsCreate?.({
-    title: 'Réparer la mise à jour',
+    title: texte('maj.titreConversation'),
     category: provider,
     provider
   })
@@ -118,6 +138,8 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
    * refuse aux agents (src/shared/garde-git-destructeur.ts), et conv-1023 s'est rabattu sur une
    * branche `autowin/recovery/…` que l'app a publiée et poussée toute seule. La skill porte la voie
    * sûre (branche `sauvegarde/…`) et la règle « ne réintroduis jamais ce que main a retiré ».
+   * Ce prompt RESTE EN FRANÇAIS quelle que soit la langue de l'app (conv-1170) : c'est une consigne
+   * pour l'agent, et `skills-gel-maj.routables.test.ts` vérifie qu'il route vers `/maj`.
    */
   const prompt =
     `/maj La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage puis relance la ` +
@@ -148,6 +170,7 @@ export function UpdateBanner({
 }: {
   collapsed?: boolean
 }): React.JSX.Element | null {
+  const { t } = useTextesArtefactsEtBandeaux()
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [applying, setApplying] = useState<UpdateStrategy | null>(null)
   const [checkError, setCheckError] = useState<string>()
@@ -166,7 +189,8 @@ export function UpdateBanner({
         if (generation !== checkGeneration.current || applyOwnsBanner.current) return
         const nextInfo = result as UpdateInfo
         if (nextInfo.error !== undefined) {
-          setCheckError(nextInfo.error || 'Verification des mises a jour impossible.')
+          // Message figé dans la langue du moment de l'échec, comme ceux que rend le main.
+          setCheckError(nextInfo.error || texte('maj.verificationImpossible'))
           return
         }
         setInfo(nextInfo)
@@ -174,7 +198,7 @@ export function UpdateBanner({
       })
       .catch((reason: unknown) => {
         if (generation !== checkGeneration.current || applyOwnsBanner.current) return
-        setCheckError(errorMessage(reason, 'Verification des mises a jour impossible.'))
+        setCheckError(errorMessage(reason, texte('maj.verificationImpossible')))
       })
   }, [])
 
@@ -197,7 +221,7 @@ export function UpdateBanner({
   }, [check])
 
   if (checkError) {
-    const retryLabel = `Verification des mises a jour impossible : ${checkError}. Reessayer`
+    const retryLabel = t('maj.verificationReessayer', { erreur: checkError })
     return (
       <div className="rail-update" data-testid="update-banner">
         <button
@@ -211,7 +235,7 @@ export function UpdateBanner({
           <span className="rail-update-icon" aria-hidden="true">
             &#8635;
           </span>
-          {!collapsed && <span className="rail-update-label">Reessayer</span>}
+          {!collapsed && <span className="rail-update-label">{t('maj.reessayer')}</span>}
         </button>
         <span
           className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
@@ -291,10 +315,7 @@ export function UpdateBanner({
           setApplying(null)
           setInfo(fresh)
           setChoicesOpen(true)
-          setApplyError(
-            `L’état du dépôt a changé : « ${UPDATE_STRATEGY_LABELS[strategy]} » ne s’applique plus. ` +
-              `Choisis parmi les voies encore possibles.`
-          )
+          setApplyError(texte('maj.etatChange', { voie: texte(CLES_DES_VOIES[strategy].nom) }))
           return
         }
       }
@@ -317,11 +338,11 @@ export function UpdateBanner({
       // le verrou posé au début d'`apply` restait pris à vie, donc `check()` (cycle de 3 minutes ET
       // retour de focus) jetait tous ses résultats et le bouton figeait le dernier compte connu.
       applyOwnsBanner.current = false
-      setApplyError(r?.error ?? 'Échec de la mise à jour.')
+      setApplyError(r?.error ?? texte('maj.echec'))
       setApplying(null)
     } catch (reason) {
       applyOwnsBanner.current = false
-      setApplyError(errorMessage(reason, 'Échec de la mise à jour.'))
+      setApplyError(errorMessage(reason, texte('maj.echec')))
       setApplying(null)
     }
   }
@@ -329,20 +350,29 @@ export function UpdateBanner({
   // Nommer la RÉFÉRENCE comparée, pas la branche sortie : le compte vient de `origin/main`, donc
   // afficher « N commits sur feat/x » était faux. Si l'utilisateur n'est pas sur main, on le dit.
   const reference = info.reference ?? 'origin/main'
-  const elsewhere = info.branch && info.branch !== 'main' ? ` · tu es sur ${info.branch}` : ''
-  const dirtyNote = info.dirty
-    ? ' · ton travail en cours reste en place ; la mise à jour est refusée si elle entre en conflit'
-    : ''
-  const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}${dirtyNote}`
+  const elsewhere =
+    info.branch && info.branch !== 'main' ? t('maj.ailleurs', { branche: info.branch }) : ''
+  const dirtyNote = info.dirty ? t('maj.travailEnCours') : ''
+  const detail = t('maj.detail', {
+    nombre: info.behind,
+    reference,
+    ailleurs: elsewhere,
+    travail: dirtyNote
+  })
+  const nomDeVoie = (voie: UpdateStrategy): string => t(CLES_DES_VOIES[voie].nom)
+  const aideDeVoie = (voie: UpdateStrategy): string => t(CLES_DES_VOIES[voie].aide)
   const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
   const incoming = info.incoming ?? []
   const incomingHidden = info.behind - incoming.length
-  const whoLabel = `Qui a poussé quoi ? — voir ${incoming.length === 1 ? 'le commit' : `les ${incoming.length} commits`} à récupérer depuis ${reference}`
+  const whoLabel =
+    incoming.length === 1
+      ? t('maj.quiLeCommit', { reference })
+      : t('maj.quiLesCommits', { nombre: incoming.length, reference })
   const actionLabel = applying
-    ? 'Mise à jour en cours'
+    ? t('maj.enCours')
     : applyError
-      ? `Échec de la mise à jour : ${applyError}. Réessayer`
-      : `${UPDATE_STRATEGY_LABELS[primary]} — ${detail}. ${UPDATE_STRATEGY_HINTS[primary]}`
+      ? t('maj.echecReessayer', { erreur: applyError })
+      : `${nomDeVoie(primary)} — ${detail}. ${aideDeVoie(primary)}`
   return (
     <div className="rail-update" data-testid="update-banner">
       <div className="rail-update-row">
@@ -420,7 +450,7 @@ export function UpdateBanner({
             {!collapsed && (
               <>
                 <span className="thinking-label rail-update-label">
-                  {applying ? 'Mise à jour…' : UPDATE_STRATEGY_LABELS[primary]}
+                  {applying ? t('maj.miseAJour') : nomDeVoie(primary)}
                 </span>
                 <span className="thinking-duree rail-update-count">+{info.behind}</span>
               </>
@@ -433,7 +463,7 @@ export function UpdateBanner({
           id="rail-update-incoming"
           className={`rail-update-incoming${collapsed ? ' is-floating' : ''}`}
           data-testid="update-incoming"
-          aria-label={`Commits à récupérer depuis ${reference}`}
+          aria-label={t('maj.commitsARecuperer', { reference })}
         >
           {incoming.map((commit) => (
             <li
@@ -457,7 +487,7 @@ export function UpdateBanner({
           ))}
           {incomingHidden > 0 && (
             <li className="rail-update-commit-more">
-              … et {incomingHidden} commit(s) plus ancien(s)
+              {t('maj.plusAnciens', { nombre: incomingHidden })}
             </li>
           )}
         </ol>
@@ -469,8 +499,8 @@ export function UpdateBanner({
           data-testid="update-more"
           disabled={applying !== null}
           aria-expanded={choicesOpen}
-          aria-label={`Autres façons d’intégrer ${reference}`}
-          title={`Autres façons d’intégrer ${reference}`}
+          aria-label={t('maj.autresFacons', { reference })}
+          title={t('maj.autresFacons', { reference })}
           onClick={() => setChoicesOpen((open) => !open)}
         >
           ⋯
@@ -485,14 +515,14 @@ export function UpdateBanner({
               className={`rail-update-choice${collapsed ? ' is-glyph' : ''}`}
               data-testid={`update-choice-${strategy}`}
               disabled={applying !== null}
-              aria-label={`${UPDATE_STRATEGY_LABELS[strategy]} — ${UPDATE_STRATEGY_HINTS[strategy]}`}
-              title={`${UPDATE_STRATEGY_LABELS[strategy]} — ${UPDATE_STRATEGY_HINTS[strategy]}`}
+              aria-label={`${nomDeVoie(strategy)} — ${aideDeVoie(strategy)}`}
+              title={`${nomDeVoie(strategy)} — ${aideDeVoie(strategy)}`}
               onClick={() => void apply(strategy)}
             >
               {collapsed ? (
                 <span aria-hidden="true">{UPDATE_STRATEGY_GLYPHS[strategy]}</span>
               ) : (
-                UPDATE_STRATEGY_LABELS[strategy]
+                nomDeVoie(strategy)
               )}
             </button>
           ))}
@@ -513,9 +543,9 @@ export function UpdateBanner({
             type="button"
             className={`rail-update-repair capsule-bouton${collapsed ? ' is-glyph' : ''}`}
             data-testid="update-repair"
-            aria-label="Faire réparer le blocage de mise à jour"
+            aria-label={t('maj.faireReparerAria')}
             onClick={() => void reparerBlocageUpdate(applyError)}
-            title="Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour"
+            title={t('maj.faireReparerAide')}
           >
             {/* Capsule comme Détails (conv-181) : la clé est DESSINÉE (trait blanc dans le rond
                 dégradé, comme l'icône de Détails), plus l'emoji clé en couleur. */}
@@ -534,7 +564,7 @@ export function UpdateBanner({
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                 </svg>
               </span>
-              {!collapsed && <span className="thinking-label">Faire réparer</span>}
+              {!collapsed && <span className="thinking-label">{t('maj.faireReparer')}</span>}
             </span>
           </button>
         </>

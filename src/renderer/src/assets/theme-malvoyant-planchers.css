@@ -181,10 +181,7 @@
 /* components/CandidatsPickPanel.css — tailles */
 :root[data-theme^='malvoyant-'] .cpick-compte,
 :root[data-theme^='malvoyant-'] .cpick-voie-piste,
-:root[data-theme^='malvoyant-'] .cpick-auto,
-:root[data-theme^='malvoyant-'] .cpick-pourquoi,
-:root[data-theme^='malvoyant-'] .cpick-motif,
-:root[data-theme^='malvoyant-'] .cpick-motif-note {
+:root[data-theme^='malvoyant-'] .cpick-auto {
   font-size: 13px;
 }
 
@@ -192,8 +189,7 @@
 :root[data-theme^='malvoyant-'] .cpick-tete,
 :root[data-theme^='malvoyant-'] .cpick-titre,
 :root[data-theme^='malvoyant-'] .cpick-q p,
-:root[data-theme^='malvoyant-'] .cpick-voie-piste,
-:root[data-theme^='malvoyant-'] .cpick-motif {
+:root[data-theme^='malvoyant-'] .cpick-voie-piste {
   color: var(--text);
 }
 
@@ -916,6 +912,12 @@
   font-size: 13px;
 }
 
+/* components/ProjetsPartagesDuBoard.css — tailles */
+:root[data-theme^='malvoyant-'] .besoins-projets-titre,
+:root[data-theme^='malvoyant-'] .besoins-projets-note {
+  font-size: 13px;
+}
+
 /* components/PropositionDeFils.css — tailles */
 :root[data-theme^='malvoyant-'] .md-fils__rang,
 :root[data-theme^='malvoyant-'] .md-fils__fichiers,
@@ -925,6 +927,12 @@
 
 /* components/RequestThread.css — tailles */
 :root[data-theme^='malvoyant-'] .request-story-chapter dt {
+  font-size: 13px;
+}
+
+/* components/RiviereDuProjet.collegues.css — tailles */
+:root[data-theme^='malvoyant-'] .riviere-fiche-collegue,
+:root[data-theme^='malvoyant-'] .riviere-fiche-taches-collegue {
   font-size: 13px;
 }
 

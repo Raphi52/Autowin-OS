@@ -2,6 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { InboxCandidate } from '../../../main/brain-inbox'
 import { brainBusinessError } from './graph-view-model'
 import { Spinner } from './Spinner'
+import { langueCourante } from '../langue'
+import {
+  traduireKnowledge,
+  useTextesKnowledge,
+  type CleKnowledge
+} from '../textes-ecrans/knowledge'
 
 /**
  * BOÎTE DE RÉCEPTION du savoir, dans la vue Knowledge.
@@ -27,17 +33,24 @@ export type InboxCandidateView = InboxCandidate
  * Ce que dit chaque état de sha — « non vérifié » n'est PAS « à jour ». Non exporté : ce fichier
  * n'exporte qu'un composant (`react-refresh/only-export-components`).
  */
-const SHA_STATE_LABELS: Record<NonNullable<InboxCandidateView['source']>['shaState'], string> = {
-  current: 'sha à jour',
-  stale: 'sha obsolète — le fichier a changé depuis',
-  unknown: 'sha non vérifié localement',
-  absent: 'sans sha'
+const SHA_STATE_LABELS: Record<
+  NonNullable<InboxCandidateView['source']>['shaState'],
+  CleKnowledge
+> = {
+  current: 'boite.sha.current',
+  stale: 'boite.sha.stale',
+  unknown: 'boite.sha.unknown',
+  absent: 'boite.sha.absent'
 }
 
-function ageLabel(candidate: InboxCandidateView): string {
-  if (candidate.ageDays === undefined) return 'âge inconnu'
-  if (candidate.ageDays === 0) return 'déposé aujourd’hui'
-  return `déposé il y a ${candidate.ageDays} jour${candidate.ageDays === 1 ? '' : 's'}`
+type Traduire = ReturnType<typeof useTextesKnowledge>['t']
+
+function ageLabel(candidate: InboxCandidateView, t: Traduire): string {
+  if (candidate.ageDays === undefined) return t('boite.age.inconnu')
+  if (candidate.ageDays === 0) return t('boite.age.aujourdhui')
+  return t(candidate.ageDays === 1 ? 'boite.age.unJour' : 'boite.age.jours', {
+    n: candidate.ageDays
+  })
 }
 
 /**
@@ -55,7 +68,9 @@ async function promptCurate(pending: number): Promise<void> {
     (roleMap ? Object.values(roleMap)[0]?.provider : undefined)
   if (!provider) return
   const conversation = await window.api.conversationsCreate?.({
-    title: 'Trier les candidats du savoir',
+    // Le TITRE du fil s'affiche dans la liste : il suit la langue. La commande envoyée plus bas, elle,
+    // est la consigne d'un agent et reste en français (conv-1170).
+    title: traduireKnowledge('boite.curate.conversation', langueCourante()),
     category: provider,
     provider
   })
@@ -93,6 +108,7 @@ export function KnowledgeInboxPanel({
    */
   onPendingCountChange?: (count: number) => void
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   const [candidates, setCandidates] = useState<InboxCandidateView[]>([])
   const [error, setError] = useState('')
   const [decisionErrors, setDecisionErrors] = useState<ReadonlyMap<string, string>>(() => new Map())
@@ -170,7 +186,9 @@ export function KnowledgeInboxPanel({
       })
       .catch((cause) => {
         if (isCurrent())
-          setError(brainBusinessError('Impossible de charger la boîte de réception.', cause))
+          setError(
+            brainBusinessError(traduireKnowledge('boite.erreur.charger', langueCourante()), cause)
+          )
       })
       .finally(() => {
         if (isCurrent()) setLoading(false)
@@ -217,7 +235,10 @@ export function KnowledgeInboxPanel({
         if (isCurrent()) setIndexState({ phase: 'searchable', action, title: candidate.title })
       } catch (cause) {
         if (isCurrent()) {
-          const message = brainBusinessError("Impossible d'appliquer cette décision.", cause)
+          const message = brainBusinessError(
+            traduireKnowledge('boite.erreur.decision', langueCourante()),
+            cause
+          )
           setDecisionErrors((current) => new Map(current).set(candidate.id, message))
         }
       } finally {
@@ -263,7 +284,10 @@ export function KnowledgeInboxPanel({
         })
       } catch (cause) {
         if (!isCurrent()) return
-        const message = brainBusinessError('Impossible de charger le contenu.', cause)
+        const message = brainBusinessError(
+          traduireKnowledge('boite.erreur.contenu', langueCourante()),
+          cause
+        )
         setBodyErrors((current) => new Map(current).set(candidate.id, message))
       } finally {
         if (isCurrent()) {
@@ -276,21 +300,23 @@ export function KnowledgeInboxPanel({
   )
 
   return (
-    <section className="knowledge-inbox" aria-label="Boîte de réception du savoir">
+    <section className="knowledge-inbox" aria-label={t('boite.aria')}>
       <header className="knowledge-inbox__head">
-        <span>Boîte de réception</span>
+        <span>{t('boite.titre')}</span>
         <strong>
-          {candidates.length} candidat{candidates.length === 1 ? '' : 's'}
+          {t(candidates.length === 1 ? 'boite.candidat' : 'boite.candidats', {
+            n: candidates.length
+          })}
         </strong>
         <button
           type="button"
           onClick={() => void promptCurate(candidates.length)}
-          title="Ouvre une conversation et lance la skill curate sur la file d’attente"
+          title={t('boite.curate.titre')}
         >
-          Trier avec /curate
+          {t('boite.curate.bouton')}
         </button>
         <button onClick={reload} disabled={!brainPath || loading}>
-          {loading ? 'lecture…' : 'Actualiser'}
+          {loading ? t('boite.lecture') : t('boite.actualiser')}
         </button>
       </header>
 
@@ -298,7 +324,7 @@ export function KnowledgeInboxPanel({
         <p className="knowledge-inbox__error" role="alert">
           <span>{error}</span>
           <button type="button" className="knowledge-inbox__retry" onClick={reload}>
-            Réessayer
+            {t('commun.reessayer')}
           </button>
         </p>
       )}
@@ -312,12 +338,12 @@ export function KnowledgeInboxPanel({
         >
           {indexState.phase === 'reindexing' ? (
             <>
-              <Spinner /> {`« ${indexState.title} » — réindexation en cours…`}
+              <Spinner /> {t('boite.index.enCours', { titre: indexState.title })}
             </>
           ) : indexState.action === 'promote' ? (
-            `« ${indexState.title} » est promue et trouvable par la recherche.`
+            t('boite.index.promue', { titre: indexState.title })
           ) : (
-            `« ${indexState.title} » est rejetée : elle n’est plus trouvable par la recherche.`
+            t('boite.index.rejetee', { titre: indexState.title })
           )}
         </p>
       )}
@@ -341,9 +367,7 @@ export function KnowledgeInboxPanel({
       )}
 
       {!error && candidates.length === 0 && !loading && (
-        <p className="knowledge-inbox__empty">
-          Aucun candidat en attente — tout ce qui a été déposé a été tranché.
-        </p>
+        <p className="knowledge-inbox__empty">{t('boite.vide')}</p>
       )}
 
       <ul className="knowledge-inbox__list">
@@ -361,10 +385,13 @@ export function KnowledgeInboxPanel({
                   {candidate.type && (
                     <span className="knowledge-inbox__type">{candidate.type}</span>
                   )}
-                  <small>{ageLabel(candidate)}</small>
+                  <small>{ageLabel(candidate, t)}</small>
                   {twin && (
-                    <span className="knowledge-inbox__dup" title={`proche de ${twin.id}`}>
-                      doublon probable {Math.round(twin.similarity * 100)} %
+                    <span
+                      className="knowledge-inbox__dup"
+                      title={t('boite.doublon.titre', { id: twin.id })}
+                    >
+                      {t('boite.doublon', { pourcent: Math.round(twin.similarity * 100) })}
                     </span>
                   )}
                 </summary>
@@ -376,7 +403,7 @@ export function KnowledgeInboxPanel({
                       <>
                         <code>{candidate.source.locator}</code>
                         <span className="knowledge-inbox__sha">
-                          {SHA_STATE_LABELS[candidate.source.shaState]}
+                          {t(SHA_STATE_LABELS[candidate.source.shaState])}
                         </span>
                         {candidate.source.problem && (
                           <em className="knowledge-inbox__source-problem">
@@ -385,24 +412,22 @@ export function KnowledgeInboxPanel({
                         )}
                       </>
                     ) : (
-                      <em className="knowledge-inbox__source-problem">
-                        aucune source déclarée — fait non traçable
-                      </em>
+                      <em className="knowledge-inbox__source-problem">{t('boite.aucuneSource')}</em>
                     )}
                   </dd>
                   {candidate.scope && (
                     <>
-                      <dt>Portée</dt>
+                      <dt>{t('boite.portee')}</dt>
                       <dd>{candidate.scope}</dd>
                     </>
                   )}
-                  <dt>Déposé</dt>
-                  <dd>{candidate.depositedAt ?? 'date inconnue'}</dd>
+                  <dt>{t('boite.depose')}</dt>
+                  <dd>{candidate.depositedAt ?? t('boite.dateInconnue')}</dd>
                 </dl>
 
                 {candidate.nearDuplicates.length > 0 && (
                   <div className="knowledge-inbox__twins" role="note">
-                    <strong>Quasi-jumeaux</strong>
+                    <strong>{t('boite.jumeaux')}</strong>
                     <ul>
                       {candidate.nearDuplicates.map((duplicate) => (
                         <li key={duplicate.id}>
@@ -410,26 +435,27 @@ export function KnowledgeInboxPanel({
                           <span>
                             {' — '}
                             {Math.round(duplicate.similarity * 100)} %
-                            {duplicate.zone === 'knowledge'
-                              ? ' · DÉJÀ dans le savoir canonique'
-                              : ' · autre candidat en attente'}
+                            {` · ${t(
+                              duplicate.zone === 'knowledge'
+                                ? 'boite.jumeaux.canonique'
+                                : 'boite.jumeaux.autre'
+                            )}`}
                           </span>
                         </li>
                       ))}
                     </ul>
                     {candidate.nearDuplicatesOmitted && (
                       <small>
-                        Non affichés : {candidate.nearDuplicatesOmitted.inbox} inbox ·{' '}
-                        {candidate.nearDuplicatesOmitted.knowledge} knowledge.
+                        {t('boite.jumeaux.omis', {
+                          inbox: candidate.nearDuplicatesOmitted.inbox,
+                          knowledge: candidate.nearDuplicatesOmitted.knowledge
+                        })}
                         {(candidate.nearDuplicatesOmitted.knowledge > 0 ||
                           candidate.nearDuplicates.some(({ zone }) => zone === 'knowledge')) &&
-                          ' Le meilleur doublon canonique reste toujours visible.'}
+                          ` ${t('boite.jumeaux.meilleur')}`}
                       </small>
                     )}
-                    <small>
-                      Similarité lexicale, calculée hors du serveur : un signal pour la revue, pas
-                      un verdict. Rien n’est fusionné automatiquement.
-                    </small>
+                    <small>{t('boite.jumeaux.note')}</small>
                   </div>
                 )}
 
@@ -437,7 +463,7 @@ export function KnowledgeInboxPanel({
                   {loadedBodies.get(candidate.id) ?? candidate.body}
                   {candidate.bodyTruncated && !loadedBodies.has(candidate.id) ? '…' : ''}
                 </pre>
-                {loadingBodies.has(candidate.id) && <small>lecture du corps complet…</small>}
+                {loadingBodies.has(candidate.id) && <small>{t('boite.corps.lecture')}</small>}
                 {bodyErrors.has(candidate.id) && (
                   <small className="knowledge-inbox__source-problem" role="alert">
                     {bodyErrors.get(candidate.id)}
@@ -450,18 +476,29 @@ export function KnowledgeInboxPanel({
                     disabled={busyIds.has(candidate.id)}
                     onClick={() => void decide(candidate, 'promote')}
                   >
-                    Promouvoir
+                    {t('boite.promouvoir')}
                   </button>
                   <button
                     className="is-reject"
                     disabled={busyIds.has(candidate.id)}
                     onClick={() => void decide(candidate, 'reject')}
                   >
-                    Rejeter
+                    {t('boite.rejeter')}
                   </button>
                   <small>
-                    Promouvoir déplace la fiche dans <code>knowledge/</code> ; rejeter l’envoie dans{' '}
-                    <code>.trash/</code> — réversible, rien n’est supprimé.
+                    {/* Les deux dossiers restent des `<code>` : la phrase les porte en `{knowledge}` et
+                        `{trash}`, remplacés ici par l'élément. */}
+                    {t('boite.aide')
+                      .split(/\{(knowledge|trash)\}/)
+                      .map((morceau, rang) =>
+                        rang % 2 === 1 ? (
+                          <code key={rang}>
+                            {morceau === 'knowledge' ? 'knowledge/' : '.trash/'}
+                          </code>
+                        ) : (
+                          morceau
+                        )
+                      )}
                   </small>
                 </div>
               </details>

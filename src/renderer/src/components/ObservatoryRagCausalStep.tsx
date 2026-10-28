@@ -1,4 +1,6 @@
 import { summarizeRagTrace } from './rag-trace-model'
+import { formaterDate, formaterNombre } from '../langue'
+import { useTextesObservatory } from '../textes-ecrans/observatory'
 import { RagTraceCard } from './RagTraceCard'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 import { lastUserMessagePreview, trustworthyRagTrigger } from './observatory-event-preview'
@@ -32,6 +34,7 @@ export function ObservatoryRagCausalStep({
   currentCalls: PromptCallLike[]
   convBrainTraces: BrainTraceView[]
 }): React.JSX.Element | null {
+  const { t } = useTextesObservatory()
   if (event.kind !== 'injection') return null
   const rag = summarizeRagTrace({ system: event.content })
   if (rag.status !== 'injected' || rag.engine !== 'Brain') return null
@@ -56,7 +59,8 @@ export function ObservatoryRagCausalStep({
   const hasRetrievalTime = Boolean(isFirstDelivery && brainTrace?.timestamp)
   const observedAt = hasRetrievalTime ? brainTrace!.timestamp : (event.timestamp ?? '')
   const timeKind = hasRetrievalTime ? 'retrieval' : 'trace'
-  const provider = event.provider ?? event.recipient ?? call?.provider ?? 'provider non exposé'
+  const provider =
+    event.provider ?? event.recipient ?? call?.provider ?? t('ragEtape.providerNonExpose')
 
   return (
     <section
@@ -75,25 +79,34 @@ export function ObservatoryRagCausalStep({
         <div>
           <strong>
             {isFirstDelivery && brainTrace
-              ? 'Autowin interroge le Brain'
-              : 'Autowin remet le contexte Brain au modèle'}
+              ? t('ragEtape.autowinInterrogeBrain')
+              : t('ragEtape.autowinRemetContexteBrain')}
           </strong>
           <small>
             {hasRetrievalTime
-              ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · récupération terminée · remis à ${provider}`
+              ? t('ragEtape.recuperationTerminee', {
+                  heure: formaterDate(observedAt, { timeStyle: 'medium' }),
+                  provider
+                })
               : observedAt
-                ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · heure de trace · remise non horodatée à ${provider}`
-                : `heure et remise non exposées · destinataire ${provider}`}
+                ? t('ragEtape.heureDeTrace', {
+                    heure: formaterDate(observedAt, { timeStyle: 'medium' }),
+                    provider
+                  })
+                : t('ragEtape.heureNonExposee', { provider })}
           </small>
         </div>
         <b>
-          {rag.sources.length} source{rag.sources.length > 1 ? 's' : ''} ·{' '}
-          {rag.injectedCharacters.toLocaleString('fr-FR')} caractères
+          {t('ragEtape.sourcesCaracteres', {
+            n: rag.sources.length,
+            s: rag.sources.length > 1 ? 's' : '',
+            caracteres: formaterNombre(rag.injectedCharacters)
+          })}
         </b>
       </header>
       <p>
-        <b>Déclenché par</b>
-        <span>{trigger ? `« ${trigger} »` : 'Action déclenchante non exposée'}</span>
+        <b>{t('ragEtape.declenche')}</b>
+        <span>{trigger ? `« ${trigger} »` : t('ragEtape.actionDeclenchanteNonExposee')}</span>
       </p>
       <RagTraceCard
         request={{ system: event.content }}
@@ -101,8 +114,8 @@ export function ObservatoryRagCausalStep({
       />
       {isFirstDelivery && brainTrace?.navigation && <BrainNavigationCard trace={brainTrace} />}
       <small className="observatory-rag-boundary">
-        Preuve observée à la frontière Autowin → provider · le fournisseur peut encore transformer
-        l’enveloppe. {correlation === 'estimated' ? 'Corrélation estimée (trace historique).' : ''}
+        {t('ragEtape.preuveObserveeFrontiereAutowin')}{' '}
+        {correlation === 'estimated' ? t('ragEtape.correlationEstimeeTraceHistorique') : ''}
       </small>
     </section>
   )

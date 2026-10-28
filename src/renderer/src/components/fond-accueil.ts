@@ -12,6 +12,8 @@
  * du moteur 3D pour savoir quel fond est choisi.
  */
 import { autowinStorageKey } from '../storage-keys'
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 import type { DecorVariant } from './home-decor-scene'
 
 /**
@@ -76,9 +78,21 @@ export const EVENEMENT_FOND_ACCUEIL = 'autowin:fond-accueil'
  * identifiant reste `noir` : c'est la valeur déjà enregistrée sur les postes qui l'ont choisi.
  */
 export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
-  { id: FOND_NOIR, nom: 'Aucun' },
+  // Les noms communs suivent la langue (conv-1170) ; « Cyberpunk » et « Nier Automata » sont des
+  // noms propres, identiques dans les deux langues.
+  {
+    id: FOND_NOIR,
+    get nom() {
+      return traduireAccueil('fond.aucun', langueCourante())
+    }
+  },
   { id: 'avenue', nom: 'Cyberpunk' },
-  { id: 'actuel', nom: 'Planètes' },
+  {
+    id: 'actuel',
+    get nom() {
+      return traduireAccueil('fond.planetes', langueCourante())
+    }
+  },
   { id: FOND_NIER, nom: 'Nier Automata (radar)' }
 ]
 

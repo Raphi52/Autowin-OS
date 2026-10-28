@@ -6439,8 +6439,23 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
         })
       } catch (erreur) {
         if (conversationId) inscrireEchangeAuJournal({ fil: conversationId, runId, question })
+        // La panne nomme le rôle et son binding, comme tout autre appel de modèle : sans ça, la trace
+        // disait « panne pendant la réponse (spawn … ENOENT) » sans dire qui avait échoué (garde
+        // `provider-failure-diagnosis.test.ts`, rouge sur main depuis l'ajout de cet échange — salvage conv-1211).
+        // La cause brute reste en tête, entre parenthèses : c'est elle que la trace et ses tests lisent.
+        const message = erreur instanceof Error ? erreur.message : String(erreur)
+        const explique = explainRoleFailure(
+          'Échange avant réparation',
+          'subagent',
+          {
+            provider: session.provider,
+            ...(session.model ? { model: session.model } : {}),
+            message
+          },
+          roles.getBinding('subagent').provider
+        )
         return {
-          echec: `refus maintenu : panne pendant la réponse (${erreur instanceof Error ? erreur.message : String(erreur)})`
+          echec: `refus maintenu : panne pendant la réponse (${message}) — ${explique}`
         }
       }
       if (reponse.usage) {

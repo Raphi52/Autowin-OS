@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './AskDecision.css'
 import './CadrageHypotheses.css'
 import { amorceDeCorrection, type HypotheseDeCadrage } from '../../../shared/cadrage-confiance'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /*
  * Ce sur quoi le cadrage REPOSE sans l'avoir verifie — montre pendant le run, pas apres.
@@ -42,6 +43,7 @@ export function CadrageHypotheses({
   const [deplie, setDeplie] = useState<ReadonlySet<number>>(() => new Set())
   const [replieLocal, setReplieLocal] = useState(false)
   const replie = repliePilote ?? replieLocal
+  const { t } = useTextesChatDecisions()
   if (!hypotheses.length) return null
   const basculer = (index: number): void =>
     setDeplie((precedent) => {
@@ -56,21 +58,21 @@ export function CadrageHypotheses({
       data-testid="cadrage-hypotheses"
     >
       <div className="askd-tete">
-        <span className="askd-badge">cadrage</span>
-        <span className="askd-question">
-          Je continue en supposant ceci — clique une ligne seulement si c&rsquo;est faux
-        </span>
+        <span className="askd-badge">{t('cadrage.badge')}</span>
+        <span className="askd-question">{t('cadrage.question')}</span>
         {replie && (
           <span className="cadrage-hyp-compte">
-            {hypotheses.length} supposition{hypotheses.length > 1 ? 's' : ''}
+            {t(hypotheses.length > 1 ? 'cadrage.compte.plusieurs' : 'cadrage.compte.un', {
+              n: hypotheses.length
+            })}
           </span>
         )}
         <button
           type="button"
           className="cadrage-hyp-plier"
           aria-expanded={!replie}
-          aria-label={replie ? 'Déplier les suppositions du cadrage' : 'Réduire à une ligne'}
-          title={replie ? 'Déplier' : 'Réduire à une ligne'}
+          aria-label={replie ? t('cadrage.deplierTout') : t('cadrage.reduire')}
+          title={replie ? t('cadrage.deplier') : t('cadrage.reduire')}
           onClick={() =>
             onBasculerRepli ? onBasculerRepli() : setReplieLocal((valeur) => !valeur)
           }
@@ -95,7 +97,7 @@ export function CadrageHypotheses({
                       type="button"
                       className="askd-tri"
                       aria-expanded={ouvert}
-                      aria-label={ouvert ? 'Replier' : 'Déplier'}
+                      aria-label={ouvert ? t('cadrage.replier') : t('cadrage.deplier')}
                       onClick={() => basculer(index)}
                     >
                       {ouvert ? '▾' : '▸'}
@@ -111,16 +113,16 @@ export function CadrageHypotheses({
                     onClick={() => onCorriger?.(amorceDeCorrection(hypothese))}
                   >
                     <span className="askd-libelle">{hypothese.affirmation}</span>
-                    <span className="askd-consequence">{libelleSource(hypothese.source)}</span>
+                    <span className="askd-consequence">{t(cleDeLaSource(hypothese.source))}</span>
                   </button>
                   <div className="askd-droite">
-                    <span className="askd-entree">Corriger</span>
+                    <span className="askd-entree">{t('cadrage.corriger')}</span>
                   </div>
                 </div>
                 {ouvert && hypothese.justification && (
                   <div className="askd-detail">
                     <div className="askd-q">
-                      <b>Pourquoi</b>
+                      <b>{t('cadrage.pourquoi')}</b>
                       <p>{hypothese.justification}</p>
                     </div>
                   </div>
@@ -132,16 +134,16 @@ export function CadrageHypotheses({
       )}
       {!replie && (
         <div className="askd-pied">
-          <span>Le run continue — rien n&rsquo;attend ta réponse</span>
-          <span>une correction relance depuis le cadrage</span>
+          <span>{t('cadrage.pied.continue')}</span>
+          <span>{t('cadrage.pied.correction')}</span>
         </div>
       )}
     </div>
   )
 }
 
-function libelleSource(source: HypotheseDeCadrage['source']): string {
-  return source === 'confiance'
-    ? 'marqué NON VÉRIFIÉ par le cadrage'
-    : 'hypothèse écrite dans le besoin'
+function cleDeLaSource(
+  source: HypotheseDeCadrage['source']
+): 'cadrage.source.confiance' | 'cadrage.source.besoin' {
+  return source === 'confiance' ? 'cadrage.source.confiance' : 'cadrage.source.besoin'
 }

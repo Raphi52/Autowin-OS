@@ -1,4 +1,6 @@
 import { isBlocked, mentionDEtatDuRun } from '../../../shared/run-blocked'
+import { formaterDate, formaterNombre } from '../langue'
+import { useTextesObservatory } from '../textes-ecrans/observatory'
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
 import type {
@@ -89,6 +91,7 @@ export function ObservatoryRail({
   prioritySignals: ObservatoryPrioritySignal[]
   onOpenSignal: (eventId: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   return (
     <aside className="observatory-rail">
       {/* WORKFLOWS EN PREMIER — vue TRANSVERSALE des RUN.md du dépôt, notamment ceux restés `open`.
@@ -97,25 +100,27 @@ export function ObservatoryRail({
           LISANT une capture de l'app, pas en test — aucun test ne voit un ordre de sections. */}
       <section className="observatory-diagnostics observatory-runs" aria-busy={runsLoading}>
         <span className="observatory-panel-title">
-          WORKFLOWS · TOUS
+          {t('rail.workflowsTous')}
           {/* BLOQUÉ, pas « open » : un run `green` dont la DoD est incomplète, ou figé sur un
               statut fossile, est resté sans issue. Ne compter que `open` le rendait INVISIBLE.
               La règle est celle du dashboard (`isBlocked`), pas une seconde définition locale. */}
-          {runs.length > 0 ? ` · ${runs.filter((r) => isBlocked(r.summary)).length} bloqué(s)` : ''}
+          {runs.length > 0
+            ? t('rail.bloques', { n: runs.filter((r) => isBlocked(r.summary)).length })
+            : ''}
           {/* NON INTÉGRÉ ≠ bloqué : un run vert, DoD complète, peut avoir son travail retenu ou
               bloqué à la publication. Le compte ci-dessus, fondé sur le RUN.md, ne le voit pas. */}
           {runs.some((r) => r.publication)
-            ? ` · ${runs.filter((r) => r.publication).length} non intégré(s)`
+            ? t('rail.nonIntegres', { n: runs.filter((r) => r.publication).length })
             : ''}
         </span>
         {runs.length === 0 ? (
           <p>
             {runsLoading ? (
               <>
-                <Spinner /> Lecture des RUN.md…
+                <Spinner /> {t('rail.lectureRunMd')}
               </>
             ) : (
-              'Aucun RUN.md.'
+              t('rail.aucunRunMd')
             )}
           </p>
         ) : (
@@ -131,8 +136,9 @@ export function ObservatoryRail({
                 <strong>
                   {run.summary.status}
                   {mentionDEtatDuRun(run.summary) ? ` · ${mentionDEtatDuRun(run.summary)}` : ''}
-                  {run.publicationLabel ? ` · travail ${run.publicationLabel}` : ''} ·{' '}
-                  {run.subject}
+                  {run.publicationLabel
+                    ? t('rail.travail', { etat: run.publicationLabel })
+                    : ''} · {run.subject}
                 </strong>
                 <span>
                   {run.session}
@@ -151,7 +157,7 @@ export function ObservatoryRail({
                   data-conversation-id={run.conversationId}
                   onClick={() => onOpenRunConversation(run.conversationId as string)}
                 >
-                  voir la trace
+                  {t('rail.voirTrace')}
                 </button>
               ) : null}
             </div>
@@ -164,12 +170,12 @@ export function ObservatoryRail({
         data-testid="observatory-conversation-filter"
         value={conversationQuery}
         onChange={(event) => onConversationQueryChange(event.target.value)}
-        placeholder="Filtrer titre ou provider…"
-        aria-label="Filtrer les conversations"
+        placeholder={t('rail.filtrerTitreOuProvider')}
+        aria-label={t('rail.filtrerConversations')}
       />
       <small data-testid="observatory-conversation-count">
-        {visibleConversations.length.toLocaleString('fr-FR')} /{' '}
-        {filteredConversationCount.toLocaleString('fr-FR')} conversation
+        {formaterNombre(visibleConversations.length)} / {formaterNombre(filteredConversationCount)}{' '}
+        conversation
         {filteredConversationCount > 1 ? 's' : ''}
       </small>
       <div className="observatory-conversations">
@@ -191,13 +197,14 @@ export function ObservatoryRail({
           data-testid="observatory-conversation-more"
           onClick={onShowMoreConversations}
         >
-          Afficher {Math.min(conversationLimitStep, hiddenConversationCount)} de plus ·{' '}
-          {hiddenConversationCount.toLocaleString('fr-FR')} masquée
-          {hiddenConversationCount > 1 ? 's' : ''}
+          {t(hiddenConversationCount > 1 ? 'rail.afficherPlus.pluriel' : 'rail.afficherPlus', {
+            n: Math.min(conversationLimitStep, hiddenConversationCount),
+            masquees: formaterNombre(hiddenConversationCount)
+          })}
         </button>
       )}
       <section className="observatory-calls" aria-busy={callsLoading}>
-        <span className="observatory-panel-title">APPELS OBSERVÉS</span>
+        <span className="observatory-panel-title">{t('rail.appelsObserves')}</span>
         {currentCalls.map((call) => (
           <button
             key={call.id}
@@ -217,9 +224,9 @@ export function ObservatoryRail({
               ) : null
             })()}
             <small>
-              {new Date(call.ts).toLocaleTimeString('fr-FR')} ·{' '}
-              {(call.usage?.inputTokens ?? 0).toLocaleString('fr-FR')} in ·{' '}
-              {(call.usage?.cacheReadTokens ?? 0).toLocaleString('fr-FR')} cache
+              {formaterDate(call.ts, { timeStyle: 'medium' })} ·{' '}
+              {formaterNombre(call.usage?.inputTokens ?? 0)} in ·{' '}
+              {formaterNombre(call.usage?.cacheReadTokens ?? 0)} cache
             </small>
           </button>
         ))}
@@ -229,7 +236,7 @@ export function ObservatoryRail({
         data-testid="conversation-activity"
         aria-busy={conversationActivityLoading}
       >
-        <span className="observatory-panel-title">ACTIVITÉ CONVERSATION</span>
+        <span className="observatory-panel-title">{t('rail.activiteConversation')}</span>
         {conversationActivity.slice(-12).map((entry, index) => (
           <p key={`${entry.ts}:${entry.kind}:${index}`}>
             <strong>{entry.label}</strong>
@@ -251,16 +258,16 @@ export function ObservatoryRail({
         ))}
         {activitySession && (
           <div>
-            <small>{activitySession.totalToolCalls} appels outil</small>
+            <small>{t('rail.appelsOutil', { n: activitySession.totalToolCalls })}</small>
             <button
               data-testid="session-import"
               onClick={() => onImportSession(activitySession.meta)}
             >
-              Importer en conversation
+              {t('rail.importerConversation')}
             </button>
             {sessionImportPending ? (
               <small data-testid="session-import-notice" role="status">
-                <Spinner /> Import en cours…
+                <Spinner /> {t('rail.importCours')}
               </small>
             ) : (
               sessionImportNotice && (
@@ -274,17 +281,17 @@ export function ObservatoryRail({
               .filter((image) => image.exists)
               .map((image) => (
                 <button key={image.path} onClick={() => onOpenImage(image.path)}>
-                  Voir image
+                  {t('rail.voirImage')}
                 </button>
               ))}
-            {activityImage && <img src={activityImage} alt="Capture du transcript" />}
+            {activityImage && <img src={activityImage} alt={t('rail.captureTranscript')} />}
           </div>
         )}
       </section>
       <section className="observatory-diagnostics">
-        <span className="observatory-panel-title">SIGNAUX PRIORITAIRES</span>
+        <span className="observatory-panel-title">{t('rail.signauxPrioritaires')}</span>
         {prioritySignals.length === 0 ? (
-          <p>Aucun signal évident.</p>
+          <p>{t('rail.aucunSignalEvident')}</p>
         ) : (
           prioritySignals.map((item) => (
             <button
@@ -294,12 +301,18 @@ export function ObservatoryRail({
               onClick={() => onOpenSignal(item.eventId)}
             >
               <strong>
-                {item.severityLabel} · {item.impact.toLocaleString('fr-FR')} caractères
+                {t('rail.impact', {
+                  severite: item.severityLabel,
+                  n: formaterNombre(item.impact)
+                })}
               </strong>
               <span>
                 {item.label}
                 {item.turnIds.length > 0
-                  ? ` · ${item.turnIds.length} tour${item.turnIds.length > 1 ? 's' : ''}`
+                  ? t('rail.tours', {
+                      n: item.turnIds.length,
+                      s: item.turnIds.length > 1 ? 's' : ''
+                    })
                   : ''}
               </span>
             </button>

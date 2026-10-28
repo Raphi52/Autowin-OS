@@ -38,16 +38,22 @@ beforeEach(() => {
   spawnCapture.stdoutEvents = []
 })
 
-async function drainer(): Promise<{ deltas: string[]; text: string }> {
+async function drainer(): Promise<{
+  deltas: string[]
+  text: string
+  coupures: Array<{ categorie?: string; explication?: string }>
+}> {
   const { ClaudeCliAdapter } = await import('./claude')
   const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
   const deltas: string[] = []
+  const coupures: Array<{ categorie?: string; explication?: string }> = []
   let step = await gen.next()
   while (!step.done) {
     if (step.value.delta) deltas.push(step.value.delta)
+    if (step.value.coupureFiltre) coupures.push(step.value.coupureFiltre)
     step = await gen.next()
   }
-  return { deltas, text: step.value.text }
+  return { deltas, text: step.value.text, coupures }
 }
 
 const COUPURE = {
@@ -145,6 +151,21 @@ describe('ClaudeCliAdapter — réponse coupée par le filtre de sécurité du f
     expect(text.split('⚠️ Le filtre de sécurité').length - 1).toBe(1)
   })
 
+  /*
+   * LE SIGNAL EST AUSSI UNE DONNÉE, pas seulement un texte (conv-1161, 2e passe). L'avis affiché ne
+   * suffisait pas à l'app : la rétrospective et le kaizen lisent le journal du tour, où la coupure
+   * n'apparaissait nulle part — le diagnostic a dû fouiller `run-stdout/` pour la retrouver.
+   * Chaque coupure part donc en fragment structuré, MÊME quand l'avis n'est pas répété.
+   */
+  it('joint à chaque coupure sa catégorie et son explication, pour le journal du tour', async () => {
+    spawnCapture.stdoutEvents = sequenceCoupee(2)
+    const { coupures } = await drainer()
+    expect(coupures).toEqual([
+      { categorie: 'cyber', explication: 'blocked under Usage Policy' },
+      { categorie: 'cyber', explication: 'blocked under Usage Policy' }
+    ])
+  })
+
   it('reste muet sur une fin de réponse ordinaire', async () => {
     spawnCapture.stdoutEvents = [
       {
@@ -157,7 +178,8 @@ describe('ClaudeCliAdapter — réponse coupée par le filtre de sécurité du f
       },
       { ...RESULTAT, result: 'B.' }
     ]
-    const { text } = await drainer()
+    const { text, coupures } = await drainer()
     expect(text).toBe('B.')
+    expect(coupures).toEqual([])
   })
 })

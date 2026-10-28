@@ -92,7 +92,9 @@ describe('workflow header toggle', () => {
       /className=\{`thinking-block workflow-capsule\$\{showRuns \? ' is-live' : ' is-done'\}`\}/
     )
     expect(source).toMatch(/workflow-toggle\$\{showRuns \? ' is-active' : ''\}/)
-    expect(source).toContain('<span className="thinking-label">Détails</span>')
+    // Le libellé passe par la table des textes depuis la traduction anglaise (conv-1170) : sa clé
+    // `entete.details` porte « Détails » en français (textes-ecrans/chat-fil.ts).
+    expect(source).toContain(`<span className="thinking-label">{texteFil('entete.details')}</span>`)
     // Plus rien ne peint `.workflow-toggle` lui-même, hors l'anneau de focus clavier.
     const sansCommentaires = css.replace(/\/\*[\s\S]*?\*\//g, '')
     const regles = [...sansCommentaires.matchAll(/([^{}]*\.workflow-toggle[^{}]*)\{/g)].map((m) =>

@@ -8,6 +8,8 @@
  *    affiche des lignes blanches indistinguables ;
  *  - les entrées non-`audioinput` (haut-parleurs, caméras) n'ont rien à faire dans un choix de micro.
  */
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 export interface MicroDisponible {
   id: string
@@ -25,7 +27,10 @@ export function microsDepuisPeripheriques(
 ): MicroDisponible[] {
   return peripheriques
     .filter((p) => p.kind === 'audioinput')
-    .map((p, index) => ({ id: p.deviceId, nom: p.label || `Micro ${index + 1}` }))
+    .map((p, index) => ({
+      id: p.deviceId,
+      nom: p.label || traduireAccueil('micro.numero', langueCourante(), { n: index + 1 })
+    }))
 }
 
 /** Énumère les micros RÉELS. Rend une liste vide plutôt que d'échouer : sans énumération possible

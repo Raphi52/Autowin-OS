@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { etapesGit } from './etapes-git'
 import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
@@ -93,17 +96,30 @@ type Typage =
   | { statut: 'echec'; projets: string[]; commande: string; erreurs: string[] }
   | { statut: 'non-verifie'; raison: string }
 
+/**
+ * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
+ * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux` (conv-1170).
+ */
+type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
+const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
+  traduireChatPanneaux(cle, langueCourante(), valeurs)
+
 /** Vécu le 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant a cassé la compilation de main. */
 function libelleTypage(typage: Typage): string {
   if (typage.statut === 'vert') {
-    const deja = typage.dejaRouges ? ` — ${typage.dejaRouges} erreur(s) déjà présente(s) au dernier commit` : ''
-    return `Typage de ce qui part · vert (${typage.projets.join(', ')})${deja}`
+    const projets = typage.projets.join(', ')
+    return typage.dejaRouges
+      ? tx('sc.typage.vertDejaRouges', { projets, n: typage.dejaRouges })
+      : tx('sc.typage.vert', { projets })
   }
   if (typage.statut === 'echec') {
     const n = typage.erreurs.length
-    return `Typage de ce qui part · ${n} erreur${n > 1 ? 's' : ''} nouvelle${n > 1 ? 's' : ''} (${typage.commande})`
+    return tx(n > 1 ? 'sc.typage.echec.plusieurs' : 'sc.typage.echec.un', {
+      n,
+      commande: typage.commande
+    })
   }
-  return `Typage non vérifié · ${typage.raison}`
+  return tx('sc.typage.nonVerifie', { raison: typage.raison })
 }
 
 type Verification =
@@ -121,24 +137,24 @@ type Verification =
   | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
   | { statut: 'non-verifie'; raison: string }
 
-const MOTIFS_EXCLUSION: Record<string, string> = {
-  'modifie-avant-le-tour': 'déjà modifié avant le tour',
-  'touche-par-un-autre-fil': 'touché aussi par un autre fil',
-  'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier',
-  'tests-rouges': 'tests rouges',
-  'import-hors-commit': 'importe un fichier qui ne partirait pas avec lui',
-  'typage-rouge': 'ne compile pas sans ce qui reste en attente'
+const MOTIFS_EXCLUSION: Record<string, CleDuPanneau> = {
+  'modifie-avant-le-tour': 'sc.exclusion.modifieAvantLeTour',
+  'touche-par-un-autre-fil': 'sc.exclusion.toucheParUnAutreFil',
+  'autre-fil-en-cours': 'sc.exclusion.autreFilEnCours',
+  'tests-rouges': 'sc.exclusion.testsRouges',
+  'import-hors-commit': 'sc.exclusion.importHorsCommit',
+  'typage-rouge': 'sc.exclusion.typageRouge'
 }
 
 /** Mesuré le 2026-10-01 : `b6d2a3fc` poussé sans test a laissé main rouge 20 h. */
 function libelleVerification(verification: Verification): string {
   if (verification.statut === 'vert') {
-    const s = verification.testsJoues > 1 ? 's' : ''
-    const verts = `Tests rejoués avant de pousser · ${verification.testsJoues} vert${s}`
+    const n = verification.testsJoues
+    const verts = tx(n > 1 ? 'sc.verif.verts.plusieurs' : 'sc.verif.verts.un', { n })
     const nommes: Array<[string, string[] | undefined]> = [
-      ['rouge sous charge, vert seul', verification.instablesSousCharge],
-      ['déjà rouge au dernier commit', verification.dejaRouges],
-      ['rouge venu d’un travail non publié', verification.rougesDAilleurs]
+      [tx('sc.verif.instables'), verification.instablesSousCharge],
+      [tx('sc.verif.dejaRouges'), verification.dejaRouges],
+      [tx('sc.verif.rougesDAilleurs'), verification.rougesDAilleurs]
     ]
     return [
       verts,
@@ -147,23 +163,28 @@ function libelleVerification(verification: Verification): string {
         .map(([motif, suites]) => `${motif} : ${suites!.join(', ')}`)
     ].join(' — ')
   }
-  if (verification.statut === 'echec')
-    return `Tests rejoués avant de pousser · ${verification.detail}`
-  return `Tests non rejoués · ${verification.raison}`
+  if (verification.statut === 'echec') return tx('sc.verif.echec', { detail: verification.detail })
+  return tx('sc.verif.nonRejoues', { raison: verification.raison })
 }
 
 /** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */
 function libelleExclusion(item: Exclusion): string {
   // Le fil qui tient le fichier, nommé (conv-1083) : « touché aussi par conv-B ».
+  const cleMotif = MOTIFS_EXCLUSION[item.motif]
   const motif = item.fils?.length
-    ? `touché aussi par ${item.fils.join(', ')}`
-    : (MOTIFS_EXCLUSION[item.motif] ?? item.motif)
+    ? tx('sc.exclusion.toucheParFils', { fils: item.fils.join(', ') })
+    : cleMotif
+      ? tx(cleMotif)
+      : item.motif
   if (item.testsEnEchec?.length) return `${item.path} (${motif} : ${item.testsEnEchec.join(', ')})`
   if (item.erreursDeTypage?.length) return `${item.path} (${motif} : ${item.erreursDeTypage[0]})`
   const n = item.lignesNonReclamees
   if (!n) return `${item.path} (${motif})`
-  const s = n > 1 ? 's' : ''
-  return `${item.path} (${motif}, ${n} ligne${s} non réclamée${s})`
+  return tx(n > 1 ? 'sc.exclusion.lignes.plusieurs' : 'sc.exclusion.lignes.un', {
+    chemin: item.path,
+    motif,
+    n
+  })
 }
 
 const normRacine = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
@@ -176,30 +197,37 @@ function cheminsModifies(changes: GitChange[], racine?: string): string[] {
 }
 
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
+  const portee = scope
   if (result.status === 'pushed') {
-    if (result.mode === 'direct') return `${scope} · poussé sur ${result.branch}`
+    const branche = result.branch
+    if (result.mode === 'direct') return tx('sc.publi.pousseSur', { portee, branche })
     if (result.mode === 'pr')
       return result.pr
-        ? `${scope} · push refusé sur la branche → ${result.branch} + ${result.pr}`
-        : `${scope} · poussé sur ${result.branch}, PR non ouverte · ${result.prError ?? 'motif inconnu'}`
-    return `${scope} · publié · ${result.branch}`
+        ? tx('sc.publi.pushRefuse', { portee, branche, pr: result.pr })
+        : tx('sc.publi.prNonOuverte', {
+            portee,
+            branche,
+            erreur: result.prError ?? tx('sc.publi.motifInconnu')
+          })
+    return tx('sc.publi.publie', { portee, branche })
   }
-  if (result.status === 'committed') return `${scope} · commité localement`
-  if (result.status === 'failed') return `${scope} · échec · ${result.error}`
-  const reasons: Record<string, string> = {
-    'no-changes': 'aucun changement',
-    'no-remote': 'aucun distant',
-    'recovery-baseline-missing': 'baseline de reprise absente',
-    'brain-sans-depot': 'Brain sans dépôt git',
-    'protected-branch': 'branche protégée',
-    'secret-detected': 'secret détecté',
-    'concurrent-commits': 'commits concurrents',
-    'invalid-publication-range': 'plage Git non vérifiable',
-    unattributed: 'aucun fichier du tour prouvé à ce fil',
-    'tests-rouges': 'tests rouges',
-    'typage-rouge': 'typage rouge'
+  if (result.status === 'committed') return tx('sc.publi.commiteLocalement', { portee })
+  if (result.status === 'failed') return tx('sc.publi.echec', { portee, erreur: result.error })
+  const reasons: Record<string, CleDuPanneau> = {
+    'no-changes': 'sc.raison.aucunChangement',
+    'no-remote': 'sc.raison.aucunDistant',
+    'recovery-baseline-missing': 'sc.raison.baselineAbsente',
+    'brain-sans-depot': 'sc.raison.brainSansDepot',
+    'protected-branch': 'sc.raison.brancheProtegee',
+    'secret-detected': 'sc.raison.secretDetecte',
+    'concurrent-commits': 'sc.raison.commitsConcurrents',
+    'invalid-publication-range': 'sc.raison.plageInvalide',
+    unattributed: 'sc.raison.nonAttribue',
+    'tests-rouges': 'sc.raison.testsRouges',
+    'typage-rouge': 'sc.raison.typageRouge'
   }
-  return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
+  const cle = reasons[result.reason]
+  return tx('sc.publi.nonPublie', { portee, raison: cle ? tx(cle) : result.reason })
 }
 
 /**
@@ -232,11 +260,20 @@ function demanderDiff(
 
 /** Actions hors flux : uniquement celles qu'aucune étape ne couvre déjà. */
 function actionsGit(nbChanges: number): Array<{ label: string; prompt: string }> {
+  // `prompt` reste en français : c'est la consigne envoyée à l'agent, pas un texte d'écran.
   return [
-    { label: 'Nouvelle branche', prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : ' },
-    { label: 'Changer de branche', prompt: 'change de branche vers : ' },
+    {
+      label: tx('sc.action.nouvelleBranche'),
+      prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : '
+    },
+    { label: tx('sc.action.changerDeBranche'), prompt: 'change de branche vers : ' },
     ...(nbChanges > 0
-      ? [{ label: 'Mettre de côté', prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre' }]
+      ? [
+          {
+            label: tx('sc.action.mettreDeCote'),
+            prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre'
+          }
+        ]
       : [])
   ]
 }
@@ -251,6 +288,7 @@ export function SourceControlPane({
   depotConversation?: string
   onSendPrompt?: (prompt: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [brainTraces, setBrainTraces] = useState<BrainTrace[]>([])
   const [brainUnavailable, setBrainUnavailable] = useState(false)
@@ -372,7 +410,7 @@ export function SourceControlPane({
         void window.api
           .conversationGitState(conversationId)
           .then((value) => finishGit(value as GitReadResult))
-          .catch(() => finishGit({ available: false, error: 'Lecture conversation indisponible.' }))
+          .catch(() => finishGit({ available: false, error: tx('sc.erreur.lectureConversation') }))
       }
     } else if (view === 'brain') {
       if (!conversationId) finishBrain([])
@@ -386,7 +424,7 @@ export function SourceControlPane({
       void window.api
         .getGitState(repoPath || undefined)
         .then((value) => finishGit(value as GitReadResult))
-        .catch(() => finishGit({ available: false, error: 'Lecture Git indisponible.' }))
+        .catch(() => finishGit({ available: false, error: tx('sc.erreur.lectureGit') }))
     }
 
     return () => {
@@ -461,7 +499,7 @@ export function SourceControlPane({
       setAutoClose(applied as AutoCloseViewState)
     } catch {
       setAutoClose({ enabled: previous })
-      setAutoCloseError('Impossible de conserver ce réglage sur le disque.')
+      setAutoCloseError(tx('sc.erreur.reglageNonConserve'))
     }
   }
 
@@ -503,7 +541,7 @@ export function SourceControlPane({
       .catch(() => {
         // fix-ok: une erreur obsolète ne doit ni bloquer le chargement ni écraser un diff plus récent.
         if (diffRequestRef.current === requestId) {
-          setDiff({ available: false, error: 'Diff indisponible.' })
+          setDiff({ available: false, error: tx('sc.erreur.diff') })
         }
       })
   }
@@ -524,16 +562,18 @@ export function SourceControlPane({
   const fichiersCommentes = new Set(relecture.map((c) => c.chemin)).size
   const paneLabel =
     view === 'tree'
-      ? 'Arborescence du projet'
+      ? t('sc.vue.arborescence')
       : view === 'brain'
-        ? 'Appels Brain de la conversation'
+        ? t('sc.vue.brain')
         : view === 'workspace' && repoPath
           ? repoPath.replace(/^.*[\\/]/, '')
           : view === 'project'
             ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
               // « Projet de la conversation » se contredirait à l'écran.
-              'Fichiers de la conversation'
-            : 'Dépôt courant'
+              t('sc.vue.fichiers')
+            : t('sc.vue.depotCourant')
+  const comptesRelecture = (n: number): string =>
+    t(n > 1 ? 'sc.commentaires.plusieurs' : 'sc.commentaires.un', { n })
 
   return (
     <div className="sc-pane" data-testid="source-control-pane">
@@ -544,44 +584,46 @@ export function SourceControlPane({
             {!scopeLoaded && (
               <span className="sc-loading" data-testid="sc-loading">
                 {' '}
-                · lecture…
+                {t('sc.lecture')}
               </span>
             )}
           </span>
           <button
             className={`sc-btn sc-repo-btn${view === 'project' ? ' is-active' : ''}`}
             data-testid="sc-repo-project"
-            title="Fichiers modifiés par cette conversation"
+            title={t('sc.onglet.fichiers.titre')}
             onClick={() => selectView('project')}
           >
             {/* « Fichiers » et non « Projet » : cet onglet liste les FICHIERS modifiés par la
                 conversation, ce que son propre `title` disait déjà. « Projet » annonçait un périmètre
                 (le dépôt) au lieu du contenu (les fichiers touchés ici). */}
-            Fichiers
+            {t('sc.onglet.fichiers')}
           </button>
           <button
             className={`sc-btn sc-repo-btn${view === 'tree' ? ' is-active' : ''}`}
             data-testid="sc-view-tree"
-            title="Arborescence du projet et editeur de fichier"
+            title={t('sc.onglet.projet.titre')}
             onClick={() => selectView('tree')}
           >
-            Projet
+            {t('sc.onglet.projet')}
           </button>
           <button
             className={`sc-btn sc-repo-btn${view === 'brain' ? ' is-active' : ''}`}
             data-testid="sc-repo-brain"
-            title="Appels au Brain effectués depuis cette conversation"
+            title={t('sc.onglet.brain.titre')}
             onClick={() => selectView('brain')}
           >
+            {/* Nom propre, identique dans les deux langues. */}
             Brain
           </button>
           <button
             className={`sc-btn sc-repo-btn${view === 'workspace' ? ' is-active' : ''}`}
             data-testid="sc-view-workspace"
-            title="Git : branche, synchronisation et actions sur le dépôt"
+            title={t('sc.onglet.git.titre')}
             onClick={() => selectView('workspace')}
           >
-            {/* « Git » et non « Workspace » : demande de l'utilisateur (conv-844). */}
+            {/* « Git » et non « Workspace » : demande de l'utilisateur (conv-844). Nom propre,
+                identique dans les deux langues. */}
             Git
           </button>
         </div>
@@ -600,57 +642,66 @@ export function SourceControlPane({
         )}
 
         {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
-          <div className="sc-empty">Dépôt Git introuvable ici (lecture indisponible).</div>
+          <div className="sc-empty">{t('sc.depotIntrouvable')}</div>
         )}
 
         {view === 'project' && visibleGit?.state && (
           <section className="sc-sect">
-            <header className="sc-h">Modifiés par cette conversation · {changes.length}</header>
+            <header className="sc-h">{t('sc.modifies', { n: changes.length })}</header>
             {relecture.length > 0 && (
               <div className="sc-relecture" data-testid="sc-relecture">
                 <span className="sc-relecture-compte">
-                  <b>Relecture</b> · {relecture.length} commentaire{relecture.length > 1 ? 's' : ''}{' '}
-                  sur {fichiersCommentes} fichier{fichiersCommentes > 1 ? 's' : ''}
+                  <b>{t('sc.relecture')}</b> ·{' '}
+                  {t('sc.relecture.compte', {
+                    commentaires: comptesRelecture(relecture.length),
+                    fichiers: t(
+                      fichiersCommentes > 1 ? 'sc.fichiers.plusieurs' : 'sc.fichiers.un',
+                      {
+                        n: fichiersCommentes
+                      }
+                    )
+                  })}
                 </span>
                 <button
                   className="sc-btn sc-relecture-envoyer"
                   data-testid="sc-relecture-envoyer"
                   disabled={!onSendPrompt}
-                  title="Envoie tous les commentaires à l'agent en un seul message, avec fichier, ligne et texte cité"
+                  title={t('sc.relecture.envoyer.titre')}
                   onClick={envoyerRelecture}
                 >
-                  Envoyer à l’agent
+                  {t('sc.relecture.envoyer')}
                 </button>
                 <button
                   className={`sc-btn${effacerArme ? ' is-armed' : ''}`}
                   data-testid="sc-relecture-effacer"
                   onClick={() => (effacerArme ? majRelecture([]) : setEffacerArme(true))}
                 >
-                  {effacerArme ? 'Confirmer : tout effacer' : 'Tout effacer'}
+                  {effacerArme ? t('sc.relecture.effacer.confirmer') : t('sc.relecture.effacer')}
                 </button>
               </div>
             )}
             {relectureEnvoyee && relecture.length === 0 && (
               <div className="sc-relecture is-envoyee" data-testid="sc-relecture-envoyee">
                 <span className="sc-relecture-compte">
-                  Relecture envoyée à l’agent · {relectureEnvoyee.length} commentaire
-                  {relectureEnvoyee.length > 1 ? 's' : ''}
+                  {t('sc.relecture.envoyee', {
+                    commentaires: comptesRelecture(relectureEnvoyee.length)
+                  })}
                 </span>
                 <button
                   className="sc-btn"
                   data-testid="sc-relecture-remettre"
-                  title="Si l'agent était occupé et n'a rien reçu : remet ces commentaires en brouillon"
+                  title={t('sc.relecture.remettre.titre')}
                   onClick={() => {
                     majRelecture([...relectureEnvoyee, ...relecture])
                     setRelectureEnvoyee(null)
                   }}
                 >
-                  Remettre en brouillon
+                  {t('sc.relecture.remettre')}
                 </button>
               </div>
             )}
             {changes.length === 0 ? (
-              <div className="sc-clean">Aucun fichier modifié par cette conversation.</div>
+              <div className="sc-clean">{t('sc.aucunFichier')}</div>
             ) : (
               <>
                 {changes.map((change) => (
@@ -662,7 +713,7 @@ export function SourceControlPane({
                           : ''
                       }`}
                       data-testid="sc-file"
-                      title={`${change.path} — clic : voir le diff`}
+                      title={t('sc.fichier.titre', { chemin: change.path })}
                       onClick={() => toggleDiff(change)}
                     >
                       <span className={`sc-m sc-m-${change.status}`}>
@@ -681,19 +732,16 @@ export function SourceControlPane({
                               {change.path}
                             </span>
                             {onSendPrompt && (
-                              <span
-                                className="sc-diff-astuce"
-                                title="Survolez un numéro de ligne puis cliquez « + » : le commentaire rejoint la relecture envoyée à l'agent"
-                              >
-                                + sur une ligne : commenter
+                              <span className="sc-diff-astuce" title={t('sc.diff.astuce.titre')}>
+                                {t('sc.diff.astuce')}
                               </span>
                             )}
-                            <span className="sc-diff-wrap-mode">Retour ligne</span>
+                            <span className="sc-diff-wrap-mode">{t('sc.diff.retourLigne')}</span>
                           </div>
                           <div className="sc-diff-content">
                             {diff === null ? (
                               <div className="sc-clean">
-                                <Spinner /> Chargement du diff…
+                                <Spinner /> {t('sc.diff.chargement')}
                               </div>
                             ) : diff.available ? (
                               <>
@@ -715,7 +763,10 @@ export function SourceControlPane({
                                 />
                               </>
                             ) : (
-                              <div className="sc-clean">Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}</div>
+                              <div className="sc-clean">
+                                {t('sc.diff.indisponible')}
+                                {diff.error ? ` : ${diff.error}` : '.'}
+                              </div>
                             )}
                           </div>
                           <div className="sc-diff-actions">
@@ -735,6 +786,7 @@ export function SourceControlPane({
                                 setAnnules((liste) =>
                                   liste.includes(change.path) ? liste : [...liste, change.path]
                                 )
+                                // Consigne pour l'agent : reste en français.
                                 propose(
                                   `annule les changements de ${change.path} faits par cette conversation : ` +
                                     `remets-le dans son état d'avant. Avant d'annuler, garde une copie ` +
@@ -744,8 +796,8 @@ export function SourceControlPane({
                               }}
                             >
                               {annulerArme === change.path
-                                ? 'Confirmer : annuler ces changements'
-                                : 'Annuler ces changements'}
+                                ? t('sc.diff.annuler.confirmer')
+                                : t('sc.diff.annuler')}
                             </button>
                           </div>
                         </div>
@@ -757,9 +809,11 @@ export function SourceControlPane({
                   <button
                     className="sc-btn"
                     onClick={() =>
+                      // Consigne pour l'agent : reste en français.
                       propose('commit tous les changements avec un message clair, puis push')
                     }
                   >
+                    {/* Terme Git, identique dans les deux langues. */}
                     Commit
                   </button>
                 </div>
@@ -775,13 +829,14 @@ export function SourceControlPane({
                   data-testid="sc-remettre"
                   onClick={() => {
                     setAnnules((liste) => liste.filter((p) => p !== path))
+                    // Consigne pour l'agent : reste en français.
                     propose(
                       `remets les changements de ${path} que tu viens d'annuler, ` +
                         `à partir de la copie gardée dans artifacts/annules/.`
                     )
                   }}
                 >
-                  Remettre le changement
+                  {t('sc.remettreChangement')}
                 </button>
               </div>
             ))}
@@ -790,11 +845,13 @@ export function SourceControlPane({
 
         {view === 'brain' && (
           <section className="sc-sect">
-            <header className="sc-h">Appels Brain · {visibleBrainTraces.length}</header>
+            <header className="sc-h">
+              {t('sc.brain.appels', { n: visibleBrainTraces.length })}
+            </header>
             {brainUnavailable ? (
-              <div className="sc-empty">Lecture des appels Brain indisponible.</div>
+              <div className="sc-empty">{t('sc.brain.lectureIndisponible')}</div>
             ) : visibleBrainTraces.length === 0 ? (
-              <div className="sc-clean">Aucun appel Brain dans cette conversation.</div>
+              <div className="sc-clean">{t('sc.brain.aucun')}</div>
             ) : (
               visibleBrainTraces.map((trace, index) => {
                 const retained =
@@ -807,31 +864,37 @@ export function SourceControlPane({
                   >
                     <header>
                       <span className="sc-brain-kind">
-                        {trace.kind === 'query' ? 'Requête du modèle' : 'Injection automatique'}
+                        {trace.kind === 'query' ? t('sc.brain.requete') : t('sc.brain.injection')}
                       </span>
                       <time dateTime={trace.timestamp}>
-                        {new Date(trace.timestamp).toLocaleTimeString('fr-FR', {
+                        {formaterDate(trace.timestamp, {
                           hour: '2-digit',
                           minute: '2-digit'
                         })}
                       </time>
                     </header>
-                    <p>{trace.query || 'Requête non exposée'}</p>
+                    <p>{trace.query || t('sc.brain.requeteNonExposee')}</p>
                     <footer>
-                      <span title={trace.turnId ?? 'Tour historique non corrélé'}>
-                        {trace.turnId ? `Tour ${trace.turnId.slice(0, 8)}` : 'Tour non corrélé'}
+                      <span title={trace.turnId ?? t('sc.brain.tourNonCorrele.titre')}>
+                        {trace.turnId
+                          ? t('sc.brain.tour', { id: trace.turnId.slice(0, 8) })
+                          : t('sc.brain.tourNonCorrele')}
                       </span>
                       <span>
                         {trace.status === 'unavailable'
-                          ? 'Brain indisponible'
+                          ? t('sc.brain.indisponible')
                           : trace.found === false
-                            ? 'Aucun résultat'
+                            ? t('sc.brain.aucunResultat')
                             : trace.found === true
-                              ? 'Résultat trouvé'
-                              : 'Résultat historique inconnu'}
+                              ? t('sc.brain.resultatTrouve')
+                              : t('sc.brain.resultatInconnu')}
                       </span>
-                      <span>{trace.injectedChars.toLocaleString('fr-FR')} caractères transmis</span>
-                      {retained.length > 0 && <span>{retained.length} source(s) retenue(s)</span>}
+                      <span>
+                        {t('sc.brain.caracteres', { n: formaterNombre(trace.injectedChars) })}
+                      </span>
+                      {retained.length > 0 && (
+                        <span>{t('sc.brain.sources', { n: retained.length })}</span>
+                      )}
                     </footer>
                     {retained.length > 0 && (
                       <ul className="sc-brain-sources">
@@ -851,7 +914,7 @@ export function SourceControlPane({
 
         {view === 'workspace' && visibleGit?.state && (
           <section className="sc-sect">
-            <header className="sc-h">Branche</header>
+            <header className="sc-h">{t('sc.branche')}</header>
             <div className="sc-branch-row">
               <span className="sc-branch">{visibleGit.state.branch || '—'}</span>
               {(visibleGit.state.ahead > 0 || visibleGit.state.behind > 0) && (
@@ -864,22 +927,21 @@ export function SourceControlPane({
                 data-testid="sc-autoclose"
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
-                  autoClose?.enabled
-                    ? 'Activé — après chaque tâche d’agent réussie ET chaque tour de chat réussi qui a modifié des fichiers, tente de publier : commit de ces fichiers-là, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Un fichier touché aussi par un autre fil reste en attente. Clic : désactiver.'
-                    : 'Désactivé — rien n’est publié automatiquement. Clic : activer.'
+                  autoClose?.enabled ? t('sc.auto.active.titre') : t('sc.auto.desactive.titre')
                 }
                 onClick={() => void toggleAutoClose()}
               >
                 <span className="sc-toggle-dot" aria-hidden="true" />
-                Enchaînement auto
+                {t('sc.auto')}
+                {/* « ON »/« OFF » : identiques dans les deux langues. */}
                 <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
               </button>
             </div>
-            <header className="sc-h">Étapes</header>
+            <header className="sc-h">{t('sc.etapes')}</header>
             <div className="sc-flux" data-testid="sc-git-flux">
               {etapesGit(visibleGit.state).length === 0 ? (
                 <div className="sc-clean" data-testid="sc-git-a-jour">
-                  À jour : aucun changement, rien à envoyer ni à récupérer.
+                  {t('sc.aJour')}
                 </div>
               ) : (
                 etapesGit(visibleGit.state).map((etape, index) => (
@@ -916,8 +978,8 @@ export function SourceControlPane({
             )}
             {autoClose?.last && (
               <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
-                <strong>Dernier enchaînement · {autoClose.last.runId}</strong>
-                <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
+                <strong>{t('sc.dernierEnchainement', { run: autoClose.last.runId })}</strong>
+                <span>{autoCloseResultLabel(t('sc.portee.projet'), autoClose.last.project)}</span>
                 {autoClose.last.brain && (
                   <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
                 )}
@@ -931,7 +993,9 @@ export function SourceControlPane({
                 ) : null}
                 {autoClose.last.exclus?.length ? (
                   <span data-testid="sc-autoclose-exclus">
-                    {`Laissé en attente · ${autoClose.last.exclus.map(libelleExclusion).join(', ')}`}
+                    {t('sc.laisseEnAttente', {
+                      liste: autoClose.last.exclus.map(libelleExclusion).join(', ')
+                    })}
                   </span>
                 ) : null}
               </div>

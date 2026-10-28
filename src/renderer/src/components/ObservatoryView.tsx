@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { langueCourante, formaterDate, formaterNombre } from '../langue'
+import {
+  useTextesObservatory,
+  traduireObservatory,
+  type CleObservatory
+} from '../textes-ecrans/observatory'
 import {
   buildHarnessTimelineFromTrace,
   type HarnessTraceEvent,
@@ -42,32 +48,41 @@ import { DerouleRejouable } from './ObservatoryAgentGantt'
 import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
-const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
-  'response-displayed': 'Réponse affichée',
-  artifact: 'Artefact produit',
-  message: 'Message',
-  injection: 'Injection',
-  decision: 'Décision',
-  'tool-call': 'TOOL',
-  'tool-result': 'TOOL RESULT',
-  'model-response': 'Réponse',
-  handoff: 'Délégation',
-  verdict: 'Verdict',
-  gate: 'Contrôle',
-  retry: 'Retry',
-  cancellation: 'Annulation',
-  error: 'Erreur',
-  boundary: 'Options'
+// Libellés : des CLÉS de la table de textes, traduites au rendu pour suivre la langue (conv-1170).
+const LABEL: Record<HarnessTimelineEvent['kind'], CleObservatory> = {
+  'response-displayed': 'vue.genre.reponseAffichee',
+  artifact: 'vue.genre.artefact',
+  message: 'vue.genre.message',
+  injection: 'vue.genre.injection',
+  decision: 'vue.genre.decision',
+  'tool-call': 'vue.genre.outil',
+  'tool-result': 'vue.genre.resultatOutil',
+  'model-response': 'vue.genre.reponse',
+  handoff: 'vue.genre.delegation',
+  verdict: 'vue.genre.verdict',
+  gate: 'vue.genre.controle',
+  retry: 'vue.genre.retry',
+  cancellation: 'vue.genre.annulation',
+  error: 'vue.genre.erreur',
+  boundary: 'vue.genre.options'
 }
-const ZONE_LABEL: Record<'sortant' | 'reponse' | 'sousagent', string> = {
-  sortant: 'Sortant',
-  reponse: 'Réponse',
-  sousagent: 'Sous-agents'
+const ZONE_LABEL: Record<'sortant' | 'reponse' | 'sousagent', CleObservatory> = {
+  sortant: 'vue.zone.sortant',
+  reponse: 'vue.zone.reponse',
+  sousagent: 'vue.zone.sousAgents'
 }
-const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', string> = {
-  sortant: 'ce qui part au provider · message + injection + options',
-  reponse: 'ce que le modèle a produit et ce qui a été affiché',
-  sousagent: 'délégation et jugements des sous-agents'
+const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', CleObservatory> = {
+  sortant: 'vue.zone.sortant.aide',
+  reponse: 'vue.zone.reponse.aide',
+  sousagent: 'vue.zone.sousAgents.aide'
+}
+// La couverture des requêtes natives est une valeur du code (native-trace-summary.ts) : seul son
+// affichage se traduit.
+const COUVERTURE: Record<ReturnType<typeof summarizeNativeTraces>['coverage'], CleObservatory> = {
+  aucune: 'vue.couverture.aucune',
+  partielle: 'vue.couverture.partielle',
+  rattachée: 'vue.couverture.rattachee',
+  'non-rattachée': 'vue.couverture.nonRattachee'
 }
 type CausalScope = 'all' | 'critical' | 'signals'
 /**
@@ -105,6 +120,7 @@ export function ObservatoryView({
   onDismissFocus?: () => void
   onOpenCapabilities?: () => void
 }): React.JSX.Element {
+  const { t, langue } = useTextesObservatory()
   const [conversations, setConversations] = useState<ConversationItem[]>([])
   const [conversationId, setConversationId] = useState('')
   const [timeline, setTimeline] = useState<HarnessTimeline>(EMPTY)
@@ -228,7 +244,8 @@ export function ObservatoryView({
       setSourceErrors((current) => {
         const next = { ...current }
         for (const source of ['conversations', 'native']) delete next[source]
-        for (const [source, message] of Object.entries(errors)) next[source] = message ?? 'Erreur'
+        for (const [source, message] of Object.entries(errors))
+          next[source] = message ?? traduireObservatory('vue.erreur', langueCourante())
         return next
       })
       if (focus && errors.conversations) setFocusUnavailable('source')
@@ -420,8 +437,8 @@ export function ObservatoryView({
   )
   const observed = useMemo(() => computeObservatoryTotals(currentCalls), [currentCalls])
   const semanticComparison = useMemo(
-    () => (compare.length === 2 ? compareObservatoryEvents(compare[0], compare[1]) : null),
-    [compare]
+    () => (compare.length === 2 ? compareObservatoryEvents(compare[0], compare[1], langue) : null),
+    [compare, langue]
   )
   const scopedTurns = useMemo(
     () =>
@@ -446,13 +463,16 @@ export function ObservatoryView({
   const ganttByTurn = useMemo(() => {
     const byTurn = new Map<string, AgentGantt>()
     for (const turn of scopedTurns) {
-      const gantt = buildAgentGantt(turn.events, { minLanes: 2, outils: true })
+      const gantt = buildAgentGantt(turn.events, { minLanes: 2, outils: true, langue })
       if (gantt) byTurn.set(turn.id, gantt)
     }
     return byTurn
-  }, [scopedTurns])
+  }, [scopedTurns, langue])
   const authorityEvents = useMemo(() => allEvents.filter((event) => event.authority), [allEvents])
-  const decisionLedger = useMemo(() => buildObservatoryDecisionLedger(allEvents), [allEvents])
+  const decisionLedger = useMemo(
+    () => buildObservatoryDecisionLedger(allEvents, langue),
+    [allEvents, langue]
+  )
   const causalPath = useMemo(() => buildCausalPath(allEvents), [allEvents])
   const causalNodes = flattenCausalNodes(causalPath.roots)
   // Les traces/RAG ne concernent que les tours réellement capturés. On SCOPE à la conversation
@@ -549,7 +569,10 @@ export function ObservatoryView({
         // Visible : le bandeau d'erreurs de sources, plutôt qu'un clic sans effet.
         updateSourceError(
           'activitySession',
-          `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
+          traduireObservatory('vue.sessionIllisible', langueCourante(), {
+            chemin: session.path,
+            raison: error instanceof Error ? error.message : String(error)
+          })
         )
       })
   }
@@ -566,11 +589,18 @@ export function ObservatoryView({
     void window.api
       .conversationsImportSession({ id: session.id, project: session.project })
       .then((result) => {
-        setSessionImportNotice(`Importée : « ${result.title} » (${result.messageCount} messages)`)
+        setSessionImportNotice(
+          traduireObservatory('vue.importee', langueCourante(), {
+            titre: result.title,
+            n: result.messageCount
+          })
+        )
       })
       .catch((error: unknown) => {
         setSessionImportNotice(
-          `Import impossible : ${error instanceof Error ? error.message : String(error)}`
+          traduireObservatory('vue.importImpossible', langueCourante(), {
+            raison: error instanceof Error ? error.message : String(error)
+          })
         )
       })
       .finally(() => {
@@ -592,7 +622,10 @@ export function ObservatoryView({
         setActivityImage('')
         updateSourceError(
           'activityImage',
-          `Capture illisible (${path}) : ${error instanceof Error ? error.message : String(error)}`
+          traduireObservatory('vue.captureIllisible', langueCourante(), {
+            chemin: path,
+            raison: error instanceof Error ? error.message : String(error)
+          })
         )
       })
   }
@@ -676,10 +709,10 @@ export function ObservatoryView({
       },
       limitations: [
         scope === 'view'
-          ? 'Cet export contient uniquement les événements visibles dans la vue filtrée.'
-          : 'Cet export contient la trace complète, indépendamment des filtres visibles.',
-        'Les traces globales sans conversationId ne peuvent pas être attribuées à cette conversation.',
-        'Les payloads exportés sont exact-redacted ; les secrets connus sont masqués à nouveau.'
+          ? traduireObservatory('vue.cetExportContientUniquement', langueCourante())
+          : traduireObservatory('vue.cetExportContientTrace', langueCourante()),
+        traduireObservatory('vue.tracesGlobalesSansConversationid', langueCourante()),
+        traduireObservatory('vue.payloadsExportesSontExact', langueCourante())
       ],
       timeline: exportedTimeline,
       causalNodes: exportedCausalNodes,
@@ -726,8 +759,8 @@ export function ObservatoryView({
           dateTime={mark?.clock ? event.timestamp : undefined}
           title={
             mark?.clock
-              ? `${new Date(event.timestamp!).toLocaleString('fr-FR')}${mark.delta ? ` · ${mark.delta} depuis l’événement précédent affiché` : ''}`
-              : 'Horodatage absent de la trace'
+              ? `${formaterDate(event.timestamp!)}${mark.delta ? t('vue.depuisPrecedent', { delta: mark.delta }) : ''}`
+              : t('vue.horodatageAbsentTrace')
           }
         >
           <b>{mark?.clock ?? '—'}</b>
@@ -751,15 +784,15 @@ export function ObservatoryView({
         >
           <i>{index + 1}</i>
           <span>
-            <b>{isReasoningEvent(event) ? 'Raisonnement du modèle' : LABEL[event.kind]}</b>
-            {diverges && <em className="observatory-diverge-badge">divergeant</em>}
+            <b>{isReasoningEvent(event) ? t('vue.raisonnementModele') : t(LABEL[event.kind])}</b>
+            {diverges && <em className="observatory-diverge-badge">{t('vue.divergeant')}</em>}
             <small>{event.actor}</small>
           </span>
           <p>
             <strong>
               {event.content
                 ? humanEventPreview(event.kind, event.content, 140)
-                : 'Aucun contenu observable.'}
+                : t('vue.aucunContenuObservable')}
             </strong>
             <small>
               {event.provider
@@ -768,17 +801,15 @@ export function ObservatoryView({
             </small>
           </p>
           <span className="observatory-load">
-            {event.inputTokens != null && <b>{event.inputTokens.toLocaleString('fr-FR')} in</b>}
+            {event.inputTokens != null && <b>{formaterNombre(event.inputTokens)} in</b>}
             {event.cacheReadTokens != null && (
-              <small>{event.cacheReadTokens.toLocaleString('fr-FR')} cache</small>
+              <small>{formaterNombre(event.cacheReadTokens)} cache</small>
             )}
-            {event.outputTokens != null && (
-              <small>{event.outputTokens.toLocaleString('fr-FR')} out</small>
-            )}
+            {event.outputTokens != null && <small>{formaterNombre(event.outputTokens)} out</small>}
             {event.costUsd != null && <small>${event.costUsd.toFixed(4)}</small>}
             {event.durationMs != null && <small>{Math.round(event.durationMs)} ms</small>}
             {event.inputTokens == null && event.outputTokens == null && (
-              <small>{event.content.length.toLocaleString('fr-FR')} caractères</small>
+              <small>{t('vue.caracteres', { n: formaterNombre(event.content.length) })}</small>
             )}
           </span>
         </button>
@@ -787,10 +818,10 @@ export function ObservatoryView({
         <article className="observatory-event-detail" onClick={(click) => click.stopPropagation()}>
           <header>
             <div>
-              <b>Payload exact</b>
+              <b>{t('vue.payloadExact')}</b>
               <small>
                 {event.channel} · {event.injector ?? event.actor} →{' '}
-                {event.recipient ?? 'non exposé'}
+                {event.recipient ?? t('vue.nonExpose')}
               </small>
             </div>
             <button
@@ -802,7 +833,9 @@ export function ObservatoryView({
                 )
               }
             >
-              {compare.some((item) => item.id === event.id) ? 'Retirer du diff' : 'Comparer'}
+              {compare.some((item) => item.id === event.id)
+                ? t('vue.retirerDiff')
+                : t('vue.comparer')}
             </button>
           </header>
           {/* `event.content` = concaténation des payloads (harness-timeline-model). Redondant dès
@@ -812,7 +845,7 @@ export function ObservatoryView({
           <p>{event.detail}</p>
           {event.payloads.length > 0 && (
             <section className="observatory-payload-list">
-              <b>Blocs · {event.payloads.length}</b>
+              <b>{t('vue.blocs', { n: event.payloads.length })}</b>
               {event.payloads.map((payload, payloadIndex) => (
                 <article key={`${event.id}:payload:${payloadIndex}`}>
                   <header>
@@ -836,70 +869,69 @@ export function ObservatoryView({
     <section className="view-page observatory-view" data-testid="observatory-view">
       <header className="observatory-head">
         <ModuleHeader
-          eyebrow="Traçabilité des conversations"
+          eyebrow={t('vue.tracabiliteConversations')}
           title="Observatory"
-          description="Suis les appels, les coûts, les durées et les erreurs."
+          description={t('vue.suisAppelsCoutsDurees')}
         />
         <div className="observatory-metrics">
           <strong data-metric="calls">
-            {currentCalls.length.toLocaleString('fr-FR')}
-            <small>appels · conversation</small>
+            {formaterNombre(currentCalls.length)}
+            <small>{t('vue.appelsConversation')}</small>
           </strong>
           <strong data-metric="input">
-            {observed.input.toLocaleString('fr-FR')}
+            {formaterNombre(observed.input)}
             <small>tokens in</small>
           </strong>
           <strong data-metric="cache">
-            {observed.cache.toLocaleString('fr-FR')}
-            <small>cache lu</small>
+            {formaterNombre(observed.cache)}
+            <small>{t('vue.cacheLu')}</small>
           </strong>
           {observed.cost === 0 && observed.input + observed.output > 0 ? (
             // Des tokens sans prix ne prouvent ni une gratuite ni un abonnement : le fournisseur
             // peut simplement ne pas exposer la tarification dans son retour d'usage.
-            <strong data-metric="cost" title="Prix non exposé par le fournisseur pour ces appels">
-              non exposé
-              <small>coût inconnu</small>
+            <strong data-metric="cost" title={t('vue.prixNonExposeFournisseur')}>
+              {t('vue.nonExpose')}
+              <small>{t('vue.coutInconnu')}</small>
             </strong>
           ) : (
             <strong data-metric="cost">
               ${observed.cost.toFixed(3)}
-              <small>coût</small>
+              <small>{t('vue.cout')}</small>
             </strong>
           )}
           <strong data-metric="output">
-            {observed.output.toLocaleString('fr-FR')}
+            {formaterNombre(observed.output)}
             <small>tokens out</small>
           </strong>
           {/* DURÉE : 0 avec des appels ne veut pas dire « instantané » — le fournisseur peut ne pas
               l'exposer. Même traitement que le coût : on le DIT au lieu d'afficher un faux zéro. */}
-          <strong data-metric="duration" title="Somme des durées mesurées des appels">
+          <strong data-metric="duration" title={t('vue.sommeDureesMesureesAppels')}>
             {observed.durationMs > 0 ? (
               <>
                 {formatObservatoryDuration(observed.durationMs)}
-                <small>durée cumulée</small>
+                <small>{t('vue.dureeCumulee')}</small>
               </>
             ) : (
               <>
-                non exposé
-                <small>durée inconnue</small>
+                {t('vue.nonExpose')}
+                <small>{t('vue.dureeInconnue')}</small>
               </>
             )}
           </strong>
-          <strong data-metric="errors" title="Appels modèle terminés en échec">
-            {observed.errors.toLocaleString('fr-FR')}
-            <small>erreurs</small>
+          <strong data-metric="errors" title={t('vue.appelsModeleTerminesEchec')}>
+            {formaterNombre(observed.errors)}
+            <small>{t('vue.erreurs')}</small>
           </strong>
-          <strong
-            data-metric="actions"
-            title="Actions réelles exécutées par les sous-agents (commandes shell, patchs fichiers)"
-          >
-            {allEvents.filter((event) => event.kind === 'tool-call').length.toLocaleString('fr-FR')}
-            <small>actions réelles</small>
+          <strong data-metric="actions" title={t('vue.actionsReellesExecuteesSous')}>
+            {formaterNombre(allEvents.filter((event) => event.kind === 'tool-call').length)}
+            <small>{t('vue.actionsReelles')}</small>
           </strong>
           {hasNativeTraces && (
             <strong data-metric="native">
-              {nativeSummary.count.toLocaleString('fr-FR')}
-              <small>Requêtes · {nativeSummary.coverage}</small>
+              {formaterNombre(nativeSummary.count)}
+              <small>
+                {t('vue.requetes', { couverture: t(COUVERTURE[nativeSummary.coverage]) })}
+              </small>
             </strong>
           )}
         </div>
@@ -908,16 +940,13 @@ export function ObservatoryView({
         <div className="observatory-toolbar__scope" data-toolbar-zone="scope">
           <span data-testid="observatory-result-count">
             <strong>
-              {(viewMode === 'timeline'
-                ? visibleEventCount
-                : visibleCausalNodes.length
-              ).toLocaleString('fr-FR')}
+              {formaterNombre(
+                viewMode === 'timeline' ? visibleEventCount : visibleCausalNodes.length
+              )}
             </strong>
             {' / '}
-            {(viewMode === 'timeline' ? allEvents.length : causalNodes.length).toLocaleString(
-              'fr-FR'
-            )}{' '}
-            {viewMode === 'timeline' ? 'événements' : 'étapes'}
+            {formaterNombre(viewMode === 'timeline' ? allEvents.length : causalNodes.length)}{' '}
+            {viewMode === 'timeline' ? t('vue.evenements') : t('vue.etapes')}
           </span>
           <small
             data-testid="observatory-freshness"
@@ -927,8 +956,14 @@ export function ObservatoryView({
             }
           >
             {lastRefreshedAt
-              ? `${Object.keys(sourceErrors).length ? 'Actualisation partielle' : 'Actualisé'} à ${new Date(lastRefreshedAt).toLocaleTimeString('fr-FR')}`
-              : 'En attente de données'}
+              ? Object.keys(sourceErrors).length
+                ? t('vue.actualisationPartielle', {
+                    heure: formaterDate(lastRefreshedAt, { timeStyle: 'medium' })
+                  })
+                : t('vue.actualise', {
+                    heure: formaterDate(lastRefreshedAt, { timeStyle: 'medium' })
+                  })
+              : t('vue.attenteDonnees')}
           </small>
           {hasNativeTraces && nativeSummary.lastTimestamp && (
             <small
@@ -941,20 +976,24 @@ export function ObservatoryView({
         </div>
 
         <div className="observatory-toolbar__analysis" data-toolbar-zone="analysis">
-          <div className="observatory-view-switch" role="group" aria-label="Mode de visualisation">
+          <div
+            className="observatory-view-switch"
+            role="group"
+            aria-label={t('vue.modeVisualisation')}
+          >
             <button
               className={viewMode === 'timeline' ? 'is-active' : ''}
               aria-pressed={viewMode === 'timeline'}
               onClick={() => setViewMode('timeline')}
             >
-              Chronologie
+              {t('vue.chronologie')}
             </button>
             <button
               className={viewMode === 'causal' ? 'is-active' : ''}
               aria-pressed={viewMode === 'causal'}
               onClick={() => setViewMode('causal')}
             >
-              Chemin critique
+              {t('vue.cheminCritique')}
             </button>
           </div>
           {/* La comparaison A/B n'existait que comme geste cache (Shift+clic) : rien ne l'annoncait
@@ -965,9 +1004,11 @@ export function ObservatoryView({
             role="status"
           >
             <b>
-              {compare.length}/2 sélectionné{compare.length > 1 ? 's' : ''}
+              {t(compare.length > 1 ? 'vue.selection.pluriel' : 'vue.selection', {
+                n: compare.length
+              })}
             </b>
-            <small>Shift+clic sur deux événements pour les comparer</small>
+            <small>{t('vue.shiftClicDeuxEvenements')}</small>
           </span>
 
           {viewMode === 'timeline' ? (
@@ -975,10 +1016,10 @@ export function ObservatoryView({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Rechercher acteur, modèle, contenu…"
-                aria-label="Rechercher dans la chronologie"
+                placeholder={t('vue.rechercherActeurModeleContenu')}
+                aria-label={t('vue.rechercherChronologie')}
               />
-              <div className="observatory-quick-filters" aria-label="Filtres rapides">
+              <div className="observatory-quick-filters" aria-label={t('vue.filtresRapides')}>
                 {QUICK_FILTERS.map((filter) => (
                   <button
                     type="button"
@@ -994,17 +1035,20 @@ export function ObservatoryView({
                 ))}
               </div>
               <details className="observatory-filter-menu">
-                <summary>Filtres{activeFilterCount ? ` · ${activeFilterCount}` : ''}</summary>
+                <summary>
+                  {t('vue.filtres')}
+                  {activeFilterCount ? ` · ${activeFilterCount}` : ''}
+                </summary>
                 <div>
                   <select
                     value={typeFilter}
                     onChange={(event) => setTypeFilter(event.target.value)}
                     aria-label="Type"
                   >
-                    <option value="all">Tous les types</option>
+                    <option value="all">{t('vue.tousTypes')}</option>
                     {typeOptions.map((type) => (
                       <option key={type} value={type}>
-                        {LABEL[type]}
+                        {t(LABEL[type])}
                       </option>
                     ))}
                   </select>
@@ -1013,7 +1057,7 @@ export function ObservatoryView({
                     onChange={(event) => setProviderFilter(event.target.value)}
                     aria-label="Provider"
                   >
-                    <option value="all">Tous providers</option>
+                    <option value="all">{t('vue.tousProviders')}</option>
                     {providerOptions.map((provider) => (
                       <option key={provider}>{provider}</option>
                     ))}
@@ -1026,16 +1070,16 @@ export function ObservatoryView({
                 onClick={resetTimelineFilters}
                 disabled={activeFilterCount === 0}
               >
-                Réinitialiser
+                {t('vue.reinitialiser')}
               </button>
             </div>
           ) : (
             <div className="observatory-causal-controls" data-testid="causal-controls">
               {(
                 [
-                  ['all', 'Tous les liens'],
-                  ['critical', 'Critique seul'],
-                  ['signals', 'Signaux']
+                  ['all', t('vue.tousLiens')],
+                  ['critical', t('vue.critiqueSeul')],
+                  ['signals', t('vue.signaux')]
                 ] as Array<[CausalScope, string]>
               ).map(([scope, label]) => (
                 <button
@@ -1055,7 +1099,8 @@ export function ObservatoryView({
                 onClick={() => setCausalScope('all')}
                 disabled={causalFilterCount === 0}
               >
-                Réinitialiser{causalFilterCount ? ` · ${causalFilterCount}` : ''}
+                {t('vue.reinitialiser')}
+                {causalFilterCount ? ` · ${causalFilterCount}` : ''}
               </button>
             </div>
           )}
@@ -1068,7 +1113,7 @@ export function ObservatoryView({
             onClick={refreshSources}
             disabled={refreshing}
           >
-            {refreshing ? 'Actualisation…' : 'Actualiser'}
+            {refreshing ? t('vue.actualisation') : t('vue.actualiser')}
           </button>
           <details>
             <summary>Actions</summary>
@@ -1076,23 +1121,23 @@ export function ObservatoryView({
               <button
                 type="button"
                 onClick={() => onOpenCapabilities?.()}
-                title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Gates · Mods · Tools)"
+                title={t('vue.editerCapacitesInjecteesPrompt')}
               >
-                Capacités du prompt
+                {t('vue.capacitesPrompt')}
               </button>
               <button
                 type="button"
                 disabled={!conversationId}
                 onClick={() => void exportTrace('view')}
               >
-                Exporter la vue
+                {t('vue.exporterVue')}
               </button>
               <button
                 type="button"
                 disabled={!conversationId}
                 onClick={() => void exportTrace('full')}
               >
-                Exporter toute la trace
+                {t('vue.exporterTouteTrace')}
               </button>
             </div>
           </details>
@@ -1102,14 +1147,14 @@ export function ObservatoryView({
         <aside className="observatory-turn-focus" role="status">
           <span>
             {focusUnavailable === 'conversation'
-              ? 'Conversation ciblée introuvable'
+              ? t('vue.conversationCibleeIntrouvable')
               : focusUnavailable === 'source'
-                ? 'Conversation ciblée indisponible'
+                ? t('vue.conversationCibleeIndisponible')
                 : focusUnavailable === 'turn'
-                  ? `Tour ${turnFocus.turnId} introuvable dans cette conversation`
+                  ? t('vue.tourIntrouvable', { tour: turnFocus.turnId })
                   : causalTracePartial
-                    ? `Tour ciblé · ${turnFocus.turnId} · trace causale partielle, preuves d’appel disponibles`
-                    : `Tour ciblé · ${turnFocus.turnId}`}
+                    ? t('vue.tourCiblePartiel', { tour: turnFocus.turnId })
+                    : t('vue.tourCible', { tour: turnFocus.turnId })}
           </span>
           <button
             type="button"
@@ -1123,14 +1168,14 @@ export function ObservatoryView({
               onDismissFocus?.()
             }}
           >
-            Toute la conversation
+            {t('vue.touteConversation')}
           </button>
         </aside>
       )}
       {Object.keys(sourceErrors).length > 0 && (
         <aside className="observatory-source-errors" role="alert">
           <div>
-            <strong>Certaines sources de télémétrie sont indisponibles</strong>
+            <strong>{t('vue.certainesSourcesTelemetrieSont')}</strong>
             <small>
               {Object.entries(sourceErrors)
                 .map(([source, message]) => `${source} : ${message}`)
@@ -1143,16 +1188,20 @@ export function ObservatoryView({
               setSemanticRetryKey((value) => value + 1)
             }}
           >
-            Réessayer
+            {t('vue.reessayer')}
           </button>
         </aside>
       )}
       {conversationId && semanticTimeline && (
         <aside className="observatory-semantic-timeline" data-testid="semantic-timeline-summary">
-          <strong>Memoire temporelle reconstruite</strong>
+          <strong>{t('vue.memoireTemporelleReconstruite')}</strong>
           <small>
-            {semanticTimeline.nodes.length} noeud{semanticTimeline.nodes.length > 1 ? 's' : ''} ·{' '}
-            {semanticTimeline.edges.length} lien{semanticTimeline.edges.length > 1 ? 's' : ''}
+            {t('vue.memoire.compte', {
+              noeuds: semanticTimeline.nodes.length,
+              sNoeuds: semanticTimeline.nodes.length > 1 ? 's' : '',
+              liens: semanticTimeline.edges.length,
+              sLiens: semanticTimeline.edges.length > 1 ? 's' : ''
+            })}
           </small>
         </aside>
       )}
@@ -1162,22 +1211,22 @@ export function ObservatoryView({
           data-testid="brain-injection-inventory"
         >
           <summary>
-            Injections &amp; appels Brain ·{' '}
-            {brainInventory.points.filter((point) => point.appelsTotal > 0).length}/
-            {brainInventory.points.length} points déclarés ont déjà été appelés
+            {t('vue.inventaire.resume', {
+              appeles: brainInventory.points.filter((point) => point.appelsTotal > 0).length,
+              total: brainInventory.points.length
+            })}
           </summary>
           <p>
-            Liste tenue par le registre <code>brain-injection-points.ts</code> et verrouillée par un
-            test : un appel Brain non déclaré casse la suite. Un point à zéro appel est affiché
-            comme tel — l’absence est un fait, pas un trou.
+            {t('vue.registre.avant')} <code>brain-injection-points.ts</code>{' '}
+            {t('vue.registre.apres')}
           </p>
           <table>
             <thead>
               <tr>
-                <th>Point d’appel</th>
-                <th>Nature</th>
-                <th>Cette conversation</th>
-                <th>Total tracé</th>
+                <th>{t('vue.pointAppel')}</th>
+                <th>{t('vue.nature')}</th>
+                <th>{t('vue.cetteConversation')}</th>
+                <th>{t('vue.totalTrace')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1193,13 +1242,17 @@ export function ObservatoryView({
                     <small>{point.pourquoi}</small>
                   </td>
                   <td>
-                    {point.injecte ? 'injecté dans le prompt' : 'appel sans injection'}
-                    {point.emission === 'porte-par-appelant' ? ' · tracé par ses appelants' : ''}
+                    {point.injecte ? t('vue.injectePrompt') : t('vue.appelSansInjection')}
+                    {point.emission === 'porte-par-appelant' ? t('vue.traceAppelants') : ''}
                   </td>
                   <td>
                     {point.appelsConversation === 0
-                      ? 'aucun appel'
-                      : `${point.appelsConversation} appel${point.appelsConversation > 1 ? 's' : ''} · ${point.caracteresConversation.toLocaleString('fr-FR')} car. injectés`}
+                      ? t('vue.aucunAppel')
+                      : t('vue.appelsInjectes', {
+                          n: point.appelsConversation,
+                          s: point.appelsConversation > 1 ? 's' : '',
+                          caracteres: formaterNombre(point.caracteresConversation)
+                        })}
                   </td>
                   <td>{point.appelsTotal}</td>
                 </tr>
@@ -1208,10 +1261,10 @@ export function ObservatoryView({
           </table>
           {brainInventory.tracesNonRattachees > 0 && (
             <p data-testid="brain-inventory-orphelines">
-              {brainInventory.tracesNonRattachees} trace
-              {brainInventory.tracesNonRattachees > 1 ? 's' : ''} sans point déclaré — comptée
-              {brainInventory.tracesNonRattachees > 1 ? 's' : ''} à part plutôt que devinée
-              {brainInventory.tracesNonRattachees > 1 ? 's' : ''}.
+              {t('vue.inventaire.orphelines', {
+                n: brainInventory.tracesNonRattachees,
+                s: brainInventory.tracesNonRattachees > 1 ? 's' : ''
+              })}
             </p>
           )}
         </details>
@@ -1219,14 +1272,12 @@ export function ObservatoryView({
       {legacyBrainTraces.length > 0 && (
         <details className="observatory-native-diagnostics">
           <summary>
-            {legacyBrainTraces.length} ancienne{legacyBrainTraces.length > 1 ? 's' : ''} trace
-            {legacyBrainTraces.length > 1 ? 's' : ''} Brain · non rattachée
-            {legacyBrainTraces.length > 1 ? 's' : ''} à un tour
+            {t('vue.anciennesTraces', {
+              n: legacyBrainTraces.length,
+              s: legacyBrainTraces.length > 1 ? 's' : ''
+            })}
           </summary>
-          <p>
-            Ces traces historiques n’ont pas de turnId. Observatory refuse de leur inventer une
-            position causale.
-          </p>
+          <p>{t('vue.cesTracesHistoriquesN')}</p>
           <div>
             {legacyBrainTraces.map((trace) => (
               <BrainNavigationCard
@@ -1240,15 +1291,12 @@ export function ObservatoryView({
       {unlinkedNativeTraces.length > 0 && (
         <details className="observatory-native-diagnostics">
           <summary>
-            {unlinkedNativeTraces.length} payload
-            {unlinkedNativeTraces.length > 1 ? 's' : ''} brut
-            {unlinkedNativeTraces.length > 1 ? 's' : ''} · non rattaché
-            {unlinkedNativeTraces.length > 1 ? 's' : ''}
+            {t('vue.payloadsBruts', {
+              n: unlinkedNativeTraces.length,
+              s: unlinkedNativeTraces.length > 1 ? 's' : ''
+            })}
           </summary>
-          <p>
-            Ces requêtes ne sont attribuées à aucune conversation sans identifiant partagé. Secrets
-            masqués.
-          </p>
+          <p>{t('vue.cesRequetesSontAttribuees')}</p>
           <div>
             {[...unlinkedNativeTraces]
               .reverse()
@@ -1256,12 +1304,17 @@ export function ObservatoryView({
               .map((trace) => (
                 <details key={trace.apiRequestId}>
                   <summary>
-                    {new Date(trace.timestamp).toLocaleString('fr-FR')} · {trace.provider} →{' '}
-                    {trace.model} · {trace.messageCount} messages · {trace.toolCount} outils
+                    {t('vue.traceNative', {
+                      date: formaterDate(trace.timestamp),
+                      provider: trace.provider,
+                      modele: trace.model,
+                      messages: trace.messageCount,
+                      outils: trace.toolCount
+                    })}
                   </summary>
                   <RagTraceCard request={trace.request} />
                   <details className="observatory-rag-payload">
-                    <summary>Payload exact · exact-redacted</summary>
+                    <summary>{t('vue.payloadExactExactRedacted')}</summary>
                     <HumanJson value={trace.request} />
                   </details>
                 </details>
@@ -1321,7 +1374,7 @@ export function ObservatoryView({
         >
           {loading && (
             <div className="observatory-empty">
-              <Spinner /> Lecture des traces…
+              <Spinner /> {t('vue.lectureTraces')}
             </div>
           )}
           {/* Trois CAUSES distinctes derriere un flux vide : aucune conversation, aucune trace, ou
@@ -1331,54 +1384,52 @@ export function ObservatoryView({
             visibleTurns.length === 0 &&
             (!conversationId ? (
               <div className="observatory-empty" data-testid="observatory-empty-no-conversation">
-                Aucune conversation à observer. Sélectionnez-en une dans le rail.
+                {t('vue.aucuneConversationObserverSelectionnez')}
               </div>
             ) : allEvents.length === 0 ? (
               <div className="observatory-empty" data-testid="observatory-empty-no-trace">
-                Cette conversation n’a aucune trace capturée.
+                {t('vue.cetteConversationNAucune')}
               </div>
             ) : (
               <div className="observatory-empty" data-testid="observatory-empty-filtered">
                 <span>
-                  Aucun des {allEvents.length.toLocaleString('fr-FR')} événements ne passe les
-                  filtres actifs.
+                  {t('vue.aucunEvenementFiltre', { n: formaterNombre(allEvents.length) })}
                 </span>
                 <button type="button" onClick={resetTimelineFilters}>
-                  Réinitialiser les filtres
+                  {t('vue.reinitialiserFiltres')}
                 </button>
               </div>
             ))}
           {!loading && viewMode === 'causal' && causalNodes.length === 0 && (
-            <div className="observatory-empty">Aucun lien causal observable.</div>
+            <div className="observatory-empty">{t('vue.aucunLienCausalObservable')}</div>
           )}
           {!loading &&
             viewMode === 'causal' &&
             causalNodes.length > 0 &&
             visibleCausalNodes.length === 0 && (
               <div className="observatory-empty" data-testid="observatory-empty-causal-filtered">
-                <span>
-                  Aucune des {causalNodes.length.toLocaleString('fr-FR')} étapes ne passe ce filtre
-                  causal.
-                </span>
+                <span>{t('vue.aucuneEtapeFiltre', { n: formaterNombre(causalNodes.length) })}</span>
                 <button type="button" onClick={() => setCausalScope('all')}>
-                  Voir tous les liens
+                  {t('vue.voirTousLiens')}
                 </button>
               </div>
             )}
           {!loading && viewMode === 'causal' && visibleCausalNodes.length > 0 && (
-            <section className="observatory-causal-path" aria-label="Chemin causal critique">
+            <section className="observatory-causal-path" aria-label={t('vue.cheminCausalCritique')}>
               <header>
                 <div>
-                  <b>Chemin causal critique</b>
+                  <b>{t('vue.cheminCausalCritique')}</b>
                   <small>
-                    {causalPath.criticalPathIds.length} étape
-                    {causalPath.criticalPathIds.length > 1 ? 's' : ''} · goulot{' '}
-                    {causalPath.bottleneckId
-                      ? causalPath.byId.get(causalPath.bottleneckId)?.event.label
-                      : 'non calculable'}
+                    {t('vue.cheminCritique.resume', {
+                      n: causalPath.criticalPathIds.length,
+                      s: causalPath.criticalPathIds.length > 1 ? 's' : '',
+                      goulot: causalPath.bottleneckId
+                        ? (causalPath.byId.get(causalPath.bottleneckId)?.event.label ?? '')
+                        : t('vue.nonCalculable')
+                    })}
                   </small>
                 </div>
-                <span>Inclusif / exclusif</span>
+                <span>{t('vue.inclusifExclusif')}</span>
               </header>
               <div className="observatory-causal-tree">
                 {visibleCausalNodes.map((node) => (
@@ -1407,14 +1458,14 @@ export function ObservatoryView({
                         </b>
                         <small>
                           {node.exclusiveDurationMs == null
-                            ? 'exclusif inconnu'
-                            : `${Math.round(node.exclusiveDurationMs)} ms propre`}
+                            ? t('vue.exclusifInconnu')
+                            : t('vue.msPropre', { n: Math.round(node.exclusiveDurationMs) })}
                         </small>
                       </span>
                       {node.issues.length > 0 && <em>{node.issues.join(' · ')}</em>}
                       {node.event.kind === 'injection' &&
                         summarizeRagTrace({ system: node.event.content }).status === 'injected' && (
-                          <em className="observatory-rag-node-badge">RAG injecté</em>
+                          <em className="observatory-rag-node-badge">{t('vue.ragInjecte')}</em>
                         )}
                     </button>
                     {selected?.id === node.id && (
@@ -1424,13 +1475,13 @@ export function ObservatoryView({
                       >
                         <header>
                           <div>
-                            <b>Payload exact · {node.event.label}</b>
+                            <b>{t('vue.payloadExactDe', { etiquette: node.event.label })}</b>
                             <small>
                               {node.event.channel} · {node.event.injector ?? node.event.actor} →{' '}
-                              {node.event.recipient ?? 'non exposé'}
+                              {node.event.recipient ?? t('vue.nonExpose')}
                             </small>
                           </div>
-                          <button onClick={() => setSelected(null)}>Fermer</button>
+                          <button onClick={() => setSelected(null)}>{t('vue.fermer')}</button>
                         </header>
                         <ObservatoryRagCausalStep
                           event={node.event}
@@ -1462,10 +1513,12 @@ export function ObservatoryView({
             <section className="observatory-diff">
               <header>
                 <div>
-                  <b>Comparaison causale A/B</b>
+                  <b>{t('vue.comparaisonCausaleB')}</b>
                   <small>
-                    {semanticComparison.changed} changement
-                    {semanticComparison.changed > 1 ? 's' : ''}
+                    {t('vue.changements', {
+                      n: semanticComparison.changed,
+                      s: semanticComparison.changed > 1 ? 's' : ''
+                    })}
                   </small>
                 </div>
                 <button
@@ -1474,13 +1527,13 @@ export function ObservatoryView({
                     setCompare([])
                   }}
                 >
-                  Fermer
+                  {t('vue.fermer')}
                 </button>
               </header>
               <table>
                 <thead>
                   <tr>
-                    <th>Champ</th>
+                    <th>{t('vue.champ')}</th>
                     <th>A</th>
                     <th>B</th>
                     <th>Delta</th>
@@ -1521,39 +1574,41 @@ export function ObservatoryView({
             >
               <summary>
                 <div>
-                  <b>Décisions & preuves</b>
+                  <b>{t('vue.decisionsPreuves')}</b>
                   <small>
-                    {decisionLedger.filter((entry) => entry.status === 'open').length} ouverte
-                    {decisionLedger.filter((entry) => entry.status === 'open').length > 1
-                      ? 's'
-                      : ''}
+                    {t(
+                      decisionLedger.filter((entry) => entry.status === 'open').length > 1
+                        ? 'vue.ouvertes'
+                        : 'vue.ouverte',
+                      { n: decisionLedger.filter((entry) => entry.status === 'open').length }
+                    )}
                   </small>
                 </div>
-                <span>Hypothèse → signal → observation → verdict</span>
+                <span>{t('vue.hypotheseSignalObservationVerdict')}</span>
               </summary>
               <div>
                 {decisionLedger.map((entry) => (
                   <article key={entry.decisionId} data-status={entry.status}>
                     <header>
                       <strong>{entry.hypothesis}</strong>
-                      <b>{entry.status === 'open' ? 'ouverte' : 'clôturée'}</b>
+                      <b>{entry.status === 'open' ? t('vue.etatOuverte') : t('vue.cloturee')}</b>
                     </header>
                     <dl>
                       <div>
-                        <dt>Signal attendu</dt>
-                        <dd>{entry.expectedSignal ?? 'non déclaré'}</dd>
+                        <dt>{t('vue.signalAttendu')}</dt>
+                        <dd>{entry.expectedSignal ?? t('vue.nonDeclare')}</dd>
                       </div>
                       <div>
                         <dt>Observation</dt>
-                        <dd>{entry.observation ?? 'non observée'}</dd>
+                        <dd>{entry.observation ?? t('vue.nonObservee')}</dd>
                       </div>
                       <div>
                         <dt>Gate</dt>
-                        <dd>{entry.gate ?? 'non passé'}</dd>
+                        <dd>{entry.gate ?? t('vue.nonPasse')}</dd>
                       </div>
                       <div>
                         <dt>Verdict</dt>
-                        <dd>{entry.verdict ?? 'en attente'}</dd>
+                        <dd>{entry.verdict ?? t('vue.attente')}</dd>
                       </div>
                     </dl>
                   </article>
@@ -1566,28 +1621,28 @@ export function ObservatoryView({
               <section className="observatory-turn" key={turn.id}>
                 <header>
                   <div>
-                    <span>TOUR {timeline.turns.length - turnIndex}</span>
-                    <time>{new Date(turn.ts).toLocaleString('fr-FR')}</time>
+                    <span>{t('vue.tourNumero', { n: timeline.turns.length - turnIndex })}</span>
+                    <time>{formaterDate(turn.ts)}</time>
                     {turnSpan(turn.events) && (
                       <small
                         className="observatory-turn-span"
                         data-testid="observatory-turn-span"
-                        title="Durée couverte par les événements affichés de ce tour"
+                        title={t('vue.dureeCouverteEvenementsAffiches')}
                       >
-                        sur {turnSpan(turn.events)}
+                        {t('vue.surDuree', { duree: turnSpan(turn.events) ?? '' })}
                       </small>
                     )}
                   </div>
                   <small>
-                    {turn.tokens.toLocaleString('fr-FR')} tokens ·{' '}
+                    {formaterNombre(turn.tokens)} tokens ·{' '}
                     {turn.costUsd
                       ? `$${turn.costUsd.toFixed(4)}`
-                      : `${turn.inputTokens.toLocaleString('fr-FR')} in · ${turn.outputTokens.toLocaleString('fr-FR')} out`}
+                      : `${formaterNombre(turn.inputTokens)} in · ${formaterNombre(turn.outputTokens)} out`}
                   </small>
                 </header>
                 {ganttByTurn.get(turn.id) && (
                   <DerouleRejouable
-                    libelle="Rejouer ce tour"
+                    libelle={t('vue.rejouerTour')}
                     gantt={ganttByTurn.get(turn.id)!}
                     selectedId={selected?.id}
                     onSelect={focusGanttEvent}
@@ -1610,8 +1665,8 @@ export function ObservatoryView({
                         className={`observatory-group is-${item.zone}`}
                       >
                         <div className="observatory-group-head">
-                          <b>{ZONE_LABEL[item.zone]}</b>
-                          <small>{ZONE_HINT[item.zone]}</small>
+                          <b>{t(ZONE_LABEL[item.zone])}</b>
+                          <small>{t(ZONE_HINT[item.zone])}</small>
                         </div>
                         {item.events.map(({ event, diverges }) =>
                           renderEvent(event, n++, diverges, turn.id, marks.get(event.id))
@@ -1639,12 +1694,15 @@ export function ObservatoryView({
             >
               <summary>
                 <div>
-                  <b>Ancienne autorité & mutations</b>
+                  <b>{t('vue.ancienneAutoriteMutations')}</b>
                   <small>
-                    {authorityEvents.length} reçu{authorityEvents.length > 1 ? 's' : ''}
+                    {t('vue.recus', {
+                      n: authorityEvents.length,
+                      s: authorityEvents.length > 1 ? 's' : ''
+                    })}
                   </small>
                 </div>
-                <span>Historique antérieur à la politique unique</span>
+                <span>{t('vue.historiqueAnterieurPolitiqueUnique')}</span>
               </summary>
               <div>
                 {authorityEvents.map((event) => {
@@ -1653,22 +1711,22 @@ export function ObservatoryView({
                     receipt.decision === 'confirm'
                       ? 'confirmation'
                       : receipt.decision === 'allow'
-                        ? 'autorisée'
-                        : 'refusée'
+                        ? t('vue.autorisee')
+                        : t('vue.refusee')
                   const resolutionLabel =
                     receipt.resolution === 'approve'
-                      ? 'approuvée'
+                      ? t('vue.approuvee')
                       : receipt.resolution === 'cancel'
-                        ? 'annulée'
+                        ? t('vue.annulee')
                         : receipt.decision === 'allow'
-                          ? 'autorisée'
+                          ? t('vue.autorisee')
                           : receipt.decision === 'deny'
-                            ? 'refusée'
-                            : 'non résolue historiquement'
+                            ? t('vue.refusee')
+                            : t('vue.nonResolueHistoriquement')
                   return (
                     <article key={event.id} data-decision={receipt.decision}>
                       <header>
-                        <strong>{event.recipient ?? event.label ?? 'commande'}</strong>
+                        <strong>{event.recipient ?? event.label ?? t('vue.commande')}</strong>
                         <b>{resolutionLabel}</b>
                       </header>
                       <dl>
@@ -1677,20 +1735,20 @@ export function ObservatoryView({
                           <dd>{receipt.mode}</dd>
                         </div>
                         <div>
-                          <dt>Risque</dt>
+                          <dt>{t('vue.risque')}</dt>
                           <dd>{receipt.commandAuthority}</dd>
                         </div>
                         <div>
                           <dt>Mutation</dt>
-                          <dd>{receipt.mutates ? 'oui' : 'non'}</dd>
+                          <dd>{receipt.mutates ? t('vue.oui') : t('vue.non')}</dd>
                         </div>
                         <div>
-                          <dt>Décision</dt>
+                          <dt>{t('vue.decision')}</dt>
                           <dd>{decisionLabel}</dd>
                         </div>
                         <div>
-                          <dt>Arbitre</dt>
-                          <dd>{receipt.resolvedBy ?? 'non applicable'}</dd>
+                          <dt>{t('vue.arbitre')}</dt>
+                          <dd>{receipt.resolvedBy ?? t('vue.nonApplicable')}</dd>
                         </div>
                       </dl>
                     </article>

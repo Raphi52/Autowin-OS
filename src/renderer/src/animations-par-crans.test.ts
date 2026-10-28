@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import postcss, { type Rule } from 'postcss'
 import { describe, expect, it } from 'vitest'
 import {
   ANIMATIONS_PAR_CRANS,
@@ -78,7 +79,10 @@ const FICHIER_DE: Record<string, string> = {
   'etape-pouls': 'components/ChatView.css',
   'etape-reflet': 'components/ChatView.css',
   'conv-asking-list': 'components/ChatView.css',
-  'conv-asking-wiggle': 'components/ChatView.css'
+  'conv-asking-wiggle': 'components/ChatView.css',
+  // Lampe à lave d'Holographique (conv-1199) : l'onglet ouvert du menu la porte en permanence.
+  // Le thème clair est dérivé de ce fichier (theme-holographique-clair.test.ts le tient à jour).
+  'nv-lave': 'assets/theme-nebuleuse-verre.css'
 }
 
 const sansCommentaires = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -190,6 +194,51 @@ describe('animations par crans — toutes sur la grille commune', () => {
     const [liste] = declarations(css, 'conv-asking-list')
     const [gigue] = declarations(css, 'conv-asking-wiggle')
     expect(liste.dureeMs).toBe(gigue.dureeMs)
+  })
+
+  it('nv-lave : une durée, un rythme ou un départ surchargés restent sur la grille commune', () => {
+    // conv-1199 : la règle commune pose `animation: nv-lave …` sur tous les porteurs de lave, puis
+    // des règles plus loin ne changent QU'UNE longhand — l'onglet ouvert du menu coule en 18 s
+    // (`animation-duration`), deux familles de boutons partent à -3 s / -6 s (`animation-delay`).
+    // Ces longhands échappent à `declarations()` : sans ce test, l'onglet du menu, seul à l'écran
+    // toute la journée, tournerait à des crans de 200 ms… ou en fluide, sans que rien rougisse.
+    // fix-ok: cause mesurée le 2026-10-28 (conv-1199) — avant correction, ce test rougissait 3 fois
+    // (nv-lave absente de ANIMATIONS_PAR_CRANS, lave en ease-in-out, onglet 18 s sans steps) ; il
+    // rougit encore si l'onglet `.nav-item.active` garde 18 s sans son propre steps(60).
+    const css = sansCommentaires(lire(FICHIER_DE['nv-lave']))
+    const racine = postcss.parse(css)
+    const commune = new Map<string, ReturnType<typeof declarations>[number]>()
+    racine.walkDecls('animation', (d) => {
+      if (!/^nv-lave\s/.test(d.value)) return
+      const [pose] = declarations(`animation: ${d.value};`, 'nv-lave')
+      for (const s of (d.parent as Rule).selectors) commune.set(s.trim(), pose)
+    })
+    expect(commune.size, 'aucun porteur de « animation: nv-lave »').toBeGreaterThan(0)
+
+    let surcharges = 0
+    racine.walkRules((regle) => {
+      const base = regle.selectors.map((s) => commune.get(s.trim())).find(Boolean)
+      if (!base) return
+      const longhand: Record<string, string> = {}
+      regle.walkDecls(/^animation-(duration|timing-function|delay)$/, (d) => {
+        longhand[d.prop] = d.value
+      })
+      if (Object.keys(longhand).length === 0) return
+      surcharges++
+      const ms = (v: string): number => parseFloat(v) * (/\dms$/.test(v) ? 1 : 1000)
+      const dureeMs = longhand['animation-duration']
+        ? ms(longhand['animation-duration'])
+        : base.dureeMs
+      const delaiMs = longhand['animation-delay'] ? ms(longhand['animation-delay']) : base.delaiMs
+      const rythme = longhand['animation-timing-function']
+      const crans = rythme ? Number(/steps\((\d+)\)/.exec(rythme)?.[1] ?? NaN) : base.crans
+      const texte = `${regle.selector} { ${JSON.stringify(longhand)} }`
+      expect(crans, `${texte} : animation fluide, pas de steps()`).toBeGreaterThan(0)
+      expect(horsGrille(css, 'nv-lave', dureeMs, crans!, delaiMs), texte).toEqual([])
+    })
+    // L'onglet du menu (18 s) et les deux familles décalées : un test qui ne lirait plus rien
+    // serait vert pour de mauvaises raisons.
+    expect(surcharges).toBeGreaterThanOrEqual(3)
   })
 })
 

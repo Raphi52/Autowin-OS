@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { strFromU8, unzipSync, type UnzipFileFilter } from 'fflate'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { formaterNombre } from '../langue'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 
 const MAX_ARCHIVE_ENTRIES = 500
 const MAX_ARCHIVE_INFLATED_BYTES = 64 * 1024 * 1024
@@ -131,9 +133,12 @@ export function ArtifactArchivePreview({
 }: {
   artifact: ChatArtifact
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
+  // Les erreurs sont des CLÉS, traduites au rendu : `useMemo` ne se recalcule pas quand la langue
+  // change (conv-1170).
   const result = useMemo(() => {
     if (!artifact.content || artifact.encoding !== 'base64')
-      return { error: 'Contenu d’archive indisponible' } as const
+      return { error: 'archive.indisponible' } as const
     if (artifact.mimeType === 'application/rtf') {
       try {
         const source = new TextDecoder().decode(base64Bytes(artifact.content))
@@ -146,17 +151,18 @@ export function ArtifactArchivePreview({
             .trim()
         } as const
       } catch {
-        return { error: 'Document RTF illisible' } as const
+        return { error: 'archive.rtfIllisible' } as const
       }
     }
     try {
       return { files: unzipBounded(artifact.content) } as const
     } catch {
-      return { error: 'Archive illisible ou format non pris en charge' } as const
+      return { error: 'archive.illisible' } as const
     }
   }, [artifact.content, artifact.encoding, artifact.mimeType])
 
-  if ('error' in result) return <div className="artifact-preview__blocked">{result.error}</div>
+  if ('error' in result && result.error !== undefined)
+    return <div className="artifact-preview__blocked">{t(result.error)}</div>
   if ('legacyText' in result)
     return <article className="artifact-office-document">{result.legacyText}</article>
   if (artifact.kind === 'document') return documentPreview(result.files)
@@ -166,11 +172,15 @@ export function ArtifactArchivePreview({
   const entries = Object.entries(result.files)
   return (
     <div className="artifact-archive">
-      <div className="artifact-archive__summary">{entries.length} éléments inspectés</div>
+      <div className="artifact-archive__summary">
+        {t('archive.inspectes', { nombre: entries.length })}
+      </div>
       {entries.slice(0, 500).map(([name, content]) => (
         <div className="artifact-archive__entry" key={name}>
           <span title={name}>{name}</span>
-          <small>{content.byteLength.toLocaleString('fr-FR')} o</small>
+          <small>
+            {t('artefact.poids.octets', { taille: formaterNombre(content.byteLength) })}
+          </small>
         </div>
       ))}
     </div>

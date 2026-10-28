@@ -9,6 +9,8 @@
  * Ce module est PUR (hors `passageDuFil`, qui lit une `Selection` qu'on lui donne) : la vue ne fait
  * qu'appliquer.
  */
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 
 export type ActionPassage = 'citer' | 'detaille' | 'faux' | 'retenir'
 
@@ -18,13 +20,44 @@ export const ACTIONS_PASSAGE: ReadonlyArray<{
   libelle: string
   titre: string
 }> = [
-  { action: 'citer', libelle: 'Citer', titre: 'Citer ce passage dans ta réponse' },
-  { action: 'detaille', libelle: 'Détaille', titre: 'Demander d’approfondir ce passage' },
-  { action: 'faux', libelle: 'C’est faux', titre: 'Contester ce passage : l’agent le revérifie' },
+  // Libellé et titre lus À L'AFFICHAGE, dans la langue de l'interface (conv-1170) : la barre qui
+  // les montre se redessine quand la langue change. Les textes que le geste pose dans la saisie
+  // (`texteDeLActionSurPassage`) restent en français : c'est une consigne envoyée à l'agent.
+  {
+    action: 'citer',
+    get libelle() {
+      return traduireChatFil('passage.citer', langueCourante())
+    },
+    get titre() {
+      return traduireChatFil('passage.citer.titre', langueCourante())
+    }
+  },
+  {
+    action: 'detaille',
+    get libelle() {
+      return traduireChatFil('passage.detaille', langueCourante())
+    },
+    get titre() {
+      return traduireChatFil('passage.detaille.titre', langueCourante())
+    }
+  },
+  {
+    action: 'faux',
+    get libelle() {
+      return traduireChatFil('passage.faux', langueCourante())
+    },
+    get titre() {
+      return traduireChatFil('passage.faux.titre', langueCourante())
+    }
+  },
   {
     action: 'retenir',
-    libelle: 'Retiens ça',
-    titre: 'Demander à l’agent de garder ce passage en mémoire'
+    get libelle() {
+      return traduireChatFil('passage.retenir', langueCourante())
+    },
+    get titre() {
+      return traduireChatFil('passage.retenir.titre', langueCourante())
+    }
   }
 ]
 

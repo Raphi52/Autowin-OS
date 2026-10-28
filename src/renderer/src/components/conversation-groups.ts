@@ -13,6 +13,9 @@
  */
 
 import { canonicalProjectPath } from '../../../shared/project-path'
+import type { Langue } from '../../../shared/langue'
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
 
 /** Le groupe des analyses automatiques. Replié par défaut — c'est tout l'objet de sa séparation. */
 export const GROUPE_KAIZEN = 'auto-kaizen'
@@ -97,7 +100,9 @@ export function nomDeDossier(chemin: string): string {
  */
 export function groupeDe(
   conversation: ConversationLike,
-  dossierParDefaut?: string
+  dossierParDefaut?: string,
+  /** Langue des libellés « Divers » (conv-1170) : la vue la passe pour se redessiner quand elle change. */
+  langue: Langue = langueCourante()
 ): {
   key: string
   label: string
@@ -106,6 +111,7 @@ export function groupeDe(
   // Auto-Kaizen d'abord : une analyse automatique reste une analyse automatique, même si elle porte
   // un dossier. La ranger sous son projet la remettrait exactement là où elle dérange.
   if (conversation.autoKaizen) {
+    // « Auto-kaizen » reste tel quel dans les deux langues : c'est le nom de la skill kaizen.
     return { key: GROUPE_KAIZEN, label: 'Auto-kaizen', kind: 'kaizen' }
   }
   // La CATEGORIE avant le dossier : c'est la dissociation demandée le 2026-09-16 (conv-81). Un fil
@@ -125,7 +131,11 @@ export function groupeDe(
     const key = defaut.replace(/[\\/]+$/, '') || defaut
     return { key, label: nomDeDossier(key), kind: 'dossier' }
   }
-  return { key: GROUPE_DIVERS, label: 'Divers', kind: 'divers' }
+  return {
+    key: GROUPE_DIVERS,
+    label: traduireChatFil('groupe.divers', langue),
+    kind: 'divers'
+  }
 }
 
 /**
@@ -138,11 +148,12 @@ export function groupeDe(
  */
 export function grouperConversations<T extends ConversationLike>(
   conversations: readonly T[],
-  dossierParDefaut?: string
+  dossierParDefaut?: string,
+  langue: Langue = langueCourante()
 ): ConversationGroup<T>[] {
   const par = new Map<string, ConversationGroup<T>>()
   for (const conversation of conversations) {
-    const { key, label, kind } = groupeDe(conversation, dossierParDefaut)
+    const { key, label, kind } = groupeDe(conversation, dossierParDefaut, langue)
     const existant = par.get(key)
     if (existant) existant.items.push(conversation)
     else par.set(key, { key, label, kind, depth: 0, items: [conversation] })
@@ -261,7 +272,8 @@ export function ordonnerGroupes<T extends ConversationLike>(
 export function groupeRecent<T extends ConversationLike>(
   conversations: readonly T[],
   dateDe: (conversation: T) => number,
-  limite: number = TAILLE_RECENT
+  limite: number = TAILLE_RECENT,
+  langue: Langue = langueCourante()
 ): ConversationGroup<T> | null {
   const items = conversations
     .filter((conversation) => !conversation.autoKaizen)
@@ -270,7 +282,13 @@ export function groupeRecent<T extends ConversationLike>(
     .slice(0, Math.max(0, limite))
     .map((entree) => entree.conversation)
   if (items.length === 0) return null
-  return { key: GROUPE_RECENT, label: 'Récent', kind: 'recent', depth: 0, items }
+  return {
+    key: GROUPE_RECENT,
+    label: traduireChatFil('groupe.recent', langue),
+    kind: 'recent',
+    depth: 0,
+    items
+  }
 }
 
 /**

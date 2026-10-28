@@ -6,6 +6,8 @@ import type {
   StatutDemande
 } from '../../../shared/carte-des-besoins'
 import {
+  ECHELLE_MAX,
+  ETIREMENT_MAX,
   JOURS,
   MARGE_DE_LA_LOUPE,
   PAR_LIGNE,
@@ -171,15 +173,17 @@ describe('la loupe', () => {
       const g = bords[jour] * W
       const d = bords[jour + 1] * W
       for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {
-        const { x, k } = placer(jour, colonne, bords, W)
-        expect(x - (POSTIT_L * k) / 2).toBeGreaterThanOrEqual(g - 1e-9)
-        expect(x + (POSTIT_L * k) / 2).toBeLessThanOrEqual(d + 1e-9)
+        // `kx` : l'échelle en largeur, celle qui borne au jour serré (sa hauteur garde 0,09).
+        // `largeur` : celle du papier, étiré quand sa case a de la place (conv-1204).
+        const { x, kx, largeur } = placer(jour, colonne, bords, W)
+        expect(x - (largeur * kx) / 2).toBeGreaterThanOrEqual(g - 1e-9)
+        expect(x + (largeur * kx) / 2).toBeLessThanOrEqual(d + 1e-9)
       }
     }
     const large = placer(13, 0, bords, W)
     const etroit = placer(2, 0, bords, W)
     expect(large.k).toBeGreaterThan(etroit.k * 3)
-    expect(large.k).toBeLessThanOrEqual(1)
+    expect(large.k).toBeLessThanOrEqual(ECHELLE_MAX)
   })
 
   it('avance d’une demi-journée par cran et rend la main en butée', () => {
@@ -324,10 +328,10 @@ describe('les frises longues', () => {
       expect(l.indexOf(Math.max(...l))).toBe(n - 4)
       return Math.max(...l)
     })
-    expect(parts[0]).toBeCloseTo(0.384, 2)
+    // ~47 % depuis conv-1204 (« on optimise mal l'espace ») ; 38,4 % avant, celle des maquettes.
+    expect(parts[0]).toBeCloseTo(0.469, 2)
     for (const part of parts) expect(part).toBeCloseTo(parts[0], 2)
-    // L'amplitude de 2 semaines est celle des maquettes, inchangée.
-    expect(poidsDesJours(13.5)[13]).toBeCloseTo(10, 9)
+    expect(poidsDesJours(13.5)[13]).toBeCloseTo(16, 9)
   })
 
   it('à 3 mois, un post-it d’une colonne serrée garde sa hauteur sans déborder sur les jours voisins', () => {
@@ -338,11 +342,13 @@ describe('les frises longues', () => {
     const d = bords[jour + 1] * W
     expect(d - g).toBeLessThan(6)
     for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {
-      const { x, k, kx } = placer(jour, colonne, bords, W)
+      const { x, k, kx, largeur } = placer(jour, colonne, bords, W)
       expect(k).toBe(0.09)
       expect(kx).toBeLessThan(k)
-      expect(x - (POSTIT_L * kx) / 2).toBeGreaterThanOrEqual(g - 1e-9)
-      expect(x + (POSTIT_L * kx) / 2).toBeLessThanOrEqual(d + 1e-9)
+      // Trop serré pour sa largeur d'origine : il ne s'étire surtout pas.
+      expect(largeur).toBe(POSTIT_L)
+      expect(x - (largeur * kx) / 2).toBeGreaterThanOrEqual(g - 1e-9)
+      expect(x + (largeur * kx) / 2).toBeLessThanOrEqual(d + 1e-9)
     }
     // Dans la colonne large, rien ne change : même échelle en largeur et en hauteur.
     const large = placer(89, 0, bords, W)
@@ -450,6 +456,33 @@ describe('tout tient dans la hauteur de l’écran', () => {
     expect(tasse.kx).toBe(0.4)
   })
 
+  // conv-1204, « il doit y avoir plus de texte par post it » : tenu par la hauteur, le post-it
+  // gardait 124 de large au milieu d'une case deux fois plus large.
+  it('tenu par la hauteur, le post-it s’élargit pour remplir sa case, sans en sortir', () => {
+    const bords = bordsDesColonnes(poidsDesJours(13.5))
+    const g = bords[13] * W
+    const d = bords[13 + 1] * W
+    // Tenu par la largeur de sa case : sa largeur d'origine.
+    const libre = placer(13, 0, bords, W)
+    expect(libre.k).toBeLessThan(ECHELLE_MAX)
+    expect(libre.largeur).toBe(POSTIT_L)
+    for (const echelleMax of [0.4, 0.7]) {
+      const tasse = placer(13, 0, bords, W, echelleMax)
+      expect(tasse.largeur).toBeGreaterThan(POSTIT_L)
+      expect(tasse.largeur).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX)
+      // L'écriture garde l'échelle que la hauteur lui laisse : c'est le papier qui s'élargit.
+      expect(tasse.k).toBe(echelleMax)
+      for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {
+        const { x, kx, largeur } = placer(13, colonne, bords, W, echelleMax)
+        expect(x - (largeur * kx) / 2).toBeGreaterThanOrEqual(g + (colonne * (d - g)) / 3 - 1e-9)
+        expect(x + (largeur * kx) / 2).toBeLessThanOrEqual(g + ((colonne + 1) * (d - g)) / 3 + 1e-9)
+      }
+    }
+    // À 0,7, il remplit 90 % de sa case, comme un post-it tenu par la largeur.
+    const p = placer(13, 0, bords, W, 0.7)
+    expect(p.largeur * p.kx).toBeCloseTo(((d - g) / 3) * 0.9, 6)
+  })
+
   /** L'échelle d'un post-it de l'étage `e` au jour `j`, telle que la vue la pose. */
   const echelle = (e: { pas: number[]; colonnes: number[] }, j: number, bords: number[]): number =>
     placer(j, 0, bords, W, e.pas[j] / O.sousLigne, e.colonnes[j]).k
@@ -463,7 +496,8 @@ describe('tout tient dans la hauteur de l’écran', () => {
       etage('prouve', { 13: 1 })
     ]
     const H = 500
-    const avant = disposerEtages(etages, bords, W, H, { ...O, jourLoupe: 13, colonnesMax: 3 })
+    // La grille d'avant, 3 de front partout : sans jour de loupe (colonnesMax: 3 laisse 1 et 2).
+    const avant = disposerEtages(etages, bords, W, H, O)
     const apres = disposerEtages(etages, bords, W, H, { ...O, jourLoupe: 13 })
     expect(avant.map((e) => e.colonnes[13])).toEqual([3, 3, 3])
     expect([4, 5]).toContain(apres[1].colonnes[13])
@@ -485,12 +519,29 @@ describe('tout tient dans la hauteur de l’écran', () => {
         )
   })
 
-  it('un jour peu chargé sous la loupe reste à 3 de front : c’est la largeur qui borne', () => {
+  it('un jour peu chargé sous la loupe passe sous 3 de front quand la hauteur reste libre (conv-1204)', () => {
+    // « le post it doit être plus grand, on optimise mal l'espace » : à 3 de front, ces 9 post-it
+    // tenaient en 3 lignes et laissaient la moitié du tableau vide sous eux.
     const bords = bordsDesColonnes(poidsDesJours(13.5))
     const etages = [etage('sans-preuve', { 13: 2 }), etage('prouve', { 13: 1 })]
-    const d = disposerEtages(etages, bords, W, 500, { ...O, jourLoupe: 13 })
-    expect(d.map((e) => e.colonnes[13])).toEqual([3, 3])
-    expect(echelle(d[0], 13, bords)).toBeCloseTo(placer(13, 0, bords, W).k, 9)
+    const H = 500
+    const d = disposerEtages(etages, bords, W, H, { ...O, jourLoupe: 13 })
+    for (const e of d) expect(e.colonnes[13]).toBeLessThan(3)
+    expect(echelle(d[0], 13, bords)).toBeGreaterThan(placer(13, 0, bords, W, 1, 3).k * 1.2)
+    const minTrois = Math.min(
+      ...disposerEtages(etages, bords, W, H, O).map((e) => echelle(e, 13, bords))
+    )
+    for (const e of d) expect(echelle(e, 13, bords)).toBeGreaterThanOrEqual(minTrois - 1e-9)
+    expect(fin(d)).toBeLessThanOrEqual(H + 1e-6)
+  })
+
+  it('une case seule sous la loupe grandit au-delà de 1, jamais au-delà d’ECHELLE_MAX', () => {
+    const bords = bordsDesColonnes(poidsDesJours(13.5))
+    const d = disposerEtages([etage('prouve', { 13: 1 })], bords, W, 600, { ...O, jourLoupe: 13 })
+    const k = echelle(d[0], 13, bords)
+    expect(k).toBeGreaterThan(1)
+    expect(k).toBeLessThanOrEqual(ECHELLE_MAX)
+    expect(fin(d)).toBeLessThanOrEqual(600 + 1e-6)
   })
 
   it('à 4 et 5 de front, chaque post-it reste dans la colonne de son jour', () => {

@@ -1,3 +1,6 @@
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
+
 /** Kind d'une pièce jointe de chat, dérivé du type/nom/taille du fichier. */
 export type ChatAttachmentKind = 'text' | 'image' | 'file'
 
@@ -41,9 +44,12 @@ export interface EncodedChatAttachment {
 }
 
 export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+  // Unités dans la langue de l'interface (conv-1170) ; le nombre garde son point décimal d'avant.
+  const langue = langueCourante()
+  if (bytes < 1024) return traduireChatFil('taille.octets', langue, { n: bytes })
+  if (bytes < 1024 * 1024)
+    return traduireChatFil('taille.ko', langue, { n: Math.round(bytes / 1024) })
+  return traduireChatFil('taille.mo', langue, { n: (bytes / (1024 * 1024)).toFixed(1) })
 }
 
 export function fileKind(file: File): ChatAttachmentKind {

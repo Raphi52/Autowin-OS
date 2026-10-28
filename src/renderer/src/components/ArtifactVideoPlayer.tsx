@@ -1,5 +1,11 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { langueCourante } from '../langue'
+import {
+  traduireArtefactsEtBandeaux,
+  useTextesArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
 import { PointerMomentVideo } from './video-pointage-context'
 import {
   FPS_SUPPOSE,
@@ -39,25 +45,34 @@ async function capturerImage(
   video: HTMLVideoElement,
   nom: string
 ): Promise<{ image: File | null; erreur?: string }> {
+  // Message d'un geste qui vient d'échouer : écrit dans la langue du moment du clic.
+  const echec = (cle: CleArtefactsEtBandeaux, erreur?: string): string =>
+    traduireArtefactsEtBandeaux(
+      cle,
+      langueCourante(),
+      erreur === undefined ? undefined : { erreur }
+    )
   const largeur = video.videoWidth
   const hauteur = video.videoHeight
-  if (!largeur || !hauteur)
-    return { image: null, erreur: 'image non jointe : vidéo pas encore chargée' }
+  if (!largeur || !hauteur) return { image: null, erreur: echec('video.nonJointe.pasChargee') }
   const canvas = document.createElement('canvas')
   canvas.width = largeur
   canvas.height = hauteur
   const contexte = canvas.getContext('2d')
-  if (!contexte) return { image: null, erreur: 'image non jointe : dessin indisponible' }
+  if (!contexte) return { image: null, erreur: echec('video.nonJointe.dessin') }
   try {
     contexte.drawImage(video, 0, 0, largeur, hauteur)
   } catch (error) {
     return {
       image: null,
-      erreur: `image non jointe : ${error instanceof Error ? error.message : String(error)}`
+      erreur: echec(
+        'video.nonJointe.erreur',
+        error instanceof Error ? error.message : String(error)
+      )
     }
   }
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) return { image: null, erreur: 'image non jointe : encodage PNG impossible' }
+  if (!blob) return { image: null, erreur: echec('video.nonJointe.png') }
   return { image: new File([blob], nom, { type: 'image/png' }) }
 }
 
@@ -68,6 +83,7 @@ export function ArtifactVideoPlayer({
   artifact: ChatArtifact
   src: string
 }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const videoRef = useRef<HTMLVideoElement>(null)
   const pointer = useContext(PointerMomentVideo)
   const fpsDonne = fpsValide(artifact.fps)
@@ -142,15 +158,15 @@ export function ArtifactVideoPlayer({
 
   const uneSeconde = Math.max(1, Math.round(fps))
   const libelleFps = fpsSuppose
-    ? `images/s inconnues · ${FPS_SUPPOSE} supposé`
-    : `${libelleCadence(fps)} i/s`
+    ? t('video.cadenceInconnue', { fps: FPS_SUPPOSE })
+    : t('video.cadence', { cadence: libelleCadence(fps) })
 
   return (
     <div
       className="lecteur-video"
       data-lecteur-video=""
       tabIndex={0}
-      aria-label="Lecteur vidéo image par image — flèches : ±1 image, Maj + flèches : ±1 s"
+      aria-label={t('video.lecteur')}
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
         if (immobile) return
@@ -183,7 +199,7 @@ export function ArtifactVideoPlayer({
         <div className="lecteur-video__pas">
           <button
             type="button"
-            aria-label="Reculer d’une seconde"
+            aria-label={t('video.reculer')}
             disabled={immobile}
             onClick={() => decaler(-uneSeconde)}
           >
@@ -191,23 +207,23 @@ export function ArtifactVideoPlayer({
           </button>
           <button
             type="button"
-            aria-label="Image précédente"
+            aria-label={t('video.imagePrecedente')}
             disabled={immobile}
             onClick={() => decaler(-1)}
           >
-            −1 img
+            {t('video.moinsUneImage')}
           </button>
           <button
             type="button"
-            aria-label="Image suivante"
+            aria-label={t('video.imageSuivante')}
             disabled={immobile}
             onClick={() => decaler(1)}
           >
-            +1 img
+            {t('video.plusUneImage')}
           </button>
           <button
             type="button"
-            aria-label="Avancer d’une seconde"
+            aria-label={t('video.avancer')}
             disabled={immobile}
             onClick={() => decaler(uneSeconde)}
           >
@@ -216,22 +232,22 @@ export function ArtifactVideoPlayer({
         </div>
         <output className="lecteur-video__etat" data-lecteur-etat="">
           <strong>{formatTemps(image / fps)}</strong>
-          {` · image ${image}${total === undefined ? '' : `/${total}`} · ${libelleFps}`}
+          {t('video.etat', {
+            image,
+            total: total === undefined ? '' : `/${total}`,
+            cadence: libelleFps
+          })}
         </output>
         {pointer && (
           <button
             type="button"
             className="lecteur-video__pointer"
-            aria-label="Pointer ce moment"
-            title={
-              pret
-                ? 'Insère une référence à cette image dans ton message et joint l’image'
-                : 'Image en cours de chargement'
-            }
+            aria-label={t('video.pointer')}
+            title={pret ? t('video.pointerAide') : t('video.imageEnChargement')}
             disabled={!pret}
             onClick={() => void pointerCeMoment()}
           >
-            Pointer ce moment
+            {t('video.pointer')}
           </button>
         )}
       </div>

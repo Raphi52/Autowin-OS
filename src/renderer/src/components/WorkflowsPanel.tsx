@@ -10,6 +10,7 @@ import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
 import { Markdown } from './Markdown'
 import { runOuvertARelire } from './run-ouvert-a-jour'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 import { jouerEntreeCadre } from '../entree-cascade'
 import { arreterGlissement, glisserPanneau } from '../glissement-panneau'
 
@@ -69,14 +70,15 @@ const RUN_DOT: Record<string, string> = {
   interrupted: 'st-warn'
 }
 
-const EFFORT_FR: Record<string, string> = {
-  low: 'faible',
-  medium: 'moyen',
-  high: 'élevé',
-  xhigh: 'très élevé',
-  max: 'max',
-  ultra: 'ultra'
-}
+// L'effort de raisonnement en clair. « max » et « ultra » se disent pareil dans les deux langues.
+const EFFORT_FR = {
+  low: 'workflows.effort.low',
+  medium: 'workflows.effort.medium',
+  high: 'workflows.effort.high',
+  xhigh: 'workflows.effort.xhigh'
+} as const
+const estEffortTraduit = (effort: string): effort is keyof typeof EFFORT_FR =>
+  Object.hasOwn(EFFORT_FR, effort)
 
 /**
  * Nœuds qui parlent du DÉPÔT plutôt que d'un sous-agent : y descendre ouvre Source control, qui
@@ -155,6 +157,7 @@ export type WorkflowsPanelProps = {
  * choses distinctes ; les séparer ne rend donc rien à corréler de tête.
  */
 export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const {
     runsPaneWidth,
     beginRunsResize,
@@ -334,7 +337,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
       <div
         className="runs-pane-resizer"
         role="separator"
-        aria-label="Redimensionner la colonne Détails"
+        aria-label={t('workflows.redimensionner')}
         aria-orientation="vertical"
         onPointerDown={beginRunsResize}
       />
@@ -347,7 +350,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             barre d'onglets juste dessous : trois rangees pour nommer la meme chose. Les onglets
             SONT desormais le titre, les actions restent a droite. */}
         <div className="workflow-panel-head">
-          <div className="workflow-section-tabs" role="tablist" aria-label="Sections du panneau">
+          <div
+            className="workflow-section-tabs"
+            role="tablist"
+            aria-label={t('workflows.sections')}
+          >
             {PANEL_TABS.map(([id, libelle]) => (
               <button
                 key={id}
@@ -368,8 +375,8 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             <button
               className="workflow-panel-action workflow-panel-close"
               onClick={() => setShowRuns(false)}
-              title="Fermer les détails"
-              aria-label="Fermer les détails"
+              title={t('workflows.fermer')}
+              aria-label={t('workflows.fermer')}
             >
               <WorkflowCloseIcon />
             </button>
@@ -453,14 +460,12 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
           {selection && !depot && fils.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              {activeId
-                ? 'Aucun fil de sous-agents pour cette étape — son détail reste lisible dans l’onglet Graph.'
-                : 'Sélectionne une conversation pour voir le fil de ses sous-agents.'}
+              {activeId ? t('workflows.aucunFilEtape') : t('workflows.selectionneFil')}
             </div>
           )}
           {filsHorsTour && (
             <div className="c-faint" style={{ fontSize: 11, padding: '0 var(--s2)' }}>
-              Aucun fil rattaché à ce tour précis — voici tous les fils de la conversation.
+              {t('workflows.horsTour')}
             </div>
           )}
           {fils.map(([runKey, liveRun]) => (
@@ -474,7 +479,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                 <summary
                   className="row"
                   style={{ justifyContent: 'space-between', cursor: 'pointer' }}
-                  title="Replier / déplier ce sous-agent"
+                  title={t('workflows.replierSousAgent')}
                 >
                   <span className="row gap2" style={{ minWidth: 0 }}>
                     {liveRun.status === 'running' ? (
@@ -495,14 +500,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                     (() => {
                       const phase = liveRun.phase
                       const meta = phase ? STEP_META[phase.step] : undefined
-                      const label = phase ? phaseLabel(phase) : 'sous-agent'
+                      const label = phase ? phaseLabel(phase) : t('workflows.sousAgent')
                       // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
                       const shortModel = phase?.model?.split('/').pop()
                       const eff =
                         phase?.reasoningEffort &&
                         phase.reasoningEffort !== 'none' &&
                         phase.reasoningEffort !== 'auto'
-                          ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
+                          ? estEffortTraduit(phase.reasoningEffort)
+                            ? t(EFFORT_FR[phase.reasoningEffort])
+                            : phase.reasoningEffort
                           : undefined
                       const detail = shortModel
                         ? `${shortModel}${eff ? ` · ${eff}` : ''}`
@@ -518,10 +525,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               {detail && <span className="mono c-accent"> {detail}</span>}
                             </span>
                             <span className="row gap2">
-                              <span className="badge">en cours</span>
+                              <span className="badge">{t('workflows.enCours')}</span>
                               <button
                                 className="btn btn-sm btn-danger"
-                                title="Stopper le sous-agent en cours"
+                                // Le libellé « ⏹ Stop » se dit pareil en anglais.
+                                title={t('workflows.stopperTitre')}
                                 onClick={(event) => {
                                   // Sans ce retour, un échec d'annulation laissait le run affiché
                                   // « en cours » sans explication : l'utilisateur croit avoir stoppé
@@ -532,8 +540,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                                   void window.api
                                     .cancelOrchestration(liveRun.convId)
                                     .catch((error: unknown) => {
-                                      button.textContent = '⚠ Stop échoué'
-                                      button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
+                                      button.textContent = t('workflows.stopEchoue')
+                                      button.title = t('workflows.annulationImpossible', {
+                                        erreur:
+                                          error instanceof Error ? error.message : String(error)
+                                      })
                                     })
                                 }}
                               >
@@ -547,10 +558,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                             Le texte du livrable, lui, peut rester vide tout ce temps.
                           */}
                           {liveRun.note && (
-                            <div
-                              className="subagent-live-note"
-                              title="Activité en cours du sous-agent"
-                            >
+                            <div className="subagent-live-note" title={t('workflows.activite')}>
                               {liveRun.note}
                             </div>
                           )}
@@ -567,9 +575,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
           {runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              {activeId
-                ? "Aucun RUN.md pour cette conversation. C'est normal quand tout a été traité directement dans le chat : un tour de chat n'en crée pas, même long. Le déroulé de ces tours reste lisible dans l'onglet Graph ci-dessus et dans l'Observatory. Un RUN.md n'apparaît ici que si une tâche est orchestrée, ou si tu en attaches un."
-                : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
+              {activeId ? t('workflows.aucunRunMd') : t('workflows.selectionneRunMd')}
             </div>
           )}
           {runs.map((r) => {
@@ -639,7 +645,10 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                           {r.summary.dodChecked}/{r.summary.dodTotal}
                         </span>
                         <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                          J {r.summary.journalEvents} · D {r.summary.defauts}
+                          {t('workflows.compteurs', {
+                            journal: r.summary.journalEvents,
+                            defauts: r.summary.defauts
+                          })}
                         </span>
                       </div>
                     </button>
@@ -647,8 +656,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       <button
                         type="button"
                         className="run-delete-button"
-                        aria-label={`Supprimer le run ${r.subject}`}
-                        title={r.session === 'attaché' ? 'Détacher ce RUN' : 'Supprimer ce RUN'}
+                        aria-label={t('workflows.supprimerRunAria', { sujet: r.subject })}
+                        // `'attaché'` est la valeur que pose le principal : elle se compare en français.
+                        title={
+                          r.session === 'attaché'
+                            ? t('workflows.detacherRun')
+                            : t('workflows.supprimerRun')
+                        }
                         onClick={() => requestDeleteRun(r)}
                       >
                         <RunTrashIcon />
@@ -665,7 +679,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
                               onClick={() => setRunDetailTab('trace')}
                             >
-                              Fil des sous-agents
+                              {t('workflows.onglet.trace')}
                             </button>
                           )}
                           {openRun && (
@@ -685,7 +699,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               className={`run-detail-tab${runDetailTab === 'livrable' ? ' is-active' : ''}`}
                               onClick={() => setRunDetailTab('livrable')}
                             >
-                              Sorties entières
+                              {t('workflows.onglet.livrable')}
                             </button>
                           )}
                         </div>
@@ -698,11 +712,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                         </div>
                       ) : openRun?.error ? (
                         <div className="run-detail-error" data-testid="run-detail-error">
-                          Lecture impossible de ce RUN.md — {openRun.error}
+                          {t('workflows.lectureImpossible', { erreur: openRun.error })}
                         </div>
                       ) : openRun?.pending ? (
                         <div className="c-faint" data-testid="run-detail-loading">
-                          Ouverture du RUN.md…
+                          {t('workflows.ouverture')}
                         </div>
                       ) : (
                         openRun && <RunInspector content={openRun.content} summary={r.summary} />

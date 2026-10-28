@@ -8,12 +8,22 @@ import {
 import { SEUIL_GEL_MS, type ResumeGels } from '../../../shared/gel-detector'
 import type { InventaireDisque } from '../../../main/store/inventaire-disque'
 import type { EtatReleveMemoire } from '../../../main/releve-memoire'
+import { formaterDate, langueCourante } from '../langue'
+import {
+  traduireBoardEtMaintenance,
+  useTextesBoardEtMaintenance,
+  type CleBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
 import { formaterOctets } from './formater-octets'
 
 /** Rôle Electron → mot courant (conv-1077) : « Tab » ne dit rien à qui regarde ses processus. */
-const ROLE_PROCESSUS: Record<string, string> = {
-  Browser: 'Processus principal',
-  Tab: 'Fenêtre',
+// Traduits à l'affichage (conv-1170).
+const ROLE_PROCESSUS: Record<string, CleBoardEtMaintenance> = {
+  Browser: 'perf.role.principal',
+  Tab: 'perf.role.fenetre'
+}
+/** « GPU » et « Service » : les mêmes mots en anglais, ils restent en dur. */
+const ROLE_PROCESSUS_IDENTIQUE: Record<string, string> = {
   GPU: 'GPU',
   Utility: 'Service'
 }
@@ -75,6 +85,12 @@ async function sonderRenderer(): Promise<ResumeSondeRenderer> {
 }
 
 export function PerfLagPanel(): React.JSX.Element {
+  const { t } = useTextesBoardEtMaintenance()
+  /** Le rôle d'un processus : une clé de la table se traduit, un nom propre (« GPU ») reste. */
+  const role = (type: string): string => {
+    const cle = ROLE_PROCESSUS[type]
+    return cle ? t(cle) : (ROLE_PROCESSUS_IDENTIQUE[type] ?? type)
+  }
   const [rapport, setRapport] = useState<RapportTours | undefined>()
   const [erreur, setErreur] = useState('')
   const [sonde, setSonde] = useState<ResumeSondeRenderer | undefined>()
@@ -85,7 +101,7 @@ export function PerfLagPanel(): React.JSX.Element {
   const charger = useCallback(async () => {
     const api = (window as unknown as { api?: ApiPerf }).api
     if (typeof api?.perfTurnLatency !== 'function') {
-      setErreur('canal perf:turnLatency indisponible (moteur non reconstruit ?)')
+      setErreur(traduireBoardEtMaintenance('perf.canalAbsent', langueCourante()))
       return
     }
     try {
@@ -121,7 +137,7 @@ export function PerfLagPanel(): React.JSX.Element {
     <div className="perf-panel" data-testid="perf-panel">
       <div className="perf-head">
         <button type="button" data-testid="perf-refresh" onClick={() => void charger()}>
-          Relire le journal
+          {t('perf.relire')}
         </button>
         <button
           type="button"
@@ -131,15 +147,15 @@ export function PerfLagPanel(): React.JSX.Element {
         >
           {sondeEnCours ? (
             <>
-              <span className="spinner" aria-hidden="true" /> Sonde en cours…
+              <span className="spinner" aria-hidden="true" /> {t('perf.sondeEnCours')}
             </>
           ) : (
-            `Sonder le renderer (${DUREE_SONDE_MS / 1000} s)`
+            t('perf.sonder', { secondes: DUREE_SONDE_MS / 1000 })
           )}
         </button>
         {rapport && (
           <span className="perf-meta">
-            {rapport.tours} tours · {rapport.source}
+            {t('perf.tours', { n: rapport.tours, source: rapport.source })}
           </span>
         )}
       </div>
@@ -148,20 +164,19 @@ export function PerfLagPanel(): React.JSX.Element {
 
       {gels && (
         <section className="perf-gels" data-testid="perf-gels">
-          <h3>Gels du process principal</h3>
+          <h3>{t('perf.gels.titre')}</h3>
           {!gels.disponible ? (
             <p className="tests-empty" data-testid="perf-gels-indisponible">
-              Aucun journal de gels ({gels.source}) : le détecteur n’a pas encore tourné sur ce
-              poste. Rien n’est affiché plutôt qu’un zéro rassurant.
+              {t('perf.gels.indisponible', { source: gels.source })}
             </p>
           ) : gels.gels === 0 && !gels.gelsNonImputables ? (
             <p className="perf-suspects" data-testid="perf-gels-vide">
-              Aucun blocage au-dessus de {SEUIL_GEL_MS} ms sur la fenêtre observée.
+              {t('perf.gels.vide', { seuil: SEUIL_GEL_MS })}
             </p>
           ) : (
             <>
               <p className="perf-suspects" data-testid="perf-gels-resume">
-                {gels.gels} gel(s) · pire {gels.pireMs} ms · {gels.cumulMs} ms figés au total
+                {t('perf.gels.resume', { gels: gels.gels, pire: gels.pireMs, cumul: gels.cumulMs })}
               </p>
               {/*
                 Un gel non imputable est REEL pour l'utilisateur : notre process n'a pas brulé de
@@ -171,18 +186,19 @@ export function PerfLagPanel(): React.JSX.Element {
               */}
               {gels.gelsNonImputables > 0 && (
                 <p className="perf-suspects" data-testid="perf-gels-non-imputables">
-                  + {gels.gelsNonImputables} gel(s) hors de notre boucle ({gels.msNonImputables} ms)
-                  : le process n’a pas consommé de CPU pendant le blocage — machine saturée ou mise
-                  en veille, non imputable à une opération.
+                  {t('perf.gels.nonImputables', {
+                    n: gels.gelsNonImputables,
+                    ms: gels.msNonImputables
+                  })}
                 </p>
               )}
               <table className="perf-table">
                 <thead>
                   <tr>
-                    <th>Opération</th>
-                    <th>gels</th>
-                    <th>cumul</th>
-                    <th>pire</th>
+                    <th>{t('perf.col.operation')}</th>
+                    <th>{t('perf.col.gels')}</th>
+                    <th>{t('perf.col.cumul')}</th>
+                    <th>{t('perf.col.pire')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -203,8 +219,7 @@ export function PerfLagPanel(): React.JSX.Element {
 
       {rapport && !rapport.disponible && (
         <p className="tests-empty" data-testid="perf-indisponible">
-          Aucun journal de jalons ({rapport.source}) : aucun tour de chat mesuré sur ce poste. Rien
-          n’est affiché plutôt qu’un zéro rassurant.
+          {t('perf.jalons.indisponible', { source: rapport.source })}
         </p>
       )}
 
@@ -212,9 +227,11 @@ export function PerfLagPanel(): React.JSX.Element {
         <>
           <p className="perf-suspects" data-testid="perf-suspects">
             {rapport.suspects.length === 0
-              ? `Aucun segment au-dessus de ${SEUIL_SEGMENT_LENT_MS} ms (p95).`
-              : `Suspects (p95 > ${SEUIL_SEGMENT_LENT_MS} ms) : ` +
-                rapport.suspects.map((s) => `${s.nom} (${s.p95Ms} ms)`).join(' · ')}
+              ? t('perf.suspects.aucun', { seuil: SEUIL_SEGMENT_LENT_MS })
+              : t('perf.suspects', {
+                  seuil: SEUIL_SEGMENT_LENT_MS,
+                  liste: rapport.suspects.map((s) => `${s.nom} (${s.p95Ms} ms)`).join(' · ')
+                })}
           </p>
           <table className="perf-table">
             <thead>
@@ -243,7 +260,7 @@ export function PerfLagPanel(): React.JSX.Element {
             </tbody>
           </table>
           {rapport.lignesIllisibles > 0 && (
-            <p className="tests-invalid">⚠ {rapport.lignesIllisibles} ligne(s) illisible(s)</p>
+            <p className="tests-invalid">{t('perf.illisibles', { n: rapport.lignesIllisibles })}</p>
           )}
         </>
       )}
@@ -251,16 +268,16 @@ export function PerfLagPanel(): React.JSX.Element {
       {disque && (
         <section className="perf-disque" data-testid="perf-disque">
           <h3>
-            Espace disque — {formaterOctets(disque.octets)}
-            {disque.partiel ? ' (au moins)' : ''}
+            {t('perf.disque.titre', { poids: formaterOctets(disque.octets) })}
+            {disque.partiel ? t('perf.auMoins') : ''}
           </h3>
           <table className="perf-table">
             <thead>
               <tr>
-                <th>Famille</th>
-                <th>Poids</th>
-                <th>Fichiers</th>
-                <th>Ménage au démarrage</th>
+                <th>{t('perf.col.famille')}</th>
+                <th>{t('perf.col.poids')}</th>
+                <th>{t('perf.col.fichiers')}</th>
+                <th>{t('perf.col.menage')}</th>
               </tr>
             </thead>
             <tbody>
@@ -271,13 +288,18 @@ export function PerfLagPanel(): React.JSX.Element {
                     <td>{famille.nom}</td>
                     <td>
                       {formaterOctets(famille.octets)}
-                      {famille.partiel ? ' (au moins)' : ''}
+                      {famille.partiel ? t('perf.auMoins') : ''}
                     </td>
                     <td>{famille.fichiers}</td>
                     <td>
                       {menage
-                        ? `${menage.supprimes} supprimé(s), ${formaterOctets(menage.octetsLiberes)} libéré(s)` +
-                          (menage.restants === undefined ? '' : ` · reste ${menage.restants}`)
+                        ? t('perf.menage', {
+                            supprimes: menage.supprimes,
+                            liberes: formaterOctets(menage.octetsLiberes)
+                          }) +
+                          (menage.restants === undefined
+                            ? ''
+                            : t('perf.menage.reste', { n: menage.restants }))
                         : '—'}
                     </td>
                   </tr>
@@ -285,56 +307,60 @@ export function PerfLagPanel(): React.JSX.Element {
               })}
             </tbody>
           </table>
-          <p className="perf-disque-note">
-            Rien n’est supprimé par cet écran : il MONTRE ce que le ménage du démarrage a déjà fait.
-            Un poids marqué « au moins » a été arrêté par le plafond de comptage — un plancher, pas
-            un total.
-          </p>
+          <p className="perf-disque-note">{t('perf.disque.note')}</p>
         </section>
       )}
 
       {memoire?.dernier && (
         <section className="perf-disque" data-testid="perf-memoire">
           <h3>
-            Mémoire et processeur — {memoire.dernier.totalMo} Mo (pic depuis le lancement :{' '}
-            {memoire.picTotalMo} Mo)
+            {t('perf.memoire.titre', {
+              total: memoire.dernier.totalMo,
+              pic: memoire.picTotalMo
+            })}
           </h3>
           <table className="perf-table">
             <thead>
               <tr>
-                <th>Processus</th>
+                <th>{t('perf.col.processus')}</th>
                 <th>PID</th>
-                <th>Mémoire</th>
-                <th>Processeur</th>
+                <th>{t('perf.col.memoire')}</th>
+                <th>{t('perf.col.processeur')}</th>
               </tr>
             </thead>
             <tbody>
               {memoire.dernier.processus.map((p) => (
                 <tr key={p.pid} data-testid="perf-memoire-processus">
                   <td>
-                    {ROLE_PROCESSUS[p.type] ?? p.type}
+                    {role(p.type)}
                     {p.nom && p.nom !== p.type ? ` (${p.nom})` : ''}
                   </td>
                   <td>{p.pid}</td>
-                  <td>{p.memoireMo} Mo</td>
+                  <td>{t('octets.mo', { n: p.memoireMo })}</td>
                   <td>{p.cpuPct} %</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="perf-disque-note">
-            Relevé du {new Date(memoire.dernier.ts).toLocaleTimeString()}, un toutes les{' '}
-            {Math.round(memoire.periodeMs / 1000)} s ({memoire.echantillons} depuis le lancement).
-            Mémoire = ensemble de travail de chaque processus.
+            {t('perf.memoire.note', {
+              heure: formaterDate(memoire.dernier.ts, { timeStyle: 'medium' }),
+              secondes: Math.round(memoire.periodeMs / 1000),
+              n: memoire.echantillons
+            })}
           </p>
         </section>
       )}
 
       {sonde && (
         <p className="perf-sonde" data-testid="perf-sonde">
-          Renderer : {sonde.ticks} ticks · retard max {sonde.retardMaxMs} ms · {sonde.tachesLongues}{' '}
-          tâche(s) longue(s), pire {sonde.tacheLonguePlusLongueMs} ms —{' '}
-          {sonde.gele ? '⚠ gel observé' : 'fluide'}
+          {t('perf.sonde', {
+            ticks: sonde.ticks,
+            retard: sonde.retardMaxMs,
+            longues: sonde.tachesLongues,
+            pire: sonde.tacheLonguePlusLongueMs,
+            verdict: t(sonde.gele ? 'perf.sonde.gel' : 'perf.sonde.fluide')
+          })}
         </p>
       )}
     </div>

@@ -36,12 +36,39 @@ const NEGATIONS = [
   'pas dans le catalogue',
   'absent du catalogue',
   'absents du catalogue',
-  'no such tool'
+  'no such tool',
+  /*
+   * Les memes negations en anglais (conv-1197, 2026-10-28) : l'agent repond en anglais quand
+   * l'interface l'est, et « `edit_file` does not exist » passait sous la garde. « n't available »
+   * couvre isn't / aren't ; « not available » couvre is not / are not.
+   */
+  'does not exist',
+  "doesn't exist",
+  'do not exist',
+  "don't exist",
+  'not available',
+  "n't available",
+  'unavailable',
+  'not exposed',
+  "n't exposed",
+  'not in the catalog',
+  'missing from the catalog'
 ]
 
 /** Un intercalaire plus long, ou porteur d'une rupture, ne gouverne plus le nom qui precede. */
 const PLAFOND_INTERCALAIRE = 24
-const RUPTURES = [',', ' mais ', ' sauf ', ' contrairement ', ' et ']
+const RUPTURES = [
+  ',',
+  ' mais ',
+  ' sauf ',
+  ' contrairement ',
+  ' et ',
+  ' but ',
+  ' except ',
+  ' unlike ',
+  ' whereas ',
+  ' and '
+]
 
 function sansAccent(texte: string): string {
   return texte.normalize('NFD').replace(/[\u0300-\u036f]/gu, '')
@@ -72,7 +99,22 @@ function precedeParUnDeterminant(plat: string, position: number): boolean {
  * la negation (« non », « aucun », « ✗ », « ❌ »), pas une cellule qui la contient au fil d'une
  * phrase. « J'ai utilise edit_file, non sans mal » n'est pas un tableau et ne declenche rien.
  */
-const CELLULES_NEGATIVES = new Set(['non', 'aucun', 'aucune', 'x', '✗', '❌', '⛔', 'no', 'nope'])
+const CELLULES_NEGATIVES = new Set([
+  'non',
+  'aucun',
+  'aucune',
+  'x',
+  '✗',
+  '❌',
+  '⛔',
+  'no',
+  'nope',
+  // Tableau ecrit en anglais (conv-1197, 2026-10-28).
+  'none',
+  'missing',
+  'unavailable',
+  'not available'
+])
 
 function outilsNiesParUnTableau(texte: string, catalogue: readonly string[]): string[] {
   const trouves: string[] = []
@@ -123,7 +165,8 @@ export function outilsFaussementAbsents(texte: unknown, catalogue: readonly stri
    * entre le nom et sa negation, donc toute mention citee — c'est-a-dire toutes les vraies —
    * etait rejetee comme rupture. Cinq tests rouges sur ce seul caractere.
    */
-  const brut = sansAccent(texte).toLowerCase()
+  // L'apostrophe typographique (’) vaut la droite : « doesn’t exist », « n’existe pas » (conv-1197).
+  const brut = sansAccent(texte).toLowerCase().replace(/[’‘]/gu, "'")
   let plat = ''
   // Pour chaque caractère de `plat` : vrai s'il suivait immédiatement un accent grave (nom cité).
   const cite: boolean[] = []
@@ -219,7 +262,14 @@ const INACCESSIBLE = [
   /je\s+ne\s+peux\s+pas\s+(?:citer|relire|consulter|rouvrir)/iu,
   /je\s+n.ai\s+pas\s+(?:acc[èe]s\s+[àa]\s+|)(?:cette|la|ces|les)\s+(?:conversation|conversations|tours?)/iu,
   /je\s+ne\s+vois\s+pas\s+(?:cette|la)\s+conversation/iu,
-  /pas\s+(?:d.acc[èe]s|acc[èe]s)\s+[àa]\s+(?:l.historique|mes\s+conversations)/iu
+  /pas\s+(?:d.acc[èe]s|acc[èe]s)\s+[àa]\s+(?:l.historique|mes\s+conversations)/iu,
+  // Les memes refus en anglais (conv-1197, 2026-10-28), forme pour forme.
+  /\bonly\s+exists?\s+in\s+my\s+context/iu,
+  /\boutside\s+(?:of\s+)?my\s+context/iu,
+  /\bI\s+(?:can(?:not|.t)|am\s+unable\s+to|.m\s+unable\s+to)\s+(?:quote|re-?read|consult|reopen|see|view)\b/iu,
+  /\bI\s+(?:do(?:\s+not|n.t)|can(?:not|.t))\s+(?:have\s+)?access\s+(?:to\s+)?(?:this|that|the|these|those)\s+(?:conversations?|(?:previous\s+|past\s+|earlier\s+)?turns?)/iu,
+  /\bI\s+(?:do(?:\s+not|n.t)|can(?:not|.t))\s+see\s+(?:this|that|the)\s+conversation/iu,
+  /\bno\s+access\s+to\s+(?:the\s+)?(?:history|my\s+conversations|past\s+conversations)/iu
 ]
 
 /**
@@ -233,7 +283,7 @@ const INACCESSIBLE = [
  * la proximite. Le mot doit donc etre ENTIER (`conversationId` n'en est pas un) et partager la phrase.
  */
 const SUJET_CONVERSATION =
-  /(?<![\p{L}\p{N}_])(?:conversations?|scout|tours?\s+(?:pr[ée]c[ée]dents?|pass[ée]s?)|historique|ce\s+qu.on\s+a\s+dit)(?![\p{L}\p{N}_])/iu
+  /(?<![\p{L}\p{N}_])(?:conversations?|scout|tours?\s+(?:pr[ée]c[ée]dents?|pass[ée]s?)|historique|ce\s+qu.on\s+a\s+dit|(?:previous|past|earlier)\s+turns?|history|what\s+we\s+(?:said|discussed))(?![\p{L}\p{N}_])/iu
 
 /** Une phrase : coupee sur . ! ? … suivis d'un blanc, et a chaque saut de ligne (puce, titre). */
 const FIN_DE_PHRASE = /[.!?…]+(?=\s|$)|\n/u

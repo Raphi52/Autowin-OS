@@ -2,6 +2,11 @@ import {
   requiresAttention,
   type WorktreeAgentActivity
 } from '../../../shared/worktree-activity-model'
+import { langueCourante } from '../langue'
+import {
+  traduireWorktreesEtBureaux,
+  type CleWorktreesEtBureaux
+} from '../textes-ecrans/worktrees-et-bureaux'
 
 /**
  * Ce qu'un chef de projet doit lire en trois secondes : ce qui l'attend, et si ça avance.
@@ -40,14 +45,21 @@ export const VERDICTS_CHANTIER = [
 
 export type VerdictChantier = (typeof VERDICTS_CHANTIER)[number]
 
-export const LIBELLES_VERDICT: Record<VerdictChantier, string> = {
-  'a-toi': 'à toi',
-  pret: 'prêt à fusionner',
-  'en-cours': 'en cours',
-  'a-verifier': 'inconnu — à vérifier',
-  interrompu: 'interrompu',
-  termine: 'terminé'
+/** Le libellé de chaque verdict, par sa clé dans la table des textes (traduction, conv-1170). */
+export const CLES_VERDICT: Record<VerdictChantier, CleWorktreesEtBureaux> = {
+  'a-toi': 'verdict.aToi',
+  pret: 'verdict.pret',
+  'en-cours': 'verdict.enCours',
+  'a-verifier': 'verdict.aVerifier',
+  interrompu: 'verdict.interrompu',
+  termine: 'verdict.termine'
 }
+
+/**
+ * La CLÉ de regroupement des runs sans branche. Elle reste en français : le code et ses tests la
+ * relisent et la comparent ; seul son AFFICHAGE passe par `chantier.brancheInconnue` (conv-1170).
+ */
+export const BRANCHE_INCONNUE = 'branche inconnue'
 
 export interface Chantier {
   /** La branche de départ. C'est l'unité qu'un chef de projet nomme, pas l'identifiant d'un run. */
@@ -118,7 +130,7 @@ export function regrouperParChantier(
   for (const agent of agents) {
     // Une branche absente n'est pas fondue dans les autres : un chantier anonyme reste UN chantier,
     // et le fondre inventerait un regroupement que les données ne portent pas.
-    const cle = agent.baseBranch?.trim() || 'branche inconnue'
+    const cle = agent.baseBranch?.trim() || BRANCHE_INCONNUE
     const lot = parBranche.get(cle)
     if (lot) lot.push(agent)
     else parBranche.set(cle, [agent])
@@ -192,5 +204,8 @@ export function formatAttente(ms: number | undefined): string | undefined {
   if (minutes < 60) return `${Math.max(minutes, 1)} min`
   const heures = Math.floor(minutes / 60)
   if (heures < 48) return `${heures} h`
-  return `${Math.floor(heures / 24)} j`
+  // `min` et `h` sont les mêmes symboles en anglais ; seul le jour change (« j » / « d », conv-1170).
+  return traduireWorktreesEtBureaux('attente.jours', langueCourante(), {
+    n: Math.floor(heures / 24)
+  })
 }

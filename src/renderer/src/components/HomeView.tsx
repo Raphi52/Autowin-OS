@@ -22,7 +22,6 @@ import {
   defaultHomeLayout,
   estDispositionDOrigine,
   HOME_WIDGET_IDS,
-  HOME_WIDGET_TITLES,
   reconcileLayout,
   moveWidgetBox,
   parseHomeLayout,
@@ -60,6 +59,8 @@ import {
   type ConversationEnAttente
 } from './conversations-attention'
 import { autowinStorageKey } from '../storage-keys'
+import { formaterDate, langueCourante } from '../langue'
+import { traduireAccueil, useTextesAccueil, type CleAccueil } from '../textes-ecrans/accueil'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
@@ -140,6 +141,20 @@ export type OutlookState =
   | { etat: 'chargement' }
   | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda; luLe: number }
   | { etat: 'panne'; cause: string }
+
+/**
+ * La clé de traduction du titre de chaque tuile (conv-1170). Le français de ces clés est celui de
+ * `HOME_WIDGET_TITLES`, mot pour mot (vérifié par `HomeView.langue.test.tsx`) ; Jarvis n'y est pas :
+ * son titre est le nom choisi par l'utilisateur, pas un texte de l'interface.
+ */
+const CLE_TITRE_TUILE: Readonly<Record<Exclude<HomeWidgetId, 'jarvis'>, CleAccueil>> = {
+  mails: 'tuile.mails',
+  agenda: 'tuile.agenda',
+  routines: 'tuile.routines',
+  notifications: 'tuile.notifications',
+  conversations: 'tuile.conversations',
+  enregistrements: 'tuile.enregistrements'
+}
 
 interface HoldState {
   id: HomeWidgetId
@@ -265,6 +280,7 @@ export function HomeView({
    * dans la fenetre qui ecrit, d'ou l'evenement dedie de `jarvis-nom` — sans lui, le titre de la
    * tuile garderait l'ancien nom jusqu'au redemarrage.
    */
+  const { t, langue } = useTextesAccueil()
   const [nomJarvis, setNomJarvis] = useState<string>(() => lireNomJarvis(window.localStorage))
   useEffect(() => {
     const relire = (): void => setNomJarvis(lireNomJarvis(window.localStorage))
@@ -289,10 +305,12 @@ export function HomeView({
    *
    * Tous les titres sont fixes SAUF celui de l'assistant, qui suit le nom choisi : le nom regle et le
    * titre affiche doivent etre la meme chose, sinon on aurait deux verites pour un seul objet.
+   * Les titres fixes suivent la langue de l'interface (conv-1170).
    */
   const titreWidget = useCallback(
-    (id: HomeWidgetId): string => (id === 'jarvis' ? nomJarvis : HOME_WIDGET_TITLES[id]),
-    [nomJarvis]
+    (id: HomeWidgetId): string =>
+      id === 'jarvis' ? nomJarvis : traduireAccueil(CLE_TITRE_TUILE[id], langue),
+    [nomJarvis, langue]
   )
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
@@ -490,7 +508,10 @@ export function HomeView({
       window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } }
     ).api
     if (!api?.outlookSnapshot) {
-      setOutlook({ etat: 'panne', cause: "la passerelle Outlook n'est pas disponible" })
+      setOutlook({
+        etat: 'panne',
+        cause: traduireAccueil('outlook.passerelleAbsente', langueCourante())
+      })
       return
     }
     try {
@@ -568,8 +589,9 @@ export function HomeView({
   }, [active, outlookRequis, readOutlook])
 
   const departures = useMemo(
-    () => (snapshot ? nextDepartures(snapshot.tasks, now) : []),
-    [snapshot, now]
+    // « dans 12 min » suit la langue de l'interface (conv-1170).
+    () => (snapshot ? nextDepartures(snapshot.tasks, now, 12, langue) : []),
+    [snapshot, now, langue]
   )
   const notices = useMemo(
     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
@@ -710,7 +732,7 @@ export function HomeView({
       }
     ).api
     if (!api?.outlookOuvrir) {
-      setErreurOuverture('Cette version ne sait pas encore ouvrir un élément dans Outlook.')
+      setErreurOuverture(traduireAccueil('outlook.ouvrirAbsent', langueCourante()))
       return
     }
     setOuvertureEnCours(id)
@@ -718,7 +740,9 @@ export function HomeView({
     try {
       const resultat = await api.outlookOuvrir(id)
       if (!resultat.ok)
-        setErreurOuverture(resultat.erreur ?? "Outlook n'a pas pu ouvrir cet élément.")
+        setErreurOuverture(
+          resultat.erreur ?? traduireAccueil('outlook.ouvrirEchec', langueCourante())
+        )
     } catch (error) {
       setErreurOuverture(error instanceof Error ? error.message : String(error))
     } finally {
@@ -752,7 +776,7 @@ export function HomeView({
         }
       ).api
       if (!api?.outlookRepondre) {
-        return { ok: false, erreur: 'Cette version ne sait pas encore répondre depuis Outlook.' }
+        return { ok: false, erreur: traduireAccueil('outlook.repondreAbsent', langueCourante()) }
       }
       try {
         return await api.outlookRepondre(id, corps, pieces)
@@ -797,7 +821,7 @@ export function HomeView({
       if (!api?.outlookNouveauMessage) {
         return {
           ok: false,
-          erreur: 'Cette version ne sait pas encore ouvrir une conversation depuis Outlook.'
+          erreur: traduireAccueil('outlook.nouvelleAbsente', langueCourante())
         }
       }
       try {
@@ -832,7 +856,7 @@ export function HomeView({
       if (!api?.outlookMarquerLu) {
         return {
           ok: false,
-          erreur: 'Cette version ne sait pas encore marquer un message comme lu.'
+          erreur: traduireAccueil('outlook.marquerAbsent', langueCourante())
         }
       }
       try {
@@ -934,28 +958,23 @@ export function HomeView({
               un bouton isole a l'autre bout de l'ecran obligeait a traverser la page pour un reglage. */}
           <div className="home-view__masthead-ligne">
             <h1>
-              Autowin <b>Accueil</b>
+              Autowin <b>{t('entete.accueil')}</b>
             </h1>
             <button
               type="button"
               className="home-view__rouage"
               onClick={basculerReglages}
               aria-expanded={reglagesOuverts}
-              aria-label="Réglages de l’accueil"
+              aria-label={t('reglages.ariaBouton')}
               data-testid="home-settings"
-              title="Réglages de l'accueil : fond, widgets affichés, nom de l'assistant, disposition"
+              title={t('reglages.titreBouton')}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
               </svg>
             </button>
           </div>
-          {noticeVisible ? (
-            <p>
-              Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la
-              lâchez. Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).
-            </p>
-          ) : null}
+          {noticeVisible ? <p>{t('aide.tuiles')}</p> : null}
           {erreurOuverture !== null ? (
             <p className="home-view__alerte" role="status">
               {erreurOuverture}
@@ -966,15 +985,15 @@ export function HomeView({
           <div
             className="home-view__settings"
             role="dialog"
-            aria-label="Réglages de l'accueil"
+            aria-label={t('reglages.ariaPanneau')}
             data-testid="home-settings-panel"
           >
             <section className="home-settings__bloc">
-              <h3>Fond</h3>
+              <h3>{t('reglages.fond')}</h3>
               <label className="home-settings__champ">
                 <select
                   value={fond}
-                  aria-label="Fond de l'accueil"
+                  aria-label={t('reglages.ariaFond')}
                   data-testid="home-fond"
                   onChange={(event) => choisirFondAccueil(event.target.value as FondAccueil)}
                 >
@@ -992,7 +1011,7 @@ export function HomeView({
               </label>
             </section>
             <section className="home-settings__bloc">
-              <h3>Widgets affichés</h3>
+              <h3>{t('reglages.widgets')}</h3>
               <ul>
                 {HOME_WIDGET_IDS.map((id) => (
                   <li key={id}>
@@ -1016,30 +1035,30 @@ export function HomeView({
                 vivent dans SON widget — demande de l'utilisateur du 2026-09-01. Ce panneau ne garde
                 que ce qui concerne la PAGE : les tuiles affichees et leur disposition. */}
             <section className="home-settings__bloc">
-              <h3>Disposition</h3>
+              <h3>{t('reglages.disposition')}</h3>
               <div className="home-settings__actions">
                 <button
                   type="button"
                   onClick={annuler}
                   disabled={!canUndo(histoire)}
                   data-testid="home-undo"
-                  title="Défaire le dernier déplacement ou redimensionnement"
+                  title={t('reglages.annulerTitre')}
                 >
-                  Annuler
+                  {t('reglages.annuler')}
                 </button>
                 <button type="button" onClick={scatter}>
-                  Disperser
+                  {t('reglages.disperser')}
                 </button>
                 <button type="button" onClick={resetLayout}>
-                  Rétablir la disposition
+                  {t('reglages.retablir')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setNoticeForcee(true)}
-                  title="Rappeler comment manipuler les tuiles"
+                  title={t('reglages.rappelTitre')}
                   data-testid="home-rappel-notice"
                 >
-                  Rappeler l&apos;aide
+                  {t('reglages.rappel')}
                 </button>
               </div>
             </section>
@@ -1061,7 +1080,7 @@ export function HomeView({
             data-testid={`home-widget-${box.id}`}
             tabIndex={0}
             role="group"
-            aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
+            aria-label={t('tuile.aria', { titre: titreWidget(box.id) })}
             onKeyDown={(event) => auClavier(event, box.id)}
             style={{
               width: `${box.w}px`,
@@ -1086,14 +1105,14 @@ export function HomeView({
               <h2>{titreWidget(box.id)}</h2>
               <i className="home-tile__rule" />
               {box.id === 'notifications' && pending > 0 ? (
-                <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
+                <span className="home-tile__count" title={t('tuile.remontees', { n: pending })}>
                   {pending}
                 </span>
               ) : null}
               {box.id === 'conversations' && enAttente.length > 0 ? (
                 <span
                   className="home-tile__count"
-                  title={`${enAttente.length} conversation(s) en attente de reprise`}
+                  title={t('tuile.enAttente', { n: enAttente.length })}
                 >
                   {enAttente.length}
                 </span>
@@ -1114,17 +1133,22 @@ export function HomeView({
                   data-testid="home-refresh-outlook"
                   title={
                     outlook.etat === 'ok'
-                      ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
-                      : 'Relire Outlook maintenant'
+                      ? t('outlook.luA', {
+                          heure: formaterDate(outlook.luLe, { timeStyle: 'medium' })
+                        })
+                      : t('outlook.relire')
                   }
                 >
-                  {outlookEnCours ? <Spinner /> : 'Actualiser'}
+                  {outlookEnCours ? <Spinner /> : t('outlook.actualiser')}
                 </button>
               ) : null}
               {box.id === 'mails' && compteurs.personnes > 0 ? (
                 <span
                   className="home-tile__count"
-                  title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
+                  title={t('outlook.nonLus', {
+                    personnes: compteurs.personnes,
+                    total: compteurs.total
+                  })}
                 >
                   {compteurs.personnes}
                 </span>
@@ -1221,6 +1245,7 @@ function WidgetBody({
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   if (id === 'enregistrements') {
     // Le micro qui ECRIT sur le disque, et la liste de ce qu'il a ecrit. A part de Jarvis a
     // dessein : ici le mot « Jarvis » prononce ne lance rien.
@@ -1242,13 +1267,13 @@ function WidgetBody({
     if (outlook.etat === 'chargement')
       return (
         <p className="home-hint">
-          <Spinner /> Lecture d’Outlook…
+          <Spinner /> {t('outlook.chargement')}
         </p>
       )
     if (outlook.etat === 'panne') {
       // La cause est AFFICHÉE. Une liste vide se lirait « vous n'avez pas de mail » alors qu'elle
       // veut dire « la lecture a échoué » — et l'utilisateur ne saurait pas quoi faire.
-      return <p className="home-error">Outlook injoignable : {outlook.cause}</p>
+      return <p className="home-error">{t('outlook.injoignable', { cause: outlook.cause })}</p>
     }
     return id === 'mails' ? (
       <InterlocuteursWidget
@@ -1266,12 +1291,12 @@ function WidgetBody({
   }
 
   if (error) {
-    return <p className="home-error">Task Manager injoignable : {error}</p>
+    return <p className="home-error">{t('taches.injoignable', { erreur: error })}</p>
   }
   if (loading) {
     return (
       <p className="home-hint">
-        <Spinner /> Lecture du Task Manager…
+        <Spinner /> {t('taches.chargement')}
       </p>
     )
   }
@@ -1282,9 +1307,9 @@ function WidgetBody({
       // chose. Relevé en pilotant l'app — trois quarts de l'écran affichaient des phrases de vide.
       return (
         <p className="home-hint">
-          Aucune routine horaire n’est programmée.{' '}
+          {t('routines.aucune')}{' '}
           <button type="button" className="home-lien" onClick={() => onNavigate?.('planification')}>
-            En créer une
+            {t('routines.creer')}
           </button>
         </p>
       )
@@ -1293,14 +1318,9 @@ function WidgetBody({
       <ul className="home-list">
         {departures.map((departure) => (
           <li key={departure.id} data-suspended={departure.suspended ? 'true' : undefined}>
-            <time>
-              {new Date(departure.at).toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </time>
+            <time>{formaterDate(departure.at, { hour: '2-digit', minute: '2-digit' })}</time>
             <span>{departure.title}</span>
-            <em>{departure.suspended ? 'désactivée' : departure.relative}</em>
+            <em>{departure.suspended ? t('routines.desactivee') : departure.relative}</em>
           </li>
         ))}
       </ul>
@@ -1310,9 +1330,9 @@ function WidgetBody({
   if (notices.length === 0) {
     return (
       <p className="home-hint">
-        Rien à signaler. Vos agents n’ont rien remonté.{' '}
+        {t('remontees.rien')}{' '}
         <button type="button" className="home-lien" onClick={() => onNavigate?.('watchdog')}>
-          Voir le Watchdog
+          {t('remontees.voirWatchdog')}
         </button>
       </p>
     )
@@ -1328,11 +1348,12 @@ function WidgetBody({
           <button
             type="button"
             onClick={() => onNavigate?.('watchdog')}
-            title={`Ouvrir le Watchdog — ${notice.origin}`}
+            title={t('remontees.ouvrirTitre', { origine: notice.origin })}
           >
             <span>{notice.message}</span>
             <small>
-              {notice.origin} · {notice.kind === 'missed' ? 'occurrence ratée' : 'échec'}
+              {notice.origin} ·{' '}
+              {notice.kind === 'missed' ? t('remontees.ratee') : t('remontees.echec')}
             </small>
           </button>
           {/* Solder l'alerte SANS quitter l'accueil : sinon traiter une alerte demandait de la
@@ -1342,10 +1363,10 @@ function WidgetBody({
               type="button"
               className="home-notices__acquitter"
               onClick={() => void onAcquitter(notice.id)}
-              title="Acquitter : l’alerte sort du compteur"
+              title={t('remontees.acquitterTitre')}
               data-testid={`home-acquitter-${notice.id}`}
             >
-              Acquitter
+              {t('remontees.acquitter')}
             </button>
           ) : null}
         </li>
@@ -1367,12 +1388,9 @@ function ConversationsEnAttenteList({
   items: readonly ConversationEnAttente[]
   onOuvrir: (id: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   if (items.length === 0) {
-    return (
-      <p className="home-hint">
-        Aucune conversation en attente. Les fenêtres dont le tour vient de finir apparaîtront ici.
-      </p>
-    )
+    return <p className="home-hint">{t('conversations.aucune')}</p>
   }
   return (
     <ul className="home-convs">
@@ -1383,10 +1401,12 @@ function ConversationsEnAttenteList({
             data-testid="home-conversation"
             data-conv-id={conversation.id}
             onClick={() => onOuvrir(conversation.id)}
-            title="Ouvrir cette conversation dans le chat"
+            title={t('conversations.ouvrirTitre')}
           >
             <i className="home-convs__dot" aria-hidden="true" />
-            <span className="home-convs__title">{conversation.titre || 'Sans titre'}</span>
+            <span className="home-convs__title">
+              {conversation.titre || t('conversations.sansTitre')}
+            </span>
           </button>
         </li>
       ))}
@@ -1404,13 +1424,14 @@ function AgendaList({
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
+  const { t } = useTextesAccueil()
   // Le widget n'est plus « du jour » : sa première ligne nomme TOUJOURS le prochain rendez-vous,
   // quel que soit son jour — c'est la question que l'utilisateur pose en premier.
   const prochain = agenda.aujourdHui[0] ?? agenda.semaine[0] ?? agenda.suivant
   const resteAujourdHui = agenda.aujourdHui.filter((entry) => entry.id !== prochain?.id)
   const resteSemaine = agenda.semaine.filter((entry) => entry.id !== prochain?.id)
   if (prochain === null || prochain === undefined) {
-    return <p className="home-hint">Aucun rendez-vous à venir dans votre agenda.</p>
+    return <p className="home-hint">{t('agenda.aucun')}</p>
   }
   const ligne = (entry: AgendaEntry, label: string): React.JSX.Element => (
     <li key={entry.id}>
@@ -1418,18 +1439,18 @@ function AgendaList({
         type="button"
         onClick={() => void onOuvrir(entry.id)}
         disabled={ouvertureEnCours === entry.id}
-        title="Ouvrir le rendez-vous dans Outlook"
+        title={t('agenda.ouvrirTitre')}
         data-testid={`home-ouvrir-rdv-${entry.id}`}
       >
         <time>{label}</time>
-        <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
+        <span>{ouvertureEnCours === entry.id ? t('commun.ouverture') : entry.sujet}</span>
         <em>{entry.lieu || formatEventTime(entry)}</em>
       </button>
     </li>
   )
   return (
     <>
-      <p className="home-subhead">Prochain</p>
+      <p className="home-subhead">{t('agenda.prochain')}</p>
       <ul className="home-list home-list--cliquable" data-testid="home-agenda-prochain">
         {ligne(
           prochain,
@@ -1440,7 +1461,7 @@ function AgendaList({
       </ul>
       {resteAujourdHui.length > 0 ? (
         <>
-          <p className="home-subhead">Aujourd’hui</p>
+          <p className="home-subhead">{t('agenda.aujourdhui')}</p>
           <ul className="home-list home-list--cliquable">
             {resteAujourdHui.map((entry) => ligne(entry, formatEventTime(entry)))}
           </ul>
@@ -1448,7 +1469,7 @@ function AgendaList({
       ) : null}
       {resteSemaine.length > 0 ? (
         <>
-          <p className="home-subhead">Cette semaine</p>
+          <p className="home-subhead">{t('agenda.semaine')}</p>
           <ul className="home-list home-list--cliquable">
             {resteSemaine.map((entry) => ligne(entry, formatEventDay(entry)))}
           </ul>

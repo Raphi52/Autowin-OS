@@ -1,0 +1,74 @@
+/* LES PROJETS PARTAGÉS DU BOARD (conv-1211) : le menu à cocher à côté du bouton 📁. Couleurs tirées
+   des variables du thème, comme le reste de l'en-tête du Board (`CarteDesBesoinsView.css`). */
+
+.besoins-projets {
+  position: relative;
+}
+.besoins-projets > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.besoins-projets > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Posé PAR-DESSUS la rivière, aligné sur le bord droit du bouton : l'en-tête est à droite de l'écran. */
+.besoins-projets-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: max-content;
+  min-width: 240px;
+  max-width: 420px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: var(--r2, 6px);
+  /* `--bg-0` est OPAQUE dans chaque thème (theme.css.test.ts) ; `--surface-card` est un voile
+     translucide : la rivière se lisait à travers la liste (capture du 2026-10-28, conv-1211). */
+  background: var(--bg-0);
+  font-size: 12px;
+  color: var(--text);
+}
+.besoins-projets-titre {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.besoins-projets-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+.besoins-projets-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.besoins-projets-ligne.is-tous {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.besoins-projets-nom {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.besoins-projets-compte {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+.besoins-projets-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}

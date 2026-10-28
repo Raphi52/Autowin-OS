@@ -23,6 +23,7 @@ import {
   type Rect,
   type ZoneDesCartes
 } from './notification-popup'
+import { traduireCoeur } from './textes-coeur'
 
 /**
  * Le thème choisi dans Réglages · Interface, tel que la page de l'app l'a envoyé (conv-1090). Il
@@ -71,7 +72,7 @@ const ouvrirFenetre: DependancesPile['ouvrirFenetre'] = ({
     skipTaskbar: true,
     focusable: false,
     alwaysOnTop: true,
-    title: 'Autowin — fin de tour',
+    title: traduireCoeur('carte.titreFenetre'),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -106,6 +107,7 @@ const ouvrirFenetre: DependancesPile['ouvrirFenetre'] = ({
   // fermée PENDANT son chargement fait aussi rejeter `loadFile` (ERR_ABORTED) : rien à signaler.
   win.loadFile(fichier).catch((erreur: unknown) => {
     if (win.isDestroyed()) return
+    // Journal seulement, lu par qui diagnostique : reste en français (conv-1170, lot 18).
     console.warn('[fin-de-tour] page de carte non chargée, bulle Windows —', String(erreur))
     surEchec(erreur)
   })

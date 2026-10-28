@@ -14,6 +14,7 @@
  * Le sens inverse est tout aussi important : tant qu'un run est vivant, ses étapes gardent
  * « en cours ». Une réconciliation trop zélée ferait passer un travail réel pour un travail mort.
  */
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 /** Statuts qui, hors run vivant, sont des restes d'un run interrompu. */
 const STRANDED = new Set(['running', 'pending'])
@@ -24,14 +25,14 @@ const STRANDED = new Set(['running', 'pending'])
  * table est de toute façon la sémantique des statuts, pas du rendu.
  */
 export function statusLabel(status: string | undefined): string {
-  if (status === 'running') return 'en cours'
-  if (status === 'failed') return 'échec'
-  if (status === 'cancelled') return 'annulé'
-  if (status === 'pending') return 'en attente'
+  if (status === 'running') return t('statut.en-cours')
+  if (status === 'failed') return t('statut.echec')
+  if (status === 'cancelled') return t('statut.annule')
+  if (status === 'pending') return t('statut.en-attente')
   // Une étape que l'app a laissée en route n'est PAS terminée : sans cette branche elle tombait dans
   // le défaut « terminé », et le graphe annonçait une réussite qui n'a jamais eu lieu.
-  if (status === 'interrupted') return 'interrompu'
-  return 'terminé'
+  if (status === 'interrupted') return t('statut.interrompu')
+  return t('statut.termine')
 }
 
 /**
@@ -45,7 +46,7 @@ export function statusLabelDuNoeud(
   const echecs = display?.echecs
   if (status !== 'failed' || !echecs || !display?.count || display.count < 2)
     return statusLabel(status)
-  return `${echecs} échec${echecs > 1 ? 's' : ''}`
+  return t(echecs > 1 ? 'statut.echecs.n' : 'statut.echecs.un', { n: echecs })
 }
 
 export function settleStrandedExecutionStatus<T extends { status?: string }>(

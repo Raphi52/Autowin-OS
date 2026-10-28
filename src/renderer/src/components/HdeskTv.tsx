@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
 import { toucheTv } from './hdesk-tv-touches'
 import { cransMolette, enfilerGeste, pointDansImage } from './hdesk-gestes'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 export interface HdeskTvApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
@@ -85,6 +86,7 @@ export function HdeskTv({
   // 500 ms (conv-540) : la boucle ne se chevauche pas, donc la cadence reelle = max(500, duree capture).
   intervalleMs = 500
 }: Props): React.JSX.Element | null {
+  const { t } = useTextesChatDecisions()
   const [bureaux, setBureaux] = useState<BureauTv[]>([])
   const [choisi, setChoisi] = useState<string | null>(null)
   const [image, setImage] = useState<ImageTv | null>(null)
@@ -104,7 +106,7 @@ export function HdeskTv({
   // File et conversions partagées avec l'aperçu de la vue « Bureaux cachés » (hdesk-gestes.ts, conv-344).
   const envoyer = (geste: GesteTv): Promise<void> =>
     enfilerGeste(fileRef, apiAct(), geste, (r) => {
-      setRetourGeste(r.ok ? null : `Action refusée : ${r.message}`)
+      setRetourGeste(r.ok ? null : t('tv.actionRefusee', { message: r.message }))
       // Rafraîchir tout de suite : sans cela l'effet du geste n'apparaît qu'au tour suivant de la boucle.
       rafraichirRef.current?.()
     })
@@ -114,14 +116,10 @@ export function HdeskTv({
   const basculer = async (): Promise<void> => {
     const f = apiBasculer()
     if (!f || !choisi) return
-    const ok = window.confirm(
-      'Ton écran va afficher le bureau caché.\n' +
-        'Pour revenir : bouton « Revenir à mon bureau », Échap, ou automatiquement après 2 minutes.\n' +
-        'Continuer ?'
-    )
+    const ok = window.confirm(t('tv.confirmerBascule'))
     if (!ok) return
     const r = await f(choisi).catch((e: unknown) => ({ ok: false, message: String(e) }))
-    setRetourGeste(r.ok ? null : `Bascule refusée : ${r.message ?? ''}`)
+    setRetourGeste(r.ok ? null : t('tv.basculeRefusee', { message: r.message ?? '' }))
   }
   // Le clic dans l'image réduite est ramené aux coordonnées de la capture (x * largeur / largeur affichée).
   // fix-ok: cause mesurée — le clic sortait sur `statut !== 'ok'` alors qu'une page web sort unie (test image unie rouge→vert) ; la frappe remontait au chat faute de stopPropagation ; deux gestes se chevauchaient sans file (tests rouges reproduits puis verts).
@@ -278,13 +276,9 @@ export function HdeskTv({
 
   const travailChoisi = bureaux.find((b) => b.id === choisi)
   return (
-    <section
-      className="msg assistant hdesk-tv"
-      data-testid="hdesk-tv"
-      aria-label="Aperçu en direct du bureau caché"
-    >
+    <section className="msg assistant hdesk-tv" data-testid="hdesk-tv" aria-label={t('tv.aria')}>
       <div className="msg-meta">
-        <span className="msg-role">Bureau caché</span>
+        <span className="msg-role">{t('tv.role')}</span>
       </div>
       <div
         style={{
@@ -310,7 +304,7 @@ export function HdeskTv({
               color: 'var(--gold, #d4a94f)'
             }}
           >
-            📺 en direct
+            {t('tv.enDirect')}
           </span>
           {bureaux.length > 1 ? (
             bureaux.map((b) => (
@@ -340,8 +334,8 @@ export function HdeskTv({
               type="button"
               onClick={() => void basculer()}
               style={BOUTON_TV}
-              aria-label="Basculer mon écran sur ce bureau"
-              title="Basculer mon écran sur ce bureau (retour : bouton Revenir, Échap ou 2 min)"
+              aria-label={t('tv.basculerAria')}
+              title={t('tv.basculerTitre')}
               data-testid="hdesk-tv-basculer"
             >
               ⇄
@@ -351,7 +345,7 @@ export function HdeskTv({
             type="button"
             onClick={() => setGrand((g) => !g)}
             style={BOUTON_TV}
-            aria-label={grand ? 'Réduire' : 'Agrandir'}
+            aria-label={grand ? t('tv.reduire') : t('tv.agrandir')}
           >
             {grand ? '▭' : '⛶'}
           </button>
@@ -359,7 +353,7 @@ export function HdeskTv({
             type="button"
             onClick={fermerTv}
             style={BOUTON_TV}
-            aria-label="Fermer l'aperçu"
+            aria-label={t('tv.fermer')}
             data-testid="hdesk-tv-fermer"
           >
             ×
@@ -367,25 +361,24 @@ export function HdeskTv({
         </div>
         {ferme && (
           <p data-testid="hdesk-tv-ferme" style={{ margin: '4px 0', color: 'var(--text-dim, #a9b2c4)' }}>
-            Le bureau « {ferme.travail} » s&apos;est fermé.
+            {t('tv.ferme', { travail: ferme.travail })}
           </p>
         )}
         {image?.statut === 'uni' && (
           <p data-testid="hdesk-tv-uni" style={{ margin: '4px 0' }}>
-            Capture unie : rien d&apos;observable (l&apos;app dessine peut-être par la carte
-            graphique).
+            {t('tv.uni')}
           </p>
         )}
         {image?.statut === 'erreur' && (
           <p data-testid="hdesk-tv-erreur" style={{ margin: '4px 0' }}>
-            Capture impossible : {image.message}
+            {t('tv.captureImpossible', { message: image.message })}
           </p>
         )}
         {(image?.statut === 'ok' || image?.statut === 'uni') && (
           <img
             data-testid="hdesk-tv-image"
             src={image.dataUrl}
-            alt={`Bureau caché — ${travailChoisi?.travail ?? image.id}`}
+            alt={t('tv.imageAlt', { travail: travailChoisi?.travail ?? image.id })}
             style={{
               width: '100%',
               display: 'block',
@@ -427,8 +420,8 @@ export function HdeskTv({
               disabled={!dernierClic || dernierClic.id !== image.id}
               placeholder={
                 dernierClic && dernierClic.id === image.id
-                  ? 'Texte à taper au point cliqué (Entrée = valider)'
-                  : "Clique d'abord dans l'image pour viser un champ"
+                  ? t('tv.placeholderTaper')
+                  : t('tv.placeholderViser')
               }
               style={{ flex: 1, fontSize: 12 }}
             />
@@ -439,7 +432,7 @@ export function HdeskTv({
               disabled={!dernierClic || dernierClic.id !== image.id || !texte}
               onClick={() => taper(false)}
             >
-              Taper
+              {t('tv.taper')}
             </button>
           </form>
         )}

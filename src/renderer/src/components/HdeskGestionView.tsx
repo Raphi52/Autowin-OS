@@ -43,6 +43,12 @@ import {
 } from '../../../shared/hdesk-gestion'
 import { toucheTv } from './hdesk-tv-touches'
 import { ViewTopBar } from './ViewTopBar'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import { riche } from '../textes'
+import {
+  traduireWorktreesEtBureaux,
+  useTextesWorktreesEtBureaux
+} from '../textes-ecrans/worktrees-et-bureaux'
 import './ViewPage.css'
 import './HdeskGestionView.css'
 
@@ -87,7 +93,7 @@ const quand = (iso: string): string => {
   const d = new Date(iso)
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString('fr-FR', {
+    : formaterDate(d, {
         day: '2-digit',
         month: '2-digit',
         hour: '2-digit',
@@ -103,20 +109,22 @@ const momentCourt = (iso: string | undefined, reference: number): string | null 
   if (!iso) return null
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  const jour = (t: Date): string => t.toLocaleDateString('fr-FR')
+  // Le jour sert seulement à COMPARER deux dates : n'importe quelle locale convient, pourvu que ce
+  // soit la même des deux côtés.
+  const jour = (t: Date): string => formaterDate(t, { dateStyle: 'short' })
   const ref = new Date(reference || d.getTime())
-  if (jour(d) === jour(ref))
-    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  if (jour(d) === jour(ref)) return formaterDate(d, { hour: '2-digit', minute: '2-digit' })
   const veille = new Date(ref)
   veille.setDate(ref.getDate() - 1)
-  if (jour(d) === jour(veille)) return 'hier'
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  if (jour(d) === jour(veille))
+    return traduireWorktreesEtBureaux('hdesk.moment.hier', langueCourante())
+  return formaterDate(d, { day: '2-digit', month: '2-digit' })
 }
 
 const nomDeFichier = (chemin: string): string => chemin.split(/[\\/]/).pop() || chemin
 
 const secondes = (ms: number): string =>
-  `${(ms / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} s`
+  `${formaterNombre(ms / 1000, { maximumFractionDigits: 1 })} s`
 
 const minutesSecondes = (ms: number): string => {
   const s = Math.max(0, Math.ceil(ms / 1000))
@@ -154,6 +162,7 @@ export function HdeskGestionView({
   delaiPilotageMs = 60_000,
   onOpenConversation
 }: Props): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   const cible = (): Partial<HdeskGestionApi> | undefined => cibleDe(api)
   const [liste, setListe] = useState<ResultatListeBureaux | null>(null)
   // Instant de la dernière lecture : référence de « 10:53 / hier » des lignes, posée hors rendu.
@@ -185,7 +194,7 @@ export function HdeskGestionView({
   // setState synchrone dans un effet, rendus en cascade).
   const indisponible = !cibleDe(api)?.hdeskGestionBureaux
   const etatListe: ResultatListeBureaux | null = indisponible
-    ? { ok: false, message: 'Bureaux cachés indisponibles dans cette version.' }
+    ? { ok: false, message: t('hdesk.indisponible') }
     : liste
 
   const quitterPilotage = (): void => {
@@ -297,7 +306,7 @@ export function HdeskGestionView({
   /** Le fil par son titre ; un clic ouvre la conversation (conv-344). « manuel » ou absent : texte. */
   const fil = (b: BureauGere): React.JSX.Element | string => {
     const id = b.conversationId
-    if (!id) return 'aucun'
+    if (!id) return t('hdesk.fil.aucun')
     if (id === FIL_MANUEL || !onOpenConversation) return id
     return (
       <button
@@ -365,7 +374,7 @@ export function HdeskGestionView({
         ok: false as const,
         message: String(e)
       }))
-      setRetourGeste(r.ok ? null : `Action refusée : ${r.message}`)
+      setRetourGeste(r.ok ? null : t('hdesk.actionRefusee', { message: r.message }))
       // Rafraîchir tout de suite : sans cela l'effet du geste n'apparaît qu'au tour suivant.
       rafraichirRef.current?.()
     })
@@ -404,10 +413,7 @@ export function HdeskGestionView({
   const fermer = async (b: BureauGere): Promise<void> => {
     const f = cible()?.hdeskGestionFermer
     if (!f || enFermeture.has(b.id)) return
-    const ok = window.confirm(
-      `Fermer l'application du bureau « ${b.travail} » ?\n` +
-        "Ce qui n'est pas enregistré dans cette application sera perdu."
-    )
+    const ok = window.confirm(t('hdesk.fermer.confirmation', { travail: b.travail }))
     if (!ok) return
     setEnFermeture((prec) => new Set(prec).add(b.id))
     // Le libellé d'attente est rendu dans le JSX, AVEC son spinner, tant que `enFermeture` porte
@@ -425,7 +431,10 @@ export function HdeskGestionView({
     })
     setRetours((prec) => ({
       ...prec,
-      [b.id]: { ok: r.ok, message: r.ok ? r.message : `Fermeture refusée : ${r.message}` }
+      [b.id]: {
+        ok: r.ok,
+        message: r.ok ? r.message : t('hdesk.fermetureRefusee', { message: r.message })
+      }
     }))
     rafraichirRef.current?.()
   }
@@ -434,18 +443,16 @@ export function HdeskGestionView({
   const basculer = async (b: BureauGere): Promise<void> => {
     const f = cible()?.hdeskTvBasculer
     if (!f) return
-    const ok = window.confirm(
-      'Ton écran va afficher le bureau caché.\n' +
-        'Pour revenir : bouton « Revenir à mon bureau », Échap, ou automatiquement après 2 minutes.\n' +
-        'Continuer ?'
-    )
+    const ok = window.confirm(t('hdesk.basculer.confirmation'))
     if (!ok) return
     const r = await f(b.id).catch((e: unknown) => ({ ok: false, message: String(e) }))
     setRetours((prec) => ({
       ...prec,
       [b.id]: {
         ok: r.ok,
-        message: r.ok ? 'Écran basculé.' : `Bascule refusée : ${r.message ?? ''}`
+        message: r.ok
+          ? t('hdesk.ecranBascule')
+          : t('hdesk.basculeRefusee', { message: r.message ?? '' })
       }
     }))
   }
@@ -534,18 +541,19 @@ export function HdeskGestionView({
         <>
           <img
             src={img.dataUrl}
-            alt={`Aperçu du bureau ${b.id}`}
+            alt={t('hdesk.apercu.alt', { id: b.id })}
             data-testid="hdesk-antenne-image"
             className={img.statut === 'uni' ? 'is-uni' : undefined}
             onClick={cliquerImage}
             onWheel={molette}
           />
-          {img.statut === 'uni' && <span className="hdesk-ecran-note">Image unie</span>}
+          {img.statut === 'uni' && <span className="hdesk-ecran-note">{t('hdesk.imageUnie')}</span>}
         </>
       )
-    if (img?.statut === 'ferme') return <span>Bureau fermé</span>
-    if (img?.statut === 'erreur') return <span title={img.message}>Aperçu impossible</span>
-    return <span>Capture…</span>
+    if (img?.statut === 'ferme') return <span>{t('hdesk.bureauFerme')}</span>
+    if (img?.statut === 'erreur')
+      return <span title={img.message}>{t('hdesk.apercuImpossible')}</span>
+    return <span>{t('hdesk.capture')}</span>
   }
 
   /** Pastille d'une ligne : verte, orange (sans fil, image unie, aperçu en échec) ou éteinte. */
@@ -560,8 +568,8 @@ export function HdeskGestionView({
   const sousLigne = (b: BureauGere): string =>
     [
       b.executable ? nomDeFichier(b.executable) : null,
-      images[b.id]?.statut === 'uni' ? 'image unie' : null,
-      b.conversationId ?? 'sans fil',
+      images[b.id]?.statut === 'uni' ? t('hdesk.sousLigne.imageUnie') : null,
+      b.conversationId ?? t('hdesk.sansFil'),
       momentCourt(b.lanceLe, luA)
     ]
       .filter(Boolean)
@@ -576,22 +584,30 @@ export function HdeskGestionView({
   const visePret = Boolean(antenne && dernierClic && dernierClic.id === antenne.id)
   const sansFil = bureaux.filter((b) => !b.conversationId).length
   const retoursOrphelins = Object.entries(retours).filter(([id]) => !antenne || id !== antenne.id)
+  // Le compte à rebours reste un élément à part (`hdesk-compte-a-rebours`) au milieu de la phrase
+  // traduite : on la coupe à l'endroit de `{duree}`.
+  const [retourAvant = '', retourApres = ''] = t('hdesk.pilote.retour').split('{duree}')
 
   return (
     <section className="view-page hdesk-gestion-view" data-testid="hdesk-view" data-active={active}>
       <ViewTopBar
-        eyebrow="OUTILS"
-        title="Bureaux cachés"
+        eyebrow={t('hdesk.eyebrow')}
+        title={t('hdesk.titre')}
         actions={
           <span className="hdesk-entete">
             {bureaux.length > 0 && (
               <span className="hdesk-stats" data-testid="hdesk-direct">
                 <span>
-                  <b>{bureaux.length}</b> {bureaux.length > 1 ? 'ouverts' : 'ouvert'}
+                  {riche(
+                    t(bureaux.length > 1 ? 'hdesk.stats.ouverts' : 'hdesk.stats.ouvert', {
+                      n: bureaux.length
+                    }),
+                    'b'
+                  )}
                 </span>
                 {sansFil > 0 && (
                   <span className="is-alerte">
-                    <b>{sansFil}</b> sans fil
+                    {riche(t('hdesk.stats.sansFil', { n: sansFil }), 'b')}
                   </span>
                 )}
               </span>
@@ -605,7 +621,7 @@ export function HdeskGestionView({
                 setRetourCreation(null)
               }}
             >
-              {formOuvert ? 'Annuler' : '+ Nouveau bureau'}
+              {formOuvert ? t('commun.annuler') : t('hdesk.nouveau')}
             </button>
           </span>
         }
@@ -615,7 +631,7 @@ export function HdeskGestionView({
         <form className="hdesk-formulaire" data-testid="hdesk-formulaire" onSubmit={creer}>
           {/* L'application d'abord : l'identifiant se propose à partir d'elle (conv-344). */}
           <div className="hdesk-champ-exe">
-            {champ('executable', 'Application (.exe)', 'C:\\chemin\\vers\\application.exe')}
+            {champ('executable', t('hdesk.champ.executable'), t('hdesk.champ.executable.aide'))}
             {cible()?.hdeskGestionChoisirExe && (
               <button
                 type="button"
@@ -623,14 +639,15 @@ export function HdeskGestionView({
                 data-testid="hdesk-parcourir"
                 onClick={() => void parcourir()}
               >
-                Parcourir…
+                {t('hdesk.parcourir')}
               </button>
             )}
           </div>
-          {champ('id', 'Identifiant', 'proposé à partir de l’application')}
-          {champ('arguments', 'Arguments (facultatif)', 'ex. /mode test')}
-          {champ('travail', 'Ce que tu y fais', 'ex. Essai de mon appli sur une branche de test')}
-          {champ('conversationId', 'Fil (facultatif)', FIL_MANUEL)}
+          {champ('id', t('hdesk.champ.id'), t('hdesk.champ.id.aide'))}
+          {champ('arguments', t('hdesk.champ.arguments'), t('hdesk.champ.arguments.aide'))}
+          {champ('travail', t('hdesk.champ.travail'), t('hdesk.champ.travail.aide'))}
+          {/* `FIL_MANUEL` reste tel quel : c'est la valeur que le code compare quand on la tape. */}
+          {champ('conversationId', t('hdesk.champ.fil'), FIL_MANUEL)}
           <button
             type="submit"
             className="btn btn-accent"
@@ -639,8 +656,8 @@ export function HdeskGestionView({
           >
             {/* conv-344 : l'écran disait « 40 s » alors que l'application attend CREATION_ATTENTE_MS. */}
             {creationEnCours
-              ? `Création… (jusqu’à ${Math.round(CREATION_ATTENTE_MS / 1000)} s)`
-              : 'Créer le bureau'}
+              ? t('hdesk.creation', { secondes: Math.round(CREATION_ATTENTE_MS / 1000) })
+              : t('hdesk.creer')}
           </button>
         </form>
       )}
@@ -653,7 +670,7 @@ export function HdeskGestionView({
         >
           {retourCreation.ok
             ? retourCreation.message
-            : `Création refusée : ${retourCreation.message}`}
+            : t('hdesk.creationRefusee', { message: retourCreation.message })}
           {!retourCreation.ok && retourCreation.idLibre && (
             <button
               type="button"
@@ -664,7 +681,7 @@ export function HdeskGestionView({
                 setFormOuvert(true)
               }}
             >
-              Utiliser « {retourCreation.idLibre} »
+              {t('hdesk.utiliserId', { id: retourCreation.idLibre })}
             </button>
           )}
         </div>
@@ -677,10 +694,10 @@ export function HdeskGestionView({
           role={r.ok ? 'status' : 'alert'}
           data-testid={`hdesk-retour-${id}`}
         >
-          {id} :{' '}
+          {t('hdesk.retour.prefixe', { id })}{' '}
           {enFermeture.has(id) ? (
             <>
-              <Spinner size={12} /> Fermeture en cours…
+              <Spinner size={12} /> {t('hdesk.fermetureEnCours')}
             </>
           ) : (
             r.message
@@ -690,15 +707,15 @@ export function HdeskGestionView({
 
       {etatListe === null ? (
         <p className="hdesk-etat">
-          <Spinner size={12} /> Lecture des bureaux…
+          <Spinner size={12} /> {t('hdesk.lectureBureaux')}
         </p>
       ) : !etatListe.ok ? (
         <p className="hdesk-etat hdesk-retour is-erreur" role="alert" data-testid="hdesk-erreur">
-          Liste des bureaux impossible : {etatListe.message}
+          {t('hdesk.listeImpossible', { message: etatListe.message })}
         </p>
       ) : (
         <div className={`hdesk-console${antenne ? '' : ' is-vide'}`}>
-          <nav className="hdesk-cote" aria-label="Bureaux cachés">
+          <nav className="hdesk-cote" aria-label={t('hdesk.titre')}>
             {antenne ? (
               <ul className="hdesk-liste" data-testid="hdesk-liste">
                 {bureaux.map((b) => {
@@ -729,8 +746,8 @@ export function HdeskGestionView({
                         type="button"
                         className="hdesk-ligne-fermer"
                         data-testid={`hdesk-fermer-moniteur-${b.id}`}
-                        aria-label={`Fermer le bureau « ${b.travail} »`}
-                        title={enCours ? 'Fermeture…' : 'Fermer ce bureau caché'}
+                        aria-label={t('hdesk.ligne.fermer.aria', { travail: b.travail })}
+                        title={enCours ? t('hdesk.fermeture') : t('hdesk.ligne.fermer.titre')}
                         disabled={enCours}
                         onClick={() => void fermer(b)}
                       >
@@ -744,10 +761,10 @@ export function HdeskGestionView({
               </ul>
             ) : (
               <div className="hdesk-etat hdesk-vide" data-testid="hdesk-vide">
-                <p>Aucun bureau caché ouvert.</p>
+                <p>{t('hdesk.vide')}</p>
                 {!formOuvert && (
                   <button type="button" className="btn" onClick={() => setFormOuvert(true)}>
-                    Créer un bureau
+                    {t('hdesk.creerUnBureau')}
                   </button>
                 )}
               </div>
@@ -756,8 +773,12 @@ export function HdeskGestionView({
             {/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper — aussi quand plus
                 aucun bureau n'est ouvert, c'est même là qu'il sert le plus. */}
             {recents.length > 0 && (
-              <section className="hdesk-recents" data-testid="hdesk-recents" aria-label="Récents">
-                <h3>Récents</h3>
+              <section
+                className="hdesk-recents"
+                data-testid="hdesk-recents"
+                aria-label={t('hdesk.recents')}
+              >
+                <h3>{t('hdesk.recents')}</h3>
                 <ul>
                   {recents.map((r) => (
                     <li
@@ -781,7 +802,7 @@ export function HdeskGestionView({
                         disabled={creationEnCours}
                         onClick={() => relancer(r)}
                       >
-                        Relancer
+                        {t('hdesk.relancer')}
                       </button>
                     </li>
                   ))}
@@ -795,44 +816,41 @@ export function HdeskGestionView({
               className="hdesk-detail"
               data-testid="hdesk-antenne"
               data-bureau={antenne.id}
-              aria-label={`Bureau « ${antenne.travail} »`}
+              aria-label={t('hdesk.detail.aria', { travail: antenne.travail })}
             >
               <div
                 className={`hdesk-barre${pilote ? ' is-pilote' : ''}`}
                 data-testid="hdesk-bandeau"
               >
-                <span className="hdesk-mode" role="group" aria-label="Mode de l’aperçu">
+                <span className="hdesk-mode" role="group" aria-label={t('hdesk.mode.aria')}>
                   <button
                     type="button"
                     data-testid="hdesk-regarder"
                     aria-pressed={!pilote}
                     onClick={quitterPilotage}
                   >
-                    Regarder
+                    {t('hdesk.regarder')}
                   </button>
                   <button
                     type="button"
                     data-testid="hdesk-piloter"
                     aria-pressed={pilote}
                     disabled={!pilotable}
-                    title={pilotable ? undefined : 'Pas d’image à piloter pour l’instant'}
+                    title={pilotable ? undefined : t('hdesk.piloter.indisponible')}
                     onClick={piloter}
                   >
-                    Piloter
+                    {t('hdesk.piloter')}
                   </button>
                 </span>
                 {pilote ? (
                   <span className="hdesk-barre-etat">
-                    <strong>Tu pilotes ce bureau</strong> · retour en Regarder dans{' '}
-                    <b data-testid="hdesk-compte-a-rebours">{minutesSecondes(restantMs)}</b> sans
-                    geste
+                    <strong>{t('hdesk.pilote.titre')}</strong> {retourAvant}
+                    <b data-testid="hdesk-compte-a-rebours">{minutesSecondes(restantMs)}</b>
+                    {retourApres}
                   </span>
                 ) : (
-                  <span
-                    className="hdesk-barre-etat"
-                    title="Un clic dans l’image ne fait rien : passe en Piloter pour agir."
-                  >
-                    lecture seule
+                  <span className="hdesk-barre-etat" title={t('hdesk.lectureSeule.titre')}>
+                    {t('hdesk.lectureSeule')}
                   </span>
                 )}
                 <span className="hdesk-espace" />
@@ -840,10 +858,10 @@ export function HdeskGestionView({
                   type="button"
                   className="btn btn-sm"
                   data-testid={`hdesk-basculer-${antenne.id}`}
-                  title="Afficher ce bureau sur mon écran (retour : bouton Revenir, Échap ou 2 min)"
+                  title={t('hdesk.afficher.titre')}
                   onClick={() => void basculer(antenne)}
                 >
-                  Afficher sur mon écran
+                  {t('hdesk.afficher')}
                 </button>
                 <button
                   type="button"
@@ -852,7 +870,7 @@ export function HdeskGestionView({
                   disabled={enFermeture.has(antenne.id)}
                   onClick={() => void fermer(antenne)}
                 >
-                  {enFermeture.has(antenne.id) ? 'Fermeture…' : 'Fermer'}
+                  {enFermeture.has(antenne.id) ? t('hdesk.fermeture') : t('commun.fermer')}
                 </button>
                 {pilote && (
                   <span className="hdesk-jauge" aria-hidden="true">
@@ -869,7 +887,7 @@ export function HdeskGestionView({
                 >
                   {enFermeture.has(antenne.id) ? (
                     <>
-                      <Spinner size={12} /> Fermeture en cours…
+                      <Spinner size={12} /> {t('hdesk.fermetureEnCours')}
                     </>
                   ) : (
                     retours[antenne.id].message
@@ -906,7 +924,7 @@ export function HdeskGestionView({
                   }}
                 >
                   {visePret && dernierClic && (
-                    <span className="hdesk-vise" title="Point visé, en pixels de la capture">
+                    <span className="hdesk-vise" title={t('hdesk.vise.titre')}>
                       ({dernierClic.x}, {dernierClic.y})
                     </span>
                   )}
@@ -915,11 +933,7 @@ export function HdeskGestionView({
                     value={texte}
                     onChange={(e) => setTexte(e.target.value)}
                     disabled={!visePret}
-                    placeholder={
-                      visePret
-                        ? 'Texte à taper au point cliqué (Entrée = valider)'
-                        : "Clique d'abord dans l'image pour viser un champ"
-                    }
+                    placeholder={visePret ? t('hdesk.texte.pret') : t('hdesk.texte.viser')}
                   />
                   <button
                     type="button"
@@ -928,7 +942,7 @@ export function HdeskGestionView({
                     disabled={!visePret || !texte}
                     onClick={() => taper(false)}
                   >
-                    Taper
+                    {t('hdesk.taper')}
                   </button>
                 </form>
               )}
@@ -939,19 +953,23 @@ export function HdeskGestionView({
               )}
 
               <p className="hdesk-pied" data-testid="hdesk-pied">
-                <span title="Identifiant du bureau caché">{antenne.id}</span>
+                <span title={t('hdesk.pied.id.titre')}>{antenne.id}</span>
                 {antenne.conversationId ? (
-                  <span>Fil {fil(antenne)}</span>
+                  <span>
+                    {t('hdesk.pied.fil')} {fil(antenne)}
+                  </span>
                 ) : (
-                  <span className="is-alerte">Sans fil</span>
+                  <span className="is-alerte">{t('hdesk.pied.sansFil')}</span>
                 )}
-                {antenne.lanceLe && <span>Lancé {quand(antenne.lanceLe)}</span>}
+                {antenne.lanceLe && (
+                  <span>{t('hdesk.pied.lance', { quand: quand(antenne.lanceLe) })}</span>
+                )}
                 <span className="hdesk-espace" />
                 <span className="hdesk-cadence">
                   <i className="hdesk-point is-ok" aria-hidden="true" />
-                  {pilote
-                    ? `image toutes les ${secondes(intervallePiloteMs)}`
-                    : `image toutes les ${secondes(intervalleMs)}`}
+                  {t('hdesk.cadence', {
+                    duree: secondes(pilote ? intervallePiloteMs : intervalleMs)
+                  })}
                 </span>
               </p>
             </article>

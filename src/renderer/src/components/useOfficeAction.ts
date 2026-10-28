@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTextesWorktreesEtBureaux } from '../textes-ecrans/worktrees-et-bureaux'
 
 export type OfficeActionKey = 'open' | 'retry' | 'keep-agent' | 'keep-mine'
 
@@ -14,6 +15,7 @@ export function useOfficeAction(): {
   error?: string
   run: (key: OfficeActionKey, action: () => unknown) => void
 } {
+  const { t } = useTextesWorktreesEtBureaux()
   const [pending, setPending] = React.useState<OfficeActionKey | null>(null)
   const [error, setError] = React.useState<string | undefined>(undefined)
   const run = (key: OfficeActionKey, action: () => unknown): void => {
@@ -22,7 +24,7 @@ export function useOfficeAction(): {
     setError(undefined)
     const fail = (cause: unknown): void => {
       setPending(null)
-      setError(cause instanceof Error ? cause.message : 'Action impossible pour l’instant.')
+      setError(cause instanceof Error ? cause.message : t('action.impossible'))
     }
     try {
       const result = action() as PromiseLike<unknown> | undefined

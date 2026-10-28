@@ -750,6 +750,20 @@ export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
 }
 
 /**
+ * Ce message est-il composé par le plan (`promptDuLot` dans le fil d'un lot, `promptDeReveil` dans
+ * le fil chef), et non tapé par l'utilisateur ? Le 2026-10-27, le lot 19 de plan-5e2a57e7
+ * (conv-1192) s'est arrêté sur la question des deux lectures : personne pour y répondre, le plan l'a
+ * compté « fait » sans une ligne écrite, et sa relance a été refusée.
+ */
+export function estUnMessageDuPlan(message: string | undefined): boolean {
+  const texte = (message ?? '').trimStart()
+  return (
+    texte.startsWith('RÉVEIL DU PLAN DE LOTS « ') ||
+    /^Lot \d+ sur \d+ du plan « .*», confié par le fil chef \S+ \(plan-[^)\s]+\)\.$/mu.test(texte)
+  )
+}
+
+/**
  * Le compte rendu d'un lot, écrit au chef dans le journal des messages entre fils. Il tient dans
  * la borne du journal ; une réponse longue est coupée par le DÉBUT (le résumé demandé est à la fin)
  * et renvoie au fil enfant. Les lignes techniques invisibles sont retirées AVANT la coupe : elles

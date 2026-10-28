@@ -1,4 +1,7 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import type { Langue } from '../../../shared/langue'
+import { langueCourante } from '../langue'
+import { traduireObservatory } from '../textes-ecrans/observatory'
 
 export interface ObservatoryDecisionEntry {
   decisionId: string
@@ -10,8 +13,12 @@ export interface ObservatoryDecisionEntry {
   status: 'open' | 'closed'
 }
 
-function decisionText(content: string): { hypothesis: string; expectedSignal?: string } {
-  const fallback = content.trim() || 'Décision sans hypothèse exposée'
+function decisionText(
+  content: string,
+  langue: Langue
+): { hypothesis: string; expectedSignal?: string } {
+  const fallback =
+    content.trim() || traduireObservatory('decisions.decisionSansHypotheseExposee', langue)
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>
     const hypothesis = [parsed.hypothesis, parsed.hypothèse, parsed.decision, parsed.reason].find(
@@ -30,7 +37,8 @@ function decisionText(content: string): { hypothesis: string; expectedSignal?: s
 }
 
 export function buildObservatoryDecisionLedger(
-  events: readonly HarnessTimelineEvent[]
+  events: readonly HarnessTimelineEvent[],
+  langue: Langue = langueCourante()
 ): ObservatoryDecisionEntry[] {
   const byId = new Map(events.map((event) => [event.id, event]))
   const inputOrder = new Map(events.map((event, index) => [event.id, index]))
@@ -68,7 +76,7 @@ export function buildObservatoryDecisionLedger(
       const terminalGate = gate?.status === 'completed' ? gate : undefined
       const terminalVerdict =
         verdict && (verdict.status == null || verdict.status === 'completed') ? verdict : undefined
-      const parsed = decisionText(decision.content)
+      const parsed = decisionText(decision.content, langue)
       return {
         decisionId: decision.id,
         ...parsed,

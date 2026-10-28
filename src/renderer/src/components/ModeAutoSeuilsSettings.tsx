@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTextesSettings } from '../textes-ecrans/settings'
 import { ModuleHeader } from './ModuleHeader'
 import { CLE_SEUILS_CHAINE_AUTO, SEUILS_CHAINE_DEFAUT, lireSeuilsChaine } from './chat-auto-mode'
 import './OrchestrationBudgetSettings.css'
@@ -9,6 +10,7 @@ import './OrchestrationBudgetSettings.css'
  * d'envoi automatique, donc un changement vaut dès le tour suivant, sans redémarrage.
  */
 export function ModeAutoSeuilsSettings(): React.JSX.Element {
+  const { t } = useTextesSettings()
   const initial = lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO))
   const [quota, setQuota] = useState(String(initial.quotaHebdoPct))
   const [tours, setTours] = useState(String(initial.toursAutoMax))
@@ -18,36 +20,36 @@ export function ModeAutoSeuilsSettings(): React.JSX.Element {
     const quotaHebdoPct = Number(quota)
     const toursAutoMax = Number(tours)
     if (!Number.isInteger(quotaHebdoPct) || quotaHebdoPct < 1 || quotaHebdoPct > 100) {
-      setMessage('Le seuil de quota doit être un entier entre 1 et 100.')
+      setMessage(t('modeAuto.quotaInvalide'))
       return
     }
     // fix-ok: cause mesurée — le panneau acceptait 5000 tours alors que lireSeuilsChaine borne à 1000 : réglage ignoré en silence (test « refuse plus de 1000 tours » rouge→vert).
     if (!Number.isInteger(toursAutoMax) || toursAutoMax < 1 || toursAutoMax > 1000) {
-      setMessage('Le nombre de tours doit être un entier entre 1 et 1000.')
+      setMessage(t('modeAuto.toursInvalides'))
       return
     }
     window.localStorage.setItem(
       CLE_SEUILS_CHAINE_AUTO,
       JSON.stringify({ quotaHebdoPct, toursAutoMax })
     )
-    setMessage('Seuils enregistrés : ils valent dès le prochain tour automatique.')
+    setMessage(t('modeAuto.enregistres'))
   }
 
   return (
     <section
       className="orchestration-budget surface-panel"
-      aria-label="Arrêt automatique du mode ∞"
+      aria-label={t('modeAuto.aria')}
       data-testid="mode-auto-seuils"
     >
-      <ModuleHeader eyebrow="Protection du mode ∞" title="Arrêt automatique de la chaîne" />
+      <ModuleHeader eyebrow={t('modeAuto.eyebrow')} title={t('modeAuto.titre')} />
       <p>
-        Le mode ∞ d’un fil s’arrête tout seul, avec un message dans le fil, dès que le quota
-        hebdomadaire Claude atteint le seuil, ou après ce nombre de tours automatiques d’affilée
-        sans message de ta part. Défauts : {SEUILS_CHAINE_DEFAUT.quotaHebdoPct} % et{' '}
-        {SEUILS_CHAINE_DEFAUT.toursAutoMax} tours.
+        {t('modeAuto.description', {
+          quota: SEUILS_CHAINE_DEFAUT.quotaHebdoPct,
+          tours: SEUILS_CHAINE_DEFAUT.toursAutoMax
+        })}
       </p>
       <label>
-        <span>Quota hebdomadaire Claude (%)</span>
+        <span>{t('modeAuto.quota')}</span>
         <div className="orchestration-budget-input">
           <input
             type="number"
@@ -61,7 +63,7 @@ export function ModeAutoSeuilsSettings(): React.JSX.Element {
         </div>
       </label>
       <label>
-        <span>Tours automatiques d’affilée</span>
+        <span>{t('modeAuto.tours')}</span>
         <div className="orchestration-budget-input">
           <input
             type="number"
@@ -80,7 +82,7 @@ export function ModeAutoSeuilsSettings(): React.JSX.Element {
         data-testid="mode-auto-seuils-enregistrer"
         onClick={enregistrer}
       >
-        Enregistrer
+        {t('modeAuto.enregistrer')}
       </button>
       {message && <p role="status">{message}</p>}
     </section>

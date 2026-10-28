@@ -5,6 +5,13 @@ import type {
   HarnessTimelineTurn
 } from './harness-timeline-model'
 import type { GestesDuTour } from '../../../shared/gestes-agent'
+import type { Langue } from '../../../shared/langue'
+import { formaterDate, langueCourante } from '../langue'
+import {
+  auPluriel,
+  traduireChatFilsEtLots,
+  type CleChatFilsEtLots
+} from '../textes-ecrans/chat-fils-et-lots'
 import { bareToolName, toolTitle } from './execution-step-titles'
 import { projectLatestRequestExecution } from './request-execution-tree-model'
 
@@ -37,26 +44,29 @@ export const FAMILY_ORDER: readonly ActionFamily[] = [
   'autre'
 ]
 
-/** Titre du chapitre « Ce qu'il a fait » pour chaque famille. */
-export const FAMILY_CHAPTER: Record<ActionFamily, string> = {
-  lire: 'Il a lu',
-  chercher: 'Il a cherché',
-  modifier: 'Il a modifié',
-  verifier: 'Il a vérifié',
-  lancer: 'Il a lancé',
-  demander: 'Il t’a demandé',
-  autre: 'Autres gestes'
+/**
+ * Titre du chapitre « Ce qu'il a fait » pour chaque famille : sa CLÉ de texte (« Il a lu »…), lue
+ * dans la langue de l'écran par RequestThread (traduction anglaise, conv-1170).
+ */
+export const FAMILY_CHAPTER: Record<ActionFamily, CleChatFilsEtLots> = {
+  lire: 'demandes.famille.chapitre.lire',
+  chercher: 'demandes.famille.chapitre.chercher',
+  modifier: 'demandes.famille.chapitre.modifier',
+  verifier: 'demandes.famille.chapitre.verifier',
+  lancer: 'demandes.famille.chapitre.lancer',
+  demander: 'demandes.famille.chapitre.demander',
+  autre: 'demandes.famille.chapitre.autre'
 }
 
-/** Libellé court de la ligne du fil (« Lu ×4 · Question ×1 »). */
-export const FAMILY_SHORT: Record<ActionFamily, string> = {
-  lire: 'Lu',
-  chercher: 'Cherché',
-  modifier: 'Modifié',
-  verifier: 'Vérifié',
-  lancer: 'Lancé',
-  demander: 'Question',
-  autre: 'Autre'
+/** Libellé court de la ligne du fil (« Lu ×4 · Question ×1 ») : sa CLÉ de texte. */
+export const FAMILY_SHORT: Record<ActionFamily, CleChatFilsEtLots> = {
+  lire: 'demandes.famille.court.lire',
+  chercher: 'demandes.famille.court.chercher',
+  modifier: 'demandes.famille.court.modifier',
+  verifier: 'demandes.famille.court.verifier',
+  lancer: 'demandes.famille.court.lancer',
+  demander: 'demandes.famille.court.demander',
+  autre: 'demandes.famille.court.autre'
 }
 
 const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
@@ -164,22 +174,35 @@ export interface RequestStory {
   failure?: string
 }
 
-const GIT_OUTCOME: Record<string, string> = {
-  merged: 'fusionnée',
-  nothing: 'aucun changement',
-  conflict: 'conflit',
-  blocked: 'bloquée',
-  kept: 'copie conservée'
+const GIT_OUTCOME: Record<string, CleChatFilsEtLots> = {
+  merged: 'modele.git.merged',
+  nothing: 'modele.git.nothing',
+  conflict: 'modele.git.conflict',
+  blocked: 'modele.git.blocked',
+  kept: 'modele.git.kept'
+}
+
+/*
+ * Le récit est écrit dans la langue demandée AU MOMENT où il est construit : RequestThread le
+ * reconstruit (useMemo) quand la langue de l'écran change. La date suit la langue courante
+ * (`formaterDate`), la même pendant le rendu.
+ */
+function textesDe(langue: Langue): {
+  texte: (cle: CleChatFilsEtLots, valeurs?: Record<string, string | number>) => string
+  plural: (count: number, un: CleChatFilsEtLots, plusieurs: CleChatFilsEtLots) => string
+} {
+  const texte = (cle: CleChatFilsEtLots, valeurs?: Record<string, string | number>): string =>
+    traduireChatFilsEtLots(cle, langue, valeurs)
+  // Singulier ou pluriel selon `count` et la langue (`auPluriel`).
+  const plural = (count: number, un: CleChatFilsEtLots, plusieurs: CleChatFilsEtLots): string =>
+    texte(auPluriel(count, langue) ? plusieurs : un, { n: count })
+  return { texte, plural }
 }
 
 function dateLabelOf(ts: string): string {
   const date = new Date(ts)
   if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(date)
-}
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count > 1 ? 's' : ''}`
+  return formaterDate(date, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 function worstStatus(statuses: Array<string | undefined>): string | undefined {
@@ -244,8 +267,10 @@ function familiesOf(tools: HarnessTimelineEvent[], turn: HarnessTimelineTurn): S
 function storyOf(
   timeline: HarnessTimeline,
   turn: HarnessTimelineTurn,
-  live: boolean
+  live: boolean,
+  langue: Langue
 ): RequestStory {
+  const { texte, plural } = textesDe(langue)
   const projection = projectLatestRequestExecution(timeline, { turnId: turn.id })
   const events = projection.events
   const root = events.find((event) => event.display?.kind === 'request')
@@ -303,49 +328,74 @@ function storyOf(
   // DÉCISION : comment la demande a été traitée.
   const decision: string[] = []
   if (projection.runIds?.length) {
-    decision.push(`Travail confié à un run (${plural(projection.runIds.length, 'run')})`)
+    decision.push(
+      plural(
+        projection.runIds.length,
+        'modele.decision.confie.un',
+        'modele.decision.confie.plusieurs'
+      )
+    )
     const skills = events
       .filter((event) => event.display?.kind === 'skill')
       .map((event) => event.display?.skillName)
       .filter(Boolean)
-    if (skills.length > 0) decision.push(`étapes : ${skills.join(' → ')}`)
+    if (skills.length > 0)
+      decision.push(texte('modele.decision.etapes', { etapes: skills.join(' → ') }))
     if (events.some((event) => event.display?.workspace?.mode === 'worktree'))
-      decision.push('dans une copie de travail séparée')
-    if (agents.length > 0) decision.push(plural(agents.length, 'sous-agent'))
+      decision.push(texte('modele.decision.copie'))
+    if (agents.length > 0)
+      decision.push(
+        plural(
+          agents.length,
+          'modele.decision.sousAgents.un',
+          'modele.decision.sousAgents.plusieurs'
+        )
+      )
   } else {
     const phases = events
       .filter((event) => event.display?.kind === 'phase')
       .map((event) => event.display?.skillName)
       .filter(Boolean)
     decision.push(
-      phases.length > 0 ? `Pipeline Autowin · étapes : ${phases.join(' → ')}` : 'Chat direct'
+      phases.length > 0
+        ? texte('modele.decision.pipeline', { etapes: phases.join(' → ') })
+        : texte('modele.decision.chatDirect')
     )
     const roles = [...new Set(agents.map((agent) => agent.display?.title ?? agent.actor))]
     if (roles.length > 0) decision.push(roles.join(', '))
     const model = agents.find((agent) => agent.model)?.model
     if (model) decision.push(model)
-    if (agents.length > 1) decision.push(plural(agents.length, 'appel') + ' au modèle')
+    if (agents.length > 1)
+      decision.push(texte('modele.decision.appelsModele', { n: agents.length }))
   }
 
   // RÉSULTAT : ce sur quoi la demande s'est terminée.
   const families = familiesOf(tools, turn)
   const outcome: string[] = []
-  if (status === 'failed') outcome.push(failure ? `Échec : ${failure}` : 'Échec')
-  if (status === 'cancelled') outcome.push('Arrêtée avant la fin')
-  if (status === 'interrupted') outcome.push('Interrompue : aucune fin enregistrée')
-  if (status === 'running') outcome.push('En cours')
+  if (status === 'failed')
+    outcome.push(
+      failure ? texte('modele.issue.echecRaison', { raison: failure }) : texte('modele.issue.echec')
+    )
+  if (status === 'cancelled') outcome.push(texte('modele.issue.arretee'))
+  if (status === 'interrupted') outcome.push(texte('modele.issue.interrompue'))
+  if (status === 'running') outcome.push(texte('modele.issue.enCours'))
   if (status === 'completed' && failedCalls > 0)
-    outcome.push(`${plural(failedCalls, 'appel')} en échec, repris ensuite`)
+    outcome.push(
+      plural(failedCalls, 'modele.issue.appelsEchec.un', 'modele.issue.appelsEchec.plusieurs')
+    )
   if (closureTotals)
     outcome.push(
       closureTotals.status === 'green'
-        ? 'Clôture verte'
+        ? texte('modele.issue.clotureVerte')
         : closureTotals.status === 'red'
-          ? 'Clôture rouge'
-          : 'Clôture en attente'
+          ? texte('modele.issue.clotureRouge')
+          : texte('modele.issue.clotureAttente')
     )
-  if (git?.display?.git)
-    outcome.push(`Git : ${GIT_OUTCOME[git.display.git.outcome] ?? git.display.git.outcome}`)
+  if (git?.display?.git) {
+    const issue = git.display.git.outcome
+    const cle = GIT_OUTCOME[issue] as CleChatFilsEtLots | undefined
+    outcome.push(texte('modele.issue.git', { issue: cle ? texte(cle) : issue }))
+  }
   const modified = families.find((family) => family.family === 'modifier')
   if (modified)
     outcome.push(modified.actions.map((action) => `${action.title} ×${action.count}`).join(', '))
@@ -353,13 +403,13 @@ function storyOf(
     .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
     .at(-1)
   if (lastTool && familyOf(lastTool.actor) === 'demander')
-    outcome.push('Question posée : il attend ta réponse')
-  else if (shown) outcome.push('Réponse affichée')
+    outcome.push(texte('modele.issue.question'))
+  else if (shown) outcome.push(texte('modele.issue.affichee'))
   // Les tours sans « réponse affichée » (tâches programmées, veille des mails, traces plus
   // anciennes) ont pourtant RÉPONDU : un appel au modèle terminé le prouve.
   else if (status === 'completed' && agents.some((agent) => agent.status === 'completed'))
-    outcome.push('Réponse du modèle rendue')
-  if (outcome.length === 0) outcome.push('Aucune réponse enregistrée')
+    outcome.push(texte('modele.issue.rendue'))
+  if (outcome.length === 0) outcome.push(texte('modele.issue.aucune'))
 
   return {
     turnId: turn.id,
@@ -384,10 +434,11 @@ function storyOf(
  */
 export function buildRequestThread(
   timeline: HarnessTimeline,
-  options: { live?: boolean } = {}
+  options: { live?: boolean; langue?: Langue } = {}
 ): RequestStory[] {
+  const langue = options.langue ?? langueCourante()
   return timeline.turns.map((turn, index) =>
-    storyOf(timeline, turn, Boolean(options.live) && index === 0)
+    storyOf(timeline, turn, Boolean(options.live) && index === 0, langue)
   )
 }
 

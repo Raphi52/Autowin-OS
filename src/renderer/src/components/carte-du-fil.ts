@@ -27,6 +27,11 @@ import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 
 export type StatutEtape = 'prouve' | 'refuse' | 'en-cours' | 'sans-preuve' | 'a-venir'
 
+// Textes laissés en français (traduction anglaise, conv-1170) : ce module tourne dans le processus
+// principal (`src/main/carte-des-besoins.ts`), qui garde la carte en cache, et
+// `carte-des-besoins-branches.ts` compare le constat « une question t’attend » mot pour mot. Le
+// Board traduit constats, titres de repli et états à l'AFFICHAGE (`RiviereDuProjet.tsx`).
+
 export const LIBELLES_STATUT: Record<StatutEtape, string> = {
   prouve: 'prouvé',
   refuse: 'refusé',

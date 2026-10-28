@@ -9,6 +9,8 @@ import { roleLabel, stepTitle, toolNameOf, toolTitle } from './execution-step-ti
 import { extractHumanMessage } from './human-message'
 import { causeNommee, raisonDeLaCloture, raisonDuGit } from './raison-d-echec'
 import { estArretParStop } from '../../../shared/arret-par-stop'
+import { formaterDate } from '../langue'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 /** Charges qu'un nœud d'étape garde pour son détail : pensée, prompt envoyé, retour. */
 export const NODE_PAYLOAD_KINDS = new Set([
@@ -64,6 +66,8 @@ const PHASE_LABELS: Record<string, string> = {
   learn: 'Learn',
   salvage: 'Salvage',
   remake: 'Remake',
+  // Noms de skill (ceux qu'on tape après « / ») : des noms propres, gardés dans les deux langues
+  // comme « Scout » ou « Learn » (traduction anglaise, conv-1170).
   gel: 'Gel',
   residus: 'Résidus',
   steal: 'Steal'
@@ -121,10 +125,10 @@ function requestRoot(
   return {
     id: `request:${turn.id}`,
     kind: 'message',
-    actor: 'Utilisateur',
+    actor: t('arbre.utilisateur'),
     label: compactLabel(ownText || (isLatest ? requestLabel : undefined)),
     content: '',
-    detail: `Demande ${turn.id}`,
+    detail: t('arbre.demande', { id: turn.id }),
     timestamp: turn.ts,
     status:
       turn.events.some((event) => event.status === 'running') || turnStartedNotClosed(turn)
@@ -163,7 +167,7 @@ function phaseRoot(
     actor: 'Autowin OS',
     label: nomDEtape(phase),
     content: '',
-    detail: `Phase ${phase} observée dans la trace`,
+    detail: t('arbre.phase-observee', { phase }),
     timestamp,
     status: 'completed',
     durationMs: 0,
@@ -455,7 +459,7 @@ function projectRunExecutions(
       actor: 'Autowin OS',
       label: workspace.repositoryPath,
       content: '',
-      detail: `Dépôt commun · ${workspace.repositoryPath}`,
+      detail: t('arbre.depot-commun', { chemin: workspace.repositoryPath }),
       timestamp: fact.timestamp,
       status: running ? 'running' : 'completed',
       durationMs: 0,
@@ -499,7 +503,7 @@ function projectRunExecutions(
         actor: 'Autowin OS',
         label: workspace.path,
         content: '',
-        detail: `Copie isolée du run ${runId}`,
+        detail: t('arbre.copie-du-run', { run: runId }),
         timestamp: workspaceFact.timestamp,
         status: terminalClosureByRun.has(runId) ? 'completed' : 'running',
         durationMs: 0,
@@ -528,7 +532,7 @@ function projectRunExecutions(
         actor: 'Autowin OS',
         label: quote.regime,
         content: '',
-        detail: `Plan d’exécution compilé avant le premier appel provider`,
+        detail: t('arbre.plan'),
         timestamp: quoteFact.timestamp,
         status: 'completed',
         durationMs: 0,
@@ -577,7 +581,7 @@ function projectRunExecutions(
         actor: 'Autowin OS',
         label: phase,
         content: '',
-        detail: `Phase ${phase} utilisée comme alias de skill ; le nom réel du kit n'est pas transporté.`,
+        detail: t('arbre.alias', { phase }),
         timestamp: phaseAttempts[0]?.timestamp,
         status: executionStatus(phaseAttempts),
         durationMs: 0,
@@ -590,7 +594,7 @@ function projectRunExecutions(
           skillName: phase,
           skillIdentity: 'phase-alias',
           workflow: 'autowin',
-          limitation: 'Le runtime transporte la phase, pas le nom réel de la skill du kit.',
+          limitation: t('arbre.alias.limite'),
           observedEventIds: phaseAttempts.map((event) => event.id)
         }
       }
@@ -690,7 +694,7 @@ function projectRunExecutions(
         actor: 'Git',
         label: git.outcome,
         content: '',
-        detail: git.detail ?? `Finalisation Git du run ${runId}`,
+        detail: git.detail ?? t('arbre.git', { run: runId }),
         timestamp: gitFact.timestamp,
         status: git.outcome === 'conflict' || git.outcome === 'blocked' ? 'failed' : 'completed',
         durationMs: 0,
@@ -747,7 +751,7 @@ function projectRunExecutions(
       actor: 'Autowin OS',
       label: closure.status,
       content: '',
-      detail: `Clôture du run ${runId}`,
+      detail: t('arbre.cloture', { run: runId }),
       timestamp: closureFact?.timestamp ?? workspaceFact.timestamp,
       // UN RUN NON CLOS EST « EN ATTENTE », PAS « EN COURS ».
       //
@@ -916,10 +920,7 @@ function humanRequestText(turn: HarnessTimelineTurn, max: number): string {
 function turnDateLabel(ts: string): string {
   const date = new Date(ts)
   if (Number.isNaN(date.getTime())) return 'unlabeled request'
-  return `request of ${new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(date)}`
+  return `request of ${formaterDate(date, { dateStyle: 'short', timeStyle: 'short' })}`
 }
 
 export function projectLatestRequestExecution(
@@ -1049,10 +1050,10 @@ export function projectLatestRequestExecution(
         skillName: event.execution?.phase ?? (structural.length === 0 ? slashSkill : undefined),
         limitation:
           structural.length === 0
-            ? 'Chat direct : le pipeline Autowin n’a pas été déclenché.'
+            ? t('arbre.chat-direct')
             : event.execution?.phase
               ? undefined
-              : 'Trace historique : phase Autowin non exposée.'
+              : t('arbre.trace-historique')
       }
     }
   })

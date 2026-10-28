@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CATALOG } from './commands'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION, STYLE_CLOTURE_CHAT } from './response-style'
+import { TEXTES_FR as TEXTES_CHAT_DECISIONS } from '../renderer/src/textes-ecrans/chat-decisions'
 
 /**
  * TERRAIN NE SE JOUE QUE SI L'UTILISATEUR LE DEMANDE (2026-10-15).
@@ -38,7 +39,12 @@ describe('terrain reste à la demande de l’utilisateur', () => {
       new URL('../renderer/src/components/CandidatsPickPanel.tsx', import.meta.url),
       'utf8'
     )
-    const titre = /data-testid="cpick-lancer"[\s\S]*?title="([^"]+)"/u.exec(source)?.[1]
+    // Depuis la traduction anglaise (lot « Chat — décisions », conv-1177, 2026-10-27), l'infobulle
+    // n'est plus en dur : le bouton rend `t('<clé>')` et le français fait foi dans la table
+    // `textes-ecrans/chat-decisions.ts` (salvage conv-1211).
+    const cle = /data-testid="cpick-lancer"[\s\S]*?title=\{t\('([^']+)'\)\}/u.exec(source)?.[1]
+    expect(cle, 'clé de l’infobulle du bouton introuvable').toBeDefined()
+    const titre = TEXTES_CHAT_DECISIONS[cle as keyof typeof TEXTES_CHAT_DECISIONS]
     expect(titre, 'infobulle du bouton introuvable').toBeDefined()
     expect(titre).not.toMatch(/terrain/iu)
     expect(titre).toContain('cadrage → build → nettoyage → jugement')

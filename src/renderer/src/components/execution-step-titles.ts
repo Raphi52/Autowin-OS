@@ -1,4 +1,5 @@
 import type { HarnessTimelineEvent } from './harness-timeline-model'
+import { texteChatExecution as t, type CleChatExecution } from '../textes-ecrans/chat-execution'
 
 /**
  * TITRES DES BLOCS DU GRAPHE D'EXÉCUTION — ce qui s'est passé, en mots courants.
@@ -18,68 +19,71 @@ import type { HarnessTimelineEvent } from './harness-timeline-model'
  * (capture du 2026-10-12). Une paire [un, plusieurs] donne le pluriel d'une action regroupée :
  * « Note lue », mais « Notes lues ×3 ». Un nom absent de la table s'affiche tel quel.
  */
-const TOOL_TITLES: Record<string, string | readonly [string, string]> = {
-  ask: ['Question posée', 'Questions posées'],
-  orchestrate: ['Agent lancé', 'Agents lancés'],
-  run: ['Commande', 'Commandes'],
-  verify: ['Vérification', 'Vérifications'],
-  remember: ['Fait retenu', 'Faits retenus'],
-  restart_app: 'Redémarrage',
-  reload_env: 'Réglage rechargé',
-  get_state: 'État relu',
-  navigate: 'Vue affichée',
-  brain_query: 'Brain interrogé',
-  brain_read: ['Note lue', 'Notes lues'],
-  brain_graph: 'Liens suivis',
-  skill_charger: ['Skill chargée', 'Skills chargées'],
-  load_graph: 'Graphe chargé',
-  conversation_search: ['Fils cherchés', 'Fils cherchés'],
-  conversation_read: ['Fil lu', 'Fils lus'],
-  retrospective: ['Fil examiné', 'Fils examinés'],
-  create_conversation: ['Fil créé', 'Fils créés'],
-  rename_conversation: ['Fil renommé', 'Fils renommés'],
-  classer_conversation: ['Fil classé', 'Fils classés'],
-  remove_conversation: ['Fil supprimé', 'Fils supprimés'],
-  remove_conversations: 'Fils supprimés',
-  chat_send: ['Message envoyé', 'Messages envoyés'],
-  ecrire_a_un_fil: ['Message à un autre fil', 'Messages à d’autres fils'],
-  lire_mes_messages: 'Messages des autres fils lus',
-  plan_de_lots: ['Plan de lots', 'Plans de lots'],
-  attach_run: 'Workflow attaché',
-  read_file: ['Fichier lu', 'Fichiers lus'],
-  list_files: ['Dossier listé', 'Dossiers listés'],
-  find_in_files: ['Recherche', 'Recherches'],
-  edit_file: ['Fichier modifié', 'Fichiers modifiés'],
-  create_file: ['Fichier créé', 'Fichiers créés'],
-  move_file: ['Fichier déplacé', 'Fichiers déplacés'],
-  delete_file: ['Fichier supprimé', 'Fichiers supprimés'],
-  run_status: 'Copies inspectées',
-  proprietaire_fichier: ['Propriétaire vérifié', 'Propriétaires vérifiés'],
-  marquer_travail_trie: 'Travail trié',
-  marquer_travaux_tries: 'Travaux triés',
-  confirmer_verdict_juge: 'Verdict confirmé',
-  desktop_observe: ['Écran capturé', 'Écrans capturés'],
-  desktop_act: ['Geste à l’écran', 'Gestes à l’écran'],
-  bureau_cache_fermer: 'Bureau fermé',
-  bureau_cache_lancer: 'Bureau lancé',
-  bureau_cache_observer: ['Bureau observé', 'Bureaux observés'],
-  bureau_cache_agir: ['Geste dans le bureau', 'Gestes dans le bureau'],
-  show_video: 'Vidéo montrée',
-  sql_query: ['Requête SQL', 'Requêtes SQL'],
-  ticket_get: ['Fiche lue', 'Fiches lues'],
-  ticket_search: 'Fiches cherchées',
-  ticket_create: ['Fiche créée', 'Fiches créées'],
-  ticket_update: ['Fiche modifiée', 'Fiches modifiées'],
-  task_create: ['Tâche créée', 'Tâches créées'],
-  task_list: 'Tâches listées',
-  Read: ['Fichier lu', 'Fichiers lus'],
-  Grep: ['Recherche', 'Recherches'],
-  Glob: 'Fichiers listés',
-  Bash: ['Commande', 'Commandes'],
-  Edit: ['Fichier modifié', 'Fichiers modifiés'],
-  Write: ['Fichier écrit', 'Fichiers écrits'],
-  WebSearch: ['Recherche web', 'Recherches web'],
-  WebFetch: ['Page web lue', 'Pages web lues']
+const TOOL_TITLES: Record<
+  string,
+  CleChatExecution | readonly [CleChatExecution, CleChatExecution]
+> = {
+  ask: ['outil.ask', 'outil.ask.n'],
+  orchestrate: ['outil.orchestrate', 'outil.orchestrate.n'],
+  run: ['outil.run', 'outil.run.n'],
+  verify: ['outil.verify', 'outil.verify.n'],
+  remember: ['outil.remember', 'outil.remember.n'],
+  restart_app: 'outil.restart_app',
+  reload_env: 'outil.reload_env',
+  get_state: 'outil.get_state',
+  navigate: 'outil.navigate',
+  brain_query: 'outil.brain_query',
+  brain_read: ['outil.brain_read', 'outil.brain_read.n'],
+  brain_graph: 'outil.brain_graph',
+  skill_charger: ['outil.skill_charger', 'outil.skill_charger.n'],
+  load_graph: 'outil.load_graph',
+  conversation_search: 'outil.conversation_search',
+  conversation_read: ['outil.conversation_read', 'outil.conversation_read.n'],
+  retrospective: ['outil.retrospective', 'outil.retrospective.n'],
+  create_conversation: ['outil.create_conversation', 'outil.create_conversation.n'],
+  rename_conversation: ['outil.rename_conversation', 'outil.rename_conversation.n'],
+  classer_conversation: ['outil.classer_conversation', 'outil.classer_conversation.n'],
+  remove_conversation: ['outil.remove_conversation', 'outil.remove_conversation.n'],
+  remove_conversations: 'outil.remove_conversation.n',
+  chat_send: ['outil.chat_send', 'outil.chat_send.n'],
+  ecrire_a_un_fil: ['outil.ecrire_a_un_fil', 'outil.ecrire_a_un_fil.n'],
+  lire_mes_messages: 'outil.lire_mes_messages',
+  plan_de_lots: ['outil.plan_de_lots', 'outil.plan_de_lots.n'],
+  attach_run: 'outil.attach_run',
+  read_file: ['outil.read_file', 'outil.read_file.n'],
+  list_files: ['outil.list_files', 'outil.list_files.n'],
+  find_in_files: ['outil.find_in_files', 'outil.find_in_files.n'],
+  edit_file: ['outil.edit_file', 'outil.edit_file.n'],
+  create_file: ['outil.create_file', 'outil.create_file.n'],
+  move_file: ['outil.move_file', 'outil.move_file.n'],
+  delete_file: ['outil.delete_file', 'outil.delete_file.n'],
+  run_status: 'outil.run_status',
+  proprietaire_fichier: ['outil.proprietaire_fichier', 'outil.proprietaire_fichier.n'],
+  marquer_travail_trie: 'outil.marquer_travail_trie',
+  marquer_travaux_tries: 'outil.marquer_travaux_tries',
+  confirmer_verdict_juge: 'outil.confirmer_verdict_juge',
+  desktop_observe: ['outil.desktop_observe', 'outil.desktop_observe.n'],
+  desktop_act: ['outil.desktop_act', 'outil.desktop_act.n'],
+  bureau_cache_fermer: 'outil.bureau_cache_fermer',
+  bureau_cache_lancer: 'outil.bureau_cache_lancer',
+  bureau_cache_observer: ['outil.bureau_cache_observer', 'outil.bureau_cache_observer.n'],
+  bureau_cache_agir: ['outil.bureau_cache_agir', 'outil.bureau_cache_agir.n'],
+  show_video: 'outil.show_video',
+  sql_query: ['outil.sql_query', 'outil.sql_query.n'],
+  ticket_get: ['outil.ticket_get', 'outil.ticket_get.n'],
+  ticket_search: 'outil.ticket_search',
+  ticket_create: ['outil.ticket_create', 'outil.ticket_create.n'],
+  ticket_update: ['outil.ticket_update', 'outil.ticket_update.n'],
+  task_create: ['outil.task_create', 'outil.task_create.n'],
+  task_list: 'outil.task_list',
+  Read: ['outil.read_file', 'outil.read_file.n'],
+  Grep: ['outil.find_in_files', 'outil.find_in_files.n'],
+  Glob: 'outil.Glob',
+  Bash: ['outil.run', 'outil.run.n'],
+  Edit: ['outil.edit_file', 'outil.edit_file.n'],
+  Write: ['outil.Write', 'outil.Write.n'],
+  WebSearch: ['outil.WebSearch', 'outil.WebSearch.n'],
+  WebFetch: ['outil.WebFetch', 'outil.WebFetch.n']
 }
 
 /** `mcp__autowin__ask` → `ask` : le préfixe du serveur ne dit rien à l'utilisateur. */
@@ -106,11 +110,15 @@ export function toolNameOf(event: HarnessTimelineEvent): string | undefined {
  * s'affiche à part, pour qu'une coupure du titre ne l'emporte jamais.
  */
 export function toolTitle(name: string | undefined, count = 1): string {
-  if (!name) return 'Outil non nommé par la trace'
-  const entree = TOOL_TITLES[name]
+  if (!name) return t('outil.sans-nom')
+  // Propriété PROPRE seulement : « constructor » ou « toString » restent des noms bruts.
+  const entree = Object.prototype.hasOwnProperty.call(TOOL_TITLES, name)
+    ? TOOL_TITLES[name]
+    : undefined
   if (entree === undefined) return name
-  if (typeof entree === 'string') return entree
-  return count > 1 ? entree[1] : entree[0]
+  // Dans la langue de l'interface (conv-1170) : la table garde des clés, traduites à la lecture.
+  if (typeof entree === 'string') return t(entree)
+  return t(count > 1 ? entree[1] : entree[0])
 }
 
 /**

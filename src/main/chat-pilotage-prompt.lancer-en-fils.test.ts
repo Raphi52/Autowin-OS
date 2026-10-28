@@ -13,13 +13,25 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
 
   it('apprend la fence, ses champs et quand l’écrire', () => {
     expect(prompt).toContain('```' + FORME_FILS)
-    expect(prompt).toMatch(/au moins DEUX tâches d'ACTION indépendantes/u)
     expect(prompt).toContain('"fichiers"')
     // Les cas où il ne faut PAS proposer, sinon la carte découpe des étapes liées.
     expect(prompt).toMatch(/questions seules/u)
     expect(prompt).toMatch(/dépend du résultat/u)
-    // Le tour s'arrête sur la carte : aucune tâche n'est commencée avant le clic.
-    expect(prompt).toMatch(/ne commence AUCUNE/u)
+  })
+
+  /*
+   * PLUS D'ÉTAPE DE VALIDATION (conv-1163, 2026-10-27 : « je ne veux plu avoir cette etape de
+   * validation », sur la capture de la carte « 2 tâches dans ton message »). Plusieurs tâches se
+   * font à la suite dans le tour ; la carte ne sert que si l'utilisateur demande lui-même des fils.
+   * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre « ne commence AUCUNE », ou faire rendre la carte
+   * à l'agent dès deux tâches.
+   */
+  it('fait plusieurs tâches à la suite, sans arrêter le tour sur une carte à valider', () => {
+    expect(prompt).toMatch(/au moins DEUX tâches d'ACTION, fais-les TOUTES dans ce tour/u)
+    expect(prompt).toMatch(/sans carte ni demande d'accord/u)
+    expect(prompt).toMatch(/ne se rend QUE si l'utilisateur demande LUI-MÊME/u)
+    expect(prompt).toMatch(/Jamais de bloc de ta propre initiative : ni pour plusieurs tâches/u)
+    expect(prompt).not.toMatch(/ne commence AUCUNE/u)
   })
 
   /*

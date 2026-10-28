@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CONFIG_AUTOWIN, type EtatLancement } from '../../../shared/scripts-copie'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /**
  * LE BOUTON « LANCER » DU PANNEAU FICHIERS (2026-09-28, veille concurrentielle : le « Run » de
@@ -10,16 +11,24 @@ import { CONFIG_AUTOWIN, type EtatLancement } from '../../../shared/scripts-copi
  * puis l'état, le port réservé, l'adresse locale dès que le serveur l'annonce (cliquable), et la
  * fin de la sortie. Un échec dit son code et sa dernière ligne.
  */
-const SOURCES: Record<NonNullable<EtatLancement['source']>, string> = {
-  autowin: CONFIG_AUTOWIN,
-  conductor: '.conductor/settings.toml',
-  'package.json': 'détecté dans package.json'
+// Deux sources sont des chemins de fichier, qui ne se traduisent pas ; la troisième est une phrase.
+const SOURCES: Record<
+  NonNullable<EtatLancement['source']>,
+  { chemin: string } | { cle: 'lancement.source.packageJson' }
+> = {
+  autowin: { chemin: CONFIG_AUTOWIN },
+  conductor: { chemin: '.conductor/settings.toml' },
+  'package.json': { cle: 'lancement.source.packageJson' }
 }
 
 export function LancementBarre({ conversationId }: { conversationId: string }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   const [etat, setEtat] = useState<EtatLancement | null>(null)
   const [occupe, setOccupe] = useState(false)
-  const [erreurAppel, setErreurAppel] = useState<string>()
+  /** L'appel qui a échoué, mis en mots au rendu (la phrase suit la langue). */
+  const [erreurAppel, setErreurAppel] = useState<
+    'lancement.lectureIndisponible' | 'lancement.arretImpossible' | 'lancement.lancementImpossible'
+  >()
 
   // Pas de remise à zéro ici : le parent monte la barre avec `key={conversationId}`, donc un
   // changement de conversation repart d'un composant neuf (état vide) au lieu d'effacer celui-ci.
@@ -31,7 +40,7 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
         if (vivant) setEtat(e)
       })
       .catch(() => {
-        if (vivant) setErreurAppel('Lecture du lancement indisponible.')
+        if (vivant) setErreurAppel('lancement.lectureIndisponible')
       })
     const off = window.api.onLancement?.((maj) => {
       if (maj.conversationId === conversationId) setEtat(maj.etat)
@@ -53,17 +62,21 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
         : await window.api.lancementDemarrer(conversationId)
       setEtat(suivant)
     } catch {
-      setErreurAppel(enCours ? 'Arrêt impossible.' : 'Lancement impossible.')
+      setErreurAppel(enCours ? 'lancement.arretImpossible' : 'lancement.lancementImpossible')
     } finally {
       setOccupe(false)
     }
   }
   const sansCommande = etat !== null && !etat.commande && !enCours
+  const libelleDeLaSource = (source: (typeof SOURCES)[keyof typeof SOURCES]): string =>
+    'chemin' in source ? source.chemin : t(source.cle)
   const fin =
     etat?.statut === 'termine'
-      ? `Terminé (code ${etat.code ?? 0})`
+      ? t('lancement.termine', { code: etat.code ?? 0 })
       : etat?.statut === 'echec' && etat.commande
-        ? `Échec${etat.code !== undefined && etat.code !== null ? ` (code ${etat.code})` : ''}` +
+        ? (etat.code !== undefined && etat.code !== null
+            ? t('lancement.echecCode', { code: etat.code })
+            : t('lancement.echec')) +
           (etat.lignes.length ? ` — ${etat.lignes[etat.lignes.length - 1]}` : '')
         : undefined
 
@@ -80,14 +93,14 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
           disabled={occupe || etat === null || sansCommande}
           title={
             enCours
-              ? 'Arrête la commande et tous les processus qu’elle a lancés'
+              ? t('lancement.arreterTitre')
               : etat?.commande
-                ? `Lance « ${etat.commande} » dans le dossier de cette conversation`
-                : `Déclare « lancement » dans ${CONFIG_AUTOWIN}`
+                ? t('lancement.lancerTitre', { commande: etat.commande })
+                : t('lancement.declarerTitre', { fichier: CONFIG_AUTOWIN })
           }
           onClick={() => void agir()}
         >
-          {enCours ? '■ Arrêter' : '▶ Lancer'}
+          {enCours ? t('lancement.arreter') : t('lancement.lancer')}
         </button>
         {etat?.commande ? (
           <code className="sc-lancement-commande" data-testid="sc-lancement-commande">
@@ -95,18 +108,20 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
           </code>
         ) : null}
         {etat?.source && etat.commande ? (
-          <span className="sc-lancement-source">{SOURCES[etat.source]}</span>
+          <span className="sc-lancement-source">{libelleDeLaSource(SOURCES[etat.source])}</span>
         ) : null}
       </div>
       {sansCommande && !etat?.erreur ? (
         <div className="sc-lancement-info" data-testid="sc-lancement-vide">
-          Aucun lancement déclaré : ajoute <code>&quot;lancement&quot;</code> dans{' '}
+          {/* « lancement » est la clé que le principal lit dans le fichier : elle se garde telle quelle. */}
+          {t('lancement.aucun')} <code>&quot;lancement&quot;</code> {t('lancement.aucun.dans')}{' '}
           <code>{CONFIG_AUTOWIN}</code>.
         </div>
       ) : null}
       {enCours ? (
         <div className="sc-lancement-info" data-testid="sc-lancement-etat">
-          <span className="sc-lancement-point" aria-hidden="true" /> En cours
+          <span className="sc-lancement-point" aria-hidden="true" /> {t('lancement.enCours')}
+          {/* « port » se dit pareil en anglais. */}
           {etat?.port ? ` · port ${etat.port}` : ''}
           {etat?.adresse ? (
             <>
@@ -133,12 +148,12 @@ export function LancementBarre({ conversationId }: { conversationId: string }): 
       ) : null}
       {etat?.erreur || erreurAppel ? (
         <div className="sc-lancement-info is-echec" data-testid="sc-lancement-erreur" role="alert">
-          {etat?.erreur ?? erreurAppel}
+          {etat?.erreur ?? (erreurAppel ? t(erreurAppel) : undefined)}
         </div>
       ) : null}
       {etat && etat.lignes.length > 0 ? (
         <details className="sc-lancement-sortie">
-          <summary>Sortie · {etat.lignes.length} dernière(s) ligne(s)</summary>
+          <summary>{t('lancement.sortie', { n: etat.lignes.length })}</summary>
           <pre data-testid="sc-lancement-sortie">{etat.lignes.join('\n')}</pre>
         </details>
       ) : null}

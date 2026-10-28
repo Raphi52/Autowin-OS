@@ -10,6 +10,8 @@
  */
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { cleDuLancement, planDesFils, type TacheDeFil } from '../../../shared/lancer-en-fils'
+import { riche } from '../textes'
+import { auPluriel, useTextesChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
 import { MessageDuFil } from './message-du-fil'
 import {
   EVT_FILS_LANCES,
@@ -24,8 +26,6 @@ import {
 import './BlocDonnees.css'
 import './PropositionDeFils.css'
 
-const pluriel = (n: number, mot: string): string => `${n} ${mot}${n > 1 ? 's' : ''}`
-
 export function PropositionDeFils({
   taches,
   source
@@ -33,6 +33,7 @@ export function PropositionDeFils({
   taches: TacheDeFil[]
   source: string
 }): React.JSX.Element {
+  const { langue, t } = useTextesChatFilsEtLots()
   // L'identité de la réponse qui porte la carte (`message-du-fil.ts`, fil + tour) : un souvenir PAR
   // réponse (défaut D5). `''` = réponse encore en cours d'écriture : son tour n'est peut-être pas
   // connu, donc un clic se souviendrait sous une clé qui changera, et les boutons reviendraient.
@@ -111,20 +112,24 @@ export function PropositionDeFils({
   return (
     <div ref={ref} className="md-donnees md-fils" data-testid="proposition-fils">
       <div className="md-donnees__titre">
-        {total >= 2 ? `${pluriel(total, 'tâche')} dans ton message` : 'Une seule tâche'}
+        {total >= 2 ? t('fils.titre.plusieurs', { n: total }) : t('fils.titre.une')}
       </div>
       {plan.length === 0 ? (
-        <div className="md-donnees__note">Une seule tâche distincte : rien à découper.</div>
+        <div className="md-donnees__note">{t('fils.rienADecouper')}</div>
       ) : (
         <ol className="md-fils__liste">
           {plan.map((fil, rang) => (
             <li key={rang} className="md-fils__fil">
-              {parallele ? <span className="md-fils__rang">fil {rang + 1}</span> : null}
+              {parallele ? (
+                <span className="md-fils__rang">{t('fils.rang', { n: rang + 1 })}</span>
+              ) : null}
               <span className="md-fils__taches">
                 {fil.taches.map((tache, n) => (
                   <span key={n} className="md-fils__tache">
                     <b>{tache.titre}</b>
-                    {n > 0 ? <span className="md-donnees__ton--discret"> — à la suite</span> : null}
+                    {n > 0 ? (
+                      <span className="md-donnees__ton--discret">{t('fils.aLaSuite')}</span>
+                    ) : null}
                     {tache.fichiers.length ? (
                       <span className="md-fils__fichiers">{tache.fichiers.join(' · ')}</span>
                     ) : null}
@@ -136,13 +141,11 @@ export function PropositionDeFils({
         </ol>
       )}
       {plan.length === 1 ? (
-        <div className="md-donnees__note">
-          Elles touchent les <b>mêmes fichiers</b> : elles passent l’une après l’autre.
-        </div>
+        <div className="md-donnees__note">{riche(t('fils.memesFichiers'), 'b')}</div>
       ) : null}
       {rienNestParti ? (
         <div className="md-donnees__ton--ko">
-          Rien n’est parti : {raisonDuRefus ?? 'raison inconnue'}.
+          {t('fils.rienNestParti', { raison: raisonDuRefus ?? t('fils.raisonInconnue') })}
         </div>
       ) : null}
       {souvenir && !rienNestParti ? (
@@ -156,7 +159,7 @@ export function PropositionDeFils({
               disabled={enEcriture}
               onClick={() => lancer('fils')}
             >
-              Lancer en {plan.length} fils
+              {t('fils.lancer', { n: plan.length })}
             </button>
           ) : null}
           <button
@@ -165,17 +168,21 @@ export function PropositionDeFils({
             disabled={enEcriture}
             onClick={() => lancer('ici')}
           >
-            Tout ici, l’une après l’autre
+            {t('fils.toutIci')}
           </button>
           <span className="md-donnees__note">
-            {enEcriture ? (
-              'Les boutons s’activent à la fin de la réponse.'
-            ) : (
-              <>
-                Coût : <b>{pluriel(total, 'tour')}</b>
-                {parallele ? `, dont ${plan.length} en même temps` : ''}.
-              </>
-            )}
+            {enEcriture
+              ? t('fils.boutonsEnAttente')
+              : riche(
+                  t('fils.cout', {
+                    tours: t(
+                      auPluriel(total, langue) ? 'fils.cout.tours.plusieurs' : 'fils.cout.tours.un',
+                      { n: total }
+                    ),
+                    dont: parallele ? t('fils.cout.dont', { n: plan.length }) : ''
+                  }),
+                  'b'
+                )}
           </span>
         </div>
       ) : null}
@@ -184,14 +191,16 @@ export function PropositionDeFils({
 }
 
 function EtatLance({ souvenir }: { souvenir: Souvenir }): React.JSX.Element {
-  if ('envoye' in souvenir) return <div className="md-donnees__note">Lancement demandé…</div>
+  const { t } = useTextesChatFilsEtLots()
+  if ('envoye' in souvenir)
+    return <div className="md-donnees__note">{t('fils.lancementDemande')}</div>
   const ouvrir = (id: string): void => {
     window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: id }))
   }
   return (
     <div className="md-fils__lance">
       <span className="md-donnees__ton--ok">
-        {souvenir.mode === 'ici' ? 'Lancé ici, l’une après l’autre.' : 'Lancé :'}
+        {souvenir.mode === 'ici' ? t('fils.lanceIci') : t('fils.lance')}
       </span>
       {souvenir.mode === 'fils'
         ? souvenir.fils.map((fil) => (
@@ -200,14 +209,16 @@ function EtatLance({ souvenir }: { souvenir: Souvenir }): React.JSX.Element {
               type="button"
               className="md-fils__lien"
               onClick={() => ouvrir(fil.id)}
-              title="Ouvrir ce fil"
+              title={t('fils.ouvrirCeFil')}
             >
               {fil.titre} <span className="md-fils__id">{fil.id}</span>
             </button>
           ))
         : null}
       {souvenir.refus?.length ? (
-        <span className="md-donnees__ton--ko">Non parti : {souvenir.refus.join(' · ')}</span>
+        <span className="md-donnees__ton--ko">
+          {t('fils.nonParti', { liste: souvenir.refus.join(' · ') })}
+        </span>
       ) : null}
     </div>
   )

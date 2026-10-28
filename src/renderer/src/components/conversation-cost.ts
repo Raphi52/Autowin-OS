@@ -12,6 +12,8 @@
  */
 
 import type { TokenUsage } from '../../../shared/token-usage'
+import { formaterNombre, langueCourante } from '../langue'
+import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { formatUsd, resolveCostCoverage, type CostCoverage } from '../../../shared/cost-estimate'
 
 export interface CostRow extends TokenUsage {
@@ -231,13 +233,24 @@ function spendLabel(input: SpendLabelInput): string {
   if (input.knownUsd > 0) parts.push(formatUsd(input.knownUsd))
   // « estimés » est le mot des AUTRES surfaces pour la même chose (`formatCostCoverage`) :
   // le garder ici, c'est un seul vocabulaire de coût dans toute l'app.
-  if (input.estimatedUsd > 0) parts.push(`≈ ${formatUsd(input.estimatedUsd)} estimés`)
+  if (input.estimatedUsd > 0)
+    parts.push(
+      traduireChatPanneaux('cout.estimes', langueCourante(), {
+        montant: formatUsd(input.estimatedUsd)
+      })
+    )
   const montant = parts.join(' + ')
   const reste = Math.max(0, input.unpricedCalls - input.estimatedCalls)
   // Ce qui reste sans aucun chiffre se COMPTE : « 1 appel non chiffré » dit ce qui manque et
   // combien, là où « non exposé » n'était qu'un aveu sans quantité.
   const manquant =
-    reste > 0 ? `${reste} appel${reste > 1 ? 's' : ''} non chiffré${reste > 1 ? 's' : ''}` : ''
+    reste > 0
+      ? traduireChatPanneaux(
+          reste > 1 ? 'cout.nonChiffre.plusieurs' : 'cout.nonChiffre.un',
+          langueCourante(),
+          { n: reste }
+        )
+      : ''
   if (montant && manquant) return `${montant} · ${manquant}`
   return montant || manquant || formatUsd(input.knownUsd)
 }
@@ -273,7 +286,13 @@ export function spendingRows(rows: readonly CostRow[]): CostRow[] {
 
 /** « 1 appel » / « 3 appels » — vu a l'ecran le 2026-07-29 en « 1 appels ». */
 export function callsLabel(calls: number): string {
-  return `${calls} appel${calls > 1 ? 's' : ''}`
+  return traduireChatPanneaux(
+    calls > 1 ? 'cout.appels.plusieurs' : 'cout.appels.un',
+    langueCourante(),
+    {
+      n: calls
+    }
+  )
 }
 
 /** Part d'une ligne dans le total, en pourcentage entier (pour une barre de proportion). */
@@ -290,7 +309,9 @@ export function formatDuration(ms: number): string | undefined {
   if (!Number.isFinite(ms) || ms <= 0) return undefined
   if (ms < 1000) return `${Math.round(ms)} ms`
   const seconds = ms / 1000
-  if (seconds < 60) return `${seconds.toFixed(1).replace('.', ',')} s`
+  // Séparateur décimal de la langue de l'interface (conv-1170) : « 4,2 s » / « 4.2 s ».
+  if (seconds < 60)
+    return `${formaterNombre(seconds, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`
   const minutes = Math.floor(seconds / 60)
   const rest = Math.round(seconds - minutes * 60)
   if (minutes < 60) return rest > 0 ? `${minutes} min ${rest} s` : `${minutes} min`

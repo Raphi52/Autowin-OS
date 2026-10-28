@@ -1,4 +1,6 @@
 import type { MetierGraphe } from '../../../main/viz/fs-brains'
+import type { Langue } from '../../../shared/langue'
+import { TEXTES_FR, traduireKnowledge, type CleKnowledge } from '../textes-ecrans/knowledge'
 import { pathSegments, relativePathOf } from './graph-vault-paths'
 import type { GraphNode } from './graph-view-model'
 
@@ -46,15 +48,38 @@ export function brainSubjectOf(
   const sousProjet = metier?.sousProjet
   if (sousProjet && sousProjet.motifs.some((motif) => chemin.includes(motif)))
     return sousProjet.libelle
-  if (has(themes, 'kit', 'process') || segments[0] === 'governance')
-    return 'Le kit et la façon de travailler'
-  if (segments.length === 1 && RACINE_CONDUITE.has(segments[0]))
-    return 'Le kit et la façon de travailler'
-  if (chemin.includes('brain') || segments[1] === '_maps') return 'Le Brain lui-même'
+  if (has(themes, 'kit', 'process') || segments[0] === 'governance') return TEXTES_FR['sujet.kit']
+  if (segments.length === 1 && RACINE_CONDUITE.has(segments[0])) return TEXTES_FR['sujet.kit']
+  if (chemin.includes('brain') || segments[1] === '_maps') return TEXTES_FR['sujet.brain']
   if (metier && (chemin.includes(metier.cle) || has(themes, metier.cle)))
     return metier.libelle + '/' + sousDomaineMetier(segments, metier)
-  if (segments[0] === 'inbox') return 'À trier'
-  return 'Transverse'
+  if (segments[0] === 'inbox') return TEXTES_FR['sujet.aTrier']
+  return TEXTES_FR['sujet.transverse']
+}
+
+/**
+ * LE SUJET TEL QU'IL S'AFFICHE (traduction anglaise, conv-1170, 2026-10-27). `brainSubjectOf` rend le
+ * FRANÇAIS parce que le sujet devient l'IDENTIFIANT de sa branche (`__tree__:Transverse/…`), relu
+ * par le code — branches repliées, sélection — et qui ne doit pas changer avec la langue. Seul ce qui
+ * est montré passe par ici. Un libellé qui n'est pas un sujet générique (dossier, domaine métier)
+ * ressort tel quel.
+ */
+const CLES_DES_SUJETS: ReadonlyMap<string, CleKnowledge> = new Map(
+  (
+    [
+      'sujet.kit',
+      'sujet.brain',
+      'sujet.aTrier',
+      'sujet.transverse',
+      'sujet.decisions',
+      'sujet.savoirGeneral'
+    ] as const
+  ).map((cle) => [TEXTES_FR[cle], cle])
+)
+
+export function libelleDeSujet(libelle: string, langue: Langue): string {
+  const cle = CLES_DES_SUJETS.get(libelle)
+  return cle ? traduireKnowledge(cle, langue) : libelle
 }
 
 /**
@@ -80,6 +105,7 @@ function sousDomaineMetier(segments: readonly string[], metier: MetierGraphe): s
   const prefixe = `${metier.cle}-`
   if (segments[0] === 'projects' && segments[1]?.startsWith(prefixe))
     return segments[1].slice(prefixe.length)
-  if (segments.includes('decisions') || segments.includes('lessons')) return 'décisions et leçons'
-  return 'savoir général'
+  if (segments.includes('decisions') || segments.includes('lessons'))
+    return TEXTES_FR['sujet.decisions']
+  return TEXTES_FR['sujet.savoirGeneral']
 }

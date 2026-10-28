@@ -13,6 +13,7 @@ import {
   placerMascotte,
   placerMascotteGardee,
   PRELOAD_MASCOTTE,
+  RETRAIT_HALO,
   SEUIL_GLISSER_PX,
   TAILLE_MASCOTTE,
   zoneDesCartes
@@ -77,13 +78,14 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     expect(rect.x + rect.width).toBeGreaterThan(zone.width - 20)
   })
 
-  it('les cartes sortent à sa gauche : aucune ne recouvre la bille', () => {
+  it('les cartes sortent à sa gauche, collées au halo sans le recouvrir (conv-1195)', () => {
     const zone = { x: 0, y: 0, width: 1920, height: 1032 }
     const bille = placerMascotte(zone)
     const cartes = disposerPopups(zoneDesCartes(bille, zone), [140, 200])
-    for (const carte of cartes) expect(carte.x + carte.width).toBeLessThan(bille.x)
-    // Au coin d'origine, rien ne change : la pile repose sur le bas de l'écran, comme avant.
-    expect(cartes[0].y + cartes[0].height).toBe(1032 - 12)
+    // « snap ensemble » : le bord droit de chaque carte touche le halo, sans vide entre eux.
+    for (const carte of cartes) expect(carte.x + carte.width).toBe(bille.x + RETRAIT_HALO)
+    // La plus récente a son bas au niveau du bas du halo.
+    expect(cartes[0].y + cartes[0].height).toBe(bille.y + bille.height - RETRAIT_HALO)
   })
 
   describe('les cartes suivent la bille glissée ailleurs (conv-1142)', () => {
@@ -96,6 +98,13 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     })
     const recouvre = (a: Rect, b: Rect): boolean =>
       a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+    /** La partie visible de la bille : la bande transparente de sa fenêtre peut passer sous une carte. */
+    const halo = (b: Rect): Rect => ({
+      x: b.x + RETRAIT_HALO,
+      y: b.y + RETRAIT_HALO,
+      width: b.width - 2 * RETRAIT_HALO,
+      height: b.height - 2 * RETRAIT_HALO
+    })
     /** Quatre cartes (le maximum de la pile), de la plus récente à la plus ancienne. */
     const cartes = (b: Rect, zone: Rect = ecran): Rect[] =>
       disposerPopups(zoneDesCartes(b, zone), [159, 101, 159, 101])
@@ -103,27 +112,27 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     it('en haut à gauche : à sa droite, la plus récente au niveau de son haut, la pile descend', () => {
       const b = bille(20, 30)
       const [recente, ...autres] = cartes(b)
-      expect(recente.x).toBe(20 + TAILLE_MASCOTTE + 12)
-      expect(recente.y).toBe(30)
+      expect(recente.x).toBe(20 + TAILLE_MASCOTTE - RETRAIT_HALO)
+      expect(recente.y).toBe(30 + RETRAIT_HALO)
       for (const carte of autres) expect(carte.y).toBeGreaterThan(recente.y)
     })
 
     it('en bas à gauche : à sa droite, la plus récente au niveau de son bas, la pile monte', () => {
       const b = bille(20, 900)
       const [recente, ...autres] = cartes(b)
-      expect(recente.x).toBe(20 + TAILLE_MASCOTTE + 12)
-      expect(recente.y + recente.height).toBe(900 + TAILLE_MASCOTTE)
+      expect(recente.x).toBe(20 + TAILLE_MASCOTTE - RETRAIT_HALO)
+      expect(recente.y + recente.height).toBe(900 + TAILLE_MASCOTTE - RETRAIT_HALO)
       for (const carte of autres) expect(carte.y).toBeLessThan(recente.y)
     })
 
     it('en haut au milieu : à sa gauche, et la pile descend', () => {
       const b = bille(1000, 200)
       const [recente] = cartes(b)
-      expect(recente.x + recente.width).toBe(1000 - 12)
-      expect(recente.y).toBe(200)
+      expect(recente.x + recente.width).toBe(1000 + RETRAIT_HALO)
+      expect(recente.y).toBe(200 + RETRAIT_HALO)
     })
 
-    it('aucune carte ne recouvre la bille, ni ne sort de l’écran, où qu’elle soit', () => {
+    it('aucune carte ne recouvre le halo, ni ne sort de l’écran, où que soit la bille', () => {
       for (const [x, y] of [
         [0, 0],
         [20, 30],
@@ -136,7 +145,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
       ]) {
         const b = bille(x, y)
         for (const carte of cartes(b)) {
-          expect(recouvre(carte, b), `bille en ${x},${y}`).toBe(false)
+          expect(recouvre(carte, halo(b)), `bille en ${x},${y}`).toBe(false)
           expect(carte.x).toBeGreaterThanOrEqual(0)
           expect(carte.x + carte.width).toBeLessThanOrEqual(1920)
           expect(carte.y).toBeGreaterThanOrEqual(0)

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import { creerZoneDeDessinHorsPage } from './zone-dessin-diagramme'
 
 function adaptDiagramSource(source: string): string {
@@ -24,6 +25,7 @@ function adaptDiagramSource(source: string): string {
 }
 
 export function ArtifactDiagramPreview({ source }: { source: string }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const reactId = useId()
   const id = useMemo(() => `artifact-diagram-${reactId.replaceAll(':', '')}`, [reactId])
   /** La place réelle du diagramme dans le fil : sa largeur devient celle de la zone de dessin. */
@@ -31,7 +33,8 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
   const [rendered, setRendered] = useState<{
     source: string
     svg?: string
-    error?: string
+    /** Dessin refusé par mermaid : le message est traduit au rendu (conv-1170). */
+    error?: true
   }>()
 
   useEffect(() => {
@@ -53,11 +56,7 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
         if (active) setRendered({ source, svg: result.svg })
       })
       .catch(() => {
-        if (active)
-          setRendered({
-            source,
-            error: 'Diagramme invalide ou syntaxe non prise en charge'
-          })
+        if (active) setRendered({ source, error: true })
       })
       .finally(() => zone.remove())
     return () => {
@@ -71,14 +70,14 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
   if (error)
     return (
       <div ref={placeRef}>
-        <div className="artifact-preview__blocked">{error}</div>
+        <div className="artifact-preview__blocked">{t('diagramme.invalide')}</div>
         <pre className="artifact-preview__source is-diagram">{source}</pre>
       </div>
     )
   if (!svg)
     return (
       <div ref={placeRef} className="artifact-preview__placeholder" role="status">
-        Rendu du diagramme…
+        {t('diagramme.rendu')}
       </div>
     )
   return (

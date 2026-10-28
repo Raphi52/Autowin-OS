@@ -235,6 +235,17 @@ export function promptDOrdre(message: { id: string; de: string; texte: string })
   ].join('\n')
 }
 
+/**
+ * Ce message est-il le tour lancé par un ordre (`promptDOrdre`), et non une demande de l'utilisateur ?
+ * Le contrôle des deux lectures ne doit pas demander à un humain de choisir le sens d'un texte qu'un
+ * agent a écrit : personne n'est là pour répondre (conv-1192, 2026-10-27).
+ */
+export function estUnPromptDOrdre(message: string | undefined): boolean {
+  return /^Ordre de \S+ \(message \S+, écrit par l'agent de ce fil avec ecrire_a_un_fil — pas l'utilisateur\) :/u.test(
+    (message ?? '').trimStart()
+  )
+}
+
 export type IssueReveil = 'lance' | 'occupe' | 'indisponible' | 'echec'
 
 /**

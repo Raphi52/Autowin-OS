@@ -1,3 +1,6 @@
+import { langueCourante } from '../langue'
+import { traduireChatFil } from '../textes-ecrans/chat-fil'
+
 /**
  * COMPOSITION DU PROMPT, agrégée sur PLUSIEURS appels.
  *
@@ -49,8 +52,6 @@ function positiveInt(valeur: unknown): number {
   return nombre > 0 ? nombre : 0
 }
 
-const UNATTRIBUTED = 'non attribué'
-
 /**
  * Additionne les blocs par nom sur une série d'appels. Fonction PURE : aucune lecture disque,
  * aucun prix — le coût en dollars dépend du cache et ne se déduit pas d'un nombre de caractères.
@@ -93,7 +94,9 @@ export function aggregatePromptComposition(
     }
     // Un bloc peut être déclaré plus GRAND que le `system` final (troncature en aval) : le reste
     // non attribué ne peut pas être négatif.
-    ajoute(UNATTRIBUTED, 'unattributed', Math.max(0, systemChars - attribues))
+    // Libellé dans la langue de l'interface (conv-1170) ; le genre `unattributed` reste la clé relue.
+    const nonAttribue = traduireChatFil('composition.nonAttribue', langueCourante())
+    ajoute(nonAttribue, 'unattributed', Math.max(0, systemChars - attribues))
     const aInjecte =
       systemChars > 0 || (call.contextBlocks ?? []).some((bloc) => positiveInt(bloc?.chars) > 0)
     if (aInjecte) callsComptes += 1

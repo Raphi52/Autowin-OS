@@ -17,6 +17,16 @@
  * geste, l'ensemble trié chronologiquement.
  */
 import type { Msg } from './chat-view-types'
+import { langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
+
+/**
+ * Les libellés des lignes s'écrivent dans la langue COURANTE (conv-1170) : le panneau qui les
+ * assemble refait ses lignes quand elle change (`ModelActivityLogPane`).
+ */
+const tx = (cle: Parameters<typeof traduireChatPanneaux>[0], valeurs?: ValeursDeTexte): string =>
+  traduireChatPanneaux(cle, langueCourante(), valeurs)
 
 export type ModelActivityKind =
   | 'prompt'
@@ -206,7 +216,7 @@ function fromParts(turnId: string, parts: ReadonlyArray<Record<string, unknown>>
           id,
           turnId,
           kind: 'text',
-          label: 'Réponse',
+          label: tx('activite.reponse'),
           detail,
           ...stamp(part),
           ...allFields(part)
@@ -234,7 +244,7 @@ function fromParts(turnId: string, parts: ReadonlyArray<Record<string, unknown>>
         id,
         turnId,
         kind: 'artifact',
-        label: String(artifact.name ?? artifact.id ?? 'artefact'),
+        label: String(artifact.name ?? artifact.id ?? tx('activite.artefact')),
         ...stamp(part),
         ...allFields(part),
         ...(detail ? { detail } : {})
@@ -247,7 +257,7 @@ function fromParts(turnId: string, parts: ReadonlyArray<Record<string, unknown>>
         id,
         turnId,
         kind: 'error',
-        label: `Erreur (${String(part.cause ?? 'turn')})`,
+        label: tx('activite.erreurCause', { cause: String(part.cause ?? 'turn') }),
         ...stamp(part),
         ...allFields(part),
         ...(detail ? { detail } : {}),
@@ -284,7 +294,7 @@ function fromMessageThinking(turnId: string, message: Msg): Brute[] {
       id: `${turnId}:thread:reasoning`,
       turnId,
       kind: 'reasoning',
-      label: 'Raisonnement',
+      label: tx('activite.raisonnement'),
       detail: pensee
     })
   const vies = ((message as { providerStatusLog?: string[] }).providerStatusLog ?? []).filter(
@@ -353,7 +363,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'reasoning',
-        label: `Raisonnement (étape ${String(event.iteration ?? '?')})`,
+        label: tx('activite.raisonnementEtape', { n: String(event.iteration ?? '?') }),
         ...stamp(event)
       }
       rafale = { ligne, texte: String(event.text ?? ''), premier: event, fragments: 1 }
@@ -372,7 +382,9 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'model-call',
-        label: `Appel modèle${event.name ? ` — ${String(event.name)}` : ''}`,
+        label: event.name
+          ? tx('activite.appelModeleNomme', { nom: String(event.name) })
+          : tx('activite.appelModele'),
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {})
@@ -386,7 +398,9 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       // bloc de champs et personne ne voit qu'un echec a ete rattrape.
       const reprise = event.repriseProbableDe
       const mentionReprise =
-        typeof reprise === 'string' && reprise ? `reprend l'action ${reprise}` : undefined
+        typeof reprise === 'string' && reprise
+          ? tx('activite.reprise', { action: reprise })
+          : undefined
       const detail = joinDetail(
         mentionReprise,
         short(event.args),
@@ -426,7 +440,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'action',
-        label: String(event.name ?? 'résultat'),
+        label: String(event.name ?? tx('activite.resultat')),
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {}),
@@ -443,7 +457,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'error',
-        label: 'Erreur',
+        label: tx('activite.erreur'),
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {}),
@@ -458,7 +472,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'artifact',
-        label: String(artifact.name ?? artifact.id ?? 'artefact'),
+        label: String(artifact.name ?? artifact.id ?? tx('activite.artefact')),
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {})
@@ -473,7 +487,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'prompt',
-        label: 'Prompt système',
+        label: tx('activite.promptSysteme'),
         ...stamp(event),
         ...(detail ? { detail } : {})
       })
@@ -487,7 +501,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'usage',
-        label: 'Appel facturé',
+        label: tx('activite.appelFacture'),
         ...stamp(event),
         ...(detail ? { detail } : {})
       })
@@ -500,7 +514,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'done',
-        label: 'Issue du tour',
+        label: tx('activite.issueDuTour'),
         ...stamp(event),
         ...(detail ? { detail } : {})
       })
@@ -509,7 +523,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
     if (kind === 'done' || kind === 'cancelled') {
       const usage = event.usage as Record<string, unknown> | undefined
       const detail = joinDetail(
-        event.outcome ? `issue ${String(event.outcome)}` : undefined,
+        event.outcome ? tx('activite.issue', { issue: String(event.outcome) }) : undefined,
         usage ? short(usage) : undefined,
         rest(event, 'usage', 'outcome')
       )
@@ -517,7 +531,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         id,
         turnId,
         kind: 'done',
-        label: kind === 'cancelled' ? 'Tour annulé' : 'Tour terminé',
+        label: kind === 'cancelled' ? tx('activite.tourAnnule') : tx('activite.tourTermine'),
         ...stamp(event),
         ...allFields(event),
         ...(detail ? { detail } : {})
@@ -565,7 +579,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       id: `${turnId}:reasoning`,
       turnId,
       kind: 'reasoning',
-      label: 'Raisonnement',
+      label: tx('activite.raisonnement'),
       ...reasoningAt,
       detail: short(reasoning)
     })
@@ -575,7 +589,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       id: `${turnId}:delta`,
       turnId,
       kind: 'text',
-      label: 'Réponse',
+      label: tx('activite.reponse'),
       ...textAt,
       detail: short(text)
     })
@@ -627,8 +641,8 @@ export function detailCausal(event: Record<string, unknown>): string | undefined
     .map((payload) =>
       joinDetail(
         payload.name
-          ? `${String(payload.kind ?? 'charge')} « ${String(payload.name)} »`
-          : String(payload.kind ?? 'charge'),
+          ? `${String(payload.kind ?? tx('activite.charge'))} « ${String(payload.name)} »`
+          : String(payload.kind ?? tx('activite.charge')),
         short(payload.content)
       )
     )
@@ -710,7 +724,9 @@ function fromActivity(entries: ReadonlyArray<Record<string, unknown>>): Brute[] 
       id: `activity:${index}:${String(entry.ts ?? '')}`,
       turnId: '',
       kind: 'usage' as ModelActivityKind,
-      label: joinDetail(String(entry.kind ?? 'appel'), short(entry.label)) ?? 'appel',
+      label:
+        joinDetail(String(entry.kind ?? tx('activite.appel')), short(entry.label)) ??
+        tx('activite.appel'),
       ...isoStamp(entry.ts),
       ...allFields(entry),
       ...(detail ? { detail } : {})
@@ -787,9 +803,9 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * fichier a été nettoyé reste présent via ses parts durables.
  */
 /** Qui a touché le fichier, dit en clair plutôt qu'en nom de canal. */
-const AUTEUR_FICHIER: Record<string, string> = {
-  edit_file: 'édition directe',
-  subagent: 'sous-agent'
+const AUTEUR_FICHIER: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
+  edit_file: 'activite.editionDirecte',
+  subagent: 'activite.sousAgent'
 }
 
 /**
@@ -803,7 +819,8 @@ function fromFichiers(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
       ? trace.paths.filter((chemin): chemin is string => typeof chemin === 'string')
       : []
     const auteurBrut = typeof trace.source === 'string' ? trace.source : ''
-    const auteur = AUTEUR_FICHIER[auteurBrut] ?? auteurBrut
+    const cleAuteur = AUTEUR_FICHIER[auteurBrut]
+    const auteur = cleAuteur ? tx(cleAuteur) : auteurBrut
     const detail = joinDetail(
       chemins.length > 0 ? chemins.join(', ') : undefined,
       rest(trace, 'paths', 'source', 'timestamp', 'conversationId', 'turnId')
@@ -814,9 +831,14 @@ function fromFichiers(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
       kind: 'fichiers' as ModelActivityKind,
       label:
         joinDetail(
-          `${chemins.length} fichier${chemins.length > 1 ? 's' : ''} touché${chemins.length > 1 ? 's' : ''}`,
+          tx(
+            chemins.length > 1
+              ? 'activite.fichiersTouches.plusieurs'
+              : 'activite.fichiersTouches.un',
+            { n: chemins.length }
+          ),
           auteur || undefined
-        ) ?? 'fichiers touchés',
+        ) ?? tx('activite.fichiersTouches'),
       ...isoStamp(trace.timestamp),
       ...allFields(trace),
       ...(detail ? { detail } : {})
@@ -825,14 +847,14 @@ function fromFichiers(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
 }
 
 /** État d'une copie de travail, dit en clair. */
-const ETAT_BUREAU: Record<string, string> = {
-  isolated: 'isolée',
-  working: 'au travail',
-  ready: 'prête',
-  merged: 'publiée',
-  conflict: 'en conflit',
-  blocked: 'bloquée',
-  interrupted: 'interrompue'
+const ETAT_BUREAU: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
+  isolated: 'activite.bureau.isolee',
+  working: 'activite.bureau.auTravail',
+  ready: 'activite.bureau.prete',
+  merged: 'activite.bureau.publiee',
+  conflict: 'activite.bureau.enConflit',
+  blocked: 'activite.bureau.bloquee',
+  interrupted: 'activite.bureau.interrompue'
 }
 
 /**
@@ -843,7 +865,8 @@ const ETAT_BUREAU: Record<string, string> = {
 function fromBureaux(bureaux: ReadonlyArray<Record<string, unknown>>): Brute[] {
   return bureaux.map((bureau, index) => {
     const etatBrut = typeof bureau.state === 'string' ? bureau.state : ''
-    const etat = ETAT_BUREAU[etatBrut] ?? etatBrut
+    const cleEtat = ETAT_BUREAU[etatBrut]
+    const etat = cleEtat ? tx(cleEtat) : etatBrut
     const fichiers = Array.isArray(bureau.files) ? bureau.files : []
     const chemins = fichiers
       .map((fichier) => {
@@ -855,9 +878,15 @@ function fromBureaux(bureaux: ReadonlyArray<Record<string, unknown>>): Brute[] {
       .filter((chemin) => chemin !== '')
     const detail = joinDetail(
       short(bureau.task),
-      chemins.length > 0 ? `${chemins.length} fichier(s) : ${chemins.join(', ')}` : undefined,
-      typeof bureau.attentionReason === 'string' ? `attente : ${bureau.attentionReason}` : undefined,
-      typeof bureau.conflictFile === 'string' ? `conflit sur ${bureau.conflictFile}` : undefined,
+      chemins.length > 0
+        ? tx('activite.bureau.fichiers', { n: chemins.length, liste: chemins.join(', ') })
+        : undefined,
+      typeof bureau.attentionReason === 'string'
+        ? tx('activite.bureau.attente', { raison: bureau.attentionReason })
+        : undefined,
+      typeof bureau.conflictFile === 'string'
+        ? tx('activite.bureau.conflit', { fichier: bureau.conflictFile })
+        : undefined,
       rest(bureau, 'task', 'files', 'attentionReason', 'conflictFile', 'state', 'startedAtMs')
     )
     return {
@@ -865,7 +894,9 @@ function fromBureaux(bureaux: ReadonlyArray<Record<string, unknown>>): Brute[] {
       // Un bureau appartient a une CONVERSATION, pas a un tour : il traverse plusieurs tours.
       turnId: typeof bureau.turnId === 'string' ? bureau.turnId : '',
       kind: 'agent' as ModelActivityKind,
-      label: joinDetail(short(bureau.agentName) ?? 'sous-agent', etat || undefined) ?? 'sous-agent',
+      label:
+        joinDetail(short(bureau.agentName) ?? tx('activite.sousAgent'), etat || undefined) ??
+        tx('activite.sousAgent'),
       ...(typeof bureau.startedAtMs === 'number' ? { at: bureau.startedAtMs } : {}),
       ...allFields(bureau),
       ...(detail ? { detail } : {}),
@@ -908,9 +939,9 @@ function fromPromptCalls(calls: ReadonlyArray<Record<string, unknown>>): Brute[]
     const systeme = blocs(call.systemBlocks)
     const contexte = blocs(call.contextBlocks)
     const detail = joinDetail(
-      modele ? `modèle : ${modele}` : undefined,
-      systeme ? `système : ${systeme}` : undefined,
-      contexte ? `contexte injecté : ${contexte}` : undefined,
+      modele ? tx('activite.prompt.modele', { modele }) : undefined,
+      systeme ? tx('activite.prompt.systeme', { systeme }) : undefined,
+      contexte ? tx('activite.prompt.contexte', { contexte }) : undefined,
       typeof call.durationMs === 'number' ? `${call.durationMs} ms` : undefined,
       short(call.error),
       short(call.response)
@@ -921,12 +952,14 @@ function fromPromptCalls(calls: ReadonlyArray<Record<string, unknown>>): Brute[]
       kind: 'prompt' as ModelActivityKind,
       label:
         joinDetail(
-          'Prompt envoyé',
+          tx('activite.promptEnvoye'),
           short(call.actor),
           short(call.phase),
           short(call.provider),
-          typeof call.iteration === 'number' ? `étape ${call.iteration}` : undefined
-        ) ?? 'Prompt envoyé',
+          typeof call.iteration === 'number'
+            ? tx('activite.etape', { n: call.iteration })
+            : undefined
+        ) ?? tx('activite.promptEnvoye'),
       ...isoStamp(call.ts),
       ...allFields(call),
       ...(detail ? { detail } : {}),
@@ -936,12 +969,13 @@ function fromPromptCalls(calls: ReadonlyArray<Record<string, unknown>>): Brute[]
 }
 
 /** Nature de l'aller-retour Brain, dite en clair plutôt qu'en code interne. */
-const BRAIN_NATURE: Record<string, string> = {
-  automatic: 'contexte préchargé',
+// `brain_query` : nom d'outil, identique dans les deux langues.
+const BRAIN_NATURE: Record<string, Parameters<typeof traduireChatPanneaux>[0] | 'brain_query'> = {
+  automatic: 'activite.brain.automatique',
   query: 'brain_query',
-  empreinte: 'empreinte du dépôt',
-  recherche: 'recherche humaine',
-  depot: 'dépôt d’un fait'
+  empreinte: 'activite.brain.empreinte',
+  recherche: 'activite.brain.recherche',
+  depot: 'activite.brain.depot'
 }
 
 /**
@@ -953,13 +987,15 @@ const BRAIN_NATURE: Record<string, string> = {
 function fromBrain(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
   return traces.map((trace, index) => {
     const kind = typeof trace.kind === 'string' ? trace.kind : ''
-    const nature = BRAIN_NATURE[kind] ?? kind ?? ''
+    const cleNature = BRAIN_NATURE[kind]
+    const nature =
+      cleNature === 'brain_query' ? cleNature : cleNature ? tx(cleNature) : (kind ?? '')
     const statut = typeof trace.status === 'string' ? trace.status : undefined
     const injecte = typeof trace.injectedChars === 'number' ? trace.injectedChars : undefined
     const detail = joinDetail(
       short(trace.query),
-      statut ? `issue : ${statut}` : undefined,
-      injecte !== undefined ? `${injecte} caractères injectés` : undefined,
+      statut ? tx('activite.brain.issue', { statut }) : undefined,
+      injecte !== undefined ? tx('activite.brain.injectes', { n: injecte }) : undefined,
       rest(trace, 'query', 'status', 'injectedChars', 'timestamp', 'kind')
     )
     // L'ÉCHEC d'une récupération est un fait : un savoir vide ou indisponible explique une réponse
@@ -1026,7 +1062,7 @@ export function lignesDuFil(
         // ce qu'elles avaient declenche.
         turnId: turnIdDuTourSuivant(messages, messageIndex),
         kind: 'prompt',
-        label: 'Demande',
+        label: tx('activite.demande'),
         source: 'thread',
         ...(detail ? { detail } : {})
       })

@@ -10,6 +10,8 @@ import {
   type CostRow
 } from './conversation-cost'
 import { aggregatePromptComposition, type CompositionCallInput } from './prompt-composition'
+import { langueCourante } from '../langue'
+import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ConversationCostIndicator.css'
 
 /**
@@ -41,13 +43,14 @@ function cacheWriteHint(cacheWriteTokens: number | undefined): string {
       : cacheWriteTokens >= 1_000
         ? `${Math.round(cacheWriteTokens / 1_000)}k`
         : `${Math.round(cacheWriteTokens)}`
-  return ` (dont ${volume} tokens écrits en cache)`
+  return traduireChatPanneaux('cout.ecritsEnCache', langueCourante(), { volume })
 }
 
 export function ConversationCostIndicator({
   conversationId,
   busy
 }: Props): React.JSX.Element | null {
+  const { t } = useTextesChatPanneaux()
   /*
    * LES LIGNES PORTENT LE FIL DONT ELLES VIENNENT. Signalé le 2026-09-21 : « je navigue de conv en
    * conv et ça écrit le même coût ». Le serveur rendait bien un total par fil ; la pastille, elle,
@@ -157,11 +160,11 @@ export function ConversationCostIndicator({
         onClick={() =>
           setOpenConversationId((id) => (id === conversationId ? null : (conversationId ?? null)))
         }
-        title={
-          summary.rewritingContext
-            ? `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} %${cacheWriteHint(summary.cacheWriteTokens)} — le contexte est réécrit au lieu d’être relu`
-            : `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} %${cacheWriteHint(summary.cacheWriteTokens)} · cliquer pour le détail`
-        }
+        title={t(summary.rewritingContext ? 'cout.titre.reecrit' : 'cout.titre', {
+          appels: callsLabel(summary.calls),
+          pourcent: Math.round(summary.cacheHitRatio * 100),
+          ecrits: cacheWriteHint(summary.cacheWriteTokens)
+        })}
       >
         {summary.label}
         {summary.rewritingContext ? <span className="conv-cost-flag"> ⚠</span> : null}
@@ -170,7 +173,10 @@ export function ConversationCostIndicator({
         <div className="conv-cost-panel fade-in" data-testid="conversation-cost-panel">
           <div className="conv-cost-head">
             <span>
-              {callsLabel(summary.calls)} · cache {Math.round(summary.cacheHitRatio * 100)} %
+              {t('cout.entete', {
+                appels: callsLabel(summary.calls),
+                pourcent: Math.round(summary.cacheHitRatio * 100)
+              })}
               {totalDuration ? ` · ${totalDuration}` : ''}
             </span>
             <button
@@ -179,19 +185,17 @@ export function ConversationCostIndicator({
               onClick={() => void refresh(true)}
               disabled={loading}
             >
-              {loading ? '…' : 'Actualiser'}
+              {loading ? '…' : t('cout.actualiser')}
             </button>
           </div>
           {manualError && (
             <p className="conv-cost-warn" role="alert" data-testid="conversation-cost-error">
-              L’actualisation a échoué (journal des coûts illisible) — le total affiché peut être
-              périmé.
+              {t('cout.erreur')}
             </p>
           )}
           {summary.rewritingContext && (
             <p className="conv-cost-warn" data-testid="conversation-cost-warning">
-              Le contexte est réécrit à chaque appel au lieu d’être relu depuis le cache — c’est ce
-              qui fait grimper la facture.
+              {t('cout.reecrit')}
             </p>
           )}
           <ul className="conv-cost-rows">
@@ -206,7 +210,7 @@ export function ConversationCostIndicator({
                 <span className="conv-cost-time" data-testid={`conversation-time-${row.key}`}>
                   {formatDuration(row.durationMs ?? 0) ?? '—'}
                   {summary.durationMs > 0 && row.durationMs
-                    ? ` · ${timeSharePercent(row, summary.durationMs)} %`
+                    ? t('cout.partTemps', { n: timeSharePercent(row, summary.durationMs) })
                     : ''}
                 </span>
               </li>
@@ -216,8 +220,10 @@ export function ConversationCostIndicator({
             <div className="conv-cost-composition" data-testid="conversation-composition">
               <div className="conv-cost-head">
                 <span>
-                  Composition du prompt · {callsLabel(composition.calls)} ·{' '}
-                  {Math.round(composition.totalChars / 1000)} kcar injectés
+                  {t('cout.composition', {
+                    appels: callsLabel(composition.calls),
+                    kcar: Math.round(composition.totalChars / 1000)
+                  })}
                 </span>
               </div>
               <ul className="conv-cost-rows">
@@ -228,30 +234,22 @@ export function ConversationCostIndicator({
                   >
                     <span className="conv-cost-key">
                       {row.name}
-                      {row.channel === 'context' ? ' (contexte)' : ''}
+                      {row.channel === 'context' ? t('cout.composition.contexte') : ''}
                     </span>
                     <span className="conv-cost-bar" aria-hidden="true">
                       <span style={{ width: `${row.share}%` }} />
                     </span>
                     <span className="conv-cost-amount">
-                      {row.kcharsPerCall} kcar/appel · {row.share} %
+                      {t('cout.composition.parAppel', { kcar: row.kcharsPerCall, part: row.share })}
                     </span>
                     <span className="conv-cost-time">{callsLabel(row.calls)}</span>
                   </li>
                 ))}
               </ul>
-              <p className="conv-cost-note">
-                Taille RÉELLE de chaque bloc injecté, additionnée sur les appels. « non attribué » =
-                des caractères partis dans le prompt système qu’aucun bloc ne déclare. Pas de prix
-                ici : le coût d’un bloc dépend du cache, il ne se déduit pas d’un nombre de
-                caractères.
-              </p>
+              <p className="conv-cost-note">{t('cout.composition.note')}</p>
             </div>
           )}
-          <p className="conv-cost-note">
-            Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus. « — » =
-            durée non enregistrée par la source, pas une opération instantanée.
-          </p>
+          <p className="conv-cost-note">{t('cout.note')}</p>
         </div>
       )}
     </div>

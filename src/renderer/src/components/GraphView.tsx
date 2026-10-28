@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
-import { brainSubjectOf } from './graph-brain-categories'
+import { brainSubjectOf, libelleDeSujet } from './graph-brain-categories'
+import { formaterNombre, langueCourante } from '../langue'
+import {
+  traduireKnowledge,
+  useTextesKnowledge,
+  type CleKnowledge
+} from '../textes-ecrans/knowledge'
 import { doitResynchroniser, signatureCamera } from './graph-etiquettes-cadence'
 import { mesurerBlocGraphe } from './graph-perf'
 import { tailleSuivante } from './graph-taille-observee'
@@ -114,10 +120,16 @@ const MIN_LABEL_GAP = 34
 const LABEL_SCREEN_HEIGHT = 0.035
 
 /** Ce que fera le PROCHAIN clic — un bouton doit annoncer sa destination, pas son état. */
-const LIBELLE_BASCULE: Record<GraphLayoutMode, string> = {
-  force: 'Passer en arborescence (un anneau = un niveau, les branches portent la filiation)',
-  tree: 'Repasser en disposition libre (montre la connectivité)'
+const LIBELLE_BASCULE: Record<GraphLayoutMode, CleKnowledge> = {
+  force: 'graphe.bascule.versArbre',
+  tree: 'graphe.bascule.versLibre'
 }
+
+/**
+ * Un message posé dans un état (erreur, invite) hors du rendu : il prend la langue du moment où il
+ * naît, comme le reste du message d'erreur (conv-1170).
+ */
+const texteDuMoment = (cle: CleKnowledge): string => traduireKnowledge(cle, langueCourante())
 
 const ICONE_BASCULE: Record<GraphLayoutMode, string> = {
   force: '⁘',
@@ -155,6 +167,7 @@ export function GraphView({
   active: boolean
   onCleanMemory: (brainLabel: string) => void
 }): React.JSX.Element {
+  const { t, langue } = useTextesKnowledge()
   // Mode visuel (sombre vs galaxy) : choisi via le toggle de la toolbar, persisté entre lancements.
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>(() =>
     loadGraphLayoutMode(localStorage)
@@ -282,9 +295,7 @@ export function GraphView({
       })
       .catch((error) => {
         if (isCurrent())
-          setBrainsErr(
-            brainBusinessError('Impossible de lister les graphes de connaissances.', error)
-          )
+          setBrainsErr(brainBusinessError(texteDuMoment('graphe.erreur.listerGraphes'), error))
       })
       .finally(() => {
         if (isCurrent()) setBrainsLoading(false)
@@ -333,7 +344,7 @@ export function GraphView({
         refreshBrains()
       })
       .catch((error) => {
-        setErr(brainBusinessError('Impossible de rafraîchir le graphe de connaissances.', error))
+        setErr(brainBusinessError(texteDuMoment('graphe.erreur.rafraichir'), error))
         setLoading(false)
       })
   }, [evictGraphCache, refreshBrains, resetBrainSearchResults, selected])
@@ -385,8 +396,7 @@ export function GraphView({
         )
       })
       .catch((error) => {
-        if (current)
-          setThemesErr(brainBusinessError('Impossible de charger les thèmes du workspace.', error))
+        if (current) setThemesErr(brainBusinessError(texteDuMoment('graphe.erreur.themes'), error))
       })
     return () => {
       current = false
@@ -449,7 +459,7 @@ export function GraphView({
           setVaultSearch([])
           setSearchRetrieval({
             status: 'failed',
-            note: brainBusinessError('Recherche indisponible.', error)
+            note: brainBusinessError(texteDuMoment('graphe.erreur.recherche'), error)
           })
         })
     }, 200)
@@ -515,8 +525,7 @@ export function GraphView({
         if (shouldAutoFitGraphPhase('complete')) setInitialFitRequest((request) => request + 1)
       })
       .catch((error) => {
-        if (current)
-          setErr(brainBusinessError('Impossible de charger le graphe de connaissances.', error))
+        if (current) setErr(brainBusinessError(texteDuMoment('graphe.erreur.charger'), error))
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -566,8 +575,8 @@ export function GraphView({
     () =>
       selectedBrain?.kind === 'vault' && selectedBrain.themes
         ? selectedBrain.themes.map((theme) => ({ ...theme, count: theme.count ?? 0 }))
-        : buildThemeSummaries(graph.nodes, selectedBrain?.themes, selectedBrain?.metier),
-    [graph.nodes, selectedBrain]
+        : buildThemeSummaries(graph.nodes, selectedBrain?.themes, selectedBrain?.metier, langue),
+    [graph.nodes, langue, selectedBrain]
   )
   const themeOrder = useMemo(() => themeSummaries.map((theme) => theme.id), [themeSummaries])
   const themeCounts = useMemo(
@@ -577,9 +586,9 @@ export function GraphView({
   const searchCatalogThemes = useMemo(
     () =>
       selectedBrain?.kind === 'vault' && themeQuery.trim()
-        ? buildThemeSummaries(vaultSearch, [], selectedBrain.metier)
+        ? buildThemeSummaries(vaultSearch, [], selectedBrain.metier, langue)
         : themeSummaries,
-    [selectedBrain?.kind, selectedBrain?.metier, themeQuery, themeSummaries, vaultSearch]
+    [langue, selectedBrain?.kind, selectedBrain?.metier, themeQuery, themeSummaries, vaultSearch]
   )
   const catalogSearch = useMemo(
     () =>
@@ -668,7 +677,7 @@ export function GraphView({
             .filter((treeNode) => !treeNode.isLeaf && treeNode.depth > 0)
             .map((treeNode): GraphNode => ({
               id: `__tree__:${treeNode.id}`,
-              label: treeNode.label,
+              label: libelleDeSujet(treeNode.label, langue),
               group: treeNode.depth,
               treeNodeId: treeNode.id,
               treeDepth: treeNode.depth,
@@ -689,7 +698,7 @@ export function GraphView({
       }
     }
       }),
-    [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree]
+    [collapsedTreeNodeIds, displayGraph, langue, layoutMode, visibleTree]
   )
 
   /**
@@ -789,7 +798,7 @@ export function GraphView({
         x: Math.cos(n.angle) * pousse,
         y: Math.sin(n.angle) * pousse,
         // Dans la MÊME unité que la position : ~0,55 hauteur par caractère.
-        width: `${n.label} · ${n.leaves}`.length * hauteurEtiquette * 0.55,
+        width: `${libelleDeSujet(n.label, langue)} · ${n.leaves}`.length * hauteurEtiquette * 0.55,
         height: hauteurEtiquette,
         // Le nombre de fiches sous le nœud fait l'importance — SAUF pour le premier anneau. Les
         // catégories cognitives sont l'ancrage de toute la lecture : sans leurs noms, l'anneau ne
@@ -810,7 +819,7 @@ export function GraphView({
       const pose = poseDe.get(noeud.id)
       if (pose === undefined) continue
       const label = createConnectedLabel(
-        `${collapsedTreeNodeIds.has(noeud.id) ? '▸ ' : ''}${noeud.label} · ${noeud.leaves}`,
+        `${collapsedTreeNodeIds.has(noeud.id) ? '▸ ' : ''}${libelleDeSujet(noeud.label, langue)} · ${noeud.leaves}`,
         new THREE.Color(BAND_COLORS[noeud.depth % BAND_COLORS.length]).getStyle()
       )
       // Poussée vers l'EXTÉRIEUR le long de son propre rayon, puis écartée en Y si elle recouvrait
@@ -831,7 +840,7 @@ export function GraphView({
         disposable.material?.dispose?.()
       }
     }
-  }, [collapsedTreeNodeIds, layoutMode, tree, treeZoomTier, visibleTree])
+  }, [collapsedTreeNodeIds, langue, layoutMode, tree, treeZoomTier, visibleTree])
 
   /**
    * L'arbre est une vue 2D : on coupe la 3ᵉ dimension et on fait converger le zoom vers le CURSEUR.
@@ -1051,7 +1060,7 @@ export function GraphView({
         if (requestId === themeNodesRequestRef.current) {
           setThemeNodes([])
           // Ce canal écrasait l'erreur GLOBALE du graphe : il porte désormais la sienne, réessayable.
-          setThemeNodesErr(brainBusinessError('Impossible de charger les notes du thème.', error))
+          setThemeNodesErr(brainBusinessError(texteDuMoment('graphe.erreur.notesDuTheme'), error))
         }
       })
   }, [activeThemes, graphReload, selected, themeNodesReload])
@@ -1521,13 +1530,13 @@ export function GraphView({
       })
       .catch((error) => {
         if (requestId === fileRequestRef.current)
-          setFileErr(brainBusinessError('Impossible de charger le voisinage.', error))
+          setFileErr(brainBusinessError(texteDuMoment('graphe.erreur.voisinage'), error))
       })
       .finally(() => {
         if (requestId === fileRequestRef.current) setExpandingNodeId(null)
       })
     if (!nextNode.file) {
-      setFileErr('Ce nœud n’a pas de fichier source.')
+      setFileErr(texteDuMoment('graphe.erreur.sansFichier'))
       return
     }
     try {
@@ -1538,7 +1547,7 @@ export function GraphView({
       if (requestId === fileRequestRef.current) setFile(loadedFile)
     } catch (error) {
       if (requestId === fileRequestRef.current)
-        setFileErr(brainBusinessError('Impossible de lire la fiche.', error))
+        setFileErr(brainBusinessError(texteDuMoment('graphe.erreur.lireFiche'), error))
     }
   }
 
@@ -1550,16 +1559,13 @@ export function GraphView({
       clearNodeSelection()
       reloadAfterInboxDecision(selected)
     } catch (error) {
-      setFileErr(brainBusinessError('Impossible de retirer cette fiche du Brain.', error))
+      setFileErr(brainBusinessError(texteDuMoment('graphe.erreur.retirer'), error))
     }
   }
 
   async function supersedeSelectedKnowledge(): Promise<void> {
     if (!node || !node.id.startsWith('knowledge/') || selectedBrain?.kind !== 'vault') return
-    const replacementId = window.prompt(
-      'Identifiant de la fiche canonique de remplacement (knowledge/…)',
-      'knowledge/'
-    )
+    const replacementId = window.prompt(texteDuMoment('graphe.remplacer.invite'), 'knowledge/')
     if (!replacementId?.trim()) return
     setFileErr('')
     try {
@@ -1567,7 +1573,7 @@ export function GraphView({
       clearNodeSelection()
       reloadAfterInboxDecision(selected)
     } catch (error) {
-      setFileErr(brainBusinessError('Impossible de remplacer cette fiche.', error))
+      setFileErr(brainBusinessError(texteDuMoment('graphe.erreur.remplacer'), error))
     }
   }
 
@@ -1750,12 +1756,12 @@ export function GraphView({
     >
       <header className="graph-toolbar">
         <ModuleHeader
-          eyebrow="Connaissances connectées"
+          eyebrow={t('graphe.eyebrow')}
           title="Memory"
-          description="Explore les connaissances reliées de ton Brain."
+          description={t('graphe.description')}
         />
         <select
-          aria-label="Graphe de connaissances"
+          aria-label={t('graphe.selecteur')}
           value={selected}
           onChange={(event) => {
             resetBrainSearchResults()
@@ -1771,7 +1777,7 @@ export function GraphView({
         >
           {brains.length === 0 && (
             <option value="">
-              {brainsLoading ? 'Détection des graphes…' : 'Aucun graphe accessible'}
+              {brainsLoading ? t('graphe.detection') : t('graphe.aucunGraphe')}
             </option>
           )}
           {brains.map((brain) => (
@@ -1788,9 +1794,9 @@ export function GraphView({
               type="button"
               className="graph-brains-retry"
               onClick={refreshBrains}
-              title="Relancer la détection des graphes de connaissances"
+              title={t('graphe.detection.relancerTitre')}
             >
-              Réessayer la détection
+              {t('graphe.detection.reessayer')}
             </button>
           </span>
         )}
@@ -1799,8 +1805,8 @@ export function GraphView({
           className="graph-refresh"
           onClick={refreshGraph}
           disabled={loading}
-          aria-label="Rafraîchir les graphes"
-          title="Rafraîchir les graphes"
+          aria-label={t('graphe.rafraichir')}
+          title={t('graphe.rafraichir')}
         >
           ↻
         </button>
@@ -1817,9 +1823,9 @@ export function GraphView({
           // arborescence il aurait annoncé « éteint » à un lecteur d'écran alors qu'un agencement est
           // bien actif. `mixed` est la valeur prévue par ARIA pour un troisième état.
           aria-checked={layoutMode === 'tree'}
-          aria-label="Disposition du graphe"
+          aria-label={t('graphe.disposition')}
           data-layout-mode={layoutMode}
-          title={LIBELLE_BASCULE[layoutMode]}
+          title={t(LIBELLE_BASCULE[layoutMode])}
         >
           {ICONE_BASCULE[layoutMode]}
         </button>
@@ -1833,7 +1839,7 @@ export function GraphView({
             saveGraphVisualMode(localStorage, next)
           }}
           aria-checked={visualMode === 'galaxy'}
-          title={visualMode === 'galaxy' ? 'Repasser en mode sombre' : 'Passer en mode galaxy'}
+          title={t(visualMode === 'galaxy' ? 'graphe.mode.versSombre' : 'graphe.mode.versGalaxy')}
         >
           <span className="graph-mode-switch__track" aria-hidden="true">
             <span className="graph-mode-switch__icon">🌑</span>
@@ -1845,10 +1851,11 @@ export function GraphView({
           type="button"
           className="graph-clean-memory"
           onClick={() =>
+            // « brain actif » part dans la consigne de l'agent brainwash (App.tsx), en français.
             onCleanMemory(brains.find((brain) => brain.path === selected)?.label ?? 'brain actif')
           }
           disabled={!selected || loading}
-          title="Ouvrir une conversation brainwash pour auditer ce brain"
+          title={t('graphe.cleanMemory.titre')}
         >
           Clean memory
         </button>
@@ -1860,30 +1867,30 @@ export function GraphView({
                 ? ` / ${graph.totalNodes}`
                 : ''}
             </strong>{' '}
-            nœuds
+            {t('graphe.stats.noeuds')}
           </span>
           <span>
             <strong>{graph.links.length}</strong> relations
           </span>
           <span>
-            <strong>{themeSummaries.length}</strong> thèmes
+            <strong>{themeSummaries.length}</strong> {t('graphe.stats.themes')}
           </span>
           {inboxPending > 0 && (
             <span className="graph-stat-inbox">
-              <strong>{inboxPending}</strong> en attente de revue
+              <strong>{inboxPending}</strong> {t('graphe.stats.enAttente')}
             </span>
           )}
         </div>
       </header>
 
-      <aside ref={themeSidebarRef} className="theme-sidebar" aria-label="Filtres de thèmes">
+      <aside ref={themeSidebarRef} className="theme-sidebar" aria-label={t('graphe.filtres')}>
         <div className="sidebar-heading">
-          <span>Rechercher</span>
-          <button onClick={() => setActiveThemes(new Set())}>Effacer</button>
+          <span>{t('graphe.rechercher')}</span>
+          <button onClick={() => setActiveThemes(new Set())}>{t('graphe.effacer')}</button>
         </div>
         <input
-          aria-label="Rechercher un thème ou une fiche"
-          placeholder="Thème ou fiche…"
+          aria-label={t('graphe.recherche.aria')}
+          placeholder={t('graphe.recherche.placeholder')}
           value={themeQuery}
           onChange={(event) => {
             // Retire A dans le même rendu qui affiche la saisie B : aucun verdict/résultat
@@ -1897,7 +1904,7 @@ export function GraphView({
           onClick={() => setActiveThemes(new Set())}
         >
           <i style={{ background: visualProfile.palette[0] }} />
-          <span>Tous les thèmes</span>
+          <span>{t('graphe.tousLesThemes')}</span>
           <small>
             {graph.totalNodes && graph.totalNodes !== graph.nodes.length
               ? `${graph.nodes.length} / ${graph.totalNodes}`
@@ -1923,7 +1930,7 @@ export function GraphView({
               className="graph-themes-retry"
               onClick={() => setThemesReload((request) => request + 1)}
             >
-              Réessayer
+              {t('commun.reessayer')}
             </button>
           </p>
         )}
@@ -1935,14 +1942,14 @@ export function GraphView({
               className="graph-theme-nodes-retry"
               onClick={() => setThemeNodesReload((request) => request + 1)}
             >
-              Réessayer
+              {t('commun.reessayer')}
             </button>
           </p>
         )}
         <div className="theme-list">
           {themeQuery.trim() && visibleSearchNodes.length > 0 && (
-            <div className="node-search-results" aria-label="Fiches trouvées">
-              <span className="search-results-heading">Fiches</span>
+            <div className="node-search-results" aria-label={t('graphe.fichesTrouvees')}>
+              <span className="search-results-heading">{t('graphe.fiches')}</span>
               {visibleSearchNodes.map((resultNode) => (
                 <button
                   key={resultNode.id}
@@ -1955,8 +1962,8 @@ export function GraphView({
                     {brainScoreChannelLabel(resultNode)}
                     {' · '}
                     {resultNode.score !== undefined
-                      ? `pertinence locale ${Math.round(resultNode.score)}`
-                      : 'pertinence locale —'}
+                      ? t('graphe.pertinence', { score: Math.round(resultNode.score) })
+                      : t('graphe.pertinence.aucune')}
                     {(resultNode.relations?.length ?? 0) > 0
                       ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
                       : ''}
@@ -1966,7 +1973,7 @@ export function GraphView({
             </div>
           )}
           {themeQuery.trim() && catalogSearch.themes.length > 0 && (
-            <span className="search-results-heading">Thèmes</span>
+            <span className="search-results-heading">{t('commun.themes')}</span>
           )}
           {catalogSearch.themes.map((theme) => {
             const colorIndex = themeSummaries.findIndex((item) => item.id === theme.id)
@@ -1990,52 +1997,54 @@ export function GraphView({
           })}
         </div>
         <p className="theme-sidebar__note">
-          <strong>Mode surbrillance</strong>
+          <strong>{t('graphe.surbrillance')}</strong>
           {activeThemes.size === 0
-            ? ' Tous les nœuds sont actifs.'
-            : ` ${highlightedCount} nœuds actifs. Le reste demeure visible comme contexte.`}
+            ? ` ${t('graphe.surbrillance.tous')}`
+            : ` ${t('graphe.surbrillance.actifs', { n: highlightedCount })}`}
         </p>
       </aside>
 
-      {columnResizer('theme', 'Redimensionner la colonne Thèmes')}
+      {columnResizer('theme', t('graphe.redimensionner.themes'))}
 
       <main className="graph-stage">
         <div className="graph-stage__heading">
-          <span>{activeThemes.size === 0 ? 'Tous les thèmes' : 'Thèmes actifs'}</span>
+          <span>{t(activeThemes.size === 0 ? 'graphe.tousLesThemes' : 'graphe.themesActifs')}</span>
           <strong>
             {activeThemes.size === 0
-              ? 'Vue d’ensemble'
+              ? t('graphe.vueEnsemble')
               : [...activeThemes]
                   .map((theme) => themeSummaries.find((item) => item.id === theme)?.label ?? theme)
                   .join(' + ')}
           </strong>
           <small>
-            {highlightedCount} nœuds mis en évidence · {graph.nodes.length - highlightedCount} de
-            contexte
+            {t('graphe.miseEnEvidence', {
+              n: highlightedCount,
+              contexte: graph.nodes.length - highlightedCount
+            })}
           </small>
         </div>
         {loading && (
           <div className="graph-loading" role="status" aria-live="polite">
             <Spinner lg />
-            <span className="graph-loading__label">Chargement du graphe…</span>
+            <span className="graph-loading__label">{t('graphe.chargement')}</span>
           </div>
         )}
         {expandingNodeId && !loading && (
           <div className="graph-status">
-            <Spinner /> Chargement des connexions…
+            <Spinner /> {t('graphe.chargementConnexions')}
           </div>
         )}
         {err && (
           <div className="graph-status graph-status--error" role="alert">
             <span className="graph-status__message">{err}</span>
             <button type="button" className="graph-status__retry" onClick={retryGraph}>
-              Réessayer
+              {t('commun.reessayer')}
             </button>
           </div>
         )}
         {!brainsLoading && !loading && !err && selected && graph.nodes.length === 0 && (
           <div className="graph-status graph-status--empty">
-            <span>Aucun nœud disponible pour ce graphe.</span>
+            <span>{t('graphe.vide')}</span>
             {/* Un écran vide sans issue laissait l'utilisateur sans recours : deux sorties concrètes. */}
             <div className="graph-empty-actions">
               <button
@@ -2044,10 +2053,10 @@ export function GraphView({
                 onClick={() => void refreshGraph()}
                 disabled={!selected}
               >
-                Réindexer ce graphe
+                {t('graphe.vide.reindexer')}
               </button>
               <button type="button" className="graph-empty-brains" onClick={refreshBrains}>
-                Relancer la détection des graphes
+                {t('graphe.vide.relancerDetection')}
               </button>
             </div>
           </div>
@@ -2058,8 +2067,10 @@ export function GraphView({
           (graph.totalNodes as number) > graph.nodes.length && (
             <div className="graph-truncation" role="status">
               <span>
-                Graphe TRONQUÉ : {graph.nodes.length} nœuds affichés sur {graph.totalNodes}. Les
-                autres ne sont ni cherchés ni cliquables.
+                {t('graphe.tronque', {
+                  affiches: graph.nodes.length,
+                  total: graph.totalNodes ?? 0
+                })}
               </span>
               <button
                 type="button"
@@ -2071,7 +2082,7 @@ export function GraphView({
                 }
                 disabled={settings.lod >= 10_000}
               >
-                Charger plus de nœuds
+                {t('graphe.tronque.plus')}
               </button>
             </div>
           )}
@@ -2127,7 +2138,7 @@ export function GraphView({
                   type="button"
                   className={`theme-cluster-label ${activeThemes.has(theme.id) ? 'is-active' : ''}`}
                   data-theme-id={theme.id}
-                  aria-label={`Filtrer par ${theme.label}`}
+                  aria-label={t('graphe.filtrerPar', { theme: theme.label })}
                   aria-pressed={activeThemes.has(theme.id)}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -2147,7 +2158,7 @@ export function GraphView({
             )}
           </div>
           {layoutMode === 'tree' && visibleTree && (
-            <div className="tree-branch-controls" role="toolbar" aria-label="Branches du Brain">
+            <div className="tree-branch-controls" role="toolbar" aria-label={t('graphe.branches')}>
               {visibleTree.nodes
                 .filter((treeNode) => treeNode.depth === 1 && !treeNode.isLeaf)
                 .map((treeNode) => (
@@ -2158,32 +2169,41 @@ export function GraphView({
                     aria-pressed={collapsedTreeNodeIds.has(treeNode.id)}
                     data-tree-leaves={treeNode.leaves}
                     onClick={() => toggleTreeBranch(treeNode.id)}
-                    title={`${collapsedTreeNodeIds.has(treeNode.id) ? 'Déplier' : 'Replier'} ${treeNode.label}`}
+                    title={t(
+                      collapsedTreeNodeIds.has(treeNode.id)
+                        ? 'graphe.branche.deplier'
+                        : 'graphe.branche.replier',
+                      { branche: libelleDeSujet(treeNode.label, langue) }
+                    )}
                   >
                     <span aria-hidden="true">
                       {collapsedTreeNodeIds.has(treeNode.id) ? '▸' : '▾'}
                     </span>
-                    {treeNode.label}
+                    {libelleDeSujet(treeNode.label, langue)}
                     <small>{treeNode.leaves}</small>
                   </button>
                 ))}
             </div>
           )}
           {settings.health && (
-            <aside className="graph-health-lens" aria-label="Relations à vérifier">
+            <aside className="graph-health-lens" aria-label={t('graphe.sante')}>
               <header>
-                <strong>Relations à vérifier</strong>
+                <strong>{t('graphe.sante')}</strong>
                 <span>{healthIssues.length}</span>
               </header>
               {healthIssues.length === 0 ? (
-                <p>Aucune contradiction ni connaissance remplacée dans cette vue.</p>
+                <p>{t('graphe.sante.vide')}</p>
               ) : (
                 healthIssues.slice(0, 12).map((issue) => (
                   <div
                     className={`graph-health-issue is-${issue.relation}`}
                     key={`${issue.relation}:${issue.source.id}:${issue.target.id}`}
                   >
-                    <span>{issue.relation === 'contradicts' ? 'Contradiction' : 'Remplace'}</span>
+                    <span>
+                      {issue.relation === 'contradicts'
+                        ? 'Contradiction'
+                        : t('graphe.sante.remplace')}
+                    </span>
                     <button type="button" onClick={() => void openNode(issue.source)}>
                       {issue.source.label}
                     </button>
@@ -2212,7 +2232,7 @@ export function GraphView({
               }}
             />
             <strong>{node.label}</strong>
-            <span>Ouvrir le détail →</span>
+            <span>{t('graphe.ouvrirDetail')}</span>
           </button>
         )}
         {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
@@ -2221,12 +2241,14 @@ export function GraphView({
           <button
             type="button"
             className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
-            aria-label="Poste de travail du savoir"
+            aria-label={t('graphe.poste')}
             aria-expanded={panelTab === 'workbench'}
             title={
               inboxPending > 0
-                ? `${inboxPending} candidat${inboxPending === 1 ? '' : 's'} en attente de revue`
-                : 'Boîte de réception et banc d’essai de récupération'
+                ? t(inboxPending === 1 ? 'graphe.poste.candidat' : 'graphe.poste.candidats', {
+                    n: inboxPending
+                  })
+                : t('graphe.poste.titre')
             }
             onClick={() =>
               setPanelTab((current) => (current === 'workbench' ? 'node' : 'workbench'))
@@ -2243,11 +2265,11 @@ export function GraphView({
         {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && (
           <div className="graph-workbench-popover">
             <div className="graph-settings-popover__heading">
-              <strong>Savoir</strong>
+              <strong>{t('graphe.poste.savoir')}</strong>
               <button
                 type="button"
                 onClick={() => setPanelTab('node')}
-                aria-label="Fermer le poste de travail"
+                aria-label={t('graphe.poste.fermer')}
               >
                 ×
               </button>
@@ -2268,9 +2290,9 @@ export function GraphView({
         <button
           type="button"
           className={`graph-settings-button ${panelTab === 'visibility' ? 'is-active' : ''}`}
-          aria-label="Réglages de visibilité"
+          aria-label={t('graphe.visibilite.reglages')}
           aria-expanded={panelTab === 'visibility'}
-          title="Réglages de visibilité"
+          title={t('graphe.visibilite.reglages')}
           onClick={() =>
             setPanelTab((current) => (current === 'visibility' ? 'node' : 'visibility'))
           }
@@ -2280,56 +2302,56 @@ export function GraphView({
         {panelTab === 'visibility' && (
           <div className="graph-settings-popover">
             <div className="graph-settings-popover__heading">
-              <strong>Visibilité</strong>
+              <strong>{t('graphe.visibilite')}</strong>
               <button
                 type="button"
                 onClick={() => setPanelTab('node')}
-                aria-label="Fermer les réglages"
+                aria-label={t('graphe.visibilite.fermer')}
               >
                 ×
               </button>
             </div>
             <div className="visibility-settings">
               <SettingsSection
-                title="Contenu affiché"
+                title={t('graphe.visibilite.contenu')}
                 onReset={() => {
                   invalidatePendingGraphFit()
                   setSettings(DEFAULT_GRAPH_VISIBILITY_SETTINGS)
                 }}
               >
                 <ToggleRow
-                  label="Libellés au survol"
+                  label={t('graphe.visibilite.libelles')}
                   checked={settings.labels}
                   onChange={(labels) => patchSettings({ labels })}
                 />
                 {layoutMode !== 'tree' && (
                   <ToggleRow
-                    label="Liens"
+                    label={t('commun.liens')}
                     checked={settings.links}
                     onChange={(links) => patchSettings({ links })}
                   />
                 )}
                 <ToggleRow
-                  label="Nœuds sans lien"
+                  label={t('graphe.visibilite.orphelins')}
                   checked={settings.orphans}
                   onChange={(orphans) => patchSettings({ orphans })}
                 />
                 {layoutMode !== 'tree' && (
                   <ToggleRow
-                    label="Flèches de direction"
+                    label={t('graphe.visibilite.fleches')}
                     checked={settings.arrows}
                     onChange={(arrows) => patchSettings({ arrows })}
                   />
                 )}
                 <ToggleRow
-                  label="Relations à vérifier"
+                  label={t('graphe.sante')}
                   checked={settings.health}
                   onChange={(health) => patchSettings({ health })}
                 />
               </SettingsSection>
-              <SettingsSection title="Lisibilité">
+              <SettingsSection title={t('graphe.lisibilite')}>
                 <RangeRow
-                  label="Opacité du contexte"
+                  label={t('graphe.lisibilite.opacite')}
                   value={settings.contextOpacity}
                   min={0.05}
                   max={0.8}
@@ -2338,7 +2360,7 @@ export function GraphView({
                   onChange={(contextOpacity) => patchSettings({ contextOpacity })}
                 />
                 <RangeRow
-                  label="Taille des nœuds"
+                  label={t('graphe.lisibilite.taille')}
                   value={settings.nodeSize}
                   min={0.5}
                   max={3}
@@ -2348,7 +2370,7 @@ export function GraphView({
                 />
                 {layoutMode !== 'tree' && (
                   <RangeRow
-                    label="Épaisseur des liens"
+                    label={t('graphe.lisibilite.epaisseur')}
                     value={settings.linkWidth}
                     min={0.1}
                     max={2}
@@ -2359,9 +2381,9 @@ export function GraphView({
                 )}
               </SettingsSection>
               {layoutMode !== 'tree' && (
-                <SettingsSection title="Disposition">
+                <SettingsSection title={t('graphe.agencement')}>
                   <RangeRow
-                    label="Espacement des nœuds"
+                    label={t('graphe.agencement.espacement')}
                     value={settings.nodeSpacing}
                     min={30}
                     max={240}
@@ -2372,38 +2394,32 @@ export function GraphView({
                       patchSettings({ nodeSpacing })
                     }}
                   />
-                  <p className="setting-help">
-                    Augmentez cette valeur pour étaler le Brain et distinguer les relations.
-                  </p>
+                  <p className="setting-help">{t('graphe.agencement.aide')}</p>
                 </SettingsSection>
               )}
-              <SettingsSection title="Nombre de nœuds">
+              <SettingsSection title={t('graphe.nombre')}>
                 <RangeRow
-                  label="Nœuds affichés"
+                  label={t('graphe.nombre.affiches')}
                   value={settings.lod}
                   min={100}
                   max={10_000}
                   step={100}
-                  display={settings.lod.toLocaleString('fr-FR')}
+                  display={formaterNombre(settings.lod)}
                   onChange={(lod) => patchSettings({ lod })}
                 />
-                <p className="setting-help">
-                  Affiche en priorité les nœuds les plus connectés du graphe.
-                </p>
+                <p className="setting-help">{t('graphe.nombre.aide')}</p>
               </SettingsSection>
             </div>
           </div>
         )}
         <div className="graph-hint">
-          {layoutMode === 'tree'
-            ? 'Glisser : déplacer · molette : zoomer · clic : sélectionner'
-            : 'Glisser : pivoter · molette : zoomer · clic : sélectionner'}
+          {t(layoutMode === 'tree' ? 'graphe.aide.arbre' : 'graphe.aide.libre')}
         </div>
       </main>
 
       {detailOpen && (
         <>
-          {columnResizer('detail', 'Redimensionner la colonne de droite')}
+          {columnResizer('detail', t('graphe.redimensionner.detail'))}
           <aside ref={visibilitySidebarRef} className="visibility-sidebar is-detail-open">
             {node ? (
               <NodePanel

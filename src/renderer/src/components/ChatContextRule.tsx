@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 
 /**
  * LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
@@ -32,6 +33,7 @@ export function ChatContextRule({
   /** Panneau de detail (avec l'action Compacter), fabrique par le parent. */
   panelNode?: ReactNode
 }): React.JSX.Element | null {
+  const { t } = useTextesChatFil()
   const [survole, setSurvole] = useState(false)
   const [fige, setFige] = useState(false)
   const zoneRef = useRef<HTMLDivElement>(null)
@@ -69,7 +71,7 @@ export function ChatContextRule({
           contexte au bout de la jauge, pas tout a droite mais a droite de la jauge qui progresse ») :
           il suit la pointe, le rail gris reprend apres lui (ChatView.css). */}
       <span className="chat-context-rule-libelle" aria-hidden="true">
-        contexte
+        {t('contexte.libelle')}
       </span>
       {panelNode ? (
         survole || fige ? panelNode : null

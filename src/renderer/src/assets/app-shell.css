@@ -230,12 +230,22 @@
   scrollbar-width: none;
 }
 
+/* LE MENU LAISSE LA PLACE À L'ANNEAU DE FOCUS (2026-10-28, conv-1208 : « le border est coupé à
+   gauche et à droite », capsule « Chat » du menu DÉPLIÉ). L'anneau de focus de Nébuleuse (2 px de
+   trait + 2 px d'écart) se dessine 4 px HORS de l'item ; `overflow-y: auto` rogne aussi l'axe
+   horizontal, et l'item remplissait toute la largeur de `.nav` : 4 px coupés de chaque côté
+   (mesuré dans l'app, rail déplié). `.nav` reçoit donc 4 px de marge intérieure, rendus par une
+   marge négative : les items gardent leur taille et leur place, seule la zone de rognage s'élargit
+   (elle déborde dans les 12 px de marge du rail, 8 px replié). */
 .nav {
+  --nav-anneau: 4px;
   display: flex;
   flex-direction: column;
   gap: var(--s4);
   overflow-y: auto;
   flex: 1;
+  padding: var(--nav-anneau);
+  margin: calc(-1 * var(--nav-anneau));
 }
 .nav-group {
   display: flex;

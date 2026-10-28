@@ -28,6 +28,10 @@ import {
 
 /** Côté de la fenêtre (carrée, transparente) : la bille, son halo et la pastille qui déborde. */
 export const TAILLE_MASCOTTE = 80
+/** Diamètre du halo (`.ob` et `.h` de la page), centré dans la fenêtre : le bord visible de la bille. */
+const TAILLE_HALO = 64
+/** Bande transparente entre le bord de la fenêtre et le halo : les cartes s'y collent (conv-1195). */
+export const RETRAIT_HALO = (TAILLE_MASCOTTE - TAILLE_HALO) / 2
 /** Distance au coin de la zone de travail (au-dessus de la barre des tâches, pas dessous). */
 const MARGE_MASCOTTE = 6
 
@@ -148,25 +152,42 @@ export function placerMascotte(zone: Rect): Rect {
  *   aucune ne tient (écran très étroit) : le côté le plus large ;
  * - sens : bille dans la moitié BASSE de l'écran, la pile part du bas de la bille et monte ; dans
  *   la moitié haute, elle part du haut de la bille et descend.
- * Au coin d'origine, le résultat est la zone d'avant : cartes à gauche, posées sur le bas de l'écran.
+ *
+ * CARTES COLLÉES AU HALO (conv-1195, 2026-10-28, demande : « j'aimerais que les notifs et la
+ * mascotte soient snap ensemble ») : la carte était posée à `MARGE_CARTE` (12 px) de la FENÊTRE de
+ * la bille, elle-même transparente sur `RETRAIT_HALO` (8 px) autour du halo — 20 px de vide visible.
+ * La carte touche maintenant le halo, et son bas (ou son haut, pile qui descend) est au niveau du
+ * sien. Elle empiète donc sur la bande transparente de la fenêtre de la bille, jamais sur le halo :
+ * le glisser, lu sur `.ob` seul (`PRELOAD_MASCOTTE`), reste entier.
  */
 export function zoneDesCartes(bille: Rect, zone: Rect): ZoneDesCartes {
   const droiteZone = zone.x + zone.width
   const basZone = zone.y + zone.height
-  const droiteBille = bille.x + bille.width
-  const placeAGauche = bille.x - zone.x
-  const placeADroite = droiteZone - droiteBille
-  const besoin = LARGEUR_POPUP + MARGE_CARTE
+  const halo = {
+    gauche: bille.x + RETRAIT_HALO,
+    droite: bille.x + bille.width - RETRAIT_HALO,
+    haut: bille.y + RETRAIT_HALO,
+    bas: bille.y + bille.height - RETRAIT_HALO
+  }
+  const placeAGauche = halo.gauche - zone.x
+  const placeADroite = droiteZone - halo.droite
+  const besoin = LARGEUR_POPUP
   const aGauche = placeAGauche >= besoin || (placeADroite < besoin && placeAGauche >= placeADroite)
+  // `disposerPopups` écarte la carte de `MARGE_CARTE` du bord de sa zone : la zone dépasse le halo
+  // d'autant, pour que la carte arrive pile sur lui.
   const horizontal: Pick<ZoneDesCartes, 'x' | 'width' | 'bord'> = aGauche
-    ? { x: zone.x, width: Math.max(0, placeAGauche), bord: 'droite' }
-    : { x: droiteBille, width: Math.max(0, placeADroite), bord: 'gauche' }
+    ? { x: zone.x, width: Math.max(0, placeAGauche + MARGE_CARTE), bord: 'droite' }
+    : {
+        x: halo.droite - MARGE_CARTE,
+        width: Math.max(0, placeADroite + MARGE_CARTE),
+        bord: 'gauche'
+      }
   const enBas = bille.y + bille.height / 2 >= zone.y + zone.height / 2
   if (enBas) {
-    const bas = Math.min(basZone, bille.y + bille.height + MARGE_CARTE)
+    const bas = Math.min(basZone, halo.bas + MARGE_CARTE)
     return { ...horizontal, y: zone.y, height: Math.max(0, bas - zone.y), sens: 'haut' }
   }
-  const haut = Math.max(zone.y, bille.y - MARGE_CARTE)
+  const haut = Math.max(zone.y, halo.haut - MARGE_CARTE)
   return { ...horizontal, y: haut, height: Math.max(0, basZone - haut), sens: 'bas' }
 }
 
@@ -222,11 +243,11 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 body{display:grid;place-items:center;font-family:ui-monospace,Consolas,monospace;user-select:none}
 .m{display:grid;place-items:center;width:68px;height:68px}
 .m>*{grid-area:1/1}
-.ob{display:grid;place-items:center;width:64px;height:64px;cursor:pointer;touch-action:none;transition:transform .2s}
+.ob{display:grid;place-items:center;width:${TAILLE_HALO}px;height:${TAILLE_HALO}px;cursor:pointer;touch-action:none;transition:transform .2s}
 .ob:active{cursor:grabbing}
 .m:hover .ob{transform:scale(1.06)}
 .ob>*{grid-area:1/1;border-radius:50%;transform:rotate(0deg)}
-.h{display:none;width:64px;height:64px;overflow:visible;border-radius:0}
+.h{display:none;width:${TAILLE_HALO}px;height:${TAILLE_HALO}px;overflow:visible;border-radius:0}
 .h circle{fill:none;stroke-width:2}
 .bw,.bk,.bl{width:52px;height:52px}
 .bw{background:radial-gradient(circle,#fff9 0,#fff2 42%,#fff0 62%),${ANNEAU}}

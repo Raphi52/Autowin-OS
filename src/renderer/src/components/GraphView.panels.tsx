@@ -4,6 +4,7 @@ import { champsDeConnaissance } from './node-detail-fields'
 import { brainScoreChannelLabel, nodeThemeIds, type GraphNode } from './graph-view-model'
 import { Spinner } from './Spinner'
 import { useState } from 'react'
+import { useTextesKnowledge } from '../textes-ecrans/knowledge'
 
 /**
  * Sous-composants de présentation de l'observatoire 3D (GraphView) : sections de
@@ -19,11 +20,12 @@ export function SettingsSection({
   onReset?: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   return (
     <section className="settings-section">
       <div className="settings-section__heading">
         <span>{title}</span>
-        {onReset && <button onClick={onReset}>Réinitialiser</button>}
+        {onReset && <button onClick={onReset}>{t('panneau.reinitialiser')}</button>}
       </div>
       {children}
     </section>
@@ -122,6 +124,7 @@ export function NodePanel({
   /** Ferme le panneau de droite (désélectionne le nœud). */
   onClose?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   // Les liens d'une fiche fournie se comptent par dizaines et melangent toutes les relations :
   // sans ce filtre, retrouver « qui me cite » revenait a lire la liste entiere a l'oeil.
   const [relation, setRelation] = useState('')
@@ -134,9 +137,9 @@ export function NodePanel({
   return (
     <div className="node-panel">
 
-      <nav className="node-links" aria-label="Nœuds reliés">
+      <nav className="node-links" aria-label={t('panneau.liens.aria')}>
         <div className="node-links__heading">
-          <strong>Liens</strong>
+          <strong>{t('commun.liens')}</strong>
           <span>
             {liensVisibles.length === linkedNodes.length
               ? linkedNodes.length
@@ -151,11 +154,11 @@ export function NodePanel({
         {relationsPresentes.length > 1 && (
           <select
             className="node-links__relation"
-            aria-label="Filtrer les liens par relation"
+            aria-label={t('panneau.liens.filtre')}
             value={relation}
             onChange={(event) => setRelation(event.target.value)}
           >
-            <option value="">Toutes relations</option>
+            <option value="">{t('panneau.liens.toutes')}</option>
             {relationsPresentes.map((nom) => (
               <option key={nom} value={nom}>
                 {nom}
@@ -164,7 +167,7 @@ export function NodePanel({
           </select>
         )}
 
-        {liensVisibles.length === 0 && <p>Aucun nœud relié dans cette vue.</p>}
+        {liensVisibles.length === 0 && <p>{t('panneau.liens.aucun')}</p>}
         {liensVisibles.map((linked) => (
           <button
             key={`${linked.direction}:${linked.node.id}`}
@@ -178,7 +181,7 @@ export function NodePanel({
         ))}
         {deuxiemeSaut && deuxiemeSaut.length > 0 && (
           <details className="node-links__saut" data-testid="node-second-hop">
-            <summary>Voisinage à 2 sauts ({deuxiemeSaut.length})</summary>
+            <summary>{t('panneau.deuxSauts', { n: deuxiemeSaut.length })}</summary>
             {deuxiemeSaut.map((saut) => (
               <button key={saut.node.id} type="button" onClick={() => onNavigate(saut.node)}>
                 <span aria-hidden="true">⇢</span>
@@ -194,8 +197,8 @@ export function NodePanel({
           <button
             type="button"
             className="node-panel__close"
-            aria-label="Fermer le panneau"
-            title="Fermer"
+            aria-label={t('panneau.fermer.aria')}
+            title={t('panneau.fermer')}
             onClick={onClose}
           >
             ×
@@ -205,14 +208,14 @@ export function NodePanel({
         <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
         <h2>{node.label}</h2>
         <div className="node-panel__path">
-          <span>{node.file ?? 'Aucun fichier associé'}</span>
+          <span>{node.file ?? t('panneau.aucunFichier')}</span>
           {node.file && (
             <button
               type="button"
               className="node-panel__copier"
               onClick={() => void navigator.clipboard?.writeText(String(node.file))}
             >
-              Copier le chemin
+              {t('panneau.copierChemin')}
             </button>
           )}
         </div>
@@ -220,11 +223,11 @@ export function NodePanel({
         {onRetract && (
           <div>
             <button type="button" className="node-panel__retry" onClick={onRetract}>
-              Retirer du Brain canonique
+              {t('panneau.retirer')}
             </button>
             {onSupersede && (
               <button type="button" className="node-panel__retry" onClick={onSupersede}>
-                Remplacer par une autre fiche
+                {t('panneau.remplacer')}
               </button>
             )}
           </div>
@@ -235,28 +238,28 @@ export function NodePanel({
             {/* La fiche ET son voisinage passent par le même chargement : un seul réessai les couvre. */}
             {onRetry && (
               <button type="button" className="node-panel__retry" onClick={onRetry}>
-                Réessayer
+                {t('commun.reessayer')}
               </button>
             )}
           </div>
         )}
         {!file && !fileErr && (
           <div className="node-panel__loading">
-            <Spinner /> Chargement du contenu…
+            <Spinner /> {t('panneau.chargement')}
           </div>
         )}
         {/* DÉTAIL DU NŒUD — l'information existait déjà dans le nœud, elle n'était simplement
             jamais rendue. Repliée par défaut : le contenu de la fiche reste la lecture première. */}
         <details className="node-panel__details" data-testid="node-panel-details">
-          <summary>Détail du nœud</summary>
+          <summary>{t('panneau.detail')}</summary>
           <dl className="node-panel__meta">
-            <dt>Identifiant</dt>
+            <dt>{t('panneau.detail.id')}</dt>
             <dd>{node.id}</dd>
-            <dt>Thèmes</dt>
+            <dt>{t('commun.themes')}</dt>
             <dd>{nodeThemeIds(node).join(' · ') || '—'}</dd>
-            <dt>Scores de recherche</dt>
+            <dt>{t('panneau.detail.scores')}</dt>
             <dd>{brainScoreChannelLabel(node)}</dd>
-            <dt>Relations déclarées</dt>
+            <dt>{t('panneau.detail.relations')}</dt>
             <dd>{node.relations?.length ?? 0}</dd>
           </dl>
           {node.relations && node.relations.length > 0 && (
@@ -289,14 +292,15 @@ export function ThemeNodesPanel({
   nodes: GraphNode[]
   onNavigate: (node: GraphNode) => void
 }): React.JSX.Element {
+  const { t } = useTextesKnowledge()
   return (
     <div className="theme-nodes-panel">
       <div className="theme-nodes-panel__heading">
-        <span>Nœuds du thème</span>
+        <span>{t('panneau.theme.titre')}</span>
         <strong>{nodes.length}</strong>
       </div>
-      <nav className="node-links" aria-label="Nœuds des thèmes actifs par ordre alphabétique">
-        {nodes.length === 0 && <p>Aucun nœud dans ce thème.</p>}
+      <nav className="node-links" aria-label={t('panneau.theme.aria')}>
+        {nodes.length === 0 && <p>{t('panneau.theme.vide')}</p>}
         {nodes.map((themeNode) => (
           <button key={themeNode.id} type="button" onClick={() => onNavigate(themeNode)}>
             <span aria-hidden="true">✦</span>

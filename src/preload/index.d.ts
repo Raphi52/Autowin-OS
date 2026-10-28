@@ -39,6 +39,8 @@ import type {
   CarteDesBesoins,
   ResultatDuRattachement
 } from '../shared/carte-des-besoins'
+import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
+import type { BoardsDesCollegues } from '../shared/board-collegues'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatPiper } from '../main/piper-local'
@@ -525,7 +527,18 @@ interface ChatApi {
   transcriptRevealer: (chemin: string) => Promise<{ ok: true }>
   conversations: () => Promise<ConversationSummary[]>
   /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
-  carteDesBesoins: () => Promise<CarteDesBesoins>
+  carteDesBesoins: (options?: {
+    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier (conv-1206). */
+    etatsManuels?: Record<string, EtatManuelDuBoard>
+  }) => Promise<CarteDesBesoins>
+  /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
+  boardDossier: () => Promise<EtatDuDossierDuBoard>
+  boardDossierChoisir: () => Promise<EtatDuDossierDuBoard>
+  boardDossierEffacer: () => Promise<EtatDuDossierDuBoard>
+  /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
+  boardDossierProjets: (projets: string[] | null) => Promise<EtatDuDossierDuBoard>
+  /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
+  boardCollegues: () => Promise<BoardsDesCollegues>
   /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
   carteLierWorkItem: (cible: {
     conversationId: string
@@ -640,15 +653,6 @@ interface ChatApi {
   veilleMarquer: (id: string, statut: 'nouveau' | 'ecarte' | 'prompte') => Promise<StockVeille>
   /** Lance la passe INTERNE (scout local) et rend le résultat ; le stock est réécrit côté main. */
   veilleGenerer: (conversationId?: string) => Promise<{ retenus: number; stock: StockVeille }>
-  /**
-   * « Pourquoi pas ? » sur une piste décochée du panneau du scout (piste 2, conv-1033) : vrai si la
-   * mémoire du scout du dossier de la conversation connaissait la piste.
-   */
-  scoutMotif: (
-    titre: string,
-    motif: 'deja-fait' | 'faux' | 'trop-petit' | 'hors-sujet',
-    conversationId?: string
-  ) => Promise<boolean>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>

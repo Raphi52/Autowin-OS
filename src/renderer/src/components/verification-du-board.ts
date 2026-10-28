@@ -18,6 +18,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CarteDesBesoins, StatutDemande } from '../../../shared/carte-des-besoins'
+import { langueCourante } from '../langue'
+import { traduireBoardEtMaintenance } from '../textes-ecrans/board-et-maintenance'
 import { filsDuProjet } from './carte-des-besoins-branches'
 import type { PostItDeLaRiviere } from './carte-riviere'
 
@@ -27,14 +29,18 @@ export const COMMANDE_DE_VERIFICATION = '/check'
 /**
  * Les post-its que « Tout vérifier » vise : ceux de la ligne « À vérifier » (l'étage AFFICHÉ, état
  * manuel compris), et seulement ceux de la personne choisie quand un filtre est posé — les autres
- * sont estompés à l'écran, l'utilisateur ne les vise pas.
+ * sont estompés à l'écran, l'utilisateur ne les vise pas. Jamais un post-it de collègue
+ * (conv-1210) : son fil vit sur SON poste, un `/check` envoyé d'ici n'y arriverait pas.
  */
 export function postitsAVerifier(
   postits: readonly PostItDeLaRiviere[],
   personne: string | null
 ): PostItDeLaRiviere[] {
   return postits.filter(
-    (p) => p.etage === 'sans-preuve' && (personne === null || p.demandeur?.cle === personne)
+    (p) =>
+      p.etage === 'sans-preuve' &&
+      !p.collegue &&
+      (personne === null || p.demandeur?.cle === personne)
   )
 }
 
@@ -63,7 +69,11 @@ export async function lancerLesVerifications(
     try {
       const r = await envoyer(conversationId, COMMANDE_DE_VERIFICATION)
       if (r.ok) bilan.lances.push(conversationId)
-      else bilan.echecs.push({ conversationId, raison: r.error ?? 'envoi refusé' })
+      else
+        bilan.echecs.push({
+          conversationId,
+          raison: r.error ?? traduireBoardEtMaintenance('verif.envoiRefuse', langueCourante())
+        })
     } catch (e) {
       bilan.echecs.push({ conversationId, raison: e instanceof Error ? e.message : String(e) })
     }
@@ -73,11 +83,21 @@ export async function lancerLesVerifications(
 
 /** Le bilan en une ligne : « /check lancé dans 3 fils », « … · 1 refusé : <raison> ». */
 export function resumeDuBilan(bilan: BilanDeVerification): string {
+  const langue = langueCourante()
   const n = bilan.lances.length
-  const lance = n === 0 ? 'aucun /check lancé' : `/check lancé dans ${n} fil${n > 1 ? 's' : ''}`
+  const lance =
+    n === 0
+      ? traduireBoardEtMaintenance('verif.bilan.aucun', langue)
+      : traduireBoardEtMaintenance(n > 1 ? 'verif.bilan.plusieurs' : 'verif.bilan.un', langue, {
+          n
+        })
   if (bilan.echecs.length === 0) return lance
   const e = bilan.echecs.length
-  return `${lance} · ${e} refusé${e > 1 ? 's' : ''} : ${bilan.echecs[0].raison}`
+  return traduireBoardEtMaintenance(
+    e > 1 ? 'verif.bilan.refusPlusieurs' : 'verif.bilan.refusUn',
+    langue,
+    { lance, e, raison: bilan.echecs[0].raison }
+  )
 }
 
 /** Pas du recalcul pendant qu'un `/check` tourne : le calcul ne refait que les fils qui ont bougé. */

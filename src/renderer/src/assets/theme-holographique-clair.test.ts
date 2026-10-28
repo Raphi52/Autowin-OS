@@ -142,8 +142,23 @@ describe('theme Holographique blanc', () => {
     expect(jeton('--on-accent')).toBe('#ffffff')
     expect(jeton('--chat-corps-vous')).toBe('#ffffff')
     const bulle = css.slice(css.indexOf(`${PREFIXE} .cosmic-outline .msg.user .msg-body.msg-bulle {`))
-    expect(bulle).toMatch(/background: linear-gradient\(135deg, #3c6eeb, #d02b8c\)/)
-    for (const extremite of ['#3c6eeb', '#d02b8c']) expect(contraste('#ffffff', extremite)).toBeGreaterThanOrEqual(4.5)
+    // La bulle coule en lampe a lave depuis conv-1163 (2026-10-27) : son fond est la lave du theme,
+    // des gouttes posees sur le degrade #3c6eeb -> #d02b8c. CHAQUE couleur pleine de la lave (gouttes
+    // et degrade) doit tenir le blanc a 4,5:1.
+    expect(bulle).toMatch(/^[^}]*background: var\(--nv-lave-fond\);/)
+    let lave = ''
+    postcss.parse(css).walkRules((r) => {
+      if (
+        !r.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === `${PREFIXE} .msg.user .msg-body`)
+      )
+        return
+      r.walkDecls('--nv-lave-fond', (d) => void (lave = d.value))
+    })
+    expect(lave.replace(/\s+/g, ' ')).toMatch(/, linear-gradient\(135deg, #3c6eeb, #d02b8c\)$/)
+    const pleines = [...new Set(lave.match(/#[0-9a-f]{6}\b/gi) ?? [])]
+    expect(pleines.length).toBeGreaterThanOrEqual(3)
+    for (const couleur of pleines)
+      expect(contraste('#ffffff', couleur), couleur).toBeGreaterThanOrEqual(4.5)
   })
 
   /* conv-229 (2026-10-11, capture : « Actives », « Compacte », « Mosaique » illisibles) : « dans le

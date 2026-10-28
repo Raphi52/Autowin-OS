@@ -1,3 +1,12 @@
+import { langueCourante } from '../langue'
+import {
+  traduireArtefactsEtBandeaux,
+  type CleArtefactsEtBandeaux
+} from '../textes-ecrans/artefacts-et-bandeaux'
+
+/** Les seuls refus possibles : `modele3d.illisible` ou un `modele3d.refuse.*`. */
+type RefusModele3d = Extract<CleArtefactsEtBandeaux, `modele3d.${'illisible' | `refuse.${string}`}`>
+
 const MAX_MODEL_ELEMENTS = 250_000
 const MAX_MODEL_SCALARS = 2_000_000
 const MAX_MODEL_DECLARED_BYTES = 32 * 1024 * 1024
@@ -38,11 +47,11 @@ function arrayOfRecords(value: unknown): Array<Record<string, unknown>> {
     : []
 }
 
-function validateGltf(bytes: Uint8Array, binary: boolean): string | undefined {
+function validateGltf(bytes: Uint8Array, binary: boolean): RefusModele3d | undefined {
   const document = gltfJson(bytes, binary)
-  if (!document) return 'Modèle 3D illisible'
+  if (!document) return 'modele3d.illisible'
   const accessors = arrayOfRecords(document.accessors)
-  if (accessors.length > 4_096) return 'Modèle 3D refusé : structure trop complexe'
+  if (accessors.length > 4_096) return 'modele3d.refuse.structure'
   const components: Record<string, number> = {
     SCALAR: 1,
     VEC2: 2,
@@ -73,22 +82,21 @@ function validateGltf(bytes: Uint8Array, binary: boolean): string | undefined {
       !width ||
       !bytesPerComponent
     )
-      return 'Modèle 3D refusé : géométrie hors limites'
+      return 'modele3d.refuse.geometrie'
     scalars += count * width
     declaredBytes += count * width * bytesPerComponent
     if (scalars > MAX_MODEL_SCALARS || declaredBytes > MAX_MODEL_DECLARED_BYTES)
-      return 'Modèle 3D refusé : géométrie hors limites'
+      return 'modele3d.refuse.geometrie'
   }
   const buffers = arrayOfRecords(document.buffers)
   if (
     buffers.reduce((sum, buffer) => sum + Math.max(0, Number(buffer.byteLength) || 0), 0) >
     MAX_MODEL_DECLARED_BYTES
   )
-    return 'Modèle 3D refusé : buffers trop volumineux'
+    return 'modele3d.refuse.buffers'
   for (const resource of [...buffers, ...arrayOfRecords(document.images)]) {
     const uri = resource.uri
-    if (typeof uri === 'string' && !uri.startsWith('data:'))
-      return 'Modèle 3D refusé : ressource externe'
+    if (typeof uri === 'string' && !uri.startsWith('data:')) return 'modele3d.refuse.ressource'
   }
   if (
     arrayOfRecords(document.nodes).length > 10_000 ||
@@ -97,7 +105,7 @@ function validateGltf(bytes: Uint8Array, binary: boolean): string | undefined {
       0
     ) > 10_000
   )
-    return 'Modèle 3D refusé : scène trop complexe'
+    return 'modele3d.refuse.scene'
   return undefined
 }
 
@@ -111,7 +119,7 @@ function isObjWhitespace(character: string): boolean {
   )
 }
 
-function validateObj(source: string): string | undefined {
+function validateObj(source: string): RefusModele3d | undefined {
   let elements = 0
   let generatedVertices = 0
   let cursor = 0
@@ -125,7 +133,7 @@ function validateObj(source: string): string | undefined {
     const command = source.slice(commandStart, index)
     if (['v', 'vn', 'vt', 'f', 'l', 'p'].includes(command)) {
       elements += 1
-      if (elements > MAX_MODEL_ELEMENTS) return 'Modèle 3D refusé : géométrie hors limites'
+      if (elements > MAX_MODEL_ELEMENTS) return 'modele3d.refuse.geometrie'
     }
     if (command === 'f' || command === 'l' || command === 'p') {
       let references = 0
@@ -140,14 +148,18 @@ function validateObj(source: string): string | undefined {
       if (command === 'f' && references >= 3) generatedVertices += (references - 2) * 3
       else if (command === 'l' && references >= 2) generatedVertices += (references - 1) * 2
       else if (command === 'p') generatedVertices += references
-      if (generatedVertices > MAX_MODEL_ELEMENTS) return 'Modèle 3D refusé : géométrie hors limites'
+      if (generatedVertices > MAX_MODEL_ELEMENTS) return 'modele3d.refuse.geometrie'
     }
     cursor = lineEnd < 0 ? source.length : lineEnd + 1
   }
   return undefined
 }
 
-export function validateModel3dBytes(name: string, bytes: Uint8Array): string | undefined {
+/**
+ * Le refus d'un modèle 3D, en CLÉ de la table de textes : l'aperçu la traduit au rendu, donc dans la
+ * langue courante même si elle change après coup (conv-1170).
+ */
+export function refusDuModele3d(name: string, bytes: Uint8Array): RefusModele3d | undefined {
   const lower = name.toLowerCase()
   if (lower.endsWith('.gltf')) return validateGltf(bytes, false)
   if (lower.endsWith('.glb')) return validateGltf(bytes, true)
@@ -165,7 +177,7 @@ export function validateModel3dBytes(name: string, bytes: Uint8Array): string | 
     return declared > MAX_MODEL_ELEMENTS ||
       properties > 64 ||
       declared * Math.max(1, properties) > MAX_MODEL_SCALARS
-      ? 'Modèle 3D refusé : géométrie hors limites'
+      ? 'modele3d.refuse.geometrie'
       : undefined
   }
   if (lower.endsWith('.stl') && bytes.byteLength >= 84) {
@@ -174,7 +186,13 @@ export function validateModel3dBytes(name: string, bytes: Uint8Array): string | 
       true
     )
     if (triangles > MAX_MODEL_ELEMENTS || 84 + triangles * 50 > bytes.byteLength)
-      return 'Modèle 3D refusé : géométrie hors limites'
+      return 'modele3d.refuse.geometrie'
   }
   return undefined
+}
+
+/** Le refus d'un modèle 3D en toutes lettres, dans la langue courante ; `undefined` s'il est accepté. */
+export function validateModel3dBytes(name: string, bytes: Uint8Array): string | undefined {
+  const refus = refusDuModele3d(name, bytes)
+  return refus === undefined ? undefined : traduireArtefactsEtBandeaux(refus, langueCourante())
 }

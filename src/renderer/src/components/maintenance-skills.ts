@@ -14,7 +14,21 @@
  * éditions, salvage publie ce qu'il récupère) : le clic doit savoir ce qu'il déclenche.
  */
 
+import { langueCourante } from '../langue'
+import {
+  traduireBoardEtMaintenance,
+  type CleBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
+
 export type GroupeMaintenance = 'routine' | 'analyse' | 'depannage'
+
+/**
+ * Titres, rôles et libellés de groupe sont lus dans la langue COURANTE à chaque lecture (getters,
+ * conv-1170). Le `prompt` reste en français : c'est la consigne envoyée à l'agent, et sa tête
+ * `/<nom>` est relue par `invokedSkillId` ; l'agent reçoit la langue de l'utilisateur à part.
+ */
+const enLangue = (cle: CleBoardEtMaintenance): string =>
+  traduireBoardEtMaintenance(cle, langueCourante())
 
 export interface SkillMaintenance {
   /** Nom du dossier `skills/<nom>/` — vérifié par le test contre le disque. */
@@ -29,63 +43,102 @@ export interface SkillMaintenance {
 }
 
 export const GROUPES_MAINTENANCE: ReadonlyArray<{ id: GroupeMaintenance; libelle: string }> = [
+  // « Routine » : même mot en anglais, il reste en dur.
   { id: 'routine', libelle: 'Routine' },
-  { id: 'analyse', libelle: 'Analyse et amélioration' },
-  { id: 'depannage', libelle: 'Dépannage' }
+  {
+    id: 'analyse',
+    get libelle() {
+      return enLangue('skills.groupe.analyse')
+    }
+  },
+  {
+    id: 'depannage',
+    get libelle() {
+      return enLangue('skills.groupe.depannage')
+    }
+  }
 ]
 
 export const SKILLS_MAINTENANCE: readonly SkillMaintenance[] = [
   {
     nom: 'maintenance',
-    titre: 'Bulletin de santé',
-    role: 'Bugs, lenteurs, retard, travail inachevé — répare au plus un défaut prouvé.',
+    get titre() {
+      return enLangue('skills.maintenance.titre')
+    },
+    get role() {
+      return enLangue('skills.maintenance.role')
+    },
     groupe: 'routine',
     prompt:
       '/maintenance passe d’Autowin OS lancée à la main depuis la vue Maintenance : rends le bulletin du jour.'
   },
   {
     nom: 'gc',
-    titre: 'Ménage des données',
-    role: 'Déplace les déchets prouvés de .autowin-data en corbeille datée.',
+    get titre() {
+      return enLangue('skills.gc.titre')
+    },
+    get role() {
+      return enLangue('skills.gc.role')
+    },
     groupe: 'routine',
     prompt:
       '/gc passe sur .autowin-data lancée à la main depuis la vue Maintenance : rends le bilan.'
   },
   {
     nom: 'curate',
-    titre: 'Trier le savoir',
-    role: 'Promeut, fusionne ou rejette les candidats en attente du Brain.',
+    get titre() {
+      return enLangue('skills.curate.titre')
+    },
+    get role() {
+      return enLangue('skills.curate.role')
+    },
     groupe: 'routine',
     prompt: '/curate vide la file des candidats Brain et rends le bilan.'
   },
   {
     nom: 'rendement',
-    titre: 'Coûts et lenteurs',
-    role: 'Classe les conversations par gaspillage et remonte à la cause du détour.',
+    get titre() {
+      return enLangue('skills.rendement.titre')
+    },
+    get role() {
+      return enLangue('skills.rendement.role')
+    },
     groupe: 'analyse',
     prompt:
       '/rendement analyse les conversations des 7 derniers jours : les pires gaspillages, leur cause et le chemin minimal.'
   },
   {
     nom: 'residus',
-    titre: 'Code mort',
-    role: 'Repère fichiers morts et branches jamais atteintes — propose, ne supprime rien.',
+    get titre() {
+      return enLangue('skills.residus.titre')
+    },
+    get role() {
+      return enLangue('skills.residus.role')
+    },
     groupe: 'analyse',
     prompt:
       '/residus cherche le code résiduel inutile d’Autowin OS et rends la liste classée des candidats au nettoyage, sans rien supprimer.'
   },
   {
     nom: 'glean',
-    titre: 'Récolter le savoir',
-    role: 'Dépose comme candidats Brain les faits jamais retenus des conversations.',
+    get titre() {
+      return enLangue('skills.glean.titre')
+    },
+    get role() {
+      return enLangue('skills.glean.role')
+    },
     groupe: 'analyse',
     prompt:
       '/glean récolte dans les conversations des 7 derniers jours les faits durables jamais retenus et dépose-les comme candidats Brain.'
   },
   {
     nom: 'kaizen',
-    titre: 'Corriger un comportement',
-    role: 'Trouve un défaut de comportement des agents et applique le correctif à sa source.',
+    get titre() {
+      return enLangue('skills.kaizen.titre')
+    },
+    get role() {
+      return enLangue('skills.kaizen.role')
+    },
     groupe: 'analyse',
     prompt:
       '/kaizen sur les conversations Autowin des dernières 24 h : trouve le défaut de comportement le plus coûteux et corrige sa cause.'
@@ -93,31 +146,47 @@ export const SKILLS_MAINTENANCE: readonly SkillMaintenance[] = [
   // Ajout du 2026-10-23 (conv-1112) : « rajoute /heal dans la vue maintenance ».
   {
     nom: 'heal',
-    titre: 'Corriger les défauts',
-    role: 'Trouve les défauts prouvés du code (test rouge, lenteur mesurée) et les corrige un à un.',
+    get titre() {
+      return enLangue('skills.heal.titre')
+    },
+    get role() {
+      return enLangue('skills.heal.role')
+    },
     groupe: 'analyse',
     prompt:
       '/heal Autowin OS : trouve les défauts prouvés (tests rouges, lenteurs mesurées) et corrige-les un à la fois, jusqu’au vert.'
   },
   {
     nom: 'salvage',
-    titre: 'Travail non publié',
-    role: 'Retrouve le travail resté de côté, le trie par contenu, puis publie ce qu’il garde.',
+    get titre() {
+      return enLangue('skills.salvage.titre')
+    },
+    get role() {
+      return enLangue('skills.salvage.role')
+    },
     groupe: 'depannage',
     prompt:
       '/salvage cherche le travail non publié du dépôt Autowin OS (copies de travail, remises de côté, branches non fusionnées) et trie-le par contenu.'
   },
   {
     nom: 'gel',
-    titre: 'Enquête sur un gel',
-    role: 'Remonte un gel de l’app jusqu’à son fichier et sa ligne — désigne, ne corrige pas.',
+    get titre() {
+      return enLangue('skills.gel.titre')
+    },
+    get role() {
+      return enLangue('skills.gel.role')
+    },
     groupe: 'depannage',
     prompt: '/gel enquête sur les derniers gels enregistrés d’Autowin OS et désigne le coupable.'
   },
   {
     nom: 'maj',
-    titre: 'Débloquer la mise à jour',
-    role: 'Résout ce qui bloque la mise à jour sans perdre le travail local.',
+    get titre() {
+      return enLangue('skills.maj.titre')
+    },
+    get role() {
+      return enLangue('skills.maj.role')
+    },
     groupe: 'depannage',
     prompt:
       '/maj vérifie la mise à jour d’Autowin OS : si elle est bloquée, résous le blocage puis relance-la ; sinon dis qu’elle passe.'
@@ -139,14 +208,14 @@ export async function lancerSkillMaintenance(skill: SkillMaintenance): Promise<s
       roleMap?.subagent?.provider ??
       (roleMap ? Object.values(roleMap)[0]?.provider : undefined)
     if (!provider) {
-      return 'Aucun modèle IA n’est attribué aux rôles : règle-le dans Settings › Routage.'
+      return enLangue('skills.aucunModele')
     }
     const conversation = await window.api.conversationsCreate?.({
       title: `/${skill.nom} — ${skill.titre}`,
       category: provider,
       provider
     })
-    if (!conversation?.id) return 'La conversation n’a pas pu être créée.'
+    if (!conversation?.id) return enLangue('skills.conversationNonCreee')
     try {
       await window.api.appCommand?.('navigate', { tab: 'chat' })
     } catch {

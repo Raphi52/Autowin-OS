@@ -9,11 +9,17 @@ import { useLangue } from './langue'
  * Maison, sans bibliothèque : aucune installation n'est possible pendant que l'app tourne
  * (`scripts/garde-npm-modules.mjs`), et le besoin tient en une table et une fonction.
  *
- * LA TRADUCTION AVANCE PAR LOTS. Lot 1 : la barre de navigation, Settings (sections, Interface,
- * Providers, Diagnostic et ses trois panneaux) et la zone de saisie du chat. Un écran non encore
- * traduit garde ses textes en dur, en français ; la phrase `interface.langue.couverture` dit à
- * l'utilisateur ce qui est déjà traduit et NOMME ce qui reste en français (objection du juge,
- * réparation 3) — `textes.test.ts` vérifie qu'elle cite chaque écran de la navigation.
+ * LA TRADUCTION A AVANCÉ PAR LOTS. Lot 1 (conv-1146) : la barre de navigation, Settings (sections,
+ * Interface, Providers, Diagnostic et ses trois panneaux) et la zone de saisie du chat — ici. Puis le
+ * plan de 19 lots de conv-1170 (2026-10-27) : chaque groupe d'écrans dans sa table
+ * (`textes-ecrans/`, 16 tables), les textes du processus principal dans `main/textes-coeur.ts`, les
+ * dates et nombres par `formaterDate` / `formaterNombre` (`langue.ts`). Restent en français, à dessein
+ * ou faute de lot : les messages renvoyés tels quels par `src/main` et `src/shared` (dont
+ * `shared/watchdog-regex.ts` et le moteur du plan de lots), les consignes destinées à l'agent, la
+ * voix de Jarvis, et deux formats d'heure écrits en `fr-FR` (`heure-message.ts`,
+ * `observatory-timeline-axis.ts`). La phrase `interface.langue.couverture` dit à l'utilisateur ce qui
+ * est traduit et NOMME ce qui reste en français (objection du juge, conv-1146, réparation 3) —
+ * `textes.test.ts` vérifie qu'elle cite chaque écran de la navigation dans sa partie « traduit ».
  *
  * Le FRANÇAIS fait foi : c'est le texte d'avant ce réglage, mot pour mot, pour que rien ne change à
  * qui ne touche pas à la langue. L'anglais a les MÊMES clés (le type l'impose) ; une entrée anglaise
@@ -101,7 +107,7 @@ export const TEXTES_FR = {
   'interface.langue.description':
     'La langue de l’application et des réponses de l’agent. **Français** reste le réglage par défaut. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans redémarrage ; une étape de travail déjà en cours se termine dans l’ancienne langue.',
   'interface.langue.couverture':
-    '**Traduction en cours.** Sont déjà traduits : la barre de navigation, Settings (la liste des sections, Interface, Providers et Diagnostic) et la zone de saisie du chat. **Restent en français pour l’instant :** le reste du chat (liste des conversations, en-tête, page d’accueil du chat) ; les écrans Accueil, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Bureaux cachés, Tickets, Board et Maintenance ; les pages Skills, Hooks, Gates, Mods, Tools, Behaviour, Routage et Rules de Settings ; les dates ; les messages venus du cœur de l’application (notifications, erreurs, résultat et noms des contrôles du diagnostic).',
+    '**Les écrans sont traduits.** La barre de navigation et chaque écran : Accueil, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Bureaux cachés, Tickets, Board, Maintenance et Settings (toutes ses pages, Routage compris) ; la plupart des dates ; les notifications de fin de tour et les contrôles du Diagnostic. **Restent en français :** les messages que le cœur de l’application renvoie tels quels (erreurs, refus, raisons et avertissements du plan de lots, motif invalide d’une règle de réveil) ; ce qui s’adresse à l’agent (demandes des boutons, consignes des skills de Maintenance, descriptions des skills de Settings) ; ce que dit Jarvis ; l’heure des messages du chat et l’axe du temps de l’Observatory ; un message court enregistré, qui garde la langue du moment ; vos propres données (titres, noms de tâches, notes).',
   'interface.langue.echec':
     '**L’agent n’a pas reçu ce choix.** L’écran suit la langue choisie, mais l’agent répond encore dans l’ancienne. Détail :',
   'interface.langue.reessayer': 'Réessayer',
@@ -215,7 +221,7 @@ export const TEXTES_EN: Record<CleDeTexte, string> = {
   'interface.langue.description':
     'The language of the application and of the agent’s replies. **Français** remains the default setting. The choice is saved on this computer and applies immediately, without restarting; a work step already running finishes in the previous language.',
   'interface.langue.couverture':
-    '**Translation in progress.** Already translated: the navigation bar, Settings (the list of sections, Interface, Providers and Diagnostics) and the chat input box. **Still in French for now:** the rest of the chat (conversation list, header, chat start page); the Home, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Hidden desktops, Tickets, Board and Maintenance screens; the Skills, Hooks, Gates, Mods, Tools, Behaviour, Routing and Rules pages of Settings; dates; messages coming from the application core (notifications, errors, the diagnostic’s result and check names).',
+    '**The screens are translated.** The navigation bar and every screen: Home, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Hidden desktops, Tickets, Board, Maintenance and Settings (all its pages, Routing included); most dates; end-of-turn notifications and the Diagnostics checks. **Still in French:** messages the application core passes on as they are (errors, refusals, the lot plan’s reasons and warnings, an invalid wake-up rule pattern); what is addressed to the agent (requests sent by buttons, the Maintenance skills’ instructions, the skill descriptions in Settings); what Jarvis says; the time of chat messages and the Observatory’s time axis; a short message recorded earlier, which keeps the language of that moment; your own data (titles, task names, notes).',
   'interface.langue.echec':
     '**The agent did not receive this choice.** The screen follows the chosen language, but the agent still answers in the previous one. Details:',
   'interface.langue.reessayer': 'Retry',

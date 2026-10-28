@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { langueCourante } from '../langue'
+import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import { useSkillsInventory } from './useSkillsInventory'
 import { WorkflowCanvas, type CanvasGraph, type Phase } from './WorkflowCanvas'
 
@@ -52,6 +54,7 @@ export function WorkflowGraphEditor({
   profile: ProfileLike
   onSave: (graph: CanvasGraph) => void
 }): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   /**
    * Les skills du disque, proposables comme briques au même titre que les huit phases. La lecture
    * vit dans `useSkillsInventory` : MÊME source que l'exécutabilité, sinon la palette proposerait
@@ -93,7 +96,12 @@ export function WorkflowGraphEditor({
         if (cancelled) return
         // Une vérification injoignable bloque l'enregistrement sans écraser un graphe plus récent.
         setVerdict({
-          defects: [{ message: 'Vérification indisponible.' }],
+          // Hors `t` : l'effet ne dépend que du graphe, la langue est lue au moment de l'échec.
+          defects: [
+            {
+              message: traduireAgentStudio('graphe.verificationIndisponible', langueCourante())
+            }
+          ],
           worstCaseNodeExecutions: null
         })
       })
@@ -130,17 +138,17 @@ export function WorkflowGraphEditor({
             setEnregistre(true)
           }}
         >
-          {enregistre ? 'Enregistré' : 'Enregistrer le workflow'}
+          {enregistre ? t('graphe.enregistre') : t('graphe.enregistrer')}
         </button>
         {bloquant > 0 && (
           <span className="workflow-graph-hint" data-testid="workflow-graph-blocked">
-            {bloquant} point(s) à corriger avant d’enregistrer.
+            {t('graphe.bloquant', { n: bloquant })}
           </span>
         )}
         {/* Le pire cas est la seule mesure qui dise ce que ce graphe peut COÛTER au maximum. */}
         {bloquant === 0 && verdict?.worstCaseNodeExecutions !== null && verdict && (
           <span className="workflow-graph-hint" data-testid="workflow-graph-worstcase">
-            au plus {verdict.worstCaseNodeExecutions} exécution(s) de phase
+            {t('graphe.pireCas', { n: verdict.worstCaseNodeExecutions })}
           </span>
         )}
       </div>

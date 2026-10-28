@@ -1,5 +1,6 @@
 import { sensDuCodeDeBlocage } from '../../../shared/raison-de-blocage'
 import type { RunClosureObservation, RunGitObservation } from '../../../shared/run-execution'
+import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 /**
  * POURQUOI UNE ÉTAPE ROUGE DU GRAPHE A ÉCHOUÉ (demande du 2026-10-15, conv-966 : « fais que chaque
@@ -28,21 +29,23 @@ export function raisonDuGit(git: RunGitObservation | undefined): string | undefi
   if (!git || (git.outcome !== 'blocked' && git.outcome !== 'conflict')) return undefined
   const observee = git.detail?.trim()
   const traduite =
-    git.outcome === 'conflict'
-      ? 'conflit de contenu entre le travail du run et la base'
-      : sensDuCodeDeBlocage(git.reason)
+    git.outcome === 'conflict' ? t('echec.git.conflit') : sensDuCodeDeBlocage(git.reason)
   const cause =
     observee ||
     traduite ||
-    (git.reason?.trim() ? `blocage « ${git.reason.trim()} »` : 'aucune cause rendue par Git')
+    (git.reason?.trim()
+      ? t('echec.git.blocage', { raison: git.reason.trim() })
+      : t('echec.git.sans-cause'))
   const fichiers = git.files ?? []
   const nommes = fichiers.slice(0, FICHIERS_NOMMES)
   const reste = fichiers.length - nommes.length
   const enCause =
     nommes.length > 0
-      ? ` — fichiers en cause : ${nommes.join(', ')}${reste > 0 ? ` (+${reste})` : ''}`
+      ? t('echec.git.fichiers', {
+          fichiers: `${nommes.join(', ')}${reste > 0 ? ` (+${reste})` : ''}`
+        })
       : ''
-  return `Travail non publié : ${borne(cause)}${enCause}`
+  return `${t('echec.git.non-publie', { cause: borne(cause) })}${enCause}`
 }
 
 /**
@@ -58,16 +61,16 @@ export function raisonDeLaCloture(
   const motifs = (closure.gateReasons ?? []).map((motif) => motif.trim()).filter(Boolean)
   if (motifs.length > 0) return borne(motifs.join(' · '))
   if (causes.git) return causes.git
-  if (causes.etapeEnEchec) return `Run arrêté avant le contrôle final — ${causes.etapeEnEchec}`
+  if (causes.etapeEnEchec) return t('echec.cloture.avant-controle', { etape: causes.etapeEnEchec })
   // Aucune étape en échec, mais une étape annulée : c'est le Stop qui a arrêté le run (conv-966).
   if (causes.etapeArreteeParStop)
-    return `Run arrêté par le bouton Stop du chat — pendant ${causes.etapeArreteeParStop}`
-  return 'Run en échec : aucune raison n’a été enregistrée'
+    return t('echec.cloture.stop', { etape: causes.etapeArreteeParStop })
+  return t('echec.cloture.sans-raison')
 }
 
 /** La cause d'une étape en échec, préfixée de son nom : « Sous-agent · clean : quota atteint ». */
 export function causeNommee(titre: string | undefined, cause: string | undefined): string {
   const nom = titre?.trim()
-  if (!cause?.trim()) return `${nom || 'une étape'} a échoué sans écrire de cause`
-  return nom ? `${nom} : ${cause.trim()}` : cause.trim()
+  if (!cause?.trim()) return t('echec.etape.sans-cause', { nom: nom || t('echec.etape.une-etape') })
+  return nom ? t('echec.etape.cause', { nom, cause: cause.trim() }) : cause.trim()
 }

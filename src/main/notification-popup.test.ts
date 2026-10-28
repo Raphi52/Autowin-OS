@@ -335,6 +335,21 @@ describe('creerPileDePopups — le contrat d’une notification, tenu par une ca
     expect(fenetres[0].rects.at(-1)).toEqual(disposerPopups(zone, [159])[0])
   })
 
+  it('replacer() repose les cartes ouvertes sur la zone relue, sans en fermer (conv-1195)', () => {
+    // La mascotte glissée déplace la zone : les cartes collées à elle la suivent.
+    const zone: ZoneDesCartes = { x: 0, y: 0, width: 1920, height: 1032 }
+    const { pile, fenetres } = pileDeTest(zone)
+    pile.fabriquer(PRETE).show()
+    pile.fabriquer(ECHEC).show()
+    zone.x = 300
+    zone.height = 700
+    pile.replacer()
+    const attendus = disposerPopups(zone, [101, 159])
+    expect(fenetres[1].rects.at(-1)).toEqual(attendus[0])
+    expect(fenetres[0].rects.at(-1)).toEqual(attendus[1])
+    expect(fenetres.map((f) => f.fermee)).toEqual([false, false])
+  })
+
   it('au-delà de 4 cartes, la plus ancienne se ferme', () => {
     const { pile, fenetres } = pileDeTest()
     for (let i = 0; i < 5; i += 1) pile.fabriquer(PRETE).show()

@@ -1,4 +1,6 @@
 import type { HarnessAnomaly, HarnessTimelineEvent } from './harness-timeline-model'
+import { langueCourante } from '../langue'
+import { traduireObservatory } from '../textes-ecrans/observatory'
 
 /**
  * « Signaux prioritaires » se lit comme un TRIAGE : ce qui est CASSÉ passe devant ce qui est
@@ -26,8 +28,12 @@ const SEVERITY_RANK: Record<ObservatorySignalSeverity, number> = {
   info: 2
 }
 const SEVERITY_LABEL: Record<ObservatorySignalSeverity, string> = {
-  error: 'échec',
-  warning: 'à vérifier',
+  get error() {
+    return traduireObservatory('signaux.echec', langueCourante())
+  },
+  get warning() {
+    return traduireObservatory('signaux.verifier', langueCourante())
+  },
   info: 'volume'
 }
 

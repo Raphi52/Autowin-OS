@@ -27,6 +27,13 @@ import { appelsDeLOutil } from './appels-outil-detail'
 import { defautsDeTrace } from './defauts-de-trace'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
+import { formaterNombre } from '../langue'
+import { riche } from '../textes'
+import {
+  texteChatExecution as texte,
+  useTextesChatExecution,
+  type CleChatExecution
+} from '../textes-ecrans/chat-execution'
 import {
   constellationEdgePath,
   layoutConstellation,
@@ -66,22 +73,23 @@ interface WorkflowExecutionGraphProps {
   onSelect?: (selection: ExecutionNodeSelection | null) => void
 }
 
-const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
-  message: 'Message',
-  injection: 'Injection',
-  decision: 'Décision',
-  'tool-call': 'Appel outil',
-  'tool-result': 'Résultat outil',
-  artifact: 'Artefact produit',
-  'model-response': 'Réponse modèle',
-  'response-displayed': 'Réponse affichée',
-  handoff: 'Relais',
-  verdict: 'Verdict',
-  gate: 'Gate',
-  retry: 'Nouvel essai',
-  cancellation: 'Annulation',
-  error: 'Erreur',
-  boundary: 'Frontière'
+// Des CLÉS de texte, traduites à la lecture (traduction anglaise, conv-1170).
+const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], CleChatExecution> = {
+  message: 'graphe.evenement.message',
+  injection: 'graphe.evenement.injection',
+  decision: 'graphe.evenement.decision',
+  'tool-call': 'graphe.evenement.tool-call',
+  'tool-result': 'graphe.evenement.tool-result',
+  artifact: 'graphe.evenement.artifact',
+  'model-response': 'graphe.evenement.model-response',
+  'response-displayed': 'graphe.evenement.response-displayed',
+  handoff: 'graphe.evenement.handoff',
+  verdict: 'graphe.evenement.verdict',
+  gate: 'graphe.evenement.gate',
+  retry: 'graphe.evenement.retry',
+  cancellation: 'graphe.evenement.cancellation',
+  error: 'graphe.evenement.error',
+  boundary: 'graphe.evenement.boundary'
 }
 
 /**
@@ -91,8 +99,7 @@ const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
 function elapsedLabel(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`
   const seconds = ms / 1000
-  if (seconds < 60)
-    return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(seconds)} s`
+  if (seconds < 60) return `${formaterNombre(seconds, { maximumFractionDigits: 2 })} s`
   const total = Math.round(seconds)
   const minutes = Math.floor(total / 60)
   if (minutes < 60) return `${minutes} min ${String(total % 60).padStart(2, '0')} s`
@@ -101,8 +108,9 @@ function elapsedLabel(ms: number): string {
 
 /** Coût total d'une demande, au centime : « 10,14 $ ». */
 function totalCostLabel(costUsd: number): string {
-  if (costUsd > 0 && costUsd < 0.01) return '< 0,01 $'
-  return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(costUsd)} $`
+  const centimes = { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  if (costUsd > 0 && costUsd < 0.01) return `< ${formaterNombre(0.01, centimes)} $`
+  return `${formaterNombre(costUsd, centimes)} $`
 }
 
 /** Durée et coût du tour entier, portés par la demande depuis que le « Bilan du tour » n'est plus un bloc. */
@@ -124,8 +132,8 @@ function requestTotals(event: HarnessTimelineEvent): string | undefined {
  */
 function durationLabel(durationMs: number | undefined, offsetMs?: number): string {
   if (durationMs != null) return elapsedLabel(durationMs)
-  if (offsetMs != null) return `a +${elapsedLabel(offsetMs)}`
-  return 'instant non horodate'
+  if (offsetMs != null) return texte('graphe.position', { duree: elapsedLabel(offsetMs) })
+  return texte('graphe.non-horodate')
 }
 
 /** Position de l'evenement depuis le debut de la demande, depuis son horodatage logue. */
@@ -139,8 +147,8 @@ function offsetFromStart(
 }
 
 function costLabel(costUsd: number | undefined): string {
-  if (costUsd == null) return 'coût inconnu'
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
+  if (costUsd == null) return texte('graphe.cout-inconnu')
+  return `${formaterNombre(costUsd, { maximumFractionDigits: 4 })} $`
 }
 
 /**
@@ -149,7 +157,7 @@ function costLabel(costUsd: number | undefined): string {
  */
 function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.skillName) return `skill · ${event.display.skillName}`
-  if (event.display?.workflow === 'autowin') return 'skill non tracée'
+  if (event.display?.workflow === 'autowin') return texte('graphe.skill-non-tracee')
   return undefined
 }
 
@@ -168,23 +176,23 @@ function hasCardMeta(event: HarnessTimelineEvent): boolean {
 }
 
 function gitOutcomeLabel(outcome: string | undefined): string {
-  if (outcome === 'merged') return 'Fusionnée'
-  if (outcome === 'nothing') return 'Aucun changement'
-  if (outcome === 'conflict') return 'Conflit'
-  if (outcome === 'blocked') return 'Bloquée'
-  if (outcome === 'kept') return 'Copie conservée'
-  return 'Inconnu'
+  if (outcome === 'merged') return texte('graphe.git.merged')
+  if (outcome === 'nothing') return texte('graphe.git.nothing')
+  if (outcome === 'conflict') return texte('graphe.git.conflict')
+  if (outcome === 'blocked') return texte('graphe.git.blocked')
+  if (outcome === 'kept') return texte('graphe.git.kept')
+  return texte('graphe.git.inconnu')
 }
 
 function closureStatusLabel(status: string | undefined): string {
   if (status === 'green') return 'Green'
-  if (status === 'degraded-closed') return 'Dégradé clos'
+  if (status === 'degraded-closed') return texte('graphe.cloture.degrade')
   if (status === 'red') return 'Red'
-  return 'Ouvert'
+  return texte('graphe.cloture.ouvert')
 }
 
 function workspaceModeLabel(mode: string | undefined): string {
-  return mode === 'worktree' ? 'Copie isolée' : 'Dépôt de travail'
+  return mode === 'worktree' ? texte('graphe.mode.copie') : texte('graphe.mode.depot')
 }
 
 function ExecutionNodeMeta({
@@ -197,6 +205,7 @@ function ExecutionNodeMeta({
   /** La constellation écrit la durée sur sa propre ligne, sous le titre : pas deux fois. */
   sansDuree?: boolean
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const display = event.display
   if (display?.kind === 'workspace') {
     const mode = workspaceModeLabel(display.workspace?.mode)
@@ -222,11 +231,11 @@ function ExecutionNodeMeta({
           {workflowQuoteLabel(display.quote?.workflow)}
         </span>
         <span aria-hidden="true">·</span>
-        <span>{display.quote?.regime ?? 'regime inconnu'}</span>
+        <span>{display.quote?.regime ?? t('graphe.regime-inconnu')}</span>
         <span aria-hidden="true">·</span>
-        <span>{display.quote?.limits.maxProviderCalls ?? 0} appels max</span>
+        <span>{t('graphe.appels-max', { n: display.quote?.limits.maxProviderCalls ?? 0 })}</span>
         <span aria-hidden="true">·</span>
-        <span>{display.quote?.limits.maxAgents ?? 0} agents max</span>
+        <span>{t('graphe.agents-max', { n: display.quote?.limits.maxAgents ?? 0 })}</span>
       </>
     )
   }
@@ -235,7 +244,7 @@ function ExecutionNodeMeta({
       <>
         <span className="workflow-execution-skill">phase · {display.skillName}</span>
         <span aria-hidden="true">·</span>
-        <span>alias observé</span>
+        <span>{t('graphe.alias-observe')}</span>
       </>
     )
   }
@@ -266,7 +275,7 @@ function ExecutionNodeMeta({
         )}
         <span>
           {costLabel(display.closure?.totalCostUsd)}
-          {unknown > 0 ? ` + ${unknown} non chiffre(s)` : ''}
+          {unknown > 0 ? t('graphe.non-chiffres', { n: unknown }) : ''}
         </span>
       </>
     )
@@ -284,7 +293,7 @@ function ExecutionNodeMeta({
       </>
     )
   }
-  if (display?.kind === 'phase') return <span>Phase Autowin</span>
+  if (display?.kind === 'phase') return <span>{t('graphe.phase-autowin')}</span>
   const skill = skillLabel(event)
   return (
     <>
@@ -335,6 +344,7 @@ function ExecutionNodeReasoning({
 }: {
   event: HarnessTimelineEvent
 }): React.JSX.Element | null {
+  const { t } = useTextesChatExecution()
   const reasoning = (event.payloads ?? [])
     .filter((payload) => payload.kind === 'reasoning')
     .map((payload) => payload.content)
@@ -342,7 +352,7 @@ function ExecutionNodeReasoning({
   if (reasoning.length === 0) return null
   return (
     <details className="workflow-execution-reasoning" data-execution-reasoning>
-      <summary>Raisonnement du sous-agent</summary>
+      <summary>{t('graphe.raisonnement')}</summary>
       {reasoning.map((content, index) => (
         <pre key={index}>{content}</pre>
       ))}
@@ -362,6 +372,7 @@ function ExecutionNodeExchange({
 }: {
   event: HarnessTimelineEvent
 }): React.JSX.Element | null {
+  const { t } = useTextesChatExecution()
   const pick = (...kinds: string[]): string[] =>
     (event.payloads ?? [])
       .filter((payload) => kinds.includes(payload.kind))
@@ -378,7 +389,7 @@ function ExecutionNodeExchange({
     return (
       <div className="workflow-execution-exchange" data-execution-exchange>
         <details open data-execution-demande>
-          <summary>Ta demande</summary>
+          <summary>{t('graphe.ta-demande')}</summary>
           <pre>{demande}</pre>
         </details>
       </div>
@@ -398,15 +409,15 @@ function ExecutionNodeExchange({
     if (enCours) {
       return (
         <p className="workflow-execution-exchange-empty" data-execution-exchange="en-cours">
-          Étape en cours : son prompt et son retour s’afficheront ici.
+          {t('graphe.echange.en-cours')}
         </p>
       )
     }
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="vide">
         {event.status === 'interrupted'
-          ? 'Étape interrompue avant d’avoir écrit son prompt et son retour.'
-          : 'Aucun prompt ni retour enregistré pour cette étape.'}
+          ? t('graphe.echange.interrompue')
+          : t('graphe.echange.vide')}
       </p>
     )
   }
@@ -414,7 +425,7 @@ function ExecutionNodeExchange({
     <div className="workflow-execution-exchange" data-execution-exchange>
       {prompt.length > 0 && (
         <details open data-execution-prompt>
-          <summary>Prompt envoyé</summary>
+          <summary>{t('graphe.prompt-envoye')}</summary>
           {prompt.map((content, index) => (
             <pre key={index}>{content}</pre>
           ))}
@@ -422,7 +433,7 @@ function ExecutionNodeExchange({
       )}
       {system.length > 0 && (
         <details data-execution-system>
-          <summary>Instructions système</summary>
+          <summary>{t('graphe.instructions-systeme')}</summary>
           {system.map((content, index) => (
             <pre key={index}>{content}</pre>
           ))}
@@ -431,7 +442,9 @@ function ExecutionNodeExchange({
       {response.length > 0 && (
         <details open data-execution-response>
           <summary>
-            {event.kind === 'response-displayed' ? 'Texte affiché' : 'Retour de l’étape'}
+            {event.kind === 'response-displayed'
+              ? t('graphe.texte-affiche')
+              : t('graphe.retour-etape')}
           </summary>
           {response.map((content, index) => (
             <pre key={index}>{content}</pre>
@@ -440,7 +453,7 @@ function ExecutionNodeExchange({
       )}
       {response.length === 0 && enCours && (
         <p className="workflow-execution-exchange-empty" data-execution-exchange="retour-attendu">
-          Étape en cours : son retour s’affichera à sa fin.
+          {t('graphe.retour-attendu')}
         </p>
       )}
     </div>
@@ -482,12 +495,12 @@ const GENRES_PAR_DETAIL: Record<'echange' | 'fait-retenu' | 'appels', string[]> 
  * l'arbre ne reçoit toujours aucun contenu d'outil.
  */
 function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const appels = appelsDeLOutil(event.payloads ?? [])
   if (appels.length === 0) {
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="geste-sans-contenu">
-        Le détail de ce geste n’a pas été enregistré : seuls son nom, son issue et sa durée le sont.
-        Les gestes faits avec Claude depuis le 15 octobre gardent leur commande et leur retour.
+        {t('graphe.geste-sans-contenu')}
       </p>
     )
   }
@@ -495,16 +508,20 @@ function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.
     <div className="workflow-execution-exchange" data-execution-appels>
       {appels.map((appel, index) => (
         <details key={index} open={index === 0} data-execution-appel>
-          <summary>{appels.length > 1 ? `Appel ${index + 1}` : 'Appel'}</summary>
+          <summary>
+            {appels.length > 1 ? t('graphe.appel.n', { n: index + 1 }) : t('graphe.appel')}
+          </summary>
           {appel.envoye !== undefined && (
             <>
-              <p className="workflow-execution-appel-part">Envoyé</p>
+              <p className="workflow-execution-appel-part">{t('graphe.envoye')}</p>
               <pre data-execution-appel-envoye>{appel.envoye}</pre>
             </>
           )}
           {appel.retour !== undefined && (
             <>
-              <p className="workflow-execution-appel-part">{appel.erreur ? 'Erreur' : 'Retour'}</p>
+              <p className="workflow-execution-appel-part">
+                {appel.erreur ? t('graphe.erreur') : t('graphe.retour')}
+              </p>
               <pre data-execution-appel-retour>{appel.retour}</pre>
             </>
           )}
@@ -519,6 +536,7 @@ function ExecutionNodeAppels({ event }: { event: HarnessTimelineEvent }): React.
  * dans le fil…). Un refus ne montre que son motif. Voir `fait-retenu-detail.ts` pour la garde.
  */
 function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const lectures = (event.payloads ?? [])
     .filter((payload) => payload.kind === 'tool-result' || payload.kind === 'error')
     .map(lireReponseRemember)
@@ -528,9 +546,7 @@ function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): 
     const enCours = event.status === 'running' || event.status === 'pending'
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="fait-illisible">
-        {enCours
-          ? 'Dépôt en cours : la réponse du Brain s’affichera ici.'
-          : 'La réponse de cet appel n’a pas été enregistrée : on ne sait pas s’il a été déposé ni pourquoi.'}
+        {enCours ? t('graphe.fait.en-cours') : t('graphe.fait.illisible')}
       </p>
     )
   }
@@ -540,8 +556,8 @@ function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): 
         lecture.retenu ? (
           <details open key={index} data-execution-fait>
             <summary>
-              {lectures.length > 1 ? `Fait ${index + 1}` : 'Fait retenu'}
-              {!lecture.depose && ' · gardé dans ce fil, pas au Brain'}
+              {lectures.length > 1 ? t('graphe.fait.n', { n: index + 1 }) : t('graphe.fait')}
+              {!lecture.depose && t('graphe.fait.dans-ce-fil')}
             </summary>
             {lecture.titre && <p className="workflow-execution-fait-titre">{lecture.titre}</p>}
             <pre>{lecture.texte}</pre>
@@ -549,7 +565,7 @@ function ExecutionNodeFaitsRetenus({ event }: { event: HarnessTimelineEvent }): 
           </details>
         ) : (
           <p key={index} className="workflow-execution-warning" data-execution-fait-refuse>
-            Non retenu · {lecture.motif}
+            {t('graphe.fait.non-retenu', { motif: lecture.motif })}
           </p>
         )
       )}
@@ -572,6 +588,7 @@ function ExecutionNodeContents({
   conversationId: string
   event: HarnessTimelineEvent
 }): React.JSX.Element | null {
+  const { t } = useTextesChatExecution()
   const sources = lecturesAllegeesDisponibles() ? (event.display?.payloadEventIds ?? []) : []
   const mode = event.display?.detailOutil ?? 'echange'
   // Le genre lu fait partie de la clé : mêmes sources, mêmes genres, mêmes charges.
@@ -614,14 +631,14 @@ function ExecutionNodeContents({
     return (
       <p className="workflow-execution-exchange-empty" data-execution-exchange="chargement">
         <Spinner size={12} />
-        Chargement du détail…
+        {t('graphe.chargement-detail')}
       </p>
     )
   }
   if (cle && lu?.erreur) {
     return (
       <p className="workflow-execution-warning" role="alert" data-execution-exchange="erreur">
-        Détail indisponible · {lu.erreur}
+        {t('graphe.detail-indisponible', { erreur: lu.erreur })}
       </p>
     )
   }
@@ -652,18 +669,27 @@ function ExecutionNodeDetail({
   event: HarnessTimelineEvent
   offsetMs?: number
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const display = event.display
   if (display?.kind === 'workspace') {
     const workspace = display.workspace
     return (
       <dl>
-        <DetailRow label="Chemin effectif" value={workspace?.path ?? 'Non exposé'} />
+        <DetailRow
+          label={t('graphe.ligne.chemin')}
+          value={workspace?.path ?? t('graphe.valeur.non-expose')}
+        />
         <DetailRow label="Mode" value={workspaceModeLabel(workspace?.mode)} />
-        <DetailRow label="Dépôt source" value={workspace?.repositoryPath ?? 'Non exposé'} />
+        <DetailRow
+          label={t('graphe.ligne.depot-source')}
+          value={workspace?.repositoryPath ?? t('graphe.valeur.non-expose')}
+        />
         {workspace?.baseBranch && (
-          <DetailRow label="Branche de base" value={workspace.baseBranch} />
+          <DetailRow label={t('graphe.ligne.branche-base')} value={workspace.baseBranch} />
         )}
-        {workspace?.baseSha && <DetailRow label="Révision de base" value={workspace.baseSha} />}
+        {workspace?.baseSha && (
+          <DetailRow label={t('graphe.ligne.revision-base')} value={workspace.baseSha} />
+        )}
       </dl>
     )
   }
@@ -671,36 +697,51 @@ function ExecutionNodeDetail({
     const quote = display.quote
     return (
       <dl>
-        <DetailRow label="Regime" value={quote?.regime ?? 'Non expose'} />
-        <DetailRow label="Phases" value={quote?.phases.join(' · ') || 'Aucune'} />
+        <DetailRow
+          label="Regime"
+          value={quote?.regime ?? t('graphe.valeur.non-expose-sans-accent')}
+        />
+        <DetailRow label="Phases" value={quote?.phases.join(' · ') || t('graphe.valeur.aucune')} />
         <DetailRow
           label="Decomposition"
           value={
             quote?.decomposition.mode === 'build-only'
-              ? `build uniquement · ${quote.decomposition.maxNodes} noeuds max`
-              : 'desactivee'
+              ? t('graphe.valeur.build-uniquement', { n: quote.decomposition.maxNodes })
+              : t('graphe.valeur.desactivee')
           }
         />
-        <DetailRow label="Appels max" value={quote?.limits.maxProviderCalls ?? 'Non expose'} />
         <DetailRow
-          label="Budget tokens d'admission"
-          value={quote?.limits.maxTotalTokens ?? 'Non expose'}
+          label={t('graphe.ligne.appels-max')}
+          value={quote?.limits.maxProviderCalls ?? t('graphe.valeur.non-expose-sans-accent')}
         />
         <DetailRow
-          label="Mesure tokens"
-          value="Usage final du provider; le prochain appel est refuse au plafond"
+          label={t('graphe.ligne.budget-tokens')}
+          value={quote?.limits.maxTotalTokens ?? t('graphe.valeur.non-expose-sans-accent')}
         />
-        <DetailRow label="Agents max" value={quote?.limits.maxAgents ?? 'Non expose'} />
-        <DetailRow label="Concurrence max" value={quote?.limits.maxConcurrency ?? 'Non expose'} />
+        <DetailRow
+          label={t('graphe.ligne.mesure-tokens')}
+          value={t('graphe.valeur.mesure-tokens')}
+        />
+        <DetailRow
+          label={t('graphe.ligne.agents-max')}
+          value={quote?.limits.maxAgents ?? t('graphe.valeur.non-expose-sans-accent')}
+        />
+        <DetailRow
+          label={t('graphe.ligne.concurrence-max')}
+          value={quote?.limits.maxConcurrency ?? t('graphe.valeur.non-expose-sans-accent')}
+        />
       </dl>
     )
   }
   if (display?.kind === 'skill') {
     return (
       <dl>
-        <DetailRow label="Phase observée" value={display.skillName ?? 'Non exposée'} />
-        <DetailRow label="Identité" value="Alias de phase" />
-        <DetailRow label="Run" value={display.runId ?? 'Non exposé'} />
+        <DetailRow
+          label={t('graphe.ligne.phase-observee')}
+          value={display.skillName ?? t('graphe.valeur.non-exposee')}
+        />
+        <DetailRow label={t('graphe.ligne.identite')} value={t('graphe.valeur.alias-phase')} />
+        <DetailRow label="Run" value={display.runId ?? t('graphe.valeur.non-expose')} />
       </dl>
     )
   }
@@ -710,14 +751,20 @@ function ExecutionNodeDetail({
         <DetailRow label="Agent" value={event.execution?.agentId ?? event.actor} />
         <DetailRow
           label="Attempt"
-          value={display.attemptId ?? event.execution?.attemptId ?? 'Non exposé'}
+          value={display.attemptId ?? event.execution?.attemptId ?? t('graphe.valeur.non-expose')}
         />
-        <DetailRow label="Skill" value={display.skillName ?? 'Non exposée'} />
-        <DetailRow label="Durée" value={durationLabel(event.durationMs, offsetMs)} />
+        <DetailRow label="Skill" value={display.skillName ?? t('graphe.valeur.non-exposee')} />
+        <DetailRow
+          label={t('graphe.ligne.duree')}
+          value={durationLabel(event.durationMs, offsetMs)}
+        />
         {event.provider && <DetailRow label="Provider" value={event.provider} />}
-        {event.model && <DetailRow label="Modèle" value={event.model} />}
+        {event.model && <DetailRow label={t('graphe.ligne.modele')} value={event.model} />}
         {(display.dependencyIds?.length ?? 0) > 0 && (
-          <DetailRow label="Dépend de" value={display.dependencyIds?.join(', ')} />
+          <DetailRow
+            label={t('graphe.ligne.depend-de')}
+            value={display.dependencyIds?.join(', ')}
+          />
         )}
       </dl>
     )
@@ -726,12 +773,18 @@ function ExecutionNodeDetail({
     const git = display.git
     return (
       <dl>
-        <DetailRow label="Sort Git" value={gitOutcomeLabel(git?.outcome)} />
-        <DetailRow label="Révision" value={git?.commitSha ?? 'Aucun commit'} />
-        <DetailRow label="Branche de base" value={git?.baseBranch ?? 'Non exposée'} />
+        <DetailRow label={t('graphe.ligne.sort-git')} value={gitOutcomeLabel(git?.outcome)} />
+        <DetailRow
+          label={t('graphe.ligne.revision')}
+          value={git?.commitSha ?? t('graphe.valeur.aucun-commit')}
+        />
+        <DetailRow
+          label={t('graphe.ligne.branche-base')}
+          value={git?.baseBranch ?? t('graphe.valeur.non-exposee')}
+        />
         {git?.worktreePath && <DetailRow label="Worktree" value={git.worktreePath} />}
         {(git?.files?.length ?? 0) > 0 && (
-          <DetailRow label="Fichiers" value={git?.files?.join(', ')} />
+          <DetailRow label={t('graphe.ligne.fichiers')} value={git?.files?.join(', ')} />
         )}
         {git?.reason && (
           <DetailRow
@@ -750,44 +803,62 @@ function ExecutionNodeDetail({
     const closure = display.closure
     return (
       <dl>
-        <DetailRow label="État de clôture" value={closureStatusLabel(closure?.status)} />
-        <DetailRow label="Temps total" value={durationLabel(closure?.totalDurationMs, offsetMs)} />
-        <DetailRow label="Coût total" value={costLabel(closure?.totalCostUsd)} />
+        <DetailRow
+          label={t('graphe.ligne.etat-cloture')}
+          value={closureStatusLabel(closure?.status)}
+        />
+        <DetailRow
+          label={t('graphe.ligne.temps-total')}
+          value={durationLabel(closure?.totalDurationMs, offsetMs)}
+        />
+        <DetailRow label={t('graphe.ligne.cout-total')} value={costLabel(closure?.totalCostUsd)} />
         {closure?.usage && (
           <>
-            <DetailRow label="Agents admis" value={closure.usage.startedAgents ?? 'Non expose'} />
-            <DetailRow label="Appels fournisseur" value={closure.usage.startedCalls} />
-            <DetailRow label="Appels actifs" value={closure.usage.activeCalls} />
-            <DetailRow label="Tokens totaux" value={closure.usage.totalTokens} />
-            <DetailRow label="Tokens frais" value={closure.usage.freshTokens} />
             <DetailRow
-              label="Couverture"
+              label={t('graphe.ligne.agents-admis')}
+              value={closure.usage.startedAgents ?? t('graphe.valeur.non-expose-sans-accent')}
+            />
+            <DetailRow
+              label={t('graphe.ligne.appels-fournisseur')}
+              value={closure.usage.startedCalls}
+            />
+            <DetailRow label={t('graphe.ligne.appels-actifs')} value={closure.usage.activeCalls} />
+            <DetailRow label={t('graphe.ligne.tokens-totaux')} value={closure.usage.totalTokens} />
+            <DetailRow label={t('graphe.ligne.tokens-frais')} value={closure.usage.freshTokens} />
+            <DetailRow
+              label={t('graphe.ligne.couverture')}
               value={
                 closure.usage.unpricedCalls > 0
-                  ? `${closure.usage.unpricedCalls} appel(s) sans prix`
+                  ? t('graphe.valeur.sans-prix', { n: closure.usage.unpricedCalls })
                   : closure.usage.tokenCoverage === 'complete'
-                    ? 'Complète'
-                    : 'Partielle'
+                    ? t('graphe.valeur.complete')
+                    : t('graphe.valeur.partielle')
               }
             />
           </>
         )}
         {closure?.integrationOutcome && (
-          <DetailRow label="Intégration" value={gitOutcomeLabel(closure.integrationOutcome)} />
+          <DetailRow
+            label={t('graphe.ligne.integration')}
+            value={gitOutcomeLabel(closure.integrationOutcome)}
+          />
         )}
         {(closure?.gateReasons?.length ?? 0) > 0 && (
-          <DetailRow label="Raisons" value={closure?.gateReasons?.join(' · ')} />
+          <DetailRow label={t('graphe.ligne.raisons')} value={closure?.gateReasons?.join(' · ')} />
         )}
       </dl>
     )
   }
   return (
     <dl>
-      <DetailRow label="Acteur" value={event.actor} />
-      <DetailRow label="Durée" value={durationLabel(event.durationMs, offsetMs)} />
+      <DetailRow label={t('graphe.ligne.acteur')} value={event.actor} />
+      <DetailRow
+        label={t('graphe.ligne.duree')}
+        value={durationLabel(event.durationMs, offsetMs)}
+      />
       {skillLabel(event) && <DetailRow label="Skill" value={skillLabel(event)} />}
       {event.provider && <DetailRow label="Provider" value={event.provider} />}
-      {event.model && <DetailRow label="Modèle" value={event.model} />}
+      {event.model && <DetailRow label={t('graphe.ligne.modele')} value={event.model} />}
       <DetailRow label="Observation" value={event.detail} />
     </dl>
   )
@@ -919,7 +990,7 @@ function ExecutionConstellation({
             const event = node.event
             const status = event.status ?? 'completed'
             const kind = event.display?.kind ?? 'event'
-            const titre = event.display?.title ?? EVENT_LABEL[event.kind]
+            const titre = event.display?.title ?? texte(EVENT_LABEL[event.kind])
             const compte = event.display?.count
             const offset = offsetFromStart(event.timestamp, baseMs)
             const duree = dureeDuNoeud(node)
@@ -1058,6 +1129,7 @@ function ExecutionFiche({
   baseMs?: number
   dureeDemande?: number
 }): React.JSX.Element {
+  const { t } = useTextesChatExecution()
   const event = node.event
   const status = event.status ?? 'completed'
   const offset = offsetFromStart(event.timestamp, baseMs)
@@ -1071,11 +1143,11 @@ function ExecutionFiche({
     <div
       className="workflow-execution-detail wx-fiche"
       role="region"
-      aria-label="Détail de l’étape sélectionnée"
+      aria-label={t('graphe.fiche')}
       data-execution-detail-of={node.id}
     >
       <div className="wx-fiche-tete">
-        <b>{event.display?.title ?? EVENT_LABEL[event.kind]}</b>
+        <b>{event.display?.title ?? t(EVENT_LABEL[event.kind])}</b>
         <em className={`wx-fiche-statut is-${status}`}>
           {statusLabelDuNoeud(status, event.display)}
         </em>
@@ -1086,7 +1158,8 @@ function ExecutionFiche({
             <span className="wx-jauge-plein" style={{ width: `${Math.max(2, part * 100)}%` }} />
           </span>
           <span className="wx-jauge-texte">
-            {chiffreDuNoeud(node, offset)} · <b>{Math.round(part * 100)} %</b> de la demande
+            {chiffreDuNoeud(node, offset)} ·{' '}
+            {riche(t('graphe.fiche.part', { part: Math.round(part * 100) }), 'b')}
           </span>
         </div>
       )}
@@ -1096,7 +1169,7 @@ function ExecutionFiche({
         event.display?.failure &&
         !(event.display.kind === 'closure' && event.display.closure?.gateReasons?.length) && (
           <p className="workflow-execution-pourquoi" data-execution-pourquoi>
-            <b>Pourquoi</b> · {event.display.failure}
+            <b>{t('graphe.fiche.pourquoi')}</b> · {event.display.failure}
           </p>
         )}
       <ExecutionNodeDetail event={event} offsetMs={offset} />
@@ -1106,7 +1179,7 @@ function ExecutionFiche({
           trace (« Chat direct… », phase sans nom de skill) est une information : ton neutre. */}
       {defauts.length > 0 && (
         <p className="workflow-execution-warning" data-execution-defaut>
-          Trace partielle · {defauts.join(', ')}
+          {t('graphe.fiche.trace-partielle', { defauts: defauts.join(', ') })}
         </p>
       )}
       {event.display?.limitation && (
@@ -1126,6 +1199,7 @@ export function WorkflowExecutionGraph({
   turnId: imposedTurnId,
   onSelect
 }: WorkflowExecutionGraphProps): React.JSX.Element {
+  const { langue, t } = useTextesChatExecution()
   const [events, setEvents] = useState<HarnessTimelineEvent[]>([])
   const [turnId, setTurnId] = useState<string | undefined>()
   const [turns, setTurns] = useState<RequestTurnOption[]>([])
@@ -1212,6 +1286,24 @@ export function WorkflowExecutionGraph({
     previousLive.current = live
     if (active && conversationId && wasLive && !live) void load(false)
   }, [active, conversationId, live, load])
+
+  // LA LANGUE CHANGE : l'arbre est relu et reprojeté, sans écran de chargement (conv-1170). Le
+  // modèle écrit dans la langue courante ses titres d'action, ses raisons d'échec et ses repères ;
+  // sans cette relecture, ils resteraient dans l'ancienne langue jusqu'à la prochaine écriture.
+  const languePrecedente = useRef(langue)
+  useEffect(() => {
+    if (languePrecedente.current === langue) return
+    languePrecedente.current = langue
+    if (!active || !conversationId) return
+    // Hors du corps de l'effet, comme le chargement principal ci-dessus : pas de rendu en cascade.
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) void load(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [active, conversationId, langue, load])
 
   useEffect(() => {
     if (!active || !conversationId || !window.api.onAppEvent) return
@@ -1361,11 +1453,7 @@ export function WorkflowExecutionGraph({
   ).size
 
   if (!conversationId) {
-    return (
-      <div className="workflow-execution-empty">
-        Sélectionne une conversation pour voir son graphe d’exécution.
-      </div>
-    )
+    return <div className="workflow-execution-empty">{t('graphe.sans-conversation')}</div>
   }
 
   return (
@@ -1373,12 +1461,12 @@ export function WorkflowExecutionGraph({
       className="workflow-execution-graph"
       data-conversation-id={conversationId}
       data-turn-id={turnId}
-      aria-label="Arbre de traitement de la demande"
+      aria-label={t('graphe.arbre')}
       aria-busy={loading}
     >
       <header className="workflow-execution-summary">
         <div>
-          <strong>Traitement de la demande</strong>
+          <strong>{t('graphe.traitement')}</strong>
           <span>
             {runCount > 0 && (
               <>
@@ -1389,8 +1477,10 @@ export function WorkflowExecutionGraph({
             {nodes.filter((node) => node.event.display?.kind === 'agent').length} agent
             {nodes.filter((node) => node.event.display?.kind === 'agent').length > 1 ? 's' : ''}
             {' · '}
-            {Math.max(0, nodes.length - 1)} étape{nodes.length > 2 ? 's' : ''}
-            {live ? ' · en direct' : ''}
+            {t(nodes.length > 2 ? 'graphe.etapes.n' : 'graphe.etapes.un', {
+              n: Math.max(0, nodes.length - 1)
+            })}
+            {live ? t('graphe.en-direct') : ''}
           </span>
         </div>
         {/*
@@ -1402,7 +1492,7 @@ export function WorkflowExecutionGraph({
           <select
             className="workflow-execution-turn-select"
             data-execution-turn-select
-            aria-label="Demande affichée dans le graphe"
+            aria-label={t('graphe.choix-demande')}
             value={turnId ?? turns[0].id}
             onChange={(changed) =>
               setPicked({
@@ -1425,20 +1515,18 @@ export function WorkflowExecutionGraph({
       {loading && nodes.length === 0 && (
         <div className="workflow-execution-loading" role="status">
           <Spinner />
-          Chargement du graphe…
+          {t('graphe.chargement')}
         </div>
       )}
       {!loading && error && (
         <div className="workflow-execution-error" role="alert">
-          Graphe indisponible · {error}
+          {t('graphe.indisponible', { erreur: error })}
         </div>
       )}
       {!loading && !error && nodes.length === 0 && (
         <div className="workflow-execution-empty">
           {/* « la dernière demande » mentait dès qu'un tour ANTÉRIEUR était sélectionné. */}
-          {pickedTurnId
-            ? 'Aucune trace d’exécution pour la demande sélectionnée.'
-            : 'Aucune trace d’exécution pour la dernière demande.'}
+          {pickedTurnId ? t('graphe.vide.choisie') : t('graphe.vide.derniere')}
         </div>
       )}
 
@@ -1446,7 +1534,7 @@ export function WorkflowExecutionGraph({
         <div
           className="workflow-execution-tree"
           role="tree"
-          aria-label="Traitement de la demande"
+          aria-label={t('graphe.traitement')}
           ref={setArbre}
           data-execution-constellation
         >

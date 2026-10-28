@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react'
+import type { Langue } from '../../../shared/langue'
 import {
-  LIBELLE_STATUT,
-  bilanDuPlan,
-  libelleEtat,
   relancerLot,
+  type EtatDuLot,
   type GestePlanDeLots,
   type LotDuPlan,
   type PlanDeLots,
+  type StatutDuPlan,
   type VuePlanDeLots
 } from '../../../shared/plan-de-lots'
+import { formaterDate } from '../langue'
+import {
+  auPluriel,
+  texteDuBilan,
+  traduireChatFilsEtLots,
+  useTextesChatFilsEtLots,
+  type CleChatFilsEtLots
+} from '../textes-ecrans/chat-fils-et-lots'
 import { formatDuration, summarizeConversationCost, type CostRow } from './conversation-cost'
 import './TableauDesLots.css'
 
@@ -17,7 +25,8 @@ import './TableauDesLots.css'
  *
  * Le fil chef est le seul que l'utilisateur suit : ce bloc, posé au-dessus de la zone de saisie,
  * montre chaque lot (à faire, en cours, fait, échec), le fil qui le traite, et le budget de tours.
- * C'est AUSSI là que vit le seul clic qui lance un plan : l'agent dépose, l'utilisateur décide.
+ * Depuis conv-1171, le plan part dès que l'agent le dépose : ici, l'utilisateur suit et peut
+ * arrêter. « Lancer le plan » ne reste que pour un plan déposé avant ce changement.
  *
  * Dans un fil enfant, une seule ligne rappelle quel lot il traite et pour quel chef.
  * Relu à chaque signal `refresh` (plans-de-lots, chat, conversations) et à chaque changement de fil.
@@ -49,11 +58,44 @@ function coutDuFil(couts: CoutsParFil, fil: string | undefined): CostRow[] | und
   return lignes
 }
 
-const heure = (ms: number): string =>
-  new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+const heure = (ms: number): string => formaterDate(ms, { hour: '2-digit', minute: '2-digit' })
+
+/** Le texte d'une clé, au singulier ou au pluriel selon `n` et la langue (`auPluriel`). */
+const selonNombre = (
+  langue: Langue,
+  n: number,
+  un: CleChatFilsEtLots,
+  plusieurs: CleChatFilsEtLots,
+  valeurs: Record<string, string | number> = {}
+): string =>
+  traduireChatFilsEtLots(auPluriel(n, langue) ? plusieurs : un, langue, { n, ...valeurs })
+
+/*
+ * Les libellés d'état et de statut de l'écran. Le moteur garde les siens en français
+ * (`LIBELLE_ETAT` / `LIBELLE_STATUT`, shared/plan-de-lots.ts) : l'agent du fil chef les lit.
+ */
+const CLE_ETAT: Record<EtatDuLot, CleChatFilsEtLots> = {
+  'a-faire': 'lots.etat.a-faire',
+  'en-cours': 'lots.etat.en-cours',
+  fait: 'lots.etat.fait',
+  echec: 'lots.etat.echec',
+  interrompu: 'lots.etat.interrompu'
+}
+const CLE_STATUT: Record<StatutDuPlan, CleChatFilsEtLots> = {
+  'attente-accord': 'lots.statut.attente-accord',
+  'en-cours': 'lots.statut.en-cours',
+  termine: 'lots.statut.termine',
+  'suspendu-quota': 'lots.statut.suspendu-quota',
+  'plafond-atteint': 'lots.statut.plafond-atteint',
+  bloque: 'lots.statut.bloque',
+  interrompu: 'lots.statut.interrompu',
+  arrete: 'lots.statut.arrete',
+  refuse: 'lots.statut.refuse',
+  remplace: 'lots.statut.remplace'
+}
 
 /** Durée du DERNIER lancement du lot (une relance remet `debut` à zéro). */
-function dureeDuLot(lot: LotDuPlan): { texte: string; titre?: string } {
+function dureeDuLot(lot: LotDuPlan, langue: Langue): { texte: string; titre?: string } {
   if (!lot.debut) return { texte: INCONNU }
   if (lot.fin)
     return {
@@ -62,8 +104,14 @@ function dureeDuLot(lot: LotDuPlan): { texte: string; titre?: string } {
     }
   // En cours : l'heure de départ reste vraie sans horloge qui tourne, une durée figée ne le serait pas.
   if (lot.etat === 'en-cours')
-    return { texte: `depuis ${heure(lot.debut)}`, titre: 'lancé, pas fini' }
-  return { texte: INCONNU, titre: `lancé à ${heure(lot.debut)}, fin non notée` }
+    return {
+      texte: traduireChatFilsEtLots('lots.duree.depuis', langue, { heure: heure(lot.debut) }),
+      titre: traduireChatFilsEtLots('lots.duree.lancePasFini', langue)
+    }
+  return {
+    texte: INCONNU,
+    titre: traduireChatFilsEtLots('lots.duree.finNonNotee', langue, { heure: heure(lot.debut) })
+  }
 }
 
 /**
@@ -112,13 +160,17 @@ function useCoutsDesLots(plan: PlanDeLots | null): CoutsParFil {
 }
 
 /** Le coût des lots MESURÉS, additionné par le même résumé ; les lots lancés sans mesure sont comptés. */
-function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil): string {
+function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil, langue: Langue): string {
   const lances = plan.lots.filter((l) => l.fil)
   const mesures = lances.map((l) => coutDuFil(couts, l.fil)).filter((c): c is CostRow[] => !!c)
   if (!mesures.length) return INCONNU
   const total = summarizeConversationCost(mesures.flat()).label
   const sansMesure = lances.length - mesures.length
-  return sansMesure ? `${total} · ${sansMesure} lot${sansMesure > 1 ? 's' : ''} sans mesure` : total
+  return sansMesure
+    ? selonNombre(langue, sansMesure, 'lots.cout.sansMesure.un', 'lots.cout.sansMesure.plusieurs', {
+        total
+      })
+    : total
 }
 
 /*
@@ -138,7 +190,8 @@ const STATUTS_RELANCE_GRISEE = new Set<PlanDeLots['statut']>([
 /** `null` = pas de bouton ; sinon actif, ou grisé avec sa raison. */
 function relanceAuClic(
   plan: PlanDeLots,
-  lot: LotDuPlan
+  lot: LotDuPlan,
+  langue: Langue
 ): { possible: true } | { possible: false; raison: string } | null {
   if (lot.etat !== 'echec' && lot.etat !== 'interrompu') return null
   if (relancerLot(plan, lot.rang).ok) return { possible: true }
@@ -147,7 +200,9 @@ function relanceAuClic(
   if (plan.toursLances >= plan.plafondTours && STATUTS_RELANCE_GRISEE.has(plan.statut))
     return {
       possible: false,
-      raison: `plafond de ${plan.plafondTours} tours atteint : relance impossible.`
+      raison: traduireChatFilsEtLots('lots.relance.plafond', langue, {
+        plafond: plan.plafondTours
+      })
     }
   return null
 }
@@ -163,15 +218,16 @@ function LotsDuPlan({
   occupe: boolean
   relancer: (rang: number) => void
 }): React.JSX.Element {
+  const { langue, t } = useTextesChatFilsEtLots()
   return (
     <ol className="tdl-lots">
       {plan.lots.map((lot) => {
-        const duree = dureeDuLot(lot)
+        const duree = dureeDuLot(lot, langue)
         const cout = coutDuFil(couts, lot.fil)
-        const relance = relanceAuClic(plan, lot)
+        const relance = relanceAuClic(plan, lot, langue)
         return (
           <li key={lot.rang} className={`tdl-lot tdl-lot--${lot.etat}`} data-lot-etat={lot.etat}>
-            <span className="tdl-pastille">{libelleEtat(lot.etat)}</span>
+            <span className="tdl-pastille">{t(CLE_ETAT[lot.etat])}</span>
             <span className="tdl-lot-titre">
               {lot.rang}. {lot.titre}
               {lot.raison ? <span className="tdl-lot-raison"> — {lot.raison}</span> : null}
@@ -184,12 +240,17 @@ function LotsDuPlan({
                     disabled={occupe || !relance.possible}
                     title={
                       relance.possible
-                        ? `Relancer le lot ${lot.rang} dans ${lot.fil ?? 'un nouveau fil'} — compte un tour (${plan.toursLances} sur ${plan.plafondTours})`
+                        ? t('lots.relance.titre', {
+                            rang: lot.rang,
+                            fil: lot.fil ?? t('lots.relance.nouveauFil'),
+                            lances: plan.toursLances,
+                            plafond: plan.plafondTours
+                          })
                         : relance.raison
                     }
                     onClick={() => relancer(lot.rang)}
                   >
-                    Relancer
+                    {t('lots.relance.bouton')}
                   </button>
                   {relance.possible ? null : (
                     <span className="tdl-relance-raison">{relance.raison}</span>
@@ -207,7 +268,7 @@ function LotsDuPlan({
             <span
               className={`tdl-mesure tdl-cout${cout ? '' : ' tdl-mesure--inconnue'}`}
               data-testid={`tdl-lot-${lot.rang}-cout`}
-              title={cout ? `Coût du fil ${lot.fil}` : 'Coût non mesuré'}
+              title={cout ? t('lots.cout.duFil', { fil: lot.fil ?? '' }) : t('lots.cout.nonMesure')}
             >
               {cout ? summarizeConversationCost(cout).label : INCONNU}
             </span>
@@ -218,7 +279,7 @@ function LotsDuPlan({
                 onClick={() => {
                   if (lot.fil) ouvrirFil(lot.fil)
                 }}
-                title={`Ouvrir ${lot.fil}`}
+                title={t('lots.ouvrirFil', { fil: lot.fil })}
               >
                 {lot.fil}
               </button>
@@ -237,6 +298,7 @@ export function TableauDesLots({
 }: {
   conversationId?: string | null
 }): React.JSX.Element | null {
+  const { langue, t } = useTextesChatFilsEtLots()
   // L'état porte le fil qu'il décrit : à un changement de fil, l'ancien plan n'est jamais affiché.
   const [lu, setLu] = useState<{ fil: string; vue: VuePlanDeLots | null }>({ fil: '', vue: null })
   const [geste, setGeste] = useState<{ fil: string; enCours: boolean; erreur?: string }>({
@@ -283,24 +345,24 @@ export function TableauDesLots({
     return (
       <section
         className="tdl tdl--enfant"
-        aria-label="Lot d’un plan"
+        aria-label={t('lots.enfant.aria')}
         data-testid="tableau-des-lots"
       >
         <span className="tdl-kicker">
-          Lot {vue.rang}/{plan.lots.length}
+          {/* Rang absent : rien, comme l'ancien `{vue.rang}` rendu vide. */}
+          {t('lots.enfant.rang', { rang: vue.rang ?? '', total: plan.lots.length })}
         </span>
         <span>
-          du plan « {plan.titre} », mené par{' '}
+          {t('lots.enfant.duPlan', { titre: plan.titre })}{' '}
           <button type="button" className="tdl-fil" onClick={() => ouvrirFil(plan.chef)}>
             {plan.chef}
           </button>
-          {lot ? ` — ${libelleEtat(lot.etat)}` : ''}
+          {lot ? ` — ${t(CLE_ETAT[lot.etat])}` : ''}
         </span>
       </section>
     )
   }
 
-  const bilan = bilanDuPlan(plan)
   const erreur = geste.fil === conversationId ? geste.erreur : undefined
   const occupe = geste.fil === conversationId && geste.enCours
   const agir = (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number): void => {
@@ -325,33 +387,46 @@ export function TableauDesLots({
   return (
     <section
       className={`tdl tdl--${plan.statut}`}
-      aria-label="Plan de lots"
+      aria-label={t('lots.aria')}
       data-testid="tableau-des-lots"
       data-statut={plan.statut}
     >
       <header className="tdl-tete">
-        <span className="tdl-kicker">Plan de lots</span>
+        <span className="tdl-kicker">{t('lots.kicker')}</span>
         <strong className="tdl-titre">{plan.titre}</strong>
         <span className={`tdl-statut tdl-statut--${plan.statut}`}>
-          {LIBELLE_STATUT[plan.statut]}
+          {t(CLE_STATUT[plan.statut])}
         </span>
       </header>
       <div className="tdl-bilan">
-        {bilan.texte} · {plan.parallele} {plan.parallele > 1 ? 'fils' : 'fil'} en parallèle ·{' '}
-        <span
-          data-testid="tdl-cout-total"
-          title="Somme des fils des lots (fil chef non compris), même calcul que la pastille de coût du fil"
-        >
-          coût des lots {coutTotalDesLots(plan, couts)}
+        {texteDuBilan(plan, langue)} ·{' '}
+        {selonNombre(langue, plan.parallele, 'lots.parallele.un', 'lots.parallele.plusieurs')} ·{' '}
+        <span data-testid="tdl-cout-total" title={t('lots.cout.titre')}>
+          {t('lots.cout.total', { cout: coutTotalDesLots(plan, couts, langue) })}
         </span>
       </div>
       {plan.raison ? <div className="tdl-raison">{plan.raison}</div> : null}
-      {plan.statut === 'attente-accord' && plan.avertissements.length ? (
-        <ul className="tdl-avertissements">
-          {plan.avertissements.map((a) => (
-            <li key={a}>{a}</li>
-          ))}
-        </ul>
+      {/*
+       * Repliés (conv-1171) : 36 lignes « les lots X et Y annoncent le même fichier » poussaient la
+       * zone de saisie hors de l'écran. Montrés quel que soit l'état : le plan part sans clic, c'est
+       * en cours qu'ils expliquent pourquoi un lot attend.
+       */}
+      {plan.avertissements.length ? (
+        <details className="tdl-avertissements" data-testid="tdl-avertissements">
+          <summary>
+            {selonNombre(
+              langue,
+              plan.avertissements.length,
+              'lots.avertissements.un',
+              'lots.avertissements.plusieurs'
+            )}
+          </summary>
+          <ul>
+            {plan.avertissements.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </details>
       ) : null}
       <LotsDuPlan
         plan={plan}
@@ -367,8 +442,11 @@ export function TableauDesLots({
             disabled={occupe}
             onClick={() => agir('accepter')}
           >
-            Lancer le plan — {plan.lots.length} lots, {plan.parallele} en parallèle, plafond{' '}
-            {plan.plafondTours} tours
+            {t('lots.lancer', {
+              lots: plan.lots.length,
+              parallele: plan.parallele,
+              plafond: plan.plafondTours
+            })}
           </button>
           <button
             type="button"
@@ -376,12 +454,9 @@ export function TableauDesLots({
             disabled={occupe}
             onClick={() => agir('refuser')}
           >
-            Refuser
+            {t('lots.refuser')}
           </button>
-          <span className="tdl-note">
-            Chaque lot ouvre un fil et coûte au moins un tour de modèle IA. Rien ne part sans ce
-            clic.
-          </span>
+          <span className="tdl-note">{t('lots.note')}</span>
         </div>
       ) : null}
       {STATUTS_ARRETABLES.has(plan.statut) || STATUTS_REPRENABLES.has(plan.statut) ? (
@@ -393,7 +468,7 @@ export function TableauDesLots({
               disabled={occupe}
               onClick={() => agir('reprendre')}
             >
-              Reprendre
+              {t('lots.reprendre')}
             </button>
           ) : null}
           {STATUTS_ARRETABLES.has(plan.statut) ? (
@@ -403,7 +478,7 @@ export function TableauDesLots({
               disabled={occupe}
               onClick={() => agir('arreter')}
             >
-              Arrêter (aucun nouveau lot)
+              {t('lots.arreter')}
             </button>
           ) : null}
         </div>

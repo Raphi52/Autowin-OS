@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { langueCourante } from '../langue'
+import { traduireChatFil, useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { libelleSortieCommande } from './evidence-label'
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
@@ -32,19 +34,37 @@ import {
 } from './chat-parts-helpers'
 import { useDureeVivante } from './duree-vivante'
 
+// Libellés lus à l'affichage, dans la langue de l'interface (conv-1170). « Navigation », « Message »
+// et « Orchestration » s'écrivent pareil en anglais : ils restent tels quels.
 const CMD_LABEL: Record<string, string> = {
   navigate: 'Navigation',
   chat_send: 'Message',
   orchestrate: 'Orchestration',
-  create_conversation: 'Conversation créée',
-  rename_conversation: 'Conversation renommée',
-  remove_conversation: 'Conversation supprimée',
-  set_role: 'Rôle réglé',
-  resolve_decision: 'Décision résolue',
-  load_graph: 'Graphe chargé',
-  get_state: 'Lecture d’état',
+  get create_conversation() {
+    return traduireChatFil('commande.conversationCreee', langueCourante())
+  },
+  get rename_conversation() {
+    return traduireChatFil('commande.conversationRenommee', langueCourante())
+  },
+  get remove_conversation() {
+    return traduireChatFil('commande.conversationSupprimee', langueCourante())
+  },
+  get set_role() {
+    return traduireChatFil('commande.roleRegle', langueCourante())
+  },
+  get resolve_decision() {
+    return traduireChatFil('commande.decisionResolue', langueCourante())
+  },
+  get load_graph() {
+    return traduireChatFil('commande.grapheCharge', langueCourante())
+  },
+  get get_state() {
+    return traduireChatFil('commande.lectureEtat', langueCourante())
+  },
   // Skill choisie par le modèle (conv-1034) : le fil montrait « skill_charger » brut.
-  skill_charger: 'Skill chargée'
+  get skill_charger() {
+    return traduireChatFil('commande.skillChargee', langueCourante())
+  }
 }
 
 /**
@@ -61,9 +81,10 @@ const CMD_LABEL: Record<string, string> = {
  * message de vide non plus. Une etape sans prompt ni resultat rend juste son identite.
  */
 function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const [ouvert, setOuvert] = useState(false)
   const detaille = Boolean(choix.prompt || choix.raisonnement || choix.outcome)
-  const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || 'etape'
+  const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || t('pipeline.etapeSansAccent')
   const estControle = choix.phase === 'gate' || choix.role === 'gate'
   return (
     <li className={detaille ? 'is-depliable' : undefined} data-testid="activity-pipeline-line">
@@ -74,7 +95,9 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
             className="activity-step-toggle activity-pipeline-chevron"
             data-testid="activity-pipeline-toggle"
             aria-expanded={ouvert}
-            aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
+            aria-label={
+              ouvert ? t('pipeline.replier', { nom }) : t('pipeline.deplierSansAccent', { nom })
+            }
             onClick={() => setOuvert((etat) => !etat)}
           >
             {ouvert ? '▼' : '▶'}
@@ -92,7 +115,7 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
       </div>
       {ouvert && choix.prompt && (
         <>
-          <div className="activity-pipeline-titre">prompt envoyé</div>
+          <div className="activity-pipeline-titre">{t('pipeline.promptEnvoye')}</div>
           <pre className="activity-step-detail" data-testid="activity-pipeline-prompt">
             {choix.prompt}
           </pre>
@@ -100,7 +123,7 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
       )}
       {ouvert && choix.raisonnement && (
         <>
-          <div className="activity-pipeline-titre">raisonnement</div>
+          <div className="activity-pipeline-titre">{t('pipeline.raisonnement')}</div>
           <pre className="activity-step-detail" data-testid="activity-pipeline-reasoning">
             {choix.raisonnement}
           </pre>
@@ -109,7 +132,7 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
       {ouvert && choix.outcome && (
         <>
           <div className="activity-pipeline-titre">
-            {estControle ? 'décision et motif' : 'ce que l’étape a rendu'}
+            {estControle ? t('pipeline.decisionEtMotif') : t('pipeline.rendu')}
           </div>
           <pre
             className={`activity-step-detail${choix.ok === false ? ' failed' : ''}`}
@@ -149,14 +172,17 @@ function PhaseDeLaCapsule({
   // La PHASE nomme l'etape ; le role vient a part, apres un point median, et seulement s'il dit
   // autre chose qu'elle. Colle au nom, il donnait « prompt envoyé à scout subagent » (capture du
   // 2026-10-10, conv-194) — une phase qui n'existe pas.
-  const nom = choix.phase ?? choix.role ?? 'étape'
+  const { t } = useTextesChatFil()
+  const nom = choix.phase ?? choix.role ?? t('capsule.etape')
   const role = choix.role && choix.role !== nom ? choix.role : undefined
   const estControle = choix.phase === 'gate' || choix.role === 'gate'
   const qui = choix.model ?? choix.provider
   return (
     <section className="orch-section" data-testid="activity-pipeline-line">
       <div className="orch-titre">
-        {[choix.prompt ? `prompt envoyé à ${nom}` : nom, role, qui].filter(Boolean).join(' · ')}
+        {[choix.prompt ? t('capsule.promptEnvoyeA', { nom }) : nom, role, qui]
+          .filter(Boolean)
+          .join(' · ')}
       </div>
       {choix.prompt && (
         <pre className="orch-texte" data-testid="activity-pipeline-prompt">
@@ -168,7 +194,9 @@ function PhaseDeLaCapsule({
           s'ecrit a l'instant —, sans empecher de remonter. */}
       {choix.raisonnement && (
         <>
-          <div className="orch-titre">{enCours ? 'raisonnement · en direct' : 'raisonnement'}</div>
+          <div className="orch-titre">
+            {enCours ? t('capsule.raisonnementDirect') : t('pipeline.raisonnement')}
+          </div>
           <pre
             className={`orch-texte orch-raisonnement${enCours ? ' is-direct' : ''}`}
             data-testid="activity-pipeline-reasoning"
@@ -178,7 +206,9 @@ function PhaseDeLaCapsule({
         </>
       )}
       {(choix.outcome || enCours) && (
-        <div className="orch-titre">{estControle ? 'décision et motif' : 'rendu'}</div>
+        <div className="orch-titre">
+          {estControle ? t('pipeline.decisionEtMotif') : t('capsule.rendu')}
+        </div>
       )}
       {choix.outcome ? (
         <pre
@@ -188,7 +218,7 @@ function PhaseDeLaCapsule({
           {choix.outcome}
         </pre>
       ) : enCours ? (
-        <div className="orch-attente">pas encore — s’affiche ici quand {nom} finit</div>
+        <div className="orch-attente">{t('capsule.pasEncore', { nom })}</div>
       ) : null}
     </section>
   )
@@ -209,6 +239,7 @@ function EtageActivite({
   etape: ChatActionPart
   lien?: string
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const detail = localActionDetail(etape)
   /**
    * SKILLS ET AGENTS CHOISIS pour la tache (demande du 2026-09-02, capture jointe). Une
@@ -258,7 +289,11 @@ function EtageActivite({
             className="activity-step-toggle"
             data-testid="activity-step-toggle"
             aria-expanded={ouvert}
-            aria-label={ouvert ? `Replier ${libelle}` : `Déplier le détail de ${libelle}`}
+            aria-label={
+              ouvert
+                ? t('pipeline.replier', { nom: libelle })
+                : t('pipeline.deplier', { nom: libelle })
+            }
             onClick={() => setOuvert((etat) => !etat)}
           >
             {ouvert ? '▾' : '▸'}
@@ -276,7 +311,9 @@ function EtageActivite({
             className="activity-step-target is-clickable"
             data-testid="activity-step-target"
             aria-expanded={ouvert}
-            title={ouvert ? `Replier ${cible}` : `Déplier le détail de ${cible}`}
+            title={
+              ouvert ? t('pipeline.replier', { nom: cible }) : t('pipeline.deplier', { nom: cible })
+            }
             onClick={() => setOuvert((etat) => !etat)}
           >
             {cible}
@@ -332,6 +369,7 @@ function sortieDebordante(text: string): boolean {
 }
 
 export function SubAgentText({ text }: { text: string }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const [ouvert, setOuvert] = useState(false)
   // Pas de bouton quand tout tient deja : promettre un depliage sans effet visible se lit comme casse.
   const depliable = sortieDebordante(text)
@@ -344,8 +382,8 @@ export function SubAgentText({ text }: { text: string }): React.JSX.Element {
           className="subagent-text-toggle"
           onClick={() => setOuvert(!ouvert)}
           aria-expanded={ouvert}
-          aria-label={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
-          title={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
+          aria-label={ouvert ? t('sortie.replier') : t('sortie.deplier')}
+          title={ouvert ? t('sortie.replier') : t('sortie.deplier')}
         >
           {ouvert ? '▾' : '▸'}
         </button>
@@ -368,27 +406,28 @@ function EnveloppeDePrompt({
   prompt: NonNullable<OrchStep['prompt']>
   testid?: string
 }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   return (
     <details className="prompt-envelope" data-testid={testid}>
-      <summary>Voir le prompt envoyé</summary>
+      <summary>{t('prompt.voir')}</summary>
       <div className="prompt-envelope-meta">
         <span>{prompt.provider}</span>
         {prompt.model && <span>{prompt.model}</span>}
         <span>{prompt.transport}</span>
       </div>
       <p className="prompt-envelope-limit">{prompt.limitation}</p>
-      <strong>Système · instructions + skills/contexte injectés</strong>
+      <strong>{t('prompt.systeme')}</strong>
       <div className="prompt-envelope-system" data-testid="prompt-system-md">
-        <BrainMarkdown source={prompt.system || 'Aucun bloc système.'} />
+        <BrainMarkdown source={prompt.system || t('prompt.aucunSysteme')} />
       </div>
-      <strong>Messages transmis</strong>
+      <strong>{t('prompt.messages')}</strong>
       {prompt.messages.map((message, messageIndex) => (
         <section key={`${message.role}-${messageIndex}`}>
           <small>{message.role}</small>
           <pre>{message.content}</pre>
         </section>
       ))}
-      <strong>Options de transport</strong>
+      <strong>{t('prompt.options')}</strong>
       <HumanJson value={prompt.options} />
     </details>
   )
@@ -396,6 +435,9 @@ function EnveloppeDePrompt({
 
 /** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
 export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
+  // Le détail et l'erreur d'une étape restent tels qu'ils arrivent : c'est le texte du modèle ou du
+  // contrôle, que d'autres parties du code relisent (conv-1170).
+  const { t } = useTextesChatFil()
   const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
   // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC » (conv-966). Le run
   // l'écrit `failed` — l'étape ne s'est pas terminée — mais son erreur porte le motif du Stop. Sa
@@ -414,8 +456,10 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
         ) : (
           s.provider && <span className="mono c-accent">{s.provider}</span>
         )}
-        {echec && <span className="subagent-failed-pill">échec</span>}
-        {annule && <span className="subagent-failed-pill is-cancelled">annulé</span>}
+        {echec && <span className="subagent-failed-pill">{t('sousAgent.echec')}</span>}
+        {annule && (
+          <span className="subagent-failed-pill is-cancelled">{t('sousAgent.annule')}</span>
+        )}
         {s.detail && <span className="c-faint">{s.detail}</span>}
         {typeof s.costUsd === 'number' ? (
           <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
@@ -429,7 +473,7 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
             <span
               className="c-faint tnum"
               style={{ marginLeft: 'auto' }}
-              title="Coût non chiffré par le provider"
+              title={t('sousAgent.coutNonChiffre')}
             >
               {formatTokens(s.tokens)}
             </span>
@@ -441,7 +485,7 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
       )}
       {s.thinking && (
         <details className="subagent-thinking">
-          <summary>Raisonnement</summary>
+          <summary>{t('sousAgent.raisonnement')}</summary>
           <pre>{s.thinking}</pre>
         </details>
       )}
@@ -455,13 +499,14 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
 /** Fil des sous-agents (exec/juge/gate) — réutilisé en direct et dans le détail d'un run.
  *  Les membres d'un même fan-out (≥2 modèles d'une phase) sont rendus CÔTE À CÔTE pour comparaison. */
 export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   const groups = groupSubagentSteps(steps)
   const perModel = costByModel(steps)
   return (
     <div className="col" style={{ gap: 'var(--s2)' }}>
       {perModel.length >= 2 && (
         <div className="run-cost-recap" data-testid="run-cost-recap">
-          <span className="c-faint">Coût par modèle</span>
+          <span className="c-faint">{t('cout.parModele')}</span>
           {perModel.map((m) => (
             <span key={m.model} className="run-cost-chip">
               <span className="mono">{m.model}</span>
@@ -471,7 +516,9 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
               {m.costUsd > 0 && <b className="tnum">{m.costUsd.toFixed(4)} $</b>}
               {m.unpricedCalls > 0 && (
                 <b className="tnum run-cost-uncosted" data-testid="cost-uncosted">
-                  {formatTokens(m.unpricedTokens)} non chiffré{m.unpricedCalls > 1 ? 's' : ''}
+                  {t(m.unpricedCalls > 1 ? 'cout.nonChiffres' : 'cout.nonChiffre', {
+                    volume: formatTokens(m.unpricedTokens)
+                  })}
                 </b>
               )}
               <i className="c-faint">×{m.count}</i>
@@ -497,6 +544,7 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
 /** Preuves d'exécution rendues LISIBLEMENT inline : diff pour un file_change, stdout+exit pour une
  *  commande. Remplace le dump JSON générique — c'est ce qui rend le travail « visible » dans le Chat. */
 function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
+  const { t } = useTextesChatFil()
   return (
     <div className="evidence-list">
       {items.map((e, i) => (
@@ -504,7 +552,7 @@ function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
           <summary>
             <span className={`status-dot ${e.ok ? 'st-ok' : 'st-err'}`} />
             {e.type === 'file_change' ? (
-              <span className="mono">📝 {e.path || 'fichier modifié'}</span>
+              <span className="mono">📝 {e.path || t('preuve.fichierModifie')}</span>
             ) : (
               <>
                 <span className="mono">{e.command ? `$ ${e.command}` : e.type}</span>
@@ -517,7 +565,7 @@ function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
                   return (
                     <span
                       className={`evidence-exit ${libelle.ok ? 'st-ok' : 'st-err'}`}
-                      title={`code de sortie ${e.exitCode}`}
+                      title={t('preuve.codeDeSortie', { code: String(e.exitCode) })}
                     >
                       {libelle.texte}
                     </span>
@@ -569,6 +617,7 @@ export function AssistantActivityGroup({
 }): React.JSX.Element {
   // État LOCAL au bouton : le clic n'a sinon aucun retour visible tant que le tour persisté
   // n'est pas revenu du main, et un second clic relançait la même tâche en double.
+  const { t } = useTextesChatFil()
   const [resumePending, setResumePending] = useState(false)
   const [resumeError, setResumeError] = useState<string | null>(null)
   /*
@@ -641,21 +690,24 @@ export function AssistantActivityGroup({
     running
   )
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
+  // « n action(s) » s'écrit pareil dans les deux langues ; seul l'état se traduit (conv-1170).
+  const terminees = (n: number): string =>
+    t(n > 1 ? 'activite.terminees' : 'activite.terminee', { actions: plural(n, 'action') })
+  const interrompues = (n: number): string =>
+    t(n > 1 ? 'activite.interrompues' : 'activite.interrompue', { actions: plural(n, 'action') })
   const status = running
     ? completedCount > 0
-      ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(runningCount, 'action')} en cours`
-      : `${plural(actions.length, 'action')} en cours`
+      ? `${terminees(completedCount)} · ${t('activite.enCours', { actions: plural(runningCount, 'action') })}`
+      : t('activite.enCours', { actions: plural(actions.length, 'action') })
     : failed
       ? resumeDesActions?.state === 'refused' && !actions.some((action) => action.ok === false)
-        ? `${plural(actions.length, 'action')} sans effet`
-        : `${plural(actions.length, 'action')} avec erreur`
+        ? t('activite.sansEffet', { actions: plural(actions.length, 'action') })
+        : t('activite.avecErreur', { actions: plural(actions.length, 'action') })
       : interruptedCount > 0
         ? completedCount > 0
-          ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(interruptedCount, 'action')} interrompue${interruptedCount > 1 ? 's' : ''}`
-          : `${plural(interruptedCount, 'action')} interrompue${interruptedCount > 1 ? 's' : ''}`
-        : actions.length > 1
-          ? `${actions.length} actions terminées`
-          : '1 action terminée'
+          ? `${terminees(completedCount)} · ${interrompues(interruptedCount)}`
+          : interrompues(interruptedCount)
+        : terminees(actions.length)
   // Bloc NON dépliable : le détail (prompt envoyé au sous-agent, résultats, trace) vit dans
   // Workflows, pas au milieu du fil. Le bloc est donc un simple bouton qui y renvoie — vers la
   // carte du run si ça tourne, vers l'historique d'activité si c'est déjà terminé/interrompu.
@@ -689,14 +741,15 @@ export function AssistantActivityGroup({
   // erreur n'offrait AUCUN levier -> « erreur » sans quoi faire (frustration, conv veille 2026-08-14).
   const retryable = onResume
     ? interruptedCount > 0
-      ? { task: interruptedTask(actions), verb: 'Reprendre' as const, gerund: 'Reprise' }
+      ? { task: interruptedTask(actions), verb: 'Reprendre' as const }
       : failed
-        ? { task: failedTask(actions), verb: 'Relancer' as const, gerund: 'Relance' }
+        ? { task: failedTask(actions), verb: 'Relancer' as const }
         : undefined
     : undefined
   const resumable = retryable?.task
   const retryVerb = retryable?.verb ?? 'Reprendre'
-  const retryGerund = retryable?.gerund ?? 'Reprise'
+  // Le verbe choisit la phrase entière, dans la langue de l'interface (conv-1170).
+  const estRelance = retryVerb === 'Relancer'
   // Les deux boutons arretent le clic : dans la capsule d'orchestration, ils vivent DANS l'en-tete
   // depliable, et un clic sur ↗ ou Relancer ne doit pas plier/deplier le bloc au passage.
   const boutonRun = runConsultable ? (
@@ -704,7 +757,7 @@ export function AssistantActivityGroup({
       type="button"
       className="activity-open-run"
       data-testid="activity-open-run"
-      title="Voir la trace complète dans Workflows"
+      title={t('activite.voirTrace')}
       // Annule le depliage DES LA CAPTURE : un moteur qui deplie le <details> pendant la remontee
       // du clic (avant le gestionnaire de React, pose a la racine) ne le ferait plus.
       onClickCapture={(event) => event.preventDefault()}
@@ -726,10 +779,14 @@ export function AssistantActivityGroup({
       {...(resumeError ? { 'data-resume-error': resumeError } : {})}
       title={
         resumePending
-          ? `${retryGerund} en cours : ${resumable}`
+          ? t(estRelance ? 'reprise.relanceEnCours' : 'reprise.repriseEnCours', {
+              tache: resumable
+            })
           : resumeError
-            ? `${retryGerund} échouée : ${resumeError} — cliquer pour réessayer`
-            : `${retryVerb} : ${resumable}`
+            ? t(estRelance ? 'reprise.relanceEchouee' : 'reprise.repriseEchouee', {
+                erreur: resumeError
+              })
+            : t(estRelance ? 'reprise.relancer' : 'reprise.reprendre', { tache: resumable })
       }
       onClickCapture={(event) => event.preventDefault()}
       onClick={async (event) => {
@@ -740,7 +797,7 @@ export function AssistantActivityGroup({
         try {
           const outcome = await onResume?.(resumable)
           if (outcome && outcome.ok === false) {
-            setResumeError(outcome.error || 'reprise refusée')
+            setResumeError(outcome.error || t('reprise.refusee'))
           }
         } catch (error) {
           setResumeError(error instanceof Error ? error.message : String(error))
@@ -749,7 +806,11 @@ export function AssistantActivityGroup({
         }
       }}
     >
-      {resumePending ? `↻ ${retryGerund}…` : resumeError ? '↻ Réessayer' : `↻ ${retryVerb}`}
+      {resumePending
+        ? t(estRelance ? 'reprise.boutonRelance' : 'reprise.boutonReprise')
+        : resumeError
+          ? t('reprise.boutonReessayer')
+          : t(estRelance ? 'reprise.boutonRelancer' : 'reprise.boutonReprendre')}
     </button>
   ) : null
   /*
@@ -806,7 +867,7 @@ export function AssistantActivityGroup({
     const phasesDeLegende =
       pipeline.length > 1
         ? pipeline.map((choix, index) => ({
-            nom: choix.phase ?? choix.role ?? 'étape',
+            nom: choix.phase ?? choix.role ?? t('capsule.etape'),
             etat: etatsDesPhases[index]!
           }))
         : []
@@ -856,7 +917,7 @@ export function AssistantActivityGroup({
                     <span className="orch-sep" aria-hidden="true">
                       ·
                     </span>
-                    <span className="orch-phase">{phaseCourante ?? 'en cours'}</span>
+                    <span className="orch-phase">{phaseCourante ?? t('capsule.enCours')}</span>
                   </>
                 )}
                 {dureeVivante && (
@@ -910,13 +971,13 @@ export function AssistantActivityGroup({
               : resultats.length === 0 &&
                 taches.length > 0 && (
                   <section className="orch-section">
-                    <div className="orch-titre">travail demandé</div>
+                    <div className="orch-titre">{t('capsule.travailDemande')}</div>
                     <pre className="orch-texte">{taches.join('\n\n')}</pre>
                   </section>
                 )}
             {resultats.map((detail, index) => (
               <section className="orch-section" key={`resultat-${index}`}>
-                <div className="orch-titre">demande et résultat du run</div>
+                <div className="orch-titre">{t('capsule.demandeEtResultat')}</div>
                 <pre
                   className={`orch-texte${detail.ok ? '' : ' failed'}`}
                   data-testid="activity-step-detail"
@@ -994,10 +1055,10 @@ export function AssistantActivityGroup({
             data-testid="activity-group"
             title={
               !runConsultable
-                ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
+                ? t('activite.actionLocale')
                 : running
-                  ? 'Ouvrir cette action en cours dans Workflows'
-                  : 'Voir le détail de cette action dans Workflows'
+                  ? t('activite.ouvrirEnCours')
+                  : t('activite.voirDetail')
             }
             aria-disabled={!runConsultable && !why.length && !actions.length}
             {...(why.length

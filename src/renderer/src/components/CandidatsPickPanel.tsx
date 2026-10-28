@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { type CandidatAffiche, numerosDesCandidats } from './veille-candidats-message'
-import { MOTIFS_REFUS, type MotifRefus } from './scout-table'
 import {
   emojiType,
   libelleVoie,
@@ -13,19 +12,20 @@ import {
   voieDeLaPiste
 } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
-/** Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria. */
-const LIBELLE_BANDE: Record<'g' | 'y' | 'r', string> = {
-  g: 'fort',
-  y: 'moyen',
-  r: 'faible'
-}
+/**
+ * Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria.
+ * « Impact » et « Effort » se disent pareil en anglais : seul le niveau se traduit.
+ */
+const LIBELLE_BANDE = {
+  g: 'candidats.bande.g',
+  y: 'candidats.bande.y',
+  r: 'candidats.bande.r'
+} as const
 
 /** Au-dela du 10e candidat, la cascade ne decale plus : 30 lignes n'attendent pas 1,2 s. */
 const RANG_MAX_CASCADE = 10
-
-/** La barre illustre la note sur 100 ; une note hors bornes ne deborde pas du rail. */
-const largeurNote = (note: number): string => `${Math.min(100, Math.max(0, note))}%`
 
 /**
  * Le panneau de SÉLECTION sous un message de scout : une case par candidat, une ligne DÉPLIABLE
@@ -39,8 +39,7 @@ export function CandidatsPickPanel({
   candidats,
   texteScout,
   autoLancer,
-  onPick,
-  onMotif
+  onPick
 }: {
   candidats: CandidatAffiche[]
   /** Le texte du scout : s'il déclare `CIBLE:`/`CIBLES:`, ce choix pré-coche les cases. */
@@ -57,13 +56,8 @@ export function CandidatsPickPanel({
    * n'a pas de `suite`.
    */
   onPick?: (prompt: string, suite?: readonly string[]) => void
-  /**
-   * « Pourquoi pas ? » sur une ligne DÉCOCHÉE (piste 2, conv-1033) : le motif part dans la mémoire du
-   * scout, qui le rend au scout suivant. Absent = pas de bouton (les candidats de la veille web ont
-   * leur propre « Écarter », sur un autre stock).
-   */
-  onMotif?: (candidat: CandidatAffiche, motif: MotifRefus) => Promise<boolean> | void
 }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   /*
    * QUI COCHE ? L'agent quand il a DÉCLARÉ son choix, l'habitude sinon.
    *
@@ -79,25 +73,6 @@ export function CandidatsPickPanel({
     auto ?? new Set(candidats.map((_, i) => i))
   )
   const [deplies, setDeplies] = useState<ReadonlySet<number>>(new Set())
-  const [motifOuvert, setMotifOuvert] = useState<number | null>(null)
-  // Ce que la mémoire a répondu, ligne par ligne : « Noté » ne s'affiche qu'une fois écrit.
-  const [motifs, setMotifs] = useState<ReadonlyMap<number, string>>(new Map())
-  const noterMotif = (index: number, motif: MotifRefus): void => {
-    const afficher = (texte: string): void =>
-      setMotifs((courant) => new Map(courant).set(index, texte))
-    setMotifOuvert(null)
-    afficher('…')
-    Promise.resolve(onMotif?.(candidats[index]!, motif)).then(
-      (ecrit) =>
-        afficher(
-          ecrit === false
-            ? 'Non noté : piste absente de la mémoire du scout'
-            : `Noté : ${MOTIFS_REFUS[motif]}`
-        ),
-      (erreur: unknown) =>
-        afficher(`Non noté : ${erreur instanceof Error ? erreur.message : String(erreur)}`)
-    )
-  }
   const basculer = (index: number): void => {
     setCoches((courant) => {
       const suivant = new Set(courant)
@@ -159,17 +134,26 @@ export function CandidatsPickPanel({
               setCoches(tous ? new Set() : new Set(candidats.map((_, index) => index)))
             }
           />
-          tout
+          {t('candidats.tout')}
         </label>
         {auto !== null && (
           <span className="cpick-auto" data-testid="cpick-auto">
             {auto.size === 0
-              ? 'Le scout n’a retenu aucun candidat — rien n’est coché.'
-              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? `lancé automatiquement ${resumeDuPlan(planAuto)}.` : 'à toi de lancer.'}`}
+              ? t('candidats.aucunRetenu')
+              : t(auto.size > 1 ? 'candidats.choix.plusieurs' : 'candidats.choix.un', {
+                  n: auto.size,
+                  total: candidats.length,
+                  suite: autoLancer
+                    ? t('candidats.lanceAuto', { plan: resumeDuPlan(planAuto) })
+                    : t('candidats.aToiDeLancer')
+                })}
           </span>
         )}
         <span className="cpick-compte">
-          {coches.size}/{candidats.length} sélectionné{coches.size > 1 ? 's' : ''}
+          {t(coches.size > 1 ? 'candidats.compte.plusieurs' : 'candidats.compte.un', {
+            coches: coches.size,
+            total: candidats.length
+          })}
         </span>
       </div>
       {candidats.map((candidat, index) => (
@@ -187,11 +171,13 @@ export function CandidatsPickPanel({
               data-testid="cpick-deplier"
               onClick={() => deplier(index)}
               aria-expanded={deplies.has(index)}
-              title={deplies.has(index) ? 'Replier les détails' : 'Déplier tous les détails'}
+              title={
+                deplies.has(index) ? t('candidats.replierDetails') : t('candidats.deplierDetails')
+              }
             >
               {deplies.has(index) ? '▾' : '▸'}
             </button>
-            <span className="cpick-type" title={candidat.type ?? 'nature inconnue'}>
+            <span className="cpick-type" title={candidat.type ?? t('candidats.natureInconnue')}>
               {emojiType(candidat.type)}
             </span>
             <span className="cpick-num" data-testid="cpick-num">
@@ -205,94 +191,65 @@ export function CandidatsPickPanel({
               data-testid="cpick-voie-piste"
               data-voie={voies[index]!.voie}
               title={voies[index]!.motif}
-              aria-label={`${voies[index]!.voie === 'directe' ? 'Correction directe' : 'À cadrer'} : ${voies[index]!.motif}`}
+              aria-label={t(
+                voies[index]!.voie === 'directe'
+                  ? 'candidats.voie.directeAria'
+                  : 'candidats.voie.aCadrerAria',
+                { motif: voies[index]!.motif }
+              )}
             >
-              {voies[index]!.voie === 'directe' ? 'direct' : 'à cadrer'}
+              {/* « direct » se dit pareil en anglais. */}
+              {voies[index]!.voie === 'directe' ? 'direct' : t('candidats.voie.aCadrer')}
             </span>
             {/* La valeur de la ligne : une note quand le scout en donne une, sinon les deux
-                pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre. */}
+                pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre.
+                Le chiffre seul : la jauge qui le doublait est retirée (« ça sert à rien », conv-1198). */}
             {candidat.pertinence !== undefined && (
-              <>
-                <span className="cpick-barre" aria-hidden="true">
-                  <span
-                    className="cpick-barre-remplie"
-                    style={{ width: largeurNote(candidat.pertinence) }}
-                  />
-                </span>
-                <span className="cpick-score">{candidat.pertinence}</span>
-              </>
+              <span className="cpick-score">{candidat.pertinence}</span>
             )}
             {candidat.pertinence === undefined && (candidat.impact || candidat.effort) && (
               <span className="cpick-pastilles" data-testid="cpick-pastilles">
                 {candidat.impact && (
                   <span
                     className={`cpick-dot cpick-dot-${candidat.impact}`}
-                    title={`Impact ${LIBELLE_BANDE[candidat.impact]}`}
-                    aria-label={`Impact ${LIBELLE_BANDE[candidat.impact]}`}
+                    title={`Impact ${t(LIBELLE_BANDE[candidat.impact])}`}
+                    aria-label={`Impact ${t(LIBELLE_BANDE[candidat.impact])}`}
                   />
                 )}
                 {candidat.effort && (
                   <span
                     className={`cpick-dot cpick-dot-${candidat.effort}`}
-                    title={`Effort ${LIBELLE_BANDE[candidat.effort]}`}
-                    aria-label={`Effort ${LIBELLE_BANDE[candidat.effort]}`}
+                    title={`Effort ${t(LIBELLE_BANDE[candidat.effort])}`}
+                    aria-label={`Effort ${t(LIBELLE_BANDE[candidat.effort])}`}
                   />
                 )}
               </span>
             )}
-            {onMotif && !coches.has(index) && (
-              <button
-                type="button"
-                className="cpick-pourquoi"
-                data-testid="cpick-pourquoi"
-                aria-expanded={motifOuvert === index}
-                onClick={() => setMotifOuvert((courant) => (courant === index ? null : index))}
-              >
-                Pourquoi pas ?
-              </button>
-            )}
           </div>
-          {onMotif && !coches.has(index) && (motifOuvert === index || motifs.has(index)) && (
-            <div className="cpick-motifs">
-              {motifOuvert === index ? (
-                (Object.keys(MOTIFS_REFUS) as MotifRefus[]).map((motif) => (
-                  <button
-                    key={motif}
-                    type="button"
-                    className="cpick-motif"
-                    data-testid="cpick-motif"
-                    onClick={() => noterMotif(index, motif)}
-                  >
-                    {MOTIFS_REFUS[motif]}
-                  </button>
-                ))
-              ) : (
-                <span className="cpick-motif-note" data-testid="cpick-motif-note">
-                  {motifs.get(index)}
-                </span>
-              )}
-            </div>
-          )}
           {deplies.has(index) && (
             <div className="cpick-details fade-in" data-testid="cpick-details">
               {/* Trois blocs, un par QUESTION — c'est tout (demande du 14/08). Les anciens
                   candidats sans what/why/how retombent sur ce que leur charge portait. */}
               <div className="cpick-q">
-                <b>Quoi ?</b>
+                <b>{t('candidats.quoi')}</b>
                 <p>{candidat.what ?? candidat.titre}</p>
               </div>
               <div className="cpick-q">
-                <b>Pourquoi ?</b>
+                <b>{t('candidats.pourquoi')}</b>
                 <p>
                   {candidat.why ??
-                    (candidat.citation ? `Preuve lue : « ${candidat.citation} »` : '—')}
+                    (candidat.citation
+                      ? t('candidats.preuveLue', { citation: candidat.citation })
+                      : '—')}
                 </p>
               </div>
               <div className="cpick-q">
-                <b>Comment ?</b>
+                <b>{t('candidats.comment')}</b>
                 <p>
                   {candidat.how ??
-                    (candidat.url ? `Partir de l'ancrage ${candidat.url}.` : 'Non précisé.')}
+                    (candidat.url
+                      ? t('candidats.ancrage', { url: candidat.url })
+                      : t('candidats.nonPrecise'))}
                 </p>
               </div>
             </div>
@@ -301,19 +258,20 @@ export function CandidatsPickPanel({
       ))}
       {plan.length === 1 && (
         <div className="cpick-voie" data-testid="cpick-voie">
-          Le workflow intelligent jouera : <b>{libelleVoie(plan[0]!.voie)}</b> —{' '}
-          {motifDuLot(plan[0]!)}.
+          {t('candidats.jouera')} <b>{libelleVoie(plan[0]!.voie)}</b> — {motifDuLot(plan[0]!)}.
         </div>
       )}
       {plan.length > 1 && (
         <div className="cpick-voie" data-testid="cpick-voie">
-          Le workflow intelligent lancera <b>{plan.length} lots à la suite</b>, un par tour,{' '}
-          {MAX_PISTES_PAR_LOT} pistes au plus chacun :
+          {t('candidats.lancera')} <b>{t('candidats.lancera.lots', { n: plan.length })}</b>
+          {t('candidats.lancera.suite', { max: MAX_PISTES_PAR_LOT })}
           <ol className="cpick-lots">
             {plan.map((lot, rang) => (
               <li key={rang} data-testid="cpick-lot" data-voie={lot.voie}>
-                <b>{libelleVoie(lot.voie)}</b> — piste{lot.positions.length > 1 ? 's' : ''}{' '}
-                {lot.positions.map((position) => retenus[position]! + 1).join(', ')}
+                <b>{libelleVoie(lot.voie)}</b>{' '}
+                {t(lot.positions.length > 1 ? 'candidats.lot.pistes' : 'candidats.lot.piste', {
+                  positions: lot.positions.map((position) => retenus[position]! + 1).join(', ')
+                })}
               </li>
             ))}
           </ol>
@@ -332,9 +290,9 @@ export function CandidatsPickPanel({
           data-lots={plan.length}
           disabled={selection.length === 0}
           onClick={() => lancer(redigerPromptsDuPlan(plan))}
-          title="Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Les pistes partent par lots de 3 au plus, l'un après l'autre, chacun jusqu'au commit publié"
+          title={t('candidats.lancerTitre')}
         >
-          Lancer le workflow intelligent{plan.length > 1 ? ` (${plan.length} lots)` : ''}
+          {plan.length > 1 ? t('candidats.lancerLots', { n: plan.length }) : t('candidats.lancer')}
         </button>
       </div>
     </div>

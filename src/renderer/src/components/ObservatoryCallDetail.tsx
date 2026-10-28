@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { formaterNombre } from '../langue'
+import { useTextesObservatory } from '../textes-ecrans/observatory'
 import { HumanJson } from './HumanJson'
 import { LatestRequestGate } from './observatory-reliability'
 import type {
@@ -17,32 +19,34 @@ import { Spinner } from './Spinner'
  * de distinguer « voici tout ce qui a été injecté » de « voici ce qu'on sait nommer ».
  */
 function InjectionInventoryList({ call }: { call: PromptCall }): React.JSX.Element | null {
+  const { t } = useTextesObservatory()
   const inventory = injectionInventory(call)
   if (inventory.empty) return null
   return (
     <section className="observatory-injections" data-testid="observatory-injections">
       <b>
-        Injections · {inventory.blocks.length} bloc{inventory.blocks.length > 1 ? 's' : ''} nommé
-        {inventory.blocks.length > 1 ? 's' : ''}
-        {inventory.exhaustive ? '' : ' · liste incomplète'}
+        {t('appel.injections', {
+          n: inventory.blocks.length,
+          s: inventory.blocks.length > 1 ? 's' : ''
+        })}
+        {inventory.exhaustive ? '' : t('appel.listeIncomplete')}
       </b>
       <ul>
         {inventory.blocks.map((block) => (
           <li key={`${block.channel}:${block.name}`}>
             <span>{block.name}</span>
-            <small>{block.channel === 'system' ? 'système' : 'contexte poussé'}</small>
-            <b>{block.chars.toLocaleString('fr-FR')} car.</b>
+            <small>
+              {block.channel === 'system' ? t('appel.systeme') : t('appel.contextePousse')}
+            </small>
+            <b>{t('appel.caracteres', { n: formaterNombre(block.chars) })}</b>
             <small>{block.share}&nbsp;%</small>
           </li>
         ))}
         {inventory.unattributedChars > 0 && (
           <li data-testid="observatory-injection-unattributed">
-            <span>non attribué</span>
-            <small>
-              système · aucun bloc ne revendique ces caractères, le site d’appel ne déclare pas sa
-              décomposition
-            </small>
-            <b>{inventory.unattributedChars.toLocaleString('fr-FR')} car.</b>
+            <span>{t('appel.nonAttribue')}</span>
+            <small>{t('appel.systemeAucunBlocRevendique')}</small>
+            <b>{t('appel.caracteres', { n: formaterNombre(inventory.unattributedChars) })}</b>
             <small>
               {inventory.systemChars > 0
                 ? Math.round((inventory.unattributedChars / inventory.systemChars) * 100)
@@ -71,6 +75,7 @@ export function ObservatoryCallDetail({
   call: PromptCall
   onClose: () => void
 }): React.JSX.Element {
+  const { t } = useTextesObservatory()
   const [shadowRecommendation, setShadowRecommendation] = useState<
     ShadowRouteRecommendation | ShadowRouteInsufficientData | null
   >(null)
@@ -83,19 +88,19 @@ export function ObservatoryCallDetail({
       <header>
         <div>
           <b>
-            Appel exact · {call.provider}
+            {t('appel.appelExact', { provider: call.provider })}
             {call.model ? ` · ${call.model}` : ''}
           </b>
           <small>
             {call.boundary} · {call.turnId}
           </small>
         </div>
-        <button onClick={onClose}>Fermer</button>
+        <button onClick={onClose}>{t('appel.fermer')}</button>
       </header>
       <div className="observatory-call-metrics">
-        <b>{(call.usage?.inputTokens ?? 0).toLocaleString('fr-FR')} in</b>
-        <span>{(call.usage?.cacheReadTokens ?? 0).toLocaleString('fr-FR')} cache</span>
-        <span>{(call.usage?.outputTokens ?? 0).toLocaleString('fr-FR')} out</span>
+        <b>{formaterNombre(call.usage?.inputTokens ?? 0)} in</b>
+        <span>{formaterNombre(call.usage?.cacheReadTokens ?? 0)} cache</span>
+        <span>{formaterNombre(call.usage?.outputTokens ?? 0)} out</span>
         <span>${(call.usage?.costUsd ?? 0).toFixed(4)}</span>
       </div>
       <small>{call.limitation}</small>
@@ -103,9 +108,7 @@ export function ObservatoryCallDetail({
         type="button"
         disabled={!call.phase}
         title={
-          call.phase
-            ? 'Comparer les routes observées pour cette phase'
-            : 'Phase inconnue pour cet ancien appel'
+          call.phase ? t('appel.comparerRoutesObserveesCette') : t('appel.phaseInconnueCetAncien')
         }
         onClick={() => {
           if (!call.phase) return
@@ -131,17 +134,19 @@ export function ObservatoryCallDetail({
             })
         }}
       >
-        Comparer en shadow
+        {t('appel.comparerShadow')}
       </button>
       {shadowLoading && (
         <small role="status">
-          <Spinner /> Comparaison shadow en cours…
+          <Spinner /> {t('appel.comparaisonShadowCours')}
         </small>
       )}
-      {shadowError && <small role="alert">Shadow indisponible : {shadowError}</small>}
+      {shadowError && (
+        <small role="alert">{t('appel.shadowIndisponible', { raison: shadowError })}</small>
+      )}
       {shadowRecommendation != null && (
         <section data-testid="shadow-route-recommendation">
-          <b>Recommandation shadow · jamais appliquée automatiquement</b>
+          <b>{t('appel.recommandationShadowJamaisAppliquee')}</b>
           <HumanJson value={shadowRecommendation} />
         </section>
       )}
@@ -156,8 +161,8 @@ export function ObservatoryCallDetail({
       <HumanJson className="observatory-payload" value={call.messages} />
       <b>Options</b>
       <HumanJson className="observatory-payload" value={call.options} />
-      <b>Réponse</b>
-      <pre className="observatory-payload">{call.response || '(vide)'}</pre>
+      <b>{t('appel.reponse')}</b>
+      <pre className="observatory-payload">{call.response || t('appel.vide')}</pre>
     </article>
   )
 }

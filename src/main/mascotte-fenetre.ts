@@ -10,7 +10,7 @@
  * Elle se CACHE tant qu'une fenêtre d'Autowin est regardée : posée en bas à droite, elle couvrirait
  * le bas de la fenêtre (la saisie), pour la même raison que les cartes se ferment alors.
  */
-import { app, BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, screen, type IpcMainEvent } from 'electron'
 import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,11 +31,13 @@ import {
   zoneDesCartes,
   type PositionMascotte
 } from './mascotte'
+import { entreesDuMenuMascotte } from './mascotte-menu'
 import {
   ecrireMascotteAffichee,
   ecrirePositionMascotte,
   lirePositionMascotte
 } from './mascotte-reglage'
+import { creerCompteDesRuns, type EvenementDeRun } from './mascotte-runs'
 import type { FinDeTourPourNotification } from './notification-fin-de-tour'
 import type { Rect, ZoneDesCartes } from './notification-popup'
 
@@ -48,11 +50,16 @@ export type DependancesMascotte = {
   ouvrirFil: (conversationId: string) => void
   /** Ramène Autowin, sans fil particulier. */
   ouvrirAutowin: () => void
+  /** Le titre d'un fil, pour le menu du clic droit (conv-1196) ; absent = son identifiant. */
+  titreDuFil: (conversationId: string) => string | null | undefined
 }
 
 export type MascotteDuBureau = {
-  /** Le nombre de runs en cours, tel que l'interface l'envoie (`os:presence`). */
-  runsActifs: (nombre: number) => void
+  /**
+   * Chaque événement diffusé par le moteur (`broadcast`) : les départs et fins de run y sont
+   * comptés, fenêtre principale fermée comprise (`mascotte-runs.ts`, conv-1196).
+   */
+  evenementDeRun: (evenement: EvenementDeRun) => void
   /** Un tour de chat vient de finir : il attend peut-être l'utilisateur. */
   finDeTour: (
     conversationId: string,
@@ -76,6 +83,11 @@ export type MascotteDuBureau = {
   zoneDesCartes: (zone: Rect) => ZoneDesCartes
   /** La page d'une carte : avec le liseré arc-en-ciel quand la mascotte est affichée. */
   decorerCarte: (html: string) => string
+  /**
+   * Prévenu à chaque déplacement de la bille (glisser, lâcher, écran changé) : les cartes de fin
+   * de tour se reposent contre elle et la suivent (conv-1195, « snap ensemble »).
+   */
+  quandElleBouge: (ecouteur: () => void) => void
 }
 
 /** Les réponses de chat n'émettent aucun événement de début : relues à ce rythme. */
@@ -83,7 +95,7 @@ const RYTHME_MS = 1500
 
 export function creerMascotteDuBureau(): MascotteDuBureau {
   const suivi = creerSuiviMascotte()
-  let runs = 0
+  const runs = creerCompteDesRuns()
   let deps: DependancesMascotte | null = null
   let affichee = true
   /** `app.whenReady` passé : avant, aucune fenêtre ne peut naître. */
@@ -94,11 +106,22 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   let feuilleCourante = ''
   let cleFeuille: string | null = null
   let fileFeuilles: Promise<void> = Promise.resolve()
+  const ecouteursDeplacement: Array<() => void> = []
+  /** Un écouteur qui jette ne doit pas figer la bille au milieu d'un glisser. */
+  const aBouge = (): void => {
+    for (const ecouteur of ecouteursDeplacement) {
+      try {
+        ecouteur()
+      } catch (erreur) {
+        console.warn('[mascotte] cartes non replacées —', String(erreur))
+      }
+    }
+  }
 
   const etatCourant = (): ReturnType<typeof etatDeLaMascotte> =>
     etatDeLaMascotte({
       toursEnCours: deps?.toursEnCours() ?? 0,
-      runsActifs: runs,
+      runsActifs: runs.nombre(),
       filsEnAttente: suivi.filsEnAttente(),
       filsEnEchec: suivi.filsEnEchec()
     })
@@ -141,7 +164,9 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     )
 
   const placer = (): void => {
-    if (win && !win.isDestroyed()) win.setBounds(placement())
+    if (!win || win.isDestroyed()) return
+    win.setBounds(placement())
+    aBouge()
   }
 
   /** Le clic sur la bille : le fil qui t'attend, sinon Autowin. Lu AVANT que l'ouverture l'efface. */
@@ -152,6 +177,37 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     else deps.ouvrirAutowin()
   }
 
+  /**
+   * Le clic droit (conv-1196, ligne 12 du scout) : TOUS les fils qui t'attendent, le clic gauche n'en
+   * ouvrant qu'un (`mascotte-menu.ts`). Lu par l'événement `context-menu` du moteur : la page n'a
+   * aucun script, et le préchargement n'écoute que le bouton gauche. `x`/`y` sont relatifs à la
+   * fenêtre, comme `popup` les attend.
+   */
+  const montrerMenu = (fenetre: BrowserWindow, x: number, y: number): void => {
+    const dependances = deps
+    if (!dependances) return
+    const modele = entreesDuMenuMascotte({
+      filsEnAttente: suivi.filsEnAttente(),
+      filsEnEchec: suivi.filsEnEchec(),
+      titreDuFil: dependances.titreDuFil
+    }).map((entree): Electron.MenuItemConstructorOptions => {
+      switch (entree.type) {
+        case 'fil':
+          return {
+            label: entree.libelle,
+            click: () => dependances.ouvrirFil(entree.conversationId)
+          }
+        case 'info':
+          return { label: entree.libelle, enabled: false }
+        case 'separateur':
+          return { type: 'separator' }
+        case 'autowin':
+          return { label: entree.libelle, click: () => dependances.ouvrirAutowin() }
+      }
+    })
+    Menu.buildFromTemplate(modele).popup({ window: fenetre, x: Math.round(x), y: Math.round(y) })
+  }
+
   /** Le lâcher d'un glisser : ramenée entière sur l'écran, puis la place est gardée. */
   const poser = (fenetre: BrowserWindow, position: PositionMascotte): void => {
     const rect = placerMascotteGardee(
@@ -160,6 +216,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       screen.getPrimaryDisplay().workArea
     )
     fenetre.setBounds(rect)
+    aBouge()
     try {
       ecrirePositionMascotte({ x: rect.x, y: rect.y })
     } catch (erreur) {
@@ -185,8 +242,10 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     }
     if (geste === 'bouge') {
       const position = glisser.bouge(curseur)
-      if (position)
+      if (position) {
         fenetre.setBounds({ ...position, width: TAILLE_MASCOTTE, height: TAILLE_MASCOTTE })
+        aBouge()
+      }
       return
     }
     const fin = geste === 'lache' ? glisser.lache(curseur) : glisser.annule(curseur)
@@ -237,6 +296,14 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     // La croix : navigation INTERNE vers `#fermer`. Le clic de la bille passe par `surGeste`.
     fenetre.webContents.on('did-navigate-in-page', (_evenement, url, principale) => {
       if (principale && deps && estLaFermeture(url)) fermerDepuisLaBille()
+    })
+    fenetre.webContents.on('context-menu', (_evenement, params) => {
+      try {
+        montrerMenu(fenetre, params.x, params.y)
+      } catch (erreur) {
+        // Sans menu, le clic gauche ouvre toujours le fil le plus récent.
+        console.warn('[mascotte] menu non affiché —', String(erreur))
+      }
     })
     fenetre.webContents.on('will-navigate', (evenement) => evenement.preventDefault())
     fenetre.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -289,8 +356,9 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   }
 
   return {
-    runsActifs: (nombre) => {
-      runs = Number.isFinite(nombre) ? Math.max(0, Math.floor(nombre)) : 0
+    evenementDeRun: (evenement) => {
+      if (evenement.type !== 'orchestrate-start' && evenement.type !== 'orchestrate-end') return
+      runs.evenement(evenement)
       rafraichir()
     },
     finDeTour: (conversationId, fin) => {
@@ -333,6 +401,9 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       const bille = win && !win.isDestroyed() ? win.getBounds() : placement()
       return zoneDesCartes(bille, screen.getDisplayMatching(bille).workArea)
     },
-    decorerCarte: (html) => (visible() ? avecLisereArcEnCiel(html) : html)
+    decorerCarte: (html) => (visible() ? avecLisereArcEnCiel(html) : html),
+    quandElleBouge: (ecouteur) => {
+      ecouteursDeplacement.push(ecouteur)
+    }
   }
 }

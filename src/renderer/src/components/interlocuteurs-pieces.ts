@@ -26,6 +26,8 @@
  * `InterlocuteursWidget.reponse-pieces.test.tsx`.
  */
 import { bytesToBase64, formatFileSize } from './chat-attachments'
+import { langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 /** Ce qui traverse l'IPC pour UNE pièce jointe : son nom, sa taille, son contenu en base64. */
 export interface PieceJointeMessage {
@@ -60,17 +62,21 @@ export async function preparerPiecesLachees(
   })
   if (retenus.length === 0) return { pieces: [] }
   if (dejaLa.length + retenus.length > MAX_PIECES) {
-    return { erreur: `Pas plus de ${MAX_PIECES} pièces jointes par message.` }
+    return {
+      erreur: traduireAccueil('pieces.tropNombreuses', langueCourante(), { max: MAX_PIECES })
+    }
   }
   const tropGros = retenus.find((fichier) => fichier.size > MAX_PIECE_OCTETS)
   if (tropGros) {
-    return { erreur: `${tropGros.name} dépasse la limite de 10 Mo.` }
+    return {
+      erreur: traduireAccueil('pieces.tropGrosse', langueCourante(), { nom: tropGros.name })
+    }
   }
   const total =
     dejaLa.reduce((somme, piece) => somme + piece.taille, 0) +
     retenus.reduce((somme, fichier) => somme + fichier.size, 0)
   if (total > MAX_PIECES_OCTETS) {
-    return { erreur: 'Le total des pièces jointes dépasse 20 Mo.' }
+    return { erreur: traduireAccueil('pieces.totalTropGros', langueCourante()) }
   }
   try {
     const pieces = await Promise.all(
@@ -83,7 +89,9 @@ export async function preparerPiecesLachees(
     return { pieces }
   } catch (error) {
     return {
-      erreur: `Lecture impossible : ${error instanceof Error ? error.message : String(error)}`
+      erreur: traduireAccueil('pieces.lectureImpossible', langueCourante(), {
+        cause: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 }

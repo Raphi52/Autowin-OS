@@ -19,6 +19,7 @@ import {
   type ContenuNotification,
   type NotificationAffichable
 } from './notification-fin-de-tour'
+import { langueCoeur, traduireCoeur } from './textes-coeur'
 
 export type Rect = { x: number; y: number; width: number; height: number }
 
@@ -290,7 +291,7 @@ export function htmlDePopup(
   palette: PaletteCarte = PALETTE_HOLOGRAPHIQUE
 ): string {
   const echec = contenu.issue === 'echec'
-  const etat = echec ? 'Le tour a échoué' : 'Réponse prête'
+  const etat = traduireCoeur(echec ? 'carte.etatEchec' : 'carte.etatPret')
   const lignes = lignesDuCorps(contenu)
   const faits = (lignes.length > 0 ? lignes : [' '])
     .map((ligne) => `<span class="ligne" title="${echapper(ligne)}">${echapper(ligne)}</span>`)
@@ -305,11 +306,12 @@ export function htmlDePopup(
               `<a class="bouton ${index === 0 ? 'principal' : 'second'}" href="#suite-${index}" title="${echapper(suite)}"><span class="ligne">${echapper(libelleDeBouton(suite))}</span></a>`
           )
           .join('')}</div>`
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+  // La langue de la page suit celle des textes : un lecteur d'écran lit l'anglais avec la bonne voix.
+  return `<!doctype html><html lang="${langueCoeur()}"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <title>Autowin — ${echapper(etat)}</title><style>${cssDePopup(couleursDeCarte(palette))}</style></head>
 <body><div class="cadre"><div class="carte${echec ? ' echec' : ''}">
-<div class="tete"><a class="ouvrir-tete" href="#ouvrir" title="Ouvrir le fil"><span class="icone">A</span><span class="textes"><span class="ligne titre">${echapper(contenu.fil)}</span><span class="ligne sous">${echapper(etat)} · ${echapper(heure)}</span></span></a><a class="fermer" href="#fermer" title="Fermer">×</a></div>
+<div class="tete"><a class="ouvrir-tete" href="#ouvrir" title="${echapper(traduireCoeur('carte.ouvrirFil'))}"><span class="icone">A</span><span class="textes"><span class="ligne titre">${echapper(contenu.fil)}</span><span class="ligne sous">${echapper(etat)} · ${echapper(heure)}</span></span></a><a class="fermer" href="#fermer" title="${echapper(traduireCoeur('carte.fermer'))}">×</a></div>
 <a class="faits" href="#ouvrir">${faits}</a>
 ${boutons}
 </div></div></body></html>`
@@ -400,6 +402,11 @@ export type DependancesPile = {
 export function creerPileDePopups(deps: DependancesPile): {
   fabriquer: (contenu: ContenuNotification) => NotificationAffichable
   toutFermer: () => void
+  /**
+   * Repose les cartes ouvertes sur la zone relue : la mascotte glissée les emmène avec elle
+   * (conv-1195, « snap ensemble »). Aucune carte ne se ferme pendant le glisser.
+   */
+  replacer: () => void
 } {
   type Carte = { hauteur: number; fermer: () => void; fenetre?: FenetrePopup }
   /** Ordre d'arrivée : la dernière est la plus récente, donc la plus basse. */
@@ -514,6 +521,7 @@ export function creerPileDePopups(deps: DependancesPile): {
 
   return {
     fabriquer,
-    toutFermer: () => [...pile].forEach((carte) => carte.fermer())
+    toutFermer: () => [...pile].forEach((carte) => carte.fermer()),
+    replacer
   }
 }

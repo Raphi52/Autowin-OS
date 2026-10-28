@@ -661,7 +661,27 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   seule et sans fil (tous les plans gardes, reduits au chef et aux fils de lots), pour ranger
     //   la liste des conversations en un appel. Meme garde des la premiere ligne ; `action` passe par
     //   `guardString` avant tout, et les gestes qui ecrivent exigent toujours le fil chef du plan.
-    expect(handlers).toHaveLength(244)
+    // MISE A JOUR 2026-10-28 (conv-1206) — 244 -> 247, mesure par ce test (vert a 244 avant ce
+    //   travail). TROIS ajoutes (`ipc/carte-des-besoins.ts`, dossier ou le Board est recopie), gardes
+    //   des leur PREMIERE ligne par `assertTrustedRendererSender(event, 'Dossier du Board')` :
+    //   `os:board-dossier` — LECTURE de l'etat du dossier ; aucun argument.
+    //   `os:board-dossier:choisir` — le chemin vient du SELECTEUR NATIF (`pickDirectory`), jamais
+    //     d'un texte de la vue ; il doit etre complet et exister avant d'etre ecrit dans
+    //     `board-dossier.json` (userData).
+    //   `os:board-dossier:effacer` — supprime ce seul fichier de reglage ; aucun argument.
+    //   `os:carteDesBesoins` recoit en plus les etats poses a la main : chaque entree passe par
+    //   `etatManuelLisible` (etage connu, nombre fini) et un id `[\w.-]{1,80}`, 20 000 au plus.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-28 (conv-1210 + conv-1211) — 247 -> 249, DEUX ajoutes dans
+    //   `ipc/carte-des-besoins.ts`, gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossier du Board')` :
+    //   `os:board-collegues` (conv-1210) — LECTURE seule des Boards des autres postes ; aucun
+    //     argument, le dossier est celui regle sur le poste, jamais un chemin recu de la vue.
+    //   `os:board-dossier:projets` (conv-1211) — les projets recopies dans le dossier : une liste de
+    //     CLES de projet (jamais un chemin lu ou ecrit), passee par `projetsPartagesLisibles`
+    //     (chaines seules, 500 au plus) ; illisible = refus, rien n'est retenu. `null` = tous.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(249)
     expect(unguarded).toEqual([])
   })
 

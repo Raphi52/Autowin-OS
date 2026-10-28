@@ -7,7 +7,8 @@
  *    d'une couleur écrite en dur : un thème ajouté demain a ses boutons sans rien écrire ;
  *  - les règles des boutons sont assez LOURDES pour passer devant les `.btn` des thèmes, chargés
  *    après ChatView.css : Ninja Claude rendait les deux boutons gris (capture de l'utilisateur) ;
- *  - aucune feuille de thème ne réécrit ces boutons : un thème ne règle que les propriétés --suppr-* ;
+ *  - aucune feuille de thème ne repeint ces boutons : un thème n'y pose que des réglages (les
+ *    propriétés --suppr-* et ce qui les nourrit, et le mouvement d'une animation) ;
  *  - les trois thèmes où l'accent seul ne suffit pas ont leur réglage (texte sombre sur accent vif,
  *    terracotta de bouton plein).
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : écrire un hex dans les valeurs par défaut, alléger un
@@ -74,17 +75,25 @@ describe('carte de suppression des fils — boutons dans tous les thèmes', () =
     expect(poids(`${garder}:hover:not(:disabled)`)).toBeGreaterThanOrEqual(8)
   })
 
-  it('aucune feuille de thème ne réécrit ces boutons : elles ne règlent que les --suppr-*', () => {
+  // Un thème peut viser ces boutons pour y poser des RÉGLAGES -- propriétés personnalisées et
+  // mouvement -- jamais une propriété qui peint (fond, couleur, bord, ombre). Depuis conv-1163
+  // (2026-10-27, « a mettre aussi sur ces boutons ») Holographique y pose sa lampe à lave : ses
+  // gouttes ont des positions animées propres à chaque bouton, qui ne peuvent pas venir de la carte.
+  it('aucune feuille de thème ne repeint ces boutons : elles n’y posent que des réglages', () => {
     const dossier = new URL('../assets/', import.meta.url)
     const fautives: string[] = []
     for (const fichier of readdirSync(dossier).filter((f) => f.endsWith('.css'))) {
       postcss.parse(readFileSync(new URL(fichier, dossier), 'utf8')).walkRules((regle) => {
         if (
-          regle.selectors.some((s) =>
+          !regle.selectors.some((s) =>
             /delete-confirm-gel|delete-confirm-card--fils[^,]*delete-confirm-cancel/.test(s)
           )
         )
-          fautives.push(`${fichier} : ${regle.selector}`)
+          return
+        regle.walkDecls((d) => {
+          if (!d.prop.startsWith('--') && !/^animation(-delay)?$/.test(d.prop))
+            fautives.push(`${fichier} : ${regle.selector} : ${d.prop}`)
+        })
       })
     }
     expect(fautives).toEqual([])

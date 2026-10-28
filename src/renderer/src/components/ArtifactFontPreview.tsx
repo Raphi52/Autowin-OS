@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 
 export function ArtifactFontPreview({ artifact }: { artifact: ChatArtifact }): React.JSX.Element {
+  const { t } = useTextesArtefactsEtBandeaux()
   const id = useId()
   const family = useMemo(() => `artifact-font-${id.replaceAll(':', '')}`, [id])
   const [ready, setReady] = useState(false)
@@ -31,7 +33,7 @@ export function ArtifactFontPreview({ artifact }: { artifact: ChatArtifact }): R
       data-font-loaded={ready}
     >
       <span>Aa Bb Cc · 0123456789</span>
-      <small>Portez ce vieux whisky au juge blond qui fume.</small>
+      <small>{t('police.phraseEssai')}</small>
     </div>
   )
 }

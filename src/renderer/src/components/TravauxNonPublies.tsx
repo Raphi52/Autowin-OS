@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import { libelleTravail, type TravailNonPublie } from './travail-non-publie'
 import type { RapportRetention } from '../../../shared/rapport-retention'
 import { Spinner } from './Spinner'
@@ -29,6 +30,7 @@ import { Spinner } from './Spinner'
 export const INTERVALLE_ATTENTE_RAPPORT_MS = 3_000
 
 export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const [travaux, setTravaux] = useState<TravailNonPublie[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [ouvert, setOuvert] = useState<string | null>(null)
@@ -126,11 +128,11 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
        * de départ autorisé », qui dit exactement quoi faire (rebaser) au lieu d'un « échec » opaque.
        */
       if (!rendu) {
-        setResultat(`Reprise refusée pour ${agentId} — travail jugé rouge, ou déjà repris.`)
+        setResultat(t('tnp.repriseRefusee', { agent: agentId }))
       } else if (rendu.state === 'blocked') {
-        setResultat(`Reprise bloquée : ${rendu.detail ?? 'motif non précisé par le moteur.'}`)
+        setResultat(t('tnp.repriseBloquee', { detail: rendu.detail ?? t('tnp.motifNonPrecise') }))
       } else {
-        setResultat(`Reprise lancée. Suis son avancement dans Source control.`)
+        setResultat(t('tnp.repriseLancee'))
       }
     } catch (cause) {
       setResultat(String(cause))
@@ -142,8 +144,8 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
   return (
     <div className="tnp" data-testid="travaux-non-publies">
       <header className="tnp-tete">
-        <b>Travaux terminés, jamais publiés</b>
-        <button type="button" onClick={onFermer} aria-label="Fermer">
+        <b>{t('tnp.titre')}</b>
+        <button type="button" onClick={onFermer} aria-label={t('tnp.fermer')}>
           ×
         </button>
       </header>
@@ -154,8 +156,8 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
           {resultat}
         </p>
       )}
-      {!travaux && !erreur && <p className="tnp-vide">Lecture des branches…</p>}
-      {travaux?.length === 0 && <p className="tnp-vide">Tout est publié.</p>}
+      {!travaux && !erreur && <p className="tnp-vide">{t('tnp.lectureBranches')}</p>}
+      {travaux?.length === 0 && <p className="tnp-vide">{t('tnp.toutPublie')}</p>}
 
       <ul className="tnp-liste">
         {(travaux ?? []).map((travail) => (
@@ -170,28 +172,28 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
                 data-testid={`tnp-voir-${travail.agentId}`}
                 onClick={() => void voir(travail.agentId)}
               >
-                {ouvert === travail.agentId ? 'Masquer' : 'Voir le diff'}
+                {ouvert === travail.agentId ? t('tnp.masquer') : t('tnp.voirDiff')}
               </button>
               <button
                 type="button"
                 data-testid={`tnp-reintegrer-${travail.agentId}`}
                 disabled={enCours === travail.agentId}
                 onClick={() => void reintegrer(travail.agentId)}
-                title="Retenter la publication de ce travail"
+                title={t('tnp.reintegrer.titre')}
               >
-                {enCours === travail.agentId ? '…' : 'Réintégrer'}
+                {enCours === travail.agentId ? '…' : t('tnp.reintegrer')}
               </button>
             </div>
             {ouvert === travail.agentId && (
               <pre className="tnp-patch" data-testid="tnp-patch">
                 {patch ? (
-                  patch.patch || '(diff vide)'
+                  patch.patch || t('tnp.diffVide')
                 ) : (
                   <>
-                    <Spinner /> Lecture…
+                    <Spinner /> {t('tnp.lecture')}
                   </>
                 )}
-                {patch?.tronque ? '\n\n[…] diff tronqué — trop long pour être lu ici.' : ''}
+                {patch?.tronque ? `\n\n${t('tnp.diffTronque')}` : ''}
               </pre>
             )}
           </li>
@@ -223,21 +225,24 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
       */}
       {rapport !== undefined && (
         <section className="tnp-retention" data-testid="tnp-retention">
-          <b>Sauvegardes automatiques</b>
+          <b>{t('tnp.sauvegardes')}</b>
           {rapport === null ? (
             <p className="tnp-vide" data-testid="tnp-retention-jamais">
-              <Spinner /> Balayage en cours… le premier examen prend une dizaine de secondes.
+              <Spinner /> {t('tnp.balayage')}
             </p>
           ) : (
             <>
               <p data-testid="tnp-retention-resume">
-                {rapport.examines} sauvegarde(s) examinée(s) · {rapport.sansPerte.length} sans
-                perte · {rapport.aTrancher.length} à trancher
-                {rapport.reportees > 0 ? ` · ${rapport.reportees} au prochain passage` : ''}
+                {t('tnp.resume', {
+                  examines: rapport.examines,
+                  sansPerte: rapport.sansPerte.length,
+                  aTrancher: rapport.aTrancher.length
+                })}
+                {rapport.reportees > 0 ? t('tnp.reportees', { n: rapport.reportees }) : ''}
               </p>
               {rapport.sansPerte.length > 0 && (
                 <details data-testid="tnp-retention-sans-perte">
-                  <summary>{rapport.sansPerte.length} déjà en base — rien à perdre</summary>
+                  <summary>{t('tnp.dejaEnBase', { n: rapport.sansPerte.length })}</summary>
                   <ul>
                     {rapport.sansPerte.map((nom) => (
                       <li key={nom}>{nom}</li>
@@ -247,9 +252,7 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
               )}
               {rapport.aTrancher.length > 0 && (
                 <details data-testid="tnp-retention-a-trancher">
-                  <summary>
-                    {rapport.aTrancher.length} périmée(s) — elles portent du travail non lu
-                  </summary>
+                  <summary>{t('tnp.perimees', { n: rapport.aTrancher.length })}</summary>
                   <ul>
                     {rapport.aTrancher.map((nom) => (
                       <li key={nom}>{nom}</li>
@@ -257,18 +260,13 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
                   </ul>
                 </details>
               )}
-              <p className="tnp-note">
-                Aucune n’est supprimée automatiquement — c’est un constat, pas un geste.
-              </p>
+              <p className="tnp-note">{t('tnp.aucuneSupprimee')}</p>
             </>
           )}
         </section>
       )}
 
-      <p className="tnp-note">
-        Rien n’est supprimé ici. Autowin retente les publications qui peuvent encore aboutir ;
-        certaines ne peuvent plus l’être, et « Traiter » est là pour faire trancher ces cas.
-      </p>
+      <p className="tnp-note">{t('tnp.rienSupprime')}</p>
     </div>
   )
 }

@@ -6,6 +6,7 @@ import {
   type CommentaireRelecture,
   type RepereLigne
 } from '../../../shared/relecture-diff'
+import { useTextesWorktreesEtBureaux } from '../textes-ecrans/worktrees-et-bureaux'
 import './DiffView.css'
 
 /**
@@ -30,6 +31,7 @@ export function DiffView({
   onAjouter?: (repere: RepereLigne, texte: string) => void
   onRetirer?: (id: string) => void
 }): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
   const lines = parseUnifiedDiff(diff)
   /**
    * Emplacement (côté + numéro) dont la zone de commentaire est ouverte — pas l'index dans la
@@ -39,7 +41,7 @@ export function DiffView({
    */
   const [enEdition, setEnEdition] = useState<string | null>(null)
   const [brouillon, setBrouillon] = useState('')
-  if (!lines.length) return <div className="diff-empty">Aucune différence à afficher.</div>
+  if (!lines.length) return <div className="diff-empty">{t('diff.vide')}</div>
 
   const parEmplacement = new Map<string, CommentaireRelecture[]>()
   for (const c of commentaires) {
@@ -84,8 +86,8 @@ export function DiffView({
                     type="button"
                     className="diff-commenter"
                     data-testid="diff-commenter"
-                    title={`Commenter la ligne ${repere.ligne} — le commentaire partira à l'agent avec la relecture`}
-                    aria-label={`Commenter la ligne ${repere.ligne}`}
+                    title={t('diff.commenter.titre', { ligne: repere.ligne })}
+                    aria-label={t('diff.commenter.aria', { ligne: repere.ligne })}
                     onClick={(event) => {
                       event.stopPropagation()
                       setEnEdition(emplacement)
@@ -112,8 +114,8 @@ export function DiffView({
                     type="button"
                     className="diff-comment-retirer"
                     data-testid="diff-comment-retirer"
-                    title="Retirer ce commentaire de la relecture"
-                    aria-label="Retirer ce commentaire"
+                    title={t('diff.retirer.titre')}
+                    aria-label={t('diff.retirer.aria')}
                     onClick={(event) => {
                       event.stopPropagation()
                       onRetirer(c.id)
@@ -132,7 +134,7 @@ export function DiffView({
                   autoFocus
                   rows={2}
                   value={brouillon}
-                  placeholder={`Ce que l'agent doit changer ligne ${repere.ligne}… (Ctrl+Entrée pour ajouter)`}
+                  placeholder={t('diff.editeur.aide', { ligne: repere.ligne })}
                   onChange={(event) => setBrouillon(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
@@ -152,10 +154,10 @@ export function DiffView({
                     disabled={!brouillon.trim()}
                     onClick={() => valider(repere)}
                   >
-                    Ajouter à la relecture
+                    {t('diff.editeur.ajouter')}
                   </button>
                   <button type="button" className="sc-btn" onClick={fermer}>
-                    Annuler
+                    {t('commun.annuler')}
                   </button>
                 </div>
               </div>

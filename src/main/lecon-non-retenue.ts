@@ -17,9 +17,11 @@
  * Une ligne qui S'ÉTIQUETTE leçon : « Leçon : », « **Leçon** : », « - **Leçon :** »,
  * « **Leçon corrigée** : », « **Leçon (pour les prochaines captures) :** ». Une mention en cours de
  * phrase (« les deux leçons que tu as recollées ») n'en est pas une, ni une citation (`>`).
+ * En anglais aussi (conv-1197, 2026-10-28) : l'agent répond en anglais quand l'interface l'est, et
+ * « **Lesson**: » / « **Lesson learned:** » passaient sans avertissement.
  */
 const LIGNE_DE_LECON =
-  /^[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?Le[cç]ons?(?:[ \t]+corrig[ée]es?)?(?:\*\*|__)?(?:[ \t]*\([^)\n]{0,160}\))?[ \t\u00a0\u202f]*(?:\*\*|__)?[ \t\u00a0\u202f]*:/imu
+  /^[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?(?:Le[cç]ons?(?:[ \t]+corrig[ée]es?)?|Lessons?(?:[ \t]+(?:learned|learnt))?)(?:\*\*|__)?(?:[ \t]*\([^)\n]{0,160}\))?[ \t\u00a0\u202f]*(?:\*\*|__)?[ \t\u00a0\u202f]*:/imu
 
 /** Les blocs de code ne sont pas la réponse : une « Leçon : » dans un exemple n'en est pas une. */
 const BLOC_DE_CODE = /```[\s\S]*?```/g

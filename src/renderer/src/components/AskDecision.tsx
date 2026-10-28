@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './AskDecision.css'
+import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 import {
   optionsRepondues,
   promptDeLOption,
@@ -61,23 +62,24 @@ function retenirFerme(id: string): void {
 }
 
 function Detail({ detail }: { detail: NonNullable<AskOption['detail']> }): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
   return (
     <div className="askd-detail">
       {detail.fait && (
         <div className="askd-q">
-          <b>Ce que ça fait</b>
+          <b>{t('ask.detail.fait')}</b>
           <p>{detail.fait}</p>
         </div>
       )}
       {detail.touche && (
         <div className="askd-q">
-          <b>Ce que ça touche</b>
+          <b>{t('ask.detail.touche')}</b>
           <p>{detail.touche}</p>
         </div>
       )}
       {detail.neReglePas && (
         <div className="askd-q est-residuel">
-          <b>Ne règle pas</b>
+          <b>{t('ask.detail.neReglePas')}</b>
           <p>{detail.neReglePas}</p>
         </div>
       )}
@@ -112,6 +114,7 @@ export function AskDecisionBlock({
    */
   idDurable?: string
 }): React.JSX.Element | null {
+  const { t } = useTextesChatDecisions()
   const run = decision.provenance?.source === 'run' ? decision.provenance : undefined
   const [ferme, setFerme] = useState(() =>
     run && idDurable ? lireFermes().includes(idDurable) : false
@@ -290,14 +293,14 @@ export function AskDecisionBlock({
            subagent ». Le nom du run n'est pas un lien — rien ne sait encore ouvrir un run depuis
            le fil, et un chevron qui ne mene nulle part mentirait. */
         <div className="askd-provenance" data-testid="ask-decision-provenance">
-          <span className="askd-provenance-de">Message du run</span>
+          <span className="askd-provenance-de">{t('ask.run.de')}</span>
           {run.run && <code className="askd-provenance-run">{run.run}</code>}
           <button
             type="button"
             className="askd-fermer"
             onClick={fermer}
-            aria-label="Fermer le message du run"
-            title="Fermer sans répondre"
+            aria-label={t('ask.run.fermerAria')}
+            title={t('ask.run.fermerTitre')}
             data-testid="ask-decision-fermer"
           >
             ×
@@ -310,6 +313,8 @@ export function AskDecisionBlock({
         </p>
       )}
       <div className="askd-tete">
+        {/* « run » et « ask » restent tels quels dans les deux langues : le nom de la commande `ask`
+            et celui d'un run, que l'utilisateur retrouve ailleurs sous ce nom. */}
         <span className="askd-badge">{run ? 'run' : 'ask'}</span>
         <span className="askd-question">{decision.question}</span>
       </div>
@@ -328,7 +333,7 @@ export function AskDecisionBlock({
                     type="button"
                     className="askd-tri"
                     aria-expanded={deplie}
-                    aria-label={deplie ? 'Replier le détail' : 'Déplier le détail'}
+                    aria-label={deplie ? t('ask.replierDetail') : t('ask.deplierDetail')}
                     onClick={() => basculer(index)}
                   >
                     {deplie ? '▾' : '▸'}
@@ -352,7 +357,9 @@ export function AskDecisionBlock({
                     <span>
                       <span className="askd-libelle">
                         {option.libelle}
-                        {option.recommande && <span className="askd-tag">recommandé</span>}
+                        {option.recommande && (
+                          <span className="askd-tag">{t('ask.recommande')}</span>
+                        )}
                       </span>
                       {option.consequence && (
                         <span className="askd-consequence">{option.consequence}</span>
@@ -370,7 +377,7 @@ export function AskDecisionBlock({
                   >
                     <span className="askd-libelle">
                       {option.libelle}
-                      {option.recommande && <span className="askd-tag">recommandé</span>}
+                      {option.recommande && <span className="askd-tag">{t('ask.recommande')}</span>}
                     </span>
                     {option.consequence && (
                       <span className="askd-consequence">{option.consequence}</span>
@@ -382,7 +389,9 @@ export function AskDecisionBlock({
                    * Le mot plutot que le glyphe ⏎ : la police du rendu ne le porte pas partout et
                    * il sortait en tofu (rectangle vide) sur la capture du 20/08.
                    */}
-                  {!decision.choixMultiple && <span className="askd-entree">Entrée</span>}
+                  {!decision.choixMultiple && (
+                    <span className="askd-entree">{t('ask.entree')}</span>
+                  )}
                   <span className="askd-touche">{index + 1}</span>
                 </div>
               </div>
@@ -395,7 +404,7 @@ export function AskDecisionBlock({
         {verrouille ? (
           /* Ce que claude.exe fait aussi : la question reste LISIBLE, mais elle est close. Le bloc
              ne redevient jamais cliquable -- la suite de la conversation est la reponse. */
-          <span data-testid="ask-decision-close">Répondu — écrivez la suite dans le composer</span>
+          <span data-testid="ask-decision-close">{t('ask.repondu')}</span>
         ) : decision.choixMultiple ? (
           <>
             <button
@@ -407,26 +416,26 @@ export function AskDecisionBlock({
             >
               {/* Le compte en pastille, plus « (1) » (conv-209, variante 6). L'espace garde un nom
                   lisible (« Envoyer 2 ») ; dans le flex du bouton, il ne se dessine pas. */}
-              Envoyer{' '}
+              {t('ask.envoyer')}{' '}
               {selection.length > 0 && (
                 <span className="askd-envoyer-compte" data-testid="ask-decision-compte">
                   {selection.length}
                 </span>
               )}
             </button>
-            <span>plusieurs réponses possibles — cochez celles qui conviennent</span>
+            <span>{t('ask.plusieurs')}</span>
           </>
         ) : (
           <span>
-            <span className="askd-k">Entrée</span> sur une ligne pour répondre
+            <span className="askd-k">{t('ask.entree')}</span> {t('ask.surUneLigne')}
           </span>
         )}
         {auMoinsUnDetail && (
           <span>
-            <span className="askd-k">▸</span> pour déplier le détail
+            <span className="askd-k">▸</span> {t('ask.pourDeplier')}
           </span>
         )}
-        <span>ou écrivez autre chose dans le composer</span>
+        <span>{t('ask.ouEcrivez')}</span>
       </div>
     </div>
   )

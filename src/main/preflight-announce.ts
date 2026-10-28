@@ -1,4 +1,5 @@
 import type { PreflightResult } from './preflight'
+import { traduireCoeur } from './textes-coeur'
 
 /**
  * Quand ANNONCER un diagnostic de démarrage — et quand se taire.
@@ -48,12 +49,12 @@ function failing(result: PreflightResult): PreflightResult['checks'] {
 function brainReason(outcome: BrainLaunchOutcome | undefined, graceMs: number): string {
   const secondes = Math.round(graceMs / 1000)
   if (outcome?.status === 'unavailable' && outcome.detail) {
-    return `injoignable après ${secondes} s — ${outcome.detail}`
+    return traduireCoeur('diagnostic.brain.injoignableApres', { secondes, detail: outcome.detail })
   }
   if (outcome?.status === 'starting') {
-    return `démarré mais toujours pas prêt après ${secondes} s — warm-up anormalement long, RAG désactivé`
+    return traduireCoeur('diagnostic.brain.lent', { secondes })
   }
-  return `injoignable après ${secondes} s — service local non démarré, RAG désactivé`
+  return traduireCoeur('diagnostic.brain.nonDemarre', { secondes })
 }
 
 export function decidePreflightAnnouncement(

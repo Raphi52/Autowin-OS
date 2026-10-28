@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ContextGauge } from '../../../shared/context-gauge'
 import { tokensCourts, type ContexteDetaille } from '../../../shared/contexte-detaille'
+import { formaterDate, formaterNombre, langueCourante } from '../langue'
+import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ModelQuotaIndicator.css'
 import './ContexteDetaille.css'
 
@@ -25,6 +27,7 @@ export function ContextGaugeIndicator({
   onCompact?: () => void
   busy?: boolean
 }): React.JSX.Element | null {
+  const { t } = useTextesChatPanneaux()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -69,10 +72,12 @@ export function ContextGaugeIndicator({
 
   if (!gauge) return null
   const pourcent = Math.round(gauge.ratio * 100)
-  const titre =
-    `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
-    `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
-    `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+  const titre = t('contexte.titre', {
+    utilises: formaterNombre(gauge.used),
+    limite: formaterNombre(gauge.limit),
+    pourcent,
+    cache: formaterNombre(gauge.cacheRead)
+  })
   return (
     <div
       className="chat-context-gauge-root"
@@ -99,7 +104,7 @@ export function ContextGaugeIndicator({
         <span className="chat-context-gauge-track">
           <span className="chat-context-gauge-fill" style={{ width: `${pourcent}%` }} />
         </span>
-        {pourcent} %
+        {t('contexte.pourcent', { n: pourcent })}
       </button>
       {open && (
         <ContextGaugeDetail
@@ -151,6 +156,7 @@ export function ContextGaugeDetail({
   /** Appele quand une action du panneau doit le refermer. */
   fermer?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   if (contexte)
     return (
       <ContexteParCategorie
@@ -163,21 +169,23 @@ export function ContextGaugeDetail({
       />
     )
   const pourcent = Math.round(gauge.ratio * 100)
-  const titre =
-    `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
-    `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
-    `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+  const titre = t('contexte.titre', {
+    utilises: formaterNombre(gauge.used),
+    limite: formaterNombre(gauge.limit),
+    pourcent,
+    cache: formaterNombre(gauge.cacheRead)
+  })
   return (
     <section
       className="model-quota-popover"
       data-testid="chat-context-popover"
-      aria-label="Contexte de cette conversation"
+      aria-label={t('contexte.aria')}
       style={style}
     >
       <header>
         <div>
-          <strong>Contexte de cette conversation</strong>
-          <small>fenêtre du modèle servi</small>
+          <strong>{t('contexte.aria')}</strong>
+          <small>{t('contexte.fenetre')}</small>
         </div>
       </header>
       <div className="model-quota-list">
@@ -189,10 +197,13 @@ export function ContextGaugeDetail({
         >
           <div className="model-quota-name">
             <span>
-              <strong>Occupation du fil</strong>
+              <strong>{t('contexte.occupation')}</strong>
               <small>
-                {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')} tokens
-                · {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
+                {t('contexte.detail', {
+                  utilises: formaterNombre(gauge.used),
+                  limite: formaterNombre(gauge.limit),
+                  cache: formaterNombre(gauge.cacheRead)
+                })}
               </small>
             </span>
           </div>
@@ -201,8 +212,8 @@ export function ContextGaugeDetail({
               <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
             </div>
             <strong className="model-quota-values">
-              <span>{pourcent} % occupé</span>
-              <small>{gauge.fresh.toLocaleString('fr-FR')} tokens frais</small>
+              <span>{t('contexte.occupe', { n: pourcent })}</span>
+              <small>{t('contexte.frais', { n: formaterNombre(gauge.fresh) })}</small>
             </strong>
             {onCompact && (
               <button
@@ -212,17 +223,17 @@ export function ContextGaugeDetail({
                 disabled={busy === true}
                 title={
                   busy === true
-                    ? 'Compaction indisponible : un tour est déjà en cours'
+                    ? t('contexte.compaction.indisponible')
                     : // La carte du fil (conv-1059, à la place du carnet de conv-1038) montre
                       // ensuite les étapes que l'agent ne relit plus.
-                      'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé : la carte du fil montre ensuite les étapes que l’agent ne relit plus'
+                      t('contexte.compaction.carte')
                 }
                 onClick={() => {
                   fermer?.()
                   onCompact()
                 }}
               >
-                Compacter
+                {t('contexte.compacter')}
               </button>
             )}
           </div>
@@ -232,12 +243,17 @@ export function ContextGaugeDetail({
   )
 }
 
-/** « 2,5 % » — une decimale, virgule francaise, comme les lignes du panneau de claude.exe. */
+/**
+ * « 2,5 % » — une decimale, comme les lignes du panneau de claude.exe ; separateur et signe suivent
+ * la langue de l'interface (conv-1170 : « 2.5% » en anglais).
+ */
 function partDeFenetre(tokens: number, limite: number): string {
-  return `${((tokens / limite) * 100).toLocaleString('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1
-  })} %`
+  return traduireChatPanneaux('contexte.pourcent', langueCourante(), {
+    n: formaterNombre((tokens / limite) * 100, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    })
+  })
 }
 
 /** Une liste repliable du panneau (outils MCP, fichiers memoire, skills). */
@@ -264,7 +280,7 @@ function ListeContexte({
       </summary>
       <ul>
         {elements.map((e, i) => (
-          <li key={`${e.nom}-${i}`} title={`${e.nom} — ${e.tokens.toLocaleString('fr-FR')} tokens`}>
+          <li key={`${e.nom}-${i}`} title={`${e.nom} — ${formaterNombre(e.tokens)} tokens`}>
             <span className="ctx-nom">{nomCourt ? nomCourt(e.nom) : e.nom}</span>
             <span className="ctx-tokens">{tokensCourts(e.tokens)}</span>
           </li>
@@ -300,10 +316,11 @@ function ContexteParCategorie({
   style?: React.CSSProperties
   fermer?: () => void
 }): React.JSX.Element {
+  const { t } = useTextesChatPanneaux()
   const { utilise, limite, categories } = contexte
   const pourcent = Math.round((utilise / limite) * 100)
   const segments = categories.filter((c) => c.genre === 'utilise' || c.genre === 'reserve')
-  const heure = new Date(contexte.mesureLe).toLocaleTimeString('fr-FR', {
+  const heure = formaterDate(contexte.mesureLe, {
     hour: '2-digit',
     minute: '2-digit'
   })
@@ -312,16 +329,16 @@ function ContexteParCategorie({
       className="model-quota-popover ctx-panneau"
       data-testid="chat-context-popover"
       data-context-level={level}
-      aria-label="Contexte de cette conversation"
+      aria-label={t('contexte.aria')}
       style={style}
     >
       <header className="ctx-entete">
-        <strong>Contexte</strong>
-        <small title="Heure de la mesure des catégories par le CLI">mesuré à {heure}</small>
+        <strong>{t('contexte.court')}</strong>
+        <small title={t('contexte.mesure.titre')}>{t('contexte.mesureA', { heure })}</small>
       </header>
       <div className="ctx-resume" data-testid="ctx-resume">
         <span>
-          <b>{pourcent} %</b> utilisé
+          <b>{t('contexte.pourcent', { n: pourcent })}</b> {t('contexte.utilise')}
         </span>
         <span className="ctx-total">
           {tokensCourts(utilise)} / {tokensCourts(limite)}
@@ -342,7 +359,7 @@ function ContexteParCategorie({
             key={`${c.genre}-${c.cle}`}
             className={`ctx-cat is-${c.genre}`}
             data-categorie={c.cle}
-            title={`${c.libelle} — ${c.tokens.toLocaleString('fr-FR')} tokens`}
+            title={`${c.libelle} — ${formaterNombre(c.tokens)} tokens`}
           >
             <i className={`ctx-pastille ctx-c-${c.cle}`} aria-hidden="true" />
             <span className="ctx-nom">{c.libelle}</span>
@@ -355,13 +372,13 @@ function ContexteParCategorie({
       </ul>
       <div className="ctx-listes">
         <ListeContexte
-          titre="Outils MCP"
+          titre={t('contexte.outilsMcp')}
           elements={contexte.outilsMcp}
           ouverte
           testid="ctx-outils-mcp"
         />
         <ListeContexte
-          titre="Fichiers mémoire"
+          titre={t('contexte.fichiersMemoire')}
           elements={contexte.fichiersMemoire}
           ouverte
           testid="ctx-fichiers-memoire"
@@ -371,6 +388,7 @@ function ContexteParCategorie({
           }}
         />
         <ListeContexte
+          // « Skills » : identique dans les deux langues.
           titre="Skills"
           elements={contexte.skills}
           ouverte={false}
@@ -384,17 +402,13 @@ function ContexteParCategorie({
             className="quota-context-compact"
             data-testid="quota-context-compact"
             disabled={busy === true}
-            title={
-              busy === true
-                ? 'Compaction indisponible : un tour est déjà en cours'
-                : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
-            }
+            title={busy === true ? t('contexte.compaction.indisponible') : t('contexte.compaction')}
             onClick={() => {
               fermer?.()
               onCompact()
             }}
           >
-            Compacter
+            {t('contexte.compacter')}
           </button>
         </footer>
       )}

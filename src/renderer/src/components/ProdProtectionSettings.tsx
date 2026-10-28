@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Spinner } from './Spinner'
+import { langueCourante } from '../langue'
+import { riche } from '../textes'
+import { traduireSettings, useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
 import type {
   EtatPorteProd,
   NiveauProtectionProd,
@@ -29,6 +32,10 @@ import './ProdProtectionSettings.css'
  * l'écran se contente de demander le champ correspondant.
  */
 export function ProdProtectionSettings(): React.JSX.Element {
+  // Textes dans la langue de Settings · Interface (conv-1170). Les messages posés par un rappel le
+  // sont dans la langue du moment (`dire`) ; ce qui vient du processus principal (`porte.raison`,
+  // `reponse.erreur`, `proposition.erreur`) reste tel quel : les messages du cœur ne sont pas traduits.
+  const { t } = useTextesSettings()
   const [porte, setPorte] = useState<EtatPorteProd | null>(null)
   const [definie, setDefinie] = useState<boolean | null>(null)
   const [longueurMinimale, setLongueurMinimale] = useState(12)
@@ -40,6 +47,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
   const [proposition, setProposition] = useState<PropositionAutoriteProd | null>(null)
   const [calcul, setCalcul] = useState(false)
   const [copie, setCopie] = useState<'copie' | 'echec' | null>(null)
+  const dire = (cle: CleSettings): string => traduireSettings(cle, langueCourante())
 
   /**
    * LA LISTE PROPOSÉE DEPUIS LE CATALOGUE SQL. Le catalogue n'est interrogé qu'au clic, et rien
@@ -51,7 +59,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
     try {
       setProposition(await window.api.prodAutoriteProposition())
     } catch {
-      setProposition({ ok: false, erreur: "La proposition n'a pas pu être calculée." })
+      setProposition({ ok: false, erreur: dire('prod.propositionEchec') })
     } finally {
       setCalcul(false)
     }
@@ -89,12 +97,12 @@ export function ProdProtectionSettings(): React.JSX.Element {
       try {
         const reponse = await window.api.prodPorteNiveau(niveau)
         if (!reponse.ok) {
-          setMessage({ ton: 'erreur', texte: reponse.erreur ?? 'Niveau refusé.' })
+          setMessage({ ton: 'erreur', texte: reponse.erreur ?? dire('prod.niveauRefuse') })
           return
         }
         await relire()
       } catch {
-        setMessage({ ton: 'erreur', texte: "Le niveau n'a pas pu être changé." })
+        setMessage({ ton: 'erreur', texte: dire('prod.niveauEchec') })
       }
     },
     // `relire` est stable ; la dépendance est déclarée pour que le lien reste visible.
@@ -115,7 +123,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
   const enregistrer = useCallback(async () => {
     if (occupe) return
     if (nouvelle !== confirmation) {
-      setMessage({ ton: 'erreur', texte: 'Les deux saisies ne correspondent pas.' })
+      setMessage({ ton: 'erreur', texte: dire('prod.saisiesDifferentes') })
       return
     }
     setOccupe(true)
@@ -132,14 +140,12 @@ export function ProdProtectionSettings(): React.JSX.Element {
       }
       setMessage({
         ton: 'ok',
-        texte: definie
-          ? 'Phrase changée. Les autorisations en cours sont annulées.'
-          : 'Protection activée. Tout geste de production demandera désormais cette phrase.'
+        texte: definie ? dire('prod.phraseChangee') : dire('prod.protectionActivee')
       })
       await relire()
     } catch {
       oublier()
-      setMessage({ ton: 'erreur', texte: "Le réglage n'a pas pu être enregistré." })
+      setMessage({ ton: 'erreur', texte: dire('prod.reglageEchec') })
     } finally {
       setOccupe(false)
     }
@@ -147,8 +153,9 @@ export function ProdProtectionSettings(): React.JSX.Element {
 
   const etatLisible =
     porte === null
-      ? { mot: 'Inconnu', detail: "L'état de la protection n'a pas pu être lu." }
-      : porte.niveau === 'aucun'
+      ? { mot: t('prod.inconnu'), detail: t('prod.etatIllisible') }
+      : // « Inactive » / « Active » : même mot dans les deux langues.
+        porte.niveau === 'aucun'
         ? { mot: 'Inactive', detail: porte.raison }
         : { mot: 'Active', detail: porte.raison }
 
@@ -176,22 +183,17 @@ export function ProdProtectionSettings(): React.JSX.Element {
       {porte && (
         <ul className="prod-faits">
           <li data-testid="prod-protection-declarees">
-            <b>{porte.declarees}</b> cible{porte.declarees > 1 ? 's' : ''} déclarée
-            {porte.declarees > 1 ? 's' : ''}
-            {porte.declarees === 0 && (
-              <>
-                {' '}
-                — <b>tout</b> sera traité comme de la production, maquettes comprises, dès que la
-                phrase existera.
-              </>
-            )}
+            <b>{porte.declarees}</b>{' '}
+            {porte.declarees > 1 ? t('prod.ciblesDeclarees') : t('prod.cibleDeclaree')}
+            {porte.declarees === 0 && <> {riche(t('prod.toutEnProd'), 'b')}</>}
           </li>
           <li>
-            Fichier de déclaration : <code>{porte.chemin}</code>
+            {t('prod.fichierDeclaration')} <code>{porte.chemin}</code>
           </li>
           {porte.anomalies.length > 0 && (
             <li data-testid="prod-protection-anomalies">
-              <b>{porte.anomalies.length}</b> ligne(s) écartée(s) : {porte.anomalies.join(' · ')}
+              <b>{porte.anomalies.length}</b>{' '}
+              {t('prod.lignesEcartees', { liste: porte.anomalies.join(' · ') })}
             </li>
           )}
         </ul>
@@ -207,10 +209,10 @@ export function ProdProtectionSettings(): React.JSX.Element {
         >
           {calcul ? (
             <>
-              <Spinner size={12} /> Lecture du catalogue…
+              <Spinner size={12} /> {t('prod.lectureCatalogue')}
             </>
           ) : (
-            'Proposer la liste depuis le catalogue SQL'
+            t('prod.proposer')
           )}
         </button>
         {proposition && !proposition.ok && (
@@ -221,26 +223,31 @@ export function ProdProtectionSettings(): React.JSX.Element {
         {proposition?.ok && (
           <>
             <p data-testid="prod-catalogue-resume">
-              Le catalogue déclare <b>{proposition.exploitees}</b> base(s) exploitée(s).{' '}
-              <b>{proposition.ajoutees.length}</b> base(s) à ajouter (
-              <b>{proposition.ajoutees.filter((a) => a.classe === 'prod').length}</b> en production,{' '}
-              <b>{proposition.ajoutees.filter((a) => a.classe === 'non-prod').length}</b> hors
-              production) · <b>{proposition.passeesEnProd.length}</b> passée(s) en production ·{' '}
-              <b>{proposition.conservees}</b> entrée(s) actuelle(s) reprise(s).
+              {riche(
+                t('prod.resume', {
+                  exploitees: proposition.exploitees,
+                  ajoutees: proposition.ajoutees.length,
+                  enProd: proposition.ajoutees.filter((a) => a.classe === 'prod').length,
+                  horsProd: proposition.ajoutees.filter((a) => a.classe === 'non-prod').length,
+                  passees: proposition.passeesEnProd.length,
+                  conservees: proposition.conservees
+                }),
+                'b'
+              )}
             </p>
             {proposition.passeesEnProd.length > 0 && (
               <p data-testid="prod-catalogue-prod">
-                Déclarées hors production mais exploitées selon le catalogue, donc passées en
-                production : <b>{proposition.passeesEnProd.join(', ')}</b>
+                {riche(
+                  t('prod.passeesEnProd', { liste: proposition.passeesEnProd.join(', ') }),
+                  'b'
+                )}
               </p>
             )}
             {proposition.anomalies.length > 0 && (
-              <p>Non repris de ton fichier actuel : {proposition.anomalies.join(' · ')}</p>
+              <p>{t('prod.nonRepris', { liste: proposition.anomalies.join(' · ') })}</p>
             )}
             {proposition.ajoutees.length === 0 && proposition.passeesEnProd.length === 0 ? (
-              <p>
-                Ta déclaration <b>couvre déjà tout le catalogue</b> : rien à changer.
-              </p>
+              <p>{riche(t('prod.couvreDeja'), 'b')}</p>
             ) : (
               <>
                 <textarea
@@ -255,31 +262,28 @@ export function ProdProtectionSettings(): React.JSX.Element {
                   className="btn"
                   onClick={() => void copier(proposition.contenu)}
                 >
-                  {copie === 'copie' ? 'Copié' : 'Copier'}
+                  {copie === 'copie' ? t('prod.copie') : t('prod.copier')}
                 </button>
                 {copie === 'echec' && (
                   <p className="prod-message prod-message-erreur" role="alert">
-                    La copie a échoué : sélectionne le texte ci-dessus à la main.
+                    {t('prod.copieEchec')}
                   </p>
                 )}
               </>
             )}
-            <p className="prod-note">
-              Autowin n’écrit jamais ce fichier : colle ce contenu dans le fichier de déclaration
-              indiqué plus haut, puis rouvre cet écran pour vérifier le nombre de cibles déclarées.
-            </p>
+            <p className="prod-note">{t('prod.noteCatalogue')}</p>
           </>
         )}
       </div>
 
       <fieldset className="prod-niveaux" data-testid="prod-protection-niveaux">
-        <legend>Ce qu’Autowin demande avant d’agir sur une base de production</legend>
+        <legend>{t('prod.niveaux')}</legend>
         {(
           [
-            ['confirmation', 'Une fenêtre « voulez-vous continuer ? »', 'Recommandé'],
-            ['phrase', 'La phrase de passe', 'Postes partagés'],
-            ['aucun', 'Rien du tout', 'Protection désactivée']
-          ] as [NiveauProtectionProd, string, string][]
+            ['confirmation', 'prod.niveau.confirmation', 'prod.niveau.confirmation.note'],
+            ['phrase', 'prod.niveau.phrase', 'prod.niveau.phrase.note'],
+            ['aucun', 'prod.niveau.aucun', 'prod.niveau.aucun.note']
+          ] as [NiveauProtectionProd, CleSettings, CleSettings][]
         ).map(([valeur, libelle, note]) => (
           <label key={valeur} className="prod-niveau" htmlFor={`prod-niveau-${valeur}`}>
             <input
@@ -291,7 +295,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
               onChange={() => void changerNiveau(valeur)}
             />
             <span>
-              <b>{libelle}</b> <span className="prod-niveau-note">{note}</span>
+              <b>{t(libelle)}</b> <span className="prod-niveau-note">{t(note)}</span>
             </span>
           </label>
         ))}
@@ -300,7 +304,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
       <div className="prod-formulaire" hidden={porte?.niveau !== 'phrase'}>
         {definie && (
           <label className="prod-label" htmlFor="prod-actuelle">
-            Phrase de passe actuelle
+            {t('prod.phraseActuelle')}
             <input
               id="prod-actuelle"
               type="password"
@@ -312,7 +316,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
           </label>
         )}
         <label className="prod-label" htmlFor="prod-nouvelle">
-          {definie ? 'Nouvelle phrase' : 'Phrase de passe'} ({longueurMinimale} caractères minimum)
+          {t(definie ? 'prod.nouvellePhrase' : 'prod.phraseDePasse', { n: longueurMinimale })}
           <input
             id="prod-nouvelle"
             type="password"
@@ -340,7 +344,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
           disabled={occupe || nouvelle.length === 0 || confirmation.length === 0}
           onClick={() => void enregistrer()}
         >
-          {definie ? 'Changer la phrase' : 'Activer la protection'}
+          {definie ? t('prod.changerPhrase') : t('prod.activer')}
         </button>
       </div>
 
@@ -349,10 +353,7 @@ export function ProdProtectionSettings(): React.JSX.Element {
           {message.texte}
         </p>
       )}
-      <p className="prod-note">
-        La phrase n’est jamais enregistrée en clair, ni envoyée à un modèle. Changer la phrase
-        annule les autorisations déjà accordées.
-      </p>
+      <p className="prod-note">{t('prod.notePhrase')}</p>
     </section>
   )
 }

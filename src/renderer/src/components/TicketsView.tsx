@@ -43,6 +43,16 @@ import './ViewPage.css'
 import './TicketsView.css'
 import { Spinner } from './Spinner'
 import { BulleDuTicket } from './BulleDuTicket'
+import { formaterDate, langueCourante } from '../langue'
+import type { ValeursDeTexte } from '../textes'
+import { traduireTickets, useTextesTickets, type CleTickets } from '../textes-ecrans/tickets'
+
+/**
+ * Un texte de l'écran HORS rendu (traduction anglaise, conv-1170) : messages d'erreur et statuts du
+ * mode auto, posés dans un état au moment où ils arrivent, donc dans la langue de cet instant.
+ */
+const texte = (cle: CleTickets, valeurs?: ValeursDeTexte): string =>
+  traduireTickets(cle, langueCourante(), valeurs)
 
 interface TicketSourceSummary {
   profile: TicketSourceProfile
@@ -73,7 +83,7 @@ const EMPTY_DRAFT: SourceDraft = {
 type SortKey = 'recent' | 'priority' | 'id-desc' | 'id' | 'title'
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Impossible de charger les tickets.'
+  return error instanceof Error ? error.message : texte('erreur.chargement')
 }
 
 /** Initiales (2 lettres max) pour l'avatar d'assigné. */
@@ -96,20 +106,24 @@ function hueOf(label: string): number {
   return Math.abs(hash) % 360
 }
 
-/** Date relative courte (fr) — repère temporel plus lisible qu'un ISO brut dans la liste. */
+/**
+ * Date relative courte — repère temporel plus lisible qu'un ISO brut dans la liste. Appelée pendant
+ * le rendu de la vue, elle suit la langue de l'interface (conv-1170).
+ */
 function relativeDate(iso: string | undefined): string {
   if (!iso) return '—'
   const then = Date.parse(iso)
   if (Number.isNaN(then)) return iso
   const deltaMs = Date.now() - then
   const minutes = Math.floor(deltaMs / 60_000)
-  if (minutes < 1) return 'à l’instant'
-  if (minutes < 60) return `il y a ${minutes} min`
+  if (minutes < 1) return texte('date.instant')
+  if (minutes < 60) return texte('date.minutes', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `il y a ${hours} h`
+  if (hours < 24) return texte('date.heures', { n: hours })
   const days = Math.floor(hours / 24)
-  if (days < 30) return `il y a ${days} j`
-  return new Date(then).toLocaleDateString('fr-FR')
+  if (days < 30) return texte('date.jours', { n: days })
+  // Mêmes composants que `toLocaleDateString` : jour, mois et année en chiffres.
+  return formaterDate(then, { year: 'numeric', month: 'numeric', day: 'numeric' })
 }
 
 /** Tags Azure (`System.Tags`, séparés par « ; ») → liste propre. */
@@ -124,11 +138,11 @@ function ticketTags(item: TicketItem): string[] {
 
 /** État d'un traitement en mots — sert l'infobulle de la bulle de conversation. */
 function treatmentLabel(status: TicketTreatmentRecord['status']): string {
-  if (status === 'prepared') return 'prêt'
-  if (status === 'running') return 'en cours'
-  if (status === 'succeeded') return 'traité'
-  if (status === 'interrupted') return 'interrompu'
-  return 'échec'
+  if (status === 'prepared') return texte('traitement.pret')
+  if (status === 'running') return texte('traitement.enCours')
+  if (status === 'succeeded') return texte('traitement.traite')
+  if (status === 'interrupted') return texte('traitement.interrompu')
+  return texte('traitement.echec')
 }
 
 function priorityRank(priority: TicketItem['priority']): number {
@@ -177,6 +191,7 @@ function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
 }
 
 export function TicketsView({ active }: { active: boolean }): React.JSX.Element {
+  const { t } = useTextesTickets()
   const [sources, setSources] = useState<TicketSourceSummary[]>([])
   const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [sourceId, setSourceId] = useState(() => localStorage.getItem(SOURCE_KEY) ?? '')
@@ -480,7 +495,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const saveSource = async (): Promise<void> => {
     const profile = sourceFromDraft(draft)
     if (!profile) {
-      setError('Complète les champs obligatoires de la source.')
+      setError(texte('erreur.champsSource'))
       return
     }
     const generation = requestGeneration.current
@@ -663,14 +678,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       saveSeen(localStorage, seenRef.current)
       autoPrimedRef.current = true
       setAutoStatus(
-        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés · ` +
-          describeAutoModeCost(autoSettingsRef.current, 0)
+        texte('auto.veilleAmorcee', {
+          n: visibleItemsRef.current.length,
+          cout: describeAutoModeCost(autoSettingsRef.current, 0)
+        })
       )
     } else {
       // ARRET IMMEDIAT : kill-switch global (les workers en cours le consultent a chaque boucle).
       stopAutoModeNow()
       autoBusyRef.current = false
-      setAutoStatus('arrêté')
+      setAutoStatus(texte('auto.arrete'))
     }
   }
 
@@ -679,7 +696,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     const settings = autoSettingsRef.current
     let budget = remainingSessionRuns(settings, launchedRef.current)
     if (budget <= 0) {
-      setAutoStatus(`arrêté · plafond de session atteint (${settings.maxRunsPerSession} runs)`)
+      setAutoStatus(texte('auto.plafondAtteint', { n: settings.maxRunsPerSession }))
       return
     }
     let selection = pickIncomingTickets(
@@ -690,9 +707,11 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     if (!selection.toTreat.length) return
     autoBusyRef.current = true
     setAutoStatus(
-      `traitement de ${selection.toTreat.length} entrant(s)${
-        selection.deferred ? ` · ${selection.deferred} reporté(s)` : ''
-      } · ${describeAutoModeCost(settings, selection.toTreat.length)}`
+      texte('auto.traitement', {
+        n: selection.toTreat.length,
+        reportes: selection.deferred ? texte('auto.reportes', { n: selection.deferred }) : '',
+        cout: describeAutoModeCost(settings, selection.toTreat.length)
+      })
     )
     let provider: string | undefined
     try {
@@ -706,7 +725,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     }
     if (!provider) {
       autoBusyRef.current = false
-      setAutoStatus('en veille · aucun rôle configuré')
+      setAutoStatus(texte('auto.aucunRole'))
       return
     }
     if (typeof window.api.providerStatus === 'function') {
@@ -714,7 +733,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       const providerState = statuses.find((entry) => entry.provider === provider)?.status
       if (providerState && ['absent', 'expired', 'standby'].includes(providerState)) {
         autoBusyRef.current = false
-        setAutoStatus(`en veille · provider ${provider} indisponible (${providerState})`)
+        setAutoStatus(texte('auto.providerIndisponible', { provider, etat: providerState }))
         return
       }
     }
@@ -814,9 +833,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     autoBusyRef.current = false
     setAutoStatus(
       autoModeEnabledRef.current && !isAutoModeStopped()
-        ? `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}` +
-            ` · ${remainingSessionRuns(settings, launchedRef.current)} run(s) restants sur le plafond`
-        : 'arrêté'
+        ? texte('auto.bilan', {
+            reussis: succeeded,
+            total,
+            echecs: failed ? texte('auto.echecs', { n: failed }) : '',
+            restants: remainingSessionRuns(settings, launchedRef.current)
+          })
+        : texte('auto.arrete')
     )
   }, [autoMode, enrichTicket, recordTreatment])
 
@@ -837,8 +860,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       saveSeen(localStorage, seenRef.current)
       autoPrimedRef.current = true
       setAutoStatus(
-        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés · ` +
-          describeAutoModeCost(autoSettingsRef.current, 0)
+        texte('auto.veilleAmorcee', {
+          n: visibleItemsRef.current.length,
+          cout: describeAutoModeCost(autoSettingsRef.current, 0)
+        })
       )
       return
     }
@@ -953,11 +978,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const initialLoading = active && !sourcesLoaded && !error
   /** Causes RÉELLES d'un écran vide : ce qui restreint le périmètre, nommé une par une. */
   const emptyCauses = [
-    serverQuery ? `recherche serveur « ${serverQuery} »` : undefined,
-    query.trim() ? `recherche locale « ${query.trim()} »` : undefined,
-    typeFilter ? `type « ${typeFilter} »` : undefined,
-    stateFilter ? `état « ${stateFilter} »` : undefined,
-    assigneeFilter.trim() ? `assigné « ${assigneeFilter.trim()} »` : undefined
+    serverQuery ? t('contenu.cause.rechercheServeur', { valeur: serverQuery }) : undefined,
+    query.trim() ? t('contenu.cause.rechercheLocale', { valeur: query.trim() }) : undefined,
+    typeFilter ? t('contenu.cause.type', { valeur: typeFilter }) : undefined,
+    stateFilter ? t('contenu.cause.etat', { valeur: stateFilter }) : undefined,
+    assigneeFilter.trim()
+      ? t('contenu.cause.assigne', { valeur: assigneeFilter.trim() })
+      : undefined
   ].filter((cause): cause is string => cause !== undefined)
 
   /** Navigation clavier ↑/↓ dans la liste (P3-9) : déplace la sélection, sans toucher aux coches. */
@@ -978,14 +1005,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         `ViewTopBar`, la même que les autres vues — la recopier ici l'aurait fait diverger.
       */}
       <ViewTopBar
-        eyebrow="Travail synchronisé"
-        title="Tickets"
-        description="Synchronise et pilote le travail issu de tes sources externes."
-        ariaLabel="Sections Tickets"
+        eyebrow={t('vue.surtitre')}
+        title={t('vue.titre')}
+        description={t('vue.description')}
+        ariaLabel={t('vue.sections')}
         active={sectionActive}
         onSelect={setSectionActive}
         tabs={[
-          { id: 'externes', label: 'Sources externes' },
+          { id: 'externes', label: t('vue.onglet.externes') },
+          // Nom du produit, identique dans les deux langues : reste en dur.
           { id: 'autowin', label: 'Autowin OS' }
         ]}
       />
@@ -1003,7 +1031,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <header className="tickets-head">
             <div className="tickets-source-controls">
               <label className="tickets-source-pill">
-                <span className="tickets-source-eyebrow">Source</span>
+                <span className="tickets-source-eyebrow">{t('source.surtitre')}</span>
                 <span className="tickets-source-provider" aria-hidden="true">
                   {selectedSource?.provider === 'github'
                     ? ''
@@ -1012,7 +1040,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       : '◆'}
                 </span>
                 <select
-                  aria-label="Source de tickets"
+                  aria-label={t('source.choix')}
                   data-testid="tickets-source"
                   value={sourceId}
                   onChange={(event) => changeSource(event.target.value)}
@@ -1027,12 +1055,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               <button
                 type="button"
                 className="tickets-source-add"
-                title={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
-                aria-label={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
+                title={showSourceForm ? t('source.fermer') : t('source.ajouter')}
+                aria-label={showSourceForm ? t('source.fermer') : t('source.ajouter')}
                 aria-expanded={showSourceForm}
                 onClick={() => setShowSourceForm((visible) => !visible)}
               >
-                {showSourceForm ? '✕' : '＋ Source'}
+                {showSourceForm ? '✕' : t('source.ajouterCourt')}
               </button>
             </div>
           </header>
@@ -1040,12 +1068,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           {showSourceForm && (
             <div className="tickets-source-form">
               <select
-                aria-label="Fournisseur"
+                aria-label={t('source.fournisseur')}
                 value={draft.provider}
                 onChange={(event) =>
                   setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
                 }
               >
+                {/* Noms de produits, identiques dans les deux langues : restent en dur. */}
                 <option value="azure">Azure DevOps</option>
                 <option value="github">GitHub</option>
                 <option value="gitlab">GitLab</option>
@@ -1053,14 +1082,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               {draft.provider === 'azure' && (
                 <>
                   <input
-                    aria-label="Organisation Azure"
-                    placeholder="Organisation"
+                    aria-label={t('source.organisationAzure')}
+                    placeholder={t('source.organisation')}
                     value={draft.organization}
                     onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
                   />
                   <input
-                    aria-label="Projet Azure"
-                    placeholder="Projet"
+                    aria-label={t('source.projetAzure')}
+                    placeholder={t('source.projet')}
                     value={draft.project}
                     onChange={(event) => setDraft({ ...draft, project: event.target.value })}
                   />
@@ -1068,48 +1097,48 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               )}
               {draft.provider === 'github' && (
                 <input
-                  aria-label="Propriétaire GitHub"
-                  placeholder="Organisation ou propriétaire"
+                  aria-label={t('source.proprietaireGithub')}
+                  placeholder={t('source.organisationOuProprietaire')}
                   value={draft.owner}
                   onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
                 />
               )}
               {draft.provider === 'gitlab' && (
                 <input
-                  aria-label="Namespace GitLab"
-                  placeholder="Groupe / sous-groupe"
+                  aria-label={t('source.namespaceGitlab')}
+                  placeholder={t('source.groupe')}
                   value={draft.namespace}
                   onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
                 />
               )}
               <input
-                aria-label={draft.provider === 'azure' ? 'Dépôt Azure de contexte' : 'Dépôt'}
-                placeholder={draft.provider === 'azure' ? 'Dépôt de contexte' : 'Dépôt'}
+                aria-label={draft.provider === 'azure' ? t('source.depotAzure') : t('source.depot')}
+                placeholder={
+                  draft.provider === 'azure' ? t('source.depotContexte') : t('source.depot')
+                }
                 value={draft.repository}
                 onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
               />
               {draft.provider !== 'azure' && (
                 <>
                   <input
-                    aria-label="URL personnalisée"
-                    placeholder="URL personnalisée (optionnel)"
+                    aria-label={t('source.url')}
+                    placeholder={t('source.urlOptionnelle')}
                     value={draft.baseUrl}
                     onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
                   />
                   <span className="tickets-auth-help" data-testid="tickets-auth-help">
-                    {draft.provider === 'github'
-                      ? 'Privé : GH_TOKEN sur github.com ; pour une URL personnalisée, connecte gh à cet hôte.'
-                      : 'Privé : GITLAB_TOKEN sur gitlab.com ; pour une URL personnalisée, connecte glab à cet hôte.'}
+                    {draft.provider === 'github' ? t('source.aideGithub') : t('source.aideGitlab')}
                   </span>
                 </>
               )}
               <button
                 type="button"
                 onClick={() => void saveSource()}
-                aria-label="Enregistrer la source"
-                title="Enregistrer la source"
+                aria-label={t('source.enregistrerTitre')}
+                title={t('source.enregistrerTitre')}
               >
-                Enregistrer
+                {t('source.enregistrer')}
               </button>
             </div>
           )}
@@ -1118,17 +1147,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <div className="tickets-stats" data-testid="tickets-stats">
               {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
               sur la page chargée uniquement (le fournisseur pagine à 50). */}
-              <span
-                className="tickets-stats-total"
-                title="Compteurs calculés sur la page chargée, pas sur tout le projet"
-              >
-                <strong>{items.length}</strong> chargé(s) · <strong>{visibleItems.length}</strong>{' '}
-                affiché(s) · périmètre : page chargée
+              <span className="tickets-stats-total" title={t('stats.titre')}>
+                <strong>{items.length}</strong> {t('stats.charges')}{' '}
+                <strong>{visibleItems.length}</strong> {t('stats.affiches')}
               </span>
               <div
                 className="tickets-stats-states"
                 role="group"
-                aria-label="Répartition par état sur la page chargée"
+                aria-label={t('stats.repartition')}
               >
                 {stateCounts.map(([state, count]) => (
                   <button
@@ -1136,7 +1162,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     type="button"
                     className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
                     style={{ ['--chip-hue' as string]: hueOf(state) }}
-                    title={`Filtrer sur « ${state} »`}
+                    title={t('stats.filtrerSur', { etat: state })}
                     onClick={() => setStateFilter((current) => (current === state ? '' : state))}
                   >
                     {state} <b>{count}</b>
@@ -1145,7 +1171,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               </div>
               {checkedIds.size > 0 && (
                 <span className="tickets-stats-selection" data-testid="tickets-selection-count">
-                  {checkedVisibleItems.length} sélectionné(s)
+                  {t('stats.selection', { n: checkedVisibleItems.length })}
                 </span>
               )}
             </div>
@@ -1154,8 +1180,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-toolbar">
             <input
               type="search"
-              aria-label="Rechercher les tickets"
-              placeholder="ID, titre ou assigné… (Entrée = recherche serveur)"
+              aria-label={t('barre.rechercher')}
+              placeholder={t('barre.rechercherIndice')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -1170,18 +1196,18 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <button
               data-testid="tickets-search-server"
               type="button"
-              title="Chercher ce titre sur le serveur (tout le projet), pas seulement dans la page chargée"
+              title={t('barre.chercherTitre')}
               disabled={!selectedSource || loading}
               onClick={() => runServerSearch(query)}
             >
-              Chercher
+              {t('barre.chercher')}
             </button>
             {serverQuery && (
               <span className="tickets-server-query" data-testid="tickets-server-query">
-                serveur : « {serverQuery} »
+                {t('barre.serveur', { requete: serverQuery })}
                 <button
                   type="button"
-                  title="Effacer la recherche serveur"
+                  title={t('barre.effacerServeur')}
                   onClick={() => {
                     setQuery('')
                     runServerSearch('')
@@ -1192,32 +1218,32 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               </span>
             )}
             <select
-              aria-label="Filtrer par type"
-              title="Types présents dans la page chargée (pas tout le projet)"
+              aria-label={t('barre.filtrerType')}
+              title={t('barre.typesPresents')}
               value={typeFilter}
               onChange={(event) => setTypeFilter(event.target.value)}
             >
-              <option value="">Tous les types</option>
+              <option value="">{t('barre.tousTypes')}</option>
               {types.map((type) => (
                 <option key={type}>{type}</option>
               ))}
             </select>
             <select
-              aria-label="Filtrer par état"
-              title="États présents dans la page chargée (pas tout le projet)"
+              aria-label={t('barre.filtrerEtat')}
+              title={t('barre.etatsPresents')}
               value={stateFilter}
               onChange={(event) => setStateFilter(event.target.value)}
             >
-              <option value="">Tous les états</option>
+              <option value="">{t('barre.tousEtats')}</option>
               {states.map((state) => (
                 <option key={state}>{state}</option>
               ))}
             </select>
             <input
               list="tickets-people-list"
-              aria-label="Filtrer par assigné"
+              aria-label={t('barre.filtrerAssigne')}
               data-testid="tickets-assignee-filter"
-              placeholder="Assigné…"
+              placeholder={t('barre.assigneIndice')}
               value={assigneeFilter}
               onChange={(event) => setAssigneeFilter(event.target.value)}
             />
@@ -1227,39 +1253,40 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               ))}
             </datalist>
             <select
-              aria-label="Trier"
+              aria-label={t('barre.trier')}
               data-testid="tickets-sort"
               value={sortKey}
               onChange={(event) => setSortKey(event.target.value as SortKey)}
             >
-              <option value="recent">Plus récents</option>
-              <option value="priority">Priorité</option>
-              <option value="id-desc">ID décroissant</option>
-              <option value="id">ID croissant</option>
-              <option value="title">Titre A→Z</option>
+              <option value="recent">{t('barre.tri.recent')}</option>
+              <option value="priority">{t('barre.tri.priorite')}</option>
+              <option value="id-desc">{t('barre.tri.idDecroissant')}</option>
+              <option value="id">{t('barre.tri.idCroissant')}</option>
+              <option value="title">{t('barre.tri.titre')}</option>
             </select>
             {selectedSource && (
               <span className="tickets-auth-mode">
                 {selectedSource.provider === 'azure'
-                  ? `Projet ${selectedSource.project} · ${
-                      selectedSummary?.credentialConfigured
-                        ? 'Coffre configuré'
-                        : 'Session Azure CLI'
-                    }`
+                  ? t('barre.acces.projet', {
+                      projet: selectedSource.project,
+                      acces: selectedSummary?.credentialConfigured
+                        ? t('barre.acces.coffre')
+                        : t('barre.acces.sessionAzure')
+                    })
                   : selectedSummary?.credentialConfigured
-                    ? 'Coffre configuré'
-                    : 'Public · session CLI/env si privée'}
+                    ? t('barre.acces.coffre')
+                    : t('barre.acces.public')}
               </span>
             )}
             <button
               data-testid="tickets-refresh"
               type="button"
-              aria-label="Actualiser les tickets"
-              title="Actualiser les tickets"
+              aria-label={t('barre.actualiserTitre')}
+              title={t('barre.actualiserTitre')}
               disabled={!selectedSource || loading}
               onClick={() => selectedSource && void load(selectedSource)}
             >
-              Actualiser
+              {t('barre.actualiser')}
             </button>
           </div>
 
@@ -1269,31 +1296,27 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               type="button"
               title={
                 allVisibleChecked
-                  ? 'Tout désélectionner'
-                  : `Tout sélectionner (${visibleItems.length})`
+                  ? t('actions.toutDeselectionner')
+                  : t('actions.toutSelectionner', { n: visibleItems.length })
               }
               disabled={visibleItems.length === 0}
               onClick={toggleAllVisible}
             >
               {allVisibleChecked
-                ? 'Tout désélectionner'
-                : `Tout sélectionner (${visibleItems.length})`}
+                ? t('actions.toutDeselectionner')
+                : t('actions.toutSelectionner', { n: visibleItems.length })}
             </button>
             <button
               data-testid="tickets-treat-selection"
               type="button"
               className="tickets-treat-selection"
               disabled={checkedVisibleItems.length === 0}
-              title={
-                sendDirectly
-                  ? 'Ouvre UNE conversation pour la sélection et ENVOIE le prompt'
-                  : 'Ouvre UNE conversation pour la sélection et y pré-remplit le prompt, sans l’envoyer'
-              }
+              title={sendDirectly ? t('actions.envoyerTitre') : t('actions.preparerTitre')}
               onClick={() => void openSelectionConversation()}
             >
               {sendDirectly
-                ? `Traiter la sélection (${checkedVisibleItems.length})`
-                : `Préparer le prompt (${checkedVisibleItems.length})`}
+                ? t('actions.traiter', { n: checkedVisibleItems.length })
+                : t('actions.preparer', { n: checkedVisibleItems.length })}
             </button>
             {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
             l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
@@ -1303,7 +1326,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 checked={sendDirectly}
                 onChange={(e) => setSendDirectly(e.target.checked)}
               />
-              Traiter réellement (envoi immédiat)
+              {t('actions.envoiImmediat')}
             </label>
             {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
             périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
@@ -1313,16 +1336,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 checked={autoMode}
                 onChange={(e) => setAutoModeChecked(e.target.checked)}
               />
-              Mode auto (traite les entrants du filtre)
+              {t('auto.case')}
             </label>
             {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
             par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
             <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
               <label>
-                Parallèle
+                {t('auto.parallele')}
                 <input
                   type="number"
-                  aria-label="Runs en parallèle"
+                  aria-label={t('auto.paralleleAria')}
                   data-testid="tickets-auto-concurrency"
                   min={AUTO_MODE_LIMITS.concurrency.min}
                   max={AUTO_MODE_LIMITS.concurrency.max}
@@ -1331,10 +1354,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 />
               </label>
               <label>
-                Par cycle
+                {t('auto.parCycle')}
                 <input
                   type="number"
-                  aria-label="Tickets traités par cycle"
+                  aria-label={t('auto.parCycleAria')}
                   data-testid="tickets-auto-cap"
                   min={AUTO_MODE_LIMITS.capPerCycle.min}
                   max={AUTO_MODE_LIMITS.capPerCycle.max}
@@ -1343,10 +1366,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 />
               </label>
               <label>
-                Plafond session
+                {t('auto.plafond')}
                 <input
                   type="number"
-                  aria-label="Plafond de runs pour la session"
+                  aria-label={t('auto.plafondAria')}
                   data-testid="tickets-auto-max-runs"
                   min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
                   max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
@@ -1355,22 +1378,22 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 />
               </label>
               <span data-testid="tickets-auto-cost">
-                {describeAutoModeCost(autoSettings, 0)} · {launched} lancé(s)
+                {describeAutoModeCost(autoSettings, 0)} · {t('auto.lances', { n: launched })}
               </span>
               {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
               <button
                 type="button"
                 data-testid="tickets-auto-kill"
                 className="tickets-auto-kill"
-                title="Arrêt immédiat du mode auto (kill-switch global)"
+                title={t('auto.stopTitre')}
                 onClick={() => {
                   stopAutoModeNow()
                   autoBusyRef.current = false
                   setAutoModeChecked(false)
-                  setAutoStatus('arrêté (kill-switch)')
+                  setAutoStatus(t('auto.arreteKill'))
                 }}
               >
-                Stop
+                {t('auto.stop')}
               </button>
             </span>
             {autoStatus && (
@@ -1383,62 +1406,68 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-content">
             {sourceError ? (
               <div className="tickets-error" role="alert">
-                <strong>Chargement des sources impossible</strong>
+                <strong>{t('contenu.sourcesImpossible')}</strong>
                 <span>{sourceError}</span>
                 <button
                   data-testid="tickets-retry"
                   type="button"
-                  title="Réessayer le chargement des tickets"
+                  title={t('contenu.reessayerTitre')}
                   onClick={retry}
                 >
-                  Réessayer
+                  {t('contenu.reessayer')}
                 </button>
               </div>
             ) : (loading || initialLoading) && items.length === 0 ? (
-              <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
+              <div
+                className="tickets-loading"
+                role="status"
+                aria-label={t('contenu.chargementAria')}
+              >
                 <Spinner lg />
-                <span>Synchronisation des tickets…</span>
+                <span>{t('contenu.synchronisation')}</span>
               </div>
             ) : error && items.length === 0 ? (
               <div className="tickets-error" role="alert">
-                <strong>Chargement impossible</strong>
+                <strong>{t('contenu.chargementImpossible')}</strong>
                 <span>{error}</span>
                 <button
                   data-testid="tickets-retry"
                   type="button"
-                  title="Réessayer le chargement des tickets"
+                  title={t('contenu.reessayerTitre')}
                   onClick={retry}
                 >
-                  Réessayer
+                  {t('contenu.reessayer')}
                 </button>
               </div>
             ) : sourcesLoaded && sources.length === 0 ? (
               <div className="tickets-empty">
-                <strong>Aucune source configurée</strong>
-                <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
+                <strong>{t('contenu.aucuneSource')}</strong>
+                <span>{t('contenu.ajouteSource')}</span>
               </div>
             ) : visibleItems.length === 0 ? (
               /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
              offerte, et « Charger la suite » reste accessible quand la page suivante existe —
              avant, `!hasMore` supprimait tout message et l'écran restait muet. */
               <div className="tickets-empty" data-testid="tickets-empty">
-                <strong>{items.length === 0 ? 'Aucun ticket' : 'Aucun résultat'}</strong>
+                <strong>
+                  {items.length === 0 ? t('contenu.aucunTicket') : t('contenu.aucunResultat')}
+                </strong>
                 <span>
                   {emptyCauses.length
-                    ? `Périmètre restreint par : ${emptyCauses.join(' · ')}.`
-                    : 'Cette source ne renvoie aucun élément accessible sur la page chargée.'}
+                    ? t('contenu.perimetreRestreint', { causes: emptyCauses.join(' · ') })
+                    : t('contenu.sourceVide')}
                 </span>
                 {emptyCauses.length > 0 && (
                   <button
                     type="button"
                     data-testid="tickets-empty-clear"
-                    title="Effacer la recherche serveur et les filtres locaux"
+                    title={t('contenu.effacerTitre')}
                     onClick={() => {
                       resetFilters()
                       if (serverQuery) runServerSearch('')
                     }}
                   >
-                    Effacer la recherche et les filtres
+                    {t('contenu.effacer')}
                   </button>
                 )}
                 {hasMore && (
@@ -1454,10 +1483,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                   >
                     {loading ? (
                       <>
-                        <Spinner /> Chargement…
+                        <Spinner /> {t('contenu.chargement')}
                       </>
                     ) : (
-                      'Charger la suite'
+                      t('contenu.chargerSuite')
                     )}
                   </button>
                 )}
@@ -1469,24 +1498,26 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     className="tickets-refreshing"
                     data-testid="tickets-refreshing"
                     role="status"
-                    aria-label="Actualisation des tickets en cours"
+                    aria-label={t('contenu.actualisationAria')}
                   >
                     <Spinner lg />
-                    <span>Actualisation…</span>
+                    <span>{t('contenu.actualisation')}</span>
                   </div>
                 )}
                 {error && (
                   <div className="tickets-stale" data-testid="tickets-stale" role="status">
                     {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
                     dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
-                    <strong>{stale ? 'Données périmées' : 'Chargement partiel impossible'}</strong>
+                    <strong>
+                      {stale ? t('contenu.perimees') : t('contenu.partielImpossible')}
+                    </strong>
                     <span>{error}</span>
                   </div>
                 )}
                 <div
                   className="tickets-list"
                   role="list"
-                  aria-label="Tickets"
+                  aria-label={t('vue.titre')}
                   tabIndex={-1}
                   onKeyDown={(event) => {
                     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
@@ -1502,7 +1533,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                         <input
                           type="checkbox"
                           data-testid="ticket-process-checkbox"
-                          aria-label={`Cocher le ticket ${item.id}`}
+                          aria-label={t('liste.cocher', { id: item.id })}
                           checked={checkedIds.has(identity)}
                           onChange={() => toggleChecked(identity)}
                         />
@@ -1542,7 +1573,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                                   {item.assignee}
                                 </>
                               ) : (
-                                <span className="tickets-unassigned">Non assigné</span>
+                                <span className="tickets-unassigned">{t('liste.nonAssigne')}</span>
                               )}
                             </span>
                           </span>
@@ -1556,15 +1587,18 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                           data-testid="ticket-open-conversation"
                           aria-label={
                             treatment
-                              ? `Rejoindre la conversation du ticket ${item.id}`
-                              : `Ouvrir une conversation pour le ticket ${item.id}`
+                              ? t('liste.rejoindreAria', { id: item.id })
+                              : t('liste.ouvrirAria', { id: item.id })
                           }
                           title={
                             treatment
-                              ? `Rejoindre la conversation de #${item.id} (${treatmentLabel(treatment.status)})`
+                              ? t('liste.rejoindreTitre', {
+                                  id: item.id,
+                                  etat: treatmentLabel(treatment.status)
+                                })
                               : sendDirectly
-                                ? `Ouvrir une conversation pour #${item.id} et ENVOYER le prompt`
-                                : `Ouvrir une conversation pour #${item.id} (prompt pré-rempli, non envoyé)`
+                                ? t('liste.ouvrirEnvoyerTitre', { id: item.id })
+                                : t('liste.ouvrirPreparerTitre', { id: item.id })
                           }
                           onClick={() => void openTicketConversation(item, treatment)}
                         >
@@ -1586,15 +1620,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     >
                       {loading ? (
                         <>
-                          <Spinner /> Chargement…
+                          <Spinner /> {t('contenu.chargement')}
                         </>
                       ) : (
-                        'Charger la suite'
+                        t('contenu.chargerSuite')
                       )}
                     </button>
                   ) : (
                     <span data-testid="tickets-page-end" className="tickets-page-end">
-                      Fin de la liste
+                      {t('liste.fin')}
                     </span>
                   )}
                 </div>
@@ -1631,26 +1665,26 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     )}
                     <dl>
                       <div>
-                        <dt>Assigné</dt>
-                        <dd>{selectedItem.assignee || 'Non assigné'}</dd>
+                        <dt>{t('detail.assigne')}</dt>
+                        <dd>{selectedItem.assignee || t('liste.nonAssigne')}</dd>
                       </div>
                       <div>
-                        <dt>Créé</dt>
+                        <dt>{t('detail.cree')}</dt>
                         <dd>{selectedItem.createdAt || '—'}</dd>
                       </div>
                       <div>
-                        <dt>Mis à jour</dt>
+                        <dt>{t('detail.misAJour')}</dt>
                         <dd title={selectedItem.updatedAt}>
                           {relativeDate(selectedItem.updatedAt)}
                         </dd>
                       </div>
                     </dl>
                     <section>
-                      <h3>Description</h3>
-                      <p>{plainText(selectedItem.description) || 'Aucune description.'}</p>
+                      <h3>{t('detail.description')}</h3>
+                      <p>{plainText(selectedItem.description) || t('detail.aucuneDescription')}</p>
                     </section>
                     <section>
-                      <h3>Relations</h3>
+                      <h3>{t('detail.relations')}</h3>
                       {selectedItem.relations?.length ? (
                         <ul>
                           {selectedItem.relations.map((relation, index) => (
@@ -1661,16 +1695,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                           ))}
                         </ul>
                       ) : (
-                        <p>Aucune relation.</p>
+                        <p>{t('detail.aucuneRelation')}</p>
                       )}
                     </section>
                     <section>
-                      <h3>Discussion</h3>
+                      <h3>{t('detail.discussion')}</h3>
                       {selectedItem.comments?.length ? (
                         <ul data-testid="ticket-comments">
                           {selectedItem.comments.map((comment, index) => (
                             <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
-                              <strong>{comment.author ?? 'Auteur inconnu'}</strong>
+                              <strong>{comment.author ?? t('detail.auteurInconnu')}</strong>
                               {comment.createdAt ? (
                                 <time>{relativeDate(comment.createdAt)}</time>
                               ) : null}
@@ -1679,11 +1713,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                           ))}
                         </ul>
                       ) : (
-                        <p>Aucun commentaire chargé.</p>
+                        <p>{t('detail.aucunCommentaire')}</p>
                       )}
                     </section>
                     <a href={selectedItem.url} target="_blank" rel="noreferrer">
-                      Ouvrir dans {selectedSource?.provider ?? 'la source'}
+                      {t('detail.ouvrirDans', {
+                        cible: selectedSource?.provider ?? t('detail.laSource')
+                      })}
                     </a>
                   </article>
                 )}

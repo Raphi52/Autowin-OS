@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { Spinner } from './Spinner'
+import { useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
 
 export type CapabilityKind = 'skills' | 'hooks' | 'gates' | 'tools' | 'plugins'
 type Kind = CapabilityKind
@@ -22,31 +23,33 @@ interface Item {
 
 type RelatedItem = Item & { relationKind: 'hook' | 'tool'; relationSource: string }
 
-const META: Record<Kind, { title: string; empty: string; description: string }> = {
+// `title` : nom de la section de Settings, le même dans les deux langues. `empty` et `description`
+// sont des clés de `textes-ecrans/settings.ts` (traduction anglaise, conv-1170).
+const META: Record<Kind, { title: string; empty: CleSettings; description: CleSettings }> = {
   skills: {
     title: 'Skills',
-    empty: 'Aucune skill trouvée.',
-    description: 'Les procédures que les agents peuvent suivre dans chaque run.'
+    empty: 'capacites.skills.vide',
+    description: 'capacites.skills.description'
   },
   hooks: {
     title: 'Hooks',
-    empty: 'Aucun hook configuré.',
-    description: 'Les scripts lancés tout seuls à certains moments d’un run, côté Claude ou Codex.'
+    empty: 'capacites.hooks.vide',
+    description: 'capacites.hooks.description'
   },
   gates: {
     title: 'Gates',
-    empty: 'Aucun contrôle de fin de run.',
-    description: 'Les contrôles de fin de run, écrits en code.'
+    empty: 'capacites.gates.vide',
+    description: 'capacites.gates.description'
   },
   tools: {
     title: 'Tools',
-    empty: 'Aucun toolset trouvé.',
-    description: 'Les outils que les agents ont vraiment utilisés, et le catalogue local.'
+    empty: 'capacites.tools.vide',
+    description: 'capacites.tools.description'
   },
   plugins: {
     title: 'Mods',
-    empty: 'Aucun mod ni plugin enregistré.',
-    description: 'Les mods et plugins installés et déclarés.'
+    empty: 'capacites.plugins.vide',
+    description: 'capacites.plugins.description'
   }
 }
 
@@ -77,6 +80,9 @@ export function CapabilitiesView({
   active: boolean
   kind?: Kind
 }): React.JSX.Element {
+  // Textes dans la langue de Settings · Interface (conv-1170). Ce qui vient des registres (noms,
+  // descriptions, sources, matchers, événements) reste tel quel.
+  const { t } = useTextesSettings()
   const [items, setItems] = useState<Item[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -93,7 +99,8 @@ export function CapabilitiesView({
   const [relationCatalog, setRelationCatalog] = useState<RelatedItem[]>([])
   // L'échec d'UNE source de relations ne doit ni vider le catalogue ni polluer la liste principale :
   // il est agrégé partiellement et SIGNALÉ ici.
-  const [relationSourcesDown, setRelationSourcesDown] = useState<string[]>([])
+  // Des CLÉS de texte, traduites à l'affichage : la langue peut changer après le chargement.
+  const [relationSourcesDown, setRelationSourcesDown] = useState<CleSettings[]>([])
 
   useEffect(() => {
     if (!active) return
@@ -136,31 +143,31 @@ export function CapabilitiesView({
     if (!active) return
     let current = true
     const sources: Array<{
-      label: string
+      label: CleSettings
       relationKind: 'hook' | 'tool'
       relationSource: string
       load: () => Promise<Item[]>
     }> = [
       {
-        label: 'Hooks Claude',
+        label: 'capacites.relations.hooksClaude',
         relationKind: 'hook',
         relationSource: 'Claude',
         load: () => window.api.claudeHooks()
       },
       {
-        label: 'Hooks Codex',
+        label: 'capacites.relations.hooksCodex',
         relationKind: 'hook',
         relationSource: 'Codex',
         load: () => window.api.codexHooks()
       },
       {
-        label: 'Hooks Autowin',
+        label: 'capacites.relations.hooksAutowin',
         relationKind: 'hook',
         relationSource: 'Autowin',
         load: () => window.api.capabilityControls('hooks')
       },
       {
-        label: 'Tools Autowin',
+        label: 'capacites.relations.toolsAutowin',
         relationKind: 'tool',
         relationSource: 'Autowin',
         load: () => window.api.capabilityControls('tools')
@@ -169,7 +176,7 @@ export function CapabilitiesView({
     void Promise.allSettled(sources.map((source) => source.load())).then((results) => {
       if (!current) return
       const catalog: RelatedItem[] = []
-      const down: string[] = []
+      const down: CleSettings[] = []
       results.forEach((result, index) => {
         const source = sources[index]
         if (result.status === 'fulfilled') {
@@ -270,29 +277,26 @@ export function CapabilitiesView({
     <section className="capability-cockpit">
       <header className="cockpit-header">
         <ModuleHeader
-          eyebrow="Capacités connectées"
+          eyebrow={t('capacites.eyebrow')}
           title={META[kind].title}
-          description={META[kind].description}
+          description={t(META[kind].description)}
         />
         <div className="cockpit-toolbar">
           <input
             className="input"
             value={query}
-            placeholder="Rechercher une capacité…"
+            placeholder={t('capacites.recherche')}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
       </header>
 
       {error && <div className="control-error">{error}</div>}
-      {restartRequired && (
-        <div className="control-notice">
-          Changement enregistré · nouvelle session ou redémarrage requis.
-        </div>
-      )}
+      {restartRequired && <div className="control-notice">{t('capacites.redemarrage')}</div>}
 
       <div className="cockpit-shell">
         <aside className="cockpit-sources">
+          {/* « Sources » : le même mot dans les deux langues. */}
           <h2>Sources</h2>
           {kind === 'skills' ? (
             <>
@@ -300,9 +304,9 @@ export function CapabilitiesView({
                 className={skillSource === 'all' ? 'is-active' : ''}
                 onClick={() => setSkillSource('all')}
               >
-                <b>Toutes</b>
+                <b>{t('capacites.toutes')}</b>
                 <strong>{items.length}</strong>
-                <small>Registre synchronisé</small>
+                <small>{t('capacites.registreSynchronise')}</small>
               </button>
               {skillSources.map((source) => (
                 <button
@@ -316,7 +320,7 @@ export function CapabilitiesView({
                 </button>
               ))}
               <button className="is-future" disabled>
-                <b>＋ Source future</b>
+                <b>{t('capacites.sourceFuture')}</b>
               </button>
             </>
           ) : kind === 'hooks' ? (
@@ -328,7 +332,7 @@ export function CapabilitiesView({
               >
                 <b>{source.label}</b>
                 {hookModel === source.id && <strong>{items.length}</strong>}
-                <small>Hooks {source.label}</small>
+                <small>{t('capacites.hooksDe', { source: source.label })}</small>
               </button>
             ))
           ) : kind === 'tools' ? (
@@ -337,79 +341,82 @@ export function CapabilitiesView({
                 className={toolSource === 'real' ? 'is-active' : ''}
                 onClick={() => setToolSource('real')}
               >
-                <b>Actions réelles</b>
+                <b>{t('capacites.actionsReelles')}</b>
                 {toolSource === 'real' && <strong>{items.length}</strong>}
-                <small>Exécutées par les agents</small>
+                <small>{t('capacites.executeesParAgents')}</small>
               </button>
               <button
                 className={toolSource === 'catalog' ? 'is-active' : ''}
                 onClick={() => setToolSource('catalog')}
               >
-                <b>Catalogue local</b>
+                <b>{t('capacites.catalogueLocal')}</b>
                 {toolSource === 'catalog' && <strong>{items.length}</strong>}
-                <small>Décoratif · non invoqué</small>
+                <small>{t('capacites.decoratif')}</small>
               </button>
             </>
           ) : (
             <button className="is-active">
-              <b>{kind === 'gates' ? 'Autowin' : 'Registre local'}</b>
+              <b>{kind === 'gates' ? 'Autowin' : t('capacites.registreLocal')}</b>
               <strong>{items.length}</strong>
               <small>
-                {kind === 'gates'
-                  ? 'Contrôles de fin de run (code)'
-                  : 'Mods et plugins installés et déclarés'}
+                {kind === 'gates' ? t('capacites.gates.source') : t('capacites.plugins.source')}
               </small>
             </button>
           )}
 
-          <h2 className="status-title">État</h2>
+          <h2 className="status-title">{t('capacites.etat')}</h2>
           <button
             className={statusFilter === 'enabled' ? 'is-active' : ''}
             onClick={() => setStatusFilter(statusFilter === 'enabled' ? 'all' : 'enabled')}
           >
-            <b>Actives</b>
+            <b>{t('capacites.actives')}</b>
             <strong className="is-green">{enabledCount}</strong>
           </button>
           <button
             className={statusFilter === 'disabled' ? 'is-active' : ''}
             onClick={() => setStatusFilter(statusFilter === 'disabled' ? 'all' : 'disabled')}
           >
-            <b>Désactivées</b>
+            <b>{t('capacites.desactivees')}</b>
             <strong>{effectiveItems.length - enabledCount}</strong>
           </button>
         </aside>
 
         <main className="cockpit-registry">
           <div className="registry-heading">
-            <span>{META[kind].title} disponibles</span>
+            <span>{t('capacites.disponibles', { titre: META[kind].title })}</span>
             <span>
-              {filtered.length} résultat{filtered.length > 1 ? 's' : ''}
+              {t(filtered.length > 1 ? 'capacites.resultats' : 'capacites.resultat', {
+                n: filtered.length
+              })}
             </span>
           </div>
           <div className="control-list">
             {loading ? (
               <p className="control-empty">
-                <Spinner /> Lecture des sources…
+                <Spinner /> {t('capacites.lecture')}
               </p>
             ) : filtered.length === 0 && hiddenByStatus > 0 ? (
               <div className="control-empty">
                 <p>
-                  {hiddenByStatus} capacité{hiddenByStatus > 1 ? 's' : ''} existe
-                  {hiddenByStatus > 1 ? 'nt' : ''} mais {hiddenByStatus > 1 ? 'sont' : 'est'}{' '}
-                  masquée
-                  {hiddenByStatus > 1 ? 's' : ''} par le filtre d’état.
+                  {t(hiddenByStatus > 1 ? 'capacites.masquees' : 'capacites.masquee', {
+                    n: hiddenByStatus
+                  })}
                 </p>
                 <button
                   type="button"
                   data-testid="capabilities-reveal-disabled"
                   onClick={() => setStatusFilter('all')}
                 >
-                  Afficher les {hiddenByStatus}{' '}
-                  {statusFilter === 'enabled' ? 'désactivées' : 'actives'}
+                  {t(
+                    statusFilter === 'enabled'
+                      ? 'capacites.afficherDesactivees'
+                      : 'capacites.afficherActives',
+                    { n: hiddenByStatus }
+                  )}
                 </button>
               </div>
             ) : filtered.length === 0 ? (
-              <p className="control-empty">{META[kind].empty}</p>
+              <p className="control-empty">{t(META[kind].empty)}</p>
             ) : (
               filtered.map((item) => (
                 <article
@@ -423,7 +430,9 @@ export function CapabilitiesView({
                     <p>{item.description}</p>
                     {(item.scope || item.matcher) && (
                       <div className="control-hook-meta">
-                        {item.scope && <em>{item.scope === 'global' ? 'Global' : 'Projet'}</em>}
+                        {item.scope && (
+                          <em>{item.scope === 'global' ? 'Global' : t('capacites.projet')}</em>
+                        )}
                         {item.matcher && <code>matcher: {item.matcher}</code>}
                       </div>
                     )}
@@ -439,7 +448,7 @@ export function CapabilitiesView({
                   </span>
                   {kind === 'tools' && toolSource === 'real' ? (
                     // Actions réellement exécutées = lecture seule (observabilité, pas d'admin).
-                    <span className="control-usage-count" title="Occurrences observées">
+                    <span className="control-usage-count" title={t('capacites.occurrences')}>
                       ×{(item as { count?: number }).count ?? ''}
                     </span>
                   ) : kind === 'tools' ? (
@@ -450,7 +459,7 @@ export function CapabilitiesView({
                       aria-checked={item.enabled}
                       className={`control-toggle ${item.enabled ? 'is-on' : ''}`}
                       disabled={busy === item.id}
-                      title="Activer ou désactiver cet outil dans le registre natif"
+                      title={t('capacites.basculerOutil')}
                       onClick={(event) => {
                         event.stopPropagation()
                         void toggle(item)
@@ -462,9 +471,9 @@ export function CapabilitiesView({
                     // Skills/hooks = lecture seule (état lu du registre natif, pas d'admin ici).
                     <span
                       className={`control-status-tag ${item.enabled ? 'is-on' : ''}`}
-                      title="État lu du registre (lecture seule)"
+                      title={t('capacites.etatLu')}
                     >
-                      {item.enabled ? 'Actif' : 'Inactif'}
+                      {item.enabled ? t('capacites.actif') : t('capacites.inactif')}
                     </span>
                   )}
                 </article>
@@ -474,15 +483,20 @@ export function CapabilitiesView({
           {!loading && kind === 'skills' && selected && (
             <section className="related-capabilities">
               <div className="registry-heading">
-                <span>Hooks & tools associés à {selected.label}</span>
+                <span>{t('capacites.associes', { nom: selected.label })}</span>
+                {/* « relation(s) » : le même mot dans les deux langues. */}
                 <span>
                   {relations.length} relation{relations.length > 1 ? 's' : ''}
                 </span>
               </div>
               {relationSourcesDown.length > 0 && (
                 <p className="control-notice" data-testid="relations-partial">
-                  Catalogue de relations partiel : {relationSourcesDown.join(', ')} indisponible
-                  {relationSourcesDown.length > 1 ? 's' : ''}.
+                  {t(
+                    relationSourcesDown.length > 1
+                      ? 'capacites.relationsPartielPluriel'
+                      : 'capacites.relationsPartiel',
+                    { liste: relationSourcesDown.map((cle) => t(cle)).join(', ') }
+                  )}
                 </p>
               )}
               <div className="related-list">
@@ -504,7 +518,7 @@ export function CapabilitiesView({
                     </button>
                   ))
                 ) : (
-                  <p>Aucune relation explicite détectée dans les déclarations.</p>
+                  <p>{t('capacites.aucuneRelation')}</p>
                 )}
               </div>
             </section>
@@ -512,7 +526,7 @@ export function CapabilitiesView({
         </main>
 
         <aside className="cockpit-inspector">
-          <h2>Inspecteur</h2>
+          <h2>{t('capacites.inspecteur')}</h2>
           {selected ? (
             <>
               <div className="inspector-hero">
@@ -525,20 +539,22 @@ export function CapabilitiesView({
                     (kind === 'hooks' ? hookModel : 'Autowin')}
                 </span>
                 <h3>{selected.label}</h3>
-                <p>{selected.enabled ? 'Active' : 'Désactivée'}</p>
+                <p>{selected.enabled ? 'Active' : t('capacites.desactivee')}</p>
               </div>
               <dl>
                 <div>
-                  <dt>Origine</dt>
+                  <dt>{t('capacites.origine')}</dt>
                   <dd>{selected.source || (kind === 'hooks' ? hookModel : 'Autowin')}</dd>
                 </div>
                 <div>
-                  <dt>Portée</dt>
-                  <dd>{selected.scope === 'project' ? 'Projet' : 'Globale'}</dd>
+                  <dt>{t('capacites.portee')}</dt>
+                  <dd>
+                    {selected.scope === 'project' ? t('capacites.projet') : t('capacites.globale')}
+                  </dd>
                 </div>
                 {selected.event && (
                   <div>
-                    <dt>Événement</dt>
+                    <dt>{t('capacites.evenement')}</dt>
                     <dd>{selected.event}</dd>
                   </div>
                 )}
@@ -552,7 +568,7 @@ export function CapabilitiesView({
                 )}
                 {kind === 'skills' && (
                   <div>
-                    <dt>Liée à</dt>
+                    <dt>{t('capacites.lieeA')}</dt>
                     <dd>
                       {relations.filter((item) => item.relationKind === 'hook').length} hooks ·{' '}
                       {relations.filter((item) => item.relationKind === 'tool').length} tools
@@ -560,21 +576,23 @@ export function CapabilitiesView({
                   </div>
                 )}
                 <div>
-                  <dt>Gestion</dt>
-                  <dd>{kind === 'tools' ? 'Registre natif' : 'Lecture seule'}</dd>
+                  <dt>{t('capacites.gestion')}</dt>
+                  <dd>
+                    {kind === 'tools' ? t('capacites.registreNatif') : t('capacites.lectureSeule')}
+                  </dd>
                 </div>
               </dl>
               <div className="inspector-impact">
-                <b>Impact du changement</b>
+                <b>{t('capacites.impact')}</b>
                 <p>
                   {kind === 'tools'
-                    ? 'Modifie le registre natif ; peut nécessiter une nouvelle session pour prise en compte.'
-                    : 'Capacité en lecture seule ici : son état est lu du registre, non modifiable depuis cette vue.'}
+                    ? t('capacites.impact.tools')
+                    : t('capacites.impact.lectureSeule')}
                 </p>
               </div>
             </>
           ) : (
-            <p className="control-empty">Sélectionne une capacité pour afficher ses détails.</p>
+            <p className="control-empty">{t('capacites.selectionner')}</p>
           )}
         </aside>
       </div>

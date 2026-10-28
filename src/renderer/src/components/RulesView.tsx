@@ -1,4 +1,5 @@
 import { ProdProtectionSettings } from './ProdProtectionSettings'
+import { useTextesSettings } from '../textes-ecrans/settings'
 
 /**
  * ONGLET « RULES » DE SETTINGS — les règles d'Autowin OS.
@@ -12,8 +13,9 @@ const REGLES_AUTOWIN_OS: ReadonlyArray<{ id: string; Panneau: () => React.JSX.El
 ]
 
 export function RulesView(): React.JSX.Element {
+  const { t } = useTextesSettings()
   return (
-    <div className="settings-rules" aria-label="Rules d’Autowin OS" data-testid="settings-rules">
+    <div className="settings-rules" aria-label={t('rules.aria')} data-testid="settings-rules">
       {REGLES_AUTOWIN_OS.map(({ id, Panneau }) => (
         <Panneau key={id} />
       ))}

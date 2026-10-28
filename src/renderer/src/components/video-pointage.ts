@@ -17,6 +17,7 @@
  * - Le temps ÉCRIT dans la référence est le DÉBUT de l'image (N / fps), pas la cible de
  *   déplacement (N + 0,5) / fps : l'image 372 s'écrit `00:12.40`, pas `00:12.41`.
  */
+import { formaterNombre } from '../langue'
 
 /** Repli quand ffprobe n'a pas pu mesurer les images/s : affiché comme « supposé », jamais tu. */
 export const FPS_SUPPOSE = 30
@@ -32,11 +33,15 @@ export function fpsValide(valeur: unknown): number | undefined {
 
 /**
  * Cadence à AFFICHER : ffprobe mesure les cadences NTSC en fraction (30000/1001), que le texte
- * brut rendait « 29.97002997002997 ». Arrondie au millième (23,976 · 29,97 · 59,94), virgule
- * décimale ; le calcul des images garde la valeur exacte.
+ * brut rendait « 29.97002997002997 ». Arrondie au millième (23,976 · 29,97 · 59,94), séparateur
+ * décimal de la langue (virgule en français, point en anglais — conv-1170) ; le calcul des images
+ * garde la valeur exacte.
  */
 export function libelleCadence(fps: number): string {
-  return String(Math.round(fps * 1000) / 1000).replace('.', ',')
+  return formaterNombre(Math.round(fps * 1000) / 1000, {
+    maximumFractionDigits: 3,
+    useGrouping: false
+  })
 }
 
 /** Nombre d'images d'une vidéo de `duree` secondes, ou `undefined` si la durée est inconnue. */
@@ -77,7 +82,11 @@ export interface MomentVideo {
   chemin: string
 }
 
-/** `[vidéo <nom> · 00:12.40 · image 372/1188 · <chemin>]` — ce que l'agent relit. */
+/**
+ * `[vidéo <nom> · 00:12.40 · image 372/1188 · <chemin>]` — ce que l'agent relit. RESTE EN FRANÇAIS
+ * quelle que soit la langue de l'app (conv-1170) : son format est décrit à l'agent mot pour mot
+ * (outil `show_video`), et une référence traduite ne serait plus reconnue.
+ */
 export function referenceVideo(moment: MomentVideo): string {
   const image = moment.total === undefined ? `${moment.image}` : `${moment.image}/${moment.total}`
   const suppose = moment.fpsSuppose ? ` · ${moment.fps} i/s supposé` : ''

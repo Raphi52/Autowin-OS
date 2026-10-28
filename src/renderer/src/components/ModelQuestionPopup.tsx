@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import './ModelQuestionPopup.css'
 
 interface PendingQuestion {
@@ -10,6 +11,7 @@ interface PendingQuestion {
 }
 
 export function ModelQuestionPopup(): React.JSX.Element | null {
+  const { t } = useTextesArtefactsEtBandeaux()
   const [queue, setQueue] = useState<PendingQuestion[]>([])
   const [answer, setAnswer] = useState('')
   const [sending, setSending] = useState(false)
@@ -60,7 +62,9 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
       // croire que sa réponse était partie : le bouton se réactivait, rien ne s'affichait, et la
       // réponse saisie était perdue en silence. On garde la saisie ET on dit que ça a échoué.
       setSendError(
-        `La réponse n'a pas pu être envoyée : ${error instanceof Error ? error.message : String(error)}. Réessaie.`
+        t('question.echecEnvoi', {
+          erreur: error instanceof Error ? error.message : String(error)
+        })
       )
     } finally {
       setSending(false)
@@ -74,9 +78,9 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
           <span className={`model-question-source ${current.source}`}>
             {current.source === 'loop' ? 'Loop Builder' : 'Chat'}
           </span>
-          {queue.length > 1 && <small>{queue.length} questions en attente</small>}
+          {queue.length > 1 && <small>{t('question.enAttente', { nombre: queue.length })}</small>}
         </header>
-        <h2>Le modèle a besoin de toi</h2>
+        <h2>{t('question.titre')}</h2>
         {current.context && <div className="model-question-context">{current.context}</div>}
         <p>{current.text}</p>
         {current.options.length > 0 && (
@@ -89,12 +93,12 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
           </div>
         )}
         <label>
-          Réponse libre
+          {t('question.reponseLibre')}
           <textarea
             ref={inputRef}
             value={answer}
             disabled={sending}
-            placeholder="Répondre au modèle…"
+            placeholder={t('question.placeholder')}
             onChange={(event) => setAnswer(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) void submit()
@@ -107,7 +111,7 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
           </p>
         ) : null}
         <footer>
-          <small>Ctrl + Entrée pour envoyer · Échap pour passer</small>
+          <small>{t('question.raccourcis')}</small>
           <div className="model-question-actions">
             <button
               type="button"
@@ -115,10 +119,10 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
               disabled={sending}
               onClick={() => window.close()}
             >
-              Passer
+              {t('question.passer')}
             </button>
             <button disabled={!answer.trim() || sending} onClick={() => void submit()}>
-              {sending ? 'Transmission…' : 'Répondre et reprendre'}
+              {sending ? t('question.transmission') : t('question.repondre')}
             </button>
           </div>
         </footer>

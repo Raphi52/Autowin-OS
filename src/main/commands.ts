@@ -864,12 +864,12 @@ export const CATALOG: CommandSpec[] = [
     /*
      * SUPER CONVERSATION (conv-1150, 2026-10-26) — `plans-de-lots-app.ts`. conv-1146 avait confié
      * 113 écrans à un seul agent. Ton fil devient CHEF : l'app ouvre un fil par lot, au plus 3 à la
-     * fois, et te réveille à chaque fin de lot avec son compte rendu. Rien ne part sans le clic de
-     * l'utilisateur sur le plan entier.
+     * fois, et te réveille à chaque fin de lot avec son compte rendu. Depuis conv-1171, le plan part
+     * dès son dépôt, sans clic d'accord ; l'utilisateur garde « Arrêter » dans le tableau.
      */
     name: 'plan_de_lots',
     description:
-      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : tu proposes un plan de 2 à 20 lots (fichiers séparés ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » : il ne part qu'une fois ses prérequis faits, et un prérequis en échec le bloque jusqu'à sa relance) ; RIEN ne part avant que l'utilisateur clique « Lancer le plan » dans le tableau de ton fil. Ensuite l'app ouvre un fil par lot (au plus 3 en même temps), y envoie sa demande, et te réveille à chaque fin de lot avec son compte rendu (messages de tes fils) : tu vérifies, tu relances un lot en échec (action « relancer »), et tu rends le bilan assemblé à la fin. Action « etat » : le tableau du plan. Une tâche courte ou d'un seul tenant n'en a pas besoin : un lot par fil coûte un tour.",
+      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : tu proposes un plan de 2 à 20 lots (fichiers séparés ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » : il ne part qu'une fois ses prérequis faits, et un prérequis en échec le bloque jusqu'à sa relance) ; le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter dans le tableau de ton fil) : ne dépose donc que pour un vrai chantier. L'app ouvre un fil par lot (au plus 3 en même temps), y envoie sa demande, et te réveille à chaque fin de lot avec son compte rendu (messages de tes fils) : tu vérifies, tu relances un lot en échec (action « relancer »), et tu rends le bilan assemblé à la fin. Action « etat » : le tableau du plan. Une tâche courte ou d'un seul tenant n'en a pas besoin : un lot par fil coûte un tour.",
     args: {
       action: 'deposer|etat|relancer (défaut : deposer si « plan » est donné, sinon etat)',
       plan: 'pour deposer — { "titre", "parallele" (1 à 3, défaut 3), "plafondTours" (défaut 2 par lot : le tour du lot et une relance), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue ; 4 000 caractères au plus), "fichiers": [chemins prévus], "apres": [numéros des lots à attendre — facultatif, sans cycle] } ] }',

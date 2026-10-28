@@ -11,45 +11,39 @@ const regle = (morceau: string): string => {
   for (const m of styles.matchAll(/([^{}]+){([^}]*)}/g)) if (m[1].includes(morceau)) return m[2]
   return ''
 }
-const ms = (valeur: string): number =>
-  valeur.endsWith('ms') ? parseFloat(valeur) : parseFloat(valeur) * 1000
 
 /**
- * LA CARTE NE PASSE JAMAIS SUR LE TEXTE PENDANT LE DÉFILEMENT (conv-1193, 2026-10-28 : « la
- * scrollbar repasse là en overlay pendant que je scroll au lieu de décaler »).
+ * LE TEXTE NE SE RÉAGENCE JAMAIS QUAND LA CARTE S'OUVRE (conv-1193, 2026-10-28 : « je veux pas que
+ * ça envoie des mots à la ligne comme ça »).
  *
- * Le fil se poussait en 800 ms par une transition de `padding-right` : chaque image relance la mise
- * en page du fil ENTIER. Mesuré dans l'app (copie cachée, conv-1139, 45 000 px de fil) : 130 à
- * 240 ms par image pendant la poussée, soit ~7 images/s. Les aperçus et la carte, eux, s'animent sans
- * attendre la mise en page : ils apparaissaient sur un texte pas encore poussé (aperçus posés sur le
- * texte immobile pendant 470 ms, page occupée 0,6 s).
- * Donc : à l'ouverture, la place est réservée D'UN COUP, dans la même image où la carte commence à
- * se dévoiler ; au repli, le texte ne reprend sa largeur qu'une fois la carte rentrée.
- * Happy-dom ne calcule aucune mise en page : la règle est vérifiée dans la feuille ; la preuve à
- * l'écran est la sonde image par image (D:/tmp/sonde-overlay).
+ * Deux demandes à tenir ensemble : la carte ne passe pas sur le texte (conv-1114, puis conv-1193
+ * « la scrollbar repasse là en overlay pendant que je scroll au lieu de décaler »), ET le texte ne
+ * change pas de largeur — sinon les lignes se recoupent à l'ouverture, des mots passent à la ligne
+ * suivante, puis reviennent au repli. La seule forme qui tient les deux : la place de la carte
+ * ouverte est réservée EN PERMANENCE à droite du fil, et l'ouverture n'y change rien.
+ * (Avant : marge 12 px au repos, 80 px carte ouverte — poussée en 800 ms, puis d'un coup.)
+ * Happy-dom ne calcule aucune mise en page : la règle est vérifiée dans la feuille.
  */
-describe('ascenseur du fil — la conversation est décalée avant que la carte ne s’ouvre', () => {
-  const ouvert = regle("[data-ascenseur='deplie']")
+describe('ascenseur du fil — la largeur du texte ne dépend pas de la carte', () => {
   const repos = regle('.chat-scroll.chat-scroll--ascenseur,')
 
-  it('à l’ouverture, la marge réservée s’applique sans transition', () => {
-    expect(ouvert).toMatch(/padding-right:\s*var\(--adf-reserve/)
-    expect(ouvert).toMatch(/transition:\s*none/)
+  // Carte de 36 px + 8 d'écart : largeur divisée par 2 (conv-1202, « divise par 2 la largeur de la
+  // barre […] pour gagner de la place pour le contenu du chat ») — avant 72 + 8 = 80 px.
+  it('la place de la carte ouverte est réservée au repos', () => {
+    expect(repos).toMatch(/padding-right:\s*var\(--adf-reserve,\s*44px\)\s*!important/)
   })
 
-  it('au repli, le texte reprend sa largeur d’un coup, seulement après que la carte est rentrée', () => {
-    const transition = /transition:\s*padding-right\s+([\d.]+m?s)\s+\S+\s+([\d.]+m?s)/.exec(repos)
-    expect(transition, repos).not.toBeNull()
-    const [, duree, delai] = transition!
-    expect(ms(duree)).toBe(0)
-    // La carte rentre par `clip-path` et s'efface par `opacity` (délai compris) : le plus long des deux.
-    const carte = regle('.adf-carte')
-    const fin = Math.max(
-      ...[
-        ...carte.matchAll(/(?:clip-path|opacity)\s+([\d.]+m?s)(?:\s+[^\s,;]+)?(?:\s+([\d.]+m?s))?/g)
-      ].map((m) => ms(m[1]) + (m[2] ? ms(m[2]) : 0))
-    )
-    expect(fin).toBeGreaterThan(0)
-    expect(ms(delai)).toBeGreaterThanOrEqual(fin)
+  it('la carte ouverte fait 36 px, et la réserve par défaut 44 px', () => {
+    expect(regle('.adf.is-deplie')).toMatch(/width:\s*36px/)
+    expect(regle('@property --adf-reserve')).toMatch(/initial-value:\s*44px/)
+  })
+
+  it('aucune règle ne change la marge du fil quand la carte s’ouvre', () => {
+    for (const m of styles.matchAll(/([^{}]+){([^}]*)}/g))
+      if (m[1].includes('data-ascenseur')) expect(m[2], m[1]).not.toMatch(/padding/)
+  })
+
+  it('aucune transition de marge : rien ne bouge à l’ouverture ni au repli', () => {
+    expect(styles).not.toMatch(/transition:[^;]*padding/)
   })
 })

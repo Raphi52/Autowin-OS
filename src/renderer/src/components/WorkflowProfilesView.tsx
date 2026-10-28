@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { formaterNombre, langueCourante } from '../langue'
+import { traduireAgentStudio, useTextesAgentStudio } from '../textes-ecrans/agent-studio'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
 import { profileSummary, promptEffectif } from './workflow-profile-summary'
 import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
@@ -229,23 +231,31 @@ function dureeLisible(ms: number): string {
   return `${Math.round(ms / 1000)} s`
 }
 
+/** Deux décimales, sans séparateur de milliers : « 0,55 $ » en français, « $0.55 » en anglais. */
 function coutLisible(usd: number): string {
-  return `${usd.toFixed(2).replace('.', ',')} $`
+  const montant = formaterNombre(usd, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false
+  })
+  return traduireAgentStudio('wf.cout', langueCourante(), { montant })
 }
 
 /** La ligne affichee sous le nom du workflow. Une phrase pure, donc lisible et testable. */
 function phraseMesures(nom: string, duels: Record<string, AgregatDuels>): string {
+  const langue = langueCourante()
   const m = mesuresPour(nom, duels)
-  if (!m || m.duels === 0) return 'Arène : aucune mesure enregistrée'
+  if (!m || m.duels === 0) return traduireAgentStudio('wf.arene.aucune', langue)
+  // Les verdicts sont ceux du journal des duels, tels qu'il les écrit : une donnée, pas un libellé.
   const verdicts = Object.entries(m.verdicts)
     .map(([verdict, n]) => `${n} ${verdict}`)
     .join(', ')
-  const duree = dureeLisible(m.dureeMedianeMs)
-  const cout = coutLisible(m.coutMedianUsd)
-  const pluriel = m.duels > 1 ? 's' : ''
-  return `Arène : ${m.duels} duel${pluriel} · ${duree} médian · ${cout} médian${
-    verdicts ? ` · ${verdicts}` : ''
-  }`
+  return traduireAgentStudio(m.duels > 1 ? 'wf.arene.plusieurs' : 'wf.arene.un', langue, {
+    n: m.duels,
+    duree: dureeLisible(m.dureeMedianeMs),
+    cout: coutLisible(m.coutMedianUsd),
+    verdicts: verdicts ? ` · ${verdicts}` : ''
+  })
 }
 
 /**
@@ -265,30 +275,59 @@ interface ResultatsReels {
   coutMedianUsd?: number
 }
 
-function pluriel(n: number, mot: string, motPluriel = `${mot}s`): string {
-  return `${n} ${n > 1 ? motPluriel : mot}`
+type CleDeTexteAgentStudio = Parameters<typeof traduireAgentStudio>[0]
+
+/**
+ * Un message posé APRÈS une attente (échec d'IPC, renommage retombé 300 ms plus tard) : la langue
+ * se lit au moment où il naît, pas à celui du rendu qui a lancé l'appel.
+ */
+function texteMaintenant(
+  cle: CleDeTexteAgentStudio,
+  valeurs?: Record<string, string | number>
+): string {
+  return traduireAgentStudio(cle, langueCourante(), valeurs)
+}
+
+/** `n` suivi du mot au singulier jusqu'à 1, au pluriel au-delà — chaque forme a sa clé. */
+function pluriel(n: number, un: CleDeTexteAgentStudio, plusieurs = un): string {
+  return traduireAgentStudio(n > 1 ? plusieurs : un, langueCourante(), { n })
 }
 
 function phraseResultatsReels(nom: string, reels: Record<string, ResultatsReels>): string {
+  const langue = langueCourante()
+  const ici = (cle: CleDeTexteAgentStudio, valeurs?: Record<string, string | number>): string =>
+    traduireAgentStudio(cle, langue, valeurs)
   const cible = nom.trim().toLowerCase()
   const r = Object.entries(reels).find(([k]) => k.trim().toLowerCase() === cible)?.[1]
-  if (!r || r.runs === 0) return 'Usage réel : aucun run enregistré sous ce nom'
-  const morceaux = [pluriel(r.runs, 'run')]
+  if (!r || r.runs === 0) return ici('wf.reels.aucun')
+  const morceaux = [pluriel(r.runs, 'wf.reels.run.un', 'wf.reels.run.plusieurs')]
   const allesAuBout = r.abouties + r.echecs
-  const issues = [pluriel(r.abouties, 'abouti'), `${r.echecs} en échec`]
+  const issues = [
+    pluriel(r.abouties, 'wf.reels.abouti.un', 'wf.reels.abouti.plusieurs'),
+    ici('wf.reels.echecs', { n: r.echecs })
+  ]
   morceaux.push(
     allesAuBout > 0
-      ? `${issues.join(', ')} (${Math.round((r.abouties / allesAuBout) * 100)} % de réussite)`
+      ? ici('wf.reels.taux', {
+          issues: issues.join(', '),
+          taux: Math.round((r.abouties / allesAuBout) * 100)
+        })
       : issues.join(', ')
   )
-  if (r.interrompues > 0) morceaux.push(`${pluriel(r.interrompues, 'interrompu')}, hors taux`)
-  if (r.nonCloses > 0) morceaux.push(pluriel(r.nonCloses, 'non clos', 'non clos'))
-  if (r.dureeMedianeMs !== undefined) morceaux.push(`${dureeLisible(r.dureeMedianeMs)} médian`)
-  if (r.coutMedianUsd !== undefined) morceaux.push(`${coutLisible(r.coutMedianUsd)} médian`)
-  return `Usage réel : ${morceaux.join(' · ')}`
+  if (r.interrompues > 0)
+    morceaux.push(
+      pluriel(r.interrompues, 'wf.reels.interrompu.un', 'wf.reels.interrompu.plusieurs')
+    )
+  if (r.nonCloses > 0) morceaux.push(pluriel(r.nonCloses, 'wf.reels.nonClos'))
+  if (r.dureeMedianeMs !== undefined)
+    morceaux.push(ici('wf.reels.median', { valeur: dureeLisible(r.dureeMedianeMs) }))
+  if (r.coutMedianUsd !== undefined)
+    morceaux.push(ici('wf.reels.median', { valeur: coutLisible(r.coutMedianUsd) }))
+  return ici('wf.reels.phrase', { morceaux: morceaux.join(' · ') })
 }
 
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
+  const { t } = useTextesAgentStudio()
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   /** Duels deja mesures, par nom de workflow. Lecture seule : rien n'est rejoue ici. */
   const [duels, setDuels] = useState<Record<string, AgregatDuels>>({})
@@ -355,7 +394,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         if (!cancelled && next) setFile(next as ProfilesFile)
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(`Impossible de lire les workflows : ${raison(reason)}`)
+        if (!cancelled) setError(texteMaintenant('wf.erreur.lecture', { raison: raison(reason) }))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -371,7 +410,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       const next = (await window.api.workflowProfileSelect?.(id)) as ProfilesFile | undefined
       if (next) setFile(next)
     } catch (reason) {
-      setError(`La sélection n’a pas pu être enregistrée : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.selection', { raison: raison(reason) }))
     }
   }
 
@@ -382,7 +421,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       if (next) setFile(next)
       if (editingId === id) setEditingId(null)
     } catch (reason) {
-      setError(`La suppression a échoué : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.suppression', { raison: raison(reason) }))
     }
   }
 
@@ -392,7 +431,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       const next = (await window.api.workflowProfileSave?.(profile)) as ProfilesFile | undefined
       if (next) setFile(next)
     } catch (reason) {
-      setError(`L’enregistrement a échoué : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.enregistrement', { raison: raison(reason) }))
     }
   }
 
@@ -430,7 +469,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         },
         (reason: unknown) => {
           if (version !== persistVersionRef.current) return
-          setError(`Le renommage a échoué : ${raison(reason)}`)
+          setError(texteMaintenant('wf.erreur.renommage', { raison: raison(reason) }))
           // Rollback visible : le champ retrouve le nom réellement persisté.
           setNames((current) => oublier(current, profile.id))
         }
@@ -469,10 +508,11 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     try {
       const res = await window.api.workflowProfilesExport?.(id)
       // Une annulation n'est pas une erreur : on ne crie pas quand l'utilisateur ferme la boîte.
+      // `'annulé'` : la raison qu'écrit le processus principal, comparée ici — elle reste en français.
       if (res && !res.ok && res.reason && res.reason !== 'annulé')
-        setError(`Export : ${res.reason}`)
+        setError(texteMaintenant('wf.erreur.exportRaison', { raison: res.reason }))
     } catch (reason) {
-      setError(`L’export a échoué : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.export', { raison: raison(reason) }))
     }
   }
 
@@ -483,17 +523,21 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       if (!res) return
       if (res.file) setFile(res.file)
       if (!res.ok && res.reason && res.reason !== 'annulé') {
-        setError(`Import : ${res.reason}`)
+        setError(texteMaintenant('wf.erreur.importRaison', { raison: res.reason }))
         return
       }
       // Ce qui a été ÉCARTÉ se dit : un import silencieux qui perd la moitié du fichier ment.
       if (res.rejected?.length) {
         setError(
-          `${res.imported ?? 0} workflow(s) importé(s) ; ${res.rejected.length} écarté(s) : ${res.rejected.join(', ')}`
+          texteMaintenant('wf.erreur.importEcartes', {
+            importes: res.imported ?? 0,
+            ecartes: res.rejected.length,
+            liste: res.rejected.join(', ')
+          })
         )
       }
     } catch (reason) {
-      setError(`L’import a échoué : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.import', { raison: raison(reason) }))
     }
   }
 
@@ -507,11 +551,12 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     try {
       const next = (await window.api.workflowProfileSave?.({
         id: `workflow-${rang}`,
+        // Un nom ENREGISTRÉ dans le profil, pas un libellé : il ne change pas avec la langue.
         name: `Workflow ${rang}`
       })) as ProfilesFile | undefined
       if (next) setFile(next)
     } catch (reason) {
-      setError(`La création a échoué : ${raison(reason)}`)
+      setError(texteMaintenant('wf.erreur.creation', { raison: raison(reason) }))
     }
   }
 
@@ -519,15 +564,14 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     <section className="workflow-profiles" data-testid="workflow-profiles-view">
       <header className="workflow-profiles-head">
         <div>
+          {/* « Workflows » : le même mot en anglais. */}
           <h2>Workflows</h2>
-          <p className="workflow-profiles-sub">
-            Une façon de travailler nommée — modèles, efforts, phases, consignes.
-          </p>
+          <p className="workflow-profiles-sub">{t('wf.sousTitre')}</p>
         </div>
         <div className="workflow-profiles-actions">
           <button type="button" onClick={() => void importer()} data-testid="workflow-import">
             <Icone nom="import" />
-            Importer
+            {t('wf.importer')}
           </button>
           <button
             type="button"
@@ -536,11 +580,11 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
             disabled={file.profiles.length === 0}
           >
             <Icone nom="export" />
-            Tout exporter
+            {t('wf.toutExporter')}
           </button>
           <button type="button" onClick={() => void create()} data-testid="workflow-create">
             <Icone nom="plus" />
-            Nouveau
+            {t('wf.nouveau')}
           </button>
         </div>
       </header>
@@ -563,9 +607,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
             role="alert"
             data-testid="workflow-active-unrunnable"
           >
-            Workflow « {actifProfil.name} » imposé au chat mais NON EXÉCUTABLE :{' '}
-            {soucis.join(' ; ')}. Il ne sera pas joué — corrige-le ou re-clique-le pour le
-            désélectionner.
+            {t('wf.actif.injouable', { nom: actifProfil.name, soucis: soucis.join(' ; ') })}
           </p>
         ) : null
       })()}
@@ -579,9 +621,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         const actifProfil = file.profiles.find((p) => p.id === file.activeId)
         return actifProfil ? (
           <p className="workflow-profiles-sub" role="note" data-testid="workflow-active-default">
-            « {actifProfil.name} » est le workflow par défaut : le choix automatique passe avant
-            lui, et il ne pilote que les demandes pour lesquelles ce choix n’en propose aucun.
-            Re-clique-le pour n’avoir aucun workflow par défaut.
+            {t('wf.actif.parDefaut', { nom: actifProfil.name })}
           </p>
         ) : null
       })()}
@@ -595,12 +635,11 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           aria-busy="true"
           data-testid="workflow-loading"
         >
-          <Spinner /> Chargement des workflows…
+          <Spinner /> {t('wf.chargement')}
         </p>
       ) : file.profiles.length === 0 && !loading ? (
         <p className="workflow-profiles-empty" data-testid="workflow-empty">
-          Aucun workflow pour l’instant. Crée-en un pour figer une façon de travailler et pouvoir la
-          comparer à une autre.
+          {t('wf.vide')}
         </p>
       ) : (
         <ul className="workflow-profiles-list">
@@ -646,8 +685,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     // de le choisir lui-même. Ouvrir l'éditeur n'est ni l'un ni l'autre.
                     title={
                       bloque
-                        ? `Non exécutable : ${issues.join(' ; ')}`
-                        : `Imposer ${profile.name} au chat — la case à côté dit seulement si le chat a le droit de l’invoquer lui-même, et le bouton Éditer n’impose rien`
+                        ? t('wf.imposer.bloque', { soucis: issues.join(' ; ') })
+                        : t('wf.imposer.titre', { nom: profile.name })
                     }
                     // Re-cliquer le workflow imposé le DÉSÉLECTIONNE. C'est le seul chemin qui reste
                     // vers « aucun workflow imposé » depuis que la ligne « Configuration courante » a
@@ -662,17 +701,17 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                         className="workflow-profile-name"
                         data-testid={`workflow-rename-${profile.id}`}
                         value={nom}
-                        aria-label={`Nom du workflow ${profile.name}`}
+                        aria-label={t('wf.renommer.aria', { nom: profile.name })}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => rename(profile, e.target.value)}
                       />
-                      {actif && <span className="wf-badge is-on">actif</span>}
+                      {actif && <span className="wf-badge is-on">{t('wf.badge.actif')}</span>}
                       {issues.length > 0 && (
                         <span
                           className="wf-badge is-broken"
                           data-testid={`workflow-unrunnable-${profile.id}`}
                         >
-                          non exécutable
+                          {t('wf.badge.injouable')}
                         </span>
                       )}
                       <span className="workflow-profile-summary">{profileSummary(profile)}</span>
@@ -687,10 +726,10 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     className="workflow-profile-toggle"
                     title={
                       issues.length > 0
-                        ? `Non exécutable : ${issues.join(' ; ')} — le chat ne peut pas l’invoquer tant que ce n’est pas corrigé`
+                        ? t('wf.invocable.bloque', { soucis: issues.join(' ; ') })
                         : profile.enabled === false
-                          ? `${profile.name} : le chat ne peut pas l’invoquer`
-                          : `${profile.name} : le chat peut l’invoquer`
+                          ? t('wf.invocable.non', { nom: profile.name })
+                          : t('wf.invocable.oui', { nom: profile.name })
                     }
                   >
                     <input
@@ -700,7 +739,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                       // choisir seul : l'échec ne venait alors d'aucun geste de l'utilisateur.
                       disabled={issues.length > 0}
                       checked={profile.enabled !== false}
-                      aria-label={`Rendre ${profile.name} invocable par le chat`}
+                      aria-label={t('wf.invocable.aria', { nom: profile.name })}
                       onChange={(e) => void save({ ...profile, enabled: e.target.checked })}
                     />
                   </label>
@@ -711,18 +750,18 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     className="workflow-profile-action"
                     data-testid={`workflow-edit-${profile.id}`}
                     aria-pressed={editingId === profile.id}
-                    title={`Ouvrir l’éditeur de ${profile.name} sans l’imposer au chat`}
-                    aria-label={`Ouvrir l’éditeur de ${profile.name}`}
+                    title={t('wf.editer.titre', { nom: profile.name })}
+                    aria-label={t('wf.editer.aria', { nom: profile.name })}
                     onClick={() => setEditingId(editingId === profile.id ? null : profile.id)}
                   >
-                    Éditer
+                    {t('wf.editer')}
                   </button>
                   <button
                     type="button"
                     className="workflow-profile-action"
                     data-testid={`workflow-export-${profile.id}`}
-                    title={`Exporter ${profile.name}`}
-                    aria-label={`Exporter ${profile.name}`}
+                    title={t('wf.exporter', { nom: profile.name })}
+                    aria-label={t('wf.exporter', { nom: profile.name })}
                     onClick={() => void exporter(profile.id)}
                   >
                     <Icone nom="export" />
@@ -733,9 +772,9 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     <span
                       className="workflow-profile-confirm"
                       role="alertdialog"
-                      aria-label={`Confirmer la suppression de ${profile.name}`}
+                      aria-label={t('wf.supprimer.confirmerAria', { nom: profile.name })}
                     >
-                      <span>Supprimer ?</span>
+                      <span>{t('wf.supprimer.question')}</span>
                       <button
                         type="button"
                         className="workflow-profile-action is-danger"
@@ -745,7 +784,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                           void remove(profile.id)
                         }}
                       >
-                        Oui
+                        {t('wf.oui')}
                       </button>
                       <button
                         type="button"
@@ -753,7 +792,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                         data-testid={`workflow-remove-cancel-${profile.id}`}
                         onClick={() => setConfirmRemoveId(null)}
                       >
-                        Non
+                        {t('wf.non')}
                       </button>
                     </span>
                   ) : (
@@ -761,8 +800,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                       type="button"
                       className="workflow-profile-action is-danger"
                       data-testid={`workflow-remove-${profile.id}`}
-                      title={`Supprimer ${profile.name}`}
-                      aria-label={`Supprimer ${profile.name}`}
+                      title={t('wf.supprimer', { nom: profile.name })}
+                      aria-label={t('wf.supprimer', { nom: profile.name })}
                       onClick={() => setConfirmRemoveId(profile.id)}
                     >
                       <Icone nom="poubelle" />
@@ -791,8 +830,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                         <b>{ligne.role}</b> → {ligne.modele}{' '}
                         <em>
                           {ligne.origine === 'workflow'
-                            ? '(imposé par ce workflow)'
-                            : '(topologie)'}
+                            ? t('wf.role.workflow')
+                            : t('wf.role.topologie')}
                         </em>
                       </li>
                     ))}
@@ -806,23 +845,27 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     data-testid={`workflow-prompt-${profile.id}`}
                   >
                     <summary>
-                      Prompt effectif
+                      {t('wf.prompt')}
                       {profile.instructions?.mode === 'replace' ? (
                         <span
                           className="wf-badge is-broken"
                           data-testid={`workflow-prompt-replace-${profile.id}`}
                         >
-                          remplace les consignes de phase
+                          {t('wf.prompt.remplace')}
                         </span>
                       ) : (
-                        <span className="wf-badge">s’ajoute aux consignes de phase</span>
+                        <span className="wf-badge">{t('wf.prompt.ajoute')}</span>
                       )}
                     </summary>
                     <ul>
                       {promptEffectif(profile).map((ligne) => (
                         <li key={`${ligne.phase}-${ligne.origine}`}>
                           <b>{ligne.phase}</b>{' '}
-                          <em>{ligne.origine === 'phase' ? '(consigne de phase)' : '(globale)'}</em>
+                          <em>
+                            {ligne.origine === 'phase'
+                              ? t('wf.prompt.phase')
+                              : t('wf.prompt.globale')}
+                          </em>
                           <blockquote>{ligne.texte}</blockquote>
                         </li>
                       ))}

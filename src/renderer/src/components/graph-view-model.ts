@@ -1,4 +1,7 @@
 import type { MetierGraphe } from '../../../main/viz/fs-brains'
+import type { Langue } from '../../../shared/langue'
+import { formaterNombre, langueCourante } from '../langue'
+import { traduireKnowledge } from '../textes-ecrans/knowledge'
 
 export type GraphNode = {
   id: string
@@ -25,19 +28,27 @@ export type GraphNode = {
   z?: number
 }
 
+/**
+ * Arrondi par `toFixed` (l'arrondi d'avant, au millième près), séparateur décimal de la langue
+ * courante (conv-1170 : la virgule était écrite en dur). Sans séparateur de milliers, comme avant.
+ */
 function formatBrainScore(value: number | undefined): string {
   return typeof value === 'number' && Number.isFinite(value)
-    ? value.toFixed(3).replace('.', ',')
+    ? formaterNombre(Number(value.toFixed(3)), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false
+      })
     : '—'
 }
 
 export function brainScoreChannelLabel(node: GraphNode): string {
-  return [
-    `dense ${formatBrainScore(node.denseScore)}`,
-    `lexical ${formatBrainScore(node.lexicalScore)}`,
-    `graphe ${formatBrainScore(node.graphScore)}`,
-    `fusion ${formatBrainScore(node.fusedScore)}`
-  ].join(' · ')
+  return traduireKnowledge('modele.scores', langueCourante(), {
+    dense: formatBrainScore(node.denseScore),
+    lexical: formatBrainScore(node.lexicalScore),
+    graphe: formatBrainScore(node.graphScore),
+    fusion: formatBrainScore(node.fusedScore)
+  })
 }
 export type GraphLink = {
   source: string | GraphNode
@@ -197,7 +208,9 @@ export function graphLinkArrowColor(mode: GraphVisualMode): string {
 export function buildThemeSummaries(
   nodes: GraphNode[],
   declaredThemes: ThemeDefinition[] = [],
-  metier?: MetierGraphe
+  metier?: MetierGraphe,
+  /** Langue des libellés « Thème N » : la passer fait recalculer un `useMemo` qui en dépend. */
+  langue: Langue = langueCourante()
 ): ThemeSummary[] {
   const counts = new Map<string, number>()
   for (const node of nodes) {
@@ -207,7 +220,7 @@ export function buildThemeSummaries(
     const declaredIds = new Set(declaredThemes.map((theme) => theme.id))
     const dynamicThemes = [...counts.entries()]
       .filter(([id]) => id.startsWith('theme/') && !declaredIds.has(id))
-      .map(([id, count]) => ({ id, label: themeLabel(id, metier), count }))
+      .map(([id, count]) => ({ id, label: themeLabel(id, langue, metier), count }))
       .sort((a, b) => a.id.localeCompare(b.id))
     return [
       ...declaredThemes.map((theme) => ({ ...theme, count: counts.get(theme.id) ?? 0 })),
@@ -215,7 +228,7 @@ export function buildThemeSummaries(
     ]
   }
   return [...counts.entries()]
-    .map(([id, count]) => ({ id, label: themeLabel(id, metier), count }))
+    .map(([id, count]) => ({ id, label: themeLabel(id, langue, metier), count }))
     .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
 }
 
@@ -524,13 +537,13 @@ export function dynamicGraphForKey(
 }
 
 /** Libelle d'un theme ; celui du domaine metier de l'entreprise (profil) porte son libelle. */
-function themeLabel(id: string, metier?: MetierGraphe): string {
+function themeLabel(id: string, langue: Langue, metier?: MetierGraphe): string {
   if (metier && id === `theme/${metier.cle}`) return metier.libelle
   if (id.startsWith('theme/')) {
     const value = id.slice('theme/'.length)
     return value.charAt(0).toUpperCase() + value.slice(1)
   }
-  return `Thème ${id.slice('community/'.length)}`
+  return traduireKnowledge('modele.theme', langue, { numero: id.slice('community/'.length) })
 }
 
 function endpointId(endpoint: string | GraphNode): string {

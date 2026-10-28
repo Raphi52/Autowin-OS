@@ -589,12 +589,37 @@ const CALCUL_POSE = new RegExp(
   'gu'
 )
 
+/*
+ * LA QUESTION EN ANGLAIS (conv-1197, 2026-10-28). L'interface peut être en anglais, et l'utilisateur
+ * y écrit « how many », « count », « number of » : rien de tout cela n'était lu comme une demande de
+ * compte, donc un chiffre deviné sans lecture sortait sans relance. Mêmes précautions qu'en français :
+ * les tournures où « count » ou « number » ne demandent rien (« count on », « count as », « a number
+ * of » = plusieurs) sont retirées d'abord, et un calcul posé (« how many is 2 + 2 ») n'est pas un compte.
+ */
+const EXPRESSIONS_ANGLAISES_SANS_DEMANDE_DE_COMPTE =
+  /\bcount(?:s|ed|ing)?\s+(?:on|upon|as|me\s+in)\b|\ba\s+(?:(?:large|small|certain|good|great|huge)\s+)?number\s+of\b/g
+const MOT_NOMBRE_ANGLAIS = String.raw`(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand)`
+const NOMBRE_ANGLAIS = String.raw`\(?\s*(?:-?\d+(?:[.,]\d+)?|(?<![\p{L}])${MOT_NOMBRE_ANGLAIS}(?:[-\s]+${MOT_NOMBRE_ANGLAIS})*(?![\p{L}]))\s*\)?`
+const OPERATEUR_ANGLAIS = String.raw`(?:[-+*/×÷x^]|plus|minus|times|(?:divided|multiplied)\s+by)`
+const CALCUL_POSE_ANGLAIS = new RegExp(
+  String.raw`\bhow\s+(?:many|much)\s+(?:is|are|makes?|does|do|equals?)\s+` +
+    String.raw`${NOMBRE_ANGLAIS}(?:\s*${OPERATEUR_ANGLAIS}\s*${NOMBRE_ANGLAIS})+`,
+  'gu'
+)
+
 function demandeUnCompte(texte: string): boolean {
   const q = texte
     .toLowerCase()
     .replace(EXPRESSIONS_SANS_DEMANDE_DE_COMPTE, ' ')
+    .replace(EXPRESSIONS_ANGLAISES_SANS_DEMANDE_DE_COMPTE, ' ')
     .replace(CALCUL_POSE, ' ')
+    .replace(CALCUL_POSE_ANGLAIS, ' ')
   return (
+    /\bhow\s+many\b/.test(q) ||
+    /\bnumber\s+of\b/.test(q) ||
+    /\bcount(?:s|ed|ing)?\b/.test(q) ||
+    /\blist(?:s|ed|ing)?\b/.test(q) ||
+    /\binventory\b/.test(q) ||
     /\bcombien\b/.test(q) ||
     /\bnombre\b/.test(q) ||
     /\bcompte[rz]?\b/.test(q) ||
@@ -885,13 +910,22 @@ export function exigeCorrigerEtPoursuivre(echecNonCorrige: boolean, reponse: str
    * et a l'inverse un agent qui declarait correctement la tache hors de sa portee, sans employer un
    * mot de la liste, se faisait relancer deux fois puis accuser de tourner en rond.
    */
+  /*
+   * Chaque forme a sa jumelle ANGLAISE (conv-1197, 2026-10-28) : l'agent répond en anglais quand
+   * l'interface l'est, et « I need your approval » ou « Should I…? » ne désarmaient plus rien —
+   * un mur réel, dit honnêtement, était relancé comme un abandon.
+   */
   const demandeExpliciteALHumain =
     /(il me faut|j[’']ai besoin d|n[ée]cessite|requiert|exige)[^.]{0,40}(autoris|accord|droits?|feu vert|validation|mot de passe|identifiant)/i.test(
+      texte
+    ) ||
+    /\b(I need|requires?|need your)\b[^.]{0,40}\b(permission|approv|authori[sz]|consent|rights?|go-ahead|green light|password|credentials?)/i.test(
       texte
     )
   const questionSuspensive =
     texte.includes('?') &&
-    /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
+    (/(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte) ||
+      /\b(should I|shall I|do you want|would you like|can I|may I|do you confirm)\b/i.test(texte))
   /*
    * `impossible` ne desarme plus la reprise par sa seule PRESENCE. Defaut mesure le 2026-08-22 :
    * « le patch a echoue, la ligne visee est impossible a localiser » decrivait l'echec lui-meme, et
@@ -901,6 +935,9 @@ export function exigeCorrigerEtPoursuivre(echecNonCorrige: boolean, reponse: str
    */
   const declareHorsDePortee =
     /(n[’']existe pas|je ne peux pas|m[’']est impossible|impossible (?:de|d[’'])\s*(?:le |la |les |l[’'])?(?:faire|continuer|proc[ée]der|acc[ée]der)|hors de (ma|mon) (port[ée]e|p[ée]rim[èe]tre)|pas dans mon p[ée]rim[èe]tre)/i.test(
+      texte
+    ) ||
+    /\b(does(?: not|n[’']t) exist|I can(?:not|[’']t)|I(?: am|[’']m) unable to|it(?: is|[’']s) impossible (?:for me )?to|out(?:side)? of my (?:scope|reach)|beyond my (?:scope|reach))\b/i.test(
       texte
     )
   return !(demandeExpliciteALHumain || questionSuspensive || declareHorsDePortee)
@@ -930,7 +967,14 @@ function sansAccents(texte: string): string {
  * Les mots par lesquels une reponse AVOUE un echec. Une seule liste, partagee par la detection
  * d'aveu et par le retrait des negations : deux listes desynchronisees etaient le defaut d'origine.
  */
-const MOTS_DECHEC = 'echou|echec|erreur|impossible|refus|bloqu|probleme|souci'
+// Les mots anglais (conv-1197, 2026-10-28) : « the edit failed » n'était pas lu comme un aveu, et
+// l'agent honnête qui répond en anglais était relancé pour un échec qu'il venait de nommer.
+const MOTS_DECHEC =
+  'echou|echec|erreur|impossible|refus|bloqu|probleme|souci|fail|error|unable|denied|blocked|problem'
+
+/** Aveux en tournure verbale, hors liste de mots : « n'a pas pu », « couldn't », « didn't work ». */
+const TOURNURES_DECHEC =
+  "n[’']a pas (?:pu|fonctionne)|could(?:n[’']t| not)|was(?:n[’']t| not) able|did(?:n[’']t| not) work"
 
 /**
  * NIER un echec n'est pas l'avouer — et la NEGATION est une CLASSE, pas une liste de couples.
@@ -953,8 +997,12 @@ const MOTS_DECHEC = 'echou|echec|erreur|impossible|refus|bloqu|probleme|souci'
  * echangerait un faux negatif rare contre un faux positif courant. Signale plutot que corrige de
  * travers.
  */
+/*
+ * Négateurs anglais (conv-1197) : « no errors », « nothing failed », « didn't fail ». Le « n't » n'est
+ * négateur qu'après un AUXILIAIRE (did, has, was…) : « couldn't fix the error » reste un aveu.
+ */
 const NEGATIONS_DECHEC = new RegExp(
-  `(?:rien|aucune?|pas|sans|jamais|nulle?|zero|0)\\b(?:\\W+\\w+){0,2}\\W+(?:${MOTS_DECHEC})\\w*`,
+  `(?:rien|aucune?|pas|sans|jamais|nulle?|zero|0|\\b(?:no|not|without|never|none|nothing)|\\b(?:did|does|do|has|have|had|was|were|is|are)n[’']t)\\b(?:\\W+\\w+){0,2}\\W+(?:${MOTS_DECHEC})\\w*`,
   'gi'
 )
 
@@ -964,9 +1012,7 @@ export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boo
   if (!texte) return false // le tour muet a sa propre garde
   // Retire d'abord ce qui NIE un echec : ce qui reste, s'il reste un mot, est un vrai aveu.
   const sansNegations = sansAccents(texte).replace(NEGATIONS_DECHEC, ' ')
-  const nommeLEchec = new RegExp(`(?:${MOTS_DECHEC}|n[’']a pas (?:pu|fonctionne))`, 'i').test(
-    sansNegations
-  )
+  const nommeLEchec = new RegExp(`(?:${MOTS_DECHEC}|${TOURNURES_DECHEC})`, 'i').test(sansNegations)
   return !nommeLEchec
 }
 
@@ -1000,15 +1046,26 @@ export function exigeAgirPasAnnoncer(
   if (!texte) return false // le tour muet a sa propre garde
   const q = (question ?? '').toLowerCase()
   // Un verbe d'ACTION à l'impératif ou à l'infinitif : l'utilisateur demande un effet, pas un avis.
+  /*
+   * Les deux côtés ont leur forme ANGLAISE (conv-1197, 2026-10-28) : l'interface en anglais fait
+   * répondre l'agent en anglais, et « I'll first identify… » récité sans agir passait inaperçu.
+   */
   const demandeUneAction =
     /\b(range|classe|cr[ée]e|ajoute|modifie|corrige|r[ée]pare|supprime|renomme|impl[ée]mente|fais|lance|applique|configure|installe|d[ée]place)/i.test(
+      q
+    ) ||
+    /\b(sort|organi[sz]e|create|add|modify|change|fix|repair|delete|remove|rename|implement|run|launch|apply|configure|install|move|build|update)\b/i.test(
       q
     )
   if (!demandeUneAction) return false
   // La marque du plan récité : « je vais », « je cible maintenant », « je commence par »…
   const annonceAuFutur =
     /\bje (vais|commence|cible|compte|prévois|m[’']apprête)\b/i.test(texte) ||
-    /\bje (procède|démarre|attaque) (maintenant|par)\b/i.test(texte)
+    /\bje (procède|démarre|attaque) (maintenant|par)\b/i.test(texte) ||
+    /\bI(?:[’']ll| will| am going to|[’']m going to| am about to|[’']m about to| plan to)\b/i.test(
+      texte
+    ) ||
+    /\b(?:let me|I(?:[’']ll| will)) (?:start|begin|first|now)\b/i.test(texte)
   return annonceAuFutur
 }
 
@@ -1320,13 +1377,17 @@ export function exigePreuveAvantDePromettre(reponse: string, uneActionAEuLieu: b
     ) ||
     /\bje (?:te |vous )?(?:dirai|préviendrai|previendrai|informerai|recontacte|recontacterai)\b/i.test(
       texte
+    ) ||
+    // Les mêmes promesses en anglais (conv-1197, 2026-10-28), l'agent répondant dans la langue choisie.
+    /\bI(?:[’']ll| will) (?:get back to you|come back to you|report back|keep you (?:posted|updated|informed|in the loop)|let you know|update you|ping you)\b/i.test(
+      texte
     )
   if (promesseFigee) return true
   // Famille B — verbe de RESTITUTION à la 1re personne ET marqueur d'ATTENTE, dans la même phrase.
   const RESTITUTION =
-    /\bje (?:te |vous )?(?:rends|rendrai|redonne|redonnerai|donne|donnerai|livre|livrerai|rapporte|rapporterai|remets|remettrai|poste|posterai)\b/i
+    /\bje (?:te |vous )?(?:rends|rendrai|redonne|redonnerai|donne|donnerai|livre|livrerai|rapporte|rapporterai|remets|remettrai|poste|posterai)\b|\bI(?:[’']ll| will) (?:give|send|deliver|post|share|hand|bring|return)\b/i
   const ATTENTE =
-    /\b(?:dès qu|des qu|dès que|des que|quand (?:il|elle|ce|ça|ca)|une fois qu|à la fin|a la fin|au retour|ensuite)/i
+    /\b(?:dès qu|des qu|dès que|des que|quand (?:il|elle|ce|ça|ca)|une fois qu|à la fin|a la fin|au retour|ensuite|as soon as|once (?:it|the|this|that)|when (?:it|the|this|that)|at the end|afterwards)/i
   return texte
     .split(/(?<=[.!?])\s+|\n+/u)
     .some((phrase) => RESTITUTION.test(phrase) && ATTENTE.test(phrase))
@@ -1404,15 +1465,22 @@ export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): bool
   if (!bureauUtilise) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false
-  if (/\b(?:mot de passe|password|mfa|authenticator|empreinte|code (?:reçu )?par sms)\b/i.test(texte))
+  if (
+    /\b(?:mot de passe|password|mfa|authenticator|empreinte|fingerprint|code (?:reçu )?par sms|sms code)\b/i.test(
+      texte
+    )
+  )
     return false
-  const rubrique = /(?:^|\n)\s*\**\s*(?:à|a) faire\b/i.test(texte)
+  // Chaque forme a sa jumelle anglaise (conv-1197, 2026-10-28) : « To do: 1. Go to Brave… ».
+  const rubrique = /(?:^|\n)\s*\**\s*(?:(?:à|a) faire|to ?do|next steps?)\b/i.test(texte)
   const GESTE =
-    /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne)\b/i
+    /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne|go to|open|click|enter|type|paste|press|select)\b/i
   // Tournure sans rubrique (« il te reste à entrer le code », « à toi de saisir… »).
   const RENVOI =
     /(?:^|[\s(«])(?:il te reste à|il ne te reste (?:plus )?qu[’']à|à toi de|tu n[’']as plus qu[’']à|tu dois)\s+(?:aller|ouvrir|cliquer|saisir|taper|entrer|coller|appuyer|sélectionner)(?![a-zà-ÿ])/i
-  return (rubrique && GESTE.test(texte)) || RENVOI.test(texte)
+  const RENVOI_ANGLAIS =
+    /(?:^|[\s("])(?:you still need to|all you (?:have|need) to do is|it[’']s up to you to|you just need to|you need to|you must|you have to)\s+(?:go|open|click|enter|type|paste|press|select)\b/i
+  return (rubrique && GESTE.test(texte)) || RENVOI.test(texte) || RENVOI_ANGLAIS.test(texte)
 }
 
 export const RELANCE_FAIRE_LE_GESTE =

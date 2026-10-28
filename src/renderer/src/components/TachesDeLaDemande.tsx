@@ -16,21 +16,28 @@ import type {
   ResultatDuRattachement,
   WorkItemDeLaDemande
 } from '../../../shared/carte-des-besoins'
+import type { Langue } from '../../../shared/langue'
+import {
+  traduireBoardEtMaintenance,
+  useTextesBoardEtMaintenance,
+  type CleBoardEtMaintenance
+} from '../textes-ecrans/board-et-maintenance'
 import { Spinner } from './Spinner'
 import './TachesDeLaDemande.css'
 
-const ORIGINES: Record<WorkItemDeLaDemande['origine'], string> = {
-  tickets: 'fil ouvert depuis la vue Tickets pour cette fiche',
-  mention: 'numéro écrit dans le prompt, fiche lue à la source',
-  manuel: 'rattaché à la main'
+const ORIGINES: Record<WorkItemDeLaDemande['origine'], CleBoardEtMaintenance> = {
+  tickets: 'taches.origine.tickets',
+  mention: 'taches.origine.mention',
+  manuel: 'taches.origine.manuel'
 }
 
-function aide(w: WorkItemDeLaDemande): string {
-  const origine = w.herite
-    ? 'repris de la demande précédente (ce prompt la poursuit)'
-    : ORIGINES[w.origine]
+function aide(w: WorkItemDeLaDemande, langue: Langue): string {
+  const origine = traduireBoardEtMaintenance(
+    w.herite ? 'taches.herite' : ORIGINES[w.origine],
+    langue
+  )
   const type = w.type ? `${w.type} · ` : ''
-  return `${type}${origine}${w.titre ? '' : ' · titre pas encore lu à la source'}`
+  return `${type}${origine}${w.titre ? '' : traduireBoardEtMaintenance('taches.titreNonLu', langue)}`
 }
 
 /** Une source de tickets configurée, telle que le champ « + task » la propose (conv-1127). */
@@ -59,6 +66,7 @@ export function TachesDeLaDemande({
    */
   sources?: readonly SourceDeTache[]
 }): React.JSX.Element {
+  const { t, langue } = useTextesBoardEtMaintenance()
   const [ouvert, setOuvert] = useState(false)
   const [saisie, setSaisie] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
@@ -106,7 +114,7 @@ export function TachesDeLaDemande({
             data-testid="tache"
             data-origine={w.origine}
             data-herite={w.herite ? '1' : undefined}
-            title={aide(w)}
+            title={aide(w, langue)}
           >
             <b>#{w.id}</b>
             {w.titre && <span className="tache-titre">{w.titre}</span>}
@@ -115,8 +123,8 @@ export function TachesDeLaDemande({
                 type="button"
                 className="tache-detacher"
                 data-testid="tache-detacher"
-                aria-label={`Détacher #${w.id}`}
-                title="Détacher cette task de la demande"
+                aria-label={t('taches.detacher', { id: w.id })}
+                title={t('taches.detacher.aide')}
                 onClick={() => void delier(demande, w)}
               >
                 ×
@@ -126,7 +134,7 @@ export function TachesDeLaDemande({
         ))
       ) : (
         <span className="tache-sans" data-testid="tache-sans">
-          sans task
+          {t('taches.sans')}
         </span>
       )}
       {lier && !ouvert && (
@@ -134,9 +142,10 @@ export function TachesDeLaDemande({
           type="button"
           className="tache-bouton"
           data-testid="tache-lier"
-          title="Lier cette demande à un work item"
+          title={t('taches.lier.aide')}
           onClick={() => setOuvert(true)}
         >
+          {/* « task » est déjà le mot anglais : le libellé reste le même dans les deux langues. */}
           + task
         </button>
       )}
@@ -146,8 +155,8 @@ export function TachesDeLaDemande({
             <select
               className="tache-source"
               data-testid="tache-source"
-              aria-label="Source du work item"
-              title="Dans quelle source chercher ce numéro"
+              aria-label={t('taches.source')}
+              title={t('taches.source.aide')}
               value={source}
               disabled={enCours}
               onChange={(e) => setSourceChoisie(e.target.value)}
@@ -162,8 +171,8 @@ export function TachesDeLaDemande({
           <input
             className="tache-saisie"
             data-testid="tache-saisie"
-            aria-label="Numéro du work item"
-            placeholder="1234 ou #1234"
+            aria-label={t('taches.numero')}
+            placeholder={t('taches.numero.exemple')}
             inputMode="numeric"
             autoFocus
             value={saisie}
@@ -187,14 +196,14 @@ export function TachesDeLaDemande({
           >
             {enCours ? (
               <>
-                <Spinner size={12} /> Lecture…
+                <Spinner size={12} /> {t('taches.lecture')}
               </>
             ) : (
-              'Lier'
+              t('taches.lier')
             )}
           </button>
           <button type="button" className="tache-bouton is-discret" onClick={fermer}>
-            Annuler
+            {t('commun.annuler')}
           </button>
         </span>
       )}

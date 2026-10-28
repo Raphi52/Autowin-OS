@@ -6,6 +6,8 @@
  * quand la semaine est vide. Hors React, pour que ces règles soient testables sans monter d'interface
  * ni dépendre d'une vraie boîte aux lettres — ce qui serait intestable sur une machine d'intégration.
  */
+import { formaterDate, langueCourante } from '../langue'
+import { traduireAccueil } from '../textes-ecrans/accueil'
 
 /**
  * UNE pièce jointe telle que le script d'instantané la rapporte : son nom et sa taille, jamais son
@@ -223,7 +225,7 @@ export function groupByInterlocutor(
     const deMoi = Boolean(mail.deMoi)
     const message: MessageInterlocuteur = {
       id: mail.id,
-      sujet: mail.sujet || '(sans objet)',
+      sujet: mail.sujet || traduireAccueil('outlook.sansObjet', langueCourante()),
       corps: extraireCorpsUtile(mail.corps ?? ''),
       recuLe: instant,
       // Un message que l'utilisateur a lui-meme envoye n'est jamais « a lire » : le compter
@@ -328,7 +330,7 @@ export function splitAgenda(events: readonly OutlookRawEvent[], now: number): Ag
       if (!Number.isFinite(debut)) return null
       return {
         id: event.id,
-        sujet: event.sujet || '(sans titre)',
+        sujet: event.sujet || traduireAccueil('outlook.sansTitre', langueCourante()),
         lieu: event.lieu ?? '',
         debut,
         fin: Number.isFinite(fin) ? fin : debut,
@@ -353,13 +355,13 @@ export function splitAgenda(events: readonly OutlookRawEvent[], now: number): Ag
 
 /** Étiquette d'heure d'un rendez-vous, ou « journée » pour un événement sur la journée entière. */
 export function formatEventTime(entry: AgendaEntry): string {
-  if (entry.journeeEntiere) return 'journée'
-  return new Date(entry.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  if (entry.journeeEntiere) return traduireAccueil('outlook.journee', langueCourante())
+  return formaterDate(entry.debut, { hour: '2-digit', minute: '2-digit' })
 }
 
 /** Jour lisible, pour les rendez-vous qui ne sont pas aujourd'hui. */
 export function formatEventDay(entry: AgendaEntry): string {
-  return new Date(entry.debut).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })
+  return formaterDate(entry.debut, { weekday: 'short', day: 'numeric' })
 }
 
 
@@ -399,8 +401,8 @@ export function extraireCorpsUtile(corps: string): string {
 export function formatMessageDate(instant: number | null): string {
   if (instant === null || instant === 0) return ''
   const date = new Date(instant)
-  const jour = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-  const heure = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  const jour = formaterDate(date, { day: '2-digit', month: '2-digit' })
+  const heure = formaterDate(date, { hour: '2-digit', minute: '2-digit' })
   return `${jour} ${heure}`
 }
 
@@ -410,13 +412,13 @@ export function formatExchangeDate(instant: number | null, now: number): string 
   const jour = new Date(now)
   const debutJour = new Date(jour.getFullYear(), jour.getMonth(), jour.getDate()).getTime()
   if (instant >= debutJour) {
-    return new Date(instant).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    return formaterDate(instant, { hour: '2-digit', minute: '2-digit' })
   }
-  if (instant >= debutJour - JOUR_MS) return 'hier'
+  if (instant >= debutJour - JOUR_MS) return traduireAccueil('outlook.hier', langueCourante())
   if (instant >= debutJour - 6 * JOUR_MS) {
-    return new Date(instant).toLocaleDateString('fr-FR', { weekday: 'short' })
+    return formaterDate(instant, { weekday: 'short' })
   }
-  return new Date(instant).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  return formaterDate(instant, { day: '2-digit', month: '2-digit' })
 }
 
 /**
@@ -428,15 +430,18 @@ export function formatExchangeDate(instant: number | null, now: number): string 
  */
 export function parseOutlookResult(raw: unknown): OutlookResult {
   if (typeof raw !== 'object' || raw === null) {
-    return { ok: false, erreur: 'réponse illisible de la passerelle Outlook' }
+    return { ok: false, erreur: traduireAccueil('outlook.reponseIllisible', langueCourante()) }
   }
   const candidate = raw as Record<string, unknown>
   if (candidate.ok !== true) {
-    const erreur = typeof candidate.erreur === 'string' ? candidate.erreur : 'cause inconnue'
+    const erreur =
+      typeof candidate.erreur === 'string'
+        ? candidate.erreur
+        : traduireAccueil('outlook.causeInconnue', langueCourante())
     return { ok: false, erreur }
   }
   if (!Array.isArray(candidate.mails) || !Array.isArray(candidate.evenements)) {
-    return { ok: false, erreur: 'réponse incomplète de la passerelle Outlook' }
+    return { ok: false, erreur: traduireAccueil('outlook.reponseIncomplete', langueCourante()) }
   }
   return {
     ok: true,

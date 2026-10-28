@@ -33,7 +33,11 @@ export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   'etape-reflet',
   // Pastille « question en attente » de la liste des fils : colonne de points et « ? » (::before).
   'conv-asking-list',
-  'conv-asking-wiggle'
+  'conv-asking-wiggle',
+  // Lampe à lave d'Holographique (theme-nebuleuse-verre.css) : boutons, bulles, cadres et l'onglet
+  // ouvert du menu, qui la porte toute la journée — conv-1199. Calée ici, elle change d'image sur
+  // les mêmes crans que les autres indicateurs au lieu d'ajouter sa propre grille.
+  'nv-lave'
 ])
 
 /** Ce qu'on lit et écrit d'une animation : son nom CSS et son départ sur l'horloge du document. */

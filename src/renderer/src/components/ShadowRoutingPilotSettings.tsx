@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { langueCourante } from '../langue'
+import { riche } from '../textes'
+import { traduireSettings, useTextesSettings } from '../textes-ecrans/settings'
 import { ModuleHeader } from './ModuleHeader'
 
 interface PilotState {
@@ -21,6 +24,9 @@ function reason(error: unknown): string {
  * Le défaut reste OFF : aucune donnée n'est collectée sans ce clic.
  */
 export function ShadowRoutingPilotSettings(): React.JSX.Element {
+  // Messages posés dans l'état : traduits au moment où ils sont posés (`langueCourante`), comme
+  // BrainSettings ; les raisons venues du moteur restent telles quelles (conv-1170).
+  const { t } = useTextesSettings()
   const [state, setState] = useState<PilotState | null>(null)
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -29,14 +35,16 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
   const load = useCallback(async (): Promise<void> => {
     const read = window.api?.shadowRoutingPilot
     if (typeof read !== 'function') {
-      setLoadError("Le pilote de routage shadow n'est pas exposé par l'application.")
+      setLoadError(traduireSettings('shadow.nonExpose', langueCourante()))
       return
     }
     try {
       setState((await read()) as PilotState)
       setLoadError('')
     } catch (error) {
-      setLoadError(`Le réglage n'a pas pu être lu : ${reason(error)}`)
+      setLoadError(
+        traduireSettings('shadow.lectureEchec', langueCourante(), { raison: reason(error) })
+      )
     }
   }, [])
 
@@ -49,7 +57,7 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
   const toggle = async (enabled: boolean): Promise<void> => {
     const write = window.api?.setShadowRoutingPilot
     if (typeof write !== 'function') {
-      setMessage("La bascule n'est pas exposée par l'application.")
+      setMessage(t('shadow.basculeNonExposee'))
       return
     }
     setSaving(true)
@@ -57,13 +65,9 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
     try {
       const saved = (await write(enabled)) as PilotState
       setState(saved)
-      setMessage(
-        saved.active
-          ? 'Mesure active : chaque appel modèle est désormais rapproché de l’issue vérifiée de son run.'
-          : 'Mesure arrêtée : aucune nouvelle observation n’est enregistrée.'
-      )
+      setMessage(saved.active ? t('shadow.mesureActive') : t('shadow.mesureArretee'))
     } catch (error) {
-      setMessage(`L’enregistrement a échoué : ${reason(error)}`)
+      setMessage(t('shadow.enregistrementEchec', { raison: reason(error) }))
     } finally {
       setSaving(false)
     }
@@ -72,22 +76,16 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
   return (
     <section
       className="shadow-routing-pilot surface-panel"
-      aria-label="Pilote de routage shadow"
+      aria-label={t('shadow.aria')}
       data-testid="shadow-routing-pilot"
     >
-      <ModuleHeader eyebrow="Apprentissage du routage" title="Mesure des routes (pilote shadow)" />
-      <p>
-        Cochez pour que l’application mesure elle-même{' '}
-        <b>quelle route tient le vert au coût le plus bas</b> : pour chaque appel modèle, elle
-        enregistre le fournisseur, le modèle, la phase, le coût, la durée, puis l’issue{' '}
-        <b>vérifiée</b> du run. L’Observatory peut alors comparer les routes observées. Rien n’est
-        appliqué automatiquement : la recommandation reste un avis.
-      </p>
+      <ModuleHeader eyebrow={t('shadow.eyebrow')} title={t('shadow.titre')} />
+      <p>{riche(t('shadow.description'), 'b')}</p>
       {loadError && (
         <div className="domain-warning">
           <p role="alert">{loadError}</p>
           <button type="button" className="btn" onClick={() => void load()}>
-            Réessayer
+            {t('shadow.reessayer')}
           </button>
         </div>
       )}
@@ -99,13 +97,11 @@ export function ShadowRoutingPilotSettings(): React.JSX.Element {
           disabled={state === null || saving}
           onChange={(event) => void toggle(event.target.checked)}
         />
-        <span>Mesurer les routes (pilote shadow) — décoché, aucune donnée n’est collectée</span>
+        <span>{t('shadow.case')}</span>
       </label>
       {state?.envOverride != null && (
         <p className="domain-hint" role="status" data-testid="shadow-routing-pilot-env">
-          La variable d’environnement AUTOWIN_MODEL_ROUTING_SHADOW_ENABLED force actuellement le
-          pilote à {state.envOverride ? 'ACTIF' : 'INACTIF'} : elle l’emporte sur ce réglage
-          jusqu’au prochain démarrage sans elle.
+          {t('shadow.env', { etat: state.envOverride ? t('shadow.actif') : t('shadow.inactif') })}
         </p>
       )}
       {message && (
