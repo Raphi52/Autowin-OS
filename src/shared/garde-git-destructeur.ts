@@ -414,8 +414,9 @@ const messagesEnAttente = () => {
   } catch { return undefined; }
 };
 // ORIENTATIONS DE L'UTILISATEUR, REMISES EN PLEIN APPEL (conv-1241, shared/orientations-en-cours.ts).
-// conv-1240 (tour 2e218711, saisie ts 1793225455947) : un tour d'UN seul appel de 11 minutes n'a jamais
-// relu l'orientation tapée 3 s après ses étapes — la boucle pilote ne la relit qu'entre deux appels.
+// conv-1240 (tour 2e218711, saisie ts 1793225455947) : l'orientation tapée 3 s après les étapes a
+// attendu tout le premier appel (16 min, 22:10:38 → 22:27:00) et n'a été lue qu'au second (22:27:07) —
+// la boucle pilote ne la relit qu'entre deux appels.
 // Même chemin que les messages entre fils ; seules celles déposées depuis le début de CET appel
 // (« depuis », posé par Autowin dans reservation.json) partent. Toute panne = rien, jamais un refus.
 const orientationsEnAttente = () => {

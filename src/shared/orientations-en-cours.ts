@@ -3,11 +3,13 @@
  *
  * Mesure (conv-1240, tour 2e218711-cf9d-4a92-b161-b7840f791264) : l'utilisateur oriente à 22:10:55
  * (saisie ts 1793225455947, « et le petit model je dois pouvoir le changer dans agents studio »),
- * 3 s après que le modèle a posé ses étapes. Le tour entier tient en UN appel au CLI Claude (plus
- * de 11 minutes, 58 actions, itération 0 de bout en bout) : la boucle pilote ne relit les
+ * 3 s après que le modèle a posé ses étapes. Le premier appel au CLI Claude (itération 0) dure
+ * 16 min, de 22:10:38 à 22:27:00, pour 84 appels d'outil : la boucle pilote ne relit les
  * orientations (`pendingDirectives`) qu'ENTRE deux appels, et le CLI reçoit son prompt sur une
- * entrée standard aussitôt fermée. Le flux du modèle (`run-stdout/bb335db8-….stdout.jsonl`) ne
- * contient pas la phrase : les étapes ne pouvaient pas en tenir compte.
+ * entrée standard aussitôt fermée. Le flux de ce premier appel (`run-stdout/bb335db8-….stdout.jsonl`)
+ * ne la donne jamais au modèle ; elle n'est lue qu'au second appel (itération 1, 22:27:07), et
+ * l'étape qui en découle n'apparaît qu'à 22:28:51, une fois tout le reste fini (mesure relue sur
+ * `turn-journals/conv-1240/2e218711-….jsonl`, kaizen conv-1241 réparation 2).
  *
  * Le contrôle lancé avant chaque outil de l'agent remet déjà les messages entre fils
  * (`messages-entre-fils.ts`, `additionalContext`, banc réel du 2026-10-24) : les orientations prennent
