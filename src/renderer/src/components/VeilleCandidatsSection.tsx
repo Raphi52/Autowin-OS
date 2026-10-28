@@ -4,6 +4,8 @@ import type { StockVeille } from '../../../main/veille/candidats-store'
 import { trierParPertinence, type TriVeille } from './veille-tri'
 import './VeilleCandidatsSection.css'
 import { Spinner } from './Spinner'
+import { formaterDate } from '../langue'
+import { useTextesTickets, type CleTickets } from '../textes-ecrans/tickets'
 
 /**
  * Les candidats de veille, prêts à être promptés en un clic.
@@ -35,18 +37,13 @@ export interface VeilleCandidatsSectionProps {
   ouvrirConversationScout?: () => Promise<string | undefined>
 }
 
-const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
-  nouveau: 'nouveau',
-  prompte: 'prompté',
-  ecarte: 'écarté',
-  perime: 'périmé'
+/** Le libellé de chaque statut, traduit au rendu (`textes-ecrans/tickets.ts`, conv-1170). */
+const CLE_STATUT: Record<CandidatVeille['statut'], CleTickets> = {
+  nouveau: 'veille.statut.nouveau',
+  prompte: 'veille.statut.prompte',
+  ecarte: 'veille.statut.ecarte',
+  perime: 'veille.statut.perime'
 }
-
-/** Dit pourquoi un candidat périmé ne se prompte plus — même texte sur le bouton et après un clic. */
-const RAISON_PERIME =
-  'La ligne citée n’est plus dans le fichier : ce défaut a sans doute déjà été corrigé.'
-
-const pluriel = (n: number, mot: string): string => `${n} ${mot}${n > 1 ? 's' : ''}`
 
 /**
  * Prépare la conversation VISIBLE du scout interne : créée par la vue puis OUVERTE immédiatement
@@ -62,7 +59,9 @@ async function ouvrirConversationScoutParDefaut(): Promise<string | undefined> {
     Object.values(roleMap)[0]?.provider
   if (!provider) return undefined
   const conversation = await window.api.conversationsCreate({
-    title: `[veille] scout interne ${new Date().toLocaleString('fr-FR')}`.slice(0, 80),
+    // Titre de conversation, pas un libellé de l'écran : il garde la forme française que pose aussi
+    // le main (`veille/scout-visible.ts`) ; seule la date suit la langue (conv-1170).
+    title: `[veille] scout interne ${formaterDate(new Date())}`.slice(0, 80),
     category: provider,
     provider
   })
@@ -123,6 +122,7 @@ function LigneCandidat({
   // Dépliage Quoi/Pourquoi/Comment (14/08) : les candidats du scout interne portent le contrat
   // étendu ; les autres retombent honnêtement sur ce qu'ils ont (titre, citation, ancrage).
   const [deplie, setDeplie] = useState(false)
+  const { t } = useTextesTickets()
   return (
     <li className={`veille-ligne is-${candidat.statut}`}>
       <div className="veille-ligne-tete">
@@ -132,7 +132,7 @@ function LigneCandidat({
           data-testid="veille-deplier"
           onClick={() => setDeplie((v) => !v)}
           aria-expanded={deplie}
-          title={deplie ? 'Replier les détails' : 'Déplier Quoi / Pourquoi / Comment'}
+          title={deplie ? t('veille.replier') : t('veille.deplier')}
         >
           {deplie ? '▾' : '▸'}
         </button>
@@ -144,18 +144,18 @@ function LigneCandidat({
           <span
             className="veille-pertinence"
             data-testid="veille-pertinence"
-            title="Pertinence pour Autowin, notée par le scout (0-100)"
+            title={t('veille.pertinenceTitre')}
           >
             <b>{candidat.pertinence}</b>
             <small>/100</small>
           </span>
         ) : (
           <span className="veille-pertinence is-absente" data-testid="veille-pertinence-absente">
-            non noté
+            {t('veille.nonNote')}
           </span>
         )}
         <span className={`veille-statut is-${candidat.statut}`}>
-          {LIBELLE_STATUT[candidat.statut]}
+          {t(CLE_STATUT[candidat.statut])}
         </span>
       </div>
       <strong className="veille-titre" onClick={() => setDeplie((v) => !v)}>
@@ -166,38 +166,38 @@ function LigneCandidat({
       {deplie && (
         <div className="veille-details" data-testid="veille-details">
           <div className="veille-q">
-            <b>Quoi ?</b>
+            <b>{t('veille.quoi')}</b>
             <p>{candidat.what ?? candidat.titre}</p>
           </div>
           <div className="veille-q">
-            <b>Pourquoi ?</b>
-            <p>{candidat.why ?? `Preuve lue : « ${candidat.citation} »`}</p>
+            <b>{t('veille.pourquoi')}</b>
+            <p>{candidat.why ?? t('veille.preuveLue', { citation: candidat.citation })}</p>
           </div>
           <div className="veille-q">
-            <b>Comment ?</b>
-            <p>{candidat.how ?? `Partir de l'ancrage ${candidat.url}.`}</p>
+            <b>{t('veille.comment')}</b>
+            <p>{candidat.how ?? t('veille.partirAncrage', { url: candidat.url })}</p>
           </div>
         </div>
       )}
       <div className="veille-actions">
         <a href={candidat.url} target="_blank" rel="noreferrer" className="veille-source">
-          ouvrir la source
+          {t('veille.ouvrirSource')}
         </a>
         <button
           type="button"
           className="veille-prompter"
           onClick={() => onPrompter(candidat)}
           disabled={candidat.statut === 'perime'}
-          title={candidat.statut === 'perime' ? RAISON_PERIME : undefined}
+          title={candidat.statut === 'perime' ? t('veille.raisonPerime') : undefined}
         >
-          Prompter dans Autowin
+          {t('veille.prompter')}
         </button>
         <button
           type="button"
           onClick={() => onEcarter(candidat)}
           disabled={candidat.statut === 'ecarte' || candidat.statut === 'perime'}
         >
-          Écarter
+          {t('veille.ecarter')}
         </button>
       </div>
     </li>
@@ -211,6 +211,7 @@ export function VeilleCandidatsSection({
   generer,
   ouvrirConversationScout
 }: VeilleCandidatsSectionProps): React.JSX.Element {
+  const { t } = useTextesTickets()
   const [stock, setStock] = useState<StockVeille>()
   const [erreur, setErreur] = useState<string>()
   const [voirEcartes, setVoirEcartes] = useState(false)
@@ -268,7 +269,7 @@ export function VeilleCandidatsSection({
     return (
       <section className="veille" data-testid="veille-section">
         <p className="veille-message is-error" role="alert" data-testid="veille-erreur">
-          Veille illisible : {erreur}
+          {t('veille.illisible', { erreur })}
         </p>
       </section>
     )
@@ -278,7 +279,7 @@ export function VeilleCandidatsSection({
     return (
       <section className="veille" data-testid="veille-section">
         <p className="veille-message" role="status" data-testid="veille-attente">
-          <Spinner /> Lecture des candidats…
+          <Spinner /> {t('veille.lecture')}
         </p>
       </section>
     )
@@ -313,8 +314,8 @@ export function VeilleCandidatsSection({
     if (!actuel || actuel.statut === 'perime') {
       setAvis(
         actuel
-          ? `« ${candidat.titre} » n’a pas été envoyé. ${RAISON_PERIME}`
-          : `« ${candidat.titre} » n’est plus dans le stock : rien n’a été envoyé.`
+          ? t('veille.nonEnvoye', { titre: candidat.titre, raison: t('veille.raisonPerime') })
+          : t('veille.horsStock', { titre: candidat.titre })
       )
       return
     }
@@ -325,8 +326,12 @@ export function VeilleCandidatsSection({
   const ecartes = stock.candidats.filter((c) => c.statut === 'ecarte').length
   const perimes = stock.candidats.filter((c) => c.statut === 'perime').length
   const masques = [
-    ...(ecartes > 0 ? [pluriel(ecartes, 'écarté')] : []),
-    ...(perimes > 0 ? [pluriel(perimes, 'périmé')] : [])
+    ...(ecartes > 0
+      ? [t(ecartes > 1 ? 'veille.masques.ecartes' : 'veille.masques.ecarte', { n: ecartes })]
+      : []),
+    ...(perimes > 0
+      ? [t(perimes > 1 ? 'veille.masques.perimes' : 'veille.masques.perime', { n: perimes })]
+      : [])
   ].join(' · ')
 
   return (
@@ -334,35 +339,35 @@ export function VeilleCandidatsSection({
       <header className="veille-head">
         <div className="veille-compte" data-testid="veille-compte">
           <b>{visibles.length}</b>
-          <span>{visibles.length === 1 ? 'candidat' : 'candidats'}</span>
+          <span>{visibles.length === 1 ? t('veille.candidat') : t('veille.candidats')}</span>
         </div>
         <div className="veille-meta">
           {stock.dernierePasse ? (
             <span data-testid="veille-derniere-passe">
-              dernière lecture&nbsp;: {new Date(stock.dernierePasse).toLocaleString('fr-FR')}
+              {t('veille.derniereLecture', { date: formaterDate(stock.dernierePasse) })}
             </span>
           ) : (
             // Jamais lu ≠ rien trouvé. Le dire évite de prendre une veille jamais lancée pour un calme plat.
-            <span data-testid="veille-jamais-lue">aucune lecture effectuée pour l’instant</span>
+            <span data-testid="veille-jamais-lue">{t('veille.jamaisLue')}</span>
           )}
           <label className="veille-tri">
-            trier par
+            {t('veille.trierPar')}
             <select
               value={tri}
               onChange={(e) => setTri(e.target.value as TriVeille)}
               data-testid="veille-tri"
             >
-              <option value="pertinence">pertinence</option>
-              <option value="date">ordre de lecture</option>
+              <option value="pertinence">{t('veille.tri.pertinence')}</option>
+              <option value="date">{t('veille.tri.date')}</option>
             </select>
           </label>
           {masques && (
             <button type="button" onClick={() => setVoirEcartes((v) => !v)}>
-              {voirEcartes ? 'masquer' : 'voir'} {masques}
+              {voirEcartes ? t('veille.masquer') : t('veille.voir')} {masques}
             </button>
           )}
           <button type="button" onClick={() => void lire()} data-testid="veille-actualiser">
-            Actualiser
+            {t('veille.actualiser')}
           </button>
           <button
             type="button"
@@ -370,14 +375,14 @@ export function VeilleCandidatsSection({
             onClick={() => void genererPlus()}
             disabled={generation}
             data-testid="veille-generer"
-            title="Scout interne : analyse les conversations loggées, les workflows et le code d’Autowin pour proposer de nouveaux candidats"
+            title={t('veille.genererTitre')}
           >
             {generation ? (
               <>
-                <Spinner /> Génération en cours…
+                <Spinner /> {t('veille.generation')}
               </>
             ) : (
-              'En générer plus'
+              t('veille.generer')
             )}
           </button>
         </div>
@@ -392,8 +397,9 @@ export function VeilleCandidatsSection({
       {stock.echecs.length > 0 && (
         <div className="veille-echecs" role="alert" data-testid="veille-echecs">
           <strong>
-            {stock.echecs.length} source{stock.echecs.length > 1 ? 's' : ''} muette
-            {stock.echecs.length > 1 ? 's' : ''} à la dernière lecture
+            {t(stock.echecs.length > 1 ? 'veille.echecs.plusieurs' : 'veille.echecs.un', {
+              n: stock.echecs.length
+            })}
           </strong>
           <ul>
             {stock.echecs.map((echec) => (
@@ -407,8 +413,7 @@ export function VeilleCandidatsSection({
 
       {visibles.length === 0 ? (
         <p className="veille-message" data-testid="veille-vide">
-          Aucun candidat. Une lecture n’a peut-être jamais été lancée, ou les sources n’annoncent
-          rien.
+          {t('veille.vide')}
         </p>
       ) : (
         /*
@@ -420,10 +425,10 @@ export function VeilleCandidatsSection({
         <div className="veille-colonnes" data-testid="veille-colonnes">
           <div className="veille-colonne" data-testid="veille-colonne-ajouts">
             <h3>
-              Nouveautés <b>{ajouts.length}</b>
+              {t('veille.nouveautes')} <b>{ajouts.length}</b>
             </h3>
             {ajouts.length === 0 ? (
-              <p className="veille-message">Aucun ajout de capacité dans cette lecture.</p>
+              <p className="veille-message">{t('veille.aucunAjout')}</p>
             ) : (
               <ul className="veille-liste" data-testid="veille-liste">
                 {ajouts.map((candidat) => (
@@ -439,10 +444,10 @@ export function VeilleCandidatsSection({
           </div>
           <div className="veille-colonne" data-testid="veille-colonne-corrections">
             <h3>
-              Corrections &amp; autres <b>{corrections.length}</b>
+              {t('veille.corrections')} <b>{corrections.length}</b>
             </h3>
             {corrections.length === 0 ? (
-              <p className="veille-message">Aucune correction relevée.</p>
+              <p className="veille-message">{t('veille.aucuneCorrection')}</p>
             ) : (
               <ul className="veille-liste" data-testid="veille-liste-corrections">
                 {corrections.map((candidat) => (

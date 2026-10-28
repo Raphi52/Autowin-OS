@@ -41,6 +41,8 @@ function lignes(bloc: string): string[] {
     .filter(Boolean)
 }
 
+// Restés en français (traduction anglaise, conv-1170) : « Besoin », « Défauts », « Critère de
+// succès », « aucun / néant / rien » sont LUS dans le RUN.md, écrit en français par les agents.
 export function apercuDuRun(content: string): ApercuRun {
   const besoinBloc = sectionBody(content, 'Besoin')
   const besoin =

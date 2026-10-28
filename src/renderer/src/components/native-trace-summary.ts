@@ -17,6 +17,7 @@ export function summarizeNativeTraces(traces: NativeTraceSummaryInput[]): {
   lastModel?: string
   boundary?: NativeTraceSummaryInput['boundary']
   source?: NativeTraceSummaryInput['source']
+  // Des valeurs d'état, pas des libellés : ObservatoryView les traduit à l'affichage (`COUVERTURE`).
   coverage: 'aucune' | 'partielle' | 'rattachée' | 'non-rattachée'
 } {
   const ordered = [...traces].sort(

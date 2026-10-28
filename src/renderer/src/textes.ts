@@ -21,6 +21,9 @@ import { useLangue } from './langue'
  *
  * Deux conventions dans les textes : `{nom}` est remplacé par une valeur, `**…**` est rendu en gras
  * (`riche`) — ce qui garde les mots en gras de l'écran sans couper les phrases en morceaux.
+ *
+ * Les autres écrans ont chacun LEUR table, faite par `tableDeTextes` (plus bas) dans
+ * `textes-ecrans/` : mêmes règles, fichiers séparés (conv-1170).
  */
 export const TEXTES_FR = {
   'rail.deployer': 'Déployer le menu',
@@ -292,7 +295,67 @@ interface Tables {
   readonly en: Readonly<Record<string, string | undefined>>
 }
 
-const TABLES: Tables = { fr: TEXTES_FR, en: TEXTES_EN }
+/**
+ * LA RÈGLE, en un seul endroit, pour la table principale comme pour celles des écrans : anglais
+ * absent ou vide → le français ; `{nom}` remplacé par sa valeur, une valeur oubliée reste visible.
+ */
+function texteDans(
+  tables: Tables,
+  cle: string,
+  langue: Langue,
+  valeurs: ValeursDeTexte | undefined
+): string {
+  const anglais = langue === 'en' ? tables.en[cle] : undefined
+  const texte = typeof anglais === 'string' && anglais.trim() !== '' ? anglais : tables.fr[cle]
+  if (!valeurs) return texte
+  return texte.replace(/\{(\w+)\}/g, (tout, nom: string) =>
+    nom in valeurs ? String(valeurs[nom]) : tout
+  )
+}
+
+/** Ce que rend `tableDeTextes` : la même paire `traduire` / `useTextes` que la table principale. */
+export interface TableDeTextes<Cle extends string> {
+  readonly traduire: (cle: Cle, langue: Langue, valeurs?: ValeursDeTexte) => string
+  readonly useTextes: () => {
+    langue: Langue
+    t: (cle: Cle, valeurs?: ValeursDeTexte) => string
+  }
+}
+
+/**
+ * UNE TABLE DE TEXTES PAR GROUPE D'ÉCRANS (traduction complète, conv-1170, 2026-10-27). Une seule
+ * table pour toute l'app ferait écrire tous les lots de traduction dans le MÊME fichier en même temps ;
+ * chaque groupe d'écrans a donc la sienne (`textes-ecrans/`), avec exactement les règles de la table
+ * principale (`texteDans`, `riche` inchangé).
+ *
+ * `fr` : un objet `as const`, le français mot pour mot. `en` : les MÊMES clés — une clé manquante
+ * viole la contrainte de `En`, une clé en trop se heurte au `never` de l'intersection ; les deux
+ * cas ne compilent pas, même quand `en` est passé par une variable (pas seulement en littéral).
+ */
+export function tableDeTextes<
+  Fr extends Readonly<Record<string, string>>,
+  En extends Readonly<Record<keyof Fr, string>>
+>(
+  fr: Fr,
+  en: En & Readonly<Record<Exclude<keyof En, keyof Fr>, never>>
+): TableDeTextes<Extract<keyof Fr, string>> {
+  const tables: Tables = { fr, en }
+  const traduireIci = (
+    cle: Extract<keyof Fr, string>,
+    langue: Langue,
+    valeurs?: ValeursDeTexte
+  ): string => texteDans(tables, cle, langue, valeurs)
+  function useTextesIci(): {
+    langue: Langue
+    t: (cle: Extract<keyof Fr, string>, valeurs?: ValeursDeTexte) => string
+  } {
+    const langue = useLangue()
+    return { langue, t: (cle, valeurs) => traduireIci(cle, langue, valeurs) }
+  }
+  return { traduire: traduireIci, useTextes: useTextesIci }
+}
+
+const TABLE_PRINCIPALE = tableDeTextes(TEXTES_FR, TEXTES_EN)
 
 /**
  * Le texte d'une clé dans une langue. Anglais absent ou vide : le français. `tables` est injectable
@@ -302,14 +365,11 @@ export function traduire(
   cle: CleDeTexte,
   langue: Langue,
   valeurs?: ValeursDeTexte,
-  tables: Tables = TABLES
+  tables?: Tables
 ): string {
-  const anglais = langue === 'en' ? tables.en[cle] : undefined
-  const texte = typeof anglais === 'string' && anglais.trim() !== '' ? anglais : tables.fr[cle]
-  if (!valeurs) return texte
-  return texte.replace(/\{(\w+)\}/g, (tout, nom: string) =>
-    nom in valeurs ? String(valeurs[nom]) : tout
-  )
+  return tables
+    ? texteDans(tables, cle, langue, valeurs)
+    : TABLE_PRINCIPALE.traduire(cle, langue, valeurs)
 }
 
 /**
@@ -339,6 +399,5 @@ export function useTextes(): {
   langue: Langue
   t: (cle: CleDeTexte, valeurs?: ValeursDeTexte) => string
 } {
-  const langue = useLangue()
-  return { langue, t: (cle, valeurs) => traduire(cle, langue, valeurs) }
+  return TABLE_PRINCIPALE.useTextes()
 }

@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import { LANGUE_PAR_DEFAUT, estLangue, langueOuDefaut, type Langue } from '../../shared/langue'
+import {
+  LANGUE_PAR_DEFAUT,
+  estLangue,
+  langueOuDefaut,
+  localeDeLangue,
+  type Langue
+} from '../../shared/langue'
 
 /**
  * LA LANGUE DE L'INTERFACE — Settings · Interface, liste « Langue » (conv-1146, 2026-10-26).
@@ -120,6 +126,36 @@ export function abonnerLangue(abonne: () => void): () => void {
 /** La langue courante, pour un composant : il se redessine quand elle change. */
 export function useLangue(): Langue {
   return useSyncExternalStore(abonnerLangue, langueCourante, langueCourante)
+}
+
+/**
+ * LES DATES ET LES NOMBRES DANS LA LANGUE DE L'INTERFACE (traduction complète, conv-1170,
+ * 2026-10-27). Les écrans écrivaient `toLocaleString('fr-FR', …)` en dur : ces deux fonctions
+ * prennent la locale de la langue courante (`localeDeLangue`, `shared/langue.ts`).
+ *
+ * `formaterDate` suit EXACTEMENT `Date.prototype.toLocaleString` (Intl) : sans composant demandé
+ * dans `options`, date ET heure — c'est la forme la plus courante dans l'app, et un appel
+ * `x.toLocaleString('fr-FR', opts)` remplacé par `formaterDate(x, opts)` affiche le même français.
+ * Pour la date seule : `{ dateStyle: 'short' }` ; l'heure seule : `{ timeStyle: 'medium' }`. Une date
+ * invalide rend « Invalid Date », comme avant, sans lever d'erreur.
+ *
+ * Elles lisent la langue au moment de l'appel : dans un composant, appelées pendant le rendu d'un
+ * composant qui lit `useLangue()` ou `useTextes()`, elles suivent un changement de langue.
+ */
+export function formaterDate(
+  valeur: Date | number | string,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  const date = valeur instanceof Date ? valeur : new Date(valeur)
+  return date.toLocaleString(localeDeLangue(langueCourante()), options)
+}
+
+/** Un nombre dans la langue courante (séparateurs de milliers et décimale) : `Intl.NumberFormat`. */
+export function formaterNombre(
+  valeur: number | bigint,
+  options?: Intl.NumberFormatOptions
+): string {
+  return new Intl.NumberFormat(localeDeLangue(langueCourante()), options).format(valeur)
 }
 
 /** Le dernier échec d'envoi au moteur, pour un composant : il se redessine quand il change. */

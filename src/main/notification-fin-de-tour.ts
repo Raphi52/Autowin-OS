@@ -11,6 +11,7 @@
  */
 import { faitsDuRapport } from '../shared/orchestration-outcome'
 import { extrairePropositionsSuite, retirerLignePromptSuivant } from '../shared/prompt-suivant'
+import { traduireCoeur } from './textes-coeur'
 
 /** Ce que la fin d'un tour dit d'elle-même — le sous-ensemble utile du résultat de `lancerTour`. */
 export type FinDeTourPourNotification = {
@@ -91,7 +92,9 @@ function corpsDeReponse(brut: string | undefined): string {
           .map(sansDecorMarkdown)
           .filter((ligne) => ligne.length > 0 && ligne !== '---')
           .slice(0, 2)
-  return lignes.length > 0 ? lignes.map(couper).join('\n') : 'Le tour est terminé.'
+  return lignes.length > 0
+    ? lignes.map(couper).join('\n')
+    : traduireCoeur('finDeTour.corpsParDefaut')
 }
 
 /**
@@ -117,8 +120,8 @@ export function contenuDeNotificationDeFinDeTour(
   if (!entree.ok) {
     const premiere = (entree.error ?? '').split(/\r?\n/u).find((ligne) => ligne.trim()) ?? ''
     return {
-      title: `${titre} — le tour a échoué`,
-      body: couper(premiere.trim()) || 'Le tour s’est arrêté sur une erreur.',
+      title: traduireCoeur('finDeTour.titreEchec', { fil: titre }),
+      body: couper(premiere.trim()) || traduireCoeur('finDeTour.corpsEchec'),
       fil: titre,
       issue: 'echec'
     }
@@ -127,7 +130,7 @@ export function contenuDeNotificationDeFinDeTour(
     .slice(0, MAX_BOUTONS)
     .map((proposition) => proposition.texte)
   return {
-    title: `${titre} — réponse prête`,
+    title: traduireCoeur('finDeTour.titrePret', { fil: titre }),
     body: corpsDeReponse(entree.text),
     ...(suites.length > 0 ? { suites } : {}),
     fil: titre,
