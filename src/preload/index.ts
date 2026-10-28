@@ -695,6 +695,10 @@ const api = {
   }): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins', options),
   /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
   boardDossier: (): Promise<EtatDuDossierDuBoard> => ipcRenderer.invoke('os:board-dossier'),
+  /** La liste des dossiers de travail du Chat, la seule que le Board montre, et ses retraits
+   *  (conv-1212). */
+  boardDossiersDuChat: (dossiers: string[], retires: string[] = []): Promise<boolean> =>
+    ipcRenderer.invoke('os:board-dossiers-du-chat', dossiers, retires),
   boardDossierChoisir: (): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:board-dossier:choisir'),
   boardDossierEffacer: (): Promise<EtatDuDossierDuBoard> =>
@@ -852,6 +856,16 @@ const api = {
   /** Ouvre un element (message ou rendez-vous) dans Outlook, par son identifiant. */
   outlookOuvrir: (id: string): Promise<{ ok: boolean; erreur?: string }> =>
     ipcRenderer.invoke('outlook:ouvrir', id),
+  /**
+   * OUVRE une piece jointe RECUE : Outlook la copie dans un dossier temporaire, Windows l'ouvre.
+   * `rang` = position de la piece dans le message (instantane), `null` s'il est inconnu.
+   */
+  outlookOuvrirPiece: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:ouvrir-piece', id, rang, nom),
   /**
    * REPOND a un message et ENVOIE la reponse. Irreversible : l'appelant doit avoir fait confirmer.
    * Canal distinct de la lecture et de l'ouverture, parce que c'est le seul qui ecrit.

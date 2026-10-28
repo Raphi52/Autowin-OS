@@ -27,6 +27,15 @@ import type { EtatDuDossierDuBoard } from '../../../shared/board-dossier'
 import type { BoardsDesCollegues } from '../../../shared/board-collegues'
 import { carteAvecCollegues } from './board-collegues'
 import { ProjetsPartagesDuBoard } from './ProjetsPartagesDuBoard'
+import {
+  carteDuBoardAffichee,
+  lignesDuMenuDesProjets,
+  lireDossiersDuChat,
+  lireDossiersRetires,
+  lireDossiersToujoursProposes,
+  retirerDossierDuChat,
+  transmettreDossiersDuChat
+} from './dossiers-du-chat'
 import { RiviereDuProjet } from './RiviereDuProjet'
 import type { SourceDeTache } from './TachesDeLaDemande'
 import { ViewTopBar } from './ViewTopBar'
@@ -58,15 +67,25 @@ export function CarteDesBesoinsView({
   const [carte, setCarte] = useState<CarteDesBesoins | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
+  // Les dossiers de travail du Chat (conv-1212) : les seuls projets du Board. Relus à chaque calcul,
+  // donc à chaque retour sur l'onglet — un dossier retiré dans le Chat sort aussi d'ici.
+  const [dossiersDuChat, setDossiersDuChat] = useState<string[]>(() => lireDossiersDuChat())
 
   const charger = useCallback(async () => {
     setChargement(true)
     try {
+      // La liste d'abord : c'est le processus principal qui réduit le Board à ces dossiers.
+      const dossiers = lireDossiersDuChat()
+      const retires = lireDossiersRetires()
+      setDossiersDuChat(dossiers)
+      await transmettreDossiersDuChat(dossiers, retires)
+      const toujours = await lireDossiersToujoursProposes()
       // Les états posés à la main vivent ici : joints pour que la copie du dossier (conv-1206)
       // range chaque post-it à l'étage qu'il a À L'ÉCRAN.
-      setCarte(
-        await window.api.carteDesBesoins({ etatsManuels: lireEtatsManuels(window.localStorage) })
-      )
+      const calculee = await window.api.carteDesBesoins({
+        etatsManuels: lireEtatsManuels(window.localStorage)
+      })
+      setCarte(carteDuBoardAffichee(calculee, dossiers, toujours, retires))
       setErreur(null)
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e))
@@ -201,6 +220,16 @@ export function CarteDesBesoinsView({
     [charger]
   )
 
+  // La croix d'une ligne du menu « Projets » (conv-1212) : retire le dossier de la liste du Chat —
+  // la même que la croix du Chat —, puis recalcule le Board sans lui.
+  const retirerDuChat = useCallback(
+    async (chemin: string) => {
+      setDossiersDuChat(retirerDossierDuChat(chemin))
+      await charger()
+    },
+    [charger]
+  )
+
   // LES POST-IT DES COLLÈGUES (conv-1210) : les Boards que les autres postes recopient dans le même
   // dossier, relus APRÈS la carte et à part, pour qu'un partage lent ne retarde jamais le nôtre ; le
   // processus principal espace lui-même les relectures. Mêlés à la carte AFFICHÉE seulement.
@@ -329,13 +358,17 @@ export function CarteDesBesoinsView({
                     ne repartent pas d'ici (conv-1211, conv-1210). */}
                 {dossier?.dossier && carte && (
                   <ProjetsPartagesDuBoard
-                    projets={carte.projets.map((p) => ({
-                      cle: p.cle,
-                      libelle: p.libelle,
-                      demandes: p.demandes.length
-                    }))}
+                    projets={lignesDuMenuDesProjets(
+                      carte.projets.map((p) => ({
+                        cle: p.cle,
+                        libelle: p.libelle,
+                        demandes: p.demandes.length
+                      })),
+                      dossiersDuChat
+                    )}
                     choisis={dossier.projets ?? null}
                     onChoisir={(p) => void choisirProjets(p)}
+                    onRetirer={(chemin) => void retirerDuChat(chemin)}
                   />
                 )}
               </span>

@@ -69,4 +69,36 @@ describe('ProjetsPartagesDuBoard', () => {
     cocher(vue.querySelector('[data-testid="besoins-projets-tous"]'))
     expect(onChoisir).toHaveBeenCalledWith(null)
   })
+
+  it('la croix d’une ligne retire son dossier du Chat sans cocher ni décocher (conv-1212)', () => {
+    const onChoisir = vi.fn()
+    const onRetirer = vi.fn()
+    hote = document.createElement('div')
+    document.body.appendChild(hote)
+    racine = createRoot(hote)
+    act(() => {
+      racine?.render(
+        createElement(ProjetsPartagesDuBoard, {
+          projets: [
+            { cle: 'D:\\Factures', libelle: 'Factures', demandes: 12, retirable: 'D:\\Factures' },
+            // Le dépôt par défaut, que le Chat propose toujours : pas de croix.
+            { cle: 'D:\\Perso', libelle: 'Perso', demandes: 3 }
+          ],
+          choisis: null,
+          onChoisir,
+          onRetirer
+        })
+      )
+    })
+    const croix = [...hote.querySelectorAll('button')].filter((b) =>
+      b.getAttribute('data-testid')?.startsWith('besoins-projet-retirer-')
+    )
+    expect(croix.map((b) => b.getAttribute('data-testid'))).toEqual([
+      'besoins-projet-retirer-D:\\Factures'
+    ])
+    act(() => croix[0].click())
+    expect(onRetirer).toHaveBeenCalledWith('D:\\Factures')
+    expect(onChoisir).not.toHaveBeenCalled()
+    expect(caseDu(hote, 'D:\\Factures')?.checked).toBe(true)
+  })
 })

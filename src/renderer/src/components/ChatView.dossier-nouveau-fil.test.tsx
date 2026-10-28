@@ -8,6 +8,7 @@ import {
   mountChat,
   type ChatHarness
 } from './ChatView.harness'
+import { retirerDossierDuChat } from './dossiers-du-chat'
 
 /**
  * LA DEMANDE : « je dois pouvoir choisir mon CWD dans un nouveau fil » — avec la pastille de
@@ -205,5 +206,51 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     await harness.type('premier tour')
     await harness.click('.composer-send')
     expect(conversationsSetProject).toHaveBeenCalledWith('neuf', 'C:\\Users\\Moi')
+  })
+
+  /**
+   * LA DEMANDE (conv-1212, 2026-10-28) : « des éléments que je ne peux même pas supprimer, ils n'ont
+   * pas la petite croix ». La croix du Board retire aussi le dépôt par défaut et « This computer »,
+   * que ce menu propose toujours : la liste est commune, ils doivent quitter ce menu à leur tour —
+   * même quand la croix est cliquée Chat monté (sur l'onglet Board).
+   */
+  it('le dépôt par défaut et « This computer » retirés par la croix du Board quittent ce menu', async () => {
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['D:\\Projets\\Cible'])
+    )
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([]),
+        dossierPersonnel: vi.fn().mockResolvedValue('C:\\Users\\Moi'),
+        behaviourComposition: vi
+          .fn()
+          .mockResolvedValue({ inspection: { workspace: 'D:\\AutoWinOS', files: [] } })
+      })
+    )
+    const entrees = (): string[] =>
+      [...document.querySelectorAll<HTMLElement>('[data-project-path]')].map(
+        (b) => `${b.dataset.testid}:${b.dataset.projectPath}`
+      )
+
+    await harness.click('[data-testid="chat-project-dot"]')
+    expect(entrees()).toEqual(
+      expect.arrayContaining([
+        'conv-project-this-computer:C:\\Users\\Moi',
+        'conv-project-default:D:\\AutoWinOS',
+        'conv-project-choice:D:\\Projets\\Cible'
+      ])
+    )
+    await harness.click('[data-testid="chat-project-dot"]')
+
+    await act(async () => {
+      retirerDossierDuChat('D:\\AutoWinOS')
+      retirerDossierDuChat('c:/users/moi/')
+      await Promise.resolve()
+    })
+    await harness.click('[data-testid="chat-project-dot"]')
+    expect(entrees().filter((e) => !e.startsWith('conv-project-forget'))).toEqual([
+      'conv-project-choice:D:\\Projets\\Cible'
+    ])
   })
 })

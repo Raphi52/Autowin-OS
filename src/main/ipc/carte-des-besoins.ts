@@ -41,6 +41,14 @@ import type { DossierDuBoard } from '../board-dossier'
 import { creerLecteurDesCollegues } from '../board-collegues'
 import { creerCopieDeFinDeTour } from '../board-copie-fin-de-tour'
 import { projetsPartagesLisibles } from '../../shared/board-projets-partages'
+import {
+  carteDesDossiersDuChat,
+  dossiersDuBoard,
+  dossiersDuChatLisibles
+} from '../../shared/board-dossiers-du-chat'
+import { creerDossiersDuChat } from '../board-dossiers-du-chat'
+import type { CarteDesBesoins } from '../../shared/carte-des-besoins'
+import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import type { BoardsDesCollegues } from '../../shared/board-collegues'
 import type { TicketItem, TicketSourceProfile } from '../../shared/tickets'
@@ -160,6 +168,20 @@ export function registerCarteDesBesoinsIpc({
     lireLiens,
     identiteDuDossier
   })
+  // Le Board ne montre que les dossiers du Chat (conv-1212), plus ceux que le Chat propose toujours
+  // — le dépôt par défaut et « This computer » —, sauf si une croix les a retirés. Même réduction
+  // pour l'affichage et pour la copie vers le dossier du Board : ce qui part est ce que la vue montre.
+  const dossiersDuChat = creerDossiersDuChat(racineDuPoste ? { racine: racineDuPoste } : {})
+  const calculerLeBoard = async (): Promise<CarteDesBesoins> => {
+    const carte = await calculateur.calculer()
+    const liste = dossiersDuChat.lire()
+    return carteDesDossiersDuChat(
+      carte,
+      liste === null
+        ? null
+        : dossiersDuBoard(liste.dossiers, [os.executionWorkspace, homedir()], liste.retires)
+    )
+  }
   const lecture = tickets
     ? {
         sources: () => tickets.listSources(),
@@ -181,13 +203,13 @@ export function registerCarteDesBesoinsIpc({
       ? creerCopieDeFinDeTour({
           racine: racineDuPoste,
           dossierDuBoard,
-          calculer: () => calculateur.calculer()
+          calculer: calculerLeBoard
         })
       : null
 
   ipcMain.handle('os:carteDesBesoins', async (event, options: unknown) => {
     assertTrustedRendererSender(event, 'CarteDesBesoins')
-    const carte = await calculateur.calculer()
+    const carte = await calculerLeBoard()
     // Copie vers le dossier du Board (conv-1206), sans attendre : un partage lent ou injoignable ne
     // retarde jamais l'affichage. Les états posés à la main vivent dans la vue, qui les joint ici.
     const manuels = etatsManuelsLisibles(objet(options).etatsManuels)
@@ -230,6 +252,21 @@ export function registerCarteDesBesoinsIpc({
       }
     return dossierDuBoard.choisirProjets(projets)
   })
+
+  // La liste des dossiers du Chat et ses retraits (conv-1212), transmis par la vue à chaque
+  // changement : relus par `dossiersDuChatLisibles` avant d'être gardés, illisible = rien ne change.
+  // Retraits absents = vue d'avant leur ajout : aucun retrait.
+  ipcMain.handle(
+    'os:board-dossiers-du-chat',
+    (event, brute: unknown, retiresBruts: unknown = []): boolean => {
+      assertTrustedRendererSender(event, 'Dossiers du Chat')
+      const liste = dossiersDuChatLisibles(brute)
+      const retires = dossiersDuChatLisibles(retiresBruts)
+      if (liste === undefined || retires === undefined) return false
+      dossiersDuChat.retenir(liste, retires)
+      return true
+    }
+  )
 
   // Les Boards des collègues (conv-1210) : les AUTRES sous-dossiers du dossier du Board, relus à
   // part de la carte pour qu'un partage lent ne retarde jamais notre Board. Aucun argument : le

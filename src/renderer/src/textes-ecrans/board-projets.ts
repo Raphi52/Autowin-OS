@@ -18,7 +18,8 @@ export const TEXTES_FR = {
   'projets.tousEtFuturs': 'Tous, y compris les prochains',
   'projets.note': 'Un nouveau projet n’est pas recopié tant qu’il n’est pas coché.',
   'projets.demande': '{n} demande',
-  'projets.demandes': '{n} demandes'
+  'projets.demandes': '{n} demandes',
+  'projets.retirer': 'Retirer {chemin} des dossiers de travail du Chat (et du Board)'
 }
 
 export type CleBoardProjets = keyof typeof TEXTES_FR
@@ -32,7 +33,8 @@ export const TEXTES_EN: Record<CleBoardProjets, string> = {
   'projets.tousEtFuturs': 'All, including future ones',
   'projets.note': 'A new project is not copied until it is checked.',
   'projets.demande': '{n} request',
-  'projets.demandes': '{n} requests'
+  'projets.demandes': '{n} requests',
+  'projets.retirer': 'Remove {chemin} from the Chat working folders (and from the Board)'
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */

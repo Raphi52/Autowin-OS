@@ -21,18 +21,26 @@ export interface ProjetAffiche {
   cle: string
   libelle: string
   demandes: number
+  /** Le dossier du Chat que la croix de la ligne retire ; absent = pas de croix (conv-1212). */
+  retirable?: string
 }
 
 export function ProjetsPartagesDuBoard({
   projets,
   choisis,
-  onChoisir
+  onChoisir,
+  onRetirer
 }: {
   /** Les projets de la carte affichée, dans son ordre (le plus récemment actif d'abord). */
   projets: readonly ProjetAffiche[]
   /** Le choix retenu sur le poste : `null` = tous. */
   choisis: readonly string[] | null
   onChoisir: (projets: string[] | null) => void
+  /**
+   * La croix au bout d'une ligne (conv-1212) : retire le dossier de la liste des dossiers de travail
+   * du Chat, la même que la croix du menu « Ranger dans… » — il quitte le Chat ET le Board.
+   */
+  onRetirer?: (chemin: string) => void
 }): React.JSX.Element {
   const { t, langue } = useTextesBoardProjets()
   // Singulier jusqu'à 1 en français (« 0 demande »), seulement à 1 en anglais (« 0 requests »).
@@ -82,20 +90,35 @@ export function ProjetsPartagesDuBoard({
         </label>
         <div className="besoins-projets-liste">
           {projets.map((p) => (
-            <label key={p.cle} className="besoins-projets-ligne" title={p.cle}>
-              <input
-                type="checkbox"
-                checked={projetPartage(choisis, p.cle)}
-                data-testid={`besoins-projet-${p.cle}`}
-                onChange={() => onChoisir(basculerProjetPartage(choisis, p.cle, cles))}
-              />
-              <span className="besoins-projets-nom">{p.libelle}</span>
-              <span className="besoins-projets-compte">
-                {t(singulier(p.demandes) ? 'projets.demande' : 'projets.demandes', {
-                  n: p.demandes
-                })}
-              </span>
-            </label>
+            // La croix est SŒUR de la case, pas dedans : un clic sur elle ne doit pas cocher.
+            <div key={p.cle} className="besoins-projets-ligne is-projet">
+              <label className="besoins-projets-case" title={p.cle}>
+                <input
+                  type="checkbox"
+                  checked={projetPartage(choisis, p.cle)}
+                  data-testid={`besoins-projet-${p.cle}`}
+                  onChange={() => onChoisir(basculerProjetPartage(choisis, p.cle, cles))}
+                />
+                <span className="besoins-projets-nom">{p.libelle}</span>
+                <span className="besoins-projets-compte">
+                  {t(singulier(p.demandes) ? 'projets.demande' : 'projets.demandes', {
+                    n: p.demandes
+                  })}
+                </span>
+              </label>
+              {p.retirable && onRetirer && (
+                <button
+                  type="button"
+                  className="besoins-projets-retirer"
+                  data-testid={`besoins-projet-retirer-${p.cle}`}
+                  title={t('projets.retirer', { chemin: p.retirable })}
+                  aria-label={t('projets.retirer', { chemin: p.retirable })}
+                  onClick={() => onRetirer(p.retirable as string)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
         {choisis !== null && <p className="besoins-projets-note">{t('projets.note')}</p>}

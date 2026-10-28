@@ -56,6 +56,36 @@
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
+/* Une ligne de projet = la case (qui coche) + la croix (qui retire du Chat, conv-1212). */
+.besoins-projets-ligne.is-projet {
+  cursor: default;
+}
+.besoins-projets-case {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+.besoins-projets-retirer {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r1, 4px);
+  background: none;
+  color: var(--text-faint, var(--text-dim));
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.besoins-projets-retirer:hover,
+.besoins-projets-retirer:focus-visible {
+  background: rgba(239, 63, 63, 0.14);
+  color: var(--c-err);
+}
 .besoins-projets-nom {
   flex: 1 1 auto;
   min-width: 0;

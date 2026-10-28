@@ -533,6 +533,9 @@ interface ChatApi {
   }) => Promise<CarteDesBesoins>
   /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
   boardDossier: () => Promise<EtatDuDossierDuBoard>
+  /** La liste des dossiers de travail du Chat, la seule que le Board montre (conv-1212) ; absent =
+   *  preload d'avant redémarrage. */
+  boardDossiersDuChat?: (dossiers: string[], retires?: string[]) => Promise<boolean>
   boardDossierChoisir: () => Promise<EtatDuDossierDuBoard>
   boardDossierEffacer: () => Promise<EtatDuDossierDuBoard>
   /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
@@ -656,6 +659,12 @@ interface ChatApi {
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>
+  /** Ouvre une pièce jointe REÇUE (copiée par Outlook dans un dossier temporaire, ouverte par Windows). */
+  outlookOuvrirPiece: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /**
    * Envoie une réponse à un message Outlook, et ses pièces jointes éventuelles.
    * Irréversible : à confirmer avant l'appel.

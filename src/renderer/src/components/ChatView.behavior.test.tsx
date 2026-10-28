@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ChatView } from './ChatView'
+import { retirerDossierDuChat } from './dossiers-du-chat'
 
 // L'attente entre deux reprises après surcharge (30 s en vrai) est neutralisée : ces tests
 // vérifient la DÉCISION et le GESTE, pas la patience.
@@ -278,6 +279,54 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
     // La croix RETIRE de la liste, elle ne RANGE pas : aucun classement ne doit partir.
     expect(conversationsSetProject).not.toHaveBeenCalled()
+  })
+
+  /**
+   * LA CROIX DU BOARD RETIRE DE LA MÊME LISTE (conv-1212). Le Chat reste monté pendant qu'on est sur
+   * le Board : s'il ne relisait pas la liste, sa copie en mémoire réécrirait le dossier retiré à son
+   * prochain changement. Et chaque état de la liste part au processus principal, qui réduit le Board.
+   */
+  it('un dossier retiré par la croix du Board quitte aussi le menu du Chat, et la liste part au Board', async () => {
+    const boardDossiersDuChat = vi.fn().mockResolvedValue(true)
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['C:\\Travail\\Projet Alpha', 'C:\\Travail\\Projet Beta'])
+    )
+    // Ce fichier ne vide pas le stockage entre deux tests : la croix du test précédent y a laissé
+    // un retrait.
+    window.localStorage.setItem('autowin.conv-folders.retires', '[]')
+    await mount(
+      api({
+        conversations: vi
+          .fn()
+          .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\Travail\\Projet Alpha' }]),
+        boardDossiersDuChat
+      })
+    )
+    expect(boardDossiersDuChat).toHaveBeenLastCalledWith(
+      ['C:\\Travail\\Projet Alpha', 'C:\\Travail\\Projet Beta'],
+      []
+    )
+
+    await act(async () => {
+      retirerDossierDuChat('C:\\Travail\\Projet Beta')
+      await Promise.resolve()
+    })
+
+    await ouvrirSelecteurDossiers('Conversation A')
+    expect(
+      [...document.querySelectorAll('[data-testid="conv-project-choice"]')].map((b) =>
+        b.getAttribute('data-project-path')
+      )
+    ).toEqual(['C:\\Travail\\Projet Alpha'])
+    expect(JSON.parse(window.localStorage.getItem('autowin.conv-folders.connus') ?? '[]')).toEqual([
+      'C:\\Travail\\Projet Alpha'
+    ])
+    // Le retrait part avec la liste : le processus principal ne le réajoute pas de son côté.
+    expect(boardDossiersDuChat).toHaveBeenLastCalledWith(
+      ['C:\\Travail\\Projet Alpha'],
+      ['C:\\Travail\\Projet Beta']
+    )
   })
 
   /**
