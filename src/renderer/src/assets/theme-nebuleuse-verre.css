@@ -4212,6 +4212,470 @@
 /* SELECTION-VUES:FIN */
 
 /* ---------------------------------------------------------------------------
+   6 bis. LAMPE A LAVE dans les boutons au degrade, les bulles des messages de l'utilisateur et
+   tous les bords bleu -> rose (conv-1163, 2026-10-27).
+   Demande : « une animation de couleur pour mes boutons qui ont un degrade bleu et rose », puis
+   « je veux que les couleurs changent en mode liquide » ; choix sur maquette : « la lampe a lave
+   de avant » (/draft, fournee 2, proposition 1), livree telle quelle. Trois gouttes -- rose, bleue
+   et leur violet -- flottent sur le degrade bleu -> rose et se fondent, aller-retour de 9 s.
+   Les positions sont des proprietes ENREGISTREES (`@property`) : une variable libre sauterait d'une
+   valeur a l'autre au lieu de couler. Le fond est ecrit une fois dans `--nv-lave-fond`, pose sur
+   CHAQUE bouton : ses `var()` y lisent les positions animees du bouton lui-meme (pose sur :root, il
+   figerait celles de :root). Les etats gardent leur marque PAR-DESSUS la lave : reflet bombe au
+   survol, reflet et eclat de « Nouveau fil » sur un fil vide. Seul ecart a la maquette : le coeur
+   de la goutte bleue est le bleu PLEIN (la maquette passait par un bleu a 80 %), pour tenir la
+   regle « un seul bleu, toujours plein » (conv-182, test « Degrades : un seul bleu »).
+   Cout : en fluide, la carte graphique recomposait la fenetre 60 fois/s tant qu'un element a lave
+   etait a l'ecran (environ 20 % pour une animation fluide permanente, mesure du 22/10) -- et
+   l'onglet ouvert du menu la porte toute la journee. Depuis conv-1199 (2026-10-28, piste du scout
+   « la lave fait travailler la carte graphique en continu », lecture retenue : « par petits sauts,
+   comme les autres indicateurs ») la lave avance par crans de 100 ms (`steps()`), calee sur
+   l'horloge commune des indicateurs (animations-par-crans.ts, liste ANIMATIONS_PAR_CRANS) : entre
+   deux crans, aucune image (6 a 9 % mesures pour les autres indicateurs, contre 20 % en fluide).
+   Le mouvement devient lineaire par segment (`steps()` ne se combine pas a `ease-in-out`).
+   Toute duree, tout depart ou image cle de la lave reste multiple de 100 ms : tenu par
+   animations-par-crans.test.ts (onglet du menu a 18 s compris). Pas de garde
+   prefers-reduced-motion : ce poste l'a actif, et l'animation a ete choisie pour etre vue (meme
+   parti que le gresillement des neons).
+   --------------------------------------------------------------------------- */
+@property --nv-lave-x1 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 85%;
+}
+@property --nv-lave-y1 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 30%;
+}
+@property --nv-lave-x2 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 12%;
+}
+@property --nv-lave-y2 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 70%;
+}
+@property --nv-lave-x3 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+@property --nv-lave-y3 {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+/* Le fond liquide lui-meme, NON herite : il change a chaque image, et herite, il ferait recalculer
+   a chaque image tout ce que contient l'element (le contenu d'une bulle, d'un run deplie). */
+@property --nv-lave-fond {
+  syntax: '*';
+  inherits: false;
+}
+/* LE MOTEUR : chaque element ou calque qui porte la lave declare son fond et l'anime. Boutons (fond),
+   bulles des messages de l'utilisateur (fond), puis tous les BORDS bleu -> rose -- demande du meme
+   fil : « met ca aussi pour mes messages, et pour les borders bleu rose partout ou yen a », sur la
+   capture des capsules Raisonnement / Actions / Etapes. Les bords nacres (bleu, rose ET argent :
+   questions, fiches du graphe) ne sont pas des bords bleu -> rose et restent tels quels. */
+:root[data-theme='nebuleuse-verre'] .btn-accent,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .btn-accent,
+:root[data-theme='nebuleuse-verre'] .tests-run:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled),
+:root[data-theme='nebuleuse-verre'] .askd .askd-envoyer:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-lancement-bouton:not(.is-on),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-relecture-envoyer,
+:root[data-theme='nebuleuse-verre'] .shell.theme-serious .task-manager-primary,
+:root[data-theme='nebuleuse-verre'] .msg.user .msg-body,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item.active,
+:root[data-theme='nebuleuse-verre'] .runs-pane .run-row[aria-expanded='true'],
+:root[data-theme='nebuleuse-verre'] .runs-pane .live-run:has(> .live-run-fold[open]),
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-filter :is(input, select):focus,
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-toggle[aria-pressed='true'],
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-voie.is-seule,
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-flux-step.is-suggested,
+:root[data-theme='nebuleuse-verre'] .runs-pane .diff-editeur-texte:focus,
+:root[data-theme='nebuleuse-verre']
+  .runs-pane
+  :is(.model-log-expand, .pp-editeur, .sc-relecture, .diff-comment, .diff-editeur),
+:root[data-theme='nebuleuse-verre'] .model-log-frise,
+:root[data-theme='nebuleuse-verre']
+  :is(.model-select-menu, .model-quota-popover)
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled),
+:root[data-theme='nebuleuse-verre'] .model-select-menu .effort-matrix-row.is-active,
+:root[data-theme='nebuleuse-verre']
+  .shell.theme-serious
+  :is(
+    .topology-model.is-selected,
+    .cockpit-sources > button.is-active,
+    .control-row.is-selected,
+    .settings-view .control-row.is-selected,
+    .task-manager-row.is-selected,
+    .task-manager-weekdays label.is-selected,
+    .tests-project.is-active > button:first-child,
+    .observatory-view .observatory-view-switch button.is-active,
+    .observatory-view .observatory-quick-filters button.is-active,
+    .observatory-view .observatory-causal-controls button.is-active,
+    .observatory-view .observatory-conversations > button.is-active,
+    .observatory-view .observatory-calls button.is-active,
+    .observatory-view .observatory-event.is-selected,
+    .observatory-view .observatory-causal-node-wrap > button.is-selected,
+    .tickets-state-chip.is-active,
+    .tickets-list [data-testid='ticket-row'].is-selected,
+    .workflow-profile.is-active,
+    .theme-filter.is-active,
+    .settings-nav-item.is-active,
+    .graph-observatory--galaxy .theme-filter.is-active,
+    .wf-return-buttons button.is-active
+  ),
+:root[data-theme='nebuleuse-verre']
+  .shell.theme-serious
+  .router-view
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled),
+:root[data-theme='nebuleuse-verre'] .artifact-pile__tranches > span,
+:root[data-theme='nebuleuse-verre'] .brand::after,
+:root[data-theme='nebuleuse-verre']
+  .thinking-block:not(.workflow-capsule)
+  > summary
+  .thinking-capsule::before,
+:root[data-theme='nebuleuse-verre'] .capsule-bouton:not(.is-error) .thinking-capsule::before,
+:root[data-theme='nebuleuse-verre'] .rail-update-who::before,
+:root[data-theme='nebuleuse-verre'] .conv-foot::before,
+:root[data-theme='nebuleuse-verre'] .conv-foot > button::before,
+:root[data-theme='nebuleuse-verre'] .delete-confirm-card--fils .delete-confirm-cancel::before,
+:root[data-theme='nebuleuse-verre'] .delete-confirm-card--fils .delete-confirm-gel,
+:root[data-theme='nebuleuse-verre'] .nav-item.active {
+  --nv-lave-fond:
+    radial-gradient(
+      ellipse 60% 120% at var(--nv-lave-x1) var(--nv-lave-y1),
+      #e63ca0 0%,
+      rgba(230, 60, 160, 0.8) 35%,
+      rgba(230, 60, 160, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 65% 130% at var(--nv-lave-x2) var(--nv-lave-y2),
+      #3c6eeb 0%,
+      #3c6eeb 35%,
+      rgba(60, 110, 235, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 45% 110% at var(--nv-lave-x3) var(--nv-lave-y3),
+      #9150dc 0%,
+      rgba(145, 80, 220, 0) 100%
+    ),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  /* 3 segments de 3 s (images cles 0 / 33,3333 / 66,6667 / 100 %), 30 crans de 100 ms chacun. */
+  animation: nv-lave 9s steps(30) infinite alternate;
+}
+/* Les boutons, puis les bulles : la lave EST leur fond. L'onglet ouvert du menu de gauche aussi
+   (meme fil, capture du rond « Chat » sous l'avatar : « a mettre aussi sur ces boutons ») : sa
+   pastille garde sa forme, son bord transparent et son absence de halo (conv-198). */
+:root[data-theme='nebuleuse-verre'] .nav-item.active,
+:root[data-theme='nebuleuse-verre'] .btn-accent,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .btn-accent,
+:root[data-theme='nebuleuse-verre'] .tests-run:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
+:root[data-theme='nebuleuse-verre'] .askd .askd-envoyer:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-lancement-bouton:not(.is-on),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-relecture-envoyer,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.user .msg-body,
+:root[data-theme='nebuleuse-verre'] .msg.user .msg-body,
+:root[data-theme='nebuleuse-verre']:not([data-base='clair'])
+  .cosmic-outline
+  .msg.user
+  .msg-body.msg-bulle {
+  background: var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+/* L'onglet ouvert du menu coule DEUX FOIS plus lentement (18 s au lieu de 9) : il reste a l'ecran
+   toute la journee, au bord du regard (meme fil : « Ralentis la lampe a lave du rond Chat du menu de
+   gauche (cycle plus long), sans toucher aux autres boutons »). Seule la duree change. */
+:root[data-theme='nebuleuse-verre'] .nav-item.active {
+  animation-duration: 18s;
+  /* Deux fois plus de crans pour une duree double : chaque cran reste de 100 ms (conv-1199). */
+  animation-timing-function: steps(60);
+}
+/* Deux boutons voisins ne coulent pas au meme rythme : chaque famille part d'un autre moment. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row,
+:root[data-theme='nebuleuse-verre'] .shell.theme-serious .task-manager-primary {
+  animation-delay: -3s;
+}
+:root[data-theme='nebuleuse-verre'] .tests-run:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .askd .askd-envoyer:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-relecture-envoyer {
+  animation-delay: -6s;
+}
+:root[data-theme='nebuleuse-verre'] .btn-accent:hover:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .btn-accent:hover:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row:hover,
+:root[data-theme='nebuleuse-verre']
+  .runs-pane
+  .sc-lancement-bouton:not(.is-on):hover:not(:disabled),
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-relecture-envoyer:hover:not(:disabled) {
+  background:
+    radial-gradient(
+      55% 85% at 50% 0%,
+      rgba(255, 255, 255, 0.4),
+      rgba(255, 255, 255, 0.1) 55%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row.active {
+  background:
+    radial-gradient(ellipse 75% 60% at 35% 0%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0)),
+    var(--nv-lave-fond);
+}
+:root[data-theme='nebuleuse-verre'] .shell.theme-serious .task-manager-primary {
+  background: var(--nv-lave-fond) !important;
+}
+:root[data-theme='nebuleuse-verre']
+  .shell.theme-serious
+  .task-manager-primary:hover:not(:disabled) {
+  background:
+    radial-gradient(
+      55% 85% at 50% 0%,
+      rgba(255, 255, 255, 0.4),
+      rgba(255, 255, 255, 0.1) 55%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    var(--nv-lave-fond) !important;
+}
+/* ENVOYER, pret : le meme gel (reflet blanc du haut, plus fort au survol, eteint a l'appui), la lave
+   a la place du degrade fixe. Le carre creux de « rien a envoyer » n'a pas de degrade : intact. */
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+/* LES BORDS. Meme technique que chaque regle d'origine (double fond padding-box / border-box, ou
+   calque evide par masque), la lave a la place du degrade fixe. `background-origin: border-box` sur
+   TOUS les calques : la lave en a quatre, et cales sur l'interieur ils se repeteraient sous le bord
+   transparent, qui montrerait le cote oppose. Les etats plus precis (fil survole dans le pied de la
+   liste, capsule d'un workflow, mise a jour en echec) gardent leur dessin : ils sont exclus ou
+   ecrits plus lourds. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item.active {
+  background:
+    linear-gradient(#100e17, #100e17) padding-box,
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .runs-pane .run-row[aria-expanded='true'],
+:root[data-theme='nebuleuse-verre'] .runs-pane .live-run:has(> .live-run-fold[open]),
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-filter :is(input, select):focus,
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-toggle[aria-pressed='true'],
+:root[data-theme='nebuleuse-verre'] .runs-pane .model-log-voie.is-seule,
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-flux-step.is-suggested,
+:root[data-theme='nebuleuse-verre'] .runs-pane .sc-flux-step.is-suggested:hover,
+:root[data-theme='nebuleuse-verre'] .runs-pane .diff-editeur-texte:focus {
+  background:
+    linear-gradient(var(--nv-rp-choisi), var(--nv-rp-choisi)) padding-box,
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre']
+  :is(.model-select-menu, .model-quota-popover)
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled),
+:root[data-theme='nebuleuse-verre'] .model-select-menu .effort-matrix-row.is-active {
+  background:
+    linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box,
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre']
+  .shell.theme-serious
+  :is(
+    .topology-model.is-selected,
+    .cockpit-sources > button.is-active,
+    .control-row.is-selected,
+    .settings-view .control-row.is-selected,
+    .task-manager-row.is-selected,
+    .task-manager-weekdays label.is-selected,
+    .tests-project.is-active > button:first-child,
+    .observatory-view .observatory-view-switch button.is-active,
+    .observatory-view .observatory-quick-filters button.is-active,
+    .observatory-view .observatory-causal-controls button.is-active,
+    .observatory-view .observatory-conversations > button.is-active,
+    .observatory-view .observatory-calls button.is-active,
+    .observatory-view .observatory-event.is-selected,
+    .observatory-view .observatory-causal-node-wrap > button.is-selected,
+    .tickets-state-chip.is-active,
+    .tickets-list [data-testid='ticket-row'].is-selected,
+    .workflow-profile.is-active,
+    .theme-filter.is-active,
+    .settings-nav-item.is-active,
+    .graph-observatory--galaxy .theme-filter.is-active,
+    .wf-return-buttons button.is-active
+  ),
+:root[data-theme='nebuleuse-verre']
+  .shell.theme-serious
+  .router-view
+  :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled) {
+  background:
+    linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box,
+    var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+/* Les FRISES : le trait vertical de 2 px a gauche d'un detail deplie, d'un editeur ou d'un tour du
+   journal. Chacun des quatre calques de la lave prend la taille du trait. */
+:root[data-theme='nebuleuse-verre']
+  .runs-pane
+  :is(.model-log-expand, .pp-editeur, .sc-relecture, .diff-comment, .diff-editeur) {
+  background-image: var(--nv-lave-fond);
+  background-position: left top;
+  background-size: 2px 100%;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .model-log-frise {
+  background-image: var(--nv-lave-fond);
+}
+/* Les CALQUES de bord (capsules du fil, cadre des anneaux, qui met a jour, pied de la liste des fils,
+   « Garder » de la suppression, tranches de la pile d'images, filet de la marque). */
+:root[data-theme='nebuleuse-verre'] .artifact-pile__tranches > span,
+:root[data-theme='nebuleuse-verre'] .brand::after,
+:root[data-theme='nebuleuse-verre']
+  .thinking-block:not(.workflow-capsule)
+  > summary
+  .thinking-capsule::before,
+:root[data-theme='nebuleuse-verre'] .capsule-bouton:not(.is-error) .thinking-capsule::before,
+:root[data-theme='nebuleuse-verre'] .rail-update-who::before,
+:root[data-theme='nebuleuse-verre'] .conv-foot::before,
+:root[data-theme='nebuleuse-verre'] .conv-foot > button::before {
+  background: var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+/* « Garder » : son calque est peint par une regle plus lourde de ChatView.css, a travers
+   `--suppr-lisere` ; c'est ce reglage que la lave remplace, sur le calque lui-meme. */
+:root[data-theme='nebuleuse-verre'] .delete-confirm-card--fils .delete-confirm-cancel::before {
+  --suppr-lisere: var(--nv-lave-fond);
+}
+/* « Supprimer definitivement » (meme fil, capture du bouton plein : « a mettre aussi sur ces
+   boutons ») : meme voie que « Garder ». La regle commune peint `--suppr-plein` (repos) et
+   `--suppr-plein-vif` (survol) ; on les redefinit SUR le bouton, ou la lave a ses positions animees
+   -- posees sur la carte, elles liraient celles de la carte, qui n'en a pas. Le gel du haut est
+   celui de la carte, inchange. Il part a mi-cycle : « Garder », juste dessous, ne coule pas en
+   meme temps que lui. */
+:root[data-theme='nebuleuse-verre'] .delete-confirm-card--fils .delete-confirm-gel {
+  animation-delay: -4.5s;
+  --suppr-plein:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
+    var(--nv-lave-fond);
+  --suppr-plein-vif:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
+    var(--nv-lave-fond);
+}
+/* Le CADRE des blocs Raisonnement / Actions / Etapes et de la barre d'activite n'a qu'une source,
+   anneau-activite.css (aucune feuille de theme ne le repeint, test « le cadre est dessine par les
+   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes et leur mouvement. */
+:root[data-theme='nebuleuse-verre'] {
+  --thinking-capsule-lave-chaud: #e63ca0;
+  --thinking-capsule-lave-froid: #3c6eeb;
+  --thinking-capsule-lave-milieu: #9150dc;
+  --thinking-capsule-lave-animation: nv-lave 9s steps(30) infinite alternate;
+}
+/* LES TOURS PRECEDENTS NE COULENT PLUS (meme fil : « Limite la lampe a lave des capsules
+   Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse
+   suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade FIXE d'avant
+   la lave, et plus rien n'y bouge. Seule la derniere reponse du fil garde la lave.
+   - le cadre (anneau-activite.css, seul a le dessiner) : jetons des gouttes vides et mouvement
+     coupe, il retombe sur son degrade de base ;
+   - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
+     ArtifactPreview.css, recopie tel quel.
+   `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
+   `.msg.assistant` et se pose apres le dernier message, ne compte pas comme une reponse. */
+:root[data-theme='nebuleuse-verre'] .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail) {
+  --thinking-capsule-lave-chaud: transparent;
+  --thinking-capsule-lave-froid: transparent;
+  --thinking-capsule-lave-milieu: transparent;
+  --thinking-capsule-lave-animation: none;
+}
+:root[data-theme='nebuleuse-verre']
+  .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
+  :is(
+    .thinking-block:not(.workflow-capsule) > summary .thinking-capsule,
+    .capsule-bouton:not(.is-error) .thinking-capsule
+  )::before,
+:root[data-theme='nebuleuse-verre']
+  .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
+  .artifact-pile__tranches
+  > span {
+  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  animation: none;
+}
+/* Images cles aux TIERS exacts (conv-1199) : a 33 % / 66 %, elles tombaient a 2970 / 5940 ms sur
+   9 s, hors de la grille de 100 ms des crans -- la lave aurait change d'image entre deux crans.
+   fix-ok: animation fluide mesuree (animations-par-crans.test.ts rouge : « nv-lave 9s ease-in-out :
+   animation fluide, pas de steps() ») -> crans de 100 ms sur images cles alignees. */
+@keyframes nv-lave {
+  0% {
+    --nv-lave-x1: 85%;
+    --nv-lave-y1: 30%;
+    --nv-lave-x2: 12%;
+    --nv-lave-y2: 70%;
+    --nv-lave-x3: 50%;
+    --nv-lave-y3: 100%;
+  }
+  33.3333% {
+    --nv-lave-x1: 50%;
+    --nv-lave-y1: 85%;
+    --nv-lave-x2: 40%;
+    --nv-lave-y2: 10%;
+    --nv-lave-x3: 85%;
+    --nv-lave-y3: 40%;
+  }
+  66.6667% {
+    --nv-lave-x1: 18%;
+    --nv-lave-y1: 40%;
+    --nv-lave-x2: 75%;
+    --nv-lave-y2: 65%;
+    --nv-lave-x3: 30%;
+    --nv-lave-y3: 0%;
+  }
+  100% {
+    --nv-lave-x1: 65%;
+    --nv-lave-y1: 10%;
+    --nv-lave-x2: 88%;
+    --nv-lave-y2: 90%;
+    --nv-lave-x3: 10%;
+    --nv-lave-y3: 70%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    7. MOUVEMENT REDUIT : la seule lueur qui bat s'arrete.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {

@@ -540,11 +540,14 @@ const COMPLEMENT_CLAIR = `
 }
 /* La bulle de l'utilisateur : le degrade du noir, rose assombri (#d02b8c) pour que le blanc dessus
    passe 4,5:1 sur toute la bulle (4,54:1 sur le bleu, 4,77:1 sur le rose). La regle de
-   cosmic-outline.css est reservee aux themes sombres : elle est reprise ici. */
+   cosmic-outline.css est reservee aux themes sombres : elle est reprise ici.
+   Depuis conv-1163 (2026-10-27, « met ca aussi pour mes messages ») la bulle coule en lampe a lave,
+   comme sur le noir : \`--nv-lave-fond\` et son mouvement viennent de la section LAMPE A LAVE derivee
+   du noir, aux memes couleurs (gouttes sur le degrade #3c6eeb -> #d02b8c, rose assombri compris). */
 :root[data-theme='${CLAIR_ID}'] .cosmic-outline .msg.user .msg-body.msg-bulle {
   border: 1px solid transparent;
   border-radius: 12px 12px 3px 12px;
-  background: linear-gradient(135deg, #3c6eeb, #d02b8c);
+  background: var(--nv-lave-fond);
   background-origin: border-box;
   background-repeat: no-repeat;
   color: #ffffff;

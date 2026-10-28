@@ -325,7 +325,19 @@ describe('theme Nebuleuse de verre', () => {
     expect(bord.background).toBe('#ffffff')
     // Les messages envoyes PENDANT un tour (DirectiveReceiptRow, sans `msg-bulle`) sont peints par
     // la regle du theme : meme sens que les bulles ordinaires (ils etaient rose -> bleu).
-    expect(decls(`${PREFIXE} .msg.user .msg-body`).background).toBe(bulle)
+    // Depuis conv-1163 (2026-10-27, « met ca aussi pour mes messages »), ce theme peint TOUTES les
+    // bulles a la lampe a lave : des gouttes qui coulent POSEES SUR ce meme degrade, son dernier calque.
+    const bulleTheme = decls(`${PREFIXE} .msg.user .msg-body`)
+    expect(bulleTheme.background).toBe('var(--nv-lave-fond)')
+    expect(bulleTheme['--nv-lave-fond'].replace(/\s+/g, ' ')).toMatch(
+      /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
+    )
+    expect(bulleTheme['--nv-lave-fond']).toContain(bulle)
+    expect(bulleTheme.animation).toMatch(/^nv-lave /)
+    expect(
+      decls(`${PREFIXE}:not([data-base='clair']) .cosmic-outline .msg.user .msg-body.msg-bulle`)
+        .background
+    ).toBe('var(--nv-lave-fond)')
     expect(bord['border-radius']).toBe('inherit')
     expect(bord['mask-composite']).toBe('exclude')
     expect(bord['pointer-events']).toBe('none')
@@ -449,7 +461,8 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   // conv-198 (2026-10-10) : « enlève le halo autour de ce que j'ai sélectionné ». L'onglet ouvert
-  // du menu garde son dégradé, sans lueur autour.
+  // du menu garde son dégradé, sans lueur autour. Depuis conv-1163 (2026-10-27, capture du rond
+  // « Chat » : « a mettre aussi sur ces boutons »), ce dégradé coule en lampe à lave.
   it('ne met aucun halo autour de l onglet ouvert du menu', () => {
     for (const [fichier, theme] of [
       ['./theme-nebuleuse-verre.css', 'nebuleuse-verre']
@@ -464,7 +477,15 @@ describe('theme Nebuleuse de verre', () => {
           })
         }
       })
-      expect(actif.background, fichier).toBe('var(--nv-degrade)')
+      expect(actif.background, fichier).toBe('var(--nv-lave-fond)')
+      expect(actif['--nv-lave-fond'], fichier).toContain(
+        'linear-gradient(135deg, #3c6eeb, #e63ca0)'
+      )
+      expect(actif.animation, fichier).toMatch(/^nv-lave /)
+      // Deux fois plus lente que les boutons (9 s), et seulement elle (conv-1163, « Ralentis la
+      // lampe a lave du rond Chat [...] sans toucher aux autres boutons »).
+      expect(actif['animation-duration'], fichier).toBe('18s')
+      expect(actif['background-origin'], fichier).toBe('border-box')
       expect(actif['box-shadow'], fichier).toBe('none')
       expect(lire(fichier), fichier).not.toMatch(/nv-lueur-toi/)
     }
@@ -505,8 +526,10 @@ describe('theme Nebuleuse de verre', () => {
 describe('Envoyer en gel fondu bleu-rose', () => {
   const ENVOI = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled)`
   const VIDE = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled`
+  // Sous le reflet, la lampe a lave du theme depuis conv-1163 (2026-10-27) : des gouttes qui coulent
+  // posees sur le degrade bleu -> rose, qu'on verifie dans `--nv-lave-fond` (test « peint le rond »).
   const GEL =
-    /^linear-gradient\(180deg, rgba\(255, 255, 255, (0?\.\d+)\), rgba\(255, 255, 255, 0\) (\d+)%\),\s*linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
+    /^linear-gradient\(180deg, rgba\(255, 255, 255, (0?\.\d+)\), rgba\(255, 255, 255, 0\) (\d+)%\),\s*var\(--nv-lave-fond\)$/
   const derniere = (selecteur: string): Record<string, string> => {
     const valeurs: Record<string, string> = {}
     postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
@@ -527,6 +550,10 @@ describe('Envoyer en gel fondu bleu-rose', () => {
     const pret = derniere(ENVOI)
     expect(pret.background).toMatch(GEL)
     expect(reflet(pret.background)).toBe(0.4)
+    expect(pret['--nv-lave-fond'].replace(/\s+/g, ' ')).toMatch(
+      /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
+    )
+    expect(pret.animation).toMatch(/^nv-lave /)
     expect(pret.color).toBe('#ffffff')
     expect(pret['border-color']).toBe('transparent')
     expect(pret['background-origin']).toBe('border-box')
@@ -1034,7 +1061,9 @@ describe('Cadre chanfrein platine, coins seuls', () => {
  */
 describe('Pied de liste : une capsule a liseré, une seule case au survol', () => {
   const PIED = `${PREFIXE} .conv-foot`
-  const LISERE = 'linear-gradient(90deg, #3c6eeb, #e63ca0)'
+  // Le liseré bleu -> rose coule en lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu
+  // rose partout ou yen a ») : le calque porte la lave, animee sur lui-meme.
+  const LISERE = 'var(--nv-lave-fond)'
   const regles = (): postcss.Rule[] => {
     const toutes: postcss.Rule[] = []
     postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((r) => {
@@ -1063,6 +1092,7 @@ describe('Pied de liste : une capsule a liseré, une seule case au survol', () =
     const avant = decls(`${PIED}::before`)
     anneau(avant)
     expect(avant.background).toBe(LISERE)
+    expect(avant.animation).toMatch(/^nv-lave /)
     expect(decls(PIED).position).toBe('relative')
   })
 
@@ -1403,10 +1433,16 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       `${POPUPS} :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
     )
     const ligne = derniere(`${PREFIXE} .model-select-menu .effort-matrix-row.is-active`)
+    // Le cadre coule en lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu rose partout ») :
+    // meme fond choisi a l'interieur, la lave a la place du degrade fixe dans le bord.
     for (const fond of [puce.background, ligne.background]) {
       expect(fond).toBe(
-        'linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box, var(--nv-pop-cadre) border-box'
+        'linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box, var(--nv-lave-fond)'
       )
+    }
+    for (const r of [puce, ligne]) {
+      expect(r['background-origin']).toBe('border-box')
+      expect(r.animation).toMatch(/^nv-lave /)
     }
   })
 
@@ -1419,7 +1455,9 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       .map((r) => r.selecteur)
       .filter((s) => s.includes('router-'))
       .filter((s) => !/model-select-menu|model-quota-popover/.test(s))
-    expect(horsPopup).toEqual([
+    // Plusieurs regles peuvent viser CE selecteur (le cadre, puis la lampe a lave de conv-1163) ;
+    // aucune n'en vise un autre.
+    expect([...new Set(horsPopup)]).toEqual([
       `${PREFIXE} .shell.theme-serious .router-view :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
     ])
   })
@@ -1430,8 +1468,9 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     )
     expect(puce.border).toBe('1px solid transparent')
     expect(puce.background).toBe(
-      'linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box, var(--nv-choisi-cadre) border-box'
+      'linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box, var(--nv-lave-fond)'
     )
+    expect(puce.animation).toMatch(/^nv-lave /)
     expect(derniere(PREFIXE)['--nv-choisi-cadre']).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
   })
 
@@ -1495,9 +1534,70 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     // Plus aucune regle de bouton propre au theme : elle passerait devant la regle commune ou la
     // contredirait selon l'ordre de chargement.
     expect(derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)).toEqual({})
-    expect(
-      derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
-    ).toEqual({})
+    // Le liseré de « Garder » coule en lampe a lave (conv-1163, 2026-10-27) : le theme ne lui pose
+    // que des REGLAGES (la lave, son mouvement, et `--suppr-lisere` qui la designe) -- jamais un
+    // fond, qui contredirait la regle commune.
+    const lisere = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
+    expect(Object.keys(lisere).sort()).toEqual(['--nv-lave-fond', '--suppr-lisere', 'animation'])
+    expect(lisere['--suppr-lisere']).toBe('var(--nv-lave-fond)')
+    // « Supprimer definitivement » coule aussi (meme fil) : memes reglages seulement, le gel du haut
+    // de la carte garde par-dessus la lave, au repos comme au survol.
+    const plein = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-gel`)
+    expect(Object.keys(plein).sort()).toEqual([
+      '--nv-lave-fond',
+      '--suppr-plein',
+      '--suppr-plein-vif',
+      'animation',
+      'animation-delay'
+    ])
+    expect(plein['--suppr-plein']).toMatch(
+      /rgba\(255, 255, 255, 0\.4\)[\s\S]*var\(--nv-lave-fond\)$/
+    )
+    expect(plein['--suppr-plein-vif']).toMatch(
+      /rgba\(255, 255, 255, 0\.56\)[\s\S]*var\(--nv-lave-fond\)$/
+    )
+  })
+})
+
+/**
+ * LAMPE A LAVE DES CAPSULES : LE DERNIER TOUR SEUL (conv-1163, 2026-10-27 : « Limite la lampe a lave
+ * des capsules Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »).
+ * Une reponse suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade fixe
+ * d'avant la lave et ne bougent plus. La TV du bureau cache (`.msg.assistant` sans `.msg--rail`)
+ * n'est pas une reponse : posee apres le dernier message, elle ne doit pas le figer.
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer la regle, remettre la lave sur les tours finis, ou
+ * compter la TV comme une reponse.
+ */
+describe('Lampe a lave des capsules : le dernier tour seul', () => {
+  const regles: { selecteurs: string[]; decls: Record<string, string> }[] = []
+  postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+    const decls: Record<string, string> = {}
+    regle.walkDecls((d) => {
+      decls[d.prop] = d.value
+    })
+    regles.push({ selecteurs: regle.selectors.map((s) => s.replace(/\s+/g, ' ').trim()), decls })
+  })
+  const TOUR_FINI = `${PREFIXE} .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)`
+
+  it('vide les gouttes du cadre et coupe son mouvement sur un tour fini', () => {
+    const jetons = regles.find((r) => r.selecteurs.includes(TOUR_FINI))?.decls
+    expect(jetons).toEqual({
+      '--thinking-capsule-lave-chaud': 'transparent',
+      '--thinking-capsule-lave-froid': 'transparent',
+      '--thinking-capsule-lave-milieu': 'transparent',
+      '--thinking-capsule-lave-animation': 'none'
+    })
+  })
+
+  it('rend aux pastilles et aux tranches leur degrade fixe, immobile', () => {
+    const fige = regles.find((r) =>
+      r.selecteurs.some((s) => s.startsWith(`${TOUR_FINI} :is(`) && s.endsWith('::before'))
+    )
+    expect(fige?.selecteurs).toContain(`${TOUR_FINI} .artifact-pile__tranches > span`)
+    expect(fige?.decls.background).toBe(
+      'linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud))'
+    )
+    expect(fige?.decls.animation).toBe('none')
   })
 })
 

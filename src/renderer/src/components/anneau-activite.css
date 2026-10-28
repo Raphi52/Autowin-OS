@@ -41,7 +41,13 @@
   );
 }
 /* BORD DEGRADE de 2 px : un calque evide par masque, comme les capsules — `border-image` ignore
-   l'arrondi, et un fond `border-box` masquerait le fil sous le cadre. */
+   l'arrondi, et un fond `border-box` masquerait le fil sous le cadre.
+   LAMPE A LAVE (conv-1163, 2026-10-27 : « les borders bleu rose partout ou yen a », sur la capture
+   des blocs Raisonnement / Actions / Etapes) : trois gouttes posees sur le degrade du bord, aux
+   couleurs que le THEME donne (`--thinking-capsule-lave-*`), qui anime aussi leur position sur ce
+   calque (`--thinking-capsule-lave-animation`, positions `--nv-lave-*`). Le cadre reste dessine ICI
+   seul : un theme ne fait que fournir ces jetons. Sans eux, gouttes transparentes et aucune
+   animation : le bord est le degrade fixe d'avant. */
 .cadre-anneau::before {
   content: '';
   position: absolute;
@@ -49,7 +55,28 @@
   z-index: -1;
   padding: 2px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  background:
+    radial-gradient(
+      ellipse 60% 120% at var(--nv-lave-x1, 85%) var(--nv-lave-y1, 30%),
+      var(--thinking-capsule-lave-chaud, transparent) 0%,
+      color-mix(in srgb, var(--thinking-capsule-lave-chaud, transparent) 80%, transparent) 35%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 65% 130% at var(--nv-lave-x2, 12%) var(--nv-lave-y2, 70%),
+      var(--thinking-capsule-lave-froid, transparent) 0%,
+      var(--thinking-capsule-lave-froid, transparent) 35%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 45% 110% at var(--nv-lave-x3, 50%) var(--nv-lave-y3, 100%),
+      var(--thinking-capsule-lave-milieu, transparent) 0%,
+      transparent 100%
+    ),
+    linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  animation: var(--thinking-capsule-lave-animation, none);
   pointer-events: none;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
