@@ -44,6 +44,16 @@ export const TEXTES_FR = {
   'graphe.notePerso': 'perso',
   'graphe.notePerso.titre':
     'Note de ton Brain perso, privée — l’agent l’ouvre avec le préfixe perso:',
+  // Filtre des deux Brains et leurs ponts (conv-1262).
+  'graphe.filtreBrains': 'Brains affichés',
+  'graphe.filtreBrains.equipe': 'Équipe',
+  'graphe.filtreBrains.perso': 'Perso',
+  'graphe.filtreBrains.deux': 'Les deux',
+  'graphe.ponts.un': '1 pont perso → équipe',
+  'graphe.ponts.nombre': '{n} ponts perso → équipe',
+  'graphe.ponts.titre':
+    'Liens calculés par le sens entre tes notes perso et leurs voisines d’équipe. Rien n’est écrit côté équipe.',
+  'graphe.ponts.aucun': 'Aucun pont : {raison}',
   'graphe.detection': 'Détection des graphes…',
   'graphe.aucunGraphe': 'Aucun graphe accessible',
   'graphe.detection.relancerTitre': 'Relancer la détection des graphes de connaissances',
@@ -261,6 +271,15 @@ export const TEXTES_EN: Record<CleKnowledge, string> = {
   'graphe.notePerso': 'personal',
   'graphe.notePerso.titre':
     'Note from your personal Brain, private — the agent opens it with the perso: prefix',
+  'graphe.filtreBrains': 'Brains shown',
+  'graphe.filtreBrains.equipe': 'Team',
+  'graphe.filtreBrains.perso': 'Personal',
+  'graphe.filtreBrains.deux': 'Both',
+  'graphe.ponts.un': '1 personal → team bridge',
+  'graphe.ponts.nombre': '{n} personal → team bridges',
+  'graphe.ponts.titre':
+    'Links computed by meaning between your personal notes and their nearest team notes. Nothing is written on the team side.',
+  'graphe.ponts.aucun': 'No bridge: {raison}',
   'graphe.detection': 'Detecting graphs…',
   'graphe.aucunGraphe': 'No graph available',
   'graphe.detection.relancerTitre': 'Run knowledge graph detection again',

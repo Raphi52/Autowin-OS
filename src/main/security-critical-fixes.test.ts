@@ -709,7 +709,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:mascotte:choisir-style` — ECRIT ce style ; `ecrireStyleMascotte` refuse tout ce qui n'est
     //     pas `magicien` ou `basique`, puis la fenetre de la mascotte est recreee dans ce style.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(257)
+    // MISE A JOUR 2026-10-29 (conv-1262) — 257 -> 258, MESURE sur l'arbre partage. UN canal, garde
+    //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Brain')` (`ipc/brain.ts`) :
+    //   `os:loadBrainGraphReunis` — LECTURE des deux Brains relies par leurs ponts. Seul argument :
+    //     le plafond d'affichage (`lod`, nombre sinon ignore) ; AUCUN chemin recu de la vue — le
+    //     worker resout lui-meme la racine d'equipe et celle du Brain perso regle.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(258)
     expect(unguarded).toEqual([])
   })
 

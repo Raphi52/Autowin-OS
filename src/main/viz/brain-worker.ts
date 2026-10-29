@@ -8,13 +8,16 @@ import {
   loadBrainGraph,
   loadBrainGraphAsync,
   loadBrainGraphPreviewAsync,
+  loadBrainsReunisAsync,
   loadBrainNeighborhood,
   loadBrainThemeNodes,
   loadBrainThemes,
   readNodeFile,
   scanBrainGraphs,
-  searchVaultBrainNotesAsync
+  searchVaultBrainNotesAsync,
+  SHARED_BRAIN_ROOT
 } from './fs-brains'
+import { racineBrainPerso } from '../brain-perso-racine'
 import type { BrainWorkerRequest } from './brain-worker-contract'
 import { CacheParSignature } from './brain-worker-cache'
 
@@ -58,6 +61,15 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         value = await graphCache.obtenir(key, path, () =>
           loadBrainGraphAsync(path, lod, community, corpus)
         )
+        break
+      }
+      case 'loadGraphReunis': {
+        // Les deux Brains dans un graphe, reliés par leurs ponts (conv-1262). Les racines sont
+        // résolues ICI, jamais reçues de la vue : elle ne choisit pas quels dossiers sont lus.
+        const racinePerso = racineBrainPerso()
+        if (!racinePerso) throw new Error('aucun Brain perso réglé')
+        const [lod, corpus] = request.args
+        value = await loadBrainsReunisAsync(SHARED_BRAIN_ROOT, racinePerso, lod, corpus)
         break
       }
       case 'loadThemes':

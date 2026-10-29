@@ -1109,6 +1109,8 @@ const api = {
     ipcRenderer.invoke('os:loadBrainGraph', path, lod, community),
   loadBrainGraphPreview: (path: string, lod?: number): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainGraphPreview', path, lod),
+  loadBrainGraphReunis: (lod?: number): Promise<VizGraph> =>
+    ipcRenderer.invoke('os:loadBrainGraphReunis', lod),
   loadBrainThemes: (path: string): Promise<BrainTheme[]> =>
     ipcRenderer.invoke('os:loadBrainThemes', path),
   loadBrainThemeNodes: (path: string, themeIds: string[]): Promise<VizGraph['nodes']> =>
