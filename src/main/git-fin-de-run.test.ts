@@ -12,7 +12,7 @@ import { sandboxForPhase } from './orchestrator'
  *
  * Defaut vecu (conv-1521) : chaque run rendait la main sur « veux-tu que je commit / fusionne ? ».
  * Le travail restait dans une copie isolee et la decision d'integration retombait sur l'humain, run
- * apres run. La skill `salvage` fait exactement ce tri (balayage, jugement par CONTENU, execution),
+ * apres run. La skill `salvage` faisait exactement ce tri (balayage, jugement par CONTENU, execution),
  * elle etait sur disque et n'etait jouee QUE sur demande explicite.
  *
  * Elle est donc posee APRES la capitalisation (`learn`), dans le meme apres-gate : on ne trie que ce
@@ -33,28 +33,28 @@ const profil = (id: string): (typeof DEFAULT_WORKFLOWS)[number] => {
   return trouve!
 }
 
-describe('`salvage` ferme le run apres la capitalisation', () => {
+describe('`git` ferme le run apres la capitalisation (`salvage` avant conv-1252)', () => {
   for (const id of AVEC_SALVAGE) {
-    it(`${id} : learn -> salvage, et rien ne repart de salvage`, () => {
+    it(`${id} : learn -> git, et rien ne repart de git`, () => {
       const graphe = profil(id).graph!
       const learn = graphe.nodes.find((n) => n.phase === 'learn')
-      const salvage = graphe.nodes.filter((n) => n.phase === 'salvage')
+      const fin = graphe.nodes.filter((n) => n.phase === 'git')
 
       expect(learn, `${id} : un noeud learn`).toBeTruthy()
-      expect(salvage).toHaveLength(1)
+      expect(fin).toHaveLength(1)
       // Atteignable DEPUIS learn : l'ordre compte, on capitalise avant de trier.
-      expect(graphe.edges.some((a) => a.from === learn!.id && a.to === salvage[0]!.id)).toBe(true)
+      expect(graphe.edges.some((a) => a.from === learn!.id && a.to === fin[0]!.id)).toBe(true)
       // Terminal : trier le travail est le dernier geste du run.
-      expect(graphe.edges.filter((a) => a.from === salvage[0]!.id)).toEqual([])
+      expect(graphe.edges.filter((a) => a.from === fin[0]!.id)).toEqual([])
     })
   }
 
-  it('la chaine apres-gate est rendue DANS L’ORDRE learn puis salvage', () => {
+  it('la chaine apres-gate est rendue DANS L’ORDRE learn puis git', () => {
     const graphe = profil('feature').graph!
-    expect(noeudsApresJuge(graphe)).toEqual(['learn-1', 'salvage-1'])
+    expect(noeudsApresJuge(graphe)).toEqual(['learn-1', 'git-1'])
   })
 
-  it('un profil sans salvage garde une chaine d’un seul maillon', () => {
+  it('un profil sans git garde une chaine d’un seul maillon', () => {
     // L'entree qui doit FAIRE ECHOUER une correction trop large : si `noeudsApresJuge` se mettait a
     // inventer un maillon, ce graphe le montrerait.
     const graphe = {
@@ -93,15 +93,15 @@ describe('`salvage` ferme le run apres la capitalisation', () => {
   })
 })
 
-describe('`salvage` peut REELLEMENT trier', () => {
-  it('le noeud salvage recoit les droits d’ecriture sur une tache de mutation', () => {
+describe('`git` peut REELLEMENT trier', () => {
+  it('le noeud git recoit les droits d’ecriture sur une tache de mutation', () => {
     // Un noeud en lecture seule ne peut ni fusionner ni jeter : il redigerait ce qu'il ferait.
-    expect(sandboxForPhase('corrige le bug de rendu', 'salvage')).toBe('danger-full-access')
+    expect(sandboxForPhase('corrige le bug de rendu', 'git')).toBe('danger-full-access')
   })
 
   it('AUCUNE phase n’est bridee : meme droits partout (demande utilisateur 2026-09-04)', () => {
     // « tout le monde doit pouvoir tout faire a tout moment » : plus de frontiere par phase.
-    expect(sandboxForPhase('explique-moi comment marche le routage', 'salvage')).toBe(
+    expect(sandboxForPhase('explique-moi comment marche le routage', 'git')).toBe(
       'danger-full-access'
     )
     expect(sandboxForPhase('corrige le bug de rendu', 'scout')).toBe('danger-full-access')
@@ -114,13 +114,11 @@ describe('`salvage` peut REELLEMENT trier', () => {
       'danger-full-access'
     )
     // Le juge aussi : sans shell ni ecriture il ne peut pas verifier ce qu'il note.
-    expect(sandboxForPhase('/kaizen audite cette conversation', 'judge')).toBe(
-      'danger-full-access'
-    )
+    expect(sandboxForPhase('/kaizen audite cette conversation', 'judge')).toBe('danger-full-access')
   })
 
-  it('la skill `salvage` charge de vraies instructions', () => {
-    expect(skillInstruction('salvage').length).toBeGreaterThan(500)
+  it('la skill `git` charge de vraies instructions', () => {
+    expect(skillInstruction('git').length).toBeGreaterThan(500)
   })
 })
 

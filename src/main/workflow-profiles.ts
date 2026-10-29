@@ -323,12 +323,45 @@ function normalizeGraph(value: unknown): WorkflowGraph | undefined {
   if (!isPlainObject(value)) return undefined
   const nodes = Array.isArray(value.nodes) ? value.nodes : []
   const edges = Array.isArray(value.edges) ? value.edges : []
-  const candidate = {
+  const candidate = salvageDevientGit({
     entry: typeof value.entry === 'string' ? value.entry : '',
     nodes,
     edges
-  } as WorkflowGraph
+  } as WorkflowGraph)
   return graphDefects(candidate).length === 0 ? candidate : undefined
+}
+
+/**
+ * La skill `salvage` a été SUPPRIMÉE le 2026-10-29 (conv-1252) : `/git` porte son tri, puis publie
+ * et range. Un graphe enregistré avant (douze profils sur le poste de l'utilisateur) fermait ses
+ * runs par un nœud `salvage` dont la consigne n'existe plus : il partirait sans instruction. On le
+ * relit en nœud `git`, identifiant compris (`salvage-1` → `git-1`), pour qu'un profil livré resté
+ * intact garde l'empreinte du catalogue actuel — les migrations à empreinte exacte en dépendent.
+ */
+export function salvageDevientGit(graph: WorkflowGraph): WorkflowGraph {
+  const estSalvage = (node: unknown): boolean =>
+    isPlainObject(node) && node.phase === 'salvage' && typeof node.id === 'string'
+  if (!graph.nodes.some(estSalvage)) return graph
+  const pris = new Set(graph.nodes.map((node) => (isPlainObject(node) ? node.id : undefined)))
+  const renomme = new Map<string, string>()
+  for (const node of graph.nodes) {
+    if (!estSalvage(node) || !node.id.startsWith('salvage-')) continue
+    const neuf = `git-${node.id.slice('salvage-'.length)}`
+    if (!pris.has(neuf)) renomme.set(node.id, neuf)
+  }
+  const id = (ancien: string): string => renomme.get(ancien) ?? ancien
+  return {
+    ...graph,
+    entry: id(graph.entry),
+    nodes: graph.nodes.map((node) =>
+      estSalvage(node) ? { ...node, id: id(node.id), phase: 'git' } : node
+    ),
+    edges: graph.edges.map((edge) =>
+      isPlainObject(edge) && typeof edge.from === 'string' && typeof edge.to === 'string'
+        ? { ...edge, from: id(edge.from), to: id(edge.to) }
+        : edge
+    )
+  }
 }
 
 function normalizeInstructions(value: unknown): WorkflowInstructions | undefined {

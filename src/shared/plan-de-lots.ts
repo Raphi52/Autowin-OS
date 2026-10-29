@@ -510,6 +510,11 @@ export interface IssueDuTour {
   repris?: boolean
   /** Clos SANS résultat : l'agent est mort avec l'app (reprise « sans signe de vie »). */
   perdu?: boolean
+  /**
+   * L'erreur de l'`orchestrate` du tour quand il a échoué (`outcome.status === 'failed'`). Le tour
+   * de chat, lui, finit `ok` : il a bien répondu « Échec du workflow : … » (conv-1237, 2026-10-28).
+   */
+  echecOrchestration?: string
 }
 
 /**
@@ -541,6 +546,13 @@ const ligneLisible = (ligne: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
 
+/** La ligne d'une erreur multiligne qui porte le mur de quota (« • claude (…) : You've hit… »). */
+const ligneDuMur = (erreur: string): string | undefined =>
+  erreur
+    .split('\n')
+    .map((l) => l.replace(/^[\s•*-]+/u, '').trim())
+    .find(estMurDeQuota)
+
 /** La ligne où le fil se déclare bloqué ; un marqueur seul (titre) prend la ligne qui l'explique. */
 function blocageDeclare(texte: string): string | undefined {
   const m = BLOCAGE_DECLARE.exec(texte)
@@ -568,6 +580,12 @@ function blocageDeclare(texte: string): string | undefined {
  * Un tour fini sans erreur dont la réponse se déclare bloquée (« ⛔ Bloqué », « ⚠️ Non résolu »)
  * est un ÉCHEC, avec sa ligne de blocage pour raison : noté « fait », le chef ne le relançait pas
  * (conv-1153). Seule la réponse visible compte, pas une suggestion invisible qui citerait le marqueur.
+ *
+ * LIMITE D'USAGE (conv-1236, plan-c21413ba, 2026-10-28) : un lot coupé par le mur — erreur du tour
+ * OU de son `orchestrate` — est en ÉCHEC et REND son tour au plafond, qu'il n'a pas pu dépenser.
+ * Sans cela, 3 lots coupés étaient notés « fait » et épuisaient un plafond de 3 tours sans une
+ * ligne écrite. Le mur se lit sur ces erreurs seulement, jamais dans la réponse : un lot qui
+ * travaille sur la détection du quota cite la phrase dans son résumé.
  */
 export function noterFinDeTour(
   plan: PlanDeLots,
@@ -582,21 +600,26 @@ export function noterFinDeTour(
   if (lot.etat !== 'en-cours' && !reprisApresRedemarrage) return { plan, effet: 'deja-note', lot }
   if (issue.tour && lot.tour && issue.tour !== lot.tour) return { plan, effet: 'autre-tour', lot }
   const erreur = (issue.erreur ?? '').trim()
-  const blocage = issue.ok ? blocageDeclare(reponseVisible(issue.texte)) : undefined
-  const reussi = issue.ok && !blocage
-  const raison = blocage
-    ? `le fil se déclare bloqué : ${blocage}`.slice(0, RAISON_MAX)
-    : issue.ok
-      ? undefined
-      : issue.annule
-        ? 'tour arrêté avant la fin'
-        : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
+  const mur = [issue.ok ? '' : erreur, (issue.echecOrchestration ?? '').trim()].find(estMurDeQuota)
+  const blocage = issue.ok && !mur ? blocageDeclare(reponseVisible(issue.texte)) : undefined
+  const reussi = issue.ok && !blocage && !mur
+  const raison = mur
+    ? // La ligne du mur en tête : `reprendrePlan` la relit (`estMurDeQuota`) après la coupe.
+      (ligneDuMur(mur) ?? mur).slice(0, RAISON_MAX)
+    : blocage
+      ? `le fil se déclare bloqué : ${blocage}`.slice(0, RAISON_MAX)
+      : issue.ok
+        ? undefined
+        : issue.annule
+          ? 'tour arrêté avant la fin'
+          : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
   let suivant = avecLot(plan, lot.rang, {
     etat: reussi ? 'fait' : 'echec',
     raison,
     fin: maintenant
   })
-  if (!issue.ok && estMurDeQuota(erreur) && suivant.statut === 'en-cours')
+  if (mur) suivant = { ...suivant, toursLances: Math.max(0, suivant.toursLances - 1) }
+  if (mur && suivant.statut === 'en-cours')
     suivant = {
       ...suivant,
       statut: 'suspendu-quota',

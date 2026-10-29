@@ -91,11 +91,12 @@ describe('passageDuFil', () => {
     expect(passageDuFil(window.getSelection(), fil)).toBeNull()
   })
 
-  it('passage géant : coupé à 4000 caractères avec « … »', () => {
+  // conv-1228 (2026-10-28) : plus de coupe à 4 000 caractères (passage-selectionne.entier.test.ts).
+  it('passage géant : posé entier, sans « … »', () => {
     const fil = poser(`<div class="msg assistant"><p>${'a'.repeat(5000)}</p></div>`)
     selectionner(fil.querySelector('p')!.firstChild!, 0, 5000)
     const passage = passageDuFil(window.getSelection(), fil)
-    expect(passage).toHaveLength(4000)
-    expect(passage?.endsWith('…')).toBe(true)
+    expect(passage).toHaveLength(5000)
+    expect(passage?.endsWith('…')).toBe(false)
   })
 })

@@ -116,4 +116,18 @@ describe('découpage des textes du tour', () => {
     expect(placeDeLaReponse([blocs], true)).toEqual([0, 1])
     expect(placeDeLaReponse([[blocs[0]]], true)).toBeUndefined()
   })
+
+  it('arrivée APRÈS le début de la réponse, elle se range en tête sans la couper (conv-1240)', () => {
+    // Lue en parallèle du modèle : sur un tour rapide, la ligne arrive entre deux morceaux du texte.
+    const blocs = groupAssistantActivity([
+      reponse,
+      { ...lecture, at: DEBUT + 10_000 },
+      { kind: 'text', streamId: '0:0', text: 'Suite de la réponse.' }
+    ])
+    expect(blocs).toHaveLength(2)
+    expect(blocs[0]).toMatchObject({ kind: 'text', lectureRetenue: true })
+    expect((blocs[1] as { text: string }).text).toBe(
+      'Je ne modifie aucun fichier, comme demandé.\nSuite de la réponse.'
+    )
+  })
 })

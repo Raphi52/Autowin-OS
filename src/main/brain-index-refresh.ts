@@ -146,13 +146,25 @@ export function needsIndexRebuild(health: BrainHealth | null): boolean {
  *   c'est la limite d'origine, gardée telle quelle (une cause durable — corpus illisible, disque
  *   plein — ne se répare pas en réessayant).
  */
-let etat: 'libre' | 'en-cours' | 'echec' = 'libre'
-let redemandee = false
+type EtatReindexation = { etat: 'libre' | 'en-cours' | 'echec'; redemandee: boolean }
+/**
+ * Un état PAR RACINE de Brain (conv-1233, 2026-10-28) : l'index du Brain perso se reconstruit à
+ * côté de celui de l'équipe, et l'échec de l'un ne doit pas interdire l'autre.
+ */
+const etats = new Map<string, EtatReindexation>()
+
+function etatDe(racine: string): EtatReindexation {
+  let e = etats.get(racine)
+  if (!e) {
+    e = { etat: 'libre', redemandee: false }
+    etats.set(racine, e)
+  }
+  return e
+}
 
 /** Remise à zéro de l'état de session — réservée aux tests. */
 export function resetBrainIndexRefreshAttempt(): void {
-  etat = 'libre'
-  redemandee = false
+  etats.clear()
 }
 
 /**
@@ -163,17 +175,18 @@ export function startBrainIndexRebuild(
   env: NodeJS.ProcessEnv = process.env,
   spawnFn: SpawnLike = spawn as never
 ): BrainIndexRefresh {
-  if (etat === 'echec') {
+  const { tooling, python, brainRoot } = resolveBrainRuntime(env)
+  const session = etatDe(brainRoot)
+  if (session.etat === 'echec') {
     return {
       status: 'not-needed',
       detail: 'réindexation échouée deux fois cette session — pas de nouvel essai'
     }
   }
-  if (etat === 'en-cours') {
-    redemandee = true
+  if (session.etat === 'en-cours') {
+    session.redemandee = true
     return { status: 'not-needed', detail: 'réindexation déjà en cours — une autre suivra sa fin' }
   }
-  const { tooling, python, brainRoot } = resolveBrainRuntime(env)
   if (!tooling || !python || !brainRoot) {
     return { status: 'unavailable', detail: 'runtime Brain local non configuré' }
   }
@@ -191,7 +204,7 @@ export function startBrainIndexRebuild(
   // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
   childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
   recopierNomsHistoriques(childEnv, env)
-  etat = 'en-cours'
+  session.etat = 'en-cours'
   const args = [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir]
   const options = { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
 
@@ -207,8 +220,8 @@ export function startBrainIndexRebuild(
       // cause durable (corpus illisible, disque plein) ne se répare pas en réessayant en boucle.
       if (essaiFinal) {
         console.warn('[brain-index] second essai également échoué — Brain laissé dégradé')
-        etat = 'echec'
-        redemandee = false
+        session.etat = 'echec'
+        session.redemandee = false
         return
       }
       console.log('[brain-index] second et dernier essai')
@@ -229,9 +242,9 @@ export function startBrainIndexRebuild(
       if (regle) return
       regle = true
       console.log('[brain-index] réindexation terminée —', outDir)
-      etat = 'libre'
-      if (redemandee) {
-        redemandee = false
+      session.etat = 'libre'
+      if (session.redemandee) {
+        session.redemandee = false
         console.log(
           '[brain-index] savoir modifié pendant la reconstruction — nouvelle réindexation'
         )
@@ -271,7 +284,9 @@ export async function ensureBrainIndexFresh(deps?: {
     return { status: 'not-needed', detail: 'instance de test : index du Brain partagé non touché' }
   }
   // Session qui a déjà renoncé : inutile de solliciter le serveur.
-  if (etat === 'echec') return startBrainIndexRebuild(deps?.env, deps?.spawnFn)
+  if (etatDe(resolveBrainRuntime(deps?.env).brainRoot).etat === 'echec') {
+    return startBrainIndexRebuild(deps?.env, deps?.spawnFn)
+  }
   const env = deps?.env ?? process.env
   const lire = deps?.readHealth ?? (() => readBrainHealth(fetch, env))
   const attendre = deps?.sleepFn ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))) // sleep-ok: laisse le Brain finir d'évaluer la fraîcheur

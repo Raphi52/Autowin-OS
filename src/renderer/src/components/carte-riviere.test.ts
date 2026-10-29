@@ -435,6 +435,26 @@ describe('tout tient dans la hauteur de l’écran', () => {
     }
   })
 
+  // conv-1214 : la ligne « À vérifier » garde sous chaque post-it la place de ses boutons.
+  it('un étage au pas plus grand l’applique à ses lignes, et tout tient encore', () => {
+    const bords = bordsDesColonnes(poidsDesJours(13.5))
+    const etages = [etage('refuse', { 13: 2 }), etage('sans-preuve', { 13: 4, 2: 6 })]
+    const avecPlace = { ...O, sousLigneParEtage: { 'sans-preuve': 62 + 24 } }
+    // Sans hauteur connue : chaque étage prend le pas de SA taille de ligne, à la même échelle.
+    const [r, v] = disposerEtages(etages, bords, W, 0, avecPlace)
+    expect(v.pas[13] / r.pas[13]).toBeCloseTo((62 + 24) / 62, 9)
+    // Tassé : jamais au-delà de la hauteur offerte, et chaque case garde ses lignes.
+    for (const H of [500, 300, 180]) {
+      const d = disposerEtages(etages, bords, W, H, avecPlace)
+      expect(fin(d)).toBeLessThanOrEqual(H + 1e-6)
+      for (const e of d)
+        for (let j = 0; j < JOURS; j += 1)
+          expect(Math.ceil(e.nombreParJour[j] / e.colonnes[j]) * e.pas[j]).toBeLessThanOrEqual(
+            e.hauteur - e.marge + 1e-6
+          )
+    }
+  })
+
   it('donne la place à l’étage qu’éclaire la loupe', () => {
     const etages = [etage('refuse', { 2: 6 }), etage('prouve', { 13: 6 })]
     const sur = (foyer: number) =>
@@ -469,7 +489,9 @@ describe('tout tient dans la hauteur de l’écran', () => {
     for (const echelleMax of [0.4, 0.7]) {
       const tasse = placer(13, 0, bords, W, echelleMax)
       expect(tasse.largeur).toBeGreaterThan(POSTIT_L)
-      expect(tasse.largeur).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX)
+      // Sous l'échelle 1, le plafond suit le grossissement du texte (conv-1242, texteDuPostit) : à
+      // l'écran, un post-it ne s'étire toujours pas au-delà de ETIREMENT_MAX × POSTIT_L.
+      expect(tasse.largeur * tasse.k).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX + 1e-9)
       // L'écriture garde l'échelle que la hauteur lui laisse : c'est le papier qui s'élargit.
       expect(tasse.k).toBe(echelleMax)
       for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {

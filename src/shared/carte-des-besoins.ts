@@ -129,9 +129,11 @@ export interface BilanDesMentions {
 /**
  * D'où vient le demandeur. `journal` : relevé dans git AU MOMENT du prompt. `git-du-dossier` : la
  * demande est antérieure au journal, l'identité est celle que git donne AUJOURD'HUI dans le dossier
- * du fil — une déduction, affichée comme telle.
+ * du fil — une déduction, affichée comme telle. `poste` : le nom de ce poste sur le Board (choisi
+ * dans les réglages, sinon le compte Windows), posé sur toutes ses demandes (conv-1230,
+ * `board-nom-du-poste.ts`).
  */
-export type OrigineDuDemandeur = 'journal' | 'git-du-dossier'
+export type OrigineDuDemandeur = 'journal' | 'git-du-dossier' | 'poste'
 
 export interface DemandeurDeLaCarte {
   /** Clé de regroupement : l'email en minuscules, sinon le nom — git distingue deux emails, nous aussi. */
@@ -202,4 +204,26 @@ export interface CarteDesBesoins {
   calculeeA: number
   /** Durée du calcul dans le processus principal, pour voir s'il devient trop lourd. */
   dureeMs: number
+  /**
+   * Durée de chaque étape (conv-1248) : voir dans l'app OÙ part le temps, sans la redémarrer avec
+   * un chrono. La lecture des runs se recouvre avec les autres : la somme dépasse `dureeMs`.
+   * Absente d'une carte écrite par une version plus ancienne (Board d'un collègue).
+   */
+  etapesMs?: EtapesDuCalcul
+}
+
+/** Millisecondes par étape du calcul de la carte (conv-1248). */
+export interface EtapesDuCalcul {
+  /** Relecture des fils (seuls ceux qui ont bougé sont recalculés). */
+  fils: number
+  /** Du lancement de la lecture des runs à son résultat, attente du disque comprise. */
+  runs: number
+  /** Identités git des dossiers (servies de leur mémoire, relues en fond). */
+  identites: number
+  /** `besoins.jsonl` relu. */
+  journal: number
+  /** `liens-work-items.jsonl` relu. */
+  liens: number
+  /** Projection finale : projets, demandes, demandeurs. */
+  assemblage: number
 }

@@ -9,6 +9,7 @@ import { appliquerThemeMode, lireThemeMode } from './theme-mode'
 import { appliquerLangue, lireLangue, transmettreLangueAuMoteur } from './langue'
 import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
+import { installerModaliteSaisie } from './modalite-saisie'
 
 /*
  * Le mode d'affichage est posé AVANT le premier rendu : appliqué après, l'application
@@ -37,6 +38,13 @@ installerCopiePropre()
  * par seconde, 20 à 33 % de la carte graphique de l'utilisateur (conv-1075).
  */
 installerAnimationsParCrans()
+
+/*
+ * Le contour de focus d'un bouton ne s'allume qu'en naviguant au clavier (conv-1222) : Chromium
+ * l'allumait aussi sur un bouton cliqué dès qu'une touche partait ensuite, Maj seule comprise.
+ * Posé AVANT le premier rendu, pour qu'aucun contour n'apparaisse au démarrage.
+ */
+installerModaliteSaisie()
 
 /*
  * La sonde demarre AVANT le premier rendu, et pour toute la duree de la session : un gel se produit

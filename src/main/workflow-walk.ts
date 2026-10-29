@@ -205,18 +205,18 @@ export function noeudApprentissageApresJuge(graph: WorkflowGraph): string | unde
  * LA CHAINE APRES-GATE, dans l ordre ou elle doit etre jouee ; vide si le profil n en declare pas.
  *
  * Elle part d une arete VERTE d un juge vers un noeud `learn`, et se prolonge tant que le maillon
- * suivant est lui aussi un noeud d apres-gate (`learn` ou `salvage`) atteint par une sortie UNIQUE.
+ * suivant est lui aussi un noeud d apres-gate (`learn` ou `git`) atteint par une sortie UNIQUE.
  * Le DERNIER maillon doit etre terminal : s il continuait, il appartiendrait a la marche.
  *
  * `salvage` y a ete ajoute le 2026-08-29 pour une raison mesuree (conv-1521) : un run vert rendait
  * la main sur « veux-tu que je commit / fusionne ? » et laissait le travail dans une copie isolee.
  * Trier le travail est un GESTE DU RUN, pas une question a l utilisateur — et, comme la
- * capitalisation, il ne se joue que sur un verdict VERT.
+ * capitalisation, il ne se joue que sur un verdict VERT. Depuis le 2026-10-29 (conv-1252) ce maillon
+ * est `git` : la skill `salvage` a été supprimée, `/git` porte son tri puis publie et range.
  */
 export function noeudsApresJuge(graph: WorkflowGraph): string[] {
   const juges = new Set(graph.nodes.filter((node) => node.phase === 'judge').map((node) => node.id))
-  const estMaillon = (phase: string | undefined): boolean =>
-    phase === 'learn' || phase === 'salvage'
+  const estMaillon = (phase: string | undefined): boolean => phase === 'learn' || phase === 'git'
   for (const edge of graph.edges) {
     if (!juges.has(edge.from) || edge.when !== 'green') continue
     const premier = graph.nodes.find((node) => node.id === edge.to)

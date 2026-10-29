@@ -331,8 +331,10 @@ export class ExecutionSupervisor {
       if (abortRun) runtime.controller.abort(reason)
       throw new ExecutionBudgetExceededError(reason)
     }
-    // La CONCURRENCE reste enforcee : elle protege de la saturation de la machine en process, pas le
-    // portefeuille — elle ne releve donc pas du reglage ci-dessous. Aucune borne de DUREE n'existe.
+    // La CONCURRENCE n'est plus refusée ici (2026-10-28, décision utilisateur « ni budget ni
+    // blocage ») : un tour renvoyé juste après un Stop mourait sur « Budget de concurrence atteint
+    // (1) » car l'appel arrêté n'était pas encore libéré. Le fan-out reste borné par son ordonnanceur
+    // (greedy-scheduler.ts), qui n'a jamais compté sur ce refus. Aucune borne de DUREE n'existe.
     //
     // Plafonds de DÉPENSE : `blocking` refuse l'appel SUIVANT, jamais la finalisation d'un appel
     // déjà payé. `metering-only` continue de tout compter sans refuser.
@@ -357,9 +359,6 @@ export class ExecutionSupervisor {
     }
     if (launchesAgent && runtime.startedAgents >= limits.maxAgents) {
       deny(`Budget d'agents atteint (${limits.maxAgents})`)
-    }
-    if (runtime.activeCalls >= limits.maxConcurrency) {
-      deny(`Budget de concurrence atteint (${limits.maxConcurrency})`)
     }
     if (enforceSpend && runtime.totalTokens >= limits.maxTotalTokens) {
       deny(`Budget tokens total atteint (${limits.maxTotalTokens})`, false)

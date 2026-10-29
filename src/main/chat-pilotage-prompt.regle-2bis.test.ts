@@ -15,8 +15,10 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 describe('chat-pilotage-prompt — regle 2 bis (edition atomique des balises englobantes)', () => {
   it('enonce la regle, sa cause et son interdit', () => {
     const prompt = buildChatPilotagePrompt([])
-    // 1. La regle est numerotee 2 bis, entre le « CHERCHE » (2) et le « ESSAIE » (3).
-    expect(prompt).toContain('2 bis.')
+    // 1. La regle est numerotee 1 bis, entre le « CHERCHE » (1) et le « NETTOIE » (2) — renumerotee
+    // le 2026-10-28 (conv-1229) quand « arrete la meme approche » et « ESSAIE » sont partis : ils
+    // redisaient le reflexe 7 de la constitution.
+    expect(prompt).toContain('1 bis.')
     // 2. La CAUSE est nommee : la verification apres chaque edition refuse l'etat intermediaire.
     expect(prompt).toMatch(/apres CHAQUE edition[\s\S]{0,120}REFUSE/u)
     // 3. Le REMEDE est nomme : ouverture et fermeture dans le meme appel.
@@ -68,10 +70,12 @@ describe('chat-pilotage-prompt — regle 2 bis (edition atomique des balises eng
   it('garde la regle a sa place dans le bloc « FACE A UN BLOCAGE »', () => {
     const prompt = buildChatPilotagePrompt([])
     const blocage = prompt.indexOf('FACE A UN BLOCAGE')
-    const regle = prompt.indexOf('2 bis.')
-    const essaie = prompt.indexOf('3. ESSAIE')
+    const cherche = prompt.indexOf('1. CHERCHE')
+    const regle = prompt.indexOf('1 bis.')
+    const nettoie = prompt.indexOf('2. NETTOIE')
     expect(blocage).toBeGreaterThanOrEqual(0)
-    expect(regle).toBeGreaterThan(blocage)
-    expect(essaie).toBeGreaterThan(regle)
+    expect(cherche).toBeGreaterThan(blocage)
+    expect(regle).toBeGreaterThan(cherche)
+    expect(nettoie).toBeGreaterThan(regle)
   })
 })

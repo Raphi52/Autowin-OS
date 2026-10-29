@@ -688,18 +688,27 @@ function tracePath(runPath: string): string {
   return join(dirname(runPath), 'trace.json')
 }
 
-const STEP_TEXT_CAP = 4000
+/**
+ * Borne d'une étape du fil : seulement contre une sortie démesurée. Avant conv-1228 (2026-10-28),
+ * 4 000 caractères suivis d'un « … » nu : l'étape lue entière en direct ressortait amputée après un
+ * rechargement ou une reprise (qui réécrit ce fichier à partir de sa propre relecture).
+ */
+const STEP_TEXT_CAP = 200_000
+/** Place de la marque de coupe : une étape déjà bornée, relue puis réécrite, n'est pas recoupée. */
+const MARGE_DE_LA_MARQUE = 100
+
+function texteDEtape(texte: string | undefined): string | undefined {
+  if (!texte || texte.length <= STEP_TEXT_CAP + MARGE_DE_LA_MARQUE) return texte
+  return `${texte.slice(0, STEP_TEXT_CAP)}… [${texte.length - STEP_TEXT_CAP} caractères coupés]`
+}
 
 /**
  * Persiste le FIL des sous-agents (exec/juge/gate avec contenu) à côté du RUN.md.
- * Sidecar JSON séparé → ne casse pas le format autowin du .md. Contenu cappé.
+ * Sidecar JSON séparé → ne casse pas le format autowin du .md.
  */
 export function saveConvRunTrace(runPath: string, steps: OrchestrationStep[]): void {
   try {
-    const trimmed = steps.map((s) => ({
-      ...s,
-      text: s.text && s.text.length > STEP_TEXT_CAP ? `${s.text.slice(0, STEP_TEXT_CAP)}…` : s.text
-    }))
+    const trimmed = steps.map((s) => ({ ...s, text: texteDEtape(s.text) }))
     writeFileSync(tracePath(runPath), JSON.stringify(trimmed), 'utf8')
   } catch {
     /* la trace est un bonus d'affichage : son échec ne casse rien */

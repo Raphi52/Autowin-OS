@@ -1478,6 +1478,13 @@ export class ConversationStore {
    */
   chargeurDArchive?: (id: string) => Conversation | undefined
 
+  /**
+   * Résolue quand la relecture des archives est finie, avec le nombre ajouté — tout de suite sans
+   * archive. Posée par `persistConversations` (conv-1248) : le préchauffage du Board l'attend, sans
+   * quoi il ne calculerait que les fils actifs et laisserait les ~800 archivés à la première ouverture.
+   */
+  archivesChargees: Promise<number> = Promise.resolve(0)
+
   get(id: string): Conversation | undefined {
     const conversation = this.conversations.get(id)
     if (conversation || !this.chargeurDArchive) return conversation

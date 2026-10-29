@@ -364,10 +364,13 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
 
   it('l’écho n’entre PAS dans le prompt système — le préfixe doit rester cachable', () => {
     const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
-    const system = source.slice(
-      source.indexOf('const systemParts'),
-      source.indexOf('const system =')
-    )
+    // Les blocs systeme sont une FONCTION du texte de pilotage depuis le 2026-10-28 (conv-1229 :
+    // consigne courte quand les outils directs sont servis) ; tout systeme envoye passe par elle.
+    const debut = source.indexOf('const systemPartsAvec')
+    const fin = source.indexOf('const assemblerSysteme')
+    expect(debut).toBeGreaterThan(0)
+    expect(fin).toBeGreaterThan(debut)
+    const system = source.slice(debut, fin)
     expect(system).not.toContain('memoryEcho')
     expect(buildChatPilotagePrompt([])).not.toMatch(
       /CE QUE TU AS RETENU DANS CETTE CONVERSATION \(/

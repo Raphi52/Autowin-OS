@@ -25,7 +25,9 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 describe('chat-pilotage-prompt — le mot « scout » ne commande pas une orchestration', () => {
   it('nomme les MOTS qui ne declenchent pas de pipeline, « scout » en tete', () => {
     const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/VOCABULAIRE de la demande ne decide JAMAIS de l'orchestration/u)
+    // Fondu dans la RÈGLE PREMIÈRE le 2026-10-28 (conv-1229) : la phrase change, pas la regle.
+    expect(prompt).toMatch(/Les MOTS de la demande ne décident pas/u)
+    expect(prompt).toMatch(/nomment un livrable d'analyse que tu rends toi-même/u)
     for (const mot of ['scout', 'audit', 'trouve les causes', '/heal']) {
       expect(prompt).toContain(mot)
     }

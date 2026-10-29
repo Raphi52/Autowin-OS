@@ -20,8 +20,12 @@ import { estLigneBesoinAMasquer } from './ligne-besoin'
 
 const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
-/** Au-delà, ce n'est plus un prompt mais un paragraphe : on le borne au lieu de noyer le champ. */
-const LONGUEUR_MAX = 600
+/**
+ * Au-delà, ce n'est plus un prompt mais un pavé : la ligne est ÉCARTÉE (fail-open, comme le dit
+ * l'en-tête), jamais coupée. Avant conv-1228 (2026-10-28), on la tronquait à 600 caractères en
+ * pleine phrase, et un clic envoyait cet ordre amputé comme s'il était entier.
+ */
+const LONGUEUR_MAX = 2_000
 
 const SAUT = String.fromCharCode(10)
 
@@ -121,11 +125,9 @@ function lirePropositionsBrutes(texte: string): PropositionSuite[] {
     )
     // Une ligne réduite à de la ponctuation est un raté du modèle, pas un prompt.
     if (!/[\p{L}\p{N}]/u.test(lue.texte)) continue
-    lues.push({
-      texte:
-        lue.texte.length > LONGUEUR_MAX ? lue.texte.slice(0, LONGUEUR_MAX).trimEnd() : lue.texte,
-      score: lue.score
-    })
+    // Un pavé n'est pas un prompt : écarté ENTIER, jamais envoyé en morceau.
+    if (lue.texte.length > LONGUEUR_MAX) continue
+    lues.push({ texte: lue.texte, score: lue.score })
   }
   return lues
 }
@@ -324,8 +326,14 @@ function mentionneUnActeDePublication(texte: string): boolean {
   )
 }
 
+/*
+ * `/git` EN TÊTE (conv-1250, 2026-10-29). L'utilisateur relançait ce prompt en retapant la cible :
+ * « /salvage push main origin », « /salvage all origin main ». `/git` trie comme salvage PUIS
+ * publie selon les habitudes du dépôt et range ce qui traîne. En tête, parce que seule la forme
+ * `/nom` en début de message charge la skill (`skill-nommee.ts`).
+ */
 export const PROMPT_SALVAGE =
-  "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
+  '/git : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées), publie-les selon les habitudes du dépôt et range ce qui traîne.'
 
 /*
  * DEUX EXCEPTIONS, mesurees le 2026-09-03 (conv-210).
@@ -343,7 +351,12 @@ export const PROMPT_SALVAGE =
  * Le garde-fou garde tout son mordant sur le cas qu'il vise : un prompt dont l'acte PRINCIPAL est
  * de publier.
  */
-const ORDRE_DE_TRI = /\/salvage\b/i
+/*
+ * `/git` est l'ordre de tri au même titre que `/salvage` (conv-1250). Les bords excluent un chemin :
+ * `src/main/git-read-main.ts` ou `scripts/salvage-resurrection.mjs` nomment un fichier, ils
+ * n'ordonnent aucun tri.
+ */
+const ORDRE_DE_TRI = /(?<![\w./\\-])\/(?:salvage|git)(?![\w./\\-])/i
 const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b/i
 
 /*

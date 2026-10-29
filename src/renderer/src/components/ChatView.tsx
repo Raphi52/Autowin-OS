@@ -207,6 +207,16 @@ import {
   fusionnerDossiersImportes,
   sansDossierRetire
 } from './chat-dossiers-import'
+import {
+  CLE_DOSSIERS_CONNUS,
+  CLE_DOSSIERS_RETIRES,
+  EVT_DOSSIERS_DU_CHAT,
+  ecrireDossiersRetires as ecrireRetiresPartages,
+  lireDossiersDuChat,
+  lireDossiersRetires,
+  transmettreDossiersDuChat
+} from './dossiers-du-chat'
+import { cleDeDossier } from '../../../shared/board-dossiers-du-chat'
 import { OrchestratorModelSelector, type OrchestratorAccounts } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
@@ -276,8 +286,6 @@ const CLE_JAUGES = 'autowin.context-gauges.v1'
  */
 const CLE_CONTEXTES = 'autowin.contextes-detailles.v1'
 const CONTEXTES_MEMORISES_MAX = 40
-/** Dossiers de classement deja choisis, memorises entre les sessions. */
-const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
 /**
  * Texte de CETTE vue dans la langue courante (traduction anglaise, conv-1170), pour le rendu comme pour
  * un gestionnaire ou un effet : lu à l'appel, il n'ajoute aucune dépendance de hook. La vue se
@@ -293,27 +301,12 @@ const LIBELLE_FILTRE_STATUT = {
   inactives: 'liste.filtre.archivees'
 } as const satisfies Record<'toutes' | 'actives' | 'inactives', Parameters<typeof texteFil>[0]>
 /**
- * Dossiers RETIRES par la croix — la memoire qui empeche l'import claude.exe de les ressusciter
- * a chaque lancement. Distincte de la liste : « absent » ne dit pas si c'est « jamais vu » ou
- * « retire expres », et l'import a besoin de cette difference.
+ * La liste des dossiers et la mémoire des retraits vivent dans `dossiers-du-chat.ts` depuis que la
+ * croix du Board retire de la MÊME liste (conv-1212).
  */
-const CLE_DOSSIERS_RETIRES = 'autowin.conv-folders.retires'
-
-function lireDossiersRetires(): string[] {
-  try {
-    const lu = JSON.parse(window.localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]') as unknown
-    return Array.isArray(lu) ? lu.filter((x): x is string => typeof x === 'string') : []
-  } catch {
-    return [] // mémoire illisible : au pire un dossier retiré revient UNE fois, la croix le range
-  }
-}
-
 function ecrireDossiersRetires(retires: string[]): void {
-  try {
-    window.localStorage.setItem(CLE_DOSSIERS_RETIRES, JSON.stringify(retires))
-  } catch (error) {
-    traceSilentFailure('dossiers-retires:persist', error)
-  }
+  const erreur = ecrireRetiresPartages(retires)
+  if (erreur) traceSilentFailure('dossiers-retires:persist', erreur)
 }
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
 import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
@@ -3011,7 +3004,14 @@ export function ChatView({
               })
             }
           }
+          // LE BANDEAU NOMME SON FIL (conv-1241) : il est commun à la vue et survit au changement de
+          // fil ; celui de conv-1227 (Stop à 22:09:11) s'affichait au-dessus de conv-1240, dont le
+          // tour tournait encore, et se lisait comme parlant de l'orientation de conv-1240.
+          const titreDuFil =
+            convsRef.current.find((conversation) => conversation.id === convId)?.title?.trim() ||
+            convId
           const text = texteFil('orientation.apresFin', {
+            titre: titreDuFil.length > 48 ? `${titreDuFil.slice(0, 47)}…` : titreDuFil,
             n: textes.length,
             suite: texteFil(
               gele
@@ -6885,34 +6885,70 @@ export function ChatView({
    * l'ecriture : a la lecture il vide ce qui s'est deja installe (cette liste vit dans le stockage
    * local, il n'y a pas de migration de fichier possible), a l'ecriture il empeche le retour.
    */
-  const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => {
-    try {
-      const brut = window.localStorage.getItem(CLE_DOSSIERS_CONNUS)
-      const lu = brut ? (JSON.parse(brut) as unknown) : null
-      if (Array.isArray(lu))
-        return lu.filter((x): x is string => typeof x === 'string' && estCheminDeDossier(x))
-    } catch {
-      /* preference illisible : on repart des dossiers reellement utilises */
-    }
-    return []
-  })
+  const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => lireDossiersDuChat())
+  /*
+    Les retraits, aussi en mémoire : la croix du Board retire même le dépôt par défaut
+    (conv-1212, 2e demande : « ils n'ont pas la petite croix »), que ce menu propose toujours — il
+    doit le cacher à son tour, la liste est commune. « This computer » n'en tient JAMAIS compte
+    (conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer »).
+  */
+  const [dossiersRetires, setDossiersRetires] = useState<string[]>(() => lireDossiersRetires())
+  const estRetire = useCallback(
+    (chemin: string | null | undefined): boolean => {
+      const cle = cleDeDossier(chemin)
+      return !!cle && dossiersRetires.some((retire) => cleDeDossier(retire) === cle)
+    },
+    [dossiersRetires]
+  )
   const memoriserDossier = useCallback((chemin: string): void => {
     const propre = chemin.trim()
     if (!estCheminDeDossier(propre)) return
     // Un ajout MANUEL efface le retrait : l'utilisateur vient de dire le contraire de la croix,
     // et l'import claude.exe redevient autorisé à maintenir ce dossier.
-    ecrireDossiersRetires(sansDossierRetire(lireDossiersRetires(), propre))
+    const retires = sansDossierRetire(lireDossiersRetires(), propre)
+    ecrireDossiersRetires(retires)
+    setDossiersRetires(retires)
     setDossiersMemorises((connus) => (connus.includes(propre) ? connus : [...connus, propre]))
   }, [])
   const oublierDossier = useCallback((chemin: string): void => {
     // Retrait EXPLICITE, mémorisé : sans cette trace, l'import claude.exe rejoué à chaque
     // lancement ressusciterait le dossier et la croix serait un bouton mort.
-    ecrireDossiersRetires(avecDossierRetire(lireDossiersRetires(), chemin))
+    const retires = avecDossierRetire(lireDossiersRetires(), chemin)
+    ecrireDossiersRetires(retires)
+    setDossiersRetires(retires)
     setDossiersMemorises((connus) => connus.filter((connu) => connu !== chemin))
   }, [])
   useEffect(() => {
     window.localStorage.setItem(CLE_DOSSIERS_CONNUS, JSON.stringify(dossiersMemorises))
+    // Le Board ne montre que ces dossiers (conv-1212) : le processus principal en garde la copie,
+    // pour que sa recopie de fin de tour suive aussi un retrait fait ici, Board fermé.
+    void transmettreDossiersDuChat(dossiersMemorises).catch((error) =>
+      traceSilentFailure('dossiers-du-chat:transmettre', error)
+    )
   }, [dossiersMemorises])
+  // La croix du Board retire de la MÊME liste (conv-1212) : relue ici, sinon la copie en mémoire du
+  // Chat réécrirait le dossier retiré à son prochain changement.
+  useEffect(() => {
+    const relire = (): void => {
+      setDossiersMemorises((connus) => {
+        const lus = lireDossiersDuChat()
+        return JSON.stringify(lus) === JSON.stringify(connus) ? connus : lus
+      })
+      setDossiersRetires((avant) => {
+        const lus = lireDossiersRetires()
+        return JSON.stringify(lus) === JSON.stringify(avant) ? avant : lus
+      })
+    }
+    const autreFenetre = (event: StorageEvent): void => {
+      if (event.key === CLE_DOSSIERS_CONNUS || event.key === CLE_DOSSIERS_RETIRES) relire()
+    }
+    window.addEventListener(EVT_DOSSIERS_DU_CHAT, relire)
+    window.addEventListener('storage', autreFenetre)
+    return () => {
+      window.removeEventListener(EVT_DOSSIERS_DU_CHAT, relire)
+      window.removeEventListener('storage', autreFenetre)
+    }
+  }, [])
 
   const rangerDans = useCallback(
     async (conversationId: string, chemin?: string | null): Promise<void> => {
@@ -8076,6 +8112,8 @@ export function ChatView({
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
+              {/* « This computer » est TOUJOURS là (conv-1231), même si une ancienne croix du Board
+                  l'a mémorisé comme retiré : il ne se retire pas. */}
               {convFolderMenu.mode === 'dossier' && dossierPersonnel && (
                 <button
                   role="menuitem"
@@ -8097,6 +8135,7 @@ export function ChatView({
               {convFolderMenu.mode === 'dossier' &&
                 defaultWorkspace?.trim() &&
                 !estDossierPersonnel(defaultWorkspace) &&
+                !estRetire(defaultWorkspace) &&
                 !dossiersConversations.includes(defaultWorkspace.trim()) && (
                   <button
                     role="menuitem"
@@ -8423,11 +8462,14 @@ export function ChatView({
                     // Meme source que le badge de branche (`gitCwd`), sinon les deux divergent.
                     const dossierProjet = dossierProjetAffiche
                     const cheminEffectif = dossierProjet || defaultWorkspace
-                    const labelDossier = estDossierPersonnel(cheminEffectif)
+                    const surCetOrdinateur = estDossierPersonnel(cheminEffectif)
+                    const labelDossier = surCetOrdinateur
                       ? 'This computer'
                       : cheminEffectif
                         ? nomDeDossier(cheminEffectif)
                         : 'Autowin OS'
+                    // Même icône que sa ligne du menu (💻), pas le 📁 d'un projet (conv-1231).
+                    const iconeDossier = surCetOrdinateur ? '💻' : '📁'
                     const titreDossier = dossierProjet
                       ? active
                         ? texteFil('entete.dossierAssigne', { chemin: dossierProjet })
@@ -8454,7 +8496,7 @@ export function ChatView({
                           })
                         }}
                       >
-                        📁 {labelDossier}
+                        {iconeDossier} {labelDossier}
                       </button>
                     )
                   })()}

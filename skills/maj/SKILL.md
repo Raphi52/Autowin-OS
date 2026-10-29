@@ -5,7 +5,7 @@ description: >-
   est bloquée », « l'update ne passe pas ») : compte les conflits sans toucher l'arbre, garde le vrai
   travail local, met de côté le reste sur une branche de secours, fusionne origin/main, vérifie et
   redémarre. NE PAS utiliser pour : trier des travaux non publiés ou des remises de côté hors mise à
-  jour (→ `salvage`), publier ou pousser (jamais sans demande), un autre dépôt qu'Autowin OS.
+  jour (→ `git`), publier ou pousser (jamais sans demande), un autre dépôt qu'Autowin OS.
 ---
 
 # maj — faire passer la mise à jour sans perdre ni ressusciter de travail

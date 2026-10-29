@@ -8,6 +8,7 @@ import {
   mountChat,
   type ChatHarness
 } from './ChatView.harness'
+import { retirerDossierDuChat } from './dossiers-du-chat'
 
 /**
  * LA DEMANDE : « je dois pouvoir choisir mon CWD dans un nouveau fil » — avec la pastille de
@@ -198,12 +199,63 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     await act(async () => {
       ceci!.click()
     })
-    expect(
-      harness.container.querySelector('[data-testid="chat-project-dot"]')?.textContent
-    ).toContain('This computer')
+    const pastille = harness.container.querySelector('[data-testid="chat-project-dot"]')
+    expect(pastille?.textContent).toContain('This computer')
+    // conv-1231 : « l'icône s'affiche pas ici » — la pastille montre le 💻 du menu, pas le 📁.
+    expect(pastille?.textContent).toContain('💻')
+    expect(pastille?.textContent).not.toContain('📁')
 
     await harness.type('premier tour')
     await harness.click('.composer-send')
     expect(conversationsSetProject).toHaveBeenCalledWith('neuf', 'C:\\Users\\Moi')
+  })
+
+  /**
+   * LA DEMANDE (conv-1212, 2026-10-28) : « des éléments que je ne peux même pas supprimer, ils n'ont
+   * pas la petite croix ». La croix du Board retire aussi le dépôt par défaut, que ce menu propose
+   * toujours : la liste est commune, il doit quitter ce menu à son tour — même quand la croix est
+   * cliquée Chat monté (sur l'onglet Board).
+   * SAUF « This computer » (conv-1231, même jour : « j'ai perdu le this computer, il doit être
+   * impossible à supprimer ») : un retrait mémorisé à son nom, d'avant la règle, ne le cache pas.
+   */
+  it('le dépôt par défaut retiré par la croix du Board quitte ce menu, « This computer » reste', async () => {
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['D:\\Projets\\Cible'])
+    )
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([]),
+        dossierPersonnel: vi.fn().mockResolvedValue('C:\\Users\\Moi'),
+        behaviourComposition: vi
+          .fn()
+          .mockResolvedValue({ inspection: { workspace: 'D:\\AutoWinOS', files: [] } })
+      })
+    )
+    const entrees = (): string[] =>
+      [...document.querySelectorAll<HTMLElement>('[data-project-path]')].map(
+        (b) => `${b.dataset.testid}:${b.dataset.projectPath}`
+      )
+
+    await harness.click('[data-testid="chat-project-dot"]')
+    expect(entrees()).toEqual(
+      expect.arrayContaining([
+        'conv-project-this-computer:C:\\Users\\Moi',
+        'conv-project-default:D:\\AutoWinOS',
+        'conv-project-choice:D:\\Projets\\Cible'
+      ])
+    )
+    await harness.click('[data-testid="chat-project-dot"]')
+
+    await act(async () => {
+      retirerDossierDuChat('D:\\AutoWinOS')
+      retirerDossierDuChat('c:/users/moi/')
+      await Promise.resolve()
+    })
+    await harness.click('[data-testid="chat-project-dot"]')
+    expect(entrees().filter((e) => !e.startsWith('conv-project-forget'))).toEqual([
+      'conv-project-this-computer:C:\\Users\\Moi',
+      'conv-project-choice:D:\\Projets\\Cible'
+    ])
   })
 })

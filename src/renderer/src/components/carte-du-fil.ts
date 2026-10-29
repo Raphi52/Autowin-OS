@@ -220,7 +220,11 @@ function statutDuSegment(
   const issues = issuesDuSegment(reponses)
   const echec = issues.find((issue) => issue.state === 'failed')
   if (echec) return { statut: 'refuse', constat: echec.label }
-  const blocage = BLOCAGE_DECLARE.exec(texteDe(derniere))?.[0]
+  // Les deux emoji d'abord (conv-1248) : l'expression essaie chaque ligne de chaque réponse, ~95 ms
+  // mesurés à la première ouverture du Board (1 083 fils) pour des textes qui n'en ont presque jamais.
+  const texte = texteDe(derniere)
+  const blocage =
+    texte.includes('⛔') || texte.includes('⚠') ? BLOCAGE_DECLARE.exec(texte)?.[0] : undefined
   if (blocage) return { statut: 'refuse', constat: nettoyer(blocage) }
   const preuve = issues.at(-1)
   if (preuve) return { statut: 'prouve', constat: preuve.label }

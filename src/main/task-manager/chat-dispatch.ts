@@ -32,6 +32,11 @@ export interface ScheduledChatRuntime {
     /** Dossier de travail de la conversation créée ; absent = dossier global d'Autowin. */
     projectPath?: string
   }): { id: string }
+  /**
+   * Le dossier personnel, « This computer » du choix du dossier de travail : là où travaille un
+   * agent réveillé sans chemin choisi (conv-1213, 2026-10-28). Absent = dossier global, comme avant.
+   */
+  dossierPersonnel?(): string | undefined
   bindConversation(taskId: string, conversationId: string): void
   /**
    * Range la conversation sur le dossier global COURANT d'Autowin. Appelé à chaque déclenchement
@@ -381,6 +386,12 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(task.destination.conversationId)
       return task.destination.conversationId
     }
+    // Sans chemin choisi, l'agent réveillé travaille sur « This computer », jamais dans le dépôt
+    // d'Autowin qu'on ne lui a pas confié. Demande de l'utilisateur, conv-1213 (2026-10-28) :
+    // « quand un agent se réveille il doit pas avoir de CWD il doit être sur this computer ».
+    const dossier = estCheminDeDossier(category)
+      ? category.trim()
+      : this.runtime.dossierPersonnel?.()
     const created = this.runtime.createConversation({
       title: task.destination.title,
       category,
@@ -390,7 +401,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       // chemin de projet. Seul le CHEMIN désigne sans ambiguïté un dossier de travail : c'est la
       // même frontière de forme que le rangement d'une conversation (`estCheminDeDossier`).
       // fix-ok: mesuré le 2026-10-09 (conv-113) — la catégorie n'atteignait jamais la conversation créée, qui tournait donc dans le dossier global d'Autowin au lieu du projet demandé.
-      ...(estCheminDeDossier(category) ? { projectPath: category.trim() } : {})
+      ...(dossier ? { projectPath: dossier } : {})
     })
     this.runtime.bindConversation(task.id, created.id)
     if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(created.id)

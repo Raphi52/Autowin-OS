@@ -29,6 +29,17 @@ describe('estMurDeQuota', () => {
     )
   })
 
+  it('reconnaît la limite des 5 HEURES (conv-1236)', () => {
+    // Recopié de turn-journals/conv-1236 (tour 98f5030c, 2026-10-28) : la nouvelle formulation de
+    // la limite de session du compte. Ignorée, elle laissait un plan de lots continuer à brûler
+    // ses tours sur le mur.
+    expect(
+      estMurDeQuota(
+        "Claude a interrompu l'appel : You've hit your 5-hour limit · resets 11pm (Europe/Paris)"
+      )
+    ).toBe(true)
+  })
+
   it('NE ferme PAS le compte entier sur la limite d’UN modèle (Opus)', () => {
     // Le mur est indexé par compte (`quotaWallKey`, registry.ts) : le fermer sur « Opus limit »
     // refuserait aussi Sonnet et Haiku. Forme relevée par les guides publics (revue de conv-1055).

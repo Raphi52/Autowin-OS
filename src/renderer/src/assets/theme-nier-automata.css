@@ -711,6 +711,24 @@
   border-radius: 0;
   background: #4e4b42;
 }
+/* Menu du dossier de travail (pastille 📁 du chat, conv-1218 : « grosse bande blanche au niveau des
+   croix »). Il gardait le #ffffff de la base claire (theme-modes.css), que le generateur ne transpose
+   pas (un blanc n'est pas sature) ; ses lignes, sans classe, prenaient le cadre beige de
+   `button:not([class])` (regle des pages Worktrees/Tests), et la colonne des croix d'oubli,
+   transparente, laissait voir le blanc. Papier fonce comme la fenetre des quotas ; lignes A PLAT sur
+   ce papier (le survol reste en negatif via `button:not([class]):hover`), croix sur le meme fond. */
+:root[data-theme='nier-automata'][data-base='clair'] .conv-menu-pop {
+  border: 1px solid rgba(78, 75, 66, 0.35);
+  border-top: 3px solid #4e4b42;
+  border-radius: 0;
+  background: #cdc8b0;
+  box-shadow: 0 6px 18px rgba(78, 75, 66, 0.25);
+}
+:root[data-theme='nier-automata'][data-base='clair'] .conv-menu-pop button:not([class]) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 
 /* Observatory : « trop de couleur ». Le jeu est monochrome : toute la vue passe en encre sur papier
    (les couleurs restent distinguables en valeur, pas en teinte). */

@@ -64,10 +64,11 @@ describe('collecte de contexte d’orchestration', () => {
       content: `message numéro ${i} ${'x'.repeat(2000)}`
     }))
     const context = collectOrchestrationContext({ task: 't', conversation: { id: 'c', messages } })
-    // La fenêtre est celle du routeur (10 derniers messages, 600 caractères) — pas une seconde vérité.
+    // La fenêtre est celle du routeur (10 derniers messages) — pas une seconde vérité. Depuis
+    // conv-1228, une demande de l'utilisateur y passe ENTIÈRE (orchestration-context.demande-entiere.test.ts).
     expect(context).toContain('message numéro 39')
     expect(context).not.toContain('message numéro 29')
-    expect(context.split('\n').every((line) => line.length < 700)).toBe(true)
+    expect(context).toContain(`message numéro 39 ${'x'.repeat(2000)}`)
   })
 
   it('reste tolérant quand la conversation n’a aucun message', () => {

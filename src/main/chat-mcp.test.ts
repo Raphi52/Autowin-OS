@@ -579,6 +579,55 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
     expect(t.texteFinal()).toContain('Voici.')
   })
 
+  /*
+   * CONSIGNE SANS DOUBLON (conv-1229, 2026-10-28) : une commande servie en outil direct n'est plus
+   * redétaillée dans la consigne du chat ; sur un retour au texte, la liste complète repart, puisque
+   * le `<cmd>` est alors le seul chemin du modèle.
+   */
+  it('consigne : outils servis -> seules les commandes texte seul y sont detaillees', async () => {
+    const t = pilote('claude', [{ texte: 'Voici.' }])
+    await t.jouer()
+    const systeme = t.vus[0]!.system ?? ''
+    expect(t.vus[0]!.skillNodeTools).toBeDefined()
+    for (const nom of ['ask', 'orchestrate', 'read_file', 'edit_file']) {
+      expect(systeme).toContain(`\n- ${nom}(`)
+    }
+    for (const nom of ['get_state', 'remember', 'desktop_observe']) {
+      expect(systeme).not.toContain(`\n- ${nom}(`)
+    }
+    expect(systeme).toMatch(/Et en outils directs[^\n]*get_state, remember, desktop_observe\./u)
+    // Les blocs annonces a l'observabilite sont ceux de CET envoi, pas ceux du systeme complet.
+    const pilotage = (t.vus[0]!.systemBlocks ?? []).find((b) => b.name === 'pilotage')
+    expect(systeme).toContain('Et en outils directs')
+    expect(pilotage?.chars).toBeGreaterThan(0)
+    expect((t.vus[0]!.systemBlocks ?? []).reduce((n, b) => n + b.chars, 0)).toBe(systeme.length)
+  })
+
+  it('consigne : modele sans canal natif -> liste complete des commandes', async () => {
+    const t = pilote('codex', [{ texte: 'Voici.' }])
+    await t.jouer()
+    const systeme = t.vus[0]!.system ?? ''
+    for (const nom of ['get_state', 'remember', 'desktop_observe', 'ask', 'orchestrate']) {
+      expect(systeme).toContain(`\n- ${nom}(`)
+    }
+    expect(systeme).not.toContain('Et en outils directs')
+  })
+
+  it('consigne : serveur d outils en panne -> liste complete des commandes', async () => {
+    const t = pilote('claude', [{ texte: 'Voici.' }], undefined, {
+      demarrer: async () => {
+        throw new Error('port indisponible')
+      }
+    })
+    await t.jouer()
+    const systeme = t.vus[0]!.system ?? ''
+    expect(t.vus[0]!.skillNodeTools).toBeUndefined()
+    for (const nom of ['get_state', 'remember', 'desktop_observe']) {
+      expect(systeme).toContain(`\n- ${nom}(`)
+    }
+    expect(systeme).not.toContain('Et en outils directs')
+  })
+
   it('surveillance : le tour en lecture seule automatique n ouvre aucun serveur', async () => {
     const t = pilote('claude', [{ texte: 'Rien à signaler.' }])
     await t.jouer({ surveillance: true })

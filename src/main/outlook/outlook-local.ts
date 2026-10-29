@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 
@@ -44,6 +44,64 @@ export interface OutlookNewMessageResult {
   ok: boolean
   erreur?: string
 }
+
+/**
+ * Les types de fichier qu'une pièce REÇUE ne doit pas ouvrir d'un clic dans la tuile.
+ *
+ * Ouvrir une pièce, c'est la passer à Windows, qui LANCE un `.exe`, un `.js` ou un `.lnk` au lieu de
+ * l'afficher. Outlook refuse lui-même ces types (« Level 1 ») : la tuile ne doit pas être la porte
+ * qu'Outlook a fermée. Liste recopiée de la page Microsoft « Blocked attachments in Outlook »,
+ * https://support.microsoft.com/en-us/office/blocked-attachments-in-outlook-434752e1-02d3-4e90-9124-8b81e49a8519
+ * (lue le 2026-10-28, conv-1220), plus les paquets MSIX qu'elle ne nomme pas encore.
+ */
+const EXTENSIONS_QUI_LANCENT = new Set(
+  (
+    'ade adp apk app appcontent-ms application appref-ms appx asp aspx asx bas bat bgi cab cdxml ' +
+    'cer chm cmd cnt com cpl crt csh der diagcab exe fxp gadget grp hlp hpj hta htc img inf ins iso ' +
+    'isp its jar jnlp js jse ksh library-ms lnk mad maf mag mam maq mar mas mat mau mav maw mcf mda ' +
+    'mdb mde mdt mdw mdz msc mht mhtml msh msh1 msh2 mshxml msh1xml msh2xml msi msp mst msu ops osd ' +
+    'pcd pif pl plg prf prg printerexport ps1 ps1xml ps2 ps2xml psc1 psc2 psd1 psdm1 pssc pst py pyc ' +
+    'pyo pyw pyz pyzw reg scf scr sct search-ms settingcontent-ms shb shs theme tmp udl url vb vbe ' +
+    'vbp vbs vhd vhdx vsmacros vsw webpnp website ws wsb wsc wsf wsh xbap xll xnk ' +
+    'msix msixbundle appxbundle'
+  ).split(' ')
+)
+
+/**
+ * L'extension qui décidera du programme, en minuscules — `''` s'il n'y en a pas.
+ *
+ * Les points et espaces FINAUX sont retirés d'abord : Windows les ignore (« facture.exe. » s'ouvre
+ * comme un `.exe`), donc les laisser ferait passer un exécutable pour un fichier sans extension.
+ */
+export function extensionDePiece(nom: string): string {
+  const net = nom.replace(/[. ]+$/, '')
+  const point = net.lastIndexOf('.')
+  return point < 0 ? '' : net.slice(point + 1).toLowerCase()
+}
+
+/** Vrai quand ouvrir cette pièce LANCERAIT un programme au lieu de l'afficher. */
+export function pieceQuiLance(nom: string): boolean {
+  return EXTENSIONS_QUI_LANCENT.has(extensionDePiece(nom))
+}
+
+/**
+ * Codes de sortie du script d'enregistrement d'une pièce reçue (`outlook-local-piece.ps1`).
+ * Le 4 lui est propre : le message existe encore, mais pas cette pièce (nom changé, pièce retirée).
+ */
+const PIECE_FAILURES: Readonly<Record<number, string>> = {
+  1: "Outlook n'a pas pu fournir cette pièce jointe.",
+  2: "Cet identifiant n'a pas la forme d'un élément Outlook.",
+  3: 'Ce message n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.',
+  4: 'Cette pièce jointe n’est plus dans le message — actualisez la tuile.'
+}
+
+/**
+ * Où les pièces ouvertes sont écrites. Un dossier par clic, sous une racine commune : le visualiseur
+ * garde le fichier ouvert (un PDF dans Acrobat est verrouillé), donc un deuxième clic ne doit pas
+ * réécrire le même chemin. Les dossiers de plus d'un jour sont retirés au clic suivant.
+ */
+const RACINE_PIECES_OUVERTES = 'autowin-pieces-recues'
+const DUREE_PIECES_OUVERTES_MS = 24 * 60 * 60 * 1000
 
 /** Plafond du corps d'une reponse. Assez pour un message, assez peu pour rester un widget. */
 const MAX_CORPS = 20_000
@@ -132,6 +190,22 @@ export interface OutlookGatewayOptions {
     corpsPath: string,
     piecesPath?: string
   ) => Promise<number>
+  /**
+   * Idem pour l'enregistrement d'une pièce REÇUE. Le nom attendu et le chemin de destination
+   * passent par un fichier UTF-8 (`cheminsPath`), jamais en arguments : la console est en cp1252.
+   */
+  extracteurPiece?: (
+    scriptPath: string,
+    id: string,
+    rang: number,
+    cheminsPath: string
+  ) => Promise<number>
+  /**
+   * OUVRE un fichier avec le programme que Windows lui associe. Rend `''` en cas de succès, la cause
+   * sinon — la forme de `shell.openPath` d'Electron, qu'index.ts branche ici. Absent = la passerelle
+   * refuse d'ouvrir : ce module n'importe pas Electron, ses tests tournent sans lui.
+   */
+  ouvreurFichier?: (chemin: string) => Promise<string>
   now?: () => number
   /**
    * Passerelle HORS SERVICE : aucun script lancé, aucun Outlook touché, chaque geste rend cette
@@ -403,6 +477,37 @@ function defaultReplier(
   })
 }
 
+function defaultExtracteurPiece(
+  scriptPath: string,
+  id: string,
+  rang: number,
+  cheminsPath: string
+): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-Id',
+        id,
+        '-Rang',
+        String(rang),
+        '-CheminsFichier',
+        cheminsPath
+      ],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
+      (error) => {
+        const code = (error as { code?: number } | null)?.code
+        resolve(typeof code === 'number' ? code : error ? 1 : 0)
+      }
+    )
+  })
+}
+
 function defaultOpener(scriptPath: string, id: string): Promise<number> {
   return new Promise((resolve) => {
     execFile(
@@ -443,6 +548,13 @@ export class OutlookLocalGateway {
     corpsPath: string,
     piecesPath?: string
   ) => Promise<number>
+  private readonly extracteurPiece: (
+    scriptPath: string,
+    id: string,
+    rang: number,
+    cheminsPath: string
+  ) => Promise<number>
+  private readonly ouvreurFichier: ((chemin: string) => Promise<string>) | undefined
   private readonly now: () => number
   private readonly horsService: string | undefined
   private cache: { at: number; result: OutlookGatewayResult } | null = null
@@ -458,6 +570,8 @@ export class OutlookLocalGateway {
     this.marqueur = options.marqueur ?? defaultMarqueur
     this.lecteurCorps = options.lecteurCorps ?? defaultLecteurCorps
     this.redacteur = options.redacteur ?? defaultRedacteur
+    this.extracteurPiece = options.extracteurPiece ?? defaultExtracteurPiece
+    this.ouvreurFichier = options.ouvreurFichier
     this.now = options.now ?? (() => Date.now())
     this.horsService = options.horsService?.trim() || undefined
   }
@@ -573,6 +687,105 @@ export class OutlookLocalGateway {
       return { ok: false, erreur: OPEN_FAILURES[code] ?? OPEN_FAILURES[1] }
     } catch (error) {
       return { ok: false, erreur: describeFailure(error) }
+    }
+  }
+
+  /**
+   * OUVRE une pièce jointe REÇUE : Outlook la copie dans un dossier temporaire, puis Windows l'ouvre
+   * avec le programme qu'il lui associe.
+   *
+   * Demande du 2026-10-28 (conv-1220) : la tuile n'affichait que le nom et la taille, et renvoyait à
+   * « Ouvrir dans Outlook ». `rang` est la position de la pièce dans le message (champ `rang` de
+   * l'instantané) ; `null` pour un instantané plus ancien, le script retrouve alors la pièce par son
+   * nom. Le nom est TOUJOURS comparé au vrai nom côté script : un rang décalé n'ouvre pas une autre
+   * pièce que celle qu'on a cliquée.
+   *
+   * Tout arrive du renderer par IPC : identifiant, rang et nom sont revalidés ici, et un type de
+   * fichier qui LANCE un programme est refusé avant d'avoir touché Outlook.
+   */
+  async openAttachment(id: unknown, rang: unknown, nom: unknown): Promise<OutlookOpenResult> {
+    const refus = this.refusHorsService()
+    if (refus) return refus
+    if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
+      return { ok: false, erreur: PIECE_FAILURES[2] }
+    }
+    const position =
+      rang === null || rang === undefined ? 1 : typeof rang === 'number' ? rang : Number.NaN
+    if (!Number.isInteger(position) || position < 1 || position > 50) {
+      return {
+        ok: false,
+        erreur: 'Cette pièce jointe n’a pas une position valable dans le message.'
+      }
+    }
+    const nomPiece = typeof nom === 'string' ? nom.trim() : ''
+    if (!nomPieceAcceptable(nomPiece)) {
+      return {
+        ok: false,
+        erreur: 'Le nom de cette pièce jointe n’est pas utilisable comme nom de fichier.'
+      }
+    }
+    if (pieceQuiLance(nomPiece)) {
+      return {
+        ok: false,
+        erreur: `« ${nomPiece} » peut lancer un programme : ouvrez-la depuis Outlook, qui la contrôle.`
+      }
+    }
+    if (!this.ouvreurFichier) {
+      return {
+        ok: false,
+        erreur: 'L’ouverture de fichiers n’est pas disponible dans cette instance.'
+      }
+    }
+
+    const racine = join(tmpdir(), RACINE_PIECES_OUVERTES)
+    let travail: string | null = null
+    let dossierPiece: string | null = null
+    try {
+      await mkdir(racine, { recursive: true })
+      await this.purgerPiecesOuvertes(racine)
+      dossierPiece = await mkdtemp(join(racine, 'p-'))
+      const chemin = join(dossierPiece, nomPiece)
+      // Le fichier des chemins vit HORS du dossier de la pièce : il est retiré dès la fin de l'appel,
+      // alors que la pièce doit rester tant que son programme la tient ouverte.
+      travail = await mkdtemp(join(tmpdir(), 'autowin-outlook-piece-'))
+      const cheminsPath = join(travail, 'chemins.txt')
+      await writeFile(cheminsPath, `${nomPiece}\n${chemin}`, 'utf8')
+      const code = await this.extracteurPiece(
+        this.scriptVoisin('outlook-local-piece.ps1'),
+        id,
+        position,
+        cheminsPath
+      )
+      if (code !== 0) {
+        await rm(dossierPiece, { recursive: true, force: true }).catch(() => {})
+        return { ok: false, erreur: PIECE_FAILURES[code] ?? PIECE_FAILURES[1] }
+      }
+      // Code 0 sans fichier = le script a menti ou le disque a refusé : ne pas passer à Windows un
+      // chemin vide, qui ouvrirait un dialogue « Ouvrir avec » sans rapport.
+      await stat(chemin)
+      const echec = await this.ouvreurFichier(chemin)
+      if (echec)
+        return { ok: false, erreur: `Windows n’a pas pu ouvrir « ${nomPiece} » : ${echec}` }
+      return { ok: true }
+    } catch (error) {
+      if (dossierPiece) await rm(dossierPiece, { recursive: true, force: true }).catch(() => {})
+      return { ok: false, erreur: describeFailure(error) }
+    } finally {
+      if (travail) await rm(travail, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /** Retire les pièces ouvertes il y a plus d'un jour. Au mieux : un fichier encore verrouillé reste. */
+  private async purgerPiecesOuvertes(racine: string): Promise<void> {
+    const limite = this.now() - DUREE_PIECES_OUVERTES_MS
+    const entrees = await readdir(racine, { withFileTypes: true }).catch(() => [])
+    for (const entree of entrees) {
+      if (!entree.isDirectory()) continue
+      const dossier = join(racine, entree.name)
+      const infos = await stat(dossier).catch(() => null)
+      if (infos && infos.mtimeMs < limite) {
+        await rm(dossier, { recursive: true, force: true }).catch(() => {})
+      }
     }
   }
 

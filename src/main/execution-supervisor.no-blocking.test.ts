@@ -71,18 +71,18 @@ describe('budget bloquant sans destruction du travail déjà payé', () => {
     })
   })
 
-  it('continue de borner la concurrence : elle protège la machine, pas le portefeuille', async () => {
+  it('ne refuse plus un appel pour la concurrence (décision du 2026-10-28)', async () => {
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('lance un fan-out')
-    quote.limits.maxConcurrency = 2
+    quote.limits.maxConcurrency = 1
 
     await supervisor.run(quote, undefined, async () => {
       const a = supervisor.reserveProviderCall()!
       const b = supervisor.reserveProviderCall()!
-      expect(() => supervisor.reserveProviderCall()).toThrowError(/concurrence/i)
       a.complete()
       b.complete()
     })
+    expect(supervisor.lastSnapshot()!.stoppedReason).toBeUndefined()
   })
 
   /**

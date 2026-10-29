@@ -220,8 +220,10 @@ export function ArtifactPile({
       </details>
       {!ouverte && (
         <span className="artifact-pile__tranches" aria-hidden="true">
-          <span />
-          <span />
+          {/* Une CLASSE par tranche (conv-1229) : la règle `:has()` du thème qui fige la pile d'un
+              tour fini les vise par elle, jamais par la balise `span` — voir theme-nebuleuse-verre.css. */}
+          <span className="artifact-pile__tranche" />
+          <span className="artifact-pile__tranche" />
         </span>
       )}
     </div>

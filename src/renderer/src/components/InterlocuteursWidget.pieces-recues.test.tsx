@@ -58,7 +58,14 @@ function contactAvec(messages: MessageInterlocuteur[]): Interlocuteur {
 }
 
 /** Monte la tuile puis descend jusqu'aux messages : noms → fils → conversation. */
-async function ouvrirLaConversation(contact: Interlocuteur): Promise<HTMLDivElement> {
+async function ouvrirLaConversation(
+  contact: Interlocuteur,
+  onOuvrirPiece?: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
+): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -71,7 +78,8 @@ async function ouvrirLaConversation(contact: Interlocuteur): Promise<HTMLDivElem
         ouvertureEnCours: null,
         onRepondre: vi.fn().mockResolvedValue({ ok: true }),
         onNouvelleConversation: vi.fn().mockResolvedValue({ ok: true }),
-        onMarquerLu: vi.fn().mockResolvedValue({ ok: true })
+        onMarquerLu: vi.fn().mockResolvedValue({ ok: true }),
+        onOuvrirPiece
       })
     )
   })
@@ -97,8 +105,8 @@ describe('les pieces jointes recues dans la bulle du fil', () => {
         message({
           id: 'm-promeom',
           pieces: [
-            { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335 },
-            { nom: 'appointment_813649365.ics', taille: 685 }
+            { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335, rang: 1 },
+            { nom: 'appointment_813649365.ics', taille: 685, rang: 2 }
           ]
         })
       ])
@@ -129,10 +137,91 @@ describe('les pieces jointes recues dans la bulle du fil', () => {
     // doit pas disparaître avec le texte — c'est justement le cas où l'utilisateur en a besoin.
     const container = await ouvrirLaConversation(
       contactAvec([
-        message({ id: 'm-sans-corps', corps: '', pieces: [{ nom: 'devis.pdf', taille: 4_096 }] })
+        message({
+          id: 'm-sans-corps',
+          corps: '',
+          pieces: [{ nom: 'devis.pdf', taille: 4_096, rang: null }]
+        })
       ])
     )
     const liste = container.querySelector('[data-testid="home-chat-pieces-m-sans-corps"]')
     expect(liste?.textContent ?? '').toContain('devis.pdf')
+  })
+})
+
+/**
+ * conv-1220 (2026-10-28) : « rends les pièces jointes reçues cliquables : un clic sur le nom ouvre le
+ * fichier, en le récupérant depuis Outlook ». Le NOM devient le bouton ; ce qui part vers Outlook est
+ * l'identifiant du MESSAGE, le RANG de la pièce dans ce message et son nom — c'est ce triplet que le
+ * script vérifie avant d'enregistrer quoi que ce soit.
+ */
+describe('ouvrir une piece recue d un clic sur son nom', () => {
+  const avecDeuxPieces = (): Interlocuteur =>
+    contactAvec([
+      message({
+        id: 'm-bienvenue',
+        pieces: [
+          // Rangs 3 et 4, comme sur la vraie boîte : les rangs 1 et 2 sont des images de signature
+          // écartées par l'instantané. Le rang n'est donc PAS l'index dans la liste affichée.
+          { nom: 'ski.msg', taille: 78_963, rang: 3 },
+          { nom: 'early.msg', taille: 34_047, rang: 4 }
+        ]
+      })
+    ])
+
+  const cliquer = async (container: HTMLElement, testId: string): Promise<void> => {
+    const bouton = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+    expect(bouton, `bouton absent : ${testId}`).toBeTruthy()
+    await act(async () => {
+      bouton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+  }
+
+  it('envoie le message, le RANG et le nom de la piece cliquee', async () => {
+    const onOuvrirPiece = vi.fn().mockResolvedValue({ ok: true })
+    const container = await ouvrirLaConversation(avecDeuxPieces(), onOuvrirPiece)
+    await cliquer(container, 'home-chat-piece-ouvrir-m-bienvenue-1')
+    expect(onOuvrirPiece).toHaveBeenCalledTimes(1)
+    expect(onOuvrirPiece).toHaveBeenCalledWith('m-bienvenue', 4, 'early.msg')
+    expect(container.querySelector('[data-testid="home-inter-piece-erreur"]')).toBeNull()
+  })
+
+  it('affiche la cause quand l ouverture est refusee', async () => {
+    const onOuvrirPiece = vi
+      .fn()
+      .mockResolvedValue({ ok: false, erreur: 'Cette pièce jointe n’est plus dans le message.' })
+    const container = await ouvrirLaConversation(avecDeuxPieces(), onOuvrirPiece)
+    await cliquer(container, 'home-chat-piece-ouvrir-m-bienvenue-0')
+    const erreur = container.querySelector('[data-testid="home-inter-piece-erreur"]')
+    expect(erreur?.textContent ?? '').toContain('Cette pièce jointe n’est plus dans le message.')
+  })
+
+  it('grise le bouton pendant l ouverture, puis le rend', async () => {
+    let terminer: (valeur: { ok: boolean }) => void = () => {}
+    const onOuvrirPiece = vi.fn(
+      () => new Promise<{ ok: boolean }>((resolve) => (terminer = resolve))
+    )
+    const container = await ouvrirLaConversation(avecDeuxPieces(), onOuvrirPiece)
+    await cliquer(container, 'home-chat-piece-ouvrir-m-bienvenue-0')
+    const bouton = (): HTMLButtonElement =>
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="home-chat-piece-ouvrir-m-bienvenue-0"]'
+      )!
+    expect(bouton().disabled).toBe(true)
+    // L'AUTRE pièce reste cliquable : seule celle qu'on ouvre attend.
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="home-chat-piece-ouvrir-m-bienvenue-1"]'
+      )!.disabled
+    ).toBe(false)
+    await act(async () => terminer({ ok: true }))
+    expect(bouton().disabled).toBe(false)
+    expect(bouton().textContent).toBe('ski.msg')
+  })
+
+  it('sans passerelle d ouverture, le nom reste du texte', async () => {
+    const container = await ouvrirLaConversation(avecDeuxPieces())
+    expect(container.querySelector('[data-testid^="home-chat-piece-ouvrir-"]')).toBeNull()
+    expect(container.textContent).toContain('ski.msg')
   })
 })

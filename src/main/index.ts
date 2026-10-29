@@ -12,6 +12,7 @@ import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-
 import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
 import { estNiveauProtection } from '../shared/prod-protection'
 import { MOTIF_STOP_DU_CHAT } from '../shared/arret-par-stop'
+import { HAUTEUR_BOUTONS_FENETRE } from '../shared/barre-fenetre'
 import { nomUtilisateurCourant } from './identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
@@ -130,8 +131,18 @@ import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
 import { ensureBrainIndexFresh, readBrainHealth, reindexerApresMutation } from './brain-index-refresh'
 import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from './brain-reglage'
+import {
+  defaultBrainPersoRoot,
+  demarrerBrainPerso,
+  demarrerBrainPersoAuLancement,
+  envDuBrainPerso,
+  origineBrainPerso,
+  pingBrainPerso,
+  preparerDossierBrainPerso,
+  racineBrainPerso
+} from './brain-perso'
 import { defaultBrainRoot } from './brain-paths'
-import type { BrainReglageState } from '../shared/preload-contracts'
+import type { BrainPersoState, BrainReglageState } from '../shared/preload-contracts'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -414,7 +425,12 @@ import {
 } from './notification-fin-de-tour'
 import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
 import { creerMascotteDuBureau } from './mascotte-fenetre'
-import { ecrireMascotteAffichee, lireMascotteAffichee } from './mascotte-reglage'
+import {
+  ecrireMascotteAffichee,
+  ecrireStyleMascotte,
+  lireMascotteAffichee,
+  lireStyleMascotte
+} from './mascotte-reglage'
 import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -535,6 +551,7 @@ import { lancerScoutVeille } from './veille/scout-claude'
 import { candidatsInternesDuDepot } from './veille/audit-depot'
 import { dispatcherAvecVeille } from './veille/dispatch-veille'
 import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
+import { deposerOrientationDuFil, solderOrientationsDuFil } from './orientations-en-cours-app'
 
 /**
  * ATTRIBUTION du démarrage. Le jalon « module principal évalué » est posé AVANT les 167 imports
@@ -1230,9 +1247,24 @@ const dossierDuTour = (conversationId?: string): string =>
  * proches au plus (rang ≤ 3, score ≥ 0,40), jamais leur contenu, et RIEN quand aucune n'est proche
  * (détail et mesure : `brain-titres-du-tour.ts`).
  */
+/** Serveur du Brain perso injoignable : on le démarre en fond, la recherche suivante le trouvera. */
+const relancerBrainPerso = (): void => {
+  void demarrerBrainPerso()
+    .then((r) => {
+      if (r && r.status !== 'already-up') console.log('[brain-perso]', r.status, '—', r.detail)
+    })
+    .catch((e) => console.warn('[brain-perso] démarrage impossible —', String(e)))
+}
 const titresBrainDuTour = createBrainTitresDuTour({
-  workspace: (conversationId?: string) => dossierDuTour(conversationId)
+  workspace: (conversationId?: string) => dossierDuTour(conversationId),
+  // BRAIN PERSO (conv-1233, 2026-10-28) : ses notes proches arrivent aussi, préfixées `perso:`.
+  brainPerso: () => envDuBrainPerso(),
+  persoInjoignable: relancerBrainPerso
 })
+// BRAIN PERSO dans le contexte des travaux en arrière-plan (conv-1233, 2026-10-28) : chaque run
+// cherche aussi dans le Brain perso, notes préfixées `perso:` (`orchestrator.ts`).
+os.brainPersoDuRun = () => envDuBrainPerso()
+os.brainPersoInjoignable = relancerBrainPerso
 const contexteGrapheDuTour = createBrainContextProvider({
   // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc CONTOSO, donc une question Autowin ramenait
   // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
@@ -1308,9 +1340,13 @@ const mascotteDuBureau = creerMascotteDuBureau()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
 const pendingDirectives = new Map<string, string[]>()
 function drainPendingDirectives(conversationId: string): string[] {
-  const queued = pendingDirectives.get(conversationId) ?? []
+  const enFile = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
-  if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
+  if (enFile.length) broadcast({ type: 'refresh', scope: 'directives' })
+  // fix-ok: conv-1241 (tour 6e6212f1) — la file n'était relue qu'ENTRE deux appels : conv-1240, tour 2e218711, saisie ts 1793225455947 absente du premier appel (16 min, 22:10:38 → 22:27:00), lue seulement au second (22:27:07).
+  // Celles que le contrôle avant outil a déjà remises au modèle EN PLEIN APPEL ne
+  // repartent pas une seconde fois (`orientations-en-cours-app.ts`).
+  const queued = solderOrientationsDuFil(conversationId, enFile, 'tour')
   return queued
 }
 // Le fenetrage vit dans src/main/window.ts : il ne prenait ici que les valeurs listees ci-dessous.
@@ -2088,6 +2124,17 @@ function registerChatIpc(): void {
     mascotteDuBureau.afficher(lireMascotteAffichee())
     return lireMascotteAffichee()
   })
+  // Le choix « Magicien / Basique » de la même ligne de Settings · Interface (conv-1249).
+  ipcMain.handle('os:mascotte:style', (event) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    return lireStyleMascotte()
+  })
+  ipcMain.handle('os:mascotte:choisir-style', (event, style: unknown) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    ecrireStyleMascotte(style)
+    mascotteDuBureau.changerStyle(lireStyleMascotte())
+    return lireStyleMascotte()
+  })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
     // On n'accepte qu'un hexadecimal : cette valeur part vers une API natice de Windows.
@@ -2095,7 +2142,11 @@ function registerChatIpc(): void {
     const fenetre = BrowserWindow.fromWebContents(event.sender)
     if (!fenetre || fenetre.isDestroyed()) return false
     try {
-      fenetre.setTitleBarOverlay({ color: '#00000000', symbolColor: couleur, height: 28 })
+      fenetre.setTitleBarOverlay({
+        color: '#00000000',
+        symbolColor: couleur,
+        height: HAUTEUR_BOUTONS_FENETRE
+      })
       return true
     } catch {
       // Plateforme sans overlay de barre de titre (macOS, Linux) : ce n'est pas une panne.
@@ -3148,6 +3199,62 @@ Le fil reprend ensuite normalement.`
     return brainReglageState()
   })
 
+  // BRAIN PERSO (conv-1233, 2026-10-28) : même formulaire que celui de l'équipe, son propre fichier
+  // (`brain-perso.json`). Pas de redémarrage : le serveur perso démarre dès l'enregistrement.
+  const brainPersoState = async (erreur?: string): Promise<BrainPersoState> => {
+    const reglage = lireBrainReglage(process.env, 'perso')
+    const racine = racineBrainPerso() ?? null
+    const envPerso = envDuBrainPerso()
+    // Un serveur perso lancé AVANT un changement de dossier sert encore l'ancien (même garde que
+    // pour l'équipe : /health porte la racine servie).
+    const serveurRacine = envPerso
+      ? ((await readBrainHealth(fetch, envPerso, 2000))?.root ?? null)
+      : null
+    return {
+      choisi: reglage.chemin || reglage.depot ? reglage : null,
+      racine,
+      origine: origineBrainPerso(),
+      serveurJoignable: racine ? await pingBrainPerso() : false,
+      serveurRacine,
+      serveurSurUnAutreDossier:
+        racine !== null && serveurRacine !== null && !memeDossier(serveurRacine, racine),
+      ...(erreur ? { erreur: erreur.replace(/\/\/[^@/\s]*@/g, '//***@') } : {})
+    }
+  }
+
+  ipcMain.handle('os:brain-perso', (event) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    return brainPersoState()
+  })
+
+  ipcMain.handle('os:brain-perso:enregistrer', async (event, entree: unknown) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    const champs = (entree && typeof entree === 'object' ? entree : {}) as {
+      chemin?: unknown
+      depot?: unknown
+    }
+    try {
+      const reglage = await appliquerBrainReglage(
+        { chemin: champs.chemin, depot: champs.depot },
+        { racineParDefaut: defaultBrainPersoRoot(), quel: 'perso' }
+      )
+      const racine = reglage.chemin ?? (reglage.depot ? defaultBrainPersoRoot() : undefined)
+      if (racine) preparerDossierBrainPerso(racine)
+      const lancement = await demarrerBrainPerso()
+      if (lancement) console.log('[brain-perso] serveur', lancement.status, '—', lancement.detail)
+      return brainPersoState()
+    } catch (error) {
+      return brainPersoState(error instanceof Error ? error.message : String(error))
+    }
+  })
+
+  ipcMain.handle('os:brain-perso:reset', (event) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    // Retire le RÉGLAGE seulement : le dossier et ses notes restent sur le disque.
+    effacerBrainReglage(process.env, 'perso')
+    return brainPersoState()
+  })
+
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
     const selected = await pickDirectory(event.sender)
@@ -3757,7 +3864,7 @@ Le fil reprend ensuite normalement.`
       },
       ouvrirAutowin: () => showMainWindow(),
       titreDuFil: (id) => os.conversations.get(id)?.title
-    }, lireMascotteAffichee())
+    }, lireMascotteAffichee(), lireStyleMascotte())
 
   /*
    * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
@@ -4178,6 +4285,8 @@ Le fil reprend ensuite normalement.`
     agentStudioBinding: () => os.roles.getBinding('orchestrator'),
     hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
     createConversation: (input) => os.conversations.create(input),
+    // « This computer » (conv-1213) : même dossier que le choix du dossier de travail du Chat.
+    dossierPersonnel: () => canonicalProjectPath(homedir()) ?? homedir(),
     bindConversation: (taskId, conversationId) => {
       scheduledTasks.bindConversation(taskId, conversationId)
     },
@@ -4523,6 +4632,9 @@ Le fil reprend ensuite normalement.`
   // ce bureau, invisible, et le garde vivant après la capture (conv-1016, 2026-10-17).
   const outlookGateway = new OutlookLocalGateway({
     appRoot: app.getAppPath(),
+    // Ouvre une piece jointe RECUE, une fois copiee par Outlook (conv-1220). `shell.openPath` rend
+    // '' en cas de succes et la cause sinon : la passerelle affiche cette cause telle quelle.
+    ouvreurFichier: (chemin) => shell.openPath(chemin),
     ...(headlessTestInstance ? { horsService: OUTLOOK_HORS_INSTANCE_CACHEE } : {})
   })
   // fix-ok: 3 edits mesures - (1) remplacement Python a casse les antislashs, (2) bloc finally repris, (3) format de mes seules lignes (index.ts deja rouge au format avant moi).
@@ -4732,6 +4844,16 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.openItem(id)
   })
+  // OUVRE une piece jointe RECUE (conv-1220) : Outlook la copie dans un dossier temporaire, Windows
+  // l'ouvre. Rien n'est ecrit dans la boite. Identifiant, rang et nom sont revalides cote main, et un
+  // type de fichier qui LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script.
+  ipcMain.handle(
+    'outlook:ouvrir-piece',
+    async (event, id: unknown, rang: unknown, nom: unknown) => {
+      assertTrustedRendererSender(event, 'Outlook')
+      return outlookGateway.openAttachment(id, rang, nom)
+    }
+  )
   // Le seul canal Outlook qui ECRIT : il envoie une reponse, donc un acte irreversible. La
   // confirmation appartient a l'interface, qui est le seul endroit ou l'utilisateur est present ; ici
   // on garde la validation du contenu, parce qu'une frontiere de confiance ne se garde pas d'un cote.
@@ -4938,6 +5060,11 @@ Le fil reprend ensuite normalement.`
       const queued = pendingDirectives.get(conversationId) ?? []
       queued.push((directive || '(image envoyée sans texte)') + suffixe)
       pendingDirectives.set(conversationId, queued)
+      // REMISE EN PLEIN APPEL (conv-1241) : la boucle pilote ne relit la file qu'ENTRE deux appels ;
+      // un appel du CLI Claude peut durer 16 minutes (conv-1240, tour 2e218711 : saisie ts
+      // 1793225455947 absente du premier appel, lue au second). Doublée sur disque, le contrôle
+      // avant chaque outil la remet.
+      deposerOrientationDuFil(conversationId, queued[queued.length - 1])
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
       // seul temoin etait un recu vivant dans la memoire de l'ecran : un rechargement l'effacait et
@@ -5982,6 +6109,14 @@ app.whenReady().then(async () => {
     pingBrain: () => appPreflightProbes().pingBrain(),
     onEvent: (message) => console.log(message)
   })
+
+  // BRAIN PERSO (conv-1233, 2026-10-28) : son serveur démarre avec l'app, à côté de celui de
+  // l'équipe. Une instance de TEST n'y touche pas, comme pour le Brain d'équipe.
+  if (!isolatedTestInstance) {
+    void demarrerBrainPersoAuLancement().catch((e) =>
+      console.warn('[brain-perso] démarrage impossible —', String(e))
+    )
+  }
 
   // MOTEUR RECHARGÉ SANS TUER PERSONNE (dev seulement) : l'interface se recharge déjà à chaud ; le
   // moteur, lui, est recompilé en coulisse à chaque modification et l'app ne se relance que quand

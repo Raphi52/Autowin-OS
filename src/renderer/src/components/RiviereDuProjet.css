@@ -52,12 +52,6 @@
   color: #14121c;
 }
 
-.riviere-compte {
-  font-size: 12px;
-  color: var(--text-dim);
-  cursor: help;
-}
-
 /* Le papier du tableau : la bande des jours, fixe, puis la partie qui défile. */
 .riviere-cadre {
   display: flex;
@@ -301,6 +295,36 @@
 .riviere-postit[data-taille='puce'] .riviere-postit-titre,
 .riviere-postit[data-taille='puce'] .riviere-postit-meta {
   visibility: hidden;
+}
+
+/* Le texte garde sa taille à l'écran quand le post-it rapetisse (conv-1242, texteDuPostit) : son
+   bloc est contre-échelonné (1/k), et cette transformation glisse en même temps que celle du papier
+   — une taille de police changée d'un coup le faisait gonfler pendant 0,3 s à chaque cran. Quand la
+   ligne projet · heure ne tient plus, le titre prend sa place. */
+.riviere-postit-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  transform-origin: 0 0;
+  transition: transform 0.3s var(--riviere-courbe);
+}
+
+.riviere-postit[data-glisse] .riviere-postit-texte {
+  transition: none;
+}
+
+.riviere-postit[data-meta='sans'] .riviere-postit-meta {
+  display: none;
+}
+.riviere-postit-titre[data-lignes='3'] {
+  -webkit-line-clamp: 3;
+}
+.riviere-postit-titre[data-lignes='2'] {
+  -webkit-line-clamp: 2;
+}
+.riviere-postit-titre[data-lignes='1'] {
+  -webkit-line-clamp: 1;
 }
 
 .riviere-punaise {

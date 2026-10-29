@@ -23,6 +23,12 @@
  * ANNONCÉE en une ligne dans le fil (laquelle part, laquelle est écartée) et transmise au run ou au
  * modèle, pour que l'utilisateur corrige après coup sans être bloqué avant.
  *
+ * À CHAQUE MESSAGE (conv-1240, 2026-10-28). L'utilisateur, en voyant la ligne de temps en temps :
+ * « met le tout le temps ». Le petit modèle rend donc TOUJOURS sa lecture, même sans ambiguïté
+ * (`{ kind: 'retenue' }` sans lecture écartée), et la ligne s'affiche à chaque message écrit par un
+ * humain. La QUESTION, elle, ne change pas : seulement à quasi-égalité, et seulement aux trois points
+ * de passage d'avant (`agent-pilot.ts`).
+ *
  * Ce module ne parle à AUCUN modèle : il fabrique la consigne d'un petit modèle, VALIDE sa réponse
  * et construit la question. L'appel lui-même est injecté (`index.ts`), comme le rangement du premier
  * message. Toute réponse inexploitable rend `undefined` : le travail part comme avant. Une question
@@ -41,12 +47,14 @@ import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
  * exercice pour `/arena`), et la question qui compte — le résultat livré risque-t-il d'être jeté.
  */
 export const CONSIGNE_DEUX_LECTURES = [
-  "Tu relis UNE demande adressée à un agent de développement, juste AVANT qu'il ne lance un travail",
-  "payant ou ne modifie ce qui s'affiche. Ton rôle : éviter que l'utilisateur réponde « t'as mal",
-  'compris » après coup.',
+  "Tu relis UNE demande adressée à un agent de développement, juste AVANT qu'il ne la traite. Ton",
+  "rôle : montrer à l'utilisateur, en une phrase, ce que l'agent va comprendre, pour éviter qu'il",
+  'réponde « t’as mal compris » après coup.',
+  'Le dernier message de l’agent, s’il t’est donné, est le contexte : une demande courte ou une',
+  'relance (« go », « ok », « met le ») porte sur ce dont il parlait, souvent sa dernière proposition.',
   'Question : deux personnes compétentes, qui connaissent les commandes citées, pourraient-elles',
-  "comprendre cette demande de deux façons qui mènent à des travaux DIFFÉRENTS, au point que l'un",
-  'des deux résultats serait jeté ?',
+  'comprendre cette demande de deux façons qui mènent à des travaux ou des réponses DIFFÉRENTS, au',
+  "point que l'un des deux résultats serait jeté ?",
   'Regarde en priorité :',
   "- l'ÉCART entre ce que fait la commande citée (sa description t'est donnée) et l'objet que la",
   '  demande veut obtenir : la commande, faite comme d’habitude, livrerait-elle autre chose ?',
@@ -56,15 +64,16 @@ export const CONSIGNE_DEUX_LECTURES = [
   'Ne compte PAS : un détail d’exécution que l’agent tranche seul (comment coder, quel fichier), ni',
   'une règle établie (un test rouge se corrige dans le code, jamais en desserrant le test).',
   'Réponds UNIQUEMENT par une ligne JSON, sans texte autour :',
-  '{"lectures":[]} si une seule lecture est plausible ;',
+  '{"lectures":[{"texte":"<ce que la demande veut obtenir>","proba":100}]} si une seule lecture est',
+  'plausible ;',
   'sinon {"lectures":[{"texte":"<la lecture la plus probable>","proba":<entier>},',
   '{"texte":"<l\'autre lecture>","proba":<entier>}]}.',
   '« proba » : la probabilité, en pourcentage, que l’utilisateur veuille dire CETTE lecture ; les',
   'deux font 100. Estime-la honnêtement d’après les mots de la demande et le contexte, sans la',
   'ramener vers 50 par prudence.',
-  'Chaque texte : UNE phrase de 160 caractères au plus, qui REPREND LES MOTS de la demande et',
-  'précise seulement le sens du passage ambigu. Aucun jargon, aucun nom de fichier que la demande',
-  'ne cite pas.'
+  'Chaque texte : UNE phrase de 160 caractères au plus, qui REPREND LES MOTS de la demande et dit',
+  'concrètement ce qu’elle veut obtenir, en précisant le sens du passage ambigu s’il y en a un.',
+  'Aucun jargon, aucun nom de fichier que la demande ne cite pas.'
 ].join('\n')
 
 /**
@@ -93,6 +102,17 @@ const PLAFOND_LECTURE = 200
 const PLAFOND_CONTEXTE = 800
 
 /**
+ * L'extrait du dernier message de l'agent : son DÉBUT et sa FIN. Depuis que chaque message est lu
+ * (conv-1240), une relance (« go », « met le ») porte le plus souvent sur la FIN de ce message — sa
+ * proposition, sa recommandation — que le seul début coupait.
+ */
+export function extraitDuContexte(contexte: string): string {
+  if (contexte.length <= PLAFOND_CONTEXTE) return contexte
+  const moitie = PLAFOND_CONTEXTE / 2
+  return `${contexte.slice(0, moitie).trimEnd()} […] ${contexte.slice(-moitie).trimStart()}`
+}
+
+/**
  * La charge envoyée au petit modèle : ce que font les commandes citées, l'extrait de contexte s'il
  * existe, puis la demande.
  */
@@ -111,7 +131,7 @@ export function chargeDeuxLectures(
   return [
     commandes.length ? `Ce que font les commandes citées :\n${commandes.join('\n')}\n` : '',
     contexte
-      ? `Dernier message de l'agent (extrait, pour le contexte) :\n${contexte.slice(0, PLAFOND_CONTEXTE)}\n`
+      ? `Dernier message de l'agent (extrait, pour le contexte) :\n${extraitDuContexte(contexte)}\n`
       : '',
     `Demande de l'utilisateur :\n${demande.trim()}`
   ]
@@ -168,18 +188,32 @@ function lireUneLecture(brut: unknown): { texte: string; proba: number } | undef
 /**
  * Ce que le contrôle décide : POSER la question (quasi-égalité), ou partir sur la lecture RETENUE
  * en l'annonçant (conv-1123 : « que je puisse corriger après coup sans être bloqué avant »).
+ * `ecartee` absente : la demande n'avait qu'une lecture, annoncée quand même (conv-1240).
  */
 export type IssueDesLectures =
   | { kind: 'question'; lectures: [string, string] }
-  | { kind: 'retenue'; retenue: string; ecartee: string }
+  | { kind: 'retenue'; retenue: string; ecartee?: string }
+
+/**
+ * La lecture à ANNONCER, quelle que soit l'issue : là où la question n'est pas posée (un tour sans
+ * travail payant ni changement d'affichage), la plus probable des deux est annoncée, l'autre nommée.
+ */
+export function lectureAAnnoncer(
+  issue: IssueDesLectures
+): Extract<IssueDesLectures, { kind: 'retenue' }> {
+  return issue.kind === 'retenue'
+    ? issue
+    : { kind: 'retenue', retenue: issue.lectures[0], ecartee: issue.lectures[1] }
+}
 
 /**
  * La décision tirée de la réponse du petit modèle, ou `undefined`.
  *
- * `undefined` dans TOUS les cas douteux — JSON illisible, une seule lecture, une lecture SANS
- * probabilité, deux lectures identiques, une lecture trop longue ou qui ne reprend pas ses mots. Le
- * travail part alors comme avant, sans annonce : ce contrôle ne doit jamais devenir un mur.
- * Deux lectures valides : `question` si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins,
+ * `undefined` dans TOUS les cas douteux — JSON illisible, aucune lecture, une lecture SANS
+ * probabilité, deux lectures identiques, une lecture trop longue. Le travail part alors comme avant,
+ * sans annonce : ce contrôle ne doit jamais devenir un mur.
+ * UNE lecture valide : `retenue` sans lecture écartée (conv-1240). Deux lectures valides : `question`
+ * si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins ET qu'elles reprennent ses mots,
  * sinon `retenue` — la plus probable part, l'autre est nommée pour pouvoir corriger (conv-1123).
  */
 export function lireLesLectures(reponse: unknown, demande: string): IssueDesLectures | undefined {
@@ -193,6 +227,11 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
     return undefined
   }
   const lectures = (brut as { lectures?: unknown })?.lectures
+  if (Array.isArray(lectures) && lectures.length === 1) {
+    const seule = lireUneLecture(lectures[0])
+    if (!seule || seule.texte.length > PLAFOND_LECTURE) return undefined
+    return { kind: 'retenue', retenue: seule.texte }
+  }
   if (!Array.isArray(lectures) || lectures.length !== 2) return undefined
   const lues = lectures.map(lireUneLecture)
   if (!lues[0] || !lues[1]) return undefined
@@ -205,11 +244,13 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
   const cle = (texte: string): string =>
     sansAccent(texte).toLowerCase().replace(/\W+/gu, ' ').trim()
   if (cle(a) === cle(b)) return undefined
-  if (!reprendSesMots(a, demande) || !reprendSesMots(b, demande)) return undefined
   const ecart = ((premiere.proba - seconde.proba) / total) * 100
-  return ecart > ECART_MAX_POUR_DEMANDER
-    ? { kind: 'retenue', retenue: a, ecartee: b }
-    : { kind: 'question', lectures: [a, b] }
+  // Les BOUTONS doivent être dans ses mots (conv-1123) ; la ligne, non (conv-1240) : sur le vrai
+  // modèle, « met le tout le temps » lu « à chaque demande » perdait sa ligne faute du mot « temps ».
+  const dansSesMots = reprendSesMots(a, demande) && reprendSesMots(b, demande)
+  return ecart <= ECART_MAX_POUR_DEMANDER && dansSesMots
+    ? { kind: 'question', lectures: [a, b] }
+    : { kind: 'retenue', retenue: a, ecartee: b }
 }
 
 /**
@@ -225,16 +266,20 @@ export function lireDeuxLectures(reponse: unknown, demande: string): [string, st
  * La ligne affichée dans le fil quand une lecture domine : laquelle part, et laquelle est écartée,
  * pour que l'utilisateur corrige d'un mot au lieu d'être arrêté avant (conv-1123).
  */
-export function annonceDeLaLectureRetenue(retenue: string, ecartee: string): string {
-  return `${DEBUT_LECTURE_RETENUE}« ${retenue} » — si tu voulais plutôt « ${ecartee} », dis-le.`
+export function annonceDeLaLectureRetenue(retenue: string, ecartee?: string): string {
+  return ecartee
+    ? `${DEBUT_LECTURE_RETENUE}« ${retenue} » — si tu voulais plutôt « ${ecartee} », dis-le.`
+    : `${DEBUT_LECTURE_RETENUE}« ${retenue} »`
 }
 
 /**
  * La même lecture, ajoutée à la tâche d'un run : sans elle, le run relirait la demande à sa façon
  * et pourrait faire autre chose que ce que la ligne affichée vient d'annoncer.
  */
-export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee: string): string {
-  const precision = `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
+export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee?: string): string {
+  const precision = ecartee
+    ? `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
+    : `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} ».`
   return tache.includes(precision) ? tache : `${tache.trimEnd()}\n\n${precision}`
 }
 
@@ -243,9 +288,15 @@ export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee:
  * d'affichage). « SYSTÈME: » la fait encadrer comme une relance d'Autowin, jamais comme des mots de
  * l'utilisateur (`baliserRelanceAutomatique`).
  */
-export function consigneDeLectureRetenue(retenue: string, ecartee: string): string {
+export function consigneDeLectureRetenue(retenue: string, ecartee?: string): string {
+  if (!ecartee)
+    return [
+      'SYSTÈME: la demande ci-dessus a été relue avant toi, et une seule lecture en est plausible.',
+      `L'utilisateur a déjà vu la ligne : ${annonceDeLaLectureRetenue(retenue)}`,
+      'Ne la réannonce pas. Si tu comprends sa demande autrement, dis-le en une phrase en tête de ta réponse.'
+    ].join('\n')
   return [
-    'SYSTÈME: la demande ci-dessus pouvait se lire de deux façons ; une lecture domine nettement.',
+    'SYSTÈME: la demande ci-dessus pouvait se lire de deux façons ; la plus probable a été retenue.',
     `L'utilisateur a déjà vu la ligne : ${annonceDeLaLectureRetenue(retenue, ecartee)}`,
     `Fais le travail selon cette lecture : « ${retenue} ». Ne la réannonce pas et ne pose pas la question.`
   ].join('\n')
@@ -317,8 +368,9 @@ const RELANCE =
   /^\s*(ok|okay|go|vas-?y|continue|oui|yes|valide|parfait|d'accord|dac|top|merci)\b[\s.!]*$/iu
 
 /**
- * La demande mérite-t-elle d'être lue deux fois ? Filtre déterministe AVANT tout appel de modèle :
- * écarte un message vide, d'un à trois mots, ou une relance (« ok », « go »).
+ * La demande mérite-t-elle une QUESTION en cas de doute ? Filtre déterministe : écarte un message
+ * vide, d'un à trois mots, ou une relance (« ok », « go »). Depuis conv-1240, ces messages sont
+ * quand même LUS pour la ligne affichée ; seule la question leur reste épargnée.
  */
 export function meriteUneLecture(demande: string | undefined): boolean {
   const texte = (demande ?? '').trim()

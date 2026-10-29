@@ -39,6 +39,11 @@ export const TEXTES_FR = {
   'graphe.eyebrow': 'Connaissances connectées',
   'graphe.description': 'Explore les connaissances reliées de ton Brain.',
   'graphe.selecteur': 'Graphe de connaissances',
+  // Brain PERSO à côté du Brain d'équipe (conv-1233) : nom dans le sélecteur, marque de ses notes.
+  'graphe.brainPerso': 'Brain perso',
+  'graphe.notePerso': 'perso',
+  'graphe.notePerso.titre':
+    'Note de ton Brain perso, privée — l’agent l’ouvre avec le préfixe perso:',
   'graphe.detection': 'Détection des graphes…',
   'graphe.aucunGraphe': 'Aucun graphe accessible',
   'graphe.detection.relancerTitre': 'Relancer la détection des graphes de connaissances',
@@ -252,6 +257,10 @@ export const TEXTES_EN: Record<CleKnowledge, string> = {
   'graphe.eyebrow': 'Connected knowledge',
   'graphe.description': 'Explore the linked knowledge of your Brain.',
   'graphe.selecteur': 'Knowledge graph',
+  'graphe.brainPerso': 'Personal Brain',
+  'graphe.notePerso': 'personal',
+  'graphe.notePerso.titre':
+    'Note from your personal Brain, private — the agent opens it with the perso: prefix',
   'graphe.detection': 'Detecting graphs…',
   'graphe.aucunGraphe': 'No graph available',
   'graphe.detection.relancerTitre': 'Run knowledge graph detection again',

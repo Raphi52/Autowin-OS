@@ -418,6 +418,7 @@ import {
 import type { DecompositionOutcome } from './greedy-decompose'
 import { resumeConsigne, type SousTachePlan } from './runs/plan-en-vagues'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import { fusionnerListesBrain, PREFIXE_NOTE_PERSO } from './brain-perso'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
@@ -782,6 +783,14 @@ export interface OrchestratorCollaboratorDeps {
   trust: TrustLedger
   /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
   retrieveBrain?: typeof retrieveBrainContext
+  /**
+   * Environnement du Brain PERSO (`envDuBrainPerso`), relu à CHAQUE run : un Brain perso réglé dans
+   * les Réglages sert dès le run suivant. Absent ou `undefined` : seul le Brain d'équipe est
+   * interrogé (conv-1233, 2026-10-28).
+   */
+  brainPerso?: () => NodeJS.ProcessEnv | undefined
+  /** Le serveur perso n'écoute pas (connexion refusée) : l'appelant tente de le démarrer. */
+  persoInjoignable?: () => void
   /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */
   causalMemoryFor?: (conversationId: string) => string
   /**
@@ -1257,15 +1266,23 @@ function porterVersPhaseSuivante(texte: string): string {
  * une phase du pipeline lit le fichier elle-même (elle tourne avec les droits de lecture complets) —
  * d'où la RACINE, sans laquelle un chemin `knowledge/…` ne mène nulle part hors du serveur.
  */
-export function consigneCandidatesBrain(racine?: string): string {
+export function consigneCandidatesBrain(racine?: string, perso?: { racine?: string }): string {
   const ouvrir = racine
     ? `avec \`brain_read\` si tu l'as, sinon en lisant le fichier \`${racine}/<chemin>\``
     : 'avec `brain_read`'
-  return (
+  const base =
     `Ci-dessus : les notes CANDIDATES du Brain pour cette tâche (titre, chemin, taille), PAS leur contenu. ` +
     `Ouvre EN ENTIER celles qui servent ta tâche, autant qu'il en faut, ${ouvrir}. ` +
     `Ignore les autres ; ne fouille le dépôt que pour ce que ce savoir ne couvre pas.`
-  )
+  if (!perso) return base
+  /*
+   * BRAIN PERSO (conv-1233) : ses notes vivent sous une AUTRE racine. Sans cette phrase, une phase
+   * sans `brain_read` lirait `<racine de l'équipe>/perso:knowledge/…`, un fichier qui n'existe pas.
+   */
+  const ouvrirPerso = perso.racine
+    ? `avec \`brain_read\` en GARDANT le préfixe si tu l'as, sinon en lisant le fichier \`${perso.racine}/<chemin sans le préfixe>\``
+    : 'avec `brain_read` en GARDANT le préfixe'
+  return `${base} Les notes préfixées \`${PREFIXE_NOTE_PERSO}\` viennent du Brain PERSO de l'utilisateur (privé) : ouvre-les ${ouvrirPerso}.`
 }
 
 /**
@@ -4308,6 +4325,26 @@ ${CONTRAT_OBJECTIONS}`
     // 2 000 caractères (2026-09-27) : chaque sous-agent ouvre EN ENTIER les notes qu'il juge
     // nécessaires. Dégrade à '' si le serveur est absent.
     const brainCorpus = brainCorpusForWorkspace(this.deps.executionWorkspace)
+    /*
+     * BRAIN PERSO (conv-1233, 2026-10-28, demande utilisateur : « étends le Brain perso au contexte
+     * des travaux lancés en arrière-plan »). Interrogé EN MÊME TEMPS que celui de l'équipe : le run
+     * n'attend pas plus longtemps. Aucun filtre de dépôt (ses notes ne sont rangées par aucun
+     * projet), mêmes règles sinon : sources signées seules, jamais `inbox/`. Ses chemins arrivent
+     * préfixés `perso:`, ce que le `brain_read` des phases reconnaît pour ouvrir le bon Brain.
+     */
+    let envPerso: NodeJS.ProcessEnv | undefined
+    try {
+      envPerso = this.deps.brainPerso?.()
+    } catch {
+      // Réglage perso illisible : le run part avec le seul Brain d'équipe.
+      envPerso = undefined
+    }
+    const brainPersoEnCours = envPerso
+      ? (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {
+          env: envPerso,
+          mode: 'candidates'
+        }).catch(() => undefined)
+      : undefined
     const brain =
       brainCorpus?.length === 0
         ? { context: '', status: 'empty' as const }
@@ -4315,9 +4352,21 @@ ${CONTRAT_OBJECTIONS}`
             corpus: brainCorpus,
             mode: 'candidates'
           })
+    const brainPerso = await brainPersoEnCours
+    if (brainPerso?.status === 'unavailable' && brainPerso.unavailableReason === 'network') {
+      try {
+        this.deps.persoInjoignable?.()
+      } catch {
+        // Relancer le serveur perso est un confort : jamais une cause d'échec du run.
+      }
+    }
     const brainRetrievedAt = new Date().toISOString()
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
-    const brainContext = scopedBrain.context
+    const persoScoped = brainPerso ? scopeBrainRetrieval(brainPerso, undefined) : undefined
+    const listePerso = persoScoped?.status === 'found' ? persoScoped.context.trim() : ''
+    const brainContext = listePerso
+      ? fusionnerListesBrain(scopedBrain.context, listePerso)
+      : scopedBrain.context
     /**
      * NOTIFIÉ ICI, à l'endroit où l'appel a EU LIEU — et non trente lignes plus bas comme avant.
      *
@@ -4335,7 +4384,8 @@ ${CONTRAT_OBJECTIONS}`
         kind: 'automatic',
         query: brainQuery,
         found: brainContext.length > 0,
-        status: scopedBrain.status,
+        // Le statut est celui de l'équipe, sauf quand des notes perso ont été servies.
+        status: listePerso ? 'found' : scopedBrain.status,
         injectedChars: brainContext.length,
         navigation: scopedBrain.navigation
       })
@@ -4397,7 +4447,15 @@ ${CONTRAT_OBJECTIONS}`
       ...(brainContext
         ? [
             contexteNomme('brainContext', brainContext),
-            contexteNomme('brainPriorite', consigneCandidatesBrain(scopedBrain.navigation?.root))
+            contexteNomme(
+              'brainPriorite',
+              consigneCandidatesBrain(
+                scopedBrain.navigation?.root,
+                listePerso
+                  ? { racine: persoScoped?.navigation?.root ?? envPerso?.AUTOWIN_BRAIN_ROOT }
+                  : undefined
+              )
+            )
           ]
         : []),
       contexteNomme('tache', taskContext),

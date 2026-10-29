@@ -346,6 +346,17 @@
   background: #3c6eeb;
   color: #ffffff;
 }
+/* Selection dans MES bulles en BLANC INVERSE (conv-1215, 2026-10-28 : « quand je selectionne mes
+   propres messages le fond rose sur rose fais que je vois pas ce que je selectionne », option 1
+   choisie sur maquette). Le rose a 38 % se fondait dans la lave rose -> bleu -> violet de la bulle ;
+   le blanc plein tranche sur toutes ses couleurs, a tout moment du mouvement. Le texte selectionne
+   prend le rose du theme. Deux selecteurs : le texte pose directement dans la bulle, et celui de
+   ses paragraphes. */
+:root[data-theme='nebuleuse-verre'] .msg.user .msg-body::selection,
+:root[data-theme='nebuleuse-verre'] .msg.user .msg-body ::selection {
+  background: #ffffff;
+  color: #e63ca0;
+}
 :root[data-theme='nebuleuse-verre'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
   outline: 2px solid rgba(255, 124, 191, 0.85);
   outline-offset: 2px;
@@ -383,8 +394,9 @@
    3. RAIL (menu de gauche) : colonne de verre flottante.
    --------------------------------------------------------------------------- */
 :root[data-theme='nebuleuse-verre'] .theme-serious .rail {
-  /* Haut et bas : la marge des blocs (var(--s5), app-shell.css). Gauche : la marge de fenetre. */
-  margin: var(--s5) 0 var(--s5) var(--nv-marge-fenetre);
+  /* Haut et bas : la marge des blocs (app-shell.css ; en haut, --marge-haut-vue suit le zoom,
+     conv-1223). Gauche : la marge de fenetre. */
+  margin: var(--marge-haut-vue) 0 var(--s5) var(--nv-marge-fenetre);
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   border-radius: 18px;
@@ -4616,7 +4628,11 @@
    - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
      ArtifactPreview.css, recopie tel quel.
    `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
-   `.msg.assistant` et se pose apres le dernier message, ne compte pas comme une reponse. */
+   `.msg.assistant` et se pose apres le dernier message, ne compte pas comme une reponse.
+   Les tranches sont visees par leur CLASSE, jamais par `> span` (conv-1229) : Chromium range la
+   cible finale de TOUTES les regles `:has()` dans un seul ensemble d'invalidation, et `span` y
+   faisait restyler tous les `span` de l'app a chaque frappe dans la saisie (≈ 220 ms par lettre,
+   gel de 15 s puis rechargement de la fenetre le 28/10 a 18:31). Garde : has-cible-nue.test.ts. */
 :root[data-theme='nebuleuse-verre'] .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail) {
   --thinking-capsule-lave-chaud: transparent;
   --thinking-capsule-lave-froid: transparent;
@@ -4632,7 +4648,7 @@
 :root[data-theme='nebuleuse-verre']
   .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
   .artifact-pile__tranches
-  > span {
+  > .artifact-pile__tranche {
   background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
   animation: none;
 }

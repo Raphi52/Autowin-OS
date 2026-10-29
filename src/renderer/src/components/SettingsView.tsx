@@ -6,6 +6,7 @@ import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView, type CapabilityKind } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { BrainSettings } from './BrainSettings'
+import { BrainPersoSettings } from './BrainPersoSettings'
 import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
 import { ModeAutoSeuilsSettings } from './ModeAutoSeuilsSettings'
@@ -309,6 +310,7 @@ export function SettingsView({
           {section === 'rules' && <RulesView />}
           {section === 'preflight' && <ExecutionWorkspaceSettings />}
           {section === 'preflight' && <BrainSettings />}
+          {section === 'preflight' && <BrainPersoSettings />}
           {section === 'preflight' && (
             <section
               className="settings-preflight surface-panel"

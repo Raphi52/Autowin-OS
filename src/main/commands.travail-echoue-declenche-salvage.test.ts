@@ -41,14 +41,14 @@ const UN_TRAVAIL: Travail = {
   fichiers: ['src/renderer/src/components/home-decor-scene.ts']
 }
 
-describe('du travail non fusionné déclenche `salvage`', () => {
+describe('du travail non fusionné déclenche `git` (ex-`salvage`, supprimé le 2026-10-29, conv-1252)', () => {
   it('pose une consigne qui NOMME le skill quand du travail attend', async () => {
     const bus = new AppCommandBus(osAvec([UN_TRAVAIL]), () => undefined)
 
     const prompt = await bus.snapshotForPrompt()
 
     expect(prompt.travauxNonFusionnes?.compte).toBe(1)
-    expect(prompt.travauxNonFusionnes?.consigne).toContain('salvage')
+    expect(prompt.travauxNonFusionnes?.consigne).toContain('skill `git`')
   })
 
   it('reste ABSENT quand rien n’attend — une règle permanente se dilue', async () => {
@@ -66,7 +66,7 @@ describe('du travail non fusionné déclenche `salvage`', () => {
 
     const serialise = JSON.stringify(await bus.snapshotForPrompt())
 
-    expect(serialise).toContain('salvage')
+    expect(serialise).toContain('skill `git`')
     expect(serialise).toContain('run-ef845009a251-1')
   })
 

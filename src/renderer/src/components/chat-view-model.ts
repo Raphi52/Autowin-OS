@@ -1,6 +1,11 @@
 import {
   lireTestsDuTerminal,
   reduceChatTurn,
+  REASONING_MAX,
+  bornerJournalDActions,
+  bornerLigneDAction,
+  cibleEntiereDe,
+  statutComplet,
   type ChatTurnEvent,
   type ChatTurnStatus,
   type PersistedChatActionPart,
@@ -511,7 +516,7 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
  * Borne du raisonnement garde par ligne. On garde la FIN — ce que l'agent pense maintenant —, a la
  * meme borne que celle du fournisseur (`THINKING_CAP`, src/main/providers/thinking.ts).
  */
-export const RAISONNEMENT_MAX = 20_000
+export const RAISONNEMENT_MAX = REASONING_MAX
 
 /**
  * ACCUMULE un fragment de raisonnement sous la ligne de pipeline de la phase qui l'a emis.
@@ -885,9 +890,6 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
   }
 }
 
-/** Borne de l'historique des signes de vie : de quoi relire un tour long sans gonfler la vue. */
-const STATUTS_MAX = 500
-
 /**
  * Le reducteur du fil, plus le DEBUT DU TOUR (rail, conv-338) : un tour en direct n'a pas encore
  * d'heure de debut ; le premier evenement date par le main la lui donne, puis elle ne bouge plus.
@@ -915,18 +917,23 @@ function reduireEvenementDuPilote(
   if (event.kind === 'provider-status' && event.text) {
     // Une meme ligne re-emise (un battement qui se repete a l'identique) n'ajoute rien : on ne
     // duplique que ce qui CHANGE, et on borne l'historique pour un tour tres long.
+    // Le JOURNAL garde la commande entière (`data.target`), l'en-tête garde la ligne courte : en
+    // dépliant une action, on lisait sinon une commande coupée à 120 caractères (conv-1228).
+    // Même borne que le tour enregistré, qui DIT ce qu'elle retire (`bornerJournalDActions`) : avant
+    // conv-1228, 500 lignes de 300 caractères, coupées en silence.
+    const ligne = bornerLigneDAction(statutComplet(event.text, cibleEntiereDe(event.data)))
     const journal = message.providerStatusLog ?? []
-    const suite = journal.at(-1) === event.text ? journal : [...journal, event.text]
+    const suite = journal.at(-1) === ligne ? journal : [...journal, ligne]
     return {
       ...message,
       turnId,
       providerStatus: event.text,
-      providerStatusLog: suite.slice(-STATUTS_MAX)
+      providerStatusLog: bornerJournalDActions(suite)
     }
   }
   if (event.kind === 'reasoning' && event.text) {
     const merged = `${message.reasoning ?? ''}${event.text}`
-    return { ...message, turnId, reasoning: merged.slice(-4_000) }
+    return { ...message, turnId, reasoning: merged.slice(-REASONING_MAX) }
   }
   const heure = typeof event.at === 'number' ? { at: event.at } : {}
   if (event.kind === 'tests-du-terminal') {
@@ -1791,6 +1798,8 @@ export function stripAssistantThinking(text: string): string {
 
 export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
   const compact: ChatDisplayPart[] = []
+  /** La ligne « Lecture retenue », rangée en tête à la fin (conv-1240). */
+  let lecture: ChatDisplayPart | undefined
   const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
   const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
   let textIndex = 0
@@ -1822,17 +1831,18 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
       continue
     }
     // La ligne « Lecture retenue » ne se fond pas dans la réponse qui la suit : elle reste un bloc
-    // à part pour être repérée d'un coup d'œil (conv-1123).
+    // à part pour être repérée d'un coup d'œil (conv-1123). Elle se range TOUJOURS en tête du
+    // message (conv-1240) : lue en parallèle du modèle, elle peut arriver après le début de sa
+    // réponse, qu'elle ne doit ni couper en deux ni suivre. Le texte autour reste d'un seul tenant.
     if (part.streamId === FLUX_LECTURE_RETENUE) {
-      flushText()
       textIndex++
-      if (part.text.trim())
-        compact.push({
+      if (part.text.trim() && !lecture)
+        lecture = {
           kind: 'text',
           text: part.text.trim(),
           lectureRetenue: true,
           ...(part.at === undefined ? {} : { at: part.at })
-        })
+        }
       continue
     }
     pendingText.push({
@@ -1842,7 +1852,7 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
     })
   }
   flushText()
-  return compact
+  return lecture ? [lecture, ...compact] : compact
 }
 
 export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {

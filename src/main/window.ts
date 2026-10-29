@@ -19,6 +19,7 @@ import { surveillerParBattement } from './gel-battement-fenetre'
 import { journaliserGel } from './gel-main'
 import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer, screen } from 'electron'
 import { placerFenetreDetachee } from '../shared/view-tabs'
+import { HAUTEUR_BOUTONS_FENETRE } from '../shared/barre-fenetre'
 import type { AppDestination } from '../shared/navigation'
 import { installerCaptureSonSysteme } from './audio-loopback'
 import { join } from 'path'
@@ -307,7 +308,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       titleBarOverlay: {
         color: '#00000000',
         symbolColor: '#f5f7fb',
-        height: 28
+        height: HAUTEUR_BOUTONS_FENETRE
       },
       icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon,
       webPreferences: {

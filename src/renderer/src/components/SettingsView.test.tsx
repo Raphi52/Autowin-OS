@@ -9,6 +9,9 @@ vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 // portent bien sur le panneau Diagnostic et non sur le voisin.
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
+// Même isolement pour le panneau du Brain perso (conv-1233), couvert par BrainPersoSettings.test.tsx :
+// sans lui, son alerte « réglage illisible » passait devant celle de la réparation.
+vi.mock('./BrainPersoSettings', () => ({ BrainPersoSettings: () => null }))
 // L'alerte de l'onglet Routage a sa sonde a elle (`useProvidersAReconnecter`, couverte par
 // `SettingsView.routage.test.tsx`) : neutralisee ici, sinon elle consommerait les reponses de
 // `providerStatus` que cette suite reserve a la section Providers.

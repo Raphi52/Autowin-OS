@@ -28,6 +28,14 @@ export interface SkillNommee {
 const AVEC_BARRE = /^\s*\/([A-Za-z0-9][\w-]*)(?=\s|$)/
 const SANS_BARRE = /^\s*([A-Za-z][\w-]*)(?=[\s,:.;!]|$)/
 
+/*
+ * Skills dont le nom est AUSSI une commande courante : en tête d'un message, le mot nu désigne la
+ * commande (« git status me dit… », « git push refusé »), pas la skill. Or `/git` commite, pousse et
+ * supprime des branches : un faux déclenchement publierait sans demande (conv-1250, 2026-10-29).
+ * Pour elles, seule la forme avec barre invoque.
+ */
+const BARRE_OBLIGATOIRE = new Set(['git'])
+
 export function skillNommeeEnTete(
   texte: string | null | undefined,
   nomsConnus: Iterable<string>
@@ -45,6 +53,7 @@ export function skillNommeeEnTete(
     }
   }
   if (!connu) return null
+  if (!slash && BARRE_OBLIGATOIRE.has(nom)) return null
   let reste = contenu.slice(m[0].length)
   if (!slash) {
     if (/^\s*=/.test(reste)) return null

@@ -305,6 +305,14 @@ export class AutowinOS {
    */
   directivesEnAttente?: (conversationId: string) => string[]
   /**
+   * Environnement du Brain PERSO, branché par `index.ts` (`envDuBrainPerso`) ; absent = aucun Brain
+   * perso, comme dans les tests. Branchement tardif plutôt qu'un appel direct ici : un test qui
+   * construit l'OS ne doit pas aller lire le réglage réel du poste (conv-1233, 2026-10-28).
+   */
+  brainPersoDuRun?: () => NodeJS.ProcessEnv | undefined
+  /** Serveur du Brain perso injoignable pendant un run : `index.ts` tente de le démarrer. */
+  brainPersoInjoignable?: () => void
+  /**
    * Pose une question à l'utilisateur (fenêtre de question) et attend sa réponse, branché par
    * `index.ts`. Un run s'en sert pour se mettre en pause sur une objection d'étendue répétée.
    */
@@ -714,6 +722,9 @@ export class AutowinOS {
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
+      // BRAIN PERSO (conv-1233) : relu à chaque run, même branchement tardif que `drainDirectives`.
+      brainPerso: () => this.brainPersoDuRun?.(),
+      persoInjoignable: () => this.brainPersoInjoignable?.(),
       // Même branchement tardif que `drainDirectives` : la fenêtre de question vit dans `index.ts`
       // (objection d'étendue répétée, conv-1149). Absente = personne ne peut répondre.
       demanderALUtilisateur: (question, contexte, signal) =>

@@ -4,6 +4,7 @@ import { resolveHeadShas } from '../brain-source-sha'
 import {
   applyBrainRetrievalScoresAsync,
   assertAuthorizedBrainVaultAsync,
+  brainPersoGraphRefs,
   loadBrainGraph,
   loadBrainGraphAsync,
   loadBrainGraphPreviewAsync,
@@ -44,7 +45,9 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
     let value: unknown
     switch (request.method) {
       case 'listBrains':
-        value = scanBrainGraphs(undefined, false)
+        // Le Brain PERSO s'ajoute à côté de celui de l'équipe (conv-1233), sans catalogue de thèmes ici
+        // non plus : la vue les demande à part (`loadThemes`).
+        value = [...scanBrainGraphs(undefined, false), ...brainPersoGraphRefs(undefined, false)]
         break
       case 'loadPreview':
         value = await loadBrainGraphPreviewAsync(request.args[0], request.args[1], request.args[2])
@@ -58,7 +61,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         break
       }
       case 'loadThemes':
-        value = loadBrainThemes(request.args[0], request.args[1])
+        value = await loadBrainThemes(request.args[0], request.args[1])
         break
       case 'loadThemeNodes':
         value = loadBrainThemeNodes(request.args[0], request.args[1], request.args[2])

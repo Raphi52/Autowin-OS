@@ -174,7 +174,7 @@ describe('le prompt que « Traiter » dépose', () => {
   })
 })
 
-describe('« Traiter » lance un SALVAGE, il ne réinvente pas la procédure', () => {
+describe('« Traiter » lance /git, il ne réinvente pas la procédure', () => {
   const enAttente = [
     {
       agentId: 'run-aaa-1',
@@ -192,10 +192,13 @@ describe('« Traiter » lance un SALVAGE, il ne réinvente pas la procédure', (
 
   it('INVOQUE la compétence dès le premier caractère', () => {
     // `invokedSkillId` ne reconnaît un skill qu'en TÊTE de message (`/^\s*\/nom\b/`). Une mention
-    // au milieu du texte ne déclencherait rien : le prompt parlerait de salvage sans le lancer.
+    // au milieu du texte ne déclencherait rien : le prompt parlerait de /git sans le lancer.
+    // Depuis le 2026-10-29 (conv-1250), « Traiter » lance `/git` et non plus `/salvage` : `/git`
+    // trie comme salvage PUIS publie et range, ce que l'utilisateur tapait à la main après chaque tri.
     const prompt = promptTravauxNonPublies(enAttente) ?? ''
 
-    expect(prompt.startsWith('/salvage')).toBe(true)
+    expect(prompt.split('\n')[0]).toBe('/git')
+    expect(prompt).not.toMatch(/^\s*\/salvage\b/)
   })
 
   it('porte le CONTEXTE que la compétence ne peut pas deviner', () => {

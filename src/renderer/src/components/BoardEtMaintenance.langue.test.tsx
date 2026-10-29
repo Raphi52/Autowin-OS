@@ -117,7 +117,11 @@ describe('Board — langue', () => {
     expect(vue()).toContain('The river')
     expect(texte(el, 'besoins-stats')).toContain('2 requests')
     expect(texte(el, 'besoins-actualiser')).toBe('Refresh')
-    expect(texte(el, 'riviere-pied')).toContain('threads over the last 14 days')
+    // La ligne de compte (« threads over the last 14 days… ») a été retirée (conv-1226) : la
+    // fenêtre ne se dit plus que dans l'aria-label de la rivière.
+    expect(el.querySelector('[data-testid="riviere"]')?.getAttribute('aria-label')).toBe(
+      'The river, the last 14 days'
+    )
     expect(texte(el, 'riviere-tout-verifier')).toBe('Check all · 1')
     const etages = [...el.querySelectorAll('[data-testid="riviere-etage"]')].map(
       (e) => e.textContent
@@ -138,7 +142,9 @@ describe('Board — langue', () => {
     await act(async () => appliquerLangue('fr'))
     expect(texte(el, 'besoins-actualiser')).toBe('Actualiser')
     expect(texte(el, 'riviere-fiche-ouvrir')).toBe('Ouvrir le fil')
-    expect(texte(el, 'riviere-pied')).toContain('fils sur les 14 derniers jours')
+    expect(el.querySelector('[data-testid="riviere"]')?.getAttribute('aria-label')).toBe(
+      'La rivière, les 14 derniers jours'
+    )
     expect(el.querySelector('[data-testid="riviere-fiche-demande"]')?.getAttribute('title')).toBe(
       'fini sans vérification'
     )

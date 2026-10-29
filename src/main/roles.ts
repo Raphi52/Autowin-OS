@@ -71,11 +71,11 @@ export function resolvePhaseBinding(
  * Mesuré dans `prompt-observability` : les 100 appels d'étapes et les 63 juges partaient TOUS à
  * l'effort du rôle (`xhigh`), qu'il s'agisse d'écrire le code (build) ou de noter une leçon (learn).
  * Rien ne faisait ce choix : `phaseModel` le permet, mais seulement à la main, sans écran, et pas pour
- * think/learn/salvage (hors `PipelinePhase`).
+ * think/learn/git (hors `PipelinePhase`).
  *
  * La règle ne s'applique QUE quand l'effort de l'étape HÉRITE du réglage du rôle : un `phaseModel`,
  * l'effort propre d'un agent du canevas ou un binding figé passent devant (décidé à l'appelant).
- * - Crans retirés selon l'étape : build et salvage jamais ; scout/frame/terrain un ; clean/think/learn deux.
+ * - Crans retirés selon l'étape : build et git jamais ; scout/frame/terrain un ; clean/think/learn deux.
  * - La difficulté de la demande (`classifyRegime`) n'agit que sur les étapes baissées : difficile en
  *   rend un, triviale en retire un de plus. Une erreur de classement coûte du temps, jamais build.
  * - PLAFOND = le réglage (jamais au-dessus, ni `max` ni `ultra`). PLANCHER = le plus bas effort de la
@@ -86,7 +86,7 @@ export function resolvePhaseBinding(
  */
 const CRANS_RETIRES_PAR_ETAPE: Readonly<Record<string, number>> = {
   build: 0,
-  salvage: 0,
+  git: 0,
   scout: 1,
   frame: 1,
   terrain: 1,

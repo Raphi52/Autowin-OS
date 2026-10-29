@@ -89,6 +89,9 @@ export function runsRoot(): string {
   return join(process.env.USERPROFILE ?? '.', '.claude', 'runs')
 }
 
+/** RUN.md ouverts en même temps au plus (conv-1248) : la fenêtre du snapshot (24) tient en un paquet. */
+const LECTURES_EN_PARALLELE = 32
+
 async function safeReaddir(p: string): Promise<string[]> {
   try {
     return await readdir(p)
@@ -133,43 +136,63 @@ export async function scanRunsBounded(
     ).values()
   ]
 
-  const candidates: { subject: string; session: string; path: string; mtime: number }[] = []
-  for (const racine of racines) {
-    const sessions = sessionFilter
-      ? (await safeReaddir(racine)).filter((s) => sessionFilter.has(s))
-      : await safeReaddir(racine)
-    for (const session of sessions) {
-      const sessionDir = join(racine, session)
-      for (const ws of await safeReaddir(sessionDir)) {
-        const runPath = join(sessionDir, ws, 'RUN.md')
-        try {
-          const runStat = await stat(runPath)
-          candidates.push({
-            subject: ws.replace(/-workspace$/, ''),
-            session,
-            path: runPath,
-            mtime: runStat.mtimeMs
-          })
-        } catch {
-          /* pas de RUN.md ici — ignoré */
-        }
-      }
-    }
-  }
+  // TOUTES les dates lancées ensemble (conv-1248, 2026-10-29) : attendre chaque `stat` avant le
+  // suivant faisait ~1 150 allers-retours disque d'affilée sur le poste — 55 à 90 ms par scan,
+  // 111 ms en médiane dans l'app (`snapshot:runs`), contre 16 à 39 ms ensemble, résultat identique.
+  // L'ordre d'insertion reste celui des dossiers : le tri stable départage les dates égales pareil.
+  type Candidat = { subject: string; session: string; path: string; mtime: number }
+  const parRacine = await Promise.all(
+    racines.map(async (racine) => {
+      const sessions = sessionFilter
+        ? (await safeReaddir(racine)).filter((s) => sessionFilter.has(s))
+        : await safeReaddir(racine)
+      return Promise.all(
+        sessions.map(async (session) => {
+          const sessionDir = join(racine, session)
+          const datees = await Promise.all(
+            (await safeReaddir(sessionDir)).map(async (ws): Promise<Candidat | null> => {
+              const runPath = join(sessionDir, ws, 'RUN.md')
+              try {
+                const runStat = await stat(runPath)
+                return {
+                  subject: ws.replace(/-workspace$/, ''),
+                  session,
+                  path: runPath,
+                  mtime: runStat.mtimeMs
+                }
+              } catch {
+                return null // pas de RUN.md ici — ignoré
+              }
+            })
+          )
+          return datees.filter((c): c is Candidat => c !== null)
+        })
+      )
+    })
+  )
+  const candidates = parRacine.flat(2)
 
   candidates.sort((a, b) => b.mtime - a.mtime)
   const limit =
     options.limit === undefined ? candidates.length : Math.max(0, Math.floor(options.limit))
   const retenus = candidates.slice(0, limit)
 
+  // Les RUN.md retenus, lus ensemble eux aussi, mais par paquets : un `readFile` garde son fichier
+  // ouvert jusqu'au bout, et `scanRuns()` sans borne (os.ts) en lirait des milliers d'un coup.
+  // L'ordre de la liste reste celui du tri.
   const entries: RunEntry[] = []
-  for (const candidate of retenus) {
-    try {
-      const md = await readFile(candidate.path, 'utf8')
-      entries.push({ ...candidate, summary: parseRun(md, candidate.subject) })
-    } catch {
-      /* run illisible — ignoré */
-    }
+  for (let debut = 0; debut < retenus.length; debut += LECTURES_EN_PARALLELE) {
+    const lus = await Promise.all(
+      retenus.slice(debut, debut + LECTURES_EN_PARALLELE).map(async (candidate) => {
+        try {
+          const md = await readFile(candidate.path, 'utf8')
+          return { ...candidate, summary: parseRun(md, candidate.subject) }
+        } catch {
+          return null // run illisible — ignoré
+        }
+      })
+    )
+    for (const entree of lus) if (entree) entries.push(entree)
   }
 
   return { entries, remaining: candidates.length - retenus.length }

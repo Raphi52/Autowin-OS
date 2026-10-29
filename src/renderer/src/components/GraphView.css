@@ -2159,3 +2159,28 @@
   opacity: 1;
   background: rgba(255, 255, 255, 0.06);
 }
+
+/*
+ * LA MARQUE « PERSO » d'une note du Brain perso (conv-1233, 2026-10-28) : une puce discrète, posée
+ * dans la fiche de la note, la liste d'un thème et les résultats de recherche.
+ */
+.note-perso {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--gold, #c9a75d);
+  border-radius: 3px;
+  color: var(--gold, #c9a75d);
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: lowercase;
+}
+
+.node-search-result .note-perso,
+.node-links button .note-perso {
+  grid-column: 2;
+  justify-self: start;
+}

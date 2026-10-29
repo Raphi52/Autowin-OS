@@ -383,6 +383,13 @@ export function bordsDesColonnes(poids: readonly number[]): number[] {
 export const POSTIT_L = 124
 export const POSTIT_H = 84
 /**
+ * La place gardée sous un post-it « À vérifier » pour ses boutons « vérifier / à la main », à
+ * l'échelle 1 : 3 d'écart, 20 de boutons (mesurés dans Chromium), 1 de jeu. Sans elle (conv-1214,
+ * 2026-10-28), les boutons tombaient sur le haut du post-it du dessous — l'écart entre deux lignes
+ * n'est que de 8 — et la souris, plus bas dans sa carte, ne les voyait plus.
+ */
+export const PLACE_DES_GESTES = 24
+/**
  * L'échelle la plus grande d'un post-it. Plafonnée à 1 jusqu'au 2026-10-28, quand l'utilisateur a
  * constaté (conv-1204) : « le post it doit être plus grand, on optimise mal l'espace » — la colonne
  * de la loupe gardait des post-it de 124 px au-dessus d'un tiers de tableau vide. Ils grandissent
@@ -423,8 +430,82 @@ export function placer(
   const l = (bords[j + 1] - bords[j]) * largeurPx
   const ajuste = ajusteALaColonne(l, colonnes)
   const k = Math.min(ECHELLE_MAX, Math.max(0.09, ajuste), echelleMax)
-  const largeur = POSTIT_L * Math.min(ETIREMENT_MAX, Math.max(1, ajuste / k))
+  // Sous l'échelle 1, le texte garde sa taille à l'écran (texteDuPostit, conv-1242) : il grossit de
+  // 1/k dans le papier, et le papier peut s'élargir d'autant pour garder ses mots par ligne — sans
+  // quoi, à 80 fils par jour, un post-it de 89 px coupait son titre à 11 lettres dans une case de 130.
+  const largeur = POSTIT_L * Math.min(ETIREMENT_MAX / Math.min(1, k), Math.max(1, ajuste / k))
   return { x: g + (l * (colonne + 0.5)) / colonnes, k, kx: Math.min(k, ajuste), largeur }
+}
+
+/**
+ * Le texte d'un post-it, mesuré dans le papier À L'ÉCHELLE 1 — les mêmes valeurs que
+ * RiviereDuProjet.css (`.riviere-postit`, `-titre`, `-meta`), que RiviereDuProjet.lisible.test.tsx
+ * compare au fichier : 11 px de titre, 9 px de ligne projet · heure, interligne 1,2, bande de la
+ * punaise 14, marge du bas 4, écart 2, 9 de chaque côté.
+ */
+const TITRE_PX = 11
+const META_PX = 9
+const INTERLIGNE = 1.2
+const BANDE_DE_LA_PUNAISE = 14
+const MARGE_DU_BAS = 4
+const ECART_TITRE_META = 2
+const MARGES_LATERALES = 18
+const LIGNES_DU_TITRE = 4
+/**
+ * En deçà de cette largeur de texte À L'ÉCRAN (~9 lettres), le post-it reste une pastille : à 40,
+ * la colonne voisine de la loupe se couvrait de « ajout… » / « AutoWi… » (banc à 40 fils par jour).
+ * 58 = (124 − 18) × 0,55 : un post-it de base écrit dès l'ancien seuil d'échelle, jamais plus tard.
+ */
+const LARGEUR_DE_TEXTE_MIN = 58
+
+export interface CadreDuTexte {
+  /**
+   * La contre-échelle du bloc de texte dans le papier : 1/k sous l'échelle 1 (le texte garde ses
+   * 11 px à l'écran), 1 au-dessus (il grandit avec le post-it). Une TRANSFORMATION, animée comme
+   * celle du papier : une taille de police changée d'un coup pendant que le papier rétrécissait en
+   * 0,3 s faisait gonfler le texte à chaque cran de molette (×4,7 mesuré à 150 fils par jour).
+   */
+  grossi: number
+  /** Largeur du bloc de texte avant sa contre-échelle : il revient, grossi, à la largeur du papier. */
+  largeur: number
+}
+
+/** Le bloc de texte d'un post-it à l'échelle `k`, de largeur `largeur` avant l'échelle. */
+export function cadreDuTexte(k: number, largeur: number): CadreDuTexte {
+  const grossi = 1 / Math.min(1, k)
+  return { grossi, largeur: (largeur - MARGES_LATERALES) / grossi }
+}
+
+export interface TexteDuPostIt extends CadreDuTexte {
+  /** Lignes de titre qui tiennent sous la punaise. */
+  lignes: number
+  /** Faux : la ligne projet · heure ne tient plus, le titre prend sa place. */
+  avecMeta: boolean
+}
+
+/**
+ * Ce qu'un post-it à l'échelle `k` (largeur `largeur` avant l'échelle) écrit, ou `null` : une
+ * pastille. Depuis le 2026-10-28 (conv-1242, « elle casse quand ya trop d'éléments et quand je fais
+ * ctrl molette les textes disparaissent, et c'est illisible ») : le texte suivait l'échelle (11 px
+ * × k) et se cachait sous k = 0,55. Or k baisse dès que le board se charge (« tout tient dans
+ * l'écran ») et dès que l'app zoome (Ctrl + molette réduit la place en pixels CSS) : mesuré à 40 fils
+ * par jour, un titre de ~6 px, puis plus rien au zoom ×1,5. Le texte garde donc À L'ÉCRAN sa taille
+ * de l'échelle 1 (sous k = 1, il grossit d'autant dans le papier), et c'est le NOMBRE DE LIGNES qui
+ * cède : 4, puis moins, puis la ligne projet · heure, puis la pastille quand plus une ligne ne tient.
+ * Au-dessus de k = 1, il grandit avec le post-it, comme avant.
+ */
+export function texteDuPostit(k: number, largeur: number): TexteDuPostIt | null {
+  if ((largeur - MARGES_LATERALES) * k < LARGEUR_DE_TEXTE_MIN) return null
+  const cadre = cadreDuTexte(k, largeur)
+  // Dans le bloc de texte, avant sa contre-échelle : les tailles de la feuille de style, et la
+  // hauteur du papier sous la punaise réduite d'autant.
+  const ligne = TITRE_PX * INTERLIGNE
+  const place = (POSTIT_H - BANDE_DE_LA_PUNAISE - MARGE_DU_BAS) / cadre.grossi
+  const avecMeta = Math.floor((place - ECART_TITRE_META - META_PX * INTERLIGNE) / ligne + 1e-9)
+  if (avecMeta >= 1)
+    return { ...cadre, lignes: Math.min(LIGNES_DU_TITRE, avecMeta), avecMeta: true }
+  const seul = Math.floor(place / ligne + 1e-9)
+  return seul >= 1 ? { ...cadre, lignes: Math.min(LIGNES_DU_TITRE, seul), avecMeta: false } : null
 }
 
 /** L'échelle qui fait tenir `colonnes` post-it de front dans une colonne de `l` px (90 % de sa largeur). */
@@ -585,6 +666,11 @@ export interface OptionsDeDisposition {
   debut: number
   marge: number
   sousLigne: number
+  /**
+   * Le pas d'un étage qui garde de la place sous ses post-it (« À vérifier » et ses boutons,
+   * conv-1214), à l'échelle 1 ; les autres étages prennent `sousLigne`.
+   */
+  sousLigneParEtage?: Readonly<Partial<Record<string, number>>>
   vide: number
   /** Le jour de la loupe : ses cases chargées essaient COLONNES_DE_LA_LOUPE. Absent = 3 partout. */
   jourLoupe?: number
@@ -618,14 +704,18 @@ export function disposerEtages(
   const largeur = (j: number): number => (bords[j + 1] - bords[j]) * largeurPx
   const echelle = (j: number, c: number): number =>
     Math.min(ECHELLE_MAX, Math.max(0.09, ajusteALaColonne(largeur(j), c)))
-  const pasDe = (j: number, c: number): number =>
-    Math.max(PAS_MIN_PASTILLE, o.sousLigne * echelle(j, c))
-  const pasDeBase = Array.from({ length: n }, (_, j) => pasDe(j, PAR_LIGNE))
+  /** Le pas à l'échelle 1 de l'étage `i`. */
+  const sousLigne = etages.map((e) => o.sousLigneParEtage?.[e.cle] ?? o.sousLigne)
+  const pasDe = (i: number, j: number, c: number): number =>
+    Math.max(PAS_MIN_PASTILLE, sousLigne[i] * echelle(j, c))
+  const pasDeBase = etages.map((_, i) =>
+    Array.from({ length: n }, (_, j) => pasDe(i, j, PAR_LIGNE))
+  )
   const jl = o.jourLoupe !== undefined && o.jourLoupe >= 0 && o.jourLoupe < n ? o.jourLoupe : -1
   // Ce que chaque étage demande HORS du jour de la loupe : ne dépend pas des colonnes essayées.
-  const horsLoupe = etages.map((e) =>
+  const horsLoupe = etages.map((e, i) =>
     e.nombreParJour.reduce(
-      (m, nb, j) => (j === jl ? m : Math.max(m, Math.ceil(nb / PAR_LIGNE) * pasDeBase[j])),
+      (m, nb, j) => (j === jl ? m : Math.max(m, Math.ceil(nb / PAR_LIGNE) * pasDeBase[i][j])),
       0
     )
   )
@@ -636,7 +726,7 @@ export function disposerEtages(
     const besoins = etages.map((e, i) =>
       jl < 0
         ? horsLoupe[i]
-        : Math.max(horsLoupe[i], Math.ceil(e.nombreParJour[jl] / cs[i]) * pasDe(jl, cs[i]))
+        : Math.max(horsLoupe[i], Math.ceil(e.nombreParJour[jl] / cs[i]) * pasDe(i, jl, cs[i]))
     )
     const tenue = (f: number): number => besoins.reduce((t, b) => t + Math.max(o.vide, b * f), 0)
     let f = 1
@@ -661,8 +751,8 @@ export function disposerEtages(
         const nb = e.nombreParJour[jl]
         if (nb === 0) return
         const lignes = Math.ceil(nb / cs[i])
-        const pas = Math.min(pasDe(jl, cs[i]), (besoins[i] * f) / lignes) * g
-        const k = Math.min(echelle(jl, cs[i]), pas / o.sousLigne)
+        const pas = Math.min(pasDe(i, jl, cs[i]), (besoins[i] * f) / lignes) * g
+        const k = Math.min(echelle(jl, cs[i]), pas / sousLigne[i])
         min = Math.min(min, k)
         somme += nb * k
       })
@@ -700,7 +790,7 @@ export function disposerEtages(
     const hauteur = o.marge + Math.max(o.vide, place) + 4
     const colonnes = Array.from({ length: n }, (_, j) => (j === jl ? retenu.cs[i] : PAR_LIGNE))
     const pas = colonnes.map((c, j) => {
-      const voulu = j === jl ? pasDe(j, c) : pasDeBase[j]
+      const voulu = j === jl ? pasDe(i, j, c) : pasDeBase[i][j]
       const lignes = Math.ceil(e.nombreParJour[j] / c)
       return (lignes > 0 ? Math.min(voulu, place / lignes) : voulu) * g
     })

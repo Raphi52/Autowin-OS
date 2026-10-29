@@ -170,3 +170,45 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
     expect(codexSend).not.toHaveBeenCalled()
   })
 })
+
+describe('ProviderRegistry — témoin d’appel réussi (conv-1240)', () => {
+  it('signale le provider qui a VRAIMENT répondu, une fois l’appel terminé', async () => {
+    const reg = directRegistry()
+    const temoin = vi.fn()
+    reg.quandAppelReussi(temoin)
+
+    await reg.send('claude', conv)
+
+    expect(temoin).toHaveBeenCalledTimes(1)
+    expect(temoin).toHaveBeenCalledWith('claude')
+  })
+
+  it('ne signale rien quand l’appel échoue (contrôle négatif)', async () => {
+    const enPanne = new MockProvider('claude')
+    // eslint-disable-next-line require-yield
+    enPanne.send = async function* (): AsyncGenerator<StreamChunk, SendResult, void> {
+      throw new Error('Invalid API key · Please run /login')
+    }
+    const reg = new ProviderRegistry().register(enPanne)
+    const temoin = vi.fn()
+    reg.quandAppelReussi(temoin)
+
+    await expect(reg.send('claude', conv)).rejects.toThrow(/login/)
+    expect(temoin).not.toHaveBeenCalled()
+  })
+
+  it('un témoin qui jette ne fait pas échouer le tour de l’utilisateur', async () => {
+    const reg = directRegistry()
+    const avertir = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    reg.quandAppelReussi(() => {
+      throw new Error('disque plein')
+    })
+
+    await expect(reg.send('claude', conv)).resolves.toMatchObject({ provider: 'claude' })
+    expect(avertir).toHaveBeenCalledWith(
+      expect.stringContaining('statut'),
+      expect.stringContaining('disque plein')
+    )
+    avertir.mockRestore()
+  })
+})

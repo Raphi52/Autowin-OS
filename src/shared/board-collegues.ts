@@ -48,7 +48,7 @@ export interface PostItDuFichier {
 export interface BoardDUnCollegue {
   /** Le sous-dossier du collègue : son compte Windows. */
   poste: string
-  /** Le nom écrit sur ses post-it : le demandeur le plus fréquent de son Board, sinon `poste`. */
+  /** Le nom écrit sur ses post-it : celui que son poste a écrit (`nom`), sinon `poste` (conv-1230). */
   nom: string
   /** Quand son poste a écrit ce fichier (ISO), s'il le dit. */
   enregistreA?: string

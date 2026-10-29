@@ -26,10 +26,21 @@ export interface BrainReglage {
   depot?: string
 }
 
+/**
+ * QUEL Brain : celui de l'ÉQUIPE (partagé) ou le Brain PERSO (privé, demande utilisateur du
+ * 2026-10-28, conv-1233). Même forme de réglage, un fichier chacun : `brain.json` et
+ * `brain-perso.json`.
+ */
+export type QuelBrain = 'equipe' | 'perso'
+
 /** `undefined` sans `APPDATA` : un environnement de test qui ne le pose pas ne lit aucun réglage. */
-export function brainReglageFile(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function brainReglageFile(
+  env: NodeJS.ProcessEnv = process.env,
+  quel: QuelBrain = 'equipe'
+): string | undefined {
   const base = env.APPDATA?.trim()
-  return base ? join(base, AUTOWIN_APP_DATA_DIR, 'brain.json') : undefined
+  const nom = quel === 'perso' ? 'brain-perso.json' : 'brain.json'
+  return base ? join(base, AUTOWIN_APP_DATA_DIR, nom) : undefined
 }
 
 function texte(valeur: unknown): string | undefined {
@@ -47,8 +58,11 @@ export function normaliserBrainReglage(entree: { chemin?: unknown; depot?: unkno
 }
 
 /** Le réglage enregistré, ou `{}`. Ne bloque jamais le démarrage : illisible = aucun réglage. */
-export function lireBrainReglage(env: NodeJS.ProcessEnv = process.env): BrainReglage {
-  const fichier = brainReglageFile(env)
+export function lireBrainReglage(
+  env: NodeJS.ProcessEnv = process.env,
+  quel: QuelBrain = 'equipe'
+): BrainReglage {
+  const fichier = brainReglageFile(env, quel)
   if (!fichier) return {}
   try {
     return normaliserBrainReglage(JSON.parse(readFileSync(fichier, 'utf8')) as Record<string, unknown>)
@@ -57,13 +71,20 @@ export function lireBrainReglage(env: NodeJS.ProcessEnv = process.env): BrainReg
   }
 }
 
-export function effacerBrainReglage(env: NodeJS.ProcessEnv = process.env): void {
-  const fichier = brainReglageFile(env)
+export function effacerBrainReglage(
+  env: NodeJS.ProcessEnv = process.env,
+  quel: QuelBrain = 'equipe'
+): void {
+  const fichier = brainReglageFile(env, quel)
   if (fichier) rmSync(fichier, { force: true })
 }
 
-function ecrireBrainReglage(reglage: BrainReglage, env: NodeJS.ProcessEnv): void {
-  const fichier = brainReglageFile(env)
+function ecrireBrainReglage(
+  reglage: BrainReglage,
+  env: NodeJS.ProcessEnv,
+  quel: QuelBrain
+): void {
+  const fichier = brainReglageFile(env, quel)
   if (!fichier) throw new Error('Dossier de données introuvable (APPDATA) : réglage non enregistré.')
   if (!reglage.chemin && !reglage.depot) {
     rmSync(fichier, { force: true })
@@ -96,9 +117,12 @@ export async function appliquerBrainReglage(
     racineParDefaut: string
     env?: NodeJS.ProcessEnv
     cloner?: (depot: string, dossier: string) => Promise<void>
+    /** Le Brain réglé ; absent = celui de l'équipe. */
+    quel?: QuelBrain
   }
 ): Promise<BrainReglage> {
   const env = deps.env ?? process.env
+  const quel = deps.quel ?? 'equipe'
   const brut = texte(entree.chemin)
   if (brut && !isAbsolute(brut)) {
     throw new Error(`Chemin incomplet : « ${brut} ». Donne le chemin entier, par exemple D:\\Brain.`)
@@ -117,6 +141,6 @@ export async function appliquerBrainReglage(
   } else if (reglage.chemin && !existsSync(reglage.chemin)) {
     throw new Error(`Dossier introuvable : ${reglage.chemin}`)
   }
-  ecrireBrainReglage(reglage, env)
+  ecrireBrainReglage(reglage, env, quel)
   return reglage
 }

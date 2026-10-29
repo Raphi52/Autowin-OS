@@ -15,6 +15,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { CATALOG } from './commands'
 
 describe('prompt de pilotage — processus hote', () => {
   const prompt = buildChatPilotagePrompt([])
@@ -48,10 +49,20 @@ describe('prompt de pilotage — processus hote', () => {
    * despite the usual rule ») et a demande « je redemarre ? ». Saisie ts 1792232135771 : « j'ai un
    * systeme pour mettre le redemarrage en queue tu aurais du l'utiliser ».
    */
+  /*
+   * RACCOURCI le 2026-10-28 (conv-1229) : la mecanique de la file (`enFile: true`, preavis, repos)
+   * est dite par la description de `restart_app`, servie avec la commande ; le prompt garde le
+   * COMPORTEMENT que conv-304 a manque : redemarrer quand meme, sans poser la question.
+   */
   it('d autres agents tournent : restart_app QUAND MEME (mise en file), jamais la question', () => {
-    expect(prompt).toMatch(/D'AUTRES conversations ou des runs tournent \? Appelle QUAND MEME `restart_app`/)
-    expect(prompt).toMatch(/EN FILE \(`enFile: true`\)/)
-    expect(prompt).toMatch(/Ne pose donc JAMAIS la question « je redemarre maintenant ou j'attends \? »/)
+    expect(prompt).toMatch(/MEME si d'autres agents tournent \(il se met en file\)/)
+    expect(prompt).toMatch(/jamais la question « je redemarre \? »/)
+  })
+
+  it('la description de restart_app porte la mecanique retiree du prompt (file, enFile, attente)', () => {
+    const restart = CATALOG.find((c) => c.name === 'restart_app')
+    expect(restart?.description).toMatch(/MIS EN FILE \(`enFile: true`\)/)
+    expect(restart?.description).toMatch(/ne demande donc pas à l.utilisateur s.il faut attendre/u)
   })
 
   it('interdit l arret large d un nom de processus entier', () => {

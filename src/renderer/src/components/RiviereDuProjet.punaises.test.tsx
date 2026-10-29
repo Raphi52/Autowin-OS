@@ -181,6 +181,43 @@ describe('RiviereDuProjet — liège et punaises (conv-1204)', () => {
     expect(regle).toMatch(/justify-content:\s*center/u)
   })
 
+  // « dans le board les boutons verifier apparaissent que quand ma souris est dans le haut de la
+  // carte » (conv-1214, 2026-10-28). Mesuré dans l'app (souris CDP, 2133 × 1146) : les boutons d'un
+  // post-it, posés sous lui, tombaient sur les 14 premiers pixels du post-it du dessous — l'écart
+  // entre deux lignes (8 × k) est plus court que les boutons (20 px). Ils semblaient donc appartenir
+  // à celui-là, et disparaissaient dès que la souris descendait plus bas dans sa carte.
+  it('les gestes d’un post-it « À vérifier » ne mordent jamais sur le post-it du dessous', async () => {
+    /** La hauteur des deux boutons à l'échelle 1, mesurée dans Chromium (conv-1214). */
+    const HAUT_MESURE_DES_GESTES = 20
+    const el = await monter(carte(8), true)
+    const papiers = [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-postit"]')].map(
+      (p) => {
+        const [tx, ty, , k] =
+          /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([\d.e-]+), ([\d.e-]+)\)/u
+            .exec(p.style.transform)!
+            .slice(1)
+            .map(Number)
+        const largeur = parseFloat(p.style.width)
+        return { id: p.dataset.conversation!, gauche: tx, droite: tx + largeur, haut: ty, k }
+      }
+    )
+    let dessous = 0
+    for (const g of el.querySelectorAll<HTMLElement>('[data-testid="riviere-verif-postit"]')) {
+      const echelle = Number(g.style.getPropertyValue('--riviere-gestes-echelle') || 1)
+      const haut = parseFloat(g.style.top)
+      const bas = haut + HAUT_MESURE_DES_GESTES * echelle
+      const milieu = parseFloat(g.style.left)
+      const sien = papiers.find((p) => p.id === g.dataset.verifConversation)!
+      for (const p of papiers) {
+        if (p === sien || p.haut <= sien.haut || milieu < p.gauche || milieu > p.droite) continue
+        dessous += 1
+        expect(bas, `${sien.id} sur ${p.id}`).toBeLessThanOrEqual(p.haut)
+      }
+    }
+    // Le cas mesuré existe bien : des post-it empilés dans la même colonne.
+    expect(dessous).toBeGreaterThan(0)
+  })
+
   // « réduis un peu la taille de la police et passe à 4 lignes le contenu des post it » (conv-1204).
   it('le titre d’un post-it tient sur 4 lignes, dans une police plus petite qu’avant', () => {
     const css = readFileSync('src/renderer/src/components/RiviereDuProjet.css', 'utf8')

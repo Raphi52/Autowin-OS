@@ -40,4 +40,12 @@ describe('skillNommeeEnTete', () => {
   it('ne corrige PAS une faute de frappe sur le nom nu', () => {
     expect(skillNommeeEnTete('darft un menu', noms)).toBeNull()
   })
+
+  it('exige la barre pour git : « git status… » parle de la commande, pas de /git (conv-1250)', () => {
+    const avecGit = [...noms, 'git']
+    expect(skillNommeeEnTete('/git', avecGit)).toEqual({ skill: 'git', reste: '', barre: true })
+    expect(skillNommeeEnTete('/git pr', avecGit)?.reste).toBe('pr')
+    expect(skillNommeeEnTete('git status me dit que tout est propre ?', avecGit)).toBeNull()
+    expect(skillNommeeEnTete('git push refusé, pourquoi', avecGit)).toBeNull()
+  })
 })

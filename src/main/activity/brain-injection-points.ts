@@ -65,11 +65,16 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
       {
         file: 'src/main/orchestrator.ts',
         anchor: ': await (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {'
+      },
+      // Brain PERSO (conv-1233) : interrogé en même temps, une seule trace pour les deux.
+      {
+        file: 'src/main/orchestrator.ts',
+        anchor: '? (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {'
       }
     ],
     trace: { file: 'src/main/orchestrator.ts', anchor: 'onBrainRetrieved?.({' },
     pourquoi:
-      "Liste des notes candidates (titre, chemin, taille) injectée en tête de contexte de chaque phase du run ; chaque phase ouvre en entier celles qu'elle juge nécessaires."
+      "Liste des notes candidates (titre, chemin, taille) injectée en tête de contexte de chaque phase du run ; chaque phase ouvre en entier celles qu'elle juge nécessaires. Avec un Brain perso réglé, ses notes s'ajoutent, préfixées perso:."
   },
   // `orchestration-empreinte-depot` RETIRÉ le 2026-09-27 : sa question figée ramenait les mêmes
   // notes hors sujet à chaque run. Ses traces historiques (kind `empreinte`) restent lisibles, mais
@@ -83,11 +88,17 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     sites: [
       {
         file: 'src/main/commands.ts',
-        anchor: "await this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })"
+        anchor: "this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })"
+      },
+      // Brain PERSO (conv-1233) : interrogé en même temps, une seule trace pour les deux.
+      {
+        file: 'src/main/commands.ts',
+        anchor: "this.retrieveBrain(decision.query, { env: envPerso, mode: 'candidates' })"
       }
     ],
     trace: { file: 'src/main/commands.ts', anchor: "kind: 'query'" },
-    pourquoi: 'Récupération à la demande du modèle, rendue dans le résultat de commande.'
+    pourquoi:
+      'Récupération à la demande du modèle, rendue dans le résultat de commande — Brain d’équipe et, s’il est réglé, Brain perso (chemins préfixés perso:).'
   },
   {
     id: 'chat-context-push',
@@ -110,11 +121,17 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     injecte: true,
     emission: 'spool',
     sites: [
-      { file: 'src/main/brain-titres-du-tour.ts', anchor: 'const brut = await retrieve(requete, {' }
+      { file: 'src/main/brain-titres-du-tour.ts', anchor: ': await retrieve(requete, {' },
+      // Brain PERSO (conv-1233) : interrogé en même temps que celui de l'équipe.
+      {
+        file: 'src/main/brain-titres-du-tour.ts',
+        anchor:
+          "retrieve(requete, { env: envPerso, mode: 'candidates', timeoutMs: TITRES_DELAI_MS })"
+      }
     ],
     trace: { file: 'src/main/brain-titres-du-tour.ts', anchor: 'point: POINT_TITRES_DU_TOUR' },
     pourquoi:
-      "Chaque tour de chat reçoit le chemin des 3 notes les plus proches au plus (jamais leur contenu), rien quand aucune n'est proche ; le modèle ouvre les utiles avec `brain_read`."
+      "Chaque tour de chat reçoit le chemin des 3 notes les plus proches au plus (jamais leur contenu), rien quand aucune n'est proche ; le modèle ouvre les utiles avec `brain_read`. Avec un Brain perso réglé, jusqu'à 3 notes perso en plus, préfixées perso:."
   },
   {
     id: 'ui-brain-search',
@@ -127,11 +144,16 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
       // ce registre pour un declarant de canal IPC aux yeux de la garde de securite, qui relit les
       // sources. Une liste d'inventaire ne doit pas se faire prendre pour la surface qu'elle decrit.
       { file: 'src/main/ipc/brain.ts', anchor: "handle('os:searchBrain'" },
-      { file: 'src/preload/index.ts', anchor: "ipcRenderer.invoke('os:searchBrain'" }
+      { file: 'src/preload/index.ts', anchor: "ipcRenderer.invoke('os:searchBrain'" },
+      // Brain PERSO ouvert dans la vue Knowledge (conv-1233) : cherché sur son propre serveur.
+      {
+        file: 'src/main/ipc/brain.ts',
+        anchor: 'await retrieveBrainContext(query, { env: envPerso })'
+      }
     ],
     trace: { file: 'src/main/ipc/brain.ts', anchor: "kind: 'recherche'" },
     pourquoi:
-      'Appel réel au Brain déclenché par l’humain (GraphView, banc de retrieval) : consomme le même retriever que les runs.'
+      'Appel réel au Brain déclenché par l’humain (GraphView, banc de retrieval) : consomme le même retriever que les runs. Le Brain perso, ouvert dans la vue, se cherche sur son propre serveur.'
   },
   {
     id: 'command-brain-remember',

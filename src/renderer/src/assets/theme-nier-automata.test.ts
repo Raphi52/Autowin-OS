@@ -121,4 +121,19 @@ describe('theme NieR:Automata', () => {
       expect(contraste(texte, fond)).toBeGreaterThanOrEqual(4.5)
     }
   })
+
+  /**
+   * Menu du dossier de travail (pastille 📁, conv-1218) : il gardait le #ffffff de la base claire
+   * (theme-modes.css), que le generateur ne transpose pas (blanc = non sature). La colonne des
+   * croix d'oubli, transparente, le montrait en bande blanche a cote des lignes peintes en beige
+   * par `button:not([class])`. ENTREE QUI DOIT FAIRE ECHOUER CE CAS : retirer le fond papier du
+   * menu, ou rendre aux lignes un fond different de celui du menu.
+   */
+  it('peint le menu des dossiers en papier, lignes et colonne des croix sur le meme fond', () => {
+    const css = lire('./theme-nier-automata.css')
+    const fondMenu = declaration(css, '.conv-menu-pop', 'background')
+    expect(fondMenu).toBe('#cdc8b0')
+    expect(declaration(css, '.conv-menu-pop button:not([class])', 'background')).toBe('transparent')
+    expect(contraste(jeton(css, '--text'), fondMenu)).toBeGreaterThanOrEqual(4.5)
+  })
 })

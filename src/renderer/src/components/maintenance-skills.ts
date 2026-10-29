@@ -157,16 +157,16 @@ export const SKILLS_MAINTENANCE: readonly SkillMaintenance[] = [
       '/heal Autowin OS : trouve les défauts prouvés (tests rouges, lenteurs mesurées) et corrige-les un à la fois, jusqu’au vert.'
   },
   {
-    nom: 'salvage',
+    nom: 'git',
     get titre() {
-      return enLangue('skills.salvage.titre')
+      return enLangue('skills.git.titre')
     },
     get role() {
-      return enLangue('skills.salvage.role')
+      return enLangue('skills.git.role')
     },
     groupe: 'depannage',
     prompt:
-      '/salvage cherche le travail non publié du dépôt Autowin OS (copies de travail, remises de côté, branches non fusionnées) et trie-le par contenu.'
+      '/git sur le dépôt Autowin OS : trie par contenu le travail non publié (copies de travail, remises de côté, branches non fusionnées), publie-le et range ce qui traîne.'
   },
   {
     nom: 'gel',

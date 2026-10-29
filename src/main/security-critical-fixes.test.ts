@@ -681,7 +681,35 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     CLES de projet (jamais un chemin lu ou ecrit), passee par `projetsPartagesLisibles`
     //     (chaines seules, 500 au plus) ; illisible = refus, rien n'est retenu. `null` = tous.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(249)
+    // MISE A JOUR 2026-10-28 (conv-1220) — 249 -> 251. ATTRIBUTION MESUREE : ce test etait DEJA
+    //   rouge a 250 avant ce changement, sur `os:board-dossiers-du-chat` (`ipc/carte-des-besoins.ts`,
+    //   travail non commite de conv-1212, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossiers du Chat')`). PLUS UN, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'Outlook')` :
+    //   `outlook:ouvrir-piece` — OUVRE une piece jointe RECUE de la tuile Interlocuteurs. Rien n'est
+    //     ecrit dans la boite. L'identifiant est valide contre `^[0-9A-Fa-f]{16,512}$`, le rang est un
+    //     entier 1..50, le nom passe `nomPieceAcceptable` (aucun separateur de chemin) et un type qui
+    //     LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script ; nom et
+    //     chemin partent par un fichier temporaire UTF-8, jamais en ligne de commande.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-28 (conv-1230) — 251 -> 255, MESURE sur l'arbre partage. ATTRIBUTION :
+    //   ce test etait DEJA rouge a 254 avant ce changement, sur TROIS canaux non commites de
+    //   conv-1233 (Brain perso, `index.ts`) : `os:brain-perso`, `os:brain-perso:enregistrer`,
+    //   `os:brain-perso:reset`. PLUS UN, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossier du Board')` (`ipc/carte-des-besoins.ts`) :
+    //   `os:board-dossier:nom` — le nom de ce poste sur le Board. Le texte passe par
+    //     `nomDuPosteLisible` (chaine, caracteres de controle retires, 80 au plus ; vide ou `null` =
+    //     le compte Windows) ; illisible = refus, rien n'est retenu. Ecrit seulement dans
+    //     `board-dossier.json` (userData) ; aucun chemin recu de la vue.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-29 (conv-1249) — +2, choix « Magicien / Basique » de la mascotte
+    //   (`index.ts`), gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` :
+    //   `os:mascotte:style` — LECTURE du style (`mascotte.json`, %APPDATA%autowin-os) ; aucun argument.
+    //   `os:mascotte:choisir-style` — ECRIT ce style ; `ecrireStyleMascotte` refuse tout ce qui n'est
+    //     pas `magicien` ou `basique`, puis la fenetre de la mascotte est recreee dans ce style.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(257)
     expect(unguarded).toEqual([])
   })
 

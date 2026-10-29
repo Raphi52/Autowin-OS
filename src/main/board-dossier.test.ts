@@ -119,7 +119,13 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
     const board = creerDossierDuBoard({ racine, utilisateur: 'moi', delaiMs: 0 })
     board.enregistrer(CARTE, {})
     await board.attendre()
-    expect(board.etat()).toEqual({ dossier: null, cible: null, enCours: false })
+    expect(board.etat()).toEqual({
+      dossier: null,
+      cible: null,
+      enCours: false,
+      nom: 'moi',
+      compte: 'moi'
+    })
   })
 
   it('refuse un chemin incomplet ou un dossier introuvable, sans rien enregistrer', async () => {
@@ -257,9 +263,17 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
     expect(JSON.parse(readFileSync(fichier, 'utf8')).demandes).toBe(4)
 
     // Relu par une nouvelle instance, et gardé quand on oublie puis rechoisit le dossier.
-    expect(lireReglageDuBoard(racine)).toEqual({ dossier: partage, projets: ['D:\\Projet'] })
+    expect(lireReglageDuBoard(racine)).toEqual({
+      dossier: partage,
+      projets: ['D:\\Projet'],
+      nom: null
+    })
     await board.effacer()
-    expect(lireReglageDuBoard(racine)).toEqual({ dossier: null, projets: ['D:\\Projet'] })
+    expect(lireReglageDuBoard(racine)).toEqual({
+      dossier: null,
+      projets: ['D:\\Projet'],
+      nom: null
+    })
     expect((await board.choisir(partage)).projets).toEqual(['D:\\Projet'])
 
     // Retour à « tous ».
@@ -275,6 +289,50 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
       'utf8'
     )
     expect(lireReglageDuBoard(racine).projets).toEqual([])
+  })
+
+  // conv-1230 : « nom windows par défaut et un setting pour en choisir un autre ».
+  it('écrit le compte Windows comme nom par défaut, puis le nom choisi, gardé au fil des réglages', async () => {
+    const racine = temp()
+    const partage = temp()
+    const board = creerDossierDuBoard({ racine, utilisateur: 'jdupont', delaiMs: 0 })
+    expect(board.nomDuPoste()).toEqual({ compte: 'jdupont', nom: 'jdupont' })
+    expect(board.etat()).toMatchObject({ nom: 'jdupont', compte: 'jdupont' })
+    expect(board.etat().nomChoisi).toBeUndefined()
+    await board.choisir(partage)
+    const fichier = join(partage, 'jdupont', 'board.json')
+    board.enregistrer(CARTE, {})
+    await board.attendre()
+    expect(JSON.parse(readFileSync(fichier, 'utf8'))).toMatchObject({
+      poste: 'jdupont',
+      nom: 'jdupont'
+    })
+
+    // Le nom choisi part à la copie suivante, même si le Board n'a pas bougé ; le sous-dossier,
+    // lui, reste celui du compte (les collègues le retrouvent au même endroit).
+    expect(await board.choisirNom('Jean Dupont')).toMatchObject({
+      nom: 'Jean Dupont',
+      compte: 'jdupont',
+      nomChoisi: 'Jean Dupont'
+    })
+    board.enregistrer(CARTE, {})
+    await board.attendre()
+    expect(JSON.parse(readFileSync(fichier, 'utf8')).nom).toBe('Jean Dupont')
+    expect(readFileSync(join(partage, 'jdupont', 'board.md'), 'utf8')).toContain(
+      '# Board — Jean Dupont'
+    )
+
+    // Gardé sur le poste, et par les autres réglages : projets, oubli du dossier.
+    await board.choisirProjets(['D:\\Projet'])
+    await board.effacer()
+    expect(lireReglageDuBoard(racine).nom).toBe('Jean Dupont')
+    expect(creerDossierDuBoard({ racine, utilisateur: 'jdupont' }).nomDuPoste().nom).toBe(
+      'Jean Dupont'
+    )
+
+    // Retour au compte Windows.
+    expect((await board.choisirNom(null)).nom).toBe('jdupont')
+    expect(lireReglageDuBoard(racine).nom).toBeNull()
   })
 
   it('effacer oublie le dossier sur le poste', async () => {

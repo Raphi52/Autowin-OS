@@ -30,6 +30,7 @@ import type {
 } from '../shared/carte-des-besoins'
 import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
+import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
 
 export const FICHIER_DU_REGLAGE = 'board-dossier.json'
 export const FORMAT_DU_BOARD = 'autowin-board/1'
@@ -67,6 +68,11 @@ export interface BoardEnregistre {
   format: typeof FORMAT_DU_BOARD
   /** Le compte Windows du poste qui a écrit ce fichier. */
   poste: string
+  /**
+   * Le nom à écrire sur ses post-it chez les collègues : choisi dans les réglages, sinon le compte
+   * Windows (conv-1230). Absent dans les fichiers écrits avant : le lecteur prend alors `poste`.
+   */
+  nom?: string
   enregistreA?: string
   demandes: number
   comptes: Record<StatutDemande, number>
@@ -177,12 +183,14 @@ export function postItsDuBoard(
 export function boardAEnregistrer(
   carte: CarteDesBesoins,
   manuels: Readonly<Record<string, EtatManuelDuBoard>>,
-  poste: string
+  poste: string,
+  nom?: string
 ): BoardEnregistre {
   const { postIts, filsSansDate } = postItsDuBoard(carte, manuels)
   return {
     format: FORMAT_DU_BOARD,
     poste,
+    ...(nom ? { nom } : {}),
     demandes: carte.demandes,
     comptes: carte.comptes,
     postIts,
@@ -222,7 +230,7 @@ function ligne(texte: string): string {
 /** La version à lire de `board.json` : un titre par projet, un post-it par fil, ses demandes dessous. */
 export function boardEnMarkdown(board: BoardEnregistre): string {
   const sortie: string[] = [
-    `# Board — ${board.poste}`,
+    `# Board — ${ligne(board.nom ?? board.poste)}`,
     '',
     `Enregistré le ${board.enregistreA ? dateLisible(board.enregistreA) : '—'} · ${board.postIts.length} post-it · ${board.demandes} demandes · ${board.comptes.prouve} prouvées · ${board.comptes.refuse} refusées`,
     '',
@@ -272,25 +280,32 @@ export function boardEnMarkdown(board: BoardEnregistre): string {
 // ———————————————————————————————————————————————————————————————— le réglage du poste
 
 /**
- * Le réglage du poste : le dossier (ou `null`) et les projets partagés (`null` = tous, conv-1211).
- * Fichier illisible = aucun dossier, tous les projets : le Board marche sans.
+ * Le réglage du poste : le dossier (ou `null`), les projets partagés (`null` = tous, conv-1211) et
+ * le nom choisi pour le Board (`null` = le compte Windows, conv-1230).
+ * Fichier illisible = aucun dossier, tous les projets, le compte Windows : le Board marche sans.
  */
 export function lireReglageDuBoard(racine: string): {
   dossier: string | null
   projets: string[] | null
+  nom: string | null
 } {
   try {
     const lu = JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8')) as {
       dossier?: unknown
       projets?: unknown
+      nom?: unknown
     }
     const dossier =
       typeof lu.dossier === 'string' && isAbsolute(lu.dossier.trim()) ? lu.dossier.trim() : null
     // Un choix illisible ne se lit PAS comme « tous » : ce serait partager ce qu'on avait retiré.
     const projets = projetsPartagesLisibles(lu.projets)
-    return { dossier, projets: projets === undefined ? [] : projets }
+    return {
+      dossier,
+      projets: projets === undefined ? [] : projets,
+      nom: nomDuPosteLisible(lu.nom) ?? null
+    }
   } catch {
-    return { dossier: null, projets: null }
+    return { dossier: null, projets: null, nom: null }
   }
 }
 
@@ -335,6 +350,10 @@ export interface DossierDuBoard {
   effacer: () => Promise<EtatDuDossierDuBoard>
   /** Retient les projets recopiés (`null` = tous) ; appliqué à la prochaine écriture (conv-1211). */
   choisirProjets: (projets: readonly string[] | null) => Promise<EtatDuDossierDuBoard>
+  /** Retient le nom affiché sur le Board (`null` = le compte Windows, conv-1230). */
+  choisirNom: (nom: string | null) => Promise<EtatDuDossierDuBoard>
+  /** Le compte Windows du poste et le nom écrit sur ses post-it (le choisi, sinon le compte). */
+  nomDuPoste: () => { compte: string; nom: string }
   /** Envoie le Board vers le dossier, sans attendre ; ne fait rien sans dossier choisi. */
   enregistrer: (
     carte: CarteDesBesoins,
@@ -363,9 +382,13 @@ export function creerDossierDuBoard(deps: {
       return { annuler: () => clearTimeout(t) }
     })
   const poste = sousDossierDuPoste(deps.utilisateur)
+  // Le compte tel que Windows le donne ; un compte illisible prend le nom du sous-dossier.
+  const compte = deps.utilisateur.trim() || poste
   const reglage = lireReglageDuBoard(deps.racine)
   let dossier = reglage.dossier
   let projets = reglage.projets
+  let nomChoisi = reglage.nom
+  const nomDuPoste = (): { compte: string; nom: string } => ({ compte, nom: nomChoisi ?? compte })
   let dernier: EtatDuDossierDuBoard['dernier']
   let erreur: string | undefined
   let enAttente: {
@@ -386,7 +409,10 @@ export function creerDossierDuBoard(deps: {
     ...(projets ? { projets: [...projets] } : {}),
     ...(dernier ? { dernier } : {}),
     ...(erreur ? { erreur } : {}),
-    enCours: Boolean(ecriture || minuteur || enAttente)
+    enCours: Boolean(ecriture || minuteur || enAttente),
+    nom: nomDuPoste().nom,
+    compte,
+    ...(nomChoisi ? { nomChoisi } : {})
   })
 
   async function ecrire(travail: NonNullable<typeof enAttente>): Promise<void> {
@@ -397,7 +423,8 @@ export function creerDossierDuBoard(deps: {
     const board = boardAEnregistrer(
       carteDesProjetsPartages(travail.carte, projets),
       travail.manuels,
-      poste
+      poste,
+      nomDuPoste().nom
     )
     const corps = JSON.stringify(board)
     if (empreinte && empreinte.cible === ici && empreinte.corps === corps) return
@@ -437,16 +464,24 @@ export function creerDossierDuBoard(deps: {
     })
   }
 
-  /** Le dossier ET le choix des projets : changer l'un ne doit jamais effacer l'autre (conv-1211). */
+  /**
+   * Le dossier, le choix des projets et le nom : changer l'un ne doit jamais effacer les autres
+   * (conv-1211, conv-1230).
+   */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
-    nouveauxProjets: readonly string[] | null
+    nouveauxProjets: readonly string[] | null,
+    nouveauNom: string | null = nomChoisi
   ): Promise<void> {
     await mkdir(deps.racine, { recursive: true })
     await writeFile(
       join(deps.racine, FICHIER_DU_REGLAGE),
       `${JSON.stringify(
-        { dossier: nouveauDossier, ...(nouveauxProjets ? { projets: nouveauxProjets } : {}) },
+        {
+          dossier: nouveauDossier,
+          ...(nouveauxProjets ? { projets: nouveauxProjets } : {}),
+          ...(nouveauNom ? { nom: nouveauNom } : {})
+        },
         null,
         2
       )}\n`,
@@ -456,6 +491,14 @@ export function creerDossierDuBoard(deps: {
 
   return {
     etat,
+    nomDuPoste,
+    async choisirNom(nom) {
+      await ecrireLeReglage(dossier, projets, nom)
+      nomChoisi = nom
+      // Le nom est écrit dans board.json : la prochaine copie part même si le Board n'a pas bougé.
+      empreinte = null
+      return etat()
+    },
     async choisirProjets(choix) {
       const retenus = choix === null ? null : [...new Set(choix)]
       await ecrireLeReglage(dossier, retenus)
@@ -482,8 +525,8 @@ export function creerDossierDuBoard(deps: {
     },
     async effacer() {
       // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
-      // repartager d'un coup ce qu'on avait décoché.
-      if (projets) await ecrireLeReglage(null, projets)
+      // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230).
+      if (projets || nomChoisi) await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })
       dossier = null
       enAttente = null

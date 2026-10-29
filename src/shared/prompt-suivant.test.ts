@@ -5,8 +5,10 @@ import {
   NOTE_MIN_ALTERNATIVE,
   retirerLignePromptSuivant,
   estPromptDePublication,
+  ordreDeTriDejaJoue,
   PROMPT_SALVAGE
 } from './prompt-suivant'
+import { skillNommeeEnTete } from './skill-nommee'
 
 const LIGNE = 'AUTOWIN_PROMPT_V1: Lance le terrain sur le build du pari.'
 
@@ -37,11 +39,11 @@ describe('extraction du prompt suivant', () => {
     expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: —')).toBeNull()
   })
 
-  it('borne un prompt délirant plutôt que de remplir le composer d’un pavé', () => {
-    const long = 'a'.repeat(1200)
-    const lu = extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${long}`)
-    expect(lu).not.toBeNull()
-    expect((lu as string).length).toBeLessThanOrEqual(600)
+  // conv-1228 (2026-10-28) : un pavé est ÉCARTÉ, jamais coupé — un ordre tronqué partait au clic
+  // comme s'il était entier (prompt-suivant.jamais-coupe.test.ts).
+  it('écarte un prompt délirant plutôt que de remplir le composer d’un pavé', () => {
+    const long = 'a'.repeat(3_000)
+    expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${long}`)).toBeNull()
   })
 
   it('retire le gras et les accents graves du markdown, un composer n’est pas du markdown', () => {
@@ -181,6 +183,27 @@ describe('retrait de la ligne technique de l’affichage', () => {
 
   it('ne laisse pas une ligne vide en fin de texte à la place de la ligne retirée', () => {
     expect(retirerLignePromptSuivant(`fin du travail\n${LIGNE}`)).toBe('fin du travail')
+  })
+})
+
+describe('publication → /git (conv-1250)', () => {
+  it('la suite proposée invoque /git, qui trie, publie selon le dépôt et range', () => {
+    expect(skillNommeeEnTete(PROMPT_SALVAGE, ['git', 'salvage'])).toMatchObject({
+      skill: 'git',
+      barre: true
+    })
+  })
+  it('/git compte comme l’ordre de tri, au même titre que /salvage', () => {
+    expect(ordreDeTriDejaJoue('/git')).toBe(true)
+    expect(ordreDeTriDejaJoue('/git pr')).toBe(true)
+    expect(ordreDeTriDejaJoue('/salvage push main origin')).toBe(true)
+    expect(estPromptDePublication('Lance /git pour publier le lot.')).toBe(false)
+  })
+  it('un chemin qui contient /git ou /salvage n’est pas un ordre de tri', () => {
+    expect(ordreDeTriDejaJoue('regarde src/main/git-read-main.ts')).toBe(false)
+    expect(ordreDeTriDejaJoue('lance scripts/salvage-resurrection.mjs')).toBe(false)
+    const publier = 'Pousse sur main la correction de src/main/git-read-main.ts.'
+    expect(estPromptDePublication(publier)).toBe(true)
   })
 })
 

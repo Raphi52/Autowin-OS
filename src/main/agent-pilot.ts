@@ -97,6 +97,7 @@ import {
   consigneDeLectureRetenue,
   demandeDeChangementDeRendu,
   dernierMessageAgent,
+  lectureAAnnoncer,
   lireLesLectures,
   meriteUneLecture,
   questionDesDeuxLectures,
@@ -1274,8 +1275,14 @@ export class AgentPilot {
      * facon de couvrir TOUS les points de sortie du tour sans en oublier un.
      */
     let emettreEchecsAbandonnes: (() => void) | undefined
+    /**
+     * Le tour a rendu sa fin (`done` ou `error`). La ligne « Lecture retenue » lue EN PARALLÈLE du
+     * modèle (conv-1240) ne s'écrit plus après : elle arriverait sous un message déjà clos.
+     */
+    let tourClos = false
     const emit = (e: PilotEventVariant): void => {
       if (e.kind === 'done' || e.kind === 'error') {
+        tourClos = true
         const dire = emettreEchecsAbandonnes
         emettreEchecsAbandonnes = undefined
         dire?.()
@@ -1462,7 +1469,12 @@ export class AgentPilot {
      * natives ne sont pas interceptables), et l'`orchestrate` émis par le modèle. Jamais sur une
      * reprise interne, un tour de fond ni la réponse à cette même question.
      */
-    const lectureATrancher =
+    /*
+     * LUE À CHAQUE MESSAGE D'UN HUMAIN (conv-1240) : la ligne « Lecture retenue » s'affiche à chaque
+     * tour, demande de l'utilisateur (« met le tout le temps »). La QUESTION garde ses filtres
+     * d'avant : jamais sur une relance ou un message de moins de quatre mots, jamais deux fois.
+     */
+    const lectureDuTourArmee =
       Boolean(this.demanderDeuxLectures) &&
       routingUserMessageOverride === undefined &&
       !sendLimits?.tourDeFond &&
@@ -1473,14 +1485,14 @@ export class AgentPilot {
       // Même chose pour le message d'un lot, d'un ordre entre fils ou du réveil du chef : composé par
       // l'app ou un agent, sans humain pour cliquer. conv-1192 (2026-10-27) s'y est arrêté net.
       !estUnMessageDuPlan(latestUserMessage) &&
-      !estUnPromptDOrdre(latestUserMessage) &&
-      meriteUneLecture(latestUserMessage) &&
-      !suitUneQuestionDesLectures(history)
+      !estUnPromptDOrdre(latestUserMessage)
+    const questionPermise =
+      meriteUneLecture(latestUserMessage) && !suitUneQuestionDesLectures(history)
     let lecturesMemorisees: Promise<IssueDesLectures | undefined> | undefined
     const deuxLecturesDuTour = (): Promise<IssueDesLectures | undefined> => {
-      const demande = latestUserMessage
+      const demande = latestUserMessage?.trim() ? latestUserMessage : undefined
       const demander = this.demanderDeuxLectures
-      if (!lectureATrancher || !demande || !demander) return Promise.resolve(undefined)
+      if (!lectureDuTourArmee || !demande || !demander) return Promise.resolve(undefined)
       // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
       // conv-767 comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
       const descriptions = descriptionsDesCommandes(commandesCitees(demande))
@@ -1488,7 +1500,11 @@ export class AgentPilot {
         CONSIGNE_DEUX_LECTURES,
         chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions)
       )
-        .then((reponse) => lireLesLectures(reponse, demande))
+        .then((reponse) => {
+          const issue = lireLesLectures(reponse, demande)
+          // Une relance, ou la réponse à la question d'avant : la ligne, jamais une question.
+          return issue && !questionPermise ? lectureAAnnoncer(issue) : issue
+        })
         // Un contrôle en panne ne bloque jamais le travail : il part comme avant.
         .catch(() => undefined)
       return lecturesMemorisees
@@ -1623,6 +1639,18 @@ export class AgentPilot {
     const lecturesAvantRendu = demandeDeChangementDeRendu(latestUserMessage)
       ? deuxLecturesDuTour()
       : undefined
+    /*
+     * TOUS LES AUTRES TOURS (conv-1240) : la lecture court EN PARALLÈLE du modèle, sans l'attendre.
+     * Mesure sur turn-timing.jsonl du 2026-10-28 : le petit modèle répond en ~4 s, le premier jeton du
+     * modèle du chat arrive en 24 s (médiane) et en moins de 5 s pour 5 % des tours seulement.
+     * L'attendre aurait rallongé CHAQUE réponse ; la ligne arrive presque toujours avant le texte, et
+     * le fil la range de toute façon en tête du message (`chat-view-model.ts`). Si le modèle demande
+     * ensuite un run, la même lecture mémorisée le garde (question à quasi-égalité, tâche précisée).
+     */
+    if (!lecturesAvantRendu)
+      void deuxLecturesDuTour().then((issue) => {
+        if (issue && !tourClos) annoncerLaLectureRetenue(lectureAAnnoncer(issue))
+      })
     const retrievedContext =
       this.retrieveContext && latestUserMessage
         ? await this.retrieveContext(latestUserMessage, { conversationId, turnId }).catch(() => '')
@@ -1686,80 +1714,119 @@ export class AgentPilot {
      * qu'il était concaténé ici, le system prompt changeait à chaque tour et aucun préfixe ne pouvait
      * être réutilisé. Il est désormais passé dans le MESSAGE (voir `convo`) : même information remise
      * au modèle, mais le system redevient identique d'un tour à l'autre, donc cachable.
+     *
+     * Fonction du texte de pilotage (conv-1229) : un envoi qui reçoit les outils directs prend la
+     * consigne SANS les commandes déjà servies en outils (`systemeAvecOutilsDirects`, plus bas).
      */
-    const systemParts = watchdogReadOnly
-      ? [
-          {
-            name: 'watchdog-read-only',
-            text:
-              "Tu es le triage automatique non invasif d'Autowin OS. Reponds en francais, " +
-              'directement et en moins de 250 mots. Tu observes un incident en LECTURE SEULE : ' +
-              "n'emets aucune commande Autowin, ne lance aucune orchestration, ne modifie rien et " +
-              'ne cree aucun worktree. Utilise au plus les lectures locales strictement necessaires. ' +
-              'Si le contexte ne cite aucun artefact ou chemin precis, ne fouille pas le depot au hasard : ' +
-              'distingue les faits, la cause seulement si elle est prouvee, puis la preuve manquante. ' +
-              'Respecte exactement toute derniere ligne ISSUE demandee par le message utilisateur.\n'
-          }
-        ]
-      : directReadOnly
+    const systemPartsAvec = (pilotage: string): Array<{ name: string; text: string }> =>
+      watchdogReadOnly
         ? [
             {
-              name: 'direct-read-only',
+              name: 'watchdog-read-only',
               text:
-                "Tu es le chat direct d'Autowin OS. Reponds en francais a la demande exacte de " +
-                "l'utilisateur, sans preambule inutile. Ce tour est strictement en LECTURE SEULE : " +
-                "n'emets aucune commande qui MODIFIE quoi que ce soit, ne lance aucune orchestration, " +
-                'ne modifie rien et ne cree aucun worktree. Utilise uniquement les lectures locales ' +
-                'strictement necessaires. Distingue les faits observes des deductions et respecte tout ' +
-                'format de sortie explicitement demande. Si le message dit « reponds exactement X », ' +
-                'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus. ' +
-                'EXPRESSION VISUELLE : hors format strict demande, des que ta reponse a une STRUCTURE ' +
-                '(comparaison, etapes, statuts, chiffres, recapitulatif), prefere un bloc ferme ' +
-                '```html-render en DIRECTION « transparence totale » (choix utilisateur) : aucun ' +
-                'panneau ni fond opaque, typographie sur le fond de l’app, mise en page COMPACTE ' +
-                '(interlignes 1.45-1.55, marges de section <=10px, aucun grand vide vertical), jamais de ' +
-                'halos ; sans JavaScript ni URL externe. ' +
-                // Les classes de l'app remplacent la recette de couleurs en dur (conv-1074).
-                CONSIGNE_CLASSES_PAGES_HTML +
-                ' Garde le texte simple pour une ou deux phrases.\n'
-            },
-            // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
-            // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).
-            // `pilotage` est deja reduit au catalogue readOnlyHint dans ce cas ('' si vide).
-            { name: 'pilotage-lecture', text: pilotage }
+                "Tu es le triage automatique non invasif d'Autowin OS. Reponds en francais, " +
+                'directement et en moins de 250 mots. Tu observes un incident en LECTURE SEULE : ' +
+                "n'emets aucune commande Autowin, ne lance aucune orchestration, ne modifie rien et " +
+                'ne cree aucun worktree. Utilise au plus les lectures locales strictement necessaires. ' +
+                'Si le contexte ne cite aucun artefact ou chemin precis, ne fouille pas le depot au hasard : ' +
+                'distingue les faits, la cause seulement si elle est prouvee, puis la preuve manquante. ' +
+                'Respecte exactement toute derniere ligne ISSUE demandee par le message utilisateur.\n'
+            }
           ]
-        : [
-            { name: 'constitution', text: CONSTITUTION },
-            { name: 'pilotage', text: pilotage },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
-            {
-              name: 'projectContext',
-              text:
-                this.projectContext(conversationId) +
-                blocProfilUtilisateur() +
-                blocLangueDeReponse()
-            },
-            /**
-             * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
-             * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour
-             * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
-             * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
-             * regles de travail visuel, conditionnelles (conv-614) — image jointe comprise (conv-742).
-             *
-             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
-             * visuelle apparait ou disparait d'un tour a l'autre.
-             */
-            ...blocsSystemeEcran(
-              latestUserMessage ?? '',
-              (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image'),
-              conversationId ?? ''
-            )
-          ]
-    const system = systemParts.map((p) => p.text).join('')
-    const systemBlocks = systemParts
-      .filter((p) => p.text)
-      .map((p) => ({ name: p.name, chars: p.text.length }))
+        : directReadOnly
+          ? [
+              {
+                name: 'direct-read-only',
+                text:
+                  "Tu es le chat direct d'Autowin OS. Reponds en francais a la demande exacte de " +
+                  "l'utilisateur, sans preambule inutile. Ce tour est strictement en LECTURE SEULE : " +
+                  "n'emets aucune commande qui MODIFIE quoi que ce soit, ne lance aucune orchestration, " +
+                  'ne modifie rien et ne cree aucun worktree. Utilise uniquement les lectures locales ' +
+                  'strictement necessaires. Distingue les faits observes des deductions et respecte tout ' +
+                  'format de sortie explicitement demande. Si le message dit « reponds exactement X », ' +
+                  'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus. ' +
+                  'EXPRESSION VISUELLE : hors format strict demande, des que ta reponse a une STRUCTURE ' +
+                  '(comparaison, etapes, statuts, chiffres, recapitulatif), prefere un bloc ferme ' +
+                  '```html-render en DIRECTION « transparence totale » (choix utilisateur) : aucun ' +
+                  'panneau ni fond opaque, typographie sur le fond de l’app, mise en page COMPACTE ' +
+                  '(interlignes 1.45-1.55, marges de section <=10px, aucun grand vide vertical), jamais de ' +
+                  'halos ; sans JavaScript ni URL externe. ' +
+                  // Les classes de l'app remplacent la recette de couleurs en dur (conv-1074).
+                  CONSIGNE_CLASSES_PAGES_HTML +
+                  ' Garde le texte simple pour une ou deux phrases.\n'
+              },
+              // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
+              // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).
+              // `pilotage` est deja reduit au catalogue readOnlyHint dans ce cas ('' si vide).
+              { name: 'pilotage-lecture', text: pilotage }
+            ]
+          : [
+              { name: 'constitution', text: CONSTITUTION },
+              { name: 'pilotage', text: pilotage },
+              { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+              // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
+              {
+                name: 'projectContext',
+                text:
+                  this.projectContext(conversationId) +
+                  blocProfilUtilisateur() +
+                  blocLangueDeReponse()
+              },
+              /**
+               * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
+               * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour
+               * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
+               * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
+               * regles de travail visuel, conditionnelles (conv-614) — image jointe comprise (conv-742).
+               *
+               * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
+               * visuelle apparait ou disparait d'un tour a l'autre.
+               */
+              ...blocsSystemeEcran(
+                latestUserMessage ?? '',
+                (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image'),
+                conversationId ?? ''
+              )
+            ]
+    const assemblerSysteme = (
+      texte: string
+    ): { system: string; systemBlocks: Array<{ name: string; chars: number }> } => {
+      const parts = systemPartsAvec(texte)
+      return {
+        system: parts.map((p) => p.text).join(''),
+        systemBlocks: parts
+          .filter((p) => p.text)
+          .map((p) => ({ name: p.name, chars: p.text.length }))
+      }
+    }
+    // Le système COMPLET (liste entière des commandes) : défaut de chaque envoi, et seul servi quand
+    // les outils directs ne démarrent pas — le texte `<cmd>` est alors le seul chemin du modèle.
+    const { system, systemBlocks } = assemblerSysteme(pilotage)
+    /**
+     * LISTE DES COMMANDES SANS DOUBLON (conv-1229, 2026-10-28). Mesure sur le texte réellement envoyé
+     * (prompt-observability, conv-1229) : 46 des 55 commandes de la liste étaient AUSSI servies en
+     * outils directs, avec la même description et des arguments plus détaillés
+     * (`outilsPublies`, skill-node-mcp.ts) — 18 830 caractères payés deux fois à chaque requête.
+     * Quand les outils directs sont servis, la consigne ne détaille plus que les commandes texte seul.
+     * Calculé au premier envoi servi, puis réutilisé : même texte d'un envoi à l'autre, donc cachable.
+     */
+    let systemeOutilsDirects:
+      | { cle: string; system: string; systemBlocks: Array<{ name: string; chars: number }> }
+      | undefined
+    const systemeAvecOutilsDirects = (
+      noms: readonly string[]
+    ): { system: string; systemBlocks: Array<{ name: string; chars: number }> } => {
+      // Surveillance (aucune commande) et lecture seule (catalogue réduit) gardent leur consigne.
+      if (watchdogReadOnly || directReadOnly || noms.length === 0) return { system, systemBlocks }
+      const cle = noms.join(',')
+      if (systemeOutilsDirects?.cle !== cle) {
+        systemeOutilsDirects = {
+          cle,
+          ...assemblerSysteme(buildChatPilotagePrompt(catalog, { outilsDirects: noms }))
+        }
+      }
+      return systemeOutilsDirects
+    }
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     // Session-resume du CHAT (levier coût) : si la conversation a déjà une session CLI ouverte avec
@@ -2581,6 +2648,8 @@ export class AgentPilot {
       )
       prompt.systemBlocks = systemBlocks
       prompt.contextBlocks = contextBlocks
+      // Les blocs RÉELLEMENT envoyés : complets, ou sans les commandes servies en outils directs.
+      let blocsSystemeDeCetEnvoi = systemBlocks
       let attempt =
         recoveredProviderCall && i === recoveredProviderCall.iteration
           ? recoveredProviderCall.attempt
@@ -2616,7 +2685,7 @@ export class AgentPilot {
         // Le panneau « Contexte » du chat, detaille par categorie : seul un tour de chat a un ecran.
         ...(conversationId && !watchdogReadOnly ? { mesurerContexte: true } : {}),
         observePrompt: (observed) => {
-          observed.systemBlocks = systemBlocks
+          observed.systemBlocks = blocsSystemeDeCetEnvoi
           observed.contextBlocks = contextBlocks
           prompt = observed
         },
@@ -2794,8 +2863,16 @@ export class AgentPilot {
           callStartedAt = performance.now()
           timer.mark(`send${i}:start`)
           let sawFirstChunk = false
+          // Outils servis : la consigne ne redit plus les commandes qu'ils décrivent déjà (conv-1229).
+          // Repli au texte `<cmd>` : la liste complète, seul chemin qui reste au modèle.
+          const systemeDeCetEnvoi = outilsDeCetEnvoi
+            ? systemeAvecOutilsDirects(outilsDeCetEnvoi.noms)
+            : { system, systemBlocks }
+          blocsSystemeDeCetEnvoi = systemeDeCetEnvoi.systemBlocks
+          prompt.system = systemeDeCetEnvoi.system
+          prompt.systemBlocks = systemeDeCetEnvoi.systemBlocks
           const optionsDeCetEnvoi: SendOptions = outilsDeCetEnvoi
-            ? { ...options, skillNodeTools: outilsDeCetEnvoi.options }
+            ? { ...options, ...systemeDeCetEnvoi, skillNodeTools: outilsDeCetEnvoi.options }
             : options
           res = await this.registry.send(provider, messages, optionsDeCetEnvoi, (chunk) => {
             /**

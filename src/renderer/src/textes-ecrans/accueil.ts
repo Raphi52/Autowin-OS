@@ -148,6 +148,8 @@ export const TEXTES_FR = {
   'inter.glissez': 'Glissez un fichier ici pour le joindre ({max} max, 10 Mo chacun).',
   'inter.ouvrirFilTitre': 'Ouvrir ce fil dans Outlook',
   'inter.ouvrirDansOutlook': 'Ouvrir dans Outlook',
+  'inter.ouvrirPiece': 'Ouvrir {nom}',
+  'inter.pieceEchec': 'Impossible d’ouvrir la pièce jointe : {erreur}',
   'inter.reponseEnvoyee':
     'Réponse envoyée. Elle apparaîtra dans le fil à la prochaine actualisation.',
   'inter.envoyerParOutlook': 'Envoyer par Outlook',
@@ -413,6 +415,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'inter.glissez': 'Drag a file here to attach it ({max} max, 10 MB each).',
   'inter.ouvrirFilTitre': 'Open this thread in Outlook',
   'inter.ouvrirDansOutlook': 'Open in Outlook',
+  'inter.ouvrirPiece': 'Open {nom}',
+  'inter.pieceEchec': 'Could not open the attachment: {erreur}',
   'inter.reponseEnvoyee': 'Reply sent. It will appear in the thread at the next refresh.',
   'inter.envoyerParOutlook': 'Send with Outlook',
   'inter.confirmerEnvoi': 'Confirm sending to {nom}',

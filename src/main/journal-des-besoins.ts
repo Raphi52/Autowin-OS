@@ -102,18 +102,31 @@ export async function identiteGitDuDossier(
   return { nom: nom ?? email ?? '', ...(email ? { email } : {}) }
 }
 
-/** Identités gardées en mémoire quelques minutes : un tour ne doit pas payer un `git` à chaque fois. */
+/**
+ * Identités gardées en mémoire quelques minutes : un tour ne doit pas payer un `git` à chaque fois.
+ *
+ * `servirLaPerimee` (le Board, conv-1248) : une valeur expirée est rendue tout de suite pendant que
+ * la relecture tourne, pour la fois suivante. Sans cela, toute ouverture du Board plus de 5 min après
+ * la précédente attendait ~30 `git config` (0,36 à 0,54 s mesurés). Le journal des tours ne s'en sert
+ * pas : il relève l'identité DU tour, pas celle d'il y a 5 minutes.
+ */
 export function creerIdentitesEnCache(
   lire: (dossier: string | undefined) => Promise<IdentiteGit | null> = (dossier) =>
     identiteGitDuDossier(dossier),
   maintenant: () => number = Date.now,
-  dureeMs = 5 * 60_000
+  dureeMs = 5 * 60_000,
+  servirLaPerimee = false
 ): (dossier: string | undefined) => Promise<IdentiteGit | null> {
   const cache = new Map<string, { a: number; identite: Promise<IdentiteGit | null> }>()
   return (dossier) => {
     const cle = dossier ?? ''
     const connue = cache.get(cle)
     if (connue && maintenant() - connue.a < dureeMs) return connue.identite
+    if (connue && servirLaPerimee) {
+      // Une relecture en échec garde l'ancienne valeur, au lieu de la remplacer par un rejet.
+      cache.set(cle, { a: maintenant(), identite: lire(dossier).catch(() => connue.identite) })
+      return connue.identite
+    }
     const identite = lire(dossier)
     cache.set(cle, { a: maintenant(), identite })
     return identite

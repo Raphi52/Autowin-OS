@@ -159,55 +159,6 @@ function TaskManagerIcon(): React.JSX.Element {
   )
 }
 
-/**
- * L'icône du Board (conv-1126, 2026-10-23 : proposition 5 retenue, « Board » + tableau à post-it).
- * Même facture que TaskManagerIcon : cadre en dégradé cyan → violet, trois colonnes = les étages de
- * la rivière, le post-it rose = celui qui vient de bouger.
- */
-function BoardIcon(): React.JSX.Element {
-  return (
-    <svg
-      data-icon="board"
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient
-          id="board-gradient"
-          gradientUnits="userSpaceOnUse"
-          x1="3"
-          y1="5"
-          x2="21"
-          y2="21"
-        >
-          <stop stopColor="#36e6ff" />
-          <stop offset="1" stopColor="#a855f7" />
-        </linearGradient>
-      </defs>
-      <rect
-        x="2.75"
-        y="3.75"
-        width="18.5"
-        height="16.5"
-        rx="3"
-        fill="rgba(54, 230, 255, 0.1)"
-        stroke="url(#board-gradient)"
-        strokeWidth="1.5"
-      />
-      <path d="M9 4v16M15 4v16" stroke="url(#board-gradient)" strokeWidth="1.1" opacity="0.6" />
-      <rect x="4.4" y="6.5" width="3" height="2.6" rx="0.6" fill="url(#board-gradient)" />
-      <rect x="4.4" y="10.6" width="3" height="2.6" rx="0.6" fill="url(#board-gradient)" />
-      <rect x="10.5" y="6.5" width="3" height="2.6" rx="0.6" fill="url(#board-gradient)" />
-      <rect x="16.5" y="6.5" width="3" height="2.6" rx="0.6" fill="#fb7185" />
-    </svg>
-  )
-}
-
 export function MainApp(): React.JSX.Element {
   const testInstance = new URLSearchParams(window.location.search).get('instance') === 'test'
   // L'accueil est la vue d'ouverture : c'est l'endroit ou l'on lit l'etat de sa journee d'un coup
@@ -689,8 +640,6 @@ export function MainApp(): React.JSX.Element {
                     <WorktreeIcon />
                   ) : it.id === 'task-manager' ? (
                     <TaskManagerIcon />
-                  ) : it.id === 'besoins' ? (
-                    <BoardIcon />
                   ) : (
                     it.icon
                   )}

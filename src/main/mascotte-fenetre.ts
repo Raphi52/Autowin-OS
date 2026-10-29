@@ -9,8 +9,19 @@
  *
  * Elle se CACHE tant qu'une fenêtre d'Autowin est regardée : posée en bas à droite, elle couvrirait
  * le bas de la fenêtre (la saisie), pour la même raison que les cartes se ferment alors.
+ *
+ * Elle est RECRÉÉE au déverrouillage de la session (`recreerFenetre`, conv-1227) : née pendant une
+ * coupure du Bureau à distance, elle ne se dessinait plus après la reconnexion.
  */
-import { app, BrowserWindow, ipcMain, Menu, screen, type IpcMainEvent } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  screen,
+  type IpcMainEvent
+} from 'electron'
 import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,12 +33,14 @@ import {
   cssDeLEtat,
   estLaFermeture,
   etatDeLaMascotte,
+  geometrieMascotte,
   gesteDeMascotte,
   htmlDeMascotte,
   issuePourLaMascotte,
   placerMascotteGardee,
+  pointSurLaBille,
+  positionPourLeStyle,
   PRELOAD_MASCOTTE,
-  TAILLE_MASCOTTE,
   zoneDesCartes,
   type PositionMascotte
 } from './mascotte'
@@ -35,7 +48,8 @@ import { entreesDuMenuMascotte } from './mascotte-menu'
 import {
   ecrireMascotteAffichee,
   ecrirePositionMascotte,
-  lirePositionMascotte
+  lirePositionMascotte,
+  type StyleMascotte
 } from './mascotte-reglage'
 import { creerCompteDesRuns, type EvenementDeRun } from './mascotte-runs'
 import type { FinDeTourPourNotification } from './notification-fin-de-tour'
@@ -67,9 +81,15 @@ export type MascotteDuBureau = {
   ) => void
   /**
    * Branche la mascotte sur Autowin (une seule fois) ; sa fenêtre n'est créée que si elle est
-   * affichée (`affichee`, le choix de Settings · Interface lu au démarrage).
+   * affichée (`affichee`, le choix de Settings · Interface lu au démarrage), dans le `style` gardé
+   * (magicien par défaut, conv-1249).
    */
-  demarrer: (deps: DependancesMascotte, affichee: boolean) => void
+  demarrer: (deps: DependancesMascotte, affichee: boolean, style?: StyleMascotte) => void
+  /**
+   * Le choix « Magicien / Basique » de Settings · Interface (conv-1249) : la fenêtre est recréée
+   * dans le nouveau style, la bille au même point de l'écran.
+   */
+  changerStyle: (style: StyleMascotte) => void
   /**
    * L'interrupteur de Settings · Interface (conv-1145). Masquée = fenêtre FERMÉE, pas seulement
    * cachée : rien ne reste à l'écran ni en mémoire. Réaffichée = fenêtre recréée.
@@ -92,12 +112,22 @@ export type MascotteDuBureau = {
 
 /** Les réponses de chat n'émettent aucun événement de début : relues à ce rythme. */
 const RYTHME_MS = 1500
+/**
+ * CLICS À TRAVERS LE PERSONNAGE (conv-1227) : la fenêtre a grandi pour le chapeau, les bras et les
+ * sorts, mais seule la bille (et sa croix) doit prendre les clics — une fenêtre transparente les
+ * prend partout sinon (limite documentée d'Electron). Le pointeur est relu à ce rythme, et la
+ * fenêtre laisse passer les clics (`setIgnoreMouseEvents`) dès qu'il n'est plus sur la bille. La
+ * décision vient de la position lue par le moteur, pas d'un événement de la page : une fenêtre qui
+ * laisse passer les clics ne reçoit plus le survol qui la réveillerait.
+ */
+const RYTHME_SURVOL_MS = 60
 
 export function creerMascotteDuBureau(): MascotteDuBureau {
   const suivi = creerSuiviMascotte()
   const runs = creerCompteDesRuns()
   let deps: DependancesMascotte | null = null
   let affichee = true
+  let style: StyleMascotte = 'magicien'
   /** `app.whenReady` passé : avant, aucune fenêtre ne peut naître. */
   let prete = false
   let win: BrowserWindow | null = null
@@ -105,6 +135,8 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   const glisser = creerGlisserMascotte()
   let feuilleCourante = ''
   let cleFeuille: string | null = null
+  /** `true` : les clics passent à travers la fenêtre ; `null` = pas encore décidé. */
+  let traversante: boolean | null = null
   let fileFeuilles: Promise<void> = Promise.resolve()
   const ecouteursDeplacement: Array<() => void> = []
   /** Un écouteur qui jette ne doit pas figer la bille au milieu d'un glisser. */
@@ -129,7 +161,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   /** Pose la feuille de l'état si elle a changé ; une à la fois, dans l'ordre. */
   const rafraichir = (): void => {
     if (!win || win.isDestroyed() || !chargee) return
-    const feuille = cssDeLEtat(etatCourant())
+    const feuille = cssDeLEtat(etatCourant(), style)
     if (feuille === feuilleCourante) return
     feuilleCourante = feuille
     const contenu = win.webContents
@@ -160,7 +192,8 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     placerMascotteGardee(
       lirePositionMascotte(),
       screen.getAllDisplays().map((ecran) => ecran.workArea),
-      screen.getPrimaryDisplay().workArea
+      screen.getPrimaryDisplay().workArea,
+      style
     )
 
   const placer = (): void => {
@@ -213,7 +246,8 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     const rect = placerMascotteGardee(
       position,
       screen.getAllDisplays().map((ecran) => ecran.workArea),
-      screen.getPrimaryDisplay().workArea
+      screen.getPrimaryDisplay().workArea,
+      style
     )
     fenetre.setBounds(rect)
     aBouge()
@@ -243,7 +277,8 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     if (geste === 'bouge') {
       const position = glisser.bouge(curseur)
       if (position) {
-        fenetre.setBounds({ ...position, width: TAILLE_MASCOTTE, height: TAILLE_MASCOTTE })
+        const { largeur, hauteur } = geometrieMascotte(style)
+        fenetre.setBounds({ ...position, width: largeur, height: hauteur })
         aBouge()
       }
       return
@@ -253,10 +288,22 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     else if (fin?.type === 'pose') poser(fenetre, fin.position)
   }
 
+  /** La bille sous le pointeur prend les clics ; partout ailleurs, ils passent au bureau. */
+  const suivreLePointeur = (): void => {
+    const fenetre = win
+    if (!fenetre || fenetre.isDestroyed() || !fenetre.isVisible()) return
+    const [x, y] = fenetre.getPosition()
+    const curseur = screen.getCursorScreenPoint()
+    const traverse = !pointSurLaBille({ x: curseur.x - x, y: curseur.y - y }, style)
+    if (traverse === traversante) return
+    traversante = traverse
+    fenetre.setIgnoreMouseEvents(traverse)
+  }
+
   const creerFenetre = (): void => {
     const fichier = join(tmpdir(), `autowin-mascotte-${process.pid}.html`)
     const preload = join(tmpdir(), `autowin-mascotte-${process.pid}.preload.js`)
-    writeFileSync(fichier, htmlDeMascotte(), 'utf8')
+    writeFileSync(fichier, htmlDeMascotte(style), 'utf8')
     writeFileSync(preload, PRELOAD_MASCOTTE, 'utf8')
     win = new BrowserWindow({
       ...placement(),
@@ -286,6 +333,12 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       }
     })
     const fenetre = win
+    // Une fenêtre neuve n'a pas forcément la taille de l'ancienne (style changé, conv-1249) : les
+    // cartes ouvertes se recollent contre elle.
+    aBouge()
+    traversante = null
+    const survol = setInterval(suivreLePointeur, RYTHME_SURVOL_MS)
+    survol.unref?.()
     fenetre.webContents.on('did-finish-load', () => {
       chargee = true
       feuilleCourante = ''
@@ -308,6 +361,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     fenetre.webContents.on('will-navigate', (evenement) => evenement.preventDefault())
     fenetre.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     fenetre.once('closed', () => {
+      clearInterval(survol)
       rmSync(fichier, { force: true })
       rmSync(preload, { force: true })
       if (win === fenetre) win = null
@@ -328,6 +382,47 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
     } catch (erreur) {
       console.warn('[mascotte] fenêtre impossible —', String(erreur))
     }
+  }
+
+  /**
+   * RECONNEXION DU BUREAU À DISTANCE (conv-1227, 2026-10-28) : une fenêtre transparente née pendant
+   * une coupure de la session ne dessinait plus rien après la reconnexion. Windows l'affichait, sa
+   * page se croyait visible, mais le moteur ne produisait aucune image (Autowin relancé à 22:04:27,
+   * session coupée de 22:03:53 à 23:01:54, « capture sans image en 4 s » à 23:31:42) ; une fenêtre
+   * recréée, elle, se dessine. Electron ne signale pas la reconnexion elle-même, mais elle
+   * déverrouille la session (journal Windows : 4778 puis 4801), ce qu'il signale par `unlock-screen`.
+   * Un simple déverrouillage la recrée donc aussi : invisible, l'état vit hors de la fenêtre.
+   */
+  const recreerFenetre = (motif: string): void => {
+    const ancienne = win
+    if (!ancienne || ancienne.isDestroyed()) {
+      assurerFenetre()
+      return
+    }
+    // Après l'écouteur `closed` de `creerFenetre`, qui libère `win` : la neuve peut naître.
+    ancienne.once('closed', () => assurerFenetre())
+    ancienne.close()
+    console.info(`[mascotte] ${motif} — fenêtre recréée`)
+  }
+
+  /**
+   * MAGICIEN OU BASIQUE (conv-1249) : la page, la taille de la fenêtre et la zone qui prend les
+   * clics changent avec le style ; la fenêtre est donc recréée, comme au déverrouillage. La place
+   * gardée suit (`positionPourLeStyle`) : la bille ne saute pas quand on change de style.
+   */
+  const changerStyle = (nouveau: StyleMascotte): void => {
+    if (nouveau === style) return
+    const avant = style
+    style = nouveau
+    const gardee = lirePositionMascotte()
+    if (gardee) {
+      try {
+        ecrirePositionMascotte(positionPourLeStyle(gardee, avant, nouveau))
+      } catch (erreur) {
+        console.warn('[mascotte] place non gardée —', String(erreur))
+      }
+    }
+    recreerFenetre('style changé')
   }
 
   const visible = (): boolean => deps !== null && affichee
@@ -368,10 +463,11 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       suivi.finDeTour(conversationId, issue)
       rafraichir()
     },
-    demarrer: (dependances, afficheeAuDemarrage) => {
+    demarrer: (dependances, afficheeAuDemarrage, styleAuDemarrage) => {
       if (deps) return
       deps = dependances
       affichee = afficheeAuDemarrage
+      if (styleAuDemarrage) style = styleAuDemarrage
       ipcMain.on(CANAL_GESTE_MASCOTTE, surGeste)
       void app.whenReady().then(() => {
         prete = true
@@ -390,16 +486,18 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
         screen.on('display-metrics-changed', placer)
         screen.on('display-added', placer)
         screen.on('display-removed', placer)
+        powerMonitor.on('unlock-screen', () => recreerFenetre('session déverrouillée'))
         setInterval(rafraichir, RYTHME_MS).unref?.()
       })
     },
     afficher,
+    changerStyle,
     estLaMascotte: (fenetre) => fenetre !== null && fenetre === win,
     zoneDesCartes: (zone) => {
       if (!visible()) return zone
       // La fenêtre si elle existe ; pas encore créée, la place où elle va naître.
       const bille = win && !win.isDestroyed() ? win.getBounds() : placement()
-      return zoneDesCartes(bille, screen.getDisplayMatching(bille).workArea)
+      return zoneDesCartes(bille, screen.getDisplayMatching(bille).workArea, style)
     },
     decorerCarte: (html) => (visible() ? avecLisereArcEnCiel(html) : html),
     quandElleBouge: (ecouteur) => {

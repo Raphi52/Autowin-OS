@@ -36,7 +36,9 @@ import {
   depuisDerniereCompaction
 } from '../chat-turn-messages'
 import {
+  cibleEntiereDe,
   lireTestsDuTerminal,
+  statutComplet,
   type ChatTurnEvent,
   type PersistedChatPart
 } from '../../shared/chat-turn'
@@ -98,6 +100,7 @@ import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../reprise-apres-arret'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
+import { solderOrientationsDuFil } from '../orientations-en-cours-app'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -175,6 +178,8 @@ export type RunPilotChat = (
   text?: string
   error?: string
   verification?: { complete: boolean; evidence: string }
+  /** Erreur de l'`orchestrate` du tour quand il a échoué (le tour, lui, reste `ok`). */
+  echecOrchestration?: string
   resolvedModel?: string
   knownCostUsd?: number
   totalTokens?: number
@@ -346,6 +351,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     const promptJournalMemory: PromptJournalMemory = {}
     let completedText = ''
     let verification: { complete: boolean; evidence: string } | undefined
+    // L'erreur de l'`orchestrate` du tour s'il a échoué : le tour finit `ok` malgré elle, et un
+    // plan de lots notait « fait » un lot coupé par la limite d'usage (conv-1236, 2026-10-28).
+    let echecOrchestration: string | undefined
     let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
     let turnPromptIdentity:
       { provider: string; model?: string; reasoningEffort?: string } | undefined
@@ -818,6 +826,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // L'issue d'orchestration entre dans la trace comme verdict de CONTROLE type, au lieu de
           // rester du texte libre que rien ne peut filtrer ni compter.
           const issue = pilotEvent.outcome
+          if (issue?.status === 'failed' && typeof issue.error === 'string')
+            echecOrchestration = issue.error
           if (conversationId && issue && Object.keys(issue).length > 0) {
             try {
               const outcomeEvent = appendObservedOrchestrationOutcome(causalTrace, {
@@ -1011,7 +1021,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         // dans le tour la rafale qui vient de finir (conv-1110).
         raisonnementDuTour.recevoir(pilotEvent)
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
-          if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
+          // Le tour ENREGISTRÉ garde la commande entière, comme le direct (conv-1228) : relu, le
+          // bloc Actions ne montrait sinon qu'une commande coupée à 120 caractères.
+          const ligneEntiere = statutComplet(pilotEvent.text, cibleEntiereDe(pilotEvent.data))
+          if (streamedActions.at(-1) !== ligneEntiere) streamedActions.push(ligneEntiere)
           // UN GESTE FINI DE L'AGENT ENTRE DANS LA TRACE (nom, issue, durée, et ce qu'il a reçu et
           // rendu quand le modèle IA le fournit), comme les preuves d'exécution d'un run.
           const geste = conversationId ? gesteDeLaLigne(pilotEvent.text) : undefined
@@ -1651,6 +1664,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           spoken.join('\n').trim() ||
           etiquettesAction.join('\n').trim(),
         verification,
+        ...(echecOrchestration ? { echecOrchestration } : {}),
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
@@ -1769,7 +1783,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
          * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
          */
-        const orphelines = pendingDirectives.get(conversationId) ?? []
+        // fix-ok: conv-1241 (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
+        // Une orientation déjà remise au modèle par le contrôle avant outil n'est pas
+        // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
+        const orphelines = solderOrientationsDuFil(
+          conversationId,
+          pendingDirectives.get(conversationId) ?? [],
+          'rendue'
+        )
         if (pendingDirectives.delete(conversationId)) {
           broadcast({ type: 'refresh', scope: 'directives' })
         }
@@ -1826,7 +1847,8 @@ export function issueDuResultat(resultat: Awaited<ReturnType<RunPilotChat>>): Is
     tour: resultat.turnId,
     ...(resultat.cancelled ? { annule: true } : {}),
     ...(resultat.error ? { erreur: resultat.error } : {}),
-    ...(resultat.text ? { texte: resultat.text } : {})
+    ...(resultat.text ? { texte: resultat.text } : {}),
+    ...(resultat.echecOrchestration ? { echecOrchestration: resultat.echecOrchestration } : {})
   }
 }
 

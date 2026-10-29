@@ -94,14 +94,15 @@ describe('`learn` ferme le travail substantiel', () => {
       expect(learn).toHaveLength(1)
       /*
        * CHANGEMENT DE CONTRAT DU 2026-08-29 (conv-1521) : `learn` n est plus le DERNIER maillon,
-       * il est le PREMIER de la chaine d apres-gate. Sa seule sortie va vers `salvage`, qui trie
-       * le travail au lieu de rendre la main sur « veux-tu que je commit ? ». Ce qui reste vrai :
+       * il est le PREMIER de la chaine d apres-gate. Sa seule sortie va vers `git` (`salvage` avant
+       * conv-1252), qui trie le travail au lieu de rendre la main sur « veux-tu que je commit ? ».
+       * Ce qui reste vrai :
        * la chaine ne se traverse pas pendant la marche, et son dernier maillon est terminal
-       * (`salvage-apres-kaizen.test.ts`).
+       * (`git-fin-de-run.test.ts`).
        */
       const sorties = graphe.edges.filter((arete) => arete.from === learn[0]!.id)
       expect(sorties).toHaveLength(1)
-      expect(graphe.nodes.find((node) => node.id === sorties[0]!.to)?.phase).toBe('salvage')
+      expect(graphe.nodes.find((node) => node.id === sorties[0]!.to)?.phase).toBe('git')
       // Et atteignable : un nœud terminal sans arête entrante ne serait jamais joué.
       expect(graphe.edges.some((arete) => arete.to === learn[0]!.id)).toBe(true)
     })

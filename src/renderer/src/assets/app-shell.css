@@ -13,7 +13,8 @@
   top: 0;
   left: 216px;
   right: 138px;
-  height: 28px;
+  /* La hauteur de la barre de fenêtre, zoom compris (theme.css, conv-1223). */
+  height: var(--marge-haut-vue);
   -webkit-app-region: drag;
   pointer-events: none;
 }
@@ -35,8 +36,9 @@
   /* MEME HAUTEUR QUE LES BLOCS (demande du 2026-10-09, conv-124 : « met la au meme niveau
      vertical en haut et en bas que les autres blocs, sur tous les themes »). Les blocs de
      chaque vue commencent et finissent a la marge de `.main` (var(--s5)) : le menu reprend
-     la MEME valeur, il suit donc si cette marge change. */
-  margin-block: var(--s5);
+     la MEME valeur, il suit donc si cette marge change. En haut, c'est `--marge-haut-vue` : elle
+     grandit sous 100 % de zoom avec celle de `.main` (theme.css, conv-1223). */
+  margin-block: var(--marge-haut-vue) var(--s5);
   box-shadow: none;
   transition:
     width 180ms var(--ease),
@@ -326,6 +328,10 @@
   flex: 1;
   min-width: 0;
   padding: var(--s5);
+  /* Sous 100 % de zoom, les boutons de fenêtre de Windows deviennent plus hauts que var(--s5) en
+     pixels de page : la vue descend d'autant pour que leur gris de survol ne la recouvre pas
+     (theme.css, conv-1223). */
+  padding-top: var(--marge-haut-vue);
   overflow: hidden;
   display: flex;
   flex-direction: column;

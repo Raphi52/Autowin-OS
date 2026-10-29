@@ -5,6 +5,8 @@ import {
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
   consigneDeLectureRetenue,
+  extraitDuContexte,
+  lectureAAnnoncer,
   lireLesLectures,
   tacheAvecLectureRetenue,
   demandeDeChangementDeRendu,
@@ -125,13 +127,22 @@ describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
     ).toEqual({ kind: 'retenue', retenue: LECTURE_CODE_767, ecartee: LECTURE_ARENA_767 })
   })
 
-  it('une réponse douteuse ne retient RIEN : pas d’annonce sur une lecture non validée', () => {
+  it('une réponse sans lecture ne retient RIEN', () => {
     expect(lireLesLectures('{"lectures":[]}', DEMANDE_767)).toBeUndefined()
-    const savante = reponse(
-      ['une task (toujours la meme) facile à évaluer via /arena', 90],
-      ['un banc de mesure reproductible pour comparer des orchestrations', 10]
-    )
-    expect(lireLesLectures(savante, DEMANDE_767)).toBeUndefined()
+  })
+
+  it('hors de ses mots : jamais en boutons, mais la ligne s’affiche quand même (conv-1240)', () => {
+    const retenue = 'une task (toujours la meme) facile à évaluer via /arena'
+    const ecartee = 'un banc de mesure reproductible pour comparer des orchestrations'
+    for (const [p1, p2] of [
+      [90, 10],
+      [50, 50]
+    ])
+      expect(lireLesLectures(reponse([retenue, p1], [ecartee, p2]), DEMANDE_767)).toEqual({
+        kind: 'retenue',
+        retenue,
+        ecartee
+      })
   })
 
   it('l’annonce tient en une ligne : la lecture qui part, puis l’autre', () => {
@@ -153,6 +164,75 @@ describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
     const consigne = consigneDeLectureRetenue('lecture a', 'lecture b')
     expect(consigne.startsWith('SYSTÈME:')).toBe(true)
     expect(consigne).toContain('« lecture a »')
+  })
+})
+
+describe('une seule lecture : annoncée quand même (conv-1240, « met le tout le temps »)', () => {
+  const DEMANDE = 'met le tout le temps'
+  const COMPRISE =
+    'Afficher la ligne « Lecture retenue » à chaque message, et plus seulement de temps en temps'
+
+  it('une lecture seule → retenue, sans lecture écartée', () => {
+    expect(lireLesLectures(reponse([COMPRISE, 100]), DEMANDE)).toEqual({
+      kind: 'retenue',
+      retenue: COMPRISE
+    })
+  })
+
+  it('une lecture seule reformulée est annoncée telle quelle : c’est ce que l’agent a compris', () => {
+    // Rejeu sur le vrai modèle (2026-10-28) : « met le tout le temps » lu « à chaque demande ».
+    const reformulee = 'Afficher la ligne « Lecture retenue » à chaque demande'
+    expect(lireLesLectures(reponse([reformulee, 100]), DEMANDE)).toEqual({
+      kind: 'retenue',
+      retenue: reformulee
+    })
+  })
+
+  it('une relance sans mot porteur (« go ») est annoncée d’après le contexte', () => {
+    expect(lireLesLectures(reponse(['Lancer le build recommandé', 100]), 'go')).toEqual({
+      kind: 'retenue',
+      retenue: 'Lancer le build recommandé'
+    })
+  })
+
+  it('une lecture seule trop longue ou sans probabilité n’est pas annoncée', () => {
+    expect(lireLesLectures(reponse([`temps ${'x'.repeat(250)}`, 100]), DEMANDE)).toBeUndefined()
+    expect(
+      lireLesLectures(JSON.stringify({ lectures: [{ texte: COMPRISE }] }), DEMANDE)
+    ).toBeUndefined()
+  })
+
+  it('la ligne, la tâche du run et la consigne du modèle ne parlent d’aucune autre lecture', () => {
+    expect(annonceDeLaLectureRetenue('zoom de la frise')).toBe(
+      'Lecture retenue : « zoom de la frise »'
+    )
+    const tache = tacheAvecLectureRetenue(DEMANDE_767, 'lecture a')
+    expect(tache).toContain('« lecture a ».')
+    expect(tache).not.toContain('écartée')
+    expect(tacheAvecLectureRetenue(tache, 'lecture a')).toBe(tache)
+    const consigne = consigneDeLectureRetenue('lecture a')
+    expect(consigne.startsWith('SYSTÈME:')).toBe(true)
+    expect(consigne).toContain('« lecture a »')
+    expect(consigne).not.toContain('deux façons')
+  })
+
+  it('là où la question n’est pas posée, la plus probable des deux est annoncée, l’autre nommée', () => {
+    expect(lectureAAnnoncer({ kind: 'question', lectures: ['a', 'b'] })).toEqual({
+      kind: 'retenue',
+      retenue: 'a',
+      ecartee: 'b'
+    })
+    const seule = { kind: 'retenue', retenue: 'a' } as const
+    expect(lectureAAnnoncer(seule)).toBe(seule)
+  })
+
+  it('le contexte garde le DÉBUT et la FIN du dernier message : une relance vise sa proposition', () => {
+    const message = `Début du message. ${'x'.repeat(3000)} 👉 Recommandé : lancer le build.`
+    const extrait = extraitDuContexte(message)
+    expect(extrait.startsWith('Début du message.')).toBe(true)
+    expect(extrait.endsWith('👉 Recommandé : lancer le build.')).toBe(true)
+    expect(extrait.length).toBeLessThan(820)
+    expect(extraitDuContexte('court')).toBe('court')
   })
 })
 

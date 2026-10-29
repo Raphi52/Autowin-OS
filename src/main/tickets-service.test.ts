@@ -135,15 +135,17 @@ describe('#4 enrichissement borné à la frontière (discussion + titre des rela
     ...over
   })
 
-  it('garde les commentaires les plus RÉCENTS et borne leur taille', () => {
+  // conv-1228 (2026-10-28) : la discussion passe ENTIÈRE ; seul un message démesuré est coupé, en le
+  // disant (tickets-discussion-entiere.test.ts). Avant : 20 messages de 2 000 caractères, en silence.
+  it('garde toute la discussion, dans l’ordre, et chaque texte entier', () => {
     const comments = Array.from({ length: 40 }, (_, index) => ({
       author: 'A',
       text: `m${index} ${'x'.repeat(5_000)}`
     }))
     const normalized = normalizeTicketItem(item({ comments }))
-    expect(normalized.comments).toHaveLength(20)
-    expect(normalized.comments?.[0].text.startsWith('m20')).toBe(true)
-    expect(normalized.comments?.[0].text.length).toBeLessThanOrEqual(2_000)
+    expect(normalized.comments).toHaveLength(40)
+    expect(normalized.comments?.[0].text.startsWith('m0')).toBe(true)
+    expect(normalized.comments?.[0].text).toBe(comments[0].text)
   })
 
   it('ignore un commentaire vide et n’invente aucun titre de relation', () => {
@@ -168,12 +170,17 @@ describe('#4 enrichissement borné à la frontière (discussion + titre des rela
     const registry = {
       supports: vi.fn(() => true),
       list: vi.fn(async () => ({
-        items: [item({ comments: Array.from({ length: 30 }, () => ({ text: 'c' })) })],
+        items: [
+          item({
+            comments: [{ text: '   ' }, ...Array.from({ length: 30 }, () => ({ text: ' c ' }))]
+          })
+        ],
         hasMore: false
       }))
     } as unknown as TicketProviderRegistry
     const service = new TicketService({ ...deps, registry })
     const page = await service.list({ source: DEFAULT_TICKET_SOURCE })
-    expect(page.items[0].comments).toHaveLength(20)
+    expect(page.items[0].comments).toHaveLength(30)
+    expect(page.items[0].comments?.[0].text).toBe('c')
   })
 })

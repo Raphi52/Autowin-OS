@@ -127,8 +127,10 @@ describe('navigation humaine synchronisée avec le main', () => {
     await act(async () => root.unmount())
   })
 
-  // conv-1126 : la vue `besoins` s'appelle « Board » et porte un tableau à post-it dessiné.
-  it('affiche le Board avec son icône vectorielle, sans émoji', async () => {
+  // conv-1126 : la vue `besoins` s'appelle « Board ». conv-1217 (2026-10-28) : son tableau à
+  // post-it dessiné se fondait dans la pilule active violet-rose ; remplacé par l'émoji 📌
+  // (proposition 5), plein comme ses voisins Tickets et Maintenance.
+  it('affiche le Board avec la punaise 📌, sans l’ancien dessin', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -149,10 +151,8 @@ describe('navigation humaine synchronisée avec le main', () => {
 
     const bouton = container.querySelector('[data-testid="nav-besoins"]')
     expect(bouton?.textContent).toContain('Board')
-    expect(bouton?.textContent).not.toContain('📋')
-    const icon = bouton?.querySelector('svg[data-icon="board"]')
-    expect(icon?.querySelector('linearGradient stop[stop-color="#36e6ff"]')).not.toBeNull()
-    expect(icon?.querySelector('rect[fill="#fb7185"]')).not.toBeNull()
+    expect(bouton?.querySelector('.space-toy-icon')?.textContent).toBe('📌')
+    expect(bouton?.querySelector('svg[data-icon="board"]')).toBeNull()
     await act(async () => root.unmount())
   })
 

@@ -184,7 +184,25 @@ const BLOCS_DE_CODE_CARACTERES_MAX = 2_000_000
 const blocsDeCodeMemoire = new Map<string, readonly BlocDeCodeMarkdown[] | null>()
 let blocsDeCodeCaracteres = 0
 
+/**
+ * AUCUN BLOC DE CODE POSSIBLE (conv-1248, 2026-10-28) : en CommonMark (le parseur sans extension
+ * d'ici), un nœud `code` naît d'une clôture ``` ou ~~~, ou d'une indentation de 4 colonnes — donc
+ * 4 espaces d'affilée ou une tabulation, puces et citations comprises. Sans aucun des quatre, la
+ * réponse est sûre sans parseur. Mesure : la première ouverture du Board relit 11 385 messages,
+ * 2,0 s dont ~75 % dans `fromMarkdown`, que la mémoire de 256 textes ne couvre pas.
+ */
+function sansBlocDeCodePossible(source: string): boolean {
+  return (
+    !source.includes('```') &&
+    !source.includes('~~~') &&
+    !source.includes('\t') &&
+    !source.includes('    ')
+  )
+}
+
 function blocsDeCodeMarkdown(source: string): readonly BlocDeCodeMarkdown[] | null {
+  // Avant la mémoire : un texte sans code n'y prend pas la place d'un texte qui en a.
+  if (sansBlocDeCodePossible(source)) return []
   const connu = blocsDeCodeMemoire.get(source)
   if (connu !== undefined) {
     // Plus recemment lu = dernier evince.

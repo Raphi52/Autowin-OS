@@ -24,6 +24,7 @@ import type {
   DemandeDeLaCarte,
   DemandeurAuCompte,
   DemandeurDeLaCarte,
+  EtapesDuCalcul,
   NatureDuProjet,
   ProjetDeLaCarte,
   RunBloqueDeLaCarte,
@@ -387,6 +388,17 @@ export function creerCalculateurDeCarte(deps: {
 
   async function calculer(): Promise<CarteDesBesoins> {
     const debut = maintenant()
+    // La lecture des runs part D'ABORD (conv-1248, 2026-10-29) : c'est de l'attente disque (111 ms
+    // en médiane dans l'app), qui avance pendant que les fils se relisent au lieu de s'y ajouter.
+    // Son échec est capté tout de suite (pas de rejet orphelin) et relevé plus bas, comme avant.
+    const runsEnCours = (async () => {
+      try {
+        const runs = await deps.lireRuns()
+        return { runs, ms: maintenant() - debut }
+      } catch (erreur) {
+        return { erreur }
+      }
+    })()
     const conversations = deps.lireConversations()
     const vivantes = new Set<string>()
     const demandesParConversation = new Map<string, DemandeDeLaCarte[]>()
@@ -407,25 +419,45 @@ export function creerCalculateurDeCarte(deps: {
     }
     // Un fil supprimé ne doit pas rester en mémoire pour toujours.
     for (const id of memoire.keys()) if (!vivantes.has(id)) memoire.delete(id)
-    const runs = await deps.lireRuns()
+    const finDesFils = maintenant()
+    // Journal et liens : deux fichiers lus d'un bloc, pendant que les runs attendent le disque.
+    const journal = deps.lireJournal?.()
+    const avantLiens = maintenant()
+    const liens = deps.lireLiens?.()
+    const avantIdentites = maintenant()
     const dossierParDefaut = deps.dossierParDefaut?.()
-    const identitesParDossier = await identitesDesFils(
+    const identitesEnCours = identitesDesFils(
       conversations,
       demandesParConversation,
       dossierParDefaut
-    )
-    return assemblerLaCarte({
+    ).then((identites) => ({ identites, ms: maintenant() - avantIdentites }))
+    const [lus, identitesLues] = await Promise.all([runsEnCours, identitesEnCours])
+    if ('erreur' in lus) throw lus.erreur
+    const { runs } = lus
+    const avantAssemblage = maintenant()
+    const carte = assemblerLaCarte({
       conversations,
       demandesParConversation,
       runs,
       ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       ...(dossierParDefaut ? { dossierParDefaut } : {}),
-      ...(deps.lireJournal ? { journal: deps.lireJournal() } : {}),
-      ...(deps.lireLiens ? { liens: deps.lireLiens() } : {}),
-      identitesParDossier,
-      calculeeA: maintenant(),
-      dureeMs: maintenant() - debut
+      ...(journal ? { journal } : {}),
+      ...(liens ? { liens } : {}),
+      identitesParDossier: identitesLues.identites,
+      calculeeA: avantAssemblage,
+      dureeMs: 0
     })
+    const fin = maintenant()
+    const etapesMs: EtapesDuCalcul = {
+      fils: finDesFils - debut,
+      runs: lus.ms,
+      identites: identitesLues.ms,
+      journal: avantLiens - finDesFils,
+      liens: avantIdentites - avantLiens,
+      assemblage: fin - avantAssemblage
+    }
+    // `dureeMs` compte désormais l'assemblage, qui se calculait APRÈS sa mesure.
+    return { ...carte, dureeMs: fin - debut, etapesMs }
   }
 
   return {

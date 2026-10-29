@@ -73,12 +73,22 @@ export function InterlocuteursWidget({
   ouvertureEnCours,
   onRepondre,
   onNouvelleConversation,
-  onMarquerLu
+  onMarquerLu,
+  onOuvrirPiece
 }: {
   fils: Interlocuteur[]
   now: number
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
+  /**
+   * OUVRE une pièce jointe REÇUE (conv-1220) : Outlook la copie, Windows l'ouvre. Absent = le nom
+   * reste un simple texte, comme avant cette capacité.
+   */
+  onOuvrirPiece?: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /**
    * RÉPOND à un message existant, avec ses pièces jointes éventuelles.
    *
@@ -245,6 +255,7 @@ export function InterlocuteursWidget({
         ouvertureEnCours={ouvertureEnCours}
         onRepondre={onRepondre}
         onMarquerLu={onMarquerLu}
+        onOuvrirPiece={onOuvrirPiece}
       />
     </div>
   )
@@ -511,7 +522,8 @@ function EcranConversation({
   onOuvrir,
   ouvertureEnCours,
   onRepondre,
-  onMarquerLu
+  onMarquerLu,
+  onOuvrirPiece
 }: {
   conversation: FilConversation
   contact: Interlocuteur
@@ -523,8 +535,37 @@ function EcranConversation({
     pieces: readonly PieceJointeMessage[]
   ) => Promise<{ ok: boolean; erreur?: string }>
   onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
+  onOuvrirPiece?: (
+    id: string,
+    rang: number | null,
+    nom: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
   const { t } = useTextesAccueil()
+  /** La pièce en cours d'ouverture (`<message>#<index>`) : son bouton se grise le temps de l'appel. */
+  const [pieceEnCours, setPieceEnCours] = useState<string | null>(null)
+  const [erreurPiece, setErreurPiece] = useState<string | null>(null)
+  /**
+   * Ouvre une pièce reçue. La cause d'un échec est AFFICHÉE sous le fil : un clic sans effet visible
+   * se lirait comme un nom qui n'est pas cliquable, alors que c'est Outlook ou Windows qui a refusé.
+   */
+  const ouvrirPiece = useCallback(
+    async (messageId: string, index: number, rang: number | null, nom: string): Promise<void> => {
+      if (!onOuvrirPiece) return
+      const cle = `${messageId}#${index}`
+      setPieceEnCours(cle)
+      setErreurPiece(null)
+      try {
+        const resultat = await onOuvrirPiece(messageId, rang, nom)
+        if (!resultat.ok) setErreurPiece(resultat.erreur ?? t('outlook.ouvrirEchec'))
+      } catch (error) {
+        setErreurPiece(error instanceof Error ? error.message : String(error))
+      } finally {
+        setPieceEnCours((courante) => (courante === cle ? null : courante))
+      }
+    },
+    [onOuvrirPiece, t]
+  )
   const [brouillon, setBrouillon] = useState('')
   const [pieces, setPieces] = useState<PieceJointeMessage[]>([])
   const [survol, setSurvol] = useState(false)
@@ -709,9 +750,20 @@ function EcranConversation({
       ) : null}
       <ol className="home-chat" data-testid="home-inter-conversation">
         {conversation.messages.map((message) => (
-          <Bulle key={message.id} message={message} contact={contact} />
+          <Bulle
+            key={message.id}
+            message={message}
+            contact={contact}
+            onOuvrirPiece={onOuvrirPiece ? ouvrirPiece : undefined}
+            pieceEnCours={pieceEnCours}
+          />
         ))}
       </ol>
+      {erreurPiece !== null ? (
+        <p className="home-error" role="alert" data-testid="home-inter-piece-erreur">
+          {t('inter.pieceEchec', { erreur: erreurPiece })}
+        </p>
+      ) : null}
       {erreurLu !== null ? (
         // Nomme, pas avale : une pastille qui ne part pas se lit comme une panne du widget, alors que
         // c'est Outlook qui a refuse l'ecriture.
@@ -1075,10 +1127,21 @@ function EcranNouveau({
 /** UN message du fil : qui, quand, et le texte. Côté droit si c'est moi. */
 function Bulle({
   message,
-  contact
+  contact,
+  onOuvrirPiece,
+  pieceEnCours = null
 }: {
   message: MessageInterlocuteur
   contact: Interlocuteur
+  /** Absent = les noms de pièces restent du texte (aucune passerelle d'ouverture branchée). */
+  onOuvrirPiece?: (
+    messageId: string,
+    index: number,
+    rang: number | null,
+    nom: string
+  ) => Promise<void>
+  /** `<message>#<index>` de la pièce en cours d'ouverture, sinon `null`. */
+  pieceEnCours?: string | null
 }): React.JSX.Element {
   const { t } = useTextesAccueil()
   return (
@@ -1102,20 +1165,38 @@ function Bulle({
         ligne du message. Et rien du tout quand la liste est vide — relevé du 2026-09-10 sur la
         vraie boîte, 150 des 153 messages reçus n'ont aucune pièce, et un cadre vide sur chacun
         serait un bruit permanent.
-        Nom et taille seulement : le contenu ne traverse pas l'instantané. Pour ouvrir le fichier,
-        le bouton « Ouvrir dans Outlook » du fil est déjà là.
+        Nom et taille seulement : le contenu ne traverse pas l'instantané. Le NOM s'ouvre d'un clic
+        (conv-1220) : la pièce est alors demandée à Outlook, à ce moment-là seulement.
       */}
       {message.pieces.length > 0 ? (
         <ul className="home-chat__pieces" data-testid={`home-chat-pieces-${message.id}`}>
-          {message.pieces.map((piece, rang) => (
-            // Le nom seul ne fait pas une clé : deux pièces d'un même message peuvent le partager.
-            <li className="home-chat__piece" key={`${rang}-${piece.nom}`}>
-              <span className="home-chat__piece-nom" title={piece.nom}>
-                {piece.nom}
-              </span>
-              <em className="home-chat__piece-taille">{formatFileSize(piece.taille)}</em>
-            </li>
-          ))}
+          {message.pieces.map((piece, index) => {
+            const enCours = pieceEnCours === `${message.id}#${index}`
+            return (
+              // Le nom seul ne fait pas une clé : deux pièces d'un même message peuvent le partager.
+              <li className="home-chat__piece" key={`${index}-${piece.nom}`}>
+                {onOuvrirPiece ? (
+                  <button
+                    type="button"
+                    className="home-chat__piece-nom home-chat__piece-ouvrir"
+                    title={t('inter.ouvrirPiece', { nom: piece.nom })}
+                    disabled={enCours}
+                    aria-busy={enCours ? 'true' : undefined}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => void onOuvrirPiece(message.id, index, piece.rang, piece.nom)}
+                    data-testid={`home-chat-piece-ouvrir-${message.id}-${index}`}
+                  >
+                    {enCours ? t('commun.ouverture') : piece.nom}
+                  </button>
+                ) : (
+                  <span className="home-chat__piece-nom" title={piece.nom}>
+                    {piece.nom}
+                  </span>
+                )}
+                <em className="home-chat__piece-taille">{formatFileSize(piece.taille)}</em>
+              </li>
+            )
+          })}
         </ul>
       ) : null}
     </li>

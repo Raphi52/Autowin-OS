@@ -97,6 +97,18 @@ export const TEXTES_FR = {
   'brain.serveur.avant': 'Le serveur Brain déjà lancé sert encore',
   'brain.serveur.apres':
     ': tant qu’il tourne, ce qu’Autowin retient y part. Arrête-le pour qu’il reparte sur le bon dossier.',
+  'brainPerso.titre': 'Brain perso',
+  'brainPerso.description':
+    'Ton Brain **privé**, à côté de celui de l’équipe. Autowin cherche dans **les deux**. Quand il retient un fait, il le range lui-même : ce qui touche un projet ou un outil de l’équipe va au **Brain d’équipe**, le reste au **Brain perso** — et il te dit où. Rien n’y passe du perso vers l’équipe. **Avec un dépôt git**, ton Brain perso te suit d’un poste à l’autre.',
+  'brainPerso.aucun': 'Aucun Brain perso : tout ce qu’Autowin retient va au Brain d’équipe.',
+  'brainPerso.actif': 'Brain perso :',
+  'brainPerso.serveurOk': 'serveur prêt',
+  'brainPerso.serveurAttente': 'serveur en démarrage (environ 40 s)',
+  'brainPerso.dossier.placeholder':
+    'ex. D:\\MonBrain · vide avec un dépôt = dossier local d’Autowin',
+  'brainPerso.retirer': 'Retirer le Brain perso',
+  'brainPerso.retirer.note':
+    'Retirer ne supprime rien : le dossier et ses notes restent sur le disque.',
 
   'interface.eyebrow': 'Apparence',
   'interface.titre': 'Interface',
@@ -211,6 +223,17 @@ export const TEXTES_EN: Record<CleDeTexte, string> = {
   'brain.serveur.avant': 'The Brain server already running still serves',
   'brain.serveur.apres':
     ': while it runs, what Autowin remembers goes there. Stop it so that it restarts on the right folder.',
+  'brainPerso.titre': 'Personal Brain',
+  'brainPerso.description':
+    'Your **private** Brain, next to the team one. Autowin searches **both**. When it remembers a fact, it files it itself: anything about a team project or tool goes to the **team Brain**, the rest to your **personal Brain** — and it tells you where. Nothing flows from personal to team. **With a git repository**, your personal Brain follows you from one machine to another.',
+  'brainPerso.aucun': 'No personal Brain: everything Autowin remembers goes to the team Brain.',
+  'brainPerso.actif': 'Personal Brain:',
+  'brainPerso.serveurOk': 'server ready',
+  'brainPerso.serveurAttente': 'server starting (about 40 s)',
+  'brainPerso.dossier.placeholder':
+    'e.g. D:\\MyBrain · empty with a repository = Autowin’s local folder',
+  'brainPerso.retirer': 'Remove the personal Brain',
+  'brainPerso.retirer.note': 'Removing deletes nothing: the folder and its notes stay on disk.',
 
   'interface.eyebrow': 'Appearance',
   'interface.titre': 'Interface',
