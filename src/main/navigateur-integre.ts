@@ -132,6 +132,11 @@ export interface VueNavigateur {
   executer(source: string): Promise<unknown>
   /** PNG en `data:` de la page entière, ou d'un rectangle en pixels CSS ; `null` si vide. */
   capturer(rect?: RectNavigateur): Promise<string | null>
+  /**
+   * Fait produire une image à la page, même cachée. Sans image depuis sa navigation, Chromium jette
+   * clics, molette et touches (conv-1293) : appelé avant chaque action de l'agent.
+   */
+  peindre(): Promise<void>
   envoyer(evenement: EvenementSaisie): void
   insererTexte(texte: string): Promise<void>
   fermer(): void
@@ -753,6 +758,23 @@ export class GestionnaireNavigateur {
         const garde = await this.gardeSaisie(onglet, action, null)
         if (garde) return garde
       }
+      // fix-ok: cause mesurée (conv-1293, lot 5/5 de conv-1286) — en Annoter/Choisir, la page AVALE
+      // clics et pointeurs (écoutes du mode, navigateur-page-script.ts) : le clic de l'agent partait,
+      // l'outil disait « Clic sur … » et rien ne changeait (instance cachée, après « Envoyer au
+      // chat »). On éteint donc le mode de CET onglet avant d'écrire ; le panneau le montre. Placé
+      // AVANT la relecture du site, qui doit rester collée à l'envoi. Défiler ne passe pas ici.
+      let modeCoupe: ModeNavigateur = null
+      if (action.type !== 'defiler' && this.mode && this.ongletDuMode === onglet.id) {
+        modeCoupe = this.mode
+        await this.couperMode()
+      }
+      // fix-ok: cause mesurée (conv-1293, réparation 1, objection du juge) — tant que la page n'a
+      // produit aucune image depuis sa navigation, Blink JETTE clics, molette et touches (seuls les
+      // déplacements passent : WidgetInputHandlerManager::DispatchEvent, « we don't want users
+      // interacting with stuff they can't see »). Une vue cachée — fil non regardé, panneau fermé —
+      // n'en produit jamais : page ouverte panneau fermé, clic perdu et « Clic sur … » quand même
+      // (run-r1-rouge.txt). On force donc une image avant d'envoyer, AVANT la relecture du site.
+      await onglet.vue.peindre()
       // Garde (b) rejouée au DERNIER moment : l'accord vaut pour une origine, et la page a pu en
       // changer pendant l'attente (jusqu'à 120 s) ou la surbrillance — redirection, rafraîchissement.
       // Objection du juge (conv-1287) : sans cette relecture, le clic partait sur un site jamais
@@ -766,7 +788,13 @@ export class GestionnaireNavigateur {
           )
         }
       }
-      return await this.jouerAction(onglet, action, cible)
+      const resultat = await this.jouerAction(onglet, action, cible)
+      if (!modeCoupe) return resultat
+      const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
+      return {
+        ...resultat,
+        message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
+      }
     } catch (erreur) {
       return refus(
         'page-indisponible',
@@ -1311,6 +1339,32 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
         ecouteurs.surNouvelleFenetre(details.url, details.disposition)
         return { action: 'deny' }
       })
+      /*
+       * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (conv-1293, lot 5/5 de conv-1286) — mesuré dans
+       * l'instance cachée : Ctrl+Shift+B, le focus dans la page, laissait le panneau ouvert. Ses
+       * écoutes (ChatView, NavigateurIntegre) vivent dans le rendu de la fenêtre, qui ne reçoit pas
+       * les touches de cette vue. On les y rejoue ; la page ne les voit pas. La frappe de l'AGENT
+       * (`envoyer`, même chemin `sendInputEvent`) reste à la page : son Control+T n'ouvre pas
+       * d'onglet dans le panneau de l'utilisateur.
+       */
+      let frappeDeLAgent = false
+      contenu.on('before-input-event', (evenement, entree) => {
+        if (frappeDeLAgent || entree.type !== 'keyDown') return
+        if (!(entree.control || entree.meta) || entree.alt) return
+        const touche = entree.key.toLowerCase()
+        const avecMaj = touche === 'b' || touche === 's'
+        if (!(entree.shift ? avecMaj : touche === 't')) return
+        if (fenetre.isDestroyed()) return
+        evenement.preventDefault()
+        const keyCode = touche.toUpperCase()
+        const modifiers: Array<'control' | 'shift'> = entree.shift
+          ? ['control', 'shift']
+          : ['control']
+        fenetre.webContents.focus()
+        fenetre.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+        fenetre.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+      })
+
       const changer = (): void => ecouteurs.surChangement()
       contenu.on('did-start-loading', changer)
       contenu.on('did-stop-loading', changer)
@@ -1382,6 +1436,23 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
           const image = await contenu.capturePage(zone, { stayHidden: true })
           return image.isEmpty() ? null : image.toDataURL()
         },
+        /*
+         * Image forcée par le débogueur intégré (conv-1293, réparation 1) : `Page.captureScreenshot`
+         * fait dessiner la page même cachée et ATTEND l'image avant de la copier. `capturePage` ne
+         * convient pas : il copie tout de suite, et sur une page jamais dessinée il échoue
+         * (« UnknownVizError », run-r1-vert.txt) sans rien faire dessiner. Débogueur détaché après
+         * coup s'il ne l'était pas : aucun effet durable sur la page.
+         */
+        async peindre() {
+          const debogueur = contenu.debugger
+          const attacheIci = !debogueur.isAttached()
+          if (attacheIci) debogueur.attach('1.3')
+          try {
+            await debogueur.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: 1 })
+          } finally {
+            if (attacheIci && debogueur.isAttached()) debogueur.detach()
+          }
+        },
         envoyer(evenement) {
           const z = zoom()
           if ('x' in evenement) {
@@ -1391,7 +1462,13 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
               y: Math.round(evenement.y * z)
             } as Parameters<typeof contenu.sendInputEvent>[0])
           } else {
-            contenu.sendInputEvent(evenement as Parameters<typeof contenu.sendInputEvent>[0])
+            // `before-input-event` est émis PENDANT `sendInputEvent` : le drapeau couvre l'appel.
+            frappeDeLAgent = true
+            try {
+              contenu.sendInputEvent(evenement as Parameters<typeof contenu.sendInputEvent>[0])
+            } finally {
+              frappeDeLAgent = false
+            }
           }
         },
         insererTexte: (texte) => contenu.insertText(texte),
