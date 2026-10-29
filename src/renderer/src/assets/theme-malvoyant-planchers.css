@@ -806,6 +806,11 @@
   color: var(--text);
 }
 
+/* components/NavigateurIntegre.css — tailles */
+:root[data-theme^='malvoyant-'] .navigateur-annotation-numero {
+  font-size: 13px;
+}
+
 /* components/NomSurLeBoardReglage.css — tailles */
 :root[data-theme^='malvoyant-'] .nom-board-compact-titre,
 :root[data-theme^='malvoyant-'] .nom-board-compact .nom-board-erreur {
