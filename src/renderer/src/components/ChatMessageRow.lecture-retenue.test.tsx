@@ -67,16 +67,16 @@ async function rendre(parts: ChatPart[]): Promise<Element> {
 }
 
 describe('ligne « Lecture retenue » dans le fil', () => {
-  it('s’affiche à part, avant la réponse, sous une étiquette « lecture »', async () => {
+  it('s’affiche à part, avant la réponse, sous une étiquette « compréhension »', async () => {
     const tour = await rendre([lecture, reponse])
     const ligne = tour.querySelector('[data-testid="lecture-retenue"]')
     expect(ligne, 'la ligne doit avoir son propre bloc').not.toBeNull()
     expect(ligne?.closest('.msg-body'), 'jamais dans le bloc de la réponse').toBeNull()
-    expect(ligne?.querySelector('.msg-lecture-etiquette')?.textContent).toBe('lecture')
+    expect(ligne?.querySelector('.msg-lecture-etiquette')?.textContent).toBe('compréhension')
     const texte = ligne?.querySelector('.msg-lecture-texte')?.textContent ?? ''
     expect(texte.startsWith('« Ajouter à la rivière')).toBe(true)
     expect(texte).toContain('si tu voulais plutôt « changer l’échelle de temps visible (zoom) »')
-    expect(texte, 'l’étiquette dit déjà « lecture »').not.toContain('Lecture retenue')
+    expect(texte, 'l’étiquette dit déjà ce qu’est la ligne').not.toContain('Lecture retenue')
     // La réponse reste un bloc ordinaire, APRÈS la ligne, et c'est elle le dernier point du rail.
     const blocs = [...tour.querySelectorAll('.msg-body, [data-testid="lecture-retenue"]')]
     expect(blocs.map((b) => b.getAttribute('data-testid') ?? 'reponse')).toEqual([
