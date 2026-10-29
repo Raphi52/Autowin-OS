@@ -190,6 +190,8 @@ class FausseVue implements VueNavigateur {
     return Promise.resolve(true)
   }
   capturer(): Promise<string | null> {
+    // `capturePage` sur une page sans image : Chromium échoue ainsi (conv-1286, navigateur_capture).
+    if (this.sansImage) return Promise.reject(new Error('UnknownVizError'))
     return Promise.resolve('data:image/png;base64,AAAA')
   }
   /**
@@ -515,6 +517,19 @@ describe('une page sans image reçoit quand même l’action de l’agent', () =
     expect(vue.peintures).toBe(0)
     expect(vue.evenements).toEqual([])
     expect(vue.perdus).toEqual([])
+  })
+
+  /*
+   * Mesuré dans l'app (conv-1286, 2026-10-29) : `navigateur_capture` sur `localhost:5173` rouvert,
+   * panneau fermé, échouait deux fois de suite en « UnknownVizError » alors que `navigateur_lire`
+   * lisait la page. Entrée qui fait échouer ce test : une capture tentée sans image forcée avant.
+   */
+  it('capture : une image est forcée avant la copie, la page cachée se capture', async () => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    const vue = fabrique.vues[0]
+    vue.sansImage = true
+    await expect(nav.capturer('conv-a')).resolves.toBe('data:image/png;base64,AAAA')
+    expect(vue.peintures).toBe(1)
   })
 })
 

@@ -678,7 +678,13 @@ export class GestionnaireNavigateur {
   /** Capture PNG (`data:`) de l'onglet actif, ou `null` sans onglet ni image. */
   async capturer(conversationId: string): Promise<string | null> {
     const onglet = this.ongletActif(conversationId)
-    return onglet ? onglet.vue.capturer() : null
+    if (!onglet) return null
+    // fix-ok: cause mesurée (conv-1286, 2026-10-29) — `capturePage` COPIE la dernière image sans en
+    // faire dessiner : sur une page rouverte panneau fermé, aucune image depuis la navigation, et
+    // `navigateur_capture` échouait en « UnknownVizError » (deux fois de suite, page lisible par
+    // `navigateur_lire`). Même cause que le clic perdu de conv-1293 : on force une image d'abord.
+    await onglet.vue.peindre()
+    return onglet.vue.capturer()
   }
 
   lignesConsole(conversationId: string): LigneConsole[] {
