@@ -37,6 +37,15 @@ export interface EtatDuDossierDuBoard {
   erreur?: string
   /** Un enregistrement est en cours ou attend la fin du délai entre deux écritures. */
   enCours: boolean
+  /**
+   * Le nom écrit sur les post-it de ce poste : `nomChoisi`, sinon `compte` (conv-1230). Absents
+   * quand aucun Board n'est câblé.
+   */
+  nom?: string
+  /** Le compte Windows du poste : le nom par défaut, et celui de son sous-dossier. */
+  compte?: string
+  /** Le nom choisi dans Settings · Interface ; absent = le compte Windows. */
+  nomChoisi?: string
 }
 
 /** Rend `null` quand la valeur n'est pas un état manuel lisible : la vue n'est pas une source sûre. */

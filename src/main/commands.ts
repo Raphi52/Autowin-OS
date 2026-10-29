@@ -57,6 +57,16 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'no
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { runBrainGraph, runBrainRead } from './brain-graph-command'
+import {
+  cheminSansPrefixePerso,
+  demarrerBrainPerso,
+  depotsBrainPerso,
+  envDuBrainPerso,
+  estCheminPerso,
+  fusionnerListesBrain,
+  origineBrainPerso,
+  promouvoirBrainPerso
+} from './brain-perso'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -1347,7 +1357,10 @@ export const CATALOG: CommandSpec[] = [
       tags: 'facultatif — quelques mots-clés',
       confidence: 'facultatif — low | medium | high',
       supersedes:
-        'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue'
+        'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue',
+      // conv-1233 (2026-10-28) : deux Brains, et c'est l'agent qui range (choix de l'utilisateur).
+      portee:
+        'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste (notes personnelles, projets perso, vie hors équipe) — privé, jamais partagé. Défaut : equipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
     },
     annotations: {
       readOnlyHint: false,
@@ -1451,7 +1464,9 @@ export const CATALOG: CommandSpec[] = [
     name: 'brain_read',
     description:
       'Ouvrir EN ENTIER, sans coupe, une note curée du Brain nommée par brain_query ou brain_graph — pour en lire le contenu, décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
-    args: { path: 'chemin de la note, knowledge/…/nom.md' },
+    args: {
+      path: 'chemin de la note, knowledge/…/nom.md — garde le préfixe perso: d’une note du Brain perso'
+    },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -4639,6 +4654,31 @@ export class AppCommandBus {
         return profilRetirer(a.preference)
       case 'brain_graph':
       case 'brain_read': {
+        /*
+         * NOTE DU BRAIN PERSO (conv-1233) : la recherche rend ses chemins préfixés `perso:`. On
+         * l'ouvre sur le serveur perso, sans filtre de dépôt — les notes perso ne sont rangées
+         * par aucun projet.
+         */
+        const cible = String((name === 'brain_read' ? a.path : a.entity) ?? '')
+        if (estCheminPerso(cible)) {
+          const envPerso = envDuBrainPerso()
+          if (!envPerso) {
+            return {
+              found: false,
+              status: 'unavailable',
+              knowledge: '',
+              note: 'aucun Brain perso réglé (Réglages › Diagnostic › Brain perso)'
+            }
+          }
+          const argsPerso =
+            name === 'brain_read'
+              ? { ...a, path: cheminSansPrefixePerso(cible) }
+              : { ...a, entity: cheminSansPrefixePerso(cible) }
+          const depsPerso = { token: brainServiceToken(envPerso), origin: origineBrainPerso() }
+          return name === 'brain_graph'
+            ? await runBrainGraph(argsPerso, depsPerso)
+            : await runBrainRead(argsPerso, depsPerso)
+        }
         const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
         if (corpus?.length === 0) {
           return {
@@ -4711,6 +4751,28 @@ export class AppCommandBus {
         // PRÉFÉRENCE → PROFIL LOCAL (conv-1098, 2026-10-22, demande de l'utilisateur) : le type
         // `preference` s'arrête ICI, avant tout appel au Brain partagé. Voir `retenirPreferenceAuProfil`.
         if (a.type === 'preference') return retenirPreferenceAuProfil(a)
+        /*
+         * BRAIN PERSO OU BRAIN D'ÉQUIPE (conv-1233, 2026-10-28) : l'agent range lui-même, d'après
+         * `portee`. Sans Brain perso réglé, un fait perso est REFUSÉ, jamais rabattu sur l'équipe :
+         * ce serait publier à toute l'équipe ce que l'utilisateur voulait garder pour lui.
+         */
+        const portee =
+          String(a.portee ?? '')
+            .trim()
+            .toLowerCase() === 'perso'
+            ? 'perso'
+            : 'equipe'
+        const envPerso = portee === 'perso' ? envDuBrainPerso() : undefined
+        if (portee === 'perso' && !envPerso) {
+          return {
+            allowed: false,
+            stored: false,
+            rangement: 'rien',
+            detail:
+              'rien n’a été retenu — aucun Brain perso n’est réglé (Réglages › Diagnostic › Brain perso). Dis-le à l’utilisateur ; ne le range pas dans le Brain d’équipe à sa place'
+          }
+        }
+        const rangement = portee === 'perso' ? 'Brain perso' : 'Brain d’équipe'
         const convId = conversationId ?? this.activeConversationId ?? ''
         const learningOutcome =
           a.learningOutcome === 'success' || a.learningOutcome === 'failure'
@@ -4734,11 +4796,22 @@ export class AppCommandBus {
         let learning: OutcomeLearningResult | undefined
         try {
           outcome = await rememberFact(a, {
-            token: brainServiceToken(),
+            token: brainServiceToken(envPerso),
+            ...(envPerso ? { origin: origineBrainPerso(), deposited: depotsBrainPerso } : {}),
             authorAgent: 'autowin-os',
             model: this.os.roles.getBinding('orchestrator').model ?? 'autowin',
             workspace: this.workspaceDuTour
           })
+          // Le Brain perso n'attend aucune relecture : le fait est promu puis indexé tout de suite.
+          // Le compte-rendu du serveur dit « un humain le promeut » : faux ici, on le remplace.
+          if (envPerso && outcome.stored) {
+            promouvoirBrainPerso(envPerso)
+            outcome = {
+              ...outcome,
+              detail:
+                'rangé dans le Brain perso de l’utilisateur (privé) — promu et indexé tout de suite, sans relecture : trouvable par brain_query d’ici quelques secondes'
+            }
+          }
           if (outcome.fact && learningOutcome && convId && turnId && this.outcomeLearning) {
             try {
               const linkedRunId =
@@ -4822,11 +4895,12 @@ export class AppCommandBus {
             return {
               ...outcome,
               ...(learning ? { learning } : {}),
+              rangement,
               detail: `${outcome.detail} (non rattaché à ce fil : aucune conversation active)`
             }
           }
         }
-        return { ...outcome, ...(learning ? { learning } : {}) }
+        return { ...outcome, ...(learning ? { learning } : {}), rangement }
       }
       case 'read_file': {
         const decision = decideRead(
@@ -6226,20 +6300,47 @@ export class AppCommandBus {
       }
     }
     const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
-    const brain =
+    // DEUX BRAINS (conv-1233, 2026-10-28) : celui de l'équipe et, s'il est réglé, le Brain perso,
+    // interrogés EN MÊME TEMPS. Le perso n'a pas de filtre de dépôt : ses notes ne sont rangées
+    // par aucun projet.
+    const envPerso = envDuBrainPerso()
+    const [brain, perso] = await Promise.all([
       corpus?.length === 0
         ? { context: '', status: 'empty' as const }
         : // La LISTE des notes candidates (titre, chemin, taille) : l'agent ouvre ensuite en entier,
           // avec `brain_read`, celles qu'il juge nécessaires — aucune borne de taille ni de nombre.
-          await this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })
+          this.retrieveBrain(decision.query, { corpus, mode: 'candidates' }),
+      envPerso
+        ? this.retrieveBrain(decision.query, { env: envPerso, mode: 'candidates' })
+        : undefined
+    ])
+    // Serveur perso éteint : on le démarre en fond ; la question suivante le trouvera debout.
+    if (perso?.status === 'unavailable' && perso.unavailableReason === 'network') {
+      void demarrerBrainPerso().then(
+        (r) => r && console.log('[brain-perso]', r.status, '—', r.detail)
+      )
+    }
     // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
     const scoped = scopeBrainRetrieval(brain, corpus)
-    const outcome = buildBrainOutcome(
-      decision.query,
-      scoped.context,
-      scoped.status,
-      scoped.unavailableReason
-    )
+    // Même règle pour le perso : seules les sources SIGNÉES comptent, et jamais `inbox/` — sans
+    // filtre de dépôt (`undefined`), ses notes n'appartiennent à aucun projet.
+    const persoScoped = perso ? scopeBrainRetrieval(perso, undefined) : undefined
+    const persoTrouve = persoScoped?.status === 'found' && persoScoped.context.trim().length > 0
+    const outcome = persoTrouve
+      ? buildBrainOutcome(
+          decision.query,
+          fusionnerListesBrain(scoped.context, persoScoped.context),
+          'found'
+        )
+      : buildBrainOutcome(decision.query, scoped.context, scoped.status, scoped.unavailableReason)
+    if (envPerso && perso && !persoTrouve && perso.status !== 'empty') {
+      // Le Brain perso n'a pas répondu : le DIRE, sinon son silence passe pour « rien de perso ».
+      const avis = `Brain perso indisponible (${perso.unavailableReason ?? perso.status}) — ses notes n’ont pas été cherchées`
+      outcome.note = outcome.note ? `${outcome.note} · ${avis}` : avis
+    }
+    if (persoTrouve && scoped.status !== 'found' && scoped.status !== 'empty') {
+      outcome.note = `Brain d’équipe indisponible (${scoped.unavailableReason ?? scoped.status}) — seules les notes perso sont listées`
+    }
     if (conversationId) {
       appendBrainTrace({
         timestamp: new Date().toISOString(),

@@ -1,0 +1,62 @@
+/* « Ton nom sur le Board » (Settings · Interface, conv-1230). Uniquement des jetons du thème : la
+   ligne reste lisible dans tous les thèmes, clairs compris. Elle reprend le gabarit `.interface-row`
+   d'InterfaceView.css ; un filet la sépare du réglage au-dessus, comme la mascotte. */
+.interface-row[data-testid='interface-nom-board'] {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.nom-board-choix {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  max-width: 100%;
+  margin: 0;
+}
+.nom-board-saisie {
+  width: 200px;
+  max-width: 100%;
+  padding: 6px var(--s2);
+  border-radius: var(--r1);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-3);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--dur) var(--ease);
+}
+.nom-board-saisie::placeholder {
+  color: var(--text-dim);
+}
+.nom-board-saisie:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+/* Même spécificité que `.interface-row-text p` (texte atténué), sinon l'erreur resterait grise. */
+.interface-row-text p.nom-board-erreur {
+  color: var(--err, var(--text));
+}
+
+/* Le même champ dans le rouage du Board (conv-1230) : titre discret au-dessus, comme les autres
+   parties du menu (`.besoins-projets-titre`). */
+.nom-board-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nom-board-compact-titre {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.nom-board-compact .nom-board-saisie {
+  width: 160px;
+  padding-block: 4px;
+  font-size: 12px;
+}
+.nom-board-compact .nom-board-erreur {
+  margin: 0;
+  font-size: 11px;
+  color: var(--err, var(--text));
+}

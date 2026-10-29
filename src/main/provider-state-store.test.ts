@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -74,5 +74,35 @@ describe('ProviderStateStore — mutations entrelacées (anti-perte)', () => {
     b.recordProbe('kimi', 'expired', 2000)
     expect(a.get('codex').mode).toBe('standby')
     expect(a.get('kimi').lastProbe?.status).toBe('expired')
+  })
+
+  it('un appel réel réussi remplace un « expiré » daté, sans réécrire un statut déjà juste (conv-1240)', () => {
+    const { path } = fixture()
+    const store = new ProviderStateStore(path)
+    // Mesuré le 2026-10-28 : un test du 13/10 resté « expired » bloquait tout choix de modèle Claude
+    // dans les sélecteurs, alors que chaque tour Claude réussissait.
+    store.recordProbe('claude', 'expired', 1_791_882_494_249)
+
+    store.noterAppelReussi('claude', 1_793_000_000_000)
+    expect(store.get('claude').lastProbe).toEqual({
+      status: 'authenticated',
+      checkedAt: 1_793_000_000_000
+    })
+
+    // Déjà juste : aucun accès en écriture sur le chemin d'un tour.
+    const avant = readFileSync(path, 'utf8')
+    store.noterAppelReussi('claude', 1_794_000_000_000)
+    expect(readFileSync(path, 'utf8')).toBe(avant)
+  })
+
+  it('un appel réussi garde le mode veille choisi par l’utilisateur', () => {
+    const { path } = fixture()
+    const store = new ProviderStateStore(path)
+    store.setMode('claude', 'standby')
+    store.noterAppelReussi('claude', 1000)
+    expect(store.get('claude')).toEqual({
+      mode: 'standby',
+      lastProbe: { status: 'authenticated', checkedAt: 1000 }
+    })
   })
 })

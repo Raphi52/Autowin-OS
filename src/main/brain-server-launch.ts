@@ -159,8 +159,20 @@ export function buildBrainLaunchCommand(
  * avant lui créerait un doublon inutile) plus un PLAFOND d'essais (si trois spawns meurent, le
  * problème n'est pas le timing et re-spawner en boucle ne le résoudra pas).
  */
-let attempts = 0
-let lastAttemptAt = 0
+/*
+ * UN COMPTEUR PAR SERVEUR, rangé par PORT (conv-1233, 2026-10-28) : le Brain perso tourne sur son
+ * propre port à côté de celui de l'équipe. Un compteur unique aurait fait payer à l'un les essais
+ * ratés de l'autre.
+ */
+const tentatives = new Map<string, { attempts: number; lastAttemptAt: number }>()
+
+function cleTentative(env: NodeJS.ProcessEnv): string {
+  try {
+    return sharedBrainPort(env)
+  } catch {
+    return 'origine-invalide'
+  }
+}
 
 /** Plafond d'essais par session : au-delà, le défaut n'est pas un problème de timing. */
 export const MAX_BRAIN_LAUNCH_ATTEMPTS = 3
@@ -223,10 +235,13 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
   return { tooling, python, brainRoot }
 }
 
-/** Réarme les tentatives (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */
-export function resetBrainLaunchAttempt(): void {
-  attempts = 0
-  lastAttemptAt = 0
+/**
+ * Réarme les tentatives (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite).
+ * Sans `env` : tous les serveurs ; avec : seulement celui de ce port.
+ */
+export function resetBrainLaunchAttempt(env?: NodeJS.ProcessEnv): void {
+  if (env) tentatives.delete(cleTentative(env))
+  else tentatives.clear()
 }
 
 /**
@@ -241,12 +256,15 @@ export async function ensureBrainServerStarted(
 ): Promise<BrainLaunchResult> {
   try {
     if (await isUp()) {
-      resetBrainLaunchAttempt() // il tourne → réarme pour une éventuelle chute future
+      resetBrainLaunchAttempt(env) // il tourne → réarme pour une éventuelle chute future
       return { status: 'already-up', detail: 'brain_server déjà joignable' }
     }
   } catch {
     /* ping en erreur = traité comme down */
   }
+  const cle = cleTentative(env)
+  const etat = tentatives.get(cle) ?? { attempts: 0, lastAttemptAt: 0 }
+  const { attempts, lastAttemptAt } = etat
   if (attempts >= MAX_BRAIN_LAUNCH_ATTEMPTS) {
     return {
       status: 'unavailable',
@@ -321,8 +339,8 @@ export async function ensureBrainServerStarted(
       detail: `chemin du tooling refusé (caractère interprété par cmd.exe dans « ${tooling} ») — renommer le dossier ou pointer AUTOWIN_BRAIN_TOOLING ailleurs`
     }
   }
-  attempts += 1
-  lastAttemptAt = now()
+  const essai = attempts + 1
+  tentatives.set(cle, { attempts: essai, lastAttemptAt: now() })
   const child = spawnFn(command.bin, command.args, {
     cwd: command.cwd,
     env: childEnv,
@@ -333,6 +351,6 @@ export async function ensureBrainServerStarted(
   child.unref?.()
   return {
     status: 'starting',
-    detail: `brain_server lancé (essai ${attempts}/${MAX_BRAIN_LAUNCH_ATTEMPTS}) — warm-up fastembed ~30-40 s (le preflight re-sonde avec backoff)`
+    detail: `brain_server lancé (essai ${essai}/${MAX_BRAIN_LAUNCH_ATTEMPTS}) — warm-up fastembed ~30-40 s (le preflight re-sonde avec backoff)`
   }
 }

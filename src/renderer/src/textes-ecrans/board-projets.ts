@@ -4,7 +4,8 @@ import { tableDeTextes } from '../textes'
  * TEXTES — LES PROJETS PARTAGÉS DU BOARD (demande du 2026-10-28, conv-1211 : « dans le board je veux
  * qu'on puisse choisir quel CWD on partage »).
  *
- * Écran couvert : `ProjetsPartagesDuBoard`, le menu à cocher posé à côté du bouton 📁 du Board.
+ * Écrans couverts : `ProjetsPartagesDuBoard`, la liste à cocher des projets, et `RouageDuBoard`, le
+ * bouton ⚙ posé à côté du bouton 📁 du Board qui l'ouvre (conv-1230).
  * Table à part de `board-et-maintenance.ts` : plusieurs fils écrivaient en même temps dans celle-là.
  * Mêmes règles, vérifiées par `tables.test.ts` : le français fait foi, l'anglais a les mêmes clés et
  * les mêmes `{valeurs}`.
@@ -19,7 +20,9 @@ export const TEXTES_FR = {
   'projets.note': 'Un nouveau projet n’est pas recopié tant qu’il n’est pas coché.',
   'projets.demande': '{n} demande',
   'projets.demandes': '{n} demandes',
-  'projets.retirer': 'Retirer {chemin} des dossiers de travail du Chat (et du Board)'
+  'projets.retirer': 'Retirer {chemin} des dossiers de travail du Chat (et du Board)',
+  'rouage.titre': 'Réglages du Board',
+  'rouage.aide': 'Réglages du Board : Actualiser, ton nom, les projets recopiés dans le dossier'
 }
 
 export type CleBoardProjets = keyof typeof TEXTES_FR
@@ -34,7 +37,9 @@ export const TEXTES_EN: Record<CleBoardProjets, string> = {
   'projets.note': 'A new project is not copied until it is checked.',
   'projets.demande': '{n} request',
   'projets.demandes': '{n} requests',
-  'projets.retirer': 'Remove {chemin} from the Chat working folders (and from the Board)'
+  'projets.retirer': 'Remove {chemin} from the Chat working folders (and from the Board)',
+  'rouage.titre': 'Board settings',
+  'rouage.aide': 'Board settings: Refresh, your name, the projects copied to the folder'
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */

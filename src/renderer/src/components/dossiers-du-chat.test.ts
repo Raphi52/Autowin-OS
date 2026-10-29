@@ -66,6 +66,50 @@ describe('lignesDuMenuDesProjets', () => {
       { cle: 'D:\\Neuf', libelle: 'Neuf', demandes: 0, retirable: 'D:\\Neuf' }
     ])
   })
+
+  /**
+   * conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer ». Et son nom est
+   * celui du Chat, pas le nom du dossier (conv-1230 : « c'est quoi cette ligne <compte Windows> ? »).
+   */
+  it('« This computer » n’a pas de croix et porte son nom du Chat, qu’il ait des demandes ou non', () => {
+    const avecDemandes = lignesDuMenuDesProjets(
+      [{ cle: 'C:\\Users\\Moi', libelle: 'Moi', demandes: 3 }],
+      [],
+      'c:/users/moi/'
+    )
+    expect(avecDemandes).toEqual([
+      { cle: 'C:\\Users\\Moi', libelle: '💻 This computer', demandes: 3 }
+    ])
+    const sansDemande = lignesDuMenuDesProjets([], ['C:\\Users\\Moi', 'D:\\Neuf'], 'C:\\Users\\Moi')
+    expect(sansDemande).toEqual([
+      { cle: 'C:\\Users\\Moi', libelle: '💻 This computer', demandes: 0 },
+      { cle: 'D:\\Neuf', libelle: 'Neuf', demandes: 0, retirable: 'D:\\Neuf' }
+    ])
+  })
+
+  /** conv-1243 : « this computer met le en premier de la liste », quel que soit son rang d'activité. */
+  it('« This computer » est la première ligne, avec ou sans demande', () => {
+    const avecDemandes = lignesDuMenuDesProjets(
+      [
+        { cle: 'D:\\AutoWinOS', libelle: 'AutoWinOS', demandes: 12 },
+        { cle: 'C:\\Users\\Moi', libelle: 'Moi', demandes: 1 },
+        { cle: 'D:\\Factures', libelle: 'Factures', demandes: 2 }
+      ],
+      [],
+      'C:\\Users\\Moi'
+    )
+    expect(avecDemandes.map((l) => l.libelle)).toEqual([
+      '💻 This computer',
+      'AutoWinOS',
+      'Factures'
+    ])
+    const sansDemande = lignesDuMenuDesProjets(
+      [{ cle: 'D:\\AutoWinOS', libelle: 'AutoWinOS', demandes: 12 }],
+      ['D:\\Neuf', 'C:\\Users\\Moi'],
+      'C:\\Users\\Moi'
+    )
+    expect(sansDemande.map((l) => l.libelle)).toEqual(['💻 This computer', 'AutoWinOS', 'Neuf'])
+  })
 })
 
 describe('la croix sur un dossier que le Chat propose toujours (conv-1212, 2e demande)', () => {
@@ -81,6 +125,18 @@ describe('la croix sur un dossier que le Chat propose toujours (conv-1212, 2e de
       JSON.parse(s.valeurs[CLE_DOSSIERS_RETIRES]) as string[]
     )
     expect(affichee.projets.map((p) => p.cle)).toEqual(['D:\\Factures'])
+  })
+
+  it('« This computer » déjà mémorisé comme retiré reste au Board (conv-1231)', () => {
+    const carte = carteAvec(['D:\\AutoWinOS', 'C:\\Users\\moi'])
+    const affichee = carteDuBoardAffichee(
+      carte,
+      [],
+      ['D:\\AutoWinOS', 'C:\\Users\\moi'],
+      ['D:\\AutoWinOS', 'c:/users/moi/'],
+      'C:\\Users\\moi'
+    )
+    expect(affichee.projets.map((p) => p.cle)).toEqual(['C:\\Users\\moi'])
   })
 
   it('la vue réduit elle-même ce que rend un processus principal d’avant redémarrage', () => {

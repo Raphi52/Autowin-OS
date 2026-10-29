@@ -91,6 +91,24 @@ export interface BrainReglageState {
   erreur?: string
 }
 
+/** Le Brain PERSO (conv-1233, 2026-10-28) : privé, à côté de celui de l'équipe. */
+export interface BrainPersoState {
+  /** Le réglage enregistré, ou `null` : aucun Brain perso. */
+  choisi: { chemin?: string; depot?: string } | null
+  /** Dossier du Brain perso, ou `null` sans réglage. */
+  racine: string | null
+  /** Adresse locale de son serveur (autre port que celui de l'équipe). */
+  origine: string
+  /** Son serveur répond. */
+  serveurJoignable: boolean
+  /** Dossier que sert le serveur perso déjà lancé, s'il répond. */
+  serveurRacine: string | null
+  /** Le serveur perso sert un AUTRE dossier (lancé avant un changement de réglage). */
+  serveurSurUnAutreDossier: boolean
+  /** Raison d'un enregistrement refusé (chemin introuvable, clonage raté…). */
+  erreur?: string
+}
+
 export interface ExecutionWorkspaceState {
   /** Le dossier ACTIF pour cette session — figé au démarrage. */
   path: string

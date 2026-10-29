@@ -23,7 +23,9 @@
  * le Brain, et `os:brainTraces`, qui lit les traces d'une conversation avec ses voisines.
  */
 import { ipcMain } from 'electron'
-import { brainScopeForWorkspace } from '../brain-corpus-scope'
+import { brainScopeForWorkspace, scopeBrainRetrieval } from '../brain-corpus-scope'
+import { envDuBrainPerso, estRacineBrainPerso } from '../brain-perso'
+import { retrieveBrainContext } from '../brain-retrieval'
 import { SHARED_BRAIN_ROOT } from '../viz/fs-brains'
 import { buildBrainSearchEnvelope } from '../brain-search-envelope'
 import {
@@ -77,6 +79,26 @@ export function registerBrainIpc({
   curationRecoveryReady,
   invalidateBrainRuntime
 }: BrainIpcDeps): void {
+  /**
+   * PORTÉE D'UN VAULT (conv-1233, 2026-10-28 : « affiche le Brain perso dans la vue Knowledge, à
+   * côté du Brain d'équipe »). Le Brain d'équipe suit le corpus du dossier de travail, comme avant.
+   * Le Brain PERSO n'en a aucun — ses notes ne sont rangées par aucun projet — et se cherche sur SON
+   * serveur. Le choix se fait sur le chemin envoyé par la vue ; l'AUTORISATION de lire reste celle
+   * du worker (`viz/fs-brains.ts`, racines du Brain d'équipe et du Brain perso réglé).
+   */
+  const porteeDuVault = (vault: string): ReturnType<typeof brainScopeForWorkspace> => {
+    if (!estRacineBrainPerso(vault)) return brainScopeForWorkspace(os.executionWorkspace)
+    return {
+      corpus: undefined,
+      localResults: (results) => [...results],
+      retrieve: async (query) => {
+        const envPerso = envDuBrainPerso()
+        if (!envPerso) return { context: '', status: 'empty' }
+        // Mêmes règles que l'équipe : sources signées seules, jamais `inbox/`.
+        return scopeBrainRetrieval(await retrieveBrainContext(query, { env: envPerso }), undefined)
+      }
+    }
+  }
   // --- Graphe brain 3D (données réelles disque) + workflow ---
   ipcMain.handle('os:listBrains', (event) => {
     assertTrustedRendererSender(event, 'Brain')
@@ -84,41 +106,43 @@ export function registerBrainIpc({
   })
   ipcMain.handle('os:loadBrainGraphPreview', (event, path: string, lod?: number) => {
     assertTrustedRendererSender(event, 'Brain')
-    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
-    return brainWorker.request('loadPreview', guardString(path, 'path'), lod, corpus)
+    const vault = guardString(path, 'path')
+    return brainWorker.request('loadPreview', vault, lod, porteeDuVault(vault).corpus)
   })
   ipcMain.handle('os:loadBrainThemes', (event, path: string) => {
     assertTrustedRendererSender(event, 'Brain')
-    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
-    return brainWorker.request('loadThemes', guardString(path, 'path'), corpus)
+    const vault = guardString(path, 'path')
+    return brainWorker.request('loadThemes', vault, porteeDuVault(vault).corpus)
   })
   ipcMain.handle('os:loadBrainThemeNodes', (event, path: string, rawThemeIds: unknown) => {
     assertTrustedRendererSender(event, 'Brain')
     if (!Array.isArray(rawThemeIds) || rawThemeIds.length > 100)
       throw new Error('IPC themeIds: tableau borné attendu')
     const themeIds = rawThemeIds.map((themeId, index) => guardString(themeId, `themeIds[${index}]`))
-    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
-    return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds, corpus)
+    const vault = guardString(path, 'path')
+    return brainWorker.request('loadThemeNodes', vault, themeIds, porteeDuVault(vault).corpus)
   })
   ipcMain.handle('os:loadBrainGraph', (event, path: string, lod?: number, community?: number) => {
     assertTrustedRendererSender(event, 'Brain')
-    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
-    return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community, corpus)
+    const vault = guardString(path, 'path')
+    return brainWorker.request('loadGraph', vault, lod, community, porteeDuVault(vault).corpus)
   })
   ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
     assertTrustedRendererSender(event, 'Brain')
+    const vault = guardString(path, 'path')
     return brainWorker.request(
       'loadNeighborhood',
-      guardString(path, 'path'),
+      vault,
       guardString(nodeId, 'nodeId'),
-      brainScopeForWorkspace(os.executionWorkspace).corpus
+      porteeDuVault(vault).corpus
     )
   })
   ipcMain.handle('os:readNodeFile', (event, path: string, vaultRoot?: string) => {
     assertTrustedRendererSender(event, 'Brain')
     const guardedVaultRoot =
       vaultRoot === undefined ? undefined : guardString(vaultRoot, 'vaultRoot')
-    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    // Sans vault nommé (RUN.md hors Brain), la portée reste celle de l'équipe, comme avant.
+    const corpus = porteeDuVault(guardedVaultRoot ?? '').corpus
     return brainWorker.request('readNodeFile', guardString(path, 'path'), guardedVaultRoot, corpus)
   })
   /**
@@ -135,7 +159,7 @@ export function registerBrainIpc({
     assertTrustedRendererSender(event, 'BrainSearch')
     const selectedPath = guardString(path, 'path')
     const boundedQuery = guardString(query, 'query')
-    const brainScope = brainScopeForWorkspace(os.executionWorkspace)
+    const brainScope = porteeDuVault(selectedPath)
     const resolution = await brainSearchCoordinator.searchDetailed(selectedPath, boundedQuery, {
       authorize: (root) =>
         brainSearchWorker.requestWithTimeout(

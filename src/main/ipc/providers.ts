@@ -97,6 +97,12 @@ async function probeProviderConnection(
 }
 
 export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDeps): void {
+  // Chaque appel réel réussi remet le statut à jour (conv-1240, 2026-10-28). Sans lui, seul le
+  // bouton « Tester » l'écrivait : un « expiré » du 13/10 a bloqué quinze jours tout choix de modèle
+  // Claude dans les sélecteurs, alors que tous les tours passaient.
+  os.registry.quandAppelReussi((provider) => {
+    providerStateStore.noterAppelReussi(provider)
+  })
   ipcMain.handle('os:providerLogin', (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider login')
     os.startProviderLogin(guardString(provider, 'provider'))

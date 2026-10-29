@@ -37,7 +37,10 @@ export function estMurDeQuota(texte: string | undefined | null): boolean {
   // le mur que ce vocabulaire ferme est celui du COMPTE entier (`quotaWallKey`, registry.ts) — il
   // refuserait aussi Sonnet et Haiku jusqu'à l'heure annoncée. Sa vraie réponse est de changer de
   // modèle, ce qu'aucun code ne sait faire aujourd'hui.
-  return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session|weekly)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
+  // « 5-hour limit » (conv-1236, 2026-10-28) : la limite de session du compte sous sa formulation
+  // actuelle (« You've hit your 5-hour limit · resets 11pm »), relevée dans 14 journaux de tour.
+  // Ignorée, un plan de lots notait ses lots coupés « fait » et brûlait son plafond sur le mur.
+  return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session|weekly|\d+-hour)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
     t
   )
 }

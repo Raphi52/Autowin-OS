@@ -7,20 +7,27 @@ import {
   cssDeLEtat,
   estLaFermeture,
   etatDeLaMascotte,
+  geometrieMascotte,
   gesteDeMascotte,
+  HALO_DANS_LA_FENETRE,
+  HAUTEUR_MASCOTTE,
   htmlDeMascotte,
   issuePourLaMascotte,
+  LARGEUR_MASCOTTE,
   placerMascotte,
   placerMascotteGardee,
+  pointSurLaBille,
+  positionPourLeStyle,
   PRELOAD_MASCOTTE,
-  RETRAIT_HALO,
+  RETRAIT_COTE,
   SEUIL_GLISSER_PX,
-  TAILLE_MASCOTTE,
   zoneDesCartes
 } from './mascotte'
+import { CENTRE_BILLE, RAYON_GLYPHE } from './mascotte-personnage'
 import { disposerPopups, htmlDePopup, type Rect } from './notification-popup'
 
 const VIDE = { toursEnCours: 0, runsActifs: 0, filsEnAttente: [], filsEnEchec: [] }
+const HALO = HALO_DANS_LA_FENETRE
 
 describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
   it('calme quand rien ne tourne ni n’attend : pas de pastille, le clic ouvre Autowin', () => {
@@ -72,20 +79,21 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
   it('posée dans le coin de la zone de travail, donc au-dessus de l’horloge', () => {
     const zone = { x: 0, y: 0, width: 1920, height: 1032 }
     const rect = placerMascotte(zone)
-    expect(rect.width).toBe(TAILLE_MASCOTTE)
+    expect(rect.width).toBe(LARGEUR_MASCOTTE)
+    expect(rect.height).toBe(HAUTEUR_MASCOTTE)
     expect(rect.x + rect.width).toBeLessThanOrEqual(zone.width)
     expect(rect.y + rect.height).toBeLessThanOrEqual(zone.height)
     expect(rect.x + rect.width).toBeGreaterThan(zone.width - 20)
   })
 
-  it('les cartes sortent à sa gauche, collées au halo sans le recouvrir (conv-1195)', () => {
+  it('les cartes sortent à sa gauche, au ras du personnage sans le recouvrir (conv-1195, conv-1227)', () => {
     const zone = { x: 0, y: 0, width: 1920, height: 1032 }
     const bille = placerMascotte(zone)
     const cartes = disposerPopups(zoneDesCartes(bille, zone), [140, 200])
-    // « snap ensemble » : le bord droit de chaque carte touche le halo, sans vide entre eux.
-    for (const carte of cartes) expect(carte.x + carte.width).toBe(bille.x + RETRAIT_HALO)
+    // « snap ensemble » : le bord droit de chaque carte touche le bord du dessin (bras, sorts).
+    for (const carte of cartes) expect(carte.x + carte.width).toBe(bille.x + RETRAIT_COTE)
     // La plus récente a son bas au niveau du bas du halo.
-    expect(cartes[0].y + cartes[0].height).toBe(bille.y + bille.height - RETRAIT_HALO)
+    expect(cartes[0].y + cartes[0].height).toBe(bille.y + HALO.y + HALO.taille)
   })
 
   describe('les cartes suivent la bille glissée ailleurs (conv-1142)', () => {
@@ -93,17 +101,24 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     const bille = (x: number, y: number): Rect => ({
       x,
       y,
-      width: TAILLE_MASCOTTE,
-      height: TAILLE_MASCOTTE
+      width: LARGEUR_MASCOTTE,
+      height: HAUTEUR_MASCOTTE
     })
     const recouvre = (a: Rect, b: Rect): boolean =>
       a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
-    /** La partie visible de la bille : la bande transparente de sa fenêtre peut passer sous une carte. */
+    /** Le halo de la bille, dans sa fenêtre. */
     const halo = (b: Rect): Rect => ({
-      x: b.x + RETRAIT_HALO,
-      y: b.y + RETRAIT_HALO,
-      width: b.width - 2 * RETRAIT_HALO,
-      height: b.height - 2 * RETRAIT_HALO
+      x: b.x + HALO.x,
+      y: b.y + HALO.y,
+      width: HALO.taille,
+      height: HALO.taille
+    })
+    /** Le dessin du personnage : seule la bande transparente des côtés peut passer sous une carte. */
+    const dessin = (b: Rect): Rect => ({
+      x: b.x + RETRAIT_COTE,
+      y: b.y,
+      width: b.width - 2 * RETRAIT_COTE,
+      height: b.height
     })
     /** Quatre cartes (le maximum de la pile), de la plus récente à la plus ancienne. */
     const cartes = (b: Rect, zone: Rect = ecran): Rect[] =>
@@ -112,40 +127,41 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     it('en haut à gauche : à sa droite, la plus récente au niveau de son haut, la pile descend', () => {
       const b = bille(20, 30)
       const [recente, ...autres] = cartes(b)
-      expect(recente.x).toBe(20 + TAILLE_MASCOTTE - RETRAIT_HALO)
-      expect(recente.y).toBe(30 + RETRAIT_HALO)
+      expect(recente.x).toBe(20 + LARGEUR_MASCOTTE - RETRAIT_COTE)
+      expect(recente.y).toBe(30 + HALO.y)
       for (const carte of autres) expect(carte.y).toBeGreaterThan(recente.y)
     })
 
     it('en bas à gauche : à sa droite, la plus récente au niveau de son bas, la pile monte', () => {
       const b = bille(20, 900)
       const [recente, ...autres] = cartes(b)
-      expect(recente.x).toBe(20 + TAILLE_MASCOTTE - RETRAIT_HALO)
-      expect(recente.y + recente.height).toBe(900 + TAILLE_MASCOTTE - RETRAIT_HALO)
+      expect(recente.x).toBe(20 + LARGEUR_MASCOTTE - RETRAIT_COTE)
+      expect(recente.y + recente.height).toBe(900 + HALO.y + HALO.taille)
       for (const carte of autres) expect(carte.y).toBeLessThan(recente.y)
     })
 
     it('en haut au milieu : à sa gauche, et la pile descend', () => {
       const b = bille(1000, 200)
       const [recente] = cartes(b)
-      expect(recente.x + recente.width).toBe(1000 + RETRAIT_HALO)
-      expect(recente.y).toBe(200 + RETRAIT_HALO)
+      expect(recente.x + recente.width).toBe(1000 + RETRAIT_COTE)
+      expect(recente.y).toBe(200 + HALO.y)
     })
 
-    it('aucune carte ne recouvre le halo, ni ne sort de l’écran, où que soit la bille', () => {
+    it('aucune carte ne recouvre le personnage, ni ne sort de l’écran, où que soit la bille', () => {
       for (const [x, y] of [
         [0, 0],
         [20, 30],
         [20, 900],
         [1000, 200],
         [1000, 700],
-        [1840, 0],
-        [1840, 952],
+        [1920 - LARGEUR_MASCOTTE, 0],
+        [1920 - LARGEUR_MASCOTTE, 1032 - HAUTEUR_MASCOTTE],
         [500, 476]
       ]) {
         const b = bille(x, y)
         for (const carte of cartes(b)) {
           expect(recouvre(carte, halo(b)), `bille en ${x},${y}`).toBe(false)
+          expect(recouvre(carte, dessin(b)), `personnage en ${x},${y}`).toBe(false)
           expect(carte.x).toBeGreaterThanOrEqual(0)
           expect(carte.x + carte.width).toBeLessThanOrEqual(1920)
           expect(carte.y).toBeGreaterThanOrEqual(0)
@@ -172,18 +188,46 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     )
   })
 
-  it('chaque état allume son halo et sa pastille', () => {
+  it('chaque état allume son halo, son chiffre et ses gestes (conv-1227)', () => {
     const travail = cssDeLEtat({ etat: 'travail', pastille: '3', fil: null })
-    expect(travail).toContain('content:"3"')
-    expect(travail).toContain('stroke-dasharray')
+    // Le 3 dans l'étoile, et la baguette qui écrit CE 3.
+    expect(travail).toContain('body .v3{display:inline}')
+    expect(travail).toContain('body .t3{display:inline}')
+    expect(travail).toContain('body .ET{display:inline}')
+    // Le glyphe : couronne et étoile tournent en sens contraires (conv-1227).
+    expect(travail).toMatch(/body \.h \.ge\{animation:ot [\d.]+s linear infinite\}/u)
+    expect(travail).toMatch(/body \.h \.gi\{animation:ot [\d.]+s linear infinite reverse\}/u)
     const attente = cssDeLEtat({ etat: 'attente', pastille: '1', fil: 'c' })
     expect(attente).toContain('#f0c75e')
+    expect(attente).toContain('body .EA{display:inline}')
+    expect(attente).toContain('body .v1{display:inline}')
     const probleme = cssDeLEtat({ etat: 'probleme', pastille: '!', fil: 'c' })
-    expect(probleme).toContain('content:"!"')
+    expect(probleme).toContain('body .vx{display:inline}')
     expect(probleme).toContain('#e5534b')
     const calme = cssDeLEtat({ etat: 'calme', pastille: null, fil: null })
-    expect(calme).not.toContain('content:')
+    expect(calme).not.toMatch(/\.v[0-9px]\{/u)
     expect(calme).toContain('.z{display:block}')
+    expect(calme).toContain('body .fR{display:inline}')
+    // Opaque au repos (conv-1227) : aucune opacité réduite sur le personnage.
+    expect(calme).not.toMatch(/opacity/u)
+  })
+
+  it('le halo est un grand glyphe de runes, qui tient dans la fenêtre (conv-1227)', () => {
+    // L'ancien cercle avait un rayon de 30 px ; « je le veux plus gros ».
+    expect(RAYON_GLYPHE).toBeGreaterThanOrEqual(44)
+    // Avec son trait (1,1 px), il reste hors de la bande des cartes et dans la fenêtre.
+    const bord = RAYON_GLYPHE + 1
+    expect(CENTRE_BILLE.x - bord).toBeGreaterThanOrEqual(RETRAIT_COTE)
+    expect(CENTRE_BILLE.x + bord).toBeLessThanOrEqual(LARGEUR_MASCOTTE - RETRAIT_COTE)
+    expect(CENTRE_BILLE.y - bord).toBeGreaterThanOrEqual(0)
+    expect(CENTRE_BILLE.y + bord).toBeLessThanOrEqual(HAUTEUR_MASCOTTE)
+    const html = htmlDeMascotte()
+    const glyphe = /<svg class="h"[^>]*>(.*?)<\/svg>/su.exec(html)?.[1] ?? ''
+    expect(glyphe).toContain('class="ge"')
+    expect(glyphe).toContain('class="gi"')
+    expect(glyphe).toContain(`r="${RAYON_GLYPHE}"`)
+    // 24 signes autour : 20 runes et 4 losanges.
+    expect(glyphe.match(/translate\(32 /gu)?.length).toBe(24)
   })
 
   it('les règles d’état pèsent plus que la page (une feuille insertCSS perd à poids égal)', () => {
@@ -200,11 +244,16 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     expect(htmlDeMascotte()).toMatch(/\.ob>\*\{[^}]*transform:rotate\(0deg\)/u)
   })
 
-  it('le nombre est au milieu de la bille, pas dans un coin (conv-1142)', () => {
-    const regle = /\.n\{([^}]*)\}/u.exec(htmlDeMascotte())?.[1] ?? ''
-    expect(regle).toContain('justify-self:center')
-    expect(regle).toContain('align-self:center')
-    expect(regle).toContain('margin:0;')
+  it('le nombre est le chiffre qui brille dans l’étoile du chapeau, pas l’étoile (conv-1227)', () => {
+    const html = htmlDeMascotte()
+    // Un chiffre dessiné par compte possible, centré sur l'étoile (x = 25 de la boîte de la bille).
+    for (const v of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9+'])
+      expect(html).toContain(`>${v}</text>`)
+    expect(html).toMatch(/<text class="ch nb v3" x="25"/u)
+    // C'est le chiffre qui a la lueur animée ; l'étoile, jaune et pleine depuis conv-1227 (« l'étoile
+    // du chapeau fais-la jaune »), n'a ni classe ni lueur.
+    expect(html).toMatch(/\.p \.nb\{animation:nb /u)
+    expect(html).toMatch(/<path d="M25 -13\.5[^"]*" fill="#ffd23f" stroke="#fff0a8"[^>]*\/>/u)
   })
 
   it('aucune zone de glisser Windows : elle mangerait le clic de la bille (conv-1142)', () => {
@@ -216,7 +265,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
 
   it('se ferme par sa croix, lue sur la navigation interne, posée devant la bille (conv-1142)', () => {
     expect(htmlDeMascotte()).toContain('<a class="f" href="#fermer"')
-    expect(htmlDeMascotte()).toMatch(/\.f\{position:relative;z-index:2/u)
+    expect(htmlDeMascotte()).toMatch(/\.f\{position:absolute;z-index:2/u)
     expect(estLaFermeture('file:///C:/x/mascotte.html#fermer')).toBe(true)
     expect(estLaFermeture('file:///C:/x/mascotte.html#ailleurs')).toBe(false)
   })
@@ -336,7 +385,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
   it('revient à la place où on l’a laissée, entière, tant qu’elle est sur un écran', () => {
     const principal = { x: 0, y: 0, width: 1920, height: 1040 }
     const second = { x: 1920, y: 0, width: 1280, height: 984 }
-    const bord = { width: TAILLE_MASCOTTE, height: TAILLE_MASCOTTE }
+    const bord = { width: LARGEUR_MASCOTTE, height: HAUTEUR_MASCOTTE }
     expect(placerMascotteGardee({ x: 300, y: 200 }, [principal, second], principal)).toEqual({
       x: 300,
       y: 200,
@@ -348,9 +397,9 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
       ...bord
     })
     // Débordant du bord : ramenée dedans.
-    expect(placerMascotteGardee({ x: 1870, y: 990 }, [principal], principal)).toEqual({
-      x: 1920 - TAILLE_MASCOTTE,
-      y: 1040 - TAILLE_MASCOTTE,
+    expect(placerMascotteGardee({ x: 1840, y: 960 }, [principal], principal)).toEqual({
+      x: 1920 - LARGEUR_MASCOTTE,
+      y: 1040 - HAUTEUR_MASCOTTE,
       ...bord
     })
     // Écran débranché, ou rien de gardé : le coin d'origine.
@@ -377,8 +426,91 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     expect(decoree.replace(ajout, '')).toBe(page)
   })
 
-  it('rien d’autre qu’un compte n’entre dans la chaîne CSS de la pastille', () => {
+  it('rien d’autre qu’un compte n’entre dans la feuille de l’état', () => {
     const css = cssDeLEtat({ etat: 'travail', pastille: '"}*{display:none', fil: null })
-    expect(css).not.toContain('content:')
+    expect(css).not.toContain('"')
+    expect(css).not.toContain('*')
+    // Sans compte lisible, la baguette ne trace rien : le bras droit reste au repos, visible.
+    expect(css).toContain('body .rD{display:inline}')
+    // Un compte inconnu de la page (« 10 ») n'allume rien non plus.
+    expect(cssDeLEtat({ etat: 'travail', pastille: '10', fil: null })).not.toMatch(/\.[vt]10/u)
+  })
+
+  it('seule la bille (et sa croix) prend les clics ; le reste du personnage les laisse passer', () => {
+    expect(pointSurLaBille({ x: CENTRE_BILLE.x, y: CENTRE_BILLE.y })).toBe(true)
+    expect(pointSurLaBille({ x: CENTRE_BILLE.x + 30, y: CENTRE_BILLE.y })).toBe(true)
+    // Le chapeau, au-dessus de la bille, et les coins vides de la fenêtre.
+    expect(pointSurLaBille({ x: CENTRE_BILLE.x, y: CENTRE_BILLE.y - 50 })).toBe(false)
+    expect(pointSurLaBille({ x: 2, y: 2 })).toBe(false)
+    expect(pointSurLaBille({ x: LARGEUR_MASCOTTE - 2, y: HAUTEUR_MASCOTTE - 2 })).toBe(false)
+    // La croix, en haut à droite du halo.
+    const croix = /\.f\{[^}]*left:(\d+)px;top:(\d+)px/u.exec(htmlDeMascotte())
+    expect(croix).not.toBeNull()
+    expect(pointSurLaBille({ x: Number(croix?.[1]) + 9, y: Number(croix?.[2]) + 9 })).toBe(true)
+  })
+})
+
+describe('mascotte du bureau — style basique (conv-1249)', () => {
+  const ECRAN: Rect = { x: 0, y: 0, width: 1920, height: 1040 }
+
+  it('la page basique est la bille seule : nombre au milieu, halo en cercle, sans personnage', () => {
+    const html = htmlDeMascotte('basique')
+    expect(html).toContain('<i class="n"></i>')
+    expect(html).toContain('<circle cx="20" cy="20" r="19"/>')
+    expect(html).not.toContain('class="p"')
+    expect(html).not.toContain('class="cps"')
+    // Mêmes calques que le magicien pour le glisser et la croix.
+    expect(html).toContain('<i class="ob"')
+    expect(html).toContain('<a class="f" href="#fermer"')
+    // Le magicien reste la page par défaut.
+    expect(htmlDeMascotte()).toContain('class="cps"')
+  })
+
+  it('l’état allume le nombre au milieu de la bille, pas un chiffre du chapeau', () => {
+    const travail = cssDeLEtat({ etat: 'travail', pastille: '3', fil: null }, 'basique')
+    expect(travail).toContain('body .n::after{content:"3"}')
+    expect(travail).toContain('body .h circle{stroke:#8d98bd;stroke-dasharray:3 4}')
+    expect(travail).not.toMatch(/.v3|.t3/u)
+    const calme = cssDeLEtat({ etat: 'calme', pastille: null, fil: null }, 'basique')
+    expect(calme).not.toContain('.n')
+    expect(calme).toContain('body .z{display:block}')
+    // Une pastille douteuse n'entre pas dans le CSS.
+    expect(cssDeLEtat({ etat: 'travail', pastille: '"}*{', fil: null }, 'basique')).not.toContain(
+      'content'
+    )
+  })
+
+  it('fenêtre de 80 px au coin de l’horloge ; la bille entière prend les clics', () => {
+    const g = geometrieMascotte('basique')
+    expect(placerMascotte(ECRAN, 'basique')).toEqual({ x: 1834, y: 954, width: 80, height: 80 })
+    expect(pointSurLaBille({ x: g.centre.x, y: g.centre.y }, 'basique')).toBe(true)
+    expect(pointSurLaBille({ x: g.croix.x + 9, y: g.croix.y + 9 }, 'basique')).toBe(true)
+    expect(pointSurLaBille({ x: 1, y: 79 }, 'basique')).toBe(false)
+  })
+
+  it('les cartes se collent au halo de la bille basique (8 px de bande)', () => {
+    const fenetre = placerMascotte(ECRAN, 'basique')
+    const zone = zoneDesCartes(fenetre, ECRAN, 'basique')
+    expect(zone.bord).toBe('droite')
+    expect(zone.x + zone.width).toBe(fenetre.x + 8 + 12)
+    expect(zone.y + zone.height).toBe(fenetre.y + 72 + 12)
+  })
+
+  it('changer de style garde le centre de la bille au même point de l’écran', () => {
+    const magicien = { x: 1000, y: 500 }
+    const basique = positionPourLeStyle(magicien, 'magicien', 'basique')
+    const cm = geometrieMascotte('magicien').centre
+    const cb = geometrieMascotte('basique').centre
+    expect({ x: basique.x + cb.x, y: basique.y + cb.y }).toEqual({
+      x: magicien.x + cm.x,
+      y: magicien.y + cm.y
+    })
+    expect(positionPourLeStyle(basique, 'basique', 'magicien')).toEqual(magicien)
+    // Une place gardée en basique reste sur l'écran avec la fenêtre de 80 px.
+    expect(placerMascotteGardee(basique, [ECRAN], ECRAN, 'basique')).toEqual({
+      ...basique,
+      width: 80,
+      height: 80
+    })
   })
 })

@@ -9,31 +9,118 @@
  * - une BILLE aux couleurs de l'anneau du logo (`assets/autowin-logo-anneau.png`, 12 couleurs
  *   relevées au pixel tous les 30°), avec un reflet de verre ;
  * - un HALO autour d'elle qui dit l'état : pointillés qui tournent (au travail), or qui bat (un fil
- *   t'attend), rouge (un tour a échoué), rien au calme ;
+ *   t'attend), rouge (un tour a échoué), rien au calme ; depuis conv-1227, c'est un grand glyphe
+ *   de runes (`glypheDuHalo`), même code de couleurs ;
  * - une PASTILLE au coin qui compte : les agents au travail, ou les fils qui t'attendent ; « ! »
  *   sur un échec ;
  * - « Sentinelle » : dans le coin, juste au-dessus de l'horloge, et les cartes de fin de tour
  *   sortent à sa gauche (`zoneDesCartes`) ; depuis conv-1142, elle se glisse ailleurs et les cartes
  *   la suivent.
  *
+ * Depuis conv-1227 (2026-10-28), la bille est un PERSONNAGE (`mascotte-personnage.ts`) : visage,
+ * chapeau de magicien, bras qui lancent des sorts, et la pastille devient le chiffre qui brille dans
+ * l'étoile du chapeau. La fenêtre grandit d'autant ; seule la bille (et sa croix) prend les clics.
+ *
  * Ce module ne connaît pas Electron (même découpe que `notification-popup.ts`) : l'état, la page,
  * le placement et la lecture des clics sont testés sans fenêtre. La fenêtre vit dans
  * `mascotte-fenetre.ts`.
  */
+import {
+  CENTRE_BILLE,
+  cssDuPersonnage,
+  glypheDuHalo,
+  HAUTEUR_MASCOTTE,
+  LARGEUR_MASCOTTE,
+  reglesDuPersonnage,
+  svgDuPersonnage,
+  visageDeLaBille
+} from './mascotte-personnage'
+import type { StyleMascotte } from './mascotte-reglage'
 import { LARGEUR_POPUP, MARGE_CARTE, type Rect, type ZoneDesCartes } from './notification-popup'
 import {
   contenuDeNotificationDeFinDeTour,
   type FinDeTourPourNotification
 } from './notification-fin-de-tour'
 
-/** Côté de la fenêtre (carrée, transparente) : la bille, son halo et la pastille qui déborde. */
-export const TAILLE_MASCOTTE = 80
-/** Diamètre du halo (`.ob` et `.h` de la page), centré dans la fenêtre : le bord visible de la bille. */
+/**
+ * La fenêtre (transparente) : la bille au milieu du personnage, qui déborde de tous côtés
+ * (chapeau, bras, sorts, pantins). Elle était un carré de 80 px avant le personnage.
+ */
+export { HAUTEUR_MASCOTTE, LARGEUR_MASCOTTE }
+/** Diamètre du halo (`.ob` et `.h` de la page) : le bord visible de la bille. */
 const TAILLE_HALO = 64
-/** Bande transparente entre le bord de la fenêtre et le halo : les cartes s'y collent (conv-1195). */
-export const RETRAIT_HALO = (TAILLE_MASCOTTE - TAILLE_HALO) / 2
+/** Le carré du halo dans la fenêtre, centré sur la bille. */
+export const HALO_DANS_LA_FENETRE = {
+  x: CENTRE_BILLE.x - TAILLE_HALO / 2,
+  y: CENTRE_BILLE.y - TAILLE_HALO / 2,
+  taille: TAILLE_HALO
+} as const
+/**
+ * Bande transparente sur les CÔTÉS de la fenêtre, hors du dessin (les notes et les runes s'arrêtent
+ * à 11 px du bord) : les cartes s'y collent, au ras du personnage (conv-1195, conv-1227).
+ */
+export const RETRAIT_COTE = 10
 /** Distance au coin de la zone de travail (au-dessus de la barre des tâches, pas dessous). */
 const MARGE_MASCOTTE = 6
+/** La croix de fermeture, dans la fenêtre : en haut à droite du halo. */
+const CROIX = { x: CENTRE_BILLE.x + 20, y: CENTRE_BILLE.y - 40, taille: 18 } as const
+
+/**
+ * LA GÉOMÉTRIE DE CHAQUE STYLE (conv-1249, 2026-10-29, « choix de mascotte soit magicien soit
+ * basique ») : le magicien vit dans sa grande fenêtre (chapeau, bras, sorts) ; la bille basique
+ * reprend la fenêtre d'avant conv-1227, un carré de 80 px, le halo de 64 au milieu et la croix au
+ * coin haut-droit de son cadre de 68 px (`.m`). Tout ce qui place, colle les cartes ou lit les clics
+ * passe par elle.
+ */
+export type GeometrieMascotte = {
+  largeur: number
+  hauteur: number
+  /** Le centre de la bille dans la fenêtre. */
+  centre: { x: number; y: number }
+  /** Bande transparente des CÔTÉS de la fenêtre : les cartes s'y collent. */
+  retraitCote: number
+  /** La croix de fermeture, dans la fenêtre. */
+  croix: { x: number; y: number; taille: number }
+}
+const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
+  magicien: {
+    largeur: LARGEUR_MASCOTTE,
+    hauteur: HAUTEUR_MASCOTTE,
+    centre: CENTRE_BILLE,
+    retraitCote: RETRAIT_COTE,
+    croix: CROIX
+  },
+  basique: {
+    largeur: 80,
+    hauteur: 80,
+    centre: { x: 40, y: 40 },
+    retraitCote: (80 - TAILLE_HALO) / 2,
+    croix: { x: 56, y: 6, taille: 18 }
+  }
+}
+export function geometrieMascotte(style: StyleMascotte = 'magicien'): GeometrieMascotte {
+  return GEOMETRIES[style]
+}
+
+/**
+ * Le pointeur (relatif au coin de la fenêtre) est-il sur la bille ou sa croix ? Partout ailleurs —
+ * chapeau, bras, sorts, vide —, la fenêtre laisse passer les clics vers le bureau (conv-1227) :
+ * le personnage déborde largement de la bille, il ne doit pas cacher ce qu'il y a dessous.
+ */
+export function pointSurLaBille(
+  point: { x: number; y: number },
+  style: StyleMascotte = 'magicien'
+): boolean {
+  const { centre, croix } = geometrieMascotte(style)
+  const rayon = TAILLE_HALO / 2 + 2
+  if (Math.hypot(point.x - centre.x, point.y - centre.y) <= rayon) return true
+  return (
+    point.x >= croix.x &&
+    point.x <= croix.x + croix.taille &&
+    point.y >= croix.y &&
+    point.y <= croix.y + croix.taille
+  )
+}
 
 /** Les quatre états des maquettes : Calme, Au travail, Pour toi, Problème. */
 export type NomEtatMascotte = 'calme' | 'travail' | 'attente' | 'probleme'
@@ -132,12 +219,13 @@ export function creerSuiviMascotte(): {
 }
 
 /** La fenêtre : en bas à droite de la zone de travail, donc juste au-dessus de l'horloge. */
-export function placerMascotte(zone: Rect): Rect {
+export function placerMascotte(zone: Rect, style: StyleMascotte = 'magicien'): Rect {
+  const { largeur, hauteur } = geometrieMascotte(style)
   return {
-    x: zone.x + zone.width - MARGE_MASCOTTE - TAILLE_MASCOTTE,
-    y: zone.y + zone.height - MARGE_MASCOTTE - TAILLE_MASCOTTE,
-    width: TAILLE_MASCOTTE,
-    height: TAILLE_MASCOTTE
+    x: zone.x + zone.width - MARGE_MASCOTTE - largeur,
+    y: zone.y + zone.height - MARGE_MASCOTTE - hauteur,
+    width: largeur,
+    height: hauteur
   }
 }
 
@@ -147,7 +235,7 @@ export function placerMascotte(zone: Rect): Rect {
  * coin de l'horloge »). Avant, la zone des cartes perdait seulement la colonne du coin d'origine :
  * une bille glissée ailleurs laissait les cartes au coin de l'horloge.
  *
- * `bille` est la fenêtre de la mascotte, `zone` la zone de travail de SON écran :
+ * `fenetre` est la fenêtre de la mascotte, `zone` la zone de travail de SON écran :
  * - côté : à GAUCHE de la bille si une carte y tient, sinon à droite (bille près du bord gauche) ;
  *   aucune ne tient (écran très étroit) : le côté le plus large ;
  * - sens : bille dans la moitié BASSE de l'écran, la pile part du bas de la bille et monte ; dans
@@ -155,34 +243,45 @@ export function placerMascotte(zone: Rect): Rect {
  *
  * CARTES COLLÉES AU HALO (conv-1195, 2026-10-28, demande : « j'aimerais que les notifs et la
  * mascotte soient snap ensemble ») : la carte était posée à `MARGE_CARTE` (12 px) de la FENÊTRE de
- * la bille, elle-même transparente sur `RETRAIT_HALO` (8 px) autour du halo — 20 px de vide visible.
+ * la bille, elle-même transparente sur 8 px autour du halo — 20 px de vide visible.
  * La carte touche maintenant le halo, et son bas (ou son haut, pile qui descend) est au niveau du
  * sien. Elle empiète donc sur la bande transparente de la fenêtre de la bille, jamais sur le halo :
  * le glisser, lu sur `.ob` seul (`PRELOAD_MASCOTTE`), reste entier.
+ *
+ * AU RAS DU PERSONNAGE (conv-1227) : depuis qu'elle a des bras, des sorts et des feux follets qui
+ * débordent du halo, une carte collée au halo cachait tout un côté du personnage. Elle touche donc
+ * le bord du DESSIN (`RETRAIT_COTE`) ; son bas (ou son haut) reste au niveau de celui du halo.
  */
-export function zoneDesCartes(bille: Rect, zone: Rect): ZoneDesCartes {
+export function zoneDesCartes(
+  fenetre: Rect,
+  zone: Rect,
+  style: StyleMascotte = 'magicien'
+): ZoneDesCartes {
+  const { centre, retraitCote } = geometrieMascotte(style)
   const droiteZone = zone.x + zone.width
   const basZone = zone.y + zone.height
-  const halo = {
-    gauche: bille.x + RETRAIT_HALO,
-    droite: bille.x + bille.width - RETRAIT_HALO,
-    haut: bille.y + RETRAIT_HALO,
-    bas: bille.y + bille.height - RETRAIT_HALO
+  const dessin = {
+    gauche: fenetre.x + retraitCote,
+    droite: fenetre.x + fenetre.width - retraitCote
   }
-  const placeAGauche = halo.gauche - zone.x
-  const placeADroite = droiteZone - halo.droite
+  const halo = {
+    haut: fenetre.y + centre.y - TAILLE_HALO / 2,
+    bas: fenetre.y + centre.y + TAILLE_HALO / 2
+  }
+  const placeAGauche = dessin.gauche - zone.x
+  const placeADroite = droiteZone - dessin.droite
   const besoin = LARGEUR_POPUP
   const aGauche = placeAGauche >= besoin || (placeADroite < besoin && placeAGauche >= placeADroite)
-  // `disposerPopups` écarte la carte de `MARGE_CARTE` du bord de sa zone : la zone dépasse le halo
+  // `disposerPopups` écarte la carte de `MARGE_CARTE` du bord de sa zone : la zone dépasse le dessin
   // d'autant, pour que la carte arrive pile sur lui.
   const horizontal: Pick<ZoneDesCartes, 'x' | 'width' | 'bord'> = aGauche
     ? { x: zone.x, width: Math.max(0, placeAGauche + MARGE_CARTE), bord: 'droite' }
     : {
-        x: halo.droite - MARGE_CARTE,
+        x: dessin.droite - MARGE_CARTE,
         width: Math.max(0, placeADroite + MARGE_CARTE),
         bord: 'gauche'
       }
-  const enBas = bille.y + bille.height / 2 >= zone.y + zone.height / 2
+  const enBas = fenetre.y + centre.y >= zone.y + zone.height / 2
   if (enBas) {
     const bas = Math.min(basZone, halo.bas + MARGE_CARTE)
     return { ...horizontal, y: zone.y, height: Math.max(0, bas - zone.y), sens: 'haut' }
@@ -234,10 +333,56 @@ const ANNEAU =
  * comme les cartes (`notification-popup-fenetre.ts`).
  *
  * LE NOMBRE AU MILIEU DE LA BILLE (conv-1142, 2026-10-26, demande : « je veux que le nombre soit
- * au milieu du cercle ») : la pastille `.n` était au coin bas-droit, elle est centrée sur la bille,
- * un peu plus grande (26 px) et cerclée de sombre pour rester lisible sur le reflet clair du centre.
+ * au milieu du cercle ») : la pastille `.n` était au coin bas-droit, elle a été centrée sur la bille.
+ *
+ * LE PERSONNAGE (conv-1227, 2026-10-28, « implémente le 2 ») : le nombre est maintenant le CHIFFRE
+ * qui brille dans l'étoile du chapeau, dessiné avec tout le personnage (`svgDuPersonnage`) par-dessus
+ * la bille ; le visage est peint sur la bille (`visageDeLaBille`). Le survol grossit tout le
+ * personnage (`scale`), le saut de « pour toi » le soulève (`translate`) : deux propriétés
+ * distinctes, qui se composent au lieu de s'écraser.
  */
-export function htmlDeMascotte(): string {
+export function htmlDeMascotte(style: StyleMascotte = 'magicien'): string {
+  if (style === 'basique') return htmlDeLaBilleBasique()
+  const cx = CENTRE_BILLE.x
+  const cy = CENTRE_BILLE.y
+  const halo = HALO_DANS_LA_FENETRE
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Autowin — mascotte</title><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+body{font-family:ui-monospace,Consolas,monospace;user-select:none}
+.m{position:relative;width:${LARGEUR_MASCOTTE}px;height:${HAUTEUR_MASCOTTE}px}
+.cps{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:${cx}px ${cy}px;transition:scale .2s}
+.m:has(.ob:hover) .cps{scale:1.04}
+.ob{position:absolute;left:${halo.x}px;top:${halo.y}px;display:grid;place-items:center;width:${TAILLE_HALO}px;height:${TAILLE_HALO}px;cursor:pointer;touch-action:none}
+.ob:active{cursor:grabbing}
+.ob>*{grid-area:1/1;border-radius:50%;transform:rotate(0deg)}
+.h{display:none;width:${TAILLE_HALO}px;height:${TAILLE_HALO}px;overflow:visible;border-radius:0}
+.h *{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.h .gn{fill:currentColor;stroke:none}
+.h .ge,.h .gi{transform-origin:${TAILLE_HALO / 2}px ${TAILLE_HALO / 2}px}
+.bw,.bk,.bl,.y{width:52px;height:52px}
+.bw{background:radial-gradient(circle,#fff9 0,#fff2 42%,#fff0 62%),${ANNEAU}}
+.bl{background:radial-gradient(circle at 32% 26%,#fffffff2 0,#fff5 13%,#fff0 28%),radial-gradient(circle,#0a0c1e00 56%,#0a0c1e80)}
+.bk{display:none;background:radial-gradient(circle,#e5534b59,#e5534bbf)}
+.y{overflow:visible;border-radius:0}
+.z{display:none;position:absolute;left:${cx + 18}px;top:${cy - 40}px;font-weight:700;font-size:16px;line-height:1;color:#9aa3b5;animation:oz 2.4s infinite}
+.f{position:absolute;z-index:2;left:${CROIX.x}px;top:${CROIX.y}px;display:grid;place-items:center;width:${CROIX.taille}px;height:${CROIX.taille}px;border-radius:50%;background:#10131ce6;box-shadow:0 0 0 1px #ffffff38;color:#c9d1e3;font-size:13px;line-height:1;text-decoration:none;cursor:pointer;opacity:0;transition:opacity .2s .4s}
+.m:has(.ob:hover) .f,.f:hover{opacity:1;transition-delay:0s}
+.m:has(.ob:hover) .z{visibility:hidden}
+@keyframes ot{to{transform:rotate(360deg)}}
+@keyframes ob{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes oz{0%{opacity:0;transform:none}50%{opacity:1}100%{opacity:0;transform:translate(4px,-6px)}}
+@keyframes ho{40%{translate:0 -5px}60%{translate:0 0}}
+${cssDuPersonnage()}
+</style></head><body><div class="m"><div class="cps"><i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><svg class="h" viewBox="0 0 ${TAILLE_HALO} ${TAILLE_HALO}">${glypheDuHalo()}</svg><i class="bw"></i><i class="bk"></i><i class="bl"></i>${visageDeLaBille()}</i>${svgDuPersonnage()}</div><i class="z">z</i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
+}
+
+/**
+ * LA BILLE BASIQUE (conv-1249, 2026-10-29) : la page d'avant le personnage, telle que conv-1142 l'a
+ * laissée — la bille, son halo en cercle et le nombre au milieu (`.n`), sans visage ni chapeau.
+ * Mêmes noms de calques que le magicien là où ils existent (`.ob`, `.h`, `.bw`, `.bk`, `.bl`, `.z`,
+ * `.f`) : le préchargement et la croix marchent pareil.
+ */
+function htmlDeLaBilleBasique(): string {
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Autowin — mascotte</title><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
 body{display:grid;place-items:center;font-family:ui-monospace,Consolas,monospace;user-select:none}
@@ -264,6 +409,45 @@ body{display:grid;place-items:center;font-family:ui-monospace,Consolas,monospace
 </style></head><body><div class="m"><i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><svg class="h" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19"/></svg><i class="bw"></i><i class="bk"></i><i class="bl"></i><i class="n"></i><i class="z">z</i></i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
 }
 
+/** Les règles d'état de la bille basique : celles d'avant conv-1227, inchangées. */
+function reglesDeLaBilleBasique(
+  etat: NomEtatMascotte,
+  pastille: string | null
+): Array<[string, string]> {
+  const regles: Array<[string, string]> = []
+  if (pastille) regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
+  switch (etat) {
+    case 'calme':
+      regles.push(['.bw,.bl', 'opacity:.5'], ['.z', 'display:block'])
+      break
+    case 'travail':
+      regles.push(
+        ['.h', 'display:block;animation:ot 4s linear infinite'],
+        ['.h circle', 'stroke:#8d98bd;stroke-dasharray:3 4'],
+        ['.bw', 'animation:ot 5s linear infinite'],
+        ['.n', 'background:linear-gradient(135deg,#467ffa,#a868f9)']
+      )
+      break
+    case 'attente':
+      regles.push(
+        ['.h', 'display:block;animation:ob 1.4s infinite'],
+        ['.h circle', 'stroke:#f0c75e;stroke-width:2.6'],
+        ['.n', 'background:#f0c75e;color:#1b1f2a']
+      )
+      break
+    case 'probleme':
+      regles.push(
+        ['.h', 'display:block'],
+        ['.h circle', 'stroke:#e5534b;stroke-width:2.6'],
+        ['.bw', 'filter:grayscale(1)'],
+        ['.bk', 'display:block'],
+        ['.n', 'background:#e5534b']
+      )
+      break
+  }
+  return regles
+}
+
 /**
  * FERMER LA BILLE (conv-1142, 2026-10-26, demande : « je veux pouvoir déplacer la mascotte et la
  * fermer ») : au survol, une CROIX en haut à droite, lien vers `#fermer`. Elle reste 0,4 s après la
@@ -287,11 +471,14 @@ export type PositionMascotte = { x: number; y: number }
 export function placerMascotteGardee(
   position: PositionMascotte | null,
   zones: readonly Rect[],
-  principale: Rect
+  principale: Rect,
+  style: StyleMascotte = 'magicien'
 ): Rect {
+  const { largeur, hauteur, centre } = geometrieMascotte(style)
   if (position) {
-    const cx = position.x + TAILLE_MASCOTTE / 2
-    const cy = position.y + TAILLE_MASCOTTE / 2
+    // Le centre de la BILLE, pas de la fenêtre : c'est elle que l'utilisateur a posée.
+    const cx = position.x + centre.x
+    const cy = position.y + centre.y
     const zone = zones.find(
       (z) => cx >= z.x && cx < z.x + z.width && cy >= z.y && cy < z.y + z.height
     )
@@ -299,14 +486,29 @@ export function placerMascotteGardee(
       const borne = (v: number, min: number, max: number): number =>
         Math.min(Math.max(v, min), Math.max(min, max))
       return {
-        x: borne(position.x, zone.x, zone.x + zone.width - TAILLE_MASCOTTE),
-        y: borne(position.y, zone.y, zone.y + zone.height - TAILLE_MASCOTTE),
-        width: TAILLE_MASCOTTE,
-        height: TAILLE_MASCOTTE
+        x: borne(position.x, zone.x, zone.x + zone.width - largeur),
+        y: borne(position.y, zone.y, zone.y + zone.height - hauteur),
+        width: largeur,
+        height: hauteur
       }
     }
   }
-  return placerMascotte(principale)
+  return placerMascotte(principale, style)
+}
+
+/**
+ * CHANGER DE STYLE SANS DÉPLACER LA BILLE (conv-1249) : la place gardée est le coin de la FENÊTRE,
+ * et les deux styles n'ont ni la même fenêtre ni la bille au même endroit dedans. Le coin est donc
+ * recalculé pour que le centre de la bille reste au même point de l'écran.
+ */
+export function positionPourLeStyle(
+  position: PositionMascotte,
+  avant: StyleMascotte,
+  apres: StyleMascotte
+): PositionMascotte {
+  const de = geometrieMascotte(avant).centre
+  const vers = geometrieMascotte(apres).centre
+  return { x: position.x + de.x - vers.x, y: position.y + de.y - vers.y }
 }
 
 /**
@@ -426,46 +628,65 @@ for (const type of ['pointercancel', 'lostpointercapture']) {
 
 /**
  * La feuille de l'ÉTAT, ajoutée par-dessus la page. La pastille n'accepte que des chiffres, « + »
- * et « ! » (`etatDeLaMascotte`) : rien d'autre n'entre dans la chaîne CSS de `content`.
+ * et « ! » (`etatDeLaMascotte`) ; depuis le personnage (conv-1227), elle n'entre même plus dans le
+ * CSS : elle choisit l'un des chiffres déjà dessinés dans la page (`reglesDuPersonnage`).
  *
  * Chaque sélecteur est préfixé par `body ` : une feuille posée par `insertCSS` passe AVANT celles de
  * la page à poids égal. Constaté le 2026-10-25 en capture de la vraie fenêtre (conv-1145) : la
  * rotation, absente de la page, s'appliquait ; `.h{display:block}` et `.n{display:grid}` perdaient
  * contre le `display:none` de la page, et ni halo ni pastille ne s'allumaient.
  */
-export function cssDeLEtat(etat: EtatMascotte): string {
-  const regles: Array<[string, string]> = []
+export function cssDeLEtat(etat: EtatMascotte, style: StyleMascotte = 'magicien'): string {
   const pastille = etat.pastille && /^[0-9+!]{1,2}$/u.test(etat.pastille) ? etat.pastille : null
-  if (pastille) regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
+  if (style === 'basique') return enFeuille(reglesDeLaBilleBasique(etat.etat, pastille))
+  const regles: Array<[string, string]> = reglesDuPersonnage(etat.etat, pastille)
   switch (etat.etat) {
     case 'calme':
-      regles.push(['.bw,.bl', 'opacity:.5'], ['.z', 'display:block'])
+      // Opaque au repos aussi (conv-1227, « met la pas transparente au repos ») : l'ancien
+      // `.cps{opacity:.55}` rendait le personnage à moitié transparent dès que rien ne tournait.
+      regles.push(['.z', 'display:block'])
       break
+    // Le halo est un GLYPHE (`glypheDuHalo`, conv-1227) : sa couronne de runes (`.ge`) et son étoile
+    // (`.gi`) tournent en sens contraires ; l'état choisit couleur, lueur et vitesse.
     case 'travail':
       regles.push(
-        ['.h', 'display:block;animation:ot 4s linear infinite'],
-        ['.h circle', 'stroke:#8d98bd;stroke-dasharray:3 4'],
-        ['.bw', 'animation:ot 5s linear infinite'],
-        ['.n', 'background:linear-gradient(135deg,#467ffa,#a868f9)']
+        [
+          '.h',
+          'display:block;color:#cfe8ff;filter:drop-shadow(0 0 1.2px #7fc4ff) drop-shadow(0 0 3px #3d8bff)'
+        ],
+        ['.h .ge', 'animation:ot 14s linear infinite'],
+        ['.h .gi', 'animation:ot 9s linear infinite reverse'],
+        ['.h .gp', 'animation:ob 2.2s ease-in-out infinite'],
+        ['.bw', 'animation:ot 5s linear infinite']
       )
       break
     case 'attente':
       regles.push(
-        ['.h', 'display:block;animation:ob 1.4s infinite'],
-        ['.h circle', 'stroke:#f0c75e;stroke-width:2.6'],
-        ['.n', 'background:#f0c75e;color:#1b1f2a']
+        [
+          '.h',
+          'display:block;color:#f0c75e;filter:drop-shadow(0 0 1.5px #f0c75e) drop-shadow(0 0 3px #ffb02e)'
+        ],
+        ['.h .ge', 'animation:ot 24s linear infinite'],
+        ['.h .gi', 'animation:ot 16s linear infinite reverse'],
+        ['.h .gp', 'animation:ob 1.4s infinite'],
+        ['.cps', 'animation:ho 1.1s ease-in-out infinite']
       )
       break
     case 'probleme':
+      // Immobile et rouge ; ses runes grésillent, comme un sort cassé.
       regles.push(
-        ['.h', 'display:block'],
-        ['.h circle', 'stroke:#e5534b;stroke-width:2.6'],
+        ['.h', 'display:block;color:#e5534b;filter:drop-shadow(0 0 1.5px #e5534b)'],
+        ['.h .gp', 'animation:ob .9s steps(2) infinite'],
         ['.bw', 'filter:grayscale(1)'],
-        ['.bk', 'display:block'],
-        ['.n', 'background:#e5534b']
+        ['.bk', 'display:block']
       )
       break
   }
+  return enFeuille(regles)
+}
+
+/** Chaque sélecteur préfixé par `body ` (voir `cssDeLEtat`). */
+function enFeuille(regles: ReadonlyArray<readonly [string, string]>): string {
   return regles
     .map(([selecteurs, declarations]) => {
       const prefixes = selecteurs.split(',').map((s) => `body ${s.trim()}`)

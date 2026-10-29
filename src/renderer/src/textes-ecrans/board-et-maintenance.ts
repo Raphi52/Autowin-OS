@@ -54,8 +54,6 @@ export const TEXTES_FR = {
   'vue.dossierColleguesErreur': 'Collègues non relus : {erreur}',
 
   // — La rivière (RiviereDuProjet)
-  'riviere.aide':
-    'molette sur le tableau ou clic sur une colonne : la colonne visée s’élargit, et ses post-it grandissent · la molette vers le haut remonte le temps jusqu’au plus vieux fil · glisse un post-it vers un autre étage pour changer son état — gardé sur ce poste jusqu’à la prochaine demande du fil, jamais compté comme une preuve',
   'riviere.fenetre.derniers': 'les {n} derniers jours',
   'riviere.fenetre.du': 'du {debut} au {fin}',
   'riviere.aria': 'La rivière, {fenetre}',
@@ -64,12 +62,6 @@ export const TEXTES_FR = {
   'riviere.aujourdhui': 'revenir à aujourd’hui',
   'riviere.personnes': 'Filtrer par personne',
   'riviere.tous': 'Tous',
-  'riviere.pied.filsSur': 'fils sur {fenetre}',
-  'riviere.pied.fils': 'fils {fenetre}',
-  'riviere.pied.plusAnciens': ' · {n} plus anciens',
-  'riviere.pied.plusRecents': ' · {n} plus récents',
-  'riviere.pied.loupe': ' · molette ou clic = loupe',
-  'riviere.pied.molette': ', molette vers le haut = plus ancien',
   'riviere.postit.poseALaMain': ' · posé à la main',
   'riviere.postit.collegue': ' · fil de {nom}, en lecture seule',
   'riviere.postit.demandes': '{n} dem.',
@@ -309,8 +301,6 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'vue.dossierCollegues': 'Colleagues’ sticky notes: {noms}',
   'vue.dossierColleguesErreur': 'Colleagues not read: {erreur}',
 
-  'riviere.aide':
-    'wheel on the board or click on a column: the targeted column widens, and its sticky notes grow · wheel up goes back in time to the oldest thread · drag a sticky note to another floor to change its state — kept on this computer until the thread’s next request, never counted as proof',
   'riviere.fenetre.derniers': 'the last {n} days',
   'riviere.fenetre.du': 'from {debut} to {fin}',
   'riviere.aria': 'The river, {fenetre}',
@@ -319,12 +309,6 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'riviere.aujourdhui': 'back to today',
   'riviere.personnes': 'Filter by person',
   'riviere.tous': 'All',
-  'riviere.pied.filsSur': 'threads over {fenetre}',
-  'riviere.pied.fils': 'threads {fenetre}',
-  'riviere.pied.plusAnciens': ' · {n} older',
-  'riviere.pied.plusRecents': ' · {n} newer',
-  'riviere.pied.loupe': ' · wheel or click = magnifier',
-  'riviere.pied.molette': ', wheel up = older',
   'riviere.postit.poseALaMain': ' · set by hand',
   'riviere.postit.collegue': ' · {nom}’s thread, read-only',
   'riviere.postit.demandes': '{n} req.',

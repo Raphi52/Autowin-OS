@@ -178,6 +178,8 @@ export type RunPilotChat = (
   text?: string
   error?: string
   verification?: { complete: boolean; evidence: string }
+  /** Erreur de l'`orchestrate` du tour quand il a échoué (le tour, lui, reste `ok`). */
+  echecOrchestration?: string
   resolvedModel?: string
   knownCostUsd?: number
   totalTokens?: number
@@ -349,6 +351,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     const promptJournalMemory: PromptJournalMemory = {}
     let completedText = ''
     let verification: { complete: boolean; evidence: string } | undefined
+    // L'erreur de l'`orchestrate` du tour s'il a échoué : le tour finit `ok` malgré elle, et un
+    // plan de lots notait « fait » un lot coupé par la limite d'usage (conv-1236, 2026-10-28).
+    let echecOrchestration: string | undefined
     let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
     let turnPromptIdentity:
       { provider: string; model?: string; reasoningEffort?: string } | undefined
@@ -821,6 +826,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // L'issue d'orchestration entre dans la trace comme verdict de CONTROLE type, au lieu de
           // rester du texte libre que rien ne peut filtrer ni compter.
           const issue = pilotEvent.outcome
+          if (issue?.status === 'failed' && typeof issue.error === 'string')
+            echecOrchestration = issue.error
           if (conversationId && issue && Object.keys(issue).length > 0) {
             try {
               const outcomeEvent = appendObservedOrchestrationOutcome(causalTrace, {
@@ -1657,6 +1664,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           spoken.join('\n').trim() ||
           etiquettesAction.join('\n').trim(),
         verification,
+        ...(echecOrchestration ? { echecOrchestration } : {}),
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
@@ -1839,7 +1847,8 @@ export function issueDuResultat(resultat: Awaited<ReturnType<RunPilotChat>>): Is
     tour: resultat.turnId,
     ...(resultat.cancelled ? { annule: true } : {}),
     ...(resultat.error ? { erreur: resultat.error } : {}),
-    ...(resultat.text ? { texte: resultat.text } : {})
+    ...(resultat.text ? { texte: resultat.text } : {}),
+    ...(resultat.echecOrchestration ? { echecOrchestration: resultat.echecOrchestration } : {})
   }
 }
 

@@ -304,8 +304,9 @@ describe('RiviereDuProjet', () => {
           new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
         )
     })
-  const pied = (el: HTMLElement): string =>
-    el.querySelector('[data-testid="riviere-pied"]')?.textContent ?? ''
+  // La ligne de compte en tête a été retirée (conv-1226) : la fenêtre se lit dans l'aria-label.
+  const fenetre = (el: HTMLElement): string =>
+    el.querySelector('[data-testid="riviere"]')?.getAttribute('aria-label') ?? ''
   const auJourdhui = (el: HTMLElement): HTMLElement | null =>
     el.querySelector('[data-testid="riviere-aujourdhui"]')
 
@@ -315,7 +316,8 @@ describe('RiviereDuProjet', () => {
     expect(el.querySelector('[data-testid="riviere-periode"]')).toBeNull()
     expect(largeurs(el)).toHaveLength(14)
     expect(postit(el, 'conv-5')).toBeNull()
-    expect(pied(el)).toContain('sur les 14 derniers jours · 2 plus anciens')
+    expect(el.querySelector('[data-testid="riviere-pied"]')).toBeNull()
+    expect(fenetre(el)).toBe('La rivière, les 14 derniers jours')
     expect(auJourdhui(el)).toBeNull()
 
     // 40 crans d'une demi-journée : 20 jours en arrière, le jour de conv-5.
@@ -326,10 +328,8 @@ describe('RiviereDuProjet', () => {
     expect(plusLarge(el)).toBe(3)
     expect(postit(el, 'conv-5').dataset.jour).toBe('3')
     expect(el.querySelectorAll('[data-testid="riviere-postit"]')).toHaveLength(1)
-    // Dans le passé, la frise dit ses dates et compte ce qui est plus récent qu'elle.
-    expect(pied(el)).toContain(
-      'fils du mer 30 sept. au mar 13 oct. · 1 plus anciens · 4 plus récents'
-    )
+    // Dans le passé, la frise dit ses dates.
+    expect(fenetre(el)).toBe('La rivière, du mer 30 sept. au mar 13 oct.')
     expect(auJourdhui(el)).not.toBeNull()
 
     // Jusqu'au plus vieux fil (60 jours), puis plus rien : au-delà, la frise serait vide.
@@ -338,7 +338,6 @@ describe('RiviereDuProjet', () => {
     expect(plusLarge(el)).toBe(0)
     expect(postit(el, 'conv-6').dataset.etage).toBe('sans-preuve')
     expect(postit(el, 'conv-5')).toBeNull()
-    expect(pied(el)).not.toContain('plus anciens')
     expect(largeurs(el)).toHaveLength(14)
 
     // Et vers aujourd'hui, la frise revient d'elle-même jusqu'au présent.

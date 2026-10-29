@@ -24,6 +24,7 @@ import type {
   PostItDuFichier,
   StatutDuFichier
 } from '../shared/board-collegues'
+import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
 
 export const FORMAT_LU = 'autowin-board/1'
 export const DELAI_ENTRE_LECTURES_MS = 15_000
@@ -143,21 +144,16 @@ function postItLu(v: unknown): PostItDuFichier | null {
   }
 }
 
-/** Le nom écrit sur les post-it d'un collègue : son demandeur le plus fréquent, sinon son compte. */
-export function nomDuCollegue(poste: string, postIts: readonly PostItDuFichier[]): string {
-  const comptes = new Map<string, number>()
-  for (const p of postIts) {
-    const nom = p.demandeur?.nom.trim()
-    if (nom) comptes.set(nom, (comptes.get(nom) ?? 0) + 1)
-  }
-  let meilleur = poste
-  let max = 0
-  for (const [nom, n] of comptes)
-    if (n > max) {
-      meilleur = nom
-      max = n
-    }
-  return meilleur
+/**
+ * Le nom écrit sur les post-it d'un collègue : celui que SON poste a écrit dans `board.json` (choisi
+ * dans ses réglages, sinon son compte Windows), sinon son compte — le nom de son sous-dossier.
+ *
+ * Plus le demandeur git le plus fréquent (conv-1230) : un poste avec une identité git affichait
+ * un surnom git, un poste sans affichait son compte Windows — deux genres de noms côte à côte.
+ */
+export function nomDuCollegue(poste: string, nomEcrit: unknown): string {
+  const nom = nomDuPosteLisible(nomEcrit)
+  return nom ?? poste
 }
 
 /**
@@ -180,7 +176,7 @@ export function boardDuCollegue(poste: string, contenu: string): BoardDUnCollegu
   const enregistreA = date(o.enregistreA)
   return {
     poste,
-    nom: nomDuCollegue(poste, postIts),
+    nom: nomDuCollegue(poste, o.nom),
     ...(enregistreA ? { enregistreA } : {}),
     postIts
   }

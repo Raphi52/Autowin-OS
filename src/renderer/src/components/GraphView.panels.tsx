@@ -11,6 +11,20 @@ import { useTextesKnowledge } from '../textes-ecrans/knowledge'
  * réglages et panneaux de détail. Purs (props only), extraits pour alléger GraphView.tsx.
  */
 
+/**
+ * LA MARQUE « PERSO » d'une note du Brain perso (conv-1233, 2026-10-28 : « affiche le Brain perso
+ * dans la vue Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »). Une seule
+ * forme, posée partout où la vue liste ou ouvre une note perso.
+ */
+export function MarquePerso(): React.JSX.Element {
+  const { t } = useTextesKnowledge()
+  return (
+    <em className="note-perso" data-testid="note-perso" title={t('graphe.notePerso.titre')}>
+      {t('graphe.notePerso')}
+    </em>
+  )
+}
+
 export function SettingsSection({
   title,
   onReset,
@@ -107,7 +121,8 @@ export function NodePanel({
   onRetry,
   onRetract,
   onSupersede,
-  onClose
+  onClose,
+  perso = false
 }: {
   node: GraphNode
   file: { path: string; content: string } | null
@@ -123,6 +138,8 @@ export function NodePanel({
   onSupersede?: () => void
   /** Ferme le panneau de droite (désélectionne le nœud). */
   onClose?: () => void
+  /** La note vient du Brain PERSO : elle porte la marque « perso » (conv-1233). */
+  perso?: boolean
 }): React.JSX.Element {
   const { t } = useTextesKnowledge()
   // Les liens d'une fiche fournie se comptent par dizaines et melangent toutes les relations :
@@ -205,7 +222,10 @@ export function NodePanel({
           </button>
         )}
 
-        <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
+        <span className="node-panel__theme">
+          {perso && <MarquePerso />}
+          {nodeThemeIds(node).join(' · ')}
+        </span>
         <h2>{node.label}</h2>
         <div className="node-panel__path">
           <span>{node.file ?? t('panneau.aucunFichier')}</span>
@@ -287,10 +307,13 @@ export function NodePanel({
 
 export function ThemeNodesPanel({
   nodes,
-  onNavigate
+  onNavigate,
+  perso = false
 }: {
   nodes: GraphNode[]
   onNavigate: (node: GraphNode) => void
+  /** Les notes viennent du Brain PERSO : chacune porte la marque « perso » (conv-1233). */
+  perso?: boolean
 }): React.JSX.Element {
   const { t } = useTextesKnowledge()
   return (
@@ -305,6 +328,7 @@ export function ThemeNodesPanel({
           <button key={themeNode.id} type="button" onClick={() => onNavigate(themeNode)}>
             <span aria-hidden="true">✦</span>
             <strong>{themeNode.label}</strong>
+            {perso && <MarquePerso />}
           </button>
         ))}
       </nav>

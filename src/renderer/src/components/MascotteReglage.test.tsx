@@ -81,3 +81,59 @@ describe('Settings · Interface — interrupteur « Mascotte du bureau » (conv-
     expect(interrupteur(c).disabled).toBe(true)
   })
 })
+
+const liste = (c: HTMLElement): HTMLSelectElement =>
+  c.querySelector('[data-testid="interface-mascotte-style"]') as HTMLSelectElement
+
+describe('Settings · Interface — style « Magicien / Basique » (conv-1249)', () => {
+  const choisir = async (select: HTMLSelectElement, valeur: string): Promise<void> => {
+    await act(async () => {
+      select.value = valeur
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  it('montre le style gardé par le moteur, avec les deux choix', async () => {
+    const c = await monter({
+      mascotteAffichee: vi.fn(async () => true),
+      afficherMascotte: vi.fn(),
+      styleMascotte: vi.fn(async () => 'basique'),
+      choisirStyleMascotte: vi.fn()
+    })
+    expect(liste(c).disabled).toBe(false)
+    expect(liste(c).value).toBe('basique')
+    expect([...liste(c).options].map((o) => o.textContent)).toEqual(['Magicien', 'Basique'])
+  })
+
+  it('choisir Basique le demande au moteur et affiche SA réponse', async () => {
+    const choisirStyleMascotte = vi.fn(async (style: string) => style)
+    const c = await monter({
+      mascotteAffichee: vi.fn(async () => true),
+      afficherMascotte: vi.fn(),
+      styleMascotte: vi.fn(async () => 'magicien'),
+      choisirStyleMascotte
+    })
+    await choisir(liste(c), 'basique')
+    expect(choisirStyleMascotte).toHaveBeenCalledWith('basique')
+    expect(liste(c).value).toBe('basique')
+  })
+
+  it('un enregistrement refusé garde le style d’avant et le dit', async () => {
+    const c = await monter({
+      mascotteAffichee: vi.fn(async () => true),
+      afficherMascotte: vi.fn(),
+      styleMascotte: vi.fn(async () => 'magicien'),
+      choisirStyleMascotte: vi.fn(async () => {
+        throw new Error('APPDATA absent')
+      })
+    })
+    await choisir(liste(c), 'basique')
+    expect(liste(c).value).toBe('magicien')
+    expect(c.textContent).toContain('n’a pas pu être enregistré')
+  })
+
+  it('sans réponse du moteur sur le style, la liste reste inerte', async () => {
+    const c = await monter({ mascotteAffichee: vi.fn(async () => true), afficherMascotte: vi.fn() })
+    expect(liste(c).disabled).toBe(true)
+  })
+})

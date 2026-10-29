@@ -1593,7 +1593,11 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
     const fige = regles.find((r) =>
       r.selecteurs.some((s) => s.startsWith(`${TOUR_FINI} :is(`) && s.endsWith('::before'))
     )
-    expect(fige?.selecteurs).toContain(`${TOUR_FINI} .artifact-pile__tranches > span`)
+    // Par la CLASSE des tranches, jamais `> span` : sous `:has()`, une balise nue fait restyler
+    // toutes les balises de ce nom à chaque frappe (conv-1229, has-cible-nue.test.ts).
+    expect(fige?.selecteurs).toContain(
+      `${TOUR_FINI} .artifact-pile__tranches > .artifact-pile__tranche`
+    )
     expect(fige?.decls.background).toBe(
       'linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud))'
     )

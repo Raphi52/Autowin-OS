@@ -10,9 +10,12 @@
  * Désormais un projet du Board est un dossier de la liste du Chat — celle du menu « Ranger dans… »,
  * avec sa croix (`autowin.conv-folders.connus`) —, plus les dossiers que le Chat propose toujours :
  * le dépôt par défaut et « This computer ». Catégories, Auto-kaizen et Divers sortent.
- * Ces deux-là se retirent aussi depuis le Board (même jour : « des éléments que je ne peux même pas
- * supprimer, ils n'ont pas la petite croix ») : la croix les range dans la mémoire des retraits
- * (`autowin.conv-folders.retires`), et ils quittent le Board comme le menu du Chat.
+ * Le dépôt par défaut se retire aussi depuis le Board (même jour : « des éléments que je ne peux
+ * même pas supprimer, ils n'ont pas la petite croix ») : la croix le range dans la mémoire des
+ * retraits (`autowin.conv-folders.retires`), et il quitte le Board comme le menu du Chat.
+ * « This computer », LUI, NE SE RETIRE JAMAIS (même jour, conv-1231 : « j'ai perdu le this computer,
+ * il doit être impossible à supprimer ») : c'est le dossier des fils sans projet et des agents
+ * réveillés (`chat-dispatch.ts`). Un retrait déjà mémorisé à son nom est ignoré (`irretirables`).
  * La règle est appliquée par le processus principal AVANT l'affichage ET avant la copie vers le
  * dossier du Board : ce qui part sur le partage est ce que la vue montre.
  */
@@ -65,13 +68,19 @@ export function carteDesDossiersDuChat(
  * Les dossiers que le Board montre : ceux du Chat, plus ceux qu'il propose toujours (dépôt par
  * défaut, « This computer »), sauf ceux-là quand une croix les a retirés. Les dossiers du Chat ne
  * sont pas filtrés par les retraits : le Chat les affiche tels quels, et le Board suit le Chat.
+ * `irretirables` (« This computer », conv-1231) restent même retirés : une croix d'avant la règle a
+ * pu en garder la trace dans la mémoire des retraits.
  */
 export function dossiersDuBoard(
   dossiers: readonly string[],
   toujoursProposes: readonly (string | null | undefined)[],
-  retires: readonly string[]
+  retires: readonly string[],
+  irretirables: readonly (string | null | undefined)[] = []
 ): string[] {
-  const exclus = new Set(retires.map(cleDeDossier).filter((c): c is string => !!c))
+  const gardes = new Set(irretirables.map(cleDeDossier).filter((c): c is string => !!c))
+  const exclus = new Set(
+    retires.map(cleDeDossier).filter((c): c is string => !!c && !gardes.has(c))
+  )
   const proposes = toujoursProposes.filter(
     (chemin): chemin is string =>
       estCheminDeDossier(chemin) && !exclus.has(cleDeDossier(chemin) ?? '')

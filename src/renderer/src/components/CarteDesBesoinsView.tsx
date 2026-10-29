@@ -27,10 +27,12 @@ import type { EtatDuDossierDuBoard } from '../../../shared/board-dossier'
 import type { BoardsDesCollegues } from '../../../shared/board-collegues'
 import { carteAvecCollegues } from './board-collegues'
 import { ProjetsPartagesDuBoard } from './ProjetsPartagesDuBoard'
+import { RouageDuBoard } from './RouageDuBoard'
 import {
   carteDuBoardAffichee,
   lignesDuMenuDesProjets,
   lireDossiersDuChat,
+  lireDossierPersonnel,
   lireDossiersRetires,
   lireDossiersToujoursProposes,
   retirerDossierDuChat,
@@ -70,6 +72,8 @@ export function CarteDesBesoinsView({
   // Les dossiers de travail du Chat (conv-1212) : les seuls projets du Board. Relus à chaque calcul,
   // donc à chaque retour sur l'onglet — un dossier retiré dans le Chat sort aussi d'ici.
   const [dossiersDuChat, setDossiersDuChat] = useState<string[]>(() => lireDossiersDuChat())
+  // « This computer » (conv-1231) : jamais retirable, donc sans croix et gardé malgré un retrait.
+  const [dossierPersonnel, setDossierPersonnel] = useState<string | null>(null)
 
   const charger = useCallback(async () => {
     setChargement(true)
@@ -79,13 +83,17 @@ export function CarteDesBesoinsView({
       const retires = lireDossiersRetires()
       setDossiersDuChat(dossiers)
       await transmettreDossiersDuChat(dossiers, retires)
-      const toujours = await lireDossiersToujoursProposes()
+      const [toujours, personnel] = await Promise.all([
+        lireDossiersToujoursProposes(),
+        lireDossierPersonnel()
+      ])
+      setDossierPersonnel(personnel)
       // Les états posés à la main vivent ici : joints pour que la copie du dossier (conv-1206)
       // range chaque post-it à l'étage qu'il a À L'ÉCRAN.
       const calculee = await window.api.carteDesBesoins({
         etatsManuels: lireEtatsManuels(window.localStorage)
       })
-      setCarte(carteDuBoardAffichee(calculee, dossiers, toujours, retires))
+      setCarte(carteDuBoardAffichee(calculee, dossiers, toujours, retires, personnel))
       setErreur(null)
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e))
@@ -354,33 +362,33 @@ export function CarteDesBesoinsView({
                     ×
                   </button>
                 )}
-                {/* NOS projets seulement (`carte`, pas `carteAffichee`) : les post-it des collègues
-                    ne repartent pas d'ici (conv-1211, conv-1210). */}
-                {dossier?.dossier && carte && (
-                  <ProjetsPartagesDuBoard
-                    projets={lignesDuMenuDesProjets(
-                      carte.projets.map((p) => ({
-                        cle: p.cle,
-                        libelle: p.libelle,
-                        demandes: p.demandes.length
-                      })),
-                      dossiersDuChat
-                    )}
-                    choisis={dossier.projets ?? null}
-                    onChoisir={(p) => void choisirProjets(p)}
-                    onRetirer={(chemin) => void retirerDuChat(chemin)}
-                  />
-                )}
+                {/* Le rouage (conv-1230) : « Actualiser », le nom de ce poste sur le Board, puis
+                    la liste des projets — qui n'existe qu'une fois un dossier choisi. */}
+                <RouageDuBoard
+                  chargement={chargement}
+                  onActualiser={() => void charger()}
+                  onNomEnregistre={() => void charger()}
+                >
+                  {/* NOS projets seulement (`carte`, pas `carteAffichee`) : les post-it des
+                      collègues ne repartent pas d'ici (conv-1211, conv-1210). */}
+                  {dossier?.dossier && carte && (
+                    <ProjetsPartagesDuBoard
+                      projets={lignesDuMenuDesProjets(
+                        carte.projets.map((p) => ({
+                          cle: p.cle,
+                          libelle: p.libelle,
+                          demandes: p.demandes.length
+                        })),
+                        dossiersDuChat,
+                        dossierPersonnel
+                      )}
+                      choisis={dossier.projets ?? null}
+                      onChoisir={(p) => void choisirProjets(p)}
+                      onRetirer={(chemin) => void retirerDuChat(chemin)}
+                    />
+                  )}
+                </RouageDuBoard>
               </span>
-              <button
-                type="button"
-                className="btn btn-sm"
-                data-testid="besoins-actualiser"
-                disabled={chargement}
-                onClick={() => void charger()}
-              >
-                {chargement ? t('vue.calcul') : t('vue.actualiser')}
-              </button>
             </span>
           </span>
         }

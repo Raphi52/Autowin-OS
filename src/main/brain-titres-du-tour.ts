@@ -5,6 +5,7 @@ import {
   type BrainRetrievalOptions,
   type BrainRetrievalResult
 } from './brain-retrieval'
+import { PREFIXE_NOTE_PERSO } from './brain-perso'
 import { motsDe } from '../shared/mots'
 
 /**
@@ -26,6 +27,14 @@ import { motsDe } from '../shared/mots'
  * plus loin. Rang ≤ 3 et score ≥ 0,40 : bonne note dans le bloc pour 15 questions sur 24 (autant que
  * rang ≤ 5 ou score ≥ 0,30), 1,8 ligne en moyenne (le moins de toute la grille), 0 bloc sur les 3
  * questions hors sujet. Changer ces bornes = rejouer `scripts/sonde-titres-brain.mts`.
+ *
+ * BRAIN PERSO (conv-1233, 2026-10-28, demande utilisateur : « étends le Brain perso aux notes
+ * proches servies à chaque tour »). S'il est réglé, il est interrogé EN MÊME TEMPS que celui de
+ * l'équipe (le tour n'attend pas plus), avec les mêmes bornes, et ses notes arrivent sous le même
+ * en-tête avec le préfixe `perso:` — celui que `brain_read` reconnaît pour ouvrir la note dans le
+ * bon Brain. Jusqu'à 3 notes de chaque Brain. Limite connue : les bornes ont été mesurées sur le
+ * Brain d'équipe ; dans un petit Brain perso, le rang ≤ 3 laisse presque tout passer et seul le
+ * score ≥ 0,40 trie.
  */
 export const TITRES_RANG_MAX = 3
 export const TITRES_SCORE_MIN = 0.4
@@ -55,9 +64,12 @@ export interface TitreBrain {
  */
 export function selectionnerTitres(
   resultat: BrainRetrievalResult,
-  dejaMontres: ReadonlySet<string> = new Set()
+  dejaMontres: ReadonlySet<string> = new Set(),
+  /** `perso:` pour les notes du Brain perso (conv-1233) : porté par le chemin rendu ET mémorisé. */
+  prefixe = ''
 ): TitreBrain[] {
   const candidats = resultat.navigation?.candidates ?? []
+  const cheminRendu = (path: string): string => `${prefixe}${path.split('\\').join('/')}`
   return candidats
     .filter(
       (c) =>
@@ -65,12 +77,12 @@ export function selectionnerTitres(
         c.rank <= TITRES_RANG_MAX &&
         c.denseCos >= TITRES_SCORE_MIN &&
         Boolean(c.path) &&
-        !dejaMontres.has(c.path)
+        !dejaMontres.has(prefixe ? cheminRendu(c.path) : c.path)
     )
     .sort((a, b) => a.rank - b.rank)
     .slice(0, TITRES_MAX)
     .map((c) => ({
-      path: c.path.split('\\').join('/'),
+      path: cheminRendu(c.path),
       title: (c.title?.trim() || c.path).replace(/\s+/g, ' ').slice(0, TITRE_MAX_CARACTERES)
     }))
 }
@@ -91,7 +103,17 @@ interface OptionsTitresDuTour {
   workspace?: (conversationId?: string) => string | undefined
   retrieve?: (query: string, options: BrainRetrievalOptions) => Promise<BrainRetrievalResult>
   onBrainTrace?: (trace: BrainTrace) => void
+  /**
+   * Environnement du Brain PERSO (`envDuBrainPerso`), ou `undefined` sans Brain perso. Relu à
+   * CHAQUE tour : un Brain perso réglé dans les Réglages sert dès le tour suivant.
+   */
+  brainPerso?: () => NodeJS.ProcessEnv | undefined
+  /** Le serveur perso n'écoute pas (connexion refusée) : l'appelant tente de le démarrer. */
+  persoInjoignable?: () => void
 }
+
+/** Dossier sans corpus Brain déclaré : l'équipe n'est pas interrogée (même fermeture que brain_query). */
+const EQUIPE_FERMEE: BrainRetrievalResult = { context: '', status: 'empty' }
 
 export function createBrainTitresDuTour(
   options: OptionsTitresDuTour = {}
@@ -115,22 +137,46 @@ export function createBrainTitresDuTour(
     const requete = query.trim().slice(0, REQUETE_MAX_CARACTERES)
     if (motsDe(requete).length < TITRES_MOTS_MIN) return ''
     const corpus = brainCorpusForWorkspace(options.workspace?.(meta?.conversationId))
-    // Même fermeture que `brain_query` : un dossier sans corpus déclaré n'interroge rien.
-    if (corpus?.length === 0) return ''
-    const debut = performance.now()
-    const brut = await retrieve(requete, {
-      ...(corpus ? { corpus } : {}),
-      mode: 'candidates',
-      timeoutMs: TITRES_DELAI_MS
-    }).catch((): BrainRetrievalResult => ({
+    const envPerso = options.brainPerso?.()
+    // Même fermeture que `brain_query` : un dossier sans corpus déclaré n'interroge rien de
+    // l'équipe. Le Brain perso, rangé par aucun projet, reste interrogé.
+    const equipeFermee = corpus?.length === 0
+    if (equipeFermee && !envPerso) return ''
+    const echec = (): BrainRetrievalResult => ({
       context: '',
       status: 'unavailable',
       unavailableReason: 'network'
-    }))
+    })
+    const debut = performance.now()
+    // Lancée AVANT d'attendre l'équipe : les deux recherches tournent en même temps.
+    const persoEnCours = envPerso
+      ? retrieve(requete, { env: envPerso, mode: 'candidates', timeoutMs: TITRES_DELAI_MS }).catch(
+          echec
+        )
+      : undefined
+    const brut = equipeFermee
+      ? EQUIPE_FERMEE
+      : await retrieve(requete, {
+          ...(corpus ? { corpus } : {}),
+          mode: 'candidates',
+          timeoutMs: TITRES_DELAI_MS
+        }).catch(echec)
+    const brutPerso = await persoEnCours
     const durationMs = Math.round(performance.now() - debut)
+    if (brutPerso?.status === 'unavailable' && brutPerso.unavailableReason === 'network') {
+      options.persoInjoignable?.()
+    }
     const resultat = scopeBrainRetrieval(brut, corpus)
     const dejaMontres = meta?.conversationId ? montresParFil.get(meta.conversationId) : undefined
-    const titres = selectionnerTitres(resultat, dejaMontres)
+    // Mêmes règles pour le perso : sources signées seules, jamais `inbox/`, aucun filtre de projet.
+    const titresPerso = brutPerso
+      ? selectionnerTitres(
+          scopeBrainRetrieval(brutPerso, undefined),
+          dejaMontres,
+          PREFIXE_NOTE_PERSO
+        )
+      : []
+    const titres = [...selectionnerTitres(resultat, dejaMontres), ...titresPerso]
     const bloc = rendreTitres(titres)
     if (meta?.conversationId) {
       if (titres.length > 0) memoriser(meta.conversationId, titres)
@@ -142,7 +188,8 @@ export function createBrainTitresDuTour(
         point: POINT_TITRES_DU_TOUR,
         query: requete.slice(0, 300),
         found: titres.length > 0,
-        status: resultat.status,
+        // Le statut est celui de l'équipe, sauf quand des notes perso ont été servies.
+        status: titresPerso.length > 0 ? 'found' : resultat.status,
         ...(resultat.unavailableReason ? { unavailableReason: resultat.unavailableReason } : {}),
         durationMs,
         injectedChars: bloc.length,

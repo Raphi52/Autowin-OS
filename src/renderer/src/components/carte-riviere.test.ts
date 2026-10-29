@@ -489,7 +489,9 @@ describe('tout tient dans la hauteur de l’écran', () => {
     for (const echelleMax of [0.4, 0.7]) {
       const tasse = placer(13, 0, bords, W, echelleMax)
       expect(tasse.largeur).toBeGreaterThan(POSTIT_L)
-      expect(tasse.largeur).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX)
+      // Sous l'échelle 1, le plafond suit le grossissement du texte (conv-1242, texteDuPostit) : à
+      // l'écran, un post-it ne s'étire toujours pas au-delà de ETIREMENT_MAX × POSTIT_L.
+      expect(tasse.largeur * tasse.k).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX + 1e-9)
       // L'écriture garde l'échelle que la hauteur lui laisse : c'est le papier qui s'élargit.
       expect(tasse.k).toBe(echelleMax)
       for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {

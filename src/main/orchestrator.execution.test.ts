@@ -16,6 +16,7 @@ import type {
   StreamChunk
 } from './providers/types'
 import { RoleModelConfig } from './roles'
+import type { BrainRetrievalResult } from './brain-retrieval'
 import { compileExecutionQuote } from './execution-quote'
 import { TrustLedger } from './trust/ledger'
 import { STYLE_CLOTURE_CHAT, STYLE_TON } from './response-style'
@@ -354,6 +355,139 @@ describe('Orchestrator execution contract', () => {
     expect(consigneCandidatesBrain('\\\\nas1\\Brain')).toContain('EN ENTIER')
     expect(consigneCandidatesBrain(undefined)).toContain('`brain_read`')
     expect(consigneCandidatesBrain(undefined)).not.toContain('<chemin>')
+    // Sans notes perso, la consigne ne parle pas du Brain perso.
+    expect(consigneCandidatesBrain('\\\\nas1\\Brain')).not.toContain('perso:')
+  })
+
+  /*
+   * BRAIN PERSO DANS LE CONTEXTE DES RUNS (conv-1233, 2026-10-28, demande utilisateur : « étends le
+   * Brain perso au contexte des travaux lancés en arrière-plan : cherche aussi dans le Brain perso,
+   * avec le préfixe perso: »).
+   */
+  describe('Brain perso', () => {
+    const ENV_PERSO: NodeJS.ProcessEnv = { AUTOWIN_BRAIN_ROOT: 'C:\\Users\\moi\\Brain perso' }
+    const preamble = '[BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
+    const reponse = (chemin: string, racine: string): BrainRetrievalResult => {
+      const sources = [
+        { path: chemin, content: `### Candidate 1 — Note\n\`${chemin}\` · 1 Ko · domain` }
+      ]
+      return {
+        context: preamble + sources[0].content,
+        status: 'found',
+        structuredContext: { preamble, sources },
+        navigation: { query: 'q', minDense: 0.25, root: racine, candidates: [] }
+      }
+    }
+    const lancer = async (options: {
+      brainPerso?: () => NodeJS.ProcessEnv | undefined
+      perso: () => Promise<BrainRetrievalResult>
+      persoInjoignable?: () => void
+    }): Promise<{
+      prompt: string
+      vus: Array<{ env?: NodeJS.ProcessEnv; corpus?: readonly string[] }>
+      evenements: Array<{ status: string; injectedChars: number }>
+    }> => {
+      const provider = new CapturingProvider()
+      const vus: Array<{ env?: NodeJS.ProcessEnv; corpus?: readonly string[] }> = []
+      const evenements: Array<{ status: string; injectedChars: number }> = []
+      const orchestrator = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id },
+          judge: { provider: provider.id }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: process.cwd(),
+        brainPerso: options.brainPerso,
+        persoInjoignable: options.persoInjoignable,
+        retrieveBrain: async (_query, opts) => {
+          vus.push({ env: opts?.env, corpus: opts?.corpus })
+          return opts?.env === ENV_PERSO
+            ? options.perso()
+            : reponse('knowledge/lessons/equipe.md', '\\\\nas1\\Team Brain')
+        }
+      })
+      await orchestrator.run(
+        'analyse la mémoire en lecture seule sans la modifier',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '',
+        [],
+        'conv-brain-perso',
+        undefined,
+        (event) => evenements.push(event)
+      )
+      return {
+        prompt: provider.messages[0].map((message) => message.content).join('\n'),
+        vus,
+        evenements
+      }
+    }
+
+    it('cherche dans les deux Brains et marque les notes perso du préfixe perso:', async () => {
+      const { prompt, vus, evenements } = await lancer({
+        brainPerso: () => ENV_PERSO,
+        perso: async () => reponse('knowledge/domain/velo.md', ENV_PERSO.AUTOWIN_BRAIN_ROOT ?? '')
+      })
+      // Deux recherches : l'équipe, puis le perso — sans filtre de projet.
+      expect(vus).toHaveLength(2)
+      expect(vus.find((v) => v.env === ENV_PERSO)?.corpus).toBeUndefined()
+      expect(prompt).toContain('`knowledge/lessons/equipe.md`')
+      expect(prompt).toContain('`perso:knowledge/domain/velo.md`')
+      expect(prompt).not.toContain('`knowledge/domain/velo.md`')
+      expect(prompt).toContain('BRAIN PERSO')
+      // Une phase sans brain_read sait où lire la note perso : sous la racine PERSO, pas l'équipe.
+      expect(prompt).toContain(
+        consigneCandidatesBrain('\\\\nas1\\Team Brain', { racine: 'C:\\Users\\moi\\Brain perso' })
+      )
+      expect(prompt).toContain('`C:\\Users\\moi\\Brain perso/<chemin sans le préfixe>`')
+      expect(evenements).toHaveLength(1)
+      expect(evenements[0].status).toBe('found')
+    })
+
+    it('une note perso dans inbox/ (pas encore promue) n’entre jamais dans le contexte', async () => {
+      const { prompt } = await lancer({
+        brainPerso: () => ENV_PERSO,
+        perso: async () => reponse('inbox/20261028-fait.md', ENV_PERSO.AUTOWIN_BRAIN_ROOT ?? '')
+      })
+      expect(prompt).not.toContain('perso:')
+      expect(prompt).not.toContain('BRAIN PERSO')
+    })
+
+    it('sans Brain perso réglé : une seule recherche et un contexte inchangé', async () => {
+      const perso = vi.fn(async () => reponse('knowledge/domain/velo.md', 'x'))
+      const { prompt, vus } = await lancer({ brainPerso: () => undefined, perso })
+      expect(vus).toHaveLength(1)
+      expect(perso).not.toHaveBeenCalled()
+      expect(prompt).not.toContain('perso:')
+      expect(prompt).toContain(consigneCandidatesBrain('\\\\nas1\\Team Brain'))
+    })
+
+    it('serveur perso éteint : le run part avec l’équipe et l’app tente de le démarrer', async () => {
+      const injoignable = vi.fn()
+      const { prompt } = await lancer({
+        brainPerso: () => ENV_PERSO,
+        perso: async () => ({ context: '', status: 'unavailable', unavailableReason: 'network' }),
+        persoInjoignable: injoignable
+      })
+      expect(injoignable).toHaveBeenCalledTimes(1)
+      expect(prompt).toContain('`knowledge/lessons/equipe.md`')
+      expect(prompt).not.toContain('perso:')
+    })
+
+    it('une recherche perso qui lève ne casse pas le run', async () => {
+      const { prompt } = await lancer({
+        brainPerso: () => ENV_PERSO,
+        perso: async () => {
+          throw new Error('panne perso')
+        }
+      })
+      expect(prompt).toContain('`knowledge/lessons/equipe.md`')
+      expect(prompt).not.toContain('perso:')
+    })
   })
 
   it('notifie la récupération Brain avant une erreur ultérieure du provider', async () => {

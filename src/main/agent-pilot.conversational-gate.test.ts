@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { CONSTITUTION } from './constitution'
 
 /**
  * Contrat du GATE CONVERSATIONNEL de `chat()`.
@@ -47,7 +48,7 @@ describe('chat() — gate conversationnel', () => {
     // echoue) alors qu'il pouvait lire. La regle d'origine etait juste quand il etait AVEUGLE.
     expect(prompt).toContain("ANALYSER, ce n'est pas MODIFIER")
     expect(prompt).toContain('OUTILS DE LECTURE')
-    expect(prompt).toMatch(/Scouter, auditer[\s\S]{0,200}JAMAIS avec/)
+    expect(prompt).toMatch(/scouter, auditer[\s\S]{0,200}JAMAIS avec `orchestrate`/u)
   })
 
   it('oriente la correction ponctuelle vers edit_file + verify, pas vers le pipeline', () => {
@@ -61,7 +62,10 @@ describe('chat() — gate conversationnel', () => {
     // cap atteint -> « je n'y arrive pas » ET un workspace a moitie modifie.
     expect(prompt).toContain('FACE A UN BLOCAGE')
     expect(prompt).toContain('NETTOIE AVANT DE PARLER')
-    expect(prompt).toMatch(/echoue deux fois[\s\S]{0,80}Arrete-la/)
+    // « La meme approche qui echoue deux fois, arrete-la » vit dans la CONSTITUTION (reflexe 7),
+    // injectee dans le meme prompt systeme ; le doublon du pilotage est parti le 2026-10-28 (conv-1229).
+    expect(prompt).toContain("CHANGE D'APPROCHE (réflexe 7)")
+    expect(CONSTITUTION).toMatch(/change d'approche, ne répète pas la même/u)
     // Un echec doit NOMMER ce qui a ete essaye et ce qui manque.
     expect(prompt).toContain('NOMMANT ce que tu as essaye')
   })
@@ -75,10 +79,13 @@ describe('chat() — gate conversationnel', () => {
   })
 
   it('borne la « demande ouverte » : conversationnelle -> reponse, code -> orchestrate', () => {
-    expect(prompt).toContain('Si elle est CONVERSATIONNELLE')
-    expect(prompt).toContain('SANS aucune commande')
-    // Resserre apres essai reel : le critere est « faut-il TRAVAILLER dessus », pas « ça parle de code ».
-    expect(prompt).toContain("porte sur le CODE et demande d'y TRAVAILLER")
+    // Fondue dans la RÈGLE PREMIÈRE le 2026-10-28 (conv-1229) : la demande ouverte se tranche par le
+    // MEME critere que le reste — quelque chose doit-il CHANGER ? Non : options dans la reponse, sans
+    // commande. Oui (un chantier) : `orchestrate`, pipeline scout/frame.
+    expect(prompt).toMatch(
+      /Non → tu réponds DIRECTEMENT, AUCUNE commande[\s\S]*demande OUVERTE[\s\S]*options concrètes et scorées[\s\S]*Oui →/u
+    )
+    expect(prompt).toContain('mener un chantier (pipeline scout/frame si la demande est ouverte)')
   })
 
   it('ne lance pas build quand aucun livrable ni cible ne sont nommes', () => {
@@ -90,7 +97,8 @@ describe('chat() — gate conversationnel', () => {
   })
 
   it('n’exige jamais de renvoyer la question a l’utilisateur (divergence preservee)', () => {
-    expect(prompt).toContain('ne renvoie JAMAIS la question')
+    expect(prompt).toContain("ne se renvoie JAMAIS à l'utilisateur")
+    expect(prompt).toContain('DERNIER recours')
     expect(prompt).toContain('options concrètes et scorées')
   })
 
@@ -115,8 +123,8 @@ describe('chat() — skill nommée et demande de texte', () => {
   })
 
   it('exclut le pipeline quand le livrable demandé est du TEXTE', () => {
-    expect(prompt).toContain("UNE DEMANDE DE TEXTE N'EST PAS UNE DEMANDE D'ACTION")
-    expect(prompt).toContain('ZÉRO commande')
+    expect(prompt).toMatch(/DEMANDE DE TEXTE[^.]*se rédige dans ta réponse, ZÉRO commande/u)
+    expect(prompt).toContain('même si ce texte parle de lancer un run')
   })
 
   it('place ces deux règles APRÈS la RÈGLE PREMIÈRE dont elles précisent le tri', () => {

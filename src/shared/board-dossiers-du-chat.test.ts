@@ -111,4 +111,16 @@ describe('dossiersDuBoard — même les dossiers que le Chat propose toujours se
   it('un retrait ne cache pas un dossier que le Chat affiche (le Board suit le Chat)', () => {
     expect(dossiersDuBoard(['D:\\Factures'], [], ['D:\\Factures'])).toEqual(['D:\\Factures'])
   })
+
+  /** conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer ». */
+  it('« This computer » reste au Board même si une ancienne croix l’a mémorisé comme retiré', () => {
+    expect(
+      dossiersDuBoard(
+        ['D:\\Factures'],
+        toujours,
+        ['d:/autowinos', 'c:\\users\\MOI\\'],
+        ['C:\\Users\\moi']
+      )
+    ).toEqual(['D:\\Factures', 'C:\\Users\\moi'])
+  })
 })

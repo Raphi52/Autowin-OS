@@ -3,7 +3,7 @@ import { tableDeTextes } from '../textes'
 /**
  * TEXTES — NOMS DES THÈMES, MASCOTTE, DÉCORS DE L’ACCUEIL ET DERNIERS FICHIERS (traduction anglaise, conv-1170, 2026-10-27).
  *
- * Écrans couverts : theme-mode, MascotteReglage, les décors animés de l’accueil (`home-decor-*`), la réparation du
+ * Écrans couverts : theme-mode, MascotteReglage, NomSurLeBoardReglage, les décors animés de l’accueil (`home-decor-*`), la réparation du
  * diagnostic, le traitement des tickets et les derniers textes isolés.
  *
  * Une table par groupe d'écrans pour que les lots de traduction, menés en même temps, n'écrivent
@@ -25,6 +25,22 @@ export const TEXTES_FR = {
   'mascotte.erreurLecture': 'Le réglage de la mascotte n’a pas pu être lu.',
   'mascotte.erreurEnregistrement':
     'Le choix n’a pas pu être enregistré : la mascotte reste comme avant.',
+  // Le choix « Magicien / Basique » (conv-1249).
+  'mascotte.style.titre': 'Style de la mascotte',
+  'mascotte.style.description':
+    'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. Le changement est immédiat ; la mascotte garde sa place.',
+  'mascotte.style.magicien': 'Magicien',
+  'mascotte.style.basique': 'Basique',
+
+  // Settings · Interface — « Ton nom sur le Board » (NomSurLeBoardReglage.tsx, conv-1230).
+  'nomBoard.titre': 'Ton nom sur le Board',
+  'nomBoard.description':
+    'Le nom écrit sur **tes post-it**, dans ton Board et dans celui des **collègues** qui partagent le même dossier. Par défaut, ton **compte Windows** ({compte}).',
+  'nomBoard.libelle': 'Nom affiché',
+  'nomBoard.enregistrer': 'Enregistrer',
+  'nomBoard.parDefaut': 'Revenir au compte Windows',
+  'nomBoard.erreurLecture': 'Le nom du Board n’a pas pu être lu.',
+  'nomBoard.erreurEnregistrement': 'Le nom n’a pas pu être enregistré : il reste comme avant.',
 
   // Boutons « réparer » du diagnostic (preflight-repair-affordance.ts). Le français est AUSSI celui
   // du plan du moteur (`src/main/preflight-repair.ts`), que le test de contrat compare.
@@ -52,6 +68,20 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'mascotte.masquee': 'Hidden',
   'mascotte.erreurLecture': 'The mascot setting could not be read.',
   'mascotte.erreurEnregistrement': 'The choice could not be saved: the mascot stays as it was.',
+  'mascotte.style.titre': 'Mascot style',
+  'mascotte.style.description':
+    'The **wizard** wears a hat where the number shines, and casts spells while an agent is working. The **basic marble** stays a plain marble, with the number in the middle. The change is immediate; the mascot keeps its place.',
+  'mascotte.style.magicien': 'Wizard',
+  'mascotte.style.basique': 'Basic',
+
+  'nomBoard.titre': 'Your name on the Board',
+  'nomBoard.description':
+    'The name written on **your sticky notes**, in your Board and in the Board of **colleagues** who share the same folder. By default, your **Windows account** ({compte}).',
+  'nomBoard.libelle': 'Displayed name',
+  'nomBoard.enregistrer': 'Save',
+  'nomBoard.parDefaut': 'Back to the Windows account',
+  'nomBoard.erreurLecture': 'The Board name could not be read.',
+  'nomBoard.erreurEnregistrement': 'The name could not be saved: it stays as it was.',
 
   'reparation.claudeSession.libelle': 'Sign in',
   'reparation.claudeSession.note':

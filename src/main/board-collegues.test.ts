@@ -66,7 +66,8 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
       })
     )
     expect(lu?.postIts.map((p) => p.conversationId)).toEqual(['conv-1'])
-    expect(lu?.nom).toBe('Jean Dupont')
+    // Sans `nom` écrit par son poste : son compte, pas le demandeur git (conv-1230).
+    expect(lu?.nom).toBe('jdupont')
   })
 
   it('refuse un JSON cassé ou un autre format', () => {
@@ -87,16 +88,30 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
     expect(titre.length).toBeLessThanOrEqual(4000)
   })
 
-  it('nomme le collègue par son demandeur le plus fréquent, sinon par son compte', () => {
-    const lu = boardDuCollegue(
+  // conv-1230 : un poste avec identité git affichait un surnom git, un poste sans son compte.
+  it('nomme le collègue par le nom que son poste écrit, sinon par son compte — jamais par git', () => {
+    const avecNom = boardDuCollegue(
       'jdupont',
       JSON.stringify({
         format: 'autowin-board/1',
-        postIts: [postIt('conv-1', 'Jean'), postIt('conv-2', 'Jean D.'), postIt('conv-3', 'Jean')]
+        nom: 'Jean Dupont',
+        postIts: [postIt('conv-1', 'Surnom'), postIt('conv-2', 'Surnom')]
       })
     )
-    expect(nomDuCollegue('jdupont', lu?.postIts ?? [])).toBe('Jean')
-    expect(nomDuCollegue('jdupont', [])).toBe('jdupont')
+    expect(avecNom?.nom).toBe('Jean Dupont')
+    // Fichier d'avant le réglage (sans `nom`) : le compte Windows, pas le demandeur git majoritaire.
+    const sansNom = boardDuCollegue(
+      'jdupont',
+      JSON.stringify({
+        format: 'autowin-board/1',
+        postIts: [postIt('conv-1', 'Jean'), postIt('conv-3', 'Jean')]
+      })
+    )
+    expect(sansNom?.nom).toBe('jdupont')
+    // Un nom illisible ou trop long venu du partage ne passe pas.
+    expect(nomDuCollegue('jdupont', 42)).toBe('jdupont')
+    expect(nomDuCollegue('jdupont', 'x'.repeat(500))).toBe('jdupont')
+    expect(nomDuCollegue('jdupont', '  Jean\u0007  D. ')).toBe('Jean D.')
   })
 })
 
@@ -111,7 +126,8 @@ describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier
     })
     const lu = await lecteur.lire()
     expect(lu.collegues.map((c) => c.poste)).toEqual(['jdupont'])
-    expect(lu.collegues[0].nom).toBe('Jean Dupont')
+    // Son fichier n'écrit pas de `nom` : son compte Windows (conv-1230).
+    expect(lu.collegues[0].nom).toBe('jdupont')
     expect(lu.erreur).toBeUndefined()
   })
 

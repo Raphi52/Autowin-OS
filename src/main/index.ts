@@ -131,8 +131,18 @@ import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
 import { ensureBrainIndexFresh, readBrainHealth, reindexerApresMutation } from './brain-index-refresh'
 import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from './brain-reglage'
+import {
+  defaultBrainPersoRoot,
+  demarrerBrainPerso,
+  demarrerBrainPersoAuLancement,
+  envDuBrainPerso,
+  origineBrainPerso,
+  pingBrainPerso,
+  preparerDossierBrainPerso,
+  racineBrainPerso
+} from './brain-perso'
 import { defaultBrainRoot } from './brain-paths'
-import type { BrainReglageState } from '../shared/preload-contracts'
+import type { BrainPersoState, BrainReglageState } from '../shared/preload-contracts'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -415,7 +425,12 @@ import {
 } from './notification-fin-de-tour'
 import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
 import { creerMascotteDuBureau } from './mascotte-fenetre'
-import { ecrireMascotteAffichee, lireMascotteAffichee } from './mascotte-reglage'
+import {
+  ecrireMascotteAffichee,
+  ecrireStyleMascotte,
+  lireMascotteAffichee,
+  lireStyleMascotte
+} from './mascotte-reglage'
 import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -1232,9 +1247,24 @@ const dossierDuTour = (conversationId?: string): string =>
  * proches au plus (rang ≤ 3, score ≥ 0,40), jamais leur contenu, et RIEN quand aucune n'est proche
  * (détail et mesure : `brain-titres-du-tour.ts`).
  */
+/** Serveur du Brain perso injoignable : on le démarre en fond, la recherche suivante le trouvera. */
+const relancerBrainPerso = (): void => {
+  void demarrerBrainPerso()
+    .then((r) => {
+      if (r && r.status !== 'already-up') console.log('[brain-perso]', r.status, '—', r.detail)
+    })
+    .catch((e) => console.warn('[brain-perso] démarrage impossible —', String(e)))
+}
 const titresBrainDuTour = createBrainTitresDuTour({
-  workspace: (conversationId?: string) => dossierDuTour(conversationId)
+  workspace: (conversationId?: string) => dossierDuTour(conversationId),
+  // BRAIN PERSO (conv-1233, 2026-10-28) : ses notes proches arrivent aussi, préfixées `perso:`.
+  brainPerso: () => envDuBrainPerso(),
+  persoInjoignable: relancerBrainPerso
 })
+// BRAIN PERSO dans le contexte des travaux en arrière-plan (conv-1233, 2026-10-28) : chaque run
+// cherche aussi dans le Brain perso, notes préfixées `perso:` (`orchestrator.ts`).
+os.brainPersoDuRun = () => envDuBrainPerso()
+os.brainPersoInjoignable = relancerBrainPerso
 const contexteGrapheDuTour = createBrainContextProvider({
   // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc CONTOSO, donc une question Autowin ramenait
   // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
@@ -2093,6 +2123,17 @@ function registerChatIpc(): void {
     ecrireMascotteAffichee(affichee)
     mascotteDuBureau.afficher(lireMascotteAffichee())
     return lireMascotteAffichee()
+  })
+  // Le choix « Magicien / Basique » de la même ligne de Settings · Interface (conv-1249).
+  ipcMain.handle('os:mascotte:style', (event) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    return lireStyleMascotte()
+  })
+  ipcMain.handle('os:mascotte:choisir-style', (event, style: unknown) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    ecrireStyleMascotte(style)
+    mascotteDuBureau.changerStyle(lireStyleMascotte())
+    return lireStyleMascotte()
   })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
@@ -3158,6 +3199,62 @@ Le fil reprend ensuite normalement.`
     return brainReglageState()
   })
 
+  // BRAIN PERSO (conv-1233, 2026-10-28) : même formulaire que celui de l'équipe, son propre fichier
+  // (`brain-perso.json`). Pas de redémarrage : le serveur perso démarre dès l'enregistrement.
+  const brainPersoState = async (erreur?: string): Promise<BrainPersoState> => {
+    const reglage = lireBrainReglage(process.env, 'perso')
+    const racine = racineBrainPerso() ?? null
+    const envPerso = envDuBrainPerso()
+    // Un serveur perso lancé AVANT un changement de dossier sert encore l'ancien (même garde que
+    // pour l'équipe : /health porte la racine servie).
+    const serveurRacine = envPerso
+      ? ((await readBrainHealth(fetch, envPerso, 2000))?.root ?? null)
+      : null
+    return {
+      choisi: reglage.chemin || reglage.depot ? reglage : null,
+      racine,
+      origine: origineBrainPerso(),
+      serveurJoignable: racine ? await pingBrainPerso() : false,
+      serveurRacine,
+      serveurSurUnAutreDossier:
+        racine !== null && serveurRacine !== null && !memeDossier(serveurRacine, racine),
+      ...(erreur ? { erreur: erreur.replace(/\/\/[^@/\s]*@/g, '//***@') } : {})
+    }
+  }
+
+  ipcMain.handle('os:brain-perso', (event) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    return brainPersoState()
+  })
+
+  ipcMain.handle('os:brain-perso:enregistrer', async (event, entree: unknown) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    const champs = (entree && typeof entree === 'object' ? entree : {}) as {
+      chemin?: unknown
+      depot?: unknown
+    }
+    try {
+      const reglage = await appliquerBrainReglage(
+        { chemin: champs.chemin, depot: champs.depot },
+        { racineParDefaut: defaultBrainPersoRoot(), quel: 'perso' }
+      )
+      const racine = reglage.chemin ?? (reglage.depot ? defaultBrainPersoRoot() : undefined)
+      if (racine) preparerDossierBrainPerso(racine)
+      const lancement = await demarrerBrainPerso()
+      if (lancement) console.log('[brain-perso] serveur', lancement.status, '—', lancement.detail)
+      return brainPersoState()
+    } catch (error) {
+      return brainPersoState(error instanceof Error ? error.message : String(error))
+    }
+  })
+
+  ipcMain.handle('os:brain-perso:reset', (event) => {
+    assertTrustedRendererSender(event, 'Brain perso')
+    // Retire le RÉGLAGE seulement : le dossier et ses notes restent sur le disque.
+    effacerBrainReglage(process.env, 'perso')
+    return brainPersoState()
+  })
+
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
     const selected = await pickDirectory(event.sender)
@@ -3767,7 +3864,7 @@ Le fil reprend ensuite normalement.`
       },
       ouvrirAutowin: () => showMainWindow(),
       titreDuFil: (id) => os.conversations.get(id)?.title
-    }, lireMascotteAffichee())
+    }, lireMascotteAffichee(), lireStyleMascotte())
 
   /*
    * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
@@ -6006,6 +6103,14 @@ app.whenReady().then(async () => {
     pingBrain: () => appPreflightProbes().pingBrain(),
     onEvent: (message) => console.log(message)
   })
+
+  // BRAIN PERSO (conv-1233, 2026-10-28) : son serveur démarre avec l'app, à côté de celui de
+  // l'équipe. Une instance de TEST n'y touche pas, comme pour le Brain d'équipe.
+  if (!isolatedTestInstance) {
+    void demarrerBrainPersoAuLancement().catch((e) =>
+      console.warn('[brain-perso] démarrage impossible —', String(e))
+    )
+  }
 
   // MOTEUR RECHARGÉ SANS TUER PERSONNE (dev seulement) : l'interface se recharge déjà à chaud ; le
   // moteur, lui, est recompilé en coulisse à chaque modification et l'app ne se relance que quand

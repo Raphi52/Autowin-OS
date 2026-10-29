@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
 import { basculerTheme } from '../transition-de-vue'
 import { MascotteReglage } from './MascotteReglage'
+import { NomSurLeBoardReglage } from './NomSurLeBoardReglage'
 import './InterfaceView.css'
 
 /**
@@ -142,6 +143,7 @@ export function InterfaceView(): React.JSX.Element {
         </label>
       </div>
       <MascotteReglage />
+      <NomSurLeBoardReglage />
       <p className="interface-reserve" data-testid="interface-zoom">
         {riche(t('interface.zoom'))}
       </p>

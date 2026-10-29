@@ -271,6 +271,71 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
   })
 
   /*
+   * LIMITE D'USAGE PRISE POUR UN LOT « FAIT » (conv-1236, plan-c21413ba, 2026-10-28). Les lots 1,
+   * 2 et 5 du thème Golden ont été notés « fait » sans une ligne écrite, et le plafond de 3 tours
+   * s'est épuisé sur eux. Deux formes réelles, recopiées de turn-journals/ :
+   *  - le tour du lot finit sans erreur, mais son `orchestrate` a buté sur la limite (conv-1237,
+   *    tour 5bdd19cc : événement `outcome` « failed », réponse « Échec du workflow : … ») ;
+   *  - le tour lui-même échoue sur la limite des 5 heures (conv-1236, tour 98f5030c), une forme que
+   *    `estMurDeQuota` ne connaissait pas.
+   */
+  const murHebdo =
+    "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie\n• claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your weekly limit · resets 4am (Europe/Paris)"
+  const mur5h =
+    "Claude a interrompu l'appel : You've hit your 5-hour limit · resets 11pm (Europe/Paris)"
+
+  it('tour ok dont l’orchestration a buté sur la limite d’usage : échec, plan suspendu, tour rendu', () => {
+    const avant = deuxEnCours()
+    const r = noterFinDeTour(
+      avant,
+      'conv-110',
+      { ok: true, texte: `Échec du workflow : ${murHebdo}`, echecOrchestration: murHebdo },
+      3000
+    )
+    expect(r.lot?.etat).toBe('echec')
+    expect(r.lot?.raison).toMatch(/You've hit your weekly limit/)
+    expect(r.plan.statut).toBe('suspendu-quota')
+    expect(r.plan.toursLances).toBe(avant.toursLances - 1)
+  })
+
+  it('tour en échec sur la limite des 5 heures : échec, plan suspendu, tour rendu', () => {
+    const avant = deuxEnCours()
+    const r = noterFinDeTour(avant, 'conv-110', { ok: false, erreur: mur5h }, 3000)
+    expect(r.lot?.etat).toBe('echec')
+    expect(r.plan.statut).toBe('suspendu-quota')
+    expect(r.plan.toursLances).toBe(avant.toursLances - 1)
+  })
+
+  it('cas réel : 3 lots coupés par la limite ne vident pas le plafond, « Reprendre » les relance', () => {
+    // Plan Golden : 6 lots, 3 en parallèle, plafond de 3 tours.
+    let p = lancerCeQuiPart(
+      planAccepte({
+        parallele: 3,
+        plafondTours: 3,
+        lots: [lot(1), lot(2), lot(3), lot(4), lot(5), lot(6)]
+      })
+    )
+    expect(p.toursLances).toBe(3)
+    p = noterFinDeTour(p, 'conv-110', { ok: true, echecOrchestration: murHebdo }, 3000).plan
+    p = noterFinDeTour(p, 'conv-120', { ok: true, echecOrchestration: mur5h }, 3001).plan
+    p = noterFinDeTour(p, 'conv-130', { ok: false, erreur: mur5h }, 3002).plan
+    expect(p.lots.filter((l) => l.etat === 'fait')).toEqual([])
+    expect(p.toursLances).toBe(0)
+    expect(p.statut).toBe('suspendu-quota')
+    const repris = reprendrePlan(p)
+    expect(repris.ok).toBe(true)
+    if (repris.ok) expect(lotsAPartir(repris.plan)).toEqual([1, 2, 3])
+  })
+
+  it('une réponse qui CITE la limite sans que le tour y ait buté reste « fait »', () => {
+    // Un lot qui travaille sur la détection du quota écrit ce texte dans son résumé.
+    const texte = `J’ai ajouté la forme « ${mur5h} » au détecteur ; tests verts.`
+    const r = noterFinDeTour(deuxEnCours(), 'conv-110', { ok: true, texte }, 3000)
+    expect(r.lot?.etat).toBe('fait')
+    expect(r.plan.statut).toBe('en-cours')
+  })
+
+  /*
    * UN TOUR « OK » QUI SE DÉCLARE BLOQUÉ (conv-1153, lot 1 du plan conv-1151, 2026-10-26) : le tour
    * finit sans erreur, mais l'agent écrit « ⛔ Bloqué » ou « ⚠️ Non résolu » (consigne de
    * `response-style.ts`). Noté « fait », le chef ne le relançait pas. Même lecture que la carte du

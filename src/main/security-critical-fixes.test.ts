@@ -692,7 +692,24 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script ; nom et
     //     chemin partent par un fichier temporaire UTF-8, jamais en ligne de commande.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(251)
+    // MISE A JOUR 2026-10-28 (conv-1230) — 251 -> 255, MESURE sur l'arbre partage. ATTRIBUTION :
+    //   ce test etait DEJA rouge a 254 avant ce changement, sur TROIS canaux non commites de
+    //   conv-1233 (Brain perso, `index.ts`) : `os:brain-perso`, `os:brain-perso:enregistrer`,
+    //   `os:brain-perso:reset`. PLUS UN, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Dossier du Board')` (`ipc/carte-des-besoins.ts`) :
+    //   `os:board-dossier:nom` — le nom de ce poste sur le Board. Le texte passe par
+    //     `nomDuPosteLisible` (chaine, caracteres de controle retires, 80 au plus ; vide ou `null` =
+    //     le compte Windows) ; illisible = refus, rien n'est retenu. Ecrit seulement dans
+    //     `board-dossier.json` (userData) ; aucun chemin recu de la vue.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-29 (conv-1249) — +2, choix « Magicien / Basique » de la mascotte
+    //   (`index.ts`), gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` :
+    //   `os:mascotte:style` — LECTURE du style (`mascotte.json`, %APPDATA%autowin-os) ; aucun argument.
+    //   `os:mascotte:choisir-style` — ECRIT ce style ; `ecrireStyleMascotte` refuse tout ce qui n'est
+    //     pas `magicien` ou `basique`, puis la fenetre de la mascotte est recreee dans ce style.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(257)
     expect(unguarded).toEqual([])
   })
 

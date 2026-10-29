@@ -11,6 +11,7 @@ import {
 import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
 import { dirname, extname, join, posix, relative, resolve, win32 } from 'node:path'
 import { sharedBrainRoot, teamWorkspaces } from '../brain-paths'
+import { racineBrainPerso } from '../brain-perso-racine'
 import { identiteMetier, type IdentiteMetier } from '../identite-entreprise'
 import { brainSourcePathAllowed } from '../brain-corpus-scope'
 import type { BrainNavigation } from '../brain-retrieval'
@@ -37,6 +38,8 @@ export interface BrainGraphRef {
   path: string
   sizeMb: number
   kind: 'vault'
+  /** Le Brain PERSO de l'utilisateur (conv-1233) : la vue marque ses notes « perso ». */
+  perso?: true
   themes?: BrainTheme[]
   /** Domaine metier de l'entreprise (profil), pour classer ses fiches dans la vue ; absent = neutre. */
   metier?: MetierGraphe
@@ -239,23 +242,43 @@ function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): bool
   }
 }
 
+/**
+ * LES VAULTS QUE LA VUE KNOWLEDGE PEUT OUVRIR : le Brain d'équipe et, s'il est réglé, le Brain
+ * PERSO de l'utilisateur (conv-1233, 2026-10-28, demande : « affiche le Brain perso dans la vue
+ * Knowledge, à côté du Brain d'équipe »). Relu à chaque appel : un Brain perso réglé dans les
+ * Réglages s'ouvre sans redémarrer. Une racine imposée par l'appelant (`allowedRoot`) reste la
+ * SEULE autorisée, comme avant.
+ */
+export function racinesBrainVue(allowedRoot?: string): string[] {
+  if (allowedRoot !== undefined) return [allowedRoot]
+  let perso: string | undefined
+  try {
+    perso = racineBrainPerso()
+  } catch {
+    // Réglage perso illisible : seul le Brain d'équipe reste ouvrable.
+    perso = undefined
+  }
+  return perso ? [SHARED_BRAIN_ROOT, perso] : [SHARED_BRAIN_ROOT]
+}
+
 /** Frontière synchrone commune à toutes les lectures renderer d'un vault. */
-function assertAuthorizedBrainVaultSync(
-  requestedRoot: string,
-  allowedRoot = SHARED_BRAIN_ROOT
-): string {
+function assertAuthorizedBrainVaultSync(requestedRoot: string, allowedRoot?: string): string {
   let requestedRealRoot: string
-  let allowedRealRoot: string
   try {
     requestedRealRoot = realpathSync.native(resolve(requestedRoot))
-    allowedRealRoot = realpathSync.native(resolve(allowedRoot))
   } catch {
     throw new Error('brain vault hors périmètre autorisé')
   }
-  if (!retrievalRootsMatch(requestedRealRoot, allowedRealRoot)) {
-    throw new Error('brain vault hors périmètre autorisé')
+  for (const racine of racinesBrainVue(allowedRoot)) {
+    let allowedRealRoot: string
+    try {
+      allowedRealRoot = realpathSync.native(resolve(racine))
+    } catch {
+      continue
+    }
+    if (retrievalRootsMatch(requestedRealRoot, allowedRealRoot)) return requestedRealRoot
   }
-  return requestedRealRoot
+  throw new Error('brain vault hors périmètre autorisé')
 }
 
 function realPathIsWithinRoot(realPath: string, root: string): boolean {
@@ -301,22 +324,24 @@ async function retrievalRootsMatchAsync(
 /** Autorise un vault avant tout appel au retrieval global, avec la même identité disque que la fusion. */
 export async function assertAuthorizedBrainVaultAsync(
   requestedRoot: string,
-  allowedRoot = SHARED_BRAIN_ROOT
+  allowedRoot?: string
 ): Promise<string> {
   let requestedRealRoot: string
-  let allowedRealRoot: string
   try {
-    ;[requestedRealRoot, allowedRealRoot] = await Promise.all([
-      realpathAsync(resolve(requestedRoot)),
-      realpathAsync(resolve(allowedRoot))
-    ])
+    requestedRealRoot = await realpathAsync(resolve(requestedRoot))
   } catch {
     throw new Error('brain vault hors périmètre autorisé')
   }
-  if (!(await retrievalRootsMatchAsync(requestedRealRoot, allowedRealRoot))) {
-    throw new Error('brain vault hors périmètre autorisé')
+  for (const racine of racinesBrainVue(allowedRoot)) {
+    let allowedRealRoot: string
+    try {
+      allowedRealRoot = await realpathAsync(resolve(racine))
+    } catch {
+      continue
+    }
+    if (await retrievalRootsMatchAsync(requestedRealRoot, allowedRealRoot)) return requestedRealRoot
   }
-  return requestedRealRoot
+  throw new Error('brain vault hors périmètre autorisé')
 }
 
 async function operationalRelativeAsync(
@@ -502,6 +527,29 @@ export function scanBrainGraphs(
     })
   }
   return found
+}
+
+/**
+ * Le Brain PERSO dans la liste des graphes de la vue, à côté de celui de l'équipe (conv-1233).
+ * Vide sans Brain perso réglé, ou si son dossier n'existe pas encore. Pas de domaine métier : ses
+ * notes ne sont rangées par aucun projet de l'entreprise.
+ */
+export function brainPersoGraphRefs(
+  racine: string | undefined = racineBrainPerso(),
+  includeVaultThemes = true
+): BrainGraphRef[] {
+  if (!racine || !existsSync(racine) || retrievalRootsMatch(racine, SHARED_BRAIN_ROOT)) return []
+  return [
+    {
+      id: 'brain-perso',
+      label: 'Brain perso',
+      path: racine,
+      sizeMb: 0,
+      kind: 'vault',
+      perso: true,
+      themes: includeVaultThemes ? vaultThemeCatalog(racine) : []
+    }
+  ]
 }
 
 /** Plafond de sécurité sur la taille lue (évite d'avaler un fichier aberrant). */
@@ -751,7 +799,7 @@ export async function searchVaultBrainNotesAsync(
     corpus?: readonly string[]
   } = {}
 ): Promise<BrainNoteSearchResult[]> {
-  const { limit = 40, allowedRoot = SHARED_BRAIN_ROOT, corpus } = options
+  const { limit = 40, allowedRoot, corpus } = options
   const normalized = normalizeSearchText(query)
   const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
   if (!normalized || tokens.length === 0 || limit <= 0 || corpus?.length === 0) return []
@@ -978,7 +1026,7 @@ function vaultThemeCatalog(root: string, corpus?: readonly string[]): BrainTheme
 export async function loadBrainThemes(
   path: string,
   corpus?: readonly string[],
-  allowedRoot = SHARED_BRAIN_ROOT
+  allowedRoot?: string
 ): Promise<BrainTheme[]> {
   if (corpus?.length === 0) return []
   if (!existsSync(path) || !statSync(path).isDirectory()) return []
@@ -1208,7 +1256,7 @@ export function readNodeFile(
   path: string,
   vaultRoot?: string,
   corpus?: readonly string[],
-  allowedVaultRoot = SHARED_BRAIN_ROOT,
+  allowedVaultRoot?: string,
   openDescriptor: (canonicalPath: string) => number = openVaultNoteDescriptor
 ): { path: string; content: string } {
   if (!existsSync(path)) throw new Error('fichier introuvable')
@@ -1224,7 +1272,7 @@ export function readNodeFile(
   // Brain canonique reste soumise au corpus, même si un ancien appelant omet `vaultRoot`.
   if (
     authorizedVault === undefined &&
-    realPathIsWithinRoot(real, allowedVaultRoot) &&
+    realPathIsWithinRoot(real, allowedVaultRoot ?? SHARED_BRAIN_ROOT) &&
     !brainSourcePathAllowed(real, corpus)
   ) {
     throw new Error('fichier hors corpus du workspace')

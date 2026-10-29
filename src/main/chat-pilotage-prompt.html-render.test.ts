@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import {
+  REGLES_VISUELLES,
+  buildChatPilotagePrompt,
+  tourTouchantAuVisuel
+} from './chat-pilotage-prompt'
 
 describe('chat HTML rendering contract', () => {
   it('teaches every orchestrator the explicit local-only fence without replacing normal text', () => {
@@ -29,9 +33,16 @@ describe('chat HTML rendering contract', () => {
     // conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : scene fixe de 1600 px coupee dans la
     // colonne, verifiee sur une copie a 1640 px — saisie ts=1791619766383 « je vois les 6 memes ».
     const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toContain('LARGEUR DU BLOC')
+    // La regle de base sert a TOUT bloc, tableau d'une reponse ordinaire compris : servie a chaque tour.
     expect(prompt).toMatch(/COLONNE de réponse/u)
-    expect(prompt).toMatch(/jamais une scène de taille fixe réduite par zoom/u)
-    expect(prompt).toContain('node scripts/html-render-apercu.mjs')
+    expect(prompt).toMatch(/dessine-le FLUIDE \(largeur 100 %, flex-wrap/u)
+    // Le detail des maquettes (conv-1229, 2026-10-28) ne part qu'aux tours visuels : il n'est plus
+    // dans le corps, il est entier dans le bloc visuel, et une demande de maquette ouvre ce bloc.
+    expect(prompt).not.toContain('html-render-apercu')
+    expect(REGLES_VISUELLES).toContain('LARGEUR DU BLOC')
+    expect(REGLES_VISUELLES).toMatch(/jamais une scène de taille fixe réduite par zoom/u)
+    expect(REGLES_VISUELLES).toContain('node scripts/html-render-apercu.mjs')
+    expect(tourTouchantAuVisuel('montre-moi six variantes de la maquette du menu')).toBe(true)
+    expect(tourTouchantAuVisuel('/draft la page des réglages')).toBe(true)
   })
 })

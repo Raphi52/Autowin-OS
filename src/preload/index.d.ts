@@ -30,6 +30,7 @@ import type {
   ChatAttachment,
   AgentTopology,
   ExecutionWorkspaceState,
+  BrainPersoState,
   BrainReglageState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
@@ -295,6 +296,9 @@ interface ChatApi {
   /** La mascotte du bureau (conv-1145) : affichée ou masquée, choix gardé par le moteur. */
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>
+  /** Le style de la mascotte du bureau : le magicien ou la bille basique (conv-1249). */
+  styleMascotte: () => Promise<'magicien' | 'basique'>
+  choisirStyleMascotte: (style: 'magicien' | 'basique') => Promise<'magicien' | 'basique'>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
@@ -506,6 +510,10 @@ interface ChatApi {
   choisirDossierBrain: () => Promise<string | null>
   enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }) => Promise<BrainReglageState>
   resetBrainReglage: () => Promise<BrainReglageState>
+  /** Le Brain PERSO, privé, à côté de celui de l'équipe (conv-1233, `src/main/brain-perso.ts`). */
+  brainPerso: () => Promise<BrainPersoState>
+  enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
+  resetBrainPerso: () => Promise<BrainPersoState>
   onModelQuestion: (cb: (question: PendingModelQuestion) => void) => () => void
   answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
   toolUsage: () => Promise<
@@ -540,6 +548,9 @@ interface ChatApi {
   boardDossierEffacer: () => Promise<EtatDuDossierDuBoard>
   /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
   boardDossierProjets: (projets: string[] | null) => Promise<EtatDuDossierDuBoard>
+  /** Le nom de ce poste sur le Board, `null` = le compte Windows (conv-1230) ; absent = preload
+   *  d'avant redémarrage. */
+  boardDossierNom?: (nom: string | null) => Promise<EtatDuDossierDuBoard>
   /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
   boardCollegues: () => Promise<BoardsDesCollegues>
   /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */

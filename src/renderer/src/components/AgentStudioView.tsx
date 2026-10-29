@@ -9,6 +9,7 @@ import { ViewTopBar } from './ViewTopBar'
 // un renommage laisse a moitie fait — et un lecteur qui cherche `RolesView` ne trouve pas le code.
 import { AgentsTopologyView } from './AgentsTopologyView'
 import { WorkflowProfilesView } from './WorkflowProfilesView'
+import { PetitesTachesReglage } from './PetitesTachesReglage'
 import './ViewPage.css'
 import './DomainShell.css'
 
@@ -96,7 +97,15 @@ export function AgentStudioView({
         {section === 'workflows' ? (
           <WorkflowProfilesView active={active} />
         ) : (
-          <AgentsTopologyView active={active} />
+          <>
+            {/* Le modèle des petites tâches, aussi ici (conv-1240) : même bloc que Routage. */}
+            <PetitesTachesReglage
+              active={active}
+              idBase="studio-petites-taches-modele"
+              testId="studio-petites-taches"
+            />
+            <AgentsTopologyView active={active} />
+          </>
         )}
       </div>
     </section>

@@ -646,8 +646,13 @@
   min-width: 0;
 }
 
-/* Les deux boutons forment une seule bande : seul le dernier garde l'arrondi de droite. */
-.home-notices li:has(> .home-notices__acquitter) > button:first-child {
+/* Les deux boutons forment une seule bande : seul le dernier garde l'arrondi de droite.
+   Sans `:has()` (conv-1229) : la croix est le seul frère possible du bouton, donc « suivi d'un
+   frère » suffit. Écrite `li:has(> .home-notices__acquitter) > button:first-child`, la règle
+   ajoutait la balise `button` à l'ensemble d'invalidation que Chromium partage entre TOUTES les
+   règles `:has()` : chaque frappe dans la saisie du chat restylait alors tous les boutons de
+   l'app (≈ 220 ms par lettre, gel de 15 s puis rechargement de la fenêtre, 28/10 18:31). */
+.home-notices li > button:first-child:not(:last-child) {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }

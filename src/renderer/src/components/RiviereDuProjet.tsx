@@ -64,6 +64,7 @@ import {
   PLACE_DES_GESTES,
   POSTIT_H,
   bordsDesColonnes,
+  cadreDuTexte,
   disposerEtages,
   etiquettesDesJours,
   foyerDAujourdhui,
@@ -72,6 +73,7 @@ import {
   placer,
   poidsDesJours,
   riviereDe,
+  texteDuPostit,
   type EtageDeLaRiviere,
   type Loupe,
   type PostItDeLaRiviere
@@ -109,7 +111,10 @@ const SEUIL_GLISSER = 5
 const PAS_DE_MOLETTE = 50
 /** En dessous, la colonne ne trace plus son bord : à 3 mois, 90 traits gris tous les 4 px griseraient le tableau. */
 const COLONNE_SERREE = 12
-/** En dessous, le post-it n'est plus qu'une pastille de couleur : son texte serait illisible. */
+/**
+ * En dessous, les gestes « vérifier » reprennent leur taille d'origine au lieu de suivre le post-it.
+ * Elle cachait aussi le texte jusqu'au 2026-10-28 : c'est désormais `texteDuPostit` (conv-1242).
+ */
 const ECHELLE_TEXTE = 0.55
 const DEMANDES_DE_LA_FICHE = 12
 const COULEURS_PERSONNES = ['#e9bd4e', '#4fb6e0', '#ff85c8', '#7cc46b', '#b48cff', '#ff9f5a']
@@ -310,6 +315,9 @@ export function RiviereDuProjet({
     const el = cadre.current
     if (!el) return
     const surMolette = (e: WheelEvent): void => {
+      // Ctrl + molette est le zoom de l'app (App.tsx) : il déplaçait AUSSI la loupe d'une
+      // demi-journée par cran, et les post-it regardés perdaient leur texte (conv-1242).
+      if (e.ctrlKey) return
       const facteur = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1
       // La fiche ouverte garde son propre défilement.
       if ((e.target as Element | null)?.closest?.('.riviere-fiche')) return
@@ -479,17 +487,8 @@ export function RiviereDuProjet({
           </span>
         )}
         {verifier && <ToutVerifier aVerifier={aVerifier} verifier={verifier} />}
-        {/* Le compte et l'aide, en tête : rien ne reste sous le tableau (« que ce board »). */}
-        <span className="riviere-compte" data-testid="riviere-pied" title={t('riviere.aide')}>
-          <b>{riviere.postits.length}</b>{' '}
-          {t(recul === 0 ? 'riviere.pied.filsSur' : 'riviere.pied.fils', { fenetre })}
-          {riviere.horsFenetre > 0 && t('riviere.pied.plusAnciens', { n: riviere.horsFenetre })}
-          {riviere.plusRecents > 0 && t('riviere.pied.plusRecents', { n: riviere.plusRecents })}
-          {t('riviere.pied.loupe')}
-          {/* Dans le passé, « revenir à aujourd’hui » dit déjà où l'on est ; l'indice y passait sur
-              deux lignes et volait sa hauteur au tableau (capture à 900 px, conv-1131). */}
-          {recul === 0 && t('riviere.pied.molette')}
-        </span>
+        {/* Plus de ligne de compte ni d'aide à la molette en tête : l'utilisateur l'a fait retirer
+            (conv-1226, « vire ce texte du board »). La fenêtre reste dite par l'aria-label. */}
       </div>
       <div ref={cadre} className="riviere-cadre" data-testid="riviere-cadre">
         {/* La bande des jours reste en place pendant que le tableau défile dessous. */}
@@ -588,6 +587,10 @@ export function RiviereDuProjet({
               const px = enMain ? enMain.x0 + enMain.dx : x
               const py = enMain ? enMain.y0 + enMain.dy : y
               const estompe = personne !== null && p.demandeur?.cle !== personne
+              // Le texte garde sa taille à l'écran ; ce sont ses lignes qui cèdent (conv-1242). Son
+              // bloc est contre-échelonné même en pastille : il reste continu quand elle s'écrit.
+              const texte = texteDuPostit(k, largeur)
+              const cadreTexte = texte ?? cadreDuTexte(k, largeur)
               return (
                 <button
                   key={p.conversationId}
@@ -599,7 +602,8 @@ export function RiviereDuProjet({
                   data-etage={p.etage}
                   data-manuel={p.manuel ? '1' : undefined}
                   data-collegue={p.collegue?.poste}
-                  data-taille={k >= ECHELLE_TEXTE ? 'carte' : 'puce'}
+                  data-taille={texte ? 'carte' : 'puce'}
+                  data-meta={texte && !texte.avecMeta ? 'sans' : undefined}
                   data-estompe={estompe || undefined}
                   data-glisse={enMain ? '1' : undefined}
                   data-choisi={choisi === p.conversationId || undefined}
@@ -674,16 +678,30 @@ export function RiviereDuProjet({
                       } as React.CSSProperties
                     }
                   />
-                  <span className="riviere-postit-titre">{p.titre}</span>
-                  <span className="riviere-postit-meta">
-                    {/* Le nom du collègue d'abord (conv-1210) : la ligne se coupe par la fin. */}
-                    {p.collegue && (
-                      <b className="riviere-postit-collegue" data-testid="riviere-postit-collegue">
-                        {p.collegue.nom} ·{' '}
-                      </b>
-                    )}
-                    {p.projet} · {heure(p.instant)} ·{' '}
-                    {t('riviere.postit.demandes', { n: p.demandes.length })}
+                  <span
+                    className="riviere-postit-texte"
+                    data-testid="riviere-postit-texte"
+                    style={{
+                      width: cadreTexte.largeur,
+                      transform: `scale(${cadreTexte.grossi})`
+                    }}
+                  >
+                    <span className="riviere-postit-titre" data-lignes={texte?.lignes}>
+                      {p.titre}
+                    </span>
+                    <span className="riviere-postit-meta">
+                      {/* Le nom du collègue d'abord (conv-1210) : la ligne se coupe par la fin. */}
+                      {p.collegue && (
+                        <b
+                          className="riviere-postit-collegue"
+                          data-testid="riviere-postit-collegue"
+                        >
+                          {p.collegue.nom} ·{' '}
+                        </b>
+                      )}
+                      {p.projet} · {heure(p.instant)} ·{' '}
+                      {t('riviere.postit.demandes', { n: p.demandes.length })}
+                    </span>
                   </span>
                 </button>
               )

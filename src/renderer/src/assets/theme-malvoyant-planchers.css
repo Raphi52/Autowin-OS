@@ -479,7 +479,8 @@
 :root[data-theme^='malvoyant-'] .node-links__degre,
 :root[data-theme^='malvoyant-'] .node-links__relation,
 :root[data-theme^='malvoyant-'] .node-links__saut > summary,
-:root[data-theme^='malvoyant-'] .node-panel__copier {
+:root[data-theme^='malvoyant-'] .node-panel__copier,
+:root[data-theme^='malvoyant-'] .note-perso {
   font-size: 13px;
 }
 
@@ -801,6 +802,12 @@
 :root[data-theme^='malvoyant-'] .model-quota-reset button,
 :root[data-theme^='malvoyant-'] .model-quota-reset-message {
   color: var(--text);
+}
+
+/* components/NomSurLeBoardReglage.css — tailles */
+:root[data-theme^='malvoyant-'] .nom-board-compact-titre,
+:root[data-theme^='malvoyant-'] .nom-board-compact .nom-board-erreur {
+  font-size: 13px;
 }
 
 /* components/ObservatoryView.css — tailles */

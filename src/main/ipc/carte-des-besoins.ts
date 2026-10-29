@@ -47,6 +47,7 @@ import {
   dossiersDuChatLisibles
 } from '../../shared/board-dossiers-du-chat'
 import { creerDossiersDuChat } from '../board-dossiers-du-chat'
+import { carteAuNomDuPoste, nomDuPosteLisible } from '../../shared/board-nom-du-poste'
 import type { CarteDesBesoins } from '../../shared/carte-des-besoins'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
@@ -54,6 +55,7 @@ import type { BoardsDesCollegues } from '../../shared/board-collegues'
 import type { TicketItem, TicketSourceProfile } from '../../shared/tickets'
 import type { TicketGetRequest } from '../ticket-providers/provider-contract'
 import type { AutowinOS } from '../os'
+import { interfaceVisible } from '../startup-gate'
 
 /** La lecture des fiches, et elle seule : le type n'offre aucune écriture chez le fournisseur. */
 export interface LectureDesTickets {
@@ -114,7 +116,8 @@ export function registerCarteDesBesoinsIpc({
   tickets,
   dossierDuBoard,
   choisirDossier,
-  racineDuPoste
+  racineDuPoste,
+  prechauffageApres
 }: {
   os: Pick<AutowinOS, 'conversations' | 'runsWithGate' | 'executionWorkspace'>
   journal?: { lire: () => ReadonlyMap<string, EntreeDuJournal> }
@@ -128,11 +131,15 @@ export function registerCarteDesBesoinsIpc({
   /** Dossier de données du poste, où la copie de fin de tour garde les états posés à la main
    *  (`board-etats-manuels.json`, conv-1210) ; absent = aucune copie de fin de tour. */
   racineDuPoste?: string
+  /** Quand lancer le calcul à froid sans la vue (conv-1248) ; défaut : fenêtre affichée ET
+   *  archives dans le store. */
+  prechauffageApres?: Promise<unknown>
 }): {
   /** Recopie le Board vers le dossier sans la vue (conv-1210) : appelée à chaque fin de tour. */
   recopierLeBoard: () => void
 } {
-  const identiteDuDossier = creerIdentitesEnCache()
+  // Valeur expirée servie pendant sa relecture (conv-1248) : l'ouverture n'attend plus les `git`.
+  const identiteDuDossier = creerIdentitesEnCache(undefined, undefined, undefined, true)
   const liens = racineDesLiens ? creerLiensWorkItems({ racine: racineDesLiens }) : null
   // Le type du store et celui de la carte décrivent le même JSON ; seul le typage des parts diffère.
   const lireConversations = (): readonly (ConversationPourLaCarte & { updatedAt?: number })[] =>
@@ -169,18 +176,24 @@ export function registerCarteDesBesoinsIpc({
     identiteDuDossier
   })
   // Le Board ne montre que les dossiers du Chat (conv-1212), plus ceux que le Chat propose toujours
-  // — le dépôt par défaut et « This computer » —, sauf si une croix les a retirés. Même réduction
-  // pour l'affichage et pour la copie vers le dossier du Board : ce qui part est ce que la vue montre.
+  // — le dépôt par défaut et « This computer » —, sauf si une croix les a retirés ; « This computer »
+  // ne se retire jamais (conv-1231). Même réduction pour l'affichage et pour la copie vers le
+  // dossier du Board : ce qui part est ce que la vue montre.
   const dossiersDuChat = creerDossiersDuChat(racineDuPoste ? { racine: racineDuPoste } : {})
   const calculerLeBoard = async (): Promise<CarteDesBesoins> => {
     const carte = await calculateur.calculer()
     const liste = dossiersDuChat.lire()
-    return carteDesDossiersDuChat(
+    const reduite = carteDesDossiersDuChat(
       carte,
       liste === null
         ? null
-        : dossiersDuBoard(liste.dossiers, [os.executionWorkspace, homedir()], liste.retires)
+        : dossiersDuBoard(liste.dossiers, [os.executionWorkspace, homedir()], liste.retires, [
+            homedir()
+          ])
     )
+    // Un seul nom pour ce poste, sur l'écran comme dans la copie partagée (conv-1230) : celui
+    // choisi dans Settings · Interface, sinon le compte Windows — plus l'identité git du dossier.
+    return dossierDuBoard ? carteAuNomDuPoste(reduite, dossierDuBoard.nomDuPoste()) : reduite
   }
   const lecture = tickets
     ? {
@@ -241,6 +254,17 @@ export function registerCarteDesBesoinsIpc({
 
   // Les projets recopiés dans le dossier (conv-1211) : `null` = tous ; la liste reçue de la vue est
   // relue par `projetsPartagesLisibles` avant d'être gardée, illisible = rien ne change.
+  // Le nom de ce poste sur le Board (conv-1230) : texte relu par `nomDuPosteLisible`, `null` ou vide
+  // = revenir au compte Windows, illisible = rien ne change.
+  ipcMain.handle('os:board-dossier:nom', (event, brut: unknown) => {
+    assertTrustedRendererSender(event, 'Dossier du Board')
+    if (!dossierDuBoard) return { dossier: null, cible: null, enCours: false }
+    const nom = nomDuPosteLisible(brut)
+    if (nom === undefined)
+      return { ...dossierDuBoard.etat(), erreur: 'Nom illisible ou trop long : rien n’a changé.' }
+    return dossierDuBoard.choisirNom(nom)
+  })
+
   ipcMain.handle('os:board-dossier:projets', (event, brute: unknown) => {
     assertTrustedRendererSender(event, 'Dossier du Board')
     if (!dossierDuBoard) return { dossier: null, cible: null, enCours: false }
@@ -327,6 +351,20 @@ export function registerCarteDesBesoinsIpc({
       carte.projets.flatMap((p) => p.demandes)
     )
   })
+
+  /*
+   * LE CALCUL À FROID FAIT SANS LA VUE (conv-1248, « accélère un max le loading du board ») : la
+   * première ouverture relisait les ~1 100 fils pendant que la vue affichait « Chargement… » — 2,0 s
+   * mesurées, 1,0 s après le raccourci Markdown. Fait ici une fois la fenêtre affichée et les
+   * archives dans le store, il laisse en mémoire ce que l'ouverture relit ensuite en ~20 ms ; une
+   * ouverture pendant ce calcul partage le même (`enCours`). Un échec ne coûte que le gain :
+   * l'ouverture refait le calcul et dit l'erreur, elle.
+   */
+  void (prechauffageApres ?? Promise.all([interfaceVisible, os.conversations.archivesChargees]))
+    .then(() => calculateur.calculer())
+    .catch((erreur: unknown) =>
+      console.warn('[besoins] préchauffage du Board impossible :', erreur)
+    )
 
   return {
     // Le calcul n'est lancé qu'au moment d'écrire, et jamais sans dossier choisi (conv-1210).

@@ -95,6 +95,7 @@ import {
   disposeGraphTextures
 } from './graph-three-helpers'
 import {
+  MarquePerso,
   NodePanel,
   RangeRow,
   SettingsSection,
@@ -407,7 +408,8 @@ export function GraphView({
   // poste de travail : sinon la revue humaine s'accumule sans que rien ne la réclame.
   useEffect(() => {
     const brain = brains.find((candidate) => candidate.path === selected)
-    if (!selected || brain?.kind !== 'vault') {
+    // Le Brain PERSO n'a pas de revue humaine : ses faits sont promus seuls (conv-1233).
+    if (!selected || brain?.kind !== 'vault' || brain.perso) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setInboxPending(0)
       return
@@ -473,6 +475,13 @@ export function GraphView({
     () => brains.find((brain) => brain.path === selected),
     [brains, selected]
   )
+  /**
+   * BRAIN PERSO OUVERT (conv-1233, 2026-10-28, demande : « affiche le Brain perso dans la vue
+   * Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »). Ses notes portent la
+   * marque « perso » partout où la vue les liste ; retrait, remplacement et revue de la boîte de
+   * réception restent propres au Brain d'équipe (le processus principal les borne à sa racine).
+   */
+  const persoOuvert = selectedBrain?.perso === true
 
   useEffect(() => {
     if (!selected) return
@@ -1782,7 +1791,7 @@ export function GraphView({
           )}
           {brains.map((brain) => (
             <option key={brain.path} value={brain.path}>
-              {brain.label}
+              {brain.perso ? t('graphe.brainPerso') : brain.label}
             </option>
           ))}
         </select>
@@ -1958,6 +1967,7 @@ export function GraphView({
                 >
                   <i aria-hidden="true">✦</i>
                   <span>{resultNode.label}</span>
+                  {persoOuvert && <MarquePerso />}
                   <small className="node-search-result__meta">
                     {brainScoreChannelLabel(resultNode)}
                     {' · '}
@@ -2237,7 +2247,7 @@ export function GraphView({
         )}
         {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
             aux brains de type vault, qui ont une boîte de réception et une récupération. */}
-        {selectedBrain?.kind === 'vault' && (
+        {selectedBrain?.kind === 'vault' && !persoOuvert && (
           <button
             type="button"
             className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
@@ -2262,7 +2272,7 @@ export function GraphView({
             )}
           </button>
         )}
-        {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && (
+        {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && !persoOuvert && (
           <div className="graph-workbench-popover">
             <div className="graph-settings-popover__heading">
               <strong>{t('graphe.poste.savoir')}</strong>
@@ -2432,13 +2442,18 @@ export function GraphView({
                 onClose={clearNodeSelection}
                 onRetry={() => void openNode(node)}
                 onNavigate={(nextNode) => openNode(nextNode)}
+                perso={persoOuvert}
                 onRetract={
-                  selectedBrain?.kind === 'vault' && node.id.startsWith('knowledge/')
+                  selectedBrain?.kind === 'vault' &&
+                  !persoOuvert &&
+                  node.id.startsWith('knowledge/')
                     ? () => void retractSelectedKnowledge()
                     : undefined
                 }
                 onSupersede={
-                  selectedBrain?.kind === 'vault' && node.id.startsWith('knowledge/')
+                  selectedBrain?.kind === 'vault' &&
+                  !persoOuvert &&
+                  node.id.startsWith('knowledge/')
                     ? () => void supersedeSelectedKnowledge()
                     : undefined
                 }
@@ -2447,6 +2462,7 @@ export function GraphView({
               <ThemeNodesPanel
                 nodes={activeThemeNodes}
                 onNavigate={(nextNode) => openNode(nextNode)}
+                perso={persoOuvert}
               />
             )}
           </aside>

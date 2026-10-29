@@ -9,13 +9,13 @@ import { CATALOG } from './commands'
  */
 const SECTIONS_RETIREES = [
   "VERIFICATION CIBLEE AVANT L'ACTE FINAL",
-  'Tu peux faire modifier le code du workspace',
+  'Oui → correction ponctuelle',
   'UNE SEULE orchestration par TOUR',
   "PÉRIMÈTRE D'ÉCRITURE",
   "TU VIS DANS L'APP QUE TU PILOTES",
-  'Que faire a la place',
-  '2 bis. `edit_file`',
-  '4. NETTOIE AVANT DE PARLER',
+  'tu le FAIS toi-meme avec `restart_app`',
+  '1 bis. `edit_file`',
+  '2. NETTOIE AVANT DE PARLER',
   'Une ECRITURE DANS UN SYSTEME EXTERNE',
   'MÉMOIRE : tu peux RETENIR',
   'INFORMATIF SPONTANÉ',

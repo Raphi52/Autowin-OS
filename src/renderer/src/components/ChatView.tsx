@@ -6887,9 +6887,10 @@ export function ChatView({
    */
   const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => lireDossiersDuChat())
   /*
-    Les retraits, aussi en mémoire : la croix du Board retire même le dépôt par défaut et « This
-    computer » (conv-1212, 2e demande : « ils n'ont pas la petite croix »), que ce menu propose
-    toujours — il doit les cacher à son tour, la liste est commune.
+    Les retraits, aussi en mémoire : la croix du Board retire même le dépôt par défaut
+    (conv-1212, 2e demande : « ils n'ont pas la petite croix »), que ce menu propose toujours — il
+    doit le cacher à son tour, la liste est commune. « This computer » n'en tient JAMAIS compte
+    (conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer »).
   */
   const [dossiersRetires, setDossiersRetires] = useState<string[]>(() => lireDossiersRetires())
   const estRetire = useCallback(
@@ -8111,28 +8112,26 @@ export function ChatView({
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
-              {/* Retiré par la croix du Board (conv-1212) : caché ici aussi, la liste est commune ;
-                  le rechoisir par « Choisir un dossier » efface le retrait. */}
-              {convFolderMenu.mode === 'dossier' &&
-                dossierPersonnel &&
-                !estRetire(dossierPersonnel) && (
-                  <button
-                    role="menuitem"
-                    data-testid="conv-project-this-computer"
-                    data-project-path={dossierPersonnel}
-                    title={texteFil('dossiers.cetOrdinateur.titre', { chemin: dossierPersonnel })}
-                    onClick={() => {
-                      const menu = convFolderMenu
-                      setConvFolderMenu(null)
-                      appliquerRangement(menu, dossierPersonnel)
-                    }}
-                  >
-                    <span className="conv-menu-ic" aria-hidden="true">
-                      💻
-                    </span>
-                    This computer
-                  </button>
-                )}
+              {/* « This computer » est TOUJOURS là (conv-1231), même si une ancienne croix du Board
+                  l'a mémorisé comme retiré : il ne se retire pas. */}
+              {convFolderMenu.mode === 'dossier' && dossierPersonnel && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-this-computer"
+                  data-project-path={dossierPersonnel}
+                  title={texteFil('dossiers.cetOrdinateur.titre', { chemin: dossierPersonnel })}
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    appliquerRangement(menu, dossierPersonnel)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    💻
+                  </span>
+                  This computer
+                </button>
+              )}
               {convFolderMenu.mode === 'dossier' &&
                 defaultWorkspace?.trim() &&
                 !estDossierPersonnel(defaultWorkspace) &&
@@ -8463,11 +8462,14 @@ export function ChatView({
                     // Meme source que le badge de branche (`gitCwd`), sinon les deux divergent.
                     const dossierProjet = dossierProjetAffiche
                     const cheminEffectif = dossierProjet || defaultWorkspace
-                    const labelDossier = estDossierPersonnel(cheminEffectif)
+                    const surCetOrdinateur = estDossierPersonnel(cheminEffectif)
+                    const labelDossier = surCetOrdinateur
                       ? 'This computer'
                       : cheminEffectif
                         ? nomDeDossier(cheminEffectif)
                         : 'Autowin OS'
+                    // Même icône que sa ligne du menu (💻), pas le 📁 d'un projet (conv-1231).
+                    const iconeDossier = surCetOrdinateur ? '💻' : '📁'
                     const titreDossier = dossierProjet
                       ? active
                         ? texteFil('entete.dossierAssigne', { chemin: dossierProjet })
@@ -8494,7 +8496,7 @@ export function ChatView({
                           })
                         }}
                       >
-                        📁 {labelDossier}
+                        {iconeDossier} {labelDossier}
                       </button>
                     )
                   })()}

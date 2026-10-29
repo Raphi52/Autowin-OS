@@ -175,3 +175,141 @@ describe('createBrainTitresDuTour — le branchement du tour de chat', () => {
     expect(appels).toHaveLength(0)
   })
 })
+
+/**
+ * BRAIN PERSO DANS LES NOTES PROCHES (conv-1233, 2026-10-28, demande utilisateur : « cherche aussi
+ * dans le Brain perso et montre ses notes avec le préfixe perso: »).
+ */
+describe('createBrainTitresDuTour — Brain perso', () => {
+  const ENV_PERSO: NodeJS.ProcessEnv = {
+    AUTOWIN_BRAIN_ROOT: 'D:/MonBrain',
+    AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:8775'
+  }
+  const persoNote = (rank: number, denseCos: number): BrainNavigationCandidate => ({
+    ...candidat(rank, denseCos),
+    path: `knowledge/domain/perso-${rank}.md`
+  })
+  beforeEach(() => {
+    vi.stubEnv('AUTOWIN_BRAIN_CORPUS', '*')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function monter(
+    equipe: () => Promise<BrainRetrievalResult>,
+    perso: () => Promise<BrainRetrievalResult>,
+    // `null` = aucun Brain perso réglé (`undefined` reprendrait la valeur par défaut).
+    envPerso: NodeJS.ProcessEnv | null = ENV_PERSO
+  ) {
+    const appels: BrainRetrievalOptions[] = []
+    const traces: BrainTrace[] = []
+    const injoignable = vi.fn()
+    const titres = createBrainTitresDuTour({
+      retrieve: async (_query, options) => {
+        appels.push(options)
+        return options.env === ENV_PERSO ? perso() : equipe()
+      },
+      onBrainTrace: (trace) => traces.push(trace),
+      brainPerso: () => envPerso ?? undefined,
+      persoInjoignable: injoignable
+    })
+    return { titres, appels, traces, injoignable }
+  }
+
+  it('les deux Brains : notes d’équipe puis notes perso préfixées perso:, sous le même en-tête', async () => {
+    const { titres, appels } = monter(
+      async () => resultat([candidat(1, 0.62)]),
+      async () => resultat([persoNote(1, 0.7), persoNote(2, 0.2)])
+    )
+    const bloc = await titres(QUESTION, { conversationId: 'conv-1' })
+    expect(bloc).toBe(
+      `${EN_TETE_TITRES}\n- knowledge/lessons/note-1.md\n- perso:knowledge/domain/perso-1.md`
+    )
+    // Le perso est interrogé sans filtre de projet, avec le même délai que l'équipe.
+    const appelPerso = appels.find((o) => o.env === ENV_PERSO)
+    expect(appelPerso).toMatchObject({ mode: 'candidates', timeoutMs: TITRES_DELAI_MS })
+    expect(appelPerso).not.toHaveProperty('corpus')
+  })
+
+  it('les deux recherches partent EN MÊME TEMPS : le tour n’attend pas l’une puis l’autre', async () => {
+    let enCours = 0
+    let maxSimultanees = 0
+    const lente = async (r: BrainRetrievalResult): Promise<BrainRetrievalResult> => {
+      enCours += 1
+      maxSimultanees = Math.max(maxSimultanees, enCours)
+      await new Promise((ok) => setTimeout(ok, 20)) // sleep-ok: simule la latence du serveur
+      enCours -= 1
+      return r
+    }
+    const { titres } = monter(
+      () => lente(resultat([candidat(1, 0.62)])),
+      () => lente(resultat([persoNote(1, 0.7)]))
+    )
+    await titres(QUESTION, { conversationId: 'conv-1' })
+    expect(maxSimultanees).toBe(2)
+  })
+
+  it('une note perso déjà montrée dans le fil n’est pas relistée', async () => {
+    const { titres } = monter(
+      async () => resultat([]),
+      async () => resultat([persoNote(1, 0.7)])
+    )
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toContain('perso:')
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toBe('')
+  })
+
+  it('une note perso dans inbox/ (pas encore promue) n’est jamais servie', async () => {
+    const { titres } = monter(
+      async () => resultat([]),
+      async () => resultat([{ ...persoNote(1, 0.9), path: 'inbox/20261028-fait.md' }])
+    )
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toBe('')
+  })
+
+  it('seul le perso a une note proche : le bloc la montre et la trace dit « found »', async () => {
+    const { titres, traces } = monter(
+      async () => resultat([candidat(1, 0.2)]),
+      async () => resultat([persoNote(1, 0.7)])
+    )
+    const bloc = await titres(QUESTION, { conversationId: 'conv-1', turnId: 't-1' })
+    expect(bloc).toBe(`${EN_TETE_TITRES}\n- perso:knowledge/domain/perso-1.md`)
+    expect(traces[0]).toMatchObject({ found: true, status: 'found', injectedChars: bloc.length })
+  })
+
+  it('dossier sans corpus d’équipe : l’équipe n’est pas interrogée, le perso l’est', async () => {
+    vi.stubEnv('AUTOWIN_BRAIN_CORPUS', ',')
+    const { titres, appels } = monter(
+      async () => resultat([candidat(1, 0.9)]),
+      async () => resultat([persoNote(1, 0.7)])
+    )
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toBe(
+      `${EN_TETE_TITRES}\n- perso:knowledge/domain/perso-1.md`
+    )
+    expect(appels).toHaveLength(1)
+    expect(appels[0].env).toBe(ENV_PERSO)
+  })
+
+  it('serveur perso éteint : les notes d’équipe passent quand même, et l’app tente de le démarrer', async () => {
+    const { titres, injoignable } = monter(
+      async () => resultat([candidat(1, 0.62)]),
+      async () => {
+        throw new TypeError('fetch failed')
+      }
+    )
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).toBe(
+      `${EN_TETE_TITRES}\n- knowledge/lessons/note-1.md`
+    )
+    expect(injoignable).toHaveBeenCalledOnce()
+  })
+
+  it('sans Brain perso réglé : une seule recherche, comme avant', async () => {
+    const { titres, appels } = monter(
+      async () => resultat([candidat(1, 0.62)]),
+      async () => resultat([persoNote(1, 0.7)]),
+      null
+    )
+    expect(await titres(QUESTION, { conversationId: 'conv-1' })).not.toContain('perso:')
+    expect(appels).toHaveLength(1)
+  })
+})

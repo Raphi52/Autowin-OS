@@ -48,7 +48,7 @@ describe('ProjetsPartagesDuBoard', () => {
   it('sans choix : « tous », chaque projet coché ; décocher le perso garde les autres', () => {
     const onChoisir = vi.fn()
     const vue = monter(null, onChoisir)
-    expect(vue.querySelector('[data-testid="besoins-projets-bouton"]')?.textContent).toBe(
+    expect(vue.querySelector('[data-testid="besoins-projets-resume"]')?.textContent).toBe(
       'Projets : tous'
     )
     expect(
@@ -61,7 +61,7 @@ describe('ProjetsPartagesDuBoard', () => {
   it('avec une liste : le compte et la note ; « tous » rend null', () => {
     const onChoisir = vi.fn()
     const vue = monter(['D:\\Factures'], onChoisir)
-    expect(vue.querySelector('[data-testid="besoins-projets-bouton"]')?.textContent).toBe(
+    expect(vue.querySelector('[data-testid="besoins-projets-resume"]')?.textContent).toBe(
       'Projets : 1/2'
     )
     expect(caseDu(vue, 'D:\\Perso')?.checked).toBe(false)

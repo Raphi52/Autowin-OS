@@ -1,6 +1,8 @@
 /**
- * LES PROJETS PARTAGÉS DU BOARD — le menu à cocher posé à côté du bouton 📁 (demande du 2026-10-28,
- * conv-1211 : « dans le board je veux qu'on puisse choisir quel CWD on partage »).
+ * LES PROJETS PARTAGÉS DU BOARD — la liste à cocher du rouage ⚙ posé à côté du bouton 📁 (demande du
+ * 2026-10-28, conv-1211 : « dans le board je veux qu'on puisse choisir quel CWD on partage »). Elle
+ * avait son propre bouton « Projets : … » ; depuis conv-1230 (« un ptit bouton rouage qui contiendra
+ * projet, le bouton refresh et le nom d'usage »), c'est `RouageDuBoard` qui l'ouvre.
  *
  * Le dossier du Board (conv-1206) recopiait TOUS les projets sur le partage de l'équipe. Ce menu
  * coche ceux qui partent : un projet = un dossier de travail (ou une catégorie) de la barre latérale.
@@ -8,7 +10,7 @@
  * liste devient explicite et un projet nouveau ne part plus sans être coché
  * (`board-projets-partages.ts`). Le processus principal garde le choix et l'applique à l'écriture.
  */
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import {
   basculerProjetPartage,
   projetPartage,
@@ -45,84 +47,70 @@ export function ProjetsPartagesDuBoard({
   const { t, langue } = useTextesBoardProjets()
   // Singulier jusqu'à 1 en français (« 0 demande »), seulement à 1 en anglais (« 0 requests »).
   const singulier = (n: number): boolean => (langue === 'en' ? n === 1 : n <= 1)
-  const [ouvert, setOuvert] = useState(false)
-  const racine = useRef<HTMLDetailsElement>(null)
   const cles = projets.map((p) => p.cle)
   const resume = resumeDesProjetsPartages(choisis, cles)
 
-  // Un clic hors du menu le referme : `<details>` seul resterait ouvert par-dessus la rivière.
-  useEffect(() => {
-    if (!ouvert) return
-    const dehors = (e: MouseEvent): void => {
-      if (racine.current && !racine.current.contains(e.target as Node)) setOuvert(false)
-    }
-    document.addEventListener('mousedown', dehors)
-    return () => document.removeEventListener('mousedown', dehors)
-  }, [ouvert])
-
   return (
-    <details
-      ref={racine}
+    <div
       className="besoins-projets"
       data-testid="besoins-projets"
-      open={ouvert}
-      onToggle={(e) => setOuvert(e.currentTarget.open)}
+      role="group"
+      aria-label={t('projets.titre')}
     >
-      <summary
-        className="btn btn-sm"
+      {/* L'ancien libellé du bouton « Projets » devient le titre de la partie : le compte reste lu
+          d'un coup d'œil une fois le rouage ouvert. */}
+      <p
+        className="besoins-projets-titre"
         title={t('projets.aide')}
-        data-testid="besoins-projets-bouton"
+        data-testid="besoins-projets-resume"
       >
         {resume.tous
           ? t('projets.tous')
           : t('projets.partie', { n: resume.partages, total: resume.total })}
-      </summary>
-      <div className="besoins-projets-menu" role="group" aria-label={t('projets.titre')}>
-        <p className="besoins-projets-titre">{t('projets.titre')}</p>
-        <label className="besoins-projets-ligne is-tous">
-          <input
-            type="checkbox"
-            checked={choisis === null}
-            data-testid="besoins-projets-tous"
-            onChange={(e) => onChoisir(e.currentTarget.checked ? null : [...cles])}
-          />
-          <span>{t('projets.tousEtFuturs')}</span>
-        </label>
-        <div className="besoins-projets-liste">
-          {projets.map((p) => (
-            // La croix est SŒUR de la case, pas dedans : un clic sur elle ne doit pas cocher.
-            <div key={p.cle} className="besoins-projets-ligne is-projet">
-              <label className="besoins-projets-case" title={p.cle}>
-                <input
-                  type="checkbox"
-                  checked={projetPartage(choisis, p.cle)}
-                  data-testid={`besoins-projet-${p.cle}`}
-                  onChange={() => onChoisir(basculerProjetPartage(choisis, p.cle, cles))}
-                />
-                <span className="besoins-projets-nom">{p.libelle}</span>
-                <span className="besoins-projets-compte">
-                  {t(singulier(p.demandes) ? 'projets.demande' : 'projets.demandes', {
-                    n: p.demandes
-                  })}
-                </span>
-              </label>
-              {p.retirable && onRetirer && (
-                <button
-                  type="button"
-                  className="besoins-projets-retirer"
-                  data-testid={`besoins-projet-retirer-${p.cle}`}
-                  title={t('projets.retirer', { chemin: p.retirable })}
-                  aria-label={t('projets.retirer', { chemin: p.retirable })}
-                  onClick={() => onRetirer(p.retirable as string)}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {choisis !== null && <p className="besoins-projets-note">{t('projets.note')}</p>}
+      </p>
+      <label className="besoins-projets-ligne is-tous">
+        <input
+          type="checkbox"
+          checked={choisis === null}
+          data-testid="besoins-projets-tous"
+          onChange={(e) => onChoisir(e.currentTarget.checked ? null : [...cles])}
+        />
+        <span>{t('projets.tousEtFuturs')}</span>
+      </label>
+      <div className="besoins-projets-liste">
+        {projets.map((p) => (
+          // La croix est SŒUR de la case, pas dedans : un clic sur elle ne doit pas cocher.
+          <div key={p.cle} className="besoins-projets-ligne is-projet">
+            <label className="besoins-projets-case" title={p.cle}>
+              <input
+                type="checkbox"
+                checked={projetPartage(choisis, p.cle)}
+                data-testid={`besoins-projet-${p.cle}`}
+                onChange={() => onChoisir(basculerProjetPartage(choisis, p.cle, cles))}
+              />
+              <span className="besoins-projets-nom">{p.libelle}</span>
+              <span className="besoins-projets-compte">
+                {t(singulier(p.demandes) ? 'projets.demande' : 'projets.demandes', {
+                  n: p.demandes
+                })}
+              </span>
+            </label>
+            {p.retirable && onRetirer && (
+              <button
+                type="button"
+                className="besoins-projets-retirer"
+                data-testid={`besoins-projet-retirer-${p.cle}`}
+                title={t('projets.retirer', { chemin: p.retirable })}
+                aria-label={t('projets.retirer', { chemin: p.retirable })}
+                onClick={() => onRetirer(p.retirable as string)}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
       </div>
-    </details>
+      {choisis !== null && <p className="besoins-projets-note">{t('projets.note')}</p>}
+    </div>
   )
 }

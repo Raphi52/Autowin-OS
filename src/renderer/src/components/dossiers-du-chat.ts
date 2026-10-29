@@ -17,10 +17,11 @@
  * (`carteDuBoardAffichee`) : un processus principal d'avant redémarrage ne réduit rien, et
  * l'utilisateur voyait alors « depot » et « Divers » sans croix (conv-1212, 2e demande).
  *
- * TOUTES les lignes du menu « Projets » ont une croix (même demande : « des éléments que je ne peux
- * même pas supprimer, ils n'ont pas la petite croix ») : sur le dépôt par défaut ou « This
- * computer », que le Chat propose toujours, elle les range dans la mémoire des retraits, et ils
- * quittent le Board comme le menu du Chat.
+ * Les lignes du menu « Projets » ont une croix (même demande : « des éléments que je ne peux même
+ * pas supprimer, ils n'ont pas la petite croix ») : sur le dépôt par défaut, que le Chat propose
+ * toujours, elle le range dans la mémoire des retraits, et il quitte le Board comme le menu du Chat.
+ * SAUF « This computer » (conv-1231 : « j'ai perdu le this computer, il doit être impossible à
+ * supprimer ») : pas de croix, et un retrait déjà mémorisé à son nom est ignoré partout.
  */
 import type { CarteDesBesoins } from '../../../shared/carte-des-besoins'
 import { estCheminDeDossier } from '../../../shared/project-path'
@@ -117,6 +118,19 @@ export async function transmettreDossiersDuChat(
 }
 
 /**
+ * Le dossier personnel, « This computer » — jamais retirable (conv-1231). `null` = pont absent
+ * (preload d'avant redémarrage) ou illisible.
+ */
+export async function lireDossierPersonnel(): Promise<string | null> {
+  try {
+    const chemin = await window.api.dossierPersonnel?.()
+    return chemin && estCheminDeDossier(chemin) ? chemin.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Les dossiers que le Chat propose toujours : le dépôt actif de la session et le dossier personnel
  * (« This computer »), lus au processus principal — les mêmes qu'il ajoute de son côté. `null` =
  * illisibles : la vue ne refiltre pas, plutôt que de faire disparaître le dépôt par défaut.
@@ -125,7 +139,7 @@ export async function lireDossiersToujoursProposes(): Promise<string[] | null> {
   try {
     const [espace, personnel] = await Promise.all([
       window.api.executionWorkspace?.(),
-      window.api.dossierPersonnel?.()
+      lireDossierPersonnel()
     ])
     if (!espace?.path?.trim()) return null
     return personnel?.trim() ? [espace.path, personnel] : [espace.path]
@@ -136,17 +150,22 @@ export async function lireDossiersToujoursProposes(): Promise<string[] | null> {
 
 /**
  * Le Board tel que la vue le montre : la règle du processus principal, rejouée sur ce qu'il rend
- * (sans effet s'il a déjà réduit). `toujours` à `null` = la carte reçue telle quelle.
+ * (sans effet s'il a déjà réduit). `toujours` à `null` = la carte reçue telle quelle. `personnel`
+ * (« This computer ») reste même s'il a été retiré (conv-1231).
  */
 export function carteDuBoardAffichee(
   carte: CarteDesBesoins,
   dossiers: readonly string[],
   toujours: readonly string[] | null,
-  retires: readonly string[]
+  retires: readonly string[],
+  personnel: string | null = null
 ): CarteDesBesoins {
   if (toujours === null) return carte
-  return carteDesDossiersDuChat(carte, dossiersDuBoard(dossiers, toujours, retires))
+  return carteDesDossiersDuChat(carte, dossiersDuBoard(dossiers, toujours, retires, [personnel]))
 }
+
+/** Le nom du dossier personnel dans le menu « Projets » : le même que dans le Chat (conv-1230). */
+export const NOM_DU_DOSSIER_PERSONNEL = '💻 This computer'
 
 /** Une ligne du menu « Projets » du Board. `retirable` = le chemin que sa croix retire du Chat. */
 export interface LigneDeProjet {
@@ -159,13 +178,22 @@ export interface LigneDeProjet {
 /**
  * Les lignes du menu « Projets » : les projets du Board (déjà réduits aux dossiers du Chat), puis
  * les dossiers du Chat qui n'ont encore aucune demande — la liste commune y est donc entière.
- * Chaque ligne qui est un dossier a sa croix, y compris le dépôt par défaut et « This computer »,
- * absents de la liste mémorisée : leur croix les range dans la mémoire des retraits.
+ * Chaque ligne qui est un dossier a sa croix, y compris le dépôt par défaut, absent de la liste
+ * mémorisée : sa croix le range dans la mémoire des retraits. Seul `personnel` (« This computer »)
+ * n'en a pas : il ne se retire jamais (conv-1231).
  */
 export function lignesDuMenuDesProjets(
   projets: readonly { cle: string; libelle: string; demandes: number }[],
-  dossiers: readonly string[]
+  dossiers: readonly string[],
+  personnel: string | null = null
 ): LigneDeProjet[] {
+  const clePersonnelle = cleDeDossier(personnel)
+  const retirable = (chemin: string | undefined): string | undefined =>
+    chemin && (!clePersonnelle || cleDeDossier(chemin) !== clePersonnelle) ? chemin : undefined
+  // Le dossier personnel porte le nom que lui donne le Chat (ChatView.tsx), pas celui du dossier :
+  // le nom du compte Windows se lisait comme le nom d'une personne (conv-1230, « c'est quoi cette ligne »).
+  const nomAffiche = (cle: string, libelle: string): string =>
+    clePersonnelle && cle === clePersonnelle ? NOM_DU_DOSSIER_PERSONNEL : libelle
   const parCle = new Map<string, string>()
   for (const chemin of dossiers) {
     const cle = cleDeDossier(chemin)
@@ -175,12 +203,24 @@ export function lignesDuMenuDesProjets(
   const lignes: LigneDeProjet[] = projets.map((p) => {
     const cle = cleDeDossier(p.cle) ?? p.cle
     vus.add(cle)
-    const chemin = parCle.get(cle) ?? (estCheminDeDossier(p.cle) ? p.cle : undefined)
-    return chemin ? { ...p, retirable: chemin } : { ...p }
+    const chemin = retirable(parCle.get(cle) ?? (estCheminDeDossier(p.cle) ? p.cle : undefined))
+    const ligne = { ...p, libelle: nomAffiche(cle, p.libelle) }
+    return chemin ? { ...ligne, retirable: chemin } : ligne
   })
   for (const [cle, chemin] of parCle) {
     if (vus.has(cle)) continue
-    lignes.push({ cle: chemin, libelle: nomDeDossier(chemin), demandes: 0, retirable: chemin })
+    const croix = retirable(chemin)
+    lignes.push({
+      cle: chemin,
+      libelle: nomAffiche(cle, nomDeDossier(chemin)),
+      demandes: 0,
+      ...(croix ? { retirable: croix } : {})
+    })
   }
-  return lignes
+  // « This computer » en tête (conv-1243 : « met le en premier de la liste ») ; les autres gardent
+  // leur ordre d'activité.
+  if (!clePersonnelle) return lignes
+  const estPersonnelle = (l: LigneDeProjet): boolean =>
+    (cleDeDossier(l.cle) ?? l.cle) === clePersonnelle
+  return [...lignes.filter(estPersonnelle), ...lignes.filter((l) => !estPersonnelle(l))]
 }

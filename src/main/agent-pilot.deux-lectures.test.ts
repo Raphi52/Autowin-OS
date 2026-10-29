@@ -44,7 +44,7 @@ const LECTURE_CODE_767 =
 const LECTURES_767 = reponse([LECTURE_ARENA_767, 52], [LECTURE_CODE_767, 48])
 
 function banc(
-  reponseDuLecteur: string | Error | undefined,
+  reponseDuLecteur: string | Error | (() => Promise<string>) | undefined,
   reponsesDuModele: string[] = ['Réponse du modèle.']
 ) {
   const evenements: PilotEvent[] = []
@@ -79,6 +79,7 @@ function banc(
     void systeme
     void charge
     if (reponseDuLecteur instanceof Error) throw reponseDuLecteur
+    if (typeof reponseDuLecteur === 'function') return reponseDuLecteur()
     return reponseDuLecteur ?? '{"lectures":[]}'
   })
   const pilote = new AgentPilot(
@@ -126,6 +127,7 @@ function banc(
     bus.exec.mock.calls.find((appel) => appel[0] === nom)?.[1]
   return {
     jouer,
+    evenements,
     lecteur,
     registry,
     bus,
@@ -187,13 +189,14 @@ describe('rejeu de conv-767 : le /scout ambigu ne part pas, une question le remp
           '/scout une task (toujours la meme) facile à évaluer, pour lancer des /arena dessus et comparer les workflows'
       }
     ])
-    expect(b.lecteur).not.toHaveBeenCalled()
+    // Relue pour la ligne (conv-1240), jamais réinterrogée : la quasi-égalité ne repose rien.
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
     expect(b.executees()).toEqual(['orchestrate'])
   })
 })
 
 describe('le jumeau : sans double lecture, rien ne change', () => {
-  it('une seule lecture → le run part comme avant, sans annonce ni précision', async () => {
+  it('une réponse SANS lecture (ancien format `[]`) → le run part comme avant, sans annonce ni précision', async () => {
     const b = banc('{"lectures":[]}')
     await b.jouer([{ role: 'user', content: DEMANDE_767 }])
     expect(b.lecteur).toHaveBeenCalledTimes(1)
@@ -370,10 +373,78 @@ describe('les deux autres points de passage', () => {
       expect(envoye).toContain(ligne)
   })
 
-  it('une question de l’utilisateur n’est pas une demande de changement : aucun appel au lecteur', async () => {
-    const b = banc(LECTURES_767)
-    await b.jouer([{ role: 'user', content: 'comment rendre mon graph beaucoup plus clair ?' }])
-    expect(b.lecteur).not.toHaveBeenCalled()
+  it('une question de l’utilisateur n’est pas une demande de changement : la ligne, jamais la question', async () => {
+    const demande = 'comment rendre mon graph beaucoup plus clair ?'
+    const b = banc(
+      reponse(
+        ['comment rendre mon graph beaucoup plus clair à lire', 52],
+        ['comment rendre mon graph beaucoup plus clair de couleurs', 48]
+      )
+    )
+    await b.jouer([{ role: 'user', content: demande }])
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    expect(b.executees()).not.toContain('ask')
     expect(b.registry.send).toHaveBeenCalledTimes(1)
+    expect(b.annonce().texte?.trim()).toBe(
+      annonceDeLaLectureRetenue(
+        'comment rendre mon graph beaucoup plus clair à lire',
+        'comment rendre mon graph beaucoup plus clair de couleurs'
+      )
+    )
+  })
+})
+
+describe('la ligne à CHAQUE message (conv-1240, « met le tout le temps »)', () => {
+  const COMPRISE =
+    'Afficher la ligne « Lecture retenue » à chaque message, et plus seulement de temps en temps'
+
+  it('un message sans ambiguïté affiche sa lecture, avant la fin du tour, sans question', async () => {
+    const b = banc(reponse([COMPRISE, 100]))
+    await b.jouer([{ role: 'user', content: 'met le tout le temps' }])
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    expect(b.executees()).not.toContain('ask')
+    expect(b.registry.send).toHaveBeenCalledTimes(1)
+    const { rang, texte } = b.annonce()
+    expect(texte?.trim()).toBe(annonceDeLaLectureRetenue(COMPRISE))
+    expect(rang).toBeLessThan(b.evenements.findIndex((e) => e.kind === 'done'))
+  })
+
+  it('une relance (« go ») est lue avec la FIN du dernier message, et ne pose jamais la question', async () => {
+    const proposition = '👉 Recommandé : lancer le build sur la rivière de la Carte du projet.'
+    const b = banc(
+      reponse(
+        ['go : lancer le build sur la rivière de la Carte du projet', 50],
+        ['go : relancer le scout de la Carte du projet', 50]
+      )
+    )
+    await b.jouer([
+      { role: 'user', content: 'regarde la carte du projet et dis-moi ce qui cloche' },
+      { role: 'assistant', content: `Voici ce que j'ai vu. ${'x'.repeat(3000)} ${proposition}` },
+      { role: 'user', content: 'go' }
+    ])
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    expect(b.lecteur.mock.calls[0][1]).toContain(proposition)
+    expect(b.executees()).not.toContain('ask')
+    expect(b.annonce().texte).toContain('lancer le build sur la rivière')
+  })
+
+  it('le /scout sans ambiguïté part annoncé, sa lecture jointe à la tâche', async () => {
+    const comprise = 'une task (toujours la meme) pratique pour etre évaluée via /arena'
+    const b = banc(reponse([comprise, 100]))
+    await b.jouer([{ role: 'user', content: DEMANDE_767 }])
+    expect(b.executees()).toEqual(['orchestrate'])
+    expect(b.annonce().texte?.trim()).toBe(annonceDeLaLectureRetenue(comprise))
+    expect(b.annonce().rang).toBeLessThan(b.rangDeCommande('orchestrate'))
+    expect(String(b.argsDe('orchestrate')?.task)).toContain(`« ${comprise} ».`)
+  })
+
+  it('une lecture arrivée APRÈS la fin du tour n’est plus écrite sous un message clos', async () => {
+    let repondre: (texte: string) => void = () => undefined
+    const b = banc(() => new Promise<string>((resolve) => (repondre = resolve)))
+    await b.jouer([{ role: 'user', content: 'met le tout le temps' }])
+    expect(b.evenements.some((e) => e.kind === 'done')).toBe(true)
+    repondre(reponse([COMPRISE, 100]))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(b.annonce().rang).toBe(-1)
   })
 })

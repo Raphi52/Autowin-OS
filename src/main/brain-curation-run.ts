@@ -80,11 +80,15 @@ export function pendingCandidateCount(brainRoot: string): number {
   }
 }
 
-let attempted = false
+/**
+ * Racines déjà curées cette session. Une par Brain (conv-1233, 2026-10-28) : le Brain perso ne doit
+ * pas perdre sa curation parce que celle de l'équipe a déjà eu lieu.
+ */
+const racinesTentees = new Set<string>()
 
 /** Remise à zéro de la tentative unique — réservée aux tests. */
 export function resetBrainCurationAttempt(): void {
-  attempted = false
+  racinesTentees.clear()
 }
 
 /**
@@ -112,14 +116,22 @@ export function startBrainCuration(
    * ne doit pas le modifier. Mesuré le 2026-09-29 : une instance lancée par un autre fil a démarré
    * sa propre maintenance du Brain en parallèle de l'app principale.
    */
-  instanceDeTest = false
+  instanceDeTest = false,
+  /**
+   * Faux pour le Brain PERSO : chaque fait retenu y est promu tout de suite, sans relecture humaine
+   * (choix de l'utilisateur, conv-1233). Le verrou de la boîte empêche toujours deux passes en même
+   * temps.
+   */
+  uneFoisParSession = true
 ): CurationLaunch {
   if (instanceDeTest) {
     return { status: 'nothing-to-do', detail: 'instance de test : le Brain partagé n’est pas curé' }
   }
-  if (attempted) return { status: 'nothing-to-do', detail: 'curation déjà tentée cette session' }
   const runtime = resolveBrainRuntime(env)
   const { tooling, python, brainRoot } = runtime
+  if (uneFoisParSession && racinesTentees.has(brainRoot)) {
+    return { status: 'nothing-to-do', detail: 'curation déjà tentée cette session' }
+  }
   if (!tooling || !python || !brainRoot) {
     return { status: 'unavailable', detail: 'runtime Brain local non configuré' }
   }
@@ -166,7 +178,7 @@ export function startBrainCuration(
   // Nom lu par les scripts Python du Brain ; l'ancien nom aussi, pour une copie deja installee.
   childEnv.AUTOWIN_BRAIN_ROOT = brainRoot
   recopierNomsHistoriques(childEnv, env)
-  attempted = true
+  racinesTentees.add(brainRoot)
   let rendu = false
   const liberer = (): void => {
     if (rendu) return

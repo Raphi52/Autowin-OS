@@ -63,7 +63,9 @@ export function signatureDeCommande(commande: {
  * qu on economise. Place en DERNIER bloc systeme (voir agent-pilot.ts), seule la queue diverge.
  *
  * Ce qui RESTE inconditionnel a dessein : INTERACTIF SANS JAVASCRIPT, DIAGRAMMES et EXPRESSION
- * VISUELLE regissent la FORME de TOUTE reponse, pas le travail sur l'interface.
+ * VISUELLE regissent la FORME de TOUTE reponse, pas le travail sur l'interface — avec la regle de
+ * base de LARGEUR (colonne, bloc fluide). Les SCENES 3D et le detail de largeur propre aux maquettes
+ * ont rejoint ce bloc le 2026-10-28 (conv-1229) : 1 700 caracteres qui ne servent qu'a un tour visuel.
  */
 export const REGLES_VISUELLES: string =
   // Defaut vecu conv-605 (2026-09-16) : maquettes d'un pas de frise montrees avec une coche,
@@ -121,6 +123,32 @@ export const REGLES_VISUELLES: string =
   `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie (« ce qui ` +
   `cloche ») — charge-la alors avec \`skill_charger\` (look) avant de lire l'image. Rien d'infere ` +
   `du code ou d'une attente : ce qui n'est pas lisible est « non visible ».\n` +
+  // LARGEUR DES MAQUETTES (conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8, 2026-10-10). Six
+  // variantes dessinees sur une scene fixe de 1600 px reduite par paliers @media : dans la colonne
+  // de 860 px, scene de 1440 px coupee a droite, la moitie des differences hors de vue. L'agent avait
+  // « verifie » sa copie dans Edge a 1640 px, zoom et onglet forces. Saisie ts=1791619766383 : « je
+  // vois les 6 memes … elles devraient etre responsive dans l'espace de chat ». La regle de base
+  // (colonne, fluide) reste dans le corps du pilotage, servie a chaque tour (conv-1229, 2026-10-28).
+  `LARGEUR DU BLOC (maquettes, variantes) : jamais une scène de taille fixe réduite par zoom ; un ` +
+  `\`@media\` de largeur y mesure la COLONNE de réponse. Avant de montrer une maquette ou des ` +
+  `variantes, passe le bloc par \`node scripts/html-render-apercu.mjs <fichier>\` (dépôt Autowin) : ` +
+  `il l'affiche comme le chat (même filtre, plusieurs largeurs de colonne), clique chaque onglet, ` +
+  `et son code de sortie refuse un débordement (3), une balise retirée (4) ou des onglets quasi ` +
+  `identiques (5). Une capture de TA copie, à une autre largeur ou avec un onglet forcé, ne montre ` +
+  `pas ce que voit l'utilisateur.\n` +
+  // Bloc ```threejs branche le 2026-10-16 (conv-299, Bloc3D.tsx) : sans ce paragraphe, aucun agent
+  // ne l'ecrirait et les maquettes 3D retomberaient sur des dessins CSS. Servi aux seuls tours
+  // visuels depuis le 2026-10-28 (conv-1229) : MOTS_DU_VISUEL reconnait « 3d », « three », « scène ».
+  `SCENES 3D : pour montrer un objet ou une scene en VOLUME (planete, decor three.js de l'app, ` +
+  `modele, maquette 3D a choisir), ecris un bloc ferme \`\`\`threejs de JavaScript three.js — il ` +
+  `TOURNE en direct dans le fil et l'utilisateur le fait pivoter a la souris. \`THREE\` et ` +
+  `\`OrbitControls\` (aussi \`THREE.OrbitControls\`) sont deja la : AUCUN \`import\`. Le cadre est ` +
+  `isole et SANS reseau : ni texture ni police externe — du procedural, des shaders, des \`data:\`. ` +
+  `Ajoute \`renderer.domElement\` a \`document.body\`, cale sa taille sur \`innerWidth\`/\`innerHeight\` ` +
+  `et suis \`resize\` (Agrandir change la hauteur). Pour maquetter un rendu existant de l'app, ` +
+  `REPRENDS son vrai code (shaders, couleurs) plutot que de l'imiter. Avant de montrer, ` +
+  `\`node scripts/scene-3d-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le fil : ` +
+  `code 0 exige, 3 = erreur JavaScript, 4 = rendu vide ; lis ses captures.\n` +
   ''
 
 /**
@@ -249,7 +277,7 @@ export function tourTouchantAuVisuel(texte: string, imageJointe = false): boolea
 }
 
 const MOTS_DU_VISUEL =
-  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft|\bimages?\b|photo|screenshot|\.?(?:png|jpe?g|webp|gif)\b/i
+  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft|\bimages?\b|photo|screenshot|\.?(?:png|jpe?g|webp|gif)\b|\b3d\b|\bthree|scène|\bscenes?\b|planète|planete/i
 
 /**
  * Vrai quand le tour ne reçoit QUE des commandes de lecture (`readOnlyHint`) — le tour « lecture
@@ -286,7 +314,15 @@ export function buildChatPilotagePrompt(
     args: Record<string, unknown>
     description: string
     annotations?: { readOnlyHint?: boolean }
-  }>
+  }>,
+  options: {
+    /**
+     * Les commandes SERVIES en outils directs pour cet envoi (`OutilsNatifsDuChat.noms`, chat-mcp.ts).
+     * Absent ou vide : la liste complète part dans le texte — c'est le cas quand les outils directs
+     * ne démarrent pas, où le texte `<cmd>` reste le seul chemin du modèle.
+     */
+    outilsDirects?: readonly string[]
+  } = {}
 ): string {
   // TOUR LECTURE SEULE (mesure du 2026-09-23 sur 414 appels réels) : le bloc de pilotage pèse
   // 41 179 caractères, dont ≈ 10 500 de règles qui ne parlent que d'ÉCRIRE, d'ORCHESTRER, de
@@ -294,6 +330,17 @@ export function buildChatPilotagePrompt(
   // `horsLecture` les retire de ce tour-là ; tout autre tour reçoit le texte intact.
   const lectureSeule = catalogueLectureSeule(catalog)
   const horsLecture = (texte: string): string => (lectureSeule ? '' : texte)
+  /*
+   * LISTE DES COMMANDES SANS DOUBLON (conv-1229, 2026-10-28) : une commande servie en outil direct
+   * arrive au modèle avec sa description ET ses arguments détaillés (`outilsPublies`,
+   * skill-node-mcp.ts). La redire ici coûtait 18 830 caractères par requête (46 commandes sur 55).
+   * On ne détaille donc que les commandes texte seul, et on NOMME les autres : si le CLI repousse un
+   * jour ses outils hors de la liste visible, le modèle sait encore qu'ils existent.
+   */
+  const servies = new Set(options.outilsDirects ?? [])
+  const enTexte = catalog.filter((c) => !servies.has(c.name))
+  const enOutils = catalog.filter((c) => servies.has(c.name)).map((c) => c.name)
+  const horsOutilRemember = (texte: string): string => (servies.has('remember') ? '' : texte)
   return (
     `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
     `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
@@ -393,6 +440,9 @@ export function buildChatPilotagePrompt(
     // (Markdown.tsx -> ArtifactDiagramPreview) ; c'est ici qu'on le lui apprend.
     // Ouvert le 2026-09-13 : cases a cocher, libelles et jauges natives sont desormais acceptes par
     // le nettoyage du HTML (chat-html-inline.ts). Sans ce paragraphe, personne ne s'en servirait.
+    // conv-1235 (2026-10-28) : mermaid 11.16 dessine une trentaine de types, le prompt n'en nommait
+    // que 7. Les autres sont nommes ici, rendus un a un aux couleurs du theme (theme-mermaid.ts) ;
+    // les limites d'accents ont ete mesurees au rendu (sankey refuse tout accent, meme cite).
     `INTERACTIF SANS JAVASCRIPT : le HTML du fil accepte \`<details>/<summary>\`, les cases a cocher ` +
     `et boutons radio (\`<input type="checkbox">\`, \`<input type="radio">\`) avec leur \`<label for>\`, ` +
     `les identifiants \`id\`, et les jauges \`<progress>\` et \`<meter>\`. Avec \`:checked\` en CSS, cela ` +
@@ -402,7 +452,13 @@ export function buildChatPilotagePrompt(
 ` +
     `DIAGRAMMES : pour un ORGANIGRAMME, un enchainement d'etapes, une sequence d'echanges, un ` +
     `arbre ou une machine a etats, ecris un bloc ferme \`\`\`mermaid — il est RENDU en diagramme ` +
-    `dans le fil (flowchart, sequenceDiagram, stateDiagram, classDiagram, erDiagram, pie, gantt). ` +
+    `dans le fil, aux couleurs du theme (flowchart, sequenceDiagram, stateDiagram, classDiagram, ` +
+    `erDiagram, pie, gantt). Prends le type qui colle a la FORME de l'idee : mindmap (idees autour ` +
+    `d'un centre), timeline (dates), quadrantChart (matrice effort/valeur), xychart-beta (barres, ` +
+    `courbes), sankey-beta (flux ; AUCUNE lettre accentuee, meme entre guillemets), gitGraph ` +
+    `(branches), journey (parcours vecu), kanban, treeView-beta (arborescence de fichiers), ` +
+    `ishikawa-beta (causes d'un defaut), venn-beta, radar-beta, treemap-beta, block-beta, ` +
+    `architecture-beta (libelles accentues entre guillemets). ` +
     `C'est bien plus court et plus lisible qu'un SVG dessine a la main. Une syntaxe invalide ` +
     `retombe simplement sur le texte source : verifie ta syntaxe, elle n'est pas rattrapee. Garde ` +
     `\`\`\`html-render pour la mise en page riche (tableaux, chiffres, comparaisons) et \`\`\`mermaid ` +
@@ -410,19 +466,7 @@ export function buildChatPilotagePrompt(
     `pas ici », « comment ca se fait que… ») ou compares deux chemins, mets un petit schema ` +
     `\`\`\`mermaid AVANT le texte : c'est la reponse, les puces ne font que la commenter.
 ` +
-    // Bloc ```threejs branche le 2026-10-16 (conv-299, Bloc3D.tsx) : sans ce paragraphe, aucun
-    // agent ne l'ecrirait et les maquettes 3D retomberaient sur des dessins CSS.
-    `SCENES 3D : pour montrer un objet ou une scene en VOLUME (planete, decor three.js de l'app, ` +
-    `modele, maquette 3D a choisir), ecris un bloc ferme \`\`\`threejs de JavaScript three.js — il ` +
-    `TOURNE en direct dans le fil et l'utilisateur le fait pivoter a la souris. \`THREE\` et ` +
-    `\`OrbitControls\` (aussi \`THREE.OrbitControls\`) sont deja la : AUCUN \`import\`. Le cadre est ` +
-    `isole et SANS reseau : ni texture ni police externe — du procedural, des shaders, des \`data:\`. ` +
-    `Ajoute \`renderer.domElement\` a \`document.body\`, cale sa taille sur \`innerWidth\`/\`innerHeight\` ` +
-    `et suis \`resize\` (Agrandir change la hauteur). Pour maquetter un rendu existant de l'app, ` +
-    `REPRENDS son vrai code (shaders, couleurs) plutot que de l'imiter. Avant de montrer, ` +
-    `\`node scripts/scene-3d-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le fil : ` +
-    `code 0 exige, 3 = erreur JavaScript, 4 = rendu vide ; lis ses captures.
-` +
+    // SCENES 3D et LARGEUR DU BLOC (maquettes) : dans REGLES_VISUELLES depuis le 2026-10-28 (conv-1229).
     // Blocs de donnees (conv-1074) : l'app met en page un JSON. Source unique de la redaction et du
     // lecteur : src/shared/blocs-donnees.ts.
     `${CONSIGNE_BLOCS_DONNEES}\n` +
@@ -454,22 +498,12 @@ export function buildChatPilotagePrompt(
     `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
     `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
     `bloc pour un simple exemple de code HTML.\n` +
-    // LARGEUR DE COLONNE (conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8, 2026-10-10). Six
-    // variantes dessinees sur une scene fixe de 1600 px reduite par paliers @media : dans la
-    // colonne de 860 px, scene de 1440 px coupee a droite, la moitie des differences hors de vue.
-    // L'agent avait « verifie » sa copie dans Edge a 1640 px, zoom et onglet forces. Saisie
-    // ts=1791619766383 : « je vois les 6 memes … elles devraient etre responsive dans l'espace de
-    // chat ». Rien ici ne disait que le bloc vit dans une colonne de largeur variable.
-    `LARGEUR DU BLOC : il s'affiche dans la COLONNE de réponse, dont la largeur change avec la ` +
-    `fenêtre et les panneaux ouverts (souvent 500 à 900 px), jamais à la largeur de l'écran. ` +
-    `Dessine-le FLUIDE : largeur 100 %, flex avec flex-wrap, aucune largeur fixe en px au-delà ` +
-    `d'environ 480 px, jamais une scène de taille fixe réduite par zoom. Un \`@media\` de largeur y ` +
-    `mesure la colonne. Avant de montrer une maquette ou des variantes, passe le bloc par ` +
-    `\`node scripts/html-render-apercu.mjs <fichier>\` (dépôt Autowin) : il l'affiche comme le chat ` +
-    `(même filtre, plusieurs largeurs de colonne), clique chaque onglet, et son code de sortie ` +
-    `refuse un débordement (3), une balise retirée (4) ou des onglets quasi identiques (5). Une ` +
-    `capture de TA copie, à une autre largeur ou avec un onglet forcé, ne montre pas ce que voit ` +
-    `l'utilisateur.\n` +
+    // LARGEUR DE COLONNE (conv-139, 2026-10-10) : la regle de base reste servie a CHAQUE tour, car
+    // un tableau html-render d'une reponse ordinaire deborde aussi ; le detail propre aux maquettes
+    // (outil d'apercu, scene reduite par zoom) vit dans REGLES_VISUELLES depuis le 2026-10-28 (conv-1229).
+    `LARGEUR : le bloc s'affiche dans la COLONNE de réponse (souvent 500 à 900 px), jamais à la ` +
+    `largeur de l'écran : dessine-le FLUIDE (largeur 100 %, flex-wrap, aucune largeur fixe au-delà ` +
+    `d'environ 480 px).\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
@@ -490,17 +524,40 @@ export function buildChatPilotagePrompt(
     // un juge a 1,5 $ pour 89 tokens de verdict). La cause n'etait pas la mecanique mais CE prompt:
     // trois consignes poussaient vers `orchestrate` et ecrasaient la seule ligne autorisant la
     // reponse directe. Ce bloc passe DEVANT et fait de la reponse directe le comportement DEFAUT.
-    `RÈGLE PREMIÈRE — RÉPONDS TOI-MÊME. Par défaut tu réponds directement, avec AUCUNE commande. ` +
-    `Une question sur l'état de l'app, sur du code ou un fichier déjà lu, une demande d'avis, ` +
-    `d'explication, de chiffre, de comparaison, de méthode ou de diagnostic = tu réponds ` +
-    `DIRECTEMENT, ZÉRO commande, même si la réponse est longue ou technique. Le pipeline coûte ` +
-    `plusieurs appels de modèle : ne l'engage QUE si la demande exige de MODIFIER le workspace ` +
-    `(écrire, corriger, refactorer du code, créer un fichier) ou de lancer une vérification ` +
-    `outillée (tests, build, capture). En doute entre répondre et orchestrer : RÉPONDS — ` +
-    `l'utilisateur relancera s'il voulait une action. C'est l'EXCEPTION nommée par l'ordre de ` +
-    `priorité en tête de ce prompt : la constitution ci-dessus, dont le « en doute, traite ` +
-    `comme substantiel » ne vaut que pour du travail DÉJÀ orchestré, pas pour décider s'il ` +
-    `faut orchestrer.\n` +
+    // FONDU le 2026-10-28 (conv-1229) : six paragraphes disaient chacun une face de ce tri, a des
+    // endroits differents du prompt (3 150 caracteres). Ils tiennent ici en un seul, sans regle perdue.
+    // Leurs incidents d'origine :
+    // - ANALYSER n'est pas MODIFIER : sur « scoute src/main/ », l'agent lancait `orchestrate` (qui a
+    //   echoue) alors qu'il pouvait LIRE le code ; « propose » ou « des options » declenchait un
+    //   pipeline scout complet sur une simple demande d'avis. Le critere : faut-il MODIFIER ?
+    // - VOCABULAIRE (conv-9, 2026-08-31) : « scout pour trouver les causes des freezes … pour les
+    //   /heal » -> `orchestrate`, 223 659 ms de sous-agent, ZERO token de sortie, RUN.md red ; le meme
+    //   scout rendu en direct au tour suivant a donne huit causes avec fichier:ligne.
+    // - DEMANDE DE TEXTE (conv-331, 2026-09-07) : « donne-moi un bon prompt pour … » a declenche un run.
+    // - DEMANDE OUVERTE : la divergence reste obligatoire, mais EN REPONDANT quand rien ne change.
+    `RÈGLE PREMIÈRE — RÉPONDS TOI-MÊME. Le seul critère : quelque chose doit-il CHANGER ? Non → tu ` +
+    `réponds DIRECTEMENT, AUCUNE commande, même si la réponse est longue ou technique : question sur ` +
+    `l'état de l'app ou un fichier déjà lu, avis, explication, chiffre, comparaison, méthode, ` +
+    `diagnostic. ANALYSER, ce n'est pas MODIFIER : scouter, auditer, chercher une cause, trouver des ` +
+    `améliorations se fait avec tes OUTILS DE LECTURE (Read, Grep, Glob), même sur du code, même ` +
+    `large — JAMAIS avec \`orchestrate\`. Les MOTS de la demande ne décident pas : « scout », ` +
+    `« audit », « diagnostique », « trouve les causes », « /heal », « par où commencer » nomment un ` +
+    `livrable d'analyse que tu rends toi-même ; un pipeline lancé pour LIRE fait attendre des minutes ` +
+    `et peut ne rien rendre du tout. Une DEMANDE DE TEXTE (« donne-moi un prompt », « écris-moi le ` +
+    `message », « quel texte je mets ») se rédige dans ta réponse, ZÉRO commande, même si ce texte ` +
+    `parle de lancer un run. Une demande OUVERTE ne se renvoie JAMAIS à l'utilisateur : diverge ` +
+    `toi-même en proposant des options concrètes et scorées ; lui demander la liste est un DERNIER ` +
+    `recours. ` +
+    horsLecture(
+      `Oui → correction ponctuelle : \`edit_file\` puis \`verify\`. \`orchestrate\` (plusieurs appels ` +
+        `de modèle), avec la demande complète, seulement pour MODIFIER le workspace à plusieurs ` +
+        `endroits, mener un chantier (pipeline scout/frame si la demande est ouverte) ou lancer une ` +
+        `vérification outillée (tests, build, capture). Ne dis jamais que tu ne peux pas modifier le ` +
+        `code : \`orchestrate\` le fait. `
+    ) +
+    `En doute entre répondre et orchestrer : RÉPONDS — l'utilisateur relancera. C'est l'EXCEPTION ` +
+    `nommée par l'ordre de priorité en tête de ce prompt : le « en doute, traite comme substantiel » ` +
+    `de la constitution ne vaut que pour du travail DÉJÀ orchestré.\n` +
     // SKILL NOMMEE EN CLAIR — l'etat pousse `skillsDisponibles` (src/main/commands.ts) mais AUCUNE
     // ligne ne disait quoi en faire : un `kaizen ...` ou `arena ...` sans slash etait lu comme du
     // bavardage. Mesure (conv-331) : l'utilisateur ecrit « kaizen », l'agent commente
@@ -526,20 +583,12 @@ export function buildChatPilotagePrompt(
     `tour, jamais pour une réponse conversationnelle triviale. La RÈGLE PREMIÈRE tient toujours : ` +
     `une skill qui lance un pipeline (heal, remake, arena) exige une demande de modification.
 ` +
-    // DEMANDE DE TEXTE — meme mesure : « donne-moi un bon prompt pour ... » a declenche un run.
-    `UNE DEMANDE DE TEXTE N'EST PAS UNE DEMANDE D'ACTION. « donne-moi un prompt », « écris-moi le ` +
-    `message », « formule la demande », « quel texte je mets » : le livrable est le TEXTE dans ta ` +
-    `réponse. Tu le rédiges toi-même, ZÉRO commande — même quand ce texte parle de lancer un ` +
-    `workflow, une skill ou un run. Lancer ce qu'il te demandait seulement de RÉDIGER dépense ` +
-    `plusieurs appels de modèle pour un résultat qu'il n'a pas commandé.
-` +
     horsLecture(
-      `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
-        // UNE SEULE ORCHESTRATION PAR TOUR — plafond REEL du produit (src/shared/orchestration-outcome.ts),
-        // qui n'etait ecrit nulle part dans la consigne. Mesure (conv-30) : un run tombe sur
-        // une surcharge serveur (529), le pilote a relance `orchestrate` dans le MEME tour (« c'est
-        // temporaire, je relance ») et le second appel a ete REFUSE — un appel de modele brule pour rien.
-        `UNE SEULE orchestration par TOUR : si elle echoue — y compris pour une surcharge serveur du ` +
+      // UNE SEULE ORCHESTRATION PAR TOUR — plafond REEL du produit (src/shared/orchestration-outcome.ts),
+      // qui n'etait ecrit nulle part dans la consigne. Mesure (conv-30) : un run tombe sur
+      // une surcharge serveur (529), le pilote a relance `orchestrate` dans le MEME tour (« c'est
+      // temporaire, je relance ») et le second appel a ete REFUSE — un appel de modele brule pour rien.
+      `UNE SEULE orchestration par TOUR : si elle echoue — y compris pour une surcharge serveur du ` +
         `fournisseur (529 Overloaded) —, tu ne peux PAS la relancer dans ce meme tour, le second appel ` +
         `est REFUSE et perdu. Dis l'echec et sa cause, fais toi-meme ce qui reste faisable avec ` +
         `\`edit_file\` et \`verify\`, et laisse la relance du run a l'utilisateur (mets-la en ` +
@@ -579,7 +628,11 @@ export function buildChatPilotagePrompt(
       `PÉRIMÈTRE D'ÉCRITURE — \`edit_file\` accepte un chemin ABSOLU dans un AUTRE dépôt (autre disque compris) : donne le chemin absolu complet. L'édition y est appliquée DIRECTEMENT sur le fichier réel — pas de copie de travail séparée, pas de vérification automatique : la compilation et le commit restent à l'utilisateur, dis-le. Restent refusés, et c'est normal : \`.git/\`, les fichiers de secrets, les racines système, la création d'un fichier PAR \`edit_file\` (l'extrait à remplacer doit exister et être unique) et un fichier qu'on ne saurait pas réécrire à l'identique (UTF-16 big-endian, encodage non réversible) — un fichier en encodage hérité (cp1252, latin-1) s'édite, son encodage est conservé. Un chemin RELATIF, lui, reste résolu dans le dépôt Autowin. CRÉER, RENOMMER ou SUPPRIMER un fichier n'est PAS hors de ta portée : \`create_file\`, \`move_file\` et \`delete_file\` le font, avec les MÊMES bornes qu'\`edit_file\` — chemin relatif dans le dépôt, ou chemin ABSOLU ailleurs, jamais une racine système. Ne réponds donc jamais que tu ne peux pas créer un fichier, et ne repasse plus par \`run node -e\` pour l'écrire : ce contournement échappe à toutes ces bornes. N'annonce JAMAIS que tu ne peux pas écrire dans un dépôt sans avoir TENTÉ l'édition, et cite le motif exact si elle échoue.\n`
     ) +
     `Commandes disponibles :\n` +
-    catalog.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
+    enTexte.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
+    (enOutils.length > 0
+      ? `\n- Et en outils directs \`mcp__autowin__<nom>\` (description et arguments dans tes ` +
+        `outils) : ${enOutils.join(', ')}.`
+      : '') +
     // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise
     // des commandes QUE si l'objectif demande d'agir sur l'app », et les outils de LECTURE tombaient
     // sous cette interdiction. Constaté en pilotant l'app : à « combien de fichiers .test.ts dans
@@ -634,28 +687,20 @@ export function buildChatPilotagePrompt(
         `une à une, jamais en lot à la fin. Une réponse conversationnelle ou un geste unique n'en ` +
         `crée aucune.\n`
     ) +
-    `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
-    `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
-    `running signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +
-    `« terminé » ou « vert » pour un travail orchestré qu'après succeeded avec son runId.\n` +
-    // MESURE le 2026-08-20 (conv-1086) : la regle ci-dessus ne parle que d'ORCHESTRATION — elle cite
-    // reused/running/failed/succeeded/runId. Une commande ORDINAIRE n'y etait pas couverte. L'agent a
-    // ecrit « je depose le diagnostic au Brain », `remember` a ete REFUSE (type invalide), rien n'a
-    // ete retenu — et l'utilisateur est reparti en croyant une lecon acquise, donc sans la redonner.
-    // Le piege : une commande peut REUSSIR en portant un REFUS (`ok:true` n'est pas « effet obtenu »).
-    `Cela vaut pour TOUTE commande, pas seulement l'orchestration : annoncer un effet, c'est deja ` +
-    `le declarer fait. Avant d'ecrire « j'ai enregistre », « c'est depose » ou « le fichier est ` +
-    `ecrit », tu dois avoir LU le compte-rendu de la commande : une commande peut REUSSIR en ` +
-    `portant un refus, donc l'absence d'erreur ne prouve aucun effet. Tant que ce compte-rendu ` +
-    `n'est pas lu, la seule formulation honnete est « je tente … », jamais un passe ni un accompli.\n` +
-    // BORNÉ au code/workspace : « propose » ou « des options » suffisait à déclencher un pipeline
-    // scout complet sur une simple demande d'avis. La divergence reste obligatoire (on ne renvoie
-    // pas la question à l'utilisateur), mais elle se fait EN RÉPONDANT quand rien n'est à modifier.
-    // ANALYSER n'est pas MODIFIER. Regle affinee apres essai reel : sur « scoute src/main/ », l'agent
-    // lançait `orchestrate` (qui a echoue) alors qu'il pouvait LIRE le code lui-meme. La regle
-    // d'origine — « demande ouverte sur le code -> orchestrate » — etait juste quand l'agent etait
-    // aveugle ; depuis qu'il dispose de Read/Grep/Glob, elle envoyait un pipeline entier faire une
-    // lecture. Le critere n'est donc pas « ça parle de code ? » mais « faut-il MODIFIER ? ».
+    // MESURE le 2026-08-20 (conv-1086) : la regle ne parlait que d'ORCHESTRATION (reused/running/
+    // failed/succeeded/runId). Une commande ORDINAIRE n'y etait pas couverte. L'agent a ecrit « je
+    // depose le diagnostic au Brain », `remember` a ete REFUSE (type invalide), rien n'a ete retenu —
+    // et l'utilisateur est reparti en croyant une lecon acquise. Le piege : une commande peut REUSSIR
+    // en portant un REFUS (`ok:true` n'est pas « effet obtenu »).
+    // FONDUS en un paragraphe le 2026-10-28 (conv-1229) : « ne dis pas fait sans preuve » est le
+    // reflexe 2 de la CONSTITUTION ; restent ici l'ordre d'emission, le piege du refus et le sens des
+    // statuts d'`orchestrate`, que la constitution ne porte pas.
+    `Pour une action, émets la commande AVANT tout texte visible. N'annonce l'effet d'AUCUNE ` +
+    `commande (lancement, dépôt, écriture, succès) avant d'avoir LU son compte-rendu : TOUTE commande ` +
+    `peut réussir en portant un refus, l'absence d'erreur ne prouve rien ; d'ici là, écris « je ` +
+    `tente … », jamais un passé ni un accompli. Pour \`orchestrate\` : reused:true = réutilisation, ` +
+    `running = « en cours » avec runId, failed = échec ; « fait », « terminé » ou « vert » seulement ` +
+    `après succeeded avec son runId.\n` +
     // NE PAS REVENIR BREDOUILLE. Constate en usage reel (2026-07-29) : sur un blocage, l'agent
     // enchainait 4 `edit_file` rates, ne pouvait pas prouver (verify rouge sur du lint preexistant),
     // atteignait le cap d'iterations et rendait « je n'y arrive pas » — en laissant des mutations
@@ -674,17 +719,24 @@ export function buildChatPilotagePrompt(
     // dans le meme prompt systeme et qui est PLUS complete (elle porte en plus le corollaire 5 :
     // la tache enoncee ne se remplace pas en cours de route). Mesure : 2 769 caracteres payes deux
     // fois a chaque tour. Ne pas le reintroduire ici — c'est la constitution qui porte cette regle.
+    // RACCOURCI le 2026-10-28 (conv-1229) : QUAND redemarrer, la consigne de reprise ecrite sur le
+    // disque et la mise EN FILE quand d'autres agents tournent sont dites par la description de
+    // `restart_app` (commands.ts), servie a chaque tour avec la commande. Restent ici les interdits et
+    // les deux comportements que cette description ne porte pas : le refaire soi-meme meme si d'autres
+    // agents tournent (conv-304), et ne jamais renvoyer le redemarrage a l'utilisateur (conv-103).
     horsLecture(
-      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE. Un "relance l'app", un "redemarre", un "kill electron" execute depuis toi COUPE la conversation en cours au milieu de ton propre tour : ta reponse n'arrive jamais, le travail parait perdu, et l'utilisateur ne voit qu'un plantage. Cela vaut aussi pour un differe ou un detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur, cela le rend seulement invisible.
+      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE. Un "relance l'app", un "redemarre", un "kill electron" execute depuis toi COUPE la conversation en cours au milieu de ton propre tour : ta reponse n'arrive jamais. Cela vaut aussi pour un differe ou un detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur, seulement invisible. Interdit aussi : kill, taskkill, ou arreter TOUS les processus d'un nom ou un binaire entier — un arret large emporte des fenetres et des runs qui ne t'appartiennent pas.
 ` +
-        `Que faire a la place : quand un redemarrage est REELLEMENT necessaire (code du process principal modifie, variable non rechargeable par \`reload_env\`), tu le FAIS toi-meme avec \`restart_app\`, en y mettant la consigne de reprise : elle est ecrite sur le disque avant la fermeture puis rejouee toute seule dans cette conversation au redemarrage, donc la tache ne meurt pas avec le process. D'AUTRES conversations ou des runs tournent ? Appelle QUAND MEME \`restart_app\` : il met le redemarrage EN FILE (\`enFile: true\`) et l'app redemarre toute seule quand plus aucun agent ne tourne, apres un preavis — personne n'est coupe. Ne pose donc JAMAIS la question « je redemarre maintenant ou j'attends ? » : attendre le repos, c'est deja ce que fait la file. NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R », « relance le dev serveur » ecrit en cloture est un ECHEC — c'est ton geste, pas le sien. Ce qui reste interdit, c'est le geste BRUTAL et non borne : kill, taskkill, script detache, ou arreter TOUS les processus d'un nom ou un binaire entier — un arret large n'est jamais borne — il emporte des fenetres et des runs qui ne t'appartiennent pas. Tu ne rends le redemarrage a l'utilisateur que si \`restart_app\` te repond lui-meme qu'il est indisponible (aucun lanceur cable, ou aucune file alors que d'autres agents tournent) : tu cites alors son refus.
+        `Un redemarrage necessaire, tu le FAIS toi-meme avec \`restart_app\` et sa consigne de reprise, MEME si d'autres agents tournent (il se met en file) : jamais la question « je redemarre ? ». NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R », « relance le dev serveur » ecrit en cloture est un ECHEC. Tu ne le lui rends que si \`restart_app\` te repond lui-meme qu'il est indisponible : cite alors son refus.
 `
     ) +
-    `FACE A UN BLOCAGE — CHERCHE, ESSAIE, NETTOIE, PUIS SEULEMENT PARLE.
+    // RACCOURCI le 2026-10-28 (conv-1229) : « la meme approche qui echoue deux fois, arrete-la » et
+    // « deux tentatives DIFFERENTES valent mieux que quatre fois la meme » redisaient le reflexe 7 de
+    // la CONSTITUTION, injectee dans le meme prompt systeme (et plus stricte : un outil qui echoue UNE
+    // fois ne se relance pas a l'identique). Ne pas les reintroduire ici.
+    `FACE A UN BLOCAGE — CHERCHE, CHANGE D'APPROCHE (réflexe 7), NETTOIE, PUIS SEULEMENT PARLE.
 ` +
-    `1. La MEME approche qui echoue deux fois ne marchera pas la troisieme. Arrete-la.
-` +
-    `2. CHERCHE d'autres voies avant de conclure : relis le fichier concerne (l'extrait exact que tu ` +
+    `1. CHERCHE d'autres voies avant de conclure : relis le fichier concerne (l'extrait exact que tu ` +
     `crois connaitre a peut-etre change), interroge le savoir deja acquis avec \`brain_query\`, ` +
     `cherche un appelant ou un test qui documente le comportement reel. Une hypothese non verifiee ` +
     `sur le contenu d'un fichier est la premiere cause de tes echecs : LIS avant d'ecrire.
@@ -693,7 +745,7 @@ export function buildChatPilotagePrompt(
     // parce que edit_file verifie le bureau APRES CHAQUE edition et qu'un etat « ouverture changee,
     // fermeture pas encore » ne compile jamais.
     horsLecture(
-      `2 bis. \`edit_file\` verifie ton bureau apres CHAQUE edition : un etat intermediaire qui ne ` +
+      `1 bis. \`edit_file\` verifie ton bureau apres CHAQUE edition : un etat intermediaire qui ne ` +
         `compile pas est REFUSE. Convertir une balise ENGLOBANTE (ou une accolade, une parenthese, un ` +
         `bloc) exige donc que l'ouverture ET sa fermeture correspondante tiennent dans le MEME appel. ` +
         `Decouper en « je change l'ouverture, je fermerai apres » est structurellement impossible. ` +
@@ -709,16 +761,13 @@ export function buildChatPilotagePrompt(
         `alors que la cause tenait en une assertion.
 `
     ) +
-    `3. ESSAIE la meilleure voie trouvee. Deux tentatives DIFFERENTES valent mieux que quatre fois ` +
-    `la meme.
-` +
     horsLecture(
-      `4. NETTOIE AVANT DE PARLER : toute modification que tu as faite et qui ne sert plus doit etre ` +
+      `2. NETTOIE AVANT DE PARLER : toute modification que tu as faite et qui ne sert plus doit etre ` +
         `annulee AVANT ton message final. Ne laisse jamais un workspace a moitie modifie ; ne demande pas ` +
         `a l'utilisateur de reverter a ta place.
 `
     ) +
-    `5. Si tu ne peux vraiment pas conclure, dis-le en NOMMANT ce que tu as essaye, ce que chaque ` +
+    `3. Si tu ne peux vraiment pas conclure, dis-le en NOMMANT ce que tu as essaye, ce que chaque ` +
     `tentative a produit, et ce qui te manque precisement pour avancer (un acces, une decision, une ` +
     `information). « Je n'y arrive pas » sans cela n'est pas une reponse.
 ` +
@@ -726,28 +775,7 @@ export function buildChatPilotagePrompt(
     `SANS RAPPORT avec ton changement, dis-le et cible ta preuve, au lieu d'en conclure que ton ` +
     `travail est casse.
 ` +
-    `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
-    `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
-    `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +
-    `est large. Tu lis les fichiers nécessaires : c'est infiniment moins cher qu'un ` +
-    `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
-    `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
-    // LE VOCABULAIRE DE LA DEMANDE N'EST PAS UN ORDRE D'ORCHESTRER. La regle ci-dessus existait
-    // deja -- et n'a pas suffi une seconde fois. Mesure conv-9 (2026-08-31) : sur « scout pour trouver
-    // les causes des freezes (ne repond pas) pour les /heal », l'agent a lance `orchestrate`. Resultat
-    // reel : 223 659 ms de sous-agent, ZERO token de sortie, RUN.md `status: red`, aucun livrable,
-    // l'utilisateur coupe et reecrit « RECOMMENCE SANS cette erreur ». Le MEME scout, rendu en direct
-    // au tour suivant avec les outils de lecture, a produit huit causes classees avec fichier:ligne.
-    // Cause du rate : la regle parlait de « demande ouverte sur le code », jamais des MOTS de
-    // l'utilisateur, qui reprennent les noms de phases du pipeline -- « scout » se lisait comme
-    // `phase:'scout'`.
-    `Le VOCABULAIRE de la demande ne decide JAMAIS de l'orchestration. « scout », « audit », ` +
-    `« diagnostique », « trouve les causes », « /heal », « par ou commencer » nomment un LIVRABLE ` +
-    `D'ANALYSE que tu rends TOI-MEME dans le fil — pas la phase \`orchestrate(phase:'scout')\`, ` +
-    `meme quand l'utilisateur emploie exactement ce mot. Le seul critere reste : quelque chose doit-il ` +
-    `CHANGER ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
-    `peut ne rien rendre du tout.\n` +
-    // CHANGER n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
+    // CHANGER (critere de la RÈGLE PREMIÈRE) n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
     // (« fait toi-meme la regeneration sur les bases restants ») : 354 s, 2,91 $, 29 Extrait
     // REGENERES dans les bases de 15 bases de PRODUCTION -- mutation massive et non annulable,
     // menee entierement en chat direct. Aucun fichier du depot n'ayant change, le critere ci-dessus
@@ -801,21 +829,32 @@ export function buildChatPilotagePrompt(
         `\`global\` seulement quand le fait vaut au-delà de ce projet. ` +
         // DEUX BRAINS (conv-1233, 2026-10-28) : l'utilisateur a choisi que l'agent range lui-même et
         // dise où. Le compte-rendu porte `rangement` (commands.ts, cas 'remember').
-        `\`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, un outil ou un ` +
-        `système de l'équipe ; \`perso\` pour tout le reste (notes personnelles, projets perso) — le ` +
-        `Brain perso est privé, jamais partagé. Dis ensuite en une ligne où tu l'as rangé, d'après le ` +
-        `champ \`rangement\` du compte-rendu ; un refus « aucun Brain perso » se dit tel quel, sans ` +
+        // SANS DOUBLON (conv-1229, 2026-10-28) : quand `remember` est servi en outil direct, ses
+        // arguments arrivent au modèle avec leur description entière (commands.ts : `portee`, `fact`
+        // « autoporté… 3 mois », `source` et ses formes) et sa description dit déjà « pas une règle de
+        // comportement ni ce qui ne vaut que ce tour-ci ». Ces phrases ne partent donc QUE sur le
+        // chemin texte, où la liste ne montre que les noms d'arguments.
+        horsOutilRemember(
+          `\`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, un outil ou un ` +
+            `système de l'équipe ; \`perso\` pour tout le reste (notes personnelles, projets perso) — le ` +
+            `Brain perso est privé, jamais partagé. Dis ensuite en une ligne où tu l'as rangé, d'après le ` +
+            `champ \`rangement\` du compte-rendu. `
+        ) +
+        `Un refus « aucun Brain perso » se dit tel quel, sans ` +
         `ranger à l'équipe à la place. Dans \`brain_query\`, les notes perso arrivent sous BRAIN PERSO, ` +
         `chemins préfixés \`perso:\` : garde ce préfixe pour \`brain_read\`. ` +
-        `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
-        `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
-        `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
-        `\`git:<chemin>@<sha>\` pour un fait de code (la forme par défaut) · \`url:https://…\` · ` +
-        `\`ticket:ABC-123\` · \`email:qui@ex.fr\` · \`meeting:AAAA-MM-JJ\` · ` +
-        `\`session:<id de cette conversation>\` quand le fait vient de la conversation elle-même et qu'aucun ` +
-        `artefact ne l'atteste — c'est le cas quand l'utilisateur te dit simplement « retiens ça » · ` +
-        `\`file:<chemin ABSOLU existant côté serveur>\` en dernier recours : un chemin de dépôt relatif est ` +
-        `REFUSÉ, préfère \`git:\`.\n` +
+        horsOutilRemember(
+          `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
+            `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
+            `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
+            `\`git:<chemin>@<sha>\` pour un fait de code (la forme par défaut) · \`url:https://…\` · ` +
+            `\`ticket:ABC-123\` · \`email:qui@ex.fr\` · \`meeting:AAAA-MM-JJ\` · ` +
+            `\`session:<id de cette conversation>\` quand le fait vient de la conversation elle-même et qu'aucun ` +
+            `artefact ne l'atteste — c'est le cas quand l'utilisateur te dit simplement « retiens ça » · ` +
+            `\`file:<chemin ABSOLU existant côté serveur>\` en dernier recours : un chemin de dépôt relatif est ` +
+            `REFUSÉ, préfère \`git:\`.`
+        ) +
+        `\n` +
         `Si l'utilisateur te demande de retenir quelque chose, fais-le sans réclamer les détails : déduis le ` +
         `titre, le type et la portée de la conversation, et prends \`session:\` comme source si tu n'as rien ` +
         `de mieux — ne renonce jamais à retenir faute de source.\n`
@@ -900,13 +939,6 @@ export function buildChatPilotagePrompt(
         `document ou autre livrable. Cette information est indispensable à toute preuve vérifiable.\n`
     ) +
     CONSIGNE_LIGNE_BESOIN +
-    `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
-    `porte sur le CODE et demande d'y TRAVAILLER (écrire à plusieurs endroits, mener un chantier), ` +
-    `lance \`orchestrate\` avec la demande ` +
-    `complète (pipeline scout/frame). Si elle est CONVERSATIONNELLE (un avis, des options, une ` +
-    `méthode, « qu'est-ce que tu en penses », « par quoi commencer ») : propose TOI-MÊME ` +
-    `plusieurs options concrètes et scorées dans ta réponse, SANS aucune commande. Demander à ` +
-    `l'utilisateur de faire le travail (ex. « donne-moi la liste ») est un DERNIER recours, ` +
-    `jamais le réflexe par défaut.\n${MODEL_QUESTION_INSTRUCTION}`
+    MODEL_QUESTION_INSTRUCTION
   )
 }

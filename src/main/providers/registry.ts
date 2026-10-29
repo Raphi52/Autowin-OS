@@ -137,6 +137,29 @@ export class ProviderRegistry {
   private readonly quotaSuccessors = new Map<string, string>()
   private readonly quotaRotationFlights = new Map<string, Promise<string | undefined>>()
 
+  /**
+   * TÉMOIN D'APPEL RÉUSSI (conv-1240, 2026-10-28) : le main y branche la mise à jour du statut
+   * d'authentification affiché (`ProviderStateStore.noterAppelReussi`). Le registre ne connaît pas
+   * ce store — même partage des rôles que la rotation : il signale, il ne décide pas.
+   */
+  private temoinAppelReussi?: (providerId: string) => void
+
+  quandAppelReussi(temoin: (providerId: string) => void): void {
+    this.temoinAppelReussi = temoin
+  }
+
+  /** Un témoin en panne (disque plein…) ne doit jamais faire échouer le tour : il est DIT, pas avalé. */
+  private signalerAppelReussi(providerId: string): void {
+    try {
+      this.temoinAppelReussi?.(providerId)
+    } catch (error) {
+      console.warn(
+        `[registry] statut de ${providerId} non mis à jour après un appel réussi —`,
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(
     private readonly systemBlock: string | undefined = undefined,
@@ -536,6 +559,7 @@ export class ProviderRegistry {
       .then(
         (result) => {
           settleReservation(effectiveOptions.signal.aborted, result.usage)
+          if (!effectiveOptions.signal.aborted) this.signalerAppelReussi(route.id)
           return result
         },
         (error) => {

@@ -122,6 +122,37 @@ describe('Agent Studio — la section par défaut est CÂBLÉE', () => {
     expect(container.querySelector('[data-testid="workflow-profiles-view"]')).toBeNull()
   })
 
+  it('le modèle des petites tâches se change aussi ici, sur le MÊME réglage que Routage (conv-1240)', async () => {
+    const effectif = { provider: 'claude', model: 'claude-haiku-5-5', reasoningEffort: 'low' }
+    const setPetitesTaches = vi.fn().mockResolvedValue({ reglage: null, effectif })
+    stub({
+      petitesTaches: vi.fn().mockResolvedValue({ reglage: null, effectif }),
+      setPetitesTaches,
+      models: vi.fn().mockResolvedValue([
+        {
+          id: 'claude/claude-opus-5-5',
+          provider: 'claude',
+          model: 'claude-opus-5-5',
+          label: 'Opus 5.5',
+          reasoningEfforts: ['low', 'high'],
+          defaultReasoningEffort: 'high'
+        }
+      ])
+    })
+    await render('topology')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const bloc = container.querySelector('[data-testid="studio-petites-taches"]')
+    expect(bloc, 'le bloc doit être dans l’onglet Topologie').not.toBeNull()
+    expect(bloc?.querySelector('h3')?.textContent).toBe('Modèle des petites tâches')
+    expect(container.querySelector('[data-testid="studio-petites-taches-defaut"]')).not.toBeNull()
+    // Ses identifiants ne croisent pas ceux de Routage, monté en même temps dans l'app.
+    expect(bloc?.querySelector('[id^="router-petites-taches"]')).toBeNull()
+    expect(bloc?.querySelector('[id^="studio-petites-taches-modele"]')).not.toBeNull()
+  })
+
   it('l’onglet topology est marqué actif', async () => {
     stub()
     await render('topology')

@@ -1798,6 +1798,8 @@ export function stripAssistantThinking(text: string): string {
 
 export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
   const compact: ChatDisplayPart[] = []
+  /** La ligne « Lecture retenue », rangée en tête à la fin (conv-1240). */
+  let lecture: ChatDisplayPart | undefined
   const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
   const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
   let textIndex = 0
@@ -1829,17 +1831,18 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
       continue
     }
     // La ligne « Lecture retenue » ne se fond pas dans la réponse qui la suit : elle reste un bloc
-    // à part pour être repérée d'un coup d'œil (conv-1123).
+    // à part pour être repérée d'un coup d'œil (conv-1123). Elle se range TOUJOURS en tête du
+    // message (conv-1240) : lue en parallèle du modèle, elle peut arriver après le début de sa
+    // réponse, qu'elle ne doit ni couper en deux ni suivre. Le texte autour reste d'un seul tenant.
     if (part.streamId === FLUX_LECTURE_RETENUE) {
-      flushText()
       textIndex++
-      if (part.text.trim())
-        compact.push({
+      if (part.text.trim() && !lecture)
+        lecture = {
           kind: 'text',
           text: part.text.trim(),
           lectureRetenue: true,
           ...(part.at === undefined ? {} : { at: part.at })
-        })
+        }
       continue
     }
     pendingText.push({
@@ -1849,7 +1852,7 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
     })
   }
   flushText()
-  return compact
+  return lecture ? [lecture, ...compact] : compact
 }
 
 export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {

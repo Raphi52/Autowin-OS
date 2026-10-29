@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './RouterView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { PetitesTachesReglage } from './PetitesTachesReglage'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { agentStudioProviderIds } from './provider-catalog'
 import { libraryModels } from './model-library'
@@ -55,12 +56,6 @@ interface Binding {
   reasoningEffort?: string
 }
 
-/** Réglage des petites tâches tel que le processus principal le rend (null = jamais posé). */
-interface PetitesTaches {
-  reglage: Binding | null
-  effectif: Binding
-}
-
 export function RouterView({ active = true }: { active?: boolean }): React.JSX.Element {
   const { t } = useTextesSettings()
   const [models, setModels] = useState<RuntimeModel[]>([])
@@ -81,9 +76,6 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [providerError, setProviderError] = useState<Record<string, string>>({})
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
-  const [petitesTaches, setPetitesTaches] = useState<PetitesTaches | null>(null)
-  const [petitesTachesPending, setPetitesTachesPending] = useState(false)
-  const [petitesTachesError, setPetitesTachesError] = useState<string | null>(null)
   const [catalogActive, setCatalogActive] = useState(active)
   const reloadGenerationRef = useRef(0)
 
@@ -134,34 +126,17 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setBinding(roles.orchestrator ?? null)
   }, [])
 
-  // Appel OPTIONNEL, comme `claudeAccounts` : un preload plus ancien que le renderer (app packagée
-  // pas encore réinstallée) n'a pas ce canal, et la section se cache au lieu de lever un rejet.
-  // Un échec de lecture est DIT dans la section, jamais avalé.
-  const reloadPetitesTaches = useCallback(async (): Promise<void> => {
-    try {
-      const etat = await window.api.petitesTaches?.()
-      if (etat) setPetitesTaches(etat)
-    } catch (reason) {
-      setPetitesTachesError(reason instanceof Error ? reason.message : String(reason))
-    }
-  }, [])
-
   useEffect(() => {
     if (!active) return
     void Promise.resolve().then(reloadCatalog)
-    void Promise.resolve().then(reloadPetitesTaches)
     const off = window.api.onAppEvent((event) => {
-      if (event.type === 'refresh' && event.scope === 'roles') {
-        void reloadCatalog()
-        // Le modèle du chat change aussi l'EFFECTIF des petites tâches quand elles ne sont pas réglées.
-        void reloadPetitesTaches()
-      }
+      if (event.type === 'refresh' && event.scope === 'roles') void reloadCatalog()
     })
     return () => {
       invalidatePendingReloads()
       off()
     }
-  }, [active, reloadCatalog, reloadPetitesTaches])
+  }, [active, reloadCatalog])
 
   const byProvider = useMemo(() => {
     const map = new Map<string, RuntimeModel[]>()
@@ -322,22 +297,6 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     }
   }
 
-  const changePetitesTaches = async (option: OrchestratorModelOption | null): Promise<void> => {
-    if (petitesTachesPending) return
-    setPetitesTachesPending(true)
-    setPetitesTachesError(null)
-    try {
-      const etat = option
-        ? await window.api.setPetitesTaches(option.provider, option.model, option.reasoningEffort)
-        : await window.api.setPetitesTaches(null)
-      setPetitesTaches(etat)
-    } catch (e) {
-      setPetitesTachesError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setPetitesTachesPending(false)
-    }
-  }
-
   return (
     <section className="router-view">
       <ModuleHeader
@@ -365,47 +324,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
         />
       </section>
 
-      {(petitesTaches || petitesTachesError) && (
-        <section className="router-default" data-testid="router-petites-taches">
-          <header>
-            <h3>{t('routeur.petites.titre')}</h3>
-            <small>{t('routeur.petites.aide')}</small>
-          </header>
-          <OrchestratorModelSelector
-            busy={false}
-            catalogLoaded={loaded}
-            models={models}
-            statuses={statuses}
-            binding={petitesTaches?.effectif ?? null}
-            pending={petitesTachesPending}
-            error={petitesTachesError}
-            onSelect={(option) => void changePetitesTaches(option)}
-            idBase="router-petites-taches-modele"
-            // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
-            // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
-            // Non réglé = Haiku en effort low (`roles.ts`, conv-1097), plus le modèle du chat.
-            libelle={
-              petitesTaches?.reglage ? t('routeur.petites.regle') : t('routeur.petites.parDefaut')
-            }
-            aide={t('routeur.petites.application')}
-          />
-          {petitesTaches && !petitesTaches.reglage && (
-            <p className="router-hint" data-testid="router-petites-taches-defaut">
-              {t('routeur.petites.nonRegle')}
-            </p>
-          )}
-          {petitesTaches?.reglage && (
-            <button
-              type="button"
-              className="router-petites-taches-reset"
-              disabled={petitesTachesPending}
-              onClick={() => void changePetitesTaches(null)}
-            >
-              {t('routeur.petites.revenir')}
-            </button>
-          )}
-        </section>
-      )}
+      {/* Bloc partagé avec Agent Studio (conv-1240) : un seul code, un seul réglage. */}
+      <PetitesTachesReglage
+        active={active}
+        models={models}
+        statuses={statuses}
+        catalogLoaded={loaded}
+        idBase="router-petites-taches-modele"
+        testId="router-petites-taches"
+      />
 
       <div className="router-providers">
         {providers.map((provider) => {
