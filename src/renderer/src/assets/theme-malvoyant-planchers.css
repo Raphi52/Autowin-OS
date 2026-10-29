@@ -1039,7 +1039,8 @@
 /* components/TableauDesLots.css — tailles */
 :root[data-theme^='malvoyant-'] .tdl-pastille,
 :root[data-theme^='malvoyant-'] .tdl-bouton--lot,
-:root[data-theme^='malvoyant-'] .tdl-relance-raison {
+:root[data-theme^='malvoyant-'] .tdl-relance-raison,
+:root[data-theme^='malvoyant-'] .tdl-reduire {
   font-size: 13px;
 }
 
