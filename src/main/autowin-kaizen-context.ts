@@ -828,11 +828,23 @@ ${MARQUEUR_FIN}
  * dernier tour de la conv 150 … » a recu le dossier de conv-152 (promptCalls, turnEvents, saisies
  * vides). On prend la PREMIERE mention `conv N` / `conv-N` / `conversation N` de la phrase ;
  * l'appelant retombe sur la conversation courante si elle n'existe pas.
+ *
+ * Le NUMÉRO SEUL en tête compte aussi (kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f,
+ * 2026-10-29) : « /kaizen 1263 le petit modele de l'app a parlé de dialogue … » a reçu le dossier
+ * de conv-1266 elle-même, vide (« Aucune conversation n'est nommée »), alors que la scène était
+ * dans conv-1263. L'utilisateur désigne ses conversations ainsi (« 1256 pk cette conv paralélise
+ * pas tout », conv-1265). Seulement le PREMIER mot, et jamais une quantité (« 3 fois », « 1/10 ») ;
+ * une mention `conv N` dans la phrase reste prioritaire.
  */
+const NUMERO_SEUL_EN_TETE =
+  /^\/kaizen\s+(?:la\s+)?(\d{1,6})(?=[\s,:;]|$)(?!\s+(?:fois|x|%|min(?:utes?)?|h|heures?|s|sec(?:ondes?)?|jours?|tours?|messages?|lignes?|fichiers?|commits?|euros?)\b)/i
+
 export function kaizenNamedConversationId(task: string): string | undefined {
   const tache = task.trim()
   if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
-  const numero = /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1]
+  const numero =
+    /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1] ??
+    NUMERO_SEUL_EN_TETE.exec(tache)?.[1]
   return numero ? `conv-${numero}` : undefined
 }
 
