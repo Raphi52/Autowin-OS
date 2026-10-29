@@ -127,7 +127,7 @@ export type NomEtatMascotte = 'calme' | 'travail' | 'attente' | 'probleme'
 
 export type EtatMascotte = {
   etat: NomEtatMascotte
-  /** Le texte de la pastille (chiffre, « 9+ » ou « ! ») ; `null` = pas de pastille. */
+  /** Le texte de la pastille (le compte, de 1 à 99, ou « ! ») ; `null` = pas de pastille. */
   pastille: string | null
   /** Le fil qu'un clic sur la bille ouvre ; `null` = ouvrir Autowin, simplement. */
   fil: string | null
@@ -144,9 +144,13 @@ export type EntreesMascotte = {
   filsEnEchec: readonly string[]
 }
 
-/** Une pastille de 22 px tient deux caractères : au-delà de 9, « 9+ ». */
+/**
+ * Le VRAI compte, jusqu'à 99 (conv-1270, « affiche le vrai nombre sur le chapeau jusqu'à 99 au lieu
+ * de 9+ ») : il était « 9+ » au-delà de 9. La pastille tient deux caractères (22 px dans la bille
+ * basique, deux chiffres côte à côte sur le chapeau) : au-delà de 99, elle reste à 99.
+ */
 function compte(n: number): string {
-  return n > 9 ? '9+' : String(n)
+  return String(Math.min(n, 99))
 }
 
 /**

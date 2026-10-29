@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  classeDeLaValeur,
-  classeDuTrace,
+  classesDeLaValeur,
+  classesDuTrace,
   cssDuPersonnage,
   ecartsDesBras,
   reglesDuPersonnage,
@@ -9,7 +9,13 @@ import {
   visageDeLaBille
 } from './mascotte-personnage'
 
-const COMPTES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9+']
+/** Les chiffres seuls, puis ceux d'un nombre à deux chiffres : dizaines et unités (conv-1270). */
+const COMPTES = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+const SUFFIXES = [
+  ...COMPTES,
+  ...COMPTES.map((c) => `d${c}`),
+  ...['0', ...COMPTES].map((c) => `u${c}`)
+]
 /**
  * Un sort par couleur des yeux, dans leur ordre : [dégradé des yeux de lumière, cœur de l'encre du
  * chiffre écrit, couleur vive (iris des yeux, halo de l'encre, étoile du chapeau)] (conv-1247).
@@ -26,26 +32,33 @@ const forme = (p: string): string => p.replace(/[-\d.\s]+/gu, ' ').trim()
 describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-1227)', () => {
   it('la baguette écrit vraiment chaque chiffre : sa pointe ne s’écarte jamais du tracé', () => {
     const ecarts = ecartsDesBras()
-    for (const v of COMPTES) {
+    for (const v of SUFFIXES) {
       // Mesuré sur les images clés que la page joue (simplifiées, arrondies au degré), en pixels.
       expect(ecarts[`trace ${v}`], `trace ${v}`).toBeLessThan(1)
     }
+    // Deux chiffres : le bras de la dizaine passe la main à celui de l'unité dans la même pose (coude
+    // et pointe), et la reprend au tour suivant — la bascule ne se voit pas (conv-1270).
+    expect(ecarts['relais']).toBeLessThan(1)
     expect(ecarts['gauche au travail']).toBeLessThan(1)
     expect(ecarts['bras pour toi']).toBeLessThan(1)
   })
 
   it('un groupe d’écriture et un chiffre dessinés par compte, « ! » en plus pour l’échec', () => {
     const svg = svgDuPersonnage()
-    for (const v of COMPTES) {
-      expect(svg).toContain(`class="${classeDuTrace(v)}"`)
-      expect(svg).toContain(`class="ch nb ${classeDeLaValeur(v)}"`)
+    for (const s of SUFFIXES) {
+      expect(svg).toContain(`class="t${s}"`)
+      expect(svg).toContain(`class="ch nb v${s}"`)
     }
     expect(svg).toContain('class="ch nr vx"')
-    expect(classeDeLaValeur('!')).toBe('vx')
-    expect(classeDuTrace('!')).toBeNull()
-    expect(classeDeLaValeur('9+')).toBe('vp')
-    for (const autre of [null, '10', '0', 'x', '"}'])
-      expect(classeDeLaValeur(autre), String(autre)).toBeNull()
+    expect(classesDeLaValeur('!')).toEqual(['vx'])
+    expect(classesDuTrace('!')).toEqual([])
+    // Le vrai nombre jusqu'à 99 (conv-1270) : une dizaine et une unité, chacune à sa place.
+    expect(classesDeLaValeur('7')).toEqual(['v7'])
+    expect(classesDeLaValeur('47')).toEqual(['vd4', 'vu7'])
+    expect(classesDeLaValeur('10')).toEqual(['vd1', 'vu0'])
+    expect(classesDuTrace('99')).toEqual(['td9', 'tu9'])
+    for (const autre of [null, '0', '05', '100', '9+', 'x', '"}'])
+      expect(classesDeLaValeur(autre), String(autre)).toEqual([])
   })
 
   it('tout ce qu’un état rallume est éteint par la page, d’une règle qu’il peut battre', () => {
@@ -53,7 +66,7 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     const css = cssDuPersonnage()
     const etats = ['calme', 'travail', 'attente', 'probleme'] as const
     for (const etat of etats)
-      for (const pastille of [null, '1', '3', '9+', '!']) {
+      for (const pastille of [null, '1', '3', '10', '47', '99', '!']) {
         for (const [selecteur, declarations] of reglesDuPersonnage(etat, pastille)) {
           const classe = selecteur.slice(1)
           expect(page, `${etat} ${pastille} ${selecteur}`).toContain(classe)
@@ -69,7 +82,8 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
       reglesDuPersonnage(etat, p)
         .filter(([, d]) => d === 'display:inline')
         .map(([s]) => s)
-    expect(allume('travail', '9+')).toEqual(['.vp', '.ET', '.tp', '.fT'])
+    expect(allume('travail', '47')).toEqual(['.vd4', '.vu7', '.ET', '.td4', '.tu7', '.fT'])
+    expect(allume('attente', '47')).toEqual(['.vd4', '.vu7', '.EA', '.fA'])
     expect(allume('attente', '2')).toEqual(['.v2', '.EA', '.fA'])
     expect(allume('calme', null)).toEqual(['.ER', '.fR', '.GF'])
     expect(allume('probleme', '!')).toEqual(['.vx', '.ER', '.fP'])
@@ -200,6 +214,13 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(20)
     // Le chiffre du chapeau : blanc, 26 px (16 avant), il peut déborder de l’étoile.
     expect(svg).toMatch(/<text class="ch nb v1"[^>]*font-size="26" fill="#ffffff">1<\/text>/u)
+    // Deux chiffres (conv-1270) : 20 px, la dizaine finit au centre de l'étoile, l'unité y commence.
+    expect(svg).toMatch(
+      /<text class="ch nb vd4" x="25" y="4" text-anchor="end"[^>]*font-size="20"[^>]*>4<\/text>/u
+    )
+    expect(svg).toMatch(
+      /<text class="ch nb vu0" x="25" y="4" text-anchor="start"[^>]*font-size="20"[^>]*>0<\/text>/u
+    )
   })
 
   it('les bras sont noirs et mats : aucune lueur, mains d’encre (conv-1227)', () => {
@@ -279,10 +300,10 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
       expect(classeYeux, yeux).toBeDefined()
       expect(trace, encre).toBeDefined()
       expect(joue(trace ?? ''), `encre ${encre} = yeux ${yeux}`).toEqual(joue(classeYeux ?? ''))
-      // Chaque compte s'écrit dans cette encre.
-      for (const v of COMPTES) {
-        const groupe = svg.slice(svg.indexOf(`<g class="${classeDuTrace(v)}">`))
-        expect(groupe.slice(0, groupe.indexOf('class="jt ')), `${v} en ${encre}`).toContain(
+      // Chaque chiffre, seul ou à sa place dans un nombre à deux chiffres, s'écrit dans cette encre.
+      for (const s of SUFFIXES) {
+        const groupe = svg.slice(svg.indexOf(`<g class="t${s}">`))
+        expect(groupe.slice(0, groupe.indexOf('class="jt ')), `${s} en ${encre}`).toContain(
           `stroke="${encre}"`
         )
       }

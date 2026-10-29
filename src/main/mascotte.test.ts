@@ -40,7 +40,10 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
       pastille: '3',
       fil: null
     })
-    expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 12 }).pastille).toBe('9+')
+    // Le vrai nombre jusqu'à 99 (conv-1270, « au lieu de 9+ ») ; au-delà, la pastille reste à 99.
+    expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 12 }).pastille).toBe('12')
+    expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 60, runsActifs: 39 }).pastille).toBe('99')
+    expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 150 }).pastille).toBe('99')
   })
 
   it('pour toi l’emporte sur le travail ; le clic ouvre le fil le plus récent', () => {
@@ -246,9 +249,17 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
 
   it('le nombre est le chiffre qui brille dans l’étoile du chapeau, pas l’étoile (conv-1227)', () => {
     const html = htmlDeMascotte()
-    // Un chiffre dessiné par compte possible, centré sur l'étoile (x = 25 de la boîte de la bille).
-    for (const v of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9+'])
+    // Un chiffre dessiné par chiffre possible, centré sur l'étoile (x = 25 de la boîte de la bille) ;
+    // un nombre à deux chiffres allume une dizaine et une unité (conv-1270), 0 compris.
+    for (const v of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
       expect(html).toContain(`>${v}</text>`)
+    expect(html).not.toContain('>9+</text>')
+    expect(cssDeLEtat({ etat: 'travail', pastille: '47', fil: null })).toContain(
+      'body .vd4{display:inline}'
+    )
+    expect(cssDeLEtat({ etat: 'travail', pastille: '47', fil: null })).toContain(
+      'body .vu7{display:inline}'
+    )
     expect(html).toMatch(/<text class="ch nb v3" x="25"/u)
     // C'est le chiffre qui a la lueur animée ; l'étoile, jaune et pleine depuis conv-1227 (« l'étoile
     // du chapeau fais-la jaune »), n'a ni classe ni lueur.
