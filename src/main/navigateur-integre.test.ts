@@ -192,7 +192,24 @@ class FausseVue implements VueNavigateur {
   capturer(): Promise<string | null> {
     return Promise.resolve('data:image/png;base64,AAAA')
   }
+  /**
+   * Règle de Chromium reproduite à la demande (conv-1293, lot 5/5 de conv-1286) : tant que la page
+   * n'a produit aucune image, Blink jette clics, molette et touches ; seuls les déplacements passent
+   * (`WidgetInputHandlerManager::DispatchEvent`). Une vue cachée n'en produit jamais d'elle-même.
+   */
+  sansImage = false
+  perdus: EvenementSaisie[] = []
+  peintures = 0
+  peindre(): Promise<void> {
+    this.peintures += 1
+    this.sansImage = false
+    return Promise.resolve()
+  }
   envoyer(evenement: EvenementSaisie): void {
+    if (this.sansImage && evenement.type !== 'mouseMove') {
+      this.perdus.push(evenement)
+      return
+    }
     this.evenements.push(evenement)
   }
   insererTexte(texte: string): Promise<void> {
@@ -462,6 +479,43 @@ describe('surbrillance 800 ms et bandeau « l’agent pilote »', () => {
       expect(vue.methodes().at(-1)).toBe('retirerSurbrillance')
     }
   )
+})
+
+/*
+ * Objection du juge (conv-1293, réparation 1) — mesuré dans l'instance cachée (run8) : sur une page
+ * qui n'avait encore produit aucune image (site changé, vue cachée), le clic de l'agent était jeté
+ * par Chromium et l'outil répondait quand même « Clic sur … ». Cas réel : l'onglet d'un fil que
+ * l'utilisateur ne regarde pas, ou panneau fermé. Entrée qui fait échouer ce test si la correction
+ * est fausse : `sansImage = true` (aucune image depuis la navigation) — image forcée APRÈS l'envoi,
+ * ou pas pour la molette ou les touches, et `perdus` n'est plus vide.
+ */
+describe('une page sans image reçoit quand même l’action de l’agent', () => {
+  it.each([
+    { type: 'clic', cible: { ref: 1 } } as const,
+    { type: 'touche', touche: 'Enter', cible: { ref: 1 } } as const,
+    { type: 'defiler', dy: 300 } as const
+  ])('$type : une image est forcée avant l’envoi, rien n’est jeté', async (action) => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ description: 'textbox « Nom »' })
+    vue.sansImage = true
+    const resultat = await nav.agir('conv-a', action)
+    expect(resultat).toMatchObject({ ok: true })
+    expect(vue.perdus).toEqual([])
+    expect(vue.evenements.some((e) => e.type !== 'mouseMove')).toBe(true)
+  })
+
+  it('jumeau : une action refusée (cible introuvable) ne force aucune image et n’envoie rien', async () => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = () => ({ trouve: false })
+    vue.sansImage = true
+    const resultat = await nav.agir('conv-a', { type: 'clic', cible: { ref: 9 } })
+    expect(resultat).toMatchObject({ ok: false, refus: 'cible-introuvable' })
+    expect(vue.peintures).toBe(0)
+    expect(vue.evenements).toEqual([])
+    expect(vue.perdus).toEqual([])
+  })
 })
 
 describe('garde (b) : accord par site', () => {
@@ -735,6 +789,66 @@ describe('annotations : le canal de retour de la page', () => {
     await nav.basculerMode('annoter')
     expect(nav.etat('conv-a').mode).toBeNull()
   })
+
+  /*
+   * Mesuré le 2026-10-29 (conv-1293, lot 5/5 de conv-1286) dans l'instance cachée : après « Envoyer
+   * au chat », le mode Annoter reste allumé ; le clic de l'agent part, la page l'AVALE (écoutes
+   * click/pointerdown du mode) et l'outil répond « Clic sur … » sans que rien ne change. L'entrée
+   * qui ferait échouer ce test si la correction était fausse : un mode encore « annoter » au moment
+   * du mouseDown de l'agent.
+   */
+  function modeAuPremierEvenement(vue: FausseVue): Array<unknown> {
+    const vus: unknown[] = []
+    const envoyer = vue.envoyer.bind(vue)
+    vue.envoyer = (evenement) => {
+      if (vus.length === 0)
+        vus.push(vue.appels.filter((a) => a.methode === 'activerMode').at(-1)?.args[0])
+      envoyer(evenement)
+    }
+    return vus
+  }
+
+  it('un clic de l’agent sur l’onglet en mode Annoter éteint d’abord le mode : la page ne l’avale pas', async () => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    nav.afficherFil('conv-a')
+    nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee()
+    await nav.basculerMode('annoter')
+    expect(nav.etat('conv-a').mode).toBe('annoter')
+    const modeVu = modeAuPremierEvenement(vue)
+    const resultat = await nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
+    expect(resultat).toMatchObject({ ok: true })
+    expect(resultat.message).toContain('Annoter')
+    expect(modeVu).toEqual([null])
+    expect(nav.etat('conv-a').mode).toBeNull()
+  })
+
+  it('jumeau : défiler ne fait que lire, le mode Annoter de l’utilisateur reste allumé', async () => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    nav.afficherFil('conv-a')
+    nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
+    const vue = fabrique.vues[0]
+    await nav.basculerMode('annoter')
+    const resultat = await nav.agir('conv-a', { type: 'defiler', dy: 300 })
+    expect(resultat).toMatchObject({ ok: true })
+    expect(vue.appels.filter((a) => a.methode === 'activerMode').map((a) => a.args[0])).toEqual([
+      'annoter'
+    ])
+    expect(nav.etat('conv-a').mode).toBe('annoter')
+  })
+
+  it('jumeau : une action refusée (cible introuvable) laisse le mode allumé', async () => {
+    nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+    nav.afficherFil('conv-a')
+    nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = () => ({ trouve: false })
+    await nav.basculerMode('annoter')
+    const resultat = await nav.agir('conv-a', { type: 'clic', cible: { ref: 9 } })
+    expect(resultat).toMatchObject({ ok: false, refus: 'cible-introuvable' })
+    expect(nav.etat('conv-a').mode).toBe('annoter')
+  })
 })
 
 describe('réglages, données, navigateur du système', () => {
@@ -895,6 +1009,139 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
       (electronSimule.vues.at(-1)?.options as { webPreferences: { partition: string } })
         .webPreferences.partition
     ).toBe('autowin-navigateur')
+  })
+
+  /*
+   * Mesuré le 2026-10-29 (conv-1293, lot 5/5 de conv-1286) dans l'instance cachée : Ctrl+Shift+B
+   * tapé le focus DANS la page laissait le panneau ouvert — ses raccourcis écoutent le rendu de la
+   * fenêtre, qui ne voit pas les touches de la vue native. L'entrée qui ferait échouer ce test si
+   * la correction était fausse : un keyDown Ctrl+Shift+B venu de la page, non rejoué à la fenêtre.
+   */
+  function fabriqueAvecFenetre(): {
+    vue: VueNavigateur
+    touche: (entree: Record<string, unknown>) => { evitee: boolean }
+    fenetre: {
+      webContents: { focus: ReturnType<typeof vi.fn>; sendInputEvent: ReturnType<typeof vi.fn> }
+    }
+  } {
+    const fenetre = {
+      contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+      isDestroyed: () => false,
+      webContents: { focus: vi.fn(), sendInputEvent: vi.fn() }
+    }
+    const vraie = creerFabriqueElectron(fenetre as never)
+    const vue = vraie.creerVue({
+      partition: PARTITION_EPHEMERE,
+      ecouteurs: {
+        surChangement: vi.fn(),
+        surNouvelleFenetre: vi.fn(),
+        surConsole: vi.fn(),
+        surRequeteEchouee: vi.fn(),
+        surTelechargement: vi.fn()
+      }
+    })
+    const simulee = electronSimule.vues.at(-1)
+    if (!simulee) throw new Error('aucune vue créée')
+    const touche = (entree: Record<string, unknown>): { evitee: boolean } => {
+      const evenement = { evitee: false, preventDefault: () => (evenement.evitee = true) }
+      simulee.webContents.ecoutes.get('before-input-event')?.(evenement, {
+        type: 'keyDown',
+        control: false,
+        meta: false,
+        shift: false,
+        alt: false,
+        ...entree
+      })
+      return evenement
+    }
+    // L'agent tape par `sendInputEvent` : comme le vrai Electron, il repasse par l'écoute.
+    ;(simulee.webContents as unknown as Record<string, unknown>).getZoomFactor = () => 1
+    ;(simulee.webContents as unknown as Record<string, unknown>).sendInputEvent = (e: {
+      type: string
+      keyCode?: string
+      modifiers?: string[]
+    }) => {
+      if (e.type === 'keyDown')
+        touche({
+          key: e.keyCode,
+          control: e.modifiers?.includes('control'),
+          shift: e.modifiers?.includes('shift')
+        })
+    }
+    return { vue, touche, fenetre }
+  }
+
+  // Mesuré (conv-1293, run-r1-vert.txt) : `capturePage` échoue sur une page jamais dessinée sans la
+  // faire dessiner ; la capture du débogueur, elle, attend l'image.
+  it.each([
+    { dejaAttache: false, journal: ['attach 1.3', 'Page.captureScreenshot', 'detach'] },
+    { dejaAttache: true, journal: ['Page.captureScreenshot'] }
+  ])(
+    'peindre : image attendue par le débogueur, laissé comme trouvé (déjà attaché : $dejaAttache)',
+    async ({ dejaAttache, journal }) => {
+      const fenetre = {
+        contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+        isDestroyed: () => false,
+        webContents: { focus: vi.fn(), sendInputEvent: vi.fn() }
+      }
+      const vue = creerFabriqueElectron(fenetre as never).creerVue({
+        partition: PARTITION_PERSISTANTE,
+        ecouteurs: {
+          surChangement: vi.fn(),
+          surNouvelleFenetre: vi.fn(),
+          surConsole: vi.fn(),
+          surRequeteEchouee: vi.fn(),
+          surTelechargement: vi.fn()
+        }
+      })
+      const vu: string[] = []
+      let attache = dejaAttache
+      ;(electronSimule.vues.at(-1)?.webContents as unknown as Record<string, unknown>).debugger = {
+        isAttached: () => attache,
+        attach: (v: string) => {
+          attache = true
+          vu.push(`attach ${v}`)
+        },
+        detach: () => {
+          attache = false
+          vu.push('detach')
+        },
+        sendCommand: (methode: string) => {
+          vu.push(methode)
+          return Promise.resolve({ data: '' })
+        }
+      }
+      await vue.peindre()
+      expect(vu).toEqual(journal)
+      expect(attache).toBe(dejaAttache)
+    }
+  )
+
+  it.each([
+    { key: 'B', shift: true, keyCode: 'B', modifiers: ['control', 'shift'] },
+    { key: 'S', shift: true, keyCode: 'S', modifiers: ['control', 'shift'] },
+    { key: 't', shift: false, keyCode: 'T', modifiers: ['control'] }
+  ])(
+    'raccourci du panneau tapé DANS la page ($key, Maj $shift) : retenu et rejoué à la fenêtre',
+    ({ key, shift, keyCode, modifiers }) => {
+      const { touche, fenetre } = fabriqueAvecFenetre()
+      expect(touche({ key, control: true, shift }).evitee).toBe(true)
+      expect(fenetre.webContents.focus).toHaveBeenCalled()
+      expect(fenetre.webContents.sendInputEvent.mock.calls.map((c) => c[0])).toEqual([
+        { type: 'keyDown', keyCode, modifiers },
+        { type: 'keyUp', keyCode, modifiers }
+      ])
+    }
+  )
+
+  it('jumeaux : Ctrl+B, un relâchement, et la frappe de l’AGENT restent à la page', () => {
+    const { vue, touche, fenetre } = fabriqueAvecFenetre()
+    expect(touche({ key: 'b', control: true }).evitee).toBe(false)
+    expect(touche({ key: 'B', control: true, shift: true, type: 'keyUp' }).evitee).toBe(false)
+    expect(touche({ key: 'B', control: true, shift: true, alt: true }).evitee).toBe(false)
+    vue.envoyer({ type: 'keyDown', keyCode: 'T', modifiers: ['control'] })
+    expect(fenetre.webContents.sendInputEvent).not.toHaveBeenCalled()
+    expect(fenetre.webContents.focus).not.toHaveBeenCalled()
   })
 })
 

@@ -125,6 +125,9 @@ class FausseVue implements VueNavigateur {
   async capturer(): Promise<string | null> {
     return null
   }
+  async peindre(): Promise<void> {
+    this.appels.push('peindre')
+  }
   envoyer(): void {
     this.appels.push('envoyer')
   }
