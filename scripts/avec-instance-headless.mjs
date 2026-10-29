@@ -490,9 +490,16 @@ function lirePidLanceur(racineInstances, instanceId) {
 
 const AGE_PURGE_MS = 24 * 3600 * 1000
 const HORS_CAPTURE = new Set(['user-data', 'appdata', 'instance.json', 'lanceur.pid'])
+/*
+ * Les DEUX identifiants par defaut : `preuve-<pid>` (ce script) et `ui-capture-<pid>`
+ * (instanceIdUiCapture de ui-capture.mjs). Seul le premier etait reconnu : 465 dossiers
+ * ui-capture-* sur 572 jamais purges le 2026-10-29 (maintenance conv-1048).
+ */
+const NOM_PAR_DEFAUT = /^(?:preuve|ui-capture)-([0-9]+)$/
 
 /**
- * Les dossiers d'instance a PURGER. Seulement : nom `preuve-<pid>` (identifiant par defaut), plus de
+ * Les dossiers d'instance a PURGER. Seulement : nom par defaut (`preuve-<pid>` ou
+ * `ui-capture-<pid>`), plus de
  * 24 h, lanceur (le pid du nom) mort, application de la fiche morte ou absente, et AUCUNE capture —
  * toute entree hors profil et fiches internes (`proof/`, une image, une fixture) protege le dossier.
  * Un pid reutilise par un autre processus passe pour vivant : on garde, jamais l'inverse. Pure.
@@ -500,7 +507,7 @@ const HORS_CAPTURE = new Set(['user-data', 'appdata', 'instance.json', 'lanceur.
 export function dossiersApurger({ dossiers, vivant = pidVivant, ageMin = AGE_PURGE_MS }) {
   return dossiers
     .filter((d) => {
-      const m = /^preuve-([0-9]+)$/.exec(d.nom)
+      const m = NOM_PAR_DEFAUT.exec(d.nom)
       if (!m || d.ageMs <= ageMin) return false
       if (vivant(Number(m[1])) || vivant(d.pidApp)) return false
       return d.entrees.every((e) => HORS_CAPTURE.has(e))
@@ -516,7 +523,7 @@ export function purgerDossiersInstance(
   if (!existsSync(racineInstances)) return []
   const dossiers = []
   for (const entree of readdirSync(racineInstances, { withFileTypes: true })) {
-    if (!entree.isDirectory() || !entree.name.startsWith('preuve-')) continue
+    if (!entree.isDirectory() || !NOM_PAR_DEFAUT.test(entree.name)) continue
     const chemin = join(racineInstances, entree.name)
     let pidApp = Number.NaN
     try {

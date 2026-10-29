@@ -213,4 +213,39 @@ describe('purge des dossiers d instance', () => {
       rmSync(racine, { recursive: true, force: true })
     }
   })
+
+  /*
+   * ui-capture.mjs nomme ses instances `ui-capture-<pid>` (instanceIdUiCapture) : la purge, qui ne
+   * reconnaissait que `preuve-<pid>`, n'en effacait aucune — 465 dossiers sur 572 le 2026-10-29,
+   * +47 par jour (maintenance conv-1048). Memes gardes : vieux, lanceur et app morts, sans capture.
+   */
+  it('purge aussi les ui-capture-<pid> vieux, morts et sans capture', async () => {
+    const { dossiersApurger } = await import('./avec-instance-headless.mjs')
+    const dossiers = [
+      { ...base, nom: 'ui-capture-200', entrees: ['appdata', 'user-data'], pidApp: Number.NaN },
+      { ...base, nom: 'ui-capture-201', ageMs: 23 * H },
+      { ...base, nom: 'ui-capture-777' },
+      { ...base, nom: 'ui-capture-202', entrees: ['user-data', 'capture.png'] },
+      { ...base, nom: 'ui-capture-ma-vue' }
+    ]
+    expect(dossiersApurger({ dossiers, vivant })).toEqual(['ui-capture-200'])
+  })
+
+  it('efface reellement un ui-capture-<pid> purgeable', async () => {
+    const { purgerDossiersInstance } = await import('./avec-instance-headless.mjs')
+    const { existsSync, utimesSync } = await import('node:fs')
+    const racine = mkdtempSync(join(tmpdir(), 'aw-purge-'))
+    try {
+      const vieux = (Date.now() - 30 * H) / 1000
+      for (const nom of ['ui-capture-200', 'ui-capture-777']) {
+        mkdirSync(join(racine, nom, 'appdata'), { recursive: true })
+        utimesSync(join(racine, nom), vieux, vieux)
+      }
+      expect(purgerDossiersInstance(racine, { vivant })).toEqual(['ui-capture-200'])
+      expect(existsSync(join(racine, 'ui-capture-200'))).toBe(false)
+      expect(existsSync(join(racine, 'ui-capture-777'))).toBe(true)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
 })
