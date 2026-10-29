@@ -326,8 +326,14 @@ function mentionneUnActeDePublication(texte: string): boolean {
   )
 }
 
+/*
+ * `/git` EN TÊTE (conv-1250, 2026-10-29). L'utilisateur relançait ce prompt en retapant la cible :
+ * « /salvage push main origin », « /salvage all origin main ». `/git` trie comme salvage PUIS
+ * publie selon les habitudes du dépôt et range ce qui traîne. En tête, parce que seule la forme
+ * `/nom` en début de message charge la skill (`skill-nommee.ts`).
+ */
 export const PROMPT_SALVAGE =
-  "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
+  '/git : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées), publie-les selon les habitudes du dépôt et range ce qui traîne.'
 
 /*
  * DEUX EXCEPTIONS, mesurees le 2026-09-03 (conv-210).
@@ -345,7 +351,12 @@ export const PROMPT_SALVAGE =
  * Le garde-fou garde tout son mordant sur le cas qu'il vise : un prompt dont l'acte PRINCIPAL est
  * de publier.
  */
-const ORDRE_DE_TRI = /\/salvage\b/i
+/*
+ * `/git` est l'ordre de tri au même titre que `/salvage` (conv-1250). Les bords excluent un chemin :
+ * `src/main/git-read-main.ts` ou `scripts/salvage-resurrection.mjs` nomment un fichier, ils
+ * n'ordonnent aucun tri.
+ */
+const ORDRE_DE_TRI = /(?<![\w./\\-])\/(?:salvage|git)(?![\w./\\-])/i
 const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b/i
 
 /*
