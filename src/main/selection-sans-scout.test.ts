@@ -50,12 +50,12 @@ describe('graphSansPhase', () => {
     expect(graphDefects(apres)).toEqual([])
   })
 
-  it('« Exploration » : think → frame → learn → salvage', () => {
+  it('« Exploration » : think → frame → learn → git', () => {
     expect(linearPhasesOf(graphSansPhase(livre('exploration'), 'scout')!)).toEqual([
       'think',
       'frame',
       'learn',
-      'salvage'
+      'git'
     ])
   })
 

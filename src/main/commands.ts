@@ -2746,7 +2746,7 @@ export class AppCommandBus {
               compte: full.travauxNonPublies.length,
               consigne:
                 `${full.travauxNonPublies.length} travail(aux) terminé(s) ne sont PAS dans la base. ` +
-                'Invoque le skill `salvage` pour les trier un par un (fusionner / jeter / laisser) : ' +
+                'Invoque le skill `git` pour les trier un par un (fusionner / jeter / laisser) : ' +
                 'il juge sur le CONTENU, car le plus souvent le travail est déjà présent sous une ' +
                 'autre implémentation. Ne conclus JAMAIS « rien à fusionner » sans l’avoir fait — un ' +
                 '`git status` dans l’arbre principal ne voit pas ces copies isolées. ' +

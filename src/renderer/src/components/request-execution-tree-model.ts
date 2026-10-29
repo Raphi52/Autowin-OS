@@ -64,7 +64,9 @@ const PHASE_LABELS: Record<string, string> = {
   judge: 'Judge',
   kaizen: 'Kaizen',
   learn: 'Learn',
+  // `salvage` reste pour les traces d'avant le 2026-10-29 ; `git` le remplace depuis (conv-1252).
   salvage: 'Salvage',
+  git: 'Git',
   remake: 'Remake',
   // Noms de skill (ceux qu'on tape après « / ») : des noms propres, gardés dans les deux langues
   // comme « Scout » ou « Learn » (traduction anglaise, conv-1170).

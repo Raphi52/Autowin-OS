@@ -8,13 +8,13 @@ describe("effortParDefautDeLEtape — l'effort d'une étape quand l'utilisateur 
   it('table complète pour un réglage xhigh, sur les 3 niveaux de difficulté', () => {
     const table = (difficulte: 'critical' | 'standard' | 'trivial'): Record<string, string> =>
       Object.fromEntries(
-        ['build', 'salvage', 'scout', 'frame', 'terrain', 'clean', 'think', 'learn'].map(
+        ['build', 'git', 'scout', 'frame', 'terrain', 'clean', 'think', 'learn'].map(
           (etape) => [etape, effortParDefautDeLEtape(etape, difficulte, 'xhigh', CLAUDE) ?? '—']
         )
       )
     expect(table('critical')).toEqual({
       build: 'xhigh',
-      salvage: 'xhigh',
+      git: 'xhigh',
       scout: 'xhigh',
       frame: 'xhigh',
       terrain: 'xhigh',
@@ -24,7 +24,7 @@ describe("effortParDefautDeLEtape — l'effort d'une étape quand l'utilisateur 
     })
     expect(table('standard')).toEqual({
       build: 'xhigh',
-      salvage: 'xhigh',
+      git: 'xhigh',
       scout: 'high',
       frame: 'high',
       terrain: 'high',
@@ -34,7 +34,7 @@ describe("effortParDefautDeLEtape — l'effort d'une étape quand l'utilisateur 
     })
     expect(table('trivial')).toEqual({
       build: 'xhigh',
-      salvage: 'xhigh',
+      git: 'xhigh',
       scout: 'medium',
       frame: 'medium',
       terrain: 'medium',
@@ -73,9 +73,9 @@ describe("effortParDefautDeLEtape — l'effort d'une étape quand l'utilisateur 
     expect(effortParDefautDeLEtape('build', 'critical', 'xhigh', CLAUDE)).not.toBe('max')
   })
 
-  it('build et salvage ne sont jamais baissés, même sur une demande triviale', () => {
+  it('build et git ne sont jamais baissés, même sur une demande triviale', () => {
     expect(effortParDefautDeLEtape('build', 'trivial', 'xhigh', CLAUDE)).toBe('xhigh')
-    expect(effortParDefautDeLEtape('salvage', 'trivial', 'xhigh', CLAUDE)).toBe('xhigh')
+    expect(effortParDefautDeLEtape('git', 'trivial', 'xhigh', CLAUDE)).toBe('xhigh')
   })
 
   it('étape inconnue, juge, kaizen, remake → effort inchangé', () => {

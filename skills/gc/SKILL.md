@@ -7,7 +7,7 @@ description: >-
   runs anciennes, fichiers temporaires à la racine — et les DÉPLACE en corbeille datée
   (réversible). Ne supprime jamais définitivement sans demande explicite de l'utilisateur.
   Ne pas utiliser pour le code mort de `src/` (→ `residus`) ni pour le travail non publié ou une
-  copie de travail modifiée (→ `salvage`).
+  copie de travail modifiée (→ `git`).
 ---
 
 # gc — le ramasse-miettes des données d'Autowin OS
@@ -38,7 +38,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
 - Hors périmètre ABSOLU : `claude-accounts/` (identités, secrets), `Cache/`, `Code Cache/`,
   `GPUCache/`, `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal` (propriété
-  d'Electron, il les gère seul), `whisper/`, `piper/` (modèles), `worktrees/` (→ `/salvage`),
+  d'Electron, il les gère seul), `whisper/`, `piper/` (modèles), `worktrees/` (→ `/git`),
   tout fichier de configuration `*.json` à la racine autre que les satellites listés ci-dessous.
 
 ## Procédure
@@ -80,7 +80,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      `<copie>\node_modules` (`cmd /c rmdir "<copie>\node_modules"` : `rmdir` sans `/s` ne retire
      que le lien) et VÉRIFIER qu'elle a disparu ; (2) seulement alors `git worktree remove <copie>`.
      Lancé avec la jonction en place, `git worktree remove` la traverse et efface le `node_modules`
-     du dépôt (constaté le 2026-10-10, conv-207). Une copie avec des modifications → `/salvage`, pas `/gc`.
+     du dépôt (constaté le 2026-10-10, conv-207). Une copie avec des modifications → `/git`, pas `/gc`.
      Exception : `command-verify-<conversation>` (`src/main/verification-isolee.ts`) est UNE copie
      par conversation, réutilisée, qui reçoit l'état courant de l'arbre partagé avant chaque
      vérification — ses « modifications » sont ce miroir, pas du travail (le recensement des travaux
@@ -88,7 +88,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      Rien ne la retire : la COMPTER et la PESER dans le bilan ; candidate si sa conversation n'a
      plus de tour depuis > 7 jours (`lastUserMessageAt` de `get_state`, ou archivée).
    - **Branches `autowin/recovery/*` et remises de côté (`git stash list`)** : les COMPTER et les
-     dater dans le bilan, rien de plus. Leur tri relève de `/salvage`.
+     dater dans le bilan, rien de plus. Leur tri relève de `/git`.
    - **Chemins périmés** : `git worktree prune --dry-run` ; s'il liste quelque chose, le rapporter.
 3. **Balayer = déplacer, pas supprimer.** Déplacer chaque candidat vers
    `.autowin-data/gc-corbeille/AAAA-MM-JJ/<chemin d'origine>` (`move_file`, ou `run` d'un `mv`

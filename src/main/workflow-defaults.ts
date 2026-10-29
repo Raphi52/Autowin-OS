@@ -63,7 +63,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
@@ -71,7 +71,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -89,7 +89,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'frame-1', when: 'always' },
@@ -99,7 +99,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -120,7 +120,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge' },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'scout-1', when: 'always' },
@@ -130,7 +130,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -151,14 +151,14 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
           agents: [agentStudio('correcteur'), agentStudio('gardien'), agentStudio('lean')]
         },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
         { from: 'build-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 3 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -185,13 +185,13 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         },
         { id: 'frame-1', phase: 'frame', agents: [agentStudio('contraintes')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'scout-1', when: 'always' },
         { from: 'scout-1', to: 'frame-1', when: 'always' },
         { from: 'frame-1', to: 'learn-1', when: 'always' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -209,7 +209,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'remake-1', when: 'always' },
@@ -218,7 +218,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -231,7 +231,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
    *   kaizen (87) · retouche d'interface (337, dont 228 ouverts par elle) · retrait d'une fonction
    *   (72) · gel/lenteur (35) · audit en lecture seule (16) · code mort (4) · veille marché (4).
    * Écartés, et pourquoi : /draft (le choix se fait au clic dans le fil, un run ne peut pas
-   * l'attendre) ; /salvage seul (il travaille sur l'arbre réel, un run sur une copie séparée) ;
+   * l'attendre) ; /git seul (il travaille sur l'arbre réel, un run sur une copie séparée) ;
    * les questions (réponse directe, aucun workflow) ; les lots de candidats d'un scout (couverts par
    * Chantier/Feature — leurs rouges venaient d'un fichier bloqué par un autre fil, pas du graphe).
    */
@@ -248,7 +248,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'kaizen-1', when: 'always' },
@@ -256,7 +256,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'kaizen-1', when: 'red', maxTraversals: 1 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -271,13 +271,13 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'build-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -295,7 +295,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
@@ -304,7 +304,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -322,7 +322,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'gel-1', when: 'always' },
@@ -331,7 +331,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -368,7 +368,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'residus-1', when: 'always' },
@@ -377,7 +377,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   },
@@ -393,13 +393,13 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'steal-1', phase: 'steal' },
         { id: 'frame-1', phase: 'frame', agents: [agentStudio('probleme')] },
         { id: 'learn-1', phase: 'learn' },
-        { id: 'salvage-1', phase: 'salvage' }
+        { id: 'git-1', phase: 'git' }
       ],
       edges: [
         { from: 'think-1', to: 'steal-1', when: 'always' },
         { from: 'steal-1', to: 'frame-1', when: 'always' },
         { from: 'frame-1', to: 'learn-1', when: 'always' },
-        { from: 'learn-1', to: 'salvage-1', when: 'always' }
+        { from: 'learn-1', to: 'git-1', when: 'always' }
       ]
     }
   }

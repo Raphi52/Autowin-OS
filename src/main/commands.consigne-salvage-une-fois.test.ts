@@ -53,7 +53,7 @@ describe('la consigne de tri se dit UNE FOIS par travail, pas a chaque tour', ()
     file = [travail('run-aaa111-1'), travail('run-bbb222-1')]
     const reveil = (await bus.snapshotForPrompt()).travauxNonFusionnes
 
-    expect(reveil?.consigne).toContain('salvage')
+    expect(reveil?.consigne).toContain('skill `git`')
     // L'apercu porte les DEUX : trier un travail sans voir ses voisins produit les balayages
     // partiels que la consigne cherche justement a eviter.
     expect(reveil?.apercu.map((t) => t.agentId)).toEqual(['run-aaa111-1', 'run-bbb222-1'])

@@ -564,7 +564,7 @@ export function buildChatPilotagePrompt(
     // le probleme au lieu de jouer la boucle, puis doit le redemander deux tours de suite.
     `SKILL NOMMÉE = SKILL INVOQUÉE. Au moment où le message de l'utilisateur commence par le nom ` +
     `d'une skill listée dans skillsDisponibles — avec ou sans barre oblique (« kaizen … », ` +
-    `« /arena … », « salvage … ») —, c'est une INVOCATION de cette skill, pas une remarque en ` +
+    `« /arena … », « heal … ») —, c'est une INVOCATION de cette skill, pas une remarque en ` +
     `passant : tu joues sa boucle dans CE tour, sur le sujet que porte la fin du message. Le reste ` +
     `de la phrase, même s'il s'agit d'un reproche ou d'une question, est son OBJET, jamais un motif ` +
     `de ne pas la jouer. Répondre à côté oblige l'utilisateur à re-nommer la skill : c'est un tour ` +

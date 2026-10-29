@@ -206,9 +206,9 @@ export const TEXTES_FR = {
   'skills.heal.titre': 'Corriger les défauts',
   'skills.heal.role':
     'Trouve les défauts prouvés du code (test rouge, lenteur mesurée) et les corrige un à un.',
-  'skills.salvage.titre': 'Travail non publié',
-  'skills.salvage.role':
-    'Retrouve le travail resté de côté, le trie par contenu, puis publie ce qu’il garde.',
+  'skills.git.titre': 'Travail non publié',
+  'skills.git.role':
+    'Retrouve le travail resté de côté, le trie par contenu, le publie et range ce qui traîne.',
   'skills.gel.titre': 'Enquête sur un gel',
   'skills.gel.role':
     'Remonte un gel de l’app jusqu’à son fichier et sa ligne — désigne, ne corrige pas.',
@@ -441,9 +441,9 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'skills.heal.titre': 'Fix the defects',
   'skills.heal.role':
     'Finds the proven defects of the code (red test, measured slowness) and fixes them one by one.',
-  'skills.salvage.titre': 'Unpublished work',
-  'skills.salvage.role':
-    'Finds the work left aside, sorts it by content, then publishes what it keeps.',
+  'skills.git.titre': 'Unpublished work',
+  'skills.git.role':
+    'Finds the work left aside, sorts it by content, publishes it and tidies what is left.',
   'skills.gel.titre': 'Freeze investigation',
   'skills.gel.role': 'Traces an app freeze back to its file and line — points, does not fix.',
   'skills.maj.titre': 'Unblock the update',

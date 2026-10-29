@@ -307,7 +307,7 @@ describe('workflows livrés d’origine', () => {
       'clean',
       'judge',
       'learn',
-      'salvage'
+      'git'
     ])
     // Aucun fournisseur, modèle ou fan-out caché : le moteur reprend la configuration Agent Studio.
     expect(graph.nodes.every((node) => node.agents === undefined)).toBe(true)
@@ -341,7 +341,7 @@ describe('workflows livrés d’origine', () => {
       'clean-1',
       'judge-1',
       'learn-1',
-      'salvage-1'
+      'git-1'
     ])
   })
 
