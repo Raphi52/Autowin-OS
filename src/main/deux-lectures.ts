@@ -36,6 +36,7 @@
  */
 import type { ReponseAsk } from './ask-options'
 import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
+import { VOCABULAIRE_AUTOWIN } from './vocabulaire-autowin'
 
 /**
  * La consigne du petit modèle. Stable d'un appel à l'autre (cache).
@@ -45,11 +46,16 @@ import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
  * demandait « la demande est-elle ambiguë ? » ; lue seule, une phrase paraît toujours claire. Ce qui
  * manquait : ce que fait la COMMANDE citée (`/scout` cherche des améliorations dans du code, pas un
  * exercice pour `/arena`), et la question qui compte — le résultat livré risque-t-il d'être jeté.
+ *
+ * Le VOCABULAIRE d'Autowin manquait aussi (kaizen conv-1266) : « fais une super conv » sur un jeu
+ * a été lu « améliorer ses dialogues » (conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766) —
+ * mesure et cause dans `vocabulaire-autowin.ts`.
  */
 export const CONSIGNE_DEUX_LECTURES = [
   "Tu relis UNE demande adressée à un agent de développement, juste AVANT qu'il ne la traite. Ton",
   "rôle : montrer à l'utilisateur, en une phrase, ce que l'agent va comprendre, pour éviter qu'il",
   'réponde « t’as mal compris » après coup.',
+  VOCABULAIRE_AUTOWIN,
   'Le dernier message de l’agent, s’il t’est donné, est le contexte : une demande courte ou une',
   'relance (« go », « ok », « met le ») porte sur ce dont il parlait, souvent sa dernière proposition.',
   'Question : deux personnes compétentes, qui connaissent les commandes citées, pourraient-elles',

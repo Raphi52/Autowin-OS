@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AVIS_DEUX_LECTURES,
+  CONSIGNE_DEUX_LECTURES,
   ECART_MAX_POUR_DEMANDER,
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
@@ -321,5 +322,13 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
     const charge = chargeDeuxLectures('nan pas ça', 'x'.repeat(5000))
     expect(charge.length).toBeLessThan(1000)
     expect(charge).toContain('nan pas ça')
+  })
+
+  // conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766 : « fais une super conv » lu « améliorer
+  // ses dialogues ». Sans le vocabulaire d'Autowin, rejeu Haiku : 0 lecture « plan de lots » sur 3.
+  it('la consigne donne le sens des mots d’Autowin qui ne sont pas des commandes (kaizen conv-1266)', () => {
+    expect(CONSIGNE_DEUX_LECTURES).toContain('Autowin OS')
+    expect(CONSIGNE_DEUX_LECTURES).toMatch(/« super conv ».*« plan de lots »/u)
+    expect(CONSIGNE_DEUX_LECTURES).toMatch(/« conv ».*conversation de travail/su)
   })
 })
