@@ -150,6 +150,7 @@
 :root[data-base='clair'] .graph-observatory,
 :root[data-base='clair'] .graph-toolbar select,
 :root[data-base='clair'] .theme-sidebar input,
+:root[data-base='clair'] .graph-brains-filtre button,
 :root[data-base='clair'] .graph-refresh,
 :root[data-base='clair'] .graph-toolbar__stats strong,
 :root[data-base='clair'] .sidebar-heading,

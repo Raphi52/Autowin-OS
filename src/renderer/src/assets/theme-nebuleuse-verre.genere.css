@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   568 regles, 785 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   584 regles, 804 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -108,6 +108,14 @@
     color: rgb(255, 114, 185)
 }
 
+/* ---- src/renderer/src/components/AscenseurDuFil.css ---- */
+:root[data-theme='nebuleuse-verre'] .adf {
+    --adf-rose: rgb(255, 35, 145)
+}
+:root[data-theme='nebuleuse-verre'] .adf-apercu-k {
+    color: var(--gold, rgb(255, 107, 181))
+}
+
 /* ---- src/renderer/src/components/BehaviourView.css ---- */
 :root[data-theme='nebuleuse-verre'] .behaviour-field-excerpt pre {
     background: rgba(10, 10, 10, 0.25)
@@ -188,6 +196,9 @@
 :root[data-theme='nebuleuse-verre'] .cpick-tete {
     border-image: linear-gradient(90deg, rgba(251, 91, 171, 0.55), rgba(251, 91, 171, 0.06)) 1
 }
+:root[data-theme='nebuleuse-verre'] .cpick-voie-directe::before {
+    background: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-verre'] .cpick-dot-g {
     background: rgb(0, 255, 85)
 }
@@ -231,6 +242,17 @@
 }
 :root[data-theme='nebuleuse-verre'] .composer-suite.is-best {
     border-color: rgba(251, 91, 171, 0.55)
+}
+:root[data-theme='nebuleuse-verre'] .composer-suite.is-cochee {
+    border-color: var(--gold-bright, rgb(255, 108, 182));
+    background: rgba(251, 91, 171, 0.1)
+}
+:root[data-theme='nebuleuse-verre'] .composer-suite-case {
+    color: var(--gold-bright, rgb(255, 108, 182))
+}
+:root[data-theme='nebuleuse-verre'] .composer-suite.is-cochee .composer-suite-case {
+    border-color: var(--gold-bright, rgb(255, 108, 182));
+    background: rgba(251, 91, 171, 0.16)
 }
 :root[data-theme='nebuleuse-verre'] .composer-suite-score {
     background: rgba(251, 91, 171, 0.16);
@@ -574,6 +596,9 @@
 :root[data-theme='nebuleuse-verre'] .graph-toolbar select, :root[data-theme='nebuleuse-verre'] .theme-sidebar input {
     color: rgb(205, 198, 241)
 }
+:root[data-theme='nebuleuse-verre'] .graph-brains-filtre button.is-active {
+    color: rgb(255, 184, 219)
+}
 :root[data-theme='nebuleuse-verre'] .graph-refresh {
     color: rgb(205, 198, 241)
 }
@@ -828,6 +853,10 @@
 }
 :root[data-theme='nebuleuse-verre'] .node-links__saut > summary {
     color: rgb(251, 91, 171)
+}
+:root[data-theme='nebuleuse-verre'] .note-perso {
+    border: 1px solid var(--gold, rgb(243, 102, 173));
+    color: var(--gold, rgb(243, 102, 173))
 }
 
 /* ---- src/renderer/src/components/HomeView.css ---- */
@@ -1511,6 +1540,41 @@
 }
 :root[data-theme='nebuleuse-verre'] .project-pane .pp-noeud.is-modifie {
     box-shadow: inset 2px 0 0 rgb(251, 91, 171)
+}
+
+/* ---- src/renderer/src/components/RiviereDuProjet.css ---- */
+:root[data-theme='nebuleuse-verre'] .riviere-etage[data-etage='en-cours'] {
+    --riviere-etage: rgb(255, 35, 145)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-etage[data-etage='prouve'] {
+    --riviere-etage: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-postit[data-etage='en-cours'] {
+    --riviere-papier: rgb(255, 182, 219)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-postit[data-etage='prouve'] {
+    --riviere-papier: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-punaise {
+    background: radial-gradient(
+      circle at 34% 30%,
+      rgba(255, 255, 255, 0.85) 0 1.2px,
+      rgba(255, 255, 255, 0) 3px
+    ),
+    radial-gradient(circle at 50% 50%, rgba(10, 10, 10, 0) 55%, rgba(10, 10, 10, 0.28) 100%),
+    var(--riviere-punaise, #9aa4b2)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-fiche[data-etage='en-cours'] {
+    --riviere-papier: rgb(255, 182, 219)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-fiche[data-etage='prouve'] {
+    --riviere-papier: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-point[data-statut='prouve'] {
+    background: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-verre'] .riviere-point[data-statut='en-cours'] {
+    background: rgb(255, 0, 128)
 }
 
 /* ---- src/renderer/src/components/RouterView.css ---- */

@@ -404,6 +404,7 @@
 
 /* components/GraphView.css — tailles */
 :root[data-theme^='malvoyant-'] .graph-stage__heading span,
+:root[data-theme^='malvoyant-'] .graph-brains-filtre__ponts,
 :root[data-theme^='malvoyant-'] .graph-mode-switch__icon,
 :root[data-theme^='malvoyant-'] .graph-clean-memory,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats,
@@ -489,6 +490,7 @@
 :root[data-theme^='malvoyant-'] .graph-stage__heading span,
 :root[data-theme^='malvoyant-'] .graph-toolbar select,
 :root[data-theme^='malvoyant-'] .theme-sidebar input,
+:root[data-theme^='malvoyant-'] .graph-brains-filtre button,
 :root[data-theme^='malvoyant-'] .graph-refresh,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats,
 :root[data-theme^='malvoyant-'] .graph-toolbar__stats strong,
