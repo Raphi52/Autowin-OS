@@ -103,7 +103,7 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
   const reste = enAttente.length - lignes.length
 
   /*
-   * « TRAITER » LANCE UN SALVAGE — il ne redecrit pas la procedure.
+   * « TRAITER » LANCE `/git` — il ne redecrit pas la procedure.
    *
    * Ce prompt deroulait ses propres quatre etapes, ecrites a la main. Deux procedures existaient
    * donc pour le meme travail : celle-ci, redigee une fois et jamais eprouvee, et celle du skill
@@ -111,15 +111,20 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
    * branches non fusionnees), juge par CONTENU et non par le message, et exige un SHA consigne
    * avant toute suppression. Quand deux procedures se concurrencent, c'est la moins tenue qui gagne.
    *
-   * L'INVOCATION DOIT ETRE EN TETE : `invokedSkillId` ne reconnait un skill qu'en debut de message.
-   * Une mention au milieu du texte parlerait de salvage sans jamais le lancer — exactement le genre
-   * d'etiquette qui ment.
+   * `/git` ET NON PLUS `/salvage` (2026-10-29, conv-1250) : `/git` joue ce meme balayage et ce meme
+   * tri par contenu PUIS publie vers la cible deduite et range les porteurs vides, SHA notes. Apres un
+   * `/salvage`, l'utilisateur retapait « push main origin » a chaque fois ; le bouton s'arretait
+   * donc a mi-chemin du geste qu'il voulait.
+   *
+   * L'INVOCATION DOIT ETRE EN TETE : `invokedSkillId` ne reconnait un skill qu'en debut de message,
+   * et `/git` exige sa barre (`skill-nommee.ts`). Une mention au milieu du texte parlerait de /git
+   * sans jamais le lancer — exactement le genre d'etiquette qui ment.
    *
    * Le prompt ne garde donc que ce que le skill NE PEUT PAS deviner : quels travaux attendent, et
    * ou ils vivent.
    */
   return [
-    '/salvage',
+    '/git',
     '',
     enAttente.length === 1
       ? '1 travail terminé n’a jamais été publié. Il n’arrive pas dans main.'
