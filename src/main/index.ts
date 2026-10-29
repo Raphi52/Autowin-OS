@@ -32,6 +32,7 @@ import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
 import { registerProjectFilesIpc } from './ipc/project-files'
 import { registerLancementIpc } from './ipc/lancement'
+import { registerNavigateurIpc } from './ipc/navigateur'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -5423,6 +5424,8 @@ app.whenReady().then(async () => {
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
   registerHdeskTvIpc()
+  // Navigateur intégré du chat (conv-1286) : ses pages vivent DANS la fenêtre principale.
+  registerNavigateurIpc({ fenetrePrincipale: fenetres.fenetrePrincipale })
   // Mods d'Autowin chargés par chaque run (conv-58) : hors archive, comme les scripts du bureau caché.
   definirDossierModsAutowin(join(racineScriptsHorsArchive(app.getAppPath()), 'mods', 'autowin'))
   registerProdPassphraseIpc(ipcMain, {

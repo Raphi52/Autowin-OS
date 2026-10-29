@@ -117,6 +117,50 @@ import type {
   ResultatFermetureGeree,
   ResultatListeBureaux
 } from '../shared/hdesk-gestion'
+import { CANAUX_NAVIGATEUR, type ApiNavigateur, type EtatNavigateur } from '../shared/navigateur'
+
+/**
+ * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
+ * les noms de canaux viennent de `CANAUX_NAVIGATEUR` — aucun n'est réécrit ici.
+ */
+const navigateur: ApiNavigateur = {
+  etat: (conversationId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.etat, conversationId),
+  afficherFil: (conversationId) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.afficherFil, conversationId),
+  ouvrir: (conversationId, url) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.ouvrir, conversationId, url),
+  naviguer: (ongletId, url) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.naviguer, ongletId, url),
+  reculer: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.reculer, ongletId),
+  avancer: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.avancer, ongletId),
+  recharger: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.recharger, ongletId),
+  arreter: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.arreter, ongletId),
+  activerOnglet: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.activerOnglet, ongletId),
+  fermerOnglet: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.fermerOnglet, ongletId),
+  poserCadre: (rect, zoom) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.poserCadre, rect, zoom),
+  basculerMode: (mode) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.basculerMode, mode),
+  annotations: (conversationId) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.annotations, conversationId),
+  supprimerAnnotation: (id) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.supprimerAnnotation, id),
+  viderAnnotations: (conversationId) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.viderAnnotations, conversationId),
+  repondreAccord: (origine, reponse) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.repondreAccord, origine, reponse),
+  reglages: {
+    lire: () => ipcRenderer.invoke(CANAUX_NAVIGATEUR.reglagesLire),
+    ecrire: (reglages) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.reglagesEcrire, reglages)
+  },
+  effacerDonnees: () => ipcRenderer.invoke(CANAUX_NAVIGATEUR.effacerDonnees),
+  ouvrirDansNavigateurParDefaut: (url) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.ouvrirDansNavigateurParDefaut, url),
+  // Un écouteur par abonnement, retiré par la fonction rendue : un panneau démonté n'écoute plus.
+  surEtat: (rappel) => {
+    const ecouteur = (_e: unknown, etat: EtatNavigateur): void => rappel(etat)
+    ipcRenderer.on(CANAUX_NAVIGATEUR.evenementEtat, ecouteur)
+    return () => {
+      ipcRenderer.removeListener(CANAUX_NAVIGATEUR.evenementEtat, ecouteur)
+    }
+  }
+}
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -148,6 +192,8 @@ const api = {
     ipcRenderer.invoke('hdesk:gestion:creer', demande),
   hdeskGestionChoisirExe: (): Promise<ResultatChoixExe> =>
     ipcRenderer.invoke('hdesk:gestion:choisirExe'),
+  // Navigateur intégré du chat (conv-1286) : `window.api.navigateur`, typé par `ApiNavigateur`.
+  navigateur,
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
   // jeton opaque borne a une cible, une operation et cinq minutes.
