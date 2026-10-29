@@ -58,6 +58,9 @@ describe('ui-capture --state', () => {
     })
     expect(resoudreEtat('Atterrissage-Reussi')).toBe('atterrissage-reussi')
     expect(resoudreEtat('atterrissage-rate')).toBeUndefined()
+    // Le reflet de la pastille « compréhension » (conv-1280) : attribut nu, comme le pose le composant.
+    expect(attributDEtat('arrivee')).toEqual({ nom: 'data-arrivee', valeur: '' })
+    expect(resoudreEtat(' Arrivee ')).toBe('arrivee')
   })
 })
 
