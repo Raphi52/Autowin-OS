@@ -205,7 +205,8 @@ describe('TableauDesLots', () => {
   it('avertissements repliés derrière leur nombre, aussi pendant que le plan tourne', async () => {
     const avertissements = Array.from(
       { length: 36 },
-      (_, i) => `les lots 1 et ${i + 2} annoncent le même fichier (src/x.ts) : ils passeront l’un après l’autre.`
+      (_, i) =>
+        `les lots 1 et ${i + 2} annoncent le même fichier (src/x.ts) : ils passeront l’un après l’autre.`
     )
     poserApi({
       'conv-1': { plan: { ...plan(), statut: 'en-cours', avertissements }, role: 'chef' }
@@ -227,6 +228,91 @@ describe('TableauDesLots', () => {
     await act(async () => ecouteur?.({ type: 'refresh', scope: 'plans-de-lots' }))
     expect(hote.querySelector('[data-testid="tableau-des-lots"]')).not.toBeNull()
     fin()
+  })
+
+  /*
+   * conv-1283 : après « Refuser », le tableau restait posé au-dessus de la saisie avec ses lots qui
+   * ne partiront jamais. Il se ferme au clic, sans attendre le signal de rafraîchissement.
+   */
+  describe('plan refusé', () => {
+    it('« Refuser » ferme le tableau dès la réponse, sans signal de rafraîchissement', async () => {
+      const p = plan()
+      poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      const voir = api.plansDeLots as (...a: unknown[]) => Promise<ReponsePlansDeLots>
+      api.plansDeLots = (geste: string, ...reste: unknown[]): Promise<ReponsePlansDeLots> =>
+        geste === 'refuser'
+          ? (appels.push([geste, ...reste]),
+            Promise.resolve({ ok: true, plan: { ...p, statut: 'refuse' }, detail: 'plan refusé.' }))
+          : voir(geste, ...reste)
+      const { hote, fin } = await monter('conv-1')
+      const refuser = [...hote.querySelectorAll('.tdl-bouton')].find(
+        (b) => b.textContent === 'Refuser'
+      ) as HTMLButtonElement
+      await act(async () => refuser.click())
+      expect(appels.at(-1)).toEqual(['refuser', 'conv-1', 'plan-a'])
+      expect(hote.querySelector('[data-testid="tableau-des-lots"]')).toBeNull()
+      fin()
+    })
+
+    it('un fil dont le plan est refusé n’affiche aucun tableau', async () => {
+      poserApi({ 'conv-1': { plan: { ...plan(), statut: 'refuse' }, role: 'chef' } })
+      const { hote, fin } = await monter('conv-1')
+      expect(hote.querySelector('[data-testid="tableau-des-lots"]')).toBeNull()
+      fin()
+    })
+  })
+
+  /*
+   * conv-1283 : le tableau prenait jusqu'à 340 px au-dessus de la saisie pendant tout le plan.
+   * « Réduire » ne garde que la ligne de titre ; le choix est retenu par plan, au remontage aussi.
+   */
+  describe('réduire le tableau', () => {
+    afterEach(() => window.localStorage.clear())
+
+    it('« Réduire » ne garde que la ligne de titre ; « Agrandir » rend lots et boutons', async () => {
+      poserApi({ 'conv-1': { plan: { ...plan(), statut: 'en-cours' }, role: 'chef' } })
+      const { hote, fin } = await monter('conv-1')
+      const bascule = (): HTMLButtonElement =>
+        hote.querySelector('[data-testid="tdl-reduire"]') as HTMLButtonElement
+      expect(bascule().textContent).toBe('Réduire')
+      expect(bascule().getAttribute('aria-expanded')).toBe('true')
+      await act(async () => bascule().click())
+      const tableau = hote.querySelector('[data-testid="tableau-des-lots"]') as HTMLElement
+      expect(tableau.getAttribute('data-reduit')).toBe('oui')
+      expect(tableau.querySelector('.tdl-titre')?.textContent).toBe('Traduction anglaise')
+      expect(tableau.querySelector('.tdl-statut')?.textContent).toBe('en cours')
+      expect(tableau.querySelectorAll('.tdl-lot')).toHaveLength(0)
+      expect(tableau.querySelector('.tdl-bilan')).toBeNull()
+      expect(tableau.querySelector('.tdl-actions')).toBeNull()
+      expect(bascule().textContent).toBe('Agrandir')
+      expect(bascule().getAttribute('aria-expanded')).toBe('false')
+      await act(async () => bascule().click())
+      expect(hote.querySelectorAll('.tdl-lot')).toHaveLength(3)
+      expect(hote.querySelector('.tdl-actions')).not.toBeNull()
+      fin()
+    })
+
+    it('réduit reste réduit au remontage, pour ce plan seulement', async () => {
+      poserApi({
+        'conv-1': { plan: { ...plan(), statut: 'en-cours' }, role: 'chef' },
+        'conv-2': { plan: { ...plan(), id: 'plan-b', chef: 'conv-2' }, role: 'chef' }
+      })
+      const premier = await monter('conv-1')
+      await act(async () =>
+        (premier.hote.querySelector('[data-testid="tdl-reduire"]') as HTMLButtonElement).click()
+      )
+      premier.fin()
+      const encore = await monter('conv-1')
+      expect(
+        encore.hote.querySelector('[data-testid="tableau-des-lots"]')?.getAttribute('data-reduit')
+      ).toBe('oui')
+      expect(encore.hote.querySelectorAll('.tdl-lot')).toHaveLength(0)
+      encore.fin()
+      const autre = await monter('conv-2')
+      expect(autre.hote.querySelectorAll('.tdl-lot')).toHaveLength(3)
+      autre.fin()
+    })
   })
 
   /*

@@ -76,6 +76,10 @@ export const TEXTES_FR = {
     'Chaque lot ouvre un fil et coûte au moins un tour de modèle IA. Rien ne part sans ce clic.',
   'lots.reprendre': 'Reprendre',
   'lots.arreter': 'Arrêter (aucun nouveau lot)',
+  'lots.reduire': 'Réduire',
+  'lots.reduire.titre': 'Réduire le tableau à sa ligne de titre — le plan continue',
+  'lots.agrandir': 'Agrandir',
+  'lots.agrandir.titre': 'Afficher les lots, le bilan et les boutons du plan',
 
   // — Carte « Lancer en N fils » (PropositionDeFils, proposition-fils-evenements).
   'fils.titre.plusieurs': '{n} tâches dans ton message',
@@ -288,6 +292,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'Each batch opens a thread and costs at least one AI model turn. Nothing starts without this click.',
   'lots.reprendre': 'Resume',
   'lots.arreter': 'Stop (no new batch)',
+  'lots.reduire': 'Collapse',
+  'lots.reduire.titre': 'Collapse the board to its title line — the plan keeps running',
+  'lots.agrandir': 'Expand',
+  'lots.agrandir.titre': 'Show the batches, the summary and the plan buttons',
 
   'fils.titre.plusieurs': '{n} tasks in your message',
   'fils.titre.une': 'A single task',
