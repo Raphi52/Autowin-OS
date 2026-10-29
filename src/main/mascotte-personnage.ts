@@ -396,7 +396,8 @@ const COULEURS_DU_SORT = [
 ] as const
 type Encre = (typeof COULEURS_DU_SORT)[number]
 const lueurDe = (c: string): string => `gl${c.slice(1)}`
-const LUEURS = [...COULEURS_DU_SORT.map((c) => c.vif), OR, CYAN, ROSE]
+// Plus de lueur cyan ni rose : seuls les trois cercles magiques s'en servaient (retirés, conv-1258).
+const LUEURS = [...COULEURS_DU_SORT.map((c) => c.vif), OR]
 
 function seg(dx: number, dy: number, b: number): string {
   const l = Math.hypot(dx, dy) || 1
@@ -715,15 +716,21 @@ function tracer(
  * empilés en perspective, des colonnes de runes qui montent, des éclats de cristal). Elle remplace
  * la boule pétrie puis lancée en boule de feu. Même cycle que le tracé (`D_TRACE`) : la sphère
  * culmine quand le chiffre écrit file au chapeau, au moment où les yeux s'allument (`visage`).
+ * Depuis conv-1258, des étoiles en orbite tiennent la place des cercles (`ORBITE`).
  */
 const POIGNET: Pt = [-10, 43.5]
-/** La sphère flotte au-dessus de la paume, les cercles au-dessus d'elle, de plus en plus petits. */
+/** La sphère flotte au-dessus de la paume. */
 const SPHERE: Pt = [-14, 27]
-const CERCLES = [
-  [17, 9.5, CYAN],
-  [10, 8, OR],
-  [4, 6.5, ROSE]
-] as const
+/**
+ * LES ÉTOILES EN ORBITE (conv-1258, /draft, « Implémenter la 3 · Étoiles en orbite ») : trois
+ * étoiles d'or tournent autour de la sphère, passent devant puis derrière elle, et plongent dedans
+ * au sommet du sort. Elles remplacent les trois cercles magiques empilés en perspective, qui à
+ * taille réelle ne se lisaient que comme trois barres rose, or et cyan au-dessus de la main.
+ * L'orbite : une ellipse de `rx` × `ry` px inclinée de `inclinaison` degrés, un tour en `tour`
+ * secondes, les trois étoiles à un tiers de tour l'une de l'autre.
+ */
+const ORBITE = { rx: 14.5, ry: 5.5, inclinaison: -12, tour: 1.8 } as const
+const ETOILE_D_OR = `<path d="M0-4.6L1.15-1.15 4.6 0 1.15 1.15 0 4.6-1.15 1.15-4.6 0-1.15-1.15Z" fill="${OR}"/><circle r="1.2" fill="#fff"/>`
 /** Le poignet, en % du cycle : il s'abaisse, monte avec la sphère, la pousse au sommet, redescend. */
 const GESTE_INVOCATION: ReadonlyArray<readonly [number, Pt]> = [
   [0, POIGNET],
@@ -737,38 +744,12 @@ const GESTE_INVOCATION: ReadonlyArray<readonly [number, Pt]> = [
 /** Le coude gauche en bas : la main tenue paume en l'air, comme on porte un plateau. */
 const coudeEnBas = (_ex: number, ey: number): number => ey
 
-/** Un cercle magique vu de face, de rayon `r` : deux anneaux, une étoile à six branches, des graduations. */
-function cercleMagique(r: number, couleur: string): string {
-  const ri = r * 0.74
-  const triangle = (k0: number): string =>
-    'M' +
-    [0, 2, 4]
-      .map((k) => {
-        const a = (Math.PI / 3) * (k + k0) - Math.PI / 2
-        return `${r2(ri * Math.cos(a))} ${r2(ri * Math.sin(a))}`
-      })
-      .join('L') +
-    'Z'
-  const graduations = Array.from({ length: 12 }, (_, i) => {
-    const a = (Math.PI / 6) * i
-    const [c, s] = [Math.cos(a), Math.sin(a)]
-    return `M${r2(r * 0.8 * c)} ${r2(r * 0.8 * s)}L${r2(r * 0.94 * c)} ${r2(r * 0.94 * s)}`
-  }).join('')
-  return (
-    `<circle r="${r}" stroke="${couleur}" stroke-width="1.2" fill="none"/>` +
-    `<circle r="${r2(ri)}" stroke="${couleur}" stroke-width=".6" fill="none"/>` +
-    `<path d="${triangle(0)}${triangle(1)}" stroke="${couleur}" stroke-width=".6" fill="none"/>` +
-    `<path d="${graduations}" stroke="#fff3c4" stroke-width=".6"/>` +
-    `<circle r="${r2(r * 0.16)}" fill="${couleur}"/>`
-  )
-}
-
 function invocation(f: Feuille): { bras: string; derriere: string; devant: string; ecart: number } {
   const T = D_TRACE
   const { joints, ecart, droit } = resoudre(f, S_L, U_L, F_L, GESTE_INVOCATION, coudeEnBas, T)
   const tenue = `<g transform="translate(${F_L[0]} ${F_L[1]})"><g class="jt ${droit()}">${MAIN_OUVERTE}</g></g>`
   const brasGauche = bras(S_L, U_L, F_L, joints, tenue, 2)
-  // La sphère et ses cercles suivent la main (mêmes instants, même interpolation linéaire).
+  // La sphère et ses étoiles suivent la main (mêmes instants, même interpolation linéaire).
   const suit = f.anim(
     GESTE_INVOCATION.map(
       ([t, [x, y]]) => [t, `translate:${r2(x - POIGNET[0])}px ${r2(y - POIGNET[1])}px`] as const
@@ -822,24 +803,54 @@ function invocation(f: Feuille): { bras: string; derriere: string; devant: strin
     `<g transform="rotate(-35) scale(1 .45)"><g class="${tourne(1.5, -1)}"><circle r="9" stroke="${ROSE}" stroke-width="1.1" stroke-dasharray="12 44" fill="none"/></g></g>` +
     `<g transform="scale(1.3)"><g class="${crepite}"><path d="M-3.2-.8l-1.6 1.6 1.2.6-2 1.8M3.2-.8l1.6 1.6-1.2.6 2 1.8M-.8-3.2l1-2 .8 1 .8-2" stroke="#f3eeff" stroke-width=".6" fill="none"/></g></g>` +
     `<g class="${eclair}"><circle r="12" fill="url(#gFl)"/></g>`
-  // Les cercles apparaissent l'un après l'autre, de bas en haut, et s'effacent après le sommet.
-  const apparait = (k: number): string =>
-    f.anim(
-      [
-        [0, 'scale:.4;opacity:0'],
-        [8 + 8 * k, 'scale:.4;opacity:0'],
-        [18 + 8 * k, 'scale:1;opacity:1'],
-        [64, 'scale:1.12;opacity:1'],
-        [86, 'scale:1;opacity:1'],
-        [96, 'scale:1.2;opacity:0'],
-        [100, 'scale:.4;opacity:0']
-      ],
-      T
-    )
-  const cercles = CERCLES.map(
-    ([y, r, couleur], k) =>
-      `<g transform="translate(${SPHERE[0]} ${y}) scale(1 .3)"><g class="${apparait(k)}"><g class="${lueurDe(couleur)}"><g class="${tourne(4 + k, k % 2 ? -1 : 1)}">${cercleMagique(r, couleur)}</g></g></g></g>`
-  ).join('')
+  // Les étoiles naissent avec la sphère, plongent dedans à son sommet (l'éclair, à 64 %), et en
+  // ressortent un instant quand elle retombe. La ronde se resserre sur le centre de la sphère (`jt`).
+  const ronde = f.anim(
+    [
+      [0, 'scale:.3;opacity:0'],
+      [8, 'scale:.3;opacity:0'],
+      [18, 'scale:.95;opacity:1'],
+      [58, 'scale:1;opacity:1'],
+      [66, 'scale:0;opacity:0'],
+      [80, 'scale:0;opacity:0'],
+      [92, 'scale:.8;opacity:1'],
+      [100, 'scale:.3;opacity:0']
+    ],
+    T
+  )
+  // Un tour d'orbite, sur 12 points de l'ellipse : devant (moitié basse), l'étoile est plus grande et
+  // plus vive ; derrière, plus petite et plus pâle.
+  const orbite = Array.from({ length: 13 }, (_, i): Image => {
+    const a = (i / 12) * 2 * Math.PI
+    const [x, y] = tourner([ORBITE.rx * Math.cos(a), ORBITE.ry * Math.sin(a)], ORBITE.inclinaison)
+    const avant = Math.sin(a)
+    return [
+      (i / 12) * 100,
+      `translate:${r2(x)}px ${r2(y)}px;scale:${r2(0.85 + 0.3 * avant)};opacity:${r2(0.75 + 0.25 * avant)}`
+    ]
+  })
+  // Pour passer VRAIMENT devant puis derrière la sphère, chaque étoile a deux copies, une de chaque
+  // côté d'elle, et une seule se montre à la fois : la première moitié du tour (0 à 50 %) est
+  // devant. La bascule tombe aux deux bouts de l'ellipse, à 14,5 px du centre, hors de la sphère.
+  const etoiles = (devant: boolean): string =>
+    [0, 1, 2]
+      .map((k) => {
+        const delai = r2((k * ORBITE.tour) / 3)
+        const cote = f.anim(
+          [
+            [0, `opacity:${devant ? 1 : 0}`],
+            [50, `opacity:${devant ? 0 : 1}`],
+            [100, `opacity:${devant ? 0 : 1}`]
+          ],
+          ORBITE.tour,
+          { delai, courbe: 'step-end' }
+        )
+        const tour = f.anim(orbite, ORBITE.tour, { delai, courbe: 'linear' })
+        return `<g class="${tour}"><g class="${cote} ${lueurDe(OR)}">${ETOILE_D_OR}</g></g>`
+      })
+      .join('')
+  const enRonde = (devant: boolean): string =>
+    `<g transform="translate(${SPHERE[0]} ${SPHERE[1]})"><g class="jt ${ronde}">${etoiles(devant)}</g></g>`
   // Les colonnes de runes qui montaient au-dessus de la main ont été retirées (conv-1227, « les
   // ronds qui montent c'est trop, enlève-les ») : à la vraie taille, leurs runes ne se lisaient que
   // comme des points de couleur qui grimpaient.
@@ -867,7 +878,7 @@ function invocation(f: Feuille): { bras: string; derriere: string; devant: strin
     eclatCristal(-9, 38, 2, ROSE, 1.35) +
     eclatCristal(-25, 36, -2, ROSE, 1.8) +
     eclatCristal(-3, 41, 4, '#fff3c4', 1.1)
-  const derriere = `<g class="${suit}">${cercles}${placer(SPHERE[0], SPHERE[1], sphere, grandit)}</g>`
+  const derriere = `<g class="${suit}">${enRonde(false)}${placer(SPHERE[0], SPHERE[1], sphere, grandit)}${enRonde(true)}</g>`
   return { bras: brasGauche, derriere, devant: eclats, ecart }
 }
 

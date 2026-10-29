@@ -149,12 +149,24 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     // Plus aucun pantin : un grimoire au travail (bleu), un pour toi (or), un fermé au calme.
     expect(svg).not.toMatch(/mP[BPV]/u)
     expect(svg.match(/class="grim /gu)?.length).toBe(3)
-    // L'invocation de la capture : sphère d'énergie, trois cercles magiques couchés en perspective,
-    // une main ouverte aux cinq doigts. Plus de colonnes de runes qui montent (« c'est trop »).
+    // L'invocation de la capture : sphère d'énergie, une main ouverte aux cinq doigts. Plus de
+    // colonnes de runes qui montent (« c'est trop »), ni de cercles magiques couchés en perspective :
+    // à taille réelle, ils ne se lisaient que comme trois barres de couleur (conv-1258).
     expect(svg).toContain('url(#oS)')
-    expect(svg.match(/scale\(1 \.3\)/gu)?.length).toBe(3)
+    expect(svg).not.toMatch(/scale\(1 \.3\)/u)
     expect(svg).not.toMatch(/gK[123]/u)
     expect(svg).toContain('M.6 .4Q-3.4 2.8-7.6-.4')
+    // À leur place, trois étoiles d'or en orbite (conv-1258, « Étoiles en orbite ») : chacune a une
+    // copie derrière la sphère et une devant, pour passer vraiment devant puis derrière elle.
+    const sphere = svg.indexOf('url(#oS)')
+    const etoiles = [...svg.matchAll(/M0-4\.6L1\.15-1\.15/gu)].map((m) => m.index ?? 0)
+    expect(etoiles.length).toBe(6)
+    expect(etoiles.filter((i) => i < sphere).length).toBe(3)
+    // Une seule des deux copies se montre à la fois : elles basculent ensemble, à mi-tour.
+    const css = cssDuPersonnage()
+    expect(css).toContain('{0%{opacity:1}50%{opacity:0}100%{opacity:0}}')
+    expect(css).toContain('{0%{opacity:0}50%{opacity:1}100%{opacity:1}}')
+    expect(css.match(/ 1\.8s step-end/gu)?.length).toBe(6)
     // Les yeux de lumière n'appartiennent qu'au visage du travail, et s'allument par une animation.
     const visage = visageDeLaBille()
     const travail = visage.slice(visage.indexOf('<g class="fT">'), visage.indexOf('<g class="fA">'))
