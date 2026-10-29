@@ -95,6 +95,23 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
       appuiSourcesNeuvesHandler({ event: 'pre-green', task: vide, output: 'rien' }).block
     ).toBeFalsy()
   })
+
+  // kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f : dossier aux trois sources vides,
+  // dont le pied exigeait une citation impossible que le contrôle ne réclame pas.
+  it('le pied n exige AUCUNE citation quand les trois sources sont vides, et l exige sinon', () => {
+    const vide = buildAutowinKaizenTask('/kaizen conv-vide', {
+      ...dossier(),
+      promptCalls: [],
+      turnEvents: [],
+      saisies: []
+    })
+    expect(vide).not.toContain('AU MOINS UNE de ces corrections')
+    expect(vide).not.toContain('un contrôle hors modèle refuse le rendu')
+    expect(vide).toContain('aucune citation n')
+    const plein = buildAutowinKaizenTask('/kaizen conv-105', dossier())
+    expect(plein).toContain('AU MOINS UNE de ces corrections')
+    expect(plein).toContain('un contrôle hors modèle refuse le rendu')
+  })
   /*
     Deux defauts releves par le controle final sur CE controle, sur les donnees reelles de conv-105 :
     le tour existe sous `9e9b58cc-0a65-499a-8fdf-7613ca85a0d1`, mais un humain — et un rapport —

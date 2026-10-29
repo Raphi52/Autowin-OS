@@ -168,7 +168,10 @@ describe('dossier de preuve /kaizen — intégrité', () => {
       runs: Array.from({ length: 4 }, (_, index) => ({
         path: `C:/runs/run-${index}/RUN.md`,
         content: 'r'.repeat(4000)
-      }))
+      })),
+      // Une source neuve au moins : sans elle, le pied n'exige plus de citation (kaizen conv-1266),
+      // et ce test vérifie justement que l'exigence survit à la saturation.
+      saisies: [{ ts: 1_756_720_000_000, voie: 'chat', texte: 'reprend' }]
     })
 
     expect(task.length).toBeLessThanOrEqual(28_000)

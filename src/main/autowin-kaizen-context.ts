@@ -805,10 +805,25 @@ ${MARQUEUR_FIN}
       rognés) et elle est CONTRÔLÉE hors modèle par `exigenceAppuiSourcesNeuves`, parce qu'une
       exigence seulement écrite avait déjà été écrite, puis non tenue.
     */
-    ` AU MOINS UNE de ces corrections doit s'appuyer sur les appels modèle (promptCalls), le ` +
-    `journal des tours (turnEvents) ou les saisies (saisies) de ce dossier, et CITER l'identifiant ` +
-    `exact qui l'établit : le \`turnId\` de l'appel ou du tour, ou l'horodatage \`ts\` de la saisie. ` +
-    `Sans cette citation, un contrôle hors modèle refuse le rendu.`
+    /*
+      TROIS SOURCES VIDES → PAS D'EXIGENCE (kaizen conv-1266, tour
+      9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f, 2026-10-29). Le dossier de conv-1266 avait promptCalls,
+      turnEvents et saisies vides ; le pied exigeait quand même une citation « sinon un contrôle
+      refuse le rendu », alors que `exigenceAppuiSourcesNeuves` rend `applicable: false` sur ce
+      même dossier (rien à citer). Une exigence impossible pousse à citer n'importe quoi ou à un
+      commit de pure forme (Brain : conv-742, commit qui n'ajoutait qu'un `fix-ok`). Le texte dit
+      donc ce que le contrôle fait vraiment. Décidé sur les listes AVANT l'ajustement au budget,
+      qui ne vide jamais les trois.
+    */
+    (snapshot.promptCalls.length || snapshot.turnEvents.length || snapshot.saisies.length
+      ? ` AU MOINS UNE de ces corrections doit s'appuyer sur les appels modèle (promptCalls), le ` +
+        `journal des tours (turnEvents) ou les saisies (saisies) de ce dossier, et CITER l'identifiant ` +
+        `exact qui l'établit : le \`turnId\` de l'appel ou du tour, ou l'horodatage \`ts\` de la saisie. ` +
+        `Sans cette citation, un contrôle hors modèle refuse le rendu.`
+      : ` Ce dossier ne contient aucun appel modèle, aucun tour ni aucune saisie (promptCalls, ` +
+        `turnEvents et saisies sont vides) : aucune citation n'en est exigée, et aucun contrôle ne ` +
+        `la réclame. Cherche les traces toi-même (\`.autowin-data/autowin-os/turn-journals/<conv>/\`, ` +
+        `\`cost.jsonl\`) et cite les identifiants que tu y lis.`)
   const budget = TOTAL_CAP - entete.length - pied.length - TRONCATURE_MARGE
   const retires = ajusterAuBudget(snapshot, budget)
   // Ce qui a été retiré est DIT : un dossier amputé en silence se lit comme un dossier complet.
