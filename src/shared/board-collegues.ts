@@ -21,6 +21,8 @@ export interface DemandeDuFichier {
   rang: number
   messageId?: string
   titre: string
+  /** Le message entier (conv-1278) ; absent d'un fichier écrit avant, ou quand `titre` suffit. */
+  texte?: string
   statut: StatutDuFichier
   constat: string
   date?: string

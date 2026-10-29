@@ -55,6 +55,13 @@ export interface EtapeCarte {
    * ligne collée de plusieurs pages ne doit pas noyer la fiche.
    */
   titreEntier: string
+  /**
+   * Le message ENTIER de la demande, sauts de ligne gardés, pour la fiche du Board (conv-1278 : « je
+   * veux pouvoir voir les messages en entier quand j'ouvre le détail »). Borné à `MAX_TEXTE` : un
+   * journal collé de plusieurs pages ne doit pas peser sur le Board partagé. Absent quand il ne dit
+   * rien de plus que `titre`.
+   */
+  texte?: string
   statut: StatutEtape
   /** Le constat qui justifie la couleur : « npm test → exit 0 », « tour arrêté avant la fin »… */
   constat: string
@@ -91,6 +98,8 @@ export interface Carte {
 
 const MAX_TITRE = 120
 const MAX_TITRE_ENTIER = 600
+/** Mesuré le 2026-10-29 sur 1 026 messages : 4 000 caractères en montrent 98 % en entier. */
+export const MAX_TEXTE = 4000
 
 function nettoyer(ligne: string, max = MAX_TITRE): string {
   const nue = ligne
@@ -288,6 +297,10 @@ export function carteDuFil(entree: {
             })()
           : premiereLigne(lecture?.texte ?? '', max)
     const titre = titreDe(MAX_TITRE)
+    const titreEntier = titreDe(MAX_TITRE_ENTIER)
+    // « go » n'a rien à montrer de plus que la suite qu'il accepte : son texte est ce titre-là.
+    const entiere = estCompactage(message) ? null : lectureDeLaDemande(fil, rang, MAX_TEXTE)
+    const texte = !entiere ? undefined : entiere.genre === 'accord' ? titreEntier : entiere.texte
     const lu = statutDuSegment(reponses, auBoutDuFil)
     const statut = lu.statut
     let constat = lu.constat
@@ -306,7 +319,8 @@ export function carteDuFil(entree: {
       cible: rang,
       ...(message.messageId ? { messageId: message.messageId } : {}),
       titre: titre || 'Demande',
-      titreEntier: titreDe(MAX_TITRE_ENTIER) || 'Demande',
+      titreEntier: titreEntier || 'Demande',
+      ...(texte && texte !== titre ? { texte } : {}),
       statut,
       constat,
       ...(instants.length > 0 ? { debut: instants[0] } : {}),

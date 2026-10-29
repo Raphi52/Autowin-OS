@@ -88,6 +88,24 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
     expect(titre.length).toBeLessThanOrEqual(4000)
   })
 
+  // conv-1278 : la fiche montre le message ENTIER du collègue, ses retours à la ligne compris.
+  it('relit le message entier d’une demande, sauts de ligne gardés, et s’en passe s’il manque', () => {
+    const base = postIt('conv-1')
+    const demande = (base.demandes as Record<string, unknown>[])[0]
+    const lu = boardDuCollegue(
+      'x',
+      JSON.stringify({
+        format: 'autowin-board/1',
+        postIts: [
+          { ...base, demandes: [{ ...demande, texte: 'ligne une\nligne\u0007 deux' }] },
+          postIt('conv-2')
+        ]
+      })
+    )
+    expect(lu?.postIts[0].demandes[0].texte).toBe('ligne une\nligne deux')
+    expect(lu?.postIts[1].demandes[0]).not.toHaveProperty('texte')
+  })
+
   // conv-1230 : un poste avec identité git affichait un surnom git, un poste sans son compte.
   it('nomme le collègue par le nom que son poste écrit, sinon par son compte — jamais par git', () => {
     const avecNom = boardDuCollegue(

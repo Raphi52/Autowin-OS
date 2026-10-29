@@ -68,6 +68,47 @@ describe('carteDuFil — une étape par demande', () => {
   })
 })
 
+/**
+ * LE MESSAGE ENTIER POUR LA FICHE DU BOARD (conv-1278, 2026-10-29) : « je veux pouvoir voir les
+ * messages en entier quand j'ouvre le détail ». Entrées qui font échouer une version fausse : un
+ * message de plusieurs lignes (le titre n'en garde qu'une), une ligne de plus de 240 caractères (la
+ * borne de l'ancrage du mode auto), un journal collé de plusieurs pages (borné), un « go » (son texte
+ * est la suite qu'il accepte, pas « go »), un message court (aucun doublon du titre).
+ */
+describe('carteDuFil — le texte entier de chaque demande', () => {
+  it('garde toutes les lignes et tout le texte d’un message long', () => {
+    const premiere = `/maj La mise à jour est bloquée : ${'« la tentative a été annulée » '.repeat(10)}`
+    const message = `${premiere}\n\nDétail :\n- ligne deux\n- ligne trois`
+    const { etapes } = carteDuFil({ fil: [user(message, 1), asst(2, [texte('ok')])] })
+    expect(etapes[0].titre).toHaveLength(120)
+    expect(etapes[0].texte).toBe(message.trim())
+  })
+
+  it('un message court d’une ligne n’a pas de texte en double du titre', () => {
+    const { etapes } = carteDuFil({ fil: [user('corrige le bouton', 1), asst(2, [texte('ok')])] })
+    expect(etapes[0].titre).toBe('corrige le bouton')
+    expect(etapes[0].texte).toBeUndefined()
+  })
+
+  it('un journal collé de plusieurs pages est borné', () => {
+    const journal = 'erreur au démarrage\n'.repeat(500)
+    const { etapes } = carteDuFil({ fil: [user(journal, 1), asst(2, [texte('ok')])] })
+    expect(etapes[0].texte?.length).toBeLessThanOrEqual(4001)
+    expect(etapes[0].texte?.endsWith('…')).toBe(true)
+  })
+
+  it('un « go » a pour texte la suite qu’il accepte, entière', () => {
+    const suite = `Lancer le juge sur la carte ${'et sur la fiche '.repeat(12)}`.trim()
+    const fil = [
+      user('construis la carte', 1),
+      asst(2, [texte(CLOTURE(suite))]),
+      user('go', 3),
+      asst(4, [texte('fini')])
+    ]
+    expect(carteDuFil({ fil }).etapes[1].texte).toBe(`Suite : ${suite}`)
+  })
+})
+
 describe('carteDuFil — la couleur suit la PREUVE', () => {
   it('une vérification verte prouve l’étape', () => {
     const { etapes, prouvees, total } = carteDuFil({

@@ -93,6 +93,18 @@ describe('postItsDuBoard — ce que le Board affiche', () => {
     expect(caduc.etage).toBe('en-cours')
     expect(caduc.manuel).toBeUndefined()
   })
+
+  // conv-1278 : les collègues lisent le message ENTIER dans la fiche, pas la première ligne coupée.
+  it('écrit le message entier d’une demande quand il en dit plus que son titre', () => {
+    const { postIts } = postItsDuBoard(
+      carte([
+        demande({ conversationId: 'conv-1', rang: 0, debut: H, texte: 'ligne une\nligne deux' }),
+        demande({ conversationId: 'conv-1', rang: 2, debut: 2 * H })
+      ])
+    )
+    expect(postIts[0].demandes[0].texte).toBe('ligne une\nligne deux')
+    expect(postIts[0].demandes[1]).not.toHaveProperty('texte')
+  })
 })
 
 describe('sousDossierDuPoste', () => {

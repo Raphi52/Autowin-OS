@@ -859,7 +859,11 @@ function FicheDeLaRiviere({
             <span className="riviere-fiche-heure">
               {d.debut !== undefined ? heure(d.debut) : '—'}
             </span>
-            <span className="riviere-fiche-texte">{texteDeLaCarte(d.titre, langue)}</span>
+            {/* Le message ENTIER, retours à la ligne gardés (conv-1278) : la première ligne coupée
+                à 120 caractères ne laissait pas lire la demande. */}
+            <span className="riviere-fiche-texte" data-testid="riviere-fiche-texte">
+              {texteDeLaCarte(d.texte ?? d.titre, langue)}
+            </span>
             {/* La task de la demande (conv-1127) : liée, héritée, ou « sans task » + rattachement.
                 Chez un collègue (conv-1210), ses tasks telles que son Board les lie, sans geste. */}
             {d.collegue ? (

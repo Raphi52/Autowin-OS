@@ -81,6 +81,8 @@ function demandeLue(v: unknown): DemandeDuFichier | null {
   const s = statut(o.statut)
   if (titre === null || !s || typeof o.rang !== 'number' || !Number.isInteger(o.rang)) return null
   const constat = texte(o.constat) ?? ''
+  // Le message entier (conv-1278) : un fichier écrit avant ne l'a pas, la fiche montre alors le titre.
+  const entier = texte(o.texte)
   const messageId = texte(o.messageId, 200)
   const d = date(o.date)
   const demandeur = personne(o.demandeur)
@@ -98,6 +100,7 @@ function demandeLue(v: unknown): DemandeDuFichier | null {
     rang: o.rang,
     ...(messageId ? { messageId } : {}),
     titre,
+    ...(entier ? { texte: entier } : {}),
     statut: s,
     constat,
     ...(d ? { date: d } : {}),
