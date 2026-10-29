@@ -146,12 +146,14 @@ describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
       })
   })
 
-  it('l’annonce tient en une ligne : la lecture qui part, puis l’autre', () => {
-    const ligne = annonceDeLaLectureRetenue('zoom de la frise', 'filtre des éléments')
-    expect(ligne).toBe(
-      'Lecture retenue : « zoom de la frise » — si tu voulais plutôt « filtre des éléments », dis-le.'
-    )
+  it('l’annonce tient en une ligne : ce qui a été compris, sans l’autre lecture (conv-1280)', () => {
+    const ligne = annonceDeLaLectureRetenue('zoom de la frise')
+    expect(ligne).toBe('Compréhension : « zoom de la frise »')
     expect(ligne).not.toContain('\n')
+    // L'autre lecture reste connue du modèle, mais ne s'affiche plus dans le fil.
+    const consigne = consigneDeLectureRetenue('zoom de la frise', 'filtre des éléments')
+    expect(consigne).toContain('« filtre des éléments »')
+    expect(consigne).not.toContain('si tu voulais plutôt')
   })
 
   it('la tâche du run garde la demande entière et ne prend la précision qu’une fois', () => {
@@ -205,8 +207,13 @@ describe('une seule lecture : annoncée quand même (conv-1240, « met le tout l
 
   it('la ligne, la tâche du run et la consigne du modèle ne parlent d’aucune autre lecture', () => {
     expect(annonceDeLaLectureRetenue('zoom de la frise')).toBe(
-      'Lecture retenue : « zoom de la frise »'
+      'Compréhension : « zoom de la frise »'
     )
+    // Le modèle nomme la ligne comme l'étiquette du fil (conv-1280).
+    for (const consigne of [consigneDeLectureRetenue('a'), consigneDeLectureRetenue('a', 'b')]) {
+      expect(consigne).toContain('« compréhension »')
+      expect(consigne).not.toMatch(/^L'utilisateur a déjà vu la ligne : /m)
+    }
     const tache = tacheAvecLectureRetenue(DEMANDE_767, 'lecture a')
     expect(tache).toContain('« lecture a ».')
     expect(tache).not.toContain('écartée')

@@ -39,7 +39,11 @@ const reponse: ChatPart = {
   at: DEBUT + 9_000
 }
 
-async function rendre(parts: ChatPart[]): Promise<Element> {
+async function rendre(
+  parts: ChatPart[],
+  fini = true,
+  enPlus: Record<string, unknown> = {}
+): Promise<Element> {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
@@ -47,10 +51,11 @@ async function rendre(parts: ChatPart[]): Promise<Element> {
     role: 'assistant',
     content: '',
     turnId: 't1',
-    done: true,
-    status: 'completed',
+    done: fini,
+    status: fini ? 'completed' : 'running',
     debutDuTour: DEBUT,
-    parts
+    parts,
+    ...enPlus
   }
   await act(async () => {
     root.render(
@@ -74,9 +79,14 @@ describe('ligne « Lecture retenue » dans le fil', () => {
     expect(ligne?.closest('.msg-body'), 'jamais dans le bloc de la réponse').toBeNull()
     expect(ligne?.querySelector('.msg-lecture-etiquette')?.textContent).toBe('compréhension')
     const texte = ligne?.querySelector('.msg-lecture-texte')?.textContent ?? ''
-    expect(texte.startsWith('« Ajouter à la rivière')).toBe(true)
-    expect(texte).toContain('si tu voulais plutôt « changer l’échelle de temps visible (zoom) »')
+    // Ce qui a été compris, et rien d'autre (conv-1280 : « mets juste ce qu'il a compris, point ») :
+    // la ligne de cet ancien fil porte encore l'autre lecture, elle ne s'affiche plus.
+    expect(texte).toBe('« Ajouter à la rivière un sélecteur qui filtre les données »')
+    expect(texte).not.toContain('si tu voulais plutôt')
     expect(texte, 'l’étiquette dit déjà ce qu’est la ligne').not.toContain('Lecture retenue')
+    // Pastille nacrée (conv-1280) : la phrase comprise en gras, une coche dans l'étiquette.
+    expect(ligne?.querySelector('.msg-lecture-sens')?.textContent).toBe(texte)
+    expect(ligne?.querySelector('.msg-lecture-etiquette svg.msg-lecture-coche')).not.toBeNull()
     // La réponse reste un bloc ordinaire, APRÈS la ligne, et c'est elle le dernier point du rail.
     const blocs = [...tour.querySelectorAll('.msg-body, [data-testid="lecture-retenue"]')]
     expect(blocs.map((b) => b.getAttribute('data-testid') ?? 'reponse')).toEqual([
@@ -87,6 +97,34 @@ describe('ligne « Lecture retenue » dans le fil', () => {
       'Je ne modifie aucun fichier'
     )
     expect(tour.querySelector('[data-nature="reponse"] [data-testid="lecture-retenue"]')).toBeNull()
+  })
+
+  it('ne fait passer le reflet que pendant le tour, jamais sur un tour fini (conv-1280)', async () => {
+    const enCours = await rendre([lecture, reponse], false)
+    expect(enCours.querySelector('.msg-lecture-etiquette')?.hasAttribute('data-arrivee')).toBe(true)
+    const fini = await rendre([lecture, reponse])
+    expect(fini.querySelector('.msg-lecture-etiquette')?.hasAttribute('data-arrivee')).toBe(false)
+  })
+
+  it('se lit en tête du tour, au-dessus de Raisonnement, Actions et Étapes (conv-1280)', async () => {
+    const action: ChatPart = {
+      kind: 'action',
+      actionId: 'a1',
+      name: 'run',
+      ok: true,
+      at: DEBUT + 2_000
+    }
+    const tour = await rendre([action, lecture, reponse], true, {
+      reasoning: 'Je lis la rivière.'
+    })
+    const ligne = tour.querySelector('[data-testid="lecture-retenue"]')
+    const cadre = tour.querySelector('.thinking-block')
+    expect(cadre, 'le bloc Raisonnement / Actions / Étapes doit être rendu').not.toBeNull()
+    expect(ligne).not.toBeNull()
+    // Avant le cadre du tour dans le document, et une seule fois (plus dans la suite du tour).
+    expect(ligne!.compareDocumentPosition(cadre!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tour.querySelectorAll('[data-testid="lecture-retenue"]')).toHaveLength(1)
+    expect(tour.querySelector('.msg-turn [data-testid="lecture-retenue"]')).toBeNull()
   })
 
   it('n’est jamais prise pour la réponse d’un tour qui n’a rien écrit d’autre', async () => {

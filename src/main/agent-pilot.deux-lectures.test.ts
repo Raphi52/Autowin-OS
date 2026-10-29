@@ -202,7 +202,7 @@ describe('le jumeau : sans double lecture, rien ne change', () => {
     expect(b.lecteur).toHaveBeenCalledTimes(1)
     expect(b.executees()).toEqual(['orchestrate'])
     expect(b.annonce().rang).toBe(-1)
-    expect(b.argsDe('orchestrate')?.task).not.toContain('Lecture retenue')
+    expect(b.argsDe('orchestrate')?.task).not.toContain('Compréhension de la demande')
   })
 
   it('un lecteur en panne ne bloque jamais le run', async () => {
@@ -287,14 +287,14 @@ describe('le jumeau : sans double lecture, rien ne change', () => {
     expect(b.executees()).toEqual(['orchestrate'])
     // La ligne est dans le fil AVANT le run : l'utilisateur peut corriger sans attendre la fin.
     const { rang, texte } = b.annonce()
-    expect(texte?.trim()).toBe(annonceDeLaLectureRetenue(LECTURE_ARENA_767, LECTURE_CODE_767))
+    expect(texte?.trim()).toBe(annonceDeLaLectureRetenue(LECTURE_ARENA_767))
     expect(rang).toBeGreaterThanOrEqual(0)
     expect(rang).toBeLessThan(b.rangDeCommande('orchestrate'))
     // Le run reçoit la demande ENTIÈRE, plus la lecture annoncée : il ne peut pas faire l'autre.
     const tache = String(b.argsDe('orchestrate')?.task)
     expect(tache.startsWith(DEMANDE_767)).toBe(true)
     expect(tache).toContain(
-      `Lecture retenue de la demande, annoncée à l'utilisateur : « ${LECTURE_ARENA_767} »`
+      `Compréhension de la demande, annoncée à l'utilisateur : « ${LECTURE_ARENA_767} »`
     )
   })
 
@@ -351,7 +351,7 @@ describe('les deux autres points de passage', () => {
     ])
     await b.jouer([{ role: 'user', content: demande }])
     expect(b.executees()).toEqual(['orchestrate'])
-    expect(b.annonce().texte?.trim()).toBe(annonceDeLaLectureRetenue(retenue, ecartee))
+    expect(b.annonce().texte?.trim()).toBe(annonceDeLaLectureRetenue(retenue))
     expect(b.annonce().rang).toBeLessThan(b.rangDeCommande('orchestrate'))
     // `rootTask` est l'autorité du run (commands.ts) : c'est là que la lecture doit arriver.
     const racine = String(b.argsDe('orchestrate')?.rootTask)
@@ -367,7 +367,7 @@ describe('les deux autres points de passage', () => {
     await b.jouer([{ role: 'user', content: demande }])
     expect(b.executees()).not.toContain('ask')
     expect(b.registry.send).toHaveBeenCalledTimes(1)
-    expect(b.annonce().texte?.trim()).toBe(annonceDeLaLectureRetenue(retenue, ecartee))
+    expect(b.annonce().texte?.trim()).toBe(annonceDeLaLectureRetenue(retenue))
     const envoye = b.appelsModele[0].map((m) => String(m.content)).join('\n')
     for (const ligne of consigneDeLectureRetenue(retenue, ecartee).split('\n'))
       expect(envoye).toContain(ligne)
@@ -386,10 +386,7 @@ describe('les deux autres points de passage', () => {
     expect(b.executees()).not.toContain('ask')
     expect(b.registry.send).toHaveBeenCalledTimes(1)
     expect(b.annonce().texte?.trim()).toBe(
-      annonceDeLaLectureRetenue(
-        'comment rendre mon graph beaucoup plus clair à lire',
-        'comment rendre mon graph beaucoup plus clair de couleurs'
-      )
+      annonceDeLaLectureRetenue('comment rendre mon graph beaucoup plus clair à lire')
     )
   })
 })
