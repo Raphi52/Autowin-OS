@@ -32,7 +32,7 @@ import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
 import { registerProjectFilesIpc } from './ipc/project-files'
 import { registerLancementIpc } from './ipc/lancement'
-import { registerNavigateurIpc } from './ipc/navigateur'
+import { gestionnaireNavigateur, registerNavigateurIpc } from './ipc/navigateur'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -1860,6 +1860,9 @@ bus.observerBureauCache = (id) =>
   (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath()))).image(id)
 bus.agirBureauCache = (geste) => agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
 bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.id === id)
+// Outils `navigateur_*` de l'agent (conv-1286, lot 4/5) : le gestionnaire est redemandé à chaque
+// appel — la fenêtre principale rouverte en porte un neuf ; fermée, il vaut `null`.
+bus.navigateur = () => gestionnaireNavigateur()
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )

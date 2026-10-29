@@ -68,6 +68,13 @@ const TOOL_TITLES: Record<
   bureau_cache_lancer: 'outil.bureau_cache_lancer',
   bureau_cache_observer: ['outil.bureau_cache_observer', 'outil.bureau_cache_observer.n'],
   bureau_cache_agir: ['outil.bureau_cache_agir', 'outil.bureau_cache_agir.n'],
+  // Navigateur intégré du chat (conv-1286, lot 4/5).
+  navigateur_ouvrir: ['outil.navigateur_ouvrir', 'outil.navigateur_ouvrir.n'],
+  navigateur_lire: ['outil.navigateur_lire', 'outil.navigateur_lire.n'],
+  navigateur_capture: ['outil.navigateur_capture', 'outil.navigateur_capture.n'],
+  navigateur_agir: ['outil.navigateur_agir', 'outil.navigateur_agir.n'],
+  navigateur_console: 'outil.navigateur_console',
+  navigateur_annotations: 'outil.navigateur_annotations',
   show_video: 'outil.show_video',
   sql_query: ['outil.sql_query', 'outil.sql_query.n'],
   ticket_get: ['outil.ticket_get', 'outil.ticket_get.n'],
