@@ -9,7 +9,8 @@ description: >-
   le plus fréquent est un travail DÉJÀ intégré autrement. À utiliser quand un dépôt a accumulé du
   travail de côté au fil des sessions ou des agents, quand un outil signale « du travail non publié
   », ou sur « did I lose work? », « what is still not merged? » (§ Quand la déclencher). NE PAS
-  utiliser pour relire la qualité d'un code, résoudre un conflit de fusion en cours, ni restaurer un
+  utiliser pour tout finir d'un coup — tri, commit, push ou demande de fusion selon le dépôt, ménage
+  (→ `git`) —, relire la qualité d'un code, résoudre un conflit de fusion en cours, ni restaurer un
   fichier depuis un commit connu.
 ---
 
