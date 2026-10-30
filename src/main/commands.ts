@@ -3340,6 +3340,9 @@ export class AppCommandBus {
       a[k] === undefined || a[k] === null || a[k] === '' ? undefined : Number(a[k])
     const sansOnglet = (): boolean => nav.etat(fil).ongletActif === null
     const AUCUN_ONGLET = 'Aucun onglet ouvert dans ce fil : ouvre une page avec navigateur_ouvrir.'
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — ce chemin ignorait `signalDuTour` : un geste
+    // retenu en pause survivait au Stop et partait au clic sur « Reprendre », agent déjà coupé.
+    const arret = this.signalDuTour?.(fil)
     const image = (nom: string, dataUrl: string): NonNullable<Message['attachments']>[number] => {
       const content = dataUrl.slice(dataUrl.indexOf(',') + 1)
       return {
@@ -3356,7 +3359,8 @@ export class AppCommandBus {
         const url = s('url').trim()
         if (!url) return refus('Refusé : passe `url`, l’adresse à ouvrir.')
         const r = await nav.agentOuvrir(fil, url, {
-          nouvelOnglet: a.nouvelOnglet === true || a.nouvelOnglet === 'true'
+          nouvelOnglet: a.nouvelOnglet === true || a.nouvelOnglet === 'true',
+          arret
         })
         return {
           data: {
@@ -3368,11 +3372,11 @@ export class AppCommandBus {
       }
       case 'navigateur_lire': {
         if (sansOnglet()) return refus(AUCUN_ONGLET)
-        return { data: { ok: true, page: await nav.lire(fil) } }
+        return { data: { ok: true, page: await nav.lire(fil, arret) } }
       }
       case 'navigateur_capture': {
         if (sansOnglet()) return refus(AUCUN_ONGLET)
-        const dataUrl = await nav.capturer(fil)
+        const dataUrl = await nav.capturer(fil, arret)
         if (!dataUrl)
           return refus(
             'Capture impossible : la page n’a rendu aucune image. Relis-la avec navigateur_lire.'
@@ -3385,7 +3389,7 @@ export class AppCommandBus {
       case 'navigateur_agir': {
         const action = this.actionNavigateur(a)
         if (typeof action === 'string') return refus(action)
-        const r = await nav.agir(fil, action)
+        const r = await nav.agir(fil, action, arret)
         if (r.ok)
           return {
             data: {

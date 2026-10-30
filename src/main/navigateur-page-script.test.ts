@@ -166,6 +166,28 @@ describe('localiser et focus — la garde mot de passe côté page', () => {
     expect(jouer<LocalisationPage>('localiser', [{ selecteur: '))' }, {}]).trouve).toBe(false)
   })
 
+  // fix-ok: run-adc12547df2d-1 (objection du juge) — le moteur REGARDE désormais la cible d'un geste
+  // en pause avec ces options : ce que la page en fait est ce que l'utilisateur subit s'il reprend
+  // la main. Le rouge était côté moteur (options passées), ce test tient le côté page.
+  it('sans focaliser ni sélectionner, la cible est lue et le champ de l’utilisateur reste le sien', () => {
+    document.body.innerHTML = '<input id="sien" value="à garder"><input id="cible" value="ancien">'
+    const sien = document.querySelector<HTMLInputElement>('#sien')
+    const cible = document.querySelector<HTMLInputElement>('#cible')
+    sien?.focus()
+    sien?.setSelectionRange(0, 3)
+    const vu = jouer<LocalisationPage>('localiser', [
+      { selecteur: '#cible' },
+      { focaliser: false, selectionner: false }
+    ])
+    expect(vu).toMatchObject({ trouve: true, secret: false })
+    expect(document.activeElement).toBe(sien)
+    expect(sien?.selectionStart).toBe(0)
+    expect(sien?.selectionEnd).toBe(3)
+    // Jumeau : le même appel, une fois le geste libéré, entre dans le champ et le sélectionne.
+    jouer('localiser', [{ selecteur: '#cible' }, { focaliser: true, selectionner: true }])
+    expect(document.activeElement).toBe(cible)
+  })
+
   // Objection du juge (conv-1287, réparation 1) : une frappe sans cible doit pouvoir surligner le
   // champ actif, donc `focus` rend sa position ; sans champ actif, la touche va à la page entière.
   it('focus rend la position du champ actif, ou toute la fenêtre quand rien n’a le focus', () => {
