@@ -97,8 +97,11 @@ export interface IoJournalFils {
  *
  * `copieDejaLue` : lecture pour un agent d'étape de run, qui n'a pas les outils pour répondre. Rien
  * n'est noté livré (le fil garde le message pour son prochain tour) ; la liste écarte ce que cet
- * agent a déjà lu. conv-1332, 2026-10-30 : msg-0e75e0e8 (conv-1333, « dis-le-moi avant d'écrire »)
- * n'a jamais atteint le kaizen en cours, qui a écrit 7 minutes plus tard dans le fichier en cause.
+ * agent a déjà lu.
+ * fix-ok: conv-1332, 2026-10-30 — cause mesurée : `messagesEnAttente` (garde-git-destructeur.ts)
+ * s'arrêtait dès que le fil venait de AUTOWIN_CONVERSATION_ID, donc un agent de run ne recevait rien.
+ * msg-0e75e0e8 (conv-1333, « dis-le-moi avant d'écrire ») n'a laissé aucune ligne `livre` au journal,
+ * et le kaizen a écrit 7 minutes plus tard dans le fichier en cause.
  */
 export function livrerMessagesEnAttente(
   io: IoJournalFils,
