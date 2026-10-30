@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type {
   AnnotationNavigateur,
   EtatNavigateur,
+  GesteNavigateur,
   OngletNavigateur,
   ReglagesNavigateur
 } from '../../../shared/navigateur'
@@ -81,6 +82,19 @@ function annotation(id: string, commentaire: string): AnnotationNavigateur {
   }
 }
 
+function geste(id: string, partiel: Partial<GesteNavigateur> = {}): GesteNavigateur {
+  return {
+    id,
+    ongletId: 'onglet-1',
+    verbe: 'clic',
+    nature: 'agit',
+    description: 'cliquer sur bouton « Envoyer »',
+    etat: 'fait',
+    debut: Date.now(),
+    ...partiel
+  }
+}
+
 /** `window.api.navigateur` simulé : état poussé à la main, comme le processus principal le ferait. */
 function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
   const abonnes = new Set<(etat: EtatNavigateur) => void>()
@@ -123,6 +137,7 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
     },
     effacerDonnees: vi.fn(async () => undefined),
     ouvrirDansNavigateurParDefaut: vi.fn(async () => undefined),
+    piloter: vi.fn(async () => undefined),
     surEtat: vi.fn((rappel: (etat: EtatNavigateur) => void) => {
       abonnes.add(rappel)
       return () => {
@@ -475,6 +490,191 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(props.onElementChoisi).toHaveBeenCalledWith(choisie)
     expect(nav.api.supprimerAnnotation).toHaveBeenCalledWith(choisie.id)
     expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeNull()
+  })
+
+  // ── Pas-à-pas : frise et bandeau de pilotage (conv-1286, maquette « 1 · Jalons ») ─────────────
+
+  const bandeau = (): Element | null =>
+    conteneur!.querySelector('[data-testid="navigateur-pilotage"]')
+  const frise = (): Element | null => conteneur!.querySelector('[data-testid="navigateur-frise"]')
+  const boutonsDuBandeau = (): string[] =>
+    [...bandeau()!.querySelectorAll('button')].map((b) => b.textContent ?? '')
+  const texteDuBandeau = (): string =>
+    bandeau()!.querySelector('[role="status"]')?.textContent ?? ''
+
+  it('frise : absente sans geste, puis entre la barre d’adresse et la page', async () => {
+    await monter()
+    expect(frise()).toBeNull()
+    await nav.pousser({ gestes: [geste('g1')] })
+    const suit = (a: Element, b: Element): boolean =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(suit(conteneur!.querySelector('.navigateur-barre')!, frise()!)).toBe(true)
+    expect(suit(frise()!, conteneur!.querySelector('.navigateur-zone')!)).toBe(true)
+  })
+
+  it('frise : elle suit l’onglet actif', async () => {
+    await monter()
+    await nav.pousser({
+      onglets: [onglet('onglet-1'), onglet('onglet-2')],
+      gestes: [geste('g1', { ongletId: 'onglet-2' })]
+    })
+    expect(frise()).toBeNull()
+    await nav.pousser({ ongletActif: 'onglet-2' })
+    expect(frise()).toBeTruthy()
+  })
+
+  it('bandeau, libre : Pause + Reprendre la main', async () => {
+    await monter()
+    await nav.pousser({ agentPilote: true })
+    expect(texteDuBandeau()).toBe('L’agent pilote cet onglet')
+    expect(boutonsDuBandeau()).toEqual(['Pause', 'Reprendre la main'])
+  })
+
+  it('bandeau, en pause : « geste N / M » + Reprendre, Pas suivant, Reprendre la main', async () => {
+    await monter()
+    await nav.pousser({
+      pilotage: 'pause',
+      gestes: [geste('g1'), geste('g2', { etat: 'prochain' }), geste('g3', { etat: 'prochain' })]
+    })
+    expect(texteDuBandeau()).toBe('L’agent pilote cet onglet · en pause · geste 2 / 3')
+    expect(boutonsDuBandeau()).toEqual(['Reprendre', 'Pas suivant', 'Reprendre la main'])
+  })
+
+  it('jumeau : en pause sans geste sur cet onglet, pas de compteur à inventer', async () => {
+    await monter()
+    await nav.pousser({ pilotage: 'pause' })
+    expect(texteDuBandeau()).toBe('L’agent pilote cet onglet · en pause')
+  })
+
+  it('bandeau, main reprise : « Tu as la main » + Rendre la main à l’agent, seul', async () => {
+    await monter()
+    await nav.pousser({ pilotage: 'main' })
+    expect(texteDuBandeau()).toBe('Tu as la main')
+    expect(boutonsDuBandeau()).toEqual(['Rendre la main à l’agent'])
+  })
+
+  it('chaque bouton envoie SON ordre, pour CE fil', async () => {
+    await monter()
+    const cliquer = async (libelle: string): Promise<void> => {
+      await act(async () => bouton(bandeau()!, libelle).click())
+    }
+    await nav.pousser({ agentPilote: true })
+    await cliquer('Pause')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'pause')
+    await cliquer('Reprendre la main')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'reprendre-la-main')
+    await nav.pousser({ pilotage: 'pause' })
+    await cliquer('Reprendre')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'reprendre')
+    await cliquer('Pas suivant')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'pas-suivant')
+    await cliquer('Reprendre la main')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'reprendre-la-main')
+    await nav.pousser({ pilotage: 'main' })
+    await cliquer('Rendre la main à l’agent')
+    expect(nav.api.piloter).toHaveBeenLastCalledWith('A', 'rendre-la-main')
+    expect(nav.api.piloter).toHaveBeenCalledTimes(6)
+  })
+
+  it('un ordre qui échoue se dit dans le panneau', async () => {
+    await monter()
+    await nav.pousser({ agentPilote: true })
+    nav.api.piloter.mockRejectedValueOnce(new Error('canal coupé'))
+    await act(async () => {
+      bouton(bandeau()!, 'Pause').click()
+      await vider()
+    })
+    expect(conteneur!.querySelector('[role="alert"]')?.textContent).toBe('canal coupé')
+  })
+
+  it('l’agent ne pilote pas, rien en cours, aucun geste : pas de bandeau', async () => {
+    await monter()
+    expect(bandeau()).toBeNull()
+  })
+
+  describe('le bandeau survit au dernier geste', () => {
+    // `shouldAdvanceTime` : l'horloge simulée continue de courir, sinon `vider()` ne rendrait jamais.
+    beforeEach(() => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'Date'],
+        shouldAdvanceTime: true
+      })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const allerA = (instant: number): Promise<void> =>
+      act(async () => {
+        vi.advanceTimersByTime(instant - Date.now())
+      })
+
+    it('visible 20 s après le geste, entre deux gestes, puis retiré', async () => {
+      await monter()
+      const debut = Date.now()
+      await nav.pousser({ gestes: [geste('g1', { debut })] })
+      expect(bandeau()).toBeTruthy()
+      await allerA(debut + 19_500)
+      expect(bandeau()).toBeTruthy()
+      await allerA(debut + 20_001)
+      expect(bandeau()).toBeNull()
+      // La frise, elle, reste : c'est le journal du fil.
+      expect(frise()).toBeTruthy()
+    })
+
+    it('un nouveau geste relance les 20 s', async () => {
+      await monter()
+      const debut = Date.now()
+      await nav.pousser({ gestes: [geste('g1', { debut })] })
+      await allerA(debut + 15_000)
+      const second = Date.now()
+      await nav.pousser({ gestes: [geste('g1', { debut }), geste('g2', { debut: second })] })
+      await allerA(debut + 21_000)
+      expect(bandeau()).toBeTruthy()
+      await allerA(second + 20_001)
+      expect(bandeau()).toBeNull()
+    })
+
+    it('jumeau : un geste de plus de 20 s à l’ouverture du panneau ne rallume rien', async () => {
+      await nav.pousser({ gestes: [geste('g1', { debut: Date.now() - 60_000 })] })
+      await monter()
+      expect(bandeau()).toBeNull()
+      expect(frise()).toBeTruthy()
+    })
+
+    it('jumeau : un geste sur un AUTRE onglet ne garde pas le bandeau', async () => {
+      await monter()
+      await nav.pousser({ gestes: [geste('g1', { ongletId: 'onglet-2' })] })
+      expect(bandeau()).toBeNull()
+    })
+
+    it('en pause ou main reprise : il reste, quel que soit l’âge du dernier geste', async () => {
+      await monter()
+      const vieux = geste('g1', { debut: Date.now() - 60_000 })
+      await nav.pousser({ gestes: [vieux], pilotage: 'pause' })
+      expect(bandeau()).toBeTruthy()
+      await nav.pousser({ pilotage: 'main' })
+      expect(bandeau()).toBeTruthy()
+      await nav.pousser({ pilotage: 'libre' })
+      expect(bandeau()).toBeNull()
+    })
+
+    it('tant que l’agent pilote : il reste, quel que soit l’âge du dernier geste', async () => {
+      await monter()
+      const vieux = geste('g1', { debut: Date.now() - 60_000 })
+      await nav.pousser({ gestes: [vieux], agentPilote: true })
+      expect(bandeau()).toBeTruthy()
+    })
+
+    it('un geste pas fini (question d’accord de 120 s) le garde : on peut reprendre la main', async () => {
+      await monter()
+      const debut = Date.now()
+      await nav.pousser({ gestes: [geste('g1', { debut, etat: 'en-cours' })] })
+      await allerA(debut + 60_000)
+      expect(bandeau()).toBeTruthy()
+      await nav.pousser({ gestes: [geste('g1', { debut, etat: 'fait' })] })
+      expect(bandeau()).toBeNull()
+    })
   })
 })
 

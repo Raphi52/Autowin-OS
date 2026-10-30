@@ -402,6 +402,15 @@
   font-size: 13px;
 }
 
+/* components/FriseGestesNavigateur.css — tailles */
+:root[data-theme^='malvoyant-'] .navigateur-pilotage-pause,
+:root[data-theme^='malvoyant-'] .navigateur-pilotage-bouton,
+:root[data-theme^='malvoyant-'] .navigateur-jalon-verbe,
+:root[data-theme^='malvoyant-'] .navigateur-jalon-temps,
+:root[data-theme^='malvoyant-'] .navigateur-frise-legende {
+  font-size: 13px;
+}
+
 /* components/GraphView.css — tailles */
 :root[data-theme^='malvoyant-'] .graph-stage__heading span,
 :root[data-theme^='malvoyant-'] .graph-brains-filtre__ponts,
