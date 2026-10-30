@@ -80,7 +80,60 @@ describe('contrôle avant chaque outil : messages d’autres fils', () => {
     expect(appeler({ tool_name: 'Read', tool_input: {} }).stdout).toBe('')
   })
 
-  it('un agent d’étape de run (fil venu de AUTOWIN_CONVERSATION_ID) ne reçoit rien, le message reste en attente', () => {
+  /*
+   * conv-1332, 2026-10-30 : msg-0e75e0e8 (conv-1333, 17:43, « dis-le-moi avant d'écrire ») n'a jamais
+   * atteint le kaizen en cours : 0 ligne `livre` au journal. Le kaizen a écrit dans
+   * plans-de-lots-app.test.ts à 17:50, et ce fichier est resté refusé à conv-1333 jusqu'à 18:21.
+   */
+  it('un agent d’étape de run lit une copie, une seule fois, et le message reste dû au fil', () => {
+    writeFileSync(journal, `${message('msg-1')}\n`, 'utf8')
+    const entree = { tool_name: 'Read', tool_input: {}, session_id: 'etape-1' }
+    const env = { AUTOWIN_CONVERSATION_ID: 'conv-B' }
+
+    const sortie = JSON.parse(appeler(entree, env).stdout).hookSpecificOutput
+    expect(sortie.permissionDecision).toBeUndefined()
+    expect(sortie.additionalContext).toContain('texte msg-1')
+    expect(sortie.additionalContext).toContain('tu ne peux pas y répondre')
+    expect(sortie.additionalContext).toContain('avant d’écrire')
+
+    expect(appeler(entree, env).stdout).toBe('')
+    expect(lignesDuJournal(readFileSync(journal, 'utf8'))).toHaveLength(1)
+
+    // Le message reste dû au fil : son agent de chat le reçoit, avec le droit de répondre.
+    const chat = JSON.parse(appeler({ tool_name: 'Read', tool_input: {} }).stdout)
+    expect(chat.hookSpecificOutput.additionalContext).toContain('réponds avec ecrire_a_un_fil')
+  })
+
+  it('une nouvelle étape du même run relit le message, un message arrivé en route est montré', () => {
+    writeFileSync(journal, `${message('msg-1')}\n`, 'utf8')
+    const env = { AUTOWIN_CONVERSATION_ID: 'conv-B' }
+    const etape1 = { tool_name: 'Read', tool_input: {}, session_id: 'etape-1' }
+    appeler(etape1, env)
+    writeFileSync(journal, `${message('msg-1')}\n${message('msg-2')}\n`, 'utf8')
+
+    const suite = appeler(etape1, env).stdout
+    expect(suite).toContain('texte msg-2')
+    expect(suite).not.toContain('texte msg-1')
+
+    const etape2 = { tool_name: 'Read', tool_input: {}, session_id: 'etape-2' }
+    expect(appeler(etape2, env).stdout).toContain('texte msg-1')
+  })
+
+  it('un ordre lu par une étape de run ne s’y exécute pas : il reste au fil', () => {
+    writeFileSync(
+      journal,
+      `${JSON.stringify({ ...JSON.parse(message('msg-1')), nature: 'ordre' })}\n`,
+      'utf8'
+    )
+    const sortie = appeler(
+      { tool_name: 'Read', tool_input: {}, session_id: 'etape-1' },
+      { AUTOWIN_CONVERSATION_ID: 'conv-B' }
+    ).stdout
+    expect(sortie).toContain('un ordre sera traité par le fil après ce travail')
+    expect(sortie).not.toContain('est du travail à faire')
+  })
+
+  it('un agent d’étape de run sans identifiant de session ne reçoit rien, le message reste en attente', () => {
     writeFileSync(journal, `${message('msg-1')}\n`, 'utf8')
     expect(
       appeler({ tool_name: 'Read', tool_input: {} }, { AUTOWIN_CONVERSATION_ID: 'conv-B' }).stdout
