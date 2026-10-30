@@ -503,7 +503,7 @@ export interface AppSnapshot {
     tourEnCours?: boolean
   }>
   /** Les 12 runs les plus récents, PLUS tout run bloqué plus ancien lu dans la fenêtre du scan. */
-  runs: Array<{ subject: string; status: string; blocked: boolean }>
+  runs: Array<{ subject: string; status: string; blocked: boolean; decisionAttendue?: true }>
   /**
    * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
    * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
@@ -570,7 +570,7 @@ export interface PromptSnapshot {
   tab: AppDestination
   activeConversationId?: string
   providers: string[]
-  runsBlocked: Array<{ subject: string; status: string }>
+  runsBlocked: Array<{ subject: string; status: string; decisionAttendue?: true }>
   /**
    * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
    * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
@@ -2844,7 +2844,12 @@ export class AppCommandBus {
       // jamais coupé : `runsBlocked` filtre CETTE liste, et la coupe à 12 le faisait disparaître.
       runs: runs
         .filter((r, i) => i < 12 || r.blocked)
-        .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+        .map((r) => ({
+          subject: r.subject,
+          status: r.summary.status,
+          blocked: r.blocked,
+          ...(r.summary.decisionAttendue ? { decisionAttendue: true as const } : {})
+        })),
       ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
       // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
@@ -2939,7 +2944,11 @@ export class AppCommandBus {
       providers: full.providers,
       runsBlocked: full.runs
         .filter((r) => r.blocked)
-        .map((r) => ({ subject: r.subject, status: r.status })),
+        .map((r) => ({
+          subject: r.subject,
+          status: r.status,
+          ...(r.decisionAttendue ? { decisionAttendue: true as const } : {})
+        })),
       ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
       conversationsCount: full.conversations.length,
       ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),

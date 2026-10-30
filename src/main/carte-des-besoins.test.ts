@@ -199,6 +199,47 @@ describe('assemblerLaCarte — rangée par projet comme la barre latérale', () 
     expect(projets[0].libelle).toBe('P1')
   })
 
+  // conv-1199 (scout conv-1332) : un run validé qui attend une réponse de l'utilisateur n'est pas une
+  // alerte « run bloqué », mais il ne doit pas disparaître pour autant (contrôle final, conv-1337).
+  // Les entrées qui font échouer une version fausse : `attend` (retiré sans remplacement) ;
+  // `sans-question`, même statut (un tri sur le statut le prendrait pour une décision) ; `clos`,
+  // même question mais rien à traiter (un tri sur la seule question le compterait).
+  it('un run validé qui attend une décision est compté à part, dans son projet', () => {
+    const { projets, runsBloques, runsEnAttenteDeDecision } = carte(
+      [conv('c1', [user('construis', 1_000), asst(1_100, [])], { projectPath: 'D:/P1' })],
+      [
+        run('attend', {
+          conversationId: 'c1',
+          summary: { status: 'green', decisionAttendue: true }
+        }),
+        run('sans-question', { conversationId: 'c1', summary: { status: 'green' } }),
+        run('clos', {
+          conversationId: 'c1',
+          summary: { status: 'green', decisionAttendue: true },
+          blocked: false
+        })
+      ]
+    )
+    expect(projets[0].runsBloques.map((r) => r.sujet)).toEqual(['sans-question'])
+    expect(runsBloques).toBe(1)
+    expect(projets[0].runsEnAttenteDeDecision?.map((r) => r.sujet)).toEqual(['attend'])
+    expect(projets[0].runsEnAttenteDeDecision?.[0]).toMatchObject({
+      statut: 'green',
+      conversationId: 'c1'
+    })
+    expect(runsEnAttenteDeDecision).toBe(1)
+  })
+
+  it('sans run en attente de décision, la carte ne porte pas ce compte', () => {
+    const { projets, runsEnAttenteDeDecision } = carte(
+      [conv('c1', [user('construis', 1_000), asst(1_100, [])], { projectPath: 'D:/P1' })],
+      [run('rouge', { conversationId: 'c1' })]
+    )
+    expect(projets[0].runsBloques.map((r) => r.sujet)).toEqual(['rouge'])
+    expect(projets[0].runsEnAttenteDeDecision).toBeUndefined()
+    expect(runsEnAttenteDeDecision).toBeUndefined()
+  })
+
   it('le calculateur ne recalcule que les fils qui ont bougé, et oublie les fils supprimés', async () => {
     let fils: (ConversationPourLaCarte & { updatedAt: number })[] = [
       { ...conv('a', [user('une', 1_000), asst(1_100, [])]), updatedAt: 1 },

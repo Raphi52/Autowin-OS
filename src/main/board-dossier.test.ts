@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CarteDesBesoins, DemandeDeLaCarte, StatutDemande } from '../shared/carte-des-besoins'
 import {
+  boardAEnregistrer,
   boardEnMarkdown,
   creerDossierDuBoard,
   FICHIER_DU_REGLAGE,
@@ -358,6 +359,44 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
 })
 
 describe('boardEnMarkdown', () => {
+  // Le run retiré des « Runs bloqués » ne doit pas sortir du fichier pour autant : il y figurait
+  // avant que la carte le compte à part (conv-1346).
+  it('écrit les runs en attente de décision à part, et rien s’il n’y en a pas', () => {
+    const base = carte([])
+    const enregistre = boardAEnregistrer(
+      {
+        ...base,
+        projets: [
+          {
+            ...base.projets[0],
+            runsEnAttenteDeDecision: [
+              {
+                sujet: 'attend\nvotre avis',
+                statut: 'green',
+                chemin: 'C:/runs/attend/RUN.md',
+                mtime: 2 * H,
+                conversationId: 'conv-9'
+              }
+            ]
+          }
+        ],
+        runsEnAttenteDeDecision: 1
+      },
+      {},
+      'moi'
+    )
+    expect(enregistre.runsBloques).toEqual([])
+    expect(enregistre.runsEnAttenteDeDecision).toHaveLength(1)
+    const md = boardEnMarkdown(enregistre)
+    expect(md).toContain('## En attente de votre décision')
+    expect(md).toContain('green · attend votre avis · conv-9')
+    expect(md).not.toContain('## Runs bloqués')
+
+    const sans = boardAEnregistrer(base, {}, 'moi')
+    expect(sans).not.toHaveProperty('runsEnAttenteDeDecision')
+    expect(boardEnMarkdown(sans)).not.toContain('En attente de votre décision')
+  })
+
   it('un titre de fil sur plusieurs lignes reste sur une seule ligne', () => {
     const md = boardEnMarkdown({
       format: 'autowin-board/1',

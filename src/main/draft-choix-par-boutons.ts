@@ -16,6 +16,9 @@
  * cadrage (étape 1 de la procédure : la technique cible) reste permise.
  */
 
+import { skillNommeeEnTete } from '../shared/skill-nommee'
+import { invokedSkillId } from './skill-pipeline'
+
 interface MessageDuFil {
   role: string
   content: unknown
@@ -23,17 +26,47 @@ interface MessageDuFil {
 
 /** Libellés envoyés par les boutons du carrousel (BOUTONS_PAR_DEFAUT et boutonsFixes du script). */
 const LIBELLE_DU_CARROUSEL = /^\s*(?:affiner la \d+\s*·|aucune?\s*:\s*propose \d+ autres)/i
-/** « Implémenter la N · nom », « implémente la 2 » : la sortie de la boucle /draft. */
-const ORDRE_D_IMPLEMENTATION = /^\s*impl[ée]ment/i
-const INVOCATION_DRAFT = /^\s*\/draft\b/i
+/**
+ * « Implémenter la N · nom », « implémente la 2 », « go implémente » : la sortie de la boucle /draft.
+ * « go implémente en fonction du theme » est relevé dans conv-1002 : sans le mot de tête, la
+ * remontée ci-dessous traversait cet ordre et gardait le mode pour tout le reste du fil.
+ */
+const ORDRE_D_IMPLEMENTATION = /^\s*(?:(?:go|ok|okay|oui|vas[- ]y|allez)[\s,:!.]+)*impl[ée]ment/i
+/**
+ * `/draft` en pleine phrase : « ok balec /draft comment… » (conv-1284), « Reprends le /draft… »
+ * (conv-1113). Un MOT à part, précédé d'un espace : « n'importe où » attraperait
+ * `skills/draft/SKILL.md` (conv-1317) ou `scripts/draft-carrousel.mjs`, et une citation de code
+ * (`` `/draft` ``, scout conv-1332) ne vaut pas invocation.
+ */
+const DRAFT_EN_PLEINE_PHRASE = /\s\/draft(?![\w/-]|\.\w)/i
+/**
+ * Une invocation en pleine phrase est dans le début du message. Relevé sur le poste le 2026-10-30 :
+ * les invocations tombent à 68 caractères au plus (conv-815) ; au-delà de 126, c'est une consigne
+ * qui PARLE de /draft (« passe le carrousel /draft 3D en page interactive », conv-1304).
+ */
+const ZONE_D_INVOCATION = 100
+/**
+ * Réponses libres traversées, au plus, depuis le dernier repère. Un fil peut quitter la boucle sans
+ * ordre reconnaissable (« la D », conv-802) : le mode ne doit pas durer jusqu'à la fin du fil. La
+ * plus longue boucle relevée en compte 8 (conv-904) ; le rejeu en a laissé 25 sans cette borne.
+ */
+const MESSAGES_LIBRES_MAX = 10
 
 /**
- * Vrai quand ce tour présente (ou re-présente) des propositions /draft :
- *  - le message invoque /draft (`skillInvoquee`, calculée par le pilote) ;
- *  - ou c'est le libellé d'un bouton du carrousel (« Affiner la 2 · … », « Aucune : propose … ») ;
- *  - ou c'est la réponse DIRECTE à un tour /draft (« 1 et 3 », « 1+3+4 »).
- * Faux dès que l'utilisateur ordonne l'implémentation. Ne lit QUE les messages de l'utilisateur :
- * le texte d'une réponse précédente n'est pas fiable dans l'historique (il vit dans ses `parts`).
+ * Vrai quand ce tour présente (ou re-présente) des propositions /draft : `skillInvoquee` (calculée
+ * par le pilote) vaut `draft`, ou, en remontant les messages du plus récent au plus ancien, le
+ * premier repère trouvé OUVRE la boucle (/draft, clic sur un bouton du carrousel) plutôt qu'il ne la
+ * FERME (ordre d'implémentation, autre commande). Les messages libres entre les deux (« 1 et 3 »,
+ * « la D », « plus sobre ») ne disent rien : on les traverse.
+ *
+ * La lecture se bornait aux deux derniers messages : le mode tombait à la deuxième réponse libre.
+ * Rejoué le 2026-10-30 sur les fils du poste, ce défaut a laissé passer 16 `ask` qui faisaient choisir
+ * entre des propositions, dans conv-1002 (« je vois pas de preview au tour precedent pour faire mon
+ * choix »), conv-701, conv-903 et conv-904. Prix connu de la remontée : un `ask` de cadrage à six
+ * options (conv-677) tombe aussi sous le refus ; le tour continue, le modèle reformule.
+ *
+ * Ne lit QUE les messages de l'utilisateur : le texte d'une réponse précédente n'est pas fiable dans
+ * l'historique (il vit dans ses `parts`).
  */
 export function boucleDraftEnCours(
   historique: ReadonlyArray<MessageDuFil>,
@@ -43,11 +76,15 @@ export function boucleDraftEnCours(
   const textes = historique
     .filter((message) => message.role === 'user' && typeof message.content === 'string')
     .map((message) => message.content as string)
-  const dernier = textes.at(-1) ?? ''
-  if (ORDRE_D_IMPLEMENTATION.test(dernier)) return false
-  if (LIBELLE_DU_CARROUSEL.test(dernier)) return true
-  const precedent = textes.at(-2) ?? ''
-  return INVOCATION_DRAFT.test(precedent) || LIBELLE_DU_CARROUSEL.test(precedent)
+  for (const texte of textes.slice(-(MESSAGES_LIBRES_MAX + 1)).reverse()) {
+    if (skillNommeeEnTete(texte, ['draft'])) return true
+    if (invokedSkillId(texte)) return false
+    // Avant l'ordre d'implémentation : « Affiner la 2 · Implémentation légère » reste un clic.
+    if (LIBELLE_DU_CARROUSEL.test(texte)) return true
+    if (ORDRE_D_IMPLEMENTATION.test(texte)) return false
+    if (DRAFT_EN_PLEINE_PHRASE.test(texte.slice(0, ZONE_D_INVOCATION))) return true
+  }
+  return false
 }
 
 /** Une option qui DÉSIGNE une proposition : « 3 · Koïs », « Affiner la 1 », « Mélanger la 5 »… */

@@ -121,6 +121,24 @@ describe('/draft : le choix passe par les boutons du bloc, jamais par `ask`', ()
     expect(askExecute(exec)).toBe(false)
   })
 
+  it('refuse encore après plusieurs réponses libres et sur /draft en pleine phrase (conv-1284)', async () => {
+    const { exec, appelsModele } = await piloter(
+      [
+        { role: 'user', content: 'ok balec /draft comment adapter la vue chat' },
+        { role: 'assistant', content: 'Six pistes.' },
+        { role: 'user', content: 'la 2' },
+        { role: 'assistant', content: 'Variantes de la 2.' },
+        { role: 'user', content: 'plus sobre' },
+        { role: 'assistant', content: 'Variantes.' },
+        { role: 'user', content: 'encore' }
+      ],
+      [LECTURE + ASK_CONV_310, 'Voici le carrousel.']
+    )
+
+    expect(askExecute(exec)).toBe(false)
+    expect(appelsModele).toBeGreaterThan(1)
+  })
+
   it('refuse après un clic sur un bouton du carrousel (« Affiner la 2 · … »)', async () => {
     const { exec } = await piloter(
       [{ role: 'user', content: 'Affiner la 2 · Noir néon' }],

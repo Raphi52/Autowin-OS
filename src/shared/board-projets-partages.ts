@@ -57,7 +57,11 @@ export function carteDesProjetsPartages(
     projets: retenus,
     comptes,
     demandes: retenus.reduce((n, p) => n + p.demandes.length, 0),
-    runsBloques: retenus.reduce((n, p) => n + p.runsBloques.length, 0)
+    runsBloques: retenus.reduce((n, p) => n + p.runsBloques.length, 0),
+    runsEnAttenteDeDecision: retenus.reduce(
+      (n, p) => n + (p.runsEnAttenteDeDecision?.length ?? 0),
+      0
+    )
   }
 }
 

@@ -61,12 +61,21 @@ export interface OrchestrationContextInput {
   /** Une ligne par tour ANTÉRIEUR à la fenêtre reprise en entier — sinon il disparaît sans trace. */
   toursAnterieurs?: string[]
   app?: { tab: string }
-  runs?: Array<{ subject: string; status: string; blocked: boolean }>
+  runs?: Array<{ subject: string; status: string; blocked: boolean; decisionAttendue?: boolean }>
   unavailable?: string[]
 }
 
 /** Nombre de RUN.md rattachés dont le chemin est donné au run : les plus récents, assez pour un fil. */
 const RUN_PATHS_MAX = 5
+
+/**
+ * « green, bloqué » faisait lire comme un échec à réparer un run validé qui attend une réponse de
+ * l'utilisateur (conv-1199, scout conv-1332). Texte lu par le modèle, d'où « de l'utilisateur ».
+ */
+function etatDuRun(run: { blocked: boolean; decisionAttendue?: boolean }): string {
+  if (run.decisionAttendue) return ', en attente de la décision de l’utilisateur'
+  return run.blocked ? ', bloqué' : ''
+}
 
 export function collectOrchestrationContext(input: OrchestrationContextInput): string {
   const lines = [
@@ -151,7 +160,7 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
     .slice(0, 8)
   lines.push(
     relevantRuns.length
-      ? `Runs en cours/bloqués: ${relevantRuns.map((run) => `${run.subject} (${run.status}${run.blocked ? ', bloqué' : ''})`).join('; ')}`
+      ? `Runs en cours/bloqués: ${relevantRuns.map((run) => `${run.subject} (${run.status}${etatDuRun(run)})`).join('; ')}`
       : 'Runs en cours/bloqués: aucun observé'
   )
   if (input.unavailable?.length)
