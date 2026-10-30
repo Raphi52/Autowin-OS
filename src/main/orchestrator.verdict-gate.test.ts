@@ -56,6 +56,20 @@ describe('lecture du verdict du juge — un seul lecteur, aligné sur le contrat
     }
   })
 
+  it('le mot « défaut » écrit en prose dans une puce OK n est PAS un rejet contractuel', () => {
+    // Mesuré run-9930e4959cf4-1 (conv-359, trace.json entrée 13) : juge « VALIDE / SCORE: 92 »,
+    // puces toutes OK, dont « Les tests repèrent un vrai défaut : avec l'aléa élargi… ». La
+    // typographie française (espace avant « : ») suffisait à lire ce VALIDE comme un DEFAUT, et le
+    // contrôle rendait « Promis mais pas fait : 1 point(s) » sur un travail validé.
+    const verdict =
+      'VALIDE\nSCORE: 92\nOBJECTIONS:\n' +
+      "- OK: Les tests repèrent un vrai défaut : avec l'aléa élargi dans une copie, la suite sort en code 1."
+    expect(lireVerdictJuge(verdict)).toBe(true)
+    // Jumeau refusé, même mot : en tête de ligne, c'est la forme du contrat, donc un rejet.
+    expect(lireVerdictJuge('Défaut : preuve absente, bien que la partie A soit valide')).toBe(false)
+    expect(lireVerdictJuge('VALIDE\n- Défaut : la preuve manque')).toBe(false)
+  })
+
   it('un rejet PRIME sur une mention d approbation dans le même texte', () => {
     // « DEFAUT: ... bien que certains points soient valides » doit rester un refus.
     expect(lireVerdictJuge('DEFAUT: incomplet, bien que la partie A soit valide')).toBe(false)
