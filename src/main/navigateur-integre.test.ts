@@ -268,6 +268,15 @@ async function laisserFiler(): Promise<void> {
   for (let i = 0; i < 10; i++) await Promise.resolve()
 }
 
+/**
+ * Le résultat, ou « sans réponse » : un geste resté bloqué doit rougir, pas faire expirer le test.
+ * 20 ms : largement de quoi passer la surbrillance, qui prend un tour d'horloge même à 0 ms.
+ */
+async function issueSansAttendre<T>(action: Promise<T>): Promise<T | 'sans réponse'> {
+  await new Promise((fin) => setTimeout(fin, 20))
+  return Promise.race([action, Promise.resolve('sans réponse' as const)])
+}
+
 let racine: string
 let fabrique: ReturnType<typeof fausseFabrique>
 let nav: GestionnaireNavigateur
@@ -1416,6 +1425,283 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       const r = await nav.agir('conv-a', CLIC)
       expect(r).toMatchObject({ ok: false, refus: 'main-reprise' })
       expect(r.message).not.toMatch(/Mode /)
+    })
+  })
+
+  // fix-ok: run-adc12547df2d-1 (mesuré) — un geste est noté `prochain` dès son arrivée, mais n'entre
+  // dans `enPause` qu'une fois sa cible lue : « Pas suivant » cliqué entre les deux ne libérait rien,
+  // et le geste attendait quand même (vrai outil pendu, commands.navigateur.test.ts, 3 fois sur 3).
+  describe('ordre donné pendant la lecture de la cible', () => {
+    const CLIC = { type: 'clic', cible: { ref: 1 } } as const
+    const ENVOI = ['mouseMove', 'mouseDown', 'mouseUp']
+
+    function preparer(): FausseVue {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      return vue
+    }
+
+    it('« Pas suivant » vaut pour ce geste, qui ne s’arrête pas à l’attente', async () => {
+      const vue = preparer()
+      nav.piloter('conv-a', 'pause')
+      const action = nav.agir('conv-a', CLIC)
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['prochain'])
+
+      nav.piloter('conv-a', 'pas-suivant')
+
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['en-cours'])
+      expect(await issueSansAttendre(action)).toMatchObject({ ok: true })
+      expect(vue.evenements.map((e) => e.type)).toEqual(ENVOI)
+      expect(nav.etat('conv-a').pilotage).toBe('pause')
+    })
+
+    it('la saisie libérée ainsi entre quand même dans le champ avant de taper', async () => {
+      const vue = preparer()
+      nav.piloter('conv-a', 'pause')
+      const action = nav.agir('conv-a', { type: 'saisir', texte: 'Bonjour', cible: { ref: 1 } })
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await issueSansAttendre(action)).toMatchObject({ ok: true })
+      expect(vue.appels.filter((a) => a.methode === 'localiser').at(-1)?.args[1]).toEqual({
+        focaliser: true,
+        selectionner: false
+      })
+      expect(vue.textes).toEqual(['Bonjour'])
+    })
+
+    it('jumeau : un ordre libère UN geste, le suivant attend le sien', async () => {
+      const vue = preparer()
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', CLIC)
+      const second = nav.agir('conv-a', CLIC)
+
+      nav.piloter('conv-a', 'pas-suivant')
+
+      expect(await issueSansAttendre(premier)).toMatchObject({ ok: true })
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['fait', 'prochain'])
+      expect(vue.evenements).toHaveLength(3)
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await issueSansAttendre(second)).toMatchObject({ ok: true })
+      expect(vue.evenements).toHaveLength(6)
+    })
+
+    it('jumeau : « Pause » cliquée pendant la lecture retient bien le geste', async () => {
+      const vue = preparer()
+      const action = nav.agir('conv-a', CLIC)
+
+      nav.piloter('conv-a', 'pause')
+      await laisserFiler()
+
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['prochain'])
+      expect(vue.evenements).toEqual([])
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await issueSansAttendre(action)).toMatchObject({ ok: true })
+    })
+
+    it('jumeau : sans geste en route, « Pas suivant » ne fait rien, le prochain attendra', async () => {
+      const vue = preparer()
+      nav.piloter('conv-a', 'pause')
+      nav.piloter('conv-a', 'pas-suivant')
+      const action = nav.agir('conv-a', CLIC)
+      await laisserFiler()
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['prochain'])
+      expect(vue.evenements).toEqual([])
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await issueSansAttendre(action)).toMatchObject({ ok: true })
+    })
+  })
+
+  // fix-ok: run-adc12547df2d-1 (objection du juge) — `agir` attendait la promesse de la question
+  // d'accord sans rien d'autre : « Reprendre la main » et le Stop laissaient le geste `en-cours` et la
+  // question à l'écran jusqu'à la réponse ou 120 s, le champ déjà pris (focus et texte sélectionné).
+  describe('question d’accord du site : la main reprise et le Stop n’attendent pas la réponse', () => {
+    const SITE = 'https://exemple.fr'
+    const CLIC = { type: 'clic', cible: { ref: 1 } } as const
+    const SAISIE = {
+      type: 'saisir',
+      texte: 'Bonjour',
+      remplacer: true,
+      cible: { ref: 1 }
+    } as const
+    const SANS_TOUCHER = { focaliser: false, selectionner: false }
+    const EN_ENTRANT = { focaliser: true, selectionner: true }
+    const ARRETS: Array<[string, (arret: AbortController) => void, string, RegExp]> = [
+      [
+        'Reprendre la main',
+        () => nav.piloter('conv-a', 'reprendre-la-main'),
+        'main-reprise',
+        /repris la main/
+      ],
+      ['Stop', (arret) => arret.abort('user'), 'page-indisponible', /arrêté/]
+    ]
+    const regards = (vue: FausseVue): unknown[] =>
+      vue.appels.filter((a) => a.methode === 'localiser').map((a) => a.args[1])
+
+    function preparer(conversationId = 'conv-a'): FausseVue {
+      nav.ouvrir(conversationId, `${SITE}/page`)
+      const vue = fabrique.vues.at(-1) as FausseVue
+      vue.reponses.localiser = cibleTrouvee()
+      return vue
+    }
+
+    it.each(ARRETS)(
+      '%s : refus sans réponse, et la question tombe',
+      async (_n, arreter, code, m) => {
+        const vue = preparer()
+        const arret = new AbortController()
+        const action = nav.agir('conv-a', CLIC, arret.signal)
+        await laisserFiler()
+        expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
+
+        arreter(arret)
+
+        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
+        expect(await issueSansAttendre(action)).toMatchObject({
+          ok: false,
+          refus: code,
+          message: expect.stringMatching(m)
+        })
+        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
+        expect(vue.evenements).toEqual([])
+        expect(vue.methodes()).not.toContain('surligner')
+      }
+    )
+
+    it.each(ARRETS)(
+      '%s après « Pas suivant » : le champ n’a jamais été pris',
+      async (_n, arreter, code) => {
+        const vue = preparer()
+        const arret = new AbortController()
+        nav.piloter('conv-a', 'pause')
+        const action = nav.agir('conv-a', SAISIE, arret.signal)
+        await laisserFiler()
+        nav.piloter('conv-a', 'pas-suivant')
+        await laisserFiler()
+        expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
+
+        arreter(arret)
+
+        expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: code })
+        expect(regards(vue)).toEqual([SANS_TOUCHER, SANS_TOUCHER])
+        expect(vue.textes).toEqual([])
+      }
+    )
+
+    it('fil libre : la saisie ne prend le champ qu’une fois l’accord donné', async () => {
+      const vue = preparer()
+      const action = nav.agir('conv-a', SAISIE)
+      await laisserFiler()
+      expect(regards(vue)).toEqual([SANS_TOUCHER])
+
+      nav.repondreAccord(SITE, 'une-fois')
+
+      expect(await action).toMatchObject({ ok: true })
+      expect(regards(vue)).toEqual([SANS_TOUCHER, EN_ENTRANT])
+      expect(vue.textes).toEqual(['Bonjour'])
+    })
+
+    it('jumeau : sur un site déjà accepté, aucune question, le champ est pris du premier coup', async () => {
+      const vue = preparer()
+      nav.repondreAccord(SITE, 'une-fois')
+      expect(await nav.agir('conv-a', SAISIE)).toMatchObject({ ok: true })
+      expect(regards(vue)).toEqual([EN_ENTRANT])
+      expect(vue.textes).toEqual(['Bonjour'])
+    })
+
+    it('la page change de site pendant la question : le nouveau site n’a pas le champ pris', async () => {
+      const vue = preparer()
+      const action = nav.agir('conv-a', SAISIE)
+      await laisserFiler()
+      vue.adresse = 'https://site-b.fr/'
+
+      nav.repondreAccord(SITE, 'une-fois')
+
+      expect(await action).toMatchObject({ ok: false, refus: 'page-changee' })
+      expect(regards(vue)).toEqual([SANS_TOUCHER])
+      expect(vue.textes).toEqual([])
+    })
+
+    it.each(ARRETS)(
+      '%s pendant la relecture : aucune question n’est posée',
+      async (_n, arreter, code) => {
+        const vue = preparer()
+        const arret = new AbortController()
+        nav.piloter('conv-a', 'pause')
+        const action = nav.agir('conv-a', CLIC, arret.signal)
+        await laisserFiler()
+        const cible = cibleTrouvee()
+        vue.reponses.localiser = (args): unknown => {
+          arreter(arret)
+          return cible(args)
+        }
+
+        nav.piloter('conv-a', 'pas-suivant')
+
+        expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: code })
+        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
+      }
+    )
+
+    it('un autre fil sur le même site garde sa question et son geste', async () => {
+      preparer('conv-a')
+      const autre = preparer('conv-b')
+      const abandonne = nav.agir('conv-a', CLIC)
+      const garde = nav.agir('conv-b', CLIC)
+      await laisserFiler()
+
+      nav.piloter('conv-a', 'reprendre-la-main')
+
+      expect(await issueSansAttendre(abandonne)).toMatchObject({ refus: 'main-reprise' })
+      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
+      expect(autre.evenements).toEqual([])
+      nav.repondreAccord(SITE, 'une-fois')
+      expect(await garde).toMatchObject({ ok: true })
+      expect(autre.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    })
+
+    it('un geste du même fil encore en attente garde la question', async () => {
+      const vue = preparer()
+      const arret = new AbortController()
+      const arrete = nav.agir('conv-a', CLIC, arret.signal)
+      const suivant = nav.agir('conv-a', CLIC)
+      await laisserFiler()
+
+      arret.abort('user')
+
+      expect(await issueSansAttendre(arrete)).toMatchObject({ ok: false })
+      expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
+      nav.repondreAccord(SITE, 'une-fois')
+      expect(await suivant).toMatchObject({ ok: true })
+      expect(vue.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    })
+
+    it('main reprise puis rendue aussitôt : le geste abandonné ne repart pas', async () => {
+      const vue = preparer()
+      const action = nav.agir('conv-a', CLIC)
+      await laisserFiler()
+
+      nav.piloter('conv-a', 'reprendre-la-main')
+      nav.piloter('conv-a', 'rendre-la-main')
+
+      expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: 'main-reprise' })
+      expect(vue.evenements).toEqual([])
+    })
+
+    it('la question abandonnée n’écourte pas la suivante : elle a ses 120 s', async () => {
+      vi.useFakeTimers()
+      nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
+      preparer()
+      const abandonne = nav.agir('conv-a', CLIC)
+      await vi.advanceTimersByTimeAsync(60_000)
+      nav.piloter('conv-a', 'reprendre-la-main')
+      await abandonne
+      nav.piloter('conv-a', 'rendre-la-main')
+
+      const suivant = nav.agir('conv-a', CLIC)
+      await vi.advanceTimersByTimeAsync(DELAI_ACCORD_MS - 1)
+      expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await suivant).toMatchObject({ ok: false, refus: 'accord-refuse' })
     })
   })
 
