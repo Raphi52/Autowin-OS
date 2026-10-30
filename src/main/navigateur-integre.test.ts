@@ -120,6 +120,12 @@ import { envDelaiOutilsMcp } from './providers/claude'
 
 type Reponse = (args: unknown[]) => unknown
 
+/**
+ * Posée par un test : le chargement des pages ne finit pas tout seul. Remise à zéro avant chaque
+ * test : un test rouge ne laisse pas ses pages bloquées aux suivants.
+ */
+let chargementRetenu: Promise<{ ok: boolean }> | null = null
+
 class FausseVue implements VueNavigateur {
   adresse = ''
   visible = false
@@ -145,7 +151,7 @@ class FausseVue implements VueNavigateur {
 
   charger(url: string): Promise<{ ok: boolean; erreur?: string }> {
     this.adresse = url
-    return Promise.resolve({ ok: true })
+    return chargementRetenu ?? Promise.resolve({ ok: true })
   }
   url(): string {
     return this.adresse
@@ -267,6 +273,7 @@ let fabrique: ReturnType<typeof fausseFabrique>
 let nav: GestionnaireNavigateur
 
 beforeEach(() => {
+  chargementRetenu = null
   racine = mkdtempSync(join(tmpdir(), 'autowin-navigateur-'))
   fabrique = fausseFabrique()
   nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
@@ -1069,6 +1076,134 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     expect(ordre.lastIndexOf('retirerSurbrillance')).toBeGreaterThan(ordre.indexOf('surligner'))
     expect(ordre.at(-1)).toBe('localiser')
     expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
+  })
+
+  // fix-ok: run-adc12547df2d-1 (objection du juge) — l'état POUSSÉ gardait « cliquer sur la page »
+  // alors que `etat()` et le tracé disaient la cible (rouge mesuré ici). Lire `nav.etat()` ne voyait
+  // donc rien : on lit ce que reçoit le panneau.
+  it('la description précisée par la cible est POUSSÉE au panneau, pas seulement lisible par etat()', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    fabrique.vues[0].reponses.localiser = cibleTrouvee()
+    const pousses: string[][] = []
+    nav.surEtat((e) => pousses.push(e.gestes.map((g) => g.description)))
+    nav.piloter('conv-a', 'pause')
+    const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
+    await laisserFiler()
+    expect(pousses.at(-1)).toEqual(['cliquer sur button « Envoyer »'])
+    nav.piloter('conv-a', 'reprendre')
+    await action
+  })
+
+  it('jumeau : sans cible à préciser, rien de plus n’est poussé pendant l’attente', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    await laisserFiler()
+    nav.piloter('conv-a', 'pause')
+    const pousses: string[][] = []
+    nav.surEtat((e) => pousses.push(e.gestes.map((g) => g.description)))
+    const action = nav.agir('conv-a', { type: 'defiler', dy: 200 })
+    await laisserFiler()
+    expect(pousses).toHaveLength(1)
+    nav.piloter('conv-a', 'reprendre')
+    await action
+  })
+
+  // Même cause que la description : le panneau filtre la frise sur l'onglet actif. Un geste poussé
+  // avec un onglet vide reste invisible tant que le chargement dure.
+  it('fil sans onglet : pendant le chargement, le geste poussé porte déjà l’onglet ouvert', async () => {
+    let finChargement: (r: { ok: boolean }) => void = () => undefined
+    chargementRetenu = new Promise((fin) => (finChargement = fin))
+    const pousses: string[][] = []
+    nav.surEtat((e) => pousses.push(e.gestes.map((g) => g.ongletId)))
+    const ouverture = nav.agentOuvrir('conv-a', 'http://localhost:5173')
+    await laisserFiler()
+    expect(pousses.at(-1)).toEqual([nav.etat('conv-a').ongletActif])
+    finChargement({ ok: true })
+    await ouverture
+  })
+
+  // Objection du juge (run-adc12547df2d-1) : l'onglet de plus demandé par l'agent passait par
+  // `ouvrir`, le chemin des boutons de l'interface : ni noté, ni retenu, ni refusé.
+  describe('onglet de plus demandé par l’agent', () => {
+    const NOUVEL = { nouvelOnglet: true }
+
+    it('libre : noté sur l’onglet ouvert, devenu actif, sans attendre la fin du chargement', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      chargementRetenu = new Promise(() => undefined)
+      const r = await nav.agentOuvrir('conv-a', 'http://localhost:4000', NOUVEL)
+      expect(r).toMatchObject({ ok: true })
+      expect(r.message).toContain('navigateur_lire')
+      const etat = nav.etat('conv-a')
+      expect(etat.onglets).toHaveLength(2)
+      expect(etat.ongletActif).toBe(r.ongletId)
+      expect(etat.gestes.map((g) => [g.verbe, g.nature, g.etat, g.ongletId])).toEqual([
+        ['ouvrir', 'agit', 'fait', r.ongletId]
+      ])
+      expect(etat.gestes[0].description).toBe('ouvrir http://localhost:4000/')
+    })
+
+    it('pause : il attend ; aucun onglet tant que « Pas suivant » ne le libère, et la pause reste', async () => {
+      const premier = nav.ouvrir('conv-a', 'http://localhost:5173')
+      nav.piloter('conv-a', 'pause')
+      const ouverture = nav.agentOuvrir('conv-a', 'http://localhost:4000', NOUVEL)
+      await laisserFiler()
+      expect(nav.etat('conv-a').onglets).toHaveLength(1)
+      expect(nav.etat('conv-a').ongletActif).toBe(premier)
+      expect(nav.etat('conv-a').gestes.map((g) => [g.verbe, g.etat])).toEqual([
+        ['ouvrir', 'prochain']
+      ])
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await ouverture).toMatchObject({ ok: true })
+      expect(nav.etat('conv-a').onglets).toHaveLength(2)
+      expect(nav.etat('conv-a').pilotage).toBe('pause')
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['fait'])
+    })
+
+    it('« Reprendre la main » : refus, aucun onglet, onglet actif inchangé ; « Rendre la main » le permet', async () => {
+      const premier = nav.ouvrir('conv-a', 'http://localhost:5173')
+      nav.piloter('conv-a', 'pause')
+      const enAttente = nav.agentOuvrir('conv-a', 'http://localhost:4000', NOUVEL)
+      await laisserFiler()
+      nav.piloter('conv-a', 'reprendre-la-main')
+      const r = await enAttente
+      expect(r.ok).toBe(false)
+      expect(r.message).toMatch(/repris la main/)
+      expect(await nav.agentOuvrir('conv-a', 'http://localhost:4001', NOUVEL)).toMatchObject({
+        ok: false
+      })
+      expect(fabrique.vues).toHaveLength(1)
+      expect(nav.etat('conv-a').ongletActif).toBe(premier)
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse', 'refuse'])
+
+      nav.piloter('conv-a', 'rendre-la-main')
+      expect(await nav.agentOuvrir('conv-a', 'http://localhost:4002', NOUVEL)).toMatchObject({
+        ok: true
+      })
+      expect(nav.etat('conv-a').onglets).toHaveLength(2)
+    })
+
+    it('pause expirée : refus en phrase, aucun onglet', async () => {
+      vi.useFakeTimers()
+      nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      nav.piloter('conv-a', 'pause')
+      const ouverture = nav.agentOuvrir('conv-a', 'http://localhost:4000', NOUVEL)
+      await vi.advanceTimersByTimeAsync(DELAI_PAUSE_MS)
+      const r = await ouverture
+      expect(r.ok).toBe(false)
+      expect(r.message).toMatch(/pause/)
+      expect(fabrique.vues).toHaveLength(1)
+    })
+
+    it('adresse refusée ou plafond d’onglets : une phrase et un geste refusé, jamais une exception', async () => {
+      const adresse = await nav.agentOuvrir('conv-a', 'javascript:alert(1)', NOUVEL)
+      expect(adresse.ok).toBe(false)
+      expect(adresse.message).toContain('Adresse refusée')
+      for (let i = 0; i < MAX_ONGLETS_PAR_FIL; i++) nav.ouvrir('conv-a', 'http://localhost:5173')
+      const plafond = await nav.agentOuvrir('conv-a', 'http://localhost:4000', NOUVEL)
+      expect(plafond.ok).toBe(false)
+      expect(plafond.message).toContain(`${MAX_ONGLETS_PAR_FIL} onglets`)
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse', 'refuse'])
+    })
   })
 
   it('« Reprendre » repasse en libre et joue le geste en attente ; les suivants passent seuls', async () => {

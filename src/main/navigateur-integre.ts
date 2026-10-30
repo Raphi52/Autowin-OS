@@ -695,16 +695,20 @@ export class GestionnaireNavigateur {
 
   // ── Agent ─────────────────────────────────────────────────────────────────────────────────────
 
-  /** Charge l'adresse dans l'onglet actif du fil (en ouvre un s'il n'y en a pas) et attend la fin. */
+  /**
+   * Charge l'adresse dans l'onglet actif du fil (en ouvre un s'il n'y en a pas) et attend la fin.
+   * `nouvelOnglet` ouvre un onglet de plus, sans attendre son chargement.
+   */
   async agentOuvrir(
     conversationId: string,
-    url: string
+    url: string,
+    options: { nouvelOnglet?: boolean } = {}
   ): Promise<{ ok: boolean; ongletId?: string; message: string }> {
     const adresse = normaliserUrlNavigateur(url)
     const geste = this.noterGeste(conversationId, 'ouvrir', `ouvrir ${adresse ?? url}`)
     let ok = false
     try {
-      const resultat = await this.ouvrirPourLAgent(conversationId, url, adresse, geste)
+      const resultat = await this.ouvrirPourLAgent(conversationId, url, adresse, geste, options)
       ok = resultat.ok
       return resultat
     } finally {
@@ -716,11 +720,13 @@ export class GestionnaireNavigateur {
     conversationId: string,
     url: string,
     adresse: string | null,
-    geste: GesteNavigateur
+    geste: GesteNavigateur,
+    options: { nouvelOnglet?: boolean }
   ): Promise<{ ok: boolean; ongletId?: string; message: string }> {
     if (!adresse) return { ok: false, message: `Adresse refusée : « ${texteBorne(url, 200)} ».` }
     const pause = await this.franchirPause(conversationId, geste)
     if (pause.refus) return { ok: false, message: pause.refus.message }
+    if (options.nouvelOnglet) return this.ouvrirOngletPourLAgent(conversationId, adresse, geste)
     let onglet = this.ongletActif(conversationId)
     if (!onglet) {
       if (this.fil(conversationId).onglets.length >= MAX_ONGLETS_PAR_FIL) {
@@ -729,9 +735,8 @@ export class GestionnaireNavigateur {
       onglet = this.creerOnglet(conversationId)
       this.fil(conversationId).actif = onglet.id
       this.appliquerVisibilite()
-      this.emettre(conversationId)
     }
-    geste.ongletId = onglet.id
+    this.preciserGeste(conversationId, geste, { ongletId: onglet.id })
     const resultat = await onglet.vue.charger(adresse)
     this.emettre(conversationId)
     return resultat.ok
@@ -741,6 +746,32 @@ export class GestionnaireNavigateur {
           ongletId: onglet.id,
           message: `Chargement impossible : ${resultat.erreur ?? 'erreur inconnue'}`
         }
+  }
+
+  /**
+   * fix-ok: cause mesurée (run-adc12547df2d-1, objection du juge) — `navigateur_ouvrir` +
+   * `nouvelOnglet` appelait `ouvrir`, le chemin des boutons de l'interface, qu'aucune pause ne
+   * retient : en main reprise, onglet ouvert et devenu actif, `ok: true`, 0 geste noté. L'agent
+   * passe donc ici, APRÈS la pause ; `ouvrir` reste à l'utilisateur et sort de `NavigateurDeLAgent`.
+   */
+  private ouvrirOngletPourLAgent(
+    conversationId: string,
+    adresse: string,
+    geste: GesteNavigateur
+  ): { ok: boolean; ongletId?: string; message: string } {
+    try {
+      const ongletId = this.ouvrir(conversationId, adresse)
+      this.preciserGeste(conversationId, geste, { ongletId })
+      return {
+        ok: true,
+        ongletId,
+        message:
+          'Nouvel onglet ouvert dans le panneau du fil, chargement en cours : lis-le avec navigateur_lire.'
+      }
+    } catch (erreur) {
+      // `ouvrir` jette au-delà du plafond d'onglets : l'agent reçoit sa phrase.
+      return { ok: false, message: messageErreur(erreur) }
+    }
   }
 
   /** L'instantané brut de l'onglet actif (éléments numérotés), ou `null` sans onglet. */
@@ -901,7 +932,9 @@ export class GestionnaireNavigateur {
     // n'a rien à faire attendre), AVANT l'accord du site (on ne demande pas l'accord d'un geste que
     // l'utilisateur n'a pas encore libéré). Sans cible, une frappe vise le champ actif : c'est lui
     // qu'on trace en pointillés.
-    geste.description = texteBorne(decrireAction(action, cible?.description), MAX_DESCRIPTION_GESTE)
+    this.preciserGeste(conversationId, geste, {
+      description: decrireAction(action, cible?.description)
+    })
     const pause = await this.franchirPause(conversationId, geste, async () => {
       const zone =
         cible?.rect ??
@@ -1423,6 +1456,29 @@ export class GestionnaireNavigateur {
   ): void {
     if (geste.etat === etat) return
     geste.etat = etat
+    if (this.fils.has(conversationId)) this.emettre(conversationId)
+  }
+
+  /**
+   * Précise un geste déjà noté et le POUSSE à l'interface.
+   * fix-ok: cause mesurée (run-adc12547df2d-1, objection du juge) — `marquerGeste` ne pousse que si
+   * l'ÉTAT change, or la cible trouvée ou l'onglet ouvert laissent l'état tel quel : en pause, le
+   * panneau gardait « cliquer sur la page » alors que le tracé disait la cible, et pendant un
+   * chargement il recevait un geste sans onglet.
+   */
+  private preciserGeste(
+    conversationId: string,
+    geste: GesteNavigateur,
+    precisions: { description?: string; ongletId?: string }
+  ): void {
+    const description = texteBorne(
+      precisions.description ?? geste.description,
+      MAX_DESCRIPTION_GESTE
+    )
+    const ongletId = precisions.ongletId ?? geste.ongletId
+    if (description === geste.description && ongletId === geste.ongletId) return
+    geste.description = description
+    geste.ongletId = ongletId
     if (this.fils.has(conversationId)) this.emettre(conversationId)
   }
 

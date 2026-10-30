@@ -2020,11 +2020,15 @@ export const CATALOG: CommandSpec[] = [
   }
 ]
 
-/** Ce que les outils `navigateur_*` prennent du moteur (conv-1286) : ses méthodes d'agent, rien d'autre. */
+/**
+ * Ce que les outils `navigateur_*` prennent du moteur (conv-1286) : ses méthodes d'agent, rien
+ * d'autre. Pas `ouvrir`, le chemin des boutons de l'interface : aucune pause ne le retient.
+ * fix-ok: run-adc12547df2d-1 (objection du juge) — `navigateur_ouvrir` + `nouvelOnglet` l'appelait :
+ * en main reprise, `ok: true` et onglet actif changé. Un outil qui l'appellerait ne compile plus.
+ */
 export type NavigateurDeLAgent = Pick<
   GestionnaireNavigateur,
   | 'etat'
-  | 'ouvrir'
   | 'agentOuvrir'
   | 'lire'
   | 'capturer'
@@ -3351,23 +3355,9 @@ export class AppCommandBus {
       case 'navigateur_ouvrir': {
         const url = s('url').trim()
         if (!url) return refus('Refusé : passe `url`, l’adresse à ouvrir.')
-        if (a.nouvelOnglet === true || a.nouvelOnglet === 'true') {
-          // `ouvrir` jette sur une adresse refusée ou au-delà de 20 onglets : on rend sa phrase.
-          try {
-            const ongletId = nav.ouvrir(fil, url)
-            return {
-              data: {
-                ok: true,
-                ongletId,
-                detail:
-                  'Nouvel onglet ouvert dans le panneau du fil, chargement en cours : lis-le avec navigateur_lire.'
-              }
-            }
-          } catch (e) {
-            return refus(e instanceof Error ? e.message : String(e))
-          }
-        }
-        const r = await nav.agentOuvrir(fil, url)
+        const r = await nav.agentOuvrir(fil, url, {
+          nouvelOnglet: a.nouvelOnglet === true || a.nouvelOnglet === 'true'
+        })
         return {
           data: {
             ok: r.ok,

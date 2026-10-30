@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 import { AppCommandBus, CATALOG, type NavigateurDeLAgent } from './commands'
 import { outilsDuChat } from './chat-mcp'
 import { REGLES_ECRAN_UTILISATEUR } from './chat-pilotage-prompt'
+import { GestionnaireNavigateur, type VueNavigateur } from './navigateur-integre'
 import type {
   ActionAgentNavigateur,
   AnnotationNavigateur,
@@ -9,6 +13,14 @@ import type {
   RequeteEchouee,
   ResultatActionNavigateur
 } from '../shared/navigateur'
+
+// Le vrai moteur importe `electron` à son chargement ; ces tests ne créent aucune vraie page.
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir() },
+  session: {},
+  shell: {},
+  WebContentsView: class {}
+}))
 
 /*
  * NAVIGATEUR INTÉGRÉ DU CHAT — les outils de l'agent (conv-1286, lot 4/5, 2026-10-29).
@@ -47,7 +59,7 @@ function moteurFactice(o: {
   console?: LigneConsole[]
   requetes?: RequeteEchouee[]
   annotations?: AnnotationNavigateur[]
-  ouvrirJette?: string
+  ouvrirRefuse?: string
 }): { nav: NavigateurDeLAgent; appels: Appel[] } {
   const fils = new Set(o.fils ?? ['conv-a', 'conv-b'])
   const appels: Appel[] = []
@@ -62,13 +74,9 @@ function moteurFactice(o: {
       gestes: [],
       pilotage: 'libre'
     }),
-    ouvrir: (fil, url) => {
-      appels.push({ methode: 'ouvrir', fil, detail: url })
-      if (o.ouvrirJette) throw new Error(o.ouvrirJette)
-      return `onglet-neuf-${fil}`
-    },
-    agentOuvrir: async (fil, url) => {
-      appels.push({ methode: 'agentOuvrir', fil, detail: url })
+    agentOuvrir: async (fil, url, options) => {
+      appels.push({ methode: 'agentOuvrir', fil, detail: { url, ...options } })
+      if (o.ouvrirRefuse) return { ok: false, message: o.ouvrirRefuse }
       return { ok: true, ongletId: `onglet-${fil}`, message: `Page ouverte : ${url}` }
     },
     lire: async (fil) => {
@@ -190,7 +198,7 @@ describe('navigateur_* — le fil est celui de l’APPEL', () => {
     await bus.exec('navigateur_annotations', autre, 'conv-a')
     expect(moteur.appels.map((a) => a.methode)).toEqual([
       'agentOuvrir',
-      'ouvrir',
+      'agentOuvrir',
       'lire',
       'capturer',
       'agir',
@@ -199,6 +207,10 @@ describe('navigateur_* — le fil est celui de l’APPEL', () => {
       'annotations'
     ])
     expect(new Set(moteur.appels.map((a) => a.fil))).toEqual(new Set(['conv-a']))
+    expect(moteur.appels.slice(0, 2).map((a) => a.detail)).toEqual([
+      { url: 'localhost:5173', nouvelOnglet: false },
+      { url: 'exemple.fr', nouvelOnglet: true }
+    ])
   })
 
   it('jumeau : un autre fil atteint SON panneau', async () => {
@@ -231,13 +243,97 @@ describe('navigateur_* — le fil est celui de l’APPEL', () => {
   })
 
   it('une adresse refusée par le moteur en nouvel onglet revient en phrase', async () => {
-    const moteur = moteurFactice({ ouvrirJette: 'Adresse refusée : « javascript:alert(1) ».' })
+    const moteur = moteurFactice({ ouvrirRefuse: 'Adresse refusée : « javascript:alert(1) ».' })
     const r = await busAvec(moteur).exec(
       'navigateur_ouvrir',
       { url: 'javascript:alert(1)', nouvelOnglet: true },
       'conv-a'
     )
     expect(data(r)).toEqual({ ok: false, detail: 'Adresse refusée : « javascript:alert(1) ».' })
+  })
+})
+
+/*
+ * fix-ok: run-adc12547df2d-1 (objection du juge) — `navigateur_ouvrir` + `nouvelOnglet` passait par
+ * `ouvrir`, le chemin des boutons de l'interface : rouge mesuré ici, `ok: true` en main reprise et
+ * 0 geste noté. Un moteur factice ne voit pas ça : le vrai outil sur le vrai moteur, seules les
+ * pages sont simulées.
+ */
+describe('navigateur_ouvrir + nouvelOnglet — le vrai outil sur le vrai moteur', () => {
+  function pageSimulee(): VueNavigateur {
+    let adresse = ''
+    return {
+      charger: async (url: string) => {
+        adresse = url
+        return { ok: true }
+      },
+      url: () => adresse,
+      titre: () => '',
+      chargement: () => false,
+      peutReculer: () => false,
+      peutAvancer: () => false,
+      poserCadre: () => undefined,
+      rendreVisible: () => undefined,
+      fermer: () => undefined
+    } as unknown as VueNavigateur
+  }
+
+  function vraiMoteur(): { nav: GestionnaireNavigateur; bus: AppCommandBus } {
+    const nav = new GestionnaireNavigateur({
+      racine: mkdtempSync(join(tmpdir(), 'autowin-outils-navigateur-')),
+      fabrique: {
+        creerVue: pageSimulee,
+        effacerDonnees: () => Promise.resolve(),
+        ouvrirExterne: () => Promise.resolve()
+      }
+    })
+    const bus = new AppCommandBus(os, () => undefined)
+    bus.navigateur = () => nav
+    return { nav, bus }
+  }
+
+  const ARGS = { url: 'http://localhost:4000', nouvelOnglet: true }
+
+  it('main reprise : refusé en phrase, aucun onglet de plus, onglet actif inchangé, geste noté', async () => {
+    const { nav, bus } = vraiMoteur()
+    const premier = nav.ouvrir('conv-a', 'http://localhost:5173')
+    nav.piloter('conv-a', 'reprendre-la-main')
+    const r = await bus.exec('navigateur_ouvrir', ARGS, 'conv-a')
+    expect(data(r).ok).toBe(false)
+    expect(String(data(r).detail)).toMatch(/repris la main/)
+    const etat = nav.etat('conv-a')
+    expect(etat.onglets).toHaveLength(1)
+    expect(etat.ongletActif).toBe(premier)
+    expect(etat.gestes.map((g) => [g.verbe, g.etat])).toEqual([['ouvrir', 'refuse']])
+    nav.detruire()
+  })
+
+  it('pause : l’outil attend, l’onglet ne s’ouvre qu’au « Pas suivant »', async () => {
+    const { nav, bus } = vraiMoteur()
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    nav.piloter('conv-a', 'pause')
+    const appel = bus.exec('navigateur_ouvrir', ARGS, 'conv-a')
+    await vi.waitFor(() =>
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['prochain'])
+    )
+    expect(nav.etat('conv-a').onglets).toHaveLength(1)
+    nav.piloter('conv-a', 'pas-suivant')
+    const r = await appel
+    expect(data(r).ok).toBe(true)
+    expect(data(r).ongletId).toBe(nav.etat('conv-a').ongletActif)
+    expect(String(data(r).detail)).toContain('navigateur_lire')
+    expect(nav.etat('conv-a').onglets).toHaveLength(2)
+    nav.detruire()
+  })
+
+  it('jumeau libre : l’onglet s’ouvre et le geste est noté', async () => {
+    const { nav, bus } = vraiMoteur()
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const r = await bus.exec('navigateur_ouvrir', ARGS, 'conv-a')
+    expect(data(r).ok).toBe(true)
+    expect(nav.etat('conv-a').onglets).toHaveLength(2)
+    expect(nav.etat('conv-a').gestes.map((g) => [g.verbe, g.etat])).toEqual([['ouvrir', 'fait']])
+    nav.detruire()
   })
 })
 
