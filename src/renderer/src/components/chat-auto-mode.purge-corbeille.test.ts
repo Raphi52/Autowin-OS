@@ -372,7 +372,13 @@ const SANS_LE_GESTE_EN_TETE = [
   'Utilise --cette-fois',
   'Passe gc-purge-auto.json à true',
   'Remets enabled à true dans gc-purge-auto.json',
-  'Ajoute enabled à gc-purge-auto.json'
+  'Ajoute enabled à gc-purge-auto.json',
+  // Une corbeille datée n'a qu'un seul geste possible, quel que soit le verbe.
+  'Jette la corbeille du 16/10',
+  'Nettoie la corbeille du 16/10',
+  'Retire la corbeille du 16/10',
+  'Déplace gc-corbeille/2026-10-16 hors du dépôt',
+  'Clear the trash'
 ]
 
 describe('mode auto — le geste de purge s’arrête où qu’il soit dans la phrase', () => {
@@ -393,7 +399,9 @@ describe('mode auto — le geste de purge s’arrête où qu’il soit dans la p
     'Je confirme',
     'Non, garde',
     'Regarde si tu peux purger les deux',
-    'Relis le bilan, puis rm -rf le dossier'
+    'Relis le bilan, puis rm -rf le dossier',
+    'Relis le bilan, puis retire les deux',
+    'Cherche pourquoi la corbeille a grossi, puis jette les deux'
   ])('dans une passe /gc : %s', (suite) => {
     expect(decider(passeGc(suite))).toMatchObject(arret)
   })
@@ -404,6 +412,8 @@ describe('mode auto — le geste de purge s’arrête où qu’il soit dans la p
     'Cherche pourquoi la corbeille du 16/10 n’a pas été purgée',
     'Corrige la purge de la corbeille',
     'Documente la purge de la corbeille et ajoute un test',
+    'Retire le bouton Corbeille du panneau',
+    'Relis le bilan de la corbeille du 16/10',
     'Ajoute un test à la purge de la corbeille, puis documente-la',
     'Implémente la purge de la corbeille, puis ajoute un test de la purge',
     'Supprime gc-purge-auto.json',

@@ -777,17 +777,22 @@ function uneClauseFait(geste: RegExp, nu: string): boolean {
   return nu.split(CLAUSES).some((clause) => geste.test(clause) && !SUITE_DE_TRAVAIL.test(clause))
 }
 // La forme en -ée dit un constat, pas un geste : « la copie n'a pas été effacée » (passe du 24/10).
-const VIDER = /purg(?!ees?\b)\w*|vid(?:e|er|ez)\b|empty\b/.source
+const VIDER = /purg(?!ees?\b)\w*|vid(?:e|er|ez)\b|empty\b|jett\w*|nettoi\w*|nettoy\w*|clear\b/
+  .source
 const SUPPRIMER = /(?:supprim|effac)(?!ees?\b)\w*|delete\b|rm\s+-/.source
 const GESTE_DE_VIDAGE = new RegExp(`\\b(?:${VIDER})`, 'u')
 const GESTE_DE_SUPPRESSION = new RegExp(`\\b(?:${SUPPRIMER})`, 'u')
 // Les réponses de la question du `/gc` (skills/gc/SKILL.md) : aucune ne nomme la corbeille.
 const REPONSE_DE_PURGE = /\bpurge\s+cette\s+fois\b|\bvide\s+seul\b|\bactiv\w*\s+(?:la\s+)?purge\b/u
 const NOMME_UNE_CORBEILLE = /\b(?:corbeilles?|trash)\b/u
+// Une corbeille datée n'a qu'un geste possible : la nommer sans annoncer un travail, c'est y toucher.
+const NOMME_UNE_CORBEILLE_DATEE =
+  /\b(?:corbeilles?|trash)\s+(?:du\s+|of\s+|from\s+)?\d|gc-corbeille\/\d/u
 function suiteVideUneCorbeille(nu: string): boolean {
   return (
     (NOMME_UNE_CORBEILLE.test(nu) && uneClauseFait(GESTE_DE_VIDAGE, nu)) ||
     (nu.includes('gc-corbeille') && uneClauseFait(GESTE_DE_SUPPRESSION, nu)) ||
+    uneClauseFait(NOMME_UNE_CORBEILLE_DATEE, nu) ||
     uneClauseFait(REPONSE_DE_PURGE, nu)
   )
 }
@@ -829,7 +834,11 @@ export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
  * fois », « Il faut purger les deux », « Proceed », « Non, garde ») répond à la place de l'utilisateur.
  */
 const RUBRIQUE_A_PURGER = /^#{1,6}\s*a\s+purger\b/mu
-const GESTE_DANS_UNE_PASSE = new RegExp(`\\b(?:${VIDER}|${SUPPRIMER}|cette[\\s-]+fois\\b)`, 'u')
+// « retire-la » reste permis : c'est la suite réelle du 24/10, qui visait une copie temporaire.
+const GESTE_DANS_UNE_PASSE = new RegExp(
+  `\\b(?:${VIDER}|${SUPPRIMER}|cette[\\s-]+fois\\b|retir\\w*\\s+(?:les|tout)\\b)`,
+  'u'
+)
 function suiteRepondALaPasseGc(suite: string, texteReponse: string): boolean {
   if (!RUBRIQUE_A_PURGER.test(normaliserPisteCible(texteReponse))) return false
   const nu = normaliserPisteCible(suite)
