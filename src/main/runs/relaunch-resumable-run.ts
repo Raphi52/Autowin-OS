@@ -18,7 +18,65 @@ import type { AutowinOS } from '../os'
 import type { TraceStore } from '../activity/trace-store'
 import type { ExecutionEvidence } from '../providers/types'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
+import type { IssueDuTour } from '../../shared/plan-de-lots'
 import type { OrchestrationRunState } from './orchestration-state'
+
+/**
+ * LE PLAN DE LOTS SUIT LE RUN REPRIS (conv-1308, 2026-10-30). Un lot lancé en `/build` tourne dans un
+ * run. Au redémarrage, ce run repart par ce module, pas par `reprendreAppelChat` (index.ts) : rien ne
+ * prévenait le plan, son lot restait « interrompu » et sa fin n'enchaînait aucun lot.
+ */
+export type SuiviDuPlan = {
+  /** Un run repart dans ce fil : son lot redevient en cours. */
+  agentRepris: (conversationId: string, tour?: string) => void
+  /** Le run est fini : même observateur qu'une fin de tour de chat. */
+  finDuRun: (conversationId: string, issue: IssueDuTour) => void
+}
+
+/** Le résultat d'un run, lu comme la fin d'un tour : mêmes règles que la clôture du fil. */
+export function issueDuRunRepris(resultat: {
+  result?: string
+  valid?: boolean
+  gateBlocked?: boolean
+  gateReasons?: unknown
+}): IssueDuTour {
+  const texte = resultat.result?.trim()
+  const avecTexte = texte ? { texte } : {}
+  if (!resultat.gateBlocked && resultat.valid !== false) return { ok: true, ...avecTexte }
+  const raisons = Array.isArray(resultat.gateReasons)
+    ? resultat.gateReasons.filter((raison): raison is string => typeof raison === 'string')
+    : []
+  return {
+    ok: false,
+    erreur: raisons.join(' ; ') || texte || 'Livraison refusée par le contrôle final.',
+    ...avecTexte
+  }
+}
+
+/** Un run clos sans résultat. Un lot adopté passe en échec, un lot interrompu attend « Reprendre ». */
+export function issueDuRunPerdu(erreur: string): IssueDuTour {
+  return { ok: false, perdu: true, erreur }
+}
+
+/**
+ * Annonce la fin d'un run repris. Quand une reprise d'APPEL CHAT possède encore ce tour, c'est elle
+ * qui annonce : une orchestration lancée du chat partage son `turnId`, et le chat peut répondre
+ * après le run. `tour` sert au plan à écarter le run d'un autre tour du même fil.
+ */
+export function annoncerFinDuRun(
+  deps: Pick<DependancesDeRelance, 'plansDeLots' | 'appelChatReprisPourTour'>,
+  run: { conversationId?: string; turnId?: string },
+  issue: IssueDuTour
+): void {
+  const { conversationId, turnId } = run
+  if (!deps.plansDeLots || !conversationId) return
+  if (turnId && deps.appelChatReprisPourTour(conversationId, turnId)) return
+  deps.plansDeLots.finDuRun(conversationId, {
+    ...issue,
+    repris: true,
+    ...(turnId ? { tour: turnId } : {})
+  })
+}
 
 /**
  * Le contrat de la relance. Chaque membre est un EFFET que la reprise produit sur le monde : le
@@ -79,11 +137,23 @@ export type DependancesDeRelance = {
   appelChatReprisPourTour: (conversationId: string, turnId: string) => boolean
   /** Une reprise qui a tué l'app au démarrage précédent n'est pas rejouée (conv-1150). */
   gardePlantage?: import('./garde-reprise-plantage').GardeRepriseCrash
+  /** Absent : aucun plan de lots à prévenir. */
+  plansDeLots?: SuiviDuPlan
+}
+
+/** Le candidat de relance : son fil et son tour servent quand le point de reprise a disparu. */
+type CandidatDeRelance = Pick<OrchestrationRunState, 'runId'> &
+  Partial<Pick<OrchestrationRunState, 'conversationId' | 'turnId'>>
+
+/** Ce que le plan apprendra à la sortie de la relance, posé par chaque chemin. */
+type FinDeRelance = {
+  run: { conversationId?: string; turnId?: string }
+  issue: IssueDuTour
 }
 
 export function creerRelanceDeRunReprenable(
   deps: DependancesDeRelance
-): (candidate: Pick<OrchestrationRunState, 'runId'>) => Promise<void> {
+): (candidate: CandidatDeRelance) => Promise<void> {
   const {
     os,
     bus,
@@ -119,11 +189,13 @@ export function creerRelanceDeRunReprenable(
     fenetresVivantes,
     defaultProcessIdentity,
     appelChatReprisPourTour,
-    gardePlantage
+    gardePlantage,
+    plansDeLots
   } = deps
 
   const relaunchResumableRun = async (
-    candidate: Pick<OrchestrationRunState, 'runId'>
+    candidate: CandidatDeRelance,
+    fin: FinDeRelance
   ): Promise<void> => {
     const resumableRun = os.reconcileResumableOrchestrationForRelaunch(
       candidate.runId,
@@ -144,6 +216,7 @@ export function creerRelanceDeRunReprenable(
       }
     )
     if (!resumableRun) return
+    fin.run = resumableRun
     // Avant tout chargement : c'est la reprise elle-même qui a fait mourir l'app (OOM du 26/10).
     if (gardePlantage?.aPlanteAuparavant(resumableRun.runId)) {
       os.forgetResumableOrchestration(resumableRun.runId)
@@ -161,6 +234,9 @@ export function creerRelanceDeRunReprenable(
           text: `Run ${resumableRun.runId} abandonné : sa reprise au démarrage précédent a fait planter l'app.`
         })
       }
+      fin.issue = issueDuRunPerdu(
+        `run ${resumableRun.runId} abandonné : sa reprise au démarrage précédent a fait planter l’app.`
+      )
       return
     }
     gardePlantage?.poser(resumableRun.runId)
@@ -168,8 +244,13 @@ export function creerRelanceDeRunReprenable(
       await os.waitUntilReady()
     } catch (error) {
       console.warn('[resume-orchestration] topologie indisponible, checkpoint conserve :', error)
+      fin.issue = issueDuRunPerdu(`run ${resumableRun.runId} non repris : modèles indisponibles.`)
       return
     }
+    // La file de démarrage sérialise les reprises : celle-ci part peut-être longtemps après son tri,
+    // et « Reprendre tout » ou le réveil après quota passent par ici sans passer par le démarrage.
+    if (resumableRun.conversationId)
+      plansDeLots?.agentRepris(resumableRun.conversationId, resumableRun.turnId)
     const conversationId = resumableRun.conversationId ?? '__autonomous__'
     const recordedTurnRuntime = resumableRun.turnId
       ? os.conversations
@@ -417,6 +498,7 @@ export function creerRelanceDeRunReprenable(
           ...(learning ? { learning } : {})
         }
         durableResumeTurn.succeed(delivered)
+        fin.issue = issueDuRunRepris(delivered)
         const deliveryStatus = result.gateBlocked || !result.valid ? 'red' : 'green'
         if (resumedRunFile) {
           saveConvRunTrace(resumedRunFile.path, resumedSteps)
@@ -453,14 +535,15 @@ export function creerRelanceDeRunReprenable(
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
+        fin.issue = { ok: false, erreur: message }
         // Refus DÉFINITIFS : sans cette classification, le checkpoint restait en place et le
         // même run rejouait sa reprise (et son échec) à chaque boot (mesuré 13/08, deux boots).
         const refus = classifierRefusDeReprise(message)
         if (refus === 'publication-acquise') {
-          durableResumeTurn.succeed({
-            result:
-              'Publication Git déjà acquise pour ce run ; reprise automatique annulée sans nouvel appel provider.'
-          })
+          const dejaPublie =
+            'Publication Git déjà acquise pour ce run ; reprise automatique annulée sans nouvel appel provider.'
+          durableResumeTurn.succeed({ result: dejaPublie })
+          fin.issue = { ok: true, texte: dejaPublie }
           os.forgetResumableOrchestration(resumableRun.runId)
           broadcast({
             type: 'orchestrate-end',
@@ -538,5 +621,17 @@ export function creerRelanceDeRunReprenable(
       })
   }
 
-  return relaunchResumableRun
+  // UN SEUL point de sortie pour le plan : chaque chemin ci-dessus pose son issue, et une sortie
+  // imprévue compte comme un run perdu. Sans cela, un lot adopté resterait en cours à jamais.
+  return async (candidate) => {
+    const fin: FinDeRelance = {
+      run: candidate,
+      issue: issueDuRunPerdu('reprise du run arrêtée sans résultat.')
+    }
+    try {
+      await relaunchResumableRun(candidate, fin)
+    } finally {
+      annoncerFinDuRun(deps, fin.run, fin.issue)
+    }
+  }
 }

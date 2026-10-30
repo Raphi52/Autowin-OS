@@ -444,3 +444,391 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     expect(b.coord.plans()).toEqual([])
   })
 })
+
+/*
+ * conv-1284 (2026-10-29) — les gestes repris des threads de claude.exe, au niveau du coordinateur :
+ * un lot ne lance pas de plan (claude.exe refuse qu'une session lancée par une autre en démarre
+ * une), une décision notée par un lot atteint les lots suivants, le chef ajoute des lots à son plan
+ * lancé, et le modèle d'un lot part avec son tour.
+ */
+describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots (conv-1284)', () => {
+  const plan2 = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    titre: 'Chantier',
+    parallele: 1,
+    lots: [
+      { titre: 'Cœur', demande: '/build le cœur', fichiers: ['src/coeur.ts'] },
+      { titre: 'Écran', demande: '/build l’écran', fichiers: ['src/ecran.tsx'] }
+    ],
+    ...extra
+  })
+
+  it('le fil d’un lot ne dépose pas de plan tant que le sien vit ; le chef le peut après la fin', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2() })
+    const r = b.coord.deposer('conv-100', plan4)
+    expect(r).toMatchObject({
+      ok: false,
+      erreur: expect.stringMatching(
+        /lot 1 du plan plan-p1 \(chef conv-1\).*un lot ne lance pas de plan/
+      )
+    })
+    await expect(b.coord.outil('conv-100', { plan: plan4 })).rejects.toThrow(/un lot ne lance pas/)
+    // Jumeau : plan fini, le fil redevient libre de mener un chantier à lui.
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    expect(b.coord.plans()[0].statut).toBe('termine')
+    expect(b.coord.deposer('conv-100', plan4).ok).toBe(true)
+  })
+
+  it('une décision notée par un lot part dans le message du lot suivant et dans le réveil du chef', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2() })
+    const note = (await b.coord.outil('conv-100', {
+      action: 'noter',
+      decision: 'le module s’appelle carte-du-plan.ts'
+    })) as { detail: string }
+    expect(note.detail).toMatch(/décision notée \(lot 1\)/)
+    expect(b.coord.plans()[0].decisions).toEqual([
+      { texte: 'le module s’appelle carte-du-plan.ts', de: 'lot 1', le: expect.any(Number) }
+    ])
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    const suivant = b.lancements.find((l) => l.fil === 'conv-101')
+    expect(suivant?.prompt).toContain('- le module s’appelle carte-du-plan.ts (lot 1)')
+    const reveil = b.lancements.find((l) => l.fil === 'conv-1')
+    expect(reveil?.prompt).toContain(
+      'Décisions notées par les lots : « le module s’appelle carte-du-plan.ts » (lot 1).'
+    )
+    // Un fil hors de tout plan n'a rien où noter.
+    await expect(b.coord.outil('conv-9', { action: 'noter', decision: 'x' })).rejects.toThrow(
+      /aucun plan dans ce fil/
+    )
+  })
+
+  it('le chef ajoute des lots à son plan lancé ; un lot ne le peut pas', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2({ parallele: 2 }) })
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101'])
+    await expect(
+      b.coord.outil('conv-100', { action: 'ajouter', plan: { lots: [{ demande: 'x' }] } })
+    ).rejects.toThrow(/seul le fil chef/)
+    const r = (await b.coord.outil('conv-1', {
+      action: 'ajouter',
+      plan: JSON.stringify({
+        lots: [
+          { titre: 'Tests', demande: '/build les tests', fichiers: ['src/x.test.ts'], apres: [1] }
+        ]
+      })
+    })) as { detail: string }
+    expect(r.detail).toMatch(/1 lot ajouté \(rang 3\), plafond porté à 6 tours/)
+    const plan = b.coord.plans()[0]
+    expect(plan.lots[2]).toMatchObject({ rang: 3, etat: 'a-faire', apres: [1] })
+    // Il attend le lot 1 : il part dès sa fin, sans geste du chef.
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    expect(
+      b.lancements.some((l) => l.fil === 'conv-102' && l.prompt.startsWith('/build les tests'))
+    ).toBe(true)
+  })
+
+  it('le modèle d’un lot part avec son tour ; un lot sans modèle n’en impose aucun', async () => {
+    const appels: Array<{ fil: string; modele?: string; args: number }> = []
+    const b = banc({
+      lancer: async (...args) => {
+        appels.push({ fil: args[0], modele: args[2], args: args.length })
+        return { ok: true, turnId: `t-${args[0]}` }
+      }
+    })
+    const avecModele = plan2({ parallele: 2 })
+    ;(avecModele.lots as Array<Record<string, unknown>>)[1].modele = 'haiku'
+    await b.coord.outil('conv-1', { plan: avecModele })
+    expect(appels).toEqual([
+      { fil: 'conv-100', modele: undefined, args: 2 },
+      { fil: 'conv-101', modele: 'haiku', args: 3 }
+    ])
+  })
+
+  /*
+   * conv-1284 (2026-10-29, demande de l'utilisateur) : une décision notée part AUSSI par message aux
+   * lots déjà en cours — avant, seuls les lots partis ensuite la recevaient.
+   */
+  it('une décision notée part par message aux lots EN COURS : ni à son auteur, ni aux lots finis', async () => {
+    const b = banc()
+    const plan3 = plan2({ parallele: 3 })
+    ;(plan3.lots as unknown[]).push({
+      titre: 'Tests',
+      demande: '/build les tests',
+      fichiers: ['src/t.test.ts']
+    })
+    await b.coord.outil('conv-1', { plan: plan3 })
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101', 'conv-102'])
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    const avant = b.journal().length
+    // Le lot 2 note : seul le lot 3, encore en cours, est prévenu — pas le lot 1 (fini) ni le lot 2 lui-même.
+    const parLot = (await b.coord.outil('conv-101', {
+      action: 'noter',
+      decision: 'les états restent en français côté moteur'
+    })) as { detail: string }
+    const duLot = b.journal().slice(avant)
+    expect(duLot.map((m) => [(m.de as { fil: string }).fil, m.a])).toEqual([
+      ['conv-101', 'conv-102']
+    ])
+    expect(String(duLot[0].texte)).toMatch(
+      /^Décision notée dans le plan « Chantier » \(plan-p1\) par lot 2 : les états restent en français côté moteur\n/
+    )
+    expect(parLot.detail).toMatch(/envoyée aux lots en cours : conv-102/)
+    // Le chef note : les deux lots en cours sont prévenus, de la part du chef.
+    const parChef = (await b.coord.outil('conv-1', {
+      action: 'noter',
+      decision: 'en anglais, « lot » se dit « batch »'
+    })) as { detail: string }
+    const duChef = b.journal().slice(avant + 1)
+    expect(duChef.map((m) => [(m.de as { fil: string }).fil, m.a])).toEqual([
+      ['conv-1', 'conv-101'],
+      ['conv-1', 'conv-102']
+    ])
+    expect(parChef.detail).toMatch(/envoyée aux lots en cours : conv-101, conv-102/)
+    // La même décision notée deux fois ne repart pas.
+    await b.coord.outil('conv-1', {
+      action: 'noter',
+      decision: 'en anglais, « lot » se dit « batch »'
+    })
+    expect(b.journal().length).toBe(avant + 3)
+  })
+
+  it('aucun lot en cours : la décision est notée sans message, le détail le dit', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2() })
+    await b.coord.surFinDeTour('conv-100', { ok: true })
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    const avant = b.journal().length
+    const r = (await b.coord.outil('conv-1', { action: 'noter', decision: 'x vaut y' })) as {
+      detail: string
+    }
+    expect(b.journal().length).toBe(avant)
+    expect(r.detail).toMatch(/aucun lot en cours à prévenir/)
+  })
+
+  /*
+   * conv-1284 (2026-10-29, demande de l'utilisateur) : la réponse du chef à un lot bloqué part en
+   * ORDRE et relance elle-même le fil du lot ; le coordinateur le suit comme une relance.
+   */
+  const bloque = async (b: Banc): Promise<void> => {
+    await b.coord.outil('conv-1', { plan: plan2() })
+    await b.coord.surFinDeTour('conv-100', {
+      ok: true,
+      texte: 'Il me manque le nom du module.\n\n⛔ Bloqué : j’attends la réponse du chef'
+    })
+  }
+  const ordre =
+    'Ordre de conv-1 (message msg-1, écrit par l’agent de ce fil) :\n\nle module s’appelle carte.ts'
+
+  it('l’ordre du chef relance le lot bloqué dans SON fil : en cours, un tour compté, sa fin notée', async () => {
+    const b = banc()
+    await bloque(b)
+    const avantOrdre = b.coord.plans()[0]
+    expect(avantOrdre.lots[0]).toMatchObject({ etat: 'attend-chef', fil: 'conv-100' })
+    const lances: Array<{ fil: string; prompt: string }> = []
+    const r = await b.coord.lancerParOrdre('conv-1', 'conv-100', ordre, async (fil, prompt) => {
+      lances.push({ fil, prompt })
+      return { ok: true, turnId: 'tour-ordre' }
+    })
+    expect(r).toEqual({ ok: true, turnId: 'tour-ordre' })
+    expect(lances).toHaveLength(1)
+    expect(lances[0].fil).toBe('conv-100')
+    expect(lances[0].prompt.startsWith(ordre)).toBe(true)
+    expect(lances[0].prompt).toMatch(/Ce fil fait le lot 1 sur 2 du plan « Chantier »/)
+    expect(lances[0].prompt).toMatch(/inutile de lui écrire en plus/)
+    const pendant = b.coord.plans()[0]
+    expect(pendant.lots[0]).toMatchObject({ etat: 'en-cours', fil: 'conv-100', tour: 'tour-ordre' })
+    expect(pendant.toursLances).toBe(avantOrdre.toursLances + 1)
+    // Aucun second tour : l'app n'a pas relancé le lot elle-même.
+    expect(b.lancements.filter((l) => l.fil === 'conv-100')).toHaveLength(1)
+    const avant = b.journal().length
+    await b.coord.surFinDeTour('conv-100', {
+      ok: true,
+      tour: 'tour-ordre',
+      texte: 'Fait : carte.ts créé.'
+    })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('fait')
+    const cr = b.journal().slice(avant)
+    expect(cr.map((m) => [(m.de as { fil: string }).fil, m.a])).toEqual([['conv-100', 'conv-1']])
+    expect(String(cr[0].texte)).toMatch(/^Lot 1\/2 « Cœur » : fait dans conv-100/)
+  })
+
+  /*
+   * conv-1284 (2026-10-29, demande de l'utilisateur) : « attend le chef » est un état à part — le
+   * tableau, le compte rendu et le réveil du chef le disent, et le plan ne se clôt pas sans réponse.
+   */
+  it('un lot qui pose sa question au chef « attend le chef » : compte rendu, réveil, plan ouvert', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2({ parallele: 2 }) })
+    await b.coord.surFinDeTour('conv-100', {
+      ok: true,
+      texte: 'Quel nom pour le module ?\n\n⛔ Bloqué : j’attends la réponse du chef'
+    })
+    const plan = b.coord.plans()[0]
+    expect(plan.lots[0]).toMatchObject({ etat: 'attend-chef', fil: 'conv-100' })
+    const cr = b.journal().at(-1)
+    expect(String(cr?.texte)).toMatch(
+      /^Lot 1\/2 « Cœur » : attend le chef dans conv-100 \(question posée au chef/
+    )
+    const reveil = b.lancements.filter((l) => l.fil === 'conv-1').at(-1)
+    expect(reveil?.prompt).toMatch(/lot 1 « Cœur » : attend le chef/)
+    expect(reveil?.prompt).toMatch(/un lot qui attend ta réponse \(état « attend le chef »\)/)
+    // L'autre lot finit : le plan reste ouvert, il attend la réponse du chef.
+    await b.coord.surFinDeTour('conv-101', { ok: true })
+    expect(b.coord.plans()[0]).toMatchObject({
+      statut: 'en-cours',
+      raison: expect.stringMatching(/le lot 1 attend la réponse du chef/)
+    })
+    // Le relu du disque garde l'état (un état inconnu ferait sauter tout le plan).
+    expect(banc({ contenu: b.stockage.contenu }).coord.plans()[0].lots[0].etat).toBe('attend-chef')
+  })
+
+  it('l’ordre du chef relance le lot avec SON modèle (pas celui du fil par défaut)', async () => {
+    const b = banc()
+    const avecModele = plan2()
+    ;(avecModele.lots as Array<Record<string, unknown>>)[0].modele = 'sonnet'
+    await b.coord.outil('conv-1', { plan: avecModele })
+    await b.coord.surFinDeTour('conv-100', {
+      ok: true,
+      texte: '⛔ Bloqué : j’attends la réponse du chef'
+    })
+    const appels: Array<{ fil: string; modele?: string }> = []
+    await b.coord.lancerParOrdre('conv-1', 'conv-100', ordre, async (fil, _prompt, modele) => {
+      appels.push({ fil, modele })
+      return { ok: true }
+    })
+    expect(appels).toEqual([{ fil: 'conv-100', modele: 'sonnet' }])
+  })
+
+  it('jumeaux : ordre d’un autre fil, ou vers un lot qui n’est pas en échec — lancement inchangé, plan intact', async () => {
+    const b = banc()
+    await bloque(b)
+    const plan = b.coord.plans()[0]
+    const lances: string[] = []
+    const lancer = async (_fil: string, prompt: string): Promise<{ ok: boolean }> => {
+      lances.push(prompt)
+      return { ok: true }
+    }
+    await b.coord.lancerParOrdre('conv-9', 'conv-100', ordre, lancer)
+    await b.coord.lancerParOrdre('conv-1', 'conv-101', ordre, lancer)
+    expect(lances).toEqual([ordre, ordre])
+    expect(b.coord.plans()[0]).toEqual(plan)
+  })
+
+  it('plafond de tours épuisé : l’ordre ne relance pas le lot, la raison remonte', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', { plan: plan2({ plafondTours: 2 }) })
+    await b.coord.surFinDeTour('conv-100', {
+      ok: true,
+      texte: '⛔ Bloqué : j’attends la réponse du chef'
+    })
+    expect(b.coord.plans()[0].toursLances).toBe(2)
+    let appele = false
+    const r = await b.coord.lancerParOrdre('conv-1', 'conv-100', ordre, async () => {
+      appele = true
+      return { ok: true }
+    })
+    expect(appele).toBe(false)
+    expect(r).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/lot 1 .*plafond de 2 tours atteint/)
+    })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('attend-chef')
+  })
+
+  /*
+   * conv-1284 (2026-10-29, demande de l'utilisateur) : une relance compte un tour AVANT de lancer
+   * (la place est réservée). Si le tour ne démarre pas, ce tour n'a rien coûté : il est rendu au
+   * plafond, que la relance vienne du chef, de l'utilisateur ou d'un ordre.
+   */
+  const bancARefus = (): { b: Banc; refuser: (oui: boolean) => void } => {
+    let refus = false
+    const b = banc({
+      lancer: async (fil) =>
+        refus ? { ok: false, error: 'conversation introuvable' } : { ok: true, turnId: `t-${fil}` }
+    })
+    return { b, refuser: (oui) => (refus = oui) }
+  }
+  const enEchec = async (b: Banc): Promise<number> => {
+    await b.coord.outil('conv-1', { plan: plan2({ parallele: 2 }) })
+    await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('echec')
+    return b.coord.plans()[0].toursLances
+  }
+
+  it('relance du chef qui ne démarre pas : lot en échec, tour rendu au plafond', async () => {
+    const { b, refuser } = bancARefus()
+    const tours = await enEchec(b)
+    refuser(true)
+    await b.coord.outil('conv-1', { action: 'relancer', lot: 1 })
+    const plan = b.coord.plans()[0]
+    expect(plan.lots[0]).toMatchObject({ etat: 'echec' })
+    expect(plan.lots[0].raison).toMatch(/lancement refusé : conversation introuvable/)
+    expect(plan.toursLances).toBe(tours)
+    // Jumeau : la relance qui démarre garde son tour.
+    refuser(false)
+    await b.coord.outil('conv-1', { action: 'relancer', lot: 1 })
+    expect(b.coord.plans()[0].lots[0].etat).toBe('en-cours')
+    expect(b.coord.plans()[0].toursLances).toBe(tours + 1)
+  })
+
+  it('relance de l’utilisateur (bouton du tableau) qui ne démarre pas : tour rendu', async () => {
+    const { b, refuser } = bancARefus()
+    const tours = await enEchec(b)
+    refuser(true)
+    const r = await b.coord.relancer('conv-1', 1, b.coord.plans()[0].id)
+    expect(r.ok).toBe(true)
+    expect(b.coord.plans()[0].lots[0].etat).toBe('echec')
+    expect(b.coord.plans()[0].toursLances).toBe(tours)
+  })
+
+  it('ordre du chef dont le tour ne démarre pas : lot en échec, tour rendu', async () => {
+    const { b } = bancARefus()
+    const tours = await enEchec(b)
+    const r = await b.coord.lancerParOrdre(
+      'conv-1',
+      'conv-100',
+      'Ordre de conv-1 : vas-y',
+      async () => ({
+        ok: false,
+        error: 'session introuvable'
+      })
+    )
+    expect(r.ok).toBe(false)
+    const plan = b.coord.plans()[0]
+    expect(plan.lots[0].etat).toBe('echec')
+    expect(plan.lots[0].raison).toMatch(
+      /réveil par l’ordre du chef non lancé : session introuvable/
+    )
+    expect(plan.toursLances).toBe(tours)
+  })
+
+  it('le premier lancement d’un lot qui ne démarre pas ne compte pas non plus de tour', async () => {
+    const { b, refuser } = bancARefus()
+    refuser(true)
+    await b.coord.outil('conv-1', { plan: plan2() })
+    const plan = b.coord.plans()[0]
+    expect(plan.lots.map((l) => l.etat)).toEqual(['echec', 'echec'])
+    expect(plan.toursLances).toBe(0)
+  })
+
+  it('le contexte et les décisions survivent au disque ; une décision abîmée est sautée', async () => {
+    const b = banc()
+    await b.coord.outil('conv-1', {
+      plan: plan2({
+        contexte:
+          'Refondre le tableau des lots. Décidé : aucune couleur en dur, les textes passent par textes-ecrans.'
+      })
+    })
+    await b.coord.outil('conv-1', { action: 'noter', decision: 'on garde le nom TableauDesLots' })
+    const disque = JSON.parse(b.stockage.contenu) as { plans: Array<Record<string, unknown>> }
+    ;(disque.plans[0].decisions as unknown[]).push({ texte: 42 })
+    const relu = banc({ contenu: JSON.stringify(disque) })
+    const plan = relu.coord.plans()[0]
+    expect(plan.contexte).toMatch(/^Refondre le tableau des lots/)
+    expect(plan.decisions).toEqual([
+      { texte: 'on garde le nom TableauDesLots', de: 'chef', le: expect.any(Number) }
+    ])
+  })
+})

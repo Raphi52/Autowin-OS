@@ -69,7 +69,7 @@ export type BlocLu = { ok: true; langage: LangageDuBloc; bloc: string } | { ok: 
  * Une ligne qui fermerait la clôture avant la fin est refusée : la suite sortirait en texte brut.
  */
 export function blocDuContenu(contenu: string, langageDemande?: string): BlocLu {
-  const texte = contenu.replace(/^﻿/, '').replace(/\r\n?/g, '\n').trim()
+  const texte = contenu.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim()
   if (texte === '') return { ok: false, raison: 'le fichier est vide' }
   if (langageDemande !== undefined && !estUnLangageDuBloc(langageDemande))
     return {

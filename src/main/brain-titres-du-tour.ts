@@ -28,6 +28,20 @@ import { motsDe } from '../shared/mots'
  * rang ≤ 5 ou score ≥ 0,30), 1,8 ligne en moyenne (le moins de toute la grille), 0 bloc sur les 3
  * questions hors sujet. Changer ces bornes = rejouer `scripts/sonde-titres-brain.mts`.
  *
+ * BORNES CONFIRMÉES SUR L'USAGE RÉEL (conv-1303, 2026-10-30) : `scripts/banc-notes-proches-usage.mjs`
+ * rejoue d'autres tris sur 822 tours servis et compte les notes réellement ouvertes. Aucun ne fait
+ * mieux pour le même nombre de lignes (sans seuil : +2 ouvertures pour 2× les lignes ; score mêlé
+ * aux mots du titre : moins bien). Les notes ouvertes HORS du bloc étaient à 57 sur 75 absentes des
+ * candidats.
+ *
+ * LA REQUÊTE RESTE LE MESSAGE ENTIER (conv-1303, 2026-10-30, `scripts/banc-notes-proches-requete.mts`,
+ * 825 tours rejoués sur le Brain vivant) : notes ouvertes couvertes 54/153 avec le message entier,
+ * 25 avec ses mots-clés, 23 avec les mots-clés + le 1er ou le précédent message du fil, 59 avec
+ * l'union message + mots-clés mais pour 35 % de lignes en plus. Ces 57 notes, l'agent les a trouvées
+ * par SA recherche `brain_query`, reformulée par sens (« /draft » → « préférences visuelles »), et
+ * dans sa liste longue (67 sur 75), pas dans un bloc de 3 (20 sur 75) : aucune réécriture du message
+ * ne les aurait servies. Le bloc et `brain_query` se complètent, comme prévu.
+ *
  * BRAIN PERSO (conv-1233, 2026-10-28, demande utilisateur : « étends le Brain perso aux notes
  * proches servies à chaque tour »). S'il est réglé, il est interrogé EN MÊME TEMPS que celui de
  * l'équipe (le tour n'attend pas plus), avec les mêmes bornes, et ses notes arrivent sous le même
@@ -48,6 +62,32 @@ const REQUETE_MAX_CARACTERES = 2_000
 /** Mémoire des notes déjà montrées : bornée, elle ne grossit pas avec la vie de l'app. */
 const FILS_MEMORISES_MAX = 200
 const NOTES_PAR_FIL_MAX = 150
+
+/**
+ * MESSAGES COMPOSÉS PAR L'APP, SANS SUJET PROPRE — aucune recherche (conv-1303, 2026-10-30).
+ *
+ * La requête est le message entier. Pour ces trois messages, il ne décrit que la MÉCANIQUE de l'app
+ * (une tâche de fond rendue, des lots finis, la fin d'une chaîne) : la recherche ramenait les notes
+ * sur cette mécanique, pas sur la tâche. Mesure du 22 au 30/10 (spool × turn-journals) : reprise
+ * automatique 1 bloc lu sur 24, réveil de plan de lots 0 sur 12, fin de chaîne du mode auto 0 sur 3,
+ * et les notes « plan de lots » servies 46 fois sans une ouverture. Le prompt d'un LOT et l'ordre
+ * d'un autre fil portent, eux, une vraie tâche : ils restent interrogés.
+ *
+ * Copies des en-têtes de leurs producteurs, épinglées par le test : `ENTETE_REPRISE_AUTOMATIQUE`
+ * (`chat/relance-taches-de-fond.ts`), `promptDeReveil` (`shared/plan-de-lots.ts`), `DEBUT_RELEVE`
+ * (`renderer/.../chat-auto-mode.ts`). Copiées plutôt qu'importées : le premier tire le lanceur de
+ * processus, le dernier vit côté interface.
+ */
+export const DEBUTS_SANS_SUJET_PROPRE: readonly string[] = [
+  '[Reprise automatique]',
+  'RÉVEIL DU PLAN DE LOTS « ',
+  'La chaîne de ce fil est terminée. Ne lance aucun chantier'
+]
+
+export function messageSansSujetPropre(message: string): boolean {
+  const texte = message.trimStart()
+  return DEBUTS_SANS_SUJET_PROPRE.some((debut) => texte.startsWith(debut))
+}
 
 export const POINT_TITRES_DU_TOUR = 'chat-titres-du-tour'
 export const EN_TETE_TITRES = 'BRAIN — notes proches :'
@@ -110,6 +150,24 @@ interface OptionsTitresDuTour {
   brainPerso?: () => NodeJS.ProcessEnv | undefined
   /** Le serveur perso n'écoute pas (connexion refusée) : l'appelant tente de le démarrer. */
   persoInjoignable?: () => void
+  /**
+   * Traces Brain déjà écrites (`readBrainTraces`), relues UNE fois au premier appel pour rebâtir
+   * les notes déjà montrées par fil. Absent = mémoire vierge (tests).
+   */
+  relireTraces?: () => readonly BrainTrace[]
+}
+
+/**
+ * Notes servies par une trace de ce point : son champ `notes` (exact, depuis conv-1303), sinon la
+ * même sélection rejouée sur la navigation qu'elle a gardée (traces plus anciennes).
+ */
+export function notesServiesParTrace(trace: BrainTrace): string[] {
+  if (trace.point !== POINT_TITRES_DU_TOUR || !(trace.injectedChars > 0)) return []
+  if (trace.notes) return trace.notes
+  if (!trace.navigation) return []
+  return selectionnerTitres({ context: '', status: 'found', navigation: trace.navigation }).map(
+    (t) => t.path
+  )
 }
 
 /** Dossier sans corpus Brain déclaré : l'équipe n'est pas interrogée (même fermeture que brain_query). */
@@ -121,6 +179,7 @@ export function createBrainTitresDuTour(
   const retrieve = options.retrieve ?? retrieveBrainContext
   const emettreTrace = options.onBrainTrace ?? appendBrainTrace
   const montresParFil = new Map<string, Set<string>>()
+  let tracesRelues = false
 
   const memoriser = (conversationId: string, titres: readonly TitreBrain[]): void => {
     const deja = montresParFil.get(conversationId) ?? new Set<string>()
@@ -133,9 +192,40 @@ export function createBrainTitresDuTour(
     }
   }
 
+  /**
+   * MÉMOIRE QUI SURVIT AU REDÉMARRAGE (conv-1303, 2026-10-30) : elle ne vivait qu'en RAM, et
+   * 137 lignes ont été resservies dans un fil qui les avait déjà reçues (13-30/10). Le spool garde
+   * chaque bloc servi : le relire une fois (~40 ms pour 1 900 traces) suffit, sans second fichier.
+   */
+  const relireUneFois = (): void => {
+    if (tracesRelues || !options.relireTraces) return
+    tracesRelues = true
+    let traces: readonly BrainTrace[] = []
+    try {
+      traces = options.relireTraces()
+    } catch {
+      return
+    }
+    // Les plus anciennes d'abord : les bornes de `memoriser` gardent alors les plus récentes.
+    const chronologiques = [...traces].sort(
+      (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)
+    )
+    for (const trace of chronologiques) {
+      const notes = notesServiesParTrace(trace)
+      if (notes.length > 0 && trace.conversationId) {
+        memoriser(
+          trace.conversationId,
+          notes.map((path) => ({ path, title: path }))
+        )
+      }
+    }
+  }
+
   return async (query, meta) => {
     const requete = query.trim().slice(0, REQUETE_MAX_CARACTERES)
     if (motsDe(requete).length < TITRES_MOTS_MIN) return ''
+    if (messageSansSujetPropre(requete)) return ''
+    relireUneFois()
     const corpus = brainCorpusForWorkspace(options.workspace?.(meta?.conversationId))
     const envPerso = options.brainPerso?.()
     // Même fermeture que `brain_query` : un dossier sans corpus déclaré n'interroge rien de
@@ -193,7 +283,8 @@ export function createBrainTitresDuTour(
         ...(resultat.unavailableReason ? { unavailableReason: resultat.unavailableReason } : {}),
         durationMs,
         injectedChars: bloc.length,
-        ...(resultat.navigation ? { navigation: resultat.navigation } : {})
+        ...(resultat.navigation ? { navigation: resultat.navigation } : {}),
+        ...(titres.length > 0 ? { notes: titres.map((t) => t.path) } : {})
       })
     }
     return bloc

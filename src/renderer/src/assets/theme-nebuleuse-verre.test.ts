@@ -662,12 +662,12 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
 
 /**
  * BOUTONS A CHANFREIN « PLATINE » (conv-302, 2026-10-17 : « /draft des boutons a chanfrin », puis
- * « Implementer la 1 · Platine »). Envoyer, Nouveau fil et Detail prennent le cadre des grands
- * panneaux, a leur echelle : coins haut gauche et bas droit coupes, pans blanc et argent qui
- * mesurent deux fois la coupe, cotes a 7 %. Le remplissage reste celui de chaque bouton.
- * ENTREES QUI DOIVENT FAIRE ECHOUER : une coupe sans cadre (ou l'inverse), des couleurs de pans
- * ecrites en dur (Holographique blanc ne les recolorerait pas), un bord encore epais sous Envoyer
- * (le cadre, cale sur la boite interieure, decollerait de la coupe), un cadre qui capte les clics.
+ * « Implementer la 1 · Platine »). Envoyer et Nouveau fil prennent le cadre des grands panneaux, a
+ * leur echelle. Le remplissage reste celui de chaque bouton. Details en est sorti (conv-1317,
+ * 2026-10-30 : il prend le look de la Mini-adresse, voir ChatView.style.test.ts).
+ * ENTREES QUI DOIVENT FAIRE ECHOUER : un cadre sans anneau, des couleurs ecrites en dur (Holographique
+ * blanc ne les recolorerait pas), un bord encore epais sous Envoyer (le cadre, cale sur la boite
+ * interieure, decollerait), un cadre qui capte les clics, Details remis au chanfrein.
  */
 describe('Boutons a chanfrein Platine', () => {
   const BOUTONS = {
@@ -675,14 +675,7 @@ describe('Boutons a chanfrein Platine', () => {
     // Stop (conv-349, « fais un bouton stop a chanfrin pour la barre de prompt ») : 28 px, pose
     // sous Envoyer, la meme coupe que lui.
     stop: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-stop`,
-    'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`,
-    details: `${PREFIXE} .workflow-capsule > summary .thinking-capsule`
-  }
-  const MESURES: Record<string, [string, string]> = {
-    envoyer: ['6px', '12px'],
-    stop: ['6px', '12px'],
-    'nouveau fil': ['9px', '18px'],
-    details: ['6px', '12px']
+    'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`
   }
   const aplati = (s: string): string =>
     s
@@ -700,13 +693,11 @@ describe('Boutons a chanfrein Platine', () => {
     })
     return valeurs
   }
-  const COUPE =
-    'polygon(var(--nv-bouton-coupe) 0, 100% 0, 100% calc(100% - var(--nv-bouton-coupe)), calc(100% - var(--nv-bouton-coupe)) 100%, 0 100%, 0 var(--nv-bouton-coupe))'
 
   /* conv-1068 (2026-10-22 : « remet des bords arrondis sur le bouton envoyer stop et nouveau
-     fil ») : ces trois-la quittent la coupe pour des coins arrondis, Details la garde. ENTREE QUI
-     DOIT FAIRE ECHOUER : une coupe restee sur l'un des trois, ou un cadre encore taille en
-     polygone (il ne suivrait pas l'arrondi et deborderait aux coins). Meme jour, « enleve le bord
+     fil ») : ces trois-la quittent la coupe pour des coins arrondis. ENTREE QUI DOIT FAIRE
+     ECHOUER : une coupe restee sur l'un des trois, ou un cadre encore taille en polygone (il ne
+     suivrait pas l'arrondi et deborderait aux coins). Meme jour, « enleve le bord
      blanc dans les coins » : leurs pans allumes (haut gauche, bas droit) disparaissent, l'anneau
      n'a plus que ses cotes ; un pan revenu sur l'un des trois doit faire echouer. */
   const ARRONDIS: Record<string, string> = {
@@ -715,12 +706,11 @@ describe('Boutons a chanfrein Platine', () => {
     'nouveau fil': '999px'
   }
 
-  it('coupe les coins haut gauche et bas droit de Details, pans deux fois la coupe', () => {
-    const r = derniere(BOUTONS.details)
-    expect(r['clip-path']).toBe(COUPE)
-    expect(r['border-radius']).toBe('0')
-    expect(r.position).toBe('relative')
-    expect([r['--nv-bouton-coupe'], r['--nv-bouton-pans']]).toEqual(MESURES.details)
+  it('ne coupe plus aucun bouton : Details a quitte le chanfrein (conv-1317)', () => {
+    const feuille = lire('./theme-nebuleuse-verre.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(feuille).not.toContain('--nv-bouton-coupe')
+    expect(feuille).not.toContain('--nv-bouton-pans')
+    expect(feuille).not.toMatch(/\.workflow-capsule\s*>/)
   })
 
   it('arrondit Envoyer, Stop et Nouveau fil au lieu de les couper', () => {
@@ -742,26 +732,16 @@ describe('Boutons a chanfrein Platine', () => {
       expect([cadre.position, cadre.inset], nom).toEqual(['absolute', '0'])
       expect(cadre['pointer-events'], nom).toBe('none')
       expect(cadre.background, nom).not.toMatch(/#[0-9a-f]{3,6}\b/i)
-      if (nom in ARRONDIS) {
-        // Anneau evide par masque, qui suit l'arrondi du bouton ; cotes seules, aucun pan clair.
-        expect(cadre.background, nom).toBe(
-          'linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes))'
-        )
-        expect(cadre.padding, nom).toBe('1px')
-        expect(cadre['border-radius'], nom).toBe('inherit')
-        expect(cadre['clip-path'], nom).toBe('none')
-        expect(cadre.mask, nom).toBe(
-          'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)'
-        )
-      } else {
-        expect(cadre.background, nom).toContain('var(--nv-chanfrein-haut)')
-        expect(cadre.background, nom).toContain('var(--nv-chanfrein-bas)')
-        expect(cadre.background, nom).toContain('var(--nv-bouton-pans) var(--nv-bouton-pans)')
-        expect(cadre.padding, nom).toBe('0')
-        expect(cadre.mask, nom).toBe('none')
-        expect(cadre['clip-path'], nom).toMatch(/^polygon\(evenodd,/)
-        expect(cadre['clip-path'], nom).toContain('calc(var(--nv-bouton-coupe) + 0.414px) 1px')
-      }
+      // Anneau evide par masque, qui suit l'arrondi du bouton ; cotes seules, aucun pan clair.
+      expect(cadre.background, nom).toBe(
+        'linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes))'
+      )
+      expect(cadre.padding, nom).toBe('1px')
+      expect(cadre['border-radius'], nom).toBe('inherit')
+      expect(cadre['clip-path'], nom).toBe('none')
+      expect(cadre.mask, nom).toBe(
+        'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)'
+      )
     }
   })
 

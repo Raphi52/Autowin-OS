@@ -1568,7 +1568,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => {
       ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
-    await click('summary[title="Détails de l’exécution"]')
+    await click('button[title="Détails de l’exécution"]')
     // Le fil des sous-agents vit dans l'onglet Runs depuis le 2026-09-01 (demande utilisateur) :
     // le panneau s'ouvre sur le graphe, il faut donc y aller.
     await ouvrirOngletRuns()
@@ -1614,7 +1614,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('summary[title="Détails de l’exécution"]')
+    await click('button[title="Détails de l’exécution"]')
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
@@ -1660,7 +1660,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('summary[title="Détails de l’exécution"]')
+    await click('button[title="Détails de l’exécution"]')
     // Les RUN.md ont leur propre onglet depuis le 2026-09-01 : il faut l'ouvrir pour les lire.
     await click('button[role="tab"]:nth-of-type(2)')
 
@@ -1733,7 +1733,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ])
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]), causalTrace }))
     await click('.conv-pick')
-    await click('summary[title="Détails de l’exécution"]')
+    await click('button[title="Détails de l’exécution"]')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1789,7 +1789,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Montage + sélection de conversation : rien n'est lu tant que le panneau reste fermé.
     expect(causalTrace).not.toHaveBeenCalled()
 
-    await click('summary[title="Détails de l’exécution"]')
+    await click('button[title="Détails de l’exécution"]')
     // Le graphe n’est plus derrière un onglet : ouvrir le panneau SUFFIT à le monter, donc à lire
     // la trace. La paresse tient désormais à l’ouverture du panneau, seule garde encore réelle.
     await act(async () => {
@@ -1881,7 +1881,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
 
     const texte =
-      container!.querySelector('summary[title="Détails de l’exécution"]')?.textContent ?? ''
+      container!.querySelector('button[title="Détails de l’exécution"]')?.textContent ?? ''
     expect(texte).toContain('1 open')
     expect(texte).not.toContain('green')
   })

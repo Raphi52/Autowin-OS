@@ -2580,25 +2580,30 @@ ol.md-list li {
   margin-left: auto;
 }
 
-/* Bouton Détails = capsule Raisonnement / Actions (conv-178, 2026-10-10). Il n'a PLUS de style
-   propre : `.thinking-block` le dessine (voir ChatView.tsx). Seuls restent sa place dans l'en-tête
-   et l'anneau de focus clavier. */
-.workflow-capsule {
-  margin: 0;
+/* Bouton Détails : le bouton creux de la Mini-adresse (BoutonCreux.css, conv-1317, 2026-10-30), qui
+   remplace la capsule de conv-178. Ne reste ici que ce qu'il a en plus : il ne rétrécit pas, seul
+   le site de son voisin le peut, et il a une flèche. */
+.workflow-toggle {
+  flex: none;
 }
 /* LA FLECHE DE DETAILS POINTE A GAUCHE QUAND LE PANNEAU EST OUVERT (conv-177, 2026-10-10 : « la
-   fleche doit pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Les capsules
-   Raisonnement / Actions se deplient VERS LE BAS : ouvertes, leur chevron monte (-135deg, plus
-   bas). Le panneau Details, lui, s'ouvre SUR LE COTE, a droite : ferme, la fleche pointe vers lui
-   (a droite, -45deg, inchange) ; ouvert, elle pointe a GAUCHE, le sens qui le replie. */
-.thinking-block.workflow-capsule[open] > summary .thinking-capsule::after {
-  transform: rotate(135deg);
+   fleche doit pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Le panneau
+   Details s'ouvre SUR LE COTE, a droite : ferme, la fleche pointe vers lui (a droite, -45deg) ;
+   ouvert, elle pointe a GAUCHE, le sens qui le replie. */
+.workflow-toggle::after {
+  content: '';
+  flex: none;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px 0 1px;
+  border-right: 1.25px solid currentColor;
+  border-bottom: 1.25px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
 }
-
-.workflow-toggle:focus-visible {
-  outline: 1px solid rgba(255, 212, 90, 0.72);
-  outline-offset: 3px;
-  border-radius: 999px;
+.workflow-toggle[aria-pressed='true']::after {
+  transform: rotate(135deg);
 }
 
 .model-select-shell {
@@ -4445,6 +4450,7 @@ button.chat-project-dot:disabled {
 .thinking-block > summary .thinking-secondes,
 .thinking-block > summary .thinking-duree,
 .capsule-bouton .thinking-duree,
+.workflow-toggle .thinking-duree,
 .activity-anneau .anneau-l1 .thinking-duree {
   flex: none;
   padding: 0 0.6em;

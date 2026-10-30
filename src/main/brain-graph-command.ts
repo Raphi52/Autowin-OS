@@ -1,3 +1,4 @@
+import { appendBrainTrace, type BrainTrace } from './activity/brain-trace-spool'
 import { sharedBrainOrigin } from './brain-paths'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 
@@ -154,3 +155,43 @@ export async function runBrainRead(
   return callBrain('/read', { path, entier: true }, deps)
 }
 // fix-ok: plus de borne de contenu cote app (2026-09-27) ; seules les gardes de transport de brain-protocol.ts restent
+
+/** Identifiant du point de registre (`activity/brain-injection-points.ts`) des lectures du modèle. */
+export const POINT_LECTURE_BRAIN = 'command-brain-read'
+
+/**
+ * TRACE D'UNE LECTURE BRAIN — `brain_read` (note entière) ou `brain_graph` (liens).
+ *
+ * POURQUOI (conv-1303, 2026-10-30) : ces deux commandes injectaient du savoir Brain dans le prompt
+ * sans écrire aucune trace. Mesure du 22 au 30/10 : 148 notes entières, 347 000 caractères — plus
+ * que tout le bloc des notes proches (159 000) —, absents de l'Observatory et du registre qui se dit
+ * exhaustif. La trace porte le chemin ouvert (`notes`) : c'est lui qui permet de compter, note par
+ * note, combien de fois une note servie a été réellement lue.
+ *
+ * Ne jette jamais : `appendBrainTrace` avale ses propres pannes et les compte.
+ */
+export function tracerLectureBrain(
+  outil: 'brain_read' | 'brain_graph',
+  args: Record<string, unknown>,
+  outcome: BrainMemoryOutcome,
+  meta: { conversationId?: string; turnId?: string; durationMs?: number },
+  emettre: (trace: BrainTrace) => unknown = appendBrainTrace
+): void {
+  if (!meta.conversationId) return
+  const brute = outil === 'brain_read' ? args.path : args.entity
+  // Même forme que les chemins servis par les notes proches (barres obliques avant).
+  const cible = (typeof brute === 'string' ? brute : '').trim().replace(/[\\]/g, '/').slice(0, 400)
+  emettre({
+    timestamp: new Date().toISOString(),
+    conversationId: meta.conversationId,
+    ...(meta.turnId ? { turnId: meta.turnId } : {}),
+    kind: 'lecture',
+    point: POINT_LECTURE_BRAIN,
+    query: `${outil}: ${cible}`,
+    found: outcome.found,
+    status: outcome.status === 'not-requested' ? 'empty' : outcome.status,
+    ...(meta.durationMs !== undefined ? { durationMs: meta.durationMs } : {}),
+    injectedChars: outcome.knowledge.length,
+    ...(outil === 'brain_read' && cible ? { notes: [cible] } : {})
+  })
+}

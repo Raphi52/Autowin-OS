@@ -76,6 +76,7 @@ const TOOL_TITLES: Record<
   navigateur_console: 'outil.navigateur_console',
   navigateur_annotations: 'outil.navigateur_annotations',
   show_video: 'outil.show_video',
+  montrer_bloc: 'outil.montrer_bloc',
   sql_query: ['outil.sql_query', 'outil.sql_query.n'],
   ticket_get: ['outil.ticket_get', 'outil.ticket_get.n'],
   ticket_search: 'outil.ticket_search',

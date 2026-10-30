@@ -1138,3 +1138,23 @@ describe('câblage — le prompt enseigne toutes les formes, dont le repli sessi
     expect(prompt()).toMatch(/POUR RELIRE/)
   })
 })
+
+// conv-1303 (2026-10-30) : l'état d'un fil n'est pas un fait durable.
+describe('decideRemember — titre ouvert par un fil', () => {
+  it('refuse un titre qui commence par « conv-NNN » et dit quoi faire', () => {
+    const decision = decideRemember({
+      ...FAIT_VALIDE,
+      title: 'conv-1146 — le travail non commité de la 1re tentative est à l’abri'
+    })
+    expect(decision.allowed).toBe(false)
+    expect(!decision.allowed && decision.reason).toContain('nomme le SUJET')
+  })
+
+  it('accepte un fil cité ailleurs que en tête du titre', () => {
+    const decision = decideRemember({
+      ...FAIT_VALIDE,
+      title: 'Plans de lots : un tour jamais démarré est rendu au plafond (conv-1284)'
+    })
+    expect(decision.allowed).toBe(true)
+  })
+})

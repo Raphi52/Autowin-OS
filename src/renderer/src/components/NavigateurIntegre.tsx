@@ -1,9 +1,15 @@
 /**
  * NAVIGATEUR INTÉGRÉ DU CHAT — le panneau (conv-1286, lot 3/5, 2026-10-29).
  *
- * Un navigateur posé à côté du fil : onglets du fil actif, barre d'adresse, mode Annoter (élément ou
- * zone + commentaire, envoyés en lot au chat), Choisir un élément (un clic, inséré tout de suite dans
- * la saisie), carte d'accord par site quand l'agent veut écrire dans une page.
+ * Un navigateur posé à côté du fil : la barre d'adresse, les onglets toujours visibles juste dessous,
+ * Choisir un élément (un clic, inséré tout de suite dans la saisie), barre d'accord par site quand
+ * l'agent veut écrire dans une page. Le bouton Annoter est retiré (conv-1306, 2026-10-30) : le
+ * principal garde ce mode, plus rien ne l'allume ici ; celles déjà posées restent listées et envoyables.
+ *
+ * LE CADRE DE PAGE (/draft de conv-1306, « Cadre de page ») : la page prend un cadre ambre quand
+ * l'agent pilote OU attend un accord, avec sa bande en haut et la barre d'accord au pied. La bande
+ * est TOUJOURS là (titre de l'onglet au repos, en entier : l'onglet, lui, le coupe) : une bande qui
+ * apparaît ferait sauter la page à chaque action de l'agent, juste après qu'il a repéré sa cible.
  *
  * LA PAGE N'EST PAS DANS LE DOM : c'est une vue Electron posée PAR-DESSUS la fenêtre, au cadre que
  * ce panneau mesure (`poserCadre`). Tout ce qui doit passer au-dessus d'elle — menu ⋮, aperçu
@@ -27,6 +33,7 @@ import { FriseGestesNavigateur } from './FriseGestesNavigateur'
 import {
   adresseDeLaSaisie,
   apiNavigateur,
+  decouperAdresse,
   texteNavigateur,
   DUREE_BANDEAU_APRES_GESTE_MS,
   gestesDeLOnglet,
@@ -36,6 +43,50 @@ import {
   zoomDeLaFenetre
 } from './navigateur-integre-outils'
 import './NavigateurIntegre.css'
+
+// ── Icônes ──────────────────────────────────────────────────────────────────────────────────────
+
+/** Tracés de la maquette Nacre (conv-1306) : trait fin, couleur du texte qui les porte. */
+const TRACES = {
+  reculer: <path d="M10 3.5L5.5 8l4.5 4.5" />,
+  avancer: <path d="M6 3.5L10.5 8 6 12.5" />,
+  recharger: (
+    <>
+      <path d="M12.6 9.2A4.8 4.8 0 1 1 11.4 4.4" />
+      <path d="M12 2.4v2.8H9.2" />
+    </>
+  ),
+  cadenas: (
+    <>
+      <rect x="4" y="7.2" width="8" height="6" rx="1.6" />
+      <path d="M5.8 7.2V5.4a2.2 2.2 0 0 1 4.4 0v1.8" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="8" cy="8" r="5.2" />
+      <path d="M2.8 8h10.4M8 2.8c2.2 2 2.2 8.4 0 10.4M8 2.8c-2.2 2-2.2 8.4 0 10.4" />
+    </>
+  ),
+  plus: <path d="M8 3.5v9M3.5 8h9" />,
+  fermer: <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />,
+  menu: (
+    <>
+      <circle cx="8" cy="3.6" r="1.1" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.1" fill="currentColor" />
+      <circle cx="8" cy="12.4" r="1.1" fill="currentColor" />
+    </>
+  ),
+  choisir: <path d="M4 3l8.2 3.9-3.6 1.3-1.4 3.7z" />
+} as const
+
+function Icone({ nom }: { nom: keyof typeof TRACES }): React.JSX.Element {
+  return (
+    <svg className="navigateur-icone" viewBox="0 0 16 16" aria-hidden="true">
+      {TRACES[nom]}
+    </svg>
+  )
+}
 
 // ── Composant ───────────────────────────────────────────────────────────────────────────────────
 
@@ -90,6 +141,7 @@ export function NavigateurIntegre({
   const racineRef = useRef<HTMLElement | null>(null)
   const zoneRef = useRef<HTMLDivElement | null>(null)
   const adresseRef = useRef<HTMLInputElement | null>(null)
+  const listeOngletsRef = useRef<HTMLDivElement | null>(null)
   const etatRef = useRef<EtatNavigateur | null>(null)
   const annotationsRef = useRef<AnnotationNavigateur[]>([])
   const dernierCadreRef = useRef<string | null>(null)
@@ -102,6 +154,8 @@ export function NavigateurIntegre({
 
   const ongletActif = etat?.onglets.find((onglet) => onglet.id === etat.ongletActif) ?? null
   const cadreVisible = visible && !menuOuvert && !redimensionnement
+  // Tout ce qui, en s'ouvrant, peut DÉPLACER la page sans changer sa taille : voir le cadre plus bas.
+  const disposition = [Boolean(erreur), Boolean(etat?.demandeAccord), annotations.length > 0].join()
 
   function agir(promesse: Promise<unknown> | undefined): void {
     setErreur(null)
@@ -213,6 +267,8 @@ export function NavigateurIntegre({
    * fenêtre (le principal les convertit). Remesuré quand la zone change de taille, quand la fenêtre
    * change (zoom compris : il déclenche `resize`) et quand un VOISIN de gauche change de largeur —
    * le panneau glisse alors sans changer de taille, ce que l'observateur de la zone ne voit pas.
+   * Même trou en hauteur : une rangée qui s'ouvre au-dessus pendant qu'une autre se ferme dessous
+   * déplace la zone à taille égale, d'où `disposition`.
    */
   useEffect(() => {
     const api = apiNavigateur()
@@ -251,7 +307,7 @@ export function NavigateurIntegre({
       observateur?.disconnect()
       window.removeEventListener('resize', mesurer)
     }
-  }, [cadreVisible, pleinCadre, largeur])
+  }, [cadreVisible, pleinCadre, largeur, disposition])
 
   // Panneau démonté (fermé, mosaïque) : la page native ne doit pas rester à flotter sur le chat.
   useEffect(() => {
@@ -305,6 +361,14 @@ export function NavigateurIntegre({
       document.removeEventListener('mousedown', surClic)
     }
   }, [menuOuvert])
+
+  // Trop d'onglets pour la rangée : elle défile, et l'onglet actif doit rester à l'écran (un onglet
+  // ouvert par l'agent naît au bout, hors de vue).
+  useEffect(() => {
+    listeOngletsRef.current
+      ?.querySelector('.navigateur-onglet.is-actif')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [etat?.ongletActif, etat?.onglets.length])
 
   function nouvelOnglet(): void {
     agir(apiNavigateur()?.ouvrir(conversationId, 'about:blank'))
@@ -387,6 +451,13 @@ export function NavigateurIntegre({
   const mode = etat?.mode ?? null
   const onglets = etat?.onglets ?? []
   const demande = etat?.demandeAccord
+  const adresseLue = decouperAdresse(saisie)
+  const chiffre = decouperAdresse(urlActive)?.chiffre ?? false
+  const titreActif = ongletActif
+    ? ongletActif.titre && ongletActif.titre !== 'about:blank'
+      ? ongletActif.titre
+      : t('sansTitre')
+    : ''
 
   return (
     <>
@@ -409,56 +480,6 @@ export function NavigateurIntegre({
         aria-label={t('titre')}
         data-testid="navigateur-panneau"
       >
-        <div className="navigateur-onglets" role="tablist" aria-label={t('onglets')}>
-          {onglets.map((onglet) => {
-            const titre =
-              onglet.titre && onglet.titre !== 'about:blank' ? onglet.titre : t('sansTitre')
-            const actif = onglet.id === etat?.ongletActif
-            return (
-              <div key={onglet.id} className={`navigateur-onglet${actif ? ' is-actif' : ''}`}>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={actif}
-                  className="navigateur-onglet-titre"
-                  title={onglet.url}
-                  onClick={() => agir(apiNavigateur()?.activerOnglet(onglet.id))}
-                >
-                  {onglet.chargement && <span className="spinner" aria-hidden="true" />}
-                  <span className="navigateur-onglet-libelle">{titre}</span>
-                </button>
-                <button
-                  type="button"
-                  className="navigateur-onglet-fermer"
-                  aria-label={t('fermerOnglet', { titre })}
-                  title={t('fermerOnglet', { titre })}
-                  onClick={() => agir(apiNavigateur()?.fermerOnglet(onglet.id))}
-                >
-                  ×
-                </button>
-              </div>
-            )
-          })}
-          <button
-            type="button"
-            className="navigateur-bouton navigateur-nouvel-onglet"
-            aria-label={t('nouvelOnglet')}
-            title={t('nouvelOnglet')}
-            onClick={nouvelOnglet}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="navigateur-bouton navigateur-fermer"
-            aria-label={t('fermerPanneau')}
-            title={t('fermerPanneau')}
-            onClick={onFermer}
-          >
-            ×
-          </button>
-        </div>
-
         <div className="navigateur-barre">
           <button
             type="button"
@@ -468,7 +489,7 @@ export function NavigateurIntegre({
             disabled={!ongletActif?.peutReculer}
             onClick={() => ongletActif && agir(apiNavigateur()?.reculer(ongletActif.id))}
           >
-            ←
+            <Icone nom="reculer" />
           </button>
           <button
             type="button"
@@ -478,7 +499,7 @@ export function NavigateurIntegre({
             disabled={!ongletActif?.peutAvancer}
             onClick={() => ongletActif && agir(apiNavigateur()?.avancer(ongletActif.id))}
           >
-            →
+            <Icone nom="avancer" />
           </button>
           <button
             type="button"
@@ -488,50 +509,55 @@ export function NavigateurIntegre({
             disabled={!ongletActif}
             onClick={() => ongletActif && agir(apiNavigateur()?.recharger(ongletActif.id))}
           >
-            ↻
+            <Icone nom="recharger" />
           </button>
-          <form className="navigateur-adresse" onSubmit={charger}>
-            <input
-              ref={adresseRef}
-              type="text"
-              className="navigateur-adresse-champ"
-              aria-label={t('adresse')}
-              placeholder={t('adresse')}
-              value={saisie}
-              spellCheck={false}
-              onChange={(event) => setSaisie(event.target.value)}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-          </form>
-          <button
-            type="button"
-            className={`navigateur-bouton navigateur-mode${mode === 'annoter' ? ' is-actif' : ''}`}
-            aria-pressed={mode === 'annoter'}
-            title={t('annoterTitre')}
-            disabled={!ongletActif}
-            onClick={() => basculerMode('annoter')}
-          >
-            {t('annoter')}
-          </button>
-          <button
-            type="button"
-            className={`navigateur-bouton navigateur-mode${mode === 'choisir' ? ' is-actif' : ''}`}
-            aria-pressed={mode === 'choisir'}
-            title={t('choisirTitre')}
-            disabled={!ongletActif}
-            onClick={() => basculerMode('choisir')}
-          >
-            {t('choisir')}
-          </button>
-          <button
-            type="button"
-            className="navigateur-bouton"
-            aria-pressed={pleinCadre}
-            title={pleinCadre ? t('coteACote') : t('pleinCadre')}
-            onClick={() => setPleinCadre((v) => !v)}
-          >
-            {pleinCadre ? t('coteACote') : t('pleinCadre')}
-          </button>
+          <div className="navigateur-capsule">
+            <div className="navigateur-capsule-interieur">
+              <span className="navigateur-site">
+                {ongletActif?.chargement ? (
+                  <span className="spinner" aria-hidden="true" />
+                ) : (
+                  <Icone nom={chiffre ? 'cadenas' : 'globe'} />
+                )}
+              </span>
+              <form
+                className={`navigateur-adresse${adresseLue ? ' a-une-vue' : ''}`}
+                onSubmit={charger}
+              >
+                <input
+                  ref={adresseRef}
+                  type="text"
+                  className="navigateur-adresse-champ"
+                  aria-label={t('adresse')}
+                  placeholder={t('adresse')}
+                  value={saisie}
+                  spellCheck={false}
+                  onChange={(event) => setSaisie(event.target.value)}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                {adresseLue && (
+                  <span className="navigateur-adresse-vue" aria-hidden="true">
+                    <b>{adresseLue.site}</b>
+                    {adresseLue.suite}
+                  </span>
+                )}
+              </form>
+            </div>
+          </div>
+          <div className="navigateur-bascule">
+            <button
+              type="button"
+              className={`navigateur-mode${mode === 'choisir' ? ' is-actif' : ''}`}
+              aria-label={t('choisir')}
+              aria-pressed={mode === 'choisir'}
+              title={t('choisirTitre')}
+              disabled={!ongletActif}
+              onClick={() => basculerMode('choisir')}
+            >
+              <Icone nom="choisir" />
+              <span className="navigateur-mode-libelle">{t('choisir')}</span>
+            </button>
+          </div>
           <div className="navigateur-menu-zone">
             <button
               type="button"
@@ -542,10 +568,21 @@ export function NavigateurIntegre({
               aria-expanded={menuOuvert}
               onClick={() => setMenuOuvert((v) => !v)}
             >
-              ⋮
+              <Icone nom="menu" />
             </button>
             {menuOuvert && (
               <div className="navigateur-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOuvert(false)
+                    setPleinCadre((v) => !v)
+                  }}
+                >
+                  <span className="navigateur-coche" aria-hidden="true" />
+                  {pleinCadre ? t('coteACote') : t('pleinCadre')}
+                </button>
                 <button
                   type="button"
                   role="menuitemcheckbox"
@@ -598,6 +635,71 @@ export function NavigateurIntegre({
               </div>
             )}
           </div>
+          {/* LA CROIX QUITTE LA BARRE D'ADRESSE (conv-1317, 2026-10-30 : « pas dans la barre d'url la
+              crois dans la barre d'url enleve la ») : dans la capsule, elle semblait effacer
+              l'adresse. Au bout de la rangée, elle ferme le panneau, sans doute possible. */}
+          <button
+            type="button"
+            className="navigateur-petit-fermer"
+            aria-label={t('fermerPanneau')}
+            title={t('fermerPanneau')}
+            onClick={onFermer}
+          >
+            <Icone nom="fermer" />
+          </button>
+        </div>
+        {/* TOUJOURS VISIBLES, juste sous l'adresse (conv-1306, 2026-10-30 : repliés dans un compteur, on
+            ne les trouvait pas). Le « + » reste hors de ce qui défile : quand les onglets débordent, il
+            reste à portée. Pas de barre de défilement : la molette verticale fait défiler la rangée. */}
+        <div className="navigateur-onglets">
+          <div
+            ref={listeOngletsRef}
+            className="navigateur-onglets-liste"
+            role="tablist"
+            aria-label={t('onglets')}
+            onWheel={(event) => {
+              event.currentTarget.scrollLeft += event.deltaY
+            }}
+          >
+            {onglets.map((onglet) => {
+              const titre =
+                onglet.titre && onglet.titre !== 'about:blank' ? onglet.titre : t('sansTitre')
+              const actif = onglet.id === etat?.ongletActif
+              return (
+                <div key={onglet.id} className={`navigateur-onglet${actif ? ' is-actif' : ''}`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={actif}
+                    className="navigateur-onglet-titre"
+                    title={onglet.url}
+                    onClick={() => agir(apiNavigateur()?.activerOnglet(onglet.id))}
+                  >
+                    {onglet.chargement && <span className="spinner" aria-hidden="true" />}
+                    <span className="navigateur-onglet-libelle">{titre}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="navigateur-petit-fermer"
+                    aria-label={t('fermerOnglet', { titre })}
+                    title={t('fermerOnglet', { titre })}
+                    onClick={() => agir(apiNavigateur()?.fermerOnglet(onglet.id))}
+                  >
+                    <Icone nom="fermer" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            className="navigateur-bouton"
+            aria-label={t('nouvelOnglet')}
+            title={t('nouvelOnglet')}
+            onClick={nouvelOnglet}
+          >
+            <Icone nom="plus" />
+          </button>
         </div>
         {bandeauVisible && (
           <div
@@ -636,85 +738,94 @@ export function NavigateurIntegre({
             {erreur}
           </div>
         )}
-        {etat?.agentPilote && (
-          <div className="navigateur-pilote" role="status" data-testid="navigateur-pilote">
-            {t('agentPilote')}
+        <div className={`navigateur-cadre${etat?.agentPilote || demande ? ' is-agent' : ''}`}>
+          <div className="navigateur-cadre-tete">
+            {/* « L'agent pilote » vit dans le bandeau du pas-à-pas, toujours visible tant qu'il pilote :
+                le répéter ici l'affichait deux fois (conv-1286). */}
+            {demande ? (
+              <span role="status">{t('agentAttend')}</span>
+            ) : (
+              <span title={ongletActif?.url}>{titreActif}</span>
+            )}
           </div>
-        )}
-        {demande && (
-          <div
-            className="navigateur-accord"
-            role="group"
-            aria-label={t('accordTitre', { origine: demande.origine })}
-          >
-            <div className="navigateur-accord-texte">
-              <strong>{t('accordTitre', { origine: demande.origine })}</strong>
-              <span>{demande.action}</span>
-            </div>
-            <div className="navigateur-accord-boutons">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'une-fois'))}
-              >
-                {t('accordUneFois')}
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'toujours'))}
-              >
-                {t('accordToujours')}
-              </button>
-              <button
-                type="button"
-                className="btn navigateur-accord-refuser"
-                onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'refuser'))}
-              >
-                {t('accordRefuser')}
-              </button>
-            </div>
+          <div ref={zoneRef} className="navigateur-zone" data-testid="navigateur-zone">
+            {onglets.length === 0 ? (
+              <p className="navigateur-vide">{t('vide')}</p>
+            ) : menuOuvert ? (
+              <p className="navigateur-vide">{t('pageMasquee')}</p>
+            ) : null}
           </div>
-        )}
-
-        <div ref={zoneRef} className="navigateur-zone" data-testid="navigateur-zone">
-          {onglets.length === 0 ? (
-            <p className="navigateur-vide">{t('vide')}</p>
-          ) : menuOuvert ? (
-            <p className="navigateur-vide">{t('pageMasquee')}</p>
-          ) : null}
+          {demande && (
+            <div
+              className="navigateur-accord"
+              role="group"
+              aria-label={t('accordTitre', { origine: demande.origine })}
+            >
+              <div className="navigateur-accord-texte">
+                <strong>{t('accordTitre', { origine: demande.origine })}</strong>
+                <span>{demande.action}</span>
+              </div>
+              <div className="navigateur-accord-boutons">
+                <button
+                  type="button"
+                  className="navigateur-pilule navigateur-pilule-gel"
+                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'une-fois'))}
+                >
+                  {t('accordUneFois')}
+                </button>
+                <button
+                  type="button"
+                  className="navigateur-pilule"
+                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'toujours'))}
+                >
+                  {t('accordToujours')}
+                </button>
+                <button
+                  type="button"
+                  className="navigateur-pilule navigateur-accord-refuser"
+                  onClick={() => agir(apiNavigateur()?.repondreAccord(demande.origine, 'refuser'))}
+                >
+                  {t('accordRefuser')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {annotations.length > 0 && (
           <div className="navigateur-annotations" data-testid="navigateur-annotations">
-            <div className="navigateur-annotations-titre">
+            <span className="navigateur-annotations-titre">
               {t('annotations', { n: annotations.length })}
-            </div>
+            </span>
             <ol className="navigateur-annotations-liste">
-              {annotations.map((annotation, index) => (
-                <li key={annotation.id} className="navigateur-annotation">
-                  <span className="navigateur-annotation-numero">{index + 1}</span>
-                  <span className="navigateur-annotation-corps">
+              {annotations.map((annotation, index) => {
+                const commentaire = annotation.commentaire || t('sansCommentaire')
+                return (
+                  <li key={annotation.id} className="navigateur-annotation" title={commentaire}>
+                    <span className="navigateur-annotation-numero">{index + 1}</span>
                     <span className="navigateur-annotation-extrait">
                       {annotation.texteElement || annotation.selecteur}
                     </span>
-                    <span className="navigateur-annotation-commentaire">
-                      {annotation.commentaire || t('sansCommentaire')}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="navigateur-onglet-fermer"
-                    aria-label={t('supprimer', { n: index + 1 })}
-                    title={t('supprimer', { n: index + 1 })}
-                    onClick={() => agir(apiNavigateur()?.supprimerAnnotation(annotation.id))}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
+                    {/* Le commentaire se lit au survol ; caché à l'œil, pas aux lecteurs d'écran. */}
+                    <span className="navigateur-annotation-commentaire">{commentaire}</span>
+                    <button
+                      type="button"
+                      className="navigateur-petit-fermer"
+                      aria-label={t('supprimer', { n: index + 1 })}
+                      title={t('supprimer', { n: index + 1 })}
+                      onClick={() => agir(apiNavigateur()?.supprimerAnnotation(annotation.id))}
+                    >
+                      <Icone nom="fermer" />
+                    </button>
+                  </li>
+                )
+              })}
             </ol>
-            <button type="button" className="btn navigateur-envoyer" onClick={envoyerAuChat}>
+            <button
+              type="button"
+              className="navigateur-pilule navigateur-pilule-gel navigateur-envoyer"
+              onClick={envoyerAuChat}
+            >
               {t('envoyer')}
             </button>
           </div>

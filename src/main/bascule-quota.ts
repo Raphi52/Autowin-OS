@@ -11,8 +11,12 @@ import type { ModelQuotaWindow } from '../shared/model-quotas'
  * Choix de l'utilisateur (conv-1069) : « rien plafonner, juste basculer ». Donc ni file d'attente ni
  * plafond de tours simultanés : quand aucun compte n'a de marge, l'appel part sur le compte actif,
  * exactement comme avant, et la rotation après refus reste le filet.
+ *
+ * 100 % et non plus 85 % (conv-1328, 2026-10-30) : l'utilisateur veut vider un compte jusqu'au bout
+ * avant d'en changer (« ça doit changer uniquement à 100 % quand on a tout vidé »). La sonde plafonne
+ * l'utilisation à 100 (`percent` de model-quotas.ts) : un compte épuisé lit donc exactement 100.
  */
-export const SEUIL_BASCULE_POURCENT = 85
+export const SEUIL_BASCULE_POURCENT = 100
 
 /**
  * Au-delà, la sonde ne retient plus le lancement : l'appel part sur le compte actif. Une sonde de
@@ -43,7 +47,7 @@ export interface ChoixDeCompte {
  * Le compte vers lequel partir, ou `undefined` pour rester. On ne quitte l'actif que s'il est MESURÉ
  * au-dessus du seuil, et seulement vers un compte MESURÉ en dessous — jamais à l'aveugle : un compte
  * non connecté ou dont la sonde échoue n'est pas un refuge. Les autres comptes ne sont sondés que si
- * l'actif est presque plein, et jamais avec un seul compte : zéro coût ajouté dans le cas courant.
+ * l'actif est plein, et jamais avec un seul compte : zéro coût ajouté dans le cas courant.
  */
 export async function compteAvecMarge(choix: ChoixDeCompte): Promise<string | undefined> {
   const seuil = choix.seuil ?? SEUIL_BASCULE_POURCENT

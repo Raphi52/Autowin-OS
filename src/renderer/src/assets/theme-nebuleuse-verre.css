@@ -2435,7 +2435,10 @@
    Sans `clip-path`, le contour de focus n'est plus rogne ; le cadre s'allume quand meme au clavier.
    PLUS DE PANS ALLUMES (conv-1068, meme jour : « enleve le bord blanc dans les coins ») : sur un
    arrondi, les deux equerres claires du haut gauche et du bas droit se lisaient comme un bord blanc
-   pose dans les coins. L'anneau ne garde que les cotes a 7 %, uniformes ; Details garde les siens. */
+   pose dans les coins. L'anneau ne garde que les cotes a 7 %, uniformes ; Details garde les siens.
+   DETAILS QUITTE LE CHANFREIN (conv-1317, 2026-10-30 : « le bouton détail met lui le meme look ») :
+   il prend le bouton creux de la Mini-adresse (BoutonCreux.css). Ses regles ont quitte ce bloc ; ce
+   qui en parle plus haut est l'historique. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send {
   --nv-bouton-rayon: 8px;
   border-width: 0;
@@ -2447,10 +2450,6 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
   --nv-bouton-rayon: 999px;
 }
-:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
-  --nv-bouton-coupe: 6px;
-  --nv-bouton-pans: 12px;
-}
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
@@ -2458,19 +2457,6 @@
   position: relative;
   border-radius: var(--nv-bouton-rayon);
   clip-path: none;
-}
-:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule {
-  --nv-bouton-cotes: var(--nv-chanfrein-cotes);
-  position: relative;
-  border-radius: 0;
-  clip-path: polygon(
-    var(--nv-bouton-coupe) 0,
-    100% 0,
-    100% calc(100% - var(--nv-bouton-coupe)),
-    calc(100% - var(--nv-bouton-coupe)) 100%,
-    0 100%,
-    0 var(--nv-bouton-coupe)
-  );
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send::before,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-stop::before,
@@ -2491,40 +2477,6 @@
     linear-gradient(#000 0 0) content-box exclude,
     linear-gradient(#000 0 0);
   clip-path: none;
-  pointer-events: none;
-}
-:root[data-theme='nebuleuse-verre'] .workflow-capsule > summary .thinking-capsule::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  padding: 0;
-  border-radius: 0;
-  background:
-    linear-gradient(var(--nv-chanfrein-haut), var(--nv-chanfrein-haut)) left top /
-      var(--nv-bouton-pans) var(--nv-bouton-pans) no-repeat,
-    linear-gradient(var(--nv-chanfrein-bas), var(--nv-chanfrein-bas)) right bottom /
-      var(--nv-bouton-pans) var(--nv-bouton-pans) no-repeat,
-    linear-gradient(var(--nv-bouton-cotes), var(--nv-bouton-cotes));
-  -webkit-mask: none;
-  mask: none;
-  clip-path: polygon(
-    evenodd,
-    var(--nv-bouton-coupe) 0,
-    100% 0,
-    100% calc(100% - var(--nv-bouton-coupe)),
-    calc(100% - var(--nv-bouton-coupe)) 100%,
-    0 100%,
-    0 var(--nv-bouton-coupe),
-    var(--nv-bouton-coupe) 0,
-    calc(var(--nv-bouton-coupe) + 0.414px) 1px,
-    calc(100% - 1px) 1px,
-    calc(100% - 1px) calc(100% - var(--nv-bouton-coupe) - 0.414px),
-    calc(100% - var(--nv-bouton-coupe) - 0.414px) calc(100% - 1px),
-    1px calc(100% - 1px),
-    1px calc(var(--nv-bouton-coupe) + 0.414px),
-    calc(var(--nv-bouton-coupe) + 0.414px) 1px
-  );
   pointer-events: none;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-input-row > .composer-send:focus-visible,

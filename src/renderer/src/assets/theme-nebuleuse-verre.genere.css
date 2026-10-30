@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   584 regles, 804 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   591 regles, 812 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -378,9 +378,6 @@
     border-color: rgba(255, 50, 153, 0.6);
     background: rgba(191, 0, 96, 0.22)
 }
-:root[data-theme='nebuleuse-verre'] .workflow-toggle:focus-visible {
-    outline: 1px solid rgba(255, 141, 198, 0.72)
-}
 :root[data-theme='nebuleuse-verre'] .model-select-menu {
     background: rgba(10, 10, 10, 0.99)
 }
@@ -480,7 +477,7 @@
     ),
     rgba(10, 10, 10, 0.985)
 }
-:root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-secondes, :root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-duree, :root[data-theme='nebuleuse-verre'] .capsule-bouton .thinking-duree, :root[data-theme='nebuleuse-verre'] .activity-anneau .anneau-l1 .thinking-duree {
+:root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-secondes, :root[data-theme='nebuleuse-verre'] .thinking-block > summary .thinking-duree, :root[data-theme='nebuleuse-verre'] .capsule-bouton .thinking-duree, :root[data-theme='nebuleuse-verre'] .workflow-toggle .thinking-duree, :root[data-theme='nebuleuse-verre'] .activity-anneau .anneau-l1 .thinking-duree {
     background: rgba(10, 10, 10, 0.5)
 }
 :root[data-theme='nebuleuse-verre'] .conv-mosaic-close-all {
@@ -1766,6 +1763,33 @@
 }
 :root[data-theme='nebuleuse-verre'] .sg-chip:hover {
     border-color: var(--accent, rgb(122, 95, 255))
+}
+
+/* ---- src/renderer/src/components/SuperConvMosaique.css ---- */
+:root[data-theme='nebuleuse-verre'] .scm-onglet--chef {
+    --scm-c: var(--gold, rgb(251, 91, 171))
+}
+:root[data-theme='nebuleuse-verre'] .scm-onglet.is-non-lu {
+    border-color: var(--gold, rgb(251, 91, 171));
+    color: var(--gold-bright, var(--gold, rgb(251, 91, 171)))
+}
+:root[data-theme='nebuleuse-verre'] .scm-bandeau {
+    border-bottom: 1px solid color-mix(in srgb, var(--gold, rgb(251, 91, 171)) 35%, transparent)
+}
+:root[data-theme='nebuleuse-verre'] .scm-kicker {
+    color: var(--gold, rgb(251, 91, 171))
+}
+:root[data-theme='nebuleuse-verre'] .scm-chiffre b {
+    color: var(--gold, rgb(251, 91, 171))
+}
+:root[data-theme='nebuleuse-verre'] .scm-maintenant {
+    color: var(--gold, rgb(251, 91, 171))
+}
+:root[data-theme='nebuleuse-verre'] button.scm-nom:not(:disabled):hover {
+    color: var(--gold-bright, var(--gold, rgb(251, 91, 171)))
+}
+:root[data-theme='nebuleuse-verre'] .scm-maintenant-ligne {
+    background: var(--gold, rgb(251, 91, 171))
 }
 
 /* ---- src/renderer/src/components/TaskManagerView.css ---- */

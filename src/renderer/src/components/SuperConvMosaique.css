@@ -1,0 +1,473 @@
+/* LA SUPER CONV DANS LA MOSAÏQUE (conv-1305, SuperConvMosaique.tsx) : onglets dans l'en-tête de la
+   case, frise pleine dans l'onglet Chef, piste réduite dans l'onglet d'un lot. Couleurs d'état =
+   celles du tableau des lots (TableauDesLots.css) : accent = en cours, ok = fait, err = échec,
+   warn = interrompu / attend le chef ; l'or marque les repères (chef, maintenant, non lu). */
+
+.scm-etat--en-cours {
+  --scm-c: var(--accent);
+}
+.scm-etat--fait {
+  --scm-c: var(--ok);
+}
+.scm-etat--echec {
+  --scm-c: var(--err);
+}
+.scm-etat--interrompu,
+.scm-etat--attend-chef {
+  --scm-c: var(--warn);
+}
+.scm-etat--a-faire {
+  --scm-c: var(--text-faint, currentColor);
+}
+
+/* — Onglets de navigateur (conv-1286) : posés sur un filet, chacun avec son fond et son titre. Ils se
+   partagent la ligne et rétrécissent ensemble, comme dans un navigateur. L'onglet ouvert prend le
+   fond du panneau (--surface-panel est translucide, d'où --bg-0 dessous) : il masque le filet et
+   s'ouvre sur son contenu ; les autres, teintés, le laissent passer et se lisent comme à cliquer. */
+.scm-onglets {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, currentColor 24%, transparent);
+}
+.scm-onglet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 280px;
+  min-width: 96px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--text-dim, inherit);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.scm-onglet-titre {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scm-onglet:hover:not(:disabled):not(.is-actif) {
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  color: var(--text, inherit);
+}
+.scm-onglet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Un lot pas encore lancé n'a pas de fil à ouvrir : pointillés sans fond, pour ne pas passer pour
+   un onglet cliquable. */
+.scm-onglet:disabled {
+  border-style: dashed;
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.scm-onglet.is-actif {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(var(--surface-panel), var(--surface-panel)), var(--bg-0);
+  color: var(--text, inherit);
+  font-weight: 650;
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.scm-onglet--chef {
+  --scm-c: var(--gold, #d4a94f);
+}
+/* Un lot fini depuis le dernier passage sur son onglet : doré tant qu'on ne l'a pas ouvert. */
+.scm-onglet.is-non-lu {
+  opacity: 1;
+  border-color: var(--gold, #d4a94f);
+  color: var(--gold-bright, var(--gold, #d4a94f));
+}
+.scm-point {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--scm-c, currentColor);
+}
+.scm-onglet.scm-etat--en-cours .scm-point {
+  animation: scm-pouls 1.6s ease-in-out infinite;
+}
+@keyframes scm-pouls {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scm-onglet.scm-etat--en-cours .scm-point {
+    animation: none;
+  }
+}
+
+/* — Le bandeau, entre l'en-tête et le fil. Il défile seul s'il dépasse : le fil garde sa place. */
+.scm-bandeau {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(340px, 48%);
+  overflow-y: auto;
+  padding: 6px 10px 8px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold, #d4a94f) 35%, transparent);
+  font-size: 11px;
+}
+.scm-bandeau--chef.is-reduit {
+  padding-bottom: 6px;
+}
+.scm-chiffres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+}
+.scm-kicker {
+  font:
+    600 10px/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold, #d4a94f);
+}
+.scm-chiffre {
+  font:
+    10px/1.3 ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint, currentColor);
+}
+.scm-chiffre b {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--gold, #d4a94f);
+}
+.scm-maintenant {
+  font:
+    10px/1.3 ui-monospace,
+    monospace;
+  color: var(--gold, #d4a94f);
+}
+/* Les gestes de la ligne des chiffres, calés à droite : Reprendre et Arrêter (case de mosaïque,
+   conv-1315), Réduire partout. */
+.scm-actions {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.scm-reduire,
+.scm-geste {
+  padding: 1px 8px;
+  border: 1px solid var(--container-border, currentColor);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.scm-reduire {
+  opacity: 0.75;
+}
+.scm-reduire:hover {
+  opacity: 1;
+}
+.scm-geste:hover:not(:disabled) {
+  border-color: currentColor;
+}
+.scm-geste:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.scm-geste--principal {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.scm-pistes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.scm-vide {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* — Une piste : nom · voie · coût, puis état · durée · phrase · Relancer. */
+.scm-piste {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 5px;
+  box-shadow: inset 2px 0 0 var(--scm-c, transparent);
+}
+.scm-piste-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.scm-nom {
+  flex: 0 0 clamp(90px, 32%, 190px);
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.scm-nom:not(:disabled) {
+  cursor: pointer;
+}
+button.scm-nom:not(:disabled):hover {
+  color: var(--gold-bright, var(--gold, #d4a94f));
+}
+.scm-nom--lot {
+  flex-basis: clamp(90px, 38%, 240px);
+}
+.scm-voie {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 13px;
+}
+.scm-voie--axe {
+  height: 12px;
+}
+.scm-graduation {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.scm-maintenant-ligne {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--gold, #d4a94f);
+}
+.scm-barre {
+  position: absolute;
+  top: 2px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--scm-c, currentColor);
+}
+.scm-barre.scm-etat--en-cours {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 35%, transparent),
+    var(--accent)
+  );
+}
+.scm-barre.scm-etat--echec {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--err) 0 3px,
+    color-mix(in srgb, var(--err) 22%, transparent) 3px 6px
+  );
+}
+.scm-barre.scm-etat--attend-chef,
+.scm-barre.scm-etat--interrompu {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--warn) 0 3px,
+    color-mix(in srgb, var(--warn) 22%, transparent) 3px 6px
+  );
+}
+.scm-barre--attente {
+  top: 5px;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--text-faint, currentColor) 0 4px,
+    transparent 4px 7px
+  );
+}
+.scm-heure {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  font:
+    9px/12px ui-monospace,
+    monospace;
+  color: var(--text-faint, currentColor);
+  white-space: nowrap;
+}
+.scm-heure--debut {
+  translate: 0 0;
+}
+.scm-heure--fin {
+  translate: -100% 0;
+}
+.scm-cout {
+  flex: 0 0 52px;
+  font:
+    10px/1.3 ui-monospace,
+    monospace;
+  text-align: right;
+  color: var(--text-dim, currentColor);
+  white-space: nowrap;
+}
+.scm-cout--inconnu {
+  opacity: 0.6;
+}
+.scm-piste-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: calc(clamp(90px, 32%, 190px) + 8px);
+}
+.scm-bandeau--lot .scm-piste-detail {
+  padding-left: 0;
+}
+.scm-pastille {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--scm-c, currentColor);
+  border-radius: 9px;
+  color: var(--scm-c, currentColor);
+  font:
+    600 9px/1.5 ui-monospace,
+    monospace;
+  white-space: nowrap;
+}
+.scm-duree {
+  flex: none;
+  font:
+    10px/1.3 ui-monospace,
+    monospace;
+  color: var(--text-faint, currentColor);
+  white-space: nowrap;
+}
+.scm-phrase {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim, currentColor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scm-etat--echec .scm-phrase {
+  color: var(--err);
+}
+.scm-relancer {
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--err);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--err);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.scm-relancer:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.scm-erreur {
+  color: var(--err);
+  font-size: 11px;
+}
+/* — La même super conv dans le panneau de chat (conv-1315) : sous l'en-tête, au-dessus du fil. Le
+   bandeau y a pour parent ce bloc, de hauteur libre : sa borne en % n'y vaut plus rien, d'où `vh`,
+   assez bas pour laisser le fil lisible à côté de la saisie dans une petite fenêtre. */
+.scm-chat {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* La ligne des chiffres. Le haut dégage le mot « contexte », qui descend de 7 px sous l'en-tête ;
+     les côtés reprennent ceux de l'en-tête. */
+  min-height: 44px;
+  padding: 8px 24px 0;
+}
+/* LES ONGLETS DANS LA BANDE DES BOUTONS DE FENÊTRE, comme un navigateur (conv-1315, 2026-10-30 : « la
+   barre d'onglets doit être tout en haut au niveau de réduire fermer »). `.chat` coupe ce qui dépasse
+   (cosmic-outline.css), d'où `fixed`, qui en sort tant qu'aucun thème ne lui pose de filtre ou de
+   transformation. Le bloc garde la largeur du panneau, même colonne redimensionnée ou Détails ouvert,
+   et s'arrête avant les boutons de Windows (`titlebar-area`, en pixels de page quel que soit le zoom ;
+   138 px en repli, comme `.shell::before`). Cette bande déplace la fenêtre : les onglets s'y excluent
+   un à un, et le vide autour d'eux continue de la déplacer. */
+.chat:has(> .scm-chat) {
+  anchor-name: --scm-panneau;
+}
+.scm-chat .scm-onglets {
+  position: fixed;
+  top: 0;
+  left: calc(anchor(--scm-panneau left) + 18px);
+  right: max(
+    anchor(--scm-panneau right),
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)))
+  );
+  height: var(--marge-haut-vue);
+  box-shadow: none;
+}
+.scm-chat .scm-onglet {
+  height: 100%;
+  padding: 0 10px;
+  font-size: 11.5px;
+  -webkit-app-region: no-drag;
+}
+.scm-chat .scm-bandeau {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(340px, 30vh);
+  padding-left: 0;
+  padding-right: 0;
+}
+/* Dans la case de mosaïque, les onglets se posent sur le filet de l'en-tête, qui passe de bordure à
+   ombre : une bordure resterait sous l'onglet ouvert, qui ne peindrait pas par-dessus. */
+.chat-mosaic-super > .chat-mosaic-window-head {
+  align-items: flex-end;
+  padding-top: 6px;
+  padding-bottom: 0;
+  border-bottom-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--container-border);
+}
+.chat-mosaic-super > .chat-mosaic-window-head > :not(.scm-onglets) {
+  align-self: center;
+}
+/* Hauteur serrée : c'est la frise qui cède (elle défile), pas l'en-tête. Il a une hauteur minimale
+   fixe, donc rien ne l'empêchait de s'écraser sous son contenu, qui passait alors sur les onglets.
+   Le fil garde de quoi se lire : sans minimum, sa base nulle le laissait à zéro. */
+.chat:has(> .scm-chat) > .chat-head {
+  flex: none;
+}
+.chat:has(> .scm-chat) > .chat-scroll {
+  min-height: 120px;
+}
+/* Case étroite (4 colonnes et plus) : la phrase passe sous l'état, le nom rétrécit. */
+@container (max-width: 360px) {
+  .scm-piste-detail {
+    padding-left: 0;
+    flex-wrap: wrap;
+  }
+}

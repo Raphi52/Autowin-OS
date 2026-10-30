@@ -101,6 +101,7 @@ import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../reprise-apres-arret'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../orientations-en-cours-app'
+import { estUnFluxDeBloc } from '../montrer-bloc-command'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -1006,7 +1007,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             }
           }
         }
-        if (pilotEvent.kind === 'delta' && pilotEvent.text) {
+        // Un bloc posé par `montrer_bloc` (conv-1306) n'est pas du texte DIT par le modèle : compté
+        // ici, il s'intercalerait dans le déjà-dit (avant + bloc + après) ; `resteADire` n'y
+        // retrouverait plus le texte de clôture « avant + après » et le republierait en entier.
+        if (pilotEvent.kind === 'delta' && pilotEvent.text && !estUnFluxDeBloc(pilotEvent.streamId)) {
           // Deux itérations d'un même tour sont deux MESSAGES : les coller bout à bout soudait la
           // fin de l'un au début de l'autre (« …du balayage.```html-render »), ce qui sortait le
           // bloc mis en forme en texte brut. Cf. coller-texte-parle.ts pour le défaut mesuré.

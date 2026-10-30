@@ -40,21 +40,21 @@ describe('utilisation d’un compte', () => {
 })
 
 describe('choix du compte avant lancement', () => {
-  it('le seuil est 85 %', () => {
-    expect(SEUIL_BASCULE_POURCENT).toBe(85)
+  it('le seuil est 100 % : on vide un compte avant d’en changer (conv-1328)', () => {
+    expect(SEUIL_BASCULE_POURCENT).toBe(100)
   })
 
-  it('compte actif à 90 % et un autre à 30 % : bascule sur l’autre', async () => {
+  it('compte actif vidé (100 %) et un autre à 30 % : bascule sur l’autre', async () => {
     const cible = await compteAvecMarge({
       actifId: 'default',
       comptes: ['default', 'compte-2'],
-      mesurer: mesures({ default: 90, 'compte-2': 30 })
+      mesurer: mesures({ default: 100, 'compte-2': 30 })
     })
     expect(cible).toBe('compte-2')
   })
 
-  it('compte actif sous le seuil : ne bascule pas, et ne sonde même pas les autres', async () => {
-    const mesurer = vi.fn(mesures({ default: 84, 'compte-2': 5 }))
+  it('compte actif à 99 %, pas encore vidé : ne bascule pas, et ne sonde même pas les autres', async () => {
+    const mesurer = vi.fn(mesures({ default: 99, 'compte-2': 5 }))
     const cible = await compteAvecMarge({
       actifId: 'default',
       comptes: ['default', 'compte-2'],
@@ -73,11 +73,11 @@ describe('choix du compte avant lancement', () => {
     expect(mesurer).not.toHaveBeenCalled()
   })
 
-  it('tous les comptes au-dessus du seuil : reste sur l’actif — rien n’est mis en attente', async () => {
+  it('tous les comptes vidés : reste sur l’actif — rien n’est mis en attente', async () => {
     const cible = await compteAvecMarge({
       actifId: 'default',
       comptes: ['default', 'compte-2', 'compte-3'],
-      mesurer: mesures({ default: 92, 'compte-2': 88, 'compte-3': 97 })
+      mesurer: mesures({ default: 100, 'compte-2': 100, 'compte-3': 100 })
     })
     expect(cible).toBeUndefined()
   })
@@ -86,7 +86,7 @@ describe('choix du compte avant lancement', () => {
     const cible = await compteAvecMarge({
       actifId: 'compte-2',
       comptes: ['default', 'compte-2', 'compte-3'],
-      mesurer: mesures({ default: 70, 'compte-2': 95, 'compte-3': 10 })
+      mesurer: mesures({ default: 70, 'compte-2': 100, 'compte-3': 10 })
     })
     expect(cible).toBe('compte-3')
   })
@@ -97,7 +97,7 @@ describe('choix du compte avant lancement', () => {
       comptes: ['default', 'compte-2'],
       mesurer: async (id) => {
         if (id === 'compte-2') throw new Error('Session Claude indisponible')
-        return 96
+        return 100
       }
     })
     expect(cible).toBeUndefined()
@@ -114,12 +114,12 @@ describe('choix du compte avant lancement', () => {
 })
 
 describe('bascule avant lancement', () => {
-  it('bascule le compte actif quand il est presque épuisé', async () => {
+  it('bascule le compte actif quand il est vidé', async () => {
     const basculer = vi.fn()
     const cible = await basculerAvantLancement({
       actifId: 'default',
       comptes: ['default', 'compte-2'],
-      mesurer: mesures({ default: 93, 'compte-2': 12 }),
+      mesurer: mesures({ default: 100, 'compte-2': 12 }),
       actifCourant: () => 'default',
       basculer
     })
@@ -132,7 +132,7 @@ describe('bascule avant lancement', () => {
     const cible = await basculerAvantLancement({
       actifId: 'default',
       comptes: ['default', 'compte-2', 'compte-3'],
-      mesurer: mesures({ default: 93, 'compte-2': 12, 'compte-3': 40 }),
+      mesurer: mesures({ default: 100, 'compte-2': 12, 'compte-3': 40 }),
       actifCourant: () => 'compte-3',
       basculer
     })

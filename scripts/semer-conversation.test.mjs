@@ -266,6 +266,42 @@ describe('--conversation — refusée hors de l’instance cachée', () => {
     expect(existsSync(join(destination, 'plans-de-lots.json'))).toBe(false)
   })
 
+  // conv-1284 (2026-10-29) : la capture du fil chef conv-1299 montrait « — » pour le coût de chaque
+  // lot, alors que l'app réelle les connaît (0,19 $, 0,06 $, 0,07 $) : la copie n'emportait que les
+  // fichiers de coût du chef. Les lots du plan qu'il MÈNE voyagent avec lui, et repartent après.
+  it('copie les fichiers de coût des lots du plan mené, pas ceux d’un plan dont il n’est qu’un lot', () => {
+    const source = racineSource()
+    ecrire(
+      join(source, 'plans-de-lots.json'),
+      JSON.stringify({
+        version: 1,
+        plans: [
+          { id: 'p-mene', chef: 'conv-955', lots: [{ rang: 1, fil: 'conv-2' }, { rang: 2 }] },
+          {
+            id: 'p-lot',
+            chef: 'conv-3',
+            lots: [
+              { rang: 1, fil: 'conv-955' },
+              { rang: 2, fil: 'conv-6' }
+            ]
+          }
+        ]
+      })
+    )
+    ecrire(join(source, 'activity', 'conv-2.jsonl'), '{"cout":1}\n')
+    ecrire(join(source, 'prompt-observability', 'conv-2.jsonl'), '{"cout":2}\n')
+    ecrire(join(source, 'prompt-observability', 'conv-6.jsonl'), '{"cout":3}\n')
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-955' })
+    const lot = (dossier) => join(destination, dossier, 'conv-2.jsonl')
+    expect(readFileSync(lot('activity'), 'utf8')).toBe('{"cout":1}\n')
+    expect(readFileSync(lot('prompt-observability'), 'utf8')).toBe('{"cout":2}\n')
+    expect(existsSync(join(destination, 'prompt-observability', 'conv-6.jsonl'))).toBe(false)
+    retirerSemence(destination, rapport)
+    expect(existsSync(lot('activity'))).toBe(false)
+    expect(existsSync(lot('prompt-observability'))).toBe(false)
+  })
+
   it('refuse un identifiant manquant ou dangereux', () => {
     expect(demandeDeConversation(['--conversation', '--view'])?.echec).toMatch(/invalide/)
     expect(demandeDeConversation(['--conversation', '../x'])?.echec).toMatch(/invalide/)

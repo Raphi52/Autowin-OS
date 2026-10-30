@@ -83,10 +83,12 @@ export const REFUS_ASK_DRAFT =
   '`ask` (demande de l’utilisateur : des boutons dans le bloc, pas de question). La question n’a ' +
   'pas été affichée et ton tour continue. Pose le BLOC DE CHOIX dans ta réponse : écris les ' +
   'propositions en JSON, lance `node scripts/draft-carrousel.mjs <propositions.json> --out ' +
-  '<tour.md>` et recopie son bloc ```html-render TEL QUEL — ses boutons « Affiner la N · nom », ' +
-  '« Implémenter la N · nom » et « Aucune : propose 6 autres directions » font le choix. Sujet 3D ' +
-  '(scènes ```threejs) : le même carrousel, avec pour `html` une fiche (nom + ce qui change) ; ' +
-  'les scènes restent au-dessus. Puis termine ta réponse SANS question.'
+  '<tour.md>` et pose ce fichier dans le fil avec `montrer_bloc` (ne le recopie pas : un ' +
+  'carrousel de 52 ko n’y tenait plus, conv-1306) — ses boutons « Affiner la N · nom », ' +
+  '« Implémenter la N · nom » et « Aucune : propose 6 autres directions » font le choix. Sujet 3D : ' +
+  'UNE scène three.js dans le champ `scene3d` du JSON, qui suit `autowin.surChoix`, et pour `html` ' +
+  'une fiche (nom + ce qui change) ; le carrousel devient alors une page ```html-interactif qui ' +
+  'porte la scène (conv-1304). Puis termine ta réponse SANS question.'
 
 /** Ligne visible dans le fil : l'utilisateur voit pourquoi aucune question ne s'affiche. */
 export const STATUT_REFUS_ASK_DRAFT =

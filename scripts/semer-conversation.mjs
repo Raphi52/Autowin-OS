@@ -49,6 +49,26 @@ export const fichiersDeConversation = (id) => [
   join('prompt-observability', `${id}.jsonl`)
 ]
 
+/**
+ * Fichiers de COÛT des lots d'un plan que `id` MÈNE, relatifs à la racine de données. Pure.
+ * conv-1284 (2026-10-29) : le tableau du chef lit le coût de chaque lot dans le fil du lot
+ * (`costBreakdown`, TableauDesLots.tsx) ; sans ces fichiers, la copie affichait « — » pour chaque
+ * lot alors que l'app réelle les connaissait (capture de conv-1299). Les plans dont `id` n'est
+ * qu'un lot n'emportent rien : ce n'est pas son tableau.
+ */
+export const fichiersDeCoutDesLots = (plans, id) =>
+  [
+    ...new Set(
+      plans
+        .filter((p) => p?.chef === id && Array.isArray(p.lots))
+        .flatMap((p) => p.lots.map((l) => l?.fil))
+        .filter((fil) => estIdDeConversation(fil) && fil !== id)
+    )
+  ].flatMap((fil) => [
+    join('activity', `${fil}.jsonl`),
+    join('prompt-observability', `${fil}.jsonl`)
+  ])
+
 /** Dossiers propres à une conversation. `turn-journals/<id>` en est EXCLU à dessein (voir en-tête). */
 export const dossiersDeConversation = (id) => [join('runs', id)]
 
@@ -197,6 +217,7 @@ export function semerConversation({ source, destination, id }) {
   }
   // Plans de lots (conv-1150) : sans eux, le tableau d'avancement d'un fil chef ne s'affiche pas.
   const plansDeLots = join(source, NOM_PLANS_DE_LOTS)
+  const coutsDesLots = []
   if (existsSync(plansDeLots)) {
     const siens = plansDeLotsDe(readFileSync(plansDeLots, 'utf8'), id)
     if (siens.length > 0) {
@@ -206,6 +227,14 @@ export function semerConversation({ source, destination, id }) {
         'utf8'
       )
       ecrits.push(NOM_PLANS_DE_LOTS)
+    }
+    // conv-1284 : le coût de chaque lot vient du fil du lot (`fichiersDeCoutDesLots`).
+    for (const relatif of fichiersDeCoutDesLots(siens, id)) {
+      if (!existsSync(join(source, relatif))) continue
+      mkdirSync(dirname(join(destination, relatif)), { recursive: true })
+      copyFileSync(join(source, relatif), join(destination, relatif))
+      ecrits.push(relatif)
+      coutsDesLots.push(relatif)
     }
   }
   let runs = 0
@@ -225,7 +254,8 @@ export function semerConversation({ source, destination, id }) {
     lignesDeJournal: lignes.length,
     archivee,
     runs,
-    ecrits
+    ecrits,
+    coutsDesLots
   }
 }
 
@@ -274,7 +304,12 @@ export function retirerSemence(destination, rapport) {
     ...new Set([
       ...emplacementsDeConversation(rapport.conversation),
       ...dossiersDArtefacts(destination, rapport.conversation),
-      ...variantes
+      ...variantes,
+      // conv-1284 : les fichiers de coût des lots, copiés avec le plan. Seuls ces deux dossiers et un
+      // nom de fil valide passent : un rapport abîmé ne fait rien retirer d'autre.
+      ...(Array.isArray(rapport.coutsDesLots) ? rapport.coutsDesLots : []).filter((relatif) =>
+        /^(activity|prompt-observability)[\\/][A-Za-z0-9._-]{1,120}\.jsonl$/.test(String(relatif))
+      )
     ])
   ]
   for (const relatif of aRetirer) {

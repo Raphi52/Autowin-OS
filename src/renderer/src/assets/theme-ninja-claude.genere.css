@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   1028 regles, 1428 declarations. Voir genererNinjaClaude.
+   1035 regles, 1436 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -753,9 +753,6 @@
     border-color: rgba(217, 120, 88, 0.6);
     background: rgba(156, 65, 35, 0.22)
 }
-:root[data-theme='ninja-claude'] .workflow-toggle:focus-visible {
-    outline: 1px solid rgba(225, 146, 120, 0.72)
-}
 :root[data-theme='ninja-claude'] .model-select-menu {
     background: rgba(31, 30, 29, 0.99)
 }
@@ -874,7 +871,7 @@
     ),
     rgba(31, 30, 29, 0.985)
 }
-:root[data-theme='ninja-claude'] .thinking-block > summary .thinking-secondes, :root[data-theme='ninja-claude'] .thinking-block > summary .thinking-duree, :root[data-theme='ninja-claude'] .capsule-bouton .thinking-duree, :root[data-theme='ninja-claude'] .activity-anneau .anneau-l1 .thinking-duree {
+:root[data-theme='ninja-claude'] .thinking-block > summary .thinking-secondes, :root[data-theme='ninja-claude'] .thinking-block > summary .thinking-duree, :root[data-theme='ninja-claude'] .capsule-bouton .thinking-duree, :root[data-theme='ninja-claude'] .workflow-toggle .thinking-duree, :root[data-theme='ninja-claude'] .activity-anneau .anneau-l1 .thinking-duree {
     background: rgba(31, 30, 29, 0.5)
 }
 :root[data-theme='ninja-claude'] .conv-mosaic-close-all {
@@ -3013,6 +3010,33 @@
 :root[data-theme='ninja-claude'] .sg-chip:hover {
     border-color: var(--accent, rgb(170, 168, 160));
     background: var(--surface, rgb(38, 38, 36))
+}
+
+/* ---- src/renderer/src/components/SuperConvMosaique.css ---- */
+:root[data-theme='ninja-claude'] .scm-onglet--chef {
+    --scm-c: var(--gold, rgb(215, 110, 76))
+}
+:root[data-theme='ninja-claude'] .scm-onglet.is-non-lu {
+    border-color: var(--gold, rgb(215, 110, 76));
+    color: var(--gold-bright, var(--gold, rgb(215, 110, 76)))
+}
+:root[data-theme='ninja-claude'] .scm-bandeau {
+    border-bottom: 1px solid color-mix(in srgb, var(--gold, rgb(215, 110, 76)) 35%, transparent)
+}
+:root[data-theme='ninja-claude'] .scm-kicker {
+    color: var(--gold, rgb(215, 110, 76))
+}
+:root[data-theme='ninja-claude'] .scm-chiffre b {
+    color: var(--gold, rgb(215, 110, 76))
+}
+:root[data-theme='ninja-claude'] .scm-maintenant {
+    color: var(--gold, rgb(215, 110, 76))
+}
+:root[data-theme='ninja-claude'] button.scm-nom:not(:disabled):hover {
+    color: var(--gold-bright, var(--gold, rgb(215, 110, 76)))
+}
+:root[data-theme='ninja-claude'] .scm-maintenant-ligne {
+    background: var(--gold, rgb(215, 110, 76))
 }
 
 /* ---- src/renderer/src/components/TachesDeLaDemande.css ---- */

@@ -66,6 +66,13 @@ description: >-
    citant la note qui le couvre.
 5. `reject` — lire la raison. « source locator is not verifiable » se corrige (`git:<chemin>@<sha>`,
    `session:<id>`) ; un secret ou une donnée personnelle détecté se SUPPRIME.
+5 bis. **Notes bruyantes** (conv-1303) — depuis le dépôt Autowin : `npx tsx scripts/notes-brain-bruyantes.mts`
+   liste les notes servies au moins 10 fois dans le chat sans jamais être ouvertes (même liste que
+   l'inventaire Brain de l'Observatory). Lire chacune : un ÉTAT PASSAGER (travail non commité d'un
+   fil, statut daté d'une tâche) passe `status: superseded` avec son motif ; une règle durable au titre
+   trop large voit son titre et sa première phrase resserrés sur son vrai sujet. Une note juste et
+   précise reste telle quelle : peu ouverte ne veut pas dire fausse. « mesure non commencée » ou liste
+   vide = rien à faire.
 6. **Inventaire Obsidian — APRÈS la dernière écriture dans `knowledge/`, AVANT la réindexation.**
    `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>` doit rendre
    `"errors": []`. Pourquoi cet ordre : l'inventaire généré

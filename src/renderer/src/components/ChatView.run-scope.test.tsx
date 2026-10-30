@@ -61,6 +61,17 @@ describe('ChatView — portée du panneau Workflows', () => {
 
   const bouton = (): HTMLElement => h?.container.querySelector('.workflow-toggle') as HTMLElement
 
+  // Détails est un vrai bouton depuis conv-1317 : son état se lit sur lui, comme la Mini-adresse.
+  it('Détails dit lui-même si le panneau est ouvert', async () => {
+    await monter()
+    expect(bouton().tagName).toBe('BUTTON')
+    expect(bouton().getAttribute('aria-pressed')).toBe('false')
+    await h!.click('.workflow-toggle')
+    expect(bouton().getAttribute('aria-pressed')).toBe('true')
+    await h!.click('.workflow-toggle')
+    expect(bouton().getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('le sélecteur de portée n’existe plus dans le panneau', async () => {
     await monter()
     await h!.click('.workflow-toggle')

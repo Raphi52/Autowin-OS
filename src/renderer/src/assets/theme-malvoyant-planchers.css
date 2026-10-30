@@ -816,6 +816,12 @@
 }
 
 /* components/NavigateurIntegre.css — tailles */
+:root[data-theme^='malvoyant-'] .navigateur-mode,
+:root[data-theme^='malvoyant-'] .navigateur-cadre-tete,
+:root[data-theme^='malvoyant-'] .navigateur-accord-texte span,
+:root[data-theme^='malvoyant-'] .navigateur-pilule,
+:root[data-theme^='malvoyant-'] .navigateur-annotations-titre,
+:root[data-theme^='malvoyant-'] .navigateur-annotation,
 :root[data-theme^='malvoyant-'] .navigateur-annotation-numero {
   font-size: 13px;
 }
@@ -1050,7 +1056,21 @@
   font-size: 13px;
 }
 
+/* components/SuperConvMosaique.css — tailles */
+:root[data-theme^='malvoyant-'] .scm-bandeau,
+:root[data-theme^='malvoyant-'] .scm-reduire,
+:root[data-theme^='malvoyant-'] .scm-geste,
+:root[data-theme^='malvoyant-'] .scm-vide,
+:root[data-theme^='malvoyant-'] .scm-nom,
+:root[data-theme^='malvoyant-'] .scm-relancer,
+:root[data-theme^='malvoyant-'] .scm-erreur,
+:root[data-theme^='malvoyant-'] .scm-chat .scm-onglet {
+  font-size: 13px;
+}
+
 /* components/TableauDesLots.css — tailles */
+:root[data-theme^='malvoyant-'] .tdl-memoire-de,
+:root[data-theme^='malvoyant-'] .tdl-modele,
 :root[data-theme^='malvoyant-'] .tdl-pastille,
 :root[data-theme^='malvoyant-'] .tdl-bouton--lot,
 :root[data-theme^='malvoyant-'] .tdl-relance-raison,
@@ -1190,6 +1210,11 @@
 
 /* components/VerificationDuBoard.css — tailles */
 :root[data-theme^='malvoyant-'] .riviere-verif-refus {
+  font-size: 13px;
+}
+
+/* components/VisionneuseDiagramme.css — tailles */
+:root[data-theme^='malvoyant-'] .artifact-diagram__agrandir {
   font-size: 13px;
 }
 

@@ -19,7 +19,11 @@ export const CONSIGNE_PLAN_DE_LOTS =
   `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\`. Déposer LANCE le plan aussitôt, ` +
   `sans clic de l'utilisateur (il peut l'arrêter dans le tableau) : ne dépose qu'un plan prêt. Avant de déposer, une lecture ` +
   `ciblée (le même escalier que pour un symptôme) estime les fichiers de chaque lot ; un lot qui a ` +
-  `besoin du RÉSULTAT d'un autre l'attend par « apres ». Chaque lot coûte un tour : vise 3 à 8 lots, ` +
+  `besoin du RÉSULTAT d'un autre l'attend par « apres ». Donne un « contexte » commun (le but, les ` +
+  `décisions et contraintes déjà prises) : le fil d'un lot ne sait RIEN d'autre que sa demande et ce ` +
+  `contexte. Un lot simple part sur un modèle léger (« modele »: « haiku » ou « sonnet »). Pendant le ` +
+  `plan, une nouvelle demande qui prolonge le chantier s'AJOUTE au plan (action « ajouter »), et une ` +
+  `décision qui vaut pour les lots à venir se NOTE (action « noter »). Chaque lot coûte un tour : vise 3 à 8 lots, ` +
   `pas plus que le chantier n'en demande. Dis en une ligne pourquoi tu découpes et que les lots sont ` +
   `partis, puis rends la main : l'app te réveille à chaque fin de lot. AUCUN plan pour : une tâche qui tient en un ou deux fichiers, une correction ` +
   `ponctuelle, une question ou une analyse (RÈGLE PREMIÈRE), plusieurs demandes indépendantes de ` +

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CONTEXTE_MAX,
+  CONTEXTE_MIN,
+  DECISIONS_MAX,
+  DECISION_MAX,
   DEMANDE_MAX,
   LOTS_MAX,
+  TOURS_PAR_LOT_DEFAUT,
+  ajouterLots,
+  estUnMessageDuPlan,
+  noterDecision,
   PARALLELE_MAX,
   bilanDuPlan,
   compteRenduDuLot,
@@ -9,6 +17,7 @@ import {
   decisionDeDepot,
   empreintePlan,
   interrompreAuDemarrage,
+  libelleEtat,
   lirePlanDeLots,
   lotsAPartir,
   marquerEchec,
@@ -33,6 +42,10 @@ import {
  * (garde `etat !== 'en-cours'`), `lotsAPartir`/`reprendrePlan` ignoraient un fil encore occupé
  * (5 rouges), et un agent mort avec l'app comptait comme une fin (2 rouges, d'où `perdu`).
  */
+
+/** Un contexte commun valide (au moins `CONTEXTE_MIN` caractères), conv-1284. */
+const CONTEXTE =
+  'Traduire les 113 écrans de l’app en anglais. Décidé : clés i18n en kebab-case, un fichier par écran, aucune chaîne en dur ne reste.'
 
 const lot = (n: number, fichiers: string[] = [`src/ecran-${n}.tsx`]): Record<string, unknown> => ({
   titre: `Lot ${n}`,
@@ -69,11 +82,23 @@ function lancerCeQuiPart(plan: PlanDeLots): PlanDeLots {
 
 describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () => {
   it('nominal : 4 lots, parallélisme 2, plafond par défaut de 2 tours par lot', () => {
-    const r = lu({ titre: 'Traduction', parallele: 2, lots: [lot(1), lot(2), lot(3), lot(4)] })
+    const r = lu({
+      titre: 'Traduction',
+      contexte: CONTEXTE,
+      parallele: 2,
+      lots: [lot(1), lot(2), lot(3), lot(4)]
+    })
     expect(r.plan.lots).toHaveLength(4)
     expect(r.plan.parallele).toBe(2)
     expect(r.plan.plafondTours).toBe(8)
+    expect(r.plan.contexte).toBe(CONTEXTE)
     expect(r.avertissements).toEqual([])
+  })
+
+  it('jumeau (conv-1284) : sans contexte commun, le plan passe mais le dit', () => {
+    const r = lu({ lots: [lot(1), lot(2)] })
+    expect(r.plan.contexte).toBeUndefined()
+    expect(r.avertissements.join(' ')).toMatch(/aucun « contexte » commun/)
   })
 
   it('accepte un plan écrit en JSON texte (arguments d’outil sérialisés)', () => {
@@ -321,6 +346,32 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(r.lot?.etat).toBe('echec')
     expect(r.plan.statut).toBe('suspendu-quota')
     expect(r.plan.toursLances).toBe(avant.toursLances - 1)
+  })
+
+  // conv-1284 (2026-10-29, demande de l'utilisateur) : un tour qui n'a jamais démarré ne coûte rien.
+  it('lancement qui n’a pas démarré : échec noté, tour rendu — une seule fois même s’il bute aussi sur la limite', () => {
+    const avant = deuxEnCours()
+    const r = noterFinDeTour(
+      avant,
+      'conv-110',
+      { ok: false, erreur: 'lancement refusé : conversation introuvable', nonDemarre: true },
+      3000
+    )
+    expect(r.lot).toMatchObject({
+      etat: 'echec',
+      raison: 'lancement refusé : conversation introuvable'
+    })
+    expect(r.plan.toursLances).toBe(avant.toursLances - 1)
+    const mur = noterFinDeTour(
+      avant,
+      'conv-110',
+      { ok: false, erreur: mur5h, nonDemarre: true },
+      3000
+    )
+    expect(mur.plan.toursLances).toBe(avant.toursLances - 1)
+    // Jumeau : un tour qui a démarré puis échoué garde son tour.
+    const demarre = noterFinDeTour(avant, 'conv-110', { ok: false, erreur: 'build rouge' }, 3000)
+    expect(demarre.plan.toursLances).toBe(avant.toursLances)
   })
 
   it('cas réel : 3 lots coupés par la limite ne vident pas le plafond, « Reprendre » les relance', () => {
@@ -885,5 +936,309 @@ describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv
     const [plan] = plansPourLaListe([lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))])
     expect(Object.keys(plan).sort()).toEqual(['chef', 'id', 'lots', 'total'])
     expect(Object.keys(plan.lots[0]).sort()).toEqual(['fil', 'rang'])
+  })
+})
+
+/*
+ * conv-1284 (2026-10-29) — le meilleur des threads de claude.exe dans le plan de lots : contexte
+ * commun (brief des « side sessions », refusé sous 80 caractères), décisions partagées (mémoire
+ * des « Projects »), fratrie dans le message d'un lot (« Linked sessions now »), modèle par lot,
+ * et lots ajoutés à un plan lancé (le coordinateur range une nouvelle demande dans le chantier).
+ */
+describe('contexte commun et modèle par lot (conv-1284)', () => {
+  it('refuse un contexte trop court ou trop long, en disant pourquoi il compte', () => {
+    const court = lirePlanDeLots({ contexte: 'traduire', lots: [lot(1), lot(2)] })
+    expect(court.ok).toBe(false)
+    if (!court.ok) expect(court.erreur).toMatch(/80 au moins.*ne sait rien d’autre/)
+    const long = lirePlanDeLots({ contexte: 'x'.repeat(CONTEXTE_MAX + 1), lots: [lot(1), lot(2)] })
+    expect(long.ok).toBe(false)
+    expect(lu({ contexte: 'x'.repeat(CONTEXTE_MIN), lots: [lot(1), lot(2)] }).plan.contexte).toBe(
+      'x'.repeat(CONTEXTE_MIN)
+    )
+    expect(lirePlanDeLots({ contexte: 42, lots: [lot(1), lot(2)] }).ok).toBe(false)
+  })
+
+  it('lit un modèle par lot ; refuse un nom qui n’en est pas un', () => {
+    const r = lu({ lots: [{ ...lot(1), modele: 'haiku' }, lot(2)] })
+    expect(r.plan.lots[0].modele).toBe('haiku')
+    expect(r.plan.lots[1]).not.toHaveProperty('modele')
+    for (const modele of ['', 'un modèle', 42, '-x', 'a'.repeat(61)]) {
+      const refuse = lirePlanDeLots({ lots: [{ ...lot(1), modele }, lot(2)] })
+      expect(refuse.ok, String(modele)).toBe(false)
+      if (!refuse.ok) expect(refuse.erreur).toMatch(/lot 1 : modele/)
+    }
+  })
+
+  it('un plan sans contexte ni modèle garde l’empreinte d’avant ces champs', () => {
+    // Formule d'avant conv-1284, recopiée : un plan déjà sur disque ne doit pas changer de clé.
+    const avant = (plan: ReturnType<typeof lu>['plan']): string => {
+      const texte = JSON.stringify([
+        plan.titre,
+        plan.parallele,
+        plan.plafondTours,
+        plan.lots.map((l) => {
+          const base = [l.titre, l.demande, l.fichiers.map((f) => f.toLowerCase())]
+          return l.apres.length ? [...base, l.apres] : base
+        })
+      ])
+      let h = 0x811c9dc5
+      for (let i = 0; i < texte.length; i++) {
+        h ^= texte.charCodeAt(i)
+        h = Math.imul(h, 0x01000193) >>> 0
+      }
+      return h.toString(16).padStart(8, '0')
+    }
+    const simple = lu({ lots: [lot(1), { ...lot(2), apres: [1] }] }).plan
+    expect(empreintePlan(simple)).toBe(avant(simple))
+    const avecModele = lu({ lots: [lot(1), { ...lot(2), apres: [1], modele: 'sonnet' }] }).plan
+    expect(empreintePlan(avecModele)).not.toBe(empreintePlan(simple))
+    const avecContexte = lu({ contexte: CONTEXTE, lots: [lot(1), { ...lot(2), apres: [1] }] }).plan
+    expect(empreintePlan(avecContexte)).not.toBe(empreintePlan(simple))
+  })
+})
+
+describe('promptDuLot — ce que sait le fil d’un lot (conv-1284)', () => {
+  it('porte le contexte, les décisions, les autres lots et la règle de la question au chef', () => {
+    let plan = lancerCeQuiPart(
+      planAccepte({
+        contexte: CONTEXTE,
+        parallele: 2,
+        lots: [lot(1), lot(2), lot(3, ['src/commun.ts'])]
+      })
+    )
+    const note = noterDecision(plan, 'les clés suivent le nom du fichier', 'lot 1', 3000)
+    if (!note.ok) throw new Error(note.erreur)
+    plan = note.plan
+    const texte = promptDuLot(plan, plan.lots[2])
+    expect(texte.startsWith("/build traduis l'écran 3")).toBe(true)
+    expect(texte).toContain(`Contexte commun du plan (le même pour tous les lots) :\n${CONTEXTE}`)
+    expect(texte).toContain('- les clés suivent le nom du fichier (lot 1)')
+    expect(texte).toContain(
+      '- lot 1 « Lot 1 » : en cours, fil conv-110 — fichiers : src/ecran-1.tsx'
+    )
+    expect(texte).toContain('- lot 2 « Lot 2 » : en cours, fil conv-120')
+    expect(texte).not.toContain('- lot 3 «')
+    expect(texte).toMatch(/UNE question courte avec ecrire_a_un_fil \(destinataire conv-1\)/)
+    expect(texte).toContain('« ⛔ Bloqué : j’attends la réponse du chef »')
+    // conv-1284 (2026-10-29) : la réponse du chef arrive en ordre, les décisions par message.
+    expect(texte).toContain('sa réponse arrivera comme un ordre qui relance ce fil')
+    expect(texte).toContain('les lots en cours la reçoivent par message')
+    expect(texte).toMatch(/action « noter »/)
+    // Le message reste reconnu comme composé par le plan (garde des deux lectures, conv-1192).
+    expect(estUnMessageDuPlan(texte)).toBe(true)
+  })
+
+  it('jumeau : sans contexte ni décision, aucune rubrique vide', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const texte = promptDuLot(plan, plan.lots[0])
+    expect(texte).not.toMatch(/Contexte commun/)
+    expect(texte).not.toMatch(/Décisions prises en route/)
+    expect(estUnMessageDuPlan(texte)).toBe(true)
+  })
+
+  /*
+   * conv-1284 (2026-10-29, demande de l'utilisateur) : un lot qui a posé sa question au chef
+   * « attend le chef » — un état à part. Noté « échec » jusque-là, il passait pour un lot cassé
+   * (bilan du chef dans le test réel de conv-1299 : « il attendait seulement, il n'avait pas échoué »).
+   */
+  it('la question bloquante d’un lot le met en « attend le chef », relançable (ni « fait » ni « échec »)', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const fin = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: 'J’ai posé ma question.\n\n⛔ Bloqué : j’attends la réponse du chef' },
+      4000
+    )
+    expect(fin.lot?.etat).toBe('attend-chef')
+    expect(fin.lot?.raison).toMatch(/question posée au chef/)
+    expect(libelleEtat('attend-chef')).toBe('attend le chef')
+    expect(bilanDuPlan(fin.plan)).toMatchObject({ echecs: 0, attendChef: 1 })
+    expect(bilanDuPlan(fin.plan).texte).toMatch(
+      /0 en échec, 1 en cours, 0 à faire, 1 attend le chef sur 2/
+    )
+    expect(relancerLot(fin.plan, 1).ok).toBe(true)
+    // Apostrophe droite tolérée : le marqueur est réécrit à la main par l'agent.
+    const droite = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: "⛔ Bloqué : j'attends la réponse du chef" },
+      4000
+    )
+    expect(droite.lot?.etat).toBe('attend-chef')
+  })
+
+  it('un plan dont un lot attend le chef ne se termine pas ; il ne passe pas « bloqué » non plus', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const attente = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: '⛔ Bloqué : j’attends la réponse du chef' },
+      4000
+    ).plan
+    const fin = noterFinDeTour(attente, 'conv-120', { ok: true }, 4001).plan
+    expect(fin.statut).toBe('en-cours')
+    expect(fin.raison).toMatch(/le lot 1 attend la réponse du chef/)
+    // Le lot repart (réponse du chef) : la raison s'efface, et sa fin termine le plan.
+    const relance = relancerLot(fin, 1)
+    if (!relance.ok) throw new Error(relance.erreur)
+    expect(relance.plan.raison).toBeUndefined()
+    const repart = lancerCeQuiPart(relance.plan)
+    expect(noterFinDeTour(repart, 'conv-110', { ok: true }, 4002).plan.statut).toBe('termine')
+    // Un lot qui en attend un autre en attente reste à faire, sans « bloqué ».
+    const chaine = lancerCeQuiPart(planAccepte({ lots: [lot(1), { ...lot(2), apres: [1] }] }))
+    const enAttente = noterFinDeTour(
+      chaine,
+      'conv-110',
+      { ok: true, texte: '⛔ Bloqué : j’attends la réponse du chef' },
+      4000
+    ).plan
+    expect(enAttente.statut).toBe('en-cours')
+    expect(enAttente.lots[1].etat).toBe('a-faire')
+  })
+
+  // conv-1284 : rien ne tournait, rien n'est interrompu — le plan attend toujours le chef, dont la
+  // réponse (un ordre) doit pouvoir relancer le lot sans clic « Reprendre ».
+  it('redémarrage pendant que le plan attend le chef : le plan reste en cours, l’ordre relance', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    let p = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: '⛔ Bloqué : j’attends la réponse du chef' },
+      4000
+    ).plan
+    p = noterFinDeTour(p, 'conv-120', { ok: true }, 4001).plan
+    const apres = interrompreAuDemarrage(p)
+    expect(apres).toBe(p)
+    expect(relancerLot(apres, 1).ok).toBe(true)
+    // Jumeau : un lot qui tournait au moment du redémarrage interrompt toujours le plan.
+    const enCours = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: '⛔ Bloqué : j’attends la réponse du chef' },
+      4000
+    ).plan
+    expect(interrompreAuDemarrage(enCours).statut).toBe('interrompu')
+  })
+
+  it('jumeau : un blocage qui n’attend pas le chef reste un échec', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const fin = noterFinDeTour(
+      plan,
+      'conv-110',
+      { ok: true, texte: '⛔ Bloqué : le build reste rouge, 3 tests en échec' },
+      4000
+    )
+    expect(fin.lot?.etat).toBe('echec')
+  })
+})
+
+describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
+  const plan = (): PlanDeLots => planAccepte({ lots: [lot(1), lot(2)] })
+
+  it('note, dédoublonne sans casse, borne la longueur et le nombre', () => {
+    const r = noterDecision(plan(), '  le port   reste 5173 ', 'chef', 10)
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.plan.decisions).toEqual([{ texte: 'le port reste 5173', de: 'chef', le: 10 }])
+    expect(noterDecision(r.plan, 'LE PORT RESTE 5173', 'lot 2', 11)).toMatchObject({
+      ok: true,
+      deja: true
+    })
+    expect(noterDecision(plan(), '', 'chef', 1).ok).toBe(false)
+    expect(noterDecision(plan(), 42, 'chef', 1).ok).toBe(false)
+    expect(noterDecision(plan(), 'x'.repeat(DECISION_MAX + 1), 'chef', 1).ok).toBe(false)
+    let p = plan()
+    for (let i = 0; i < DECISIONS_MAX; i++) {
+      const n = noterDecision(p, `décision ${i}`, 'chef', i)
+      if (!n.ok) throw new Error(n.erreur)
+      p = n.plan
+    }
+    expect(noterDecision(p, 'une de plus', 'chef', 99).ok).toBe(false)
+  })
+
+  it('refuse un plan écarté (refusé, remplacé) ; accepte un plan fini', () => {
+    expect(noterDecision({ ...plan(), statut: 'remplace' }, 'x', 'chef', 1).ok).toBe(false)
+    expect(noterDecision({ ...plan(), statut: 'refuse' }, 'x', 'chef', 1).ok).toBe(false)
+    expect(noterDecision({ ...plan(), statut: 'termine' }, 'x', 'chef', 1).ok).toBe(true)
+  })
+
+  it('le réveil du chef montre les décisions des LOTS, pas les siennes', () => {
+    let p = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    for (const [texte, de] of [
+      ['nom retenu : carte-du-plan.ts', 'lot 2'],
+      ['on garde le port 5173', 'chef']
+    ]) {
+      const n = noterDecision(p, texte, de, 1)
+      if (!n.ok) throw new Error(n.erreur)
+      p = n.plan
+    }
+    const reveil = promptDeReveil(p, [1])
+    expect(reveil).toContain(
+      'Décisions notées par les lots : « nom retenu : carte-du-plan.ts » (lot 2).'
+    )
+    expect(reveil).not.toContain('port 5173')
+    expect(reveil).toMatch(/action « ajouter »/)
+    // conv-1284 : la réponse à un lot bloqué part en ordre, sans « relancer » en plus.
+    expect(reveil).toMatch(/réponds-lui avec ecrire_a_un_fil, nature « ordre »/)
+    expect(reveil).toContain('ne le relance pas en plus')
+  })
+})
+
+describe('ajouterLots — un plan lancé grandit au lieu d’en exiger un second (conv-1284)', () => {
+  it('ajoute à la suite, « apres » peut viser un lot déjà là, le plafond grandit', () => {
+    const plan = lancerCeQuiPart(planAccepte({ parallele: 1, lots: [lot(1), lot(2)] }))
+    const r = ajouterLots(plan, { lots: [{ ...lot(3), apres: [1], modele: 'haiku' }, lot(4)] })
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.plan.lots.map((l) => [l.rang, l.etat, l.apres])).toEqual([
+      [1, 'en-cours', []],
+      [2, 'a-faire', []],
+      [3, 'a-faire', [1]],
+      [4, 'a-faire', []]
+    ])
+    expect(r.plan.lots[2].modele).toBe('haiku')
+    expect(r.plan.plafondTours).toBe(plan.plafondTours + 2 * TOURS_PAR_LOT_DEFAUT)
+    expect(r.plan.statut).toBe('en-cours')
+  })
+
+  it('un plan terminé repart avec les lots ajoutés ; accepte aussi une liste nue en JSON texte', () => {
+    let plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    plan = noterFinDeTour(plan, 'conv-110', { ok: true }, 5).plan
+    plan = noterFinDeTour(plan, 'conv-120', { ok: true }, 6).plan
+    expect(plan.statut).toBe('termine')
+    const r = ajouterLots(plan, JSON.stringify([lot(3)]))
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.plan.statut).toBe('en-cours')
+    expect(lotsAPartir(r.plan)).toEqual([3])
+  })
+
+  it('refuse : plan suspendu ou arrêté, cycle, rang inconnu, trop de lots, rien à ajouter', () => {
+    const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const suspendu = ajouterLots({ ...plan, statut: 'suspendu-quota' }, [lot(3)])
+    expect(suspendu.ok).toBe(false)
+    if (!suspendu.ok) expect(suspendu.erreur).toMatch(/Reprendre/)
+    expect(ajouterLots({ ...plan, statut: 'arrete' }, [lot(3)]).ok).toBe(false)
+    const cycle = ajouterLots(plan, [
+      { ...lot(3), apres: [4] },
+      { ...lot(4), apres: [3] }
+    ])
+    expect(cycle.ok).toBe(false)
+    if (!cycle.ok) expect(cycle.erreur).toMatch(/cycle/)
+    const inconnu = ajouterLots(plan, [{ ...lot(3), apres: [9] }])
+    expect(inconnu.ok).toBe(false)
+    if (!inconnu.ok) expect(inconnu.erreur).toMatch(/lot 3 : apres — le lot 9 n’existe pas/)
+    const trop = ajouterLots(
+      plan,
+      Array.from({ length: LOTS_MAX - 1 }, (_, i) => lot(i + 3))
+    )
+    expect(trop.ok).toBe(false)
+    expect(ajouterLots(plan, []).ok).toBe(false)
+    expect(ajouterLots(plan, { lots: 'non' }).ok).toBe(false)
+  })
+
+  it('un lot ajouté qui annonce le fichier d’un lot vivant : averti, et jamais en même temps', () => {
+    const plan = lancerCeQuiPart(planAccepte({ parallele: 3, lots: [lot(1), lot(2)] }))
+    const r = ajouterLots(plan, [lot(3, ['src/ecran-1.tsx'])])
+    if (!r.ok) throw new Error(r.erreur)
+    expect(r.avertissements.join(' ')).toMatch(/lot 3 annonce un fichier du lot 1/)
+    expect(lotsAPartir(r.plan)).toEqual([])
   })
 })

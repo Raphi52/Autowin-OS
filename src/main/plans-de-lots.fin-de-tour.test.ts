@@ -37,13 +37,22 @@ const laisserFiler = async (): Promise<void> => {
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0))
 }
 
-function bancReel(options: { contenu?: string; fils?: string[]; premierFil?: number } = {}): {
+function bancReel(
+  options: {
+    contenu?: string
+    fils?: string[]
+    premierFil?: number
+    /** Reprises réservées AVANT le chargement du coordinateur, comme `reprendreAppelChat` (index.ts). */
+    reprisDesLeChargement?: string[]
+  } = {}
+): {
   coord: CoordinateurDesPlans
   turns: ActiveChatTurns
   lancements: Array<{ fil: string; prompt: string }>
   tourUtilisateur: (fil: string) => void
   finir: (fil: string) => Promise<void>
   reprise: (fil: string) => (issue: IssueDuTour, ordre?: 'apres' | 'avant') => Promise<void>
+  finDeReprise: (fil: string) => (issue: IssueDuTour) => Promise<void>
   stockage: () => string
 } {
   const turns = new ActiveChatTurns()
@@ -71,6 +80,23 @@ function bancReel(options: { contenu?: string; fils?: string[]; premierFil?: num
     turns.trackPreparation(args[2], () => corps(...args))
   const surFin: ObservateurFinDeTour = (fil, issue) => coord.surFinDeTour(fil, issue)
   const runPilotChat = suivreLaFinDuTour(tourCompteDesReception, surFin)
+  // MÊME ordre que `reprendreAppelChat` (index.ts) : réservation `setRecovered` à la reprise ; à la
+  // fin, `delete` de la réservation PUIS annonce `repris`. `avant` rejoue l'ordre fautif.
+  const reprise = (fil: string) => {
+    const controller = new AbortController()
+    let clore!: () => void
+    turns.setRecovered(fil, controller, new Promise<void>((r) => (clore = r)))
+    return async (issue: IssueDuTour, ordre: 'apres' | 'avant' = 'apres'): Promise<void> => {
+      if (ordre === 'avant') annoncerLaFinDuTour(surFin, fil, { ...issue, repris: true })
+      turns.delete(fil, controller)
+      clore()
+      if (ordre === 'apres') annoncerLaFinDuTour(surFin, fil, { ...issue, repris: true })
+      await laisserFiler()
+    }
+  }
+  const reprisesDuChargement = new Map(
+    (options.reprisDesLeChargement ?? []).map((fil) => [fil, reprise(fil)])
+  )
   const coord: CoordinateurDesPlans = new CoordinateurDesPlans({
     creerFil: () => {
       const fil = `conv-${prochain++}`
@@ -99,19 +125,11 @@ function bancReel(options: { contenu?: string; fils?: string[]; premierFil?: num
     coord,
     turns,
     stockage: () => stocke,
-    // MÊME ordre que `reprendreAppelChat` (index.ts) : réservation `setRecovered` à la reprise ; à la
-    // fin, `delete` de la réservation PUIS annonce `repris`. `avant` rejoue l'ordre fautif.
-    reprise: (fil) => {
-      const controller = new AbortController()
-      let clore!: () => void
-      turns.setRecovered(fil, controller, new Promise<void>((r) => (clore = r)))
-      return async (issue, ordre = 'apres') => {
-        if (ordre === 'avant') annoncerLaFinDuTour(surFin, fil, { ...issue, repris: true })
-        turns.delete(fil, controller)
-        clore()
-        if (ordre === 'apres') annoncerLaFinDuTour(surFin, fil, { ...issue, repris: true })
-        await laisserFiler()
-      }
+    reprise,
+    finDeReprise: (fil) => {
+      const fin = reprisesDuChargement.get(fil)
+      if (!fin) throw new Error(`aucune reprise réservée au chargement pour ${fil}`)
+      return fin
     },
     lancements,
     tourUtilisateur: (fil) => {
@@ -242,6 +260,173 @@ describe('plans de lots — redémarrage, avec le vrai registre des tours et de 
 })
 
 /*
+ * LE PLAN SUIT L'AGENT QUI A SURVÉCU (conv-1308, 2026-10-30, demande de l'utilisateur). Vécu sur
+ * plan-b4358910 : l'app redémarre pendant le lot 1, l'agent continue, le chef affiche « interrompu »
+ * alors que le fil du lot tourne. « Reprendre » y aurait lancé un second agent, et rien ne devait
+ * enchaîner les lots 2 et 3 à sa fin. Un lot dont l'agent vit n'est pas interrompu ; seul un lot
+ * dont l'agent est mort attend encore le clic.
+ */
+describe('plans de lots — le plan suit l’agent qui a survécu au redémarrage', () => {
+  const planEnChaine = {
+    titre: 'Navigateur',
+    parallele: 3,
+    lots: [1, 2, 3].map((n) => ({
+      titre: `Étape ${n}`,
+      demande: `/build étape ${n}`,
+      fichiers: [`src/etape-${n}.ts`],
+      apres: n > 1 ? [n - 1] : []
+    }))
+  }
+
+  /** Le plan tourne, seul le lot 1 est parti ; l'app redémarre sur le disque ainsi laissé. */
+  async function disqueDuPlanEnChaine(): Promise<string> {
+    const avant = bancReel()
+    const d = avant.coord.deposer('conv-1', planEnChaine)
+    if (!d.ok) throw new Error(d.erreur)
+    await avant.coord.accepter('conv-1', d.plan.id)
+    await laisserFiler()
+    expect(avant.lancements.map((l) => l.fil)).toEqual(['conv-100'])
+    return avant.stockage()
+  }
+
+  const etats = (b: ReturnType<typeof bancReel>): string[] =>
+    b.coord.plans()[0].lots.map((l) => l.etat)
+
+  it('agent réservé avant le chargement : le plan reste en cours, rien n’est relancé', async () => {
+    const b = bancReel({
+      contenu: await disqueDuPlanEnChaine(),
+      fils: ['conv-100'],
+      premierFil: 101,
+      reprisDesLeChargement: ['conv-100']
+    })
+    expect(b.coord.plans()[0].statut).toBe('en-cours')
+    expect(b.coord.plans()[0].raison).toBeUndefined()
+    expect(etats(b)).toEqual(['en-cours', 'a-faire', 'a-faire'])
+    expect(b.lancements).toEqual([])
+  })
+
+  it('sa fin note le lot, enchaîne le lot suivant et réveille le chef, sans aucun clic', async () => {
+    const b = bancReel({
+      contenu: await disqueDuPlanEnChaine(),
+      fils: ['conv-100'],
+      premierFil: 101,
+      reprisDesLeChargement: ['conv-100']
+    })
+    await b.finDeReprise('conv-100')({ ok: true, texte: 'Étape 1 livrée.' })
+    expect(etats(b)).toEqual(['fait', 'en-cours', 'a-faire'])
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-101', 'conv-1'])
+    expect(reveilsDuChef(b)[0]).toMatch(/lot 1 « Étape 1 » : fait/)
+    // La chaîne continue : le lot 2 fini, le lot 3 part à son tour.
+    await b.finir('conv-101')
+    expect(etats(b)).toEqual(['fait', 'fait', 'en-cours'])
+  })
+
+  it('agent connu APRÈS le chargement (inventaire, run rattaché) : même résultat', async () => {
+    const b = bancReel({
+      contenu: await disqueDuPlanEnChaine(),
+      fils: ['conv-100'],
+      premierFil: 101
+    })
+    expect(b.coord.plans()[0].statut).toBe('interrompu')
+    b.coord.agentRepris('conv-100')
+    expect(b.coord.plans()[0].statut).toBe('en-cours')
+    expect(etats(b)).toEqual(['en-cours', 'a-faire', 'a-faire'])
+    expect(b.lancements).toEqual([])
+    await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
+    expect(etats(b)).toEqual(['fait', 'en-cours', 'a-faire'])
+  })
+
+  it('« Reprendre » n’a plus rien à faire : aucun second agent dans le fil du lot', async () => {
+    const b = bancReel({
+      contenu: await disqueDuPlanEnChaine(),
+      fils: ['conv-100'],
+      premierFil: 101
+    })
+    b.coord.agentRepris('conv-100')
+    const r = await b.coord.reprendre('conv-1', b.coord.plans()[0].id)
+    expect(r.ok).toBe(false)
+    expect(b.lancements).toEqual([])
+  })
+
+  it('un lot mort à côté du survivant : le plan attend le clic, le survivant finit quand même', async () => {
+    const avant = await planAccepte()
+    const b = bancReel({
+      contenu: avant.stockage(),
+      fils: ['conv-100', 'conv-101'],
+      premierFil: 102
+    })
+    b.coord.agentRepris('conv-100')
+    expect(b.coord.plans()[0].statut).toBe('interrompu')
+    expect(etats(b)).toEqual(['en-cours', 'interrompu', 'a-faire'])
+    await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
+    expect(etats(b)).toEqual(['fait', 'interrompu', 'a-faire'])
+    // Rien ne repart seul pour le lot mort ; le chef, lui, est prévenu.
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
+    await b.finir('conv-1')
+    await b.coord.reprendre('conv-1', b.coord.plans()[0].id)
+    await laisserFiler()
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1', 'conv-101', 'conv-102'])
+  })
+
+  it('un plan arrêté par l’utilisateur le reste : le lot finit, aucun autre ne part', async () => {
+    const avant = bancReel()
+    const d = avant.coord.deposer('conv-1', planEnChaine)
+    if (!d.ok) throw new Error(d.erreur)
+    await avant.coord.accepter('conv-1', d.plan.id)
+    await laisserFiler()
+    avant.coord.arreter('conv-1', d.plan.id)
+    const b = bancReel({ contenu: avant.stockage(), fils: ['conv-100'], premierFil: 101 })
+    b.coord.agentRepris('conv-100')
+    expect(b.coord.plans()[0].statut).toBe('arrete')
+    expect(etats(b)).toEqual(['en-cours', 'a-faire', 'a-faire'])
+    await b.coord.surFinDeTour('conv-100', { ok: true, repris: true })
+    expect(b.coord.plans()[0].statut).toBe('arrete')
+    expect(etats(b)).toEqual(['fait', 'a-faire', 'a-faire'])
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
+  })
+
+  it('un run d’un AUTRE tour du même fil n’adopte pas le lot', async () => {
+    const avant = bancReel()
+    const d = avant.coord.deposer('conv-1', planEnChaine)
+    if (!d.ok) throw new Error(d.erreur)
+    await avant.coord.accepter('conv-1', d.plan.id)
+    await laisserFiler()
+    const brut = JSON.parse(avant.stockage()) as {
+      plans: Array<{ lots: Array<{ tour?: string }> }>
+    }
+    brut.plans[0].lots[0].tour = 'tour-du-lot'
+    const b = bancReel({
+      contenu: JSON.stringify(brut),
+      fils: ['conv-100'],
+      premierFil: 101
+    })
+    b.coord.agentRepris('conv-100', 'tour-ancien')
+    expect(b.coord.plans()[0].statut).toBe('interrompu')
+    b.coord.agentRepris('conv-100', 'tour-du-lot')
+    expect(b.coord.plans()[0].statut).toBe('en-cours')
+  })
+
+  it('l’agent adopté meurt sans résultat : lot en échec, suite bloquée, chef prévenu', async () => {
+    const b = bancReel({
+      contenu: await disqueDuPlanEnChaine(),
+      fils: ['conv-100'],
+      premierFil: 101
+    })
+    b.coord.agentRepris('conv-100')
+    await b.coord.surFinDeTour('conv-100', {
+      ok: false,
+      repris: true,
+      perdu: true,
+      erreur: 'agent resté sans signe de vie'
+    })
+    expect(etats(b)).toEqual(['echec', 'a-faire', 'a-faire'])
+    expect(b.coord.plans()[0].statut).toBe('bloque')
+    expect(reveilsDuChef(b)).toHaveLength(1)
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-1'])
+  })
+})
+
+/*
  * Le site d'appel : la composition testée ci-dessus est celle d'index.ts. Si l'annonce repart de
  * `createRunPilotChat` (donc de l'intérieur de `trackPreparation`), ces deux tests restent verts
  * mais le chef de l'app réelle n'est plus réveillé : c'est ce que cette garde refuse.
@@ -273,6 +458,54 @@ describe('plans de lots — branchement de la fin de tour dans index.ts', () => 
     expect(reprise).toMatch(
       /const closeWithoutRecovery = \(event: ChatTurnEvent\): void => \{\s+issueDeReprise = issueDeCloture\(event\)/
     )
+  })
+
+  /*
+   * conv-1308 : index.ts ne se démarre pas sous test. Le comportement est prouvé plus haut et dans
+   * `relaunch-resumable-run.test.ts` ; ici, le branchement des deux chemins de reprise.
+   */
+  it('une reprise d’appel chat prévient le plan dès qu’elle réserve le fil', () => {
+    const debut = index.indexOf(
+      'const reprendreAppelChat = (call: RecoverableChatProviderCall): void => {'
+    )
+    const reprise = index.slice(debut, index.indexOf('\n  }\n', debut))
+    const reserve = reprise.indexOf('activeChatTurns.setRecovered(')
+    const adopte = reprise.indexOf('suiviDesPlans.coordinateur?.agentRepris(')
+    expect(reserve).toBeGreaterThan(0)
+    expect(adopte).toBeGreaterThan(reserve)
+  })
+
+  it('un run repris au démarrage (rattaché ou relancé) est adopté avant toute attente', () => {
+    const debut = index.indexOf('for (const resumableRun of resumableRuns) {')
+    const boucle = index.slice(debut, index.indexOf('const preflightStartedAt', debut))
+    expect(boucle).toMatch(
+      /reprise === 'rattacher' \|\| reprise === 'relancer'[\s\S]{0,200}suiviDuPlan\.agentRepris\(/
+    )
+    expect(boucle.indexOf('suiviDuPlan.agentRepris(')).toBeLessThan(
+      boucle.indexOf(
+        'void waitUntilRunCanResume(',
+        boucle.indexOf("if (reprise === 'rattacher') {")
+      )
+    )
+  })
+
+  it('un rattachement clos sans relance annonce sa fin au plan', () => {
+    const debut = index.indexOf('for (const resumableRun of resumableRuns) {')
+    const boucle = index.slice(debut, index.indexOf('const preflightStartedAt', debut))
+    const rattache = boucle.slice(boucle.indexOf("if (reprise === 'rattacher') {"))
+    expect(rattache.match(/annoncerFinDuRunRepris\(/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('la relance d’un run reçoit le suivi du plan', () => {
+    const appel = index.slice(index.indexOf('creerRelanceDeRunReprenable({'))
+    const deps = appel.slice(0, appel.indexOf('\n  })\n'))
+    expect(deps).toContain('plansDeLots: suiviDuPlan')
+    const debut = index.indexOf('const suiviDuPlan: SuiviDuPlan = {')
+    const suivi = index.slice(debut, index.indexOf('\n  }\n', debut))
+    expect(suivi).toContain('suiviDesPlans.coordinateur?.agentRepris(')
+    expect(suivi).toContain('annoncerLaFinDuTour(observateurDesPlans,')
+    // Le démarrage et l'enregistrement des canaux n'ont pas la même portée : le suivi passe par ici.
+    expect(index).toContain('const suiviDuPlan = registerChatIpc()')
   })
 
   it('la fabrique du tour ne reçoit plus l’observateur de fin (il annoncerait trop tôt)', () => {

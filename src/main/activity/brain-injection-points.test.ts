@@ -21,7 +21,14 @@ const MOTIFS: { nom: string; regex: RegExp }[] = [
   { nom: 'retrieveBrainContext(...)', regex: /(?<!function\s)\bretrieveBrainContext\s*\)?\s*\(/ },
   { nom: 'retrieveBrain(...)', regex: /\bretrieveBrain\s*\(/ },
   { nom: 'rememberFact(...)', regex: /(?<!function\s)\brememberFact\s*\(/ },
-  { nom: 'HTTP Brain', regex: /\$\{origin\}\/(query-secure|query|ingest|challenge)/ },
+  // `/read`, `/graph` et la route en variable (conv-1303, 2026-10-30) : `brain_read` passait par
+  // `${origin}${route}`, que l'ancien motif ne voyait pas — 148 notes entières injectées, 347 000
+  // caractères du 22 au 30/10, absents d'un registre qui se dit exhaustif.
+  {
+    nom: 'HTTP Brain',
+    regex: /\$\{origin\}(\/(query-secure|query|ingest|challenge|read|graph)\b|\$\{route\})/
+  },
+  { nom: 'runBrainRead/runBrainGraph(...)', regex: /(?<!function\s)\brunBrain(Read|Graph)\s*\(/ },
   { nom: 'IPC os:searchBrain', regex: /['"]os:searchBrain['"]/ }
 ]
 

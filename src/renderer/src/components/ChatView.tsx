@@ -125,6 +125,9 @@ import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { TableauDesLots } from './TableauDesLots'
+import { ongletDuFil } from './frise-des-lots'
+import { usePlanDuChef } from './lots-mesures'
+import { SuperConvDuChat } from './SuperConvMosaique'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import {
@@ -168,7 +171,7 @@ import type {
 import { declarerVueChatMontee, filDeLaVueMontee } from './vue-chat-montee'
 import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
 import { visibleScopedRuns } from './workflows-panel-sections'
-import { ForkIcon, PanelIcon } from './chat-view-icons'
+import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
@@ -313,12 +316,13 @@ import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets-chaine-persistes'
 import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
 import { RunsEnDirect } from './runs-en-direct'
+import { RemplirSaisieDuFil } from './saisie-du-fil'
+import { BoutonDetails, BoutonNavigateur } from './BoutonNavigateur'
 import { NavigateurIntegre } from './NavigateurIntegre'
 import {
   apiNavigateur,
   blocPourLeChat,
-  lienAOuvrirDansLePanneau,
-  texteNavigateur
+  lienAOuvrirDansLePanneau
 } from './navigateur-integre-outils'
 import type { AnnotationNavigateur, ReglagesNavigateur } from '../../../shared/navigateur'
 /**
@@ -523,6 +527,20 @@ function liensDesPlans(plans: readonly PlanDansLaListe[]): Map<string, LienDeLot
       if (lot.fil !== plan.chef)
         liens.set(lot.fil, { chef: plan.chef, rang: lot.rang, total: plan.total })
   return liens
+}
+
+/**
+ * Pur : le fil chef de la super conv dont `fil` fait partie, ou `null`. Le chef d'abord, comme
+ * `planDuFil` côté app. Lu ici plutôt que relu du plan : passer d'un onglet à l'autre change de fil
+ * sans changer de chef, donc les onglets restent à l'écran sans attendre de relecture.
+ */
+function chefDeLaSuperConv(
+  fil: string | null,
+  liens: ReadonlyMap<string, LienDeLot>
+): string | null {
+  if (!fil) return null
+  for (const lien of liens.values()) if (lien.chef === fil) return fil
+  return liens.get(fil)?.chef ?? null
 }
 
 /** Vrai si les deux tables portent exactement les mêmes liens : rien à re-rendre. */
@@ -6839,14 +6857,21 @@ export function ChatView({
     fermer: fermerFenetreMosaique,
     ouvrirSeule: ouvrirSeuleDepuisMosaique,
     nouvelle: nouvelleFenetreMosaique,
-    composer: rendreComposerMosaique
+    composer: rendreComposerMosaique,
+    ouvrirFil: ouvrirDansMosaique
   })
   rappelsMosaiqueRef.current = {
     fermer: fermerFenetreMosaique,
     ouvrirSeule: ouvrirSeuleDepuisMosaique,
     nouvelle: nouvelleFenetreMosaique,
-    composer: rendreComposerMosaique
+    composer: rendreComposerMosaique,
+    ouvrirFil: ouvrirDansMosaique
   }
+  /** Onglet d'un lot pas encore peint dans la case de sa super conv (conv-1305) : on l'ouvre. */
+  const ouvrirFilMosaiqueStable = useCallback(
+    (id: string) => void rappelsMosaiqueRef.current.ouvrirFil(id),
+    []
+  )
   const fermerFenetreStable = useCallback((id: string) => rappelsMosaiqueRef.current.fermer(id), [])
   const ouvrirSeuleStable = useCallback(
     (id: string) => void rappelsMosaiqueRef.current.ouvrirSeule(id),
@@ -6867,6 +6892,28 @@ export function ChatView({
     if (busyConversationsRef.current.has(cible)) void submitBtwRef.current(prompt, cible)
     else void sendRef.current(prompt, { targetConversationId: cible })
   }, [])
+  /**
+   * Bouton de choix d'une page interactive (conv-1304, voir saisie-du-fil.ts) : il REMPLIT la
+   * saisie, comme « Reprendre en précisant… », et ne l'envoie jamais.
+   */
+  const remplirSaisieRef = useRef<(texte: string, cible?: string) => void>(() => {})
+  remplirSaisieRef.current = (texte, cible) => {
+    if (cible === undefined) {
+      setDraftInput(composerDraftKeyRef.current, texte)
+      requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+      return
+    }
+    // Fenêtre de mosaïque : c'est SA saisie qui reçoit le texte (brouillon indexé par fil).
+    setDraftInput(cible, texte)
+    const composer = composersMosaiqueRef.current.get(cible)
+    composer?.setInput(texte)
+    requestAnimationFrame(() => composer?.focusAt(-1))
+  }
+  const remplirSaisie = useCallback((texte: string) => remplirSaisieRef.current(texte), [])
+  const remplirSaisieMosaique = useCallback(
+    (texte: string, cible: string) => remplirSaisieRef.current(texte, cible),
+    []
+  )
   /**
    * Ce qui oblige un composer a se redessiner SANS passer par `fenetre` : brouillons et pieces
    * jointes (`draftsVersion`), palettes `@` et `/`. Le fil et l'etat occupe, eux, sont deja dans
@@ -7335,6 +7382,31 @@ export function ChatView({
       relirePlansRef.current = () => {}
     }
   }, [])
+
+  /*
+   * LA SUPER CONV DU FIL OUVERT (conv-1315) : sur un fil chef ou un de ses lots, le panneau de chat
+   * porte les mêmes onglets et la même frise que la case de mosaïque (`SuperConvDuChat`).
+   */
+  const chefDuFilOuvert = useMemo(
+    () => chefDeLaSuperConv(activeId, liensDeLots),
+    [activeId, liensDeLots]
+  )
+  const planDuFilOuvert = usePlanDuChef(chefDuFilOuvert)
+  const ongletDuFilOuvert =
+    planDuFilOuvert && activeId ? ongletDuFil(planDuFilOuvert, activeId) : null
+  /*
+   * Les titres des onglets de la super conv (conv-1286). La signature garde la MÊME Map tant
+   * qu'aucun titre ne change : `convs` est refait à chaque rafraîchissement de la liste, et une Map
+   * neuve redessinerait onglets et frise, que leur `memo` protège du flux.
+   */
+  const signatureDesTitres = useMemo(
+    () => JSON.stringify(convs.map((c) => [c.id, c.title])),
+    [convs]
+  )
+  const titresDesFils = useMemo<ReadonlyMap<string, string>>(
+    () => new Map(JSON.parse(signatureDesTitres) as [string, string][]),
+    [signatureDesTitres]
+  )
 
   /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
@@ -8447,8 +8519,12 @@ export function ChatView({
           rendreComposer={rendreComposerStable}
           onNouvelleConversation={nouvelleFenetreStable}
           onAnswerAsk={repondreAskMosaiqueStable}
+          onRemplirSaisie={remplirSaisieMosaique}
           signatureComposer={signatureComposerMosaique}
           skills={skillsInstallees}
+          liensDeLots={liensDeLots}
+          titresDesFils={titresDesFils}
+          onOuvrirFil={ouvrirFilMosaiqueStable}
         />
       ) : (
         <section
@@ -8636,60 +8712,24 @@ export function ChatView({
               </div>
             </div>
             <div className="row gap2 chat-head-actions">
-              {/* NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5) : ouvre ou ferme le panneau, comme Ctrl+Shift+B. */}
-              <button
-                type="button"
-                className="btn chat-navigateur-toggle"
-                data-testid="chat-navigateur-toggle"
-                // Les onglets appartiennent à un fil : sans fil ouvert, le clic n'aurait rien à montrer.
-                // fix-ok: cause mesurée (conv-1286, 2026-10-29) — capture réelle sans conversation : clic sans effet visible ; sans cette ligne, NavigateurIntegre.test.tsx « aucun fil ouvert » échoue (code 1), avec elle 31/31 (code 0).
-                disabled={!activeId}
-                aria-pressed={navigateurOuvert}
-                aria-label={texteNavigateur(navigateurOuvert ? 'fermerPanneau' : 'ouvrirPanneau')}
-                title={texteNavigateur(navigateurOuvert ? 'fermerPanneau' : 'ouvrirPanneau')}
-                onClick={() => setNavigateurOuvert((ouvert) => !ouvert)}
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
-                  <path
-                    d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              {/* DÉTAILS EN CAPSULE (conv-178, 2026-10-10 : « pareil pour Détails » — la même gueule
-                  que les capsules Raisonnement / Actions). Même balisage et mêmes classes que
-                  ThinkingBlock (`thinking-block`, `thinking-capsule`…) : ChatView.css et chaque
-                  thème le dessinent à l'identique, comme les images lues / envoyées. Panneau
-                  ouvert = capsule allumée (`is-live`), fermé = capsule de tour fini (`is-done`).
-                  Le clic est intercepté : c'est `showRuns` qui ouvre le panneau, pas le <details>. */}
-              <details
-                className={`thinking-block workflow-capsule${showRuns ? ' is-live' : ' is-done'}`}
-                open={showRuns}
-              >
-                <summary
-                  className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    setShowRuns((v) => !v)
-                  }}
-                  title={texteFil('entete.details.titre')}
-                >
-                  <span className="thinking-capsule">
-                    <span className="thinking-capsule-icone" aria-hidden="true">
-                      <PanelIcon />
-                    </span>
-                    <span className="thinking-label">{texteFil('entete.details')}</span>
-                    {openRunsCount > 0 ? (
-                      <span className="thinking-duree">{openRunsCount} open</span>
-                    ) : null}
-                    {/* Plus de badge « N green » (conv-969, 2026-10-15 : « enlève le badge 2 green du
-                        bouton détail ») : seuls les runs encore ouverts méritent un compteur ici. */}
-                  </span>
-                </summary>
-              </details>
+              {/* NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5 ; Mini-adresse, conv-1317) : ouvre ou ferme le
+                  panneau, comme Ctrl+Shift+B. */}
+              <BoutonNavigateur
+                conversationId={activeId}
+                ouvert={navigateurOuvert}
+                onBasculer={() => setNavigateurOuvert((ouvert) => !ouvert)}
+              />
+              {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (conv-1317, 2026-10-30 : « le bouton
+                  détail met lui le meme look »). Il portait le balisage de ThinkingBlock (conv-178),
+                  donc ses règles, ses reflets et le chanfrein de chaque thème : un vrai bouton de
+                  la même classe que son voisin garde les deux identiques. */}
+              <BoutonDetails
+                ouvert={showRuns}
+                libelle={texteFil('entete.details')}
+                titre={texteFil('entete.details.titre')}
+                runsOuverts={openRunsCount}
+                onBasculer={() => setShowRuns((v) => !v)}
+              />
             </div>
             {/* LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE ET LE FIL (conv-179) : posee sur
                le filet du bas de l'en-tete. Meme source que tout le reste : `jaugeCourante`. Au survol,
@@ -8722,6 +8762,14 @@ export function ChatView({
               })()}
             />
           </header>
+          {planDuFilOuvert && ongletDuFilOuvert !== null ? (
+            <SuperConvDuChat
+              key={planDuFilOuvert.id}
+              plan={planDuFilOuvert}
+              onglet={ongletDuFilOuvert}
+              titres={titresDesFils}
+            />
+          ) : null}
 
           {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
             <div
@@ -9077,7 +9125,12 @@ export function ChatView({
             <VueMesuree id="chat-fil" bloc>
               <PointerMomentVideo.Provider value={pointerMomentVideo}>
                 {/* Les runs en cours, pour le bloc des juges qui se remplit en direct (conv-1021). */}
-                <RunsEnDirect.Provider value={liveRuns}>{filRendu}</RunsEnDirect.Provider>
+                <RunsEnDirect.Provider value={liveRuns}>
+                  {/* Boutons de choix des pages interactives : ils remplissent CETTE saisie. */}
+                  <RemplirSaisieDuFil.Provider value={remplirSaisie}>
+                    {filRendu}
+                  </RemplirSaisieDuFil.Provider>
+                </RunsEnDirect.Provider>
               </PointerMomentVideo.Provider>
             </VueMesuree>
 
@@ -9138,7 +9191,7 @@ export function ChatView({
           {/* Les messages entre agents de fils du même dépôt vivent dans Détails > Runs
               (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
           {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
-          <TableauDesLots conversationId={activeId} />
+          <TableauDesLots conversationId={activeId} aCoteDeLaFrise={ongletDuFilOuvert !== null} />
           <VueMesuree id="chat-saisie" bloc>
             <ChatComposer
               ref={composerRef}

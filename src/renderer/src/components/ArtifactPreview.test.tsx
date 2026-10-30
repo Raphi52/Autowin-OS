@@ -413,7 +413,11 @@ A`
       hostile,
       expect.any(HTMLElement)
     )
-    expect(container.querySelector('.artifact-diagram')?.children).toHaveLength(1)
+    // Le dessin reste SEUL dans son conteneur : un style `& + *` n'a aucun voisin à atteindre. Le
+    // bouton Agrandir (conv-1322) vit donc à côté de ce conteneur, jamais à côté du <svg>.
+    const dessin = container.querySelector('.artifact-diagram__dessin')
+    expect(dessin?.children).toHaveLength(1)
+    expect(dessin?.firstElementChild?.tagName.toLowerCase()).toBe('svg')
   })
 
   it('agrandit une image et expose provenance, taille et revelation sure', () => {

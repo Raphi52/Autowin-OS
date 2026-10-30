@@ -30,7 +30,10 @@ type DocumentDeVue = {
     classList: { add(classe: string): unknown; remove(classe: string): unknown }
     style?: { setProperty(nom: string, valeur: string): unknown }
   }
-  startViewTransition?: (rappel: () => void) => { finished: Promise<unknown> }
+  startViewTransition?: (rappel: () => void) => {
+    ready: Promise<unknown>
+    finished: Promise<unknown>
+  }
 }
 
 /**
@@ -48,8 +51,12 @@ function transitionSousClasse(doc: DocumentDeVue, classe: string, appliquer: () 
   enVol.set(classe, (enVol.get(classe) ?? 0) + 1)
   doc.documentElement.classList.add(classe)
   const transition = doc.startViewTransition(() => flushSync(appliquer))
-  // Une transition sautee (un clic plus recent) ou en echec rejette `finished` : le changement est
-  // quand meme applique, seule l'animation manque. La classe, elle, ne doit jamais rester posee.
+  // Une transition sautee (un clic plus recent) ou en echec rejette `ready` ET `finished` : le
+  // changement est quand meme applique, seule l'animation manque. `ready` sans gestionnaire sortait
+  // en « Uncaught AbortError: Transition was skipped » dans la console (conv-1322, spec « skip the
+  // view transition »). Rien n'est masque : une erreur de `appliquer` remonte par `updateCallbackDone`,
+  // que la spec garde pour la signaler. La classe, elle, ne doit jamais rester posee.
+  void transition.ready.catch(() => undefined)
   void transition.finished
     .catch(() => undefined)
     .finally(() => {

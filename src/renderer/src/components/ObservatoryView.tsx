@@ -1259,6 +1259,44 @@ export function ObservatoryView({
               ))}
             </tbody>
           </table>
+          {brainInventory.mesureOuverturesDepuis && (
+            <div data-testid="brain-inventory-bruyantes">
+              {brainInventory.notesBruyantes.length === 0 ? (
+                <p>
+                  {t('vue.bruyantes.aucune', {
+                    seuil: brainInventory.seuilNotesBruyantes,
+                    depuis: brainInventory.mesureOuverturesDepuis.slice(0, 10)
+                  })}
+                </p>
+              ) : (
+                <>
+                  <p>
+                    <strong>
+                      {t('vue.bruyantes.titre', {
+                        seuil: brainInventory.seuilNotesBruyantes,
+                        depuis: brainInventory.mesureOuverturesDepuis.slice(0, 10)
+                      })}
+                    </strong>{' '}
+                    <small>{t('vue.bruyantes.conseil')}</small>
+                  </p>
+                  <ul>
+                    {brainInventory.notesBruyantes.map((note) => (
+                      <li key={note.chemin} data-testid="brain-note-bruyante">
+                        <code>{note.chemin}</code>{' '}
+                        <small>
+                          {t('vue.bruyantes.ligne', {
+                            servies: note.servies,
+                            fils: note.fils,
+                            s: note.fils > 1 ? 's' : ''
+                          })}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
           {brainInventory.tracesNonRattachees > 0 && (
             <p data-testid="brain-inventory-orphelines">
               {t('vue.inventaire.orphelines', {

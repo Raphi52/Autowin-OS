@@ -1,23 +1,32 @@
 import { useEffect, useState } from 'react'
-import type { Langue } from '../../../shared/langue'
-import {
-  relancerLot,
-  type EtatDuLot,
-  type GestePlanDeLots,
-  type LotDuPlan,
-  type PlanDeLots,
-  type StatutDuPlan,
-  type VuePlanDeLots
+import type {
+  GestePlanDeLots,
+  PlanDeLots,
+  StatutDuPlan,
+  VuePlanDeLots
 } from '../../../shared/plan-de-lots'
-import { formaterDate } from '../langue'
 import {
-  auPluriel,
   texteDuBilan,
-  traduireChatFilsEtLots,
   useTextesChatFilsEtLots,
   type CleChatFilsEtLots
 } from '../textes-ecrans/chat-fils-et-lots'
-import { formatDuration, summarizeConversationCost, type CostRow } from './conversation-cost'
+import { summarizeConversationCost } from './conversation-cost'
+import {
+  CLE_ETAT,
+  INCONNU,
+  coutDuFil,
+  coutTotalDesLots,
+  dureeDuLot,
+  lireReduits,
+  ouvrirFil,
+  planArretable,
+  planReprenable,
+  relanceAuClic,
+  retenirReduits,
+  selonNombre,
+  useCoutsDesLots,
+  type CoutsParFil
+} from './lots-mesures'
 import './TableauDesLots.css'
 
 /*
@@ -30,83 +39,17 @@ import './TableauDesLots.css'
  *
  * Dans un fil enfant, une seule ligne rappelle quel lot il traite et pour quel chef.
  * Relu à chaque signal `refresh` (plans-de-lots, chat, conversations) et à chaque changement de fil.
+ *
+ * `aCoteDeLaFrise` (conv-1315) : le fil s'affiche avec les onglets et la frise de la super conv, qui
+ * montrent déjà chaque lot, son état, sa durée, son coût et « Relancer ». Il ne reste ici que ce que
+ * la frise n'a pas : titre et statut du plan, raison, mémoire et gestes du plan (Arrêter, Reprendre).
  */
 
-const ouvrirFil = (fil: string): void => {
-  window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: fil }))
-}
+/* Les mesures (coût, durée, relance, réduction retenue) vivent dans `lots-mesures.ts` (conv-1305). */
 
-const STATUTS_REPRENABLES = new Set(['suspendu-quota', 'interrompu', 'arrete'])
-const STATUTS_ARRETABLES = new Set(['en-cours', 'suspendu-quota', 'interrompu'])
+type GesteDuTableau = Exclude<GestePlanDeLots, 'voir' | 'phrases'>
 
-/*
- * RÉDUIRE LE TABLEAU (conv-1283, 2026-10-29) : posé au-dessus de la zone de saisie, il prenait
- * jusqu'à 340 px pendant tout le plan, sans moyen de le replier. Réduit, il ne garde que sa ligne
- * de titre et de statut. Retenu sur le poste, par plan : sans cela, il se rouvrait à chaque
- * changement de fil ou rechargement.
- */
-const CLE_REDUITS = 'autowin:plans-de-lots-reduits'
-const REDUITS_MAX = 100
-
-function lireReduits(): string[] {
-  try {
-    const brut = JSON.parse(window.localStorage.getItem(CLE_REDUITS) ?? '[]') as unknown
-    return Array.isArray(brut) ? brut.filter((id): id is string => typeof id === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function retenirReduits(ids: string[]): void {
-  try {
-    window.localStorage.setItem(CLE_REDUITS, JSON.stringify(ids.slice(-REDUITS_MAX)))
-  } catch {
-    // Stockage indisponible : le tableau reste réduit jusqu'au prochain remontage, rien de plus.
-  }
-}
-
-/*
- * DURÉE ET COÛT DE CHAQUE LOT (conv-1151, lot 4 — constat d'origine conv-1146 : plus de 20 $ dans un
- * seul fil, sans que rien ne le montre). Le coût d'un lot est celui de SON fil, lu par le même canal
- * `costBreakdown` et résumé par le même `summarizeConversationCost` que la pastille de coût du fil
- * (ConversationCostIndicator) : un second calcul serait une seconde vérité. Un fil sans appel mesuré,
- * un canal absent ou un journal illisible donnent « — », jamais « 0 $ ».
- */
-const INCONNU = '—'
-
-/** Lignes de coût par fil de lot ; `null` = canal absent ou journal illisible. */
-type CoutsParFil = Record<string, CostRow[] | null>
-
-/** Le coût d'un fil, ou `undefined` quand rien n'a été mesuré (même règle que la pastille). */
-function coutDuFil(couts: CoutsParFil, fil: string | undefined): CostRow[] | undefined {
-  const lignes = fil ? couts[fil] : undefined
-  if (!lignes || summarizeConversationCost(lignes).calls <= 0) return undefined
-  return lignes
-}
-
-const heure = (ms: number): string => formaterDate(ms, { hour: '2-digit', minute: '2-digit' })
-
-/** Le texte d'une clé, au singulier ou au pluriel selon `n` et la langue (`auPluriel`). */
-const selonNombre = (
-  langue: Langue,
-  n: number,
-  un: CleChatFilsEtLots,
-  plusieurs: CleChatFilsEtLots,
-  valeurs: Record<string, string | number> = {}
-): string =>
-  traduireChatFilsEtLots(auPluriel(n, langue) ? plusieurs : un, langue, { n, ...valeurs })
-
-/*
- * Les libellés d'état et de statut de l'écran. Le moteur garde les siens en français
- * (`LIBELLE_ETAT` / `LIBELLE_STATUT`, shared/plan-de-lots.ts) : l'agent du fil chef les lit.
- */
-const CLE_ETAT: Record<EtatDuLot, CleChatFilsEtLots> = {
-  'a-faire': 'lots.etat.a-faire',
-  'en-cours': 'lots.etat.en-cours',
-  fait: 'lots.etat.fait',
-  echec: 'lots.etat.echec',
-  interrompu: 'lots.etat.interrompu'
-}
+/* Les libellés de statut de l'écran ; ceux des états sont dans `lots-mesures.ts` (`CLE_ETAT`). */
 const CLE_STATUT: Record<StatutDuPlan, CleChatFilsEtLots> = {
   'attente-accord': 'lots.statut.attente-accord',
   'en-cours': 'lots.statut.en-cours',
@@ -118,119 +61,6 @@ const CLE_STATUT: Record<StatutDuPlan, CleChatFilsEtLots> = {
   arrete: 'lots.statut.arrete',
   refuse: 'lots.statut.refuse',
   remplace: 'lots.statut.remplace'
-}
-
-/** Durée du DERNIER lancement du lot (une relance remet `debut` à zéro). */
-function dureeDuLot(lot: LotDuPlan, langue: Langue): { texte: string; titre?: string } {
-  if (!lot.debut) return { texte: INCONNU }
-  if (lot.fin)
-    return {
-      texte: formatDuration(lot.fin - lot.debut) ?? INCONNU,
-      titre: `${heure(lot.debut)} → ${heure(lot.fin)}`
-    }
-  // En cours : l'heure de départ reste vraie sans horloge qui tourne, une durée figée ne le serait pas.
-  if (lot.etat === 'en-cours')
-    return {
-      texte: traduireChatFilsEtLots('lots.duree.depuis', langue, { heure: heure(lot.debut) }),
-      titre: traduireChatFilsEtLots('lots.duree.lancePasFini', langue)
-    }
-  return {
-    texte: INCONNU,
-    titre: traduireChatFilsEtLots('lots.duree.finNonNotee', langue, { heure: heure(lot.debut) })
-  }
-}
-
-/**
- * Relit le coût de chaque fil de lot quand un lot change d'état ou se termine — c'est à la fin d'un
- * tour que sa dépense devient lisible (même moment que la pastille du fil), et relire tous les
- * journaux à chaque signal « chat » coûterait sans rien apprendre.
- */
-function useCoutsDesLots(plan: PlanDeLots | null): CoutsParFil {
-  const [lu, setLu] = useState<{ plan: string; couts: CoutsParFil }>({ plan: '', couts: {} })
-  const signature = plan
-    ? plan.lots.map((l) => (l.fil ? `${l.fil}:${l.etat}:${l.fin ?? ''}` : '')).join('|')
-    : ''
-  const planId = plan?.id ?? ''
-  useEffect(() => {
-    const fils = [
-      ...new Set(
-        signature
-          .split('|')
-          .filter(Boolean)
-          .map((s) => s.split(':')[0])
-      )
-    ]
-    if (!planId || !fils.length) return
-    const lire = window.api?.costBreakdown
-    let vivant = true
-    void Promise.all(
-      fils.map(async (fil): Promise<[string, CostRow[] | null]> => {
-        if (typeof lire !== 'function') return [fil, null]
-        try {
-          const lignes = (await lire('actor', fil)) as CostRow[] | undefined
-          return [fil, Array.isArray(lignes) ? lignes : null]
-        } catch {
-          // Journal illisible : ce lot reste « — », le tableau ne casse pas.
-          return [fil, null]
-        }
-      })
-    ).then((paires) => {
-      if (vivant) setLu({ plan: planId, couts: Object.fromEntries(paires) })
-    })
-    return () => {
-      vivant = false
-    }
-  }, [planId, signature])
-  // Les coûts d'un AUTRE plan (changement de fil) ne s'affichent jamais.
-  return lu.plan === planId ? lu.couts : {}
-}
-
-/** Le coût des lots MESURÉS, additionné par le même résumé ; les lots lancés sans mesure sont comptés. */
-function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil, langue: Langue): string {
-  const lances = plan.lots.filter((l) => l.fil)
-  const mesures = lances.map((l) => coutDuFil(couts, l.fil)).filter((c): c is CostRow[] => !!c)
-  if (!mesures.length) return INCONNU
-  const total = summarizeConversationCost(mesures.flat()).label
-  const sansMesure = lances.length - mesures.length
-  return sansMesure
-    ? selonNombre(langue, sansMesure, 'lots.cout.sansMesure.un', 'lots.cout.sansMesure.plusieurs', {
-        total
-      })
-    : total
-}
-
-/*
- * RELANCER UN LOT AU CLIC (conv-1151, lot 3). Avant ce bouton, seul l'agent du chef relançait un lot
- * en échec (`plan_de_lots`, action « relancer ») : l'utilisateur, qui voyait l'échec ici, devait lui
- * écrire. La décision « permis » est celle de `relancerLot` — la règle même que le geste exécutera
- * dans le coordinateur, jamais une seconde copie.
- */
-
-/** Plans dont un lot en échec garde son bouton, grisé, quand le plafond de tours est épuisé. */
-const STATUTS_RELANCE_GRISEE = new Set<PlanDeLots['statut']>([
-  'en-cours',
-  'termine',
-  'plafond-atteint'
-])
-
-/** `null` = pas de bouton ; sinon actif, ou grisé avec sa raison. */
-function relanceAuClic(
-  plan: PlanDeLots,
-  lot: LotDuPlan,
-  langue: Langue
-): { possible: true } | { possible: false; raison: string } | null {
-  if (lot.etat !== 'echec' && lot.etat !== 'interrompu') return null
-  if (relancerLot(plan, lot.rang).ok) return { possible: true }
-  // Le seul refus qui garde un bouton : sans lui, l'utilisateur ne saurait pas pourquoi rien ne
-  // repart. Les autres (quota, redémarrage, arrêt) ont déjà leur bouton « Reprendre ».
-  if (plan.toursLances >= plan.plafondTours && STATUTS_RELANCE_GRISEE.has(plan.statut))
-    return {
-      possible: false,
-      raison: traduireChatFilsEtLots('lots.relance.plafond', langue, {
-        plafond: plan.plafondTours
-      })
-    }
-  return null
 }
 
 function LotsDuPlan({
@@ -256,6 +86,16 @@ function LotsDuPlan({
             <span className="tdl-pastille">{t(CLE_ETAT[lot.etat])}</span>
             <span className="tdl-lot-titre">
               {lot.rang}. {lot.titre}
+              {lot.modele ? (
+                <span
+                  className="tdl-modele"
+                  data-testid={`tdl-lot-${lot.rang}-modele`}
+                  title={t('lots.modele.titre')}
+                >
+                  {' '}
+                  · {lot.modele}
+                </span>
+              ) : null}
               {lot.raison ? <span className="tdl-lot-raison"> — {lot.raison}</span> : null}
               {relance ? (
                 <span className="tdl-relance">
@@ -320,9 +160,11 @@ function LotsDuPlan({
 }
 
 export function TableauDesLots({
-  conversationId
+  conversationId,
+  aCoteDeLaFrise = false
 }: {
   conversationId?: string | null
+  aCoteDeLaFrise?: boolean
 }): React.JSX.Element | null {
   const { t } = useTextesChatFilsEtLots()
   // L'état porte le fil qu'il décrit : à un changement de fil, l'ancien plan n'est jamais affiché.
@@ -362,12 +204,15 @@ export function TableauDesLots({
   }, [conversationId])
 
   const vue = lu.fil === conversationId ? lu.vue : null
-  // Appelé avant tout retour anticipé (règle des hooks) ; seul le fil chef lit les coûts.
-  const couts = useCoutsDesLots(vue?.role === 'chef' ? vue.plan : null)
+  // Appelé avant tout retour anticipé (règle des hooks) ; seul le fil chef lit les coûts, et la
+  // frise lit déjà les siens.
+  const couts = useCoutsDesLots(vue?.role === 'chef' && !aCoteDeLaFrise ? vue.plan : null)
   if (!conversationId || !vue) return null
   const { plan } = vue
 
   if (vue.role === 'enfant') {
+    // L'onglet du lot et sa piste disent déjà ce que dirait cette ligne.
+    if (aCoteDeLaFrise) return null
     const lot = plan.lots.find((l) => l.rang === vue.rang)
     return (
       <section
@@ -399,7 +244,8 @@ export function TableauDesLots({
 
   const erreur = geste.fil === conversationId ? geste.erreur : undefined
   const occupe = geste.fil === conversationId && geste.enCours
-  const reduit = reduits.includes(plan.id)
+  // À côté de la frise, c'est elle qui se réduit : ce qui reste ici tient déjà sur une ligne.
+  const reduit = !aCoteDeLaFrise && reduits.includes(plan.id)
   const basculerReduit = (): void => {
     const suivants = reduit
       ? reduits.filter((id) => id !== plan.id)
@@ -407,7 +253,7 @@ export function TableauDesLots({
     setReduits(suivants)
     retenirReduits(suivants)
   }
-  const agir = (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number): void => {
+  const agir = (action: GesteDuTableau, lot?: number): void => {
     if (occupe) return
     setGeste({ fil: conversationId, enCours: true })
     const reponse =
@@ -439,7 +285,7 @@ export function TableauDesLots({
 
   return (
     <section
-      className={`tdl tdl--${plan.statut}${reduit ? ' tdl--reduit' : ''}`}
+      className={`tdl tdl--${plan.statut}${reduit ? ' tdl--reduit' : ''}${aCoteDeLaFrise ? ' tdl--frise' : ''}`}
       aria-label={t('lots.aria')}
       data-testid="tableau-des-lots"
       data-statut={plan.statut}
@@ -451,18 +297,28 @@ export function TableauDesLots({
         <span className={`tdl-statut tdl-statut--${plan.statut}`}>
           {t(CLE_STATUT[plan.statut])}
         </span>
-        <button
-          type="button"
-          className="tdl-reduire"
-          data-testid="tdl-reduire"
-          aria-expanded={!reduit}
-          title={reduit ? t('lots.agrandir.titre') : t('lots.reduire.titre')}
-          onClick={basculerReduit}
-        >
-          {reduit ? t('lots.agrandir') : t('lots.reduire')}
-        </button>
+        {aCoteDeLaFrise ? null : (
+          <button
+            type="button"
+            className="tdl-reduire"
+            data-testid="tdl-reduire"
+            aria-expanded={!reduit}
+            title={reduit ? t('lots.agrandir.titre') : t('lots.reduire.titre')}
+            onClick={basculerReduit}
+          >
+            {reduit ? t('lots.agrandir') : t('lots.reduire')}
+          </button>
+        )}
       </header>
-      {reduit ? null : <TableauDeplie plan={plan} couts={couts} occupe={occupe} agir={agir} />}
+      {reduit ? null : (
+        <TableauDeplie
+          plan={plan}
+          couts={couts}
+          occupe={occupe}
+          agir={agir}
+          aCoteDeLaFrise={aCoteDeLaFrise}
+        />
+      )}
       {erreur ? (
         <div className="tdl-erreur" role="alert">
           {erreur}
@@ -477,23 +333,27 @@ function TableauDeplie({
   plan,
   couts,
   occupe,
-  agir
+  agir,
+  aCoteDeLaFrise
 }: {
   plan: PlanDeLots
   couts: CoutsParFil
   occupe: boolean
-  agir: (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number) => void
+  agir: (action: GesteDuTableau, lot?: number) => void
+  aCoteDeLaFrise: boolean
 }): React.JSX.Element {
   const { langue, t } = useTextesChatFilsEtLots()
   return (
     <>
-      <div className="tdl-bilan">
-        {texteDuBilan(plan, langue)} ·{' '}
-        {selonNombre(langue, plan.parallele, 'lots.parallele.un', 'lots.parallele.plusieurs')} ·{' '}
-        <span data-testid="tdl-cout-total" title={t('lots.cout.titre')}>
-          {t('lots.cout.total', { cout: coutTotalDesLots(plan, couts, langue) })}
-        </span>
-      </div>
+      {aCoteDeLaFrise ? null : (
+        <div className="tdl-bilan">
+          {texteDuBilan(plan, langue)} ·{' '}
+          {selonNombre(langue, plan.parallele, 'lots.parallele.un', 'lots.parallele.plusieurs')} ·{' '}
+          <span data-testid="tdl-cout-total" title={t('lots.cout.titre')}>
+            {t('lots.cout.total', { cout: coutTotalDesLots(plan, couts, langue) })}
+          </span>
+        </div>
+      )}
       {plan.raison ? <div className="tdl-raison">{plan.raison}</div> : null}
       {/*
        * Repliés (conv-1171) : 36 lignes « les lots X et Y annoncent le même fichier » poussaient la
@@ -517,12 +377,43 @@ function TableauDeplie({
           </ul>
         </details>
       ) : null}
-      <LotsDuPlan
-        plan={plan}
-        couts={couts}
-        occupe={occupe}
-        relancer={(rang) => agir('relancer', rang)}
-      />
+      {/*
+       * conv-1284 : ce que chaque lot reçoit en plus de sa demande — le contexte commun et les
+       * décisions notées en route (par le chef ou un lot). Repliés, comme les avertissements.
+       */}
+      {plan.contexte ? (
+        <details className="tdl-memoire" data-testid="tdl-contexte">
+          <summary>{t('lots.contexte')}</summary>
+          <p>{plan.contexte}</p>
+        </details>
+      ) : null}
+      {plan.decisions?.length ? (
+        <details className="tdl-memoire" data-testid="tdl-decisions">
+          <summary>
+            {selonNombre(
+              langue,
+              plan.decisions.length,
+              'lots.decisions.un',
+              'lots.decisions.plusieurs'
+            )}
+          </summary>
+          <ul>
+            {plan.decisions.map((d) => (
+              <li key={`${d.le}-${d.texte}`}>
+                {d.texte} <span className="tdl-memoire-de">({d.de})</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {aCoteDeLaFrise ? null : (
+        <LotsDuPlan
+          plan={plan}
+          couts={couts}
+          occupe={occupe}
+          relancer={(rang) => agir('relancer', rang)}
+        />
+      )}
       {plan.statut === 'attente-accord' ? (
         <div className="tdl-actions">
           <button
@@ -548,9 +439,9 @@ function TableauDeplie({
           <span className="tdl-note">{t('lots.note')}</span>
         </div>
       ) : null}
-      {STATUTS_ARRETABLES.has(plan.statut) || STATUTS_REPRENABLES.has(plan.statut) ? (
+      {planArretable(plan) || planReprenable(plan) ? (
         <div className="tdl-actions">
-          {STATUTS_REPRENABLES.has(plan.statut) ? (
+          {planReprenable(plan) ? (
             <button
               type="button"
               className="tdl-bouton tdl-bouton--principal"
@@ -560,7 +451,7 @@ function TableauDeplie({
               {t('lots.reprendre')}
             </button>
           ) : null}
-          {STATUTS_ARRETABLES.has(plan.statut) ? (
+          {planArretable(plan) ? (
             <button
               type="button"
               className="tdl-bouton"

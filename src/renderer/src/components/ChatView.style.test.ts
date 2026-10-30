@@ -78,42 +78,52 @@ describe('workflow sidebar header', () => {
 
 describe('workflow header toggle', () => {
   /*
-   * DÉTAILS = CAPSULE RAISONNEMENT / ACTIONS (conv-178, 2026-10-10 : « pareil pour Détails »).
-   * L'ancien soulignement rose -> or (et la pastille de chaque thème) est remplacé : le bouton
-   * reprend le BALISAGE de ThinkingBlock, donc ses règles. Entrées qui doivent faire échouer :
-   * un style propre qui revient sur `.workflow-toggle` (il se battrait avec la capsule), ou un
-   * thème qui le repeint en pastille.
+   * DÉTAILS PREND LE LOOK DE LA MINI-ADRESSE (conv-1317, 2026-10-30 : « le bouton détail met lui le
+   * meme look »). Il quitte la capsule Raisonnement / Actions de conv-178 et porte la classe de son
+   * voisin, pour que les deux ne puissent pas diverger. Entrées qui doivent faire échouer : la
+   * capsule qui revient, une classe propre à un seul des deux boutons, ou une règle de thème qui
+   * repeint Détails (le chanfrein de conv-302 lui donnait une autre silhouette).
    */
-  it('dessine le bouton Détails avec la capsule Raisonnement / Actions, sans style propre', () => {
-    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+  it('dessine Détails et la Mini-adresse avec la même classe, sans capsule', () => {
+    const lireCss = (chemin: string): string =>
+      readFileSync(new URL(chemin, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const boutons = readFileSync(new URL('./BoutonNavigateur.tsx', import.meta.url), 'utf8')
 
-    expect(source).toMatch(
-      /className=\{`thinking-block workflow-capsule\$\{showRuns \? ' is-live' : ' is-done'\}`\}/
-    )
-    expect(source).toMatch(/workflow-toggle\$\{showRuns \? ' is-active' : ''\}/)
+    expect(source).toContain('<BoutonDetails')
+    expect(source).toContain('ouvert={showRuns}')
+    expect(source).not.toContain('workflow-capsule')
+    expect(boutons).toContain('className="bouton-creux"')
+    expect(boutons).toContain('className="bouton-creux workflow-toggle"')
+    expect(boutons.match(/className="bouton-creux-texte"/g)).toHaveLength(2)
     // Le libellé passe par la table des textes depuis la traduction anglaise (conv-1170) : sa clé
     // `entete.details` porte « Détails » en français (textes-ecrans/chat-fil.ts).
-    expect(source).toContain(`<span className="thinking-label">{texteFil('entete.details')}</span>`)
-    // Plus rien ne peint `.workflow-toggle` lui-même, hors l'anneau de focus clavier.
-    const sansCommentaires = css.replace(/\/\*[\s\S]*?\*\//g, '')
-    const regles = [...sansCommentaires.matchAll(/([^{}]*\.workflow-toggle[^{}]*)\{/g)].map((m) =>
-      m[1].trim()
-    )
-    expect(regles).toEqual(['.workflow-toggle:focus-visible'])
-    for (const nom of ['theme-modes.css', 'theme-nebuleuse-verre.css']) {
-      const theme = readFileSync(new URL(`../assets/${nom}`, import.meta.url), 'utf8')
-      expect(theme, nom).not.toMatch(/\.workflow-toggle(?!:focus-visible)/)
+    expect(source).toContain("libelle={texteFil('entete.details')}")
+
+    expect(lireCss('./ChatView.css')).not.toContain('.workflow-capsule')
+    // `:not(.workflow-capsule)` reste permis : il ne dessine rien, il écarte.
+    for (const nom of [
+      'theme-modes.css',
+      'theme-nebuleuse-verre.css',
+      'theme-holographique-clair.css'
+    ]) {
+      const theme = lireCss(`../assets/${nom}`)
+      expect(theme, nom).not.toMatch(/\.workflow-toggle|(?<!:not\()\.workflow-capsule/)
     }
+  })
+
+  it('le clavier allume Détails comme la Mini-adresse : aucun anneau propre', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    expect(css).not.toContain('.workflow-toggle:focus-visible')
   })
 
   /*
    * LA FLÈCHE DE DÉTAILS POINTE À GAUCHE PANNEAU OUVERT (conv-177, 2026-10-10 : « la fleche doit
    * pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Le panneau s'ouvre sur le
-   * côté : fermé, la flèche pointe à droite (-45deg, règle commune) ; ouvert, à gauche (135deg).
-   * Les capsules Raisonnement / Actions, qui se déplient vers le bas, gardent leur flèche vers le
-   * haut (-135deg). Entrées qui doivent faire échouer : la règle propre à Détails absente, ou la
-   * rotation commune changée pour toutes les capsules.
+   * côté : fermé, la flèche pointe à droite (-45deg) ; ouvert, à gauche (135deg). Les capsules
+   * Raisonnement / Actions, qui se déplient vers le bas, gardent leur flèche vers le haut (-135deg).
+   * Entrées qui doivent faire échouer : la règle propre à Détails absente, ou la rotation commune
+   * changée pour toutes les capsules.
    */
   it('fait pointer la flèche de Détails à gauche quand le panneau est ouvert', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8').replace(
@@ -124,9 +134,8 @@ describe('workflow header toggle', () => {
       const echappe = selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       return css.match(new RegExp(`(?:^|})\\s*${echappe}\\s*\\{[^}]*transform:\\s*([^;]+);`))?.[1]
     }
-    expect(rotation('.thinking-block.workflow-capsule[open] > summary .thinking-capsule::after')).toBe(
-      'rotate(135deg)'
-    )
+    expect(rotation('.workflow-toggle::after')).toBe('rotate(-45deg)')
+    expect(rotation(".workflow-toggle[aria-pressed='true']::after")).toBe('rotate(135deg)')
     expect(rotation('.thinking-block[open] > summary .thinking-capsule::after')).toBe('rotate(-135deg)')
     expect(rotation('.thinking-block > summary .thinking-capsule::after')).toBe('rotate(-45deg)')
   })

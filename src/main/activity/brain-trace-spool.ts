@@ -68,7 +68,13 @@ function boundedRedactedTrace(trace: BrainTrace): BrainTrace {
         }))
       }
     : undefined
-  const bounded: BrainTrace = { ...trace, query, ...(navigation ? { navigation } : {}) }
+  const notes = trace.notes?.slice(0, 20).map((note) => String(note).slice(0, 400))
+  const bounded: BrainTrace = {
+    ...trace,
+    query,
+    ...(navigation ? { navigation } : {}),
+    ...(notes ? { notes } : {})
+  }
   if (Buffer.byteLength(JSON.stringify(bounded), 'utf8') <= MAX_ENTRY_BYTES) return bounded
   // La navigation est reconstructible depuis Brain. L'identite, l'issue et les compteurs du run ne
   // le sont pas : on conserve ceux-ci plutot que de laisser une entree geante casser la retention.
@@ -122,8 +128,11 @@ export interface BrainTrace {
    *  - `depot`      : ÉCRITURE — dépôt d'un fait en `inbox/` par la commande `remember`.
    *  - `pousse`     : contexte Brain poussé dans le prompt d'un tour de chat, HORS run (arrivée le
    *                   2026-09-06 : ce chemin injectait sans écrire aucune trace).
+   *  - `lecture`    : `brain_read` (note entière) ou `brain_graph` (liens) demandés par le modèle
+   *                   (conv-1303, 2026-10-30 : 148 notes entières, 347 000 caractères injectés du
+   *                   22 au 30/10 sans aucune trace — le plus gros flux Brain, invisible).
    */
-  kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot' | 'pousse'
+  kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot' | 'pousse' | 'lecture'
   /**
    * Identifiant du point du registre (`brain-injection-points.ts`) qui a emis la trace. Absent sur
    * les traces historiques : l'inventaire retombe alors sur le `kind`, et refuse de deviner quand
@@ -144,6 +153,12 @@ export interface BrainTrace {
   durationMs?: number
   injectedChars: number
   navigation?: BrainNavigation
+  /**
+   * CHEMINS EXACTS des notes injectées (conv-1303, 2026-10-30) : servies par les notes proches du
+   * tour, ouvertes par `brain_read`. Sans eux, savoir quelle note a été servie puis ouverte
+   * obligeait à rejouer les seuils de sélection sur `navigation` — faux dès que la sélection change.
+   */
+  notes?: string[]
 }
 
 export function brainSpoolRoot(base = ensureAutowinAppData()): string {

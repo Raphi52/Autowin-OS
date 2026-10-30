@@ -345,6 +345,21 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     return { allowed: false, reason: 'titre manquant — un fait sans titre est introuvable' }
   if (!body) return { allowed: false, reason: 'rien à retenir : le fait est vide' }
 
+  /*
+   * L'ÉTAT D'UN FIL N'EST PAS UN FAIT DURABLE (conv-1303, 2026-10-30). Mesure : sur 1 468 notes du
+   * Brain et 485 dépôts (13-30/10), un seul titre s'ouvrait sur un numéro de fil — « conv-1146 — le
+   * travail non commité… est à l'abri dans refs/autowin/salvage » —, et c'était un statut daté, servi
+   * 23 fois par les notes proches du chat sans une ouverture. Un fait durable se nomme par son SUJET ;
+   * le fil qui l'a établi va dans la source (`session:`), pas en tête du titre.
+   */
+  if (/^\s*conv-\d+\b/iu.test(title)) {
+    return {
+      allowed: false,
+      reason:
+        'titre ouvert par un fil (« conv-NNN ») : c’est l’état d’un fil, pas un fait durable — nomme le SUJET dans le titre et mets le fil en source (session:), ou ne retiens rien si ce ne sera plus vrai dans 3 mois'
+    }
+  }
+
   // Profondeur de défense : ce que le garde distant laisse passer. Un secret déposé dans un corpus
   // partagé ne se reprend pas.
   const secret = likelySecretShape(`${title}\n${rawBody}`)

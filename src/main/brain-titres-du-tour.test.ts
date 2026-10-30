@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { ENTETE_REPRISE_AUTOMATIQUE, estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
 import type { BrainTrace } from './activity/brain-trace-spool'
 import type {
   BrainNavigationCandidate,
@@ -6,10 +9,12 @@ import type {
   BrainRetrievalResult
 } from './brain-retrieval'
 import {
+  DEBUTS_SANS_SUJET_PROPRE,
   EN_TETE_TITRES,
   POINT_TITRES_DU_TOUR,
   TITRES_DELAI_MS,
   createBrainTitresDuTour,
+  notesServiesParTrace,
   rendreTitres,
   selectionnerTitres
 } from './brain-titres-du-tour'
@@ -311,5 +316,101 @@ describe('createBrainTitresDuTour — Brain perso', () => {
     )
     expect(await titres(QUESTION, { conversationId: 'conv-1' })).not.toContain('perso:')
     expect(appels).toHaveLength(1)
+  })
+})
+
+// conv-1303 (2026-10-30) : messages de l'app sans sujet propre, et mémoire qui survit au redémarrage.
+describe('notes proches — bruit mesuré le 30/10', () => {
+  beforeEach(() => {
+    vi.stubEnv('AUTOWIN_BRAIN_CORPUS', '*')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function monter(relireTraces?: () => readonly BrainTrace[]) {
+    const appels: string[] = []
+    const traces: BrainTrace[] = []
+    const titres = createBrainTitresDuTour({
+      retrieve: async (query) => {
+        appels.push(query)
+        return resultat([candidat(1, 0.62)])
+      },
+      onBrainTrace: (trace) => traces.push(trace),
+      ...(relireTraces ? { relireTraces } : {})
+    })
+    return { titres, appels, traces }
+  }
+
+  it('les en-têtes copiés sont ceux de leurs producteurs réels', () => {
+    expect(DEBUTS_SANS_SUJET_PROPRE[0]).toBe(ENTETE_REPRISE_AUTOMATIQUE)
+    const racine = resolve(__dirname, '..', '..')
+    const plan = readFileSync(join(racine, 'src/shared/plan-de-lots.ts'), 'utf8')
+    expect(plan).toContain('`RÉVEIL DU PLAN DE LOTS « ${')
+    const autoMode = readFileSync(
+      join(racine, 'src/renderer/src/components/chat-auto-mode.ts'),
+      'utf8'
+    )
+    expect(autoMode).toContain(`'${DEBUTS_SANS_SUJET_PROPRE[2]} : propose-moi`)
+  })
+
+  it('un message composé par l’app n’interroge pas le Brain ; un lot, si', async () => {
+    const { titres, appels } = monter()
+    const reprise = `${ENTETE_REPRISE_AUTOMATIQUE} Ton tour précédent s’est terminé pendant une tâche de fond.`
+    expect(estUneRepriseAutomatique(reprise)).toBe(true)
+    expect(await titres(reprise, { conversationId: 'c' })).toBe('')
+    expect(
+      await titres('RÉVEIL DU PLAN DE LOTS « Refonte » (plan-1) — message de l’app', {
+        conversationId: 'c'
+      })
+    ).toBe('')
+    expect(appels).toHaveLength(0)
+    const lot =
+      'Lot 2 sur 4 du plan « Refonte », confié par le fil chef conv-9 (plan-1).\nCorrige le tri.'
+    expect(await titres(lot, { conversationId: 'c' })).not.toBe('')
+    expect(appels).toHaveLength(1)
+  })
+
+  it('la trace porte les chemins exacts servis', async () => {
+    const { titres, traces } = monter()
+    await titres(QUESTION, { conversationId: 'c', turnId: 't' })
+    expect(traces[0].notes).toEqual(['knowledge/lessons/note-1.md'])
+  })
+
+  it('après redémarrage, une note déjà servie dans le fil (spool) n’est pas resservie', async () => {
+    const ancienne = (conversationId: string, extra: Partial<BrainTrace>): BrainTrace => ({
+      timestamp: '2026-10-29T10:00:00.000Z',
+      conversationId,
+      kind: 'pousse',
+      point: POINT_TITRES_DU_TOUR,
+      query: QUESTION,
+      injectedChars: 60,
+      ...extra
+    })
+    const { titres, appels } = monter(() => [
+      ancienne('conv-notes', { notes: ['knowledge/lessons/note-1.md'] }),
+      // Trace d'avant le champ `notes` : la sélection est rejouée sur sa navigation.
+      ancienne('conv-nav', { navigation: resultat([candidat(1, 0.62)]).navigation }),
+      // Un bloc vide n'a rien servi.
+      ancienne('conv-vide', { injectedChars: 0, notes: ['knowledge/lessons/note-1.md'] })
+    ])
+    expect(await titres(QUESTION, { conversationId: 'conv-notes' })).toBe('')
+    expect(await titres(QUESTION, { conversationId: 'conv-nav' })).toBe('')
+    expect(await titres(QUESTION, { conversationId: 'conv-vide' })).not.toBe('')
+    expect(appels).toHaveLength(3)
+  })
+
+  it('notesServiesParTrace ignore les autres points', () => {
+    expect(
+      notesServiesParTrace({
+        timestamp: 't',
+        conversationId: 'c',
+        kind: 'lecture',
+        point: 'command-brain-read',
+        query: 'brain_read: x',
+        injectedChars: 10,
+        notes: ['x']
+      })
+    ).toEqual([])
   })
 })

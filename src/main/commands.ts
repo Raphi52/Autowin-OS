@@ -56,7 +56,7 @@ import {
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
-import { runBrainGraph, runBrainRead } from './brain-graph-command'
+import { runBrainGraph, runBrainRead, tracerLectureBrain } from './brain-graph-command'
 import {
   cheminSansPrefixePerso,
   demarrerBrainPerso,
@@ -291,6 +291,7 @@ import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import type { ChatArtifact } from '../shared/artifacts'
 import { preparerVideoAMontrer } from './show-video-command'
+import { preparerBlocAMontrer } from './montrer-bloc-command'
 import { runSqlRead } from './sql-read-command'
 import { getSqlCatalogConfig } from './sql-read-catalog'
 import type { PorteProd } from './prod-gate'
@@ -458,6 +459,11 @@ export interface CommandResult {
    * Séparé d'`attachments`, qui part tel quel dans le prochain message du modèle.
    */
   artifacts?: ChatArtifact[]
+  /**
+   * Blocs de TEXTE posés dans la réponse du fil à la place de l'appel (`montrer_bloc`), jamais
+   * envoyés au modèle IA : il n'en reçoit que le résumé de `data`.
+   */
+  blocs?: string[]
 }
 
 /** Instantané de l'état que l'agent PEUT VOIR (ce qu'il pilote). */
@@ -894,11 +900,14 @@ export const CATALOG: CommandSpec[] = [
      */
     name: 'plan_de_lots',
     description:
-      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : tu proposes un plan de 2 à 20 lots (fichiers séparés ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres » : il ne part qu'une fois ses prérequis faits, et un prérequis en échec le bloque jusqu'à sa relance) ; le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter dans le tableau de ton fil) : ne dépose donc que pour un vrai chantier. L'app ouvre un fil par lot (au plus 3 en même temps), y envoie sa demande, et te réveille à chaque fin de lot avec son compte rendu (messages de tes fils) : tu vérifies, tu relances un lot en échec (action « relancer »), et tu rends le bilan assemblé à la fin. Action « etat » : le tableau du plan. Une tâche courte ou d'un seul tenant n'en a pas besoin : un lot par fil coûte un tour.",
+      "Mener une tâche LONGUE en plusieurs fils, depuis TON fil (le chef). Action « deposer » : un plan de 2 à 20 lots (fichiers séparés ; un lot qui a besoin du RÉSULTAT d'un autre l'attend par « apres », et un prérequis en échec le bloque jusqu'à sa relance). Le plan PART AUSSITÔT déposé, sans clic de l'utilisateur (il peut l'arrêter dans ton tableau) : ne dépose que pour un vrai chantier. L'app ouvre un fil par lot (3 à la fois au plus), lui envoie sa demande et te réveille à chaque fin de lot avec son compte rendu : tu vérifies, tu relances un lot en échec (action « relancer ») et tu rends le bilan à la fin. Chaque lot reçoit le « contexte », les décisions notées et la liste des autres lots. Action « noter » (chef OU lot) : une décision envoyée aux lots en cours et remise aux suivants. Action « ajouter » (chef) : des lots en plus, pas un second plan. Action « etat » : le tableau du plan. Un fil de lot ne dépose pas de plan. Une tâche courte n'en a pas besoin : un lot coûte un tour.",
     args: {
-      action: 'deposer|etat|relancer (défaut : deposer si « plan » est donné, sinon etat)',
-      plan: 'pour deposer — { "titre", "parallele" (1 à 3, défaut 3), "plafondTours" (TOTAL des tours du plan ENTIER, relances comprises, PAS un nombre par lot — défaut : 2 × le nombre de lots ; au moins le nombre de lots, sinon le plan est refusé, conv-1256 et conv-1273), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue ; 4 000 caractères au plus), "fichiers": [chemins prévus], "apres": [numéros des lots à attendre — facultatif, sans cycle] } ] }',
-      lot: 'pour relancer — le numéro du lot (1, 2…)'
+      action:
+        'deposer|etat|relancer|noter|ajouter (défaut : deposer si « plan » est donné, sinon etat)',
+      plan: 'pour deposer — { "titre", "contexte" (le but d’ensemble, les décisions et contraintes déjà prises, comment les lots s’emboîtent : 80 à 3 000 caractères, envoyé à CHAQUE lot, qui ne sait rien d’autre), "parallele" (1 à 3, défaut 3), "plafondTours" (TOTAL des tours du plan ENTIER, relances comprises, PAS un nombre par lot — défaut : 2 × le nombre de lots ; au moins le nombre de lots, sinon le plan est refusé, conv-1256 et conv-1273), "lots": [ { "titre", "demande" (le message autoporté que recevra le fil, une commande /build en tête est reconnue ; 4 000 caractères au plus), "fichiers": [chemins prévus], "apres": [numéros des lots à attendre — facultatif, sans cycle], "modele": (facultatif — « haiku » ou « sonnet » pour un lot simple ; absent = le modèle du fil) } ] } ; pour ajouter — { "lots": [ mêmes champs ] }, rangs à la suite, « apres » peut viser un lot déjà là',
+      lot: 'pour relancer — le numéro du lot (1, 2…)',
+      decision:
+        'pour noter — la décision en une phrase (300 caractères au plus), ex. « le module s’appelle carte-du-plan.ts »'
     },
     annotations: {
       readOnlyHint: false,
@@ -1658,6 +1667,25 @@ export const CATALOG: CommandSpec[] = [
       'Montrer dans le fil de l’utilisateur une vidéo (.mp4, .webm, .mov) du dossier de travail, dans un lecteur image par image. L’utilisateur peut y pointer une image : son message contiendra alors `[vidéo <nom> · mm:ss.cc · image N/total · <chemin>]`, N compté à partir de 0 comme ffmpeg. Les images/s sont mesurées par ffprobe ; s’il échoue, le lecteur suppose 30 et l’écrit (`· 30 i/s supposé`). La vidéo n’est pas envoyée au modèle. Une vidéo que tu viens d’écrire pendant le tour (ffmpeg…) et dont tu cites le chemin dans ta réponse est montrée AUTOMATIQUEMENT : n’appelle `show_video` que pour une vidéo plus ancienne que l’utilisateur veut voir.',
     args: {
       path: 'chemin de la vidéo, relatif au dossier de travail (ou absolu dans ce dossier)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * POSER UN BLOC LU DANS UN FICHIER (conv-1306, 2026-10-30) : le carrousel d'un /draft (52 ko)
+     * devait être recopié en entier dans la réponse et n'y tenait plus. Voir `montrer-bloc-command.ts`.
+     */
+    name: 'montrer_bloc',
+    description:
+      'Afficher dans le fil, à la place de cet appel, un bloc ```html-render ou ```html-interactif lu dans un fichier — boutons de choix compris, exactement comme si tu l’avais écrit. Le fichier est un .md qui ne contient QUE ce bloc (la sortie de scripts/draft-carrousel.mjs) ou une page .html brute (posée en html-render, ou dans `langage`). Le bloc ne t’est PAS renvoyé : tu reçois seulement son résumé (langage, taille, nombre de boutons). Ne le recopie donc jamais dans ta réponse. Contrôle-le d’abord avec html-render-apercu.mjs ou html-interactif-apercu.mjs.',
+    args: {
+      path: 'chemin du fichier .md ou .html, relatif au dossier de travail ou absolu',
+      langage: 'facultatif — html-render (défaut pour une page brute) ou html-interactif'
     },
     annotations: {
       readOnlyHint: true,
@@ -2661,8 +2689,11 @@ export class AppCommandBus {
    */
   tourDeChatActif?: (conversationId: string) => boolean
 
-  /** Coordinateur des plans de lots (conv-1150), câblé tardivement depuis index.ts. Absent -> refus. */
-  plansDeLots?: Pick<CoordinateurDesPlans, 'outil'>
+  /**
+   * Coordinateur des plans de lots (conv-1150), câblé tardivement depuis index.ts. Absent -> refus.
+   * `lancerParOrdre` (conv-1284) : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
+   */
+  plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'>
 
   /**
    * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis
@@ -3130,6 +3161,14 @@ export class AppCommandBus {
         this.trace?.(name, redactedArgs(name, args), true)
         noterIssue(true)
         return { ok: true, data: video.resume, artifacts: [video.artifact] }
+      }
+      if (name === 'montrer_bloc') {
+        // Le bloc part par `blocs` (le texte du fil), jamais par `data` (le modèle IA).
+        const bloc = preparerBlocAMontrer(args, this.workspaceDuTour)
+        if (!bloc.ok) throw new Error(`montrer_bloc refusé : ${bloc.raison}`)
+        this.trace?.(name, redactedArgs(name, args), true)
+        noterIssue(true)
+        return { ok: true, data: bloc.resume, blocs: [bloc.bloc] }
       }
       if (name === 'desktop_act') {
         // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
@@ -5063,9 +5102,18 @@ export class AppCommandBus {
               ? { ...a, path: cheminSansPrefixePerso(cible) }
               : { ...a, entity: cheminSansPrefixePerso(cible) }
           const depsPerso = { token: brainServiceToken(envPerso), origin: origineBrainPerso() }
-          return name === 'brain_graph'
-            ? await runBrainGraph(argsPerso, depsPerso)
-            : await runBrainRead(argsPerso, depsPerso)
+          const debutPerso = performance.now()
+          const luPerso =
+            name === 'brain_graph'
+              ? await runBrainGraph(argsPerso, depsPerso)
+              : await runBrainRead(argsPerso, depsPerso)
+          // Le chemin tracé garde `perso:` (`a`, pas `argsPerso`) : c'est la forme servie au modèle.
+          tracerLectureBrain(name === 'brain_graph' ? 'brain_graph' : 'brain_read', a, luPerso, {
+            conversationId,
+            turnId,
+            durationMs: Math.round(performance.now() - debutPerso)
+          })
+          return luPerso
         }
         const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
         if (corpus?.length === 0) {
@@ -5077,7 +5125,16 @@ export class AppCommandBus {
           }
         }
         const deps = { token: brainServiceToken(), corpus: corpus ?? null }
-        return name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
+        const debut = performance.now()
+        const lu =
+          name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
+        // conv-1303 : ces lectures injectaient des notes entières sans aucune trace Brain.
+        tracerLectureBrain(name === 'brain_graph' ? 'brain_graph' : 'brain_read', a, lu, {
+          conversationId,
+          turnId,
+          durationMs: Math.round(performance.now() - debut)
+        })
+        return lu
       }
       case 'skill_charger':
         return chargerSkillPourLeModele(a)
@@ -5510,11 +5567,28 @@ export class AppCommandBus {
         }
         const lancer = this.lancerDansConversation
         const tourActif = this.tourDeChatActif
+        const plans = this.plansDeLots
+        // conv-1284 : l'ordre d'un chef vers le fil d'un de ses lots en échec relance ce lot ; le
+        // coordinateur le compte et le suit. Tout autre ordre part tel quel.
+        const lancerLOrdre = lancer
+          ? (fil: string, prompt: string) =>
+              plans
+                ? plans.lancerParOrdre(expediteur, fil, prompt, (f, p, modele) =>
+                    // Le modèle du lot (conv-1284), par la même voie que `chat_send` (« model »).
+                    modele
+                      ? lancer(f, p, {
+                          provider: this.os.conversations?.get?.(f)?.provider ?? 'claude',
+                          model: modele
+                        })
+                      : lancer(f, p)
+                  )
+                : lancer(fil, prompt)
+          : undefined
         const reveil = await reveillerSurOrdre(
           { id: envoi.id, de: expediteur, a: envoi.a, texte: String(a.texte) },
           {
             ...(tourActif ? { tourActif: (fil: string) => tourActif(fil) } : {}),
-            ...(lancer ? { lancer: (fil: string, prompt: string) => lancer(fil, prompt) } : {})
+            ...(lancerLOrdre ? { lancer: lancerLOrdre } : {})
           }
         )
         this.broadcast({ type: 'refresh', scope: 'messages-fils' })
