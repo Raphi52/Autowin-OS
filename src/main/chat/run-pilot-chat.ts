@@ -60,6 +60,8 @@ import {
 } from '../runs/turn-journal-enrich'
 import { appendConvActivity } from '../activity/conv-activity'
 import { rattacherSaisieAuTour } from '../store/journal-saisie'
+import { dossierDeTravailDuTour } from '../bascule-dossier-conversation'
+import { noterChoixScout } from '../scout-memoire'
 import {
   persistChatUsageSettlement,
   persistRecoveredChatProviderUsage
@@ -604,6 +606,29 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           traceSequence += 1
         } catch {
           /* trace best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+        }
+      }
+      /*
+       * UNE SÉLECTION DE PISTES SE NOTE ICI, PAS SEULEMENT DANS UN RUN (conv-1341, 2026-10-30). Seul
+       * l'orchestrateur l'écrivait : une sélection traitée dans le fil restait invisible, son scout
+       * passait pour « sans aucune piste prise » ou ses pistes pour « laissées », et le taux de prise
+       * qui ajuste les notes du scout suivant s'en trouvait faussé (6 sélections sur 25, 12-30/10).
+       * Une demande libre sort aussitôt, avant toute lecture du disque.
+       */
+      if (conversationId && !recovery && !continuation && last?.role === 'user') {
+        try {
+          noterChoixScout({
+            depot: dossierDeTravailDuTour(
+              os.conversations.get(conversationId)?.projectPath,
+              os.executionWorkspace
+            ),
+            demande: last.content,
+            maintenant: new Date().toISOString()
+          })
+        } catch (erreur) {
+          console.warn(
+            `[scout-memoire] sélection non notée, le bilan du scout l'ignorera : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+          )
         }
       }
       const routingUserMessageOverride = continuationWindow?.routingUserMessage

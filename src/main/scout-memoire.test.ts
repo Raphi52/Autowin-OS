@@ -494,11 +494,113 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       chemin,
       resultatDuRun: (run) => resultats.get(run)
     })
-    expect(bilan).toMatch(/prises traitées : 2 livrées, 0 en échec/u)
+    expect(bilan).toMatch(/prises traitées : 2 pistes dans 1 run fini : 1 livré, 0 en échec/u)
     const enEchec = bilanDesChoix({ depot: 'D:/w', chemin, resultatDuRun: () => 'defect' })
-    expect(enEchec).toMatch(/prises traitées : 0 livrée, 2 en échec/u)
+    expect(enEchec).toMatch(/prises traitées : 2 pistes dans 1 run fini : 0 livré, 1 en échec/u)
     // Sans lecteur de résultats (ou sans run connu), le bilan se tait sur la livraison.
-    expect(bilanDesChoix({ depot: 'D:/w', chemin })).not.toMatch(/livrée/u)
+    expect(bilanDesChoix({ depot: 'D:/w', chemin })).not.toMatch(/livré/u)
+  })
+
+  /*
+   * « 1 LIVRÉE, 17 EN ÉCHEC » (conv-1341, 2026-10-30). Le bilan comptait une LIGNE par piste, alors
+   * que le résultat est celui du run entier : sur la mémoire réelle, ces 18 lignes venaient de 4 runs
+   * finis (5, 4 et 8 pistes pour les trois refusés du 22/10). Un scout l'a lu comme « vos pistes
+   * n'aboutissent pas », alors que le travail de ces trois runs a été publié dans la journée.
+   * Entrée qui tue une version fausse : deux runs de tailles très différentes, résultats opposés.
+   */
+  it('un run en échec compte pour UN run, quel que soit le nombre de pistes qu’il portait', () => {
+    const chemin = fichier()
+    const titres = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: scout(...titres),
+      run: 's1',
+      maintenant: 't1',
+      chemin
+    })
+    const lot = (numero: number, ...prises: string[]): string =>
+      `${selection(...prises)}\n\nLot ${numero} sur 2 de la sélection : les autres ailleurs.`
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: lot(1, ...titres.slice(0, 8)),
+      maintenant: 't2',
+      run: 'run-lourd',
+      chemin
+    })
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: lot(2, 'I'),
+      maintenant: 't3',
+      run: 'run-leger',
+      chemin
+    })
+    const classes = { 'run-lourd': 'defect', 'run-leger': 'delivered' } as const
+    const bilan = bilanDesChoix({
+      depot: 'D:/w',
+      chemin,
+      resultatDuRun: (run) => classes[run as keyof typeof classes]
+    })
+    expect(bilan).toContain('prises traitées : 9 pistes dans 2 runs finis : 1 livré, 1 en échec')
+    expect(bilan).not.toMatch(/8 en échec/u)
+    // La ligne dit de quoi parle ce résultat : c'est elle qui avait été lue de travers.
+    expect(bilan).toMatch(/résultat du run à sa clôture, pas de chaque piste/u)
+  })
+
+  it('le bilan dit combien de pistes prises n’ont aucun run suivi, au lieu de les taire', () => {
+    const chemin = fichier()
+    const titres = ['A', 'B', 'C', 'D', 'E', 'F']
+    noterPistesScout({
+      depot: 'D:/w',
+      texte: scout(...titres),
+      run: 's1',
+      maintenant: 't1',
+      chemin
+    })
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: `${selection('A')}\n\nLot 1 sur 2 de la sélection : la suite ailleurs.`,
+      maintenant: 't2',
+      run: 'run-a',
+      chemin
+    })
+    // Le lot 2 est traité dans le fil, sans run : l'app n'en a aucun résultat.
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: `${selection('B', 'C')}\n\nLot 2 sur 2 de la sélection : la suite ailleurs.`,
+      maintenant: 't3',
+      chemin
+    })
+    const bilan = bilanDesChoix({
+      depot: 'D:/w',
+      chemin,
+      resultatDuRun: (run) => (run === 'run-a' ? 'delivered' : undefined)
+    })
+    expect(bilan).toMatch(/1 piste dans 1 run fini : 1 livré, 0 en échec/u)
+    expect(bilan).toMatch(/2 pistes sans run suivi/u)
+  })
+
+  /*
+   * LA SÉLECTION EST NOTÉE DEUX FOIS (conv-1341) : à son arrivée dans le fil, sans run, puis par le
+   * run s'il y en a un. Rejouée sans run après un run, elle ne doit pas lui retirer sa piste.
+   */
+  it('une sélection renotée sans run garde le run qui a traité la piste', () => {
+    const chemin = fichier()
+    noterPistesScout({ depot: 'D:/w', texte: scout('A', 'B'), run: 's1', maintenant: 't1', chemin })
+    const noter = (run?: string): void =>
+      noterChoixScout({
+        depot: 'D:/w',
+        demande: selection('A'),
+        maintenant: 't2',
+        ...(run ? { run } : {}),
+        chemin
+      })
+    noter()
+    noter('run-build')
+    noter()
+    expect(lireMemoireScout(chemin).entrees.map((e) => [e.titre, e.choix, e.traitePar])).toEqual([
+      ['A', 'prise', 'run-build'],
+      ['B', 'laissee', undefined]
+    ])
   })
 
   // Le journal de l'app mêle propositions, décisions et résultats : seuls les résultats comptent.

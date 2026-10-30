@@ -204,6 +204,9 @@ function memePiste(prise: string, gardee: string): boolean {
  * remet le scout à plat comme une sélection d'un seul tenant ; les lots suivants AJOUTENT leurs
  * pistes sans toucher aux autres — sinon le lot 2 aurait marqué « laissee » les pistes prises par
  * le lot 1 et effacé le run qui les a traitées.
+ *
+ * DEUX APPELANTS (conv-1341) : le tour de chat dès que la sélection arrive, sans run
+ * (`run-pilot-chat.ts`), puis l'orchestrateur s'il en lance un.
  */
 export function noterChoixScout(entree: {
   depot: string
@@ -233,6 +236,9 @@ export function noterChoixScout(entree: {
     // EN PARALLÈLE (conv-1333) : un lot suivant a pu s'enregistrer avant le lot 1, qui ne défait pas
     // ses pistes en remettant le scout à plat.
     if (decoupee && !prise && e.choix === 'prise') return e
+    // NOTÉE SANS RUN (à son arrivée dans le fil, conv-1341) : un run déjà connu reste celui qui a
+    // traité la piste, seul un autre run le remplace.
+    if (prise && !entree.run && e.traitePar) return { ...e, choix: 'prise' }
     const suivante: EntreeMemoireScout = { ...e }
     delete suivante.traitePar
     delete suivante.voie
@@ -403,22 +409,46 @@ export function bilanDesChoix(entree: {
  * lu dans ce que l'app note déjà. Seuls les runs FINIS comptent ; aucun → rien n'est dit. « en échec »
  * reste un fait sur le RUN, pas un verdict sur la piste : la classe d'un échec est déduite d'un motif
  * de texte (`commands.ts`), et un run peut échouer pour une cause sans rapport avec elle.
+ *
+ * ON COMPTE LES RUNS, PAS LES LIGNES (conv-1341, 2026-10-30). Le compte par piste donnait « 1 livrée,
+ * 17 en échec » : 4 runs finis, dont 3 lots de 5, 4 et 8 pistes refusés le 22/10. Les trois avaient
+ * un verdict du juge de 86 à 88, et leur travail est dans `origin/main` (5b3d42c1, 531a4778, cf450830) :
+ * l'app n'avait pas pu publier, à cause de fichiers en cours dans d'autres fils (conv-1070, conv-1077)
+ * ou d'un conflit avec des commits arrivés sur `main` (conv-1074), et ils l'ont été à la main dans la
+ * journée, en partie seulement pour conv-1077 (5 pistes sur 8). Le journal des résultats garde ces 3
+ * runs en `defect`, d'où la réserve écrite dans la ligne : c'est l'état du run à sa clôture, et un
+ * scout l'avait lue comme « vos pistes n'aboutissent pas ». Les pistes prises sans run ne sont pas
+ * comptées comme traitées : elles se disent.
  */
 function livraisonDesPrises(
   prises: readonly EntreeMemoireScout[],
   resultatDuRun: LecteurResultatRun
 ): string {
-  const classes = prises
-    .map((e) => (e.traitePar ? resultatDuRun(e.traitePar) : undefined))
-    .filter((c): c is ClasseResultatRun => c !== undefined)
-  if (classes.length === 0) return ''
-  const livrees = classes.filter((c) => c === 'delivered').length
+  const runsFinis = new Map<string, ClasseResultatRun>()
+  let pistes = 0
+  for (const e of prises) {
+    const classe = e.traitePar ? resultatDuRun(e.traitePar) : undefined
+    if (!e.traitePar || classe === undefined) continue
+    runsFinis.set(e.traitePar, classe)
+    pistes += 1
+  }
+  if (runsFinis.size === 0) return ''
+  const classes = [...runsFinis.values()]
+  const livres = classes.filter((c) => c === 'delivered').length
   const enEchec = classes.filter((c) => c === 'defect').length
-  const autres = classes.length - livrees - enEchec
-  return [
-    `prises traitées : ${livrees} ${livrees > 1 ? 'livrées' : 'livrée'}, ${enEchec} en échec`,
-    ...(autres > 0 ? [`${autres} ${autres > 1 ? 'interrompues' : 'interrompue'}`] : [])
+  const autres = classes.length - livres - enEchec
+  const sansRun = prises.filter((e) => !e.traitePar).length
+  const nomRuns = classes.length > 1 ? 'runs finis' : 'run fini'
+  const resultats = [
+    `${livres} ${livres > 1 ? 'livrés' : 'livré'}`,
+    `${enEchec} en échec`,
+    ...(autres > 0 ? [`${autres} ${autres > 1 ? 'interrompus' : 'interrompu'}`] : [])
   ].join(', ')
+  const reserve =
+    'résultat du run à sa clôture, pas de chaque piste : un run refusé a pu être publié ensuite'
+  const sansSuivi =
+    sansRun > 0 ? `, ${sansRun} ${sansRun > 1 ? 'pistes' : 'piste'} sans run suivi` : ''
+  return `prises traitées : ${pistes} ${pistes > 1 ? 'pistes' : 'piste'} dans ${classes.length} ${nomRuns} : ${resultats} (${reserve})${sansSuivi}`
 }
 
 /** Le bilan d'une voie : pistes prises traitées par un run FINI, et combien de ces runs ont livré. */
