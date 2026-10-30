@@ -152,6 +152,8 @@ const navigateur: ApiNavigateur = {
   effacerDonnees: () => ipcRenderer.invoke(CANAUX_NAVIGATEUR.effacerDonnees),
   ouvrirDansNavigateurParDefaut: (url) =>
     ipcRenderer.invoke(CANAUX_NAVIGATEUR.ouvrirDansNavigateurParDefaut, url),
+  piloter: (conversationId, ordre) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.piloter, conversationId, ordre),
   // Un écouteur par abonnement, retiré par la fonction rendue : un panneau démonté n'écoute plus.
   surEtat: (rappel) => {
     const ecouteur = (_e: unknown, etat: EtatNavigateur): void => rappel(etat)

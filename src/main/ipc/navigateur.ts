@@ -14,8 +14,8 @@
  *
  * Pourquoi les noms de canaux sont écrits EN TOUTES LETTRES dans `ipcMain.handle(` au lieu de
  * `CANAUX_NAVIGATEUR.x` : le contrôle de sécurité (`security-critical-fixes.test.ts`) ne voit que les
- * canaux littéraux — il vérifie que chacun est gardé et les compte. Avec la constante, ces vingt canaux
- * lui échapperaient. La dérive avec le contrat est fermée par `navigateur.test.ts`, qui exige que les
+ * canaux littéraux — il vérifie que chacun est gardé et les compte. Avec la constante, ces vingt et un
+ * canaux lui échapperaient. La dérive avec le contrat est fermée par `navigateur.test.ts`, qui exige que les
  * canaux enregistrés soient EXACTEMENT ceux de `CANAUX_NAVIGATEUR`.
  */
 import { ipcMain, type BrowserWindow } from 'electron'
@@ -29,6 +29,7 @@ import {
 import {
   CANAUX_NAVIGATEUR,
   type ModeNavigateur,
+  type OrdrePilotageNavigateur,
   type RectNavigateur,
   type ReglagesNavigateur,
   type ReponseAccordNavigateur
@@ -160,6 +161,21 @@ function guardReponseAccord(valeur: unknown): ReponseAccordNavigateur {
   )
 }
 
+const ORDRES_PILOTAGE: ReadonlySet<unknown> = new Set<OrdrePilotageNavigateur>([
+  'pause',
+  'reprendre',
+  'pas-suivant',
+  'reprendre-la-main',
+  'rendre-la-main'
+])
+
+function guardOrdrePilotage(valeur: unknown): OrdrePilotageNavigateur {
+  if (ORDRES_PILOTAGE.has(valeur)) return valeur as OrdrePilotageNavigateur
+  throw new Error(
+    'IPC navigateur.piloter: « pause », « reprendre », « pas-suivant », « reprendre-la-main » ou « rendre-la-main » attendu'
+  )
+}
+
 /** Un réglage partiel : seuls les deux réglages connus sont lus, et chacun doit être un booléen. */
 function guardReglages(valeur: unknown): Partial<ReglagesNavigateur> {
   if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) {
@@ -181,7 +197,7 @@ function guardReglages(valeur: unknown): Partial<ReglagesNavigateur> {
 
 // ─── Les canaux ─────────────────────────────────────────────────────────────────────────────────
 
-/** Branche les vingt canaux de `ApiNavigateur` ; appelé UNE fois au démarrage (`index.ts`). */
+/** Branche les vingt et un canaux de `ApiNavigateur` ; appelé UNE fois au démarrage (`index.ts`). */
 export function registerNavigateurIpc(deps: NavigateurIpcDeps): void {
   dependances = deps
 
@@ -287,5 +303,14 @@ export function registerNavigateurIpc(deps: NavigateurIpcDeps): void {
     assertTrustedRendererSender(event, PORTEE)
     const adresse = guardString(url, 'navigateur.ouvrirDansNavigateurParDefaut')
     await exiger().ouvrirDansNavigateurParDefaut(adresse)
+  })
+  // Pas-à-pas (conv-1286, 2026-10-30) : boutons Pause, Reprendre, Pas suivant, Reprendre la main et
+  // Rendre la main du bandeau, pour UN fil. Le moteur ne fait que libérer, retenir ou refuser les
+  // gestes de l'agent : aucune page chargée, rien écrit sur le disque.
+  ipcMain.handle('navigateur:piloter', (event, conversationId: unknown, ordre: unknown) => {
+    assertTrustedRendererSender(event, PORTEE)
+    const fil = guardIdentifiant(conversationId, 'navigateur.piloter.conversationId')
+    const voulu = guardOrdrePilotage(ordre)
+    exiger().piloter(fil, voulu)
   })
 }
