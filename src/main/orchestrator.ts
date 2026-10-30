@@ -431,8 +431,10 @@ import {
   sessionMemoryBlock
 } from './session-memory-echo'
 import { projectContextBlock } from './context-files'
-// Le profil personnel suit le contexte projet dans CHAQUE system de phase (conv-1098).
+// Le profil personnel suit le contexte projet dans CHAQUE system de phase (conv-1098), puis la
+// mémoire de tête de l'entreprise, comme dans le chat (conv-1285).
 import { blocProfilUtilisateur } from './profil-utilisateur'
+import { blocMemoireDeTete } from './memoire-de-tete'
 import { blocLangueDeReponse } from './langue-reglage'
 import type {
   ExecutionEvidence,
@@ -3078,6 +3080,7 @@ ${annonceCommit}`
     const projectContext =
       projectContextBlock(this.deps.executionWorkspace) +
       blocProfilUtilisateur() +
+      blocMemoireDeTete() +
       blocLangueDeReponse()
     const judgeBinding =
       bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
@@ -3316,6 +3319,7 @@ ${CONTRAT_OBJECTIONS}`
     const projectContext =
       projectContextBlock(this.deps.executionWorkspace) +
       blocProfilUtilisateur() +
+      blocMemoireDeTete() +
       blocLangueDeReponse()
     // Une phase décomposée ne doit pas contourner son panel : chaque sous-tâche est exécutée par
     // tous les membres configurés, puis leurs sorties sont fusionnées. Sans panel (build/refine ou
@@ -3866,6 +3870,7 @@ ${CONTRAT_OBJECTIONS}`
     const projectContext =
       projectContextBlock(this.deps.executionWorkspace) +
       blocProfilUtilisateur() +
+      blocMemoireDeTete() +
       blocLangueDeReponse()
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
