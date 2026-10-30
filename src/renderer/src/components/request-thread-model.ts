@@ -126,6 +126,7 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   bureau_cache_lancer: 'lancer',
   bureau_cache_agir: 'lancer',
   show_video: 'lancer',
+  montrer_bloc: 'lancer',
   chat_send: 'lancer',
   ecrire_a_un_fil: 'modifier',
   plan_de_lots: 'lancer',

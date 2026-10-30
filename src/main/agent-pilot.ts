@@ -43,6 +43,7 @@ import {
 } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import { blocProfilUtilisateur } from './profil-utilisateur'
+import { blocMemoireDeTete } from './memoire-de-tete'
 import { blocLangueDeReponse } from './langue-reglage'
 import { lireLigneDErreur } from '../shared/erreur-d-action'
 import { avertirSiLeconNonRetenue, ecritUnFichierDeMemoire } from './lecon-non-retenue'
@@ -172,6 +173,7 @@ import {
   type OuvertureOutilsNatifs
 } from './chat-mcp'
 import { cleDeVideo, videosLivreesDuTour } from './videos-livrees'
+import { fluxDuBloc, texteDuBlocDansLeFil } from './montrer-bloc-command'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -1765,11 +1767,13 @@ export class AgentPilot {
               { name: 'pilotage', text: pilotage },
               { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
               // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
+              // La mémoire de tête (faits clés de l'entreprise) le suit, stable elle aussi (conv-1285).
               {
                 name: 'projectContext',
                 text:
                   this.projectContext(conversationId) +
                   blocProfilUtilisateur() +
+                  blocMemoireDeTete() +
                   blocLangueDeReponse()
               },
               /**
@@ -2488,6 +2492,15 @@ export class AgentPilot {
         ...(echecRattrape ? { retryOf: echecRattrape } : {}),
         ...(r.attachments?.length ? { attachments: r.attachments } : {})
       })
+      // `montrer_bloc` (conv-1306) : le bloc lu dans un fichier entre dans la réponse du fil, sur
+      // son propre flux, sans repasser par le modèle IA.
+      for (const [index, bloc] of (r.blocs ?? []).entries())
+        emit({
+          kind: 'delta',
+          streamId: fluxDuBloc(`${actionId}:${index}`),
+          text: texteDuBlocDansLeFil(bloc),
+          iteration: iterationNatif
+        })
       const compte = comptabiliserCommande(nom, args, r, actionId)
       if (compte.reussie) echecsNatifsNonRattrapes.delete(cleDEchec(nom, args))
       else {
@@ -4073,6 +4086,14 @@ export class AgentPilot {
             data: r.ok ? r.data : r.error,
             ...(echecRattrape ? { retryOf: echecRattrape } : {}),
             ...(r.attachments?.length ? { attachments: r.attachments } : {})
+          })
+        // `montrer_bloc` (conv-1306) : même pose que par le canal direct, juste après le résultat.
+        for (const [index, bloc] of (r.blocs ?? []).entries())
+          emit({
+            kind: 'delta',
+            streamId: fluxDuBloc(`${actionId}:${index}`),
+            text: texteDuBlocDansLeFil(bloc),
+            iteration: i
           })
         // `orchestrate` rend déjà l'issue AUTORITATIVE du pipeline complet : build, juge, gate,
         // publication et fermeture du RUN. Redemander au modèle de l'interpréter coûtait un appel
