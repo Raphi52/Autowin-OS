@@ -128,6 +128,34 @@ describe('TableauDesLots', () => {
     fin()
   })
 
+  // conv-1284 (2026-10-29) : le lot qui a posé sa question au chef s'affiche « attend le chef », en
+  // pointillé d'alerte et non en rouge, le bilan le compte à part, et « Relancer » reste possible.
+  it('un lot qui attend la réponse du chef : son état à lui, compté à part, relançable', async () => {
+    let p: PlanDeLots = { ...plan(), statut: 'en-cours' }
+    p = marquerLance(p, 1, 'conv-100', 2)
+    p = marquerLance(p, 2, 'conv-101', 2)
+    p = noterFinDeTour(
+      p,
+      'conv-100',
+      { ok: true, texte: 'Quel nom ?\n\n⛔ Bloqué : j’attends la réponse du chef' },
+      3
+    ).plan
+    poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+    const { hote, fin } = await monter('conv-1')
+    const lot1 = hote.querySelector('[data-lot-etat="attend-chef"]')
+    expect(lot1?.classList.contains('tdl-lot--attend-chef')).toBe(true)
+    expect(lot1?.querySelector('.tdl-pastille')?.textContent).toBe('attend le chef')
+    expect(lot1?.textContent).toContain('question posée au chef conv-1')
+    expect(hote.textContent).toContain(
+      '0 fait, 0 en échec, 1 en cours, 1 à faire, 1 attend le chef sur 3'
+    )
+    const relance = hote.querySelector('[data-testid="tdl-lot-1-relancer"]') as HTMLButtonElement
+    expect(relance?.disabled).toBe(false)
+    await act(async () => relance.click())
+    expect(appels.at(-1)).toEqual(['relancer', 'conv-1', 'plan-a', 1])
+    fin()
+  })
+
   /*
    * conv-1151, lot 3 : seul l'agent du chef relançait un lot en échec ; l'utilisateur, qui voit
    * l'échec ici, devait lui écrire. Chaque lot en échec porte maintenant son bouton « Relancer ».
@@ -217,6 +245,48 @@ describe('TableauDesLots', () => {
     expect(bloc.open).toBe(false)
     expect(bloc.querySelector('summary')?.textContent).toBe('36 avertissements')
     expect(bloc.querySelectorAll('li')).toHaveLength(36)
+    fin()
+  })
+
+  /*
+   * conv-1284 : ce que chaque lot reçoit en plus de sa demande se lit dans le tableau — le contexte
+   * commun et les décisions prises en route, repliés comme les avertissements — et le modèle d'un
+   * lot s'affiche à côté de son titre.
+   */
+  it('contexte, décisions (avec leur auteur) et modèle d’un lot, repliés et lisibles', async () => {
+    const base = plan()
+    const avecMemoire: PlanDeLots = {
+      ...base,
+      statut: 'en-cours',
+      contexte: 'Traduire les écrans. Décidé : clés en kebab-case, un fichier par écran.',
+      decisions: [
+        { texte: 'le module s’appelle carte-du-plan.ts', de: 'lot 1', le: 1 },
+        { texte: 'on garde le port 5173', de: 'chef', le: 2 }
+      ],
+      lots: base.lots.map((l) => (l.rang === 2 ? { ...l, modele: 'haiku' } : l))
+    }
+    poserApi({ 'conv-1': { plan: avecMemoire, role: 'chef' } })
+    const { hote, fin } = await monter('conv-1')
+    const contexte = hote.querySelector('[data-testid="tdl-contexte"]') as HTMLDetailsElement
+    expect(contexte.tagName).toBe('DETAILS')
+    expect(contexte.open).toBe(false)
+    expect(contexte.querySelector('p')?.textContent).toMatch(/^Traduire les écrans/)
+    const decisions = hote.querySelector('[data-testid="tdl-decisions"]') as HTMLDetailsElement
+    expect(decisions.querySelector('summary')?.textContent).toBe('2 décisions prises en route')
+    expect([...decisions.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'le module s’appelle carte-du-plan.ts (lot 1)',
+      'on garde le port 5173 (chef)'
+    ])
+    expect(hote.querySelector('[data-testid="tdl-lot-2-modele"]')?.textContent).toBe(' · haiku')
+    expect(hote.querySelector('[data-testid="tdl-lot-1-modele"]')).toBeNull()
+    fin()
+  })
+
+  it('jumeau : un plan sans contexte ni décision n’affiche aucun bloc vide', async () => {
+    poserApi({ 'conv-1': { plan: { ...plan(), statut: 'en-cours' }, role: 'chef' } })
+    const { hote, fin } = await monter('conv-1')
+    expect(hote.querySelector('[data-testid="tdl-contexte"]')).toBeNull()
+    expect(hote.querySelector('[data-testid="tdl-decisions"]')).toBeNull()
     fin()
   })
 
@@ -406,5 +476,70 @@ describe('TableauDesLots', () => {
     expect(hote.textContent).toContain('Lot 2/3')
     expect(hote.textContent).toContain('mené par conv-1')
     fin()
+  })
+
+  /*
+   * conv-1315 : en vue chat, la frise de la super conv montre déjà les lots. Le tableau ne garde que
+   * ce qu'elle n'a pas — et surtout les gestes sur le plan, qu'aucun autre endroit ne porte.
+   */
+  describe('à côté de la frise', () => {
+    async function monterAvecFrise(fil: string): Promise<{ hote: HTMLElement; fin: () => void }> {
+      const hote = document.createElement('div')
+      document.body.appendChild(hote)
+      const racine = createRoot(hote)
+      await act(async () => {
+        racine.render(<TableauDesLots conversationId={fil} aCoteDeLaFrise />)
+      })
+      return { hote, fin: () => act(() => racine.unmount()) }
+    }
+
+    it('plus de lots, de bilan ni de Réduire ; titre, statut et Arrêter restent', async () => {
+      const p = marquerLance({ ...plan(), statut: 'en-cours' }, 1, 'conv-100', 2)
+      poserApi({ 'conv-1': { plan: p, role: 'chef' } }, { 'conv-100': [ligneDeCout(1)] })
+      const { hote, fin } = await monterAvecFrise('conv-1')
+      expect(hote.querySelector('.tdl-lots')).toBeNull()
+      expect(hote.querySelector('.tdl-bilan')).toBeNull()
+      expect(hote.querySelector('[data-testid="tdl-reduire"]')).toBeNull()
+      expect(hote.textContent).toContain('Traduction anglaise')
+      expect(hote.textContent).toContain('Arrêter (aucun nouveau lot)')
+      // La frise lit déjà ces coûts : une seconde lecture ne servirait à rien.
+      expect(lecturesDeCout).toEqual([])
+      fin()
+    })
+
+    it('un plan réduit dans la mosaïque garde ici Arrêter et Reprendre', async () => {
+      window.localStorage.setItem('autowin:plans-de-lots-reduits', JSON.stringify(['plan-a']))
+      const p = marquerLance({ ...plan(), statut: 'en-cours' }, 1, 'conv-100', 2)
+      poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+      const { hote, fin } = await monterAvecFrise('conv-1')
+      expect(hote.textContent).toContain('Arrêter (aucun nouveau lot)')
+      window.localStorage.clear()
+      fin()
+    })
+
+    it('la mémoire du plan reste : contexte et décisions', async () => {
+      const p: PlanDeLots = {
+        ...plan(),
+        statut: 'en-cours',
+        contexte: 'Le contexte commun',
+        decisions: [{ texte: 'Le nom est fixé', de: 'chef', le: 2 }]
+      }
+      poserApi({ 'conv-1': { plan: p, role: 'chef' } })
+      const { hote, fin } = await monterAvecFrise('conv-1')
+      expect(hote.querySelector('[data-testid="tdl-contexte"]')?.textContent).toContain(
+        'Le contexte commun'
+      )
+      expect(hote.querySelector('[data-testid="tdl-decisions"]')?.textContent).toContain(
+        'Le nom est fixé'
+      )
+      fin()
+    })
+
+    it('dans le fil d’un lot : rien, son onglet et sa piste le disent déjà', async () => {
+      poserApi({ 'conv-100': { plan: plan(), role: 'enfant', rang: 2 } })
+      const { hote, fin } = await monterAvecFrise('conv-100')
+      expect(hote.querySelector('[data-testid="tableau-des-lots"]')).toBeNull()
+      fin()
+    })
   })
 })

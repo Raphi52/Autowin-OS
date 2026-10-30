@@ -72,7 +72,8 @@ describe('recensement de retention', () => {
   it('le passage de demarrage emprunte la voie asynchrone', () => {
     const source = sourceProcessPrincipal()
 
-    expect(source).toContain('await worktrees.recenserRetentionAsync(')
-    expect(source).not.toMatch(/planifierBalayage\(\s*worktrees\.recenserRetention\(/)
+    // L'attente vit dans `jouerPasseDeRetention` (`await deps.recenser()`), qui gere aussi le rejet.
+    expect(source).toContain('return worktrees.recenserRetentionAsync(')
+    expect(source).not.toMatch(/worktrees\.recenserRetention\(/)
   })
 })

@@ -27,6 +27,7 @@ export const TEXTES_FR = {
   'lots.etat.fait': 'fait',
   'lots.etat.echec': 'échec',
   'lots.etat.interrompu': 'interrompu',
+  'lots.etat.attend-chef': 'attend le chef',
   'lots.statut.attente-accord': 'en attente de ton accord',
   'lots.statut.en-cours': 'en cours',
   'lots.statut.termine': 'terminé',
@@ -41,10 +42,12 @@ export const TEXTES_FR = {
   'lots.bilan.faits.plusieurs': '{n} faits',
   'lots.bilan.interrompus.un': ', {n} interrompu',
   'lots.bilan.interrompus.plusieurs': ', {n} interrompus',
+  'lots.bilan.attendChef.un': ', {n} attend le chef',
+  'lots.bilan.attendChef.plusieurs': ', {n} attendent le chef',
   'lots.bilan.tours.un': '{n} tour',
   'lots.bilan.tours.plusieurs': '{n} tours',
   'lots.bilan.texte':
-    '{faits}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{interrompus} sur {total} — {tours} sur {plafond}',
+    '{faits}, {echecs} en échec, {enCours} en cours, {aFaire} à faire{interrompus}{attendChef} sur {total} — {tours} sur {plafond}',
   'lots.parallele.un': '{n} fil en parallèle',
   'lots.parallele.plusieurs': '{n} fils en parallèle',
   'lots.cout.titre':
@@ -70,6 +73,11 @@ export const TEXTES_FR = {
   'lots.kicker': 'Plan de lots',
   'lots.avertissements.un': '{n} avertissement',
   'lots.avertissements.plusieurs': '{n} avertissements',
+  // conv-1284 : le contexte commun et les décisions que reçoit chaque lot, le modèle d'un lot.
+  'lots.contexte': 'Contexte commun envoyé à chaque lot',
+  'lots.decisions.un': '{n} décision prise en route',
+  'lots.decisions.plusieurs': '{n} décisions prises en route',
+  'lots.modele.titre': 'Modèle de ce lot',
   'lots.lancer': 'Lancer le plan — {lots} lots, {parallele} en parallèle, plafond {plafond} tours',
   'lots.refuser': 'Refuser',
   'lots.note':
@@ -80,6 +88,26 @@ export const TEXTES_FR = {
   'lots.reduire.titre': 'Réduire le tableau à sa ligne de titre — le plan continue',
   'lots.agrandir': 'Agrandir',
   'lots.agrandir.titre': 'Afficher les lots, le bilan et les boutons du plan',
+
+  // — La super conv dans la mosaïque (SuperConvMosaique, /draft conv-1305) : une case à onglets,
+  // la frise pleine dans l'onglet Chef, la piste du lot dans son onglet.
+  'superConv.onglets.aria': 'Onglets de la super conv',
+  'superConv.onglet.chef': 'Chef',
+  'superConv.onglet.chef.titre': '{titre} — le fil chef et la frise de tout le plan',
+  'superConv.onglet.lot': 'Lot {rang}/{total} — {titre}',
+  'superConv.onglet.lot.titre': '{titre} — {etat}',
+  'superConv.onglet.nonLu': ' — fini, pas encore lu',
+  'superConv.onglet.pasLance': '{titre} — pas encore lancé',
+  'superConv.frise.aria': 'Frise du plan de lots',
+  'superConv.chiffre.faits': 'faits',
+  'superConv.chiffre.tours': 'tours',
+  'superConv.chiffre.cout': 'coût',
+  'superConv.chiffre.ecoule': 'écoulé',
+  'superConv.maintenant': 'maintenant {heure}',
+  'superConv.pasEncore': 'Aucun lot n’est encore parti.',
+  'superConv.apres': 'après {rangs}',
+  'superConv.piste.titre': 'Ouvrir l’onglet du lot {rang}',
+  'superConv.ouverture': 'Ouverture du fil du lot…',
 
   // — Carte « Lancer en N fils » (PropositionDeFils, proposition-fils-evenements).
   'fils.titre.plusieurs': '{n} tâches dans ton message',
@@ -242,6 +270,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.etat.fait': 'done',
   'lots.etat.echec': 'failed',
   'lots.etat.interrompu': 'interrupted',
+  'lots.etat.attend-chef': 'waiting for lead',
   'lots.statut.attente-accord': 'waiting for your approval',
   'lots.statut.en-cours': 'running',
   'lots.statut.termine': 'finished',
@@ -256,10 +285,12 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.bilan.faits.plusieurs': '{n} done',
   'lots.bilan.interrompus.un': ', {n} interrupted',
   'lots.bilan.interrompus.plusieurs': ', {n} interrupted',
+  'lots.bilan.attendChef.un': ', {n} waiting for the lead',
+  'lots.bilan.attendChef.plusieurs': ', {n} waiting for the lead',
   'lots.bilan.tours.un': '{n} turn',
   'lots.bilan.tours.plusieurs': '{n} turns',
   'lots.bilan.texte':
-    '{faits}, {echecs} failed, {enCours} running, {aFaire} to do{interrompus} out of {total} — {tours} of {plafond}',
+    '{faits}, {echecs} failed, {enCours} running, {aFaire} to do{interrompus}{attendChef} out of {total} — {tours} of {plafond}',
   'lots.parallele.un': '{n} thread in parallel',
   'lots.parallele.plusieurs': '{n} threads in parallel',
   'lots.cout.titre':
@@ -285,6 +316,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.kicker': 'Batch plan',
   'lots.avertissements.un': '{n} warning',
   'lots.avertissements.plusieurs': '{n} warnings',
+  'lots.contexte': 'Shared context sent to every batch',
+  'lots.decisions.un': '{n} decision made along the way',
+  'lots.decisions.plusieurs': '{n} decisions made along the way',
+  'lots.modele.titre': 'Model for this batch',
   'lots.lancer':
     'Launch the plan — {lots} batches, {parallele} in parallel, cap of {plafond} turns',
   'lots.refuser': 'Decline',
@@ -296,6 +331,24 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.reduire.titre': 'Collapse the board to its title line — the plan keeps running',
   'lots.agrandir': 'Expand',
   'lots.agrandir.titre': 'Show the batches, the summary and the plan buttons',
+
+  'superConv.onglets.aria': 'Super conversation tabs',
+  'superConv.onglet.chef': 'Lead',
+  'superConv.onglet.chef.titre': '{titre} — the lead thread and the timeline of the whole plan',
+  'superConv.onglet.lot': 'Batch {rang}/{total} — {titre}',
+  'superConv.onglet.lot.titre': '{titre} — {etat}',
+  'superConv.onglet.nonLu': ' — finished, not read yet',
+  'superConv.onglet.pasLance': '{titre} — not started yet',
+  'superConv.frise.aria': 'Batch plan timeline',
+  'superConv.chiffre.faits': 'done',
+  'superConv.chiffre.tours': 'turns',
+  'superConv.chiffre.cout': 'cost',
+  'superConv.chiffre.ecoule': 'elapsed',
+  'superConv.maintenant': 'now {heure}',
+  'superConv.pasEncore': 'No batch has started yet.',
+  'superConv.apres': 'after {rangs}',
+  'superConv.piste.titre': 'Open the tab of batch {rang}',
+  'superConv.ouverture': 'Opening the batch thread…',
 
   'fils.titre.plusieurs': '{n} tasks in your message',
   'fils.titre.une': 'A single task',
@@ -446,7 +499,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
 /** Clé → raison pour laquelle son anglais reste identique au français. */
 export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES_FR, string>>> = {
   'messages.nature.question': 'même mot en anglais : « question »',
-  'messages.nature.info': 'même mot en anglais : « information »'
+  'messages.nature.info': 'même mot en anglais : « information »',
+  'superConv.onglet.lot.titre': 'deux valeurs et un tiret, aucun mot à traduire'
 }
 
 export const { useTextes: useTextesChatFilsEtLots, traduire: traduireChatFilsEtLots } =
@@ -476,6 +530,9 @@ export function texteDuBilan(plan: PlanDeLots, langue: Langue): string {
     aFaire: b.aFaire,
     interrompus: b.interrompus
       ? pluriel(b.interrompus, 'lots.bilan.interrompus.un', 'lots.bilan.interrompus.plusieurs')
+      : '',
+    attendChef: b.attendChef
+      ? pluriel(b.attendChef, 'lots.bilan.attendChef.un', 'lots.bilan.attendChef.plusieurs')
       : '',
     total: b.total,
     tours: pluriel(plan.toursLances, 'lots.bilan.tours.un', 'lots.bilan.tours.plusieurs'),

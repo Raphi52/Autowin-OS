@@ -95,6 +95,36 @@
   overflow-y: auto;
 }
 
+/* conv-1284 : contexte commun et décisions du plan, repliés comme les avertissements. */
+.tdl-memoire {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tdl-memoire summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.tdl-memoire p,
+.tdl-memoire ul {
+  margin: 4px 0 0;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.tdl-memoire ul {
+  padding-left: 18px;
+}
+
+.tdl-memoire-de,
+.tdl-modele {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .tdl-lots {
   list-style: none;
   margin: 0;
@@ -156,6 +186,17 @@
 }
 
 .tdl-lot--interrompu .tdl-pastille {
+  color: var(--warn);
+}
+
+/* conv-1284 : le lot a posé sa question au chef et attend sa réponse — ni fini, ni cassé. */
+.tdl-lot--attend-chef {
+  border-left-color: var(--warn);
+  border-left-style: dashed;
+}
+
+.tdl-lot--attend-chef .tdl-pastille,
+.tdl-lot--attend-chef .tdl-lot-raison {
   color: var(--warn);
 }
 
@@ -274,4 +315,57 @@
 
 .tdl--reduit {
   padding: 6px 0;
+}
+
+/*
+ * À côté de la frise de la super conv (conv-1315) : plus de liste de lots, le reste tient sur une
+ * ligne pour rendre sa hauteur au fil. Un panneau déplié (contexte, décisions) passe sous la ligne.
+ */
+.tdl--frise {
+  /*
+   * Hauteur serrée : le tableau rétrécit et défile plutôt que de pousser la saisie hors de la
+   * fenêtre (déjà signalé, conv-1171). Les gestes passent sur la première ligne (`order`, plus bas),
+   * la seule que ce minimum garde visible.
+   */
+  flex: 0 1 auto;
+  min-height: 44px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  /* Mêmes côtés que la frise et l'en-tête, au-dessus. */
+  padding: 6px 24px;
+}
+
+.tdl--frise .tdl-tete {
+  order: -2;
+  flex: 1 1 180px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* La frise porte déjà ce surtitre, juste au-dessus. */
+.tdl--frise .tdl-kicker {
+  display: none;
+}
+
+.tdl--frise .tdl-titre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tdl--frise .tdl-statut {
+  flex: none;
+}
+
+.tdl--frise .tdl-raison,
+.tdl--frise details[open] {
+  flex: 1 1 100%;
+}
+
+.tdl--frise .tdl-actions {
+  order: -1;
+  margin: 0 0 0 auto;
 }

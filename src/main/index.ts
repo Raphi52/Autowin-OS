@@ -203,6 +203,7 @@ import {
   type ObservateurFinDeTour
 } from './chat/run-pilot-chat'
 import { plansPourLaListe, type IssueDuTour } from '../shared/plan-de-lots'
+import { phrasesDesLots } from '../shared/phrase-du-fil'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
 import { modeleDuTour } from './chat/modele-de-conversation'
@@ -243,7 +244,12 @@ import { creerReprendreTout } from './runs/resume-all-interrupted-runs'
 import { creerReveilApresQuota } from './runs/reveil-apres-quota'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
-import { creerRelanceDeRunReprenable } from './runs/relaunch-resumable-run'
+import {
+  annoncerFinDuRun,
+  creerRelanceDeRunReprenable,
+  issueDuRunPerdu,
+  type SuiviDuPlan
+} from './runs/relaunch-resumable-run'
 import { cheminGardeRepriseCrash, creerGardeRepriseCrash } from './runs/garde-reprise-plantage'
 import {
   admitAutomaticResumeRuntime,
@@ -472,7 +478,7 @@ import {
   retenirMenageDemarrage
 } from './store/inventaire-disque'
 import { defaultProcessIdentity } from './store/worktree-manager'
-import { planifierBalayage } from './store/balayage-retention'
+import { jouerPasseDeRetention } from './store/balayage-retention'
 import { chargerShaConsignes } from './store/registres-consignes'
 import {
   appendExecutionEvidenceFileTrace,
@@ -1260,7 +1266,9 @@ const titresBrainDuTour = createBrainTitresDuTour({
   workspace: (conversationId?: string) => dossierDuTour(conversationId),
   // BRAIN PERSO (conv-1233, 2026-10-28) : ses notes proches arrivent aussi, préfixées `perso:`.
   brainPerso: () => envDuBrainPerso(),
-  persoInjoignable: relancerBrainPerso
+  persoInjoignable: relancerBrainPerso,
+  // conv-1303 : les notes déjà servies survivent au redémarrage (137 lignes resservies du 13 au 30/10).
+  relireTraces: () => readBrainTraces()
 })
 // BRAIN PERSO dans le contexte des travaux en arrière-plan (conv-1233, 2026-10-28) : chaque run
 // cherche aussi dans le Brain perso, notes préfixées `perso:` (`orchestrator.ts`).
@@ -2039,7 +2047,7 @@ function registerHdeskTvIpc(): void {
 }
 
 /** IPC : chat, orchestration, dashboards et graphe. */
-function registerChatIpc(): void {
+function registerChatIpc(): SuiviDuPlan {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
   // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
   // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. listUnfinishedTurnsPuisMenageAsync
@@ -3554,6 +3562,16 @@ Le fil reprend ensuite normalement.`
       if (geste === 'tous') return { ok: true, plans: plansPourLaListe(coordinateur.plans()) }
       const fil = guardString(conversationId, 'conversationId')
       if (geste === 'voir') return { ok: true, vue: coordinateur.planDuFil(fil) ?? null }
+      // Ce que dit chaque lot (conv-1315) : lu ici, où TOUS les fils sont en mémoire, tour en cours
+      // compris ; l'écran n'a que ceux qu'il a déjà peints, et une piste de lot jamais ouvert restait
+      // vide. Seules les phrases traversent le canal, pas les messages.
+      if (geste === 'phrases') {
+        const vue = coordinateur.planDuFil(fil)
+        const phrases = vue
+          ? phrasesDesLots(vue.plan, (lotFil) => os.conversations.get(lotFil)?.messages)
+          : {}
+        return { ok: true, phrases }
+      }
       const id = guardString(planId, 'planId')
       if (geste === 'accepter') return coordinateur.accepter(fil, id)
       if (geste === 'refuser') return coordinateur.refuser(fil, id)
@@ -4000,6 +4018,11 @@ Le fil reprend ensuite normalement.`
     boardDuPoste.recopierLeBoard()
   }
   const runPilotChat = suivreLaFinDuTour(tourCompteDesReception, observateurDesPlans)
+  /** Rendu au démarrage : les runs repris y préviennent les plans de lots (conv-1308). */
+  const suiviDuPlan: SuiviDuPlan = {
+    agentRepris: (fil, tour) => suiviDesPlans.coordinateur?.agentRepris(fil, tour),
+    finDuRun: (fil, issue) => annoncerLaFinDuTour(observateurDesPlans, fil, issue)
+  }
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation (`setRecovered`) fait
    * refuser un nouveau message par `os:pilotChat` et répondre « actif » à la sonde de l'écran,
@@ -4013,6 +4036,9 @@ Le fil reprend ensuite normalement.`
       resolveRecovery = resolve
     })
     activeChatTurns.setRecovered(call.conversationId, recoveryController, recoveryCompletion)
+    // Le plan de lots suit cet agent (conv-1308). Les appels reconnus au chargement passent ici avant
+    // que le coordinateur existe : il lira alors cette réservation lui-même (`tourActif`).
+    suiviDesPlans.coordinateur?.agentRepris(call.conversationId, call.turnId)
     setImmediate(() => {
       void (async () => {
         // L'issue, annoncée aux plans de lots APRÈS le relâchement de la réservation (conv-1150).
@@ -4203,33 +4229,21 @@ Le fil reprend ensuite normalement.`
     void pendantOperation('timer:balayage:retention', async () => {
       const worktrees = os.worktreeManager
       if (!worktrees) return
-      const consignes = chargerShaConsignes(app.getAppPath())
-      /*
-       * ASYNCHRONE, et ce n'est pas un detail de style. La version synchrone lance un `git cherry`
-       * par ref de secours -- 97 ce 2026-09-08 -- en `execFileSync` : 11 720 ms de fenetre figee
-       * pendant la construction de la fenetre, journalises dans `gels.jsonl`. Meme prix, meme
-       * verdict, mais paye sans tenir la boucle d'evenements.
-       */
-      const entrees = await worktrees.recenserRetentionAsync((sha) => consignes.has(sha))
-      const plan = planifierBalayage(entrees)
-      /*
-       * ON DEPOSE LE RAPPORT AVANT DE SORTIR, y compris quand il est VIDE. Un plan vide n'est pas
-       * un non-evenement : il affirme que le stock est sain, ce que « rien affiche » ne dit pas.
-       * L'interface distingue « jamais balaye » de « balaye, rien a signaler ».
-       */
-      os.poserRapportRetention({
-        faitLe: new Date().toISOString(),
-        examines: entrees.length,
-        sansPerte: plan.aSupprimer.map((e) => e.nom),
-        aTrancher: plan.aSignaler.map((e) => e.nom),
-        reportees: plan.reportees
+      // Le rejet d'un recensement trop long est GERE dans `jouerPasseDeRetention` (crash.log du
+      // 2026-10-28 : « unhandledRejection », bulletin de maintenance du 30/10, conv-1048).
+      await jouerPasseDeRetention({
+        recenser: () => {
+          const consignes = chargerShaConsignes(app.getAppPath())
+          /*
+           * ASYNCHRONE, et ce n'est pas un detail de style. La version synchrone lance un `git cherry`
+           * par ref de secours -- 97 ce 2026-09-08 -- en `execFileSync` : 11 720 ms de fenetre figee
+           * pendant la construction de la fenetre, journalises dans `gels.jsonl`. Meme prix, meme
+           * verdict, mais paye sans tenir la boucle d'evenements.
+           */
+          return worktrees.recenserRetentionAsync((sha) => consignes.has(sha))
+        },
+        poserRapport: (rapport) => os.poserRapportRetention(rapport)
       })
-      if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
-      console.info(
-        `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
-          (plan.reportees > 0 ? `, ${plan.reportees} reportes` : '') +
-          ' — AUCUNE suppression automatique.'
-      )
     })
   }
   /*
@@ -4395,9 +4409,15 @@ Le fil reprend ensuite normalement.`
         ...(source?.projectPath ? { projectPath: source.projectPath } : {})
       }).id
     },
-    lancer: (fil, prompt) =>
+    // conv-1284 : le modèle d'un lot passe par la même capacité que `chat_send` (« model »).
+    lancer: (fil, prompt, modele) =>
       bus.lancerDansConversation
-        ? bus.lancerDansConversation(fil, prompt)
+        ? modele
+          ? bus.lancerDansConversation(fil, prompt, {
+              provider: os.conversations.get(fil)?.provider ?? 'claude',
+              model: modele
+            })
+          : bus.lancerDansConversation(fil, prompt)
         : Promise.resolve({ ok: false, error: 'lancement dans un fil non câblé' }),
     tourActif: (fil) => activeChatTurns.isInFlight(fil),
     existe: (fil) => Boolean(os.conversations.get(fil)),
@@ -5275,6 +5295,7 @@ Le fil reprend ensuite normalement.`
   // Les canaux de l'activite (sessions consultees et leurs captures) vivent dans
   // src/main/ipc/activity.ts : ils ne prenaient rien ici.
   registerActivityIpc()
+  return suiviDuPlan
 }
 
 // This method will be called when Electron has finished
@@ -5510,7 +5531,7 @@ app.whenReady().then(async () => {
     return guichetProd.enAttente()
   })
   registerIdentiteIpc()
-  registerChatIpc()
+  const suiviDuPlan = registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
     service: tickets,
@@ -5710,8 +5731,19 @@ app.whenReady().then(async () => {
     fenetresVivantes: () => BrowserWindow.getAllWindows(),
     defaultProcessIdentity,
     appelChatReprisPourTour,
-    gardePlantage: creerGardeRepriseCrash(cheminGardeRepriseCrash(app.getPath('userData')))
+    gardePlantage: creerGardeRepriseCrash(cheminGardeRepriseCrash(app.getPath('userData'))),
+    plansDeLots: suiviDuPlan
   })
+  /** Un run rattaché se clôt ici sans repartir : le plan qui l'a adopté doit l'apprendre (conv-1308). */
+  const annoncerFinDuRunRepris = (
+    run: { conversationId?: string; turnId?: string },
+    raison: string
+  ): void =>
+    annoncerFinDuRun(
+      { plansDeLots: suiviDuPlan, appelChatReprisPourTour },
+      run,
+      issueDuRunPerdu(raison)
+    )
   const startupResumeQueue = new StartupResumeQueue()
 
   // « REPRENDRE TOUT » A LA DEMANDE. Le demarrage ne relance que ce qu'il trouve AU BOOT ; un run
@@ -5848,6 +5880,12 @@ app.whenReady().then(async () => {
       })
       continue
     }
+    // Le travail continue dans ce fil : son lot n'est pas interrompu (conv-1308). Fait AVANT d'attendre,
+    // parce que la file de démarrage peut retarder la relance jusqu'à la fin d'un autre run : pendant
+    // ce temps, « Reprendre » y aurait lancé un second agent. `bloquer` n'est pas adopté : plus rien
+    // ne tourne, et son lot attend le clic.
+    if ((reprise === 'rattacher' || reprise === 'relancer') && resumableRun.conversationId)
+      suiviDuPlan.agentRepris(resumableRun.conversationId, resumableRun.turnId)
     if ((reprise === 'rattacher' || reprise === 'bloquer') && resumableRun) {
       const conversationId = resumableRun.conversationId ?? '__autonomous__'
       const recordedTurnRuntime = resumableRun.turnId
@@ -6015,8 +6053,11 @@ app.whenReady().then(async () => {
             })
             broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
             console.warn('[resume-orchestration]', latest.runId, '→', reason)
+            annoncerFinDuRunRepris(latest, reason)
           } else {
             durableLiveReattachment?.succeed({ result: 'Rattachement terminé.' })
+            // Le point de reprise a disparu : aucun résultat à lire, le lot ne vaut pas « fait ».
+            annoncerFinDuRunRepris(resumableRun, 'run rattaché terminé sans résultat lisible.')
           }
           return
         }
