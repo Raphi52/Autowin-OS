@@ -1581,7 +1581,10 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
 
         arreter(arret)
 
+        // Lu avant tout `await` : c'est ce qui prouve « tout de suite », le cas exact de l'objection.
+        expect(nav.etat('conv-a').demandeAccord).toBeUndefined()
         expect(await issueSansAttendre(action)).toMatchObject({ ok: false, refus: code })
+        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
         expect(regards(vue)).toEqual([SANS_TOUCHER, SANS_TOUCHER])
         expect(vue.textes).toEqual([])
       }
