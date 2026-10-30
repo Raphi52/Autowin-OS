@@ -376,6 +376,9 @@ const NOYAU = String.raw`(function () {
    * l'utilisateur fait défiler pour regarder la page, la cible part et le cadre désigne autre chose.
    * Écoute en capture : le défilement d'un bloc intérieur ne remonte pas. Une cible retirée de la page
    * ne se mesure plus (rectangle nul) : le cadre reste où il était.
+   * fix-ok: conv-1324 (mesuré en vraie app, D:/tmp/lot3/run8.txt) — cause : le cadre est en position
+   * fixe et n'était placé qu'une fois ; après un défilement de 200 px, il restait à y=125 alors que sa
+   * cible était passée à y=-75, et il désignait un autre élément.
    */
   function suivreCible(div) {
     var el = nav.vise;

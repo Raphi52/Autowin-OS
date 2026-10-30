@@ -154,7 +154,11 @@
 .navigateur-jalon.prochain .navigateur-jalon-verbe,
 .navigateur-jalon.refuse .navigateur-jalon-verbe {
   /* Texte de 10,5 px sur une surface plus foncée que le fond de page : pure, la teinte du jalon tombe
-     entre 3,8 et 4,3:1 en thème clair, 3,9:1 sur NieR:Automata (mesuré en vraie app, conv-1324). */
+     entre 3,8 et 4,3:1 en thème clair, 3,9:1 sur NieR:Automata (mesuré en vraie app, conv-1324).
+     fix-ok: conv-1324 (style calculé en vraie app, D:/tmp/lot3/run7.txt à run11.txt, puis run12.txt)
+     — cause : les jetons --gold et --err tiennent 4,5:1 sur le FOND de page, pas sur la surface du
+     panneau, plus foncée (clair : verbe en cours 4,3, refusé 4,04 ; NieR 3,91). Puis l'opacité de 85 %
+     posée sur tout le jalon prochain retirait encore du contraste à son verbe (NieR 4,47, run12). */
   color: color-mix(in srgb, var(--jalon) 65%, var(--text));
 }
 .navigateur-jalon-temps {

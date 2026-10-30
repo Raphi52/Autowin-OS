@@ -9,6 +9,12 @@ import { describe, expect, it } from 'vitest'
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre `color: var(--jalon)` sur le verbe, ou
  * `color: var(--gold)` sur le dernier bouton du bandeau.
+ *
+ * fix-ok: conv-1324 (style calculé en vraie app, D:/tmp/lot3/run11.txt et run12.txt) — causes des
+ * retouches de ce test : NieR:Automata ne déclare pas `--err` dans theme-nier-automata.css, sa valeur
+ * vient du fichier généré (le 3,91:1 mesuré) et le reste de la base claire ; le test lit donc cette
+ * chaîne (`base`) comme la page. Et l'opacité de 85 % sur tout le jalon prochain retirait du contraste
+ * au verbe (NieR 4,47, run12) : la réinjection qui la remet doit rougir (reinjection.txt:8).
  */
 const css = readFileSync(new URL('./FriseGestesNavigateur.css', import.meta.url), 'utf8').replace(
   /\/\*[\s\S]*?\*\//g,
@@ -18,7 +24,7 @@ const dossier = new URL('../assets/', import.meta.url)
 
 /**
  * Le bloc d'un thème, pour lire ses jetons et non ceux d'un autre. `base` : ce qu'il hérite sans le
- * redéclarer, comme NieR:Automata qui prend `--err` de la base claire.
+ * redéclarer, comme NieR:Automata dont le fichier source ne déclare pas `--err`.
  */
 function jetons(
   fichier: string,
