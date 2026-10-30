@@ -104,9 +104,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      `.autowin-data/autowin-os/gc-purges.jsonl`.
    - **Pas d'accord** : `aPurger` liste les candidates. Poser la question par `ask`, avec exactement
      ces réponses : « Oui, purge cette fois », « Oui, purge et vide seul à l’avenir », « Non, garde ».
-     Le mot « purge » est obligatoire : c'est lui qui empêche le mode auto de répondre à la place de
-     l'utilisateur (« vide seul » ne le déclenche pas). Pas de « sans » ni de « rien » dans ces
-     options : ces mots retirent cette protection.
+     Le mode auto reconnaît la question à ces textes, et c'est ce qui l'empêche de répondre à la place
+     de l'utilisateur : une reformulation retire cette protection.
    - **Réponse « Oui, purge cette fois »** : relancer le script en ajoutant `--cette-fois`,
      jamais `rm -rf` ni `rmSync` (une jonction viderait sa cible). L'option ne s'ajoute jamais sans
      cette réponse de l'utilisateur, dans ce fil. Mêmes contrôles et même journal que l'accord

@@ -103,7 +103,7 @@ describe('mode auto — une purge de corbeille attend toujours l’utilisateur',
 const passeGc = (suite: string): string =>
   `## À purger\n- corbeille du 16/10 (6,1 Mo)\n\n**👉 Recommandé**\n${suite}\n\nAUTOWIN_PROMPT_V1: [85] ${suite}`
 
-const avecQuestion = (texte: string, options: string[]): Msg =>
+const avecQuestion = (texte: string, options: unknown[], choixMultiple = false): Msg =>
   ({
     role: 'assistant',
     content: texte,
@@ -113,7 +113,7 @@ const avecQuestion = (texte: string, options: string[]): Msg =>
         kind: 'action',
         name: 'ask',
         ok: true,
-        data: { question: 'Que fait-on ?', options }
+        data: { question: 'Que fait-on ?', options, ...(choixMultiple && { choixMultiple }) }
       }
     ]
   }) as unknown as Msg
@@ -351,5 +351,119 @@ describe('mode auto — dans une passe /gc, il ne répond pas seul à la questio
     expect(reponseAutoAuDernierAsk([humain, dansUnePasse(['Relis le bilan', 'Oui'])])).toBe(
       'Relis le bilan'
     )
+  })
+})
+
+/*
+ * LE REFUS NE TIENT PLUS À UNE LISTE DE DÉBUTS DE PHRASE (conv-1341, objection du contrôle final,
+ * 2026-10-31). Les phrases ci-dessous sont celles que le contrôle a fait partir seules dans le vrai
+ * `deciderRelanceAuto`, plus leurs voisines : le geste n'est pas en tête, ou rien n'est nommé.
+ */
+const SANS_LE_GESTE_EN_TETE = [
+  'Relance la purge de la corbeille du 16/10',
+  'Confirme la purge de la corbeille du 16/10',
+  'Procède à la purge de la corbeille du 16/10',
+  'OK pour purger la corbeille du 16/10',
+  'Continue : purge la corbeille du 16/10',
+  'Il faut purger la corbeille du 16/10',
+  'Vérifie la corbeille du 16/10 puis purge-la',
+  'Relis le bilan, puis vide la corbeille du 16/10',
+  'Lis le bilan avant de vider la corbeille',
+  'Utilise --cette-fois',
+  'Passe gc-purge-auto.json à true',
+  'Remets enabled à true dans gc-purge-auto.json',
+  'Ajoute enabled à gc-purge-auto.json'
+]
+
+describe('mode auto — le geste de purge s’arrête où qu’il soit dans la phrase', () => {
+  it.each(SANS_LE_GESTE_EN_TETE)('hors passe /gc : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it.each([
+    ...SANS_LE_GESTE_EN_TETE,
+    'Il faut purger les deux',
+    'Oui, cette fois',
+    'Cette fois seulement',
+    'Retire les deux',
+    'Jette les deux dossiers',
+    'Proceed',
+    'Yes please',
+    'Je confirme',
+    'Non, garde',
+    'Regarde si tu peux purger les deux',
+    'Relis le bilan, puis rm -rf le dossier'
+  ])('dans une passe /gc : %s', (suite) => {
+    expect(decider(passeGc(suite))).toMatchObject(arret)
+  })
+
+  // Le travail sur le code et la lecture gardent leur enchaînement : c'est le jumeau de chaque refus.
+  it.each([
+    'Vérifie que la purge de la corbeille a marché',
+    'Cherche pourquoi la corbeille du 16/10 n’a pas été purgée',
+    'Corrige la purge de la corbeille',
+    'Documente la purge de la corbeille et ajoute un test',
+    'Ajoute un test à la purge de la corbeille, puis documente-la',
+    'Implémente la purge de la corbeille, puis ajoute un test de la purge',
+    'Supprime gc-purge-auto.json',
+    'Retire gc-purge-auto.json'
+  ])('jumeau hors passe, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+
+  it.each([
+    'Compare les tailles des deux corbeilles',
+    'Liste les fichiers de la corbeille du 16/10',
+    'Cherche pourquoi la corbeille du 16/10 n’a pas été purgée',
+    'Corrige le test qui laisse des dossiers temporaires',
+    'Check the 16/10 folder'
+  ])('jumeau dans une passe /gc, part toujours : %s', (suite) => {
+    expect(decider(passeGc(suite))).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
+ * skills/gc/SKILL.md promet que le mode auto ne répond jamais à la question de purge. C'était faux dès
+ * que « Non, garde » était recommandée, ou la question à choix multiple : il envoyait « Non, garde »
+ * (objection du contrôle final, 2026-10-31). Rien n'était purgé, mais il tranchait à la place de
+ * l'utilisateur. Les deux contextes sont joués : la rubrique de la passe, et la question seule.
+ */
+describe('mode auto — il ne répond jamais à la question de purge, pas même « Non, garde »', () => {
+  const recommandeNon = [
+    { libelle: 'Oui, purge cette fois' },
+    { libelle: 'Oui, purge et vide seul à l’avenir' },
+    { libelle: 'Non, garde', recommande: true }
+  ]
+  const CONTEXTES = ['## À purger\n- corbeille du 16/10 (6,1 Mo)\n\nAUTOWIN_FIN_V1', 'Bilan.']
+
+  // Sans suite proposée, le mode reste armé et attend : ce qui compte est qu'aucun tour ne parte.
+  const rienNePart = (fil: Msg[]): boolean =>
+    ['arreter', 'attendre'].includes(
+      deciderRelanceAuto({ ...base, proposerNouvelleCible: true, fil }).action
+    )
+
+  it.each(CONTEXTES)('« Non, garde » recommandée n’est pas envoyée : %j', (texte) => {
+    const fil = [humain, avecQuestion(texte, recommandeNon)]
+    expect(reponseAutoAuDernierAsk(fil)).toBeNull()
+    expect(rienNePart(fil)).toBe(true)
+  })
+
+  it.each(CONTEXTES)('à choix multiple, rien n’est coché seul : %j', (texte) => {
+    const fil = [humain, avecQuestion(texte, OPTIONS_DU_GC, true)]
+    expect(reponseAutoAuDernierAsk(fil)).toBeNull()
+    expect(rienNePart(fil)).toBe(true)
+  })
+
+  it('jumeau : hors de cette question, une réponse « Non » recommandée part toujours', () => {
+    const fil = [
+      humain,
+      avecQuestion('Bilan.', [
+        { libelle: 'Oui, publie' },
+        { libelle: 'Non, garde', recommande: true }
+      ])
+    ]
+    expect(reponseAutoAuDernierAsk(fil)).toBe('Non, garde')
   })
 })

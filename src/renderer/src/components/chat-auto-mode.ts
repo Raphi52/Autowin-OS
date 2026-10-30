@@ -36,7 +36,6 @@ import {
 import { extractRecommendation } from './markdown-recommandation'
 import { parseAskDecision, promptDeLOption, promptDesOptions } from './ask-choices'
 import {
-  CIBLE_DESTRUCTRICE,
   estCibleDestructrice,
   lireDecisionScout,
   normaliserPisteCible
@@ -752,46 +751,66 @@ const SUITE_AFFIRME_GESTE_UTILISATEUR =
 // Mesuré le 2026-10-13 (passe /gc, relevée dans le Brain) et le 2026-10-28 (conv-1047) : le `/gc`
 // propose la purge de ses corbeilles dans ses suites, et une suite libre ne passe par aucun filtre
 // destructeur : celle du 13/10 est partie seule. Vider une corbeille ne se rattrape pas, seul
-// l'utilisateur en décide. La phrase doit COMMENCER par le geste (le texte arrive ici sans accents ni
-// capitales) : « Ajoute un test à gc-purger-corbeilles.mjs » ou « Supprime le bouton Corbeille »
-// restent du travail ordinaire (règles trop larges, conv-787).
-const DEBUT_DE_SUITE = /^[\s`'"«*_>-]*(?:(?:oui|ok|vas-y|yes)[\s,:!-]+)?/.source
-const LANCEMENT = /(?:(?:lance|fais|execute|run)\s+(?:la\s+|une\s+|the\s+)?)?/.source
-const SUITE_VIDE_UNE_CORBEILLE = new RegExp(
-  DEBUT_DE_SUITE +
-    LANCEMENT +
+// l'utilisateur en décide.
+//
+// fix-ok: le refus listait des débuts de phrase, et le contrôle final du 31/10 a fait partir seules dans
+// le vrai deciderRelanceAuto « Relance la purge… », « Confirme la purge… », « OK pour purger… »,
+// « Continue : purge… ». Toute liste d'ouvertures laisse passer la suivante : la règle s'inverse. Une
+// phrase qui nomme une purge s'arrête, SAUF si sa clause annonce un travail par son premier verbe (le
+// texte arrive ici sans accents ni capitales). « Ajoute un test à gc-purger-corbeilles.mjs » et
+// « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges, conv-787). La phrase
+// se coupe en clauses, car « Vérifie la corbeille puis purge-la » commence par un travail.
+// Coût mesuré le 31/10 sur 1 158 fils et 5 928 réponses : hors passe `/gc`, aucune suite réelle ne
+// nomme une purge de corbeille, donc aucune suite réelle ne change.
+const SUITE_DE_TRAVAIL = new RegExp(
+  /^[\s`'"«*_>-]*(?:puis\s+)?/.source +
     `(?:${[
-      /(?:purg\w*|vid(?:e|er|ez)|empty)\b.*\b(?:corbeilles?|trash)\b/.source,
-      /(?:supprim\w*|effac\w*|delete)\b.*\bgc-corbeille\b/.source,
-      // Les réponses exactes de la question du `/gc` (skills/gc/SKILL.md) : aucune ne nomme la corbeille.
-      /purge\s+cette\s+fois\b/.source,
-      /(?:purge\s+et\s+)?vide\s+seul\b/.source,
-      /activ\w*\s+(?:la\s+)?purge\b/.source
-    ].join('|')})`,
-  'mu'
+      /(?:cherch|expliqu|analys|mesur|compar|regard|verifi|montr|list|resum|inspect)(?:e|er|ez)?/
+        .source,
+      /(?:diagnostiqu|examin|ajout|implement|corrig|document)(?:e|er|ez)?/.source,
+      /reli(?:s|re)|li(?:s|re)|read|check|investigate|explain|find|show|add|fix/.source
+    ].join('|')})\\b`,
+  'u'
 )
+const CLAUSES = /[,;:.]\s+|\s(?:puis|ensuite|et|then|and|avant\s+de|before)\s|\savant\s+d['’]/u
+function uneClauseFait(geste: RegExp, nu: string): boolean {
+  return nu.split(CLAUSES).some((clause) => geste.test(clause) && !SUITE_DE_TRAVAIL.test(clause))
+}
+// La forme en -ée dit un constat, pas un geste : « la copie n'a pas été effacée » (passe du 24/10).
+const VIDER = /purg(?!ees?\b)\w*|vid(?:e|er|ez)\b|empty\b/.source
+const SUPPRIMER = /(?:supprim|effac)(?!ees?\b)\w*|delete\b|rm\s+-/.source
+const GESTE_DE_VIDAGE = new RegExp(`\\b(?:${VIDER})`, 'u')
+const GESTE_DE_SUPPRESSION = new RegExp(`\\b(?:${SUPPRIMER})`, 'u')
+// Les réponses de la question du `/gc` (skills/gc/SKILL.md) : aucune ne nomme la corbeille.
+const REPONSE_DE_PURGE = /\bpurge\s+cette\s+fois\b|\bvide\s+seul\b|\bactiv\w*\s+(?:la\s+)?purge\b/u
+const NOMME_UNE_CORBEILLE = /\b(?:corbeilles?|trash)\b/u
+function suiteVideUneCorbeille(nu: string): boolean {
+  return (
+    (NOMME_UNE_CORBEILLE.test(nu) && uneClauseFait(GESTE_DE_VIDAGE, nu)) ||
+    (nu.includes('gc-corbeille') && uneClauseFait(GESTE_DE_SUPPRESSION, nu)) ||
+    uneClauseFait(REPONSE_DE_PURGE, nu)
+  )
+}
 // Les deux gestes qui autorisent le script. C'est le geste qui compte, pas le nom : « Ajoute un test à
 // l'option --cette-fois » reste du travail. Retirer l'accord (« Supprime gc-purge-auto.json ») ne vide
-// rien : il n'est pas ici.
-const SUITE_LANCE_UNE_PURGE = new RegExp(
-  DEBUT_DE_SUITE + /(?:re)?(?:lanc\w*|execut\w*|joue\w*|run|node|purg\w*)\b.*--cette-fois\b/.source,
-  'mu'
-)
-const SUITE_POSE_L_ACCORD = new RegExp(
-  DEBUT_DE_SUITE +
-    /(?:ecri\w*|cre\w*|activ\w*|pos\w*|mets?|write|create|enable|touch|ajout\w*\s+\S*enabled)\b.*gc-purge-auto/
-      .source,
-  'mu'
-)
+// rien, et une valeur écrite dans ce fichier en pose un, quel que soit le verbe qui l'annonce.
+const RETIRE_L_ACCORD =
+  /^[\s`'"«*_>-]*(?:supprim|retir|effac|desactiv|remove|delete)\w*\b.*gc-purge-auto/u
+const ECRIT_L_ACCORD = /\b(?:enabled|true)\b.*gc-purge-auto|gc-purge-auto.*\b(?:enabled|true)\b/u
+function suiteAutoriseLaPurge(nu: string): boolean {
+  if (uneClauseFait(/--cette-fois\b/u, nu)) return true
+  return (
+    !RETIRE_L_ACCORD.test(nu) && (ECRIT_L_ACCORD.test(nu) || uneClauseFait(/gc-purge-auto/u, nu))
+  )
+}
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
   const nu = normaliserPisteCible(suite)
   return (
     SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) ||
     SUITE_A_TROU.test(suite) ||
     SUITE_AFFIRME_GESTE_UTILISATEUR.test(suite) ||
-    SUITE_VIDE_UNE_CORBEILLE.test(nu) ||
-    SUITE_LANCE_UNE_PURGE.test(nu) ||
-    SUITE_POSE_L_ACCORD.test(nu)
+    suiteVideUneCorbeille(nu) ||
+    suiteAutoriseLaPurge(nu)
   )
 }
 
@@ -801,21 +820,20 @@ export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
  * « Purge both », texte réel de la question du 28/10 (conv-1047, message 11), ne nomme aucune corbeille :
  * lue seule, cette phrase ne se distingue pas de « Purge le cache du navigateur ». Toutes les passes
  * `/gc` de conv-1047 ont une rubrique « ## À purger » (format fixé par skills/gc/SKILL.md), et un fil de
- * code sur la corbeille n'a aucune raison d'en écrire une : c'est le contexte qui tranche. Dans une telle
- * réponse, une suite qui COMMENCE par détruire, ou un accord nu, répond à la place de l'utilisateur. Le
- * verbe doit rester en tête : la passe du 24/10 proposait « Cherche pourquoi … n'a pas été effacée ».
+ * code sur la corbeille n'a aucune raison d'en écrire une : c'est le contexte qui tranche.
+ *
+ * Dans une telle réponse, la règle est stricte, parce qu'elle ne coûte rien (conv-1341, 2026-10-31) : la
+ * consigne y interdit toute suite de purge, et les 8 passes réelles n'ont proposé que 2 suites, dont une
+ * purge. Seul un travail annoncé par son premier verbe, sans geste de purge, continue : la passe du 24/10
+ * proposait « Cherche pourquoi … n'a pas été effacée, puis retire-la ». Tout le reste (« Oui, cette
+ * fois », « Il faut purger les deux », « Proceed », « Non, garde ») répond à la place de l'utilisateur.
  */
 const RUBRIQUE_A_PURGER = /^#{1,6}\s*a\s+purger\b/mu
-const SUITE_COMMENCE_PAR_DETRUIRE = new RegExp(
-  `${DEBUT_DE_SUITE}${LANCEMENT}(?:${/(?:vid(?:e|er|ez)|empty)\b/.source}|${CIBLE_DESTRUCTRICE.source})`,
-  'mu'
-)
-const SUITE_ACCORD_NU =
-  /^[\s`'"«*_>-]*(?:oui|ok|d['’]accord|fais-le|yes|go(?:\s+ahead)?|do\s+it)?[\s,.!…-]*(?:vas-y)?[\s,.!…-]*$/u
+const GESTE_DANS_UNE_PASSE = new RegExp(`\\b(?:${VIDER}|${SUPPRIMER}|cette[\\s-]+fois\\b)`, 'u')
 function suiteRepondALaPasseGc(suite: string, texteReponse: string): boolean {
   if (!RUBRIQUE_A_PURGER.test(normaliserPisteCible(texteReponse))) return false
   const nu = normaliserPisteCible(suite)
-  return SUITE_COMMENCE_PAR_DETRUIRE.test(nu) || SUITE_ACCORD_NU.test(nu)
+  return !SUITE_DE_TRAVAIL.test(nu) || GESTE_DANS_UNE_PASSE.test(nu)
 }
 
 /**
@@ -1036,11 +1054,17 @@ function dernierAsk(fil: readonly Msg[]): ReturnType<typeof parseAskDecision> {
  * `recommande`, sinon la PREMIERE (le contrat de `ask` place la recommandee en tete). Une reponse
  * destructrice ne part jamais seule : on rend null et la question attend l'humain. Dans une passe
  * `/gc`, un simple « Oui » à « Purger ? » l'est aussi : le mot destructeur est dans la question, pas
- * dans l'option (conv-1341, 2026-10-30, rouge mesuré : le mode auto répondait « Oui » seul).
+ * dans l'option (conv-1341, 2026-10-30, rouge mesuré : le mode auto répondait « Oui » seul). La question
+ * de purge du `/gc` ne se répond pas du tout, même par « Non, garde » : skills/gc/SKILL.md le promet,
+ * et le contrôle du 31/10 a fait partir ce « Non » recommandé ou coché en choix multiple.
  */
 export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
   const decision = dernierAsk(fil)
   if (!decision) return null
+  const estLaQuestionDePurge = decision.options.some((o) =>
+    REPONSE_DE_PURGE.test(normaliserPisteCible(promptDeLOption(o)))
+  )
+  if (estLaQuestionDePurge) return null
   const texteReponse = texteDernierAssistant(fil) ?? ''
   const sure = (o: (typeof decision.options)[number]): boolean => {
     const t = promptDeLOption(o).trim()
