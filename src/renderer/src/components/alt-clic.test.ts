@@ -147,9 +147,10 @@ describe('le geste', () => {
 })
 
 /**
- * ACTIONS À L'APPUI : une ligne de menu agit sur `mousedown` (ChatComposer.tsx:592), une poignée sur
- * `pointerdown` (ChatView.tsx:8528). Absorber le seul `click` les laissait partir : Alt+clic sur une
- * ligne de mention l'acceptait AU LIEU de la désigner (relevé en relecture, conv-1338).
+ * fix-ok: conv-1338 — ACTIONS À L'APPUI : une ligne de menu agit sur `mousedown` (`acceptMention`,
+ * ChatComposer.tsx), une poignée sur `pointerdown` (`beginConversationsResize`, ChatView.tsx).
+ * Absorber le seul `click` les laissait partir : Alt+clic sur une ligne de mention l'acceptait AU
+ * LIEU de la désigner (relevé en relecture).
  */
 describe('le geste absorbe aussi l’appui', () => {
   function appuyer(element: Element, altKey = true): MouseEvent {

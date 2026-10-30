@@ -363,7 +363,8 @@ export const scriptDuGeste = ({ geste, selecteur }) => {
         cible.focus()
         return true
       })()`
-  // Le setter natif : React compare au dernier `value` connu, une affectation directe serait ignoree.
+  // fix-ok: conv-1338 — `selecteur` porte ici le texte a saisir. Le setter natif : React compare au
+  // dernier `value` connu, une affectation directe serait ignoree.
   if (geste === 'saisie')
     return `(() => {
         const champ = document.querySelector('textarea')

@@ -195,7 +195,7 @@ export function referenceDeLElement(
   }
 
   // fix-ok: conv-1338 — sans texte, classe ni repère, `morceaux` restait vide et le geste posait une
-  // référence qui ne nommait que le fil (lu dans la version de conv-1038 ; test « aucun indice »).
+  // référence qui ne nommait que le fil (lu dans la version de conv-1038 ; test des « cas vides »).
   // Le fil seul ne désignerait rien : le clic reste ordinaire.
   if (morceaux.length === 0) return null
 

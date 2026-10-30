@@ -15,8 +15,9 @@
  * (« pk le bouton joindre fichier est grisé »). Le relâchement du pointeur y tient donc lieu de clic.
  *
  * fix-ok: conv-1338 — L'APPUI EST ABSORBÉ AUSSI : une ligne de menu agit sur `mousedown`
- * (ChatComposer.tsx:592), une poignée sur `pointerdown` (ChatView.tsx:8528), donc avant tout `click`.
- * Absorber le seul clic laissait Alt+clic accepter la mention au lieu de la désigner.
+ * (`acceptMention`, ChatComposer.tsx), une poignée sur `pointerdown` (`beginConversationsResize`,
+ * ChatView.tsx), donc avant tout `click`. Absorber le seul clic laissait Alt+clic accepter la
+ * mention au lieu de la désigner.
  *
  * Ne passent PAS par ici, sans rien à faire : les boutons de fenêtre et les zones de déplacement (le
  * système les garde), les pages du fil et le navigateur intégré (autre document). Un champ de saisie

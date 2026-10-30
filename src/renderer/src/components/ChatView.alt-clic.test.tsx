@@ -235,7 +235,8 @@ describe('ChatView — Alt+clic sur une ligne du menu de mentions', () => {
     await cliquer(element, altKey)
   }
 
-  // La ligne agit à l'appui (ChatComposer.tsx:592) : absorber le seul clic la laissait s'accepter.
+  // fix-ok: conv-1338 — la ligne agit à l'appui (`acceptMention`, ChatComposer.tsx) : absorber le
+  // seul clic la laissait s'accepter.
   it('la ligne est désignée, et la mention N’EST PAS acceptée', async () => {
     await h!.type('débloque @work')
     const ligne = h!.container.querySelector('[data-testid="mention-item"]')!
