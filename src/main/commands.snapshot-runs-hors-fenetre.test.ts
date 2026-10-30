@@ -20,7 +20,7 @@ type Run = {
   session: string
   path: string
   mtime: number
-  summary: { status: string }
+  summary: { status: string; decisionAttendue?: true }
   blocked: boolean
 }
 
@@ -67,6 +67,35 @@ describe('runs bloqués : la troncature se voit', () => {
     )
     expect(etat.runs.map((r) => r.subject)).toContain('sujet-20')
     expect(etat.runs).toHaveLength(13)
+  })
+
+  it('la décision attendue d’un run arrive jusqu’à la liste lue par les runs suivants (conv-1199)', async () => {
+    const attente = {
+      ...run(0, true),
+      summary: { status: 'green', decisionAttendue: true as const }
+    }
+    const etat = await new AppCommandBus(os([attente, run(1, true)]), () => {}).snapshot()
+    expect(etat.runs[0]).toEqual({
+      subject: 'sujet-0',
+      status: 'green',
+      blocked: true,
+      decisionAttendue: true
+    })
+    expect(etat.runs[1]).toEqual({ subject: 'sujet-1', status: 'open', blocked: true })
+  })
+
+  // Objection du contrôle final (conv-1337) : `runsBlocked` rendait `status: green` sans dire qu'il
+  // attendait l'utilisateur, et l'agent qui le lisait le prenait pour un run à débloquer.
+  it('l’état servi aux agents dit quel run attend une décision, et seulement celui-là', async () => {
+    const attente = {
+      ...run(0, true),
+      summary: { status: 'green', decisionAttendue: true as const }
+    }
+    const etat = await new AppCommandBus(os([attente, run(1, true)]), () => {}).snapshotForPrompt()
+    expect(etat.runsBlocked).toEqual([
+      { subject: 'sujet-0', status: 'green', decisionAttendue: true },
+      { subject: 'sujet-1', status: 'open' }
+    ])
   })
 
   it('le nombre de RUN.md NON lus est dit, dans get_state comme dans l’état du tour', async () => {

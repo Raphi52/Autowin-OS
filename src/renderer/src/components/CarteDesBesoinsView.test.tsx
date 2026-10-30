@@ -160,6 +160,26 @@ describe('CarteDesBesoinsView', () => {
     expect(stats).not.toContain('1 runs')
   })
 
+  // Contrôle final de conv-1337 : un run qui attend une décision disparaissait du Board. Le jumeau
+  // à zéro prouve que la mention ne s'affiche pas toujours ; `is-alerte` serait le rouge d'une
+  // panne, ce que ce run n'est pas.
+  it('affiche à part les runs en attente de votre décision, sans alerte', async () => {
+    const { el } = await monter(async () =>
+      carte([projet('P1', [demande('a', 0, 'prouve')])], { runsEnAttenteDeDecision: 2 })
+    )
+    const compte = el.querySelector('[data-testid="besoins-runs-en-attente"]')
+    expect(compte?.textContent).toBe('2 en attente de votre décision')
+    expect(compte?.classList.contains('is-alerte')).toBe(false)
+    expect(el.querySelector('[data-testid="besoins-stats"]')?.textContent).not.toContain('bloqué')
+  })
+
+  it('sans run en attente de décision, l’en-tête n’en parle pas', async () => {
+    const { el } = await monter(async () =>
+      carte([projet('P1', [demande('a', 0, 'prouve')])], { runsEnAttenteDeDecision: 0 })
+    )
+    expect(el.querySelector('[data-testid="besoins-runs-en-attente"]')).toBeNull()
+  })
+
   it('une panne du calcul est dite, pas rendue comme une carte vide', async () => {
     const { el } = await monter(async () => {
       throw new Error('store illisible')

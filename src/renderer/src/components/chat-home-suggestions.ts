@@ -9,7 +9,7 @@
  * PUR (aucun React, aucun IPC) → testable directement. Rendu par le `SuggestionGrid` existant.
  */
 
-import { isBlocked } from '../../../shared/run-blocked'
+import { attendUneDecision, isBlocked } from '../../../shared/run-blocked'
 import type { SuggestionGroup } from './scout-suggestions'
 import type { Langue } from '../../../shared/langue'
 import { traduireChatFil } from '../textes-ecrans/chat-fil'
@@ -37,7 +37,7 @@ export interface HomeSuggestionState {
   /** Runs déjà chargés (panneau workflows), résumés par `parseRun` : statut ET compte de DoD. */
   runs?: Array<{
     subject: string
-    summary: { status: string; dodTotal: number; dodChecked: number }
+    summary: { status: string; dodTotal: number; dodChecked: number; decisionAttendue?: boolean }
   }>
   /**
    * Brouillon repris (non envoyé) pour la conversation courante. Il n'est JAMAIS recopié en chip :
@@ -67,7 +67,12 @@ export function buildHomeSuggestions(
   // `running`/`pending` et toute case de DoD non cochée (conv-861, 2026-09-25).
   // Compter AVANT de couper : le sous-titre coupait la liste à 3 puis la comptait, et 7 runs
   // bloqués s'affichaient « 3 » (conv-861, 2026-09-25). Seules les chips restent limitées à 3.
-  const blocked = (state.runs ?? []).filter((r) => isBlocked(r.summary))
+  // « Débloque » proposait de réparer un run validé dont la suite appartient à l'utilisateur
+  // (conv-1199) : ce run a son propre groupe, sous les runs bloqués. Cet accueil ne s'affiche que
+  // sur un fil sans message : ce qui le garde visible partout ailleurs, c'est le Board.
+  const aTraiter = (state.runs ?? []).filter((r) => isBlocked(r.summary))
+  const decisions = aTraiter.filter((r) => attendUneDecision(r.summary))
+  const blocked = aTraiter.filter((r) => !attendUneDecision(r.summary))
   if (blocked.length > 0)
     groups.push({
       key: '⛔',
@@ -77,6 +82,16 @@ export function buildHomeSuggestions(
       items: blocked
         .slice(0, 3)
         .map((r) => ({ label: traduireChatFil('accueil.debloque', langue, { sujet: r.subject }) }))
+    })
+
+  if (decisions.length > 0)
+    groups.push({
+      key: '⏳',
+      title: traduireChatFil('accueil.decisionsAttendues', langue),
+      subtitle: `${decisions.length}`,
+      items: decisions.slice(0, 3).map((r) => ({
+        label: traduireChatFil('accueil.rappelleDecision', langue, { sujet: r.subject })
+      }))
     })
 
   if (groups.length === 0)

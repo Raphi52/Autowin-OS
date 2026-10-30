@@ -57,6 +57,8 @@ export const TEXTES_FR = {
   'accueil.suggestion.etatWorkflows': 'Quel est l’état des workflows ?',
   'accueil.runsBloques': 'Runs bloqués',
   'accueil.debloque': 'Débloque @run:{sujet}',
+  'accueil.decisionsAttendues': 'En attente de votre décision',
+  'accueil.rappelleDecision': 'Rappelle-moi la décision de @run:{sujet}',
   'accueil.pourDemarrer': 'Pour démarrer',
 
   // conversation-groups.ts
@@ -566,6 +568,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'accueil.suggestion.etatWorkflows': 'What is the state of the workflows?',
   'accueil.runsBloques': 'Blocked runs',
   'accueil.debloque': 'Unblock @run:{sujet}',
+  'accueil.decisionsAttendues': 'Awaiting your decision',
+  'accueil.rappelleDecision': 'Remind me of the decision on @run:{sujet}',
   'accueil.pourDemarrer': 'To get started',
 
   // conversation-groups.ts

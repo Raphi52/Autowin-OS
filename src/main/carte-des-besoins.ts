@@ -63,7 +63,7 @@ export interface RunPourLaCarte {
   session: string
   path: string
   mtime: number
-  summary: { status: string }
+  summary: { status: string; decisionAttendue?: boolean }
   blocked: boolean
   conversationId?: string
 }
@@ -284,6 +284,7 @@ export function assemblerLaCarte(entree: {
   }
 
   let bloques = 0
+  let enAttente = 0
   for (const run of entree.runs) {
     if (!run.blocked) continue
     const conversation = conversationDuRun(run, parId, parChemin)
@@ -297,8 +298,16 @@ export function assemblerLaCarte(entree: {
         ? { conversationId: conversation.id, conversationTitre: conversation.title }
         : {})
     }
-    projet.runsBloques.push(bloque)
-    bloques += 1
+    // Un run validé qui attend une réponse de l'utilisateur n'est pas une panne (conv-1199), mais le
+    // retirer sans rien à la place l'effaçait du Board (contrôle final, conv-1337). Rangé par projet
+    // pour que les comptes refaits après un filtre (`carteDesProjetsPartages`) disent la même chose.
+    if (run.summary.decisionAttendue) {
+      ;(projet.runsEnAttenteDeDecision ??= []).push(bloque)
+      enAttente += 1
+    } else {
+      projet.runsBloques.push(bloque)
+      bloques += 1
+    }
     activite(projet, run.mtime)
   }
 
@@ -308,6 +317,7 @@ export function assemblerLaCarte(entree: {
     // Tri STABLE : à date égale ou absente, l'ordre des fils (le plus récent d'abord) est gardé.
     projet.demandes.sort((a, b) => plusRecentDAbord(a.debut, b.debut))
     projet.runsBloques.sort((a, b) => plusRecentDAbord(a.mtime, b.mtime))
+    projet.runsEnAttenteDeDecision?.sort((a, b) => plusRecentDAbord(a.mtime, b.mtime))
   }
 
   return {
@@ -317,6 +327,7 @@ export function assemblerLaCarte(entree: {
     comptes,
     demandes: total,
     runsBloques: bloques,
+    ...(enAttente ? { runsEnAttenteDeDecision: enAttente } : {}),
     conversationsLues: entree.conversations.length,
     demandeurs: [...demandeurs.values()].sort((a, b) => b.demandes - a.demandes),
     demandesJournalisees: journalisees,

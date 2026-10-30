@@ -25,6 +25,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import type {
   CarteDesBesoins,
   DemandeDeLaCarte,
+  RunBloqueDeLaCarte,
   StatutDemande,
   WorkItemDeLaDemande
 } from '../shared/carte-des-besoins'
@@ -82,16 +83,30 @@ export interface BoardEnregistre {
   postIts: PostItEnregistre[]
   /** Fils dont aucune demande n'est datée : le Board ne les pose pas, ils sont seulement comptés. */
   filsSansDate: number
-  runsBloques: {
-    sujet: string
-    statut: string
-    chemin: string
-    date: string
-    conversationId?: string
-  }[]
+  runsBloques: RunEnregistre[]
+  /** Runs validés qui attendent une réponse de l'utilisateur. Absent = aucun (conv-1346). */
+  runsEnAttenteDeDecision?: RunEnregistre[]
+}
+
+interface RunEnregistre {
+  sujet: string
+  statut: string
+  chemin: string
+  date: string
+  conversationId?: string
 }
 
 const iso = (ms: number): string => new Date(ms).toISOString()
+
+function runEnregistre(r: RunBloqueDeLaCarte): RunEnregistre {
+  return {
+    sujet: r.sujet,
+    statut: r.statut,
+    chemin: r.chemin,
+    date: iso(r.mtime),
+    ...(r.conversationId ? { conversationId: r.conversationId } : {})
+  }
+}
 
 /**
  * L'état manuel qui tient encore : posé APRÈS la dernière demande du fil, et différent de la preuve.
@@ -190,6 +205,7 @@ export function boardAEnregistrer(
   nom?: string
 ): BoardEnregistre {
   const { postIts, filsSansDate } = postItsDuBoard(carte, manuels)
+  const enAttente = carte.projets.flatMap((p) => p.runsEnAttenteDeDecision ?? []).map(runEnregistre)
   return {
     format: FORMAT_DU_BOARD,
     poste,
@@ -198,15 +214,8 @@ export function boardAEnregistrer(
     comptes: carte.comptes,
     postIts,
     filsSansDate,
-    runsBloques: carte.projets.flatMap((p) =>
-      p.runsBloques.map((r) => ({
-        sujet: r.sujet,
-        statut: r.statut,
-        chemin: r.chemin,
-        date: iso(r.mtime),
-        ...(r.conversationId ? { conversationId: r.conversationId } : {})
-      }))
-    )
+    runsBloques: carte.projets.flatMap((p) => p.runsBloques.map(runEnregistre)),
+    ...(enAttente.length ? { runsEnAttenteDeDecision: enAttente } : {})
   }
 }
 
@@ -269,14 +278,17 @@ export function boardEnMarkdown(board: BoardEnregistre): string {
       sortie.push('')
     }
   }
-  if (board.runsBloques.length) {
-    sortie.push('## Runs bloqués', '')
-    for (const r of board.runsBloques)
+  const listeDeRuns = (titre: string, runs: readonly RunEnregistre[]): void => {
+    if (!runs.length) return
+    sortie.push(`## ${titre}`, '')
+    for (const r of runs)
       sortie.push(
         `- ${dateLisible(r.date)} · ${r.statut} · ${ligne(r.sujet)}${r.conversationId ? ` · ${r.conversationId}` : ''}`
       )
     sortie.push('')
   }
+  listeDeRuns('Runs bloqués', board.runsBloques)
+  listeDeRuns('En attente de votre décision', board.runsEnAttenteDeDecision ?? [])
   return sortie.join('\n')
 }
 

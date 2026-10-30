@@ -256,3 +256,59 @@ describe('isBlocked — runs arrêtés par Stop ou suspendus par le quota', () =
     expect(parseRun(rouge(mixte)).interruption).toBe('quota')
   })
 })
+
+/**
+ * UN RUN VERT AVEC UNE QUESTION OUVERTE N'EST PAS « BLOQUÉ » (scout conv-1332, 2026-10-30).
+ *
+ * `runs/conv-1199/build-traite-candidat-issu-scout-interne-mvrw7vi9-workspace/RUN.md` : le juge a
+ * validé (`status: green`), mais la case « Commit demande publie » reste vide parce que publier
+ * dépend d'une réponse de l'utilisateur, posée dans le bilan. Le rail et le contexte des runs
+ * disaient « green · bloqué ». Le statut ne ment pas : c'est la mention qui ne disait pas quoi faire.
+ *
+ * ENTRÉES QUI FERAIENT TOMBER UNE CORRECTION FAUSSE :
+ * - un vert à case vide SANS question (3 des 4 RUN.md « green · bloqué » du poste, rejoués par
+ *   `parseRun` le 2026-10-30) doit garder « bloqué » : remplacer tout « vert + bloqué » annoncerait
+ *   une décision que personne n'attend ;
+ * - un rouge qui pose une question reste un échec.
+ */
+describe('la décision attendue d’un run', () => {
+  const run = (status: string, bilan: string): string =>
+    `status: ${status}\n\n## Besoin\n- [x] Mutation\n- [ ] Commit demande publie\n\n## Journal\n[2026-10-28] Juge: validé\n\n## Défauts\n\n${bilan}\n\n## Cicatrices\n\n## Checks\n`
+  const bilanAvec = (question: string): string =>
+    `### Bilan de l’étape\n- Verdict : partiel — rien n'est publié.\n- Fichiers touchés : a.ts\n- Preuves : vitest → 0\n- Reste à faire : publier (ta décision)\n- Question : ${question}\n\nAUTOWIN_PARI_V1: {"confiance":0.5,"refutateur":"x"}`
+  const ouverte = bilanAvec('Je publie aussi la lave ? → Oui, publier | Non, laisser')
+
+  it('vert, case vide et question ouverte → en attente de la décision (conv-1199)', () => {
+    const resume = parseRun(run('green', ouverte))
+    expect(resume.decisionAttendue).toBe(true)
+    expect(mentionDEtatDuRun(resume)).toBe('en attente de votre décision')
+    // La règle du « bloqué » ne bouge pas : le run reste listé, seule sa mention change.
+    expect(isBlocked(resume)).toBe(true)
+  })
+
+  it('vert à case vide sans question → reste bloqué', () => {
+    const sansQuestion = [bilanAvec('aucune'), bilanAvec('<question> → <a> | <b>'), 'pas de bilan']
+    for (const bilan of sansQuestion) {
+      const resume = parseRun(run('green', bilan))
+      expect(resume.decisionAttendue).toBeUndefined()
+      expect(mentionDEtatDuRun(resume)).toBe('bloqué')
+    }
+  })
+
+  it('rouge avec une question → reste bloqué', () => {
+    const resume = parseRun(run('red', ouverte))
+    expect(resume.decisionAttendue).toBeUndefined()
+    expect(mentionDEtatDuRun(resume)).toBe('bloqué')
+  })
+
+  it('vert à cases toutes cochées : rien à signaler, même avec une question', () => {
+    const complet = run('green', ouverte).replace('- [ ] Commit', '- [x] Commit')
+    expect(isBlocked(parseRun(complet))).toBe(false)
+    expect(mentionDEtatDuRun(parseRun(complet))).toBe('')
+  })
+
+  it('seul le DERNIER bilan parle : une question dépassée ne ressort pas', () => {
+    const depassee = `${ouverte}\n\n${bilanAvec('aucune')}`
+    expect(mentionDEtatDuRun(parseRun(run('green', depassee)))).toBe('bloqué')
+  })
+})

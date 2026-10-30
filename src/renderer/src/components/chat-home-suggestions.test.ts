@@ -72,6 +72,30 @@ describe('les chips « Runs bloqués » suivent la règle unique isBlocked', () 
     ).toEqual(STATIC_SUGGESTIONS)
   })
 
+  // conv-1199 (scout conv-1332) : l'accueil proposait « Débloque » pour un run validé dont la suite
+  // appartient à l'utilisateur. Le jumeau `sans-question` garde sa chip : même statut, même DoD.
+  const attend = {
+    subject: 'attend',
+    summary: { status: 'green', dodTotal: 2, dodChecked: 1, decisionAttendue: true }
+  }
+
+  it('sépare les runs qui attendent une décision des runs à débloquer', () => {
+    const groupes = buildHomeSuggestions({ runs: [attend, run('sans-question', 'green', 1, 2)] })
+    expect(groupes.map((g) => [g.title, g.subtitle])).toEqual([
+      ['Runs bloqués', '1'],
+      ['En attente de votre décision', '1']
+    ])
+    expect(groupes[0].items.map((i) => i.label)).toEqual(['Débloque @run:sans-question'])
+    expect(groupes[1].items.map((i) => i.label)).toEqual([
+      'Rappelle-moi la décision de @run:attend'
+    ])
+  })
+
+  it('un run qui attend une décision reste signalé même sans aucun run bloqué', () => {
+    const groupes = buildHomeSuggestions({ runs: [attend] })
+    expect(groupes.map((g) => g.title)).toEqual(['En attente de votre décision'])
+  })
+
   it('même verdict que isBlocked sur tous les statuts connus, DoD complète ou non', () => {
     const statuts = [
       'pending',

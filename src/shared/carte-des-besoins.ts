@@ -185,6 +185,12 @@ export interface ProjetDeLaCarte {
   /** Les plus récentes d'abord. */
   demandes: DemandeDeLaCarte[]
   runsBloques: RunBloqueDeLaCarte[]
+  /**
+   * Runs validés dont la suite appartient à l'utilisateur : à traiter, mais pas en panne (conv-1199).
+   * Tenus par projet pour que les comptes refaits après un filtre (`carteDesProjetsPartages`) restent
+   * justes. Absent = aucun.
+   */
+  runsEnAttenteDeDecision?: RunBloqueDeLaCarte[]
   comptes: Record<StatutDemande, number>
   /** La demande ou le run le plus récent du projet. */
   derniereActivite?: number
@@ -196,6 +202,8 @@ export interface CarteDesBesoins {
   comptes: Record<StatutDemande, number>
   demandes: number
   runsBloques: number
+  /** Total de `ProjetDeLaCarte.runsEnAttenteDeDecision`. Absent = aucun. */
+  runsEnAttenteDeDecision?: number
   conversationsLues: number
   /** Les personnes qui ont prompté, la plus active d'abord. */
   demandeurs: DemandeurAuCompte[]

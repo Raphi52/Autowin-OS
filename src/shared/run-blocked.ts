@@ -47,6 +47,25 @@ export function isBlocked(s: {
 }
 
 /**
+ * Run à traiter dont la suite appartient à l'utilisateur : il ne se débloque pas, il attend sa
+ * réponse. conv-1199 s'affichait « green · bloqué » pour une publication que lui seul pouvait
+ * décider (scout conv-1332).
+ *
+ * `isBlocked` reste vrai pour ce run, et c'est voulu : une question écrite dans un bilan ne doit
+ * pas suffire à faire sortir un run de la liste à traiter. Les écrans qui montrent une PANNE (compteur
+ * « bloqués », liseré rouge, « Débloque ») l'en retirent avec cette règle, pas avec une copie locale.
+ */
+export function attendUneDecision(s: {
+  status: string
+  dodTotal: number
+  dodChecked: number
+  interruption?: RunInterruption
+  decisionAttendue?: boolean
+}): boolean {
+  return s.decisionAttendue === true && isBlocked(s)
+}
+
+/**
  * La mention écrite à côté du statut d'un run (rail de l'Observatoire). Un run INTERROMPU n'est
  * pas bloqué : on peut le relancer, et la limite de session le reprend seule (piste 4, conv-1070).
  */
@@ -55,8 +74,10 @@ export function mentionDEtatDuRun(s: {
   dodTotal: number
   dodChecked: number
   interruption?: RunInterruption
+  decisionAttendue?: boolean
 }): string {
   if (s.status === 'interrupted' || (s.status === 'red' && s.interruption))
     return 'interrompu, relançable'
+  if (attendUneDecision(s)) return 'en attente de votre décision'
   return isBlocked(s) ? 'bloqué' : ''
 }

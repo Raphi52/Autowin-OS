@@ -311,6 +311,12 @@ export function CarteDesBesoinsView({
                     {accord(carte.runsBloques, t('vue.runBloque'), t('vue.runsBloques'))}
                   </span>
                 )}
+                {/* Pas `is-alerte` : ce run est validé, il attend une réponse, il n'est pas en panne. */}
+                {(carte.runsEnAttenteDeDecision ?? 0) > 0 && (
+                  <span data-testid="besoins-runs-en-attente">
+                    <b>{carte.runsEnAttenteDeDecision}</b> {t('vue.enAttenteDecision')}
+                  </span>
+                )}
                 {avisTaches && (
                   <span className="is-alerte" data-testid="besoins-avis-taches">
                     {avisTaches}
