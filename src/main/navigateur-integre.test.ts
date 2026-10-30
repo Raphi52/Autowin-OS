@@ -1060,6 +1060,65 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toHaveLength(2)
   })
 
+  /*
+   * Mesuré en vraie app (conv-1324, run11) : page centrée, agent silencieux depuis 20 s. Le geste fait
+   * réapparaître le bandeau, le cadre perd 44 px, la cible remonte de 22 px APRÈS son repérage ; le clic
+   * partait aux anciennes coordonnées, tombait sur le champ voisin et l'outil répondait « Clic sur button ».
+   * La remise en page d'une vue cachée n'arrive qu'avec l'image forcée : le test la livre là.
+   * ENTRÉE QUI FAIT ÉCHOUER CE TEST si la correction est fausse : relire la cible AVANT `peindre`
+   * (elle se relirait encore à l'ancienne place, y = 448).
+   */
+  it('la page se remet en page avant l’envoi : le clic part là où la cible EST', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ x: 252, y: 448 })
+    const peindre = vue.peindre.bind(vue)
+    vue.peindre = () => {
+      vue.reponses.localiser = cibleTrouvee({ x: 252, y: 426 })
+      return peindre()
+    }
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: true
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([
+      { type: 'mouseDown', x: 252, y: 426, button: 'left', clickCount: 1 }
+    ])
+  })
+
+  it('jumeau : page immobile, le clic part au repérage et rien n’est refusé', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ x: 252, y: 448 })
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: true
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([
+      { type: 'mouseDown', x: 252, y: 448, button: 'left', clickCount: 1 }
+    ])
+  })
+
+  it('la cible disparaît juste avant l’envoi : refus « cible-introuvable », aucun clic', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee()
+    const peindre = vue.peindre.bind(vue)
+    vue.peindre = () => {
+      vue.reponses.localiser = () => ({ trouve: false })
+      return peindre()
+    }
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: false,
+      refus: 'cible-introuvable'
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([])
+  })
+
   it('« Pas suivant » sans geste en attente ne fait rien : le geste suivant attend quand même', async () => {
     nav.ouvrir('conv-a', 'http://localhost:5173')
     nav.piloter('conv-a', 'pause')

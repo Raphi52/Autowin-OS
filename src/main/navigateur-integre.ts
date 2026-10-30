@@ -919,8 +919,9 @@ export class GestionnaireNavigateur {
    * (Stop, main reprise et fil supprimé le font tomber sans sa réponse) → Stop, main reprise et onglet
    * REVÉRIFIÉS → entrée dans la cible si elle a attendu la question →
    * bandeau levé + cible (ou champ actif) surlignée 800 ms → garde mot de passe REJOUÉE (la page a pu
-   * déplacer le focus) → Stop, main reprise et site REVÉRIFIÉS avant d'éteindre le mode de l'utilisateur,
-   * puis avant l'envoi → action → bandeau baissé. `arret` : le Stop du tour.
+   * déplacer le focus) → Stop, main reprise et site REVÉRIFIÉS avant d'éteindre le mode de l'utilisateur
+   * → image forcée → position d'un clic RELUE (la page a pu se remettre en page) → Stop, main reprise et
+   * site revérifiés avant l'envoi → action → bandeau baissé. `arret` : le Stop du tour.
    */
   async agir(
     conversationId: string,
@@ -1147,6 +1148,18 @@ export class GestionnaireNavigateur {
       // n'en produit jamais : page ouverte panneau fermé, clic perdu et « Clic sur … » quand même
       // (run-r1-rouge.txt). On force donc une image avant d'envoyer, AVANT la relecture du site.
       await onglet.vue.peindre()
+      // fix-ok: cause mesurée (conv-1324, run11, vraie app) — le geste fait réapparaître le bandeau, le
+      // cadre perd 44 px et une page centrée remonte sa cible de 22 px APRÈS son repérage : le clic
+      // partait aux anciennes coordonnées, tombait sur le champ voisin, et l'outil disait « Clic sur
+      // button ». Une page ne le signale pas. On relit donc la position ici, APRÈS `peindre` : c'est
+      // l'image forcée qui livre sa nouvelle taille à une vue cachée.
+      if (action.type === 'clic') {
+        const relecture = await viser(
+          false,
+          'La cible a disparu de la page juste avant le clic : relis-la (les numéros changent à chaque lecture).'
+        )
+        if (relecture) return signalerMode(relecture)
+      }
       // Garde (b) rejouée au DERNIER moment : l'accord vaut pour une origine, et la page a pu en
       // changer pendant l'attente (jusqu'à 120 s) ou la surbrillance — redirection, rafraîchissement.
       // Objection du juge (conv-1287) : sans cette relecture, le clic partait sur un site jamais
