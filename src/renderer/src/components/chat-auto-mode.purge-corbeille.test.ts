@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { deciderRelanceAuto, suiteAttendUneDonneeUtilisateur } from './chat-auto-mode'
+import {
+  deciderRelanceAuto,
+  reponseAutoAuDernierAsk,
+  suiteAttendUneDonneeUtilisateur
+} from './chat-auto-mode'
 import type { Msg } from './chat-view-types'
 
 /*
@@ -246,5 +250,34 @@ describe('mode auto — ce qui n’est pas une purge de corbeille continue, hors
     expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
     expect(parLaRecommandation(suite)).toMatchObject({ action: 'envoyer' })
     expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+describe('mode auto — dans une passe /gc, il ne répond pas seul à la question de purge', () => {
+  const dansUnePasse = (options: string[]): Msg =>
+    avecQuestion('## À purger\n- corbeille du 16/10 (6,1 Mo)', options)
+  const repondu = (options: string[]): ReturnType<typeof deciderRelanceAuto> =>
+    deciderRelanceAuto({ ...base, fil: [humain, dansUnePasse(options)] })
+
+  // L'option ne porte aucun mot destructeur : c'est la question qui parle de purge.
+  it.each([
+    [['Oui', 'Non']],
+    [['Oui, vas-y', 'Non, garde']],
+    // « sans » retire la protection de `estCibleDestructrice` : le verbe en tête la rend ici.
+    [['Purge tout sans la copie du 21/09', 'Non']]
+  ])('aucune réponse ne part : %j', (options) => {
+    expect(reponseAutoAuDernierAsk([humain, dansUnePasse(options)])).toBeNull()
+    expect(repondu(options).action).not.toBe('envoyer')
+  })
+
+  it('jumeau : hors passe /gc, un « Oui » ordinaire répond toujours seul', () => {
+    const question = avecQuestion('Bilan.', ['Oui', 'Non'])
+    expect(reponseAutoAuDernierAsk([humain, question])).toBe('Oui')
+  })
+
+  it('jumeau : une première réponse sans geste part toujours, même dans une passe', () => {
+    expect(reponseAutoAuDernierAsk([humain, dansUnePasse(['Relis le bilan', 'Oui'])])).toBe(
+      'Relis le bilan'
+    )
   })
 })

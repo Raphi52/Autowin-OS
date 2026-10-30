@@ -1034,14 +1034,17 @@ function dernierAsk(fil: readonly Msg[]): ReturnType<typeof parseAskDecision> {
  * QUESTION `ask` OUVERTE AU BOUT DU FIL — en mode auto, l'agent y repond SEUL (demande utilisateur
  * du 2026-09-21 : « le mode auto doit répondre seul aux ask »). On prend l'option marquee
  * `recommande`, sinon la PREMIERE (le contrat de `ask` place la recommandee en tete). Une reponse
- * destructrice ne part jamais seule : on rend null et la question attend l'humain.
+ * destructrice ne part jamais seule : on rend null et la question attend l'humain. Dans une passe
+ * `/gc`, un simple « Oui » à « Purger ? » l'est aussi : le mot destructeur est dans la question, pas
+ * dans l'option (conv-1341, 2026-10-30, rouge mesuré : le mode auto répondait « Oui » seul).
  */
 export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
   const decision = dernierAsk(fil)
   if (!decision) return null
+  const texteReponse = texteDernierAssistant(fil) ?? ''
   const sure = (o: (typeof decision.options)[number]): boolean => {
     const t = promptDeLOption(o).trim()
-    return t !== '' && !estCibleDestructrice(t)
+    return t !== '' && !estCibleDestructrice(t) && !suiteRepondALaPasseGc(t, texteReponse)
   }
   // CHOIX NON CONCURRENTS (`choixMultiple`) : on coche TOUTES les options sures — demande utilisateur
   // conv-787 : « par défaut tous les choix si pas concurrents sinon faire au mieux ».
