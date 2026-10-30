@@ -98,6 +98,68 @@ describe('ui-capture — geste alt-souris:', () => {
 })
 
 /**
+ * `saisie:` (conv-1338, 2026-10-30) : le menu `/` de la saisie n'existe qu'après une frappe, et
+ * `--taper` joue APRÈS la chaîne de clics : aucune capture ne pouvait donc cliquer une de ses lignes,
+ * or c'est là que l'Alt+clic laissait partir l'action posée sur l'appui de la souris.
+ */
+describe('ui-capture — geste saisie:', () => {
+  class Evenement {
+    constructor(type, init) {
+      this.type = type
+      this.bubbles = init?.bubbles === true
+    }
+  }
+
+  function champ() {
+    const recus = []
+    return {
+      recus,
+      value: '',
+      focus: () => recus.push('focus'),
+      dispatchEvent: (evenement) => recus.push(`${evenement.type}:${evenement.bubbles}`)
+    }
+  }
+
+  const jouer = (texte, cible) => {
+    // Le setter natif est celui que React surveille : une simple affectation ne lui dirait rien.
+    const prototype = {}
+    Object.defineProperty(prototype, 'value', {
+      set(valeur) {
+        this.value_natif = valeur
+      }
+    })
+    return new Function(
+      'document',
+      'Event',
+      'HTMLTextAreaElement',
+      `return ${scriptDuGeste({ geste: 'saisie', selecteur: texte })}`
+    )({ querySelector: (selecteur) => (selecteur === 'textarea' ? cible : null) }, Evenement, {
+      prototype
+    })
+  }
+
+  it('saisie: → le texte tel quel, sans le lire comme un sélecteur', () => {
+    expect(gesteDeLEtape('saisie: /dra')).toEqual({ geste: 'saisie', selecteur: '/dra' })
+  })
+
+  it('le script pose le texte par le setter natif et prévient React', () => {
+    const cible = champ()
+    expect(jouer('/dra', cible)).toBe(true)
+    expect(cible.value_natif).toBe('/dra')
+    expect(cible.recus).toEqual(['focus', 'input:true'])
+  })
+
+  // Jumeau : pas de champ à l'écran, la chaîne échoue au lieu de photographier une vue sans le texte.
+  it('aucun champ : l’étape échoue', () => {
+    expect(jouer('/dra', null)).toBe(false)
+  })
+
+  it('une saisie ne change pas la vue attendue', () => {
+    expect(vueAttendueApresClics('chat', 'saisie: /dra')).toBe('chat')
+  })
+})
+
+/**
  * `survol:` (conv-1059, 2026-10-22) : le détail d'une station de la carte du fil ne s'ouvre qu'au
  * SURVOL ou au FOCUS, ce que fait une vraie souris avant son clic — `element.click()` ne fait ni
  * l'un ni l'autre. Sans ce geste, « le détail est transparent, on voit rien » ne se prouvait sur

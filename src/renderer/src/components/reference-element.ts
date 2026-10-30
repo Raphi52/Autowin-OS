@@ -194,7 +194,9 @@ export function referenceDeLElement(
     )
   }
 
-  // Rien de sûr sur l'élément lui-même : le fil seul ne désignerait rien.
+  // fix-ok: conv-1338 — sans texte, classe ni repère, `morceaux` restait vide et le geste posait une
+  // référence qui ne nommait que le fil (lu dans la version de conv-1038 ; test « aucun indice »).
+  // Le fil seul ne désignerait rien : le clic reste ordinaire.
   if (morceaux.length === 0) return null
 
   // Le journal d'un tour COPIÉ par une branche reste rangé sous le fil d'origine.

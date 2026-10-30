@@ -2134,6 +2134,10 @@ export function ChatView({
    */
   function recevoirElementCible({ texte, image, fenetre }: ElementCible): void {
     const cle = fenetre ?? brouillonVisible()
+    // fix-ok: conv-1338 — une mosaïque sans fenêtre n'a aucune saisie : le texte finissait dans un
+    // brouillon que rien n'affichait. Le chat normal en a une, et l'effet de `convViewMode` l'y repose.
+    if (convViewMode === 'mosaic' && composersMosaiqueRef.current.size === 0)
+      setConvViewMode('list')
     const brouillon = getComposerDraft(cle).input
     if (!brouillon.includes(texte)) {
       const suite = ajouterAuBrouillon(brouillon, texte)
@@ -2924,14 +2928,15 @@ export function ChatView({
     window.api.setActiveConversation(activeId)
   }, [activeId])
   /**
-   * REPOSE le brouillon restaure dans le composer, une fois au montage. La carte est hydratee depuis
-   * le stockage local, mais le composer garde son texte chez lui (handle imperatif) : sans cette
-   * remise, le texte retrouve restait invisible tant qu'aucune conversation n'etait rouverte.
+   * REPOSE le brouillon restaure dans le composer, a chaque fois que ce composer nait : au montage,
+   * et au retour de la mosaique, qui le demonte (conv-1338). La carte est hydratee depuis le stockage
+   * local, mais le composer garde son texte chez lui (handle imperatif) : sans cette remise, le
+   * texte retrouve restait invisible tant qu'aucune conversation n'etait rouverte.
    */
   useEffect(() => {
     const restaure = getComposerDraft(composerDraftKeyRef.current).input
     if (restaure) composerRef.current?.setInput(restaure)
-  }, [])
+  }, [convViewMode])
   useEffect(() => {
     let disposed = false
     const selectionInitiale = Promise.resolve().then(async () => {

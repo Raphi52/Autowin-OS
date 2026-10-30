@@ -14,6 +14,10 @@
  * `pointerup` (mesuré par de vrais clics hors écran). C'était pourtant l'exemple d'origine du geste
  * (« pk le bouton joindre fichier est grisé »). Le relâchement du pointeur y tient donc lieu de clic.
  *
+ * fix-ok: conv-1338 — L'APPUI EST ABSORBÉ AUSSI : une ligne de menu agit sur `mousedown`
+ * (ChatComposer.tsx:592), une poignée sur `pointerdown` (ChatView.tsx:8528), donc avant tout `click`.
+ * Absorber le seul clic laissait Alt+clic accepter la mention au lieu de la désigner.
+ *
  * Ne passent PAS par ici, sans rien à faire : les boutons de fenêtre et les zones de déplacement (le
  * système les garde), les pages du fil et le navigateur intégré (autre document). Un champ de saisie
  * et le fond de la page rendent une référence `null` : le clic y reste ordinaire.
@@ -131,6 +135,14 @@ function filDe(cible: Element, fenetre: string | undefined): string | null {
   return fenetre ?? (actif || null)
 }
 
+/** Ce que le geste poserait sur cette cible ; `null` : le clic et l'appui y restent ordinaires. */
+function gesteSur(cible: Element): { texte: string; destination: { fenetre?: string } } | null {
+  const destination = destinationDe(cible)
+  if (!destination) return null
+  const texte = referenceDeLElement(cible, { conversationId: filDe(cible, destination.fenetre) })
+  return texte ? { texte, destination } : null
+}
+
 /**
  * Installé une fois par `App`, toujours monté. `ouvrirChat` n'est appelé qu'une fois la capture
  * prise. Rend la fonction qui retire les écouteurs.
@@ -139,19 +151,19 @@ export function installerAltClic(ouvrirChat: () => void, fenetre: Window = windo
   let appui: EventTarget | null = null
 
   const traiter = (cible: Element, evenement: Event): void => {
-    const destination = destinationDe(cible)
-    if (!destination) return
-    const texte = referenceDeLElement(cible, {
-      conversationId: filDe(cible, destination.fenetre)
-    })
-    if (!texte) return
+    const geste = gesteSur(cible)
+    if (!geste) return
     evenement.preventDefault()
     evenement.stopPropagation()
+    const { texte, destination } = geste
     void capturer(elementVise(cible), texte).then((image) => {
       ouvrirChat()
       poserElementCible({ texte, image, ...destination })
     })
   }
+
+  const visee = ({ altKey, button, target }: MouseEvent): boolean =>
+    altKey && button === 0 && target instanceof Element && gesteSur(target) !== null
 
   const surClic = (evenement: MouseEvent): void => {
     const { altKey, button, target } = evenement
@@ -160,6 +172,13 @@ export function installerAltClic(ouvrirChat: () => void, fenetre: Window = windo
   const surAppui = (evenement: PointerEvent): void => {
     const { altKey, button, target } = evenement
     appui = altKey && button === 0 ? target : null
+    // Pas de `preventDefault` ici : il supprimerait le `mousedown`, qui porte le refus du focus.
+    if (visee(evenement)) evenement.stopPropagation()
+  }
+  const surEnfoncement = (evenement: MouseEvent): void => {
+    if (!visee(evenement)) return
+    evenement.preventDefault()
+    evenement.stopPropagation()
   }
   const surRelache = (evenement: PointerEvent): void => {
     const { altKey, button, target } = evenement
@@ -172,10 +191,12 @@ export function installerAltClic(ouvrirChat: () => void, fenetre: Window = windo
 
   fenetre.addEventListener('click', surClic, true)
   fenetre.addEventListener('pointerdown', surAppui, true)
+  fenetre.addEventListener('mousedown', surEnfoncement, true)
   fenetre.addEventListener('pointerup', surRelache, true)
   return () => {
     fenetre.removeEventListener('click', surClic, true)
     fenetre.removeEventListener('pointerdown', surAppui, true)
+    fenetre.removeEventListener('mousedown', surEnfoncement, true)
     fenetre.removeEventListener('pointerup', surRelache, true)
   }
 }

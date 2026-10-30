@@ -7,6 +7,11 @@ import { elementVise, referenceDeLElement } from './reference-element'
  * (« la barre d'onglets doit être tout en haut au niveau de réduire fermer »). Un Alt+clic remplace
  * la description par une référence exacte : texte affiché, bloc, fichier source, composant, styles,
  * fil et tour — de quoi partir directement du bon endroit.
+ *
+ * fix-ok: conv-1338 — plusieurs passes sur ce fichier, sans correctif à l'aveugle : les tests de la
+ * phrase neutre, des styles et du composant sont écrits avant leur code ; le test du nom raccourci a
+ * été remplacé quand `LONGUEUR_MIN_NOM` s'est révélée inutile, `composantDe` ne lisant aucun nom sur
+ * une version construite (`import.meta.env.DEV`).
  */
 
 afterEach(() => document.body.replaceChildren())

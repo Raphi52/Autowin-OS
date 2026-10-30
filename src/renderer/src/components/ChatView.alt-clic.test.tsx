@@ -185,6 +185,75 @@ describe('ChatView — Alt+clic sur un élément', () => {
   })
 })
 
+describe('ChatView — Alt+clic sur une ligne du menu de mentions', () => {
+  beforeAll(installRafShim)
+  let h: ChatHarness | null = null
+  let retirer: () => void
+
+  const RUN = {
+    subject: 'workflow-bench-regression',
+    session: 'attaché',
+    path: 'runs/workflow-bench-regression/RUN.md',
+    mtime: 1,
+    summary: { status: 'bloqué', dodTotal: 0, dodChecked: 0, journalEvents: 0, defauts: 0 }
+  }
+
+  beforeEach(async () => {
+    window.localStorage.clear()
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 10,
+      top: 20,
+      right: 110,
+      bottom: 70
+    } as DOMRect)
+    h = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        conversationRuns: vi.fn().mockResolvedValue([RUN]),
+        listRuns: vi.fn().mockResolvedValue([RUN]),
+        capturerElement: vi.fn().mockResolvedValue('data:image/png;base64,QUJD'),
+        getZoomFactor: () => 1
+      })
+    )
+    await h.click('.conv-pick')
+    retirer = installerAltClic(vi.fn())
+  })
+
+  afterEach(async () => {
+    retirer()
+    await h?.unmount()
+    h = null
+    vi.restoreAllMocks()
+  })
+
+  async function appuyerPuisCliquer(element: Element, altKey: boolean): Promise<void> {
+    const init = { bubbles: true, cancelable: true, altKey, button: 0 }
+    await act(async () => {
+      element.dispatchEvent(new PointerEvent('pointerdown', init))
+      element.dispatchEvent(new MouseEvent('mousedown', init))
+    })
+    await cliquer(element, altKey)
+  }
+
+  // La ligne agit à l'appui (ChatComposer.tsx:592) : absorber le seul clic la laissait s'accepter.
+  it('la ligne est désignée, et la mention N’EST PAS acceptée', async () => {
+    await h!.type('débloque @work')
+    const ligne = h!.container.querySelector('[data-testid="mention-item"]')!
+    await appuyerPuisCliquer(ligne, true)
+    const saisie = h!.textarea().value
+    expect(saisie.startsWith('débloque @work\n\nÉlément ciblé [')).toBe(true)
+    expect(saisie).not.toContain('@run:workflow-bench-regression')
+  })
+
+  // Jumeau : le même geste sans Alt accepte la mention.
+  it('sans Alt : la mention est acceptée', async () => {
+    await h!.type('débloque @work')
+    const ligne = h!.container.querySelector('[data-testid="mention-item"]')!
+    await appuyerPuisCliquer(ligne, false)
+    expect(h!.textarea().value).toBe('débloque @run:workflow-bench-regression ')
+  })
+})
+
 describe('ChatView — l’élément arrive quand le chat n’était pas encore ouvert', () => {
   beforeAll(installRafShim)
   let h: ChatHarness | null = null
@@ -209,8 +278,9 @@ describe('ChatView — l’élément arrive quand le chat n’était pas encore 
       conversation: vi.fn(async (id: string) => conversation(id, historique))
     })
 
-  // Au démarrage, le chat rouvre le dernier fil : écouter trop tôt posait le texte dans le brouillon
-  // « nouveau fil », que cette ouverture cachait aussitôt (saisie vide à l'écran).
+  // fix-ok: conv-1338 — au démarrage, le chat rouvre le dernier fil : écouter dès le montage posait le
+  // texte dans le brouillon « nouveau fil », que cette ouverture cachait aussitôt (saisie vide à
+  // l'écran ; écoute remise au montage : 3 tests de ce bloc rouges).
   it('le chat rouvre le dernier fil au démarrage : le texte arrive dans CE fil, visible', async () => {
     window.localStorage.clear()
     poserElementCible({ texte: 'Élément ciblé [depuis Réglages]', image: null })
@@ -294,5 +364,65 @@ describe('ChatView — Alt+clic en mosaïque', () => {
     })
     await reglerEtAttendre()
     expect([saisie('A'), saisie('B')]).toContain('Élément ciblé [depuis Réglages]')
+  })
+})
+
+describe('ChatView — Alt+clic depuis une autre vue, mosaïque vide', () => {
+  beforeAll(installRafShim)
+  let h: ChatHarness | null = null
+
+  afterEach(async () => {
+    await h?.unmount()
+    h = null
+    window.localStorage.clear()
+  })
+
+  const monter = async (): Promise<void> => {
+    window.localStorage.clear()
+    window.localStorage.setItem('autowin.chat.conversationsViewMode', 'mosaic')
+    window.localStorage.setItem('autowin.chat.mosaicOpenIds', JSON.stringify([]))
+    h = await mountChat(chatApi({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))
+    await reglerEtAttendre()
+    await reglerEtAttendre()
+    expect(h.container.querySelector('.chat-mosaic-vide')).toBeTruthy()
+    expect(h.container.querySelector('textarea')).toBeNull()
+  }
+
+  // Une mosaïque vide n'a aucune saisie : le texte partait dans un brouillon que rien n'affichait.
+  it('l’app revient au chat normal, la référence visible dans sa saisie', async () => {
+    await monter()
+    await act(async () => {
+      poserElementCible({ texte: 'Élément ciblé [depuis Réglages]', image: null })
+    })
+    await reglerEtAttendre()
+    expect(h!.container.querySelector('.chat-mosaic-vide')).toBeNull()
+    expect(h!.textarea().value).toBe('Élément ciblé [depuis Réglages]')
+  })
+
+  it('deux éléments à la suite : les deux restent dans la saisie, sans doublon', async () => {
+    await monter()
+    await act(async () => {
+      poserElementCible({ texte: 'Élément ciblé [un]', image: null })
+    })
+    await reglerEtAttendre()
+    await act(async () => {
+      poserElementCible({ texte: 'Élément ciblé [deux]', image: null })
+    })
+    await reglerEtAttendre()
+    expect(h!.textarea().value).toBe('Élément ciblé [un]\n\nÉlément ciblé [deux]')
+  })
+
+  it('l’image jointe suit dans la saisie du chat normal', async () => {
+    await monter()
+    await act(async () => {
+      poserElementCible({
+        texte: 'Élément ciblé [avec image]',
+        image: new File(['image'], 'element-a.png', { type: 'image/png' })
+      })
+    })
+    await reglerEtAttendre()
+    expect(h!.container.querySelectorAll('.attachment-list.pending .attachment-chip')).toHaveLength(
+      1
+    )
   })
 })

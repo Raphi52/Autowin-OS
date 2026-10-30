@@ -336,4 +336,29 @@ describe('la page : composer le message', () => {
       'Mixer : visuel de la 1 · fonctionnement de la 2 — Largeur 5 px — plus dense'
     )
   })
+
+  // « Valeurs d'origine » ne produit aucun événement `input` : sans l'écoute du clic sur `.dkc-w`,
+  // l'aperçu gardait « Largeur 5 px » alors que le message remis à la saisie ne le portait plus.
+  it('« Valeurs d’origine » : le réglage quitte le message affiché ET le message remis', () => {
+    const avecReglages = spec(2, {
+      css: '.ex-b{width:var(--ex-l)}',
+      reglages: [{ nom: 'Largeur', variable: '--ex-l', min: 1, max: 9, valeur: 3, unite: 'px' }]
+    })
+    document.body.innerHTML = carrouselDraft(avecReglages)
+    new Function(SCRIPT_REGLAGES)()
+    new Function(SCRIPT_AXES)()
+    cocher('visuel', 1)
+    cocher('fonctionnement', 2)
+    const curseur = document.querySelector('.dkc-rg input')
+    curseur.value = '5'
+    curseur.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(apercu()).toContain('Largeur 5 px')
+
+    document.querySelector('.dkc-rgz').click()
+
+    const attendu = 'Mixer : visuel de la 1 · fonctionnement de la 2'
+    expect(apercu()).toBe(attendu)
+    bouton('Mixer').click()
+    expect(remplirSaisie).toHaveBeenCalledWith(attendu)
+  })
 })

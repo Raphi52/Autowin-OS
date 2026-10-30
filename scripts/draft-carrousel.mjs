@@ -231,6 +231,9 @@ ${pour((i) => `#dkm${i}:not(:checked)~.dkc-act .dkc-mxa>.dkc-y${i},#dkm${i}:chec
 #dkmix:not(:checked)~.dkc-act .dkc-mxo{display:inline}`
 }
 
+// fix-ok: conv-1338 — à 10 propositions, la bande de vignettes débordait de 108 px à 560 px de large
+// (html-interactif-apercu.mjs, code 5) : une page n'a pas le filtre du fil qui borne chaque élément,
+// d'où le `min-width:0` de `.dkc-film`. Les autres passes sur ce fichier branchent les axes.
 function feuilleDeStyle(n, cssPropositions, avecScene = false, avecMixer = false) {
   // La place de la scène a SA hauteur, tirée de sa largeur (et non du contenu : `overflow:hidden`
   // retire le minimum automatique d'un `aspect-ratio`) — une scène qui se cale sur `innerHeight` ne

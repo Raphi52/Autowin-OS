@@ -146,6 +146,95 @@ describe('le geste', () => {
   })
 })
 
+/**
+ * ACTIONS À L'APPUI : une ligne de menu agit sur `mousedown` (ChatComposer.tsx:592), une poignée sur
+ * `pointerdown` (ChatView.tsx:8528). Absorber le seul `click` les laissait partir : Alt+clic sur une
+ * ligne de mention l'acceptait AU LIEU de la désigner (relevé en relecture, conv-1338).
+ */
+describe('le geste absorbe aussi l’appui', () => {
+  function appuyer(element: Element, altKey = true): MouseEvent {
+    const init = { bubbles: true, cancelable: true, altKey, button: 0 }
+    element.dispatchEvent(new PointerEvent('pointerdown', init))
+    const souris = new MouseEvent('mousedown', init)
+    element.dispatchEvent(souris)
+    return souris
+  }
+
+  function ecouterAppui(element: Element): ReturnType<typeof vi.fn> {
+    const action = vi.fn()
+    element.addEventListener('pointerdown', action)
+    element.addEventListener('mousedown', action)
+    return action
+  }
+
+  it('Alt+appui sur une ligne de menu : ni pointerdown ni mousedown n’atteignent la ligne', () => {
+    const ligne = poser('<ul class="menu"><li id="l">fichier.ts</li></ul>').querySelector('#l')!
+    const action = ecouterAppui(ligne)
+    const souris = appuyer(ligne)
+    expect(action).not.toHaveBeenCalled()
+    // Sans ce refus, le navigateur déplace le focus vers l'élément avant même le clic.
+    expect(souris.defaultPrevented).toBe(true)
+  })
+
+  // Jumeau : le même appui sans Alt garde son action.
+  it('appui sans Alt : l’action part', () => {
+    const ligne = poser('<ul class="menu"><li id="l">fichier.ts</li></ul>').querySelector('#l')!
+    const action = ecouterAppui(ligne)
+    const souris = appuyer(ligne, false)
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(souris.defaultPrevented).toBe(false)
+  })
+
+  // Jumeaux : là où le geste ne désigne rien, Alt+appui reste un appui ordinaire.
+  it('Alt+appui dans un champ de saisie : ordinaire, le curseur s’y pose', () => {
+    const champ = poser('<div class="v"><textarea id="t"></textarea></div>').querySelector('#t')!
+    const action = ecouterAppui(champ)
+    const souris = appuyer(champ)
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(souris.defaultPrevented).toBe(false)
+  })
+
+  it('Alt+appui sur le fond de la page : ordinaire', () => {
+    const action = ecouterAppui(document.body)
+    const souris = appuyer(document.body)
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(souris.defaultPrevented).toBe(false)
+  })
+
+  it('Alt+appui du bouton droit : ordinaire', () => {
+    const ligne = poser('<ul class="menu"><li id="l">fichier.ts</li></ul>').querySelector('#l')!
+    const action = ecouterAppui(ligne)
+    ligne.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true, altKey: true, button: 2 })
+    )
+    expect(action).toHaveBeenCalledTimes(1)
+  })
+
+  it('l’appui absorbé n’empêche pas le clic qui suit de poser la référence', async () => {
+    const ligne = poser('<ul class="menu"><li id="l">fichier.ts</li></ul>').querySelector('#l')!
+    appuyer(ligne)
+    altClic(ligne)
+    await attendre()
+    expect(recus[0].texte).toContain('fichier.ts')
+  })
+
+  it('bouton grisé : l’appui absorbé laisse le relâchement poser la référence', async () => {
+    const bouton = poser('<div class="v"><button id="b" disabled>Joindre</button></div>')
+    clicSurGrise(bouton.querySelector('#b')!)
+    await attendre()
+    expect(recus).toHaveLength(1)
+  })
+
+  it('retirer le geste libère l’appui', () => {
+    retirer()
+    const ligne = poser('<ul class="menu"><li id="l">fichier.ts</li></ul>').querySelector('#l')!
+    const action = ecouterAppui(ligne)
+    appuyer(ligne)
+    expect(action).toHaveBeenCalledTimes(2)
+    retirer = installerAltClic(ouvrirChat)
+  })
+})
+
 describe('bouton grisé : aucun click n’y arrive', () => {
   it('le relâchement du pointeur pose la référence, avec l’état du bouton', async () => {
     const racine = poser('<div class="v"><button id="b" disabled>Joindre</button></div>')

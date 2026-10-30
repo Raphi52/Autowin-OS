@@ -78,6 +78,9 @@
  *                                    `alt-souris:<sel>` (conv-1338) = VRAI clic de souris, Alt tenu :
  *                                    `alt:` est simule, il atteint meme un bouton grise, ou une vraie
  *                                    souris ne produit aucun `click`. Le geste amene au chat.
+ *                                    `saisie:<texte>` (conv-1338) = pose ce texte dans le premier
+ *                                    `textarea` AU MILIEU de la chaine : `--taper` joue apres les
+ *                                    clics, donc rien ne pouvait cliquer ce que la frappe ouvre.
  *         [--state attention|occupe|atterrissage-reussi|atterrissage-echec|arrivee]
  *         [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
@@ -275,14 +278,15 @@ export const accuseDImage = (message) =>
  * selecteur de clic ordinaire.
  */
 export const gesteDeLEtape = (etape) => {
-  const prefixe = /^(alt-souris|alt|selection|survol|point):\s*(.+)$/u.exec(etape.trim())
+  const prefixe = /^(alt-souris|alt|selection|survol|point|saisie):\s*(.+)$/u.exec(etape.trim())
   if (!prefixe) return { geste: 'clic', selecteur: etape.trim() }
   const geste = {
     'alt-souris': 'alt-souris',
     alt: 'alt-clic',
     selection: 'selection',
     survol: 'survol',
-    point: 'point'
+    point: 'point',
+    saisie: 'saisie'
   }[prefixe[1]]
   return { geste, selecteur: prefixe[2].trim() }
 }
@@ -357,6 +361,16 @@ export const scriptDuGeste = ({ geste, selecteur }) => {
         cible.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
         cible.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
         cible.focus()
+        return true
+      })()`
+  // Le setter natif : React compare au dernier `value` connu, une affectation directe serait ignoree.
+  if (geste === 'saisie')
+    return `(() => {
+        const champ = document.querySelector('textarea')
+        if (!champ) return false
+        champ.focus()
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(champ, ${JSON.stringify(selecteur)})
+        champ.dispatchEvent(new Event('input', { bubbles: true }))
         return true
       })()`
   // CLIC AU POINT (conv-1130) : `element.click()` part avec clientX = clientY = 0. Un clic qui lit
