@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  PROMPT_NOUVELLE_CIBLE,
   deciderRelanceAuto,
   reponseAutoAuDernierAsk,
   suiteAttendUneDonneeUtilisateur
@@ -202,6 +203,77 @@ describe('mode auto — une question destructrice attend, dans tous les fils', (
     expect(deciderRelanceAuto({ ...base, fil: [humain, reponseQuestion] })).toMatchObject({
       action: 'envoyer',
       texte: expect.stringMatching(/^Garde/)
+    })
+  })
+})
+
+/*
+ * LA RELÈVE DE FIN DE CHAÎNE NE PASSE PAS DEVANT LA QUESTION (conv-1341, 2026-10-30).
+ *
+ * `skills/gc/SKILL.md` fait finir par `AUTOWIN_FIN_V1` la passe qui pose la question de purge. Le mode
+ * auto n'y répondait pas, puis, le fil affiché étant « fini », il envoyait la relève : un tour payant
+ * par-dessus la question, mesuré `envoyer` au nettoyage. Toutes les portes de fin de chaîne sont jouées :
+ * chacune mène au même envoi.
+ */
+describe('mode auto — une question destructrice arrête aussi la fin de chaîne', () => {
+  const affiche = { ...base, proposerNouvelleCible: true }
+  const FINS: [string, string][] = [
+    ['fin explicite', '## À purger\n- corbeille du 16/10 (6,1 Mo)\n\nAUTOWIN_FIN_V1'],
+    ['recommandation « rien »', 'Bilan.\n\n👉 Recommandé — rien'],
+    ['bloc « Fait » vide', '✅ Fait\nrien\n\n👉 Recommandé : rien'],
+    ['reste à faire « rien »', 'Bilan.\n\n⏳ Reste à faire : rien']
+  ]
+
+  it.each(FINS)('%s : la relève ne part pas, le fil affiché dit pourquoi', (_nom, texte) => {
+    const fil = [humain, avecQuestion(texte, OPTIONS_DU_GC)]
+    expect(reponseAutoAuDernierAsk(fil)).toBeNull()
+    expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject(arret)
+  })
+
+  it('une question destructrice hors passe /gc arrête de même', () => {
+    const fil = [
+      humain,
+      avecQuestion('Bilan.\n\nAUTOWIN_FIN_V1', ['Oui, supprime la branche', 'Non'])
+    ]
+    expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject(arret)
+  })
+
+  it('jumeau : sans question, la fin de chaîne envoie toujours sa relève', () => {
+    const fil = [humain, reponse('## À purger\n- rien\n\nAUTOWIN_FIN_V1')]
+    expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
+      action: 'envoyer',
+      texte: PROMPT_NOUVELLE_CIBLE
+    })
+  })
+
+  it('jumeau : une question sans réponse destructrice répond toujours seule', () => {
+    const fil = [
+      humain,
+      avecQuestion('Bilan.\n\nAUTOWIN_FIN_V1', ['Ajoute les tests', 'Documente'])
+    ]
+    expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
+      action: 'envoyer',
+      texte: expect.stringMatching(/^Ajoute les tests/)
+    })
+  })
+
+  it('jumeau : un fil d’arrière-plan garde sa raison de fin de chaîne', () => {
+    const fil = [humain, avecQuestion('Bilan.\n\nAUTOWIN_FIN_V1', OPTIONS_DU_GC)]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
+      action: 'arreter',
+      raison: 'fin-explicite'
+    })
+  })
+
+  it('jumeau : une relève déjà faite dans la série laisse le mode allumé', () => {
+    const fil = [
+      humain,
+      { role: 'user', content: PROMPT_NOUVELLE_CIBLE } as Msg,
+      avecQuestion('Bilan.\n\nAUTOWIN_FIN_V1', OPTIONS_DU_GC)
+    ]
+    expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
+      action: 'attendre',
+      raison: 'chaine-finie'
     })
   })
 })

@@ -1150,6 +1150,17 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
      */
     if (relevesDepuisHumain(entree.fil) >= 1 || estUneReleve(entree.dernierPromptEnvoye ?? ''))
       return { action: 'attendre', raison: 'chaine-finie' }
+    /*
+     * fix-ok: une passe `/gc` finit par AUTOWIN_FIN_V1 avec sa question de purge ouverte (consigne de
+     * skills/gc/SKILL.md) : `dernierAsk` non nul veut dire ici que le mode auto a refusé d'y répondre,
+     * et la relève partait quand même, tour payant par-dessus la question (sonde conv-1341 : `envoyer`).
+     */
+    if (dernierAsk(entree.fil))
+      return {
+        action: 'arreter',
+        raison: 'suite-attend-utilisateur',
+        message: MESSAGES_ARRET['suite-attend-utilisateur']
+      }
     return { action: 'envoyer', texte: PROMPT_NOUVELLE_CIBLE, signature }
   }
   // Même garde qu'en affichage : si la demande de CE tour était déjà l'ordre de tri, la publication
@@ -1181,8 +1192,8 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * passait à la suite libre : « la question attend l'humain » n'était pas tenu. Mesuré le 30/10 sur
    * les fils réels : 14 questions sur 86 de ce type, 9 envois évités au rejeu, et « Oui, purge cette
    * fois » envoyé seul par deciderRelanceAuto. `dernierAsk` non nul veut dire ici que le mode auto a
-   * refusé d'y répondre : aucune suite proposée ne passe devant. La relève de fin de chaîne, plus
-   * haut, n'est pas concernée : elle ne répond pas à la question, mais elle part quand même.
+   * refusé d'y répondre : aucune suite proposée ne passe devant, pas plus que la relève de fin de chaîne
+   * (même garde, plus haut).
    */
   if (
     dernierAsk(entree.fil) ||

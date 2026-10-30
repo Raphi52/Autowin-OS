@@ -121,7 +121,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    - **Retirer l'accord** : supprimer `gc-purge-auto.json` dès que l'utilisateur le demande, et le dire.
    Une passe qui pose une question de purge finit par `AUTOWIN_FIN_V1` et ne met NI la purge dans sa
    rubrique Recommandé NI dans une ligne de suite : elle s'afficherait comme un bouton de suite, et un
-   clic purgerait sans passer par la question. Le mode auto, lui, ne répond jamais à cette question.
+   clic purgerait sans passer par la question. Le mode auto, lui, ne répond jamais à cette question
+   et n'envoie rien par-dessus.
 5. **Re-mesurer** et rendre le bilan.
 
 ## Format du bilan
