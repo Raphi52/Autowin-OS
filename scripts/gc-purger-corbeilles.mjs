@@ -117,7 +117,10 @@ function inventaire(corbeille, lireDossier) {
   return resultat
 }
 
-/** Range une entrée : `recente`, `gardee` (avec son motif) ou `candidate` (avec son inventaire). */
+/**
+ * Range une entrée : `recente`, `disparue`, `gardee` (avec son motif) ou `candidate` (avec son
+ * inventaire).
+ */
 function examiner({ racine, nom, aujourdhui, lireDossier, lireInfos }) {
   const jour = jourDuNom(nom)
   if (jour === null) return { rang: 'gardee', nom, motif: 'nom sans date valable' }

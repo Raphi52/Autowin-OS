@@ -556,5 +556,7 @@ describe('skills/gc/SKILL.md — l’accord de purge reste réservé à un humai
   it('toute purge passe par le script : plus aucune suppression écrite à la main', () => {
     expect(skill).not.toContain('supprimerArbre')
     expect(skill).not.toContain('fs-supprimer')
+    const gardees = skill.slice(skill.indexOf('**Corbeille `gardees`**'))
+    expect(gardees.slice(0, 250)).toMatch(/ni par `--cette-fois` ni à la main/u)
   })
 })
