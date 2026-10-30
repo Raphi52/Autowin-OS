@@ -103,7 +103,7 @@ import {
   texteDeLActionSurPassage,
   type ActionPassage
 } from './passage-selectionne'
-import { referenceDeLElement } from './reference-element'
+import { ecouterElementsCibles, type ElementCible } from './alt-clic'
 import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
 import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
@@ -2118,20 +2118,32 @@ export function ChatView({
     }
   }
 
+  /** La saisie qui reçoit un élément venu d'ailleurs : en mosaïque, une fenêtre à l'écran. */
+  function brouillonVisible(): string {
+    if (convViewMode !== 'mosaic') return composerDraftKeyRef.current
+    const fenetres = [...composersMosaiqueRef.current.keys()]
+    const actif = activeRef.current
+    return actif && fenetres.includes(actif) ? actif : (fenetres[0] ?? composerDraftKeyRef.current)
+  }
+
   /**
-   * « C'EST QUOI ÇA ? » (conv-1038, 2026-10-21) : Alt+clic sur un élément du chat pose sa
-   * référence exacte dans la saisie (`reference-element.ts`), sans envoyer. Le clic est ABSORBÉ en
-   * phase de capture : Alt+clic sur « brancher » ne crée pas de branche, sur un lien ne l'ouvre pas.
-   * En mosaïque, la saisie principale n'est pas à l'écran : le clic garde son sens ordinaire.
+   * L'ÉLÉMENT DÉSIGNÉ PAR ALT+CLIC (conv-1038, étendu à toute l'app conv-1338, voir `alt-clic.ts`) :
+   * sa référence s'AJOUTE au brouillon, sans envoyer, et sa capture arrive en pièce jointe. Recliqué
+   * ou double-cliqué, le même élément n'est pas redit ; une image refusée (plafond de pièces jointes)
+   * laisse le texte et s'explique sous la saisie (`addFiles`).
    */
-  function surAltClic(event: React.MouseEvent<HTMLDivElement>): void {
-    if (!event.altKey || convViewMode === 'mosaic' || !(event.target instanceof Element)) return
-    const reference = referenceDeLElement(event.target, { conversationId: activeRef.current })
-    if (!reference) return
-    event.preventDefault()
-    event.stopPropagation()
-    setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), reference))
-    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  function recevoirElementCible({ texte, image, fenetre }: ElementCible): void {
+    const cle = fenetre ?? brouillonVisible()
+    const brouillon = getComposerDraft(cle).input
+    if (!brouillon.includes(texte)) {
+      const suite = ajouterAuBrouillon(brouillon, texte)
+      setDraftInput(cle, suite)
+      composersMosaiqueRef.current.get(cle)?.setInput(suite)
+    }
+    if (image) void addFiles([image], cle, (fichier) => fichier.name)
+    requestAnimationFrame(() =>
+      (composersMosaiqueRef.current.get(cle) ?? composerRef.current)?.focusAt(-1)
+    )
   }
 
   function getComposerDraft(key: string): ComposerDraft {
@@ -2617,6 +2629,8 @@ export function ChatView({
    */
   const addFilesRef = useRef(addFiles)
   addFilesRef.current = addFiles
+  const recevoirElementCibleRef = useRef(recevoirElementCible)
+  recevoirElementCibleRef.current = recevoirElementCible
   const pointerMomentVideo = useCallback((moment: MomentPointe): void => {
     composerRef.current?.insererAuCurseur(moment.reference)
     // Doublon par NOM seul : `<vidéo>-i<N>.png` désigne une image précise ; deux encodages PNG du
@@ -2635,7 +2649,7 @@ export function ChatView({
     )
     convsRef.current = loaded // dispo IMMÉDIATEMENT pour la reprise auto (sans attendre le render)
     setConvs(loaded)
-    void autoResumeOnce(loaded)
+    repriseDemarrageRef.current ??= autoResumeOnce(loaded)
   }
 
   /**
@@ -2644,6 +2658,7 @@ export function ChatView({
    * ratait la reprise (course au démarrage, constatée en essai réel). Une seule fois par session.
    */
   const autoResumeDoneRef = useRef(false)
+  const repriseDemarrageRef = useRef<Promise<void> | null>(null)
   async function autoResumeOnce(loaded: Conv[]): Promise<void> {
     if (autoResumeDoneRef.current) return
     autoResumeDoneRef.current = true
@@ -2922,7 +2937,7 @@ export function ChatView({
   }, [])
   useEffect(() => {
     let disposed = false
-    void Promise.resolve().then(async () => {
+    const selectionInitiale = Promise.resolve().then(async () => {
       await refreshConvs()
       // ALIGNEMENT AU MONTAGE : le main est la source de vérité de la conversation active. Le scout
       // de veille (et tout flux né hors du chat) sélectionne sa conversation PENDANT que cette vue
@@ -2962,6 +2977,19 @@ export function ChatView({
         })
         .catch(() => undefined)
     })
+    // ÉLÉMENTS DÉSIGNÉS AVANT LE PREMIER AFFICHAGE DU CHAT (Alt+clic depuis une autre vue, conv-1338).
+    // Le fil ouvert au démarrage n'est connu qu'après ces deux étapes : écouter plus tôt posait le
+    // texte dans le brouillon « nouveau fil », que l'ouverture du dernier fil cachait aussitôt.
+    let couperElementsCibles: (() => void) | undefined
+    const ecouterLesElements = (): void => {
+      if (disposed) return
+      couperElementsCibles = ecouterElementsCibles((element) =>
+        recevoirElementCibleRef.current(element)
+      )
+    }
+    void selectionInitiale
+      .then(() => repriseDemarrageRef.current)
+      .then(ecouterLesElements, ecouterLesElements)
     void Promise.resolve(window.api.workflowProfileNotice?.())
       .then((notice) => {
         if (!disposed && notice && typeof notice.text === 'string') {
@@ -3372,6 +3400,7 @@ export function ChatView({
     })
     return () => {
       disposed = true
+      couperElementsCibles?.()
       deltaBatcher.cancel()
       raisonnementBatcher.cancel()
       offApp()
@@ -7767,7 +7796,6 @@ export function ChatView({
       }`}
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
-      onClickCapture={surAltClic}
     >
       {/* HARNAIS DE PROFILAGE (heal gels vue chat, 2026-09-18) : `vue-chat` seul ne disait pas QUELLE
           zone tenait le fil d'affichage (1,3 a 2,8 s sur conv-680). Chaque zone signale son propre

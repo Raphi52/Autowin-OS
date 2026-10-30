@@ -75,6 +75,9 @@
  *                                    relache la souris (barre « repondre a un passage »).
  *                                    `point:<sel>` (conv-1130) = clic AVEC la position de la souris,
  *                                    au centre de la cible (un geste qui lit clientX/clientY).
+ *                                    `alt-souris:<sel>` (conv-1338) = VRAI clic de souris, Alt tenu :
+ *                                    `alt:` est simule, il atteint meme un bouton grise, ou une vraie
+ *                                    souris ne produit aucun `click`. Le geste amene au chat.
  *         [--state attention|occupe|atterrissage-reussi|atterrissage-echec|arrivee]
  *         [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
@@ -272,11 +275,15 @@ export const accuseDImage = (message) =>
  * selecteur de clic ordinaire.
  */
 export const gesteDeLEtape = (etape) => {
-  const prefixe = /^(alt|selection|survol|point):\s*(.+)$/u.exec(etape.trim())
+  const prefixe = /^(alt-souris|alt|selection|survol|point):\s*(.+)$/u.exec(etape.trim())
   if (!prefixe) return { geste: 'clic', selecteur: etape.trim() }
-  const geste = { alt: 'alt-clic', selection: 'selection', survol: 'survol', point: 'point' }[
-    prefixe[1]
-  ]
+  const geste = {
+    'alt-souris': 'alt-souris',
+    alt: 'alt-clic',
+    selection: 'selection',
+    survol: 'survol',
+    point: 'point'
+  }[prefixe[1]]
   return { geste, selecteur: prefixe[2].trim() }
 }
 
@@ -296,12 +303,28 @@ export const vueAttendueApresClics = (vue, declencheur) => {
     .filter(Boolean)
   for (const etape of etapes) {
     const { geste, selecteur } = gesteDeLEtape(etape)
+    if (geste === 'alt-souris') attendue = 'chat'
     if (geste !== 'clic' && geste !== 'alt-clic') continue
     const id = /^\[data-testid=(["']?)nav-([a-z-]+)\1\]$/u.exec(selecteur)?.[2]
     if (id && VUES_CONNUES.includes(id)) attendue = id
   }
   return attendue
 }
+
+/** Le centre de la cible, en pixels de page ; `null` si elle n'existe pas. */
+export const scriptDuPoint = (selecteur) => `(() => {
+  const cible = document.querySelector(${JSON.stringify(selecteur)})
+  if (!cible) return null
+  const r = cible.getBoundingClientRect()
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+})()`
+
+/** Les ordres d'un vrai clic gauche, Alt tenu (`modifiers: 1` dans le pilotage du navigateur). */
+export const clicAltSouris = ({ x, y }) => [
+  { type: 'mouseMoved', x, y, modifiers: 1 },
+  { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, modifiers: 1 },
+  { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1, modifiers: 1 }
+]
 
 /** Le script joue dans la page pour ce geste ; il rend `true` si la cible existe. */
 export const scriptDuGeste = ({ geste, selecteur }) => {
@@ -1471,7 +1494,21 @@ const main = async () => {
     await ouvrirFlux()
     declencheurTrouve = true
     for (const etape of etapes) {
-      const trouve = await evaluer(scriptDuGeste(gesteDeLEtape(etape)))
+      const geste = gesteDeLEtape(etape)
+      let trouve
+      if (geste.geste === 'alt-souris') {
+        // Pendant le fondu d'une vue, une vraie souris touche le fond de la page, pas l'element.
+        await attendreFinDeTransition(lireFondu)
+        const point = await evaluer(scriptDuPoint(geste.selecteur))
+        trouve = Boolean(point)
+        if (point)
+          for (const ordre of clicAltSouris(point)) await envoyer('Input.dispatchMouseEvent', ordre)
+        // Le geste capture l'element AVANT de changer de vue (1,5 s au plus, alt-clic.ts) : une
+        // capture prend environ 1 s dans l'instance cachee, soit plus que la pause ordinaire.
+        await new Promise((r) => setTimeout(r, 2500))
+      } else {
+        trouve = await evaluer(scriptDuGeste(geste))
+      }
       if (!trouve) {
         declencheurTrouve = false
         break

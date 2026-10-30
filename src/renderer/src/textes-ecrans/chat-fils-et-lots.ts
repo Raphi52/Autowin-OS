@@ -234,7 +234,7 @@ export const TEXTES_FR = {
   'modele.issue.rendue': 'Réponse du modèle rendue',
   'modele.issue.aucune': 'Aucune réponse enregistrée',
 
-  // — Alt+clic « C'est quoi ça ? » (reference-element) : la question que l'utilisateur pose, dans
+  // — Alt+clic sur un élément (reference-element) : la référence que l'utilisateur pose, dans
   // son message. Les chemins, classes et repères qu'elle cite restent tels quels (cherchables).
   'reference.blocs.tour': 'en-tête du tour',
   'reference.blocs.texte': 'texte de la réponse',
@@ -248,13 +248,17 @@ export const TEXTES_FR = {
   'reference.element': 'élément pointé : « {texte} »',
   'reference.bouton': 'bouton « {nom} »',
   'reference.desactive': ' (désactivé)',
+  'reference.boutonDesactive': 'bouton désactivé',
   'reference.classe': 'classe {classe}',
+  'reference.composant': 'composant {composant}',
   'reference.bloc': 'bloc : {libelle} ({source})',
   'reference.repere': 'repère {repere}',
   'reference.dans': 'dans : {origine}',
   'reference.fil': 'fil {fil}',
   'reference.tour': 'tour {tour}',
-  'reference.question': 'C’est quoi ça ? [{morceaux}]',
+  'reference.styles':
+    'styles : police {police}, taille {taille}, couleur {couleur}, fond {fond}, marge {marge}, retrait {retrait}',
+  'reference.cible': 'Élément ciblé [{morceaux}]',
 
   // — Brouillon « Reprendre en précisant » (chat-resume-refine), que l'utilisateur complète.
   'reprise.motif.cancelled': 'le tour précédent a été annulé',
@@ -481,13 +485,17 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'reference.element': 'pointed element: “{texte}”',
   'reference.bouton': 'button “{nom}”',
   'reference.desactive': ' (disabled)',
+  'reference.boutonDesactive': 'disabled button',
   'reference.classe': 'class {classe}',
+  'reference.composant': 'component {composant}',
   'reference.bloc': 'block: {libelle} ({source})',
   'reference.repere': 'test id {repere}',
   'reference.dans': 'in: {origine}',
   'reference.fil': 'thread {fil}',
   'reference.tour': 'turn {tour}',
-  'reference.question': 'What is this? [{morceaux}]',
+  'reference.styles':
+    'styles: font {police}, size {taille}, color {couleur}, background {fond}, margin {marge}, padding {retrait}',
+  'reference.cible': 'Targeted element [{morceaux}]',
 
   'reprise.motif.cancelled': 'the previous turn was cancelled',
   'reprise.motif.interrupted': 'the previous turn was interrupted before the end',

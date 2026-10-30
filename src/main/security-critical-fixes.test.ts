@@ -739,7 +739,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     moteur ne fait que retenir, liberer ou refuser les gestes de l'agent : aucune page
     //     chargee, aucune ecriture disque. Aucune protection retiree.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(279)
+    // MISE A JOUR 2026-10-30 (conv-1338, Alt+clic sur toute l'app) — 279 -> 281, MESURE par ce test
+    //   (rouge a 280 sur le main intact, 281 avec le canal ci-dessous). DEUX canaux, gardes des leur
+    //   PREMIERE ligne par `assertTrustedRendererSender` :
+    //   `app:capturer-element` (`ipc/capture-element.ts`) — image de l'element designe par Alt+clic.
+    //     Ne capture que la fenetre qui demande (`event.sender`) ; rectangle controle avant toute
+    //     capture (nombres finis, positifs, 32 768 au plus), aucune ecriture disque.
+    //   `run:gitApresFil:set` (e22e609b, conv-1339) — laisse hors compte par ce commit. Interrupteur
+    //     de « publier apres un fil », relu ici et non ecrit a sa place.
+    //   Aucune protection retiree. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(281)
     expect(unguarded).toEqual([])
   })
 

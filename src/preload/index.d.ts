@@ -104,6 +104,12 @@ export interface ClaudeAccountsPayload {
 
 interface ChatApi {
   captureTestPage: () => Promise<string>
+  capturerElement?: (rect: {
+    x: number
+    y: number
+    largeur: number
+    hauteur: number
+  }) => Promise<string | null>
   seedArtifactPreviewsTest: (htmlOnly?: boolean) => Promise<{
     conversationId: string
     turnId: string

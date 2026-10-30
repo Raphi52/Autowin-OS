@@ -227,7 +227,7 @@ export function siteDeLAdresse(adresse: string): string | null {
 }
 
 /** `data:image/png;base64,…` → fichier joignable ; `null` si l'adresse n'est pas une image base64. */
-function fichierDeLaCapture(dataUrl: string, nom: string): File | null {
+export function fichierDeLaCapture(dataUrl: string, nom: string): File | null {
   const trouve = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(dataUrl)
   if (!trouve) return null
   const binaire = atob(trouve[2])

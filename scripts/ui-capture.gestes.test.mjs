@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { gesteDeLEtape, scriptDuGeste } from './ui-capture.mjs'
+import {
+  clicAltSouris,
+  gesteDeLEtape,
+  scriptDuGeste,
+  scriptDuPoint,
+  vueAttendueApresClics
+} from './ui-capture.mjs'
 
 /**
  * Pourquoi ce test existe (conv-1038, 2026-10-21) : la chaîne `--click` ne savait que
@@ -43,6 +49,51 @@ describe('ui-capture — gestes de la chaîne --click', () => {
     const selection = scriptDuGeste({ geste: 'selection', selecteur: '.a' })
     expect(selection).toContain('selectNodeContents')
     expect(selection).toContain("'mouseup'")
+  })
+})
+
+/**
+ * `alt-souris:` (conv-1338, 2026-10-30) : `alt:` n'envoie qu'un événement `click` simulé. Il arrive
+ * même sur un bouton grisé, où une vraie souris ne produit aucun `click` (sonde hors écran) : il
+ * prouvait donc un geste que l'utilisateur ne fait pas. Celui-ci passe par le vrai pilotage du
+ * navigateur (`Input.dispatchMouseEvent`), Alt tenu.
+ */
+describe('ui-capture — geste alt-souris:', () => {
+  it('alt-souris: → vrai clic, sélecteur intact, sans se confondre avec alt:', () => {
+    expect(gesteDeLEtape('alt-souris: .a button')).toEqual({
+      geste: 'alt-souris',
+      selecteur: '.a button'
+    })
+    expect(gesteDeLEtape('alt: .a').geste).toBe('alt-clic')
+  })
+
+  it('le point visé est le centre de la cible, et une cible absente rend null', () => {
+    const script = scriptDuPoint('.a')
+    expect(script).toContain('document.querySelector(".a")')
+    expect(script).toContain('return null')
+    expect(script).toContain('r.left + r.width / 2')
+  })
+
+  it('les trois ordres de souris tiennent Alt (modificateur 1) du survol au relâchement', () => {
+    const ordres = clicAltSouris({ x: 10, y: 20 })
+    expect(ordres.map((ordre) => ordre.type)).toEqual([
+      'mouseMoved',
+      'mousePressed',
+      'mouseReleased'
+    ])
+    for (const ordre of ordres) expect(ordre).toMatchObject({ x: 10, y: 20, modifiers: 1 })
+    expect(ordres[1]).toMatchObject({ button: 'left', buttons: 1, clickCount: 1 })
+    expect(ordres[2]).toMatchObject({ button: 'left', buttons: 0, clickCount: 1 })
+  })
+
+  // Le geste amène au chat : la vue à contrôler n'est plus celle de départ.
+  it('la vue attendue après un alt-souris: est le chat', () => {
+    expect(vueAttendueApresClics('settings', 'alt-souris: .a')).toBe('chat')
+  })
+
+  // Jumeau : le `alt:` simulé garde son comportement, il ne promet aucune bascule.
+  it('après un alt: simulé, la vue attendue ne change pas', () => {
+    expect(vueAttendueApresClics('settings', 'alt: .a')).toBe('settings')
   })
 })
 

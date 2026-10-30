@@ -25,6 +25,7 @@ import { registerConversationsIpc } from './ipc/conversations'
 import { registerCarteDesBesoinsIpc } from './ipc/carte-des-besoins'
 import { creerDossierDuBoard } from './board-dossier'
 import { registerLangueIpc } from './ipc/langue'
+import { registerCaptureElementIpc } from './ipc/capture-element'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
@@ -3344,6 +3345,8 @@ Le fil reprend ensuite normalement.`
   registerChatArtifactsIpc({ os })
   // La langue de Settings · Interface (conv-1146) : l'agent répond dans celle qui est choisie.
   registerLangueIpc()
+  // La capture de l'élément désigné par Alt+clic, jointe au brouillon du fil (conv-1338).
+  registerCaptureElementIpc()
   // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
   // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
   // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.

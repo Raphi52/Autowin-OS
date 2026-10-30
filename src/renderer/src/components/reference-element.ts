@@ -1,11 +1,16 @@
 /**
- * « C'EST QUOI ÇA ? » — la référence exacte d'un élément de l'écran (conv-1038, 2026-10-21).
+ * L'ÉLÉMENT CIBLÉ — la référence exacte d'un élément de l'écran (conv-1038, 2026-10-21 ; étendue à
+ * toute l'app, avec styles et composant, conv-1338, 2026-10-30).
  *
  * Pourquoi : ~6 % des messages de l'utilisateur (71 sur 1 197, relevé du scout conv-1038) portent
  * sur l'app elle-même — « c'est quoi ce bloc chelou ? », « pk le bouton joindre fichier est
- * grisé » — et il devait DÉCRIRE ce qu'il voyait. Un Alt+clic pose à la place une référence que
- * l'agent sait suivre : le texte affiché, le bloc et son fichier source, le repère de test, la classe
- * (cherchables par grep), le fil et le tour (`turn-journals/<fil>/<tour>.jsonl`).
+ * grisé » — et 163 retouches d'octobre décrivent un endroit en mots. Un Alt+clic pose à la place une
+ * référence que l'agent sait suivre : le texte affiché, le bloc et son fichier source, le composant,
+ * le repère de test, la classe (cherchables par grep), le fil et le tour
+ * (`turn-journals/<fil>/<tour>.jsonl`), puis les styles calculés.
+ *
+ * La phrase est NEUTRE : « C'est quoi ça ? » n'a jamais servi (0 occurrence sur 1 094 messages depuis
+ * le 01/10, conv-1338), et une question contredisait un ordre comme « met une croix ici ».
  *
  * Les étiquettes lues ici existent déjà dans le fil : `data-nature` sur chaque point du rail d'un
  * tour (`ChatMessageRow.tsx`, `noeud`) ; `data-origine`, `data-turn-id`, `data-message-id` et
@@ -59,14 +64,92 @@ function attributProche(element: Element, attribut: string): string | undefined 
   return element.closest(`[${attribut}]`)?.getAttribute(attribut) ?? undefined
 }
 
+const SELECTEUR_BOUTON = 'button, a, summary, [role="button"]'
+
 /**
- * La référence à poser dans la saisie, ou `null` dans un champ de saisie : Alt+clic y garde son
- * usage de texte (sélection, curseur), et la zone qu'on écrit n'a pas à se décrire elle-même.
+ * L'élément que la référence et la capture décrivent : le bouton ou le lien autour de la cible s'il
+ * y en a un. Un clic tombe souvent sur son icône, un dessin de 12 px sans marge ni couleur utile.
+ */
+export function elementVise(cible: Element): Element {
+  return cible.closest(SELECTEUR_BOUTON) ?? cible
+}
+
+type Fibre = { type?: unknown; return?: Fibre | null }
+
+const LONGUEUR_MIN_NOM = 3
+/** Assez de marches pour sortir des balises d'un composant, sans parcourir toute l'app. */
+const MARCHES_MAX = 40
+
+/** Le nom d'un type React : fonction ou classe, ou enveloppe `memo` / `forwardRef`. */
+function nomDuType(type: unknown): string | undefined {
+  if (!type || typeof type === 'string') return undefined
+  const porteur = type as {
+    displayName?: unknown
+    name?: unknown
+    type?: unknown
+    render?: unknown
+  }
+  const nom = porteur.displayName ?? porteur.name
+  if (typeof nom === 'string' && nom) return nom
+  return nomDuType(porteur.type) ?? nomDuType(porteur.render)
+}
+
+/** La fibre React de l'élément ou de son plus proche parent qui en a une (SVG injecté…). */
+function fibreDe(element: Element): Fibre | undefined {
+  for (let noeud: Element | null = element; noeud; noeud = noeud.parentElement) {
+    const cle = Object.keys(noeud).find((nom) => nom.startsWith('__reactFiber$'))
+    if (cle) return (noeud as unknown as Record<string, Fibre>)[cle]
+  }
+  return undefined
+}
+
+/**
+ * Le composant React le plus proche. Le nom n'est fiable qu'avec le serveur de développement : une
+ * version construite raccourcit les noms, et un nom faux enverrait l'agent au mauvais endroit.
+ */
+function composantDe(element: Element): string | undefined {
+  if (!import.meta.env.DEV) return undefined
+  let fibre = fibreDe(element)
+  for (let marche = 0; fibre && marche < MARCHES_MAX; marche += 1) {
+    const nom = nomDuType(fibre.type)
+    if (nom && /^[A-Z]/u.test(nom) && nom.length >= LONGUEUR_MIN_NOM) return nom
+    fibre = fibre.return ?? undefined
+  }
+  return undefined
+}
+
+/** Le premier fond opaque en remontant : un élément transparent montre celui de son parent. */
+function fondEffectif(element: Element): string {
+  for (let noeud: Element | null = element; noeud; noeud = noeud.parentElement) {
+    const fond = getComputedStyle(noeud).backgroundColor
+    if (fond && fond !== 'transparent' && !/^rgba\([^)]*,\s*0\)$/u.test(fond)) return fond
+  }
+  return 'transparent'
+}
+
+/** Mêmes valeurs que l'élément choisi du navigateur intégré (`navigateur-page-script.ts`). */
+function stylesDe(element: Element): Record<string, string> {
+  const styles = getComputedStyle(element)
+  return {
+    police: styles.fontFamily.split(',')[0].replace(/["']/gu, '').trim(),
+    taille: styles.fontSize,
+    couleur: styles.color,
+    fond: fondEffectif(element),
+    marge: styles.margin,
+    retrait: styles.padding
+  }
+}
+
+/**
+ * La référence à poser dans la saisie, ou `null` quand elle n'aurait rien à dire : dans un champ de
+ * saisie, Alt+clic garde son usage de texte (sélection, curseur), et sur le fond de la page ou un
+ * élément sans aucun indice, le clic reste ordinaire au lieu de poser une référence vide.
  */
 export function referenceDeLElement(
   cible: Element,
   contexte: { conversationId: string | null }
 ): string | null {
+  if (cible.matches('html, body')) return null
   if (cible.closest('textarea, input, select, [contenteditable="true"]')) return null
   const langue = langueCourante()
   const dire = (cle: CleChatFilsEtLots, valeurs?: Record<string, string>): string =>
@@ -76,19 +159,24 @@ export function referenceDeLElement(
   const texte = texteVisible(cible)
   if (texte) morceaux.push(dire('reference.element', { texte }))
 
-  const bouton = cible.closest('button, a, summary, [role="button"]')
+  const bouton = cible.closest(SELECTEUR_BOUTON)
   const nomDuBouton = bouton?.getAttribute('title') ?? bouton?.getAttribute('aria-label')
+  const desactive =
+    bouton?.hasAttribute('disabled') || bouton?.getAttribute('aria-disabled') === 'true'
   if (bouton && nomDuBouton && nomDuBouton !== texte) {
-    const desactive =
-      bouton.hasAttribute('disabled') || bouton.getAttribute('aria-disabled') === 'true'
     morceaux.push(
       dire('reference.bouton', { nom: nomDuBouton }) +
         (desactive ? dire('reference.desactive') : '')
     )
+  } else if (desactive) {
+    morceaux.push(dire('reference.boutonDesactive'))
   }
 
   const classe = cible.closest('[class]')?.classList[0]
   if (classe) morceaux.push(dire('reference.classe', { classe }))
+
+  const composant = composantDe(cible)
+  if (composant) morceaux.push(dire('reference.composant', { composant }))
 
   const bloc = BLOCS_DU_TOUR[attributProche(cible, 'data-nature') ?? '']
   if (bloc)
@@ -110,11 +198,16 @@ export function referenceDeLElement(
     )
   }
 
+  // Rien de sûr sur l'élément lui-même : le fil seul ne désignerait rien.
+  if (morceaux.length === 0) return null
+
   // Le journal d'un tour COPIÉ par une branche reste rangé sous le fil d'origine.
   const fil = attributProche(cible, 'data-fil-du-tour') ?? contexte.conversationId
   if (fil) morceaux.push(dire('reference.fil', { fil }))
   const tour = attributProche(cible, 'data-turn-id')
   if (tour) morceaux.push(dire('reference.tour', { tour }))
 
-  return dire('reference.question', { morceaux: morceaux.join(' · ') })
+  morceaux.push(dire('reference.styles', stylesDe(elementVise(cible))))
+
+  return dire('reference.cible', { morceaux: morceaux.join(' · ') })
 }

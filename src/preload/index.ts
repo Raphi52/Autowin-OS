@@ -167,6 +167,13 @@ const navigateur: ApiNavigateur = {
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
+  /** L'image de l'élément désigné par Alt+clic, en adresse `data:` ; `null` si rien à capturer. */
+  capturerElement: (rect: {
+    x: number
+    y: number
+    largeur: number
+    hauteur: number
+  }): Promise<string | null> => ipcRenderer.invoke('app:capturer-element', rect),
   seedArtifactPreviewsTest: (
     htmlOnly = false
   ): Promise<{ conversationId: string; turnId: string }> =>
