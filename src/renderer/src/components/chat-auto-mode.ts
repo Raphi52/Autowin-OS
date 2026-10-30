@@ -1190,10 +1190,10 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
   /*
    * fix-ok: une question dont la réponse recommandée est destructrice rendait null plus haut, et le code
    * passait à la suite libre : « la question attend l'humain » n'était pas tenu. Mesuré le 30/10 sur
-   * les fils réels : 14 questions sur 86 de ce type, 9 envois évités au rejeu, et « Oui, purge cette
-   * fois » envoyé seul par deciderRelanceAuto. `dernierAsk` non nul veut dire ici que le mode auto a
-   * refusé d'y répondre : aucune suite proposée ne passe devant, pas plus que la relève de fin de chaîne
-   * (même garde, plus haut).
+   * les fils actifs : 14 questions de ce type sur 86 (38 sur 454 archives comprises), 9 envois évités
+   * au rejeu, et « Oui, purge cette fois » envoyé seul par deciderRelanceAuto. `dernierAsk` non nul veut
+   * dire ici que le mode auto a refusé d'y répondre : aucune suite proposée ne passe devant, pas plus
+   * que la relève de fin de chaîne (même garde, plus haut).
    */
   if (
     dernierAsk(entree.fil) ||
