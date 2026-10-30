@@ -19,6 +19,7 @@
  * et le fond de la page rendent une référence `null` : le clic y reste ordinaire.
  */
 
+import type { RectNavigateur } from '../../../shared/navigateur'
 import { fichierDeLaCapture } from './navigateur-integre-outils'
 import { elementVise, referenceDeLElement } from './reference-element'
 
@@ -30,13 +31,6 @@ export interface ElementCible {
   image: File | null
   /** La fenêtre de mosaïque cliquée ; absente, c'est le fil actif du chat. */
   fenetre?: string
-}
-
-export interface RectangleElement {
-  x: number
-  y: number
-  largeur: number
-  hauteur: number
 }
 
 // ── La file vers le chat ───────────────────────────────────────────────────────────────────────
@@ -72,7 +66,7 @@ export function rectangleVisible(
   boite: Boite,
   fenetre: { largeur: number; hauteur: number },
   zoom: number
-): RectangleElement | null {
+): RectNavigateur | null {
   const gauche = Math.max(boite.left, 0)
   const haut = Math.max(boite.top, 0)
   const droite = Math.min(boite.right, fenetre.largeur)
@@ -87,7 +81,7 @@ export function rectangleVisible(
 }
 
 /** Le même élément recliqué garde son nom : `addFiles` le dédoublonne par nom. */
-function nomDeLImage(texte: string, rect: RectangleElement): string {
+function nomDeLImage(texte: string, rect: RectNavigateur): string {
   let empreinte = 5381
   for (const lettre of `${texte}|${Math.round(rect.x)}|${Math.round(rect.y)}`)
     empreinte = (empreinte * 33 + (lettre.codePointAt(0) ?? 0)) >>> 0
@@ -111,7 +105,9 @@ async function capturer(element: Element, texte: string): Promise<File | null> {
   try {
     const adresse = await Promise.race([api.capturerElement(rect), delai])
     return adresse ? fichierDeLaCapture(adresse, nomDeLImage(texte, rect)) : null
-  } catch {
+  } catch (erreur) {
+    // La référence part sans image : le geste reste utile, mais la cause doit rester lisible.
+    console.warn('[alt-clic] capture impossible, référence envoyée sans image', erreur)
     return null
   } finally {
     clearTimeout(minuteur)
@@ -157,16 +153,16 @@ export function installerAltClic(ouvrirChat: () => void, fenetre: Window = windo
     })
   }
 
-  const surClic = (evenement: Event): void => {
-    const { altKey, button, target } = evenement as MouseEvent
+  const surClic = (evenement: MouseEvent): void => {
+    const { altKey, button, target } = evenement
     if (altKey && button === 0 && target instanceof Element) traiter(target, evenement)
   }
-  const surAppui = (evenement: Event): void => {
-    const { altKey, button, target } = evenement as PointerEvent
+  const surAppui = (evenement: PointerEvent): void => {
+    const { altKey, button, target } = evenement
     appui = altKey && button === 0 ? target : null
   }
-  const surRelache = (evenement: Event): void => {
-    const { altKey, button, target } = evenement as PointerEvent
+  const surRelache = (evenement: PointerEvent): void => {
+    const { altKey, button, target } = evenement
     const memeCible = appui === target
     appui = null
     if (!altKey || button !== 0 || !memeCible || !(target instanceof Element)) return

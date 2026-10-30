@@ -27,13 +27,7 @@
 /** Le message entier reste loin des 4 000 caractères de la saisie (`MAX_SAISIE`, amorce.js). */
 export const COMMENTAIRE_MAX = 1000
 
-const echapper = (texte) =>
-  String(texte ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-const AXES = [
+export const AXES = [
   ['visuel', 'Visuel'],
   ['fonctionnement', 'Fonctionnement']
 ]
@@ -58,13 +52,6 @@ export function verifierAxes(propositions) {
         erreurs.push(`proposition ${i + 1} : « ${axe} » attendu en texte, sur chaque proposition`)
   })
   return erreurs
-}
-
-/** La description d'une proposition sur sa fiche, sous la maquette. */
-export function ficheAxes(p) {
-  if (!aDesAxes(p)) return ''
-  const lignes = AXES.map(([axe, nom]) => `<span><b>${nom}</b> ${echapper(p[axe])}</span>`)
-  return `<div class="dkc-axf">${lignes.join('')}</div>`
 }
 
 /**

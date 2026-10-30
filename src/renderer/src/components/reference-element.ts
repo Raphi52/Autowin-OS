@@ -75,20 +75,15 @@ export function elementVise(cible: Element): Element {
 }
 
 type Fibre = { type?: unknown; return?: Fibre | null }
+type PorteurDeNom = { displayName?: unknown; name?: unknown; type?: unknown; render?: unknown }
 
-const LONGUEUR_MIN_NOM = 3
 /** Assez de marches pour sortir des balises d'un composant, sans parcourir toute l'app. */
 const MARCHES_MAX = 40
 
 /** Le nom d'un type React : fonction ou classe, ou enveloppe `memo` / `forwardRef`. */
 function nomDuType(type: unknown): string | undefined {
-  if (!type || typeof type === 'string') return undefined
-  const porteur = type as {
-    displayName?: unknown
-    name?: unknown
-    type?: unknown
-    render?: unknown
-  }
+  if (!type || (typeof type !== 'object' && typeof type !== 'function')) return undefined
+  const porteur: PorteurDeNom = type
   const nom = porteur.displayName ?? porteur.name
   if (typeof nom === 'string' && nom) return nom
   return nomDuType(porteur.type) ?? nomDuType(porteur.render)
@@ -97,8 +92,9 @@ function nomDuType(type: unknown): string | undefined {
 /** La fibre React de l'élément ou de son plus proche parent qui en a une (SVG injecté…). */
 function fibreDe(element: Element): Fibre | undefined {
   for (let noeud: Element | null = element; noeud; noeud = noeud.parentElement) {
-    const cle = Object.keys(noeud).find((nom) => nom.startsWith('__reactFiber$'))
-    if (cle) return (noeud as unknown as Record<string, Fibre>)[cle]
+    const entree = Object.entries(noeud).find(([nom]) => nom.startsWith('__reactFiber$'))
+    const fibre: unknown = entree?.[1]
+    if (typeof fibre === 'object' && fibre !== null) return fibre
   }
   return undefined
 }
@@ -112,7 +108,7 @@ function composantDe(element: Element): string | undefined {
   let fibre = fibreDe(element)
   for (let marche = 0; fibre && marche < MARCHES_MAX; marche += 1) {
     const nom = nomDuType(fibre.type)
-    if (nom && /^[A-Z]/u.test(nom) && nom.length >= LONGUEUR_MIN_NOM) return nom
+    if (nom && /^[A-Z]/u.test(nom)) return nom
     fibre = fibre.return ?? undefined
   }
   return undefined

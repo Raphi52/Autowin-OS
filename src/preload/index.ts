@@ -117,7 +117,12 @@ import type {
   ResultatFermetureGeree,
   ResultatListeBureaux
 } from '../shared/hdesk-gestion'
-import { CANAUX_NAVIGATEUR, type ApiNavigateur, type EtatNavigateur } from '../shared/navigateur'
+import {
+  CANAUX_NAVIGATEUR,
+  type ApiNavigateur,
+  type EtatNavigateur,
+  type RectNavigateur
+} from '../shared/navigateur'
 
 /**
  * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
@@ -168,12 +173,8 @@ const navigateur: ApiNavigateur = {
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
   /** L'image de l'élément désigné par Alt+clic, en adresse `data:` ; `null` si rien à capturer. */
-  capturerElement: (rect: {
-    x: number
-    y: number
-    largeur: number
-    hauteur: number
-  }): Promise<string | null> => ipcRenderer.invoke('app:capturer-element', rect),
+  capturerElement: (rect: RectNavigateur): Promise<string | null> =>
+    ipcRenderer.invoke('app:capturer-element', rect),
   seedArtifactPreviewsTest: (
     htmlOnly = false
   ): Promise<{ conversationId: string; turnId: string }> =>

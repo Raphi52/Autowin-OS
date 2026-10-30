@@ -13,7 +13,7 @@ import type {
   PropositionAutoriteProd
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
-import type { ApiNavigateur } from '../shared/navigateur'
+import type { ApiNavigateur, RectNavigateur } from '../shared/navigateur'
 import type { GestesDesTours } from '../shared/gestes-agent'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -104,12 +104,7 @@ export interface ClaudeAccountsPayload {
 
 interface ChatApi {
   captureTestPage: () => Promise<string>
-  capturerElement?: (rect: {
-    x: number
-    y: number
-    largeur: number
-    hauteur: number
-  }) => Promise<string | null>
+  capturerElement?: (rect: RectNavigateur) => Promise<string | null>
   seedArtifactPreviewsTest: (htmlOnly?: boolean) => Promise<{
     conversationId: string
     turnId: string

@@ -2657,11 +2657,8 @@ export function ChatView({
    * qui sait quand les conversations sont réellement chargées : dispatcher à l'aveugle après un délai
    * ratait la reprise (course au démarrage, constatée en essai réel). Une seule fois par session.
    */
-  const autoResumeDoneRef = useRef(false)
   const repriseDemarrageRef = useRef<Promise<void> | null>(null)
   async function autoResumeOnce(loaded: Conv[]): Promise<void> {
-    if (autoResumeDoneRef.current) return
-    autoResumeDoneRef.current = true
     let turns: UnfinishedTurn[] = []
     try {
       turns = ((await window.api.unfinishedTurns?.()) ?? []) as UnfinishedTurn[]
@@ -2989,7 +2986,8 @@ export function ChatView({
     }
     void selectionInitiale
       .then(() => repriseDemarrageRef.current)
-      .then(ecouterLesElements, ecouterLesElements)
+      .catch((erreur: unknown) => traceSilentFailure('selection-initiale', erreur))
+      .finally(ecouterLesElements)
     void Promise.resolve(window.api.workflowProfileNotice?.())
       .then((notice) => {
         if (!disposed && notice && typeof notice.text === 'string') {

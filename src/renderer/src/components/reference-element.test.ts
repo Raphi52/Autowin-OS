@@ -179,8 +179,8 @@ describe('referenceDeLElement', () => {
       ).toContain('composant Icone')
     })
 
-    // Une version construite raccourcit les noms : un nom coupé tromperait l'agent.
-    it('un nom raccourci par la construction de l’app n’est pas rapporté', () => {
+    // Une fonction en minuscules n'est pas un composant : on remonte au-delà.
+    it('un nom en minuscules n’est pas rapporté', () => {
       const racine = poser('<div class="z"><span id="cible">ok</span></div>')
       avecFibre(racine.querySelector('#cible')!, {
         type: 'span',

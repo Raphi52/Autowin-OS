@@ -12,7 +12,7 @@
 import { ipcMain } from 'electron'
 import { assertTrustedRendererSender } from '../ipc-senders'
 
-/** Largeur maximale d'une surface Chromium : au-delà, ce n'est plus une mesure d'écran. */
+/** Borne choisie très au-dessus de tout écran : au-delà, ce n'est plus une mesure de fenêtre. */
 const COTE_MAX = 32768
 
 export interface RectanglePage {
@@ -24,7 +24,9 @@ export interface RectanglePage {
 
 /** Le rectangle en pixels entiers, ou une erreur qui nomme ce qui a été reçu. */
 export function rectangleDeCapture(valeur: unknown): RectanglePage {
-  const { x, y, largeur, hauteur } = (valeur ?? {}) as Record<string, unknown>
+  const brut: { x?: unknown; y?: unknown; largeur?: unknown; hauteur?: unknown } =
+    typeof valeur === 'object' && valeur !== null ? valeur : {}
+  const { x, y, largeur, hauteur } = brut
   const dansLaFenetre = (n: unknown): n is number =>
     typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= COTE_MAX
   if (
@@ -54,7 +56,8 @@ export async function capturerElement(page: PageCapturable, rect: unknown): Prom
   try {
     const image = await page.capturePage(rectangle)
     return image.isEmpty() ? null : image.toDataURL()
-  } catch {
+  } catch (erreur) {
+    console.warn('[capture-element] capture impossible, référence envoyée sans image', erreur)
     return null
   }
 }

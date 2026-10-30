@@ -84,8 +84,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { CLASSE_PLACE_SCENE } from '../src/renderer/scene-3d/choix-scene.mjs'
 import {
+  AXES,
   carrouselAvecAxes,
-  ficheAxes,
   panneauAxes,
   propositionsAvecAxes,
   SCRIPT_AXES,
@@ -373,6 +373,11 @@ export function carrouselDraft(spec) {
       const cible = p.n + sens
       return fleche(p.n, cible >= 1 && cible <= n ? cible : 0, sens)
     }).join('')}</span>`
+  // Les axes sont validés sur toutes les propositions ou sur aucune (`verifierAxes`).
+  const ficheAxes = (p) =>
+    p.visuel === undefined
+      ? ''
+      : `<div class="dkc-axf">${AXES.map(([axe, nom]) => `<span><b>${nom}</b> ${echapper(p[axe])}</span>`).join('')}</div>`
   const piste = `<div class="dkc-trk">\n${P.map(
     (p) =>
       `<div class="dkc-sl dkc-s${p.n}">${tete(p)}<div class="dkc-mq">${p.html}</div>${ficheAxes(p)}</div>`
