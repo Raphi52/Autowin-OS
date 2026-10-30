@@ -30,8 +30,11 @@ export const MONDE_ISOLE_NAVIGATEUR = 1286
 /** Le signal « file non vide » ; le principal le retire de la console qu'il garde. */
 export const PING_NAVIGATEUR = '__aw-nav:ping'
 
-/** Version du noyau : un noyau plus ancien déjà posé dans la page est remplacé. */
-const VERSION_NOYAU = 1
+/**
+ * Version du noyau : un noyau plus ancien déjà posé dans la page est remplacé. 2 = aperçu du geste
+ * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30).
+ */
+const VERSION_NOYAU = 2
 
 /** Les points d'entrée du noyau joignables par `appelPage`. */
 export type MethodePage =
@@ -248,6 +251,7 @@ const NOYAU = String.raw`(function () {
       '* { box-sizing: border-box; font-family: system-ui, sans-serif; }',
       '.surbrillance { position: fixed; border: 3px solid #f59e0b; border-radius: 4px; box-shadow: 0 0 0 4px rgba(245,158,11,.35); pointer-events: none; transition: all .15s; }',
       '.etiquette { position: absolute; left: -3px; top: -24px; background: #f59e0b; color: #111; font-size: 12px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }',
+      '.surbrillance.prochain { border-style: dashed; box-shadow: none; }',
       '.survol { position: fixed; border: 2px solid #3b82f6; background: rgba(59,130,246,.12); pointer-events: none; }',
       '.zone { position: fixed; border: 2px dashed #3b82f6; background: rgba(59,130,246,.10); pointer-events: none; }',
       '.pastille { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.4); pointer-events: none; }',
@@ -341,17 +345,22 @@ const NOYAU = String.raw`(function () {
     return { aucun: false, secret: estChampSecret(a), cadreIntegre: estCadre(a), description: roleDe(a) + ' « ' + nomDe(a) + ' »', rect: rectDe(a) };
   };
 
-  /* --- Surbrillance de la cible, avant chaque action de l'agent. --- */
-  nav.surligner = function (rect, libelle) {
+  /*
+   * --- Surbrillance de la cible, avant chaque action de l'agent. ---
+   * options.prochain : le geste ATTEND un ordre de l'utilisateur (fil en pause) ; même cadre, en
+   * pointillés, étiquette « prochain · … » — il voit ce qui partira au « Pas suivant ».
+   */
+  nav.surligner = function (rect, libelle, options) {
     nav.retirerSurbrillance();
+    var prochain = !!(options && options.prochain);
     var calque = calqueDe();
     var div = document.createElement('div');
-    div.className = 'surbrillance';
+    div.className = prochain ? 'surbrillance prochain' : 'surbrillance';
     placer(div, rect);
     if (libelle) {
       var et = document.createElement('div');
       et.className = 'etiquette';
-      et.textContent = borne(libelle, 80);
+      et.textContent = borne(prochain ? 'prochain · ' + libelle : libelle, 80);
       div.appendChild(et);
     }
     calque.appendChild(div);

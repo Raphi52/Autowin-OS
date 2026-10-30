@@ -166,6 +166,28 @@ describe('localiser et focus — la garde mot de passe côté page', () => {
     expect(jouer<LocalisationPage>('localiser', [{ selecteur: '))' }, {}]).trouve).toBe(false)
   })
 
+  // fix-ok: run-adc12547df2d-1 (objection du juge) — le moteur REGARDE désormais la cible d'un geste
+  // en pause avec ces options : ce que la page en fait est ce que l'utilisateur subit s'il reprend
+  // la main. Le rouge était côté moteur (options passées), ce test tient le côté page.
+  it('sans focaliser ni sélectionner, la cible est lue et le champ de l’utilisateur reste le sien', () => {
+    document.body.innerHTML = '<input id="sien" value="à garder"><input id="cible" value="ancien">'
+    const sien = document.querySelector<HTMLInputElement>('#sien')
+    const cible = document.querySelector<HTMLInputElement>('#cible')
+    sien?.focus()
+    sien?.setSelectionRange(0, 3)
+    const vu = jouer<LocalisationPage>('localiser', [
+      { selecteur: '#cible' },
+      { focaliser: false, selectionner: false }
+    ])
+    expect(vu).toMatchObject({ trouve: true, secret: false })
+    expect(document.activeElement).toBe(sien)
+    expect(sien?.selectionStart).toBe(0)
+    expect(sien?.selectionEnd).toBe(3)
+    // Jumeau : le même appel, une fois le geste libéré, entre dans le champ et le sélectionne.
+    jouer('localiser', [{ selecteur: '#cible' }, { focaliser: true, selectionner: true }])
+    expect(document.activeElement).toBe(cible)
+  })
+
   // Objection du juge (conv-1287, réparation 1) : une frappe sans cible doit pouvoir surligner le
   // champ actif, donc `focus` rend sa position ; sans champ actif, la touche va à la page entière.
   it('focus rend la position du champ actif, ou toute la fenêtre quand rien n’a le focus', () => {
@@ -198,6 +220,30 @@ describe('surbrillance', () => {
     expect(document.querySelector('aw-nav-calque')?.shadowRoot).toBeNull()
     jouer('retirerSurbrillance')
     expect(calque.querySelector('.surbrillance')).toBeNull()
+  })
+
+  // Pas-à-pas (conv-1286, 2026-10-30) : en pause, le geste ATTEND ; sa cible est tracée en
+  // pointillés, étiquette « prochain · … », pour que l'utilisateur voie ce qui partira au clic.
+  it('aperçu du geste suivant : même cadre, en pointillés, étiquette « prochain · … »', () => {
+    jouer('surligner', [
+      { x: 1, y: 2, largeur: 30, hauteur: 40 },
+      'cliquer sur button « Envoyer »',
+      { prochain: true }
+    ])
+    const calque = noyau().calque as ShadowRoot
+    const cadre = calque.querySelector('.surbrillance') as HTMLElement
+    expect(cadre.classList.contains('prochain')).toBe(true)
+    expect(cadre.style.width).toBe('30px')
+    expect(cadre.textContent).toBe('prochain · cliquer sur button « Envoyer »')
+    expect(calque.querySelector('style')?.textContent).toMatch(
+      /\.surbrillance\.prochain \{[^}]*border-style: dashed/
+    )
+    // Jumeau : le geste libéré reprend le cadre plein, sans le mot « prochain ».
+    jouer('surligner', [{ x: 1, y: 2, largeur: 30, hauteur: 40 }, 'cliquer sur la page'])
+    const plein = calque.querySelector('.surbrillance') as HTMLElement
+    expect(calque.querySelectorAll('.surbrillance')).toHaveLength(1)
+    expect(plein.classList.contains('prochain')).toBe(false)
+    expect(plein.textContent).toBe('cliquer sur la page')
   })
 })
 

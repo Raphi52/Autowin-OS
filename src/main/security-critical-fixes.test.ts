@@ -727,7 +727,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   limitee a http(s) par le moteur. Une adresse recue de la vue n'est QUE chargee dans un
     //   onglet (http, https ou file:, liste de `normaliserUrlNavigateur`) : aucune ecriture disque.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(278)
+    // MISE A JOUR 2026-10-30 (conv-1286, pas-a-pas du navigateur integre, lot 1/3) — 278 -> 279,
+    //   MESURE par ce test (rouge a 279 avant cette ligne). UN canal dans `ipc/navigateur.ts`, garde
+    //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Navigateur intégré du chat')` :
+    //   `navigateur:piloter` — boutons Pause / Reprendre / Pas suivant / Reprendre la main / Rendre la
+    //     main d'UN fil. Identifiant de fil passe par `guardIdentifiant` (non vide, 200 au plus),
+    //     ordre par une liste FERMEE de cinq valeurs ; tout le reste est refuse avant le moteur. Le
+    //     moteur ne fait que retenir, liberer ou refuser les gestes de l'agent : aucune page
+    //     chargee, aucune ecriture disque. Aucune protection retiree.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(279)
     expect(unguarded).toEqual([])
   })
 

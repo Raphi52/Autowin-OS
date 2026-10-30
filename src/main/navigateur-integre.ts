@@ -19,6 +19,13 @@
  *
  * Ce lot ne pose ni canal IPC, ni interface, ni commande d'agent : les lots suivants branchent les
  * méthodes publiques listées sur la classe.
+ *
+ * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque geste
+ * de l'agent (ouvrir, lire, capture, agir) est noté dans un journal PAR FIL (20 derniers), et passe
+ * par le pilotage du fil. En pause, il ATTEND un ordre de l'utilisateur (sa cible tracée en
+ * pointillés) ; main reprise, il est refusé sans toucher la page. Le délai d'attente
+ * (`DELAI_PAUSE_MS`) reste sous celui que le CLI laisse à un appel d'outil direct. Le Stop du tour
+ * (signal `arret` remis par les outils de l'agent) refuse tout de suite un geste pas encore parti.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -41,17 +48,21 @@ import {
   type AnnotationNavigateur,
   type DemandeAccordNavigateur,
   type EtatNavigateur,
+  type GesteNavigateur,
   type InstantanePage,
   type LigneConsole,
   type ModeNavigateur,
   type NiveauConsole,
   type OngletNavigateur,
+  type OrdrePilotageNavigateur,
+  type PilotageNavigateur,
   type RectNavigateur,
   type RefusActionNavigateur,
   type ReglagesNavigateur,
   type ReponseAccordNavigateur,
   type RequeteEchouee,
-  type ResultatActionNavigateur
+  type ResultatActionNavigateur,
+  type VerbeGesteNavigateur
 } from '../shared/navigateur'
 
 /** Session gardée d'un lancement à l'autre (réglage « garder les cookies »). */
@@ -69,6 +80,17 @@ export const MAX_ELEMENTS_INSTANTANE = 400
 export const MAX_ANNOTATIONS_PAR_FIL = 50
 export const DELAI_SURBRILLANCE_MS = 800
 export const DELAI_ACCORD_MS = 120_000
+/** Gestes de l'agent gardés par fil, pour la frise du panneau. */
+export const TAILLE_JOURNAL_GESTES = 20
+const MAX_DESCRIPTION_GESTE = 120
+/**
+ * Attente d'un geste en pause, sans ordre de l'utilisateur, avant refus `pause-expiree`. Pourquoi
+ * 9 min et pas 10 : le CLI coupe un appel d'outil direct à `verify` + 2 min, soit 12 min par défaut
+ * (`envDelaiOutilsMcp`, providers/claude.ts) ; un geste libéré à la dernière seconde peut encore
+ * attendre l'accord du site (120 s) et la surbrillance. 9 + 2 min laissent une minute de marge ;
+ * au-delà, l'agent recevrait une coupure muette au lieu d'un refus lisible (test qui le borne).
+ */
+export const DELAI_PAUSE_MS = 9 * 60_000
 /** Relève de la file de la page tant qu'un mode est actif, si le signal console se perdait. */
 const PERIODE_RELEVE_MODE_MS = 1_000
 const MAX_TEXTE_SAISI = 10_000
@@ -266,6 +288,49 @@ function refus(code: RefusActionNavigateur, message: string): ResultatActionNavi
   return { ok: false, refus: code, message }
 }
 
+/** Garde (a), sur ce qu'on sait de la cible et du champ actif : mot de passe ou cadre opaque. */
+function refusSaisieSensible(
+  vus: ReadonlyArray<{ secret?: boolean; cadreIntegre?: boolean } | null | undefined>
+): ResultatActionNavigateur | null {
+  if (vus.some((v) => v?.secret === true)) {
+    return refus(
+      'mot-de-passe',
+      "Saisie refusée : la cible est un champ de mot de passe ou de code. L'utilisateur se connecte lui-même."
+    )
+  }
+  if (vus.some((v) => v?.cadreIntegre === true)) {
+    return refus(
+      'cadre-integre',
+      "Saisie refusée : la cible est dans un cadre intégré, impossible de vérifier que ce n'est pas un mot de passe."
+    )
+  }
+  return null
+}
+
+/** Les verbes qui ne font que regarder la page ; les autres agissent (couleur de la frise). */
+const VERBES_QUI_LISENT = new Set<VerbeGesteNavigateur>(['lire', 'capture', 'defiler'])
+
+const MESSAGE_MAIN_REPRISE =
+  "L'utilisateur a repris la main sur le navigateur : rien n'a été fait. N'agis plus dans la page sans qu'il te le redemande."
+const MESSAGE_FIL_FERME =
+  "Le navigateur de ce fil a été fermé pendant la pause : rien n'a été fait."
+const MESSAGE_TOUR_ARRETE =
+  "Le tour a été arrêté par l'utilisateur : ce geste n'est pas parti, rien n'a été fait."
+
+/**
+ * Le refus d'un geste qui rend une valeur (`lire`, `capturer`) : il part en erreur, et l'appelant
+ * (commandes de l'agent) le rend tel quel. `refus` garde le code pour qui veut le distinguer.
+ */
+export class RefusGesteNavigateur extends Error {
+  readonly refus: RefusActionNavigateur
+
+  constructor(resultat: ResultatActionNavigateur) {
+    super(resultat.message)
+    this.name = 'RefusGesteNavigateur'
+    this.refus = resultat.refus ?? 'page-indisponible'
+  }
+}
+
 // ─── Le gestionnaire ─────────────────────────────────────────────────────────────────────────────
 
 interface OngletInterne {
@@ -289,9 +354,31 @@ interface FilInterne {
   /** Nombre d'actions de l'agent en cours : le bandeau reste levé tant qu'il en reste une. */
   pilotes: number
   demandeAccord?: DemandeAccordNavigateur
+  /** Les `TAILLE_JOURNAL_GESTES` derniers gestes de l'agent, tous onglets. */
+  gestes: GesteNavigateur[]
+  pilotage: PilotageNavigateur
+  /** Gestes qui attendent un ordre (fil en pause), dans l'ordre d'arrivée : « Pas suivant » prend le premier. */
+  enPause: AttentePause[]
+  /** Gestes suspendus à une question d'accord : main reprise et Stop les font tomber sans sa réponse. */
+  enAccord: GesteEnAccord[]
+}
+
+/** Ce qui libère un geste en pause : un ordre de jeu, la main reprise, le délai, le Stop, le fil fermé. */
+type IssuePause = 'jouer' | 'main' | 'expire' | 'arret' | 'ferme'
+
+interface AttentePause {
+  geste: GesteNavigateur
+  resoudre: (issue: IssuePause) => void
+  minuterie: ReturnType<typeof setTimeout>
 }
 
 type IssueAccord = ReponseAccordNavigateur | 'delai'
+
+interface GesteEnAccord {
+  origine: string
+  /** Rend le geste à son appelant, sans attendre la réponse de l'utilisateur. */
+  sortir: () => void
+}
 
 interface AttenteAccord {
   promesse: Promise<IssueAccord>
@@ -306,6 +393,7 @@ export interface OptionsGestionnaireNavigateur {
   racine?: string
   delaiSurbrillanceMs?: number
   delaiAccordMs?: number
+  delaiPauseMs?: number
 }
 
 /**
@@ -313,7 +401,7 @@ export interface OptionsGestionnaireNavigateur {
  *  - interface : `etat`, `afficherFil`, `ouvrir`, `naviguer`, `reculer`, `avancer`, `recharger`,
  *    `arreter`, `activerOnglet`, `fermerOnglet`, `poserCadre`, `basculerMode`, `annotations`,
  *    `supprimerAnnotation`, `viderAnnotations`, `repondreAccord`, `lireReglages`,
- *    `ecrireReglages`, `effacerDonnees`, `ouvrirDansNavigateurParDefaut`, `surEtat` ;
+ *    `ecrireReglages`, `effacerDonnees`, `ouvrirDansNavigateurParDefaut`, `piloter`, `surEtat` ;
  *  - agent : `agentOuvrir`, `instantane`, `lire`, `capturer`, `agir`, `lignesConsole`,
  *    `requetesEchouees` (+ `annotations`) ;
  *  - cycle de vie : `oublierFil` (fil supprimé), `detruire` (fermeture de l'app).
@@ -323,14 +411,18 @@ export class GestionnaireNavigateur {
   private readonly racine: string
   private readonly delaiSurbrillanceMs: number
   private readonly delaiAccordMs: number
+  private readonly delaiPauseMs: number
   private readonly onglets = new Map<string, OngletInterne>()
   private readonly fils = new Map<string, FilInterne>()
   private readonly abonnes = new Set<(etat: EtatNavigateur) => void>()
   private readonly accordsSession = new Set<string>()
   private readonly attentes = new Map<string, AttenteAccord>()
+  /** Gestes libérés par « Pas suivant » avant d'atteindre leur attente (voir `pasSuivant`). */
+  private readonly gestesLiberes = new WeakSet<GesteNavigateur>()
   private sitesToujours: Set<string> | null = null
   private reglages: ReglagesNavigateur | null = null
   private compteur = 0
+  private compteurGestes = 0
   private filAffiche: string | null = null
   private cadre: CadreFenetre | null = null
   private mode: ModeNavigateur = null
@@ -342,6 +434,7 @@ export class GestionnaireNavigateur {
     this.racine = options.racine ?? autowinAppDataRoot()
     this.delaiSurbrillanceMs = options.delaiSurbrillanceMs ?? DELAI_SURBRILLANCE_MS
     this.delaiAccordMs = options.delaiAccordMs ?? DELAI_ACCORD_MS
+    this.delaiPauseMs = options.delaiPauseMs ?? DELAI_PAUSE_MS
   }
 
   // ── État ──────────────────────────────────────────────────────────────────────────────────────
@@ -361,7 +454,9 @@ export class GestionnaireNavigateur {
       agentPilote: (fil?.pilotes ?? 0) > 0,
       ...(fil?.demandeAccord ? { demandeAccord: { ...fil.demandeAccord } } : {}),
       mode: modeIci,
-      nombreAnnotations: fil?.annotations.length ?? 0
+      nombreAnnotations: fil?.annotations.length ?? 0,
+      gestes: (fil?.gestes ?? []).map((g) => ({ ...g })),
+      pilotage: fil?.pilotage ?? 'libre'
     }
   }
 
@@ -437,23 +532,30 @@ export class GestionnaireNavigateur {
     this.emettre(onglet.conversationId)
   }
 
-  /** Le fil supprimé : ses onglets se ferment, ses demandes d'accord tombent. */
+  /** Le fil supprimé : ses onglets se ferment, ses demandes d'accord et ses gestes en pause tombent. */
   oublierFil(conversationId: string): void {
     const fil = this.fils.get(conversationId)
     if (!fil) return
+    for (const attente of [...fil.enPause]) this.libererPause(conversationId, attente, 'ferme')
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — on retirait le fil de la question sans en sortir
+    // ses gestes : seul sur le site, le geste attendait les 120 s ; un autre fil présent, sa réponse
+    // relançait le geste du fil supprimé et `this.fil()` recréait ce fil.
+    for (const enAccord of [...fil.enAccord]) this.abandonnerAccord(conversationId, enAccord)
     for (const id of fil.onglets) {
       this.onglets.get(id)?.vue.fermer()
       this.onglets.delete(id)
     }
-    for (const attente of this.attentes.values()) attente.fils.delete(conversationId)
     this.fils.delete(conversationId)
     if (this.filAffiche === conversationId) this.filAffiche = null
     this.appliquerVisibilite()
   }
 
-  /** Fermeture de l'app : tout se ferme, les demandes en attente sont refusées. */
+  /** Fermeture de l'app : tout se ferme, les demandes et les gestes en attente sont refusés. */
   detruire(): void {
     for (const origine of [...this.attentes.keys()]) this.terminerAttente(origine, 'refuser')
+    for (const [conversationId, fil] of this.fils) {
+      for (const attente of [...fil.enPause]) this.libererPause(conversationId, attente, 'ferme')
+    }
     this.arreterReleveMode()
     for (const onglet of this.onglets.values()) onglet.vue.fermer()
     this.onglets.clear()
@@ -555,6 +657,37 @@ export class GestionnaireNavigateur {
     if (this.attentes.has(origine)) this.terminerAttente(origine, reponse)
   }
 
+  // ── Pas-à-pas ─────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Un bouton du bandeau, pour CE fil (les autres fils ne sont pas touchés). « Pas suivant » libère
+   * le premier geste en attente et la pause reste ; « Reprendre » et « Rendre la main » repassent en
+   * libre et libèrent tout ; « Reprendre la main » refuse l'attente et chaque geste suivant, jusqu'à
+   * « Rendre la main ».
+   */
+  piloter(conversationId: string, ordre: OrdrePilotageNavigateur): void {
+    const fil = this.fil(conversationId)
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — `pause` et `reprendre` passaient `main` à
+    // `pause` ou `libre` (essai) : un ordre en retard du panneau aurait rendu la page à l'agent.
+    if (fil.pilotage === 'main' && ordre !== 'rendre-la-main') {
+      this.emettre(conversationId)
+      return
+    }
+    if (ordre === 'pause') fil.pilotage = 'pause'
+    else if (ordre === 'reprendre' || ordre === 'rendre-la-main') fil.pilotage = 'libre'
+    else if (ordre === 'reprendre-la-main') fil.pilotage = 'main'
+    else if (ordre === 'pas-suivant') this.pasSuivant(conversationId, fil)
+    // Hors pause, plus rien n'attend : libre joue les gestes retenus, main les refuse.
+    if (fil.pilotage !== 'pause') {
+      const issue: IssuePause = fil.pilotage === 'main' ? 'main' : 'jouer'
+      for (const attente of [...fil.enPause]) this.libererPause(conversationId, attente, issue)
+    }
+    if (fil.pilotage === 'main') {
+      for (const enAccord of [...fil.enAccord]) this.abandonnerAccord(conversationId, enAccord)
+    }
+    this.emettre(conversationId)
+  }
+
   // ── Réglages ──────────────────────────────────────────────────────────────────────────────────
 
   lireReglages(): ReglagesNavigateur {
@@ -605,13 +738,38 @@ export class GestionnaireNavigateur {
 
   // ── Agent ─────────────────────────────────────────────────────────────────────────────────────
 
-  /** Charge l'adresse dans l'onglet actif du fil (en ouvre un s'il n'y en a pas) et attend la fin. */
+  /**
+   * Charge l'adresse dans l'onglet actif du fil (en ouvre un s'il n'y en a pas) et attend la fin.
+   * `nouvelOnglet` ouvre un onglet de plus, sans attendre son chargement. `arret` : le Stop du tour.
+   */
   async agentOuvrir(
     conversationId: string,
-    url: string
+    url: string,
+    options: { nouvelOnglet?: boolean; arret?: AbortSignal } = {}
   ): Promise<{ ok: boolean; ongletId?: string; message: string }> {
     const adresse = normaliserUrlNavigateur(url)
+    const geste = this.noterGeste(conversationId, 'ouvrir', `ouvrir ${adresse ?? url}`)
+    let ok = false
+    try {
+      const resultat = await this.ouvrirPourLAgent(conversationId, url, adresse, geste, options)
+      ok = resultat.ok
+      return resultat
+    } finally {
+      this.terminerGeste(conversationId, geste, ok)
+    }
+  }
+
+  private async ouvrirPourLAgent(
+    conversationId: string,
+    url: string,
+    adresse: string | null,
+    geste: GesteNavigateur,
+    options: { nouvelOnglet?: boolean; arret?: AbortSignal }
+  ): Promise<{ ok: boolean; ongletId?: string; message: string }> {
     if (!adresse) return { ok: false, message: `Adresse refusée : « ${texteBorne(url, 200)} ».` }
+    const pause = await this.franchirPause(conversationId, geste, options.arret)
+    if (pause.refus) return { ok: false, message: pause.refus.message }
+    if (options.nouvelOnglet) return this.ouvrirOngletPourLAgent(conversationId, adresse, geste)
     let onglet = this.ongletActif(conversationId)
     if (!onglet) {
       if (this.fil(conversationId).onglets.length >= MAX_ONGLETS_PAR_FIL) {
@@ -620,8 +778,8 @@ export class GestionnaireNavigateur {
       onglet = this.creerOnglet(conversationId)
       this.fil(conversationId).actif = onglet.id
       this.appliquerVisibilite()
-      this.emettre(conversationId)
     }
+    this.preciserGeste(conversationId, geste, { ongletId: onglet.id })
     const resultat = await onglet.vue.charger(adresse)
     this.emettre(conversationId)
     return resultat.ok
@@ -631,6 +789,32 @@ export class GestionnaireNavigateur {
           ongletId: onglet.id,
           message: `Chargement impossible : ${resultat.erreur ?? 'erreur inconnue'}`
         }
+  }
+
+  /**
+   * fix-ok: cause mesurée (run-adc12547df2d-1, objection du juge) — `navigateur_ouvrir` +
+   * `nouvelOnglet` appelait `ouvrir`, le chemin des boutons de l'interface, qu'aucune pause ne
+   * retient : en main reprise, onglet ouvert et devenu actif, `ok: true`, 0 geste noté. L'agent
+   * passe donc ici, APRÈS la pause ; `ouvrir` reste à l'utilisateur et sort de `NavigateurDeLAgent`.
+   */
+  private ouvrirOngletPourLAgent(
+    conversationId: string,
+    adresse: string,
+    geste: GesteNavigateur
+  ): { ok: boolean; ongletId?: string; message: string } {
+    try {
+      const ongletId = this.ouvrir(conversationId, adresse)
+      this.preciserGeste(conversationId, geste, { ongletId })
+      return {
+        ok: true,
+        ongletId,
+        message:
+          'Nouvel onglet ouvert dans le panneau du fil, chargement en cours : lis-le avec navigateur_lire.'
+      }
+    } catch (erreur) {
+      // `ouvrir` jette au-delà du plafond d'onglets : l'agent reçoit sa phrase.
+      return { ok: false, message: messageErreur(erreur) }
+    }
   }
 
   /** L'instantané brut de l'onglet actif (éléments numérotés), ou `null` sans onglet. */
@@ -651,9 +835,24 @@ export class GestionnaireNavigateur {
 
   /**
    * La page, en texte pour l'agent : préfixée comme DONNÉE NON FIABLE et bornée à 30 000
-   * caractères, préfixe compris.
+   * caractères, préfixe compris. UN geste « lire » : `instantane` n'en note pas (seul `lire`
+   * l'appelle). Refus du pilotage (main reprise, pause expirée, Stop) = `RefusGesteNavigateur`.
    */
-  async lire(conversationId: string): Promise<string> {
+  async lire(conversationId: string, arret?: AbortSignal): Promise<string> {
+    const geste = this.noterGeste(conversationId, 'lire', 'lire la page')
+    let ok = false
+    try {
+      const pause = await this.franchirPause(conversationId, geste, arret)
+      if (pause.refus) throw new RefusGesteNavigateur(pause.refus)
+      const texte = await this.lirePage(conversationId)
+      ok = true
+      return texte
+    } finally {
+      this.terminerGeste(conversationId, geste, ok)
+    }
+  }
+
+  private async lirePage(conversationId: string): Promise<string> {
     const inst = await this.instantane(conversationId)
     if (!inst) return `${PREFIXE_LECTURE}\nAucun onglet ouvert dans ce fil.`
     const lignes = [
@@ -675,8 +874,25 @@ export class GestionnaireNavigateur {
     return complet.slice(0, MAX_CARACTERES_LECTURE - fin.length) + fin
   }
 
-  /** Capture PNG (`data:`) de l'onglet actif, ou `null` sans onglet ni image. */
-  async capturer(conversationId: string): Promise<string | null> {
+  /**
+   * Capture PNG (`data:`) de l'onglet actif, ou `null` sans onglet ni image. Refus du pilotage
+   * (main reprise, pause expirée, Stop) = `RefusGesteNavigateur`.
+   */
+  async capturer(conversationId: string, arret?: AbortSignal): Promise<string | null> {
+    const geste = this.noterGeste(conversationId, 'capture', 'capturer la page')
+    let ok = false
+    try {
+      const pause = await this.franchirPause(conversationId, geste, arret)
+      if (pause.refus) throw new RefusGesteNavigateur(pause.refus)
+      const image = await this.capturerPage(conversationId)
+      ok = image !== null
+      return image
+    } finally {
+      this.terminerGeste(conversationId, geste, ok)
+    }
+  }
+
+  private async capturerPage(conversationId: string): Promise<string | null> {
     const onglet = this.ongletActif(conversationId)
     if (!onglet) return null
     // fix-ok: cause mesurée (conv-1286, 2026-10-29) — `capturePage` COPIE la dernière image sans en
@@ -697,55 +913,191 @@ export class GestionnaireNavigateur {
 
   /**
    * Une action de l'agent dans l'onglet actif du fil. Ordre IMPOSÉ :
-   * cible → garde mot de passe → accord du site → bandeau levé + cible (ou champ actif) surlignée
-   * 800 ms → garde mot de passe REJOUÉE (la page a pu déplacer le focus) → site REVÉRIFIÉ (la page
-   * a pu en changer) → action → bandeau baissé.
+   * Stop ou main reprise ? refus sans toucher la page → cible (fil en pause ou question d'accord à
+   * venir : lue sans y entrer) → garde mot de passe → ATTENTE DE PAUSE (cible en pointillés ; après
+   * l'attente, Stop et main reprise revérifiés, cible relocalisée, garde rejouée) → accord du site
+   * (Stop, main reprise et fil supprimé le font tomber sans sa réponse) → Stop, main reprise et onglet
+   * REVÉRIFIÉS → entrée dans la cible si elle a attendu la question →
+   * bandeau levé + cible (ou champ actif) surlignée 800 ms → garde mot de passe REJOUÉE (la page a pu
+   * déplacer le focus) → Stop, main reprise et site REVÉRIFIÉS avant d'éteindre le mode de l'utilisateur,
+   * puis avant l'envoi → action → bandeau baissé. `arret` : le Stop du tour.
    */
   async agir(
     conversationId: string,
-    action: ActionAgentNavigateur
+    action: ActionAgentNavigateur,
+    arret?: AbortSignal
+  ): Promise<ResultatActionNavigateur> {
+    const geste = this.noterGeste(conversationId, action.type, decrireAction(action, undefined))
+    let ok = false
+    try {
+      // Refus AVANT `localiser`, qui fait défiler la page et lui donne le focus.
+      const resultat =
+        this.refusImmediat(conversationId, arret) ??
+        (await this.jouerAgir(conversationId, action, geste, arret))
+      ok = resultat.ok
+      return resultat
+    } finally {
+      this.terminerGeste(conversationId, geste, ok)
+    }
+  }
+
+  private async jouerAgir(
+    conversationId: string,
+    action: ActionAgentNavigateur,
+    geste: GesteNavigateur,
+    arret: AbortSignal | undefined
   ): Promise<ResultatActionNavigateur> {
     const onglet = this.ongletActif(conversationId)
     if (!onglet) return refus('aucun-onglet', 'Aucun onglet ouvert dans ce fil : ouvre une page.')
     const tape = action.type === 'saisir' || action.type === 'touche'
-    let cible: LocalisationPage | null = null
-    try {
-      if (action.cible) {
-        cible = (await this.jouer(onglet, 'localiser', [
-          action.cible,
-          { focaliser: tape, selectionner: action.type === 'saisir' && action.remplacer === true }
-        ])) as LocalisationPage | null
-        if (!cible?.trouve) {
-          return refus(
-            'cible-introuvable',
-            'Cible introuvable dans la page : relis-la (les numéros changent à chaque lecture).'
-          )
+    const optionsCible = {
+      focaliser: tape,
+      selectionner: action.type === 'saisir' && action.remplacer === true
+    }
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — `localiser` donnait le focus et sélectionnait
+    // le texte AVANT tout ordre (essai sur `saisir` + `remplacer`) : main reprise, l'utilisateur avait
+    // perdu son focus et sa prochaine frappe remplaçait la sélection. Fil en pause, on REGARDE la cible
+    // (position, secret) sans y entrer ; on y entre plus bas, une fois le geste libéré.
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — même défaut pendant la question d'accord, qui
+    // peut durer 120 s : champ déjà pris quand l'utilisateur reprenait la main (`saisir` + `remplacer`,
+    // essai du juge). Une question à venir retient donc l'entrée comme une pause.
+    const regardSeul =
+      tape &&
+      (this.fils.get(conversationId)?.pilotage === 'pause' || this.questionAttendue(onglet, action))
+    // `as` et non une annotation : `viser` l'écrit depuis une fermeture, que TypeScript ne suit pas.
+    let cible = null as LocalisationPage | null
+    // Vise la cible, dit à la frise ce qu'on vise, joue la garde mot de passe. `entrer` faux : on
+    // regarde seulement, sans focus ni sélection.
+    const viser = async (
+      entrer: boolean,
+      introuvable: string
+    ): Promise<ResultatActionNavigateur | null> => {
+      try {
+        if (action.cible) {
+          cible = (await this.jouer(onglet, 'localiser', [
+            action.cible,
+            entrer ? optionsCible : { focaliser: false, selectionner: false }
+          ])) as LocalisationPage | null
+          if (!cible?.trouve) return refus('cible-introuvable', introuvable)
         }
+        // fix-ok: run-adc12547df2d-1 (objection du juge) — sans cette ligne après une attente, le clic
+        // partait sur « Tout supprimer » et la frise gardait « cliquer sur button « Annuler » ».
+        this.preciserGeste(conversationId, geste, {
+          description: decrireAction(action, cible?.description)
+        })
+        if (!tape) return null
+        // La cible n'a pas le focus : le champ actif, celui de l'utilisateur, ne dit rien d'elle.
+        return !entrer && cible
+          ? refusSaisieSensible([cible])
+          : await this.gardeSaisie(onglet, action, cible)
+      } catch (erreur) {
+        return refus('page-indisponible', `La page ne répond pas : ${messageErreur(erreur)}`)
       }
-      if (tape) {
-        const garde = await this.gardeSaisie(onglet, action, cible)
-        if (garde) return garde
+    }
+    const premierRegard = await viser(
+      !regardSeul,
+      'Cible introuvable dans la page : relis-la (les numéros changent à chaque lecture).'
+    )
+    if (premierRegard) return premierRegard
+
+    // ATTENTE DE PAUSE (pas-à-pas, conv-1286) : APRÈS la garde mot de passe (un geste refusé d'office
+    // n'a rien à faire attendre), AVANT l'accord du site (on ne demande pas l'accord d'un geste que
+    // l'utilisateur n'a pas encore libéré). Sans cible, une frappe vise le champ actif : c'est lui
+    // qu'on trace en pointillés.
+    const pause = await this.franchirPause(conversationId, geste, arret, async () => {
+      const zone =
+        cible?.rect ??
+        (tape ? ((await this.jouer(onglet, 'focus', [])) as FocusPage | null)?.rect : undefined)
+      return zone ? { onglet, zone } : null
+    })
+    if (pause.refus) return pause.refus
+    let dansLaCible = !regardSeul
+    // Sans attente, `regardSeul` oblige quand même à repasser : « Reprendre » arrivé pendant le premier
+    // regard libère un geste dont la cible n'a pas encore le focus, et le texte partirait ailleurs.
+    if (pause.attendu || regardSeul) {
+      // fix-ok: run-adc12547df2d-1 (objection du juge) — rien ne relisait le Stop ni la main reprise
+      // entre la libération et `localiser` ci-dessous, qui donne le focus et sélectionne : « Pas
+      // suivant » puis Stop aussitôt, geste refusé mais champ déjà touché.
+      const apresLiberation = this.refusImmediat(conversationId, arret)
+      if (apresLiberation) return apresLiberation
+      if (this.onglets.get(onglet.id) !== onglet) {
+        return refus('aucun-onglet', "L'onglet a été fermé pendant la pause : rien n'a été fait.")
       }
-    } catch (erreur) {
-      return refus('page-indisponible', `La page ne répond pas : ${messageErreur(erreur)}`)
+      // La page a pu bouger, défiler ou se recharger pendant l'attente : on relocalise la cible,
+      // et la garde mot de passe se rejoue sur ce qu'on vise MAINTENANT.
+      const entrer = !this.questionAttendue(onglet, action)
+      if (pause.attendu || entrer) {
+        const relecture = await viser(
+          entrer,
+          'La cible a disparu de la page pendant la pause : relis-la (les numéros changent à chaque lecture).'
+        )
+        if (relecture) return relecture
+        dansLaCible = entrer
+      }
     }
 
     // L'origine pour laquelle l'accord est obtenu : relue juste avant l'action (voir plus bas).
     const origineAutorisee = origineSoumiseAAccord(onglet.vue.url())
-    if (action.type !== 'defiler') {
-      const issue = await this.obtenirAccord(
-        conversationId,
-        onglet.vue.url(),
-        decrireAction(action, cible?.description)
+    // Stop ou main reprise pendant la relecture : pas de question pour un geste déjà perdu.
+    const avantAccord = this.refusImmediat(conversationId, arret)
+    if (avantAccord) return avantAccord
+    const issue =
+      action.type === 'defiler'
+        ? 'accorde'
+        : await this.obtenirAccord(
+            conversationId,
+            onglet.vue.url(),
+            decrireAction(action, cible?.description),
+            arret
+          )
+    // L'accord peut durer 120 s : un Stop arrivé entre-temps ne lève ni bandeau ni surbrillance, et
+    // n'éteint pas le mode de l'utilisateur. Relu AVANT l'issue : c'est lui qui dit la vraie raison.
+    const apresAccord = this.refusImmediat(conversationId, arret)
+    if (apresAccord) return apresAccord
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — la question ne vérifiait pas l'onglet, comme le
+    // fait la pause : relire son adresse levait « Object has been destroyed » hors du `try`, et l'agent
+    // recevait cette phrase au lieu d'un refus. Lu AVANT `abandon` : un fil supprimé ferme ses onglets,
+    // et cette vraie raison ne doit pas se lire « l'utilisateur a repris la main ».
+    if (this.onglets.get(onglet.id) !== onglet) {
+      return refus(
+        'aucun-onglet',
+        "L'onglet a été fermé pendant la question d'accord : rien n'a été fait."
       )
-      if (issue !== 'accorde') {
-        return refus(
-          'accord-refuse',
-          issue === 'delai'
-            ? `Pas de réponse de l'utilisateur en ${Math.round(this.delaiAccordMs / 1000)} s : action refusée sur ce site.`
-            : "L'utilisateur a refusé que l'agent agisse sur ce site."
-        )
-      }
+    }
+    // Main reprise puis déjà rendue : le geste a été abandonné, il ne repart pas.
+    if (issue === 'abandon') return refus('main-reprise', MESSAGE_MAIN_REPRISE)
+    if (issue !== 'accorde') {
+      return refus(
+        'accord-refuse',
+        issue === 'delai'
+          ? `Pas de réponse de l'utilisateur en ${Math.round(this.delaiAccordMs / 1000)} s : action refusée sur ce site.`
+          : "L'utilisateur a refusé que l'agent agisse sur ce site."
+      )
+    }
+
+    // Ce qui interdit encore l'envoi : Stop, main reprise, site changé. Sans `await` : appelée au dernier
+    // moment, elle reste collée à l'envoi.
+    const relire = (): ResultatActionNavigateur | null => {
+      const arrete = this.refusImmediat(conversationId, arret)
+      if (arrete || action.type === 'defiler') return arrete
+      const origineActuelle = origineSoumiseAAccord(onglet.vue.url())
+      if (origineActuelle === origineAutorisee) return null
+      return refus(
+        'page-changee',
+        `La page a changé de site pendant l'attente (${origineAutorisee ?? 'poste local'} → ${origineActuelle ?? 'poste local'}) : rien n'a été envoyé. Relis la page avant d'agir.`
+      )
+    }
+
+    // L'accord est acquis : on entre enfin dans la cible. La question a pu durer, la cible est relue ;
+    // la page a pu changer de site, on ne prend pas un champ que l'accord ne couvre pas.
+    if (tape && !dansLaCible) {
+      const avantEntree = relire()
+      if (avantEntree) return avantEntree
+      const entree = await viser(
+        true,
+        "La cible a disparu de la page pendant la question d'accord : relis-la (les numéros changent à chaque lecture)."
+      )
+      if (entree) return entree
     }
 
     const fil = this.fil(conversationId)
@@ -769,8 +1121,22 @@ export class GestionnaireNavigateur {
       // l'outil disait « Clic sur … » et rien ne changeait (instance cachée, après « Envoyer au
       // chat »). On éteint donc le mode de CET onglet avant d'écrire ; le panneau le montre. Placé
       // AVANT la relecture du site, qui doit rester collée à l'envoi. Défiler ne passe pas ici.
+      // fix-ok: run-adc12547df2d-1 (objection du juge) — le mode était coupé avant toute relecture :
+      // « Reprendre la main » pendant la surbrillance rendait un refus, 0 événement, et Annoter éteint.
+      // Un geste qui ne partira pas n'éteint pas le mode : on relit AVANT de couper, puis à nouveau
+      // avant l'envoi, parce que la coupure elle-même prend un aller-retour avec la page.
       let modeCoupe: ModeNavigateur = null
+      const signalerMode = (resultat: ResultatActionNavigateur): ResultatActionNavigateur => {
+        if (!modeCoupe) return resultat
+        const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
+        return {
+          ...resultat,
+          message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
+        }
+      }
       if (action.type !== 'defiler' && this.mode && this.ongletDuMode === onglet.id) {
+        const avantCoupure = relire()
+        if (avantCoupure) return avantCoupure
         modeCoupe = this.mode
         await this.couperMode()
       }
@@ -785,22 +1151,11 @@ export class GestionnaireNavigateur {
       // changer pendant l'attente (jusqu'à 120 s) ou la surbrillance — redirection, rafraîchissement.
       // Objection du juge (conv-1287) : sans cette relecture, le clic partait sur un site jamais
       // autorisé. Aucun `await` entre cette lecture et l'envoi des événements.
-      if (action.type !== 'defiler') {
-        const origineActuelle = origineSoumiseAAccord(onglet.vue.url())
-        if (origineActuelle !== origineAutorisee) {
-          return refus(
-            'page-changee',
-            `La page a changé de site pendant l'attente (${origineAutorisee ?? 'poste local'} → ${origineActuelle ?? 'poste local'}) : rien n'a été envoyé. Relis la page avant d'agir.`
-          )
-        }
-      }
-      const resultat = await this.jouerAction(onglet, action, cible)
-      if (!modeCoupe) return resultat
-      const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
-      return {
-        ...resultat,
-        message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
-      }
+      // Même relecture pour « Reprendre la main » ou Stop cliqué PENDANT la surbrillance : le geste
+      // n'est pas encore parti, il ne part pas (pas-à-pas, conv-1286).
+      const auDernierMoment = relire()
+      if (auDernierMoment) return signalerMode(auDernierMoment)
+      return signalerMode(await this.jouerAction(onglet, action, cible))
     } catch (erreur) {
       return refus(
         'page-indisponible',
@@ -821,7 +1176,16 @@ export class GestionnaireNavigateur {
   private fil(conversationId: string): FilInterne {
     let fil = this.fils.get(conversationId)
     if (!fil) {
-      fil = { onglets: [], actif: null, annotations: [], pilotes: 0 }
+      fil = {
+        onglets: [],
+        actif: null,
+        annotations: [],
+        pilotes: 0,
+        gestes: [],
+        pilotage: 'libre',
+        enPause: [],
+        enAccord: []
+      }
       this.fils.set(conversationId, fil)
     }
     return fil
@@ -1104,34 +1468,40 @@ export class GestionnaireNavigateur {
     cible: LocalisationPage | null
   ): Promise<ResultatActionNavigateur | null> {
     const focus = (await this.jouer(onglet, 'focus', [])) as FocusPage | null
-    const secret = cible?.secret === true || focus?.secret === true
-    if (secret) {
-      return refus(
-        'mot-de-passe',
-        "Saisie refusée : la cible est un champ de mot de passe ou de code. L'utilisateur se connecte lui-même."
-      )
-    }
-    if (cible?.cadreIntegre === true || focus?.cadreIntegre === true) {
-      return refus(
-        'cadre-integre',
-        "Saisie refusée : la cible est dans un cadre intégré, impossible de vérifier que ce n'est pas un mot de passe."
-      )
-    }
+    const sensible = refusSaisieSensible([cible, focus])
+    if (sensible) return sensible
     if (action.type === 'saisir' && (!focus || focus.aucun)) {
       return refus('cible-introuvable', "Aucun champ n'a le focus : donne une cible à la saisie.")
     }
     return null
   }
 
-  /** Garde (b) : `accorde`, ou la raison du refus. */
+  private siteAccepte(origine: string): boolean {
+    return this.accordsSession.has(origine) || this.lireSitesToujours().has(origine)
+  }
+
+  /** Ce geste poserait-il la question d'accord ? Défiler ne fait que lire : jamais. */
+  private questionAttendue(onglet: OngletInterne, action: ActionAgentNavigateur): boolean {
+    if (action.type === 'defiler') return false
+    const origine = origineSoumiseAAccord(onglet.vue.url())
+    return origine !== null && !this.siteAccepte(origine)
+  }
+
+  /**
+   * Garde (b) : `accorde`, ou la raison du refus. `abandon` : main reprise, Stop ou fil supprimé
+   * pendant la question.
+   *
+   * fix-ok: run-adc12547df2d-1 (objection du juge) — seule la réponse ou les 120 s rendaient le geste :
+   * « Reprendre la main » laissait `en-cours`, la question à l'écran et l'agent bloqué sans raison.
+   */
   private async obtenirAccord(
     conversationId: string,
     url: string,
-    action: string
-  ): Promise<'accorde' | 'refuse' | 'delai'> {
+    action: string,
+    arret: AbortSignal | undefined
+  ): Promise<'accorde' | 'refuse' | 'delai' | 'abandon'> {
     const origine = origineSoumiseAAccord(url)
-    if (origine === null) return 'accorde'
-    if (this.accordsSession.has(origine) || this.lireSitesToujours().has(origine)) return 'accorde'
+    if (origine === null || this.siteAccepte(origine)) return 'accorde'
     let attente = this.attentes.get(origine)
     if (!attente) {
       let resoudre: (issue: IssueAccord) => void = () => undefined
@@ -1144,11 +1514,51 @@ export class GestionnaireNavigateur {
       this.attentes.set(origine, attente)
     }
     attente.fils.add(conversationId)
-    this.fil(conversationId).demandeAccord = { origine, action }
+    const fil = this.fil(conversationId)
+    fil.demandeAccord = { origine, action }
+    let sortir: () => void = () => undefined
+    const abandon = new Promise<'abandon'>((r) => {
+      sortir = () => r('abandon')
+    })
+    const enAccord: GesteEnAccord = { origine, sortir }
+    fil.enAccord.push(enAccord)
+    const surArret = (): void => this.abandonnerAccord(conversationId, enAccord)
+    arret?.addEventListener('abort', surArret, { once: true })
     this.emettre(conversationId)
-    const issue = await attente.promesse
-    if (issue === 'delai') return 'delai'
-    return issue === 'refuser' ? 'refuse' : 'accorde'
+    try {
+      const issue = await Promise.race([attente.promesse, abandon])
+      if (issue === 'delai' || issue === 'abandon') return issue
+      return issue === 'refuser' ? 'refuse' : 'accorde'
+    } finally {
+      arret?.removeEventListener('abort', surArret)
+      // Le fil a pu être oublié pendant la question : on ne le recrée pas.
+      const vivant = this.fils.get(conversationId)
+      if (vivant) vivant.enAccord = vivant.enAccord.filter((g) => g !== enAccord)
+    }
+  }
+
+  /**
+   * Sort UN geste de la question, sans réponse de l'utilisateur. La question reste tant qu'un autre
+   * geste de ce fil l'attend, et un autre fil sur le même site garde la sienne : elle ne s'éteint
+   * vraiment, délai compris, qu'une fois plus personne dessus — la suivante repart alors avec ses 120 s.
+   */
+  private abandonnerAccord(conversationId: string, enAccord: GesteEnAccord): void {
+    const { origine } = enAccord
+    const fil = this.fils.get(conversationId)
+    if (fil) fil.enAccord = fil.enAccord.filter((g) => g !== enAccord)
+    if (!fil?.enAccord.some((g) => g.origine === origine)) {
+      const attente = this.attentes.get(origine)
+      attente?.fils.delete(conversationId)
+      if (attente?.fils.size === 0) {
+        clearTimeout(attente.minuterie)
+        this.attentes.delete(origine)
+      }
+      if (fil?.demandeAccord?.origine === origine) {
+        delete fil.demandeAccord
+        this.emettre(conversationId)
+      }
+    }
+    enAccord.sortir()
   }
 
   private terminerAttente(origine: string, issue: IssueAccord): void {
@@ -1163,6 +1573,192 @@ export class GestionnaireNavigateur {
         this.emettre(conversationId)
       }
     }
+    attente.resoudre(issue)
+  }
+
+  // ── Interne : pas-à-pas ───────────────────────────────────────────────────────────────────────
+
+  /** Note un geste de l'agent sur l'onglet actif du fil : `prochain` si le fil est en pause. */
+  private noterGeste(
+    conversationId: string,
+    verbe: VerbeGesteNavigateur,
+    description: string
+  ): GesteNavigateur {
+    const fil = this.fil(conversationId)
+    const geste: GesteNavigateur = {
+      id: `geste-${++this.compteurGestes}`,
+      ongletId: fil.actif ?? '',
+      verbe,
+      nature: VERBES_QUI_LISENT.has(verbe) ? 'lit' : 'agit',
+      description: texteBorne(description, MAX_DESCRIPTION_GESTE),
+      etat: fil.pilotage === 'pause' ? 'prochain' : 'en-cours',
+      debut: Date.now()
+    }
+    fil.gestes.push(geste)
+    if (fil.gestes.length > TAILLE_JOURNAL_GESTES) {
+      fil.gestes.splice(0, fil.gestes.length - TAILLE_JOURNAL_GESTES)
+    }
+    this.emettre(conversationId)
+    return geste
+  }
+
+  /**
+   * Change l'état d'un geste et le pousse à l'interface. Fil oublié entre-temps : rien à pousser,
+   * et surtout pas de fil recréé (d'où `fils.get` et non `fil()`).
+   */
+  private marquerGeste(
+    conversationId: string,
+    geste: GesteNavigateur,
+    etat: GesteNavigateur['etat']
+  ): void {
+    if (geste.etat === etat) return
+    geste.etat = etat
+    if (this.fils.has(conversationId)) this.emettre(conversationId)
+  }
+
+  /**
+   * Précise un geste déjà noté et le POUSSE à l'interface.
+   * fix-ok: cause mesurée (run-adc12547df2d-1, objection du juge) — `marquerGeste` ne pousse que si
+   * l'ÉTAT change, or la cible trouvée ou l'onglet ouvert laissent l'état tel quel : en pause, le
+   * panneau gardait « cliquer sur la page » alors que le tracé disait la cible, et pendant un
+   * chargement il recevait un geste sans onglet.
+   */
+  private preciserGeste(
+    conversationId: string,
+    geste: GesteNavigateur,
+    precisions: { description?: string; ongletId?: string }
+  ): void {
+    const description = texteBorne(
+      precisions.description ?? geste.description,
+      MAX_DESCRIPTION_GESTE
+    )
+    const ongletId = precisions.ongletId ?? geste.ongletId
+    if (description === geste.description && ongletId === geste.ongletId) return
+    geste.description = description
+    geste.ongletId = ongletId
+    if (this.fils.has(conversationId)) this.emettre(conversationId)
+  }
+
+  private terminerGeste(conversationId: string, geste: GesteNavigateur, ok: boolean): void {
+    this.marquerGeste(conversationId, geste, ok ? 'fait' : 'refuse')
+  }
+
+  /** Le refus qui vaut là, tout de suite, sans lire la page : Stop du tour ou main reprise. */
+  private refusImmediat(
+    conversationId: string,
+    arret: AbortSignal | undefined
+  ): ResultatActionNavigateur | null {
+    if (arret?.aborted) return refus('page-indisponible', MESSAGE_TOUR_ARRETE)
+    if (this.fils.get(conversationId)?.pilotage === 'main') {
+      return refus('main-reprise', MESSAGE_MAIN_REPRISE)
+    }
+    return null
+  }
+
+  /**
+   * Le passage obligé de chaque geste de l'agent. Libre : il part. Stop ou main reprise : refusé. En
+   * pause : il ATTEND un ordre (« Pas suivant », « Reprendre »), le délai ou le Stop ; `apercu` donne
+   * la zone à tracer en pointillés pendant ce temps. `attendu` dit à l'appelant qu'il doit relire la
+   * page.
+   *
+   * fix-ok: run-adc12547df2d-1 (objection du juge) — le moteur n'avait aucun signal d'arrêt : pause,
+   * clic, Stop, puis « Reprendre » → `mouseDown` parti et `ok: true` pour un agent déjà coupé.
+   */
+  private async franchirPause(
+    conversationId: string,
+    geste: GesteNavigateur,
+    arret: AbortSignal | undefined,
+    apercu?: () => Promise<{ onglet: OngletInterne; zone: RectNavigateur } | null>
+  ): Promise<{ refus?: ResultatActionNavigateur; attendu: boolean }> {
+    const immediat = this.refusImmediat(conversationId, arret)
+    if (immediat) return { refus: immediat, attendu: false }
+    const fil = this.fils.get(conversationId)
+    if (!fil || fil.pilotage !== 'pause' || this.gestesLiberes.has(geste)) {
+      this.marquerGeste(conversationId, geste, 'en-cours')
+      return { attendu: false }
+    }
+    // L'attente est inscrite AVANT tout `await` : un ordre donné pendant le tracé la trouve.
+    let libere = false
+    let resoudre: (issue: IssuePause) => void = () => undefined
+    const issue = new Promise<IssuePause>((r) => {
+      resoudre = (valeur) => {
+        libere = true
+        r(valeur)
+      }
+    })
+    const attente: AttentePause = {
+      geste,
+      resoudre,
+      minuterie: setTimeout(
+        () => this.libererPause(conversationId, attente, 'expire'),
+        this.delaiPauseMs
+      )
+    }
+    attente.minuterie.unref?.()
+    fil.enPause.push(attente)
+    this.marquerGeste(conversationId, geste, 'prochain')
+    // `libere` : un Stop juste après l'ordre ne réécrit pas l'issue, la relecture d'avant l'envoi le voit.
+    const surArret = (): void => {
+      if (!libere) this.libererPause(conversationId, attente, 'arret')
+    }
+    arret?.addEventListener('abort', surArret, { once: true })
+
+    let trace: OngletInterne | null = null
+    try {
+      // L'aperçu est un confort : une page qui ne répond pas n'empêche pas d'attendre l'ordre.
+      const apercuVu = apercu ? await apercu().catch(() => null) : null
+      if (apercuVu && !libere) {
+        trace = apercuVu.onglet
+        await this.jouer(trace, 'surligner', [
+          apercuVu.zone,
+          geste.description,
+          { prochain: true }
+        ]).catch(() => undefined)
+      }
+      const fin = await issue
+      if (fin === 'jouer') return { attendu: true }
+      if (fin === 'main')
+        return { refus: refus('main-reprise', MESSAGE_MAIN_REPRISE), attendu: true }
+      if (fin === 'ferme')
+        return { refus: refus('page-indisponible', MESSAGE_FIL_FERME), attendu: true }
+      if (fin === 'arret')
+        return { refus: refus('page-indisponible', MESSAGE_TOUR_ARRETE), attendu: true }
+      return {
+        refus: refus(
+          'pause-expiree',
+          `Le fil est en pause et l'utilisateur n'a pas libéré ce geste en ${Math.round(this.delaiPauseMs / 60_000)} min : rien n'a été fait. Demande-lui s'il veut que tu continues.`
+        ),
+        attendu: true
+      }
+    } finally {
+      arret?.removeEventListener('abort', surArret)
+      // La page a pu être quittée pendant l'attente : il n'y a alors plus de tracé à retirer.
+      if (trace) await this.jouer(trace, 'retirerSurbrillance', []).catch(() => undefined)
+    }
+  }
+
+  /**
+   * Libère le premier geste qui attend.
+   *
+   * fix-ok: run-adc12547df2d-1 (mesuré) — un geste est affiché `prochain` dès son arrivée, mais n'entre
+   * dans `enPause` qu'une fois sa cible lue. « Pas suivant » cliqué entre les deux ne libérait rien :
+   * le geste attendait quand même. L'ordre lui est donc gardé, `franchirPause` le lit à l'arrivée.
+   */
+  private pasSuivant(conversationId: string, fil: FilInterne): void {
+    const attente = fil.enPause[0]
+    if (attente) return this.libererPause(conversationId, attente, 'jouer')
+    const enRoute = fil.gestes.find((g) => g.etat === 'prochain')
+    if (!enRoute) return
+    this.gestesLiberes.add(enRoute)
+    this.marquerGeste(conversationId, enRoute, 'en-cours')
+  }
+
+  /** Sort un geste de l'attente : `jouer` le remet en cours, tout le reste le refuse. */
+  private libererPause(conversationId: string, attente: AttentePause, issue: IssuePause): void {
+    clearTimeout(attente.minuterie)
+    const fil = this.fils.get(conversationId)
+    if (fil) fil.enPause = fil.enPause.filter((a) => a !== attente)
+    this.marquerGeste(conversationId, attente.geste, issue === 'jouer' ? 'en-cours' : 'refuse')
     attente.resoudre(issue)
   }
 

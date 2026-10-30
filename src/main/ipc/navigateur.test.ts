@@ -280,7 +280,10 @@ describe('canaux navigateur:*', () => {
     ['navigateur:reglages-ecrire', [null]],
     ['navigateur:reglages-ecrire', [[true]]],
     ['navigateur:reglages-ecrire', [{ garderCookies: 'oui' }]],
-    ['navigateur:ouvrir-dans-navigateur-par-defaut', [42]]
+    ['navigateur:ouvrir-dans-navigateur-par-defaut', [42]],
+    ['navigateur:piloter', ['conv-a', 'arreter']],
+    ['navigateur:piloter', ['conv-a', undefined]],
+    ['navigateur:piloter', ['', 'pause']]
   ] as Array<[string, unknown[]]>)('refuse %s %j avant le moteur', async (canal, args) => {
     await expect(appeler(canal, ...args)).rejects.toThrow(/^IPC navigateur\./)
     // Rien n'a atteint le moteur : le gestionnaire n'a même pas été créé.
@@ -305,6 +308,22 @@ describe('canaux navigateur:*', () => {
     })
     await expect(appeler('navigateur:etat', 'x'.repeat(200))).resolves.toMatchObject({
       onglets: []
+    })
+    // Pas-à-pas (conv-1286) : chacun des cinq ordres passe, et vaut pour CE fil seulement.
+    for (const ordre of [
+      'pas-suivant',
+      'reprendre',
+      'reprendre-la-main',
+      'rendre-la-main',
+      'pause'
+    ]) {
+      await expect(appeler('navigateur:piloter', 'conv-a', ordre), ordre).resolves.toBeUndefined()
+    }
+    await expect(appeler('navigateur:etat', 'conv-a')).resolves.toMatchObject({
+      pilotage: 'pause'
+    })
+    await expect(appeler('navigateur:etat', 'conv-b')).resolves.toMatchObject({
+      pilotage: 'libre'
     })
   })
 
@@ -487,6 +506,7 @@ describe('pont window.api.navigateur (preload)', () => {
     await pont.reglages.ecrire({ garderCookies: false })
     await pont.effacerDonnees()
     await pont.ouvrirDansNavigateurParDefaut('https://exemple.fr')
+    await pont.piloter('conv-a', 'pas-suivant')
     expect(simule.invocations).toEqual([
       [CANAUX_NAVIGATEUR.etat, 'conv-a'],
       [CANAUX_NAVIGATEUR.afficherFil, null],
@@ -507,7 +527,8 @@ describe('pont window.api.navigateur (preload)', () => {
       [CANAUX_NAVIGATEUR.reglagesLire],
       [CANAUX_NAVIGATEUR.reglagesEcrire, { garderCookies: false }],
       [CANAUX_NAVIGATEUR.effacerDonnees],
-      [CANAUX_NAVIGATEUR.ouvrirDansNavigateurParDefaut, 'https://exemple.fr']
+      [CANAUX_NAVIGATEUR.ouvrirDansNavigateurParDefaut, 'https://exemple.fr'],
+      [CANAUX_NAVIGATEUR.piloter, 'conv-a', 'pas-suivant']
     ])
     // Chaque canal invoqué par le pont a son handler côté principal.
     for (const [canal] of simule.invocations)

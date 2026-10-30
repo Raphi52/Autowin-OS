@@ -91,6 +91,8 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
     agentPilote: false,
     mode: null,
     nombreAnnotations: 0,
+    gestes: [],
+    pilotage: 'libre',
     ...initial
   }
   let annotations: AnnotationNavigateur[] = []

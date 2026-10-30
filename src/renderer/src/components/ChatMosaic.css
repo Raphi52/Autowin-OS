@@ -8,7 +8,10 @@
   align-content: start;
   gap: 8px;
   min-height: 0;
-  padding: 8px;
+  /* AUCUN retrait autour de la grille (conv-1318, 2026-10-30 : « la top barre du chat n'est pas
+     alignee, en bas c'est pareil ») : les 8 px poses ici descendaient le haut des fenetres et
+     remontaient leur bas par rapport a la liste des conversations. L'ecart avec la liste vient
+     deja de `.chat-layout`, comme pour le chat plein. */
 }
 /* 1 ou 2 fenetres = UNE seule rangee : elle prend TOUTE la hauteur disponible (demande
    utilisateur du 30/08) au lieu d etre collee en haut a 320 px. */
