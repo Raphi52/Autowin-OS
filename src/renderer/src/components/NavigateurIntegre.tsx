@@ -21,12 +21,18 @@ import type {
   ReglagesNavigateur
 } from '../../../shared/navigateur'
 import { useLangue } from '../langue'
+import { FriseGestesNavigateur } from './FriseGestesNavigateur'
 // fix-ok: cause mesurée (conv-1286) — une fonction exportée par ce fichier fait échouer `eslint`
 // (react-refresh/only-export-components, code 1) : textes et outils vivent dans navigateur-integre-outils.ts.
 import {
   adresseDeLaSaisie,
   apiNavigateur,
   texteNavigateur,
+  DUREE_BANDEAU_APRES_GESTE_MS,
+  gestesDeLOnglet,
+  LIBELLE_ORDRE,
+  ORDRES_DU_PILOTAGE,
+  rangDuGeste,
   zoomDeLaFenetre
 } from './navigateur-integre-outils'
 import './NavigateurIntegre.css'
@@ -77,6 +83,9 @@ export function NavigateurIntegre({
   const [largeur, setLargeur] = useState(largeurMemorisee)
   const [redimensionnement, setRedimensionnement] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
+  // L'heure n'avance que par `recevoir` et la minuterie du bandeau : relue au rendu, elle le rendrait
+  // impur (react-hooks/purity) et personne ne redessinerait le panneau à l'échéance.
+  const [maintenant, setMaintenant] = useState(0)
 
   const racineRef = useRef<HTMLElement | null>(null)
   const zoneRef = useRef<HTMLDivElement | null>(null)
@@ -135,6 +144,7 @@ export function NavigateurIntegre({
       const precedent = etatRef.current
       etatRef.current = suivant
       setEtat(suivant)
+      setMaintenant(Date.now())
       const avant = precedent ? precedent.nombreAnnotations : annotationsRef.current.length
       if (suivant.nombreAnnotations !== avant || !precedent) {
         const enChoix = suivant.mode === 'choisir' || precedent?.mode === 'choisir'
@@ -182,6 +192,21 @@ export function NavigateurIntegre({
     if (document.activeElement === adresseRef.current) return
     setSaisie(urlActive === 'about:blank' ? '' : urlActive)
   }, [urlActive, ongletActif?.id])
+
+  // Rien n'est poussé quand les 20 s s'écoulent : sans cette minuterie, le bandeau resterait affiché
+  // jusqu'au prochain changement du fil. `finBandeau` et non `Date.now()` : une minuterie peut partir
+  // une milliseconde trop tôt, et le bandeau ne se retirerait alors jamais.
+  const gestesOnglet = gestesDeLOnglet(etat?.gestes ?? [], etat?.ongletActif ?? null)
+  const dernierGeste = gestesOnglet.at(-1)
+  const finBandeau = dernierGeste ? dernierGeste.debut + DUREE_BANDEAU_APRES_GESTE_MS : null
+  useEffect(() => {
+    if (finBandeau === null) return
+    const minuterie = setTimeout(
+      () => setMaintenant(finBandeau),
+      Math.max(0, finBandeau - Date.now())
+    )
+    return () => clearTimeout(minuterie)
+  }, [finBandeau])
 
   /*
    * LE CADRE DE LA PAGE. Mesuré sur la zone d'affichage, en pixels CSS du rendu, avec le zoom de la
@@ -347,6 +372,17 @@ export function NavigateurIntegre({
     window.addEventListener('pointermove', bouger)
     window.addEventListener('pointerup', lacher)
   }
+
+  const pilotage = etat?.pilotage ?? 'libre'
+  const rang = rangDuGeste(gestesOnglet)
+  // Un geste pas fini garde le bandeau au-delà des 20 s : une question d'accord dure jusqu'à 120 s, et
+  // « Reprendre la main » doit rester à portée pendant qu'elle attend.
+  const gesteEnCours = dernierGeste?.etat === 'en-cours' || dernierGeste?.etat === 'prochain'
+  const bandeauVisible =
+    Boolean(etat?.agentPilote) ||
+    pilotage !== 'libre' ||
+    gesteEnCours ||
+    (finBandeau !== null && maintenant < finBandeau)
 
   const mode = etat?.mode ?? null
   const onglets = etat?.onglets ?? []
@@ -563,6 +599,37 @@ export function NavigateurIntegre({
             )}
           </div>
         </div>
+        {bandeauVisible && (
+          <div
+            className={`navigateur-pilotage${pilotage === 'main' ? ' is-main' : ''}`}
+            data-testid="navigateur-pilotage"
+          >
+            <span className="navigateur-pilotage-texte" role="status">
+              {pilotage === 'main' ? t('tuAsLaMain') : t('agentPilote')}
+              {pilotage === 'pause' && (
+                <span className="navigateur-pilotage-pause">
+                  {` ${rang ? t('enPauseGeste', rang) : t('enPause')}`}
+                </span>
+              )}
+            </span>
+            <span className="navigateur-pilotage-boutons">
+              {ORDRES_DU_PILOTAGE[pilotage].map((ordre) => (
+                <button
+                  key={ordre}
+                  type="button"
+                  className="navigateur-pilotage-bouton"
+                  onClick={() => agir(apiNavigateur()?.piloter(conversationId, ordre))}
+                >
+                  {t(LIBELLE_ORDRE[ordre])}
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
+        <FriseGestesNavigateur
+          gestes={etat?.gestes ?? []}
+          ongletActif={etat?.ongletActif ?? null}
+        />
 
         {erreur && (
           <div className="navigateur-erreur" role="alert">

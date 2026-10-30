@@ -661,6 +661,9 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   seule et sans fil (tous les plans gardes, reduits au chef et aux fils de lots), pour ranger
     //   la liste des conversations en un appel. Meme garde des la premiere ligne ; `action` passe par
     //   `guardString` avant tout, et les gestes qui ecrivent exigent toujours le fil chef du plan.
+    // 2026-10-30 (conv-1315) — compte INCHANGE : `os:plansDeLots` gagne un geste « phrases », LECTURE
+    //   seule : la ligne que dit chaque lot du plan du fil donne, rien d'autre des messages. Meme
+    //   garde des la premiere ligne, fil passe par `guardString`.
     // MISE A JOUR 2026-10-28 (conv-1206) — 244 -> 247, mesure par ce test (vert a 244 avant ce
     //   travail). TROIS ajoutes (`ipc/carte-des-besoins.ts`, dossier ou le Board est recopie), gardes
     //   des leur PREMIERE ligne par `assertTrustedRendererSender(event, 'Dossier du Board')` :

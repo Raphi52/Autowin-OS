@@ -8,7 +8,10 @@
 import {
   normaliserUrlNavigateur,
   type AnnotationNavigateur,
-  type ApiNavigateur
+  type ApiNavigateur,
+  type GesteNavigateur,
+  type OrdrePilotageNavigateur,
+  type PilotageNavigateur
 } from '../../../shared/navigateur'
 import { langueCourante } from '../langue'
 
@@ -46,6 +49,25 @@ const TEXTES_FR = {
   accordUneFois: 'Autoriser une fois',
   accordToujours: 'Toujours',
   accordRefuser: 'Refuser',
+  pilotagePause: 'Pause',
+  pilotageReprendre: 'Reprendre',
+  pilotagePasSuivant: 'Pas suivant',
+  pilotageReprendreLaMain: 'Reprendre la main',
+  pilotageRendreLaMain: 'Rendre la main à l’agent',
+  tuAsLaMain: 'Tu as la main',
+  enPause: '· en pause',
+  enPauseGeste: '· en pause · geste {n} / {m}',
+  friseGestes: 'Gestes de l’agent sur cet onglet',
+  legendeLit: 'lit',
+  legendeAgit: 'agit',
+  legendeEtats: '◎ en cours · ○ prochain',
+  verbeOuvrir: 'ouvrir',
+  verbeLire: 'lire',
+  verbeCapture: 'capture',
+  verbeClic: 'clic',
+  verbeSaisir: 'saisir',
+  verbeTouche: 'touche',
+  verbeDefiler: 'défiler',
   annotations: 'Annotations ({n})',
   supprimer: 'Supprimer l’annotation {n}',
   sansCommentaire: '(sans commentaire)',
@@ -85,6 +107,25 @@ const TEXTES_EN: Record<CleNavigateur, string> = {
   accordUneFois: 'Allow once',
   accordToujours: 'Always',
   accordRefuser: 'Deny',
+  pilotagePause: 'Pause',
+  pilotageReprendre: 'Resume',
+  pilotagePasSuivant: 'Next step',
+  pilotageReprendreLaMain: 'Take over',
+  pilotageRendreLaMain: 'Hand back to the agent',
+  tuAsLaMain: 'You have control',
+  enPause: '· paused',
+  enPauseGeste: '· paused · step {n} / {m}',
+  friseGestes: 'Agent actions on this tab',
+  legendeLit: 'reads',
+  legendeAgit: 'acts',
+  legendeEtats: '◎ in progress · ○ next',
+  verbeOuvrir: 'open',
+  verbeLire: 'read',
+  verbeCapture: 'capture',
+  verbeClic: 'click',
+  verbeSaisir: 'type',
+  verbeTouche: 'key',
+  verbeDefiler: 'scroll',
   annotations: 'Annotations ({n})',
   supprimer: 'Delete annotation {n}',
   sansCommentaire: '(no comment)',
@@ -204,4 +245,56 @@ export function apiNavigateur(): ApiNavigateur | undefined {
 export function zoomDeLaFenetre(): number {
   const lu = (window.api as { getZoomFactor?: () => number } | undefined)?.getZoomFactor?.()
   return typeof lu === 'number' && Number.isFinite(lu) && lu > 0 ? lu : 1
+}
+
+// ── Pas-à-pas : frise et bandeau de pilotage (conv-1286, maquette « 1 · Jalons ») ───────────────
+
+/**
+ * Temps pendant lequel le bandeau survit au dernier geste de l'onglet : `agentPilote` ne vaut vrai
+ * que le temps d'une action, et sans ce délai le bouton Pause disparaîtrait entre deux gestes.
+ */
+export const DUREE_BANDEAU_APRES_GESTE_MS = 20_000
+
+/** Les boutons du bandeau selon le pilotage, dans l'ordre de la maquette. */
+export const ORDRES_DU_PILOTAGE: Record<PilotageNavigateur, readonly OrdrePilotageNavigateur[]> = {
+  libre: ['pause', 'reprendre-la-main'],
+  pause: ['reprendre', 'pas-suivant', 'reprendre-la-main'],
+  main: ['rendre-la-main']
+}
+
+export const LIBELLE_ORDRE: Record<OrdrePilotageNavigateur, CleNavigateur> = {
+  pause: 'pilotagePause',
+  reprendre: 'pilotageReprendre',
+  'pas-suivant': 'pilotagePasSuivant',
+  'reprendre-la-main': 'pilotageReprendreLaMain',
+  'rendre-la-main': 'pilotageRendreLaMain'
+}
+
+/**
+ * Les gestes de l'onglet actif, du plus ancien au plus récent. Sans onglet actif, ceux qui n'en
+ * visent aucun : une ouverture en attente dans un fil vide (`ongletId` vide, voir le contrat) doit
+ * rester visible pendant que l'utilisateur décide.
+ */
+export function gestesDeLOnglet(
+  gestes: readonly GesteNavigateur[],
+  ongletActif: string | null
+): GesteNavigateur[] {
+  const onglet = ongletActif ?? ''
+  return gestes.filter((geste) => geste.ongletId === onglet)
+}
+
+/** `m:ss` écoulées depuis `origine`, jamais négatif (`debut` vient du processus principal). */
+export function tempsDepuis(instant: number, origine: number): string {
+  const secondes = Math.max(0, Math.floor((instant - origine) / 1000))
+  return `${Math.floor(secondes / 60)}:${String(secondes % 60).padStart(2, '0')}`
+}
+
+/**
+ * « geste N / M » du bandeau en pause : N est le premier geste qui attend, celui que « Pas suivant »
+ * jouera (le dernier joué si rien n'attend) ; M, les gestes connus de l'onglet. `null` sans geste.
+ */
+export function rangDuGeste(gestes: readonly GesteNavigateur[]): { n: number; m: number } | null {
+  if (gestes.length === 0) return null
+  const attendu = gestes.findIndex((geste) => geste.etat === 'prochain')
+  return { n: attendu === -1 ? gestes.length : attendu + 1, m: gestes.length }
 }
