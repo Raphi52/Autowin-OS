@@ -316,6 +316,9 @@ const MESSAGE_FIL_FERME =
   "Le navigateur de ce fil a été fermé pendant la pause : rien n'a été fait."
 const MESSAGE_TOUR_ARRETE =
   "Le tour a été arrêté par l'utilisateur : ce geste n'est pas parti, rien n'a été fait."
+// Un numéro ne revient jamais : seule une lecture en pose, et elle renumérote depuis 1.
+const MESSAGE_NUMERO_PERDU =
+  "La page a changé pendant la pause et ne porte plus le numéro de ta lecture : rien n'a été fait. Relis-la (les numéros changent à chaque lecture)."
 
 /**
  * Le refus d'un geste qui rend une valeur (`lire`, `capturer`) : il part en erreur, et l'appelant
@@ -341,6 +344,11 @@ interface OngletInterne {
   requetes: RequeteEchouee[]
   /** Dernier état de chargement vu : `surChangement` y distingue la FIN d'un chargement. */
   chargeait: boolean
+  /**
+   * Compte des appels qui posent ou effacent le SEUL cadre de la page (et des chargements, qui
+   * l'effacent aussi) : un geste en attente sait ainsi si son tracé est encore celui de la page.
+   */
+  toursDuCadre: number
 }
 
 interface AnnotationInterne {
@@ -365,8 +373,15 @@ interface FilInterne {
   enAccord: GesteEnAccord[]
 }
 
-/** Ce qui libère un geste en pause : un ordre de jeu, la main reprise, le délai, le Stop, le fil fermé. */
-type IssuePause = 'jouer' | 'main' | 'expire' | 'arret' | 'ferme'
+/**
+ * Ce qui libère un geste en pause : un ordre de jeu, la main reprise, le délai, le Stop, le fil fermé,
+ * ou sa cible perdue pour de bon (numéro de lecture effacé par la page).
+ */
+type IssuePause = 'jouer' | 'main' | 'expire' | 'arret' | 'ferme' | 'perdu'
+
+/** Ce que montre un geste en pause : sa zone en pointillés, rien, ou le refus d'une cible perdue. */
+type ApercuPause =
+  { onglet: OngletInterne; zone: RectNavigateur } | { perdu: ResultatActionNavigateur } | null
 
 interface AttentePause {
   geste: GesteNavigateur
@@ -374,6 +389,8 @@ interface AttentePause {
   minuterie: ReturnType<typeof setTimeout>
   /** Remet les pointillés après un chargement de page, qui efface le calque de la page. */
   retracer: () => void
+  /** Un autre geste vient de finir : trace ce geste s'il n'est pas déjà le cadre de la page. */
+  passerLeRelais: () => void
 }
 
 type IssueAccord = ReponseAccordNavigateur | 'delai'
@@ -1012,7 +1029,15 @@ export class GestionnaireNavigateur {
     const pause = await this.franchirPause(conversationId, geste, arret, async (pageNeuve) => {
       // Page rechargée : la place lue avant ne vaut plus, et rien n'est tracé pour une cible disparue
       // ou devenue secrète, que le geste libéré se verra refuser. Sans focus : il n'est pas encore libre.
-      if (pageNeuve && (await viser(false, 'Cible perdue au rechargement.'))) return null
+      if (pageNeuve) {
+        const relue = await viser(false, MESSAGE_NUMERO_PERDU)
+        // Un sélecteur peut encore apparaître (page qui se construit après son chargement) ; un numéro
+        // disparu ne revient jamais : ce geste ne peut plus partir, il tombe tout de suite.
+        if (relue?.refus === 'cible-introuvable' && action.cible && 'ref' in action.cible) {
+          return { perdu: relue }
+        }
+        if (relue) return null
+      }
       const zone =
         cible?.rect ??
         (tape ? ((await this.jouer(onglet, 'focus', [])) as FocusPage | null)?.rect : undefined)
@@ -1260,7 +1285,8 @@ export class GestionnaireNavigateur {
       vue,
       console: [],
       requetes: [],
-      chargeait: false
+      chargeait: false,
+      toursDuCadre: 0
     }
     this.onglets.set(id, onglet)
     this.fil(conversationId).onglets.push(id)
@@ -1305,7 +1331,11 @@ export class GestionnaireNavigateur {
     // La FIN d'un chargement seulement, pas chaque changement : relire la cible fait défiler la page, et
     // une page qui change de titre chaque seconde ramènerait l'utilisateur sans cesse sur la cible.
     const charge = onglet.vue.chargement()
-    if (onglet.chargeait && !charge) this.retracerPause(onglet)
+    if (onglet.chargeait && !charge) {
+      // Le chargement a effacé le calque de la page : aucun tracé d'avant n'y est plus.
+      onglet.toursDuCadre += 1
+      this.retracerPause(onglet)
+    }
     onglet.chargeait = charge
     this.emettre(onglet.conversationId)
   }
@@ -1395,6 +1425,9 @@ export class GestionnaireNavigateur {
   // ── Interne : page ────────────────────────────────────────────────────────────────────────────
 
   private jouer(onglet: OngletInterne, methode: MethodePage, args: unknown[]): Promise<unknown> {
+    // Compté à l'APPEL, pas à la réponse : la page les exécute dans cet ordre, et un geste qui lit
+    // le compte juste après son propre tracé sait qu'aucun autre ne l'a recouvert depuis.
+    if (methode === 'surligner' || methode === 'retirerSurbrillance') onglet.toursDuCadre += 1
     return onglet.vue.executer(appelPage(methode, args))
   }
 
@@ -1674,7 +1707,7 @@ export class GestionnaireNavigateur {
   private terminerGeste(conversationId: string, geste: GesteNavigateur, ok: boolean): void {
     this.marquerGeste(conversationId, geste, ok ? 'fait' : 'refuse')
     // Ici et pas à la libération : le geste qui finit a retiré son cadre, le suivant peut poser le sien.
-    this.fils.get(conversationId)?.enPause[0]?.retracer()
+    this.fils.get(conversationId)?.enPause[0]?.passerLeRelais()
   }
 
   /** Le refus qui vaut là, tout de suite, sans lire la page : Stop du tour ou main reprise. */
@@ -1705,7 +1738,7 @@ export class GestionnaireNavigateur {
     conversationId: string,
     geste: GesteNavigateur,
     arret: AbortSignal | undefined,
-    apercu?: (pageNeuve: boolean) => Promise<{ onglet: OngletInterne; zone: RectNavigateur } | null>
+    apercu?: (pageNeuve: boolean) => Promise<ApercuPause>
   ): Promise<{ refus?: ResultatActionNavigateur; attendu: boolean }> {
     const immediat = this.refusImmediat(conversationId, arret)
     if (immediat) return { refus: immediat, attendu: false }
@@ -1725,6 +1758,10 @@ export class GestionnaireNavigateur {
     })
     // `as` et non une annotation : `tracer` l'écrit depuis une fermeture, que TypeScript ne suit pas.
     let trace = null as OngletInterne | null
+    // Le compte du cadre au moment de NOTRE tracé : égal au compte de l'onglet, le cadre de la page
+    // est encore le nôtre.
+    let tourDuTrace = -1
+    let refusPerdu = null as ResultatActionNavigateur | null
     const tracer = async (pageNeuve: boolean): Promise<void> => {
       // fix-ok: conv-1324 (mesuré, run-rouge-deux.txt) — un seul cadre vit dans la page et chaque geste
       // traçait par-dessus le précédent : elle montrait le dernier arrivé, « Pas suivant » joue le premier.
@@ -1733,8 +1770,22 @@ export class GestionnaireNavigateur {
       try {
         const vu = apercu && !libere ? await apercu(pageNeuve) : null
         if (!vu || libere) return
+        // fix-ok: objection du juge (conv-1324, réparation ; `cadre=null` mesuré pour une cible par
+        // numéro, run-definitif.txt:73) — le geste attendait un ordre qui ne pouvait plus le faire
+        // partir. Il tombe tout de suite, et le suivant prend le relais.
+        if ('perdu' in vu) {
+          refusPerdu = vu.perdu
+          this.libererPause(conversationId, attente, 'perdu')
+          return
+        }
         trace = vu.onglet
-        await this.jouer(trace, 'surligner', [vu.zone, geste.description, { prochain: true }])
+        const pose = this.jouer(trace, 'surligner', [
+          vu.zone,
+          geste.description,
+          { prochain: true }
+        ])
+        tourDuTrace = trace.toursDuCadre
+        await pose
       } catch {
         // Page fermée ou en pleine navigation : il n'y a rien à tracer pour l'instant.
       }
@@ -1751,6 +1802,15 @@ export class GestionnaireNavigateur {
       ),
       retracer: () => {
         traces = traces.then(() => tracer(true))
+      },
+      // fix-ok: objection du juge (conv-1324, réparation) — le relais relisait une cible déjà tracée,
+      // et `localiser` recentre la page sur elle : chaque geste refusé à côté y ramenait l'utilisateur.
+      // Le compte du cadre, pas un simple « déjà tracé » : un geste joué entre-temps a pu effacer ce
+      // cadre (son `retirerSurbrillance`), et c'est alors au relais de le reposer.
+      passerLeRelais: () => {
+        traces = traces.then(() =>
+          trace && tourDuTrace === trace.toursDuCadre ? undefined : tracer(true)
+        )
       }
     }
     attente.minuterie.unref?.()
@@ -1772,6 +1832,12 @@ export class GestionnaireNavigateur {
         return { refus: refus('page-indisponible', MESSAGE_FIL_FERME), attendu: true }
       if (fin === 'arret')
         return { refus: refus('page-indisponible', MESSAGE_TOUR_ARRETE), attendu: true }
+      if (fin === 'perdu') {
+        return {
+          refus: refusPerdu ?? refus('cible-introuvable', MESSAGE_NUMERO_PERDU),
+          attendu: true
+        }
+      }
       return {
         refus: refus(
           'pause-expiree',
