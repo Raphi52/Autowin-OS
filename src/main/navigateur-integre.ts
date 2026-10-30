@@ -1673,6 +1673,8 @@ export class GestionnaireNavigateur {
 
   private terminerGeste(conversationId: string, geste: GesteNavigateur, ok: boolean): void {
     this.marquerGeste(conversationId, geste, ok ? 'fait' : 'refuse')
+    // Ici et pas à la libération : le geste qui finit a retiré son cadre, le suivant peut poser le sien.
+    this.fils.get(conversationId)?.enPause[0]?.retracer()
   }
 
   /** Le refus qui vaut là, tout de suite, sans lire la page : Stop du tour ou main reprise. */
@@ -1724,6 +1726,9 @@ export class GestionnaireNavigateur {
     // `as` et non une annotation : `tracer` l'écrit depuis une fermeture, que TypeScript ne suit pas.
     let trace = null as OngletInterne | null
     const tracer = async (pageNeuve: boolean): Promise<void> => {
+      // fix-ok: conv-1324 (mesuré, run-rouge-deux.txt) — un seul cadre vit dans la page et chaque geste
+      // traçait par-dessus le précédent : elle montrait le dernier arrivé, « Pas suivant » joue le premier.
+      if (fil.enPause[0] !== attente) return
       // L'aperçu est un confort : une page qui ne répond pas n'empêche pas d'attendre l'ordre.
       try {
         const vu = apercu && !libere ? await apercu(pageNeuve) : null

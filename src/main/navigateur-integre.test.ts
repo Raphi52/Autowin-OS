@@ -1200,6 +1200,89 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     })
   })
 
+  // Conv-1324 : chaque geste traçait par-dessus le précédent. La page montrait le DERNIER arrivé alors
+  // que « Pas suivant » joue le PREMIER, et ce premier retirait le cadre en finissant : le second
+  // attendait sans plus rien montrer.
+  describe('deux gestes en attente : la page montre celui que « Pas suivant » va jouer', () => {
+    const PLACE_UN = { x: 10, y: 20, largeur: 100, hauteur: 30 }
+    const PLACE_DEUX = { x: 10, y: 300, largeur: 100, hauteur: 30 }
+    const UN = { type: 'clic', cible: { selecteur: '#un' } } as const
+    const DEUX = { type: 'clic', cible: { selecteur: '#deux' } } as const
+    const traces = (vue: FausseVue): unknown[][] =>
+      vue.appels.filter((a) => a.methode === 'surligner').map((a) => a.args)
+    const deuxEnAttente = async (): Promise<{
+      vue: FausseVue
+      premier: ReturnType<typeof nav.agir>
+      second: ReturnType<typeof nav.agir>
+    }> => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#deux'
+          ? cibleTrouvee({ rect: PLACE_DEUX, description: 'button « Deux »' })([])
+          : cibleTrouvee({ rect: PLACE_UN, description: 'button « Un »' })([])
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', UN)
+      await laisserFiler()
+      const second = nav.agir('conv-a', DEUX)
+      await laisserFiler()
+      return { vue, premier, second }
+    }
+
+    it('le premier arrivé garde les pointillés, le second ne les lui prend pas', async () => {
+      const { vue } = await deuxEnAttente()
+      expect(traces(vue)).toEqual([[PLACE_UN, 'cliquer sur button « Un »', { prochain: true }]])
+    })
+
+    it('le premier joué, le second prend les pointillés et les garde', async () => {
+      const { vue, premier, second } = await deuxEnAttente()
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await premier).toMatchObject({ ok: true })
+      await laisserFiler()
+      const enPointilles = traces(vue).filter((args) => args[2])
+      expect(enPointilles.at(-1)).toEqual([
+        PLACE_DEUX,
+        'cliquer sur button « Deux »',
+        { prochain: true }
+      ])
+      expect(
+        vue
+          .methodes()
+          .filter((m) => m !== 'prendre')
+          .at(-1)
+      ).toBe('surligner')
+      expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toHaveLength(1)
+      nav.piloter('conv-a', 'reprendre')
+      expect(await second).toMatchObject({ ok: true })
+    })
+
+    it('à trois, le relais va au suivant dans l’ordre, pas au dernier arrivé', async () => {
+      const { vue, premier } = await deuxEnAttente()
+      void nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#trois' } })
+      await laisserFiler()
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await premier).toMatchObject({ ok: true })
+      await laisserFiler()
+      expect(traces(vue).at(-1)?.[0]).toEqual(PLACE_DEUX)
+      expect(
+        vue
+          .methodes()
+          .filter((m) => m !== 'prendre')
+          .at(-1)
+      ).toBe('surligner')
+    })
+
+    it('jumeau : la main reprise fait tomber les deux gestes, rien n’est retracé', async () => {
+      const { vue, premier, second } = await deuxEnAttente()
+      vue.appels = []
+      nav.piloter('conv-a', 'reprendre-la-main')
+      expect(await premier).toMatchObject({ refus: 'main-reprise' })
+      expect(await second).toMatchObject({ refus: 'main-reprise' })
+      await laisserFiler()
+      expect(vue.methodes()).not.toContain('surligner')
+    })
+  })
+
   it('pause : la garde mot de passe passe AVANT l’attente, l’accord du site APRÈS', async () => {
     nav.ouvrir('conv-a', 'https://exemple.fr')
     const vue = fabrique.vues[0]
