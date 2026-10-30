@@ -94,9 +94,28 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    `.autowin-data/gc-corbeille/AAAA-MM-JJ/<chemin d'origine>` (`move_file`, ou `run` d'un `mv`
    unitaire). Écrire à côté `MANIFEST.txt` : chemin d'origine, taille, motif. C'est ce manifeste
    qui rend la restauration possible.
-4. **Proposer la purge.** Les corbeilles de plus de 14 jours sont LISTÉES avec leur taille, jamais
-   vidées d'office : la suppression définitive est irréversible, elle attend un « purge » explicite
-   de l'utilisateur (via `ask`, option recommandée en premier).
+4. **Purger ou proposer.** Lancer, depuis le dépôt Autowin, la passe qui seule décide de ce qui part :
+   `node --no-warnings scripts/gc-purger-corbeilles.mjs --racine <chemin absolu>/.autowin-data/gc-corbeille`.
+   Elle rend un bilan JSON et ne supprime rien sans accord. Une corbeille de 14 jours pile n'est pas
+   encore candidate : l'âge se compte en jours du calendrier, et le script tranche.
+   - **Accord donné** (`.autowin-data/autowin-os/gc-purge-auto.json` contient `{"enabled": true}`) :
+     le script a déjà purgé ce qui avait plus de 14 jours. Reporter `purgees`, `gardees` et `echecs`
+     dans le bilan. Chaque purge a sa ligne dans `.autowin-data/autowin-os/gc-purges.jsonl`.
+   - **Pas d'accord** : `aPurger` liste les candidates. Poser la question par `ask`, avec exactement
+     ces réponses : « Oui, purge cette fois », « Oui, purge et vide seul à l’avenir », « Non, garde ».
+     Le mot « purge » est obligatoire : c'est lui qui empêche le mode auto de répondre à la place de
+     l'utilisateur (« vide seul » ne le déclenche pas). Pas de « sans » ni de « rien » dans ces
+     options : ces mots retirent cette protection.
+   - **Réponse « et vide seul à l’avenir »** : écrire `{"enabled": true}` dans `gc-purge-auto.json`,
+     puis relancer le script. Il ne s'écrit jamais sans cette réponse de l'utilisateur, dans ce fil.
+     Un `/gc` qui est allé chercher cet accord ailleurs (« il l'a dit la semaine dernière ») s'abstient.
+   - **Corbeille `gardees`** (sauvegarde `conversations.json*` ou `*.pre-remake`, manifeste manquant,
+     dossier illisible) : jamais purgée d'office. Elle repart à la question habituelle, avec son motif.
+     Le geste du 28/10 reste le bon : mettre la sauvegarde dans `.autowin-data/sauvegardes/`, vérifier
+     qu'elle y est, puis demander.
+   - **Retirer l'accord** : supprimer `gc-purge-auto.json` dès que l'utilisateur le demande, et le dire.
+   Une passe qui pose une question de purge finit par `AUTOWIN_FIN_V1` et ne met NI la purge dans sa
+   rubrique Recommandé NI dans une ligne de suite : le mode auto l'enverrait comme un message.
 5. **Re-mesurer** et rendre le bilan.
 
 ## Format du bilan
@@ -104,12 +123,14 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 # GC — AAAA-MM-JJ
 .autowin-data : X Go → Y Go (corbeille du jour : Z Mo)
 ## Collecté        (catégorie · nombre · taille · motif)
+## Purgé           (corbeille · âge · taille — accord permanent, journal gc-purges.jsonl)
 ## À purger        (corbeille · âge · taille — attend ton accord)
-## À vérifier      (candidats sans preuve de mort suffisante)
+## À vérifier      (candidats sans preuve de mort suffisante, corbeilles gardées et leur motif)
 ```
 
 ## Garde-fous
-- Aucune suppression définitive sans accord explicite ; aucune édition de `conversations.json`.
+- Aucune suppression définitive sans accord explicite (`scripts/gc-purger-corbeilles.mjs`, ou un
+  « purge » de l'utilisateur) ; aucune édition de `conversations.json`.
 - Jamais de collecte sur un fichier modifié dans les dernières 24 h (conversation peut-être en cours).
 - Pas d'`orchestrate`, pas de commit, pas de kill de processus.
 - Une sonde qui échoue (fichier illisible, `get_state` muet) → la catégorie correspondante n'est
