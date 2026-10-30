@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NOM_PAGE_SCENE_3D, TYPE_MESSAGE_SCENE_3D } from '../../../shared/scene-3d'
 import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
+import { codeSceneDuCarrousel } from '../../scene-3d/choix-scene.mjs'
 import './Bloc3D.css'
 
 // `message` absent : la scène n'a rien dit, « Erreur inconnue » est traduit au rendu (conv-1170).
@@ -21,6 +22,16 @@ type EtatScene = { etat: 'chargement' } | { etat: 'lancee' } | { etat: 'erreur';
 
 /** Marge autour de la colonne a partir de laquelle une scene est montee ou demontee. */
 const MARGE_VISIBILITE = '300px 0px'
+
+/**
+ * ANCIENS /draft EN VOLUME (avant conv-1304, 2026-10-30) : leur scene ```threejs etait montee par le
+ * fil dans le carrousel qui la suivait, avec `autowin.surChoix`. Ce montage n'existe plus (le
+ * carrousel en volume est une page ```html-interactif qui porte sa scene) : une scene d'un fil
+ * ancien se rend seule, au-dessus de son carrousel. Elle recoit le meme prelude pour montrer la
+ * proposition 1 au lieu de planter sur « autowin is not defined ».
+ */
+const codeAEnvoyer = (code: string): string =>
+  /\bautowin\.surChoix\s*\(/u.test(code) ? codeSceneDuCarrousel(code) : code
 
 export function Bloc3D({ code }: { code: string }): React.JSX.Element {
   const { t } = useTextesArtefactsEtBandeaux()
@@ -56,7 +67,7 @@ export function Bloc3D({ code }: { code: string }): React.JSX.Element {
       if (donnees.etat === 'pret') {
         // Origine opaque : aucune cible plus precise que '*' n'existe. Le destinataire est fixe
         // par la reference du cadre, pas par l'origine.
-        cadre.postMessage({ type: TYPE_MESSAGE_SCENE_3D, code }, '*')
+        cadre.postMessage({ type: TYPE_MESSAGE_SCENE_3D, code: codeAEnvoyer(code) }, '*')
       } else if (donnees.etat === 'lancee') {
         setEtat((courant) => (courant.etat === 'erreur' ? courant : { etat: 'lancee' }))
       } else if (donnees.etat === 'erreur') {

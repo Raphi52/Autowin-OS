@@ -15,6 +15,7 @@ import logoAnneau from './assets/autowin-logo-anneau.png'
 import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
+import { BarriereErreur } from './components/BarriereErreur'
 import { DecorDeFond } from './components/DecorDeFond'
 import { useDecorEnVeille } from './components/decor-veille'
 import { installerLumiereDesPanneaux } from './panneaux-lumiere'
@@ -588,7 +589,11 @@ export function MainApp(): React.JSX.Element {
        * cache, boucle arretee, il ne dessine rien ailleurs, mais un retour ne paie plus sa
        * reconstruction (2,2 a 3,7 s sans rue, mesure du banc). Voir `decor-veille.ts`.
        */}
-      {decorMonte && <DecorDeFond actif={tab === 'accueil'} />}
+      {decorMonte && (
+        <BarriereErreur zone="decor">
+          <DecorDeFond actif={tab === 'accueil'} />
+        </BarriereErreur>
+      )}
       {/*
        * La POPUP de démarrage (« Bienvenue dans Autowin OS », connexion au Brain et aux modèles)
        * n'existe plus : retirée à la demande de l'utilisateur le 2026-10-15 (conv-963). Un prérequis
@@ -659,7 +664,9 @@ export function MainApp(): React.JSX.Element {
             ))}
           </div>
         </nav>
-        <UpdateBanner collapsed={railCollapsed} />
+        <BarriereErreur zone="mise-a-jour">
+          <UpdateBanner collapsed={railCollapsed} />
+        </BarriereErreur>
         {/* Le NUMÉRO DE BUILD (nombre de commits) incrémente à chaque commit → l'utilisateur voit d'un
             coup s'il lance une version plus récente. Le SHA court lève l'ambiguïté. `__BUILD_*__` sont
             gravés au build par `electron.vite.config.ts` ; en test (non défini) on retombe proprement. */}

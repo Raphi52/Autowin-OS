@@ -80,4 +80,17 @@ describe('behaviour IPC authority', () => {
     expect(isSceneFrameUrl('http://localhost:5173/scene-3d.html', installee)).toBe(false)
     expect(isSceneFrameUrl('pas une adresse', installee)).toBe(false)
   })
+
+  // conv-1304 : la jumelle sans moteur 3D, ou tournent les pages interactives sans 3D. Memes
+  // regles d'adresse exacte ; aucune autre page de l'app ne passe pour autant.
+  it('laisse aussi charger la page interactive sans moteur 3D, a son adresse exacte', () => {
+    const dev = { devRendererUrl: 'http://localhost:5173/' }
+    expect(isSceneFrameUrl('http://localhost:5173/page-interactive.html', dev)).toBe(true)
+    expect(isSceneFrameUrl('http://localhost:5174/page-interactive.html', dev)).toBe(false)
+    expect(isSceneFrameUrl('http://localhost:5173/x/page-interactive.html', dev)).toBe(false)
+    expect(isSceneFrameUrl('http://localhost:5173/page-interactive.htm', dev)).toBe(false)
+    const installee = { rendererHtmlPath: 'C:\\app\\renderer\\index.html' }
+    expect(isSceneFrameUrl('file:///C:/app/renderer/page-interactive.html', installee)).toBe(true)
+    expect(isSceneFrameUrl('file:///C:/autre/page-interactive.html', installee)).toBe(false)
+  })
 })

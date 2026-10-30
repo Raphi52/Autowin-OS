@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { racineSelonLePont } from './racine-selon-le-pont'
+import { BarriereErreur } from './components/BarriereErreur'
 import { surveillerGelsRenderer } from './gel-renderer'
 import { detailDeGelPourVue, vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
@@ -75,7 +76,12 @@ surveillerGelsRenderer((dureeMs) => {
 /*
  * Ouverte dans un navigateur ordinaire (`localhost:5173` hors d'Electron), l'interface n'a pas le pont
  * `window.api` et plantait en écran noir : elle n'est alors pas montée, un écran dit pourquoi (conv-1286).
+ *
+ * LE DERNIER FILET (conv-1327) : ce qui tombe hors des écrans protégés par `VueMesuree` (le menu, la
+ * coque, `App` lui-même) laisserait sinon la fenêtre noire, sans rien à cliquer.
  */
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>{racineSelonLePont(window, <App />)}</StrictMode>
+  <StrictMode>
+    <BarriereErreur zone="racine">{racineSelonLePont(window, <App />)}</BarriereErreur>
+  </StrictMode>
 )

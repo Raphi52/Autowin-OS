@@ -261,6 +261,7 @@ import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-
 import { TravauxNonPublies } from './TravauxNonPublies'
 import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
+import { BarriereErreur } from './BarriereErreur'
 import { VueMesuree } from './VueMesuree'
 import { reutiliserConversationsInchangees } from './conversations-stables'
 import { declencheursDeListe, noterDeclencheursListe, noterLigneListe } from './rendu-long'
@@ -8763,12 +8764,14 @@ export function ChatView({
             />
           </header>
           {planDuFilOuvert && ongletDuFilOuvert !== null ? (
-            <SuperConvDuChat
-              key={planDuFilOuvert.id}
-              plan={planDuFilOuvert}
-              onglet={ongletDuFilOuvert}
-              titres={titresDesFils}
-            />
+            <BarriereErreur zone="chat-lots" cle={planDuFilOuvert.id}>
+              <SuperConvDuChat
+                key={planDuFilOuvert.id}
+                plan={planDuFilOuvert}
+                onglet={ongletDuFilOuvert}
+                titres={titresDesFils}
+              />
+            </BarriereErreur>
           ) : null}
 
           {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
@@ -9122,7 +9125,7 @@ export function ChatView({
                 <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
               ))}
 
-            <VueMesuree id="chat-fil" bloc>
+            <VueMesuree id="chat-fil" bloc cle={activeId}>
               <PointerMomentVideo.Provider value={pointerMomentVideo}>
                 {/* Les runs en cours, pour le bloc des juges qui se remplit en direct (conv-1021). */}
                 <RunsEnDirect.Provider value={liveRuns}>
@@ -9191,8 +9194,10 @@ export function ChatView({
           {/* Les messages entre agents de fils du même dépôt vivent dans Détails > Runs
               (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
           {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
-          <TableauDesLots conversationId={activeId} aCoteDeLaFrise={ongletDuFilOuvert !== null} />
-          <VueMesuree id="chat-saisie" bloc>
+          <BarriereErreur zone="chat-lots" cle={activeId}>
+            <TableauDesLots conversationId={activeId} aCoteDeLaFrise={ongletDuFilOuvert !== null} />
+          </BarriereErreur>
+          <VueMesuree id="chat-saisie" bloc cle={activeId}>
             <ChatComposer
               ref={composerRef}
               busy={busy}
@@ -9388,22 +9393,24 @@ export function ChatView({
       {/* ---- Navigateur intégré (conv-1286, lot 3/5) : entre le fil et les Détails, fil unique
           seulement. Démonté en mosaïque ou fermé : il retire alors la page native (poserCadre(null)). */}
       {convViewMode !== 'mosaic' && navigateurOuvert && activeId && (
-        <NavigateurIntegre
-          key={activeId}
-          conversationId={activeId}
-          visible={isActive && !openImage}
-          onFermer={() => setNavigateurOuvert(false)}
-          onEnvoyerAuChat={(annotations) => insererDepuisLeNavigateur(annotations, false)}
-          onElementChoisi={(annotation) => insererDepuisLeNavigateur([annotation], true)}
-          onReglages={(reglages) => {
-            reglagesNavigateurRef.current = reglages
-          }}
-        />
+        <BarriereErreur zone="chat-navigateur" cle={activeId}>
+          <NavigateurIntegre
+            key={activeId}
+            conversationId={activeId}
+            visible={isActive && !openImage}
+            onFermer={() => setNavigateurOuvert(false)}
+            onEnvoyerAuChat={(annotations) => insererDepuisLeNavigateur(annotations, false)}
+            onElementChoisi={(annotation) => insererDepuisLeNavigateur([annotation], true)}
+            onReglages={(reglages) => {
+              reglagesNavigateurRef.current = reglages
+            }}
+          />
+        </BarriereErreur>
       )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {runsAffiche && (
-        <VueMesuree id="chat-workflows" bloc>
+        <VueMesuree id="chat-workflows" bloc cle={activeId}>
           <WorkflowsPanel
             fermeture={!showRuns}
             onFermee={runsSorti}

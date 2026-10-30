@@ -44,7 +44,8 @@ describe('ChatView composer resilience', () => {
   })
 
   it('memoizes stable message rows for long histories', () => {
-    expect(rowSource).toContain('export const ChatMessageRow = memo(')
+    // La ligne reste mémorisée SOUS sa barrière d'erreur (conv-1327) : `ChatMessageRow` l'enveloppe.
+    expect(rowSource).toContain('const LigneDuFil = memo(')
     expect(rowSource).toContain('prev.message === next.message')
     expect(source).toContain('<ChatMessageRow')
     expect(source).toContain('messageKey(')

@@ -6,7 +6,7 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 import { useAjusterALaLargeur } from './ajuster-a-la-largeur'
 import { retirerLignePromptSuivant } from '../../../shared/prompt-suivant'
@@ -14,10 +14,9 @@ import { parseFileRef } from '../../../shared/file-ref'
 import { tokenizeMarkdownCodeBlocks } from './markdown-blocs'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
 import { Bloc3D } from './Bloc3D'
+import { BlocHtmlInteractif } from './BlocHtmlInteractif'
 import { BlocDonnees } from './BlocDonnees'
 import { PropositionDeFils } from './PropositionDeFils'
-import { SceneDuCarrousel } from './SceneDuCarrousel'
-import { CLASSE_PLACE_SCENE, rattacherScenesAuxCarrousels } from './draft-scene-3d'
 import { splitFinalSummary } from './markdown-cloture'
 import { formaterNombre, langueCourante } from '../langue'
 import {
@@ -40,7 +39,6 @@ type MarkdownProps = {
   continuationPrefix?: string
   highlightFinalSummary?: boolean
 }
-
 
 /**
  * MÉMOÏSATION DU RENDU — le fil se re-rend à chaque lot de deltas ; sans `memo`, les bulles déjà
@@ -90,10 +88,11 @@ function renderAvecClotures(source: string, rang: number): React.ReactNode[] {
   ]
 }
 
-
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
-  // Une scene ```threejs suivie de SON carrousel /draft est montee dans le carrousel (conv-318).
-  return rattacherScenesAuxCarrousels(tokenizeMarkdownCodeBlocks(text)).map((block, index) => {
+  // Plus de scene ```threejs montee dans le carrousel /draft qui la suit (conv-318) : un carrousel
+  // en volume est desormais UNE page ```html-interactif qui porte sa scene (conv-1304,
+  // scripts/draft-carrousel.mjs). Chaque bloc se rend seul.
+  return tokenizeMarkdownCodeBlocks(text).map((block, index) => {
     if (block.kind === 'html-render' && block.content.length > MAX_INLINE_HTML_CHARS)
       return (
         // Trop volumineux pour etre injecte dans le fil. On le dit explicitement plutot que de le
@@ -127,7 +126,6 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
           key={`${keyPrefix}-html-render-${index}`}
           html={prepared.html}
           scopeId={prepared.scopeId}
-          scene={block.scene}
         />
       )
     }
@@ -146,6 +144,30 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
         </div>
       )
 
+    if (block.kind === 'html-interactif')
+      return (
+        // Page dont les scripts TOURNENT, dans le cadre isole des scenes 3D (conv-1292).
+        <BlocHtmlInteractif key={`${keyPrefix}-html-interactif-${index}`} html={block.content} />
+      )
+    if (block.kind === 'html-interactif-en-cours')
+      return (
+        // Fence encore ouverte : rien ne s'execute avant la cloture (conv-1304). Le code reste
+        // lisible a la demande, replie.
+        <details
+          key={`${keyPrefix}-html-interactif-en-cours-${index}`}
+          className="bloc-html-interactif-en-cours"
+          data-testid="chat-inline-html-interactif-en-cours"
+        >
+          <summary>
+            {texte('pageInteractive.enEcriture', {
+              lignes: formaterNombre(block.content.split('\n').length)
+            })}
+          </summary>
+          <pre className="md-code">
+            <code>{block.content}</code>
+          </pre>
+        </details>
+      )
     if (block.kind === 'scene-3d')
       return (
         // Scene three.js VIVANTE, executee dans un cadre isole sans reseau (Bloc3D.tsx). Le code
@@ -206,7 +228,6 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
     return <span key={`${keyPrefix}-text-${index}`}>{renderTextBlock(block.content)}</span>
   })
 }
-
 
 type Align = 'left' | 'center' | 'right'
 
@@ -339,46 +360,22 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
  * Bloc ```html-render``` du fil. Il ne defile jamais en largeur : ce que la feuille de style n'a pas
  * pu rendre fluide est reduit a l'echelle de la colonne (voir `ajuster-a-la-largeur.ts`).
  */
-function BlocHtmlRendu({
-  html,
-  scopeId,
-  scene
-}: {
-  html: string
-  scopeId: string
-  /** Code de la scene ```threejs a monter dans la place `.dkc-3d` d'un carrousel /draft. */
-  scene?: string
-}): React.JSX.Element {
+function BlocHtmlRendu({ html, scopeId }: { html: string; scopeId: string }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
-  // Le bloc et sa place `.dkc-3d`, relus une fois le HTML pose : un ref ne se lit pas au rendu.
-  const [scenePosee, setScenePosee] = useState<{ hote: HTMLElement; place: HTMLElement } | null>(
-    null
-  )
   // fix-ok: React 19 compare `dangerouslySetInnerHTML` par IDENTITE d'objet (react-dom-client,
   // updateProperties : `propKey !== lastProp` -> `innerHTML = __html`). Un `{ __html }` neuf a chaque
-  // rendu reecrivait tout le bloc : la scene montee dans `.dkc-3d` disparaissait aussitot (mesure
-  // conv-318), et un carrousel perdait la proposition cochee. Meme objet tant que le HTML ne change pas.
+  // rendu reecrivait tout le bloc : un carrousel perdait la proposition cochee (mesure conv-318).
+  // Meme objet tant que le HTML ne change pas.
   const contenu = useMemo(() => ({ __html: html }), [html])
   useAjusterALaLargeur(ref, html)
-  // La place n'existe qu'une fois le HTML pose, et change avec lui.
-  useLayoutEffect(() => {
-    const hote = ref.current
-    const place = scene ? hote?.querySelector<HTMLElement>(`.${CLASSE_PLACE_SCENE}`) : null
-    setScenePosee(hote && place ? { hote, place } : null)
-  }, [html, scene])
   return (
-    <>
-      <div
-        ref={ref}
-        className="md-html"
-        data-testid="chat-inline-html"
-        data-html-scope={scopeId}
-        dangerouslySetInnerHTML={contenu}
-      />
-      {scene && scenePosee ? (
-        <SceneDuCarrousel hote={scenePosee.hote} place={scenePosee.place} code={scene} />
-      ) : null}
-    </>
+    <div
+      ref={ref}
+      className="md-html"
+      data-testid="chat-inline-html"
+      data-html-scope={scopeId}
+      dangerouslySetInnerHTML={contenu}
+    />
   )
 }
 

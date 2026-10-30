@@ -107,6 +107,15 @@
  *                                    (defaut : premier `textarea`) : ce qui ne s'ouvre qu'a la
  *                                    frappe (palette `/`). Champ absent = code 9. Valeur rendue
  *                                    a la fin.
+ *         [--clic-page <selecteur | texte:libelle>] [--page <selecteur>] [--saisie-attendue <t>]
+ *                                    CLIQUE DANS UNE PAGE INTERACTIVE du fil (bloc ```html-interactif,
+ *                                    conv-1304) : cible cherchee DANS son cadre isole, amenee a
+ *                                    l'ecran, puis VRAI clic de souris (activation utilisateur
+ *                                    comprise). Rapport `clicPage` : libelle, point, saisie et
+ *                                    messages de l'utilisateur avant/apres. Cible absente = code 9 ;
+ *                                    point masque, saisie differente de --saisie-attendue ou message
+ *                                    parti = echec nomme (code 5). Saisie rendue a la fin.
+ *                                    Voir scripts/ui-capture-clic-page.mjs.
  *         [--ralenti <1..20>]        avec --motion : ralentit l'horloge des animations AVANT le
  *                                    declencheur (defaut x10 avec --click, --taper ou --state,
  *                                    x1 sinon ; 1 = coupe).
@@ -117,6 +126,15 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bailDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import {
+  CADRE_DE_PAGE,
+  MESSAGES_UTILISATEUR,
+  clicDansLaPage,
+  decalagePourVoir,
+  echecsDuClicPage,
+  pointDuClic,
+  scriptCibleDansLaPage
+} from './ui-capture-clic-page.mjs'
 import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 import {
   estIdDeConversation,
@@ -976,8 +994,15 @@ const main = async () => {
   let id = 0
   const attente = new Map()
   const erreursConsole = []
+  // Cadres isoles vivant dans un AUTRE processus (--clic-page, conv-1304) : leur session de
+  // debogage, par identifiant de cadre, annoncee par `Target.setAutoAttach`.
+  const sessionsDesCadres = new Map()
   socket.onmessage = ({ data }) => {
     const m = JSON.parse(data)
+    if (m.method === 'Target.attachedToTarget' && m.params?.targetInfo?.type === 'iframe') {
+      sessionsDesCadres.set(m.params.targetInfo.targetId, m.params.sessionId)
+      return
+    }
     const accuse = accuseDImage(m)
     if (accuse) {
       socket.send(JSON.stringify({ id: ++id, ...accuse }))
@@ -993,7 +1018,7 @@ const main = async () => {
       erreursConsole.push(String(m.params.entry.text).slice(0, 200))
     }
   }
-  const envoyer = (methode, params = {}) =>
+  const envoyer = (methode, params = {}, session) =>
     new Promise((ok, ko) => {
       const n = ++id
       const t = setTimeout(() => {
@@ -1004,7 +1029,14 @@ const main = async () => {
         ok: (v) => (clearTimeout(t), ok(v)),
         ko: (e) => (clearTimeout(t), ko(e))
       })
-      socket.send(JSON.stringify({ id: n, method: methode, params }))
+      socket.send(
+        JSON.stringify({
+          id: n,
+          method: methode,
+          params,
+          ...(session ? { sessionId: session } : {})
+        })
+      )
     })
   const evaluer = async (expression) => {
     const r = await envoyer('Runtime.evaluate', {
@@ -1258,9 +1290,9 @@ const main = async () => {
     })()`).catch(() => false)
     await new Promise((r) => setTimeout(r, 1_500))
     for (let essai = 0; essai < 60; essai++) {
-      const pret = await evaluer(`Boolean(document.querySelector('[data-testid="nav-${vue}"]'))`).catch(
-        () => false
-      )
+      const pret = await evaluer(
+        `Boolean(document.querySelector('[data-testid="nav-${vue}"]'))`
+      ).catch(() => false)
       if (pret) break
       await new Promise((r) => setTimeout(r, 500))
     }
@@ -1638,6 +1670,202 @@ const main = async () => {
     mesuresDom = await mesurerDom()
   }
 
+  // --clic-page (conv-1304, 2026-10-30) : un VRAI clic DANS une page interactive du fil. Voir
+  // scripts/ui-capture-clic-page.mjs pour le pourquoi ; ici, la partie qui parle a l'instance.
+  const clicPage = clicDansLaPage(process.argv)
+  let rapportClicPage
+  if (clicPage) {
+    await ouvrirFlux()
+    await envoyer('DOM.enable')
+    await envoyer('Target.setAutoAttach', {
+      autoAttach: true,
+      waitForDebuggerOnStart: false,
+      flatten: true
+    }).catch(() => {})
+    const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+    const listeDesCadres = `(() => {
+      const page = ${JSON.stringify(clicPage.page)}
+      return page
+        ? [...document.querySelectorAll(page)].map((el) => (el.matches('iframe') ? el : el.querySelector('iframe'))).filter(Boolean)
+        : [...document.querySelectorAll(${JSON.stringify(CADRE_DE_PAGE)})]
+    })()`
+    // Le cadre n°i de la liste, en objet de debogage, puis l'identifiant de SON document.
+    const cadreNumero = async (i) => {
+      const r = await envoyer('Runtime.evaluate', { expression: `${listeDesCadres}[${i}] ?? null` })
+      if (!r.result?.objectId) return null
+      const { node } = await envoyer('DOM.describeNode', { objectId: r.result.objectId })
+      return node?.frameId ?? null
+    }
+    // Monde isole DU CADRE : meme processus d'abord, sinon la session du cadre. Un monde cree avant
+    // le chargement de la page meurt avec le document vide : on le recree une fois si besoin.
+    const mondes = new Map()
+    const evaluerDansLeCadre = async (frameId, expression, nouvelEssai = true) => {
+      let monde = mondes.get(frameId)
+      if (!monde) {
+        for (const session of [undefined, sessionsDesCadres.get(frameId)]) {
+          if (session === null) continue
+          try {
+            const { executionContextId } = await envoyer(
+              'Page.createIsolatedWorld',
+              { frameId, worldName: 'ui-capture-clic-page' },
+              session
+            )
+            monde = { session, contexte: executionContextId }
+            break
+          } catch {
+            // Cadre d'un autre processus : la session suivante.
+          }
+        }
+        if (!monde) return { inaccessible: true }
+        mondes.set(frameId, monde)
+      }
+      try {
+        const r = await envoyer(
+          'Runtime.evaluate',
+          { expression, contextId: monde.contexte, returnByValue: true },
+          monde.session
+        )
+        return { valeur: r.result?.value ?? null, processus: monde.session ? 'separe' : 'meme' }
+      } catch (erreur) {
+        mondes.delete(frameId)
+        if (nouvelEssai) return evaluerDansLeCadre(frameId, expression, false)
+        throw erreur
+      }
+    }
+    const script = scriptCibleDansLaPage(clicPage.cible)
+    const nomCible = clicPage.cible.texte
+      ? `texte:${clicPage.cible.texte}`
+      : clicPage.cible.selecteur
+    // 1. Chercher la cible, page par page, jusqu'a 10 s : une page montee recoit son contenu apres
+    // son « pret », et une page 3D charge d'abord son moteur.
+    let trouvee = null
+    let pagesFouillees = 0
+    let inaccessibles = 0
+    for (const debut = Date.now(); !trouvee && Date.now() - debut < 10_000;) {
+      const nombre = await evaluer(`${listeDesCadres}.length`)
+      pagesFouillees = nombre
+      inaccessibles = 0
+      for (let i = 0; i < nombre && !trouvee; i++) {
+        const frameId = await cadreNumero(i)
+        if (!frameId) continue
+        const r = await evaluerDansLeCadre(frameId, script).catch(() => ({ inaccessible: true }))
+        if (r.inaccessible) inaccessibles++
+        else if (r.valeur) trouvee = { rang: i, frameId, processus: r.processus }
+      }
+      if (!trouvee) await pause(400)
+    }
+    if (!trouvee) {
+      await restaurerVue()
+      socket.close()
+      rendre(
+        {
+          ok: false,
+          echecs: [
+            `clic-page-cible-absente(${nomCible}, ${pagesFouillees} page(s) fouillee(s)${inaccessibles ? `, ${inaccessibles} inaccessible(s)` : ''})`
+          ],
+          vue
+        },
+        9
+      )
+    }
+    // 2. Amener le point a l'ecran : une VRAIE molette au-dessus du fil (un defilement de script
+    // ne tenait pas, le fil se recollait en bas — voir --scroll), jusqu'a ce qu'il y reste.
+    const mesurerLeClic = async () => {
+      const cadre = await evaluer(`(() => {
+        const c = ${listeDesCadres}[${trouvee.rang}]
+        if (!c) return null
+        const r = c.getBoundingClientRect()
+        let zone = c.parentElement
+        while (zone && !(zone.scrollHeight > zone.clientHeight + 1 &&
+          /auto|scroll|overlay/.test(getComputedStyle(zone).overflowY))) zone = zone.parentElement
+        const z = (zone ?? document.documentElement).getBoundingClientRect()
+        const haut = Math.max(z.top, 0), bas = Math.min(z.bottom, innerHeight)
+        return { x: r.left, y: r.top, bordGauche: c.clientLeft, bordHaut: c.clientTop,
+          zone: { haut, hauteur: bas - haut, centreX: (Math.max(z.left, 0) + Math.min(z.right, innerWidth)) / 2 } }
+      })()`)
+      const cible = (await evaluerDansLeCadre(trouvee.frameId, script)).valeur
+      return cadre && cible ? { cadre, cible, point: pointDuClic(cadre, cible.rect) } : null
+    }
+    let mesure = await mesurerLeClic()
+    for (let essai = 0; mesure && essai < 6; essai++) {
+      const decalage = decalagePourVoir(mesure.point.y, mesure.cadre.zone)
+      if (decalage === 0) break
+      await envoyer('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x: mesure.cadre.zone.centreX,
+        y: mesure.cadre.zone.haut + mesure.cadre.zone.hauteur / 2,
+        deltaX: 0,
+        deltaY: decalage
+      })
+      await pause(450)
+      mesure = await mesurerLeClic()
+    }
+    rapportClicPage = {
+      cible: nomCible,
+      page: trouvee.rang + 1,
+      processusDuCadre: trouvee.processus,
+      saisieAttendue: clicPage.saisieAttendue
+    }
+    if (!mesure) {
+      rapportClicPage.echec = `clic-page-cible-perdue(${nomCible})`
+    } else {
+      rapportClicPage.libelle = mesure.cible.libelle
+      rapportClicPage.point = mesure.point
+      // 3. Rien ne doit masquer le point : ni dans la page de l'app (bouton flottant, tiroir), ni
+      // dans la page elle-meme (un calque par-dessus la cible).
+      const dessus = await evaluer(`(() => {
+        const c = ${listeDesCadres}[${trouvee.rang}]
+        const el = document.elementFromPoint(${mesure.point.x}, ${mesure.point.y})
+        if (el === c) return null
+        // Sans regex : un antislash serait mange par ce gabarit de chaine.
+        return el ? el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(' ')[0] : '') : 'hors-de-la-fenetre'
+      })()`)
+      if (dessus) rapportClicPage.echec = `clic-page-masque(${dessus})`
+      else if (!mesure.cible.atteignable)
+        rapportClicPage.echec = `clic-page-cible-couverte(${nomCible})`
+    }
+    if (!rapportClicPage.echec) {
+      const lireLeFil = () =>
+        evaluer(`({
+          saisie: document.querySelector(${JSON.stringify(clicPage.champ)})?.value ?? null,
+          messages: document.querySelectorAll(${JSON.stringify(MESSAGES_UTILISATEUR)}).length
+        })`)
+      const avant = await lireLeFil()
+      // 4. Le clic, a la souris : le navigateur le route vers le cadre et lui donne l'activation.
+      const { x, y } = mesure.point
+      await envoyer('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+      await envoyer('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        buttons: 1,
+        clickCount: 1
+      })
+      await envoyer('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x,
+        y,
+        button: 'left',
+        buttons: 0,
+        clickCount: 1
+      })
+      await pause(900)
+      const apres = await lireLeFil()
+      Object.assign(rapportClicPage, {
+        saisieAvant: avant.saisie,
+        saisieApres: apres.saisie,
+        messagesAvant: avant.messages,
+        messagesApres: apres.messages
+      })
+      // Le brouillon de l'utilisateur est rendu a la fin (fenetre reelle), comme pour --taper.
+      if (!saisieARestaurer && avant.saisie !== null && apres.saisie !== avant.saisie) {
+        saisieARestaurer = { champ: clicPage.champ, valeur: avant.saisie }
+      }
+    }
+    mesuresDom = await mesurerDom()
+  }
+
   // --retraits (conv-160) : le retrait du contenu se MESURE au rendu, il ne se lit pas a l'oeil sur
   // une capture — deux vues a 18 et 38 px du bord se ressemblent, et c'est cet ecart qui derivait.
   const retraits = drapeau('--retraits')
@@ -1900,9 +2128,15 @@ const main = async () => {
     ...(retraits !== undefined ? { retraits } : {}),
     ...(conversationOuverte ? { conversation: conversationOuverte } : {}),
     ...(tourChoisi ? { tour: tourChoisi } : {}),
-    ...(listeChoisie ? { listeChoisie } : {})
+    ...(listeChoisie ? { listeChoisie } : {}),
+    ...(rapportClicPage ? { clicPage: rapportClicPage } : {})
   }
-  const verdict = verdictCapture(mesures)
+  const verdictDeLaVue = verdictCapture(mesures)
+  const echecsDuClic = echecsDuClicPage(rapportClicPage)
+  const verdict = {
+    ok: verdictDeLaVue.ok && echecsDuClic.length === 0,
+    echecs: [...verdictDeLaVue.echecs, ...echecsDuClic]
+  }
   rendre(
     {
       ...verdict,
@@ -1937,10 +2171,17 @@ if (lanceEnCli) {
   // `process.exit`, et Vitest tuait le fichier (« process.exit unexpectedly called with "1" »).
   // Mesure 2026-10-10 (conv-160) : 4 fichiers de test sur 4 sans aucun test execute. Elle n'a de
   // sens qu'au lancement en CLI, juste avant `main()` — le seul code qui ouvre un WebSocket.
-  if (typeof globalThis.WebSocket !== 'function' && !process.execArgv.includes('--experimental-websocket')) {
-    const relance = spawnSync(process.execPath, ['--experimental-websocket', ...process.argv.slice(1)], {
-      stdio: 'inherit'
-    })
+  if (
+    typeof globalThis.WebSocket !== 'function' &&
+    !process.execArgv.includes('--experimental-websocket')
+  ) {
+    const relance = spawnSync(
+      process.execPath,
+      ['--experimental-websocket', ...process.argv.slice(1)],
+      {
+        stdio: 'inherit'
+      }
+    )
     process.exit(relance.status ?? 1)
   }
   await main()

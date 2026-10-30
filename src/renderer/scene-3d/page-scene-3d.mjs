@@ -25,11 +25,13 @@
  */
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build } from 'esbuild'
+import { build, transform } from 'esbuild'
 
 export const NOM_PAGE_SCENE_3D = 'scene-3d.html'
+/** La meme page SANS moteur 3D, pour les pages ```html-interactif qui ne nomment pas `THREE`. */
+export const NOM_PAGE_INTERACTIVE = 'page-interactive.html'
 
 const DOSSIER_PAR_DEFAUT = dirname(fileURLToPath(import.meta.url))
 
@@ -92,39 +94,102 @@ const STYLE =
   'max-height:50%;overflow:auto;white-space:pre-wrap;color:#ffb4b4;background:rgba(40,8,12,.88);' +
   'border-top:1px solid rgba(235,40,40,.6);font:12px/1.45 ui-monospace,Consolas,monospace}'
 
-/** La page complete, prete a servir. */
-export async function construirePageScene3d({ dossier = DOSSIER_PAR_DEFAUT } = {}) {
-  const moteur = await construireMoteur(dossier)
+/** Identifiant du bloc de texte qui porte le moteur, lu par l'amorce (`chargerMoteur`). */
+export const ID_MOTEUR_3D = 'autowin-moteur-3d'
+/** Identifiant du bloc de texte de `autowin.graphique` (graphiques.js), lu par l'amorce. */
+export const ID_GRAPHIQUES = 'autowin-graphiques'
+
+/**
+ * La boite a outils de graphiques, en texte comme le moteur : ni empreinte a ajouter a la politique,
+ * ni code evalue pour une page qui ne dessine rien. `transform` et non `build` : le texte est une
+ * EXPRESSION dont l'amorce lit la valeur.
+ */
+async function construireGraphiques(dossier) {
+  const { code } = await transform(readFileSync(join(dossier, 'graphiques.js'), 'utf8'), {
+    minify: true,
+    target: 'chrome120',
+    legalComments: 'none'
+  })
+  return sansFermetureDeScript(code)
+}
+
+/**
+ * La page complete, prete a servir.
+ *
+ * MOTEUR A LA DEMANDE (conv-1304, 2026-10-30). La meme page servait les scenes ```threejs ET les
+ * pages ```html-interactif ; elle executait three.js (~750 Ko) a chaque cadre, meme pour une page
+ * sans 3D. Mesure Electron 44, 8 cadres : ~100 ms et ~68 Mo avec le moteur execute, ~30 ms et
+ * ~37 Mo sans. Le moteur est donc pose en TEXTE (`type="text/plain"`, jamais execute par le
+ * navigateur) et l'amorce l'evalue seulement quand il sert : toujours pour une scene, pour une page
+ * si son HTML nomme `THREE` ou `OrbitControls`. L'amorce reste le SEUL script autorise par
+ * empreinte ; le moteur passe par `eval`, deja permis pour le code des scenes.
+ *
+ * DEUX PAGES (conv-1304, meme jour). Meme non execute, ce texte etait encore telecharge et lu par
+ * chaque cadre. `avecMoteur: false` construit `page-interactive.html` : la meme amorce, la meme
+ * politique, sans le bloc du moteur ; le fil y envoie toute page qui ne nomme pas `THREE`
+ * (`pageIsoleePour`, page-interactive.ts). Le filtre de navigation de la fenetre accepte ces deux
+ * adresses, et elles seules (isSceneFrameUrl).
+ */
+export async function construirePageScene3d({
+  dossier = DOSSIER_PAR_DEFAUT,
+  avecMoteur = true
+} = {}) {
+  const moteur = avecMoteur ? await construireMoteur(dossier) : ''
+  const graphiques = await construireGraphiques(dossier)
   const amorce = sansFermetureDeScript(readFileSync(join(dossier, 'amorce.js'), 'utf8'))
-  const politique = politiqueScene3d([empreinteScript(moteur), empreinteScript(amorce)])
+  const politique = politiqueScene3d([empreinteScript(amorce)])
   return (
     '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
     `<meta http-equiv="Content-Security-Policy" content="${politique}">` +
     '<meta http-equiv="x-dns-prefetch-control" content="off">' +
     '<meta name="referrer" content="no-referrer">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    `<title>Scène 3D</title><style>${STYLE}</style></head><body>` +
-    `<script>${moteur}</script><script>${amorce}</script>` +
+    `<title>${avecMoteur ? 'Scène 3D' : 'Page interactive'}</title>` +
+    `<style>${STYLE}</style></head><body>` +
+    (avecMoteur ? `<script type="text/plain" id="${ID_MOTEUR_3D}">${moteur}</script>` : '') +
+    `<script type="text/plain" id="${ID_GRAPHIQUES}">${graphiques}</script>` +
+    `<script>${amorce}</script>` +
     '</body></html>'
   )
 }
 
+/** Les pages a servir, par nom de fichier. */
+const PAGES = [
+  { nom: NOM_PAGE_SCENE_3D, avecMoteur: true },
+  { nom: NOM_PAGE_INTERACTIVE, avecMoteur: false }
+]
+
 /**
  * Branchement Vite (electron.vite.config.ts, partie renderer) :
- *   - en developpement, le serveur repond a `/scene-3d.html` avec la page construite ;
- *   - au build, la page est emise a cote de `index.html` (out/renderer/scene-3d.html).
- * La page est construite une seule fois par processus : le moteur ne change qu'avec `three`.
+ *   - en developpement, le serveur repond a `/scene-3d.html` et `/page-interactive.html` ;
+ *   - au build, les deux pages sont emises a cote de `index.html` (out/renderer/).
+ * Chaque page est construite une fois, puis RECONSTRUITE quand l'amorce ou le moteur changent.
+ * Mesure du 2026-10-30 (conv-1304) : construite une seule fois par processus, la page servie gardait
+ * l'ancienne amorce apres chaque modification de `amorce.js` — l'app de dev montrait un
+ * comportement que le code ne portait plus, jusqu'au redemarrage du serveur (seule une modification
+ * de CE fichier, dependance de la configuration Vite, le provoquait).
  */
 export function pluginScene3d({ dossier = DOSSIER_PAR_DEFAUT } = {}) {
-  let page
-  const obtenir = () => (page ??= construirePageScene3d({ dossier }))
+  const construites = new Map()
+  const obtenir = ({ nom, avecMoteur }) => {
+    if (!construites.has(nom)) construites.set(nom, construirePageScene3d({ dossier, avecMoteur }))
+    return construites.get(nom)
+  }
+  const sources = new Set(
+    ['amorce.js', 'graphiques.js', 'runtime.js'].map((nom) => resolve(dossier, nom))
+  )
   return {
     name: 'autowin-scene-3d',
     configureServer(server) {
+      for (const source of sources) server.watcher.add(source)
+      server.watcher.on('change', (fichier) => {
+        if (sources.has(resolve(fichier))) construites.clear()
+      })
       server.middlewares.use((requete, reponse, suite) => {
         const chemin = (requete.url ?? '').split(/[?#]/u)[0]
-        if (chemin !== `/${NOM_PAGE_SCENE_3D}`) return suite()
-        obtenir().then(
+        const page = PAGES.find(({ nom }) => chemin === `/${nom}`)
+        if (!page) return suite()
+        obtenir(page).then(
           (html) => {
             reponse.setHeader('Content-Type', 'text/html; charset=utf-8')
             reponse.setHeader('Cache-Control', 'no-store')
@@ -135,7 +200,9 @@ export function pluginScene3d({ dossier = DOSSIER_PAR_DEFAUT } = {}) {
       })
     },
     async generateBundle() {
-      this.emitFile({ type: 'asset', fileName: NOM_PAGE_SCENE_3D, source: await obtenir() })
+      for (const page of PAGES) {
+        this.emitFile({ type: 'asset', fileName: page.nom, source: await obtenir(page) })
+      }
     }
   }
 }

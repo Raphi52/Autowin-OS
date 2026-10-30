@@ -11,6 +11,7 @@ import * as chatExecution from './chat-execution'
 import * as chatFil from './chat-fil'
 import * as chatFilsEtLots from './chat-fils-et-lots'
 import * as chatPanneaux from './chat-panneaux'
+import * as barriereErreur from './barriere-erreur'
 import * as horsElectron from './hors-electron'
 import * as knowledge from './knowledge'
 import * as observatory from './observatory'
@@ -52,7 +53,8 @@ const TABLES: Readonly<Record<string, TableDEcran>> = {
   settings,
   'chat-fils-et-lots': chatFilsEtLots,
   'reglages-et-decor': reglagesEtDecor,
-  'hors-electron': horsElectron
+  'hors-electron': horsElectron,
+  'barriere-erreur': barriereErreur
 }
 
 const valeursDe = (texte: string): string[] =>

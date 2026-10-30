@@ -61,13 +61,17 @@
  *   - le `html` est RECOPIÉ dans sa vignette : préfixe tes classes (jamais `dkc-`), et un `id`
  *     (dégradé SVG) est renommé dans la copie pour ne pas exister en double.
  *   - « scene3d » (sujet en VOLUME, conv-318 : « le bloc 3d doit etre dans le bloc draft ») : le
- *     code three.js d'UNE scène qui montre la proposition choisie. Il sort en clôture ```threejs
- *     juste AVANT le carrousel, qui lui laisse une place (`dkc-3d`) au-dessus des fiches : le fil
- *     monte la scène DANS le carrousel (src/renderer/src/components/draft-scene-3d.ts) et lui
- *     transmet le rang affiché par `autowin.surChoix((n) => …)`, que la scène DOIT écouter.
- *   Sortie : le fichier .md avec la clôture ```html-render (précédée de la scène s'il y en a une), à
- *   contrôler par scripts/html-render-apercu.mjs (code 0) — et scripts/scene-3d-apercu.mjs pour la
- *   scène — puis à recopier tel quel dans la réponse.
+ *     code three.js d'UNE scène qui montre la proposition choisie, écrit comme un bloc ```threejs
+ *     (`document.body`, `innerWidth`/`innerHeight`, « resize »). Le carrousel devient alors UNE
+ *     page ```html-interactif (conv-1304, 2026-10-30) : la scène y tourne DANS la place `dkc-3d`,
+ *     au-dessus des fiches, et suit le rang affiché par `autowin.surChoix((n) => …)`, qu'elle DOIT
+ *     écouter. Ses boutons y REMPLISSENT la saisie au lieu d'envoyer (src/renderer/src/components/
+ *     saisie-du-fil.ts) : le code de la page tourne, l'utilisateur relit le choix avant de l'envoyer.
+ *     Avant, la scène sortait en clôture ```threejs à part, que le fil montait dans le carrousel.
+ *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène —,
+ *   à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs et
+ *   scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par la commande `montrer_bloc`
+ *   (conv-1306 : recopié à la main, un carrousel de 52 ko ne tenait plus dans la réponse).
  *   Codes : 0 = écrit ; 2 = usage ou propositions invalides (raisons sur stdout) ; 1 = erreur.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -116,6 +120,8 @@ export function verifierPropositions(spec) {
         )
       if (/^\s*(`{3,}|~{3,})/m.test(spec.scene3d))
         erreurs.push('« scene3d » : une ligne en ``` fermerait la clôture de la scène')
+      if (/<\/script/i.test(spec.scene3d))
+        erreurs.push('« scene3d » : « </script » fermerait le script de la scène dans la page')
     }
   }
   if (spec.mixer !== undefined && typeof spec.mixer !== 'boolean')
@@ -193,8 +199,11 @@ ${pour((i) => `#dkm${i}:not(:checked)~.dkc-act .dkc-mxa>.dkc-y${i},#dkm${i}:chec
 }
 
 function feuilleDeStyle(n, cssPropositions, avecScene = false, avecMixer = false) {
+  // La place de la scène a SA hauteur, tirée de sa largeur (et non du contenu : `overflow:hidden`
+  // retire le minimum automatique d'un `aspect-ratio`) — une scène qui se cale sur `innerHeight` ne
+  // peut donc pas faire grandir la page en boucle.
   const styleScene = avecScene
-    ? `.dkc-mid{min-width:0;display:flex;flex-direction:column;flex-wrap:nowrap;gap:10px}\n.${CLASSE_PLACE_SCENE}{min-width:0}`
+    ? `.dkc-mid{min-width:0;display:flex;flex-direction:column;flex-wrap:nowrap;gap:10px}\n.${CLASSE_PLACE_SCENE}{position:relative;min-width:0;min-height:200px;max-height:380px;aspect-ratio:16/9;overflow:hidden;border-radius:10px}\n.${CLASSE_PLACE_SCENE} canvas{display:block}`
     : ''
   const D = `${TRANSITION.duree}s`
   const E = TRANSITION.courbe
@@ -314,8 +323,7 @@ export function carrouselDraft(spec) {
   const interrupteur =
     '<label for="dkall" class="dkc-tog"><span class="dkc-sw"><span></span></span>Tout voir</label>'
   const navigation = `<span class="dkc-nav">${P.map(
-    (p) =>
-      `<span class="dkc-q dkc-q${p.n}">${p.n} / ${n}</span>`
+    (p) => `<span class="dkc-q dkc-q${p.n}">${p.n} / ${n}</span>`
   ).join(
     ''
   )}</span><span class="dkc-gtx">les ${n} côte à côte · clique une carte pour la choisir</span>`
@@ -386,7 +394,7 @@ ${feuilleDeStyle(n, cssPropositions, Boolean(spec.scene3d), avecMixer)}
 </style>
 <div class="dkc-w">
 <div class="dkc-hd">${echapper(spec.titre)}</div>
-${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · <b>choisis</b> avec les boutons du bas, ${avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
+${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · <b>choisis</b> avec les boutons du bas${spec.scene3d ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
 <div class="dkc-car">${champs}
 ${navigation}
 ${scene}
@@ -398,12 +406,69 @@ ${interrupteur}
 </div>`
 }
 
-/** Le bloc complet, clôture comprise, prêt à recopier dans la réponse — la scène 3D d'abord. */
-export const blocHtmlRender = (spec) =>
-  (spec.scene3d ? '```threejs\n' + spec.scene3d.trim() + '\n```\n\n' : '') +
-  '```html-render\n' +
-  carrouselDraft(spec) +
-  '\n```\n'
+/**
+ * La scène écrite pour un CADRE ENTIER, posée dans la place `dkc-3d` de la page (conv-1304). Elle
+ * garde les habitudes d'un bloc ```threejs : `innerWidth`/`innerHeight` rendent la taille de la
+ * place, « resize » suit la place, et ce qu'elle ajoute à `document.body` (son canvas) y est déplacé.
+ * Le rang affiché sort des cases radio du carrousel, lues à chaque `change`, et il est RETENU dans
+ * le localStorage de la page (gardé par le fil) : une page 3D est démontée loin de l'écran
+ * (BlocHtmlInteractif.tsx) et revient sur la proposition qu'on regardait. Script SÉPARÉ de celui
+ * de la scène : une erreur de la scène reste dite à SA ligne du bloc.
+ */
+export const SCRIPT_PLACE_SCENE = `;(() => {
+  const place = document.querySelector('.${CLASSE_PLACE_SCENE}')
+  if (!place) return
+  const cases = Array.from(document.querySelectorAll('.dkc-car > input[type="radio"]'))
+  const rang = () => Math.max(1, cases.findIndex((c) => c.checked) + 1)
+  const retenu = Number(localStorage.getItem('dkc-choix'))
+  if (retenu >= 1 && retenu <= cases.length) cases[retenu - 1].checked = true
+  const ecouteurs = []
+  const autowin = window.autowin || (window.autowin = {})
+  autowin.choix = rang()
+  autowin.surChoix = (fn) => {
+    if (typeof fn !== 'function') return
+    ecouteurs.push(fn)
+    fn(autowin.choix)
+  }
+  document.addEventListener('change', () => {
+    const n = rang()
+    if (n === autowin.choix) return
+    autowin.choix = n
+    localStorage.setItem('dkc-choix', String(n))
+    for (const fn of ecouteurs) fn(n)
+  })
+  Object.defineProperty(window, 'innerWidth', { configurable: true, get: () => place.clientWidth })
+  Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => place.clientHeight })
+  new ResizeObserver(() => window.dispatchEvent(new Event('resize'))).observe(place)
+  new MutationObserver((changements) => {
+    for (const changement of changements)
+      for (const noeud of changement.addedNodes)
+        if (noeud.nodeType === 1 && noeud.id !== 'autowin-scene-3d-erreur') place.appendChild(noeud)
+  }).observe(document.body, { childList: true })
+})()`
+
+/** Attribut du script de la scène dans la page : scene-3d-apercu.mjs le retrouve par lui. */
+export const ATTRIBUT_SCRIPT_SCENE = 'data-dkc-scene'
+
+/** La page ```html-interactif d'un carrousel EN VOLUME : le carrousel, puis sa scène. */
+export function pageDuCarrousel3d(spec) {
+  if (!spec?.scene3d) throw new Error('« scene3d » absent : le carrousel reste un html-render')
+  return (
+    carrouselDraft(spec) +
+    `\n<script>\n${SCRIPT_PLACE_SCENE}\n</script>\n<script ${ATTRIBUT_SCRIPT_SCENE}>\n` +
+    spec.scene3d.trim() +
+    '\n</script>'
+  )
+}
+
+/**
+ * Le bloc complet, clôture comprise, prêt à recopier dans la réponse : ```html-render sans scène,
+ * ```html-interactif avec (la scène tourne dans la page, voir `pageDuCarrousel3d`).
+ */
+export const blocDuCarrousel = (spec) =>
+  spec.scene3d
+    ? '```html-interactif\n' + pageDuCarrousel3d(spec) + '\n```\n'
+    : '```html-render\n' + carrouselDraft(spec) + '\n```\n'
 
 const lanceEnCli = Boolean(
   process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/draft-carrousel.mjs')
@@ -427,7 +492,7 @@ if (lanceEnCli) {
     const sortie = resolve(
       i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fichier.replace(/\.json$/i, '') + '.md'
     )
-    const bloc = blocHtmlRender(spec)
+    const bloc = blocDuCarrousel(spec)
     mkdirSync(dirname(sortie), { recursive: true })
     writeFileSync(sortie, bloc)
     sortir(0, {
@@ -436,9 +501,11 @@ if (lanceEnCli) {
       propositions: spec.propositions.length,
       octets: Buffer.byteLength(bloc),
       suite:
-        `node scripts/html-render-apercu.mjs "${sortie}" (code 0 exigé)` +
-        (spec.scene3d ? `, node scripts/scene-3d-apercu.mjs "${sortie}" (code 0 exigé)` : '') +
-        ', puis recopie le tout tel quel'
+        (spec.scene3d
+          ? `node scripts/html-interactif-apercu.mjs "${sortie}" et ` +
+            `node scripts/scene-3d-apercu.mjs "${sortie}" (code 0 exigé pour chacun)`
+          : `node scripts/html-render-apercu.mjs "${sortie}" (code 0 exigé)`) +
+        ', puis pose-le dans le fil avec la commande montrer_bloc (path = ce fichier) : ne le recopie pas'
     })
   } catch (erreur) {
     sortir(1, { ok: false, erreur: String(erreur?.message ?? erreur) })
