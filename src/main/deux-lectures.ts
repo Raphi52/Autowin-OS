@@ -284,9 +284,24 @@ export function annonceDeLaLectureRetenue(retenue: string): string {
  */
 export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee?: string): string {
   const precision = ecartee
-    ? `Compréhension de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
-    : `Compréhension de la demande, annoncée à l'utilisateur : « ${retenue} ».`
+    ? `${DEBUT_PRECISION}« ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
+    : `${DEBUT_PRECISION}« ${retenue} ».`
   return tache.includes(precision) ? tache : `${tache.trimEnd()}\n\n${precision}`
+}
+
+const DEBUT_PRECISION = "Compréhension de la demande, annoncée à l'utilisateur : "
+
+/**
+ * La tâche SANS cette précision : ce que l'utilisateur a tapé. Tout ce qui lit la demande pour y
+ * trouver une CIBLE passe par ici : la précision est une paraphrase du modèle, et elle porte aussi
+ * la lecture ÉCARTÉE. Le /kaizen de conv-1332 (tour c7de932e-abac-4f8b-ba34-1b6335b62653) a pris le
+ * `/draft` de cette lecture écartée pour une commande citée, et audité conv-1306 à la place.
+ */
+export function sansPrecisionDeLecture(tache: string): string {
+  const debut = tache.indexOf(`\n\n${DEBUT_PRECISION}`)
+  if (debut < 0) return tache
+  const fin = tache.indexOf('\n\n', debut + 2)
+  return `${tache.slice(0, debut)}${fin < 0 ? '' : tache.slice(fin)}`
 }
 
 /**
