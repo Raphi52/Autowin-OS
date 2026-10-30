@@ -90,6 +90,40 @@ describe('lots du workflow intelligent → mémoire du scout', () => {
     })
   })
 
+  /*
+   * EN PARALLÈLE (conv-1333) : les lots partent ensemble, rien ne garantit que le lot 1 s'enregistre
+   * le premier. Il remettait le scout à plat : les pistes du lot 2, déjà notées, redevenaient
+   * « laissées » et perdaient le run qui les traitait.
+   */
+  it('le lot 2 noté AVANT le lot 1 garde ses pistes : l’ordre d’arrivée ne compte pas', () => {
+    const chemin = join(mkdtempSync(join(tmpdir(), 'scout-lots-')), 'pistes.json')
+    noterPistesScout({
+      depot: DEPOT,
+      texte: TABLEAU,
+      run: 'scout-1',
+      maintenant: '2026-10-22T10:00:00Z',
+      chemin
+    })
+    const [lot1, lot2] = messagesDesLots()
+    for (const [demande, run, heure] of [
+      [lot2!, 'lot-2', '11'],
+      [lot1!, 'lot-1', '12']
+    ] as const)
+      noterChoixScout({
+        depot: DEPOT,
+        demande,
+        run,
+        maintenant: `2026-10-22T${heure}:00:00Z`,
+        chemin
+      })
+    const etat = Object.fromEntries(
+      lireMemoireScout(chemin).entrees.map((e) => [e.titre, [e.choix, e.traitePar, e.voie]])
+    )
+    expect(etat['Vue des coûts']).toEqual(['prise', 'lot-2', 'complete'])
+    expect(etat['Écriture du cache']).toEqual(['prise', 'lot-1', 'directe'])
+    expect(etat['Logs bavards']).toEqual(['laissee', undefined, undefined])
+  })
+
   it('une NOUVELLE sélection (lot 1 ou sans lot) remet le scout à plat, comme avant', () => {
     const chemin = memoireApresLesLots()
     const candidats = candidatsDepuisScoutTable(parseScoutTable(TABLEAU)!)

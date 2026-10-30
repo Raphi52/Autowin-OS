@@ -223,12 +223,16 @@ export function noterChoixScout(entree: {
     .sort((a, b) => b.vuLe.localeCompare(a.vuLe))[0]
   if (!source) return
   const lot = lotDeLaSelection(entree.demande)
-  const lotSuivant = lot !== null && lot.numero > 1
+  const decoupee = lot !== null && lot.total > 1
+  const lotSuivant = decoupee && lot.numero > 1
   const voie = voieDeLaSelection(entree.demande)
   const entrees = memoire.entrees.map((e): EntreeMemoireScout => {
     if (e.depot !== depot || e.run !== source.run) return e
     const prise = prises.some((p) => memePiste(p, e.titre))
     if (lotSuivant && !prise) return e
+    // EN PARALLÈLE (conv-1333) : un lot suivant a pu s'enregistrer avant le lot 1, qui ne défait pas
+    // ses pistes en remettant le scout à plat.
+    if (decoupee && !prise && e.choix === 'prise') return e
     const suivante: EntreeMemoireScout = { ...e }
     delete suivante.traitePar
     delete suivante.voie
