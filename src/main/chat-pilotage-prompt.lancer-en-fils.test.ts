@@ -35,6 +35,16 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
   })
 
   /*
+   * Faire « à la suite » ne vaut que pour ce qui tient dans le tour (kaizen de conv-1332). Sans
+   * cette exception, la règle ci-dessus l'emportait sur le plan de lots : voir le test de
+   * `chat-pilotage-prompt.plan-de-lots.test.ts`.
+   */
+  it('renvoie au plan de lots les tâches indépendantes qui prendraient chacune un tour', () => {
+    expect(prompt).toMatch(/lance-les en parallèle avec `plan_de_lots` quand cet outil existe/u)
+    expect(prompt).toMatch(/il part sans carte ni clic/u)
+  })
+
+  /*
    * Essai réel du 2026-10-25 (conv-1147, instance de test) : sans cette phrase, l'agent a LU le
    * fichier joint et recopié dans chaque `demande` son contenu ET son chemin temporaire
    * (`autowin-os-attachments-…`), qui est effacé à la fin de son tour (`providers/claude.ts`,

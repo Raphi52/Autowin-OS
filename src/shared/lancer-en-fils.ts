@@ -200,6 +200,10 @@ export function cleDuLancement(source: string, reponse?: string): string {
  * fait toutes, à la suite, dans le tour — règle d'Autonomie (4) de la constitution — et la carte ne
  * sert plus que si l'utilisateur demande lui-même de répartir le travail en fils.
  *
+ * « À LA SUITE » NE VAUT QUE POUR CE QUI TIENT DANS LE TOUR (kaizen de conv-1332, 2026-10-30, « tu
+ * aurais dû tout paralléliser ») : ce qui est refusé, c'est la validation, pas le parallélisme. Le
+ * plan de lots part sans clic ; voir `main/consigne-plan-de-lots.ts`.
+ *
  * RACCOURCIE (conv-1229, 2026-10-28) : ce bloc part à CHAQUE appel du chat, alors qu'il ne sert que
  * sur demande explicite de fils. Retirés : l'explication de la carte côté app (« L'app dessine une
  * carte… », mécanique que le modèle n'a pas à appliquer) et la seconde tâche de l'exemple. Toutes
@@ -208,7 +212,9 @@ export function cleDuLancement(source: string, reponse?: string): string {
 export const CONSIGNE_LANCER_EN_FILS =
   `PLUSIEURS TÂCHES DANS UN MESSAGE — au moment où le message de l'utilisateur demande au moins DEUX ` +
   `tâches d'ACTION, fais-les TOUTES dans ce tour, l'une après l'autre, sans carte ni demande ` +
-  `d'accord : l'utilisateur a refusé cette étape de validation. Le bloc ` +
+  `d'accord : l'utilisateur a refusé cette étape de validation. Une exception : si ces tâches sont ` +
+  `indépendantes, sur des fichiers séparés, et que chacune occuperait un tour entier, lance-les en ` +
+  `parallèle avec \`plan_de_lots\` quand cet outil existe — il part sans carte ni clic. Le bloc ` +
   '```' +
   `${FORME_FILS} ne se rend QUE si l'utilisateur demande LUI-MÊME de répartir le travail en plusieurs ` +
   `fils (« répartis en fils », « lance-les en parallèle ») : estime d'abord, par une recherche rapide, ` +
