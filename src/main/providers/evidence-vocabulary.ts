@@ -144,6 +144,29 @@ function isVerifyingScript(args: string[]): boolean {
   return ['test', 'typecheck', 'build', 'lint', 'check'].includes((args[1] ?? '').toLowerCase())
 }
 
+/**
+ * Un interpréteur Python ne VÉRIFIE que s'il lance un oracle de test : `-m pytest|unittest`, ou un
+ * script dont le NOM dit test (`tests.py`, `test_x.py`, `x_test.py`, `run_tests.py`). Sans cette
+ * règle, un dépôt dont l'oracle est `python tools/tests.py` ne pouvait jamais cocher la case
+ * « tests » du contrôle final (conv-355, 5 refus). Un script quelconque (`build.py`, `-c`) reste
+ * hors de la table : il peut écrire sans rien prouver.
+ */
+function isPythonTest(args: string[]): boolean {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '-m') return ['pytest', 'unittest'].includes((args[i + 1] ?? '').toLowerCase())
+    if (arg === '-c') return false
+    if (arg === '-X' || arg === '-W') {
+      i += 1
+      continue
+    }
+    if (arg.startsWith('-')) continue
+    const nom = arg.replace(/^.*[\\/]/, '').toLowerCase()
+    return /^(?:.*[_-])?tests?(?:[_-].*)?\.py$/.test(nom)
+  }
+  return false
+}
+
 /** Verbes qui CHANGENT un état. `true` = toujours ; sinon un prédicat sur les arguments. */
 const MUTATING: Record<string, Rule> = {
   git: isMutatingGit,
@@ -224,7 +247,11 @@ const VERIFYING: Record<string, Rule> = {
   cargo: firstIs('test'),
   go: firstIs('test'),
   dotnet: firstIs('test'),
-  node: (args) => args.includes('-e')
+  node: (args) => args.includes('-e'),
+  python: isPythonTest,
+  python3: isPythonTest,
+  'python.exe': isPythonTest,
+  py: isPythonTest
 }
 
 /**

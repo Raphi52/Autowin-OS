@@ -410,3 +410,39 @@ describe('une preuve de test redirigée vers un fichier reste une VÉRIFICATION'
     expect(claudeToolEvidenceKind('Bash', commande)).toBe('mutation')
   })
 })
+
+/**
+ * BOUCLE MESURÉE le 2026-10-30 (conv-355, `run-acf5f351f041-1`) — même pathologie que conv-15,
+ * autre langage. Le lot RobloxFishingBrainrot exigeait « tests verts » ; ses tests se lancent par
+ * `python tools/tests.py` (code 0, 898 OK, relancés à chaque passage). Le contrôle final a
+ * pourtant refusé CINQ fois « Promis mais pas fait : "Tests demandes executes avec un code de
+ * sortie 0" ».
+ *
+ * CAUSE : la table `VERIFYING` ne connaissait aucun interpréteur Python. `python` n'y figurant
+ * pas, `python tools/tests.py` — et même `python -m pytest` — ressortait en `inspection`, et
+ * `rootRequirementChecks` ne coche la case « tests » que sur un `verification` : case
+ * insatisfaisable pour tout dépôt dont l'oracle est un script Python.
+ */
+describe('un test lancé par l’interpréteur Python est une VÉRIFICATION', () => {
+  it.each([
+    'python tools/tests.py',
+    'cd "/d/SOurcees/RobloxFishingBrainrot" && python tools/tests.py > /tmp/t.log 2>&1; echo "EXIT_TESTS=$?"',
+    'python3 tests/test_peche.py',
+    'py -3 tools/tests.py',
+    'python -I tools/run_tests.py',
+    'python -m pytest -q',
+    'python -m unittest discover'
+  ])('reconnaît le test : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).toBe('verification')
+  })
+
+  /** LA FRONTIÈRE : un script Python quelconque n'est pas un oracle de test. */
+  it.each([
+    'python tools/build.py',
+    `python -c "print('tests ok')"`,
+    'python -m pip install lupa',
+    'python scripts/latest.py'
+  ])('ne prend pas pour un test : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).not.toBe('verification')
+  })
+})
