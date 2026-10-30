@@ -537,11 +537,14 @@ export class GestionnaireNavigateur {
     const fil = this.fils.get(conversationId)
     if (!fil) return
     for (const attente of [...fil.enPause]) this.libererPause(conversationId, attente, 'ferme')
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — on retirait le fil de la question sans en sortir
+    // ses gestes : seul sur le site, le geste attendait les 120 s ; un autre fil présent, sa réponse
+    // relançait le geste du fil supprimé et `this.fil()` recréait ce fil.
+    for (const enAccord of [...fil.enAccord]) this.abandonnerAccord(conversationId, enAccord)
     for (const id of fil.onglets) {
       this.onglets.get(id)?.vue.fermer()
       this.onglets.delete(id)
     }
-    for (const attente of this.attentes.values()) attente.fils.delete(conversationId)
     this.fils.delete(conversationId)
     if (this.filAffiche === conversationId) this.filAffiche = null
     this.appliquerVisibilite()
@@ -913,8 +916,8 @@ export class GestionnaireNavigateur {
    * Stop ou main reprise ? refus sans toucher la page → cible (fil en pause ou question d'accord à
    * venir : lue sans y entrer) → garde mot de passe → ATTENTE DE PAUSE (cible en pointillés ; après
    * l'attente, Stop et main reprise revérifiés, cible relocalisée, garde rejouée) → accord du site
-   * (Stop et main reprise le font tomber sans sa réponse) → Stop et main reprise REVÉRIFIÉS → entrée
-   * dans la cible si elle a attendu la question →
+   * (Stop, main reprise et fil supprimé le font tomber sans sa réponse) → Stop, main reprise et onglet
+   * REVÉRIFIÉS → entrée dans la cible si elle a attendu la question →
    * bandeau levé + cible (ou champ actif) surlignée 800 ms → garde mot de passe REJOUÉE (la page a pu
    * déplacer le focus) → Stop, main reprise et site REVÉRIFIÉS avant d'éteindre le mode de l'utilisateur,
    * puis avant l'envoi → action → bandeau baissé. `arret` : le Stop du tour.
@@ -1051,6 +1054,16 @@ export class GestionnaireNavigateur {
     // n'éteint pas le mode de l'utilisateur. Relu AVANT l'issue : c'est lui qui dit la vraie raison.
     const apresAccord = this.refusImmediat(conversationId, arret)
     if (apresAccord) return apresAccord
+    // fix-ok: run-adc12547df2d-1 (objection du juge) — la question ne vérifiait pas l'onglet, comme le
+    // fait la pause : relire son adresse levait « Object has been destroyed » hors du `try`, et l'agent
+    // recevait cette phrase au lieu d'un refus. Lu AVANT `abandon` : un fil supprimé ferme ses onglets,
+    // et cette vraie raison ne doit pas se lire « l'utilisateur a repris la main ».
+    if (this.onglets.get(onglet.id) !== onglet) {
+      return refus(
+        'aucun-onglet',
+        "L'onglet a été fermé pendant la question d'accord : rien n'a été fait."
+      )
+    }
     // Main reprise puis déjà rendue : le geste a été abandonné, il ne repart pas.
     if (issue === 'abandon') return refus('main-reprise', MESSAGE_MAIN_REPRISE)
     if (issue !== 'accorde') {
@@ -1475,7 +1488,8 @@ export class GestionnaireNavigateur {
   }
 
   /**
-   * Garde (b) : `accorde`, ou la raison du refus. `abandon` : main reprise ou Stop pendant la question.
+   * Garde (b) : `accorde`, ou la raison du refus. `abandon` : main reprise, Stop ou fil supprimé
+   * pendant la question.
    *
    * fix-ok: run-adc12547df2d-1 (objection du juge) — seule la réponse ou les 120 s rendaient le geste :
    * « Reprendre la main » laissait `en-cours`, la question à l'écran et l'agent bloqué sans raison.

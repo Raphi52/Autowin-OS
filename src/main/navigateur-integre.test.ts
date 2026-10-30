@@ -154,6 +154,9 @@ class FausseVue implements VueNavigateur {
     return chargementRetenu ?? Promise.resolve({ ok: true })
   }
   url(): string {
+    // Comme `contenu.getURL()` sur une page fermée (objection du juge, run-adc12547df2d-1). Fausse page
+    // qui répondait encore une fois fermée : le recul de la question d'accord passait inaperçu.
+    if (this.ferme) throw new TypeError('Object has been destroyed')
     return this.adresse
   }
   titre(): string {
@@ -190,6 +193,7 @@ class FausseVue implements VueNavigateur {
     return { largeur: 800, hauteur: 600 }
   }
   executer(source: string): Promise<unknown> {
+    if (this.ferme) return Promise.reject(new TypeError('Object has been destroyed'))
     const appel = decoderAppelPage(source)
     if (!appel) return Promise.reject(new Error('source illisible'))
     this.appels.push(appel)
@@ -1705,6 +1709,101 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       expect(nav.etat('conv-a').demandeAccord?.origine).toBe(SITE)
       await vi.advanceTimersByTimeAsync(1)
       expect(await suivant).toMatchObject({ ok: false, refus: 'accord-refuse' })
+    })
+
+    // Objection du juge (run-adc12547df2d-1) : après la question, la relecture du site lisait l'adresse
+    // d'une page fermée, hors du `try` : `agir` se rejetait et l'agent recevait une phrase technique.
+    it.each([
+      ['une saisie', SAISIE],
+      ['un clic', CLIC]
+    ] as const)(
+      '%s dont l’onglet est fermé pendant la question : refus clair, rien ne part',
+      async (_n, action) => {
+        const vue = preparer()
+        const enCours = nav.agir('conv-a', action)
+        await laisserFiler()
+        nav.fermerOnglet(nav.etat('conv-a').ongletActif as string)
+
+        nav.repondreAccord(SITE, 'une-fois')
+
+        expect(await enCours).toMatchObject({
+          ok: false,
+          refus: 'aucun-onglet',
+          message: expect.stringMatching(/onglet a été fermé/)
+        })
+        expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
+        expect(vue.textes).toEqual([])
+        expect(vue.evenements).toEqual([])
+      }
+    )
+
+    it('jumeau : l’onglet fermé pendant la pause donne le même refus', async () => {
+      preparer()
+      nav.piloter('conv-a', 'pause')
+      const enCours = nav.agir('conv-a', CLIC)
+      await laisserFiler()
+      nav.fermerOnglet(nav.etat('conv-a').ongletActif as string)
+
+      nav.piloter('conv-a', 'pas-suivant')
+
+      expect(await enCours).toMatchObject({ ok: false, refus: 'aucun-onglet' })
+    })
+
+    // Objection du juge (run-adc12547df2d-1) : `oublierFil` laissait les gestes dans la question. Seul
+    // sur le site, le geste attendait les 120 s ; un autre fil présent, sa réponse relançait le geste
+    // du fil supprimé et `this.fil()` recréait ce fil.
+    const filConnu = (id: string): boolean =>
+      (nav as unknown as { fils: Map<string, unknown> }).fils.has(id)
+
+    it('fil supprimé pendant la question : son geste tombe tout de suite', async () => {
+      const vue = preparer()
+      const enCours = nav.agir('conv-a', SAISIE)
+      await laisserFiler()
+
+      nav.oublierFil('conv-a')
+
+      expect(await issueSansAttendre(enCours)).toMatchObject({
+        ok: false,
+        refus: 'aucun-onglet',
+        message: expect.stringMatching(/onglet a été fermé/)
+      })
+      expect(vue.textes).toEqual([])
+      expect(filConnu('conv-a')).toBe(false)
+    })
+
+    it('fil supprimé : la réponse de l’autre fil sur le même site ne relance pas son geste', async () => {
+      const supprimee = preparer('conv-a')
+      const autre = preparer('conv-b')
+      const perdu = nav.agir('conv-a', CLIC)
+      const garde = nav.agir('conv-b', CLIC)
+      await laisserFiler()
+
+      nav.oublierFil('conv-a')
+
+      expect(await issueSansAttendre(perdu)).toMatchObject({ ok: false, refus: 'aucun-onglet' })
+      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
+      nav.repondreAccord(SITE, 'une-fois')
+      expect(await garde).toMatchObject({ ok: true })
+      expect(autre.evenements.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+      expect(supprimee.evenements).toEqual([])
+      expect(filConnu('conv-a')).toBe(false)
+    })
+
+    it('la question du fil supprimé n’écourte pas celle d’un autre fil : elle a ses 120 s', async () => {
+      vi.useFakeTimers()
+      nav = new GestionnaireNavigateur({ fabrique, racine, delaiSurbrillanceMs: 0 })
+      preparer('conv-a')
+      const perdu = nav.agir('conv-a', CLIC)
+      await vi.advanceTimersByTimeAsync(60_000)
+      nav.oublierFil('conv-a')
+
+      preparer('conv-b')
+      const suivant = nav.agir('conv-b', CLIC)
+      await vi.advanceTimersByTimeAsync(DELAI_ACCORD_MS - 1)
+      expect(nav.etat('conv-b').demandeAccord?.origine).toBe(SITE)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await suivant).toMatchObject({ ok: false, refus: 'accord-refuse' })
+      expect(await perdu).toMatchObject({ ok: false })
     })
   })
 
