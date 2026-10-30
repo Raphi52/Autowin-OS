@@ -247,6 +247,72 @@ describe('surbrillance', () => {
   })
 })
 
+describe('surbrillance : le cadre suit sa cible', () => {
+  /*
+   * Mesuré en vraie app (conv-1324, run9) : en pause, l'utilisateur fait défiler pour regarder la page ;
+   * la cible part à y = -75, le cadre reste à y = 125 et désigne autre chose. Pareil quand le bandeau
+   * remet la page en page. ENTRÉE QUI FAIT ÉCHOUER CE TEST si la correction est fausse : n'écouter que
+   * `scroll` sans la capture, ou oublier `resize`.
+   */
+  function poserCible(haut: { valeur: number }): HTMLElement {
+    document.body.innerHTML = '<button id="b">Envoyer</button>'
+    const bouton = document.getElementById('b') as HTMLElement
+    bouton.getBoundingClientRect = () => new DOMRect(24, haut.valeur, 150, 38)
+    return bouton
+  }
+  const cadre = (): HTMLElement =>
+    (noyau().calque as ShadowRoot).querySelector('.surbrillance') as HTMLElement
+
+  it('suit le défilement et la remise en page, y compris dans un bloc qui défile', () => {
+    const haut = { valeur: 125 }
+    poserCible(haut)
+    const vise = jouer<LocalisationPage>('localiser', [{ selecteur: '#b' }, {}])
+    jouer('surligner', [vise.rect, 'cliquer', { prochain: true }])
+    expect(cadre().style.top).toBe('125px')
+
+    haut.valeur = -75
+    window.dispatchEvent(new Event('scroll'))
+    expect(cadre().style.top).toBe('-75px')
+
+    // Un bloc qui défile : `scroll` ne remonte pas, seule la capture le voit.
+    haut.valeur = 60
+    document.body.dispatchEvent(new Event('scroll'))
+    expect(cadre().style.top).toBe('60px')
+
+    haut.valeur = 90
+    window.dispatchEvent(new Event('resize'))
+    expect(cadre().style.top).toBe('90px')
+  })
+
+  it('une frappe sans cible suit le champ actif', () => {
+    const haut = { valeur: 40 }
+    poserCible(haut)
+    ;(document.getElementById('b') as HTMLElement).focus()
+    const champ = jouer<FocusPage>('focus')
+    jouer('surligner', [champ.rect, 'taper'])
+    haut.valeur = 15
+    window.dispatchEvent(new Event('scroll'))
+    expect(cadre().style.top).toBe('15px')
+  })
+
+  it('jumeaux : cadre retiré, plus aucun suivi ; cible disparue, le cadre reste où il est', () => {
+    const haut = { valeur: 125 }
+    const bouton = poserCible(haut)
+    const vise = jouer<LocalisationPage>('localiser', [{ selecteur: '#b' }, {}])
+    jouer('surligner', [vise.rect, 'cliquer'])
+    const premier = cadre()
+    jouer('retirerSurbrillance')
+    haut.valeur = 10
+    window.dispatchEvent(new Event('scroll'))
+    expect(premier.style.top).toBe('125px')
+
+    jouer('surligner', [vise.rect, 'cliquer'])
+    bouton.remove()
+    window.dispatchEvent(new Event('scroll'))
+    expect(cadre().style.top).toBe('125px')
+  })
+})
+
 describe('mode annoter', () => {
   it('un clic ouvre la bulle sans déclencher la page ; Entrée range l’annotation et pose la pastille 1', () => {
     document.body.innerHTML = '<h1 id="titre" style="color: rgb(255, 0, 0)">Bonjour</h1>'
