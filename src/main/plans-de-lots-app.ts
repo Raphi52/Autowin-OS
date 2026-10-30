@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { autowinAppDataRoot } from './app-data'
 import {
   LIBELLE_STATUT,
+  adopterLotRepris,
+  ajouterLots,
   bilanDuPlan,
   compteRenduDuLot,
   creerPlan,
@@ -15,6 +17,8 @@ import {
   lotsAPartir,
   marquerEchec,
   marquerLance,
+  messageDeDecision,
+  noterDecision,
   noterFinDeTour,
   noterTourDuLot,
   promptDeReveil,
@@ -22,7 +26,9 @@ import {
   relancerLot,
   reprendrePlan,
   statutApresLancements,
+  suiteDeLOrdreAuLot,
   type IssueDuTour,
+  type LotDuPlan,
   type PlanDeLots,
   type StatutDuPlan
 } from '../shared/plan-de-lots'
@@ -53,8 +59,15 @@ const PLANS_GARDES = 50
 export interface DepsPlans {
   /** Crée un fil enfant dans le dossier du chef ; rend son identifiant. Lève en cas d'échec. */
   creerFil: (chef: string, titre: string) => string
-  /** Lance un tour dans le fil ; rend la main au démarrage du tour (`lancerDansConversation`). */
-  lancer: (fil: string, prompt: string) => Promise<{ ok: boolean; turnId?: string; error?: string }>
+  /**
+   * Lance un tour dans le fil ; rend la main au démarrage du tour (`lancerDansConversation`).
+   * `modele` : celui du lot (conv-1284) ; absent, le tour suit le modèle du fil.
+   */
+  lancer: (
+    fil: string,
+    prompt: string,
+    modele?: string
+  ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
   tourActif: (fil: string) => boolean
   existe: (fil: string) => boolean
   /** Écrit au fil `a` comme le fil `de` (journal des messages entre fils). Lève sur refus. */
@@ -94,7 +107,15 @@ function stockageFichier(chemin = cheminFichierPlans()): NonNullable<DepsPlans['
   }
 }
 
-const ETATS = new Set(['a-faire', 'en-cours', 'fait', 'echec', 'interrompu'])
+const ETATS = new Set(['a-faire', 'en-cours', 'fait', 'echec', 'interrompu', 'attend-chef'])
+/** Un plan dont les lots peuvent encore tourner : son fil de lot n'en lance pas un autre. */
+const PLAN_VIVANT: ReadonlySet<StatutDuPlan> = new Set([
+  'attente-accord',
+  'en-cours',
+  'suspendu-quota',
+  'interrompu',
+  'bloque'
+])
 const STATUTS = new Set(Object.keys(LIBELLE_STATUT))
 
 /** Un plan relu du disque est vérifié champ par champ : une entrée abîmée est sautée. */
@@ -110,6 +131,7 @@ function estPlanLisible(x: unknown): x is PlanDeLots {
     typeof p.plafondTours === 'number' &&
     typeof p.toursLances === 'number' &&
     STATUTS.has(String(p.statut)) &&
+    (p.decisions === undefined || Array.isArray(p.decisions)) &&
     Array.isArray(p.lots) &&
     p.lots.every(
       (l) =>
@@ -178,12 +200,32 @@ export class CoordinateurDesPlans {
     let change = false
     this.#plans = plans.filter(estPlanLisible).map((p) => {
       // Au démarrage, l'app a perdu le suivi des lots « en cours » : ils passent interrompus. Leur
-      // agent a pu survivre (`reprendreAppelChat`, index.ts) : sa fin, annoncée `repris`, compte
-      // encore, et « Reprendre » adopte un lot dont le fil tourne au lieu d'y lancer un second agent.
-      const apres = interrompreAuDemarrage({
+      // agent a pu survivre : un fil déjà réservé par `reprendreAppelChat` (index.ts) est adopté ici,
+      // les travaux reconnus plus tard le sont par `agentRepris` (conv-1308). Sa fin, annoncée
+      // `repris`, compte, et « Reprendre » n'y lance jamais un second agent.
+      const interrompu = interrompreAuDemarrage({
         ...p,
-        avertissements: p.avertissements ?? []
+        avertissements: p.avertissements ?? [],
+        // Une décision abîmée sur disque est sautée, pas le plan (conv-1284).
+        ...(p.decisions
+          ? {
+              decisions: p.decisions.filter(
+                (d) =>
+                  !!d &&
+                  typeof d.texte === 'string' &&
+                  typeof d.de === 'string' &&
+                  typeof d.le === 'number'
+              )
+            }
+          : {})
       })
+      const apres = interrompu.lots.reduce(
+        (plan, l) =>
+          l.fil && l.etat === 'interrompu' && this.#deps.tourActif(l.fil)
+            ? adopterLotRepris(plan, l.fil)
+            : plan,
+        interrompu
+      )
       if (apres !== p) change = true
       return apres
     })
@@ -233,6 +275,15 @@ export class CoordinateurDesPlans {
   deposer(chef: string, brut: unknown): ResultatPlan {
     if (!chef.trim() || !this.#deps.existe(chef))
       return { ok: false, erreur: `fil chef « ${chef} » inconnu.` }
+    // PAS DE PLAN DANS UN LOT (conv-1284) — claude.exe refuse qu'une session lancée par une autre
+    // en démarre une à son tour : sans borne, un lot qui juge sa part « longue » ouvrait ses
+    // propres fils, hors du tableau et du plafond du chef.
+    const vu = this.planDuFil(chef)
+    if (vu?.role === 'enfant' && PLAN_VIVANT.has(vu.plan.statut))
+      return {
+        ok: false,
+        erreur: `ce fil fait le lot ${vu.rang} du plan ${vu.plan.id} (chef ${vu.plan.chef}) : un lot ne lance pas de plan à lui. Fais ta part ici ; s’il manque du travail au chantier, écris-le au chef (ecrire_a_un_fil vers ${vu.plan.chef}) — lui peut ajouter des lots.`
+      }
     const lecture = lirePlanDeLots(brut)
     if (!lecture.ok) return { ok: false, erreur: lecture.erreur }
     const decision = decisionDeDepot(this.#plans, chef, empreintePlan(lecture.plan))
@@ -311,6 +362,18 @@ export class CoordinateurDesPlans {
         raison: 'arrêté par l’utilisateur : aucun nouveau lot ne part, les lots en cours finissent.'
       }),
       detail: 'plan arrêté.'
+    }
+  }
+
+  /**
+   * Un travail continue dans ce fil après un redémarrage : tour de chat repris, ou run rattaché ou
+   * relancé (conv-1308). Son lot redevient en cours et sa fin, annoncée par `surFinDeTour`, enchaîne
+   * la suite. Aucun tour n'est lancé ici : le travail existe déjà.
+   */
+  agentRepris(fil: string, tour?: string): void {
+    for (const plan of [...this.#plans]) {
+      const adopte = adopterLotRepris(plan, fil, tour)
+      if (adopte !== plan) this.#poser(adopte)
     }
   }
 
@@ -402,6 +465,47 @@ export class CoordinateurDesPlans {
         tableau: tableauTexte(vu.plan)
       }
     }
+    if (action === 'noter') {
+      const vu = this.planDuFil(chef)
+      if (!vu) throw new Error('plan_de_lots : aucun plan dans ce fil — rien où noter.')
+      const de = vu.role === 'chef' ? 'chef' : `lot ${vu.rang}`
+      const r = noterDecision(vu.plan, args.decision, de, this.#maintenant())
+      if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
+      if (r.deja)
+        return { ok: true, plan: resume(r.plan), detail: 'décision déjà notée : rien de nouveau.' }
+      this.#poser(r.plan)
+      const decision = (r.plan.decisions ?? []).at(-1)
+      const prevenus = decision ? this.#prevenirLesLotsEnCours(r.plan, chef, decision) : []
+      return {
+        ok: true,
+        plan: resume(r.plan),
+        detail:
+          `décision notée (${de}) : ` +
+          (prevenus.length
+            ? `envoyée aux lots en cours : ${prevenus.join(', ')} ; `
+            : 'aucun lot en cours à prévenir ; ') +
+          'les lots qui partent ou repartent ensuite la recevront dans leur demande.'
+      }
+    }
+    if (action === 'ajouter') {
+      const vu = this.planDuFil(chef)
+      if (!vu || vu.role !== 'chef')
+        throw new Error('plan_de_lots : seul le fil chef ajoute des lots à son plan.')
+      const avant = vu.plan.lots.length
+      const r = ajouterLots(vu.plan, args.plan ?? args.lots)
+      if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
+      this.#poser(r.plan)
+      await this.#lancerLesSuivants(r.plan.id)
+      const apres = this.#plan(r.plan.id) ?? r.plan
+      const ajoutes = apres.lots.length - avant
+      return {
+        ok: true,
+        plan: resume(apres),
+        detail:
+          `${ajoutes} lot${ajoutes > 1 ? 's' : ''} ajouté${ajoutes > 1 ? 's' : ''} (rang${ajoutes > 1 ? 's' : ''} ${avant + 1}${ajoutes > 1 ? ` à ${apres.lots.length}` : ''}), plafond porté à ${apres.plafondTours} tours.` +
+          (r.avertissements.length ? ` Avertissements : ${r.avertissements.join(' ')}` : '')
+      }
+    }
     if (action === 'relancer') {
       const rang = Number(args.lot)
       if (!Number.isInteger(rang) || rang < 1)
@@ -411,7 +515,7 @@ export class CoordinateurDesPlans {
       return { ok: true, plan: resume(r.plan), detail: r.detail }
     }
     throw new Error(
-      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer.`
+      `plan_de_lots : action « ${action} » inconnue. Actions : deposer, etat, relancer, noter, ajouter.`
     )
   }
 
@@ -459,6 +563,88 @@ export class CoordinateurDesPlans {
     } catch (e) {
       this.#journal(`fin de tour de ${fil} non traitée`, e)
     }
+  }
+
+  /**
+   * Une décision notée va aussi, par message, aux lots EN COURS (conv-1284, demande de
+   * l'utilisateur) : sans cela un lot déjà parti travaillait jusqu'au bout sur une consigne
+   * périmée. L'expéditeur est le fil qui a noté ; ni lui ni un lot fini ne la reçoivent. Un envoi
+   * refusé (plafond horaire, fil disparu) ne bloque ni la note ni les autres envois. Rend les fils
+   * prévenus.
+   */
+  #prevenirLesLotsEnCours(
+    plan: PlanDeLots,
+    auteur: string,
+    decision: { texte: string; de: string }
+  ): string[] {
+    const prevenus: string[] = []
+    for (const lot of plan.lots) {
+      if (lot.etat !== 'en-cours' || !lot.fil || lot.fil === auteur || !this.#deps.existe(lot.fil))
+        continue
+      try {
+        this.#deps.ecrire(auteur, lot.fil, messageDeDecision(plan, decision))
+        prevenus.push(lot.fil)
+      } catch (e) {
+        this.#journal(`décision non envoyée au lot ${lot.rang} (${lot.fil})`, e)
+      }
+    }
+    return prevenus
+  }
+
+  /**
+   * LE LOT BLOQUÉ RÉVEILLÉ PAR L'ORDRE DU CHEF (conv-1284, 2026-10-29, demande de l'utilisateur :
+   * « réveiller directement un lot bloqué par la réponse du chef » au lieu de répondre puis relancer).
+   * `ecrire_a_un_fil` (commands.ts) fait passer par ici le lancement du tour d'un ordre : si
+   * l'expéditeur est le CHEF d'un plan et le destinataire le fil d'un de ses lots qui ATTEND sa
+   * réponse (« attend le chef ») ou en ÉCHEC, ce tour
+   * vaut relance — mêmes règles que `relancerLot` (plafond, quota), un tour compté, le lot marqué en
+   * cours AVANT le lancement (aucun second agent par `#lancerLesSuivants`), et sa fin notée comme
+   * celle d'un lot. Tout autre ordre part tel quel. Un refus (plafond) ne lance rien : l'ordre reste
+   * en attente et la raison remonte au chef par le détail de son envoi. Le tour part avec le MODÈLE
+   * du lot : sans lui, le lot 1 du test réel (conv-1299, en sonnet) avait repris en opus.
+   */
+  async lancerParOrdre(
+    de: string,
+    fil: string,
+    prompt: string,
+    lancer: (
+      fil: string,
+      prompt: string,
+      modele?: string
+    ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
+  ): Promise<{ ok: boolean; turnId?: string; error?: string }> {
+    const reprenable = (l: LotDuPlan): boolean =>
+      l.fil === fil && (l.etat === 'attend-chef' || l.etat === 'echec')
+    const plan = this.#plans.find((p) => p.chef === de && p.lots.some(reprenable))
+    const lot = plan?.lots.find(reprenable)
+    if (!plan || !lot) return lancer(fil, prompt)
+    const relance = relancerLot(plan, lot.rang)
+    if (!relance.ok)
+      return { ok: false, error: `lot ${lot.rang} du plan ${plan.id} : ${relance.erreur}` }
+    const lance = this.#poser(marquerLance(relance.plan, lot.rang, fil, this.#maintenant()))
+    const lotLance = lance.lots.find((l) => l.rang === lot.rang) ?? lot
+    let r: { ok: boolean; turnId?: string; error?: string }
+    try {
+      const suite = prompt + suiteDeLOrdreAuLot(lance, lotLance)
+      r = lotLance.modele ? await lancer(fil, suite, lotLance.modele) : await lancer(fil, suite)
+    } catch (e) {
+      r = { ok: false, error: (e as Error)?.message ?? String(e) }
+    }
+    if (r.ok) {
+      const apres = this.#plan(plan.id)
+      if (apres && r.turnId) {
+        const avecTour = noterTourDuLot(apres, lot.rang, r.turnId)
+        if (avecTour !== apres) this.#poser(avecTour)
+      }
+      return r
+    }
+    // Même sortie qu'un lancement refusé (`#lancerUnLot`) : le lot repasse en échec, le chef le saura.
+    await this.surFinDeTour(fil, {
+      ok: false,
+      erreur: `réveil par l’ordre du chef non lancé : ${r.error ?? 'raison inconnue'}`,
+      nonDemarre: true
+    })
+    return r
   }
 
   #arretChefSupprime(plan: PlanDeLots): PlanDeLots {
@@ -547,15 +733,25 @@ export class CoordinateurDesPlans {
       }
       const lance = this.#poser(marquerLance(plan, rang, fil, this.#maintenant()))
       const lotLance = lance.lots.find((l) => l.rang === rang) ?? lot
-      lancements.push(this.#lancerUnLot(planId, rang, fil, promptDuLot(lance, lotLance)))
+      lancements.push(
+        this.#lancerUnLot(planId, rang, fil, promptDuLot(lance, lotLance), lotLance.modele)
+      )
     }
     await Promise.all(lancements)
   }
 
-  async #lancerUnLot(planId: string, rang: number, fil: string, prompt: string): Promise<void> {
+  async #lancerUnLot(
+    planId: string,
+    rang: number,
+    fil: string,
+    prompt: string,
+    modele?: string
+  ): Promise<void> {
     let r: { ok: boolean; turnId?: string; error?: string }
     try {
-      r = await this.#deps.lancer(fil, prompt)
+      r = modele
+        ? await this.#deps.lancer(fil, prompt, modele)
+        : await this.#deps.lancer(fil, prompt)
     } catch (e) {
       r = { ok: false, error: (e as Error)?.message ?? String(e) }
     }
@@ -569,7 +765,8 @@ export class CoordinateurDesPlans {
     }
     await this.surFinDeTour(fil, {
       ok: false,
-      erreur: `lancement refusé : ${r.error ?? 'raison inconnue'}`
+      erreur: `lancement refusé : ${r.error ?? 'raison inconnue'}`,
+      nonDemarre: true
     })
   }
 }

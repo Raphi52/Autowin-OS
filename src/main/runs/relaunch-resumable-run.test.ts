@@ -7,6 +7,8 @@ import { creerRelanceDeRunReprenable, type DependancesDeRelance } from './relaun
 import { loadConvRunTrace, saveConvRunTrace, statutDuRunMd } from './conv-runs'
 import { causeDInterruption } from '../classe-terminale-echec'
 import { supprimerArbre } from '../fs-supprimer'
+import { CoordinateurDesPlans, type DepsPlans } from '../plans-de-lots-app'
+import type { IssueDuTour } from '../../shared/plan-de-lots'
 
 /**
  * CE QUE CES TESTS REMPLACENT.
@@ -96,7 +98,10 @@ type Reglages = {
   appelChatReprisPourTour?: (conversationId: string, turnId: string) => boolean
 }
 
-function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<void> } {
+function banc(reglages: Reglages = {}): {
+  observe: Banc
+  relance: (candidat?: Pick<OrchestrationRunState, 'runId' | 'conversationId'>) => Promise<void>
+} {
   const observe: Banc = {
     ordre: [],
     runTaskArgs: [],
@@ -214,7 +219,7 @@ function banc(reglages: Reglages = {}): { observe: Banc; relance: () => Promise<
   const finales = reglages.sabotage ? reglages.sabotage(deps) : deps
   return {
     observe,
-    relance: () => creerRelanceDeRunReprenable(finales)({ runId: 'run-repris' })
+    relance: (candidat = { runId: 'run-repris' }) => creerRelanceDeRunReprenable(finales)(candidat)
   }
 }
 
@@ -634,6 +639,264 @@ describe('relance — un refus definitif tarit le checkpoint au lieu de le rejou
     const b = refusJoue('', 'provider injoignable')
     await b.relance()
     expect(b.observe.oublis).toEqual([])
+  })
+})
+
+/**
+ * LE PLAN DE LOTS SUIT LE RUN REPRIS (conv-1308, 2026-10-30). Un lot lancé en `/build` tourne dans
+ * un run : au redémarrage, il repart par CE module, pas par `reprendreAppelChat`. Aucune de ses
+ * sorties ne prévenait le plan : le lot 1 de plan-b4358910 restait « interrompu » pendant que son
+ * agent travaillait, et sa fin n'aurait lancé ni le lot 2 ni le lot 3.
+ */
+describe('relance — le plan de lots du fil suit le run repris', () => {
+  type Suivi = {
+    adoptions: Array<[string, string | undefined]>
+    fins: Array<[string, IssueDuTour]>
+  }
+  const suivi = (): Suivi & { dep: NonNullable<DependancesDeRelance['plansDeLots']> } => {
+    const adoptions: Suivi['adoptions'] = []
+    const fins: Suivi['fins'] = []
+    return {
+      adoptions,
+      fins,
+      dep: {
+        agentRepris: (fil, tour) => adoptions.push([fil, tour]),
+        finDuRun: (fil, issue) => fins.push([fil, issue])
+      }
+    }
+  }
+
+  it('adopte le lot, puis annonce un succès avec le tour d’origine et la réponse du run', async () => {
+    const s = suivi()
+    const b = banc({ sabotage: (d) => ({ ...d, plansDeLots: s.dep }) })
+    await b.relance()
+    expect(s.adoptions).toEqual([['conv-1', 'turn-origine']])
+    expect(s.fins).toEqual([
+      ['conv-1', { ok: true, repris: true, tour: 'turn-origine', texte: 'livrable' }]
+    ])
+    // Annoncée APRÈS la clôture du RUN.md : le chef réveillé lit un run déjà clos.
+    expect(b.observe.clotures).toHaveLength(1)
+  })
+
+  it('annonce la fin APRÈS la clôture du run, jamais avant', async () => {
+    const ordre: string[] = []
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        closeConvRun: (() => ordre.push('run clos')) as never,
+        plansDeLots: {
+          agentRepris: s.dep.agentRepris,
+          finDuRun: () => ordre.push('plan prévenu')
+        }
+      })
+    })
+    await b.relance()
+    expect(ordre).toEqual(['run clos', 'plan prévenu'])
+  })
+
+  it('un contrôle final bloqué est un échec, avec ses raisons', async () => {
+    const s = suivi()
+    const b = banc({
+      cyclesDeVie: [],
+      sabotage: (d) => ({ ...d, plansDeLots: s.dep }),
+      resultat: async () => ({
+        ...RESULTAT_VERT,
+        valid: false,
+        gateBlocked: true,
+        gateReasons: ['preuve absente', 'test rouge']
+      })
+    })
+    await b.relance()
+    expect(s.fins[0][1]).toMatchObject({
+      ok: false,
+      repris: true,
+      erreur: 'preuve absente ; test rouge'
+    })
+  })
+
+  it('une reprise qui lève est un échec, avec son message', async () => {
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({ ...d, plansDeLots: s.dep }),
+      resultat: async () => {
+        throw new Error('provider indisponible')
+      }
+    })
+    await b.relance()
+    expect(s.fins).toEqual([
+      ['conv-1', { ok: false, repris: true, tour: 'turn-origine', erreur: 'provider indisponible' }]
+    ])
+  })
+
+  it('une publication déjà acquise est un succès', async () => {
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: s.dep,
+        classifierRefusDeReprise: () => 'publication-acquise' as never
+      }),
+      resultat: async () => {
+        throw new Error('publication complete deja engagee')
+      }
+    })
+    await b.relance()
+    expect(s.fins[0][1]).toMatchObject({ ok: true, repris: true })
+  })
+
+  it.each(['copie-durable-absente', 'contexte-de-reprise-invalide'])(
+    '%s : échec annoncé, le plan n’attend pas un run qui ne reviendra pas',
+    async (classe) => {
+      const s = suivi()
+      const b = banc({
+        sabotage: (d) => ({
+          ...d,
+          plansDeLots: s.dep,
+          classifierRefusDeReprise: () => classe as never
+        }),
+        resultat: async () => {
+          throw new Error('copie durable absente')
+        }
+      })
+      await b.relance()
+      expect(s.fins[0][1]).toMatchObject({ ok: false, repris: true })
+      expect(s.fins[0][1].erreur).toContain('copie durable absente')
+    }
+  )
+
+  it('checkpoint refusé : rien n’est adopté, et un lot déjà adopté est clos comme perdu', async () => {
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: s.dep,
+        os: { ...d.os, reconcileResumableOrchestrationForRelaunch: () => null } as never
+      })
+    })
+    await b.relance({ runId: 'run-repris', conversationId: 'conv-1' })
+    expect(s.adoptions).toEqual([])
+    expect(s.fins).toEqual([['conv-1', expect.objectContaining({ ok: false, perdu: true })]])
+  })
+
+  it('reprise qui a fait planter l’app : abandonnée, le plan le sait', async () => {
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: s.dep,
+        gardePlantage: {
+          aPlanteAuparavant: () => true,
+          retirer: () => {},
+          poser: () => {}
+        } as never
+      })
+    })
+    await b.relance()
+    expect(s.fins).toEqual([['conv-1', expect.objectContaining({ ok: false, perdu: true })]])
+  })
+
+  it('topologie indisponible : le run ne repart pas, le plan le sait', async () => {
+    const s = suivi()
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: s.dep,
+        os: {
+          ...d.os,
+          waitUntilReady: async () => {
+            throw new Error('modèles pas prêts')
+          }
+        } as never
+      })
+    })
+    await b.relance()
+    expect(s.fins).toEqual([['conv-1', expect.objectContaining({ ok: false, perdu: true })]])
+  })
+
+  it('un tour possédé par une reprise d’appel chat : c’est elle qui annonce, une seule fin', async () => {
+    const s = suivi()
+    const b = banc({
+      appelChatReprisPourTour: (_conversationId, turnId) => turnId === 'turn-origine',
+      sabotage: (d) => ({ ...d, plansDeLots: s.dep })
+    })
+    await b.relance()
+    expect(s.fins).toEqual([])
+  })
+
+  it('un run sans conversation ne prévient aucun plan', async () => {
+    const s = suivi()
+    const b = banc({
+      etat: { conversationId: undefined },
+      sabotage: (d) => ({ ...d, plansDeLots: s.dep })
+    })
+    await b.relance()
+    expect(s.adoptions).toEqual([])
+    expect(s.fins).toEqual([])
+  })
+
+  /** La chaîne entière, vrai coordinateur : le scénario de plan-b4358910. */
+  it('avec le vrai coordinateur : le lot 1 repris en run finit, le lot 2 part, le chef est réveillé', async () => {
+    let stocke = ''
+    const lancements: string[] = []
+    let prochain = 100
+    const fils = new Set(['conv-chef'])
+    const deps: DepsPlans = {
+      creerFil: () => {
+        const fil = `conv-${prochain++}`
+        fils.add(fil)
+        return fil
+      },
+      lancer: async (fil) => {
+        lancements.push(fil)
+        return { ok: true }
+      },
+      tourActif: () => false,
+      existe: (fil) => fils.has(fil),
+      ecrire: () => {},
+      stockage: {
+        lire: () => stocke,
+        ecrire: (c) => {
+          stocke = c
+        }
+      },
+      journaliser: () => {}
+    }
+    const avant = new CoordinateurDesPlans(deps)
+    const depot = avant.deposer('conv-chef', {
+      titre: 'Navigateur',
+      parallele: 3,
+      lots: [1, 2].map((n) => ({
+        titre: `Étape ${n}`,
+        demande: `/build étape ${n}`,
+        fichiers: [`src/etape-${n}.ts`],
+        apres: n > 1 ? [n - 1] : []
+      }))
+    })
+    if (!depot.ok) throw new Error(depot.erreur)
+    await avant.accepter('conv-chef', depot.plan.id)
+    expect(lancements).toEqual(['conv-100'])
+
+    // L'app redémarre : le plan relu du disque est interrompu, le run du lot repart.
+    const apres = new CoordinateurDesPlans(deps)
+    expect(apres.plans()[0].statut).toBe('interrompu')
+    let fini!: () => void
+    const finAnnoncee = new Promise<void>((r) => (fini = r))
+    const b = banc({
+      etat: { conversationId: 'conv-100', turnId: undefined },
+      sabotage: (d) => ({
+        ...d,
+        plansDeLots: {
+          agentRepris: (fil, tour) => apres.agentRepris(fil, tour),
+          finDuRun: (fil, issue) => void apres.surFinDeTour(fil, issue).then(fini)
+        }
+      })
+    })
+    await b.relance()
+    await finAnnoncee
+    expect(apres.plans()[0].lots.map((l) => l.etat)).toEqual(['fait', 'en-cours'])
+    expect(apres.plans()[0].statut).toBe('en-cours')
+    expect(lancements).toEqual(['conv-100', 'conv-101', 'conv-chef'])
   })
 })
 
